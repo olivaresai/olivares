@@ -20,6 +20,7 @@ import (
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 	"github.com/olivaresai/olivares/modules/governance"
+	"github.com/olivaresai/olivares/modules/sessions/hookpep"
 )
 
 func TestSessionClaudeCanceledWaitClosesRequestAndAnchorsDeny(t *testing.T) {
@@ -42,7 +43,7 @@ func TestSessionClaudeCanceledWaitClosesRequestAndAnchorsDeny(t *testing.T) {
 			h.set.gov.UseApprovalCapacity(h.authr.ApprovalCapacity)
 			h.set.gov.UseApprovalAuthority(h.authr, auth.NewAuthorizer(h.set.gov.RequestEvaluator(), auth.WithScopedGrants(h.set.gov.ScopedGrants())))
 			var logs bytes.Buffer
-			d := &claudeHookDecider{defaultPolicy: &hookPolicyDoc{Default: "allow"}, authr: credentials, eval: h.set.gov.Evaluator(), scoped: h.set.gov.ScopedGrants(), approvals: service, store: h.st, clock: time.Now, log: slog.New(slog.NewTextHandler(&logs, nil))}
+			d := newClaudeHookDecider(&hookpep.Decider{DefaultPolicy: &hookpep.PolicyDoc{Default: "allow"}, Authr: credentials, Eval: h.set.gov.Evaluator(), Authz: harnessAuthz(h), Scoped: h.set.gov.ScopedGrants(), Approvals: service, Store: h.st, Clock: time.Now, Log: slog.New(slog.NewTextHandler(&logs, nil))})
 			limit := 3 * time.Second
 			if scenario == "deadline" {
 				limit = 350 * time.Millisecond
@@ -58,7 +59,7 @@ func TestSessionClaudeCanceledWaitClosesRequestAndAnchorsDeny(t *testing.T) {
 			defer func() { cancel(); <-done }()
 			var pending governance.Approval
 			for pending.ID == "" {
-				items, _, err := service.List(t.Context(), tenant, hookActionCapability, "pending", "")
+				items, _, err := service.List(t.Context(), tenant, hookpep.ActionCapability, "pending", "")
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -127,7 +128,7 @@ func TestSessionClaudeCanceledWaitClosesRequestAndAnchorsDeny(t *testing.T) {
 			}); err != nil {
 				t.Fatal(err)
 			}
-			items, _, err := service.List(t.Context(), tenant, hookActionCapability, "pending", "")
+			items, _, err := service.List(t.Context(), tenant, hookpep.ActionCapability, "pending", "")
 			if err != nil || len(items) != 0 {
 				t.Fatalf("pending requests=%d err=%v", len(items), err)
 			}

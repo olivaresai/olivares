@@ -21,7 +21,7 @@
 set -uo pipefail
 ROOT="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")/.." && pwd -P)"
 CHECK="$ROOT/scripts/check-phone-home-claims.sh"
-[ -r "$CHECK" ] || { echo "test-phone-home-claims: ⛔ no encuentro $CHECK" >&2; exit 2; }
+[ -r "$CHECK" ] || { echo "test-phone-home-claims: ⛔ cannot find $CHECK" >&2; exit 2; }
 
 _tmp_base="${TMPDIR:-/workspace/.olivares-tmptest}"
 mkdir -p "$_tmp_base" || exit 2
@@ -42,7 +42,7 @@ stage() {
 	         "$T/docs/trust" \
 	         "$T/docs/internals" \
 	         "$T/web/src/features" \
-	         "$T/email/copy" \
+	         "$T/email/locales" \
 	         "$T/commercial/license-worker/src/portal/pages" \
 	         "$T/commercial/license-worker/src/email" \
 	         "$T/docs"
@@ -58,7 +58,7 @@ PAGE
 	printf 'export const panel = "no mandatory outbound calls at boot"\n' \
 		> "$T/web/src/features/panel.ts"
 	printf '{"license":{"attestation":"Verifying it never calls us; downloading does."}}\n' \
-		> "$T/email/copy/en.json"
+		> "$T/email/locales/en.json"
 	printf 'const p = "Verifying it never calls us."\n' \
 		> "$T/commercial/license-worker/src/portal/pages/licenses.ts"
 	# `docs/` entero se vigila desde el 2026-08-28 (F7 del contraste): una página bajo `docs/` que
@@ -106,8 +106,8 @@ peek() { head -"${1:-4}" "$TMP/out" "$TMP/err"; }
 
 # ── 0 · el árbol limpio pasa ─────────────────────────────────────────────────────────────────
 stage; run
-if [ "$(rc)" = 0 ]; then ok "árbol con la redacción firmada: rc 0"
-else bad "árbol limpio dio rc=$(rc): $(peek 6)"; fi
+if [ "$(rc)" = 0 ]; then ok "tree with approved wording: rc 0"
+else bad "clean tree returned rc=$(rc): $(peek 6)"; fi
 
 # ── 1..7 · CONTROL POSITIVO POR IDIOMA ───────────────────────────────────────────────────────
 # Cada alternativa del patrón que cubre un locale publicado tiene que poder enrojecer. Se inyecta
@@ -118,9 +118,9 @@ idioma_case() {
 	printf '%s\n' "$frase" >> "$T/docs-site/src/content/docs/how-to/air-gap-install.md"
 	run
 	if [ "$(rc)" = 1 ] && saw 'air-gap-install.md'; then
-		ok "positivo $nombre: «$frase» enrojece y nombra la página"
+		ok "positive $nombre: «$frase» fails and names the page"
 	else
-		bad "positivo $nombre: «$frase» dio rc=$(rc) — $(peek 3)"
+		bad "positive $nombre: «$frase» returned rc=$(rc) — $(peek 3)"
 	fi
 }
 idioma_case en-zero  'Mirror them into a private registry and install — with zero phone-home.'
@@ -133,11 +133,10 @@ idioma_case fr       'Mettez-les en miroir dans un registre privé — sans aucu
 idioma_case ja       'フォンホームゼロ'
 idioma_case ru       'Никаких обращений «домой»'
 idioma_case zh       '零外呼'
-# ⛔⛔ LAS SIETE FORMAS QUE EL LOTE RETIRÓ Y EL PATRÓN NO VEÍA — hallazgo ALTO del contraste
-# `sol max` (F1). Cada cadena de abajo es el LITERAL de `origin/main` que borró: si una de
-# ellas volviera al árbol, hasta el 2026-08-28 no habría subido ninguna cuenta. La batería anterior
-# no las mataba porque probaba las formas que yo tenía delante («zero phone-home»), no las que
-# estaba retirando — que es la distancia exacta entre un control y una conjetura.
+# The seven exact forms removed by were invisible to the earlier pattern
+# (sol max F1, high). Each string below is the original main literal: before
+# 2026-08-28 its return would not increase the count. Tests covered familiar
+# zero-phone-home wording rather than the actual removed variants; cover those now.
 idioma_case en-callbacks 'Zero telemetry, zero callbacks. Air-gapped deployments are first-class.'
 idioma_case en-contacts  'The product never contacts Olivares AI.'
 idioma_case de-kontakt   'Sie nimmt niemals Kontakt zu externen Servern auf und lässt sich offline validieren.'
@@ -159,12 +158,12 @@ if grep -q '__ALTERNATIVA_RETIRADA__' "$_gutted"; then
 	_grc=0
 	OLIVARES_CLONE="$T" bash "$_gutted" >"$TMP/out" 2>"$TMP/err" || _grc=$?
 	if [ "$_grc" = 2 ] && grep -q '零外呼' "$TMP/err"; then
-		ok "canario: romper una alternativa del patrón da rc 2 y nombra la promesa que dejó de ver"
+		ok "canary: breaking a pattern alternative returns rc 2 and names the promise no longer detected"
 	else
-		bad "canario: patrón roto dio rc=$_grc — $(head -4 "$TMP/err")"
+		bad "canary: broken pattern returned rc=$_grc — $(head -4 "$TMP/err")"
 	fi
 else
-	bad "el mutante del canario NO se inyectó — el caso no dice nada del gate"
+	bad "the canary mutant was NOT injected — the case proves nothing about the gate"
 fi
 
 # ── 7-ter · una promesa bajo `docs/` que NO es `docs/trust` cuenta (F7) ───────────────────────
@@ -172,8 +171,8 @@ stage
 printf '\nInstall it with zero phone-home, always.\n' >> "$T/docs/internals/architecture.md"
 run
 if [ "$(rc)" = 1 ] && saw 'docs/internals/architecture.md'; then
-	ok "una promesa bajo docs/ fuera de docs/trust cuenta y se nombra"
-else bad "docs/ fuera de trust dio rc=$(rc): $(peek 4)"; fi
+	ok "a promise under docs/ outside docs/trust is counted and named"
+else bad "docs/ outside trust returned rc=$(rc): $(peek 4)"; fi
 
 # ── 7-quater · `docs/contracts/` NO cuenta: el export lo bloquea al por mayor y sus ficheros
 # llevan el número de sesión en el nombre. Vigilarlo metía ese token en la línea base, que SÍ se
@@ -186,15 +185,15 @@ mkdir -p "$T/docs/contracts"
 # `lint:export`, esta vez por su propio fixture.
 printf 'Install with zero phone-home, always.\n' > "$T/docs/contracts/algun-contrato.md"
 run
-if [ "$(rc)" = 0 ]; then ok "docs/contracts/ (bloqueado por el export) no cuenta"
-else bad "docs/contracts/ contó (rc=$(rc)): $(peek 4)"; fi
+if [ "$(rc)" = 0 ]; then ok "docs/contracts/ (blocked by the export) is not counted"
+else bad "docs/contracts/ was counted (rc=$(rc)): $(peek 4)"; fi
 
 # ── 8 · una promesa en un fichero NUEVO (fuera de la base) también enrojece ───────────────────
 stage
 printf 'Zero phone-home, ever.\n' > "$T/docs/trust/vendor-viability.md"
 run
-if [ "$(rc)" = 1 ] && saw 'vendor-viability.md'; then ok "fichero nuevo con promesa: rc 1"
-else bad "fichero nuevo dio rc=$(rc): $(peek 3)"; fi
+if [ "$(rc)" = 1 ] && saw 'vendor-viability.md'; then ok "new file with a promise: rc 1"
+else bad "new file returned rc=$(rc): $(peek 3)"; fi
 
 # ── 9 · una ruta de la base cuya cuenta SUBE enrojece (la mutación del 2026-08-21) ────────────
 stage
@@ -202,8 +201,8 @@ printf '0\tdocs-site/src/content/docs/how-to/air-gap-install.md\n0\tdocs/trust/o
 	> "$T/docs/phone-home-claims-baseline.txt"
 printf 'And there is zero phone-home in the community edition, ever.\n' >> "$T/docs/trust/one-pager.md"
 run
-if [ "$(rc)" = 1 ] && saw 'one-pager.md: 0 → 1'; then ok "cuenta que SUBE dentro de la base: rc 1 con antes→después"
-else bad "subida dio rc=$(rc): $(peek 4)"; fi
+if [ "$(rc)" = 1 ] && saw 'one-pager.md: 0 → 1'; then ok "count INCREASES within the baseline: rc 1 with before→after"
+else bad "increase returned rc=$(rc): $(peek 4)"; fi
 
 # ── 10 · una ruta cuya cuenta BAJA **NO** es una promesa nueva (el defecto de) ──────────
 stage
@@ -211,8 +210,8 @@ printf '2\tdocs-site/src/content/docs/how-to/air-gap-install.md\n1\tdocs/trust/o
 	> "$T/docs/phone-home-claims-baseline.txt"
 run
 if [ "$(rc)" = 0 ] && saw 'air-gap-install.md: 2 → 0'; then
-	ok "retirada (2→0, 1→0): rc 0 y la nombra como BAJA, no como promesa nueva"
-else bad "retirada dio rc=$(rc): $(peek 6)"; fi
+	ok "removal (2→0, 1→0): rc 0, named as DECREASE, not a new promise"
+else bad "removal returned rc=$(rc): $(peek 6)"; fi
 
 # ── 11 · NO-DISPARO: la afirmación ACOTADA y cierta no cuenta ─────────────────────────────────
 # Las cinco líneas de abajo son TEXTO VIVO de `origin/main` después de C09-05, no invenciones: si
@@ -230,61 +229,61 @@ stage
 	printf 'ライセンス検証で当社へ通信することはありません。\n'
 } >> "$T/docs-site/src/content/docs/how-to/air-gap-install.md"
 run
-if [ "$(rc)" = 0 ]; then ok "no-disparo: la redacción ACOTADA de C09-05 (en/es/fr/ru) no cuenta"
-else bad "la forma ACOTADA enrojeció (rc=$(rc)): $(peek 4)"; fi
+if [ "$(rc)" = 0 ]; then ok "no trigger: the SCOPED wording of C09-05 (en/es/fr/ru) is not counted"
+else bad "the SCOPED form failed (rc=$(rc)): $(peek 4)"; fi
 
 # ── 12 · el archivo CONGELADO no cuenta ──────────────────────────────────────────────────────
 stage
 printf 'Install with zero phone-home.\n' > "$T/docs-site/src/content/docs/2026-06/old.md"
 run
-if [ "$(rc)" = 0 ]; then ok "docs/2026-06/ (archivo congelado) no cuenta"
-else bad "el archivo congelado contó (rc=$(rc)): $(peek 3)"; fi
+if [ "$(rc)" = 0 ]; then ok "docs/2026-06/ (frozen archive) is not counted"
+else bad "the frozen archive was counted (rc=$(rc)): $(peek 3)"; fi
 
 # ── 13 · un TEST que asegura la AUSENCIA de la promesa no convierte al guardián en infractor ──
 stage
 printf "expect(screen.queryByText(/nothing phones home/i)).toBeNull()\n" \
 	> "$T/web/src/features/attestation.test.tsx"
 run
-if [ "$(rc)" = 0 ]; then ok "un .test.tsx que cita la promesa retirada no cuenta"
-else bad "el fichero de test contó (rc=$(rc)): $(peek 3)"; fi
+if [ "$(rc)" = 0 ]; then ok "a .test.tsx quoting the removed promise is not counted"
+else bad "the test file was counted (rc=$(rc)): $(peek 3)"; fi
 
 # ── 14 · el bundle de correo GENERADO no cuenta (lo cubre lint:email-brand) ───────────────────
 stage
 printf 'export const T = { license: { text: "never phones home" } }\n' \
 	> "$T/commercial/license-worker/src/email/templates.generated.ts"
 run
-if [ "$(rc)" = 0 ]; then ok "templates.generated.ts (artefacto) no cuenta"
-else bad "el artefacto generado contó (rc=$(rc)): $(peek 3)"; fi
+if [ "$(rc)" = 0 ]; then ok "templates.generated.ts (artifact) is not counted"
+else bad "the generated artifact was counted (rc=$(rc)): $(peek 3)"; fi
 
 # ── 15 · sin línea base ⇒ NO HE PODIDO MIRAR ─────────────────────────────────────────────────
 stage
 rm -f "$T/docs/phone-home-claims-baseline.txt"
 printf 'Zero phone-home.\n' >> "$T/docs/trust/one-pager.md"
 run
-if [ "$(rc)" = 2 ]; then ok "línea base ausente: rc 2 (no «cero promesas»)"
-else bad "sin base dio rc=$(rc): $(peek 3)"; fi
+if [ "$(rc)" = 2 ]; then ok "missing baseline: rc 2 (not «zero promises»)"
+else bad "without baseline, returned rc=$(rc): $(peek 3)"; fi
 
 # ── 16 · superficie ausente ⇒ NO HE PODIDO MIRAR ─────────────────────────────────────────────
 stage
-rm -rf "$T/email/copy"
+rm -rf "$T/email/locales"
 run
-if [ "$(rc)" = 2 ] && saw 'email/copy'; then ok "superficie ausente: rc 2 y la nombra"
-else bad "superficie ausente dio rc=$(rc): $(peek 3)"; fi
+if [ "$(rc)" = 2 ] && saw 'email/locales'; then ok "missing surface: rc 2 and names it"
+else bad "missing surface returned rc=$(rc): $(peek 3)"; fi
 
 # ── 17 · fichero de raíz vigilado ausente ⇒ NO HE PODIDO MIRAR ────────────────────────────────
 stage
 rm -f "$T/INSTALL.md"
 run
-if [ "$(rc)" = 2 ] && saw 'INSTALL.md'; then ok "fichero de raíz ausente: rc 2 y lo nombra"
-else bad "fichero ausente dio rc=$(rc): $(peek 3)"; fi
+if [ "$(rc)" = 2 ] && saw 'INSTALL.md'; then ok "missing root file: rc 2 and names it"
+else bad "missing file returned rc=$(rc): $(peek 3)"; fi
 
 # ── 18 · patrón CIEGO (cero coincidencias con base poblada e inexistente) ⇒ rc 2 ──────────────
 stage
 printf '3\tdocs-site/src/content/docs/how-to/una-pagina-que-no-existe.md\n' \
 	> "$T/docs/phone-home-claims-baseline.txt"
 run
-if [ "$(rc)" = 2 ]; then ok "cero coincidencias con base poblada: rc 2 (patrón caducado)"
-else bad "el conjunto vacío se aprobó (rc=$(rc)): $(peek 4)"; fi
+if [ "$(rc)" = 2 ]; then ok "zero matches with populated baseline: rc 2 (stale pattern)"
+else bad "the empty set passed (rc=$(rc)): $(peek 4)"; fi
 
 printf 'check-phone-home-claims selftest: %d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ] || exit 1

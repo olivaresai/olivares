@@ -29,7 +29,8 @@ func f2aHistoricalRender(t *testing.T, engine store.Engine) string {
 		}
 	}
 	var lineage []string
-	for _, obj := range lineageGuardObjects(dia) {
+	// The v9 render is guard edition 1; the workspace guard moved on in a later version.
+	for _, obj := range lineageGuardObjectsFor(dia, lineageRelationsEdition1()) {
 		lineage = append(lineage, obj.statement)
 	}
 	raw, err := json.Marshal(struct {

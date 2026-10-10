@@ -18,6 +18,7 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/olivaresai/olivares/cmd/olivares/internal/mcpgateway"
 	mcpc "github.com/olivaresai/olivares/connectors/mcp"
 	"github.com/olivaresai/olivares/core/audit"
 	coreengine "github.com/olivaresai/olivares/core/engine"
@@ -154,8 +155,8 @@ func newMCPDegradeStore(t *testing.T) (store.Store, model.TenantID) {
 func TestMCPEvidenceTaskDegradeSeqZeroRefusesAndCountsLoss(t *testing.T) {
 	ctx := context.Background()
 	st, tenant := newMCPDegradeStore(t)
-	a := mcpGateAuditor{
-		log: slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)), store: st, tenant: tenant,
+	a := mcpgateway.GateAuditor{
+		Log: slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)), Store: st, Tenant: tenant,
 	}
 	base := hookPendingDrops(t, st)
 	binding := mcpEvidenceBinding("op-task-degrade-1", "digest-a")
@@ -358,7 +359,7 @@ func TestMCPTaskLifecycleFullPathJournalsTaskEffects(t *testing.T) {
 // TestMCPTaskSweepUpstreamRPCErrorIsNotACancellation drives the round-1
 // F-02 exploit through the REAL production forwarder: the upstream answers the
 // sweep's tasks/cancel with a strictly valid HTTP 2xx JSON-RPC ERROR, which
-// mcpUpstreamForwarder correctly classifies as {State: completed} plus a non-nil
+// mcpgateway.UpstreamForwarder correctly classifies as {State: completed} plus a non-nil
 // error. The round-1 gateway looked only at `state == completed`, marked the
 // task locally canceled, counted it as a success and thereby removed a LIVE
 // task from every future emergency sweep.
@@ -502,7 +503,7 @@ func TestMCPTaskKillSwitchStopSettlesBlockedButCancelPasses(t *testing.T) {
 // TestMCPTaskUpdateAckOnlyNeverConfirmsStatus is review round-3 R3-01 over
 // the REAL production forwarder: SEP-2663 defines UpdateTaskResult as an empty,
 // eventually-consistent ACKNOWLEDGEMENT and directs clients to observe status
-// through tasks/get or task notifications. mcpUpstreamForwarder validates the
+// through tasks/get or task notifications. mcpgateway.UpstreamForwarder validates the
 // JSON-RPC ENVELOPE, not the method-specific result shape, so a broken or hostile
 // upstream can answer a tasks/update with a strictly valid, correlated success
 // whose body claims `{"resultType":"complete","status":"canceled"}`. Round-2 fed

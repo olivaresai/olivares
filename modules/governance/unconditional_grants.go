@@ -84,7 +84,7 @@ func (u *unconditionalGrants) UnconditionalGrantPerms(ctx context.Context, p aut
 	if m.grants.grantExpiredState(before, beforeLoaded, m.grants.clock()) {
 		return nil, nil
 	}
-	// ADR-0024 Q1 offline staleness: past the bound the engine turns a positive grant into
+	// offline-policy staleness offline staleness: past the bound the engine turns a positive grant into
 	// a deny-closed ABSTAIN (grants.go Scoped, grantExpired) and the request falls back to
 	// RBAC. Reporting from the stored rows without asking would then offer actions the
 	// engine has stopped authorizing — an over-offer produced by a clock rather than by a

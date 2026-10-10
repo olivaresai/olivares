@@ -267,6 +267,37 @@ function PrimitivesBoard({ d }: { d: DemoText }) {
           </Button>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" onClick={noop}>
+            {d.buttons.secondary}
+          </Button>
+          <Button variant="destructive-solid" onClick={noop}>
+            {d.buttons.danger}
+          </Button>
+          <Button variant="link" onClick={noop}>
+            {d.buttons.secondary}
+          </Button>
+        </div>
+        {(['icon', 'icon-sm'] as const).map((size) => (
+          <div key={size} data-icon-actions={size} className="flex gap-1">
+            <Button
+              size={size}
+              variant="ghost"
+              aria-label={d.buttons.secondary}
+              onClick={noop}
+            >
+              <Rows3 aria-hidden="true" />
+            </Button>
+            <Button
+              size={size}
+              variant="ghost"
+              aria-label={d.buttons.danger}
+              onClick={noop}
+            >
+              <CircleX aria-hidden="true" />
+            </Button>
+          </div>
+        ))}
+        <div className="flex flex-wrap items-center gap-2">
           <Button size="sm" onClick={noop}>
             {d.buttons.small}
           </Button>

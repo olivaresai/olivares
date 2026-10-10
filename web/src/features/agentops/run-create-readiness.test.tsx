@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { act, render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '@/lib/api/errors'
@@ -35,6 +35,10 @@ vi.mock('@/features/workspace-templates/api', () => ({
     list: (t: string | null, p?: unknown) => ['tpl', t, 'list', p ?? null],
     detail: (t: string | null, id: string) => ['tpl', t, 'detail', id],
   },
+}))
+vi.mock('@tanstack/react-router', async (orig) => ({
+  ...(await orig<typeof import('@tanstack/react-router')>()),
+  useNavigate: () => vi.fn(),
 }))
 vi.mock('@/components/ui/toaster', () => ({
   toast: { success: vi.fn(), error: vi.fn() },
@@ -99,8 +103,18 @@ beforeEach(() => {
   )
 })
 
+/** The profile's requirements in full are under Advanced options;
+ * what stops the launch is also said beside Start. */
+async function openAdvanced(user = userEvent.setup()) {
+  const toggle = await screen.findByRole('button', { name: 'Advanced options' })
+  if (toggle.getAttribute('aria-expanded') !== 'true') await user.click(toggle)
+}
+const panel = async () => within(await screen.findByTestId('launch-readiness'))
+const start = () => screen.getByRole('button', { name: 'Start' })
+
 async function choose(name: RegExp) {
   const user = userEvent.setup()
+  await openAdvanced(user)
   await user.click(await screen.findByLabelText('Provider profile'))
   await user.click(await screen.findByRole('option', { name }))
   return user
@@ -111,9 +125,7 @@ describe('RunCreateDialog — selected-profile launch readiness', () => {
     wrap()
     await waitFor(() => expect(agentOpsApi.listProfiles).toHaveBeenCalled())
     expect(agentOpsApi.profileLaunchReadiness).not.toHaveBeenCalled()
-    expect(
-      screen.getByRole('button', { name: /request launch/i }),
-    ).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Start' })).toBeDisabled()
   })
 
   it('queries only the selected tuple after the choice, and a ready observation permits the request', async () => {
@@ -130,7 +142,7 @@ describe('RunCreateDialog — selected-profile launch readiness', () => {
       await screen.findByText('Local requirements checked'),
     ).toBeInTheDocument()
     const user = userEvent.setup()
-    await user.click(screen.getByRole('button', { name: /request launch/i }))
+    await user.click(screen.getByRole('button', { name: 'Start' }))
     await waitFor(() => expect(agentOpsApi.createRun).toHaveBeenCalledOnce())
     expect(vi.mocked(agentOpsApi.createRun).mock.calls[0][0]).toMatchObject({
       provider_profile_ref: 'ppf_a',
@@ -159,7 +171,7 @@ describe('RunCreateDialog — selected-profile launch readiness', () => {
     expect(screen.getByText(/Inspection is incomplete/)).toBeInTheDocument()
     expect(screen.queryByText('Local requirements checked')).toBeNull()
     const user = userEvent.setup()
-    await user.click(screen.getByRole('button', { name: /request launch/i }))
+    await user.click(screen.getByRole('button', { name: 'Start' }))
     await waitFor(() => expect(agentOpsApi.createRun).toHaveBeenCalledOnce())
   })
 
@@ -182,9 +194,7 @@ describe('RunCreateDialog — selected-profile launch readiness', () => {
     wrap()
     await choose(/Home A/)
     expect(await screen.findByText('Missing configuration')).toBeInTheDocument()
-    expect(
-      screen.getByRole('button', { name: /request launch/i }),
-    ).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Start' })).toBeDisabled()
     expect(agentOpsApi.createRun).not.toHaveBeenCalled()
   })
 
@@ -218,9 +228,7 @@ describe('RunCreateDialog — selected-profile launch readiness', () => {
       expect(screen.queryByText('Local requirements checked')).toBeNull(),
     )
     expect(screen.getByText('Missing configuration')).toBeInTheDocument()
-    expect(
-      screen.getByRole('button', { name: /request launch/i }),
-    ).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Start' })).toBeDisabled()
     expect(agentOpsApi.createRun).not.toHaveBeenCalled()
   })
 
@@ -237,12 +245,15 @@ describe('RunCreateDialog — selected-profile launch readiness', () => {
     wrap()
     await choose(/Home A/)
     expect(
-      await screen.findByText(/The profile changed during inspection/),
+      await (await panel()).findByText(/The profile changed during inspection/),
     ).toBeInTheDocument()
+    expect(start()).toHaveAccessibleDescription(
+      /^The profile changed during inspection\./,
+    )
     expect(agentOpsApi.createRun).not.toHaveBeenCalled()
     const user = userEvent.setup()
     await user.click(
-      screen.getByRole('button', { name: 'Read requirements again' }),
+      (await panel()).getByRole('button', { name: 'Read requirements again' }),
     )
     expect(
       await screen.findByText('Local requirements checked'),
@@ -260,7 +271,7 @@ describe('RunCreateDialog — selected-profile launch readiness', () => {
     expect(
       await screen.findByText('Local requirements checked'),
     ).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: /request launch/i }))
+    await user.click(screen.getByRole('button', { name: 'Start' }))
     expect(
       await screen.findByText(/The launch request was refused/),
     ).toBeInTheDocument()
@@ -285,22 +296,21 @@ describe('RunCreateDialog — selected-profile launch readiness', () => {
     expect(
       await screen.findByText('Local requirements checked'),
     ).toBeInTheDocument()
-    expect(
-      screen.getByRole('button', { name: /request launch/i }),
-    ).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Start' })).toBeEnabled()
     let refetching: Promise<unknown> | undefined
     await act(async () => {
       refetching = qc.refetchQueries({ type: 'active' })
     })
     expect(
-      await screen.findByText(
-        /Checking the selected profile’s local requirements/,
-      ),
+      await (
+        await panel()
+      ).findByText(/Checking the selected profile’s local requirements/),
     ).toBeInTheDocument()
+    expect(start()).toHaveAccessibleDescription(
+      'Checking the selected profile’s local requirements…',
+    )
     expect(screen.queryByText('Local requirements checked')).toBeNull()
-    expect(
-      screen.getByRole('button', { name: /request launch/i }),
-    ).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Start' })).toBeDisabled()
     expect(agentOpsApi.createRun).not.toHaveBeenCalled()
     release(fixtureReadiness())
     await act(async () => {
@@ -309,9 +319,7 @@ describe('RunCreateDialog — selected-profile launch readiness', () => {
     expect(
       await screen.findByText('Local requirements checked'),
     ).toBeInTheDocument()
-    expect(
-      screen.getByRole('button', { name: /request launch/i }),
-    ).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Start' })).toBeEnabled()
   })
 
   it.each([
@@ -332,11 +340,10 @@ describe('RunCreateDialog — selected-profile launch readiness', () => {
       await act(async () => {
         await qc.refetchQueries({ type: 'active' })
       })
-      expect(await screen.findByText(notice)).toBeInTheDocument()
+      expect(await (await panel()).findByText(notice)).toBeInTheDocument()
+      expect(start()).toHaveAccessibleDescription(notice)
       expect(screen.queryByText('Local requirements checked')).toBeNull()
-      expect(
-        screen.getByRole('button', { name: /request launch/i }),
-      ).toBeDisabled()
+      expect(screen.getByRole('button', { name: 'Start' })).toBeDisabled()
       expect(agentOpsApi.createRun).not.toHaveBeenCalled()
     },
   )
@@ -360,12 +367,10 @@ describe('RunCreateDialog — selected-profile launch readiness', () => {
       await qc.refetchQueries({ type: 'active' })
     })
     expect(
-      await screen.findByText(/The profile changed during inspection/),
+      await (await panel()).findByText(/The profile changed during inspection/),
     ).toBeInTheDocument()
     expect(screen.queryByText('Local requirements checked')).toBeNull()
-    expect(
-      screen.getByRole('button', { name: /request launch/i }),
-    ).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Start' })).toBeDisabled()
     expect(agentOpsApi.createRun).not.toHaveBeenCalled()
   })
 
@@ -386,9 +391,7 @@ describe('RunCreateDialog — selected-profile launch readiness', () => {
     ).toBeInTheDocument()
     expect(screen.queryByText('Could not be checked')).toBeNull()
     expect(screen.queryByText(/Inspection is incomplete/)).toBeNull()
-    expect(
-      screen.getByRole('button', { name: /request launch/i }),
-    ).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Start' })).toBeDisabled()
     expect(agentOpsApi.createRun).not.toHaveBeenCalled()
   })
 
@@ -401,7 +404,7 @@ describe('RunCreateDialog — selected-profile launch readiness', () => {
     expect(
       await screen.findByText('Local requirements checked'),
     ).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: /request launch/i }))
+    await user.click(screen.getByRole('button', { name: 'Start' }))
     expect(
       await screen.findByText(/The launch request was refused/),
     ).toBeInTheDocument()
@@ -417,12 +420,10 @@ describe('RunCreateDialog — selected-profile launch readiness', () => {
     expect(
       await screen.findByText('Local requirements checked'),
     ).toBeInTheDocument()
-    expect(
-      screen.getByText(/requesting a launch needs sessions:run:write/),
-    ).toBeInTheDocument()
-    expect(
-      screen.getByRole('button', { name: /request launch/i }),
-    ).toBeDisabled()
+    expect(start()).toHaveAccessibleDescription(
+      'Starting a session needs the sessions:run:write permission.',
+    )
+    expect(screen.getByRole('button', { name: 'Start' })).toBeDisabled()
     expect(agentOpsApi.createRun).not.toHaveBeenCalled()
   })
 })

@@ -1,0 +1,34 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# The words localized documents write around a version, read by scripts/check-release-version.sh:
+# data, so that script's source stays in US English. One entry per line, two fields separated by a
+# tab: the name the checker reads it by and its value. A row value is a regular expression (most are
+# an alternation of words) that the row named in the checker inserts into its pattern as written; a
+# next-release value is the sentence start the selftest plants in that locale's README. The checker
+# refuses the file whole (exit 2) when it cannot be read, a line is not name<TAB>value, a name
+# repeats, a value does not compile or matches the empty string, or a name it reads is missing.
+otel-convention-before	semconv|gen_ai|mcp|[Mm]essages|invoke_|OpenLLMetry|[Cc]onventions?|Konvention|convenci|соглашени|约定|規約|GenAI|client/internal|Spezifikation|especificaci|спецификац|规范|仕様|upstream|amont|aguas|вверх|[Ff]ramework|оркестр|orchestr|[Ww]orkflow|CrewAI|crew|antérieures|anteriores|und früher|ранее|以前|及更早|and prior|normaliz|profile|Profil|perfil|профил|配置|プロファイル|default|Standard|predeterminad|défaut|умолчани|默认|デフォルト|events|Events|eventos|событи|事件|イベント|mensajes|[Сс]ообщения|不符合
+otel-convention-after	is the last|ist das letzte|es la última|est la dernière|— последний|\+ generation
+revision	Revisión|revisión
+time-unit	分钟|分|秒|小时|時間
+section	\b[Ss]ecci[oó]n(?:es)?|\bAbschnitt
+boundary-before	\bpr[eé]-|пред-|\b(?:before|from|from the|since|until|vor|ab|ab dem|seit|avant|à partir de|depuis|antes de|anterior a|desde)[ \t]+(?:\*\*)?|(?<!\w)до(?: версии)?[ \t]+|(?<!\w)начиная с(?: релиза)?[ \t]+|尚未到[ \t]*|从[ \t]*|自[ \t]*
+boundary-compound	-(?:Projekt|Produkt|Pakete|Status|стадии|продукт|пакеты)|／設計段階にある
+boundary-after	以前|以降|未満|前|之前|起
+ga-milestone	la release|サポート期間は
+thousands-word	aktiven|entradas
+ocsf-1.8-before	offiziellen|landen|de clase|`ai_operation`|officiels|公式の|official|классов|версии|官方|因此|、
+ocsf-1.3-before	de bajada a|rétrogradation en|понижением до
+ocsf-1.3-compound	-Downgrade-Emitter
+ocsf-1.3-after	降级输出器|へのダウン$
+conjunction	and|und|y|et|и|和
+claude-client-before	(?<!\w)(?i:client|cliente|seit|desde|depuis|since|ab|de la|клиент|клиента|с)|binary in|`claude`|从|客户端|自|クライアント|[（(]
+claude-client-after	以降
+tak-version	version|versión|версия|バージョン|版本
+next-release-de	Das nächste Release ist
+next-release-es	La próxima release es
+next-release-fr	La prochaine version est
+next-release-ja	次のリリースは
+next-release-zh	下一个版本是
+next-release-ru	Следующий выпуск —

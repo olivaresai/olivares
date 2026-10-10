@@ -6,6 +6,12 @@ description: >-
   которое опирается правило, ограничения приёмников по каждому транспорту и два
   места, где проекция не является полноценным конвертом.
 ---
+SIEM and ITSM push, OTLP downloads, external trace and metric delivery, and posture export require Business. Community keeps local observability, trace-context propagation, saved settings and `olivares dr backup`. Generic chat, email and webhook notifications remain available in Community.
+
+
+:::note[Business]
+Экспорт аудита (`GET /v1/audit/export`, `olivares audit export`), архивы в каталогах и проверка внешних архивов требуют Business. Community сохраняет подписанный журнал, `olivares audit verify` и `olivares dr backup`; экспорт возвращает HTTP 501 или код выхода 9. Пересылка аудита и перенос DDIL с сегментами аудита также требуют Business.
+:::
 
 Эта страница — **контракт исходящего потока**: что покидает control plane, на
 каком диалекте, каким транспортом и что с этим делает приёмник. Она написана для
@@ -53,7 +59,7 @@ DCR Sentinel или загрузку в code scanning.
 |---|---|---|
 | Экспорт журнала (`GET /v1/audit/export?format=…`) | `cef\|leef\|syslog\|otlp\|otlp_envelope\|otlp_log_record\|ocsf` | `cef` |
 | Sink событий (`sink_format` push-подписки) | `ocsf\|cef\|leef\|syslog\|otlp\|otlp_envelope\|json` | `ocsf` |
-| Коннекторы уведомлений (`filelog`, `splunkhec`, `s3archive`, `siem`) | `json\|cef\|leef\|syslog\|otlp\|otlp_envelope\|ocsf\|asim` | `json` |
+| Коннекторы уведомлений (`filelog`, `splunkhec`, `s3archive` (Business: Regulated Operations), `siem`) | `json\|cef\|leef\|syslog\|otlp\|otlp_envelope\|ocsf\|asim` | `json` |
 | Коннектор syslog | `syslog\|cef\|leef` | `syslog` |
 
 У экспорта журнала нет сквозной передачи сырого JSON — его JSON-формы и есть формы
@@ -62,7 +68,7 @@ OTLP выше. `json` означает две разные доставки: sin
 преобразования диалекта), тогда как коннекторы уведомлений формируют лишь
 минимальную проекцию уведомления — отображаемые поля, а не исходную полезную
 нагрузку. `asim` принимают все четыре коннектора уведомлений, включая
-`s3archive`. Формат вне списка своей поверхности отклоняется: опечатка при
+`s3archive` (Business: Regulated Operations). Формат вне списка своей поверхности отклоняется: опечатка при
 создании или настройке получает ошибку, называющую принимаемые токены этой
 поверхности, а повреждённое сохранённое значение отвергается при кодировании
 (с указанием повреждённого написания, а не списка); ничто не откатывается молча

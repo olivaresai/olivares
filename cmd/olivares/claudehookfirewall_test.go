@@ -10,7 +10,7 @@ import (
 
 	"github.com/olivaresai/olivares/connectors/claude"
 	claudeapi "github.com/olivaresai/olivares/connectors/claude-api"
-	"github.com/olivaresai/olivares/core/model"
+	"github.com/olivaresai/olivares/modules/sessions/hookpep"
 )
 
 // fakeHookInspector is a stand-in for the commercial hookhardening.Inspector. It records the
@@ -41,9 +41,9 @@ func TestHookFirewall_FurtherRestrictsAllowedCall(t *testing.T) {
 	h := newHarness(t)
 	tok := h.firmAgentToken(t, "agent-fw-deny@e2e.test")
 	// Policy WOULD allow the call; the firewall denies it (a secret in the argument).
-	f := newHookPEPFixture(t, h, hookPolicyDoc{Default: "allow"}, false, fixedEval{allow: true}, false)
+	f := newHookPEPFixture(t, h, hookpep.PolicyDoc{Default: "allow"}, false, fixedEval{allow: true}, false)
 	insp := &fakeHookInspector{forward: false}
-	f.dec.hookInspector = insp
+	f.dec.Inspector = insp
 
 	out := f.call(t, "Write", map[string]any{"file_path": "/app/c.env", "content": "AKIAIOSFODNN7EXAMPLE"}, tok, h.tenantA)
 	if got := decisionOf(out); got != claude.DecisionDeny {
@@ -58,8 +58,8 @@ func TestHookFirewall_CleanVerdictDoesNotWidenDisposition(t *testing.T) {
 	h := newHarness(t)
 	tok := h.firmAgentToken(t, "agent-fw-nowiden@e2e.test")
 	// Disposition DENY; a clean (forwarding) firewall must NOT turn it into an allow.
-	f := newHookPEPFixture(t, h, hookPolicyDoc{Default: "deny"}, false, fixedEval{allow: true}, false)
-	f.dec.hookInspector = &fakeHookInspector{forward: true}
+	f := newHookPEPFixture(t, h, hookpep.PolicyDoc{Default: "deny"}, false, fixedEval{allow: true}, false)
+	f.dec.Inspector = &fakeHookInspector{forward: true}
 
 	out := f.call(t, "Read", map[string]any{"file_path": "/repo/x"}, tok, h.tenantA)
 	if got := decisionOf(out); got != claude.DecisionDeny {
@@ -70,9 +70,9 @@ func TestHookFirewall_CleanVerdictDoesNotWidenDisposition(t *testing.T) {
 func TestHookFirewall_AllowsWhenCleanAndPermitted(t *testing.T) {
 	h := newHarness(t)
 	tok := h.firmAgentToken(t, "agent-fw-allow@e2e.test")
-	f := newHookPEPFixture(t, h, hookPolicyDoc{Default: "allow"}, false, fixedEval{allow: true}, false)
+	f := newHookPEPFixture(t, h, hookpep.PolicyDoc{Default: "allow"}, false, fixedEval{allow: true}, false)
 	insp := &fakeHookInspector{forward: true}
-	f.dec.hookInspector = insp
+	f.dec.Inspector = insp
 
 	out := f.call(t, "Bash", map[string]any{"command": "ls -la /repo"}, tok, h.tenantA)
 	if got := decisionOf(out); got != claude.DecisionAllow {
@@ -80,16 +80,5 @@ func TestHookFirewall_AllowsWhenCleanAndPermitted(t *testing.T) {
 	}
 	if len(insp.gotTexts) == 0 || insp.gotTexts[0] != "ls -la /repo" {
 		t.Fatalf("the Bash command must have been extracted as a channel, got %v", insp.gotTexts)
-	}
-}
-
-func TestHookFirewall_NilInspectorIsInert(t *testing.T) {
-	// The default AGPL build path: a nil inspector is a clean pass — the firewall changes nothing.
-	d := &claudeHookDecider{}
-	dec := d.runHookFirewall(context.Background(), model.TenantID("t_x"), "actor", hookAgent{}, claude.HookDecisionInput{
-		Tool: "Bash", Event: "PreToolUse",
-	})
-	if !dec.Forward {
-		t.Fatalf("nil inspector must be an inert clean pass")
 	}
 }

@@ -109,7 +109,7 @@ libstdc++.so.6|1fd75fe70354a416d75aef22bcae68c47bd25d20e2d0568c30b1a9838cf62f11
 # <<< PINS
 
 refuse() {
-	printf '%s: NO HE PODIDO MIRAR — %s\n' "$me" "$*" >&2
+	printf '%s: COULD NOT LOOK — %s\n' "$me" "$*" >&2
 	exit 2
 }
 usage() {

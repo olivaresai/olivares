@@ -30,18 +30,18 @@ export LC_ALL
 
 RAIZ="${OLIVARES_CLONE:-$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")/.." && pwd -P)}"
 cd "$RAIZ" 2>/dev/null || {
-	echo "check-connector-inventory: ⛔ NO HE PODIDO MIRAR: no existe $RAIZ" >&2
+	echo "check-connector-inventory: ⛔ COULD NOT CHECK: missing $RAIZ" >&2
 	exit 2
 }
 DOC="${OLIVARES_CONNECTOR_INVENTORY:-docs/ai-context/CONNECTORS.md}"
 DIR="${OLIVARES_CONNECTOR_DIR:-connectors}"
 
 [ -r "$DOC" ] || {
-	echo "check-connector-inventory: ⛔ NO HE PODIDO MIRAR: no se puede leer $DOC" >&2
+	echo "check-connector-inventory: ⛔ COULD NOT CHECK: cannot read $DOC" >&2
 	exit 2
 }
 [ -d "$DIR" ] || {
-	echo "check-connector-inventory: ⛔ NO HE PODIDO MIRAR: no existe $DIR/" >&2
+	echo "check-connector-inventory: ⛔ COULD NOT CHECK: missing $DIR/" >&2
 	exit 2
 }
 
@@ -53,26 +53,26 @@ raiz = os.environ["DIR"]
 
 def ciego(msg):
     # «No he podido mirar» NO es «está limpio»: 2, nunca 1 y nunca 0.
-    print(f"check-connector-inventory: ⛔ NO HE PODIDO MIRAR: {msg}", file=sys.stderr)
+    print(f"check-connector-inventory: ⛔ COULD NOT CHECK: {msg}", file=sys.stderr)
     sys.exit(2)
 
 try:
     texto = open(doc, encoding="utf8").read()
 except OSError as exc:
-    ciego(f"{doc} ilegible ({exc})")
+    ciego(f"{doc} unreadable ({exc})")
 
 # La tabla vive bajo «## Truth Table» y termina en el siguiente encabezado de nivel 2. Si el
 # documento se reestructura, esto NO adivina: dice que no ha podido mirar.
 try:
     i = texto.index("## Truth Table")
 except ValueError:
-    ciego(f"{doc} no tiene una sección «## Truth Table» — la tabla puede haberse renombrado")
+    ciego(f"{doc} has no «## Truth Table» section — the table may have been renamed")
 j = texto.find("\n## ", i + 5)
 bloque = texto[i:] if j == -1 else texto[i:j]
 
 filas = set(re.findall(r"^\| `([^`]+)` \|", bloque, re.M))
 if not filas:
-    ciego(f"{doc}: la tabla no tiene ni una fila reconocible — el barrido mediría cero contra todo")
+    ciego(f"{doc}: the table has no recognizable rows — the scan would compare everything against zero")
 
 # ⛔ EL DENOMINADOR ES «TIENE CÓDIGO GO», NO «ES UN DIRECTORIO». `connectors/backstage` son
 #    plugins TypeScript y NO lleva fila a propósito; es el mismo «−1 non-Go» que
@@ -107,10 +107,10 @@ try:
                 break
         (dirs if tiene_go else sin_go).add(d)
 except OSError as exc:
-    ciego(f"no se pudo recorrer {raiz}/ ({exc})")
+    ciego(f"could not traverse {raiz}/ ({exc})")
 
 if not dirs:
-    ciego(f"cero conectores con código Go bajo {raiz}/ — el árbol no es el que este gate espera")
+    ciego(f"no connectors with Go code under {raiz}/ — this tree does not match the expected layout")
 
 faltan = sorted(dirs - filas)
 sobran = sorted(filas - dirs - sin_go)
@@ -124,28 +124,28 @@ if m and int(m.group(1)) != total_dirs:
 
 if not faltan and not sobran and cifra_mal is None:
     print(
-        f"check-connector-inventory: OK — {len(filas)} fila(s) cubren los {len(dirs)} conector(es) "
-        f"con Go ({len(sin_go)} sin Go, exento(s) a propósito: {', '.join(sorted(sin_go)) or 'ninguno'}). "
-        f"⚠ Las otras 11 métricas del bloque Summary NO están cubiertas por este gate."
+        f"check-connector-inventory: OK — {len(filas)} row(s) cover the {len(dirs)} connector(s) "
+        f"with Go ({len(sin_go)} without Go, intentionally exempt: {', '.join(sorted(sin_go)) or 'none'}). "
+        f"⚠ The other 11 metrics in the Summary block are not covered by this check."
     )
     sys.exit(0)
 
 for c in faltan:
     print(
-        f"check-connector-inventory: ⛔ `{c}` tiene código Go y NO tiene fila en {doc} — "
-        f"un conector sin fila desaparece del inventario y no lo ve ningún gate, sólo una persona.",
+        f"check-connector-inventory: ⛔ `{c}` contains Go code but has no row in {doc} — "
+        f"a connector without a row disappears from the inventory and requires manual discovery.",
         file=sys.stderr,
     )
 for c in sobran:
     print(
-        f"check-connector-inventory: ⛔ {doc} tiene fila para `{c}` y no existe {raiz}/{c} — "
-        f"la tabla nombra algo que el árbol no tiene.",
+        f"check-connector-inventory: ⛔ {doc} has a row for `{c}`, but {raiz}/{c} is missing — "
+        f"the table names something absent from the tree.",
         file=sys.stderr,
     )
 if cifra_mal:
     print(
-        f"check-connector-inventory: ⛔ el resumen dice «Connector directories | {cifra_mal[0]}» y "
-        f"hay {cifra_mal[1]} — la cifra se re-deriva, no se transcribe.",
+        f"check-connector-inventory: ⛔ the summary says «Connector directories | {cifra_mal[0]}», but "
+        f"there are {cifra_mal[1]}; this count is derived from the tree, not copied.",
         file=sys.stderr,
     )
 sys.exit(1)

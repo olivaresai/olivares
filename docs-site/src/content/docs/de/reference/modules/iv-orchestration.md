@@ -7,6 +7,8 @@ description: >-
   deny-closed Seam, ehrlich benannt.
 ---
 
+**Edition:** Business Identity & Scale. Community antwortet auf diesen Routen mit `501`, enthält keine Orchestrierungskonsole oder Ausführung und erhält gespeicherte Daten für den Export.
+
 Modul IV ist die **Observe-and-Govern**-Ebene dafür, wie Agenten sich
 koordinieren. Es implementiert **kein** Agenten-Framework neu (kein
 LangGraph/CrewAI/AutoGen), es betreibt keinen Agenten und es startet niemals

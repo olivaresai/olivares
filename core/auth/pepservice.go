@@ -337,7 +337,10 @@ func (a *Authenticator) AuthenticatePEP(
 		return PEPIdentity{}, ErrUnauthenticated
 	}
 
-	var identity PEPIdentity
+	var (
+		identity PEPIdentity
+		used     model.ID
+	)
 	err := a.st.AuthView(ctx, func(as store.AuthScope) error {
 		token, found, err := lookupAPITokenBySelector(ctx, as, selector)
 		if err != nil {
@@ -417,11 +420,13 @@ func (a *Authenticator) AuthenticatePEP(
 			registeredCapabilities: clonePEPCapabilities(service.Capabilities),
 			capabilityVersion:      service.CapabilityVersion,
 		}
+		used = token.ID
 		return nil
 	})
 	if err != nil {
 		return PEPIdentity{}, err
 	}
+	a.recordTokenUse(ctx, used)
 	return identity, nil
 }
 

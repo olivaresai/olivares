@@ -187,11 +187,17 @@ func readyWorkLaunchItem(
 	return created.ResultID, workspace, ownerExternal
 }
 
-func workLaunchSpec(itemID model.ID, agentRef string) WorkLaunchSpec {
+func workLaunchSpec(t *testing.T, m *Module, tenant model.TenantID, itemID model.ID, agentRef string, profileRefs ...string) WorkLaunchSpec {
+	profileRef := ""
+	if len(profileRefs) != 0 {
+		profileRef = profileRefs[0]
+	} else {
+		profileRef = ensureRuntimeTestProfileRef(t, m, tenant)
+	}
 	return WorkLaunchSpec{
 		WorkItemID: itemID, AuditActorRef: agentRef,
 		Runtime: CreateRunParams{
-			Name: "k4-managed", Transport: TransportStreamJSON,
+			Name: "k4-managed", Transport: TransportStreamJSON, ProviderProfileRef: profileRef,
 			Isolation: IsolationNative, Actor: agentRef,
 			ActorKind: model.ActorAgent, AgentRef: agentRef,
 		},
@@ -208,7 +214,7 @@ func TestLaunchForWorkReservesAndBindsBeforeSpawnWithCanonicalWorkspace(t *testi
 		WithWorkIdentityResolver(allowWorkIdentity{}), WithWorkContentGuard(allowWorkContent{}),
 	)
 	itemID, workspace, agentRef := readyWorkLaunchItem(t, m, st, tenant)
-	spec := workLaunchSpec(itemID, agentRef)
+	spec := workLaunchSpec(t, m, tenant, itemID, agentRef)
 	expectedKey := WorkLaunchDispatchKey(itemID, 1, 1, WorkLaunchAttemptLeaseBind)
 	inspected := false
 	runner.before = func() error {
@@ -291,14 +297,14 @@ func TestLaunchForWorkUserAuditUsesDurableAgentExecutorAndReplays(t *testing.T) 
 		WithWorkIdentityResolver(allowWorkIdentity{}), WithWorkContentGuard(allowWorkContent{}),
 	)
 	itemID, workspace, ownerExternal := readyWorkLaunchItem(t, m, st, tenant)
-	m.UseWorkIdentityResolver(durableWorkLaunchIdentity{m: m, st: st})
+	WithWorkIdentityResolver(durableWorkLaunchIdentity{m: m, st: st})(m)
 	snapshot, err := m.Get(ctx, tenant, WorkPrincipal{}, itemID)
 	if err != nil {
 		t.Fatalf("load agent-owned WorkItem: %v", err)
 	}
 	ownerCanonical := snapshot.Item.OwnerRef
 	userID := model.NewID()
-	spec := workLaunchSpec(itemID, ownerExternal)
+	spec := workLaunchSpec(t, m, tenant, itemID, ownerExternal)
 	spec.AuditActorRef = userID.String()
 	spec.Runtime.Actor = "token:workflow-admin"
 	spec.Runtime.ActorKind = model.ActorUser
@@ -452,7 +458,7 @@ func TestLaunchForWorkRejectsSessionOwnerBeforeReservation(t *testing.T) {
 	_, err = m.LaunchForWork(ctx, tenant, WorkLaunchSpec{
 		WorkItemID: created.ResultID, AuditActorRef: userID.String(),
 		Runtime: CreateRunParams{
-			Name: "must-not-launch", Actor: "token:workflow-admin", ActorKind: model.ActorUser,
+			ProviderProfileRef: ensureRuntimeTestProfileRef(t, m, tenant), Name: "must-not-launch", Actor: "token:workflow-admin", ActorKind: model.ActorUser,
 		},
 	})
 	if we := asWorkError(err); we == nil || we.code != "owner_ineligible" {
@@ -537,7 +543,7 @@ func TestLaunchForWorkRejectsUserOwnerBeforeReservation(t *testing.T) {
 	_, err = m.LaunchForWork(ctx, tenant, WorkLaunchSpec{
 		WorkItemID: created.ResultID, AuditActorRef: auditUserID.String(),
 		Runtime: CreateRunParams{
-			Name: "must-not-launch", Actor: "token:workflow-admin", ActorKind: model.ActorUser,
+			ProviderProfileRef: ensureRuntimeTestProfileRef(t, m, tenant), Name: "must-not-launch", Actor: "token:workflow-admin", ActorKind: model.ActorUser,
 		},
 	})
 	if we := asWorkError(err); we == nil || we.code != "owner_ineligible" {
@@ -578,7 +584,7 @@ func TestLaunchForWorkRejectsNonCanonicalUserAuditActor(t *testing.T) {
 		WithWorkIdentityResolver(allowWorkIdentity{}), WithWorkContentGuard(allowWorkContent{}),
 	)
 	itemID, _, ownerExternal := readyWorkLaunchItem(t, m, st, tenant)
-	spec := workLaunchSpec(itemID, ownerExternal)
+	spec := workLaunchSpec(t, m, tenant, itemID, ownerExternal)
 	spec.Runtime.Actor = "token:workflow-admin"
 	spec.Runtime.ActorKind = model.ActorUser
 	spec.AuditActorRef = "token:not-a-canonical-user-id"
@@ -604,7 +610,7 @@ func TestLaunchForWorkExactDispatchReplayNeverSpawnsTwice(t *testing.T) {
 		WithWorkIdentityResolver(allowWorkIdentity{}), WithWorkContentGuard(allowWorkContent{}),
 	)
 	itemID, _, agentRef := readyWorkLaunchItem(t, m, st, tenant)
-	spec := workLaunchSpec(itemID, agentRef)
+	spec := workLaunchSpec(t, m, tenant, itemID, agentRef)
 	first, err := m.LaunchForWork(context.Background(), tenant, spec)
 	if err != nil {
 		t.Fatal(err)
@@ -682,7 +688,7 @@ func TestLaunchForWorkReplaySurvivesStoreReopen(t *testing.T) {
 	m1.UseData(api.NewModuleData(st1))
 	bindStoreStanding(m1, st1)
 	itemID, _, agentRef := readyWorkLaunchItem(t, m1, st1, tenant)
-	spec := workLaunchSpec(itemID, agentRef)
+	spec := workLaunchSpec(t, m1, tenant, itemID, agentRef)
 	first, err := m1.LaunchForWork(ctx, tenant, spec)
 	if err != nil {
 		_ = st1.Close()
@@ -705,6 +711,7 @@ func TestLaunchForWorkReplaySurvivesStoreReopen(t *testing.T) {
 		t.Fatalf("reopen store: %v", err)
 	}
 	t.Cleanup(func() { _ = st2.Close() })
+	m2.UseExecutionEnvironmentRef(m1.rt.environmentRef)
 	m2.UseData(api.NewModuleData(st2))
 	bindStoreStanding(m2, st2)
 
@@ -744,7 +751,7 @@ func TestLaunchForWorkSameDispatchWithDifferentRuntimeConflicts(t *testing.T) {
 		WithWorkIdentityResolver(allowWorkIdentity{}), WithWorkContentGuard(allowWorkContent{}),
 	)
 	itemID, _, agentRef := readyWorkLaunchItem(t, m, st, tenant)
-	spec := workLaunchSpec(itemID, agentRef)
+	spec := workLaunchSpec(t, m, tenant, itemID, agentRef)
 	first, err := m.LaunchForWork(context.Background(), tenant, spec)
 	if err != nil {
 		t.Fatal(err)
@@ -781,7 +788,7 @@ func TestLaunchForWorkConcurrentDispatchHasOneProcess(t *testing.T) {
 		WithWorkIdentityResolver(allowWorkIdentity{}), WithWorkContentGuard(allowWorkContent{}),
 	)
 	itemID, _, agentRef := readyWorkLaunchItem(t, m, st, tenant)
-	spec := workLaunchSpec(itemID, agentRef)
+	spec := workLaunchSpec(t, m, tenant, itemID, agentRef)
 	type outcome struct {
 		managed ManagedRunRef
 		err     error

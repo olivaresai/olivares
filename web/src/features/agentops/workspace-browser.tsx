@@ -40,12 +40,15 @@ import { Label } from '@/components/ui/label'
 import { Spinner } from '@/components/ui/spinner'
 import { Switch } from '@/components/ui/switch'
 import { toast } from '@/components/ui/toaster'
+import { HeadDiff } from '@/features/shared/head-diff'
+import { headUnavailable } from '@/features/shared/head-unavailable'
 import { useAuth } from '@/lib/auth/context'
 import { ApiError } from '@/lib/api/errors'
 import { cn } from '@/lib/utils'
 import { agentOpsApi, agentOpsKeys } from './api'
 import type { FileEntry, SensitivityHit, WorkspaceDTO } from './types'
 import './i18n'
+import { downloadBlob } from '@/lib/api/download'
 
 const PAGE = 200
 
@@ -57,6 +60,16 @@ const PAGE = 200
  * UI never renders content through an HTML sink (the editor is text-only).
  */
 export function WorkspaceBrowser({ workspace }: { workspace: WorkspaceDTO }) {
+  const { activeTenant } = useAuth()
+  return (
+    <Browser
+      key={`${activeTenant}:${workspace.workspace_ref}:${workspace.root_path}`}
+      workspace={workspace}
+    />
+  )
+}
+
+function Browser({ workspace }: { workspace: WorkspaceDTO }) {
   const { t } = useTranslation('agentops')
   const { activeTenant, can } = useAuth()
   const qc = useQueryClient()
@@ -384,6 +397,28 @@ function FileViewer({
   const [moveOpen, setMoveOpen] = useState(false)
   const [moveTo, setMoveTo] = useState(path)
 
+  // What git HEAD holds for this file. A 404 (no repository, a file never committed) is
+  // an answer: the file shows without a Changes view. Any other failure is said so under
+  // the file. Each read is an audited, policy-checked read, so a cut-off file does not
+  // ask and a focus change does not ask again.
+  const head = useQuery({
+    queryKey: agentOpsKeys.fileHead(
+      activeTenant,
+      workspace.workspace_ref,
+      path,
+    ),
+    queryFn: () => agentOpsApi.readFile(workspace.workspace_ref, path, 'HEAD'),
+    enabled: !isBinary && !file.truncated,
+    refetchOnWindowFocus: false,
+  })
+  const committed =
+    head.data &&
+    head.data.encoding === 'utf-8' &&
+    !head.data.truncated &&
+    !file.truncated
+      ? head.data.content
+      : undefined
+
   const del = useMutation({
     mutationFn: () =>
       agentOpsApi.deleteFile(workspace.workspace_ref, path, recursive),
@@ -451,14 +486,23 @@ function FileViewer({
           {t('browser.binary')}
         </p>
       ) : (
-        <CodeEditor
-          value={editing ? editValue : file.content}
-          onChange={editing ? onChange : undefined}
+        <HeadDiff
+          key={path}
+          committed={editing ? undefined : committed}
+          current={file.content}
           language={lang}
-          readOnly={!editing}
-          ariaLabel={t('browser.editorAria')}
           height="26rem"
-        />
+          unavailable={!editing && headUnavailable(head.error)}
+        >
+          <CodeEditor
+            value={editing ? editValue : file.content}
+            onChange={editing ? onChange : undefined}
+            language={lang}
+            readOnly={!editing}
+            ariaLabel={t('browser.editorAria')}
+            height="26rem"
+          />
+        </HeadDiff>
       )}
 
       {editing && (
@@ -687,12 +731,7 @@ function downloadFile(file: import('./types').FileReadResponse): void {
   } else {
     blob = new Blob([file.content], { type: 'text/plain;charset=utf-8' })
   }
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = file.path.split('/').pop() || 'file'
-  a.click()
-  URL.revokeObjectURL(url)
+  downloadBlob(blob, file.path.split('/').pop() || 'file')
 }
 
 function errToast(t: (k: string) => string) {

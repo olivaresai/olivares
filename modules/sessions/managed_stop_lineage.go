@@ -204,7 +204,7 @@ func (m *Module) RepairRunLineage(
 	cursor RunLineageRepairCursor,
 ) (RunLineageRepairResult, error) {
 	out := RunLineageRepairResult{Next: cursor}
-	if m == nil || m.data == nil {
+	if m == nil || m.Data == nil {
 		return out, errors.New("sessions: run lineage repair has no data handle")
 	}
 	if tenant.IsZero() {
@@ -217,10 +217,32 @@ func (m *Module) RepairRunLineage(
 	if !cursor.UpperBound.IsZero() && cursor.After >= cursor.UpperBound {
 		return RunLineageRepairResult{Exhausted: true}, nil
 	}
+	// The read establishes only whether this bounded page has candidates. A
+	// positive attempt recaptures a new-pass bound and every row inside Mutate;
+	// no identity resolution or version decision crosses this snapshot.
+	hasCandidates := false
+	err := m.Data.View(ctx, tenant, func(sc store.Scope) error {
+		repo, err := sc.Ext(runKind)
+		if err != nil {
+			return err
+		}
+		_, rows, err := readRunLineageRepairPage(ctx, repo, cursor)
+		hasCandidates = len(rows) != 0
+		return err
+	})
+	if err != nil {
+		return out, err
+	}
+	if err := ctx.Err(); err != nil {
+		return out, err
+	}
+	if !hasCandidates {
+		return RunLineageRepairResult{Exhausted: true}, nil
+	}
 	// The pass runs on the tenant scope the engine lifecycle hands it, unconfined:
 	// every row it exists to fix carries a NULL lineage, and NULL is exactly what
 	// confinement hides. A confined repair could not see its own candidates.
-	err := m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
+	err = m.Data.Mutate(ctx, tenant, func(sc store.Scope) error {
 		// A retried attempt starts from nothing: counters describe ONE committed
 		// transaction, never the sum of attempts that rolled back.
 		out = RunLineageRepairResult{Next: cursor}
@@ -228,20 +250,7 @@ func (m *Module) RepairRunLineage(
 		if err != nil {
 			return err
 		}
-		next := cursor
-		if next.UpperBound.IsZero() {
-			// Captured ONCE, from the highest existing id, before any row is read.
-			upper, err := highestRunID(ctx, repo)
-			if err != nil {
-				return err
-			}
-			if upper.IsZero() {
-				out.Exhausted = true
-				return nil
-			}
-			next.UpperBound = upper
-		}
-		rows, err := runLineageCandidates(ctx, repo, next.After, next.UpperBound)
+		next, rows, err := readRunLineageRepairPage(ctx, repo, cursor)
 		if err != nil {
 			return err
 		}
@@ -275,6 +284,22 @@ func (m *Module) RepairRunLineage(
 		out.Next = RunLineageRepairCursor{}
 	}
 	return out, nil
+}
+
+func readRunLineageRepairPage(
+	ctx context.Context,
+	repo store.GenericRepo,
+	next RunLineageRepairCursor,
+) (RunLineageRepairCursor, []model.Record, error) {
+	if next.UpperBound.IsZero() {
+		upper, err := highestRunID(ctx, repo)
+		if err != nil || upper.IsZero() {
+			return next, nil, err
+		}
+		next.UpperBound = upper
+	}
+	rows, err := runLineageCandidates(ctx, repo, next.After, next.UpperBound)
+	return next, rows, err
 }
 
 // repairOneRunLineage resolves and writes one row, or records why it did not.

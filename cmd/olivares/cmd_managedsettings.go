@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/olivaresai/olivares/core/envconfig"
 	"github.com/spf13/cobra"
 
 	"github.com/olivaresai/olivares/connectors/managedsettings"
@@ -124,7 +125,7 @@ func newAgentManagedSettingsCmd() *cobra.Command {
 				pol.Env[managedsettings.EnvBaseURL] = gatewayURL
 			}
 			if bypassed, reason := managedsettings.ServerTierBypassed(os.LookupEnv); bypassed {
-				ambient := strings.TrimSpace(os.Getenv(managedsettings.EnvBaseURL))
+				ambient := strings.TrimSpace(envconfig.Get(managedsettings.EnvBaseURL))
 				if gatewayURL == "" || ambient == "" || ambient != gatewayURL {
 					// Never print the URL: it may contain inline credentials.
 					_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "WARNING: governed managed-settings detected an unmanaged inference route override: %s\n", reason)

@@ -7,10 +7,9 @@ import (
 	"context"
 	"crypto/ed25519"
 	"encoding/json"
+	jose "github.com/go-jose/go-jose/v4"
 	"strings"
 	"testing"
-
-	jose "github.com/go-jose/go-jose/v4"
 )
 
 // normCanon runs the full §8.4 payload preparation (decode generic → normalize →

@@ -148,7 +148,7 @@ func call(h api.ModuleHandler, c Caller, method, id string, body any) *httptest.
 func TestRequestFieldsForCustodyAreRefused(t *testing.T) {
 	h := newHarness(t)
 	create := handlerFor(t, h.m, http.MethodPost, "/targets")
-	for _, f := range []string{"credential_ref", "api_base", "installation_id", "local_path", "secret"} {
+	for _, f := range []string{"credential_ref", "api_base", "installation_id", "local_path", "secret", "host"} {
 		body := map[string]any{"workspace_id": h.ws.String(), "credential_binding_id": "cb1", "repository_binding_id": "rb1", "push_prefix": "olivares/", "merge_bases": []string{"main"}, f: "x"}
 		rec := call(create, h.admin(), http.MethodPost, "", body)
 		if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "field_not_accepted") {
@@ -210,7 +210,8 @@ func checkPushEnvelope(t *testing.T, tail string, wantStatus int) {
 		if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
 			t.Fatal(err)
 		}
-		if len(response) != 1 || response["error"] != "invalid_request" {
+		detail, ok := response["error"].(map[string]any)
+		if len(response) != 1 || !ok || detail["code"] != "invalid_request" || detail["message"] != "invalid_request" {
 			t.Errorf("refusal response: %v", response)
 		}
 		if len(intents) != 0 || h.git.count() != 0 || h.host.mints != 0 || h.host.ref("olivares/trailing") != "" {
@@ -249,5 +250,34 @@ func TestPushRouteReturnsContractDTO(t *testing.T) {
 	rec = call(merge, h.admin(), http.MethodPost, h.target.ID.String(), map[string]any{"operation_id": "m", "number": 1, "expected_head": shaCommit, "method": "merge", "expected_result_tree": shaTree})
 	if rec.Code != http.StatusUnprocessableEntity || !strings.Contains(rec.Body.String(), "unsupported_requirement") {
 		t.Fatalf("exact tree: %d %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestDecodeErrorsKeepCodesAndNameFields(t *testing.T) {
+	for _, tc := range []struct{ body, code, field string }{
+		{`{"secret":"private-value"}`, "field_not_accepted", "secret"},
+		{`{"expected_version":"private-value"}`, "invalid_request", "expected_version"},
+	} {
+		var v targetBody
+		req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(tc.body))
+		rec := httptest.NewRecorder()
+		if decode(rec, req, &v) {
+			t.Fatal("invalid body accepted")
+		}
+		var envelope struct {
+			Error struct{ Code, Message string }
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &envelope); err != nil {
+			t.Fatal(err)
+		}
+		if rec.Code != http.StatusBadRequest || envelope.Error.Code != tc.code {
+			t.Fatalf("error contract changed: %d %s", rec.Code, rec.Body.String())
+		}
+		if !strings.Contains(envelope.Error.Message, tc.field) {
+			t.Errorf("message %q does not name %s", envelope.Error.Message, tc.field)
+		}
+		if strings.Contains(rec.Body.String(), "private-value") {
+			t.Fatal("request value leaked")
+		}
 	}
 }

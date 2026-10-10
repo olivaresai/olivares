@@ -1,0 +1,97 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+# A Docker daemon replays the README with an older :latest cached: a disposable hosted one,
+# or the shared daemon of the self-hosted pool when vars.CI_RUNNER names it (GitHub-hosted
+# Docker has been unavailable for olivaresai since 2026-10-04). On the shared daemon the run
+# owns its container, port, volume and network (deploy/compose/docker-compose.first-hour.ci.yml
+# and the Compose project name), takes the daemon-wide image tags under a lock and removes
+# what it created. Nothing is skipped or weakened on either runner.
+# This workflow builds and tests candidate bytes; it never publishes them.
+name: release-first-hour
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-first-hour-${{ github.ref }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  release-first-hour:
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          dest: ${{ runner.temp }}/setup-pnpm
+          standalone: true
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.work
+          cache: ${{ runner.environment == 'github-hosted' }}   # self-hosted runners keep the Go caches on local disk
+          cache-dependency-path: go.work.sum
+      - uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
+        with:
+          version: v2.17.0
+          install-only: true
+      - name: Install the locked browser harness
+        run: |
+          set -euo pipefail
+          pnpm --dir web install --frozen-lockfile --ignore-scripts
+          # Self-hosted images must supply system libraries; the runner has no sudo.
+          deps=()
+          if [[ "$RUNNER_ENVIRONMENT" == github-hosted ]]; then
+            deps=(--with-deps)
+          fi
+          export PLAYWRIGHT_BROWSERS_PATH="$RUNNER_TEMP/first-hour-browsers"
+          pnpm --dir web exec playwright install "${deps[@]}" chromium
+          echo "PLAYWRIGHT_BROWSERS_PATH=$PLAYWRIGHT_BROWSERS_PATH" >> "$GITHUB_ENV"
+      - name: Install go-task (pinned)
+        uses: ./.github/actions/olivares-tool-cache
+        with:
+          task_version: "3.51.1"
+      - name: Check the release gate and its browser guards
+        run: task test:release-first-hour
+      - name: README Compose first hour, empty store and fresh browser
+        timeout-minutes: 45
+        env:
+          OLIVARES_LICENSE_PUBKEY: ${{ vars.OLIVARES_LICENSE_PUBKEY }}
+          OLIVARES_OTA_PUBKEY: ${{ vars.OLIVARES_OTA_PUBKEY }}
+          # Required canonical templates; `goreleaser build` never publishes.
+          RELEASE_GITHUB_OWNER: olivaresai
+          RELEASE_GITHUB_NAME: olivares
+          OCI_IMAGE_REPO: ghcr.io/olivaresai/olivares
+          SOURCE_REPOSITORY_URL: https://github.com/olivaresai/olivares
+          COSIGN_MODE: keyless
+          PUBLISH_HOMEBREW: "false"
+        run: bash scripts/release-first-hour.sh
+      - name: Preserve evidence on the runner
+        if: always()
+        continue-on-error: true
+        uses: ./.github/actions/ci-evidence
+        with:
+          name: release-first-hour-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/first-hour-artifacts-candidate
+      - name: First-hour captures, identity, failures and redacted engine log
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-first-hour-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/first-hour-artifacts-candidate
+          include-hidden-files: false
+          if-no-files-found: error
+          retention-days: 1

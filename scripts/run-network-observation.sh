@@ -33,7 +33,7 @@ elapsed="$SECONDS"
 
 advise() {
 	local reason="$1" message
-	message="$label: ADVISORY — $reason; ${elapsed}s medidos. No se atribuye ese resultado al árbol."
+	message="$label: ADVISORY — $reason; ${elapsed}s measured. This result is not attributed to the tree."
 	echo "run-network-observation: ⚠ $message" >&2
 	if [ "${GITHUB_ACTIONS:-}" = "true" ]; then
 		echo "::warning title=External observation advisory::$message" >&2
@@ -54,15 +54,15 @@ case "$rc" in
 	# Most callers observed a real mismatch and must block. A census explicitly marked advisory is
 	# informational even when it found something (the pre-push unpublished-work ratchet).
 	if [ "$mode" = "all-advisory" ]; then
-		advise "el censo externo/local informó un hallazgo (rc=1)"
+		advise "the external/local census reported a finding (rc=1)"
 	fi
 	exit 1
 	;;
 2)
-	advise "el runner no pudo observar el sujeto externo (red/IP o herramienta)"
+	advise "the runner could not observe the external subject (network/IP or tool)"
 	;;
 *)
-	echo "run-network-observation: $label devolvió rc=$rc, fuera del contrato 0/1/2; no se degrada." >&2
+	echo "run-network-observation: $label returned rc=$rc, outside the 0/1/2 contract; the failure is preserved." >&2
 	exit "$rc"
 	;;
 esac

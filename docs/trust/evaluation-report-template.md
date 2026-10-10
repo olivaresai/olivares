@@ -25,7 +25,7 @@ Use this template with the [evaluation guide](./evaluation-guide.md). Enter `pas
 | Report date |  |
 | Product version |  |
 | Source commit |  |
-| License tier | Community / Enterprise evaluation |
+| License tier | Community / Business / Enterprise |
 | Deployment topology |  |
 | Operating system and architecture |  |
 | CPU and memory allocation |  |
@@ -94,9 +94,9 @@ evidence export. Include operator actions and investigation time.
 | 3.3 | Wire identity source (OIDC) |  |  |  |
 | 3.4 | Backup/restore cycle |  |  |  |
 | 3.5 | Verify there is NO user cap |  |  |  |
-| 3.6 | SSO enforcement (enterprise) |  |  |  |
-| 3.7 | Content firewall (enterprise) |  |  |  |
-| 3.8 | Multi-IdP federation (enterprise) |  |  |  |
+| 3.6 | SSO enforcement (Business: Identity & Scale) |  |  |  |
+| 3.7 | Content firewall (Business: AI Runtime Security) |  |  |  |
+| 3.8 | Multi-IdP federation (Business: Identity & Scale) |  |  |  |
 | 3.9 | Review honesty-and-limits page |  |  |  |
 
 **Phase 3 verdict:** Pass / Fail / Blocked

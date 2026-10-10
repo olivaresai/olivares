@@ -7,11 +7,10 @@ package orchestration
 import (
 	"context"
 	"errors"
-	"sort"
-
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
+	"sort"
 )
 
 // The orchestration retirement step. When a tenant removes an account, this step

@@ -169,7 +169,7 @@ def main() -> int:
         )
         return 0
     except (ContractError, OSError, ValueError) as exc:
-        print(f"assemble-package-repository-publish-tree: HALLAZGO — {exc}", file=sys.stderr)
+        print(f"assemble-package-repository-publish-tree: FINDING — {exc}", file=sys.stderr)
         return 1
 
 

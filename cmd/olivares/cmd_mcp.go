@@ -72,7 +72,7 @@ func newMCPPinsCmd(flags *authClientFlags) *cobra.Command {
 		Use:   "pins",
 		Short: "List and manage approved MCP tool fingerprints",
 		Long: "List, approve and remove tenant-scoped MCP tool fingerprints. Tool pins detect\n" +
-			"definition drift and are enforced by the enterprise tool-pin verifier.",
+			"definition drift and are enforced by the Business tool-pin verifier.",
 		Example: `  olivares mcp pins ls
   olivares mcp pins approve github.search --from-drift
   olivares mcp pins rm github.search`,

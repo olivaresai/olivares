@@ -16,11 +16,14 @@ import type { LiveDTO, TimelineDTO } from './types'
  * via the shared `useLiveStream` hook (bearer auth + tenant pin, audited on open),
  * NOT a path here.
  *
- * Pagination note (contract): the `/live` cursor is IGNORED — a custom most-recent
+ * Pagination note (contract): by default the `/live` cursor is IGNORED — a custom most-recent
  * sort means raising `limit` is how you widen the page; `cc_state` then filters that
- * page in-memory. The timeline IS keyset-paginated (cursor + has_more).
+ * page in-memory. With `pagination: 'cursor'`, the list traverses stable ID pages.
+ * The timeline IS keyset-paginated (cursor + has_more).
  */
 export interface LiveListParams {
+  /** Complete traversal in stable ID order; absent keeps the recency page. */
+  pagination?: 'cursor'
   cc_state?: string
   workspace_id?: string
   /** Exact STORE filters — the rows of one profile and/or one external id (the

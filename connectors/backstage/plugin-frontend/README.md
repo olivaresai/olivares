@@ -5,6 +5,8 @@ SPDX-License-Identifier: Apache-2.0
 
 # Olivares in Backstage — frontend plugin
 
+> **Deprecated.** Olivares does not use these packages. They keep working in this release series; their removal will be announced in the release notes beforehand. They are not qualified for production installation.
+
 `@olivaresai/backstage-plugin-olivares` makes the Olivares AI estate a native
 part of the developer portal. It is a **real plugin, not an iframe**: it renders
 the control plane's own data with Backstage components, so operating agents and

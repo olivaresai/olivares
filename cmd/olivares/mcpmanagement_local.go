@@ -6,6 +6,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -18,6 +19,7 @@ import (
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/secret"
 	"github.com/olivaresai/olivares/modules/sessions"
+	sessionegress "github.com/olivaresai/olivares/modules/sessions/egress"
 )
 
 func (m *mcpManagement) localEnvironment(ctx context.Context, tenant model.TenantID, row auth.MCPGatewayServer) ([]sessions.EnvVar, []string, error) {
@@ -66,7 +68,7 @@ func (m *mcpManagement) probeLocalServer(ctx context.Context, tenant model.Tenan
 	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
 	spec := sessions.LaunchSpec{Program: row.Command, Args: row.Args, Dir: dir, Isolation: sessions.IsolationNative, WaitDelay: time.Second, Env: env}
-	if err := m.confineLocalServer(&spec); err != nil {
+	if err := m.confineLocalServer(&spec, row.EgressHosts...); err != nil {
 		return nil, newManagedStdioFailure("process_start", err, patterns)
 	}
 	if m.eng != nil && m.eng.sessionsMod != nil {
@@ -100,7 +102,16 @@ func (m *mcpManagement) probeLocalServer(ctx context.Context, tenant model.Tenan
 // The agent's resolved launch grants the writable paths. Configured script and
 // file arguments add exact read/execute grants, never their parent directory.
 // Named code directories are read-only; the session folder is the only writer.
-func (m *mcpManagement) confineLocalServer(spec *sessions.LaunchSpec) error {
+// Egress hosts replace the launch's network with exactly those HTTPS hosts, at
+// public addresses only; with none, the command keeps the network of its launch.
+func (m *mcpManagement) confineLocalServer(spec *sessions.LaunchSpec, egressHosts ...string) error {
+	spec.ConfinementRequired = true
+	if len(egressHosts) > 0 {
+		spec.NetworkPolicy = &sessionegress.Policy{PublicOnly: true}
+		for _, host := range egressHosts {
+			spec.NetworkPolicy.Providers = append(spec.NetworkPolicy.Providers, "https://"+host)
+		}
+	}
 	// Each MCP child gets its own HOME and TMPDIR from the confined runner.
 	// Never reuse the agent's home or the user's project for package caches.
 	env := make([]sessions.EnvVar, 0, len(spec.Env))
@@ -130,13 +141,13 @@ func (m *mcpManagement) confineLocalServer(spec *sessions.LaunchSpec) error {
 	}
 	spec.Program = resolved
 	if m.eng == nil || m.eng.sessionsMod == nil {
-		return nil
+		return errMCPEgressUnconfined(spec)
 	}
 	rw := []string{spec.Dir}
 	ro := []string{resolved}
 	spec.Confinement = m.eng.sessionsMod.ConfinementPolicy(rw, ro)
 	if spec.Confinement == nil {
-		return nil
+		return errMCPEgressUnconfined(spec)
 	}
 	// The runner also reads the executable's install directory. Refuse a
 	// command placed directly in a broad/protected directory before spawning.
@@ -172,6 +183,15 @@ func (m *mcpManagement) confineLocalServer(spec *sessions.LaunchSpec) error {
 		spec.Confinement.ReadOnly = append(spec.Confinement.ReadOnly, path)
 	}
 	return nil
+}
+
+// The network boundary runs inside the filesystem confinement helper. Without
+// it an egress profile cannot hold, so the command does not start.
+func errMCPEgressUnconfined(spec *sessions.LaunchSpec) error {
+	if spec.NetworkPolicy == nil {
+		return nil
+	}
+	return newManagedStdioFailure("process_start", errors.New("egress hosts need process confinement (Landlock) on the engine host"), nil)
 }
 
 func (m *mcpManagement) allowedMCPCodePath(spec *sessions.LaunchSpec, path string, directory bool) bool {

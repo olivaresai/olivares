@@ -86,7 +86,7 @@ const (
 	// endpoints because the projection emits a tenant-wide rbac:read/admin permit for an
 	// admin-capable subject — but its ceiling still bounds it to its own scope+role.
 	permRBACRead  auth.Permission = "governance:rbac:read"
-	permRBACAdmin auth.Permission = "governance:rbac:admin"
+	permRBACAdmin auth.Permission = auth.PermRBACAdmin
 	// per-agent risk tier. read=list/get profiles; write=classify (run the
 	// heuristic); admin=set operator tier and review.
 	permAgentRiskRead  auth.Permission = "governance:agent-risk:read"
@@ -137,8 +137,8 @@ func WithClock(c model.Clock) Option {
 	return func(m *Module) { m.clock = c }
 }
 
-// WithOfflinePolicyStaleness sets the deployment-wide offline-trust bound (ADR-0024
-// Q1): past this staleness without the scoped-grant policy being re-established on this
+// WithOfflinePolicyStaleness sets the deployment-wide offline-trust bound.
+// Past this staleness without the scoped-grant policy being re-established on this
 // node, a tenant's POSITIVE grants expire deny-closed while its forbid/deny rules stay
 // enforced. Zero (the default) means no bound — a connected deployment behaves exactly as
 // before. An edge/DDIL deployment sets it (the ratified default is 72h) so a grant that
@@ -178,7 +178,7 @@ type Module struct {
 	data             api.ModuleData
 	host             sdk.Host
 	clock            model.Clock
-	// offlineStaleness is the deployment-wide offline-trust bound (ADR-0024 Q1), wired
+	// offlineStaleness is the deployment-wide offline-trust bound, wired
 	// into the scoped-grant engine at construction. Zero ⇒ no bound (connected default).
 	offlineStaleness time.Duration
 	eval             *evaluator
@@ -464,6 +464,7 @@ func (m *Module) APIRoutes(reg api.RouteRegistrar) {
 	// Read tier: both only reflect what /pdp/versions already lists.
 	reg.Handle("GET", "/pdp/versions/{revision}", permPolicyRead, m.handlePdpGetVersion)
 	reg.Handle("GET", "/pdp/active", permPolicyRead, m.handlePdpActive)
+	reg.Handle("DELETE", "/pdp/active", permPolicyAdmin, m.handlePdpDisable)
 	reg.Handle("GET", "/pdp/tests", permPolicyRead, m.handlePdpTests)
 	reg.Handle("POST", "/pdp/publish", permPolicyAdmin, m.handlePdpPublish)
 	reg.Handle("POST", "/pdp/rollback", permPolicyAdmin, m.handlePdpRollback)
@@ -488,14 +489,8 @@ func (m *Module) APIRoutes(reg api.RouteRegistrar) {
 	reg.Handle("POST", "/approvals/sweep", permApprovalAdmin, m.handleSweep)
 
 	// Subsystem E — break-glass emergency access: audited, notified,
-	// time-boxed, forced post-review. Never a silent bypass (breakglass.go).
-	reg.Handle("GET", "/breakglass", permBreakGlassRead, m.handleListBreakGlass)
-	reg.Handle("POST", "/breakglass", permBreakGlassAdmin, m.handleActivateBreakGlass)
-	reg.Handle("POST", "/breakglass/consume", permBreakGlassUse, m.handleConsumeBreakGlass)
-	reg.Handle("GET", "/breakglass/{id}", permBreakGlassRead, m.handleGetBreakGlass)
-	reg.Handle("GET", "/breakglass/{id}/uses", permBreakGlassRead, m.handleListBreakGlassUses)
-	reg.Handle("POST", "/breakglass/{id}/revoke", permBreakGlassAdmin, m.handleRevokeBreakGlass)
-	reg.Handle("POST", "/breakglass/{id}/review", permBreakGlassAdmin, m.handleReviewBreakGlass)
+	// time-boxed, forced post-review. Business implementation; Community keeps the published 501 routes.
+	m.registerBreakGlassRoutes(reg)
 
 	// Subsystem F — NHI lifecycle: rotation, expiry/staleness enforcement
 	// and governed offboarding on top of the roster (nhilifecycle.go).
@@ -558,6 +553,10 @@ func (m *Module) APIRoutes(reg api.RouteRegistrar) {
 	reg.Handle("POST", "/rbac/grants", permRBACAdmin, m.handleCreateScopedGrant)
 	reg.Handle("GET", "/rbac/grants/{id}", permRBACRead, m.handleGetScopedGrant)
 	reg.Handle("DELETE", "/rbac/grants/{id}", permRBACAdmin, m.handleRevokeScopedGrant)
+	reg.Handle("GET", "/rbac/inheritance-filters", permRBACRead, m.handleListInheritanceFilters)
+	reg.Handle("POST", "/rbac/inheritance-filters", permRBACAdmin, m.handleCreateInheritanceFilter)
+	reg.Handle("GET", "/rbac/inheritance-filters/{id}", permRBACRead, m.handleGetInheritanceFilter)
+	reg.Handle("DELETE", "/rbac/inheritance-filters/{id}", permRBACAdmin, m.handleRemoveInheritanceFilter)
 
 	// Subsystem J — per-agent risk/autonomy tier: heuristic classification
 	// from observed signals, operator override, human review. The effective tier

@@ -68,12 +68,10 @@ describe('ScorecardCard', () => {
     expect(screen.queryByText(/Regressed/i)).not.toBeInTheDocument()
   })
 
-  // El rótulo «Pass-rate» debe cubrir #aprobados/#total, no la media de las tasas
-  // por corrida: una corrida de 1 caso pesaba lo mismo que una de 200. El motor
-  // manda las dos cifras desde (scorecards.go:43 y :52) y la consola sólo
-  // declaraba la primera, así que la tarjeta enseñaba la media bajo el nombre de
-  // la tasa. La fixture ahora lleva las dos y DIFIEREN, que es lo que hace que
-  // este test pueda distinguirlas.
+  // The Pass-rate label must report total passed/total scored, not average per-run rates:
+  // a one-case run previously weighed as much as a 200-case run. The engine has sent both
+  // values since (`scorecards.go:43,52`), but the console declared only the average.
+  // The fixture includes distinct values so this test can tell them apart.
   it('shows the case-weighted pass-rate with its denominator, not the per-run mean', () => {
     const sc = scorecardsFixture[0]
     renderIntel(<ScorecardCard scorecard={sc} />)

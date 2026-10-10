@@ -88,17 +88,14 @@ d="$(repo committed_md)" || exit 2; conflict "$d/README.md"
 git -C "$d" add -A; git -C "$d" commit -qm "bad resolution in prose"
 run "$d" 1 "markers in MARKDOWN are caught — prose has no syntax error" "README.md:2"
 
-# --- CASE 2b. ⛔ UN NOMBRE QUE EMPIEZA POR GUION SE LO COME `grep` COMO OPCIÓN. Lo encontró el
-# contraste the model el 2026-08-15 y estaba VIVO en main: un fichero llamado `--help` con el
-# triple dentro daba **CLEAN, rc=0** — `xargs` añade los operandos detrás del patrón, `grep` lee
-# `--help` como opción, imprime su ayuda, sale 0, y el script descarta el diagnóstico.
-#
-# ⛔ EL FIXTURE TIENE UN SOLO CULPABLE, Y ES DELIBERADO: con un segundo fichero malo el caso da
-# DIRTY por ESE otro y la casilla pasaría sin ejercitar nada. Me pasó al medirlo la primera vez —
-# di el caso por bueno con un señuelo contaminado.
+# Case 2b: a leading-dash filename became a grep option (the model, 2026-08-15).
+# A --help file containing conflict markers returned CLEAN rc 0 on main: xargs put
+# the operand after the pattern, grep printed help and exited 0, and the script
+# discarded the diagnostic. Use exactly one offending file; another bad fixture
+# would make DIRTY pass for the wrong reason, as the first reproduction did.
 d="$(repo dash_option)"; conflict "$d/--help"
 git -C "$d" add -A >/dev/null 2>&1; git -C "$d" commit -qm "dash option" >/dev/null 2>&1
-run "$d" 1 "un fichero llamado --help NO es invisible" "--help:1"
+run "$d" 1 "a file named --help is NOT invisible" "--help:1"
 
 # --- CASE 3. Written but not yet `git add`-ed. Reading only the index would move the blind
 # spot one step earlier rather than close it, and the author staging a bad resolution is the
@@ -165,19 +162,15 @@ run "$WORK/not-a-repo" 2 "a real directory that is not a repository is COULD NOT
 d="$(repo subdir)" || exit 2; mkdir -p "$d/sub"
 run "$d/sub" 2 "a SUBDIRECTORY of a repo is refused, not silently graded" "not the top level"
 
-# --- UN CENSO VACÍO ES UNA SONDA ROTA, NO UN ÁRBOL LIMPIO.
-#
-# ⛔ ESTA CASILLA EXISTE PORQUE SU MUTANTE SOBREVIVIÓ. El contraste the model del 2026-08-15
-#    (`an internal design note (not shipped)`) quitó el rechazo del censo
-#    vacío y la batería siguió en **15/15**: el sujeto mutado devolvía `rc 0` y
-#    «CLEAN — 0 file(s) examined». Ninguna casilla usaba un repositorio sin ficheros, así que
-#    nada distinguía «no hay marcadores» de «no he mirado nada».
-#
-#    El fixture NO puede salir de repo(), que commitea un README a propósito: aquí hace falta un
-#    repositorio de verdad y VACÍO, que es justo el caso que faltaba.
+# An empty census is an unperformed probe, not a clean tree.
+# The the model review on 2026-08-15
+# (an internal design note (not shipped)) removed the empty-census
+# rejection, yet all 15 cases still passed with “CLEAN — 0 file(s) examined”, rc 0.
+# No case used an empty repository. Create one directly: repo() deliberately commits
+# a README and cannot supply the missing condition.
 d="$WORK/censo-vacio"; mkdir -p "$d"
-git init -q -b main "$d" >/dev/null 2>&1 || { printf 'FIXTURE: git init falló\n' >&2; exit 2; }
-[ "$(git -C "$d" ls-files | wc -l)" -eq 0 ] || { printf 'FIXTURE: el repo vacío no está vacío\n' >&2; exit 2; }
+git init -q -b main "$d" >/dev/null 2>&1 || { printf 'FIXTURE: git init failed\n' >&2; exit 2; }
+[ "$(git -C "$d" ls-files | wc -l)" -eq 0 ] || { printf 'FIXTURE: the empty repo is not empty\n' >&2; exit 2; }
 run "$d" 2 "an EMPTY census is UNVERIFIED, not a clean tree" "census that stopped working"
 
 printf '\nconflict-markers: %d passed, %d failed\n' "$PASS" "$FAIL"

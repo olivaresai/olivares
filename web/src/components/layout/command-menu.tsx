@@ -1,9 +1,17 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
-import { LogOut, Moon, Play, Search, Sun } from 'lucide-react'
+import {
+  LogOut,
+  Moon,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Play,
+  Search,
+  Sun,
+} from 'lucide-react'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
@@ -19,6 +27,12 @@ import {
   useCommandActionAuthority,
 } from '@/features/navigation/command-actions'
 import { useViewAccess } from '@/features/navigation/authorization'
+import { agentToolsApi, agentToolsKeys } from '@/features/agent-tools/api'
+import { toolFacts, toolLabel } from '@/features/agent-tools/inventory'
+import { useProviderBoundary } from '@/features/providers/auth-boundary'
+import { settingsSearchEntries } from '@/features/settings/sections'
+import { OffTag } from '@/features/navigation/off-tag'
+import { cn } from '@/lib/utils'
 import { useAuth } from '@/lib/auth/context'
 import {
   SEARCH_KIND_FEATURE,
@@ -38,6 +52,9 @@ import {
 import { KEYBINDINGS, NAV_LEADER, NAV_SEQUENCES } from '@/lib/keybindings/table'
 import { useCommandStore } from '@/stores/command'
 import { useThemeStore } from '@/stores/theme'
+import { usePreferencesStore } from '@/stores/preferences'
+import { foldOrOverlay } from './sidebar-mode'
+import { frameFor } from './page-frames'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useSessionRail } from './use-session-rail'
 
@@ -97,7 +114,7 @@ const SEARCH_DEBOUNCE_MS = 250
  * finds. Each result shows `Area › Section` so two doors into one screen stay
  * distinguishable. Hidden (deep-link-only) views are never offered. */
 export function CommandMenu() {
-  const { t } = useTranslation(['nav', 'common', 'auth'])
+  const { t } = useTranslation(['nav', 'common', 'auth', 'settings'])
   const open = useCommandStore((s) => s.open)
   const setOpen = useCommandStore((s) => s.setOpen)
 
@@ -149,8 +166,8 @@ function PaletteBody() {
   const { t } = useTranslation(['nav', 'common', 'auth'])
   const setOpen = useCommandStore((s) => s.setOpen)
   const navigate = useNavigate()
-  const { activeTenant, can, logout } = useAuth()
-  const { navigable } = useViewAccess()
+  const { activeTenant, can, logout, isSuperadmin } = useAuth()
+  const { navigable, listed, isOff } = useViewAccess()
   // The verbs' own authority, which is NOT the view's (see features/navigation/command-actions).
   const { authorized: mayRun, capture } = useCommandActionAuthority()
   const setTheme = useThemeStore((s) => s.setTheme)
@@ -159,6 +176,41 @@ function PaletteBody() {
   const [query, setQuery] = useState('')
   const [debounced, setDebounced] = useState('')
   const { commandOnly, text: matchQuery } = matchQueryOf(query)
+  const boundary = useProviderBoundary()
+  const toolsView = viewById('agent-tools')
+  const ToolIcon = toolsView?.icon ?? Search
+  // Installed objects use the Tools page's authority and its existing scoped reads.
+  // Disabled queries may retain cached data: also gate the rows below on readTools.
+  const readTools = !!isSuperadmin && !!toolsView && navigable(toolsView)
+  const queryClient = useQueryClient()
+  const toolScope = useMemo(
+    () => [...agentToolsKeys.all, 'palette', boundary.epoch],
+    [boundary.epoch],
+  )
+  // Retire only palette-owned reads; the Tools page may still be refreshing or
+  // polling an install under this authority. Leaving the palette or authority
+  // must cancel late reads and prevent a tenant round trip reviving snapshots.
+  useEffect(
+    () => () => {
+      void queryClient.cancelQueries({ queryKey: toolScope })
+      queryClient.removeQueries({ queryKey: toolScope })
+    },
+    [toolScope, queryClient, readTools],
+  )
+  const inventoryQ = useQuery({
+    queryKey: [...toolScope, 'inventory'],
+    queryFn: ({ signal }) => agentToolsApi.inventory(signal),
+    enabled: readTools && !commandOnly,
+    staleTime: 30_000,
+    retry: false,
+  })
+  const providersQ = useQuery({
+    queryKey: [...toolScope, 'providers', activeTenant],
+    queryFn: ({ signal }) => agentToolsApi.providers(activeTenant, signal),
+    enabled: readTools && !commandOnly,
+    staleTime: 30_000,
+    retry: false,
+  })
 
   useEffect(() => {
     const id = window.setTimeout(() => setDebounced(query), SEARCH_DEBOUNCE_MS)
@@ -182,23 +234,36 @@ function PaletteBody() {
 
   const go = (to: string) => {
     setOpen(false)
-    void navigate({ to: to as never })
+    // A complete destination must be parsed into route, query and fragment; `to`
+    // alone treats a query or fragment as part of the route pathname.
+    if (to.includes('?') || to.includes('#')) {
+      const target = new URL(to, window.location.origin)
+      void navigate({
+        to: target.pathname as never,
+        search: Object.fromEntries(target.searchParams) as never,
+        hash: target.hash.slice(1),
+      })
+    } else {
+      void navigate({ to: to as never })
+    }
   }
 
   // Same visibility rule as the sidebar, and now literally the same predicate: the
   // shared projection + never a hideInNav view. A hidden view is
   // parameterized/deep-link-only (e.g. /session-viewer/$id) — navigating to its literal
-  // path would 404 on the placeholder segment.
-  const views = FEATURE_VIEWS.filter(
+  // path would 404 on the placeholder segment. A data search hit opens its own
+  // room, as an entity's next room does (`rooms`); Go to and the verbs are navigation.
+  const rooms = FEATURE_VIEWS.filter(
     (v: FeatureView) => !v.hideInNav && navigable(v),
   )
+  const views = rooms.filter((v) => listed(v))
 
   // The shared index, narrowed to what THIS principal may open (the same projection the
   // sidebar filter uses), ranked by the query.
   const index = useMemo(() => buildNavSearchIndex(t), [t])
   const authorized = useMemo(
-    () => authorizedEntries(index, navigable),
-    [index, navigable],
+    () => authorizedEntries(index, listed),
+    [index, listed],
   )
   const ranked = useMemo(
     () => rankNavMatches(authorized, matchQuery),
@@ -211,10 +276,26 @@ function PaletteBody() {
     : ranked.filter((e) => e.kind === 'area' || e.kind === 'view')
   const settingsHits = commandOnly
     ? []
-    : ranked.filter((e) => e.kind === 'settings')
+    : rankNavMatches(
+        [
+          ...authorized.filter((e) => e.kind === 'settings'),
+          ...settingsSearchEntries(t, !!isSuperadmin),
+        ],
+        matchQuery,
+      )
 
   const needle = fold(matchQuery)
   const shows = (label: string) => !needle || fold(label).includes(needle)
+  const tools =
+    commandOnly || !readTools
+      ? []
+      : toolFacts(
+          inventoryQ.isError ? undefined : inventoryQ.data,
+          providersQ.isError ? [] : (providersQ.data?.providers ?? []),
+        ).filter(
+          (tool) =>
+            tool.installed && shows(`${toolLabel(tool.driver)} ${tool.driver}`),
+        )
   const recentSessions = commandOnly
     ? []
     : rail.groups
@@ -254,6 +335,8 @@ function PaletteBody() {
   const renderNav = (e: NavSearchEntry) => {
     const Icon = e.icon
     const context = e.kind === 'area' ? t('nav:directory.area') : e.context
+    const view = e.kind === 'view' ? viewById(e.id) : undefined
+    const off = !!view && isOff(view)
     return (
       <CommandItem
         key={`${e.kind}:${e.id}`}
@@ -262,7 +345,10 @@ function PaletteBody() {
       >
         <Icon />
         <span className="flex min-w-0 flex-1 flex-col">
-          <span className="truncate" data-slot="palette-name">
+          <span
+            className={cn('truncate', off && 'text-text-3')}
+            data-slot="palette-name"
+          >
             {markMatch(e.label, matchQuery)}
           </span>
           {context || e.description ? (
@@ -277,6 +363,7 @@ function PaletteBody() {
             </span>
           ) : null}
         </span>
+        {off ? <OffTag /> : null}
         <KeyHint keys={goKeys(e)} />
       </CommandItem>
     )
@@ -381,22 +468,33 @@ function PaletteBody() {
   const showLight = shows(`${themeLabel} ${lightLabel}`)
   const showDark = shows(`${themeLabel} ${darkLabel}`)
   const showSignOut = shows(signOutLabel)
+  // The palette's fold entry is the sidebar's own gesture (sidebar-mode.ts): on a work page
+  // it unfolds the navigation over the page, elsewhere it folds or unfolds the sidebar.
+  const unfolds =
+    frameFor(window.location.pathname) === 'work' ||
+    usePreferencesStore.getState().sidebarCollapsed
+  const foldLabel = t(
+    unfolds ? 'common:actions.expandSidebar' : 'common:actions.collapseSidebar',
+  )
+  const showFold = shows(foldLabel)
   const anyAction =
     actionItems.length > 0 ||
     showStartSession ||
     showLight ||
     showDark ||
+    showFold ||
     showSignOut
   const visibleSearch = commandOnly
     ? []
     : searchHits.filter((hit) => {
         const featureId = SEARCH_KIND_FEATURE[hit.kind]
         const route = SEARCH_KIND_ROUTES[hit.kind]
-        const view = views.find((v) => v.id === featureId)
+        const view = rooms.find((v) => v.id === featureId)
         return !!route && !(featureId && !view)
       })
   const anyListed =
     visibleSearch.length > 0 ||
+    tools.length > 0 ||
     anyAction ||
     goToHits.length > 0 ||
     recentSessions.length > 0 ||
@@ -485,6 +583,23 @@ function PaletteBody() {
                 </span>
               </CommandItem>
             ) : null}
+            {showFold ? (
+              <CommandItem
+                value={`sidebar:fold ${foldLabel}`}
+                onSelect={() => {
+                  setOpen(false)
+                  foldOrOverlay(
+                    window.location.pathname,
+                    useCommandStore.getState().opener,
+                  )
+                }}
+              >
+                {unfolds ? <PanelLeftOpen /> : <PanelLeftClose />}
+                <span className="truncate" data-slot="palette-name">
+                  {markMatch(foldLabel, matchQuery)}
+                </span>
+              </CommandItem>
+            ) : null}
             {showSignOut ? (
               <CommandItem
                 value={`signout ${signOutLabel}`}
@@ -555,12 +670,36 @@ function PaletteBody() {
           </CommandGroup>
         ) : null}
 
-        {visibleSearch.length > 0 ? (
+        {visibleSearch.length > 0 || tools.length > 0 ? (
           <CommandGroup heading={t('common:commandPalette.searchResults')}>
+            {tools.map((tool) => (
+              <CommandItem
+                key={`tool:${tool.driver}`}
+                value={`tool:${tool.driver} ${toolLabel(tool.driver)}`}
+                onSelect={() =>
+                  go(
+                    `${toolsView!.path}#tool-${encodeURIComponent(tool.driver)}`,
+                  )
+                }
+              >
+                <ToolIcon />
+                <span className="flex min-w-0 flex-1 flex-col">
+                  <span className="truncate" data-slot="palette-name">
+                    {markMatch(toolLabel(tool.driver), matchQuery)}
+                  </span>
+                  <span
+                    className="truncate text-caption leading-4 text-muted-foreground"
+                    data-slot="palette-context"
+                  >
+                    {t('nav:items.agent-tools')}
+                  </span>
+                </span>
+              </CommandItem>
+            ))}
             {visibleSearch.map((hit) => {
               const featureId = SEARCH_KIND_FEATURE[hit.kind]
               const route = SEARCH_KIND_ROUTES[hit.kind]
-              const view = views.find((v) => v.id === featureId)
+              const view = rooms.find((v) => v.id === featureId)
               const Icon = view?.icon ?? Search
               if (!route) return null
               return (
@@ -594,7 +733,10 @@ function PaletteBody() {
           {t('common:commandPalette.searchTruncated')}
         </p>
       ) : null}
-      {searchQ.data?.degraded ? (
+      {searchQ.data?.degraded ||
+      (readTools &&
+        !commandOnly &&
+        (inventoryQ.isError || providersQ.isError)) ? (
         <p className="px-3 py-1 text-caption text-destructive">
           {t('common:commandPalette.searchDegraded')}
         </p>

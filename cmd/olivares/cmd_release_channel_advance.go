@@ -82,7 +82,7 @@ func newReleaseVerifyChannelAdvanceCmd() *cobra.Command {
 	o := &channelAdvanceOptions{}
 	cmd := &cobra.Command{
 		Use:   "verify-channel-advance",
-		Short: "Refuse a channel publication that would not move the LIVE channel forward (CFG-06 monotonicity fence)",
+		Short: "Refuse a channel publication that would not move the LIVE channel forward",
 		Long: "Reads the manifest the update channel serves RIGHT NOW and compares its version to\n" +
 			"the one you are about to publish (--candidate). The publication is accepted only if\n" +
 			"it moves the channel strictly forward.\n\n" +
@@ -100,7 +100,7 @@ func newReleaseVerifyChannelAdvanceCmd() *cobra.Command {
 		// scrubbed. Naming a private organisation here would put
 		// a private org in front of every reader of the public binary. The export gate caught
 		// exactly this line on 2026-08-27.
-		Example: "  # before publishing the draft for v26.8.1\n" +
+		Example: "  # before publishing the draft for 1.1\n" +
 			"  olivares release verify-channel-advance --candidate dist/stable-manifest.json\n\n" +
 			"  # against a disposable test repository, pinned to its tag\n" +
 			"  olivares release verify-channel-advance --candidate dist/stable-manifest.json \\\n" +

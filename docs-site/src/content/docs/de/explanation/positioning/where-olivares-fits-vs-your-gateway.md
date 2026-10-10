@@ -18,9 +18,15 @@ ist Content-Sicherheit bei diesem Aufruf. Beide sind real, beide sind gut in dem
 tun, und keines ist das, was Olivares ist.
 
 :::tip[Die Kurzfassung]
-**Olivares AI ist kein AI-Gateway.** Es routet, cacht, load-balanciert nicht und sitzt
-nicht auf dem Hot Path Ihres Modell-Traffics, und das wird es nie. Es sitzt **neben und
-hinter** Ihrem Gateway als die *Governance- und Evidenz-Plane*: In-Process-Durchsetzung
+**Olivares AI ergänzt Ihr AI-Gateway.** Modellaufrufe einer Sitzung umgehen
+den Olivares-Inferenz-Proxy standardmäßig. Explizit durch diesen Proxy geleitete
+Aufrufe passieren vor der Weiterleitung seine Inline-Durchsetzung. Die Access Map
+beobachtet außerhalb des Datenpfads; ein Collector-Ausfall reduziert die Abdeckung.
+Verwaltete Claude-Code-Sitzungen installieren standardmäßig Tool-Aufruf-Hooks,
+die den Engine-PEP aufrufen. Ist dieser bei einem Ausfall oder Neustart unerreichbar,
+verweigern die Hooks jeden geregelten Tool-Aufruf (deny-closed).
+
+Olivares ergänzt die *Governance- und Evidenz-Plane*: In-Process-Durchsetzung
 innerhalb der Agenten-Laufzeit, ein manipulationserkennbares Evidenz-Ledger,
 Non-Human-Identity-Lifecycle und Human-in-the-Loop / Break-Glass / Kill-Switch
 über **Live-Sessions**. Ihr Gateway regelt den *Request*; Olivares regelt den

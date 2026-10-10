@@ -71,7 +71,7 @@ export function StandardMaturityBadge({
         {t(`maturity.${key}`, { defaultValue: humanize(maturity) })}
       </span>
       {showVersion ? (
-        <span className="font-mono tabular-nums opacity-80">v{version}</span>
+        <span className="font-mono tabular-nums">v{version}</span>
       ) : null}
     </Badge>
   )

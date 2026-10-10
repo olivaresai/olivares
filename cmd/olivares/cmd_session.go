@@ -39,11 +39,6 @@ import (
 //     gets `text`, by the same rule (provider-contract.ts runInputMode);
 //   - `follow` renders the stream the way the console does, and `-o json` keeps the
 //     raw frames.
-//
-// Measured on 2026-10-01 before this file existed (CLX/CLI-MAP.md): `olivares session`
-// was an unknown command, `--text` to a Claude run was a 400, attach printed raw
-// NDJSON, get/stop/resume printed the whole run JSON, and a session could only be
-// named by its UUID.
 
 // sessionRunsPath and sessionWorkspacesPath are the endpoints this file speaks to.
 const (
@@ -62,7 +57,7 @@ func newSessionCmd() *cobra.Command {
 		Use:     "session",
 		Aliases: []string{"sessions"},
 		Short:   "Start, follow, send to, stop and resume agent sessions",
-		Long: "Run an agent tool (Claude Code, Codex, Grok Build, OpenCode) in a folder on the engine's\n" +
+		Long: "Run an agent tool (Claude Code, Codex, Grok Build, OpenCode, Gemini CLI) in a folder on the engine's\n" +
 			"host and talk to it from here. Sessions keep running when this terminal closes. Refer to\n" +
 			"a session by its name or its id.",
 		Example: "  olivares session start . \"fix the failing test\"\n" +
@@ -76,6 +71,7 @@ func newSessionCmd() *cobra.Command {
 		newSessionFollowCmd(),
 		newSessionListCmd(),
 		newSessionShowCmd(),
+		newSessionPeersCmd(),
 		newSessionLifecycleCmd("stop", "Stop a session", "/stop", "Stopped"),
 		newSessionLifecycleCmd("resume", "Resume a stopped session", "/resume", "Resumed"),
 		newSessionInterruptCmd(),
@@ -89,11 +85,13 @@ func newSessionCmd() *cobra.Command {
 
 func newSessionStartCmd() *cobra.Command {
 	var (
-		cfg                       agentClientConfig
-		tool, name, profile       string
-		model, effort, permission string
-		dlp                       string
-		detach                    bool
+		cfg                           agentClientConfig
+		tool, name, profile, template string
+		account                       string
+		model, effort, permission     string
+		dlp                           string
+		detach, worktree              bool
+		worktreeFrom                  string
 	)
 	cmd := &cobra.Command{
 		Use:   "start [folder] [prompt]",
@@ -102,12 +100,21 @@ func newSessionStartCmd() *cobra.Command {
 			"session after it. With a prompt, it sends the prompt and shows the reply.\n\n" +
 			"The first time, it registers the folder for sessions; a folder it registers carries no\n" +
 			"DLP label unless you pass --dlp. Without --tool it runs the first tool that is ready\n" +
-			"(Claude Code, Codex, Grok Build, OpenCode), as the console's New session does. Without\n" +
+			"(Claude Code, Codex, Grok Build, OpenCode, Gemini CLI), as the console's New session does. Without\n" +
 			"--profile the engine picks how the tool runs (its own login, or a key or local model\n" +
-			"from Providers), and one line says which.",
+			"from Providers), and one line says which. --account <name> launches under a provider\n" +
+			"account instead (olivares provider account ls); the account fixes the tool.\n\n" +
+			"With --worktree the session works in a git worktree of its own, on a new branch of the\n" +
+			"folder's repository, so two sessions on one repository do not share files. The folder\n" +
+			"must be the repository's top folder. --worktree-from <commit or branch> starts that\n" +
+			"worktree at a commit or a local branch of the repository instead of its current\n" +
+			"commit, which is how you open the work a handoff names (it implies --worktree).",
 		Example: "  olivares session start\n" +
 			"  olivares session start ~/code/my-app \"explain this repository\"\n" +
-			"  olivares session start . --tool codex --name review",
+			"  olivares session start . --tool codex --name review\n" +
+			"  olivares session start . --account work\n" +
+			"  olivares session start . --worktree --name feature\n" +
+			"  olivares session start . --worktree-from 0123456789abcdef0123456789abcdef01234567 --name review",
 		Args: cobra.MaximumNArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			folder := "."
@@ -120,30 +127,40 @@ func newSessionStartCmd() *cobra.Command {
 			}
 			tool = strings.ToLower(strings.TrimSpace(tool))
 			if tool != "" && driverConfigHome(tool, "/") == "" {
-				return sentence(exitcode.Usage, "Unknown tool %q. Use claude, codex, grok or opencode.", tool)
+				return sentence(exitcode.Usage, "Unknown tool %q. Use claude, codex, grok, opencode or gemini-cli.", tool)
 			}
-			if _, ok := permissionModes[permission]; !ok {
+			templateID := strings.TrimSpace(template)
+			if templateID != "" && !cmd.Flags().Changed("permission") {
+				permission = "" // the selected template supplies its mode
+			}
+			if templateID != "" && permission == "edits-and-commands" {
+				return sentence(exitcode.Usage, "A saved template cannot replace the edits-and-commands preset. Choose read-only, edits-only or ask, or omit --permission to use the template's mode.")
+			}
+			if _, ok := permissionModes[permission]; !ok && !(templateID != "" && permission == "") {
 				return sentence(exitcode.Usage, "Unknown permission %q. Use edits-and-commands, edits-only, read-only or ask.", permission)
 			}
 			if err := cfg.resolve(); err != nil {
 				return err
 			}
 			ctx := cmd.Context()
-			if tool == "" {
-				tool = "claude"
-				if strings.TrimSpace(profile) == "" {
-					tool = cfg.readyTool(ctx)
-				}
-			}
 			// The profile first: a start the engine refuses registers no folder.
-			profileRef, err := cfg.toolProfile(ctx, cmd.ErrOrStderr(), tool, profile)
+			var profileRef string
+			if cmd.Flags().Changed("account") {
+				profileRef, err = cfg.accountProfile(ctx, cmd.ErrOrStderr(), tool, profile, account)
+			} else if tool == "" && strings.TrimSpace(profile) == "" {
+				profileRef, err = cfg.readyToolProfile(ctx, cmd.ErrOrStderr())
+			} else {
+				if tool == "" {
+					tool = "claude"
+				}
+				profileRef, err = cfg.toolProfile(ctx, cmd.ErrOrStderr(), tool, profile)
+			}
 			if err != nil {
 				return err
 			}
 			// The preset next, for the same reason: edits-and-commands is the engine's
 			// built-in template, and a start without it could run under the profile's
-			// stored mode instead of the one the person chose (SR2 report 194).
-			templateID := ""
+			// stored mode instead of the one the person chose.
 			if permission == "edits-and-commands" {
 				if templateID, err = cfg.builtinTemplate(ctx, editsAndCommandsTemplate); err != nil {
 					return err
@@ -166,20 +183,24 @@ func newSessionStartCmd() *cobra.Command {
 				"effort": effort, "model": model, "workspace_ref": str(ws, "workspace_ref"),
 				"isolation": "native", "provider_profile_ref": profileRef,
 			}
-			// The preset goes with every tool (HU 043): the engine applies it in the tool's
+			// The preset goes with every tool: the engine applies it in the tool's
 			// own settings, or refuses one the tool cannot honour with a sentence printed as
 			// is. Sent only for Claude Code, Codex, Grok and OpenCode ran with "default".
 			body["permission_mode"] = permissionModes[permission]
 			if templateID != "" {
 				body["template_id"] = templateID
 			}
+			// Sent only when asked for: a start without the flag is the request it always was.
+			if worktree || worktreeFrom != "" {
+				body["worktree"] = true
+			}
+			if worktreeFrom != "" {
+				body["worktree_from"] = worktreeFrom
+			}
 			// 202: the launch needs a person's approval; the session exists and waits.
-			status, b, err := cfg.do(ctx, "POST", sessionRunsPath, body, http.StatusCreated, http.StatusAccepted)
+			_, b, err := cfg.do(ctx, "POST", sessionRunsPath, body, http.StatusCreated, http.StatusAccepted)
 			if err != nil {
 				return err
-			}
-			if status != http.StatusCreated && status != http.StatusAccepted {
-				return httpErr(status, b)
 			}
 			run := map[string]any{}
 			if err := json.Unmarshal(b, &run); err != nil {
@@ -206,17 +227,21 @@ func newSessionStartCmd() *cobra.Command {
 		},
 	}
 	cfg.addFlags(cmd)
-	cmd.Flags().StringVar(&tool, "tool", "", "agent tool: claude, codex, grok or opencode (default: the first one that is ready)")
+	cmd.Flags().StringVar(&tool, "tool", "", "agent tool: claude, codex, grok, opencode or gemini-cli (default: the first one that is ready)")
 	cmd.Flags().StringVar(&name, "name", "", "session name (default: the folder's name; -2, -3 … when taken)")
 	cmd.Flags().StringVar(&profile, "profile", "", "provider profile to launch under (default: the one the engine picks, as in the console)")
+	cmd.Flags().StringVar(&account, "account", "", "launch under this provider account (its name or profile reference; see olivares provider account ls)")
 	cmd.Flags().StringVar(&model, "model", "", "model alias or id (default: the tool's own)")
 	cmd.Flags().StringVar(&effort, "effort", "", "low|medium|high|xhigh|max")
+	cmd.Flags().StringVar(&template, "template", "", "saved session template ID; its terms apply at launch and resume")
 	cmd.Flags().StringVar(&permission, "permission", "edits-and-commands",
 		"what the agent may do without asking: edits-and-commands, edits-only, read-only, or ask")
 	cmd.Flags().StringVar(&dlp, "dlp", "off", "DLP posture for a folder this command registers: off, label or deny")
 	cmd.Flags().BoolVar(&detach, "detach", false, "with a prompt, send it and return without showing the reply")
+	cmd.Flags().BoolVar(&worktree, "worktree", false, "work in a git worktree of its own, on a new branch (the folder must be a git repository's top folder)")
+	cmd.Flags().StringVar(&worktreeFrom, "worktree-from", "", "start the worktree at this commit id or local branch instead of the current commit (implies --worktree)")
 	_ = cmd.RegisterFlagCompletionFunc("tool", func(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
-		return []string{"claude", "codex", "grok", "opencode"}, cobra.ShellCompDirectiveNoFileComp
+		return []string{"claude", "codex", "grok", "opencode", "gemini-cli"}, cobra.ShellCompDirectiveNoFileComp
 	})
 	_ = cmd.RegisterFlagCompletionFunc("permission", func(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
 		return []string{"edits-and-commands", "edits-only", "read-only", "ask"}, cobra.ShellCompDirectiveNoFileComp
@@ -259,12 +284,9 @@ func sessionFolder(arg string) (string, error) {
 // folderWorkspace returns the active workspace registered at root, registering it
 // when there is none.
 func (c *agentClientConfig) folderWorkspace(ctx context.Context, root, dlp string) (map[string]any, error) {
-	status, b, err := c.do(ctx, "GET", sessionWorkspacesPath, nil)
+	_, b, err := c.do(ctx, "GET", sessionWorkspacesPath, nil)
 	if err != nil {
 		return nil, err
-	}
-	if status != http.StatusOK {
-		return nil, httpErr(status, b)
 	}
 	var page struct {
 		Items []map[string]any `json:"items"`
@@ -281,12 +303,9 @@ func (c *agentClientConfig) folderWorkspace(ctx context.Context, root, dlp strin
 		"root_path": root, "name": filepath.Base(root), "mount_mode": "rw",
 		"container_target": "/workspace", "dlp_mode": dlp,
 	}
-	status, b, err = c.do(ctx, "POST", sessionWorkspacesPath, body, http.StatusCreated)
+	_, b, err = c.do(ctx, "POST", sessionWorkspacesPath, body, http.StatusCreated)
 	if err != nil {
 		return nil, err
-	}
-	if status != http.StatusCreated {
-		return nil, httpErr(status, b)
 	}
 	ws := map[string]any{}
 	return ws, json.Unmarshal(b, &ws)
@@ -294,39 +313,50 @@ func (c *agentClientConfig) folderWorkspace(ctx context.Context, root, dlp strin
 
 // sessionToolOrder is the console's order of the tools a session runs
 // (SESSION_TOOLS in web/src/features/agentops/tool-names.ts).
-var sessionToolOrder = []string{"claude", "codex", "grok", "opencode"}
+var sessionToolOrder = []string{"claude", "codex", "grok", "opencode", "gemini-cli"}
 
-// readyTool is the tool a start without --tool runs (HU2-22): the first, in the
-// console's order, that the engine can run now, by the preview the console's New
-// session reads (GET provider-profiles/resolve). It was always Claude Code, even with
-// only OpenCode and a local model set up. With none ready it is Claude Code, whose
-// refusal says what to set up.
-func (c *agentClientConfig) readyTool(ctx context.Context) string {
-	if tool, ok := c.firstReadyTool(ctx); ok {
-		return tool
+// firstReadyTool is the first tool, in the console's order, that the engine's one
+// readiness answer (provider-profiles/readiness, the console's too) says can start a
+// session now; "" when none can or the answer cannot be read. With none ready,
+// refused is the answer's sentence for the first tool whose key its provider refused
+// ("Codex would run on the API key …, which its provider refused at the last test."),
+// so the person reads the cause instead of a step for another tool. `olivares` and `tool ls` read readiness
+// here, so they cannot disagree with each other or with the console: a key its
+// provider refused is not ready in any of them. `session start` without --tool
+// resolves the tool it names (readyToolProfile).
+func (c *agentClientConfig) firstReadyTool(ctx context.Context) (tool, refused string) {
+	status, b, err := c.do(ctx, "GET", profilesPath+"/readiness", nil, http.StatusOK, http.StatusNotFound)
+	if err != nil || status != http.StatusOK {
+		return "", ""
 	}
-	return "claude"
+	var res struct {
+		Tools []struct {
+			Driver  string `json:"driver"`
+			Ready   bool   `json:"ready"`
+			Code    string `json:"code"`
+			Message string `json:"message"`
+		} `json:"tools"`
+	}
+	if json.Unmarshal(b, &res) != nil {
+		return "", ""
+	}
+	for _, name := range sessionToolOrder {
+		for _, t := range res.Tools {
+			switch {
+			case t.Driver != name:
+			case t.Ready:
+				return name, ""
+			case t.Code == readinessKeyRefused && refused == "":
+				refused = termSafe(t.Message)
+			}
+		}
+	}
+	return "", refused
 }
 
-// firstReadyTool is the first tool, in the console's order, the engine's preview
-// says can run a session now; false when none can. `olivares`, `tool ls` and
-// `session start` read readiness here, so they cannot disagree.
-func (c *agentClientConfig) firstReadyTool(ctx context.Context) (string, bool) {
-	for _, tool := range sessionToolOrder {
-		status, b, err := c.do(ctx, "GET", profilesPath+"/resolve?driver="+url.QueryEscape(tool), nil,
-			http.StatusOK, http.StatusConflict, http.StatusServiceUnavailable, http.StatusNotFound)
-		if err != nil || status != http.StatusOK {
-			continue
-		}
-		var res struct {
-			Reason string `json:"reason"`
-		}
-		if json.Unmarshal(b, &res) == nil && res.Reason != "" && res.Reason != "none" {
-			return tool, true
-		}
-	}
-	return "", false
-}
+// readinessKeyRefused is the readiness code of a tool whose only key its provider
+// refused at the last test.
+const readinessKeyRefused = "key_refused"
 
 // toolProfile returns the profile a session of this tool launches under: the one
 // named by --profile, else the one the engine resolves for the tool (the same choice
@@ -336,22 +366,70 @@ func (c *agentClientConfig) toolProfile(ctx context.Context, stderr io.Writer, t
 		return ref, nil
 	}
 	if driverConfigHome(tool, "/") == "" {
-		return "", sentence(exitcode.Usage, "Unknown tool %q. Use claude, codex, grok or opencode.", tool)
+		return "", sentence(exitcode.Usage, "Unknown tool %q. Use claude, codex, grok, opencode or gemini-cli.", tool)
 	}
-	// HU 030: the engine chooses, as for the console (provider-profiles/resolve, FH 026):
-	// the tool's own login when it is signed in, else a Providers key or local model it
-	// can use; it reuses or creates the profile. The CLI keeps no rule of its own.
-	status, b, err := c.do(ctx, "POST", profilesPath+"/resolve", map[string]any{"driver": tool},
-		http.StatusOK, http.StatusConflict, http.StatusServiceUnavailable, http.StatusNotFound)
+	status, b, err := c.resolveProfile(ctx, tool)
+	return profileRefOf(stderr, tool, status, b, err)
+}
+
+// accountProfile is the profile a session launches under when the person named an
+// account: found the way `tool login --account` finds it (exact name once, or a
+// profile reference), with the same exit codes, and without asking the engine to
+// choose. The account fixes the tool, so --tool may only repeat it.
+func (c *agentClientConfig) accountProfile(ctx context.Context, stderr io.Writer, tool, profile, account string) (string, error) {
+	if strings.TrimSpace(profile) != "" {
+		return "", sentence(exitcode.Usage, "Use --account or --profile, not both.")
+	}
+	found, err := c.findToolAccount(ctx, account)
 	if err != nil {
 		return "", err
 	}
+	if tool != "" && tool != found.Driver {
+		return "", sentence(exitcode.Conflict, "This account uses %s. Run olivares session start --tool %s --account %s.", toolName(found.Driver), found.Driver, termSafe(account))
+	}
+	fmt.Fprintf(stderr, "Using %s (account %s)\n", toolName(found.Driver), termSafe(found.Name))
+	return found.Ref, nil
+}
+
+// resolveProfile asks the engine to choose the tool's profile, as for the console
+// (provider-profiles/resolve): the tool's own login when it is signed in, else a
+// Providers key or local model it can use; it reuses or creates the profile. The CLI
+// keeps no rule of its own.
+func (c *agentClientConfig) resolveProfile(ctx context.Context, tool string) (int, []byte, error) {
+	return c.do(ctx, "POST", profilesPath+"/resolve", map[string]any{"driver": tool},
+		http.StatusOK, http.StatusConflict, http.StatusServiceUnavailable, http.StatusNotFound)
+}
+
+// readyToolProfile is the profile of the tool a start without --tool runs: the first,
+// in the console's order, that the engine's readiness answer says can start now
+// (firstReadyTool, the answer `olivares` and `tool ls` name as the next step), so a
+// tool whose only key its provider refused is not launched. It was always Claude Code,
+// even with only OpenCode and a local model set up. With none ready, or the answer
+// unreadable, it is the refused key's sentence when a tool has one (the launch's own
+// refusal, without a resolve), else Claude Code's resolve, whose refusal says what to
+// set up.
+func (c *agentClientConfig) readyToolProfile(ctx context.Context, stderr io.Writer) (string, error) {
+	tool, refused := c.firstReadyTool(ctx)
 	switch {
-	case status == http.StatusNotFound:
-		return "", toolHTTPErr(status, b)
-	case status != http.StatusOK:
-		// 409: nothing can run the tool; 503: the node cannot read its sign-in now
-		// (FH 032). The engine's sentence is printed as it is (exit 5 or 6), and with
+	case tool != "":
+	case refused != "":
+		return "", exitcode.New(exitcode.Conflict, &apiRefusal{status: http.StatusConflict, code: readinessKeyRefused, text: refused})
+	default:
+		tool = "claude"
+	}
+	status, b, err := c.resolveProfile(ctx, tool)
+	return profileRefOf(stderr, tool, status, b, err)
+}
+
+// profileRefOf is the profile reference in the engine's answer to a resolve, and
+// says which profile in one line.
+func profileRefOf(stderr io.Writer, tool string, status int, b []byte, err error) (string, error) {
+	if err != nil {
+		return "", err
+	}
+	if status != http.StatusOK {
+		// Readiness and operational refusals keep their engine status and code.
+		// The engine's sentence is printed as it is, and with
 		// -o json it keeps its status and code, like every engine refusal.
 		return "", httpErr(status, b)
 	}
@@ -392,7 +470,7 @@ func (c *agentClientConfig) toolProfile(ctx context.Context, stderr io.Writer, t
 }
 
 // The permission choices of a Claude Code session, as the console's New session
-// offers them (FH, e4f53b2a): the default is the engine's built-in "Edits and
+// offers them: the default is the engine's built-in "Edits and
 // commands" template (an allowlist under dontAsk, so the agent can edit and run
 // commands and every other tool is refused); the others are plain modes.
 var permissionModes = map[string]string{
@@ -403,7 +481,7 @@ const editsAndCommandsTemplate = "Edits and commands"
 
 // builtinTemplate returns the id of the engine's built-in session template with this
 // name. A list the engine refuses, or one without the template, is an error that names
-// the preset: the start must not go on without it (SR2 report 194).
+// the preset: the start must not go on without it.
 func (c *agentClientConfig) builtinTemplate(ctx context.Context, name string) (string, error) {
 	// do refuses anything but 200 with the engine's own sentence; the preset is named
 	// around it, and its exit code is kept.
@@ -473,9 +551,13 @@ func printSessionWaitsForApproval(w io.Writer, run map[string]any, page string, 
 
 func printSessionStarted(w io.Writer, run map[string]any) error {
 	name := sessionLabel(run)
+	where := termSafe(str(run, "workspace_path"))
+	if branch := termSafe(str(run, "worktree_branch")); branch != "" {
+		where += " on branch " + branch
+	}
 	_, err := fmt.Fprintf(w, "Started %s (%s) in %s\n  send:    olivares session send %s \"<text>\"\n"+
 		"  follow:  olivares session follow %s\n  stop:    olivares session stop %s\n",
-		name, sessionDriver(run), termSafe(str(run, "workspace_path")), shellWord(name), shellWord(name), shellWord(name))
+		name, sessionDriver(run), where, shellWord(name), shellWord(name), shellWord(name))
 	return err
 }
 
@@ -580,12 +662,8 @@ func (c *agentClientConfig) postTurn(ctx context.Context, run map[string]any, te
 	if err != nil {
 		return err
 	}
-	status, b, err := c.do(ctx, "POST", sessionRunsPath+"/"+url.PathEscape(str(run, "run_ref"))+"/input", body, http.StatusAccepted)
-	if err != nil {
+	if _, _, err := c.do(ctx, "POST", sessionRunsPath+"/"+url.PathEscape(str(run, "run_ref"))+"/input", body, http.StatusAccepted); err != nil {
 		return err
-	}
-	if status != http.StatusAccepted {
-		return httpErr(status, b)
 	}
 	return nil
 }
@@ -627,6 +705,7 @@ func (c *agentClientConfig) sendTurn(cmd *cobra.Command, run map[string]any, tex
 	}
 	view := newSessionView(cmd.OutOrStdout())
 	view.driver, view.engineSupplied, view.readyShown = sessionDriver(run), engineSupplied(run), true
+	view.noOneAsked = noOneAsked(run)
 	// A reply received before the stream stopped is shown before any failure sentence.
 	defer view.finish()
 	for {
@@ -661,12 +740,12 @@ func (c *agentClientConfig) sendTurn(cmd *cobra.Command, run map[string]any, tex
 
 // sessionShowsTurns reports whether this CLI can tell when a turn of this run ends:
 // a Claude stream-json run emits a `result` frame, a Codex run `turn/completed`, an
-// OpenCode or Grok Build run (ACP) the session/prompt result with its stopReason.
+// OpenCode, Grok Build or Gemini CLI run (ACP) the session/prompt result with its stopReason.
 // Another driver's frames are its own protocol, so send returns once the engine
 // accepts the message.
 func sessionShowsTurns(run map[string]any) bool {
 	switch d := strings.TrimSpace(str(run, "provider_driver")); d {
-	case "", "claude", "codex", "opencode", "grok":
+	case "", "claude", "codex", "opencode", "grok", "gemini-cli":
 		return str(run, "transport") != "remote-control"
 	}
 	return false
@@ -758,8 +837,8 @@ func (c *agentClientConfig) readAttach(ctx context.Context, ref string, from int
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
-		b, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-		return httpErr(resp.StatusCode, b)
+		b, readErr := readCLIResponse(resp, req, 1<<20, false)
+		return guardCLIRefusalError(httpErr(resp.StatusCode, b), resp.StatusCode, cliRequestSecrets(req), readErr)
 	}
 	return scanSSE(resp.Body, fn)
 }
@@ -821,6 +900,7 @@ func newSessionFollowCmd() *cobra.Command {
 			raw := outputIsJSON(cmd)
 			view := newSessionView(cmd.OutOrStdout())
 			view.driver, view.engineSupplied = sessionDriver(run), engineSupplied(run)
+			view.noOneAsked = noOneAsked(run)
 			defer view.finish()
 			frames, errs := cfg.openFrames(cmd.Context(), str(run, "run_ref"), from)
 			for {
@@ -976,11 +1056,17 @@ func printSessionFields(w io.Writer, run map[string]any) {
 	if reason := termSafe(str(run, "reason")); state == "failed" || (state == "stopped" && strings.TrimSpace(reason) != "") {
 		fields = append(fields, termrender.Field{Key: "reason", Value: reason})
 	}
-	fields = append(fields,
-		termrender.Field{Key: "tool", Value: sessionDriver(run)},
-		termrender.Field{Key: "folder", Value: termSafe(str(run, "workspace_path"))},
-		termrender.Field{Key: "started", Value: str(run, "started_at")},
-	)
+	fields = append(fields, termrender.Field{Key: "tool", Value: sessionDriver(run)})
+	// The mode as the tool itself last reported it (plan, acceptEdits, on-request · …).
+	if mode := termSafe(str(run, "tool_mode")); mode != "" {
+		fields = append(fields, termrender.Field{Key: "mode", Value: mode})
+	}
+	fields = append(fields, termrender.Field{Key: "folder", Value: termSafe(str(run, "workspace_path"))})
+	// A session in its own git worktree says on which branch.
+	if branch := termSafe(str(run, "worktree_branch")); branch != "" {
+		fields = append(fields, termrender.Field{Key: "branch", Value: branch})
+	}
+	fields = append(fields, termrender.Field{Key: "started", Value: str(run, "started_at")})
 	if stopped := str(run, "stopped_at"); stopped != "" {
 		fields = append(fields, termrender.Field{Key: "stopped", Value: stopped})
 	}
@@ -988,6 +1074,10 @@ func printSessionFields(w io.Writer, run map[string]any) {
 		termrender.Field{Key: "cost", Value: strings.TrimPrefix(runCostLine(run), "cost ")},
 		termrender.Field{Key: "id", Value: str(run, "run_ref")},
 	)
+	// The canonical osn_ ID is what another session's peer send names.
+	if sid := termSafe(str(run, "canonical_sid")); sid != "" {
+		fields = append(fields, termrender.Field{Key: "session id", Value: sid})
+	}
 	renderTo(w).Fields(fields)
 }
 
@@ -1017,12 +1107,9 @@ func newSessionLifecycleCmd(use, short, suffix, done string) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			status, b, err := cfg.do(cmd.Context(), "POST", sessionRunsPath+"/"+url.PathEscape(str(run, "run_ref"))+suffix, nil, http.StatusOK)
+			_, b, err := cfg.do(cmd.Context(), "POST", sessionRunsPath+"/"+url.PathEscape(str(run, "run_ref"))+suffix, nil, http.StatusOK)
 			if err != nil {
 				return err
-			}
-			if status != http.StatusOK {
-				return httpErr(status, b)
 			}
 			updated := map[string]any{}
 			if err := json.Unmarshal(b, &updated); err != nil {
@@ -1104,14 +1191,18 @@ func newSessionInterruptCmd() *cobra.Command {
 
 func newSessionRemoveCmd() *cobra.Command {
 	var cfg agentClientConfig
+	var discardWorktree bool
 	cmd := &cobra.Command{
 		Use:     "rm <session>",
 		Aliases: []string{"delete", "remove"},
 		Short:   "Remove a stopped session",
 		Long: "rm releases a session that stopped, failed or never started (its launch was rejected or\n" +
 			"expired) and deletes its record. A folder you gave the session is kept; a folder the\n" +
-			"engine created for it is removed.",
-		Example:           "  olivares session rm my-app",
+			"engine created for it is removed.\n\n" +
+			"A session started with --worktree has a git worktree and a branch. rm removes them when\n" +
+			"the branch is merged and the worktree has no uncommitted files, and otherwise refuses and\n" +
+			"says what would be lost. Add --discard-worktree to remove them anyway.",
+		Example:           "  olivares session rm my-app\n  olivares session rm feature --discard-worktree",
 		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: completeSessions,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -1125,24 +1216,27 @@ func newSessionRemoveCmd() *cobra.Command {
 			name, ref := sessionLabel(run), url.PathEscape(str(run, "run_ref"))
 			switch str(run, "state") {
 			case "stopped", "failed", "declined", "expired":
-				status, b, err := cfg.do(cmd.Context(), "POST", sessionRunsPath+"/"+ref+"/cleanup", nil, http.StatusOK)
-				if err != nil {
-					return err
+				// A body only when the person confirmed: the call is otherwise what it always was.
+				var confirm any
+				if discardWorktree {
+					confirm = map[string]any{"discard_worktree": true}
 				}
-				if status != http.StatusOK {
-					return httpErr(status, b)
+				if _, _, err := cfg.do(cmd.Context(), "POST", sessionRunsPath+"/"+ref+"/cleanup", confirm, http.StatusOK); err != nil {
+					// A refusal about the session's worktree says which flag confirms it.
+					var refusal *apiRefusal
+					if !discardWorktree && str(run, "worktree_branch") != "" && errors.As(err, &refusal) &&
+						refusal.status == http.StatusConflict && strings.Contains(refusal.text, "worktree") {
+						return sentence(exitcode.Conflict, "%s. Add --discard-worktree to go on anyway.", strings.TrimRight(refusal.text, ". "))
+					}
+					return err
 				}
 			case "cleaned":
 			default:
 				return sentence(exitcode.Conflict, "Session %s is %s. Stop it first: olivares session stop %s",
 					name, str(run, "state"), shellWord(name))
 			}
-			status, b, err := cfg.do(cmd.Context(), "DELETE", sessionRunsPath+"/"+ref, nil, http.StatusOK)
-			if err != nil {
+			if _, _, err := cfg.do(cmd.Context(), "DELETE", sessionRunsPath+"/"+ref, nil, http.StatusOK); err != nil {
 				return err
-			}
-			if status != http.StatusOK {
-				return httpErr(status, b)
 			}
 			return renderOut(cmd, func(w io.Writer) error {
 				_, err := fmt.Fprintf(w, "Removed %s.\n", name)
@@ -1151,6 +1245,7 @@ func newSessionRemoveCmd() *cobra.Command {
 		},
 	}
 	cfg.addFlags(cmd)
+	cmd.Flags().BoolVar(&discardWorktree, "discard-worktree", false, "also remove the session's git worktree and branch when its work is not merged or has uncommitted files")
 	return cmd
 }
 
@@ -1173,12 +1268,9 @@ func newSessionEventsCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			status, b, err := cfg.do(cmd.Context(), "GET", sessionRunsPath+"/"+url.PathEscape(str(run, "run_ref"))+"/events", nil)
+			_, b, err := cfg.do(cmd.Context(), "GET", sessionRunsPath+"/"+url.PathEscape(str(run, "run_ref"))+"/events", nil)
 			if err != nil {
 				return err
-			}
-			if status != http.StatusOK {
-				return httpErr(status, b)
 			}
 			return printRaw(cmd, b)
 		},
@@ -1191,12 +1283,9 @@ func newSessionEventsCmd() *cobra.Command {
 
 // listRuns reads the newest runs (the API sorts by creation, newest first).
 func (c *agentClientConfig) listRuns(ctx context.Context) ([]map[string]any, error) {
-	status, b, err := c.do(ctx, "GET", fmt.Sprintf("%s?limit=%d", sessionRunsPath, sessionListLimit), nil)
+	_, b, err := c.do(ctx, "GET", fmt.Sprintf("%s?limit=%d", sessionRunsPath, sessionListLimit), nil)
 	if err != nil {
 		return nil, err
-	}
-	if status != http.StatusOK {
-		return nil, httpErr(status, b)
 	}
 	var page struct {
 		Items []map[string]any `json:"items"`
@@ -1215,12 +1304,9 @@ func (c *agentClientConfig) findSession(ctx context.Context, arg string) (map[st
 		return nil, sentence(exitcode.Usage, "Name the session. List them: olivares session ls")
 	}
 	if runRefPattern.MatchString(arg) {
-		status, b, err := c.do(ctx, "GET", sessionRunsPath+"/"+url.PathEscape(arg), nil)
+		_, b, err := c.do(ctx, "GET", sessionRunsPath+"/"+url.PathEscape(arg), nil)
 		if err != nil {
 			return nil, err
-		}
-		if status != http.StatusOK {
-			return nil, httpErr(status, b)
 		}
 		run := map[string]any{}
 		return run, json.Unmarshal(b, &run)
@@ -1250,7 +1336,7 @@ func (c *agentClientConfig) findSession(ctx context.Context, arg string) (map[st
 	return matches[0], nil
 }
 
-// sessionsMatching is what a person types for a session whose name is long (HU2-09):
+// sessionsMatching is what a person types for a session whose name is long:
 // the start of its name, with the "…" a narrow `session ls` cell ends with ignored,
 // or the id `session ls` shows (the end of its reference, 4 characters or more).
 func sessionsMatching(runs []map[string]any, arg string) []map[string]any {
@@ -1361,7 +1447,7 @@ func sinceText(stamp string, now time.Time) string {
 }
 
 // sentence is a message a person reads: a full sentence with its next command, in the
-// copy Root sets for the CLI (CLX/COPY-NEEDS.md). It is not an error value for code
+// CLI's own copy. It is not an error value for code
 // to wrap, which is why it does not follow Go's lower-case error-string convention.
 func sentence(code int, format string, args ...any) error {
 	return exitcode.New(code, fmt.Errorf(format, args...))

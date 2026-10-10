@@ -7,6 +7,7 @@ package sqlstore
 import (
 	"context"
 	"database/sql"
+	"path/filepath"
 	"testing"
 
 	"github.com/olivaresai/olivares/core/internal/store/dialect"
@@ -225,6 +226,87 @@ func TestReconcileCreatesMissingCoreTable(t *testing.T) {
 	// not error.
 	if err := reconcileColumns(ctx, db, dia, []model.EntityDescriptor{desc}); err != nil {
 		t.Fatalf("reconcile re-run: %v", err)
+	}
+}
+
+// TestOpenReconcilesModuleColumnsGainedAfterAdoption is the boot-level reproducer
+// of the wiring. ac43c1cc routed schema adoption through versioned
+// migrations and deleted the per-boot module reconcile; every test in this
+// package stayed green while nine modules/sessions upgrade tests went red on
+// main (issue #437), because the unit tests above call the pieces directly.
+// This one boots the real Open path twice with a descriptor that grew a nullable
+// column in between, so deleting the wiring again fails HERE, in the package
+// that owns it, instead of only downstream.
+func TestOpenReconcilesModuleColumnsGainedAfterAdoption(t *testing.T) {
+	ctx := context.Background()
+	cfg := store.Config{Engine: store.EngineSQLite, DSN: filepath.Join(t.TempDir(), "grown.db")}
+	grown := widgetDescriptor
+	grown.Fields = append(append([]model.FieldSpec(nil), widgetDescriptor.Fields...),
+		model.FieldSpec{Name: "note", Kind: model.KindText, Nullable: true})
+	grownRegistration := func(reg store.ExtensionRegistry) error { return reg.Register(grown) }
+
+	// Boot 1 (the "old binary"): the table is created from the v1 descriptor and
+	// adopted once.
+	st, err := Open(ctx, cfg, registerWidget)
+	if err != nil {
+		t.Fatalf("open with the pre-growth descriptor: %v", err)
+	}
+	tenant := provisionTenant(t, st, "grown-adoption")
+	var widgetID model.ID
+	if err := st.Mutate(ctx, tenant, func(sc store.Scope) error {
+		repo, err := sc.Ext(widgetDescriptor.Kind)
+		if err != nil {
+			return err
+		}
+		rec, err := repo.Create(ctx, model.Record{"label": "adopted", "count": int64(1)})
+		widgetID = model.ID(rec.String(model.ColID))
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	// Boot 2 (the upgraded binary): the table is already tracked, so
+	// applyModuleTables skips it — only the boot's module reconcile can bring the
+	// grown column. The read-modify-write below is what broke on main: without
+	// the reconcile every statement naming "note" fails with no such column.
+	st2, err := Open(ctx, cfg, grownRegistration)
+	if err != nil {
+		t.Fatalf("open with the grown descriptor: %v", err)
+	}
+	defer st2.Close() //nolint:errcheck // best-effort close after the assertions
+	if err := st2.Mutate(ctx, tenant, func(sc store.Scope) error {
+		repo, err := sc.Ext(grown.Kind)
+		if err != nil {
+			return err
+		}
+		rec, err := repo.Get(ctx, widgetID)
+		if err != nil {
+			return err
+		}
+		rec["note"] = "written after the upgrade"
+		_, err = repo.Update(ctx, rec)
+		return err
+	}); err != nil {
+		t.Fatalf("write through the column gained after adoption: %v", err)
+	}
+	if err := st2.View(ctx, tenant, func(sc store.Scope) error {
+		repo, err := sc.Ext(grown.Kind)
+		if err != nil {
+			return err
+		}
+		rec, err := repo.Get(ctx, widgetID)
+		if err != nil {
+			return err
+		}
+		if rec.String("note") != "written after the upgrade" {
+			t.Fatalf("note round-trip = %q", rec.String("note"))
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
 	}
 }
 

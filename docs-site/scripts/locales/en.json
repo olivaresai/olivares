@@ -1,0 +1,8 @@
+{
+  "source": "setting it registers|registers that driver|registers the OpenCode ACP driver|by pinning an official binary|not launchable|cannot be launched",
+  "flags": "i",
+  "noProvider": {
+    "source": "name \\*\\*no\\*\\* provider",
+    "flags": ""
+  }
+}

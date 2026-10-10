@@ -18,6 +18,7 @@ import (
 
 	"github.com/olivaresai/olivares/core/audit"
 	coreengine "github.com/olivaresai/olivares/core/engine"
+	"github.com/olivaresai/olivares/core/modulespec"
 	"github.com/olivaresai/olivares/core/runtime"
 	"github.com/olivaresai/olivares/core/store"
 	"github.com/olivaresai/olivares/sdk"
@@ -101,6 +102,9 @@ func dbActivateDirectoryWriterCmd() *cobra.Command {
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			if err := checkCMEKInstall(dataDir); err != nil {
+				return err
+			}
 			var missing []string
 			if !writersUpgraded {
 				missing = append(missing, "--writers-upgraded")
@@ -175,8 +179,8 @@ func bootSchemaRegistrar(log *slog.Logger) (func(store.ExtensionRegistry) error,
 	if err != nil {
 		return nil, fmt.Errorf("directory writer activation: signer: %w", err)
 	}
-	set, err := buildModules(signer, ed25519.NewKeyFromSeed(fixedSeed(1)), ed25519.NewKeyFromSeed(fixedSeed(2)),
-		nil, nil, sourcesConfig{}, EditionConfig{}, "", log)
+	set, err := buildModules(nil, signer, ed25519.NewKeyFromSeed(fixedSeed(1)), ed25519.NewKeyFromSeed(fixedSeed(2)),
+		nil, nil, nil, sourcesConfig{}, EditionConfig{}, "", log)
 	if err != nil {
 		return nil, fmt.Errorf("directory writer activation: load module operator config: %w", err)
 	}
@@ -186,7 +190,7 @@ func bootSchemaRegistrar(log *slog.Logger) (func(store.ExtensionRegistry) error,
 		if !ok {
 			return nil, fmt.Errorf("directory writer activation: module %q does not satisfy sdk.Module", m.APINamespace())
 		}
-		if err := rt.AddModule(sm, sdk.Config{}); err != nil {
+		if err := rt.AddModule(sm, modulespec.DefaultConfig(m.APINamespace())); err != nil {
 			return nil, fmt.Errorf("directory writer activation: register module %q: %w", m.APINamespace(), err)
 		}
 	}
@@ -219,6 +223,9 @@ func resolveDirectoryActivationStore(
 				dir = d
 			}
 			resolved = filepath.Join(dir, "olivares.db")
+		}
+		if err := checkCMEKSQLiteStore(resolved); err != nil {
+			return cfg, err
 		}
 		if info, err := os.Stat(resolved); err != nil || !info.Mode().IsRegular() {
 			return cfg, fmt.Errorf("no sqlite database at %q — the activation ceremony never creates a store; run the engine once (or `olivares quickstart`) first, or pass --dsn/--data-dir", resolved)

@@ -6,12 +6,13 @@
 // to the engine's job stream and renders the phase, a progress bar, and the status
 // badge. LiveDot shows the honest connection state. The web adds no logic — the
 // engine owns progress computation (ARCHITECTURE.md SS8).
-import { useCallback, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
+import { useCallback, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
 import { useLiveStream } from '@/features/shared/sse'
 import { LiveDot } from '@/features/shared/live-dot'
-import { drApi } from './api'
+import { drApi, drKeys } from './api'
 import type { DRJob } from './types'
 
 const STATUS_VARIANT: Record<string, 'neutral' | 'success' | 'danger'> = {
@@ -22,22 +23,37 @@ const STATUS_VARIANT: Record<string, 'neutral' | 'success' | 'danger'> = {
 
 export interface JobProgressProps {
   jobId: string
-  /** Called when the job reaches a terminal state (completed or failed). */
+  /** Called once when the job reaches a terminal state (completed or failed). */
   onFinished?: (job: DRJob) => void
 }
 
 export function JobProgress({ jobId, onFinished }: JobProgressProps) {
   const { t } = useTranslation('backups')
+  const queryClient = useQueryClient()
   const [job, setJob] = useState<DRJob | null>(null)
+  const finishedJob = useRef<string | null>(null)
 
   const onSnapshot = useCallback(
     (snapshot: DRJob) => {
       setJob(snapshot)
-      if (snapshot.status === 'completed' || snapshot.status === 'failed') {
+      if (
+        (snapshot.status === 'completed' || snapshot.status === 'failed') &&
+        finishedJob.current !== snapshot.id
+      ) {
+        finishedJob.current = snapshot.id
+        // Acceptance precedes the snapshot. Refresh when the operation ends,
+        // once per job even if the SSE connection replays its terminal state.
+        for (const queryKey of [
+          drKeys.backups(),
+          drKeys.jobs(),
+          drKeys.pending(),
+        ]) {
+          void queryClient.invalidateQueries({ queryKey })
+        }
         onFinished?.(snapshot)
       }
     },
-    [onFinished],
+    [onFinished, queryClient],
   )
 
   const { status: streamStatus } = useLiveStream<DRJob>({
@@ -79,6 +95,12 @@ export function JobProgress({ jobId, onFinished }: JobProgressProps) {
       <p className="text-caption tabular-nums text-muted-foreground">
         {t('job.complete', { progress })}
       </p>
+
+      {job?.notes && (
+        <p role="status" className="break-words text-body">
+          {job.notes}
+        </p>
+      )}
 
       {job?.error && (
         <p className="break-words text-body text-danger">{job.error}</p>

@@ -37,7 +37,7 @@ else bad "live pin should be CLEAN ($(cat "$TMP/err"))"; fi
 stage
 sed -i 's/Hoy NO existe/Hoy SI existe/' "$TMP/tree/design/PRICING-CANON.md"
 run
-if [ "$(cat "$TMP/rc")" = 1 ]; then ok "mutant (canon drops Hoy NO existe) is killed"
+if [ "$(cat "$TMP/rc")" = 1 ]; then ok "mutant (canon drops the explicit absence marker) is killed"
 else bad "canon hole closed stayed rc=$(cat "$TMP/rc") ($(cat "$TMP/err"))"; fi
 
 stage

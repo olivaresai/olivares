@@ -184,8 +184,8 @@ func TestRuntimeInputCheckedOneCompleteBarrierAndScopeOrder(t *testing.T) {
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 			defer cancel()
-			observed := &runtimeInputObservedData{ModuleData: f.m.data, watched: ctx}
-			f.m.data = observed
+			observed := &runtimeInputObservedData{ModuleData: f.m.Data, watched: ctx}
+			f.m.Data = observed
 			var order []string
 			checks := &runtimeInputChecksForTest{
 				target: func(inner context.Context, sc store.Scope) error {
@@ -274,7 +274,7 @@ func TestRuntimeInputCheckedUnknownCommitAndCancellation(t *testing.T) {
 			checks := runtimeInputChecksAllowForTest()
 			switch failure {
 			case "unknown-commit":
-				f.m.data = &runtimeInputLostCommitData{ModuleData: f.m.data}
+				f.m.Data = &runtimeInputLostCommitData{ModuleData: f.m.Data}
 			case "before-send-cancel":
 				checks.send = func(context.Context, store.Scope) error { cancel(); return nil }
 			case "after-send-cancel":
@@ -435,8 +435,8 @@ func TestRuntimeInputCheckedOwnedDriverAndProfile(t *testing.T) {
 	for _, be := range managedStopBackends(t) {
 		t.Run(be.name, func(t *testing.T) {
 			f := newManagedStopFixture(t, be.config(t))
-			observed := &runtimeInputObservedData{ModuleData: f.m.data}
-			f.m.data = observed
+			observed := &runtimeInputObservedData{ModuleData: f.m.Data}
+			f.m.Data = observed
 			dto, live := f.launch("checked-exact-driver")
 			target := runtimeInputTargetForTest(t, f, dto.RunRef)
 			request := RuntimeInputRequest{Target: target, Authority: runtimeInputAuthorityForTest(t, f, target), Mode: RuntimeInputRaw, Raw: []byte(`{"jsonrpc":"2.0"}`)}
@@ -492,8 +492,8 @@ func TestRuntimeInputCheckedOriginalDeadlineWhileRunLocked(t *testing.T) {
 	defer release()
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
 	defer cancel()
-	observed := &runtimeInputObservedData{ModuleData: f.m.data, watched: ctx}
-	f.m.data = observed
+	observed := &runtimeInputObservedData{ModuleData: f.m.Data, watched: ctx}
+	f.m.Data = observed
 	result, err := f.m.DeliverRuntimeInputChecked(ctx, request, runtimeInputChecksAllowForTest())
 	if err == nil || result.Attempted || proc.sentCount() != 0 || observed.mutations != 0 {
 		t.Fatalf("expired run-lock wait continued: %#v %v mutations=%d", result, err, observed.mutations)
@@ -556,8 +556,8 @@ func TestRuntimeInputCheckedOriginalDeadlineAtActualDriverAndPipe(t *testing.T) 
 		t.Run(wait, func(t *testing.T) {
 			f := newManagedStopFixture(t, store.Config{Engine: store.EngineSQLite, DSN: ":memory:", Debug: true})
 			committed := make(chan struct{}, 1)
-			observed := &runtimeInputObservedData{ModuleData: f.m.data, afterCommit: func() { committed <- struct{}{} }}
-			f.m.data = observed
+			observed := &runtimeInputObservedData{ModuleData: f.m.Data, afterCommit: func() { committed <- struct{}{} }}
+			f.m.Data = observed
 			dto, live := f.launch("checked-blocked-" + wait)
 			target := runtimeInputTargetForTest(t, f, dto.RunRef)
 			request := RuntimeInputRequest{Target: target, Authority: runtimeInputAuthorityForTest(t, f, target), Mode: RuntimeInputText, Text: "must not cross after original expiry"}
@@ -686,8 +686,8 @@ func TestRuntimeInputCheckedEpochBumpDuringRunWait(t *testing.T) {
 			defer unlock()
 			ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 			defer cancel()
-			observed := &runtimeInputObservedData{ModuleData: f.m.data, watched: ctx}
-			f.m.data = observed
+			observed := &runtimeInputObservedData{ModuleData: f.m.Data, watched: ctx}
+			f.m.Data = observed
 			started := make(chan struct{})
 			type reply struct {
 				result RuntimeInputResult

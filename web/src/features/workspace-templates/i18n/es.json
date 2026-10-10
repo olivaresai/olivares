@@ -55,6 +55,8 @@
       "maxDuration": "Duración máxima de sesión (minutos)",
       "allowedTools": "Herramientas permitidas",
       "allowedToolsPlaceholder": "p. ej. Bash,Read,Edit",
+      "requireTruncateProtection": "Exigir protección contra truncamiento en sesiones de solo lectura",
+      "truncateProtectionHint": "Las sesiones de solo lectura de esta plantilla no se iniciarán en núcleos antiguos que no puedan aplicar esta protección.",
       "recordIo": "Grabar E/S",
       "peersSameTemplate": "Las sesiones de esta plantilla pueden escribirse entre sí"
     }

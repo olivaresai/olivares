@@ -3,6 +3,10 @@ title: "El modelo de seguridad"
 description: "La postura secure-by-design detrás de Olivares AI — por qué read-first, datos mínimos, deny-by-default y una auditoría con alteraciones detectables son las decisiones de seguridad de fondo, no la enumeración de amenazas."
 ---
 
+:::note[Business]
+La exportación de auditoría (`GET /v1/audit/export`, `olivares audit export`), los archivos en directorios y la verificación de archivos externos requieren Business. Community conserva el registro firmado, `olivares audit verify` y `olivares dr backup`; la exportación devuelve HTTP 501 o código de salida 9. El reenvío de auditoría y las transferencias DDIL con segmentos de auditoría también requieren Business.
+:::
+
 Olivares AI es un producto de seguridad que corre **dentro de la propia
 infraestructura del cliente** y construye un mapa de lo que cada agente de IA puede
 alcanzar. Eso lo hace a la vez muy sensible y muy valioso para un atacante: un defecto
@@ -26,18 +30,20 @@ para operadores, no a la documentación pública.
 
 ## Read-first: riesgo asimétrico bajo
 
-El núcleo **observa**; no se interpone. El access map se reconstruye a partir de
-señales que el estate ya emite — OpenTelemetry, auditoría de bases de datos, trazas de
-auditoría en la nube, y (como backstop no cooperativo) eBPF — y el colector **nunca
-está en la ruta de datos del agente**.
+El access map observa fuera de banda. Reconstruye el acceso a partir de
+OpenTelemetry, auditoría de bases de datos, trazas de auditoría en la nube y un
+backstop eBPF. Un fallo del colector de observación pierde visibilidad sin
+condicionar las acciones del agente.
 
-Esto es una decisión de seguridad antes que de producto. Un enforcer en línea que se
-sitúa por delante de cada acción del agente es un único punto de fallo: si se atasca o
-se cae, puede tirar producción consigo, y se convierte en un objetivo de alto valor
-precisamente *porque* está en la ruta. Un observador read-first lleva el perfil de
-riesgo opuesto, **asimétrico**. Si el colector falla, deja de *ver* — no detiene al
-agente, y no rompe producción. El fallo en el peor caso de un observador es un hueco de
-visibilidad, no una caída.
+El enforcement tiene otro requisito de disponibilidad: sus puntos son inline y
+deny-closed. Los hooks de llamadas a herramientas de Claude Code gestionado llaman
+al punto de enforcement de política (PEP) del motor, que este monta por defecto.
+Si el PEP resulta inaccesible durante una caída o un reinicio del motor, se deniega
+toda llamada gobernada a herramientas. El proxy de inferencia inline y los gates
+MCP tools/call y de delegación A2A se aplican al tráfico encaminado por ellos; el
+proxy de inferencia no es la ruta por defecto de las llamadas al modelo de las
+sesiones. Incluye el motor en la planificación de disponibilidad de las sesiones
+gobernadas.
 
 La misma propiedad neutraliza la evasión obvia. El colector corre como un servicio
 separado y privilegiado **fuera del control del agente**, de modo que un agente que
@@ -154,7 +160,7 @@ nativa no da.
 
 :::note[Dos caminos fuera de la caja: pull y un push real]
 El ledger verificable llega a un SIEM por dos vías. La exportación **pull**
-(`GET /v1/audit/export`) está siempre disponible y es el artefacto que un operador
+(`GET /v1/audit/export`) requiere Business y es el artefacto que un operador
 archiva. Un **push** es real cuando se configura: una suscripción de eventing
 `audit.recorded` arranca una bomba de ledger por tenant que entrega cada registro
 sellado **al menos una vez** por el transporte duradero, con guardia SSRF, reintentos y
@@ -231,8 +237,8 @@ vinculante sobre lo que está construido hoy frente a lo que está diseñado.
 
 ## Por qué estas decisiones se sostienen juntas
 
-Ninguna de estas elecciones se sostiene sola. Read-first mantiene al producto fuera del
-radio de impacto de los mismos sistemas que vigila. Datos mínimos reduce lo que una
+La observación read-first limita los fallos del colector a huecos de visibilidad;
+el enforcement inline depende del motor y deniega ante fallos. Datos mínimos reduce lo que una
 brecha del producto podría siquiera exponer. Los tokens opacos, la ausencia de
 credenciales por defecto, el RBAC deny-by-default y una junta ABAC que solo restringe
 hacen que la autoridad sea pequeña, revocable e imposible de ampliar por accidente. El

@@ -76,8 +76,12 @@ var firstHourNextCommands = map[string]string{
 // written down: it must have a Run or a RunE, and its verb must not be on the
 // closed write list in firsthour_next_test.go.
 var topLevelNextCommands = map[string]string{
+	"account":       "olivares auth status",
+	"modules":       "olivares modules ls",
+	"skills":        "olivares skills ls",
 	"accessmap":     "olivares accessmap graph",
 	"adoption":      "olivares adoption summary",
+	"admin":         "olivares superadmin status",
 	"agent":         "olivares session ls",
 	"session":       "olivares session ls",
 	"tool":          "olivares tool ls",
@@ -102,6 +106,7 @@ var topLevelNextCommands = map[string]string{
 	"evals":         "olivares evals gate",
 	"eventing":      "olivares eventing subscriptions ls",
 	"findings":      "olivares findings export",
+	"gitpublish":    "olivares gitpublish targets ls",
 	// `finops cost` is the INGEST group, and `cost` alone is a container that
 	// prints help and exits 0, measured on 2026-09-19 — which is what "runnable as
 	// printed" has to mean for an operator and not only
@@ -127,7 +132,6 @@ var topLevelNextCommands = map[string]string{
 	"observability":   "olivares observability ingestion-health",
 	"orchestration":   "olivares orchestration graph",
 	"policy":          "olivares policy replay --decision-id <decision-id>",
-	"posture":         "olivares posture export",
 	"provider":        "olivares provider ls",
 	"readyz":          "olivares doctor",
 	"recording":       "olivares recording sessions ls",
@@ -150,6 +154,7 @@ var topLevelNextCommands = map[string]string{
 	"version":         "olivares status",
 	"voice":           "olivares voice sessions ls",
 	"work":            "olivares work list items",
+	"workspaces":      "olivares workspaces ls",
 }
 
 // nextCommandExempt is the closed list of top-level verbs that name NO next

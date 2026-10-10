@@ -44,8 +44,8 @@ fixture="$scratch/release"
 payload="$scratch/payload"
 fakebin="$scratch/fakebin"
 mkdir -p "$fixture" "$payload" "$fakebin" "$scratch/tmp" "$scratch/home"
-archive=olivares_26.8.0_linux_amd64.tar.gz
-release_identity='https://github.com/olivaresai/olivares/.github/workflows/release.yml@refs/tags/v26.8.0'
+archive=olivares_26.800_linux_amd64.tar.gz
+release_identity='https://github.com/olivaresai/olivares/.github/workflows/release.yml@refs/tags/26.800'
 sudo_sentinel="$scratch/sudo-ran"
 
 cat >"$fakebin/curl" <<'FAKECURL'
@@ -98,7 +98,7 @@ write_good_release() {
 	cat >"$payload/olivares" <<'FAKEOLIVARES'
 #!/bin/sh
 if [ "${1:-}" = version ]; then
-	printf '%s\n' 'olivares 26.8.0 fixture'
+	printf '%s\n' 'olivares 26.800 fixture'
 	exit 0
 fi
 exit 2
@@ -120,7 +120,7 @@ common_env=(
 	OLIVARES_GITHUB_URL=https://fixture.invalid
 )
 run_installer() {
-	env "${common_env[@]}" /bin/sh "$root/scripts/install.sh" --version v26.8.0 "$@"
+	env "${common_env[@]}" /bin/sh "$root/scripts/install.sh" --version 26.800 "$@"
 }
 
 # i. Change the downloaded archive after the signed checksum manifest was created.
@@ -136,7 +136,7 @@ grep -Fq 'checksum mismatch' "$scratch/err"
 write_good_release
 expect_rc 0 "identity control: production installer accepts reviewed workflow" run_installer \
 	--bindir "$scratch/bin-identity"
-printf '%s\n' 'https://github.com/example/fork/.github/workflows/release.yml@refs/tags/v26.8.0' \
+printf '%s\n' 'https://github.com/example/fork/.github/workflows/release.yml@refs/tags/26.800' \
 	>"$fixture/checksums.txt.pem"
 expect_rc 1 "mutant ii: production installer rejects another cosign identity" run_installer \
 	--bindir "$scratch/bin-identity-mutant"
@@ -166,22 +166,22 @@ expect_rc 0 "destination control: sudo sentinel was not invoked" bash "$lib" no-
 # v. The expected available version comes from the trusted signed-channel fixture; changing
 # only that field must not retain a green doctor verdict in the matrix assertion.
 cat >"$scratch/doctor-good.json" <<'JSON'
-{"schema":"olivares.ai/doctor/v1","overall":"healthy","checks":[{"name":"update-channel","status":"pass","detail":"current=26.8.0 available=26.9.0 status=upgrade-available"}]}
+{"schema":"olivares.ai/doctor/v1","overall":"healthy","checks":[{"name":"update-channel","status":"pass","detail":"current=26.800 available=26.900 status=upgrade-available"}]}
 JSON
 cat >"$scratch/doctor-fake-available.json" <<'JSON'
-{"schema":"olivares.ai/doctor/v1","overall":"healthy","checks":[{"name":"update-channel","status":"pass","detail":"current=26.8.0 available=99.0.0 status=upgrade-available"}]}
+{"schema":"olivares.ai/doctor/v1","overall":"healthy","checks":[{"name":"update-channel","status":"pass","detail":"current=26.800 available=99.0 status=upgrade-available"}]}
 JSON
 expect_rc 0 "OTA control: trusted available version matches" bash "$lib" doctor \
-	"$scratch/doctor-good.json" 26.8.0 26.9.0 upgrade-available
+	"$scratch/doctor-good.json" 26.800 26.900 upgrade-available
 expect_rc 1 "mutant v: falsified OTA available version is rejected" bash "$lib" doctor \
-	"$scratch/doctor-fake-available.json" 26.8.0 26.9.0 upgrade-available
+	"$scratch/doctor-fake-available.json" 26.800 26.900 upgrade-available
 grep -Fq 'differs from trusted fixture' "$scratch/err"
 
 # vi. Known userlands are measurable; an unknown one is the explicit third answer.
 printf 'ID=debian\n' >"$scratch/os-release"
 expect_rc 0 "platform control: Debian fixture is measurable" bash "$lib" platform debian "$scratch/os-release"
 expect_rc 2 "mutant vi: unsupported distro is not reported green" bash "$lib" platform plan9 "$scratch/os-release"
-grep -Fq 'NO HE PODIDO MIRAR' "$scratch/err"
+grep -Fq 'COULD NOT LOOK' "$scratch/err"
 
-printf 'CI-ONLY: real v26.8.0 cosign/download/install, five Docker userlands, hosted macOS, actual service start and TLS doctor probes.\n'
+printf 'CI-ONLY: real 26.800 cosign/download/install, five Docker userlands, hosted macOS, actual service start and TLS doctor probes.\n'
 printf '1..%d\n' "$passes"

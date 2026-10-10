@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+import type { ComponentProps } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import {
   act,
@@ -12,7 +13,6 @@ import {
 } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { clippingAncestors } from '@/test/clipping'
 import { fakeRouter } from '@/test/fake-router'
 import { stubViewportWidth } from '@/test/viewport'
 import type { RunDTO } from '@/features/agentops/types'
@@ -38,12 +38,15 @@ vi.mock('@tanstack/react-router', async () => {
 })
 
 // The SSE stream is a live connection; the list under test is the merge, not the wire.
+const streamStatus = vi.hoisted(() => ({
+  value: 'open' as 'open' | 'error',
+}))
 vi.mock('@/features/shared', async () => {
   const actual =
     await vi.importActual<typeof import('@/features/shared')>(
       '@/features/shared',
     )
-  return { ...actual, useLiveStream: () => ({ status: 'open' }) }
+  return { ...actual, useLiveStream: () => ({ status: streamStatus.value }) }
 })
 
 // The heavy operate panels are proven by their own tests; mounting them here would
@@ -54,8 +57,38 @@ vi.mock('@/features/agentops/profiles-panel', () => ({
 vi.mock('@/features/agentops/workspaces-panel', () => ({
   WorkspacesPanel: () => <div>workspaces-panel</div>,
 }))
-vi.mock('@/features/agentops/run-create-dialog', () => ({
-  RunCreateDialog: () => null,
+// Keep the real modal focus lifecycle; the form's inputs have their own tests.
+vi.mock('@/features/agentops/run-create-dialog', async () => {
+  const { Dialog, DialogContent, DialogTitle } =
+    await import('@/components/ui/dialog')
+  return {
+    RunCreateDialog: ({
+      open,
+      onOpenChange,
+      onCloseAutoFocus,
+    }: ComponentProps<
+      typeof import('@/features/agentops/run-create-dialog').RunCreateDialog
+    >) => (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent
+          onCloseAutoFocus={onCloseAutoFocus}
+          aria-describedby={undefined}
+        >
+          <DialogTitle>Advanced launch</DialogTitle>
+        </DialogContent>
+      </Dialog>
+    ),
+  }
+})
+vi.mock('@/features/first-hour/first-hour', () => ({
+  NewSessionDialog: ({
+    open,
+    onAdvanced,
+  }: {
+    open: boolean
+    onAdvanced: () => void
+  }) =>
+    open ? <button onClick={onAdvanced}>Advanced launch options</button> : null,
 }))
 // The card is handed an already-resolved session; the target it was resolved FOR
 // is what these cases are about, and it rides on the resolution.
@@ -94,6 +127,8 @@ vi.mock('@/features/agentops/api', async (importOriginal) => ({
 
 import { agentOpsApi } from '@/features/agentops/api'
 import { sessionsApi } from './api'
+import { NewSessionHost } from '@/features/first-hour/new-session-host'
+import { useNewSessionDialog } from '@/features/first-hour/new-session-store'
 import { SessionsWorkspaceView } from './sessions-workspace-view'
 
 const observed: LiveDTO = {
@@ -141,20 +176,36 @@ const launchedRun: RunDTO = {
  *    the row-backed open target these cases read — is the other tab, unchanged. Opening
  *    it keeps every case measuring what it was written to measure.
  *
- *    MOUSEDOWN, not click: a Radix tab trigger selects on mouse-down, and a bare
- *    `.click()` leaves the strip where it was — which reads as "the table is empty"
- *    rather than "the tab never changed".
+ *    The table is reached through the list header's `⋯` menu ("Show as table"). The menu
+ *    opens on the trigger's Enter key, which jsdom delivers as a plain KeyboardEvent
+ *    (Radix opens on pointer-down only for a real pointer event).
  */
-function openTable() {
-  // The LAST strip: a few cases render the view twice in one test, and the newest
+function openListMenu() {
+  // The LAST list header: a few cases render the view twice in one test, and the newest
   // mount is the one they go on to assert against.
-  const triggers = screen.getAllByRole('tab', { name: 'Table' })
+  const triggers = screen.queryAllByTestId('sessions-list-menu')
+  if (triggers.length === 0) return
   act(() => {
-    fireEvent.mouseDown(triggers[triggers.length - 1])
+    fireEvent.keyDown(triggers[triggers.length - 1], { key: 'Enter' })
   })
 }
 
-function renderView(entrance: 'observe' | 'operate' = 'observe') {
+function openView(label: 'Show as table' | 'Workspaces' | 'Provider profiles') {
+  openListMenu()
+  const items = screen.getAllByRole('menuitem', { name: label })
+  act(() => {
+    fireEvent.click(items[items.length - 1])
+  })
+}
+
+function openTable() {
+  openView('Show as table')
+}
+
+function renderView(
+  entrance: 'observe' | 'operate' = 'observe',
+  { table = true }: { table?: boolean } = {},
+) {
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false, gcTime: 0 } },
   })
@@ -163,7 +214,11 @@ function renderView(entrance: 'observe' | 'operate' = 'observe') {
       <SessionsWorkspaceView entrance={entrance} />
     </QueryClientProvider>,
   )
-  openTable()
+  if (
+    table &&
+    new URLSearchParams(fakeRouter.searchStr()).get('tab') !== 'table'
+  )
+    openTable()
   return result
 }
 
@@ -174,6 +229,7 @@ const rowFor = async (label: string) => {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  streamStatus.value = 'open'
   fakeRouter.reset('/sessions')
   perms.clear()
   perms.add('sessions:live:read')
@@ -431,7 +487,7 @@ describe('SessionsWorkspaceView — two doors, one room', () => {
   it('reads Sessions on the /agentops door too, and opens its table on launched sessions', async () => {
     renderView('operate')
     expect(
-      await screen.findByRole('heading', { name: 'Sessions' }),
+      await screen.findByRole('heading', { name: 'Table' }),
     ).toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: 'Claude Code' })).toBeNull()
     // The door is only the filter the table opens on: what Olivares launched, while
@@ -461,7 +517,7 @@ describe('SessionsWorkspaceView — two doors, one room', () => {
   })
 
   it('keeps the observe framing on the /sessions door', async () => {
-    renderView('observe')
+    renderView('observe', { table: false })
     expect(
       await screen.findByRole('heading', { name: 'Sessions' }),
     ).toBeInTheDocument()
@@ -469,41 +525,48 @@ describe('SessionsWorkspaceView — two doors, one room', () => {
     expect(await screen.findByText('nightly-indexer')).toBeInTheDocument()
   })
 
-  it('offers the provider-profile plane only to a principal who can read profiles', async () => {
+  it('offers the provider-profile view only to a principal who can read profiles', async () => {
     perms.add('sessions:profile:read')
-    renderView()
+    const first = renderView('observe', { table: false })
+    await screen.findByTestId('sessions-list-menu')
+    openListMenu()
     expect(
-      await screen.findByRole('tab', { name: 'Provider profiles' }),
+      await screen.findByRole('menuitem', { name: 'Provider profiles' }),
     ).toBeInTheDocument()
+    first.unmount()
     perms.delete('sessions:profile:read')
-    renderView()
-    await waitFor(() =>
-      expect(
-        screen.queryAllByRole('tab', { name: 'Provider profiles' }),
-      ).toHaveLength(1),
-    )
+    renderView('observe', { table: false })
+    await screen.findByTestId('sessions-list-menu')
+    openListMenu()
+    await screen.findByRole('menuitem', { name: 'Show as table' })
+    expect(
+      screen.queryByRole('menuitem', { name: 'Provider profiles' }),
+    ).toBeNull()
   })
 
-  it('offers the workspace plane only to a principal who can read runs', async () => {
-    renderView()
+  it('offers the workspace view only to a principal who can read runs', async () => {
+    const first = renderView('observe', { table: false })
+    await screen.findByTestId('sessions-list-menu')
+    openListMenu()
     expect(
-      await screen.findByRole('tab', { name: 'Workspaces' }),
+      await screen.findByRole('menuitem', { name: 'Workspaces' }),
     ).toBeInTheDocument()
+    first.unmount()
     perms.delete('sessions:run:read')
-    renderView()
-    await waitFor(() =>
-      expect(screen.queryAllByRole('tab', { name: 'Workspaces' })).toHaveLength(
-        1,
-      ),
-    )
+    renderView('observe', { table: false })
+    await screen.findByTestId('sessions-list-menu')
+    openListMenu()
+    await screen.findByRole('menuitem', { name: 'Show as table' })
+    expect(screen.queryByRole('menuitem', { name: 'Workspaces' })).toBeNull()
   })
 
   it('offers the launch action only to a principal who can write runs', async () => {
-    renderView()
+    const first = renderView()
     await screen.findByText('Untitled session')
     expect(
       screen.queryByRole('button', { name: /New session/i }),
     ).not.toBeInTheDocument()
+    first.unmount()
     perms.add('sessions:run:write')
     renderView()
     expect(
@@ -665,7 +728,7 @@ describe('SessionsWorkspaceView — two homes, one provider session id', () => {
  * asserted is the address bar an operator would copy, and not a prop.
  */
 describe('SessionsWorkspaceView — chrome above the work', () => {
-  it('keeps the counts and tab strip in the chrome above the work', async () => {
+  it('keeps the name, the count and the views menu in the list header, with no tab strip', async () => {
     const qc = new QueryClient({
       defaultOptions: { queries: { retry: false, gcTime: 0 } },
     })
@@ -676,18 +739,16 @@ describe('SessionsWorkspaceView — chrome above the work', () => {
     )
     const heading = await screen.findByRole('heading', { name: 'Sessions' })
     const summary = await screen.findByTestId('sessions-summary')
-    expect(heading.closest('[data-slot="page-header"]')).toContainElement(
-      summary,
-    )
+    const header = heading.closest('[data-slot="list-header"]') as HTMLElement
+    expect(header).toContainElement(summary)
+    expect(header).toContainElement(screen.getByTestId('sessions-list-menu'))
     const panes = screen.getByTestId('sessions-panes')
-    // The strip used to be the pane header, one 36 px band under the title. It is on
-    // the title line now, so the panes begin with the work itself.
-    expect(panes).not.toContainElement(screen.getByRole('tablist'))
-    expect(heading.closest('[data-slot="work-chrome"]')).toContainElement(
-      screen.getByRole('tablist'),
-    )
     expect(panes).toContainElement(await screen.findByTestId('work-rail'))
-    expect(panes).not.toContainElement(summary)
+    expect(panes).toContainElement(header)
+    expect(screen.queryByRole('tablist')).toBeNull()
+    // The list is live: no Refresh button and no Live chip beside the name.
+    expect(screen.queryByRole('button', { name: 'Refresh' })).toBeNull()
+    expect(within(header).queryByText('Live')).toBeNull()
   })
 })
 
@@ -709,7 +770,7 @@ describe('SessionsWorkspaceView — the surface opens on work, not on nothing', 
     // A default is not a selection. A surface that rewrote the address under its reader
     // would hand a recipient a different link than its author copied.
     fakeRouter.reset('/sessions')
-    renderView()
+    renderView('observe', { table: false })
     await screen.findByTestId('card')
     expect(fakeRouter.url()).toBe('/sessions')
   })
@@ -737,7 +798,9 @@ describe('SessionsWorkspaceView — the address bar holds the session', () => {
     renderView()
     await user.click(await rowFor('Untitled session'))
     await screen.findByTestId('card')
-    expect(fakeRouter.url()).toBe('/sessions?session=sess%3Asess-found')
+    expect(fakeRouter.url()).toBe(
+      '/sessions?tab=table&session=sess%3Asess-found',
+    )
   })
 
   it('Back returns to the session read a moment ago, and Forward goes on again', async () => {
@@ -788,7 +851,7 @@ describe('SessionsWorkspaceView — the address bar holds the session', () => {
       /session/,
     )
     expect(screen.queryByTestId('card')).not.toBeInTheDocument()
-    await waitFor(() => expect(fakeRouter.url()).toBe('/sessions'))
+    await waitFor(() => expect(fakeRouter.url()).toBe('/sessions?tab=table'))
   })
 
   it('a withdrawn read retires the open session, clears the bar and SAYS SO', async () => {
@@ -824,7 +887,7 @@ describe('SessionsWorkspaceView — the address bar holds the session', () => {
       ),
     )
     expect(await screen.findByTestId('sessions-address-retired')).toBeVisible()
-    await waitFor(() => expect(fakeRouter.url()).toBe('/sessions'))
+    await waitFor(() => expect(fakeRouter.url()).toBe('/sessions?tab=table'))
   })
 })
 
@@ -843,28 +906,30 @@ describe('SessionsWorkspaceView — one chrome row above the work', () => {
     )
   }
 
-  // Measured on the seeded estate at 1440×900: title line 24, gap 12, tab strip 36 —
-  // the first rail row at y=181 against a budget of 136. The strip joins the title
-  // line, which is the shape /console and /provider-profiles already carry.
-  it('paints the title and the tab strip on the same 36 px row', async () => {
+  // The list header is ONE 48 px row: the name, the count, `+` and `⋯`. The first row of
+  // the list starts under it, and nothing else spends a line above the work.
+  it('paints the list header on one 48 px row, with the name as the page heading', async () => {
     renderSurface()
-    await screen.findAllByRole('tab', { name: 'Table' })
-    const chrome = document.querySelector('[data-slot="work-chrome"]')
-    expect(chrome).not.toBeNull()
-    expect(chrome!.className).toMatch(/\bh-9\b/)
-    expect(
-      within(chrome as HTMLElement).getByRole('heading', { level: 1 }),
-    ).toHaveTextContent('Sessions')
-    expect(
-      within(chrome as HTMLElement).getByRole('tablist'),
-    ).toBeInTheDocument()
+    const heading = await screen.findByRole('heading', { level: 1 })
+    expect(heading).toHaveTextContent('Sessions')
+    const header = heading.closest('[data-slot="list-header"]') as HTMLElement
+    expect(header).not.toBeNull()
+    expect(header.firstElementChild!.className).toMatch(/\bh-12\b/)
+    expect(screen.queryByRole('tablist')).toBeNull()
   })
 
-  it('the header says only the counts: sessions and running, no engine wording (Root review, 09)', async () => {
+  it('the count is a number, and says sessions and running on its hover (no engine wording)', async () => {
     renderSurface()
     const summary = await screen.findByTestId('sessions-summary')
-    expect(summary.textContent).toMatch(/^\d+ sessions?( · \d+ running)?$/)
-    const header = summary.closest('[data-slot="page-header"]') as HTMLElement
+    expect(summary.textContent).toMatch(/^\d+$/)
+    expect(summary.getAttribute('title')).toMatch(
+      /^\d+ sessions?( · \d+ running)?$/,
+    )
+    expect(summary).toHaveAttribute('aria-hidden', 'true')
+    expect(
+      screen.getByText(summary.getAttribute('title') as string),
+    ).toHaveClass('sr-only')
+    const header = summary.closest('[data-slot="list-header"]') as HTMLElement
     expect(header.textContent).not.toMatch(/plane|Tenant-wide|—/i)
     expect(screen.queryByTestId('sessions-scope-note')).toBeNull()
   })
@@ -881,101 +946,351 @@ describe('SessionsWorkspaceView — one chrome row above the work', () => {
       has_more: false,
     })
     renderSurface()
-    await screen.findAllByRole('tab', { name: 'Table' })
+    await screen.findByTestId('sessions-list-menu')
     await waitFor(() => expect(agentOpsApi.listRuns).toHaveBeenCalled())
     await new Promise((r) => setTimeout(r, 50))
     expect(screen.queryByTestId('sessions-summary')).toBeNull()
     expect(screen.queryByText(/0 sessions/)).toBeNull()
   })
 
-  // The scope note left the header with the subtitle (Root review, 09: counts only).
-  it('keeps the counts on the header line', async () => {
+  // Every truncating element in the header owes the reader the whole text.
+  it('leaves no truncating element in the list header without a title', async () => {
     renderSurface()
-    const chrome = (await waitFor(() => {
-      const el = document.querySelector('[data-slot="work-chrome"]')
-      expect(el).not.toBeNull()
-      return el
-    })) as HTMLElement
-    await waitFor(() =>
-      expect(
-        within(chrome).getByTestId('sessions-summary'),
-      ).toBeInTheDocument(),
-    )
-  })
-
-  // Measured at 1440: the description was cut from 1454 px to 797 with no `title` at
-  // all — the attribute was there a round earlier and a later one lost it, because the
-  // description on THIS screen is a node (the counts and the scope note ride in it) and
-  // `title` takes a string. The walk is what catches the next one here instead of in a
-  // browser: every truncating element in the header owes the reader the whole text.
-  it('leaves no truncating element in the header without a title', async () => {
-    renderSurface()
-    const chrome = (await waitFor(() => {
-      const el = document.querySelector('[data-slot="work-chrome"]')
-      expect(el).not.toBeNull()
-      return el
-    })) as HTMLElement
-    await waitFor(() =>
-      expect(
-        within(chrome).getByTestId('sessions-summary'),
-      ).toBeInTheDocument(),
-    )
-    const header = chrome.querySelector(
-      '[data-slot="page-header"]',
-    ) as HTMLElement
+    const summary = await screen.findByTestId('sessions-summary')
+    const header = summary.closest('[data-slot="list-header"]') as HTMLElement
     const naked = [...header.querySelectorAll('.truncate')].filter(
       (el) => !el.closest('[title]'),
     )
     expect(naked.map((el) => (el.textContent ?? '').slice(0, 40))).toEqual([])
-    const described = within(chrome).getByTestId('sessions-summary')
-      .parentElement as HTMLElement
-    expect(described.getAttribute('title')).toBe(
-      within(chrome).getByTestId('sessions-summary').textContent,
-    )
   })
 
-  /**
-   * ⛔ THE PANEL IS PAINTED AND UNTOUCHABLE WHEN THE ROW CLIPS IT, and no assertion this
-   *    round had could see that. The disclosure opens a panel `absolute top-full` INSIDE
-   *    the chrome row; the row was `h-9 … overflow-hidden`, so at 390×844 the panel's box
-   *    ran y 94→168 inside a row that ended at 96 and `elementFromPoint` at its centre
-   *    answered the table underneath — Launch, Refresh, Register and Export unreachable on
-   *    all four screens, with `aria-expanded` true and no `hidden` class, which is exactly
-   *    what the round-3 oracle asserted.
-   *
-   *    The walk is over CLASSES because jsdom loads no stylesheet (see `@/test/clipping`);
-   *    the computed fact is measured in a browser by `code-r4/probe/panel.mjs`.
-   */
-  it('phone: nothing between the open panel and the page clips it', async () => {
-    const user = userEvent.setup()
+  it('names the icon buttons: New session and More, each with a hover', async () => {
     perms.add('sessions:run:write')
-    stubViewportWidth(390)
     renderSurface()
-    const toggle = await screen.findByTestId('page-actions-toggle')
-    await user.click(toggle)
-    expect(toggle).toHaveAttribute('aria-expanded', 'true')
-    const panel = document.querySelector(
-      '[data-slot="page-actions"]',
-    ) as HTMLElement
-    // Joined, so a failure NAMES the element that cut the panel on its one line.
-    expect(clippingAncestors(panel).join(' | ')).toBe('')
-    expect(
-      within(panel).getByRole('button', { name: 'New session' }),
-    ).toBeInTheDocument()
+    const user = userEvent.setup()
+    const add = await screen.findByTestId('sessions-new')
+    expect(add).toHaveAccessibleName('New session')
+    const more = screen.getByTestId('sessions-list-menu')
+    expect(more).toHaveAccessibleName('More')
+    await user.hover(more)
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('More')
   })
 
-  // Nothing between the chrome and the panes but the notices, and those only when
-  // something has to be said: a tab strip of its own there is what cost the 45 px.
-  it('puts the panes straight under the chrome row, with no strip between them', async () => {
+  // Nothing between the notices and the panes: the list header is inside the panes.
+  it('puts the panes straight under the notices, with no strip between them', async () => {
     renderSurface()
     const panes = await screen.findByTestId('sessions-panes')
-    const chrome = document.querySelector('[data-slot="work-chrome"]')!
-    expect(chrome.parentElement).toBe(panes.parentElement)
-    expect(panes.previousElementSibling).toBe(chrome)
     expect(panes.querySelector('[role="tablist"]')).toBeNull()
-    // The tab body starts flush under the strip; `pt-4` there is a second gap.
+    expect(document.querySelector('[data-slot="work-chrome"]')).toBeNull()
     for (const panel of panes.querySelectorAll('[role="tabpanel"]')) {
       expect(panel.className).toMatch(/\bpt-0\b/)
     }
   })
+
+  it('opens the table from the menu, with a way back to the list', async () => {
+    const user = userEvent.setup()
+    renderSurface()
+    await screen.findByTestId('work-rail')
+    openTable()
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Table' }),
+    ).toBeInTheDocument()
+    await user.click(screen.getByTestId('sessions-view-back'))
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Sessions' }),
+    ).toBeInTheDocument()
+  })
+
+  it('shows a failed stream as one quiet line under the header, and nothing otherwise', async () => {
+    streamStatus.value = 'error'
+    const first = renderSurface()
+    const notice = await screen.findByTestId('sessions-stream-notice')
+    expect(notice).toHaveTextContent('Reconnecting…')
+    expect(notice.closest('[data-slot="list-header"]')).not.toBeNull()
+    first.unmount()
+    streamStatus.value = 'open'
+    renderSurface()
+    await screen.findByTestId('sessions-list-menu')
+    expect(screen.queryByTestId('sessions-stream-notice')).toBeNull()
+  })
+})
+
+// 26.10.1 review, measured again before this fix: an empty Sessions page painted two
+// empty states and THREE New session buttons (header, rail, work pane). One empty estate
+// is one fact.
+describe('SessionsWorkspaceView — an empty estate', () => {
+  afterEach(() => stubViewportWidth(1440))
+
+  function renderEmpty(entrance: 'observe' | 'operate' = 'observe') {
+    vi.mocked(sessionsApi.live).mockResolvedValue({
+      items: [],
+      has_more: false,
+    })
+    vi.mocked(agentOpsApi.listRuns).mockResolvedValue({
+      items: [],
+      has_more: false,
+    } as never)
+    perms.add('sessions:run:write')
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false, gcTime: 0 } },
+    })
+    // The shell's one New session host, which the header's New session opens.
+    useNewSessionDialog.setState({ open: false, opener: null, advanced: null })
+    return render(
+      <QueryClientProvider client={qc}>
+        <SessionsWorkspaceView entrance={entrance} />
+        <NewSessionHost />
+      </QueryClientProvider>,
+    )
+  }
+
+  it('shows one empty state, in one line of plain words, with the one New session', async () => {
+    renderEmpty()
+    const title = await screen.findByText('No sessions yet')
+    expect(screen.getAllByText('No sessions yet')).toHaveLength(1)
+    expect(screen.queryByText('Select a session')).toBeNull()
+    expect(screen.queryByText('No session selected')).toBeNull()
+    const empty = title.closest('[data-slot="empty-state"]') as HTMLElement
+    expect(empty).toHaveTextContent(
+      'Sessions you start, and the ones Olivares finds, appear here.',
+    )
+    expect(
+      screen.getAllByRole('button', { name: /New session/i }),
+    ).toHaveLength(1)
+    const pill = within(empty).getByRole('button', { name: 'New session' })
+    expect(pill).toBeInTheDocument()
+    // The one primary action of an empty list is a pill in open space.
+    expect(pill.className).toContain('rounded-full')
+    expect(pill.className).toContain('bg-accent')
+    // The list header stays beside it, without a second New session.
+    expect(screen.getByTestId('sessions-list-menu')).toBeInTheDocument()
+    expect(screen.queryByTestId('sessions-new')).toBeNull()
+  })
+
+  it('keeps exactly one New session on the Table tab', async () => {
+    renderEmpty()
+    await screen.findByText('No sessions yet')
+    openTable()
+    const title = await screen.findByText('No sessions yet')
+    const empty = title.closest('[data-slot="empty-state"]') as HTMLElement
+    expect(
+      screen.getAllByRole('button', { name: /New session/i }),
+    ).toHaveLength(1)
+    expect(
+      within(empty).getByRole('button', { name: 'New session' }),
+    ).toBeInTheDocument()
+  })
+
+  it.each(['Sessions', 'Table', 'Provider profiles'])(
+    'returns focus to the single New session action after Advanced launch closes on %s',
+    async (tab) => {
+      const user = userEvent.setup()
+      perms.add('sessions:profile:read')
+      renderEmpty()
+      await screen.findByText('No sessions yet')
+      if (tab === 'Table') openTable()
+      if (tab === 'Provider profiles') openView('Provider profiles')
+      const launch = screen.getByRole('button', { name: 'New session' })
+      await user.click(launch)
+      await user.click(
+        screen.getByRole('button', { name: 'Advanced launch options' }),
+      )
+      await screen.findByRole('dialog', { name: 'Advanced launch' })
+      await user.keyboard('{Escape}')
+      await waitFor(() =>
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
+      )
+      expect(
+        screen.getAllByRole('button', { name: 'New session' }),
+      ).toHaveLength(1)
+      await waitFor(() => expect(launch).toHaveFocus())
+    },
+  )
+
+  it.each([
+    [1024, 'narrative'],
+    [1024, 'context'],
+    [1024, 'rail'],
+    [1600, 'narrative'],
+  ] as const)(
+    'keeps one header New session for a cold selection with empty lists at %s px, pane %s',
+    async (width, pane) => {
+      stubViewportWidth(width)
+      fakeRouter.reset(`/sessions?session=sess%3Asess-found&pane=${pane}`)
+      vi.mocked(sessionsApi.liveOne).mockResolvedValue(observed)
+      vi.mocked(sessionsApi.timeline).mockResolvedValue({
+        items: [],
+        has_more: false,
+      })
+      renderEmpty()
+
+      await screen.findByText('No sessions yet')
+      await waitFor(() =>
+        expect(sessionsApi.liveOne).toHaveBeenCalledWith('sess-found'),
+      )
+      const action = screen.getByRole('button', { name: 'New session' })
+      expect(action).toBeEnabled()
+      expect(action.closest('[data-slot="list-header"]')).not.toBeNull()
+      // One, and in the list header: the rail's own empty state carries none.
+      expect(
+        screen.getAllByRole('button', { name: 'New session' }),
+      ).toHaveLength(1)
+      expect(
+        within(
+          document.getElementById('work-pane-rail') as HTMLElement,
+        ).getAllByRole('button', { name: 'New session' }),
+      ).toHaveLength(1)
+      expect(
+        within(
+          document.querySelector('[data-slot="empty-state"]') as HTMLElement,
+        ).queryByRole('button', { name: 'New session' }),
+      ).not.toBeInTheDocument()
+    },
+  )
+
+  it.each([true, false])(
+    'keeps the Table error visible and New session gated by launch permission (%s)',
+    async (canLaunch) => {
+      if (canLaunch) perms.add('sessions:run:write')
+      vi.mocked(sessionsApi.live).mockRejectedValue(
+        new Error('live unavailable'),
+      )
+      vi.mocked(agentOpsApi.listRuns).mockRejectedValue(
+        new Error('runs unavailable'),
+      )
+      renderView()
+
+      await screen.findByRole('button', { name: /retry/i })
+      expect(screen.queryByText('No sessions yet')).not.toBeInTheDocument()
+      const actions = screen.queryAllByRole('button', { name: 'New session' })
+      expect(actions).toHaveLength(canLaunch ? 1 : 0)
+      if (canLaunch) expect(actions[0]).toBeEnabled()
+    },
+  )
+
+  it.each(['Sessions', 'Table'])(
+    'keeps New session available while %s reads are pending',
+    async (tab) => {
+      perms.add('sessions:run:write')
+      vi.mocked(sessionsApi.live).mockReturnValue(new Promise(() => {}))
+      vi.mocked(agentOpsApi.listRuns).mockReturnValue(new Promise(() => {}))
+      renderView('observe', { table: tab === 'Table' })
+
+      expect(screen.queryByText('No sessions yet')).not.toBeInTheDocument()
+      expect(
+        screen.getAllByRole('button', { name: 'New session' }),
+      ).toHaveLength(1)
+      expect(screen.getByRole('button', { name: 'New session' })).toBeEnabled()
+    },
+  )
+
+  it('titles the page Sessions, as navigation names it, whichever door opened it', async () => {
+    renderEmpty('operate')
+    await screen.findByText('No sessions yet')
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(
+      /^Sessions$/,
+    )
+    expect(screen.queryByText('Claude Code')).toBeNull()
+  })
+
+  it('with sessions listed, New session is the header verb and appears once', async () => {
+    perms.add('sessions:run:write')
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false, gcTime: 0 } },
+    })
+    render(
+      <QueryClientProvider client={qc}>
+        <SessionsWorkspaceView entrance="observe" />
+      </QueryClientProvider>,
+    )
+    await screen.findByTestId('work-rail')
+    await screen.findByTestId('sessions-summary')
+    expect(
+      screen.getAllByRole('button', { name: /New session/i }),
+    ).toHaveLength(1)
+  })
+})
+
+// THE OBSERVED HALF HAS NO TIMER AND ITS STREAM OPENS ONLY OVER AN ANSWER: a first read that
+// failed stayed failed. The notice carries the way out.
+describe('SessionsWorkspaceView — a half that failed can be asked again', () => {
+  it('shows Retry on the live notice and asks the live half again, not the runs', async () => {
+    const user = userEvent.setup()
+    vi.mocked(sessionsApi.live).mockRejectedValue(new Error('live unavailable'))
+    renderView('observe', { table: false })
+    const notice = await screen.findByTestId('sessions-live-lookup-failed')
+    expect(notice).toHaveTextContent(/observed half could not be read/i)
+    const liveBefore = vi.mocked(sessionsApi.live).mock.calls.length
+    const runsBefore = vi.mocked(agentOpsApi.listRuns).mock.calls.length
+    vi.mocked(sessionsApi.live).mockResolvedValue({
+      items: [observed],
+      has_more: false,
+    })
+    await user.click(within(notice).getByRole('button', { name: 'Retry' }))
+    await waitFor(() =>
+      expect(vi.mocked(sessionsApi.live).mock.calls.length).toBeGreaterThan(
+        liveBefore,
+      ),
+    )
+    await waitFor(() =>
+      expect(screen.queryByTestId('sessions-live-lookup-failed')).toBeNull(),
+    )
+    // The guarded read asks the runs again too when this person may read them.
+    expect(
+      vi.mocked(agentOpsApi.listRuns).mock.calls.length,
+    ).toBeGreaterThanOrEqual(runsBefore)
+  })
+
+  it('shows Retry on the runs notice', async () => {
+    const user = userEvent.setup()
+    vi.mocked(agentOpsApi.listRuns).mockRejectedValue(new Error('runs down'))
+    renderView('observe', { table: false })
+    const notice = await screen.findByTestId('sessions-run-lookup-failed')
+    const before = vi.mocked(agentOpsApi.listRuns).mock.calls.length
+    await user.click(within(notice).getByRole('button', { name: 'Retry' }))
+    await waitFor(() =>
+      expect(vi.mocked(agentOpsApi.listRuns).mock.calls.length).toBeGreaterThan(
+        before,
+      ),
+    )
+  })
+})
+
+describe('SessionsWorkspaceView — where the keyboard goes between views', () => {
+  it('enters another view on its back button and returns to the menu button', async () => {
+    const user = userEvent.setup()
+    renderView('observe', { table: false })
+    await screen.findByTestId('sessions-list-menu')
+    openTable()
+    const back = await screen.findByTestId('sessions-view-back')
+    expect(back).toHaveFocus()
+    await user.click(back)
+    expect(await screen.findByTestId('sessions-list-menu')).toHaveFocus()
+  })
+})
+
+describe('URL views are authoritative', () => {
+  it.each(['table', 'workspaces', 'profiles'] as const)(
+    'opens a cold %s link and follows Back/Forward',
+    async (tab) => {
+      perms.add('sessions:workspace:read')
+      perms.add('sessions:profile:read')
+      fakeRouter.reset(`/sessions?tab=${tab}`)
+      const view = renderView('observe', { table: false })
+      const assertView = async () => {
+        if (tab === 'table') await screen.findByRole('grid')
+        else await screen.findByText(`${tab}-panel`)
+      }
+      await assertView()
+      view.unmount()
+      renderView('observe', { table: false })
+      await assertView()
+      act(() => fakeRouter.go('/sessions'))
+      await screen.findByTestId('sessions-list-menu')
+      act(() => fakeRouter.back())
+      await assertView()
+      act(() => fakeRouter.forward())
+      await screen.findByTestId('sessions-list-menu')
+    },
+  )
 })

@@ -145,7 +145,7 @@ func communicationAcknowledgeAppendOnlyGraph(
 	now := model.NewTimestamp(communicationSchemaNow()).String()
 	ackID := model.NewID()
 	var delivery model.Record
-	if err := fixture.m.data.View(ctx, fixture.tenant, func(sc store.Scope) error {
+	if err := fixture.m.Data.View(ctx, fixture.tenant, func(sc store.Scope) error {
 		repo, err := sc.Ext(messageDeliveryKind)
 		if err != nil {
 			return err
@@ -406,11 +406,12 @@ func TestCommunicationAppendOnlyReadOnSplitOwnerPostgres(t *testing.T) {
 	}
 	m.UseData(api.NewModuleData(st))
 	bindStoreStanding(m, st)
-	m.UseCommunicationGuardReconciliationData(
-		NewCommunicationGuardReconciliationData(api.NewModuleData(st)),
-	)
+	func() {
+		m.CommunicationGuardData = NewCommunicationGuardReconciliationData(api.NewModuleData(st))
+		m.normalize()
+	}()
 	var workspace model.ID
-	if err := m.data.View(ctx, tenant, func(sc store.Scope) error {
+	if err := m.Data.View(ctx, tenant, func(sc store.Scope) error {
 		value, err := sc.DefaultWorkspace(ctx)
 		if err == nil {
 			workspace = value.ID

@@ -9,7 +9,7 @@ description: >-
 Community バイナリは `session-cockpit` API 名前空間の可用性ディスクリプタを
 登録する。この名前空間には現在 **ハンドラがゼロ** であり、**対話型コックピットは
 ない**。`/v1/m/session-cockpit` 配下のリクエストは **欠如による 404** を受ける。
-このディスクリプタはカタログの 31 個の製品モジュールには含まれない。
+このディスクリプタはカタログの 32 個の製品モジュールには含まれない。
 
 ## 現在の可用性
 
@@ -31,7 +31,7 @@ Community バイナリは `session-cockpit` API 名前空間の可用性ディ�
 
 1. `sessions` 名前空間のライブセッションモジュールルート —
    [ライブ運用とセッション](/ja/reference/modules/ii-sessions/)。
-2. コンソールの **Sessions**（`/sessions`）、**Claude Code**（`/agentops`）、
+2. コンソールの **Sessions**（`/sessions`、`/agentops` も同じ）、
    **Work**（`/work`）— [コンソールリファレンス](/ja/reference/console/)。
 3. 次節の公式 CLI ライフサイクル。
 

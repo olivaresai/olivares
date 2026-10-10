@@ -14,13 +14,13 @@
 set -uo pipefail
 RAIZ="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 SUT="$RAIZ/scripts/check-worktree-push-free.sh"
-[ -r "$SUT" ] || { echo "test-worktree-push-free: NO HE PODIDO MIRAR: no leo $SUT" >&2; exit 2; }
+[ -r "$SUT" ] || { echo "test-worktree-push-free: COULD NOT LOOK: cannot read $SUT" >&2; exit 2; }
 # shellcheck source=lib/exec-workdir.sh
 . "$RAIZ/scripts/lib/exec-workdir.sh" || {
-	echo "test-worktree-push-free: NO HE PODIDO MIRAR: falta scripts/lib/exec-workdir.sh" >&2; exit 2; }
+	echo "test-worktree-push-free: COULD NOT LOOK: missing scripts/lib/exec-workdir.sh" >&2; exit 2; }
 
 WORK="$(olivares_pick_exec_workdir wtpushfree)" || {
-	echo "test-worktree-push-free: NO HE PODIDO MIRAR: sin directorio ejecutable" >&2; exit 2; }
+	echo "test-worktree-push-free: COULD NOT LOOK: no executable directory" >&2; exit 2; }
 SENUELO=""
 limpia() { [ -n "$SENUELO" ] && kill "$SENUELO" 2>/dev/null; rm -rf "$WORK"; }
 trap limpia EXIT HUP INT TERM
@@ -28,13 +28,13 @@ trap limpia EXIT HUP INT TERM
 fallos=0
 comprueba() { # <nombre> <esperado> <rc>
 	if [ "$2" = "$3" ]; then printf '  ok    %-52s rc=%s\n' "$1" "$3"
-	else printf '  FAIL  %-52s esperaba %s, dio %s\n' "$1" "$2" "$3"; fails=1; fallos=$((fallos + 1)); fi
+	else printf '  FAIL  %-52s expected %s, got %s\n' "$1" "$2" "$3"; fails=1; fallos=$((fallos + 1)); fi
 }
 
 ARBOL="$WORK/arbol"; mkdir -p "$ARBOL"
 
 # ── VERDE: un worktree sin ningún push ────────────────────────────────────────────────────────
-bash "$SUT" "$ARBOL" >/dev/null 2>&1; comprueba "sin push: libre" 0 "$?"
+bash "$SUT" "$ARBOL" >/dev/null 2>&1; comprueba "no push: free" 0 "$?"
 
 # ── ROJO: con un push VIVO. El señuelo se llama como el hook real y vive en el árbol. ─────────
 # ⛔ SIN `exec`, y es la diferencia entre una batería que prueba algo y una que no. La primera
@@ -53,27 +53,27 @@ for _ in $(seq 1 50); do
 	sleep 0.1
 done
 if [ "$(readlink "/proc/$SENUELO/cwd" 2>/dev/null)" != "$ARBOL" ]; then
-	echo "test-worktree-push-free: NO HE PODIDO MIRAR: el señuelo no llegó a $ARBOL" >&2
+	echo "test-worktree-push-free: COULD NOT LOOK: decoy did not reach $ARBOL" >&2
 	exit 2
 fi
-bash "$SUT" "$ARBOL" >/dev/null 2>&1; comprueba "con push vivo: NO editar" 1 "$?"
+bash "$SUT" "$ARBOL" >/dev/null 2>&1; comprueba "live push: DO NOT edit" 1 "$?"
 
 # ── Y el control que separa «lo detecta» de «dice que sí a todo»: OTRO árbol, mismo instante. ──
 OTRO="$WORK/otro"; mkdir -p "$OTRO"
-bash "$SUT" "$OTRO" >/dev/null 2>&1; comprueba "otro árbol con el señuelo vivo: libre" 0 "$?"
+bash "$SUT" "$OTRO" >/dev/null 2>&1; comprueba "another tree with a live decoy: free" 0 "$?"
 
 kill "$SENUELO" 2>/dev/null; wait "$SENUELO" 2>/dev/null; SENUELO=""
 # ── Y al morir el push, el mismo árbol vuelve a estar libre ───────────────────────────────────
 for _ in $(seq 1 50); do ps -o pid= -p "$SENUELO" >/dev/null 2>&1 || break; sleep 0.1; done
-bash "$SUT" "$ARBOL" >/dev/null 2>&1; comprueba "muerto el push: libre otra vez" 0 "$?"
+bash "$SUT" "$ARBOL" >/dev/null 2>&1; comprueba "push ended: free again" 0 "$?"
 
 # ── NO HE PODIDO MIRAR ────────────────────────────────────────────────────────────────────────
-bash "$SUT" "$WORK/no-existe" >/dev/null 2>&1; comprueba "ruta inexistente: no he podido mirar" 2 "$?"
-bash "$SUT" >/dev/null 2>&1;                   comprueba "sin argumento: no he podido mirar" 2 "$?"
+bash "$SUT" "$WORK/no-existe" >/dev/null 2>&1; comprueba "nonexistent path: could not look" 2 "$?"
+bash "$SUT" >/dev/null 2>&1;                   comprueba "no argument: could not look" 2 "$?"
 
 if [ "$fallos" -eq 0 ]; then
-	echo "check-worktree-push-free --batería: 6/6 (libre · push vivo · otro árbol · tras morir · sin ruta · sin argumento)"
+	echo "check-worktree-push-free test suite: 6/6 (free · live push · another tree · after exit · missing path · missing argument)"
 	exit 0
 fi
-echo "check-worktree-push-free --batería: $fallos caso(s) en rojo"
+echo "check-worktree-push-free test suite: $fallos case(s) red"
 exit 1

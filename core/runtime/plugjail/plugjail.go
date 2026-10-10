@@ -3,9 +3,11 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 
 // Package plugjail confines the third-party connector-plugin subprocesses the
-// runtime launches. Admission (Sigstore/DSSE + a digest re-pin at exec) proves WHAT
-// runs; plugjail bounds WHAT a running plugin can reach — defense in depth on top of
-// the operator's trust decision.
+// runtime launches. Admission checks the admitted digest at the plugin's path
+// before launch; it does not seal execution against a later path replacement.
+// Plugjail bounds filesystem access on supported Linux kernels, on top of the
+// operator's trust decision. It installs no seccomp filter, clears no bounding
+// capabilities, and does not enforce an active health-timeout monitor.
 //
 // The claim is "signed trusted-operator plugin confinement", never "safe marketplace
 // sandbox": see docs/security/PLUGIN-CONFINEMENT-THREAT-MODEL.md for exactly what is
@@ -20,14 +22,16 @@ import (
 	"runtime"
 	"strings"
 	"time"
+
+	"github.com/olivaresai/olivares/core/runtime/confine"
 )
 
 // Level is the overall confinement grade a launch achieved.
 type Level string
 
 const (
-	// LevelStrong: the full Linux control set applied (env-scoped, dedicated non-root
-	// UID, caps dropped, no-new-privs, cgroup ceilings, seccomp, landlock).
+	// LevelStrong requires the full control set, including seccomp and cleared
+	// bounding capabilities. Those two are not implemented, so it is unreachable.
 	LevelStrong Level = "strong"
 	// LevelPartial: env scoping + the lifecycle bound applied, but one or more OS
 	// isolation primitives were unavailable and were degraded (recorded per control).
@@ -51,26 +55,26 @@ type Confinement struct {
 	MemoryBytes   int64
 	PidsMax       int64
 	CPUMaxPercent int
-	// ReadableRoots are the host paths the plugin may READ (landlock). Empty ⇒ the
-	// minimal default (its own binary dir + the Go/tmp runtime needs).
+	// ReadableRoots are explicit host read/execute grants, in addition to the plugin
+	// directory, selected runtime and named DNS/TLS files. No session roots apply.
 	ReadableRoots []string
 	// WritableScratch is the single writable path the plugin gets (landlock). Empty ⇒
-	// a per-plugin tmp dir the caller provisions.
+	// an owned per-plugin directory provisioned by Apply and removed by Cleanup.
 	WritableScratch string
 	// ExtraEnv is the explicit, minimal allow-list the plugin receives ON TOP of the
 	// baseline (PATH). The engine's own environment is NEVER inherited (C1).
 	ExtraEnv []string
-	// Seccomp / Landlock request the syscall / filesystem confinement; they degrade
-	// honestly (recorded in the attestation) where the kernel does not support them.
+	// Landlock requests filesystem confinement plus no_new_privs on supported Linux.
+	// Seccomp is retained as a request field; no filter is installed in this release.
 	Seccomp  bool
 	Landlock bool
-	// HealthTimeout bounds how long a launch may take to become healthy before the
-	// kill budget fires (0 ⇒ the caller's default).
+	// HealthTimeout is retained for compatibility. There is no active health-timeout
+	// monitor in this release; the loader's launch timeout and cgroup limits differ.
 	HealthTimeout time.Duration
 }
 
 // Default returns the baseline strong-intent confinement for a named plugin. The
-// actual level achieved is resolved at apply time on the host and reported in the
+// actual level is resolved from host support and successful child launch in the
 // Attestation — Default states the INTENT (drop to non-root, cap ceilings, seccomp
 // + landlock on), the platform decides how much of it is real.
 func Default(name string) Confinement {
@@ -98,7 +102,8 @@ const (
 	defaultHealthTimeout = 30 * time.Second
 )
 
-// Attestation is the per-launch, auditable proof of HOW a plugin was confined. Every
+// Attestation records launch controls. Apply prepares it; ConfirmLaunch records
+// the child-only controls after a successful handshake. Every
 // bool reflects a control that ACTUALLY applied on this host; a false is an honest
 // "not applied", never a hidden gap. It intentionally mirrors the shape of
 // sandboxrt.Attestation so the trust center reads one isolation-evidence vocabulary.
@@ -121,12 +126,13 @@ type Attestation struct {
 	At            time.Time `json:"at"`
 }
 
-// KillReason classifies why the runtime terminated a plugin, for the evidence trail.
+// KillReason retains termination classifications for callers. Plugjail does not
+// install an active health-timeout monitor in this release.
 type KillReason string
 
 const (
 	KillNone      KillReason = ""
-	KillTimeout   KillReason = "health_timeout" // did not become healthy in the budget
+	KillTimeout   KillReason = "health_timeout" // retained classification; no active health monitor
 	KillOOM       KillReason = "cgroup_oom"     // exceeded the memory ceiling
 	KillResource  KillReason = "resource"       // exceeded a pids/cpu ceiling
 	KillShutdown  KillReason = "shutdown"       // ordinary teardown
@@ -167,12 +173,11 @@ type Cleanup func()
 
 func noopCleanup() {}
 
-// Apply confines cmd for launching a plugin under c and returns the Attestation of the
-// REAL level achieved plus a Cleanup for any host resources allocated. It ALWAYS scopes
-// the environment (C1 — the engine's secrets are never inherited); the OS-level controls
-// (dedicated UID, cap-drop, cgroup ceilings, seccomp, landlock) are applied by the
-// platform hook and honestly degraded where a primitive is unavailable. cmd.SysProcAttr
-// and cmd.Env are set here; the caller must not overwrite them afterwards.
+// Apply prepares a scoped command and host resource cleanup. On supported Linux,
+// the shared re-exec helper must apply Landlock/no_new_privs before exec; those
+// child-only controls are recorded by ConfirmLaunch after a successful handshake.
+// Bounding capabilities, seccomp and an active health monitor remain absent.
+// Callers must retain cmd.Env, cmd.SysProcAttr and the helper executable/argv.
 func Apply(cmd *exec.Cmd, c Confinement) (Attestation, Cleanup, error) {
 	att := Attestation{
 		Plugin:        c.Name,
@@ -182,7 +187,7 @@ func Apply(cmd *exec.Cmd, c Confinement) (Attestation, Cleanup, error) {
 		At:            time.Now(),
 	}
 	att.Degraded = append(att.Degraded,
-		"egress: the resident plugin RPC channel is not network-isolated to a declared allowlist (PRE-release; see threat model)")
+		"egress: the resident plugin RPC channel is not network-isolated to a declared allowlist (see threat model)")
 
 	// C1: scope the environment on EVERY platform. This is the load-bearing control —
 	// without it a third-party plugin inherits every connector secret + KMS/signing key.
@@ -194,6 +199,17 @@ func Apply(cmd *exec.Cmd, c Confinement) (Attestation, Cleanup, error) {
 	}
 	att.Level = resolveLevel(att)
 	return att, cleanup, nil
+}
+
+// ConfirmLaunch records the child-only controls after the caller has observed
+// a successful plugin handshake. A helper that cannot apply them refuses exec,
+// so a failed launch must never call this function.
+func ConfirmLaunch(cmd *exec.Cmd, att Attestation) Attestation {
+	if confine.IsWrapped(cmd) {
+		att.Landlock, att.NoNewPrivs = true, true
+	}
+	att.Level = resolveLevel(att)
+	return att
 }
 
 // resolveLevel folds the applied controls into the overall grade. Strong requires the

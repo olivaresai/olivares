@@ -12,6 +12,7 @@
     "close": "Cerrar",
     "push": "Hacer push",
     "pull_request": "Abrir pull request",
+    "draftPullRequest": "Abrir una pull request en borrador",
     "merge": "Fusionar",
     "reconcile": "Reconciliar",
     "abandon": "Abandonar"
@@ -70,7 +71,7 @@
   },
   "authority": {
     "requires": "Requiere {{permission}}",
-    "requiresAal3": "Requiere {{permission}} y una elevación a AAL3"
+    "requiresStepUp": "Requiere {{permission}} y la verificación adicional para acciones administrativas"
   },
   "publish": {
     "push": {
@@ -89,6 +90,12 @@
       "submit": "Solicitar fusión"
     }
   },
+  "session": {
+    "title": "Publicar",
+    "hint": "Haz push del commit de esta sesión a través del destino de publicación de su espacio de trabajo. El motor trae el commit desde la carpeta de la sesión.",
+    "publish": "Publicar",
+    "publishTo": "Publicar en {{prefix}}"
+  },
   "fields": {
     "ref": "Ref de la rama",
     "refHint": "Una ref completa bajo el prefijo de push, por ejemplo refs/heads/{{prefix}}change.",
@@ -97,6 +104,9 @@
     "commit": "Commit",
     "tree": "Árbol",
     "treeHint": "El ID del árbol del commit. El motor rechaza el push si el repositorio gestionado contiene un árbol distinto.",
+    "sessionRun": "Ejecución de la sesión",
+    "sessionRunHint": "Opcional. La ejecución de sesión cuya carpeta contiene el commit. El motor trae primero el commit desde ella al repositorio gestionado.",
+    "sessionRunFixedHint": "La sesión de la que sale este push. El motor trae primero el commit desde su carpeta al repositorio gestionado.",
     "headRef": "Rama head",
     "headRefHint": "Una rama bajo {{prefix}}.",
     "base": "Rama base",
@@ -108,7 +118,7 @@
     "expectedHeadHint": "La fusión solo se produce mientras el head de la pull request sea este commit.",
     "method": "Método de fusión",
     "acknowledgeIntent": "Reconocer intención abandonada",
-    "acknowledgeIntentHint": "Opcional. El ID de una intención abandonada que retiene este ámbito. Indicarlo requiere administración del destino con AAL3.",
+    "acknowledgeIntentHint": "Opcional. El ID de una intención abandonada que retiene este ámbito. Indicarlo requiere administración del destino.",
     "operationId": "ID de operación",
     "operationIdHint": "Enviar de nuevo esta misma solicitud con este ID devuelve la intención registrada. No se despacha por segunda vez."
   },
@@ -175,11 +185,15 @@
     "protected_branch_refused": "La rama está protegida en el host y se rechaza publicar en ella.",
     "push_prefix_overlaps_base": "El prefijo de push permitiría que un push llegara a una base de fusión.",
     "ref_not_allowed": "La rama no está bajo el prefijo de push de este destino.",
+    "repository_config_refused": "La configuración del repositorio gestionado no es la que gestiona el motor. No se envió nada.",
     "repository_outside_binding": "El repositorio está fuera de los propietarios que permite la vinculación de credencial.",
     "runtime_credential_refused": "La credencial de runtime de una sesión no puede publicar. Actúa con tu propia credencial.",
     "scoped_grant_required": "Esta acción necesita una concesión acotada sobre este destino.",
+    "separation_of_duty": "Iniciaste la sesión que creó este cambio. Pide a otra persona que lo revise y lo fusione.",
+    "session_source_refused": "La ejecución de sesión no está en el espacio de trabajo de este destino, o su carpeta no es un repositorio del que el motor pueda traer commits.",
+    "session_source_unavailable": "No se pudo leer a tiempo la carpeta de la sesión. No se envió nada.",
     "stale_lease": "La rama ya no está en el commit actual esperado.",
-    "step_up_required": "Esta acción necesita una elevación a AAL3. Complétala cuando se te pida.",
+    "step_up_required": "Esta acción necesita la verificación adicional para acciones administrativas que exige este despliegue. Complétala cuando se te pida.",
     "subject_mismatch": "Este ID de operación pertenece a una solicitud hecha por otro sujeto.",
     "target_changed": "El destino cambió después de que se admitiera la solicitud. No se despachó nada.",
     "target_in_use": "Una intención en despacho, incierta o abandonada todavía retiene este destino.",

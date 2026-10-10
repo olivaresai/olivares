@@ -271,6 +271,13 @@ function PointReadSection({ query }: { query: UseQueryResult<EntityDetail> }) {
     <AsyncSection query={query} skeletonHeight={72} className="mt-3">
       {(data) => (
         <>
+          {data.entry.kind === 'resource' &&
+            (data.detail?.ai_discovery === 'unregistered_at_discovery' ||
+              data.detail?.ai_discovery === 'unknown') && (
+              <CaveatNotice tone="warning">
+                {t(`detail.aiDiscovery.${data.detail.ai_discovery}`)}
+              </CaveatNotice>
+            )}
           <FreshnessBlock entry={data.entry} />
           <CoreFields detail={data.detail} />
         </>
@@ -338,6 +345,7 @@ function FreshnessBlock({ entry }: { entry: CatalogEntry }) {
 function CoreFields({ detail }: { detail?: Record<string, unknown> }) {
   const { t } = useTranslation('inventory')
   const fields = Object.entries(detail ?? {})
+    .filter(([k]) => k !== 'ai_discovery')
     .map(([k, v]) => [k, renderValue(v)] as const)
     .filter(([, v]) => v !== null)
   if (fields.length === 0) {

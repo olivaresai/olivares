@@ -3,6 +3,10 @@ title: "Le modèle de sécurité"
 description: "La posture sécurisée par conception derrière Olivares AI — pourquoi la lecture d'abord, les données minimales, le refus par défaut et un audit à altération détectable sont les décisions de sécurité porteuses, et non l'énumération des menaces."
 ---
 
+:::note[Business]
+L’export d’audit (`GET /v1/audit/export`, `olivares audit export`), les archives en répertoire et la vérification d’archives externes nécessitent Business. Community conserve le registre signé, `olivares audit verify` et `olivares dr backup` ; l’export renvoie HTTP 501 ou le code de sortie 9. Le transfert d’audit et les transferts DDIL contenant des segments d’audit nécessitent aussi Business.
+:::
+
 Olivares AI est un produit de sécurité qui s'exécute **au sein de la propre
 infrastructure du client** et construit une carte de ce que chaque agent IA peut
 atteindre. Cela le rend à la fois hautement sensible et hautement précieux pour un
@@ -27,19 +31,19 @@ matériel de durcissement pour opérateurs, pas à la documentation publique.
 
 ## Lecture d'abord : faible risque asymétrique
 
-Le cœur **observe** ; il ne s'interpose pas. La carte d'accès est reconstruite à partir
-des signaux que le parc émet déjà — OpenTelemetry, audit de base de données, journaux
-d'audit cloud, et (comme backstop non coopératif) eBPF — et le collecteur n'est
-**jamais dans le chemin de données de l'agent**.
+La carte d'accès observe hors du chemin des données. Elle reconstruit les
+accès à partir d'OpenTelemetry, de l'audit des bases de données, des pistes d'audit
+cloud et d'un backstop eBPF. La défaillance d'un collecteur d'observation fait perdre
+de la visibilité sans bloquer les actions de l'agent.
 
-C'est une décision de sécurité avant d'être une décision produit. Un point d'application
-en ligne placé devant chaque action d'agent est un point de défaillance unique : s'il
-cale ou plante, il peut entraîner la production avec lui, et il devient une cible de
-grande valeur précisément *parce qu'il* est dans le chemin. Un observateur en lecture
-d'abord porte le profil de risque opposé, **asymétrique**. Si le collecteur échoue, il
-cesse de *voir* — il n'arrête pas l'agent, et il ne casse pas la production. La
-défaillance dans le pire des cas d'un observateur est un trou dans la visibilité, non
-une panne.
+L'application des règles a une autre exigence de disponibilité : les points
+d'application sont inline et refusent l'accès en cas d'échec. Les hooks d'appel
+d'outil Claude Code gérés contactent le PEP du moteur, exposé par défaut. Si ce PEP
+est inaccessible pendant une panne ou un redémarrage, tout appel d'outil gouverné
+est refusé. Le proxy d'inférence inline, le gate MCP tools/call et le gate de
+délégation A2A s'appliquent au trafic qui les traverse ; le proxy d'inférence n'est
+pas la route par défaut des appels aux modèles des sessions. Incluez le moteur
+dans la planification de disponibilité des sessions gouvernées.
 
 La même propriété neutralise l'évasion évidente. Le collecteur s'exécute comme un
 service distinct, privilégié, **hors du contrôle de l'agent**, de sorte qu'un agent qui
@@ -163,7 +167,7 @@ d'entreprise demande, et c'est ce que la télémétrie native ne donne pas.
 
 :::note[Deux chemins hors machine : le pull et un push réel]
 Le journal vérifiable atteint un SIEM par deux voies. L'export **pull**
-(`GET /v1/audit/export`) est toujours disponible et constitue l'artefact qu'un
+(`GET /v1/audit/export`) nécessite Business et constitue l'artefact qu'un
 exploitant archive. Un **push** est réel dès qu'il est configuré : un abonnement
 d'eventing `audit.recorded` démarre une pompe de journal par locataire qui livre chaque
 enregistrement scellé **au moins une fois** via le transport durable, protégé contre le
@@ -244,8 +248,8 @@ construit aujourd'hui versus conçu.
 
 ## Pourquoi ces décisions tiennent ensemble
 
-Aucun de ces choix ne tient seul. La lecture d'abord garde le produit hors du rayon
-d'explosion des systèmes mêmes qu'il surveille. Les données minimales réduisent ce qu'une
+L’observation read-first limite les défaillances des collecteurs aux lacunes de visibilité ;
+l’application inline dépend du moteur et refuse l’accès en cas d’échec. Les données minimales réduisent ce qu'une
 compromission du produit pourrait même exposer. Les tokens opaques, l'absence de
 credentials par défaut, le RBAC en refus par défaut et une couture ABAC qui ne fait que
 restreindre signifient que l'autorité est petite, révocable, et impossible à élargir par

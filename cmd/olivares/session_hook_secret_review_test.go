@@ -25,6 +25,7 @@ import (
 	"github.com/olivaresai/olivares/core/secure"
 	"github.com/olivaresai/olivares/modules/governance"
 	"github.com/olivaresai/olivares/modules/sessions"
+	"github.com/olivaresai/olivares/modules/sessions/hookpep"
 )
 
 const hookSecretCanary = "synthetic-vault-value-without-token-pattern"
@@ -64,19 +65,18 @@ func newHookSecretTestRun(t *testing.T, value string, wrap func(auth.PolicyEvalu
 	tenant := model.TenantID(h.tenantA)
 	m := h.set.sessions
 	authorizer := auth.NewAuthorizer(h.set.gov.RequestEvaluator(), auth.WithScopedGrants(h.set.gov.ScopedGrants()))
-	m.UseWorkAuthorizer(authorizer)
+	sessions.WithWorkAuthorizer(authorizer)(m)
 	sessions.WithRunner(approvalProjectionRunner{})(m)
-	m.EnableProfiledLaunches()
 	m.UseExecutionEnvironmentRef("secret-review-test")
 	vault := &hookSecretVault{value: value}
 	fixture := &hookSecretTestRun{h: h, tenant: tenant, vault: vault}
-	m.UseProviderSecretVault(vault)
+	sessions.WithProviderSecretVault(vault)(m)
 	credentials := newSessionHookCredentials(h.authr, h.st, m, h.set.gov)
-	m.UseLaunchGate(approvalProjectionLaunchGate(func(ctx context.Context, tenant model.TenantID, intent sessions.LaunchIntent) (sessions.LaunchDecision, error) {
+	sessions.WithLaunchGate(approvalProjectionLaunchGate(func(ctx context.Context, tenant model.TenantID, intent sessions.LaunchIntent) (sessions.LaunchDecision, error) {
 		var err error
 		fixture.token, err = credentials.mint(ctx, tenant, intent)
 		return sessions.LaunchDecision{Allowed: err == nil}, err
-	}))
+	}))(m)
 	var profile struct {
 		Ref string `json:"profile_ref"`
 	}
@@ -108,7 +108,7 @@ func newHookSecretTestRun(t *testing.T, value string, wrap func(auth.PolicyEvalu
 	if err != nil {
 		t.Fatal(err)
 	}
-	eng := &engine{sessionHooks: credentials, authr: h.authr, store: h.st, sessionsMod: m, engineApprovals: service, policyEval: h.set.gov.Evaluator(), scopedGrants: h.set.gov.ScopedGrants(), api: apiSrv}
+	eng := &engine{sessionHooks: credentials, authr: h.authr, authz: authorizer, store: h.st, sessionsMod: m, engineApprovals: service, policyEval: h.set.gov.Evaluator(), scopedGrants: h.set.gov.ScopedGrants(), api: apiSrv}
 	if wrap != nil {
 		eng.policyEval = wrap(eng.policyEval)
 	}
@@ -141,7 +141,7 @@ func TestSessionClaudeHookWithholdsExactVaultValues(t *testing.T) {
 	defer func() { cancel(); <-done }()
 	var pending governance.Approval
 	for pending.ID == "" {
-		items, _, err := service.List(ctx, tenant, hookActionCapability, "pending", "")
+		items, _, err := service.List(ctx, tenant, hookpep.ActionCapability, "pending", "")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -283,7 +283,7 @@ func TestSessionClaudeHookRefusesRetentionAcrossCredentialGeneration(t *testing.
 			t.Error("old generation vault value reached the canonical audit")
 		}
 	}
-	pending, _, err := h.set.gov.EngineApprovals().List(ctx, fixture.tenant, hookActionCapability, "pending", "")
+	pending, _, err := h.set.gov.EngineApprovals().List(ctx, fixture.tenant, hookpep.ActionCapability, "pending", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -363,7 +363,7 @@ func TestSessionClaudeHookWithholdsWithoutItsSecretRedactor(t *testing.T) {
 	if strings.Contains(fixture.logs.String(), hookSecretCanary) {
 		t.Error("unsupervised input reached the hook log")
 	}
-	all, _, err := fixture.h.set.gov.EngineApprovals().List(t.Context(), fixture.tenant, hookActionCapability, "", "")
+	all, _, err := fixture.h.set.gov.EngineApprovals().List(t.Context(), fixture.tenant, hookpep.ActionCapability, "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -393,7 +393,7 @@ func TestSessionClaudeHookKeepsDeadlineReasonWithSecrets(t *testing.T) {
 	if strings.Contains(fixture.logs.String(), "evidence gap") {
 		t.Error("deadline lost its terminal deny anchor")
 	}
-	pending, _, err := fixture.h.set.gov.EngineApprovals().List(t.Context(), fixture.tenant, hookActionCapability, "pending", "")
+	pending, _, err := fixture.h.set.gov.EngineApprovals().List(t.Context(), fixture.tenant, hookpep.ActionCapability, "pending", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -455,7 +455,7 @@ func TestSessionClaudeHookWithholdsSecretInScopedResourceProjection(t *testing.T
 	} else if strings.Contains(observation.preview, recognizable) {
 		t.Error("scoped evidence retained a projected secret fragment")
 	}
-	all, _, err := fixture.h.set.gov.EngineApprovals().List(t.Context(), fixture.tenant, hookActionCapability, "", "")
+	all, _, err := fixture.h.set.gov.EngineApprovals().List(t.Context(), fixture.tenant, hookpep.ActionCapability, "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -519,7 +519,7 @@ func TestSessionClaudeHookWithholdsUnauthenticatedToolInput(t *testing.T) {
 			if strings.Contains(fixture.logs.String(), hookSecretCanary) {
 				t.Error("unauthenticated caller retained vault-bearing input in SOC")
 			}
-			pending, _, err := fixture.h.set.gov.EngineApprovals().List(t.Context(), fixture.tenant, hookActionCapability, "pending", "")
+			pending, _, err := fixture.h.set.gov.EngineApprovals().List(t.Context(), fixture.tenant, hookpep.ActionCapability, "pending", "")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -567,7 +567,7 @@ func TestSessionClaudeHookRefusesMaskedSecretOperations(t *testing.T) {
 			if !strings.Contains(rec.Body.String(), `"permissionDecision":"deny"`) {
 				t.Error("hidden operation was not refused before human review")
 			}
-			all, _, err := fixture.h.set.gov.EngineApprovals().List(t.Context(), fixture.tenant, hookActionCapability, "", "")
+			all, _, err := fixture.h.set.gov.EngineApprovals().List(t.Context(), fixture.tenant, hookpep.ActionCapability, "", "")
 			if err != nil || len(all) != 0 {
 				t.Error("unreviewable operation entered the human queue")
 			}
@@ -599,7 +599,7 @@ func reviewHookSecretInput(t *testing.T, fixture *hookSecretTestRun, tool string
 	service := fixture.h.set.gov.EngineApprovals()
 	var pending governance.Approval
 	for pending.ID == "" {
-		items, _, err := service.List(ctx, fixture.tenant, hookActionCapability, "pending", "")
+		items, _, err := service.List(ctx, fixture.tenant, hookpep.ActionCapability, "pending", "")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -644,7 +644,7 @@ func assertHookSecretNotRetained(t *testing.T, fixture *hookSecretTestRun, value
 	if strings.Contains(fixture.logs.String(), value) {
 		t.Error("hook log retained the vault value")
 	}
-	all, _, err := fixture.h.set.gov.EngineApprovals().List(t.Context(), fixture.tenant, hookActionCapability, "", "")
+	all, _, err := fixture.h.set.gov.EngineApprovals().List(t.Context(), fixture.tenant, hookpep.ActionCapability, "", "")
 	if err != nil {
 		t.Fatal(err)
 	}

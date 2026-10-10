@@ -16,7 +16,7 @@ import (
 	"github.com/olivaresai/olivares/modules/governance"
 )
 
-// Follow-up (ADR-0024 Q1): the offline-trust bound is ASYMMETRIC. Offline, past
+// Follow-up: the offline-trust bound is ASYMMETRIC. Offline, past
 // policy_max_staleness, a positive scoped GRANT expires deny-closed (it can no longer
 // authorize what RBAC would not), but a FORBID stays enforced (a stale restriction can
 // only restrict, never escalate). With no bound configured — the connected-node default

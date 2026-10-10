@@ -182,6 +182,26 @@ describe('las claves de caché nombran al inquilino', () => {
         `useQuery({ queryKey: ['knowledge', 'tenant', 'scans'] })`,
       ),
     ).toHaveLength(1)
+    // Invalid spread (#718): spreading a base key does not visibly prove tenant scope;
+    // the base may or may not contain it. `[...queryKey, 'used-by']` violates the rule just
+    // like a flat literal.
+    expect(
+      clavesSinInquilino(`useQuery({ queryKey: [...queryKey, 'used-by'] })`),
+    ).toHaveLength(1)
+    // Invalid spread with a decoy: a tenant name inside a string does not scope a spread
+    // key. A special case for spreads must not inspect raw strings.
+    expect(
+      clavesSinInquilino(
+        `useQuery({ queryKey: [...queryKey, 'used-by', 'tenant'] })`,
+      ),
+    ).toHaveLength(1)
+    // BUENO 4: the DERIVED key names the tenant with a real identifier, even when
+    // the base already carried it — the key declares its own scope.
+    expect(
+      clavesSinInquilino(
+        `useQuery({ queryKey: [...queryKey, 'used-by', roster, tenant] })`,
+      ),
+    ).toEqual([])
   })
 })
 
@@ -217,6 +237,9 @@ const NO_SON_DE_INQUILINO: Record<string, string> = {
     '`/v1/whoami` describe al PRINCIPAL, no a un inquilino: es el mismo dato mire donde mire',
   'lib-api.orgs':
     '`/v1/system/orgs` es la lista de inquilinos — no puede vivir dentro de uno',
+  'agent-tools.*':
+    '`/v1/m/agenttools/*` uses HandleSystem: host tools belong to the ' +
+    'deployment and the route ignores tenant selection (the same reason as GLOBALES)',
   'backups.*':
     'BASE `/v1/console/dr` — la copia de seguridad es del despliegue',
   'logs.*': 'BASE `/v1/console/logs` — el búfer de log es del proceso',

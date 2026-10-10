@@ -118,6 +118,7 @@ type adoptProviderAccountRequest struct {
 }
 
 type patchProviderAccountMetadataRequest struct {
+	Name        json.RawMessage `json:"name"`
 	DisplayName json.RawMessage `json:"display_name"`
 	Accent      json.RawMessage `json:"accent"`
 }
@@ -164,10 +165,15 @@ func (m *Module) handleGetProviderAccount(w http.ResponseWriter, r *http.Request
 	writeJSON(w, http.StatusOK, toProviderAccountDTO(account))
 }
 
-// handlePatchProviderAccountMetadata edits the display name and/or color without changing the account's stable name, reference, home or launch configuration; an empty string clears that field.
+// handlePatchProviderAccountMetadata edits the account's name, display label and/or color; a rename changes only the name, never the reference, home or launch configuration, and an empty display label or color clears that field.
 func (m *Module) handlePatchProviderAccountMetadata(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
 	var body patchProviderAccountMetadataRequest
 	if !decodeJSONBody(w, r, &body) {
+		return
+	}
+	name, err := accountMetadataString(body.Name)
+	if err != nil {
+		writeRunErr(w, err)
 		return
 	}
 	displayName, err := accountMetadataString(body.DisplayName)
@@ -180,11 +186,11 @@ func (m *Module) handlePatchProviderAccountMetadata(w http.ResponseWriter, r *ht
 		writeRunErr(w, err)
 		return
 	}
-	if displayName == nil && accent == nil {
-		writeRunErr(w, badRequest("provide display_name and/or accent"))
+	if name == nil && displayName == nil && accent == nil {
+		writeRunErr(w, badRequest("provide name, display_name and/or accent"))
 		return
 	}
-	account, err := m.PatchProviderAccountMetadata(r.Context(), mc.Principal, mc.Tenant, chi.URLParam(r, "ref"), ProviderAccountMetadataPatch{DisplayName: displayName, Accent: accent})
+	account, err := m.PatchProviderAccountMetadata(r.Context(), mc.Principal, mc.Tenant, chi.URLParam(r, "ref"), ProviderAccountMetadataPatch{Name: name, DisplayName: displayName, Accent: accent})
 	if err != nil {
 		writeRunErr(w, err)
 		return

@@ -157,8 +157,16 @@ type ociSeccomp struct {
 }
 
 type ociSeccompSyscall struct {
-	Names  []string `json:"names"`
-	Action string   `json:"action"`
+	Names  []string        `json:"names"`
+	Action string          `json:"action"`
+	Args   []ociSeccompArg `json:"args,omitempty"`
+}
+
+type ociSeccompArg struct {
+	Index    uint   `json:"index"`
+	Value    uint64 `json:"value"`
+	ValueTwo uint64 `json:"valueTwo"`
+	Op       string `json:"op"`
 }
 
 // seccompAllowlist is the curated set of syscalls the deny-by-default profile
@@ -172,7 +180,7 @@ var seccompAllowlist = []string{
 	"sigaltstack", "ioctl", "access", "pipe", "pipe2", "dup", "dup2", "dup3",
 	"nanosleep", "clock_gettime", "clock_nanosleep", "gettimeofday", "getpid", "gettid",
 	"futex", "sched_yield", "set_tid_address", "set_robust_list", "get_robust_list",
-	"epoll_create1", "epoll_ctl", "epoll_pwait", "epoll_wait", "poll", "ppoll", "select", "pselect6",
+	"epoll_create1", "epoll_ctl", "epoll_pwait", "epoll_wait", "eventfd2", "poll", "ppoll", "select", "pselect6",
 	"socket", "connect", "getsockname", "getpeername", "setsockopt", "getsockopt",
 	"sendto", "recvfrom", "sendmsg", "recvmsg", "shutdown",
 	"fcntl", "getdents64", "getrandom", "exit", "exit_group", "arch_prctl",
@@ -191,7 +199,14 @@ func buildSeccomp() *ociSeccomp {
 	return &ociSeccomp{
 		DefaultAction: "SCMP_ACT_ERRNO",
 		Architectures: seccompArches,
-		Syscalls:      []ociSeccompSyscall{{Names: names, Action: "SCMP_ACT_ALLOW"}},
+		Syscalls: []ociSeccompSyscall{
+			{Names: names, Action: "SCMP_ACT_ALLOW"},
+			// Go's Linux runtime creates threads with VM|FS|FILES|SIGHAND|THREAD|SYSVSEM,
+			// optionally adding SETTLS on amd64. Other flags to clone(2) stay denied.
+			{Names: []string{"clone"}, Action: "SCMP_ACT_ALLOW", Args: []ociSeccompArg{
+				{Index: 0, Value: ^uint64(0x80000), ValueTwo: 0x50f00, Op: "SCMP_CMP_MASKED_EQ"},
+			}},
+		},
 	}
 }
 

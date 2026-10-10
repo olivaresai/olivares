@@ -16,9 +16,28 @@ import (
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 	"github.com/olivaresai/olivares/modules/sessions"
+	"github.com/olivaresai/olivares/modules/sessions/hookpep"
 )
 
-const sessionHookTokenPrefix = "olvsess_"
+const sessionHookTokenPrefix = hookpep.SessionTokenPrefix
+
+// The hook PEP asks its authenticator for the session plane by type assertion; this keeps a
+// signature drift a compile error instead of a PEP that quietly stops masking session secrets.
+var _ hookpep.SessionCredentials = (*sessionHookCredentials)(nil)
+
+// freshStopEpoch rides the context of one Mint. The issuer read the stop history
+// for this mint and put the answer in the scope, so the validator does not list the
+// history a second time for the same launch. A stop engaged between the read and the
+// publish leaves a bearer whose epoch is stale: its first use reads the history,
+// finds the stop and refuses. A later use of a bearer carries no such value, so it
+// always reads the history.
+type freshStopEpoch struct {
+	tenant   model.TenantID
+	agentRef string
+	epoch    string
+}
+
+type freshStopEpochKey struct{}
 
 // sessionHookCredentials only adapts the shared credential service to the launch
 // gate and legacy hook authenticator. It owns no separate identity or token map.
@@ -40,10 +59,13 @@ func newSessionHookCredentials(a *auth.Authenticator, st store.Store, m *session
 		}
 	}
 	validate := func(ctx context.Context, scope auth.SessionScope) error {
+		fresh, justRead := ctx.Value(freshStopEpochKey{}).(freshStopEpoch)
 		if stopEpoch != nil {
-			epoch, err := stopEpoch(ctx, scope.TenantID, scope.AgentRef)
-			if err != nil || epoch != scope.StopEpoch {
-				return auth.ErrUnauthenticated
+			if !justRead || fresh != (freshStopEpoch{scope.TenantID, scope.AgentRef, scope.StopEpoch}) {
+				epoch, err := stopEpoch(ctx, scope.TenantID, scope.AgentRef)
+				if err != nil || epoch != scope.StopEpoch {
+					return auth.ErrUnauthenticated
+				}
 			}
 		} else if len(stops) > 0 && stops[0] != nil {
 			state, err := stops[0].KillSwitchState(ctx, scope.TenantID)
@@ -75,13 +97,16 @@ func newSessionHookCredentials(a *auth.Authenticator, st store.Store, m *session
 		if errors.Is(err, auth.ErrSessionAccessEnded) {
 			return m.StopForAccessEnded(stopCtx, scope, user)
 		}
+		if errors.Is(err, auth.ErrSessionCredentialExpired) {
+			return m.StopForCredentialExpiry(stopCtx, scope)
+		}
 		if err != nil {
 			return err
 		}
 		return m.StopForAccessChange(stopCtx, scope, user)
 	}), authr: a, store: st, stopEpoch: stopEpoch}
 	if m != nil {
-		m.UseSessionAccessCheck(credentials.CheckOwnerAccess)
+		m.SessionAccessCheck = credentials.CheckOwnerAccess
 	}
 	return credentials
 }
@@ -158,6 +183,7 @@ func (c *sessionHookCredentials) mintForPrincipalContext(ctx context.Context, p 
 		if err != nil {
 			return "", err
 		}
+		ctx = context.WithValue(ctx, freshStopEpochKey{}, freshStopEpoch{tenant, intent.AgentRef, epoch})
 	}
 	return c.Mint(ctx, p, auth.SessionScope{TenantID: tenant, WorkspaceID: workspace, FolderRef: firstNonEmptyStr(intent.WorkspaceRef, intent.RunRef), FolderPath: intent.FolderPath, SessionRef: intent.ClaimSID, RunRef: intent.RunRef, AgentRef: intent.AgentRef, Holder: intent.Holder, Fence: intent.Fence, StopEpoch: epoch, Preset: intent.Preset(), AllowedTools: intent.AllowedTools,
 		SecretEnv: strings.Join(secretEnvNames(intent.SecretEnv), ",")})
@@ -169,3 +195,6 @@ func (c *sessionHookCredentials) Authenticate(ctx context.Context, token string)
 	}
 	return c.authr.Authenticate(ctx, token)
 }
+
+// ResolvesStopHistory reports whether resolving this credential already checks the live stop history.
+func (c *sessionHookCredentials) ResolvesStopHistory() bool { return c.stopEpoch != nil }

@@ -245,6 +245,7 @@ var (
 		pdeclLeaves(pdeclNoneTarget, "[].child_id", "[].policy_id", "[].policy_kind", "[].dimension",
 			"[].period", "[].policy_spec_digest", "[].period_start", "[].period_end", "[].action"),
 		model.Leaf("[].scope_key", model.Ref(model.EncodeUserRef, "")),
+		model.Leaf("[].workspace_refs[]", pdeclBudgetKeyEvidence),
 		pdeclEvidenceRefLeaves)...)
 
 	// pdeclAttemptLegacy declares the immutable original of an imported hold. Its
@@ -441,6 +442,7 @@ type jsonTarget struct {
 	StaticReservedMicroUSD *jsonInt          `json:"static_reserved_micro_usd,omitempty"`
 	Action                 string            `json:"action"`
 	Membership             []jsonEvidenceRef `json:"membership"`
+	WorkspaceRefs          []string          `json:"workspace_refs,omitempty"`
 }
 
 type jsonAccountingBasis struct {
@@ -884,6 +886,7 @@ func encodeTargets(ts []TargetSnapshot) []jsonTarget {
 			StaticReservedMicroUSD: optJSONInt(t.StaticReservedMicroUSD),
 			Action:                 t.Action,
 			Membership:             encodeEvidenceRefs(t.Membership),
+			WorkspaceRefs:          append([]string(nil), t.WorkspaceRefs...),
 		}
 		if t.PolicySpecDigest != nil {
 			d := string(*t.PolicySpecDigest)
@@ -931,6 +934,7 @@ func decodeTargets(in []jsonTarget) ([]TargetSnapshot, error) {
 			StaticReservedMicroUSD: fromJSONInt(jt.StaticReservedMicroUSD),
 			Action:                 jt.Action,
 			Membership:             mem,
+			WorkspaceRefs:          append([]string(nil), jt.WorkspaceRefs...),
 		}
 		if jt.PolicySpecDigest != nil {
 			d := Digest(*jt.PolicySpecDigest)

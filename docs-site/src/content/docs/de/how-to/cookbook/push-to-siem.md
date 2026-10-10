@@ -8,6 +8,12 @@ description: >-
 sidebar:
   order: 6
 ---
+SIEM and ITSM push, OTLP downloads, external trace and metric delivery, and posture export require Business. Community keeps local observability, trace-context propagation, saved settings and `olivares dr backup`. Generic chat, email and webhook notifications remain available in Community.
+
+
+:::note[Business]
+Audit-Export (`GET /v1/audit/export`, `olivares audit export`), Verzeichnisarchive und die Prüfung externer Archive erfordern Business. Community behält das signierte Ledger, `olivares audit verify` und `olivares dr backup`; Export liefert HTTP 501 oder Exit-Code 9. Audit-Weiterleitung und DDIL-Transfers mit Audit-Segmenten erfordern ebenfalls Business.
+:::
 
 **Ziel:** Ihr SIEM empfängt die Findings der Control Plane *und* ihr
 manipulationserkennbares Audit-Ledger als Push, ohne dass ein Forwarder Dateien tailt.
@@ -18,6 +24,16 @@ vollständig unterstützt — Pull ist weiterhin die richtige Form für WORM-Arc
 Neuverifizierung; Push ist die richtige Form für die Live-SIEM-Ingestion.
 
 ## 1. Das Sink-Abonnement erstellen
+
+Aktivieren Sie zuerst den auswählbaren Ledger-Forwarder; dies aktiviert auch seine Eventing-Abhängigkeit:
+
+```bash
+olivares modules on siemforward
+```
+
+Warten Sie, bis der Neustart der Engine abgeschlossen ist. Führen Sie dann
+`olivares modules ls` aus und prüfen Sie vor dem Erstellen des Abonnements,
+dass `siemforward` und `eventing` laufen.
 
 ```bash
 curl -ks -X POST "$BASE/v1/m/eventing/subscriptions" \
@@ -75,9 +91,10 @@ curl -ks -X POST "$BASE/v1/m/eventing/subscriptions/$ID/test" \
 
 ## 2. Der Ledger-Push, ehrlich beschrieben
 
-Das Abonnieren von **`audit.recorded`** aktiviert die Ledger-Pumpe: Der Forwarder
-durchläuft das versiegelte Audit-Ledger jedes Tenants ab einem Tenant-spezifischen Cursor und stellt
-jeden Datensatz in die dauerhafte Zustellungs-Engine ein — **mindestens einmal (at-least-once)**, in Reihenfolge,
+Die Ledger-Pumpe läuft, wenn **`siemforward` aktiviert ist**, und liest ab dem
+Tenant-spezifischen Cursor. Ein **`audit.recorded`**-Abonnement erhält Datensätze,
+die nach seiner Erstellung in die dauerhafte Zustellungs-Engine eingereiht werden —
+**mindestens einmal (at-least-once)**,
 fortsetzbar. Jeder Datensatz trägt seine Felder zur Ketten-Integrität unverändert, sodass die
 SIEM-Kopie genau das erlaubt, was der Pull-Export erlaubt: die
 Ketten-VERKNÜPFUNG (`prev_hash` von n+1 gleich `hash` von n) und eine
@@ -95,8 +112,10 @@ beantworten, WELCHE Metadaten ein Commitment abdeckt.
 
 Drei Eigenschaften, die man kennen sollte:
 
-- **Kein Abonnement, keine Arbeit.** Ohne einen `audit.recorded`-Abonnenten schreibt die Pumpe
-  nichts — der Pfad kostet nichts, bis Sie ihn anfordern.
+- **Der Cursor rückt auch ohne Abonnement vor.** Ohne `audit.recorded`-Abonnenten
+  wird keine Zustellung eingereiht, aber die aktivierte Pumpe speichert ihren Cursor.
+  Eine neue Sink liefert bereits passierte Datensätze nicht nach;
+  verwenden Sie den Pull-Export für historische Datensätze.
 - **At-least-once bedeutet, dass Duplikate möglich sind** bei der erneuten Zustellung; deduplizieren Sie
   über die Sequenznummer des Datensatzes pro Tenant.
 - **Die Pumpe ist Leader-gated** in HA — genau ein Knoten leitet weiter.

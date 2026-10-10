@@ -248,7 +248,7 @@ func (m *Module) prepareWorkItemHandoffOffer(
 		policy := protectedPayloadPolicyFrom(directPreflight.Payload)
 		schema, _ := PayloadSlotHandoff.schema()
 		handoffPayload, err := PrepareProtectedPayload(
-			ctx, m.communicationSealer, PayloadSlotHandoff, policy,
+			ctx, m.CommunicationSealer, PayloadSlotHandoff, policy,
 			ContentAAD{
 				TenantID: scope.TenantID, WorkspaceID: scope.WorkspaceID,
 				ChannelID: cmd.ChannelID, EntityKind: handoffKind, EntityID: ids.handoff.Handoff,

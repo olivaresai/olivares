@@ -88,7 +88,7 @@ func trackedCoreVersions(t *testing.T, db *sql.DB) []int {
 func TestLoginCapabilitySQLitePlanIsElevenThenThirteenWithNoSeed(t *testing.T) {
 	st, _ := openLoginCapabilitySQLite(t)
 	got := trackedCoreVersions(t, st.(*sqlStore).db)
-	want := []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 14, 15, 17, 18}
+	want := []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 14, 15, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27}
 	if len(got) != len(want) {
 		t.Fatalf("tracked core versions = %v, want %v", got, want)
 	}
@@ -104,8 +104,8 @@ func TestLoginCapabilitySQLitePlanIsElevenThenThirteenWithNoSeed(t *testing.T) {
 	if _, ok := compiled[12]; ok {
 		t.Fatal("the compiled plan registers reserved v12")
 	}
-	if _, ok := compiled[13]; !ok || coreSupportedMigrationVersion != 18 {
-		t.Fatalf("the compiled plan lacks v13 or the ceiling is not v18: ceiling=%d", coreSupportedMigrationVersion)
+	if _, ok := compiled[13]; !ok || coreSupportedMigrationVersion != 27 {
+		t.Fatalf("the compiled plan lacks v13 or the ceiling is not v27: ceiling=%d", coreSupportedMigrationVersion)
 	}
 }
 

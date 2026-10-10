@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"sync"
@@ -21,6 +22,7 @@ import (
 	"github.com/olivaresai/olivares/cmd/olivares/internal/toolinstall"
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/auth"
+	"github.com/olivaresai/olivares/core/driverfacts"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 )
@@ -78,10 +80,17 @@ type Module struct {
 	resolveProgram func(driver string) string
 	// loginHome says where a tenant's own login of a tool lives (SetLoginHome);
 	// nil refuses every sign-in and status read.
-	loginHome LoginHomeFunc
-	signIns   map[model.ID]*SignIn
+	loginHome   LoginHomeFunc
+	signIns     map[model.ID]*SignIn
+	statusReads map[statusSelection]*statusRead
+	// providerEntries caches each tool instance's snapshot (providers.go).
+	providerEntries map[string]*providerEntry
+	// signedIn is told the tenant of each sign-in the tool confirmed (OnSignedIn).
+	signedIn func(model.TenantID)
 	// ollama is the local model service this engine runs (ollama.go).
 	ollama ollamaService
+	// childCommand builds every child this module starts (SetChildCommand).
+	childCommand ChildCommand
 }
 
 var _ api.Module = (*Module)(nil)
@@ -132,7 +141,9 @@ func New(ctx context.Context, engine *toolinstall.Engine, root string, readOnly 
 	return m, nil
 }
 func (m *Module) Close() {
+	m.mu.Lock()
 	m.cancel()
+	m.mu.Unlock()
 	m.wg.Wait()
 	if m.files != nil {
 		m.files.Close()
@@ -153,6 +164,7 @@ func (m *Module) APIRoutes(reg api.RouteRegistrar) {
 	door.HandleSystem("POST", "/plans", m.handlePlan)
 	door.HandleSystem("POST", "/installs", m.handleInstall)
 	door.HandleSystem("GET", "/jobs/{id}", m.handleJob)
+	door.HandleSystem("GET", "/providers", m.handleProviders)
 	door.HandleSystem("GET", "/sign-in", m.handleSignInStatus)
 	door.HandleSystem("POST", "/sign-in", m.handleSignInStart)
 	door.HandleSystem("GET", "/sign-in/{id}", m.handleSignInGet)
@@ -229,6 +241,28 @@ func audit(ctx context.Context, mc api.ModuleContext, action string, id model.ID
 		return err
 	})
 }
+
+type toolPresence struct {
+	Program string `json:"program"`
+	Present bool   `json:"present"`
+}
+
+// sessionToolPresence lists unmanaged tools and the published Gemini presence field.
+// It uses the launch program resolver and executable lookup; it never runs a tool.
+func (m *Module) sessionToolPresence() map[string]toolPresence {
+	presence := map[string]toolPresence{}
+	for _, facts := range driverfacts.All() {
+		// Gemini presence predates its installer and remains a published API field.
+		if !facts.Session || facts.Installer != "" && facts.Key != "gemini-cli" {
+			continue
+		}
+		_, err := exec.LookPath(m.program(facts.Key))
+		presence[facts.Key] = toolPresence{Program: facts.Program,
+			Present: err == nil}
+	}
+	return presence
+}
+
 func (m *Module) inventory(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
 	if err := audit(r.Context(), mc, "inventory", "", nil); err != nil {
 		unavailable(w)
@@ -249,7 +283,7 @@ func (m *Module) inventory(w http.ResponseWriter, r *http.Request, mc api.Module
 	if len(recent) > 5 {
 		recent = recent[:5]
 	}
-	write(w, 200, map[string]any{"drivers": m.engine.DriverKeys(), "verification_levels": m.engine.VerificationLevels(), "platform": toolinstall.HostPlatform(), "inventory": inv, "read_only": m.readOnly, "jobs": recent})
+	write(w, 200, map[string]any{"drivers": m.engine.DriverKeys(), "presence": m.sessionToolPresence(), "verification_levels": m.engine.VerificationLevels(), "platform": toolinstall.HostPlatform(), "inventory": inv, "read_only": m.readOnly, "jobs": recent})
 }
 func (m *Module) detect(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
 	driver := r.URL.Query().Get("driver")
@@ -317,7 +351,7 @@ func (m *Module) detect(w http.ResponseWriter, r *http.Request, mc api.ModuleCon
 }
 func decode(w http.ResponseWriter, r *http.Request, v any) bool {
 	if err := api.DecodeRequestBody(w, r, v, api.RequestBodySpec{MaxBytes: 4096}); err != nil {
-		fail(w, 400, "bad_request", "Provide a valid request with only the supported fields.")
+		fail(w, 400, "bad_request", api.RequestBodyErrorMessage(err, "Provide a valid request with only the supported fields."))
 		return false
 	}
 	return true

@@ -203,3 +203,21 @@ func TestFederationU8_ReconcileRemovesOrphan(t *testing.T) {
 		t.Error("the orphan domain must have been pruned (deny-close to global)")
 	}
 }
+
+// TestFederationResolveLoginKeepsBuildCause covers the enterprise leg: a selected
+// tenant IdP that does not build fails closed to NoFederation carrying the build error and
+// its protocol, so the SP metadata endpoint can report it instead of "not configured".
+func TestFederationResolveLoginKeepsBuildCause(t *testing.T) {
+	broken := errors.New("SP signing keypair: no PEM data")
+	svc := auth.NewFederationService(testStore(t), fedTestSealer{}, func(context.Context, auth.FederationParams) (auth.Federation, error) {
+		return nil, broken
+	}, auth.NoFederation{}, fedTestMultiIDP{})
+	tenant := model.NewTenantID()
+	mustPutIdP(t, svc, tenant, model.DefaultFederationAlias, oidcDomains("idp-broken", true, "broken.example"))
+
+	fed, resolved := svc.ResolveLogin(context.Background(), auth.SelectionInput{Tenant: tenant})
+	absent, ok := fed.(auth.NoFederation)
+	if !ok || !errors.Is(absent.Cause, broken) || absent.ConfiguredProtocol != auth.ProtocolOIDC || resolved.Scope != tenant {
+		t.Fatalf("ResolveLogin = %#v %+v, want NoFederation with the build cause, protocol oidc, scope %s", fed, resolved, tenant)
+	}
+}

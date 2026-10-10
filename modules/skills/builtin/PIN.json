@@ -1,0 +1,290 @@
+{
+  "schema": 1,
+  "sources": {
+    "ecc": {
+      "repository": "https://github.com/affaan-m/ECC",
+      "release": "v2.2.3",
+      "commit": "c05b2d6614f62f6db0047669aa4eefb223d478f9",
+      "license": "MIT",
+      "license_file": "LICENSE",
+      "exclude": {
+        "skills/carrier-relationship-management": "metadata holds a mapping; the importer's portable-v1 validator accepts string values only",
+        "skills/customs-trade-compliance": "metadata holds a mapping; the importer's portable-v1 validator accepts string values only",
+        "skills/energy-procurement": "metadata holds a mapping; the importer's portable-v1 validator accepts string values only",
+        "skills/inventory-demand-planning": "metadata holds a mapping; the importer's portable-v1 validator accepts string values only",
+        "skills/logistics-exception-management": "metadata holds a mapping; the importer's portable-v1 validator accepts string values only",
+        "skills/production-scheduling": "metadata holds a mapping; the importer's portable-v1 validator accepts string values only",
+        "skills/quality-nonconformance": "metadata holds a mapping; the importer's portable-v1 validator accepts string values only",
+        "skills/returns-reverse-logistics": "metadata holds a mapping; the importer's portable-v1 validator accepts string values only"
+      }
+    },
+    "mattpocock-skills": {
+      "repository": "https://github.com/mattpocock/skills",
+      "release": "1.2.3",
+      "commit": "d81f3a183412e71a5b1e84ca21bc1a35eea03a60",
+      "license": "MIT",
+      "license_file": "LICENSE",
+      "select": {
+        "mattpocock-engineering": "skills/engineering",
+        "mattpocock-productivity": "skills/productivity"
+      },
+      "exclude": {
+        "skills/engineering/pr": "metadata holds a mapping; the importer's portable-v1 validator accepts string values only"
+      }
+    }
+  },
+  "packs": [
+    {
+      "id": "ecc-agentic-patterns",
+      "source": "ecc",
+      "description": "Agentic engineering, autonomous loops, agent harness construction, and LLM pipeline optimization skills.",
+      "file": "ecc-agentic-patterns.tar.gz",
+      "sha256": "dda8cb4dad601f307c5da734e885e58239b98bf94563b7bc77de9757ff871127",
+      "tar_sha256": "07d0b9007113aa2cb0d76e86b08267ae28fab60dc57c29e7cc24f1b18cc5208c",
+      "skills": 35,
+      "files": 44
+    },
+    {
+      "id": "ecc-business-content",
+      "source": "ecc",
+      "description": "Business, writing, market, and investor communication skills.",
+      "file": "ecc-business-content.tar.gz",
+      "sha256": "5aec18647e440b9fe55fb142a24c4c00798d072d4392fbd3977767475ae1a14a",
+      "tar_sha256": "6b705d088ad4ab4b18732bbac52b14442382f8f3725954ebedcce3bd6d1863f4",
+      "skills": 14,
+      "files": 28
+    },
+    {
+      "id": "ecc-database",
+      "source": "ecc",
+      "description": "Database and persistence-focused skills.",
+      "file": "ecc-database.tar.gz",
+      "sha256": "1bdb3ad335329dce9821ebe1f8da99fdb082e49a650c5b500d3d68e4ecc5a9c8",
+      "tar_sha256": "55d9d4f71d6739cba57971d6a88228fc8cef21d45cde2fba618b0ceda8f1f287",
+      "skills": 7,
+      "files": 8
+    },
+    {
+      "id": "ecc-devops-infra",
+      "source": "ecc",
+      "description": "Deployment workflows, Docker patterns, and infrastructure skills.",
+      "file": "ecc-devops-infra.tar.gz",
+      "sha256": "8de91f1bb05dbc2df99ef86d4a9d8db0554f0115c33218c4d0a5e7f4edd5d01c",
+      "tar_sha256": "8cda61c96a41d7c6437da4905e7045a045769ea89576ee60eec22c2ca6eea9bc",
+      "skills": 17,
+      "files": 20
+    },
+    {
+      "id": "ecc-document-processing",
+      "source": "ecc",
+      "description": "Document processing, conversion, and translation skills.",
+      "file": "ecc-document-processing.tar.gz",
+      "sha256": "5e266422825306edc99971509a8f5368bfa26bb85bfbad50f097d75e5a622f1f",
+      "tar_sha256": "2d19a4cf882eeed7cbbda4dec50625b2277cfe7ee6f4770fdd2de2b7667b96d6",
+      "skills": 2,
+      "files": 4
+    },
+    {
+      "id": "ecc-framework-language",
+      "source": "ecc",
+      "description": "Core framework, language, and application-engineering skills.",
+      "file": "ecc-framework-language.tar.gz",
+      "sha256": "6b466eb368780a9be177fed358e277de59f33606010fa47b61c7b224cc284573",
+      "tar_sha256": "20188e80c0736f09ef4a39f23a108836a3df7baedb46137fdc122a9592258412",
+      "skills": 70,
+      "files": 118
+    },
+    {
+      "id": "ecc-ito-compute",
+      "source": "ecc",
+      "description": "Authenticated It\u00f4 GPU inventory, RFQ, status, device revocation, and explicitly gated node-qualification workflows through the separately installed canonical CLI.",
+      "file": "ecc-ito-compute.tar.gz",
+      "sha256": "67fd1521c917c28cc370297419f6e76646e3e76f2bc5c66ff5790bf58d245343",
+      "tar_sha256": "c22561ebd674293b297ec4001768593f8ef30bb03700be862d4cb5ec04a001fb",
+      "skills": 3,
+      "files": 5
+    },
+    {
+      "id": "ecc-machine-learning",
+      "source": "ecc",
+      "description": "Production machine-learning engineering workflows for data contracts, reproducible training, evaluation, deployment, monitoring, and rollback.",
+      "file": "ecc-machine-learning.tar.gz",
+      "sha256": "5f72b98c80b185a8e5b8b12df933bae37df2be48c2b3d510aec2033333dfc353",
+      "tar_sha256": "a5b9280e292622348c6a5de5d74b4b93456aa6e405c92590f092590da6f5964e",
+      "skills": 4,
+      "files": 5
+    },
+    {
+      "id": "ecc-media-generation",
+      "source": "ecc",
+      "description": "Media generation, technical explainers, and AI-assisted editing skills.",
+      "file": "ecc-media-generation.tar.gz",
+      "sha256": "1465870c82dd7b4a669257b1750a5c7610124559834defde0222c3036fb49553",
+      "tar_sha256": "a09464550bbd7cd9aebf03a49141a70faea495a83252bf56cd815027b1f3c712",
+      "skills": 11,
+      "files": 162
+    },
+    {
+      "id": "ecc-nasiko-control-plane",
+      "source": "ecc",
+      "description": "Experimental Nasiko CLI lifecycle bridge guidance for pinned installation, read-only status, qualified uninstall, and opt-in telemetry boundaries.",
+      "file": "ecc-nasiko-control-plane.tar.gz",
+      "sha256": "37abb20c6e5f649e82cf424e06c73d5eba26b88250b2b971356ed037a0e56e4f",
+      "tar_sha256": "a0f9f73f437991de869045d113ab9f6ee8647947e4fc0a155b9e4d61cc3de520",
+      "skills": 1,
+      "files": 3
+    },
+    {
+      "id": "ecc-operator-desk-patterns",
+      "source": "ecc",
+      "description": "Generic operator desk patterns: never-silent approval loop, counterparty channel discipline, master agreement generation with a rolling schedule, and deterministic e-signature field placement.",
+      "file": "ecc-operator-desk-patterns.tar.gz",
+      "sha256": "603824855eaa32fbee3820c303c1f6d603b6aa0256e1d12dd9eeed43f8c8751c",
+      "tar_sha256": "cde9b5a39c663997b0b458cc6b2b79da9f985ae5c0a6e281608e9451f976e127",
+      "skills": 4,
+      "files": 13
+    },
+    {
+      "id": "ecc-operator-workflows",
+      "source": "ecc",
+      "description": "Connected-app operator workflows for setup audits, billing operations, program tracking, Google Workspace, and network optimization.",
+      "file": "ecc-operator-workflows.tar.gz",
+      "sha256": "5b838f167cffadd05a905364d28c398d0d745f9a0e58b9798c4309108df50c9c",
+      "tar_sha256": "8541e63b3b8163922244bc2664be9f1cc048c2fb63cd784bb9a4c5704bc01291",
+      "skills": 19,
+      "files": 21
+    },
+    {
+      "id": "ecc-optimization-workflows",
+      "source": "ecc",
+      "description": "Parallel execution, benchmarking, data-throughput, latency, and recursive decision-ledger skills for faster evidence-backed work.",
+      "file": "ecc-optimization-workflows.tar.gz",
+      "sha256": "d3da0ae725d0efe9bc17369c8d17a67e2573fde89873fd525d173cd6228c71ac",
+      "tar_sha256": "a07ff3380e1c2abfbfec55088b706c108bfa92a56d540e1b1308bf8a07597d70",
+      "skills": 8,
+      "files": 9
+    },
+    {
+      "id": "ecc-orchestration",
+      "source": "ecc",
+      "description": "Worktree/tmux orchestration runtime and workflow docs.",
+      "file": "ecc-orchestration.tar.gz",
+      "sha256": "946dd143f3f5e6761aca2580640bc68ef7e36bdf8de4afad9a079741d367d74b",
+      "tar_sha256": "504c2f61f1d113a916ea25def30ed46c24f10364e0689917206ae071cb47253f",
+      "skills": 1,
+      "files": 2
+    },
+    {
+      "id": "ecc-prediction-market-skills",
+      "source": "ecc",
+      "description": "Public, non-advisory prediction-market workflows and the consolidated read-only Ito baskets data skill with gated Ito API access.",
+      "file": "ecc-prediction-market-skills.tar.gz",
+      "sha256": "fa6c20678f8e6ead7fac79bc3400231d19184ed104d9deda1290137f833bcf39",
+      "tar_sha256": "5ac09d35d0808c3013b51077f2e30ffdeef1870e149ad256808fc0984086b620",
+      "skills": 3,
+      "files": 6
+    },
+    {
+      "id": "ecc-research-apis",
+      "source": "ecc",
+      "description": "Research and API integration skills for deep investigations and model integrations.",
+      "file": "ecc-research-apis.tar.gz",
+      "sha256": "27c6059e2c2af8c3ee42b80700c6f861c0aee68b6d45f34d6655a7edd117b9d9",
+      "tar_sha256": "56bb851435450b70f2eec1574368c1c920de58b4cae29ea3295d875604852982",
+      "skills": 9,
+      "files": 10
+    },
+    {
+      "id": "ecc-security",
+      "source": "ecc",
+      "description": "Security review and security-focused framework guidance.",
+      "file": "ecc-security.tar.gz",
+      "sha256": "e60ee1f9e8e3f0e3b336d17280f27ae7bf91eb7a3088a7e8ac2f002fb412a7f0",
+      "tar_sha256": "93587910a7735689af15ff7b4361804bd0add0630e9e825a4493a718d8b9510e",
+      "skills": 19,
+      "files": 21
+    },
+    {
+      "id": "ecc-skill-unified-memory",
+      "source": "ecc",
+      "description": "Single-skill unified-memory guidance; requires the separately installed ecc-universal CLI runtime.",
+      "file": "ecc-skill-unified-memory.tar.gz",
+      "sha256": "9dfbf2227f94fe10ab412c12a09f35048512f1bf66d08eccd9c0054152f76083",
+      "tar_sha256": "3d8fd30a0b3d8d040c12eec6ec5e1376a39324789d2497a6ff842a5e16bc4734",
+      "skills": 1,
+      "files": 2
+    },
+    {
+      "id": "ecc-social-distribution",
+      "source": "ecc",
+      "description": "Social publishing and distribution skills.",
+      "file": "ecc-social-distribution.tar.gz",
+      "sha256": "0d3267e2b11a5574a795f3a701dd53c4a145af0483b26c8d07424bcc9bbe9bc3",
+      "tar_sha256": "129b00bbb81c5cd19e4434079e9d490222408243ea4d5c4aa8de9335c54da77e",
+      "skills": 3,
+      "files": 4
+    },
+    {
+      "id": "ecc-swift-apple",
+      "source": "ecc",
+      "description": "Swift, SwiftUI, and Apple platform skills including concurrency, persistence, and design patterns.",
+      "file": "ecc-swift-apple.tar.gz",
+      "sha256": "e3dcc5d810f55a63f06766d7c06adecc92e4af440c51e2d1f0f89d72c84dfda0",
+      "tar_sha256": "45568da6fdf65dc811362c06222d5bee19575f5ebb32ca385f9127f165856bca",
+      "skills": 7,
+      "files": 10
+    },
+    {
+      "id": "ecc-workflow-quality",
+      "source": "ecc",
+      "description": "Evaluation, TDD, verification, compaction, learning, and cross-harness memory skills, including the legacy continuous-learning v1 path. The unified-memory workflow requires the separately installed ecc-universal CLI runtime.",
+      "file": "ecc-workflow-quality.tar.gz",
+      "sha256": "b750b537191880ac7b20604bfe0832c349324050e20399a3b252463307b7d45f",
+      "tar_sha256": "9b3875d7a581d1b2f3e86285fcc8d398ae74929e1ce9cfd62a5f497523306797",
+      "skills": 47,
+      "files": 103
+    },
+    {
+      "id": "mattpocock-engineering",
+      "source": "mattpocock-skills",
+      "description": "Upstream skills/engineering.",
+      "file": "mattpocock-engineering.tar.gz",
+      "sha256": "ea0a2f492dfa79aef79112e8f4610c96599b887c737673307c1ce14fcdbbe9d8",
+      "tar_sha256": "a015a385c4cf5a6a771e156cac0f7f40b0300190e0970ac872fc48d8e4c67ce0",
+      "skills": 19,
+      "files": 59
+    },
+    {
+      "id": "mattpocock-productivity",
+      "source": "mattpocock-skills",
+      "description": "Upstream skills/productivity.",
+      "file": "mattpocock-productivity.tar.gz",
+      "sha256": "a7095f5c142de957349f77d8893ac196018738d4f486e08c2784e2b58b706cae",
+      "tar_sha256": "fb61639959e6440d4d7334eee3f5a5356907598c90b2fbf61ea5723cb5252c0b",
+      "skills": 7,
+      "files": 21
+    }
+  ],
+  "data": [
+    {
+      "id": "ecc-agents",
+      "source": "ecc",
+      "description": "Agent definitions (data).",
+      "file": "data/ecc-agents.tar.gz",
+      "sha256": "8bb5fec48d9f3fa81d16bfba7307654b6b667886e258732d50298bd1041b257d",
+      "tar_sha256": "e916f632a65c7e573d27674c9e2bbde52d1b3f0d8eb164bc2b858de815c31c26",
+      "skills": 0,
+      "files": 69
+    },
+    {
+      "id": "ecc-rules",
+      "source": "ecc",
+      "description": "Rules (data).",
+      "file": "data/ecc-rules.tar.gz",
+      "sha256": "db5782f1a099dc8be87268cc801557f0d539d0f4879386c2e94d8a03704a21f9",
+      "tar_sha256": "1080d764f3772b2357ca89401b06fd93b16856bea8dadaf61f46182345aae252",
+      "skills": 0,
+      "files": 123
+    }
+  ]
+}

@@ -11,13 +11,14 @@ A source does one job: it **observes** an external system and **emits normalized
 
 Concretely, a source implements a small interface — `Open` (configure once), `Gather` (run, emitting), `Close` (release) — and during `Gather` it hands the engine one observation at a time through a sink. The engine owns scheduling: a streaming source (a log tail, a receiver) blocks in `Gather` and emits until it is cancelled; a batch source does its work and returns, and the engine decides when to run it again. The connector never owns its own timer.
 
-There are exactly three kinds of observation a source can emit:
+There are exactly four kinds of observation a source can emit:
 
 | Observation | What it carries | Used by |
 |---|---|---|
 | `edge` | An origin (agent / identity / session) touched a resource, with a read/write mode | The R/RW access map |
 | `cost` | Model/provider usage cost | FinOps |
 | `finding` | A guardrail / red-team / forensic finding | Security |
+| `metric` | A non-cost measure | Productivity and adoption metrics |
 
 The set is closed by design — a third party cannot introduce a new observation kind. The engine **lifts** each emitted observation onto the in-process event bus, where modules consume it without coupling to the source that produced it. For the access map specifically, the engine resolves the connector's string references to entities and merges the observation into a persisted access edge.
 
@@ -138,13 +139,13 @@ The exact keys inside each connector's `config` block (log paths, endpoints, cre
 
 ### An unconfigured source warns honestly
 
-The engine fails safe, not loud, when nothing is wired:
+Startup handles an unset variable separately from a configured file:
 
 - If `OLIVARES_SOURCES_CONFIG` is **unset**, the engine starts with no sources.
-- If the file is **missing, unreadable, or not valid JSON**, the engine **warns and continues** with no sources — it does not crash on boot.
+- If the configured file is **missing, unreadable, or not valid JSON**, `olivares serve` **exits with code `1`**. The error starts with `load sources operator config: OLIVARES_SOURCES_CONFIG` and includes `refusing to start instead of silently omitting operator configuration`.
 - If the source list is **empty**, the engine warns that no connector will ingest and that the estate is running on no live traffic.
 
-In every case the boot log tells you plainly that nothing real is wired, rather than silently appearing healthy with an empty map. An honest warning is the design: an empty access map should never look like a clean one.
+For a configured file, fix the path, read permissions, or JSON and restart. The engine refuses to silently omit operator configuration.
 
 ## Where this runs
 

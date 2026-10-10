@@ -33,7 +33,7 @@ var _ func(
 
 func TestDirectNoticeExactAckPublicBoundaryDenyClosesWhenUnconfigured(t *testing.T) {
 	t.Parallel()
-	m := &Module{}
+	m := &Module{Dependencies: &Dependencies{}}
 	_, err := m.AcknowledgeDirectNoticeDelivery(
 		context.Background(),
 		DirectoryScopeRef{TenantID: model.TenantID(model.NewID()), WorkspaceID: model.NewID()},
@@ -619,9 +619,9 @@ func newDirectNoticeExactAckFixtureForBackend(
 	resolver := &directNoticeReadDirectoryResolver{now: fixture.now, epoch: fixture.epoch}
 	closure := &directNoticeReadClosureResolver{now: fixture.now, epoch: fixture.epoch}
 	legacyRead := &directNoticeExactReadLegacyAuthorizer{}
-	fixture.m.communicationDirectoryResolver = resolver
-	fixture.m.communicationGrantClosure = closure
-	fixture.m.communicationReadAuthorizer = legacyRead
+	fixture.m.CommunicationDirectoryResolver = resolver
+	fixture.m.CommunicationGrantClosure = closure
+	fixture.m.CommunicationReadAuthorizer = legacyRead
 	fixture.authorizer.calls.Store(0)
 	fixture.authorizer.fail.Store(true)
 	fixture.source.calls = 0
@@ -755,7 +755,7 @@ func directNoticeExactAckRetractDelivery(
 	ctx := context.Background()
 	var afterMessage Message
 	var afterDelivery MessageDelivery
-	err := fixture.m.data.Mutate(ctx, fixture.tenant, func(raw store.Scope) error {
+	err := fixture.m.Data.Mutate(ctx, fixture.tenant, func(raw store.Scope) error {
 		confined, err := store.ConfineWorkspace(ctx, raw, fixture.workspace)
 		if err != nil {
 			return err
@@ -983,13 +983,13 @@ func TestDirectNoticeExactAckUsesCurrentAuthorityAndCommitsOneEffectSet(t *testi
 	beforeOutboxCount := len(communicationRowsForTest(t, fixture.directNoticeFixture, workOutboxKind))
 	beforeAudit := directNoticeAuditHead(t, fixture.directNoticeFixture)
 
-	base := fixture.m.data
+	base := fixture.m.Data
 	trace := &directNoticeAuthorityTrace{}
 	authorityFirst := &directNoticeExactAckAuthorityFirstData{inner: base}
 	observer := &directNoticeMutateObserverData{inner: &directNoticeAuthorityTraceData{
 		inner: authorityFirst, trace: trace,
 	}}
-	fixture.m.data = observer
+	fixture.m.Data = observer
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 	result, err := fixture.m.acknowledgeDirectNoticeDeliveryWithAuthority(
@@ -1002,7 +1002,7 @@ func TestDirectNoticeExactAckUsesCurrentAuthorityAndCommitsOneEffectSet(t *testi
 	if err != nil {
 		t.Fatalf("exact DirectNotice Ack: %v", err)
 	}
-	fixture.m.data = base
+	fixture.m.Data = base
 
 	wantFulfillment := FulfillmentProjection{
 		State: FulfillmentMet, Required: 1, Acknowledged: 1,
@@ -1157,7 +1157,7 @@ func TestDirectNoticeExactAckLateLifecycleReplayAndUniqueness(t *testing.T) {
 			} else {
 				fixture = newDirectNoticeExactAckFixture(t)
 			}
-			base := fixture.m.data
+			base := fixture.m.Data
 			_, delivery := directNoticeExactAckMessageAndDelivery(t, fixture.directNoticeFixture)
 			if state == DeliveryRetracted {
 				_, delivery = directNoticeExactAckRetractDelivery(t, fixture)
@@ -1186,7 +1186,7 @@ func TestDirectNoticeExactAckLateLifecycleReplayAndUniqueness(t *testing.T) {
 			))
 			beforeAudit := directNoticeAuditHead(t, fixture.directNoticeFixture)
 			observer := &directNoticeMutateObserverData{inner: base}
-			fixture.m.data = observer
+			fixture.m.Data = observer
 			assertCallDelta := func(stage string, beforeViews, beforeMutates int64) {
 				t.Helper()
 				if observer.views.Load() != beforeViews+1 ||
@@ -1214,7 +1214,7 @@ func TestDirectNoticeExactAckLateLifecycleReplayAndUniqueness(t *testing.T) {
 				}) || first.AuditSeq != beforeAudit.Seq+1 {
 				t.Fatalf("first %s late exact Ack = %+v", state, first)
 			}
-			fixture.m.data = base
+			fixture.m.Data = base
 			afterFirstMessage, afterFirstDelivery := directNoticeExactAckMessageAndDelivery(
 				t, fixture.directNoticeFixture,
 			)
@@ -1266,7 +1266,7 @@ func TestDirectNoticeExactAckLateLifecycleReplayAndUniqueness(t *testing.T) {
 			}
 			assertCounts("first")
 
-			fixture.m.data = observer
+			fixture.m.Data = observer
 			beforeViews, beforeMutates = observer.views.Load(), observer.mutates.Load()
 			replayed, err := fixture.m.acknowledgeDirectNoticeDeliveryWithAuthority(
 				ctx, fixture.scope, fixture.ref, fixture.published.DeliveryID, command,
@@ -1280,10 +1280,10 @@ func TestDirectNoticeExactAckLateLifecycleReplayAndUniqueness(t *testing.T) {
 			if !reflect.DeepEqual(replayed, wantReplay) {
 				t.Fatalf("replay %s = %+v, want %+v", state, replayed, wantReplay)
 			}
-			fixture.m.data = base
+			fixture.m.Data = base
 			assertCounts("replay")
 
-			fixture.m.data = observer
+			fixture.m.Data = observer
 			changed := command
 			changed.IfMatch = fmt.Sprintf(`"v%d"`, delivery.Version+1)
 			beforeConflictClosure := fixture.closure.calls.Load()
@@ -1299,10 +1299,10 @@ func TestDirectNoticeExactAckLateLifecycleReplayAndUniqueness(t *testing.T) {
 				)
 			}
 			assertCallDelta("changed digest", beforeViews, beforeMutates)
-			fixture.m.data = base
+			fixture.m.Data = base
 			assertCounts("changed digest")
 
-			fixture.m.data = observer
+			fixture.m.Data = observer
 			currentVersion := afterFirstDelivery.Version
 			beforeTerminalClosure := fixture.closure.calls.Load()
 			beforeViews, beforeMutates = observer.views.Load(), observer.mutates.Load()
@@ -1322,7 +1322,7 @@ func TestDirectNoticeExactAckLateLifecycleReplayAndUniqueness(t *testing.T) {
 				)
 			}
 			assertCallDelta("second key", beforeViews, beforeMutates)
-			fixture.m.data = base
+			fixture.m.Data = base
 			assertCounts("second key")
 		})
 	}
@@ -1423,16 +1423,16 @@ func TestDirectNoticeExactAckPublicBoundaryBindsBeforeReadinessAndStaysOff(t *te
 	localResolver := &directNoticeReadDirectoryResolver{
 		now: fixture.now, epoch: fixture.epoch,
 	}
-	fixture.m.communicationDirectoryResolver = localResolver
+	fixture.m.CommunicationDirectoryResolver = localResolver
 	readiness := &communicationReadinessStub{
 		storeReady:  true,
 		sealerReady: true,
 		trace:       &trace,
 	}
-	fixture.m.UseCommunicationStoreReadinessWitness(readiness)
-	fixture.m.UseCommunicationContentSealer(readiness)
-	observer := &directNoticeMutateObserverData{inner: fixture.m.data}
-	fixture.m.data = observer
+	fixture.m.CommunicationStoreReadiness = readiness
+	func() { fixture.m.CommunicationSealer = readiness; fixture.m.normalize() }()
+	observer := &directNoticeMutateObserverData{inner: fixture.m.Data}
+	fixture.m.Data = observer
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 	_, err := fixture.m.AcknowledgeDirectNoticeDelivery(
@@ -1557,10 +1557,10 @@ func TestDirectNoticeExactAckReplayTokenRejectsDeliverySpliceBeforeCarrierAccess
 		t.Fatalf("normalize exact Ack command: %v", err)
 	}
 
-	base := fixture.m.data
+	base := fixture.m.Data
 	authorityFirst := &directNoticeExactAckAuthorityFirstData{inner: base}
 	observer := &directNoticeMutateObserverData{inner: authorityFirst}
-	fixture.m.data = observer
+	fixture.m.Data = observer
 	err = fixture.m.mutateCommunicationWithNarrowedAuthority(
 		ctx,
 		question,
@@ -1604,7 +1604,7 @@ func TestDirectNoticeExactAckReplayTokenRejectsDeliverySpliceBeforeCarrierAccess
 			return confirmErr
 		},
 	)
-	fixture.m.data = base
+	fixture.m.Data = base
 	if !errors.Is(err, ErrCommunicationEvidenceUnknown) ||
 		observer.views.Load() != 0 || observer.mutates.Load() != 1 ||
 		authorityFirst.authorityLocks.Load() != 1 || authorityFirst.earlyAccess.Load() ||
@@ -1681,10 +1681,10 @@ func TestDirectNoticeExactAckAuthorityTokenOwnsRequestAndReaderCommitments(t *te
 			}
 
 			before := directNoticeExactAckEffects(t, fixture.directNoticeFixture)
-			base := fixture.m.data
+			base := fixture.m.Data
 			authorityFirst := &directNoticeExactAckAuthorityFirstData{inner: base}
 			observer := &directNoticeMutateObserverData{inner: authorityFirst}
-			fixture.m.data = observer
+			fixture.m.Data = observer
 			err = fixture.m.mutateCommunicationWithNarrowedAuthority(
 				ctx,
 				question,
@@ -1743,7 +1743,7 @@ func TestDirectNoticeExactAckAuthorityTokenOwnsRequestAndReaderCommitments(t *te
 					)
 				},
 			)
-			fixture.m.data = base
+			fixture.m.Data = base
 			if !errors.Is(err, ErrCommunicationEvidenceUnknown) ||
 				observer.views.Load() != 0 || observer.mutates.Load() != 1 ||
 				authorityFirst.authorityLocks.Load() != 1 ||
@@ -1789,13 +1789,13 @@ func TestDirectNoticeExactAckUnknownDiscoveryJoinsStayUnknownAndRollback(t *test
 			defer cancel()
 			_, delivery := directNoticeExactAckMessageAndDelivery(t, fixture.directNoticeFixture)
 			before := directNoticeExactAckEffects(t, fixture.directNoticeFixture)
-			base := fixture.m.data
+			base := fixture.m.Data
 			faultData := &directNoticeExactAuthorityFirstData{
 				inner: base, getErr: test.getErr,
 				listErrKind: test.listErrKind, listErr: test.listErr,
 			}
 			observer := &directNoticeMutateObserverData{inner: faultData}
-			fixture.m.data = observer
+			fixture.m.Data = observer
 			result, err := fixture.m.acknowledgeDirectNoticeDeliveryWithAuthority(
 				ctx,
 				fixture.scope,
@@ -1803,7 +1803,7 @@ func TestDirectNoticeExactAckUnknownDiscoveryJoinsStayUnknownAndRollback(t *test
 				fixture.published.DeliveryID,
 				directNoticeExactAckCommand(delivery.Version, model.NewID()),
 			)
-			fixture.m.data = base
+			fixture.m.Data = base
 			assertDirectNoticeAckUnknownOnly(t, err)
 			if result != (DirectNoticeDeliveryAckResult{}) ||
 				observer.views.Load() != 1 || observer.mutates.Load() != 1 ||
@@ -1907,16 +1907,16 @@ func TestDirectNoticeExactAckDefersObservedOutcomesUntilFinalAuthoritySample(t *
 				if atBoundary {
 					final = freshUntil
 				}
-				base := fixture.m.data
+				base := fixture.m.Data
 				clock := &directNoticeExactSequencedClockData{
 					inner: base, refresh: model.NewTimestamp(refresh), final: model.NewTimestamp(final),
 				}
 				observer := &directNoticeMutateObserverData{inner: clock}
-				fixture.m.data = observer
+				fixture.m.Data = observer
 				result, err := fixture.m.acknowledgeDirectNoticeDeliveryWithAuthority(
 					ctx, fixture.scope, fixture.ref, target, command,
 				)
-				fixture.m.data = base
+				fixture.m.Data = base
 				if result != (DirectNoticeDeliveryAckResult{}) {
 					t.Fatalf("%s exact Ack returned result at %s: %+v", outcome, name, result)
 				}
@@ -1984,13 +1984,13 @@ func TestDirectNoticeExactAckRejectsMessageEventSequenceSkewBeforeEffects(t *tes
 					command = directNoticeExactAckCommand(delivery.Version, model.NewID())
 				}
 				before := directNoticeExactAckEffects(t, fixture.directNoticeFixture)
-				base := fixture.m.data
+				base := fixture.m.Data
 				fault := &directNoticeExactAckAuthorityFirstData{
 					inner: base, skewMessage: true,
 					messageVersion: skew.version, messageEventSeq: skew.seq,
 				}
 				observer := &directNoticeMutateObserverData{inner: fault}
-				fixture.m.data = observer
+				fixture.m.Data = observer
 				result, err := fixture.m.acknowledgeDirectNoticeDeliveryWithAuthority(
 					ctx,
 					fixture.scope,
@@ -1998,7 +1998,7 @@ func TestDirectNoticeExactAckRejectsMessageEventSequenceSkewBeforeEffects(t *tes
 					fixture.published.DeliveryID,
 					command,
 				)
-				fixture.m.data = base
+				fixture.m.Data = base
 				assertDirectNoticeAckUnknownOnly(t, err)
 				if result != (DirectNoticeDeliveryAckResult{}) ||
 					observer.views.Load() != 1 || observer.mutates.Load() != 1 ||
@@ -2137,10 +2137,10 @@ func TestDirectNoticeExactAckReplayReconstructsExactLockedProjection(t *testing.
 				t.Fatalf("build exact Ack fulfillment window: %v", err)
 			}
 			before := directNoticeExactAckEffects(t, fixture.directNoticeFixture)
-			base := fixture.m.data
+			base := fixture.m.Data
 			authorityFirst := &directNoticeExactAckAuthorityFirstData{inner: base}
 			observer := &directNoticeMutateObserverData{inner: authorityFirst}
-			fixture.m.data = observer
+			fixture.m.Data = observer
 			err = fixture.m.confirmDirectNoticeAckReplayWithAuthority(
 				ctx,
 				question,
@@ -2151,7 +2151,7 @@ func TestDirectNoticeExactAckReplayReconstructsExactLockedProjection(t *testing.
 				normalized,
 				candidate,
 			)
-			fixture.m.data = base
+			fixture.m.Data = base
 			assertDirectNoticeAckUnknownOnly(t, err)
 			wantMutates, wantAuthorityLocks := int64(1), int64(1)
 			wantCarrierAccess := true
@@ -2212,7 +2212,7 @@ func TestDirectNoticeExactAckReplayRejectsVerifiedAuditAnchorMismatch(t *testing
 	}
 	anchor.TargetID = model.NewID()
 	before := directNoticeExactAckEffects(t, fixture.directNoticeFixture)
-	base := fixture.m.data
+	base := fixture.m.Data
 	fault := &directNoticeExactAckAuthorityFirstData{
 		inner: base,
 		viewAudit: directNoticeReplayAuditLog{
@@ -2220,11 +2220,11 @@ func TestDirectNoticeExactAckReplayRejectsVerifiedAuditAnchorMismatch(t *testing
 		},
 	}
 	observer := &directNoticeMutateObserverData{inner: fault}
-	fixture.m.data = observer
+	fixture.m.Data = observer
 	result, err := fixture.m.acknowledgeDirectNoticeDeliveryWithAuthority(
 		ctx, fixture.scope, fixture.ref, fixture.published.DeliveryID, command,
 	)
-	fixture.m.data = base
+	fixture.m.Data = base
 	assertDirectNoticeAckUnknownOnly(t, err)
 	if result != (DirectNoticeDeliveryAckResult{}) || observer.views.Load() != 1 ||
 		observer.mutates.Load() != 0 || fault.authorityLocks.Load() != 0 ||
@@ -2257,7 +2257,7 @@ func TestDirectNoticeExactAckReplayRejectsLockedReceiptRowDrift(t *testing.T) {
 		t.Fatalf("seed locked-receipt exact Ack replay: %v", err)
 	}
 	before := directNoticeExactAckEffects(t, fixture.directNoticeFixture)
-	base := fixture.m.data
+	base := fixture.m.Data
 	fault := &directNoticeExactAckAuthorityFirstData{
 		inner: base,
 		transformRecord: func(kind model.Kind, record model.Record) model.Record {
@@ -2268,11 +2268,11 @@ func TestDirectNoticeExactAckReplayRejectsLockedReceiptRowDrift(t *testing.T) {
 		},
 	}
 	observer := &directNoticeMutateObserverData{inner: fault}
-	fixture.m.data = observer
+	fixture.m.Data = observer
 	result, err := fixture.m.acknowledgeDirectNoticeDeliveryWithAuthority(
 		ctx, fixture.scope, fixture.ref, fixture.published.DeliveryID, command,
 	)
-	fixture.m.data = base
+	fixture.m.Data = base
 	assertDirectNoticeAckUnknownOnly(t, err)
 	if result != (DirectNoticeDeliveryAckResult{}) || observer.views.Load() != 1 ||
 		observer.mutates.Load() != 1 || fault.authorityLocks.Load() != 1 ||
@@ -2347,9 +2347,9 @@ func TestDirectNoticeExactAckReplayRejectsInvalidReceiptModel(t *testing.T) {
 				t.Fatalf("%s receipt mutation remained model-valid", test.name)
 			}
 			before := directNoticeExactAckEffects(t, fixture.directNoticeFixture)
-			base := fixture.m.data
+			base := fixture.m.Data
 			observer := &directNoticeMutateObserverData{inner: base}
-			fixture.m.data = observer
+			fixture.m.Data = observer
 			var result DirectNoticeDeliveryAckResult
 			err = fixture.m.viewCommunication(ctx, fixture.scope, func(sc store.Scope) error {
 				result, err = directNoticeAckResultFromReceipt(
@@ -2362,7 +2362,7 @@ func TestDirectNoticeExactAckReplayRejectsInvalidReceiptModel(t *testing.T) {
 				)
 				return err
 			})
-			fixture.m.data = base
+			fixture.m.Data = base
 			assertDirectNoticeAckUnknownOnly(t, err)
 			if result != (DirectNoticeDeliveryAckResult{}) ||
 				observer.views.Load() != 1 || observer.mutates.Load() != 0 {
@@ -2464,7 +2464,7 @@ func TestDirectNoticeExactAckReplayRejectsCurrentFulfillmentDrift(t *testing.T) 
 		t.Fatalf("build current-fulfillment exact Ack authority window: %v", err)
 	}
 	before := directNoticeExactAckEffects(t, fixture.directNoticeFixture)
-	base := fixture.m.data
+	base := fixture.m.Data
 	fault := &directNoticeExactAckAuthorityFirstData{
 		inner: base,
 		transformRecord: func(kind model.Kind, record model.Record) model.Record {
@@ -2479,7 +2479,7 @@ func TestDirectNoticeExactAckReplayRejectsCurrentFulfillmentDrift(t *testing.T) 
 		},
 	}
 	observer := &directNoticeMutateObserverData{inner: fault}
-	fixture.m.data = observer
+	fixture.m.Data = observer
 	err = fixture.m.confirmDirectNoticeAckReplayWithAuthority(
 		ctx,
 		question,
@@ -2490,7 +2490,7 @@ func TestDirectNoticeExactAckReplayRejectsCurrentFulfillmentDrift(t *testing.T) 
 		normalized,
 		candidate,
 	)
-	fixture.m.data = base
+	fixture.m.Data = base
 	assertDirectNoticeAckUnknownOnly(t, err)
 	if observer.views.Load() != 0 || observer.mutates.Load() != 1 ||
 		fault.authorityLocks.Load() != 1 || fault.earlyAccess.Load() ||
@@ -2578,7 +2578,7 @@ func TestDirectNoticeExactAckReplayRejectsRelabelledEventAndOutboxAnchors(t *tes
 				t.Fatalf("seed %s exact Ack replay: %v", test.name, err)
 			}
 			before := directNoticeExactAckEffects(t, fixture.directNoticeFixture)
-			base := fixture.m.data
+			base := fixture.m.Data
 			fault := &directNoticeExactAckAuthorityFirstData{
 				inner: base, transformView: true,
 				transformRecord: func(kind model.Kind, record model.Record) model.Record {
@@ -2589,11 +2589,11 @@ func TestDirectNoticeExactAckReplayRejectsRelabelledEventAndOutboxAnchors(t *tes
 				},
 			}
 			observer := &directNoticeMutateObserverData{inner: fault}
-			fixture.m.data = observer
+			fixture.m.Data = observer
 			result, err := fixture.m.acknowledgeDirectNoticeDeliveryWithAuthority(
 				ctx, fixture.scope, fixture.ref, fixture.published.DeliveryID, command,
 			)
-			fixture.m.data = base
+			fixture.m.Data = base
 			assertDirectNoticeAckUnknownOnly(t, err)
 			if result != (DirectNoticeDeliveryAckResult{}) ||
 				observer.views.Load() != 1 || observer.mutates.Load() != 0 {
@@ -2642,10 +2642,10 @@ func TestDirectNoticeExactAckUsesHistoricalStorageGenerationAfterChannelUpgrade(
 		t.Fatalf("seal exact Ack Channel fixture: %v", err)
 	}
 	message, delivery := directNoticeExactAckMessageAndDelivery(t, fixture.directNoticeFixture)
-	base := fixture.m.data
+	base := fixture.m.Data
 	authorityFirst := &directNoticeExactAckAuthorityFirstData{inner: base}
 	observer := &directNoticeMutateObserverData{inner: authorityFirst}
-	fixture.m.data = observer
+	fixture.m.Data = observer
 	command := directNoticeExactAckCommand(delivery.Version, model.NewID())
 	result, err := fixture.m.acknowledgeDirectNoticeDeliveryWithAuthority(
 		ctx,
@@ -2675,7 +2675,7 @@ func TestDirectNoticeExactAckUsesHistoricalStorageGenerationAfterChannelUpgrade(
 		fixture.published.DeliveryID,
 		command,
 	)
-	fixture.m.data = base
+	fixture.m.Data = base
 	wantReplay := result
 	wantReplay.Replayed = true
 	if err != nil || !reflect.DeepEqual(replayed, wantReplay) ||
@@ -2799,7 +2799,7 @@ func TestDirectNoticeExactAckRejectsFutureDatedLateEvidence(t *testing.T) {
 	}
 	before := directNoticeExactAckEffects(t, fixture.directNoticeFixture)
 	future := fixture.source.evidence.FreshUntil.Add(time.Hour)
-	base := fixture.m.data
+	base := fixture.m.Data
 	fault := &directNoticeExactAckAuthorityFirstData{
 		inner: base, transformView: true,
 		transformRecord: func(kind model.Kind, record model.Record) model.Record {
@@ -2815,7 +2815,7 @@ func TestDirectNoticeExactAckRejectsFutureDatedLateEvidence(t *testing.T) {
 		},
 	}
 	observer := &directNoticeMutateObserverData{inner: fault}
-	fixture.m.data = observer
+	fixture.m.Data = observer
 
 	beforeViews, beforeMutates := observer.views.Load(), observer.mutates.Load()
 	result, err := fixture.m.acknowledgeDirectNoticeDeliveryWithAuthority(
@@ -2845,7 +2845,7 @@ func TestDirectNoticeExactAckRejectsFutureDatedLateEvidence(t *testing.T) {
 		fixture.published.DeliveryID,
 		command,
 	)
-	fixture.m.data = base
+	fixture.m.Data = base
 	assertDirectNoticeAckUnknownOnly(t, err)
 	if result != (DirectNoticeDeliveryAckResult{}) ||
 		observer.views.Load() != beforeViews+1 || observer.mutates.Load() != beforeMutates {
@@ -2876,7 +2876,7 @@ func TestDirectNoticeExactAckRejectsFutureDatedLockedChannel(t *testing.T) {
 		)
 	}
 	before := directNoticeExactAckEffects(t, fixture.directNoticeFixture)
-	base := fixture.m.data
+	base := fixture.m.Data
 	fault := &directNoticeExactAckAuthorityFirstData{
 		inner: base,
 		transformRecord: func(kind model.Kind, record model.Record) model.Record {
@@ -2887,7 +2887,7 @@ func TestDirectNoticeExactAckRejectsFutureDatedLockedChannel(t *testing.T) {
 		},
 	}
 	observer := &directNoticeMutateObserverData{inner: fault}
-	fixture.m.data = observer
+	fixture.m.Data = observer
 	result, err := fixture.m.acknowledgeDirectNoticeDeliveryWithAuthority(
 		ctx,
 		fixture.scope,
@@ -2895,7 +2895,7 @@ func TestDirectNoticeExactAckRejectsFutureDatedLockedChannel(t *testing.T) {
 		fixture.published.DeliveryID,
 		directNoticeExactAckCommand(delivery.Version, model.NewID()),
 	)
-	fixture.m.data = base
+	fixture.m.Data = base
 	assertDirectNoticeAckUnknownOnly(t, err)
 	if result != (DirectNoticeDeliveryAckResult{}) || observer.views.Load() != 1 ||
 		observer.mutates.Load() != 1 || fault.authorityLocks.Load() != 1 ||
@@ -2922,7 +2922,7 @@ func TestDirectNoticeExactAckRejectsLockedDirectoryEpochDrift(t *testing.T) {
 	defer cancel()
 	_, delivery := directNoticeExactAckMessageAndDelivery(t, fixture.directNoticeFixture)
 	before := directNoticeExactAckEffects(t, fixture.directNoticeFixture)
-	base := fixture.m.data
+	base := fixture.m.Data
 	fault := &directNoticeExactAckAuthorityFirstData{
 		inner: base,
 		transformDirectoryEpoch: func(epoch model.DirectoryEpoch) model.DirectoryEpoch {
@@ -2931,7 +2931,7 @@ func TestDirectNoticeExactAckRejectsLockedDirectoryEpochDrift(t *testing.T) {
 		},
 	}
 	observer := &directNoticeMutateObserverData{inner: fault}
-	fixture.m.data = observer
+	fixture.m.Data = observer
 	result, err := fixture.m.acknowledgeDirectNoticeDeliveryWithAuthority(
 		ctx,
 		fixture.scope,
@@ -2939,7 +2939,7 @@ func TestDirectNoticeExactAckRejectsLockedDirectoryEpochDrift(t *testing.T) {
 		fixture.published.DeliveryID,
 		directNoticeExactAckCommand(delivery.Version, model.NewID()),
 	)
-	fixture.m.data = base
+	fixture.m.Data = base
 	assertDirectNoticeAckUnknownOnly(t, err)
 	if result != (DirectNoticeDeliveryAckResult{}) || observer.views.Load() != 1 ||
 		observer.mutates.Load() != 1 || fault.authorityLocks.Load() != 1 ||
@@ -3002,7 +3002,7 @@ func TestDirectNoticeExactAckRollsBackEveryWriteFailure(t *testing.T) {
 			}
 			command := directNoticeExactAckCommand(delivery.Version, model.NewID())
 			before := directNoticeExactAckEffects(t, fixture.directNoticeFixture)
-			base := fixture.m.data
+			base := fixture.m.Data
 			failure := errors.New("injected exact Ack " + test.name + " failure")
 			var faultData api.ModuleData
 			if test.audit {
@@ -3013,7 +3013,7 @@ func TestDirectNoticeExactAckRollsBackEveryWriteFailure(t *testing.T) {
 				}
 			}
 			observer := &directNoticeMutateObserverData{inner: faultData}
-			fixture.m.data = observer
+			fixture.m.Data = observer
 			result, err := fixture.m.acknowledgeDirectNoticeDeliveryWithAuthority(
 				ctx,
 				fixture.scope,
@@ -3021,7 +3021,7 @@ func TestDirectNoticeExactAckRollsBackEveryWriteFailure(t *testing.T) {
 				fixture.published.DeliveryID,
 				command,
 			)
-			fixture.m.data = base
+			fixture.m.Data = base
 			if !errors.Is(err, failure) || result != (DirectNoticeDeliveryAckResult{}) ||
 				observer.views.Load() != 1 || observer.mutates.Load() != 1 {
 				t.Fatalf(
@@ -3071,7 +3071,7 @@ func TestDirectNoticeExactAckDefersScheduledTerminalUntilFinalAuthoritySample(t 
 			if atBoundary {
 				final = freshUntil
 			}
-			base := fixture.m.data
+			base := fixture.m.Data
 			clock := &directNoticeExactSequencedClockData{
 				inner: base, refresh: model.NewTimestamp(refresh), final: model.NewTimestamp(final),
 			}
@@ -3088,7 +3088,7 @@ func TestDirectNoticeExactAckDefersScheduledTerminalUntilFinalAuthoritySample(t 
 				},
 			}
 			observer := &directNoticeMutateObserverData{inner: fault}
-			fixture.m.data = observer
+			fixture.m.Data = observer
 			result, err := fixture.m.acknowledgeDirectNoticeDeliveryWithAuthority(
 				ctx,
 				fixture.scope,
@@ -3096,7 +3096,7 @@ func TestDirectNoticeExactAckDefersScheduledTerminalUntilFinalAuthoritySample(t 
 				fixture.published.DeliveryID,
 				directNoticeExactAckCommand(delivery.Version, model.NewID()),
 			)
-			fixture.m.data = base
+			fixture.m.Data = base
 			if result != (DirectNoticeDeliveryAckResult{}) {
 				t.Fatalf("scheduled exact Ack returned result at %s: %+v", name, result)
 			}
@@ -3148,12 +3148,12 @@ func TestDirectNoticeExactAckNarrowsTimelyCommitToDeliveryDeadline(t *testing.T)
 			if atBoundary {
 				final = *delivery.AckDueAt
 			}
-			base := fixture.m.data
+			base := fixture.m.Data
 			clock := &directNoticeFinalExpiryData{
 				inner: base, final: model.NewTimestamp(final),
 			}
 			observer := &directNoticeMutateObserverData{inner: clock}
-			fixture.m.data = observer
+			fixture.m.Data = observer
 			result, err := fixture.m.acknowledgeDirectNoticeDeliveryWithAuthority(
 				ctx,
 				fixture.scope,
@@ -3161,7 +3161,7 @@ func TestDirectNoticeExactAckNarrowsTimelyCommitToDeliveryDeadline(t *testing.T)
 				fixture.published.DeliveryID,
 				directNoticeExactAckCommand(delivery.Version, model.NewID()),
 			)
-			fixture.m.data = base
+			fixture.m.Data = base
 			if atBoundary {
 				assertDirectNoticeAckUnknownOnly(t, err)
 				if result != (DirectNoticeDeliveryAckResult{}) {
@@ -3215,7 +3215,7 @@ func TestDirectNoticeExactAckUsesEarliestDeliveryDeadline(t *testing.T) {
 			if atBoundary {
 				final = *delivery.AckDueAt
 			}
-			base := fixture.m.data
+			base := fixture.m.Data
 			clock := &directNoticeFinalExpiryData{
 				inner: base, final: model.NewTimestamp(final),
 			}
@@ -3238,7 +3238,7 @@ func TestDirectNoticeExactAckUsesEarliestDeliveryDeadline(t *testing.T) {
 				},
 			}
 			observer := &directNoticeMutateObserverData{inner: fault}
-			fixture.m.data = observer
+			fixture.m.Data = observer
 			result, err := fixture.m.acknowledgeDirectNoticeDeliveryWithAuthority(
 				ctx,
 				fixture.scope,
@@ -3246,7 +3246,7 @@ func TestDirectNoticeExactAckUsesEarliestDeliveryDeadline(t *testing.T) {
 				fixture.published.DeliveryID,
 				directNoticeExactAckCommand(delivery.Version, model.NewID()),
 			)
-			fixture.m.data = base
+			fixture.m.Data = base
 			if atBoundary {
 				assertDirectNoticeAckUnknownOnly(t, err)
 				if result != (DirectNoticeDeliveryAckResult{}) {
@@ -3304,7 +3304,7 @@ func TestDirectNoticeExactAckNarrowsOptionalCommitToExpiryDeadline(t *testing.T)
 			if atBoundary {
 				final = expiresAt
 			}
-			base := fixture.m.data
+			base := fixture.m.Data
 			clock := &directNoticeFinalExpiryData{
 				inner: base, final: model.NewTimestamp(final),
 			}
@@ -3328,7 +3328,7 @@ func TestDirectNoticeExactAckNarrowsOptionalCommitToExpiryDeadline(t *testing.T)
 				},
 			}
 			observer := &directNoticeMutateObserverData{inner: fault}
-			fixture.m.data = observer
+			fixture.m.Data = observer
 			result, err := fixture.m.acknowledgeDirectNoticeDeliveryWithAuthority(
 				ctx,
 				fixture.scope,
@@ -3336,7 +3336,7 @@ func TestDirectNoticeExactAckNarrowsOptionalCommitToExpiryDeadline(t *testing.T)
 				fixture.published.DeliveryID,
 				directNoticeExactAckCommand(delivery.Version, model.NewID()),
 			)
-			fixture.m.data = base
+			fixture.m.Data = base
 			if atBoundary {
 				assertDirectNoticeAckUnknownOnly(t, err)
 				if result != (DirectNoticeDeliveryAckResult{}) {
@@ -3377,7 +3377,7 @@ func TestDirectNoticeExactAckRejectsExpiredCarrierBeforeItsDeadline(t *testing.T
 		t.Fatalf("expired-carrier fixture AckDueAt = %v, want future", delivery.AckDueAt)
 	}
 	before := directNoticeExactAckEffects(t, fixture.directNoticeFixture)
-	base := fixture.m.data
+	base := fixture.m.Data
 	fault := &directNoticeExactAckAuthorityFirstData{
 		inner: base,
 		transformRecord: func(kind model.Kind, record model.Record) model.Record {
@@ -3388,7 +3388,7 @@ func TestDirectNoticeExactAckRejectsExpiredCarrierBeforeItsDeadline(t *testing.T
 		},
 	}
 	observer := &directNoticeMutateObserverData{inner: fault}
-	fixture.m.data = observer
+	fixture.m.Data = observer
 	result, err := fixture.m.acknowledgeDirectNoticeDeliveryWithAuthority(
 		ctx,
 		fixture.scope,
@@ -3396,7 +3396,7 @@ func TestDirectNoticeExactAckRejectsExpiredCarrierBeforeItsDeadline(t *testing.T
 		fixture.published.DeliveryID,
 		directNoticeExactAckCommand(delivery.Version, model.NewID()),
 	)
-	fixture.m.data = base
+	fixture.m.Data = base
 	assertDirectNoticeAckUnknownOnly(t, err)
 	if result != (DirectNoticeDeliveryAckResult{}) || observer.views.Load() != 1 ||
 		observer.mutates.Load() != 1 || fault.authorityLocks.Load() != 1 ||
@@ -3449,7 +3449,7 @@ func TestDirectNoticeExactAckRejectsRetractedDeliveryBeforeMessageTerminal(t *te
 		t.Fatalf("encode retracted pre-terminal Delivery: %v", err)
 	}
 	before := directNoticeExactAckEffects(t, fixture.directNoticeFixture)
-	base := fixture.m.data
+	base := fixture.m.Data
 	fault := &directNoticeExactAckAuthorityFirstData{
 		inner: base,
 		transformRecord: func(kind model.Kind, record model.Record) model.Record {
@@ -3460,7 +3460,7 @@ func TestDirectNoticeExactAckRejectsRetractedDeliveryBeforeMessageTerminal(t *te
 		},
 	}
 	observer := &directNoticeMutateObserverData{inner: fault}
-	fixture.m.data = observer
+	fixture.m.Data = observer
 	result, err := fixture.m.acknowledgeDirectNoticeDeliveryWithAuthority(
 		ctx,
 		fixture.scope,
@@ -3470,7 +3470,7 @@ func TestDirectNoticeExactAckRejectsRetractedDeliveryBeforeMessageTerminal(t *te
 		// without it, this malformed locked lineage would leak VersionMismatch.
 		directNoticeExactAckCommand(delivery.Version+1, model.NewID()),
 	)
-	fixture.m.data = base
+	fixture.m.Data = base
 	assertDirectNoticeAckUnknownOnly(t, err)
 	if result != (DirectNoticeDeliveryAckResult{}) || observer.views.Load() != 1 ||
 		observer.mutates.Load() != 1 || fault.authorityLocks.Load() != 1 ||
@@ -3515,7 +3515,7 @@ func TestDirectNoticeExactAckUndeliverableRequiresExactCurrentTombstone(t *testi
 				observedWitness.TombstoneID = model.NewID()
 			}
 			before := directNoticeExactAckEffects(t, fixture.directNoticeFixture)
-			base := fixture.m.data
+			base := fixture.m.Data
 			fault := &directNoticeExactAckAuthorityFirstData{
 				inner: base,
 				transformRecord: func(kind model.Kind, record model.Record) model.Record {
@@ -3529,7 +3529,7 @@ func TestDirectNoticeExactAckUndeliverableRequiresExactCurrentTombstone(t *testi
 				tombstoneFound:    test.found,
 			}
 			observer := &directNoticeMutateObserverData{inner: fault}
-			fixture.m.data = observer
+			fixture.m.Data = observer
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 			defer cancel()
 			result, err := fixture.m.acknowledgeDirectNoticeDeliveryWithAuthority(
@@ -3539,7 +3539,7 @@ func TestDirectNoticeExactAckUndeliverableRequiresExactCurrentTombstone(t *testi
 				fixture.published.DeliveryID,
 				directNoticeExactAckCommand(plan.After.Version, model.NewID()),
 			)
-			fixture.m.data = base
+			fixture.m.Data = base
 			if result != (DirectNoticeDeliveryAckResult{}) {
 				t.Fatalf("%s undeliverable exact Ack returned %+v", test.name, result)
 			}
@@ -3606,7 +3606,7 @@ func TestDirectNoticeExactAckReplayRejectsLockedMessageCASSkew(t *testing.T) {
 				t.Fatalf("seed exact Ack replay CAS skew: %v", err)
 			}
 			before := directNoticeExactAckEffects(t, fixture.directNoticeFixture)
-			base := fixture.m.data
+			base := fixture.m.Data
 			fault := &directNoticeExactAckAuthorityFirstData{
 				inner: base,
 				transformRecord: func(kind model.Kind, record model.Record) model.Record {
@@ -3618,7 +3618,7 @@ func TestDirectNoticeExactAckReplayRejectsLockedMessageCASSkew(t *testing.T) {
 				},
 			}
 			observer := &directNoticeMutateObserverData{inner: fault}
-			fixture.m.data = observer
+			fixture.m.Data = observer
 			result, err := fixture.m.acknowledgeDirectNoticeDeliveryWithAuthority(
 				ctx,
 				fixture.scope,
@@ -3626,7 +3626,7 @@ func TestDirectNoticeExactAckReplayRejectsLockedMessageCASSkew(t *testing.T) {
 				fixture.published.DeliveryID,
 				command,
 			)
-			fixture.m.data = base
+			fixture.m.Data = base
 			assertDirectNoticeAckUnknownOnly(t, err)
 			if result != (DirectNoticeDeliveryAckResult{}) ||
 				observer.views.Load() != 1 || observer.mutates.Load() != 1 ||
@@ -3703,8 +3703,8 @@ func TestDirectNoticeExactAckBindingFailuresDoNotOpenCommunicationData(t *testin
 			_, delivery := directNoticeExactAckMessageAndDelivery(
 				t, fixture.directNoticeFixture,
 			)
-			observer := &directNoticeMutateObserverData{inner: fixture.m.data}
-			fixture.m.data = observer
+			observer := &directNoticeMutateObserverData{inner: fixture.m.Data}
+			fixture.m.Data = observer
 			ctx := context.Background()
 			if !test.noDeadline {
 				var cancel context.CancelFunc

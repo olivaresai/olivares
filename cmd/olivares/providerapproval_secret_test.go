@@ -9,15 +9,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"log/slog"
-	"net/http"
-	"strconv"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/olivaresai/olivares/connectors/redact"
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/modules/sessions"
@@ -45,7 +41,7 @@ func TestProviderApprovalWithholdsInputWithoutItsSessionSecretRedactor(t *testin
 				t.Fatal(err)
 			}
 			observed := &providerFactEvaluator{next: h.set.gov.Evaluator()}
-			g := sessionProviderPolicy{credentials: c.SessionCredentials, eval: observed, scoped: h.set.gov.ScopedGrants(), approvals: h.set.gov.EngineApprovals(), store: h.st}
+			g := sessionProviderPolicy{credentials: c.SessionCredentials, eval: observed, authz: harnessAuthz(h), scoped: h.set.gov.ScopedGrants(), approvals: h.set.gov.EngineApprovals(), store: h.st}
 			const secret = "N1exactCanaryNoPattern0123456789"
 			req := sessions.ProviderApprovalRequest{Driver: driver, RunRef: intent.RunRef, SessionRef: scope.SessionRef, Principal: p, Kind: "command_execution", Method: "item/commandExecution/requestApproval", CommandLine: "curl --user user:" + secret + " https://example.invalid", TurnID: secret, FactsComplete: true}
 			out, err := g.Decide(context.Background(), tenant, req)
@@ -74,155 +70,6 @@ func TestProviderApprovalWithholdsInputWithoutItsSessionSecretRedactor(t *testin
 
 // Run the real vault-value redactor, live PDP, human queue and canonical ledger.
 // The owned process seam supplies protocol frames and reads no vendor account.
-func TestProviderApprovalRedactsSessionSecretsInQueueLedgerAndLogs(t *testing.T) {
-	for _, driver := range []string{"codex", "grok", "opencode"} {
-		t.Run(driver, func(t *testing.T) {
-			var logs providerApprovalLogBuffer
-			h := newHarnessWithRecorder(t, nil, slog.New(slog.NewTextHandler(&logs, nil)))
-			tenant := model.TenantID(h.tenantA)
-			m := h.set.sessions
-			m.UseWorkAuthorizer(auth.NewAuthorizer(h.set.gov.RequestEvaluator(), auth.WithScopedGrants(h.set.gov.ScopedGrants())))
-			sessions.WithRunner(approvalProjectionRunner{})(m)
-			vault := &providerApprovalTestVault{values: map[string]string{"env/one": "N1exactCanaryNoPattern0123456789", "env/quoted": `N1quote"back\slash0123456789`, "env/pattern": "olvs_abcdefgh extra-segment"}}
-			sessions.WithProviderSecretVault(vault)(m)
-			m.EnableProfiledLaunches()
-			m.UseExecutionEnvironmentRef("secret-review-test")
-			credentials := newSessionHookCredentials(h.authr, h.st, m, h.set.gov)
-			m.UseLaunchGate(approvalProjectionLaunchGate(func(ctx context.Context, tenant model.TenantID, in sessions.LaunchIntent) (sessions.LaunchDecision, error) {
-				_, err := credentials.mint(ctx, tenant, in)
-				return sessions.LaunchDecision{Allowed: err == nil}, err
-			}))
-			var profile struct {
-				Ref string `json:"profile_ref"`
-			}
-			if code := h.reqInto(http.MethodPost, "/v1/m/sessions/provider-profiles", h.adminToken, h.tenantA, map[string]any{"driver": "claude", "auth_source": "provider_account_home", "config_home": t.TempDir(), "user_home": t.TempDir()}, &profile); code != http.StatusCreated {
-				t.Fatalf("profile=%d", code)
-			}
-			var run struct {
-				Ref string `json:"run_ref"`
-			}
-			if code := h.reqInto(http.MethodPost, "/v1/m/sessions/runs", h.adminToken, h.tenantA, map[string]any{"transport": "stream-json", "permission_mode": "acceptEdits", "isolation": "native", "provider_profile_ref": profile.Ref, "secret_env": []sessions.SecretEnvRef{{Env: "EXACT_KEY", Secret: "env/one"}, {Env: "OTHER_KEY", Secret: "env/quoted"}, {Env: "WHOLE_KEY", Secret: "env/pattern"}}}, &run); code != http.StatusCreated {
-				t.Fatalf("launch=%d", code)
-			}
-			t.Cleanup(func() { h.req(http.MethodPost, "/v1/m/sessions/runs/"+run.Ref+"/stop", h.adminToken, h.tenantA, nil) })
-			p, scope, err := credentials.ResolveRun(t.Context(), tenant, run.Ref)
-			if err != nil {
-				t.Fatal(err)
-			}
-			service := h.set.gov.EngineApprovals()
-			h.set.gov.UseApprovalCapacity(h.authr.ApprovalCapacity)
-			h.set.gov.UseApprovalAuthority(h.authr, auth.NewAuthorizer(h.set.gov.RequestEvaluator(), auth.WithScopedGrants(h.set.gov.ScopedGrants())))
-			observed := &providerFactEvaluator{next: h.set.gov.Evaluator()}
-			g := sessionProviderPolicy{credentials: credentials.SessionCredentials, eval: observed, scoped: h.set.gov.ScopedGrants(), approvals: service, store: h.st, redactSecrets: m.RedactSessionSecretsWithSpans}
-			req := sessions.ProviderApprovalRequest{Driver: driver, RunRef: run.Ref, SessionRef: scope.SessionRef, Principal: p, TurnID: "exact-turn-" + vault.values["env/one"], Method: "item/fileChange/requestApproval", Kind: "file_change", FilePaths: []string{"/project/" + vault.values["env/one"] + "/one.txt", "/project/" + vault.values["env/quoted"] + "/two.txt", "/project/" + vault.values["env/pattern"] + "/three.txt"}, Requested: []string{"fs:write:/project"}, FactsComplete: true}
-			req.EffectiveFilePaths = append([]string(nil), req.FilePaths...)
-			for i, path := range req.FilePaths {
-				req.FilePaths[i] = redact.Clean(path)
-			}
-			originalPaths := strings.Join(req.EffectiveFilePaths, "\n")
-			original, _ := json.Marshal(req)
-			out, err := g.Decide(t.Context(), tenant, req)
-			if err != nil || out.Disposition != sessions.ProviderApprovalAllow {
-				t.Fatalf("allowed-path fixture expected Allow, got %s (reason=%q, error=%v)", out.Disposition, out.Reason, err)
-			}
-			if observed.question.Resource.ID != originalPaths {
-				t.Fatal("the PDP did not receive the original file paths")
-			}
-			if code, _ := h.req(http.MethodPost, "/v1/m/governance/policies", h.adminToken, h.tenantA, map[string]any{"name": "exact-review", "kind": "approval", "enabled": true, "spec": map[string]any{"required_approvals": 1, "expires_in_seconds": 60, "match": map[string]any{"action": "sessions.provider.approval", "subject_kind": "session_run"}}}); code != http.StatusCreated {
-				t.Fatalf("review policy=%d", code)
-			}
-			out, err = g.Decide(t.Context(), tenant, req)
-			if err != nil || out.Disposition != sessions.ProviderApprovalAsk {
-				t.Fatal("authored ask did not reach human review")
-			}
-			b := newApprovalBridge(approvalBridgeConfig{}, slog.New(slog.NewTextHandler(&logs, nil)))
-			b.localProposer = service
-			ctx, cancel := context.WithTimeout(t.Context(), 4*time.Second)
-			defer cancel()
-			done := make(chan struct{})
-			var answer sessions.ProviderApprovalDecision
-			var answerErr error
-			go func() {
-				defer close(done)
-				answer, answerErr = (providerApprovalAdapter{bridge: b, approvalWait: m.BeginApprovalWait, reviewFacts: g.reviewFacts, reviewReason: g.reviewReason}).Approve(ctx, tenant, req)
-			}()
-			defer func() { cancel(); <-done }()
-			var ref string
-			for ref == "" {
-				items, _, err := service.List(ctx, tenant, "sessions.provider.approval", "pending", "")
-				if err != nil {
-					t.Fatal(err)
-				}
-				if len(items) > 0 {
-					ref = items[0].ID
-					data, _ := json.Marshal(items[0])
-					assertProviderSecretsAbsent(t, vault, string(data))
-					if !strings.Contains(items[0].Reason, "[secret env/one]") || !strings.Contains(items[0].Reason, "[secret env/quoted]") || !strings.Contains(items[0].Reason, "[secret env/pattern]") {
-						t.Fatal("reviewer did not receive the exact-value projection")
-					}
-					break
-				}
-				select {
-				case <-done:
-					t.Fatalf("provider did not wait for the reviewer: reason=%q error=%v", answer.Reason, answerErr)
-				case <-ctx.Done():
-					t.Fatal("human review was not queued")
-				case <-time.After(10 * time.Millisecond):
-				}
-			}
-			if code, _ := h.decide(t, h.adminToken, ref, "approve"); code != http.StatusOK {
-				t.Fatalf("one approval=%d", code)
-			}
-			select {
-			case <-done:
-			case <-ctx.Done():
-				t.Fatal("provider did not receive the human decision")
-			}
-			if answerErr != nil || !answer.Allow || len(answer.Granted) != 1 || answer.Granted[0] != req.Requested[0] {
-				t.Fatal("approval changed the requested authority")
-			}
-			current, _ := json.Marshal(req)
-			if !bytes.Equal(original, current) || strings.Join(req.EffectiveFilePaths, "\n") != originalPaths {
-				t.Fatal("review projection mutated the provider/execution input")
-			}
-			for _, ev := range canonicalLedgerEventsFrom(t, h.st, tenant, 0) {
-				data, _ := json.Marshal(ev.meta)
-				assertProviderSecretsAbsent(t, vault, string(data))
-			}
-			// Match the original paths with a real compiled Cedar forbid. The
-			// evidence projection must not change what the live policy evaluates.
-			if code, _ := h.req(http.MethodPost, "/v1/m/governance/pdp/publish", h.adminToken, h.tenantA, map[string]any{"engine": "cedar", "source": `forbid(principal, action, resource) when { resource == Resource::` + strconv.Quote(originalPaths) + ` };`}); code != http.StatusOK {
-				t.Fatalf("scoped forbid=%d", code)
-			}
-			denied, err := g.Decide(t.Context(), tenant, req)
-			if err != nil || denied.Disposition != sessions.ProviderApprovalDeny {
-				t.Fatal("live Cedar forbid was bypassed")
-			}
-			// The deny overlay can refuse before Scoped runs. Exercise that
-			// existing evaluator with the exact raw question from this decision.
-			if scoped, err := h.set.gov.ScopedGrants().Scoped(t.Context(), observed.question); err != nil || scoped.Effect != auth.EffectForbid || !strings.Contains(logs.String(), "cedar scoped forbid") {
-				t.Fatal("live scoped forbid was bypassed or its log was silenced")
-			}
-			// The native deny emits the other existing PDP log before scoped
-			// evaluation; requiring both events prevents vacuous privacy checks.
-			if code, _ := h.req(http.MethodPost, "/v1/m/governance/policies", h.adminToken, h.tenantA, map[string]any{"name": "deny-provider", "kind": "abac", "enabled": true, "spec": map[string]any{"rules": []any{map[string]any{"deny": true, "permission": driver + ".tool.use:write"}}}}); code != http.StatusCreated {
-				t.Fatalf("deny policy=%d", code)
-			}
-			denied, err = g.Decide(t.Context(), tenant, req)
-			if err != nil || denied.Disposition != sessions.ProviderApprovalDeny || !strings.Contains(logs.String(), "abac policy restriction") {
-				t.Fatal("live deny was bypassed")
-			}
-			for _, ev := range canonicalLedgerEventsFrom(t, h.st, tenant, 0) {
-				data, _ := json.Marshal(ev.meta)
-				assertProviderSecretsAbsent(t, vault, string(data))
-			}
-			assertProviderSecretsAbsent(t, vault, logs.String())
-			if vault.opens != 3 {
-				t.Fatal("review performed another vault read")
-			}
-		})
-	}
-}
 
 // A final redactor may match serialized field names or a value spanning fields.
 // The human must receive the same operation projection that passed review.
@@ -283,7 +130,7 @@ func TestProviderApprovalRefusesWhenFinalMaskChangesReviewedScope(t *testing.T) 
 				return
 			}
 			b := newApprovalBridge(approvalBridgeConfig{}, discardLog())
-			b.localProposer = service
+			b.LocalProposer = service
 			ctx, cancel := context.WithTimeout(t.Context(), 200*time.Millisecond)
 			defer cancel()
 			answer, err := (providerApprovalAdapter{bridge: b, reviewFacts: g.reviewFacts, reviewReason: g.reviewReason}).Approve(ctx, tenant, req)

@@ -22,7 +22,7 @@ DOC="${OLIVARES_ALC01S4_DOC:-design/ALC-01-S4-INBOUND-UNGATED-2026-08-20.md}"
 grep -q 'Inbound stays open' "$DOC" || fail "$DOC lost inbound-open"
 grep -q 'HOLD on the motor' "$DOC" || fail "$DOC lost HOLD on the motor"
 if grep -qiE 'inbound SCIM gated|managed SCIM shipped|ALC-01 complete' "$DOC"; then
-	fail "$DOC claims a close this lote does not have"
+	fail "$DOC claims a close this batch does not have"
 fi
 
 python3 - "$JSON" <<'PY' || fail "JSON flags drifted"

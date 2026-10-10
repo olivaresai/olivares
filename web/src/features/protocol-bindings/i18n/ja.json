@@ -62,10 +62,10 @@
   },
   "outcome": {
     "unknownTitle": "状態は確認されていません",
-    "unknownBody": "コントロールプレーンは観測を完了できませんでした。判断前に証拠を再取得してください。",
+    "unknownBody": "観測を完了できませんでした。判断前に証拠を更新してください。",
     "brokenTitle": "The requested condition was not met",
     "brokenBody": "Review the reported code and plan before continuing.",
-    "replayed": "The control plane replayed the already committed result; it did not apply a second change."
+    "replayed": "確定済みの結果を返しました。2 回目の変更は適用されていません。"
   },
   "composer": {
     "title": "Compose protocol binding draft",

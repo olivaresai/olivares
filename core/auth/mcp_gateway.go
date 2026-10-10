@@ -15,6 +15,7 @@ import (
 	"net/url"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -77,6 +78,8 @@ type MCPGatewayProbe struct {
 
 // Input contains references and public trust anchors only. Discovery is an
 // observation; AllowedTools is a separate administrator-authored policy.
+// EgressHosts confines a command server's network to these HTTPS hosts (host or
+// host:port); empty keeps the network of the launch the command runs next to.
 type MCPGatewayServerInput struct {
 	Name          string                 `json:"name"`
 	Transport     string                 `json:"transport"`
@@ -87,6 +90,7 @@ type MCPGatewayServerInput struct {
 	EnvSecretRefs map[string]string      `json:"env_secret_refs,omitempty"`
 	CredentialRef string                 `json:"credential_ref,omitempty"`
 	EgressCIDRs   []string               `json:"egress_cidrs"`
+	EgressHosts   []string               `json:"egress_hosts,omitempty"`
 	Trust         MCPGatewayTrust        `json:"trust"`
 	AllowedTools  []MCPGatewayToolPolicy `json:"allowed_tools"`
 	Enabled       bool                   `json:"enabled"`
@@ -282,7 +286,8 @@ func (s *MCPGatewayStore) PutServer(ctx context.Context, actor Principal, tenant
 			// connection observation. A new destination cannot inherit approval.
 			changed := old.Transport != in.Transport || old.URL != in.URL || old.Command != in.Command ||
 				!slices.Equal(old.Args, in.Args) || !maps.Equal(old.Env, in.Env) ||
-				!maps.Equal(old.EnvSecretRefs, in.EnvSecretRefs) || old.CredentialRef != in.CredentialRef || !slices.Equal(old.EgressCIDRs, in.EgressCIDRs)
+				!maps.Equal(old.EnvSecretRefs, in.EnvSecretRefs) || old.CredentialRef != in.CredentialRef || !slices.Equal(old.EgressCIDRs, in.EgressCIDRs) ||
+				!slices.Equal(old.EgressHosts, in.EgressHosts)
 			if changed {
 				old.Probe = MCPGatewayProbe{State: "never_tested", Tools: []MCPGatewayTool{}}
 			}
@@ -395,7 +400,7 @@ func validateMCPGatewayServer(in MCPGatewayServerInput) error {
 	}
 	switch in.Transport {
 	case "streamable_http":
-		if !mcpPublicURL(in.URL) || in.Command != "" || len(in.Args)+len(in.Env)+len(in.EnvSecretRefs) != 0 {
+		if !mcpPublicURL(in.URL) || in.Command != "" || len(in.Args)+len(in.Env)+len(in.EnvSecretRefs)+len(in.EgressHosts) != 0 {
 			return bad("provide an HTTPS URL without credentials, query or fragment")
 		}
 	case "stdio":
@@ -434,6 +439,16 @@ func validateMCPGatewayServer(in MCPGatewayServerInput) error {
 	if len(in.EgressCIDRs) > 16 {
 		return bad("at most 16 explicit address grants")
 	}
+	if len(in.EgressHosts) > 16 {
+		return bad("at most 16 egress hosts")
+	}
+	hosts := map[string]bool{}
+	for _, host := range in.EgressHosts {
+		if !mcpEgressHost(host) || hosts[host] {
+			return bad("egress hosts must be unique lowercase HTTPS hosts, host or host:port")
+		}
+		hosts[host] = true
+	}
 	for _, cidr := range in.EgressCIDRs {
 		_, network, err := net.ParseCIDR(cidr)
 		if err != nil || network.String() != cidr {
@@ -471,6 +486,22 @@ func mcpPublicURL(raw string) bool {
 	u, err := url.Parse(raw)
 	_, destinationErr := egress.ParseDestination(raw)
 	return destinationErr == nil && strings.TrimSpace(raw) == raw && err == nil && u.Scheme == "https" && u.Hostname() != "" && u.User == nil && u.RawQuery == "" && u.Fragment == "" && !secret.ContainsInlineCredential(raw) && len(raw) <= 2048
+}
+
+// mcpEgressHost accepts the authority of an HTTPS URL in canonical form only,
+// so the stored grant is exactly what the egress proxy admits. The proxy admits
+// public addresses only; a loopback, private or local name is refused here.
+func mcpEgressHost(host string) bool {
+	u, err := url.Parse("https://" + host)
+	if err != nil || u.Host != host || u.User != nil || u.Path != "" || u.RawQuery != "" || u.Fragment != "" || strings.ContainsAny(host, "*%\\") || strings.HasSuffix(host, ":") {
+		return false
+	}
+	destination, err := egress.ParseDestination(u.String())
+	if err != nil || destination.Host != u.Hostname() || destination.Host == "localhost" || strings.HasSuffix(destination.Host, ".localhost") ||
+		(destination.IP != nil && egress.ReservedAddress(destination.IP)) {
+		return false
+	}
+	return u.Port() == "" || u.Port() == strconv.Itoa(destination.Port) && u.Port() != "443"
 }
 
 func mcpPublicJWKS(object map[string]any) bool {

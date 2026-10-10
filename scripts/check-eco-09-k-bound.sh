@@ -25,7 +25,7 @@ DRILL="${OLIVARES_ECO09_DRILL:-design/COMMERCE-FASE2-COST-DRILL-2026-08-01.md}"
 
 grep -q 'NOT BOUNDED' "$DOC" || fail "$DOC lost NOT BOUNDED"
 if grep -qiE 'K closed|K is [0-9]|bounded_attack_cost is [0-9]' "$DOC"; then
-	fail "$DOC claims a K this lote does not have"
+	fail "$DOC claims a K this batch does not have"
 fi
 grep -q 'bounded_attack_cost: UNKNOWN' "$CANON" || fail "canon lost bounded_attack_cost UNKNOWN"
 grep -q '604,6' "$DRILL" || fail "drill lost the export bytes/event"

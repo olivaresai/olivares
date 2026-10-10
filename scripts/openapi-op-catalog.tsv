@@ -24,9 +24,11 @@ DELETE	/v1/m/compliance/depth/us-law/{id}	Deletes one stored US state law pack b
 DELETE	/v1/m/compliance/nis2/incidents/{id}	Deletes one classified NIS2 incident by id.
 DELETE	/v1/m/deploy/definitions/{id}	Deletes one deployment definition by id, and refuses while a live deployment still uses it.
 DELETE	/v1/m/finops/budgets/{id}	Deletes one budget by id; a policy of any other kind is refused.
-DELETE	/v1/m/finops/cost-centers/{id}	Deletes one cost center by id together with the mappings attached to it.
-DELETE	/v1/m/finops/cost-centers/{id}/mappings/{mid}	Deletes one cost-center mapping by its own id.
+DELETE	/v1/m/finops/cost-centers/{id}	Returns HTTP 501 because FinOps is a Business feature; no FinOps action is performed.
+DELETE	/v1/m/finops/cost-centers/{id}/mappings/{mid}	Returns HTTP 501 because FinOps is a Business feature; no FinOps action is performed.
+DELETE	/v1/m/finops/model-rates/{id}	Returns HTTP 501 because FinOps is a Business feature; no FinOps action is performed.
 DELETE	/v1/m/governance/rbac/grants/{id}	Revokes one scoped RBAC grant by id.
+DELETE	/v1/m/governance/rbac/inheritance-filters/{id}	Removes one inheritance filter by id. Only an admin of the filter's node may remove it.
 DELETE	/v1/m/governance/rbac/permission-groups/{name}	Deletes one permission group by name; the caller must be a tenant admin.
 DELETE	/v1/m/governance/rbac/roles/{name}	Deletes one custom role by name; the caller must be a tenant admin.
 DELETE	/v1/m/knowledge/data-products/{id}	Deletes one data product by id.
@@ -90,23 +92,34 @@ GET	/v1/m/compliance/risk	Lists the recorded risk entries, optionally filtered b
 GET	/v1/m/eventing/dead-letters	Lists the deliveries that ended in the dead-letter queue, narrowed to the event types the caller is authorized for.
 GET	/v1/m/eventing/egress-policy/compat	Reports the destinations that only a legacy exception still permits under the tenant egress policy.
 GET	/v1/m/finops/alerts	Lists the budget alerts, optionally filtered by budget_id.
+GET	/v1/m/finops/analytics/team-summary	Returns HTTP 501 because FinOps is a Business feature; no FinOps action is performed.
 GET	/v1/m/finops/budgets	Lists the budgets defined for the tenant.
 GET	/v1/m/finops/budgets/{id}	Returns one budget by id; a policy of any other kind reads as absent.
 GET	/v1/m/finops/budgets/{id}/status	Returns the live consumption of one budget against its limit.
-GET	/v1/m/finops/cost-centers	Lists the cost centers, optionally filtered by status.
-GET	/v1/m/finops/cost-centers/{id}	Returns one cost center with its full detail.
-GET	/v1/m/finops/cost-centers/{id}/mappings	Lists the mappings that attribute spend to one cost center.
-GET	/v1/m/finops/forecast	Forecasts spend for a period (monthly by default), optionally over a window of days and broken down by a dimension.
-GET	/v1/m/finops/recommendations	Returns the cost optimization recommendations derived from the tenant recorded spend.
-GET	/v1/m/finops/spend	Returns spend aggregated by a dimension (model by default) over an optional RFC3339 since/until window.
-GET	/v1/m/finops/spend/allocation	Returns spend allocated to its attribution dimensions over an optional RFC3339 since/until window.
-GET	/v1/m/finops/spend/reconciliation	Reconciles metered spend against the ingested provider cost over an optional RFC3339 since/until window.
-GET	/v1/m/finops/spend/summary	Summarizes spend over an optional RFC3339 since/until window.
-GET	/v1/m/finops/spend/trend	Returns the per-day spend series over an optional RFC3339 since/until window.
-GET	/v1/m/finops/spend/unified	Returns spend across every metered surface in one view, over an optional RFC3339 since/until window.
-GET	/v1/m/finops/statements	Lists the chargeback statements, newest period first, optionally filtered by cost center, period and status.
-GET	/v1/m/finops/statements/{id}	Returns one chargeback statement with its full detail.
-GET	/v1/m/finops/statements/{id}/export	Exports one chargeback statement together with its line items.
+GET	/v1/m/finops/comparison	Returns HTTP 501 because FinOps is a Business feature; no FinOps action is performed.
+GET	/v1/m/finops/cost-centers	Returns HTTP 501 because FinOps is a Business feature; no FinOps action is performed.
+GET	/v1/m/finops/cost-centers/{id}	Returns HTTP 501 because FinOps is a Business feature; no FinOps action is performed.
+GET	/v1/m/finops/cost-centers/{id}/mappings	Returns HTTP 501 because FinOps is a Business feature; no FinOps action is performed.
+GET	/v1/m/finops/forecast	Returns HTTP 501 because FinOps is a Business feature; no FinOps action is performed.
+GET	/v1/m/finops/model-rates	Returns HTTP 501 because FinOps is a Business feature; no FinOps action is performed.
+GET	/v1/m/finops/model-rates/{id}	Returns HTTP 501 because FinOps is a Business feature; no FinOps action is performed.
+GET	/v1/m/finops/outcomes	Returns HTTP 501 because FinOps is a Business feature; no FinOps action is performed.
+GET	/v1/m/finops/recommendations	Returns HTTP 501 because FinOps is a Business feature; no FinOps action is performed.
+GET	/v1/m/finops/seats/utilization	Returns HTTP 501 because FinOps is a Business feature; no FinOps action is performed.
+GET	/v1/m/finops/spend	Returns HTTP 501 because FinOps is a Business feature; no FinOps action is performed.
+GET	/v1/m/finops/spend/allocation	Returns HTTP 501 because FinOps is a Business feature; no FinOps action is performed.
+GET	/v1/m/finops/spend/reconciliation	Returns HTTP 501 because FinOps is a Business feature; no FinOps action is performed.
+GET	/v1/m/finops/spend/summary	Returns HTTP 501 because FinOps is a Business feature; no FinOps action is performed.
+GET	/v1/m/finops/spend/trend	Returns HTTP 501 because FinOps is a Business feature; no FinOps action is performed.
+GET	/v1/m/finops/spend/unified	Returns HTTP 501 because FinOps is a Business feature; no FinOps action is performed.
+GET	/v1/m/finops/statements	Returns HTTP 501 because FinOps is a Business feature; no FinOps action is performed.
+GET	/v1/m/finops/statements/{id}	Returns HTTP 501 because FinOps is a Business feature; no FinOps action is performed.
+GET	/v1/m/finops/statements/{id}/export	Returns HTTP 501 because FinOps is a Business feature; no FinOps action is performed.
+GET	/v1/m/finops/value	Returns HTTP 501 because FinOps is a Business feature; no FinOps action is performed.
+GET	/v1/m/finops/value/summary	Returns HTTP 501 because FinOps is a Business feature; no FinOps action is performed.
+GET	/v1/m/governance/breakglass	Returns HTTP 501 with business_required because break-glass access requires Business; no break-glass action is performed.
+GET	/v1/m/governance/breakglass/{id}	Returns HTTP 501 with business_required because break-glass access requires Business; no break-glass action is performed.
+GET	/v1/m/governance/breakglass/{id}/uses	Returns HTTP 501 with business_required because break-glass access requires Business; no break-glass action is performed.
 GET	/v1/m/governance/guardian/rules	Lists the guardian rules defined for the tenant.
 GET	/v1/m/governance/pdp/tests	Returns the authored decision tests for one policy engine (cedar or opa), at the current or a requested revision.
 GET	/v1/m/governance/pdp/versions/{revision}	Returns one authored policy revision of the engine named by the engine query parameter.
@@ -114,6 +127,8 @@ GET	/v1/m/governance/rbac/catalog	Returns the vocabulary an authoring console ne
 GET	/v1/m/governance/rbac/delegation-authority	Returns the domains within which the calling principal may delegate authority; a superadmin is answered with no domain restriction.
 GET	/v1/m/governance/rbac/grants	Lists the scoped RBAC grants of the tenant.
 GET	/v1/m/governance/rbac/grants/{id}	Returns one scoped RBAC grant by id.
+GET	/v1/m/governance/rbac/inheritance-filters	Lists the inheritance filters of the tenant.
+GET	/v1/m/governance/rbac/inheritance-filters/{id}	Returns one inheritance filter by id.
 GET	/v1/m/governance/rbac/permission-groups	Lists the permission groups defined for the tenant.
 GET	/v1/m/governance/rbac/permission-groups/{name}	Returns one permission group by name.
 GET	/v1/m/governance/rbac/roles	Lists the custom roles defined for the tenant.
@@ -142,6 +157,29 @@ GET	/v1/m/models/model-groups/{id}	Returns one model group with its full detail.
 GET	/v1/m/models/model-versions	Lists the model versions, optionally filtered by owned_ref and status.
 GET	/v1/m/models/owned-models	Lists the owned models, optionally filtered by kind and status.
 GET	/v1/m/models/owned-models/{id}	Returns one owned model with its full detail.
+GET	/v1/m/observability/traces/{id}/export	Returns HTTP 501 with observability_export_unavailable because telemetry export requires Business; no trace is exported.
+GET	/v1/m/orchestration/decisions	Returns HTTP 501 with orchestration_unavailable because orchestration is a Business capability; no orchestration action is performed.
+GET	/v1/m/orchestration/flows	Returns HTTP 501 with orchestration_unavailable because orchestration is a Business capability; no orchestration action is performed.
+GET	/v1/m/orchestration/graph	Returns HTTP 501 with orchestration_unavailable because orchestration is a Business capability; no orchestration action is performed.
+GET	/v1/m/orchestration/graph/neighbors	Returns HTTP 501 with orchestration_unavailable because orchestration is a Business capability; no orchestration action is performed.
+GET	/v1/m/orchestration/schedules	Returns HTTP 501 with orchestration_unavailable because orchestration is a Business capability; no orchestration action is performed.
+GET	/v1/m/orchestration/schedules/{id}	Returns HTTP 501 with orchestration_unavailable because orchestration is a Business capability; no orchestration action is performed.
+GET	/v1/m/orchestration/schedules/{id}/decisions	Returns HTTP 501 with orchestration_unavailable because orchestration is a Business capability; no orchestration action is performed.
+GET	/v1/m/orchestration/schedules/{id}/revisions	Returns HTTP 501 with orchestration_unavailable because orchestration is a Business capability; no orchestration action is performed.
+GET	/v1/m/orchestration/stream	Returns HTTP 501 with orchestration_unavailable because orchestration is a Business capability; no orchestration action is performed.
+GET	/v1/m/orchestration/timeline	Returns HTTP 501 with orchestration_unavailable because orchestration is a Business capability; no orchestration action is performed.
+GET	/v1/m/orchestration/workflows	Returns HTTP 501 with orchestration_unavailable because orchestration is a Business capability; no orchestration action is performed.
+GET	/v1/m/orchestration/workflows/{id}	Returns HTTP 501 with orchestration_unavailable because orchestration is a Business capability; no orchestration action is performed.
+GET	/v1/m/orchestration/workflows/{id}/revisions	Returns HTTP 501 with orchestration_unavailable because orchestration is a Business capability; no orchestration action is performed.
+GET	/v1/m/orchestration/workflows/{id}/runs	Returns HTTP 501 with orchestration_unavailable because orchestration is a Business capability; no orchestration action is performed.
+GET	/v1/m/orchestration/workflows/{id}/runs/{run}	Returns HTTP 501 with orchestration_unavailable because orchestration is a Business capability; no orchestration action is performed.
+GET	/v1/m/posture/export	Returns HTTP 501 with posture_export_unavailable because posture export requires Business; no posture is exported.
+GET	/v1/m/redteam/catalog	Returns HTTP 501 because red team is a Business feature; no red team action is performed.
+GET	/v1/m/redteam/runs	Returns HTTP 501 because red team is a Business feature; no red team action is performed.
+GET	/v1/m/redteam/runs/{id}	Returns HTTP 501 because red team is a Business feature; no red team action is performed.
+GET	/v1/m/redteam/runs/{id}/results	Returns HTTP 501 because red team is a Business feature; no red team action is performed.
+GET	/v1/m/redteam/targets	Returns HTTP 501 because red team is a Business feature; no red team action is performed.
+GET	/v1/m/redteam/targets/{id}	Returns HTTP 501 because red team is a Business feature; no red team action is performed.
 GET	/v1/m/reporting/branding	Returns the tenant report branding, and answers 501 when no branding store is wired.
 GET	/v1/m/reporting/enterprise/bundle	Builds the evidence bundle, and answers 501 when the report engine is not configured.
 GET	/v1/m/reporting/enterprise/posture	Builds the posture report, and answers 501 when the report engine is not configured.
@@ -153,6 +191,7 @@ GET	/v1/m/reporting/schedules/{id}/runs	Lists the recorded runs of one report sc
 GET	/v1/m/reporting/schedules/{id}/runs/{rid}	Returns one recorded run of a report schedule, with its artifact when the run produced one.
 GET	/v1/m/reporting/templates/{type}	Returns the tenant custom template for one report type, or 404 when none has been authored.
 GET	/v1/m/sandbox/runs/{id}/stream	Streams one sandbox run as server-sent events; a missing run answers 404 before any stream opens, and the open is recorded in the audit ledger.
+GET	/v1/m/security/cases/{id}/export	Returns HTTP 501 with audit_export_unavailable because forensic case export requires Business; no case is exported.
 GET	/v1/m/security/integrity/verify	Verifies the audit ledger integrity and returns the result; the verification is itself recorded in the ledger.
 GET	/v1/m/sessions/decisions	Lists the recorded work decisions with keyset paging, narrowed by the allowlisted filters, which combine with AND.
 GET	/v1/m/sessions/decisions/{id}	Returns one recorded work decision by id.
@@ -160,6 +199,7 @@ GET	/v1/m/sessions/leases	Lists the work leases with keyset paging, narrowed by 
 GET	/v1/m/sessions/runs	Lists the session runs newest first, optionally narrowed by state or by the provider session a run drives.
 GET	/v1/m/sessions/runs/{ref}	Returns one session run by reference.
 GET	/v1/m/sessions/runs/{ref}/events	Lists the events of one session run in sequence order.
+GET	/v1/m/sessions/runs/{ref}/git	Returns the current branch, local branches, working-tree status and write policy in the session's folder.
 GET	/v1/m/sessions/templates	Lists the session templates, optionally narrowed to built-in ones and optionally including archived ones.
 GET	/v1/m/sessions/templates/{id}	Returns one session template with its full detail.
 GET	/v1/m/sessions/work-items	Lists the work items with keyset paging, narrowed by the allowlisted filters, which combine with AND; any other query parameter is refused.
@@ -172,9 +212,11 @@ GET	/v1/m/sessions/work-stream	Streams work events as server-sent events, resumi
 GET	/v1/m/sessions/workspaces	Lists the session workspaces of the tenant.
 GET	/v1/m/sessions/workspaces/{ref}	Returns one session workspace by reference.
 GET	/v1/m/sessions/workspaces/{ref}/files	Lists the files of a workspace under an optional path prefix, with paging.
-GET	/v1/m/sessions/workspaces/{ref}/files/raw	Reads the content of one workspace file named by the path query parameter.
+GET	/v1/m/sessions/workspaces/{ref}/files/raw	Reads the content of one workspace file named by the path query parameter, or with rev=HEAD the content git HEAD holds for it.
 GET	/v1/m/sessions/workspaces/{ref}/files/stat	Returns the metadata of one workspace entry named by the path query parameter, without its content.
 GET	/v1/m/sourcescope/resources	Lists the discovered resources, optionally filtered by kind, workspace, parent or subtree; a malformed id is refused before any store read.
+PATCH	/v1/m/orchestration/schedules/{id}	Returns HTTP 501 with orchestration_unavailable because orchestration is a Business capability; no orchestration action is performed.
+PATCH	/v1/m/orchestration/workflows/{id}	Returns HTTP 501 with orchestration_unavailable because orchestration is a Business capability; no orchestration action is performed.
 PATCH	/v1/m/sessions/work-items/{id}	Updates one work item as a validate, plan or apply command.
 PATCH	/v1/m/sessions/work-items/{id}/acceptance/{criterion_id}	Updates or evaluates one acceptance criterion of a work item as a validate, plan or apply command.
 POST	/v1/m/capabilities/toolpins/approve	Approves one tool pin; the call requires an Idempotency-Key header and the version the caller expects, and answers 501 when no pin verifier is wired.
@@ -186,20 +228,30 @@ POST	/v1/m/compliance/nis2/incidents/classify	Classifies an operator incident ag
 POST	/v1/m/compliance/risk/{id}/review	Records a review of one risk entry, setting its tier to one of unacceptable, high, limited or minimal.
 POST	/v1/m/deploy/definitions/{id}/plan	Plans one deployment definition through its executor and records the resulting plan, without applying it.
 POST	/v1/m/evals/gate/{id}/override	Overrides one eval gate verdict; a written reason is required.
-POST	/v1/m/finops/budgets	Creates a budget from the posted document.
-POST	/v1/m/finops/cost-centers	Creates a cost center from the posted document, defaulting its status to active.
-POST	/v1/m/finops/cost-centers/{id}/mappings	Creates one mapping that attributes spend to a cost center.
-POST	/v1/m/finops/statements/generate	Generates the chargeback statements for one monthly or weekly period starting at the posted RFC3339 instant.
+POST	/v1/m/finops/budgets	Returns HTTP 501 because FinOps is a Business feature; no FinOps action is performed.
+POST	/v1/m/finops/cost-centers	Returns HTTP 501 because FinOps is a Business feature; no FinOps action is performed.
+POST	/v1/m/finops/cost-centers/{id}/mappings	Returns HTTP 501 because FinOps is a Business feature; no FinOps action is performed.
+POST	/v1/m/finops/model-rates	Returns HTTP 501 because FinOps is a Business feature; no FinOps action is performed.
+POST	/v1/m/finops/outcomes	Returns HTTP 501 because FinOps is a Business feature; no FinOps action is performed.
+POST	/v1/m/finops/seats	Returns HTTP 501 because FinOps is a Business feature; no FinOps action is performed.
+POST	/v1/m/finops/statements/generate	Returns HTTP 501 because FinOps is a Business feature; no FinOps action is performed.
+POST	/v1/m/gitpublish/targets/{id}/merges	Merges one pull request only while its head is still the reviewed expected_head, and returns the publication intent with the merge commit and tree it recorded.
+POST	/v1/m/gitpublish/targets/{id}/pull-requests	Opens a pull request from a branch under the target's push prefix into an allowed merge base, or adopts the matching open one, and returns the publication intent with its receipt.
+POST	/v1/m/gitpublish/targets/{id}/pushes	Pushes one exact commit to a branch under the target's push prefix, leased on the branch's expected current value, and returns the publication intent with its receipt.
 POST	/v1/m/governance/agentcore-export/apply	Applies a previously planned AgentCore export; the plan hash is required and must still reproduce.
 POST	/v1/m/governance/agentcore-export/plan	Plans an AgentCore export for the requested enforcement mode, without applying it.
 POST	/v1/m/governance/approvals/{id}/consume	Consumes one single-use approval on behalf of a named consumer; the consumer id is required and rides the immutable audit trail.
-POST	/v1/m/governance/breakglass/consume	Consumes one break-glass grant for a named action and subject; both ride the immutable use trail.
+POST	/v1/m/governance/breakglass	Returns HTTP 501 with business_required because break-glass access requires Business; no break-glass action is performed.
+POST	/v1/m/governance/breakglass/consume	Returns HTTP 501 with business_required because break-glass access requires Business; no break-glass action is performed.
+POST	/v1/m/governance/breakglass/{id}/review	Returns HTTP 501 with business_required because break-glass access requires Business; no break-glass action is performed.
+POST	/v1/m/governance/breakglass/{id}/revoke	Returns HTTP 501 with business_required because break-glass access requires Business; no break-glass action is performed.
 POST	/v1/m/governance/killswitch	Engages a stop across the estate or over one named agent scope.
 POST	/v1/m/governance/nhi/{ref}/offboard/finalize	Finalizes the offboarding of one non-human identity.
 POST	/v1/m/governance/pdp/dry-run	Evaluates an authorization request against an unpublished candidate policy; the route is separate from explain so a console can label the intent.
-POST	/v1/m/governance/rbac/grants	Creates one scoped RBAC grant from the posted document.
-POST	/v1/m/governance/rbac/permission-groups	Creates one permission group; the caller must be a tenant admin and every permission is validated.
-POST	/v1/m/governance/rbac/roles	Creates one custom role; the caller must be a tenant admin, and a built-in role name is refused.
+POST	/v1/m/governance/rbac/grants	Creates one scoped RBAC grant from the posted document. Requires Business; Community returns 501.
+POST	/v1/m/governance/rbac/inheritance-filters	Stores one inheritance filter on a workspace, agent group or folder for one resource class. Only an admin of the node may set it. Rights that reach the node from above stop applying to that class there; grants at or below it and forbids are unchanged.
+POST	/v1/m/governance/rbac/permission-groups	Creates one permission group; the caller must be a tenant admin and every permission is validated. Requires Business; Community returns 501.
+POST	/v1/m/governance/rbac/roles	Creates one custom role; the caller must be a tenant admin, and a built-in role name is refused. Requires Business; Community returns 501.
 POST	/v1/m/health/incidents/{id}/resolve	Resolves one open incident manually.
 POST	/v1/m/inferenceproxy/device/approve	Approves or denies one device authorization by its user code; an expired or consumed code answers 410.
 POST	/v1/m/knowledge/data-products	Creates one data product from the posted document; the name must be free.
@@ -218,13 +270,26 @@ POST	/v1/m/models/model-access	Creates one model-access rule; its subject and ta
 POST	/v1/m/models/model-groups	Creates one model group from the posted document.
 POST	/v1/m/models/model-versions	Creates one model version; the owned model it belongs to must exist in the same tenant.
 POST	/v1/m/models/owned-models	Creates one owned model from the posted document.
-POST	/v1/m/orchestration/schedules/{id}/fire	Fires one schedule out of band; an empty body requests approval first, and a body carries the approved run.
-POST	/v1/m/orchestration/workflows/{id}/run	Starts one run of a workflow, optionally with the posted inputs.
+POST	/v1/m/orchestration/schedules	Returns HTTP 501 with orchestration_unavailable because orchestration is a Business capability; no orchestration action is performed.
+POST	/v1/m/orchestration/schedules/{id}/fire	Returns HTTP 501 with orchestration_unavailable because orchestration is a Business capability; no orchestration action is performed.
+POST	/v1/m/orchestration/schedules/{id}/restore	Returns HTTP 501 with orchestration_unavailable because orchestration is a Business capability; no orchestration action is performed.
+POST	/v1/m/orchestration/workflows	Returns HTTP 501 with orchestration_unavailable because orchestration is a Business capability; no orchestration action is performed.
+POST	/v1/m/orchestration/workflows/{id}/dry-run	Returns HTTP 501 with orchestration_unavailable because orchestration is a Business capability; no orchestration action is performed.
+POST	/v1/m/orchestration/workflows/{id}/restore	Returns HTTP 501 with orchestration_unavailable because orchestration is a Business capability; no orchestration action is performed.
+POST	/v1/m/orchestration/workflows/{id}/run	Returns HTTP 501 with orchestration_unavailable because orchestration is a Business capability; no orchestration action is performed.
+POST	/v1/m/orchestration/workflows/{id}/runs/{run}/reauthorize	Returns HTTP 501 with orchestration_unavailable because orchestration is a Business capability; no orchestration action is performed.
+POST	/v1/m/redteam/runs	Returns HTTP 501 because red team is a Business feature; no red team action is performed.
+POST	/v1/m/redteam/targets	Returns HTTP 501 because red team is a Business feature; no red team action is performed.
+POST	/v1/m/redteam/targets/{id}/authorize	Returns HTTP 501 because red team is a Business feature; no red team action is performed.
 POST	/v1/m/reporting/schedules	Creates one report schedule, and answers 501 when report scheduling is not wired.
 POST	/v1/m/sessions/decisions	Records a work decision as a validate, plan or apply command.
 POST	/v1/m/sessions/decisions/{id}/revoke	Revokes one recorded work decision as a validate, plan or apply command.
 POST	/v1/m/sessions/runs	Creates one session run from the posted parameters, and answers 503 when the runtime is not available.
 POST	/v1/m/sessions/runs/{ref}/cleanup	Cleans up the resources of one finished session run.
+POST	/v1/m/sessions/runs/{ref}/git/branch	Switches the session's folder to the named branch, creating it first when requested.
+POST	/v1/m/sessions/runs/{ref}/git/commit	Commits the staged changes in the session's folder with the supplied message and authenticated author.
+POST	/v1/m/sessions/runs/{ref}/git/stage	Stages the selected paths in the session's folder for the next commit.
+POST	/v1/m/sessions/runs/{ref}/git/unstage	Removes the selected paths from the session's Git index while keeping their working-tree changes.
 POST	/v1/m/sessions/runs/{ref}/input	Sends one input line or message to a live session run.
 POST	/v1/m/sessions/runs/{ref}/resume	Resumes one suspended session run.
 POST	/v1/m/sessions/runs/{ref}/stop	Stops one session run; a fenced stop carries the lease fence, and a reason without a fence is refused.
@@ -249,15 +314,17 @@ POST	/v1/m/sessions/workspaces/{ref}/files/move	Moves one workspace entry from t
 POST	/v1/m/sourcescope/posture-requests/{id}/approve	Approves one pending posture relaxation and applies it.
 POST	/v1/m/voice/sessions/open	Opens one voice session; session, agent, model and provider references are all required, and an engaged stop freezes the call.
 PUT	/v1/m/compliance/nis2/incidents/{id}	Updates one NIS2 incident, moving it to one of the early_warning, notification, intermediate or final phases.
-PUT	/v1/m/finops/budgets/{id}	Replaces one budget with the posted document; the name is required.
-PUT	/v1/m/finops/cost-centers/{id}	Replaces one cost center with the posted document.
-PUT	/v1/m/governance/rbac/permission-groups/{name}	Replaces one permission group; the caller must be a tenant admin and every permission is validated.
-PUT	/v1/m/governance/rbac/roles/{name}	Replaces one custom role; the caller must be a tenant admin, and the base role and its exclusions are validated together.
+PUT	/v1/m/finops/budgets/{id}	Returns HTTP 501 because FinOps is a Business feature; no FinOps action is performed.
+PUT	/v1/m/finops/cost-centers/{id}	Returns HTTP 501 because FinOps is a Business feature; no FinOps action is performed.
+PUT	/v1/m/finops/model-rates/{id}	Returns HTTP 501 because FinOps is a Business feature; no FinOps action is performed.
+PUT	/v1/m/governance/rbac/permission-groups/{name}	Replaces one permission group; the caller must be a tenant admin and every permission is validated. Requires Business; Community returns 501.
+PUT	/v1/m/governance/rbac/roles/{name}	Replaces one custom role; the caller must be a tenant admin, and the base role and its exclusions are validated together. Requires Business; Community returns 501.
 PUT	/v1/m/knowledge/data-products/{id}	Replaces one data product with the posted document.
 PUT	/v1/m/models/inference-deployments/{id}	Replaces one inference deployment; its references must resolve, and the admission policy can refuse it.
 PUT	/v1/m/models/model-access/{id}	Replaces one model-access rule; its subject and target references are validated.
 PUT	/v1/m/models/model-groups/{id}	Replaces one model group with the posted document.
 PUT	/v1/m/models/owned-models/{id}	Replaces one owned model with the posted document.
+PUT	/v1/m/orchestration/workflows/{id}/steps	Returns HTTP 501 with orchestration_unavailable because orchestration is a Business capability; no orchestration action is performed.
 PUT	/v1/m/reporting/branding	Replaces the tenant report branding, and answers 501 when no branding store is wired.
 PUT	/v1/m/reporting/templates/{type}	Replaces the tenant custom template for one report type; a body over the size ceiling is refused with 413.
 PUT	/v1/m/sessions/templates/{id}	Replaces one session template; an unknown key in the body is refused rather than dropped, and a built-in template is refused.
@@ -282,6 +349,7 @@ GET	/v1/audit/recent	Returns the newest ledger events, newest first, leaving out
 GET	/v1/audit/pubkey	Returns the Ed25519 checkpoint verification key in PEM form, so an external party can verify exported checkpoints offline.
 GET	/v1/audit/system	Reads the system-tenant evidence ledger, which records the cross-tenant operations. Superadmin only.
 GET	/v1/audit/verify	Verifies the ledger chain structurally and verifies every signed checkpoint against the engine key. The verification is not itself recorded, so it does not grow the chain it inspects.
+POST	/v1/account/password	Changes the signed-in user's local password after verifying their current password. Retains the calling session, revokes the user's other sign-in sessions and records the change atomically. Requires a human session; API tokens cannot call it. Password attempts share the sign-in throttle. Passwords managed by an identity provider are changed there.
 POST	/v1/auth/capabilities	Projects the CALLING credential's authority over registered operations, up to 32 independent questions per batch. A surface question asks whether one registered collection may be loaded in the named workspace; an operation question asks whether one exact operation on one exact resource is authorized right now. It never executes the operation, so asking writes no row, no audit event and no expiry. UNKNOWN means the decision could not be established, never that a role is insufficient. A positive carries refresh_after_ms, the remaining evidence window capped at 30s: an observation budget, not a lease. The handler re-authorizes every real act.
 POST	/v1/auth/login	Verifies an email and password. Returns a completed session or a pending second-factor challenge without a session token.
 POST	/v1/auth/logout	Revokes the calling session. It applies to session principals only, never to an API token.
@@ -336,6 +404,8 @@ GET	/v1/workspaces	Lists the workspaces of the resolved tenant.
 POST	/v1/workspaces	Creates one workspace. Beyond the tenant admin permission the caller must be the tenant owner or a superadmin, because a workspace admin administers within a workspace and does not mint them.
 GET	/v1/workspaces/{id}	Returns one workspace of the resolved tenant by id.
 PATCH	/v1/workspaces/{id}	Renames a workspace, edits its settings or archives it. The slug is immutable, and the default workspace cannot be archived because it is the resolution target for an unset workspace.
+PATCH	/v1/agent-groups/{id}	Partially updates one agent group: only fields present in the request are touched, so an omitted description or metadata is never wiped. The slug is immutable; a set workspace_id re-scopes the group and an explicit empty string clears the scope to tenant-wide.
+PATCH	/v1/auth/webauthn/credentials/{id}	Renames one of the calling user's authenticators. Owner-only and no step-up required: a metadata change, ledgered in core/auth.
 
 GET	/v1/console/mcp-gateway	Returns the authenticated tenant's effective MCP configuration, source ownership and actual governance without credential values. Requires tenant admin; workspace-confined credentials are refused.
 POST	/v1/console/mcp-gateway/servers	Adds a disabled Streamable HTTP server using own-tenant sealed references and version compare-and-swap. Requires tenant admin and AAL3; file-owned mode is read-only.
@@ -351,8 +421,79 @@ DELETE	/v1/auth/totp	Removes the calling account's factor and recovery codes. Re
 GET	/v1/auth/totp/policy	Returns whether administrators must enrol a factor. Requires system administration authority.
 PUT	/v1/auth/totp/policy	Sets whether administrators must enrol a factor before completing password login. Requires system administration authority and AAL3.
 GET	/v1/auth/step-up-policy	Returns what administrative actions demand beyond the sign-in: nothing (the default), an authenticator code or a passkey. Requires system administration authority.
-PUT	/v1/auth/step-up-policy	Sets what administrative actions demand beyond the sign-in. Lowering it always works; raising it needs the caller's session to meet the new level. Requires system administration authority.
+PUT	/v1/auth/step-up-policy	Sets what administrative actions demand beyond the sign-in. Lowering or turning it off needs the caller's session to meet the current level (403 step_up_required otherwise); raising it needs the caller's session to meet the new level. Requires system administration authority.
 GET	/v1/auth/browser-session	Restores the browser session's metadata after a reload: its id, expiry and CSRF token, from the HttpOnly session cookie. Signed-in users only.
 POST	/v1/auth/browser-session	Moves a legacy bearer session into the HttpOnly cookie once, rotating the bearer without extending the session's expiry. Needs the bearer and X-Olivares-Session: cookie.
 GET	/v1/users/{id}/totp	Returns a member's factor status in the selected tenant. Foreign accounts return not found. Requires membership read authority.
 POST	/v1/users/{id}/totp/reset	Resets a selected tenant member's factor and recovery codes. Tenant administrators cannot reset shared or holder-controlled accounts. Requires membership write authority and AAL3; a deployment superadmin retains global recovery authority.
+POST	/v1/auth/os-account-bindings	Starts a single-use ceremony under the current administrator authorization and configured step-up policy. The selected user must complete native account control from its own session; only direct TLS is accepted.
+POST	/v1/auth/os-account-bindings/complete	Completes one ceremony from the selected user own native product session with fresh PAM authentication and separate Account validation. The request password uses base64 byte encoding and is discarded; the reply contains only public mapping metadata and an audit digest.
+POST	/v1/agent-groups	Creates an agent group from a name and a slug ([a-z0-9][a-z0-9-]*, max 63), with an optional workspace scope that is deny-closed against unknown workspaces.
+POST	/v1/auth/piv/elevate	Verifies the presented PIV smart-card certificate (chain, OCSP, user binding) and elevates the calling session to AAL3 with method piv.
+POST	/v1/auth/webauthn/authenticate	Verifies the browser's assertion against the issued challenge and elevates the calling session to AAL3; the panel re-reads whoami to lift its gate. Any ceremony failure is a deliberately coarse 403 whose cause goes to the server log, never the response.
+POST	/v1/auth/webauthn/authenticate/options	Issues the WebAuthn assertion options (challenge) for a step-up of the calling session, bound to the request's relying party (host and forwarded origin).
+POST	/v1/auth/webauthn/register	Verifies the browser's attestation against the issued challenge and persists the credential; 409 when the credential id is already registered.
+POST	/v1/auth/webauthn/register/options	Issues the WebAuthn creation options (challenge) to register a new authenticator for the calling session's user, bound to the request's relying party (host and forwarded origin).
+POST	/v1/console/activation/apply	Applies an edition change: enable or disable a preset, or promote one add-on. Step-up required; the engine may answer that a restart is required. 501 without the activation service (a community build).
+POST	/v1/console/activation/preview	Previews one preset change as a per-add-on diff (activate, stage, unchanged or console) without applying anything.
+POST	/v1/console/dr/backup	Starts an encrypted disaster-recovery backup of the store and returns the job's id (202); follow the job at /v1/console/dr/jobs/{job_id}/stream. The passphrase must meet the documented floor and encrypts the backup keys.
+POST	/v1/console/dr/restore/upload	Uploads a raw .drbundle file for restore pre-flight. The body is the file's verbatim bytes (at most 10 GiB); the manifest is inspected and returned with the upload id, which the apply step consumes.
+POST	/v1/console/dr/restore/{id}/apply	Applies an uploaded bundle. With the dual-control gate armed this records an intent for a distinct administrator to approve (202 with request_id); otherwise it starts the restore job (202 with job_id). A delegated credential cannot pass the gate.
+POST	/v1/console/dr/restore/{id}/approve	Approves a pending dual-control restore with the approver's passphrase. A second credential of the requester cannot self-approve: the comparison is between stable administrator accounts.
+POST	/v1/console/runtime/reload	Reconciles the durable source roster against the running engine without a restart and re-resolves the licence; the report names what applied and which configuration domains still need a restart. Step-up required.
+POST	/v1/console/sso/idps/{alias}/test	Validates a candidate additional-IdP config (OIDC discovery or SAML metadata fetch) without persisting it. 501 when no SSO provider service is wired.
+POST	/v1/console/sso/tenants/{tenant}/idps/{alias}/test	Validates a candidate tenant-scoped IdP config without persisting it. 501 when no SSO provider service is wired.
+POST	/v1/console/sso/tenants/{tenant}/test	Tests the tenant's primary IdP connectivity (OIDC discovery or SAML metadata fetch) against a candidate config without persisting it.
+POST	/v1/invites/accept	Redeems an invitation token: sets the password, activates the account and mints a session. Unauthenticated — the single-use token is the gate; a browser session additionally receives the cookie envelope.
+POST	/v1/invites/{id}/resend	Rotates a pending invitation's secret and mails the new link to the invitee (202); the token travels only in the mail. 409 when no mailer is configured.
+POST	/v1/onboard	Creates-or-reuses an account and grants its tenant membership (membership:write, AAL3 step-up). Mode password sets the initial password; mode invite emails a single-use token. An account that exists and is not a member of the tenant answers 202 consent_required and writes nothing.
+GET	/v1/auth/os-account-bindings/{id}	Reads current administrative mapping metadata for the selected user and tenant after current authorization and configured step-up. Private binding handles and credential references remain internal; only direct TLS is accepted.
+DELETE	/v1/auth/os-account-bindings/{id}	Revokes current OS-account authority under current administrative authorization and configured step-up while preserving the permanent UID, account and user reservation. Only direct TLS is accepted.
+DELETE	/v1/agent-groups/{id}	Deletes one agent group and its roster (the membership rows), never the member agents themselves.
+DELETE	/v1/agent-groups/{id}/members/{agentID}	Removes one agent's membership by exact lookup, so a member beyond a page cutoff is still found; 404 when the agent is not a member.
+DELETE	/v1/auth/webauthn/credentials/{id}	Unregisters one of the calling user's authenticators (lost or stolen-key remediation). Step-up required and ledgered.
+DELETE	/v1/console/dr/backups/{id}	Deletes one backup bundle by id.
+DELETE	/v1/console/sso/idps/{alias}	Removes one additional IdP by alias within the global scope. Step-up required.
+DELETE	/v1/console/sso/tenants/{tenant}	Removes the tenant's primary IdP configuration. Step-up required.
+DELETE	/v1/console/sso/tenants/{tenant}/idps/{alias}	Removes one of the tenant's additional IdPs by alias. Step-up required.
+DELETE	/v1/invites/{id}	Deletes one pending invitation.
+GET	/v1/system/tracing	Reads saved tracing choices, the running node’s effective configuration and the names of environment overrides. Requires system administration. Override credential values are never returned.
+GET	/openapi.beta.json	Returns the beta module-route OpenAPI document: every /v1/m/<namespace>/ operation the mounted modules register, reflected from the routes themselves so it cannot drift from what the engine serves.
+GET	/v1/agent-groups	Lists the tenant's agent groups with their workspace scope, slug and status, keyset-paginated. A workspace-confined caller sees only its own workspace's groups; an optional workspace_id filter narrows a tenant-wide caller.
+GET	/v1/agent-groups/{id}	Returns one agent group. Authorization runs against the GROUP entity so a workspace-confined operator cannot read a cross-workspace group.
+GET	/v1/agent-groups/{id}/members	Lists the agents that are members of one group, keyset-paginated, as membership rows (membership id, group id, agent id).
+GET	/v1/auth/effective-rights	Projects one trustee's rights over one node: the subject (a user or token id, never an email), the node, the assurance the answer holds, the node's container lineage, and each trustee right's decision state. A subject the store does not know and one with no membership here answer alike, so the read is not an existence oracle for other tenants.
+GET	/v1/auth/piv/status	Reports the calling session's presented PIV certificate: subject, issuer, mapped role, OCSP answer and expiry. 501 when no PIV verifier roots are configured; presented statuses are ledgered.
+GET	/v1/auth/webauthn/credentials	Lists the calling user's registered authenticators: id, display name, registration time and backup eligibility only — never key material.
+GET	/v1/console/activation	Returns the edition's activation view: current edition and preset, each add-on's state (active, pending, available or console) with its in-build and licence-covered facts, and each preset's add-on keys for the chooser.
+GET	/v1/console/dr/backups	Lists the backup directory's .drbundle files, newest first; each row carries the manifest's summary (engine, engine version, tenant count, notes) when the bundle is readable.
+GET	/v1/console/dr/backups/{id}	Returns one backup's manifest and size. The id is the bundle's filename; a malformed id (path separators, dotdot) is rejected before the filesystem is touched.
+GET	/v1/console/dr/backups/{id}/download	Streams one backup bundle's verbatim encrypted bytes (.drbundle).
+GET	/v1/console/dr/jobs	Lists the in-memory DR jobs (backup and restore) with kind, status, phase and progress.
+GET	/v1/console/dr/jobs/{id}/stream	A Server-Sent Events stream of one DR job's progress: event: job frames carrying the DR job payload, comment heartbeats, ending when the job completes or fails.
+GET	/v1/console/dr/restore/pending	Lists restore requests awaiting a second approver under the dual-control gate, newest first, so a distinct administrator can find and approve one.
+GET	/v1/console/dr/schedule	Returns the scheduled-backup configuration: enabled, cron, retention, the last scheduled run's outcome, and the effective dual-control restore gate with any pending disarm instant.
+GET	/v1/console/logs/buffer	Returns the engine log's ring-buffer snapshot, newest last, filtered by module and level. total is the number of ring entries that matched the filter (not the page size) and truncated says older matches were left out.
+GET	/v1/console/logs/stream	A Server-Sent Events stream of the engine log: event: log frames carrying one entry's payload and comment heartbeats, filtered by the same parameters as the buffer.
+GET	/v1/console/modules	Returns the module catalog with, for each module, whether it is selected, running, always-on, holds data in this installation, and which modules require it, keep it on, or activate it.
+GET	/v1/console/sources/diff	Returns one bounded content diff between two refs of a repository owned by a configured source, on GitHub or GitLab. 501 when no git-host diff reader is wired, 422 when the diff exceeds the read cap, 503 with Retry-After when the host rate-limits the read.
+GET	/v1/console/sso/idps	Lists every IdP configured under the deployment-wide global scope, default first: configuration hints, never secrets. enforced_by differs per row because the posture engine resolves exactly one (scope, alias).
+GET	/v1/console/sso/idps/{alias}	Returns one additional IdP's configuration by alias within the global scope; a malformed alias is a 400 before the store is touched.
+GET	/v1/console/sso/tenants/{tenant}	Returns the tenant's primary ("default") IdP configuration; the per-tenant surface Business: Identity & Scale resolves at login.
+GET	/v1/console/sso/tenants/{tenant}/idps	Lists every IdP configured under the tenant's scope, default first: configuration hints, never secrets.
+GET	/v1/console/sso/tenants/{tenant}/idps/{alias}	Returns one of the tenant's additional IdPs by alias; a malformed alias is a 400 before the store is touched.
+GET	/v1/groups	Lists the tenant's provisioned groups with their mapped roles and member counts: the operator's view of what the IdP pushed and what each group confers, including the effective-role provenance an admin needs when a member's direct and acting roles differ.
+GET	/v1/invites	Lists the tenant's pending (unaccepted, unexpired) invitations without any token material.
+GET	/v1/workspaces/{id}/contents	Counts every kind that declares workspace lineage in the workspace, sorted by kind; a kind joins by declaring lineage in its descriptor, with no handler code. A capped count is a floor. 501 when no store census is wired.
+GET	/v1/workspaces/{id}/summary	Returns a workspace with counts of its scoped entities (agents, sessions, resources, groups). Counts come from one contents read through the caller's scope; a *_capped count is a floor ("at least N"), never a total.
+PUT	/v1/system/tracing	Saves tracing choices in the deployment settings and applies them on the running node without restarting sessions. Requires system administration and configured step-up. Existing environment inputs override saved choices.
+PUT	/v1/agent-groups/{id}/members/{agentID}	Adds an agent to a group. Idempotent by an exact (group, agent) lookup: an already-member returns the existing row with 200, a fresh add returns 201; an unknown agent is a 404, not a dangling membership.
+PUT	/v1/console/dr/schedule	Saves the schedule's operator-owned fields (enabled, cron in the runner's grammar, retention days). The dual-control gate's armed state is preserved; server-owned bookkeeping fields in a read-modify-write round trip are ignored.
+PUT	/v1/console/modules	Sets which optional modules the engine runs, by name. The selection is recorded in the deployment settings and the engine restarts itself to apply it (the reply says so); an unknown module is rejected.
+PUT	/v1/console/sso/idps/{alias}	Creates or updates one additional IdP by alias within the global scope. Step-up required; secrets are sealed at rest and never returned.
+PUT	/v1/console/sso/tenants/{tenant}	Creates or updates the tenant's primary IdP configuration. Step-up required; secrets are sealed at rest and never returned.
+PUT	/v1/console/sso/tenants/{tenant}/idps/{alias}	Creates or updates one of the tenant's additional IdPs by alias. Step-up required; secrets are sealed at rest and never returned.
+PUT	/v1/groups/{id}/parent	Nests (or, with an empty parent_id, un-nests) a group under another group of the same tenant: a member of the child is then also a member of the parent for authorization, so a scoped grant on the parent reaches the child's members. Requires owner authority; a cycle is a 409. Operator-only, never SCIM.
+PUT	/v1/groups/{id}/role	Sets (or clears, with an empty role) the role a group's members are elevated to in the group's tenant. Ceiling-checked against the CALLER's authority in the group's stored tenant, and audited.
+PUT	/v1/groups/{id}/workspace	Places or moves a user group in a workspace of the same tenant; an explicit empty workspace_id clears placement. Requires an unconfined admin. Membership, role mapping and group hierarchy are unchanged. Business edition: a Community build answers 501 departments_unavailable.
+PUT	/v1/workspaces/{id}/parent	Places a workspace (a department) under another workspace of the same tenant, or with an empty parent_id makes it a root; the whole subtree moves with it. Requires the tenant owner and the administrative step-up, because a grant on a department reaches its sub-departments. A cycle is a 409 workspace_cycle and the default workspace stays a root. Business edition: a Community build answers 501 departments_unavailable.

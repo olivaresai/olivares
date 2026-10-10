@@ -100,7 +100,7 @@ func TestJoinedApplyPostcommitDrainCollector(t *testing.T) {
 		f := newWorkFixture(t, filepath.Join(t.TempDir(), "japc-commit.db"), nil)
 		defer f.st.Close()
 		probe := &joinedApplyPostcommitProbeSink{st: f.st, tenant: f.tenant}
-		f.m.UseWorkEventSink(probe)
+		WithWorkEventSink(probe)(f.m)
 		ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 		defer cancel()
 		start := time.Now()
@@ -136,7 +136,7 @@ func TestJoinedApplyPostcommitDrainCollector(t *testing.T) {
 		f := newWorkFixture(t, filepath.Join(t.TempDir(), "japc-rollback.db"), nil)
 		defer f.st.Close()
 		probe := &joinedApplyPostcommitProbeSink{st: f.st, tenant: f.tenant}
-		f.m.UseWorkEventSink(probe)
+		WithWorkEventSink(probe)(f.m)
 		injected := errors.New("japc callback refusal")
 		_, err := f.m.ApplyPreparedProtocolReplay(context.Background(), f.tenant,
 			joinedApplyPostcommitClaim(f.workspace, ProtocolReplayJTI, "japc-rollback-"+model.NewID().String()), joinedApplyPostcommitPlan(t, f),
@@ -163,12 +163,12 @@ func TestJoinedApplyPostcommitDrainCollector(t *testing.T) {
 		f := newWorkFixture(t, filepath.Join(t.TempDir(), "japc-nested.db"), nil)
 		defer f.st.Close()
 		seedSink := &recordingWorkSink{}
-		f.m.UseWorkEventSink(seedSink)
+		WithWorkEventSink(seedSink)(f.m)
 		created := applyCreate(t, f, "japc nested seed")
 		resetRecordingWorkSink(seedSink, errors.New("offline while seeding extra"))
 		pending := insertOutboxEventForTest(t, f, workItemKind, created.ResultID, 2, "work.item.updated")
 		probe := &joinedApplyPostcommitProbeSink{st: f.st, tenant: f.tenant}
-		f.m.UseWorkEventSink(probe)
+		WithWorkEventSink(probe)(f.m)
 		var sinkAtInner int32
 		_, err := f.m.ApplyProtocolReplay(context.Background(), f.tenant,
 			joinedApplyPostcommitClaim(f.workspace, ProtocolReplayJTI, "japc-nested-outer-"+model.NewID().String()),
@@ -212,7 +212,7 @@ func TestJoinedApplyPostcommitDrainCollector(t *testing.T) {
 		f := newWorkFixture(t, filepath.Join(t.TempDir(), "japc-retry.db"), nil)
 		defer f.st.Close()
 		sink := &recordingWorkSink{}
-		f.m.UseWorkEventSink(sink)
+		WithWorkEventSink(sink)(f.m)
 		seed := applyCreate(t, f, "japc retry seed")
 		resetRecordingWorkSink(sink, errors.New("offline while seeding extra"))
 		pending := insertOutboxEventForTest(t, f, workItemKind, seed.ResultID, 2, "work.item.updated")
@@ -248,7 +248,7 @@ func TestJoinedApplyPostcommitDrainCollector(t *testing.T) {
 		f := newWorkFixture(t, filepath.Join(t.TempDir(), "japc-protocol-replay.db"), nil)
 		defer f.st.Close()
 		sink := &recordingWorkSink{}
-		f.m.UseWorkEventSink(sink)
+		WithWorkEventSink(sink)(f.m)
 		claim := joinedApplyPostcommitClaim(f.workspace, ProtocolReplayJTI, "japc-protocol-"+model.NewID().String())
 		first, err := f.m.ApplyProtocolReplay(context.Background(), f.tenant, claim,
 			func(context.Context) (ProtocolReplaySettlement, error) {
@@ -283,7 +283,7 @@ func TestJoinedApplyPostcommitDrainCollector(t *testing.T) {
 		f := newWorkFixture(t, filepath.Join(t.TempDir(), "japc-command-replay.db"), nil)
 		defer f.st.Close()
 		sink := &recordingWorkSink{}
-		f.m.UseWorkEventSink(sink)
+		WithWorkEventSink(sink)(f.m)
 		cmd := baseCreateCommand(f, "japc command replay")
 		first, err := f.m.Apply(context.Background(), f.tenant, f.principal, cmd)
 		if err != nil || first.EventID.IsZero() {
@@ -317,7 +317,7 @@ func TestJoinedApplyPostcommitDrainCollector(t *testing.T) {
 		f := newWorkFixture(t, filepath.Join(t.TempDir(), "japc-policy.db"), nil)
 		defer f.st.Close()
 		sink := &recordingWorkSink{}
-		f.m.UseWorkEventSink(sink)
+		WithWorkEventSink(sink)(f.m)
 		workItem := applyCreate(t, f, "japc policy work")
 		heldItem := applyCreate(t, f, "japc policy held")
 		resetRecordingWorkSink(sink, errors.New("offline while seeding extra"))
@@ -361,7 +361,7 @@ func TestJoinedApplyPostcommitDrainCollector(t *testing.T) {
 		f := newWorkFixture(t, filepath.Join(t.TempDir(), "japc-attempts.db"), nil)
 		defer f.st.Close()
 		sink := &recordingWorkSink{}
-		f.m.UseWorkEventSink(sink)
+		WithWorkEventSink(sink)(f.m)
 		seed := applyCreate(t, f, "japc attempts seed")
 		resetRecordingWorkSink(sink, errors.New("offline while seeding extra"))
 		pending := insertOutboxEventForTest(t, f, workItemKind, seed.ResultID, 2, "work.item.updated")
@@ -394,7 +394,7 @@ func TestJoinedApplyPostcommitDrainCollector(t *testing.T) {
 		f := newWorkFixture(t, filepath.Join(t.TempDir(), "japc-limit.db"), nil)
 		defer f.st.Close()
 		sink := &recordingWorkSink{}
-		f.m.UseWorkEventSink(sink)
+		WithWorkEventSink(sink)(f.m)
 		first := applyCreate(t, f, "japc limit a")
 		second := applyCreate(t, f, "japc limit b")
 		resetRecordingWorkSink(sink, errors.New("offline while seeding extra"))
@@ -430,7 +430,7 @@ func TestJoinedApplyPostcommitDrainCollector(t *testing.T) {
 		f := newWorkFixture(t, filepath.Join(t.TempDir(), "japc-confined.db"), nil)
 		defer f.st.Close()
 		sink := &recordingWorkSink{}
-		f.m.UseWorkEventSink(sink)
+		WithWorkEventSink(sink)(f.m)
 		var other model.ID
 		if err := f.st.Mutate(context.Background(), f.tenant, func(sc store.Scope) error {
 			ws, err := sc.Workspaces().Create(context.Background(), model.Workspace{
@@ -508,7 +508,7 @@ func TestJoinedApplyPostcommitDrainCollector(t *testing.T) {
 		f := newWorkFixture(t, filepath.Join(t.TempDir(), "japc-sinkfail.db"), nil)
 		defer f.st.Close()
 		sink := &recordingWorkSink{err: errors.New("eventing unavailable")}
-		f.m.UseWorkEventSink(sink)
+		WithWorkEventSink(sink)(f.m)
 		var created CommandResult
 		result, err := f.m.ApplyPreparedProtocolReplay(context.Background(), f.tenant,
 			joinedApplyPostcommitClaim(f.workspace, ProtocolReplayJTI, "japc-sinkfail-"+model.NewID().String()), joinedApplyPostcommitPlan(t, f),
@@ -535,7 +535,7 @@ func TestJoinedApplyPostcommitDrainCollector(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 		sink := &joinedApplyPostcommitCancelSink{cancel: cancel}
-		f.m.UseWorkEventSink(sink)
+		WithWorkEventSink(sink)(f.m)
 		var created CommandResult
 		result, err := f.m.ApplyPreparedProtocolReplay(ctx, f.tenant,
 			joinedApplyPostcommitClaim(f.workspace, ProtocolReplayJTI, "japc-cancel-"+model.NewID().String()), joinedApplyPostcommitPlan(t, f),
@@ -559,7 +559,7 @@ func TestJoinedApplyPostcommitDrainCollector(t *testing.T) {
 		t.Parallel()
 		f := newWorkFixture(t, filepath.Join(t.TempDir(), "japc-mask.db"), nil)
 		defer f.st.Close()
-		f.m.UseWorkEventSink(&recordingWorkSink{})
+		WithWorkEventSink(&recordingWorkSink{})(f.m)
 		type workspaceKey struct{}
 		parent, cancel := context.WithTimeout(context.WithValue(context.Background(), workspaceKey{}, "kept"), time.Minute)
 		defer cancel()
@@ -618,9 +618,9 @@ func TestJoinedApplyPostcommitDistinctModuleDrain(t *testing.T) {
 		defer f.st.Close()
 		ownerSink := &recordingWorkSink{}
 		peerSink := &recordingWorkSink{}
-		f.m.UseWorkEventSink(ownerSink)
+		WithWorkEventSink(ownerSink)(f.m)
 		peer := newJoinedApplyPostcommitPeerModule(t, f)
-		peer.UseWorkEventSink(peerSink)
+		WithWorkEventSink(peerSink)(peer)
 		seed := applyCreate(t, f, "japc peer allow seed")
 		resetRecordingWorkSink(ownerSink, errors.New("offline while seeding extra"))
 		pending := insertOutboxEventForTest(t, f, workItemKind, seed.ResultID, 2, "work.handoff.offered")
@@ -628,8 +628,8 @@ func TestJoinedApplyPostcommitDistinctModuleDrain(t *testing.T) {
 		resetRecordingWorkSink(peerSink, nil)
 		ownerAuth := &recordingOutboxAuthority{allowClaim: false, allowEffect: true}
 		peerAuth := &recordingOutboxAuthority{allowClaim: true, allowEffect: true}
-		f.m.UseWorkOutboxClaimAuthority(ownerAuth)
-		peer.UseWorkOutboxClaimAuthority(peerAuth)
+		func() { f.m.WorkOutboxAuthority = ownerAuth; f.m.normalize() }()
+		func() { peer.WorkOutboxAuthority = peerAuth; peer.normalize() }()
 
 		_, err := f.m.ApplyProtocolReplay(context.Background(), f.tenant,
 			joinedApplyPostcommitClaim(f.workspace, ProtocolReplayJTI, "japc-peer-allow-"+model.NewID().String()),
@@ -664,9 +664,9 @@ func TestJoinedApplyPostcommitDistinctModuleDrain(t *testing.T) {
 		defer f.st.Close()
 		ownerSink := &recordingWorkSink{}
 		peerSink := &recordingWorkSink{}
-		f.m.UseWorkEventSink(ownerSink)
+		WithWorkEventSink(ownerSink)(f.m)
 		peer := newJoinedApplyPostcommitPeerModule(t, f)
-		peer.UseWorkEventSink(peerSink)
+		WithWorkEventSink(peerSink)(peer)
 		seed := applyCreate(t, f, "japc peer refuse seed")
 		resetRecordingWorkSink(ownerSink, errors.New("offline while seeding extra"))
 		pending := insertOutboxEventForTest(t, f, workItemKind, seed.ResultID, 2, "work.handoff.offered")
@@ -674,8 +674,8 @@ func TestJoinedApplyPostcommitDistinctModuleDrain(t *testing.T) {
 		resetRecordingWorkSink(peerSink, nil)
 		ownerAuth := &recordingOutboxAuthority{allowClaim: true, allowEffect: true}
 		peerAuth := &recordingOutboxAuthority{allowClaim: false, allowEffect: true}
-		f.m.UseWorkOutboxClaimAuthority(ownerAuth)
-		peer.UseWorkOutboxClaimAuthority(peerAuth)
+		func() { f.m.WorkOutboxAuthority = ownerAuth; f.m.normalize() }()
+		func() { peer.WorkOutboxAuthority = peerAuth; peer.normalize() }()
 
 		_, err := f.m.ApplyProtocolReplay(context.Background(), f.tenant,
 			joinedApplyPostcommitClaim(f.workspace, ProtocolReplayJTI, "japc-peer-refuse-"+model.NewID().String()),

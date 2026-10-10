@@ -38,6 +38,7 @@
 // gate. Run from the repository root.
 
 import fs from 'node:fs'
+import { execFileSync } from 'node:child_process'
 import os from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
@@ -53,27 +54,13 @@ const MIN_DISCLAIMER_LENGTH = 20
 // without the baseline following, because a ratchet that does not ratchet stops
 // catching anything.
 //
-// Measured 2026-08-08, and it took THREE passes to get right — the number is
-// recorded with its method because two of those passes were wrong:
-//
-//   12  counting `const …Disclaimer` under modules/compliance only. Wrong scope: most
-//       per-framework disclaimers are inline `Disclaimer:` struct fields, and
-//       modules/models, governance and reporting carry their own.
-//   38 distinct / 44 sites  with a single-literal regex. Wrong shape: 19 of the
-//       declarations are CONCATENATED, so only the first fragment was captured —
-//       collapsing four state-law texts into a shared prefix, four overlays likewise,
-//       and dropping modules/models/spdx.go whose first fragment ("SPDX ") is 5 bytes.
-//   45 distinct / 45 sites in 17 files  with the literal-chain scanner below. The
-//       sol-max contrast measured this independently and the two agree exactly.
-//
-// 1 translated, 44 outstanding.
-//
-// The 37 are declared rather than guessed at: several are multi-paragraph legal texts
-// whose entire content is a negation, and this repo routes translation of that kind
-// to a Codex sol-max pass (CLAUDE.md, after measured ~60 defects from the
-// cheaper route — including five pages where deny-closed behaviour came out
-// INVERTED). Translating them badly would be worse than leaving them in English.
-const UNTRANSLATED_BASELINE = 44
+// Measured 2026-10-10 with the literal-chain scanner below: Community has 14
+// untranslated disclaimers; assembled Business has 44. Detect the additive private
+// compliance implementation, as scripts/lib/catalog_count.py does, so neither
+// edition borrows the other's baseline. This does not exclude any engine sources.
+const UNTRANSLATED_BASELINE = fs.existsSync(path.join(ROOT, 'modules/compliance/frameworks.go'))
+  ? 44
+  : 14
 
 function read(file) {
   return fs.readFileSync(file, 'utf8')
@@ -542,6 +529,9 @@ function selfTest() {
 
 if (process.argv.includes('--self-test')) {
   selfTest()
+  execFileSync(process.execPath, [path.join(ROOT, 'scripts/test-i18n-disclaimer-editions.mjs')], {
+    stdio: 'inherit',
+  })
 } else {
   const { problems, blindSpots, stats } = runChecks({
     mapFile: path.join(ROOT, 'web/src/features/_intel/disclaimers.ts'),
@@ -554,7 +544,7 @@ if (process.argv.includes('--self-test')) {
   //    nada, lo que diga sobre hallazgos no significa nada — cero hallazgos sobre cero material no
   //    es un aprobado, y un `1` lo haría indistinguible de un defecto real para quien lo consuma.
   if (blindSpots.length > 0) {
-    console.error('check-i18n-disclaimers: NO HE PODIDO MIRAR')
+    console.error('check-i18n-disclaimers: COULD NOT CHECK')
     for (const b of blindSpots) console.error(`  - ${b}`)
     process.exit(2)
   }

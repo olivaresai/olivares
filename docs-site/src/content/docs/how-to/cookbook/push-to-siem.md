@@ -8,6 +8,12 @@ description: >-
 sidebar:
   order: 6
 ---
+SIEM and ITSM push, OTLP downloads, external trace and metric delivery, and posture export require Business. Community keeps local observability, trace-context propagation, saved settings and `olivares dr backup`. Generic chat, email and webhook notifications remain available in Community.
+
+
+:::note[Business]
+Audit export (`GET /v1/audit/export`, `olivares audit export`), directory archives and external archive verification require Business. Community keeps the signed ledger, `olivares audit verify` and `olivares dr backup`; export routes and commands return HTTP 501 or exit 9. Audit forwarding and DDIL transfers carrying audit segments also require Business.
+:::
 
 **Goal:** your SIEM receives the control plane's findings *and* its
 tamper-evident audit ledger as a push, without a forwarder tailing files.
@@ -18,6 +24,16 @@ fully supported — pull is still the right shape for WORM archival and offline
 re-verification; push is the right shape for live SIEM ingestion.
 
 ## 1. Create the sink subscription
+
+Enable the selectable ledger forwarder first; this also enables its eventing
+dependency:
+
+```bash
+olivares modules on siemforward
+```
+
+Wait for the engine to finish restarting, then run `olivares modules ls` and
+confirm that `siemforward` and `eventing` are running before creating the subscription.
 
 ```bash
 curl -ks -X POST "$BASE/v1/m/eventing/subscriptions" \
@@ -73,9 +89,9 @@ curl -ks -X POST "$BASE/v1/m/eventing/subscriptions/$ID/test" \
 
 ## 2. The ledger push, honestly described
 
-Subscribing to **`audit.recorded`** turns on the ledger pump: the forwarder
-walks each tenant's sealed audit ledger from a per-tenant cursor and enqueues
-every record into the durable delivery engine — **at-least-once**, in order,
+With **`siemforward` enabled**, the ledger pump walks each tenant's sealed audit
+ledger from a per-tenant cursor. An **`audit.recorded`** subscription receives
+records enqueued after its creation into the durable delivery engine — **at-least-once**,
 resumable. Each record carries its chain-integrity fields verbatim, so the SIEM copy supports
 exactly what the pull export supports: the chain LINKAGE
 (`prev_hash` of n+1 equals `hash` of n) and a checkpoint signature over `hash` can
@@ -98,8 +114,10 @@ a commitment covers.
 
 Three properties worth knowing:
 
-- **No subscription, no work.** With no `audit.recorded` subscriber the pump
-  writes nothing — the path costs nothing until you ask for it.
+- **The cursor advances without a subscription.** With no `audit.recorded`
+  subscriber, no delivery is enqueued, but the enabled pump still saves its
+  cursor. A new sink does not backfill records already passed by that cursor;
+  use the pull export for historical records.
 - **At-least-once means duplicates are possible** on redelivery; de-duplicate
   on the record's sequence number per tenant.
 - **The pump is leader-gated** in HA — exactly one node forwards.

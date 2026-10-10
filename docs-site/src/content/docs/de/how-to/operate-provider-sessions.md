@@ -46,25 +46,30 @@ Ablehnung, kein Fallback.
    `sessions:profile-binding:write` plus Quellenadministration. Das Starten
    eines Laufs braucht `sessions:run:write`.
    Berechtigungen: [Konsolenreferenz](/reference/console/).
-4. Der passende Driver ist **auf diesem Knoten registriert**, indem sein
-   offizielles Binary gepinnt wird. Die Bereitschaft gilt pro Driver. Es gibt
-   keinen gemeinsamen Schalter (`cmd/olivares/sessionruntime.go`).
+4. Für den Driver muss auf **diesem Knoten** ein Executable verfügbar sein.
+   Ein explizit gepinntes Binary hat Vorrang; andernfalls ermittelt die Engine
+   das Executable beim Start. Bereitschafts- und Richtlinienprüfungen gelten
+   weiterhin pro Driver.
 
 | Driver | Diese Umgebungsvariable pinnen | Wenn sie nicht gesetzt ist |
 |---|---|---|
-| Claude Code | `OLIVARES_SESSION_RUNTIME_CLAUDE_BIN` (Standard `claude`) | der Claude-Pfad verwendet den Standard-Executable-Namen |
-| Codex | `OLIVARES_SESSION_RUNTIME_CODEX_BIN` | Ist sie nicht gesetzt, pinnt eine **registrierte** verwaltete Installation (`olivares agent tool install --driver codex`) das Executable aus der Quittung. Andernfalls bleiben Codex-Profile beobachtbar und sind nicht startbar. Die Engine durchsucht `PATH` nicht. |
-| Grok | `OLIVARES_SESSION_RUNTIME_GROK_BIN` | Ist sie nicht gesetzt, pinnt eine **registrierte** verwaltete Installation (`olivares agent tool install --driver grok`) das Executable aus der Quittung. Andernfalls bleiben Grok-Profile beobachtbar und sind nicht startbar. Die Engine durchsucht `PATH` nicht. |
+| Claude Code | `OLIVARES_SESSION_RUNTIME_CLAUDE_BIN` | Neueste verifizierte verwaltete Installation, danach `claude` im `PATH` der Engine. |
+| Codex | `OLIVARES_SESSION_RUNTIME_CODEX_BIN` | Neueste verifizierte verwaltete Installation, danach `codex` im `PATH` der Engine. |
+| Grok | `OLIVARES_SESSION_RUNTIME_GROK_BIN` | Neueste verifizierte verwaltete Installation, danach `grok` im `PATH` der Engine. |
 
-Der Wert ist das offizielle Binary, das dieser Knoten betreiben darf. Die
-Engine löst `codex` oder `grok` nicht über `PATH` auf. Die generierte
-Konfigurationstabelle listet auch `OLIVARES_SESSION_RUNTIME_OPENCODE_BIN` mit
-derselben Registrierungsregel; diese Seite fügt keine weiteren OpenCode-Aussagen
-hinzu.
+Der Wert pinnt das offizielle Executable, das dieser Knoten betreiben darf.
+Ohne Pin ist ein installiertes Tool ohne Neustart der Engine verfügbar.
+Fehlen sowohl eine verwaltete Installation als auch ein Executable in `PATH`,
+wird der Start verweigert. `OLIVARES_SESSION_RUNTIME_OPENCODE_BIN` folgt
+derselben Suchreihenfolge.
 
-Claude-Starts brauchen weiterhin eine Inferenz-Credential-Quelle
-(`OLIVARES_SESSION_RUNTIME_WIF` oder `OLIVARES_SESSION_RUNTIME_TOKEN_FILE`).
-Siehe [Ihre erste Stunde §3](/de/how-to/first-hour/#3-eine-claude-code-sitzung-über-die-konsole-starten).
+Für Claude-Profile mit `managed_injection`, die keinen Anbieter nennen, liefert
+`OLIVARES_SESSION_RUNTIME_WIF` oder `OLIVARES_SESSION_RUNTIME_TOKEN_FILE` die
+Inferenz-Zugangsdaten des Hosts. Ein Profil mit einem gebundenen Anbieter nutzt
+dessen Zugangsdaten; bei einem Fehler wird der Start ohne Fallback verweigert.
+Ein Profil mit `provider_account_home` nutzt die autorisierte Anmeldung des Tools
+und benötigt keine der beiden Variablen. Siehe
+[Anbieter hinzufügen](/de/how-to/add-a-provider/).
 Codex und Grok verwenden nur den AUTHORIZED `auth_source` des Profils:
 `provider_account_home` oder `managed_injection`, ohne Fallback dazwischen und
 ohne Vorgabe (`CHANGELOG.md` `[26.9.0]`; `ProviderProfileDTO.auth_source`).
@@ -141,23 +146,96 @@ Der produktive Create-Endpunkt verlangt `provider_profile_ref`. Das Weglassen
 behält den älteren Request-Body, den diese API ablehnt
 (`CHANGELOG.md` `[26.9.0]` B2; CLI-Flag `--provider-profile`).
 
-Der Start-Dialog bietet die **aktiven** Profile. Kein Profil ist vorausgewählt.
-Workspace- und Vorlagenauswahl dürfen geleert werden; das Profil nicht
-(`CHANGELOG.md` `[26.9.0]` Fixed).
+Der Start-Dialog bietet die **aktiven** Profile. Das einzige aktive Profil ist
+vorausgewählt; bei mehreren ist keines vorausgewählt, und **Start** fordert zur
+Auswahl auf. Workspace- und Vorlagenauswahl dürfen geleert werden; das Profil
+nicht (`CHANGELOG.md` `[26.9.0]` Fixed).
 
 ### Konsole
 
-1. Öffnen Sie **Operate sessions** (`/agentops`) oder **Observe sessions**
-   (`/sessions`). Sie teilen einen Bildschirm
+1. Öffnen Sie **Sitzungen** (`/sessions`). `/agentops` öffnet denselben Bildschirm
    ([Konsolenreferenz](/reference/console/)).
-2. Öffnen Sie den Start-Dialog.
-3. Wählen Sie **Provider profile** (`agentops.create.profile`). Der Hinweis
-   sagt, dass ein Profil erforderlich ist.
-4. Optional Workspace, Vorlage, Modell und Effort setzen. Modell und Effort
-   bleiben provider-eigene offene Strings auf den offiziellen Agent-Flags für
-   Grok (`CHANGELOG.md` `[26.9.0]`).
-5. Senden Sie **Request launch**. Nur die Profil-**Referenz** wird gepostet.
-   Der Server löst die Homes auf.
+2. Öffnen Sie **New session** und dann **Advanced launch options** (unter
+   **More options**, wenn ein Werkzeug bereit ist).
+3. Prüfen Sie **Provider profile** (`agentops.create.profile`) und schreiben
+   Sie bei Bedarf die **First message**.
+4. Optional Workspace, Vorlage, Modell und Effort unter **Advanced options**
+   setzen. Modell und Effort bleiben provider-eigene offene Strings auf den
+   offiziellen Agent-Flags für Grok (`CHANGELOG.md` `[26.9.0]`).
+5. Klicken Sie auf **Start**. Solange es nicht starten kann, sagt die Zeile
+   darunter, was fehlt. Nur die Profil-**Referenz** wird gepostet. Der Server
+   löst die Homes auf.
+
+Die Auswahl **Ordner** legt fest, wo das Tool arbeitet. **Temporärer Ordner für
+diese Sitzung** gibt dem Lauf ein eigenes Verzeichnis; ein registrierter Ordner
+verwendet diesen Ordner. Dies ist vom Workspace getrennt, der die Sitzung
+autorisiert. **Kontext → Details** zeigt gespeicherten Workspace und Ordner;
+der gewöhnliche temporäre Ordner ist keine Warnung.
+
+### Ein eigener Git-Worktree (optional)
+
+Standardmäßig arbeitet die Sitzung im ausgewählten Ordner. Ist dies der oberste
+Ordner eines Git-Repositorys, können Sie einen **neuen Git-Worktree** anfordern:
+Aktivieren Sie **In einem neuen Git-Worktree arbeiten** unter **Ordner**, oder
+führen Sie `olivares session start . --worktree` aus. Die Sitzung arbeitet auf
+einem neuen Branch (`olivares/` plus acht Zeichen ihrer ID) in ihrem eigenen
+Worktree; zwei Sitzungen teilen so keine Dateien. Mergen Sie diesen gewöhnlichen
+Repository-Branch wie üblich aus Ihrem eigenen Checkout.
+
+- Worktrees liegen unter `<data directory>/session-worktrees`.
+  `OLIVARES_SESSION_WORKTREE_DIR` verschiebt sie und
+  `OLIVARES_SESSION_WORKTREE_BRANCH_PREFIX` ändert das Branch-Präfix.
+- **Fortsetzen** verwendet denselben Worktree. Wurde nur sein Verzeichnis gelöscht,
+  stellt die Engine ihn auf demselben Branch wieder her.
+- **Aufräumen**, **Löschen** und `olivares session rm` entfernen Worktree und Branch,
+  wenn der Branch in den aktuellen Workspace-Branch gemergt ist, der Worktree auf
+  diesem Branch steht und keine uncommitted Dateien hat. Sonst wird die Freigabe
+  mit 409 verweigert und nennt den möglichen Verlust: ungemergte Arbeit, detached
+  HEAD, ein anderer Branch oder ein unerreichbarer Worktree. Aktivieren Sie
+  **Auch Worktree und Branch verwerfen** oder fügen Sie `--discard-worktree` hinzu,
+  um dennoch fortzufahren; bei unerreichbarem Worktree wird die Sitzung freigegeben
+  und der Worktree bleibt liegen. Von Git ignorierte Dateien wie Build-Ausgaben
+  werden mit dem Worktree entfernt.
+- Die Option wird vor jeder Erstellung mit 422 verweigert für Ordner außerhalb
+  der Repository-Wurzel, Repositorys ohne Commit, schreibgeschützte Workspaces oder
+  Ordner, nicht-native Isolation und Git-Konfigurationen mit Filtern
+  (`filter.<name>.clean`, `smudge`, `process`) oder Datei-Includes. Sitzungen ohne
+  diese Option bleiben unverändert.
+- Die Engine führt Git mit deaktivierten Repository-Hooks und Dateisystemmonitor,
+  ohne Ihre Git-Konfiguration sowie mit Zeit- und Ausgabelimit aus. Ein dort
+  konfigurierter Git-LFS-Filter wird daher nicht angewendet: LFS-Dateien erscheinen
+  als Pointer-Dateien. Eine Sitzung kann das gemeinsame Git-Verzeichnis des
+  Repositorys beschreiben; alle Sitzungen teilen es. Ein Worktree isoliert Dateien,
+  nicht Git-Metadaten.
+
+### Die im Handoff benannte Arbeit öffnen
+
+Ein Handoff kann die Git-Position seiner Arbeit angeben: Sein Inhalt akzeptiert
+optional `branch` und `sha` (eine vollständige Commit-ID). Bieten Sie ihn über die
+API oder `olivares message handoff offer --context-file` an; dessen JSON kann beide
+enthalten. Ein Handoff ohne diese Angaben bleibt unverändert.
+
+Beim Lesen zeigt das Panel Branch und Commit als Text. **In einem neuen Sitzungs-
+Worktree öffnen** öffnet den Startdialog mit ausgewähltem Worktree und sichtbarem
+Startpunkt. Der Start wartet, bis Sie den Workspace wählen, dessen Repository den
+Commit enthält. Das Zurücksetzen der Ordnerauswahl behält die Anforderung bei; deaktivieren
+Sie den Worktree ausdrücklich, um stattdessen eine gewöhnliche Sitzung zu starten.
+In der Kommandozeile:
+
+```sh
+olivares session start . --worktree-from <commit or branch> --name review
+```
+
+`--worktree-from` impliziert `--worktree`. Die Sitzung arbeitet auf ihrem eigenen
+neuen Branch an diesem Commit; der Branch des Absenders und Ihr Checkout bleiben
+unverändert. Fehlt der Commit im Workspace-Repository, wird der Start mit 422
+verweigert, bevor etwas angelegt wird: fetchen Sie ihn zuerst dorthin. Auch ein
+Commit, den kein Branch, Tag oder Remote-Branch hält, wird verweigert. **Branch-
+Änderungen** zeigt anschließend, was der Sitzungsbranch gegenüber dem aktuellen
+Workspace-Commit enthält, und öffnet den Text eines Pfads an der Merge-Basis neben
+dem Text an der Branch-Spitze. Sichtbar ist nur committed Arbeit innerhalb der
+erlaubten Workspace-Unterpfade und DLP-Posture; uncommitted Änderungen stehen in
+**Änderungen**.
 
 ### CLI
 
@@ -165,11 +243,10 @@ Workspace- und Vorlagenauswahl dürfen geleert werden; das Profil nicht
 olivares agent session create --provider-profile <profile_ref>
 ```
 
-Fügen Sie `--server`, `--tenant` und `--token` (oder den aktiven
+Fügen Sie `--server`, `--tenant` und `--token-file` (oder den aktiven
 Client-Kontext) hinzu wie in der [CLI-Referenz](/reference/cli/). Isolation ist
-in diesem Release `native`; `container` und `sandbox` akzeptiert die API und der
-Launcher lehnt sie ab, bis diese Runner ausgeliefert sind (generierte
-CLI-Hilfe).
+in diesem Release `native`; `container` und `sandbox` werden vor dem Anlegen
+eines Runs mit HTTP 422 abgelehnt. Wählen Sie `native` für den integrierten Runner.
 
 Ergebnis: eine Lauf-Ressource. Die verwaltete Live-Zeile ist eindeutig pro
 Beobachtungsscope und externer ID. Lesungen, die eine Zeile benennen, verwenden

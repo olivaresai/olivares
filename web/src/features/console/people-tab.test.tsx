@@ -14,7 +14,7 @@ import type { ReactElement, ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import './i18n'
 
-const { api, authState } = vi.hoisted(() => ({
+const { api, authState, serverInfo } = vi.hoisted(() => ({
   api: {
     onboard: vi.fn(),
     listInvites: vi.fn(),
@@ -31,9 +31,13 @@ const { api, authState } = vi.hoisted(() => ({
     principal: { aal: 3 } as { aal?: number } | null,
     can: (_p: string, _opts?: unknown): boolean => true,
   },
+  serverInfo: { data: {} as { invite_delivery_unavailable?: boolean } },
 }))
 
 vi.mock('@/lib/auth/context', () => ({ useAuth: () => authState }))
+vi.mock('@/lib/hooks/use-server-info', () => ({
+  useServerInfo: () => serverInfo,
+}))
 vi.mock('@/features/identity/assurance', () => ({
   AAL: { PASSWORD: 1, MFA: 2, HARDWARE: 3 },
   RequireAssurance: ({ children }: { children: ReactNode }) => <>{children}</>,
@@ -67,6 +71,7 @@ function wrap(ui: ReactElement) {
 beforeEach(() => {
   vi.clearAllMocks()
   authState.can = (_p: string, _opts?: unknown) => true
+  serverInfo.data = {}
   api.listInvites.mockResolvedValue(emptyList)
   api.listMembers.mockResolvedValue(emptyList)
   api.listSuperadmins.mockResolvedValue(emptyList)
@@ -408,5 +413,103 @@ describe('PeopleTab — onboarding checks the address', () => {
     expect(await within(dialog).findByRole('alert')).toHaveTextContent(
       'email address is not valid',
     )
+  })
+})
+
+// #471: with no invitation mailer the engine answers invite mode 409, and the console
+// offered it anyway, ending in "Something went wrong.". server-info now says so.
+describe('PeopleTab — email invitations follow the engine', () => {
+  const reason = /cannot mail invitations/i
+  const invite = {
+    id: 'i1',
+    email: 'grace@acme.io',
+    tenant: 't1',
+    role: 'member',
+    expires_at: '2030-01-01T00:00:00Z',
+    created_at: '2026-01-01T00:00:00Z',
+  }
+
+  async function openModes() {
+    const user = userEvent.setup()
+    wrap(<PeopleTab />)
+    await user.click(
+      (await screen.findAllByRole('button', { name: 'Onboard user' }))[0],
+    )
+    const dialog = await screen.findByRole('dialog')
+    await user.click(within(dialog).getByLabelText('How they sign in'))
+    const option = await screen.findByRole('option', {
+      name: 'Send an email invitation',
+    })
+    return { user, dialog, option }
+  }
+
+  it('without a mailer the invitation is disabled, with the reason', async () => {
+    serverInfo.data = { invite_delivery_unavailable: true }
+    const { dialog, option } = await openModes()
+    expect(option).toHaveAttribute('aria-disabled', 'true')
+    expect(within(dialog).getByText(reason)).toBeInTheDocument()
+  })
+
+  it('with a mailer the invitation is offered and no reason shows', async () => {
+    const { dialog, option } = await openModes()
+    expect(option).not.toHaveAttribute('aria-disabled')
+    expect(within(dialog).queryByText(reason)).toBeNull()
+  })
+
+  it('the palette request opens on the invitation with a mailer', async () => {
+    wrap(<PeopleTab inviteRequested />)
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).queryByLabelText(/^Initial password/)).toBeNull()
+  })
+
+  it('the palette request without a mailer onboards with a password', async () => {
+    serverInfo.data = { invite_delivery_unavailable: true }
+    api.onboard.mockResolvedValue({ user: { id: 'u-new' } })
+    const user = userEvent.setup()
+    wrap(<PeopleTab inviteRequested />)
+    const dialog = await screen.findByRole('dialog')
+    await user.type(within(dialog).getByLabelText(/^Email/), 'ana@acme.io')
+    await user.type(
+      within(dialog).getByLabelText(/^Initial password/),
+      'long-enough-1',
+    )
+    await user.click(within(dialog).getByRole('button', { name: 'Onboard' }))
+    await waitFor(() => expect(api.onboard).toHaveBeenCalledTimes(1))
+    expect(api.onboard.mock.calls[0][0]).toMatchObject({
+      mode: 'password',
+      password: 'long-enough-1',
+    })
+  })
+
+  it("the engine's 409 reads in the form when server-info had not said so", async () => {
+    api.onboard.mockRejectedValue(
+      new ApiError(
+        409,
+        'invite_delivery_unavailable',
+        'auth: no invitation mailer is configured',
+      ),
+    )
+    const { user, dialog } = await openModes()
+    await user.click(
+      screen.getByRole('option', { name: 'Send an email invitation' }),
+    )
+    await user.type(within(dialog).getByLabelText(/^Email/), 'ana@acme.io')
+    await user.click(within(dialog).getByRole('button', { name: 'Onboard' }))
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+      'no invitation mailer is configured',
+    )
+  })
+
+  it('a pending invitation offers its resend only with a mailer', async () => {
+    api.listInvites.mockResolvedValue({ items: [invite], has_more: false })
+    wrap(<PeopleTab />)
+    await screen.findByText(invite.email)
+    expect(screen.getByRole('button', { name: 'Resend' })).toBeEnabled()
+
+    cleanup()
+    serverInfo.data = { invite_delivery_unavailable: true }
+    wrap(<PeopleTab />)
+    await screen.findByText(invite.email)
+    expect(screen.getByRole('button', { name: 'Resend' })).toBeDisabled()
   })
 })

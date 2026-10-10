@@ -20,11 +20,9 @@ import (
 // Edition seams for the session cockpit (V269 / docs/contracts/COCKPIT-07-edition-cut.md §4).
 //
 // This file carries NO build tag on purpose: it holds the TYPES and the runner the
-// three build variants share, so the tagged files
-// (cmd/olivares/wire_noenterprise.go, and the overlay's
-// wire_enterprise_{addon_ids,noaddon_ids}.go) declare only the constructors. A type
-// declared inside a tagged file would have to be written three times and could drift
-// three ways.
+// three build variants share, so only the overlay's tagged files declare the
+// constructors its edition ports point at (edition_ports.go). A type declared inside a
+// tagged file would have to be written three times and could drift three ways.
 
 // editionAuxServer is one AUXILIARY network listener an edition serves alongside the
 // HTTP and gRPC servers.
@@ -52,7 +50,7 @@ type editionAuxServer interface {
 // a failure on errCh, exactly as serveHTTP does for the HTTP listeners.
 //
 // A build with no auxiliary listener passes an empty slice and this is a no-op — the
-// same shape as enterpriseRootCommands returning nil. In phase 0 that is EVERY build,
+// same shape as an absent rootCommands port. In phase 0 that is EVERY build,
 // including `addon_ids`: the agent listener is phase 1A work. The seam lands first so
 // the wiring, the twins and the shutdown path are already in their final shape when the
 // engine arrives.
@@ -157,6 +155,9 @@ type EditionRuntimeLaunchObserverRegistration interface {
 // EditionDependencies contains existing engine capabilities, never a private engine
 // or a second configuration source. Boot binds these after store/auth composition.
 type EditionDependencies struct {
+	// The existing shared producers used by private module wiring.
+	modules *moduleSet
+
 	// RegisterJobNotRunning registers a job's bounded in-memory status reader
 	// with server-info. Empty reason means running; values follow the public API.
 	// Nil means the status collector is unavailable, not scheduling authority.

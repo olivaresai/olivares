@@ -6,6 +6,7 @@ import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactElement } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { fakeRouter } from '@/test/fake-router'
 import './i18n'
 
 const { api, authState, assur } = vi.hoisted(() => ({
@@ -24,6 +25,11 @@ const { api, authState, assur } = vi.hoisted(() => ({
   },
   assur: { aal: 3 },
 }))
+
+vi.mock('@tanstack/react-router', async () => {
+  const { fakeRouterModule } = await import('@/test/fake-router')
+  return fakeRouterModule()
+})
 
 vi.mock('@/lib/auth/context', () => ({ useAuth: () => authState }))
 vi.mock('@/features/identity/assurance', () => ({
@@ -79,6 +85,7 @@ function wrapShared(ui: ReactElement) {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  fakeRouter.reset('/inference-proxy')
   authState.can = () => true
   authState.activeTenant = 't1'
   assur.aal = 3
@@ -540,4 +547,26 @@ describe('Messages inspector attachment', () => {
     wrap(<InferenceProxyView />)
     expect(await screen.findByText('Inspector attached')).toBeInTheDocument()
   })
+})
+
+// A verification link supplies a code, never permission or consent.
+it('prefills a linked device code and waits for an explicit permitted decision', async () => {
+  fakeRouter.reset('/inference-proxy?user_code=BCDF-GHJK#device')
+  const user = userEvent.setup()
+  const view = wrap(<InferenceProxyView />)
+  expect(await screen.findByLabelText(/user code/i)).toHaveValue('BCDF-GHJK')
+  expect(api.approveDevice).not.toHaveBeenCalled()
+  await user.click(screen.getByRole('button', { name: /^approve$/i }))
+  await waitFor(() =>
+    expect(api.approveDevice).toHaveBeenCalledWith({
+      user_code: 'BCDF-GHJK',
+      deny: false,
+    }),
+  )
+  view.unmount()
+  api.approveDevice.mockClear()
+  assur.aal = 1
+  wrap(<InferenceProxyView />)
+  expect(screen.queryByLabelText(/user code/i)).toBeNull()
+  expect(api.approveDevice).not.toHaveBeenCalled()
 })

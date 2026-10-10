@@ -22,8 +22,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	goruntime "runtime"
-	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -84,53 +84,6 @@ func TestOutOfProcessSourcePlugin(t *testing.T) {
 			t.Fatalf("did not receive edge %d from out-of-process plugin", i)
 		}
 	}
-}
-
-// countPluginChildren counts THIS process's direct children whose comm matches
-// name. /proc/<pid>/stat is world-readable, so it works whether or not plugjail
-// moved the child to a dedicated uid. comm is truncated to 15 characters by the
-// kernel, which is why the caller passes a short name.
-func countPluginChildren(t *testing.T, name string) int {
-	t.Helper()
-	entries, err := os.ReadDir("/proc")
-	if err != nil {
-		t.Skipf("/proc is not readable here, so the process count cannot be measured: %v", err)
-	}
-	me := os.Getpid()
-	n := 0
-	for _, e := range entries {
-		if !e.IsDir() {
-			continue
-		}
-		pid, cerr := strconv.Atoi(e.Name())
-		if cerr != nil {
-			continue
-		}
-		raw, rerr := os.ReadFile(filepath.Join("/proc", e.Name(), "stat"))
-		if rerr != nil {
-			continue // the process exited between the listing and the read
-		}
-		// comm is parenthesized and may contain spaces; the fields after the LAST
-		// ')' are state (3) then ppid (4).
-		close := strings.LastIndex(string(raw), ")")
-		open := strings.Index(string(raw), "(")
-		if close < 0 || open < 0 || close <= open {
-			continue
-		}
-		comm := string(raw[open+1 : close])
-		rest := strings.Fields(string(raw[close+1:]))
-		if len(rest) < 2 {
-			continue
-		}
-		ppid, perr := strconv.Atoi(rest[1])
-		if perr != nil || ppid != me || pid == me {
-			continue
-		}
-		if comm == name {
-			n++
-		}
-	}
-	return n
 }
 
 // TestOneSourcePluginBinaryBacksTwoNamedSources is the out-of-process half of the
@@ -420,5 +373,316 @@ func TestMalformedPluginRegistrationIsRefusedAndItsSubprocessReaped(t *testing.T
 			t.Fatal("successful control left a plugin subprocess behind after Stop")
 		}
 		time.Sleep(100 * time.Millisecond)
+	}
+}
+
+// TestKilledSourcePluginIsRestarted: a plugin source whose process dies while
+// Gather runs is relaunched by the runtime and runs again in a NEW process. It is
+// measured on the three ways a plugin source is loaded: first-party at boot,
+// checksum-pinned external at boot (the pin is checked again on every relaunch),
+// and live-added through a prepared source, the last both one-shot and polling.
+func TestKilledSourcePluginIsRestarted(t *testing.T) {
+	if goruntime.GOOS != "linux" {
+		t.Skip("the plugin processes are found through /proc")
+	}
+	if _, err := exec.LookPath("go"); err != nil {
+		t.Skip("go toolchain not on PATH; skipping out-of-process plugin build")
+	}
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	repoRoot := filepath.Clean(filepath.Join(wd, "..", ".."))
+	bin := filepath.Join(execCapableDir(t), "streamsource")
+	build := exec.Command("go", "build", "-o", bin, "github.com/olivaresai/olivares/core/runtime/testdata/streamsource")
+	build.Dir = repoRoot
+	if out, berr := build.CombinedOutput(); berr != nil {
+		t.Fatalf("build the streaming fixture: %v\n%s", berr, out)
+	}
+	raw, err := os.ReadFile(bin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sum := sha256.Sum256(raw)
+
+	rt := runtime.New(runtime.Options{Logger: quiet()})
+	mod := &fakeModule{name: "counter", got: make(chan event.Event, 32)}
+	if err := rt.AddModule(mod, sdk.Config{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := rt.LoadSourcePluginNamed("stream-boot", bin, sdk.Config{}, "tenant-s"); err != nil {
+		t.Fatalf("load first-party: %v", err)
+	}
+	if err := rt.LoadSourcePluginVerifiedNamed("stream-pinned", bin, sdk.Config{}, "tenant-s", hex.EncodeToString(sum[:])); err != nil {
+		t.Fatalf("load pinned: %v", err)
+	}
+	if err := rt.Start(context.Background()); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		_ = rt.Stop(ctx)
+	})
+	prepared, err := rt.PrepareSourcePlugin(bin)
+	if err != nil {
+		t.Fatalf("prepare live: %v", err)
+	}
+	if err := rt.AddPreparedSourceNamed(context.Background(), "stream-live", prepared, sdk.Config{}, "tenant-s", 0); err != nil {
+		t.Fatalf("add live: %v", err)
+	}
+	// A polling source takes the other branch of the gather loop.
+	polling, err := rt.PrepareSourcePlugin(bin)
+	if err != nil {
+		t.Fatalf("prepare polling: %v", err)
+	}
+	if err := rt.AddPreparedSourceNamed(context.Background(), "stream-poll", polling, sdk.Config{}, "tenant-s", time.Hour); err != nil {
+		t.Fatalf("add polling: %v", err)
+	}
+
+	names := []string{"stream-boot", "stream-pinned", "stream-live", "stream-poll"}
+	first := processPerSource(t, mod.got, names)
+
+	for _, pid := range pluginChildren(t, "streamsource") {
+		if kerr := syscall.Kill(pid, syscall.SIGKILL); kerr != nil {
+			t.Skipf("cannot signal the plugin process %d (it may run under a dedicated uid): %v", pid, kerr)
+		}
+	}
+
+	second := processPerSource(t, mod.got, names)
+	for _, name := range names {
+		if second[name] == first[name] {
+			t.Errorf("%s reported %s again; want a new plugin process after the kill", name, first[name])
+		}
+	}
+	if n := countPluginChildren(t, "streamsource"); n != len(names) {
+		t.Errorf("%d plugin processes running after the restart, want %d", n, len(names))
+	}
+	status := map[string]runtime.Status{}
+	for _, cs := range rt.Status() {
+		status[cs.Name] = cs.Status
+	}
+	for _, name := range names {
+		if status[name] != runtime.StatusRunning {
+			t.Errorf("%s status %q after the restart, want %q", name, status[name], runtime.StatusRunning)
+		}
+	}
+}
+
+// TestFailingGatherOfLivePluginIsNotRestarted: when the plugin process is alive and
+// its Gather fails, the failure is the connector's own. The source is left failed,
+// as before supervision, and the process is neither killed nor started again.
+func TestFailingGatherOfLivePluginIsNotRestarted(t *testing.T) {
+	if goruntime.GOOS != "linux" {
+		t.Skip("the plugin processes are found through /proc")
+	}
+	if _, err := exec.LookPath("go"); err != nil {
+		t.Skip("go toolchain not on PATH; skipping out-of-process plugin build")
+	}
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	repoRoot := filepath.Clean(filepath.Join(wd, "..", ".."))
+	bin := filepath.Join(execCapableDir(t), "streamsource")
+	build := exec.Command("go", "build", "-o", bin, "github.com/olivaresai/olivares/core/runtime/testdata/streamsource")
+	build.Dir = repoRoot
+	if out, berr := build.CombinedOutput(); berr != nil {
+		t.Fatalf("build the streaming fixture: %v\n%s", berr, out)
+	}
+
+	rt := runtime.New(runtime.Options{Logger: quiet()})
+	if err := rt.LoadSourcePluginNamed("stream-fails", bin, sdk.Config{Settings: map[string]string{"fail": "1"}}, "tenant-s"); err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	before := pluginChildren(t, "streamsource")
+	if len(before) != 1 {
+		t.Fatalf("%d plugin processes after the load, want 1", len(before))
+	}
+	if err := rt.Start(context.Background()); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		_ = rt.Stop(ctx)
+	})
+
+	// Three times the first restart delay: a supervisor that mistook the failure
+	// for a crash would have replaced the process by now.
+	time.Sleep(3 * time.Second)
+	var status runtime.Status
+	for _, cs := range rt.Status() {
+		if cs.Name == "stream-fails" {
+			status = cs.Status
+		}
+	}
+	if status != runtime.StatusFailed {
+		t.Errorf("status %q, want %q", status, runtime.StatusFailed)
+	}
+	if after := pluginChildren(t, "streamsource"); len(after) != 1 || after[0] != before[0] {
+		t.Errorf("plugin processes %v after a connector failure, want the original %v", after, before)
+	}
+}
+
+// TestPinnedPluginIsNotRestartedFromAChangedBinary: the relaunch of an external
+// plugin checks its pinned digest again. When the binary on disk changed after
+// admission, the restart is refused, the source reports the refusal, and no process
+// runs; Stop during the retries leaves nothing behind.
+func TestPinnedPluginIsNotRestartedFromAChangedBinary(t *testing.T) {
+	if goruntime.GOOS != "linux" {
+		t.Skip("the plugin processes are found through /proc")
+	}
+	if _, err := exec.LookPath("go"); err != nil {
+		t.Skip("go toolchain not on PATH; skipping out-of-process plugin build")
+	}
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	repoRoot := filepath.Clean(filepath.Join(wd, "..", ".."))
+	dir := execCapableDir(t)
+	bin := filepath.Join(dir, "streamsource")
+	build := exec.Command("go", "build", "-o", bin, "github.com/olivaresai/olivares/core/runtime/testdata/streamsource")
+	build.Dir = repoRoot
+	if out, berr := build.CombinedOutput(); berr != nil {
+		t.Fatalf("build the streaming fixture: %v\n%s", berr, out)
+	}
+	raw, err := os.ReadFile(bin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sum := sha256.Sum256(raw)
+
+	rt := runtime.New(runtime.Options{Logger: quiet()})
+	mod := &fakeModule{name: "counter", got: make(chan event.Event, 8)}
+	if err := rt.AddModule(mod, sdk.Config{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := rt.LoadSourcePluginVerifiedNamed("stream-pinned", bin, sdk.Config{}, "tenant-s", hex.EncodeToString(sum[:])); err != nil {
+		t.Fatalf("load pinned: %v", err)
+	}
+	if err := rt.Start(context.Background()); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	stopped := false
+	t.Cleanup(func() {
+		if !stopped {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			_ = rt.Stop(ctx)
+		}
+	})
+	processPerSource(t, mod.got, []string{"stream-pinned"})
+
+	// The same program with one trailing byte: it would still run, so only the pin
+	// can refuse it. Renamed into place, so the running process keeps its file.
+	changed := filepath.Join(dir, "streamsource.changed")
+	if err := os.WriteFile(changed, append(raw, 0), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(changed, bin); err != nil {
+		t.Fatal(err)
+	}
+	for _, pid := range pluginChildren(t, "streamsource") {
+		if kerr := syscall.Kill(pid, syscall.SIGKILL); kerr != nil {
+			t.Skipf("cannot signal the plugin process %d (it may run under a dedicated uid): %v", pid, kerr)
+		}
+	}
+
+	var last runtime.ComponentStatus
+	for deadline := time.Now().Add(20 * time.Second); time.Now().Before(deadline); time.Sleep(200 * time.Millisecond) {
+		for _, cs := range rt.Status() {
+			if cs.Name == "stream-pinned" {
+				last = cs
+			}
+		}
+		if last.Status == runtime.StatusFailed && strings.Contains(last.Err, "restart") {
+			break
+		}
+	}
+	if last.Status != runtime.StatusFailed || !strings.Contains(last.Err, "checksum") {
+		t.Fatalf("status %q (%s) after relaunching a changed binary, want failed with the checksum refusal", last.Status, last.Err)
+	}
+	if n := countPluginChildren(t, "streamsource"); n != 0 {
+		t.Errorf("%d plugin processes running from a binary that no longer matches its pin, want 0", n)
+	}
+	select {
+	case e := <-mod.got:
+		t.Errorf("the source emitted after its binary changed: %+v", e)
+	default:
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	begun := time.Now()
+	if err := rt.Stop(ctx); err != nil {
+		t.Fatalf("stop: %v", err)
+	}
+	stopped = true
+	if took := time.Since(begun); took > 5*time.Second {
+		t.Errorf("Stop took %v while the restart was backing off, want it to return promptly", took)
+	}
+	if n := countPluginChildren(t, "streamsource"); n != 0 {
+		t.Errorf("%d plugin processes left after Stop, want 0", n)
+	}
+}
+
+// TestCrashLoopingPluginBacksOff: a plugin that dies right after every start is
+// restarted ever more slowly (1 s, 2 s, 4 s ...), not once a second forever.
+func TestCrashLoopingPluginBacksOff(t *testing.T) {
+	if goruntime.GOOS != "linux" {
+		t.Skip("out-of-process plugin test")
+	}
+	if _, err := exec.LookPath("go"); err != nil {
+		t.Skip("go toolchain not on PATH; skipping out-of-process plugin build")
+	}
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	repoRoot := filepath.Clean(filepath.Join(wd, "..", ".."))
+	bin := filepath.Join(execCapableDir(t), "streamsource")
+	build := exec.Command("go", "build", "-o", bin, "github.com/olivaresai/olivares/core/runtime/testdata/streamsource")
+	build.Dir = repoRoot
+	if out, berr := build.CombinedOutput(); berr != nil {
+		t.Fatalf("build the streaming fixture: %v\n%s", berr, out)
+	}
+
+	rt := runtime.New(runtime.Options{Logger: quiet()})
+	mod := &fakeModule{name: "counter", got: make(chan event.Event, 32)}
+	if err := rt.AddModule(mod, sdk.Config{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := rt.LoadSourcePluginNamed("stream-crash", bin, sdk.Config{Settings: map[string]string{"crash": "1"}}, "tenant-s"); err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if err := rt.Start(context.Background()); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		_ = rt.Stop(ctx)
+	})
+
+	// Every start emits one edge. Waits of 1 s and 2 s (each +-20%) fit in 5 s and a
+	// third of 4 s does not, so at most 3 starts; a wait that reset after each
+	// successful restart would give about 5.
+	starts := 0
+	for deadline := time.After(5 * time.Second); ; {
+		select {
+		case <-mod.got:
+			starts++
+			continue
+		case <-deadline:
+		}
+		break
+	}
+	if starts < 2 {
+		t.Fatalf("%d starts in 5 s: the crashed plugin was not restarted", starts)
+	}
+	if starts > 3 {
+		t.Errorf("%d starts in 5 s: the restart wait does not grow while the plugin keeps dying", starts)
 	}
 }

@@ -6,6 +6,9 @@ description: >-
   そして台帳を読めないときは拒否。何をするか、そしてその制限。
 ---
 
+FinOps の予算と支出分析は **[Business](https://olivares.ai/pricing)** の機能です。Community はセッションごとのコスト追跡とデータのエクスポートを提供します。<!-- release -->0.1<!-- /release --> より前に保存された予算は引き続き参照・削除でき、FinOps モジュールが有効な間は適用されます。Community では予算の作成・変更はできません。評価とサンドボックスは Community に残ります。
+
+
 モジュール XI は AI のための**コスト／FinOps** レイヤーである。model および provider コネクタが
 報告するものを計上し、支出を任意の attribution ディメンションでスライスでき、現在の期間を
 予測し、budget を単なるフラグ付けではなく上限で**支出を拒否する**実際の強制（enforcement）へと
@@ -73,8 +76,8 @@ SIEM／PagerDuty への配信は output-connector モジュールの役目であ
   アドミッションを確立できず、支出は拒否される: オーケストレーションの fire、音声の open、
   モデルのルート、evals ゲートの実行、永続的な MCP タスクは拒否され、推論プロキシは
   **HTTP 503** を返す。セッション起動は独自の可用性姿勢（`OLIVARES_SESSION_BUDGET_AVAILABILITY`）
-  を適用する: 未設定なら、セッションは Community エディションでは起動し、Enterprise エディション
-  では **HTTP 503** で拒否され、どちらの場合も失敗はログに記録される。ingest 時に発行される
+  を適用する: 未設定なら、セッションはどのエディションでも **HTTP 503** で拒否され、`fail-open`
+  に設定すると起動する。どちらの場合も失敗はログに記録される。ingest 時に発行される
   budget-cap finding は、上限に達した支出を引き続き記録する。
 - **router は実行前に知るスコープのみを強制する**（global／provider／model）。より細かい
   スコープ（agent、session、team、project）は、ルート解決時ではなく fire/open シームと

@@ -479,3 +479,17 @@ func TestGitLabTargetRefusesRebaseAndChecksCIConfig(t *testing.T) {
 		t.Fatalf("GitLab CI paths checked = %v", h.git.checkedPaths)
 	}
 }
+
+// Custody implementations outside the first-party roster historically use the
+// GitHub defaults for a custom host kind. The kind extraction keeps that path.
+func TestPublicationKindCustomCustodyKeepsGitHubDefaults(t *testing.T) {
+	h := newHarness(t)
+	h.custody.hostKind = "custom"
+	if _, err := h.push(h.user(), "custom-host", "refs/heads/olivares/custom", ""); err != nil {
+		t.Fatalf("custom custody push = %v", err)
+	}
+	if h.host.mints == 0 || len(h.git.checkedPaths) != 1 || h.git.checkedPaths[0] != ".github/workflows" {
+		t.Fatalf("custom host mints %d, CI paths %v", h.host.mints, h.git.checkedPaths)
+	}
+	h.balanced()
+}

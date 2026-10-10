@@ -23,10 +23,10 @@ ROOT="${OLIVARES_ROOT:-$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." &&
 RED="${OLIVARES_DOCS_REDIRECTS:-$ROOT/docs-site/public/_redirects}"
 DOCS="${OLIVARES_DOCS_CONTENT:-$ROOT/docs-site/src/content/docs}"
 
-no_puedo() { printf 'check-docs-redirects: NO HE PODIDO MIRAR — %s\n' "$1" >&2; exit 2; }
+cannot_check() { printf 'check-docs-redirects: COULD NOT CHECK — %s\n' "$1" >&2; exit 2; }
 
-[ -r "$RED" ]  || no_puedo "no puedo leer $RED"
-[ -d "$DOCS" ] || no_puedo "no existe el arbol de contenido $DOCS"
+[ -r "$RED" ]  || cannot_check "cannot read $RED"
+[ -d "$DOCS" ] || cannot_check "missing content tree $DOCS"
 
 # Limites de la plataforma (Workers static assets), citados donde se aplican.
 MAX_REGLAS=2000
@@ -40,7 +40,7 @@ while IFS= read -r linea; do
 	reglas=$((reglas + 1))
 
 	if [ "${#linea}" -gt "$MAX_CHARS" ]; then
-		printf 'check-docs-redirects: FAIL — regla de %s caracteres, el limite es %s:\n  %s\n' \
+		printf 'check-docs-redirects: FAIL — rule has %s characters; the limit is %s:\n  %s\n' \
 			"${#linea}" "$MAX_CHARS" "${linea:0:80}..." >&2
 		fallos=$((fallos + 1))
 		continue
@@ -48,7 +48,7 @@ while IFS= read -r linea; do
 
 	# campo 2 = destino. `read` con IFS por defecto parte por espacios, que es lo que usa el formato.
 	destino="$(printf '%s\n' "$linea" | awk '{print $2}')"
-	[ -n "$destino" ] || { printf 'check-docs-redirects: FAIL — regla sin destino: %s\n' "$linea" >&2; fallos=$((fallos + 1)); continue; }
+	[ -n "$destino" ] || { printf 'check-docs-redirects: FAIL — rule has no destination: %s\n' "$linea" >&2; fallos=$((fallos + 1)); continue; }
 
 	# Un destino externo no se puede comprobar contra el arbol; se declara y se salta.
 	case "$destino" in http://*|https://*) continue ;; esac
@@ -62,7 +62,7 @@ while IFS= read -r linea; do
 	elif [ -f "$DOCS/$p/index.md" ]  ; then :
 	elif [ -f "$DOCS/$p/index.mdx" ] ; then :
 	else
-		printf 'check-docs-redirects: FAIL — el destino NO existe, la cortesia lleva a otro 404:\n' >&2
+		printf 'check-docs-redirects: FAIL — destination is missing; the redirect leads to another 404:\n' >&2
 		printf '  regla:   %s\n  destino: %s\n  buscado: %s/{%s.md,%s.mdx,%s/index.md,%s/index.mdx}\n' \
 			"$linea" "$destino" "$DOCS" "$p" "$p" "$p" "$p" >&2
 		fallos=$((fallos + 1))
@@ -70,14 +70,14 @@ while IFS= read -r linea; do
 done < "$RED"
 
 if [ "$reglas" -gt "$MAX_REGLAS" ]; then
-	printf 'check-docs-redirects: FAIL — %s reglas, el limite de la plataforma es %s\n' "$reglas" "$MAX_REGLAS" >&2
+	printf 'check-docs-redirects: FAIL — %s rules; the platform limit is %s\n' "$reglas" "$MAX_REGLAS" >&2
 	fallos=$((fallos + 1))
 fi
 
 # ⛔ CONTROL POSITIVO EN LA PROPIA PUERTA: cero reglas no es "limpio", es que no he mirado nada.
 #    Sin esto, borrar el fichero de reglas o romper el bucle sale VERDE.
-[ "$reglas" -gt 0 ] || no_puedo "no he leido ni una regla de $RED — un cero aqui no es limpieza"
+[ "$reglas" -gt 0 ] || cannot_check "no rules could be read from $RED; an empty scan is not a clean result"
 
 [ "$fallos" -eq 0 ] || exit 1
-printf 'check-docs-redirects: CLEAN — %s regla(s) de cortesia, todos los destinos existen.\n' "$reglas"
+printf 'check-docs-redirects: CLEAN — %s redirect rule(s), all destinations exist.\n' "$reglas"
 exit 0

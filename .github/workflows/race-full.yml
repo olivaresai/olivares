@@ -46,8 +46,9 @@ jobs:
   # package nobody races.
   setup:
     runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
-    timeout-minutes: 10
+    timeout-minutes: 30
     outputs:
+      bundle-artifact: web-generation-${{ github.run_id }}-${{ github.run_attempt }}
       groups: ${{ steps.spec.outputs.groups }}
       cloud_group: ${{ steps.spec.outputs.cloud_group }}
       root_shards: ${{ steps.spec.outputs.root_shards }}
@@ -103,6 +104,29 @@ jobs:
             echo "cloud_group=$(python3 -c 'import json;print(json.load(open("scripts/race-groups.json"))["cloud_task_group"])')"
             echo "root_shards=$(bash scripts/race-groups.sh root-shards)"
           } >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          dest: ${{ runner.temp }}/setup-pnpm
+          standalone: true
+      - name: install go-task (pinned)
+        uses: ./.github/actions/olivares-tool-cache
+      - name: build and capture the console once for all race jobs
+        id: web-generation
+        env:
+          PR_HEAD: ${{ github.sha }}
+        run: python3 scripts/capture-web-generation.py
+      - name: retain the generated console bundle
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: web-generation-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/web-generation-artifact/
+          retention-days: 1
+          compression-level: 0
+          if-no-files-found: error
 
   # Every workspace package under -race EXCEPT the cmd/olivares root package
   # (raced in race-root below), SPLIT INTO GROUPS so each fits a job.
@@ -181,6 +205,7 @@ jobs:
           --cpus=2
           --pids-limit=512
     env:
+      OLIVARES_REQUIRE_WEB_BUNDLE: "1"
       # The four OLIVARES_TEST_*_DSN CANNOT live here: they depend on the ephemeral
       # host port, and the `job` context is not available in jobs.<id>.env
       # (actionlint availability.go: jobs.<job_id>.env → github, inputs, matrix,
@@ -260,6 +285,16 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: download the console built by setup
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ${{ needs.setup.outputs.bundle-artifact }}
+          path: ${{ runner.temp }}/web-generation-artifact
+      - name: embed the verified console output
+        run: |
+          cd "$RUNNER_TEMP/web-generation-artifact"
+          sha256sum -c SHA256SUMS
+          tar -xzf dist.tar.gz -C "$GITHUB_WORKSPACE/core/internal/webui"
       - name: Prepare Go caches when the runner environment is unusable
         # setup-go runs go env itself, so cache fallback must precede it.
         # Keep persistent runner caches when the existing environment is usable.
@@ -347,18 +382,26 @@ jobs:
                   }
                   printf "%s %s\n", toupper(a), n; fflush();
                 }' 
+      - name: Preserve evidence on the runner
+        if: always()
+        continue-on-error: true
+        uses: ./.github/actions/ci-evidence
+        with:
+          name: race-group-timings-${{ matrix.group }}
+          path: ${{ runner.temp }}/race-group-${{ matrix.group }}.jsonl
       - name: keep the per-group timings even when the step died
         # ⛔ MI DEUDA, y la pago aqui: cuando escribi el reparto cablee el artefacto SOLO en el
         # paso de la RAIZ. La noche que `modules-sessions` murio no habia `.jsonl` de grupo, asi
         # que el diagnostico hubo que sacarlo del volcado del panic — y ahi lei de mas y acuse a
         # dos tests que iban BIEN. Con el artefacto, la proxima vez se mira el dato.
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        continue-on-error: true
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: race-group-timings-${{ matrix.group }}
           path: ${{ runner.temp }}/race-group-${{ matrix.group }}.jsonl
           if-no-files-found: warn
-          retention-days: 7
+          retention-days: 1
       - name: race the cloud control plane
         # UNA sola vez, en el grupo que la especificación nombra — y el control de
         # unión comprueba que ese nombre existe, para que renombrar un grupo no
@@ -427,6 +470,7 @@ jobs:
           --cpus=2
           --pids-limit=512
     env:
+      OLIVARES_REQUIRE_WEB_BUNDLE: "1"
       # The four OLIVARES_TEST_*_DSN CANNOT live here: they depend on the ephemeral
       # host port, and the `job` context is not available in jobs.<id>.env
       # (actionlint availability.go: jobs.<job_id>.env → github, inputs, matrix,
@@ -484,6 +528,16 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: download the console built by setup
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ${{ needs.setup.outputs.bundle-artifact }}
+          path: ${{ runner.temp }}/web-generation-artifact
+      - name: embed the verified console output
+        run: |
+          cd "$RUNNER_TEMP/web-generation-artifact"
+          sha256sum -c SHA256SUMS
+          tar -xzf dist.tar.gz -C "$GITHUB_WORKSPACE/core/internal/webui"
       - name: Prepare Go caches when the runner environment is unusable
         # setup-go runs go env itself, so cache fallback must precede it.
         # Keep persistent runner caches when the existing environment is usable.
@@ -579,15 +633,23 @@ jobs:
                   printf "%s %s\n", toupper(a), n;
                   fflush();
                 }'
+      - name: Preserve evidence on the runner
+        if: always()
+        continue-on-error: true
+        uses: ./.github/actions/ci-evidence
+        with:
+          name: race-root-timings-${{ matrix.shard }}
+          path: ${{ runner.temp }}/race-root-${{ matrix.shard }}.jsonl
       - name: keep the per-test timings even when the step died
         # `if: always()`: el caso en que estas medidas valen MAS es el del timeout, y un
         # upload condicionado al exito las perderia exactamente ahi. El nombre lleva el
         # turno porque dos artefactos no pueden llamarse igual en la misma corrida — y
         # ademas es lo que permite recalibrar el reparto turno a turno.
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        continue-on-error: true
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: race-root-timings-${{ matrix.shard }}
           path: ${{ runner.temp }}/race-root-${{ matrix.shard }}.jsonl
           if-no-files-found: warn
-          retention-days: 7
+          retention-days: 1

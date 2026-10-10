@@ -10,6 +10,8 @@ import (
 	"regexp"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/olivaresai/olivares/core/driverfacts"
 )
 
 // exitCauseMax bounds the cause recorded on a run: one line an operator reads.
@@ -22,10 +24,10 @@ var credentialShaped = regexp.MustCompile(`(?i)(bearer\s+\S+|sk-[a-z0-9_\-]{6,}|
 
 // exitCause is what a child said last before it exited on its own: the error of
 // a stream-json result frame (Claude Code reports a failed start there), else the
-// last non-empty line it wrote to stderr. One line, bounded, with anything shaped
-// like a credential masked, because it becomes the run's reason and is shown to
-// the operator (HU-06: a refused or failed launch says why). Empty when the child
-// said nothing.
+// last non-empty line it wrote to stderr, or the error line heading a stack trace
+// that ends its stderr. One line, bounded, with anything shaped like a credential
+// masked, because it becomes the run's reason and is shown to the operator (HU-06:
+// a refused or failed launch says why). Empty when the child said nothing.
 func exitCause(r *outputRing) string {
 	if r == nil {
 		return ""
@@ -47,18 +49,52 @@ func exitCause(r *outputRing) string {
 			return clipCause(res.Result)
 		}
 	}
-	for i := len(frames) - 1; i >= 0; i-- {
-		if frames[i].Stream != streamStderr {
-			continue
-		}
-		lines := strings.Split(string(frames[i].Data), "\n")
-		for j := len(lines) - 1; j >= 0; j-- {
-			if line := strings.TrimSpace(lines[j]); line != "" {
-				return clipCause(line)
-			}
+	var stderr []string
+	for _, f := range frames {
+		if f.Stream == streamStderr {
+			stderr = append(stderr, string(f.Data))
 		}
 	}
-	return ""
+	return clipCause(stderrCause(strings.Join(stderr, "\n")))
+}
+
+// stackFrame is one line of a Node or JVM stack trace: "at fn (file:1:2)",
+// "at node:internal/x:1:2", "at pkg.Fn(File.java:12)"; Node ends the last frame
+// with " {" when the error's properties follow.
+var stackFrame = regexp.MustCompile(`^at \S.*(\)|:\d+)( \{)?$`)
+
+// stackTrailer is what Node prints after a stack: the end of the error's
+// properties, or its version line.
+var stackTrailer = regexp.MustCompile(`^(\}|Node\.js v[\d.]+)$`)
+
+// stderrCause is the last non-empty line of stderr. When that line only closes a
+// stack trace (a frame, the error's properties, Node's version), the cause is the
+// error line above the trace.
+func stderrCause(text string) string {
+	var lines []string
+	for _, line := range strings.Split(text, "\n") {
+		if line = strings.TrimSpace(line); line != "" {
+			lines = append(lines, line)
+		}
+	}
+	if len(lines) == 0 {
+		return ""
+	}
+	last := lines[len(lines)-1]
+	if !stackFrame.MatchString(last) && !stackTrailer.MatchString(last) {
+		return last
+	}
+	i := len(lines) - 1
+	for i >= 0 && !stackFrame.MatchString(lines[i]) {
+		i--
+	}
+	for i > 0 && stackFrame.MatchString(lines[i-1]) {
+		i--
+	}
+	if i > 0 {
+		return lines[i-1]
+	}
+	return last
 }
 
 func clipCause(s string) string {
@@ -74,32 +110,19 @@ func clipCause(s string) string {
 	return s
 }
 
-// signInFailures are the words each coding tool exits with when it has no login it
-// can use. The tool then names its OWN step ("Please run /login", "codex login"),
-// which in Olivares is the tool's sign-in under AI tools or a key in Providers.
-var signInFailures = map[string][]string{
-	providerDriverClaude:   {"not logged in", "please run /login", "invalid api key", "oauth token has expired", "authentication_error"},
-	providerDriverCodex:    {"not logged in", "codex login", "please log in", "unauthorized"},
-	"grok":                 {"not logged in", "grok login", "unauthenticated", "unauthorized"},
-	providerDriverOpenCode: {"no provider", "api key", "unauthorized", "not authenticated"},
-}
-
-var signInToolNames = map[string]string{
-	providerDriverClaude: "Claude Code", providerDriverCodex: "Codex", "grok": "Grok Build", providerDriverOpenCode: "OpenCode",
-}
-
 // productCause turns a tool's own "not signed in" exit into the step that fixes it
 // in Olivares (CLX on 08b: the run said "Please run /login", a step the product does
 // not have). The vendor's words stay as the detail, already clipped and redacted by
 // clipCause. Any other cause is returned as it is.
 func productCause(driver, cause string) string {
-	name, known := signInToolNames[driver]
+	facts, known := driverfacts.Lookup(driver)
+	name := facts.Name
 	if !known || cause == "" {
 		return cause
 	}
 	lower := strings.ToLower(cause)
 	hit := false
-	for _, w := range signInFailures[driver] {
+	for _, w := range facts.AuthFailures {
 		if strings.Contains(lower, w) {
 			hit = true
 			break

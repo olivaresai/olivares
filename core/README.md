@@ -5,7 +5,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 # Core Engine
 
-The engine that powers Olivares AI: ingest pipeline, event bus, data model, module runtime, REST + gRPC API, authentication and authorization (WebAuthn/FIDO2, PIV/CAC, AAL step-up, Cedar policy engine), the hash-chained Ed25519-signed audit ledger, multi-tenancy (RLS on Postgres, triggers on SQLite), and the embedded web UI server.
+The engine that powers Olivares AI: ingest pipeline, event bus, data model, module runtime, REST + gRPC API, authentication and authorization (WebAuthn/FIDO2, AAL step-up, Business PIV/CAC, Cedar policy engine), the hash-chained Ed25519-signed audit ledger, multi-tenancy (RLS on Postgres, triggers on SQLite), and the embedded web UI server.
+
+PIV/CAC sign-in requires Business Identity & Scale. Community retains the PIV API contracts and
+returns `501 piv_not_configured`; passkeys and step-up authentication remain available.
 
 **License:** AGPL-3.0-only.
 

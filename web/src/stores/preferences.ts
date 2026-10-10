@@ -152,8 +152,25 @@ export function applyAppearance(p: {
   else root.removeAttribute('data-motion')
 }
 
+export interface SidebarChoice {
+  collapsed: boolean
+  pending: boolean
+}
+
 interface PreferencesState {
+  /** Browser copies, partitioned by the verified person, tenant and origin. */
+  sidebarChoices: Record<string, SidebarChoice>
+  /** Active lifetime only; never rehydrated. */
+  sidebarOwner: string | null
+  setSidebarOwner: (owner: string | null) => void
+  sidebarSaved: (owner: string, choice: SidebarChoice) => void
+  /** The person folded the sidebar to its 56 px rail (Mod+B, the fold button). A value
+   * stored before 1.0 meant "hidden"; it now reads as the rail. The browser copy of the
+   * person's choice; the engine copy wins once read (components/layout/sidebar-mode.ts). */
   sidebarCollapsed: boolean
+  /** Compatibility flag for the active browser copy. Pending writes are owned by
+   * `sidebarChoices`, never transferred to another person. */
+  sidebarUnsent: boolean
   density: Density
   /** The console's own Reduce motion setting; the system preference applies regardless. */
   reduceMotion: boolean
@@ -163,6 +180,7 @@ interface PreferencesState {
   /** N1 area expansion — see AreaExpansion. */
   navAreas: AreaExpansion
   setSidebarCollapsed: (collapsed: boolean) => void
+  setSidebarUnsent: (unsent: boolean) => void
   toggleSidebar: () => void
   setDensity: (density: Density) => void
   setReduceMotion: (reduceMotion: boolean) => void
@@ -175,17 +193,71 @@ interface PreferencesState {
   revealArea: (areaId: string) => void
 }
 
+/** One browser-copy update for engine reads and person gestures. */
+function sidebarCopy(
+  s: PreferencesState,
+  collapsed: boolean,
+  pending: boolean,
+) {
+  return {
+    sidebarCollapsed: collapsed,
+    sidebarUnsent: pending,
+    ...(s.sidebarOwner
+      ? {
+          sidebarChoices: {
+            ...s.sidebarChoices,
+            [s.sidebarOwner]: { collapsed, pending },
+          },
+        }
+      : {}),
+  }
+}
+
 export const usePreferencesStore = create<PreferencesState>()(
   persist(
     (set) => ({
+      sidebarChoices: {},
+      sidebarOwner: null,
+      setSidebarOwner: (owner) =>
+        set((s) => {
+          if (!owner) return { sidebarOwner: null }
+          const choice = s.sidebarChoices[owner] ?? {
+            // The pre-1.0 browser copy belongs to the first verified owner only.
+            collapsed:
+              Object.keys(s.sidebarChoices).length === 0 && s.sidebarCollapsed,
+            pending: false,
+          }
+          return {
+            sidebarOwner: owner,
+            sidebarChoices: { ...s.sidebarChoices, [owner]: choice },
+            sidebarCollapsed: choice.collapsed,
+            sidebarUnsent: choice.pending,
+          }
+        }),
+      sidebarSaved: (owner, choice) =>
+        set((s) =>
+          s.sidebarChoices[owner] !== choice
+            ? s
+            : {
+                sidebarChoices: {
+                  ...s.sidebarChoices,
+                  [owner]: { ...choice, pending: false },
+                },
+                ...(s.sidebarOwner === owner ? { sidebarUnsent: false } : {}),
+              },
+        ),
       sidebarCollapsed: false,
+      sidebarUnsent: false,
       density: 'comfortable',
       reduceMotion: false,
       collapsedNavGroups: [],
       navAreas: DEFAULT_AREA_EXPANSION,
-      setSidebarCollapsed: (sidebarCollapsed) => set({ sidebarCollapsed }),
+      setSidebarCollapsed: (collapsed) =>
+        set((s) => sidebarCopy(s, collapsed, false)),
+      setSidebarUnsent: (pending) =>
+        set((s) => sidebarCopy(s, s.sidebarCollapsed, pending)),
       toggleSidebar: () =>
-        set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
+        set((s) => sidebarCopy(s, !s.sidebarCollapsed, !!s.sidebarOwner)),
       setDensity: (density) => set({ density }),
       setReduceMotion: (reduceMotion) => set({ reduceMotion }),
       toggleNavGroup: (group) =>
@@ -232,16 +304,40 @@ export const usePreferencesStore = create<PreferencesState>()(
     }),
     {
       name: 'olivares.prefs',
+      partialize: ({ sidebarOwner: _owner, ...stored }) => stored,
       // The persisted blob is untrusted input. Every field the older store already had
       // rehydrates exactly as before; `navAreas` rehydrates only when it is an
       // AreaExpansion of THIS version, otherwise the default — so a corrupt or future
       // value can never reset density, theme or the sidebar, and never hides the areas.
       merge: (persisted, current) => {
         const p = (persisted ?? {}) as Partial<PreferencesState>
-        const { navAreas, reduceMotion, ...rest } = p
+        const {
+          navAreas,
+          reduceMotion,
+          sidebarOwner: _owner,
+          sidebarChoices,
+          sidebarUnsent: _unsent,
+          ...rest
+        } = p
+        const choices = Object.fromEntries(
+          Object.entries(sidebarChoices ?? {})
+            .filter(
+              ([, value]) =>
+                value &&
+                typeof value.collapsed === 'boolean' &&
+                typeof value.pending === 'boolean',
+            )
+            .map(([key, value]) => [
+              key,
+              { collapsed: value.collapsed, pending: value.pending },
+            ]),
+        )
         return {
           ...current,
           ...rest,
+          sidebarOwner: null,
+          sidebarChoices: choices,
+          sidebarUnsent: false,
           // A blob saved before the setting existed (or holding anything but `true`)
           // keeps full motion; the system preference still applies on its own.
           reduceMotion: reduceMotion === true,

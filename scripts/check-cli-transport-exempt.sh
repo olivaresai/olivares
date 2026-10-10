@@ -52,7 +52,7 @@ MARCA="cli-transport-exempt:"
 RAZON_MIN=10   # un marcador pelado no es una justificacion: «alguien tecleo la palabra magica»
 
 if [ ! -d "$PKG" ]; then
-	printf 'check-cli-transport-exempt: ⛔ NO HE PODIDO MIRAR: no existe %s\n' "$PKG" >&2
+	printf 'check-cli-transport-exempt: ⛔ COULD NOT CHECK: missing %s\n' "$PKG" >&2
 	exit 2
 fi
 
@@ -60,8 +60,8 @@ fi
 # original lleva el mismo suelo y por la misma razon.
 N=$(find "$PKG" -maxdepth 1 -name '*.go' ! -name '*_test.go' | wc -l)
 if [ "$N" -lt 50 ]; then
-	printf 'check-cli-transport-exempt: ⛔ NO HE PODIDO MIRAR: el glob ve %d ficheros .go y el\n' "$N" >&2
-	printf '  paquete tiene decenas. Un escaneo que no ve el paquete no puede declararlo limpio.\n' >&2
+	printf 'check-cli-transport-exempt: ⛔ COULD NOT CHECK: the glob sees %d .go files, but the\n' "$N" >&2
+	printf '  package contains dozens. A scan that cannot read the package cannot report it as clean.\n' >&2
 	exit 2
 fi
 
@@ -102,20 +102,20 @@ for ruta in sorted(glob.glob(os.path.join(raiz, "*.go"))):
             malos.append("%s:%d: %s" % (base, i + 1, l.strip()))
 print("\n".join(malos))
 PY
-) || { printf 'check-cli-transport-exempt: ⛔ NO HE PODIDO MIRAR: el escaneo fallo\n' >&2; exit 2; }
+) || { printf 'check-cli-transport-exempt: ⛔ COULD NOT CHECK: scan failed\n' >&2; exit 2; }
 
 if [ -n "$SALIDA" ]; then
-	printf 'check-cli-transport-exempt: ⛔ %d ruta(s) de red construyen su propio http.Client sin\n' \
+	printf 'check-cli-transport-exempt: ⛔ %d network path(s) create their own http.Client without\n' \
 		"$(printf '%s\n' "$SALIDA" | grep -c .)" >&2
-	printf '  pasar por cliTransport y sin declarar por que:\n' >&2
+	printf '  using cliTransport or declaring a reason:\n' >&2
 	printf '%s\n' "$SALIDA" | sed 's/^/    /' >&2
-	printf '\n  Para declararlo: pon `// %s <razon de al menos %d caracteres>` DENTRO DEL BLOQUE\n' "$MARCA" "$RAZON_MIN" >&2
-	printf '  DE COMENTARIO CONTIGUO inmediatamente encima del `http.Client{`. La adyacencia es\n' >&2
-	printf '  parte del contrato: una linea de CODIGO entre el marcador y el cliente CORTA el\n' >&2
-	printf '  bloque y la exencion no cuenta. No hay limite de lineas — el bloque entero vale.\n' >&2
+	printf '\n  To declare it: put `// %s <reason of at least %d characters>` in the contiguous\n' "$MARCA" "$RAZON_MIN" >&2
+	printf '  comment block immediately above `http.Client{`. Adjacency is part of the\n' >&2
+	printf '  contract: a code line between the marker and the client breaks the block, so\n' >&2
+	printf '  the exemption does not apply. There is no line limit; the entire block counts.\n' >&2
 	exit 1
 fi
 
-printf 'check-cli-transport-exempt: LIMPIO — %d fichero(s) escaneados, toda ruta de red pasa por\n' "$N"
-printf '  cliTransport o declara su razon en el comentario contiguo.\n'
+printf 'check-cli-transport-exempt: CLEAN — %d file(s) scanned; every network path uses\n' "$N"
+printf '  cliTransport or declares its reason in the adjacent comment.\n'
 exit 0

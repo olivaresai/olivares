@@ -153,7 +153,7 @@ const (
 	colRiskState    = "state" // suggested | approved | overridden
 	colRationale    = "rationale"
 	colNistFns      = "nist_functions" // JSON: []string
-	colSignals      = "signals"        // JSON: the observed signals that drove the tier
+	colSignals      = "signals"        // JSON: observed signals and separate declared intent
 	colReviewedBy   = "reviewed_by"    // nullable
 	colClassifiedAt = "classified_at"
 )
@@ -421,6 +421,7 @@ const (
 	colAPDocSHA      = "doc_sha256"
 	colAPGeneratedBy = "generated_by"
 	colAPGeneratedAt = "generated_at"
+	colAPDisclaimer  = "disclaimer" // nullable for packs generated before snapshots
 )
 
 // compliance_us_law_pack / compliance_sector_pack columns — shared by both
@@ -490,11 +491,11 @@ var (
 	// each an audit actor string (ports.go:112-116), kept as custody evidence.
 	pdeclApproversEvidence = model.Nested([]string{}, model.ClassEvidence,
 		model.Leaf("[]", model.Ref(model.EncodeUserRef, model.ClassEvidence)))
-	pdeclNoneDigest      = model.None("a SHA-256 hex digest produced by hashHex, only compared or rendered: helpers.go:208")
-	pdeclNoneLedgerHash  = model.None("the hex hash of the audit-chain head at seal time: regpackage.go:513, evidence.go:82, holds.go:175, retention.go:691, erasure.go:211, erasure.go:1391")
+	pdeclNoneDigest      = model.None("a SHA-256 hex digest produced by hashHex, only compared or rendered: helpers.go:175")
+	pdeclNoneLedgerHash  = model.None("the hex hash of the audit-chain head at seal time: regpackage.go:513, evidence.go:202, holds.go:175, retention.go:691, erasure.go:211, erasure.go:1391")
 	pdeclNoneApprovalRef = model.None("an approval reference issued by the approval gate: ports.go:110")
 	pdeclNoneDataClass   = model.None("a registered data-class id: dataclass.go:153, dataclass.go:175, holds.go:310, retention.go:583")
-	pdeclNoneFramework   = model.None("a built-in framework id resolved through the framework registry: evidence.go:58, oscalprofile.go:281")
+	pdeclNoneFramework   = model.None("a stored framework id returned as evidence or resolved through the framework registry, never to a principal: evidence.go:197, oscalprofile.go:278")
 	pdeclNoneActorKind   = model.None("the acting principal's audit actor kind, a fixed vocabulary: core/auth/principal.go:251-259, core/model/audit.go:115-125, holds.go:355, erasure.go:351")
 	pdeclNoneErasureKind = model.None("an erasure subject kind from a closed set: erasure.go:261, erasuretargets.go:64")
 	// pdeclNoneStoredDoc is untyped packager output (map[string]any) that the
@@ -542,21 +543,21 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		AppendOnly: true, // a sealed evidence package is immutable; a re-run is a new package
 		Fields: []model.FieldSpec{
 			{Name: colFramework, Kind: model.KindText, Indexed: true, Principal: pdeclNoneFramework},
-			{Name: colFrameworkVer, Kind: model.KindText, Principal: model.None("the built-in framework's version label, only rendered: evidence.go:91, evidence.go:343")},
+			{Name: colFrameworkVer, Kind: model.KindText, Principal: model.None("the stored framework version label, only rendered: evidence.go:198")},
 			{Name: colGeneratedAt, Kind: model.KindTimestamp, Indexed: true},
 			{Name: colGeneratedBy, Kind: model.KindText, Principal: pdeclActorEvidence},
 			{Name: colLedgerSeq, Kind: model.KindInt},
 			{Name: colLedgerHash, Kind: model.KindText, Nullable: true, Principal: pdeclNoneLedgerHash},
 			{Name: colIntegrityOK, Kind: model.KindBool},
 			{Name: colIntegrityN, Kind: model.KindInt},
-			{Name: colIntegrityWhy, Kind: model.KindText, Nullable: true, Principal: model.None("the chain verifier's break reason, only rendered: evidence.go:98, evidence.go:350")},
+			{Name: colIntegrityWhy, Kind: model.KindText, Nullable: true, Principal: model.None("the stored chain-verification reason, only rendered: evidence.go:205")},
 			{Name: colCtrlTotal, Kind: model.KindInt},
 			{Name: colSatisfied, Kind: model.KindInt},
 			{Name: colPartial, Kind: model.KindInt},
 			{Name: colGap, Kind: model.KindInt},
 			{Name: colUnmapped, Kind: model.KindInt},
 			{Name: colManifestHash, Kind: model.KindText, Principal: pdeclNoneDigest},
-			{Name: colScopeNote, Kind: model.KindText, Nullable: true, Principal: model.None("operator scope prose, only rendered: evidence.go:359")},
+			{Name: colScopeNote, Kind: model.KindText, Nullable: true, Principal: model.None("stored operator scope prose, only rendered: evidence.go:214")},
 		},
 	}); err != nil {
 		return err
@@ -567,19 +568,19 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		Table:      resultTable,
 		AppendOnly: true, // immutable per-control evidence within a sealed package
 		Fields: []model.FieldSpec{
-			{Name: colPackageRef, Kind: model.KindUUID, Indexed: true, Principal: model.None("the evidence package row id, only used as a filter: evidence.go:320")},
+			{Name: colPackageRef, Kind: model.KindUUID, Indexed: true, Principal: model.None("the evidence package row id, only used as a filter: evidence.go:175")},
 			{Name: colFramework, Kind: model.KindText, Indexed: true, Principal: pdeclNoneFramework},
-			{Name: colControlID, Kind: model.KindText, Indexed: true, Principal: model.None("a control id from the built-in framework catalog, only rendered: evidence.go:121, evidence.go:327")},
-			{Name: colTitle, Kind: model.KindText, Principal: model.None("a control title from the built-in framework catalog, only rendered: evidence.go:122, evidence.go:329")},
-			{Name: colStatus, Kind: model.KindText, Indexed: true, Principal: model.None("a control status from a closed set: types.go:144-162, evidence.go:123")},
-			{Name: colEvSummary, Kind: model.KindText, Nullable: true, Principal: model.None("a generated evidence summary line, only rendered: evidence.go:421, evidence.go:331")},
+			{Name: colControlID, Kind: model.KindText, Indexed: true, Principal: model.None("a stored control id, only rendered: evidence.go:182")},
+			{Name: colTitle, Kind: model.KindText, Principal: model.None("a stored control title, only rendered: evidence.go:184")},
+			{Name: colStatus, Kind: model.KindText, Indexed: true, Principal: model.None("a stored control status from a closed set, only rendered: types.go:144-162, evidence.go:185")},
+			{Name: colEvSummary, Kind: model.KindText, Nullable: true, Principal: model.None("a stored evidence summary line, only rendered: evidence.go:186")},
 			{Name: colCaps, Kind: model.KindJSON, Nullable: true, Principal: model.Nested([]CapabilityEvidence{}, model.ClassEvidence,
-				model.Leaf("[].key", model.None("a capability key from the built-in catalog: capabilities.go:432")),
-				model.Leaf("[].class", model.None("a capability class from a closed set: capabilities.go:432, types.go:18-26")),
+				model.Leaf("[].key", model.None("a stored capability key decoded and returned as evidence, never resolved to a principal: helpers.go:246, evidence.go:187")),
+				model.Leaf("[].class", model.None("a capability class from a closed set returned as evidence: types.go:18-26, evidence.go:187")),
 				model.Leaf("[].state", model.None("an evidence state from a closed set: types.go:105-116")),
-				model.Leaf("[].detail", model.None("a generated probe summary of counts and fixed labels: capabilities.go:438-608")),
-				model.Leaf("[].refs[].kind", model.None("an evidence reference class fixed in code: capabilities.go:439-605")),
-				model.Leaf("[].refs[].detail", model.None("an evidence reference label fixed in code: capabilities.go:439-605")))},
+				model.Leaf("[].detail", model.None("stored probe summary text returned as evidence, never resolved to a principal: helpers.go:246, evidence.go:187")),
+				model.Leaf("[].refs[].kind", model.None("stored reference metadata returned as evidence, never resolved to a principal: helpers.go:246, evidence.go:187")),
+				model.Leaf("[].refs[].detail", model.None("stored reference text returned as evidence, never resolved to a principal: helpers.go:246, evidence.go:187")))},
 			{Name: colOccurredAt, Kind: model.KindTimestamp},
 		},
 	}); err != nil {
@@ -600,7 +601,8 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 			{Name: colRationale, Kind: model.KindText, Nullable: true, Principal: model.None("generated and reviewer rationale prose, only rendered: risk.go:370")},
 			{Name: colNistFns, Kind: model.KindJSON, Nullable: true, Principal: model.Nested([]string{}, model.ClassEvidence,
 				model.Leaf("[]", model.None("a framework function name fixed in code: types.go:226-237")))},
-			{Name: colSignals, Kind: model.KindJSON, Nullable: true, Principal: model.Nested(riskSignals{}, model.ClassEvidence)},
+			{Name: colSignals, Kind: model.KindJSON, Nullable: true, Principal: model.Nested(riskSignals{}, model.ClassEvidence,
+				model.Leaf("declared_autonomy.state", model.None("a closed declaration-evidence state, retained and returned only: risk.go:129-137, risk.go:378-398")))},
 			{Name: colReviewedBy, Kind: model.KindText, Nullable: true, Principal: pdeclActorEvidence},
 			{Name: colClassifiedAt, Kind: model.KindTimestamp, Indexed: true},
 		},
@@ -1052,6 +1054,7 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 			{Name: colAPDocSHA, Kind: model.KindText, Principal: pdeclNoneDigest},
 			{Name: colAPGeneratedBy, Kind: model.KindText, Principal: pdeclActorEvidence},
 			{Name: colAPGeneratedAt, Kind: model.KindTimestamp, Indexed: true},
+			{Name: colAPDisclaimer, Kind: model.KindText, Nullable: true, Principal: model.None("a built-in disclaimer snapshotted at generation, only rendered: aimspack.go:162-179, aimspack.go:213-227")},
 			{Name: colLedgerSeq, Kind: model.KindInt},
 			{Name: colLedgerHash, Kind: model.KindText, Nullable: true, Principal: pdeclNoneLedgerHash},
 		},

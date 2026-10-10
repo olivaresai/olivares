@@ -9,6 +9,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/olivaresai/olivares/core/envconfig"
 	"github.com/spf13/cobra"
 
 	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
@@ -106,7 +107,7 @@ func firstNonEmptyEnv(flagVal string, envs ...string) string {
 		return flagVal
 	}
 	for _, env := range envs {
-		if value := os.Getenv(env); value != "" {
+		if value := envconfig.Get(env); value != "" {
 			return value
 		}
 	}

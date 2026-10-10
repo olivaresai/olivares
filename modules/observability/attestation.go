@@ -83,7 +83,7 @@ const (
 // source tree (.github/workflows/) — a build-time fact, declared, will go
 // stale only if the tree changes.
 var releasePipelineWorkflows = []string{
-	"release.yml", "release-chart.yml", "release-provider.yml", "scorecard.yml", "patch-velocity.yml",
+	"release.yml", "scorecard.yml", "patch-velocity.yml",
 }
 
 // handleAttestation returns the measured truth about the RUNNING binary.

@@ -105,7 +105,6 @@ function PersonalLinks({
               <Button
                 variant="ghost"
                 size="icon"
-                className="size-8 shrink-0"
                 aria-label={t(
                   kind === 'favorites'
                     ? 'personal.remove'
@@ -139,7 +138,9 @@ function PersonalLinks({
 
 /** The sidebar list under the journeys: every favorite, one click away. Nothing shows until
  * the user stars a page; the managers in All areas edit the list. */
-export function SidebarFavorites() {
+export function SidebarFavorites({
+  onNavigate,
+}: { onNavigate?: () => void } = {}) {
   const personal = usePersonalNavigation()
   const { t } = useTranslation('nav')
   const headingId = useId()
@@ -163,6 +164,7 @@ export function SidebarFavorites() {
               to={target.path as never}
               activeOptions={{ exact: true }}
               activeProps={{ 'aria-current': 'page' }}
+              onClick={onNavigate}
               data-favorite={link.id}
               className={SHELL_ROW_CLASS}
             >
@@ -247,7 +249,7 @@ function PersonalSection({
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-8 w-full"
+                className="flex-1"
                 aria-label={manage}
                 title={title}
               >

@@ -3,7 +3,7 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { describe, expect, it } from 'vitest'
 import { renderIntel, screen } from '@/test/intel'
-import { BudgetCard, AlertsTable } from './components'
+import { BudgetCard, AlertsTable } from './budget-components'
 import { alertAmount, budgetAmount, formatEvidenceMoney } from './evidence'
 import type { Alert, BudgetStatus } from './types'
 import raw from './evidence-fixtures.json'
@@ -15,6 +15,12 @@ const fixtures = raw as unknown as Record<
 >
 
 describe('handler evidence in the console', () => {
+  it('shared stored-budget cards do not present Business forecasts', () => {
+    renderIntel(<BudgetCard status={fixtures.exact.status} />)
+    expect(
+      screen.queryByText(/Forecast \(not certified\)/),
+    ).not.toBeInTheDocument()
+  })
   it('wide handler amount survives in the main budget amount', () => {
     const { container } = renderIntel(
       <BudgetCard status={fixtures.wide.status} />,
@@ -93,7 +99,9 @@ describe('handler evidence in the console', () => {
     ).not.toBeNull()
     expect(screen.queryByText(/Over limit|On track to exceed/i)).toBeNull()
     expect(screen.queryByRole('progressbar')).toBeNull()
-    expect(screen.getByText(/Forecast \(not certified\)/)).toBeInTheDocument()
+    expect(
+      screen.queryByText(/Forecast \(not certified\)/),
+    ).not.toBeInTheDocument()
     expect(
       budgetAmount({
         ...status,

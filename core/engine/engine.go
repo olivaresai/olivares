@@ -38,6 +38,27 @@ func OpenAuditReader(ctx context.Context, cfg store.Config) (store.AuditReader, 
 	return sqlstore.OpenAuditReader(ctx, cfg)
 }
 
+// OpenDRReader opens an existing SQLite snapshot for offline DR verification,
+// including authoritative tenant enumeration, without publishing a Store.
+func OpenDRReader(ctx context.Context, cfg store.Config) (store.DRReader, error) {
+	return sqlstore.OpenDRReader(ctx, cfg)
+}
+
+// AuthReader reads the auth partition without serving or mutation authority.
+type AuthReader interface {
+	AuthView(context.Context, func(store.AuthScope) error) error
+	Close() error
+}
+
+// OpenAuthReader opens an existing store without migrations or leader election.
+func OpenAuthReader(ctx context.Context, cfg store.Config) (AuthReader, error) {
+	reader, err := sqlstore.OpenAuthReader(ctx, cfg)
+	if err != nil {
+		return nil, err
+	}
+	return reader, nil
+}
+
 // ApplyMigrations applies this binary's complete PostgreSQL schema and returns
 // WITHOUT opening a service: no runtime reconciliation, no elector, no listeners, no
 // Store. It is the explicit first phase of migrate → GRANT → serve, which is the

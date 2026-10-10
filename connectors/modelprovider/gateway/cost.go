@@ -27,6 +27,9 @@ type Reservation struct {
 // ReleaseReservation are present, the composition root adapts them here
 // (tenant, spend dimensions and micro-USD stay in that adapter). When they are
 // not, use NopCostHook.
+//
+// Deprecated: Olivares does not use this API. It keeps working in this release series;
+// its removal will be announced in the release notes beforehand.
 type CostHook interface {
 	Reserve(ctx context.Context, est Estimate) (Reservation, error)
 	Commit(ctx context.Context, res Reservation, actual Usage) error
@@ -35,6 +38,9 @@ type CostHook interface {
 
 // NopCostHook admits every call and records nothing. It is the stub used when
 // no FinOps reservation backend is wired.
+//
+// Deprecated: Olivares does not use this API. It keeps working in this release series;
+// its removal will be announced in the release notes beforehand.
 type NopCostHook struct{}
 
 func (NopCostHook) Reserve(context.Context, Estimate) (Reservation, error) {

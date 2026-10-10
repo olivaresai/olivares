@@ -46,21 +46,22 @@ Olivares AI 两者兼顾。一方面，它给你的 AI 提供工作所需的东�
 ## 一个平台，而非单一功能
 
 访问图只是众多能力之一。该产品是一个**模块化平台**（精神上类似 Grafana 或 Backstage）：一个引擎加上模块再加上
-connector，其设计使得任何模块都能在无需重构其余部分的情况下接入。它内置 **31 个模块**——清单与实时会话、
+connector，其设计使得任何模块都能在无需重构其余部分的情况下接入。它内置 **32 个模块**——清单与实时会话、
 R/RW 图、agent 编排（A2A，开发中）、MCP 与技能管理、身份与非人类身份、部署、知识与上下文、安全与 guardrail（护栏）、
 模型与提供方管理、成本/FinOps、evals 与测试沙箱、red-teaming、合规与证据、内部目录、输出集成与 SIEM 推送、
-voice/realtime，以及健康/SLA——再加上不计入这 31 个模块的平台能力（它自己的 API 与 manage-as-code、多租户、高管仪表盘）——涵盖 **159 项集成**（该数字由 `scripts/check-public-counts.sh` 从代码中测得）。
+voice/realtime，以及健康/SLA——再加上不计入这 32 个模块的平台能力（它自己的 API 与 manage-as-code、多租户、高管仪表盘）——涵盖 **136 项集成**（该数字由 `scripts/check-public-counts.sh` 从代码中测得）。
 少数能力在 provisioned 之前是 pre-v1 或 deny-closed 的接缝；文档会明确说明是哪些。
+
+Community 保留本地可观测性、已保存的设置和备份导出。SIEM/ITSM 推送、外部遥测传输和安全态势导出包含在 Business 基础版中。
 
 完整列表参见[模块目录](/zh/reference/modules/overview/)，引擎与模块如何组合在一起参见
 [架构概览](/zh/explanation/architecture/overview/)。
 
 ## 它如何观测：read-first、minimal-data
 
-Olivares AI 是 **read-first（读优先）**的：引擎通过日志、OpenTelemetry 与 eBPF 进行观测；它**不**位于
-agent 的数据路径上，因此 collector 故障绝不会破坏你的生产流量。而且它在设计上是 **minimal-data（最小数据）**的：
-访问图存储的是**关系**——发起方 → 资源、读/写、信号源、置信度、时间戳——**绝不存储有效载荷、SQL 主体、密钥或 PII**。
-未被存储之物无法泄露。
+访问图通过日志、OpenTelemetry 和 eBPF 进行带外观测。观测采集器故障会造成可见性缺口，而不会门控 agent 流量。访问图存储关系——origin → resource、read/write、source、confidence、timestamp——绝不存储有效载荷、SQL 主体、密钥或 PII。
+
+控制点是内联且 deny-closed 的。受管 Claude Code 会话安装调用引擎策略执行点（PEP）的工具调用 hook。引擎默认挂载这个 hook PEP。如果引擎停机或重启导致它无法访问，每个受治理工具调用都会被拒绝。请据此规划引擎可用性。内联推理代理、MCP tools/call 门控和 A2A 委派门控控制经由它们路由的流量；模型调用默认不经过推理代理。
 
 这也是它可自托管且对 air-gap（隔离网络）友好的原因：产品没有强制遥测，控制平面默认也不产生出站流量。
 只有你明确配置为跨越边界的内容才会跨越你的边界——对你的模型 API 的调用、你接入的 SIEM/webhook 输出，

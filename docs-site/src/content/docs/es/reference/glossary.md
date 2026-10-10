@@ -14,7 +14,7 @@ más estrechos que su uso en la industria, y la estrechez es justo el punto.
 El grafo del módulo III de **orígenes** (agentes, identidades, sesiones) y los
 **recursos** que tocan, cada arista clasificada por [modo](#modo) y etiquetada
 con su [signal source](#signal-source), [atribución](#atribución-confianza)
-y [nivel de cobertura](#nivel-de-cobertura). Una capacidad clave diferenciada — uno de los 31
+y [nivel de cobertura](#nivel-de-cobertura). Una capacidad clave diferenciada — uno de los 32
 módulos, no el producto entero. Ver [¿Qué es Olivares AI?](/es/start/what-is-olivares-ai/).
 
 ### Estados de actuación: `v1` / `on-demand` / `seam`
@@ -160,8 +160,9 @@ y a [sinks SIEM](/es/how-to/cookbook/push-to-siem/).
 El término de **Gartner** para IA que monitoriza o interviene sobre *otros* agentes de IA.
 Olivares AI entrega el **resultado de gobernanza** de la categoría — observar,
 diferenciar permitido-frente-a-observado, hacer gate deny-closed, registrar de forma inmutable — pero como un
-**control plane de lectura primero fuera del data path**, no un LLM en línea
-montando guardia. Ver [Vocabulario de analistas](/es/explanation/positioning/analyst-vocabulary/);
+**observación fuera de banda y enforcement inline deny-closed**, sin un LLM
+montando guardia. Los hooks de Claude Code gestionado dependen del PEP del motor;
+un PEP inaccesible deniega las llamadas gobernadas a herramientas. Ver [Vocabulario de analistas](/es/explanation/positioning/analyst-vocabulary/);
 contrasta con el [guardian loop](#guardian-loop) en producto.
 
 ### Guardian loop
@@ -186,7 +187,7 @@ proceso a un agente. Ver [eBPF/Tetragon](/es/how-to/connectors/ebpf-tetragon/).
 
 ### live_ref
 
-Identidad asignada por el servidor de **una** fila de sesión viva. 26.10.1
+Identidad asignada por el servidor de **una** fila de sesión viva. Olivares <!-- release -->0.1<!-- /release -->
 clavea la observación por `(ámbito de observación, id externo)` para que dos
 homes de proveedor que anuncian el mismo id de sesión sigan siendo dos filas.
 Las lecturas de consola y API que significan «esta fila» usan `live_ref`, no

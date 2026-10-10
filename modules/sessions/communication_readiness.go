@@ -106,10 +106,10 @@ type CommunicationReadiness struct {
 // effect; activation remains an explicit later rollout action.
 func (m *Module) EvaluateCommunicationReadiness(ctx context.Context) (CommunicationReadiness, error) {
 	components := CommunicationReadinessComponents{
-		IssuerReady: communicationPortBound(m.rt.communicationSessionCreds),
-		ResolverReady: communicationPortBound(m.communicationDirectoryResolver) &&
-			communicationPortBound(m.communicationAudienceAttestor) &&
-			communicationPortBound(m.communicationGrantClosure),
+		IssuerReady: communicationPortBound(m.rt.CommunicationSessionCreds),
+		ResolverReady: communicationPortBound(m.CommunicationDirectoryResolver) &&
+			communicationPortBound(m.CommunicationAudienceAttestor) &&
+			communicationPortBound(m.CommunicationGrantClosure),
 		// The term watches the DIRECT BINDER, not the two CoreEntity* ports.
 		// Adjudicated 2026-08-26 on a measurement taken here, and the reason is
 		// that those ports CANNOT authorize faithfully: AuthorizeEntityRead and
@@ -123,29 +123,28 @@ func (m *Module) EvaluateCommunicationReadiness(ctx context.Context) (Communicat
 		//
 		// The bundle is faithful: it resolves the REAL principal from its
 		// PrincipalRef (ResolvePrincipalScope) and asks the same authorizer that
-		// gates the rest of the product. It is indivisible by construction --
-		// useCommunicationRequestAuthoritySources stores nil when either half is
-		// missing -- so one pointer check proves both halves.
+		// gates the rest of the product. Its bound check verifies both
+		// ports, including empty values supplied directly in Dependencies.
 		//
 		// The two ports are NOT deleted: they remain an optional seam for an
 		// external PDP that authorizes by identity attributes, which is the only
 		// thing their signature supports. They are simply out of this term.
 		PermissionsReady: communicationPermissionsReady(m.Permissions()) &&
-			communicationPortBound(m.communicationAuthoritySources),
+			m.CommunicationAuthority.bound(),
 	}
 
 	var unavailable []CommunicationReadinessDependency
 	var witnessErrors []error
-	if communicationPortBound(m.communicationStoreReadiness) {
-		ready, err := m.communicationStoreReadiness.CommunicationStoreReady(ctx)
+	if communicationPortBound(m.CommunicationStoreReadiness) {
+		ready, err := m.CommunicationStoreReadiness.CommunicationStoreReady(ctx)
 		components.StoreReady = ready && err == nil
 		if err != nil {
 			unavailable = append(unavailable, CommunicationReadinessStore)
 			witnessErrors = append(witnessErrors, fmt.Errorf("communication store readiness: %w", err))
 		}
 	}
-	if communicationPortBound(m.communicationSealer) {
-		sealerReadiness, ok := m.communicationSealer.(CommunicationContentSealerReadinessWitness)
+	if communicationPortBound(m.CommunicationSealer) {
+		sealerReadiness, ok := m.CommunicationSealer.(CommunicationContentSealerReadinessWitness)
 		if ok && communicationPortBound(sealerReadiness) {
 			ready, err := sealerReadiness.CommunicationContentSealerReady(ctx)
 			components.SealerReady = ready && err == nil
@@ -156,8 +155,8 @@ func (m *Module) EvaluateCommunicationReadiness(ctx context.Context) (Communicat
 			}
 		}
 	}
-	if communicationPortBound(m.communicationPumpReadiness) {
-		ready, err := m.communicationPumpReadiness.CommunicationPumpReady(ctx)
+	if communicationPortBound(m.CommunicationPumpReadiness) {
+		ready, err := m.CommunicationPumpReadiness.CommunicationPumpReady(ctx)
 		components.PumpReady = ready && err == nil
 		if err != nil {
 			unavailable = append(unavailable, CommunicationReadinessPump)

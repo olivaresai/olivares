@@ -15,25 +15,25 @@ export LC_ALL=C
 
 RAIZ="$(cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")/.." && pwd)"
 SUT="$RAIZ/scripts/check-ci-step-guard.sh"
-[ -x "$SUT" ] || { echo "test-ci-step-guard: ⛔ NO HE PODIDO MIRAR: no ejecutable $SUT" >&2; exit 2; }
+[ -x "$SUT" ] || { echo "test-ci-step-guard: ⛔ COULD NOT LOOK: $SUT is not executable" >&2; exit 2; }
 
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/stepguard.XXXXXX")" || exit 2
 [ -d "$TMP" ] || exit 2
 trap 'rm -rf "$TMP"' EXIT
 
-pasan=0; fallan=0
+pass_count=0; fail_count=0
 
-ok()   { printf '  ok    %-58s %s\n' "$1" "${2:-}"; pasan=$((pasan+1)); }
-malo() { printf '  FALLO %-58s %s\n' "$1" "${2:-}" >&2; fallan=$((fallan+1)); }
+ok()   { printf '  ok    %-58s %s\n' "$1" "${2:-}"; pass_count=$((pass_count+1)); }
+malo() { printf '  FAIL  %-58s %s\n' "$1" "${2:-}" >&2; fail_count=$((fail_count+1)); }
 
 # comprueba <titulo> <rc-esperado> <dir> [cadena-que-debe-aparecer]
 comprueba() {
 	local titulo="$1" esperado="$2" dir="$3" cadena="${4:-}"
-	local salida rc
-	salida="$("$SUT" "$dir" 2>&1)"
+	local output rc
+	output="$("$SUT" "$dir" 2>&1)"
 	rc=$?
 	if [ "$rc" -ne "$esperado" ]; then
-		malo "$titulo" "rc=$rc, esperaba $esperado"
+		malo "$titulo" "rc=$rc, expected $esperado"
 		return
 	fi
 	# SIN TUBERIA, y no es estilo: `printf … | grep -q` bajo `set -o pipefail` devuelve **141
@@ -41,10 +41,10 @@ comprueba() {
 	# SIGPIPE y pipefail propaga ese 141. La comprobacion falla justo cuando acierta, y de forma
 	# intermitente. Lo cazo `lint:sigpipe-booleans` en el push de este mismo commit.
 	if [ -n "$cadena" ]; then
-		case "$salida" in
+		case "$output" in
 		*"$cadena"*) ;;
 		*)
-			malo "$titulo" "rc correcto pero no dice «$cadena»"
+			malo "$titulo" "correct rc but does not report «$cadena»"
 			return
 			;;
 		esac
@@ -67,7 +67,7 @@ jobs:
       - name: lo que tarda
         run: sleep 1
 YAML
-comprueba "un job de 90 min sin guarda de paso es HALLAZGO" 1 "$D" "«lento»"
+comprueba "a 90-minute job without a step guard is a FINDING" 1 "$D" "«lento»"
 
 # ── el mismo job CON guarda: limpio ──────────────────────────────────────────────────────────
 D="$(nuevo_dir verde)"
@@ -83,13 +83,13 @@ jobs:
         timeout-minutes: 60
         run: sleep 1
 YAML
-comprueba "el MISMO job con una guarda de paso queda limpio" 0 "$D" "CLEAN"
+comprueba "the SAME job with a step guard is clean" 0 "$D" "CLEAN"
 
 # ── CONTROL NEGATIVO: el fixture limpio tiene que salir limpio, o mide el fixture ─────────────
 if [ "$("$SUT" "$D" >/dev/null 2>&1; echo $?)" = "0" ]; then
-	ok "control negativo: el fixture limpio NO se acusa a sí mismo" "rc=0"
+	ok "negative control: the clean fixture does NOT flag itself" "rc=0"
 else
-	malo "control negativo" "el fixture limpio sale rojo: la batería mediría el fixture"
+	malo "negative control" "clean fixture returns red: test would measure the fixture"
 fi
 
 # ── EL LÍMITE, POR LOS DOS LADOS. El umbral es ESTRICTAMENTE MAYOR ────────────────────────────
@@ -105,7 +105,7 @@ jobs:
       - name: sin guarda
         run: sleep 1
 YAML
-comprueba "EXACTAMENTE en el umbral (30) NO es hallazgo" 0 "$D" "CLEAN"
+comprueba "EXACTLY at the threshold (30) is NOT a finding" 0 "$D" "CLEAN"
 
 D="$(nuevo_dir pasado)"
 cat > "$D/w.yml" <<'YAML'
@@ -119,7 +119,7 @@ jobs:
       - name: sin guarda
         run: sleep 1
 YAML
-comprueba "UN MINUTO por encima del umbral (31) SI es hallazgo" 1 "$D" "«pasado»"
+comprueba "ONE MINUTE above the threshold (31) IS a finding" 1 "$D" "«pasado»"
 
 # ── un job barato sin guarda no es hallazgo: es el falso positivo que haria ignorar el gate ───
 D="$(nuevo_dir barato)"
@@ -134,7 +134,7 @@ jobs:
       - name: sin guarda
         run: sleep 1
 YAML
-comprueba "un job de 5 min sin guarda NO es hallazgo" 0 "$D" "CLEAN"
+comprueba "a 5-minute job without a guard is NOT a finding" 0 "$D" "CLEAN"
 
 # ── varios jobs: se nombran TODOS los que incumplen, no solo el primero ───────────────────────
 D="$(nuevo_dir varios)"
@@ -155,19 +155,19 @@ jobs:
       - name: b
         run: sleep 1
 YAML
-salida="$("$SUT" "$D" 2>&1)"; rc=$?
+output="$("$SUT" "$D" 2>&1)"; rc=$?
 nombra_los_dos=false
-case "$salida" in
+case "$output" in
 *'«uno»'*)
-	case "$salida" in
+	case "$output" in
 	*'«dos»'*) nombra_los_dos=true ;;
 	esac
 	;;
 esac
 if [ "$rc" = 1 ] && [ "$nombra_los_dos" = true ]; then
-	ok "dos jobs que incumplen se NOMBRAN los dos" "rc=1"
+	ok "both noncompliant jobs are NAMED" "rc=1"
 else
-	malo "dos jobs que incumplen" "rc=$rc y no nombra a los dos"
+	malo "two noncompliant jobs" "rc=$rc and does not name both"
 fi
 
 # ── el umbral es configurable, y moverlo cambia el veredicto ──────────────────────────────────
@@ -184,16 +184,16 @@ jobs:
         run: sleep 1
 YAML
 if [ "$(OLIVARES_STEP_GUARD_MIN=60 "$SUT" "$D" >/dev/null 2>&1; echo $?)" = "0" ]; then
-	ok "con el umbral en 60, un job de 40 deja de ser hallazgo" "rc=0"
+	ok "with threshold 60, a 40-minute job is no longer a finding" "rc=0"
 else
-	malo "umbral configurable" "el umbral no se honra"
+	malo "configurable threshold" "threshold is not honored"
 fi
 
 # ── LAS TRES RESPUESTAS: el tercer caso es un CODIGO, no una frase ────────────────────────────
-comprueba "un directorio que no existe es NO HE PODIDO MIRAR" 2 "$TMP/no-existe" "NO HE PODIDO MIRAR"
+comprueba "a nonexistent directory is COULD NOT LOOK" 2 "$TMP/no-existe" "COULD NOT CHECK"
 
 D="$(nuevo_dir vacio)"
-comprueba "un directorio SIN workflows es NO HE PODIDO MIRAR" 2 "$D" "NO HE PODIDO MIRAR"
+comprueba "a directory WITHOUT workflows is COULD NOT LOOK" 2 "$D" "COULD NOT CHECK"
 
 D="$(nuevo_dir ilegible)"
 cat > "$D/w.yml" <<'YAML'
@@ -208,9 +208,9 @@ jobs:
 YAML
 chmod 000 "$D/w.yml"
 if [ "$(id -u)" = "0" ]; then
-	printf '  skip  %-58s %s\n' "un fichero ilegible es NO HE PODIDO MIRAR" "(root lo lee igual)"
+	printf '  skip  %-58s %s\n' "an unreadable file is COULD NOT LOOK" "(root can still read it)"
 else
-	comprueba "un fichero ILEGIBLE es NO HE PODIDO MIRAR, no limpio" 2 "$D" "NO HE PODIDO MIRAR"
+	comprueba "an UNREADABLE file is COULD NOT LOOK, not clean" 2 "$D" "COULD NOT CHECK"
 fi
 chmod 644 "$D/w.yml" 2>/dev/null || true
 
@@ -227,16 +227,16 @@ jobs:
         run: sleep 1
 YAML
 if [ "$(OLIVARES_STEP_GUARD_MIN=cuarenta "$SUT" "$D" >/dev/null 2>&1; echo $?)" = "2" ]; then
-	ok "un umbral no numerico es NO HE PODIDO MIRAR" "rc=2"
+	ok "a nonnumeric threshold is COULD NOT LOOK" "rc=2"
 else
-	malo "umbral no numerico" "no responde 2"
+	malo "nonnumeric threshold" "does not return 2"
 fi
 
 # ── EL ARBOL DE VERDAD: este repositorio tiene que estar limpio ───────────────────────────────
 if [ -d "$RAIZ/.github/workflows" ]; then
-	comprueba "el arbol real de .github/workflows esta limpio" 0 "$RAIZ/.github/workflows" "CLEAN"
+	comprueba "the real .github/workflows tree is clean" 0 "$RAIZ/.github/workflows" "CLEAN"
 fi
 
-printf '\ncheck-ci-step-guard selftest: %d pasan, %d fallan\n' "$pasan" "$fallan"
-[ "$fallan" -eq 0 ] || exit 1
+printf '\ncheck-ci-step-guard selftest: %d passed, %d failed\n' "$pass_count" "$fail_count"
+[ "$fail_count" -eq 0 ] || exit 1
 exit 0

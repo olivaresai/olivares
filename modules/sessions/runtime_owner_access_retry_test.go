@@ -21,14 +21,14 @@ import (
 func TestOwnerAccessSweepMissingOwnerBindingKeepsOrdinarySession(t *testing.T) {
 	fr := &fakeRunner{}
 	m, _, tenant, clock := newRuntimeHarness(t, WithRunner(fr), WithCredentialSource(staticCred()))
-	dto, err := m.createRun(t.Context(), tenant, CreateRunParams{Transport: TransportStreamJSON, Isolation: IsolationNative, Actor: "user:u1", ActorKind: "user"})
+	dto, err := createProfiledTestRun(t, m, t.Context(), tenant, CreateRunParams{Transport: TransportStreamJSON, Isolation: IsolationNative, Actor: "user:u1", ActorKind: "user"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	// External PEPs and legacy sessions have no entry in the engine's issuer.
 	// The real issuer's missing binding is not an observed owner withdrawal.
 	issuer := auth.NewSessionCredentials(nil, nil)
-	m.UseSessionAccessCheck(issuer.CheckOwnerAccess)
+	m.SessionAccessCheck = issuer.CheckOwnerAccess
 	for range 3 {
 		m.sweepSessionAccess(t.Context())
 		clock.advance(6 * time.Minute)
@@ -47,7 +47,7 @@ func TestOwnerAccessSweepMissingOwnerBindingKeepsOrdinarySession(t *testing.T) {
 func TestOwnerAccessSweepTransientErrorLogsRetriesAndKeepsSession(t *testing.T) {
 	fr := &fakeRunner{}
 	m, _, tenant, clock := newRuntimeHarness(t, WithRunner(fr), WithCredentialSource(staticCred()))
-	dto, err := m.createRun(t.Context(), tenant, CreateRunParams{Transport: TransportStreamJSON, Isolation: IsolationNative, Actor: "user:u1", ActorKind: "user"})
+	dto, err := createProfiledTestRun(t, m, t.Context(), tenant, CreateRunParams{Transport: TransportStreamJSON, Isolation: IsolationNative, Actor: "user:u1", ActorKind: "user"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,13 +55,13 @@ func TestOwnerAccessSweepTransientErrorLogsRetriesAndKeepsSession(t *testing.T) 
 	m.log = slog.New(slog.NewJSONHandler(&logs, nil))
 	attempts := 0
 	fail := true
-	m.UseSessionAccessCheck(func(context.Context, model.TenantID, string) (auth.SessionScope, string, error) {
+	m.SessionAccessCheck = func(context.Context, model.TenantID, string) (auth.SessionScope, string, error) {
 		attempts++
 		if fail {
 			return auth.SessionScope{}, "", fmt.Errorf("temporary store stall: %w", context.DeadlineExceeded)
 		}
 		return auth.SessionScope{}, "", nil
-	})
+	}
 	m.sweepSessionAccess(t.Context())
 	select {
 	case <-fr.lastProc().stopped:
@@ -106,14 +106,14 @@ func TestOwnerAccessSweepTransientErrorLogsRetriesAndKeepsSession(t *testing.T) 
 func TestOwnerAccessSweepProvenEndStopsImmediately(t *testing.T) {
 	fr := &fakeRunner{}
 	m, _, tenant, _ := newRuntimeHarness(t, WithRunner(fr), WithCredentialSource(staticCred()))
-	dto, err := m.createRun(t.Context(), tenant, CreateRunParams{Transport: TransportStreamJSON, Isolation: IsolationNative, Actor: "user:u1", ActorKind: "user"})
+	dto, err := createProfiledTestRun(t, m, t.Context(), tenant, CreateRunParams{Transport: TransportStreamJSON, Isolation: IsolationNative, Actor: "user:u1", ActorKind: "user"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	m.UseSessionAccessCheck(func(context.Context, model.TenantID, string) (auth.SessionScope, string, error) {
+	m.SessionAccessCheck = func(context.Context, model.TenantID, string) (auth.SessionScope, string, error) {
 		// A proven withdrawal still stops when scoped graceful admission fails.
 		return auth.SessionScope{}, "the owner", fmt.Errorf("standing withdrawn: %w", auth.ErrSessionAccessEnded)
-	})
+	}
 	m.sweepSessionAccess(t.Context())
 	waitFor(t, "proven owner withdrawal stopped process", func() bool {
 		select {
@@ -132,21 +132,21 @@ func TestOwnerAccessSweepProvenEndStopsImmediately(t *testing.T) {
 func TestOwnerAccessSweepPersistentErrorsStopAfterFiveMinuteGrace(t *testing.T) {
 	fr := &fakeRunner{}
 	m, _, tenant, clock := newRuntimeHarness(t, WithRunner(fr), WithCredentialSource(staticCred()))
-	dto, err := m.createRun(t.Context(), tenant, CreateRunParams{Transport: TransportStreamJSON, Isolation: IsolationNative, Actor: "user:u1", ActorKind: "user"})
+	dto, err := createProfiledTestRun(t, m, t.Context(), tenant, CreateRunParams{Transport: TransportStreamJSON, Isolation: IsolationNative, Actor: "user:u1", ActorKind: "user"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	var logs bytes.Buffer
 	m.log = slog.New(slog.NewJSONHandler(&logs, nil))
 	attempts := 0
-	m.UseSessionAccessCheck(func(context.Context, model.TenantID, string) (auth.SessionScope, string, error) {
+	m.SessionAccessCheck = func(context.Context, model.TenantID, string) (auth.SessionScope, string, error) {
 		attempts++
 		if attempts == 1 {
 			// Time spent waiting for the first failure is outside the grace.
 			clock.advance(5 * time.Second)
 		}
 		return auth.SessionScope{}, "", fmt.Errorf("store read failed with sensitive-store-value")
-	})
+	}
 	m.sweepSessionAccess(t.Context())
 	// Backoff grows from 5s to 10s, 20s, then remains capped at 30s.
 	for i, delay := range []time.Duration{5 * time.Second, 10 * time.Second, 20 * time.Second, 30 * time.Second, 30 * time.Second} {

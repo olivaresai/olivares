@@ -9,6 +9,8 @@ sidebar:
   order: 1
 ---
 
+**Édition :** créer ou modifier des politiques Cedar personnalisées, permit comme forbid, nécessite Business. Community continue d’appliquer les politiques, rôles personnalisés et droits limités déjà enregistrés ; leur lecture et leur révocation restent possibles. `DELETE /v1/m/governance/pdp/active?engine=cedar` désactive uniquement la politique Cedar rédigée et conserve l’historique, les droits gérés et les politiques adoptées. Les rôles intégrés, les règles natives de refus et l’arrêt d’urgence restent dans Community. Le PDP externe de cette recette ne fait que restreindre ; les permit Cedar rédigés peuvent accorder l’accès dans leur périmètre.
+
 **Objectif :** ajouter des restrictions basées sur les attributs par-dessus un
 RBAC deny-by-default — par exemple, « personne ne touche aux ressources
 étiquetées `secret`, quel que soit ce que dit son rôle ».
@@ -62,7 +64,7 @@ default allow := true
 
 allow := false if {
   input.resource.sensitivity == "secret"
-  input.action == "read"
+  endswith(input.permission, ":read")
 }
 ```
 
@@ -76,15 +78,17 @@ Le module de gouvernance expose un cycle de vie des politiques afin qu'une
 mauvaise politique n'atterrisse jamais à l'aveugle :
 
 ```bash
+# policy.cedar is the Cedar policy above; jq 1.6 or newer builds the JSON bodies.
 # Compile-check the source:
 curl -ks -X POST "$BASE/v1/m/governance/pdp/validate" \
   -H "Authorization: Bearer $TOKEN" -H "X-Olivares-Tenant: $TENANT" \
-  -d @policy.json
+  -d "$(jq -n --rawfile source policy.cedar '{engine:"cedar",$source}')"
 
 # Pre-flight a decision WITHOUT audit side effects:
 curl -ks -X POST "$BASE/v1/m/governance/pdp/dry-run" \
   -H "Authorization: Bearer $TOKEN" -H "X-Olivares-Tenant: $TENANT" \
-  -d '{"principal":"…","action":"…","resource":{"kind":"credential","sensitivity":"secret"}}'
+  -d "$(jq -n --rawfile source policy.cedar --argjson request '{"principal":{"kind":"user","id":"u1"},"permission":"models:keys:read","resource":{"kind":"credential","sensitivity":"secret"}}' \
+        '{engine:"cedar",$source,$request}')"
 
 # Then publish (policy-admin permission):
 curl -ks -X POST "$BASE/v1/m/governance/pdp/publish" …

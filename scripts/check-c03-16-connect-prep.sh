@@ -47,7 +47,7 @@ grep -F -q 'HOLD. NOT APPLIED.' "$DOC" \
 grep -F -q '`/connect` not landed' "$DOC" \
   || fail "prepare doc lost /connect HOLD"
 if grep -qiE 'FIRMA A claimed|remainder applied on origin/main|/connect landed' "$DOC"; then
-  fail "prepare doc claims an application this lote does not have"
+  fail "prepare doc claims an application this batch does not have"
 fi
 
 python3 - "$IDX" "$HANDLER" <<'PY' || exit $?

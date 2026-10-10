@@ -36,7 +36,7 @@ check outer_empty
 
 out="$(TMPDIR="$BASE/outer" bash "$SUT" bash "$BASE/leak.sh" 2>&1)"; rc=$?
 check test "$rc" -eq 1
-check bash -c 'case "$1" in *"dejó 1 entrada"*) exit 0;; *) exit 1;; esac' _ "$out"
+check bash -c 'case "$1" in *"left 1 entry/entries"*) exit 0;; *) exit 1;; esac' _ "$out"
 check outer_empty
 
 TMPDIR="$BASE/outer" bash "$SUT" bash "$BASE/fail.sh" >/dev/null 2>&1; rc=$?

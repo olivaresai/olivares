@@ -49,6 +49,11 @@ var (
 		"%w: Handoff idempotency_key_reused", store.ErrConflict,
 	)
 	errHandoffStaleOffer = fmt.Errorf("%w: Handoff stale_offer", store.ErrConflict)
+	// errHandoffSenderNotOwner is a refusal, not a lost race: only the item's
+	// current owner may offer it, and re-reading never changes the answer. It is
+	// deliberately not an ErrCommunicationForbidden: a workflow run maps that to
+	// "denied by current policy", and this refusal is about the item's owner.
+	errHandoffSenderNotOwner = errors.New("sessions: Handoff sender_not_owner")
 )
 
 // HandoffOfferCommand materializes the Handoff aggregate for an already
@@ -1230,7 +1235,7 @@ func (m *Module) prepareHandoffOfferPayload(
 		policy := protectedPayloadPolicyFrom(message.Payload)
 		schema, _ := PayloadSlotHandoff.schema()
 		payload, err := PrepareProtectedPayload(
-			ctx, m.communicationSealer, PayloadSlotHandoff, policy,
+			ctx, m.CommunicationSealer, PayloadSlotHandoff, policy,
 			ContentAAD{
 				TenantID: normalized.scope.TenantID, WorkspaceID: normalized.scope.WorkspaceID,
 				ChannelID: channel.ID, EntityKind: handoffKind, EntityID: handoffID,
@@ -1332,7 +1337,7 @@ func (m *Module) prepareHandoffTerminalContent(
 		policy := protectedPayloadPolicyFrom(message.Payload)
 		schema, _ := PayloadSlotHandoffTerminalReason.schema()
 		reason, err := PrepareProtectedPayload(
-			ctx, m.communicationSealer, PayloadSlotHandoffTerminalReason, policy,
+			ctx, m.CommunicationSealer, PayloadSlotHandoffTerminalReason, policy,
 			ContentAAD{
 				TenantID: scope.TenantID, WorkspaceID: scope.WorkspaceID,
 				ChannelID: message.ChannelID, EntityKind: handoffKind,

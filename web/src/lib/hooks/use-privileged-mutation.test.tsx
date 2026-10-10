@@ -233,10 +233,10 @@ describe('usePrivilegedMutation (confirm → mutate → invalidate → toast →
   })
 
   it('NO reanuda en otra organización — la ceremonia dura, y el selector sigue abierto', async () => {
-    // ⛔ Lo señaló el contraste de. Reanudar es «la misma acción» por diseño, pero sólo
-    //    conserva `vars`: si el operador cambia de organización mientras resuelve el step-up,
-    //    repetir la llamada aquí aplicaría en la nueva lo que pidió en la vieja. `mutations.retry`
-    //    es `false` y no protege, porque esto no es un reintento: es una llamada nueva.
+    // The review identified this tenant boundary. Resuming keeps only `vars`: if an
+    // operator switches organizations during step-up, calling again here would apply the old
+    // request to the new organization. `mutations.retry` is false, but cannot protect this
+    // path because resumption creates a new call rather than a mutation retry.
     useTenantStore.setState({ activeTenant: 'org-A' })
     const qc = new QueryClient()
     const mutationFn = vi

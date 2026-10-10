@@ -15,6 +15,8 @@ verbos que el estate ya expone, bajo las puertas que ya existen. Ejecutar un wor
 admin *y* requiere aprobación humana, por lo que nunca es una forma de alcanzar algo a lo que no
 podías acceder directamente.
 
+**Edición:** Business Identity & Scale. Community devuelve `501` en estas rutas, no incluye la consola ni el motor de orquestación y conserva los registros para exportarlos.
+
 ## La forma de un grafo
 
 Un workflow es un conjunto de **pasos**, cada uno con un `ref` corto y único en el workflow, un
@@ -35,6 +37,14 @@ por lo que un autor de workflows nunca puede falsificar un evento first-party co
 en la ingesta de otro módulo.
 
 ## 1. Declarar el workflow
+
+En una instalación nueva, `orchestration` está desactivado. Como administrador, activa
+`orchestration` en **Settings > Edition & modules**, manteniendo los demás módulos
+seleccionados activos. Para la CLI, inicia sesión primero como administrador
+en este motor con `olivares login` y después ejecuta `olivares modules on orchestration`. Espera a
+que termine cada reinicio del motor antes de continuar; las sesiones activas
+se detienen y se pueden reanudar. De lo contrario, estas llamadas a la API
+devuelven `404 module_not_enabled`.
 
 ```bash
 curl -sS -X POST "$OLIVARES/v1/m/orchestration/workflows" \

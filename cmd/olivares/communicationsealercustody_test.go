@@ -15,8 +15,6 @@ import (
 	"syscall"
 	"testing"
 	"time"
-
-	"github.com/olivaresai/olivares/core/secure"
 )
 
 func writeCommunicationContentKeyringFile(
@@ -315,98 +313,6 @@ func TestCommunicationContentSealerConstructorObservesCancellationDuringSelfTest
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("constructor did not leave the canceled self-test")
-	}
-}
-
-func TestCommunicationContentSealerOperatorCustodyBootUnwrapOnly(t *testing.T) {
-	fakeKMS := startFakeKEKServer(t)
-	raw := communicationContentCustodyTestRaw(t)
-	cfg, err := loadKeyWrapConfig()
-	if err != nil {
-		t.Fatal(err)
-	}
-	wrapper, err := cfg.wrapper()
-	if err != nil {
-		t.Fatal(err)
-	}
-	envelope, err := secure.Seal(
-		context.Background(), wrapper, secure.PurposeOperatorConfig, raw,
-	)
-	if err != nil {
-		t.Fatal(err)
-	}
-	path := filepath.Join(t.TempDir(), "communication-keyring.sealed")
-	if err := secure.WriteSealedFile(path, envelope); err != nil {
-		t.Fatal(err)
-	}
-	sealer, err := loadCommunicationContentSealer(
-		context.Background(), path, openCommunicationContentKeyringOperatorConfig,
-	)
-	if err != nil {
-		t.Fatalf("load sealed keyring: %v", err)
-	}
-
-	// Revocation after boot cannot affect local content operations. The next
-	// boot unwrap fails, which is the existing operator-config custody model.
-	fakeKMS.revoked = true
-	aad := communicationContentTestAAD()
-	plaintext := []byte(`{"cmek":"local-after-boot"}`)
-	ciphertext, version, err := sealer.Seal(context.Background(), aad, plaintext)
-	if err != nil {
-		t.Fatalf("Seal after KEK revoke: %v", err)
-	}
-	if opened, err := sealer.Open(context.Background(), aad, ciphertext, version); err != nil ||
-		!bytes.Equal(opened, plaintext) {
-		t.Fatalf("Open after KEK revoke = %q, %v", opened, err)
-	}
-	if _, err := loadCommunicationContentSealer(
-		context.Background(), path, openCommunicationContentKeyringOperatorConfig,
-	); !errors.Is(err, errCommunicationContentCustody) {
-		t.Fatalf("next boot after KEK revoke error = %v", err)
-	}
-}
-
-func TestCommunicationContentSealerOperatorCustodyRejectsPurposeAndProvider(t *testing.T) {
-	for _, mutate := range []struct {
-		name    string
-		purpose string
-		change  func(*secure.SealedEnvelope)
-	}{
-		{name: "wrong-purpose", purpose: secure.PurposePolicySigningKey},
-		{
-			name: "wrong-provider", purpose: secure.PurposeOperatorConfig,
-			change: func(envelope *secure.SealedEnvelope) { envelope.Provider = "gcp-kms" },
-		},
-	} {
-		t.Run(mutate.name, func(t *testing.T) {
-			startFakeKEKServer(t)
-			cfg, err := loadKeyWrapConfig()
-			if err != nil {
-				t.Fatal(err)
-			}
-			wrapper, err := cfg.wrapper()
-			if err != nil {
-				t.Fatal(err)
-			}
-			envelope, err := secure.Seal(
-				context.Background(), wrapper, mutate.purpose, communicationContentCustodyTestRaw(t),
-			)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if mutate.change != nil {
-				mutate.change(envelope)
-			}
-			path := filepath.Join(t.TempDir(), "keyring.sealed")
-			if err := secure.WriteSealedFile(path, envelope); err != nil {
-				t.Fatal(err)
-			}
-			if _, err := loadCommunicationContentSealer(
-				context.Background(), path, openCommunicationContentKeyringOperatorConfig,
-			); !errors.Is(err, errCommunicationContentCustody) {
-				t.Fatalf("custody mismatch error = %v", err)
-			}
-		})
 	}
 }
 

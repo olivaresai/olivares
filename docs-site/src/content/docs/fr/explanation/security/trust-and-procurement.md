@@ -25,7 +25,7 @@ est sans doute plus utile avant la signature d'un contrat — est un package de
 préparation vérifiable : des correspondances contrôle par contrôle vers des
 preuves que vous pouvez extraire vous-même d'un déploiement en fonctionnement,
 ainsi que la liste explicite des décisions (engagements de certification,
-contractualisation des tests d'intrusion, activation du support commercial) qui
+contractualisation des tests d'intrusion) qui
 restent ouvertes. FedRAMP/ATO est explicitement hors périmètre pour le produit
 auto-hébergé.
 :::
@@ -101,10 +101,12 @@ dans votre propre déploiement.
 
 ## Support et accessibilité
 
-- Le modèle de support (paliers, objectifs de réponse selon la gravité,
-  escalade) est publié dans `SUPPORT.md` — y compris la divulgation honnête que
-  le support commercial est défini mais pas encore achetable, et que la chaîne
-  d'escalade ne compte aujourd'hui qu'une seule personne.
+- Business inclut une assistance par e-mail pendant les heures ouvrées, au mieux
+  des moyens disponibles et sans objectif de réponse. Enterprise ajoute des objectifs
+  non contraignants de première réponse convenus dans le contrat. Le modèle de
+  support et la procédure d'escalade sont publiés dans `SUPPORT.md` et dans
+  l'[offre actuelle](https://olivares.ai/pricing) ; la chaîne d'escalade ne compte
+  aujourd'hui qu'une seule personne.
 - Le rapport de conformité en matière d'accessibilité est un ACR édition **VPAT
   2.5Rev INT** complété (WCAG 2.1/2.2 AA + Revised Section 508 + EN 301 549
   V3.2.1) dans `docs/accessibility/VPAT-olivares-admin.md`, le passage formel

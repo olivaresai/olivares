@@ -15,6 +15,14 @@ cadencia, hasta que el diff esté en silencio.
 
 ## 1. Extrae el drift
 
+En una instalación nueva, `accessmap` está desactivado. Como administrador, activa
+`accessmap` en **Settings > Edition & modules**, manteniendo los demás módulos
+seleccionados activos. Para la CLI, inicia sesión primero como administrador
+en este motor con `olivares login` y después ejecuta `olivares modules on accessmap`. Espera a
+que termine cada reinicio del motor antes de continuar; las sesiones activas
+se detienen y se pueden reanudar. De lo contrario, estas llamadas a la API
+devuelven `404 module_not_enabled`.
+
 ```bash
 curl -ks "$BASE/v1/m/accessmap/drift" \
   -H "Authorization: Bearer $TOKEN" -H "X-Olivares-Tenant: $TENANT" | python3 -m json.tool

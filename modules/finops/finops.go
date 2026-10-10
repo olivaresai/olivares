@@ -12,6 +12,7 @@ import (
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
+	"github.com/olivaresai/olivares/core/store"
 	"github.com/olivaresai/olivares/sdk"
 	"github.com/olivaresai/olivares/sdk/event"
 )
@@ -175,7 +176,19 @@ func (m *Module) onEvent(ctx context.Context, e event.Event) error {
 	if !ok {
 		return nil
 	}
-	return m.onCost(ctx, tenant, cost, nil)
+	var link *model.ID
+	if e.SessionProjection {
+		id := model.ID("")
+		if raw := cost.Labels[event.SessionCoreIDLabel]; raw != "" {
+			var err error
+			id, err = model.ParseID(raw)
+			if err != nil || id.IsZero() || id.String() != raw {
+				return store.ErrNotFound
+			}
+		}
+		link = &id
+	}
+	return m.onCost(ctx, tenant, cost, nil, link)
 }
 
 // tenantOf resolves an event's string tenant reference to a TenantID, or false

@@ -16,12 +16,11 @@ import (
 // consoleRestoreGuard is the EXCLUSIVE local control the console restore holds
 // across its critical section.
 //
-// Exclusive, because this operation changes the destination: it overwrites the
-// installation's signing keys and then replaces its store file. Held ACROSS the
-// whole of that section rather than checked at its start, because the section is
-// not atomic — the keys are written one at a time and the store is copied
-// afterwards, so an interleaved boot or a second restore inside it would observe an
-// installation whose custody and whose data belong to different generations.
+// Exclusive, because this operation replaces the installation's store and keys.
+// It is held across staging, preservation, promotion and rollback. The database
+// and key files cannot change in one atomic operation, so an interleaved boot or
+// restore must not observe custody and data from different generations.
+
 type consoleRestoreGuard struct {
 	lease   *opgate.Lease
 	anchors []opgate.Anchor

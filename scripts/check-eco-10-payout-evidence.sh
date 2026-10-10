@@ -23,7 +23,7 @@ CANON="${OLIVARES_ECO10_CANON:-design/PRICING-CANON.md}"
 
 grep -q 'NOT EVIDENCED' "$DOC" || fail "$DOC lost NOT EVIDENCED"
 if grep -qiE 'DODO-2 closed|DODO-3 closed|account panel read|intermediary capped' "$DOC"; then
-	fail "$DOC claims account evidence this lote does not have"
+	fail "$DOC claims account evidence this batch does not have"
 fi
 grep -q 'unbounded-until-account-evidence' "$CANON" || \
 	fail "canon lost unbounded-until-account-evidence"

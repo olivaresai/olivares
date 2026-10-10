@@ -8,7 +8,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
+	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -84,14 +87,7 @@ type ProtocolBindingRemoteReconciler interface {
 // WithProtocolBindingRemoteReconciler wires authenticated protocol reads for
 // the K5 REST surface. A nil implementation preserves the deny-closed default.
 func WithProtocolBindingRemoteReconciler(reconciler ProtocolBindingRemoteReconciler) Option {
-	return func(m *Module) { m.UseProtocolBindingRemoteReconciler(reconciler) }
-}
-
-// UseProtocolBindingRemoteReconciler late-binds the composition adapter after
-// the sessions module and the remote executor have both been constructed.
-// Passing nil explicitly returns the HTTP reconciliation surface to OFF.
-func (m *Module) UseProtocolBindingRemoteReconciler(reconciler ProtocolBindingRemoteReconciler) {
-	m.protocolBindingReconciler = reconciler
+	return func(m *Module) { m.ProtocolBindingReconciler = reconciler }
 }
 
 func (m *Module) protocolBindingRoutes(reg api.RouteRegistrar) {
@@ -180,7 +176,7 @@ func (m *Module) handleProtocolBindingReconcile(
 	}
 	body, err := decodeProtocolBindingReconcileBody(w, r)
 	if err != nil {
-		writeWorkError(w, broken(http.StatusBadRequest, "invalid_command"))
+		writeWorkError(w, errors.Join(broken(http.StatusBadRequest, "invalid_command"), err))
 		return
 	}
 	expectedPlanHash, err := reconcilePlanPrecondition(r.Header.Get("If-Plan-Hash"), body.PlanHash)
@@ -233,7 +229,7 @@ func (m *Module) handleProtocolBindingReconcile(
 				return
 			}
 		}
-		if m.protocolBindingReconciler == nil {
+		if m.ProtocolBindingReconciler == nil {
 			writeWorkError(w, unknown(
 				"observation_unavailable", ErrProtocolBindingRemoteReconcilerUnwired,
 			))
@@ -250,14 +246,14 @@ func (m *Module) handleProtocolBindingReconcile(
 		}
 		var result ProtocolBindingReconcileResult
 		if mode == protocolBindingModeTest {
-			result, err = m.protocolBindingReconciler.TestProtocolBinding(
+			result, err = m.ProtocolBindingReconciler.TestProtocolBinding(
 				r.Context(), mc.Tenant, request,
 			)
 		} else {
 			key := strings.TrimSpace(r.Header.Get("Idempotency-Key"))
 			request.SemanticKey, err = protocolBindingReconcileApplyKey(mc, r, binding, key)
 			if err == nil {
-				result, err = m.protocolBindingReconciler.ReconcileProtocolBinding(
+				result, err = m.ProtocolBindingReconciler.ReconcileProtocolBinding(
 					r.Context(), mc.Tenant, request,
 				)
 			}
@@ -304,22 +300,32 @@ func (m *Module) handleProtocolBindingReconcile(
 	}
 }
 
-func protocolBindingQueryFromRequest(
-	r *http.Request,
-	mc api.ModuleContext,
-) (ProtocolBindingQuery, error) {
-	allowed := map[string]bool{
-		"workspace_id": true, "binding_spec_id": true, "work_item_id": true,
-		"protocol": true, "peer_authority": true, "owner_kind": true,
-		"owner_ref": true, "external_kind": true, "external_id": true,
-		"verdict": true, "terminal": true, "limit": true, "cursor": true,
-	}
-	for key, values := range r.URL.Query() {
-		if !allowed[key] || len(values) != 1 {
-			return ProtocolBindingQuery{}, protocolBindingInvalid("invalid_binding_query")
+// protocolBindingQueryRefusal is the invalid_command refusal for a list query. It names
+// the query parameter in evidence_ref, which the CLI prints as "; check <field>".
+func protocolBindingQueryRefusal(field string) error {
+	return brokenField(http.StatusBadRequest, "invalid_command", field)
+}
+
+// protocolBindingQueryValues returns the query of a list request once every
+// parameter is a known one and appears exactly once.
+func protocolBindingQueryValues(r *http.Request, allowed map[string]bool) (url.Values, error) {
+	values := r.URL.Query()
+	for _, key := range slices.Sorted(maps.Keys(values)) {
+		switch {
+		case !allowed[key] && boundedToken(key, 64):
+			return nil, protocolBindingQueryRefusal(key)
+		case !allowed[key]:
+			return nil, protocolBindingQueryRefusal("query")
+		case len(values[key]) != 1:
+			return nil, protocolBindingQueryRefusal(key)
 		}
 	}
-	values := r.URL.Query()
+	return values, nil
+}
+
+// protocolBindingQueryWorkspace reads workspace_id from a list query. A principal
+// confined to one workspace may omit it; anyone else must send it.
+func protocolBindingQueryWorkspace(values url.Values, mc api.ModuleContext) (model.ID, error) {
 	workspaceText := values.Get("workspace_id")
 	if workspaceText == "" {
 		if confined, ok := mc.Principal.ConfinedWorkspaceIn(mc.Tenant); ok {
@@ -328,11 +334,34 @@ func protocolBindingQueryFromRequest(
 	}
 	workspace, err := model.ParseID(workspaceText)
 	if err != nil || workspace.IsZero() {
-		return ProtocolBindingQuery{}, protocolBindingInvalid("invalid_binding_query")
+		return "", protocolBindingQueryRefusal("workspace_id")
+	}
+	return workspace, nil
+}
+
+func protocolBindingQueryFromRequest(
+	r *http.Request,
+	mc api.ModuleContext,
+) (ProtocolBindingQuery, error) {
+	values, err := protocolBindingQueryValues(r, map[string]bool{
+		"workspace_id": true, "binding_spec_id": true, "work_item_id": true,
+		"protocol": true, "peer_authority": true, "owner_kind": true,
+		"owner_ref": true, "external_kind": true, "external_id": true,
+		"verdict": true, "terminal": true, "limit": true, "cursor": true,
+	})
+	if err != nil {
+		return ProtocolBindingQuery{}, err
+	}
+	workspace, err := protocolBindingQueryWorkspace(values, mc)
+	if err != nil {
+		return ProtocolBindingQuery{}, err
 	}
 	limit, err := queryLimit(r)
-	if err != nil || !validWorkCursor(values.Get("cursor")) {
-		return ProtocolBindingQuery{}, protocolBindingInvalid("invalid_binding_query")
+	if err != nil {
+		return ProtocolBindingQuery{}, protocolBindingQueryRefusal("limit")
+	}
+	if !validWorkCursor(values.Get("cursor")) {
+		return ProtocolBindingQuery{}, protocolBindingQueryRefusal("cursor")
 	}
 	query := ProtocolBindingQuery{
 		WorkspaceID: workspace, Protocol: BindingProtocol(values.Get("protocol")),
@@ -342,26 +371,26 @@ func protocolBindingQueryFromRequest(
 		Limit: limit, Cursor: values.Get("cursor"),
 	}
 	for _, field := range []struct {
-		raw    string
+		name   string
 		target *model.ID
 	}{
-		{raw: values.Get("binding_spec_id"), target: &query.BindingSpecID},
-		{raw: values.Get("work_item_id"), target: &query.WorkItemID},
+		{name: "binding_spec_id", target: &query.BindingSpecID},
+		{name: "work_item_id", target: &query.WorkItemID},
 	} {
-		raw, target := field.raw, field.target
+		raw := values.Get(field.name)
 		if raw == "" {
 			continue
 		}
 		parsed, parseErr := model.ParseID(raw)
 		if parseErr != nil || parsed.IsZero() {
-			return ProtocolBindingQuery{}, protocolBindingInvalid("invalid_binding_query")
+			return ProtocolBindingQuery{}, protocolBindingQueryRefusal(field.name)
 		}
-		*target = parsed
+		*field.target = parsed
 	}
 	if raw := values.Get("terminal"); raw != "" {
 		terminal, parseErr := strconv.ParseBool(raw)
 		if parseErr != nil {
-			return ProtocolBindingQuery{}, protocolBindingInvalid("invalid_binding_query")
+			return ProtocolBindingQuery{}, protocolBindingQueryRefusal("terminal")
 		}
 		query.Terminal = &terminal
 	}

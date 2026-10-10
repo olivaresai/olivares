@@ -2,51 +2,34 @@
 # SPDX-FileCopyrightText: 2026 Olivares.AI
 # SPDX-License-Identifier: AGPL-3.0-only
 # Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
-#
-# Bateria de `scripts/seed-adoption-otlp.py`.
-#
-# ⛔ POR QUE EXISTE, Y NO ES SIMETRIA. Su hermano `verify-seed-payloads.py` pasó por tres lecturas
-#    adversariales y cada una encontró algo; este guion lo escribió LA MISMA MANO EL MISMO DÍA y no
-#    tenía ni un caso. Un guion sin banco no es «más simple»: es el que nadie ha medido. Los cuatro
-#    defectos que los lectores encontraron en el hermano son las cuatro familias que esta batería
-#    busca aquí, y por eso cada caso cita la suya.
-#
-# ⛔ LA MAYORIA NO NECESITA MOTOR, PERO LA IDEMPOTENCIA SI, Y ESA RAMA FALTABA. La forma del sobre,
-#    su reproducibilidad y el contrato de `rc` se prueban sin nada levantado. **Lo que solo un motor
-#    decide —que una segunda EJECUCION no mueva mis filas— vive en la RAMA VIVA del final**, tras
-#    `OLIVARES_VERIFY_ENGINE`/`_TOKEN`/`_TENANT`/`_OTLP`. La cabecera anterior la prometia y no
-#    existia ni un uso de esas variables: el 12/0 era hermetico entero. Cuando la rama no corre, se
-#    DICE — un caso saltado impreso como `ok` es la familia que este banco persigue.
+# Test the OTLP seed generator without an engine. The optional live branch verifies
+# receiver idempotence and reports when skipped.
 set -u -o pipefail
 
 if ! command -v python3 >/dev/null 2>&1; then
-	printf 'test-seed-adoption-otlp: NO HE PODIDO MIRAR: no hay python3 en el PATH\n' >&2
+	printf 'test-seed-adoption-otlp: CANNOT INSPECT: python3 is not in PATH\n' >&2
 	exit 2
 fi
 
 RAIZ="$(cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")/.." && pwd)"
 GUION="$RAIZ/scripts/seed-adoption-otlp.py"
 TRABAJO="$(mktemp -d)"
-# ⛔ CONSTRUCTOR UNICO DE MUTANTES, Y FAIL-CLOSED. Al mover la redaccion a `scripts/lib/`, dos
-#    mutantes siguieron apuntando al GUION mientras sus lineas ya vivian en la LIBRERIA: el
-#    `assert` saltaba, el fichero no se escribia, y el caso lo contaba VERDE porque su condicion
-#    era `if ! funcion "$mutante"` y una funcion que no puede cargar un fichero inexistente
-#    TAMBIEN falla. Medido en `main` hoy: **26 pasan, 0 fallan** con DOS `AssertionError` dentro.
-#    Un banco que anuncia verde con excepciones dentro es peor que uno rojo.
-muta_fichero() { # $1 fuente · $2 destino · $3 viejo · $4 nuevo → rc 0 si el mutante quedo construido
+# Require a present anchor, changed output and valid Python syntax before evaluating a
+# mutant.
+mutate_file() { # source, destination, old text, new text; rc 0 only after construction
 	python3 - "$1" "$2" "$3" "$4" <<'PYMUT' || return 1
 import sys
 fuente, destino, viejo, nuevo = sys.argv[1:5]
 src = open(fuente).read()
 if viejo not in src:
-    print(f"    ⛔ el ancla no esta en {fuente}: {viejo[:70]!r}", file=sys.stderr)
+    print(f"    ⛔ the anchor is absent from {fuente}: {viejo[:70]!r}", file=sys.stderr)
     sys.exit(1)
 mut = src.replace(viejo, nuevo, 1)
 if mut == src:
-    print("    ⛔ el reemplazo no cambio nada", file=sys.stderr)
+    print("    ⛔ the replacement changed nothing", file=sys.stderr)
     sys.exit(1)
 if fuente.endswith(".py"):
-    compile(mut, destino, "exec")  # un mutante que no compila no acredita nada
+    compile(mut, destino, "exec")  # Reject an invalid Python mutant.
 open(destino, "w").write(mut)
 PYMUT
 	[ -s "$2" ] || return 1
@@ -61,26 +44,18 @@ fail=0
 paso() { printf 'ok   %s\n' "$1"; ok=$((ok + 1)); }
 malo() { printf 'FAIL %s\n' "$1"; fail=$((fail + 1)); }
 
-# ⛔ LA SALIDA NO SE TIRA. Un caso que exige «rc 1» se conforma con un rc 1 de CUALQUIER causa —un
-#    motor caido, una bandera mal escrita—, y eso es «un mutante acredita la pata que NOMBRA» dentro
-#    del propio banco. Se guarda y `casa` exige que el veredicto DIGA lo que el caso afirma.
-SALIDA="$TRABAJO/salida.txt"
+# Retain output so each expected failure must identify its cause.
+OUTPUT="$TRABAJO/output.txt"
 rc_de() {
 	local g="$1"
 	shift
-	python3 "$g" "$@" >"$SALIDA" 2>&1
+	python3 "$g" "$@" >"$OUTPUT" 2>&1
 	printf '%s' "$?"
 }
-casa() { command grep -qE "$1" "$SALIDA"; }
+casa() { command grep -qE "$1" "$OUTPUT"; }
 
-# muerte_valida <fichero de salida> — rc 0 si lo que hay es una muerte LEGIBLE del sujeto, y no un
-# reventon del mutante.
-# ⛔ ESTA MITAD FALTABA, y la encontro un lector. `muta_fichero` es fail-closed en la CONSTRUCCION
-#    —si el ancla se movio, el fichero no se escribe— y este banco lo documenta seis veces. Nadie
-#    cubria la EJECUCION: un mutante que se construye bien y luego revienta con un `KeyError` no
-#    imprime el mensaje que el caso busca, asi que el `else` lo contaba como MUERTO y la bateria
-#    seguia en 48/0. Es mi propia doctrina —«un mutante que revienta no acredita nada»— sin aplicar
-#    en una rama de mi propio arnes: la muerte prematura sale por el mismo canal que el caso espera.
+# Require nonempty output without a Python traceback before counting an expected mutant
+# failure.
 muerte_valida() {
 	if [ ! -s "$1" ]; then
 		return 1
@@ -91,15 +66,7 @@ muerte_valida() {
 	return 0
 }
 
-# ── 1 · FAMILIA «--sembrar INERTE»: cada bandera tiene que hacer LO QUE DICE ──────────────────
-# El hermano llevaba una bandera que, tras un refactor, hacia lo mismo con y sin ella y nadie lo vio
-# hasta la segunda lectura. Aqui se comprueba por CONDUCTA, no contando menciones en el fuente.
-#
-# ⛔ Y LA PRIMERA VERSION DE ESTE CASO ERA DEMASIADO DEBIL: exigia solo que el sobre CAMBIARA. Un
-#    mutante que ignoraba `--dias` —fijando el rango a 29 dias— SOBREVIVIO, porque el generador
-#    aleatorio es compartido y produce otra secuencia aunque el rango este roto: el sobre cambiaba
-#    igual. «Cambia» prueba que la bandera se LEE; no prueba que haga lo que promete. Asi que cada
-#    bandera se comprueba por su SEMANTICA, que es lo unico que un mutante no puede fingir.
+# 1. Verify each flag changes its stated quantity, range or prefix.
 if python3 - "$GUION" <<'PY'
 import importlib.util, sys, time
 s = importlib.util.spec_from_file_location("a", sys.argv[1])
@@ -118,47 +85,37 @@ def attrs(r):
     return {a["key"]: a["value"]["stringValue"] for a in r["resource"]["attributes"]}
 
 
-# --equipos N -> EXACTAMENTE N equipos distintos
+# --equipos N produces exactly N distinct teams.
 so = m.sobre_otlp(m.EQUIPOS[:2], 8, 30, "demo", ANCLA)
 eq = {attrs(r)["team"] for r in recursos(so)}
 if len(eq) != 2:
-    fallos.append(f"--equipos 2 produjo {len(eq)} equipos")
+    fallos.append(f"--equipos 2 produced {len(eq)} teams")
 
-# --por-equipo N -> EXACTAMENTE N sesiones por equipo
+# --por-equipo N produces exactly N sessions per team.
 so = m.sobre_otlp(m.EQUIPOS[:3], 4, 30, "demo", ANCLA)
 cuenta = {}
 for r in recursos(so):
     cuenta[attrs(r)["team"]] = cuenta.get(attrs(r)["team"], 0) + 1
 if set(cuenta.values()) != {4}:
-    fallos.append(f"--por-equipo 4 produjo {sorted(set(cuenta.values()))} por equipo")
+    fallos.append(f"--por-equipo 4 produced {sorted(set(cuenta.values()))} per team")
 
-# --dias N -> TODAS las marcas dentro de [0, N-1] dias RESPECTO AL ANCLA
-# ⛔ ESTE CASO SE PONIA ROJO SOLO, Y EL DIA PEOR. Medía la antiguedad contra `time.time_ns()`
-#    —el reloj de pared— mientras el sobre va anclado a un `2026-08-30` escrito a mano dos lineas
-#    mas arriba. Hoy da `viejo=2` y pasa JUSTO en el limite; mañana da 3 y FALLA, y pasado 4.
-#    Simulado antes de curarlo, adelantando el reloj: hoy pasa, mañana falla, pasado falla.
-#    Y no es un rojo cualquiera: esta bateria la corre el gancho desde que la cablee, asi que
-#    habria puesto en rojo el carril rapido de TODA la flota el dia del acto. Una fecha escrita a
-#    mano no envejece con el codigo que la usa; la referencia tiene que ser la MISMA que genera
-#    los sellos.
-#
-#    Y se acota TAMBIEN el lado del futuro: `viejo > 2` dejaba pasar un sello POSTERIOR al ancla
-#    —antiguedad negativa—, que es un generador roto en la otra direccion y nadie lo miraba.
+# --dias N bounds timestamps to [0, N-1] days before the same generation anchor; future
+# timestamps fail.
 so = m.sobre_otlp(m.EQUIPOS[:6], 8, 3, "demo", ANCLA)
 sellos = [int(x["sum"]["dataPoints"][0]["timeUnixNano"])
           for r in recursos(so) for x in r["scopeMetrics"][0]["metrics"]]
 edades = [(ANCLA - t) // DIA for t in sellos]
 if max(edades) > 2:
-    fallos.append(f"--dias 3 dejo una marca de {max(edades)} dias respecto al ancla")
+    fallos.append(f"--dias 3 produced a timestamp {max(edades)} days from the anchor")
 if min(edades) < 0:
-    fallos.append(f"--dias 3 dejo una marca {-min(edades)} dias EN EL FUTURO respecto al ancla")
+    fallos.append(f"--dias 3 produced a timestamp {-min(edades)} days IN THE FUTURE from the anchor")
 
-# --prefijo P -> TODOS los session.id empiezan por P
+# --prefijo P prefixes every session ID.
 so = m.sobre_otlp(m.EQUIPOS[:2], 2, 30, "otro", ANCLA)
 malos = [attrs(r)["session.id"] for r in recursos(so)
          if not attrs(r)["session.id"].startswith("otro-")]
 if malos:
-    fallos.append(f"--prefijo otro dejo ids sin el prefijo: {malos[:2]}")
+    fallos.append(f"--prefijo otro produced IDs without the prefix: {malos[:2]}")
 
 if fallos:
     print(fallos)
@@ -166,15 +123,12 @@ if fallos:
 sys.exit(0)
 PY
 then
-	paso "las cuatro banderas hacen lo que dicen (equipos, sesiones por equipo, antiguedad, prefijo)"
+	paso "all four flags do what they claim (teams, sessions per team, age, prefix)"
 else
-	malo "alguna bandera no cumple su semantica: es la familia del --sembrar inerte"
+	malo "a flag does not fulfill its semantics: the inert --sembrar defect family"
 fi
 
-# ── 2 · la FORMA del sobre, que es de lo que depende que el conector lo entienda ──────────────
-# `session.id` va en atributos de RECURSO (no de datapoint) y la temporalidad es DELTA (1). Las dos
-# las pide el conector; si alguien las mueve, el sobre se acepta con 200 y no ingiere nada — un
-# verde que no mide, otra vez la familia A-02.
+# 2. Put session.id and team on the resource and use delta temporality (1).
 if python3 - "$GUION" <<'PY'
 import importlib.util, sys
 s = importlib.util.spec_from_file_location("a", sys.argv[1])
@@ -186,34 +140,26 @@ claves = {a["key"] for a in rm["resource"]["attributes"]}
 metricas = rm["scopeMetrics"][0]["metrics"]
 fallos = []
 if "session.id" not in claves:
-    fallos.append("session.id no esta en los atributos de RECURSO")
+    fallos.append("session.id is absent from RESOURCE attributes")
 if "team" not in claves:
-    fallos.append("falta el atributo team (sin el, la pestaña de equipos sale sin nombre)")
+    fallos.append("missing team attribute (without it, the teams tab is unnamed)")
 if any(x["sum"]["aggregationTemporality"] != 1 for x in metricas):
     fallos.append("aggregationTemporality != 1 (DELTA)")
 if not any(x["name"] == "claude_code.session.count" for x in metricas):
-    fallos.append("falta claude_code.session.count, que es lo que cuenta sesiones")
+    fallos.append("missing claude_code.session.count, which counts sessions")
 if fallos:
     print(fallos)
     sys.exit(1)
 sys.exit(0)
 PY
 then
-	paso "el sobre lleva session.id en RECURSO, team, y temporalidad DELTA"
+	paso "the envelope carries session.id on the RESOURCE, team, and DELTA temporality"
 else
-	malo "la forma del sobre no es la que el conector lee"
+	malo "the envelope shape differs from what the connector reads"
 fi
 
-# ── 3 · DOS CONSTRUCCIONES SEPARADAS DAN EL MISMO SOBRE, byte a byte ──────────────────────────
-# ⛔ ES EL CASO QUE NO EXISTIA Y QUE HABRIA CAZADO EL FALLO QUE ME RETRACTE DE PUBLICAR. Yo probaba
-#    que los `session.id` fueran estables — y lo eran— pero el generador llamaba a `time.time_ns()`,
-#    asi que los SELLOS cambiaban y el sobre NO era identico. El receptor contesta 200 y el store
-#    SUMA el delta, de modo que el re-pase DUPLICABA mientras mi banco decia que todo bien. Medido
-#    despues por un lector: 356 -> 366 -> 376.
-#
-#    La propiedad que de verdad sostiene la idempotencia no es «los ids se repiten»: es **el sobre
-#    entero es el mismo**. Y se comprueba construyendolo DOS VECES POR SEPARADO, con una pausa en
-#    medio para que un reloj vivo se delate.
+# 3. Identical arguments must produce identical envelopes across separate constructions;
+# prefix and anchor changes must alter the result.
 if python3 - "$GUION" <<'PY'
 import importlib.util, json, sys, time
 s = importlib.util.spec_from_file_location("a", sys.argv[1])
@@ -221,44 +167,38 @@ m = importlib.util.module_from_spec(s)
 s.loader.exec_module(m)
 ancla = m.ancla_de("2026-08-30")
 a = m.sobre_otlp(m.EQUIPOS[:3], 4, 30, "demo", ancla)
-time.sleep(1.1)  # si algo mira el reloj, este segundo lo delata
+time.sleep(1.1)  # Expose current-clock timestamps.
 b = m.sobre_otlp(m.EQUIPOS[:3], 4, 30, "demo", ancla)
 c = m.sobre_otlp(m.EQUIPOS[:3], 4, 30, "otro", ancla)
 fallos = []
 if json.dumps(a, sort_keys=True) != json.dumps(b, sort_keys=True):
-    fallos.append("dos construcciones con los MISMOS argumentos salen distintas")
+    fallos.append("constructions with the SAME arguments differ")
 if json.dumps(a, sort_keys=True) == json.dumps(c, sort_keys=True):
-    fallos.append("dos prefijos distintos dan el MISMO sobre")
+    fallos.append("different prefixes produce the SAME envelope")
 d = m.sobre_otlp(m.EQUIPOS[:3], 4, 30, "demo", m.ancla_de("2026-08-29"))
 if json.dumps(a, sort_keys=True) == json.dumps(d, sort_keys=True):
-    fallos.append("dos anclas distintas dan el mismo sobre: el ancla seria inerte")
+    fallos.append("different anchors produce the same envelope: the anchor would be inert")
 ids = [x["value"]["stringValue"] for r in a["resourceMetrics"]
        for x in r["resource"]["attributes"] if x["key"] == "session.id"]
 if len(set(ids)) != len(ids):
-    fallos.append("hay session.id repetidos dentro del mismo sobre")
+    fallos.append("duplicate session.id values within the same envelope")
 if fallos:
     print(fallos)
     sys.exit(1)
 sys.exit(0)
 PY
 then
-	paso "dos construcciones separadas dan el MISMO sobre; otro prefijo u otra ancla, uno distinto"
+	paso "separate constructions produce the SAME envelope; a different prefix or anchor produces a different one"
 else
-	malo "el sobre no es reproducible: la idempotencia que promete la cabecera no se sostiene"
+	malo "the envelope is not reproducible: the idempotence promised in the header does not hold"
 fi
 
-# ── 3-bis · MUTANTE: el generador vuelve a mirar el reloj ─────────────────────────────────────
-# Es el defecto exacto del que me retracte. Si sobrevive, el caso 3 no cubre nada.
-# ⛔ CONSTRUIDO CON `muta_fichero`, QUE ES FAIL-CLOSED, Y NO CON UN `assert` CRUDO. El NO de
-#    the reviewer lo midio: con un `assert` dentro del heredoc, si el ancla se mueve el fichero NO se
-#    escribe, el sujeto real falla por libreria/fichero ausente, y el `if ! ...` cuenta eso como
-#    VERDE. Un espaciado neutro en `redaccion.py` producia Traceback + AssertionError y el banco
-#    seguia diciendo 29/0 rc 0. Es mi propia clase de esta tarde aplicada al fichero que faltaba.
+# 3-bis. Reading the current clock must break deterministic envelope generation.
 m0="$TRABAJO/m0.py"
-if ! muta_fichero "$GUION" "$m0" \
+if ! mutate_file "$GUION" "$m0" \
 	'            ts = ancla_ns - r.randint(0, max(dias - 1, 0)) * dia' \
 	'            ts = time.time_ns() - r.randint(0, max(dias - 1, 0)) * dia  # MUTANTE: reloj vivo'; then
-	malo "NO se pudo construir el mutante 0 (reloj vivo): su ancla no esta en el sujeto"
+	malo "could NOT construct mutant 0 (live clock): its anchor is absent from the subject"
 elif python3 - "$m0" <<'PY2'
 import importlib.util, json, sys, time
 s = importlib.util.spec_from_file_location("a", sys.argv[1])
@@ -271,13 +211,12 @@ b = m.sobre_otlp(m.EQUIPOS[:2], 2, 30, "demo", ancla)
 sys.exit(0 if json.dumps(a, sort_keys=True) == json.dumps(b, sort_keys=True) else 1)
 PY2
 then
-	malo "el mutante del reloj vivo SOBREVIVIO: el caso 3 no detecta el defecto que lo motivo"
+	malo "the live-clock mutant SURVIVED: case 3 does not detect the defect that motivated it"
 else
-	paso "el mutante que devuelve el reloj vivo al generador MUERE en el caso 3 (sobres distintos)"
+	paso "the mutant restoring the live clock to the generator DIES in case 3 (different envelopes)"
 fi
 
-# ⛔ Y ADEMAS m0 SE ACREDITA POR SU MENSAJE, no solo por la desigualdad: si el guion muriera antes
-#    por otra causa, la desigualdad tambien saldria y el caso pasaria por el motivo equivocado.
+# Require the clock mutant to fail with its reproducibility diagnostic.
 muerto0="$(python3 - <<'PY2'
 ports = set()
 for f in ("/proc/net/tcp", "/proc/net/tcp6"):
@@ -292,27 +231,18 @@ print(next(p for p in range(29901, 30100) if p not in ports))
 PY2
 )"
 r="$(rc_de "$m0" "http://127.0.0.1:$muerto0" tok ten --otlp "http://127.0.0.1:$muerto0/v1/metrics" --control-dedup)"
-if [ "$r" = "1" ] && casa 'dos construcciones del MISMO sobre salen distintas'; then
-	paso "m0 muere NOMBRANDO su causa: dos construcciones del mismo sobre salen distintas"
+if [ "$r" = "1" ] && casa 'two builds of the SAME envelope differ'; then
+	paso "m0 dies NAMING its cause: constructions of the same envelope differ"
 elif [ "$r" = "1" ]; then
-	malo "m0 murio con rc 1 pero por otra causa: no acredita la pata que nombra"
+	malo "m0 died with rc 1 for another cause: does not establish the named check"
 else
-	malo "m0 dio rc $r contra un puerto muerto: no llego a su asercion"
+	malo "m0 returned rc $r against a dead port: did not reach its assertion"
 fi
 
-# ⛔ m1 Y m2 SE JUZGAN POR UN OBSERVABLE EXACTO, NO POR MENSAJE, Y ESO ES DELIBERADO. m1 aplasta
-#    RC_NO_PUDE_MIRAR a 0: su observable es EL PROPIO rc de la rama de ceguera, que es lo que el
-#    mutante cambia — exigirle un mensaje seria exigirle que dijera algo que no le toca decir. m2
-#    hace que una clave AUSENTE vuelva a valer cero: su observable es el `SystemExit` de
-#    `sesiones_de`/`equipos_de` sobre un diccionario fabricado, comprobado en el caso 8 por
-#    funcion y no por proceso. Un observable exacto acredita igual que un mensaje; lo que no
-#    acredita es «un no-cero cualquiera».
+# The rc mutant is judged by its exit code; the missing-field mutant by the function
+# exit. Each observable must identify the mutated behavior.
 
-# ── 3-ter · LA URL DEL RECEPTOR NO SALE ENTERA POR NINGUNA SALIDA ─────────────────────────────
-# ⛔ Un lector encontro que la URL se imprimia COMPLETA en error y en exito, y que una credencial
-#    sintetica embebida en el userinfo reaparecia en stderr. `sanea()` conserva esquema, host y
-#    puerto —lo que hace falta para diagnosticar— y tapa el resto. Las dos direcciones: tiene que
-#    OCULTAR la credencial y tiene que SEGUIR diciendo el host, o deja de servir para diagnosticar.
+# 3-ter. Redact credentials and query data while retaining the diagnostic host and port.
 if python3 - "$GUION" <<'PY'
 import importlib.util, sys
 s = importlib.util.spec_from_file_location("a", sys.argv[1])
@@ -323,29 +253,22 @@ sucia = "https://usuario:sk-abcdefghijklmnopqrstuvwx@collector.example:4318/v1/m
 limpia = m.sanea(sucia)
 for prohibido in ("sk-abcdefghijklmnopqrstuvwx", "usuario", "token=zzz"):
     if prohibido in limpia:
-        fallos.append(f"la URL saneada aun contiene {prohibido!r}")
+        fallos.append(f"the redacted URL still contains {prohibido!r}")
 if "collector.example" not in limpia or "4318" not in limpia:
-    fallos.append(f"la URL saneada perdio el host o el puerto y no sirve para diagnosticar: {limpia!r}")
+    fallos.append(f"the redacted URL lost the host or port and cannot help diagnose: {limpia!r}")
 if fallos:
     print(fallos)
     sys.exit(1)
 sys.exit(0)
 PY
 then
-	paso "la URL del receptor se imprime saneada: sin credencial ni consulta, con host y puerto"
+	paso "the receiver URL is printed redacted: no credential or query, with host and port"
 else
-	malo "la URL sale entera por alguna salida: una credencial embebida acabaria en stderr"
+	malo "the full URL appears in output: an embedded credential would reach stderr"
 fi
 
-# ── 3-quater · LA FUGA, por sus DOS rutas, y con su mutante ───────────────────────────────────
-# ⛔ ESTE CASO NO EXISTIA Y LA FUGA VIVIO DOS VERSIONES. El banco probaba `sanea()` AISLADA, y
-#    `sanea()` estaba bien: lo que fallaba era todo lo demas. Dos rutas, las dos reproducidas con
-#    codigo corriendo antes de curarlas:
-#      (a) el `Request` se construia FUERA del `try`, asi que `Request('://usuario:sk-…@host/x')`
-#          lanzaba `ValueError: unknown url type: <la URL entera>` que nadie capturaba;
-#      (b) `HTTPError` devolvia `e.read()` CRUDO y `main` lo imprimia: un receptor que conteste 400
-#          repitiendo la URL filtra por stderr.
-#    Probar la funcion de saneado y no las SALIDAS es, otra vez, medir lo de al lado.
+# 3-quater. Check redaction at the output boundary for malformed URLs and reflected HTTP
+# error bodies.
 if python3 - "$GUION" <<'PY'
 import importlib.util, io, contextlib, sys, threading, http.server, traceback
 s = importlib.util.spec_from_file_location("a", sys.argv[1])
@@ -353,7 +276,7 @@ m = importlib.util.module_from_spec(s)
 s.loader.exec_module(m)
 SEC = "sk-abcdefghijklmnopqrstuvwx"
 fugas = []
-# (a) rutas donde la URL malformada revienta dentro de urllib
+# Malformed URLs may raise within urllib.
 for u in (f"://usuario:{SEC}@host/v1/metrics", SEC,
           f"https://usuario:{SEC}@/v1/metrics?token=zzz",
           f"https://usuario:{SEC}@no.invalid:4318/v1/metrics"):
@@ -366,8 +289,8 @@ for u in (f"://usuario:{SEC}@host/v1/metrics", SEC,
     except Exception as e:
         cap = f"{type(e).__name__}: {e}\n" + traceback.format_exc()
     if SEC in err.getvalue() + out.getvalue() + cap:
-        fugas.append(f"URL malformada {u[:28]}…")
-# (b) el cuerpo de un 400 que repite la URL
+        fugas.append(f"malformed URL {u[:28]}…")
+# The HTTP 400 body reflects a credential-bearing URL.
 class H(http.server.BaseHTTPRequestHandler):
     def do_POST(self):
         self.send_response(400)
@@ -380,55 +303,39 @@ threading.Thread(target=srv.serve_forever, daemon=True).start()
 try:
     _, cuerpo = m.postear(f"http://127.0.0.1:{srv.server_port}/v1/metrics", {"resourceMetrics": []})
     if SEC in cuerpo:
-        fugas.append("cuerpo del HTTPError devuelto crudo")
+        fugas.append("HTTPError body returned unredacted")
 finally:
     srv.shutdown()
 if fugas:
-    print("FUGA:", fugas)
+    print("LEAK:", fugas)
     sys.exit(1)
 sys.exit(0)
 PY
 then
-	paso "ninguna de las dos rutas de fuga saca la credencial (URL malformada ni cuerpo de un 400)"
+	paso "neither leak path exposes the credential (malformed URL or 400 response body)"
 else
-	malo "la credencial sale por alguna salida: la redaccion no cubre todos los caminos"
+	malo "the credential appears in output: redaction does not cover every path"
 fi
 
-# ── 3-quinquies · MUTANTE: se quita la redaccion de la frontera ───────────────────────────────
-# ⛔ EL MUTANTE ATACA AHORA LA LIBRERIA, no una copia local: desde la v8 la redaccion vive en
-#    `scripts/lib/redaccion.py` y este guion solo la envuelve. Un mutante que siga apuntando a la
-#    funcion que ya no esta aqui no muta nada y se cuenta verde — me paso al escribirlo.
-# ⛔ CONSTRUIDO CON `muta_fichero`, QUE ES FAIL-CLOSED, Y NO CON UN `assert` CRUDO. El NO de
-#    the reviewer lo midio: con un `assert` dentro del heredoc, si el ancla se mueve el fichero NO se
-#    escribe, el sujeto real falla por libreria/fichero ausente, y el `if ! ...` cuenta eso como
-#    VERDE. Un espaciado neutro en `redaccion.py` producia Traceback + AssertionError y el banco
-#    seguia diciendo 29/0 rc 0. Es mi propia clase de esta tarde aplicada al fichero que faltaba.
+# 3-quinquies. Disable redaction in the shared library and require the credential tests
+# to detect leakage.
 mkdir -p "$TRABAJO/libnula"
-if ! muta_fichero "$RAIZ/scripts/lib/redaccion.py" "$TRABAJO/libnula/redaccion.py" \
+if ! mutate_file "$RAIZ/scripts/lib/redaccion.py" "$TRABAJO/libnula/redaccion.py" \
 	'        fuera = str(texto)' \
 	'        return str(texto)  # MUTANTE: la frontera no redacta nada
         fuera = str(texto)'; then
-	malo "NO se pudo construir el mutante de la frontera nula: su ancla no esta en redaccion.py"
+	malo "could NOT construct the null-boundary mutant: its anchor is absent from redaccion.py"
 elif ! OLIVARES_LIB_DIR="$TRABAJO/libnula" cred_arbitraria "$GUION" >/dev/null 2>&1; then
-	paso "el mutante que anula la frontera de la libreria FUGA: los casos de credencial lo cazan"
+	paso "the mutant disabling the library boundary LEAKS: the credential cases detect it"
 else
-	malo "anular la frontera no produce fuga: los testigos no ejercitan lo que dicen"
+	malo "disabling the boundary causes no leak: the witnesses do not exercise their claims"
 fi
 
-# ── 3-sexies · UNA CREDENCIAL ARBITRARIA, QUE ES LO QUE EL BANCO NO PROBABA ────────────────────
-# ⛔ ES EL NO DE the reviewer (A-01 sobre `89dc52767`) Y TENIA RAZON EN TODO. El testigo de 3-quater usa
-#    SIEMPRE `sk-…`, una forma que el respaldo por regex tapa aunque `_SENSIBLES` no sepa nada del
-#    secreto: la prueba pasaba **por el camino equivocado** y dejaba sin cubrir el caso que importa,
-#    una credencial que no se parece a ningun token conocido.
-#
-# ⛔ Y HAY UNA SEGUNDA LECCION, QUE ME MORDIO AL ESCRIBIR ESTE CASO: mi primer testigo corria las
-#    dos rutas EN EL MISMO PROCESO, y las llamadas de la ruta (a) dejaban el secreto en
-#    `_SENSIBLES`, asi que la ruta (b) llegaba ya tapada y daba verde. La ruta (b) se prueba EN
-#    AISLAMIENTO o no se prueba: el cuerpo de un 400 lo escribe el SERVIDOR y puede traer una
-#    credencial que este guion no ha visto nunca.
+# 3-sexies. Use an arbitrary credential that token-pattern matching cannot hide. Isolate
+# the HTTP-error case from earlier calls that remember credentials.
 SEC_ARB="Zq8plano-nada-especial-2026"
 
-cred_arbitraria() { # $1 = guion sujeto; rc 0 = sin fugas
+cred_arbitraria() { # subject script; rc 0 means no leak
 	SUJETO="$1" SEC_ARB="$SEC_ARB" OLIVARES_LIB_DIR="${OLIVARES_LIB_DIR:-}" python3 - <<'PY2'
 import contextlib, importlib.util, io, os, sys, traceback
 SEC = os.environ["SEC_ARB"]
@@ -453,7 +360,7 @@ sys.exit(1 if fugas else 0)
 PY2
 }
 
-cuerpo_400_aislado() { # $1 = guion sujeto; rc 0 = tapado. Proceso NUEVO a proposito.
+cuerpo_400_aislado() { # subject script; isolated process; rc 0 means redacted
 	SUJETO="$1" SEC_ARB="$SEC_ARB" OLIVARES_LIB_DIR="${OLIVARES_LIB_DIR:-}" python3 - <<'PY2'
 import http.server, importlib.util, os, sys, threading
 SEC = os.environ["SEC_ARB"]
@@ -475,26 +382,19 @@ PY2
 }
 
 if cred_arbitraria "$GUION" >/dev/null 2>&1; then
-	paso "una credencial ARBITRARIA no sale por ninguna ruta de URL malformada"
+	paso "an ARBITRARY credential is not exposed through any malformed URL path"
 else
-	malo "una credencial que no casa ningun regex FUGA por una URL malformada"
+	malo "a credential matching no regex LEAKS through a malformed URL"
 fi
 if cuerpo_400_aislado "$GUION" >/dev/null 2>&1; then
-	paso "el cuerpo de un 400 con una credencial NUNCA VISTA sale tapado (proceso aislado)"
+	paso "a 400 body with a NEVER-SEEN credential is redacted (isolated process)"
 else
-	malo "el cuerpo de un 400 filtra una credencial que el guion no habia visto"
+	malo "the 400 body leaks a credential the script had not seen"
 fi
 
-# ── 3-octies · LA EXCEPCION ENCADENADA, QUE MI PROPIO BANCO DESCARTABA ─────────────────────────
-# ⛔ the reviewer, A-01 sobre `817bc4a4d`, y el hallazgo es de los que enseñan: stdout y stderr salian
-#    LIMPIOS y aun asi el secreto viajaba. Un `raise SystemExit(...)` dentro de un `except`
-#    ENCADENA la excepcion original en `__context__`, y esa lleva la URL entera con la credencial
-#    aunque el mensaje ya no la lleve. Redactar el texto y dejar el contexto colgando es tapar la
-#    puerta y dejar la ventana.
-#
-#    Y mi banco no podia verlo porque hacia `except SystemExit: pass` — **descartaba justo el
-#    objeto que la llevaba**. Un testigo que captura y tira no mide: hay que INSPECCIONAR.
-contexto_limpio() { # $1 = guion sujeto; rc 0 = ninguna excepcion encadenada lleva el secreto
+# 3-octies. Inspect exception context and cause for credentials as well as visible
+# output.
+contexto_limpio() { # subject script; rc 0 means no chained credential leak
 	SUJETO="$1" SEC_ARB="$SEC_ARB" OLIVARES_LIB_DIR="${OLIVARES_LIB_DIR:-}" python3 - <<'PY2'
 import contextlib, importlib.util, io, os, sys
 SEC = os.environ["SEC_ARB"]
@@ -506,7 +406,7 @@ for u in (f"://usuario:{SEC}@host/v1/metrics", f"https://usuario:{SEC}@no.invali
         with contextlib.redirect_stderr(io.StringIO()), contextlib.redirect_stdout(io.StringIO()):
             m.postear(u, {"resourceMetrics": []})
     except BaseException as e:
-        # Se RECORRE la cadena entera, que es lo que el banco anterior no hacia.
+        # Inspect the chained exception objects.
         vistos, cur = 0, e
         while cur is not None and vistos < 12:
             if SEC in f"{cur!r}" + f"{cur}":
@@ -519,23 +419,16 @@ PY2
 }
 
 if contexto_limpio "$GUION"; then
-	paso "ninguna excepcion ENCADENADA lleva el secreto (se recorre __context__/__cause__, no se descarta)"
+	paso "no CHAINED exception carries the secret (__context__/__cause__ are traversed, not discarded)"
 else
-	malo "el secreto viaja en una excepcion encadenada aunque el mensaje salga limpio"
+	malo "the secret travels in a chained exception despite a clean message"
 fi
 
-# ── 3-nonies · UNA CABECERA REFLEJADA, CON UN VALOR ARBITRARIO ─────────────────────────────────
-# ⛔ TERCERA FRONTERA, y ni los valores recordados ni el userinfo posicional ni los regex de formas
-#    la cubrian: un receptor que conteste 400 reflejando `Authorization: Bearer <lo-que-sea>`
-#    devuelve el token. Se reconoce por el NOMBRE de la cabecera —conjunto cerrado y conocido— y se
-#    tapa el valor entero sin mirar a que se parece.
-cabecera_reflejada() { # $1 = guion sujeto; rc 0 = tapado. Proceso NUEVO.
-	# ⛔ `OLIVARES_LIB_DIR` SE REENVIA A MANO, y esto me costo un mutante que parecia sobrevivir.
-	#    Un prefijo de variable delante de una FUNCION de bash la fija en el shell pero **no la
-	#    exporta**, asi que el `python3` hijo no la veia y cargaba la libreria REAL: el mutante se
-	#    construia, no se aplicaba, y el banco lo contaba como «sobrevivio». Lo destape probando la
-	#    libreria mutada en directo —fugaba— contra el caso —no fugaba—: cuando el sujeto y el
-	#    banco discrepan, el sospechoso es el arnes.
+# 3-nonies. Redact reflected credential-header values by header name, regardless of
+# token shape.
+cabecera_reflejada() { # subject script; isolated process; rc 0 means redacted
+	# Forward OLIVARES_LIB_DIR explicitly to the Python subprocess so the requested library
+	# is loaded.
 	SUJETO="$1" SEC_ARB="$SEC_ARB" OLIVARES_LIB_DIR="${OLIVARES_LIB_DIR:-}" python3 - <<'PY2'
 import contextlib, http.server, importlib.util, io, os, sys, threading
 SEC = os.environ["SEC_ARB"]
@@ -543,22 +436,16 @@ spec = importlib.util.spec_from_file_location("m", os.environ["SUJETO"])
 m = importlib.util.module_from_spec(spec); sys.modules["m"] = m; spec.loader.exec_module(m)
 
 
-# ⛔ EL RECEPTOR DEVUELVE UNA CREDENCIAL QUE EL GUION NO CONOCE, y eso es el caso. Si reflejara
-#    NUESTRO token, lo taparia el mecanismo de «secretos declarados» y este testigo daria verde sin
-#    ejercer la frontera de cabecera — me paso al escribirlo y el mutante sobrevivio. Un receptor
-#    puede repetir la credencial de un proxy o de un salto anterior, y esa no la conocemos: por eso
-#    la cabecera se reconoce por su NOMBRE y se tapa el valor entero, sea cual sea.
+# Reflect an unknown credential so declared-secret redaction cannot satisfy this header
+# test.
 AJENA = "Up7-credencial-de-otro-salto-2026"
 
 
 class H(http.server.BaseHTTPRequestHandler):
     def do_POST(self):
         self.send_response(400); self.end_headers()
-        # ⛔ LA CABECERA REFLEJADA ES PARAMETRO, NO CONSTANTE, y esto es lo que hace util al
-        #    mutante por entrada: con `X-Api-Key` fija, quitar `authorization` de la alternancia
-        #    NO fugaba —porque la cabecera del testigo la seguia tapando `api-key`— y el caso
-        #    concluia «esa entrada no la cubre nadie» sobre una entrada perfectamente cubierta.
-        #    Medido: 2 rojos de 3. Cada mutante tiene que reflejar SU cabecera.
+        # Reflect the selected header so each removed alternation entry exercises its
+        # own boundary.
         self.wfile.write((f"upstream rejected: {os.environ.get('CAB','X-Api-Key')}: " + AJENA).encode())
 
     def log_message(self, *a):
@@ -571,10 +458,8 @@ err, out = io.StringIO(), io.StringIO()
 try:
     with contextlib.redirect_stderr(err), contextlib.redirect_stdout(out):
         try:
-            # ⛔ SE EJERCE `postear`, NO `leer`, y la diferencia es el caso: `leer` sólo emite el
-            #    `HTTPError` —cuyo texto es «HTTP Error 400: Bad Request», SIN el cuerpo—, asi que
-            #    por ahi la credencial reflejada no sale ni con la frontera quitada. El testigo
-            #    tiene que mirar donde el cuerpo SI viaja. Me costo un mutante que parecia inmortal.
+            # Exercise postear, which returns the HTTP error body carrying the reflected
+            # credential.
             _, cuerpo = m.postear(f"http://127.0.0.1:{srv.server_port}/v1/metrics",
                                   {"resourceMetrics": []})
         except BaseException:
@@ -586,107 +471,83 @@ PY2
 }
 
 if cabecera_reflejada "$GUION"; then
-	paso "un 400 que refleja una cabecera con una credencial AJENA sale tapado"
+	paso "a 400 reflecting a header with an UNKNOWN credential is redacted"
 else
-	malo "una cabecera reflejada saca una credencial que el guion no conoce: falta esa frontera"
+	malo "a reflected header exposes a credential the script does not know: that boundary is missing"
 fi
 
-# ⛔ CONSTRUIDO CON `muta_fichero`, QUE ES FAIL-CLOSED, Y NO CON UN `assert` CRUDO. El NO de
-#    the reviewer lo midio: con un `assert` dentro del heredoc, si el ancla se mueve el fichero NO se
-#    escribe, el sujeto real falla por libreria/fichero ausente, y el `if ! ...` cuenta eso como
-#    VERDE. Un espaciado neutro en `redaccion.py` producia Traceback + AssertionError y el banco
-#    seguia diciendo 29/0 rc 0. Es mi propia clase de esta tarde aplicada al fichero que faltaba.
 mkdir -p "$TRABAJO/libmut"
-if ! muta_fichero "$RAIZ/scripts/lib/redaccion.py" "$TRABAJO/libmut/redaccion.py" \
+if ! mutate_file "$RAIZ/scripts/lib/redaccion.py" "$TRABAJO/libmut/redaccion.py" \
 	'        fuera = _RX_CABECERA.sub(' \
 	'        fuera = fuera if True else _RX_CABECERA.sub('; then
-	malo "NO se pudo construir el mutante de la frontera de CABECERA: su ancla no esta en redaccion.py"
+	malo "could NOT construct the HEADER-boundary mutant: its anchor is absent from redaccion.py"
 elif ! OLIVARES_LIB_DIR="$TRABAJO/libmut" cabecera_reflejada "$GUION"; then
-	paso "el mutante que quita la frontera de CABECERA FUGA: el caso 3-nonies lo caza"
+	paso "the mutant removing the HEADER boundary LEAKS: case 3-nonies detects it"
 else
-	malo "quitar la frontera de cabecera no produce fuga: ese caso no ejercita lo que dice"
+	malo "removing the header boundary causes no leak: the case does not exercise its claim"
 fi
 
-# ⛔ CONSTRUIDO CON `muta_fichero`, QUE ES FAIL-CLOSED, Y NO CON UN `assert` CRUDO. El NO de
-#    the reviewer lo midio: con un `assert` dentro del heredoc, si el ancla se mueve el fichero NO se
-#    escribe, el sujeto real falla por libreria/fichero ausente, y el `if ! ...` cuenta eso como
-#    VERDE. Un espaciado neutro en `redaccion.py` producia Traceback + AssertionError y el banco
-#    seguia diciendo 29/0 rc 0. Es mi propia clase de esta tarde aplicada al fichero que faltaba.
 mX="$TRABAJO/mX.py"
-if ! muta_fichero "$GUION" "$mX" \
+if ! mutate_file "$GUION" "$mX" \
 	'        motivo = f"{type(e).__name__}: {e}"' \
-	'        raise SystemExit(salir(RC_NO_PUDE_MIRAR, redacta(f"no alcanzo el receptor OTLP en {sanea(url)}: {type(e).__name__}: {e}", url)))'; then
-	malo "NO se pudo construir el mutante del encadenado: su ancla no esta en el sujeto"
+	'        raise SystemExit(salir(RC_UNAVAILABLE, redacta(f"cannot reach the OTLP receiver at {sanea(url)}: {type(e).__name__}: {e}", url)))'; then
+	malo "could NOT construct the chaining mutant: its anchor is absent from the subject"
 elif ! contexto_limpio "$mX"; then
-	paso "el mutante que vuelve a lanzar DENTRO del except encadena el secreto: el caso 3-octies lo caza"
+	paso "the mutant raising again INSIDE except chains the secret: case 3-octies detects it"
 else
-	malo "volver a encadenar no produce contexto con secreto: ese caso no ejercita lo que dice"
+	malo "chaining again yields no secret-bearing context: the case does not exercise its claim"
 fi
 
-# ── 3-septies · LOS DOS MUTANTES DE LA LIBRERIA, cada uno matando SU ruta ─────────────────────
-# ⛔ APUNTABAN AL GUION Y SUS LINEAS VIVEN EN `redaccion.py` (the reviewer, A-03). Ver la razon en
-#    `muta_fichero`: sin constructor fail-closed esto salia verde sin haberse aplicado nunca.
+# 3-septies. Mutate the library paths that remember bare credentials and redact userinfo
+# positions.
 mkdir -p "$TRABAJO/lib-pelada" "$TRABAJO/lib-posicional"
-if muta_fichero "$RAIZ/scripts/lib/redaccion.py" "$TRABAJO/lib-pelada/redaccion.py" \
+if mutate_file "$RAIZ/scripts/lib/redaccion.py" "$TRABAJO/lib-pelada/redaccion.py" \
 	'        if "://" not in url and "//" not in url and len(url) >= 8:' \
 	'        if False:  # MUTANTE: la credencial pelada ya no se recuerda'; then
 	if ! OLIVARES_LIB_DIR="$TRABAJO/lib-pelada" cred_arbitraria "$GUION" >/dev/null 2>&1; then
-		paso "el mutante que deja de recordar la credencial PELADA FUGA: el caso 3-sexies lo caza"
+		paso "the mutant forgetting the BARE credential LEAKS: case 3-sexies detects it"
 	else
-		malo "quitar el recuerdo de la credencial pelada no produce fuga: ese caso no ejercita nada"
+		malo "forgetting the bare credential causes no leak: the case exercises nothing"
 	fi
 else
-	malo "NO se pudo construir el mutante de la credencial pelada: su ancla no esta en redaccion.py"
+	malo "could NOT construct the bare-credential mutant: its anchor is absent from redaccion.py"
 fi
 
-if muta_fichero "$RAIZ/scripts/lib/redaccion.py" "$TRABAJO/lib-posicional/redaccion.py" \
+if mutate_file "$RAIZ/scripts/lib/redaccion.py" "$TRABAJO/lib-posicional/redaccion.py" \
 	'        fuera = _RX_USERINFO.sub("//<oculto>@", fuera)' \
 	'        pass  # MUTANTE: el texto ajeno ya no se tapa por posicion'; then
 	if ! OLIVARES_LIB_DIR="$TRABAJO/lib-posicional" cuerpo_400_aislado "$GUION" >/dev/null 2>&1; then
-		paso "el mutante que deja de tapar por POSICION FUGA por el cuerpo del 400"
+		paso "the mutant removing POSITIONAL redaction LEAKS through the 400 body"
 	else
-		malo "quitar la redaccion posicional no produce fuga: ese caso no ejercita nada"
+		malo "removing positional redaction causes no leak: the case exercises nothing"
 	fi
 else
-	malo "NO se pudo construir el mutante posicional: su ancla no esta en redaccion.py"
+	malo "could NOT construct the positional mutant: its anchor is absent from redaccion.py"
 fi
 
-# ── 3-decies · UN MUTANTE POR ENTRADA DE CABECERA ─────────────────────────────────────────────
-# ⛔ MI MUTANTE ANTERIOR QUITABA EL REGEX ENTERO, y eso solo prueba que la regla existe — no que
-#    CADA nombre de la lista este cubierto (the reviewer, A-03). Retirar `x-auth-token` dejaba su valor
-#    saliendo y ninguna fila lo decia. Ahora hay un mutante por entrada: se quita ESE nombre de la
-#    alternancia y se comprueba que su cabecera fuga, con la fila nombrandolo.
-# Las cinco FORMAS que se prueban contra las TRES entradas que quedan (dos eran redundantes por
-# `\b`, ver la razon en la libreria): cada nombre de aqui debe fugar al quitar su entrada.
+# 3-decies. Removing each header-name entry must expose that header across its supported
+# spellings.
 for CAB_NOMBRE in authorization api-key auth-token; do
 	D="$TRABAJO/lib-cab-$CAB_NOMBRE"
 	mkdir -p "$D"
-	# ⛔ LA MUTACION SE ANCLA A LA LINEA ENTERA DEL REGEX, no al nombre suelto, y por dos razones
-	#    que me mordieron: (1) esos mismos nombres aparecen en la PROSA que explica esto, asi que
-	#    mutar la primera aparicion tocaba el comentario y no el codigo; y (2) la ultima entrada no
-	#    lleva `|` detras, asi que `"$CAB_NOMBRE|"` no casaba para ella y su mutante no se construia
-	#    — el banco lo dijo en rojo, que es lo que se le pidio hacer.
-	# ⛔ UNA barra, no dos: el fichero tiene `\b` y mi literal llevaba `\\b`. El banco lo dijo en
-	#    rojo tres veces —«su nombre no esta en el regex»— en vez de contarlas verdes, que es
-	#    exactamente para lo que se le puso el fail-closed.
+	# Anchor to the complete regex line so prose cannot match. Keep its literal backslash
+	# and handle the final entry without a trailing alternation separator.
 	LINEA_RX='    r"(?i)\b(authorization|api-key|auth-token)"'
 	LINEA_MUT="$(printf '%s' "$LINEA_RX" | sed -E "s/\\|?${CAB_NOMBRE}\\|?/|/; s/\\(\\|/(/; s/\\|\\)/)/")"
-	if muta_fichero "$RAIZ/scripts/lib/redaccion.py" "$D/redaccion.py" \
+	if mutate_file "$RAIZ/scripts/lib/redaccion.py" "$D/redaccion.py" \
 		"$LINEA_RX" "$LINEA_MUT" ; then
 		if ! CAB="$CAB_NOMBRE" OLIVARES_LIB_DIR="$D" cabecera_reflejada "$GUION" >/dev/null 2>&1; then
-			paso "quitar \`$CAB_NOMBRE\` de la alternancia FUGA su cabecera: esa entrada esta cubierta"
+			paso "removing \`$CAB_NOMBRE\` from the alternation LEAKS its header: that entry is covered"
 		else
-			malo "quitar \`$CAB_NOMBRE\` no produce fuga: esa entrada de la lista no la cubre nadie"
+			malo "removing \`$CAB_NOMBRE\` causes no leak: nobody covers that list entry"
 		fi
 	else
-		malo "NO se pudo construir el mutante de \`$CAB_NOMBRE\`: su nombre no esta en el regex"
+		malo "could NOT construct the \`$CAB_NOMBRE\` mutant: its name is absent from the regex"
 	fi
 done
 
-# ── 4 · el rc de «no he podido mirar»: un receptor donde no hay nadie ─────────────────────────
-# El puerto libre se elige MIRANDO `/proc/net/tcp` con python3, no con `awk`: el de esta caja es
-# mawk y no tiene `strtonum`, asi que una sonda con el devuelve la lista VACIA y eso se lee como
-# «no hay nada escuchando». Costo dos lecturas falsas el 2026-08-30.
+# 4. An unreachable receiver must return rc 2. Read listening ports with Python rather
+# than relying on awk strtonum support.
 muerto="$(python3 - <<'PY'
 ports = set()
 for f in ("/proc/net/tcp", "/proc/net/tcp6"):
@@ -702,39 +563,27 @@ PY
 )"
 r="$(rc_de "$GUION" "http://127.0.0.1:$muerto" tok ten --otlp "http://127.0.0.1:$muerto/v1/metrics")"
 if [ "$r" = "2" ]; then
-	paso "motor/receptor inalcanzable => rc 2 (no he podido mirar), no 0 ni 1"
+	paso "unreachable engine/receiver => rc 2 (cannot inspect), not 0 or 1"
 else
-	malo "inalcanzable deberia salir 2 y salio $r"
+	malo "unreachable receiver should exit 2, returned $r"
 fi
 
-# ── 5 · MUTANTE: la ceguera se confunde con limpieza ──────────────────────────────────────────
-# La regla 5 del canon, y el defecto que sus lectores encontraron dos veces en el hermano.
-# ⛔ CONSTRUIDO CON `muta_fichero`, QUE ES FAIL-CLOSED, Y NO CON UN `assert` CRUDO. El NO de
-#    the reviewer lo midio: con un `assert` dentro del heredoc, si el ancla se mueve el fichero NO se
-#    escribe, el sujeto real falla por libreria/fichero ausente, y el `if ! ...` cuenta eso como
-#    VERDE. Un espaciado neutro en `redaccion.py` producia Traceback + AssertionError y el banco
-#    seguia diciendo 29/0 rc 0. Es mi propia clase de esta tarde aplicada al fichero que faltaba.
+# 5. Changing unavailable evidence from rc 2 to rc 0 must be observable.
 m1="$TRABAJO/m1.py"
-if ! muta_fichero "$GUION" "$m1" \
-	'RC_LIMPIO, RC_RECHAZADO, RC_NO_PUDE_MIRAR = 0, 1, 2' \
-	'RC_LIMPIO, RC_RECHAZADO, RC_NO_PUDE_MIRAR = 0, 1, 0'; then
-	malo "NO se pudo construir el mutante 1 (rc 2 aplastado a 0): su ancla no esta en el sujeto"
+if ! mutate_file "$GUION" "$m1" \
+	'RC_LIMPIO, RC_RECHAZADO, RC_UNAVAILABLE = 0, 1, 2' \
+	'RC_LIMPIO, RC_RECHAZADO, RC_UNAVAILABLE = 0, 1, 0'; then
+	malo "could NOT construct mutant 1 (rc 2 collapsed to 0): its anchor is absent from the subject"
 fi
 r="$(rc_de "$m1" "http://127.0.0.1:$muerto" tok ten --otlp "http://127.0.0.1:$muerto/v1/metrics")"
 if [ "$r" = "0" ]; then
-	paso "el mutante que aplasta 'no pude mirar' a 'limpio' es DETECTABLE por el caso 4"
+	paso "the mutant collapsing 'cannot inspect' to 'clean' is DETECTABLE by case 4"
 else
-	malo "el mutante 1 no produjo el 0 que el caso 4 caza (dio $r)"
+	malo "mutant 1 did not produce the 0 detected by case 4 (returned $r)"
 fi
 
-# ── 6 · MUTANTE: el control de deduplicacion se queda con UNA sola mitad ──────────────────────
-# ⛔ ES LA FAMILIA A-05 —«un control acredita lo que NOMBRA»— aplicada aqui. `--control-dedup`
-#    afirma dos cosas: que la cifra SUBE en la primera ejecucion y que NO se mueve en la SEGUNDA.
-#    Sin la primera, un receptor que descartara TODO pasaria la prueba de «no duplica» con nota.
-#    ⚠ Y «segunda EJECUCION» no es «reenvio»: la version anterior de este control mandaba el mismo
-#    sobre en memoria dos veces y por eso blindo una afirmacion falsa. El caso 3 es quien garantiza
-#    que las dos ejecuciones produzcan el mismo sobre; este garantiza que el control siga
-#    afirmando las dos cosas.
+# 6. Deduplication requires an initial increase and no second increase; dropping every
+# delivery cannot satisfy both.
 if python3 - "$GUION" <<'PY'
 import sys, re
 src = open(sys.argv[1]).read()
@@ -742,36 +591,20 @@ cuerpo = src[src.index("def control_dedup"):src.index("def main(")]
 tiene_subida = "uno != por_equipo" in cuerpo
 tiene_quietud = "dos != uno" in cuerpo
 if not (tiene_subida and tiene_quietud):
-    print("control_dedup ha perdido una de sus dos mitades:",
-          "sube" if tiene_subida else "SIN la asercion de subida",
-          "|", "quieta" if tiene_quietud else "SIN la asercion de quietud")
+    print("control_dedup lost one of its two halves:",
+          "increases" if tiene_subida else "WITHOUT the increase assertion",
+          "|", "unchanged" if tiene_quietud else "WITHOUT the unchanged assertion")
     sys.exit(1)
 sys.exit(0)
 PY
 then
-	paso 'el control conserva sus DOS mitades (sube en la 1.a ejecucion, no se mueve en la 2.a)'
+	paso 'the control retains BOTH halves (increases on the first run, unchanged on the second)'
 else
-	malo 'el control se ha quedado con una mitad: un receptor que descarte todo lo pasaria'
+	malo 'the control retains only one half: a receiver discarding everything would pass'
 fi
 
-# ── 7 · la cabecera sigue nombrando el hallazgo que decide si el sembrado sirve ───────────────
-# Si alguien recorta la cabecera y se lleva la lente por defecto, se pierde LO UNICO que convierte
-# este trabajo en una captura util. No es prosa: es el requisito operativo.
-if command grep -q "useState<LensId>('analytics')" "$GUION" && command grep -q 'telemetry' "$GUION"; then
-	paso "la cabecera sigue nombrando la lente por defecto vacia y su remedio"
-else
-	malo "se ha perdido el aviso de la lente por defecto: sembrar sin el produce una captura vacia"
-fi
-
-# ── 8 · AUSENTE no es CERO, por sus dos direcciones ───────────────────────────────────────────
-# ⛔ ES LA FAMILIA QUE UN LECTOR ME ENCONTRO EN EL HERMANO Y QUE YO TENIA AQUI TAMBIEN.
-#    `d.get("sessions", 0)` convierte «el motor ya no devuelve ese campo» en «no hay sesiones», y a
-#    partir de ahi el guion acusa al SEMBRADO de lo que es un cambio de contrato. Las dos
-#    direcciones importan: ausente tiene que ser 2, y un cero legitimo tiene que seguir siendo un
-#    veredicto — si la guarda tratara el 0 como ausencia, un estate vacio saldria «no pude mirar» y
-#    nadie se enteraria de que no hay datos.
-# 2>/dev/null: los fixtures de abajo hacen que el guion imprima sus «no he podido mirar» a stderr,
-# que es justo lo que se les pide; sin silenciarlo, el banco parece roto cuando esta pasando.
+# 8. Missing fields return rc 2; legitimate zero and empty values remain valid results.
+# Suppress the expected fixture diagnostics.
 if python3 - "$GUION" 2>/dev/null <<'PY'
 import importlib.util, sys
 s = importlib.util.spec_from_file_location("a", sys.argv[1])
@@ -785,33 +618,33 @@ def rc_de_llamada(fn, arg):
         fn(arg)
     except SystemExit as e:
         return e.code
-    return "sin salir"
+    return "did not exit"
 
 
-# AUSENTE -> 2
-for etiqueta, d in [("sin telemetry", {}),
-                    ("sin totals", {"telemetry": {}}),
-                    ("totals sin sessions", {"telemetry": {"totals": {"commits": 3}}})]:
+# Missing fields return rc 2.
+for etiqueta, d in [("without telemetry", {}),
+                    ("without totals", {"telemetry": {}}),
+                    ("totals without sessions", {"telemetry": {"totals": {"commits": 3}}})]:
     r = rc_de_llamada(m.sesiones_de, d)
     if r != 2:
-        fallos.append(f"{etiqueta}: esperaba 2 y dio {r!r}")
+        fallos.append(f"{etiqueta}: expected 2, got {r!r}")
 r = rc_de_llamada(m.equipos_de, {})
 if r != 2:
-    fallos.append(f"teams ausente: esperaba 2 y dio {r!r}")
+    fallos.append(f"missing teams: expected 2, got {r!r}")
 
-# CERO LEGITIMO -> sigue siendo un veredicto, no una ceguera
+# Legitimate zero values remain valid results.
 try:
     v = m.sesiones_de({"telemetry": {"totals": {"sessions": 0}}})
     if v != 0:
-        fallos.append(f"sessions=0 devolvio {v!r}")
+        fallos.append(f"sessions=0 returned {v!r}")
 except SystemExit as e:
-    fallos.append(f"sessions=0 salio {e.code}: un cero legitimo NO es ceguera")
+    fallos.append(f"sessions=0 exited {e.code}: a legitimate zero is NOT unavailable evidence")
 try:
     v = m.equipos_de({"teams": []})
     if v != []:
-        fallos.append(f"teams=[] devolvio {v!r}")
+        fallos.append(f"teams=[] returned {v!r}")
 except SystemExit as e:
-    fallos.append(f"teams=[] salio {e.code}: una lista vacia legitima NO es ceguera")
+    fallos.append(f"teams=[] exited {e.code}: a legitimate empty list is NOT unavailable evidence")
 
 if fallos:
     print(fallos)
@@ -819,32 +652,24 @@ if fallos:
 sys.exit(0)
 PY
 then
-	paso "un campo AUSENTE sale 2 y un cero legitimo sigue siendo veredicto"
+	paso "a MISSING field exits 2 and a legitimate zero remains a verdict"
 else
-	malo "no separa ausente de cero: un cambio de contrato se leeria como «no hay datos»"
+	malo "does not distinguish missing from zero: a contract change would be read as «no data»"
 fi
 
-# ── 9 · MUTANTE: se vuelve al `.get(campo, 0)` y el caso 8 tiene que matarlo ───────────────────
-# ⛔ DOS SUSTITUCIONES, DOS PASADAS DEL CONSTRUCTOR FAIL-CLOSED. La version anterior hacia la
-#    segunda con un `replace` SIN comprobar —solo la primera llevaba `assert`—, asi que si el
-#    `return tot["sessions"]` cambiaba de forma, el mutante se construia A MEDIAS y el caso lo
-#    juzgaba igual: mediria el `if False` sin el `.get`, que no es el defecto que nombra.
+# 9. Require both mutant substitutions before evaluating a missing field treated as
+# zero.
 m2="$TRABAJO/m2.py"
-if ! muta_fichero "$GUION" "$TRABAJO/m2-paso1.py" \
+if ! mutate_file "$GUION" "$TRABAJO/m2-paso1.py" \
 	'    if "sessions" not in tot:' \
 	'    if False:  # MUTANTE: ausente vuelve a ser cero'; then
-	malo "NO se pudo construir el mutante 2 (paso 1): su ancla no esta en el sujeto"
-elif ! muta_fichero "$TRABAJO/m2-paso1.py" "$m2" \
+	malo "could NOT construct mutant 2 (step 1): its anchor is absent from the subject"
+elif ! mutate_file "$TRABAJO/m2-paso1.py" "$m2" \
 	'    return tot["sessions"]' \
 	'    return tot.get("sessions", 0)'; then
-	malo "NO se pudo construir el mutante 2 (paso 2): el .get que lo completa no se aplico"
+	malo "could NOT construct mutant 2 (step 2): the completing .get replacement was not applied"
 else
-	# ⛔ EL JUICIO VA DENTRO DEL `else`, Y ANTES ESTABA FUERA DEL `if` (the reviewer sobre `74605016c`).
-	#    Con el ancla del paso 2 movida, el banco imprimia el FAIL correcto del constructor y A
-	#    CONTINUACION cargaba un `m2.py` INEXISTENTE: el `FileNotFoundError` daba rc 1, que es
-	#    exactamente lo que este caso lee como «el mutante MUERE», y contaba `ok` detras. Un
-	#    artefacto no construido recibia juicio POSITIVO — mi propia clase, en el sitio que crei
-	#    haber cerrado esta tarde. Dos constructores exigen que el juicio cuelgue de los DOS.
+	# Evaluate only after both substitutions produce the mutant file.
 	salida_m2="$(python3 - "$m2" <<'PY' 2>&1
 import importlib.util, sys
 s = importlib.util.spec_from_file_location("a", sys.argv[1])
@@ -858,46 +683,28 @@ sys.exit(1)
 PY
 )"
 	r=$?
-	# Y se distingue el DEFECTO del CRASH: un `Traceback` da rc 1 igual que el mutante bueno.
+	# A traceback is a crash, not evidence of the expected defect.
 	if command grep -q 'Traceback' <<<"$salida_m2"; then
-		malo "el mutante 2 murio con una EXCEPCION, no con el defecto: eso no acredita el caso 8"
+		malo "mutant 2 died with an EXCEPTION rather than the defect: does not establish case 8"
 	elif [ "$r" = "1" ]; then
-		paso 'el mutante que devuelve al get-con-defecto MUERE: el caso 8 cubre algo'
+		paso 'the mutant restoring the defaulting get DIES: case 8 covers something'
 	else
-		malo "el mutante del get-con-defecto SOBREVIVIO (rc $r)"
+		malo "the defaulting-get mutant SURVIVED (rc $r)"
 	fi
 fi
 
-# ── N · LOS MENSAJES DE ESTE BANCO NO LLEVAN BACKTICKS SIN ESCAPAR ────────────────────────────
-# ⛔ NO ES ESTILO: EN `paso "…`palabra`…"` LA SHELL EJECUTA `palabra` COMO COMANDO. Me paso CUATRO
-#    veces el 2026-08-30, en cuatro ficheros distintos, y el sintoma es un hueco en la salida —
-#    `«el mutante que abre la guarda MUERE:  no se puede colar»`— o un `command not found` suelto.
-#    Se ve en la SALIDA, no en el codigo, asi que revisarlo a ojo no funciona: por eso es un caso.
-#    Comillas SIMPLES, o backtick escapado.
-# ⛔ Sin tuberia, y no es estilo: bajo `set -o pipefail` un `productor | grep -q X` devuelve
-# **141 CUANDO ACIERTA** — `grep -q` sale en el primer acierto y el productor muere con SIGPIPE—,
-# asi que este `if` tomaba la rama FALSA justo cuando debia tomar la verdadera: un autocontrol
-# que deja de detectar y no lo dice. Lo cazo `lint:sigpipe-booleans`, que estaba ROJO en main
-# para toda la flota por esta unica linea. La forma la sugiere el propio hallazgo del gate.
+# Diagnostic strings must not execute unescaped backticks. Use process substitution for
+# the boolean grep so pipefail cannot turn an early match into a SIGPIPE failure.
 if command grep -q '[^\\]`' <(command grep -nE "^[[:space:]]*(paso|malo) \"" "$0"); then
 	command grep -nE "^[[:space:]]*(paso|malo) \"" "$0" | command grep '[^\\]`' >&2
-	malo "hay mensajes con backticks SIN escapar dentro de comillas dobles: la shell los ejecuta"
+	malo "messages contain UNESCAPED backticks inside double quotes: the shell executes them"
 else
-	paso "ningun mensaje del banco lleva un backtick sin escapar dentro de comillas dobles"
+	paso "no test message contains an unescaped backtick inside double quotes"
 fi
 
-# ── 6-bis · EL CONTROL DE DEDUPLICACION, HERMETICO, Y SU MUTANTE DEL FILTRO ────────────────────
-# ⛔ ESTOS DOS CASOS ESTABAN DETRAS DE `OLIVARES_VERIFY_ENGINE` Y POR ESO NO ATABAN NADA. El lector
-#    lo dijo con la medida delante: el mutante fiel que quita el filtro por equipo dejaba el banco
-#    en 15/15 cuando no hay motor, que es como corre en el gate y en la maquina de cualquiera. Un
-#    trinquete que solo baja cuando alguien exporta cuatro variables no es un trinquete.
-#
-#    Lo que hacia falta no era un motor: era un DOBLE que sirva las DOS rutas que el control usa
-#    —el POST del receptor y `/v1/m/adoption/teams`— y que ademas presente un equipo AJENO con
-#    filas. Ese equipo ajeno es la pieza que hace mortal al mutante: con el filtro puesto, el
-#    control ve sus propias filas ir 0 -> 10 -> 10; sin el, lee la PRIMERA fila de la lista, que
-#    son 99 sesiones que no son suyas, y muere en su propia guarda. La rama viva de abajo se queda
-#    solo con lo que un doble no puede decidir: que el receptor REAL no duplique.
+# 6-bis. The fake receiver exposes both routes and an unrelated first team with 99
+# sessions. This verifies team scoping without an engine; only the live branch can prove
+# real receiver deduplication.
 cat > "$TRABAJO/doble.py" <<'PY2'
 import http.server, json, os, subprocess, sys, threading
 
@@ -967,111 +774,71 @@ sys.stdout.write(r.stdout); sys.stderr.write(r.stderr)
 sys.exit(r.returncode)
 PY2
 
-r="$(SLA=8 python3 "$TRABAJO/doble.py" "$GUION" >"$SALIDA" 2>&1; printf '%s' "$?")"
-if [ "$r" = "0" ] && casa 'filas PROPIAS del equipo .*: 0 -> 10 .* -> 10'; then
-	paso "el control de deduplicacion es HERMETICO: 0 -> 10 -> 10 en filas propias, sin motor"
+r="$(SLA=8 python3 "$TRABAJO/doble.py" "$GUION" >"$OUTPUT" 2>&1; printf '%s' "$?")"
+if [ "$r" = "0" ] && casa 'rows from THIS RUN for team .*: 0 -> 10 .* -> 10'; then
+	paso "the deduplication control is HERMETIC: 0 -> 10 -> 10 in own rows, without an engine"
 elif [ "$r" = "0" ]; then
-	malo "salio 0 sin la traza 0->10->10: el verde no dice que midio"
+	malo "exited 0 without the 0->10->10 trace: success does not show what was measured"
 else
-	malo "el control hermetico salio $r (mira $SALIDA): el doble no reproduce lo que el control usa"
+	malo "the hermetic control exited $r (see $OUTPUT): the double does not reproduce what the control uses"
 fi
 
-# ── 6-ter · MUTANTE: se pierde el filtro por equipo, SIN motor ─────────────────────────────────
-# ⛔ PRIMERO SE COMPRUEBA QUE EL SUJETO AUN TIENE EL FILTRO, y esto es la cura de A-03 (the reviewer
-#    sobre `89dc52767`). El lector demostro el agujero: si alguien RETIRA el filtro del guion real,
-#    el constructor del mutante deja de casar, el banco muere en el `assert` del apply y sale un rc
-#    2 generico — no un rojo que diga «se ha perdido el filtro por equipo». Una regresion tiene que
-#    acusarse por su NOMBRE, no por el fallo colateral de la herramienta que la mide.
+# 6-ter. Verify the producer still filters by team before constructing its
+# filter-removal mutant.
 if command grep -qF 'if (t.get("team") or "") == marca:' "$GUION"; then
-	paso "el sujeto conserva el filtro por equipo (precondicion del mutante, comprobada antes)"
+	paso "the subject retains the team filter (mutant precondition checked beforehand)"
 else
-	malo "el guion YA NO filtra por equipo: el control volveria a contar el agregado del tenant"
+	malo "the script NO LONGER filters by team: the control would count the tenant aggregate again"
 fi
 
-# ⛔ CONSTRUIDO CON `muta_fichero`, QUE ES FAIL-CLOSED, Y NO CON UN `assert` CRUDO. El NO de
-#    the reviewer lo midio: con un `assert` dentro del heredoc, si el ancla se mueve el fichero NO se
-#    escribe, el sujeto real falla por libreria/fichero ausente, y el `if ! ...` cuenta eso como
-#    VERDE. Un espaciado neutro en `redaccion.py` producia Traceback + AssertionError y el banco
-#    seguia diciendo 29/0 rc 0. Es mi propia clase de esta tarde aplicada al fichero que faltaba.
 mT="$TRABAJO/mT.py"
-if ! muta_fichero "$GUION" "$mT" \
+if ! mutate_file "$GUION" "$mT" \
 	'            if (t.get("team") or "") == marca:' \
 	'            if True:  # MUTANTE: se pierde el filtro por equipo'; then
-	malo "NO se pudo construir el mutante del filtro por equipo: su ancla no esta en el sujeto"
+	malo "could NOT construct the team-filter mutant: its anchor is absent from the subject"
 fi
-r="$(SLA=8 python3 "$TRABAJO/doble.py" "$mT" >"$SALIDA" 2>&1; printf '%s' "$?")"
-if [ "$r" != "0" ] && casa 'ya tenia 99 sesiones antes de empezar'; then
-	paso "el mutante que quita el filtro por equipo MUERE sin motor, nombrando su guarda (rc $r)"
+r="$(SLA=8 python3 "$TRABAJO/doble.py" "$mT" >"$OUTPUT" 2>&1; printf '%s' "$?")"
+if [ "$r" != "0" ] && casa 'already had 99 sessions before starting'; then
+	paso "the mutant removing the team filter DIES without an engine, naming its guard (rc $r)"
 elif [ "$r" != "0" ]; then
-	malo "el mutante murio con rc $r pero sin nombrar la guarda: no acredita el filtro"
+	malo "the mutant died with rc $r without naming the guard: does not establish the filter"
 else
-	malo "el mutante que quita el filtro por equipo SOBREVIVIO sin motor: sigue sin trinquete"
+	malo "the mutant removing the team filter SURVIVED without an engine: still no regression protection"
 fi
 
-# ── RAMA VIVA · lo que solo un motor puede decidir ────────────────────────────────────────────
-# ⛔ ESTA RAMA LA PROMETIA LA CABECERA Y NO EXISTIA. Escribi «lo que si exige motor va detras de una
-#    variable y, cuando no corre, LO DICE» — y no habia ni un uso de `OLIVARES_VERIFY_ENGINE` en
-#    todo el banco: el 12/0 era hermetico entero. Una cabecera que promete una mitad que no esta es
-#    peor que no tenerla, porque quien lee el verde cree que cubre algo que nadie cubrio.
+# Live branch: verify idempotence only when all four engine, token, tenant and OTLP
+# settings are supplied.
 if [ -n "${OLIVARES_VERIFY_ENGINE:-}" ] && [ -n "${OLIVARES_VERIFY_TOKEN:-}" ] &&
 	[ -n "${OLIVARES_VERIFY_TENANT:-}" ] && [ -n "${OLIVARES_VERIFY_OTLP:-}" ]; then
-	# El control cuenta FILAS PROPIAS (su equipo lleva un nonce), asi que su veredicto es
-	# atribuible aunque otro carril este sembrando el mismo tenant a la vez.
+	# Count only the nonce-scoped team so concurrent seeding cannot affect the result.
 	r="$(rc_de "$GUION" "$OLIVARES_VERIFY_ENGINE" "$OLIVARES_VERIFY_TOKEN" "$OLIVARES_VERIFY_TENANT" \
 		--otlp "$OLIVARES_VERIFY_OTLP" --control-dedup)"
-	if [ "$r" = "0" ] && casa 'filas PROPIAS del equipo .*: 0 -> 10 .* -> 10'; then
-		paso "contra motor vivo: 0 -> 10 -> 10 en filas PROPIAS (idempotente y atribuible)"
+	if [ "$r" = "0" ] && casa 'rows from THIS RUN for team .*: 0 -> 10 .* -> 10'; then
+		paso "against a live engine: 0 -> 10 -> 10 in OWN rows (idempotent and attributable)"
 	elif [ "$r" = "0" ]; then
-		malo "salio 0 pero sin la traza de filas propias 0->10->10: el verde no dice que midio"
+		malo "exited 0 without the own-row 0->10->10 trace: success does not show what was measured"
 	else
-		malo "el control contra motor vivo salio $r"
+		malo "the live-engine control exited $r"
 	fi
 
-	# ⛔ AQUI NO VA UN MUTANTE, Y LA RAZON ES LA QUE HACE HONESTA A ESTA RAMA. Puse uno —el reloj
-	#    vivo— y muere ANTES de tocar el motor, en la asercion hermetica «dos construcciones del
-	#    MISMO sobre salen distintas». Eso no es un fallo del caso: es que el defecto se caza mas
-	#    temprano y mas barato, y forzarlo a morir aqui seria fabricar cobertura.
-	#
-	#    Y la propiedad que SOLO un motor decide —«el mismo sobre entregado dos veces no anade»— no
-	#    la puedo mutar: vive en el receptor y en el store, no en este guion. Asi que el valor de
-	#    esta rama es la MEDIDA, no un mutante: que mis filas propias vayan 0 -> 10 -> 10. Decirlo
-	#    asi es lo unico que impide que alguien lea un 14/14 y crea que aqui hay algo que no hay.
-	if casa 'la 2.a ejecucion'; then
-		paso "la rama viva deja su traza de las dos ejecuciones en la salida"
+	# The live receiver must report two executions with scoped counts 0 -> 10 -> 10. This
+	# measures receiver persistence; local generator mutants do not prove it.
+	if casa 'second run'; then
+		paso "the live branch leaves a trace of both runs in the output"
 	else
-		malo "la rama viva no dejo traza de la 2.a ejecucion: el verde no dice que midio"
+		malo "the live branch left no trace of the second run: success does not show what was measured"
 	fi
 
-	# ⛔ EL MUTANTE DEL FILTRO YA NO VIVE AQUI, y esa mudanza es el arreglo. Estaba detras de
-	#    esta puerta, asi que sin las cuatro variables el banco daba 15/15 con el filtro RETIRADO:
-	#    un trinquete que solo baja cuando alguien exporta un motor no sujeta nada. Vive ahora en el
-	#    caso 6-ter, hermetico, y muere alli por su guarda. Aqui se queda SOLO lo que un doble no
-	#    puede decidir: que el receptor REAL no duplique.
 
 else
-	printf 'SALTADO  la RAMA VIVA no se ha corrido: exporta OLIVARES_VERIFY_ENGINE / _TOKEN /\n'
-	printf '         _TENANT / _OTLP para ejercerla. Esto NO es un ok, y ahora dice EXACTAMENTE que\n'
-	printf '         falta: la idempotencia contra un RECEPTOR REAL. El filtro por equipo ya NO\n'
-	printf '         depende de esta rama — lo sujeta el caso 6-ter, hermetico, en todos los pases.\n'
+	printf 'SKIPPED  the LIVE BRANCH was not run: export OLIVARES_VERIFY_ENGINE / _TOKEN /\n'
+	printf '         _TENANT / _OTLP to exercise it. This is NOT a pass; it states EXACTLY what is\n'
+	printf '         missing: idempotence against a REAL RECEIVER. The team filter no longer\n'
+	printf '         depends on this branch — hermetic case 6-ter checks it on every run.\n'
 fi
 
-# ── 6-quater · UN RECEPTOR SANO PERO LENTO, Y OTRO QUE DUPLICA ────────────────────────────────
-# ⛔ «AUN NO HA CAMBIADO» NO ES «YA NO CAMBIA». `estabilizar()` tomaba su primera lectura ANTES de
-#    dormir y devolvia en cuanto dos coincidian; con la persistencia tardando mas de un segundo,
-#    las dos valian lo de antes del POST y declaraba quietud SIN HABER VISTO MOVERSE NADA.
-#
-#    Y el sesgo no es simetrico, que es lo que hace daño: si el retraso afecta a la PRIMERA entrega
-#    el control sale ROJO acusando a un motor sano —«el receptor no esta ingiriendo lo mio»—, y si
-#    afecta a la SEGUNDA sale VERDE dando la idempotencia por buena mientras el store acaba con el
-#    DOBLE de filas. Se inclina siempre hacia «idempotente», que es justo lo que este control
-#    existe para no creerse. Nueve carriles y load1 de dos digitos son lo normal en esta caja.
-#
-#    Hacen falta DOS dobles, porque son dos direcciones y un solo fixture solo mata un mutante: uno
-#    que DEDUPLICA con retraso (el caso sano) y otro que NO deduplica con retraso (el peligroso).
-#    Se derivan del doble hermetico con python, no con `sed`: mi primera version los parcheaba por
-#    regex y colo un `return` que cortaba la cosecha tras el primer `resourceMetric` — el fixture
-#    entregaba UNA sesion de diez y el caso salia rojo culpando al sujeto. Un fixture mal construido
-#    acusa al codigo que mide.
+# 6-quater. Derive delayed deduplicating and delayed duplicating receivers. The test
+# must allow healthy persistence and detect a late duplicate.
 python3 - "$TRABAJO/doble.py" "$TRABAJO/doble-lento.py" "$TRABAJO/doble-dup.py" <<'PYD'
 import ast, sys
 src = open(sys.argv[1]).read()
@@ -1086,15 +853,14 @@ NUEVO_EQ = ('        ahora = time.monotonic()\n'
 
 
 def cambia(t, viejo, nuevo):
-    # Fail-closed y RUIDOSO: sin esto el derivador moriria en silencio y el `[ ! -s ]` del
-    # llamante diria «no se pudieron derivar» sin decir QUE ancla se movio.
+    # Require exactly one replacement anchor and report a mismatch.
     if t.count(viejo) != 1:
-        sys.stderr.write("    ⛔ ancla %dx (esperaba 1): %r\n" % (t.count(viejo), viejo[:70]))
+        sys.stderr.write("    ⛔ anchor %dx (expected 1): %r\n" % (t.count(viejo), viejo[:70]))
         sys.exit(1)
     return t.replace(viejo, nuevo, 1)
 
 
-# ── el LENTO: acusa ya (el 200 lo manda do_POST) y PERSISTE despues. Deduplica, como el real.
+# Acknowledge immediately and persist later, retaining deduplication.
 lento = cambia(src, 'vistas = {}          # equipo -> set de session.id',
                'vistas = {}          # equipo -> set de session.id\n'
                'import os, time\n'
@@ -1105,7 +871,7 @@ lento = cambia(lento, VIEJO_EQ, NUEVO_EQ)
 ast.parse(lento)
 open(sys.argv[2], "w").write(lento)
 
-# ── el DUPLICADOR: mismo retraso, pero cuenta con MULTIPLICIDAD (un store sin clave unica)
+# Use the same delay but count repeated sessions with multiplicity.
 dup = cambia(lento, '            pendientes.append((time.monotonic() + RETRASO, e, set(sesiones)))',
              '            pendientes.append((time.monotonic() + RETRASO, e, list(sesiones)))')
 dup = cambia(dup, '            vistas.setdefault(reg[1], set()).update(reg[2]); pendientes.remove(reg)',
@@ -1116,108 +882,98 @@ ast.parse(dup)
 open(sys.argv[3], "w").write(dup)
 PYD
 if [ ! -s "$TRABAJO/doble-lento.py" ] || [ ! -s "$TRABAJO/doble-dup.py" ]; then
-	malo "NO HE PODIDO MIRAR: no se pudieron derivar los dobles lento/duplicador del doble hermetico"
+	malo "CANNOT INSPECT: could not derive slow/duplicating doubles from the hermetic double"
 else
-	r="$(RETRASO=3 SLA=8 python3 "$TRABAJO/doble-lento.py" "$GUION" >"$SALIDA" 2>&1; printf '%s' "$?")"
-	if [ "$r" = "0" ] && casa 'filas PROPIAS del equipo .*: 0 -> 10 .* -> 10'; then
-		paso "con la persistencia tardando 3s el control da 0 -> 10 -> 10 y rc 0: no acusa a un motor sano"
+	r="$(RETRASO=3 SLA=8 python3 "$TRABAJO/doble-lento.py" "$GUION" >"$OUTPUT" 2>&1; printf '%s' "$?")"
+	if [ "$r" = "0" ] && casa 'rows from THIS RUN for team .*: 0 -> 10 .* -> 10'; then
+		paso "with 3s persistence, the control reports 0 -> 10 -> 10 and rc 0: does not blame a healthy engine"
 	else
-		malo "el control acusa a un receptor sano que solo va lento (rc $r): el sesgo al falso rojo sigue vivo"
+		malo "the control blames a healthy but slow receiver (rc $r): the false-failure bias remains"
 	fi
 
-	r="$(RETRASO=3 SLA=8 python3 "$TRABAJO/doble-dup.py" "$GUION" >"$SALIDA" 2>&1; printf '%s' "$?")"
-	if [ "$r" = "1" ] && casa 'movio mis filas de 10 a 20'; then
-		paso "contra un receptor que NO deduplica y tarda 3s, el control lo CAZA: 10 -> 20 y rc 1"
+	r="$(RETRASO=3 SLA=8 python3 "$TRABAJO/doble-dup.py" "$GUION" >"$OUTPUT" 2>&1; printf '%s' "$?")"
+	if [ "$r" = "1" ] && casa "changed this run's rows from 10 to 20"; then
+		paso "against a receiver that does NOT deduplicate and takes 3s, the control DETECTS it: 10 -> 20 and rc 1"
 	else
-		malo "un receptor que duplica con retraso salio $r: el control da la idempotencia por buena"
+		malo "a receiver duplicating with a delay exited $r: the control accepts idempotence"
 	fi
 
-	# ⛔ UN MUTANTE POR DIRECCION, cada uno contra SU doble. Con un solo fixture, el mutante del
-	#    suelo «sobrevivia» —lo medi— porque un doble que deduplica no puede enseñar un duplicado.
-	if ! muta_fichero "$GUION" "$TRABAJO/mMov.py" \
+	# Exercise each waiting mutant against the receiver that exposes its defect.
+	if ! mutate_file "$GUION" "$TRABAJO/mMov.py" \
 		'        t = 0
         for _ in range(presupuesto):' \
 		'        t = 0
         return mias(), 0  # MUTANTE: no espera a VER movimiento
         for _ in range(presupuesto):'; then
-		malo "NO se pudo construir el mutante de la espera de movimiento: su ancla no esta en el sujeto"
+		malo "could NOT construct the movement-wait mutant: its anchor is absent from the subject"
 	elif [ -s "$TRABAJO/mMov.py" ] && ! cmp -s "$GUION" "$TRABAJO/mMov.py"; then
-		r="$(RETRASO=3 SLA=8 python3 "$TRABAJO/doble-lento.py" "$TRABAJO/mMov.py" >"$SALIDA" 2>&1; printf '%s' "$?")"
-		if [ "$r" = "1" ] && casa 'dejo 0 filas propias'; then
-			paso "sin esperar a ver movimiento, el control ACUSA al receptor sano (rc 1, 0 filas): el falso rojo tiene mutante"
+		r="$(RETRASO=3 SLA=8 python3 "$TRABAJO/doble-lento.py" "$TRABAJO/mMov.py" >"$OUTPUT" 2>&1; printf '%s' "$?")"
+		if [ "$r" = "1" ] && casa 'left 0 rows from this run'; then
+			paso "without waiting for movement, the control BLAMES the healthy receiver (rc 1, 0 rows): false failure has a mutant"
 		else
-			malo "el mutante que no espera movimiento SOBREVIVIO (rc $r): el caso del receptor lento no acredita nada"
+			malo "the mutant not waiting for movement SURVIVED (rc $r): the slow-receiver case establishes nothing"
 		fi
 	else
-		malo "NO se pudo construir el mutante de la espera de movimiento: sin artefacto no hay juicio"
+		malo "could NOT construct the movement-wait mutant: no artifact means no judgment"
 	fi
 
-	if muta_fichero "$GUION" "$TRABAJO/mSuelo.py" \
+	if mutate_file "$GUION" "$TRABAJO/mSuelo.py" \
 		'            if v is not None and n == v and t >= minimo:' \
 		'            if v is not None and n == v:  # MUTANTE: el suelo de espera ya no manda'; then
-		r="$(RETRASO=3 SLA=8 python3 "$TRABAJO/doble-dup.py" "$TRABAJO/mSuelo.py" >"$SALIDA" 2>&1; printf '%s' "$?")"
-		if [ "$r" = "0" ] && casa 'no mueve'; then
-			paso "sin el suelo de espera, el control da por idempotente un store que DUPLICA: el falso verde tiene mutante"
+		r="$(RETRASO=3 SLA=8 python3 "$TRABAJO/doble-dup.py" "$TRABAJO/mSuelo.py" >"$OUTPUT" 2>&1; printf '%s' "$?")"
+		if [ "$r" = "0" ] && casa 'second run does not'; then
+			paso "without the minimum wait, the control accepts idempotence for a DUPLICATING store: false success has a mutant"
 		else
-			malo "el mutante del suelo SOBREVIVIO (rc $r): el caso del duplicador no acredita la espera minima"
+			malo "the minimum-wait mutant SURVIVED (rc $r): the duplicator case does not establish the minimum wait"
 		fi
 	else
-		malo "NO se pudo construir el mutante del suelo de espera: sin artefacto no hay juicio"
+		malo "could NOT construct the minimum-wait mutant: no artifact means no judgment"
 	fi
 fi
 
-# ── 6-sexies · SIN SLA DECLARADO NO HAY VEREDICTO DE IDEMPOTENCIA ─────────────────────────────
-# ⛔ ESPERAR MAS NO DEMUESTRA AUSENCIA, y subir el suelo no lo arregla. Mi cura anterior derivaba
-#    la espera de lo que tardo la primera entrega (6 s) y el lector la rompio con un retraso de 7 s
-#    SOLO en la segunda: el control decia «0 -> 10 -> 10, idempotente» y un segundo despues el
-#    store llegaba a 20. Cualquier suelo que yo elija se rompe con un retraso un poco mayor.
-#    La garantia no puede salir de mi paciencia: sale de un SLA que declara quien conoce el
-#    receptor. Sin el, esto es rc 2 —«no puedo dar un veredicto»—, que es la regla 5 del canon.
-r="$(RETRASO=3 python3 "$TRABAJO/doble-lento.py" "$GUION" >"$SALIDA" 2>&1; printf '%s' "$?")"
-if [ "$r" = "2" ] && casa 'NO es prueba de idempotencia'; then
-	paso "sin --sla-persistencia el control sale 2 y dice por que: no confunde «no se movio» con «no se movera»"
+# 6-sexies. Without a declared persistence deadline, unchanged counts cannot prove
+# idempotence; require rc 2.
+r="$(RETRASO=3 python3 "$TRABAJO/doble-lento.py" "$GUION" >"$OUTPUT" 2>&1; printf '%s' "$?")"
+if [ "$r" = "2" ] && casa 'does NOT prove'; then
+	paso "without --sla-persistencia, the control exits 2 and explains why: distinguishes «did not move» from «will not move»"
 elif [ "$r" = "0" ]; then
-	malo "sin SLA el control DECLARA idempotencia (rc 0): esperar mas se sigue leyendo como prueba"
+	malo "without an SLA, the control DECLARES idempotence (rc 0): waiting longer is still treated as proof"
 else
-	malo "sin SLA el control salio $r sin nombrar la razon: el rojo no dice que le falta"
+	malo "without an SLA, the control exited $r without naming the reason: failure does not explain what is missing"
 fi
 
-# Y con el SLA declarado, la MISMA observacion si es un veredicto.
-r="$(RETRASO=3 SLA=8 python3 "$TRABAJO/doble-lento.py" "$GUION" >"$SALIDA" 2>&1; printf '%s' "$?")"
-if [ "$r" = "0" ] && casa 'SLA de persistencia declarado'; then
-	paso "con --sla-persistencia el control SI declara idempotencia, y dice contra que plazo"
+# A declared persistence deadline permits a bounded idempotence verdict.
+r="$(RETRASO=3 SLA=8 python3 "$TRABAJO/doble-lento.py" "$GUION" >"$OUTPUT" 2>&1; printf '%s' "$?")"
+if [ "$r" = "0" ] && casa 'declared persistence SLA'; then
+	paso "with --sla-persistencia, the control DOES declare idempotence and names the deadline"
 else
-	malo "con SLA declarado el control salio $r: el plazo no esta cambiando el veredicto"
+	malo "with a declared SLA, the control exited $r: the deadline is not changing the verdict"
 fi
 
-# ⛔ EL ESCENARIO DEL LECTOR, TAL CUAL: 7 s SOLO en la segunda entrega. Con un SLA de 10 el control
-#    espera lo suficiente y lo CAZA; era el caso que mi suelo derivado de 6 s dejaba pasar.
-r="$(RETRASO=7 SLA=10 python3 "$TRABAJO/doble-dup.py" "$GUION" >"$SALIDA" 2>&1; printf '%s' "$?")"
-if [ "$r" = "1" ] && casa 'movio mis filas de 10 a 20'; then
-	paso "un duplicado que tarda 7s lo caza el control cuando el SLA declarado lo cubre (rc 1)"
+# Detect a duplicate delayed seven seconds within the declared ten-second deadline.
+r="$(RETRASO=7 SLA=10 python3 "$TRABAJO/doble-dup.py" "$GUION" >"$OUTPUT" 2>&1; printf '%s' "$?")"
+if [ "$r" = "1" ] && casa "changed this run's rows from 10 to 20"; then
+	paso "a duplicate delayed 7s is detected when the declared SLA covers it (rc 1)"
 else
-	malo "el duplicado de 7s salio $r: el escenario que rompio la version anterior sigue vivo"
+	malo "the 7s duplicate exited $r: the scenario breaking the previous version remains"
 fi
 
-# Su mutante: si vuelve a declarar idempotencia sin SLA, el caso de arriba muere.
-if muta_fichero "$GUION" "$TRABAJO/mSla.py" \
+# Removing the deadline guard must permit the unsupported verdict.
+if mutate_file "$GUION" "$TRABAJO/mSla.py" \
 	'    if sla <= 0:' \
 	'    if False:  # MUTANTE: vuelve a declarar idempotencia sin SLA declarado'; then
-	r="$(RETRASO=3 python3 "$TRABAJO/doble-lento.py" "$TRABAJO/mSla.py" >"$SALIDA" 2>&1; printf '%s' "$?")"
+	r="$(RETRASO=3 python3 "$TRABAJO/doble-lento.py" "$TRABAJO/mSla.py" >"$OUTPUT" 2>&1; printf '%s' "$?")"
 	if [ "$r" = "0" ]; then
-		paso "sin la guarda del SLA el control vuelve a decir 0: el caso 6-sexies acredita esa guarda"
+		paso "without the SLA guard, the control returns 0 again: case 6-sexies establishes that guard"
 	else
-		malo "el mutante del SLA SOBREVIVIO (rc $r): el caso 6-sexies no acredita nada"
+		malo "the SLA mutant SURVIVED (rc $r): case 6-sexies establishes nothing"
 	fi
 else
-	malo "NO se pudo construir el mutante del SLA: sin artefacto no hay juicio"
+	malo "could NOT construct the SLA mutant: no artifact means no judgment"
 fi
 
-# ── 6-septies · UN DUPLICADO RECHAZADO NO ES UNA PRUEBA DE IDEMPOTENCIA ───────────────────────
-# ⛔ LAS DOS ENTREGAS DEL CONTROL DESCARTABAN SU CODIGO HTTP, mientras `main` si lo miraba en el
-#    mismo fichero. Y el caso peligroso es el SEGUNDO: un 400 en el duplicado da EXACTAMENTE el
-#    mismo sintoma que la idempotencia —la cifra no se mueve— asi que, con un SLA declarado, un
-#    rechazo se leia como veredicto bueno. Un rechazo no prueba nada.
+# 6-septies. A rejected second delivery must fail; unchanged counts after rejection do
+# not prove idempotence.
 python3 - "$TRABAJO/doble.py" "$TRABAJO/doble-rechaza2.py" <<'PYR'
 import ast, sys
 src = open(sys.argv[1]).read()
@@ -1232,120 +988,91 @@ N = '''    _entregas = []
             self.send_response(400); self.end_headers(); self.wfile.write(b'{"error":"nope"}')
             return
         n = int(self.headers.get("Content-Length") or 0)'''
-assert src.count(V) == 1, "ancla do_POST %dx" % src.count(V)
+assert src.count(V) == 1, "do_POST anchor %dx" % src.count(V)
 mut = src.replace(V, N, 1)
 ast.parse(mut)
 open(sys.argv[2], "w").write(mut)
 PYR
 if [ ! -s "$TRABAJO/doble-rechaza2.py" ]; then
-	malo "NO se pudo derivar el doble que rechaza la 2.a entrega: sin artefacto no hay juicio"
+	malo "could NOT derive the double rejecting the second delivery: no artifact means no judgment"
 else
-	r="$(SLA=8 python3 "$TRABAJO/doble-rechaza2.py" "$GUION" >"$SALIDA" 2>&1; printf '%s' "$?")"
-	if [ "$r" = "1" ] && casa 'rechazo la 2.a entrega'; then
-		paso "un receptor que RECHAZA el duplicado sale rc 1 nombrandolo: no se certifica sobre lo que no entro"
+	r="$(SLA=8 python3 "$TRABAJO/doble-rechaza2.py" "$GUION" >"$OUTPUT" 2>&1; printf '%s' "$?")"
+	if [ "$r" = "1" ] && casa 'rejected the second control delivery'; then
+		paso "a receiver REJECTING the duplicate exits rc 1 and names it: rejected input cannot be certified"
 	elif [ "$r" = "0" ]; then
-		malo "un duplicado RECHAZADO se certifica como idempotente (rc 0): el rechazo se lee como prueba"
+		malo "a REJECTED duplicate is certified as idempotent (rc 0): rejection is treated as proof"
 	else
-		malo "el duplicado rechazado salio $r sin nombrar la causa: el rojo no dice que paso"
+		malo "the rejected duplicate exited $r without naming the cause: failure does not explain what happened"
 	fi
 
-	# Mutante: si se deja de mirar el codigo de la 2.a, vuelve el falso verde.
-	if muta_fichero "$GUION" "$TRABAJO/mCod.py" \
+	# Ignoring the second HTTP status must expose the false success.
+	if mutate_file "$GUION" "$TRABAJO/mCod.py" \
 		'    if not (200 <= cod2 < 300):' \
 		'    if False:  # MUTANTE: el codigo de la 2.a entrega deja de mirarse'; then
-		r="$(SLA=8 python3 "$TRABAJO/doble-rechaza2.py" "$TRABAJO/mCod.py" >"$SALIDA" 2>&1; printf '%s' "$?")"
+		r="$(SLA=8 python3 "$TRABAJO/doble-rechaza2.py" "$TRABAJO/mCod.py" >"$OUTPUT" 2>&1; printf '%s' "$?")"
 		if [ "$r" = "0" ]; then
-			paso "sin mirar el codigo de la 2.a entrega, el rechazo vuelve a leerse como idempotencia: el caso lo caza"
+			paso "without checking the second-delivery status, rejection is treated as idempotence again: the case detects it"
 		else
-			malo "el mutante del codigo de la 2.a entrega SOBREVIVIO (rc $r): el caso no acredita esa guarda"
+			malo "the second-delivery status mutant SURVIVED (rc $r): the case does not establish that guard"
 		fi
 	else
-		malo "NO se pudo construir el mutante del codigo de la 2.a entrega: sin artefacto no hay juicio"
+		malo "could NOT construct the second-delivery status mutant: no artifact means no judgment"
 	fi
 fi
 
-# ── 6-octies · EL TOKEN NO SALE, Y SE COMPRUEBA EJERCIENDO `main` COMO PROGRAMA ────────────────
-# ⛔⛔ ESTE CASO ESTABA MAL Y LO DIJO UN LECTOR (44): recordaba el token A MANO
-#     (`m._RED.recuerda(A.token)`) y afirmaba «se ejerce el MISMO camino que main». **Re-implementar
-#     no es ejercitar**: acreditaba la libreria de redaccion, no que el guion la use. Y su mutante
-#     comprobaba con `grep` que la linea hubiera desaparecido del fichero — PRESENCIA, no conducta:
-#     un mutante que nadie ejecuta no muere de nada.
-#
-# ⛔⛔ Y AL EJERCERLO DE VERDAD SALIO ALGO PEOR, QUE ES EL MOTIVO DE ESCRIBIRLO ENTERO: el mutante
-#     que retira `_RED.recuerda(a.token)` de `main` **NO FUGA**. Medido, ejecutando el guion contra
-#     un destino muerto con un token con `\r`: sujeto y mutante dan los dos rc 2 y `<oculto>`.
-#     Lo que tapa ese `ValueError: Invalid header value b'Bearer …'` es el patron `Bearer` de
-#     `scripts/lib/redaccion.py`, NO el recuerdo del token. La justificacion que el commit original
-#     escribio para esa llamada era falsa: describia un caso que otra cosa ya cubria.
-#
-#     La llamada SE QUEDA —es defensa en profundidad y cuesta una linea, para un token que asome
-#     sin `Bearer` delante— pero se queda DICIENDO LO QUE ES. Un mutante que sobrevive no se
-#     esconde: se explica. Lo que este caso acredita es lo que de verdad corta, y su mutante va
-#     sobre la LIBRERIA, que es donde vive la cura.
+# 6-octies. Run main with a control-character token and require redacted output with rc
+# 2. The library Bearer rule protects this case; remembering the token also covers
+# values without that prefix.
 TOKEN_CONTROL=$'tok-SECRETO-DE-BANCO-con\rcontrol'
 MUERTO='http://127.0.0.1:1/'
 
-corre_sujeto() { # $1 = raiz que contiene scripts/ ; imprime "<rc>|<fugas>|<lineas>"
-	local salida rc
-	salida="$(cd "$1" && timeout 60 python3 scripts/seed-adoption-otlp.py "$MUERTO" \
+corre_sujeto() { # source root containing scripts/; prints "<rc>|<leaks>|<bytes>"
+	local output rc
+	output="$(cd "$1" && timeout 60 python3 scripts/seed-adoption-otlp.py "$MUERTO" \
 		"$TOKEN_CONTROL" t --otlp "${MUERTO}v1/metrics" --equipos 1 --por-equipo 1 --dias 1 2>&1)"
 	rc=$?
-	# ⛔ SE MIDE EN BYTES, NO EN LINEAS. `wc -l` cuenta SALTOS: la salida de este guion es UNA
-	#    linea sin salto final, asi que daba 0 y mi propia guarda de «no llego a ejecutarse»
-	#    disparaba sobre una corrida perfecta. El arnes hizo bien en negarse a contarlo como paso
-	#    —esa mitad funciono— pero el numero que le di estaba mal.
-	printf '%s|%s|%s' "$rc" "$(command grep -c 'SECRETO-DE-BANCO' <<<"$salida")" \
-		"$(printf '%s' "$salida" | wc -c)"
+	# Count output bytes so a diagnostic without a trailing newline is still observed.
+	printf '%s|%s|%s' "$rc" "$(command grep -c 'SECRETO-DE-BANCO' <<<"$output")" \
+		"$(printf '%s' "$output" | wc -c)"
 }
 
-# El sujeto, tal cual esta en el arbol.
 IFS='|' read -r rc fugas bytes <<<"$(corre_sujeto "$RAIZ")"
-# ⛔ rc 127 (o cualquier salida vacia) NO es un veredicto: es que el programa no llego a correr.
-#    Un banco que acepte eso como «paso» acredita el vacio — la clase que un lector acaba de cazar
-#    en otro arnes de esta misma casa, informando «SOBREVIVIO» sobre un rc 2.
+# Reject rc 127 and empty output: neither establishes that the subject ran.
 if [ "$rc" = "127" ] || [ "$bytes" -lt 1 ]; then
-	malo "NO HE PODIDO MIRAR: el guion no llego a ejecutarse (rc $rc, $bytes bytes): sin corrida no hay veredicto"
+	malo "CANNOT INSPECT: the script did not execute (rc $rc, $bytes bytes): no run means no verdict"
 elif [ "$rc" != "2" ]; then
-	malo "ejerciendo main con un token con caracter de control esperaba rc 2 y dio $rc"
+	malo "running main with a control-character token expected rc 2, got $rc"
 elif [ "$fugas" != "0" ]; then
-	malo "el token sale LITERAL al ejercer main ($fugas veces): la frontera no cubre el ValueError de cabecera"
+	malo "the token appears LITERALLY when running main ($fugas times): the boundary does not cover the header ValueError"
 else
-	paso "ejerciendo main como programa con un token con \`\\r\`, el token no sale y el rc es 2"
+	paso "running main as a program with a token containing \`\\r\`, the token is not exposed and rc is 2"
 fi
 
-# ── 6-octies-bis · MUTANTE SOBRE LO QUE DE VERDAD CORTA, Y MUERE FUGANDO ───────────────────────
-# El arbol de mentira lleva el guion Y la libreria, porque la cura vive en la segunda. Mutar el
-# guion aqui no probaria nada: ya se midio que sobrevive.
+# 6-octies-bis. Copy the producer and library, then remove the library Bearer rule and
+# require literal token leakage.
 ARBOL_MUT="$TRABAJO/arbol-bearer"
 mkdir -p "$ARBOL_MUT/scripts/lib"
 cp "$RAIZ/scripts/seed-adoption-otlp.py" "$ARBOL_MUT/scripts/" 2>/dev/null
 cp "$RAIZ"/scripts/lib/*.py "$ARBOL_MUT/scripts/lib/" 2>/dev/null
 if [ ! -s "$ARBOL_MUT/scripts/seed-adoption-otlp.py" ] || [ ! -s "$ARBOL_MUT/scripts/lib/redaccion.py" ]; then
-	malo "NO HE PODIDO MIRAR: no se pudo copiar el arbol para el mutante de la libreria"
-elif ! muta_fichero "$RAIZ/scripts/lib/redaccion.py" "$ARBOL_MUT/scripts/lib/redaccion.py" \
+	malo "CANNOT INSPECT: could not copy the tree for the library mutant"
+elif ! mutate_file "$RAIZ/scripts/lib/redaccion.py" "$ARBOL_MUT/scripts/lib/redaccion.py" \
 	'        fuera = _RX_BEARER.sub(lambda m: m.group(1) + " <oculto>", fuera)' \
 	'        pass  # MUTANTE: el `Bearer` suelto deja de taparse'; then
-	malo "NO HE PODIDO MIRAR: no se pudo construir el mutante del \`Bearer\` suelto"
+	malo "CANNOT INSPECT: could not construct the bare \`Bearer\` mutant"
 else
 	IFS='|' read -r rcm fugasm bytesm <<<"$(corre_sujeto "$ARBOL_MUT")"
 	if [ "$rcm" = "127" ] || [ "$bytesm" -lt 1 ]; then
-		malo "NO HE PODIDO MIRAR: el mutante no llego a ejecutarse (rc $rcm): eso NO es «sobrevivio»"
+		malo "CANNOT INSPECT: the mutant did not execute (rc $rcm): that does NOT mean «survived»"
 	elif [ "$fugasm" -lt 1 ]; then
-		malo "el mutante que retira el tapado del \`Bearer\` NO fuga el token: entonces no es eso lo que corta, y este caso acredita otra cosa"
+		malo "the mutant removing bare \`Bearer\` redaction does NOT leak the token: that is not what blocks it, and this case establishes something else"
 	else
-		paso "el mutante que retira el tapado del \`Bearer\` MUERE fugando el token literal: es lo que corta"
+		paso "the mutant removing bare \`Bearer\` redaction DIES by leaking the literal token: this is what blocks it"
 	fi
 fi
 
-# ── 6-nonies · UNA FILA AJENA FLACA NO TUMBA EL VEREDICTO DEL SEMBRADO ────────────────────────
-# ⛔ `flacos` salia de TODOS los equipos con nombre del tenant, y su rc 1 dice «el sembrado salio
-#    corto»: una fila AJENA preexistente —de otro carril, de una demo anterior, de un cliente— con
-#    pocas sesiones tumbaba el veredicto de un sembrado que habia ido BIEN. El universo de la
-#    medida no era el universo de la afirmacion.
-#
-#    El doble sirve las tres rutas de `main` con TODOS los equipos propios completos y UNO ajeno
-#    flaco. Antes de la cura eso salia rc 1 culpando al sembrado; ahora sale rc 0 y el ajeno se
-#    NOMBRA, porque para una captura importa aunque no decida.
+# 6-nonies. An unrelated team with few sessions must not fail a complete seeded team
+# set; report that team separately.
 cat > "$TRABAJO/doble-ajeno.py" <<'PY9'
 import http.server, json, os, subprocess, sys, threading
 
@@ -1394,42 +1121,42 @@ sys.stdout.write(r.stdout); sys.stderr.write(r.stderr)
 sys.exit(r.returncode)
 PY9
 if [ ! -s "$TRABAJO/doble-ajeno.py" ]; then
-	malo "NO HE PODIDO MIRAR: no se pudo escribir el doble del equipo ajeno"
+	malo "CANNOT INSPECT: could not write the unrelated-team double"
 else
-	r="$(python3 "$TRABAJO/doble-ajeno.py" "$GUION" >"$SALIDA" 2>&1; printf '%s' "$?")"
-	if [ "$r" = "0" ] && casa 'AJENOS por debajo'; then
-		paso "un equipo AJENO flaco no tumba el veredicto del sembrado, y aun asi se NOMBRA en el informe"
-	elif [ "$r" = "1" ]; then
-		malo "una fila ajena flaca sigue tumbando el sembrado (rc 1): el veredicto mide un universo que no es el suyo"
+	r="$(python3 "$TRABAJO/doble-ajeno.py" "$GUION" >"$OUTPUT" 2>&1; printf '%s' "$?")"
+	# 7. Check the warning emitted by the CLI, using this existing receiver run.
+	LENS_WARNING='^  ⛔ FOR CAPTURES:.*`analytics`.*zero.*Select `telemetry`.*empty' # language-data: fixture
+	if [ "$r" = "0" ] && casa "$LENS_WARNING"; then
+		paso "the capture warning names the empty analytics lens and selecting telemetry as the remedy"
 	else
-		malo "el caso del equipo ajeno salio $r (mira $SALIDA): el doble no reproduce lo que main lee"
+		malo "the successful seed run must warn that analytics stays empty and recommend selecting telemetry"
 	fi
 
-	# Su mutante: volviendo a medir sobre TODOS, la fila ajena tumba el rc.
-	# ⛔ EL ANCLA SE MOVIO CON MI PROPIA CURA DE LOS `or 0`, que reescribio esta linea unas horas
-	#    despues de escribir el mutante. El fail-closed lo dijo —«no se pudo construir»— en vez de
-	#    contar un verde, que es exactamente para lo que esta. Se re-ancla a la linea de ahora.
-	if muta_fichero "$GUION" "$TRABAJO/mAjeno.py" \
+	if [ "$r" = "0" ] && casa 'OTHER team\(s\) below'; then
+		paso "an underfilled UNRELATED team does not fail the seeded-set verdict and is still NAMED in the report"
+	elif [ "$r" = "1" ]; then
+		malo "an underfilled unrelated row still fails the seeded set (rc 1): the verdict measures the wrong population"
+	else
+		malo "the unrelated-team case exited $r (see $OUTPUT): the double does not reproduce what main reads"
+	fi
+
+	# Removing the seeded-team filter must make the unrelated row fail the result.
+	if mutate_file "$GUION" "$TRABAJO/mAjeno.py" \
 		'              if t.get("team") in mios and sesiones_de_fila(t) < a.por_equipo]' \
 		'              if sesiones_de_fila(t) < a.por_equipo]  # MUTANTE: sobre TODO el tenant'; then
-		r="$(python3 "$TRABAJO/doble-ajeno.py" "$TRABAJO/mAjeno.py" >"$SALIDA" 2>&1; printf '%s' "$?")"
+		r="$(python3 "$TRABAJO/doble-ajeno.py" "$TRABAJO/mAjeno.py" >"$OUTPUT" 2>&1; printf '%s' "$?")"
 		if [ "$r" = "1" ]; then
-			paso "midiendo sobre todo el tenant, la fila ajena tumba el sembrado (rc 1): el caso lo acredita"
+			paso "measuring the whole tenant lets the unrelated row fail the seeded set (rc 1): the case establishes it"
 		else
-			malo "el mutante que mide sobre todo el tenant SOBREVIVIO (rc $r): el caso no acredita el acotado"
+			malo "the mutant measuring the whole tenant SURVIVED (rc $r): the case does not establish the scope"
 		fi
 	else
-		malo "NO se pudo construir el mutante del universo: sin artefacto no hay juicio"
+		malo "could NOT construct the population mutant: no artifact means no judgment"
 	fi
 fi
 
-# ── EL SEMBRADO CUBRE EL CONTRATO DEL MOTOR, Y LO COMPRUEBA CONTRA EL ──────────────────────────
-# ⛔ La lista `METRICAS` tenia CINCO de las SIETE metricas del plano OTLP y NINGUNA llevaba
-#    dimensiones. El dano no es «faltan dos numeros»: el agregador se desglosa por esas dims, asi
-#    que la evidencia sembrada salia con `accepted`/`rejected`, el desglose por herramienta, el
-#    tiempo activo y la mezcla de modelos VACIOS — y una pagina con cuatro paneles a cero se lee
-#    como «el producto no lo trae». La lista se compara ahora con el CONTRATO, no con la memoria.
-salida="$(python3 - "$GUION" "$RAIZ" <<'PY'
+# Compare the seeded metric set with the engine contract.
+output="$(python3 - "$GUION" "$RAIZ" <<'PY'
 import importlib.util, sys
 spec = importlib.util.spec_from_file_location("sd", sys.argv[1])
 m = importlib.util.module_from_spec(spec); sys.modules["sd"] = m
@@ -1441,22 +1168,22 @@ motor, razon = m.contrato_del_motor(sys.argv[2])
 if razon:
     print("NOPUDE", razon); raise SystemExit(0)
 mias = {n for n, _ in m.METRICAS}
-print("FALTAN", " ".join(sorted(motor - mias)) or "-")
+print("MISSING", " ".join(sorted(motor - mias)) or "-")
 print("SOBRAN", " ".join(sorted(mias - motor)) or "-")
 PY
 )"
-if command grep -q '^NOPUDE' <<<"$salida"; then
-	malo "no he podido leer el contrato del motor: $salida"
-elif ! command grep -q '^FALTAN -$' <<<"$salida"; then
-	malo "el sembrado NO cubre el contrato OTLP del motor: $(command grep '^FALTAN' <<<"$salida")"
-elif ! command grep -q '^SOBRAN -$' <<<"$salida"; then
-	malo "el sembrado emite metricas que el motor no reconoce: $(command grep '^SOBRAN' <<<"$salida")"
+if command grep -q '^NOPUDE' <<<"$output"; then
+	malo "could not read the engine contract: $output"
+elif ! command grep -q '^MISSING -$' <<<"$output"; then
+	malo "the seeded set does NOT cover the engine OTLP contract: $(command grep '^MISSING' <<<"$output")"
+elif ! command grep -q '^SOBRAN -$' <<<"$output"; then
+	malo "the seeded set emits metrics the engine does not recognize: $(command grep '^SOBRAN' <<<"$output")"
 else
-	paso "las metricas sembradas son EXACTAMENTE las del contrato OTLP del motor (leido, no recordado)"
+	paso "the seeded metrics are EXACTLY those in the engine OTLP contract (read, not recalled)"
 fi
 
-# Y las dimensiones, que son la mitad que de verdad llena la pagina.
-salida="$(python3 - "$GUION" <<'PY'
+# Verify the required dimensions on each metric.
+output="$(python3 - "$GUION" <<'PY'
 import importlib.util, sys
 spec = importlib.util.spec_from_file_location("sd", sys.argv[1])
 m = importlib.util.module_from_spec(spec); sys.modules["sd"] = m
@@ -1479,7 +1206,7 @@ esperado = {
 for n, e in esperado.items():
     if dims.get(n) != e:
         print("MAL", n, sorted(dims.get(n, [])), "esperado", sorted(e)); raise SystemExit(0)
-# Y las dos caras de cada desglose, o el panel sale a medias.
+# Require both added and removed line categories.
 caras = set()
 for x in env["resourceMetrics"][0]["scopeMetrics"][0]["metrics"]:
     if x["name"] == "claude_code.lines_of_code.count":
@@ -1488,22 +1215,14 @@ for x in env["resourceMetrics"][0]["scopeMetrics"][0]["metrics"]:
 print("OK" if caras == {"added", "removed"} else f"MAL lineas {sorted(caras)}")
 PY
 )"
-if [ "$salida" = "OK" ]; then
-	paso "cada metrica con desglose viaja con sus dimensiones, y las lineas traen anadidas Y borradas"
+if [ "$output" = "OK" ]; then
+	paso "each metric with a breakdown carries its dimensions, and lines include added AND removed"
 else
-	malo "las dimensiones del sobre no son las que el receptor lee: $salida"
+	malo "the envelope dimensions differ from what the receiver reads: $output"
 fi
 
-# ── LA UNIDAD DEL CABLE SON SEGUNDOS, Y EL RECEPTOR MULTIPLICA POR MIL ────────────────────────
-# ⛔ Lo destapo una MEDIDA contra el motor, no una lectura: sembrando milisegundos, el agregado
-#    salia `active_time_ms = 62.481.616.000` = **723 dias de actividad para 12 sesiones**. Y esa es
-#    la clase peor de dato malo en una captura que se publica como prueba: **una cifra a cero se
-#    lee como «falta dato»; una cifra absurda se lee como DATO**.
-#
-#    La trampa esta en que `adoptionMetricUnit` declara «ms» — pero esa es la unidad ALMACENADA.
-#    El receptor CONVIERTE: `connectors/claude/metrics.go:151`, `dp.GetAsInt() * 1000`. Leer la
-#    unidad del consumidor y sembrar en ella es exactamente el error que se comete.
-salida="$(python3 - "$GUION" <<'PY'
+# Seed active time in seconds; the receiver converts it to stored milliseconds.
+output="$(python3 - "$GUION" <<'PY'
 import importlib.util, sys
 spec = importlib.util.spec_from_file_location("sd", sys.argv[1])
 m = importlib.util.module_from_spec(spec); sys.modules["sd"] = m
@@ -1518,29 +1237,19 @@ for rm in env["resourceMetrics"]:
         if x["name"] == "claude_code.active_time.total":
             for dp in x["sum"]["dataPoints"]:
                 peor = max(peor, int(dp["asInt"]))
-# 86.400 s es UN dia, y ese es el techo defendible para lo que un datapoint puede declarar de una
-# sesion. Convertido por el receptor (x1000) son 86.400.000 ms, que siguen siendo UN dia: la
-# conversion no cambia la duracion, cambia la unidad en que se guarda.
-# ⛔ AQUI PONIA «mas de mil dias», y estaba MAL POR MIL — en el mismisimo commit que curaba una
-#    unidad equivocada. Lo caza el mismo defecto que el commit describe: una cifra escrita en prosa
-#    al lado de un predicado correcto, que nadie recalcula y que ensena la unidad al reves al
-#    siguiente lector. El predicado no cambia; el que estaba mal era yo explicandolo.
+# Limit a session datapoint to one day: 86,400 seconds, or 86,400,000 stored
+# milliseconds.
 print("MAL" if peor > 86_400 else "OK", peor)
 PY
 )"
-if [ "${salida%% *}" = "OK" ]; then
-	paso "el tiempo activo se siembra en SEGUNDOS (peor datapoint ${salida##* }s < 1 dia): el x1000 del receptor no lo dispara"
+if [ "${output%% *}" = "OK" ]; then
+	paso "active time is seeded in SECONDS (largest datapoint ${output##* }s < 1 day): receiver x1000 conversion keeps it in range"
 else
-	malo "el tiempo activo se siembra fuera de escala (${salida##* }): el receptor multiplica por 1000 y la captura mostraria anos de actividad"
+	malo "active time is seeded out of scale (${output##* }): the receiver multiplies by 1000 and the capture would show years of activity"
 fi
 
-# ── UNA FILA SIN `sessions` ES «NO PUDE MIRAR», Y AHORA HAY QUIEN LO ACREDITE ─────────────────
-# ⛔ `sesiones_de_fila` distingue AUSENTE de CERO desde hace dos claims, y esta bateria NO LO
-#    PROBABA: un lector restauro el `or 0` y el mutante SOBREVIVIO 43/0. Es la familia de siempre
-#    —una cura sin testigo es una costumbre— y aqui muerde donde mas duele: con `or 0`, «el motor
-#    dejo de devolver el campo» se convierte en «ese equipo tiene 0 sesiones», y `flacos` lo
-#    convierte a su vez en un rc 1 que ACUSA AL SEMBRADO de algo que nadie ha medido. Un cambio de
-#    contrato del motor sale como un fallo mio.
+# A team row missing sessions must report unavailable evidence (rc 2), preserving the
+# distinction from zero.
 cat > "$TRABAJO/doble-sin-sessions.py" <<'PYS'
 import http.server, json, subprocess, sys, threading
 
@@ -1590,88 +1299,80 @@ sys.stdout.write(r.stdout); sys.stderr.write(r.stderr)
 sys.exit(r.returncode)
 PYS
 if [ ! -s "$TRABAJO/doble-sin-sessions.py" ]; then
-	malo "NO HE PODIDO MIRAR: no se pudo escribir el doble de la fila sin sessions"
+	malo "CANNOT INSPECT: could not write the missing-sessions row double"
 else
-	r="$(python3 "$TRABAJO/doble-sin-sessions.py" "$GUION" >"$SALIDA" 2>&1; printf '%s' "$?")"
-	if [ "$r" = "2" ] && casa 'ausente no es cero'; then
-		paso "una fila con \`totals\` y SIN \`sessions\` sale rc 2 diciendo «ausente no es cero», no rc 1 culpando al sembrado"
+	r="$(python3 "$TRABAJO/doble-sin-sessions.py" "$GUION" >"$OUTPUT" 2>&1; printf '%s' "$?")"
+	if [ "$r" = "2" ] && casa 'missing does not mean zero'; then
+		paso "a row with \`totals\` and WITHOUT \`sessions\` exits rc 2 saying «missing is not zero», rather than rc 1 blaming the seeded set"
 	elif [ "$r" = "1" ]; then
-		malo "la fila sin \`sessions\` sale rc 1: un cambio de contrato del motor se esta leyendo como sembrado corto"
+		malo "the row without \`sessions\` exits rc 1: an engine contract change is treated as insufficient seeding"
 	else
-		malo "la fila sin \`sessions\` da rc $r sin nombrar la causa: $(head -2 "$SALIDA" | tr '\n' ' ')"
+		malo "the row without \`sessions\` returns rc $r without naming the cause: $(head -2 "$OUTPUT" | tr '\n' ' ')"
 	fi
 
-	# ── Y SU MUTANTE: el `or 0` que el lector restauro ────────────────────────────────────
-	# ⛔ EL ANCLA NO PUEDE SER `if "sessions" not in tot:`: esa linea sale DOS VECES en el guion
-	#    —`sesiones_de` y `sesiones_de_fila` la comparten— y un mutante que toque las dos muere por
-	#    la funcion equivocada. Se ancla al bloque ENTERO, que incluye el mensaje de la fila y por
-	#    tanto es unico. Y el mutante es el `or 0` REAL, no un `if False`: con `if False` la funcion
-	#    caeria en un KeyError, y un mutante que revienta no acredita nada.
+	# Anchor to the complete row-specific block so the mutant changes sesiones_de_fila
+	# alone. Restore the missing-as-zero behavior without introducing a KeyError.
 	python3 - "$GUION" "$TRABAJO/mFila.py" <<'PYM'
 import sys
 src = open(sys.argv[1]).read()
 viejo = (
     '    if "sessions" not in tot:\n'
-    '        raise SystemExit(salir(RC_NO_PUDE_MIRAR,\n'
-    '                               f"{ruta}: la fila del equipo {t.get(\'team\')!r} trae `totals` SIN "\n'
-    '                               "`sessions`: ausente no es cero"))\n'
+    '        raise SystemExit(salir(RC_UNAVAILABLE,\n'
+    '                               f"{ruta}: team row {t.get(\'team\')!r} contains `totals` WITHOUT "\n'
+    '                               "`sessions`: missing does not mean zero"))\n'
     '    return tot["sessions"]\n'
 )
-assert src.count(viejo) == 1, f"ancla de la fila: {src.count(viejo)} coincidencias"
+assert src.count(viejo) == 1, f"row anchor: {src.count(viejo)} matches"
 nuevo = '    return tot.get("sessions") or 0  # MUTANTE: ausente vuelve a caer a cero\n'
 open(sys.argv[2], "w").write(src.replace(viejo, nuevo, 1))
 PYM
 	if [ ! -s "$TRABAJO/mFila.py" ]; then
-		malo "NO HE PODIDO MIRAR: no se pudo construir el mutante del \`or 0\` de la fila"
+		malo "CANNOT INSPECT: could not construct the row's \`or 0\` mutant"
 	else
-		rm2="$(python3 "$TRABAJO/doble-sin-sessions.py" "$TRABAJO/mFila.py" >"$SALIDA" 2>&1; printf '%s' "$?")"
+		rm2="$(python3 "$TRABAJO/doble-sin-sessions.py" "$TRABAJO/mFila.py" >"$OUTPUT" 2>&1; printf '%s' "$?")"
 		if [ "$rm2" = "127" ]; then
-			malo "NO HE PODIDO MIRAR: el mutante de la fila no llego a ejecutarse (rc 127): eso NO es «sobrevivio»"
-		elif ! muerte_valida "$SALIDA"; then
-			malo "NO HE PODIDO MIRAR: el mutante de la fila REVENTO (Traceback) en vez de morir: un mutante que revienta no acredita nada"
-		elif casa 'ausente no es cero'; then
-			malo "el mutante que devuelve el \`or 0\` SIGUE diciendo «ausente no es cero» (rc $rm2): no acredita nada"
+			malo "CANNOT INSPECT: the row mutant did not execute (rc 127): that does NOT mean «survived»"
+		elif ! muerte_valida "$OUTPUT"; then
+			malo "CANNOT INSPECT: the row mutant CRASHED (Traceback) instead of dying: a crashing mutant establishes nothing"
+		elif casa 'missing does not mean zero'; then
+			malo "the mutant restoring \`or 0\` STILL says «missing is not zero» (rc $rm2): establishes nothing"
 		else
-			paso "el mutante que devuelve el \`or 0\` MUERE: deja de distinguir ausente de cero y este caso lo caza"
+			paso "the mutant restoring \`or 0\` DIES: stops distinguishing missing from zero and this case detects it"
 		fi
 	fi
 fi
 
-# ── UN MUTANTE QUE REVIENTA NO ES UN MUTANTE MUERTO ───────────────────────────────────────────
-# ⛔ SENUELO, y existe porque `muerte_valida` sin un caso que la vea cortar seria otra costumbre.
-#    El senuelo desactiva la guarda de `sesiones_de_fila` con un `if False:` —que es justo la
-#    variante que descarte al escribir el mutante bueno— y con eso la funcion cae en un `KeyError`.
-#    No imprime el mensaje que el caso busca, asi que ANTES de esta cura el arnes lo contaba como
-#    MUERTO y la bateria seguia verde. Ahora tiene que decir NO HE PODIDO MIRAR.
+# A guard-removal decoy must raise KeyError and be rejected by muerte_valida rather than
+# counted as an expected mutant failure.
 python3 - "$GUION" "$TRABAJO/mRevienta.py" <<'PYR'
 import sys
 src = open(sys.argv[1]).read()
 viejo = (
     '    if "sessions" not in tot:\n'
-    '        raise SystemExit(salir(RC_NO_PUDE_MIRAR,\n'
-    '                               f"{ruta}: la fila del equipo {t.get(\'team\')!r} trae `totals` SIN "\n'
+    '        raise SystemExit(salir(RC_UNAVAILABLE,\n'
+    '                               f"{ruta}: team row {t.get(\'team\')!r} contains `totals` WITHOUT "\n'
 )
-assert src.count(viejo) == 1, f"ancla del senuelo: {src.count(viejo)} coincidencias"
+assert src.count(viejo) == 1, f"decoy anchor: {src.count(viejo)} matches"
 nuevo = (
     '    if False:  # SENUELO: la guarda se va y la funcion cae en KeyError\n'
-    '        raise SystemExit(salir(RC_NO_PUDE_MIRAR,\n'
-    '                               f"{ruta}: la fila del equipo {t.get(\'team\')!r} trae `totals` SIN "\n'
+    '        raise SystemExit(salir(RC_UNAVAILABLE,\n'
+    '                               f"{ruta}: team row {t.get(\'team\')!r} contains `totals` WITHOUT "\n'
 )
 open(sys.argv[2], "w").write(src.replace(viejo, nuevo, 1))
 PYR
 if [ ! -s "$TRABAJO/mRevienta.py" ]; then
-	malo "NO HE PODIDO MIRAR: no se pudo construir el senuelo que revienta"
+	malo "CANNOT INSPECT: could not construct the crashing decoy"
 else
-	rs="$(python3 "$TRABAJO/doble-sin-sessions.py" "$TRABAJO/mRevienta.py" >"$SALIDA" 2>&1; printf '%s' "$?")"
-	if ! command grep -q 'KeyError' "$SALIDA"; then
-		malo "el senuelo no llego a reventar (rc $rs): sin KeyError no prueba nada; revisa el senuelo"
-	elif muerte_valida "$SALIDA"; then
-		malo "muerte_valida DA POR BUENA una salida con Traceback: un reventon se contaria como muerte"
+	rs="$(python3 "$TRABAJO/doble-sin-sessions.py" "$TRABAJO/mRevienta.py" >"$OUTPUT" 2>&1; printf '%s' "$?")"
+	if ! command grep -q 'KeyError' "$OUTPUT"; then
+		malo "the decoy did not crash (rc $rs): without KeyError, proves nothing; inspect the decoy"
+	elif muerte_valida "$OUTPUT"; then
+		malo "muerte_valida ACCEPTS output containing Traceback: a crash would count as a valid mutant failure"
 	else
-		paso "un mutante que REVIENTA se rechaza como muerte valida: el senuelo del KeyError lo demuestra"
+		paso "a CRASHING mutant is rejected as a valid mutant failure: the KeyError decoy demonstrates it"
 	fi
 fi
 
-printf '\ntest-seed-adoption-otlp: %d pasan, %d fallan\n' "$ok" "$fail"
+printf '\ntest-seed-adoption-otlp: %d passed, %d failed\n' "$ok" "$fail"
 [ "$fail" -eq 0 ] || exit 1
 exit 0

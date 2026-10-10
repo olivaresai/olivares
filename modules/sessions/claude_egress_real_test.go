@@ -8,10 +8,15 @@ package sessions
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
+	"encoding/pem"
 	"io"
 	"net"
 	"net/http"
+	"net/http/httptest"
+	"net/http/httputil"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -19,14 +24,124 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/olivaresai/olivares/modules/sessions/confine"
 )
+
+// Runs the real CLI through the production runner with a synthetic provider.
+// Neither the caller's home nor any vendor account is exposed to the child.
+func TestRealClaudeBoundNetworkNamespace(t *testing.T) {
+	bin := os.Getenv("OLIVARES_TEST_CLAUDE_BIN")
+	if bin == "" {
+		t.Skip("OLIVARES_TEST_CLAUDE_BIN is not set")
+	}
+	bin, err := filepath.Abs(bin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	runner := &fakeRunner{}
+	m, _, tenant, _ := newRuntimeHarness(t, WithRunner(runner), WithCredentialSource(&countingCredentialSource{}), WithProviderSecretVault(newFakeVault()))
+	m.UseExecutionEnvironmentRef(testEnvRef)
+	rec := mustCreateRecord(t, m, tenant, anthropicInput("Anthropic"))
+	configHome, userHome, _, _ := twoHomes(t)
+	prof := mustCreateProfile(t, m, tenant, CreateProfileInput{Driver: providerDriverClaude, ConfigHome: configHome, UserHome: userHome,
+		DisplayName: "bound", AuthSource: AuthSourceManagedInjection, ProviderRecordRef: rec.Ref})
+	if _, err := launchBound(m, tenant, prof); err != nil {
+		t.Fatal(err)
+	}
+	spec := runner.lastSpec()
+	provider := newFakeAnthropic(t)
+	endpoint := provider.url
+	if external := os.Getenv("OLIVARES_TEST_CLAUDE_TLS_ENDPOINT"); external != "" {
+		endpoint = external
+	}
+	if spec.NetworkPolicy == nil {
+		t.Fatal("a record-bound Claude launch is not network-confined")
+	}
+	spec.Program, spec.Dir, spec.BoundProvider.Endpoint = bin, t.TempDir(), endpoint
+	spec.NetworkPolicy.Providers = []string{endpoint}
+	spec.Confinement = &confine.Policy{ReadWrite: []string{spec.Dir, configHome, userHome}, ReadOnly: []string{filepath.Dir(bin)}}
+	spec.ConfinementRequired = true
+	for i := range spec.Env {
+		if spec.Env[i].Name == "ANTHROPIC_BASE_URL" {
+			spec.Env[i].Value = endpoint
+		}
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+	p, err := NewProcRunner().Launch(ctx, spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer p.Stop(context.Background())
+	msg := []byte(`{"type":"user","message":{"role":"user","content":"Say hi."}}`)
+	if err := p.Send(ctx, msg); err != nil {
+		t.Fatal(err)
+	}
+	for {
+		select {
+		case <-ctx.Done():
+			t.Fatal("real CLI did not complete the synthetic turn")
+		case frame, ok := <-p.Output():
+			if !ok {
+				code, err := p.Wait()
+				t.Fatalf("real CLI exited before answering: %d %v", code, err)
+			}
+			var event struct {
+				Type    string `json:"type"`
+				IsError bool   `json:"is_error"`
+			}
+			if json.Unmarshal(frame.Data, &event) == nil && event.Type == "result" {
+				if event.IsError || endpoint == provider.url && provider.count() == 0 {
+					t.Fatal("real CLI did not use the bound provider")
+				}
+				if endpoint == provider.url {
+					t.Logf("real Claude completed a turn through the namespace; bound requests=%d", provider.count())
+				} else {
+					t.Log("real Claude completed the externally counted TLS turn through the namespace")
+				}
+				return
+			}
+		}
+	}
+}
+
+// The engine trusts the synthetic provider; Claude trusts only the distinct
+// per-session proxy certificate injected by the runner. No vendor calls/keys.
+func TestRealClaudeTLSBoundNetworkNamespace(t *testing.T) {
+	if os.Getenv("OLIVARES_TEST_CLAUDE_BIN") == "" {
+		t.Skip("OLIVARES_TEST_CLAUDE_BIN is not set")
+	}
+	provider := newFakeAnthropic(t)
+	target, err := url.Parse(provider.url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := httptest.NewTLSServer(httputil.NewSingleHostReverseProxy(target))
+	defer server.Close()
+	root := filepath.Join(t.TempDir(), "provider.pem")
+	if err := os.WriteFile(root, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: server.Certificate().Raw}), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestRealClaudeBoundNetworkNamespace$", "-test.v")
+	cmd.Env = append(os.Environ(), "OLIVARES_TEST_CLAUDE_TLS_ENDPOINT="+server.URL, "SSL_CERT_FILE="+root, "SSL_CERT_DIR="+filepath.Dir(root))
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("real Claude TLS turn: %v\n%s", err, output)
+	}
+	if provider.count() == 0 {
+		t.Fatal("bound TLS provider received no request")
+	}
+	t.Logf("real Claude completed verified TLS through the namespace; bound requests=%d", provider.count())
+}
 
 // THE REAL CLAUDE CODE ON A KEY, SAVED SETTINGS AGAINST IT, ZERO REQUESTS TO ANY OTHER HOST.
 //
 // It takes the argv and environment the product builds for a launch bound to an Anthropic key
 // (a real createRun, captured by the fake runner) and runs them with the installed Claude Code
 // (OLIVARES_TEST_CLAUDE_BIN; 2.1.288 is the version the product installs), from a profile whose
-// saved user settings clear both quiet switches (SR2C, SR5C on 3c130b50). Only the endpoint's
+// saved user settings clear both quiet switches. Only the endpoint's
 // value is changed, to a loopback Anthropic API: up (it answers), then down (a closed port) for
 // a resume and a fresh start. Every host is counted as in
 // TestRealOpenCodeBoundSessionReachesNoOtherHost: a refusing proxy and the process tree's sockets.

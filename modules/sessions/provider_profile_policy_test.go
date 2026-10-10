@@ -116,9 +116,9 @@ func TestProfiledLaunchAppliesTheDeclaredSurfaceAndMode(t *testing.T) {
 	}
 }
 
-// TestADeclaredEmptySurfaceIsKeptApartFromAnUndeclaredOne: both launch the same
-// child, and only one of them is something an operator SAID. The difference is
-// what the profile reports, and it is the difference between a policy and a gap.
+// TestADeclaredEmptySurfaceIsKeptApartFromAnUndeclaredOne checks that profile
+// reads distinguish an explicit empty tool list from the undeclared default
+// surface, including after withdrawing a declaration.
 func TestADeclaredEmptySurfaceIsKeptApartFromAnUndeclaredOne(t *testing.T) {
 	t.Parallel()
 

@@ -165,6 +165,8 @@ class FakeControlPlane(BaseHTTPRequestHandler):
             self.wfile.write(body)
         elif url.path == "/raw-request":
             self._json(200, {})
+        elif url.path.startswith("/v1/console/sso/tenants/"):
+            self._json(200, {"ok": True})
         elif url.path == "/v1/auth/capabilities" and self.command == "POST":
             # Schema 2 (docs/contracts/CAPABILITY-PROJECTION.md): one positive with its
             # budget, one concealed non-verdict without one, one surface admission.
@@ -252,6 +254,63 @@ class ClientSmokeTest(unittest.TestCase):
         self.assertEqual(headers["X-Olivares-Tenant"], "t-override")
         self.assertIn("olivares-client-python/", headers["User-Agent"])
         self.assertIn(f"api {API_VERSION}", headers["User-Agent"])
+
+    def test_sso_tenant_paths_are_independent_of_transport_tenant(self):
+        routes = (
+            ("get", "", False),
+            ("put", "", True),
+            ("delete", "", False),
+            ("get", "_idps", False),
+            ("get", "_idps_by_alias", False),
+            ("put", "_idps_by_alias", True),
+            ("delete", "_idps_by_alias", False),
+            ("post", "_idps_by_alias_test", True),
+            ("post", "_test", True),
+        )
+        for method, suffix, has_body in routes:
+            operation = getattr(
+                self.client, f"{method}_v1_console_sso_tenants_by_tenant{suffix}"
+            )
+            path = "/v1/console/sso/tenants/route%2Fa%20b"
+            args = ["route/a b"]
+            if "idps" in suffix:
+                path += "/idps"
+            if "alias" in suffix:
+                path += "/idp%2Fx%20y"
+                args.append("idp/x y")
+            if suffix.endswith("test"):
+                path += "/test"
+            body = {"enabled": True}
+            if has_body:
+                args.append(body)
+            for override in (None, "t-override"):
+                with self.subTest(method=method, suffix=suffix, tenant=override):
+                    options = {"limit": "5"}
+                    if override is not None:
+                        # The alias is also usable by keyword without consuming
+                        # the published tenant= transport option.
+                        options.update(tenant_path=args[0], tenant=override)
+                        if "alias" in suffix:
+                            options["alias"] = args[1]
+                        if has_body:
+                            options["body"] = body
+                        out = operation(**options)
+                    else:
+                        out = operation(*args, **options)
+                    self.assertEqual(out, {"ok": True})
+                    actual_method, actual_path, headers = FakeControlPlane.requests[-1]
+                    self.assertEqual(
+                        (actual_method, actual_path),
+                        (method.upper(), path + "?limit=5"),
+                    )
+                    self.assertEqual(
+                        headers["X-Olivares-Tenant"], override or "t-default"
+                    )
+                    self.assertEqual(headers["Authorization"], "Bearer olvk_test_secret")
+                    self.assertEqual(
+                        FakeControlPlane.request_bodies[-1],
+                        json.dumps(body).encode() if has_body else b"",
+                    )
 
     def test_repeats_a_list_query_param(self):
         # The API has repeatable query parameters (GET /v1/audit's exclude_action is

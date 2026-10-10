@@ -7,6 +7,10 @@ package api_test
 import (
 	"context"
 	"net"
+	"net/http"
+	"net/url"
+	"slices"
+	"strconv"
 	"testing"
 	"time"
 
@@ -20,8 +24,157 @@ import (
 
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/api/genpb/apiv1"
+	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/license"
 )
+
+func TestGRPCListAgentsWorkspaceConfinement(t *testing.T) {
+	h := newHarness(t)
+	admin := h.adminLogin()
+	tenant := h.createOrg(admin, "workspace-list")
+	otherTenant := h.createOrg(admin, "other-tenant")
+	h.elevate(admin)
+	workspaces := make(map[string]string)
+	for _, name := range []string{"alpha", "beta", "empty"} {
+		r := h.do("POST", "/v1/workspaces", admin, map[string]any{"name": name, "slug": name}, tenantHdr(tenant))
+		if r.code != http.StatusCreated {
+			t.Fatalf("create workspace %s = %d %s", name, r.code, r.raw)
+		}
+		workspaces[name] = r.body["id"].(string)
+	}
+	list := h.do("GET", "/v1/workspaces", admin, nil, tenantHdr(tenant))
+	for _, item := range list.body["items"].([]any) {
+		if ws := item.(map[string]any); ws["slug"] == "default" {
+			workspaces["default"] = ws["id"].(string)
+		}
+	}
+	agents := make(map[string]string)
+	for _, row := range []struct{ name, workspace string }{
+		{"alpha-first", "alpha"}, {"beta-agent", "beta"}, {"unassigned", ""}, {"alpha-last", "alpha"},
+	} {
+		r := h.do("POST", "/v1/agents", admin, map[string]any{
+			"name": row.name, "kind": "test", "workspace_id": workspaces[row.workspace],
+		}, tenantHdr(tenant))
+		if r.code != http.StatusCreated {
+			t.Fatalf("create agent %s = %d %s", row.name, r.code, r.raw)
+		}
+		agents[row.name] = r.body["id"].(string)
+	}
+	if r := h.do("POST", "/v1/agents", admin, map[string]any{"name": "other-tenant-agent", "kind": "test"}, tenantHdr(otherTenant)); r.code != http.StatusCreated {
+		t.Fatalf("create other tenant agent = %d %s", r.code, r.raw)
+	}
+	tokens := make(map[string]string)
+	for _, name := range []string{"alpha", "beta", "empty", "default", "tenant-wide"} {
+		email := name + "@workspace.test"
+		r := h.do("POST", "/v1/users", admin, map[string]any{
+			"email": email, "password": "workspace-list-test1", "tenant": tenant.String(),
+			"role": auth.RoleViewer, "workspace_id": workspaces[name],
+		}, nil)
+		if r.code != http.StatusCreated {
+			t.Fatalf("create user %s = %d %s", name, r.code, r.raw)
+		}
+		r = h.do("POST", "/v1/auth/login", "", map[string]any{"email": email, "password": "workspace-list-test1"}, nil)
+		if r.code != http.StatusOK {
+			t.Fatalf("login %s = %d %s", name, r.code, r.raw)
+		}
+		tokens[name] = r.body["token"].(string)
+	}
+
+	lis, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	gs := h.srv.NewGRPCServer()
+	go func() { _ = gs.Serve(lis) }()
+	defer gs.Stop()
+	conn, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	cl := apiv1.NewControlPlaneClient(conn)
+	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
+	defer cancel()
+
+	for _, tc := range []struct {
+		name string
+		want []string
+	}{
+		{"alpha", []string{agents["alpha-first"], agents["alpha-last"]}},
+		{"beta", []string{agents["beta-agent"]}},
+		{"empty", nil},
+		// A row created without a workspace belongs to the default workspace.
+		{"default", []string{agents["unassigned"]}},
+		{"tenant-wide", []string{agents["alpha-first"], agents["alpha-last"], agents["beta-agent"], agents["unassigned"]}},
+	} {
+		for _, limit := range []int{1, 50} {
+			t.Run(tc.name+"/limit="+strconv.Itoa(limit), func(t *testing.T) {
+				authCtx := metadata.AppendToOutgoingContext(ctx, "authorization", "Bearer "+tokens[tc.name])
+				var got []string
+				cursor := ""
+				for page := 0; ; page++ {
+					if page > len(agents) {
+						t.Fatal("pagination did not terminate")
+					}
+					rest := h.do("GET", "/v1/agents?limit="+strconv.Itoa(limit)+"&cursor="+url.QueryEscape(cursor), tokens[tc.name], nil, tenantHdr(tenant))
+					if rest.code != http.StatusOK {
+						t.Fatalf("REST list = %d %s", rest.code, rest.raw)
+					}
+					list, err := cl.ListAgents(authCtx, &apiv1.ListAgentsRequest{Tenant: tenant.String(), Limit: int32(limit), Cursor: cursor})
+					if err != nil {
+						t.Fatalf("gRPC list: %v", err)
+					}
+					var restIDs, grpcIDs []string
+					for _, item := range rest.body["items"].([]any) {
+						restIDs = append(restIDs, item.(map[string]any)["id"].(string))
+					}
+					for _, agent := range list.GetAgents() {
+						grpcIDs = append(grpcIDs, agent.GetId())
+						if agent.GetTenantId() != tenant.String() {
+							t.Errorf("agent %s belongs to tenant %s", agent.GetId(), agent.GetTenantId())
+						}
+					}
+					restCursor, _ := rest.body["cursor"].(string)
+					if !slices.Equal(grpcIDs, restIDs) || list.GetCursor() != restCursor || list.GetHasMore() != rest.body["has_more"] {
+						t.Fatalf("page %d: gRPC IDs=%v cursor=%q has_more=%v; REST IDs=%v cursor=%q has_more=%v",
+							page, grpcIDs, list.GetCursor(), list.GetHasMore(), restIDs, restCursor, rest.body["has_more"])
+					}
+					got = append(got, grpcIDs...)
+					if !list.GetHasMore() {
+						break
+					}
+					cursor = list.GetCursor()
+				}
+				slices.Sort(got)
+				want := slices.Clone(tc.want)
+				slices.Sort(want)
+				if !slices.Equal(got, want) {
+					t.Fatalf("agent IDs = %v, want %v", got, want)
+				}
+			})
+		}
+	}
+	for _, tc := range []struct {
+		name, token string
+		wantHTTP    int
+		wantGRPC    codes.Code
+	}{
+		{"anonymous", "", http.StatusUnauthorized, codes.Unauthenticated},
+		{"other-tenant", tokens["alpha"], http.StatusForbidden, codes.PermissionDenied},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			authCtx := ctx
+			if tc.token != "" {
+				authCtx = metadata.AppendToOutgoingContext(ctx, "authorization", "Bearer "+tc.token)
+			}
+			_, err := cl.ListAgents(authCtx, &apiv1.ListAgentsRequest{Tenant: otherTenant.String()})
+			rest := h.do("GET", "/v1/agents", tc.token, nil, tenantHdr(otherTenant))
+			if status.Code(err) != tc.wantGRPC || rest.code != tc.wantHTTP {
+				t.Fatalf("gRPC=%v REST=%d, want %v/%d", status.Code(err), rest.code, tc.wantGRPC, tc.wantHTTP)
+			}
+		})
+	}
+}
 
 func TestGRPCControlPlane(t *testing.T) {
 	h := newHarness(t)

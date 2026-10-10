@@ -41,14 +41,8 @@ var toolInstallEngine = func(ctx context.Context) *toolinstall.Engine {
 	if v, err := toolinstall.NewGPGVerifier(ctx, exec.LookPath); err == nil {
 		verifier = v
 	}
-	claude := toolinstall.NewClaude(toolinstall.ClaudeOptions{Verifier: verifier})
-	codex := toolinstall.NewCodexRelease(toolinstall.ReleaseArchiveOptions{})
-	grok := toolinstall.NewGrok(toolinstall.GrokOptions{})
-	cat, err := toolinstall.NewCapabilityCatalog(toolinstall.NewCatalog(claude), codex, grok, toolinstall.NewOpenCode(toolinstall.ReleaseArchiveOptions{}), toolinstall.NewOllama(toolinstall.ReleaseArchiveOptions{}))
+	cat := toolinstall.NewOfficialCatalog(nil, verifier)
 	opts := toolinstall.EngineOptions{InstallerVersion: version, Verified: verifiedToolReleases}
-	if err != nil {
-		return toolinstall.NewEngine(toolinstall.NewCatalog(claude), opts)
-	}
 	return toolinstall.NewEngineWithCapabilities(cat, opts)
 }
 
@@ -63,8 +57,8 @@ func newAgentToolCmd() *cobra.Command {
 			"and Windows are release work still ahead.\n\n" +
 			"Verification class is per driver and is recorded on the receipt: Claude is publisher-signed\n" +
 			"OpenPGP; Grok is origin-only HTTPS plus a bounded probe, which is not a publisher signature;\n" +
-			"Codex, OpenCode and Ollama compare SHA-256 from their pinned official GitHub release\n" +
-			"metadata before archive placement.\n\n" +
+			"Codex and Ollama compare SHA-256 from the checksum file their official GitHub release\n" +
+			"attaches, OpenCode from its official release metadata, before archive placement.\n\n" +
 			"Channel names belong to the vendor, not to Olivares: the Grok origin publishes stable and\n" +
 			"answers 404 for latest, so --version stable is the pointer to ask for. A pointer the origin\n" +
 			"does not publish is reported as version_unknown with the URL and the status.\n\n" +
@@ -92,7 +86,7 @@ type agentToolTarget struct {
 
 func (t *agentToolTarget) addFlags(cmd *cobra.Command) {
 	t.cmd = cmd
-	cmd.Flags().StringVar(&t.driver, "driver", "claude", "provider tool to install: claude, codex, grok, opencode or ollama")
+	cmd.Flags().StringVar(&t.driver, "driver", "claude", "provider tool to install: claude, codex, grok, opencode, gemini-cli or ollama")
 	cmd.Flags().StringVar(&t.version, "version", "latest", "exact version (X.Y.Z) or the vendor pointer latest or stable")
 	cmd.Flags().StringVar(&t.platform, "platform", "", "target platform key: linux-x64, linux-arm64, linux-x64-musl, linux-arm64-musl (default: this host)")
 	addAgentToolRootFlag(cmd, &t.root)

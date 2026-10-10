@@ -1,0 +1,67 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# The INSTALL.md "Manual binary (tarball)" block, run verbatim against the published release in
+# an empty directory with cosign on PATH, as a reader has it. Its verify step once pointed at a
+# path that exists only in a source checkout and exited 127. The block ends in `sudo install`,
+# so this needs a hosted runner (the self-hosted pool has no sudo).
+# It runs when the block changes, which includes each release's bump of `ver=`. That bump lands
+# before the release exists: on that pull request the script reports NOT VERIFIED without running
+# the block. Once the release is published it runs the block verbatim, and there a 404 is red.
+# release.yml publishes in its dispatched phase 2 with GITHUB_TOKEN, which starts no `release`
+# event, so the successful phase-2 run is caught by workflow_run; `release` covers a publish by hand.
+# Preprod runs only the pull-request leg: its rehearsal publishes before the public release, and
+# the block names the public repository and its signing identity, so a later leg there proves nothing.
+name: manual-tarball-doc
+
+on:
+  workflow_dispatch:
+  release:
+    types: [published]
+  workflow_run:
+    workflows: [release]
+    types: [completed]
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/manual-tarball-doc.yml"
+      - "scripts/check-manual-tarball-doc.sh"
+      - "INSTALL.md"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: manual-tarball-doc-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  manual-tarball-doc:
+    if: >-
+      (github.repository == 'olivaresai/olivares' ||
+        (vars.OLIVARES_RELEASE_PROFILE == 'preprod' && github.event_name == 'pull_request')) &&
+      (github.event_name != 'workflow_run' ||
+        (github.event.workflow_run.event == 'workflow_dispatch' &&
+         github.event.workflow_run.conclusion == 'success'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 3
+        with:
+          persist-credentials: false
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        timeout-minutes: 5
+        with:
+          cosign-release: 'v2.6.4'
+      # No --isolate: the documented block calls the bare `cosign`, so it stays on PATH.
+      - name: assert reviewed cosign bytes
+        timeout-minutes: 2
+        run: bash scripts/assert-cosign-binary.sh
+      - name: run the documented block
+        timeout-minutes: 5
+        run: bash scripts/check-manual-tarball-doc.sh INSTALL.md

@@ -4,7 +4,7 @@
 # Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 #
 # Live DIST-24-05 leg. Linux families run inside their named container; macOS
-# runs on the hosted runner. Both install the public v26.8.0 payload through the
+# runs on the hosted runner. Both install the selected two-number release through the
 # tracked verifier, then exercise this commit's service/doctor candidate.
 set -euo pipefail
 
@@ -13,11 +13,11 @@ lib="$root/scripts/installer-matrix-lib.sh"
 family=""
 image=""
 candidate=""
-release_version=26.9.0
+release_version="$(sh "$root/scripts/build-ldflags.sh" --version)"
 inside=0
 
 usage() {
-	printf '%s\n' 'usage: installer-matrix-ci.sh --family NAME --candidate ABSOLUTE_PATH [--image IMAGE] [--release-version X.Y.Z]'
+	printf '%s\n' 'usage: installer-matrix-ci.sh --family NAME --candidate ABSOLUTE_PATH [--image IMAGE] [--release-version MAJOR.MINOR]'
 }
 
 while [[ "$#" -gt 0 ]]; do
@@ -33,7 +33,7 @@ while [[ "$#" -gt 0 ]]; do
 done
 
 [[ -n "$family" ]] || { usage >&2; exit 2; }
-[[ "$release_version" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]] || {
+[[ "$release_version" =~ ^[0-9]+\.[0-9]+$ ]] || {
 	printf 'installer-matrix: invalid release version: %s\n' "$release_version" >&2
 	exit 2
 }
@@ -50,7 +50,7 @@ if [[ "$inside" -eq 0 && "$family" != macos ]]; then
 		exit 2
 	}
 	command -v docker >/dev/null 2>&1 || {
-		printf 'installer-matrix: NO HE PODIDO MIRAR — docker is unavailable\n' >&2
+		printf 'installer-matrix: COULD NOT LOOK — docker is unavailable\n' >&2
 		exit 2
 	}
 	# The workflow isolates the reviewed cosign OUT of PATH (assert-cosign-binary.sh --isolate)
@@ -59,12 +59,12 @@ if [[ "$inside" -eq 0 && "$family" != macos ]]; then
 	# binary is preferred; PATH is the fallback for a local run.
 	if [ -n "${OLIVARES_COSIGN_BIN:-}" ]; then
 		[ -x "$OLIVARES_COSIGN_BIN" ] || {
-			printf 'installer-matrix: NO HE PODIDO MIRAR — OLIVARES_COSIGN_BIN=%s is not an executable file\n' "$OLIVARES_COSIGN_BIN" >&2
+			printf 'installer-matrix: COULD NOT LOOK — OLIVARES_COSIGN_BIN=%s is not an executable file\n' "$OLIVARES_COSIGN_BIN" >&2
 			exit 2
 		}
 	else
 		command -v cosign >/dev/null 2>&1 || {
-			printf 'installer-matrix: NO HE PODIDO MIRAR — cosign is unavailable (neither OLIVARES_COSIGN_BIN nor PATH)\n' >&2
+			printf 'installer-matrix: COULD NOT LOOK — cosign is unavailable (neither OLIVARES_COSIGN_BIN nor PATH)\n' >&2
 			exit 2
 		}
 	fi
@@ -94,7 +94,7 @@ debian|ubuntu) export DEBIAN_FRONTEND=noninteractive; apt-get update; apt-get in
 fedora) dnf install -y bash ca-certificates coreutils curl gzip procps-ng python3 tar ;;
 opensuse-leap) zypper --non-interactive refresh; zypper --non-interactive install -y bash ca-certificates coreutils curl gzip procps python3 tar ;;
 alpine) apk add --no-cache bash ca-certificates coreutils curl gzip procps python3 tar ;;
-*) echo "installer-matrix: NO HE PODIDO MIRAR — bootstrap family $MATRIX_FAMILY" >&2; exit 2 ;;
+*) echo "installer-matrix: COULD NOT LOOK — bootstrap family $MATRIX_FAMILY" >&2; exit 2 ;;
 esac
 exec bash /repo/scripts/installer-matrix-ci.sh --inside --family "$MATRIX_FAMILY" --candidate /matrix/candidate/olivares --release-version "$MATRIX_RELEASE_VERSION"'
 	docker run --rm \
@@ -115,7 +115,7 @@ if [[ "$inside" -eq 1 ]]; then
 	os_name=linux
 	init_name=systemd
 	[[ -r /etc/os-release ]] || {
-		printf 'installer-matrix: NO HE PODIDO MIRAR — container has no /etc/os-release\n' >&2
+		printf 'installer-matrix: COULD NOT LOOK — container has no /etc/os-release\n' >&2
 		exit 2
 	}
 	bash "$lib" platform "$family" /etc/os-release
@@ -232,24 +232,16 @@ trap cleanup_live EXIT
 
 # A missing network is not a false green: execute the promised dry-run, then return
 # the explicit third answer because no real release bytes were measured.
-# Release tags by era (the tag-name correction of 2026-09-29): v<version> before 26.10, bare
-# from 26.10 on. core/release/channelurl.go derives the same.
+# A release version is its bare tag.
 release_tag() {
-	local v="${1:?}" major minor
-	major="${v%%.*}"
-	minor="${v#*.}"; minor="${minor%%.*}"
-	if [ "$major" -lt 26 ] || { [ "$major" -eq 26 ] && [ "$minor" -lt 10 ]; }; then
-		printf 'v%s' "$v"
-	else
-		printf '%s' "$v"
-	fi
+	printf '%s' "${1:?}"
 }
 
 release_base="https://github.com/olivaresai/olivares/releases/download/$(release_tag "$release_version")"
 if ! curl -fsSL --range 0-0 "$release_base/checksums.txt" -o /dev/null; then
 	env OLIVARES_OS="$os_name" /bin/sh "$root/scripts/install.sh" \
 		--version "$(release_tag "$release_version")" --bindir "$HOME/.local/bin" --dry-run >>"$all_log" 2>&1
-	printf 'installer-matrix: NO HE PODIDO MIRAR — public release network path unavailable; dry-run only\n' >&2
+	printf 'installer-matrix: COULD NOT LOOK — public release network path unavailable; dry-run only\n' >&2
 	exit 2
 fi
 
@@ -265,7 +257,7 @@ installed="$HOME/.local/bin/olivares"
 bash "$lib" binary "$installed" "$(id -u)"
 "$installed" version >"$work/release-version.log" 2>&1
 grep -Fq "$release_version" "$work/release-version.log" || {
-	printf 'installer-matrix: public binary did not report v%s\n' "$release_version" >&2
+	printf 'installer-matrix: public binary did not report %s\n' "$release_version" >&2
 	exit 1
 }
 cat "$work/release-version.log" >>"$all_log"
@@ -323,4 +315,4 @@ bash "$lib" binary "$installed" "$(id -u)"
 # a resume, with a protocol stub as the agent CLI; on Linux the session process must also be
 # denied the engine data directory (scripts/session-journey-smoke.sh says what it measured).
 bash "$root/scripts/session-journey-smoke.sh" --binary "$installed" --label "$family" 2>&1 | tee -a "$all_log"
-printf 'installer-matrix: LIVE OK — %s, public v%s + candidate service/doctor + session journey\n' "$family" "$release_version"
+printf 'installer-matrix: LIVE OK — %s, public %s + candidate service/doctor + session journey\n' "$family" "$release_version"

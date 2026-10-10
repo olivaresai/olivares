@@ -8,7 +8,7 @@ description: >-
 
 Community 二进制为 `session-cockpit` API 命名空间注册一个可用性描述符。该命名空间
 当前 **没有处理程序**，也 **没有交互式驾驶舱**。`/v1/m/session-cockpit` 下的请求
-会因 **缺失而得到 404**。该描述符不是目录中 31 个产品模块之一。
+会因 **缺失而得到 404**。该描述符不是目录中 32 个产品模块之一。
 
 ## 当前可用性
 
@@ -29,7 +29,7 @@ Community 二进制为 `session-cockpit` API 命名空间注册一个可用性�
 
 1. `sessions` 命名空间下的实时会话模块路由 —
    [实时运行与会话](/zh/reference/modules/ii-sessions/)。
-2. 控制台 **Sessions**（`/sessions`）、**Claude Code**（`/agentops`）和
+2. 控制台 **Sessions**（`/sessions`，也可用 `/agentops`）和
    **Work**（`/work`）— [控制台参考](/zh/reference/console/)。
 3. 下一节中的官方 CLI 生命周期。
 

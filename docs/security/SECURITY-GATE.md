@@ -117,8 +117,8 @@ Policy tests that fail if a *ratified* invariant regresses, so a future change c
 merge one silently. They run in `task test` in the full local main/tag gate;
 mainline-ci uses the functional/race split defined in the Taskfile:
 
-- **D6 — fail-closed enterprise default** — `cmd/olivares/security_invariants_test.go`:
-  the enterprise edition defaults a per-control availability dependency to fail-closed.
+- **D6 — fail-closed default** — `cmd/olivares/security_invariants_test.go`:
+  every edition defaults a per-control availability dependency to fail-closed.
 - **observer never-deny** — `connectors/claude/observer_invariant_test.go`: an
   observe-class hook is never deny-capable, and a gating/unknown event never silently
   degrades to never-deny.

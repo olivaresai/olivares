@@ -93,7 +93,7 @@
       "data-dir": "répertoire de données"
     },
     "communityNote": "Édition Community : appliquer une licence vérifiée en affiche les détails ici ; cela ne modifie pas cette compilation.",
-    "expiredBanner": "Cette licence commerciale a expiré : les modules entreprise sont inactifs et le déploiement se comporte comme l'édition community. Vos données et vos comptes utilisateurs sont intacts — aucun compte n'a été plafonné, désactivé ni supprimé. Installez une licence renouvelée pour restaurer les modules.",
+    "expiredBanner": "Cette licence commerciale a expiré : les modules Business sont inactifs et le déploiement se comporte comme l'édition community. Vos données et vos comptes utilisateurs sont intacts — aucun compte n'a été plafonné, désactivé ni supprimé. Installez une licence renouvelée pour restaurer les modules.",
     "managedExternally": "La licence est gérée hors bande (source : {{source}}). Modifiez cette source pour la changer — l'installation depuis la console est désactivée afin d'éviter un fichier masqué.",
     "installTitle": "Installer ou mettre à jour la licence",
     "installHint": "Collez le blob de licence signé, ou téléversez le fichier de licence. Il est vérifié avec la clé de cette build avant d'être stocké, puis appliqué à chaud.",
@@ -192,6 +192,7 @@
     "mode": "Mode de connexion",
     "modePassword": "Définir un mot de passe initial",
     "modeInvite": "Envoyer une invitation par e-mail",
+    "inviteUnavailable": "Ce serveur ne peut pas envoyer d'invitations par e-mail (voir OLIVARES_INVITE_MAIL_DESTINATION dans la référence de configuration) : définissez un mot de passe initial.",
     "password": "Mot de passe initial",
     "passwordHint": "Au moins 8 caractères. L'utilisateur pourra le modifier ultérieurement.",
     "submit": "Intégrer",
@@ -206,9 +207,9 @@
   },
   "sso": {
     "title": "Authentification unique",
-    "caption": "Connectez votre fournisseur d'identité (OIDC ou SAML). Les secrets sont chiffrés au repos et ne sont plus jamais affichés. La configuration du SSO est une action à l'échelle du déploiement, réservée au superadministrateur et protégée par authentification renforcée.",
+    "caption": "Connectez votre fournisseur d'identité (OIDC ou SAML). Les secrets sont chiffrés au repos et ne sont plus jamais affichés. La configuration du SSO est une action à l'échelle du déploiement, réservée au superadministrateur.",
     "superadminOnly": "Le SSO est un paramètre à l'échelle du déploiement ; seul un superadministrateur peut le consulter ou le modifier.",
-    "builderUnavailable": "Cette version peut stocker la configuration SSO mais ne peut pas l'activer. Recompilez avec le tag enterprise pour activer la connexion OIDC/SAML.",
+    "builderUnavailable": "Cette version peut stocker la configuration SSO mais ne peut pas l'activer : aucun fournisseur OIDC/SAML n'est disponible dans ce moteur.",
     "statusConfigured": "Configuré",
     "statusNotConfigured": "Non configuré",
     "statusEnabled": "Activé",
@@ -243,64 +244,11 @@
     "deleteTitle": "Supprimer la configuration SSO",
     "deleteBody": "La connexion SSO cessera de fonctionner et reviendra aux identifiants locaux. Les secrets stockés sont supprimés.",
     "deleted": "Configuration SSO supprimée.",
-    "enforcement": {
-      "title": "Application de la connexion",
-      "caption": "Contrôles facultatifs, refusés par défaut, sur la façon dont les utilisateurs se connectent. Configurés ici ; appliqués par la version business.",
-      "requireSso": "Exiger le SSO (désactiver la connexion par mot de passe)",
-      "requireSsoHint": "Bloque la connexion par mot de passe tant qu'un fournisseur d'identité est actif, de sorte qu'un IdP absent ou désactivé ne puisse jamais verrouiller tout le monde dehors. La version business l'applique ; un coupe-circuit de l'opérateur sert de mécanisme d'urgence.",
-      "networkAllowlist": "Liste d'autorisation réseau (CIDR)",
-      "networkAllowlistHint": "Un CIDR par ligne (par exemple 10.0.0.0/8 ou 2001:db8::/32). Lorsqu'elle est définie, les connexions ne sont acceptées que depuis ces plages ; vide signifie aucune restriction d'IP. Elle protège la surface de connexion (mot de passe et finalisation du SSO) en utilisant l'IP réelle de la connexion, et non un en-tête transféré — ce n'est pas un pare-feu réseau.",
-      "enforcedEnterprise": "Appliqué par cette version",
-      "enforcedUnavailable": "Stocké, non appliqué par cette version",
-      "enforcedOutOfScope": "Non appliqué à ce fournisseur",
-      "notConfigured": "Aucune application configurée",
-      "requireSsoOn": "Connexion par mot de passe désactivée (SSO requis)",
-      "requireSsoOff": "Connexion par mot de passe autorisée",
-      "noNetworkRestriction": "Aucune restriction d'IP",
-      "unavailableBanner": "Cette version stocke la posture d'application mais ne l'applique pas. Recompilez avec le tag enterprise pour appliquer l'exigence de SSO et la liste d'autorisation réseau — elle n'applique jamais le contrôle en silence et ne le simule jamais.",
-      "outOfScopeBanner": "Cette build applique la politique de connexion, mais uniquement pour le fournisseur d'identité principal de l'ensemble du déploiement. La posture enregistrée ici n'est pas celle qu'elle lit, elle n'est donc pas appliquée. Configurez-la sur le principal du déploiement pour qu'elle prenne effet.",
-      "noIdpWarning": "L'exigence de SSO ne prend effet qu'une fois qu'un fournisseur d'identité est activé ci-dessus (anti-verrouillage)."
-    },
-    "groupsClaim": "Claim de groupes",
-    "groupsClaimHint": "Facultatif. Le claim de l'ID-token/UserInfo portant les groupes de l'utilisateur (p. ex. « groups »). L'édition business les mappe vers des rôles à la connexion.",
-    "groupsAttr": "Attribut de groupes",
-    "groupsAttrHint": "Facultatif. L'attribut SAML multivalué portant les groupes de l'utilisateur (p. ex. « memberOf »). L'édition business les mappe vers des rôles à la connexion.",
     "groups": {
-      "title": "Mappage des groupes et provisionnement",
-      "caption": "Comment les groupes d'annuaire de l'IdP deviennent des rôles, et si SCIM est la seule autorité pour les comptes. Configuré ici ; mappé par l'édition business.",
       "provisioningTitle": "Provisionnement",
       "provisioningCaption": "Si SCIM est la seule autorité pour les comptes.",
       "scimAuthoritative": "SCIM fait autorité",
-      "scimAuthoritativeHint": "Si activé, une connexion SSO ne crée jamais de compte ni ne modifie l'appartenance aux groupes — SCIM gouverne l'annuaire. Si désactivé, la première connexion provisionne l'utilisateur et ajoute (sans jamais retirer) les groupes affirmés par l'IdP.",
-      "unavailableBanner": "Cette édition extrait les groupes de l'assertion mais ne les mappe pas vers des rôles. L'édition business transforme les groupes affirmés en autorisations à la connexion."
-    },
-    "scope": {
-      "label": "Portée",
-      "global": "Global (tout le déploiement)",
-      "globalHint": "L'IdP par défaut utilisé par chaque locataire qui n'a pas le sien.",
-      "tenantHint": "L'IdP propre à ce locataire. Il ne prend effet à la connexion que dans l'édition business (capacité multi-IdP) ; activer un second IdP l'exige."
-    },
-    "idp": {
-      "label": "Fournisseur d'identité",
-      "default": "Principal (par défaut)",
-      "add": "+ Ajouter un fournisseur d'identité…",
-      "hint": "Une organisation peut utiliser plusieurs fournisseurs actifs ; chaque fournisseur supplémentaire doit revendiquer ses propres domaines de messagerie. La portée de tout le déploiement n’utilise que son fournisseur principal.",
-      "addTitle": "Ajouter un fournisseur d'identité",
-      "addBody": "Attribuez au nouvel IdP un alias court. Il identifie cet IdP au sein du périmètre et sert de clé de routage à la connexion.",
-      "aliasLabel": "Alias",
-      "aliasHint": "Lettres minuscules, chiffres et traits d'union (p. ex. « okta », « azure-ad »). 1 à 31 caractères.",
-      "addConfirm": "Continuer",
-      "on": "actif à la connexion",
-      "off": "désactivé",
-      "activeNow": "Actif à la connexion : {{names}}.",
-      "noneActive": "Aucun fournisseur d’identité n’est actif à la connexion : la connexion se fait par mot de passe."
-    },
-    "domains": {
-      "title": "Routage home-realm",
-      "caption": "Acheminez une connexion vers cet IdP selon le domaine de messagerie de l'utilisateur.",
-      "label": "Domaines de messagerie revendiqués",
-      "hint": "Un domaine par ligne (p. ex. corp.com). Chaque domaine est unique globalement entre les IdP ; une connexion email-first pour ce domaine est acheminée ici.",
-      "unavailableBanner": "Les domaines sont enregistrés mais ce build ne route pas selon eux ; le routage home-realm nécessite l'édition business."
+      "scimAuthoritativeHint": "Si activé, une connexion SSO ne crée jamais de compte ni ne modifie l'appartenance aux groupes — SCIM gouverne l'annuaire. Si désactivé, la première connexion provisionne l'utilisateur et ajoute (sans jamais retirer) les groupes affirmés par l'IdP."
     },
     "displayName": "Nom sur le bouton de connexion",
     "displayNameHint": "Les utilisateurs voient « Se connecter avec <nom> ». Laissez vide pour afficher « Authentification unique ». 80 caractères au maximum.",
@@ -333,12 +281,14 @@
     "sealerUnavailable": "Cette build peut lister les secrets mais aucun scelleur n'est branché, les valeurs ne peuvent donc pas être stockées. Configurez un backend de scellement pour activer le coffre.",
     "create": "Nouveau secret",
     "colName": "Nom",
-    "colHint": "Empreinte",
-    "colDescription": "Description",
     "rotate": "Faire tourner",
     "delete": "Supprimer",
     "none": "Aucun secret pour l'instant.",
-    "noneHint": "Ajoutez un secret pour le référencer depuis la configuration d'un connecteur sous la forme store:<name>.",
+    "noneHint": {
+      "sources": "Ajoutez un secret pour le référencer depuis la configuration d'un connecteur sous la forme store:<name>.",
+      "mcp": "Ajoutez un secret pour le référencer depuis un serveur MCP sous la forme store:<name>.",
+      "sessions": "Ajoutez un secret pour le transmettre à une session comme variable d’environnement."
+    },
     "createTitle": "Nouveau secret",
     "editTitle": "Faire tourner le secret",
     "name": "Nom",
@@ -352,12 +302,40 @@
     "rotated": "Secret enregistré.",
     "deleted": "Secret supprimé.",
     "deleteTitle": "Supprimer le secret",
-    "deleteBody": "Le secret est retiré du coffre. Toute configuration de connecteur référençant store:<name> échouera à se résoudre jusqu'à ce que vous le recréiez.",
-    "sessionCaption": "Secrets qu’une session peut recevoir en variables d’environnement. Les noms commencent par env/. Une valeur n’est plus jamais affichée."
+    "deleteBody": {
+      "sources": "Le secret est retiré du coffre. Toute configuration de connecteur référençant store:<name> échouera à se résoudre jusqu'à ce que vous le recréiez.",
+      "mcp": "Le secret est retiré du coffre. Tout serveur MCP référençant store:<name> échouera à le résoudre jusqu’à ce que vous le recréiez.",
+      "sessions": "Le secret est retiré du coffre. Une session qui le reçoit continue de s’exécuter, mais elle ne pourra pas être reprise, et un modèle de session qui le nomme ne pourra pas se lancer, jusqu’à ce que vous le recréiez."
+    },
+    "sessionCaption": "Secrets qu’une session peut recevoir en variables d’environnement. Les noms commencent par env/. Une valeur n’est plus jamais affichée.",
+    "colValue": "Valeur",
+    "colChanged": "Dernière modification",
+    "colReference": "Référence",
+    "colUsedBy": "Utilisé par",
+    "rootFolder": "Niveau supérieur",
+    "valueMasked": "Valeur masquée ; l’empreinte change quand la valeur change",
+    "usedByLoading": "Vérification…",
+    "usedByUnavailable": "Impossible de vérifier",
+    "usedByNone": {
+      "sources": "Aucun connecteur de l’inventaire des sources",
+      "mcp": "Aucun serveur MCP",
+      "sessions": "Aucune session"
+    },
+    "useKind": {
+      "source": "Connecteur",
+      "mcp": "Serveur MCP",
+      "session": "Session"
+    },
+    "externalTitle": "Références externes",
+    "externalCaption": "Des connecteurs référencent ces secrets dans un autre backend. Ils y sont conservés et renouvelés ; cette liste montre seulement où ils sont utilisés.",
+    "readOnly": "Lecture seule",
+    "usedByNoneRecent": "Aucune session parmi les {{limit}} plus récentes",
+    "usedByUnwired": "Non disponible dans cette version",
+    "usedByMore": "et {{more}} de plus"
   },
   "connectors": {
     "title": "Connecteurs",
-    "caption": "Ajoutez et configurez les connecteurs depuis lesquels le moteur ingère, avec leurs identifiants scellés au repos. Une modification est appliquée au moteur en cours d'exécution sans redémarrage. À l'échelle du déploiement, réservé au superadministrateur et protégé par authentification renforcée.",
+    "caption": "Ajoutez et configurez les connecteurs depuis lesquels le moteur ingère, avec leurs identifiants scellés au repos. Une modification est appliquée au moteur en cours d'exécution sans redémarrage. À l'échelle du déploiement et réservé au superadministrateur.",
     "superadminOnly": "Les connecteurs sont un paramètre à l'échelle du déploiement ; seul un superadministrateur peut les consulter ou les modifier.",
     "unavailable": "Cette build n'a pas branché l'intégration des connecteurs ; les connecteurs sont configurés depuis le fichier de démarrage à la place.",
     "sourcesUnavailable": "Cette build ne sert pas l'inventaire des sources ; les connecteurs en cours d'exécution ne peuvent pas être listés ici.",
@@ -477,7 +455,7 @@
       "restartBody": "Ces domaines de configuration sont lus une seule fois au démarrage et ne sont PAS appliqués par ce rechargement. Un redémarrage est requis pour qu’ils prennent effet :"
     },
     "catalog": {
-      "caption": "Tous les connecteurs que cette build peut activer, lus depuis le moteur — {{count}} au total. La consultation est en lecture seule ; en ajouter un exige toujours une authentification renforcée.",
+      "caption": "Tous les connecteurs que cette build peut activer, lus depuis le moteur — {{count}} au total. La consultation est en lecture seule.",
       "noMatch": "Aucun connecteur ne correspond à « {{query}} ».",
       "noMatchHint": "Le catalogue liste tous les connecteurs que cette build peut installer. Effacez la recherche pour tous les voir.",
       "search": "Filtrer par nom ou type",
@@ -621,7 +599,8 @@
       "workspaceScope": "Espace de travail : {{ref}}",
       "groupScope": "Groupe d'agents : {{ref}}",
       "classLabel": "limité à {{class}}",
-      "loadError": "Impossible de charger votre autorité de délégation. Réessayez."
+      "loadError": "Impossible de charger votre autorité de délégation. Réessayez.",
+      "folderScope": "Dossier : {{ref}}"
     },
     "grants": {
       "title": "Octrois délimités",
@@ -664,6 +643,26 @@
       "note": "Note",
       "noteHint": "Contexte facultatif enregistré avec l'octroi.",
       "submit": "Créer l'octroi"
+    },
+    "filters": {
+      "title": "Filtres d'héritage",
+      "caption": "Sur un espace de travail, un groupe d'agents ou un dossier, arrêtez les droits qui atteignent un type de ressource depuis au-dessus du nœud. Les attributions au nœud ou en dessous s'appliquent toujours ; les règles d'interdiction décident toujours partout.",
+      "create": "Nouveau filtre",
+      "none": "Aucun filtre d'héritage pour l'instant.",
+      "noneHint": "Chaque nœud hérite des droits accordés au-dessus de lui.",
+      "node": "Nœud",
+      "class": "Type de ressource",
+      "classHint": "Les droits venant d'au-dessus du nœud ne s'appliquent plus à ce type à cet endroit. Un groupe d'agents ne filtre que des agents.",
+      "createdBy": "Défini par",
+      "actions": "Actions",
+      "folder": "Dossier",
+      "remove": "Retirer",
+      "removeTitle": "Retirer le filtre",
+      "removeBody": "Les droits venant d'au-dessus de ce nœud s'y appliquent de nouveau immédiatement. Seul un administrateur du nœud peut le retirer.",
+      "removed": "Filtre retiré.",
+      "created": "Filtre défini.",
+      "formTitle": "Nouveau filtre d'héritage",
+      "submit": "Définir le filtre"
     },
     "defs": {
       "title": "Rôles personnalisés",
@@ -885,7 +884,23 @@
       "exportNotSealed": "Non scellé",
       "exportPopulation": "Population",
       "exportEntries": "Entrées d'accès",
-      "exportIntegrity": "Intégrité"
+      "exportIntegrity": "Intégrité",
+      "why": {
+        "tab": "Pourquoi",
+        "hint": "Lesquels des huit droits de trustee un sujet détient sur un agent, une session ou une ressource, et le chemin des conteneurs où se trouve le nœud. Chaque droit est la réponse du moteur d'autorisation lui-même ; ce panneau ne fait que l'afficher.",
+        "run": "Expliquer",
+        "path": "Chemin",
+        "inWorkspace": "(dans l'espace de travail {{workspace}})",
+        "right": "Droit",
+        "state": "État",
+        "states": {
+          "held": "Détenu",
+          "not_held": "Non détenu",
+          "unknown": "Inconnu",
+          "not_applicable": "Sans objet"
+        },
+        "unknownHint": "Inconnu signifie que le moteur n'a pas pu trancher ce droit ; la cause est dans le journal du moteur. Ce n'est pas un refus."
+      }
     }
   },
   "activation": {
@@ -1089,17 +1104,7 @@
     }
   },
   "entitlement": {
-    "title": "Modules",
-    "description": "Consultez l'édition, la couverture de licence et l'état d'activation de chaque module.",
-    "helpSummary": "Comprendre l'état des modules",
-    "threeQuestions": "Chaque colonne utilise ses propres informations actuelles. « Non connu » signifie qu'il n'y a pas assez d'informations pour déterminer cet état. Utilisez l'état et « Réessayer » pour actualiser les informations indisponibles.",
-    "noVerifiedLicense": "La couverture des modules est inconnue tant qu'une licence vérifiée n'est pas disponible.",
-    "colAddon": "Module",
-    "colBinary": "Dans cette édition",
-    "colEntitled": "Couverture de licence",
-    "colActivated": "Activation",
     "unknown": "non connu",
-    "entitled": "habilité",
     "state": {
       "active": "activé",
       "pending": "redémarrage en attente",
@@ -1110,15 +1115,6 @@
       "needsReview": "revue requise",
       "needsInput": "saisie requise"
     },
-    "binaryUnknownWhy": "Cette édition ({{edition}}) appartient au binaire en cours d'exécution. Quand le moteur publie si un module est dans ce build, la colonne l'affiche ; sinon elle reste non connue. Elle n'est pas déduite de l'empaquetage.",
-    "catalogueSourceHelp": "Les informations de modules disponibles dépendent de la compilation installée. L'installation d'une licence met à jour les détails de licence ; la disponibilité des modules est indiquée séparément.",
-    "noAddons": "Cette installation a renvoyé un catalogue de modules vide.",
-    "loading": "Chargement du catalogue de modules…",
-    "unavailable": "Les informations de modules sont indisponibles dans cette compilation.",
-    "unavailableAction": "Réessayez pour demander à nouveau les informations de modules.",
-    "failed": "Le catalogue de modules n'a pas pu être chargé. La couverture des modules est actuellement inconnue.",
-    "failedAction": "Réessayez pour demander à nouveau les informations de modules.",
-    "staleNotCurrent": "Les informations de modules chargées précédemment ne sont plus actuelles.",
     "knownFacts": "Édition : {{edition}} · État de la licence : {{status}}.",
     "knownFactsUnavailable": "L'édition et l'état de la licence n'ont pas été fournis.",
     "licenseRefreshFailed": "L'état de la licence n'a pas pu être actualisé. La couverture actuelle des modules est inconnue.",
@@ -1128,10 +1124,7 @@
     "licenseRefreshFailedAction": "Réessayez pour actualiser l'état de la licence.",
     "licenseRetry": "Réessayer l'état de la licence",
     "technicalSummary": "Détail technique",
-    "technicalDetail": "{{method}} {{endpoint}} · HTTP {{status}}{{codePart}}{{requestPart}}",
-    "inBuild": "dans cette édition",
-    "notInBuild": "absent de cette édition",
-    "notCovered": "non couvert par la licence"
+    "technicalDetail": "{{method}} {{endpoint}} · HTTP {{status}}{{codePart}}{{requestPart}}"
   },
   "mcpGateway": {
     "title": "Passerelle MCP",
@@ -1231,7 +1224,8 @@
       "legacy_forwarder": "Transfert historique du fichier",
       "session_runner_engine_user_session_folder": "Exécuteur de sessions, en tant qu'utilisateur du moteur, dans le dossier de la session",
       "reported_by_session_runner": "Tel que signalé par l'exécuteur de sessions",
-      "not_supplied_for_local_commands": "Non fourni pour les commandes locales"
+      "not_supplied_for_local_commands": "Non fourni pour les commandes locales",
+      "listed_egress_hosts_for_local_commands": "Uniquement les hôtes indiqués, pour une commande locale qui les indique"
     },
     "nameHint": "Affiché dans la liste des serveurs. Vide, il prend le nom d’hôte du serveur.",
     "advanced": "Avancé",
@@ -1290,6 +1284,41 @@
       "confirm": "Activer"
     },
     "sessionOn": "Activé : désactivez-le pour l’arrêter.",
-    "sessionOff": "Désactivé : les sessions ne peuvent ni s’envoyer de messages ni utiliser le travail attribué."
+    "sessionOff": "Désactivé : les sessions ne peuvent ni s’envoyer de messages ni utiliser le travail attribué.",
+    "startersTitle": "Serveurs de départ",
+    "startersHint": "Des serveurs sélectionnés, chacun avec son confinement et ses limites réseau. Ajouter remplit le formulaire ; le serveur est enregistré désactivé et n'exécute rien tant que vous ne l'avez pas testé et activé.",
+    "starterAdd": "Ajouter {{name}}",
+    "starterLicence": "Licence : {{licence}}",
+    "starterSource": "Source",
+    "egressHosts": "Hôtes autorisés",
+    "egressHostsHint": "La commande n'atteint que ces hôtes HTTPS, un par ligne : hôte ou hôte:port. Laissez vide pour garder le réseau de la session.",
+    "egressHostsInvalid": "Écrivez chaque hôte sous la forme hôte ou hôte:port, en minuscules et sans https://, 16 au maximum.",
+    "starters": {
+      "filesystem": {
+        "summary": "Lit et écrit des fichiers dans le dossier de la session.",
+        "profile": "S'exécute sur ce serveur avec npx. N'écrit que dans le dossier de la session et n'atteint que registry.npmjs.org, pour télécharger son paquet épinglé.",
+        "setup": "Nécessite Node.js (npx) sur ce serveur. Enregistrez, testez, puis activez-le."
+      },
+      "git": {
+        "summary": "Lit l'historique et crée des commits dans les dépôts de la session.",
+        "profile": "S'exécute sur ce serveur avec uvx. N'écrit que dans le dossier de la session et n'atteint que pypi.org et files.pythonhosted.org, pour télécharger son paquet épinglé.",
+        "setup": "Nécessite uv (uvx) sur ce serveur. Enregistrez, testez, puis activez-le."
+      },
+      "github": {
+        "summary": "Issues, pull requests et code sur GitHub, via le serveur de GitHub lui-même.",
+        "profile": "Un serveur distant : le moteur ne se connecte qu'à api.githubcopilot.com, à des adresses vérifiées et sans redirection. Les sessions ne voient jamais votre jeton.",
+        "setup": "Avant de tester, ajoutez le secret mcp/github dans Gérer les identifiants avec la valeur Bearer suivie d'un jeton d'accès personnel GitHub, puis choisissez-le comme Connexion."
+      },
+      "gitlab": {
+        "summary": "Issues, merge requests et pipelines sur GitLab, via le serveur intégré de GitLab.",
+        "profile": "Un serveur distant : le moteur ne se connecte qu'à gitlab.com, à des adresses vérifiées et sans redirection. Pour votre propre GitLab, changez l'adresse.",
+        "setup": "Avant de tester, ajoutez le secret mcp/gitlab dans Gérer les identifiants avec la valeur Bearer suivie d'un jeton OAuth GitLab avec la portée mcp, puis choisissez-le comme Connexion."
+      },
+      "playwright": {
+        "summary": "Ouvre et utilise des pages web dans un navigateur sans interface.",
+        "profile": "S'exécute sur ce serveur avec npx, dans un profil de navigateur neuf. N'écrit que dans le dossier de la session et n'atteint que registry.npmjs.org.",
+        "setup": "Nécessite Node.js et Google Chrome sur ce serveur. La navigation derrière ce profil réseau n'est pas encore validée : le navigateur peut ne pas faire confiance au proxy HTTPS du profil."
+      }
+    }
   }
 }

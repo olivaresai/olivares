@@ -14,6 +14,13 @@ is quiet.
 
 ## 1. Pull the drift
 
+On a fresh install, `accessmap` is off. As an administrator, turn it on in
+**Settings > Edition & modules**, keeping the other selected modules on.
+For the CLI, sign in to this engine as an administrator with `olivares login`,
+then run `olivares modules on accessmap`. Wait for each engine restart before continuing;
+running sessions stop and can be resumed. Otherwise these API calls return
+`404 module_not_enabled`.
+
 ```bash
 curl -ks "$BASE/v1/m/accessmap/drift" \
   -H "Authorization: Bearer $TOKEN" -H "X-Olivares-Tenant: $TENANT" | python3 -m json.tool

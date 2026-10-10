@@ -77,7 +77,7 @@ func newReportingCmd() *cobra.Command {
 			"REPORTS ARE DOCUMENTS, NOT JSON. `reports get`, `templates get` and a schedule\n" +
 			"run's artifact are HTML or PDF, so those verbs write bytes to --out and print a\n" +
 			"receipt rather than rendering a table.\n\n" +
-			"Everything beyond the catalog and generation is an enterprise capability. In a\n" +
+			"Everything beyond the catalog and generation is a Business capability. In a\n" +
 			"build without the add-on those verbs report that they are not wired, which is a\n" +
 			"product boundary and not a failure.",
 		Example: "  olivares reporting reports ls\n" +
@@ -188,7 +188,7 @@ func newReportingReportsCmd(flags *authClientFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "reports",
 		Short:   "List the report catalog and generate a report",
-		Long:    "reports lists what can be generated and generates one. These two routes are the\nopen-core surface: they work without the enterprise add-on.",
+		Long:    "reports lists what can be generated and generates one. These two routes are the\nopen-core surface: they work in the Community edition.",
 		Example: "  olivares reporting reports ls\n  olivares reporting reports get audit-summary --out audit.html",
 	}
 	cmd.AddCommand(newReportingReportsListCmd(flags), newReportingReportsGetCmd(flags))
@@ -295,21 +295,21 @@ func newReportingReportsGetCmd(flags *authClientFlags) *cobra.Command {
 func newReportingEnterpriseCmd(flags *authClientFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "enterprise",
-		Short: "Read the enterprise posture, risk and evidence-bundle reports",
+		Short: "Read the Business posture, risk and evidence-bundle reports",
 		Long: "enterprise exposes the three commercial report-engine views. They answer JSON\n" +
 			"rather than a rendered document, and they are add-on capabilities: in a build\n" +
-			"without the enterprise report engine each reports that it is not wired.",
+			"without the Business report engine each reports that it is not wired.",
 		Example: "  olivares reporting enterprise posture\n" +
 			"  olivares reporting enterprise risk -o json\n" +
 			"  olivares reporting enterprise bundle",
 	}
 	cmd.AddCommand(
-		newReportingEnterpriseViewCmd(flags, "posture", "Enterprise governance posture report",
-			"posture is the enterprise report engine's governance posture view."),
-		newReportingEnterpriseViewCmd(flags, "risk", "Enterprise risk report",
-			"risk is the enterprise report engine's risk view."),
-		newReportingEnterpriseViewCmd(flags, "bundle", "Enterprise evidence bundle",
-			"bundle is the enterprise evidence bundle: the artifact set an auditor is given."),
+		newReportingEnterpriseViewCmd(flags, "posture", "Business governance posture report",
+			"posture is the Business report engine's governance posture view."),
+		newReportingEnterpriseViewCmd(flags, "risk", "Business risk report",
+			"risk is the Business report engine's risk view."),
+		newReportingEnterpriseViewCmd(flags, "bundle", "Business evidence bundle",
+			"bundle is the Business evidence bundle: the artifact set an auditor is given."),
 	)
 	return cmd
 }
@@ -322,7 +322,7 @@ func newReportingEnterpriseViewCmd(flags *authClientFlags, name, short, long str
 	return &cobra.Command{
 		Use:   name,
 		Short: short,
-		Long: long + "\n\nIt is an ENTERPRISE ADD-ON capability. A build without the commercial report\n" +
+		Long: long + "\n\nIt is a Business capability. A build without the commercial report\n" +
 			"engine answers that it is not wired — a product boundary, not a fault, and the\n" +
 			"rest of this namespace is unaffected.\n\n" +
 			"The payload is the add-on's own document and is printed as the engine sent it\n" +

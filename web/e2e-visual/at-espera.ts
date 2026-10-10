@@ -2,15 +2,15 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// La espera por CONTENIDO del arnés de accesibilidad, en su propio módulo para que se pueda
-// testificar. Vive fuera de `at-run.ts` porque ese fichero es un GUION: llama a `main()` al
-// cargarse, así que importarlo desde una spec arrancaría la corrida entera.
+// The accessibility harness waits for content in a separate, testable module.
+// `at-run.ts` calls `main()` when loaded, so importing it from a spec would start the entire
+// run.
 //
-// ⛔ POR QUÉ EXISTE. `at-run.ts` esperaba 1500 ms FIJOS tras un `goto` con `domcontentloaded`. Una
-// vista que no había renderizado a esa altura salía con `main` ausente o vacío, y con eso
-// alimentaba `sinMain` y `noH1`, que BLOQUEAN. Es decir: el gate salía rojo por el reloj. Probado
-// por the orchestrator — entre dos corridas del mismo árbol el rojo se MUDÓ de `/finops` a
-// `/attestation`. Un veredicto que cambia de sujeto sin que cambie el sujeto no mide el sujeto.
+// Why this exists: `at-run.ts` waited a fixed 1500 ms after `goto` with `domcontentloaded`.
+// A view that had not rendered yet produced a missing or empty `main`, feeding the blocking
+// `sinMain` and `noH1` checks. The gate was failing because of timing. the orchestrator verified
+// that two runs of the same tree moved the failure from `/finops` to `/attestation`.
+// A verdict that changes subjects without a source change does not measure the subject.
 
 import type { Page } from '@playwright/test'
 

@@ -8,6 +8,8 @@ import (
 	"context"
 	"errors"
 
+	"github.com/olivaresai/olivares/connectors/modelprovider"
+	"github.com/olivaresai/olivares/connectors/modelprovider/listprice"
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/modules/sessions"
@@ -66,4 +68,14 @@ func (s *sessionCostSink) PublishSessionCost(
 		CostType:              "session_usage",
 	}
 	return s.sessions.RecordSessionObservation(ctx, principal, cs)
+}
+
+// sessionListPrice prices an operated session's turn that its tool metered in
+// tokens and did not price (Codex), at the release-embedded list prices. The
+// sample still says the money did not come from the tool, and it stays estimated.
+func sessionListPrice(provider, model string, t sessions.TurnTokens) (int64, bool) {
+	return listprice.CostMicroUSD(provider, model, modelprovider.Usage{
+		InputTokens: t.UncachedInput, CacheReadTokens: t.CacheRead,
+		CacheWriteTokens: t.CacheWrite, OutputTokens: t.Output,
+	})
 }

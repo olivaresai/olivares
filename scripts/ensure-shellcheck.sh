@@ -60,7 +60,7 @@ candidatos_destino() {
 elegir_destino() {
 	if [ -n "${OLIVARES_BIN_DIR:-}" ]; then
 		if escribible "$OLIVARES_BIN_DIR"; then printf '%s\n' "$OLIVARES_BIN_DIR"; return 0; fi
-		echo "ensure-shellcheck: NO HE PODIDO MIRAR: OLIVARES_BIN_DIR=$OLIVARES_BIN_DIR no se puede crear o escribir." >&2
+		echo "ensure-shellcheck: COULD NOT LOOK: OLIVARES_BIN_DIR=$OLIVARES_BIN_DIR cannot be created or written to." >&2
 		return 2
 	fi
 	local d probados=""
@@ -68,7 +68,7 @@ elegir_destino() {
 		if escribible "$d"; then printf '%s\n' "$d"; return 0; fi
 		probados="$probados $d"
 	done < <(candidatos_destino)
-	echo "ensure-shellcheck: NO HE PODIDO MIRAR: ningun destino escribible donde instalar shellcheck v${VER}; probados:$probados" >&2
+	echo "ensure-shellcheck: COULD NOT LOOK: no writable destination for shellcheck v${VER}; tried:$probados" >&2
 	return 2
 }
 if [ "${1:-}" = "--destino" ]; then elegir_destino; exit $?; fi
@@ -88,18 +88,18 @@ dest="$(elegir_destino)" || exit 2
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 if ! command curl -sS -L -o "$tmp/sc.tar.xz" "$URL" 2>/dev/null; then
-	echo "ensure-shellcheck: NO HE PODIDO MIRAR: sin shellcheck v${VER} y sin red para bajarlo." >&2
+	echo "ensure-shellcheck: COULD NOT LOOK: shellcheck v${VER} is unavailable and could not be downloaded." >&2
 	exit 2
 fi
 if [ "$(huella "$tmp/sc.tar.xz")" != "$TARBALL_SHA" ]; then
-	echo "ensure-shellcheck: NO HE PODIDO MIRAR: el tarball descargado NO casa con el hash anclado." >&2
-	echo "    esperado $TARBALL_SHA" >&2
-	echo "    obtenido $(huella "$tmp/sc.tar.xz")" >&2
+	echo "ensure-shellcheck: COULD NOT LOOK: the downloaded tarball does NOT match the pinned hash." >&2
+	echo "    expected $TARBALL_SHA" >&2
+	echo "    received $(huella "$tmp/sc.tar.xz")" >&2
 	exit 2
 fi
 command tar -xJf "$tmp/sc.tar.xz" -C "$tmp"
 if [ "$(huella "$tmp/shellcheck-v${VER}/shellcheck")" != "$BIN_SHA" ]; then
-	echo "ensure-shellcheck: NO HE PODIDO MIRAR: el binario extraido NO casa con el hash anclado." >&2
+	echo "ensure-shellcheck: COULD NOT LOOK: the extracted binary does NOT match the pinned hash." >&2
 	exit 2
 fi
 command install -m 0755 "$tmp/shellcheck-v${VER}/shellcheck" "$dest/shellcheck"

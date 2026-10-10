@@ -23,104 +23,12 @@ import (
 	"github.com/olivaresai/olivares/modules/voice"
 )
 
-// approvalbridge_test.go is the proof for the OUTBOUND ApprovalGate bridge.
-// The unit tests pin the deny-closed encoding/mapping; the E2E tests drive the four
+// approvalbridge_test.go is the proof for the OUTBOUND ApprovalGate bridge as this
+// binary wires it. The encoding and status-mapping unit tests live with the bridge in
+// internal/approvalbridge; the tests here build it through newApprovalBridge and drive the four
 // gates against the REAL engine (the same composition root the binary boots),
 // proving an actuation cannot proceed without a human approval bound to the exact plan
 // — and that the engine's own guards (SoD/threshold/expiry) are never bypassed.
-
-// --- unit: deny-closed encoding + status mapping ----------------------------------
-
-func TestApprovalBridgePlanBindingRoundTrip(t *testing.T) {
-	cases := []struct{ subject, plan string }{
-		{"svc/api", "a1b2c3d4e5f6"},
-		{"agent-7", ""},                    // security posture: no plan hash
-		{"weird#plan=looking", "deadbeef"}, // subject contains the marker; the appended hash still wins
-	}
-	for _, c := range cases {
-		enc := encodeSubjectRef(c.subject, c.plan)
-		if got := decodePlanHash(enc); got != c.plan {
-			t.Fatalf("decodePlanHash(encode(%q,%q))=%q, want %q", c.subject, c.plan, got, c.plan)
-		}
-	}
-	// With no plan hash the subject is stored verbatim (so a human sees a clean subject).
-	if enc := encodeSubjectRef("pii", ""); enc != "pii" {
-		t.Fatalf("empty-plan encode = %q, want verbatim", enc)
-	}
-}
-
-func TestApprovalBridgeStatusMappingDeniesByDefault(t *testing.T) {
-	// Only "approved" authorizes; every other value — including unknown, canceled and
-	// the empty zero value — is a deny, for all three two-phase gates.
-	if deployGateStatus(nbApproved) != deploy.StatusApproved {
-		t.Fatal("approved must map to StatusApproved")
-	}
-	for _, s := range []string{nbPending, nbRejected, nbCanceled, nbExpired, nbNoGate, "garbage", ""} {
-		if (deploy.GateDecision{Status: deployGateStatus(s)}).Allowed() {
-			t.Fatalf("deploy %q must not be allowed", s)
-		}
-		if (orchestration.GateDecision{Status: orchestrationGateStatus(s)}).Allowed() {
-			t.Fatalf("orchestration %q must not be allowed", s)
-		}
-		if (voice.GateDecision{Status: voiceGateStatus(s)}).Allowed() {
-			t.Fatalf("voice %q must not be allowed", s)
-		}
-	}
-	// security: only approved is Approved; no_gate is the one ungoverned case.
-	if !securityDecision(nbApproved).Approved || !securityDecision(nbApproved).Governed {
-		t.Fatal("approved must be approved+governed")
-	}
-	for _, s := range []string{nbPending, nbRejected, nbCanceled, nbExpired, nbNoGate, "garbage"} {
-		if securityDecision(s).Approved {
-			t.Fatalf("security %q must not approve", s)
-		}
-	}
-	if securityDecision(nbNoGate).Governed {
-		t.Fatal("no_gate (unconfigured) must be reported ungoverned")
-	}
-	if !securityDecision(nbPending).Governed {
-		t.Fatal("a real pending decision is governed")
-	}
-}
-
-func TestApprovalBridgeApprovedGrantWindow(t *testing.T) {
-	base := time.Date(2026, 6, 7, 12, 0, 0, 0, time.UTC)
-	b := &approvalBridge{clock: func() time.Time { return base }}
-	cred := serviceCred{expiresIn: 3600} // 1h grant window
-	fresh := approvalView{status: nbApproved, decidedAt: model.NewTimestamp(base.Add(-30 * time.Minute)).String()}
-	stale := approvalView{status: nbApproved, decidedAt: model.NewTimestamp(base.Add(-2 * time.Hour)).String()}
-
-	// Pending is always reusable (idempotent open). Approved is reusable ONLY for the
-	// one-shot security gate (reuseApproved) AND only inside its grant window.
-	if !b.reusable(cred, approvalView{status: nbPending}, false) {
-		t.Fatal("pending must be reusable")
-	}
-	if b.reusable(cred, fresh, false) {
-		t.Fatal("two-phase gate must NOT reuse an approved approval")
-	}
-	if !b.reusable(cred, fresh, true) {
-		t.Fatal("security gate must reuse a fresh approved grant")
-	}
-	if b.reusable(cred, stale, true) {
-		t.Fatal("an approved grant past its window must NOT be reused (time-box)")
-	}
-	// Fail-closed: an unparseable/empty decided_at or a zero window is never reusable.
-	if b.reusable(cred, approvalView{status: nbApproved, decidedAt: "garbage"}, true) {
-		t.Fatal("unparseable decided_at must fail closed")
-	}
-	if b.reusable(cred, approvalView{status: nbApproved, decidedAt: ""}, true) {
-		t.Fatal("empty decided_at must fail closed")
-	}
-	if b.reusable(serviceCred{expiresIn: 0}, fresh, true) {
-		t.Fatal("a zero grant window must never reuse an approved approval")
-	}
-	// Terminal states are never reusable.
-	for _, s := range []string{nbRejected, nbExpired, nbCanceled, "garbage", ""} {
-		if b.reusable(cred, approvalView{status: s, decidedAt: fresh.decidedAt}, true) {
-			t.Fatalf("status %q must not be reusable", s)
-		}
-	}
-}
 
 func TestApprovalBridgeUnconfiguredTenantDeniesClosed(t *testing.T) {
 	configured := model.NewTenantID()
@@ -134,7 +42,7 @@ func TestApprovalBridgeUnconfiguredTenantDeniesClosed(t *testing.T) {
 	ctx := context.Background()
 	// An UNCONFIGURED tenant denies exactly like the module's own denyGate — without
 	// ever touching the engine (no handler is even bound here).
-	dec, err := b.deployGate().Request(ctx, deploy.ApprovalRequest{
+	dec, err := b.DeployGate().Request(ctx, deploy.ApprovalRequest{
 		Tenant: other, Action: "deploy.apply", SubjectKind: "deployment", SubjectRef: "svc/x", PlanHash: "p",
 	})
 	if err != nil {
@@ -146,7 +54,7 @@ func TestApprovalBridgeUnconfiguredTenantDeniesClosed(t *testing.T) {
 	if !strings.HasPrefix(dec.ApprovalRef, noGateRefPrefix) {
 		t.Fatalf("ref = %q, want a no-gate reference", dec.ApprovalRef)
 	}
-	sdec, err := b.securityGate().Authorize(ctx, other, security.ApprovalRequest{
+	sdec, err := b.SecurityGate().Authorize(ctx, other, security.ApprovalRequest{
 		Action: "security.enforcement.enable", SubjectKind: "guardrail_class", SubjectRef: "pii",
 	})
 	if err != nil {
@@ -167,7 +75,7 @@ func TestApprovalBridgeHandlerNotBoundFailsClosed(t *testing.T) {
 	}
 	// A CONFIGURED tenant but the engine handler is not yet bound (a boot race): opening
 	// an approval must FAIL (deny via error), never silently succeed.
-	if _, err := b.deployGate().Request(context.Background(), deploy.ApprovalRequest{
+	if _, err := b.DeployGate().Request(context.Background(), deploy.ApprovalRequest{
 		Tenant: tenant, Action: "deploy.apply", SubjectKind: "deployment", SubjectRef: "svc/x", PlanHash: "p",
 	}); err == nil {
 		t.Fatal("request with no bound handler must error (fail-closed)")
@@ -208,7 +116,7 @@ func buildBridge(t *testing.T, h *harness, serviceToken string) *approvalBridge 
 	if b == nil {
 		t.Fatal("bridge should build")
 	}
-	b.useHandler(h.h)
+	b.UseHandler(h.h)
 	return b
 }
 
@@ -221,7 +129,7 @@ func TestApprovalBridgeDeployTwoPhaseGovernsAndBindsPlan(t *testing.T) {
 	_, bToken := h.createApprover(t, "approver-deploy@bridge.test")
 	_, cToken := h.createApprover(t, "approver-deploy2@bridge.test")
 	svc := h.mintBoundToken(t, auth.RoleEditor)
-	gate := buildBridge(t, h, svc).deployGate()
+	gate := buildBridge(t, h, svc).DeployGate()
 	ctx := context.Background()
 	tenant := model.TenantID(h.tenantA)
 	planHash := "p1a1b2c3d4e5f6a7b8c9d0"
@@ -290,7 +198,7 @@ func TestApprovalBridgeRejectionDeniesActuation(t *testing.T) {
 	h := newHarness(t)
 	_, bToken := h.createApprover(t, "approver-rej@bridge.test")
 	svc := h.mintBoundToken(t, auth.RoleEditor)
-	gate := buildBridge(t, h, svc).orchestrationGate()
+	gate := buildBridge(t, h, svc).OrchestrationGate()
 	ctx := context.Background()
 	tenant := model.TenantID(h.tenantA)
 	planHash := "sched-plan-xyz-987"
@@ -323,7 +231,7 @@ func TestApprovalBridgeRejectionDeniesActuation(t *testing.T) {
 func TestApprovalBridgeRejectsActionSubstitution(t *testing.T) {
 	h := newHarness(t)
 	svc := h.mintBoundToken(t, auth.RoleEditor)
-	gate := buildBridge(t, h, svc).orchestrationGate()
+	gate := buildBridge(t, h, svc).OrchestrationGate()
 	ctx := context.Background()
 	tenant := model.TenantID(h.tenantA)
 	planHash := "sched-plan-substitution-1"
@@ -355,7 +263,7 @@ func TestApprovalBridgeVoiceGateProceedsOnlyWhenApproved(t *testing.T) {
 	h := newHarness(t)
 	_, bToken := h.createApprover(t, "approver-voice@bridge.test")
 	svc := h.mintBoundToken(t, auth.RoleEditor)
-	gate := buildBridge(t, h, svc).voiceGate()
+	gate := buildBridge(t, h, svc).VoiceGate()
 	ctx := context.Background()
 	tenant := model.TenantID(h.tenantA)
 	planHash := "voice-plan-abc-123"
@@ -385,7 +293,7 @@ func TestApprovalBridgeSecurityPostureGoverned(t *testing.T) {
 	_, bToken := h.createApprover(t, "approver-sec@bridge.test")
 	_, cToken := h.createApprover(t, "approver-sec2@bridge.test")
 	svc := h.mintBoundToken(t, auth.RoleEditor)
-	gate := buildBridge(t, h, svc).securityGate()
+	gate := buildBridge(t, h, svc).SecurityGate()
 	ctx := context.Background()
 	tenant := model.TenantID(h.tenantA)
 	req := security.ApprovalRequest{
@@ -442,8 +350,8 @@ func TestApprovalBridgeSecurityGrantIsTimeBoxed(t *testing.T) {
 	svc := h.mintBoundToken(t, auth.RoleEditor)
 	bridge := buildBridge(t, h, svc)
 	now := time.Now()
-	bridge.clock = func() time.Time { return now } // controllable; grant window = 24h default
-	gate := bridge.securityGate()
+	bridge.Clock = func() time.Time { return now } // controllable; grant window = 24h default
+	gate := bridge.SecurityGate()
 	ctx := context.Background()
 	tenant := model.TenantID(h.tenantA)
 	req := security.ApprovalRequest{
@@ -490,7 +398,7 @@ func TestApprovalBridgeSecurityGrantIsTimeBoxed(t *testing.T) {
 func TestApprovalBridgeProposerCannotDecide(t *testing.T) {
 	h := newHarness(t)
 	svc := h.mintBoundToken(t, auth.RoleEditor)
-	gate := buildBridge(t, h, svc).deployGate()
+	gate := buildBridge(t, h, svc).DeployGate()
 	dec, err := gate.Request(context.Background(), deploy.ApprovalRequest{
 		Tenant: model.TenantID(h.tenantA), Action: "deploy.apply", SubjectKind: "deployment",
 		SubjectRef: "svc/x", PlanHash: "h1", RequestedBy: "user:svc",
@@ -508,13 +416,13 @@ func TestApprovalBridgeProposerCannotDecide(t *testing.T) {
 // engine handler. chi v5 treats a context that already carries a RouteContext
 // as a subrouter continuation (leftover RoutePath of the outer match), which
 // 404'd every in-request bridge call — a schedule/workflow fire opening its
-// approval, a hook-PEP gateOnce — until loopbackContext stripped it. This
+// approval, a hook-PEP GateOnce — until loopback.Context stripped it. This
 // pins the fix with the exact polluted-context shape a live handler produces.
 func TestApprovalBridgeLoopbackInsideChiRequestContext(t *testing.T) {
 	h := newHarness(t)
 	_, _ = h.createApprover(t, "approver-loopback@bridge.test")
 	svc := h.mintBoundToken(t, auth.RoleEditor)
-	gate := buildBridge(t, h, svc).orchestrationGate()
+	gate := buildBridge(t, h, svc).OrchestrationGate()
 
 	// The context an in-flight chi handler passes down: a RouteContext whose
 	// RoutePath was already consumed by the outer route match.
@@ -546,10 +454,10 @@ func TestLocalApprovalProposerUsesExistingQueueAndOneHuman(t *testing.T) {
 	if b == nil {
 		t.Fatal("default local proposer is missing")
 	}
-	b.localProposer = h.set.gov.EngineApprovals()
+	b.LocalProposer = h.set.gov.EngineApprovals()
 	// No handler or service token is needed for the local proposer.
 	h.set.gov.UseApprovalCapacity(h.authr.ApprovalCapacity)
-	gate := &sessionLaunchGate{bridge: b, recordAvailable: true, log: discardLog()}
+	gate := &sessionLaunchGate{bridge: b, log: discardLog()}
 	intent := sessions.LaunchIntent{Action: sessions.LaunchActionCreate, Transport: sessions.TransportStreamJSON, PermissionMode: "default", WorkspaceClassified: true, WorkspaceReadWrite: true, WorkspaceRef: "test-folder", Actor: "user:initiator"}
 	decision, err := gate.Authorize(context.Background(), model.TenantID(h.tenantA), intent)
 	if err != nil || decision.Allowed || decision.DeniedStatus != http.StatusAccepted || decision.ApprovalRef == "" {
@@ -566,10 +474,59 @@ func TestLocalApprovalProposerUsesExistingQueueAndOneHuman(t *testing.T) {
 	}
 }
 
+// A privileged launch under its claimed session asks as that session (separation
+// of duty compares people) and names the person who launched it beside it, so the queue
+// no longer says only "The session itself"; one administrator still approves it.
+func TestSessionLaunchApprovalNamesTheLauncher(t *testing.T) {
+	h := newHarness(t)
+	b := newApprovalBridge(approvalBridgeConfig{}, discardLog())
+	b.LocalProposer = h.set.gov.EngineApprovals()
+	h.set.gov.UseApprovalCapacity(h.authr.ApprovalCapacity)
+	gate := &sessionLaunchGate{bridge: b, log: discardLog()}
+	sid := "osn_" + model.NewID().String()
+	intent := sessions.LaunchIntent{Action: sessions.LaunchActionCreate, Transport: sessions.TransportStreamJSON, PermissionMode: "default", WorkspaceClassified: true, WorkspaceReadWrite: true, WorkspaceRef: "test-folder", Actor: "user:initiator", ClaimSID: sid}
+	decision, err := gate.Authorize(context.Background(), model.TenantID(h.tenantA), intent)
+	if err != nil || decision.ApprovalRef == "" {
+		t.Fatalf("waiting=%+v %v", decision, err)
+	}
+	approval, err := b.LocalProposer.Read(context.Background(), model.TenantID(h.tenantA), decision.ApprovalRef)
+	if err != nil || approval.RequestedBy != "session:"+sid || approval.LaunchedBy != "user:initiator" {
+		t.Fatalf("launch approval requested_by=%q launched_by=%q (%v), want the session and its launcher", approval.RequestedBy, approval.LaunchedBy, err)
+	}
+	if code, body := h.decide(t, h.adminToken, decision.ApprovalRef, "approve"); code != http.StatusOK {
+		t.Fatalf("one administrator approving = %d %s", code, body)
+	}
+}
+
+// The approver read "governed actuation approval opened by the engine
+// approval bridge. action=… plan=<64 hex> requested_by=…" and then "mode=default
+// transport=stream-json workspace=<uuid>". A session launch's reason is now one sentence
+// in words; the folder is on the queue row and the plan stays bound in subject_ref.
+func TestSessionLaunchApprovalReadsAsOneSentence(t *testing.T) {
+	h := newHarness(t)
+	b := newApprovalBridge(approvalBridgeConfig{}, discardLog())
+	b.LocalProposer = h.set.gov.EngineApprovals()
+	h.set.gov.UseApprovalCapacity(h.authr.ApprovalCapacity)
+	gate := &sessionLaunchGate{bridge: b, log: discardLog()}
+	intent := sessions.LaunchIntent{Action: sessions.LaunchActionCreate, Transport: sessions.TransportStreamJSON, PermissionMode: "acceptEdits", WorkspaceClassified: true, WorkspaceReadWrite: true, WorkspaceRef: "01a10199-9a90-7d32-8319-63ef996eb14f", Actor: "user:initiator", ClaimSID: "osn_" + model.NewID().String(), AllowedTools: []string{"Read", "Edit"}}
+	decision, err := gate.Authorize(context.Background(), model.TenantID(h.tenantA), intent)
+	if err != nil || decision.ApprovalRef == "" {
+		t.Fatalf("waiting=%+v %v", decision, err)
+	}
+	approval, err := b.LocalProposer.Read(context.Background(), model.TenantID(h.tenantA), decision.ApprovalRef)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "A new session that writes to a classified folder: it edits files and asks before commands; tools Read, Edit."
+	if approval.Reason != want || !strings.Contains(approval.SubjectRef, "#plan=") {
+		t.Fatalf("reason = %q (subject %q), want %q with the plan still bound", approval.Reason, approval.SubjectRef, want)
+	}
+}
+
 func TestProviderApprovalWaitsInExistingQueue(t *testing.T) {
 	h := newHarness(t)
 	b := newApprovalBridge(approvalBridgeConfig{}, discardLog())
-	b.localProposer = h.set.gov.EngineApprovals()
+	b.LocalProposer = h.set.gov.EngineApprovals()
 	tenant := model.TenantID(h.tenantA)
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
 	defer cancel()
@@ -583,7 +540,7 @@ func TestProviderApprovalWaitsInExistingQueue(t *testing.T) {
 	}()
 	var ref string
 	for ref == "" && ctx.Err() == nil {
-		items, _, err := b.localProposer.List(ctx, tenant, "sessions.provider.approval", nbPending, "")
+		items, _, err := b.LocalProposer.List(ctx, tenant, "sessions.provider.approval", nbPending, "")
 		if err != nil {
 			t.Fatal(err)
 		}

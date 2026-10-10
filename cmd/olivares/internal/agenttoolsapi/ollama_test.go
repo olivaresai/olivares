@@ -10,6 +10,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -41,7 +42,8 @@ func TestFakeOllamaProcess(t *testing.T) {
 		entries, _ := os.ReadDir(dir)
 		var models []map[string]string
 		for _, e := range entries {
-			models = append(models, map[string]string{"name": strings.ReplaceAll(e.Name(), "__", ":")})
+			name, _ := url.QueryUnescape(e.Name())
+			models = append(models, map[string]string{"name": name})
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{"models": models})
 	})
@@ -57,7 +59,10 @@ func TestFakeOllamaProcess(t *testing.T) {
 			w.(http.Flusher).Flush()
 			time.Sleep(50 * time.Millisecond)
 		}
-		_ = os.WriteFile(filepath.Join(dir, strings.ReplaceAll(in.Model, ":", "__")), nil, 0o600)
+		if err := os.WriteFile(filepath.Join(dir, url.QueryEscape(in.Model)), nil, 0o600); err != nil {
+			_ = enc.Encode(map[string]any{"error": "fixture model could not be stored"})
+			return
+		}
 		_ = enc.Encode(map[string]any{"status": "success"})
 	})
 	_ = http.ListenAndServe(os.Getenv("OLLAMA_HOST"), mux)
@@ -74,6 +79,8 @@ type ollamaFixture struct {
 	tenant    model.TenantID
 	registers int
 	mod       *Module
+	gate      chan struct{} // when set, Register waits for it to close
+	entered   int
 }
 
 func (f *ollamaFixture) registered() string {
@@ -104,6 +111,13 @@ func newOllamaServer(t *testing.T) (call func(string, string, any) (int, map[str
 			Addr: f.addr, ModelsDir: f.models, HomeDir: filepath.Join(t.TempDir(), "home"),
 			StateFile: filepath.Join(t.TempDir(), "started.json"),
 			Register: func(_ context.Context, _ auth.Principal, tenant model.TenantID, endpoint string) error {
+				f.mu.Lock()
+				f.entered++
+				gate := f.gate
+				f.mu.Unlock()
+				if gate != nil {
+					<-gate
+				}
 				f.mu.Lock()
 				f.endpoint, f.tenant = endpoint, tenant
 				f.registers++
@@ -309,7 +323,7 @@ func TestOllamaDownloadRegistersAgainForTheStartingTenant(t *testing.T) {
 	}
 }
 
-// The product-started Ollama runs with its cloud features off (OLLAMA_NO_CLOUD): HU2 saw it
+// The product-started Ollama runs with its cloud features off (OLLAMA_NO_CLOUD): real use saw it
 // reach ollama.com on start, which no local session needs.
 func TestOllamaStartsWithItsCloudFeaturesOff(t *testing.T) {
 	call, f := newOllamaServer(t)
@@ -325,5 +339,81 @@ func TestOllamaStartsWithItsCloudFeaturesOff(t *testing.T) {
 	got, _ := io.ReadAll(resp.Body)
 	if string(got) != "1" {
 		t.Fatalf("OLLAMA_NO_CLOUD = %q in the started Ollama, want 1", got)
+	}
+}
+
+// A console rereads Providers when Ollama reports running or a download succeeded, and
+// gets no later signal. Both states are reported only once the endpoint is registered
+// for the tenant, so that reread finds it (and finds the new model).
+func TestOllamaReportsRunningAndADoneDownloadOnlyOnceItsEndpointIsRegistered(t *testing.T) {
+	call, f := newOllamaServer(t)
+	hold := func() func() {
+		gate := make(chan struct{})
+		f.mu.Lock()
+		f.gate = gate
+		f.mu.Unlock()
+		var once sync.Once
+		release := func() { once.Do(func() { close(gate) }) }
+		t.Cleanup(release) // a failed check must not leave Register waiting at shutdown
+		return release
+	}
+	waitEntered := func(n int) {
+		t.Helper()
+		deadline := time.Now().Add(20 * time.Second)
+		for {
+			f.mu.Lock()
+			entered := f.entered
+			f.mu.Unlock()
+			if entered >= n {
+				return
+			}
+			if time.Now().After(deadline) {
+				t.Fatalf("Register was entered %d times, want %d", entered, n)
+			}
+			time.Sleep(20 * time.Millisecond)
+		}
+	}
+	code, org := call("POST", "/v1/system/orgs", map[string]string{"name": "Second", "slug": "second"})
+	if code != 201 {
+		t.Fatalf("org %d %v", code, org)
+	}
+	release := hold()
+	if code, st := call("POST", "/v1/m/agenttools/ollama/start", map[string]string{"tenant_id": org["tenant_id"].(string)}); code != 202 {
+		t.Fatalf("start = %d %v", code, st)
+	}
+	waitEntered(1)
+	if _, st := call("GET", "/v1/m/agenttools/ollama", nil); st["state"] != "starting" {
+		t.Fatalf("while its endpoint is being registered Ollama reports %v, want starting", st["state"])
+	}
+	release()
+	waitOllama(t, call, "running")
+	if f.registered() != "http://"+f.addr {
+		t.Fatalf("running was reported before the endpoint was registered (%q)", f.registered())
+	}
+	release = hold()
+	code, p := call("POST", "/v1/m/agenttools/ollama/pulls", map[string]string{"model": "qwen2.5:0.5b"})
+	if code != 202 {
+		t.Fatalf("pull = %d %v", code, p)
+	}
+	waitEntered(2)
+	if _, got := call("GET", "/v1/m/agenttools/ollama/pulls/"+p["id"].(string), nil); got["state"] == "succeeded" {
+		t.Fatalf("the download was reported succeeded before the record listed the model: %v", got)
+	}
+	release()
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		if _, got := call("GET", "/v1/m/agenttools/ollama/pulls/"+p["id"].(string), nil); got["state"] == "succeeded" {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the download never finished")
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	f.mu.Lock()
+	registers := f.registers
+	f.mu.Unlock()
+	if registers != 2 {
+		t.Fatalf("Register completed %d times, want 2 (start and download)", registers)
 	}
 }

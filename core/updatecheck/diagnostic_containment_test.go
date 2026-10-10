@@ -206,7 +206,7 @@ func TestCheckContainsEveryFailureStage(t *testing.T) {
 	client := contLoopbackClient(10 * time.Second)
 
 	// A healthy authenticated channel, reused by the cases that must reach it.
-	goodManifest, goodSig, goodKey := contSigned(t, release.ChannelStable, "26.9.0", nil)
+	goodManifest, goodSig, goodKey := contSigned(t, release.ChannelStable, "26.900", nil)
 	good := contChannelServer(t, release.ChannelStable, goodManifest, goodSig)
 
 	// A 404 channel, a 502 signature, a refusing destination and a remote-controlled redirect.
@@ -258,7 +258,7 @@ func TestCheckContainsEveryFailureStage(t *testing.T) {
 	hostile := contChannelServer(t, release.ChannelStable, hostileBody,
 		base64.StdEncoding.EncodeToString(release.SignManifest(hostileBody, hostilePriv)))
 
-	badSigManifest, _, _ := contSigned(t, release.ChannelStable, "26.9.0", nil)
+	badSigManifest, _, _ := contSigned(t, release.ChannelStable, "26.900", nil)
 	_, otherPriv, err := ed25519.GenerateKey(nil)
 	if err != nil {
 		t.Fatalf("keygen: %v", err)
@@ -272,11 +272,11 @@ func TestCheckContainsEveryFailureStage(t *testing.T) {
 
 	unreadableSig := contChannelServer(t, release.ChannelStable, badSigManifest, "%%% not base64 %%%")
 
-	wrongManifest, wrongSig, wrongKey := contSigned(t, release.ChannelStable, "26.9.0", nil)
+	wrongManifest, wrongSig, wrongKey := contSigned(t, release.ChannelStable, "26.900", nil)
 	wrong := contChannelServer(t, release.ChannelSecurity, wrongManifest, wrongSig)
 
 	past := time.Now().UTC().Add(-time.Hour)
-	staleManifest, staleSig, staleKey := contSigned(t, release.ChannelStable, "26.9.0", &past)
+	staleManifest, staleSig, staleKey := contSigned(t, release.ChannelStable, "26.900", &past)
 	stale := contChannelServer(t, release.ChannelStable, staleManifest, staleSig)
 
 	cases := []struct {
@@ -359,7 +359,7 @@ func TestCheckContainsEveryFailureStage(t *testing.T) {
 		{
 			name: "a wrong-channel answer names both channels",
 			cfg: Config{Endpoint: contCredentialed(wrong.URL), Channel: release.ChannelSecurity,
-				PubKey: wrongKey, CurrentVersion: "26.8.0", Client: client},
+				PubKey: wrongKey, CurrentVersion: "26.800", Client: client},
 			want: "update check: " + stageBinding + " (%s): " +
 				wrongChannelReason(release.ChannelSecurity, release.ChannelStable),
 			host: wrong.URL,
@@ -367,7 +367,7 @@ func TestCheckContainsEveryFailureStage(t *testing.T) {
 		{
 			name: "an expired manifest is a failed check",
 			cfg: Config{Endpoint: contCredentialed(stale.URL), Channel: "stable", PubKey: staleKey,
-				CurrentVersion: "26.8.0", Client: client},
+				CurrentVersion: "26.800", Client: client},
 			want: "update check: " + stageFreshness + " (%s): " + reasonExpired,
 			host: stale.URL,
 		},
@@ -413,14 +413,14 @@ func TestCheckContainsEveryFailureStage(t *testing.T) {
 // TestCheckSeparatesCancellationFromTimeout pins the two cases an operator acts on
 // differently: the engine stopping, and the channel not answering.
 func TestCheckSeparatesCancellationFromTimeout(t *testing.T) {
-	manifest, sig, key := contSigned(t, release.ChannelStable, "26.9.0", nil)
+	manifest, sig, key := contSigned(t, release.ChannelStable, "26.900", nil)
 	srv := contChannelServer(t, release.ChannelStable, manifest, sig)
 
 	canceled, cancel := context.WithCancel(context.Background())
 	cancel()
 	st := Check(canceled, Config{Endpoint: contCredentialed(srv.URL), Channel: "stable", PubKey: key,
-		CurrentVersion: "26.8.0", Client: contLoopbackClient(10 * time.Second)})
-	assertContained(t, "canceled", st, requestEcho{"stable", "26.8.0"})
+		CurrentVersion: "26.800", Client: contLoopbackClient(10 * time.Second)})
+	assertContained(t, "canceled", st, requestEcho{"stable", "26.800"})
 	if want := "update check: " + stageManifest + " (" + srv.URL + "): " + reasonCanceled; st.Error != want {
 		t.Errorf("canceled: Status.Error = %q, want %q", st.Error, want)
 	}
@@ -431,8 +431,8 @@ func TestCheckSeparatesCancellationFromTimeout(t *testing.T) {
 	}))
 	t.Cleanup(block.Close)
 	st = Check(context.Background(), Config{Endpoint: contCredentialed(block.URL), Channel: "stable", PubKey: key,
-		CurrentVersion: "26.8.0", Client: contLoopbackClient(100 * time.Millisecond)})
-	assertContained(t, "timeout", st, requestEcho{"stable", "26.8.0"})
+		CurrentVersion: "26.800", Client: contLoopbackClient(100 * time.Millisecond)})
+	assertContained(t, "timeout", st, requestEcho{"stable", "26.800"})
 	if want := "update check: " + stageManifest + " (" + block.URL + "): " + reasonTimeout; st.Error != want {
 		t.Errorf("timeout: Status.Error = %q, want %q", st.Error, want)
 	}
@@ -442,18 +442,18 @@ func TestCheckSeparatesCancellationFromTimeout(t *testing.T) {
 // what stops the containment from being an outage: the check must still ask for the exact
 // URL the operator configured, still present the credential, and still conclude.
 func TestCheckStillAddressesAndAuthenticatesTheChannel(t *testing.T) {
-	manifest, sig, key := contSigned(t, release.ChannelStable, "26.9.0", nil)
+	manifest, sig, key := contSigned(t, release.ChannelStable, "26.900", nil)
 	srv := contChannelServer(t, release.ChannelStable, manifest, sig)
 
 	st := Check(context.Background(), Config{
 		Endpoint: contCredentialed(srv.URL), Channel: "stable", PubKey: key,
-		CurrentVersion: "26.8.0", InstallID: "n1", Client: contLoopbackClient(10 * time.Second),
+		CurrentVersion: "26.800", InstallID: "n1", Client: contLoopbackClient(10 * time.Second),
 	})
 	if st.Error != "" {
 		t.Fatalf("the authenticated channel was refused: %q", st.Error)
 	}
-	if !st.Enabled || !st.Available || st.UpToDate || st.LatestVersion != "26.9.0" {
-		t.Fatalf("status = %+v, want an available 26.9.0 over a running 26.8.0", st)
+	if !st.Enabled || !st.Available || st.UpToDate || st.LatestVersion != "26.900" {
+		t.Fatalf("status = %+v, want an available 26.900 over a running 26.800", st)
 	}
 	want := []string{
 		"/" + contSegment + "/stable/manifest.json",
@@ -475,9 +475,9 @@ func TestCheckStillAddressesAndAuthenticatesTheChannel(t *testing.T) {
 	// so the assertions above are not vacuous.
 	st = Check(context.Background(), Config{
 		Endpoint: srv.URL + "/" + contSegment, Channel: "stable", PubKey: key,
-		CurrentVersion: "26.8.0", Client: contLoopbackClient(10 * time.Second),
+		CurrentVersion: "26.800", Client: contLoopbackClient(10 * time.Second),
 	})
-	assertContained(t, "unauthenticated", st, requestEcho{"stable", "26.8.0"})
+	assertContained(t, "unauthenticated", st, requestEcho{"stable", "26.800"})
 	if want := "update check: " + stageManifest + " (" + srv.URL + "): HTTP 401"; st.Error != want {
 		t.Errorf("unauthenticated: Status.Error = %q, want %q", st.Error, want)
 	}
@@ -494,13 +494,13 @@ func TestCheckerCachesTheContainedStatus(t *testing.T) {
 	}
 	c := NewChecker(Config{
 		Endpoint: contCredentialed(notFound.URL), Channel: "stable", PubKey: key,
-		CurrentVersion: "26.8.0", Client: contLoopbackClient(10 * time.Second),
+		CurrentVersion: "26.800", Client: contLoopbackClient(10 * time.Second),
 	}, time.Hour)
 
-	assertContained(t, "before refresh", c.Latest(), requestEcho{"stable", "26.8.0"})
+	assertContained(t, "before refresh", c.Latest(), requestEcho{"stable", "26.800"})
 	refreshed := c.Refresh(context.Background())
-	assertContained(t, "refresh", refreshed, requestEcho{"stable", "26.8.0"})
-	assertContained(t, "latest", c.Latest(), requestEcho{"stable", "26.8.0"})
+	assertContained(t, "refresh", refreshed, requestEcho{"stable", "26.800"})
+	assertContained(t, "latest", c.Latest(), requestEcho{"stable", "26.800"})
 	want := "update check: " + stageManifest + " (" + notFound.URL + "): HTTP 404"
 	if refreshed.Error != want || c.Latest().Error != want {
 		t.Errorf("Refresh=%q Latest=%q, want %q", refreshed.Error, c.Latest().Error, want)
@@ -516,7 +516,7 @@ func TestCheckerCachesTheContainedStatus(t *testing.T) {
 func TestFailIsTheOnlyWriterOfStatusError(t *testing.T) {
 	raw := errors.New(`release: bad update endpoint "https://u:` + contPassword + `@h/x?token=` + contQuery + `"`)
 	st := fail(Status{Enabled: true, Available: true, UpToDate: true, Security: true,
-		Advisories: []string{"OSV-2026-1"}, LatestVersion: "26.9.0"}, raw)
+		Advisories: []string{"OSV-2026-1"}, LatestVersion: "26.900"}, raw)
 	if strings.Contains(st.Error, contPassword) || strings.Contains(st.Error, contQuery) {
 		t.Fatalf("an unowned error printed itself: %q", st.Error)
 	}
@@ -526,7 +526,7 @@ func TestFailIsTheOnlyWriterOfStatusError(t *testing.T) {
 	if st.Available || st.UpToDate || st.Security || st.Advisories != nil {
 		t.Errorf("a failure must clear every claim, got %+v", st)
 	}
-	if st.LatestVersion != "26.9.0" {
+	if st.LatestVersion != "26.900" {
 		t.Errorf("the channel version is a separate JSON key and is preserved, got %q", st.LatestVersion)
 	}
 

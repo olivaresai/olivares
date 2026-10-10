@@ -6,15 +6,16 @@
 
 **Betreiben Sie die KI, die Ihr Team bereits nutzt, mit derselben Kontrolle wie über Ihre übrige Infrastruktur.**
 
-[Was es tut](#was-es-tut) · [Installation](#installation) · [Konsole](#ein-blick-in-die-konsole) · [Editionen](#editionen-und-preise) · [Dokumentation](#dokumentation) · [Community](#community) · [olivares.ai](https://olivares.ai)
+[Was es tut](#was-es-tut) · [Installation](#installation) · [Editionen](#editionen-und-preise) · [Dokumentation](#dokumentation) · [Community](#community) · [olivares.ai](https://olivares.ai)
 
 [![License: AGPL-3.0-only](https://img.shields.io/badge/license-AGPL--3.0--only-blue)](LICENSING.md)
-[![SDK & connectors: Apache-2.0](https://img.shields.io/badge/SDK%20%26%20connectors-Apache--2.0-blue)](LICENSING.md)
-[![Release: 26.10](https://img.shields.io/badge/release-26.10-28282B)](https://github.com/olivaresai/olivares/releases/tag/26.10.1)
+[![SDK & connectors: Apache-2.0](https://img.shields.io/badge/SDK%20%26%20connectors-Apache--2.0-blue)](LICENSING.md) <!-- release -->
+[![Next release: 0.1](https://img.shields.io/badge/release-0.1-28282B)](https://github.com/olivaresai/olivares/releases/tag/0.1)<!-- /release -->
 [![Status: beta](https://img.shields.io/badge/status-beta-F08000)](CHANGELOG.md)
 [![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa)](CODE_OF_CONDUCT.md)
 
 </div>
+
 
 Ihre Entwickler arbeiten mit Claude Code und Codex. Agenten rufen MCP-Server, Modelle und interne APIs auf, und geplante Jobs laufen selbstständig. Jede Komponente hat eigene Protokolle und Berechtigungen. Deshalb gibt es auf einfache Fragen keine schnelle Antwort: Welcher Agent hat diese Datei geändert? Wer hat es genehmigt? Was hat uns KI diesen Monat gekostet?
 
@@ -32,9 +33,11 @@ Olivares AI beantwortet diese Fragen an einem Ort. Es verbindet sich mit den Age
 - **KI-Ausgaben kontrollieren.** Budgets pro Team, Agent oder Modell warnen, drosseln oder stoppen Ausgaben, bevor die Rechnung kommt.
 - **Agenten sicher auf das Wissen Ihres Unternehmens zugreifen lassen.** Verbinden Sie SharePoint, Confluence, Google Drive, Notion, Salesforce, Snowflake, S3 und PostgreSQL. Jeder Agent sieht nur das, was die Person dahinter sehen darf.
 - **Arbeit über Sitzungen hinweg fortsetzen.** Aufgaben, Verantwortliche und Entscheidungen bleiben erhalten, wenn eine Sitzung endet. Starten, betreten und stoppen Sie Sitzungen von Claude Code, Codex und Grok im Browser, ohne SSH.
-- **Nachweise liefern, wenn sie gebraucht werden.** Jede Entscheidung landet in einem signierten Protokoll, in dem jede nachträgliche Änderung erkennbar ist. Ihr Sicherheitsteam und Ihre Auditoren beziehen ihre Berichte daraus; die Nachweise sind 26 Framework-Katalogen zugeordnet.
+- **Nachweise liefern, wenn sie gebraucht werden.** Jede Entscheidung landet in einem signierten Protokoll, in dem jede nachträgliche Änderung erkennbar ist. Business Compliance Packs ordnet Nachweise 26 Framework-Katalogen zu und erstellt Berichte für Ihr Sicherheitsteam und Ihre Auditoren. Community behält gespeicherte Nachweise und deren JSON/CSV-Exporte.
 
-Es funktioniert mit Ihren vorhandenen Tools: Claude Code, Codex, Grok, Cursor, gemini-cli, opencode, OpenHands und lokalen Modellen über Ollama. **31 Module** und **159 Integrationen**, alle in der kostenlosen Edition: [alle Module](docs-site/src/content/docs/reference/modules/overview.md) · [alle Konnektoren](connectors/README.md).
+Es funktioniert mit Ihren vorhandenen Tools: Claude Code, Codex, Grok, Cursor, gemini-cli, opencode, OpenHands und lokalen Modellen über Ollama. **32 Module** und **136 Integrationen**: [alle Module](docs-site/src/content/docs/reference/modules/overview.md) · [alle Konnektoren](connectors/README.md).
+
+Community behält lokale Observability, gespeicherte Einstellungen und den Backup-Export. SIEM/ITSM-Versand, externe Telemetrieübertragung und Posture-Export gehören zur Business-Basisedition.
 
 ## Installation
 
@@ -49,12 +52,14 @@ olivares quickstart
 
 **Docker.** Multi-Arch. Container-Images basieren auf Debian 13 slim (mit Node.js 24 für die Agent-Tools) und laufen als Nicht-Root-Benutzer. Lauscht auf allen Host-Schnittstellen; setzen Sie vor jedes `-p` ein `127.0.0.1:`, um den Zugriff lokal zu halten.
 
+<!-- release -->
 ```sh
 docker run -d --name olivares -p 8443:8443 -p 8444:8444 \
   -v olivares-data:/var/lib/olivares \
-  docker.io/olivaresai/olivares \
+  docker.io/olivaresai/olivares:0.1 \
   serve --listen :8443 --grpc-listen :8444 --data-dir /var/lib/olivares
 ```
+<!-- /release -->
 
 **Docker Compose.** SQLite auf einem Knoten, optional mit Postgres und Backups.
 
@@ -63,42 +68,30 @@ git clone --depth 1 https://github.com/olivaresai/olivares.git && cd olivares
 docker compose -f deploy/compose/docker-compose.yml up --wait --wait-timeout 120
 ```
 
-**Kubernetes.** Das Helm-Chart aus diesem Repository (noch keine OCI-Veröffentlichung des Charts: `publication-unverified`).
-
-```sh
-git clone --depth 1 https://github.com/olivaresai/olivares.git && cd olivares
-helm install olivares deploy/helm/olivares -n olivares-system --create-namespace
-```
-
-Ohne Helm:
-
-```sh
-git clone --depth 1 https://github.com/olivaresai/olivares.git && cd olivares
-kubectl create namespace olivares-system && kubectl apply -n olivares-system -f deploy/manifests/install.yaml
-```
+Sitzungen arbeiten in einem Host-Ordner: Setzen Sie `OLIVARES_PROJECT_DIR` vor `up` auf dessen absoluten Pfad, und Compose bindet ihn unter `/project` ein. Auf Hosts, deren AppArmor-Richtlinie User-Namespaces einschränkt (Ubuntu 24.04 und neuer), laden Sie zuerst das Sitzungsprofil: siehe [Docker Compose](INSTALL.md#docker-compose).
 
 **Debian und Ubuntu.** Das Paket legt einen Benutzer `olivares` ohne Anmeldemöglichkeit und einen gehärteten Dienst an; Sie starten ihn.
 
 ```sh
-curl -fsSLO https://github.com/olivaresai/olivares/releases/download/26.10.1/olivares_26.10.1_linux_amd64.deb
-sudo dpkg -i olivares_26.10.1_linux_amd64.deb && sudo systemctl enable --now olivares
+curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.1/olivares_0.1_linux_amd64.deb
+sudo dpkg -i olivares_0.1_linux_amd64.deb && sudo systemctl enable --now olivares
 ```
 
 **RHEL, Fedora und SUSE.**
 
 ```sh
-curl -fsSLO https://github.com/olivaresai/olivares/releases/download/26.10.1/olivares_26.10.1_linux_amd64.rpm
-sudo rpm -i olivares_26.10.1_linux_amd64.rpm && sudo systemctl enable --now olivares
+curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.1/olivares_0.1_linux_amd64.rpm
+sudo rpm -i olivares_0.1_linux_amd64.rpm && sudo systemctl enable --now olivares
 ```
 
 **Alpine.**
 
 ```sh
-curl -fsSLO https://github.com/olivaresai/olivares/releases/download/26.10.1/olivares_26.10.1_linux_amd64.apk
-sudo apk add --allow-untrusted olivares_26.10.1_linux_amd64.apk && sudo rc-service olivares start
+curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.1/olivares_0.1_linux_amd64.apk
+sudo apk add --allow-untrusted olivares_0.1_linux_amd64.apk && sudo rc-service olivares start
 ```
 
-Verwenden Sie auf ARM-Servern `arm64` statt `amd64`. Alle Dateien der Version finden Sie auf der [Release-Seite](https://github.com/olivaresai/olivares/releases/tag/26.10.1).
+Verwenden Sie auf ARM-Servern `arm64` statt `amd64`. Alle Dateien der Version finden Sie auf der [Release-Seite](https://github.com/olivaresai/olivares/releases/tag/0.1).
 
 **Homebrew.** macOS und Linux.
 
@@ -123,15 +116,7 @@ olivares serve --seed-demo --insecure --listen 127.0.0.1:8901 --grpc-listen 127.
 
 Öffnen Sie anschließend http://127.0.0.1:8901.
 
-## Ein Blick in die Konsole
-
-| | |
-|---|---|
-| <picture><source media="(prefers-color-scheme: dark)" srcset="docs-site/public/console/access-map-dark.png"><img src="docs-site/public/console/access-map-light.png" alt="Access map: what each agent reads and writes across your estate, origins on the left, resources on the right."></picture><br><sub><b>Access Map</b> — wer was liest und schreibt.</sub> | <picture><source media="(prefers-color-scheme: dark)" srcset="docs-site/public/console/access-map-drift-dark.png"><img src="docs-site/public/console/access-map-drift-light.png" alt="Least-privilege drift: unexpected accesses and unused grants overlaid on the access map."></picture><br><sub><b>Drift</b> — Zugriffe, die niemand erlaubt hat, und Berechtigungen, die niemand nutzt.</sub> |
-| <picture><source media="(prefers-color-scheme: dark)" srcset="docs-site/public/console/agentops-dark.png"><img src="docs-site/public/console/agentops-light.png" alt="Claude Code sessions created, attached to and governed from the console."></picture><br><sub><b>Sitzungen</b> — Agentensitzungen im Browser starten, betreten und stoppen.</sub> | <picture><source media="(prefers-color-scheme: dark)" srcset="docs-site/public/console/work-dark.png"><img src="docs-site/public/console/work-light.png" alt="Work: the durable cross-session backlog of work items and decisions."></picture><br><sub><b>Arbeit</b> — Aufgaben, Verantwortliche und Entscheidungen, die eine Sitzung überdauern.</sub> |
-| <picture><source media="(prefers-color-scheme: dark)" srcset="docs-site/public/console/security-dark.png"><img src="docs-site/public/console/security-light.png" alt="Security and forensics: guardrail findings, the anomaly queue and tamper-evident forensics."></picture><br><sub><b>Sicherheit</b> — blockierte Aktionen, Anomalien und ein manipulationssicheres Protokoll, in dem jede Änderung erkennbar ist.</sub> | <picture><source media="(prefers-color-scheme: dark)" srcset="docs-site/public/console/finops-dark.png"><img src="docs-site/public/console/finops-light.png" alt="FinOps: model spend, token usage, budgets and a run-rate projection."></picture><br><sub><b>Ausgaben</b> — Kosten pro Modell und Agent, Budgets und Prognosen.</sub> |
-
-Alle Ansichten: die [Konsolenreferenz](docs-site/src/content/docs/reference/console.md).
+Helm, der Kubernetes-Operator, Terraform, die Appliance und die FIPS/STIG-Bereitstellungsartefakte werden mit Business ausgeliefert; die Installation ohne Netzverbindung erfordert Enterprise. Siehe [Editionen](docs/editions.md).
 
 ## Editionen und Preise
 
@@ -141,11 +126,11 @@ Community ist das vollständige Produkt, kostenlos und Open Source. Business erg
 |---|---|---|---|
 | **Preis** | Kostenlos, AGPL-3.0 | 129 USD/Monat oder 1.290 USD/Jahr | Jahresvertrag |
 | **Leistungsumfang** | Das vollständige Produkt: unbegrenzt viele Benutzer und alle vier deny-closed Enforcement Points | Alles aus Community sowie Regulated Operations, AI Runtime Security, Compliance Packs und Identity & Scale, die kommerzielle Lizenz, signierte Updates und E-Mail-Support | Alles aus Business sowie mehr Unternehmen, Deployments und Identitätsanbieter, Offline-Mirrors und mit Ihnen vereinbarte Supportbedingungen |
-| **Geltungsbereich** | Ein aktiver Identitätsanbieter | Ein Unternehmen, zwei Produktionsdeployments mit jeweils einer Staging-Umgebung, fünf Identitätsanbieter | Im Vertrag vereinbart |
+| **Geltungsbereich** | Ein aktiver Identitätsanbieter | Ein Unternehmen, eine gleichzeitig aktive Instanz | Im Vertrag vereinbart |
 
-**Regulated Operations** bewahrt Aufzeichnungen so lange auf, wie das Gesetz es verlangt, mit Legal Hold und unveränderbaren Archiven. **AI Runtime Security** filtert, was Agenten senden, empfangen und ausführen. **Compliance Packs** liefert fertige Nachweise für ISO 42001, DORA und NIS 2. **Identity & Scale** verbindet mehrere Identitätsanbieter gleichzeitig und wächst mit größeren Deployments.
+**Regulated Operations** ergänzt regulatorische Mindestaufbewahrungsfristen, den Abgleich von Legal Holds auf Archiven und WORM-Archive auf Azure und GCS. **AI Runtime Security** ergänzt eine tiefere Prüfung dessen, was Agenten senden, empfangen und ausführen. **Compliance Packs** erstellt Entwürfe des DORA-Informationsregisters und des ISO/IEC-42001-Pakets für Ihre Prüfer. **Identity & Scale** verbindet mehrere Identitätsanbieter gleichzeitig und wächst mit größeren Deployments.
 
-[olivares.ai/pricing](https://olivares.ai/pricing) · [Was offen und was kommerziell ist](LICENSING.md)
+[olivares.ai/pricing](https://olivares.ai/pricing) · [Was jede Edition enthält](docs/editions.md) · [Was offen und was kommerziell ist](LICENSING.md)
 
 ## Architektur
 

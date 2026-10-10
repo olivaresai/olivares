@@ -14,7 +14,7 @@
   },
   "serverError": {
     "title": "Une erreur est survenue",
-    "description": "Le plan de contrôle a rencontré une erreur inattendue. Veuillez réessayer.",
+    "description": "Olivares a rencontré une erreur inattendue. Veuillez réessayer.",
     "back": "Retour à la vue d’ensemble"
   },
   "evidenceUnavailable": {
@@ -31,6 +31,7 @@
     "reload": "Recharger"
   },
   "generic": "Une erreur est survenue.",
+  "sessionTemplateUnavailable": "Le modèle « Edits and commands » est indisponible, la session n’a donc pas démarré. Choisissez une autre permission ou demandez à un administrateur de restaurer le modèle.",
   "requestId": "ID de requête",
   "codes": {
     "unauthenticated": "Votre session n’est plus valide.",
@@ -42,6 +43,7 @@
     "locked_out": "Trop de tentatives. Réessayez dans un instant.",
     "setup_required": "Le plan de contrôle nécessite une configuration au premier démarrage.",
     "setup_complete": "La configuration est déjà terminée.",
+    "setup_token_unreadable": "Le moteur ne peut pas lire son fichier de jeton de configuration. Exécutez `olivares first-boot --data-dir <data directory> --new-token` en tant que root ou avec le compte du moteur pour le remplacer, puis utilisez le nouveau jeton ; le journal du moteur indique le fichier et la raison.",
     "cross_tenant_admin_pool_not_configured": "Cette base de données ne peut pas lister toutes les organisations. Exécutez `olivares db init --superuser-dsn <superuser DSN> --data-dir <data directory> --install-directory-inventory` puis redémarrez le moteur. Ou provisionnez un rôle NOSUPERUSER BYPASSRLS avec `olivares db init --superuser-dsn <dsn> --admin-role olivares_admin --admin-password-file <file>` (voir deploy/postgres/README.md) puis redémarrez le serveur avec --admin-dsn pointant vers ce rôle.",
     "internal": "Une erreur interne est survenue."
   },
@@ -50,7 +52,6 @@
     "description": "Connectez-vous avec une identité d’annuaire admise dans l’organisation. L’autorité globale de bootstrap ne permet pas de gérer les communications du workspace."
   },
   "moduleNotEnabled": {
-    "title": "Non activé sur cette installation",
     "description": "Cette partie d'Olivares est désactivée ici ; il n'y a rien à afficher.",
     "named": "{{module}} n’est pas activé sur cette installation.",
     "unnamed": "Ce module n’est pas activé sur cette installation."

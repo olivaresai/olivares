@@ -117,6 +117,10 @@ const SIN_TECHO_CONOCIDAS: Record<string, Record<string, string>> = {
     sectorPacks: 'linea base 2026-08-28; sin clasificar drena/recorta',
     usLawPacks: 'linea base 2026-08-28; sin clasificar drena/recorta',
   },
+  console: {
+    listInheritanceFilters:
+      'modules/governance/inheritance_filter.go: handleListInheritanceFilters drains every storage page via listAll (helpers.go); inheritance_filter_list_test.go proves 1001 sorted rows, no client pagination and tenant isolation',
+  },
   deploy: {
     listRevisions: 'linea base 2026-08-28; sin clasificar drena/recorta',
   },
@@ -124,6 +128,10 @@ const SIN_TECHO_CONOCIDAS: Record<string, Record<string, string>> = {
     runResults: 'linea base 2026-08-28; sin clasificar drena/recorta',
     scorecards: 'linea base 2026-08-28; sin clasificar drena/recorta',
     suiteCases: 'linea base 2026-08-28; sin clasificar drena/recorta',
+  },
+  estate: {
+    scope:
+      'scope is a function parameter, not a list method; readEstateFamily sends limit=25 on paginated reads and bounds each projection to 25 (estate/api.ts and api.test.ts)',
   },
   eventing: {
     deadLetters: 'linea base 2026-08-28; sin clasificar drena/recorta',
@@ -186,13 +194,19 @@ const SIN_TECHO_CONOCIDAS: Record<string, Record<string, string>> = {
   observability: {
     traces: 'linea base 2026-08-28; sin clasificar drena/recorta',
   },
-  orchestration: {
-    decisions: 'linea base 2026-08-28; sin clasificar drena/recorta',
-    flows: 'linea base 2026-08-28; sin clasificar drena/recorta',
-    scheduleDecisions: 'linea base 2026-08-28; sin clasificar drena/recorta',
-    schedules: 'linea base 2026-08-28; sin clasificar drena/recorta',
-    timeline: 'linea base 2026-08-28; sin clasificar drena/recorta',
-  },
+  // Identity & Scale assembles this API; keep its original ratchet there.
+  ...(existsSync(join(RAIZ, 'orchestration/api.ts'))
+    ? {
+        orchestration: {
+          decisions: 'linea base 2026-08-28; sin clasificar drena/recorta',
+          flows: 'linea base 2026-08-28; sin clasificar drena/recorta',
+          scheduleDecisions:
+            'linea base 2026-08-28; sin clasificar drena/recorta',
+          schedules: 'linea base 2026-08-28; sin clasificar drena/recorta',
+          timeline: 'linea base 2026-08-28; sin clasificar drena/recorta',
+        },
+      }
+    : {}),
   recordings: {
     listSessions: 'linea base 2026-08-28; sin clasificar drena/recorta',
   },

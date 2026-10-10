@@ -16,6 +16,7 @@ import (
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 	"github.com/olivaresai/olivares/modules/sessions"
+	"github.com/olivaresai/olivares/modules/sessions/hookpep"
 	"github.com/olivaresai/olivares/sdk"
 )
 
@@ -23,7 +24,7 @@ import (
 // /core, and therefore the part that resolves identity, consults the PDP and anchors the
 // decision to the tamper-evident ledger.
 //
-// # Why this is not claudehookpep.go with a flag
+// # Why this is not the Claude hook PEP (modules/sessions/hookpep) with a flag
 //
 // Measured the alternative before writing a line, because the brief's rule is that
 // needing to change connectors/claude means you are duplicating rather than reusing.
@@ -43,7 +44,7 @@ import (
 // parsing and rendering their own wire. That is right, and this file adopts its half —
 // every provider-specific value below lives in codexProfile rather than being scattered
 // through the logic, so lifting the machine into a shared governor is a move, not a
-// rewrite. Doing the lift itself means editing claudehookpep.go, which is not this
+// rewrite. Doing the lift itself means editing modules/sessions/hookpep, which is not this
 // session's territory: it is pack SG-01-Codex-d, with an owner, in the design note.
 //
 // What IS reused today, because it is importable and Apache: the SDK evidence primitives
@@ -157,9 +158,9 @@ func (d *codexHookDecider) Decide(ctx context.Context, req session.Request, bear
 	// bearer, and the call was governed under this endpoint's tenant as if it belonged
 	// there. The loopback bind was the only thing standing in the way, and a bind is not
 	// an authorization decision. The precedent's own rule is the right one
-	// (claudehookpep.go resolveTenant): a caller who is not a member is refused, and an
+	// (hookpep Decider.resolveTenant): a caller who is not a member is refused, and an
 	// undeterminable tenant is deny-closed rather than assumed.
-	if tier != tierFirm {
+	if tier != hookpep.TierFirm {
 		return codexDeny("no authenticated principal on a governed hook call (deny-closed)", ""), nil
 	}
 	// staticcheck QF1001 propone De Morgan aquí. NO se aplica, y la razón es de seguridad, no de
@@ -235,27 +236,26 @@ func (d *codexHookDecider) resolveSID(ctx context.Context, req session.Request, 
 // the unknown tier, and the unknown tier is ALWAYS denied (line ~167, deny-closed) — there is
 // no knob, and there must not be one.
 //
-// ⛔ HUBO UNA `requireFirm` AQUÍ Y SE RETIRÓ EL 2026-08-19, adjudicado por el hub (r23). No la
-// restaures «por simetría» con claudehookpep.go: el canon §1-bis y el package doc de `addongate`
-// lo prohíben con todas las letras —«never gate the evaluation path of a deny-closed security
-// control»—, y la distinción que lo sostiene es que retener una capacidad no abre nada, pero
-// BORRAR UN HECHO DE AUTORIZACIÓN sí. Una perilla que apaga esta denegación convierte una
-// exigencia de identidad firme en algo que el fichero de configuración del operador puede
-// desactivar.
+// A vestigial `requireFirm` field was removed on 2026-08-19 (r23). Do not restore it
+// for symmetry with modules/sessions/hookpep: the canon's section 1-bis and the
+// `addongate` package documentation prohibit gating a deny-closed security control's
+// evaluation path. Withholding a capability opens nothing; removing an authorization
+// fact can. A switch that disables this denial would let operator configuration
+// turn off the firm-identity requirement.
 //
-// Y no se retiró una función: el campo NUNCA se leyó. Lo que se retiró fue una afirmación falsa
-// del interfaz — el operador ponía `require_firm`, lo veía confirmado en el log del arranque, y
-// no gobernaba nada.
+// No behavior was removed: the field was never read. It was a false interface claim:
+// operators could set `require_firm` and see it confirmed in the startup log, but
+// it governed nothing.
 func (d *codexHookDecider) principalOf(ctx context.Context, bearer string) (auth.Principal, actorRef, string) {
 	if d.authr == nil || strings.TrimSpace(bearer) == "" {
-		return auth.Principal{}, actorRef{}, tierUnknown
+		return auth.Principal{}, actorRef{}, hookpep.TierUnknown
 	}
 	p, err := d.authr.Authenticate(ctx, bearer)
 	if err != nil || p.IsPurposeRestricted() {
-		return auth.Principal{}, actorRef{}, tierUnknown
+		return auth.Principal{}, actorRef{}, hookpep.TierUnknown
 	}
 	actor, kind := codexActorOf(p)
-	return p, actorRef{name: actor, kind: kind}, tierFirm
+	return p, actorRef{name: actor, kind: kind}, hookpep.TierFirm
 }
 
 // pdpForbidsCodex consults the SAME composed PDP the rest of the plane uses, under the

@@ -168,7 +168,7 @@ func toDecisionDTO(rec model.Record) decisionDTO {
 		ApprovalRef:          rec.String(colApprovalRef),
 		GateStatus:           rec.String(colGateStatus),
 		OpStatus:             rec.String(colOpStatus),
-		DispatchRef:          rec.String(colDispatchRef),
+		DispatchRef:          ledgerDispatchRef(rec.String(colDispatchRef)),
 		Actor:                rec.String(colActor),
 		ActorKind:            rec.String(colActorKind),
 		Result:               rec.String(colResult),

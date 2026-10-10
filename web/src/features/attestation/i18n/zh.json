@@ -161,15 +161,15 @@
     }
   },
   "airgap": {
-    "title": "隔离网络捆绑包与 OCI Helm chart",
-    "description": "可离线验证的捆绑包，以及双重签名的 OCI Helm chart。此路径不会发起任何外部调用。",
-    "bundleTitle": "隔离网络捆绑包",
-    "bundleIntro": "基于密钥的路径无需 Rekor 或 Fulcio。维护者在线一次性构建自包含捆绑包；离线站点对其进行验证并镜像。",
+    "title": "离线捆绑包与 Business Helm 包",
+    "description": "私有部署契约：离线捆绑包和已签名的 Business chart 包。发布仍未经验证。",
+    "bundleTitle": "离线捆绑包",
+    "bundleIntro": "基于密钥的路径无需 Rekor 或 Fulcio。维护者从组装好的私有分发在线构建一次捆绑包；离线站点对其进行验证并镜像。",
     "buildCommand": "构建（在线一次）",
     "mirrorCommand": "镜像（无需互联网）",
-    "chartTitle": "OCI Helm chart",
-    "ociCoordinate": "OCI 坐标",
-    "cosignManifest": "cosign（清单）",
+    "chartTitle": "Business Helm 包",
+    "distribution": "分发",
+    "cosignPackage": "cosign（包）",
     "gpgProv": "GPG .prov",
     "verifyCommand": "验证命令"
   },

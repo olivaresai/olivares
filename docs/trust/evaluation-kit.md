@@ -37,7 +37,8 @@ the production code paths.
 
 Optional tooling and infrastructure depend on evaluation scope: `cosign` for release
 signature verification, Docker for the container path, and Postgres for HA topology
-evaluation. Enterprise criteria require an enterprise evaluation license.
+evaluation. Criteria marked with a Business family name require a Business
+evaluation license with that family enabled; [Editions](../editions.md) defines the families.
 
 ## Expected duration
 

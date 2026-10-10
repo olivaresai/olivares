@@ -104,6 +104,7 @@ func TestInstallationTokenNarrowedToOneRepositoryAndEffect(t *testing.T) {
 		EffectPullRequest: {"pull_requests": "write", "contents": "read"},
 		EffectMerge:       {"contents": "write", "pull_requests": "read"},
 		EffectObserve:     {"contents": "read", "pull_requests": "read"},
+		EffectRead:        {"contents": "read"},
 	}
 	for eff, want := range cases {
 		var body map[string]any
@@ -233,6 +234,9 @@ func TestEndpointRules(t *testing.T) {
 	}
 	if err := ValidateEndpoint("https://ghe.corp.example/api/v3", []string{"ghe.corp.example"}); err != nil {
 		t.Fatalf("allowlisted GHES refused: %v", err)
+	}
+	if err := ValidateEndpoint("https://ghe.corp.example/api/v3", []string{"ghe.other.example"}); !errors.Is(err, ErrEndpoint) {
+		t.Fatalf("a host outside the allowlist = %v, want ErrEndpoint", err)
 	}
 	if err := ValidateEndpoint("https://api.github.com", nil); err != nil {
 		t.Fatal(err)

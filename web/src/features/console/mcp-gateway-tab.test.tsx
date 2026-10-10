@@ -627,3 +627,176 @@ describe('MCP servers page headings', () => {
       expect(levels[i] - levels[i - 1]).toBeLessThanOrEqual(1)
   })
 })
+
+describe('MCP starter servers (K6.A11)', () => {
+  it('lists each curated server with its license and source, and hides one already added', async () => {
+    api.get.mockResolvedValue({
+      ...structuredClone(snapshot),
+      servers: [{ ...snapshot.servers[0], name: 'GitHub' }],
+    })
+    setup()
+    const list = await screen.findByRole('region', { name: 'Starter servers' })
+    for (const name of ['Filesystem', 'Git', 'GitLab', 'Playwright'])
+      expect(
+        within(list).getByRole('button', { name: `Add ${name}` }),
+      ).toBeInTheDocument()
+    expect(
+      within(list).queryByRole('button', { name: 'Add GitHub' }),
+    ).not.toBeInTheDocument()
+    expect(list).toHaveTextContent('License: Apache-2.0 and MIT')
+    expect(list).toHaveTextContent('reaches only registry.npmjs.org')
+    const sources = within(list).getAllByRole('link', { name: 'Source' })
+    expect(sources[0]).toHaveAttribute(
+      'href',
+      'https://github.com/modelcontextprotocol/servers',
+    )
+    expect(sources[0]).toHaveAttribute('rel', 'noopener noreferrer')
+  })
+  it('Add fills the form and nothing is written until Save, which adds it off with its egress profile', async () => {
+    const user = userEvent.setup()
+    setup()
+    await user.click(
+      await screen.findByRole('button', { name: 'Add Filesystem' }),
+    )
+    const form = await screen.findByRole('dialog')
+    expect(api.put).not.toHaveBeenCalled()
+    expect(within(form).getByLabelText(/^Command/)).toHaveValue('npx')
+    expect(within(form).getByLabelText(/^Allowed hosts/)).toHaveValue(
+      'registry.npmjs.org',
+    )
+    expect(form).toHaveTextContent('Needs Node.js (npx) on this server.')
+    await user.click(within(form).getByRole('button', { name: 'Save' }))
+    await waitFor(() =>
+      expect(api.put).toHaveBeenCalledWith(
+        1,
+        {
+          name: 'Filesystem',
+          transport: 'stdio',
+          url: '',
+          command: 'npx',
+          args: [
+            '-y',
+            '@modelcontextprotocol/server-filesystem@2026.8.31',
+            '.',
+          ],
+          env: {},
+          env_secret_refs: {},
+          egress_cidrs: [],
+          egress_hosts: ['registry.npmjs.org'],
+          trust: {},
+          enabled: false,
+        },
+        undefined,
+        expect.objectContaining({ tenant: 'tenant-one' }),
+      ),
+    )
+    expect(api.test).not.toHaveBeenCalled()
+  })
+  it('the GitHub starter adds the remote server with no sign-in chosen for the user', async () => {
+    const user = userEvent.setup()
+    setup()
+    await user.click(await screen.findByRole('button', { name: 'Add GitHub' }))
+    const form = await screen.findByRole('dialog')
+    expect(form).toHaveTextContent('add the secret mcp/github')
+    await user.click(within(form).getByRole('button', { name: 'Save' }))
+    await waitFor(() =>
+      expect(api.put).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({
+          name: 'GitHub',
+          transport: 'streamable_http',
+          url: 'https://api.githubcopilot.com/mcp/',
+          credential_ref: '',
+          enabled: false,
+        }),
+        undefined,
+        expect.anything(),
+      ),
+    )
+    expect(api.put.mock.calls[0][1]).not.toHaveProperty('egress_hosts')
+  })
+  it('Allowed hosts takes the engine form only: no scheme, no upper case', async () => {
+    const user = userEvent.setup()
+    setup()
+    await user.click(
+      await screen.findByRole('button', { name: 'Add Playwright' }),
+    )
+    const form = await screen.findByRole('dialog')
+    const hosts = within(form).getByLabelText(/^Allowed hosts/)
+    await user.clear(hosts)
+    await user.type(hosts, 'https://Example.com')
+    expect(form).toHaveTextContent('Write each host as host or host:port')
+    expect(within(form).getByRole('button', { name: 'Save' })).toBeDisabled()
+    await user.clear(hosts)
+    await user.type(hosts, 'registry.npmjs.org{Enter}example.com:8443')
+    await user.click(within(form).getByRole('button', { name: 'Save' }))
+    await waitFor(() =>
+      expect(api.put).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({
+          egress_hosts: ['registry.npmjs.org', 'example.com:8443'],
+        }),
+        undefined,
+        expect.anything(),
+      ),
+    )
+  })
+  it('changing only the allowed hosts of an enabled command server saves it off until it is tested again', async () => {
+    const live = structuredClone(snapshot)
+    Object.assign(live.servers[0]!, {
+      name: 'Filesystem',
+      transport: 'stdio',
+      url: '',
+      command: 'npx',
+      args: ['-y', '@modelcontextprotocol/server-filesystem@2026.8.31', '.'],
+      egress_hosts: ['registry.npmjs.org'],
+      credential_ref: undefined,
+      enabled: true,
+      probe: { state: 'ok', tools: [{ name: 'read_file', fingerprint: 'f1' }] },
+    })
+    api.get.mockResolvedValue(live)
+    api.put.mockResolvedValue(live)
+    const user = userEvent.setup()
+    setup()
+    const row = await screen.findByRole('article', { name: 'Filesystem' })
+    await user.click(within(row).getByRole('button', { name: 'Configure' }))
+    const dialog = await screen.findByRole('dialog')
+    const hosts = within(dialog).getByLabelText(/^Allowed hosts/)
+    await user.type(hosts, '{Enter}mirror.example.com')
+    await user.click(within(dialog).getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(api.put).toHaveBeenCalled())
+    expect(api.put.mock.calls.at(-1)![1]).toMatchObject({
+      egress_hosts: ['registry.npmjs.org', 'mirror.example.com'],
+      enabled: false,
+    })
+  })
+  it('Allowed hosts refuses a repeated host and a local name before the engine does', async () => {
+    const user = userEvent.setup()
+    setup()
+    await user.click(
+      await screen.findByRole('button', { name: 'Add Filesystem' }),
+    )
+    const form = await screen.findByRole('dialog')
+    const hosts = within(form).getByLabelText(/^Allowed hosts/)
+    for (const typed of [
+      '{Enter}registry.npmjs.org',
+      '{Enter}localhost:8080',
+      '{Enter}registry.npmjs.org.',
+    ]) {
+      await user.clear(hosts)
+      await user.type(hosts, 'registry.npmjs.org' + typed)
+      expect(within(form).getByRole('button', { name: 'Save' })).toBeDisabled()
+    }
+    await user.clear(hosts)
+    await user.type(hosts, 'registry.npmjs.org')
+    expect(within(form).getByRole('button', { name: 'Save' })).toBeEnabled()
+  })
+  it('an operator-file configuration offers no starters', async () => {
+    api.get.mockResolvedValue({ ...snapshot, source: 'file', read_only: true })
+    setup()
+    await screen.findByText('Operator file')
+    expect(
+      screen.queryByRole('region', { name: 'Starter servers' }),
+    ).not.toBeInTheDocument()
+  })
+})

@@ -223,7 +223,7 @@ func strictCostScope(spec budgetSpec) ([]model.Filter, bool, amountCause) {
 	// The key is used exactly as the evaluator uses it (budgetSpec.sampleFilters and
 	// spec.matches compare the same string), including an empty key, which scopes the
 	// budget to samples whose dimension is empty. Same subject, same predicate.
-	return []model.Filter{eq(col, spec.Key)}, true, ""
+	return spec.sampleFilters(), true, ""
 }
 
 // supportedScopeColumn reports whether a column is the cost-sample column of a
@@ -361,8 +361,9 @@ func readStrictCostTotal(ctx context.Context, sc store.Scope, w strictCostWindow
 }
 
 // strictCostRowPredicates re-reads the window's own filters as the CLOSED set this
-// reader can verify: one equality per supported dimension column. Anything else — a
-// different operator, an unknown column, a non-string value, two predicates on the
+// reader can verify: one equality per supported dimension column, or the canonical
+// workspace subtree set. Anything else — an unsupported operator or column, a
+// value of the wrong type, two predicates on the
 // same column — is refused rather than sent, because a predicate that cannot be
 // checked on the way back is a predicate the reader cannot enforce. This is not a
 // filter engine: it recognizes the shape strictCostScope produces, and nothing else.
@@ -373,10 +374,20 @@ func strictCostRowPredicates(filters []model.Filter) ([]model.Filter, amountCaus
 	seen := make(map[string]bool, len(filters))
 	out := make([]model.Filter, 0, len(filters))
 	for _, f := range filters {
-		if f.Op != model.OpEq || !supportedScopeColumn(f.Column) || seen[f.Column] {
+		if !supportedScopeColumn(f.Column) || seen[f.Column] {
 			return nil, causeScopePredicateUnsupported
 		}
-		if _, ok := f.Value.(string); !ok {
+		switch f.Op {
+		case model.OpEq:
+			if _, ok := f.Value.(string); !ok {
+				return nil, causeScopePredicateUnsupported
+			}
+		case model.OpIn:
+			refs, ok := f.Value.([]string)
+			if f.Column != colWorkspaceRef || !ok || !validWorkspaceRefs(refs) {
+				return nil, causeScopePredicateUnsupported
+			}
+		default:
 			return nil, causeScopePredicateUnsupported
 		}
 		seen[f.Column] = true
@@ -450,11 +461,29 @@ func strictCostRowFault(r model.Record, w strictCostWindow, predicates []model.F
 //     different type is a fault in what came back, not a value to coerce.
 //   - an ABSENT or NULL cell — out of scope, not malformed. It is a legitimate storage
 //     state and this reader does not invent a SQL NULL contract for it: it simply
-//     cannot show that the row satisfies the requested equality, so it does not count
+//     cannot show that the row satisfies the requested predicate, so it does not count
 //     it. A real store would not have returned such a row for this predicate anyway
 //     (SQL equality is not true for NULL, including against the empty string), which
 //     is why this is a defensive check and not a change of query semantics.
 func dimensionCellSatisfies(r model.Record, p model.Filter) (amountCause, bool) {
+	if p.Op == model.OpIn {
+		refs, ok := p.Value.([]string)
+		if p.Column != colWorkspaceRef || !ok || !validWorkspaceRefs(refs) {
+			return causeScopePredicateUnsupported, false
+		}
+		cell, present := r[p.Column]
+		if !present || cell == nil {
+			return causeCostRowOutOfScope, false
+		}
+		text, ok := cell.(string)
+		if !ok {
+			return causeCostRowDimensionMalformed, false
+		}
+		if !contains(refs, text) {
+			return causeCostRowOutOfScope, false
+		}
+		return "", true
+	}
 	want, ok := p.Value.(string)
 	if !ok {
 		// strictCostRowPredicates already refused any non-string predicate before the

@@ -248,6 +248,7 @@ function DetailBody({
       {/* Managed config. */}
       <Section
         title={t('detail.config')}
+        caption={t('configs.observationNotice')}
         action={
           cfg ? (
             <div className="flex items-center gap-1">

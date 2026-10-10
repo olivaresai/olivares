@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
-	"github.com/crewjam/saml"
+	"github.com/russellhaering/gosaml2/types"
 
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
@@ -65,24 +65,19 @@ func (o *oidcProvider) assertionAssurance(idTokenClaims *oidc.IDToken) (int, tim
 	return auth.AAL2, time.Unix(claims.AuthTime, 0).UTC()
 }
 
-func (s *samlProvider) assertionAssurance(assertion *saml.Assertion) (int, time.Time) {
+func (s *samlProvider) assertionAssurance(assertion *types.Assertion) (int, time.Time) {
 	mapping := assuranceMapping(s.assurance)
-	var authenticatedAt time.Time
-	for _, statement := range assertion.AuthnStatements {
-		ref := statement.AuthnContext.AuthnContextClassRef
-		if ref == nil || !slices.Contains(mapping.SAMLContexts, ref.Value) || statement.AuthnInstant.IsZero() {
-			continue
-		}
-		if statement.SessionNotOnOrAfter != nil && !saml.TimeNow().Before(*statement.SessionNotOnOrAfter) {
-			continue
-		}
-		// Context and event must belong to the same signature-verified statement.
-		if statement.AuthnInstant.After(authenticatedAt) {
-			authenticatedAt = statement.AuthnInstant.UTC()
-		}
-	}
-	if authenticatedAt.IsZero() {
+	statement := assertion.AuthnStatement
+	if statement == nil || statement.AuthnContext == nil || statement.AuthnInstant == nil || statement.AuthnInstant.IsZero() {
 		return auth.AAL1, time.Time{}
 	}
-	return auth.AAL2, authenticatedAt
+	ref := statement.AuthnContext.AuthnContextClassRef
+	if ref == nil || !slices.Contains(mapping.SAMLContexts, ref.Value) {
+		return auth.AAL1, time.Time{}
+	}
+	if statement.SessionNotOnOrAfter != nil && !s.sp.Clock.Now().Before(*statement.SessionNotOnOrAfter) {
+		return auth.AAL1, time.Time{}
+	}
+	// Context and event belong to the same signature-verified statement.
+	return auth.AAL2, statement.AuthnInstant.UTC()
 }

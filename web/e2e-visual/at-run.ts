@@ -287,15 +287,15 @@ const TOKEN_PAIRS: {
   { name: 'ring/surface', kind: 'ui', fg: '--ring', bg: '--surface' },
   { name: 'accent/background', kind: 'ui', fg: '--accent', bg: '--background' },
   { name: 'accent/surface', kind: 'ui', fg: '--accent', bg: '--surface' },
-  //a SELECTION ring drawn in `--accent` over an `--accent-soft` fill. The
-  // derived pass covers text (1.4.3) only, so a `ring-*` is not a pairing it can
-  // see; without this line the trace row's non-text state indicator would be a
-  // number in a comment, in the very change whose thesis is that hand-computed
-  // contrast goes stale. Named here so the gate measures it every run.
-  // `--accent-strong` es el ÚNICO identificador de color del estado seleccionado/activo
-  // (tokens.css:77, con test en tokens.test.ts:83), y los dos componentes que esta rama tocaba
-  // dependen de él. Sin estos cuatro pares la derivación mediría todo MENOS el indicador de
-  // selección: la clase exacta de verde que no mide lo que dice. Vienen de main, no de aquí.
+  //a selection ring drawn in `--accent` over an `--accent-soft` fill. The derived pass
+  // covers text (1.4.3) only, so it cannot see a `ring-*` pairing. Without this line, the trace
+  // row's non-text state indicator would be a number in a comment that can go stale.
+  // Naming it here makes the gate measure it on every run.
+  // `--accent-strong` is the only color token for the selected/active state
+  // (`tokens.css:77`, tested in `tokens.test.ts:83`), and both affected components depend on
+  // it.
+  // Without these four pairs, the derivation would miss the selection indicator while claiming
+  // to measure it. The pairs come from main.
   {
     name: 'accent-strong/surface',
     kind: 'ui',

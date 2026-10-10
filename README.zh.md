@@ -6,15 +6,16 @@
 
 **运行团队已经在用的 AI，像管理其他基础设施一样掌握它。**
 
-[它做什么](#它做什么) · [安装](#安装) · [控制台](#控制台一览) · [版本](#版本与定价) · [文档](#文档) · [社区](#社区) · [olivares.ai](https://olivares.ai)
+[它做什么](#它做什么) · [安装](#安装) · [版本](#版本与定价) · [文档](#文档) · [社区](#社区) · [olivares.ai](https://olivares.ai)
 
 [![License: AGPL-3.0-only](https://img.shields.io/badge/license-AGPL--3.0--only-blue)](LICENSING.md)
-[![SDK & connectors: Apache-2.0](https://img.shields.io/badge/SDK%20%26%20connectors-Apache--2.0-blue)](LICENSING.md)
-[![Release: 26.10](https://img.shields.io/badge/release-26.10-28282B)](https://github.com/olivaresai/olivares/releases/tag/26.10.1)
+[![SDK & connectors: Apache-2.0](https://img.shields.io/badge/SDK%20%26%20connectors-Apache--2.0-blue)](LICENSING.md) <!-- release -->
+[![Next release: 0.1](https://img.shields.io/badge/release-0.1-28282B)](https://github.com/olivaresai/olivares/releases/tag/0.1)<!-- /release -->
 [![Status: beta](https://img.shields.io/badge/status-beta-F08000)](CHANGELOG.md)
 [![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa)](CODE_OF_CONDUCT.md)
 
 </div>
+
 
 开发者用 Claude Code 和 Codex 工作。agent 调用 MCP 服务器、模型和内部 API，定时任务自行运行。每个组件都有自己的日志和权限，所以连简单的问题也难以快速回答：哪个 agent 改了这个文件，谁批准的，这个月 AI 花了多少钱？
 
@@ -32,9 +33,11 @@ Olivares AI 把答案汇集在一处。它连接你已经在用的 agent 和工�
 - **控制 AI 支出。** 按团队、agent 或模型设置预算，在账单到来之前发出警告、减缓或停止支出。
 - **安全地让 agent 使用公司知识。** 连接 SharePoint、Confluence、Google Drive、Notion、Salesforce、Snowflake、S3 和 PostgreSQL。每个 agent 只能看到使用它的人有权看到的内容。
 - **跨会话继续工作。** 会话结束后，任务、负责人和决策仍然保留。无需 SSH，就能从浏览器启动、加入和停止 Claude Code、Codex 和 Grok 会话。
-- **需要时提供证据。** 每项决策都写入签名日志，事后的任何篡改都可被检测到。安全团队和审计人员从这些记录生成报告，证据对应 26 个框架目录。
+- **需要时提供证据。** 每项决策都写入签名日志，事后的任何篡改都可被检测到。Business Compliance Packs 将证据对应到 26 个框架目录，并为安全团队和审计人员生成报告。Community 保留已存证据的读取和 JSON/CSV 导出功能。
 
-支持你已有的工具：Claude Code、Codex、Grok、Cursor、gemini-cli、opencode、OpenHands，以及通过 Ollama 运行的本地模型。**31 个模块**和 **159 项集成**全部包含在免费版本中：[所有模块](docs-site/src/content/docs/reference/modules/overview.md) · [所有连接器](connectors/README.md)。
+支持你已有的工具：Claude Code、Codex、Grok、Cursor、gemini-cli、opencode、OpenHands，以及通过 Ollama 运行的本地模型。**32 个模块**和 **136 项集成**：[所有模块](docs-site/src/content/docs/reference/modules/overview.md) · [所有连接器](connectors/README.md)。
+
+Community 保留本地可观测性、已保存的设置和备份导出。SIEM/ITSM 推送、外部遥测传输和安全态势导出包含在 Business 基础版中。
 
 ## 安装
 
@@ -49,12 +52,14 @@ olivares quickstart
 
 **Docker。** 多架构。容器镜像基于 Debian 13 slim（含供代理工具使用的 Node.js 24），并以非 root 用户运行。它监听主机的所有网络接口；在每个 `-p` 前加上 `127.0.0.1:`，即可限制为本机访问。
 
+<!-- release -->
 ```sh
 docker run -d --name olivares -p 8443:8443 -p 8444:8444 \
   -v olivares-data:/var/lib/olivares \
-  docker.io/olivaresai/olivares \
+  docker.io/olivaresai/olivares:0.1 \
   serve --listen :8443 --grpc-listen :8444 --data-dir /var/lib/olivares
 ```
+<!-- /release -->
 
 **Docker Compose。** 单节点 SQLite，可选 Postgres 和备份。
 
@@ -63,42 +68,30 @@ git clone --depth 1 https://github.com/olivaresai/olivares.git && cd olivares
 docker compose -f deploy/compose/docker-compose.yml up --wait --wait-timeout 120
 ```
 
-**Kubernetes。** 使用本仓库中的 Helm chart（chart 尚无 OCI 发布版本：`publication-unverified`）。
-
-```sh
-git clone --depth 1 https://github.com/olivaresai/olivares.git && cd olivares
-helm install olivares deploy/helm/olivares -n olivares-system --create-namespace
-```
-
-不使用 Helm：
-
-```sh
-git clone --depth 1 https://github.com/olivaresai/olivares.git && cd olivares
-kubectl create namespace olivares-system && kubectl apply -n olivares-system -f deploy/manifests/install.yaml
-```
+会话在主机上的一个文件夹中工作：在 `up` 之前把 `OLIVARES_PROJECT_DIR` 设为它的绝对路径，Compose 会把它挂载到 `/project`。在 AppArmor 策略限制用户命名空间的主机上（Ubuntu 24.04 及更高版本），请先加载会话配置文件：参见 [Docker Compose](INSTALL.md#docker-compose)。
 
 **Debian 和 Ubuntu。** 软件包添加一个无法登录的 `olivares` 用户和一个经过安全加固的服务；服务由你启动。
 
 ```sh
-curl -fsSLO https://github.com/olivaresai/olivares/releases/download/26.10.1/olivares_26.10.1_linux_amd64.deb
-sudo dpkg -i olivares_26.10.1_linux_amd64.deb && sudo systemctl enable --now olivares
+curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.1/olivares_0.1_linux_amd64.deb
+sudo dpkg -i olivares_0.1_linux_amd64.deb && sudo systemctl enable --now olivares
 ```
 
 **RHEL、Fedora 和 SUSE。**
 
 ```sh
-curl -fsSLO https://github.com/olivaresai/olivares/releases/download/26.10.1/olivares_26.10.1_linux_amd64.rpm
-sudo rpm -i olivares_26.10.1_linux_amd64.rpm && sudo systemctl enable --now olivares
+curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.1/olivares_0.1_linux_amd64.rpm
+sudo rpm -i olivares_0.1_linux_amd64.rpm && sudo systemctl enable --now olivares
 ```
 
 **Alpine。**
 
 ```sh
-curl -fsSLO https://github.com/olivaresai/olivares/releases/download/26.10.1/olivares_26.10.1_linux_amd64.apk
-sudo apk add --allow-untrusted olivares_26.10.1_linux_amd64.apk && sudo rc-service olivares start
+curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.1/olivares_0.1_linux_amd64.apk
+sudo apk add --allow-untrusted olivares_0.1_linux_amd64.apk && sudo rc-service olivares start
 ```
 
-ARM 服务器请用 `arm64` 替换 `amd64`。全部发布文件见[发布页面](https://github.com/olivaresai/olivares/releases/tag/26.10.1)。
+ARM 服务器请用 `arm64` 替换 `amd64`。全部发布文件见[发布页面](https://github.com/olivaresai/olivares/releases/tag/0.1)。
 
 **Homebrew。** macOS 和 Linux。
 
@@ -123,15 +116,7 @@ olivares serve --seed-demo --insecure --listen 127.0.0.1:8901 --grpc-listen 127.
 
 然后打开 http://127.0.0.1:8901。
 
-## 控制台一览
-
-| | |
-|---|---|
-| <picture><source media="(prefers-color-scheme: dark)" srcset="docs-site/public/console/access-map-dark.png"><img src="docs-site/public/console/access-map-light.png" alt="Access map: what each agent reads and writes across your estate, origins on the left, resources on the right."></picture><br><sub><b>访问图</b> — 谁读取和写入了什么。</sub> | <picture><source media="(prefers-color-scheme: dark)" srcset="docs-site/public/console/access-map-drift-dark.png"><img src="docs-site/public/console/access-map-drift-light.png" alt="Least-privilege drift: unexpected accesses and unused grants overlaid on the access map."></picture><br><sub><b>Drift</b> — 无人授权的访问，以及无人使用的权限。</sub> |
-| <picture><source media="(prefers-color-scheme: dark)" srcset="docs-site/public/console/agentops-dark.png"><img src="docs-site/public/console/agentops-light.png" alt="Claude Code sessions created, attached to and governed from the console."></picture><br><sub><b>会话</b> — 从浏览器启动、加入和停止 agent 会话。</sub> | <picture><source media="(prefers-color-scheme: dark)" srcset="docs-site/public/console/work-dark.png"><img src="docs-site/public/console/work-light.png" alt="Work: the durable cross-session backlog of work items and decisions."></picture><br><sub><b>工作</b> — 会话结束后仍保留的任务、负责人和决策。</sub> |
-| <picture><source media="(prefers-color-scheme: dark)" srcset="docs-site/public/console/security-dark.png"><img src="docs-site/public/console/security-light.png" alt="Security and forensics: guardrail findings, the anomaly queue and tamper-evident forensics."></picture><br><sub><b>安全</b> — 被拦截的操作、异常和可检测篡改的记录。</sub> | <picture><source media="(prefers-color-scheme: dark)" srcset="docs-site/public/console/finops-dark.png"><img src="docs-site/public/console/finops-light.png" alt="FinOps: model spend, token usage, budgets and a run-rate projection."></picture><br><sub><b>支出</b> — 按模型和 agent 查看费用、预算和预测。</sub> |
-
-全部页面见[控制台参考](docs-site/src/content/docs/reference/console.md)。
+Helm、Kubernetes operator、Terraform、一体机以及 FIPS/STIG 部署制品随 Business 分发；离线安装需要 Enterprise。参见[版本](docs/editions.md)。
 
 ## 版本与定价
 
@@ -141,11 +126,11 @@ Community 是完整产品，免费且开源。Business 增加企业在生产环�
 |---|---|---|---|
 | **价格** | 免费，AGPL-3.0 | 每月 129 美元或每年 1,290 美元 | 年度合同 |
 | **包含内容** | 完整产品：不限用户数量，包含全部四个 deny-closed 执行点 | Community 的全部内容，加上 Regulated Operations、AI Runtime Security、Compliance Packs、Identity & Scale、商业许可证、签名更新和邮件支持 | Business 的全部内容，加上更多公司、部署和身份提供商、离线镜像，以及与你约定的支持条款 |
-| **使用范围** | 一个活跃身份提供商 | 一家公司，两个生产部署，每个各配一个 staging 环境，五个身份提供商 | 按合同约定 |
+| **使用范围** | 一个活跃身份提供商 | 一家公司，同一时间一个活跃实例 | 按合同约定 |
 
-**Regulated Operations** 按法律要求的期限保留记录，支持法律保全和不可更改的归档。**AI Runtime Security** 过滤 agent 发送、接收和执行的内容。**Compliance Packs** 为 ISO 42001、DORA 和 NIS 2 提供可直接使用的证据。**Identity & Scale** 同时连接多个身份提供商，并支持更大规模的部署。
+**Regulated Operations** 增加法规要求的最短保留期限、归档上的法律保全核对，以及 Azure 和 GCS 上的 WORM 归档。**AI Runtime Security** 对 agent 发送、接收和执行的内容进行更深入的检查。**Compliance Packs** 为你的审计人员起草 DORA 信息登记册和 ISO/IEC 42001 材料包。**Identity & Scale** 同时连接多个身份提供商，并支持更大规模的部署。
 
-[olivares.ai/pricing](https://olivares.ai/pricing) · [开源与商业范围](LICENSING.md)
+[olivares.ai/pricing](https://olivares.ai/pricing) · [各版本包含的内容](docs/editions.md) · [开源与商业范围](LICENSING.md)
 
 ## 架构
 

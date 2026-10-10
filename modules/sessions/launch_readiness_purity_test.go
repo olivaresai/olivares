@@ -476,7 +476,7 @@ func TestLaunchReadiness_RuntimeCredentialWiring(t *testing.T) {
 		doc, m := readOne(t, func(m *Module) {
 			// The work issuer alone. The dual posture is INDIVISIBLE, so this is a
 			// known incomplete composition rather than a working one.
-			m.UseWorkSessionCredentialSource(nil)
+			m.WorkSessionCreds = nil
 			m.EnableCommunicationSessionCredentials()
 		})
 		doc.wantCheck(t, CheckRuntimeCredentials, ReadinessNotConfigured, codeRuntimeCredentialWiringPartial)
@@ -491,7 +491,7 @@ func TestLaunchReadiness_RuntimeCredentialWiring(t *testing.T) {
 	t.Run("enabled with a composed witness that is not effective", func(t *testing.T) {
 		stub := &communicationReadinessStub{storeReady: true, sealerReady: true}
 		doc, m := readOne(t, func(m *Module) {
-			m.UseWorkSessionCredentialSource(stubWorkCredentialSource{})
+			m.WorkSessionCreds = stubWorkCredentialSource{}
 			wireCommunicationReadiness(m, stub, false)
 			m.EnableCommunicationSessionCredentials()
 		})
@@ -507,7 +507,7 @@ func TestLaunchReadiness_RuntimeCredentialWiring(t *testing.T) {
 	t.Run("enabled with an unavailable witness", func(t *testing.T) {
 		stub := &communicationReadinessStub{storeErr: errors.New("store witness unavailable")}
 		doc, _ := readOne(t, func(m *Module) {
-			m.UseWorkSessionCredentialSource(stubWorkCredentialSource{})
+			m.WorkSessionCreds = stubWorkCredentialSource{}
 			wireCommunicationReadiness(m, stub, true)
 			m.EnableCommunicationSessionCredentials()
 		})
@@ -518,7 +518,7 @@ func TestLaunchReadiness_RuntimeCredentialWiring(t *testing.T) {
 	t.Run("enabled and effective", func(t *testing.T) {
 		stub := &communicationReadinessStub{storeReady: true, sealerReady: true, pumpReady: true}
 		doc, _ := readOne(t, func(m *Module) {
-			m.UseWorkSessionCredentialSource(stubWorkCredentialSource{})
+			m.WorkSessionCreds = stubWorkCredentialSource{}
 			wireCommunicationReadiness(m, stub, true)
 			m.EnableCommunicationSessionCredentials()
 		})

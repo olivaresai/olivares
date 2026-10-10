@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -155,7 +156,7 @@ func (m *Module) handleIngest(w http.ResponseWriter, r *http.Request, mc api.Mod
 	}
 
 	// Gather documents OUTSIDE the transaction (a source pull is an external call).
-	docs, msg, code := m.gatherDocuments(r.Context(), &req)
+	docs, validate, msg, code := m.gatherDocuments(r.Context(), mc, id.String(), &req)
 	if msg != "" {
 		writeJSON(w, code, errorBody(msg))
 		return
@@ -258,8 +259,15 @@ func (m *Module) handleIngest(w http.ResponseWriter, r *http.Request, mc api.Mod
 	}
 
 	// Phase 2 — embed (the external/egress call), only after every document
-	// passed the gates.
+	// passed the gates. Preparation and prior dispatches can outlive the source's
+	// original authority, so recheck that same proof before each nonempty dispatch.
 	for i := range prepared {
+		if validate != nil && len(prepared[i].chunks) > 0 {
+			if err := mc.Data.View(r.Context(), func(sc store.Scope) error { return validate(r.Context(), sc, SourceRead) }); err != nil {
+				writeJSON(w, http.StatusConflict, errorBody("workspace source changed during ingest; no documents were ingested"))
+				return
+			}
+		}
 		if err := m.embedPrepared(r.Context(), mc.Tenant, &prepared[i]); err != nil {
 			writeJSON(w, http.StatusBadGateway, errorBody("embedding failed: "+err.Error()))
 			return
@@ -267,7 +275,7 @@ func (m *Module) handleIngest(w http.ResponseWriter, r *http.Request, mc api.Mod
 	}
 
 	// Persist documents + chunks in ONE transaction (pure DB work; embedding done).
-	if err := m.persistDocuments(r.Context(), mc, id, region, prepared, dataProductID); err != nil {
+	if err := m.persistDocuments(r.Context(), mc, id, region, prepared, dataProductID, validate); err != nil {
 		if ce, ok := err.(*clientError); ok {
 			writeJSON(w, http.StatusBadRequest, errorBody(ce.msg))
 			return
@@ -301,35 +309,74 @@ func (m *Module) handleIngest(w http.ResponseWriter, r *http.Request, mc api.Mod
 // gatherDocuments resolves the request to a slice of documents to ingest, OUTSIDE
 // any transaction. It returns (docs, "", 0) on success or (nil, message, status)
 // on a client error.
-func (m *Module) gatherDocuments(ctx context.Context, req *ingestRequest) ([]ingestDocument, string, int) {
+func (m *Module) gatherDocuments(ctx context.Context, mc api.ModuleContext, kbRef string, req *ingestRequest) ([]ingestDocument, func(context.Context, store.Scope, SourceValidation) error, string, int) {
 	if name := strings.TrimSpace(req.Source); name != "" {
 		src, ok := m.sources[name]
+		owned := false
+		var validate func(context.Context, store.Scope, SourceValidation) error
+		if !ok && m.sourceOpener != nil {
+			pullCtx, cancel := context.WithTimeout(ctx, time.Minute)
+			defer cancel()
+			ctx = pullCtx
+			var msg string
+			var code int
+			opened, refusal, status := m.sourceOpener(ctx, mc, kbRef, name)
+			msg, code = refusal, status
+			if opened != nil {
+				src, validate = opened.Source, opened.Validate
+			}
+			if msg != "" {
+				return nil, nil, msg, code
+			}
+			ok, owned = src != nil, src != nil
+		}
 		if !ok {
-			return nil, "unknown source: " + name, http.StatusBadRequest
+			return nil, nil, "unknown source: " + name, http.StatusBadRequest
 		}
 		// Boundary with the content connectors: only document content is ingested as knowledge.
 		if src.Kind() != contentsource.ClassDocument {
-			return nil, "source " + name + " is not a document content source (audit / inventory feeds are not knowledge)", http.StatusBadRequest
+			if owned {
+				cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+				_ = src.Close(cleanup)
+				cancel()
+			}
+			return nil, nil, "source " + name + " is not a document content source (audit / inventory feeds are not knowledge)", http.StatusBadRequest
 		}
 		docs, msg, code := m.pullFromSource(ctx, src)
-		if msg != "" {
-			return nil, msg, code
+		if owned {
+			cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+			closeErr := src.Close(cleanup)
+			cancel()
+			if msg != "" || closeErr != nil {
+				return nil, nil, "workspace source could not be read; no documents were ingested", http.StatusBadGateway
+			}
 		}
-		return ingestDocumentsWithMode(docs, sourceModeForSource(src)), "", 0
+		if msg != "" {
+			return nil, nil, msg, code
+		}
+		if owned {
+			if validate == nil {
+				return nil, nil, "workspace source authority is unavailable", http.StatusServiceUnavailable
+			}
+			if err := mc.Data.View(ctx, func(sc store.Scope) error { return validate(ctx, sc, SourceRead) }); err != nil {
+				return nil, nil, "workspace source changed during ingest; no documents were ingested", http.StatusConflict
+			}
+		}
+		return ingestDocumentsWithMode(docs, sourceModeForSource(src)), validate, "", 0
 	}
 	if len(req.Documents) == 0 {
-		return nil, "", 0
+		return nil, nil, "", 0
 	}
 	if len(req.Documents) > maxInlineDocs {
-		return nil, "too many inline documents", http.StatusBadRequest
+		return nil, nil, "too many inline documents", http.StatusBadRequest
 	}
 	docs := make([]ingestDocument, 0, len(req.Documents))
 	for _, d := range req.Documents {
 		if strings.TrimSpace(d.SourceDocID) == "" {
-			return nil, "each document requires source_doc_id", http.StatusBadRequest
+			return nil, nil, "each document requires source_doc_id", http.StatusBadRequest
 		}
 		if len(d.Body) > maxBodyBytes {
-			return nil, "document body too large", http.StatusBadRequest
+			return nil, nil, "document body too large", http.StatusBadRequest
 		}
 		sk := strings.TrimSpace(d.SourceKind)
 		if sk == "" {
@@ -343,7 +390,7 @@ func (m *Module) gatherDocuments(ctx context.Context, req *ingestRequest) ([]ing
 			sourceMode: normalizeSourceMode(d.SourceMode, sourceModeDirect),
 		})
 	}
-	return docs, "", 0
+	return docs, nil, "", 0
 }
 
 func ingestDocumentsWithMode(docs []contentsource.Document, mode string) []ingestDocument {
@@ -512,8 +559,13 @@ func storedBasisHash(chunkHashes []string) string {
 // transaction, then advances the KB counts and self-audits. Re-ingesting the same
 // (source, source_doc_id) upserts the document and REPLACES its chunks (no
 // duplicates). It enforces the honest chunk ceiling of the store-backed index.
-func (m *Module) persistDocuments(ctx context.Context, mc api.ModuleContext, kbID model.ID, region string, prepared []preparedDoc, dataProductID model.ID) error {
+func (m *Module) persistDocuments(ctx context.Context, mc api.ModuleContext, kbID model.ID, region string, prepared []preparedDoc, dataProductID model.ID, validate func(context.Context, store.Scope, SourceValidation) error) error {
 	return mc.Data.Mutate(ctx, func(sc store.Scope) error {
+		if validate != nil {
+			if err := validate(ctx, sc, SourcePin); err != nil {
+				return err
+			}
+		}
 		kbRepo, err := sc.Ext(baseKind)
 		if err != nil {
 			return err
@@ -584,9 +636,17 @@ func (m *Module) persistDocuments(ctx context.Context, mc api.ModuleContext, kbI
 		if err := m.markDataProductIngested(ctx, sc, dataProductID); err != nil {
 			return err
 		}
-		return auditEvent(ctx, sc, mc, "knowledge.ingest", baseKind, kbID, map[string]any{
+		if err := auditEvent(ctx, sc, mc, "knowledge.ingest", baseKind, kbID, map[string]any{
 			"documents": len(prepared), "chunks_added": addedChunks, "embed_model": m.embedder.ModelRef(), "egress": m.embedder.AllowsEgress(),
-		})
+		}); err != nil {
+			return err
+		}
+		// The original proof must still be live at a fresh transaction-time
+		// observation after writes and audit; its pins remain held until commit.
+		if validate != nil {
+			return validate(ctx, sc, SourceFreshness)
+		}
+		return nil
 	})
 }
 

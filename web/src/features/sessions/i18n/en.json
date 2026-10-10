@@ -1,6 +1,28 @@
 {
+  "git": {
+    "title": "Git",
+    "branch": "Branch",
+    "newBranch": "New branch",
+    "branchName": "Branch name",
+    "createBranch": "Create branch",
+    "commitMessage": "Commit message",
+    "commit": "Commit",
+    "stage": "Stage {{path}}",
+    "unstage": "Unstage {{path}}",
+    "stageButton": "Stage",
+    "unstageButton": "Unstage",
+    "refresh": "Refresh Git status",
+    "loading": "Reading Git status…",
+    "readOnly": "Git changes are unavailable with this session’s permissions.",
+    "clean": "Working tree clean.",
+    "detached": "Detached HEAD",
+    "cancel": "Cancel",
+    "truncated": "Showing the first 200 files or branches. Refresh after narrowing the changes.",
+    "fileStatus": "Index: {{index}}; working tree: {{worktree}}",
+    "commitHint": "Only staged changes are committed, using your profile’s name and email.",
+    "working": "Working…"
+  },
   "title": "Sessions",
-  "subtitle": "Live agent operation — what each session is doing right now, its tokens, cost and cadence, updated over a live stream.",
   "refresh": "Refresh",
   "search": "Search session, agent, action…",
   "untitled": "Untitled session",
@@ -82,7 +104,7 @@
   },
   "empty": {
     "title": "No sessions yet",
-    "description": "Sessions appear here as soon as agents start working — the ones Olivares discovers through its connectors, and the ones you launch from this screen."
+    "description": "Sessions you start, and the ones Olivares finds, appear here."
   },
   "filtered": {
     "title": "No sessions match these filters",
@@ -92,8 +114,6 @@
     "title": "Sessions not authorized",
     "description": "Your role does not include permission to view live sessions."
   },
-  "operateTitle": "Claude Code",
-  "operateSubtitle": "Create, attach to and govern Claude Code sessions — no SSH. The sessions Olivares only observes are in this same list, and open the same card.",
   "launch": "New session",
   "allSources": "All sources",
   "tabs": {
@@ -181,7 +201,9 @@
     "unclaimed": "Activity seen from a session holding no live claim. The engine reports it; it is not the same signal as a possible evasion.",
     "relayedIO": "Its I/O is relayed to Anthropic’s cloud, so Olivares cannot show it here. Lifecycle control still applies.",
     "observedNotRead": "The observed half was not read: your role does not include sessions:live:read.",
-    "noObservationYet": "Nothing observed for this session yet — no telemetry has reached the plane under this reference.",
+    "noObservationYet": "No session activity yet.",
+    "failureReasonMissing": "This session failed. The server did not report a reason.",
+    "hostIsolationRemedy": "Ask the server administrator to allow unprivileged user and network namespaces and Landlock, then start the session again.",
     "actionFailed": "The action could not be completed.",
     "activeRun": "acting on",
     "pickRun": "Several runs drive this session. Pick one to attach, govern or stop it.",
@@ -234,26 +256,13 @@
   },
   "rail": {
     "label": "Work rail",
-    "group": {
-      "active": "Active",
-      "attention": "Waiting for you",
-      "settled": "Settled"
-    },
-    "groupEmpty": {
-      "active": "Nothing is running right now.",
-      "attention": "Nothing is waiting for you.",
-      "settled": "No session has settled yet."
-    },
     "pin": "Pin",
     "unpin": "Unpin",
     "pinnedMark": "Pinned",
     "rowMenu": "Actions for {{name}}",
-    "noObservation": "No telemetry has arrived for this session yet.",
-    "emptyTitle": "No sessions yet",
-    "emptyDescription": "Every session this deployment observes or launches appears here, grouped by what it needs from you."
+    "noObservation": "No telemetry has arrived for this session yet."
   },
   "surface": {
-    "paneSwitcher": "Choose a pane",
     "closeContext": "Close the context",
     "backTo": "Back to {{pane}}",
     "pane": {
@@ -269,6 +278,20 @@
     "notReadTitle": "This session could not be read",
     "menu": "Actions for {{name}}",
     "terminal": "In a terminal"
+  },
+  "meter": {
+    "mode": "Mode: {{mode}}",
+    "modeTitle": "{{tool}} reports: {{mode}}",
+    "theTool": "the tool",
+    "usageLabel": "This session's usage",
+    "tokens": "{{input}} in / {{output}} out tokens",
+    "costTitle": "An estimate, not an invoice: the tool's own figure, or the list price of a turn it did not price",
+    "costUnknown": "cost not reported",
+    "planLabel": "The plan's usage windows of this session's login",
+    "planNotRead": "plan window not read",
+    "resets": "Resets {{when}} ({{at}})",
+    "stale": "last known",
+    "readAt": "Read {{at}}"
   },
   "evidence": {
     "checks": {
@@ -293,7 +316,7 @@
     "noneTitle": "No session selected",
     "noneDescription": "The scope a session ran under, and the references you need to look it up, appear here.",
     "scopeTitle": "Scope",
-    "scopeHint": "What this session applies to. These are the values it ran under, not the ones selected now.",
+    "scopeHint": "What this session applies to. These are the values it ran under, not the ones selected now. Read-only folders protect file content and directory entries (no write, truncate, create, remove or rename); permissions, ownership, extended attributes and timestamps follow the host's normal permissions.",
     "tenant": "Organization",
     "workspace": "Workspace",
     "environment": "Environment",
@@ -325,12 +348,11 @@
     "wireHint": "The raw frame for the selected line. The conversation is the default view.",
     "wireEmpty": "Select a line in the conversation to see its raw frame.",
     "thisNode": "This node",
-    "noWorkspace": "No workspace",
-    "cwdWarning": "This session has no workspace. The driver reported its working directory as {{cwd}}.",
     "workTitle": "Session work authority",
     "workHint": "Recorded for the last launch. Every action checks current authorization.",
     "processState": "Process state",
     "activityState": "Activity",
+    "toolMode": "Mode as the tool reports it",
     "workRole": "Granted role",
     "workWorkspace": "Work workspace",
     "workActions": "Granted actions",
@@ -340,7 +362,17 @@
       "orchestrator": "Orchestrator"
     },
     "details": "Details",
-    "echoes": "Also reported as"
+    "echoes": "Also reported as",
+    "folder": "Folder",
+    "temporaryFolder": "Temporary folder for this session",
+    "panels": "Panels",
+    "tabChanges": "Changes",
+    "tabFiles": "Files",
+    "noFiles": "This session has no folder to browse.",
+    "noChanges": "Olivares did not start this session, so it has no changes to show.",
+    "filesUnavailable": "This folder is not available to browse.",
+    "filesNoAccess": "Your role cannot browse this folder.",
+    "filesFailed": "The folder could not be read."
   },
   "conversation": {
     "log": "Conversation",
@@ -348,10 +380,7 @@
     "empty": "No turns yet. Send a sentence below.",
     "ended": "The session I/O stream ended.",
     "lag": "{{count}} frame(s) dropped — output below resumes after the gap.",
-    "operator": "You",
-    "assistant": "Assistant",
     "tool": "Tool",
-    "system": "System",
     "result": "Result",
     "unknown": "Unrecognised frame",
     "inspect": "Show in inspector",
@@ -359,7 +388,6 @@
     "toolResult": "Result",
     "toolFailed": "Failed",
     "tokens": "{{input}} in · {{output}} out",
-    "cwdWarning": "This session has no workspace. The driver reported its working directory as {{cwd}}.",
     "protocol": "Protocol frames: {{count}}",
     "stop": {
       "cancelled": "Cancelled",
@@ -371,7 +399,13 @@
     "retrying": "Retrying ({{count}}): {{message}}",
     "keyRefused": "The provider refused the API key. Replace it under API keys.",
     "output": "Tool output ({{count}}): {{first}}",
-    "notSent": "Not sent: {{reason}}"
+    "notSent": "Not sent: {{reason}}",
+    "waitingApproval": "Sent when the launch is approved and the session starts.",
+    "workingFolder": "Working folder: {{cwd}}",
+    "temporaryFolder": "Working folder: temporary folder for this session",
+    "workedFor": "Worked for {{duration}}",
+    "toolsFolded_one": "+{{count}} tool call",
+    "toolsFolded_other": "+{{count}} tool calls"
   },
   "changes": {
     "title": "Changes in {{folder}}",
@@ -386,10 +420,45 @@
     "fileTruncated": "Showing the first 256 KB.",
     "truncated": "Showing the newest {{count}} files."
   },
+  "preview": {
+    "title": "Preview",
+    "hint": "The app this session serves on a local port. It runs in your browser, isolated from the console and outside the session's network limits.",
+    "loading": "Looking for the session's ports…",
+    "none": "This session is not serving anything on a local port.",
+    "notRunning": "The session is not running, so it serves nothing.",
+    "error": "The session's ports could not be read. Try again in a moment.",
+    "notAllowed": "Opening a preview needs permission to operate this session.",
+    "port": "Port",
+    "path": "Path",
+    "open": "Open",
+    "reload": "Reload",
+    "newTab": "Open in a new tab",
+    "openError": "The preview could not be opened. The port may have closed.",
+    "frameTitle": "Preview of port {{port}}"
+  },
+  "branchChanges": {
+    "title": "Branch changes",
+    "hint": "What this session's branch holds that the workspace's current commit does not. Committed work only.",
+    "range": "From {{base}} to {{head}}",
+    "loading": "Reading the branch…",
+    "error": "The branch changes could not be read. Try again in a moment.",
+    "empty": "This branch holds nothing the workspace's current commit does not.",
+    "back": "All branch changes",
+    "binary": "Binary file, not shown.",
+    "truncated": "Showing the first {{count}} changed files.",
+    "fileTruncated": "Showing the first 64 KB of each side.",
+    "original": "At the base",
+    "modified": "At the branch tip",
+    "status": {
+      "added": "Added",
+      "modified": "Modified",
+      "deleted": "Deleted"
+    }
+  },
   "peers": {
     "button_one": "Can message {{count}} other session",
     "button_other": "Can message {{count}} other sessions",
-    "buttonNone": "Can message no other session",
+    "buttonNone": "Choose sessions to message",
     "template": "Can message sessions from this template",
     "title": "Sessions this one can message",
     "hint": "The sessions this one may message or hand work to. The engine refuses any other.",
@@ -397,5 +466,21 @@
     "none": "No other live session in this workspace.",
     "save": "Save",
     "saved": "Message permissions saved."
+  },
+  "list": {
+    "group": {
+      "attention": "Needs you",
+      "active": "Working",
+      "settled": "Idle"
+    },
+    "more": "More",
+    "back": "Back to sessions",
+    "showTable": "Show as table",
+    "filter": "Filter sessions…",
+    "noMatch": "No session matches."
+  },
+  "thread": {
+    "copyReference": "Copy reference",
+    "terminalHint": "The same session from a terminal."
   }
 }

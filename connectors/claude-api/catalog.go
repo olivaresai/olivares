@@ -3,13 +3,16 @@
 
 package claudeapi
 
-import "github.com/olivaresai/olivares/connectors/modelprovider"
+import (
+	"github.com/olivaresai/olivares/connectors/internal/pricing"
+	"github.com/olivaresai/olivares/connectors/modelprovider"
+)
 
 // This file holds the declared, operator-maintainable Claude catalog data:
 // per-family list pricing and the Claude-stack capability set. Live mode replaces
 // the offline model list with the provider's /v1/models response and enriches each
-// model with the pricing/capabilities declared here; pricing is matched by model
-// family prefix so a new model version inherits its family's declared list price
+// model with the pricing/capabilities declared here; shared dated prices take
+// precedence over family prices. A new model version inherits its family's list price
 // until the operator overrides it. These are list prices to VERIFY against
 // console.anthropic.com/pricing — not fabricated metrics (docs/SECURITY-HARDENING.md contract).
 
@@ -17,6 +20,14 @@ import "github.com/olivaresai/olivares/connectors/modelprovider"
 // (re-verified 2026-06-09 against the pricing page + the Fable 5 / Mythos 5 launch
 // page, which added the 10/50 tier).
 const pricingAsOf = "2026-06-09"
+
+// legacyFamilyPricing reuses the shared rates — the embedded genai-prices
+// dataset first, the shared curated fallback for models it lacks — carrying
+// whichever declaration date that source stamped (see connectors/internal/pricing).
+func legacyFamilyPricing(modelID string) modelprovider.ModelPricing {
+	p, _ := pricing.ClaudePricingFor(modelID)
+	return p
+}
 
 // claudeStackCapabilities is the full Claude stack surfaced by module X (README.md
 // §2): the modern Claude 4.x models support the whole set. It is declared per
@@ -70,57 +81,40 @@ var claudeFamilies = []family{
 		contextWindow: 200000, maxOutput: 32000,
 	},
 	{
-		prefix: "claude-sonnet",
-		pricing: modelprovider.ModelPricing{
-			InputPerMTokUSD: 3, OutputPerMTokUSD: 15,
-			CacheWritePerMTokUSD: 3.75, CacheWrite1hPerMTokUSD: 6, CacheReadPerMTokUSD: 0.30,
-			Currency: "USD", AsOf: pricingAsOf, Source: modelprovider.PricingList,
-		},
+		prefix:        "claude-sonnet",
+		pricing:       legacyFamilyPricing("claude-sonnet-4-20250514"),
 		contextWindow: 200000, maxOutput: 64000,
 	},
 	// Claude Sonnet 5. The pricing page states that the $2/$10 rate, once called
 	// introductory, is the standard price. Observed 2026-09-27 at
-	// platform.claude.com/docs/en/about-claude/pricing.
+	// platform.claude.com/docs/en/about-claude/pricing; priced by the shared
+	// embedded dataset, which carries the same tariff.
 	{
-		prefix: "claude-sonnet-5",
-		pricing: modelprovider.ModelPricing{
-			InputPerMTokUSD: 2, OutputPerMTokUSD: 10,
-			CacheWritePerMTokUSD: 2.50, CacheWrite1hPerMTokUSD: 4, CacheReadPerMTokUSD: 0.20,
-			Currency: "USD", AsOf: "2026-09-27", Source: modelprovider.PricingList,
-		},
+		prefix:        "claude-sonnet-5",
+		pricing:       legacyFamilyPricing("claude-sonnet-5"),
 		contextWindow: 1000000, maxOutput: 128000,
 	},
 	// Claude Fable 5.1. Same base 10/50 as Fable 5, but cache hits are $0.25,
-	// not $1. The longer prefix wins over "claude-fable". Observed 2026-09-27.
+	// not $1. The longer prefix wins over "claude-fable". Observed 2026-09-27;
+	// priced by the shared embedded dataset, which carries the same tariff.
 	{
-		prefix: "claude-fable-5-1",
-		pricing: modelprovider.ModelPricing{
-			InputPerMTokUSD: 10, OutputPerMTokUSD: 50,
-			CacheWritePerMTokUSD: 12.50, CacheWrite1hPerMTokUSD: 20, CacheReadPerMTokUSD: 0.25,
-			Currency: "USD", AsOf: "2026-09-27", Source: modelprovider.PricingList,
-		},
+		prefix:        "claude-fable-5-1",
+		pricing:       legacyFamilyPricing("claude-fable-5-1"),
 		contextWindow: 1000000, maxOutput: 128000, datedSnapshotOnly: true,
 	},
 	// Claude Opus 5.5. $4/$20, not the generic Opus $5/$25. Cache hit is 5% of
-	// input ($0.20). Observed 2026-09-27 on the models overview and pricing page.
+	// input ($0.20). Observed 2026-09-27 on the models overview and pricing page;
+	// priced by the shared embedded dataset, which carries the same tariff.
 	{
-		prefix: "claude-opus-5-5",
-		pricing: modelprovider.ModelPricing{
-			InputPerMTokUSD: 4, OutputPerMTokUSD: 20,
-			CacheWritePerMTokUSD: 5, CacheWrite1hPerMTokUSD: 8, CacheReadPerMTokUSD: 0.20,
-			Currency: "USD", AsOf: "2026-09-27", Source: modelprovider.PricingList,
-		},
+		prefix:        "claude-opus-5-5",
+		pricing:       legacyFamilyPricing("claude-opus-5-5"),
 		contextWindow: 1000000, maxOutput: 128000, datedSnapshotOnly: true,
 	},
 	// Dated Haiku 4.5 API ID. The alias claude-haiku-4-5 stays on the claude-haiku
-	// row. Same published 1/5 rates, stamped on the day this ID was re-read.
+	// row. Same published 1/5 rates, stamped by the shared embedded dataset.
 	{
-		prefix: "claude-haiku-4-5-20251001",
-		pricing: modelprovider.ModelPricing{
-			InputPerMTokUSD: 1, OutputPerMTokUSD: 5,
-			CacheWritePerMTokUSD: 1.25, CacheWrite1hPerMTokUSD: 2, CacheReadPerMTokUSD: 0.10,
-			Currency: "USD", AsOf: "2026-09-27", Source: modelprovider.PricingList,
-		},
+		prefix:        "claude-haiku-4-5-20251001",
+		pricing:       legacyFamilyPricing("claude-haiku-4-5-20251001"),
 		contextWindow: 200000, maxOutput: 64000, datedSnapshotOnly: true,
 	},
 	{
@@ -148,60 +142,38 @@ var claudeFamilies = []family{
 		contextWindow: 1000000, maxOutput: 128000,
 	},
 	{
-		prefix: "claude-mythos-5",
-		pricing: modelprovider.ModelPricing{
-			InputPerMTokUSD: 10, OutputPerMTokUSD: 50,
-			CacheWritePerMTokUSD: 12.50, CacheWrite1hPerMTokUSD: 20, CacheReadPerMTokUSD: 1,
-			Currency: "USD", AsOf: pricingAsOf, Source: modelprovider.PricingList,
-		},
+		// Priced only by the shared curated fallback: the dataset has no row for
+		// this limited-availability model (see connectors/internal/pricing).
+		prefix:        "claude-mythos-5",
+		pricing:       legacyFamilyPricing("claude-mythos-5"),
 		contextWindow: 1000000, maxOutput: 128000,
 	},
 	// Deprecated Opus 4.0 / 4.1 keep the higher tier (15/75). Longer prefixes than
 	// "claude-opus" so the current 4.5+ ids fall through to the 5/25 entry above.
 	{
-		prefix: "claude-opus-4-0",
-		pricing: modelprovider.ModelPricing{
-			InputPerMTokUSD: 15, OutputPerMTokUSD: 75,
-			CacheWritePerMTokUSD: 18.75, CacheWrite1hPerMTokUSD: 30, CacheReadPerMTokUSD: 1.5,
-			Currency: "USD", AsOf: pricingAsOf, Source: modelprovider.PricingList,
-		},
+		prefix:        "claude-opus-4-0",
+		pricing:       legacyFamilyPricing("claude-opus-4-20250514"),
 		contextWindow: 200000, maxOutput: 32000,
 	},
 	{
-		prefix: "claude-opus-4-1",
-		pricing: modelprovider.ModelPricing{
-			InputPerMTokUSD: 15, OutputPerMTokUSD: 75,
-			CacheWritePerMTokUSD: 18.75, CacheWrite1hPerMTokUSD: 30, CacheReadPerMTokUSD: 1.5,
-			Currency: "USD", AsOf: pricingAsOf, Source: modelprovider.PricingList,
-		},
+		prefix:        "claude-opus-4-1",
+		pricing:       legacyFamilyPricing("claude-opus-4-20250514"),
 		contextWindow: 200000, maxOutput: 32000,
 	},
 	// Legacy Claude 3 generation, named by tier (claude-3-5-haiku-…, claude-3-opus-…).
 	{
-		prefix: "claude-3-opus",
-		pricing: modelprovider.ModelPricing{
-			InputPerMTokUSD: 15, OutputPerMTokUSD: 75,
-			CacheWritePerMTokUSD: 18.75, CacheWrite1hPerMTokUSD: 30, CacheReadPerMTokUSD: 1.5,
-			Currency: "USD", AsOf: pricingAsOf, Source: modelprovider.PricingList,
-		},
+		prefix:        "claude-3-opus",
+		pricing:       legacyFamilyPricing("claude-opus-4-20250514"),
 		contextWindow: 200000, maxOutput: 4096,
 	},
 	{
-		prefix: "claude-3-5-sonnet",
-		pricing: modelprovider.ModelPricing{
-			InputPerMTokUSD: 3, OutputPerMTokUSD: 15,
-			CacheWritePerMTokUSD: 3.75, CacheWrite1hPerMTokUSD: 6, CacheReadPerMTokUSD: 0.30,
-			Currency: "USD", AsOf: pricingAsOf, Source: modelprovider.PricingList,
-		},
+		prefix:        "claude-3-5-sonnet",
+		pricing:       legacyFamilyPricing("claude-sonnet-4-20250514"),
 		contextWindow: 200000, maxOutput: 8192,
 	},
 	{
-		prefix: "claude-3-5-haiku",
-		pricing: modelprovider.ModelPricing{
-			InputPerMTokUSD: 0.80, OutputPerMTokUSD: 4,
-			CacheWritePerMTokUSD: 1.0, CacheWrite1hPerMTokUSD: 1.60, CacheReadPerMTokUSD: 0.08,
-			Currency: "USD", AsOf: pricingAsOf, Source: modelprovider.PricingList,
-		},
+		prefix:        "claude-3-5-haiku",
+		pricing:       legacyFamilyPricing("claude-haiku-3-5-20241022"),
 		contextWindow: 200000, maxOutput: 8192,
 	},
 }
@@ -235,6 +207,11 @@ func pricingFor(modelID string) (modelprovider.ModelPricing, int64, int64, bool)
 		return modelprovider.ModelPricing{}, 0, 0, false
 	}
 	f := claudeFamilies[best]
+	// A dated API ID must keep its own historical tariff rather than inherit
+	// the price of a newer generation sharing the same generic prefix.
+	if p, ok := pricing.ClaudePricingFor(modelID); ok {
+		return p, f.contextWindow, f.maxOutput, true
+	}
 	return f.pricing, f.contextWindow, f.maxOutput, true
 }
 

@@ -6,6 +6,7 @@ import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactElement, ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { NetworkError } from '@/lib/api/errors'
 import './i18n'
 
 const { api, authState } = vi.hoisted(() => ({
@@ -24,7 +25,6 @@ const { api, authState } = vi.hoisted(() => ({
     createAgentGroup: vi.fn(),
     deleteAgentGroup: vi.fn(),
     getSSO: vi.fn(),
-    listIdPs: vi.fn(),
     putSSO: vi.fn(),
     deleteSSO: vi.fn(),
     testSSO: vi.fn(),
@@ -41,6 +41,9 @@ const { api, authState } = vi.hoisted(() => ({
     listGrants: vi.fn(),
     createGrant: vi.fn(),
     revokeGrant: vi.fn(),
+    listInheritanceFilters: vi.fn(),
+    createInheritanceFilter: vi.fn(),
+    removeInheritanceFilter: vi.fn(),
     listGroups: vi.fn(),
     setGroupParent: vi.fn(),
     listModelGroups: vi.fn(),
@@ -105,9 +108,7 @@ beforeEach(() => {
     network_allowlist: [],
     enforced_by: 'unavailable',
     claimed_domains: [],
-    routed_by: 'unavailable',
   })
-  api.listIdPs.mockResolvedValue({ idps: [] })
   api.rbacCatalog.mockResolvedValue({
     kinds: ['agent', 'model'],
     tree_kinds: ['agent', 'model'],
@@ -120,12 +121,37 @@ beforeEach(() => {
   api.listRoles.mockResolvedValue(emptyList)
   api.listPermGroups.mockResolvedValue(emptyList)
   api.listGrants.mockResolvedValue(emptyList)
+  api.listInheritanceFilters.mockResolvedValue(emptyList)
   api.listGroups.mockResolvedValue({ groups: [] })
   api.listModelGroups.mockResolvedValue(emptyList)
   api.listModelAccess.mockResolvedValue(emptyList)
 })
 
 describe('PeopleTab', () => {
+  it('replaces a failed member load with an actionable error and retries', async () => {
+    api.listMembers.mockRejectedValueOnce(new NetworkError('Failed to fetch'))
+    const user = userEvent.setup()
+    wrap(<PeopleTab />)
+
+    expect(
+      await screen.findByText('Control plane unreachable'),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(/check your connection and that the engine is running/i),
+    ).toBeInTheDocument()
+    expect(screen.queryByText('No active members.')).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('status', { name: /loading/i }),
+    ).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /retry/i }))
+    expect(await screen.findByText('No active members.')).toBeInTheDocument()
+    expect(api.listMembers).toHaveBeenCalledTimes(2)
+    expect(
+      screen.queryByText('Control plane unreachable'),
+    ).not.toBeInTheDocument()
+  })
+
   it('opens the onboarding dialog in invite mode when the palette asks for it', async () => {
     const handled = vi.fn()
     const user = userEvent.setup()
@@ -326,7 +352,6 @@ describe('SSOTab', () => {
       network_allowlist: [],
       enforced_by: 'unavailable',
       claimed_domains: [],
-      routed_by: 'unavailable',
     }
     api.getSSO.mockResolvedValue(samlCfg)
     api.putSSO.mockResolvedValue(samlCfg)
@@ -358,62 +383,7 @@ describe('SSOTab', () => {
     )
   })
 
-  it('offers no login enforcement on a build that does not enforce it, and claims nothing about it', async () => {
-    api.getSSO.mockResolvedValue({
-      configured: true,
-      provider_available: true,
-      protocol: 'oidc',
-      status: 'active',
-      redirect_uri: 'https://panel.example/cb',
-      require_sso: true,
-      network_allowlist: ['10.0.0.0/8'],
-      enforced_by: 'unavailable',
-      groups_mapped_by: 'unavailable',
-      claimed_domains: ['corp.example'],
-      routed_by: 'unavailable',
-    })
-    const user = userEvent.setup()
-    wrap(<SSOTab />)
-    // SSO itself is served here: its configuration stays.
-    await user.click(await screen.findByRole('button', { name: /edit/i }))
-    expect(await screen.findByLabelText(/issuer url/i)).toBeInTheDocument()
-    expect(screen.getByLabelText(/scim is authoritative/i)).toBeInTheDocument()
-    // What the server reports unavailable is not offered, and no text stands in for it.
-    expect(screen.queryByText(/login enforcement/i)).toBeNull()
-    expect(screen.queryByLabelText(/require sso/i)).toBeNull()
-    expect(screen.queryByLabelText(/network allow-list/i)).toBeNull()
-    expect(screen.queryByLabelText(/groups claim/i)).toBeNull()
-    expect(screen.queryByLabelText(/claimed email domains/i)).toBeNull()
-    expect(
-      screen.queryByText(/business build|business edition|enterprise tag/i),
-    ).toBeNull()
-    expect(screen.queryByText(/stored, not enforced/i)).toBeNull()
-  })
-
-  it('offers the scope and identity-provider choice only where the server selects among several IdPs', async () => {
-    const { unmount } = wrap(<SSOTab />)
-    // The default fixture: routed_by "unavailable" (one IdP, the deployment-wide default).
-    expect(
-      await screen.findByRole('button', { name: /configure sso/i }),
-    ).toBeInTheDocument()
-    expect(screen.queryByLabelText(/^scope/i)).toBeNull()
-    expect(screen.queryByText(/add an identity provider/i)).toBeNull()
-    unmount()
-    api.getSSO.mockResolvedValue({
-      configured: false,
-      provider_available: true,
-      redirect_uri: 'https://panel.example/v1/auth/federation/callback',
-      require_sso: false,
-      network_allowlist: [],
-      enforced_by: 'enterprise',
-      claimed_domains: [],
-      routed_by: 'enterprise',
-    })
-    wrap(<SSOTab />)
-    expect(await screen.findByLabelText(/^scope/i)).toBeInTheDocument()
-  })
-
-  it('keeps a stored posture, mapping and domains unchanged when a build that cannot serve them saves', async () => {
+  it('sends the stored posture, groups claim and domains back unchanged on save', async () => {
     api.getSSO.mockResolvedValue({
       configured: true,
       provider_available: true,
@@ -426,9 +396,7 @@ describe('SSOTab', () => {
       require_sso: true,
       network_allowlist: ['10.0.0.0/8'],
       enforced_by: 'unavailable',
-      groups_mapped_by: 'unavailable',
       claimed_domains: ['corp.example'],
-      routed_by: 'unavailable',
     })
     api.putSSO.mockResolvedValue({ configured: true })
     const user = userEvent.setup()
@@ -451,136 +419,38 @@ describe('SSOTab', () => {
     )
   })
 
-  it('shows the "Enforced by this build" badge and no unavailable banner on the enterprise build', async () => {
+  it('sends the stored SAML groups attribute and posture back unchanged on save', async () => {
     api.getSSO.mockResolvedValue({
       configured: true,
       provider_available: true,
-      protocol: 'oidc',
+      protocol: 'saml',
       status: 'active',
       redirect_uri: 'https://panel.example/cb',
+      saml_metadata_url: 'https://idp.example/meta',
+      saml_entity_id: 'sp-entity',
+      saml_acs_url: 'https://sp.example/acs',
+      saml_idp_sso_url: 'https://idp.example/sso',
+      saml_groups_attr: 'memberOf',
       require_sso: true,
       network_allowlist: ['10.0.0.0/8'],
-      enforced_by: 'enterprise',
-    })
-    wrap(<SSOTab />)
-    expect(
-      await screen.findByText(/enforced by this build/i),
-    ).toBeInTheDocument()
-    expect(
-      screen.queryByText(
-        /stores the enforcement posture but does not enforce it/i,
-      ),
-    ).not.toBeInTheDocument()
-  })
-
-  it('shows a neutral "no enforcement configured" badge (not a warning) when no posture is set', async () => {
-    api.getSSO.mockResolvedValue({
-      configured: true,
-      provider_available: true,
-      protocol: 'oidc',
-      status: 'active',
-      redirect_uri: 'https://panel.example/cb',
-      require_sso: false,
-      network_allowlist: [],
-      enforced_by: 'enterprise',
-    })
-    wrap(<SSOTab />)
-    // With nothing stored, the badge must NOT overstate "stored, not enforced".
-    expect(
-      await screen.findByText(/no enforcement configured/i),
-    ).toBeInTheDocument()
-    expect(
-      screen.queryByText(/stored, not enforced by this build/i),
-    ).not.toBeInTheDocument()
-    expect(
-      screen.queryByText(
-        /stores the enforcement posture but does not enforce it/i,
-      ),
-    ).not.toBeInTheDocument()
-  })
-
-  it('toggles require-SSO in the edit form and saves it', async () => {
-    // A build that enforces login policy offers the posture in the form.
-    api.getSSO.mockResolvedValue({
-      configured: false,
-      provider_available: true,
-      redirect_uri: 'https://panel.example/v1/auth/federation/callback',
-      require_sso: false,
-      network_allowlist: [],
-      enforced_by: 'enterprise',
-      claimed_domains: [],
-      routed_by: 'enterprise',
-    })
-    api.putSSO.mockResolvedValue({
-      configured: true,
-      provider_available: true,
-      protocol: 'oidc',
-      status: 'active',
-      redirect_uri: 'x',
-      require_sso: true,
-      network_allowlist: [],
       enforced_by: 'unavailable',
+      claimed_domains: ['corp.example'],
     })
+    api.putSSO.mockResolvedValue({ configured: true })
     const user = userEvent.setup()
     wrap(<SSOTab />)
+    await user.click(await screen.findByRole('button', { name: /edit/i }))
     await user.click(
-      await screen.findByRole('button', { name: /configure sso/i }),
-    )
-    await user.type(screen.getByLabelText(/issuer url/i), 'https://idp.example')
-    await user.type(screen.getByLabelText(/client id/i), 'cid')
-    await user.click(screen.getByLabelText(/require sso/i))
-    await user.click(
-      screen.getByRole('button', { name: /save configuration/i }),
-    )
-    await waitFor(() =>
-      expect(api.putSSO).toHaveBeenCalledWith(
-        expect.objectContaining({ require_sso: true }),
-        undefined,
-        'default',
-      ),
-    )
-  })
-
-  it('parses the network allow-list textarea into CIDRs on save', async () => {
-    // A build that enforces login policy offers the posture in the form.
-    api.getSSO.mockResolvedValue({
-      configured: false,
-      provider_available: true,
-      redirect_uri: 'https://panel.example/v1/auth/federation/callback',
-      require_sso: false,
-      network_allowlist: [],
-      enforced_by: 'enterprise',
-      claimed_domains: [],
-      routed_by: 'enterprise',
-    })
-    api.putSSO.mockResolvedValue({
-      configured: true,
-      provider_available: true,
-      protocol: 'oidc',
-      status: 'active',
-      redirect_uri: 'x',
-      require_sso: false,
-      network_allowlist: ['10.0.0.0/8', '192.168.0.0/16'],
-      enforced_by: 'unavailable',
-    })
-    const user = userEvent.setup()
-    wrap(<SSOTab />)
-    await user.click(
-      await screen.findByRole('button', { name: /configure sso/i }),
-    )
-    await user.type(screen.getByLabelText(/issuer url/i), 'https://idp.example')
-    await user.type(screen.getByLabelText(/client id/i), 'cid')
-    await user.type(
-      screen.getByLabelText(/network allow-list/i),
-      '10.0.0.0/8\n192.168.0.0/16',
-    )
-    await user.click(
-      screen.getByRole('button', { name: /save configuration/i }),
+      await screen.findByRole('button', { name: /save configuration/i }),
     )
     await waitFor(() =>
       expect(api.putSSO).toHaveBeenCalledWith(
         expect.objectContaining({
-          network_allowlist: ['10.0.0.0/8', '192.168.0.0/16'],
+          protocol: 'saml',
+          saml_groups_attr: 'memberOf',
+          require_sso: true,
+          network_allowlist: ['10.0.0.0/8'],
+          claimed_domains: ['corp.example'],
         }),
         undefined,
         'default',
@@ -608,7 +478,9 @@ describe('ScopesTab', () => {
       has_more: false,
     })
     wrap(<ScopesTab />)
-    expect(await screen.findByText('Payments')).toBeInTheDocument()
+    expect(
+      await screen.findByRole('cell', { name: 'Payments' }),
+    ).toBeInTheDocument()
   })
 
   it('creates a workspace (owner)', async () => {
@@ -629,8 +501,8 @@ describe('ScopesTab', () => {
       await screen.findByRole('button', { name: /new workspace/i }),
     )
     const dialog = await screen.findByRole('dialog')
+    // The slug is derived from the name ("EU" -> "eu"); no hand-typed slug.
     await user.type(within(dialog).getByLabelText(/name/i), 'EU')
-    await user.type(within(dialog).getByLabelText(/slug/i), 'eu')
     // The dialog's submit button (the create label, also "New workspace").
     await user.click(
       within(dialog).getByRole('button', { name: /new workspace/i }),
@@ -679,6 +551,14 @@ describe('RolesTab', () => {
     expect(await screen.findByText('agent:write')).toBeInTheDocument()
   })
 
+  it('shows the inheritance filters beside the scoped grants', async () => {
+    wrap(<RolesTab />)
+    expect(
+      await screen.findByRole('heading', { name: 'Inheritance filters' }),
+    ).toBeInTheDocument()
+    expect(api.listInheritanceFilters).toHaveBeenCalled()
+  })
+
   it('lists scoped grants', async () => {
     api.listGrants.mockResolvedValue({
       items: [
@@ -707,28 +587,38 @@ describe('RolesTab', () => {
     expect(await screen.findByText('auditor')).toBeInTheDocument()
   })
 
-  it('creates a custom role from the permission matrix', async () => {
-    api.createRole.mockResolvedValue({
-      name: 'auditor',
-      permissions: ['agent:read'],
+  it('keeps stored roles and grants readable and revocable without authoring', async () => {
+    api.listRoles.mockResolvedValue({
+      items: [{ name: 'auditor', permissions: ['agent:read'] }],
+      has_more: false,
     })
-    const user = userEvent.setup()
+    api.listGrants.mockResolvedValue({
+      items: [
+        {
+          id: 'g1',
+          subject_kind: 'user',
+          subject_ref: 'u1',
+          role: 'auditor',
+          role_custom: true,
+          scope_tree: 'tenant',
+        },
+      ],
+      has_more: false,
+    })
     wrap(<RolesTab />)
-    await user.click(await screen.findByRole('button', { name: /new role/i }))
-    const dialog = await screen.findByRole('dialog')
-    await user.type(within(dialog).getByLabelText(/^name/i), 'auditor')
-    await user.click(
-      within(dialog).getByRole('checkbox', { name: 'agent:read' }),
-    )
-    await user.click(within(dialog).getByRole('button', { name: /save role/i }))
-    await waitFor(() =>
-      expect(api.createRole).toHaveBeenCalledWith(
-        expect.objectContaining({
-          name: 'auditor',
-          permissions: ['agent:read'],
-        }),
-      ),
-    )
+    expect(await screen.findAllByText('auditor')).not.toHaveLength(0)
+    expect(screen.getByText(/editing.*requires business/i)).toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', {
+        name: /new role|new grant|new permission-group|edit role/i,
+      }),
+    ).not.toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: /^revoke$/i }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: /^delete$/i }),
+    ).toBeInTheDocument()
   })
 
   it('does not grant access when can() is false (the client never decides)', async () => {
@@ -737,6 +627,7 @@ describe('RolesTab', () => {
     expect(await screen.findByText(/you need governance/i)).toBeInTheDocument()
     expect(api.rbacCatalog).not.toHaveBeenCalled()
     expect(api.listGrants).not.toHaveBeenCalled()
+    expect(api.listInheritanceFilters).not.toHaveBeenCalled()
     expect(api.listGroups).not.toHaveBeenCalled()
   })
 })

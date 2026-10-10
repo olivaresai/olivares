@@ -18,7 +18,7 @@ import (
 
 // --- subject-axis resolution matrix (session/agent/user/user_group/role) --------
 //
-// These exercise the resolver algebra of ADR-0022: containment on the five subject axes,
+// These exercise the resolver algebra for source scoping: containment on the five subject axes,
 // absolute forbid-overrides-allow, and the honest per-consumer axis availability. The
 // write-API round-trip is covered by binding_test.go (E1); here we drive the resolver.
 
@@ -202,7 +202,7 @@ func TestS355AgentAxis(t *testing.T) {
 }
 
 // TestS355ForbidOverridesAllowAbsolute: a forbid on the user axis overrides a workspace
-// allow the actor would otherwise satisfy — forbid is absolute (ADR-0022 §2), overriding
+// allow the actor would otherwise satisfy — forbid is absolute, overriding
 // containment (and, since viewer holds model:read, tenant RBAC too).
 func TestS355ForbidOverridesAllowAbsolute(t *testing.T) {
 	h := newHarness(t)
@@ -256,7 +256,7 @@ func TestS355UserInTwoGroupsForbidOneWins(t *testing.T) {
 
 // TestS355ForbidOnlySourceStaysGlobalMinusForbidden: a source with ONLY a forbid binding
 // (no allow) is unconfined — global for everyone EXCEPT the forbidden subject (the
-// "restrict certain subjects" posture, ADR-0022 §2).
+// "restrict certain subjects" posture, source-scope contract).
 func TestS355ForbidOnlySourceStaysGlobalMinusForbidden(t *testing.T) {
 	h := newHarness(t)
 	admin := h.adminLogin()

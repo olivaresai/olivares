@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/olivaresai/olivares/core/envconfig"
 	"github.com/spf13/cobra"
 
 	"github.com/olivaresai/olivares/core/webaddr"
@@ -426,7 +427,7 @@ func emptyAsPlaceholder(v, placeholder string) string {
 }
 
 func printGovernedRAGSummary(out io.Writer, opts quickstartGovernedRAGOptions, paths governedRAGQuickstartPaths) {
-	_, semantic, reason := resolveEmbeddingsProvider(os.Getenv)
+	_, semantic, reason := resolveEmbeddingsProvider(envconfig.Get)
 	fmt.Fprintf(out, "\nGoverned RAG quickstart files written:\n"+
 		"  sources:        %s\n"+
 		"  agent gateway:  %s\n"+
@@ -445,7 +446,7 @@ func printGovernedRAGSummary(out io.Writer, opts quickstartGovernedRAGOptions, p
 func printGovernedRAGNextSteps(out io.Writer, opts quickstartGovernedRAGOptions, paths governedRAGQuickstartPaths) {
 	fmt.Fprintf(out, "\nNext steps:\n"+
 		"  1. Store the live source credential, for example:\n"+
-		"       olivares secrets put --data-dir %s --name %s --value-file /run/secrets/%s\n"+
+		"       olivares secrets put --data-dir %s --name %s --value-file /run/secrets/%s --actor <operator> --reason <why>\n"+
 		"  2. Start with the generated config:\n"+
 		"       OLIVARES_SOURCES_CONFIG=%s OLIVARES_AGENT_GATEWAY_CONFIG=%s olivares quickstart --data-dir %s\n"+
 		"  3. After setup/login, run:\n"+

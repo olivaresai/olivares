@@ -95,7 +95,8 @@
     "errors": {
       "maxAttempts": "最大尝试次数必须为 0 或介于 1 到 20 之间。",
       "initialInterval": "初始间隔必须为 0 或介于 5 到 3600 秒之间。"
-    }
+    },
+    "businessRequired": "SIEM 推送和外部遥测导出需要 Business。设置会保留；Community 不会发送数据。"
   },
   "secret": {
     "title": "订阅密钥",

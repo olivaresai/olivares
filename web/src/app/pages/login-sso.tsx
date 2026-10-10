@@ -4,6 +4,7 @@
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import type { SsoProvider } from '@/lib/api/types'
+import { isPlainOriginPath } from '@/lib/auth/return-path'
 
 /** The label the engine gives its default provider; any other label is the
  * operator's own name for the provider and is shown as given. */
@@ -21,13 +22,7 @@ export function ssoStartHref(
   returnTo: string | null,
   origin: string,
 ): string | null {
-  if (
-    typeof startUrl !== 'string' ||
-    !startUrl.startsWith('/') ||
-    startUrl.startsWith('//') ||
-    /[\\\u0000- ]/.test(startUrl)
-  )
-    return null
+  if (!isPlainOriginPath(startUrl)) return null
   try {
     const url = new URL(startUrl, origin)
     if (url.origin !== origin) return null

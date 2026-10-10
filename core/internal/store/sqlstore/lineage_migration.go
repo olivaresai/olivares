@@ -56,27 +56,40 @@ func reconcileLineageGuards(ctx context.Context, db dialect.Execer, dia dialect.
 	if err := tx.QueryRowContext(ctx, "SELECT guards_ready FROM "+directoryWriterRelation(dia, lineageControlTable)+" WHERE singleton = 1").Scan(&ready); err != nil {
 		return err
 	}
+	if err := migrate.ApplyTx(ctx, tx, dia, "schema_migrations_lineage_guards", []migrate.Migration{{
+		Version: 1, Name: "lineage_guards", Exec: func(ctx context.Context, tx *sql.Tx) error {
+			for _, object := range lineageGuardObjects(dia) {
+				present, err := verifyLineageGuard(ctx, tx, dia, object)
+				if err != nil {
+					return err
+				}
+				if present {
+					continue
+				}
+				if ready {
+					return lineageUnavailable("missing guard "+object.name, nil)
+				}
+				if _, err := tx.ExecContext(ctx, object.statement); err != nil {
+					return lineageUnavailable("install "+object.name, err)
+				}
+				if dia.Name() == store.EnginePostgres && object.body == "" {
+					if _, err := tx.ExecContext(ctx, "ALTER TABLE public."+object.table+" ENABLE ALWAYS TRIGGER "+object.name); err != nil {
+						return err
+					}
+				}
+				if present, err := verifyLineageGuard(ctx, tx, dia, object); err != nil || !present {
+					return lineageUnavailable("new guard did not verify "+object.name, err)
+				}
+			}
+			return nil
+		},
+	}}); err != nil {
+		return err
+	}
 	for _, object := range lineageGuardObjects(dia) {
 		present, err := verifyLineageGuard(ctx, tx, dia, object)
-		if err != nil {
-			return err
-		}
-		if present {
-			continue
-		}
-		if ready {
-			return lineageUnavailable("missing guard "+object.name, nil)
-		}
-		if _, err := tx.ExecContext(ctx, object.statement); err != nil {
-			return lineageUnavailable("install "+object.name, err)
-		}
-		if dia.Name() == store.EnginePostgres && object.body == "" {
-			if _, err := tx.ExecContext(ctx, "ALTER TABLE public."+object.table+" ENABLE ALWAYS TRIGGER "+object.name); err != nil {
-				return err
-			}
-		}
-		if present, err := verifyLineageGuard(ctx, tx, dia, object); err != nil || !present {
-			return lineageUnavailable("new guard did not verify "+object.name, err)
+		if err != nil || !present {
+			return lineageUnavailable("missing or altered guard "+object.name, err)
 		}
 	}
 	if err := verifyLineageSources(ctx, tx, dia); err != nil {
@@ -243,13 +256,17 @@ func preflightLineage(ctx context.Context, db dialect.Execer, dia dialect.Dialec
 	if !ready {
 		return nil
 	}
-	for _, object := range lineageGuardObjects(dia) {
+	objects, err := lineageGuardObjectsRecorded(ctx, tx, dia)
+	if err != nil {
+		return err
+	}
+	for _, object := range objects {
 		present, err := verifyLineageGuard(ctx, tx, dia, object)
 		if err != nil || !present {
 			return lineageUnavailable("tracked guard missing or changed: "+object.name, err)
 		}
 	}
-	return verifyLineageSources(ctx, tx, dia)
+	return verifyLineageSourcesFor(ctx, tx, dia, objects)
 }
 
 // Extra RLS policies can hide dependencies; extra source triggers can alter an
@@ -352,6 +369,78 @@ func verifyLineageSourceRLS(ctx context.Context, tx *sql.Tx, dia dialect.Dialect
 	}
 	if want.Relation != got.Relation || !reflect.DeepEqual(want.Policies, got.Policies) || !reflect.DeepEqual(want.Rules, got.Rules) {
 		return lineageUnavailable("source tenant policy or relation drift: "+table, nil)
+	}
+	return nil
+}
+
+func verifyLineageSourcesFor(ctx context.Context, tx *sql.Tx, dia dialect.Dialect, guards []lineageSQLObject) error {
+	writerSpecs := sqliteDirectoryWriterGuardSpecs()
+	if dia.Name() == store.EngineSQLite {
+		tracked, err := coreVersionIsTracked(ctx, tx, dia, coreUserAuthorityMigrationVersion)
+		if err != nil {
+			return err
+		}
+		if !tracked {
+			writerSpecs = sqliteDirectoryWriterGuardSpecsFor(legacyDirectoryWriterSourceTables, legacySQLiteDirectoryWriterGuardBody)
+		}
+	}
+	for _, rel := range lineageRelations {
+		expected := map[string]string{}
+		if dia.Name() == store.EngineSQLite {
+			for _, stmt := range dia.CreateTableStmts(model.EntityDescriptor{Table: rel.table}) {
+				if strings.HasPrefix(stmt, "CREATE TRIGGER ") {
+					expected[strings.Fields(stmt)[2]] = stmt
+				}
+			}
+			for _, spec := range writerSpecs {
+				if spec.Table == rel.table {
+					expected[spec.Name] = spec.Definition
+				}
+			}
+		} else {
+			if err := verifyLineageSourceRLS(ctx, tx, dia, rel.table); err != nil {
+				return err
+			}
+			for _, table := range directoryWriterSourceTables {
+				if table == rel.table {
+					expected[table+"_directory_writer_guard"] = ""
+				}
+			}
+		}
+		for _, object := range guards {
+			if object.table == rel.table && (dia.Name() == store.EngineSQLite || object.body == "") {
+				expected[object.name] = strings.Replace(object.statement, "main.", "", 1)
+			}
+		}
+		var rows *sql.Rows
+		var err error
+		if dia.Name() == store.EngineSQLite {
+			rows, err = tx.QueryContext(ctx, "SELECT name,sql FROM main.sqlite_master WHERE type='trigger' AND tbl_name=?", rel.table)
+		} else {
+			rows, err = tx.QueryContext(ctx, `SELECT t.tgname,'' FROM pg_catalog.pg_trigger t JOIN pg_catalog.pg_class c ON c.oid=t.tgrelid JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relname=$1 AND NOT t.tgisinternal`, rel.table)
+		}
+		if err != nil {
+			return err
+		}
+		for rows.Next() {
+			var name, definition string
+			if err := rows.Scan(&name, &definition); err != nil {
+				rows.Close()
+				return err
+			}
+			want, exists := expected[name]
+			if !exists || (dia.Name() == store.EngineSQLite && definition != want) {
+				rows.Close()
+				return lineageUnavailable("source trigger census drift: "+rel.table+"/"+name, nil)
+			}
+			delete(expected, name)
+		}
+		if err := closeCoreDirectoryRows(rows); err != nil {
+			return err
+		}
+		if len(expected) != 0 {
+			return lineageUnavailable("source trigger census incomplete: "+rel.table, nil)
+		}
 	}
 	return nil
 }

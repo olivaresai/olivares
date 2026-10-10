@@ -27,7 +27,7 @@ grep -q 'Unique leftover unique vs overlay `#73`' "$DOC" \
 grep -q 'NOT LANDED' "$DOC" \
   || fail "prepare doc lost NOT LANDED"
 if grep -qiE 'overlay #73 merged|xff landed on overlay main' "$DOC"; then
-  fail "prepare doc claims a land this lote does not have"
+  fail "prepare doc claims a land this batch does not have"
 fi
 
 python3 - "$JSON" <<'PY' || exit $?

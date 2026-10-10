@@ -32,7 +32,7 @@ root_dir="${OLIVARES_ROOT:-$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd
 helper="$root_dir/scripts/ensure-bsdtar.sh"
 
 could_not_look() {
-	printf '%s: NO HE PODIDO MIRAR — %s\n' "$me" "$*" >&2
+	printf '%s: COULD NOT CHECK — %s\n' "$me" "$*" >&2
 	exit 2
 }
 pass=0

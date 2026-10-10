@@ -34,7 +34,7 @@ The engine (the core, "Layer 0") is the set of shared subsystems from which ever
 |---|---|---|
 | **Ingest + event bus** | Receives OTLP and connector input, normalizes it, and distributes events to modules | Modules react to events without coupling to each other |
 | **Connector SDK** | A stable input/output connector interface — the breadth backbone | Third parties extend the platform without forking the core |
-| **Module runtime** | Loads and runs modules: compiled in-process plus out-of-process plugins | Adds a module without re-architecting or recompiling the core |
+| **Module runtime** | Loads and runs modules compiled in-process; hosts out-of-process connector plugins | Adds a module without re-architecting the core |
 | **General data model** | Multi-tenant entities and relations serving the whole catalog | One schema that all modules share and extend |
 | **API (REST/gRPC) + manage-as-code** | All functionality over an API, plus a Terraform provider | The CLI and the web speak the same API; the panel is GitOps-able |
 | **AuthN/Z + multi-tenancy** | RBAC/ABAC, orgs and tenants, isolation | Retrofitting permissions and tenancy is ruinously expensive — so, day one |
@@ -43,7 +43,7 @@ The engine (the core, "Layer 0") is the set of shared subsystems from which ever
 
 A few specifics worth calling out:
 
-- **Module runtime.** Core modules are compiled into the binary; out-of-process modules and connectors run as plugins over gRPC using `hashicorp/go-plugin`. This gives fault isolation and lets a module be added without recompiling the core.
+- **Module runtime.** Core modules are compiled into the binary; out-of-process connectors run as plugins over gRPC using `hashicorp/go-plugin`. This gives fault isolation and lets a connector be added without recompiling the core. Modules run in-process only — the out-of-process module transport is deprecated and was never wired.
 - **Event bus.** In-process by default (Go channels). The distributed binding over **NATS is optional**, not required — single-node deployments never touch it.
 - **Manage-as-code.** The API is the contract of record; the manage-as-code surface adds a Terraform provider so the control plane itself can be declared and version-controlled.
 - **Audit + integrity.** The ledger is **append-only and hash-chained**, with **Ed25519-signed checkpoints**. Entries carry a sequence number, the previous hash, the current hash, and a signature — and never carry PII. The ledger travels off-box two ways: a **pull** export endpoint emits CEF, LEEF, syslog, OTLP (a complete, postable export request; `otlp_envelope` is an exact alias, and the bare-LogRecord projection is the separate `otlp_log_record` token), or OCSF, and a **push** — real when an `audit.recorded` eventing subscription is configured — delivers each sealed record at-least-once through the durable transport. See [how to forward audit to Splunk](/how-to/forward-audit-to-splunk/).
@@ -90,7 +90,7 @@ Native audit attributes activity to a credential or role, not to an agent. A sha
 
 ### Reaching the map
 
-Viewing the access graph is a **privileged action**: tenant-scoped, available to the editor role and above (never the lowest viewer role), and **every read is audited**. The map's routes — the graph and the drift result — are not part of the stable core contract; they are published in the separate **beta** [module-route reference](/reference/api-beta/) (served at `/openapi.beta.json`), with their field-level shapes in typed Go and TypeScript interfaces. The permitted-versus-observed result is exposed at the engine's `drift` route (`/v1/m/accessmap/drift`); there is no separate `diff` endpoint. The stable core REST surface — 54 paths rendered from the product's own OpenAPI 3.1 contract — is documented in the [API reference](/reference/api/). For the full module list, see the [modules catalog](/reference/modules/overview/).
+Viewing the access graph is a **privileged action**: tenant-scoped, available to the editor role and above (never the lowest viewer role), and **every read is audited**. The map's routes — the graph and the drift result — are not part of the stable core contract; they are published in the separate **beta** [module-route reference](/reference/api-beta/) (served at `/openapi.beta.json`), with their field-level shapes in typed Go and TypeScript interfaces. The permitted-versus-observed result is exposed at the engine's `drift` route (`/v1/m/accessmap/drift`); there is no separate `diff` endpoint. The stable core REST surface — 128 core paths rendered from the product's own OpenAPI 3.1 contract — is documented in the [API reference](/reference/api/). For the full module list, see the [modules catalog](/reference/modules/overview/).
 
 ## Deployment topology
 
@@ -121,7 +121,7 @@ The control plane (the engine) can be self-hosted as one binary or, in future, m
 Two boundaries shape the architecture beyond the runtime topology:
 
 - **The connector boundary.** A connector **never imports from the core** — it depends only on the SDK. This keeps third-party connectors from contaminating the core and keeps the license boundary clean.
-- **The license boundary.** The core, the modules, and the web are **AGPL-3.0-only**; the SDK and the connectors are **Apache-2.0**; the enterprise tier is commercial. The connector boundary above is what makes the Apache/AGPL split enforceable in code. See [open core and licensing](/explanation/open-core-and-licensing/).
+- **The license boundary.** The core, the modules, and the web are **AGPL-3.0-only**; the SDK and the connectors are **Apache-2.0**; the Business and Enterprise editions are commercial. The connector boundary above is what makes the Apache/AGPL split enforceable in code. See [open core and licensing](/explanation/open-core-and-licensing/).
 
 ## Security posture, in brief
 

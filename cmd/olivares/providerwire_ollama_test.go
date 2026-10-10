@@ -14,6 +14,32 @@ import (
 	"testing"
 )
 
+func TestAgentToolOllamaProbeRejectsMalformedCatalogs(t *testing.T) {
+	for _, body := range []string{`{}`, `null`, `{"models":null}`, `{"models":[null]}`, `{"models":[{}]}`, `{"models":[{"name":"has space"}]}`} {
+		t.Run(body, func(t *testing.T) {
+			showCalls := 0
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == "/api/show" {
+					showCalls++
+				}
+				_, _ = w.Write([]byte(body))
+			}))
+			defer srv.Close()
+			result, err := newProviderProbe().Probe(context.Background(), sessions.ProviderProbeRequest{Kind: sessions.ProviderKindOllama, BaseURL: srv.URL})
+			if err == nil || len(result.Models) != 0 || showCalls != 0 {
+				t.Fatalf("malformed native catalog became successful availability or fanned out: %+v %v calls=%d", result, err, showCalls)
+			}
+		})
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"models":[]}`))
+	}))
+	defer srv.Close()
+	if result, err := newProviderProbe().Probe(context.Background(), sessions.ProviderProbeRequest{Kind: sessions.ProviderKindOllama, BaseURL: srv.URL}); err != nil || len(result.Models) != 0 {
+		t.Fatalf("explicit empty native catalog was refused: %+v %v", result, err)
+	}
+}
+
 func TestAgentToolOllamaProbeUsesLocalMetadataWithoutInferenceOrCredentials(t *testing.T) {
 	tags, show := 0, 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

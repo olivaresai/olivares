@@ -7,13 +7,15 @@ import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('@/lib/auth/context', () => ({
-  useAuth: () => ({
+const { identity } = vi.hoisted(() => ({
+  identity: {
     activeTenant: 't1',
-    isSuperadmin: true,
-    can: () => true,
-    principal: { user_id: 'u-self' },
-  }),
+    principal: { kind: 'user', user_id: 'u-self' },
+  },
+}))
+
+vi.mock('@/lib/auth/context', () => ({
+  useAuth: () => ({ ...identity, isSuperadmin: true, can: () => true }),
 }))
 
 vi.mock('@/features/console/api', () => ({
@@ -118,12 +120,164 @@ const mount = () =>
 
 beforeEach(() => {
   localStorage.clear()
+  identity.activeTenant = 't1'
+  identity.principal = { kind: 'user', user_id: 'u-self' }
   recentMock.mockClear()
   listMock.mockClear()
   resetLedger()
 })
 
 describe('NotificationBell', () => {
+  it('keeps unread activity independent when the organization or user changes', async () => {
+    const user = userEvent.setup()
+    const view = mount()
+    const dot = () => view.container.querySelector('.bg-primary')
+    const bell = () => screen.getByRole('button', { name: 'Recent activity' })
+    const redraw = () =>
+      view.rerender(
+        <Wrapper>
+          <NotificationBell />
+        </Wrapper>,
+      )
+    await waitFor(() => expect(dot()).not.toBeNull())
+    await user.click(bell())
+    expect(dot()).toBeNull()
+    await user.keyboard('{Escape}')
+
+    expect(localStorage.getItem(LAST_SEEN_KEY)).toBeNull()
+    identity.activeTenant = 't2'
+    redraw()
+    await waitFor(() => expect(dot()).not.toBeNull())
+    await user.click(bell())
+    expect(dot()).toBeNull()
+    await user.keyboard('{Escape}')
+
+    identity.activeTenant = 't1'
+    redraw()
+    await waitFor(() => expect(dot()).toBeNull())
+    identity.principal = { kind: 'user', user_id: 'u-other' }
+    redraw()
+    await waitFor(() => expect(dot()).not.toBeNull())
+  })
+
+  it('migrates the legacy marker only to a user partition, never a token or second tenant', async () => {
+    localStorage.setItem(LAST_SEEN_KEY, shown().at(-1)!.occurred_at)
+    identity.principal = { kind: 'token', user_id: 'u-self' }
+    const view = mount()
+    const dot = () => view.container.querySelector('.bg-primary')
+    await waitFor(() => expect(dot()).not.toBeNull())
+    expect(localStorage.getItem(LAST_SEEN_KEY)).not.toBeNull()
+    identity.principal = { kind: 'user', user_id: 'u-self' }
+    view.rerender(
+      <Wrapper>
+        <NotificationBell />
+      </Wrapper>,
+    )
+    await waitFor(() => expect(dot()).toBeNull())
+    expect(localStorage.getItem(LAST_SEEN_KEY)).toBeNull()
+    identity.activeTenant = 't2'
+    view.rerender(
+      <Wrapper>
+        <NotificationBell />
+      </Wrapper>,
+    )
+    await waitFor(() => expect(dot()).not.toBeNull())
+    view.unmount()
+    identity.activeTenant = 't1'
+    const restored = mount()
+    await waitFor(() => expect(recentMock).toHaveBeenCalled())
+    expect(restored.container.querySelector('.bg-primary')).toBeNull()
+  })
+
+  it('resets a token’s volatile read marker and closes the popover on tenant switch without storage writes', async () => {
+    identity.principal = { kind: 'token', user_id: 'u-self' }
+    const writes = vi.spyOn(Storage.prototype, 'setItem')
+    try {
+      const user = userEvent.setup()
+      const view = mount()
+      const dot = () => view.container.querySelector('.bg-primary')
+      await waitFor(() => expect(dot()).not.toBeNull())
+      await user.click(screen.getByRole('button', { name: 'Recent activity' }))
+      expect(dot()).toBeNull()
+      expect(screen.getByRole('link', { name: /view all/i })).toBeVisible()
+      ledger.splice(-10)
+      identity.activeTenant = 't2'
+      view.rerender(
+        <Wrapper>
+          <NotificationBell />
+        </Wrapper>,
+      )
+      await waitFor(() => expect(dot()).not.toBeNull())
+      expect(screen.queryByRole('link', { name: /view all/i })).toBeNull()
+      expect(writes).not.toHaveBeenCalled()
+    } finally {
+      writes.mockRestore()
+    }
+  })
+
+  it('reaches a work action behind ten internal records within the recent API bound', async () => {
+    const items = [
+      ...Array.from({ length: 10 }, (_, i) => ({
+        ...ledger[i]!,
+        id: `internal-${i}`,
+        action: 'authorization_decision.record',
+      })),
+      {
+        ...ledger[10]!,
+        actor: 'user:u-self',
+        action: 'sessions.work.item.create',
+      },
+    ]
+    // The published API accepts 1..50 and falls back to ten for an invalid limit.
+    // Real use returned only ten rows for the former request of 100.
+    recentMock.mockImplementationOnce(async (params?: { limit?: number }) => ({
+      head_seq: 11,
+      items: items.slice(
+        0,
+        params?.limit && params.limit >= 1 && params.limit <= 50
+          ? params.limit
+          : 10,
+      ),
+    }))
+    mount()
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Recent activity' }),
+    )
+    expect(await screen.findByText('You created a work item')).toBeVisible()
+  })
+
+  it("shows people's actions by default and exposes internal records on request", async () => {
+    recentMock.mockResolvedValueOnce({
+      head_seq: 2,
+      items: [
+        {
+          ...ledger[0]!,
+          id: 'internal',
+          action: 'authorization_decision.record',
+        },
+        {
+          ...ledger[1]!,
+          id: 'work',
+          actor: 'user:u-self',
+          action: 'sessions.work.item.ready',
+        },
+      ],
+    })
+    const user = userEvent.setup()
+    mount()
+    await user.click(screen.getByRole('button', { name: 'Recent activity' }))
+    expect(
+      await screen.findByText('You marked a work item ready'),
+    ).toBeVisible()
+    expect(screen.queryByText('Authorization decision record')).toBeNull()
+    await user.click(
+      screen.getByRole('checkbox', { name: 'Include internal records' }),
+    )
+    expect(
+      await screen.findByText('Authorization decision record'),
+    ).toBeVisible()
+  })
+
   it('shows the newest events first, never a ledger read, and never reads the ledger list', async () => {
     const user = userEvent.setup()
     mount()
@@ -149,7 +303,12 @@ describe('NotificationBell', () => {
     )
     await user.click(screen.getByRole('button'))
     expect(container.querySelector('.bg-primary')).toBeNull()
-    expect(localStorage.getItem(LAST_SEEN_KEY)).toBe(newest!.occurred_at)
+    expect(localStorage.getItem(LAST_SEEN_KEY)).toBeNull()
+    expect(
+      localStorage.getItem(
+        `${LAST_SEEN_KEY}:${JSON.stringify([window.location.origin, 'user', 'u-self', 't1'])}`,
+      ),
+    ).toBe(newest!.occurred_at)
   })
 
   it('does not light the dot when the newest event was already seen', async () => {
@@ -258,16 +417,15 @@ describe('NotificationBell', () => {
     const user = userEvent.setup()
     mount()
     await user.click(screen.getByRole('button'))
-    const approval = await screen.findByText("Ada's session asks for approval")
+    const approval = await screen.findByText('Ada requested approval')
     expect(approval.closest('a')).toHaveAttribute(
       'href',
       '/permissions?approval=apr-1',
     )
     expect(screen.getByText('You started a session')).toBeInTheDocument()
+    expect(screen.getByText('You signed in')).toBeInTheDocument()
     expect(screen.getByText('Audit checkpoint created')).toBeInTheDocument()
-    expect(
-      screen.queryByText(/auth login|signed in|mcp gateway read/i),
-    ).toBeNull()
+    expect(screen.queryByText(/auth login|mcp gateway read/i)).toBeNull()
     expect(screen.queryByText(/system: system|user:u-/)).toBeNull()
   })
 

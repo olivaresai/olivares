@@ -11,7 +11,7 @@ import (
 	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
 )
 
-// HU2-09: `session ls` cut a long name with "…" and showed no id, and `session show
+// `session ls` cut a long name with "…" and showed no id, and `session show
 // "List the files"` answered "No session is named". The id `session ls` now shows,
 // the start of the name, or the cut cell as copied, names the session; a start two
 // sessions share is refused with the way out.

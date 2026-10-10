@@ -326,10 +326,11 @@ export function TabsList({
           assignRef(ref, node)
         }}
         className={cn(
-          'relative flex h-9 min-w-0 flex-1 items-center gap-1 border-b border-border',
+          // A segmented control: one muted track, the selected tab a raised segment.
+          'relative flex h-8 w-fit max-w-full min-w-0 items-center gap-0.5 rounded-ctl bg-hover p-0.5',
           'overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
           // A VERTICAL list (a section list beside the work): no strip, no rule, rows.
-          'data-[orientation=vertical]:h-auto data-[orientation=vertical]:flex-col data-[orientation=vertical]:items-stretch data-[orientation=vertical]:gap-px data-[orientation=vertical]:border-b-0 data-[orientation=vertical]:overflow-visible',
+          'data-[orientation=vertical]:h-auto data-[orientation=vertical]:w-full data-[orientation=vertical]:flex-col data-[orientation=vertical]:items-stretch data-[orientation=vertical]:gap-px data-[orientation=vertical]:rounded-none data-[orientation=vertical]:bg-transparent data-[orientation=vertical]:p-0 data-[orientation=vertical]:overflow-visible',
           // Fade the strip at the edge that hides tabs. A mask (not a painted gradient)
           // reads correctly on `background` and `surface` alike.
           overflow === 'start' &&
@@ -379,7 +380,7 @@ function TabsScrollButton({
   return (
     <div
       className={cn(
-        'flex shrink-0 items-center border-b border-border',
+        'flex shrink-0 items-center',
         direction < 0 ? 'pr-1' : 'pl-1',
       )}
     >
@@ -391,7 +392,7 @@ function TabsScrollButton({
         data-direction={direction < 0 ? 'start' : 'end'}
         disabled={disabled}
         onClick={onClick}
-        className="inline-flex size-7 items-center justify-center rounded-md border border-border bg-surface text-muted-foreground shadow-xs transition-colors duration-100 ease-out hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
+        className="inline-flex size-7 items-center justify-center rounded-ctl text-text-2 transition-colors duration-100 ease-out hover:bg-hover hover:text-text disabled:pointer-events-none disabled:opacity-40"
       >
         <Icon className="size-4" aria-hidden="true" />
       </button>
@@ -406,15 +407,17 @@ export function TabsTrigger({
   return (
     <Trigger
       className={cn(
-        'inline-flex h-9 shrink-0 items-center gap-1.5 -mb-px px-3 text-body font-medium whitespace-nowrap',
-        'border-b-2 border-transparent text-text-2 transition-colors duration-100 ease-out',
+        'inline-flex h-7 shrink-0 items-center gap-1.5 rounded-[5px] px-3 text-body font-medium whitespace-nowrap',
+        'text-text-2 transition-[color,background-color,box-shadow] duration-100 ease-out',
         'hover:text-text',
-        'data-[state=active]:text-text data-[state=active]:border-accent-strong',
+        // The selected segment is Segmented's: the raised fill and a 1 px ring, visible in
+        // both themes (a shadow alone vanishes on the dark canvas).
+        'data-[state=active]:bg-raised data-[state=active]:text-text data-[state=active]:shadow-[0_0_0_1px_var(--line-strong)]',
         'outline-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus',
         'disabled:pointer-events-none disabled:text-text-3',
         // In a vertical list a tab is a row: no underline, the selected row is filled.
-        'data-[orientation=vertical]:mb-0 data-[orientation=vertical]:h-8 data-[orientation=vertical]:justify-start data-[orientation=vertical]:rounded-ctl data-[orientation=vertical]:border-b-0 data-[orientation=vertical]:px-2.5',
-        'data-[orientation=vertical]:hover:bg-hover data-[orientation=vertical]:data-[state=active]:bg-active',
+        'data-[orientation=vertical]:h-8 data-[orientation=vertical]:justify-start data-[orientation=vertical]:rounded-ctl data-[orientation=vertical]:px-2.5',
+        'data-[orientation=vertical]:hover:bg-hover data-[orientation=vertical]:data-[state=active]:bg-active data-[orientation=vertical]:data-[state=active]:shadow-none',
         className,
       )}
       {...props}

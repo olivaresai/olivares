@@ -18,11 +18,10 @@ func TestProfiledCompositionCannotBypassRequestedK3Readiness(t *testing.T) {
 	inference := &countingCredentialSource{}
 	gate := &recordingLaunchGate{dec: LaunchDecision{Allowed: true}}
 	m, st, tenant, profile, _ := profiledHarness(t, WithRunner(runner), WithCredentialSource(inference), WithLaunchGate(gate))
-	m.EnableProfiledLaunches()
-	m.UseCommunicationStoreReadinessWitness(&communicationReadinessStub{})
+	m.CommunicationStoreReadiness = &communicationReadinessStub{}
 	probe := &dualCredentialProbe{now: m.now}
-	m.UseWorkSessionCredentialSource(dualWorkSource{probe})
-	m.UseCommunicationSessionCredentialSource(dualCommunicationSource{probe})
+	m.WorkSessionCreds = dualWorkSource{probe}
+	m.CommunicationSessionCreds = dualCommunicationSource{probe}
 	m.EnableCommunicationSessionCredentials()
 	_, err := m.createRun(context.Background(), tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative, ProviderProfileRef: profile.Ref,

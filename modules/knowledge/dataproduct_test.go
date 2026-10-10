@@ -7,6 +7,7 @@ package knowledge
 import (
 	"context"
 	"net/http"
+	"reflect"
 	"testing"
 	"time"
 
@@ -218,6 +219,17 @@ func TestDataProductContractEnforcementOnIngest(t *testing.T) {
 	}, tenantHdr(tenant))
 	if bad.code != http.StatusUnprocessableEntity {
 		t.Fatalf("strict invalid ingest = %d %s, want 422", bad.code, bad.raw)
+	}
+	wantError := map[string]any{
+		"code":    "module_error",
+		"message": "data contract violation",
+		"details": []any{map[string]any{
+			"doc_id": "bad",
+			"errors": []any{"$.name is required"},
+		}},
+	}
+	if !reflect.DeepEqual(bad.body["error"], wantError) {
+		t.Fatalf("strict invalid ingest error = %s, want %v", bad.raw, wantError)
 	}
 	if chunks := h.allChunks(tenant, kbID); len(chunks) != 0 {
 		t.Fatalf("strict contract violation must not persist chunks, got %d", len(chunks))

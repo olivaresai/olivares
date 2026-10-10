@@ -271,5 +271,19 @@
     "truncatedHint": "There are more access rules than shown; this page takes rows by id. The marks on these rows reflect ONLY the loaded rules: allows that would introduce confinement or add permitted targets may be missing, and forbids that subtract access may be missing too — so this page can read wider OR narrower than reality, and a subject with no loaded rule does not appear at all. Do not infer effective access from it: the engine drains every page before deciding, and it resolves a principal across user, role and group, which a row cannot show.",
     "groupsTruncated": "Loaded {{n}} groups; there are more",
     "groupsTruncatedHint": "There are more model groups than shown; this page takes rows by id. A group not listed here does not demonstrate that it does not exist — a rule may still target it."
+  },
+  "availability": {
+    "label": "Model",
+    "placeholder": "Use the tool default or enter a model",
+    "default": "Use the tool default",
+    "discovering": "Models are being discovered.",
+    "stale": "Model list is out of date",
+    "failed": "Models could not be refreshed. Check the provider connection or sign in again.",
+    "unsupported": "Automatic model discovery is unavailable for this tool. Use its default model.",
+    "empty": "This provider listed no models.",
+    "provider": "Provider: {{provider}}",
+    "observed": "Last observed: {{time}}",
+    "checked": "Last checked: {{time}}",
+    "connection": "Open provider settings"
   }
 }

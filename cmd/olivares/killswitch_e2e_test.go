@@ -15,6 +15,7 @@ import (
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 	"github.com/olivaresai/olivares/modules/governance"
+	"github.com/olivaresai/olivares/modules/sessions/hookpep"
 )
 
 // killswitch_e2e_test.go is the proof at the composition root, against the
@@ -33,24 +34,23 @@ func (f *fakeMCPUpstream) Forward(context.Context, mcpc.UpstreamRequest) (mcpc.U
 	return mcpc.UpstreamResult{Result: json.RawMessage(`{"ok":true}`), State: mcpc.DispatchCompleted}, nil
 }
 
-func TestKillSwitchEstateStoryE2E(t *testing.T) {
+// The Community estate story: the one-click stop bites at the hooks PEP and the
+// MCP seams, leaves deny evidence, lifts only by a two-human re-enable and
+// exports a verified evidence pack. Business also proves it outranks a grant.
+func TestKillSwitchEstateStopAndReenableE2E(t *testing.T) {
 	h := newHarness(t)
 	tid := tenantAID(t, h)
 	ctx := context.Background()
 
 	// A governed PEP with an allow-default policy: before the stop, tool-calls flow.
-	fix := newHookPEPFixture(t, h, hookPolicyDoc{Default: "allow"}, false, nil, false)
-	fix.dec.stops = h.set.gov
-	fix.dec.stopRec = newStopDenyRecorder(h.st, discardLog())
+	fix := newHookPEPFixture(t, h, hookpep.PolicyDoc{Default: "allow"}, false, nil, false)
+	fix.dec.Stops = h.set.gov
+	fix.dec.StopDeny = newStopDenyRecorder(h.st, discardLog()).record
 
 	out := fix.call(t, "Bash", map[string]any{"command": "ls"}, h.adminToken, h.tenantA)
 	if out["permissionDecision"] != "allow" {
 		t.Fatalf("pre-stop PEP = %v", out)
 	}
-
-	// An ACTIVE break-glass grant covering EVERY action is the strongest
-	// emergency credential the plane has — the stop must outrank it.
-	grant := h.activateBreakGlassE2E(t, "", "unrelated emergency window")
 
 	// ONE CLICK: the estate stops.
 	var stop struct {
@@ -64,8 +64,7 @@ func TestKillSwitchEstateStoryE2E(t *testing.T) {
 	}
 
 	// The PEP denies EVERY governed tool-call — the check runs before the
-	// disposition AND before the HITL/break-glass path, so the active grant
-	// cannot re-authorize anything.
+	// disposition and before the HITL path.
 	out = fix.call(t, "Bash", map[string]any{"command": "ls"}, h.adminToken, h.tenantA)
 	if out["permissionDecision"] != "deny" {
 		t.Fatalf("under-stop PEP = %v", out)
@@ -74,12 +73,17 @@ func TestKillSwitchEstateStoryE2E(t *testing.T) {
 		t.Fatalf("deny reason must point at the stop: %q", reason)
 	}
 
-	// The MCP destructive-tool gate refuses despite the active grant…
+	// The MCP destructive-tool gate refuses…
 	rec := newStopDenyRecorder(h.st, discardLog())
 	gate := mcpToolGate{bridge: buildBridge(t, h, h.adminToken), tenant: tid, guard: h.set.gov, rec: rec}
 	d, err := gate.Authorize(ctx, mcpc.ToolApprovalRequest{Tenant: h.tenantA, Tool: "db.drop_table", PlanHash: "p1", RequestedBy: "agent"})
 	if err != nil || d.Status != mcpc.StatusRejected || !strings.HasPrefix(d.ApprovalRef, "killswitch:") {
 		t.Fatalf("mcp gate under stop = %+v err=%v", d, err)
+	}
+	// …and so does a 2026-07-28 approval round trip, before any approval is spent.
+	d, err = gate.Authorize(ctx, mcpc.ToolApprovalRequest{Tenant: h.tenantA, Tool: "db.drop_table", PlanHash: "p1", RequestedBy: "agent", ConsumerID: "round-trip-under-stop"})
+	if err != nil || d.Status != mcpc.StatusRejected || d.Spent || !strings.HasPrefix(d.ApprovalRef, "killswitch:") {
+		t.Fatalf("mcp gate round trip under stop = %+v err=%v", d, err)
 	}
 	// …and the upstream wrap freezes EVERY forwarded method without touching
 	// the backend.
@@ -90,12 +94,6 @@ func TestKillSwitchEstateStoryE2E(t *testing.T) {
 	}
 	if inner.calls != 0 {
 		t.Fatalf("the backend must never be reached under a stop")
-	}
-
-	// The grant is closed before recovery (hygiene; also proves the stop's deny
-	// was the switch, not a missing grant).
-	if code, body := h.req("POST", "/v1/m/governance/breakglass/"+grant+"/revoke", h.adminToken, h.tenantA, nil); code != http.StatusOK {
-		t.Fatalf("revoke grant = %d: %s", code, body)
 	}
 
 	// RE-ENABLE is never unilateral: 202 + a CRITICAL approval; two distinct
@@ -234,9 +232,9 @@ func TestKillSwitchMCPForwardAgentScope(t *testing.T) {
 // tool-call denies rather than proceeding on unknown state.
 func TestKillSwitchPEPFailsClosedOnStateError(t *testing.T) {
 	h := newHarness(t)
-	fix := newHookPEPFixture(t, h, hookPolicyDoc{Default: "allow"}, false, nil, false)
-	fix.dec.stops = failingKillSwitchGuard{}
-	fix.dec.stopRec = newStopDenyRecorder(h.st, discardLog())
+	fix := newHookPEPFixture(t, h, hookpep.PolicyDoc{Default: "allow"}, false, nil, false)
+	fix.dec.Stops = failingKillSwitchGuard{}
+	fix.dec.StopDeny = newStopDenyRecorder(h.st, discardLog()).record
 	out := fix.call(t, "Bash", map[string]any{"command": "ls"}, h.adminToken, h.tenantA)
 	if out["permissionDecision"] != "deny" {
 		t.Fatalf("PEP must fail closed on a stop-state error, got %v", out)

@@ -393,7 +393,7 @@ func TestWorkK2OwnerDiedRetriesEmptyRunRefAndPreservesSuccessor(t *testing.T) {
 		now := time.Now().UTC()
 		itemID := seedK2RecoveryActiveLeases(t, f, f.workspace, 1, now.Add(time.Minute), "")[0]
 		lease := k2RecoveryLease(t, f, itemID)
-		inner := f.m.data
+		inner := f.m.Data
 		f.m.UseData(&k2RecoveryFirstMutateHookModuleData{
 			inner: inner,
 			hook:  func() error { return bumpK2RecoveryItemVersion(f, itemID) },
@@ -422,7 +422,7 @@ func TestWorkK2OwnerDiedRetriesEmptyRunRefAndPreservesSuccessor(t *testing.T) {
 			t, f, f.workspace, 1, now.Add(time.Minute), "dead-run",
 		)[0]
 		before := k2RecoveryLease(t, f, itemID)
-		inner := f.m.data
+		inner := f.m.Data
 		f.m.UseData(&k2RecoveryFirstMutateHookModuleData{
 			inner: inner,
 			hook: func() error {

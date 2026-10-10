@@ -286,9 +286,9 @@ if (problems.length) {
 //    miró. Medido el 2026-08-17 sobre un árbol vacío, este guion salía 0.
 if (!(chunksChecked > 0)) {
   console.error(
-    `⛔ NO HE PODIDO MIRAR: el escaneo examinó 0 chunks. Un árbol sin nada que examinar NO es un
-árbol en orden — es un escáner que dejó de reconocer la disposición. Revisa las rutas antes de
-leer esto como verde.`,
+    `⛔ COULD NOT LOOK: the scan examined 0 chunks. A tree with nothing to examine is NOT a
+verified tree — the scanner no longer recognizes its layout. Check the paths before
+treating this as passing.`,
   )
   process.exit(2)
 }

@@ -28,9 +28,9 @@ MIGDIR="${OLIVARES_C0022_MIGDIR:-commercial/license-worker/migrations}"
 [ -f "$DB" ] || cannot "missing $DB"
 [ -d "$MIGDIR" ] || cannot "missing $MIGDIR"
 
-grep -q 'SALIDA 1' "$DOC" || fail "$DOC lost SALIDA 1"
+grep -q 'SALIDA 1' "$DOC" || fail "$DOC lost the required exit-code heading"
 if grep -qiE 'CREATE TABLE IF NOT EXISTS dodo_cohort_fragments|0022 creates the tables' "$DOC"; then
-	fail "$DOC claims a CREATE this lote forbids"
+	fail "$DOC claims a CREATE this batch forbids"
 fi
 if ls "$MIGDIR"/0022* >/dev/null 2>&1; then
 	fail "a 0022_*.sql exists — exit 1 forbids creating the colliding tables"

@@ -48,7 +48,8 @@ func newFinOpsCmd() *cobra.Command {
 		// invocations read the same.
 		Short: "Report AI spend and value, and govern budgets, rates and cost centers",
 		Long: "Report what the AI estate costs and what it returns, and govern the budgets, model\n" +
-			"rates and cost centers that shape it.\n\n" +
+			"rates and cost centers that shape it. Business enables budget authoring and analysis.\n" +
+			"Community can read and remove stored budgets and keeps enforcing them while FinOps is on.\n\n" +
 			"Connection, credential and TLS values use the same resolution order and trust controls\n" +
 			"as `auth`. Time windows are RFC3339 and the engine refuses an unparseable one\n" +
 			"rather than widening it, so a mistyped --since exits 2 instead of returning a bigger\n" +

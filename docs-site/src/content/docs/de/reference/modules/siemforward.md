@@ -7,6 +7,8 @@ description: >-
   Cursor-Walk und At-least-once-Zustellung. Es rendert und leitet weiter; es leitet
   Integrität niemals neu ab.
 ---
+SIEM and ITSM push, OTLP downloads, external trace and metric delivery, and posture export require Business. Community keeps local observability, trace-context propagation, saved settings and `olivares dr backup`. Generic chat, email and webhook notifications remain available in Community.
+
 
 Der SIEM/ITSM-Forwarder (`modules/siemforward`) nimmt die Evidenz, die die
 Engine bereits versiegelt, und bringt sie in den Turm, den Ihr SOC ohnehin
@@ -53,9 +55,10 @@ bedient.
 
 ## Bounded Context, klar benannt
 
-- Er **leitet weiter**, er speichert nicht. Ein Tenant ohne Sink-Subscription ist
-  ein No-op: Nichts wird eingereiht, der Cursor rückt trotzdem vor, nichts geht
-  verloren.
+- Er speichert den Tenant-spezifischen Cursor; Eventing speichert Ereignisse und Zustellungen.
+  Ohne Sink-Abonnement wird nichts eingereiht, aber die aktivierte Pumpe rückt den Cursor vor.
+  Eine neue Sink liefert bereits passierte Datensätze nicht nach;
+  das ursprüngliche Ledger bleibt über den Pull-Export verfügbar.
 - Die Weiterleitung läuft aus dem Cursor-Walk, **außerhalb der Ledger-Seal-
   Transaktion** — ein Netzwerk-Write sitzt niemals im Seal-Pfad.
 - Dies ist ein **Push zu Ihrem Turm**, abzugrenzen vom Read-only-Pull des

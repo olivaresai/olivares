@@ -17,22 +17,10 @@ import (
 	"github.com/olivaresai/olivares/connectors/internal/redact"
 )
 
-// InferenceClient is the model-INVOCATION sibling of the read-only Client. Where
-// Client is GET-only by construction (the read-first guarantee, docs/SECURITY-HARDENING.md),
-// InferenceClient deliberately performs writes — POST a Messages/Batches request,
-// multipart-upload a File, POST an embeddings request — because invoking a model IS
-// the operation. It stays minimal-data at the transport layer: it carries whatever
-// body the caller hands it and never logs the credential; the CALLER (and the
-// module above it) decides what, if anything, is persisted, always redacted/hashed
-// (docs/SECURITY-HARDENING.md). Like Client it imports only the SDK contract surface, never /core,
-// so it stays on the Apache side of the license frontier.
-type InferenceClient struct {
-	base    string
-	doer    Doer
-	scheme  AuthScheme
-	cred    string
-	headers map[string]string
-}
+// InferenceClient performs model invocation and related file/batch operations.
+// It sends caller-supplied bodies without logging credentials; callers govern persistence.
+// Its methods remain separate from the GET-only Client.
+type InferenceClient Client
 
 // NewInferenceClient builds a read-write provider client. base is the API root;
 // doer is the HTTP transport (a *http.Client in production, a stub in tests);
@@ -40,16 +28,7 @@ type InferenceClient struct {
 // are static, non-secret headers always sent (e.g. "anthropic-version"). When doer
 // is nil, http.DefaultClient is used.
 func NewInferenceClient(base string, doer Doer, scheme AuthScheme, cred string, headers map[string]string) *InferenceClient {
-	if doer == nil {
-		doer = http.DefaultClient
-	}
-	return &InferenceClient{
-		base:    strings.TrimRight(base, "/"),
-		doer:    doer,
-		scheme:  scheme,
-		cred:    cred,
-		headers: headers,
-	}
+	return (*InferenceClient)(NewClient(base, doer, scheme, cred, headers))
 }
 
 // maxInferenceErrBody bounds a redacted provider rejection diagnostic.
@@ -318,12 +297,4 @@ func redactURL(raw string) string {
 	u.Fragment = ""
 	u.RawFragment = ""
 	return u.String()
-}
-
-// truncate caps b at n bytes for a bounded error excerpt.
-func truncate(b []byte, n int) []byte {
-	if len(b) > n {
-		return b[:n]
-	}
-	return b
 }

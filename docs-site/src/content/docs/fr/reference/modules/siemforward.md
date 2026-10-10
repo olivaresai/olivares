@@ -8,6 +8,8 @@ description: >-
   livraison au moins une fois. Il rend et transmet ; il ne re-dérive jamais
   l'intégrité.
 ---
+SIEM and ITSM push, OTLP downloads, external trace and metric delivery, and posture export require Business. Community keeps local observability, trace-context propagation, saved settings and `olivares dr backup`. Generic chat, email and webhook notifications remain available in Community.
+
 
 Le transmetteur SIEM/ITSM (`modules/siemforward`) prend les preuves que le
 moteur scelle déjà et les fait parvenir à la plateforme qu'exploite déjà votre
@@ -57,9 +59,10 @@ locataire et chaque destination.
 
 ## Contexte délimité, énoncé clairement
 
-- Il **transmet**, il ne stocke pas. Un locataire sans abonnement de destination
-  est une opération nulle : rien n'est mis en file, le curseur avance tout de
-  même, rien n'est perdu.
+- Il stocke le curseur par locataire ; eventing stocke les événements capturés et les livraisons.
+  Sans abonnement de destination, rien n’est mis en file, mais la pompe activée avance le curseur.
+  Une nouvelle destination ne retransmet pas les enregistrements déjà passés ;
+  le ledger original reste disponible par export pull.
 - La transmission s'exécute depuis le parcours de curseur, **en dehors de la
   transaction de scellement du registre** — une écriture réseau ne se trouve
   jamais sur le chemin de scellement.

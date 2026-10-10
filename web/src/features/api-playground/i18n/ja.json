@@ -1,6 +1,6 @@
 {
   "title": "API プレイグラウンド",
-  "description": "コントロールプレーン API をインタラクティブに探索・テスト",
+  "description": "Olivares AI の API を探索・テストします。",
   "filterPlaceholder": "エンドポイントを絞り込む…",
   "selectEndpoint": "左パネルからエンドポイントを選択してください",
   "send": "送信",
@@ -32,7 +32,7 @@
     "networkError": "ネットワークエラー",
     "failedNetworkHint": "リクエストに失敗しました — ネットワーク接続を確認してください。",
     "blockedDestination": "送信先がブロックされました",
-    "blockedDestinationHint": "API Playground は、このコントロールプレーンにのみリクエストを送信できます。",
+    "blockedDestinationHint": "API Playground は、この Olivares AI サーバーにのみリクエストを送信できます。",
     "enterPathParam": "{{name}} を入力",
     "headerNamePlaceholder": "ヘッダー名",
     "headerValuePlaceholder": "値",

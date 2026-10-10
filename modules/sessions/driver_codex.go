@@ -9,11 +9,13 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/olivaresai/olivares/core/driverfacts"
 	"github.com/olivaresai/olivares/modules/sessions/cliruntime"
 )
 
@@ -47,7 +49,7 @@ import (
 const (
 	// envCodexHome is the configuration home variable of the official Codex CLI.
 	// It is the Codex counterpart of CLAUDE_CONFIG_DIR and is owned by the profile.
-	envCodexHome = "CODEX_HOME"
+	envCodexHome = driverfacts.CodexConfigHomeEnv
 )
 
 // Codex methods, exactly as the installed schemas name them.
@@ -64,6 +66,7 @@ const (
 	codexMethodTurnInterrupt     = "turn/interrupt"
 
 	codexNotifyTurnCompleted = "turn/completed"
+	codexNotifyTokenUsage    = "thread/tokenUsage/updated"
 	// The provider's OWN statement that it lost, and then regained, the ability to
 	// authenticate with the model provider. It is what makes readiness revocable
 	// instead of a one-shot answer taken at launch.
@@ -143,9 +146,15 @@ func NewCodexDriverWithPolicy(policy CodexPolicy) (ProviderDriver, error) {
 	return codexDriver{policy: policy}, nil
 }
 
-func (codexDriver) Key() string            { return providerDriverCodex }
-func (codexDriver) ConfigHomeEnv() string  { return envCodexHome }
-func (codexDriver) DefaultProgram() string { return "codex" }
+func (codexDriver) Key() string { return providerDriverCodex }
+func (codexDriver) ConfigHomeEnv() string {
+	facts, _ := driverfacts.Lookup(providerDriverCodex)
+	return facts.ConfigHomeEnv
+}
+func (codexDriver) DefaultProgram() string {
+	facts, _ := driverfacts.Lookup(providerDriverCodex)
+	return facts.Program
+}
 
 // TransportProfile describes the channel this driver's owned child actually
 // speaks: the Codex app-server protocol over stdio, bridged in both directions,
@@ -166,10 +175,11 @@ func (codexDriver) TransportProfile() DriverTransportProfile {
 // probing the credential a profile binds; the driver lists none.
 func (codexDriver) LaunchTerms() DriverLaunchTerms {
 	return DriverLaunchTerms{
-		Model:          TermCarried,
-		Effort:         TermCarried,
-		PermissionMode: TermCarried,
-		ModelDiscovery: ModelDiscoveryBoundCredentialProbe,
+		Model:              TermCarried,
+		Effort:             TermCarried,
+		PermissionMode:     TermCarried,
+		ModelDiscovery:     ModelDiscoveryBoundCredentialProbe,
+		BoundModelRequired: true,
 	}
 }
 
@@ -259,14 +269,28 @@ type codexSession struct {
 	policy CodexPolicy
 	conn   *rpcConn
 
-	mu            sync.Mutex
-	configReadID  string
-	threadID      string
-	turnID        string
-	authState     string
-	pending       map[string]*codexServerRequest
-	approvalFacts map[string]codexApprovalFacts
-	closed        bool
+	mu           sync.Mutex
+	configReadID string
+	threadID     string
+	turnID       string
+	authState    string
+	// model and modelProvider are what the thread answer named: the model its
+	// usage is metered on, and who serves it (what a list price is looked up under).
+	model, modelProvider string
+	// earlierUsage is a resumed thread's earlier total that arrived before the
+	// handshake bound the thread; the handshake hands it over as the baseline.
+	earlierUsage *modelUsage
+	// turnSent is set once this launch has sent a turn. A total reported before it
+	// is not this launch's spending (a resumed thread's earlier total); priorTurns
+	// are the turns such totals named (bounded like finished), so the same total
+	// repeated later is not credited either.
+	turnSent   bool
+	priorTurns []string
+	// usageUnreadSaid: an unreadable usage report has been reported once already.
+	usageUnreadSaid bool
+	pending         map[string]*codexServerRequest
+	approvalFacts   map[string]codexApprovalFacts
+	closed          bool
 	// finished holds turn ids whose completion arrived BEFORE we had recorded them
 	// as active. A fast provider can answer turn/start and complete the turn in the
 	// same breath, and the two are processed by different goroutines: the response
@@ -351,6 +375,35 @@ type codexThread struct {
 type codexThreadResponse struct {
 	Thread        codexThread `json:"thread"`
 	ModelProvider string      `json:"modelProvider"`
+	// Model, ApprovalPolicy and Sandbox are what Codex says this thread runs
+	// under: the model its usage is metered on, and its mode (runtime_tool_mode.go).
+	// The approval policy is a word or a {"granular":{…}} object.
+	Model          string          `json:"model"`
+	ApprovalPolicy json.RawMessage `json:"approvalPolicy"`
+	Sandbox        struct {
+		Type string `json:"type"`
+	} `json:"sandbox"`
+}
+
+// toolMode is Codex's own mode for the thread, "on-request · workspaceWrite", or
+// "" when its answer names neither.
+func (r codexThreadResponse) toolMode() string {
+	var approval string
+	if json.Unmarshal(r.ApprovalPolicy, &approval) != nil {
+		var granular struct {
+			Granular json.RawMessage `json:"granular"`
+		}
+		if json.Unmarshal(r.ApprovalPolicy, &granular) == nil && len(granular.Granular) > 0 {
+			approval = "granular"
+		}
+	}
+	var words []string
+	for _, w := range []string{toolModeValue(approval), toolModeValue(r.Sandbox.Type)} {
+		if w != "" {
+			words = append(words, w)
+		}
+	}
+	return strings.Join(words, " · ")
 }
 
 type codexUserInputText struct {
@@ -476,7 +529,7 @@ func (s *codexSession) Handshake(ctx context.Context) (DriverHandshake, error) {
 	model := codexOptionalString(s.cfg.Model)
 	providerID := codexBoundProviderID(s.cfg.BoundProvider)
 	modelProvider := codexOptionalString(providerID)
-	if model == nil && providerID != "" && strings.TrimSpace(s.cfg.ResumeConversationID) == "" {
+	if model == nil && providerID != "" && (codexDriver{}).LaunchTerms().BoundModelRequired && strings.TrimSpace(s.cfg.ResumeConversationID) == "" {
 		// Bound catalogs cannot discover a default. Let the native tool resolve
 		// its profile layers, then carry that configured model explicitly. Resume
 		// keeps the stored conversation's model when none was selected here.
@@ -492,7 +545,7 @@ func (s *codexSession) Handshake(ctx context.Context) (DriverHandshake, error) {
 		}
 		model = codexOptionalString(reply.Config.Model)
 		if model == nil {
-			return DriverHandshake{}, &runErr{http.StatusConflict, "Choose a model in this session's settings or in its Codex profile configuration before starting it"}
+			return DriverHandshake{}, &runErr{http.StatusConflict, "Choose a model in New session, pass --model, or set one in its Codex profile configuration before starting it"}
 		}
 	}
 	if resume := strings.TrimSpace(s.cfg.ResumeConversationID); resume != "" {
@@ -540,8 +593,22 @@ func (s *codexSession) Handshake(ctx context.Context) (DriverHandshake, error) {
 	}
 	s.mu.Lock()
 	s.threadID = id
+	s.model, s.modelProvider = modelRefValue(resp.Model), modelRefValue(resp.ModelProvider)
+	if s.cfg.BoundProvider.Kind == ProviderKindOpenAI {
+		// Codex names the alias the engine configured (confirmed above). A record of
+		// OpenAI's own kind is priced as OpenAI, at any https base_url (a proxy in
+		// front of OpenAI bills OpenAI's prices); a compatible or local server is an
+		// openai_compatible or ollama record and keeps the alias, which no price
+		// table carries.
+		s.modelProvider = ProviderKindOpenAI
+	}
+	earlier := s.earlierUsage
+	s.earlierUsage = nil
 	s.mu.Unlock()
-	return DriverHandshake{ConversationID: id, AuthState: state}, nil
+	if earlier != nil && s.cfg.OnUsage != nil {
+		s.cfg.OnUsage(s.usageReport(*earlier), false)
+	}
+	return DriverHandshake{ConversationID: id, AuthState: state, ToolMode: resp.toolMode()}, nil
 }
 
 // Input starts a turn when the conversation is idle, or STEERS the active one.
@@ -564,6 +631,10 @@ func (s *codexSession) Input(ctx context.Context, text string) (bool, error) {
 		return false, conflictErr("the provider conversation is not bound yet")
 	}
 	input := []codexUserInputText{{Type: "text", Text: text}}
+	// Before the request: the turn's usage can be read before its answer is.
+	s.mu.Lock()
+	s.turnSent = true
+	s.mu.Unlock()
 	if turn == "" {
 		raw, err := s.conn.callInOrder(ctx, codexMethodTurnStart, codexTurnStartParams{
 			ThreadID: thread, Input: input, Effort: codexOptionalString(s.cfg.Effort),
@@ -716,6 +787,8 @@ func (s *codexSession) onNotification(method string, params json.RawMessage) {
 		// A completed turn ends the TURN, not the run and not the process: the same
 		// owned child accepts another input immediately.
 		s.clearTurn(n.Turn.ID)
+	case codexNotifyTokenUsage:
+		s.observeTokenUsage(params)
 	case codexNotifyAuthRecoveryStarted:
 		// The provider says it is recovering its model-provider authentication, so
 		// whatever `account/read` answered at launch is no longer true. Readiness is
@@ -737,6 +810,93 @@ func (s *codexSession) onNotification(method string, params json.RawMessage) {
 		// notification never blocks the stream it arrived on.
 		go s.refreshAuthState()
 	}
+}
+
+// codexTokenUsageNotification is thread/tokenUsage/updated: Codex's running total
+// for the thread. Only the counts are read. Input counts the cached part
+// (measured: totalTokens = inputTokens + outputTokens), output counts reasoning.
+type codexTokenUsageNotification struct {
+	ThreadID   string `json:"threadId"`
+	TurnID     string `json:"turnId"`
+	TokenUsage struct {
+		Total struct {
+			InputTokens           int64 `json:"inputTokens"`
+			CachedInputTokens     int64 `json:"cachedInputTokens"`
+			CacheWriteInputTokens int64 `json:"cacheWriteInputTokens"`
+			OutputTokens          int64 `json:"outputTokens"`
+		} `json:"total"`
+	} `json:"tokenUsage"`
+}
+
+// observeTokenUsage hands this conversation's running total to the runtime, under
+// the model the thread answer named.
+func (s *codexSession) observeTokenUsage(params json.RawMessage) {
+	var n codexTokenUsageNotification
+	if err := json.Unmarshal(params, &n); err != nil || n.ThreadID == "" {
+		// Said once: a report whose shape changed would otherwise leave every
+		// session reading "the tool reported nothing".
+		s.mu.Lock()
+		first := !s.usageUnreadSaid
+		s.usageUnreadSaid = true
+		s.mu.Unlock()
+		if first {
+			s.warn("sessions: a Codex usage report could not be read; this session's tokens and cost are not recorded from it", "run_ref", s.cfg.RunRef)
+		}
+		return
+	}
+	if s.cfg.OnUsage == nil {
+		return
+	}
+	t := n.TokenUsage.Total
+	u := modelUsage{
+		InputTokens:         max(0, t.InputTokens-t.CachedInputTokens-t.CacheWriteInputTokens),
+		CacheReadTokens:     max(0, t.CachedInputTokens),
+		CacheCreationTokens: max(0, t.CacheWriteInputTokens),
+		OutputTokens:        max(0, t.OutputTokens),
+	}
+	if u.empty() {
+		return
+	}
+	s.mu.Lock()
+	if s.threadID == "" {
+		// A resumed thread reports its earlier total right after the thread/resume
+		// answer, which can be before the handshake has bound the thread and read
+		// its model. Only the exact conversation being resumed is kept, for the
+		// handshake to hand over.
+		if n.ThreadID == strings.TrimSpace(s.cfg.ResumeConversationID) {
+			s.earlierUsage = &u
+			if n.TurnID != "" {
+				s.priorTurns = append(s.priorTurns, n.TurnID)
+			}
+		}
+		s.mu.Unlock()
+		return
+	}
+	if n.ThreadID != s.threadID {
+		s.mu.Unlock()
+		return // another thread's total (a subagent's) is not this run's
+	}
+	own := s.turnSent && !slices.Contains(s.priorTurns, n.TurnID)
+	if !s.turnSent && n.TurnID != "" && !slices.Contains(s.priorTurns, n.TurnID) {
+		s.priorTurns = append(s.priorTurns, n.TurnID)
+		if len(s.priorTurns) > codexFinishedTurnMemory {
+			s.priorTurns = s.priorTurns[len(s.priorTurns)-codexFinishedTurnMemory:]
+		}
+	}
+	s.mu.Unlock()
+	s.cfg.OnUsage(s.usageReport(u), own)
+}
+
+// usageReport is a thread total as the usage the runtime credits, under the
+// thread's model (no model named: credited as "not reported").
+func (s *codexSession) usageReport(u modelUsage) resultUsage {
+	s.mu.Lock()
+	model, provider := s.model, s.modelProvider
+	s.mu.Unlock()
+	if model == "" {
+		return resultUsage{Fallback: u, Reported: true, Provider: provider}
+	}
+	return resultUsage{Models: map[string]modelUsage{model: u}, Reported: true, Provider: provider}
 }
 
 // codexAuthRecoveryNotification is the shared shape of the two recovery

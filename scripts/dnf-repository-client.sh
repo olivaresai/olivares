@@ -291,8 +291,8 @@ run_inside() {
 	esac
 	local install_spec="$package_name"
 	if [[ -n "$version" ]]; then
-		[[ "$version" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]] || {
-			printf 'dnf-repository-client: could not check — version must be YY.M or YY.M.N\n' >&2
+		[[ "$version" =~ ^[0-9]+\.[0-9]+$ ]] || {
+			printf 'dnf-repository-client: could not check — version must be MAJOR.MINOR\n' >&2
 			exit 2
 		}
 		install_spec="${package_name}-${version}"
@@ -345,7 +345,7 @@ main() {
 		--check-repo-info) check_repo_info "${2:-}"; exit $? ;;
 		-h | --help)
 			printf '%s\n' "usage: dnf-repository-client.sh (--repo ABS | --baseurl REVIEWED_HTTPS/\$basearch) --gpgkey ABS" \
-				"       [--expect install|refuse] [--image DIGEST] [--package NAME] [--version X.Y.Z]" \
+				"       [--expect install|refuse] [--image DIGEST] [--package NAME] [--version MAJOR.MINOR]" \
 				"       [--evidence-file ABS --staging-id run-N-attempt-N] [--inside]"
 			exit 0
 			;;

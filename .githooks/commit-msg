@@ -19,6 +19,8 @@
 set -eu
 
 MSG_FILE="$1"
+HOOK_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+bash "$HOOK_DIR/../scripts/check-commit-trailers.sh" --commit-msg "$PPID" "$MSG_FILE"
 
 # --- tier 0: GitHub closing keywords in a commit that ships no code ----------
 # WHY THIS EXISTS, with the incident that produced it. A commit that changed ONE

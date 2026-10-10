@@ -6,6 +6,8 @@ description: >-
   control tower вытягивает, чтобы обогатить собственный взгляд. Проекция в
   нейтральном JSON, а не проверенный нативный push.
 ---
+SIEM and ITSM push, OTLP downloads, external trace and metric delivery, and posture export require Business. Community keeps local observability, trace-context propagation, saved settings and `olivares dr backup`. Generic chat, email and webhook notifications remain available in Community.
+
 
 Posture export (`modules/posture-export`) — это **исходящая поверхность posture**
 движка: единственный read-only эндпоинт, который control tower опрашивает, чтобы
@@ -32,6 +34,13 @@ Posture export (`modules/posture-export`) — это **исходящая пов
   inventory-грантов.
 - **`findings`** — находки безопасности, спроецированные только как refs и
   `detail_hash`, фильтруемые по порогу `?severity=` и по `?category=`.
+
+- **`projection_readiness`** — логические значения для `inventory`, `posture_drift`
+  и `findings`, сообщающие, работают ли их производители inventory, access-map и
+  security. Это не подтверждает свежесть данных или полноту покрытия.
+  Остановленный или недоступный производитель добавляет предупреждение о
+  неполноте доказательств в `note`; сохранённые данные остаются доступными для
+  экспорта. Сводка CLI и скачанный документ содержат ту же пометку.
 
 Каждый экспорт **минимален по данным** — только refs, хеши и связи, никогда сырой
 полезной нагрузки или секрета — и защитный проход маскирования вычищает каждое

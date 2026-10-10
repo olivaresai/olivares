@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+
+	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
 )
 
 // jsonRPCVersion is the only JSON-RPC version MCP uses.
@@ -15,26 +17,35 @@ const jsonRPCVersion = "2.0"
 // rpcRequest is a JSON-RPC 2.0 request. A request carries an id; a notification
 // (no response expected) is sent with isNotification set so id is omitted.
 type rpcRequest struct {
-	JSONRPC string `json:"jsonrpc"`
-	ID      int64  `json:"id,omitempty"`
-	Method  string `json:"method"`
-	Params  any    `json:"params,omitempty"`
+	ID     int64
+	Method string
+	Params any
 
-	isNotification bool `json:"-"`
+	isNotification bool
 }
 
-// marshal encodes the request, omitting id entirely for a notification (a
-// notification with an id would be treated as a callable request by the server).
+// marshal encodes the request with the official go-sdk JSON-RPC encoder,
+// omitting id entirely for a notification (a notification with an id would be
+// treated as a callable request by the server).
 func (r rpcRequest) marshal() ([]byte, error) {
-	if r.isNotification {
-		return json.Marshal(struct {
-			JSONRPC string `json:"jsonrpc"`
-			Method  string `json:"method"`
-			Params  any    `json:"params,omitempty"`
-		}{JSONRPC: jsonRPCVersion, Method: r.Method, Params: r.Params})
+	msg := &jsonrpc.Request{Method: r.Method}
+	if !r.isNotification {
+		// The SDK takes an id in its JSON form; the transports count ids from 1,
+		// far inside float64's exact integer range.
+		id, err := jsonrpc.MakeID(float64(r.ID))
+		if err != nil {
+			return nil, err
+		}
+		msg.ID = id
 	}
-	r.JSONRPC = jsonRPCVersion
-	return json.Marshal(r)
+	if r.Params != nil {
+		params, err := json.Marshal(r.Params)
+		if err != nil {
+			return nil, err
+		}
+		msg.Params = params
+	}
+	return jsonrpc.EncodeMessage(msg)
 }
 
 // rpcMessage is a permissive view of any inbound JSON-RPC message: a response

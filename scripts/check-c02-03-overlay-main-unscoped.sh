@@ -24,7 +24,7 @@ grep -q 'Producer not on main' "$DOC" || fail "$DOC lost Producer not on main"
 grep -q 'HOLD' "$DOC" || fail "$DOC lost HOLD"
 grep -q 'land_key_before_producer' "$DOC" || fail "$DOC lost the order pin"
 if grep -qiE 'producer landed on main|FIRMA A claimed' "$DOC"; then
-	fail "$DOC claims a close this lote does not have"
+	fail "$DOC claims a close this batch does not have"
 fi
 
 python3 - "$JSON" <<'PY' || fail "JSON flags drifted"

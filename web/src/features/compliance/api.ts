@@ -38,11 +38,8 @@
 //
 //    Si algun dia una de estas rutas deja de drenar, lo que cambia PRIMERO es este fichero y su
 //    trinquete — y solo entonces el aviso.
-import { http } from '@/lib/api/client'
-import { ApiError, NetworkError, parseErrorEnvelope } from '@/lib/api/errors'
+import { apiFetchRaw, http } from '@/lib/api/client'
 import type { ListResponse } from '@/lib/api/types'
-import { useSessionStore } from '@/stores/session'
-import { useTenantStore } from '@/stores/tenant'
 import type {
   HipaaGapReport,
   CapabilityCatalogResponse,
@@ -104,11 +101,10 @@ const BASE = '/v1/m/compliance'
 
 /** Fetch an export as the server's EXACT bytes.
  *
- *  A RAW fetch (not `http.*`) because the engine answers text/csv for format=csv
+ *  The raw response (not `http.*`) because the engine answers text/csv for format=csv
  *  and the thin JSON client discards non-JSON bodies — an auditor export must be
- *  the server's exact bytes, never recomputed (ARCHITECTURE.md). It reuses the same
- *  token/tenant the client is wired to (app/providers.tsx) so auth and the
- *  server-side export self-audit (modules/compliance/evidence.go:241) still apply.
+ *  the server's exact bytes, never recomputed (ARCHITECTURE.md). The server-side export
+ *  self-audit (modules/compliance/evidence.go:241) still applies.
  *
  *  Shared by every export surface (evidence, DORA register, DORA incident report,
  *  depth packs): they all have the same "hand the auditor what the server sealed"
@@ -118,39 +114,10 @@ async function fetchRawExport(
   path: string,
   filename: string,
 ): Promise<{ filename: string; content_type: string; text: string }> {
-  const token = useSessionStore.getState().csrfToken
-  const tenant = useTenantStore.getState().activeTenant
-  const headers = new Headers({ Accept: 'application/json, text/csv' })
-  if (token) headers.set('X-CSRF-Token', token)
-  if (tenant) headers.set('X-Olivares-Tenant', tenant)
-
-  let res: Response
-  try {
-    res = await fetch(path, {
-      method: 'GET',
-      headers,
-      credentials: 'same-origin',
-    })
-  } catch (cause) {
-    throw new NetworkError('The control plane is unreachable.', cause)
-  }
-
+  const res = await apiFetchRaw(path, {
+    headers: { Accept: 'application/json, text/csv' },
+  })
   const text = await res.text()
-  if (!res.ok) {
-    let parsed: unknown
-    try {
-      parsed = JSON.parse(text)
-    } catch {
-      parsed = undefined
-    }
-    const { code, message } = parseErrorEnvelope(parsed, res.statusText)
-    throw new ApiError(
-      res.status,
-      code,
-      message,
-      res.headers.get('X-Request-ID') ?? undefined,
-    )
-  }
   return {
     filename,
     content_type: res.headers.get('Content-Type') ?? '',
@@ -164,39 +131,11 @@ async function fetchEvidenceExport(
   id: string,
   format: EvidenceExportFormat,
 ): Promise<EvidenceExportResult> {
-  const token = useSessionStore.getState().csrfToken
-  const tenant = useTenantStore.getState().activeTenant
-  const headers = new Headers({ Accept: 'application/json, text/csv' })
-  if (token) headers.set('X-CSRF-Token', token)
-  if (tenant) headers.set('X-Olivares-Tenant', tenant)
-
-  let res: Response
-  try {
-    res = await fetch(
-      `${BASE}/evidence/${encodeURIComponent(id)}/export?format=${format}`,
-      { method: 'GET', headers, credentials: 'same-origin' },
-    )
-  } catch (cause) {
-    throw new NetworkError('The control plane is unreachable.', cause)
-  }
-
+  const res = await apiFetchRaw(
+    `${BASE}/evidence/${encodeURIComponent(id)}/export?format=${format}`,
+    { headers: { Accept: 'application/json, text/csv' } },
+  )
   const text = await res.text()
-  if (!res.ok) {
-    let parsed: unknown
-    try {
-      parsed = JSON.parse(text)
-    } catch {
-      parsed = undefined
-    }
-    const { code, message } = parseErrorEnvelope(parsed, res.statusText)
-    throw new ApiError(
-      res.status,
-      code,
-      message,
-      res.headers.get('X-Request-ID') ?? undefined,
-    )
-  }
-
   const contentType = res.headers.get('Content-Type') ?? ''
   const ext = format === 'oscal' ? 'oscal.json' : format
   const result: EvidenceExportResult = {

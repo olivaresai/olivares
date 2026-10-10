@@ -30,9 +30,9 @@ grep -q 'NO ELEGIDO. NO APLICADO.' "$DOC" \
   || fail "prepare doc lost NO ELEGIDO. NO APLICADO."
 grep -q 'addongate-runtime' "$DOC" || fail "prepare doc lost option A"
 grep -q 'declare-included-in-airs-artifact' "$DOC" || fail "prepare doc lost option B"
-grep -q 'retrieval-scan' "$DEC" || fail "$DEC lost the owner question this lote presents"
+grep -q 'retrieval-scan' "$DEC" || fail "$DEC lost the owner question this batch presents"
 if grep -qiE 'elegimos A|applied option|gateamos retrieval' "$DOC"; then
-  fail "prepare doc claims a choice this lote does not have"
+  fail "prepare doc claims a choice this batch does not have"
 fi
 
 python3 - "$JSON" <<'PY' || exit $?

@@ -457,6 +457,11 @@ func validateWorkspaceLineage(d model.EntityDescriptor) error {
 		// flag would name a reader that can never exist.
 		return fmt.Errorf("workspace lineage: read-only confined exposure requires a declared lineage")
 	}
+	if d.Internal && !s.Declared() {
+		// The flag only changes what the lineage-based contents read lists; without
+		// a lineage the kind is never listed and the flag would claim nothing.
+		return fmt.Errorf("workspace lineage: an internal kind requires a declared lineage")
+	}
 	if !s.Declared() {
 		// A spec is either fully absent or fully specified; half of one is a
 		// declaration whose meaning nobody can state.

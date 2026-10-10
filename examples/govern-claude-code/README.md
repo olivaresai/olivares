@@ -49,7 +49,7 @@ TENANT=$(printf 'Authorization: Bearer %s\n' "$TOKEN" | curl -sf -X POST localho
 ## 2. Write the governed policy and mount the PEP
 
 The policy is a **deny-closed allowlist**: anything without an explicit `allow`
-rule is denied. Drop your `$TENANT` into [`hook-pep.config.json`](#policy):
+rule is denied. Drop your `$TENANT` into [`hook-pep.config.json`](#2-write-the-governed-policy-and-mount-the-pep):
 
 ```jsonc
 {
@@ -131,7 +131,7 @@ OLIVARES_HOOK_PEP_AGENT=<agent identity hint>  # refines firm attribution
   to a governed approval: the agent gets `ask` (the call is held), a human approves,
   and the *same* call (bound to its plan hash, anti-TOCTOU) then returns `allow`. Wire
   it by pointing `OLIVARES_APPROVAL_BRIDGE_CONFIG` at a per-tenant service token (see
-  `cmd/olivares/approvalbridge.go`). Approving a tool-call is a CRITICAL decision,
+  `cmd/olivares/internal/approvalbridge`). Approving a tool-call is a CRITICAL decision,
   so the reviewer needs a step-up (AAL3) session. The full pending→approve→allow loop
   is proved end to end in
   [`cmd/olivares/claudehookpep_test.go`](../../cmd/olivares/claudehookpep_test.go)
@@ -147,6 +147,6 @@ OLIVARES_HOOK_PEP_AGENT=<agent identity hint>  # refines firm attribution
 
 ## References
 
-- Decision endpoint + governed brain: `cmd/olivares/claudehookpep.go`
+- Governed brain: `modules/sessions/hookpep`; decision endpoint wiring: `cmd/olivares/claudehookpep.go`
 - Wire protocol (Claude Code hook schema): `connectors/claude/pep.go`, `connectors/claude/hooks.go`
 - Managed hook command: `cmd/olivares/cmd_claudehook.go`

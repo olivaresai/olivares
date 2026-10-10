@@ -1,48 +1,265 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
+The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+Releases use `MAJOR.MINOR`, with no patch number or `v` prefix. The next release is <!-- release -->`0.1`<!-- /release -->.
+See [versioning](INSTALL.md#versioning) for the release policy.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
-and this project uses [CalVer](https://calver.org/): a monthly release is `YY.M` (two-digit
-year and month, such as 26.10), and a patch release adds a third number, `YY.M.N`. Tags have
-no `v` prefix; the latest release is tagged `26.10.1`.
-
-> **Status: beta.** The latest published release is **26.10.1**; its dated section below is the
-> record of what it shipped. Changes for the next release are recorded under **[Unreleased]**,
-> with no release date until it is published. The
-> [releases page](https://github.com/olivaresai/olivares/releases) lists every published release.
-> Release notes and artifacts become authoritative when the corresponding release is published.
-> Every earlier release keeps its own dated section, unchanged.
-> Published CLI commands and flags, API routes and fields, configuration keys, defaults,
-> paths and stored data stay compatible in later releases, also during beta. A removal is
-> first announced as a deprecation in an earlier release and comes with an automatic
-> migration. CalVer names the release month; it never permits a regression.
-> Because CalVer does not encode breaking changes in the version number,
-> every breaking change is called out explicitly under **Changed**/**Removed** here. No
-> versions, tags, or dates are invented here (see [`SECURITY.md`](SECURITY.md) *Supported
-> versions*).
+> **Draft: Community <!-- release -->`0.1`<!-- /release --> is unreleased.** Dated sections remain unchanged;
+> the release-preparation section awaits publication. Other dated sections record published releases. [GitHub releases](https://github.com/olivaresai/olivares/releases)
+> lists their notes and artifacts. Published CLI commands and flags, API routes and
+> fields, configuration keys, defaults, paths and stored data follow the compatibility policy.
+> The <!-- release -->0.1<!-- /release --> edition changes are described in [Editions](docs/editions.md).
+> Announce deprecations in an earlier release and provide an automatic migration
+> before removal. A release never permits a regression. Any breaking change must
+> be explicit under **Changed** or **Removed**.
 
 ## How this changelog is maintained
 
-- Every user-visible `feat:` / `fix:` / breaking change that lands on `main`
-  adds an entry to **[Unreleased]** under the matching heading — *Added*,
-  *Changed*, *Deprecated*, *Removed*, *Fixed*, or *Security*. This is the
-  human-readable counterpart to the [Conventional Commits](CONTRIBUTING.md)
-  history; we do not dump git logs into it.
-- At release time, the **[Unreleased]** entries move into a new, dated version
-  section (`## [<release tag>] - YYYY-MM-DD`, latest first), and a fresh empty
-  **[Unreleased]** is started.
-- The **Security** heading is the public face of the advisory process: each
-  entry links the relevant GitHub Security Advisory (GHSA) / OSV record from the
-  flow in [`docs/security-advisories.md`](docs/security-advisories.md). The
-  changelog never discloses a vulnerability ahead of its coordinated fix.
+- Add user-visible changes to the unreleased section, grouped by what a user does.
+  Describe their effect; do not copy the commit log. State previews and limits plainly.
+- At publication, move the entries to `## [<release tag>] - YYYY-MM-DD`, latest
+  first, remove the draft subheading, and start an empty **[Unreleased]**.
+  Do not invent a publication date.
+- Release bodies and web notes are generated from the dated section. This file is
+  the only authored notes source; do not maintain a separate release body.
+- Security entries link the GHSA or OSV record from
+  [the advisory process](docs/security-advisories.md). Publish them with the coordinated
+  fix and keep private reports undisclosed.
 
 ## [Unreleased]
 
-Pending for the next release. Nothing below is published until that release is, and the
-section is dated only then.
+### Fixed
 
-## [26.10.1] - 2026-10-03
+- The deployment-wide Secrets API refuses `env/` writes and points to Manage
+  session secrets or `scope=tenant`. Existing global values remain readable and
+  deletable; session secrets continue to use the tenant store.
+- JSON request errors name unknown fields and type-mismatch paths, such as
+  `request.action`, while preserving existing HTTP statuses and error codes.
+
+
+## [0.1] - 2026-10-10
+
+Community 0.1 release notes, covering changes since 26.10.1.
+0.1 is the first two-number release and a fresh installation baseline. Releases before
+0.1 used CalVer; upgrade, downgrade and recovery qualification from that retired
+line are outside this release's scope. See **Known limits** before installing.
+
+The [edition table](docs/editions.md) defines the 0.1 scope. Community keeps
+launching, listing, watching and stopping official tools, including CLI interruption.
+Live console terminals and session steering, departments and agent groups, budgets,
+Helm and the Kubernetes operator, reports, audit export, SIEM and observability export
+belong to Business; installing offline update bundles belongs to Enterprise.
+Community still verifies bundles with `olivares upgrade --bundle --check`.
+
+Existing installations retain their data. Stored approval policies, budgets,
+group-to-role mappings, department structure and membership, group nesting and
+agent-group membership keep their protective effect in Community under the edition
+table's stored-data exception.
+Community can remove stored policies and budgets and clear a role mapping, but
+cannot create or change them. Other previously enforced Business protections must
+refuse startup rather than disappear; a CMEK installation needs the Business build,
+which can export its backup without a live license. Edition separation is still
+being implemented; the table's **Where the product differs from this page today**
+section records those gaps.
+
+### Install and start your first session
+
+- Setup offers a provider key or local model before installing a tool. The console
+  explains missing requirements and disabled actions, and fills in the first
+  session's working folder instead of requiring a server path.
+- Adding and testing an Anthropic, OpenAI or Ollama provider prepares a managed
+  profile and installs its matching tool when the administrator has permission.
+  A saved default model applies to new sessions; an explicit model still wins.
+- AI tools recognizes Grok Build and OpenCode installed outside Olivares and shows
+  their sign-in. Provider status shows the tool's own login, plan, available models
+  and reported usage, with errors when the tool cannot supply them.
+- A first message held for launch approval is sent when the session starts. The
+  session view links to its waiting approval.
+- Sessions has one empty state and one New session action. Sign-in and security
+  settings keep passkeys, authenticators, session lifetime and SSO together.
+- Fresh-install navigation focuses on home and setup, tools, providers, sessions
+  and session history. Navigation alone does not qualify a preview or place a
+  capability in Community; the edition table defines availability.
+- Compose selects the release image even when an older `latest` image is cached.
+  It has a 2 GiB memory ceiling and no CPU limit, so it starts on a one-CPU host.
+  Explicit image, digest and resource overrides remain available.
+- Compose can mount one host project at `/project` through `OLIVARES_PROJECT_DIR`.
+  Without that variable, `/project` is an empty volume, not the Olivares checkout.
+- Package setup preserves the service environment file's ownership and permissions.
+  `first-boot` reports unreadable setup state instead of claiming setup is complete;
+  package upgrade and removal messages distinguish their actual outcomes.
+- Manual tarball installation verifies signed checksums and the archive from the
+  download directory. The install guides describe the systemd unit that ships,
+  and the Homebrew caveat explains the default listeners on all interfaces.
+- Console navigation searches include the existing object nouns for views added
+  by an edition, in All areas and the command palette.
+
+### Run tools
+
+- Sessions share one launch-readiness answer between the engine, console and CLI.
+  Refused starts retain the confinement or execution failure reason. OpenCode
+  displays the requested command in approvals; npm-installed Codex resolves under
+  a non-system prefix.
+- Codex sessions bound to a provider key now have the same provider-only network
+  boundary as bound Claude Code sessions, or refuse to start. Their commands cannot
+  reach git hosts or package registries through that boundary. Own-login sessions
+  keep their existing network behavior.
+- Grok Build can use a local xAI-compatible HTTP endpoint on loopback or a private
+  network. Provider tests use the configured endpoint and explain unavailable
+  credentials or models; public plain-HTTP endpoints remain refused.
+- Gemini CLI has a beta ACP session driver and executable discovery. Its profile
+  refuses tool pre-approvals that would bypass Olivares's permission requests.
+- Opt into a separate git worktree with **Work in a new git worktree** or
+  `olivares session start . --worktree`. Cleanup refuses to discard unmerged work
+  or tracked changes without explicit confirmation.
+- Sessions can read and add workspace memory through the launcher's existing rights.
+- A person can create governed work items from Work.
+
+### Manage credentials and permissions
+
+- Secret views show folders, references and the users visible in their scope, and
+  explain the consequence of deletion. `olivares mcp secret` stores MCP credentials
+  where `mcp add --secret-env` reads them; missing references name the right store.
+- MCP starter definitions cover filesystem, git, Playwright, GitHub and GitLab servers,
+  with declared confinement and network profiles. Cedar conditions can restrict calls
+  by their arguments to narrow access.
+- Lowering or disabling administrative step-up requires a session meeting the current
+  policy. A password-only session cannot disable a configured passkey requirement.
+- `env_allow` refuses engine secrets and variables named by credential references.
+  Use a session's own `secret_env` value instead. A run stops if its I/O evidence cannot be written.
+
+### Observe, deploy and recover
+
+- Health explains when update checking is unavailable and offers local instructions
+  for enabling a signed channel or upgrading manually. Configured checks remain retryable.
+- The signed audit chain also has an RFC 6962 Merkle tree. `olivares audit tree`
+  saves signed checkpoints and verifies chain proofs offline on SQLite and PostgreSQL.
+- Synthetic sandbox generation produces bounded local scenarios from templates
+  without a model call.
+- Approved Docker retirement has a one-minute default deadline;
+  explicit `--timeout` values keep their behavior and operation outcomes survive cancellation.
+- Disaster-recovery bundles carry the local sealer keys needed to open restored
+  provider credentials, runtime secrets and authenticator enrollments.
+  Restore verifies key custody and names missing or mismatched keys.
+- Console SQLite restore verifies, restores and restarts while retaining its result.
+  PostgreSQL backup works while the engine serves.
+- Back up before future upgrades. After a core schema advance, recovery requires
+  the pre-upgrade DR bundle and its matching binary; the executable alone cannot
+  restore the data, and writes after the saved point are lost.
+- Module restarts warn with the running-session count. Default SQLite single-node
+  topology no longer reports an unsupported-production warning. Listener collisions
+  fail before binding and name both configuration keys; no endpoint moves automatically.
+- Published integration counts now exclude shared contract/helper libraries and
+  the interoperability matrix. The current tree contains 148 integration
+  capability directories; shared Go helpers no longer inflate that count.
+- Contributor task descriptions, CI labels and annotations, and shipped script
+  diagnostics use US English. Public exports check existing tooling text as well
+  as newly added source lines. The misspell census accepts its displayed English
+  class labels with `--clase` alongside existing aliases.
+
+### Security
+
+- The binary, the container images and the Terraform provider are built with
+  Go 1.26.9, which fixes eleven standard-library vulnerabilities that Go 1.26.8
+  has in `net/http`, `mime/multipart`, `crypto/tls` and `html/template`.
+  Upgrading is the only action needed:
+  [GO-2026-6599](https://pkg.go.dev/vuln/GO-2026-6599),
+  [GO-2026-6600](https://pkg.go.dev/vuln/GO-2026-6600),
+  [GO-2026-6603](https://pkg.go.dev/vuln/GO-2026-6603),
+  [GO-2026-6605](https://pkg.go.dev/vuln/GO-2026-6605),
+  [GO-2026-6607](https://pkg.go.dev/vuln/GO-2026-6607),
+  [GO-2026-6608](https://pkg.go.dev/vuln/GO-2026-6608),
+  [GO-2026-6610](https://pkg.go.dev/vuln/GO-2026-6610),
+  [GO-2026-6611](https://pkg.go.dev/vuln/GO-2026-6611),
+  [GO-2026-6612](https://pkg.go.dev/vuln/GO-2026-6612),
+  [GO-2026-6613](https://pkg.go.dev/vuln/GO-2026-6613) and
+  [GO-2026-6617](https://pkg.go.dev/vuln/GO-2026-6617).
+  `golang.org/x/net` moves to v0.60.0, which also fixes GO-2026-6603, -6611,
+  -6612 and -6617 in its own HTTP/2 code, used by gRPC and by Olivares.
+
+### Changes for API and SDK clients
+
+- Audit SIEM export, directory archival and external archive verification now require Business. Existing API routes and CLI flags remain as unavailable edition seams in Community (HTTP 501 / exit 9). Community refuses archive-bearing recovery before opening its data directory and retains recovery without an archive, its signed ledger, checkpoint/ledger verification and `dr backup`; stored ledger and archive bookkeeping are preserved. Audit forwarding queues pause across an edition change without consuming retries.
+- SIEM and ITSM push, posture export, OTLP downloads and external telemetry delivery move to Business. Community retains local observability and saved data; backups stay available.
+- The department writes added after 26.10.1 moved to the Business edition
+  (Identity & Scale) before any release: `PUT /v1/workspaces/{id}/parent` and
+  `PUT /v1/groups/{id}/workspace` answer 501 `departments_unavailable` in
+  Community, and `olivares workspaces tree|set-parent|place` and the console
+  department tree are in the Business build. A department tree stored before
+  stays readable and keeps applying to authorization, and stored group places
+  stay listed. Group nesting (`PUT /v1/groups/{id}/parent` and the console
+  **Set parent** and **Remove parent**) is unchanged in Community.
+- `/v1/agents`, `/v1/users`, `/v1/workspaces`, `/v1/audit` and
+  `/v1/audit/system` return up to 50 rows when `limit` is omitted, matching OpenAPI.
+  They previously returned 100. Follow `has_more` and `cursor` (or `from` for audit),
+  or pass `limit=100` explicitly to retain the previous page size.
+- Beta module errors missing a code gain `module_error`. Stable API bodies and
+  protocol-specific errors are unchanged.
+- Stored-budget and context-policy read failures refuse session launch in Community.
+  The respective `OLIVARES_SESSION_BUDGET_AVAILABILITY` and
+  `OLIVARES_SESSION_CONTEXT_AVAILABILITY` `fail-open` overrides retain their behavior.
+  `olivares doctor` reports the posture for its environment.
+- OpenAPI includes previously missing Community module operations and classifies
+  protocol-specific routes separately. Generated Python clients separate route
+  arguments from transport arguments.
+
+### Deprecated
+
+- `EnableProfiledLaunches` and `ProfiledLaunchesEnabled` remain for one release as
+  a no-op and an always-true getter. New launches require a resolved provider profile;
+  legacy sessions without a proven home cannot resume.
+- The never-wired out-of-process SDK module transport is deprecated. Its symbols
+  and wire contract remain until removal under the [SDK stability policy](sdk/VERSIONING.md).
+- `connectors/datasourceacl` is deprecated and remains under the compatibility
+  policy. Batch ACL synchronization through `contentsource.LiveSource.FetchACL` is supported.
+- Stock model-backed security screening is deprecated and unavailable; deterministic
+  inspection, injected classifiers and exported options keep their behavior.
+
+### Known limits
+
+- 0.1 is a fresh baseline: upgrades from retired 26.x packages, downgrades to them, and their recovery/removal-after-recovery journeys are not qualified; native package managers can treat 0.1 as older than 26.x.
+- Fresh empty-store release-container setup and first-session output, final package journeys and the complete release-binary replay are still pending; this draft does not establish release readiness.
+- Local bundle files are read into memory before verification; uncompressed tar extraction has no total-size cap, including with `--check`.
+- Same-version package reinstalls and downgrades can still print "upgraded"; that notice does not prove the installed version increased.
+- Real vendor sign-in and inference with Claude Code, Codex, OpenCode and DeepSeek are deferred until after the stable release; local models and protocol stand-ins do not qualify those accounts.
+- Tool sign-in forwards the engine's supported CA-file variables but excludes `SSL_CERT_DIR`; a certificate directory alone does not configure the tool's trust.
+- Grok Build and OpenCode provider-key sessions lack provider-only network enforcement and can reach other hosts permitted by the network; [session network isolation](SECURITY.md#session-network-isolation) describes the boundary per tool.
+- Grok Build's sandboxed presets require bubblewrap on Linux, which the release image does not supply; its local host-process turn does not qualify the container first hour.
+- Gemini CLI remains beta: shell requests lacking a command are refused, Providers does not manage its Gemini key or Google login, and no real vendor response is qualified.
+- Codex 0.160.0 with Ollama `qwen3:8b` and a 4,096-token context completed a test turn without an assistant reply; that combination is not qualified.
+- Session output uses a bounded in-memory ring; retained run metadata is not a durable conversation transcript.
+- Session worktrees require the repository's top folder, refuse git filters (including LFS) and includes, and share git metadata; cleanup removes ignored files with the worktree.
+- A resolved Codex launcher outside `node_modules`, including Yarn PnP and global shell shims, receives no package-tree confinement grant; sibling executables can remain inaccessible.
+- A final stderr line shaped like a stack frame can make a session's failure reason show the preceding line; if the bounded output ring loses the error heading, the last line remains the fallback.
+- An unconfined session can read other runs' `secret_env` values accessible to the engine user; filesystem confinement is needed to separate them.
+- Inheritance filters on stored scope structure cannot affect collection requests without declared workspace lineage; unsupported mixed higher/lower anchor expressions remain inherited, and deleting a node leaves its filter rows stored.
+- Permission-refusal hints describe built-in roles that include the permission; they do not diagnose scoped grants, workspace confinement or policies that still refuse the caller.
+- Memory audit rows identify the launcher, not the model's session; memory listing has no pagination and refuses answers over 1 MiB, so large workspace memory requires pruning.
+- Memory writes inherit the console's upsert behavior, including replacement of an existing entry above the writer's clearance; `workspace:` is a naming convention, not a reserved prefix.
+- Administrative step-up still allows an administrator without an enrolled factor to enroll the first authenticator from a password-only session, then sign in with it to meet the policy.
+- Secret "used by" lists check one roster per scope (sources, MCP servers or recent session runs); an empty list does not prove a secret has no other users, including holders outside that roster or scope.
+- Saving an MCP capability definition records an observation; it does not start a server or configure the gateway.
+- Playwright starter HTTPS browsing behind its egress profile is unqualified; the GitLab starter needs a manually stored OAuth bearer, and command starters pin only their top-level package.
+- MCP child host profiles can allow hosts beyond the session's provider; the CLI has no egress-host creation flag, and unknown operator-file members are ignored, including misspelled condition keys.
+- Cedar argument conditions distinguish name case; a backend that ignores case needs the documented missing-argument refusal pattern.
+- Approved Docker retirement now outlives the ordinary stop grace period, but an explicit short deadline can leave it incomplete; inspect deployment operations and retry to reconcile before assuming the target is absent.
+- Synthetic sandbox qualification covers `inproc-mock`; a configured OS-isolated executor and the full console journey remain unqualified.
+- PostgreSQL audit checkpoint creation requires stopping the engine; split-role installations also need the owner connection and current directory-inventory admission.
+- Audit-tree checkpoints use the on-box signing key even when an off-box key is configured; tree verification checks chain hashes, while `olivares audit verify` checks event contents.
+- Live PostgreSQL backups need up to two extra application connections and a transient owner connection in split-role setups; their advisory audit tips describe the live ledger after the dump, and restore re-verifies the dumped chain.
+- Signed GitLab webhooks still dispatch through an unsigned event header: an intercepted delivery replayed first under an ignored event can suppress the genuine delivery; real GitLab signed delivery is unqualified.
+- Full release verification is not network-free: keyless signature verification needs Sigstore trusted-root material and the SLSA verifier has no offline mode.
+- Backstage and documentation build lockfiles retain unpatched `http-cache-semantics` alerts ([advisory](https://github.com/advisories/GHSA-ch52-4w7c-c8xp)); the dependency is in their cache/download tooling, not the standalone Go engine.
+- Backstage lockfiles retain `node-forge` and `elliptic` alerts in development/build dependencies and React Router alerts in the Backstage frontend; they are not fixed by the separate UUID update, and no blanket non-reachability claim is made.
+- Compatible upstream dependency fixes are still needed; forcing incompatible majors can break Backstage, and the standalone embedded console uses a separate dependency graph.
+
+### Release numbering
+
+- Community and Enterprise release identities use two numbers, `MAJOR.MINOR`.
+  Patch numbers, `v` prefixes and release suffixes are refused. Compatible releases
+  increment MINOR; breaking releases increment MAJOR.
+
+## [26.10.1] - 2026-10-04
 
 ### Before you upgrade
 
@@ -120,6 +337,9 @@ section is dated only then.
 
 ### Fixed
 
+- Upgrades from 26.10.0 recognize the AgentOps service template installed by 26.10.0 and preserve operator edits.
+- The sessions table names the active filters when they hide every session.
+- The installer explains when it cannot create its destination file.
 - Tool sign-in, profile resolution and background work on a default PostgreSQL installation.
 - `olivares quickstart` on PostgreSQL; running `olivares db init` again no longer breaks the next start.
 - The New session dialog with one tool ready and another not signed in.
@@ -766,7 +986,7 @@ dir archive is WORM only on an immutable substrate, as the README states.
 
 **What does not ship in this release, stated as absent:** Windows binaries (Linux container or
 build from source); Apple notarization of the darwin binaries (the cask clears the Gatekeeper
-quarantine); the Helm chart as an OCI artifact — its source ships in `deploy/helm/olivares` and
+quarantine); the Helm chart as an OCI artifact — its source shipped with that historical release and
 `release-chart.yml` runs only on a `chart-v*` tag that has not been cut; the hosted Cloud tier;
 shadow mode and final work authority (design only); a general message bus for arbitrary agents
 (messages stay scoped to an orchestration workflow, enforced by a boot test).
@@ -800,14 +1020,14 @@ shadow mode and final work authority (design only); a general message bus for ar
   — each with import, drift detection, validation and acceptance tests.
   Registry docs are now autogenerated (tfplugindocs) from the schema + `examples/`.
 - **GitOps reconciliation of the control plane's own desired state** as code
-  (`deploy/gitops/olivares-as-code/`): the governance estate (agents,
+  (historical GitOps examples): the governance estate (agents,
   policies, budgets, connectors, routes) declared in HCL and continuously
   reconciled via Flux's tofu-controller or Argo CD, OpenGitOps 1.0-aligned.
   Actuating a deployment to real infrastructure remains human-in-the-loop-gated.
 - A signed, verifiable **release pipeline** (cosign / Sigstore, SBOM attestation,
   OpenVEX, SLSA provenance, OpenSSF Scorecard, air-gap bundle) — see
   [`SECURITY.md`](SECURITY.md) and `scripts/verify-release.sh`.
-- The **third-party connector ecosystem** (ADR-0016): the connector SDK declared
+- The **third-party connector ecosystem**: the connector SDK declared
   **stable v1** with its own versioning policy (`sdk/VERSIONING.md`); a
   zero-dependency scaffold (`sdk/scaffold`, CLI `olivares-connector-new`)
   generating a complete out-of-tree connector repo with a standalone

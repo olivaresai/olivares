@@ -196,7 +196,7 @@ func TestDRRestoreInPlace(t *testing.T) {
 	// ordenable. Se sella el senuelo, no se ablanda la guarda. Explicacion completa en
 	// cmd_dr_test.go, TestDRBackupVerifyRestoreCLI.
 	prevVersion := version
-	version = "26.9.0"
+	version = "26.900"
 	t.Cleanup(func() { version = prevVersion })
 	dir := t.TempDir()
 	seedDataDir(t, dir)

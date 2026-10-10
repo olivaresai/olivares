@@ -39,6 +39,9 @@ func intentMeta(in Intent) map[string]any {
 	if in.AgentIdentity != "" {
 		m["agent_identity"] = in.AgentIdentity
 	}
+	if in.Proposal.SessionRun != "" {
+		m["session_run"], m["approval_id"] = in.Proposal.SessionRun, in.Proposal.Approval
+	}
 	switch in.Effect {
 	case effectPush:
 		m["ref"], m["expected_old"], m["commit"] = in.Requested.Ref, in.Requested.ExpectedOld, in.Requested.Commit

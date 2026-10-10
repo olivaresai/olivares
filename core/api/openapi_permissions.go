@@ -47,6 +47,10 @@ var corePermissions = map[string]string{
 	"setStepUpPolicy":   "system:admin",
 	"getUserTOTPStatus": "membership:read",
 	"resetUserTOTP":     "membership:write",
+	// Deployment tracing choices (server.go: systemRoute("system:admin"); the PUT
+	// additionally requires the configured step-up inside the handler).
+	"getTracingSettings":  "system:admin",
+	"saveTracingSettings": "system:admin",
 	// Agents + access graph (handlers_core.go).
 	"listAgents":      "agent:read",
 	"getAgent":        "agent:read",
@@ -79,10 +83,11 @@ var corePermissions = map[string]string{
 	"rotateToken": "token:write",
 
 	// Workspaces (handlers_scoping.go).
-	"listWorkspaces":  "tenant:read",
-	"getWorkspace":    "tenant:read",
-	"createWorkspace": "tenant:admin",
-	"updateWorkspace": "tenant:admin",
+	"listWorkspaces":     "tenant:read",
+	"getWorkspace":       "tenant:read",
+	"createWorkspace":    "tenant:admin",
+	"updateWorkspace":    "tenant:admin",
+	"setWorkspaceParent": "tenant:admin",
 
 	// Connector health (handlers_connector_health.go).
 	"getConnectorHealth": "health:status:read",
@@ -122,6 +127,64 @@ var corePermissions = map[string]string{
 	"putSSOConfig":         "system:admin",
 	"deleteSSOConfig":      "system:admin",
 	"testSSOConfig":        "system:admin",
+
+	// Completed surfaces: each value is the gate the route registration in
+	// server.go applies (tenantRoute/entityRoute/systemRoute/authzenRoute).
+	"listAgentGroups":        "agent:read",
+	"getAgentGroup":          "agent:read",
+	"listAgentGroupMembers":  "agent:read",
+	"createAgentGroup":       "agent:write",
+	"updateAgentGroup":       "agent:write",
+	"deleteAgentGroup":       "agent:write",
+	"addAgentGroupMember":    "agent:write",
+	"removeAgentGroupMember": "agent:write",
+	"getEffectiveRights":     "authz:admin",
+	"getWorkspaceSummary":    "tenant:read",
+	"getWorkspaceContents":   "tenant:admin",
+	"listInvites":            "membership:read",
+	"listGroups":             "membership:read",
+	"revokeInvite":           "membership:write",
+	"resendInvite":           "membership:write",
+	"onboardMember":          "membership:write",
+	"setGroupRole":           "membership:write",
+	"setGroupParent":         "membership:write",
+	"setGroupWorkspace":      "membership:write",
+	"getActivationStatus":    "system:admin",
+	"previewActivation":      "system:admin",
+	"applyActivation":        "system:admin",
+	"triggerBackup":          "system:admin",
+	"listBackups":            "system:admin",
+	"getBackup":              "system:admin",
+	"deleteBackup":           "system:admin",
+	"downloadBackup":         "system:admin",
+	"listDRJobs":             "system:admin",
+	"streamDRJob":            "system:admin",
+	"listPendingRestores":    "system:admin",
+	"uploadRestore":          "system:admin",
+	"applyRestore":           "system:admin",
+	"approveRestore":         "system:admin",
+	"getDRSchedule":          "system:admin",
+	"putDRSchedule":          "system:admin",
+	"getLogBuffer":           "system:admin",
+	"streamLogs":             "system:admin",
+	"getModuleSelection":     "system:admin",
+	"selectModules":          "system:admin",
+	"reloadRuntime":          "system:admin",
+	"getSourceContentDiff":   "system:admin",
+	"listSSOIdPs":            "system:admin",
+	"getSSOIdP":              "system:admin",
+	"putSSOIdP":              "system:admin",
+	"deleteSSOIdP":           "system:admin",
+	"testSSOIdP":             "system:admin",
+	"getTenantSSOConfig":     "system:admin",
+	"putTenantSSOConfig":     "system:admin",
+	"deleteTenantSSOConfig":  "system:admin",
+	"testTenantSSOConfig":    "system:admin",
+	"listTenantSSOIdPs":      "system:admin",
+	"getTenantSSOIdP":        "system:admin",
+	"putTenantSSOIdP":        "system:admin",
+	"deleteTenantSSOIdP":     "system:admin",
+	"testTenantSSOIdP":       "system:admin",
 }
 
 // corePermissionExempt are the secured operations deliberately left without an
@@ -136,9 +199,26 @@ var corePermissionExempt = map[string]bool{
 	"whoami":           true,
 	"searchConsole":    true,
 	"authCapabilities": true,
+	// The subject completes its own native proof; administration was authorized separately.
+	"completeOSAccountBinding": true,
 	// The signed-in user's own browser session (browser_session.go).
 	"getBrowserSession":     true,
 	"migrateBrowserSession": true,
+	// The signed-in human's own password change (handlers_account_password.go): it
+	// gates on the session being human plus the CURRENT password, never on a
+	// permission, so no single value here would be the handler's real check.
+	"changeOwnPassword": true,
+	// The signed-in session proves itself with a second factor (WebAuthn assertion or PIV certificate):
+	// sessionRoute/authenticatedRoute gate it, never a permission.
+	"webauthnRegisterOptions":     true,
+	"webauthnRegister":            true,
+	"webauthnAuthenticateOptions": true,
+	"webauthnAuthenticate":        true,
+	"listWebAuthnCredentials":     true,
+	"renameWebAuthnCredential":    true,
+	"deleteWebAuthnCredential":    true,
+	"getPIVStatus":                true,
+	"elevatePIV":                  true,
 }
 
 // stampCorePermissions walks the built paths object and stamps

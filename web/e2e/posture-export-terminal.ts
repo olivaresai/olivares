@@ -48,7 +48,7 @@ function mensajesEN(): MensajesExport {
   return { done, failed }
 }
 
-export const MENSAJES_EXPORT: MensajesExport = mensajesEN()
+export const mensajesExportacion = mensajesEN
 
 /** Plazo por defecto: el mismo que la escena de captura usaba antes de extraer este helper. */
 export const PLAZO_TERMINAL_MS = 15_000
@@ -63,7 +63,7 @@ export async function esperarExportacionDePostura(
   opciones: { plazoMs?: number } = {},
 ): Promise<void> {
   const plazoMs = opciones.plazoMs ?? PLAZO_TERMINAL_MS
-  const { done, failed } = MENSAJES_EXPORT
+  const { done, failed } = mensajesExportacion()
   const exito = page.getByText(done, { exact: true })
   const fallo = page.getByText(failed, { exact: true })
 

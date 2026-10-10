@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { describe, expect, it } from 'vitest'
+import nativeHistory from './fixtures/codex-native-history.json'
 import {
   conversationCwd,
   mapConversationFrames,
@@ -10,6 +11,60 @@ import {
 } from './conversation-frames'
 
 // Frame shapes taken from the golden-path attach capture (evidence/16-session-attach.txt).
+// Stored history captured from real Codex 0.162.1 with a labelled loopback
+// Responses provider by TestCodexNativeConversationAfterStoppedHandleIsGone.
+describe('native persisted Codex conversation', () => {
+  it('restores both turns in order and deduplicates live replay by turn/item identity', () => {
+    const lines = [JSON.stringify(nativeHistory)]
+    for (const turn of nativeHistory.turns) {
+      for (const item of turn.items)
+        lines.push(
+          JSON.stringify({
+            method: 'item/completed',
+            params: { item, turnId: turn.id },
+          }),
+        )
+      lines.push(JSON.stringify({ method: 'turn/completed', params: { turn } }))
+    }
+    const items = mapConversationFrames(lines)
+    expect(items.map((item) => item.kind)).toEqual([
+      'operator',
+      'assistant',
+      'result',
+      'operator',
+      'assistant',
+      'result',
+    ])
+    expect(items.filter((item) => item.text).map((item) => item.text)).toEqual([
+      'initial CLI prompt',
+      'fixture answer',
+      'earlier console prompt',
+      'fixture answer',
+    ])
+    expect(new Set(items.map((item) => item.id)).size).toBe(items.length)
+  })
+
+  it('keeps identical text in distinct turns and does not complete an active or interrupted turn', () => {
+    const turns = nativeHistory.turns.map((turn, index) => ({
+      ...turn,
+      status: index === 0 ? 'interrupted' : 'inProgress',
+      items: turn.items.map((item) =>
+        item.type === 'userMessage'
+          ? { ...item, content: [{ type: 'text', text: 'same prompt' }] }
+          : item,
+      ),
+    }))
+    const items = mapConversationFrames([
+      JSON.stringify({ ...nativeHistory, turns }),
+    ])
+    expect(items.filter((item) => item.kind === 'operator')).toHaveLength(2)
+    expect(
+      items
+        .filter((item) => item.kind === 'result')
+        .map((item) => item.summary),
+    ).toEqual(['Turn interrupted'])
+  })
+})
 // Fields that do not drive the mapping are omitted; the discriminator and the
 // values the conversation reads are the ones the capture carried.
 

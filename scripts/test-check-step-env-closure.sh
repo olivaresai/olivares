@@ -26,7 +26,7 @@ corre() { rm -rf "$WORK/w"; mkdir -p "$WORK/w"; cat > "$WORK/w/f.yml"; \
 	# SIEMPRE cero y los dos casos que exigen rojo pasaban por verdes sin mirar nada.
 	OLIVARES_WORKFLOWS_DIR="$WORK/w" bash "$GATE" >"$WORK/o" 2>"$WORK/e"; rc=$?; }
 
-echo "check-step-env-closure — la definicion extraviada, y solo esa"
+echo "check-step-env-closure — the misplaced definition, and only that"
 
 corre <<'YML'
 name: t
@@ -41,7 +41,7 @@ jobs:
         run: echo "${FOO_BAR}"
 YML
 [ "$rc" -ne 0 ] && grep -q "FOO_BAR" "$WORK/e"
-check "consumida en un paso y declarada SOLO en otro: rojo" "la firma del defecto" $?
+check "consumed in one step and declared ONLY in another: red" "the defect signature" $?
 
 corre <<'YML'
 name: t
@@ -54,7 +54,7 @@ jobs:
         run: echo "${FOO_BAR}"
 YML
 [ "$rc" -eq 0 ]
-check "declarada en SU propio paso: verde" "control" $?
+check "declared in ITS own step: green" "control" $?
 
 corre <<'YML'
 name: t
@@ -67,7 +67,7 @@ jobs:
         run: echo "${FOO_BAR}"
 YML
 [ "$rc" -eq 0 ]
-check "declarada en el env: del WORKFLOW: verde" "ambito amplio" $?
+check "declared in WORKFLOW env: green" "broad scope" $?
 
 corre <<'YML'
 name: t
@@ -80,7 +80,7 @@ jobs:
         run: echo "${FOO_BAR}"
 YML
 [ "$rc" -eq 0 ]
-check "declarada en el env: del JOB: verde" "ambito de job" $?
+check "declared in JOB env: green" "job scope" $?
 
 corre <<'YML'
 name: t
@@ -95,7 +95,7 @@ jobs:
         run: echo "${FOO_BAR}"
 YML
 [ "$rc" -eq 0 ]
-check "exportada a GITHUB_ENV por un paso anterior: verde" "persistencia real" $?
+check "exported to GITHUB_ENV by an earlier step: green" "actual persistence" $?
 
 corre <<'YML'
 name: t
@@ -108,7 +108,7 @@ jobs:
           echo "${LOPORT}-${HIPORT}"
 YML
 [ "$rc" -eq 0 ]
-check "variable de shell que NUNCA fue env: no se acusa" "no parsea shell, y lo sabe" $?
+check "shell variable that was NEVER env: not flagged" "does not parse shell and recognizes that limit" $?
 
 corre <<'YML'
 name: t
@@ -125,12 +125,345 @@ jobs:
         run: echo "${FOO_BAR}"
 YML
 [ "$rc" -ne 0 ] && grep -q "FOO_BAR" "$WORK/e"
-check "la definicion vive en OTRO job: tambien rojo" "el ambito no cruza jobs" $?
+check "definition lives in ANOTHER job: also red" "scope does not cross jobs" $?
+
+corre <<'YML'
+name: t
+jobs:
+  j:
+    steps:
+      - name: define
+        env:
+          FOO_BAR: x
+        run: echo "${FOO_BAR}"
+      - name: YAML comments
+        # The hook honors ${FOO_BAR:-/tmp}.
+        env:
+          # Even an indented YAML comment mentions ${FOO_BAR}.
+          OTHER_VAR: x
+        run: |
+          echo ready
+        # A comment after the scalar also mentions ${FOO_BAR}.
+YML
+[ "$rc" -eq 0 ]
+check "YAML comments are not shell consumers" "before and after run" $?
+
+for scalar in '|' '>-' '|2' '>+2'; do
+corre <<YML
+name: t
+jobs:
+  j:
+    steps:
+      - name: define
+        env:
+          FOO_BAR: x
+        run: echo "\${FOO_BAR}"
+      - name: trailing YAML comments
+        run: $scalar
+          echo ready
+         # Less indented than scalar content: \${FOO_BAR}.
+            # Later YAML comments may be more indented: \${FOO_BAR}.
+YML
+[ "$rc" -eq 0 ]
+check "trailing YAML comments after a $scalar scalar" "content indentation" $?
+done
+
+corre <<'YML'
+name: t
+jobs:
+  j:
+    steps:
+      - name: define
+        env:
+          FOO_BAR: x
+        run: echo "${FOO_BAR}"
+      - name: consume
+        # Describes ${FOO_BAR} before its real consumer.
+        run: echo "${FOO_BAR}"
+YML
+[ "$rc" -eq 1 ] && grep -q "f.yml:11: 'FOO_BAR'" "$WORK/e"
+check "a real consumer after a YAML comment still fails" "original line number" $?
+
+corre <<'YML'
+name: t
+jobs:
+  j:
+    steps:
+      - name: define
+        env:
+          FOO_BAR: x
+        run: echo "${FOO_BAR}"
+      - name: descriptive export
+        # echo "FOO_BAR=x" >> "$GITHUB_ENV"
+        run: echo ready
+      - name: consume
+        run: echo "${FOO_BAR}"
+YML
+[ "$rc" -eq 1 ] && grep -q "FOO_BAR" "$WORK/e"
+check "a YAML comment cannot export a definition" "missing env still fails" $?
+
+corre <<'YML'
+name: t
+jobs:
+  j:
+    steps:
+      - name: define
+        env:
+          FOO_BAR: x
+        run: echo "${FOO_BAR}"
+      - name: inline shell string
+        run: echo "# ${FOO_BAR}"
+YML
+[ "$rc" -eq 1 ] && grep -q "FOO_BAR" "$WORK/e"
+check "a quoted hash in inline run remains a consumer" "shell string" $?
+
+for header in 'run: |' 'run: >' 'run: |-' 'run: >+' 'run: |2-' 'run: >2+' \
+  '"run": |' "'run': |" 'run: &script |' 'run: !!str |' 'run : |'; do
+corre <<YML
+name: t
+jobs:
+  j:
+    steps:
+      - name: define
+        env:
+          FOO_BAR: x
+        run: echo "\${FOO_BAR}"
+      - name: shell data
+        $header # Shell content follows.
+          cat <<EOF
+          # \${FOO_BAR}
+          EOF
+YML
+[ "$rc" -eq 1 ] && grep -q "f.yml:12: 'FOO_BAR'" "$WORK/e"
+check "hash in $header remains a consumer" "scalar content" $?
+done
+
+corre <<'YML'
+name: t
+jobs:
+  j:
+    steps:
+      - name: define
+        env:
+          FOO_BAR: x
+        run: echo "${FOO_BAR}"
+      - name: single-quoted YAML shell string
+        run: 'echo "
+          # ${FOO_BAR}"'
+YML
+[ "$rc" -eq 1 ] && grep -q "f.yml:11: 'FOO_BAR'" "$WORK/e"
+check "hash in a multiline single-quoted scalar is data" "shell expansion" $?
+
+corre <<'YML'
+name: t
+jobs:
+  j:
+    steps:
+      - name: define
+        env:
+          FOO_BAR: x
+        run: echo "${FOO_BAR}"
+      - name: double-quoted YAML shell string
+        run: "echo \"
+          # ${FOO_BAR}\""
+YML
+[ "$rc" -eq 1 ] && grep -q "f.yml:11: 'FOO_BAR'" "$WORK/e"
+check "hash in a multiline double-quoted scalar is data" "escaped quotes" $?
+
+for mapping in 'run:' 'run: # Shell content follows.'; do
+for header in '|' '>' "'echo" '"echo'; do
+corre <<YML
+name: t
+jobs:
+  j:
+    steps:
+      - name: define
+        env:
+          FOO_BAR: x
+        run: echo "\${FOO_BAR}"
+      - name: next-line scalar
+        $mapping
+          $header
+            # \${FOO_BAR}
+YML
+case "$header" in
+  "'echo") printf "            '" >> "$WORK/w/f.yml" ;;
+  '"echo') printf '            "' >> "$WORK/w/f.yml" ;;
+esac
+OLIVARES_WORKFLOWS_DIR="$WORK/w" bash "$GATE" >"$WORK/o" 2>"$WORK/e"; rc=$?
+[ "$rc" -eq 1 ] && grep -q "f.yml:12: 'FOO_BAR'" "$WORK/e"
+check "hash in a next-line $header scalar remains data" "$mapping" $?
+done
+done
+
+for kind in block quoted; do
+case "$kind" in
+  block) value=$'|\n            echo ready' ;;
+  quoted) value="'echo ready'" ;;
+esac
+corre <<YML
+name: t
+jobs:
+  j:
+    steps:
+      - name: define
+        env:
+          FOO_BAR: x
+        run: echo "\${FOO_BAR}"
+      - name: comment before value
+        run:
+          # Describes \${FOO_BAR} before the scalar begins.
+          $value
+YML
+[ "$rc" -eq 0 ]
+check "a YAML comment before a next-line $kind value" "not scalar data" $?
+done
+
+
+# Scalar properties may precede the value on separate lines.
+for properties in $'&script\n          ' $'\n          !!str ' \
+  $'&script\n          !!str ' $'!!str\n          &script ' \
+  $'\n          &script\n          !!str '; do
+for kind in literal folded single double; do
+case "$kind" in
+  literal) value=$'|\n            cat <<EOF\n            # ${FOO_BAR}\n            EOF' ;;
+  folded) value=$'>\n            echo "\n            # ${FOO_BAR}"' ;;
+  single) value=$'\'echo "\n            # ${FOO_BAR}"\'' ;;
+  double) value=$'"echo \\"\n            # ${FOO_BAR}\\""' ;;
+esac
+corre <<YML
+name: t
+jobs:
+  j:
+    steps:
+      - name: define
+        env:
+          FOO_BAR: x
+        run: echo "\${FOO_BAR}"
+      - name: continued properties
+        run: $properties$value
+YML
+consumer_line=$(grep -n '# ${FOO_BAR}' "$WORK/w/f.yml" | cut -d: -f1)
+[ "$rc" -eq 1 ] && grep -q "f.yml:$consumer_line: 'FOO_BAR'" "$WORK/e"
+check "hash in $kind after continued properties is data" "multiline properties" $?
+done
+done
+
+for header in '|' '>-' '|2' '>+2' '&script |' '!!str |' \
+  $'&script # Describes ${FOO_BAR}.\n          |' \
+  $'# Describes ${FOO_BAR}.\n          !!str |'; do
+corre <<YML
+name: t
+jobs:
+  j:
+    steps:
+      - name: define
+        env:
+          FOO_BAR: x
+        run: echo "\${FOO_BAR}"
+      - name: scalar header comments
+        run: $header # Describes \${FOO_BAR:-/tmp}.
+            echo ready
+YML
+[ "$rc" -eq 0 ]
+check "YAML comments on scalar headers are ignored" "block header" $?
+done
+
+for value in "'echo \"# \${FOO_BAR}\"'" '"echo \"# ${FOO_BAR}\""'; do
+corre <<YML
+name: t
+jobs:
+  j:
+    steps:
+      - name: define
+        env:
+          FOO_BAR: x
+        run: echo "\${FOO_BAR}"
+      - name: quoted hash with a trailing comment
+        run: $value # Describes \${FOO_BAR}.
+YML
+[ "$rc" -eq 1 ] && grep -q "f.yml:10: 'FOO_BAR'" "$WORK/e"
+check "quoted hashes survive trailing YAML comments" "$value" $?
+done
+
+for value in "'echo ready'" '"echo ready"'; do
+corre <<YML
+name: t
+jobs:
+  j:
+    steps:
+      - name: define
+        env:
+          FOO_BAR: x
+        run: echo "\${FOO_BAR}"
+      - name: quoted scalar with a trailing comment
+        run: $value # Describes \${FOO_BAR}.
+YML
+[ "$rc" -eq 0 ]
+check "YAML comments after quoted scalars are ignored" "$value" $?
+done
+
+# Plain YAML scalars also end before whitespace followed by a hash.
+for value in 'echo ready' '&script echo ready' '!!str echo ready' \
+  $'\n          echo ready' $'echo ready\n          and steady'; do
+corre <<YML
+name: t
+jobs:
+  j:
+    steps:
+      - name: define
+        env:
+          FOO_BAR: x
+        run: echo "\${FOO_BAR}"
+      - name: plain scalar with a trailing comment
+        run: $value # Describes \${FOO_BAR:-/tmp}.
+YML
+[ "$rc" -eq 0 ]
+check "YAML comments after plain scalars are ignored" "$value" $?
+done
+
+for value in 'echo "${FOO_BAR}"' 'echo "${FOO_BAR}#fragment"' \
+  'echo ready#${FOO_BAR}' $'echo ready #${FOO_BAR}' \
+  $'echo ready\n          "${FOO_BAR}#fragment"' \
+  "'echo \" # \${FOO_BAR}\"'" '"echo \" # ${FOO_BAR}\""'; do
+corre <<YML
+name: t
+jobs:
+  j:
+    steps:
+      - name: define
+        env:
+          FOO_BAR: x
+        run: echo "\${FOO_BAR}"
+      - name: real scalar consumer
+        run: $value # Describes \${FOO_BAR:-/tmp}.
+YML
+consumer_line=$(grep -n '\${FOO_BAR}' "$WORK/w/f.yml" | tail -1 | cut -d: -f1)
+[ "$rc" -eq 1 ] && grep -q "f.yml:$consumer_line: 'FOO_BAR'" "$WORK/e"
+check "real consumers survive trailing YAML comments" "$value" $?
+done
+
+corre <<'YML'
+name: t
+jobs:
+  j:
+    steps:
+      - name: define
+        env:
+          FOO_BAR: x
+        run: echo "${FOO_BAR}"
+      - name: descriptive export in a trailing comment
+        run: echo ready # echo "FOO_BAR=x" >> "$GITHUB_ENV"
+      - name: consume
+        run: echo "${FOO_BAR}"
+YML
+[ "$rc" -eq 1 ] && grep -q "f.yml:12: 'FOO_BAR'" "$WORK/e"
+check "a trailing YAML comment cannot export a definition" "missing env still fails" $?
 
 rm -rf "$WORK/w"; mkdir -p "$WORK/w"
 OLIVARES_WORKFLOWS_DIR="$WORK/w" bash "$GATE" >"$WORK/o" 2>"$WORK/e" || rc=$?
-[ "${rc:-0}" -eq 2 ] && grep -q 'NO HE PODIDO MIRAR' "$WORK/e"
-check "un directorio sin workflows da 2, no 0" "tercera respuesta" $?
+[ "${rc:-0}" -eq 2 ] && grep -q 'COULD NOT CHECK' "$WORK/e"
+check "a directory without workflows returns 2, not 0" "third response" $?
 
 echo ""
 echo "check-step-env-closure battery: $pass passed, $fail failed"

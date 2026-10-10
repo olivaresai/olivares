@@ -263,34 +263,131 @@ function importedArray(spread) {
   return { array, source }
 }
 
-// HUB_ORDER is the console's own section order ("run it → let it run → plug it in → rule
-// it → show it"). It is carried through rather than restated in the renderer: a fixed
-// order written twice is an order that will disagree with itself the first time a hub is
-// added, and the guide's headings would stop matching the sidebar an operator is reading.
-let hubOrder = null
+// Resolve a spread of a module-level const collected by `import.meta.glob('./*/<file>',
+// { eager: true, import: '<NAME>' })`: the built-in views, one `features/<dir>/views.tsx`
+// per directory. Each matching file must export NAME as an array literal. The glob is
+// expanded from the file system here, the way Vite expands it; nothing is executed.
+function globbedArrays(spread) {
+  const location = where(spread, registry)
+  const refuse = (cause) =>
+    die(`a FEATURE_VIEWS element at ${location} is not a supported directory collection: ${cause}`)
+  if (!ts.isIdentifier(spread.expression)) return null
+  const name = spread.expression.text
+  let initializer = null
+  for (const stmt of registry.statements) {
+    if (!ts.isVariableStatement(stmt) || !(stmt.declarationList.flags & ts.NodeFlags.Const)) continue
+    for (const d of stmt.declarationList.declarations) {
+      if (ts.isIdentifier(d.name) && d.name.text === name) initializer = d.initializer
+    }
+  }
+  if (!initializer) return null
+  const globs = []
+  ;(function walk(node) {
+    if (
+      ts.isCallExpression(node) &&
+      ts.isPropertyAccessExpression(node.expression) &&
+      node.expression.name.text === 'glob' &&
+      ts.isMetaProperty(node.expression.expression)
+    ) {
+      globs.push(node)
+    }
+    ts.forEachChild(node, walk)
+  })(initializer)
+  if (globs.length !== 1) refuse(`"${name}" holds ${globs.length} import.meta.glob calls, not one`)
+  const [pattern, options] = globs[0].arguments
+  const match = pattern && ts.isStringLiteral(pattern) && /^\.\/\*\/([\w.-]+\.tsx?)$/.exec(pattern.text)
+  if (!match) refuse(`"${name}" globs something other than './*/<file>'`)
+  const exportedName = options && ts.isObjectLiteralExpression(options) && literal(options, 'import')
+  if (typeof exportedName !== 'string' || literal(options, 'eager') !== true) {
+    refuse(`"${name}" is not an eager glob of one named export`)
+  }
+  const dir = path.dirname(registry.fileName)
+  const out = []
+  for (const sub of readdirSync(dir).sort()) {
+    const abs = path.join(dir, sub, match[1])
+    if (!existsSync(abs)) continue
+    const source = parseFile(path.relative(ROOT, abs))
+    const declarations = []
+    for (const statement of source.statements) {
+      if (!ts.isVariableStatement(statement)) continue
+      if (!(statement.declarationList.flags & ts.NodeFlags.Const)) continue
+      if (!statement.modifiers?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword)) continue
+      for (const declaration of statement.declarationList.declarations) {
+        if (ts.isIdentifier(declaration.name) && declaration.name.text === exportedName)
+          declarations.push(declaration)
+      }
+    }
+    if (declarations.length !== 1) {
+      refuse(`${path.relative(ROOT, abs)} has no unique exported const "${exportedName}"`)
+    }
+    const array = unwrap(declarations[0].initializer)
+    if (!array || !ts.isArrayLiteralExpression(array)) {
+      refuse(`${path.relative(ROOT, abs)} "${exportedName}" is not an array literal`)
+    }
+    out.push({ array, source })
+  }
+  if (out.length === 0) refuse(`"${name}" matched no ${pattern.text}`)
+  return out
+}
+
+// NAV_AREAS is the console's one navigation structure, read here once. Its order is the
+// guide's section order, carried through rather than restated in the renderer: an order
+// written twice is an order that will disagree with itself the first time an area is added,
+// and the guide's headings would stop matching All areas, which an operator is reading.
+// Each area's path is also a mounted route, an area directory (see the standalone routes).
+let areaOrder = null
+const areaRoutes = []
 for (const stmt of registry.statements) {
   if (!ts.isVariableStatement(stmt)) continue
   for (const d of stmt.declarationList.declarations) {
-    if (!ts.isIdentifier(d.name) || d.name.text !== 'HUB_ORDER') continue
-    if (!d.initializer || !ts.isArrayLiteralExpression(d.initializer)) {
-      die(`${REGISTRY_REL} declares HUB_ORDER but not as an array literal`)
+    if (!ts.isIdentifier(d.name) || d.name.text !== 'NAV_AREAS') continue
+    const array = unwrap(d.initializer)
+    if (!array || !ts.isArrayLiteralExpression(array)) {
+      die(`${REGISTRY_REL} declares NAV_AREAS but not as an array literal`)
     }
-    hubOrder = d.initializer.elements.map((e) => {
-      if (!ts.isStringLiteral(e)) die(`${REGISTRY_REL} HUB_ORDER holds a non-literal entry at ${where(e, registry)}`)
-      return e.text
+    areaOrder = array.elements.map((e) => {
+      const id = ts.isObjectLiteralExpression(e) ? literal(e, 'id') : undefined
+      if (typeof id !== 'string' || id === '') die(`${REGISTRY_REL} NAV_AREAS holds an area without a literal id at ${where(e, registry)}`)
+      const p = literal(e, 'path')
+      if (typeof p !== 'string' || p === '') die(`a NAV_AREAS entry at ${where(e, registry)} has no literal path`)
+      areaRoutes.push({ path: p, parent: 'appRoute', authenticated: true, where: where(e, registry) })
+      return id
     })
   }
 }
-if (!hubOrder || hubOrder.length === 0) {
-  die(`${REGISTRY_REL} declares no HUB_ORDER, so the guide has no section order to follow`)
+if (!areaOrder || areaOrder.length === 0) {
+  die(`${REGISTRY_REL} declares no NAV_AREAS, so the guide has no section order and no area directories`)
+}
+
+/** A view's area from its literal `navigation`: '' for the root of the structure. */
+function areaOf(el, id, source) {
+  const prop = el.properties.find(
+    (p) =>
+      ts.isPropertyAssignment(p) &&
+      (ts.isIdentifier(p.name) || ts.isStringLiteral(p.name)) &&
+      p.name.text === 'navigation',
+  )
+  const init = prop && unwrap(prop.initializer)
+  const obj = init && (unwrap(freezeArgument(init)) ?? init)
+  if (!obj || !ts.isObjectLiteralExpression(obj)) {
+    die(`FEATURE_VIEWS entry "${id}" at ${where(el, source)} declares no literal navigation, so its place is unknown`)
+  }
+  const kind = literal(obj, 'kind')
+  if (kind === 'root') return ''
+  const area = literal(obj, 'areaId')
+  if ((kind !== 'feature' && kind !== 'detail') || typeof area !== 'string' || area === '') {
+    die(`FEATURE_VIEWS entry "${id}" at ${where(el, source)} writes its navigation place in a form this dump cannot read`)
+  }
+  return area
 }
 
 const views = []
 const entries = []
 for (const el of viewsArray.elements) {
   if (ts.isSpreadElement(el)) {
-    const { array, source } = importedArray(el)
-    for (const entry of array.elements) entries.push({ el: entry, source })
+    const arrays = globbedArrays(el) ?? [importedArray(el)]
+    for (const { array, source } of arrays)
+      for (const entry of array.elements) entries.push({ el: entry, source })
   } else {
     entries.push({ el, source: registry })
   }
@@ -308,7 +405,7 @@ for (const { el, source } of entries) {
   // A property that EXISTS but is not a literal is a finding, never a silent absence:
   // "this view needs no permission" and "this view's permission was computed and I
   // could not read it" are opposite facts and must not collapse into the same dump.
-  for (const field of ['permission', 'helpHref', 'hub']) {
+  for (const field of ['permission', 'helpHref']) {
     if (hasProp(el, field) && literal(el, field) === undefined) {
       die(`FEATURE_VIEWS entry "${id}" at ${where(el, source)} writes ${field} as a non-literal expression, which this dump cannot read`)
     }
@@ -316,7 +413,7 @@ for (const { el, source } of entries) {
   views.push({
     id,
     path: routePath,
-    hub: literal(el, 'hub') ?? '',
+    area: areaOf(el, id, source),
     permission: literal(el, 'permission') ?? '',
     helpHref: literal(el, 'helpHref') ?? '',
     hideInNav: literal(el, 'hideInNav') === true,
@@ -329,10 +426,12 @@ if (views.length < MIN_VIEWS) {
 
 // --- the routes mounted OUTSIDE the registry ---------------------------------------
 // The public legs (/login, /setup, /accept-invite, /status-page) and /settings are
-// createRoute() calls in app/routes.tsx. They are routes the operator can reach and the
-// census records them, so a guide that covered only FEATURE_VIEWS would be short by five
-// screens and would not know it. `getParentRoute: () => rootRoute` is what makes a leg
-// public: rootRoute has no auth guard, appRoute is the guarded shell.
+// literal createRoute() calls in app/routes.tsx; the area directories are mounted there
+// from NAV_AREAS in registry.tsx, so their paths come from the one NAV_AREAS read above.
+// They are routes the operator can reach and the census records them, so a guide that
+// covered only FEATURE_VIEWS would be short by those screens and would not know it.
+// `getParentRoute: () => rootRoute` is what makes a leg public: rootRoute has no auth
+// guard, appRoute is the guarded shell.
 const ROUTES_REL = 'web/src/app/routes.tsx'
 const routes = parseFile(ROUTES_REL)
 const standalone = []
@@ -364,6 +463,8 @@ const standalone = []
   ts.forEachChild(node, walk)
 })(routes)
 
+standalone.push(...areaRoutes)
+
 // --- the census, carried through so the renderer reads ONE input --------------------
 const CENSUS_REL = 'web/src/features/route-census.json'
 const censusAbs = path.join(ROOT, CENSUS_REL)
@@ -384,8 +485,8 @@ for (const p of census.paths) {
 process.stdout.write(
   JSON.stringify(
     {
-      schema: 'olivares.console.routes/1',
-      hubOrder,
+      schema: 'olivares.console.routes/2',
+      areaOrder,
       census: [...census.paths].sort(),
       views: views.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0)),
       standalone: standalone.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0)),

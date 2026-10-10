@@ -1,38 +1,31 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 //
-// Attack paths for one selected subject. Reachability and escalation start at an
-// agent; exfiltration starts at a sensitive resource. That distinction is part of
-// the engine contract, not presentation detail.
+// Attack paths for one selected subject. Reachability and escalation start at an agent;
+// exfiltration starts at a sensitive resource. That distinction is part of the engine contract.
 //
-// `modules/access-map/module.go:158-161` sirve `/attack-paths/{reachability,escalation,
-// exfil,summary}` bajo `accessmap:graph:read` desde y hasta este fichero la consola
-// no las llamaba: su feature `access-map` sólo pedía `/graph`, `/neighbors` y `/drift`,
-// que son DATOS, no los análisis calculados.
+// `modules/access-map/module.go:158-161` has served `/attack-paths/{reachability,escalation,
+// exfil,summary}` under `accessmap:graph:read` since. Previously the console requested
+// only `/graph`, `/neighbors`, and `/drift`: data rather than computed analyses.
 //
-// TRES HECHOS DEL MOTOR MANDAN AQUÍ, Y CADA UNO ESTÁ RENDERIZADO, NO DESCUBIERTO:
+// Three engine facts govern this panel and must be visible:
 //
-//   `agent_id` is mandatory for reachability/escalation (`attackpath.go:372-405`),
-//   while `resource_id` is mandatory for exfiltration (`:407-430`). Mixing them makes
-//   one analysis return 400 on every click, so the panel renders only the analyses
-//   defined for the selected subject.
+// `agent_id` is mandatory for reachability/escalation (`attackpath.go:372-405`), while
+// `resource_id` is mandatory for exfiltration (`:407-430`). Mixing them produces a 400 on
+// every click, so the panel renders only analyses defined for the selected subject.
 //
-//   `attribution` Y `min_confidence` SON LOS DEL ESLABÓN MÁS DÉBIL, no del camino. El
-//   motor los compone con `weakestAttribution`/`weakerConfidence` (`:328-360`): una
-//   cadena de cinco saltos con cuatro `firm` y uno `unknown` sale `unknown`. Por eso van
-//   pegados a cada camino y ROTULADOS como del eslabón más débil — un camino dibujado sin
-//   ellos presenta una inferencia como un hecho, que en una superficie de seguridad es la
-//   peor dirección en la que redondear.
+// `attribution` and `min_confidence` describe the weakest link, not the path. The engine uses
+// `weakestAttribution`/`weakerConfidence` (`:328-360`): four `firm` hops and one `unknown` hop
+// produce `unknown`. Labeling these values beside each path prevents an inference from
+// being presented as a fact on a security surface.
 //
-//   Y `unknown` ES EL VALOR POR DEFECTO cuando al borde le falta el metadato (`:330`).
-//   Significa «no sé cómo se atribuyó esto», no «está bien», así que se dibuja como
-//   advertencia y no como estado neutro.
+// `unknown` is the default when edge metadata is missing (`:330`). It means the attribution
+// is unknown, so it appears as a warning rather than a neutral state.
 //
-// ⛔ Y LO QUE ESTE PANEL NO PINTA, A PROPÓSITO: el resumen del patrimonio. Medido el
-//    2026-08-20, `out.EscalationPaths` y `out.ExfilRoutes` tienen CERO asignaciones en
-//    `handleAttackPathSummary` — las funciones que los calculan existen y sólo las usan
-//    los handlers por agente—, así que salen SIEMPRE 0. Pintar «0 rutas de exfiltración»
-//    sería publicar un cero que nadie calculó. Escalado al dueño de `access-map`.
+// The estate summary is deliberately omitted. Measured on 2026-08-20, `out.EscalationPaths`
+// and `out.ExfilRoutes` had no assignments in `handleAttackPathSummary`; the calculating
+// functions were used only by per-agent handlers. Displaying zero exfiltration routes would
+// publish a value nobody computed. Escalated to the `access-map` owner.
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'

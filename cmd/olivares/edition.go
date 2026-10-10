@@ -7,9 +7,8 @@ package main
 import (
 	"errors"
 
-	"github.com/spf13/cobra"
-
 	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
+	"github.com/spf13/cobra"
 )
 
 // edition.go is how the CLI answers a Business capability that is not there: one
@@ -31,23 +30,29 @@ func notInEdition() error { return exitcode.New(exitcode.Edition, errNotInEditio
 // with the name the sentence uses. A Community build keeps them out of the help;
 // they stay invocable, so a script gets the sentence instead of "unknown command".
 var paidCommands = map[string]string{
+	"orchestration":       "Orchestration",
 	"mcp pins":            "MCP tool pinning",
 	"reporting schedules": "Report scheduling",
 	"threatintel":         "The threat-intel feed",
 	"hooks":               "Hook hardening",
+	"redteam":             "Red team",
+	"finops":              "FinOps",
 }
 
 // editionNames names the paid verbs of groups that are otherwise open: those groups
 // stay in the help, and only a refused verb gets the sentence.
 var editionNames = map[string]string{
-	"compliance": "Compliance Packs",
+	"governance breakglass": "Break-glass",
+	"compliance":            "Compliance Packs",
 }
 
 // installEditionAnswers hides the paid groups in a Community build and makes every
 // command answer errNotInEdition with "<feature> is a Business feature: <url>".
 func installEditionAnswers(root *cobra.Command) {
 	walkCommands(root, func(c *cobra.Command) {
-		if _, paid := paidCommands[commandPathWithoutBinary(c)]; paid && !enterpriseAddOnsLinked {
+		path := commandPathWithoutBinary(c)
+		baseBusiness := thisEdition.name == "enterprise" && (path == "redteam" || path == "finops")
+		if _, paid := paidCommands[path]; paid && !thisEdition.addOnsLinked && !baseBusiness {
 			c.Hidden = true
 		}
 		if c.RunE == nil {

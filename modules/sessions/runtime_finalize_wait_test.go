@@ -12,39 +12,22 @@ import (
 	"github.com/olivaresai/olivares/core/model"
 )
 
-// TestTheFinalizeWaitIsABackstopAndNotABudget separa las DOS explicaciones del «did not finalize»
-// que the planner dejó abierto el 2026-08-24 con una sola ocurrencia bajo `-race`, y su encargo
-// decía: primero un test que lo FUERCE, porque una ocurrencia no es tasa.
+// TestTheFinalizeWaitIsABackstopAndNotABudget distinguishes the two explanations
+// for "did not finalize" left open by the planner on 2026-08-24 after one race-enabled
+// occurrence. Force the symptom first: one occurrence does not establish a rate.
 //
-// LAS DOS EXPLICACIONES, y por qué una muestra no las separa:
+// A run that never finalizes indicates a code hang; one that finalizes after the
+// deadline indicates that the measurement budget interrupted the wait. Ask twice
+// about the SAME run, with an impossible deadline and then a generous one.
+// Shrinking the deadline requires no production delay hook and avoids relying on
+// host load to reproduce the original failure.
 //
-//	el run NO finaliza          -> hay un cuelgue, y la atribución es del código
-//	el run SÍ finaliza TARDE    -> el plazo es lo que corta, y el defecto es del INSTRUMENTO
-//
-// Reproducirlo esperando a que vuelva la intermitente no distingue ninguna de las dos: sólo
-// dice que a veces pasa. Lo que las separa es hacer la pregunta DOS VECES sobre el MISMO run —
-// una con un plazo imposible y otra con uno generoso— y comparar las respuestas.
-//
-// ⛔ POR QUÉ ENCOGER EL PLAZO Y NO RALENTIZAR EL CÓDIGO. Forzarlo por el otro lado exigiría una
-// costura de retardo en la ruta de finalize, que NO existe: habría que añadirla a producción
-// para probar un test. Encoger el presupuesto no toca producción, es determinista y no depende
-// de la carga de la caja — que es justo la variable que hace irreproducible el original.
-//
-// ⛔ Y SIN `t.Parallel()`, deliberadamente — PERO NO POR LA RAZÓN QUE ESCRIBÍ AQUÍ ANTES.
-//
-// Dije que este test ASIGNA la variable de paquete `finalizeWaitBudget` y que un gate del
-// repositorio lo exigía. **Las dos mitades eran falsas y las retiro.** Un contraste externo las
-// atacó y lo comprobé yo con el fichero delante:
-//
-//	asignaciones a `finalizeWaitBudget` en este fichero:  0  (sólo se LEE)
-//	`scripts/check-test-hook-parallelism.sh` en `main`:   NO EXISTE  (es de otra rama)
-//	ficheros que usan `newRuntimeHarness` Y `t.Parallel`: 15  (o sea, es normal aquí)
-//
-// LA RAZÓN VERDADERA, que además es más fuerte: **este test MIDE UN TRAMO DE TIEMPO** y lo
-// compara con un plazo. Bajo `t.Parallel()` ese número deja de medir la ruta de finalize y pasa
-// a medir la CAJA — la misma variable que hacía irreproducible el original. Un cronómetro
-// compartido con 28 vecinos no cronometra el código. Por eso va serial, y por eso la aserción
-// de abajo sobre `elapsed` puede ser una aserción y no un aviso.
+// Keep this test serial because it measures finalization elapsed time against a
+// deadline. Parallel execution would measure host contention as well as the code.
+// Earlier claims that this file assigned finalizeWaitBudget or that main required
+// scripts/check-test-hook-parallelism.sh were withdrawn: the file only read the
+// budget, that script existed on another branch, and 15 files used both
+// newRuntimeHarness and t.Parallel. Timing is the reason for serial execution.
 func TestTheFinalizeWaitIsABackstopAndNotABudget(t *testing.T) {
 	fr := &fakeRunner{}
 	m, _, tenant, _ := newRuntimeHarness(t, WithRunner(fr), WithCredentialSource(staticCred()))
@@ -78,7 +61,7 @@ func TestTheFinalizeWaitIsABackstopAndNotABudget(t *testing.T) {
 	var lr *liveRun
 	perdidas := 0
 	for i := 0; i < intentos; i++ {
-		dto, err := m.createRun(ctx, tenant, CreateRunParams{
+		dto, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{
 			Transport: TransportStreamJSON, Isolation: IsolationNative,
 			Actor: "user:u1", ActorKind: model.ActorUser,
 		})

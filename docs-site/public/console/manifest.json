@@ -1138,7 +1138,7 @@
     {
       "id": "console-agents",
       "theme": "dark",
-      "route": "/console (pestaña console-agents)",
+      "route": "/console (tab console-agents)",
       "h1": "Control console",
       "vacios": 0,
       "filas": 12,
@@ -1153,7 +1153,7 @@
     {
       "id": "console-agents",
       "theme": "light",
-      "route": "/console (pestaña console-agents)",
+      "route": "/console (tab console-agents)",
       "h1": "Control console",
       "vacios": 0,
       "filas": 12,
@@ -1168,7 +1168,7 @@
     {
       "id": "console-bindings",
       "theme": "dark",
-      "route": "/console (pestaña console-bindings)",
+      "route": "/console (tab console-bindings)",
       "h1": "Control console",
       "vacios": 2,
       "filas": 0,
@@ -1183,7 +1183,7 @@
     {
       "id": "console-bindings",
       "theme": "light",
-      "route": "/console (pestaña console-bindings)",
+      "route": "/console (tab console-bindings)",
       "h1": "Control console",
       "vacios": 2,
       "filas": 0,
@@ -2588,7 +2588,7 @@
     {
       "id": "video-07-live",
       "theme": "dark",
-      "route": "/agentops (tarjeta de sesion, pestaña Live)",
+      "route": "/agentops (session card, tab Live)",
       "h1": "dependency upgrade scan",
       "vacios": 0,
       "filas": 60,
@@ -2603,7 +2603,7 @@
     {
       "id": "video-07-live",
       "theme": "light",
-      "route": "/agentops (tarjeta de sesion, pestaña Live)",
+      "route": "/agentops (session card, tab Live)",
       "h1": "dependency upgrade scan",
       "vacios": 0,
       "filas": 60,
@@ -2618,7 +2618,7 @@
     {
       "id": "video-08-governance",
       "theme": "dark",
-      "route": "/agentops (tarjeta de sesion, pestaña Governance)",
+      "route": "/agentops (session card, tab Governance)",
       "h1": "dependency upgrade scan",
       "vacios": 0,
       "filas": 60,
@@ -2633,7 +2633,7 @@
     {
       "id": "video-08-governance",
       "theme": "light",
-      "route": "/agentops (tarjeta de sesion, pestaña Governance)",
+      "route": "/agentops (session card, tab Governance)",
       "h1": "dependency upgrade scan",
       "vacios": 0,
       "filas": 60,
@@ -2648,7 +2648,7 @@
     {
       "id": "video-10-workspace-browser",
       "theme": "dark",
-      "route": "/agentops (pestaña Workspaces, Browse files)",
+      "route": "/agentops (tab Workspaces, Browse files)",
       "h1": "acme-platform",
       "vacios": 0,
       "filas": 1,
@@ -2663,7 +2663,7 @@
     {
       "id": "video-10-workspace-browser",
       "theme": "light",
-      "route": "/agentops (pestaña Workspaces, Browse files)",
+      "route": "/agentops (tab Workspaces, Browse files)",
       "h1": "acme-platform",
       "vacios": 0,
       "filas": 1,

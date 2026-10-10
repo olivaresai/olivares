@@ -91,6 +91,11 @@ const (
 // Option configures a Module at construction.
 type Option func(*Module)
 
+// WithCompliancePacksAuthorizer binds the private edition authorization seam.
+func WithCompliancePacksAuthorizer(authorize func(string) error) Option {
+	return func(m *Module) { m.packsAuthorize = authorize }
+}
+
 // WithClock overrides the module clock (tests inject a deterministic clock).
 func WithClock(c model.Clock) Option { return func(m *Module) { m.clock = c } }
 
@@ -174,8 +179,8 @@ func WithCryptoShredCoordinator(c any) Option {
 
 // WithProfileResolver wires the OSCAL profile/SSP resolver (the commercial
 // enterprise/oscalingest add-on, wired only under -tags enterprise). nil keeps the
-// open-core default: the ingestion endpoint answers 501 and the OSCAL export keeps its
-// include-all behavior (byte-identical, no rug-pull). The open module never imports the
+// ingestion default: the endpoint answers 501; Business OSCAL export includes all
+// controls when no profile is wired. Community OSCAL export is 501. The module never imports the
 // closed add-on; it consumes it only through this interface.
 func WithProfileResolver(p ProfileResolver) Option {
 	return func(m *Module) {
@@ -204,8 +209,8 @@ func WithRetentionGovernor(g RetentionGovernor) Option {
 // enterprise/doraregister add-on, wired only under -tags enterprise): the DORA Register of
 // Information generator (Commission Implementing Regulation (EU) 2024/2956) and the
 // major-incident classifier + report drafter (RTS (EU) 2024/1772 / 2025/301). nil keeps the
-// open-core default: the /dora/register and /dora/incidents endpoints answer 501 and the open
-// dora.go ICT-risk view (GET /dora) is unchanged (byte-identical, no rug-pull). The open
+// default: the /dora/register and /dora/incidents endpoints answer 501. The ICT-risk
+// view (GET /dora) is part of Business Compliance Packs. The shared
 // module never imports the closed add-on; it consumes it only through RegulatoryPackager.
 func WithRegulatoryPackager(p RegulatoryPackager) Option {
 	return func(m *Module) {
@@ -218,8 +223,8 @@ func WithRegulatoryPackager(p RegulatoryPackager) Option {
 // WithPOAMBuilder wires the OSCAL reinforcement seam (the commercial enterprise/
 // oscalingest add-on, wired only under -tags enterprise): a FedRAMP-adjacent
 // plan-of-action-and-milestones model emitted alongside the evidence OSCAL export from the
-// sealed package's not-satisfied controls. nil keeps the open-core default: the OSCAL export
-// emits its three models byte-identically (no POA&M, no rug-pull). The open module never
+// sealed package's not-satisfied controls. nil omits POA&M from Business OSCAL export;
+// Community keeps stored JSON/CSV export and returns 501 for OSCAL. The module never
 // imports the closed add-on; it consumes it only through POAMBuilder.
 func WithPOAMBuilder(b POAMBuilder) Option {
 	return func(m *Module) {
@@ -233,8 +238,8 @@ func WithPOAMBuilder(b POAMBuilder) Option {
 // commercial enterprise/iso42001 add-on, wired only under -tags enterprise): the
 // Statement of Applicability, AI policy, AI risk register, impact assessments, lifecycle-
 // control mapping and supplier governance structured from the live assessment + operator
-// context. nil keeps the open-core default: the /aims/pack endpoints answer 501 and the
-// open catalog/evidence/risk surfaces are unchanged (byte-identical, no rug-pull). The
+// context. nil makes the /aims/pack endpoints answer 501. Catalogs and assessments
+// live in Business Compliance Packs; stored evidence and risk remain shared. The
 // open module never imports the closed add-on; it consumes it only through AIMSPackager.
 func WithAIMSPackager(p AIMSPackager) Option {
 	return func(m *Module) {
@@ -248,8 +253,8 @@ func WithAIMSPackager(p AIMSPackager) Option {
 // enterprise/compliancedepth add-on, wired only under -tags enterprise): US state AI law
 // packs (TX TRAIGA, CA SB 53, IL HB 3773, CO SB 26-189), sector-overlay packs
 // (HIPAA/PCI/FINRA), continuous controls monitoring (CCM) and FedRAMP 20x KSIs. nil
-// keeps the open-core default: the depth endpoints answer 501 and the open
-// catalog/calendar/evidence/risk surfaces are unchanged (byte-identical, no rug-pull).
+// makes the depth endpoints answer 501. Catalogs, calendars and assessments are
+// Business Compliance Packs; stored evidence and operational risk remain shared.
 // The open module never imports the closed add-on; it consumes it only through
 // ComplianceDepthPackager.
 func WithComplianceDepth(p ComplianceDepthPackager) Option {
@@ -263,9 +268,9 @@ func WithComplianceDepth(p ComplianceDepthPackager) Option {
 // WithNIS2IncidentPackager wires the NIS 2 Directive significant-incident
 // classification seam (the commercial enterprise/nis2incident add-on, wired only under
 // -tags enterprise): Art 23(3) criteria application, deadline computation and tiered
-// report drafting from operator-supplied impact data. nil keeps the open-core default: the
-// /nis2/incidents endpoints answer 501 and the open nis2 catalog/calendar surfaces are
-// unchanged (byte-identical, no rug-pull). The open module never imports the closed add-on;
+// report drafting from operator-supplied impact data. nil makes the /nis2/incidents
+// endpoints answer 501. NIS 2 catalogs and calendars are Business Compliance Packs.
+// The shared module never imports the closed add-on;
 // it consumes it only through NIS2IncidentPackager.
 func WithNIS2IncidentPackager(p NIS2IncidentPackager) Option {
 	return func(m *Module) {
@@ -285,6 +290,7 @@ func WithNIS2IncidentPackager(p NIS2IncidentPackager) Option {
 // break the evidence invariants (destruction is itself evidence-producing,
 // hold-gated and append-only certified).
 type Module struct {
+	packsAuthorize   func(string) error
 	log              *slog.Logger
 	data             api.ModuleData
 	host             sdk.Host
@@ -297,13 +303,13 @@ type Module struct {
 	providerEraser   ProviderEraser          // passthrough seam; honest not-wired default
 	fileEraser       FileStoreEraser         // Files-store plane seam; honest not-wired default
 	shredCoordinator any                     // Enterprise/rtbf coordinator seam; nil ⇒ open-core flow
-	profileResolver  ProfileResolver         // OSCAL ingestion seam; nil ⇒ ingestion 501 + export include-all (open-core default)
+	profileResolver  ProfileResolver         // OSCAL ingestion seam; nil ⇒ ingestion 501; Business OSCAL export includes all controls
 	governor         RetentionGovernor       // Records-vault floor/compliance-mode seam; nil ⇒ no floor enforced, schedules freely relaxed (open-core default)
-	regPackager      RegulatoryPackager      // Named-regulation depth seam (DORA register + major-incident); nil ⇒ register/incident endpoints 501, dora.go ICT-risk view unchanged (open-core default)
-	poamBuilder      POAMBuilder             // OSCAL POA&M reinforcement seam; nil ⇒ evidence OSCAL export byte-identical (no POA&M model) (open-core default)
-	aimsPackager     AIMSPackager            // ISO/IEC 42001 AIMS cert-readiness seam; nil ⇒ AIMS endpoints 501, catalog/evidence/risk unchanged (open-core default)
-	depthPackager    ComplianceDepthPackager // Compliance-depth seam (US laws + sector + CCM + FedRAMP); nil ⇒ depth endpoints 501, catalog/calendar/evidence unchanged (open-core default)
-	nis2Packager     NIS2IncidentPackager    // NIS 2 incident seam; nil ⇒ NIS2 incident endpoints 501, catalog/calendar unchanged (open-core default)
+	regPackager      RegulatoryPackager      // Named-regulation depth seam (DORA register + major-incident); nil ⇒ register/incident endpoints 501; ICT-risk view is Business
+	poamBuilder      POAMBuilder             // OSCAL POA&M reinforcement seam; nil ⇒ Business OSCAL export omits POA&M
+	aimsPackager     AIMSPackager            // ISO/IEC 42001 AIMS cert-readiness seam; nil ⇒ AIMS endpoints 501
+	depthPackager    ComplianceDepthPackager // Compliance-depth seam (US laws + sector + CCM + FedRAMP); nil ⇒ depth endpoints 501
+	nis2Packager     NIS2IncidentPackager    // NIS 2 incident seam; nil ⇒ NIS2 incident endpoints 501
 }
 
 // Compile-time proof the module satisfies the SDK lifecycle, the API route/permission
@@ -341,7 +347,7 @@ func (m *Module) Descriptor() sdk.Descriptor {
 		APIVersion:  sdk.APIVersion,
 		Type:        sdk.TypeModule,
 		Title:       "Compliance — regulatory mapping & audit evidence",
-		Description: "Maps EU AI Act, NIS 2 Directive, NIST AI RMF (+GenAI Profile), ISO/IEC 42001, SOC 2 / ISO 27001, GDPR, the revised EU PLD and the agentic-security crosswalks (OWASP Agentic Top 10 2026, Five Eyes agentic adoption, CISA/NSA AI Data Security, CSA MAESTRO, COSAiS) onto the capabilities the control plane already produces — every framework version-pinned to its primary source. Maintains the regulatory calendar as verified data (omnibus-aware), derives auditor-consumable evidence packages from the append-only/hash-chained ledger (with a live integrity proof), exports a DORA ICT-risk-compatible view, classifies NIS 2 Art 23 significant incidents with tiered report drafting (enterprise add-on), structures an ISO/IEC 42001 AIMS certification-readiness pack (Statement of Applicability, AI policy, risk register, impact assessments, lifecycle controls, supplier governance — enterprise add-on), classifies agent risk (EU AI Act tiers cross-mapped to NIST AI RMF, governed and audited), attests data residency, governs records management (per-class retention schedules with approved purge dispositions, legal holds with an append-only chain of custody, hold-gated sweeps sealing disposition certificates —), and reports control status + gap analysis. It designs-for-audit; it never certifies, and never marks a control satisfied without linked evidence.",
+		Description: "Maps EU AI Act, NIS 2 Directive, NIST AI RMF (+GenAI Profile), ISO/IEC 42001, SOC 2 / ISO 27001, GDPR, the revised EU PLD and the agentic-security crosswalks (OWASP Agentic Top 10 2026, Five Eyes agentic adoption, CISA/NSA AI Data Security, CSA MAESTRO, COSAiS) onto the capabilities the control plane already produces — every framework version-pinned to its primary source. Maintains the regulatory calendar as verified data (omnibus-aware), derives auditor-consumable evidence packages from the append-only/hash-chained ledger (with a live integrity proof), exports a DORA ICT-risk-compatible view, classifies NIS 2 Art 23 significant incidents with tiered report drafting (Business: base line), structures an ISO/IEC 42001 AIMS certification-readiness pack (Statement of Applicability, AI policy, risk register, impact assessments, lifecycle controls, supplier governance — Business: Compliance Packs), classifies agent risk (EU AI Act tiers cross-mapped to NIST AI RMF, governed and audited), attests data residency, governs records management (per-class retention schedules with approved purge dispositions, legal holds with an append-only chain of custody, hold-gated sweeps sealing disposition certificates —), and reports control status + gap analysis. It designs-for-audit; it never certifies, and never marks a control satisfied without linked evidence.",
 	}
 }
 
@@ -395,22 +401,22 @@ func (m *Module) Start(context.Context) error {
 		m.log.Info("compliance: no enterprise RTBF shred coordinator wired; erasure uses open-core crypto-shredding only")
 	}
 	if m.profileResolver == nil {
-		m.log.Info("compliance: no OSCAL profile resolver wired (enterprise add-on absent); profile/SSP ingestion returns 501 and the OSCAL export stays include-all")
+		m.log.Info("compliance: no OSCAL profile resolver wired (Business capability absent); profile/SSP ingestion returns 501 ")
 	}
 	if m.governor == nil {
-		m.log.Info("compliance: no retention governor wired (enterprise add-on absent); no regulatory retention floor is enforced and schedules may be freely relaxed/deleted")
+		m.log.Info("compliance: no retention governor wired (Business capability absent); no regulatory retention floor is enforced and schedules may be freely relaxed/deleted")
 	}
 	if m.regPackager == nil {
-		m.log.Info("compliance: no regulatory packager wired (enterprise add-on absent); DORA Register-of-Information generation and major-incident classification return 501 (the open ICT-risk view GET /dora is unchanged)")
+		m.log.Info("compliance: no regulatory packager wired (Business capability absent); DORA Register-of-Information generation and major-incident classification return 501 ")
 	}
 	if m.poamBuilder == nil {
-		m.log.Info("compliance: no OSCAL POA&M builder wired (enterprise add-on absent); the evidence OSCAL export emits its three models without a plan-of-action-and-milestones")
+		m.log.Info("compliance: no OSCAL POA&M builder wired (Business capability absent)")
 	}
 	if m.aimsPackager == nil {
-		m.log.Info("compliance: no AIMS packager wired (enterprise add-on absent); ISO/IEC 42001 certification-readiness pack generation returns 501 (the open iso_42001 catalog, evidence engine and risk classifier are unchanged)")
+		m.log.Info("compliance: no AIMS packager wired (Business capability absent); ISO/IEC 42001 certification-readiness pack generation returns 501 ")
 	}
 	if m.nis2Packager == nil {
-		m.log.Info("compliance: no NIS2 incident packager wired (enterprise add-on absent); NIS 2 significant-incident classification returns 501 (the open nis2 catalog and calendar are unchanged)")
+		m.log.Info("compliance: no NIS2 incident packager wired (Business capability absent); NIS 2 significant-incident classification returns 501 ")
 	}
 	return nil
 }
@@ -503,9 +509,9 @@ func (m *Module) APIRoutes(reg api.RouteRegistrar) {
 	// GENERATING a pack (structuring the live assessment + operator context into SoA/policy/
 	// risk-register/impact-assessments/lifecycle/supplier governance) is admin-tier and
 	// deny-closed (501 without the enterprise packager); reading/exporting the maintained
-	// pack is read-tier and self-audits (sensitive evidence read). The open catalog iso_42001
-	// (GET /frameworks/iso_42001), the evidence engine and the risk classifier are untouched
-	// (no rug-pull).
+	// pack is read-tier and self-audits (sensitive evidence read). ISO/IEC 42001 catalogs
+	// and assessments belong to Business Compliance Packs. Stored-evidence reads,
+	// JSON/CSV export and operational risk remain shared.
 	reg.Handle("POST", "/aims/pack", permAimsAdmin, m.handleGenerateAIMSPack)
 	reg.Handle("GET", "/aims/pack", permAimsRead, m.handleListAIMSPacks)
 	reg.Handle("GET", "/aims/pack/{id}", permAimsRead, m.handleGetAIMSPack)
@@ -515,8 +521,8 @@ func (m *Module) APIRoutes(reg api.RouteRegistrar) {
 	// the compliance-depth plane (enterprise/compliancedepth). US state AI law packs,
 	// sector-overlay packs, CCM snapshots/drift and FedRAMP KSIs. GENERATING is admin-tier
 	// and deny-closed (501 without the enterprise depth packager); reading/exporting is
-	// read-tier and self-audits (sensitive evidence read). The open catalog/calendar/evidence
-	// surfaces are untouched (no rug-pull).
+	// read-tier and self-audits (sensitive evidence read). Catalogs/calendars are Business
+	// Compliance Packs; stored-evidence reads and JSON/CSV export remain shared.
 	reg.Handle("POST", "/depth/us-law", permDepthAdmin, m.handleGenerateUSStatePack)
 	reg.Handle("GET", "/depth/us-law", permDepthRead, m.handleListUSStatePacks)
 	reg.Handle("GET", "/depth/us-law/{id}", permDepthRead, m.handleGetUSStatePack)
@@ -542,8 +548,8 @@ func (m *Module) APIRoutes(reg api.RouteRegistrar) {
 	// (enterprise/nis2incident). CLASSIFYING an incident (applying Art 23(3) criteria to
 	// operator-supplied impact data) is admin-tier and deny-closed (501 without the
 	// enterprise packager); reading/exporting the maintained classifications is read-tier
-	// and self-audits (sensitive evidence read). The open nis2 catalog and calendar are
-	// untouched (no rug-pull).
+	// and self-audits (sensitive evidence read). NIS2 catalogs and calendar belong to
+	// Business Compliance Packs.
 	reg.Handle("POST", "/nis2/incidents/classify", permNIS2Admin, m.handleClassifyNIS2Incident)
 	reg.Handle("GET", "/nis2/incidents", permNIS2Read, m.handleListNIS2Incidents)
 	reg.Handle("GET", "/nis2/incidents/{id}", permNIS2Read, m.handleGetNIS2Incident)

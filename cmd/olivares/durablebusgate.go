@@ -14,14 +14,14 @@ import (
 // the bus selection in boot.go is identical in both editions; the factory itself
 // is build-specific:
 //
-//   - wire_noenterprise.go (default AGPL build): newDurableBus is INERT — it
+//   - wire_noenterprise.go (default AGPL build): communityDurableBus is INERT — it
 //     returns (nil,nil) when unconfigured, so the bus is built exactly as before
 //     (in-proc default, or the open Core-NATS bridge when OLIVARES_BUS_CONFIG is
 //     set); it returns an ERROR when OLIVARES_DURABLE_BUS_CONFIG is set, because a
 //     durable backend the community binary cannot honor must FAIL the boot, never
 //     silently run non-durable (docs/SECURITY-HARDENING.md — never a silent gap).
 //   - cmd-overlay/olivares/durablebus_enterprise.go (-tags enterprise, private
-//     repo): newDurableBus builds the real durable JetStream bus when licensed, or
+//     repo): its newDurableBus fills the port with the real durable JetStream bus when licensed, or
 //     falls back to the open Core-NATS bridge (warned) when unlicensed.
 //
 // The default artifact never references enterprise/durablebus (no rug-pull): the
@@ -45,8 +45,8 @@ type injectGatedBus interface {
 	SetInjectGate(func() bool)
 }
 
-// newDurableBus is declared per build tag (wire_noenterprise.go returns inert;
-// the enterprise overlay returns the real backend). It is given the same payload
+// The durableBus edition port is filled per build (wire_noenterprise.go refuses a
+// configured backend; the enterprise overlay returns the real one). It is given the same payload
 // decoders and not-leader demotion the open bridge uses, so a durable deployment
 // re-materializes module-owned payloads (e.g. voice.Telemetry) identically and an
 // HA standby's expected ErrNotLeader does not drown the logs.
@@ -60,9 +60,9 @@ type injectGatedBus interface {
 //   - (nil, err)        — configured but cannot be honored (community build, or
 //     an invalid/unreadable config): boot FAILS CLOSED, never degrades silently.
 //
-// The signature is fixed by its two build-tagged declarations:
+// The signature is fixed by the editionPorts.durableBus field:
 //
-//	func newDurableBus(getenv func(string) string, decoders map[event.Type]natsbus.PayloadDecoder,
+//	func(getenv func(string) string, decoders map[event.Type]natsbus.PayloadDecoder,
 //		demote func(error) bool, log *slog.Logger, licenseFile, dataDir string) (injectGatedBus, error)
 //
 // licenseFile/dataDir let the enterprise overlay resolve+verify the commercial license

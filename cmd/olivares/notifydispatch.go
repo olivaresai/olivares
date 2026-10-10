@@ -12,31 +12,15 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"os"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
 
 	goplugin "github.com/hashicorp/go-plugin"
-
 	"github.com/olivaresai/olivares/cmd/olivares/firstparty"
-	"github.com/olivaresai/olivares/connectors/chronicle"
-	"github.com/olivaresai/olivares/connectors/datadog"
-	"github.com/olivaresai/olivares/connectors/elastic"
 	"github.com/olivaresai/olivares/connectors/email"
-	"github.com/olivaresai/olivares/connectors/filelog"
-	"github.com/olivaresai/olivares/connectors/jira"
-	"github.com/olivaresai/olivares/connectors/opsgenie"
-	"github.com/olivaresai/olivares/connectors/otlplog"
-	"github.com/olivaresai/olivares/connectors/pagerduty"
-	"github.com/olivaresai/olivares/connectors/s3archive"
-	"github.com/olivaresai/olivares/connectors/servicenow"
-	"github.com/olivaresai/olivares/connectors/siem"
 	"github.com/olivaresai/olivares/connectors/slack"
-	"github.com/olivaresai/olivares/connectors/snmp"
-	"github.com/olivaresai/olivares/connectors/splunkhec"
-	"github.com/olivaresai/olivares/connectors/syslog"
 	"github.com/olivaresai/olivares/connectors/teams"
 	"github.com/olivaresai/olivares/connectors/twilio"
 	"github.com/olivaresai/olivares/connectors/webhook"
@@ -573,65 +557,38 @@ func (d *connectorDispatcher) ConnectorFingerprint(destination string) (string, 
 	return fp, ok
 }
 
-// buildOutputConnector constructs an unopened output connector by kind. The first
-// six are the connectors (siem is the generic HTTP SIEM sink); the SIEM/log/
-// telemetry egress kinds added by give a SOC the standard transport it already
-// runs: syslog (UDP/TCP/TLS 6514, also CEF/LEEF), splunkhec (full HEC envelope +
-// indexer ack), otlplog (OTLP/HTTP logs), chronicle (Google SecOps UDM), datadog
-// (Logs Intake v2), elastic (ECS + _bulk), snmp (SNMPv3 authPriv traps) and filelog
-// (the tailable file/stream for a Universal-Forwarder posture).
+// buildOutputConnector keeps generic notifications in Community. Business supplies
+// SIEM and ITSM destinations through the existing outputConnector edition port.
 func buildOutputConnector(kind string) (sdk.OutputConnector, error) {
 	switch kind {
 	case "slack":
 		return slack.New(), nil
 	case "teams":
 		return teams.New(), nil
-	case "pagerduty":
-		return pagerduty.New(), nil
-	case "opsgenie":
-		return opsgenie.New(), nil
 	case "webhook":
 		return webhook.New(), nil
-	case "siem":
-		return siem.New(), nil
 	// ITSM/ChatOps destinations: ServiceNow (Table/SIR/em_event), Jira/JSM, the
 	// reworked Teams (Workflows + Adaptive Cards, above), email (SMTP+DKIM) and the
 	// out-of-band Twilio SMS (nice-to-have, probable post-v1).
-	case "servicenow":
-		return servicenow.New(), nil
-	case "jira":
-		return jira.New(), nil
 	case "email":
 		return email.New(), nil
 	case "twilio":
 		return twilio.New(), nil
-	case "syslog":
-		return syslog.New(), nil
-	case "splunkhec":
-		return splunkhec.New(), nil
-	case "otlplog":
-		return otlplog.New(), nil
-	case "chronicle":
-		return chronicle.New(), nil
-	case "datadog":
-		return datadog.New(), nil
-	case "elastic":
-		return elastic.New(), nil
-	case "snmp":
-		return snmp.New(), nil
-	case "filelog":
-		return filelog.New(), nil
-	// Records-management: the S3 Object Lock (WORM) sink — each notification
-	// becomes one immutable, lock-verified object (it doubles as the audit-archive
-	// sink via its exported Put face).
-	case "s3archive":
-		return s3archive.New(), nil
 	default:
 		// build-tag-gated enterprise destinations (e.g. "teamsbot", the
-		// registered-bot Action.Execute Teams connector). Returns (nil,false) in the
-		// default build, so an unknown kind still errors as before (no rug-pull).
-		if c, ok := enterpriseOutputConnector(kind); ok {
-			return c, nil
+		// registered-bot Action.Execute Teams connector). The default build has no
+		// outputConnector port, so an unknown kind still errors as before (no rug-pull).
+		if thisEdition.outputConnector != nil {
+			if c, ok := thisEdition.outputConnector(kind); ok {
+				return c, nil
+			}
+		}
+		switch kind {
+		case "siem", "syslog", "splunkhec", "otlplog", "chronicle", "datadog", "elastic", "snmp", "filelog", "servicenow", "jira", "pagerduty", "opsgenie":
+			return nil, fmt.Errorf("output connector %q requires Business", kind)
+		}
+		if kind == "s3archive" {
+			return nil, fmt.Errorf("s3archive requires Business Regulated Operations")
 		}
 		return nil, fmt.Errorf("unknown output connector kind %q", kind)
 	}
@@ -642,7 +599,7 @@ func buildOutputConnector(kind string) (sdk.OutputConnector, error) {
 // is the operator's secret-bearing config, kept out of the store. A missing path yields
 // no destinations; a supplied path must be readable and contain valid JSON.
 func loadNotifyDestinations(_ *slog.Logger) ([]notifyDestinationSpec, error) {
-	path := os.Getenv("OLIVARES_NOTIFY_CONFIG")
+	path := osGetenv("OLIVARES_NOTIFY_CONFIG")
 	if path == "" {
 		return nil, nil
 	}

@@ -5,6 +5,7 @@ package gitlab
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"net/http"
 	"strings"
@@ -16,6 +17,9 @@ import (
 
 // Name is the connector's globally unique identifier.
 const Name = "olivares.gitlab-source"
+
+// DefaultAPIBase is shared by the observer and publication target kind.
+const DefaultAPIBase = "https://gitlab.com"
 
 const (
 	// defaultWebhookAddr is LOOPBACK. It was the wildcard ":9801" until
@@ -35,6 +39,7 @@ type Source struct {
 	webhookAddr     string
 	allowPublicBind bool
 	webhookSecret   string
+	signingKey      []byte
 	token           string
 	pollInterval    time.Duration
 	aclInterval     time.Duration
@@ -62,8 +67,9 @@ func (s *Source) Descriptor() sdk.Descriptor {
 			{Key: "webhook_address", Type: sdk.FieldString, Default: defaultWebhookAddr, Description: "Listen address for the webhook HTTP server. Loopback by default; the receiver serves PLAINTEXT HTTP, so a non-loopback bind is refused unless allow_public_bind=true. Front it with a TLS gateway that forwards to this address."},
 			{Key: cfgAllowPublicBind, Type: sdk.FieldBool, Default: "false", Description: "DANGEROUS: allow binding the webhook receiver to a non-loopback address. The receiver has no TLS, so the delivery body and its secret token header would cross the network in the clear; keep loopback and terminate TLS in front of it."},
 			{Key: "webhook_secret", Type: sdk.FieldString, Required: true, Secret: true, Description: "GitLab webhook secret token (secret-store ref)"},
+			{Key: "webhook_signing_token", Type: sdk.FieldString, Secret: true, Description: "GitLab 19.0+ webhook signing token (whsec_..., secret-store ref). When set, every delivery must also carry a valid webhook-signature over webhook-id, webhook-timestamp (within 5 minutes) and the body; X-Gitlab-Token is still checked"},
 			{Key: "token", Type: sdk.FieldString, Required: true, Secret: true, Description: "GitLab access token with api scope (secret-store ref)"},
-			{Key: "api_base", Type: sdk.FieldString, Default: "https://gitlab.com", Description: "GitLab instance URL for self-managed"},
+			{Key: "api_base", Type: sdk.FieldString, Default: DefaultAPIBase, Description: "GitLab instance URL for self-managed"},
 			{Key: "poll_interval", Type: sdk.FieldDuration, Default: "5m", Description: "API polling interval"},
 			{Key: "acl_interval", Type: sdk.FieldDuration, Default: "15m", Description: "ACL sync interval"},
 			{Key: "agent_markers", Type: sdk.FieldString, Default: "Claude,Copilot,Cursor,Cline,Codex,Devin,Aider,Windsurf", Description: "Co-Authored-By names indicating AI agents"},
@@ -89,9 +95,18 @@ func (s *Source) Open(_ context.Context, cfg sdk.Config) error {
 		return fmt.Errorf("gitlab: webhook_secret is required")
 	}
 
+	s.signingKey = nil
+	if tok := cfg.Get("webhook_signing_token"); tok != "" {
+		key, err := decodeSigningToken(tok)
+		if err != nil {
+			return fmt.Errorf("gitlab: webhook_signing_token: %w", err)
+		}
+		s.signingKey = key
+	}
+
 	s.apiBase = cfg.Get("api_base")
 	if s.apiBase == "" {
-		s.apiBase = "https://gitlab.com"
+		s.apiBase = DefaultAPIBase
 	}
 	s.apiBase = strings.TrimRight(s.apiBase, "/")
 
@@ -129,6 +144,20 @@ func (s *Source) bindPolicy() netbind.Policy {
 		AllowPublic: s.allowPublicBind,
 		OptIn:       cfgAllowPublicBind,
 	}
+}
+
+// decodeSigningToken returns the HMAC key of a GitLab signing token: the
+// base64 text after the whsec_ prefix. Errors never include the token.
+func decodeSigningToken(tok string) ([]byte, error) {
+	b64, ok := strings.CutPrefix(tok, "whsec_")
+	if !ok {
+		return nil, fmt.Errorf("want the whsec_ token GitLab shows")
+	}
+	key, err := base64.StdEncoding.DecodeString(b64)
+	if err != nil || len(key) == 0 {
+		return nil, fmt.Errorf("not base64 after whsec_")
+	}
+	return key, nil
 }
 
 // Close releases resources; this connector holds none beyond the HTTP client.

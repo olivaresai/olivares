@@ -8,12 +8,14 @@
 // structural: no palette entry may target a path containing a "$" placeholder.
 // Adds the federated search section (GET /v1/search) and per-item
 // descriptions; both are covered below.
+import { FEATURE_EXTENSIONS } from '@/features/extensions'
 import { QueryClient } from '@tanstack/react-query'
 import { act, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createTestQueryClient, renderIntel } from '@/test/intel'
 
+const business = FEATURE_EXTENSIONS.some((view) => view.id === 'finops')
 const navigateMock = vi.fn()
 vi.mock('@tanstack/react-router', () => ({
   //useUrlState follows the location, so the mock has to answer it.
@@ -48,6 +50,7 @@ import { CommandMenu } from './command-menu'
 import { FEATURE_VIEWS } from '@/features/registry'
 import { queryKeys } from '@/lib/api/query'
 import { useCommandStore } from '@/stores/command'
+import { useModulesStore } from '@/stores/modules'
 import { useSessionStore } from '@/stores/session'
 import { useTenantStore } from '@/stores/tenant'
 import { useWorkspaceStore } from '@/stores/workspace'
@@ -140,10 +143,12 @@ describe('CommandMenu', () => {
       // The palette keys items by `<label> <id>` — a hidden id must not appear.
       expect(values.some((val) => val.includes(v.id))).toBe(false)
     }
-    // Every visible view IS offered (the filter only removes hidden ones).
-    for (const v of FEATURE_VIEWS.filter((x) => !x.hideInNav)) {
+    // Every visible view IS offered, except a second door into a screen this principal
+    // already reaches by its own entry: /agentops is Sessions, listed once.
+    for (const v of FEATURE_VIEWS.filter((x) => !x.hideInNav && !x.doorTo)) {
       expect(values.some((val) => val.includes(v.id))).toBe(true)
     }
+    expect(values.some((val) => val.startsWith('view:agentops '))).toBe(false)
   })
 
   it('searches the federated endpoint after a pause and navigates to the hit', async () => {
@@ -271,11 +276,14 @@ describe('CommandMenu', () => {
     const options = screen.getAllByRole('option')
     const values = options.map((o) => o.getAttribute('data-value') ?? '')
     expect(values[0]).toMatch(/^view:models /)
-    expect(
-      values.indexOf(values.find((v) => v.startsWith('view:modelOps'))!),
-    ).toBeLessThan(
-      values.indexOf(values.find((v) => v.startsWith('view:finops'))!),
-    )
+    expect(values.some((v) => v.startsWith('view:modelOps'))).toBe(true)
+    if (business) {
+      expect(
+        values.indexOf(values.find((v) => v.startsWith('view:modelOps'))!),
+      ).toBeLessThan(
+        values.indexOf(values.find((v) => v.startsWith('view:finops'))!),
+      )
+    } else expect(values.some((v) => v.startsWith('view:finops'))).toBe(false)
     expect(options[0]).toHaveTextContent('AI › Models')
   })
 
@@ -304,7 +312,9 @@ describe('CommandMenu', () => {
     let values = screen
       .getAllByRole('option')
       .map((o) => o.getAttribute('data-value') ?? '')
-    expect(values.some((v) => v.startsWith('view:agentops '))).toBe(true)
+    // The former operate portal's name finds the one Sessions screen.
+    expect(values.some((v) => v.startsWith('view:sessions '))).toBe(true)
+    expect(values.some((v) => v.startsWith('view:agentops '))).toBe(false)
     expect(values.some((v) => v.startsWith('view:claudePolicy '))).toBe(true)
     await user.clear(screen.getByRole('combobox'))
     await user.type(screen.getByRole('combobox'), 'control console')
@@ -323,7 +333,9 @@ describe('CommandMenu', () => {
       expect.arrayContaining([
         expect.stringMatching(/^action:eventing:createSubscription /),
         expect.stringMatching(/^action:alerting:createRoute /),
-        expect.stringMatching(/^action:orchestration:createSchedule /),
+        ...(FEATURE_VIEWS.some((v) => v.id === 'orchestration')
+          ? [expect.stringMatching(/^action:orchestration:createSchedule /)]
+          : []),
       ]),
     )
     await user.click(screen.getByRole('option', { name: /New alert route/ }))
@@ -355,7 +367,9 @@ describe('CommandMenu', () => {
     for (const verb of [
       'action:eventing:createSubscription',
       'action:alerting:createRoute',
-      'action:orchestration:createSchedule',
+      ...(FEATURE_VIEWS.some((v) => v.id === 'orchestration')
+        ? ['action:orchestration:createSchedule']
+        : []),
     ]) {
       const option = screen
         .getAllByRole('option')
@@ -372,7 +386,9 @@ describe('CommandMenu', () => {
     for (const entry of [
       'view:alerting ',
       'view:eventing ',
-      'view:orchestration ',
+      ...(FEATURE_VIEWS.some((v) => v.id === 'orchestration')
+        ? ['view:orchestration ']
+        : []),
       'theme:light ',
       'theme:dark ',
       'signout ',
@@ -392,7 +408,14 @@ describe('CommandMenu', () => {
   it.each([
     ['notify:route:write', 'action:alerting:createRoute'],
     ['eventing:subscription:write', 'action:eventing:createSubscription'],
-    ['orchestration:schedule:write', 'action:orchestration:createSchedule'],
+    ...(FEATURE_VIEWS.some((v) => v.id === 'orchestration')
+      ? [
+          [
+            'orchestration:schedule:write',
+            'action:orchestration:createSchedule',
+          ],
+        ]
+      : []),
   ])('offers exactly the verb %s buys', async (permission, expected) => {
     const user = userEvent.setup()
     holding([...READS, permission])
@@ -541,6 +564,66 @@ describe('CommandMenu', () => {
  *    fact about the DOM, and it is exactly the fact the mutation changes. The pixels
  *    themselves are measured in a browser by this pass's probe.
  */
+describe('the palette of a new installation', () => {
+  it('goes to every page the person may open, offers the verbs of pages that run, and still opens a search hit', async () => {
+    const user = userEvent.setup()
+    holding([...READS, ...WRITES])
+    searchConsoleMock.mockResolvedValue({
+      results: [
+        {
+          kind: 'eventing.subscription',
+          id: 's1',
+          name: 'Billing-Alerts',
+          detail: 'enabled',
+        },
+      ],
+      truncated: false,
+    })
+    openPalette()
+    const views = optionValues()
+      .map((v) => /^view:(\S+) /.exec(v)?.[1])
+      .filter(Boolean)
+    expect(views).toEqual(
+      expect.arrayContaining(['audit', 'deploy', 'home', 'sessions']),
+    )
+    await user.type(screen.getByRole('combobox'), 'new')
+    expect(optionValues().some((v) => v.startsWith('action:'))).toBe(true)
+    await user.clear(screen.getByRole('combobox'))
+    await user.type(screen.getByRole('combobox'), 'billing')
+    const hit = await screen.findByText(
+      (_, node) =>
+        node?.getAttribute('data-slot') === 'palette-name' &&
+        node.textContent === 'Billing-Alerts',
+    )
+    await user.click(hit)
+    expect(navigateMock).toHaveBeenCalledWith({ to: '/eventing' })
+  })
+})
+
+describe('the palette lists a page whose module is off', () => {
+  afterEach(() => useModulesStore.setState({ off: new Set() }))
+
+  it('as a calm entry tagged Off that still opens, and offers none of its verbs', async () => {
+    const user = userEvent.setup()
+    useModulesStore.setState({ off: new Set(['deploy']) })
+    holding([...READS, ...WRITES])
+    openPalette()
+    await user.type(screen.getByRole('combobox'), 'deploy')
+    const row = screen
+      .getAllByRole('option')
+      .find((o) =>
+        (o.getAttribute('data-value') ?? '').startsWith('view:deploy '),
+      )!
+    expect(row).toBeDefined()
+    expect(row).toHaveTextContent('Off')
+    expect(optionValues().some((v) => v.startsWith('action:deploy'))).toBe(
+      false,
+    )
+    await user.click(row)
+    expect(navigateMock).toHaveBeenCalledWith({ to: '/deploy' })
+  })
+})
+
 describe('the palette row gives its width to the name', () => {
   const firstRow = () => screen.getAllByRole('option')[0] as HTMLElement
 

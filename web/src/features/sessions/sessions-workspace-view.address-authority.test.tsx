@@ -151,9 +151,16 @@ function makeClient() {
 }
 
 function openTable() {
-  const trigger = screen.getByRole('tab', { name: 'Table' })
+  // The table is a view of the page, reached from the list header's `⋯` menu. Already
+  // on the table (a rerender keeps the view), there is no menu and nothing to open.
+  const trigger = screen.queryByTestId('sessions-list-menu')
+  if (!trigger) return
   act(() => {
-    fireEvent.mouseDown(trigger)
+    fireEvent.keyDown(trigger, { key: 'Enter' })
+  })
+  const item = screen.getByRole('menuitem', { name: 'Show as table' })
+  act(() => {
+    fireEvent.click(item)
   })
 }
 
@@ -212,7 +219,7 @@ describe('the address contract keeps the one-way retirement — A → B → A', 
     expect(await screen.findByTestId('rev-card')).toHaveTextContent(
       'sess:rev-a',
     )
-    expect(fakeRouter.url()).toBe('/sessions?session=sess%3Arev-a')
+    expect(fakeRouter.url()).toBe('/sessions?tab=table&session=sess%3Arev-a')
 
     await user.click(await rowFor(B_ADDRESS, 'rev/aba/row-b'))
     expect(await screen.findByTestId('rev-card')).toHaveTextContent(
@@ -223,13 +230,13 @@ describe('the address contract keeps the one-way retirement — A → B → A', 
     expect(await screen.findByTestId('rev-card')).toHaveTextContent(
       'sess:rev-a',
     )
-    expect(fakeRouter.depth()).toBe(4)
+    expect(fakeRouter.depth()).toBe(5)
 
     await user.click(await rowFor(B_ADDRESS, 'rev/aba/row-b-again'))
     await waitFor(() => expect(card()).toHaveTextContent('sess:rev-b'))
     act(() => fakeRouter.back())
     await waitFor(() => expect(card()).toHaveTextContent('sess:rev-a'))
-    expect(fakeRouter.url()).toBe('/sessions?session=sess%3Arev-a')
+    expect(fakeRouter.url()).toBe('/sessions?tab=table&session=sess%3Arev-a')
   })
 })
 
@@ -271,7 +278,7 @@ describe('a RETIRED address that comes back through Back', () => {
       'rev/retired/other-observed-row-excluded',
     ).toBeNull()
     expect(screen.getByTestId('sessions-address-retired')).toBeVisible()
-    await waitFor(() => expect(fakeRouter.url()).toBe('/sessions'))
+    await waitFor(() => expect(fakeRouter.url()).toBe('/sessions?tab=table'))
 
     // BACK — onto the entry that still names A, with live:read still withdrawn. A
     // disabled query keeps its last data for gcTime; the resolution must not hand it

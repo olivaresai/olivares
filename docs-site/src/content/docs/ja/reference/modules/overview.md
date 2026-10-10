@@ -1,7 +1,7 @@
 ---
 title: モジュールカタログ
 description: >-
-  Olivares AI の 31 個のモジュール —— 9 つの能力領域で整理し、各モジュールの
+  Olivares AI の 35 個の選択可能なモジュール —— 9 つの能力領域で整理し、各モジュールの
   率直な成熟度を示す。Olivares AI は ひとつのグラウンドトゥルース: Claude Code が最も深いレベル、Codex と Grok Build がその隣、
   エンタープライズにおける AI を統合・管理・保護する。これはモジュール単位の
   リファレンスである。
@@ -9,14 +9,14 @@ description: >-
 
 Olivares AI は、ひとつのグラウンドトゥルース（Claude Code が最も深いレベル、Codex と Grok Build がその隣）で
 エンタープライズにおける AI を統合・管理・保護する。これは **モジュール型プラットフォーム** であり——1 つの
-エンジン、1 つのコンソール、そして単一バイナリに配線された **31 個のモジュール**——
+エンジン、1 つのコンソール、そしてカタログ内の **35 個の選択可能なモジュール**——
 エージェントがどこで稼働しているかを観測し、何を許可されるかをガバナンスし、
 （拡大中のサブセットにおいて）実際のインフラに対して作用する。すべてのモジュールは、
 (a) コアから正規化されたイベント／データを消費し、(b) 自身のエンティティを共有データ
 モデルで宣言し、(c) 自身の API エンドポイントと UI ビューを公開する——コアや他の
 モジュールに一切触れることなく。
 
-31 個のモジュールは、以下の **9 つの能力領域** で整理される。各モジュールのステータスは
+35 個の選択可能なモジュールは **32 個のモジュールパッケージ**で実装され、governance パッケージが 4 つの独立して選択可能なモジュールを提供する。これらは、以下の **9 つの能力領域** で整理される。各モジュールのステータスは
 **2 つの半分** として読むこと。すなわち *Govern/Observe*（カタログ化・観測・ゲート・
 レポート）は今日すでに構築・配線済みである。一方 *Actuate*（実際のインフラに対して作用
 する——deploy・dispatch・send・enforce・run）は率直な状態に分かれる——サブセットでは
@@ -31,10 +31,10 @@ Olivares AI は、ひとつのグラウンドトゥルース（Claude Code が�
 
 **access map**（`iii-access-map`）——各エージェントが何に触れることができ、実際に何に
 触れているかの read/read-write グラフであり、最小権限ドリフト = `Permitted ≠ Observed`——
-は、**31 個のうち最も有用な能力のひとつ** であって、製品の全体ではない。広がりこそが
+は、**35 個のうち最も有用な能力のひとつ** であって、製品の全体ではない。広がりこそが
 要点である。すなわち 9 つの領域、1 つのエンジン、1 つのコンソールである。
 
-## 31 個のモジュール、能力領域別
+## 35 個の選択可能なモジュール、能力領域別
 
 各行はそのモジュールのページ（`/reference/modules/<slug>/`）にリンクする。**Actuate**
 列は作用する半分の率直な状態であり、`—` はそのモジュールが本質的にガバナンス／観測を
@@ -59,18 +59,20 @@ Olivares AI は、ひとつのグラウンドトゥルース（Claude Code が�
 | モジュール | Actuate | 目的 |
 |---|---|---|
 | [アイデンティティ、権限、ガバナンス](/ja/reference/modules/vi-governance/) | — | 誰が・何が・何をできるかを粒度高く。Cedar RBAC + deny-overlay + scoped grants、ロスター調整、scoped admin／カスタムロール、break-glass、kill-switch。 |
+| [アイデンティティ（`identity`）](/reference/modules/identity/) | — | 読み取り専用のワークロードアイデンティティフェデレーション、SSO、外部キー、レジデンシーのポスチャ。 |
 | [ソースと資格情報のスコーピング](/ja/reference/modules/sourcescope/) | — | ソースをワークスペース／エージェントグループにバインドする。解決時の deny-closed scoped resolver + scoped 資格情報。 |
 | [デプロイメントと統合](/ja/reference/modules/vii-deploy/) | on-demand (503) | 実際のインフラへのデプロイメントを計画・ガバナンスする。エグゼキュータは on-demand —— ライブの `apply`／`retire` はプロビジョニングされるまで `503` を返す。 |
 | [管理された Git 公開](/ja/reference/modules/gitpublish/) | on-demand | 承認済みの Git ホスト設定と現在の権限に基づき、コミットの push、プルリクエストの作成とマージを行い、結果を記録します。 |
 
-> **アイデンティティとアクセス** は [governance](/ja/reference/modules/vi-governance/) の内部に存在する——
-> 独立したモジュールはない。NHI ライフサイクル、エージェント・アイデンティティ・フェデレーション、AAL3
-> ステップアップ、SSO/SCIM はガバナンスのケイパビリティである。
+> **Identity** は、読み取り専用のアイデンティティポスチャコンソールのための、独立して選択可能なモジュールである。governance パッケージを共有し、認可モデルとアイデンティティのライフサイクルを所有する [governance](/ja/reference/modules/vi-governance/) を必要とする。同じパッケージでもモジュールスイッチは別である。
 
 ### Claude & エージェントエコシステム
 
 | モジュール | Actuate | 目的 |
 |---|---|---|
+| [Claude Code 管理ポリシー（`claude-policy`）](/reference/modules/claude-policy/) | — | バージョン付き管理ポリシーを検証・プレビュー・公開し、配布と観測されたドリフトを確認する。 |
+| [Claude エージェントの確認（`claude-agents`）](/reference/modules/claude-agents/) | — | 管理エージェントのスレッドイベントを読み、保留中のツール確認を承認または拒否する。 |
+| [スキルカタログと割り当て](/ja/reference/modules/skills/) | — | 不変のスキルカタログと固定された割り当て：ダイジェスト検証済みパックを `/v1/m/skills/packs` 配下にインストールし、ターゲットごとにピン留めし、その場で編集されることはない。 |
 | [モデルとプロバイダの管理](/ja/reference/modules/x-models/) | on-demand (503) | モデル／プロバイダのスタック全体にわたってガバナンスする。model-access、サーフェスごとの context-window、model-group ゲート。モデルの *実行* は on-demand —— 推論資格情報がプロビジョニングされるまで `503`。 |
 | [インライン推論プロキシ](/ja/reference/modules/inferenceproxy/) | PARTIAL | インラインの `/v1/messages` PEP プロキシ向けのテナント単位の inference-egress 設定 + DLP。モジュール設定は live、リスナーは opt-in、loopback デフォルト、fail-CLOSED。 |
 | [内部カタログとマーケットプレイス](/ja/reference/modules/xiv-catalog/) | — | 承認済み／署名済みのエージェント、MCP サーバー、スキルのキュレーション済みマーケットプレイス。 |
@@ -128,15 +130,11 @@ opt-in かつ loopback デフォルト。live-ingest は env ゲート。posture
 読み取り専用の射影である）。`—` = そのモジュールは本質的にガバナンス／観測を行い、
 アクチュエーション・サーフェスを持たない。この分割こそが率直な契約である。すなわち製品は
 **今日、広範に観測しガバナンスし、拡大中の——大部分がプロビジョニング・ゲート付きの——
-サブセットに対して作用する**——[誠実さと限界](/ja/start/honesty-and-limits/) を参照。この
-カタログは合成ルート（`cmd/olivares/wire.go`）から導出される。すなわち 31 個のモジュール
-すべてがそこで構築され、`rt.AddModule` を介して登録されている（2026-09-27、 で検証）。
+サブセットに対して作用する**——[誠実さと限界](/ja/start/honesty-and-limits/) を参照。選択可能なカタログは `core/modulespec/modules.json` から導出され、`olivares modules ls` とコンソールの**エディションとモジュール**一覧も同じソースを使う。`npm run test:modules` は各選択可能な名前空間に参照ページがリンクされていることと、その数を検証する。
 
-## エディションの可用性継ぎ目（31 モジュールには数えられない）
+## エディションの可用性継ぎ目（35 個の選択可能なモジュールには数えられない）
 
-上のカタログは、合成ルートが製品モジュールとして構築する **31 個のモジュール**
-である。それとは別に、Community は `session-cockpit` API 名前空間の下に可用性
-ディスクリプタを登録する。それら 31 のひとつではない。
+上のカタログは、共有モジュール仕様にある **35 個の選択可能なモジュール**を網羅する。それとは別に、Community は `session-cockpit` API 名前空間の下に可用性ディスクリプタを登録する。それら 35 のひとつではない。
 
 - [セッションコックピット（可用性）](/ja/reference/modules/session-cockpit/) —
   Community ではハンドラなし。`/v1/m/session-cockpit` は**欠如による 404** を
@@ -146,10 +144,9 @@ opt-in かつ loopback デフォルト。live-ingest は env ゲート。posture
   [Olivares で Claude Code を実行する](/ja/how-to/run-claude-code-with-olivares/)
   を参照。
 
-## プラットフォームとコアのケイパビリティ（31 モジュールには数えられない）
+## プラットフォームとコアのケイパビリティ（35 個の選択可能なモジュールには数えられない）
 
-これらは実在し、出荷済みのケイパビリティであるが、**エンジン／コア／Web のケイパビリティ**
-であって `modules/` セット内のモジュールではない——したがって 31 には数えられない。
+これらは実在し、出荷済みのケイパビリティであるが、**エンジン／コア／Web のケイパビリティ**であって、独立して選択可能なモジュールではない——したがって 35 には数えられない。
 
 - [独自 API + manage-as-code](/ja/reference/modules/xix-api-manage-as-code/) ——
   **エンジン／コアのケイパビリティ。** エンジン自身のバージョン管理された REST/gRPC API に
@@ -160,7 +157,7 @@ opt-in かつ loopback デフォルト。live-ingest は env ゲート。posture
 - [エグゼクティブ・ダッシュボード](/ja/reference/modules/xxi-executive-dashboards/) ——
   **Web のケイパビリティ。** 技術系 UI と並ぶリーダーシップ向けコンソールビュー。
   （レポート生成バックエンドは [reporting](/ja/reference/modules/reporting/) モジュールであり、
-  31 のひとつとして数えられる。）
+  35 のひとつとして数えられる。）
 - [モデルオペレーション（自社モデル）](/ja/reference/modules/xxiii-model-operations/) ——
   **models モジュールのケイパビリティ**（モジュール X の行を通じて数えられ、独立した
   行ではない）：自社モデルの統治されたレジストリ、署名済みモデルのアドミッション、
@@ -171,7 +168,7 @@ opt-in かつ loopback デフォルト。live-ingest は env ゲート。posture
 （[xxiii-fine-tuning](/ja/reference/modules/xxiii-fine-tuning/)）—— プラットフォームは
 今日その作業を統治し記録する（上記のモデルオペレーション参照）が、自ら訓練を実行したり
 推論を提供したりはしない。実行する側の半分は文書化された**計画中**の作業であり、
-**未出荷**で、31 のひとつでもない。
+**未出荷**で、35 のひとつでもない。
 
 ## モジュールが API とバスにどう現れるか
 
@@ -185,13 +182,13 @@ opt-in かつ loopback デフォルト。live-ingest は env ゲート。posture
 
 ## レイヤー
 
-31 個のモジュールは、上記のエンジン／コアおよび Web のケイパビリティと並んで、エンジン上の
+35 個の選択可能なモジュールは、上記のエンジン／コアおよび Web のケイパビリティと並んで、エンジン上の
 レイヤーの上に構築される。
 
 - **Engine（layer 0）** —— 独自 API／manage-as-code とマルチテナンシーのケイパビリティ
-  （コアであり、31 には数えない）。
+  （コアであり、35 には数えない）。
 - **Core（layer 1）** —— inventory、sessions、access-map、models、health、observability。
-- **Management（layer 2）** —— capabilities、governance、sourcescope、deploy、knowledge。
+- **Management（layer 2）** —— capabilities、governance、identity、claude-policy、claude-agents、skills、sourcescope、deploy、gitpublish、knowledge。
 - **Intelligence（layer 3）** —— orchestration、security、recording、inference proxy、
   finops、evals、compliance、reporting、siemforward、posture-export、catalog、notify、eventing、
   voice、sandbox、redteam、live-ingest、consoleviews。

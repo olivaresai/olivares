@@ -18,7 +18,7 @@ comme tests.
 
 | Édition | Ce qu’elle fait | Ce qu’elle ne fait pas |
 |---|---|---|
-| **Community (cette page)** | Enfant local possédé : lancement, stdin/stdout/stderr, attach avec curseur, reprise de la conversation exacte, reconnexion d’un flux vivant, arrêt avec code de sortie observé. Les lignes de session et les preuves restent dans le module II. | Moteur Identity & Scale multi-panneaux, listener mTLS, sessions d’entrée commerciales, chunk xterm |
+| **Community (cette page)** | Enfant local possédé : lancement, stdin/stdout/stderr, attach avec curseur, reprise de la conversation exacte, reconnexion d’un flux vivant, arrêt avec code de sortie observé. Les lignes de session et les preuves restent dans le module II. | Moteur Identity & Scale multi-panneaux, listener mTLS, entrée des panneaux du cockpit, chunk xterm |
 | **Overlay Identity & Scale** | Moteur commercial session-cockpit (listener, panneaux, ledger). Routes sous `/v1/m/session-cockpit/` lorsque l’module est présent. | Ne remplace pas `/v1/m/sessions/runs` |
 
 Une build Community répond à l’espace de noms de l’overlay par **absence**
@@ -54,6 +54,58 @@ Base : `/v1/m/sessions`. Authentifier. Envoyer `X-Olivares-Tenant`.
 | `POST` | `/runs/{ref}/stop` | SIGTERM puis SIGKILL du groupe. Code de sortie observé sur la ligne |
 | `POST` | `/runs/{ref}/resume` | Nouvelle génération de processus. Conversation stockée exacte |
 | `POST` | `/runs/{ref}/interrupt` | Annule le tour actif. Le processus reste |
+| `GET` | `/runs/{ref}/diff` | Branche du worktree comparée à son point de départ : `branch`, `base`, `head` et `files` modifiés (`path`, `status`). 404 sans worktree |
+| `GET` | `/runs/{ref}/diff/file?path=` | Texte d’un chemin à `base` et `head` (`original`, `modified`, chacun limité au minimum de `max_read_bytes` du workspace et 64 KiB) |
+
+### Option worktree
+
+`POST /runs` accepte le booléen facultatif `worktree`. S’il vaut true et que
+`workspace_ref` désigne un workspace enregistré à la racine d’un dépôt Git, la
+session travaille dans un nouveau worktree et une nouvelle branche de ce dépôt
+(`workspace_path` est le worktree ; le run indique `worktree_branch`). Absent, null
+ou false conserve le comportement existant. Le moteur répond 422 pour un workspace
+sans worktree Git, hors de la racine du dépôt, sans commit, en lecture seule ou
+avec des dossiers en lecture seule, dont la configuration Git nomme un filtre ou
+inclut un fichier, pour une isolation non native ou un lancement sans workspace ;
+503 si le nœud n’a pas de répertoire de worktrees. `POST /runs/{ref}/resume`
+retourne dans le même worktree.
+
+`POST /runs/{ref}/cleanup` accepte un body facultatif `{"discard_worktree": true}`.
+Sans body, le comportement reste inchangé ; seul true explicite confirme.
+Une session avec worktree est libérée si sa branche est fusionnée dans la branche
+courante du workspace, que le worktree est sur cette branche et n’a aucun fichier
+non commité. Sinon l’appel est refusé avec 409 (travail non fusionné, HEAD détachée,
+worktree inaccessible) et le run reste arrêté. Réessayer avec `discard_worktree`
+supprime malgré tout worktree et branche ; si le worktree est inaccessible, cela
+libère la session en laissant le worktree en place. L’événement `cleaned` du ledger
+consigne le résultat avec le sommet de branche.
+
+### Démarrer un worktree à un commit ou une branche
+
+Avec `worktree`, `POST /runs` accepte aussi `worktree_from`, facultatif : un
+identifiant complet de commit (40 ou 64 chiffres hexadécimaux minuscules) ou une
+branche locale du dépôt du workspace. Le nouveau worktree et sa propre nouvelle
+branche démarrent là plutôt qu’au commit courant du workspace ; la branche nommée
+et le checkout ne bougent pas. Un destinataire ouvre ainsi le travail d’un handoff,
+dont le contenu peut porter `branch` et `sha`. Git résout la valeur en identifiant
+complet de commit, le seul utilisé. Avant toute création, le moteur répond 422
+pour un commit ou une branche absent, une expression de révision, une plage, une
+option ou `worktree_from` sans `worktree`. Sans valeur, le lancement part du commit
+courant du workspace comme auparavant.
+
+`GET /runs/{ref}/diff` liste les chemins modifiés par la branche du worktree depuis
+sa divergence du commit courant du workspace (`base` est leur base de fusion,
+`head` le sommet de branche, tous deux des identifiants complets ; 200 chemins au
+maximum, `truncated` indique s’il y en a davantage). `GET /runs/{ref}/diff/file?path=`
+retourne le texte d’un chemin à `base` et `head`, vide si le fichier n’y existe pas.
+Il lit les objets Git commitées avec des commandes plumbing : aucune modification
+non commitée n’y figure, et la permission est celle de lecture du run. Les règles
+de fichiers du workspace restent applicables : un chemin hors des sous-chemins
+autorisés n’est pas listé et répond 404 ; une posture DLP qui refuse répond 403
+(avec audit comme une lecture de fichier workspace) ; un fichier dépassant 16 MiB
+répond 413. Une session sans worktree ou d’un autre tenant répond 404 ; une branche
+disparue ou sans historique commun répond 409. `worktree_from` répond aussi 422
+pour un commit qu’aucune branche, étiquette ou branche distante du dépôt ne retient.
 
 Reconnecter après un attach coupé est `GET …/attach?from={last+1}` sur le
 **même** processus vivant. Après perte de processus, attach dit que la session

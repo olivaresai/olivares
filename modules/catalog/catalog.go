@@ -7,7 +7,9 @@ package catalog
 import (
 	"context"
 	"crypto/ed25519"
+	"encoding/json"
 	"log/slog"
+	"net/http"
 	"sync"
 
 	"github.com/olivaresai/olivares/core/api"
@@ -36,9 +38,27 @@ type Module struct {
 	data  api.ModuleData
 	clock model.Clock
 
-	mu     sync.Mutex
-	signer ed25519.PrivateKey // nil when no signing key is configured
+	mu          sync.Mutex
+	signer      ed25519.PrivateKey // nil when no signing key is configured
+	activate    ActivateFunc
+	transitions map[string]chan struct{} // in-flight tenant/instance decisions, guarded by mu
 }
+
+// ActivationRequest pins the approved catalog source and its deployment target.
+type ActivationRequest struct {
+	EntryID     string
+	EntryKind   string
+	TargetRef   string
+	Spec        json.RawMessage
+	ApprovalRef string
+}
+
+// ActivateFunc calls the existing deployment API as the requesting principal.
+// It returns that API's status and JSON; only a completed apply permits active.
+type ActivateFunc func(*http.Request, api.ModuleContext, ActivationRequest) (int, json.RawMessage)
+
+// WithActivation wires the composition root's governed deployment path.
+func WithActivation(fn ActivateFunc) Option { return func(m *Module) { m.activate = fn } }
 
 // Compile-time proof the module satisfies the SDK lifecycle, the engine-side
 // schema seam, the API route/permission seam and the data-consumer seam.

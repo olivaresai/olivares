@@ -21,6 +21,29 @@ import (
 	"github.com/olivaresai/olivares/core/release"
 )
 
+func TestReleaseManifestVersionHelpStableAcrossBuilds(t *testing.T) {
+	original := version
+	t.Cleanup(func() { version = original })
+	var usage string
+	for _, build := range []string{"dev", "26.1001", "26.11"} {
+		t.Run(build, func(t *testing.T) {
+			version = build
+			cmd := newReleaseManifestCmd()
+			flag := cmd.Flags().Lookup("version")
+			if !strings.Contains(flag.Usage, "MAJOR.MINOR") || !strings.Contains(flag.Usage, "required") {
+				t.Errorf("version flag must describe the required MAJOR.MINOR input: %q", flag.Usage)
+			}
+			if usage != "" && flag.Usage != usage {
+				t.Errorf("generated reference depends on build version: %q != %q", flag.Usage, usage)
+			}
+			usage = flag.Usage
+			if !strings.Contains(cmd.Example, "--version "+build+" ") {
+				t.Errorf("command example must use build version %q: %s", build, cmd.Example)
+			}
+		})
+	}
+}
+
 // TestReleaseManifestGeneratorRoundTrip proves the PRODUCER (`release manifest`)
 // emits a manifest the CONSUMER (core/release.VerifyManifest) accepts: build a dir
 // of fake archives, sign, then verify + confirm the recorded digests are real. This
@@ -35,9 +58,9 @@ func TestReleaseManifestGeneratorRoundTrip(t *testing.T) {
 	}
 	amd := []byte("fake-linux-amd64-archive")
 	arm := []byte("fake-darwin-arm64-archive")
-	write("olivares_26.8.0_linux_amd64.tar.gz", amd)
-	write("olivares_26.8.0_darwin_arm64.tar.gz", arm)
-	write("olivares_26.8.0_fips_linux_amd64.tar.gz", []byte("fips-variant-skip-me"))
+	write("olivares_26.800_linux_amd64.tar.gz", amd)
+	write("olivares_26.800_darwin_arm64.tar.gz", arm)
+	write("olivares_26.800_fips_linux_amd64.tar.gz", []byte("fips-variant-skip-me"))
 	write("checksums.txt", []byte("noise"))
 
 	// A signing key (32-byte seed form).
@@ -53,8 +76,8 @@ func TestReleaseManifestGeneratorRoundTrip(t *testing.T) {
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
-	cmd.SetArgs([]string{"manifest", "--channel", "security", "--version", "v26.8.0",
-		"--dir", dir, "--min-version", "26.6.0", "--advisory", "CVE-2026-1", "--security",
+	cmd.SetArgs([]string{"manifest", "--channel", "security", "--version", "26.800",
+		"--dir", dir, "--min-version", "26.600", "--advisory", "CVE-2026-1", "--security",
 		"--rollout", "50", "--out", outPath})
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("release manifest: %v\n%s", err, buf.String())
@@ -89,7 +112,7 @@ func TestReleaseManifestGeneratorRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("generated manifest must verify against the derived pubkey: %v", err)
 	}
-	if m.Version != "26.8.0" || m.Channel != release.ChannelSecurity || !m.Security {
+	if m.Version != "26.800" || m.Channel != release.ChannelSecurity || !m.Security {
 		t.Fatalf("manifest fields wrong: %+v", m)
 	}
 	if len(m.Artifacts) != 2 { // fips + checksums.txt skipped
@@ -105,6 +128,43 @@ func TestReleaseManifestGeneratorRoundTrip(t *testing.T) {
 	}
 	if m.Rollout.Percentage == nil || *m.Rollout.Percentage != 50 {
 		t.Fatalf("rollout must be 50, got %+v", m.Rollout)
+	}
+	// Without --edition the manifest states none: the public channel manifest must stay
+	// readable by binaries that refuse unknown fields.
+	if m.Edition != "" || bytes.Contains(mb, []byte(`"edition"`)) {
+		t.Fatalf("a manifest generated without --edition must not carry the field: %q", m.Edition)
+	}
+
+	// --edition community is signed into the bytes (REL.4b).
+	cmd = newReleaseCmd()
+	buf.Reset()
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+	cmd.SetArgs([]string{"manifest", "--version", "26.800", "--dir", dir, "--edition", "community",
+		"--out", outPath, "--sign-key", "@" + keyFile})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("release manifest --edition: %v\n%s", err, buf.String())
+	}
+	if mb, err = os.ReadFile(outPath); err != nil {
+		t.Fatal(err)
+	}
+	if sigB64, err = os.ReadFile(outPath + ".sig"); err != nil {
+		t.Fatal(err)
+	}
+	if sig, err = base64.StdEncoding.DecodeString(string(bytes.TrimSpace(sigB64))); err != nil {
+		t.Fatal(err)
+	}
+	if m, err = release.VerifyManifest(mb, sig, pub); err != nil || m.Edition != release.EditionCommunity {
+		t.Fatalf("--edition community must be signed into the manifest, got %q, %v", m.Edition, err)
+	}
+
+	// A blank --edition is a mistake, not a request for an undeclared manifest.
+	cmd = newReleaseCmd()
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+	cmd.SetArgs([]string{"manifest", "--version", "26.800", "--dir", dir, "--edition", "", "--out", outPath})
+	if err := cmd.Execute(); err == nil || !strings.Contains(err.Error(), "--edition is empty") {
+		t.Fatalf("a blank --edition must be refused, got %v", err)
 	}
 }
 
@@ -125,8 +185,8 @@ func TestReleaseVerifyManifestCrossChecksDigests(t *testing.T) {
 		}
 		return p
 	}
-	writeFile("olivares_26.8.0_linux_amd64.tar.gz", amd)
-	writeFile("olivares_26.8.0_darwin_arm64.tar.gz", arm)
+	writeFile("olivares_26.800_linux_amd64.tar.gz", amd)
+	writeFile("olivares_26.800_darwin_arm64.tar.gz", arm)
 
 	// Phase 1: CI generates the unsigned, digest-bound manifest with a freshness bound.
 	manifestPath := filepath.Join(dir, "stable-manifest.json")
@@ -139,7 +199,7 @@ func TestReleaseVerifyManifestCrossChecksDigests(t *testing.T) {
 		err := cmd.Execute()
 		return buf.String(), err
 	}
-	if outStr, err := run("manifest", "--channel", "stable", "--version", "26.8.0",
+	if outStr, err := run("manifest", "--channel", "stable", "--version", "26.800",
 		"--dir", dir, "--expires-in", "2160h", "--out", manifestPath); err != nil {
 		t.Fatalf("release manifest: %v\n%s", err, outStr)
 	}
@@ -148,7 +208,7 @@ func TestReleaseVerifyManifestCrossChecksDigests(t *testing.T) {
 	// manifest lists (FIPS variant) — extra entries must not be an error.
 	sum := func(b []byte) string { s := sha256.Sum256(b); return hex.EncodeToString(s[:]) }
 	checksums := filepath.Join(dir, "checksums.txt")
-	good := fmt.Sprintf("%s  olivares_26.8.0_linux_amd64.tar.gz\n%s  olivares_26.8.0_darwin_arm64.tar.gz\n%s  olivares_26.8.0_fips_linux_amd64.tar.gz\n",
+	good := fmt.Sprintf("%s  olivares_26.800_linux_amd64.tar.gz\n%s  olivares_26.800_darwin_arm64.tar.gz\n%s  olivares_26.800_fips_linux_amd64.tar.gz\n",
 		sum(amd), sum(arm), strings.Repeat("c", 64))
 	if err := os.WriteFile(checksums, []byte(good), 0o644); err != nil {
 		t.Fatal(err)
@@ -156,11 +216,11 @@ func TestReleaseVerifyManifestCrossChecksDigests(t *testing.T) {
 
 	// Pre-ceremony cross-check (no --sig): must pass and must re-hash the bytes.
 	outStr, err := run("verify-manifest", "--manifest", manifestPath, "--checksums", checksums,
-		"--dir", dir, "--expect-channel", "stable", "--expect-version", "v26.8.0", "--require-expiry")
+		"--dir", dir, "--expect-channel", "stable", "--expect-version", "26.800", "--require-expiry")
 	if err != nil {
 		t.Fatalf("a matching manifest must cross-check clean: %v\n%s", err, outStr)
 	}
-	for _, want := range []string{"olivares_26.8.0_linux_amd64.tar.gz", "re-hashed and bound", "OK:"} {
+	for _, want := range []string{"olivares_26.800_linux_amd64.tar.gz", "re-hashed and bound", "OK:"} {
 		if !strings.Contains(outStr, want) {
 			t.Errorf("cross-check output must contain %q, got:\n%s", want, outStr)
 		}
@@ -194,7 +254,7 @@ func TestReleaseVerifyManifestCrossChecksDigests(t *testing.T) {
 	// forwards --expires-in only when the operator sets it, so an unset flag used to
 	// mint a signed manifest a mirror can replay forever. Producing one must now take
 	// an explicit, loudly-warned opt-out.
-	if outStr, err := run("manifest", "--channel", "stable", "--version", "26.8.0",
+	if outStr, err := run("manifest", "--channel", "stable", "--version", "26.800",
 		"--dir", dir, "--out", filepath.Join(dir, "default-expiry.json")); err != nil {
 		t.Fatalf("release manifest: %v\n%s", err, outStr)
 	}
@@ -208,7 +268,7 @@ func TestReleaseVerifyManifestCrossChecksDigests(t *testing.T) {
 	// merely forgot --require-expiry got `anti-freeze DISABLED` followed by `OK:` —
 	// a check that fails open.
 	noExpiry := filepath.Join(dir, "no-expiry-manifest.json")
-	if outStr, err := run("manifest", "--channel", "stable", "--version", "26.8.0",
+	if outStr, err := run("manifest", "--channel", "stable", "--version", "26.800",
 		"--dir", dir, "--no-expiry", "--out", noExpiry); err != nil {
 		t.Fatalf("release manifest --no-expiry: %v\n%s", err, outStr)
 	}
@@ -224,7 +284,7 @@ func TestReleaseVerifyManifestCrossChecksDigests(t *testing.T) {
 
 	// --dir must bind to the REAL bytes: corrupt a published archive on disk and the
 	// digest cross-check (which still passes against checksums.txt) must not save it.
-	if err := os.WriteFile(filepath.Join(dir, "olivares_26.8.0_darwin_arm64.tar.gz"), evil, 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "olivares_26.800_darwin_arm64.tar.gz"), evil, 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := run("verify-manifest", "--manifest", manifestPath, "--checksums", checksums); err != nil {
@@ -242,12 +302,12 @@ func TestReleaseVerifyManifestCrossChecksDigests(t *testing.T) {
 func TestReleaseVerifyManifestSignatureUsesEmbeddedAnchor(t *testing.T) {
 	dir := t.TempDir()
 	amd := []byte("published-linux-amd64-archive")
-	if err := os.WriteFile(filepath.Join(dir, "olivares_26.8.0_linux_amd64.tar.gz"), amd, 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "olivares_26.800_linux_amd64.tar.gz"), amd, 0o644); err != nil {
 		t.Fatal(err)
 	}
 	sum := sha256.Sum256(amd)
 	checksums := filepath.Join(dir, "checksums.txt")
-	if err := os.WriteFile(checksums, fmt.Appendf(nil, "%s  olivares_26.8.0_linux_amd64.tar.gz\n", hex.EncodeToString(sum[:])), 0o644); err != nil {
+	if err := os.WriteFile(checksums, fmt.Appendf(nil, "%s  olivares_26.800_linux_amd64.tar.gz\n", hex.EncodeToString(sum[:])), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -273,7 +333,7 @@ func TestReleaseVerifyManifestSignatureUsesEmbeddedAnchor(t *testing.T) {
 		err := cmd.Execute()
 		return buf.String(), err
 	}
-	if outStr, err := run("manifest", "--channel", "stable", "--version", "26.8.0",
+	if outStr, err := run("manifest", "--channel", "stable", "--version", "26.800",
 		"--dir", dir, "--expires-in", "2160h", "--out", manifestPath); err != nil {
 		t.Fatalf("release manifest: %v\n%s", err, outStr)
 	}
@@ -309,7 +369,7 @@ func TestReleaseVerifyManifestSignatureUsesEmbeddedAnchor(t *testing.T) {
 // leave every digest byte-identical and instead move the POLICY levers, all of which
 // the custodian's signature then blesses:
 //
-//	min_version: 99.0.0   -> the whole fleet is refused every future upgrade
+//	min_version: 99.0   -> the whole fleet is refused every future upgrade
 //	rollout.percentage: 0 -> the unattended security auto-update installs for nobody
 //	rollout.start_at far  -> same suppression, by a different field
 //	expires: 2999-…       -> the anti-freeze bound is re-opened permanently
@@ -320,13 +380,13 @@ func TestReleaseVerifyManifestSignatureUsesEmbeddedAnchor(t *testing.T) {
 func TestReleaseVerifyManifestRefusesSubstitutedPolicy(t *testing.T) {
 	dir := t.TempDir()
 	amd := []byte("published-linux-amd64-archive")
-	if err := os.WriteFile(filepath.Join(dir, "olivares_26.8.0_linux_amd64.tar.gz"), amd, 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "olivares_26.800_linux_amd64.tar.gz"), amd, 0o644); err != nil {
 		t.Fatal(err)
 	}
 	sum := sha256.Sum256(amd)
 	checksums := filepath.Join(dir, "checksums.txt")
 	if err := os.WriteFile(checksums, fmt.Appendf(nil,
-		"%s  olivares_26.8.0_linux_amd64.tar.gz\n%s  olivares_26.8.0_fips_linux_amd64.tar.gz\n",
+		"%s  olivares_26.800_linux_amd64.tar.gz\n%s  olivares_26.800_fips_linux_amd64.tar.gz\n",
 		hex.EncodeToString(sum[:]), strings.Repeat("d", 64)), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -341,13 +401,13 @@ func TestReleaseVerifyManifestRefusesSubstitutedPolicy(t *testing.T) {
 	}
 
 	base := filepath.Join(dir, "stable-manifest.json")
-	if outStr, err := run("manifest", "--channel", "stable", "--version", "26.8.0",
+	if outStr, err := run("manifest", "--channel", "stable", "--version", "26.800",
 		"--dir", dir, "--expires-in", "2160h", "--out", base); err != nil {
 		t.Fatalf("release manifest: %v\n%s", err, outStr)
 	}
 	// The honest manifest passes AND prints every policy field for human review.
 	outStr, err := run("verify-manifest", "--manifest", base, "--checksums", checksums,
-		"--dir", dir, "--expect-channel", "stable", "--expect-version", "26.8.0")
+		"--dir", dir, "--expect-channel", "stable", "--expect-version", "26.800")
 	if err != nil {
 		t.Fatalf("the honest manifest must pass: %v\n%s", err, outStr)
 	}
@@ -380,11 +440,11 @@ func TestReleaseVerifyManifestRefusesSubstitutedPolicy(t *testing.T) {
 		name, old, new, wantIn string
 	}{
 		{
-			// The fleet-wide kill switch: nobody can ever satisfy min_version 99.0.0,
+			// The fleet-wide kill switch: nobody can ever satisfy min_version 99.0,
 			// so cmd_upgrade.go's MinTooOld gate refuses every node, forever.
 			name:   "min_version-locks-the-fleet",
-			old:    "\"version\": \"26.8.0\",",
-			new:    "\"version\": \"26.8.0\",\n  \"min_version\": \"99.0.0\",",
+			old:    "\"version\": \"26.800\",",
+			new:    "\"version\": \"26.800\",\n  \"min_version\": \"99.0\",",
 			wantIn: "permanently blocks the whole fleet",
 		},
 		{
@@ -465,7 +525,7 @@ func TestReleaseVerifyManifestRefusesSubstitutedPolicy(t *testing.T) {
 	// out-of-band channel exists to prevent.
 	t.Run("paused-security-rollout", func(t *testing.T) {
 		secPath := filepath.Join(dir, "security-manifest.json")
-		if outStr, err := run("manifest", "--channel", "security", "--version", "26.8.0",
+		if outStr, err := run("manifest", "--channel", "security", "--version", "26.800",
 			"--dir", dir, "--expires-in", "2160h", "--advisory", "GHSA-xxxx-yyyy-zzzz",
 			"--rollout", "0", "--out", secPath); err != nil {
 			t.Fatalf("release manifest: %v\n%s", err, outStr)
@@ -493,7 +553,7 @@ func TestReleaseVerifyManifestRefusesSubstitutedPolicy(t *testing.T) {
 		}
 		arts, _ := m["artifacts"].([]any)
 		a0, _ := arts[0].(map[string]any)
-		a0["filename"] = "olivares_26.8.0_fips_linux_amd64.tar.gz"
+		a0["filename"] = "olivares_26.800_fips_linux_amd64.tar.gz"
 		a0["sha256"] = strings.Repeat("d", 64) // the REAL digest of the FIPS archive
 		b, _ := json.MarshalIndent(m, "", "  ")
 		p := filepath.Join(dir, "fips-remap.json")
@@ -504,7 +564,7 @@ func TestReleaseVerifyManifestRefusesSubstitutedPolicy(t *testing.T) {
 		if err == nil {
 			t.Fatalf("remapping linux/amd64 onto the FIPS archive must be REFUSED; output:\n%s", out)
 		}
-		if !strings.Contains(err.Error(), "olivares_26.8.0_linux_amd64.tar.gz") {
+		if !strings.Contains(err.Error(), "olivares_26.800_linux_amd64.tar.gz") {
 			t.Errorf("the failure must name the archive that platform must carry, got: %v", err)
 		}
 	})
@@ -520,12 +580,12 @@ func TestReleaseVerifyManifestRefusesSubstitutedPolicy(t *testing.T) {
 func TestReleaseSignManifestRefusesToSignBlind(t *testing.T) {
 	dir := t.TempDir()
 	archive := []byte("published-linux-amd64-archive")
-	if err := os.WriteFile(filepath.Join(dir, "olivares_26.8.0_linux_amd64.tar.gz"), archive, 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "olivares_26.800_linux_amd64.tar.gz"), archive, 0o644); err != nil {
 		t.Fatal(err)
 	}
 	sum := sha256.Sum256(archive)
 	checksums := filepath.Join(dir, "checksums.txt")
-	if err := os.WriteFile(checksums, fmt.Appendf(nil, "%s  olivares_26.8.0_linux_amd64.tar.gz\n", hex.EncodeToString(sum[:])), 0o644); err != nil {
+	if err := os.WriteFile(checksums, fmt.Appendf(nil, "%s  olivares_26.800_linux_amd64.tar.gz\n", hex.EncodeToString(sum[:])), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	_, otaPriv, _ := ed25519.GenerateKey(nil)
@@ -542,7 +602,7 @@ func TestReleaseSignManifestRefusesToSignBlind(t *testing.T) {
 		cmd.SetArgs(args)
 		return buf.String(), cmd.Execute()
 	}
-	if out, err := run("manifest", "--channel", "stable", "--version", "26.8.0",
+	if out, err := run("manifest", "--channel", "stable", "--version", "26.800",
 		"--dir", dir, "--expires-in", "2160h", "--out", manifestPath); err != nil {
 		t.Fatalf("release manifest: %v\n%s", err, out)
 	}
@@ -577,5 +637,132 @@ func TestReleaseSignManifestRefusesToSignBlind(t *testing.T) {
 	}
 	if _, statErr := os.Stat(forgedPath + ".sig"); statErr == nil {
 		t.Error("no signature may be written for a refused manifest")
+	}
+}
+
+func TestReleaseManifestRejectsNonReleaseIdentities(t *testing.T) {
+	for _, flag := range []string{"--version", "--min-version"} {
+		for _, value := range []string{"1.0", "1.1", "1.10", "1.299", "2.0", "dev", "vdev", "v", "1.0.1", "26.10.2", "v1.0", "1.0-rc.1", "1.0+meta", " 1.0", "1.0\n", " "} {
+			t.Run(flag+"/"+value, func(t *testing.T) {
+				dir := t.TempDir()
+				archiveVersion := "1.0"
+				if flag == "--version" {
+					archiveVersion = value
+					// The old producer stripped v before looking for archives.
+					archiveVersion = strings.TrimPrefix(strings.TrimSpace(archiveVersion), "v")
+				}
+				archive := filepath.Join(dir, "olivares_"+archiveVersion+"_linux_amd64.tar.gz")
+				if err := os.WriteFile(archive, []byte("grammar fixture archive"), 0o644); err != nil {
+					t.Fatal(err)
+				}
+				out := filepath.Join(dir, "manifest.json")
+				args := []string{"manifest", "--version", "1.0", "--dir", dir, "--out", out}
+				args = append(args, flag, value)
+				cmd := newReleaseCmd()
+				var buf bytes.Buffer
+				cmd.SetOut(&buf)
+				cmd.SetErr(&buf)
+				cmd.SetArgs(args)
+				err := cmd.Execute()
+				wantValid := value == "1.0" || value == "1.1" || value == "1.10" || value == "1.299" || value == "2.0"
+				if (err == nil) != wantValid {
+					t.Fatalf("release manifest %s=%q: %v; want valid=%t; %s", flag, value, err, wantValid, buf.String())
+				}
+				if !wantValid {
+					if _, statErr := os.Stat(out); !os.IsNotExist(statErr) {
+						t.Fatalf("invalid identity wrote a manifest: %v", statErr)
+					}
+					return
+				}
+				b, err := os.ReadFile(out)
+				if err != nil {
+					t.Fatal(err)
+				}
+				m, err := release.ParseManifest(b)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if (flag == "--version" && m.Version != value) || (flag == "--min-version" && m.MinVersion != value) {
+					t.Fatalf("producer changed the release identity: %+v", m)
+				}
+			})
+		}
+	}
+}
+
+func TestReleaseVerifyManifestExpectedVersion(t *testing.T) {
+	dir := t.TempDir()
+	archiveName := "olivares_1.0_linux_amd64.tar.gz"
+	archive := []byte("expected-version fixture archive")
+	if err := os.WriteFile(filepath.Join(dir, archiveName), archive, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	sum := sha256.Sum256(archive)
+	checksums := filepath.Join(dir, "checksums.txt")
+	if err := os.WriteFile(checksums, fmt.Appendf(nil, "%x  %s\n", sum, archiveName), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	manifest := filepath.Join(dir, "manifest.json")
+	run := func(args ...string) (string, error) {
+		cmd := newReleaseCmd()
+		var buf bytes.Buffer
+		cmd.SetOut(&buf)
+		cmd.SetErr(&buf)
+		cmd.SetArgs(args)
+		err := cmd.Execute()
+		return buf.String(), err
+	}
+	if out, err := run("manifest", "--version", "1.0", "--dir", dir, "--out", manifest); err != nil {
+		t.Fatalf("generate valid manifest: %v\n%s", err, out)
+	}
+	for _, tc := range []struct {
+		name, value, wantError string
+		omitted                bool
+	}{
+		{name: "omitted", omitted: true},
+		{name: "matching", value: "1.0"},
+		{name: "mismatched", value: "1.1", wantError: `manifest version is "1.0", expected "1.1"`},
+		{name: "exact-identity", value: "01.0", wantError: `manifest version is "1.0", expected "01.0"`},
+		{name: "empty", value: "", wantError: "--expect-version"},
+		{name: "prefix", value: "v1.0", wantError: "--expect-version"},
+		{name: "prefix-only", value: "v", wantError: "--expect-version"},
+		{name: "surrounding-spaces", value: " 1.0 ", wantError: "--expect-version"},
+		{name: "whitespace-only", value: " \t\n", wantError: "--expect-version"},
+		{name: "trailing-newline", value: "1.0\n", wantError: "--expect-version"},
+		{name: "unstamped", value: "dev", wantError: "--expect-version"},
+		{name: "prefixed-unstamped", value: "vdev", wantError: "--expect-version"},
+		{name: "patch", value: "1.0.1", wantError: "--expect-version"},
+		{name: "calver", value: "26.10.2", wantError: "--expect-version"},
+		{name: "prerelease", value: "1.0-rc.1", wantError: "--expect-version"},
+		{name: "rehearsal", value: "0.0-rehearsal.1", wantError: "--expect-version"},
+		{name: "metadata", value: "1.0+meta", wantError: "--expect-version"},
+		{name: "missing-minor", value: "1", wantError: "--expect-version"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			args := []string{"verify-manifest", "--manifest", manifest, "--checksums", checksums, "--dir", dir}
+			if !tc.omitted {
+				args = append(args, "--expect-version", tc.value)
+			}
+			out, err := run(args...)
+			if tc.wantError != "" {
+				if err == nil || !strings.Contains(err.Error(), "REFUSING") || !strings.Contains(err.Error(), tc.wantError) {
+					t.Fatalf("--expect-version=%q: want refusal containing %q, got %v\n%s", tc.value, tc.wantError, err, out)
+				}
+				if strings.Contains(out, "OK:") {
+					t.Fatalf("refused expectation printed a success verdict:\n%s", out)
+				}
+				return
+			}
+			if err != nil || !strings.Contains(out, "OK: stable manifest for 1.0") || !strings.Contains(out, "re-hashed and bound") {
+				t.Fatalf("valid expectation must verify the manifest and archive: %v\n%s", err, out)
+			}
+		})
+	}
+}
+
+func TestReleaseVerifyManifestExpectedVersionHelp(t *testing.T) {
+	usage := newReleaseVerifyManifestCmd().Flags().Lookup("expect-version").Usage
+	if !strings.Contains(usage, "MAJOR.MINOR") || strings.Contains(usage, "leading v is ignored") {
+		t.Fatalf("--expect-version must describe the bare release grammar: %q", usage)
 	}
 }

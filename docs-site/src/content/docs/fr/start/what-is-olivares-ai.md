@@ -68,7 +68,7 @@ SQLite, D1). Là où la nature lecture/écriture ne peut être déterminée, le 
 La carte d'accès est une capacité parmi beaucoup. Le produit est une **plateforme
 modulaire** (dans l'esprit de Grafana ou Backstage) : un moteur plus des modules plus des
 connecteurs, conçu pour que tout module se rattache sans réarchitecturer le reste. Il
-embarque **31 modules** — inventaire et sessions en direct, la carte L/L-É, l'orchestration
+embarque **32 modules** — inventaire et sessions en direct, la carte L/L-É, l'orchestration
 d'agents (A2A, en développement), la gestion MCP et des compétences, l'identité et l'identité non-humaine, le
 déploiement, la connaissance et le contexte, la sécurité et les guardrails, la gestion des
 modèles et des fournisseurs, le coût/FinOps, les évals et un bac à sable de test, le
@@ -76,9 +76,11 @@ red-teaming, la conformité et les preuves, un catalogue interne, les intégrati
 et le push SIEM, la voix/temps réel, et la santé/SLA — plus des capacités de plateforme
 non comptées parmi les 30 (sa propre API et la gestion-en-tant-que-code, le
 multi-tenant, les tableaux de bord exécutifs) — à travers
-**159 intégrations** (un décompte mesuré depuis le code par `scripts/check-public-counts.sh`).
+**136 intégrations** (un décompte mesuré depuis le code par `scripts/check-public-counts.sh`).
 Quelques capacités sont pré-v1 ou des coutures deny-closed jusqu'à provisionnement ; la
 documentation est explicite sur lesquelles.
+
+Community conserve l’observabilité locale, les paramètres enregistrés et l’export des sauvegardes. L’envoi SIEM/ITSM, la télémétrie externe et l’export de posture sont inclus dans l’édition de base Business.
 
 Voir le [catalogue des modules](/fr/reference/modules/overview/) pour la liste complète, et
 l'[aperçu de l'architecture](/fr/explanation/architecture/overview/) pour comprendre comment
@@ -86,12 +88,20 @@ le moteur et les modules s'assemblent.
 
 ## Comment il observe : lecture-d'abord, données-minimales
 
-Olivares AI est **lecture-d'abord** : le moteur observe à travers les journaux,
-OpenTelemetry et eBPF ; il ne se trouve **pas** sur le chemin de données de l'agent, donc
-une défaillance de collecteur ne casse jamais votre trafic de production. Et il est
-**données-minimales par conception** : le graphe d'accès stocke des **relations** —
-origine → ressource, lecture/écriture, source, confiance, horodatage — **jamais de charges
-utiles, de corps SQL, de secrets ou de PII**. Ce qui n'est pas stocké ne peut pas fuir.
+La carte d'accès observe les logs, OpenTelemetry et eBPF hors du chemin des
+données. La défaillance d'un collecteur d'observation crée une lacune de visibilité
+sans bloquer le trafic des agents. Le graphe d'accès stocke des relations — origine
+→ ressource, lecture/écriture, source, confiance, horodatage — jamais de charges
+utiles, corps SQL, secrets ou données personnelles.
+
+Les points d'application sont inline et refusent l'accès en cas d'échec.
+Les sessions Claude Code gérées installent des hooks d'appel d'outil qui contactent
+le point d'application de politique (PEP) du moteur. Le moteur expose ce PEP par
+défaut. S'il est inaccessible pendant une panne ou un redémarrage du moteur, tout
+appel d'outil gouverné est refusé. Planifiez la disponibilité du moteur en conséquence.
+Le proxy d'inférence inline, le gate MCP tools/call et le gate de délégation A2A
+appliquent les règles au trafic qui les traverse ; les appels aux modèles ne passent
+pas par le proxy d'inférence par défaut.
 
 C'est aussi pourquoi il est auto-hébergeable et compatible air-gap : il n'y a pas de
 télémétrie obligatoire et, par défaut, aucune sortie du plan de contrôle. Ne franchit votre

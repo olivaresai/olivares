@@ -170,13 +170,10 @@ says so: between the command returning and the receiver being reconfigured every
 signature check, so it sits behind `confirmDestructive` like `rm`, and its witness proves the refused
 rotation wrote nothing.
 
-> ⛔ **Aqui decia «escribe EXACTAMENTE dos columnas» y es FALSO.** Lo probo el contraste Codex
-> `sol max` del 2026-08-20 (hallazgo C08-04-2, VERIFICADO): el repositorio generico pone **todas
-> las columnas del descriptor** en el `SET`, asi que ningun verbo de esta familia escribe dos y
-> solo dos. Lo que si es cierto y es lo que importa —el invariante que el verbo defiende— es que
-> **`rotate-secret` es el unico que pone un valor NUEVO** en esas dos, y que `update` nunca genera
-> uno: reescribe el mismo. La frase vieja describia el SQL, que no controlamos; la nueva describe
-> la intencion, que si.
+The generic repository includes every descriptor column in the SQL `SET` clause, so
+`rotate-secret` does not write exactly two columns. Its invariant is that it generates
+new values for the sealed secret and its hint. `update` preserves those values even
+when the repository writes them again.
 
 ⚠ **It deliberately does NOT re-check the endpoint policy**: the destination does not change, and
 re-asking would make a subscription whose host predates today's policy impossible to re-key —

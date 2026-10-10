@@ -42,12 +42,14 @@ import (
 type Options struct {
 	Store         store.Store
 	Authenticator *auth.Authenticator
-	Authorizer    *auth.Authorizer
-	Signer        *audit.Signer
-	SetupToken    *secure.SetupToken
-	Logger        *slog.Logger
-	Clock         model.Clock
-	Version       string
+	// OSAccounts is the physical account/PAM adapter; nil uses the native OS.
+	OSAccounts auth.OSAccounts
+	Authorizer *auth.Authorizer
+	Signer     *audit.Signer
+	SetupToken *secure.SetupToken
+	Logger     *slog.Logger
+	Clock      model.Clock
+	Version    string
 	// Edition is the build edition of this binary ("community" for the default AGPL
 	// build), reported by server-info so the console shows only the controls this build
 	// can serve. It is a build fact, never a license or entitlement input (LICENSING.md).
@@ -81,7 +83,7 @@ type Options struct {
 	// Federation is the SSO provider backing the /v1/auth/federation endpoints. nil
 	// defaults to auth.NoFederation (every SSO request returns 501
 	// sso_not_configured). Since the single-IdP OIDC/SAML provider is open-core
-	// (core/auth/federation), so the base AGPL build DOES link go-oidc/crewjam and
+	// (core/auth/federation), so the base AGPL build DOES link go-oidc/gosaml2 and
 	// does real single-IdP login; the reserved multi-IdP line is wired separately.
 	Federation auth.Federation
 	// Ingest, when set, enables the collector→core IngestService on the gRPC
@@ -176,6 +178,11 @@ type Options struct {
 	// Standing is the port fenced module writers read a referenced account's
 	// standing through (ModuleContext.Standing). nil uses the Authenticator.
 	Standing auth.StandingReader
+	// Census is the store's closed registry, read before the service guards wrap
+	// the store and hide it (cmd/olivares/boot.go). The workspace contents route
+	// counts every kind it declares with workspace lineage. nil makes that route
+	// answer 501.
+	Census store.CompositionCensus
 	// FederationService is the MANAGED SSO config service: it backs the
 	// console SSO config endpoints AND resolves the live provider for login (so
 	// SSO is store-driven, not env-only). When set it supersedes Federation for the
@@ -206,6 +213,10 @@ type Options struct {
 	// MCPGateway manages tenant-owned upstreams; writes/test require tenant admin and AAL3.
 	MCPGateway        MCPGatewayService
 	MCPGatewayRuntime MCPGatewayRuntime
+	// SessionPreview serves SessionPreviewPathPrefix: a browser preview of a port a
+	// live session listens on, authorized only by the token in its path. nil
+	// leaves the prefix unmounted.
+	SessionPreview http.Handler
 	// KnowledgeStatus exposes the composition-root knowledge-plane posture (embedder
 	// kind and whether retrieval is semantic) to /status and the console summary.
 	// nil reports an unwired local-hash posture so the degraded state stays visible.
@@ -220,9 +231,13 @@ type Options struct {
 	// per-add-on state and enables/disables a preset. nil (community build) = the
 	// /v1/console/activation endpoints answer 501, the honest not-wired seam.
 	Activation ActivationService
+	// Departments is the Business organization-structure surface (departments.go).
+	// nil (community build) = the department move and the group placement answer 501.
+	Departments DepartmentService
 	// ModuleSelection reads and changes which optional modules the engine runs
 	// (/v1/console/modules). nil = the endpoints answer 501.
 	ModuleSelection ModuleSelectionService
+	TracingSettings TracingSettingsService
 	// JobsNotRunning lists the background jobs this node does not run and why;
 	// server-info carries them so the console can say so. nil omits the fact.
 	JobsNotRunning func() []JobNotRunning
@@ -296,6 +311,7 @@ type Options struct {
 type Server struct {
 	st                    store.Store
 	authr                 *auth.Authenticator
+	osAccounts            *auth.OSAccountBindings
 	authz                 *auth.Authorizer
 	authorizationRecorder AuthorizationDecisionRecorder
 	signer                *audit.Signer
@@ -306,9 +322,12 @@ type Server struct {
 	edition               string
 	// tlsPin answers the --pin-sha256 value of the certificate this engine serves now, or
 	// "" (plain HTTP, or no certificate). Set by serve before the listener starts.
-	tlsPin      func() string
-	licensePub  ed25519.PublicKey
-	licenseBlob string
+	tlsPin func() string
+	// previewsHidden: the console navigation of this installation lists the first
+	// job only. Set by serve before the listener starts.
+	previewsHidden bool
+	licensePub     ed25519.PublicKey
+	licenseBlob    string
 
 	ingest ObservationPublisher
 	fed    auth.Federation
@@ -384,6 +403,8 @@ type Server struct {
 	inviteSender InviteSender
 	// standing is the port every module route's fenced writer reads through.
 	standing auth.StandingReader
+	// census lists the kinds the workspace contents route counts; nil = 501.
+	census store.CompositionCensus
 	// fedSvc: the managed SSO config service; when set, login resolves its
 	// provider through it (store-driven) and the console SSO config endpoints use
 	// it. nil = login on the static fed and config endpoints report unavailable.
@@ -402,6 +423,7 @@ type Server struct {
 	connectorOnboarding ConnectorOnboarding
 	mcpGateway          MCPGatewayService
 	mcpGatewayRuntime   MCPGatewayRuntime
+	sessionPreview      http.Handler
 	// knowledgeStatus is the no-secret, process-level knowledge-plane posture.
 	knowledgeStatus KnowledgeStatusProvider
 	// updateStatus returns the latest cached OTA update check; nil when
@@ -424,9 +446,11 @@ type Server struct {
 	license LicenseService
 	// activation: the enterprise activation surface; nil = the console
 	// activation endpoints answer 501 (community build / not opted in).
-	activation ActivationService
+	activation  ActivationService
+	departments DepartmentService
 	// moduleSelection is the module selection surface (nil = 501).
 	moduleSelection ModuleSelectionService
+	tracingSettings TracingSettingsService
 	// jobsNotRunning is Options.JobsNotRunning.
 	jobsNotRunning func() []JobNotRunning
 	// emaGrant: the EMA jwt-bearer grant handler; nil = EMA not configured
@@ -510,9 +534,13 @@ func New(opts Options) (*Server, error) {
 	if opts.WebAuthnUnusable && opts.WebAuthn.ID != "" {
 		return nil, errors.New("api: Options.WebAuthnUnusable cannot be set together with a pinned Options.WebAuthn")
 	}
+	if opts.OSAccounts == nil {
+		opts.OSAccounts = auth.NativeOSAccounts{}
+	}
 	s := &Server{
 		st: opts.Store, authr: opts.Authenticator, authz: opts.Authorizer, signer: opts.Signer,
 		authorizationRecorder: opts.AuthorizationRecorder,
+		osAccounts:            auth.NewOSAccountBindings(opts.Authenticator, opts.Authorizer, opts.OSAccounts),
 		setupTok:              opts.SetupToken, log: opts.Logger, clock: opts.Clock, version: opts.Version, edition: opts.Edition, notEnabled: sortedCopy(opts.NotEnabledModules), communicationReady: opts.CommunicationReady,
 		licensePub: opts.LicensePublicKey, licenseBlob: opts.LicenseBlob, ingest: opts.Ingest,
 		fed: opts.Federation, sso: newSSOFlowStore(), trace: opts.Tracing, residency: opts.Residency,
@@ -524,8 +552,10 @@ func New(opts Options) (*Server, error) {
 		principalEvidence:  opts.PrincipalEvidenceProducer,
 		inviteSender:       opts.InviteSender, fedSvc: opts.FederationService, secretStore: opts.SecretStore,
 		standing:     opts.Standing,
+		census:       opts.Census,
 		sourceRoster: opts.SourceRoster, contentDiff: opts.ContentDiff, connectorOnboarding: opts.ConnectorOnboarding,
 		mcpGateway: opts.MCPGateway, mcpGatewayRuntime: opts.MCPGatewayRuntime,
+		sessionPreview:                 opts.SessionPreview,
 		knowledgeStatus:                opts.KnowledgeStatus,
 		updateStatus:                   opts.UpdateStatus,
 		updateRefresh:                  opts.UpdateRefresh,
@@ -535,28 +565,31 @@ func New(opts Options) (*Server, error) {
 		supportBundleContainsSensitive: opts.SupportBundleContainsSensitive,
 		license:                        opts.License, emaGrant: opts.EMAGrant,
 		activation:      opts.Activation,
+		departments:     opts.Departments,
 		moduleSelection: opts.ModuleSelection,
+		tracingSettings: opts.TracingSettings,
 		jobsNotRunning:  opts.JobsNotRunning,
 		logBroker:       opts.LogBroker,
 		leaderRouteGate: opts.LeaderRouteGate,
 	}
+	if s.log == nil {
+		s.log = slog.Default()
+	}
 	if opts.DR != nil {
 		s.drSvc = newDRService(*opts.DR)
-		// reload the persisted backup schedule — the RequireDualControl
-		// restore gate included — so a process restart never silently resets it.
+		// Restore policy must load before DR is available; unreadable state
+		// disables DR without taking unrelated API services down.
 		// Bounded: a wedged store must not hang construction forever.
 		loadCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		err := s.loadDRSchedule(loadCtx)
 		cancel()
 		if err != nil {
-			return nil, fmt.Errorf("api: load persisted DR schedule: %w", err)
+			s.log.Error("api: persisted DR schedule is unreadable; DR disabled", "err", err)
+			s.drSvc = nil
 		}
 	}
 	if s.fed == nil {
 		s.fed = auth.NoFederation{}
-	}
-	if s.log == nil {
-		s.log = slog.Default()
 	}
 	if s.clock == nil {
 		s.clock = model.SystemClock{}
@@ -661,7 +694,7 @@ func (s *Server) buildRouter(modules []Module) (http.Handler, error) {
 	// declaration reach those refusals without giving any sibling a policy it never
 	// asked for. It is inert when nothing is declared.
 	mw = append(mw, s.deprecationHeaders, s.secureHeaders, s.accessLog,
-		s.routeResponseMetadata, s.authenticate, s.recordAuthorizationDecisions)
+		s.routeResponseMetadata, s.restoreMaintenance, s.authenticate, s.recordAuthorizationDecisions)
 	// Stage-2: the HA leader-routing backstop runs right after authentication —
 	// BEFORE the rate limiter and the setup gate. A standby is dialable in that
 	// layout, so a request that lands on one is going to be refused no matter what;
@@ -685,27 +718,30 @@ func (s *Server) buildRouter(modules []Module) (http.Handler, error) {
 	r.Use(mw...)
 
 	if s.mcpGatewayRuntime != nil {
-		r.Handle("/session/mcp", http.HandlerFunc(s.mcpGatewayRuntime.ServeSessionHTTP))
-		r.Handle("/mcp/gateway/{tenant}/{id}", http.HandlerFunc(s.mcpGatewayRuntime.ServeGatewayHTTP))
-		r.Handle("/.well-known/oauth-protected-resource/mcp/gateway/{tenant}/{id}", http.HandlerFunc(s.mcpGatewayRuntime.ServeGatewayHTTP))
+		registerPolicyRoute(r, "*", "/session/mcp", "mcp-session", http.HandlerFunc(s.mcpGatewayRuntime.ServeSessionHTTP))
+		registerPolicyRoute(r, "*", "/mcp/gateway/{tenant}/{id}", "mcp-gateway", http.HandlerFunc(s.mcpGatewayRuntime.ServeGatewayHTTP))
+		registerPolicyRoute(r, "*", "/.well-known/oauth-protected-resource/mcp/gateway/{tenant}/{id}", "mcp-gateway", http.HandlerFunc(s.mcpGatewayRuntime.ServeGatewayHTTP))
 	}
-	r.Get("/healthz", s.handleHealth)
-	r.Get("/openapi.json", s.handleOpenAPI)
+	if s.sessionPreview != nil {
+		registerPolicyRoute(r, "*", SessionPreviewPathPrefix+"*", "session-preview", s.sessionPreview)
+	}
+	coreRoute(r, "GET", "/healthz", publicRoute, s.handleHealth)
+	coreRoute(r, "GET", "/openapi.json", publicRoute, s.handleOpenAPI)
 	// the beta module-route document, alongside the stable one and exempt
 	// the same way (RootEnginePaths) so SDK codegen can fetch it pre-setup.
-	r.Get("/openapi.beta.json", s.handleOpenAPIBeta)
+	coreRoute(r, "GET", "/openapi.beta.json", publicRoute, s.handleOpenAPIBeta)
 	// Operational probes + Prometheus scrape target (OBS-06). Root-level and
 	// auth/setup-exempt like /healthz: a Prometheus scraper and a k8s probe present
 	// no bearer and must work before first setup.
-	r.Get("/metrics", s.handleMetrics)
-	r.Get("/livez", s.handleLivez)
-	r.Get("/readyz", s.handleReadyz)
+	coreRoute(r, "GET", "/metrics", s.metricsRoute, s.handleMetrics)
+	coreRoute(r, "GET", "/livez", publicRoute, s.handleLivez)
+	coreRoute(r, "GET", "/readyz", publicRoute, s.handleReadyz)
 	// Stage-2: pod health WITHOUT the leader check — the HA readinessProbe, so
 	// a hot standby is Ready to the kubelet and a rolling update can progress
 	// (metrics.go handlePodReadyz). /readyz keeps its leader-only drain meaning.
-	r.Get("/pod-readyz", s.handlePodReadyz)
-	r.Get("/status", s.handlePublicStatus)
-	r.Get(OAuthAuthorizationServerMetadataPath, s.handleAuthorizationServerMetadata)
+	coreRoute(r, "GET", "/pod-readyz", publicRoute, s.handlePodReadyz)
+	coreRoute(r, "GET", "/status", publicRoute, s.handlePublicStatus)
+	coreRoute(r, "GET", OAuthAuthorizationServerMetadataPath, publicRoute, s.handleAuthorizationServerMetadata)
 
 	// OpenID AuthZEN Authorization API 1.0: a conformant wire adapter over the
 	// existing PDP (auth.Authorizer). Mounted at the spec's conventional /access/v1
@@ -716,84 +752,93 @@ func (s *Server) buildRouter(modules []Module) (http.Handler, error) {
 	// authz:admin. The Search endpoints ARE the access-review reverse queries
 	// ("who can access R" / "what can X access"); the export seals its result in the
 	// audit ledger (handlers_authzen.go, handlers_accessreview.go).
-	r.Get(AuthZenConfigPath, s.handleAuthzenConfig)
-	r.Post(authzenEvalPath, s.handleAuthzenEvaluation)
-	r.Post(authzenEvalsPath, s.handleAuthzenEvaluations)
-	r.Post(authzenSearchSubjPath, s.handleAuthzenSearchSubject)
-	r.Post(authzenSearchResPath, s.handleAuthzenSearchResource)
-	r.Post(authzenSearchActPath, s.handleAuthzenSearchAction)
-	r.Post(authzenExportPath, s.handleAccessReviewExport)
+	coreRoute(r, "GET", AuthZenConfigPath, s.authzenRoute(azKindConfig, ""), s.handleAuthzenConfig)
+	coreRoute(r, "POST", authzenEvalPath, s.authzenRoute(azKindEval, auth.PermAuthzRead), s.handleAuthzenEvaluation)
+	coreRoute(r, "POST", authzenEvalsPath, s.authzenRoute(azKindEval, auth.PermAuthzRead), s.handleAuthzenEvaluations)
+	coreRoute(r, "POST", authzenSearchSubjPath, s.authzenRoute(azKindSearch, auth.PermAuthzRead), s.handleAuthzenSearchSubject)
+	coreRoute(r, "POST", authzenSearchResPath, s.authzenRoute(azKindSearch, auth.PermAuthzRead), s.handleAuthzenSearchResource)
+	coreRoute(r, "POST", authzenSearchActPath, s.authzenRoute(azKindSearch, auth.PermAuthzRead), s.handleAuthzenSearchAction)
+	coreRoute(r, "POST", authzenExportPath, s.authzenRoute(azKindExport, auth.PermAuthzAdmin), s.handleAccessReviewExport)
 
 	// Build /v1 as an explicit subrouter so a module-mount error can propagate.
 	v1 := chi.NewRouter()
-	v1.Get("/server-info", s.handleServerInfo)
-	v1.Post("/setup", s.handleSetup)
+	coreRoute(v1, "GET", "/server-info", publicRoute, s.handleServerInfo)
+	coreRoute(v1, "POST", "/setup", publicRoute, s.handleSetup)
+	coreRoute(v1, "POST", "/account/password", s.authenticatedRoute, s.handleAccountPassword)
 
 	v1.Route("/auth", func(r chi.Router) {
-		r.Post("/login", s.handleLogin)
-		r.Get("/browser-session", s.handleBrowserSession)
-		r.Post("/browser-session", s.handleBrowserSession)
-		r.Post("/logout", s.handleLogout)
+		coreRoute(r, "POST", "/login", publicRoute, s.handleLogin)
+		coreRoute(r, "GET", "/browser-session", s.browserRoute, s.handleBrowserSession)
+		coreRoute(r, "POST", "/browser-session", s.browserRoute, s.handleBrowserSession)
+		coreRoute(r, "POST", "/logout", s.authenticatedRoute, s.handleLogout)
 		// Renew the calling session credential without a full re-login (rotates the
 		// token, extends expiry). Deny-closed for non-session principals.
-		r.Post("/refresh", s.handleRefresh)
-		r.Get("/whoami", s.handleWhoami)
+		coreRoute(r, "POST", "/refresh", s.authenticatedRoute, s.handleRefresh)
+		coreRoute(r, "GET", "/whoami", s.authenticatedRoute, s.handleWhoami)
+		// What a subject holds at a node and the path the node sits on: the trustee rights,
+		// each one asked of the Authorizer (handlers_effective_rights.go). Admin-gated, read-only, and
+		// under the operator's AuthZEN exposure controls like the other reverse queries.
+		coreRoute(r, "GET", "/effective-rights", s.authzenRoute(azKindSearch, auth.PermAuthzAdmin), s.handleEffectiveRights)
 		// G1-A: the SELF capability projection. Whoami keeps its contract — identity,
 		// membership and the tenant-wide role floor — and this answers the different
 		// question it was never able to: is THIS registered operation authorized for
 		// the calling credential right now, and may THIS collection be loaded. It is
 		// additive; nothing consults it to decide a route, and the handler remains the
 		// authority for every real act (handlers_capabilities.go).
-		r.Post("/capabilities", s.handleAuthCapabilities)
+		coreRoute(r, "POST", "/capabilities", s.capabilitiesRoute, s.handleAuthCapabilities)
+		coreRoute(r, "POST", "/os-account-bindings", s.osAccountRoute, s.handleOSAccountBegin)
+		coreRoute(r, "POST", "/os-account-bindings/complete", s.osAccountRoute, s.handleOSAccountComplete)
+		coreRoute(r, "GET", "/os-account-bindings/{id}", s.osAccountTargetRoute, s.handleOSAccountRead)
+		coreRoute(r, "DELETE", "/os-account-bindings/{id}", s.osAccountTargetRoute, s.handleOSAccountRevoke)
 		// RFC 8693 token exchange: mint a down-scoped, audience-bound delegated
 		// token from a subject token. OAuth wire contract (form in, OAuth JSON out).
-		r.Post("/token-exchange", s.handleTokenExchange)
+		coreRoute(r, "POST", "/token-exchange", s.tokenExchangeRoute, s.handleTokenExchange)
 		// EMA jwt-bearer grant (RFC 7523): validate an ID-JAG assertion
 		// and mint an audience-bound at+jwt for the target MCP server. Same OAuth
 		// wire contract (form in, OAuth JSON out). Deny-closed when unconfigured.
-		r.Post("/token", s.handleJWTBearerGrant)
+		coreRoute(r, "POST", "/token", publicRoute, s.handleJWTBearerGrant)
 		// SSO login federation (OIDC/SAML) behind the auth.Federation seam. start
 		// redirects to the IdP; callback validates the assertion, find/provisions
 		// the local user, and mints an opaque session. With NoFederation -> 501.
-		r.Get("/federation/start", s.handleSSOStart)
-		r.Get("/federation/saml/metadata", s.handleSAMLMetadata)
-		r.Get("/federation/callback", s.handleSSOCallback)
-		r.Post("/federation/callback", s.handleSSOCallback)
+		coreRoute(r, "GET", "/federation/start", publicRoute, s.handleSSOStart)
+		coreRoute(r, "GET", "/federation/saml/metadata", publicRoute, s.handleSAMLMetadata)
+		coreRoute(r, "GET", "/federation/callback", publicRoute, s.handleSSOCallback)
+		coreRoute(r, "POST", "/federation/callback", publicRoute, s.handleSSOCallback)
 		// Privileged login: WebAuthn ceremonies elevate the
 		// calling session to AAL3; PIV/CAC is the second hardware route. The
 		// paths are the declared seam — the panel already calls them.
-		r.Post("/webauthn/register/options", s.handleWebAuthnRegisterOptions)
-		r.Post("/webauthn/register", s.handleWebAuthnRegister)
-		r.Post("/webauthn/authenticate/options", s.handleWebAuthnAuthOptions)
-		r.Post("/webauthn/authenticate", s.handleWebAuthnAuthenticate)
+		coreRoute(r, "POST", "/webauthn/register/options", s.sessionRoute, s.handleWebAuthnRegisterOptions)
+		coreRoute(r, "POST", "/webauthn/register", s.sessionRoute, s.handleWebAuthnRegister)
+		coreRoute(r, "POST", "/webauthn/authenticate/options", s.sessionRoute, s.handleWebAuthnAuthOptions)
+		coreRoute(r, "POST", "/webauthn/authenticate", s.sessionRoute, s.handleWebAuthnAuthenticate)
 		// Credential lifecycle: list own authenticators (metadata only) and
 		// unregister one (lost/stolen-key remediation; AAL3-required, ledgered).
-		r.Get("/webauthn/credentials", s.handleWebAuthnList)
-		r.Patch("/webauthn/credentials/{id}", s.handleWebAuthnRename)
-		r.Delete("/webauthn/credentials/{id}", s.handleWebAuthnDelete)
-		r.Get("/piv/status", s.handlePIVStatus)
-		r.Post("/piv/elevate", s.handlePIVElevate)
+		coreRoute(r, "GET", "/webauthn/credentials", s.sessionRoute, s.handleWebAuthnList)
+		coreRoute(r, "PATCH", "/webauthn/credentials/{id}", s.sessionRoute, s.handleWebAuthnRename)
+		coreRoute(r, "DELETE", "/webauthn/credentials/{id}", s.sessionRoute, s.handleWebAuthnDelete)
+		coreRoute(r, "GET", "/piv/status", s.authenticatedRoute, s.handlePIVStatus)
+		coreRoute(r, "POST", "/piv/elevate", s.sessionRoute, s.handlePIVElevate)
 		// TOTP second factor. The three anonymous paths take the pending
 		// login credential in the body (a factor-gated password login has no
 		// session yet); the rest are the acting session's own factor, the
 		// deployment policy, and the admin reset under /users.
-		r.Post("/totp/enrol", s.handleTOTPEnrol)
-		r.Post("/totp/activate", s.handleTOTPActivate)
-		r.Post("/totp/challenge", s.handleTOTPChallenge)
-		r.Get("/totp/status", s.handleTOTPStatus)
-		r.Delete("/totp", s.handleTOTPRemove)
-		r.Get("/totp/policy", s.handleTOTPPolicyGet)
-		r.Put("/totp/policy", s.handleTOTPPolicyPut)
-		r.Get("/step-up-policy", s.handleStepUpPolicyGet)
-		r.Put("/step-up-policy", s.handleStepUpPolicyPut)
+		coreRoute(r, "POST", "/totp/enrol", publicRoute, s.handleTOTPEnrol) //nolint:misspell // Published API path.
+		coreRoute(r, "POST", "/totp/activate", publicRoute, s.handleTOTPActivate)
+		coreRoute(r, "POST", "/totp/challenge", publicRoute, s.handleTOTPChallenge)
+		coreRoute(r, "GET", "/totp/status", s.sessionRoute, s.handleTOTPStatus)
+		coreRoute(r, "DELETE", "/totp", s.sessionRoute, s.handleTOTPRemove)
+		coreRoute(r, "GET", "/totp/policy", s.systemRoute("system:admin"), s.handleTOTPPolicyGet)
+		coreRoute(r, "PUT", "/totp/policy", s.systemRoute("system:admin"), s.handleTOTPPolicyPut)
+		coreRoute(r, "GET", "/step-up-policy", s.systemRoute("system:admin"), s.handleStepUpPolicyGet)
+		coreRoute(r, "PUT", "/step-up-policy", s.systemRoute("system:admin"), s.handleStepUpPolicyPut)
 	})
 
 	v1.Route("/agents", func(r chi.Router) {
-		r.Get("/", s.handleListAgents)
-		r.Post("/", s.handleCreateAgent)
-		r.Get("/{id}", s.handleGetAgent)
-		r.Patch("/{id}", s.handleUpdateAgent)
-		r.Delete("/{id}", s.handleDeleteAgent)
+		coreRoute(r, "GET", "/", s.tenantRoute("agent:read"), s.handleListAgents)
+		coreRoute(r, "POST", "/", s.tenantRoute("agent:write"), s.handleCreateAgent)
+		coreRoute(r, "GET", "/{id}", s.entityRoute("agent:read", "", "id"), s.handleGetAgent)
+		coreRoute(r, "PATCH", "/{id}", s.entityRoute("agent:write", "", "id"), s.handleUpdateAgent)
+		coreRoute(r, "DELETE", "/{id}", s.entityRoute("agent:write", "", "id"), s.handleDeleteAgent)
 	})
 
 	// FASE X /: the scoping-plane console CRUD. Shipped the workspace and
@@ -802,21 +847,28 @@ func (s *Server) buildRouter(modules []Module) (http.Handler, error) {
 	// archiving, never delete, so scoped entities are not orphaned); creating one is
 	// owner-only + AAL3 (handlers_scoping.go).
 	v1.Route("/workspaces", func(r chi.Router) {
-		r.Get("/", s.handleListWorkspaces)
-		r.Post("/", s.handleCreateWorkspace)
-		r.Get("/{id}", s.handleGetWorkspace)
-		r.Patch("/{id}", s.handleUpdateWorkspace)
-		r.Get("/{id}/summary", s.handleWorkspaceSummary)
+		coreRoute(r, "GET", "/", s.tenantRoute("tenant:read"), s.handleListWorkspaces)
+		coreRoute(r, "POST", "/", s.tenantRoute("tenant:admin"), s.handleCreateWorkspace)
+		coreRoute(r, "GET", "/{id}", s.entityRoute("tenant:read", "", "id"), s.handleGetWorkspace)
+		coreRoute(r, "PATCH", "/{id}", s.entityRoute("tenant:admin", "", "id"), s.handleUpdateWorkspace)
+		// C4.4: place a department under another one (or make it a root). Owner +
+		// AAL3 like create: a grant on a department reaches its sub-departments.
+		// Business (s.departments); the Community build answers 501.
+		coreRoute(r, "PUT", "/{id}/parent", s.entityRoute("tenant:admin", "", "id"), s.handleSetWorkspaceParent)
+		coreRoute(r, "GET", "/{id}/summary", s.entityRoute("tenant:read", "", "id"), s.handleWorkspaceSummary)
+		// Every kind's count, module kinds included: admin tier, which holds every
+		// module read by verb tier, so a count reveals nothing its holder cannot list.
+		coreRoute(r, "GET", "/{id}/contents", s.entityRoute("tenant:admin", "", "id"), s.handleWorkspaceContents)
 	})
 	v1.Route("/agent-groups", func(r chi.Router) {
-		r.Get("/", s.handleListAgentGroups)
-		r.Post("/", s.handleCreateAgentGroup)
-		r.Get("/{id}", s.handleGetAgentGroup)
-		r.Patch("/{id}", s.handleUpdateAgentGroup)
-		r.Delete("/{id}", s.handleDeleteAgentGroup)
-		r.Get("/{id}/members", s.handleListAgentGroupMembers)
-		r.Put("/{id}/members/{agentID}", s.handleAddAgentGroupMember)
-		r.Delete("/{id}/members/{agentID}", s.handleRemoveAgentGroupMember)
+		coreRoute(r, "GET", "/", s.tenantRoute("agent:read"), s.handleListAgentGroups)
+		coreRoute(r, "POST", "/", s.tenantRoute("agent:write"), s.handleCreateAgentGroup)
+		coreRoute(r, "GET", "/{id}", s.entityRoute("agent:read", "agent_group", "id"), s.handleGetAgentGroup)
+		coreRoute(r, "PATCH", "/{id}", s.entityRoute("agent:write", "", "id"), s.handleUpdateAgentGroup)
+		coreRoute(r, "DELETE", "/{id}", s.entityRoute("agent:write", "", "id"), s.handleDeleteAgentGroup)
+		coreRoute(r, "GET", "/{id}/members", s.entityRoute("agent:read", "agent_group", "id"), s.handleListAgentGroupMembers)
+		coreRoute(r, "PUT", "/{id}/members/{agentID}", s.entityRoute("agent:write", "", "id"), s.handleAddAgentGroupMember)
+		coreRoute(r, "DELETE", "/{id}/members/{agentID}", s.entityRoute("agent:write", "", "id"), s.handleRemoveAgentGroupMember)
 	})
 	// FASE X /: managed SSO/IdP configuration (moves SSO off env-only). V1
 	// governs the global config, so these are superadmin-gated; writes need AAL3.
@@ -828,17 +880,17 @@ func (s *Server) buildRouter(modules []Module) (http.Handler, error) {
 		// Every route is superadmin-gated + AAL3 on writes (ratified D8); ssoScope reads
 		// {tenant} and ssoAlias reads {alias} (a malformed one 400s before the store).
 		ssoScopeRoutes := func(r chi.Router) {
-			r.Get("/", s.handleGetSSOConfig)
-			r.Put("/", s.handlePutSSOConfig)
-			r.Delete("/", s.handleDeleteSSOConfig)
-			r.Post("/test", s.handleTestSSOConfig)
+			coreRoute(r, "GET", "/", s.systemRoute("system:admin"), s.handleGetSSOConfig)
+			coreRoute(r, "PUT", "/", s.systemRoute("system:admin"), s.handlePutSSOConfig)
+			coreRoute(r, "DELETE", "/", s.systemRoute("system:admin"), s.handleDeleteSSOConfig)
+			coreRoute(r, "POST", "/test", s.systemRoute("system:admin"), s.handleTestSSOConfig)
 			r.Route("/idps", func(r chi.Router) {
-				r.Get("/", s.handleListSSOIdPs)
+				coreRoute(r, "GET", "/", s.systemRoute("system:admin"), s.handleListSSOIdPs)
 				r.Route("/{alias}", func(r chi.Router) {
-					r.Get("/", s.handleGetSSOConfig)
-					r.Put("/", s.handlePutSSOConfig)
-					r.Delete("/", s.handleDeleteSSOConfig)
-					r.Post("/test", s.handleTestSSOConfig)
+					coreRoute(r, "GET", "/", s.systemRoute("system:admin"), s.handleGetSSOConfig)
+					coreRoute(r, "PUT", "/", s.systemRoute("system:admin"), s.handlePutSSOConfig)
+					coreRoute(r, "DELETE", "/", s.systemRoute("system:admin"), s.handleDeleteSSOConfig)
+					coreRoute(r, "POST", "/test", s.systemRoute("system:admin"), s.handleTestSSOConfig)
 				})
 			})
 		}
@@ -855,9 +907,9 @@ func (s *Server) buildRouter(modules []Module) (http.Handler, error) {
 	// name is carried in the body (not the path) so it may contain '/'
 	// (handlers_secrets.go).
 	v1.Route("/console/secrets", func(r chi.Router) {
-		r.Get("/", s.handleListSecrets)
-		r.Put("/", s.handlePutSecret)
-		r.Delete("/", s.handleDeleteSecret)
+		coreRoute(r, "GET", "/", s.secretRoute, s.handleListSecrets)
+		coreRoute(r, "PUT", "/", s.secretRoute, s.handlePutSecret)
+		coreRoute(r, "DELETE", "/", s.secretRoute, s.handleDeleteSecret)
 	})
 	// the durable source roster + live reconfiguration. The source CRUD
 	// authors the connectors the engine ingests from; a write persists then applies
@@ -866,11 +918,11 @@ func (s *Server) buildRouter(modules []Module) (http.Handler, error) {
 	// superadmin-gated; writes/reload need AAL3. Config carries secret references,
 	// never values (handlers_sources.go).
 	v1.Route("/console/sources", func(r chi.Router) {
-		r.Get("/", s.handleListSources)
-		r.Put("/", s.handlePutSource)
-		r.Delete("/", s.handleDeleteSource)
+		coreRoute(r, "GET", "/", s.systemRoute("system:admin"), s.handleListSources)
+		coreRoute(r, "PUT", "/", s.systemRoute("system:admin"), s.handlePutSource)
+		coreRoute(r, "DELETE", "/", s.systemRoute("system:admin"), s.handleDeleteSource)
 		// J10-S1: bounded read-only content diff. Same permission as the roster read.
-		r.Get("/diff", s.handleGitHostDiff)
+		coreRoute(r, "GET", "/diff", s.systemRoute("system:admin"), s.handleGitHostDiff)
 	})
 	// console connector ONBOARDING — the descriptor catalog the console renders
 	// a form from, plus a sealed-credential CRUD and a connectivity test that compose
@@ -879,19 +931,19 @@ func (s *Server) buildRouter(modules []Module) (http.Handler, error) {
 	// source roster; the catalog read carries no secret (no AAL3), writes and the test
 	// do. The name is carried in the body on DELETE (it may contain '/').
 	v1.Route("/console/connectors", func(r chi.Router) {
-		r.Get("/", s.handleListConnectors)
-		r.Put("/", s.handlePutConnector)
-		r.Delete("/", s.handleDeleteConnector)
-		r.Post("/test", s.handleTestConnector)
+		coreRoute(r, "GET", "/", s.systemRoute("system:admin"), s.handleListConnectors)
+		coreRoute(r, "PUT", "/", s.systemRoute("system:admin"), s.handlePutConnector)
+		coreRoute(r, "DELETE", "/", s.systemRoute("system:admin"), s.handleDeleteConnector)
+		coreRoute(r, "POST", "/test", s.systemRoute("system:admin"), s.handleTestConnector)
 	})
-	v1.Post("/console/runtime/reload", s.handleReloadRuntime)
+	coreRoute(v1, "POST", "/console/runtime/reload", s.systemRoute("system:admin"), s.handleReloadRuntime)
 	v1.Route("/console/mcp-gateway", func(r chi.Router) {
-		r.Get("/", s.handleMCPGateway)
-		r.Post("/servers", s.handlePutMCPGatewayServer)
-		r.Put("/servers/{id}", s.handlePutMCPGatewayServer)
-		r.Delete("/servers/{id}", s.handleDeleteMCPGatewayServer)
-		r.Post("/servers/{id}/test", s.handleTestMCPGatewayServer)
-		r.Put("/session-tools", s.handleMCPGatewaySessionTools)
+		coreRoute(r, "GET", "/", s.mcpManagementRoute(false), s.handleMCPGateway)
+		coreRoute(r, "POST", "/servers", s.mcpManagementRoute(true), s.handlePutMCPGatewayServer)
+		coreRoute(r, "PUT", "/servers/{id}", s.mcpManagementRoute(true), s.handlePutMCPGatewayServer)
+		coreRoute(r, "DELETE", "/servers/{id}", s.mcpManagementRoute(true), s.handleDeleteMCPGatewayServer)
+		coreRoute(r, "POST", "/servers/{id}/test", s.mcpManagementRoute(true), s.handleTestMCPGatewayServer)
+		coreRoute(r, "PUT", "/session-tools", s.mcpManagementRoute(true), s.handleMCPGatewaySessionTools)
 	})
 
 	// the live edition/license surface — install/observe/HOT-APPLY a commercial
@@ -900,197 +952,205 @@ func (s *Server) buildRouter(modules []Module) (http.Handler, error) {
 	// blob is a signed public attestation (not a credential), so the status read needs
 	// no step-up. Pure edition plumbing — never a feature gate (LICENSING.md).
 	v1.Route("/console/license", func(r chi.Router) {
-		r.Get("/", s.handleLicenseStatus)
-		r.Post("/", s.handleInstallLicense)
-		r.Delete("/", s.handleUninstallLicense)
+		coreRoute(r, "GET", "/", s.systemRoute("system:admin"), s.handleLicenseStatus)
+		coreRoute(r, "POST", "/", s.systemRoute("system:admin"), s.handleInstallLicense)
+		coreRoute(r, "DELETE", "/", s.systemRoute("system:admin"), s.handleUninstallLicense)
 	})
 	// enterprise activation surface — read per-add-on state, preview a preset
 	// diff, and enable/disable/promote. Superadmin-gated; the apply write requires an
 	// AAL3 step-up. nil service (community) ⇒ every route 501s (honest not-wired seam).
 	v1.Route("/console/activation", func(r chi.Router) {
-		r.Get("/", s.handleActivationStatus)
-		r.Post("/preview", s.handleActivationPreview)
-		r.Post("/apply", s.handleActivationApply)
+		coreRoute(r, "GET", "/", s.systemRoute("system:admin"), s.handleActivationStatus)
+		coreRoute(r, "POST", "/preview", s.systemRoute("system:admin"), s.handleActivationPreview)
+		coreRoute(r, "POST", "/apply", s.systemRoute("system:admin"), s.handleActivationApply)
 	})
+	coreRoute(v1, "GET", "/system/tracing", s.systemRoute("system:admin"), s.handleTracingSettings)
+	coreRoute(v1, "PUT", "/system/tracing", s.systemRoute("system:admin"), s.handleTracingSettings)
 	// The module selection: which optional modules the engine runs. Superadmin;
 	// the change requires the deployment's administrative step-up, like activation.
 	v1.Route("/console/modules", func(r chi.Router) {
-		r.Get("/", s.handleModuleSelection)
-		r.Put("/", s.handleSelectModules)
+		coreRoute(r, "GET", "/", s.systemRoute("system:admin"), s.handleModuleSelection)
+		coreRoute(r, "PUT", "/", s.systemRoute("system:admin"), s.handleSelectModules)
 	})
 	// Operational console endpoints. Effective config is already redacted and the
 	// remaining reads expose no secrets, so they need no AAL3. The support bundle
 	// aggregates config and logs and therefore adds an explicit AAL3 gate.
-	v1.Get("/console/setup-status", s.handleSetupStatus)
-	v1.Get("/console/health-summary", s.handleHealthSummary)
-	v1.Get("/console/keys", s.handleKeyCustody)
-	v1.Get("/console/bus", s.handleBusSnapshot)
-	v1.Get("/console/config/effective", s.handleEffectiveConfig)
-	v1.Post("/console/support-bundle", s.handleSupportBundle)
-	v1.Post("/console/update-check", s.handleUpdateCheck)
+	coreRoute(v1, "GET", "/console/setup-status", s.systemRoute("system:admin"), s.handleSetupStatus)
+	coreRoute(v1, "GET", "/console/health-summary", s.systemRoute("system:admin"), s.handleHealthSummary)
+	coreRoute(v1, "GET", "/console/keys", s.systemRoute("system:admin"), s.handleKeyCustody)
+	coreRoute(v1, "GET", "/console/bus", s.systemRoute("system:admin"), s.handleBusSnapshot)
+	coreRoute(v1, "GET", "/console/config/effective", s.systemRoute("system:admin"), s.handleEffectiveConfig)
+	coreRoute(v1, "POST", "/console/support-bundle", s.systemRoute("system:admin"), s.handleSupportBundle)
+	coreRoute(v1, "POST", "/console/update-check", s.systemRoute("system:admin"), s.handleUpdateCheck)
 
 	// disaster-recovery console surface — backup trigger, list, download,
 	// restore, schedule, and job stream. Superadmin-gated (system:admin). The DR
 	// service is optional: nil ⇒ each handler answers 501 honestly.
 	v1.Route("/console/dr", func(r chi.Router) {
-		r.Post("/backup", s.handleTriggerBackup)
-		r.Get("/backups", s.handleListBackups)
-		r.Get("/backups/{id}", s.handleGetBackup)
-		r.Get("/backups/{id}/download", s.handleDownloadBackup)
-		r.Delete("/backups/{id}", s.handleDeleteBackup)
-		r.Post("/restore/upload", s.handleRestoreUpload)
-		r.Post("/restore/{id}/apply", s.handleRestoreApply)
-		r.Post("/restore/{id}/approve", s.handleRestoreApprove)
-		r.Get("/restore/pending", s.handleListPendingRestores)
-		r.Get("/jobs", s.handleListDRJobs)
-		r.Get("/jobs/{id}/stream", s.handleDRJobStream)
-		r.Get("/schedule", s.handleGetDRSchedule)
-		r.Put("/schedule", s.handlePutDRSchedule)
+		coreRoute(r, "POST", "/backup", s.systemRoute("system:admin"), s.handleTriggerBackup)
+		coreRoute(r, "GET", "/backups", s.systemRoute("system:admin"), s.handleListBackups)
+		coreRoute(r, "GET", "/backups/{id}", s.systemRoute("system:admin"), s.handleGetBackup)
+		coreRoute(r, "GET", "/backups/{id}/download", s.systemRoute("system:admin"), s.handleDownloadBackup)
+		coreRoute(r, "DELETE", "/backups/{id}", s.systemRoute("system:admin"), s.handleDeleteBackup)
+		coreRoute(r, "POST", "/restore/upload", s.systemRoute("system:admin"), s.handleRestoreUpload)
+		coreRoute(r, "POST", "/restore/{id}/apply", s.systemRoute("system:admin"), s.handleRestoreApply)
+		coreRoute(r, "POST", "/restore/{id}/approve", s.systemRoute("system:admin"), s.handleRestoreApprove)
+		coreRoute(r, "GET", "/restore/pending", s.systemRoute("system:admin"), s.handleListPendingRestores)
+		coreRoute(r, "GET", "/jobs", s.systemRoute("system:admin"), s.handleListDRJobs)
+		coreRoute(r, "GET", "/jobs/{id}/stream", s.systemRoute("system:admin"), s.handleDRJobStream)
+		coreRoute(r, "GET", "/schedule", s.systemRoute("system:admin"), s.handleGetDRSchedule)
+		coreRoute(r, "PUT", "/schedule", s.systemRoute("system:admin"), s.handlePutDRSchedule)
 	})
 	// engine-log viewer — real-time SSE stream and ring-buffer snapshot.
 	// Superadmin-gated. The log broker is optional: nil ⇒ 501.
-	v1.Get("/console/logs/stream", s.handleLogStream)
-	v1.Get("/console/logs/buffer", s.handleLogBuffer)
+	coreRoute(v1, "GET", "/console/logs/stream", s.systemRoute("system:admin"), s.handleLogStream)
+	coreRoute(v1, "GET", "/console/logs/buffer", s.systemRoute("system:admin"), s.handleLogBuffer)
 
 	// per-connector health metrics — the connector-health dashboard
 	// surface. Gated on health:status:read (any admin/viewer, not superadmin-only)
 	// so the console health view can show per-connector operational state.
-	v1.Get("/connectors/health", s.handleConnectorHealth)
+	coreRoute(v1, "GET", "/connectors/health", s.tenantRoute("health:status:read"), s.handleConnectorHealth)
 
-	v1.Get("/access-edges", s.handleListAccessEdges)
+	coreRoute(v1, "GET", "/access-edges", s.tenantRoute("accessgraph:read"), s.handleListAccessEdges)
 	// GET /access-edges/drift was REMOVED in (C2): it served raw,
 	// UNRECONCILED drift (cross-origin false positives). The reconciled drift lives
 	// at module III's GET /v1/m/accessmap/drift, the single source consumed by the
 	// Terraform provider and compliance. The store-level Drift accessor stays.
 
 	v1.Route("/audit", func(r chi.Router) {
-		r.Get("/", s.handleAuditList)
+		coreRoute(r, "GET", "/", s.tenantRoute("audit:read"), s.handleAuditList)
 		// Superadmin-only read of the system-tenant ledger (cross-tenant ops); the
 		// tenant-scoped list above cannot reach it (resolveTenant rejects system).
-		r.Get("/system", s.handleSystemAuditList)
-		r.Get("/verify", s.handleAuditVerify)
+		coreRoute(r, "GET", "/system", s.systemRoute(auth.PermSystemAdmin), s.handleSystemAuditList)
+		coreRoute(r, "GET", "/verify", s.tenantRoute("audit:read"), s.handleAuditVerify)
 		// The notification bell's read: newest first, not itself recorded.
-		r.Get("/recent", s.handleAuditRecent)
-		r.Get("/export", s.handleAuditExport)
-		r.Get("/pubkey", s.handleAuditPubkey)
+		coreRoute(r, "GET", "/recent", s.tenantRoute("audit:read"), s.handleAuditRecent)
+		coreRoute(r, "GET", "/export", s.tenantRoute("audit:read"), s.handleAuditExport)
+		coreRoute(r, "GET", "/pubkey", s.tenantRoute("audit:read"), s.handleAuditPubkey)
 	})
 
 	v1.Route("/users", func(r chi.Router) {
-		r.Get("/", s.handleListUsers)
-		r.Post("/", s.handleCreateUser)
+		coreRoute(r, "GET", "/", s.systemRoute("user:read"), s.handleListUsers)
+		coreRoute(r, "POST", "/", s.systemRoute("user:write"), s.handleCreateUser)
 		// internal-superadmin lifecycle. List superadmins (read), and
 		// enable/disable an internal superadmin account (write, AAL3-gated, deny-
 		// closed against total lockout). Disabling is non-destructive and reversible
 		// — the global-principal counterpart to the tenant-scoped SCIM deactivate.
-		r.Get("/superadmins", s.handleListSuperadmins)
-		r.Post("/{id}/disable", s.handleDisableSuperadmin)
-		r.Post("/{id}/enable", s.handleEnableSuperadmin)
+		coreRoute(r, "GET", "/superadmins", s.systemRoute("user:read"), s.handleListSuperadmins)
+		coreRoute(r, "POST", "/{id}/disable", s.systemRoute("user:write"), s.handleDisableSuperadmin)
+		coreRoute(r, "POST", "/{id}/enable", s.systemRoute("user:write"), s.handleEnableSuperadmin)
 		// an administrator's view and reset of another account's TOTP
 		// factor (tenant-scoped membership permission + AAL3, the onboarding
 		// gates — the population that may issue an invite may clear a factor).
-		r.Get("/{id}/totp", s.handleUserTOTPStatus)
-		r.Post("/{id}/totp/reset", s.handleUserTOTPReset)
+		coreRoute(r, "GET", "/{id}/totp", s.tenantRoute("membership:read"), s.handleUserTOTPStatus)
+		coreRoute(r, "POST", "/{id}/totp/reset", s.tenantRoute("membership:write"), s.handleUserTOTPReset)
 	})
 	v1.Route("/tokens", func(r chi.Router) {
-		r.Get("/", s.handleListTokens)
-		r.Post("/", s.handleIssueToken)
-		r.Delete("/{id}", s.handleRevokeToken)
-		r.Post("/{id}/rotate", s.handleRotateToken)
+		coreRoute(r, "GET", "/", s.authenticatedRoute, s.handleListTokens)
+		coreRoute(r, "POST", "/", s.authenticatedRoute, s.handleIssueToken)
+		coreRoute(r, "DELETE", "/{id}", s.authenticatedRoute, s.handleRevokeToken)
+		coreRoute(r, "POST", "/{id}/rotate", s.authenticatedRoute, s.handleRotateToken)
 	})
-	v1.Post("/memberships", s.handleGrantMembership)
+	coreRoute(v1, "POST", "/memberships", s.authenticatedRoute, s.handleGrantMembership)
 	// the federated console search behind ⌘K. Any authenticated tenant
 	// principal may call it; every kind is authorization-gated on its own read
 	// permission inside the handler (deny-closed per kind, search.go).
-	v1.Get("/search", s.handleSearch)
+	coreRoute(v1, "GET", "/search", s.authenticatedRoute, s.handleSearch)
 	// the tenant member roster for the console members grid — every user with
 	// a membership in the resolved tenant, enriched with effective role, workspace
 	// scoping and directory groups. Tenant-scoped read (user:read); the enable/
 	// disable actions the grid drives are the existing tenant-scoped SCIM deactivate
 	// (PATCH /scim/v2/Users/{id} active), never a new write here.
-	v1.Get("/members", s.handleListMembers)
+	coreRoute(v1, "GET", "/members", s.tenantRoute("user:read"), s.handleListMembers)
 	// FASE X /: tenant-scoped console onboarding (distinct from the
 	// superadmin-only POST /v1/users). Onboard a non-federated person into the
 	// resolved tenant (membership:write + AAL3), invite by email or admin-set
 	// password (handlers_onboarding.go). The accept leg is unauthenticated — the
 	// single-use token is the gate (the invitee has no session yet).
-	v1.Post("/onboard", s.handleOnboardMember)
+	coreRoute(v1, "POST", "/onboard", s.tenantRoute("membership:write"), s.handleOnboardMember)
 	v1.Route("/invites", func(r chi.Router) {
-		r.Get("/", s.handleListInvites)
-		r.Post("/accept", s.handleAcceptInvite)
-		r.Delete("/{id}", s.handleRevokeInvite)
-		r.Post("/{id}/resend", s.handleResendInvite)
+		coreRoute(r, "GET", "/", s.tenantRoute("membership:read"), s.handleListInvites)
+		coreRoute(r, "POST", "/accept", publicRoute, s.handleAcceptInvite)
+		coreRoute(r, "DELETE", "/{id}", s.tenantRoute("membership:write"), s.handleRevokeInvite)
+		coreRoute(r, "POST", "/{id}/resend", s.tenantRoute("membership:write"), s.handleResendInvite)
 	})
 	// the operator's view of SCIM-provisioned groups and the group→role
 	// mapping (a mapped group elevates its members' effective role in its tenant
 	// — see core/auth ConfigureGroupRole/loadGrants). Deliberately NOT a SCIM
 	// surface: the IdP pushes rosters, never roles.
 	v1.Route("/groups", func(r chi.Router) {
-		r.Get("/", s.handleListGroups)
-		r.Put("/{id}/role", s.handleSetGroupRole)
+		coreRoute(r, "GET", "/", s.tenantRoute("membership:read"), s.handleListGroups)
+		coreRoute(r, "PUT", "/{id}/role", s.tenantRoute("membership:write"), s.handleSetGroupRole)
 		// S256: nest a group under another (the group hierarchy). Owner/superadmin
 		// authority, acyclic, operator-only — the IdP pushes membership, never shape.
-		r.Put("/{id}/parent", s.handleSetGroupParent)
+		coreRoute(r, "PUT", "/{id}/parent", s.tenantRoute("membership:write"), s.handleSetGroupParent)
+		// C4.3: file a group in a workspace of its tenant (organization only: the
+		// workspace's contents list it; membership and authorization ignore it).
+		coreRoute(r, "PUT", "/{id}/workspace", s.tenantRoute("membership:write"), s.handleSetGroupWorkspace)
 	})
 
 	v1.Route("/system", func(r chi.Router) {
 		// The configured registry is a secretless operational read used by the
 		// residency selector. It is deployment-wide, so it remains superadmin-only.
-		r.Get("/residency", s.handleResidencyRegistry)
-		r.Post("/orgs", s.handleCreateOrg)
-		r.Get("/orgs", s.handleListOrgs)
-		r.Delete("/orgs/{tenant}", s.handleDropOrg)
+		coreRoute(r, "GET", "/residency", s.systemRoute("system:admin"), s.handleResidencyRegistry)
+		coreRoute(r, "POST", "/orgs", s.systemRoute("system:admin"), s.handleCreateOrg)
+		coreRoute(r, "GET", "/orgs", s.systemRoute("system:admin"), s.handleListOrgs)
+		coreRoute(r, "DELETE", "/orgs/{tenant}", s.systemRoute("system:admin"), s.handleDropOrg)
 		// set/clear a tenant's data-residency pin (region). Deny-closed against
 		// the residency registry (known region; the home region on a region-scoped
 		// instance). Adopting residency for an existing local tenant is safe; moving a
 		// tenant between regions is a data migration, out of this endpoint's scope.
-		r.Put("/orgs/{tenant}/region", s.handleSetOrgRegion)
+		coreRoute(r, "PUT", "/orgs/{tenant}/region", s.systemRoute("system:admin"), s.handleSetOrgRegion)
 		// withdraw or restore a tenant's SERVICE without deleting its data —
 		// the intermediate door the cloud grace period needs, between serving a
 		// tenant and hard-deleting it. Enforcement is the store guard
 		// (core/suspension), so every path is covered, not just this API.
-		r.Put("/orgs/{tenant}/status", s.handleSetOrgStatus)
+		coreRoute(r, "PUT", "/orgs/{tenant}/status", s.systemRoute("system:admin"), s.handleSetOrgStatus)
 	})
 
 	// SCIM 2.0 inbound service provider (RFC 7643/7644), mounted as a first-party
 	// surface under /v1/scim/v2 (NOT a module — it reaches the auth partition that
 	// modules cannot). Bearer-authed with a tenant-bound admin token.
 	v1.Route("/scim/v2", func(r chi.Router) {
-		r.Get("/Users", s.scimListUsers)
-		r.Post("/Users", s.scimCreateUser)
-		r.Get("/Users/{id}", s.scimGetUser)
-		r.Put("/Users/{id}", s.scimReplaceUser)
-		r.Patch("/Users/{id}", s.scimPatchUser)
-		r.Delete("/Users/{id}", s.scimDeleteUser)
+		coreRoute(r, "GET", "/Users", s.scimRoute("user:read"), s.scimListUsers)
+		coreRoute(r, "POST", "/Users", s.scimRoute("user:write"), s.scimCreateUser)
+		coreRoute(r, "GET", "/Users/{id}", s.scimRoute("user:read"), s.scimGetUser)
+		coreRoute(r, "PUT", "/Users/{id}", s.scimRoute("user:write"), s.scimReplaceUser)
+		coreRoute(r, "PATCH", "/Users/{id}", s.scimRoute("user:write"), s.scimPatchUser)
+		coreRoute(r, "DELETE", "/Users/{id}", s.scimRoute("user:write"), s.scimDeleteUser)
 		// Groups inbound is REAL since (was honest-501): provisioning +
 		// memberships, with the group→role mapping kept operator-only (/v1/groups).
-		r.Get("/Groups", s.scimListGroups)
-		r.Post("/Groups", s.scimCreateGroup)
-		r.Get("/Groups/{id}", s.scimGetGroup)
-		r.Put("/Groups/{id}", s.scimReplaceGroup)
-		r.Patch("/Groups/{id}", s.scimPatchGroup)
-		r.Delete("/Groups/{id}", s.scimDeleteGroup)
-		r.Get("/ServiceProviderConfig", s.scimSPConfig)
-		r.Get("/ResourceTypes", s.scimResourceTypes)
-		r.Get("/ResourceTypes/{type}", s.scimResourceType)
-		r.Get("/Schemas", s.scimSchemas)
-		r.Get("/Schemas/{urn}", s.scimSchema)
+		coreRoute(r, "GET", "/Groups", s.scimRoute("user:read"), s.scimListGroups)
+		coreRoute(r, "POST", "/Groups", s.scimRoute("user:write"), s.scimCreateGroup)
+		coreRoute(r, "GET", "/Groups/{id}", s.scimRoute("user:read"), s.scimGetGroup)
+		coreRoute(r, "PUT", "/Groups/{id}", s.scimRoute("user:write"), s.scimReplaceGroup)
+		coreRoute(r, "PATCH", "/Groups/{id}", s.scimRoute("user:write"), s.scimPatchGroup)
+		coreRoute(r, "DELETE", "/Groups/{id}", s.scimRoute("user:write"), s.scimDeleteGroup)
+		coreRoute(r, "GET", "/ServiceProviderConfig", s.scimRoute("user:read"), s.scimSPConfig)
+		coreRoute(r, "GET", "/ResourceTypes", s.scimRoute("user:read"), s.scimResourceTypes)
+		coreRoute(r, "GET", "/ResourceTypes/{type}", s.scimRoute("user:read"), s.scimResourceType)
+		coreRoute(r, "GET", "/Schemas", s.scimRoute("user:read"), s.scimSchemas)
+		coreRoute(r, "GET", "/Schemas/{urn}", s.scimRoute("user:read"), s.scimSchema)
 		// SCIM Security Event Token receiver (RFC 9967 over RFC 8935 push
 		// delivery): async deprovisioning of agents/NHIs on event, not on next
 		// poll (IDN-11). Bearer-authed like the rest of the provider.
-		r.Post("/Events", s.scimReceiveEvents)
+		coreRoute(r, "POST", "/Events", s.scimRoute("user:write"), s.scimReceiveEvents)
 	})
 
 	// SSF 1.0 / CAEP 1.0 / RISC 1.0 receiver: continuous access
 	// evaluation via SET push delivery (RFC 8935). Bearer-authed with a
 	// tenant-bound token, same auth surface as the SCIM provider.
 	v1.Route("/ssf", func(r chi.Router) {
-		r.Post("/events", s.caepReceiveEvents)
+		coreRoute(r, "POST", "/events", s.scimRoute("user:write"), s.caepReceiveEvents)
 	})
 
 	if err := s.mountModules(v1, modules); err != nil {
 		return nil, err
 	}
 	r.Mount("/v1", v1)
+	if err := checkRoutePolicies(r); err != nil {
+		return nil, err
+	}
 	s.mux = r
 	return r, nil
 }
@@ -1163,7 +1223,8 @@ func (s *Server) mountModules(r chi.Router, modules []Module) error {
 		// it. A module implementing none files nil, and its operations project as
 		// not_supported rather than as the outer boolean.
 		if slices.Contains(s.notEnabled, ns) {
-			r.Mount("/m/"+ns, moduleNotEnabledHandler(ns))
+			registerPolicyRoute(r, "*", "/m/"+ns, "module-not-enabled", moduleNotEnabledHandler(ns))
+			registerPolicyRoute(r, "*", "/m/"+ns+"/*", "module-not-enabled", moduleNotEnabledHandler(ns))
 			continue
 		}
 		projector, _ := m.(ModuleCapabilityProjector)
@@ -1216,14 +1277,11 @@ type PrincipalEvidenceProducer interface {
 // dato con `recover`, que es la huella de una afirmación que no encaja con su código. Aquí sí lo
 // es: `mountModules` propaga, `api.New` devuelve, y el caso lo lee sin recuperar nada.
 //
-// TODAY THE EVIDENCE HALF CAN ONLY REFUSE, deliberately: nothing in the tree supplies a producer
-// yet, and the real composition root boots because it registers no governed route.
-//
-// ⚠ Y PRESENCIA NO ES CABLEADO, dicho aquí porque el tercer contraste lo levantó y tiene razón: un
-// productor guardado satisface esta guarda y NO hace que ningún camino de petición lo invoque.
-// Esto refuta «nadie lo inyectó», no «nadie lo llama». El carril que cablee la evidencia sustituye
-// esta comprobación por un testigo del CAMINO DE PETICIÓN — ruta gobernada, principal reconstruido
-// de verdad, 200 con testigo sólido; y quitar sólo la llamada ⇒ 503 con el handler en cero.
+// The composition root supplies the authenticator as PrincipalEvidenceProducer.
+// Modules such as gitpublish register governed routes, which require a producer.
+// Any named Cedar action must be declared by the module. At request time the API
+// middleware reconstructs the principal through ResolvePrincipalScope; this
+// startup check only validates the wiring and action declarations.
 func checkGovernedRoutes(m Module, ns string, producer PrincipalEvidenceProducer) error {
 	var routes []moduleRoute
 	m.APIRoutes(recordingRegistrar{ns: ns, out: &routes})
@@ -1664,7 +1722,7 @@ type restoredRequestBody struct {
 	io.Closer
 }
 
-// bodyEntityID locates one exact top-level JSON string without interpreting the
+// bodyEntityID locates one canonical top-level JSON string without interpreting the
 // rest of the module payload. It deliberately does not reject unknown fields:
 // semantic closure belongs to the module's decoder after authorization.
 //
@@ -1714,8 +1772,13 @@ func bodyEntityID(r *http.Request, field string) (string, error) {
 		if decodeErr := dec.Decode(&value); decodeErr != nil {
 			return "", fmt.Errorf("%w: invalid entity body field value", errBadRequest)
 		}
-		if name != field {
+		if !strings.EqualFold(name, field) {
 			continue
+		}
+		// encoding/json accepts case-insensitive struct aliases. Refuse them
+		// here so its later decoder cannot replace the admitted selector or ID.
+		if name != field {
+			return "", fmt.Errorf("%w: noncanonical entity body field", errBadRequest)
 		}
 		if found {
 			return "", fmt.Errorf("%w: duplicate entity body field", errBadRequest)
@@ -1768,10 +1831,23 @@ func (cr chiRegistrar) entityResource(
 	r *http.Request,
 	perm auth.Permission,
 	ref EntityRef,
-) (auth.ResourceAttrs, model.TenantID, bool, error, error) {
+	bodyFields map[string]string,
+) (auth.ResourceAttrs, model.TenantID, bool, auth.Permission, error, error) {
 	res := entityBaseResource(perm, ref)
+	if ref.BodyKindField != "" {
+		kind, err := bodyEntityID(r, ref.BodyKindField)
+		if err != nil {
+			return res, "", false, "", err, nil
+		}
+		selected, known := ref.BodyKinds[kind]
+		if !known {
+			return res, "", false, "", fmt.Errorf("%w: unknown entity body kind", errBadRequest), nil
+		}
+		bodyFields[ref.BodyKindField] = kind
+		return cr.entityResource(r, perm, selected, bodyFields)
+	}
 	if (ref.IDParam == "") == (ref.BodyIDField == "") {
-		return res, "", false, nil, errors.New(
+		return res, "", false, ref.DeniedReadPermission, nil, errors.New(
 			"api: entity route must declare exactly one of IDParam and BodyIDField",
 		)
 	}
@@ -1783,7 +1859,7 @@ func (cr chiRegistrar) entityResource(
 	// An adversarial contrast found it by reading the two guards together; neither test
 	// saw it alone, because the mount-time validator never runs entityResource.
 	if ref.ConcealDeniedAsNotFound && ref.Kind == "" && ref.CoreKind == CoreKindNone {
-		return res, "", false, nil, errors.New(
+		return res, "", false, ref.DeniedReadPermission, nil, errors.New(
 			"api: a concealed entity route must declare Kind or CoreKind",
 		)
 	}
@@ -1794,32 +1870,33 @@ func (cr chiRegistrar) entityResource(
 		var locatorErr error
 		id, locatorErr = bodyEntityID(r, ref.BodyIDField)
 		if locatorErr != nil {
-			return res, "", false, locatorErr, nil
+			return res, "", false, ref.DeniedReadPermission, locatorErr, nil
 		}
+		bodyFields[ref.BodyIDField] = id
 	}
 	if id == "" {
-		return res, "", false, nil, nil
+		return res, "", false, ref.DeniedReadPermission, nil, nil
 	}
 	res.ID = id
 	if ref.CoreKind != CoreKindNone {
 		return cr.coreEntityResource(r, res, ref, model.ID(id))
 	}
 	if ref.Kind == "" || (ref.WorkspaceColumn == "" && ref.LookupColumn == "" && !ref.ConcealDeniedAsNotFound) {
-		return res, "", true, nil, nil
+		return res, "", true, ref.DeniedReadPermission, nil, nil
 	}
 	p, ok := principalFrom(r.Context())
 	if !ok {
-		return res, "", false, nil, nil // the shared authz path writes the 401
+		return res, "", false, ref.DeniedReadPermission, nil, nil // the shared authz path writes the 401
 	}
 	tenant, err := cr.s.resolveTenant(r, p)
 	if err != nil {
-		return res, "", false, nil, nil // likewise: let the shared path map the error
+		return res, "", false, ref.DeniedReadPermission, nil, nil // likewise: let the shared path map the error
 	}
 	res, found, verr := cr.s.storedEntityLineage(r.Context(), tenant, res, ref, id)
 	if verr != nil {
-		return res, tenant, false, nil, verr
+		return res, tenant, false, ref.DeniedReadPermission, nil, verr
 	}
-	return res, tenant, found, nil, nil
+	return res, tenant, found, ref.DeniedReadPermission, nil, nil
 }
 
 // storedEntityLineage reads the declared row and stamps its STORED workspace onto res.
@@ -1933,6 +2010,14 @@ func (cr chiRegistrar) authzEntityResource(
 // (una ruta gobernada con metadata vacia se degradaria sola). Handle y HandleEntity pasan
 // ungovernedRoute; HandlePolicy —y por tanto HandleSealed— pasa governedRoute.
 func (cr chiRegistrar) handle(method, pattern string, perm auth.Permission, ref *EntityRef, meta auth.RouteMetadata, governed routeGovernance, h ModuleHandler) {
+	if ref != nil && len(ref.BodyKinds) != 0 {
+		copied := *ref
+		copied.BodyKinds = make(map[string]EntityRef, len(ref.BodyKinds))
+		for kind, selected := range ref.BodyKinds {
+			copied.BodyKinds[kind] = selected
+		}
+		ref = &copied
+	}
 	// File the declaration where a PRE-ROUTING writer can find it. Registration
 	// time is the only moment that knows both the namespace and the pattern.
 	cr.declareRouteResponseHeaders(method, pattern)
@@ -1940,7 +2025,7 @@ func (cr chiRegistrar) handle(method, pattern string, perm auth.Permission, ref 
 	// declared collection scope — for the self capability projection. Registration is
 	// likewise the only moment that knows all of them together.
 	cr.declareRouteDescriptor(method, pattern, perm, ref, meta, governed)
-	cr.r.MethodFunc(method, pattern, func(w http.ResponseWriter, r *http.Request) {
+	registerPolicyRoute(cr.r, method, pattern, string(perm), http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// FIRST, before any branch can write: a route that declared response
 		// headers gets them on every answer it produces, including the refusals
 		// below that return before the module handler is ever called. Nil for
@@ -1954,8 +2039,9 @@ func (cr chiRegistrar) handle(method, pattern string, perm auth.Permission, ref 
 			ok     bool
 			// witness is the record of the decision that let this request through. For an
 			// ungoverned door it stays the zero value, which authorizes nothing by construction.
-			witness  auth.RouteAuthorizationWitness
-			resource = auth.ResourceFor(perm)
+			witness    auth.RouteAuthorizationWitness
+			resource   = auth.ResourceFor(perm)
+			bodyFields map[string]string
 		)
 		// ⛔ LA EVIDENCIA SE INSTALA AQUÍ, ANTES DE DIVIDIR COLECCIÓN Y ENTIDAD, Y SÓLO EN RUTA
 		// GOBERNADA. Antes esta pregunta vivía en la rama de entidad, y eso tenía dos defectos: la
@@ -1987,7 +2073,10 @@ func (cr chiRegistrar) handle(method, pattern string, perm auth.Permission, ref 
 				w, r, perm, resource, meta, errForbidden, governed,
 			)
 		} else {
-			res, lineageTenant, found, locatorErr, err := cr.entityResource(r, perm, *ref)
+			if ref.BodyKindField != "" || ref.BodyIDField != "" {
+				bodyFields = make(map[string]string)
+			}
+			res, lineageTenant, found, deniedRead, locatorErr, err := cr.entityResource(r, perm, *ref, bodyFields)
 			if err != nil {
 				// Deny-closed: a lineage we could not read is not a lineage we may
 				// ignore — authorizing at collection level here would silently widen
@@ -1997,7 +2086,8 @@ func (cr chiRegistrar) handle(method, pattern string, perm auth.Permission, ref 
 				if ref.ConcealDeniedAsNotFound {
 					cr.s.writeError(w, r, errEntityAuthorizationUnavailable)
 				} else {
-					cr.s.writeError(w, r, errForbidden)
+					// Deny-closed answers exactly as a denial of perm does (#491).
+					cr.s.writeError(w, r, forbiddenFor(perm, false))
 				}
 				return
 			}
@@ -2015,18 +2105,22 @@ func (cr chiRegistrar) handle(method, pattern string, perm auth.Permission, ref 
 				return
 			}
 			concealDenied := ref.ConcealDeniedAsNotFound
-			if concealDenied && ref.DeniedReadPermission != "" {
-				// Readability only selects the denial's status. The action still
-				// requires its own decision, and absence is never disclosed as 403.
-				// Evaluate the read overlay for absent references and scoped forbids
-				// too: skipping its remote work would reveal a concealed row.
+			if concealDenied && deniedRead != "" {
+				// Readability selects denial presentation, never action authority.
+				// Evaluate absent and scoped-forbidden resources too, so remote read
+				// work cannot reveal whether a concealed row exists. Body-kind reads
+				// come from the selected reference's native permission.
 				reader, authenticated := principalFrom(r.Context())
 				if authenticated && lineageTenant != "" {
 					read := cr.s.authz.AuthorizeDisclosure(r.Context(), auth.Request{
-						Principal: reader, Permission: ref.DeniedReadPermission,
+						Principal: reader, Permission: deniedRead,
 						Tenant: lineageTenant, Resource: res,
 					})
 					concealDenied = !found || !read.Allow
+					if ref.DeniedReadRoleOnly {
+						role, held := reader.RoleIn(lineageTenant)
+						concealDenied = concealDenied || reader.Superadmin || (held && auth.RoleGrants(role, perm))
+					}
 				}
 			}
 			p, tenant, witness, ok = cr.authzEntityResourcePolicy(
@@ -2053,17 +2147,27 @@ func (cr chiRegistrar) handle(method, pattern string, perm auth.Permission, ref 
 		// and the module's boot-time ModuleData alike — reads the mark from this
 		// context, so a module route is row-confined without the handler filtering.
 		r = r.WithContext(withModuleRequestBoundary(r.Context(), tenant, p))
+		// RequestPrincipal exposes the request's AMR slice to the handler. Retain
+		// a snapshot for operation authority and recording before either escapes.
+		p = copyOperationPrincipal(p)
+		call := recordedCall(r, cr.ns, method, pattern, perm, p, tenant)
 		mc := ModuleContext{
-			Principal: p,
-			Tenant:    tenant,
-			Resource:  resource,
+			operation: &moduleOperationScope{server: cr.s, principal: p, tenant: tenant,
+				call: &call},
+			Principal:        copyOperationPrincipal(p),
+			Tenant:           tenant,
+			Resource:         resource,
+			BodyEntityFields: bodyFields,
 			// ⛔ EL TESTIGO LLEGA AL HANDLER. Sin esto la decision se quedaba en un booleano y
 			// ninguna invariante suya alcanzaba a los bytes del cable (invariante V). Para las
 			// puertas no gobernadas es el valor cero, que no autoriza nada por construccion.
 			Authorization: witness,
 			Data:          NewScopedData(cr.s.st, tenant),
 			Standing:      cr.s.standing,
+			Admission:     cr.s.Admits,
 		}
+		mc.operation.httpActive.Store(true)
+		defer mc.operation.httpActive.Store(false)
 		rec := cr.s.recorder
 		if rec == nil {
 			h(w, r, mc)
@@ -2072,7 +2176,6 @@ func (cr chiRegistrar) handle(method, pattern string, perm auth.Permission, ref 
 		// Privileged-session recording. Gate runs BEFORE the handler and is
 		// deny-closed: on a recorded surface, no appendable evidence trail means no
 		// privileged action (recording.go).
-		call := recordedCall(r, cr.ns, method, pattern, perm, p, tenant)
 		dec, err := rec.Gate(recorderCtx, call)
 		if err != nil {
 			if errors.Is(err, ErrRecordingConsentRequired) {
@@ -2080,7 +2183,7 @@ func (cr chiRegistrar) handle(method, pattern string, perm auth.Permission, ref 
 				return
 			}
 			cr.s.log.Error("api: session-recording gate denied a privileged request (deny-closed)",
-				"err", err, "namespace", cr.ns, "pattern", pattern, "request_id", requestID(r.Context()))
+				"namespace", cr.ns, "pattern", pattern, "request_id", requestID(r.Context()))
 			cr.s.writeError(w, r, errRecordingUnavailable)
 			return
 		}
@@ -2127,13 +2230,13 @@ func (cr chiRegistrar) handle(method, pattern string, perm auth.Permission, ref 
 				// recorder keeps the gap permanently evident (reserved > written); this log
 				// line is the immediate operational signal.
 				cr.s.log.Error("api: session-recording frame append failed — recording gap",
-					"err", rerr, "namespace", cr.ns, "pattern", pattern,
+					"namespace", cr.ns, "pattern", pattern,
 					"session", string(dec.Session), "request_id", requestID(r.Context()))
 			}
 		}()
 		h(sw, r, mc)
 		panicked = false
-	})
+	}))
 }
 
 // NewHTTPServer returns a hardened *http.Server bound to addr serving this API.

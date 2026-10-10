@@ -117,6 +117,59 @@ func TestSeccompIsDenyByDefault(t *testing.T) {
 	}
 }
 
+func TestSeccompPermitsGoGuestThreadsOnlyWithRuntimeFlags(t *testing.T) {
+	raw, err := json.Marshal(buildSeccomp())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var profile struct {
+		Syscalls []struct {
+			Names  []string
+			Action string
+			Args   []struct {
+				Index    uint
+				Value    uint64
+				ValueTwo uint64
+				Op       string
+			}
+		}
+	}
+	if err := json.Unmarshal(raw, &profile); err != nil {
+		t.Fatal(err)
+	}
+	for _, rule := range profile.Syscalls {
+		if !hasOpt(rule.Names, "clone") {
+			continue
+		}
+		if rule.Action != "SCMP_ACT_ALLOW" || len(rule.Args) != 1 || rule.Args[0].Index != 0 || rule.Args[0].Op != "SCMP_CMP_MASKED_EQ" {
+			t.Fatal("unrestricted clone rule")
+		}
+		arg := rule.Args[0]
+		for _, flags := range []uint64{0x50f00, 0xd0f00} {
+			if flags&arg.Value != arg.ValueTwo {
+				t.Fatalf("Go thread flags %#x denied", flags)
+			}
+		}
+		// Fork, exit signals, namespace creation and unneeded flag extensions stay denied.
+		for _, flags := range []uint64{0, 17, 0x50f00 | 17, 0x50f00 | 0x80, 0x50f00 | 0x20000, 0x50f00 | 0x2000000, 0x50f00 | 0x4000000, 0x50f00 | 0x8000000, 0x50f00 | 0x10000000, 0x50f00 | 0x20000000, 0x50f00 | 0x40000000, 0x50f00 | 0x100000} {
+			if flags&arg.Value == arg.ValueTwo {
+				t.Fatalf("unneeded clone flags %#x allowed", flags)
+			}
+		}
+		return
+	}
+	t.Fatal("Go guest thread creation syscall clone is denied")
+}
+
+func TestSeccompPermitsGuestPoller(t *testing.T) {
+	for _, rule := range buildSeccomp().Syscalls {
+		if rule.Action == "SCMP_ACT_ALLOW" && hasOpt(rule.Names, "eventfd2") {
+			return
+		}
+	}
+	t.Fatal("Go guest poller syscall eventfd2 is denied")
+}
+
 // TestProxyEnvForcesEgressThroughProxy proves the workload env points every HTTP
 // scheme at the proxy and leaves no NO_PROXY bypass.
 func TestProxyEnvForcesEgressThroughProxy(t *testing.T) {

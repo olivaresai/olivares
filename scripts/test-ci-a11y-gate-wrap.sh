@@ -29,9 +29,9 @@ fallos=0
 ok() { printf '  ok    %s\n' "$1"; }
 mal() { printf '  FAIL  %s — %s\n' "$1" "$2"; fallos=$((fallos + 1)); }
 
-[ -r "$WF" ] || { echo "$NAME: 2 NO PUDE MIRAR — sin $WF" >&2; exit 2; }
-command -v python3 >/dev/null 2>&1 || { echo "$NAME: 2 NO PUDE MIRAR — sin python3" >&2; exit 2; }
-command -v bash >/dev/null 2>&1 || { echo "$NAME: 2 NO PUDE MIRAR — sin bash" >&2; exit 2; }
+[ -r "$WF" ] || { echo "$NAME: 2 COULD NOT LOOK — missing $WF" >&2; exit 2; }
+command -v python3 >/dev/null 2>&1 || { echo "$NAME: 2 COULD NOT LOOK — missing python3" >&2; exit 2; }
+command -v bash >/dev/null 2>&1 || { echo "$NAME: 2 COULD NOT LOOK — missing bash" >&2; exit 2; }
 
 PASO="$(python3 - "$WF" <<'PASOEOF'
 import io, os, sys
@@ -87,21 +87,21 @@ if texto is None:
 sys.stdout.write(texto or "")
 PASOEOF
 )" || {
-	echo "$NAME: 2 NO PUDE MIRAR — no he podido EJECUTAR el lector del workflow (intérprete o entorno)" >&2
+	echo "$NAME: 2 COULD NOT LOOK — could not EXECUTE the workflow reader (interpreter or environment)" >&2
 	exit 2
 }
 [ -n "$PASO" ] || {
-	echo "$NAME: 2 NO PUDE MIRAR — el lector CORRIÓ y no encontró el paso a11y-gate" >&2
+	echo "$NAME: 2 COULD NOT LOOK — reader RAN but did not find the a11y-gate step" >&2
 	exit 2
 }
 
 case "$PASO" in
 *"PIPESTATUS"*) : ;;
-*) echo "$NAME: 2 NO PUDE MIRAR — el paso extraído no lee PIPESTATUS" >&2; exit 2 ;;
+*) echo "$NAME: 2 COULD NOT LOOK — extracted step does not read PIPESTATUS" >&2; exit 2 ;;
 esac
 case "$PASO" in
 *'if [ "$rc" = "0" ]'*) : ;;
-*) echo "$NAME: 2 NO PUDE MIRAR — el paso extraído no tiene el guard rc=0" >&2; exit 2 ;;
+*) echo "$NAME: 2 COULD NOT LOOK — extracted step lacks the rc=0 guard" >&2; exit 2 ;;
 esac
 
 MUTANTE="$(PASO="$PASO" python3 - <<'MUTEOF'
@@ -114,7 +114,7 @@ old_body = (
     'fi\n'
 )
 if old_body not in paso:
-    sys.stderr.write("mutante: no encuentro el bloque rc=0 en el paso extraído\n")
+    sys.stderr.write("mutant: cannot find the rc=0 block in the extracted step\n")
     sys.exit(2)
 mut = paso.replace(old_body, "", 1)
 src = (
@@ -127,21 +127,21 @@ dst = (
     '"$RUNNER_TEMP/ci-fail-a11y.log" | head -1)'
 )
 if src not in mut:
-    sys.stderr.write("mutante: no encuentro la línea degenerado segura en el paso extraído\n")
+    sys.stderr.write("mutant: cannot find the safe degenerado line in the extracted step\n")
     sys.exit(2)
 mut = mut.replace(src, dst, 1)
 if mut == paso:
-    sys.stderr.write("mutante: el texto no cambió\n")
+    sys.stderr.write("mutant: text did not change\n")
     sys.exit(2)
 sys.stdout.write(mut)
 MUTEOF
 )" || {
-	echo "$NAME: 2 NO PUDE MIRAR — no he podido construir el mutante (quitar el guard)" >&2
+	echo "$NAME: 2 COULD NOT LOOK — could not construct the mutant (remove the guard)" >&2
 	exit 2
 }
 
 if [ "$MUTANTE" = "$PASO" ]; then
-	echo "$NAME: 2 NO PUDE MIRAR — el mutante es idéntico al paso: este test no ve la diferencia" >&2
+	echo "$NAME: 2 COULD NOT LOOK — mutant is identical to the step: this test cannot distinguish them" >&2
 	exit 2
 fi
 
@@ -157,8 +157,8 @@ for cand in "${TMPDIR:-}" /workspace/.olivares-tmptest "$RAIZ/.ci-a11y-gate-wrap
 	rm -f "$sonda"
 done
 if [ -z "$EXEC_DIR" ]; then
-	echo "$NAME: 2 NO PUDE MIRAR — ningún directorio de trabajo permite ejecutar;" >&2
-	echo "$NAME:   sin él, el sustituto de pnpm se salta y se mide at:gate de verdad." >&2
+	echo "$NAME: 2 COULD NOT LOOK — no working directory allows execution;" >&2
+	echo "$NAME:   without it, the pnpm substitute is skipped and real at:gate is measured." >&2
 	exit 2
 fi
 
@@ -188,31 +188,31 @@ corre() {
 	printf '%s' "$rc"
 }
 
-echo "$NAME: un log SIN la línea → paso verde; quitar el guard → el mismo log pinta rojo"
+echo "$NAME: a log WITHOUT the line → green step; remove the guard → same log turns red"
 
 r="$(corre "$PASO" 0 "$LOG_SIN")"
-[ "$r" = "0" ] && ok "log SIN la línea + rc=0 → verde" \
-	|| mal "log SIN la línea" "rc=$r (esperaba 0): el guard no sostiene el gate limpio"
+[ "$r" = "0" ] && ok "log WITHOUT the line + rc=0 → green" \
+	|| mal "log WITHOUT the line" "rc=$r (expected 0): the guard does not preserve a clean gate"
 
 r="$(corre "$MUTANTE" 0 "$LOG_SIN")"
-[ "$r" != "0" ] && ok "MUTANTE (quitar el guard): log SIN la línea → rojo (rc=$r)" \
-	|| mal "MUTANTE" "quitar el guard dejó rc=0: este test no ve 33926027726"
+[ "$r" != "0" ] && ok "MUTANT (remove the guard): log WITHOUT the line → red (rc=$r)" \
+	|| mal "MUTANT" "removing the guard left rc=0: this test misses 33926027726"
 
 r="$(corre "$PASO" 0 "$LOG_CON")"
-[ "$r" = "0" ] && ok "log CON la línea + rc=0 sigue verde (el falso rojo era la AUSENCIA)" \
-	|| mal "log CON la línea rc=0" "rc=$r (esperaba 0)"
+[ "$r" = "0" ] && ok "log WITH the line + rc=0 remains green (the false red was caused by its ABSENCE)" \
+	|| mal "log WITH the line rc=0" "rc=$r (expected 0)"
 
 r="$(corre "$PASO" 3 "$LOG_CON")"
-[ "$r" = "0" ] && ok "REL-69: rc=3 + log CON la línea + axe=0 → verde ruidoso" \
-	|| mal "REL-69" "rc=$r (esperaba 0: aviso, no rojo de producto)"
+[ "$r" = "0" ] && ok "REL-69: rc=3 + log WITH the line + axe=0 → green with warnings" \
+	|| mal "REL-69" "rc=$r (expected 0: warning, not a product failure)"
 
 r="$(corre "$PASO" 2 "$LOG_SIN")"
-[ "$r" = "2" ] && ok "rc=2 de at:gate atraviesa el wrapper (rojo de producto)" \
-	|| mal "rc=2" "rc=$r (esperaba 2): el wrapper se come el veredicto"
+[ "$r" = "2" ] && ok "at:gate rc=2 passes through the wrapper (product failure)" \
+	|| mal "rc=2" "rc=$r (expected 2): wrapper swallows the verdict"
 
 if [ "$fallos" -eq 0 ]; then
-	echo "$NAME: 0 CLEAN — 5 casos"
+	echo "$NAME: 0 CLEAN — 5 cases"
 	exit 0
 fi
-echo "$NAME: 1 — $fallos caso(s) mal"
+echo "$NAME: 1 — $fallos failed case(s)"
 exit 1

@@ -1,0 +1,652 @@
+[
+  {
+    "namespace": "accessmap",
+    "name": "olivares.access-map",
+    "package": "access-map",
+    "constructor": "accessmap.New()",
+    "edition": "community",
+    "kind": "catalog",
+    "standard": false,
+    "requires": [],
+    "selectable": true,
+    "published_26100": true,
+    "config_defaults": {},
+    "console_entries": [
+      "accessMap"
+    ]
+  },
+  {
+    "namespace": "capabilities",
+    "name": "olivares.capabilities",
+    "package": "capabilities",
+    "constructor": "capabilities.New()",
+    "edition": "community",
+    "kind": "catalog",
+    "standard": true,
+    "requires": [],
+    "selectable": true,
+    "published_26100": true,
+    "config_defaults": {},
+    "console_entries": [
+      "capabilities"
+    ]
+  },
+  {
+    "namespace": "adoption",
+    "name": "olivares.claudeadoption",
+    "package": "claudeadoption",
+    "constructor": "claudeadoption.New()",
+    "edition": "community",
+    "kind": "catalog",
+    "standard": false,
+    "requires": [],
+    "selectable": true,
+    "published_26100": true,
+    "config_defaults": {},
+    "console_entries": [
+      "adoption"
+    ]
+  },
+  {
+    "namespace": "sourcescope",
+    "name": "olivares.sourcescope",
+    "package": "sourcescope",
+    "constructor": "sourcescope.New()",
+    "edition": "community",
+    "kind": "catalog",
+    "standard": false,
+    "requires": [
+      "governance"
+    ],
+    "selectable": true,
+    "published_26100": true,
+    "config_defaults": {},
+    "console_entries": [],
+    "retirement_order": 2
+  },
+  {
+    "namespace": "catalog",
+    "name": "olivares.catalog",
+    "package": "catalog",
+    "constructor": "catalog.New()",
+    "edition": "community",
+    "kind": "catalog",
+    "standard": false,
+    "requires": ["deploy"],
+    "selectable": true,
+    "published_26100": true,
+    "config_defaults": {},
+    "console_entries": [
+      "catalog"
+    ]
+  },
+  {
+    "namespace": "skills",
+    "name": "olivares.skills",
+    "package": "skills",
+    "constructor": "skills.New(skills.Options{})",
+    "edition": "community",
+    "kind": "catalog",
+    "standard": false,
+    "requires": [],
+    "selectable": true,
+    "published_26100": false,
+    "config_defaults": {},
+    "console_entries": ["skills"]
+  },
+  {
+    "namespace": "compliance",
+    "name": "olivares.compliance",
+    "package": "compliance",
+    "constructor": "compliance.New()",
+    "edition": "community",
+    "kind": "catalog",
+    "standard": false,
+    "requires": [
+      "accessmap"
+    ],
+    "selectable": true,
+    "published_26100": true,
+    "config_defaults": {},
+    "console_entries": [
+      "compliance"
+    ],
+    "retirement_order": 8
+  },
+  {
+    "namespace": "consoleviews",
+    "name": "olivares.consoleviews",
+    "package": "consoleviews",
+    "constructor": "consoleviews.New()",
+    "edition": "community",
+    "kind": "catalog",
+    "standard": true,
+    "requires": [],
+    "selectable": true,
+    "published_26100": true,
+    "config_defaults": {},
+    "console_entries": []
+  },
+  {
+    "namespace": "deploy",
+    "name": "olivares.deploy",
+    "package": "deploy",
+    "constructor": "deploy.New()",
+    "edition": "community",
+    "kind": "catalog",
+    "standard": false,
+    "requires": [
+      "governance"
+    ],
+    "selectable": true,
+    "published_26100": true,
+    "config_defaults": {},
+    "console_entries": [
+      "deploy"
+    ]
+  },
+  {
+    "namespace": "evals",
+    "name": "olivares.evals",
+    "package": "evals",
+    "constructor": "evals.New()",
+    "edition": "community",
+    "kind": "catalog",
+    "standard": false,
+    "requires": [
+      "sessions"
+    ],
+    "selectable": true,
+    "published_26100": true,
+    "config_defaults": {},
+    "console_entries": [
+      "evals"
+    ]
+  },
+  {
+    "namespace": "eventing",
+    "name": "olivares.eventing",
+    "package": "eventing",
+    "constructor": "eventing.New()",
+    "edition": "community",
+    "kind": "catalog",
+    "standard": true,
+    "requires": [
+      "governance"
+    ],
+    "selectable": true,
+    "published_26100": true,
+    "config_defaults": {},
+    "console_entries": [
+      "eventing"
+    ],
+    "retirement_order": 6
+  },
+  {
+    "namespace": "finops",
+    "name": "olivares.finops",
+    "package": "finops",
+    "constructor": "finops.New()",
+    "edition": "business",
+    "kind": "catalog",
+    "standard": false,
+    "requires": [],
+    "selectable": true,
+    "published_26100": true,
+    "config_defaults": {},
+    "console_entries": [
+      "finops",
+      "team-costs",
+      "storedBudgets"
+    ],
+    "retirement_order": 7
+  },
+  {
+    "namespace": "gitpublish",
+    "name": "olivares.gitpublish",
+    "package": "gitpublish",
+    "constructor": "gitpublish.New(gitpublish.Options{})",
+    "edition": "community",
+    "kind": "catalog",
+    "standard": false,
+    "requires": [],
+    "selectable": true,
+    "published_26100": true,
+    "config_defaults": {},
+    "console_entries": [
+      "gitPublication"
+    ]
+  },
+  {
+    "namespace": "governance",
+    "name": "olivares.governance",
+    "package": "governance",
+    "constructor": "governance.New()",
+    "edition": "community",
+    "kind": "kernel",
+    "standard": false,
+    "requires": [],
+    "selectable": true,
+    "published_26100": true,
+    "config_defaults": {},
+    "console_entries": [
+      "permissions",
+      "identity",
+      "routinePolicies",
+      "agentcoreExport",
+      "killswitch"
+    ],
+    "retirement_order": 1
+  },
+  {
+    "namespace": "claude-policy",
+    "name": "olivares.claude-policy",
+    "package": "governance",
+    "constructor": "governance.NewPolicyConsole()",
+    "edition": "community",
+    "kind": "catalog",
+    "standard": true,
+    "requires": [
+      "governance"
+    ],
+    "selectable": true,
+    "published_26100": true,
+    "config_defaults": {},
+    "console_entries": [
+      "claudePolicy"
+    ]
+  },
+  {
+    "namespace": "claude-agents",
+    "name": "olivares.claude-agents",
+    "package": "governance",
+    "constructor": "governance.NewAgentsConsole()",
+    "edition": "community",
+    "kind": "catalog",
+    "standard": false,
+    "requires": [
+      "governance"
+    ],
+    "selectable": true,
+    "published_26100": true,
+    "config_defaults": {},
+    "console_entries": []
+  },
+  {
+    "namespace": "identity",
+    "name": "olivares.identity-console",
+    "package": "governance",
+    "constructor": "governance.NewIdentityConsole()",
+    "edition": "community",
+    "kind": "catalog",
+    "standard": true,
+    "requires": [
+      "governance"
+    ],
+    "selectable": true,
+    "published_26100": true,
+    "config_defaults": {},
+    "console_entries": []
+  },
+  {
+    "namespace": "health",
+    "name": "olivares.health",
+    "package": "health",
+    "constructor": "health.New()",
+    "edition": "community",
+    "kind": "catalog",
+    "standard": false,
+    "requires": [],
+    "selectable": true,
+    "published_26100": true,
+    "config_defaults": {},
+    "console_entries": [
+      "health"
+    ]
+  },
+  {
+    "namespace": "inventory",
+    "name": "olivares.inventory",
+    "package": "inventory",
+    "constructor": "inventory.New()",
+    "edition": "community",
+    "kind": "catalog",
+    "standard": false,
+    "requires": [],
+    "selectable": true,
+    "published_26100": true,
+    "config_defaults": {},
+    "console_entries": [
+      "inventory"
+    ]
+  },
+  {
+    "namespace": "knowledge",
+    "name": "olivares.knowledge",
+    "package": "knowledge",
+    "constructor": "knowledge.New()",
+    "edition": "community",
+    "kind": "catalog",
+    "standard": false,
+    "requires": [
+      "sourcescope",
+      "compliance"
+    ],
+    "selectable": true,
+    "published_26100": true,
+    "config_defaults": {},
+    "console_entries": [
+      "knowledge"
+    ]
+  },
+  {
+    "namespace": "liveingest",
+    "name": "olivares.liveingest",
+    "package": "liveingest",
+    "constructor": "liveingest.New()",
+    "edition": "community",
+    "kind": "catalog",
+    "standard": true,
+    "selectable": true,
+    "published_26100": true,
+    "config_defaults": {},
+    "console_entries": []
+  },
+  {
+    "namespace": "models",
+    "name": "olivares.models",
+    "package": "models",
+    "constructor": "models.New()",
+    "edition": "community",
+    "kind": "catalog",
+    "standard": false,
+    "requires": [
+      "finops",
+      "governance",
+      "sourcescope"
+    ],
+    "selectable": true,
+    "published_26100": true,
+    "config_defaults": {},
+    "console_entries": [
+      "agentArtifacts",
+      "models",
+      "modelOps",
+      "platforms",
+      "rateLimits"
+    ],
+    "retirement_order": 3
+  },
+  {
+    "namespace": "inferenceproxy",
+    "name": "olivares.inferenceproxy",
+    "package": "inferenceproxy",
+    "constructor": "inferenceproxy.New()",
+    "edition": "community",
+    "kind": "catalog",
+    "standard": false,
+    "requires": [
+      "models",
+      "finops",
+      "knowledge",
+      "governance"
+    ],
+    "selectable": true,
+    "published_26100": true,
+    "config_defaults": {},
+    "console_entries": [
+      "inferenceProxy"
+    ]
+  },
+  {
+    "namespace": "notify",
+    "name": "olivares.notify",
+    "package": "notify",
+    "constructor": "notify.New()",
+    "edition": "community",
+    "kind": "catalog",
+    "standard": false,
+    "requires": [],
+    "selectable": true,
+    "published_26100": true,
+    "config_defaults": {},
+    "console_entries": [
+      "alerting"
+    ],
+    "delivery_name": "olivares.notify",
+    "delivery_class": "state"
+  },
+  {
+    "namespace": "observability",
+    "name": "olivares.observability",
+    "package": "observability",
+    "constructor": "observability.New()",
+    "edition": "community",
+    "kind": "catalog",
+    "standard": false,
+    "requires": [],
+    "selectable": true,
+    "published_26100": true,
+    "config_defaults": {},
+    "console_entries": [
+      "observability",
+      "attestation"
+    ],
+    "delivery_name": "olivares.observability",
+    "delivery_class": "telemetry"
+  },
+  {
+    "namespace": "orchestration",
+    "name": "olivares.orchestration",
+    "package": "orchestration",
+    "constructor": "orchestration.New()",
+    "edition": "business",
+    "kind": "catalog",
+    "standard": false,
+    "requires": [
+      "finops",
+      "governance",
+      "notify",
+      "sessions"
+    ],
+    "selectable": true,
+    "published_26100": true,
+    "config_defaults": {},
+    "console_entries": [],
+    "retirement_order": 5
+  },
+  {
+    "namespace": "posture",
+    "name": "olivares.postureexport",
+    "package": "posture-export",
+    "constructor": "postureexport.New()",
+    "edition": "community",
+    "kind": "catalog",
+    "standard": false,
+    "requires": [
+      "inventory",
+      "accessmap"
+    ],
+    "selectable": true,
+    "published_26100": true,
+    "config_defaults": {},
+    "console_entries": []
+  },
+  {
+    "namespace": "recording",
+    "name": "olivares.recording",
+    "package": "recording",
+    "constructor": "recording.New()",
+    "edition": "community",
+    "kind": "catalog",
+    "standard": false,
+    "requires": [
+      "sessions"
+    ],
+    "selectable": true,
+    "published_26100": true,
+    "config_defaults": {},
+    "console_entries": [
+      "recordings",
+      "session-viewer"
+    ]
+  },
+  {
+    "namespace": "redteam",
+    "name": "olivares.redteam",
+    "package": "redteam",
+    "constructor": "redteam.New()",
+    "edition": "business",
+    "kind": "catalog",
+    "standard": false,
+    "requires": [],
+    "selectable": true,
+    "published_26100": true,
+    "config_defaults": {},
+    "console_entries": [
+      "redteam"
+    ]
+  },
+  {
+    "namespace": "reporting",
+    "name": "olivares.reporting",
+    "package": "reporting",
+    "constructor": "reporting.New()",
+    "edition": "community",
+    "kind": "catalog",
+    "standard": false,
+    "requires": [
+      "compliance"
+    ],
+    "selectable": true,
+    "published_26100": true,
+    "config_defaults": {},
+    "console_entries": [
+      "reporting"
+    ]
+  },
+  {
+    "namespace": "sandbox",
+    "name": "olivares.sandbox",
+    "package": "sandbox",
+    "constructor": "sandbox.New()",
+    "edition": "community",
+    "kind": "catalog",
+    "standard": false,
+    "requires": [
+      "evals",
+      "sessions"
+    ],
+    "selectable": true,
+    "published_26100": true,
+    "config_defaults": {},
+    "console_entries": [
+      "sandbox"
+    ]
+  },
+  {
+    "namespace": "security",
+    "name": "olivares.security",
+    "package": "security",
+    "constructor": "security.New()",
+    "edition": "community",
+    "kind": "catalog",
+    "standard": false,
+    "requires": [],
+    "selectable": true,
+    "published_26100": true,
+    "config_defaults": {},
+    "console_entries": [
+      "security"
+    ]
+  },
+  {
+    "namespace": "siemforward",
+    "name": "olivares.siemforward",
+    "package": "siemforward",
+    "constructor": "siemforward.New(eventingInput)",
+    "edition": "community",
+    "kind": "catalog",
+    "standard": false,
+    "requires": [
+      "eventing"
+    ],
+    "selectable": true,
+    "published_26100": true,
+    "config_defaults": {},
+    "console_entries": [],
+    "constructor_inputs": {
+      "eventingInput": {
+        "namespace": "eventing",
+        "type": "*eventing.Module"
+      }
+    }
+  },
+  {
+    "namespace": "sessions",
+    "name": "olivares.sessions",
+    "package": "sessions",
+    "constructor": "sessions.New()",
+    "edition": "community",
+    "kind": "kernel",
+    "standard": false,
+    "requires": [
+      "governance"
+    ],
+    "selectable": true,
+    "published_26100": true,
+    "config_defaults": {},
+    "console_entries": [
+      "sessions",
+      "protocolBindings",
+      "communications",
+      "communicationsInbox",
+      "communicationsNew",
+      "communicationsHandoffs",
+      "communicationsAdministration",
+      "estate",
+      "work",
+      "agentops",
+      "providers",
+      "providerProfiles",
+      "providerBindings",
+      "providerAccounts",
+      "workspace-templates"
+    ],
+    "retirement_order": 4
+  },
+  {
+    "namespace": "voice",
+    "name": "olivares.voice",
+    "package": "voice",
+    "constructor": "voice.New()",
+    "edition": "community",
+    "kind": "catalog",
+    "standard": false,
+    "requires": [
+      "finops",
+      "governance"
+    ],
+    "selectable": true,
+    "published_26100": true,
+    "config_defaults": {},
+    "console_entries": [
+      "voice"
+    ]
+  },
+  {
+    "namespace": "session-cockpit",
+    "name": "olivares.session-cockpit",
+    "package": "sessioncockpit",
+    "constructor": "sessioncockpit.NewPlaceholder()",
+    "edition": "community",
+    "kind": "kernel",
+    "standard": false,
+    "requires": [],
+    "selectable": false,
+    "published_26100": false,
+    "config_defaults": {},
+    "console_entries": [],
+    "edition_slot": true
+  }
+]

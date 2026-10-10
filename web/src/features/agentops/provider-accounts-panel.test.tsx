@@ -18,12 +18,13 @@ const auth = vi.hoisted(() => ({
   activeTenant: 't1' as string | null,
   perms: new Set<string>(),
   principal: 'u1',
+  superadmin: false,
 }))
 vi.mock('@/lib/auth/context', () => ({
   useAuth: () => ({
     activeTenant: auth.activeTenant,
     can: (p: string) => auth.perms.has(p),
-    isSuperadmin: false,
+    isSuperadmin: auth.superadmin,
     principal: { user_id: auth.principal, aal: 1 },
   }),
 }))
@@ -53,6 +54,18 @@ vi.mock('@/features/identity/assurance', async (orig) => ({
   StepUpPanel: ({ action }: { action: string }) => (
     <span>{`step-up ceremony:${action}`}</span>
   ),
+}))
+
+const signIn = vi.hoisted(() => ({
+  status: vi.fn(),
+  start: vi.fn(),
+  code: vi.fn(),
+  get: vi.fn(),
+  cancel: vi.fn(),
+}))
+vi.mock('@/features/first-hour/api', async (orig) => ({
+  ...((await orig()) as object),
+  signInApi: signIn,
 }))
 
 import { ApiError, NetworkError } from '@/lib/api/errors'
@@ -152,6 +165,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   auth.activeTenant = 't1'
   auth.principal = 'u1'
+  auth.superadmin = false
   grant(AR, AW)
   useSessionStore.setState({
     csrfToken: 'olvs_first',
@@ -1791,5 +1805,282 @@ describe('ProviderAccountsPanel — uncertain metadata fields', () => {
       screen.queryByRole('textbox', { name: 'Display name' }),
     ).not.toBeInTheDocument()
     expect(api.patchAccountMetadata).not.toHaveBeenCalled()
+  })
+})
+
+describe('Provider account sign-in', () => {
+  it.each(['credential', 'unmount', 'query cancellation'] as const)(
+    'retires the captured account status on %s',
+    async (change) => {
+      auth.superadmin = true
+      const pending = deferred<{
+        driver: string
+        installed: boolean
+        signed_in: boolean
+      }>()
+      signIn.status.mockReturnValue(pending.promise)
+      const user = userEvent.setup()
+      const { qc } = wrap()
+      await user.click(
+        await screen.findByRole('button', { name: 'work-claude' }),
+      )
+      await waitFor(() => expect(signIn.status).toHaveBeenCalledOnce())
+      const options = signIn.status.mock.calls[0][4] as
+        { signal?: AbortSignal; dispatchGuard?: () => void } | undefined
+      expect(options?.signal?.aborted).toBe(false)
+      if (change === 'credential') {
+        act(() =>
+          useSessionStore.setState((s) => ({
+            credentialGeneration: s.credentialGeneration + 1,
+          })),
+        )
+      } else if (change === 'unmount') {
+        await user.keyboard('{Escape}')
+      } else {
+        await act(async () =>
+          qc.cancelQueries({
+            predicate: (query) => query.queryKey.includes('account-sign-in'),
+          }),
+        )
+      }
+      expect(options?.signal?.aborted).toBe(true)
+      expect(() => options?.dispatchGuard?.()).toThrow()
+      await act(async () =>
+        pending.resolve({
+          driver: 'claude',
+          installed: true,
+          signed_in: false,
+        }),
+      )
+      expect(
+        screen.queryByRole('button', { name: 'Sign in with Claude' }),
+      ).not.toBeInTheDocument()
+    },
+  )
+
+  it('keeps an active account sign-in when status is refetched', async () => {
+    auth.superadmin = true
+    signIn.status.mockResolvedValue({
+      driver: 'claude',
+      installed: true,
+      signed_in: false,
+    })
+    const pending = deferred<{ id: string; driver: string; state: string }>()
+    signIn.start.mockReturnValue(pending.promise)
+    const user = userEvent.setup()
+    const { qc } = wrap()
+    await user.click(await screen.findByRole('button', { name: 'work-claude' }))
+    await user.click(
+      await screen.findByRole('button', { name: 'Sign in with Claude' }),
+    )
+    const options = signIn.start.mock.calls[0][3] as {
+      signal: AbortSignal
+      dispatchGuard: () => void
+    }
+    await act(async () => {
+      await qc.invalidateQueries({
+        predicate: (query) => query.queryKey.includes('account-sign-in'),
+      })
+    })
+    expect(signIn.status).toHaveBeenCalledTimes(2)
+    expect(options.signal.aborted).toBe(false)
+    expect(() => options.dispatchGuard()).not.toThrow()
+    await act(async () =>
+      pending.resolve({ id: 'flow-a', driver: 'claude', state: 'needs_code' }),
+    )
+  })
+
+  it('shows and starts the selected account login, independently of the default login', async () => {
+    auth.superadmin = true
+    signIn.status.mockResolvedValue({
+      driver: 'claude',
+      installed: true,
+      signed_in: false,
+    })
+    signIn.start.mockResolvedValue({
+      id: 'sign-b',
+      driver: 'claude',
+      account_ref: 'ppf_a',
+      state: 'needs_code',
+      url: 'https://claude.com/fixture',
+    })
+    const user = userEvent.setup()
+    wrap()
+    await user.click(await screen.findByRole('button', { name: 'work-claude' }))
+    await user.click(
+      await screen.findByRole('button', { name: 'Sign in with Claude' }),
+    )
+    expect(signIn.start).toHaveBeenCalledWith(
+      'claude',
+      't1',
+      'ppf_a',
+      expect.objectContaining({
+        signal: expect.any(AbortSignal),
+        dispatchGuard: expect.any(Function),
+      }),
+    )
+    expect(
+      await screen.findByRole('link', { name: 'Open the sign-in page' }),
+    ).toHaveAttribute('href', 'https://claude.com/fixture')
+    expect(signIn.status.mock.calls[0]).toEqual([
+      'claude',
+      't1',
+      expect.any(AbortSignal),
+      'ppf_a',
+      expect.objectContaining({
+        signal: expect.any(AbortSignal),
+        sessionEffects: 'none',
+        dispatchGuard: expect.any(Function),
+      }),
+    ])
+  })
+
+  it('does not ask for account sign-in as a non-administrator', async () => {
+    const user = userEvent.setup()
+    wrap()
+    await user.click(await screen.findByRole('button', { name: 'work-claude' }))
+    await screen.findByRole('button', { name: 'Edit label and color' })
+    expect(
+      screen.queryByRole('button', { name: 'Sign in with Claude' }),
+    ).not.toBeInTheDocument()
+    expect(signIn.status).not.toHaveBeenCalled()
+    expect(signIn.start).not.toHaveBeenCalled()
+  })
+
+  it.each(['start', 'code'] as const)(
+    'retires a pending account %s and its cache when the credential changes',
+    async (action) => {
+      auth.superadmin = true
+      signIn.status.mockResolvedValue({
+        driver: 'claude',
+        installed: true,
+        signed_in: false,
+      })
+      const flow = {
+        id: 'old-login',
+        driver: 'claude',
+        account_ref: 'ppf_a',
+        state: 'needs_code',
+        url: 'https://claude.com/old-account',
+      }
+      const answer = deferred<typeof flow>()
+      signIn.start.mockResolvedValue(flow)
+      signIn[action].mockReturnValue(answer.promise)
+      const user = userEvent.setup()
+      const { qc } = wrap()
+      await user.click(
+        await screen.findByRole('button', { name: 'work-claude' }),
+      )
+      await user.click(
+        await screen.findByRole('button', { name: 'Sign in with Claude' }),
+      )
+      if (action === 'code') {
+        await user.type(
+          await screen.findByRole('textbox', {
+            name: 'Code from the sign-in page',
+          }),
+          'fixture-code',
+        )
+        await user.click(screen.getByRole('button', { name: 'Continue' }))
+      }
+      await waitFor(() => expect(signIn[action]).toHaveBeenCalledOnce())
+      expect(qc.getMutationCache().getAll().length).toBeGreaterThan(0)
+      const options = signIn[action].mock.calls[0][
+        action === 'start' ? 3 : 2
+      ] as { signal?: AbortSignal; dispatchGuard?: () => void } | undefined
+      act(() =>
+        useSessionStore.setState((s) => ({
+          credentialGeneration: s.credentialGeneration + 1,
+        })),
+      )
+      await waitFor(() => expect(qc.getMutationCache().getAll()).toEqual([]))
+      expect(options?.signal?.aborted).toBe(true)
+      expect(() => options?.dispatchGuard?.()).toThrow()
+      await act(async () => answer.resolve(flow))
+      expect(
+        screen.queryByRole('link', { name: 'Open the sign-in page' }),
+      ).not.toBeInTheDocument()
+      expect(qc.getMutationCache().getAll()).toEqual([])
+    },
+  )
+
+  it('retires account cancellation before a changed credential can dispatch it', async () => {
+    auth.superadmin = true
+    signIn.status.mockResolvedValue({
+      driver: 'claude',
+      installed: true,
+      signed_in: false,
+    })
+    signIn.start.mockResolvedValue({
+      id: 'old-login',
+      driver: 'claude',
+      account_ref: 'ppf_a',
+      state: 'needs_code',
+      url: 'https://claude.com/old-account',
+    })
+    const answer = deferred<{ ok: boolean }>()
+    signIn.cancel.mockReturnValue(answer.promise)
+    const user = userEvent.setup()
+    wrap()
+    await user.click(await screen.findByRole('button', { name: 'work-claude' }))
+    await user.click(
+      await screen.findByRole('button', { name: 'Sign in with Claude' }),
+    )
+    await user.click(await screen.findByRole('button', { name: 'Cancel' }))
+    expect(signIn.cancel).toHaveBeenCalledOnce()
+    const options = signIn.cancel.mock.calls[0][1] as
+      { signal?: AbortSignal; dispatchGuard?: () => void } | undefined
+    expect(options?.signal?.aborted).toBe(false)
+    act(() =>
+      useSessionStore.setState((s) => ({
+        credentialGeneration: s.credentialGeneration + 1,
+      })),
+    )
+    expect(options?.signal?.aborted).toBe(true)
+    expect(() => options?.dispatchGuard?.()).toThrow()
+    await act(async () => answer.resolve({ ok: true }))
+  })
+
+  it('aborts an account flow poll when its credential leaves', async () => {
+    auth.superadmin = true
+    signIn.status.mockResolvedValue({
+      driver: 'claude',
+      installed: true,
+      signed_in: false,
+    })
+    const flow = {
+      id: 'old-login',
+      driver: 'claude',
+      account_ref: 'ppf_a',
+      state: 'needs_code',
+      url: 'https://claude.com/old-account',
+    }
+    signIn.start.mockResolvedValue(flow)
+    const answer = deferred<typeof flow>()
+    signIn.get.mockReturnValue(answer.promise)
+    const user = userEvent.setup()
+    const { qc } = wrap()
+    await user.click(await screen.findByRole('button', { name: 'work-claude' }))
+    await user.click(
+      await screen.findByRole('button', { name: 'Sign in with Claude' }),
+    )
+    await waitFor(() => expect(signIn.get).toHaveBeenCalledOnce(), {
+      timeout: 3000,
+    })
+    const signal = signIn.get.mock.calls[0][1] as AbortSignal | undefined
+    const options = signIn.get.mock.calls[0][2] as
+      { dispatchGuard?: () => void } | undefined
+    act(() =>
+      useSessionStore.setState((s) => ({
+        credentialGeneration: s.credentialGeneration + 1,
+      })),
+    )
+    expect(signal?.aborted).toBe(true)
+    expect(() => options?.dispatchGuard?.()).toThrow()
+    await act(async () => answer.resolve(flow))
+    expect(
+      screen.queryByRole('link', { name: 'Open the sign-in page' }),
+    ).not.toBeInTheDocument()
+    expect(qc.getMutationCache().getAll()).toEqual([])
   })
 })

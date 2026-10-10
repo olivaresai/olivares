@@ -132,7 +132,17 @@ func readKillSwitchState(ctx context.Context, sc store.Scope) (StopState, error)
 	if err != nil {
 		return st, err
 	}
+	return stopStateFromRows(recs), nil
+}
+
+// stopStateFromRows is shared by live-state and credential-epoch reads, including
+// their estate precedence and attribution when several stops match one agent.
+func stopStateFromRows(recs []model.Record) StopState {
+	st := StopState{AgentRefs: map[string]model.ID{}}
 	for _, rec := range recs {
+		if rec.String(colKSStatus) != ksStatusActive {
+			continue
+		}
 		id := model.ID(rec.String(model.ColID))
 		switch rec.String(colKSScopeKind) {
 		case ksScopeEstate:
@@ -145,5 +155,5 @@ func readKillSwitchState(ctx context.Context, sc store.Scope) (StopState, error)
 			}
 		}
 	}
-	return st, nil
+	return st
 }

@@ -30,8 +30,8 @@ cosign will be used. `--install-cosign` keeps the verified copy next to `olivare
 the pin is never executed.
 
 ```sh
-ver=YY.M.PATCH
-tag=v$ver
+ver=MAJOR.MINOR
+tag=$ver
 base=https://github.com/olivaresai/olivares/releases/download/$tag
 curl -fsSLO "$base/olivares-install-$ver.sh"
 curl -fsSLO "$base/checksums.txt"
@@ -40,7 +40,7 @@ curl -fsSLO "$base/checksums.txt.pem"
 cosign verify-blob \
   --certificate checksums.txt.pem \
   --signature checksums.txt.sig \
-  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v?[0-9]+\.[0-9]+(\.[0-9]+)?$' \
+  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/[0-9]+\.[0-9]+$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
   checksums.txt
 grep " olivares-install-$ver.sh\$" checksums.txt | sha256sum --check
@@ -53,7 +53,7 @@ before installing the binary. It has no cosign bypass and never invokes sudo. A
 binary-only installation remains the default; `--user` or `--system` explicitly
 adds the service adapter carried inside that same verified archive.
 
-**DIST-24-05 qualification.** The dedicated pull-request/dispatch workflow runs this
+**Installer qualification.** The dedicated pull-request/dispatch workflow runs this
 verified release path in Debian stable, Ubuntu 24.04 LTS, Fedora, openSUSE Leap and
 Alpine containers and on a hosted macOS 14 runner. It checks path, mode, owner and
 reported version by content. Because the public `v26.8.0` tag predates the service
@@ -63,7 +63,7 @@ opt-in service and `doctor -o json` TLS probes. No-network runs execute the dry-
 but return unmeasurable, not green. This matrix does not certify native
 package-manager installation; package repositories remain a separate qualification.
 
-**DIST-24-06 proposed repositories (phase 1 only).** Deterministic apt, rpm-md and APK
+**Proposed package repositories (phase 1 only).** Deterministic apt, rpm-md and APK
 metadata producers and clean-client qualification now exist in the source tree.
 **No package-repository URL is live**: there is no delegated DNS/bucket and no production
 repository-signing key. The current supported surface remains the authenticated release
@@ -92,6 +92,14 @@ an explicitly writable directory. With no service flag it stops there. `--user` 
 - OpenRC system service on Linux;
 - launchd LaunchAgent or LaunchDaemon on macOS.
 
+The systemd policy lives in `packaging/service/systemd.service`. The native release
+packager renders it with `scripts/render-package-systemd.sh`; regenerate the checked-in
+package copy with `sh scripts/render-package-systemd.sh > packaging/systemd/olivares.service`.
+Packages retain `StateDirectory=olivares`, while the archive installer manages its selected
+data directory itself. The service-install test checks that both units otherwise agree.
+`systemd-26.10.service` is a frozen upgrade-recognition template, not a source for new units;
+unedited installs can upgrade and operator-edited units remain protected.
+
 `--system` requires an already privileged process; neither stage invokes `sudo`.
 System mode creates a no-login service identity, a 0750 data directory, a create-only
 0640 env file, and a 0644 unit (the OpenRC entry point is 0755). User mode keeps all
@@ -111,51 +119,26 @@ The directory is rendered into the unit, quoted when it contains a space (system
 unquotes whole or partial words; OpenRC cannot represent it and refuses). Config and
 unit paths stay inside the closed `install_layout`.
 
-The hardened systemd unit sets `ProtectHome=true`, `PrivateTmp=true` and
-`ProtectSystem=strict`. `ReadWritePaths=` re-exposes a directory under the last but
-cannot undo either of the first two; `BindPaths=` can, for exactly one directory, and
-that is what the adapter renders:
+The systemd unit sets `ProtectSystem=full`, `ProtectHome=false` and `PrivateTmp=false`:
+`/usr`, `/boot`, `/efi` and `/etc` are read-only, and homes and the host's temporary
+directories stay visible, so the folders an operator chooses for sessions remain
+reachable. Each session's agent tool and stdio MCP servers are confined by the product's
+per-folder Landlock policy instead. The adapter renders the data directory the same way
+wherever it lies:
 
 | data directory | rendered | effect |
 | --- | --- | --- |
-| anywhere else | `ReadWritePaths=<data-dir>` | writable under `ProtectSystem=strict` |
-| `/home`, `/root`, `/run/user` | `ProtectHome=tmpfs` + `BindPaths=<data-dir>` | that directory is visible, every home stays hidden |
-| `/tmp`, `/var/tmp` | `PrivateTmp=true` kept + `BindPaths=<data-dir>` | that directory is visible inside the private `/tmp`, the rest of the host's temporary tree stays hidden |
-| `/dev`, `/proc`, `/sys` | refused | kernel and device interfaces, not durable state; the hardening replaces or read-only-mounts them |
+| anywhere, including `/home`, `/root`, `/run/user`, `/tmp` and `/var/tmp` | `ReadWritePaths=<data-dir>` | writable by the service account |
+| `/dev`, `/proc`, `/sys` (system mode) | refused | kernel and device interfaces, not durable state |
 
-> **Corrected on 2026-09-05.** This section previously said that a data directory under
-> `/tmp` or `/var/tmp` "is refused … because no directive can reach the host's tree
-> there", and both installers refused it on that ground. **The claim was false.** systemd
-> commit [`a227a4be`](https://github.com/systemd/systemd/commit/a227a4be489333b1b149df124ab284d82397ff2d)
-> ("namespace: if we can create the destination of bind and PrivateTmp= mounts",
-> 2017-09-28) states the opposite in its own message — *"we can use namespace bind mounts
-> on dirs in /tmp or /var/tmp even in conjunction with PrivateTmp="* — and the maintainer
-> closed [systemd#7272](https://github.com/systemd/systemd/issues/7272#issuecomment-344038459)
-> by pointing at it. An untested assumption published as an impossibility is worse than an
-> unsupported option: it turned an adapter's debt into a product veto.
-
-`BindPaths=` under `/tmp` or `/var/tmp` needs **systemd 235 or later**: that commit is an
-ancestor of `v235` and is not contained in `v234` (measured against the official
-repository on 2026-09-05). Both installers read `systemctl --version` on a live host and
-refuse the location, naming the running version, when it is older; a staging root
-(`--root`) has no manager to ask and is rendered without that check. A path that has to
-be re-exposed with `BindPaths=` may not contain `:`, which that directive reads as the
-separator between source and destination.
+26.10.0 rendered `ProtectHome=` and `BindPaths=` for a data directory under a home or a
+temporary directory; that unit is kept only as `systemd-26.10.service` to recognize and
+upgrade an unedited install.
 
 `/tmp` and `/var/tmp` are shared, world-writable directories that many distributions
 clear on boot or on a timer (`systemd-tmpfiles`), which would delete the estate under a
 running service. The installers say so and still render it: the location is the
 operator's decision, not the adapter's veto.
-
-**What is and is not verified.** The rendering is covered by the repository's own
-hermetic batteries, which run without a service manager. A disposable Debian 13.6 /
-systemd 257 runtime (`toolchains/systemd-test-runtime`) has since started a real unit
-with `PrivateTmp=true`, `ProtectHome=tmpfs` and two `BindPaths=`, and observed the bound
-directories readable and the host's other `/home` and `/tmp` content hidden — but with
-the bind *destination* under `/tmp`, not with a bind *source* under the host's `/tmp`,
-which is the direction this mapping uses. Effective access, UID/GID permissions and the
-invisibility of neighbouring paths for that direction are pending a run of the reviewed
-installer inside that runtime; the render does not certify them.
 
 A reinstall (an engine upgrade through the same adapter) rewrites the manifest and
 carries the AgentOps records a previous run added (`workspace_dir`, `dropin`,

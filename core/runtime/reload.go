@@ -98,7 +98,7 @@ func (r *Runtime) SourceIsRegistered(name string) bool {
 func (r *Runtime) AddSourceLive(ctx context.Context, conn sdk.SourceConnector, cfg sdk.Config, tenant string, interval time.Duration) error {
 	r.reloadMu.Lock()
 	defer r.reloadMu.Unlock()
-	return r.addSourceLiveLocked(ctx, conn.Descriptor().Name, conn, cfg, tenant, interval, nil, nil)
+	return r.addSourceLiveLocked(ctx, conn.Descriptor().Name, conn, cfg, tenant, interval, nil, pluginLaunch{}, nil)
 }
 
 // AddSourceLiveNamed is AddSourceLive with the registration name supplied by the
@@ -110,7 +110,7 @@ func (r *Runtime) AddSourceLiveNamed(ctx context.Context, name string, conn sdk.
 	}
 	r.reloadMu.Lock()
 	defer r.reloadMu.Unlock()
-	return r.addSourceLiveLocked(ctx, name, conn, cfg, tenant, interval, nil, nil)
+	return r.addSourceLiveLocked(ctx, name, conn, cfg, tenant, interval, nil, pluginLaunch{}, nil)
 }
 
 // ReplaceSourceLive rotates a running source IN PLACE: the connector whose
@@ -122,7 +122,7 @@ func (r *Runtime) AddSourceLiveNamed(ctx context.Context, name string, conn sdk.
 func (r *Runtime) ReplaceSourceLive(ctx context.Context, conn sdk.SourceConnector, cfg sdk.Config, tenant string, interval time.Duration) error {
 	r.reloadMu.Lock()
 	defer r.reloadMu.Unlock()
-	return r.replaceSourceLiveLocked(ctx, conn.Descriptor().Name, conn, cfg, tenant, interval, nil, nil)
+	return r.replaceSourceLiveLocked(ctx, conn.Descriptor().Name, conn, cfg, tenant, interval, nil, pluginLaunch{}, nil)
 }
 
 // ReplaceSourceLiveNamed rotates the source REGISTERED UNDER name in place. The
@@ -136,7 +136,7 @@ func (r *Runtime) ReplaceSourceLiveNamed(ctx context.Context, name string, conn 
 	}
 	r.reloadMu.Lock()
 	defer r.reloadMu.Unlock()
-	return r.replaceSourceLiveLocked(ctx, name, conn, cfg, tenant, interval, nil, nil)
+	return r.replaceSourceLiveLocked(ctx, name, conn, cfg, tenant, interval, nil, pluginLaunch{}, nil)
 }
 
 // RemoveSourceLive quiesces, closes and unregisters a single running source by
@@ -181,6 +181,7 @@ type PreparedSource struct {
 	rt     *Runtime
 	conn   sdk.SourceConnector
 	client *goplugin.Client // nil for an in-process source
+	plugin pluginLaunch     // how client was started, so it can be restarted
 }
 
 // ComponentName is the connector's Descriptor name — WHICH CONNECTOR this is, not
@@ -219,11 +220,7 @@ func (r *Runtime) PrepareInProcSource(conn sdk.SourceConnector) *PreparedSource 
 // returns it prepared-but-unwired. The subprocess runs until the prepared
 // source is added/replaced or Discarded.
 func (r *Runtime) PrepareSourcePlugin(path string) (*PreparedSource, error) {
-	conn, client, err := r.dispenseSource(path, nil)
-	if err != nil {
-		return nil, err
-	}
-	return &PreparedSource{rt: r, conn: conn, client: client}, nil
+	return r.prepareSourcePlugin(pluginLaunch{path: path})
 }
 
 // PrepareSourcePluginVerified launches an EXTERNAL (third-party) source-connector
@@ -231,15 +228,19 @@ func (r *Runtime) PrepareSourcePlugin(path string) (*PreparedSource, error) {
 // prepared-but-unwired. A malformed digest is refused without touching the
 // file (a supplied-but-unusable pin never degrades to an unpinned launch).
 func (r *Runtime) PrepareSourcePluginVerified(path, sha256Hex string) (*PreparedSource, error) {
-	secure, err := secureConfigFor(path, sha256Hex)
+	launch, err := pinnedLaunch(path, sha256Hex)
 	if err != nil {
 		return nil, err
 	}
-	conn, client, err := r.dispenseSource(path, secure)
+	return r.prepareSourcePlugin(launch)
+}
+
+func (r *Runtime) prepareSourcePlugin(launch pluginLaunch) (*PreparedSource, error) {
+	conn, client, err := r.launchSource(launch)
 	if err != nil {
 		return nil, err
 	}
-	return &PreparedSource{rt: r, conn: conn, client: client}, nil
+	return &PreparedSource{rt: r, conn: conn, client: client, plugin: launch}, nil
 }
 
 // Probe opens the prepared connector with cfg and closes it again WITHOUT wiring
@@ -271,6 +272,14 @@ func (p *PreparedSource) Probe(ctx context.Context, cfg sdk.Config) error {
 		_ = safe(func() error { return p.conn.Close(ctx) })
 		return fmt.Errorf("%w: %v", ErrSourceOpenFailed, oerr)
 	}
+	// A source whose Open contacts nothing proves its target answers here (ACN-11:
+	// a Vault source at an address nothing listens on was reported as answering).
+	if checker, ok := p.conn.(sdk.SourceChecker); ok {
+		if kerr := safe(func() error { return checker.Check(ctx) }); kerr != nil {
+			_ = safe(func() error { return p.conn.Close(ctx) })
+			return fmt.Errorf("%w: %v", ErrSourceDidNotAnswer, kerr)
+		}
+	}
 	if cerr := safe(func() error { return p.conn.Close(ctx) }); cerr != nil {
 		return fmt.Errorf("runtime: the source opened but did not close cleanly after the probe: %v", cerr)
 	}
@@ -283,7 +292,7 @@ func (p *PreparedSource) Probe(ctx context.Context, cfg sdk.Config) error {
 func (r *Runtime) AddPreparedSource(ctx context.Context, p *PreparedSource, cfg sdk.Config, tenant string, interval time.Duration) error {
 	r.reloadMu.Lock()
 	defer r.reloadMu.Unlock()
-	return r.addSourceLiveLocked(ctx, p.ComponentName(), p.conn, cfg, tenant, interval, p.client, nil)
+	return r.addSourceLiveLocked(ctx, p.ComponentName(), p.conn, cfg, tenant, interval, p.client, p.plugin, nil)
 }
 
 // AddPreparedSourceNamed wires a prepared source into the running engine under the
@@ -298,7 +307,7 @@ func (r *Runtime) AddPreparedSourceNamed(ctx context.Context, name string, p *Pr
 	}
 	r.reloadMu.Lock()
 	defer r.reloadMu.Unlock()
-	return r.addSourceLiveLocked(ctx, name, p.conn, cfg, tenant, interval, p.client, nil)
+	return r.addSourceLiveLocked(ctx, name, p.conn, cfg, tenant, interval, p.client, p.plugin, nil)
 }
 
 // AddPreparedSourceRegistered is AddPreparedSourceNamed for a source that comes
@@ -320,7 +329,7 @@ func (r *Runtime) AddPreparedSourceRegistered(ctx context.Context, name string, 
 	}
 	r.reloadMu.Lock()
 	defer r.reloadMu.Unlock()
-	return r.addSourceLiveLocked(ctx, name, p.conn, cfg, tenant, interval, p.client, &reg)
+	return r.addSourceLiveLocked(ctx, name, p.conn, cfg, tenant, interval, p.client, p.plugin, &reg)
 }
 
 // ReplacePreparedSource rotates a running source IN PLACE with a prepared one of
@@ -329,7 +338,7 @@ func (r *Runtime) AddPreparedSourceRegistered(ctx context.Context, name string, 
 func (r *Runtime) ReplacePreparedSource(ctx context.Context, p *PreparedSource, cfg sdk.Config, tenant string, interval time.Duration) error {
 	r.reloadMu.Lock()
 	defer r.reloadMu.Unlock()
-	return r.replaceSourceLiveLocked(ctx, p.ComponentName(), p.conn, cfg, tenant, interval, p.client, nil)
+	return r.replaceSourceLiveLocked(ctx, p.ComponentName(), p.conn, cfg, tenant, interval, p.client, p.plugin, nil)
 }
 
 // ReplacePreparedSourceNamed rotates the source registered under name with a
@@ -343,7 +352,7 @@ func (r *Runtime) ReplacePreparedSourceNamed(ctx context.Context, name string, p
 	}
 	r.reloadMu.Lock()
 	defer r.reloadMu.Unlock()
-	return r.replaceSourceLiveLocked(ctx, name, p.conn, cfg, tenant, interval, p.client, nil)
+	return r.replaceSourceLiveLocked(ctx, name, p.conn, cfg, tenant, interval, p.client, p.plugin, nil)
 }
 
 // ReplacePreparedSourceRegistered is ReplacePreparedSourceNamed with the roster
@@ -362,25 +371,78 @@ func (r *Runtime) ReplacePreparedSourceRegistered(ctx context.Context, name stri
 	}
 	r.reloadMu.Lock()
 	defer r.reloadMu.Unlock()
-	return r.replaceSourceLiveLocked(ctx, name, p.conn, cfg, tenant, interval, p.client, &reg)
+	return r.replaceSourceLiveLocked(ctx, name, p.conn, cfg, tenant, interval, p.client, p.plugin, &reg)
 }
 
 // --- internals (all run with reloadMu held) ----------------------------------
 
-// dispenseSource launches a source plugin and returns its connector + client,
-// reusing the same dispense path the boot loaders use. secure is the exec-time
-// integrity pin for an external binary (nil for first-party).
-func (r *Runtime) dispenseSource(path string, secure *goplugin.SecureConfig) (sdk.SourceConnector, *goplugin.Client, error) {
-	raw, client, err := r.dispense(path, sdkplugin.SourcePluginMap(), sdkplugin.SourcePluginName, secure)
+// pluginLaunch is how a source plugin process is started: its path and, for an
+// EXTERNAL binary, the operator-pinned sha256 checksum (nil for first-party). A
+// source keeps it so the supervisor restarts a dead process exactly the way it was
+// admitted.
+type pluginLaunch struct {
+	path     string
+	checksum []byte
+}
+
+// pinnedLaunch is the launch of an EXTERNAL binary. A malformed or empty digest is
+// refused here, before any launch: a supplied-but-unusable pin never degrades to an
+// unpinned first-party launch.
+func pinnedLaunch(path, sha256Hex string) (pluginLaunch, error) {
+	secure, err := secureConfigFor(path, sha256Hex)
+	if err != nil {
+		return pluginLaunch{}, err
+	}
+	return pluginLaunch{path: path, checksum: secure.Checksum}, nil
+}
+
+// launchPlugin starts the plugin process launch names and dispenses its connector;
+// every boot, live and restart path of a source or an output launches through here.
+// The SecureConfig is built on EVERY launch: go-plugin hashes into its Hash without
+// resetting it, so a reused config would refuse the second exec of the same,
+// unchanged binary.
+func (r *Runtime) launchPlugin(launch pluginLaunch, plugins goplugin.PluginSet, name string) (any, *goplugin.Client, error) {
+	var secure *goplugin.SecureConfig
+	if launch.checksum != nil {
+		secure = &goplugin.SecureConfig{Checksum: launch.checksum, Hash: sha256.New()}
+	}
+	return r.dispense(launch.path, plugins, name, secure)
+}
+
+// launchSource starts a source plugin and returns its connector + client.
+func (r *Runtime) launchSource(launch pluginLaunch) (sdk.SourceConnector, *goplugin.Client, error) {
+	raw, client, err := r.launchPlugin(launch, sdkplugin.SourcePluginMap(), sdkplugin.SourcePluginName)
 	if err != nil {
 		return nil, nil, err
 	}
 	conn, ok := raw.(sdk.SourceConnector)
 	if !ok {
-		client.Kill()
-		return nil, nil, fmt.Errorf("runtime: plugin %q did not dispense a SourceConnector (%T)", path, raw)
+		r.reapPlugin(client)
+		return nil, nil, fmt.Errorf("runtime: plugin %q did not dispense a SourceConnector (%T)", launch.path, raw)
 	}
 	return conn, client, nil
+}
+
+// launchOutput starts an output plugin and returns its connector + client.
+func (r *Runtime) launchOutput(launch pluginLaunch) (sdk.OutputConnector, *goplugin.Client, error) {
+	raw, client, err := r.launchPlugin(launch, sdkplugin.OutputPluginMap(), sdkplugin.OutputPluginName)
+	if err != nil {
+		return nil, nil, err
+	}
+	conn, ok := raw.(sdk.OutputConnector)
+	if !ok {
+		r.reapPlugin(client)
+		return nil, nil, fmt.Errorf("runtime: plugin %q did not dispense an OutputConnector (%T)", launch.path, raw)
+	}
+	return conn, client, nil
+}
+
+// reapPlugin kills a plugin client (blocking until the process exits), releases its
+// Confinement and drops it from Stop's teardown set.
+func (r *Runtime) reapPlugin(c *goplugin.Client) {
+	r.untrackClient(c)
+	c.Kill()
+	r.RunPluginCleanup(c)
 }
 
 // secureConfigFor decodes an operator-pinned sha256 digest into a go-plugin
@@ -397,7 +459,7 @@ func secureConfigFor(path, sha256Hex string) (*goplugin.SecureConfig, error) {
 // addSourceLiveLocked is the shared add path for AddSourceLive and the live plugin
 // loaders. On any failure it reaps the plugin subprocess (client) so a rejected
 // add leaves nothing running. reloadMu MUST be held.
-func (r *Runtime) addSourceLiveLocked(ctx context.Context, name string, conn sdk.SourceConnector, cfg sdk.Config, tenant string, interval time.Duration, client *goplugin.Client, registration *event.SourceRegistration) (err error) {
+func (r *Runtime) addSourceLiveLocked(ctx context.Context, name string, conn sdk.SourceConnector, cfg sdk.Config, tenant string, interval time.Duration, client *goplugin.Client, plugin pluginLaunch, registration *event.SourceRegistration) (err error) {
 	defer func() {
 		if err != nil && client != nil {
 			client.Kill()
@@ -443,7 +505,7 @@ func (r *Runtime) addSourceLiveLocked(ctx context.Context, name string, conn sdk
 	sctx, scancel := context.WithCancel(runCtx)
 	reg := &sourceReg{
 		conn: conn, cfg: cfg, tenant: tenant, name: name, component: conn.Descriptor().Name, poll: interval,
-		status: StatusRunning, ctx: sctx, cancel: scancel, done: make(chan struct{}), client: client,
+		status: StatusRunning, ctx: sctx, cancel: scancel, done: make(chan struct{}), client: client, plugin: plugin,
 		registration: registration.Clone(),
 	}
 
@@ -471,7 +533,7 @@ func (r *Runtime) addSourceLiveLocked(ctx context.Context, name string, conn sdk
 // replaceSourceLiveLocked rotates a source in place: Open the new connector
 // first; only on success quiesce+remove the old and launch the new. reloadMu MUST
 // be held.
-func (r *Runtime) replaceSourceLiveLocked(ctx context.Context, name string, conn sdk.SourceConnector, cfg sdk.Config, tenant string, interval time.Duration, client *goplugin.Client, registration *event.SourceRegistration) (err error) {
+func (r *Runtime) replaceSourceLiveLocked(ctx context.Context, name string, conn sdk.SourceConnector, cfg sdk.Config, tenant string, interval time.Duration, client *goplugin.Client, plugin pluginLaunch, registration *event.SourceRegistration) (err error) {
 	defer func() {
 		if err != nil && client != nil {
 			client.Kill()
@@ -525,7 +587,7 @@ func (r *Runtime) replaceSourceLiveLocked(ctx context.Context, name string, conn
 	sctx, scancel := context.WithCancel(runCtx)
 	reg := &sourceReg{
 		conn: conn, cfg: cfg, tenant: tenant, name: name, component: conn.Descriptor().Name, poll: interval,
-		status: StatusRunning, ctx: sctx, cancel: scancel, done: make(chan struct{}), client: client,
+		status: StatusRunning, ctx: sctx, cancel: scancel, done: make(chan struct{}), client: client, plugin: plugin,
 		registration: registration.Clone(),
 	}
 
@@ -566,17 +628,22 @@ func (r *Runtime) quiesceAndClose(ctx context.Context, reg *sourceReg) {
 	case <-ctx.Done():
 		r.log.Warn("runtime: timed out waiting for source to quiesce; closing anyway", "source", reg.name, "component", reg.component, "error", ctx.Err())
 	}
-	if cerr := safe(func() error { return reg.conn.Close(ctx) }); cerr != nil {
+	// A plugin restart swaps conn and client under r.mu, and on a timeout above the
+	// gather goroutine may still be running; once ctx is canceled it swaps no more.
+	r.mu.Lock()
+	conn, client := reg.conn, reg.client
+	r.mu.Unlock()
+	if cerr := safe(func() error { return conn.Close(ctx) }); cerr != nil {
 		r.log.Warn("runtime: source close failed during live reconfigure", "source", reg.name, "component", reg.component, "error", cerr)
 	}
-	if reg.client != nil {
-		r.untrackClient(reg.client)
-		reg.client.Kill()
+	if client != nil {
+		r.untrackClient(client)
+		client.Kill()
 		// release the plugin's confinement (cgroup subtree + dir) on live
 		// remove too, not only at Stop — otherwise a forked child survives and the
 		// cgroup dir leaks until the engine exits (the same gap the external-output
 		// teardown closes).
-		r.RunPluginCleanup(reg.client)
+		r.RunPluginCleanup(client)
 	}
 }
 

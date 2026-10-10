@@ -62,7 +62,15 @@ type ToolApprovalRequest struct {
 	Scope       string
 	PlanHash    string
 	RequestedBy string
-	Arguments   json.RawMessage `json:"-"`
+	// Rule is the decision-table row that asked (decision.go): "tool:<name>"
+	// for a destructive entry, "tool:<name>/condition:<id>" for a Cedar condition.
+	Rule      string
+	Arguments json.RawMessage `json:"-"`
+	// ConsumerID, when set, is the approval round trip (ask.go) this call
+	// completes: an approved decision must spend the human approval exactly once
+	// for this consumer and report Spent; a gate that cannot spend it reports
+	// rejected.
+	ConsumerID string
 }
 
 // GateDecision is the gate's answer. Allowed() is the only authorization; every other
@@ -71,6 +79,9 @@ type GateDecision struct {
 	ApprovalRef string
 	Status      GateStatus
 	PlanHash    string
+	// Spent reports that an approved decision spent the approval for the
+	// request's ConsumerID. The server refuses a round trip without it.
+	Spent bool
 }
 
 // Allowed reports whether this decision authorizes the tool call (approved + bound to
@@ -397,6 +408,18 @@ type ToolDecision struct {
 	// ADDITIVE, so the existing mcp.tool.call.* events never change.
 	EffectAction string
 	At           time.Time
+	// Decision and RuleID are the tools/call decision-table row (decision.go):
+	// allow, ask or block, and the rule that produced it. Server is the
+	// protected resource and ClientID the validated OAuth client. Empty on the
+	// surfaces the table does not decide. The field set follows docker/mcp-gateway's
+	// AuditEvent (result, policy_id, server_name, client).
+	Decision Decision
+	RuleID   string
+	Server   string
+	ClientID string
+	// GrantMode is "round_trip" when the approval was spent through the MCP
+	// 2026-07-28 approval round trip (ask.go); empty otherwise.
+	GrantMode string
 }
 
 // nopGateAuditor is the default GateAuditor when none is wired. It is DENY-CLOSED

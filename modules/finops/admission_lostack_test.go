@@ -242,7 +242,7 @@ func stageClaimWithHold(t *testing.T, m *Module, tenant model.TenantID, req Admi
 	h := stagePendingClaim(t, m, tenant, req)
 	row := admissionRowOf(t, m, tenant, req.IdempotencyKey)
 	now := m.clock.Now().Time()
-	budgets, _, err := m.budgetTargets(ctx, tenant, req.Dims, now)
+	budgets, _, err := m.budgetTargets(ctx, tenant, req.Dims, req.ActorRef, now)
 	if err != nil {
 		t.Fatalf("the staged claim's budgets: %v", err)
 	}

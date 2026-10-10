@@ -67,7 +67,8 @@ const guardManifestFormat int64 = 1
 // from the same base census. Every other older digest is refused.
 // Editions 8-16 add the independent evaluation and Git publication module deltas
 // over the current core/session shapes, preserving historical editions 1-7.
-const guardCodeEpoch int64 = 16
+// Editions 17-28 add Skills revisions over the same DA-bearing module shapes.
+const guardCodeEpoch int64 = 28
 
 // The following constants are the complete relation delta authorized by the 1 -> 2 edge.
 //

@@ -33,7 +33,7 @@
 // exactly the admitted declaration. That admission does not cover DNS resolution, provider
 // redirects, the remote server's tool inventory, tool arguments or later remote execution,
 // and traffic that does not transit the proxy is not governed. This module stores no MCP
-// grant; the contract is docs/contracts-tool-egress.md §8.
+// grant.
 //
 // Minimal data (docs/SECURITY-HARDENING.md): no row this module persists — config, DLP rule, audit —
 // ever carries a prompt, response, secret or matched PII value. The DLP rule names a

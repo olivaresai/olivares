@@ -20,7 +20,7 @@
     "tenant": "Organización",
     "allOrgs": "Todas las organizaciones",
     "range": "Rango de coste",
-    "footer": "Plano de control de Olivares AI — solo KPIs agregados; sin cargas útiles ni secretos."
+    "footer": "Olivares AI — solo KPIs agregados; sin cargas útiles ni secretos."
   },
   "empty": {
     "title": "No hay KPIs ejecutivos disponibles",
@@ -95,7 +95,8 @@
     "driftUnused": "Permisos sin usar",
     "coverageNote": "Parte del acceso se observa con cobertura parcial (captura aproximada u opaca); las cifras de deriva son un mínimo.",
     "noFindings": "Sin hallazgos abiertos.",
-    "noRuns": "Aún no hay ejecuciones red-team."
+    "noRuns": "Aún no hay ejecuciones red-team.",
+    "sharedDescription": "Hallazgos de seguridad abiertos y cambios de acceso."
   },
   "compliance": {
     "title": "Cumplimiento",

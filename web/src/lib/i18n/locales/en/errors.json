@@ -14,7 +14,7 @@
   },
   "serverError": {
     "title": "Something went wrong",
-    "description": "The control plane hit an unexpected error. Please try again.",
+    "description": "Olivares hit an unexpected error. Please try again.",
     "back": "Back to overview"
   },
   "evidenceUnavailable": {
@@ -31,6 +31,7 @@
     "reload": "Reload"
   },
   "generic": "Something went wrong.",
+  "sessionTemplateUnavailable": "The “Edits and commands” template is unavailable, so the session was not started. Choose another permission or ask an administrator to restore the template.",
   "requestId": "Request ID",
   "codes": {
     "unauthenticated": "Your session is no longer valid.",
@@ -42,6 +43,7 @@
     "locked_out": "Too many attempts. Try again in a moment.",
     "setup_required": "The control plane needs first-boot setup.",
     "setup_complete": "Setup is already complete.",
+    "setup_token_unreadable": "The engine cannot read its setup token file. Run `olivares first-boot --data-dir <data directory> --new-token` as root or as the engine's account to replace it, then use the new token; the engine log names the file and the reason.",
     "cross_tenant_admin_pool_not_configured": "This database cannot list every organization. Run `olivares db init --superuser-dsn <superuser DSN> --data-dir <data directory> --install-directory-inventory` and restart the engine. Or provision a NOSUPERUSER BYPASSRLS role with `olivares db init --superuser-dsn <dsn> --admin-role olivares_admin --admin-password-file <file>` (see deploy/postgres/README.md) and restart the server with --admin-dsn pointing at that role.",
     "internal": "An internal error occurred."
   },
@@ -50,7 +52,6 @@
     "description": "Sign in with a tenant-admitted directory identity. Global bootstrap authority cannot operate workspace communications."
   },
   "moduleNotEnabled": {
-    "title": "Not enabled on this installation",
     "description": "This part of Olivares is switched off here, so it has nothing to show.",
     "named": "{{module}} is not enabled on this installation.",
     "unnamed": "This module is not enabled on this installation."

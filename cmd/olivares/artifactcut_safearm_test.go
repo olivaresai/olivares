@@ -23,7 +23,7 @@ import (
 // operator state is left orphaned: there is no running process to orphan it in.
 //
 // This also fixes a claim that had propagated through two documents. The seam
-// comment at wire_noenterprise.go:216-217 describes its own return value as
+// comment of the former Community archive-sink stub described its return value as
 // leaving "archival OFF", and an internal design note (not shipped) §7 quoted that
 // phrase as the verdict "PIERDE EVIDENCIA". The surrounding code refutes it. If
 // someone ever softens this refusal into a warning, this test fails.
@@ -31,7 +31,7 @@ func TestArtifactCut_SafeArm_EnterpriseArchiveKindRefusesToBoot(t *testing.T) {
 	log := slog.Default()
 
 	// The operator selected the Azure immutable-LOCKED sink — a real kind, resolved
-	// only by enterpriseArchiveSink under -tags enterprise (wire_noenterprise.go:218).
+	// only by the archiveSink edition port under -tags enterprise (edition_ports.go).
 	cfg := auditArchiveConfig{sink: "azureblobworm", interval: defaultAuditArchiveInterval, retainDays: defaultAuditArchiveRetainDays}
 
 	sink, err := buildAuditArchiveSink(cfg, log)

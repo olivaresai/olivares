@@ -5,6 +5,9 @@ description: >-
   强制执行预算——传输协议中不含金额、opt-in，且在无法读取账本时拒绝。它做什么，以及它的局限。
 ---
 
+FinOps 预算和支出分析属于 **[Business](https://olivares.ai/pricing)** 功能。Community 保留每个会话的成本跟踪和数据导出。0.1 之前保存的预算仍可读取和删除，并在 FinOps 模块启用时继续执行；Community 无法创建或修改预算。评估和沙箱仍属于 Community。
+
+
 模块 XI 是面向 AI 的**成本 / FinOps** 层：它核算模型与提供方 connector（连接器）所报告的内容，
 让你按任意归因维度切分开销，预测当前周期，并把一个预算变成真正的强制执行——在上限处**拒绝该项消费**，
 而不仅仅是发出标记。本页是关于 FinOps 如今做什么、以及其保证在何处终止的参考。
@@ -57,8 +60,8 @@ FinOps 从[事件总线](/zh/reference/events/)**消费** `cost.sampled`，并**
   才会拒绝。这是刻意为之的，与审批门控 deny-closed 的姿态相反。
 - **门控无法读取账本时会拒绝。** 当 FinOps 无法读取或写入其预算账本时，准入无法建立，该项消费会被拒绝：编排的
   fire、语音的 open、模型路由、evals 门的一次运行以及持久的 MCP 任务都会被拒绝，推理代理返回 **HTTP 503**。
-  会话启动采用它自己的可用性姿态（`OLIVARES_SESSION_BUDGET_AVAILABILITY`）：未设置时，会话在 Community 版会启动，
-  在 Enterprise 版会以 **HTTP 503** 被拒绝，两种情况下该故障都会被记录。摄取时发出的预算上限 finding 仍会记录
+  会话启动采用它自己的可用性姿态（`OLIVARES_SESSION_BUDGET_AVAILABILITY`）：未设置时，会话在所有版本中都会以 **HTTP 503**
+  被拒绝；设为 `fail-open` 时会话会启动。两种情况下该故障都会被记录。摄取时发出的预算上限 finding 仍会记录
   已达到上限的开销。
 - **路由器只强制执行它在执行前已知的范围**（global / provider / model）；更细的范围（agent、session、
   team、project）在 fire/open 接缝与模型网关处强制执行，而非在路由解析处。

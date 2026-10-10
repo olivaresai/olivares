@@ -21,10 +21,7 @@ import (
 // first-time setup steps have been completed. The console wizard uses this to
 // detect first-use and show the appropriate onboarding step. Superadmin-gated
 // (no AAL3: it returns no secret).
-func (s *Server) handleSetupStatus(w http.ResponseWriter, r *http.Request) {
-	if _, ok := s.authzSystem(w, r, "system:admin"); !ok {
-		return
-	}
+func (s *Server) handleSetupStatus(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
 	ctx := r.Context()
 	steps := []setupStepDTO{
 		{ID: "database", Completed: s.checkDBReady(ctx)},
@@ -51,10 +48,7 @@ func (s *Server) handleSetupStatus(w http.ResponseWriter, r *http.Request) {
 // handleKeyCustody returns the non-secret boot-time key/sealer inventory.
 // Superadmin-gated but intentionally not AAL3-gated: this is a secretless
 // operational read, like handleHealthSummary.
-func (s *Server) handleKeyCustody(w http.ResponseWriter, r *http.Request) {
-	if _, ok := s.authzSystem(w, r, "system:admin"); !ok {
-		return
-	}
+func (s *Server) handleKeyCustody(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
 	keys := append([]KeyInfo{}, s.keyCustody.Keys...)
 	writeJSON(w, http.StatusOK, KeyCustodyInfo{Keys: keys})
 }
@@ -69,10 +63,7 @@ type bridgeStatsProvider interface {
 // handleBusSnapshot returns the full privileged event-bus snapshot. Subscriber
 // identities are appropriate on this superadmin-only console route; the public
 // /status projection below never includes them.
-func (s *Server) handleBusSnapshot(w http.ResponseWriter, r *http.Request) {
-	if _, ok := s.authzSystem(w, r, "system:admin"); !ok {
-		return
-	}
+func (s *Server) handleBusSnapshot(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
 
 	var stats eventbus.Stats
 	if s.busStats != nil {
@@ -191,10 +182,7 @@ func (s *Server) checkHasUsers(ctx context.Context) bool {
 // console dashboard: system readiness, the connector catalog size and the
 // separate configured/running/failed connector counts, user count, SSO state.
 // Superadmin-gated (no AAL3: no secret data).
-func (s *Server) handleHealthSummary(w http.ResponseWriter, r *http.Request) {
-	if _, ok := s.authzSystem(w, r, "system:admin"); !ok {
-		return
-	}
+func (s *Server) handleHealthSummary(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
 	ctx := r.Context()
 
 	pingCtx, cancel := context.WithTimeout(ctx, 2*time.Second)

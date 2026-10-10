@@ -4,9 +4,10 @@ package sessions
 
 import (
 	"context"
+	"testing"
+
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
-	"testing"
 )
 
 type beforeRunWorkScopeRegistry struct{ store.ExtensionRegistry }
@@ -31,7 +32,7 @@ func TestRunWorkScopeNullableUpgradeBothBackends(t *testing.T) {
 			m, st := openProfileModule(t, backend, func(reg store.ExtensionRegistry) error { return old.RegisterSchema(beforeRunWorkScopeRegistry{reg}) })
 			tenant := ensureTenant(t, st, "run-work-scope-upgrade")
 			ref := model.NewID().String()
-			if err := m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
+			if err := m.Data.Mutate(ctx, tenant, func(sc store.Scope) error {
 				repo, err := sc.Ext(runKind)
 				if err != nil {
 					return err
@@ -51,7 +52,7 @@ func TestRunWorkScopeNullableUpgradeBothBackends(t *testing.T) {
 				t.Fatal("upgrade changed or backfilled historical launch scope")
 			}
 			var workspace model.ID
-			if err := m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
+			if err := m.Data.Mutate(ctx, tenant, func(sc store.Scope) error {
 				ws, err := sc.DefaultWorkspace(ctx)
 				if err != nil {
 					return err

@@ -26,7 +26,7 @@ func (m *Module) RecordAuthorization(ctx context.Context, record auth.Authorizat
 	}
 	nativeVersion := "rbac-v1"
 	for _, in := range record.Snapshot.Scoped {
-		if in.Engine == "cedar-scope-v1" {
+		if in.Engine == retainedCedarScopeV1 || in.Engine == retainedCedarScopeV2 {
 			var c retainedCedar
 			if err := json.Unmarshal(in.Inputs, &c); err != nil {
 				return err

@@ -55,18 +55,17 @@ DATA="$(mktemp -d)"
 制限するには `--listen 127.0.0.1:8443` を渡してください。2026-09-17 にこの箱で
 測定すると、`quickstart --quiet` は **3 秒** でトークンを印刷しました。
 
-ウェルカムパネルは次を印刷します。
+ネイティブのクイックスタートは、セットアップ状態に応じて次のいずれかの案内を表示します。
+トークンが表示されるのは、新しく発行された場合だけです。
 
 ```text
-     (HTTPS with a self-signed certificate on first boot — your browser will
-      warn once; that is expected for a local install.)
-  2. Complete setup with this one-time token (shown once, single-use):
-
-         olst_…
+Next: Open the console; it guides setup, sign-in and your first session.
+Next: Open the console and sign in to continue your work.
+Next: Open the console to finish setup with the one-time token issued earlier.
 ```
 
 デフォルトのワイルドカードバインドでは、バナーは `https://localhost:8443` を
-表示し、トークンの下にこのホストが応答する他のすべてのアドレスを列挙します。
+表示し、このホストが応答する他のすべてのアドレスを列挙します。
 これらは別のマシンからコンソールに到達するためのものです。バナーが流れて
 しまった場合は、`olivares first-boot` がコンソールのアドレスと初回セットアップ
 の状態をもう一度表示します。パスキーを登録する前に `https://localhost:PORT` を
@@ -168,6 +167,8 @@ printf '%s\n' '{"session_id":"sess-first-hour","hook_event_name":"PreToolUse","t
 
 ### 5. 証拠を読む
 
+統制対象の各決定は、テナント台帳に `hook.tool.allow` または `hook.tool.deny` を追記します（`modules/sessions/hookpep/claudehookpep.go`）。スモークテストは両方の行の存在を確認します。
+
 ```bash
 curl -sf "$BASE/v1/audit?action=hook.tool.allow&limit=100" \
   -H "Authorization: Bearer $TOKEN" -H "X-Olivares-Tenant: $TENANT"
@@ -206,7 +207,7 @@ docker compose -f deploy/compose/docker-compose.yml \
 監査は引き続き適用されます。API トークンはこの認証要件を満たしません。
 
 これらの操作に最新の AAL3 を要求するには、`https://localhost:PORT` で
-パスキーを登録し、そのコンソールのアドレスで新たにパスキー/PIV による追加認証を
+パスキーを登録し、そのコンソールのアドレスで新たにパスキー による追加認証を
 完了してください。**Settings → Sign-in → Extra check for administrative
 actions** で **Passkey** を選択します。API では
 `PUT /v1/auth/step-up-policy` に `{"admin_step_up":"passkey"}` を送信します。
@@ -222,12 +223,17 @@ actions** で **Passkey** を選択します。API では
 session runtime: no inference credential source configured; stream-json launches are deny-closed
 ```
 
-(`cmd/olivares/sessionruntime.go`)。`OLIVARES_SESSION_RUNTIME_WIF` または
-`OLIVARES_SESSION_RUNTIME_TOKEN_FILE` の **どちらか 1 つ** を設定します。
-26.10 以降、これは唯一の道ではありません。コンソールで資格情報を登録し、
-プロファイルに紐づけてください。
-[プロバイダーを追加してエージェントを起動する](/ja/how-to/add-a-provider/) と
-[プロバイダーセッションを運用する](/how-to/operate-provider-sessions/) を参照。
+プロバイダーを指定しない `managed_injection` の Claude プロファイルでは、
+`OLIVARES_SESSION_RUNTIME_WIF` または `OLIVARES_SESSION_RUNTIME_TOKEN_FILE` が
+ホストの推論資格情報を提供します。プロバイダーに紐づいたプロファイルはその資格情報を使い、
+取得できない場合はホストの資格情報に切り替えずに起動を拒否します。
+`provider_account_home` のプロファイルは許可されたツールのログインを使い、
+どちらの変数も必要ありません。
+[プロバイダーを追加する](/ja/how-to/add-a-provider/) を参照してください。
+
+## OpenCode の状態確認
+
+セットアップ時に OpenCode のサインイン状態確認がタイムアウトまたは失敗した場合、エンジンは状態を読み取れなかったことを報告します。確認を再試行してください。確認の失敗は、ツールがサインアウトしていることを意味しません。同じ組織とアカウントに対する同時確認は、1 つのネイティブコマンドを共有します。成功した結果は最大 30 秒間再利用され、ログインファイルやインストール済み実行ファイルの変更時に更新されます。
 
 ## 関連ページ
 

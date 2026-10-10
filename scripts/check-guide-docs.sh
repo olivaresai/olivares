@@ -7,8 +7,8 @@
 # the gRPC reference, and the claims of the UPGRADE guide.
 #
 # THE REGRESSION IT FORBIDS. Measured 2026-08-15 and recorded in
-# an internal design note (not shipped):74: "Consola: 0 de 57 rutas con guía … Sin guía
-# de actualización de ninguna clase … Sin referencia gRPC (28 rpc)". Three public surfaces
+# an internal design note (not shipped):74: zero of 57 console routes had guides,
+# with no upgrade guide and no gRPC reference for 28 RPCs. Three public surfaces
 # at zero, and nothing red anywhere, because — :79 of the same document — there is a
 # coverage gate for modules and there was none for screens, upgrades or rpc. A page
 # somebody has to remember to extend is stale the day the 58th route lands, so the roster

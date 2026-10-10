@@ -4,13 +4,24 @@
 package gitlab
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
 	"crypto/subtle"
+	"encoding/base64"
 	"encoding/json"
 	"io"
 	"net/http"
+	"strconv"
+	"strings"
+	"time"
 
+	"github.com/olivaresai/olivares/connectors/internal/replay"
 	"github.com/olivaresai/olivares/sdk"
 )
+
+// signatureTolerance bounds how far webhook-timestamp may be from now, the
+// Standard Webhooks default GitLab follows.
+const signatureTolerance = 5 * time.Minute
 
 type pushHook struct {
 	Ref       string      `json:"ref"`
@@ -53,9 +64,11 @@ type mrAttributes struct {
 	SourceBranch string `json:"source_branch"`
 }
 
-// handleWebhook returns an HTTP handler that verifies the X-Gitlab-Token header,
-// dispatches by X-Gitlab-Event, and emits edges to the sink.
+// handleWebhook returns an HTTP handler that verifies the X-Gitlab-Token header
+// and, when a signing token is set, the webhook-signature; drops a repeated
+// delivery; dispatches by X-Gitlab-Event; and emits edges to the sink.
 func (s *Source) handleWebhook(sink sdk.Sink) http.HandlerFunc {
+	seen := replay.New()
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -73,54 +86,97 @@ func (s *Source) handleWebhook(sink sdk.Sink) http.HandlerFunc {
 			return
 		}
 
-		eventType := r.Header.Get("X-Gitlab-Event")
-		switch eventType {
-		case "Push Hook", "Tag Push Hook":
-			var ev pushHook
-			if err := json.Unmarshal(body, &ev); err != nil {
-				http.Error(w, "bad payload", http.StatusBadRequest)
+		// The signed webhook-id alone is the replay key when signatures are on:
+		// the unsigned Idempotency-Key (the same value from GitLab) and
+		// X-Gitlab-Event could be changed.
+		id, event := r.Header.Get("webhook-id"), r.Header.Get("X-Gitlab-Event")
+		if s.signingKey != nil {
+			if !verifySigned(r.Header, body, s.signingKey, time.Now()) {
+				http.Error(w, "forbidden", http.StatusForbidden)
 				return
 			}
-			for _, edge := range s.buildPushEdges(ev) {
-				if err := sink.Emit(r.Context(), edge); err != nil {
-					http.Error(w, "emit error", http.StatusInternalServerError)
-					return
-				}
-			}
+			event = ""
+		} else if k := r.Header.Get("Idempotency-Key"); k != "" {
+			id = k
+		}
+		seen.Once(w, event, id, func(w http.ResponseWriter) { s.serveEvent(w, r, body, sink) })
+	}
+}
 
-		case "Merge Request Hook":
-			var ev mergeRequestHook
-			if err := json.Unmarshal(body, &ev); err != nil {
-				http.Error(w, "bad payload", http.StatusBadRequest)
+// serveEvent dispatches one authenticated delivery by X-Gitlab-Event.
+func (s *Source) serveEvent(w http.ResponseWriter, r *http.Request, body []byte, sink sdk.Sink) {
+	eventType := r.Header.Get("X-Gitlab-Event")
+	switch eventType {
+	case "Push Hook", "Tag Push Hook":
+		var ev pushHook
+		if err := json.Unmarshal(body, &ev); err != nil {
+			http.Error(w, "bad payload", http.StatusBadRequest)
+			return
+		}
+		for _, edge := range s.buildPushEdges(ev) {
+			if err := sink.Emit(r.Context(), edge); err != nil {
+				http.Error(w, "emit error", http.StatusInternalServerError)
 				return
 			}
-			edges := s.buildMREdges(ev)
-			for _, edge := range edges {
-				if err := sink.Emit(r.Context(), edge); err != nil {
-					http.Error(w, "emit error", http.StatusInternalServerError)
-					return
-				}
-			}
-
-		case "Pipeline Hook", "Job Hook":
-			sample, ok, err := parseGitLabEvidence(eventType, body)
-			if err != nil {
-				http.Error(w, "bad payload", http.StatusBadRequest)
-				return
-			}
-			if ok {
-				if err := sink.Emit(r.Context(), sample); err != nil {
-					http.Error(w, "emit error", http.StatusInternalServerError)
-					return
-				}
-			}
-
-		default:
-			// Unknown events are accepted but ignored.
 		}
 
-		w.WriteHeader(http.StatusOK)
+	case "Merge Request Hook":
+		var ev mergeRequestHook
+		if err := json.Unmarshal(body, &ev); err != nil {
+			http.Error(w, "bad payload", http.StatusBadRequest)
+			return
+		}
+		edges := s.buildMREdges(ev)
+		for _, edge := range edges {
+			if err := sink.Emit(r.Context(), edge); err != nil {
+				http.Error(w, "emit error", http.StatusInternalServerError)
+				return
+			}
+		}
+
+	case "Pipeline Hook", "Job Hook":
+		sample, ok, err := parseGitLabEvidence(eventType, body)
+		if err != nil {
+			http.Error(w, "bad payload", http.StatusBadRequest)
+			return
+		}
+		if ok {
+			if err := sink.Emit(r.Context(), sample); err != nil {
+				http.Error(w, "emit error", http.StatusInternalServerError)
+				return
+			}
+		}
+
+	default:
+		// Unknown events are accepted but ignored.
 	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
+// verifySigned checks a GitLab 19.x signed delivery: one of the space-separated
+// webhook-signature values (in one header line or several) is "v1," + base64(HMAC-SHA256(key,
+// "<webhook-id>.<webhook-timestamp>.<body>")), and the timestamp is within
+// signatureTolerance of now.
+func verifySigned(h http.Header, body, key []byte, now time.Time) bool {
+	id, ts := h.Get("webhook-id"), h.Get("webhook-timestamp")
+	sec, err := strconv.ParseInt(ts, 10, 64)
+	if id == "" || err != nil {
+		return false
+	}
+	if d := now.Sub(time.Unix(sec, 0)); d > signatureTolerance || d < -signatureTolerance {
+		return false
+	}
+	mac := hmac.New(sha256.New, key)
+	mac.Write([]byte(id + "." + ts + "."))
+	mac.Write(body)
+	want := []byte("v1," + base64.StdEncoding.EncodeToString(mac.Sum(nil)))
+	for _, sig := range strings.Fields(strings.Join(h.Values("webhook-signature"), " ")) {
+		if hmac.Equal([]byte(sig), want) {
+			return true
+		}
+	}
+	return false
 }
 
 // verifyToken compares the received token against the expected secret using

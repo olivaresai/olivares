@@ -26,15 +26,15 @@ WF="${OLIVARES_C0523_WF:-commercial/license-worker/wrangler.jsonc}"
 grep -q 'HOLD' "$DOC" || fail "$DOC lost HOLD"
 grep -q 'NO IMPLEMENTADO' "$DOC" || fail "$DOC lost NO IMPLEMENTADO"
 if grep -qiE 'scheduled handler shipped|grant FSM live|FIRMA A claimed' "$DOC"; then
-	fail "$DOC claims a motor this lote does not have"
+	fail "$DOC claims a motor this batch does not have"
 fi
 
 python3 - "$JSON" <<'PY' || fail "JSON flags drifted"
 import json, re, sys
 data = json.load(open(sys.argv[1], encoding="utf-8"))
-# ⛔ El indicador dejó de ser un booleano el 2026-08-31: nombra CUÁL handler hay, porque
-# «false» era falso desde que C05-36 aterrizó la purga de retención (decisión B/90 de).
-# Lo que este HOLD protege nunca fue «que no haya crons», sino «que ningún cron mueva grants».
+# Since 2026-08-31 this field names the handler instead of using a boolean: false became
+# incorrect when C05-36 added retention purge (B/90 decision). The HOLD protects
+# grants from cron mutation; it does not forbid all cron handlers.
 if data.get("scheduled_handler") != "retention-purge-only":
     raise SystemExit("scheduled_handler must be 'retention-purge-only'")
 if data.get("grant_fsm") is not False:
@@ -45,14 +45,10 @@ for key in ("hub", "overlay"):
         raise SystemExit("%s is not a 40-hex object id" % key)
 PY
 
-# ⛔ AQUÍ SE PROHIBÍA TODO `scheduled`, Y ESO CONFUNDÍA DOS COSAS DISTINTAS.
-#
-# El HOLD protege que **ningún cron mueva grants**. Prohibir el sustantivo «scheduled» era un
-# proxy que valía mientras no hubiera ninguno — y dejó de valer el día que una decisión de
-# (orden 367, opción B/90) aterrizó la purga de retención de C05-36. El resultado fue un ROJO DE
-# FLOTA por una decisión legítima: la declaración se quedó rancia, no el HOLD.
-#
-# Ahora se comprueba la PROPIEDAD: puede haber handlers `scheduled`, y ninguno puede tocar grants.
+# Forbidding every `scheduled` handler confused the grant HOLD with a ban on cron.
+# That proxy worked only until order 367, option B/90, added C05-36 retention
+# purge. The resulting fleet failure came from a stale assertion, not a broken HOLD.
+# Check the actual property: scheduled handlers may exist, but none may touch grants.
 n_sched="$(grep -cE 'async[[:space:]]+scheduled[[:space:]]*\(' "$IDX" || true)"
 if [ "${n_sched}" -gt 1 ]; then
 	fail "worker entrypoint has ${n_sched} scheduled handlers; the HOLD allows exactly one (retention purge)"

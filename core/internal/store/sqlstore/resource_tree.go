@@ -178,48 +178,13 @@ func (r *resourceRepo) Move(ctx context.Context, node, newParent model.ID) (_ mo
 		}
 		// A cycle would form iff the proposed parent is node itself or sits inside
 		// node's own subtree (its path is node's path, or under it).
-		if newParentPath == curPath || strings.HasPrefix(newParentPath, curPath+"/") {
+		if treeMoveCycles(curPath, newParentPath) {
 			return model.Resource{}, store.ErrResourceCycle
 		}
 	}
 	newSelfPath := newParentPath + "/" + node.String()
-	now := g.clock.Now()
-	// Both statements below are built here rather than through updateAt, so the
-	// custodial write gate is reported explicitly. One report covers the pair:
-	// the descendant rewrite and the node update are one logical move.
-	if err := g.noteWrite(node); err != nil {
+	if err := g.moveTreeNode(ctx, node, newParent, cur.Version, curPath, newSelfPath); err != nil {
 		return model.Resource{}, err
-	}
-
-	// 1. Rewrite the descendants' path prefix (curPath -> newSelfPath). substr is
-	//    1-based and the start index is the constant byte length of the old prefix
-	//    (UUID paths are ASCII, so byte length == char length). A legacy node has no
-	//    path-keyed descendants, so the LIKE matches nothing — harmless.
-	updDesc := g.dia.Rebind(fmt.Sprintf(
-		"UPDATE %s SET path = ? || substr(path, ?), updated_at = ?, version = version + 1 WHERE tenant_id = ? AND path LIKE ?",
-		g.relation()))
-	if _, err := g.tx.ExecContext(ctx, updDesc,
-		newSelfPath, len(curPath)+1, now.String(), g.tenant.String(), curPath+"/%"); err != nil {
-		return model.Resource{}, mapWriteErr(err)
-	}
-
-	// 2. Update the node itself, optimistic-concurrency checked on the version we
-	//    read. The descendant rewrite above never touches node's own row (its path
-	//    is the prefix, not under it), so its version is unchanged here.
-	updSelf := g.dia.Rebind(fmt.Sprintf(
-		"UPDATE %s SET parent_id = ?, path = ?, updated_at = ?, version = version + 1 WHERE id = ? AND tenant_id = ? AND version = ?",
-		g.relation()))
-	res, err := g.tx.ExecContext(ctx, updSelf,
-		encOptID(newParent), newSelfPath, now.String(), node.String(), g.tenant.String(), cur.Version)
-	if err != nil {
-		return model.Resource{}, mapWriteErr(err)
-	}
-	n, err := res.RowsAffected()
-	if err != nil {
-		return model.Resource{}, err
-	}
-	if n == 0 {
-		return model.Resource{}, store.ErrConflict // node changed under us
 	}
 	return r.Get(ctx, node)
 }
@@ -239,12 +204,12 @@ func (r *resourceRepo) queryResources(ctx context.Context, extraWhere string, ex
 		args = append(args, extraArgs...)
 	}
 	for _, f := range q.Filters {
-		frag, val, err := g.filterFragment(f)
+		frag, vals, err := g.filterFragment(f)
 		if err != nil {
 			return nil, model.Page{}, err
 		}
 		where = append(where, frag)
-		args = append(args, val)
+		args = append(args, vals...)
 	}
 	orderBy, customSort, err := g.orderClause(q.Sort)
 	if err != nil {
@@ -312,23 +277,7 @@ func (r *resourceRepo) queryResources(ctx context.Context, extraWhere string, ex
 // "no row rewrite" rule (it fires only when a legacy row actually gains a child
 // or is reparented). It is a no-op when res already has a path.
 func (r *resourceRepo) effectivePath(ctx context.Context, res model.Resource) (string, error) {
-	if res.Path != "" {
-		return res.Path, nil
-	}
-	p := "/" + res.ID.String()
-	now := r.g.clock.Now()
-	if err := r.g.noteWrite(res.ID); err != nil {
-		return "", err
-	}
-	// The "path IS NULL" guard keeps the heal idempotent under a concurrent toucher
-	// (the path is deterministic — "/<id>" — so a lost race still converges).
-	q := r.g.dia.Rebind(fmt.Sprintf(
-		"UPDATE %s SET path = ?, updated_at = ?, version = version + 1 WHERE id = ? AND tenant_id = ? AND path IS NULL",
-		r.g.relation()))
-	if _, err := r.g.tx.ExecContext(ctx, q, p, now.String(), res.ID.String(), r.g.tenant.String()); err != nil {
-		return "", mapWriteErr(err)
-	}
-	return p, nil
+	return r.g.healTreePath(ctx, res.ID, res.Path)
 }
 
 // decodeResource reconstructs a Resource from a full row record.

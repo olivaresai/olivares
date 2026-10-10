@@ -42,6 +42,12 @@ type harness struct {
 // default (none) is covered by stepup_policy_http_test.go.
 func (h *harness) requirePasskeyStepUp() {
 	h.t.Helper()
+	h.requireStepUp(auth.StepUpPasskey)
+}
+
+// requireStepUp sets the administrative step-up policy for this harness.
+func (h *harness) requireStepUp(policy string) {
+	h.t.Helper()
 	ctx := context.Background()
 	if err := h.st.AuthMutate(ctx, func(as store.AuthScope) error {
 		rows, _, err := as.AuthPolicy().List(ctx, model.Query{})
@@ -49,14 +55,14 @@ func (h *harness) requirePasskeyStepUp() {
 			return err
 		}
 		if len(rows) == 0 {
-			_, err = as.AuthPolicy().Create(ctx, model.AuthPolicy{AdminStepUp: auth.StepUpPasskey})
+			_, err = as.AuthPolicy().Create(ctx, model.AuthPolicy{AdminStepUp: policy})
 			return err
 		}
-		rows[0].AdminStepUp = auth.StepUpPasskey
+		rows[0].AdminStepUp = policy
 		_, err = as.AuthPolicy().Update(ctx, rows[0])
 		return err
 	}); err != nil {
-		h.t.Fatalf("require passkey step-up: %v", err)
+		h.t.Fatalf("require %s step-up: %v", policy, err)
 	}
 	h.authr.ReloadStepUp()
 }
@@ -651,7 +657,7 @@ func TestAuditEndpoints(t *testing.T) {
 	}
 	// Export in CEF.
 	ex := h.do("GET", "/v1/audit/export?format=cef", admin, nil, tenantHdr(tenant))
-	if ex.code != http.StatusOK || len(ex.raw) == 0 {
+	if ex.code != auditExportStatus || len(ex.raw) == 0 {
 		t.Fatalf("export = %d", ex.code)
 	}
 	// Pubkey is available for offline verification.
@@ -661,5 +667,26 @@ func TestAuditEndpoints(t *testing.T) {
 	// OpenAPI document is served.
 	if r := h.do("GET", "/openapi.json", "", nil, nil); r.code != http.StatusOK || r.body["openapi"] != "3.1.0" {
 		t.Fatalf("openapi = %d %v", r.code, r.body["openapi"])
+	}
+}
+
+func TestWhoamiSignedInEmail(t *testing.T) {
+	h := newHarness(t)
+	admin := h.adminLogin()
+	r := h.do("GET", "/v1/auth/whoami", admin, nil, nil)
+	if r.code != http.StatusOK || r.body["email"] != "root@x.io" {
+		t.Fatalf("whoami email = %v (status %d), want signed-in email", r.body["email"], r.code)
+	}
+	tenant := h.createOrg(admin, "email-scope")
+	issued := h.do("POST", "/v1/tokens", admin, map[string]any{"name": "ci", "tenant": tenant.String(), "role": auth.RoleAdmin}, nil)
+	if issued.code != http.StatusCreated {
+		t.Fatalf("issue token = %d", issued.code)
+	}
+	r = h.do("GET", "/v1/auth/whoami", issued.body["token"].(string), nil, nil)
+	if r.code != http.StatusOK {
+		t.Fatalf("token whoami = %d", r.code)
+	}
+	if _, exists := r.body["email"]; exists {
+		t.Fatal("token principal exposed its owner's email")
 	}
 }

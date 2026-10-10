@@ -72,3 +72,12 @@ func TestContextMayBeServerCleared(t *testing.T) {
 		t.Error("no active betas → no clearing")
 	}
 }
+
+// The connector emits this header for compact_20260112 requests.
+func TestContextMayBeServerClearedCompactionBeta(t *testing.T) {
+	for _, token := range []string{"compact-2026-01-12", "compact_20260112"} {
+		if !ContextMayBeServerCleared([]string{token}) {
+			t.Errorf("%q must warn that provider context may change", token)
+		}
+	}
+}

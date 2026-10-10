@@ -4,7 +4,6 @@
   "tabs": {
     "servers": "Servers",
     "tools": "Tools",
-    "toolPins": "Tool pins",
     "skills": "Skills",
     "wiring": "Wiring",
     "configs": "Managed configs"
@@ -44,7 +43,7 @@
     "consumers": "Wired to",
     "consumersHint": "Sessions and agents connected to this server.",
     "noConfig": "No managed config",
-    "noConfigHint": "This server runs with its discovered settings. Add a managed config to govern its transport and secret references.",
+    "noConfigHint": "Add a saved definition to document this server’s transport and secret references.",
     "manageConfig": "Manage config",
     "editConfig": "Edit config",
     "deleteConfig": "Delete config",
@@ -64,46 +63,9 @@
     "schemaHash": "Schema hash",
     "readOnly": "Read-only",
     "destructive": "Destructive",
-    "untrustedNote": "Annotations are self-reported by the MCP server and are NOT verified. They are shown as signals only — the control plane never enforces on them.",
+    "untrustedNote": "MCP annotations are unverified statements from the server. Olivares AI displays them as signals and does not enforce on them.",
     "empty": "No tools discovered",
     "truncated": "Loaded {{n}} tools; there are more"
-  },
-  "toolPins": {
-    "title": "Current pins",
-    "description": "Approved MCP tool fingerprints that form the current authorization baseline.",
-    "search": "Search tool pins…",
-    "tool": "Tool",
-    "fingerprint": "Fingerprint",
-    "pinnedAt": "Pinned",
-    "pinCount": "Pin count",
-    "actions": "Actions",
-    "empty": "No tool pins",
-    "emptyHint": "No MCP tool fingerprints are pinned for this tenant.",
-    "enterprise": "Tool pins are an enterprise capability. This build has no enterprise verifier wired yet.",
-    "driftsTitle": "Pending drifts",
-    "driftsHint": "These observed fingerprints differ from the approved authorization baseline. Review each change before approving it.",
-    "pinnedFingerprint": "Pinned fingerprint",
-    "driftFingerprint": "Drifted fingerprint",
-    "driftObserved": "Observed",
-    "approve": "Approve drift",
-    "approveAria": "Approve drift for {{tool}}",
-    "approveTitle": "Approve drift for “{{tool}}”?",
-    "approveBody": "This replaces the pinned fingerprint with the currently drifted fingerprint and changes the tool authorization baseline.",
-    "approveConfirm": "Approve drift",
-    "approveDone": "Tool drift approved",
-    "unpin": "Unpin",
-    "unpinAria": "Unpin {{tool}}",
-    "unpinTitle": "Unpin “{{tool}}”?",
-    "unpinBody": "This removes the tool’s pinned authorization baseline. Future use will require a newly approved pin.",
-    "unpinConfirm": "Unpin",
-    "unpinDone": "Tool unpinned",
-    "conflictTitle": "“{{tool}}” changed while you were reviewing it",
-    "conflictBody": "The engine refused the change: the pin state moved between your read and your write. Nothing was applied. Compare what you reviewed with what is there now, then decide again.",
-    "conflictReviewed": "You reviewed (base version {{version}})",
-    "conflictCurrent": "Current (base version {{version}})",
-    "conflictGone": "This tool no longer has a pin. Someone else revoked it while you were reviewing.",
-    "conflictDismiss": "Dismiss",
-    "conflictReloading": "Re-reading the current state…"
   },
   "skills": {
     "search": "Search skills…",
@@ -151,14 +113,15 @@
     "secretsCount_other": "{{count}} references",
     "newConfig": "New config",
     "empty": "No managed configs",
-    "emptyHint": "Create a managed config to govern an MCP server’s transport, scope and secret references.",
-    "truncated": "Loaded {{n}} configs; there are more"
+    "emptyHint": "Save a definition of an MCP server’s transport, scope and secret references for observation and revision history.",
+    "truncated": "Loaded {{n}} configs; there are more",
+    "observationNotice": "Saved definitions are observation metadata. Saving, enabling or deleting one does not change the MCP gateway or a running server."
   },
   "editor": {
     "createTitle": "New managed config",
     "editTitle": "Edit managed config",
     "serverRef": "Server reference",
-    "serverRefHint": "The MCP server name this config governs. Immutable after creation.",
+    "serverRefHint": "The MCP server name this definition describes. Immutable after creation.",
     "transport": "Transport",
     "endpoint": "Endpoint",
     "endpointHint": "A reference only — never embed a credential in the endpoint.",
@@ -220,7 +183,7 @@
   "empty": {
     "config": {
       "title": "No managed configs created yet",
-      "description": "Create a managed config to govern an MCP server’s transport, scope, and secret references."
+      "description": "Save a definition of an MCP server’s transport, scope and secret references for observation and revision history."
     },
     "server": {
       "title": "No MCP servers discovered yet",

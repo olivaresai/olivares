@@ -497,7 +497,7 @@ func TestProviderBinding_Service(t *testing.T) {
 				srcOther:     {ID: srcOther, Version: 1, Name: "elsewhere", Tenant: "other-tenant", Kind: "claude", EnvironmentRef: testEnvRef},
 				srcForbidden: {ID: srcForbidden, Version: 1, Name: "global", Tenant: tenant.String(), Kind: "claude", EnvironmentRef: testEnvRef},
 			}, forbidden: map[model.ID]bool{srcForbidden: true}}
-			m.UseProviderSourceResolver(resolver)
+			m.ProviderSources = resolver
 
 			// The requested revision must be the APPLIED one (2), not the desired
 			// one somebody typed (1 or 3).
@@ -541,7 +541,7 @@ func TestProviderBinding_Service(t *testing.T) {
 			// A rotated source is ANOTHER revision: the old binding keeps explaining
 			// old events and a new one is needed for the new revision.
 			resolver.sources[srcA] = SourceRevision{ID: srcA, Version: 3, Name: "claude-home-a", Tenant: tenant.String(), Kind: "claude", EnvironmentRef: testEnvRef}
-			if err := m.data.View(ctx, tenant, func(sc store.Scope) error {
+			if err := m.Data.View(ctx, tenant, func(sc store.Scope) error {
 				if _, ok, err := findActiveBinding(ctx, sc, srcA.String(), 3, testEnvRef); err != nil || ok {
 					return errors.New("revision 3 resolved to a binding nobody created")
 				}
@@ -566,7 +566,7 @@ func TestProviderBinding_Service(t *testing.T) {
 			if again, err := m.RevokeBinding(ctx, tenant, b.Ref); err != nil || again.RevokedAt != revoked.RevokedAt {
 				t.Fatalf("second revoke: %+v %v", again, err)
 			}
-			if err := m.data.View(ctx, tenant, func(sc store.Scope) error {
+			if err := m.Data.View(ctx, tenant, func(sc store.Scope) error {
 				if _, ok, err := findActiveBinding(ctx, sc, srcA.String(), 2, testEnvRef); err != nil || ok {
 					return errors.New("a revoked binding still attributes")
 				}
@@ -621,7 +621,7 @@ func TestProviderAlias_ScopedBindWithin(t *testing.T) {
 					t.Fatal(err)
 				}
 				launch := model.NewID()
-				if err := m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
+				if err := m.Data.Mutate(ctx, tenant, func(sc store.Scope) error {
 					repo, err := sc.Ext(runKind)
 					if err != nil {
 						return err
@@ -643,7 +643,7 @@ func TestProviderAlias_ScopedBindWithin(t *testing.T) {
 			ra := seed(profA.Ref, 1)
 			rb := seed(profB.Ref, 1)
 			bind := func(r run, in managedAliasInput) error {
-				return m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
+				return m.Data.Mutate(ctx, tenant, func(sc store.Scope) error {
 					return m.bindManagedProviderAliasWithin(ctx, sc, in)
 				})
 			}
@@ -901,7 +901,7 @@ func TestProviderProfile_UpgradeFrom99aSchema(t *testing.T) {
 			}
 			// Legacy rows are intact, read as legacy (scope NULL), and none received an
 			// identity nobody recorded.
-			if err := m.data.View(ctx, tenantA, func(sc store.Scope) error {
+			if err := m.Data.View(ctx, tenantA, func(sc store.Scope) error {
 				repo, err := sc.Ext(liveKind)
 				if err != nil {
 					return err
@@ -917,13 +917,17 @@ func TestProviderProfile_UpgradeFrom99aSchema(t *testing.T) {
 					if !rec.IsNull(colObservationScope) || !rec.IsNull(colLiveCanonicalSID) || !rec.IsNull(colLiveProfileID) || rec.Int(colInputTokens) != 1 {
 						return errors.New("a legacy row was assigned identity or lost counters")
 					}
+					// The added ended_at is NULL on an upgraded row.
+					if !rec.IsNull(colLiveEndedAt) {
+						return errors.New("a legacy row was marked ended by the upgrade")
+					}
 				}
 				return nil
 			}); err != nil {
 				t.Fatal(err)
 			}
 			// Uniqueness at scope NULL still holds (the COALESCE, not a NULL-tolerant index).
-			dup := m.data.Mutate(ctx, tenantA, func(sc store.Scope) error {
+			dup := m.Data.Mutate(ctx, tenantA, func(sc store.Scope) error {
 				repo, err := sc.Ext(liveKind)
 				if err != nil {
 					return err
@@ -942,7 +946,7 @@ func TestProviderProfile_UpgradeFrom99aSchema(t *testing.T) {
 			// and a second scoped row in the same scope is refused; canonical_sid is
 			// unique among non-NULL values.
 			scoped := func(scope, sid string) error {
-				return m.data.Mutate(ctx, tenantA, func(sc store.Scope) error {
+				return m.Data.Mutate(ctx, tenantA, func(sc store.Scope) error {
 					repo, err := sc.Ext(liveKind)
 					if err != nil {
 						return err

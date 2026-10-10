@@ -64,8 +64,9 @@ _olivares_git_env="${ROOT}/scripts/lib/git-env.sh"
 }
 unset _olivares_git_env
 
-TAG="26.11"
-VERSION="26.11"
+TAG="26.1100"
+VERSION="26.1100"
+TAG_REGEX="$(python3 -c 'import re, sys; print(re.escape(sys.argv[1]))' "$TAG")"
 REPO="olivaresai/olivares"
 REPO_ID="987654321"
 RUN_ID="5150515051"
@@ -73,14 +74,23 @@ RUN_ATTEMPT="1"
 RELEASE_ID="42424242"
 
 blind() {
-	echo "test-release-finalize-stable: NO HE PODIDO MIRAR: $*" >&2
+	echo "test-release-finalize-stable: COULD NOT CHECK: $*" >&2
 	exit 2
 }
 
 # The default retains the full CI battery. Local release-format proof selects the
 # same real engine and adapters, bounded to monthly publication and reconciliation.
+# --first-stable runs the real finalizer with candidate 1.0 against every latest origin.
 case_mode="${1:-all}"
-case "$case_mode" in all | --monthly-delivery) ;; *) blind "usage: $0 [--monthly-delivery]" ;; esac
+case "$case_mode" in
+all | --monthly-delivery) ;;
+--first-stable)
+	TAG="1.0"
+	VERSION="1.0"
+	TAG_REGEX="$(python3 -c 'import re, sys; print(re.escape(sys.argv[1]))' "$TAG")"
+	;;
+*) blind "usage: $0 [--monthly-delivery|--first-stable]" ;;
+esac
 
 for tool in git jq openssl tar sha256sum go cmp base64; do
 	command -v "$tool" >/dev/null 2>&1 || blind "missing required tool: $tool"
@@ -170,7 +180,7 @@ BIN="$WORK/olivares"
 if ! (cd "$ROOT" && go build \
 	-ldflags "-s -w -X github.com/olivaresai/olivares/core/release.artifactVerifyKeyB64=${OTA_PUB}" \
 	-o "$BIN" ./cmd/olivares) >"$WORK/build.log" 2>&1; then
-	echo "test-release-finalize-stable: NO HE PODIDO MIRAR: the anchored product build failed." >&2
+	echo "test-release-finalize-stable: COULD NOT CHECK: the anchored product build failed." >&2
 	tail -20 "$WORK/build.log" >&2
 	exit 2
 fi
@@ -187,7 +197,7 @@ TREE="$WORK/tree"
 mkdir -p "$TREE" || blind "cannot create the fixture tree"
 (cd "$ROOT" && git archive HEAD) | tar -x -C "$TREE" || blind "cannot populate the fixture tree"
 for _s in release-finalize-stable.sh verify-release.sh cosign-verified.sh \
-	assert-cosign-binary.sh release-ota-channel.sh; do
+	assert-cosign-binary.sh release-ota-channel.sh lib/retired-release-tags.txt; do
 	cp "$ROOT/scripts/$_s" "$TREE/scripts/$_s" || blind "cannot overlay scripts/$_s"
 done
 rm -f "$TREE/release/advisories/${VERSION}.txt"
@@ -264,31 +274,28 @@ _y_fmt="$(python3 -c 'import json,sys; print(" ".join(sorted({fmt for entry in j
 [ -n "$_r_fmt" ] && [ "$_r_fmt" = "$_y_fmt" ]
 check "the recipe's package formats match nfpms" "drift: '$_r_fmt' vs '$_y_fmt'" $?
 
-# The archive NAMES the finalizer builds must be the templates GoReleaser renders. The base
-# entry and the `_fips_` variant are asserted separately: a collapsed pair would make the
-# FIPS archives invisible to the completeness check while every digest still agreed.
+# The archive NAMES the finalizer builds must be the templates GoReleaser renders. Community
+# builds no FIPS variant (FIPS is a Business build), so the recipe must not render one either:
+# the finalizer would then require archives the release never carries, or ship ones it never checks.
 command grep -qF 'name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"' "$GR"
 check "the base archive template is the name the finalizer derives" "olivares_<v>_<os>_<arch>.tar.gz" $?
-command grep -qF 'name_template: "{{ .ProjectName }}_{{ .Version }}_fips_{{ .Os }}_{{ .Arch }}"' "$GR"
-check "the FIPS archive template carries the _fips_ segment" "a separate, required variant" $?
-command grep -qF '{{ .ArtifactName }}.spdx.sbom.json' "$GR" &&
-	command grep -qF '{{ .ArtifactName }}.cdx.sbom.json' "$GR"
-check "both checksummed SBOM sidecars are declared per archive" "two documents, one recipe" $?
+! command grep -qE 'name_template:.*_fips_' "$GR"
+check "the recipe renders no FIPS archive" "Community ships no _fips_ archive" $?
+! command grep -qE '^sboms:' "$GR"
+check "the recipe declares no per-archive SBOM" "the signed checksums cover the archives" $?
 command grep -qF 'dist/olivares-install-*.sh' "$GR"
 check "the versioned installer is a declared extra file" "the finalizer requires it by name" $?
 
-# The sidecars the WORKFLOW uploads after goreleaser has written checksums.txt. These are the
+# The documents the WORKFLOW uploads after goreleaser has written checksums.txt. These are the
 # members the signed set deliberately does not cover, and the finalizer requires each by name.
-command grep -qF '"${a}.sbom.sigstore.json"' "$WF"
-check "release.yml uploads a per-archive SBOM attestation" "required, not optional" $?
-command grep -qF '"${a}.vex.sigstore.json" "${a}.vex.openvex.json"' "$WF"
-check "release.yml uploads both per-archive VEX sidecars" "required, not optional" $?
-command grep -qF 'gh release upload "${RELEASE_TAG}" olivares.vex.openvex.json image.spdx.sbom.json' "$WF"
-check "release.yml uploads the two top-level documents" "required, not optional" $?
+command grep -qF 'gh release upload "${RELEASE_TAG}" olivares.vex.openvex.json olivares.spdx.sbom.json' "$WF"
+check "release.yml uploads the release VEX and SBOM" "required, not optional" $?
+! command grep -qE '"\$\{a\}\.(sbom|vex)\.' "$WF"
+check "release.yml uploads no per-archive sidecar" "one SBOM and one VEX per release" $?
 # And every one of those names appears in the finalizer's required list, which is the other
 # half of the comparison: a sidecar the workflow produces and the finalizer never asks for is
 # a member nobody would notice missing.
-for _nm in sbom.sigstore.json vex.sigstore.json vex.openvex.json olivares.vex.openvex.json image.spdx.sbom.json; do
+for _nm in olivares.vex.openvex.json olivares.spdx.sbom.json; do
 	command grep -qF "$_nm" "$FIN" || { _drift="$_nm"; break; }
 done
 [ -z "${_drift:-}" ]
@@ -394,7 +401,7 @@ case "$route" in
 */releases/tags/*)
 	# ⛔ GITHUB ANSWERS 404 BY TAG FOR A DRAFT, and this stub says so instead of serving the
 	# object. That route resolves through the git ref and a draft has none — the measurement
-	# that made the finalizer read the list (2026-09-17, v26.9.0). A revert to the tag
+	# that made the finalizer read the list (2026-09-17, 26.900). A revert to the tag
 	# endpoint must redden the nominal publication row, not quietly keep passing here.
 	[ "${GH_RELEASE_RC:-0}" -eq 0 ] || { echo "gh: HTTP 503 (stub)" >&2; exit "${GH_RELEASE_RC}"; }
 	if [ "$(jq -r '.draft' "${GH_STATE}/release.json")" = "true" ]; then
@@ -616,11 +623,9 @@ ln -sf "$WORK/bin/gh" "$WORK/trusted/gh"
 # the same recipe the finalizer derives its expectations from. Built as FILES so a case can
 # remove, corrupt or duplicate exactly one member and change nothing else.
 BASE_ARCHIVES=()
-FIPS_ARCHIVES=()
 for goos in linux darwin; do
 	for goarch in amd64 arm64; do
 		BASE_ARCHIVES+=("olivares_${VERSION}_${goos}_${goarch}.tar.gz")
-		FIPS_ARCHIVES+=("olivares_${VERSION}_fips_${goos}_${goarch}.tar.gz")
 	done
 done
 
@@ -681,14 +686,14 @@ build_release_state() { # build_release_state [sign-key-name] [manifest-version]
 			printf 'not a binary\n' >"$stage/tiny/olivares"
 			(cd "$stage/tiny" && tar -czf "$cache/olivares_${VERSION}_linux_amd64.tar.gz" olivares) || return 1
 		fi
-		for a in "${BASE_ARCHIVES[@]}" "${FIPS_ARCHIVES[@]}"; do
+		for a in "${BASE_ARCHIVES[@]}"; do
 			[ "$a" = "olivares_${VERSION}_linux_amd64.tar.gz" ] && continue
 			printf 'fixture archive %s\n' "$a" >"$stage/tiny/olivares"
 			(cd "$stage/tiny" && tar -czf "$cache/$a" olivares) || return 1
 		done
 		rm -rf "$stage/pack" "$stage/tiny"
 	fi
-	for a in "${BASE_ARCHIVES[@]}" "${FIPS_ARCHIVES[@]}"; do
+	for a in "${BASE_ARCHIVES[@]}"; do
 		cp "$cache/$a" "$ASSETS/$a" || return 1
 	done
 
@@ -703,20 +708,15 @@ build_release_state() { # build_release_state [sign-key-name] [manifest-version]
 	printf 'apk\n' >"$ASSETS/olivares_${VERSION}_aarch64.apk"
 	printf 'pkg\n' >"$ASSETS/olivares_${VERSION}_linux_amd64.pkg.tar.zst"
 
-	for a in "${BASE_ARCHIVES[@]}" "${FIPS_ARCHIVES[@]}"; do
-		printf '{"spdx":"%s"}\n' "$a" >"$ASSETS/${a}.spdx.sbom.json"
-		printf '{"cdx":"%s"}\n' "$a" >"$ASSETS/${a}.cdx.sbom.json"
-	done
 	printf '%s\n' "$COMMIT" >"$ASSETS/release-commit.txt"
 	build_context_bytes >"$ASSETS/release-build-context.json"
 	printf '#!/bin/sh\n# installer %s\n' "$VERSION" >"$ASSETS/olivares-install-${VERSION}.sh"
 
-	# checksums.txt covers exactly the members GoReleaser checksums: archives, SBOM
-	# sidecars, packages, the commit evidence, the build context and the installer.
+	# checksums.txt covers exactly the members GoReleaser checksums: archives, packages,
+	# the commit evidence, the build context and the installer.
 	(
 		cd "$ASSETS" &&
-			sha256sum $(printf '%s\n' "${BASE_ARCHIVES[@]}" "${FIPS_ARCHIVES[@]}" | LC_ALL=C sort) \
-				*.spdx.sbom.json *.cdx.sbom.json \
+			sha256sum $(printf '%s\n' "${BASE_ARCHIVES[@]}" | LC_ALL=C sort) \
 				olivares_${VERSION}_linux_amd64.deb olivares_${VERSION}_linux_arm64.deb \
 				olivares-${VERSION}-1.x86_64.rpm olivares-${VERSION}-1.aarch64.rpm \
 				olivares_${VERSION}_x86_64.apk olivares_${VERSION}_aarch64.apk \
@@ -738,20 +738,15 @@ build_release_state() { # build_release_state [sign-key-name] [manifest-version]
 	printf 'stub-pipeline-signature\n' >"$ASSETS/stable-manifest.json.pipeline.sig"
 	printf 'stub-pipeline-certificate\n' >"$ASSETS/stable-manifest.json.pipeline.pem"
 
-	for a in "${BASE_ARCHIVES[@]}" "${FIPS_ARCHIVES[@]}"; do
-		printf '{"bundle":"sbom"}\n' >"$ASSETS/${a}.sbom.sigstore.json"
-		printf '{"bundle":"vex"}\n' >"$ASSETS/${a}.vex.sigstore.json"
-		printf '{"openvex":true}\n' >"$ASSETS/${a}.vex.openvex.json"
-	done
 	printf '{"openvex":"top"}\n' >"$ASSETS/olivares.vex.openvex.json"
-	printf '{"spdx":"image"}\n' >"$ASSETS/image.spdx.sbom.json"
+	printf '{"spdx":"release"}\n' >"$ASSETS/olivares.spdx.sbom.json"
 
 	# A real DSSE envelope whose in-toto subjects are the archive digests. The finalizer
 	# decodes the payload and requires every released archive to be a subject, so an envelope
 	# that named other bytes would not pass — which is what makes this fixture a fixture and
 	# not a rubber stamp.
 	: >"$stage/subjects.ndjson"
-	for a in "${BASE_ARCHIVES[@]}" "${FIPS_ARCHIVES[@]}"; do
+	for a in "${BASE_ARCHIVES[@]}"; do
 		local d
 		d="$(sha256sum "$ASSETS/$a")"
 		d="${d%% *}"
@@ -784,7 +779,7 @@ build_release_state() { # build_release_state [sign-key-name] [manifest-version]
 		'{id:$id,tag_name:$tag,draft:true,prerelease:false,immutable:false,target_commitish:$tc}' \
 		>"$STATE/release.json"
 	jq -nc --argjson id "$RELEASE_ID" --arg tag "$TAG" '{id:$id,tag_name:$tag,draft:false}' >"$STATE/latest.json"
-	jq -nc '{id:42424241,tag_name:"v26.8.0",draft:false,prerelease:false}' >"$STATE/origin.json"
+	jq -nc '{id:42424241,tag_name:"26.800",draft:false,prerelease:false}' >"$STATE/origin.json"
 	jq -nc --arg repo "$REPO" --argjson rid "$REPO_ID" --arg sha "$COMMIT" \
 		--argjson attempt "$RUN_ATTEMPT" --arg ev "$CTX_EVENT" \
 		'{repository:{full_name:$repo,id:$rid},path:".github/workflows/release.yml",
@@ -822,7 +817,7 @@ make_hostile_cache() { # make_hostile_cache <cache-name> <abs|dotdot>
 		;;
 	*) return 1 ;;
 	esac
-	for a in "${BASE_ARCHIVES[@]}" "${FIPS_ARCHIVES[@]}"; do
+	for a in "${BASE_ARCHIVES[@]}"; do
 		[ "$a" = "olivares_${VERSION}_linux_amd64.tar.gz" ] && continue
 		cp "$ARCHIVE_CACHE/real/$a" "$cache/$a" || return 1
 	done
@@ -888,39 +883,65 @@ publish_fixture() {
 	mv "$STATE/release.next" "$STATE/release.json"
 }
 
-zero_draft_denials() {
-	build_release_state || blind "zero-patch fixture"
-	for _zero_tag in 26.11.0 26.10.0; do
-		TAG="$_zero_tag"
-		git -C "$TREE" tag "$TAG" "$COMMIT" || blind "zero-patch fixture tag"
-		jq --arg tag "$TAG" '.tag_name = $tag' "$STATE/release.json" >"$STATE/release.next" &&
-			mv "$STATE/release.next" "$STATE/release.json"
-		run_finalizer
-		[ "$rc" -eq 1 ] && [ "$(patch_count)" -eq 0 ] && says 'zero-patch tags are historical only'
-		check "a new zero-patch draft refuses: $TAG" "no publication" $?
-	done
-	TAG="26.11"
-}
-
-reconcile_historical_zero() {
-	# Historical zero-patch releases remain readable after publication, while the
-	# draft cases above refuse creating them. Reuse the same independently signed engine.
-	_previous_version="$VERSION"
-	TAG="26.10.0"
-	VERSION="26.10.0"
-	if ! git -C "$TREE" rev-parse --verify "refs/tags/$TAG" >/dev/null 2>&1; then
-		git -C "$TREE" tag "$TAG" "$COMMIT" || blind "historical fixture tag"
-	fi
-	for _i in "${!BASE_ARCHIVES[@]}"; do BASE_ARCHIVES[_i]="${BASE_ARCHIVES[_i]/$_previous_version/$VERSION}"; done
-	for _i in "${!FIPS_ARCHIVES[@]}"; do FIPS_ARCHIVES[_i]="${FIPS_ARCHIVES[_i]/$_previous_version/$VERSION}"; done
-	publish_fixture || blind "historical zero-patch fixture"
-	run_finalizer
-	[ "$rc" -eq 0 ] && [ "$(patch_count)" -eq 0 ] && says 'PUBLICATION_ALREADY_COMPLETE'
-	check "published 26.10.0 reconciles without a repeated effect" "historical reader compatibility" $?
-	[ "$rc" -eq 0 ] || show
-}
-
 build_release_state || blind "could not build the nominal release fixture"
+
+# A command substitution among check's own arguments resets $? before check reads it, and the
+# row passes whatever its condition said (three such rows hid a regression here).
+! command grep -nE '^[[:space:]]*check .*[$][(].*[$][?][[:space:]]*$' "$0" >/dev/null
+check "no check row reads the status of its own label substitution" "the status is the condition's" $?
+
+# ============================================================================================
+# FIRST STABLE · 1.0 may follow `latest` only when latest is a published retired tag, named
+# exactly in scripts/lib/retired-release-tags.txt. Every other origin stays refused, including
+# the spellings a partial match reads as 1.0 or as history (measured 2026-10-08: the fresh start
+# admitted any tag that was not MAJOR.MINOR).
+# ============================================================================================
+if [ "$case_mode" = --first-stable ]; then
+	set_origin() {
+		jq --arg tag "$1" '.tag_name = $tag' "$STATE/origin.json" >"$STATE/origin.next" &&
+			mv "$STATE/origin.next" "$STATE/origin.json"
+	}
+	_retired=0
+	while IFS= read -r _origin; do
+		case "$_origin" in '' | '#'*) continue ;; esac
+		_retired=$((_retired + 1))
+		{ build_release_state && set_origin "$_origin"; } || blind "fixture"
+		run_finalizer
+		[ "$rc" -eq 0 ] && [ "$(patch_count)" -eq 1 ] && says "latest ${_origin} is a retired release"
+		check "1.0 follows the published retired tag $_origin" "the fresh start" $?
+		[ "$rc" -eq 0 ] || show
+	done <"$ROOT/scripts/lib/retired-release-tags.txt"
+	[ "$_retired" -eq 4 ]
+	check "the retired list names the four published tags" "v26.8.0 v26.9.0 26.10.0 26.10.1" $?
+	for _origin in unknown "" 1.0-rc.1 1.0+meta 1.0.1 1.0.1.2 v2.0 26.11.0 99.1.0 \
+		26.10.2 26.9.0 v26.10.1 ' 26.10.1' $'garbage\n26.10.1' $'26.10.1\n'; do
+		# The label is expanded BEFORE the condition: a command substitution inside check's own
+		# arguments would reset $? to its own status and pass every row.
+		_label="$(printf '%q' "$_origin")"
+		{ build_release_state && set_origin "$_origin"; } || blind "fixture"
+		run_finalizer
+		[ "$rc" -eq 2 ] && [ "$(patch_count)" -eq 0 ] && says 'usable version'
+		check "1.0 refuses latest $_label" "unexpected origins stay blind" $?
+		[ "$rc" -eq 2 ] || show
+	done
+	{ build_release_state && set_origin "1.0"; } || blind "fixture"
+	run_finalizer
+	[ "$rc" -eq 1 ] && [ "$(patch_count)" -eq 0 ] && says 'not a strict successor'
+	check "1.0 cannot replace a latest 1.0" "the successor guard still applies" $?
+	# Causal: the former shape, a fresh start for ANY origin that is not MAJOR.MINOR,
+	# publishes 1.0 over an unknown latest. The exact list is what refuses it.
+	restore_sut || blind "fixture"
+	sed -i 's/&& retired_tag "\$latest_tag"; then/\&\& ! [[ "$latest_tag" =~ ^[0-9]+\\.[0-9]+$ ]]; then/' "$SUT"
+	command grep -qF '&& ! [[ "$latest_tag" =~ ^[0-9]+\.[0-9]+$ ]]; then' "$SUT"
+	check "[mutant] the fresh start admits any non-MAJOR.MINOR origin" "mutant applied" $?
+	{ build_release_state && set_origin "unknown"; } || blind "fixture"
+	run_finalizer
+	[ "$rc" -eq 0 ] && [ "$(patch_count)" -eq 1 ]
+	check "[mutant] that shape publishes 1.0 over an unknown latest" "the exact list is causal" $?
+	restore_sut || blind "fixture"
+	summarize
+	exit "$?"
+fi
 
 # ============================================================================================
 # A · THE COMPLETE CANDIDATE PUBLISHES. Without this row every refusal below is satisfied by
@@ -958,7 +979,7 @@ check "the complete platform matrix was required" "not just the named artifacts"
 # verifying a download and would be wrong here. The finalizer's calls are the ones that carry
 # `--certificate-github-workflow-repository`, so the row is scoped to those and the battery
 # stops conflating two different callers' contracts.
-_tagpat="$(printf '@refs/tags/26\\.11$')"
+_tagpat="@refs/tags/${TAG_REGEX}$"
 _fincalls="$(command grep -F -- '--certificate-github-workflow-repository' "$WORK/cosign.log.$n" 2>/dev/null || true)"
 [ -n "$_fincalls" ] && printf '%s\n' "$_fincalls" | command grep -F -- "$_tagpat" >/dev/null
 check "the certificate identity pins THIS exact tag" "not any SemVer release" $?
@@ -974,10 +995,8 @@ if [ "$case_mode" = --monthly-delivery ]; then
 	publish_fixture || blind "published monthly fixture"
 	run_finalizer
 	[ "$rc" -eq 0 ] && [ "$(patch_count)" -eq 0 ] && says 'PUBLICATION_ALREADY_COMPLETE'
-	check "published 26.11 reconciles without a repeated effect" "monthly delivery" $?
+	check "published 26.1100 reconciles without a repeated effect" "monthly delivery" $?
 	[ "$rc" -eq 0 ] || show
-	zero_draft_denials
-	reconcile_historical_zero
 	summarize
 	exit "$?"
 fi
@@ -990,40 +1009,39 @@ run_finalizer
 [ "$rc" -eq 1 ] && [ "$(patch_count)" -eq 0 ] && says 'not a strict successor'
 check "an equal version cannot replace latest" "refused before publication" $?
 
-# --- the 2026-09-29 tag-name correction: the candidate grammar is BARE CalVer -------------
+# --- candidate identities are bare MAJOR.MINOR ----------------------------------------
 # A v prefix is refused with its own message (the reflexive mistake is pasting the old
-# shape); missing-month and malformed-month shapes are refused by the grammar itself.
+# shape); missing components, patch numbers and suffixes are refused.
 _saved_tag="$TAG"
-TAG="v26.9.0"
+TAG="v1.0"
 run_finalizer
 [ "$rc" -eq 1 ] && [ "$(patch_count)" -eq 0 ] && says 'carries a v prefix'
 check "a v-prefixed candidate tag is refused with the correction message" "bare only" $?
 TAG="26"
 run_finalizer
-[ "$rc" -eq 1 ] && [ "$(patch_count)" -eq 0 ] && says 'must be bare CalVer YY.M or YY.M.N'
-check "a candidate without a month is refused" "26" $?
-TAG="26.902.1"
+[ "$rc" -eq 1 ] && [ "$(patch_count)" -eq 0 ] && says 'must be bare MAJOR.MINOR'
+check "a candidate without a minor component is refused" "26" $?
+TAG="1.0.1"
 run_finalizer
-[ "$rc" -eq 1 ] && [ "$(patch_count)" -eq 0 ] && says 'must be bare CalVer YY.M or YY.M.N'
-check "a three-digit-month candidate tag is refused" "26.902.1" $?
-TAG="26.13.0"
+[ "$rc" -eq 1 ] && [ "$(patch_count)" -eq 0 ] && says 'must be bare MAJOR.MINOR'
+check "a patch candidate tag is refused" "1.0.1" $?
+TAG="26.10.2"
 run_finalizer
-[ "$rc" -eq 1 ] && [ "$(patch_count)" -eq 0 ] && says 'must be bare CalVer YY.M or YY.M.N'
-check "a month-13 candidate tag is refused" "26.13.0" $?
-TAG="26.01.0"
+[ "$rc" -eq 1 ] && [ "$(patch_count)" -eq 0 ] && says 'must be bare MAJOR.MINOR'
+check "a retired CalVer candidate tag is refused" "26.10.2" $?
+TAG="1.0-rc.1"
 run_finalizer
-[ "$rc" -eq 1 ] && [ "$(patch_count)" -eq 0 ] && says 'must be bare CalVer YY.M or YY.M.N'
-check "a leading-zero-month candidate tag is refused" "26.01.0" $?
-TAG="26.10.01"
+[ "$rc" -eq 1 ] && [ "$(patch_count)" -eq 0 ] && says 'must be bare MAJOR.MINOR'
+check "a prerelease candidate tag is refused" "1.0-rc.1" $?
+TAG="1.0.0"
 run_finalizer
-[ "$rc" -eq 1 ] && [ "$(patch_count)" -eq 0 ] && says 'must be bare CalVer YY.M or YY.M.N'
-check "a leading-zero-patch candidate tag is refused" "26.10.01" $?
+[ "$rc" -eq 1 ] && [ "$(patch_count)" -eq 0 ] && says 'must be bare MAJOR.MINOR'
+check "a zero-patch candidate tag is refused" "1.0.0" $?
 TAG="$_saved_tag"
 
-zero_draft_denials
 
 # Order is numeric by component, including components too large for machine integers.
-for _origin in 26.12 27.0.0 26.11.1 26.11.9007199254740993 v26.12.0 v27.0.0 v26.11.1 v26.11.9007199254740993; do
+for _origin in 26.1200 27.0 26.1101 26.9007199254742093 26.1200 27.0 26.1101 26.9007199254742093; do
 	build_release_state || blind "fixture"
 	jq --arg tag "$_origin" '.tag_name = $tag' "$STATE/origin.json" >"$STATE/origin.next" &&
 		mv "$STATE/origin.next" "$STATE/origin.json"
@@ -1032,7 +1050,7 @@ for _origin in 26.12 27.0.0 26.11.1 26.11.9007199254740993 v26.12.0 v27.0.0 v26.
 	check "latest $_origin prevents publishing an older candidate" "no pointer regression" $?
 done
 
-for _origin in 26.10.0 26.10.1 26.10.9007199254740993 25.99.99 v26.9.99 v26.9.9007199254740993 v25.99.99; do
+for _origin in 26.1000 26.1001 25.99 26.999 26.900; do
 	build_release_state || blind "fixture"
 	jq --arg tag "$_origin" '.tag_name = $tag' "$STATE/origin.json" >"$STATE/origin.next" &&
 		mv "$STATE/origin.next" "$STATE/origin.json"
@@ -1041,13 +1059,14 @@ for _origin in 26.10.0 26.10.1 26.10.9007199254740993 25.99.99 v26.9.99 v26.9.90
 	check "a candidate newer than $_origin publishes" "numeric component order" $?
 done
 
-for _origin in v26 v26.08.0 v26.8.0-rc1 $'v26.8.0\n'; do
+for _origin in v26 26.10.2 26.800-rc1 $'26.800\n'; do
+	_label="$(printf '%q' "$_origin")"
 	build_release_state || blind "fixture"
 	jq --arg tag "$_origin" '.tag_name = $tag' "$STATE/origin.json" >"$STATE/origin.next" &&
 		mv "$STATE/origin.next" "$STATE/origin.json"
 	run_finalizer
 	[ "$rc" -eq 2 ] && [ "$(patch_count)" -eq 0 ] && says 'usable version'
-	check "an unreadable latest tag is blind: $(printf '%q' "$_origin")" "never absence" $?
+	check "an unreadable latest tag is blind: $_label" "never absence" $?
 done
 
 for _filter in 'del(.draft)' '.draft = "false"' '.prerelease = true' '.id = null'; do
@@ -1080,17 +1099,18 @@ run_finalizer GH_ORIGIN_STATUS=404
 check "404 and an inventory containing only the draft permit the first publication" "positive case" $?
 
 build_release_state || blind "fixture"
-printf '[]\n[{"id":42424241,"tag_name":"v26.8.0","draft":false,"prerelease":false}]\n' >"$WORK/origin-pages.json"
+printf '[]\n[{"id":42424241,"tag_name":"26.800","draft":false,"prerelease":false}]\n' >"$WORK/origin-pages.json"
 run_finalizer GH_ORIGIN_STATUS=404 GH_ORIGIN_LIST_FILE="$WORK/origin-pages.json"
 [ "$rc" -eq 2 ] && [ "$(patch_count)" -eq 0 ] && says 'ordinary published release exists'
 check "404 with a published release on page two is blind" "every page counts" $?
 
 for _pages in '' '{}' '[] invalid' '[{"draft":false}]'; do
+	_label="$(printf '%q' "$_pages")"
 	build_release_state || blind "fixture"
 	printf '%s' "$_pages" >"$WORK/origin-pages.json"
 	run_finalizer GH_ORIGIN_STATUS=404 GH_ORIGIN_LIST_FILE="$WORK/origin-pages.json"
 	[ "$rc" -eq 2 ] && [ "$(patch_count)" -eq 0 ] && says 'inventory is incomplete or unreadable'
-	check "404 with an unreadable inventory is blind: $(printf '%q' "$_pages")" "empty bytes are not an empty array" $?
+	check "404 with an unreadable inventory is blind: $_label" "empty bytes are not an empty array" $?
 done
 
 build_release_state || blind "fixture"
@@ -1153,10 +1173,10 @@ build_release_state || blind "fixture"
 OTHERV="$WORK/otherversion"
 rm -rf "$OTHERV"; mkdir -p "$OTHERV"
 for _a in "${BASE_ARCHIVES[@]}"; do
-	cp "$ASSETS/$_a" "$OTHERV/${_a/${VERSION}/26.8.0}" || blind "fixture"
+	cp "$ASSETS/$_a" "$OTHERV/${_a/${VERSION}/26.800}" || blind "fixture"
 done
 (cd "$OTHERV" && sha256sum ./*.tar.gz | sed 's#\./##' >checksums.txt) || blind "fixture"
-"$BIN" release manifest --dir "$OTHERV" --channel stable --version 26.8.0 \
+"$BIN" release manifest --dir "$OTHERV" --channel stable --version 26.800 \
 	--expires-in 2160h --out "$OTHERV/stable-manifest.json" >/dev/null 2>&1 || blind "fixture"
 "$BIN" release sign-manifest --manifest "$OTHERV/stable-manifest.json" \
 	--checksums "$OTHERV/checksums.txt" --sign-key "@$KEYS/ota.seed.b64" \
@@ -1295,11 +1315,11 @@ run_finalizer
 check "an Arch package for arm64 refuses by name" "archlinux is amd64 only" $?
 
 build_release_state || blind "fixture"
-rm -f "$ASSETS/olivares_${VERSION}_linux_arm64.tar.gz.vex.sigstore.json"
+rm -f "$ASSETS/olivares.spdx.sbom.json"
 rebuild_assets_json
 run_finalizer
-[ "$rc" -eq 1 ] && [ "$(patch_count)" -eq 0 ] && says 'vex.sigstore.json'
-check "a missing required ATTESTATION refuses" "sidecars are members too" $?
+[ "$rc" -eq 1 ] && [ "$(patch_count)" -eq 0 ] && says 'olivares.spdx.sbom.json'
+check "a missing release SBOM refuses" "the release documents are members too" $?
 
 build_release_state || blind "fixture"
 rm -f "$ASSETS/multiple.intoto.jsonl"
@@ -1367,7 +1387,7 @@ check "a duplicate ROW in the signed checksums refuses" "one name, one digest" $
 build_release_state || blind "fixture"
 run_finalizer GH_ASSETS_RC=1
 [ "$rc" -eq 2 ] && [ "$(patch_count)" -eq 0 ] && says 'could not enumerate'
-check "an unreadable asset page is NO HE PODIDO MIRAR" "a short list is not a complete one" $?
+check "an unreadable asset page is COULD NOT CHECK" "a short list is not a complete one" $?
 
 build_release_state || blind "fixture"
 jq '.[0].state = "starter"' "$STATE/assets.json" >"$STATE/assets.next" && mv "$STATE/assets.next" "$STATE/assets.json"
@@ -1426,8 +1446,8 @@ run_finalizer
 mv "$WORK/slsa-verifier.hidden" "$WORK/bin/slsa-verifier" || blind "cannot restore the verifier stub"
 mv "$WORK/slsa-verifier-noc.hidden" "$WORK/bin-noc/slsa-verifier" || blind "cannot restore the isolated link"
 [ "$rc" -eq 2 ] && [ "$(patch_count)" -eq 0 ] && says 'slsa-verifier is not installed'
-check "an absent provenance verifier is NO HE PODIDO MIRAR, NO publish PATCH" "no signature, no publication" $?
-says 'NO HE PODIDO MIRAR' && ! says 'REFUSED —'
+check "an absent provenance verifier is COULD NOT CHECK, NO publish PATCH" "no signature, no publication" $?
+says 'COULD NOT LOOK' && ! says 'REFUSED —'
 check "and it is not reported as a wrong candidate" "exit 1 and exit 2 do not collapse" $?
 ! says 'strict publication verification passed'
 check "and no step reported strict verification as passed" "the waiver path is gone" $?
@@ -1505,11 +1525,11 @@ check "and it says the release IS published" "never 'it did not happen'" $?
 build_release_state || blind "fixture"
 run_finalizer GH_RELEASE_RC=1
 [ "$rc" -eq 2 ] && [ "$(patch_count)" -eq 0 ]
-check "an unreadable release is NO HE PODIDO MIRAR, not a refusal" "three verdicts, not two" $?
+check "an unreadable release is COULD NOT CHECK, not a refusal" "three verdicts, not two" $?
 
 # ============================================================================================
 # G-bis · THE CANDIDATE IS READ FROM THE LIST, AND THE BYTES ARE RETRIED. Both come from
-# finalizing v26.9.0 on 2026-09-17: `GET /releases/tags/<tag>` answers 404 for a DRAFT, which
+# finalizing 26.900 on 2026-09-17: `GET /releases/tags/<tag>` answers 404 for a DRAFT, which
 # is the only thing this ceremony ever publishes, and `gh api` has no retry of its own, so a
 # dropped transfer on a ~120 MB archive ended the whole run. The stub's tag route now answers
 # 404 for a draft exactly as GitHub does, so the nominal publication row above is itself the
@@ -1542,7 +1562,7 @@ build_release_state || blind "fixture"
 printf '{"message":"Bad credentials"}\n' >"$STATE/not-a-list.json"
 run_finalizer GH_RELEASES_LIST_FILE="$STATE/not-a-list.json"
 [ "$rc" -eq 2 ] && [ "$(patch_count)" -eq 0 ] && says 'not a JSON array'
-check "a list answer that is not an array is NO HE PODIDO MIRAR" "not 'there is no release'" $?
+check "a list answer that is not an array is COULD NOT CHECK" "not 'there is no release'" $?
 
 build_release_state || blind "fixture"
 run_finalizer GH_FETCH_FLAKY_NAME=checksums.txt GH_FETCH_DROP_FIRST=1
@@ -1582,7 +1602,7 @@ check "a preprod run naming a production surface refuses" "the guard is not the 
 build_release_state || blind "fixture"
 run_finalizer OLIVARES_OTA_PUBKEY=""
 [ "$rc" -eq 2 ] && [ "$(patch_count)" -eq 0 ]
-check "no configured anchor is NO HE PODIDO MIRAR" "never a single-check fallback" $?
+check "no configured anchor is COULD NOT CHECK" "never a single-check fallback" $?
 
 # A TOOL SUPPLIED BY THE TREE UNDER VERIFICATION CANNOT VERIFY IT. `jq` decides what the
 # inventory says, so a `jq` that the checkout itself provides is the checkout answering
@@ -1639,7 +1659,7 @@ run_finalizer
 FIN_BIN="bin"
 FIN_COSIGN_BIN=""
 [ "$rc" -eq 2 ] && [ "$(patch_count)" -eq 0 ] && says 'OLIVARES_COSIGN_BIN is not set'
-check "no authenticated cosign at all is NO HE PODIDO MIRAR" "exit 2, never exit 1" $?
+check "no authenticated cosign at all is COULD NOT CHECK" "exit 2, never exit 1" $?
 ! says 'REFUSED —'
 check "and it never calls the candidate wrong" "three verdicts, not two" $?
 
@@ -1648,7 +1668,7 @@ FIN_COSIGN_BIN="$WORK/no-such-cosign"
 run_finalizer
 FIN_COSIGN_BIN=""
 [ "$rc" -eq 2 ] && [ "$(patch_count)" -eq 0 ] && says 'not an executable file'
-check "a named cosign that is not there is NO HE PODIDO MIRAR" "could not look" $?
+check "a named cosign that is not there is COULD NOT CHECK" "could not look" $?
 
 # A RELATIVE NAME IS A REFUSAL, and the difference is not pedantry: the environment IS
 # readable, and what it says is wrong. "cosign" would be resolved by whatever PATH holds.
@@ -1667,7 +1687,7 @@ check "a relative OLIVARES_COSIGN_BIN refuses" "a name is not an authenticated b
 # that is not the expected one does not verify — so these rows measure the anchor rather than
 # an exit code.
 # ============================================================================================
-PROD_ID='^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/26\.11$'
+PROD_ID="^https://github\\.com/olivaresai/olivares/\\.github/workflows/release\\.yml@refs/tags/${TAG_REGEX}$"
 build_release_state || blind "fixture"
 run_finalizer COSIGN_EXPECT_IDENTITY="$PROD_ID"
 [ "$rc" -eq 0 ] && [ "$(patch_count)" -eq 1 ]
@@ -1685,13 +1705,13 @@ check "slsa-verifier receives the derived source repository and tag" "the same i
 # CROSS-TAG. A checksums.txt legitimately signed for another tag of this repository satisfies
 # the any-SemVer anchor and must not satisfy this publication.
 build_release_state || blind "fixture"
-run_finalizer COSIGN_EXPECT_IDENTITY='^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/26\.8\.0$'
+run_finalizer COSIGN_EXPECT_IDENTITY='^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/26\.800$'
 [ "$rc" -ne 0 ] && [ "$(patch_count)" -eq 0 ]
 check "a cosign that accepts only ANOTHER tag refuses" "cross-tag negative control" $?
 
 # THE OLD DEFAULT ITSELF. If any call still fell back to it, this row would publish.
 build_release_state || blind "fixture"
-run_finalizer COSIGN_EXPECT_IDENTITY='^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$'
+run_finalizer COSIGN_EXPECT_IDENTITY='^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/[0-9]+\.[0-9]+$'
 [ "$rc" -ne 0 ] && [ "$(patch_count)" -eq 0 ]
 check "a cosign that accepts only the any-SemVer default refuses" "the fallback is gone" $?
 
@@ -1705,7 +1725,7 @@ REPO="$PREPROD_REPO"
 build_release_state || blind "preprod fixture"
 run_finalizer GITHUB_REPOSITORY="$PREPROD_REPO" OLIVARES_RELEASE_PROFILE=preprod \
 	OLIVARES_PREPROD_MAKE_LATEST=false \
-	COSIGN_EXPECT_IDENTITY='^https://github\.com/acme/product-preprod/\.github/workflows/release\.yml@refs/tags/26\.11$'
+	COSIGN_EXPECT_IDENTITY="^https://github\\.com/acme/product-preprod/\\.github/workflows/release\\.yml@refs/tags/${TAG_REGEX}$"
 [ "$rc" -eq 0 ] && [ "$(patch_count)" -eq 1 ]
 check "the PREPROD profile completes under ITS OWN derived identity" "both supported profiles" $?
 command grep -qF -- "--source-uri github.com/${PREPROD_REPO}" "$WORK/slsa.log.$n"
@@ -1716,7 +1736,7 @@ for _policy in false legacy; do
 	build_release_state || blind "preprod fixture"
 	run_finalizer GITHUB_REPOSITORY="$PREPROD_REPO" OLIVARES_RELEASE_PROFILE=preprod \
 		OLIVARES_PREPROD_MAKE_LATEST="$_policy" GH_ORIGIN_STATUS=503 \
-		COSIGN_EXPECT_IDENTITY='^https://github\.com/acme/product-preprod/\.github/workflows/release\.yml@refs/tags/26\.11$'
+		COSIGN_EXPECT_IDENTITY="^https://github\\.com/acme/product-preprod/\\.github/workflows/release\\.yml@refs/tags/${TAG_REGEX}$"
 	[ "$rc" -eq 0 ] && [ "$(patch_count)" -eq 1 ] &&
 		! command grep -qF -- "repos/${PREPROD_REPO}/releases/latest" "$WORK/gh.log.$n"
 	check "preprod $_policy preserves its explicit pointer policy" "no latest read or successor claim" $?
@@ -2044,6 +2064,5 @@ run_finalizer
 [ "$rc" -eq 0 ] && [ "$(patch_count)" -eq 1 ]
 check "the restored finalizer still publishes the good candidate" "the mutants were undone" $?
 
-reconcile_historical_zero
 
 summarize

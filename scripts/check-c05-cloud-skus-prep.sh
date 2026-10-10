@@ -101,7 +101,7 @@ grep -F -q 'HOLD-RUNTIME-UNREACHABLE' "$DOC" \
 grep -F -q 'Does not copy `#881`' "$DOC" \
   || fail "prepare doc lost stale-branch HOLD"
 if grep -qiE 'FIRMA A claimed|remainder applied on origin/main|runtime authority impact (closed|proven)' "$DOC"; then
-  fail "prepare doc claims an application this lote does not have"
+  fail "prepare doc claims an application this batch does not have"
 fi
 
 check_catalog_channel_boundary

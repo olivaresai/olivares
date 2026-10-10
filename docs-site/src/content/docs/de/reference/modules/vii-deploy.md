@@ -42,6 +42,51 @@ Crossplane) plus eine kurzlebige, pro Operation attestierte Credential-Quelle we
 **nur bei Operator-Konfiguration** eingebunden; ohne diese handelt das Modul niemals
 stillschweigend.
 
+## Einen Executor verbinden
+
+Solange kein Administrator einen Executor verbindet, speichert Deploy Ihre
+Bereitstellungsdefinitionen und ändert keine Infrastruktur. So verbinden Sie einen:
+
+1. Schreiben Sie eine JSON-Datei mit einem Block für jede Laufzeit, auf die Sie bereitstellen
+   (`docker`, `k8s`, `nomad`, `tofu`, `terraform`, `gitops` oder `crossplane`), und einem
+   `credential`-Block. Nur die Laufzeiten in der Datei werden verbunden. Für Docker auf
+   demselben Host:
+
+   ```json
+   {
+     "docker": { "socket_path": "/var/run/docker.sock" },
+     "credential": {
+       "kind": "file",
+       "path_template": "/run/olivares/deploy/{env}-{mode}.token",
+       "ttl_seconds": 900
+     }
+   }
+   ```
+
+   Für jeden Vorgang liest Olivares ein kurzlebiges Token aus `path_template`: `{env}` ist
+   die Umgebung der Definition und `{mode}` ist `read` (Plan, Prüfen) oder `write` (Anwenden,
+   Außerbetriebnahme). Ein Werkzeug, das Sie bereits betreiben, etwa Vault Agent oder ein
+   SPIFFE-Helfer, legt deren Verzeichnis an und
+   schreibt und rotiert diese Dateien. Ohne Token wird jeder Vorgang abgelehnt.
+   Für Docker muss der Dienstbenutzer `olivares` außerdem den Socket öffnen können; die
+   Mitgliedschaft in der Gruppe `docker` gibt ihm Root-Zugriff auf diesen Host.
+2. Verweisen Sie Olivares auf die Datei. Mit dem deb- oder rpm-Paket fügen Sie diese Zeile in
+   `/etc/olivares/olivares.env` ein:
+
+   ```sh
+   OLIVARES_DEPLOY_EXECUTOR_CONFIG=/etc/olivares/deploy-executor.json
+   ```
+
+   Der Benutzer `olivares` muss die JSON-Datei lesen können, zum Beispiel mit Eigentümer
+   `root:olivares` und Modus `0640`.
+
+3. Starten Sie Olivares mit `sudo systemctl restart olivares` neu. Kann die Datei nicht gelesen
+   werden oder ist sie ungültig, startet Olivares nicht und sein Log nennt den Grund.
+
+Die Deploy-Seite bietet dann **Bereitstellung deklarieren** als Hauptaktion an, und Plan und
+Anwenden erreichen die Laufzeit. Jedes Anwenden und jede Außerbetriebnahme wartet weiterhin
+auf eine Genehmigung.
+
 ## Entitäten und der deklarierte Vertrag
 
 Das Modul deklariert vier namespaced Entitäten plus das Kern-`Deployment` als angewandten

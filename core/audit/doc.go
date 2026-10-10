@@ -20,13 +20,16 @@
 //     checkpoint invalidates it. VerifyCheckpoints validates every present
 //     checkpoint; per-event signatures are verified separately by VerifyEvents.
 //
-//   - Export. CEF (ArcSight), RFC5424 syslog and an OTLP-logs JSON projection,
+//   - Business export. CEF (ArcSight), RFC5424 syslog and an OTLP-logs JSON projection,
 //     each carrying the chain-integrity fields (seq, prev_hash, hash, sig) so an
 //     external WORM/SIEM can hold an independently verifiable copy (docs/SECURITY-HARDENING.md).
 //     Export is a manual/operator-scheduled action, NOT auto-enabled (that would
 //     violate the no-telemetry-home default); it only compensates once the copy
 //     actually leaves the host AND the verifier pins the expected latest-attested
 //     state off-box. Email/PII is never exported.
+//
+// Audit export, directory archival and external archive verification are private
+// Business implementations. Community retains the signed ledger and its verifier.
 //
 // Honest limits (docs/SECURITY-HARDENING.md): a local-disk signing key gives NO protection
 // against a full-data-dir (root/host) compromise, which holds both the database

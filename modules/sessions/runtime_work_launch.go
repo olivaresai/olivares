@@ -375,12 +375,12 @@ func (m *Module) findWorkLaunchByDispatch(
 	tenant model.TenantID,
 	key [sha256.Size]byte,
 ) (model.Record, bool, error) {
-	if m.data == nil {
+	if m.Data == nil {
 		return nil, false, &runErr{http.StatusServiceUnavailable, "session runtime store is not available"}
 	}
 	var out model.Record
 	found := false
-	err := m.data.View(ctx, tenant, func(sc store.Scope) error {
+	err := m.Data.View(ctx, tenant, func(sc store.Scope) error {
 		repo, err := sc.Ext(runKind)
 		if err != nil {
 			return err

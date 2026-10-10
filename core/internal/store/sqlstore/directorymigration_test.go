@@ -1159,5 +1159,8 @@ func dropLineageForHistoricalFixture(t *testing.T, db *sql.DB, dia dialect.Diale
 	for _, r := range lineageRelations {
 		exec("DROP TABLE " + directoryWriterRelation(dia, r.descriptor().Table))
 	}
+	// The guard installation record goes with the guards: a pre-v8 estate never
+	// had it, and a kept record makes the next boot refuse the absent guards.
+	exec("DROP TABLE " + directoryWriterRelation(dia, "schema_migrations_lineage_guards"))
 	exec(fmt.Sprintf("DELETE FROM %s WHERE version=%d", coreTrackingRelation(dia), coreLineageMigrationVersion))
 }

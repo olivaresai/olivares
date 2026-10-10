@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/olivaresai/olivares/cmd/olivares/internal/approvalbridge"
 	"github.com/olivaresai/olivares/connectors/redact"
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
@@ -29,10 +30,10 @@ type providerApprovalAdapter struct {
 }
 
 func (a providerApprovalAdapter) Approve(ctx context.Context, tenant model.TenantID, req sessions.ProviderApprovalRequest) (sessions.ProviderApprovalDecision, error) {
-	if a.bridge == nil || a.bridge.localProposer == nil {
+	if a.bridge == nil || a.bridge.LocalProposer == nil {
 		return sessions.ProviderApprovalDecision{Reason: "approval service unavailable"}, nil
 	}
-	cred, ok := a.bridge.cred(tenant)
+	cred, ok := a.bridge.ProviderCred(tenant)
 	if !ok {
 		return sessions.ProviderApprovalDecision{Reason: "approval service unavailable"}, nil
 	}
@@ -60,7 +61,7 @@ func (a providerApprovalAdapter) Approve(ctx context.Context, tenant model.Tenan
 		return sessions.ProviderApprovalDecision{}, err
 	}
 	plan := hexSHA(string(question))
-	subject := encodeSubjectRef(req.RunRef, plan)
+	subject := approvalbridge.EncodeSubjectRef(req.RunRef, plan)
 	const action = "sessions.provider.approval"
 	const kind = "session_run"
 	if deadline, ok := ctx.Deadline(); ok {
@@ -68,8 +69,8 @@ func (a providerApprovalAdapter) Approve(ctx context.Context, tenant model.Tenan
 		if seconds < 1 {
 			return sessions.ProviderApprovalDecision{Reason: "approval expired"}, nil
 		}
-		if seconds < cred.expiresIn {
-			cred.expiresIn = seconds
+		if seconds < cred.ExpiresIn {
+			cred.ExpiresIn = seconds
 		}
 	}
 	type permissionScope struct {
@@ -110,75 +111,34 @@ func (a providerApprovalAdapter) Approve(ctx context.Context, tenant model.Tenan
 	if err != nil {
 		return sessions.ProviderApprovalDecision{Reason: "permission scope is not reviewable"}, nil
 	}
-	// These offsets belong to pre-pattern bytes. Request applies the same shared
-	// cleaner once; carrying offsets against display would be invalid provenance.
-	approval, err := a.bridge.localProposer.Request(ctx, tenant, req.Principal, governance.ApprovalRequest{Action: action, SubjectKind: kind, SubjectRef: subject, Reason: reason, ReasonMasks: reasonMasks, Review: review, ReviewMasks: reviewMasks, SessionRef: req.SessionRef, ExpiresInSeconds: cred.expiresIn, EscalateInSeconds: cred.escalateIn})
+	effect, err := holdEffect(ctx, a.bridge.LocalProposer, heldEffect{
+		Tenant: tenant, Principal: req.Principal,
+		// These offsets belong to pre-pattern bytes. Request applies the same shared
+		// cleaner once; carrying offsets against display would be invalid provenance.
+		Request:  governance.ApprovalRequest{Action: action, SubjectKind: kind, SubjectRef: subject, Reason: reason, ReasonMasks: reasonMasks, Review: review, ReviewMasks: reviewMasks, SessionRef: req.SessionRef, ExpiresInSeconds: cred.ExpiresIn, EscalateInSeconds: cred.EscalateIn},
+		Consumer: consumer, Wait: a.approvalWait, Log: a.bridge.Log,
+		Shown: func(approval governance.Approval) bool {
+			return approval.Reason == display && (review == nil || approval.Review != nil && approval.Review.Tool == review.Tool && approval.Review.Text == reviewDisplay)
+		},
+	})
+	if effect.Failed == stepRegister {
+		return sessions.ProviderApprovalDecision{Reason: "session could not register its approval wait"}, err
+	}
 	if err != nil {
 		return sessions.ProviderApprovalDecision{}, err
 	}
-	if approval.Reason != display || (review != nil && (approval.Review == nil || approval.Review.Tool != review.Tool || approval.Review.Text != reviewDisplay)) {
-		cleanupCtx, cleanupCancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
-		_, _ = a.bridge.localProposer.Cancel(cleanupCtx, tenant, req.Principal, approval.ID)
-		cleanupCancel()
+	switch effect.Outcome {
+	case effectAllowed:
+		return sessions.ProviderApprovalDecision{Allow: true, Granted: granted}, nil
+	case effectUnshown:
 		return sessions.ProviderApprovalDecision{Reason: "permission scope changed during review"}, nil
-	}
-	var endApprovalWait func()
-	if a.approvalWait != nil {
-		// A policy may keep its request unexpired while this child wait remains
-		// bounded. Register the earlier live/policy deadline, not an empty date.
-		expires, bounded := ctx.Deadline()
-		if approval.ExpiresAt != "" {
-			policyExpiry, parseErr := model.ParseTimestamp(approval.ExpiresAt)
-			if parseErr != nil {
-				err = parseErr
-			} else if !bounded || policyExpiry.Time().Before(expires) {
-				expires = policyExpiry.Time()
-			}
-		} else if !bounded {
-			err = errors.New("approval wait requires a bounded context deadline")
-		}
-		if err == nil {
-			endApprovalWait, err = a.approvalWait(ctx, req.Principal, approval.ID, expires)
-			if err == nil {
-				defer endApprovalWait()
-			}
-		}
-		if err != nil {
-			cleanupCtx, cleanupCancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
-			_, _ = a.bridge.localProposer.Cancel(cleanupCtx, tenant, req.Principal, approval.ID)
-			cleanupCancel()
-			return sessions.ProviderApprovalDecision{Reason: "session could not register its approval wait"}, err
-		}
-	}
-	verdict, err := a.bridge.localProposer.Wait(ctx, tenant, approval.ID)
-	if endApprovalWait != nil {
-		endApprovalWait()
-	}
-	if err != nil {
-		if errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
-			cleanupCtx, cleanupCancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
-			closed, cancelErr := a.bridge.localProposer.Cancel(cleanupCtx, tenant, req.Principal, approval.ID)
-			cleanupCancel()
-			if cancelErr != nil && (closed.ID == "" || closed.Status == nbPending) && a.bridge.log != nil {
-				a.bridge.log.Error("provider approval cancellation incomplete", "approval_ref", approval.ID)
-			}
-		}
-		return sessions.ProviderApprovalDecision{}, err
-	}
-	if verdict.SubjectKind != kind || verdict.SubjectRef != subject || verdict.Action != action || verdict.SessionRef != req.SessionRef {
+	case effectForeign:
 		return sessions.ProviderApprovalDecision{Reason: "approval scope changed"}, nil
-	}
-	if verdict.Status != nbApproved {
-		return sessions.ProviderApprovalDecision{Reason: "human review " + verdict.Status}, nil
-	}
-	consumed, err := a.bridge.localProposer.Consume(ctx, tenant, approval.ID, consumer, "")
-	if err != nil {
-		return sessions.ProviderApprovalDecision{}, err
-	}
-	if !consumed.Granted || consumed.Replay {
+	case effectRefused:
+		return sessions.ProviderApprovalDecision{Reason: "human review " + effect.Status}, nil
+	default:
 		return sessions.ProviderApprovalDecision{Reason: "approval is no longer spendable"}, nil
 	}
-	return sessions.ProviderApprovalDecision{Allow: true, Granted: granted}, nil
 }
 
 // The human sees the same field projection already proven by reviewFacts. Mask
@@ -187,20 +147,16 @@ func (a providerApprovalAdapter) Approve(ctx context.Context, tenant model.Tenan
 func (a providerApprovalAdapter) structuredReview(ctx context.Context, tenant model.TenantID, effective, reviewed sessions.ProviderApprovalRequest) (*governance.ApprovalReview, []redact.GeneratedMaskSpan, string, error) {
 	var tool, text, expected string
 	command := false
-	switch effective.Kind {
-	case "command_execution", "legacy_exec_command":
+	switch {
+	case effective.CommandLine != "":
 		tool, text, expected = "Command", effective.CommandLine, reviewed.CommandLine
 		command = true
-	case "file_change", "legacy_apply_patch":
+	case len(effective.FilePaths) != 0:
 		tool, text, expected = "File change", strings.Join(effective.FilePaths, "\n"), strings.Join(reviewed.FilePaths, "\n")
-	default:
-		// ACP currently supplies option IDs without command/path facts. Display
-		// only the known scope; a permissions codec with no such facts keeps its
-		// legacy absent review rather than inventing the operation's contents.
-		if len(effective.Requested) == 0 {
-			return nil, nil, "", nil
-		}
+	case len(effective.Requested) != 0:
 		tool, text, expected = "Provider permission", strings.Join(effective.Requested, "\n"), strings.Join(reviewed.Requested, "\n")
+	default:
+		return nil, nil, "", nil
 	}
 	var masks []redact.GeneratedMaskSpan
 	var err error

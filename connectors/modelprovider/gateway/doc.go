@@ -9,11 +9,8 @@
 // the license frontier (no /core import) and does not add a top-level
 // connector directory (public-counts derives integrations from connectors/*/).
 //
-// This package is the invocation seam. It does not replace LiteLLM or Bifrost,
-// and it does not make Olivares a general-purpose AI gateway. The live PEP
-// (cmd/olivares/inferenceproxy.go) and models.Executor still speak
-// protocol-specific clients; they should adopt this seam. That wiring is not
-// in this slice.
+// The standalone Driver and CostHook contracts carry deprecation notices.
+// Capability helpers and shared transport/envelope types are not deprecated.
 //
 // Transports: HTTP JSON (CreateMessage) and SSE or NDJSON (StreamMessage).
 // WebSocket is not used for these protocols.

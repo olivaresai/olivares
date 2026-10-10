@@ -157,7 +157,7 @@ func TestAccessMapProjection(t *testing.T) {
 // TestS355AccessMapProjection: the single-subject axes (session/agent/user) each
 // project ONE permitted edge with the matching origin kind; the group/role axes and any
 // forbid project NOTHING (member enumeration needs the auth scope; a forbid is not a
-// permitted edge) — ADR-0022 §6.
+// permitted edge) — source-scope contract.
 func TestS355AccessMapProjection(t *testing.T) {
 	h := newHarness(t)
 	admin := h.adminLogin()

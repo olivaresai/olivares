@@ -3,6 +3,10 @@ title: "治理与审批（human-in-the-loop）"
 description: "运营者如何治理 estate：身份与权限、deny-by-default 的 RBAC 模型、仅限收紧（restrict-only）的策略接缝，以及决策被记入审计账本的 human-in-the-loop 态势。"
 ---
 
+:::note[Business]
+审计导出（`GET /v1/audit/export`、`olivares audit export`）、目录归档和外部归档验证需要 Business。Community 保留签名账本、`olivares audit verify` 和 `olivares dr backup`；导出返回 HTTP 501 或退出码 9。审计转发和携带审计段的 DDIL 传输也需要 Business。
+:::
+
 本页面向已连接至少一个数据源、现在需要**治理** estate 的运营者：
 决定谁与何物可以行动、审阅平台所呈现的内容并据此采取行动。治理位于
 **模块 VI（身份、权限、治理）**中，建立在与 API 其余部分相同的授权核心之上，
@@ -187,3 +191,7 @@ permitted-vs-observed 结果。[zero-to-graph 教程](/zh/tutorials/zero-to-grap
 - [模块目录](/zh/reference/modules/overview/)——身份、权限与治理（模块 VI）
   如何与 access map（模块 III）和发现项（模块 IX）组合。
 - [连接一个数据源](/zh/how-to/connect-a-source/)——接好 drift 和发现项据以构建的信号。
+
+## 审批版本边界（0.1）
+
+Community 保留审批引擎、CRITICAL 操作至少由两名不同人员审批的要求、kill-switch 双人控制，以及要求审核或提高风险等级、审批人数的策略。降低风险等级的审批策略和 break-glass 紧急访问属于 Business 基础版。已保存的数据仍可读取和导出，但不能降低 Community 的默认要求或授权紧急访问。

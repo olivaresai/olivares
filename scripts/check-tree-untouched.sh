@@ -52,7 +52,7 @@ foto() {
 }
 
 uso() {
-	echo "uso: check-tree-untouched.sh --snapshot <fichero> | --compare <fichero> | --selftest" >&2
+	echo "usage: check-tree-untouched.sh --snapshot <file> | --compare <file> | --selftest" >&2
 	exit 2
 }
 
@@ -73,21 +73,21 @@ if [ "${1:-}" = "--selftest" ]; then
 
 	bash "$caso/r/scripts/check.sh" --snapshot "$caso/f1" >/dev/null 2>&1
 	bash "$caso/r/scripts/check.sh" --compare "$caso/f1" >/dev/null 2>&1 && rc=0 || rc=$?
-	if [ "$rc" = "0" ]; then echo "  ok    un arbol que no cambia sale verde (la direccion que no dispara)"
-	else echo "  FAIL  un arbol intacto no salio verde (rc=$rc)"; fail=1; fi
+	if [ "$rc" = "0" ]; then echo "  ok    an unchanged tree passes (negative control)"
+	else echo "  FAIL  an unchanged tree did not pass (rc=$rc)"; fail=1; fi
 
 	printf 'dos\n' >>"$caso/r/a.txt"
 	out="$(bash "$caso/r/scripts/check.sh" --compare "$caso/f1" 2>&1)" && rc=0 || rc=$?
 	if [ "$rc" = "1" ] && grep -q 'a.txt' <<<"$out"; then
-		echo "  ok    un fichero MODIFICADO se caza y se nombra"
-	else echo "  FAIL  la modificacion no se cazo (rc=$rc)"; fail=1; fi
+		echo "  ok    a modified file is detected and named"
+	else echo "  FAIL  modification was not detected (rc=$rc)"; fail=1; fi
 	git -C "$caso/r" checkout -- a.txt 2>/dev/null
 
 	printf 'x\n' >"$caso/r/suelto.txt"
 	out="$(bash "$caso/r/scripts/check.sh" --compare "$caso/f1" 2>&1)" && rc=0 || rc=$?
 	if [ "$rc" = "1" ] && grep -q 'suelto.txt' <<<"$out"; then
-		echo "  ok    un fichero NUEVO sin trackear tambien se caza"
-	else echo "  FAIL  el fichero nuevo no se cazo (rc=$rc)"; fail=1; fi
+		echo "  ok    a new untracked file is also detected"
+	else echo "  FAIL  new file was not detected (rc=$rc)"; fail=1; fi
 	rm -f "$caso/r/suelto.txt"
 
 	# Y la direccion contraria: un gate que BORRA algo que estaba sucio tampoco es inocuo.
@@ -95,13 +95,13 @@ if [ "${1:-}" = "--selftest" ]; then
 	bash "$caso/r/scripts/check.sh" --snapshot "$caso/f2" >/dev/null 2>&1
 	rm -f "$caso/r/previo.txt"
 	out="$(bash "$caso/r/scripts/check.sh" --compare "$caso/f2" 2>&1)" && rc=0 || rc=$?
-	if [ "$rc" = "1" ]; then echo "  ok    BORRAR algo sin trackear tampoco pasa por inocuo"
-	else echo "  FAIL  el borrado paso desapercibido (rc=$rc)"; fail=1; fi
+	if [ "$rc" = "1" ]; then echo "  ok    deleting an untracked file is detected"
+	else echo "  FAIL  deletion went undetected (rc=$rc)"; fail=1; fi
 
 	out="$(bash "$caso/r/scripts/check.sh" --compare "$caso/no-existe" 2>&1)" && rc=0 || rc=$?
-	if [ "$rc" = "2" ] && grep -q 'NO HE PODIDO MIRAR' <<<"$out"; then
-		echo "  ok    una foto ilegible es NO HE PODIDO MIRAR, no verde"
-	else echo "  FAIL  la foto ausente no dio la tercera respuesta (rc=$rc)"; fail=1; fi
+	if [ "$rc" = "2" ] && grep -q 'COULD NOT CHECK' <<<"$out"; then
+		echo "  ok    an unreadable snapshot returns COULD NOT CHECK, not a pass"
+	else echo "  FAIL  missing snapshot did not return the third result (rc=$rc)"; fail=1; fi
 
 	[ "$fail" = "0" ] && { echo "check-tree-untouched selftest: 5 passed, 0 failed"; exit 0; }
 	echo "check-tree-untouched selftest: FAILED"; exit 1
@@ -113,30 +113,30 @@ modo="${1:-}"; ref="${2:-}"
 case "$modo" in
 --snapshot)
 	if ! foto >"$ref" 2>/dev/null; then
-		echo "check-tree-untouched: NO HE PODIDO MIRAR — no pude escribir la foto en '$ref'." >&2
+		echo "check-tree-untouched: COULD NOT CHECK — could not write snapshot to '$ref'." >&2
 		exit 2
 	fi
 	exit 0
 	;;
 --compare)
 	if [ ! -r "$ref" ]; then
-		echo "check-tree-untouched: NO HE PODIDO MIRAR — no existe o no puedo leer la foto" >&2
-		echo "  '$ref'. Sin ella no se ha comparado nada, y eso NO es un arbol intacto." >&2
+		echo "check-tree-untouched: COULD NOT CHECK — snapshot is missing or unreadable:" >&2
+		echo "  '$ref'. Nothing was compared, so the tree cannot be reported as unchanged." >&2
 		exit 2
 	fi
 	ahora="$(foto)"
 	antes="$(cat "$ref" 2>/dev/null)"
 	if [ "$ahora" = "$antes" ]; then
-		echo "check-tree-untouched: LIMPIO — el arbol esta igual que antes de los gates."
+		echo "check-tree-untouched: CLEAN — the tree is unchanged after the checks."
 		exit 0
 	fi
-	echo "check-tree-untouched: ⛔ EL ARBOL CAMBIO durante los gates."
+	echo "check-tree-untouched: ⛔ the tree changed during the checks."
 	diff <(printf '%s\n' "$antes") <(printf '%s\n' "$ahora") 2>/dev/null | sed 's/^/    /'
 	echo
-	echo "  Un gate que modifica el arbol al comprobarlo no lo descubre quien lo escribio: lo"
-	echo "  descubre el 'git add -A' de otro carril, ya commiteado. Si una bateria necesita"
-	echo "  mutar un fichero para su control negativo, el 'cp' de vuelta NO basta — va en un"
-	echo "  trap, como scripts/test-public-counts-verdicts.sh desde el 2026-08-19."
+	echo "  A check that modifies the tree can leave changes for another contributor's"
+	echo "  'git add -A' to commit. If a suite must mutate a file for its negative control,"
+	echo "  restoring it with 'cp' is insufficient; restoration must run in a trap,"
+	echo "  as in scripts/test-public-counts-verdicts.sh since 2026-08-19."
 	exit 1
 	;;
 *) uso ;;

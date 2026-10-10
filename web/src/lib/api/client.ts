@@ -155,14 +155,7 @@ export function configureApiClient(c: Partial<ClientConfig>): void {
   config = { ...config, ...c }
 }
 
-/** ensureFreshSession renews the credential if it is about to expire. RAW-fetch paths —
- * the CSV/NDJSON/PDF downloads the JSON client cannot consume — call this before fetching,
- * because they bypass `apiFetch` and would otherwise be the only requests in the console
- * that still die of expiry. It shares the single-flight slot, so a download starting
- * alongside five queries still renews once.
- *
- * Silent on purpose: a renewal that cannot happen leaves the caller exactly where it was —
- * the request goes out with the current credential and its 401 is handled as before. */
+/** Renew before raw/scoped requests; callers own scope and response effects. */
 export async function ensureFreshSession(): Promise<void> {
   if (caducaPronto()) await refreshOnce()
 }
@@ -327,8 +320,40 @@ export async function apiFetch<T>(
 export async function apiFetchWithMeta<T>(
   path: string,
   opts: RequestOptions = {},
-  reintentoTrasRefresco = false,
 ): Promise<{ status: number; data: T; headers: Headers }> {
+  const isolated = opts.sessionEffects === 'none'
+  const res = await apiFetchRaw(path, opts)
+
+  // Parse the body once (JSON when present); tolerate empty/non-JSON bodies.
+  let parsed: unknown = undefined
+  if (res.status !== 204) {
+    const text = await res.text()
+    if (isolated) opts.signal?.throwIfAborted()
+    if (text) {
+      try {
+        parsed = JSON.parse(text)
+      } catch {
+        parsed = undefined
+      }
+    }
+  }
+
+  assertListEnvelope(path, res.status, parsed)
+  return { status: res.status, data: parsed as T, headers: res.headers }
+}
+
+/** apiFetchRaw is the request every console call makes, and the one a download uses
+ * directly: tenant pinned on entry, session renewed before it expires, a recoverable 401
+ * replayed once, a dead session signed out, a non-2xx mapped to ApiError from the error
+ * envelope, a transport failure mapped to NetworkError. It resolves with the 2xx Response
+ * UNREAD, so a CSV, NDJSON, PDF or archive keeps the engine's exact bytes and the caller
+ * reads the headers it needs (Content-Disposition, X-Olivares-Truncated). The caller sets
+ * Accept through opts.headers. */
+export async function apiFetchRaw(
+  path: string,
+  opts: RequestOptions = {},
+  reintentoTrasRefresco = false,
+): Promise<Response> {
   const isolated = opts.sessionEffects === 'none'
   if (isolated) opts.signal?.throwIfAborted()
   // ⛔ EL INQUILINO SE FIJA AL ENTRAR, ANTES DE CUALQUIER `await`.
@@ -453,57 +478,51 @@ export async function apiFetchWithMeta<T>(
   // A transport can settle just as its owner retires. Fetch cancellation alone
   // cannot police a response already received, or the later body-reading await.
   if (isolated) opts.signal?.throwIfAborted()
+  if (res.ok) return res
   const requestId = res.headers.get('X-Request-ID') ?? undefined
 
-  // Parse the body once (JSON when present); tolerate empty/non-JSON bodies.
+  // The error body is the engine's envelope when it is JSON; tolerate anything else.
   let parsed: unknown = undefined
-  if (res.status !== 204) {
-    const text = await res.text()
-    if (isolated) opts.signal?.throwIfAborted()
-    if (text) {
-      try {
-        parsed = JSON.parse(text)
-      } catch {
-        parsed = undefined
-      }
+  const text = await res.text()
+  if (isolated) opts.signal?.throwIfAborted()
+  if (text) {
+    try {
+      parsed = JSON.parse(text)
+    } catch {
+      parsed = undefined
     }
   }
 
-  if (!res.ok) {
-    const { code, message, details } = parseErrorEnvelope(
-      parsed,
-      res.statusText || 'Request failed',
+  const { code, message, details } = parseErrorEnvelope(
+    parsed,
+    res.statusText || 'Request failed',
+  )
+  const retryAfter = res.headers.get('Retry-After')?.trim() || undefined
+  const err = new ApiError(
+    res.status,
+    code,
+    message,
+    requestId,
+    details,
+    parsed,
+    retryAfter,
+  )
+  // An authenticated 401 means the session expired or was revoked → let the
+  // app clear it and route to login. Anonymous 401s (e.g. bad login) surface
+  // to the caller for inline handling.
+  // EXPIRED is recoverable and REVOKED is not, so the credential is rotated once and
+  // the request replayed; only if that fails does the app clear the session and route
+  // to login. Anonymous 401s (e.g. bad login) still surface for inline handling.
+  if (err.isUnauthenticated && !opts.anonymous && !isolated) {
+    if (
+      puedeReintentar(path, opts, reintentoTrasRefresco) &&
+      (await refreshOnce())
     )
-    const retryAfter = res.headers.get('Retry-After')?.trim() || undefined
-    const err = new ApiError(
-      res.status,
-      code,
-      message,
-      requestId,
-      details,
-      parsed,
-      retryAfter,
-    )
-    // An authenticated 401 means the session expired or was revoked → let the
-    // app clear it and route to login. Anonymous 401s (e.g. bad login) surface
-    // to the caller for inline handling.
-    // EXPIRED is recoverable and REVOKED is not, so the credential is rotated once and
-    // the request replayed; only if that fails does the app clear the session and route
-    // to login. Anonymous 401s (e.g. bad login) still surface for inline handling.
-    if (err.isUnauthenticated && !opts.anonymous && !isolated) {
-      if (
-        puedeReintentar(path, opts, reintentoTrasRefresco) &&
-        (await refreshOnce())
-      )
-        // `opts` lleva ya el inquilino fijado al entrar: el replay no vuelve a leerlo.
-        return apiFetchWithMeta<T>(path, opts, true)
-      config.onUnauthorized()
-    }
-    throw err
+      // `opts` lleva ya el inquilino fijado al entrar: el replay no vuelve a leerlo.
+      return apiFetchRaw(path, opts, true)
+    config.onUnauthorized()
   }
-
-  assertListEnvelope(path, res.status, parsed)
-  return { status: res.status, data: parsed as T, headers: res.headers }
+  throw err
 }
 
 /** puedeReintentar decides whether ONE replay after a credential rotation is safe.

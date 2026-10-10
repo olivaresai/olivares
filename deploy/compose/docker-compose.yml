@@ -44,7 +44,9 @@ name: olivares
 
 services:
   olivares:
-    image: ${OLIVARES_IMAGE:-docker.io/olivaresai/olivares:latest}
+    # release
+    image: ${OLIVARES_IMAGE:-docker.io/olivaresai/olivares:0.1}
+    # /release
     # A FIXED NAME, so the documented next step is one argv an operator can type:
     #   docker exec olivares olivares first-boot
     # The cost is deliberate and worth stating: two copies of this stack cannot run
@@ -75,6 +77,8 @@ services:
       # prints and what the passkey relying party is derived from.
       OLIVARES_PUBLIC_URL: "${OLIVARES_PUBLIC_URL:-}"
       HOME: /var/lib/olivares/home
+      # The directory the command above serves, so a bare `olivares first-boot` finds it.
+      OLIVARES_DATA_DIR: /var/lib/olivares
     ports:
       # PUBLISHED ON EVERY HOST INTERFACE BY DEFAULT. This is a server: the console
       # answers over TLS with a self-signed first-boot certificate and no default
@@ -91,6 +95,16 @@ services:
     volumes:
       # Holds engine state, managed tools, account homes and session folders — persist it.
       - olivares-data:/var/lib/olivares
+      # The ONE project mount, at /project, read-write: the host folder whose absolute path
+      # is in OLIVARES_PROJECT_DIR (.env or the shell). Unset, /project is the empty
+      # olivares-project volume, never the directory you run `docker compose` from: the
+      # documented commands run from the Olivares checkout, whose deploy/compose/ holds the
+      # DR passphrase and the Postgres .env. A session started in /project is confined to it
+      # like any session folder, and can change everything in it: never point the variable
+      # at your home directory. Compose 2 can create a missing folder as root: check the path.
+      # The container user is UID 65532, so on a Linux host it needs write access to the
+      # folder (deploy/compose/README.md, "Work on a host project folder").
+      - "${OLIVARES_PROJECT_DIR:-olivares-project}:/project"
     # Agent dependencies are in the image; installations and caches stay in the volume.
     user: "65532:65532"
     read_only: true
@@ -100,12 +114,19 @@ services:
       - ALL
     security_opt:
       - no-new-privileges:true
-    # Resource ceilings (honored by `docker compose up`); match the Helm defaults.
+      # AppArmor 4 hosts: load the shipped profile as the README shows before up.
+      - apparmor=${OLIVARES_APPARMOR_PROFILE:-docker-default}
+      # Docker's default profile plus the user and network namespaces that confine
+      # a record-bound Claude Code or Codex session to its provider; nothing else is added.
+      - seccomp=../seccomp/olivares-sessions.json
+    # Memory ceiling for the engine plus the first agent session. There is no CPU limit:
+    # a Docker daemon refuses a CPU limit above its CPU count, so any limit above 1 would
+    # stop `up` on a 1-CPU host. The host's CPUs bound the engine; to cap it lower, add
+    # deploy.resources.limits.cpus (at most the host's CPU count) in a Compose override.
     deploy:
       resources:
         limits:
-          cpus: "1.0"
-          memory: 1G
+          memory: 2G
         reservations:
           cpus: "0.1"
           memory: 256M
@@ -128,3 +149,4 @@ services:
 
 volumes:
   olivares-data:
+  olivares-project:

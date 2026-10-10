@@ -95,7 +95,7 @@ func ollamaStateWithin(m *Module, want string, d time.Duration) bool {
 	return false
 }
 
-// HU2-14: after an engine restart the Ollama a person had started stayed "Not running"
+// After an engine restart the Ollama a person had started stayed "Not running"
 // until someone pressed Start, and the tools it serves failed. The start is kept
 // outside the child's directories; the next engine starts it again and registers it in
 // the same tenant; Stop forgets it.

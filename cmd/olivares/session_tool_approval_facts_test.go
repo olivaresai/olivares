@@ -18,6 +18,7 @@ import (
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/modules/governance"
+	"github.com/olivaresai/olivares/modules/sessions/hookpep"
 )
 
 func TestSessionClaudeApprovalCarriesRedactedToolFacts(t *testing.T) {
@@ -52,8 +53,8 @@ func TestSessionClaudeApprovalCarriesRedactedToolFacts(t *testing.T) {
 			service := h.set.gov.EngineApprovals()
 			h.set.gov.UseApprovalCapacity(h.authr.ApprovalCapacity)
 			h.set.gov.UseApprovalAuthority(h.authr, auth.NewAuthorizer(h.set.gov.RequestEvaluator(), auth.WithScopedGrants(h.set.gov.ScopedGrants())))
-			createSessionReviewPolicy(t, h, hookActionCapability, "claude.tool")
-			d := &claudeHookDecider{defaultPolicy: &hookPolicyDoc{Default: "allow"}, authr: c, eval: h.set.gov.Evaluator(), scoped: h.set.gov.ScopedGrants(), approvals: service, store: h.st, clock: time.Now, log: discardLog()}
+			createSessionReviewPolicy(t, h, hookpep.ActionCapability, "claude.tool")
+			d := newClaudeHookDecider(&hookpep.Decider{DefaultPolicy: &hookpep.PolicyDoc{Default: "allow"}, Authr: c, Eval: h.set.gov.Evaluator(), Authz: harnessAuthz(h), Scoped: h.set.gov.ScopedGrants(), Approvals: service, Store: h.st, Clock: time.Now, Log: discardLog()})
 			payload, err := json.Marshal(map[string]any{"hook_event_name": "PreToolUse", "session_id": "untrusted-vendor-session", "tool_name": tc.tool, "tool_input": tc.input})
 			if err != nil {
 				t.Fatal(err)
@@ -67,7 +68,7 @@ func TestSessionClaudeApprovalCarriesRedactedToolFacts(t *testing.T) {
 			defer func() { cancel(); <-done }()
 			var pending governance.Approval
 			for pending.ID == "" {
-				items, _, err := service.List(context.Background(), tenant, hookActionCapability, "pending", "")
+				items, _, err := service.List(context.Background(), tenant, hookpep.ActionCapability, "pending", "")
 				if err != nil {
 					t.Fatal(err)
 				}

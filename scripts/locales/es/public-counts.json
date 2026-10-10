@@ -1,0 +1,5 @@
+{
+  "selectable_modules": "módulos\\s+seleccionables\\b",
+  "modules": "módulos(?!\\s+seleccionables\\b)",
+  "twenty_one": "veinti(?:ún|uno|una)"
+}

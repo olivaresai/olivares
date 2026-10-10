@@ -1,11 +1,13 @@
 {
   "truncation": {
     "label": "Cargadas {{n}} filas; hay más",
-    "hint": "Esta vista previa del workspace tiene un techo. Usa Ver todo para explorar un inventario más amplio."
+    "hint": "Esta vista previa del workspace tiene un techo. Usa Ver todo para explorar un inventario más amplio.",
+    "hintCapped": "Esta vista previa del workspace tiene un techo."
   },
   "title": "Vista del espacio de trabajo",
   "selectTitle": "Ningún espacio de trabajo seleccionado",
   "selectPrompt": "Seleccione un espacio de trabajo en el rail de navegación para abrir este resumen, o vaya al inventario del inquilino.",
+  "selectPromptWorkspaceOnly": "Seleccione un espacio de trabajo en el rail de navegación para abrir este resumen.",
   "viewInventory": "Abrir inventario",
   "agents": "Agentes",
   "sessions": "Sesiones",
@@ -24,5 +26,12 @@
   "viewAll": "Ver todos",
   "defaultBadge": "Predeterminado",
   "created": "Creado",
-  "lastUpdated": "Última actualización"
+  "lastUpdated": "Última actualización",
+  "contents": {
+    "title": "Contenido del espacio de trabajo",
+    "count": "Recuento",
+    "loading": "Leyendo el contenido del espacio de trabajo…",
+    "empty": "Este espacio de trabajo aún no contiene nada.",
+    "unavailable": "El contenido del espacio de trabajo no está disponible."
+  }
 }

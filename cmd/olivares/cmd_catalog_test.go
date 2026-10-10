@@ -317,6 +317,18 @@ func TestCatalogInstanceTransitionRequiresAStatus(t *testing.T) {
 	}
 }
 
+func TestCatalogActivationCarriesApprovalReference(t *testing.T) {
+	prepareDatalaneCLITest(t)
+	rec := newDatalaneRecorder(t, http.StatusOK, `{"id":"ci_1","status":"active"}`)
+	if _, _, err := execDatalane(t, "", datalaneArgs(rec,
+		"catalog", "instances", "transition", "ci_1", "--status", "active", "--approval-ref", "ap_1", "--yes")...); err != nil {
+		t.Fatalf("activate with approval = %v", err)
+	}
+	if body := rec.jsonBody(t); body["approval_ref"] != "ap_1" || body["status"] != "active" {
+		t.Fatalf("activation body = %#v", body)
+	}
+}
+
 // TestCatalogDoesNotExtendTheMCPCommand is the collision guard this lot was
 // handed. `mcp` was already modified on this branch by the exit-code work, and
 // the adjacency of `catalog mcp-admission` to `mcp pins` is exactly the kind of

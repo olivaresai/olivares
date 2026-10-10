@@ -49,6 +49,10 @@
  * every sentence here exists to say what the product is NOT.
  */
 export const KNOWN_DISCLAIMERS: Readonly<Record<string, string>> = {
+  // The dependency-free disclaimer gate reads single-quoted canonical keys.
+  // prettier-ignore
+  'Draft ISO/IEC 42001:2023 certification-readiness pack based on Olivares AI\'s current assessment and operator-supplied context. All artifacts are drafts; a competent person must review them before submission to a certification body, auditor or buyer. This pack provides neither certification nor conformity assurance nor legal advice. Certification requires an accredited body (ISO/IEC 42006:2025). Control status reflects current tenant evidence; gaps remain unsatisfied.':
+    'aimsPack',
   'Technical control-status mapping derived from observed platform evidence. NOT a certification and NOT legal advice.':
     'report',
 }

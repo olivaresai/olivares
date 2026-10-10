@@ -12,18 +12,18 @@ export LC_ALL
 
 lot6_root="${OLIVARES_CLONE:-$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")/.." && pwd -P)}"
 cd "$lot6_root" 2>/dev/null || {
-	echo "console-func-l6: NO PUDE MIRAR — no puedo entrar en $lot6_root" >&2
+	echo "console-func-l6: COULD NOT CHECK — cannot enter $lot6_root" >&2
 	exit 2
 }
 
 if [ "${CONSOLE_FUNC_L6_FORCE_UNAVAILABLE:-0}" = "1" ]; then
-	echo "console-func-l6: NO PUDE MIRAR — indisponibilidad de control solicitada" >&2
+	echo "console-func-l6: COULD NOT CHECK — unavailable positive control requested" >&2
 	exit 2
 fi
 
 for lot6_tool in rg pnpm go mktemp; do
 	command -v "$lot6_tool" >/dev/null 2>&1 || {
-		echo "console-func-l6: NO PUDE MIRAR — falta $lot6_tool" >&2
+		echo "console-func-l6: COULD NOT CHECK — missing $lot6_tool" >&2
 		exit 2
 	}
 done
@@ -36,20 +36,20 @@ lot6_require() {
 	local lot6_count
 	local lot6_rc
 	if [ ! -r "$lot6_file" ]; then
-		echo "console-func-l6: NO PUDE MIRAR — no puedo leer $lot6_file" >&2
+		echo "console-func-l6: COULD NOT CHECK — cannot read $lot6_file" >&2
 		exit 2
 	fi
 	lot6_count="$(rg -F -c -- "$lot6_needle" "$lot6_file" 2>/dev/null)"
 	lot6_rc=$?
 	if [ "$lot6_rc" -gt 1 ]; then
-		echo "console-func-l6: NO PUDE MIRAR — rg fallo sobre $lot6_file" >&2
+		echo "console-func-l6: COULD NOT CHECK — rg failed on $lot6_file" >&2
 		exit 2
 	fi
 	if [ "${lot6_count:-0}" -lt 1 ]; then
-		echo "console-func-l6: ROTO — $lot6_name" >&2
+		echo "console-func-l6: FAIL — $lot6_name" >&2
 		lot6_broken=1
 	else
-		echo "console-func-l6: FUNCIONA — $lot6_name"
+		echo "console-func-l6: PASS — $lot6_name"
 	fi
 }
 
@@ -59,19 +59,19 @@ lot6_forbid() {
 	local lot6_needle="$3"
 	local lot6_rc
 	if [ ! -r "$lot6_file" ]; then
-		echo "console-func-l6: NO PUDE MIRAR — no puedo leer $lot6_file" >&2
+		echo "console-func-l6: COULD NOT CHECK — cannot read $lot6_file" >&2
 		exit 2
 	fi
 	rg -F -q -- "$lot6_needle" "$lot6_file" 2>/dev/null
 	lot6_rc=$?
 	if [ "$lot6_rc" -eq 0 ]; then
-		echo "console-func-l6: ROTO — $lot6_name" >&2
+		echo "console-func-l6: FAIL — $lot6_name" >&2
 		lot6_broken=1
 	elif [ "$lot6_rc" -gt 1 ]; then
-		echo "console-func-l6: NO PUDE MIRAR — rg fallo sobre $lot6_file" >&2
+		echo "console-func-l6: COULD NOT CHECK — rg failed on $lot6_file" >&2
 		exit 2
 	else
-		echo "console-func-l6: FUNCIONA — $lot6_name"
+		echo "console-func-l6: PASS — $lot6_name"
 	fi
 }
 
@@ -87,10 +87,13 @@ lot6_require DEPLOY_PLAN_ARRAY \
 	modules/deploy/lifecycle.go 'if changes == nil {'
 lot6_require DEPLOY_VERIFY_ARRAY \
 	modules/deploy/lifecycle.go 'if result.Changes == nil {'
-lot6_require ORCHESTRATION_DECLARED_NOT_FIRED \
-	web/src/features/orchestration/orchestration-view.tsx "'declared_not_fired',"
 lot6_require VIEWER_PERMISSION_CONTEXT_ISOLATED \
 	web/e2e/console-func-l6.spec.ts 'const viewerContext = await browser.newContext()'
+# The private assembler owns the paid subjects; missing files there still refuse.
+lot6_private_tests=()
+if [ -d enterprise ]; then
+lot6_require ORCHESTRATION_DECLARED_NOT_FIRED \
+	web/src/features/orchestration/orchestration-view.tsx "'declared_not_fired',"
 lot6_forbid ORCHESTRATION_NEIGHBORS_UNREACHABLE \
 	web/src/features/orchestration/orchestration-view.tsx 'orchestrationApi.neighbors('
 lot6_forbid ORCHESTRATION_TIMELINE_UNREACHABLE \
@@ -98,12 +101,15 @@ lot6_forbid ORCHESTRATION_TIMELINE_UNREACHABLE \
 lot6_forbid ORCHESTRATION_SCHEDULE_DETAIL_UNREACHABLE \
 	web/src/features/orchestration/orchestration-view.tsx 'orchestrationApi.schedule('
 
+ lot6_private_tests=(src/features/orchestration/api.test.ts src/features/orchestration/decisions-estate.test.tsx src/features/orchestration/orchestration.test.tsx)
+fi
+
 if [ "$lot6_broken" -ne 0 ]; then
 	exit 1
 fi
 
 lot6_log="$(mktemp "${TMPDIR:-/tmp}/console-func-l6.XXXXXX")" || {
-	echo "console-func-l6: NO PUDE MIRAR — mktemp fallo" >&2
+	echo "console-func-l6: COULD NOT CHECK — mktemp failed" >&2
 	exit 2
 }
 trap 'rm -f -- "$lot6_log"' EXIT
@@ -121,13 +127,11 @@ if pnpm -C web exec vitest run \
 	src/features/eventing/eventing-view.test.tsx \
 	src/features/eventing/sink-format.test.ts \
 	src/features/deploy/deploy.test.tsx \
-	src/features/orchestration/api.test.ts \
-	src/features/orchestration/decisions-estate.test.tsx \
-	src/features/orchestration/orchestration.test.tsx >"$lot6_log" 2>&1; then
-	echo "console-func-l6: FUNCIONA — FOCUSED_COMPONENT_TESTS"
+	"${lot6_private_tests[@]}" >"$lot6_log" 2>&1; then
+	echo "console-func-l6: PASS — FOCUSED_COMPONENT_TESTS"
 else
 	lot6_rc=$?
-	echo "console-func-l6: ROTO — FOCUSED_COMPONENT_TESTS (rc=$lot6_rc)" >&2
+	echo "console-func-l6: FAIL — FOCUSED_COMPONENT_TESTS (rc=$lot6_rc)" >&2
 	sed -n '1,180p' "$lot6_log" >&2
 	exit 1
 fi
@@ -135,20 +139,20 @@ fi
 if go test ./modules/sessions \
 	-run '^TestProtocolBindingSpecAPIDraftActivateDisableAndRead$' -count=1 \
 	>>"$lot6_log" 2>&1; then
-	echo "console-func-l6: FUNCIONA — PROTOCOL_HANDLER_TEST"
+	echo "console-func-l6: PASS — PROTOCOL_HANDLER_TEST"
 else
 	lot6_rc=$?
-	echo "console-func-l6: ROTO — PROTOCOL_HANDLER_TEST (rc=$lot6_rc)" >&2
+	echo "console-func-l6: FAIL — PROTOCOL_HANDLER_TEST (rc=$lot6_rc)" >&2
 	sed -n '1,180p' "$lot6_log" >&2
 	exit 1
 fi
 
 if go test ./modules/deploy -run '^TestApplyIsIdempotent$' -count=1 \
 	>>"$lot6_log" 2>&1; then
-	echo "console-func-l6: FUNCIONA — DEPLOY_HANDLER_TEST"
+	echo "console-func-l6: PASS — DEPLOY_HANDLER_TEST"
 else
 	lot6_rc=$?
-	echo "console-func-l6: ROTO — DEPLOY_HANDLER_TEST (rc=$lot6_rc)" >&2
+	echo "console-func-l6: FAIL — DEPLOY_HANDLER_TEST (rc=$lot6_rc)" >&2
 	sed -n '1,180p' "$lot6_log" >&2
 	exit 1
 fi

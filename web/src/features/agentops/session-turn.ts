@@ -38,3 +38,35 @@ export function sessionTurnBody(
     }),
   }
 }
+
+/** Why Send cannot act now, as an `agentops` i18n key. */
+export type SendBlockedReason =
+  | 'live.blocked.notLive'
+  | 'live.blocked.approval'
+  | 'live.blocked.sending'
+  | 'live.blocked.empty'
+
+/**
+ * The one reason a Send button is disabled, from the state that disables it, or null
+ * when it can act. Every Send that disables itself shows this text and points at it
+ * (a disabled control says why and what unblocks it). The session state comes
+ * first: typing cannot unblock a session that is not live, and a launch held for its
+ * approval is unblocked by that approval, not by a start or resume.
+ */
+export function sendBlockedReason({
+  live,
+  draft,
+  sending,
+  waitingApproval = false,
+}: {
+  live: boolean
+  draft: string
+  sending: boolean
+  waitingApproval?: boolean
+}): SendBlockedReason | null {
+  if (!live)
+    return waitingApproval ? 'live.blocked.approval' : 'live.blocked.notLive'
+  if (sending) return 'live.blocked.sending'
+  if (!draft.trim()) return 'live.blocked.empty'
+  return null
+}

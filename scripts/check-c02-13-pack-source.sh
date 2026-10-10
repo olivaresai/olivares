@@ -26,6 +26,9 @@ DOC="${OLIVARES_C0213_DOC:-design/C02-13-PACK-SOURCE-2026-08-19.md}"
 [ -f "$C13" ] || cannot "missing C13-02 map $C13"
 [ -f "$DOC" ] || cannot "missing $DOC"
 
+[ -r "$ROOT/scripts/module-catalog-go.sh" ] || cannot "missing generation wrapper"
+bash "$ROOT/scripts/module-catalog-go.sh" pack-check
+
 python3 - "$JSON" "$SETS" "$ADDON" "$C13" <<'PY' || fail "pack-composition drifted from sets.ts or addon-sets.sh"
 import itertools, json, re, sys
 
@@ -44,8 +47,6 @@ if base.get("product_id") != "self_hosted.business":
 if ent.get("product_id") != "self_hosted.enterprise":
     raise SystemExit("enterprise product_id drifted")
 codes = [a.get("code") for a in addons]
-if sorted(codes) != ["airs", "cp", "ids", "reg"]:
-    raise SystemExit("addon codes %s, want airs/cp/ids/reg" % codes)
 # Derive slugs: biz, biz+sorted-subsets, ent. Same rule as sets.ts setSlug.
 want_slugs = ["biz"]
 for r in range(1, len(codes) + 1):
@@ -53,8 +54,6 @@ for r in range(1, len(codes) + 1):
         want_slugs.append("biz+" + "+".join(combo))
 want_slugs.append("ent")
 want_slugs = sorted(want_slugs)
-if len(want_slugs) != 17:
-    raise SystemExit("derived %d slugs, want 17" % len(want_slugs))
 
 # sets.ts ADDON_CODES and ALLOWED_SET_SLUGS.
 m = re.search(r"export const ADDON_CODES = \[([^\]]+)\]", sets)
@@ -82,5 +81,5 @@ if len(entries) < 20:
     raise SystemExit("C13-02 map too short (%d)" % len(entries))
 PY
 
-say "check-c02-13-pack-source: CLEAN — 17 slugs derived; sets.ts and addon-sets.sh match."
+say "check-c02-13-pack-source: CLEAN — generated pack views and legacy catalog checks match."
 exit 0

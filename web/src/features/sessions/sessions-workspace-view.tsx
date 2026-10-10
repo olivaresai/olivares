@@ -8,20 +8,12 @@ import {
   type QueryClient,
 } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
-import {
-  Activity,
-  Eye,
-  HelpCircle,
-  Plus,
-  RefreshCw,
-  Terminal,
-} from 'lucide-react'
+import { Activity, Eye, HelpCircle, Plus, Terminal } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { DataTable, type TableColumn } from '@/components/data/data-table'
 import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
-import { PageHeader, WORK_CHROME_ROW } from '@/components/ui/page-header'
 import {
   Select,
   SelectContent,
@@ -29,18 +21,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Tabs, TabsContent } from '@/components/ui/tabs'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
 import {
   useAuthBoundary,
   type AuthBoundary,
 } from '@/features/agentops/auth-boundary'
 import { ProfilesPanel } from '@/features/agentops/profiles-panel'
-import { RunCreateDialog } from '@/features/agentops/run-create-dialog'
-import { NewSessionDialog } from '@/features/first-hour/first-hour'
+import { useNewSessionDialog } from '@/features/first-hour/new-session-store'
 import type { RunState } from '@/features/agentops/types'
 import { WorkspacesPanel } from '@/features/agentops/workspaces-panel'
-import { LiveDot, RelTimeLabel, useLiveStream } from '@/features/shared'
+import { RelTimeLabel, useLiveStream } from '@/features/shared'
 import { ApiError } from '@/lib/api/errors'
 import { useAuth } from '@/lib/auth/context'
 import { formatInt, formatMicroUsd, formatTokens } from '@/lib/format'
@@ -52,6 +44,8 @@ import { sessionsApi, sessionsKeys } from './api'
 import {
   EVIDENCE_PARAM,
   PANE_PARAM,
+  PANEL_PARAM,
+  TAB_PARAM,
   SESSION_ADDRESS_KEYS,
   SESSION_PARAM,
   addressFromTarget,
@@ -76,6 +70,11 @@ import { chooseDefaultAddress } from './default-selection'
 import { groupSessions, railOrder } from './session-groups'
 import { useSessionPins } from './use-session-pins'
 import { useSessionResolution } from './use-session-resolution'
+import {
+  SessionsListHeader,
+  SessionsViewHeader,
+  type SessionsView,
+} from './list-header'
 import { WorkSurface } from './work-surface'
 import type { SessionTarget } from './session-target'
 import type { CcState, LiveDTO } from './types'
@@ -407,14 +406,40 @@ function Inner({
   // the shell's own breakpoint decides, so the table and the chrome collapse together.
   const phone = useIsPhone()
 
-  const [tab, setTab] = useState('sessions')
+  const decodeView = useCallback(
+    (raw: Record<string, string | undefined>) => {
+      const requested = raw[TAB_PARAM] ?? 'sessions'
+      const valid =
+        requested === 'sessions' ||
+        requested === 'table' ||
+        (requested === 'workspaces' && canRunRead) ||
+        (requested === 'profiles' && canProfileRead)
+      return {
+        value: valid ? requested : 'sessions',
+        issues: valid ? [] : [TAB_PARAM],
+      }
+    },
+    [canRunRead, canProfileRead],
+  )
+  const [view, patchView, viewIssues] = useValidatedUrlState(
+    [TAB_PARAM],
+    decodeView,
+    { history: 'push' },
+  )
+  const tab = view
+  const setTab = (value: string) =>
+    patchView({ [TAB_PARAM]: value === 'sessions' ? undefined : value })
+  // Back from another view of the page puts the keyboard on the list's menu button.
+  const [returned, setReturned] = useState(false)
   const [state, setState] = useState<string>(ALL)
   const [source, setSource] = useState<string>(
     entrance === 'operate' ? 'launched' : ALL,
   )
   const [selection, setSelection] = useState<Selection | null>(null)
-  const [createOpen, setCreateOpen] = useState(false)
-  const [quickOpen, setQuickOpen] = useState(false)
+  // The shell's one New session form. The launch dialog opens from inside it, whose
+  // button is gone when it closes; focus returns to this button instead.
+  const openNewSession = (event: { currentTarget: HTMLElement }) =>
+    useNewSessionDialog.getState().setOpen(true, event.currentTarget)
   /**
    * IS THE FULL DETAIL SHEET OPEN? Selecting a session no longer opens it: the three
    * panes are where a session is READ, and the sheet is where it is OPERATED — attach,
@@ -681,7 +706,6 @@ function Inner({
   }, [canLiveRead, canRunRead, liveQuery, runsQuery])
 
   /** Ninguna fuente legible ⇒ el botón no tiene nada que refrescar y no se pinta. */
-  const hayFuenteLegible = canLiveRead || canRunRead
 
   /**
    * ONE REFRESH IN FLIGHT, AND ONE MORE IF SOMETHING HAPPENED WHILE IT RAN — held by
@@ -1404,7 +1428,7 @@ function Inner({
    * writer of what is on screen and the URL can never disagree with the card.
    */
   /** The RAIL opens a session: the panes are the destination, no modal. */
-  const abrirDelCarril = useCallback(
+  const openFromRail = useCallback(
     (s: UnifiedSession) => {
       // Below `xl` one pane is in front: opening a session from the list brings its
       // work forward, so a phone goes list → detail in one tap (AU5-06). At `xl` the
@@ -1444,6 +1468,13 @@ function Inner({
     [patchAddress],
   )
 
+  const elegirPanelTab = useCallback(
+    (panel: string) => {
+      patchAddress({ [PANEL_PARAM]: panel }, { history: 'replace' })
+    },
+    [patchAddress],
+  )
+
   const elegirEvidencia = useCallback(
     (block: EvidenceBlock) => {
       patchAddress({ [EVIDENCE_PARAM]: block }, { history: 'replace' })
@@ -1475,8 +1506,46 @@ function Inner({
   // tab follows that permission, and the panel checks write/admin at each control.
   const showProfiles = can('sessions:profile:read')
   const canBindingRead = can('sessions:profile-binding:read')
-  const title = t('title')
   const loadingCounts = liveQuery.isLoading || runsQuery.isLoading
+  /**
+   * NEW SESSION IS OFFERED ONCE PER SCREEN. With sessions listed it is the header's verb;
+   * with none, the list's one empty state carries it instead, and the header does not
+   * repeat it (the 26.10.1 review counted four on one screen, and three remained). The
+   * tabs that list no sessions keep it in the header.
+   */
+  const newSession = canRunWrite ? (
+    <Button variant="primary" size="sm" onClick={openNewSession}>
+      <Plus className="size-3.5" />
+      {t('launch')}
+    </Button>
+  ) : undefined
+  // The empty list's one action: a primary pill in open space.
+  const emptyNewSession = canRunWrite ? (
+    <Button
+      variant="primary"
+      size="lg"
+      className="rounded-full"
+      onClick={openNewSession}
+    >
+      <Plus />
+      {t('launch')}
+    </Button>
+  ) : undefined
+  const listTab = tab === 'sessions' || tab === 'table'
+  const tableError =
+    (!canLiveRead || liveQuery.isError) && (!canRunRead || runsQuery.isError)
+      ? (liveQuery.error ?? runsQuery.error)
+      : undefined
+  // ONE RETRY PER SCREEN. It re-reads both halves, so it sits on the first notice shown,
+  // and not at all where the table's own error state already carries one.
+  const noticeRetry = !(tab === 'table' && tableError !== undefined)
+  // A selected session can hide the empty rail on narrow screens. Keep its action
+  // in the header; only an unselected surface gives the action to the empty state.
+  const emptyActionVisible =
+    listTab &&
+    sessions.length === 0 &&
+    !loadingCounts &&
+    (tab === 'table' ? !tableError : !resolution.target)
   // Without the run half a launched session's state is not known, so "running" is left
   // out rather than guessed from the observed half; the partial notice says which half.
   // No sessions: the empty state says it; a "0 sessions · 0 running" line above it says
@@ -1496,138 +1565,120 @@ function Inner({
           .filter(Boolean)
           .join(' · ')
 
+  const listViews: SessionsView[] = [
+    'table',
+    ...(showWorkspaces ? (['workspaces'] as const) : []),
+    ...(showProfiles ? (['profiles'] as const) : []),
+  ]
+  const viewTitle: Record<SessionsView, string> = {
+    table: t('tabs.table'),
+    workspaces: t('tabs.workspaces'),
+    profiles: t('tabs.profiles'),
+  }
+  // The New session of a view that is not the list: the list carries its own in its head.
+  const viewNewSession = emptyActionVisible ? undefined : newSession
+  const subview = (view: SessionsView, children: React.ReactNode) => (
+    <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 pb-4 sm:px-6">
+      <SessionsViewHeader
+        title={viewTitle[view]}
+        count={counts.total}
+        countLabel={countText}
+        onBack={() => {
+          setReturned(true)
+          setTab('sessions')
+        }}
+        actions={viewNewSession}
+      />
+      {children}
+    </div>
+  )
+
   return (
-    /* WORK MODE. `min-h-0` and `flex-1` so this screen DIVIDES the viewport
-       it was given instead of stacking inside a page that scrolls: every block above the
-       tabs is `shrink-0`, the tab body is `flex-1 min-h-0`, and each pane scrolls on its
-       own. `px-4 py-3` because the work frame carries no padding of its own — a
-       workbench's regions own theirs, and a frame that padded them would take 32 px off
-       the work on every side to no purpose. */
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col px-4 py-3 sm:px-6">
-      <Tabs
-        value={tab}
-        onValueChange={setTab}
-        /* `gap-2` and not `gap-3`: the chrome row, the notices and the panes are one
-           column, and eight pixels is what keeps the first rail row inside its budget
-           once the strip no longer costs a line of its own. */
-        className="flex min-h-0 flex-1 flex-col gap-2"
-      >
-        {/* ⛔ TITLE AND TAB STRIP SHARE ONE 36 px ROW, AND THEY USED TO BE TWO.
-            Measured on the seeded estate at 1440×900: a 24 px title line, a 12 px gap and
-            a 36 px strip put the first rail row at y=181 against a budget of 136 — 45 px
-            of chrome above the work, on the screen this console opens on. The shape is
-            the one `/console` and `/provider-profiles` already carry: the header shrinks,
-            the strip takes what is left, and the counts and the scope note stay on the
-            title line where they were. */}
-        <div
-          data-slot="work-chrome"
-          className={cn(WORK_CHROME_ROW, 'shrink-0')}
+    /* WORK MODE. `min-h-0` and `flex-1` so this screen DIVIDES the viewport it was given
+       instead of stacking inside a page that scrolls: the notices are `shrink-0`, the
+       body is `flex-1 min-h-0`, and the list and the thread scroll on their own. There is
+       no padding here: the list and the thread are regions of the sheet and own theirs,
+       and a frame that padded them would take space from the work on every side. */
+    <TooltipProvider delayDuration={300}>
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <Tabs
+          value={tab}
+          onValueChange={setTab}
+          className="flex min-h-0 flex-1 flex-col gap-0"
         >
-          <PageHeader
-            className="min-w-0"
-            actionsPanelAnchor="row"
-            icon={Activity}
-            title={title}
-            description={
-              countText ? (
-                <span data-testid="sessions-summary">{countText}</span>
-              ) : undefined
-            }
-            actions={
-              <div className="flex items-center gap-2">
-                {canLiveRead && <LiveDot status={streamStatus} />}
-                {hayFuenteLegible && (
+          {/* ⛔ THE VIEWS OF THIS PAGE ARE NOT A TAB STRIP ANY MORE. The list header's `⋯`
+            opens them (the table, the workspaces, the provider profiles) and `tab` is
+            still the state that says which one is on screen; the list is its default. */}
+          <div className="flex shrink-0 flex-col gap-2 px-4 pt-2 empty:hidden">
+            <UrlStateNotice issues={[...addressIssues, ...viewIssues]} />
+            {retiredAddress && (
+              <p
+                role="status"
+                data-testid="sessions-address-retired"
+                className="rounded-md border border-border bg-muted px-2.5 py-2 text-caption text-muted-foreground"
+              >
+                {t('address.retired')}
+              </p>
+            )}
+
+            {!canLiveRead && (
+              <p className="rounded-md border border-border bg-muted px-2.5 py-2 text-caption text-muted-foreground">
+                {t('partial.noLiveRead')}
+              </p>
+            )}
+            {!canRunRead && (
+              <p className="rounded-md border border-border bg-muted px-2.5 py-2 text-caption text-muted-foreground">
+                {t('partial.noRunRead')}
+              </p>
+            )}
+            {/* A HALF THAT FAILED CAN BE ASKED AGAIN. The observed half has no timer and its
+              stream opens only over an answer, so without this a failed first read stayed
+              failed until the page was reloaded. Retry is the same permission-guarded read
+              the table's Retry makes. */}
+            {canRunRead && runsQuery.isError && (
+              <p
+                data-testid="sessions-run-lookup-failed"
+                className="flex items-center gap-2 rounded-md border border-warning-line bg-warning-soft px-2.5 py-2 text-caption text-warning"
+              >
+                <span className="min-w-0 flex-1">
+                  {t('partial.runLookupFailed')}
+                </span>
+                {noticeRetry ? (
                   <Button
-                    variant="ghost"
+                    variant="secondary"
                     size="sm"
                     onClick={refrescarLegibles}
-                    disabled={
-                      (canLiveRead && liveQuery.isFetching) ||
-                      (canRunRead && runsQuery.isFetching)
-                    }
                   >
-                    <RefreshCw
-                      className={cn(
-                        'size-3.5',
-                        ((canLiveRead && liveQuery.isFetching) ||
-                          (canRunRead && runsQuery.isFetching)) &&
-                          'animate-spin',
-                      )}
-                    />
-                    {t('refresh')}
+                    {t('common:actions.retry')}
                   </Button>
-                )}
-              </div>
-            }
-            primaryAction={
-              canRunWrite ? (
-                <Button
-                  variant="primary"
-                  size="sm"
-                  onClick={() => setQuickOpen(true)}
-                >
-                  <Plus className="size-3.5" />
-                  {t('launch')}
-                </Button>
-              ) : undefined
-            }
-          />
-          <TabsList className="min-w-0">
-            <TabsTrigger value="sessions">{t('tabs.sessions')}</TabsTrigger>
-            {/* ⛔ THE TABLE IS NOT DELETED, IT IS A TAB (the answer to a problem is never
-              to remove a function). The surface tells an operator what
-              each session is doing; the table sorts two hundred of them by cost and
-              searches every reference. They are different instruments, and this screen
-              keeps both. */}
-            <TabsTrigger value="table">{t('tabs.table')}</TabsTrigger>
-            {showWorkspaces && (
-              <TabsTrigger value="workspaces">
-                {t('tabs.workspaces')}
-              </TabsTrigger>
+                ) : null}
+              </p>
             )}
-            {showProfiles && (
-              <TabsTrigger value="profiles">{t('tabs.profiles')}</TabsTrigger>
+            {canLiveRead && liveQuery.isError && (
+              <p
+                data-testid="sessions-live-lookup-failed"
+                className="flex items-center gap-2 rounded-md border border-warning-line bg-warning-soft px-2.5 py-2 text-caption text-warning"
+              >
+                <span className="min-w-0 flex-1">
+                  {t('partial.liveLookupFailed')}
+                </span>
+                {noticeRetry && !(canRunRead && runsQuery.isError) ? (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={refrescarLegibles}
+                  >
+                    {t('common:actions.retry')}
+                  </Button>
+                ) : null}
+              </p>
             )}
-          </TabsList>
-        </div>
-
-        <UrlStateNotice issues={addressIssues} />
-        {retiredAddress && (
-          <p
-            role="status"
-            data-testid="sessions-address-retired"
-            className="rounded-md border border-border bg-muted px-2.5 py-2 text-caption text-muted-foreground"
-          >
-            {t('address.retired')}
-          </p>
-        )}
-
-        {!canLiveRead && (
-          <p className="rounded-md border border-border bg-muted px-2.5 py-2 text-caption text-muted-foreground">
-            {t('partial.noLiveRead')}
-          </p>
-        )}
-        {!canRunRead && (
-          <p className="rounded-md border border-border bg-muted px-2.5 py-2 text-caption text-muted-foreground">
-            {t('partial.noRunRead')}
-          </p>
-        )}
-        {canRunRead && runsQuery.isError && (
-          <p className="rounded-md border border-warning-line bg-warning-soft px-2.5 py-2 text-caption text-warning">
-            {t('partial.runLookupFailed')}
-          </p>
-        )}
-        {canLiveRead && liveQuery.isError && (
-          <p className="rounded-md border border-warning-line bg-warning-soft px-2.5 py-2 text-caption text-warning">
-            {t('partial.liveLookupFailed')}
-          </p>
-        )}
-        {truncated && (
-          <p className="rounded-md border border-warning-line bg-warning-soft px-2.5 py-2 text-caption text-warning">
-            {t('partial.truncated')}
-          </p>
-        )}
-        {/* ⛔ THE INSTANCE CELL'S DASH HAS FOUR CAUSES AND SAYS ONE THING. Refused (the
+            {truncated && (
+              <p className="rounded-md border border-warning-line bg-warning-soft px-2.5 py-2 text-caption text-warning">
+                {t('partial.truncated')}
+              </p>
+            )}
+            {/* ⛔ THE INSTANCE CELL'S DASH HAS FOUR CAUSES AND SAYS ONE THING. Refused (the
             grant is absent, so the read is never made), refused by the engine, failed,
             and "the profile is older than the page the engine returned" all reach the
             same quiet dash. The row can only be honest about the VALUE; WHICH of the
@@ -1637,110 +1688,114 @@ function Inner({
             no line regretting a read it did not need. The fourth cause stays silent on
             purpose — there the read ANSWERED, and "it is not in this page" is what the
             truncation notice above already says. */}
-        {profileNamesRefused && (
-          <NamesUnreadNotice testId="sessions-profile-names-refused">
-            {t('partial.noProfileRead')}
-          </NamesUnreadNotice>
-        )}
-        {profileNamesFailed && (
-          <NamesUnreadNotice testId="sessions-profile-names-failed">
-            {t('partial.profileLookupFailed')}
-          </NamesUnreadNotice>
-        )}
+            {profileNamesRefused && (
+              <NamesUnreadNotice testId="sessions-profile-names-refused">
+                {t('partial.noProfileRead')}
+              </NamesUnreadNotice>
+            )}
+            {profileNamesFailed && (
+              <NamesUnreadNotice testId="sessions-profile-names-failed">
+                {t('partial.profileLookupFailed')}
+              </NamesUnreadNotice>
+            )}
+          </div>
 
-        <div
-          data-testid="sessions-panes"
-          className="flex min-h-0 flex-1 flex-col"
-        >
-          <TabsContent
-            value="sessions"
-            className="flex min-h-0 flex-1 flex-col gap-3 pt-0"
+          <div
+            data-testid="sessions-panes"
+            className="flex min-h-0 flex-1 flex-col"
           >
-            <WorkSurface
-              sessions={sessions}
-              loading={liveQuery.isLoading || runsQuery.isLoading}
-              address={address}
-              resolution={resolution}
-              pinned={pins.pinned}
-              onTogglePin={pins.toggle}
-              onOpen={abrirDelCarril}
-              onPane={elegirPanel}
-              onEvidence={elegirEvidencia}
-              onOpenDetail={() => setDetailOpen(true)}
-              /* ⛔ NOT A SECOND PRIMARY. The page header already carries
-               `New session` as THE verb of this screen; a second primary of the same
-               weight three centimetres below it, inside an empty state, meant the
-               screen had two firsts and therefore none. It is an outline now: the same
-               action, the same dialog, offered where the operator is looking without
-               competing with the header's own. And it only appears at all with
-               `sessions:run:write`, which has not changed. */
-              emptyAction={
-                canRunWrite ? (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setQuickOpen(true)}
-                  >
-                    <Plus className="size-3.5" />
-                    {t('launch')}
-                  </Button>
-                ) : undefined
-              }
-            />
-          </TabsContent>
+            <TabsContent
+              value="sessions"
+              aria-label={t('title')}
+              className="flex min-h-0 flex-1 flex-col pt-0"
+            >
+              <WorkSurface
+                sessions={sessions}
+                loading={liveQuery.isLoading || runsQuery.isLoading}
+                address={address}
+                resolution={resolution}
+                pinned={pins.pinned}
+                onTogglePin={pins.toggle}
+                onOpen={openFromRail}
+                onPane={elegirPanel}
+                onPanel={elegirPanelTab}
+                onEvidence={elegirEvidencia}
+                onOpenDetail={() => setDetailOpen(true)}
+                emptyAction={emptyActionVisible ? emptyNewSession : undefined}
+                listHeader={
+                  <SessionsListHeader
+                    count={counts.total}
+                    countLabel={countText}
+                    onNew={
+                      canRunWrite && !emptyActionVisible
+                        ? openNewSession
+                        : undefined
+                    }
+                    views={listViews}
+                    onView={setTab}
+                    streamFailed={canLiveRead && streamStatus === 'error'}
+                    focusMenu={returned}
+                  />
+                }
+              />
+            </TabsContent>
 
-          <TabsContent
-            value="table"
-            className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pt-0"
-          >
-            <div className="flex flex-wrap items-center justify-end gap-2">
-              <Select value={source} onValueChange={setSource}>
-                <SelectTrigger
-                  className="h-7 w-auto min-w-[9rem] text-caption"
-                  aria-label={t('allSources')}
-                >
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={ALL}>{t('allSources')}</SelectItem>
-                  <SelectItem value="launched">
-                    {t('card.provenance.launched')}
-                  </SelectItem>
-                  <SelectItem value="discovered">
-                    {t('card.provenance.discovered')}
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-              <Select value={state} onValueChange={setState}>
-                <SelectTrigger
-                  className="h-7 w-auto min-w-[11rem] text-caption"
-                  aria-label={t('allStates')}
-                >
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={ALL}>{t('allStates')}</SelectItem>
-                  {OBSERVED_STATES.map((s) => (
-                    <SelectItem key={`obs:${s}`} value={`obs:${s}`}>
-                      {t('facet.observed', { state: t(`state.${s}`) })}
-                    </SelectItem>
-                  ))}
-                  {RUN_STATES.map((s) => (
-                    <SelectItem key={`run:${s}`} value={`run:${s}`}>
-                      {t('facet.run', { state: t(`runState.${s}`) })}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            <TabsContent
+              value="table"
+              aria-label={viewTitle.table}
+              className="flex min-h-0 flex-1 flex-col pt-0"
+            >
+              {subview(
+                'table',
+                <>
+                  <div className="flex flex-wrap items-center justify-end gap-2">
+                    <Select value={source} onValueChange={setSource}>
+                      <SelectTrigger
+                        className="h-7 w-auto min-w-[9rem] text-caption"
+                        aria-label={t('allSources')}
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={ALL}>{t('allSources')}</SelectItem>
+                        <SelectItem value="launched">
+                          {t('card.provenance.launched')}
+                        </SelectItem>
+                        <SelectItem value="discovered">
+                          {t('card.provenance.discovered')}
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Select value={state} onValueChange={setState}>
+                      <SelectTrigger
+                        className="h-7 w-auto min-w-[11rem] text-caption"
+                        aria-label={t('allStates')}
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={ALL}>{t('allStates')}</SelectItem>
+                        {OBSERVED_STATES.map((s) => (
+                          <SelectItem key={`obs:${s}`} value={`obs:${s}`}>
+                            {t('facet.observed', { state: t(`state.${s}`) })}
+                          </SelectItem>
+                        ))}
+                        {RUN_STATES.map((s) => (
+                          <SelectItem key={`run:${s}`} value={`run:${s}`}>
+                            {t('facet.run', { state: t(`runState.${s}`) })}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
 
-            <DataTable
-              className="min-w-0"
-              tableClassName="table-fixed"
-              columns={columns}
-              data={rows}
-              isLoading={liveQuery.isLoading || runsQuery.isLoading}
-              /* THE REPLACEMENT IS FOR WHEN NOTHING IS LEFT TO SHOW, and its condition is
+                  <DataTable
+                    className="min-w-0"
+                    tableClassName="table-fixed"
+                    columns={columns}
+                    data={rows}
+                    isLoading={liveQuery.isLoading || runsQuery.isLoading}
+                    /* THE REPLACEMENT IS FOR WHEN NOTHING IS LEFT TO SHOW, and its condition is
                unchanged on purpose: both readable halves have to be out before the grid
                becomes a state. Admission decides what is PAINTED; this decides whether
                there is a table at all, and conflating them would turn one half's refusal
@@ -1748,105 +1803,105 @@ function Inner({
                against. `TableError` then reports what actually happened (step-up before
                plain 403, network apart from both — data-table.tsx:932), so a 5xx is never
                dressed as a permission denial. */
-              error={
-                (!canLiveRead || liveQuery.isError) &&
-                (!canRunRead || runsQuery.isError)
-                  ? (liveQuery.error ?? runsQuery.error)
-                  : undefined
-              }
-              onRetry={refrescarLegibles}
-              getRowId={(s) => s.key}
-              onRowClick={abrirFila}
-              searchable
-              searchPlaceholder={t('search')}
-              stickyHeader
-              label={t('title')}
-              empty={
-                /* Sessions exist and only the filters hide them (the operate door opens
+                    error={tableError}
+                    onRetry={refrescarLegibles}
+                    getRowId={(s) => s.key}
+                    onRowClick={abrirFila}
+                    searchable
+                    searchPlaceholder={t('search')}
+                    stickyHeader
+                    label={t('title')}
+                    empty={
+                      /* Sessions exist and only the filters hide them (the operate door opens
                    on launched ones): say so and offer the way back, never "no sessions
                    yet" over a list that is not empty. */
-                sessions.length > 0 ? (
-                  <EmptyState
-                    icon={<Activity />}
-                    title={t('filtered.title')}
-                    description={t('filtered.description')}
-                    action={
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => {
-                          setSource(ALL)
-                          setState(ALL)
-                        }}
-                      >
-                        {t('common:ui.state.filtered.clear')}
-                      </Button>
+                      sessions.length > 0 ? (
+                        <EmptyState
+                          icon={<Activity />}
+                          title={t('filtered.title')}
+                          description={t('filtered.description')}
+                          action={
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => {
+                                setSource(ALL)
+                                setState(ALL)
+                              }}
+                            >
+                              {t('common:ui.state.filtered.clear')}
+                            </Button>
+                          }
+                        />
+                      ) : (
+                        <EmptyState
+                          icon={<Activity />}
+                          title={t('empty.title')}
+                          description={t('empty.description')}
+                          action={newSession}
+                        />
+                      )
                     }
                   />
-                ) : (
-                  <EmptyState
-                    icon={<Activity />}
-                    title={t('empty.title')}
-                    description={t('empty.description')}
-                  />
-                )
-              }
-            />
-          </TabsContent>
-
-          {showWorkspaces && (
-            <TabsContent
-              value="workspaces"
-              className="min-h-0 flex-1 overflow-y-auto pt-0"
-            >
-              <WorkspacesPanel />
+                </>,
+              )}
             </TabsContent>
-          )}
-          {showProfiles && (
-            <TabsContent
-              value="profiles"
-              className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pt-0"
-            >
-              {/* The plane also has its own doors, each entered on its own read tier. */}
-              <p className="text-caption text-muted-foreground">
-                {ta('profiles.view.crossHint')}{' '}
-                <Link to={'/provider-profiles' as never} className="underline">
-                  {ta('profiles.view.openProfiles')}
-                </Link>
-                {canBindingRead && (
+
+            {showWorkspaces && (
+              <TabsContent
+                value="workspaces"
+                aria-label={viewTitle.workspaces}
+                className="flex min-h-0 flex-1 flex-col pt-0"
+              >
+                {subview('workspaces', <WorkspacesPanel />)}
+              </TabsContent>
+            )}
+            {showProfiles && (
+              <TabsContent
+                value="profiles"
+                aria-label={viewTitle.profiles}
+                className="flex min-h-0 flex-1 flex-col pt-0"
+              >
+                {subview(
+                  'profiles',
                   <>
-                    {' · '}
-                    <Link
-                      to={'/provider-bindings' as never}
-                      className="underline"
-                    >
-                      {ta('profiles.view.openBindings')}
-                    </Link>
-                  </>
+                    {/* The plane also has its own doors, each entered on its own read tier. */}
+                    <p className="text-caption text-muted-foreground">
+                      {ta('profiles.view.crossHint')}{' '}
+                      <Link
+                        to={'/provider-profiles' as never}
+                        className="underline"
+                      >
+                        {ta('profiles.view.openProfiles')}
+                      </Link>
+                      {canBindingRead && (
+                        <>
+                          {' · '}
+                          <Link
+                            to={'/provider-bindings' as never}
+                            className="underline"
+                          >
+                            {ta('profiles.view.openBindings')}
+                          </Link>
+                        </>
+                      )}
+                    </p>
+                    <ProfilesPanel />
+                  </>,
                 )}
-              </p>
-              <ProfilesPanel />
-            </TabsContent>
-          )}
-        </div>
-      </Tabs>
+              </TabsContent>
+            )}
+          </div>
+        </Tabs>
 
-      <NewSessionDialog
-        open={quickOpen}
-        onOpenChange={setQuickOpen}
-        onAdvanced={() => {
-          setQuickOpen(false)
-          setCreateOpen(true)
-        }}
-      />
-      <RunCreateDialog open={createOpen} onOpenChange={setCreateOpen} />
-      <SessionCard
-        open={detailOpen}
-        resolution={resolution}
-        onClose={cerrarTarjeta}
-        onNavigate={navegarDesdeTarjeta}
-      />
-    </div>
+        <SessionCard
+          open={detailOpen}
+          resolution={resolution}
+          onClose={cerrarTarjeta}
+          onNavigate={navegarDesdeTarjeta}
+        />
+      </div>
+    </TooltipProvider>
   )
 }
 

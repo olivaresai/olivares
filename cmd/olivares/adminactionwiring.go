@@ -8,9 +8,9 @@ import (
 	"context"
 	"errors"
 	"log/slog"
-	"os"
 	"strings"
 
+	"github.com/olivaresai/olivares/cmd/olivares/internal/approvalbridge"
 	claudeapi "github.com/olivaresai/olivares/connectors/claude-api"
 	"github.com/olivaresai/olivares/core/eventbus"
 	"github.com/olivaresai/olivares/core/model"
@@ -24,7 +24,7 @@ import (
 // pushes an upstream cap into the customer's Anthropic org through the governed Admin-API
 // actuator — so a key that DODGES Olivares' in-line edge is still stopped at
 // the source. It is the composition-root half (the connector actuator is Apache-2.0 and
-// cannot import FinOps/governance; this AGPL wiring bridges them — the approvalbridge.go /
+// cannot import FinOps/governance; this AGPL wiring bridges them — the internal/approvalbridge /
 // erasurewiring.go pattern).
 //
 // What it actuates (Decisions):
@@ -37,7 +37,7 @@ import (
 //
 // HITL completion model (the security-posture-gate reuse-approved grant): a BLOCK
 // cap fires once per period (the alert ledger dedups it — finops/budgets.go), and the
-// actuator's gate uses gateOnce (reuse-approved within the approval's time-box). So the
+// actuator's gate uses GateOnce (reuse-approved within the approval's time-box). So the
 // FIRST cap OPENS a governed, plan-bound, allowlisted, AUDITED approval to deactivate the
 // offending key (it lands in the operator's approval queue, deny-closed = pending until a
 // human approves). The approval.resolved re-driver fires the cut the instant that human
@@ -96,7 +96,7 @@ type finopsBackstopConfig struct {
 }
 
 func loadClaudeAdminActuatorConfig(_ *slog.Logger) (claudeAdminActuatorConfig, error) {
-	path := os.Getenv(claudeAdminActuatorConfigEnv)
+	path := osGetenv(claudeAdminActuatorConfigEnv)
 	if path == "" {
 		return claudeAdminActuatorConfig{}, nil
 	}
@@ -161,7 +161,7 @@ func newFinopsBackstop(cfg claudeAdminActuatorConfig, targets budgetCapResolver,
 			Version:   cfg.Version,
 			AdminKey:  tc.AdminKey,
 			Allowlist: claudeapi.NewAdminActionAllowlist(tc.Allowlist),
-			Gate:      bridge.adminGate(tid),
+			Gate:      bridge.AdminGate(tid),
 			Auditor:   slogAdminAuditor{log: log},
 		})
 	}
@@ -251,13 +251,13 @@ func (s *finopsBackstop) onApprovalResolved(ctx context.Context, e event.Event) 
 		drive        func(context.Context, *claudeapi.Actuator, string, claudeapi.ActionSpec) error
 	)
 	switch res.Action {
-	case adminCapKeyDeactivate:
+	case approvalbridge.AdminCapKeyDeactivate:
 		expectedKind = "claude_admin.api_key"
 		reportAction = "deactivate_key"
 		drive = func(ctx context.Context, act *claudeapi.Actuator, subject string, spec claudeapi.ActionSpec) error {
 			return act.DeactivateKey(ctx, claudeapi.ActionDeactivateKey, subject, spec)
 		}
-	case adminCapWorkspaceArchive:
+	case approvalbridge.AdminCapWorkspaceArchive:
 		if !s.escalateArchive {
 			s.log.Info("finops-backstop: approved workspace archive ignored; archive escalation is currently disabled", "approval", res.ApprovalID)
 			return nil
@@ -283,32 +283,32 @@ func (s *finopsBackstop) onApprovalResolved(ctx context.Context, e event.Event) 
 		s.log.Warn("finops-backstop: approval resolved but approval bridge is not wired; not actuating", "tenant", tid.String(), "approval", res.ApprovalID)
 		return nil
 	}
-	cred, ok := s.bridge.cred(tid)
+	cred, ok := s.bridge.Cred(tid)
 	if !ok {
 		return nil
 	}
-	view, err := s.bridge.readApproval(ctx, cred, res.ApprovalID)
+	view, err := s.bridge.ReadApproval(ctx, cred, res.ApprovalID)
 	if err != nil {
 		s.log.Warn("finops-backstop: approval read failed; not actuating", "tenant", tid.String(), "approval", res.ApprovalID, "err", err)
 		return nil
 	}
-	if view.status != nbApproved {
+	if view.Status != nbApproved {
 		s.log.Warn("finops-backstop: approval resolved but current approval status is not approved; not actuating",
-			"tenant", tid.String(), "approval", res.ApprovalID, "status", view.status)
+			"tenant", tid.String(), "approval", res.ApprovalID, "status", view.Status)
 		return nil
 	}
-	if view.action != res.Action {
+	if view.Action != res.Action {
 		s.log.Warn("finops-backstop: approval action mismatch; not actuating",
-			"tenant", tid.String(), "approval", res.ApprovalID, "action", view.action, "want", res.Action)
+			"tenant", tid.String(), "approval", res.ApprovalID, "action", view.Action, "want", res.Action)
 		return nil
 	}
-	if view.subjectKind != expectedKind {
+	if view.SubjectKind != expectedKind {
 		s.log.Warn("finops-backstop: approval subject kind mismatch; not actuating",
 			"tenant", tid.String(), "approval", res.ApprovalID, "action", res.Action,
-			"subject_kind", view.subjectKind, "want", expectedKind)
+			"subject_kind", view.SubjectKind, "want", expectedKind)
 		return nil
 	}
-	subject, ok := approvalResolvedRawSubject(view.subjectRef)
+	subject, ok := approvalResolvedRawSubject(view.SubjectRef)
 	if !ok || subject == "" {
 		s.log.Warn("finops-backstop: approval subject is not plan-bound; not actuating",
 			"tenant", tid.String(), "approval", res.ApprovalID)

@@ -7,10 +7,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	jose "github.com/go-jose/go-jose/v4"
 	"io"
 	"net/http"
-
-	jose "github.com/go-jose/go-jose/v4"
 )
 
 // A2A v1.0 defines three equivalent transport bindings over one canonical

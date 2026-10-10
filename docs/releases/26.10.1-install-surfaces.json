@@ -94,26 +94,6 @@
         "contains": "https://olivares.ai/olivares/install.sh"
       },
       "evidence": "STAND-IN, not observed: the installer surface of 26.10.1 is read from the published release after publication, and that observation replaces this text."
-    },
-    {
-      "id": "helm-oci",
-      "status": "publication-unverified",
-      "producer": {
-        "path": ".github/workflows/release-chart.yml",
-        "matches": "^[[:space:]]+tags: [[][\"]chart-v[*][\"][]]$"
-      },
-      "prose": {
-        "path": "INSTALL.md",
-        "contains": "cosign-signed — is **unverified**"
-      },
-      "evidence": "STAND-IN, not observed: the helm-oci surface of 26.10.1 is read from the published release after publication, and that observation replaces this text.",
-      "inabilities": [
-        {
-          "observed_at": "2026-10-01T08:08:36Z",
-          "request": "anonymous pull token for ghcr.io/olivaresai/charts/olivares (scope repository:olivaresai/charts/olivares:pull)",
-          "answer": "HTTP 403 {\"errors\":[{\"code\":\"DENIED\",\"message\":\"requested access to the resource is denied\"}]}\n"
-        }
-      ]
     }
   ]
 }

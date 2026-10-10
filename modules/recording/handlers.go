@@ -1131,9 +1131,8 @@ func buildTranscript(sess model.Record, frames []model.Record) string {
 }
 
 // configDTO is the per-tenant recording policy view. RetentionEnforced is a
-// constant false until the retention/legal-hold engine lands: this module
-// TAGS sessions (retention_class/retention_days) but never purges — the knob
-// must not read as an enforced control before its enforcer exists.
+// constant false: compliance supports retain policies and holds for this class,
+// but append-only recording evidence is not purgeable. The knob is advisory.
 type configDTO struct {
 	Namespaces        []string `json:"namespaces"`
 	BreakGlassAlways  bool     `json:"breakglass_always"`

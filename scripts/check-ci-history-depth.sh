@@ -36,28 +36,28 @@
 set -uo pipefail
 
 ROOT="${OLIVARES_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || echo "")}"
-[ -n "$ROOT" ] || { echo "check-ci-history-depth: ⛔ NO HE PODIDO MIRAR: no estoy en un repositorio." >&2; exit 2; }
-cd "$ROOT" || { echo "check-ci-history-depth: ⛔ NO HE PODIDO MIRAR: no entro en $ROOT." >&2; exit 2; }
-command -v python3 >/dev/null 2>&1 || { echo "check-ci-history-depth: ⛔ NO HE PODIDO MIRAR: no hay python3." >&2; exit 2; }
+[ -n "$ROOT" ] || { echo "check-ci-history-depth: ⛔ COULD NOT CHECK: outside a repository." >&2; exit 2; }
+cd "$ROOT" || { echo "check-ci-history-depth: ⛔ COULD NOT CHECK: cannot enter $ROOT." >&2; exit 2; }
+command -v python3 >/dev/null 2>&1 || { echo "check-ci-history-depth: ⛔ COULD NOT CHECK: python3 is not installed." >&2; exit 2; }
 
 TASKFILE="${OLIVARES_CIHD_TASKFILE:-Taskfile.yml}"
 WFDIR="${OLIVARES_CIHD_WFDIR:-.github/workflows}"
 SCRIPTSDIR="${OLIVARES_CIHD_SCRIPTS:-scripts}"
-[ -r "$TASKFILE" ] || { echo "check-ci-history-depth: ⛔ NO HE PODIDO MIRAR: no leo $TASKFILE." >&2; exit 2; }
-[ -d "$WFDIR" ]    || { echo "check-ci-history-depth: ⛔ NO HE PODIDO MIRAR: no hay $WFDIR." >&2; exit 2; }
-[ -d "$SCRIPTSDIR" ] || { echo "check-ci-history-depth: ⛔ NO HE PODIDO MIRAR: no hay $SCRIPTSDIR." >&2; exit 2; }
+[ -r "$TASKFILE" ] || { echo "check-ci-history-depth: ⛔ COULD NOT CHECK: cannot read $TASKFILE." >&2; exit 2; }
+[ -d "$WFDIR" ]    || { echo "check-ci-history-depth: ⛔ COULD NOT CHECK: missing $WFDIR." >&2; exit 2; }
+[ -d "$SCRIPTSDIR" ] || { echo "check-ci-history-depth: ⛔ COULD NOT CHECK: missing $SCRIPTSDIR." >&2; exit 2; }
 
 python3 - "$TASKFILE" "$WFDIR" "$SCRIPTSDIR" <<'PY'
 import os, re, sys, glob
 taskfile, wfdir, scriptsdir = sys.argv[1], sys.argv[2], sys.argv[3]
 
 def cannot(msg):
-    print(f"check-ci-history-depth: ⛔ NO HE PODIDO MIRAR: {msg}", file=sys.stderr); sys.exit(2)
+    print(f"check-ci-history-depth: ⛔ COULD NOT CHECK: {msg}", file=sys.stderr); sys.exit(2)
 
 try:
     import yaml
 except Exception:
-    cannot("no puedo importar yaml para leer los workflows")
+    cannot("cannot import yaml to read the workflows")
 
 # 1 · guiones que derivan de historia profunda
 #
@@ -129,17 +129,17 @@ for path in sorted(glob.glob(os.path.join(scriptsdir, "**", "*.sh"), recursive=T
     try:
         body = open(path, encoding="utf-8", errors="replace").read()
     except OSError as e:
-        cannot(f"no puedo leer {path}: {e}")
+        cannot(f"cannot read {path}: {e}")
     if DEEP.search(body):
         deep_scripts.add(os.path.basename(path))
 if not deep_scripts:
-    cannot("cero guiones con derivacion historica; el patron cambio y esto seria limpio por vacuidad")
+    cannot("no scripts derive values from history; the pattern changed and an empty scan would give a false pass")
 
 # 2 · tareas que invocan cada uno
 try:
     tf = open(taskfile, encoding="utf-8", errors="replace").read().split("\n")
 except OSError as e:
-    cannot(f"no puedo leer {taskfile}: {e}")
+    cannot(f"cannot read {taskfile}: {e}")
 task_re = re.compile(r"^  ([A-Za-z0-9:_.-]+):\s*$")
 tasks_needing = {}
 cur = None
@@ -152,7 +152,7 @@ for line in tf:
             if s in line:
                 tasks_needing.setdefault(cur, set()).add(s)
 if not tasks_needing:
-    cannot("ninguna tarea invoca esos guiones; el Taskfile cambio de forma")
+    cannot("no tasks invoke these scripts; the Taskfile structure changed")
 
 # 3 · jobs que corren esas tareas, y su fetch-depth
 findings = []
@@ -161,7 +161,7 @@ for wf in sorted(glob.glob(os.path.join(wfdir, "*.yml")) + glob.glob(os.path.joi
     try:
         doc = yaml.safe_load(open(wf, encoding="utf-8", errors="replace"))
     except Exception as e:
-        cannot(f"{wf} no parsea como YAML: {e}")
+        cannot(f"{wf} cannot be parsed as YAML: {e}")
     if not isinstance(doc, dict):
         continue
     for jobname, job in (doc.get("jobs") or {}).items():
@@ -185,17 +185,17 @@ for wf in sorted(glob.glob(os.path.join(wfdir, "*.yml")) + glob.glob(os.path.joi
             findings.append((wf, jobname, sorted(needed), f"fetch-depth={depths}"))
 
 if checked == 0:
-    cannot("ningun job de CI corre esas tareas; el cruce no midio nada y 'limpio' seria mentira")
+    cannot("no CI job runs these tasks; the cross-check measured nothing and cannot report a clean result")
 
 if findings:
     for wf, job, tasks, why in findings:
-        print(f"check-ci-history-depth: ⛔ {wf} job '{job}' corre {', '.join(tasks)} —que deriva de "
-              f"historia profunda— y su checkout {why}.")
-        print( "             En un clon superficial esa derivacion sale VACIA y el gate contesta")
-        print( "             exit 2 («no he podido mirar»), que tumba el job entero. Anade")
-        print( "             `fetch-depth: 0` al checkout de ese job.")
+        print(f"check-ci-history-depth: ⛔ {wf} job '{job}' runs {', '.join(tasks)}, which derives values from "
+              f"deep history, and its checkout {why}.")
+        print( "             In a shallow clone, that derivation is empty and the check returns")
+        print( "             exit 2 (could not check), failing the entire job. Add")
+        print( "             `fetch-depth: 0` to that job's checkout.")
     sys.exit(1)
 
-print(f"check-ci-history-depth: CLEAN — {len(deep_scripts)} guion(es) con derivacion historica, "
-      f"{len(tasks_needing)} tarea(s), {checked} job(s) de CI que las corren, todos con fetch-depth: 0.")
+print(f"check-ci-history-depth: CLEAN — {len(deep_scripts)} script(s) deriving values from history, "
+      f"{len(tasks_needing)} task(s), {checked} CI job(s) running them, all with fetch-depth: 0.")
 PY

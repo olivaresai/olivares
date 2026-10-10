@@ -1,0 +1,10 @@
+{
+  "dictate": "听写",
+  "hint": "听写。你的语音不会离开此浏览器。",
+  "loading": "正在加载语音识别…",
+  "listening": "正在聆听。再按一次或按 Esc 停止。",
+  "transcribing": "正在转写…",
+  "nothing": "未听到语音。",
+  "failed": "听写失败，请重试。",
+  "blocked": "浏览器已阻止麦克风。"
+}

@@ -92,7 +92,7 @@ func TestProviderOllamaCompilesBoundEndpointIntoCodexLaunch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	spec := m.buildLaunchSpec(p, cred, WorkSessionCredential{}, CommunicationSessionCredential{}, "", nil, nil, env)
+	spec := m.childSpec(p, childDecision{cred: cred, providerEnv: env})
 	args := strings.Join(spec.Args, " ")
 	if !strings.Contains(args, `model_provider="olivares_ollama"`) || !strings.Contains(args, `base_url="http://127.0.0.1:11435/v1"`) || !strings.Contains(args, `requires_openai_auth=false`) {
 		t.Fatalf("bound endpoint absent from actual launch: %s", args)
@@ -126,7 +126,7 @@ func TestProviderOllamaCompilesBoundEndpointIntoOpenCodeLaunch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	spec := m.buildLaunchSpec(p, cred, WorkSessionCredential{}, CommunicationSessionCredential{}, "", nil, nil, env)
+	spec := m.childSpec(p, childDecision{cred: cred, providerEnv: env})
 	inline := ""
 	for _, item := range spec.Env {
 		if item.Name == envOpenCodeConfigContent {
@@ -167,7 +167,7 @@ func openCodeLocalLaunch(t *testing.T, models []string, runModel string) (string
 	if err != nil {
 		return "", at, err
 	}
-	spec := m.buildLaunchSpec(p, cred, WorkSessionCredential{}, CommunicationSessionCredential{}, "", nil, nil, env)
+	spec := m.childSpec(p, childDecision{cred: cred, providerEnv: env})
 	for _, item := range spec.Env {
 		if item.Name == envOpenCodeConfigContent {
 			return item.Value, at, nil

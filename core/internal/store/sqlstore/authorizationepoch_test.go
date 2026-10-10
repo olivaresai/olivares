@@ -808,9 +808,21 @@ func TestAuthorizationEpochSQLiteCreateOrgAndUpgradeBackfillAreAtomic(t *testing
 		if err != nil {
 			t.Fatalf("open raw upgrade fixture: %v", err)
 		}
+		// Reconstruct the pre-v21 absence in this disposable fixture. Descriptor
+		// adoption now runs once at v21, so dropping its table with v21 still
+		// tracked models corruption rather than an additive upgrade.
+		if _, err := raw.ExecContext(ctx, "DELETE FROM "+coreTrackingTable+" WHERE version > 20"); err != nil {
+			_ = raw.Close()
+			t.Fatalf("rewind descriptor adoption fixture: %v", err)
+		}
 		if _, err := raw.ExecContext(ctx, "DROP TABLE core_authorization_epoch"); err != nil {
 			_ = raw.Close()
 			t.Fatalf("remove post-v2 table fixture: %v", err)
+		}
+		var predecessor int
+		if err := raw.QueryRowContext(ctx, "SELECT MAX(version) FROM "+coreTrackingTable).Scan(&predecessor); err != nil || predecessor != 20 {
+			_ = raw.Close()
+			t.Fatalf("authorization upgrade fixture core version = %d, want 20 before descriptor adoption: %v", predecessor, err)
 		}
 		if err := raw.Close(); err != nil {
 			t.Fatalf("close raw upgrade fixture: %v", err)

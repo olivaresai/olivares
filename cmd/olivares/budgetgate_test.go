@@ -306,18 +306,23 @@ func TestModelRouterBudgetGateWiredThroughCompositionRoot(t *testing.T) {
 		return nil
 	})
 
-	// Wire-up proof: a GLOBAL block budget at its cap, created through the real FinOps API,
+	// Wire-up proof: a GLOBAL stored block budget at its cap,
 	// must make the SAME resolve endpoint deny — only possible if wire.go wired
 	// modelsBudgetGate into the models module.
 	var bud struct {
 		ID string `json:"id"`
 	}
-	if code := h.reqInto("POST", "/v1/m/finops/budgets", h.adminToken, tenant, map[string]any{
-		"name": "all-spend-cap", "enabled": true, "dimension": "global", "period": "total",
-		"action": "block", "limit_micro_usd": 1, "thresholds": []float64{1.0},
-	}, &bud); code != http.StatusCreated || bud.ID == "" {
-		t.Fatalf("create budget = %d id=%q", code, bud.ID)
+	if err := h.st.Mutate(context.Background(), model.TenantID(tenant), func(sc store.Scope) error {
+		policy, err := sc.Policies().Create(context.Background(), model.Policy{
+			Name: "all-spend-cap", Kind: "budget", Enabled: true,
+			Spec: map[string]any{"dimension": "global", "period": "total", "action": "block", "limit_micro_usd": 1, "thresholds": []float64{1.0}},
+		})
+		bud.ID = policy.ID.String()
+		return err
+	}); err != nil {
+		t.Fatal(err)
 	}
+
 	h.eventually("budget observed over its cap", 10*time.Second, func() error {
 		var st struct {
 			Over bool `json:"over"`

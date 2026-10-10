@@ -42,6 +42,9 @@ func drDrillCmd() *cobra.Command {
 		Example: "  olivares dr drill --events 100",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			if err := checkCMEKInstall(""); err != nil {
+				return err
+			}
 			ctx := cmd.Context()
 			w := cmd.OutOrStdout()
 			if events <= 0 {
@@ -78,7 +81,7 @@ func drDrillCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			sealed, refs, err := sealSigningKeys(src, cipher)
+			sealed, refs, _, err := sealSigningKeys(src, cipher)
 			if err != nil {
 				return err
 			}

@@ -18,7 +18,7 @@ import (
 // THE POLARITY TEST. /v1/console/license must answer 200 for EVERY commercial state —
 // including the ones made reachable (a license past its term, and a blob that attests
 // no term at all). The open binary reports the state; it never refuses on it
-// (LICENSING.md §ADR-0010; core/api/server.go:674-686, "pure edition plumbing — never a feature
+// (LICENSING.md; core/api/server.go:674-686, "pure edition plumbing — never a feature
 // gate"). A 403 here would be the inverted polarity the whole term-only change exists to
 // avoid.
 //

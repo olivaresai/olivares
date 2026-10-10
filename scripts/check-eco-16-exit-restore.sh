@@ -24,7 +24,7 @@ CLOUD="${OLIVARES_ECO16_CLOUD:-cloud}"
 
 grep -q 'NOT RESTORED' "$DOC" || fail "$DOC lost NOT RESTORED"
 if grep -qiE 'restore succeeded|restored a tenant' "$DOC"; then
-	fail "$DOC claims a restore this lote does not have"
+	fail "$DOC claims a restore this batch does not have"
 fi
 
 python3 - "$JSON" "$CANON" "$CLOUD" <<'PY' || fail "JSON/canon/cloud failed the ECO-16 contract"
@@ -65,7 +65,7 @@ if os.path.isdir(cloud):
             if "cloud-export" in text:
                 hits += 1
 if hits != 0:
-    raise SystemExit("cloud/ Go now mentions cloud-export (%d files); lote still says false" % hits)
+    raise SystemExit("cloud/ Go now mentions cloud-export (%d files); batch still says false" % hits)
 if data.get("format_in_cloud_go") is not False:
     raise SystemExit("format_in_cloud_go must be false while hits=0")
 PY

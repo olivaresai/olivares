@@ -521,9 +521,9 @@ func TestWorkK2LocksAgentAuthorityBeforeClaimTouch(t *testing.T) {
 		resolver := &blockingWorkAuthority{
 			entered: make(chan struct{}), release: release,
 		}
-		f.m.UseWorkIdentityResolver(resolver)
-		orderData := &claimTouchOrderModuleData{inner: f.m.data}
-		f.m.data = orderData
+		WithWorkIdentityResolver(resolver)(f.m)
+		orderData := &claimTouchOrderModuleData{inner: f.m.Data}
+		f.m.Data = orderData
 		beforeClaim := readK2RecoveryClaim(t, f.workFixture, f.sid)
 		beforeLease := getWorkLease(t, f)
 		cmd := f.command("lease.acquire", f.ready.Version-1, 0)
@@ -552,9 +552,9 @@ func TestWorkK2LocksAgentAuthorityBeforeClaimTouch(t *testing.T) {
 		resolver := &blockingWorkAuthority{
 			entered: make(chan struct{}), release: make(chan struct{}),
 		}
-		f.m.UseWorkIdentityResolver(resolver)
-		orderData := &claimTouchOrderModuleData{inner: f.m.data}
-		f.m.data = orderData
+		WithWorkIdentityResolver(resolver)(f.m)
+		orderData := &claimTouchOrderModuleData{inner: f.m.Data}
+		f.m.Data = orderData
 		before := readK2RecoveryClaim(t, f.workFixture, f.sid)
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
@@ -603,9 +603,9 @@ func TestWorkK2LocksAgentAuthorityBeforeClaimTouch(t *testing.T) {
 		resolver := &blockingWorkAuthority{
 			entered: make(chan struct{}), release: release, err: store.ErrConflict,
 		}
-		f.m.UseWorkIdentityResolver(resolver)
-		orderData := &claimTouchOrderModuleData{inner: f.m.data}
-		f.m.data = orderData
+		WithWorkIdentityResolver(resolver)(f.m)
+		orderData := &claimTouchOrderModuleData{inner: f.m.Data}
+		f.m.Data = orderData
 		beforeClaim := readK2RecoveryClaim(t, f.workFixture, f.sid)
 		beforeLease := getWorkLease(t, f)
 		_, err := f.m.Apply(
@@ -756,7 +756,7 @@ func TestWorkOutboxSettlesOnlyAfterDurableSink(t *testing.T) {
 	f := newWorkFixture(t, ":memory:", nil)
 	defer f.st.Close()
 	sink := &recordingWorkSink{err: errors.New("offline")}
-	f.m.UseWorkEventSink(sink)
+	WithWorkEventSink(sink)(f.m)
 	created := applyCreate(t, f, "outbox")
 	if created.EventID.IsZero() {
 		t.Fatal("apply returned no durable event id")
@@ -802,7 +802,7 @@ func TestWorkEventIsNotPublishedBeforeTheSourceCommit(t *testing.T) {
 	f := newWorkFixture(t, ":memory:", nil)
 	defer f.st.Close()
 	sink := &recordingWorkSink{}
-	f.m.UseWorkEventSink(sink)
+	WithWorkEventSink(sink)(f.m)
 	cmd := baseCreateCommand(f, "transaction that must roll back")
 
 	_, err := f.m.applyWithData(
@@ -834,7 +834,7 @@ func TestWorkEventPayloadUsesTheDocumentedBoundedProjection(t *testing.T) {
 	f := newWorkFixture(t, ":memory:", nil)
 	defer f.st.Close()
 	sink := &recordingWorkSink{}
-	f.m.UseWorkEventSink(sink)
+	WithWorkEventSink(sink)(f.m)
 	created := applyCreate(t, f, "content that must not enter the event")
 	if len(sink.events) != 1 {
 		t.Fatalf("durable events = %d, want 1", len(sink.events))
@@ -937,7 +937,7 @@ func TestWorkApplyOutboxNudgePreservesExplicitWorkspaceHandle(t *testing.T) {
 	local := applyCreate(t, f, "confined workspace second")
 
 	sink := &recordingWorkSink{}
-	f.m.UseWorkEventSink(sink)
+	WithWorkEventSink(sink)(f.m)
 	data := confinedWorkData{inner: f.m.workData(f.tenant), workspace: f.workspace}
 	_, err := f.m.applyWithData(context.Background(), data, f.tenant, f.principal, WorkCommand{
 		Command: "item.assign", WorkItemID: local.ResultID,
@@ -985,7 +985,7 @@ func TestWorkOutboxRecoversOnlyExpiredDeliveries(t *testing.T) {
 		t.Fatal(err)
 	}
 	sink := &recordingWorkSink{}
-	f.m.UseWorkEventSink(sink)
+	WithWorkEventSink(sink)(f.m)
 	if err := f.m.DrainWorkOutbox(context.Background(), f.tenant, 10); err != nil {
 		t.Fatal(err)
 	}
@@ -1023,7 +1023,7 @@ func TestWorkOutboxFailureIsReturnedAndExhaustionCreatesFinding(t *testing.T) {
 	defer f.st.Close()
 	sinkErr := errors.New("durable intake offline")
 	sink := &recordingWorkSink{err: sinkErr}
-	f.m.UseWorkEventSink(sink)
+	WithWorkEventSink(sink)(f.m)
 	created := applyCreate(t, f, "dead-letter evidence")
 	if err := f.st.Mutate(context.Background(), f.tenant, func(sc store.Scope) error {
 		repo, err := sc.Ext(workOutboxKind)

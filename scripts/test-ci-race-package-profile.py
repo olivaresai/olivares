@@ -16,6 +16,7 @@ import importlib.util
 import json
 import os
 import re
+import shlex
 import shutil
 import signal
 import stat
@@ -38,7 +39,7 @@ skip_n = 0
 
 
 def could_not_look(msg):
-    print(f"test-ci-race-package-profile: NO HE PODIDO MIRAR — {msg}", file=sys.stderr)
+    print(f"test-ci-race-package-profile: COULD NOT CHECK — {msg}", file=sys.stderr)
     raise SystemExit(2)
 
 
@@ -57,6 +58,55 @@ def load_inst():
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
+
+
+def without_shell_comments(text: str) -> str:
+    """A hash starts a shell comment only outside quotes and at a word boundary."""
+    result = []
+    quote = None
+    escaped = False
+    word_start = True
+    for line in text.splitlines(keepends=True):
+        for char in line:
+            if escaped:
+                escaped = False
+                if char != '\n':
+                    word_start = False
+            elif char == "\\" and quote != "'":
+                escaped = True
+            elif quote:
+                if char == quote:
+                    quote = None
+            elif char in ("'", '"'):
+                quote = char
+                word_start = False
+            elif char == '#' and word_start:
+                result.append('\n' if line.endswith('\n') else '')
+                word_start = True
+                break
+            else:
+                word_start = char.isspace() or char in ';&|()<>'
+            result.append(char)
+    return ''.join(result)
+
+
+def workflow_has_run_filter(path: Path) -> bool:
+    """Inspect run text and inline GOFLAGS, excluding YAML and shell comments.
+
+    Workflow/job/step env maps are checked by the instrument's inherited-GOFLAGS
+    validation before execution; this finite guard does not evaluate env or expressions.
+    """
+    spec = importlib.util.spec_from_file_location('ci_yaml_peek', ROOT / 'scripts/lib/ci-yaml-peek.py')
+    peek = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(peek)
+    lines = peek._lineas(path)
+    runs = [peek._valor(step, 'run', 8)
+            for job in peek._jobs(lines) for step in peek._pasos_de(lines, job)
+            if peek._valor(step, 'run', 8) is not None]
+    if not runs:
+        could_not_look('profile workflow has no executable run steps')
+    return any(re.search(r'(?:^|[\s=])--?run(?:=|\s|$)', token)
+               for run in runs for token in shlex.split(without_shell_comments(run)))
 
 
 def pick_exec_dir():
@@ -175,7 +225,7 @@ def group1_closed_matrix(inst):
     )
     check("no ./... in the profile workflow", "./..." not in wf)
     check("no -short in the profile workflow", "-short" not in wf)
-    check("no -run filter in the profile workflow", "-run" not in wf)
+    check("no -run filter in the profile workflow", not workflow_has_run_filter(WF))
     rel = RELEASE.read_text(encoding="utf-8")
     rf = RACE_FULL.read_text(encoding="utf-8")
     check("release.yml does not name race-package-profile", "race-package-profile" not in rel)
@@ -472,6 +522,90 @@ class CorrectionTests(unittest.TestCase):
         if base:
             Path(base).mkdir(parents=True, exist_ok=True)
         self.work = Path(tempfile.mkdtemp(prefix=self._testMethodName + '.', dir=base))
+
+    def workflow_filter_check(self, extra: str) -> bool:
+        # Exercise the finite guard itself, with real workflow bytes and real parsing.
+        workflow = self.work / 'profile.yml'
+        lines = WF.read_text().splitlines(keepends=True)
+        workflow.write_text(''.join(line for line in lines
+                                    if not (line.lstrip().startswith('#') and '-run' in line))
+                            + extra)
+        with mock.patch.object(sys.modules[__name__], 'WF', workflow), \
+             mock.patch.object(sys.modules[__name__], 'check') as checks, \
+             contextlib.redirect_stdout(io.StringIO()):
+            group1_closed_matrix(self.inst)
+        return next(call.args[1] for call in checks.call_args_list
+                    if call.args[0] == 'no -run filter in the profile workflow')
+
+    def test_r4_workflow_runner_comments(self) -> None:
+        for extra in (
+            '\n# ci-runner-3: go test -run=TestExample is only a comment\n',
+            '\n      - run: |\n          # ci-runner-1 and ci-runner-8\n          go test ./api\n',
+            '\n      - run: go test ./api # ci-runner-3; go test -run=TestExample\n',
+            '\n      - run: echo ci-runner-3\n',
+            '\n      - run: echo "# ci-runner-3"\n',
+            '\n      - run: go test ./api # comment with an unmatched " quote\n',
+        ):
+            with self.subTest(extra=extra):
+                self.assertTrue(self.workflow_filter_check(extra))
+
+    def test_r4_workflow_run_filters(self) -> None:
+        for extra in (
+            '\n      - run: go test -run TestExample ./api\n',
+            '\n      - run: go test -run=TestExample ./api\n',
+            '\n      - run: go test --run=TestExample ./api\n',
+            '\n      - run: |\n          go test \\\n            -run=TestExample ./api\n',
+            '\n      - run: go test "-run=TestExample" ./api\n',
+            '\n      - run: GOFLAGS="-run=TestExample" go test ./api\n',
+            '\n      - run: echo build#1; go test -run=TestExample ./api\n',
+            '\n      - run: echo build\\#1; go test -run=TestExample ./api\n',
+            '\n      - run: echo "# literal"; go test -run=TestExample ./api\n',
+            '\n      - run: >-\n          go test -run=TestExample ./api\n',
+            '\n      - run: |+\n          go test -run=TestExample ./api\n',
+            '\n      - run: | # profile command\n          go test -run=TestExample ./api\n',
+        ):
+            with self.subTest(extra=extra):
+                self.assertFalse(self.workflow_filter_check(extra))
+
+    def test_r4_yaml_quoted_run_filters(self) -> None:
+        for scalar in (
+            "'go test \"-run=TestExample\" ./api'",
+            '"go test \'-run=TestExample\' ./api"',
+            r'"go test \"-run=TestExample\" ./api"',
+            "'GOFLAGS=\"-run=TestExample\" go test ./api'",
+            "'go test ''-run=TestExample'' ./api'",
+            r'"go test \u002drun=TestExample ./api"',
+        ):
+            with self.subTest(scalar=scalar):
+                self.assertFalse(self.workflow_filter_check(f'\n      - run: {scalar}\n'))
+
+    def test_r4_yaml_quoted_shell_comments(self) -> None:
+        for scalar in (
+            "'go test ./api # go test -run=TestExample'",
+            '"go test ./api # ci-runner-3; go test -run=TestExample"',
+            "'go test ./api' # go test -run=TestExample",
+            '"go test ./api" # ci-runner-3; go test -run=TestExample',
+        ):
+            with self.subTest(scalar=scalar):
+                self.assertTrue(self.workflow_filter_check(f'\n      - run: {scalar}\n'))
+
+    def test_r4_unsupported_executable_yaml_is_not_absence(self) -> None:
+        for extra in (
+            '\n      - "run": go test -run=TestExample ./api\n',
+            "\n      - 'run': go test -run=TestExample ./api\n",
+            '\n      - run : go test -run=TestExample ./api\n',
+            '\n      - {run: go test -run=TestExample ./api}\n',
+            '\n      - id: filtered\n        "run": go test -run=TestExample ./api\n',
+            '\n      - run: &command go test -run=TestExample ./api\n',
+            '\n      - run: *command\n',
+            '\n      - run: !str go test -run=TestExample ./api\n',
+            '\n      - run: go test\n          -run=TestExample ./api\n',
+            '\n      - run: "go test\n          -run=TestExample ./api"\n',
+        ):
+            with self.subTest(extra=extra):
+                with self.assertRaises(SystemExit) as error:
+                    self.workflow_filter_check(extra)
+                self.assertEqual(error.exception.code, 2)
 
     def cgroup(self, version='v2', mount_root='/', membership='/job/leaf'):
         proc, fs = self.work / 'proc', self.work / 'fs'

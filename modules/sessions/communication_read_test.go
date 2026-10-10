@@ -262,9 +262,9 @@ func newDirectNoticeReadFixture(t *testing.T, count int) (directNoticeReadFixtur
 	}
 	resolver := &directNoticeReadDirectoryResolver{now: fixture.now, epoch: fixture.epoch}
 	closure := &directNoticeReadClosureResolver{now: fixture.now, epoch: fixture.epoch}
-	fixture.m.communicationReadAuthorizer = authorizer
-	fixture.m.communicationDirectoryResolver = resolver
-	fixture.m.communicationGrantClosure = closure
+	fixture.m.CommunicationReadAuthorizer = authorizer
+	fixture.m.CommunicationDirectoryResolver = resolver
+	fixture.m.CommunicationGrantClosure = closure
 	return directNoticeReadFixture{
 		directNoticeFixture: fixture, principal: principal, authorizer: authorizer,
 		resolver: resolver, closure: closure,
@@ -448,8 +448,8 @@ func TestGetDirectNoticeMessageIsPureAndOpensAfterCommit(t *testing.T) {
 	} {
 		before[kind] = communicationRowsForTest(t, fixture.directNoticeFixture, kind)
 	}
-	observer := &directNoticeMutateObserverData{inner: fixture.m.data}
-	fixture.m.data = observer
+	observer := &directNoticeMutateObserverData{inner: fixture.m.Data}
+	fixture.m.Data = observer
 	var opens atomic.Int64
 	result, err := fixture.m.getDirectNoticeMessageWithOpener(
 		context.Background(), fixture.scope, fixture.principal, published[0].MessageID,
@@ -518,8 +518,8 @@ func TestDirectNoticePreflightRechecksCoreBeforeCarrierView(t *testing.T) {
 			fixture.resolver.freshFor = 10 * time.Minute
 			fixture.closure.freshFor = 10 * time.Minute
 			test.expire(&fixture, clock)
-			observer := &directNoticeMutateObserverData{inner: fixture.m.data}
-			fixture.m.data = observer
+			observer := &directNoticeMutateObserverData{inner: fixture.m.Data}
+			fixture.m.Data = observer
 			var opens atomic.Int64
 			_, err := fixture.m.getDirectNoticeMessageWithOpener(
 				context.Background(), fixture.scope, fixture.principal, published[0].MessageID,
@@ -777,8 +777,8 @@ func TestListDirectNoticeInboxFinalBatchIsOneShotAndPreservesDeliveryOrder(t *te
 	second := publish(low, "batch low")
 	resolverCallsBefore := fixture.resolver.calls.Load()
 	closureCallsBefore := fixture.closure.calls.Load()
-	observer := &directNoticeMutateObserverData{inner: fixture.m.data}
-	fixture.m.data = observer
+	observer := &directNoticeMutateObserverData{inner: fixture.m.Data}
+	fixture.m.Data = observer
 	var opens atomic.Int64
 	page, err := fixture.m.listDirectNoticeInboxWithOpener(
 		context.Background(), fixture.scope, fixture.principal,
@@ -859,8 +859,8 @@ func TestListDirectNoticeInboxFinalBatchSeesEarlierGrantRevokedByLaterCore(t *te
 	}}
 	resolverCallsBefore := fixture.resolver.calls.Load()
 	closureCallsBefore := fixture.closure.calls.Load()
-	observer := &directNoticeMutateObserverData{inner: fixture.m.data}
-	fixture.m.data = observer
+	observer := &directNoticeMutateObserverData{inner: fixture.m.Data}
+	fixture.m.Data = observer
 	var opens atomic.Int64
 	page, err := fixture.m.listDirectNoticeInboxWithOpener(
 		context.Background(), fixture.scope, fixture.principal,
@@ -929,8 +929,8 @@ func TestListDirectNoticeInboxTailExpiryStopsNextCarrierView(t *testing.T) {
 	fixture.authorizer.beforeReturn[published[1].DeliveryID] = func() {
 		clock.advance(6 * time.Minute)
 	}
-	observer := &directNoticeMutateObserverData{inner: fixture.m.data}
-	fixture.m.data = observer
+	observer := &directNoticeMutateObserverData{inner: fixture.m.Data}
+	fixture.m.Data = observer
 	var opens atomic.Int64
 	page, err := fixture.m.listDirectNoticeInboxWithOpener(
 		context.Background(), fixture.scope, fixture.principal,
@@ -970,8 +970,8 @@ func TestListDirectNoticeInboxTailExpiryRevalidatesBeforeOpen(t *testing.T) {
 	fixture.authorizer.beforeReturn[published[1].DeliveryID] = func() {
 		clock.advance(6 * time.Minute)
 	}
-	observer := &directNoticeMutateObserverData{inner: fixture.m.data}
-	fixture.m.data = observer
+	observer := &directNoticeMutateObserverData{inner: fixture.m.Data}
+	fixture.m.Data = observer
 	var opens atomic.Int64
 	page, err := fixture.m.listDirectNoticeInboxWithOpener(
 		context.Background(), fixture.scope, fixture.principal,
@@ -1005,8 +1005,8 @@ func TestListDirectNoticeInboxBrokenTailRevocationAbortsBeforeOpen(t *testing.T)
 	fixture.authorizer.beforeReturn[published[1].DeliveryID] = func() {
 		fixture.closure.outcome = ReadDeny
 	}
-	observer := &directNoticeMutateObserverData{inner: fixture.m.data}
-	fixture.m.data = observer
+	observer := &directNoticeMutateObserverData{inner: fixture.m.Data}
+	fixture.m.Data = observer
 	var opens atomic.Int64
 	page, err := fixture.m.listDirectNoticeInboxWithOpener(
 		context.Background(), fixture.scope, fixture.principal,
@@ -1041,8 +1041,8 @@ func TestListDirectNoticeInboxRevokedLookaheadAbortsInsteadOfSkippingLaterCandid
 		ReadAllow,
 		ReadDeny,
 	}
-	observer := &directNoticeMutateObserverData{inner: fixture.m.data}
-	fixture.m.data = observer
+	observer := &directNoticeMutateObserverData{inner: fixture.m.Data}
+	fixture.m.Data = observer
 	var opens atomic.Int64
 	page, err := fixture.m.listDirectNoticeInboxWithOpener(
 		context.Background(), fixture.scope, fixture.principal,
@@ -1147,8 +1147,8 @@ func TestDirectNoticeReadBatchFactUnionFailsBeforeMutate(t *testing.T) {
 	t.Parallel()
 
 	fixture, _ := newDirectNoticeReadFixture(t, 0)
-	observer := &directNoticeMutateObserverData{inner: fixture.m.data}
-	fixture.m.data = observer
+	observer := &directNoticeMutateObserverData{inner: fixture.m.Data}
+	fixture.m.Data = observer
 	makeInput := func(sequence int64, facts []store.AuthorizationFactRef) directNoticeReadAuthorizationInput {
 		deliveryID := model.NewID()
 		return directNoticeReadAuthorizationInput{
@@ -1237,9 +1237,9 @@ func TestDirectNoticeMissingAuthorityFactIsUnknownAndNeverOpens(t *testing.T) {
 	t.Run("point", func(t *testing.T) {
 		fixture, published := newDirectNoticeReadFixture(t, 1)
 		fault := &directNoticeAuthorityFaultData{
-			inner: fixture.m.data, failAt: 1, err: store.ErrNotFound,
+			inner: fixture.m.Data, failAt: 1, err: store.ErrNotFound,
 		}
-		fixture.m.data = fault
+		fixture.m.Data = fault
 		var opens atomic.Int64
 		result, err := fixture.m.getDirectNoticeMessageWithOpener(
 			context.Background(), fixture.scope, fixture.principal, published[0].MessageID,
@@ -1265,9 +1265,9 @@ func TestDirectNoticeMissingAuthorityFactIsUnknownAndNeverOpens(t *testing.T) {
 	t.Run("inbox final batch", func(t *testing.T) {
 		fixture, _ := newDirectNoticeReadFixture(t, 1)
 		fault := &directNoticeAuthorityFaultData{
-			inner: fixture.m.data, failAt: 2, err: store.ErrNotFound,
+			inner: fixture.m.Data, failAt: 2, err: store.ErrNotFound,
 		}
-		fixture.m.data = fault
+		fixture.m.Data = fault
 		var opens atomic.Int64
 		page, err := fixture.m.listDirectNoticeInboxWithOpener(
 			context.Background(), fixture.scope, fixture.principal,

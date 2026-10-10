@@ -23,35 +23,37 @@ var credentialBindingDescriptor = model.EntityDescriptor{
 	Table: "core_credential_bindings",
 	Fields: []model.FieldSpec{
 		pdecl(field("target_tenant_id", model.KindUUID, false),
-			model.None("the subject's business tenant, compared with the resolving tenant: core/auth/credential_binding.go:749")),
+			model.None("the subject's business tenant, compared with the resolving tenant: core/auth/credential_binding.go:772")),
 		pdecl(field("subject_kind", model.KindText, false),
-			model.None("a subject kind from a closed set, compared: core/auth/credential_binding.go:749")),
+			model.None("a subject kind from a closed set, compared: core/auth/credential_binding.go:772")),
 		pdecl(field("subject_ref", model.KindUUID, false),
-			model.None("the subject's id, a workflow run, compared: core/auth/credential_binding.go:749")),
+			model.None("the subject's id, a workflow run, compared: core/auth/credential_binding.go:772")),
 		field("subject_generation", model.KindInt, false),
 		// The account every binding of the subject belongs to. It only ever
 		// refuses a successor bound to another account.
 		pdecl(field("subject_user_id", model.KindUUID, false), model.Ref(model.EncodeUserID, model.ClassRestrict)),
 		pdecl(field("credential_kind", model.KindText, false),
-			model.None("the closed credential kind user or token, switched on: core/auth/credential_binding.go:702")),
+			model.None("the closed credential kind user or token, switched on: core/auth/credential_binding.go:725")),
 		pdecl(field("credential_id", model.KindUUID, false),
-			model.None("the session or token row, reloaded as such when bound and at every resolution: core/auth/credential_binding.go:704, core/auth/credential_binding.go:716, core/auth/principal_evidence.go:246, core/auth/principal_evidence.go:339")),
+			model.None("the session or token row, reloaded as such when bound and at every resolution: core/auth/credential_binding.go:727, core/auth/credential_binding.go:739, core/auth/principal_evidence.go:262, core/auth/principal_evidence.go:355")),
 		field("credential_version", model.KindInt, false),
+		field("os_uid", model.KindInt, true),
+		pdecl(field("os_account", model.KindText, true), model.None("the immutable native account name, compared without deriving a product subject: core/auth/credential_binding.go:777")),
 		// The subject's authority ceiling, copied from its first binding into
 		// every successor and sealed with the row.
 		pdecl(field("ceiling_kind", model.KindText, false),
-			model.None("the closed credential kind user or token of the first binding, compared: core/auth/credential_binding.go:221")),
+			model.None("the closed credential kind user or token of the first binding, compared: core/auth/credential_binding.go:235")),
 		pdecl(field("ceiling_role", model.KindText, true), pdeclNoneAuthRole),
 		pdecl(field("ceiling_workspace_id", model.KindUUID, true),
-			model.None("the workspace the first binding's credential was confined to, compared: core/auth/credential_binding.go:221")),
+			model.None("the workspace the first binding's credential was confined to, compared: core/auth/credential_binding.go:235")),
 		pdecl(field("ceiling_agent", model.KindText, true),
-			model.None("the external id of an agent identity, never an account, compared: core/auth/credential_binding.go:221")),
+			model.None("the external id of an agent identity, never an account, compared: core/auth/credential_binding.go:235")),
 		pdecl(field("superseded_by", model.KindUUID, true),
-			model.None("the successor binding row, only tested for presence: core/auth/credential_binding.go:317, core/auth/credential_binding.go:180")),
+			model.None("the successor binding row, only tested for presence: core/auth/credential_binding.go:334, core/auth/credential_binding.go:194")),
 		field("superseded_at", model.KindTimestamp, true),
 		pdecl(field("authorized_by_actor", model.KindText, true), pdeclActorEvidence),
 		pdecl(field("seal", model.KindBytes, false),
-			model.None("SHA-256 over the row's immutable fields, only compared: core/auth/credential_binding.go:784, core/auth/credential_binding.go:754")),
+			model.None("SHA-256 over the row's immutable fields, only compared: core/auth/credential_binding.go:819, core/auth/credential_binding.go:784")),
 	},
 	Indexes: []model.IndexSpec{
 		{Name: "core_credential_bindings_subject_generation_uniq", Columns: []string{
@@ -63,13 +65,17 @@ var credentialBindingDescriptor = model.EntityDescriptor{
 var credentialBindingCodec = model.Codec[model.CredentialBinding]{
 	Base: func(b *model.CredentialBinding) *model.BaseFields { return &b.BaseFields },
 	Encode: func(b model.CredentialBinding) (model.Record, error) {
+		var uid any
+		if b.OSUID != nil {
+			uid = int64(*b.OSUID)
+		}
 		return model.Record{
 			"target_tenant_id": encTenant(b.TargetTenantID),
 			"subject_kind":     b.SubjectKind, "subject_ref": b.SubjectRef.String(),
 			"subject_generation": b.SubjectGeneration, "subject_user_id": b.SubjectUserID.String(),
 			"credential_kind": b.CredentialKind, "credential_id": b.CredentialID.String(),
-			"credential_version": b.CredentialVersion,
-			"ceiling_kind":       b.CeilingKind, "ceiling_role": encOptStr(b.CeilingRole),
+			"credential_version": b.CredentialVersion, "os_uid": uid, "os_account": encOptStr(b.OSAccount),
+			"ceiling_kind": b.CeilingKind, "ceiling_role": encOptStr(b.CeilingRole),
 			"ceiling_workspace_id": encOptID(b.CeilingWorkspaceID), "ceiling_agent": encOptStr(b.CeilingAgent),
 			"superseded_by": encOptID(b.SupersededBy), "superseded_at": encOptTS(b.SupersededAt),
 			"authorized_by_actor": encOptStr(b.AuthorizedByActor), "seal": encBytes(b.Seal),
@@ -80,7 +86,17 @@ var credentialBindingCodec = model.Codec[model.CredentialBinding]{
 		if err != nil {
 			return model.CredentialBinding{}, err
 		}
+		var uid *uint32
+		if !r.IsNull("os_uid") {
+			raw := r.Int("os_uid")
+			if raw < 1 || raw > int64(^uint32(0)) {
+				return model.CredentialBinding{}, fmt.Errorf("sqlstore: invalid OS account UID")
+			}
+			value := uint32(raw)
+			uid = &value
+		}
 		return model.CredentialBinding{
+			OSUID: uid, OSAccount: r.String("os_account"),
 			BaseFields: base, TargetTenantID: decTenant(r, "target_tenant_id"),
 			SubjectKind: r.String("subject_kind"), SubjectRef: decID(r, "subject_ref"),
 			SubjectGeneration: r.Int("subject_generation"), SubjectUserID: decID(r, "subject_user_id"),
@@ -145,7 +161,8 @@ func (s credentialBindingStore) Current(
 	ref model.ID,
 ) ([]model.CredentialBinding, error) {
 	filters := append(credentialBindingSubjectFilters(target, kind, ref),
-		model.Filter{Column: "superseded_by", Op: model.OpIsNull})
+		model.Filter{Column: "superseded_by", Op: model.OpIsNull},
+		model.Filter{Column: "superseded_at", Op: model.OpIsNull})
 	recs, _, err := s.g.List(ctx, model.Query{Filters: filters, Limit: 2})
 	if err != nil {
 		return nil, err
@@ -236,4 +253,48 @@ func (s credentialBindingStore) Supersede(
 		return model.CredentialBinding{}, err
 	}
 	return s.decode(updated)
+}
+
+func (s credentialBindingStore) OSAccountOwner(ctx context.Context, uid uint32) ([]model.CredentialBinding, error) {
+	recs, _, err := s.g.List(ctx, model.Query{Filters: []model.Filter{
+		{Column: "subject_kind", Op: model.OpEq, Value: "os_account"},
+		{Column: "subject_generation", Op: model.OpEq, Value: int64(0)},
+		{Column: "os_uid", Op: model.OpEq, Value: int64(uid)},
+	}, Limit: 2})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]model.CredentialBinding, 0, len(recs))
+	for _, rec := range recs {
+		row, e := s.decode(rec)
+		if e != nil {
+			return nil, e
+		}
+		out = append(out, row)
+	}
+	return out, nil
+}
+func (s credentialBindingStore) RevokeOSAccount(ctx context.Context, current model.CredentialBinding, at model.Timestamp) error {
+	stored, err := s.Get(ctx, current.ID)
+	if err != nil {
+		return err
+	}
+	if stored.SubjectKind != "os_account" || stored.Version != current.Version || !stored.SupersededBy.IsZero() || stored.SupersededAt != nil || at.IsZero() {
+		return store.ErrConflict
+	}
+	if s.directory == nil {
+		return fmt.Errorf("sqlstore: OS account revocation has no directory writer")
+	}
+	if err = s.directory.prepare(ctx, func() ([]model.TenantID, error) { return []model.TenantID{stored.TargetTenantID}, nil }); err != nil {
+		return err
+	}
+	stored.SupersededAt = &at
+	rec, err := credentialBindingCodec.Encode(stored)
+	if err != nil {
+		return err
+	}
+	rec[model.ColID] = stored.ID.String()
+	rec[model.ColVersion] = stored.Version
+	_, err = s.g.Update(ctx, rec)
+	return err
 }

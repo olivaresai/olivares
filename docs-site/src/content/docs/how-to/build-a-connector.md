@@ -211,8 +211,8 @@ connectors index documents certification; it is not a trust root.
 - External wiring covers **observation sources** and **content sources**; an
   output connector builds and ships identically but the notify composition does
   not yet load external output plugins.
-- Out-of-process **modules** are not available (the proto is frozen, the host
-  glue intentionally unwired).
+- Out-of-process **modules** are not available and the transport is deprecated
+  (the wire stays frozen; the host glue was never wired).
 - The observation sum type is **sealed**: you emit edges, cost samples and
   findings — with open string vocabularies — but cannot define new
   observation kinds.

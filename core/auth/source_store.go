@@ -56,7 +56,7 @@ var (
 // does NOT build or run connectors — that is the composition root's live
 // reconciler (cmd/olivares); this is only the persisted source of truth.
 type SourceStore struct {
-	st store.Store
+	st authStorage
 }
 
 // NewSourceStore builds the service.

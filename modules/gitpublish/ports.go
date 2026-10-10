@@ -73,7 +73,7 @@ var ErrBindingNotApproved = errors.New("gitpublish: binding not approved in this
 type CredentialBinding struct {
 	ID            string
 	Version       int64
-	Host          string // github | gitlab
+	Host          string // github | gitlab | git
 	AllowedOwners []string
 }
 
@@ -105,6 +105,15 @@ type Git interface {
 	// PathsChanged reports whether any CI-configuration path differs.
 	PathsChanged(ctx context.Context, repo, from, to string, paths []string) (bool, error)
 	Push(ctx context.Context, r gp.PushRequest) (gp.Result, error)
+	// Fetch feeds commit from a session folder into the server repository.
+	Fetch(ctx context.Context, repo, source, commit string) error
+}
+
+// SessionFolders resolves the folder a session run worked in, confined to the
+// target's workspace; the composition root binds the sessions module. A run
+// that is absent, foreign or has no recorded folder is store.ErrNotFound.
+type SessionFolders interface {
+	ReadRunWorkspacePath(ctx context.Context, tenant model.TenantID, workspace model.ID, run string) (string, error)
 }
 
 // PrincipalResolver rebuilds a principal from its exact credential

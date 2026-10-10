@@ -3,6 +3,12 @@ title: "Referencia de configuración"
 description: "La superficie de configuración verificada del control plane de Olivares AI: flags de serve, variables de entorno, selección de almacén y los valores por defecto seguros que vienen de fábrica."
 ---
 
+:::note[Business]
+La exportación de auditoría (`GET /v1/audit/export`, `olivares audit export`), los archivos en directorios y la verificación de archivos externos requieren Business. Community conserva el registro firmado, `olivares audit verify` y `olivares dr backup`; la exportación devuelve HTTP 501 o código de salida 9. El reenvío de auditoría y las transferencias DDIL con segmentos de auditoría también requieren Business.
+:::
+
+Desde 0.1, las claves de firma y los archivos de configuración sellados por KMS (CMEK) requieren el binario Business. Community conserva BYOK, la firma de checkpoints fuera del host (HYOK) y `keys status`. Community rechaza una instalación con CMEK antes de abrir el almacén o crear claves. Para `dr backup` y `keys unseal`, use Business con el KMS del cliente; la recuperación no requiere una licencia activa.
+
 Esta página documenta la superficie de configuración del motor del control plane — el binario único de Go llamado `olivares`. Cubre los flags que acepta el subcomando `serve`, las variables de entorno que el motor lee al arrancar, cómo se seleccionan el almacén y el policy decision point, y los valores por defecto seguros que están en efecto sin configuración alguna.
 
 Todo lo listado aquí está tomado de las propias definiciones de comando del motor y de su raíz de composición. Cuando un ajuste no puede confirmarse en el código fuente, no se lista. Para la postura de seguridad conceptual detrás de estos valores por defecto, consulta [el modelo de seguridad](/es/explanation/security/security-model/); para el camino de extremo a extremo ejecutable, consulta [autoalojamiento](/es/how-to/self-hosting/).
@@ -14,6 +20,8 @@ a partir de las propias fuentes. Los secretos que cablean fuentes reales permane
 ficheros en poder del operador referenciados por variable de entorno — nunca en el
 almacén. Los valores por defecto se eligen para fallar cerrado: TLS activado, sin credenciales por defecto y un token de un solo uso. Los enlaces son el comodín dual-stack (`:8443`, `:8444`): esto es un servidor, y el enlace nunca fue lo que lo hacía seguro.
 :::
+
+**Entrega de eventos NATS:** El puente Core NATS y NATS JetStream requieren Business Identity & Scale. Community entrega los eventos dentro del proceso.
 
 ## El subcomando `serve`
 
@@ -65,14 +73,14 @@ El directorio de datos alberga la clave de firma de auditoría, el certificado y
 
 `OLIVARES_SOURCES_CONFIG` es la única entrada a través de la cual se resuelven las fuentes de señal no-demo y los proveedores de roster de identidad. Es la configuración portadora de secretos del operador y se mantiene deliberadamente fuera del almacén. El motor la lee durante el arranque y registra cada fuente **antes** de que arranque el runtime.
 
-El tratamiento es honesto en lugar de fail-fast:
+El arranque distingue entre una variable sin establecer y un fichero configurado:
 
 - Una variable **ausente** produce una configuración vacía, y el motor avisa de que no hay nada real cableado.
-- Un fichero **ilegible o con JSON inválido** avisa y produce una configuración vacía — nunca aborta el arranque.
+- Si el fichero configurado **falta, no se puede leer o contiene JSON inválido**, `olivares serve` **termina con código `1`**. El error empieza por `load sources operator config: OLIVARES_SOURCES_CONFIG` e incluye `refusing to start instead of silently omitting operator configuration`.
 - Una lista de fuentes configurada pero **vacía** avisa de que ningún conector ingestará, de modo que el estate corre sin tráfico en vivo, en lugar de aparentar estar sano en silencio.
 - Una lista de **identidad** vacía avisa de que el roster permanece vacío y la sincronización de roster es un no-op.
 
-Esto es por diseño: una fuente no configurada aflora un aviso en lugar de hacer caer el control plane o fingir que funciona. Para poblar realmente el mapa de acceso, configura al menos una fuente — consulta [conectar una fuente](/es/how-to/connect-a-source/) y, para el camino cooperativo de Claude Code sobre OpenTelemetry y MCP, [conectar Claude Code](/es/how-to/connect-claude-code/).
+Si has configurado un fichero, corrige la ruta, los permisos de lectura o el JSON y reinicia. El motor se niega a omitir silenciosamente la configuración del operador. Para poblar el mapa de acceso, configura al menos una fuente — consulta [conectar una fuente](/es/how-to/connect-a-source/) y, para el camino cooperativo de Claude Code sobre OpenTelemetry y MCP, [conectar Claude Code](/es/how-to/connect-claude-code/).
 
 ### Punto de decisión de autorización (PDP)
 
@@ -102,7 +110,7 @@ Configura `OLIVARES_OTEL_PROVIDER_BAGGAGE_ALLOWLIST` como un array JSON de regla
 
 ### Complete variable reference
 
-The table below is generated from the product's own sources: 299 variables and 17 runtime-constructed families, covering the engine, the CLI, the Kubernetes operator, the Terraform provider and the connectors. It is regenerated and checked against those sources on every change, so it does not fall behind the binary.
+The table below is generated from the product's own sources: 296 variables and 18 runtime-constructed families, covering the engine, the CLI and the connectors. It is regenerated and checked against those sources on every change, so it does not fall behind the binary.
 
 **Required** means the feature that reads the variable does not start without it; most variables are optional and the engine runs with none of them set.
 
@@ -113,14 +121,13 @@ The table below is generated from the product's own sources: 299 variables and 1
 | `OLIVARES_AGENTCORE_EXPORT_CONFIG` | No | — | Path to the JSON configuration of the AgentCore usage export. |
 | `OLIVARES_AGENT_GATEWAY_CONFIG` | No | — | Path to the JSON configuration of the MCP agent gateway. |
 | `OLIVARES_ALLOW_CLEARTEXT` | No | — | Dangerous opt-in: lets a request carrying a credential reach a NON-loopback host over plain HTTP, for surfaces with no --allow-cleartext flag of their own. |
-| `OLIVARES_API_TOKEN` | No | — | API token the Terraform provider authenticates with, when the provider block does not set one. |
 | `OLIVARES_APPROVAL_BRIDGE_CONFIG` | No | — | Path to the JSON configuration of the bridge that routes approvals to an external system. |
-| `OLIVARES_AUDIT_ARCHIVE_CONFIG` | No | — | Path to the JSON settings for the `s3archive` sink. Secret-bearing, so it is a file rather than a value. |
+| `OLIVARES_AUDIT_ARCHIVE_CONFIG` | No | — | Path to the JSON settings for the Business Regulated Operations `s3archive` sink. Secret-bearing, so it is a file rather than a value. |
 | `OLIVARES_AUDIT_ARCHIVE_DIR` | No | — | Root directory for the `dir` archive sink. |
 | `OLIVARES_AUDIT_ARCHIVE_INTERVAL` | No | `24h` | How often sealed audit segments are archived, as a Go duration. |
 | `OLIVARES_AUDIT_ARCHIVE_RETAIN_DAYS` | No | `2555` | How long archived audit segments are retained, in days. |
 | `OLIVARES_AUDIT_ARCHIVE_SEGMENT_EVENTS` | No | — | How many events a sealed archive segment holds before the next one is started. |
-| `OLIVARES_AUDIT_ARCHIVE_SINK` | No | — | Where sealed audit segments are archived: unset for off, `dir` for a local directory, `s3archive` for object storage. |
+| `OLIVARES_AUDIT_ARCHIVE_SINK` | No | — | Where sealed audit segments are archived: unset for off, `dir` for a local directory, `s3archive` for object storage in Business Regulated Operations. |
 | `OLIVARES_AUDIT_LEGALHOLD_INTERVAL` | No | — | How often the long-horizon legal-hold sweep runs, as a Go duration. |
 | `OLIVARES_AUDIT_LEGALHOLD_RECONCILE` | No | — | Interruptor booleano, no una ruta de archivo, del reconciliador de legal holds de largo horizonte, que aplica legal holds de Object Lock a los segmentos de auditoría archivados de los tenants con un legal hold activo. Solo lo leen los builds compilados con las etiquetas `enterprise` y `addon_reg`, al arrancar el motor; un cambio surte efecto tras un reinicio. Solo lo activa un valor que `strconv.ParseBool` acepte como true, como `true` o `1`; si no se define, vale false o no se puede analizar, permanece desactivado sin error. Además, sigue desactivado salvo que el archivado de auditoría esté configurado en un sink capaz de aplicar legal holds de Object Lock. |
 | `OLIVARES_AUDIT_META_BLINDING` | No | — | Whether audit metadata commitments are written blinded, and how strictly that is required. |
@@ -133,7 +140,7 @@ The table below is generated from the product's own sources: 299 variables and 1
 | `OLIVARES_AUTHZEN_DISABLED` | No | — | Set to a true value to turn the AuthZEN decision endpoint off. |
 | `OLIVARES_AUTHZEN_EXPORT_DISABLED` | No | — | Set to a true value to turn the AuthZEN export endpoint off. |
 | `OLIVARES_AUTHZEN_SEARCH_DISABLED` | No | — | Set to a true value to turn the AuthZEN search endpoints off while leaving decisions on. |
-| `OLIVARES_BASE_URL` | No | — | Public base URL of this control plane, used where an absolute link back to it has to be produced. |
+| `OLIVARES_BASE_URL` | No | — | Public base URL of this engine, used where an absolute link back to it has to be produced. |
 | `OLIVARES_BUS_CONFIG` | No | — | Path to the JSON configuration of the message bus the engine publishes on. |
 | `OLIVARES_CAEP_TRANSMITTER_CONFIG` | No | — | Path to the JSON configuration of the CAEP transmitter that pushes shared-signal events. |
 | `OLIVARES_CATALOG_SIGNING_KEY` | No | — | Catalog signing key, inline. Prefer the file form. |
@@ -208,8 +215,6 @@ The table below is generated from the product's own sources: 299 variables and 1
 | `OLIVARES_EMBEDDINGS_VOYAGE_GEO` | No | — | Region or data-residency hint sent to the voyage provider. |
 | `OLIVARES_EMBEDDINGS_VOYAGE_KEY` | No | — | Api key for the voyage embeddings provider. |
 | `OLIVARES_EMBEDDINGS_VOYAGE_MODEL` | No | — | Embedding model requested from the voyage provider. |
-| `OLIVARES_ENDPOINT` | No | — | Control-plane base URL the Terraform provider talks to, when the provider block does not set one. |
-| `OLIVARES_ENGINE` | No | — | Store engine the Kubernetes operator selects for the engine it manages: `sqlite` or `postgres`. |
 | `OLIVARES_EVALS_MONITOR_WINDOW` | No | — | Time window the evaluation monitor scores, as a Go duration. |
 | `OLIVARES_EVENTING_ALLOW_LOOPBACK` | No | — | Set to a true value to allow loopback destinations. Single-box development only, because the default refusal is what blocks server-side request forgery. |
 | `OLIVARES_EVENTING_DISPATCH_INTERVAL` | No | `15s` | How often queued events are dispatched, as a Go duration. `0` disables the pump. |
@@ -239,7 +244,7 @@ The table below is generated from the product's own sources: 299 variables and 1
 | `OLIVARES_HOOK_PEP_TENANT` | No | — | Tenant the Claude Code hook client reports. |
 | `OLIVARES_HOOK_PEP_TOKEN` | No | — | Token the Claude Code hook client presents to the enforcement point. |
 | `OLIVARES_HOOK_PEP_URL` | No | — | Base URL of the enforcement point the Claude Code hook client calls. |
-| `OLIVARES_INCIDENTLOOP_CONFIG` | No | — | Path to the JSON configuration of the incident close-the-loop subscriber. Read by builds compiled with the `enterprise` tag. |
+| `OLIVARES_INCIDENTLOOP_CONFIG` | No | — | Path to the JSON configuration of the incident close-the-loop subscriber. Read by the Business edition. |
 | `OLIVARES_INFERENCE_PROXY_CONFIG` | No | — | Path to the JSON configuration of the governed inference proxy. |
 | `OLIVARES_INGEST_TOKEN` | No | — | Bearer token the collector ingest endpoint requires from telemetry senders. |
 | `OLIVARES_INSECURE` | No | — | Set to `1` to let the CLI talk to a plaintext or untrusted-TLS endpoint. Local development only. |
@@ -280,11 +285,11 @@ The table below is generated from the product's own sources: 299 variables and 1
 | `OLIVARES_MODEL_GATEWAY_CHAT_MODE` | No | `disabled` | Modo de activación del envío Chat síncrono gobernado. Si no se define o vale `disabled`, permanece desactivado; `development_precheck` habilita de forma explícita la comprobación previa de enrutamiento existente, no atómica y fail-open, que no es un límite monetario estricto. Cualquier otro valor impide el arranque. |
 | `OLIVARES_MODEL_GATEWAY_PROFILES_CONFIG` | No | — | Ruta al archivo JSON local de perfiles de ejecución inmutables de la puerta de enlace de modelos. Si no se define, no se carga ningún perfil; un archivo ilegible o no válido impide el arranque. |
 | `OLIVARES_NHI_ACTUATORS_CONFIG` | No | — | Path to the JSON configuration of the actuators that act on non-human identities. |
-| `OLIVARES_NIS2INCIDENT_CONFIG` | No | — | Path to the JSON configuration of NIS2 incident reporting. Read by builds compiled with the `enterprise` tag. |
+| `OLIVARES_NIS2INCIDENT_CONFIG` | No | — | Path to the JSON configuration of NIS2 incident reporting. Read by the Business edition. |
 | `OLIVARES_NOTIFY_CONFIG` | No | — | Path to the JSON list of notification destinations. Secret-bearing, so it stays out of the store. |
 | `OLIVARES_NOTIFY_DISPATCH_INTERVAL` | No | — | How often queued notifications are dispatched, as a Go duration. `0` disables the pump. |
-| `OLIVARES_OIDC_CLIENT_ID` | Yes | — | OIDC client id for this control plane. Required when the protocol is `oidc`. |
-| `OLIVARES_OIDC_CLIENT_SECRET` | Yes | — | OIDC client secret for this control plane. Required when the protocol is `oidc`. |
+| `OLIVARES_OIDC_CLIENT_ID` | Yes | — | OIDC client id for this engine. Required when the protocol is `oidc`. |
+| `OLIVARES_OIDC_CLIENT_SECRET` | Yes | — | OIDC client secret for this engine. Required when the protocol is `oidc`. |
 | `OLIVARES_OIDC_GROUPS_CLAIM` | No | — | ID-token or UserInfo claim carrying group membership. Unset leaves group mapping off. |
 | `OLIVARES_OIDC_ISSUER` | Yes | — | OIDC issuer URL. Required when the protocol is `oidc`. |
 | `OLIVARES_ONBOARDING_CONFIG` | No | — | Ruta a la configuración JSON del evaluador de preparación para el onboarding. La leen los builds compilados con la etiqueta `enterprise` cada vez que se ejecuta `olivares enterprise readiness`, no al arrancar el motor. `{}` selecciona el perfil estándar. Si no se define, o si el archivo es ilegible o no se puede analizar, ese comando informa de que la preparación para el onboarding no está configurada. |
@@ -308,19 +313,18 @@ The table below is generated from the product's own sources: 299 variables and 1
 | `OLIVARES_PDP_OPA_PATH` | No | — | Decision path queried under the Open Policy Agent endpoint. |
 | `OLIVARES_PDP_OPA_TOKEN` | No | — | Bearer token for the Open Policy Agent endpoint. |
 | `OLIVARES_PDP_OPA_URL` | No | — | Base URL of the Open Policy Agent endpoint, for the `opa` decision point. |
-| `OLIVARES_PIV_CONFIG` | No | — | Path to the JSON configuration for smart-card privileged login. |
+| `OLIVARES_PIV_CONFIG` | No | — | Path to the JSON configuration for Business Identity & Scale smart-card privileged login. Community refuses serving with this setting; data backup remains available. |
 | `OLIVARES_PLUGIN` | No | — | Handshake cookie an out-of-process connector plugin must present. Set by the engine when it launches the plugin, not by the operator. |
 | `OLIVARES_POLICY_MAX_STALENESS` | No | — | How stale a cached policy decision may be before it is refused, as a Go duration. |
 | `OLIVARES_POLICY_SIGNING_KEY` | No | — | Policy bundle signing key, inline. Prefer the file form. |
 | `OLIVARES_POLICY_SIGNING_KEY_FILE` | No | — | Path to the policy bundle signing key. |
 | `OLIVARES_POLICY_SIGNING_KEY_WRAPPED_FILE` | No | — | Path to the policy signing key wrapped by a key management service. |
-| `OLIVARES_PORTAL_TLS_DIRECTORY` | No | — | Directorio en el que el operador guarda el certificado y la clave TLS de la Appliance Console; la unidad de servicio lo nombra y pasa el par a la consola como credenciales. |
 | `OLIVARES_PQC_POSTURE_CONFIG` | No | — | Ruta a la configuración JSON del evaluador de postura poscuántica. La leen los builds compilados con la etiqueta `enterprise` cada vez que se ejecuta `olivares enterprise pqc-posture`, no al arrancar el motor. `{}` selecciona CNSA 2.0 con 2033 como año objetivo. Si no se define, o si el archivo es ilegible o no se puede analizar, ese comando informa de que la postura PQC no está configurada. |
 | `OLIVARES_PUBLIC_URL` | No | — | The address a browser reaches this console at, as scheme://host[:port]. It is what the startup panel prints and what the WebAuthn relying party is derived from, and it is independent of the listen address. The --public-url flag wins over this variable, and passing that flag empty clears it. Read at start-up only: a change takes a restart. Refused values are reported by field and failure class and are never echoed, and support bundles keep this value redacted. |
 | `OLIVARES_RATELIMIT_CONFIG` | No | — | Path to the JSON rate-limit policy the engine applies to its own endpoints. |
 | `OLIVARES_RATELIMIT_STORE` | No | — | Where rate-limit counters live, which decides whether limits are per replica or shared. |
 | `OLIVARES_RENDER_INSPECTOR_CONFIG` | No | — | Ruta al archivo JSON de políticas del inspector de contenido renderizado de MCP App. Solo la leen los builds compilados con las etiquetas `enterprise` y `addon_airs`. Si no se define, esa inspección permanece desactivada; un archivo ilegible o que no se puede analizar hace que el inspector deniegue todo el contenido renderizado hasta que se corrija el archivo y se reinicie el motor. |
-| `OLIVARES_REPORTING_CONFIG` | No | — | Path to the JSON configuration of the reporting add-on. Read by builds compiled with the `enterprise` tag. |
+| `OLIVARES_REPORTING_CONFIG` | No | — | Path to the JSON configuration of the reporting add-on. Read by the Business edition. |
 | `OLIVARES_REPORTING_SCHEDULE_INTERVAL` | No | — | How often scheduled reports are generated, as a Go duration. |
 | `OLIVARES_REPORT_CACHE_DIR` | No | — | Directory where generated report artifacts are cached. |
 | `OLIVARES_RETENTION_GOVERNOR_CONFIG` | No | — | Ruta a la configuración JSON del gobernador de retención mínima regulatoria. Solo la leen los builds compilados con las etiquetas `enterprise` y `addon_reg`, al arrancar el motor. Si no se define, no se impone ninguna retención mínima; un archivo ilegible o que no se puede analizar fija en 100 años la retención mínima de cada clase de retención hasta que se corrija el archivo y se reinicie el motor. |
@@ -332,7 +336,7 @@ The table below is generated from the product's own sources: 299 variables and 1
 | `OLIVARES_SAML_IDP_METADATA_URL` | No | — | Identity-provider metadata URL, from which the SAML endpoints and certificate are read. |
 | `OLIVARES_SAML_IDP_SSO_URL` | No | — | Identity-provider single sign-on URL, for the path where metadata is not fetched. |
 | `OLIVARES_SAML_SP_CERT_PEM` | No | — | Service-provider encryption certificate in PEM, published as the encryption key descriptor. |
-| `OLIVARES_SAML_SP_ENTITY_ID` | Yes | — | Entity id this control plane presents as the SAML service provider. Required when the protocol is `saml`. |
+| `OLIVARES_SAML_SP_ENTITY_ID` | Yes | — | Entity id this engine presents as the SAML service provider. Required when the protocol is `saml`. |
 | `OLIVARES_SAML_SP_KEY_PEM` | No | — | Service-provider encryption private key in PEM, which decrypts encrypted assertions. |
 | `OLIVARES_SAML_SP_SIGN_CERT_PEM` | No | — | Service-provider signing certificate in PEM, published as the signing key descriptor. |
 | `OLIVARES_SAML_SP_SIGN_KEY_PEM` | No | — | Service-provider signing private key in PEM, which signs authentication requests. |
@@ -356,7 +360,7 @@ The table below is generated from the product's own sources: 299 variables and 1
 | `OLIVARES_SECRETREF_VAULT_TOKEN` | No | — | Token used against HashiCorp Vault. |
 | `OLIVARES_SECRET_STORE_KEY` | No | — | Key that encrypts operator secrets held in the store. |
 | `OLIVARES_SERVERTOOL_EGRESS_CONFIG` | No | — | Ruta al archivo JSON de concesiones (grants) del gate de egress para las herramientas de servidor del proveedor (búsqueda web, obtención web, ejecución de código) en el proxy inline. Solo la leen los builds compilados con las etiquetas `enterprise` y `addon_airs`. Si no se define, esas herramientas siguen en modo de solo observación; un archivo ilegible o que no se puede analizar deniega toda herramienta de servidor de egress reconocida hasta que se corrija el archivo y se reinicie el motor. |
-| `OLIVARES_SERVER_URL` | No | — | Base URL of the control plane the CLI talks to, when `--server` is not given. |
+| `OLIVARES_SERVER_URL` | No | — | Base URL of the engine the CLI talks to, when `--server` is not given. |
 | `OLIVARES_SESSIONS_AGENT_LINK_LISTEN` | No | — | Dirección de escucha del enlace de agentes, en formato `host:port`: el endpoint con TLS mutuo que una edición basada en este árbol de fuentes ofrece a sus agentes de nodo. Se lee al arrancar; vacío, el valor predeterminado, significa que no se abre ningún listener. La compilación Community no lee esta variable. |
 | `OLIVARES_SESSIONS_MANAGED_STOP_ADMISSION_TIMEOUT` | No | `10s` | Tiempo máximo para admitir una solicitud de Stop gestionado, expresado como una duración positiva de Go con unidades. Se lee al arrancar; un valor inválido o no positivo impide el arranque. No limita el tiempo de finalización del proceso. |
 | `OLIVARES_SESSION_BUDGET_AVAILABILITY` | No | — | Whether session budget enforcement is required, and what happens when the budget service cannot answer. |
@@ -366,13 +370,16 @@ The table below is generated from the product's own sources: 299 variables and 1
 | `OLIVARES_SESSION_PEP_URL` | No | — | Base URL of the policy enforcement point a governed agent session calls before acting. |
 | `OLIVARES_SESSION_RUNTIME_BASE_URL` | No | — | Base URL the launched session runtime calls back to. |
 | `OLIVARES_SESSION_RUNTIME_CLAUDE_BIN` | No | `claude` | Executable the session runtime launches. |
-| `OLIVARES_SESSION_RUNTIME_CODEX_BIN` | No | — | Pinned official Codex executable the session runtime may operate. Setting it REGISTERS that driver on this node; unset, codex profiles stay observable and not launchable. |
-| `OLIVARES_SESSION_RUNTIME_GROK_BIN` | No | — | Pinned official Grok executable the session runtime may operate. Setting it REGISTERS that driver on this node; unset, grok profiles stay observable and not launchable. |
-| `OLIVARES_SESSION_RUNTIME_OPENCODE_BIN` | No | — | Ejecutable oficial de OpenCode fijado explícitamente que puede utilizar el runtime de sesiones. Al definirlo, se registra el driver ACP de OpenCode en este nodo; sin definirlo, los perfiles de OpenCode siguen siendo observables, pero no pueden iniciarse. Los demás drivers de proveedores no cambian. |
+| `OLIVARES_SESSION_RUNTIME_CODEX_BIN` | No | — | Explicit override selecting the official Codex executable instead of the newest verified managed install or `codex` on the engine's `PATH`. The driver is registered at boot even when unset; launch is refused if no executable resolves. |
+| `OLIVARES_SESSION_RUNTIME_GEMINI_BIN` | No | — | Pinned official Gemini CLI executable the session runtime may operate; unset, the Gemini CLI installed on this node is found when a session launches. |
+| `OLIVARES_SESSION_RUNTIME_GROK_BIN` | No | — | Explicit override selecting the official Grok executable instead of the newest verified managed install or `grok` on the engine's `PATH`. The driver is registered at boot even when unset; launch is refused if no executable resolves. |
+| `OLIVARES_SESSION_RUNTIME_OPENCODE_BIN` | No | — | Selección explícita del ejecutable oficial de OpenCode en lugar de la instalación gestionada verificada más reciente o `opencode` en el `PATH` del motor. El controlador se registra al arrancar aunque la variable no esté definida; si no encuentra un ejecutable, rechaza el lanzamiento. |
 | `OLIVARES_SESSION_RUNTIME_TOKEN_FILE` | No | — | Path to the file holding the session runtime's credential, refreshed by rotation. |
 | `OLIVARES_SESSION_RUNTIME_TOKEN_TTL` | No | `15m` | Lifetime of a minted session runtime credential, as a Go duration. |
 | `OLIVARES_SESSION_RUNTIME_WIF` | No | — | Whether the session runtime takes its credential from workload identity federation instead of a token file. |
 | `OLIVARES_SESSION_RUNTIME_WIF_RULE` | No | — | Which federation rule the session runtime exchanges its workload identity under. |
+| `OLIVARES_SESSION_WORKTREE_BRANCH_PREFIX` | No | `olivares/` | Prefix of the branch a session gets when it is started with a new git worktree; git checks the resulting branch name. |
+| `OLIVARES_SESSION_WORKTREE_DIR` | No | — | Directory that holds the git worktrees of sessions started with a new worktree; the default is session-worktrees in the data directory. |
 | `OLIVARES_SIEM_FORWARD_INTERVAL` | No | — | How often signed ledger records are forwarded to the configured SIEM, as a Go duration. |
 | `OLIVARES_SOURCES_CONFIG` | No | — | Path to the JSON file that wires real observation sources and identity roster providers before the engine starts. |
 | `OLIVARES_SSO_PROTOCOL` | No | — | Single sign-on protocol to wire: `oidc` or `saml`. Unset means no federation, and the endpoints report it rather than half-wiring one. |
@@ -380,9 +387,9 @@ The table below is generated from the product's own sources: 299 variables and 1
 | `OLIVARES_TARGET_BINDING_KEY` | No | — | Key that binds an orchestration target to this deployment, inline. Prefer the file form. |
 | `OLIVARES_TARGET_BINDING_KEY_FILE` | No | — | Path to the orchestration target binding key. |
 | `OLIVARES_TENANT` | No | — | Default tenant for CLI commands, when `--tenant` is not given. |
-| `OLIVARES_THREATINTEL_CONFIG` | No | — | Path to the JSON configuration of threat-intelligence ingest. Read by builds compiled with the `enterprise` tag. |
+| `OLIVARES_THREATINTEL_CONFIG` | No | — | Path to the JSON configuration of threat-intelligence ingest. Read by the Business edition. |
 | `OLIVARES_THREATINTEL_SIGNING_KEY` | No | — | Signing key for threat-intelligence bundles the engine publishes. |
-| `OLIVARES_TOKEN` | No | — | API token the CLI authenticates with, when `--token` is not given. |
+| `OLIVARES_TOKEN` | No | — | API token the CLI authenticates with, when no token flag such as `--token-file` is given. |
 | `OLIVARES_TOOL_PIN_CONFIG` | No | — | Ruta a la configuración JSON opcional (`require_pin_approval`) del almacén de pines de herramientas MCP, que los builds compilados con la etiqueta `enterprise` ejecutan tanto si esta variable se define como si no. Se lee al arrancar el motor. Si no se define, se mantiene la confianza en el primer uso (trust on first use); un archivo ilegible o que no se puede analizar exige la aprobación de un operador para las herramientas desconocidas hasta que se corrija el archivo y se reinicie el motor. |
 | `OLIVARES_TOTP_SEED_KEY` | No | — | Clave de 32 bytes codificada en Base64 que sella las semillas TOTP almacenadas. Usa la misma clave en los nodos HA; si no se define, el motor crea un archivo privado totp-seed.key en su directorio de datos. |
 | `OLIVARES_UPDATE_CHANNEL` | No | — | Release channel the update check asks for, such as `stable`. |
@@ -404,8 +411,6 @@ The table below is generated from the product's own sources: 299 variables and 1
 | `OLIVARES_WIF_SPIFFE_SOCKET` | No | — | Path to the SPIFFE workload API socket the engine fetches its identity from. |
 | `OLIVARES_WIF_TRUST_DOMAIN` | No | — | SPIFFE trust domain accepted for workload identity. |
 | `OLIVARES_WORK_OUTBOX_INTERVAL` | No | — | How often the work-kernel outbox is drained, as a Go duration. `0` disables the pump. |
-| `OLIVARES_WORK_RUN_REF` | No | — | Run reference the engine passes to a launched work session. Set by the engine per run, not by the operator. |
-| `OLIVARES_WORK_SESSION_ID` | No | — | Session reference the engine passes to a launched work session. Set by the engine per run, not by the operator. |
 | `OLIVARES_WORK_TOKEN` | No | — | Credencial de trabajo propia de la sesión, con ámbito limitado, inyectada por el lanzador de sesiones y leída por los comandos de trabajo. Los operadores no deben proporcionarla. Su valor siempre se oculta. |
 
 ### Variable families
@@ -427,6 +432,7 @@ These prefixes name families whose member variables are built at runtime — the
 | `OLIVARES_OIDC_` | No | — | Family prefix for the OIDC federation settings listed above. |
 | `OLIVARES_OTEL_` | No | — | Family prefix for the trace export settings listed above. |
 | `OLIVARES_SAML_` | No | — | Family prefix for the SAML federation settings listed above. |
+| `OLIVARES_SECRETREF_` | No | — | Family of settings for external secret-reference backends, including token-file references. |
 | `OLIVARES_SESSION_RUNTIME_` | No | — | Family prefix for the session runtime settings listed above. |
 | `OLIVARES_VECTOR_` | No | — | Family prefix for the vector index settings listed above. |
 | `OLIVARES_WIF_` | No | — | Family prefix for the workload identity federation settings listed above. |

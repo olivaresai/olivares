@@ -49,6 +49,12 @@ const (
 	TypeMetricSampled Type = "metric.sampled"
 )
 
+// SessionCoreIDLabel carries the exact managed attempt's core Session ID on a
+// cost sample. Only an envelope stamped SessionProjection makes it authoritative;
+// ordinary connector/HTTP labels never authorize this link. Empty means an older
+// managed run had no core Session, not permission to search for one.
+const SessionCoreIDLabel = "olivares.core_session_id"
+
 // Event is the immutable envelope distributed on the bus. It carries the
 // minimal-data fact (Payload), never raw payloads/secrets/PII (docs/SECURITY-HARDENING.md).
 type Event struct {

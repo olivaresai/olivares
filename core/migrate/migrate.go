@@ -137,6 +137,59 @@ func Apply(ctx context.Context, db dialect.Execer, dia dialect.Dialect, tracking
 	if err := ensureTracking(ctx, db, dia, trackingTable); err != nil {
 		return err
 	}
+	return applyPending(ctx, db, dia, trackingTable, migs, false, func(m Migration, applied bool) error {
+		return applyOne(ctx, db, dia, trackingTable, m)
+	})
+}
+
+// ApplyTx runs the same versioned plan inside a transaction already owned by
+// boot. Schema, tracking and the surrounding admission/data writes commit or
+// roll back together. The caller must roll back on error. NonTransactional
+// migrations cannot be used here.
+func ApplyTx(ctx context.Context, tx *sql.Tx, dia dialect.Dialect, trackingTable string, migs []Migration) error {
+	return applyTx(ctx, tx, dia, trackingTable, migs, false)
+}
+
+// ReconcileTx reasserts an immutable, versioned security repair plan, including
+// already-applied versions. It keeps the original tracking record. Use ApplyTx
+// for schema evolution; this mode preserves published per-boot guard repair.
+func ReconcileTx(ctx context.Context, tx *sql.Tx, dia dialect.Dialect, trackingTable string, migs []Migration) error {
+	return applyTx(ctx, tx, dia, trackingTable, migs, true)
+}
+
+func applyTx(ctx context.Context, tx *sql.Tx, dia dialect.Dialect, trackingTable string, migs []Migration, reconcile bool) error {
+	for _, m := range migs {
+		if reconcile && (len(m.DownStmts) != 0 || m.Phase != Expand) {
+			return fmt.Errorf("migrate: %s (v%d) repair requires a forward-only expand", m.Name, m.Version)
+		}
+		if m.NonTransactional {
+			return fmt.Errorf("migrate: %s (v%d) cannot run inside a transaction", m.Name, m.Version)
+		}
+		if err := validateMigrationPlan(m, dia.Name()); err != nil {
+			return err
+		}
+	}
+	if err := ensureTrackingTx(ctx, tx, dia, trackingTable); err != nil {
+		return err
+	}
+	return applyPending(ctx, tx, dia, trackingTable, migs, reconcile, func(m Migration, applied bool) error {
+		if reconcile && applied {
+			var name, phase string
+			var reverted sql.NullString
+			query := dia.Rebind("SELECT name, phase, reverted_at FROM " + trackingTableRef(dia, trackingTable) + " WHERE version = ?")
+			// #nosec G202 -- trackingTableRef quotes the internal tracker identity; version is bound.
+			if err := tx.QueryRowContext(ctx, query, m.Version).Scan(&name, &phase, &reverted); err != nil {
+				return err
+			}
+			if name != m.Name || phase != m.Phase.String() || reverted.Valid {
+				return fmt.Errorf("repair refuses changed or reverted tracking record")
+			}
+		}
+		return applyOneTx(ctx, tx, dia, trackingTable, m, applied)
+	})
+}
+
+func applyPending(ctx context.Context, db dialect.Querier, dia dialect.Dialect, trackingTable string, migs []Migration, reconcile bool, run func(Migration, bool) error) error {
 	applied, err := appliedVersions(ctx, db, dia, trackingTable)
 	if err != nil {
 		return err
@@ -149,10 +202,10 @@ func Apply(ctx context.Context, db dialect.Execer, dia dialect.Dialect, tracking
 		if m.Version <= 0 {
 			return fmt.Errorf("migrate: %s has non-positive version %d", m.Name, m.Version)
 		}
-		if applied[m.Version] {
+		if applied[m.Version] && !reconcile {
 			continue
 		}
-		if err := applyOne(ctx, db, dia, trackingTable, m); err != nil {
+		if err := run(m, applied[m.Version]); err != nil {
 			return fmt.Errorf("migrate %s (v%d): %w", m.Name, m.Version, err)
 		}
 	}
@@ -218,10 +271,24 @@ func ensureTracking(ctx context.Context, db dialect.Execer, dia dialect.Dialect,
 		return fmt.Errorf("migrate: begin tracking reconciliation: %w", err)
 	}
 	defer tx.Rollback() //nolint:errcheck // no-op after commit
+	if err := ensureTrackingTx(ctx, tx, dia, table); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("migrate: commit tracking reconciliation: %w", err)
+	}
+	return nil
+}
+
+// TrackingTableDDL is the runner's schema contract, also used by pre-DDL
+// admission to verify a checkpoint without creating or adopting it.
+func TrackingTableDDL(dia dialect.Dialect, table string) string {
+	return fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s (version INTEGER PRIMARY KEY, name TEXT NOT NULL, applied_at TEXT NOT NULL, phase TEXT NOT NULL DEFAULT 'expand', reverted_at TEXT)", trackingTableRef(dia, table))
+}
+
+func ensureTrackingTx(ctx context.Context, tx *sql.Tx, dia dialect.Dialect, table string) error {
 	qualified := trackingTableRef(dia, table)
-	if _, err := tx.ExecContext(ctx, fmt.Sprintf(
-		"CREATE TABLE IF NOT EXISTS %s (version INTEGER PRIMARY KEY, name TEXT NOT NULL, applied_at TEXT NOT NULL, phase TEXT NOT NULL DEFAULT 'expand', reverted_at TEXT)",
-		qualified)); err != nil {
+	if _, err := tx.ExecContext(ctx, TrackingTableDDL(dia, table)); err != nil {
 		return err
 	}
 	cols, err := dia.TableColumns(ctx, tx, table)
@@ -238,16 +305,13 @@ func ensureTracking(ctx context.Context, db dialect.Execer, dia dialect.Dialect,
 			return fmt.Errorf("migrate: add reverted_at column: %w", err)
 		}
 	}
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("migrate: commit tracking reconciliation: %w", err)
-	}
 	return nil
 }
 
 // appliedVersions returns the set of versions already recorded (regardless of
 // revert state: a reverted version keeps its row and is not re-applied — reverse a
 // schema with a new migration, never by silently re-running an old one).
-func appliedVersions(ctx context.Context, db dialect.Execer, dia dialect.Dialect, table string) (map[int]bool, error) {
+func appliedVersions(ctx context.Context, db dialect.Querier, dia dialect.Dialect, table string) (map[int]bool, error) {
 	rows, err := db.QueryContext(ctx, "SELECT version FROM "+trackingTableRef(dia, table)) // #nosec G202 -- safely quoted internal migrations-table identity
 	if err != nil {
 		return nil, err
@@ -281,6 +345,13 @@ func applyOne(ctx context.Context, db dialect.Execer, dia dialect.Dialect, table
 	}
 	defer tx.Rollback() //nolint:errcheck // no-op after commit
 
+	if err := applyOneTx(ctx, tx, dia, table, m, false); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func applyOneTx(ctx context.Context, tx *sql.Tx, dia dialect.Dialect, table string, m Migration, applied bool) error {
 	if m.Before != nil {
 		if err := m.Before(ctx, tx); err != nil {
 			return fmt.Errorf("before: %w", err)
@@ -304,10 +375,13 @@ func applyOne(ctx context.Context, db dialect.Execer, dia dialect.Dialect, table
 			return fmt.Errorf("after: %w", err)
 		}
 	}
+	if applied {
+		return nil
+	}
 	if _, err := tx.ExecContext(ctx, trackingInsert(dia, table), m.Version, m.Name, nowText(), m.Phase.String()); err != nil {
 		return err
 	}
-	return tx.Commit()
+	return nil
 }
 
 func validateMigrationPlan(m Migration, engine store.Engine) error {

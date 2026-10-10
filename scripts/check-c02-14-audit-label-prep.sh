@@ -36,7 +36,7 @@ grep -F -q 'Does not add legacyMonolithKey' "$DOC" \
 grep -F -q 'C02-02 filename stays N' "$DOC" \
   || fail "prepare doc lost C02-02 N HOLD"
 if grep -qiE 'FIRMA A claimed|remainder applied on origin/main|legacyMonolithKey landed' "$DOC"; then
-  fail "prepare doc claims an application this lote does not have"
+  fail "prepare doc claims an application this batch does not have"
 fi
 
 grep -q 'export function artifactKey(version: string, os: string, arch: string, set: string)' "$ART" \
@@ -44,7 +44,7 @@ grep -q 'export function artifactKey(version: string, os: string, arch: string, 
 grep -q 'export function downloadAuditLabel(version: string, set: string, os: string, arch: string)' "$ART" \
   || fail "downloadAuditLabel is not landed"
 if grep -q 'legacyMonolithKey' "$ART"; then
-  fail "legacyMonolithKey landed — this lote does not apply unscoped fallback"
+  fail "legacyMonolithKey landed — this batch does not apply unscoped fallback"
 fi
 
 python3 - "$JSON" <<'PY' || exit $?

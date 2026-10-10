@@ -14,18 +14,18 @@ set -uo pipefail
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 
 if ! cd "$ROOT/cmd/olivares" 2>/dev/null; then
-	echo "test-ci-env-reach: NO HE PODIDO MIRAR: falta $ROOT/cmd/olivares" >&2
+	echo "test-ci-env-reach: COULD NOT LOOK: missing $ROOT/cmd/olivares" >&2
 	exit 2
 fi
 
 # El binario NO puede vivir en /tmp: en estos contenedores está montado noexec (execve da 126).
 WORK="${TMPDIR:-$ROOT/.tmp}/cienvreach-matrix.$$"
-mkdir -p "$WORK" || { echo "test-ci-env-reach: NO HE PODIDO MIRAR: no puedo crear $WORK" >&2; exit 2; }
+mkdir -p "$WORK" || { echo "test-ci-env-reach: COULD NOT LOOK: cannot create $WORK" >&2; exit 2; }
 cleanup() { rm -rf "$WORK"; }
 trap cleanup EXIT HUP INT TERM
 
 if ! go build -o "$WORK/checkcienvreach" ./tools/checkcienvreach; then
-	echo "test-ci-env-reach: NO HE PODIDO MIRAR: la herramienta no compila" >&2
+	echo "test-ci-env-reach: COULD NOT LOOK: tool does not compile" >&2
 	exit 2
 fi
 BIN="$WORK/checkcienvreach"
@@ -57,7 +57,7 @@ corre() { # corre <nombre> <esperado> <dir>
 	if [ "$rc" = "$esperado" ]; then
 		printf 'ok    %-46s rc=%s\n' "$nombre" "$rc"
 	else
-		printf 'FALLO %-46s rc=%s (esperado %s)\n' "$nombre" "$rc" "$esperado"
+		printf 'FAIL  %-46s rc=%s (expected %s)\n' "$nombre" "$rc" "$esperado"
 		sed 's/^/        /' "$WORK/out"
 		fallos=$((fallos + 1))
 	fi
@@ -136,23 +136,23 @@ jobs:
     steps:
       - run: task test:cloud'
 
-fixture "$WORK/f-ok"        si "$WF_BUENO";     corre "camino feliz"                            0 "$WORK/f-ok"
-fixture "$WORK/f-sep"       si "$WF_SEPARADO";  corre "las fija un job que NO ejecuta"          1 "$WORK/f-sep"
-fixture "$WORK/f-medio"     si "$WF_MEDIO";     corre "sólo una de las dos que encienden"       1 "$WORK/f-medio"
-fixture "$WORK/f-sinsuite"  si "$WF_SIN_SUITE"; corre "nadie ejecuta test:cloud"                2 "$WORK/f-sinsuite"
-fixture "$WORK/f-pocos"     si "$WF_POCOS";     corre "menos de 3 jobs"                         2 "$WORK/f-pocos"
-fixture "$WORK/f-sinfuente" no "$WF_BUENO";     corre "sin fuentes: censo bajo el suelo"        2 "$WORK/f-sinfuente"
+fixture "$WORK/f-ok"        si "$WF_BUENO";     corre "happy path"                            0 "$WORK/f-ok"
+fixture "$WORK/f-sep"       si "$WF_SEPARADO";  corre "set by a job that does NOT run the suite"          1 "$WORK/f-sep"
+fixture "$WORK/f-medio"     si "$WF_MEDIO";     corre "only one of the two enabling variables"       1 "$WORK/f-medio"
+fixture "$WORK/f-sinsuite"  si "$WF_SIN_SUITE"; corre "no job runs test:cloud"                2 "$WORK/f-sinsuite"
+fixture "$WORK/f-pocos"     si "$WF_POCOS";     corre "fewer than 3 jobs"                         2 "$WORK/f-pocos"
+fixture "$WORK/f-sinfuente" no "$WF_BUENO";     corre "no sources: census below the minimum"        2 "$WORK/f-sinfuente"
 
 fixture "$WORK/f-roto"      si "$WF_BUENO"
 printf 'jobs:\n  a: [b\n   c\n' > "$WORK/f-roto/.github/workflows/mainline-ci.yml"
-corre "el workflow no parsea" 2 "$WORK/f-roto"
+corre "workflow does not parse" 2 "$WORK/f-roto"
 
 mkdir -p "$WORK/f-vacio"
-corre "no hay workflow que mirar" 2 "$WORK/f-vacio"
+corre "no workflow to inspect" 2 "$WORK/f-vacio"
 
 echo
 if [ "$fallos" -ne 0 ]; then
-	echo "test-ci-env-reach: $fallos de $casos casos FALLAN" >&2
+	echo "test-ci-env-reach: $fallos of $casos cases FAIL" >&2
 	exit 1
 fi
-echo "test-ci-env-reach: $casos/$casos — el gate se pone rojo por cada defecto y verde por el camino feliz"
+echo "test-ci-env-reach: $casos/$casos — gate is red for each defect and green for the happy path"

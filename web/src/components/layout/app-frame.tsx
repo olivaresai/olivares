@@ -4,7 +4,7 @@
 //
 // THE APP FRAME (redesign §3.2):
 //
-//   frame ─┬─ sidebar (272 px; 248 px ≤ 1360 px; hidden < 761 px)
+//   frame ─┬─ sidebar (240 px full or 56 px rail, the sidebar's own choice; hidden < 761 px)
 //          └─ sheet (canvas, radius 14 px, 8 px from the window edges)
 //               ├─ top bar
 //               └─ body: main [+ side panel 380 px; 340 px ≤ 1360 px; overlay < 1100 px]
@@ -20,15 +20,12 @@ import { SidePanelHost } from './side-panel'
 
 export function AppFrame({
   sidebar,
-  sidebarHidden = false,
   topbar,
   phoneBar,
   overlays,
   children,
 }: {
   sidebar: ReactNode
-  /** The operator folded the sidebar away (Mod+B): the sheet takes the width. */
-  sidebarHidden?: boolean
   topbar: ReactNode
   phoneBar: ReactNode
   /** The palette, the area directory and other portalled layers. */
@@ -41,9 +38,7 @@ export function AppFrame({
       data-slot="app-frame"
       className={cn(
         'grid h-svh grid-cols-1 grid-rows-[minmax(0,1fr)_auto] overflow-hidden bg-frame text-text',
-        sidebarHidden
-          ? 'min-[761px]:grid-rows-1'
-          : 'min-[761px]:grid-cols-[auto_minmax(0,1fr)] min-[761px]:grid-rows-1',
+        'min-[761px]:grid-cols-[auto_minmax(0,1fr)] min-[761px]:grid-rows-1',
         'print:block print:h-auto print:overflow-visible',
       )}
     >
@@ -59,10 +54,7 @@ export function AppFrame({
       </a>
       <div
         data-slot="sidebar"
-        className={cn(
-          'hidden min-h-0 print:hidden',
-          !sidebarHidden && 'min-[761px]:flex',
-        )}
+        className="hidden min-h-0 min-[761px]:flex print:hidden"
       >
         {sidebar}
       </div>
@@ -70,8 +62,7 @@ export function AppFrame({
         data-slot="sheet"
         className={cn(
           'flex min-h-0 min-w-0 flex-col overflow-hidden bg-canvas',
-          'min-[761px]:m-2 min-[761px]:rounded-panel min-[761px]:border min-[761px]:border-line min-[761px]:shadow-card',
-          !sidebarHidden && 'min-[761px]:ml-0',
+          'min-[761px]:m-2 min-[761px]:ml-0 min-[761px]:rounded-panel min-[761px]:border min-[761px]:border-line min-[761px]:shadow-card',
           'print:m-0 print:overflow-visible print:border-0',
         )}
       >

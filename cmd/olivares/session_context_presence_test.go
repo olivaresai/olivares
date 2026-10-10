@@ -39,7 +39,7 @@ func TestSessionLaunchGateAppliesContextOnlyWhenTenantHasPolicy(t *testing.T) {
 		}
 		t.Run(name, func(t *testing.T) {
 			p := &launchContextPresence{configured: configured, pol: knowledge.EffectivePolicy{MaxContextTokens: 2048, Strategy: "summarize", WinningScope: "tenant:t1"}}
-			gate := sessionLaunchGate{contextPolicy: p, recordAvailable: true}
+			gate := sessionLaunchGate{contextPolicy: p}
 			dec, err := gate.Authorize(t.Context(), "t1", sessions.LaunchIntent{PermissionMode: "default"})
 			if err != nil || !dec.Allowed {
 				t.Fatalf("launch: %+v err=%v", dec, err)
@@ -74,7 +74,7 @@ func TestSessionLaunchContextPresenceErrorsFollowAvailabilityPosture(t *testing.
 	for _, posture := range []availabilityPosture{availabilityFailOpen, availabilityFailClosed} {
 		t.Run(posture.String(), func(t *testing.T) {
 			p := &launchContextPresence{presenceErr: errors.New("context policy store unavailable")}
-			gate := sessionLaunchGate{contextPolicy: p, contextPosture: posture, recordAvailable: true}
+			gate := sessionLaunchGate{contextPolicy: p, contextPosture: posture}
 			dec, err := gate.Authorize(t.Context(), "t1", sessions.LaunchIntent{PermissionMode: "default"})
 			if err != nil {
 				t.Fatal(err)

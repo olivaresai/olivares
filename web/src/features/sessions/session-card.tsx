@@ -58,6 +58,7 @@ import type { SessionTarget } from './session-target'
 import type { SessionResolution } from './use-session-resolution'
 import { RunActions } from './run-actions'
 import { SessionTimeline } from './timeline'
+import { SessionFailure } from './session-failure'
 import type { Attribution, LiveDTO } from './types'
 import './i18n'
 import { ActionName } from './action-name'
@@ -237,6 +238,8 @@ function CardBody({
 
       <RunActions run={run} caps={caps} onClose={onClose} />
 
+      {grants.runRead && <SessionFailure run={run} />}
+
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
           <TabsTrigger value="overview">{t('card.tabs.overview')}</TabsTrigger>
@@ -259,7 +262,7 @@ function CardBody({
             <Observed live={live} lang={lang} />
           ) : observeUnknown ? (
             <NotRead text={t('card.observedNotRead')} />
-          ) : (
+          ) : run?.state === 'failed' ? null : (
             <p className="text-body text-muted-foreground">
               {t('card.noObservationYet')}
             </p>

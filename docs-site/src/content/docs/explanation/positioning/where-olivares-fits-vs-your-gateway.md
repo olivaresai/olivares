@@ -16,9 +16,15 @@ it, balance it, budget it. Guardrails' job is content safety on that call. Both
 are real, both are good at what they do, and neither is the thing Olivares is.
 
 :::tip[The short version]
-**Olivares AI is not an AI gateway.** It does not route, cache, load-balance, or
-sit on the hot path of your model traffic, and it never will. It sits **beside and
-behind** your gateway as the *governance and evidence plane*: in-process
+**Olivares AI complements your AI gateway.** Session model calls bypass the
+Olivares inference proxy by default. Calls explicitly routed through that proxy
+pass through its inline enforcement before forwarding. The access map observes
+out of band; a collector failure reduces coverage. Managed Claude Code sessions
+install tool-call hooks that call the engine's PEP by default. If that PEP is
+unreachable during an engine outage or restart, the hooks deny every governed
+tool call (deny-closed).
+
+Olivares adds the *governance and evidence plane*: in-process
 enforcement inside the agent runtime, a tamper-evident evidence ledger,
 non-human-identity lifecycle, and human-in-the-loop / break-glass / kill-switch
 over **live sessions**. Your gateway governs the *request*; Olivares governs the

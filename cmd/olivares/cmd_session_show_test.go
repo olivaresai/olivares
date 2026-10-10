@@ -38,3 +38,29 @@ func TestSessionShowGivesTheReasonAStoppedSessionStopped(t *testing.T) {
 		t.Fatalf("a running session shows a reason:\n%s", out)
 	}
 }
+
+// TestSessionShowPrintsTheCanonicalSessionID: a peer send names a session by
+// its canonical osn_ ID and the peers list holds it, and `session show` is where a
+// person reads a session. It printed only the run id, so no one could hand work over.
+func TestSessionShowPrintsTheCanonicalSessionID(t *testing.T) {
+	sid := "osn_01a10199-9a94-7d38-b856-ff57cca8d2b8"
+	f := newFakeSessionEngine(t)
+	f.runs = []map[string]any{
+		{"run_ref": "r1", "name": "notes", "state": "running", "provider_driver": "codex", "canonical_sid": sid},
+		{"run_ref": "r2", "name": "docs", "state": "running", "provider_driver": "codex"},
+	}
+	show := func(name string) string {
+		t.Helper()
+		out, errb, err := execSessionCLI(t, nil, append([]string{"session", "show", name}, sessionCreds(f.URL)...)...)
+		if err != nil {
+			t.Fatalf("show %s: %v\n%s", name, err, errb)
+		}
+		return out
+	}
+	if out := show("notes"); !strings.Contains(out, "SESSION ID") || !strings.Contains(out, sid) {
+		t.Fatalf("the canonical session ID is missing:\n%s", out)
+	}
+	if out := show("docs"); strings.Contains(out, "SESSION ID") {
+		t.Fatalf("a session without a canonical ID shows an empty row:\n%s", out)
+	}
+}

@@ -46,7 +46,7 @@ func (v rotationStoreVault) Revoke(ctx context.Context, actor auth.Principal, te
 func TestProviderRecordRotationWithStoreVault(t *testing.T) {
 	m, st, tenant, _ := newRuntimeHarness(t)
 	vault := rotationStoreVault{auth.NewSecretStore(st, rotationTestSealer{})}
-	m.UseProviderSecretVault(vault)
+	WithProviderSecretVault(vault)(m)
 	rec := mustCreateRecord(t, m, tenant, anthropicInput("store-backed rotation"))
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
@@ -124,7 +124,7 @@ func (v *rotationHookVault) Revoke(ctx context.Context, actor auth.Principal, te
 func TestProviderRecordCanceledRotationWithdrawsPreparedValue(t *testing.T) {
 	m, _, tenant, base, _ := providerHarness(t)
 	vault := &rotationHookVault{fakeVault: base}
-	m.UseProviderSecretVault(vault)
+	WithProviderSecretVault(vault)(m)
 	rec := mustCreateRecord(t, m, tenant, anthropicInput("canceled rotation"))
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -147,7 +147,7 @@ func TestProviderRecordRotationRejectsConcurrentChanges(t *testing.T) {
 		t.Run(change, func(t *testing.T) {
 			m, _, tenant, base, _ := providerHarness(t)
 			vault := &rotationHookVault{fakeVault: base}
-			m.UseProviderSecretVault(vault)
+			WithProviderSecretVault(vault)(m)
 			rec := mustCreateRecord(t, m, tenant, anthropicInput("concurrent rotation"))
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 			defer cancel()
@@ -189,11 +189,11 @@ func (p rotationHookProbe) Probe(ctx context.Context, _ ProviderProbeRequest) (P
 func TestProviderRecordProbeCannotPublishAcrossRotation(t *testing.T) {
 	m, _, tenant, _, _ := providerHarness(t)
 	rec := mustCreateRecord(t, m, tenant, anthropicInput("probe race"))
-	m.UseProviderProbe(rotationHookProbe{probe: func(ctx context.Context) error {
+	WithProviderProbe(rotationHookProbe{probe: func(ctx context.Context) error {
 		key := "f1-new-untested-credential"
 		_, err := m.PatchProviderRecord(ctx, tenant, rec.Ref, ProviderRecordPatch{APIKey: &key, Actor: testActor()})
 		return err
-	}})
+	}})(m)
 	if _, err := m.TestProviderRecord(context.Background(), tenant, rec.Ref); !errors.Is(err, ErrProviderRecordChanged) {
 		t.Fatal("old probe verdict was accepted after rotation")
 	}

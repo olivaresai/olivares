@@ -622,7 +622,8 @@ func TestWorkK2RunBindingProvesSIDAndDerivesAgentRef(t *testing.T) {
 	launch := func() string {
 		t.Helper()
 		got := h.doJSON(http.MethodPost, "/v1/m/sessions/runs", launcher, map[string]any{
-			"transport": "stream-json", "permission_mode": "default", "isolation": "native",
+			"provider_profile_ref": ensureRuntimeTestProfileRef(t, m, tenant),
+			"transport":            "stream-json", "permission_mode": "default", "isolation": "native",
 		}, tenantHdr(tenant))
 		ref, _ := got.body["run_ref"].(string)
 		if got.code != http.StatusCreated || ref == "" {
@@ -726,7 +727,7 @@ func TestRuntimeFilesystemWorkspaceDoesNotBecomeWorkLineage(t *testing.T) {
 	m, _, tenant, _ := newRuntimeHarness(t,
 		WithRunner(runner), WithCredentialSource(staticCred()))
 	workspaceRef := registerTestWorkspace(t, m, tenant, t.TempDir())
-	run, err := m.createRun(context.Background(), tenant, CreateRunParams{
+	run, err := createProfiledTestRun(t, m, context.Background(), tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative,
 		WorkspaceRef: workspaceRef, Actor: "user:workspace-domain", ActorKind: model.ActorUser,
 	})
@@ -739,7 +740,7 @@ func TestRuntimeFilesystemWorkspaceDoesNotBecomeWorkLineage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolve operated identity: %v", err)
 	}
-	if err := m.data.View(context.Background(), tenant, func(sc store.Scope) error {
+	if err := m.Data.View(context.Background(), tenant, func(sc store.Scope) error {
 		identity, found, err := findIdentity(context.Background(), sc, sid)
 		if err != nil {
 			return err
@@ -1171,7 +1172,8 @@ func TestWorkK2AgentTokenRunCarriesItsAuthenticatedAgent(t *testing.T) {
 	runRef := func(token string) string {
 		t.Helper()
 		created := h.doJSON(http.MethodPost, "/v1/m/sessions/runs", token, map[string]any{
-			"transport": "stream-json", "permission_mode": "default", "isolation": "native",
+			"provider_profile_ref": ensureRuntimeTestProfileRef(t, m, tenant),
+			"transport":            "stream-json", "permission_mode": "default", "isolation": "native",
 		}, tenantHdr(tenant))
 		ref, _ := created.body["run_ref"].(string)
 		if created.code != http.StatusCreated || ref == "" {

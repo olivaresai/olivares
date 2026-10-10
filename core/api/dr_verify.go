@@ -28,8 +28,10 @@ import (
 // is NOT safe to promote — the caller must refuse and leave the live data dir intact.
 //
 // tmpDir is a bundle already ExtractBundle'd (snapshot at tmpDir/<m.Store.File>, each
-// sealed key at tmpDir/<KeyRef.File>); cipher is the operator's opened KEK.
-func verifyBundleScratch(ctx context.Context, tmpDir string, m *dr.Manifest, cipher *dr.KeyCipher) (*dr.RestoreReport, error) {
+// sealed key at tmpDir/<KeyRef.File>); cipher is the operator's opened KEK; register
+// is the register func the live store opens with (DRConfig.RegisterSchema), so the
+// scratch registry, and with it the guard edition, is the one the snapshot was written under.
+func verifyBundleScratch(ctx context.Context, tmpDir string, m *dr.Manifest, cipher *dr.KeyCipher, register func(store.ExtensionRegistry) error) (*dr.RestoreReport, error) {
 	if m.EngineKind != "sqlite" {
 		// The console DR surface is SQLite-only (Postgres uses the CLI + pg_restore);
 		// a scratch chain verify for Postgres needs a scratch Postgres (see the runbook).
@@ -44,11 +46,7 @@ func verifyBundleScratch(ctx context.Context, tmpDir string, m *dr.Manifest, cip
 		return nil, fmt.Errorf("build signer from restored key: %w", err)
 	}
 
-	scratch := filepath.Join(tmpDir, "scratch-verify.db")
-	if err := dr.CopyFile(filepath.Join(tmpDir, filepath.FromSlash(m.Store.File)), scratch); err != nil {
-		return nil, fmt.Errorf("stage scratch snapshot: %w", err)
-	}
-	st, err := sqlstore.Open(ctx, store.Config{Engine: store.EngineSQLite, DSN: scratch, SignEvent: signer.SignEvent}, nil)
+	st, err := openScratchSnapshot(ctx, filepath.Join(tmpDir, filepath.FromSlash(m.Store.File)), filepath.Join(tmpDir, "scratch-verify.db"), signer, register)
 	if err != nil {
 		return nil, fmt.Errorf("open scratch store: %w", err)
 	}
@@ -59,6 +57,15 @@ func verifyBundleScratch(ctx context.Context, tmpDir string, m *dr.Manifest, cip
 		return nil, err
 	}
 	return dr.RestoreVerify(ctx, st, m, signer.PublicKey(), cpv)
+}
+
+// openScratchSnapshot opens a disposable copy with the same schema census as
+// the live engine. The original snapshot bytes remain the authenticated payload.
+func openScratchSnapshot(ctx context.Context, snapshot, scratch string, signer *audit.Signer, register func(store.ExtensionRegistry) error) (store.Store, error) {
+	if err := dr.CopyFile(snapshot, scratch); err != nil {
+		return nil, fmt.Errorf("stage scratch snapshot: %w", err)
+	}
+	return sqlstore.Open(ctx, store.Config{Engine: store.EngineSQLite, DSN: scratch, SignEvent: signer.SignEvent}, register)
 }
 
 // decryptAuditKey decrypts the bundle's audit-role signing key and parses the

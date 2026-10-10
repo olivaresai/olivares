@@ -5,22 +5,20 @@
 package main
 
 import (
-	"context"
 	"log/slog"
-	"os"
 	"strings"
 
 	claudewif "github.com/olivaresai/olivares/connectors/claude-wif"
 	"github.com/olivaresai/olivares/connectors/identitysource"
 	"github.com/olivaresai/olivares/connectors/vault"
-	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/modules/governance"
 )
 
-// nhilifecycle.go wires the governed NHI lifecycle: the LifecycleGate
-// adapter over the approval bridge (so rotation/offboarding inherit the
-// CRITICAL two-person floor and break-glass), and the per-(tenant,source)
+// nhilifecycle.go wires the governed NHI lifecycle: the per-(tenant,source)
 // write-capable LifecycleActuators the module invokes once an approval is granted.
+// The LifecycleGate adapter over the approval bridge (so rotation/offboarding
+// inherit the CRITICAL two-person floor and break-glass) is
+// internal/approvalbridge/lifecycle.go.
 //
 // Both degrade honestly: with no bridge the gate is the module's deny-closed
 // default (no actuation proceeds); with no actuator config the module's rotation
@@ -28,64 +26,6 @@ import (
 // rotation. The actuator credentials are WRITE-capable (a Vault token allowed to
 // mint AppRole secret-ids / disable entities; an Anthropic admin key allowed to
 // update key status) and live in the operator config, never the store, never logged.
-
-// --- LifecycleGate adapter over the bridge -------------------------------
-
-// lifecycleGate returns the module's LifecycleGate backed by this bridge, or nil
-// when no bridge is configured (the module keeps its deny-closed default).
-func (b *approvalBridge) lifecycleGate() governance.LifecycleGate {
-	if b == nil {
-		return nil
-	}
-	return lifecycleGateAdapter{b: b}
-}
-
-var _ governance.LifecycleGate = lifecycleGateAdapter{}
-
-type lifecycleGateAdapter struct{ b *approvalBridge }
-
-// Authorize opens (or idempotently reuses) the governed approval for one NHI
-// actuation and maps the bridge's neutral status onto the module's gate vocabulary.
-// AllowBreakGlass selects gateOnce (emergency path permitted, e.g. an urgent
-// rotation) vs gateOnceNoBreakGlass (irreversible finalize — no emergency skips the
-// second human, the erase-gate precedent). The CRITICAL two-person floor is the
-// engine's, inherited by every consumer; the bridge sends no required_approvals.
-func (a lifecycleGateAdapter) Authorize(ctx context.Context, tenant model.TenantID, req governance.LifecycleGateRequest) (governance.LifecycleGateDecision, error) {
-	var (
-		ref, status, boundHash string
-		err                    error
-	)
-	if req.AllowBreakGlass {
-		ref, status, boundHash, err = a.b.gateOnce(ctx, tenant, req.Action, req.SubjectKind, req.SubjectRef, req.PlanHash, req.Reason, req.RequestedBy)
-	} else {
-		ref, status, boundHash, err = a.b.gateOnceNoBreakGlass(ctx, tenant, req.Action, req.SubjectKind, req.SubjectRef, req.PlanHash, req.Reason, req.RequestedBy)
-	}
-	if err != nil {
-		return governance.LifecycleGateDecision{}, err
-	}
-	return governance.LifecycleGateDecision{
-		Status: lifecycleGateStatus(status), ApprovalRef: ref, PlanHash: boundHash,
-	}, nil
-}
-
-// lifecycleGateStatus maps the bridge's neutral status onto the module's exported
-// gate vocabulary. Anything unexpected is a no_gate (deny-closed).
-func lifecycleGateStatus(neutral string) string {
-	switch neutral {
-	case nbApproved:
-		return governance.GateStatusApproved
-	case nbBreakGlass:
-		return governance.GateStatusBreakGlass
-	case nbPending:
-		return governance.GateStatusPending
-	case nbRejected, nbCanceled:
-		return governance.GateStatusRejected
-	case nbExpired:
-		return governance.GateStatusExpired
-	default: // nbNoGate / unknown
-		return governance.GateStatusNoGate
-	}
-}
 
 // --- write-capable LifecycleActuators ----------------------------------------
 
@@ -109,7 +49,7 @@ type nhiActuatorTenant struct {
 	AnthropicBaseURL  string `json:"anthropic_base_url,omitempty"`
 	AnthropicAdminKey string `json:"anthropic_admin_key,omitempty"`
 	// CyberArk Conjur (COMMERCIAL — wired only under -tags enterprise via
-	// enterpriseNHIActuator): a login + API key with `update` privilege on the
+	// the nhiActuator edition port): a login + API key with `update` privilege on the
 	// target hosts, allowed to rotate a host's API key. These are plain config
 	// fields (no enterprise import); the actuator is constructed only in the
 	// build-tag-gated seam, so the default AGPL binary never links the connector.
@@ -123,7 +63,7 @@ type nhiActuatorTenant struct {
 // an empty config (no actuators — honest degrade); a supplied path must be readable and
 // contain valid JSON or startup fails closed.
 func loadNHIActuatorsConfig(_ *slog.Logger) (nhiActuatorsConfig, error) {
-	path := os.Getenv("OLIVARES_NHI_ACTUATORS_CONFIG")
+	path := osGetenv("OLIVARES_NHI_ACTUATORS_CONFIG")
 	if path == "" {
 		return nhiActuatorsConfig{}, nil
 	}
@@ -161,10 +101,12 @@ func buildNHIActuatorBindings(cfg nhiActuatorsConfig, log *slog.Logger) []govern
 			log.Info("nhi-lifecycle: Anthropic key-status actuator wired", "tenant", tenant)
 		}
 		// the COMMERCIAL CyberArk Conjur rotation actuator, wired only under
-		// -tags enterprise (enterpriseNHIActuator); the default AGPL build resolves
-		// none (wire_noenterprise.go returns false) and degrades honestly.
-		if binding, ok := enterpriseNHIActuator(t, tenant, log); ok {
-			out = append(out, binding)
+		// -tags enterprise (the nhiActuator port); the default AGPL build has none
+		// and degrades honestly.
+		if thisEdition.nhiActuator != nil {
+			if binding, ok := thisEdition.nhiActuator(t, tenant, log); ok {
+				out = append(out, binding)
+			}
 		}
 	}
 	return out

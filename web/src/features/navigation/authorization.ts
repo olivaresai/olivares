@@ -41,6 +41,7 @@ import {
   type NormalizedCapabilityQuestion,
 } from '@/lib/auth/capabilities'
 import { useAuth } from '@/lib/auth/context'
+import { isGlobalAccount } from '@/lib/auth/rbac'
 import type { ViewGate } from '@/features/navigation/model'
 import { moduleEnabled, useModulesStore } from '@/stores/modules'
 import { useWorkspaceStore } from '@/stores/workspace'
@@ -59,11 +60,25 @@ export interface ViewAccess {
   /** The established answer for one view. */
   state: (view: FeatureView) => ViewAccessState
   /**
-   * Whether a navigation surface offers the view: everything that is not an ESTABLISHED
-   * refusal. This is the single rule the sidebar, palette, shortcuts and area directory
-   * share, which is what stops them disagreeing.
+   * Whether the view may be offered and read RIGHT NOW: not refused, and its module runs. A
+   * page links to another (the composer's approval, an entity's next room), the session rail
+   * reads through this, and so do favorites and recents. Navigation LISTS through `listed`.
    */
   navigable: ViewGate
+  /**
+   * Whether navigation lists the view: every view the person may open, from the first
+   * sign-in, whether or not its module runs here. This is the single rule the sidebar,
+   * palette, shortcuts, All areas and the phone bar share, which is what stops them
+   * disagreeing. Only an established refusal hides a view; an off module is listed and
+   * flagged by `isOff`. A view it does not list keeps its route.
+   */
+  listed: ViewGate
+  /**
+   * Whether the view's module is off on this installation (or the section's, when one is
+   * given). Navigation draws such an entry dimmed with an "Off" tag; its page offers to
+   * turn the module on. Meaningful only for a view that is `listed`.
+   */
+  isOff: ViewGate
 }
 
 /**
@@ -98,7 +113,7 @@ function stateOfObservation(access: CapabilityAccess): ViewAccessState {
  * request rather than five.
  */
 export function useViewAccess(): ViewAccess {
-  const { can, isSuperadmin } = useAuth()
+  const { can, principal, activeTenant } = useAuth()
   const modulesOff = useModulesStore((s) => s.off)
   const workspace = useWorkspaceStore((s) => s.activeWorkspace)
   // The declared surface question of the one capability view, or null when this tree has
@@ -109,7 +124,7 @@ export function useViewAccess(): ViewAccess {
   // question that is not submitted has no answer, and no answer is not a refusal, so the
   // installed link stays exactly as visible as it was.
   const observation = useCapability(
-    globalAccount(isSuperadmin) ? null : declared,
+    isGlobalAccount(principal, activeTenant) ? null : declared,
   )
   return useMemo<ViewAccess>(() => {
     const state = (view: FeatureView): ViewAccessState => {
@@ -126,17 +141,22 @@ export function useViewAccess(): ViewAccess {
     }
     // A view whose engine module is not enabled here is not offered at all (ARCH C1); its
     // route says so plainly (RequirePermission).
-    return {
-      state,
-      // A section is asked with its own literal permission, never as a copy of its view: a
-      // copy hides the view's permission and capability from the census.
-      navigable: (view, section) =>
-        state(view) !== 'denied' &&
-        moduleEnabled(modulesOff, view.permission, view.id) &&
-        (!section ||
-          (can(section.requires) &&
-            moduleEnabled(modulesOff, section.requires, view.id))),
-    }
+    // A section is asked with its own literal permission, never as a copy of its view: a
+    // copy hides the view's permission and capability from the census. Its module is
+    // that permission's; the view's own module is already asked above.
+    const navigable: ViewGate = (view, section) =>
+      state(view) !== 'denied' &&
+      moduleEnabled(modulesOff, view.permission, view.id) &&
+      (!section ||
+        (can(section.requires) && moduleEnabled(modulesOff, section.requires)))
+    // Navigation lists everything not refused (a person never sees a door they may not
+    // open) and flags what is off. A section is asked with its own permission.
+    const listed: ViewGate = (view, section) =>
+      state(view) !== 'denied' && (!section || can(section.requires))
+    const isOff: ViewGate = (view, section) =>
+      !moduleEnabled(modulesOff, view.permission, view.id) ||
+      (!!section && !moduleEnabled(modulesOff, section.requires))
+    return { state, navigable, listed, isOff }
   }, [can, observation.access, modulesOff])
 }
 
@@ -177,17 +197,6 @@ export interface RouteAccess {
    * announcing a retry that is never going to be made.
    */
   readonly globalAccount: boolean
-}
-
-/**
- * The one credential family these tenant self-capability questions are known not to
- * support: an explicit current authenticated `principal.superadmin === true`. It is read
- * from the reflection the console already has, never inferred from absent membership, a
- * status code, a target's existence or a missing authority — those are the engine's to
- * decide and they keep their ordinary cadence.
- */
-function globalAccount(isSuperadmin: boolean | undefined): boolean {
-  return isSuperadmin === true
 }
 
 function routeOf(observation: CapabilityObservation): RouteAccess {
@@ -244,10 +253,10 @@ const SUPPRESSED: RouteAccess = {
  * collection is not evidence about a row.
  */
 export function useRouteAccess(view: FeatureView, search: string): RouteAccess {
-  const { can, isSuperadmin } = useAuth()
+  const { can, principal, activeTenant } = useAuth()
   const workspace = useWorkspaceStore((s) => s.activeWorkspace)
   const capability = view.capability
-  const suppressed = globalAccount(isSuperadmin)
+  const suppressed = isGlobalAccount(principal, activeTenant)
   const deepLinkQuestion = useMemo(
     () => capability?.deepLink?.(workspace, search) ?? null,
     [capability, workspace, search],

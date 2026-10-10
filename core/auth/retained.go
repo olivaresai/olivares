@@ -89,16 +89,12 @@ type authorizationCapture struct {
 	bytes         int
 }
 
-// WithAuthorizationRecording scopes recording to an operation whose owner can
-// persist AFTER its store callbacks close. The callback must not open a nested
-// write transaction. No goroutine or independent journal is created here.
+// WithAuthorizationRecording installs a sink that persists after store callbacks close.
 func WithAuthorizationRecording(ctx context.Context, sink func(AuthorizationRecord)) context.Context {
 	return context.WithValue(ctx, authorizationSinkKey{}, sink)
 }
 
-// RecordStepUpRefusal retains a step-up refusal already established by the
-// caller. It does not check assurance again or evaluate authorization policy.
-// Without the authentication policy's immutable inputs, replay is incomplete.
+// RecordStepUpRefusal records an established refusal with incomplete replay inputs.
 func (az *Authorizer) RecordStepUpRefusal(ctx context.Context, req Request) {
 	if az == nil {
 		return
@@ -135,9 +131,7 @@ func beginAuthorizationCapture(ctx context.Context, req Request) (context.Contex
 	return context.WithValue(ctx, authorizationCaptureKey{}, c), c
 }
 
-// CaptureAuthorizationInputs is called at evaluation time, using the SAME
-// immutable policy and resolved inputs that decide the request. Re-reading the
-// active policy after a decision would race publication and is forbidden here.
+// CaptureAuthorizationInputs retains the immutable policy and inputs evaluated live.
 func CaptureAuthorizationInputs(ctx context.Context, scoped bool, engine string, inputs any) {
 	c, _ := ctx.Value(authorizationCaptureKey{}).(*authorizationCapture)
 	if c == nil {
@@ -157,8 +151,7 @@ func CaptureAuthorizationInputs(ctx context.Context, scoped bool, engine string,
 	}
 }
 
-// IncompleteAuthorizationInputs marks a consulted evaluator or fact unavailable
-// to historical replay. Its live outcome is still recorded without overclaiming.
+// IncompleteAuthorizationInputs marks a consulted evaluator or fact unavailable to replay.
 func IncompleteAuthorizationInputs(ctx context.Context) {
 	if c, _ := ctx.Value(authorizationCaptureKey{}).(*authorizationCapture); c != nil {
 		c.snapshot.Complete = false
@@ -187,8 +180,6 @@ func finishAuthorizationCapture(ctx context.Context, req Request, c *authorizati
 	if c == nil {
 		return
 	}
-	// Ordinary successful reads do not consume audit retention; every denial and
-	// every write/admin question does. This is the same final PDP, not a PEP effect.
 	if outcome == EvidenceAllow && req.Permission.Verb() == VerbRead {
 		return
 	}
@@ -220,26 +211,20 @@ func ReplayRetainedAuthorization(s RetainedAuthorization, scoped ScopedDecision,
 		return EvidenceDeny, nil
 	}
 	rbac := s.Superadmin && s.SessionScope.IsZero() || s.Permission != PermSystemAdmin && s.Member && slices.Contains(s.GrantingRoles, s.Role)
-	if s.Route.RequireScopedGrant || s.Route.RBACMinimumRole != "" && (!s.Member || s.RoleRank < s.MinimumRoleRank) {
+	if s.Route.RequireScopedGrant || scoped.InheritanceFiltered || s.Route.RBACMinimumRole != "" && (!s.Member || s.RoleRank < s.MinimumRoleRank) {
 		rbac = false
 	}
-	ownerGrant := s.Route.RequireScopedGrant && !s.Tenant.IsZero() && !s.Tenant.IsSystem() &&
+	ownerGrant := s.Route.RequireScopedGrant && !scoped.InheritanceFiltered && !s.Tenant.IsZero() && !s.Tenant.IsSystem() &&
 		s.Permission != PermSystemAdmin && s.Member && s.Role == RoleOwner && !s.Restricted
 	base := rbac || ownerGrant || scoped.Effect == EffectGrant
 	if s.Restricted {
 		base = s.RestrictionAllows
 	}
-	if s.Typed != nil {
-		if s.Typed.ResourceGuard.Verdict == CheckBroken || scoped.Effect == EffectForbid || !base || !policy.Allow {
-			return EvidenceDeny, nil
-		}
-		if s.Typed.ResourceGuard.Verdict != CheckClean || s.Typed.Core.Verdict == CheckUnknown {
-			return EvidenceUnknown, nil
-		}
-		return EvidenceAllow, nil
-	}
-	if scoped.Effect == EffectForbid || !base || !policy.Allow {
+	if scoped.Effect == EffectForbid || !base || !policy.Allow || s.Typed != nil && s.Typed.ResourceGuard.Verdict == CheckBroken {
 		return EvidenceDeny, nil
+	}
+	if s.Typed != nil && (s.Typed.ResourceGuard.Verdict != CheckClean || s.Typed.Core.Verdict == CheckUnknown) {
+		return EvidenceUnknown, nil
 	}
 	return EvidenceAllow, nil
 }

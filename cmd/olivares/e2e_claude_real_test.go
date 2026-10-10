@@ -45,6 +45,7 @@ import (
 
 	"github.com/olivaresai/olivares/connectors/claude"
 	"github.com/olivaresai/olivares/core/model"
+	"github.com/olivaresai/olivares/modules/sessions/hookpep"
 )
 
 // claudeRealEnv holds the shared, expensive resources every Claude-real test uses:
@@ -58,13 +59,13 @@ type claudeRealEnv struct {
 }
 
 // pepFixture is a real-TCP PEP server bound to an ephemeral port, backed by a
-// claudeHookDecider over the shared harness's engine. Each test gets its own fixture
+// hookpep.Decider over the shared harness's engine. Each test gets its own fixture
 // with its own policy so scenarios don't interfere.
 type pepFixture struct {
 	addr     string
 	srv      *http.Server
 	listener net.Listener
-	dec      *claudeHookDecider
+	dec      *hookpep.Decider
 	audit    *auditCapture
 }
 
@@ -108,23 +109,23 @@ func (a *auditCapture) reset() {
 }
 
 // newPEPFixture starts a real-TCP PEP server with the given policy for tenant A.
-func newPEPFixture(t *testing.T, env *claudeRealEnv, pol hookPolicyDoc) *pepFixture {
+func newPEPFixture(t *testing.T, env *claudeRealEnv, pol hookpep.PolicyDoc) *pepFixture {
 	t.Helper()
 	tid, err := model.ParseTenantID(env.h.tenantA)
 	if err != nil {
 		t.Fatalf("parse tenant: %v", err)
 	}
 	audit := &auditCapture{}
-	dec := &claudeHookDecider{
-		tenants: map[model.TenantID]resolvedTenant{
-			tid: {tenant: tid, policy: pol},
+	dec := newClaudeHookDecider(&hookpep.Decider{
+		Tenants: map[model.TenantID]hookpep.ResolvedTenant{
+			tid: hookTenant(t, tid, false, pol),
 		},
-		authr: env.h.authr,
-		stops: env.h.set.gov,
-		store: env.h.st,
-		clock: time.Now,
-		log:   slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError})),
-	}
+		Authr: env.h.authr,
+		Stops: env.h.set.gov,
+		Store: env.h.st,
+		Clock: time.Now,
+		Log:   slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError})),
+	})
 	pep := claude.NewHookPEP(dec, audit, time.Now)
 
 	mux := http.NewServeMux()
@@ -345,10 +346,10 @@ func TestE2EClaudeReal_HookClientDeny(t *testing.T) {
 	olivaresBin := buildOlivaresBinary(t, dir)
 
 	env := &claudeRealEnv{h: h, olivaresBin: olivaresBin}
-	pep := newPEPFixture(t, env, hookPolicyDoc{
+	pep := newPEPFixture(t, env, hookpep.PolicyDoc{
 		Version: "e2e-deny",
 		Default: "deny",
-		Rules: []hookPolicyRule{
+		Rules: []hookpep.PolicyRule{
 			{Tool: "Read", Decision: "allow", Reason: "reads are safe"},
 		},
 	})
@@ -381,7 +382,7 @@ func TestE2EClaudeReal_HookClientAllow(t *testing.T) {
 	olivaresBin := buildOlivaresBinary(t, dir)
 
 	env := &claudeRealEnv{h: h, olivaresBin: olivaresBin}
-	pep := newPEPFixture(t, env, hookPolicyDoc{
+	pep := newPEPFixture(t, env, hookpep.PolicyDoc{
 		Version: "e2e-allow",
 		Default: "allow",
 	})
@@ -439,7 +440,7 @@ func TestE2EClaudeReal_KillSwitchDeny(t *testing.T) {
 	olivaresBin := buildOlivaresBinary(t, dir)
 	env := &claudeRealEnv{h: h, olivaresBin: olivaresBin}
 
-	pep := newPEPFixture(t, env, hookPolicyDoc{
+	pep := newPEPFixture(t, env, hookpep.PolicyDoc{
 		Version: "e2e-allow-all",
 		Default: "allow",
 	})
@@ -499,7 +500,7 @@ func TestE2EClaudeReal_ClaudeCodeToolDeny(t *testing.T) {
 	olivaresBin := buildOlivaresBinary(t, dir)
 	env := &claudeRealEnv{h: h, olivaresBin: olivaresBin}
 
-	pep := newPEPFixture(t, env, hookPolicyDoc{
+	pep := newPEPFixture(t, env, hookpep.PolicyDoc{
 		Version: "e2e-deny-all",
 		Default: "deny",
 	})
@@ -541,7 +542,7 @@ func TestE2EClaudeReal_ManagedSettingsHookLoaded(t *testing.T) {
 	env := &claudeRealEnv{h: h, olivaresBin: olivaresBin}
 
 	// An allow-all policy so Claude can actually work, but the PEP still tracks requests.
-	pep := newPEPFixture(t, env, hookPolicyDoc{
+	pep := newPEPFixture(t, env, hookpep.PolicyDoc{
 		Version: "e2e-allow-track",
 		Default: "allow",
 	})
@@ -576,7 +577,7 @@ func TestE2EClaudeReal_ClaudeCodeAllowCompletion(t *testing.T) {
 	olivaresBin := buildOlivaresBinary(t, dir)
 	env := &claudeRealEnv{h: h, olivaresBin: olivaresBin}
 
-	pep := newPEPFixture(t, env, hookPolicyDoc{
+	pep := newPEPFixture(t, env, hookpep.PolicyDoc{
 		Version: "e2e-allow-all",
 		Default: "allow",
 	})

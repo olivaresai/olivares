@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/olivaresai/olivares/core/auth"
+	"github.com/olivaresai/olivares/core/metrics"
 	"github.com/olivaresai/olivares/core/model"
 )
 
@@ -44,8 +45,9 @@ type retirementPump struct {
 	deferred map[retirementKey]retirementDeferral
 	// wakeCh carries an offboard's wake to the running loop; nil until the pump is
 	// started.
-	wakeCh chan struct{}
-	log    *slog.Logger
+	wakeCh   chan struct{}
+	log      *slog.Logger
+	failures *metrics.Counter
 }
 
 // retirementKey names one retirement: an account's generation in a tenant.
@@ -68,11 +70,27 @@ var errNoDeclaredModules = errors.New("retirement: the composition declares no m
 
 // newRetirementPump returns the pump over authr and the declared modules, ready
 // to be started.
-func newRetirementPump(authr *auth.Authenticator, declared []declaredModule, log *slog.Logger) *retirementPump {
+func newRetirementPump(authr *auth.Authenticator, declared []declaredModule, reg *metrics.Registry, log *slog.Logger) *retirementPump {
 	if log == nil {
 		log = slog.Default()
 	}
-	return &retirementPump{authr: authr, modules: declared, wakeCh: make(chan struct{}, 1), log: log}
+	p := &retirementPump{authr: authr, modules: declared, wakeCh: make(chan struct{}, 1), log: log}
+	if reg != nil {
+		p.failures = reg.CounterVec("olivares_retirement_failures_total",
+			"Retirement failures by cause: no declared modules, reading due records, or a record pass that could not complete.", "cause")
+		for _, cause := range []string{"no_declared_modules", "read_due_failed", "record_pass_failed"} {
+			p.failures.Add(0, cause)
+		}
+	}
+	return p
+}
+
+// recordFailure exposes only a fixed cause code, never record identities or raw
+// errors. Cancellation during shutdown is not an operational failure.
+func (p *retirementPump) recordFailure(ctx context.Context, cause string) {
+	if p != nil && p.failures != nil && ctx.Err() == nil {
+		p.failures.Inc(cause)
+	}
 }
 
 // wake asks the running loop for a pass now. It never blocks: a pending wake
@@ -132,14 +150,17 @@ func (p *retirementPump) clock() time.Time {
 // reads afresh. The other records still advance.
 func (p *retirementPump) runOnce(ctx context.Context) (int, error) {
 	if p == nil || p.authr == nil {
+		p.recordFailure(ctx, "no_declared_modules")
 		return 0, errNoDeclaredModules
 	}
 	if len(p.modules) == 0 {
+		p.recordFailure(ctx, "no_declared_modules")
 		return 0, errNoDeclaredModules
 	}
 	now := p.clock()
 	due, err := p.authr.DueRetirements(ctx, model.NewTimestamp(now), 0)
 	if err != nil {
+		p.recordFailure(ctx, "read_due_failed")
 		return 0, err
 	}
 	steps := p.steps()
@@ -181,6 +202,7 @@ func (p *retirementPump) runOnce(ctx context.Context) (int, error) {
 		}
 		p.mu.Unlock()
 		if err != nil {
+			p.recordFailure(ctx, "record_pass_failed")
 			p.logger().Warn("retirement: a pass did not complete; the record keeps its state and is retried later",
 				"tenant", rec.TargetTenantID.String(), "err", err)
 			continue

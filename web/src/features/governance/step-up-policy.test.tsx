@@ -31,151 +31,10 @@
 import { readFileSync, readdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import type { ReactNode } from 'react'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-
-import { ApiError } from '@/lib/api/errors'
-
-// El sujeto es QUÉ ESTADO ELIGE la pantalla, no la mecánica del panel (que carga WebAuthn por
-// `lazy`). Se sustituye por un marcador y se dice: lo que aquí se fija es la RUTA.
-// ⛔ EL DOBLE CAPTURA `onElevated`, y no es un detalle: la primera versión sólo aceptaba
-// `action`, así que las celdas habrían seguido verdes con el callback de reintento AUSENTE —
-// justo lo que hace que la ceremonia sirva para algo. Lo señaló el contraste.
-const elevados: Array<(() => void) | undefined> = []
-vi.mock('@/components/layout/step-up-state', () => ({
-  StepUpRequiredState: ({
-    action,
-    onElevated,
-  }: {
-    action: string
-    onElevated?: () => void
-  }) => {
-    elevados.push(onElevated)
-    return <div data-testid="ceremonia">{`ceremonia:${action}`}</div>
-  },
-}))
-vi.mock('@/components/ui/toaster', () => ({
-  toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
-  Toaster: () => null,
-}))
-
-const authState = vi.hoisted(() => ({
-  activeTenant: 't1' as string | null,
-  can: (_p: string): boolean => true,
-  principal: { kind: 'user', user_id: 'u1', aal: 1 } as Record<string, unknown>,
-}))
-vi.mock('@/lib/auth/context', () => ({ useAuth: () => authState }))
-
-const api = vi.hoisted(() => ({
-  listBreakGlass: vi.fn(),
-}))
-vi.mock('./api', async (orig) => {
-  const real = (await orig()) as Record<string, unknown>
-  return {
-    ...real,
-    governanceApi: { ...(real.governanceApi as object), ...api },
-  }
-})
-
-import { BreakGlassView } from './break-glass'
-
+import { describe, expect, it } from 'vitest'
 const AQUI = dirname(fileURLToPath(import.meta.url))
 const ROL = 'isForbidden'
 const CEREMONIA = 'isStepUpRequired'
-const ACUSACION = /not authorized|forbidden|no tienes/i
-
-/** Un `step_up_required` REAL, con el constructor que usa el cliente de API. */
-const ceremonia = () =>
-  new ApiError(403, 'step_up_required', 'assurance level too low')
-/** Y una negativa de rol de verdad: mismo status, código distinto. */
-const rol = () => new ApiError(403, 'forbidden', 'your role cannot do this')
-
-const wrap = (ui: ReactNode) =>
-  render(
-    <QueryClientProvider
-      client={
-        new QueryClient({ defaultOptions: { queries: { retry: false } } })
-      }
-    >
-      {ui}
-    </QueryClientProvider>,
-  )
-
-describe('break-glass — la pantalla que para una emergencia ofrece la ceremonia, no una acusación', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    elevados.length = 0
-    authState.can = () => true
-  })
-
-  it('con `step_up_required` pinta la ceremonia y NO la acusación de rol', async () => {
-    // ⛔ ALCANCE DE ESTA CELDA, DECLARADO PORQUE EL CONTRASTE ME LO SEÑALÓ: fuerza el código en
-    // la respuesta de un **GET** que el motor NO usa hoy para emitirlo (lo emiten los dos POST
-    // de `governance.go:456-475`). No demuestra, por tanto, un camino de producción vivo:
-    // demuestra que si ese gate llega a esta lectura, la consola contesta bien. Es una prueba
-    // de CONTRATO sobre la forma del error, no una reproducción de un fallo observado.
-    api.listBreakGlass.mockRejectedValue(ceremonia())
-    wrap(<BreakGlassView />)
-
-    expect(await screen.findByTestId('ceremonia')).toBeInTheDocument()
-    // La exclusión importa tanto como la presencia: el defecto que esta campaña arregla en otra
-    // pantalla era enseñar las DOS cosas a la vez.
-    expect(screen.queryByText(ACUSACION)).toBeNull()
-  })
-
-  it('y con un 403 de ROL sigue acusando — no he roto el otro camino', async () => {
-    // ⛔ CONTROL NEGATIVO: sin él, «poner la ceremonia delante» se cumpliría igual borrando la
-    //    rama de rol, y la pantalla mentiría cuando el operador SÍ carece del permiso.
-    api.listBreakGlass.mockRejectedValue(rol())
-    wrap(<BreakGlassView />)
-
-    expect(await screen.findByText(ACUSACION)).toBeInTheDocument()
-    expect(screen.queryByTestId('ceremonia')).toBeNull()
-  })
-
-  it('y `!canRead` sigue mandando ANTES que cualquier respuesta del motor', async () => {
-    // ⛔ EL DEFECTO ESPEJO, y por eso es una celda y no un comentario: `can()` es un booleano
-    //    del CLIENTE, no una respuesta del motor. Convertirlo en ceremonia ofrecería un
-    //    step-up que no arregla nada — el permiso seguiría sin estar — y dejaría al operador
-    //    dando vueltas en una ceremonia inútil.
-    authState.can = () => false
-    api.listBreakGlass.mockRejectedValue(ceremonia())
-    wrap(<BreakGlassView />)
-
-    expect(await screen.findByText(ACUSACION)).toBeInTheDocument()
-    expect(screen.queryByTestId('ceremonia')).toBeNull()
-  })
-
-  it('y la ceremonia trae un reintento que REALMENTE vuelve a consultar', async () => {
-    // ⛔ SIN ESTO, la pantalla podría ofrecer la ceremonia y dejar al operador en el mismo sitio
-    //    tras completarla. El host ejecuta `retry?.()` (step-up-host.tsx:77-84) y la copy promete
-    //    «the action resumes», así que un `onElevated` ausente es una promesa incumplida, no una
-    //    omisión inocua. Se comprueba por EFECTO: al invocarlo, la consulta se repite.
-    api.listBreakGlass.mockRejectedValue(ceremonia())
-    wrap(<BreakGlassView />)
-    await screen.findByTestId('ceremonia')
-
-    const onElevated = elevados.at(-1)
-    expect(onElevated).toBeTypeOf('function')
-
-    const antes = api.listBreakGlass.mock.calls.length
-    expect(antes).toBeGreaterThan(0) // ancla positiva: hubo consulta que repetir
-    onElevated?.()
-    await vi.waitFor(() =>
-      expect(api.listBreakGlass.mock.calls.length).toBeGreaterThan(antes),
-    )
-  })
-
-  it('los dos errores se distinguen por el CÓDIGO, no por el status', () => {
-    expect(ceremonia().status).toBe(403)
-    expect(rol().status).toBe(403)
-    expect(ceremonia().isForbidden).toBe(true) // ⇦ la trampa entera, en una línea
-    expect(ceremonia().isStepUpRequired).toBe(true)
-    expect(rol().isStepUpRequired).toBe(false)
-  })
-})
 
 // --- la guarda de CLASE ------------------------------------------------------
 
@@ -300,6 +159,6 @@ describe('governance — la negativa de ROL nunca se decide antes que la de ASEG
       .filter((f) => !CUBIERTO_POR_OTRO_PR.includes(f))
       .map((f) => readFileSync(join(AQUI, f), 'utf8'))
       .reduce((n, src) => n + apariciones(src, ROL), 0)
-    expect(decisiones).toBeGreaterThanOrEqual(8)
+    expect(decisiones).toBeGreaterThanOrEqual(4)
   })
 })

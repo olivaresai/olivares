@@ -1,84 +1,28 @@
 # SPDX-FileCopyrightText: 2026 Olivares.AI
 # SPDX-License-Identifier: AGPL-3.0-only
-#
-# Public RELEASE pipeline (SCP-02/01/03/04). Runs on the GitHub mirror — the
-# substrate where the OIDC issuer scripts/verify-release.sh already trusts
-# (token.actions.githubusercontent.com) is real, where slsa-github-generator and
-# keyless cosign/Sigstore work natively, and where the OpenSSF Scorecard runs.
-#
-# This pipeline is WRITTEN AND READY but NOT auto-triggered: it runs
-# only on a maintainer-pushed `v*` release tag, and goreleaser's `release.draft: true`
-# means even then it builds + signs into a DRAFT — publishing the draft is a deliberate
-# human action. It NEVER auto-publishes (releases are cut manually by a maintainer).
-#
-# What a tagged run produces and signs (all keyless via OIDC -> Fulcio/Rekor):
-#   - the cross-platform static binaries + tar.gz archives + checksums.txt (goreleaser)
-#   - a cosign signature over checksums.txt (transitively covers every artifact)
-#   - SPDX + CycloneDX 1.6 SBOMs per archive, AND the same attached as signed
-#     in-toto ATTESTATIONS (cosign attest-blob, new-bundle-format)            [SCP-03]
-#   - an SBOM of the container IMAGE + a cosign attestation on it             [SCP-03]
-#   - an OpenVEX document driven by govulncheck reachability + attestation    [SCP-04]
-#   - SLSA Build L3 provenance for the binaries (generic generator) and the
-#     image (container generator), verifiable with slsa-verifier              [SCP-01]
-#   - an unsigned stable OTA manifest, digest-bound to the archives of THIS run and
-#     carrying a freshness bound (--expires-in; anti-freeze). The off-box ceremony
-#     signs it, and a protected dispatch re-verifies the cosign signature over
-#     checksums.txt and has the shipped community binary cross-check every manifest
-#     digest against it — and against the published bytes — before attachment. The
-#     manifest is never signed blind: checksums.txt is the CI-signed link the
-#     custodian and the dispatch both bind it to.
-# Consumers verify with scripts/verify-release.sh (+ cosign verify-attestation /
-# slsa-verifier). Air-gap consumers use the key-based bundle (scripts/airgap-bundle.sh).
+# Release tags build a draft with signed binaries, archives, checksums, SBOMs,
+# OpenVEX and SLSA provenance. OTA manifests carry expiry and artifact digests.
+# A protected dispatch signs the stable OTA manifest, verifies the complete
+# candidate with the shipped binary and publishes it.
+# Verify releases with scripts/verify-release.sh. Air-gap consumers use
+# scripts/airgap-bundle.sh.
 name: release
 
 on:
   push:
-    # BARE CalVer is the release tag shape (2026-09-29 correction: 26.10.0, not v26.10.0).
-    # `2*` and `3*` admit it by its two-digit year (20-39) without a bracket class, which the
-    # workflow minute census cannot parse, and without matching the chart-v*/terraform-provider-v*
-    # tags; scripts/release-preflight.sh enforces the exact grammar
-    # ^[0-9]{2}\.([1-9]|1[0-2])(\.[1-9][0-9]*)?$ and refuses everything else RED. `v*` is
-    # KEPT ON PURPOSE: the internal rehearsal tags (v0.0.0-rehearsal.N) still trigger through
-    # it, and a habitual v-prefixed release tag fails loudly in the preflight instead of
-    # silently not running at all — a tag that does not trigger anything is the one failure
-    # nobody notices until a customer asks where the release is.
-    tags: ["v*", "2*", "3*"]
-  # Phase 2: after the tag run has attached stable-manifest.json to the DRAFT, this
-  # dispatch completes the stable ceremony — it SIGNS the manifest, freshly VERIFIES the
-  # complete remote candidate, and then PUBLISHES it.
-  #
-  # ⛔ WHAT THIS DISPATCH AND ITS APPROVAL NOW AUTHORIZE, SAID IN ONE SENTENCE BECAUSE THE
-  # MEANING CHANGED: approving the `ota-release-ceremony` environment for this run
+    # Preflight validates bare MAJOR.MINOR release tags; malformed
+    # numeric tags trigger its explicit refusal.
+    tags: ["[0-9]*.[0-9]*"]
+  # Phase 2 signs, verifies and publishes the selected draft. Approving
+  # the `ota-release-ceremony` environment for this run
   # authorizes PUBLICATION of the release named by `release_tag` at the commit named by
-  # `release_commit` — not signing and attachment alone, as it did until this revision.
-  # A reviewer who approves is making that release public.
-  #
-  # It changed because the previous split had a hole nothing in CI could close: the config
-  # keeps `draft: true`, so the last step was a human pressing Publish in the web UI, and
-  # QA2334 measured what that costs — v26.8.0 serves a stable manifest whose REQUIRED
-  # detached OTA signature 404s, and the shipped product's own `upgrade --check` fails on
-  # it. A workflow cannot gate a UI click. It CAN refuse to publish a candidate that does
-  # not verify, so publication moved inside the protected job
-  # (scripts/release-finalize-stable.sh) and the human approval moved with it.
-  #
-  # ⛔ ESTO CAMBIÓ CON LA ORDEN 37, y lo que había aquí decía lo contrario: «the OTA private
-  # key is never a GitHub secret and never enters CI». Era cierto, y era el motivo de que
-  # existiera un input `ota_signature_b64`: una firma producida a mano fuera de la caja y
-  # pegada en el dispatch. La orden lo retira — «no voy a estar firmando manualmente cada
-  # release». Firmar a mano no es una salvaguarda: es un paso que se olvida, que se hace mal
-  # de madrugada, y que deja la release bloqueada en quien tenga la llave.
-  #
-  # LA MITIGACIÓN, que es lo que hace aceptable el cambio: la clave vive como secreto de un
-  # ENVIRONMENT PROTEGIDO (`ota-release-ceremony`, que el job de abajo ya declara), no como
-  # secreto de repositorio. Un environment con revisores exige aprobación humana ANTES de que
-  # el job arranque, así que la llave sigue sin ser alcanzable sin un «ok» explícito — sólo
-  # que ese «ok» pasa a ser una aprobación en vez de un pegado manual. Y el material nunca
-  # aparece en una línea de mandato ni en el log: se escribe con `umask 077` bajo
-  # `$RUNNER_TEMP` y se pasa por `@ruta`.
+  # `release_commit`.
+  # Keep the OTA key in the protected environment. Write it with umask 077
+  # under RUNNER_TEMP, pass it by @path and remove it after signing.
   workflow_dispatch:
     inputs:
       release_tag:
-        description: "PUBLISH this draft release tag (YY.M[.N], bare CalVer — no v prefix). Approving the protected environment makes it public."
+        description: "PUBLISH this draft release tag (bare MAJOR.MINOR — no v prefix). Approving the protected environment makes it public."
         required: true
         type: string
       release_commit:
@@ -86,18 +30,8 @@ on:
         required: true
         type: string
 
-# ONE RELEASE AT A TIME, and this is a correctness control rather than a courtesy to the
-# runners. Phase 1 (tag push) creates the draft and may upload a security manifest; phase 2
-# (dispatch) reads the draft and completes the stable ceremony. With no `concurrency:` key
-# Actions runs them concurrently by default, and the QA contrast executed the real block to
-# show what that buys: an upload landing after the inventory response is FORMED but before it
-# returns leaves the ceremony finishing rc=0 while the draft already carries security bytes —
-# `block_rc=0 remote_security_manifest=present`. A second GET does not make a mutable release
-# atomic. Serializing the two phases of the SAME release does close the in-workflow window.
-#
-# Grouped by the RELEASE, not by the workflow: two different tags still run in parallel.
-# `cancel-in-progress: false` because a publisher is never cancelled — the rule
-# release-rehearsal.yml already carries, for the same reason.
+# Serialize both phases of each release; different tags may run in parallel.
+# Never cancel an active publisher.
 concurrency:
   group: release-${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
   cancel-in-progress: false
@@ -110,28 +44,13 @@ env:
   IMAGE_REPO: ghcr.io/olivaresai/olivares
 
 jobs:
-  # --- §C.4: the AUTHORIZATION ROOT of the production tag path (independent review P1-02). ------
-  # A previous revision ran this preflight as a STEP inside the goreleaser job — i.e.
-  # inside a job that already held `contents/packages/id-token: write` before the first
-  # instruction executed, and whose siblings did not depend on it at all. That violates
-  # §C.4 twice: the preflight must run before ANY job receives a write permission or an
-  # OIDC token, and every mutating job must consume its validated outputs. This job is
-  # read-only (`contents: read`), produces the validated profile as JOB outputs, and every
-  # mutating job below `needs:` it — directly or transitively — and reads ONLY its
-  # outputs for mode-governed decisions. If it fails, nothing downstream starts.
-  #
-  # DELIBERATELY NO repository `if:` here (independent review P2-02): a job-level `if:` that is
-  # false SKIPS silently — green nothing. This read-only job runs in ANY repository the
-  # tag push happens in (a fork, a rename, a copied tree) and the script fails RED with
-  # the §C.4.2 message. The literal repository guards remain on the MUTATING jobs as the
-  # second fence. It is event-scoped to `push` only: the workflow_dispatch path is the
-  # phase-2 OTA ceremony, which has its own declared authorization contract (see
-  # publish-ota-manifest).
+  # Read-only preflight validates every tag-push profile before dependent jobs
+  # receive write permissions or an OIDC token. Mutating jobs use its outputs.
+  # Run this check in every repository so invalid targets fail instead of skipping.
+  # Phase 2 has its own protected approval and candidate verification.
   preflight:
     if: github.event_name == 'push'
-    # Validate release inputs. On GitHub-hosted runners: this repository has no self-hosted
-    # runner, and every other job of this workflow already runs hosted (free on a public
-    # repository). A repository variable can still route it to a self-hosted class.
+    # Repository variables may override the runner for this read-only check.
     runs-on: ${{ vars.CI_RUNNER_LIGHT || vars.CI_RUNNER || 'ubuntu-latest' }}
     permissions:
       contents: read
@@ -160,86 +79,46 @@ jobs:
           persist-credentials: false
       - name: preflight — validate the release profile (fail-closed)
         id: profile
-        # ⛔ EL PERFIL LO DECLARA EL REPOSITORIO QUE CORRE, Y NINGÚN NOMBRE PRIVADO VIVE AQUÍ.
-        # `vars.OLIVARES_RELEASE_PROFILE` sólo existe en el repositorio que declara ese perfil, así que en
-        # el público toda rama de abajo resuelve a producción, que es el valor por omisión y
-        # no un caso especial. Los destinos de preprod llegan por variables de ESE repositorio
-        # (`OLIVARES_PREPROD_EXPECTED_*`) y jamás por un literal en este fichero, que viaja al
-        # árbol público — el mismo motivo por el que `aws-images.yml:306-312` deriva su ancla.
-        #
-        # ⚠ LA FORMA `cond && A || B` ES EL TERNARIO DE ACTIONS Y TIENE UNA TRAMPA: devuelve B
-        # si A resulta FALSY, así que el valor de A decide tanto como la condición. Donde una
-        # rama vale la CADENA `'false'`, la condición va INVERTIDA a propósito para que esa
-        # cadena caiga siempre en el lado `||`, donde su veracidad no se evalúa.
-        #
-        # No es cautela decorativa: la documentación dice que una cadena no vacía es verdadera,
-        # pero eso NO se puede comprobar en esta caja y en este repositorio no había precedente
-        # que lo respaldara —lo busqué—. Escribirlo de forma que la respuesta dé igual cuesta
-        # una palabra y quita la dependencia. Si la lectura optimista hubiera sido falsa, el
-        # preflight lo habría cazado (exige `false` en preprod) y el acto habría muerto ROJO el
-        # día D: fallo seguro, pero caro.
-        #
-        # Y no es una llave de confianza: el preflight en modo preprod exige la tupla inyectada
-        # (deny-closed), rechaza destinos que nombren superficie de producción (§C.4.6), obliga
-        # a que el destino declarado SEA el repositorio que corre (§C.4.2), rechaza credenciales
-        # de producción y sólo admite la credencial separada del tap preprod (§C.4.7).
+        # Preflight validates the release profile and destinations from repository
+        # variables.
         env:
           RELEASE_MODE: ${{ vars.OLIVARES_RELEASE_PROFILE == 'preprod' && 'preprod' || 'production' }}
           RELEASE_GITHUB_REPO: ${{ vars.OLIVARES_RELEASE_PROFILE == 'preprod' && vars.OLIVARES_PREPROD_EXPECTED_REPO || 'olivaresai/olivares' }}
           OCI_IMAGE_REPO: ${{ vars.OLIVARES_RELEASE_PROFILE == 'preprod' && vars.OLIVARES_PREPROD_EXPECTED_OCI || env.IMAGE_REPO }}
           SOURCE_REPOSITORY_URL: ${{ vars.OLIVARES_RELEASE_PROFILE == 'preprod' && vars.OLIVARES_PREPROD_EXPECTED_SOURCE || 'https://github.com/olivaresai/olivares' }}
-          # Side publishers use the same profile fence. The preprod image mirror is a child
-          # package of the validated OCI namespace; its Homebrew target is a dedicated repo
-          # under the running owner. Neither destination is free-form or secret material.
+          # Preprod uses a mirror below the validated OCI namespace and a dedicated
+          # Homebrew repository under the running owner.
           MIRROR_IMAGE_REPO: ${{ vars.OLIVARES_RELEASE_PROFILE == 'preprod' && format('{0}/mirror', vars.OLIVARES_PREPROD_EXPECTED_OCI) || 'docker.io/olivaresai/olivares' }}
           HOMEBREW_TAP_REPO: ${{ vars.OLIVARES_RELEASE_PROFILE == 'preprod' && format('{0}/homebrew-preprod', github.repository_owner) || 'olivaresai/homebrew-tap' }}
-          # La tupla ESPERADA viaja aparte de la DECLARADA a propósito: el preflight compara
-          # una contra otra (§C.4.1) y luego contra el repositorio que corre (§C.4.2), que es
-          # lo que convierte una variable mutable por un admin en algo inofensivo — lo peor
-          # que consigue manipularla es que su propia corrida se niegue.
-          # ⛔ Y AQUÍ VIVE LA TRAMPA DEL TERNARIO, DICHA DONDE SE LEE. Si el repositorio
-          # declara el perfil pero OLVIDA una de las tres expectativas, esa variable llega
-          # VACÍA, la rama verdadera del ternario de arriba resulta falsy, y el valor DECLARADO
-          # cae al literal de producción: un acto con perfil `preprod` declarando el destino
-          # público. No se queda así — la tupla ESPERADA sigue vacía y el preflight muere en su
-          # comprobación deny-closed antes de tocar nada— pero eso es una afirmación sobre otro
-          # fichero, así que está PROBADA allí: `test-release-preflight.sh` lleva el caso
-          # "preprod con expectativas vacías y destino de producción declarado".
+          # Compare expected and declared repository, OCI and source coordinates
+          # separately.
+          # An empty expected value must fail preflight even when the declared
+          # expression
+          # falls back to a production coordinate.
           OLIVARES_PREPROD_EXPECTED_REPO: ${{ vars.OLIVARES_PREPROD_EXPECTED_REPO }}
           OLIVARES_PREPROD_EXPECTED_OCI: ${{ vars.OLIVARES_PREPROD_EXPECTED_OCI }}
           OLIVARES_PREPROD_EXPECTED_SOURCE: ${{ vars.OLIVARES_PREPROD_EXPECTED_SOURCE }}
           RELEASE_TAG: ${{ github.ref_name }}
-          # La firma es la MISMA en preprod que en producción —keyless, con log— y eso es
-          # deliberado: ensayar con otra ruta de firma no ensaya la ruta. El razonamiento
-          # completo, incluida la fuga que esto acepta, está en el perfil `preprod` de
-          # `scripts/release-preflight.sh`, que además lo EXIGE, así que no hay dos valores
-          # que puedan separarse en silencio.
+          # Preprod and production use the same keyless signing and transparency log.
+          # Preflight enforces both settings.
           COSIGN_MODE: keyless
           COSIGN_TLOG_UPLOAD: "true"
           PUBLISH_LATEST: "true"
-          # Production keeps its exact auto semantics. Preprod exercises both publishers
-          # against fenced equivalents instead of skipping the code paths that failed first
-          # in production (REL-83/REL-85).
+          # Production retains auto publishing. Preprod exercises both publishers
+          # against isolated destinations.
           PUBLISH_DOCKERHUB: ${{ vars.OLIVARES_RELEASE_PROFILE == 'preprod' && 'true' || 'auto' }}
           PUBLISH_HOMEBREW: ${{ vars.OLIVARES_RELEASE_PROFILE == 'preprod' && 'true' || 'auto' }}
           PUBLISH_OTA_STABLE: "true"
           RUN_SLSA: "true"
-          # Los generadores SLSA escriben registros PÚBLICOS que nombran el repositorio que
-          # corre: un acto que no es de producción tiene que decir en voz alta que los acepta.
+          # Preprod must acknowledge public SLSA records naming the running repository.
           ACKNOWLEDGE_PUBLIC_SLSA_LOG: ${{ vars.OLIVARES_RELEASE_PROFILE == 'preprod' && 'true' || '' }}
           OLIVARES_LICENSE_PUBKEY: ${{ vars.OLIVARES_LICENSE_PUBKEY }}
           OLIVARES_OTA_PUBKEY: ${{ vars.OLIVARES_OTA_PUBKEY }}
-          # Presence-only inputs for the both-or-neither check (§C.4.7); never printed.
-          # ⛔ `vars` PRIMERO, Y NO ES PREFERENCIA: UN USERNAME COMO SECRET MATO UN RELEASE.
-          # Medido el 2026-08-31 en el acto publico. `DOCKERHUB_USERNAME` valia `olivaresai`, y
-          # Actions ENMASCARA el valor de un secreto alla donde aparezca — incluido dentro de
-          # `ghcr.io/olivaresai/olivares`. Un valor enmascarado NO sobrevive al paso de salidas
-          # entre jobs: `oci_image_repo` llego VACIO al job de docker y el release murio ahi.
-          #
-          # No era un fallo de esta mecanica: era una propiedad de la CONFIGURACION que esta
-          # mecanica no puede ver. Un username es configuracion, no credencial; el TOKEN si es
-          # credencial y sigue en `secrets`. El `||` conserva el camino viejo para cualquier
-          # instalacion que aun lo tenga como secret.
+          # Presence-only inputs enforce the credential pair; never print them.
+          # Prefer a username variable so secret masking cannot suppress public
+          # coordinates.
+          # Keep tokens in secrets; the username secret remains a compatibility
+          # fallback.
           DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME || secrets.DOCKERHUB_USERNAME }}
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
           HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
@@ -255,37 +134,19 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: environment admission policy — offline controls
         run: bash scripts/test-release-environment-tag-policy.sh
-      - name: verify monthly and patch tag admission before protected signing
+      - name: verify MAJOR.MINOR tag admission before protected signing
         if: github.repository == 'olivaresai/olivares'
         env:
           GH_TOKEN: ${{ github.token }}
         run: bash scripts/check-release-environment-tag-policy.sh
 
   goreleaser:
-    # PRODUCTION TARGET GUARD (design §E.1.1). Every mutation below targets
-    # olivaresai/olivares through the preflight's validated outputs. A `v*` tag pushed in
-    # ANY other repository — a fork, or the disposable rehearsal target — dies RED in the
-    # preflight job above; this literal guard is the second fence on the mutating job.
+    # The mutating job accepts the production repository or a validated preprod
+    # profile. Preflight validates destinations before this repository guard runs.
     needs: [preflight, release-environment-policy]
-    # ⛔ EL SEGUNDO DESTINO NO SE ESCRIBE, SE DECLARA POR VARIABLE, y no es estilo: este
-    # fichero VIAJA al árbol público (`.github/workflows/` se exporta), así que escribir aquí
-    # el nombre del repositorio que declara ese perfil lo publicaría — `lint:export` bloquea ese literal
-    # y tiene razón. Mismo motivo y misma cura que `aws-images.yml:306-312`.
-    #
-    # `vars.OLIVARES_RELEASE_PROFILE` sólo existe EN el repositorio que declara ese perfil, así que en el
-    # público esta rama no puede activarse ni por accidente. Y no es una llave de confianza:
-    # quien la ponga sigue chocando con el preflight, que en modo preprod exige la tupla
-    # inyectada (deny-closed), rechaza cualquier destino que nombre una superficie de
-    # producción (§C.4.6) y obliga a que el destino declarado SEA el repositorio que corre
-    # (§C.4.2). Esta condición abre la puerta; las de allí deciden quién pasa.
+    # Use the validated release profile and destinations.
     if: github.event_name == 'push' && (github.repository == 'olivaresai/olivares' || vars.OLIVARES_RELEASE_PROFILE == 'preprod')
-    # PINNED to a GitHub-hosted runner ON PURPOSE — do NOT route this through
-    # vars.CI_RUNNER. SLSA provenance derives its trust from the isolation of a
-    # hosted runner: a persistent self-hosted runner serves many jobs, so a
-    # compromised build can leave tooling behind for the next one, and a verifier
-    # "has no guarantee that the code run is in fact the intended workflow unless
-    # they also trust the self-hosted runner" (slsa-framework). Moving a release
-    # here to save minutes would silently downgrade the provenance we publish.
+    # Build and sign on a GitHub-hosted runner to keep provenance isolated.
     runs-on: ubuntu-latest
     permissions:
       contents: write # create the DRAFT release + upload assets
@@ -297,10 +158,8 @@ jobs:
       image: ${{ steps.image.outputs.image }}
       digest: ${{ steps.image.outputs.digest }}
     env:
-      # The VALIDATED profile — §C.4 job outputs, the only permitted source (§C.4.10).
-      # Job-level so GoReleaser's templates and every step read one authority; empty
-      # outputs (preflight skipped or rewired) fail the goreleaser template render
-      # (missingkey=error) instead of defaulting anywhere.
+      # Use preflight outputs for destinations, signing modes and version.
+      # Missing values fail GoReleaser template rendering.
       RELEASE_GITHUB_OWNER: ${{ needs.preflight.outputs.release_github_owner }}
       RELEASE_GITHUB_NAME: ${{ needs.preflight.outputs.release_github_name }}
       OCI_IMAGE_REPO: ${{ needs.preflight.outputs.oci_image_repo }}
@@ -315,7 +174,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 0 # goreleaser needs tags/history for the changelog
+          fetch-depth: 0 # GoReleaser needs the release tag and its history
           persist-credentials: false
       - name: phase 1 guard 1 — straight after checkout
         run: |
@@ -353,40 +212,17 @@ jobs:
         with:
           go-version-file: go.work
           cache: ${{ runner.environment == 'github-hosted' }}
-      # The web UI is built into the Go embed dir by goreleaser's `before` hook,
-      # so node + pnpm must be present before goreleaser runs.
-      # NODE FIRST, AND THAT ORDER IS THE FIX (2026-08-05). pnpm/action-setup installs pnpm
-      # THROUGH npm, so it needs a node on PATH — and it used to sit ABOVE setup-node because
-      # setup-node's `cache: pnpm` needs pnpm to already exist. On the Hetzner runners, which
-      # ship no node, that cycle cannot be satisfied: mainline-ci 30982224609 lost `web` on
-      # ci-runner-1 and `control-plane` on ci-runner-3, both at that step, with
-      # `npm ERR! ... paths[0] ... received undefined`. `standalone: true` did NOT help and the
-      # action's own docs say why: it installs @pnpm/exe, which is still an npm package.
-      # So node is installed FIRST and `cache: pnpm` is dropped — a store cache is worth less
-      # than a job that runs at all, and these runners keep their disk between jobs anyway.
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      # Install Node before pnpm, which uses npm to install. Both are needed
+      # by GoReleaser's before hook to build the embedded web UI.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .node-version
-      # PREFLIGHT: tagged-source integrity for generated artifacts. This
-      # workflow triggers on ANY `v*` tag and depends on no mainline-ci result, so
-      # nothing proves the tagged SHA ever passed the gate; goreleaser then builds
-      # the console from the COMMITTED sources (.goreleaser.yaml:42). Placed here,
-      # right after the toolchains it needs and BEFORE syft/cosign/QEMU/buildx and
-      # the registry login, so drift fails before any of that setup — and long
-      # before anything is built, signed or published.
-      # HONEST SCOPE: openapi.gen.ts is a types-only module (interfaces/type
-      # aliases, erased at compile time) that nothing imports yet, so a stale copy
-      # does NOT change the emitted bundle today. What this prevents is publishing a
-      # tag whose committed sources disagree with their own generator — and a silent
-      # miscompile the moment the console starts consuming those types.
-      # Covers the OpenAPI class only; proto:check (Taskfile.yml:539-543) is ungated
-      # by the same mechanism and DOES reach the binary (core/api/grpc.go), but
-      # needs the pinned buf/protoc toolchain budgeted in its own change.
+      # Check generated OpenAPI types against tagged sources before the build.
+      # This does not run proto:check; protobuf consistency needs its own gate.
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
         with:
-          # standalone installs @pnpm/exe, which does not need a node at RUN time. It is kept
-          # for that reason only: it does NOT remove the node this step needs to INSTALL, which
-          # is why the setup-node above it is the actual fix and must stay above it.
+          # Standalone pnpm does not need Node at runtime; installing it still needs
+          # the Node setup above.
           standalone: true
       - name: phase 1 guard 2 — after the setup actions, before the first script
         run: |
@@ -423,25 +259,41 @@ jobs:
       - name: install go-task (pinned)
         timeout-minutes: 10
         uses: ./.github/actions/olivares-tool-cache
+        with:
+          gitleaks: "true"
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.14.8"
+      - name: prepare built-artifact secret scanning
+        run: |
+          python3 -c 'from compression import zstd'
+          nfpm_bin=$(bash scripts/ensure-nfpm.sh --dest "$RUNNER_TEMP/artifact-nfpm")
+          echo "OLIVARES_NFPM_DIR=$RUNNER_TEMP/artifact-nfpm" >> "$GITHUB_ENV"
+          dirname "$nfpm_bin" >> "$GITHUB_PATH"
+          echo "OLIVARES_REAL_DOCKER=$(command -v docker)" >> "$GITHUB_ENV"
+          echo "$GITHUB_WORKSPACE/scripts/artifact-scan-bin" >> "$GITHUB_PATH"
+      - name: built-artifact scanner canaries (no credentials)
+        run: |
+          python3 scripts/test-artifact-secrets.py
+          python3 scripts/test-native-package-publication.py
       - name: preflight — OpenAPI snapshot + web client codegen freshness
         timeout-minutes: 15
         run: |
           pnpm --dir web install --frozen-lockfile
           task openapi:check
-      # PREFLIGHT: the race evidence this release claims to rest on (2026-07-29,
-      # hardened 2026-07-30).
-      #
-      # race-full.yml declares itself "the mandatory pre-release evidence". The
-      # first version of this preflight accepted a green run on any ANCESTOR of
-      # the tag. The 2026-07-30 review refuted that: `git merge-base
-      # --is-ancestor` accepts a pre-#447/#448 base whose green would then
-      # "cover" 38,226 later insertions it never saw. An old green must not
-      # habilitate a new tag.
-      #
-      # EQUALITY, therefore: some green race-full run's head SHA must BE the
-      # tagged SHA. No silent pass, no warn — the escape hatch is deliberate and
-      # loud: dispatch race-full on the release commit, wait for green, re-tag.
+      # 0.1 only (2026-10-10: 0.1 ships when it compiles and the README Compose starts the
+      # engine). A failure of this gate or of the race-full gate below is logged and does not stop
+      # 0.1; every later tag keeps both gates blocking.
+      - name: preflight — the release container first hour passed on this exact commit
+        continue-on-error: ${{ github.ref_name == '0.1' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/check-first-hour-evidence.sh
+
+      # Require a successful race-full run whose head equals the tagged commit.
+      # An ancestor's result cannot qualify this release.
       - name: preflight — a green race-full ran on the EXACT tagged SHA
+        continue-on-error: ${{ github.ref_name == '0.1' }}
         timeout-minutes: 10
         env:
           GH_TOKEN: ${{ github.token }}
@@ -481,7 +333,7 @@ jobs:
                 git fetch -q origin "${green}" 2>/dev/null || continue
               fi
               changed="$(git diff --name-only "${green}" HEAD)"
-              [ -n "${changed}" ] || continue
+              [ -n "${changed}" ] || { echo "race-full evidence: green run on ${green}; tree identical to ${GITHUB_SHA}"; match=1; break; }
               # ROOT-ANCHORED (':/' + exclude,top), not `.`: a pathspec relative to the working
               # directory would answer "nothing outside the workflows" for any diff whose files
               # all sit outside that directory, which is an admission, not a filter.
@@ -498,43 +350,24 @@ jobs:
             echo "::error::no successful race-full run exists on the tagged SHA ${GITHUB_SHA} (newest green: ${newest}). An ancestor green does not cover the diff after it — dispatch race-full on this exact commit, wait for green, and re-tag."
             exit 1
           fi
-          # GoReleaser reads the previous tag and the changelog from this history (checkout
+          # GoReleaser reads the previous tag from this history (checkout
           # fetch-depth: 0). A shallow clone does not fail the build; it publishes wrong metadata.
           if [ "$(git rev-parse --is-shallow-repository)" != "false" ]; then
-            echo "::error::the release checkout is shallow; GoReleaser would compute the previous tag and the changelog from a truncated history."
+            echo "::error::the release checkout is shallow; GoReleaser would compute the previous tag from a truncated history."
             exit 1
           fi
           if [ "${equal}" -gt 0 ]; then
             echo "race-full evidence exists for the exact tagged SHA ${GITHUB_SHA}"
           fi
       # syft on PATH for goreleaser's `sboms`; cosign for `signs`/`docker_signs`.
-      - uses: anchore/sbom-action/download-syft@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
+      - uses: anchore/sbom-action/download-syft@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
         with:
-          # EXACT pin, not the action default. Measured 2026-07-25 with both binaries:
-          # this installer revision defaults to cosign v3.0.6, the OTA job's revision
-          # defaults to v2.5.2, and .goreleaser.yaml signs with --output-signature /
-          # --output-certificate. Under v3 those flags are deprecated and IGNORED when
-          # --new-bundle-format is on (it defaults to true), so the .sig/.pem files
-          # GoReleaser expects are never written; and `--tlog-upload=false` — the flag
-          # the rehearsal depends on to leave no public record — is rejected outright
-          # ("not supported with --signing-config"). Under v2.5.2 the same commands
-          # produce a signature file and `verify-blob --key` reports Verified OK.
-          # v2.6.4, not the v2.5.2 the OTA job used to resolve: v2.5.2 falls inside two
-          # published Sigstore advisories — GHSA-whqx-f9j3-ch6m ("verification accepts
-          # any valid Rekor entry under certain conditions", <=2.6.1, fixed 2.6.2) and
-          # GHSA-w6c6-c85g-mmv6 (verify-blob-attestation false positive, <=2.6.2, fixed
-          # 2.6.3). scripts/check-cosign-contract.sh proves v2.6.4 still honours the
-          # contract. Migrating to v3 bundles is a real migration (signer, verifier, OTA
-          # check and scripts/verify-release.sh) and needs its own unit.
+          # Pin cosign v2.6.4 for the signature/certificate outputs and flags checked by
+          # scripts/check-cosign-contract.sh. A v3 bundle migration must update signers
+          # and verifiers together.
           cosign-release: 'v2.6.4'
-      # EXECUTION-TIME INVARIANT — the actual control. The static gate
-      # (task lint:cosign-pins) reads the workflow YAML and is fast, but four rounds of
-      # adversarial review proved it can never be complete: `run:` is a shell, so proving
-      # "no path here can obtain an unapproved cosign" by reading YAML is proving a
-      # negative over a Turing-complete language. At THIS point the property is decidable
-      # — resolve the binary, hash it, compare against the upstream published digest. It
-      # does not matter how cosign arrived.
+      # Check the workspace after setup actions and before any tracked script runs.
       - name: assert the checkout is untouched before phase 1 runs any script
         run: |
           set -euo pipefail
@@ -575,17 +408,9 @@ jobs:
           echo "checkout verified before phase 1 runs any tracked script"
       - name: assert the cosign binary is the reviewed artifact
         run: bash scripts/assert-cosign-binary.sh --isolate
-      # Prove the installed cosign actually honours this pipeline's signing contract
-      # BEFORE anything is built, pushed or published. It runs the real commands against
-      # a temporary key with the transparency log disabled. It is NOT a "no network"
-      # step — `verify-blob` fetches TUF trusted-root material regardless — but every
-      # Sigstore endpoint it is given is unroutable, so it cannot reach Rekor or Fulcio
-      # and cannot create a public record. Without it, a cosign that accepts our flags
-      # and silently ignores them ships a release whose signatures were never written.
-      # EXPLICIT INTERPRETER, not a bare path. The script is tracked 100644 — the repo's
-      # dominant mode (53 of 58 scripts/*.sh) — so a bare path exits 126 "permission
-      # denied" on a fresh checkout. Wired this step in with a bare path, so the
-      # check it claims to perform could never have run at all.
+      # Exercise cosign flags and output files before building or publishing.
+      # The temporary-key test disables the transparency log and blocks Rekor/Fulcio;
+      # verify-blob may still fetch TUF roots. Invoke the tracked script with Bash.
       - name: cosign signing-contract check (no publication)
         run: bash scripts/check-cosign-contract.sh
       # Multi-arch image build + push to ghcr.io.
@@ -641,50 +466,10 @@ jobs:
             exit 1
           fi
           echo "checkout verified before phase 1 consumes it"
-      # ⛔ NO STEP WRITES THE COMMIT EVIDENCE HERE, AND THAT IS THE FIX, NOT AN OMISSION.
-      # A step named "record the phase-1 commit as checksum-covered evidence" used to sit
-      # exactly here and `printf` the OID into release-commit.txt. The file is neither tracked
-      # nor ignored, so it left `?? release-commit.txt` behind, and the very next thing in this
-      # job is GoReleaser — which REFUSES to release from a dirty tree and documents this exact
-      # shape as the example (goreleaser.com/resources/errors/dirty/). The guard chain in this
-      # job was therefore blocking ITSELF: every legitimate release died at the build, having
-      # produced nothing (the model, 2026-08-15, P0-A, verdict NO-LAND).
-      #
-      # The write now happens INSIDE GoReleaser, as the first `before` hook
-      # (.goreleaser.yaml → scripts/release-commit-evidence.sh), which is the earliest point
-      # after its dirty validation: v2.17.0 runs `… → git → … → before → …`
-      # (internal/pipeline/pipeline.go:63-104) and checks dirtiness in the git pipe
-      # (internal/pipe/git/git.go:194-224). Nothing was relaxed to achieve it: the guard below
-      # still allow-lists that ONE untracked name and still pins its bytes to GITHUB_SHA, and
-      # the file is deliberately NOT ignored, so `git status` keeps seeing it.
-      # ⛔ MAKE ROOM BEFORE BUILDING. Not a precaution: the enterprise overlay's release,
-      # which uses the same shape and the same hosted runner, died on 2026-08-31 (run
-      # 33350368843) after 21 minutes 24 seconds of compiling with
-      #   compile: writing output: write $WORK/b681/_pkg_.a: no space left on device
-      # and the runner had said so itself fifteen minutes earlier — "Free space left: 95 MB" —
-      # with nobody reading it.
-      #
-      # CORRECTED DERIVATION, 2026-08-31, and the correction matters more than the number.
-      # The first version of this comment said "14 build ids = 56 binaries, against that
-      # one's 136". Both figures were wrong, by the same sloppy predicate — counting every
-      # `- id:` in the file instead of the ones under `builds:`. Counted per section: this
-      # config has builds=2 (archives=2, dockers=4, sboms=2, signs=1, nfpms=1), so 2 × 4
-      # targets = 8 binaries; the overlay's own 914-line config has builds=18, so 18 × 4 =
-      # 72, not 136. Caught it and cross-checked against the run's own build lines.
-      #
-      # And the conclusion inverts with it. 8 is not comfortably below what failed: that run
-      # built 68 of its 72 and died on the first line of each FIPS target — 94 %, needing
-      # modestly more than it had, not double. So this is not insurance for a smaller build;
-      # it is the repair of a failure this repository has not had the CHANCE to observe,
-      # because no release has ever run here. The step is written so: it costs nothing
-      # when there is room, it prints the number either way, and it refuses BEFORE compiling
-      # if there is not — instead of failing at minute 21 with a COMPILER error, which accuses
-      # the code when the fault is the machine. This workflow fires on any `v*` tag, so the
-      # public act would meet that wall with an audience.
-      #
-      # Only what this job does not use is removed. `/opt/hostedtoolcache` is NOT removed
-      # wholesale: Go and Node were installed there by the steps above and deleting it would
-      # kill them. No third-party action.
+      # Create release-commit.txt inside GoReleaser's before hook, after dirty-tree
+      # validation. Keep it visible to Git and bind its bytes to GITHUB_SHA.
+      # Free unused runner tools before building; preserve the installed Go and Node
+      # versions and refuse insufficient disk space before compiling.
       - name: make room on the runner (and say how much)
         if: runner.environment == 'github-hosted'
         run: |
@@ -731,42 +516,29 @@ jobs:
             exit 1
           fi
 
+      - name: render release notes from CHANGELOG
+        run: |
+          python3 scripts/render-release-notes.py "$RELEASE_TAG" > "$RUNNER_TEMP/release-notes.md"
+
       - name: goreleaser release (build + SBOM + cosign-sign, into a DRAFT)
         id: goreleaser
         uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
         with:
-          # EXACT version, not "~> v2": a floating constraint means two nominally
-          # identical runs can install different release engines, so a rehearsal
-          # would not prove what the next production release does (design §D.3).
+          # Pin the exact GoReleaser version for reproducible release behavior.
           version: "v2.17.0"
-          # ⛔ THE ENGINE HAS ITS OWN CLOCK, AND IT IS NOT THE JOB'S. GoReleaser v2
-          # applies a 30-minute default deadline to the whole pipeline; this job
-          # declares no `timeout-minutes`, so the runner would allow 6 hours and the
-          # binding limit is goreleaser's, not GitHub's. The enterprise overlay's
-          # 13th release rehearsal (2026-08-31) built all 72 of its binaries and then
-          # died STARTING the SBOM catalog, ~55 minutes in, on exactly that deadline —
-          # a whole cycle spent to learn the clock. This config is smaller (2 build
-          # ids = 8 binaries) but carries 4 docker images, 2 SBOMs and cosign signing
-          # behind the build, and no release has ever run here, so its wall time is
-          # UNMEASURED. `--timeout` is a CLI flag, not a config key: putting it in
-          # .goreleaser.yaml fails the parse with `field timeout not found in type
-          # config.Project` (measured, with an invented key as the negative control).
-          args: release --clean --timeout 3h
+          # Set GoReleaser's own pipeline deadline with --timeout; the job limit is
+          # separate.
+          args: release --release-notes "${{ runner.temp }}/release-notes.md" --clean --timeout 3h
         env:
-          # Destinations/signing/Homebrew mode arrive from the JOB env — the validated
-          # §C.4 outputs. A missing value fails the template render (missingkey=error)
-          # instead of silently publishing anywhere.
+          # Templates use the validated job environment; missing values must fail
+          # rendering before publication.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Independent PUBLIC anchors. The validator rejects empty/malformed/equal
-          # values before compiling. The license private key exists only in the narrow
-          # online fulfilment Worker. The OTA private key stays off-box/HSM and NEVER
-          # reaches this runner; only its public half is needed to build/verify.
+          # Build with distinct licence and OTA public keys. Reject empty, malformed
+          # or equal anchors before compilation.
           OLIVARES_LICENSE_PUBKEY: ${{ vars.OLIVARES_LICENSE_PUBKEY }}
           OLIVARES_OTA_PUBKEY: ${{ vars.OLIVARES_OTA_PUBKEY }}
-          # One SECRET, selected only after the profile passed. Repository coordinates are
-          # public configuration in validated outputs, never values hidden in a secret.
-          # Production retains the existing optional token and `auto` semantics; preprod
-          # requires a separately scoped token and forces the real publisher to run.
+          # Select the publishing token only after preflight. Preprod requires its
+          # scoped token; production retains optional-token auto semantics.
           HOMEBREW_TAP_GITHUB_TOKEN: ${{ needs.preflight.outputs.release_mode == 'preprod' && secrets.HOMEBREW_PREPROD_TAP_GITHUB_TOKEN || secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
 
       - name: exact-version native packages and complete signed draft checksums
@@ -795,15 +567,10 @@ jobs:
           }
           echo "preprod Homebrew cask bytes: $(sha256sum "${remote_cask}" | cut -d' ' -f1)"
 
-      # --- Phase 1: digest-bound manifest, deliberately UNSIGNED in CI ------------
-      # GOVERNED by the validated profile (P1-02): PUBLISH_OTA_STABLE is not a decorative
-      # assertion — this step, the only stable-named draft mutation of phase 1, runs only
-      # when the §C.4 output says so.
+      # Phase 1 creates the stable manifest when the validated profile enables it.
+      # The pipeline signature binds its bytes; phase 2 adds the OTA signature.
 
-      # ⛔ THE NUMBER, ALSO WHEN IT DIES. `if: always()` on purpose: when the overlay's release
-      # ran out of disk the only trace was that loose runner warning, and the next person to
-      # investigate had nothing to measure. A failure that leaves no measurement behind costs
-      # the next cycle as well as its own.
+      # Report remaining disk space even when the build fails.
       - name: the disk AFTER building (always, pass or fail)
         if: always()
         run: |
@@ -1006,27 +773,15 @@ jobs:
         if: needs.preflight.outputs.publish_ota_stable == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # FRESHNESS BOUND (anti-freeze). Without `expires`, Manifest.Stale() is
-          # always false and a hostile or merely stale mirror can serve this
-          # validly-signed manifest FOREVER, pinning clients to a superseded —
-          # possibly vulnerable — version. Every production manifest must carry one.
-          #
-          # Default 2160h = 90 days. The bound only bites when no NEW release has
-          # been cut in the window (each release re-issues and re-signs a manifest),
-          # so it must exceed the longest realistic quiet period, and shorter is not
-          # free: the OTA private key is off-box/HSM and every re-sign is a manual
-          # maintainer-approved ceremony. If a manifest lapses, `upgrade` fail-closes
-          # for everyone until a ceremony runs — a self-inflicted outage on the very
-          # path a security release travels. 90 days bounds a freeze to one quarter
-          # while keeping the ceremony obligation quarterly at worst. Override per repo
-          # with the OLIVARES_MANIFEST_EXPIRES_IN variable (Go duration, e.g. 720h).
-          # Re-sign cadence this implies: one signing ceremony per expiry window at
-          # worst (quarterly at the 90-day default), sooner if no release ships.
+          # Every manifest needs an expiry to bound stale mirror responses.
+          # Default: 2160h (90 days). OLIVARES_MANIFEST_EXPIRES_IN overrides it with a
+          # Go duration, such as 720h. Renew and sign before expiry; stale manifests
+          # block upgrades.
           MANIFEST_EXPIRES_IN: ${{ vars.OLIVARES_MANIFEST_EXPIRES_IN }}
         run: |
           set -euo pipefail
           # Tag/version come from the JOB env — the §C.4 validated outputs, not the raw
-          # ref context. The preflight already pinned the vMAJOR.MINOR.PATCH grammar.
+          # ref context. The preflight already pinned the bare MAJOR.MINOR grammar.
           version="${RELEASE_VERSION}"
           [ -n "${version}" ] || { echo "ERROR: empty validated version" >&2; exit 1; }
           expires_in="${MANIFEST_EXPIRES_IN:-2160h}"
@@ -1087,26 +842,10 @@ jobs:
             dist/stable-manifest.json.pipeline.sig \
             dist/stable-manifest.json.pipeline.pem
 
-      # --- Phase 1b: the SECURITY channel, deny-closed ----------------------------
-      # Until this step existed, `--channel stable` at the step above was the ONLY
-      # `release manifest` invocation in all of `.github/`, so the `security` channel —
-      # the one an internal design note (not shipped) §1 calls the central
-      # promise of a subscription — was NEVER PRODUCED. The vocabulary
-      # (core/release/manifest.go:44-50), the generator (cmd_release_manifest.go:109) and
-      # the worker that serves it all supported three channels already; only the producer
-      # was missing.
-      #
-      # WHETHER a tag is a security release is DATA IN THE TREE, not a workflow input:
-      # phase 1 runs on `push: tags`, where `inputs.*` does not exist (the dispatch path
-      # of this workflow is the phase-2 ceremony). scripts/release-ota-channel.sh reads
-      # release/advisories/<version>.txt and answers `none` or `security<TAB><ids>`,
-      # refusing a half-made declaration rather than downgrading it to `none` in silence.
-      # An ordinary release has no such file and this step is a no-op.
-      #
-      # `lts` is deliberately NOT produced here. §8.3 of the same plan leaves the LTS line
-      # policy — which version anchors it, how long it lives, whether it is an add-on —
-      # to and §7.1 states the rule: a `lts` job without that policy would publish
-      # an empty promise. The channel is activated when its policy exists, not before.
+      # The tagged release/advisories/<version>.txt declares security updates.
+      # An absent file is a no-op; an invalid declaration fails.
+      # Security manifests remain unsigned here, and phase 2 refuses their publication.
+      # LTS production needs a defined policy.
       - name: generate unsigned security OTA channel manifest (deny-closed)
         if: needs.preflight.outputs.publish_ota_stable == 'true'
         env:
@@ -1296,7 +1035,7 @@ jobs:
           gh release upload "${RELEASE_TAG}" dist/security-manifest.json
           echo "::warning::${version} published an UNSIGNED security manifest to the draft. The phase-2 ceremony does not sign it yet; publishing this draft would expose security-channel bytes that every conforming client rejects."
 
-      # --- SLSA subjects: base64(checksums.txt), the sha256sum-format manifest ----
+      # SLSA subjects are the base64-encoded checksums.txt entries.
       - name: compute base64 subjects for SLSA provenance
         id: hashes
         env:
@@ -1306,99 +1045,50 @@ jobs:
           checksum_file="$(echo "$ARTIFACTS" | jq -r '.[] | select(.type=="Checksum") | .path')"
           echo "hashes=$(base64 -w0 < "$checksum_file")" >> "$GITHUB_OUTPUT"
 
-      # --- resolve the EXACT versioned bare-manifest digest (for image attest/provenance)
-      # No `head -1`: the previous selection took whichever Docker image artifact came
-      # FIRST — possibly a single-arch child or the FIPS variant — and attested THAT
-      # while everything downstream implied the multi-arch image users pull (design
-      # finding P1-SUSPECT / §E.1.5). The script requires exactly one manifest artifact
-      # named ${OCI_IMAGE_REPO}:${VERSION}, resolves its digest from the registry, and
-      # cross-checks it against the digest GoReleaser recorded at push.
+      # Require one bare versioned image manifest, resolve its registry digest,
+      # and compare it with the digest recorded by GoReleaser.
       - name: resolve the exact versioned bare-manifest digest
         id: image
         env:
-          # OCI_IMAGE_REPO / RELEASE_VERSION come from the job env (§C.4 outputs).
+          # Image coordinates and version come from the validated job environment.
           ARTIFACTS: ${{ steps.goreleaser.outputs.artifacts }}
         run: bash scripts/resolve-bare-manifest-digest.sh
 
-      # --- SCP-03: SBOM in-toto attestations (binary archives, keyless) -----------
-      - name: attest SBOMs to the binary archives (cosign attest-blob)
-        env:
-          ARTIFACTS: ${{ steps.goreleaser.outputs.artifacts }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          for a in $(echo "$ARTIFACTS" | jq -r '.[] | select(.type=="Archive") | .path'); do
-            sbom="${a}.spdx.sbom.json"   # goreleaser wrote this sidecar
-            # FAIL, not WARN (2026-08-01). goreleaser is configured to write an
-            # SPDX sidecar per archive; if one is absent the build changed under us,
-            # and `continue` shipped that archive with no SBOM attestation while the
-            # step stayed green. A release that cannot say what is inside an artifact
-            # is not a release we sign.
-            [ -f "$sbom" ] || { echo "ERROR: no SBOM sidecar for $a — refusing to publish an unattested artifact" >&2; exit 1; }
-            bash scripts/cosign-verified.sh attest-blob --type spdxjson --predicate "$sbom" \
-              --new-bundle-format --bundle "${a}.sbom.sigstore.json" --yes "$a"
-            # CREATE-ONLY: see the stable-manifest upload for why the flag is gone.
-            # This step PRODUCES only the sigstore bundle. GoReleaser already uploaded the
-            # CycloneDX sidecar; re-uploading it made the release die with "already_exists"
-            # after the expensive build had completed.
-            gh release upload "${RELEASE_TAG}" "${a}.sbom.sigstore.json"
-          done
-        # CISA-fields linter (draft-pending) over the first archive SBOM.
-      - name: CISA-2025-draft SBOM fields check
-        env:
-          ARTIFACTS: ${{ steps.goreleaser.outputs.artifacts }}
-        run: |
-          set -euo pipefail
-          a="$(echo "$ARTIFACTS" | jq -r '.[] | select(.type=="Archive") | .path' | head -1)"
-          bash scripts/sbom-check-cisa.sh "${a}.spdx.sbom.json" --cyclonedx "${a}.cdx.sbom.json"
-
-      # --- SCP-03: SBOM of the IMAGE + attestation --------------------------------
-      - name: image SBOM + cosign attestation
+      # The release SBOM: ONE SPDX document, generated from the shipped image (its binary carries
+      # the Go module set every archive ships), attested to the image by digest and attached to
+      # the release. Archives carry no per-archive SBOM: the signed checksums cover them.
+      - name: release SBOM + image attestation + CISA-2025-draft fields check
         env:
           DIGEST: ${{ steps.image.outputs.digest }}
         run: |
           set -euo pipefail
           ref="${OCI_IMAGE_REPO}@${DIGEST}"
-          bash scripts/sbom-generate.sh "registry:${ref}" spdx-json image.spdx.sbom.json
-          bash scripts/cosign-verified.sh attest --yes --type spdxjson --predicate image.spdx.sbom.json "${ref}"
+          bash scripts/sbom-generate.sh "registry:${ref}" spdx-json olivares.spdx.sbom.json
+          bash scripts/sbom-check-cisa.sh olivares.spdx.sbom.json
+          bash scripts/cosign-verified.sh attest --yes --type spdxjson --predicate olivares.spdx.sbom.json "${ref}"
 
-      # --- SCP-04: OpenVEX driven by govulncheck reachability + attestations ------
+      # OpenVEX reachability analysis and attestations.
       - name: generate + attest OpenVEX
         env:
-          ARTIFACTS: ${{ steps.goreleaser.outputs.artifacts }}
           DIGEST: ${{ steps.image.outputs.digest }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Pin govulncheck to the exact version the rest of the repo uses (Taskfile,
-          # patch-velocity, mainline-ci) — @latest makes release behaviour time-dependent
-          # in a supply-chain pipeline (D.2).
+          # Pin govulncheck to the version used by the other repository checks.
           GOVULNCHECK_VERSION: "v1.3.0"
         run: |
           set -euo pipefail
           go install "golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}"
           bash scripts/gen-vex.sh --mode source --out olivares.vex.openvex.json
-          # attach to the image (by digest) and to each binary archive
+          # ONE OpenVEX for the release, attested to the image by digest; no per-archive copies.
           bash scripts/cosign-verified.sh attest --yes --type openvex --predicate olivares.vex.openvex.json "${OCI_IMAGE_REPO}@${DIGEST}"
-          for a in $(echo "$ARTIFACTS" | jq -r '.[] | select(.type=="Archive") | .path'); do
-            cp olivares.vex.openvex.json "${a}.vex.openvex.json"
-            bash scripts/cosign-verified.sh attest-blob --type openvex --predicate olivares.vex.openvex.json \
-              --new-bundle-format --bundle "${a}.vex.sigstore.json" --yes "$a"
-            # CREATE-ONLY: see the stable-manifest upload for why the flag is gone.
-            gh release upload "${RELEASE_TAG}" "${a}.vex.sigstore.json" "${a}.vex.openvex.json"
-          done
           # CREATE-ONLY: see the stable-manifest upload for why the flag is gone.
-          gh release upload "${RELEASE_TAG}" olivares.vex.openvex.json image.spdx.sbom.json
+          gh release upload "${RELEASE_TAG}" olivares.vex.openvex.json olivares.spdx.sbom.json
         # gh is preinstalled on the runner; GH_TOKEN (above) authorises the uploads.
 
-  # --- SCP-01: SLSA Build L3 provenance for the BINARIES ------------------------
-  # The reusable workflow runs in an ISOLATED context so signing material is
-  # unreachable from the build steps above — that isolation is what makes it L3
-  # (not L2). Pinned by SEMVER TAG, not SHA: slsa-verifier validates the builder
-  # ID against this tag, so a SHA pin would break verification (documented
-  # exception to the SHA-pin rule; SCP-07).
+  # Provenance signing runs separately from the build. Keep generator semver
+  # tag pins: slsa-verifier uses the tag in the builder identity.
   provenance-binaries:
     needs: [preflight, goreleaser]
-    # GOVERNED by the validated profile (P1-02): RUN_SLSA is load-bearing, not a
-    # decorative assertion in the preflight log.
+    # Run provenance generation only when the validated profile enables it.
     if: needs.preflight.outputs.run_slsa == 'true'
     permissions:
       actions: read # read the build environment for provenance
@@ -1412,7 +1102,7 @@ jobs:
       # Preserve the preflight acknowledgment for repositories that declare that profile.
       private-repository: ${{ github.event.repository.private }}
 
-  # --- SCP-01: SLSA Build L3 provenance for the IMAGE ---------------------------
+  # SLSA provenance for the image.
   provenance-image:
     needs: [preflight, goreleaser]
     if: needs.preflight.outputs.run_slsa == 'true'
@@ -1429,44 +1119,15 @@ jobs:
     secrets:
       registry-password: ${{ secrets.GITHUB_TOKEN }}
 
-  # --- PRODUCTION-ONLY PROMOTION: the mutable `latest*` aliases (design §A.2.4/6) --------
-  # The shared GoReleaser build phase now emits VERSIONED outputs only — `latest`,
-  # `latest-amd64` and `latest-arm64` no longer exist in .goreleaser.yaml, so a rehearsal
-  # run structurally cannot publish them. This job re-creates them here, in the production
-  # caller only, BY DIGEST: each source is re-resolved to its immutable digest, its keyless
-  # signature is verified against the release identity, and only then is the alias tag
-  # written THROUGH scripts/alias-image-digest.sh, which must prove the alias resolves to
-  # the SAME digest before declaring success. Docker's `imagetools create` defaults to
-  # `--prefer-index=true`, which WRAPS a single-manifest source in a NEW index with a NEW
-  # digest — an alias carrying neither the signature nor the attestations just verified
-  # (independent review P1-01); the script passes `--prefer-index=false` for manifest sources and
-  # asserts digest equality for every source kind.
-  #
-  # HONEST SCOPE vs design §D.4 (independent review P3-01): this is ONLY the production-side
-  # extraction of the latest aliases out of the shared build — it is NOT the full §D.4
-  # protected promotion. That split (environment: production-release with required
-  # reviewers, Docker Hub + Homebrew + draft publication behind the approval) is called
-  # optional and deferrable by the design itself and remains an owned residual; Homebrew
-  # in particular is still embedded in the GoReleaser run.
+  # The build produces versioned images. Verify their signatures before aliasing
+  # latest* through scripts/alias-image-digest.sh, which requires digest equality.
+  # Single-manifest sources use --prefer-index=false to preserve their digest.
+  # This job has no protected-environment approval; Homebrew remains in the build.
   promote-latest:
     needs: [preflight, goreleaser, provenance-image]
-    # PRODUCTION TARGET GUARD (design §E.1.1) — same literal guard as the build job —
-    # AND the load-bearing PUBLISH_LATEST switch from the validated §C.4 outputs.
-    # ⛔ EL SEGUNDO DESTINO NO SE ESCRIBE, SE DECLARA POR VARIABLE, y no es estilo: este
-    # fichero VIAJA al árbol público (`.github/workflows/` se exporta), así que escribir aquí
-    # el nombre del repositorio que declara ese perfil lo publicaría — `lint:export` bloquea ese literal
-    # y tiene razón. Mismo motivo y misma cura que `aws-images.yml:306-312`.
-    #
-    # `vars.OLIVARES_RELEASE_PROFILE` sólo existe EN el repositorio que declara ese perfil, así que en el
-    # público esta rama no puede activarse ni por accidente. Y no es una llave de confianza:
-    # quien la ponga sigue chocando con el preflight, que en modo preprod exige la tupla
-    # inyectada (deny-closed), rechaza cualquier destino que nombre una superficie de
-    # producción (§C.4.6) y obliga a que el destino declarado SEA el repositorio que corre
-    # (§C.4.2). Esta condición abre la puerta; las de allí deciden quién pasa.
+    # Preflight decides whether this profile may publish latest aliases.
     if: github.event_name == 'push' && (github.repository == 'olivaresai/olivares' || vars.OLIVARES_RELEASE_PROFILE == 'preprod') && needs.preflight.outputs.publish_latest == 'true'
-    # PINNED to a GitHub-hosted runner ON PURPOSE — do NOT route this through
-    # vars.CI_RUNNER (same rationale as the build job: this touches what the
-    # published provenance covers).
+    # Use a GitHub-hosted runner for mutations covered by provenance.
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -1477,9 +1138,9 @@ jobs:
           persist-credentials: false
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
         with:
-          # EXACT pin — same reviewed binary as the build job; see the rationale there.
+          # Use the same cosign pin and signing contract as the build job.
           cosign-release: 'v2.6.4'
-      # EXECUTION-TIME INVARIANT — the actual control; see the build job's comment.
+      # Verify the installed cosign digest before using it.
       - name: assert the cosign binary is the reviewed artifact
         run: bash scripts/assert-cosign-binary.sh --isolate
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
@@ -1490,57 +1151,26 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: verify each versioned digest, then alias latest* to it
         env:
-          # Validated §C.4 outputs, never raw contexts (P1-02).
+          # Use validated preflight outputs.
           DIGEST: ${{ needs.goreleaser.outputs.digest }}
           OCI_IMAGE_REPO: ${{ needs.preflight.outputs.oci_image_repo }}
           RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
           RELEASE_VERSION: ${{ needs.preflight.outputs.release_version }}
-          # Same anchored-identity contract (and the same repo-var validation) as the
-          # OTA job's checksum verification — see that step for the full rationale.
-          # PINNED, not a repo variable: see the binding step's note. The in-step grammar
-          # checks below stay as defence in depth, but the value they guard is now fixed here.
-          # ⛔ LA IDENTIDAD SE DERIVA EN EL PASO, NO SE ESCRIBE AQUÍ. Este fichero VIAJA al
-          # árbol público, así que un nombre de repositorio privado escrito en él se publica;
-          # `aws-images.yml:306-312` resolvió exactamente esto y `lint:export` rechazó su
-          # primera versión, la que llevaba el literal. `GITHUB_REPOSITORY` da el mismo valor
-          # en ejecución y no deja rastro en el fichero. El contrato no cambia: sigue siendo la
-          # identidad de ESTE workflow sobre una etiqueta SemVer, anclada de punta a punta, y
-          # los validadores de gramática siguen siendo defensa en profundidad, ahora sobre el
-          # valor derivado — que es lo único que puede llegar hasta ellos.
+          # Derive the certificate identity from this repository, workflow and exact
+          # tag.
           CERT_OIDC_ISSUER: https://token.actions.githubusercontent.com
-          # El destino que el preflight YA validó (§C.4.1/2/6). Es la otra fuente del cruce
-          # de abajo: sin él, comprobar el ancla contra sí misma no afirmaría nada.
+          # Compare the identity repository with the independently validated
+          # destination.
           PREFLIGHT_RELEASE_REPO: ${{ needs.preflight.outputs.release_github_repo }}
         run: |
           set -euo pipefail
-          # El nombre del repositorio entra en una EXPRESIÓN REGULAR, así que se escapa
-          # primero: lleva puntos, y un punto sin escapar casa con cualquier carácter — el
-          # ancla se aflojaría justo donde tiene que ser estricta. Misma clase de caracteres
-          # que `aws-images.yml:315`.
           # shellcheck disable=SC2016 # The sed pattern needs literal regex metacharacters.
+          # Escape the repository name before using it in the certificate-identity expression.
           repo_rx="$(printf '%s' "${GITHUB_REPOSITORY}" | sed 's/[.[\*^$()+?{}|]/\\&/g')"
-          # ⛔ LA DERIVACION NO PISA UN VALOR YA PUESTO, y esto lo exigió una bateria real, no una
-          # opinion: `test-release-security-sig-guard.sh` INYECTA un ancla sin anclar para
-          # comprobar que los validadores de abajo la rechazan. Mi primera version derivaba
-          # siempre, asi que el valor inyectado se perdia, el validador veia una cadena bien
-          # formada y NUNCA rechazaba — el caso «an unanchored identity pattern refuses» pasaba a
-          # rc=0. Es decir: al derivar habia convertido en teatro justo el control que la bateria
-          # existe para probar, y la bateria lo cazo.
-          #
-          # Que se pueda inyectar NO reabre el agujero que la derivacion cierra: el agujero era
-          # una VARIABLE DE REPOSITORIO, mutable por cualquier admin sin revision. Un valor puesto
-          # en el `env:` de este paso vive en el fichero versionado y pasa por PR, que es
-          # exactamente el nivel de revision que se pedia.
-          #
-          # ⛔ THE ANCHOR NAMES THIS EXACT TAG, not any CalVer tag. Until this revision the
-          # pattern ended in `refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$`: the correct identity for
-          # "a release of ours" and the wrong one for "the release whose latest* aliases we
-          # are about to write" — an image legitimately signed for ANOTHER tag of this
-          # repository satisfied it completely. The tag (bare CalVer since the 2026-09-29
-          # tag-name correction) is escaped first: it carries dots, and an unescaped dot
-          # matches any character exactly where the anchor must be strict (same class as
-          # `aws-images.yml:315`).
           # shellcheck disable=SC2016 # The sed pattern needs literal regex metacharacters.
+          # Preserve a supplied identity pattern so validation can reject it. Otherwise derive
+          # the identity from this workflow, the running repository and the exact release tag.
+          # Escape regex metacharacters and require a fully anchored pattern.
           tag_rx="$(printf '%s' "${RELEASE_TAG}" | sed 's/[.[\*^$()+?{}|]/\\&/g')"
           CERT_IDENTITY_REGEXP="${CERT_IDENTITY_REGEXP:-^https://github\.com/${repo_rx}/\.github/workflows/release\.yml@refs/tags/${tag_rx}\$}"
           case "${CERT_IDENTITY_REGEXP}" in
@@ -1587,49 +1217,20 @@ jobs:
             verify_and_alias "${d}" "latest-${arch}"
           done
 
-  # --- Publish the signed images to the OFFICIAL registry (docker.io) ----------
-  # ghcr.io is where the pipeline BUILDS and SIGNS (goreleaser + SLSA + SBOM); this
-  # job copies the SAME content to Docker Hub *by digest* with `cosign copy`, which
-  # carries every cosign signature and in-toto attestation (SBOM, OpenVEX, SLSA
-  # provenance) along with the image — so the Docker Hub pull path verifies
-  # identically (scripts/verify-release.sh works against either registry).
-  #
-  # REGISTRY ROLES (maintainer decision, 2026-07-25):
-  # docker.io/olivaresai/olivares is the OFFICIAL PRIMARY mirror — the coordinate the
-  # chart default, the quickstarts and every doc lead with. ghcr.io/olivaresai/olivares
-  # remains the always-published FALLBACK (build/sign origin; no anonymous-pull rate
-  # limit). The mechanics did NOT change with that decision: build on ghcr.io, copy
-  # here. What changed is which coordinate the docs put first.
-  #
-  # STILL GATED on the DOCKERHUB_* secrets (BOTH-or-NEITHER): when both are absent
-  # the job no-ops and the release still succeeds — this job is deliberately not a
-  # release gate, so a missing credential never strands a signed ghcr.io release.
-  # The trade-off is real and is why the skip path emits a WARNING, not a notice:
-  # with the docs leading with Docker Hub, a skipped mirror means the published pull
-  # commands 404 until it is re-run. Treat the secrets as a release precondition.
-  # It runs only after the image, its attestations and SLSA provenance exist on ghcr.io —
-  # and after promote-latest, because the `latest` tag it copies is now created there.
+  # Build and sign in GHCR, then copy images, signatures and attestations to
+  # Docker Hub, the primary pull coordinate. GHCR remains the build origin and
+  # fallback; scripts/verify-release.sh verifies either registry.
+  # An enabled mirror requires both credentials and fails if either is missing.
+  # Copy after attestations, provenance and latest aliases are ready.
   mirror-dockerhub:
     needs: [preflight, goreleaser, provenance-image, promote-latest]
-    # GOVERNED by the validated profile (P1-02): PUBLISH_DOCKERHUB=false skips the job
-    # entirely; 'auto' (the production value) leaves the decision to the both-or-neither
-    # credential check below, which stays as defense in depth.
+    # Explicit false skips the mirror; production auto requires credentials.
     if: needs.preflight.outputs.release_mode == 'production' && needs.preflight.outputs.publish_dockerhub != 'false'
-    # PINNED to a GitHub-hosted runner ON PURPOSE — do NOT route this through
-    # vars.CI_RUNNER. SLSA provenance derives its trust from the isolation of a
-    # hosted runner: a persistent self-hosted runner serves many jobs, so a
-    # compromised build can leave tooling behind for the next one, and a verifier
-    # "has no guarantee that the code run is in fact the intended workflow unless
-    # they also trust the self-hosted runner" (slsa-framework). Moving a release
-    # here to save minutes would silently downgrade the provenance we publish.
+    # Use a GitHub-hosted runner for mutations covered by provenance.
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      # ⛔ packages: read — this job PULLS from ghcr.io to copy into Docker Hub, and only
-      # the DESTINATION was authenticated. Measured 2026-09-01, run 33485407512: the
-      # docker.io login succeeded and the copy died on the source with
-      # «GET https://ghcr.io/token?scope=…:pull: UNAUTHORIZED» — after every other job
-      # in the release had passed. A mirror needs BOTH ends.
+      # Read GHCR packages to authenticate the source pull before copying to Docker Hub.
       packages: read
     steps:
       - name: detect Docker Hub configuration
@@ -1682,45 +1283,17 @@ jobs:
           persist-credentials: false
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
         with:
-          # EXACT pin, not the action default. Measured 2026-07-25 with both binaries:
-          # this installer revision defaults to cosign v3.0.6, the OTA job's revision
-          # defaults to v2.5.2, and .goreleaser.yaml signs with --output-signature /
-          # --output-certificate. Under v3 those flags are deprecated and IGNORED when
-          # --new-bundle-format is on (it defaults to true), so the .sig/.pem files
-          # GoReleaser expects are never written; and `--tlog-upload=false` — the flag
-          # the rehearsal depends on to leave no public record — is rejected outright
-          # ("not supported with --signing-config"). Under v2.5.2 the same commands
-          # produce a signature file and `verify-blob --key` reports Verified OK.
-          # v2.6.4, not the v2.5.2 the OTA job used to resolve: v2.5.2 falls inside two
-          # published Sigstore advisories — GHSA-whqx-f9j3-ch6m ("verification accepts
-          # any valid Rekor entry under certain conditions", <=2.6.1, fixed 2.6.2) and
-          # GHSA-w6c6-c85g-mmv6 (verify-blob-attestation false positive, <=2.6.2, fixed
-          # 2.6.3). scripts/check-cosign-contract.sh proves v2.6.4 still honours the
-          # contract. Migrating to v3 bundles is a real migration (signer, verifier, OTA
-          # check and scripts/verify-release.sh) and needs its own unit.
+          # Use the same cosign pin and signing contract as the build job.
           cosign-release: 'v2.6.4'
         if: steps.cfg.outputs.enabled == 'true'
-      # EXECUTION-TIME INVARIANT — the actual control. The static gate
-      # (task lint:cosign-pins) reads the workflow YAML and is fast, but four rounds of
-      # adversarial review proved it can never be complete: `run:` is a shell, so proving
-      # "no path here can obtain an unapproved cosign" by reading YAML is proving a
-      # negative over a Turing-complete language. At THIS point the property is decidable
-      # — resolve the binary, hash it, compare against the upstream published digest. It
-      # does not matter how cosign arrived.
+      # Verify the installed cosign digest before using it.
       - name: assert the cosign binary is the reviewed artifact
-        # SAME predicate as the checkout and the installer above. Without it this step ran
-        # unconditionally in an un-checked-out workspace with no cosign installed, so a
-        # release with no Docker Hub credentials — the documented optional case — failed
-        # here instead of no-opping. Acquisition, assertion and use must share one
-        # predicate or they drift.
+        # Checkout, installer, digest assertion and copy share the same enabled
+        # predicate.
         if: steps.cfg.outputs.enabled == 'true'
         run: bash scripts/assert-cosign-binary.sh --isolate
-      # ⛔ THE SOURCE, and it goes FIRST. Making the ghcr package public would also let
-      # this pull succeed, and the package SHOULD be public — but that is a PRODUCT
-      # requirement (§7.4, anonymous pull for users), not this job's. A job that works
-      # only while a package happens to be public breaks silently the day someone flips
-      # it back, and nobody relates the two. Same `if` as the destination login: when the
-      # copy is skipped there is nothing to authenticate for.
+      # Authenticate both source and destination when mirroring is enabled.
+      # Source pulls must not depend on the package's anonymous access setting.
       - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         if: steps.cfg.outputs.enabled == 'true'
         with:
@@ -1737,8 +1310,8 @@ jobs:
       - name: cosign copy build origin -> validated production mirror — image + signatures + attestations
         if: steps.cfg.outputs.enabled == 'true'
         env:
-          # Both coordinates come from the validated §C.4 outputs. In production the
-          # mirror output is exactly docker.io/olivaresai/olivares.
+          # Both coordinates come from validated preflight outputs; the production
+          # mirror is docker.io/olivaresai/olivares.
           SRC: ${{ needs.preflight.outputs.oci_image_repo }}
           DST: ${{ needs.preflight.outputs.mirror_image_repo }}
           RELEASE_VERSION: ${{ needs.preflight.outputs.release_version }}
@@ -1750,7 +1323,7 @@ jobs:
           # Copy each multi-arch manifest tag by digest. cosign copy transfers the
           # image index, its child manifests AND the referring signatures/attestations
           # (SBOM, OpenVEX, SLSA) — so the digest and every verification are preserved.
-          for tag in "${ver}" "latest" "${ver}-fips" "${ver}-stig"; do
+          for tag in "${ver}" "latest"; do
             echo "==> mirroring ${SRC}:${tag} -> ${DST}:${tag}"
             bash scripts/cosign-verified.sh copy --force "${SRC}:${tag}" "${DST}:${tag}"
             src_manifest="$(docker buildx imagetools inspect --raw "${SRC}:${tag}" | sha256sum | cut -d' ' -f1)"
@@ -1780,10 +1353,8 @@ jobs:
             "https://hub.docker.com/v2/repositories/olivaresai/olivares/" >/dev/null
           echo "Docker Hub repository description synced from packaging/docker/dockerhub-overview.md"
 
-  # --- Exercise the image-mirror publisher without touching Docker Hub ---------
-  # Preprod uses a second package below its validated GHCR namespace. This executes
-  # the same cosign-copy path as production, including source authentication first,
-  # while the profile preflight makes the production destination unreachable.
+  # Preprod exercises the same authenticated image-copy path inside its
+  # validated GHCR namespace.
   mirror-preprod:
     needs: [preflight, goreleaser, provenance-image, promote-latest]
     if: needs.preflight.outputs.release_mode == 'preprod' && needs.preflight.outputs.publish_dockerhub == 'true'
@@ -1800,8 +1371,7 @@ jobs:
           cosign-release: 'v2.6.4'
       - name: assert the cosign binary is the reviewed artifact
         run: bash scripts/assert-cosign-binary.sh --isolate
-      # REL-85: authenticate the SOURCE before cosign copy. The same scoped token
-      # can write the sibling destination package, so no production credential enters.
+      # Authenticate the source with the scoped token that can write the sibling mirror.
       - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ghcr.io
@@ -1814,7 +1384,7 @@ jobs:
           RELEASE_VERSION: ${{ needs.preflight.outputs.release_version }}
         run: |
           set -euo pipefail
-          for tag in "${RELEASE_VERSION}" latest "${RELEASE_VERSION}-fips" "${RELEASE_VERSION}-stig"; do
+          for tag in "${RELEASE_VERSION}" latest; do
             echo "==> mirroring ${SRC}:${tag} -> ${DST}:${tag}"
             bash scripts/cosign-verified.sh copy --force "${SRC}:${tag}" "${DST}:${tag}"
             src_manifest="$(docker buildx imagetools inspect --raw "${SRC}:${tag}" | sha256sum | cut -d' ' -f1)"
@@ -1826,103 +1396,32 @@ jobs:
             echo "${tag} sha256:${src_manifest} — identical manifest bytes"
           done
 
-  # --- Phase 2: verify the off-box signature, then attach it ----------------------
-  # This job receives a signature (public data), never private key material. The
-  # protected `ota-release-ceremony` environment requires maintainer approval.
-  #
-  # AUTHORIZATION CONTRACT OF THIS DISPATCH — declared separately from the §C.4 tag-push
-  # preflight, deliberately (independent review P1-02 adjudication). The push-path preflight
-  # asserts ref==tag identity, which a phase-2 dispatch cannot satisfy or need: this
-  # ceremony runs AFTER the tag run, against an existing draft. Its authorization root is:
-  #   1. the protected `ota-release-ceremony` environment — a human maintainer approves
-  #      every run before any step executes;
-  #   2. the literal production guard below — the only repository this job may run in is
-  #      the one its GITHUB_TOKEN can write to;
-  #   3. content authorization is CRYPTOGRAPHIC, not positional: release_tag is validated
-  #      against the same vMAJOR.MINOR.PATCH grammar the preflight pins (below) and only
-  #      selects WHICH draft to verify. La FIRMA ya no es un input (orden 37): la produce
-  #      este job con la clave del environment protegido, y sigue teniendo que verificar
-  #      bajo el ancla pública OTA sobre un manifiesto atado digest a digest al
-  #      checksums.txt verificado por identidad cosign — el mismo cruce de antes, sólo que
-  #      ahora nadie lo pega a mano. Una firma hostil sigue fallando esas comprobaciones.
-  #      verifications; neither input can redirect a destination.
-  # The §C.4 switches do not govern this job: PUBLISH_OTA_STABLE gates the PHASE-1
-  # stable-manifest draft upload in the goreleaser job; phase 2 only attaches a signature
-  # to bytes phase 1 produced, and cannot exist without them.
+  # AUTHORIZATION CONTRACT OF THIS DISPATCH
+  # Phase 2 verifies and publishes an existing draft using protected approval
+  # and repository/profile guards. Tag and commit inputs select the candidate;
+  # they cannot redirect destinations. Verify its pipeline signature and artifact
+  # digests before signing with the protected OTA key.
   publish-ota-manifest:
     needs: [release-environment-policy]
-    # PRODUCTION TARGET GUARD (design §E.1.1). Every mutation below is hard-coded to
-    # olivaresai/olivares: the GoReleaser release target, the GHCR image repository,
-    # the Homebrew tap and the stable OTA assets. A `v*` tag pushed in ANY other
-    # repository — a fork, or the disposable rehearsal target — would otherwise start
-    # this workflow and try to publish there with that repository's token. The literal
-    # guard is what makes it safe to copy this source into the rehearsal repo at all.
-    # ⛔ EL SEGUNDO DESTINO NO SE ESCRIBE, SE DECLARA POR VARIABLE, y no es estilo: este
-    # fichero VIAJA al árbol público (`.github/workflows/` se exporta), así que escribir aquí
-    # el nombre del repositorio que declara ese perfil lo publicaría — `lint:export` bloquea ese literal
-    # y tiene razón. Mismo motivo y misma cura que `aws-images.yml:306-312`.
-    #
-    # `vars.OLIVARES_RELEASE_PROFILE` sólo existe EN el repositorio que declara ese perfil, así que en el
-    # público esta rama no puede activarse ni por accidente. Y no es una llave de confianza:
-    # quien la ponga sigue chocando con el preflight, que en modo preprod exige la tupla
-    # inyectada (deny-closed), rechaza cualquier destino que nombre una superficie de
-    # producción (§C.4.6) y obliga a que el destino declarado SEA el repositorio que corre
-    # (§C.4.2). Esta condición abre la puerta; las de allí deciden quién pasa.
     if: github.event_name == 'workflow_dispatch' && (github.repository == 'olivaresai/olivares' || vars.OLIVARES_RELEASE_PROFILE == 'preprod')
-    # PINNED to a GitHub-hosted runner ON PURPOSE — do NOT route this through
-    # vars.CI_RUNNER. SLSA provenance derives its trust from the isolation of a
-    # hosted runner: a persistent self-hosted runner serves many jobs, so a
-    # compromised build can leave tooling behind for the next one, and a verifier
-    # "has no guarantee that the code run is in fact the intended workflow unless
-    # they also trust the self-hosted runner" (slsa-framework). Moving a release
-    # here to save minutes would silently downgrade the provenance we publish.
+    # Use a GitHub-hosted runner for signing and publication.
     runs-on: ubuntu-latest
-    # ⛔ EL NOMBRE SE QUEDA, Y ESO SE MIDIÓ ANTES DE DECIDIRLO. La orden 5 hablaba de un
-    # environment `production`, y cambiar esta línea a ese nombre parecía cosmético. No lo era:
-    # `gh api repos/<org>/<repo>/environments` devuelve `ota-release-ceremony` con
-    # `required_reviewers` y NINGÚN `production`. Un job que declara un environment inexistente
-    # no falla — Actions lo crea al vuelo, SIN reglas —, así que el renombrado habría movido la
-    # firma automática de un environment con revisor obligatorio a uno sin ninguno, en silencio.
-    #
-    # Y eso habría vaciado la mitigación entera de la orden 37: lo que hace aceptable que CI
-    # firme sola no es el nombre del environment, son sus revisores. El nombre describe la
-    # ceremonia manual que la orden retira; la protección es lo que se queda.
-    #
-    # En preprod se usa `preprod`, sin puerta humana a propósito. Medido de nuevo el
-    # 2026-09-01: el environment existe y lleva cero protection_rules; no depende de que
-    # Actions lo cree implícitamente.
+    # Keep the protected ota-release-ceremony environment name. A new name may
+    # create an environment without approval rules. Preprod uses its own environment.
     environment:
-      # ⛔ EL PERFIL VA ATADO AL REPOSITORIO, y esa conjuncion es el arreglo de un agujero que
-      # yo mismo abri. Con la forma anterior —solo `vars.OLIVARES_RELEASE_PROFILE == 'preprod'`—
-      # un admin del repositorio de PRODUCCION podia poner esa variable y conseguir dos cosas a
-      # la vez: que el guard del job pasara por su primer disyuntor (que mira el repositorio) y
-      # que este environment resolviera a `preprod`, que en produccion NO EXISTE. Actions habria
-      # creado uno al vuelo SIN reglas, y la firma automatica habria arrancado sin revisor.
-      #
-      # Es exactamente el peligro que este mismo fichero documenta doce lineas mas arriba para
-      # justificar que el nombre no se renombre — reintroducido detras de una variable que se
-      # pone sin revision de nadie. Atado al repositorio, en produccion `preprod` es inalcanzable.
+      # The production repository always uses ota-release-ceremony.
+      # Only a different repository with the preprod profile may select preprod.
       name: ${{ (github.repository != 'olivaresai/olivares' && vars.OLIVARES_RELEASE_PROFILE == 'preprod') && 'preprod' || 'ota-release-ceremony' }}
     permissions:
       contents: write
-      # ⛔ ONE EXTRA READ, FOR ONE QUESTION. The finalizer must establish that the artifact
-      # set it is about to publish was produced by a COMPLETED, SUCCESSFUL phase-1 run of
-      # this workflow in this repository — the build context names the run and attempt, and
-      # reading a workflow run requires `actions: read`. Without it the ceremony could
-      # authenticate the source and the bytes and still not know which run made them, which
-      # is exactly the gap an unrelated successful run walks through. It reads; it writes
-      # nothing, and it does not widen `contents`.
+      # Read the producing phase-1 run and attempt to require completed, successful
+      # status.
       actions: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          # FULLY QUALIFIED, and it is load-bearing rather than tidy. An unqualified `v26.8.0`
-          # lets the action resolve `refs/remotes/origin/v26.8.0` AHEAD of `refs/tags/v26.8.0`,
-          # so a branch that merely shares the tag's name wins. Every fact this ceremony treats
-          # as immutable comes out of this checkout — above all the advisories declaration that
-          # authorizes it — and a branch is not immutable: it would be reading the release's
-          # own truth from a commit that is not the release (the model audit, 2026-08-10,
-          # P1-02). Phase 1 runs on the tag; phase 2 must stand on the same object.
+          # Use the fully qualified tag ref so a same-named branch cannot win checkout.
+          # Phase 2 must use the object phase 1 built.
           ref: refs/tags/${{ inputs.release_tag }}
           fetch-depth: 0
           persist-credentials: false
@@ -1932,55 +1431,18 @@ jobs:
           cache: ${{ runner.environment == 'github-hosted' }}
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
         with:
-          # EXACT pin, not the action default. Measured 2026-07-25 with both binaries:
-          # this installer revision defaults to cosign v3.0.6, the OTA job's revision
-          # defaults to v2.5.2, and .goreleaser.yaml signs with --output-signature /
-          # --output-certificate. Under v3 those flags are deprecated and IGNORED when
-          # --new-bundle-format is on (it defaults to true), so the .sig/.pem files
-          # GoReleaser expects are never written; and `--tlog-upload=false` — the flag
-          # the rehearsal depends on to leave no public record — is rejected outright
-          # ("not supported with --signing-config"). Under v2.5.2 the same commands
-          # produce a signature file and `verify-blob --key` reports Verified OK.
-          # v2.6.4, not the v2.5.2 the OTA job used to resolve: v2.5.2 falls inside two
-          # published Sigstore advisories — GHSA-whqx-f9j3-ch6m ("verification accepts
-          # any valid Rekor entry under certain conditions", <=2.6.1, fixed 2.6.2) and
-          # GHSA-w6c6-c85g-mmv6 (verify-blob-attestation false positive, <=2.6.2, fixed
-          # 2.6.3). scripts/check-cosign-contract.sh proves v2.6.4 still honours the
-          # contract. Migrating to v3 bundles is a real migration (signer, verifier, OTA
-          # check and scripts/verify-release.sh) and needs its own unit.
+          # Use the same cosign pin and signing contract as the build job.
           cosign-release: 'v2.6.4'
-      # --- SCP-01 prerequisite: the SLSA provenance verifier -------------------------------
-      # ORDERING INVARIANT: this is the LAST `uses:` of the job. Every later `run:` consumes
-      # the tree inside the untouched-checkout assertion below, and no step boundary — so no
-      # `uses:` — may be scheduled inside that window. An installer placed later would open
-      # the gap that guard exists to close.
-      #
-      # WHY THE JOB NEEDS IT: scripts/release-finalize-stable.sh calls
-      # scripts/verify-release.sh --strict-publication, which FAILS when slsa-verifier is not
-      # on PATH. The check is never skipped, so the tool is a deployment prerequisite.
-      #
-      # SHA-pinned to the commit tag v2.7.1 points at. The SLSA generators elsewhere in this
-      # file keep semver-tag pins because slsa-verifier validates the builder ID against that
-      # tag; this installer is an ordinary action and takes the ordinary SHA pin.
-      #
-      # The action downloads a bootstrap verifier, refuses it unless its SHA-256 equals a
-      # constant compiled into the action, and only then makes it executable; it then verifies
-      # the requested version's own upstream provenance before placing it on PATH. Nothing
-      # downloaded is executed before its integrity is established. `github-token` stays at its
-      # default: under a SHA pin the action resolves the version through the tags API.
+      # Install slsa-verifier before the checkout-integrity window; no later setup
+      # action may precede code consumed from that verified checkout.
+      # Strict publication verification requires it. Keep its action SHA-pinned;
+      # SLSA generators use tags for builder identities.
       - uses: slsa-framework/slsa-verifier/actions/installer@ea584f4502babc6f60d9bc799dbbb13c1caa9ee6 # v2.7.1
 
-      # EXECUTION-TIME INVARIANT, the same doctrine as assert-cosign-binary.sh: the binary that
-      # will actually run is hashed, not trusted by name. Under a SHA pin the action resolves
-      # the version by returning the FIRST tag whose commit matches, and v2.7.1-rc.2 points at
-      # the SAME commit as v2.7.1; that ordering is not a documented guarantee and an rc build
-      # is not the reviewed artifact. Hashing makes the ordering stop mattering.
+      # Check the installed verifier digest and version before relying on its results.
       - name: assert the slsa-verifier binary is the reviewed artifact
         env:
-          # Upstream published digest for v2.7.1 linux/amd64, agreed by SHA256SUM.md on the
-          # upstream main branch, the release-asset digest field, and sha256sum of the asset.
-          # The installer supports GitHub-provided Linux runners only and this job is pinned to
-          # ubuntu-latest, so one platform digest is the complete table.
+          # Upstream v2.7.1 linux/amd64 digest for this GitHub-hosted Linux runner.
           EXPECTED_SLSA_VERIFIER_SHA256: '946dbec729094195e88ef78e1734324a27869f03e2c6bd2f61cbc06bd5350339'
           EXPECTED_SLSA_VERIFIER_VERSION: 'v2.7.1'
         run: |
@@ -2031,13 +1493,7 @@ jobs:
             exit 1
           }
           echo "slsa-verifier verified: ${abs} (${EXPECTED_SLSA_VERIFIER_VERSION}, sha256 ${digest})"
-      # EXECUTION-TIME INVARIANT — the actual control. The static gate
-      # (task lint:cosign-pins) reads the workflow YAML and is fast, but four rounds of
-      # adversarial review proved it can never be complete: `run:` is a shell, so proving
-      # "no path here can obtain an unapproved cosign" by reading YAML is proving a
-      # negative over a Turing-complete language. At THIS point the property is decidable
-      # — resolve the binary, hash it, compare against the upstream published digest. It
-      # does not matter how cosign arrived.
+      # Check the workspace after setup actions and before any tracked script runs.
       - name: assert the checkout is untouched before anything consumes it (phase 2)
         env:
           RELEASE_TAG: ${{ inputs.release_tag }}
@@ -2090,60 +1546,24 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_TAG: ${{ inputs.release_tag }}
           RELEASE_COMMIT: ${{ inputs.release_commit }}
-          # PINNED HERE, like the digest, and for the same reason: validating the GRAMMAR of a
-          # repo variable does not make it immutable. `vars.OLIVARES_CERT_IDENTITY` is settable
-          # by any repo admin without review, and an identity that passes every shape check can
-          # still name another workflow or another ref. The identity that signs checksums.txt
-          # is this workflow on a SemVer tag; nothing else may satisfy it.
-          # ⛔ LA IDENTIDAD SE DERIVA EN EL PASO, NO SE ESCRIBE AQUÍ. Este fichero VIAJA al
-          # árbol público, así que un nombre de repositorio privado escrito en él se publica;
-          # `aws-images.yml:306-312` resolvió exactamente esto y `lint:export` rechazó su
-          # primera versión, la que llevaba el literal. `GITHUB_REPOSITORY` da el mismo valor
-          # en ejecución y no deja rastro en el fichero. El contrato no cambia: sigue siendo la
-          # identidad de ESTE workflow sobre una etiqueta SemVer, anclada de punta a punta, y
-          # los validadores de gramática siguen siendo defensa en profundidad, ahora sobre el
-          # valor derivado — que es lo único que puede llegar hasta ellos.
+          # Derive the certificate identity from this repository, workflow and exact
+          # tag.
           CERT_OIDC_ISSUER: https://token.actions.githubusercontent.com
-          # PINNED IN THIS VERSIONED FILE, not in a repo variable. `vars.OLIVARES_COSIGN_SHA256`
-          # did not exist — `gh variable get` answers NOT FOUND — so the ceremony denied
-          # itself; and had it existed, a repo variable is admin-mutable without review, so
-          # whoever could swap the binary could swap the digest that vouches for it.
-          #
-          # This is the same approved digest the repository already pins for cosign v2.6.4
-          # linux-amd64 in scripts/assert-cosign-binary.sh, taken there from the upstream
-          # signed checksums file. Phase 2 runs on ubuntu-latest, so linux-amd64 is the
-          # artefact this step can see; a different runner arch fails the comparison rather
-          # than silently accepting an unpinned binary.
+          # Pin the cosign linux-amd64 digest here and in
+          # scripts/assert-cosign-binary.sh.
+          # A repository variable could change without review; validation requires the
+          # versioned digest.
           COSIGN_EXPECTED_SHA256: 309779b0c4e409186b0a80daba99041fe2cf65a920ce645013901df6211895a9
           COSIGN_EXPECTED_VERSION: v2.6.4
         run: |
           set -euo pipefail
-          # El nombre del repositorio entra en una EXPRESIÓN REGULAR, así que se escapa
-          # primero: lleva puntos, y un punto sin escapar casa con cualquier carácter — el
-          # ancla se aflojaría justo donde tiene que ser estricta. Misma clase de caracteres
-          # que `aws-images.yml:315`.
           # shellcheck disable=SC2016 # The sed pattern needs literal regex metacharacters.
+          # Escape the repository name before using it in the certificate-identity expression.
           repo_rx="$(printf '%s' "${GITHUB_REPOSITORY}" | sed 's/[.[\*^$()+?{}|]/\\&/g')"
-          # ⛔ LA DERIVACION NO PISA UN VALOR YA PUESTO, y esto lo exigió una bateria real, no una
-          # opinion: `test-release-security-sig-guard.sh` INYECTA un ancla sin anclar para
-          # comprobar que los validadores de abajo la rechazan. Mi primera version derivaba
-          # siempre, asi que el valor inyectado se perdia, el validador veia una cadena bien
-          # formada y NUNCA rechazaba — el caso «an unanchored identity pattern refuses» pasaba a
-          # rc=0. Es decir: al derivar habia convertido en teatro justo el control que la bateria
-          # existe para probar, y la bateria lo cazo.
-          #
-          # Que se pueda inyectar NO reabre el agujero que la derivacion cierra: el agujero era
-          # una VARIABLE DE REPOSITORIO, mutable por cualquier admin sin revision. Un valor puesto
-          # en el `env:` de este paso vive en el fichero versionado y pasa por PR, que es
-          # exactamente el nivel de revision que se pedia.
-          # ⛔ Y EL ANCLA NOMBRA ESTA ETIQUETA, NO CUALQUIER SEMVER. Hasta esta revision el
-          # patron terminaba en `refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$`, que es la identidad
-          # correcta para «una release NUESTRA» y la equivocada para «la release que estamos a
-          # punto de PUBLICAR»: un checksums.txt legitimamente firmado para OTRA etiqueta de
-          # este mismo repositorio la satisface entera. La etiqueta se escapa primero — lleva
-          # puntos, y un punto sin escapar casa con cualquier caracter justo donde el ancla
-          # tiene que ser estricta (misma clase que `aws-images.yml:315`).
           # shellcheck disable=SC2016 # The sed pattern needs literal regex metacharacters.
+          # Preserve a supplied identity pattern so validation can reject it. Otherwise derive
+          # the identity from this workflow, the running repository and the exact release tag.
+          # Escape regex metacharacters and require a fully anchored pattern.
           tag_rx="$(printf '%s' "${RELEASE_TAG}" | sed 's/[.[\*^$()+?{}|]/\\&/g')"
           CERT_IDENTITY_REGEXP="${CERT_IDENTITY_REGEXP:-^https://github\.com/${repo_rx}/\.github/workflows/release\.yml@refs/tags/${tag_rx}\$}"
           # ⛔ IDENTITY, CRYPTOGRAPHICALLY, BEFORE ANY CHECKOUT CODE RUNS.
@@ -2218,8 +1638,8 @@ jobs:
           *)
             echo "ERROR: could not read a version from ${GH_BIN}: '${gh_ver_raw}' (exit ${gh_ver_rc})." >&2
             echo "A tool that moves release assets must identify itself. No tracked code has run." >&2
-            echo "  126 = no ejecutable o montaje noexec · 127 = interprete del shebang ausente" >&2
-            echo "  141 = SIGPIPE · 0 con cadena vacia = arranco y no imprimio nada" >&2
+            echo "  126 = not executable or a noexec mount; 127 = missing shebang interpreter" >&2
+            echo "  141 = SIGPIPE; 0 with an empty string = started but printed nothing" >&2
             ls -l -- "${GH_BIN}" >&2 || true
             exit 1
             ;;
@@ -2410,22 +1830,9 @@ jobs:
             exit 1
           fi
           echo "checkout bound to phase 1 commit ${phase1_oid}, on a cosign-verified checksums.txt"
-      # ⛔ RECONCILE THE RELEASE STATE BEFORE ANY SIGNER OR CLOBBER RUNS.
-      #
-      # Everything from the next step onward either signs with the protected key or uploads
-      # with `--clobber`, and `gh`'s own manual says of that flag: "existing assets are
-      # deleted before new assets are uploaded". Against a release that is ALREADY PUBLISHED
-      # that is a public artifact deleted on the way to replacing delivered bytes — the one
-      # effect in this chain that cannot be undone. The custody script refuses it too, but
-      # it refuses AFTER the signing step has already run; a re-run of a completed ceremony
-      # would still re-sign.
-      #
-      # So the state is read here, once, before anything. A published release is not a
-      # failure of this dispatch and it is not a success either: it is a ceremony that
-      # cannot perform its declared operation, and the honest answer is to stop and say what
-      # was observed. Verifying that published candidate WITHOUT repeating any effect is
-      # what scripts/release-finalize-stable.sh does when it finds a published release; the
-      # message below names it so the operator's next action is one command, not a guess.
+      # Check draft state before signing or replacing assets; refuse a published
+      # or unreadable release. scripts/release-finalize-stable.sh can inspect a
+      # published candidate without repeating publication.
       - name: reconcile the release state before signing or clobbering
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -2475,15 +1882,15 @@ jobs:
           # Same tag grammar the §C.4 preflight pins for production (the old check
           # accepted any v* string). Prereleases are deliberately outside the contract —
           # see the policy note at PROD_TAG_RE in scripts/release-preflight.sh.
-          # BARE CalVer since the 2026-09-29 correction. A v-prefixed input gets its own
+          # Bare MAJOR.MINOR under the release version policy. A v-prefixed input gets its own
           # message because the reflexive mistake is to paste the old shape, and "wrong
           # shape" alone sends the operator to the grammar instead of to the prefix.
           if [[ "${RELEASE_TAG}" =~ ^v[0-9] ]]; then
-            echo "ERROR: release_tag '${RELEASE_TAG}' carries a v prefix. Release tags are bare CalVer (YY.M[.N], e.g. 26.10.0) since the 2026-09-29 tag-name correction." >&2
+            echo "ERROR: release_tag '${RELEASE_TAG}' carries a v prefix. Release tags are bare MAJOR.MINOR (e.g. 1.0) under the release version policy." >&2
             exit 1
           fi
-          [[ "${RELEASE_TAG}" =~ ^[0-9]{2}\.([1-9]|1[0-2])(\.(0|[1-9][0-9]*))?$ ]] || { echo "ERROR: release_tag must be bare CalVer YY.M[.N] with a real month 1-12 and no leading zeroes (e.g. 26.10.0), got '${RELEASE_TAG}'" >&2; exit 1; }
-          version="${RELEASE_TAG#v}"
+          [[ "${RELEASE_TAG}" =~ ^[0-9]+\.[0-9]+$ ]] || { echo "ERROR: release_tag must be bare MAJOR.MINOR (e.g. 1.0), got '${RELEASE_TAG}'" >&2; exit 1; }
+          version="${RELEASE_TAG}"
           mkdir -p ota-dist
           # ALL platform archives, not just linux/amd64: the cross-check below binds
           # EVERY manifest artifact to its published bytes, so every one must be here.
@@ -2509,64 +1916,24 @@ jobs:
               exit 1; }
           done
 
-      # --- The strong link of the chain, brought INTO the OTA flow -------------------
-      # checksums.txt is signed in CI by the keyless cosign identity (goreleaser
-      # `signs:`) and is the subject of the SLSA provenance. The OTA manifest is signed
-      # off-box by the custodian. Nothing previously forced the two to agree, so an
-      # actor with contents:write could overwrite the draft stable-manifest.json between
-      # phase 1 and the ceremony with the digests of a malicious archive: the custodian
-      # would sign valid JSON, this job would pass, and clients would OTA to it.
-      # Verifying cosign here and then cross-checking every digest closes that window.
+      # Authenticate checksums.txt with the release identity, then cross-check the
+      # manifest and every archive before OTA signing.
       - name: verify the cosign signature over checksums.txt
         env:
-          # Consumed by the identity derivation below, which now pins THIS tag instead of
-          # any SemVer tag in this repository's release workflow.
+          # Pin verification to this exact release tag.
           RELEASE_TAG: ${{ inputs.release_tag }}
-          # FULLY ANCHORED. cosign matches --certificate-identity-regexp with an
-          # UNANCHORED Go regexp, so the old '^https://github.com/olivaresai/olivares'
-          # also accepted `…/olivares-anything/…`, any workflow file in the repo and
-          # any branch — i.e. any Sigstore identity whose SAN merely started with that
-          # prefix. The identity that signs checksums.txt is exactly this workflow
-          # running on a version tag; nothing else may satisfy the check.
-          # PINNED, not a repo variable: see the binding step's note. The in-step grammar
-          # checks below stay as defence in depth, but the value they guard is now fixed here.
-          # ⛔ LA IDENTIDAD SE DERIVA EN EL PASO, NO SE ESCRIBE AQUÍ. Este fichero VIAJA al
-          # árbol público, así que un nombre de repositorio privado escrito en él se publica;
-          # `aws-images.yml:306-312` resolvió exactamente esto y `lint:export` rechazó su
-          # primera versión, la que llevaba el literal. `GITHUB_REPOSITORY` da el mismo valor
-          # en ejecución y no deja rastro en el fichero. El contrato no cambia: sigue siendo la
-          # identidad de ESTE workflow sobre una etiqueta SemVer, anclada de punta a punta, y
-          # los validadores de gramática siguen siendo defensa en profundidad, ahora sobre el
-          # valor derivado — que es lo único que puede llegar hasta ellos.
+          # Derive the certificate identity from this repository, workflow and exact
+          # tag.
           CERT_OIDC_ISSUER: https://token.actions.githubusercontent.com
         run: |
           set -euo pipefail
-          # El nombre del repositorio entra en una EXPRESIÓN REGULAR, así que se escapa
-          # primero: lleva puntos, y un punto sin escapar casa con cualquier carácter — el
-          # ancla se aflojaría justo donde tiene que ser estricta. Misma clase de caracteres
-          # que `aws-images.yml:315`.
           # shellcheck disable=SC2016 # The sed pattern needs literal regex metacharacters.
+          # Escape the repository name before using it in the certificate-identity expression.
           repo_rx="$(printf '%s' "${GITHUB_REPOSITORY}" | sed 's/[.[\*^$()+?{}|]/\\&/g')"
-          # ⛔ LA DERIVACION NO PISA UN VALOR YA PUESTO, y esto lo exigió una bateria real, no una
-          # opinion: `test-release-security-sig-guard.sh` INYECTA un ancla sin anclar para
-          # comprobar que los validadores de abajo la rechazan. Mi primera version derivaba
-          # siempre, asi que el valor inyectado se perdia, el validador veia una cadena bien
-          # formada y NUNCA rechazaba — el caso «an unanchored identity pattern refuses» pasaba a
-          # rc=0. Es decir: al derivar habia convertido en teatro justo el control que la bateria
-          # existe para probar, y la bateria lo cazo.
-          #
-          # Que se pueda inyectar NO reabre el agujero que la derivacion cierra: el agujero era
-          # una VARIABLE DE REPOSITORIO, mutable por cualquier admin sin revision. Un valor puesto
-          # en el `env:` de este paso vive en el fichero versionado y pasa por PR, que es
-          # exactamente el nivel de revision que se pedia.
-          # ⛔ Y EL ANCLA NOMBRA ESTA ETIQUETA, NO CUALQUIER SEMVER. Hasta esta revision el
-          # patron terminaba en `refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$`, que es la identidad
-          # correcta para «una release NUESTRA» y la equivocada para «la release que estamos a
-          # punto de PUBLICAR»: un checksums.txt legitimamente firmado para OTRA etiqueta de
-          # este mismo repositorio la satisface entera. La etiqueta se escapa primero — lleva
-          # puntos, y un punto sin escapar casa con cualquier caracter justo donde el ancla
-          # tiene que ser estricta (misma clase que `aws-images.yml:315`).
           # shellcheck disable=SC2016 # The sed pattern needs literal regex metacharacters.
+          # Preserve a supplied identity pattern so validation can reject it. Otherwise derive
+          # the identity from this workflow, the running repository and the exact release tag.
+          # Escape regex metacharacters and require a fully anchored pattern.
           tag_rx="$(printf '%s' "${RELEASE_TAG}" | sed 's/[.[\*^$()+?{}|]/\\&/g')"
           CERT_IDENTITY_REGEXP="${CERT_IDENTITY_REGEXP:-^https://github\.com/${repo_rx}/\.github/workflows/release\.yml@refs/tags/${tag_rx}\$}"
           # The identity pattern is a REPO VARIABLE, i.e. settable by anyone with repo
@@ -2639,17 +2006,15 @@ jobs:
       - name: sign the OTA manifest in-job and bind it to the signed release
         env:
           RELEASE_TAG: ${{ inputs.release_tag }}
-          # ⛔ SECRETO DE ENVIRONMENT, NO DE REPOSITORIO. Este job declara
-          # `environment: ota-release-ceremony`, así que esta clave sólo es alcanzable
-          # después de que ese environment apruebe. Un secreto de REPOSITORIO lo leería
-          # cualquier workflow del repo, sin que nadie apruebe nada.
+          # The OTA key must be an environment secret available only after protected
+          # approval.
           OTA_PRIVATE_KEY: ${{ secrets.OLIVARES_OTA_PRIVATE_KEY }}
           OLIVARES_LICENSE_PUBKEY: ${{ vars.OLIVARES_LICENSE_PUBKEY }}
           OLIVARES_OTA_PUBKEY: ${{ vars.OLIVARES_OTA_PUBKEY }}
         run: |
           set -euo pipefail
           sh scripts/check-release-pubkey.sh
-          version="${RELEASE_TAG#v}"
+          version="${RELEASE_TAG}"
 
 
           # --- La firma se produce AQUÍ (orden 37) -----------------------------------
@@ -2793,10 +2158,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_TAG: ${{ inputs.release_tag }}
           RELEASE_COMMIT: ${{ inputs.release_commit }}
-          # Consumed by the finalizer at the end of this same scalar. The OTA anchor is a
-          # PUBLIC repo variable (docs/RELEASE-VERIFICATION.md); the profile pair is what
-          # lets an isolated preprod destination state its own pointer behaviour instead of
-          # inheriting production's.
+          # The finalizer uses the public OTA anchor and the profile's latest-pointer
+          # policy.
           OLIVARES_OTA_PUBKEY: ${{ vars.OLIVARES_OTA_PUBKEY }}
           OLIVARES_RELEASE_PROFILE: ${{ vars.OLIVARES_RELEASE_PROFILE }}
           OLIVARES_PREPROD_MAKE_LATEST: ${{ vars.OLIVARES_PREPROD_MAKE_LATEST }}
@@ -2899,7 +2262,7 @@ jobs:
           fi
 
           # Same classifier as the producer, so the two cannot drift apart.
-          version="${RELEASE_TAG#v}"
+          version="${RELEASE_TAG}"
           [ -n "${version}" ] || { echo "ERROR: empty version from ${RELEASE_TAG}" >&2; exit 1; }
           set +e
           declaration="$(bash scripts/release-ota-channel.sh "${version}")"

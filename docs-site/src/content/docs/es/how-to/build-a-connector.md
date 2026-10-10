@@ -212,8 +212,8 @@ confianza.
 - El cableado externo cubre **fuentes de observación** y **content sources**; un
   connector de salida se construye y publica de forma idéntica, pero la
   composición de notify todavía no carga plugins de salida externos.
-- Los **módulos** fuera de proceso no están disponibles (el proto está congelado, el
-  pegamento del host queda intencionadamente sin cablear).
+- Los **módulos** fuera de proceso no están disponibles y el transporte está obsoleto
+  (el cable sigue congelado; el pegamento del host nunca se cableó).
 - El sum type de observación está **sellado**: emites edges, cost samples y findings —
   con vocabularios de cadena abiertos — pero no puedes definir nuevos tipos de
   observación.

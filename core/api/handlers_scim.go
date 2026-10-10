@@ -5,7 +5,6 @@
 package api
 
 import (
-	"encoding/json"
 	"errors"
 	"net/http"
 	"strings"
@@ -57,11 +56,7 @@ func scimBaseURL(r *http.Request) string {
 }
 
 func writeSCIM(w http.ResponseWriter, status int, v any) {
-	w.Header().Set("Content-Type", scim.ContentType)
-	w.WriteHeader(status)
-	if v != nil {
-		_ = json.NewEncoder(w).Encode(v)
-	}
+	WriteJSON(w, status, v, scim.ContentType)
 }
 
 func writeSCIMError(w http.ResponseWriter, e scim.Error) {
@@ -114,12 +109,8 @@ func scimInput(in scim.InboundUser) auth.SCIMUserInput {
 
 // --- Users -------------------------------------------------------------------
 
-func (s *Server) scimListUsers(w http.ResponseWriter, r *http.Request) {
-	_, tenant, aerr := s.scimAuthz(r, "user:read")
-	if aerr != nil {
-		writeSCIMError(w, *aerr)
-		return
-	}
+func (s *Server) scimListUsers(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	tenant := mc.Tenant
 	page := scim.ParsePage(r.URL.Query().Get("startIndex"), r.URL.Query().Get("count"), r.URL.Query().Has("count"))
 	filterStr := strings.TrimSpace(r.URL.Query().Get("filter"))
 
@@ -180,15 +171,12 @@ func (s *Server) scimListUsers(w http.ResponseWriter, r *http.Request) {
 	writeSCIM(w, http.StatusOK, scim.ListResponse(len(matched), page, resources))
 }
 
-func (s *Server) scimCreateUser(w http.ResponseWriter, r *http.Request) {
-	p, tenant, aerr := s.scimAuthz(r, "user:write")
-	if aerr != nil {
-		writeSCIMError(w, *aerr)
-		return
-	}
+func (s *Server) scimCreateUser(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	p := mc.Principal
+	tenant := mc.Tenant
 	var body scim.UserBodyType
 	if err := decodeSCIMBody(w, r, &body); err != nil {
-		writeSCIMError(w, scim.NewError(http.StatusBadRequest, scim.TypeInvalidSyntax, "invalid SCIM body"))
+		writeSCIMError(w, scim.NewError(http.StatusBadRequest, scim.TypeInvalidSyntax, RequestBodyErrorMessage(err, "invalid SCIM body")))
 		return
 	}
 	in := scim.DecodeUser(body)
@@ -240,12 +228,8 @@ func (s *Server) scimCreateUser(w http.ResponseWriter, r *http.Request) {
 	writeSCIM(w, status, scim.EncodeUser(u, usersURL))
 }
 
-func (s *Server) scimGetUser(w http.ResponseWriter, r *http.Request) {
-	_, tenant, aerr := s.scimAuthz(r, "user:read")
-	if aerr != nil {
-		writeSCIMError(w, *aerr)
-		return
-	}
+func (s *Server) scimGetUser(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	tenant := mc.Tenant
 	u, err := s.authr.SCIMGetMember(r.Context(), tenant, model.ID(chi.URLParam(r, "id")))
 	if err != nil {
 		s.scimNotFoundOr(w, r, err)
@@ -254,16 +238,13 @@ func (s *Server) scimGetUser(w http.ResponseWriter, r *http.Request) {
 	writeSCIM(w, http.StatusOK, scim.EncodeUser(u, scimUsersURL(r)))
 }
 
-func (s *Server) scimReplaceUser(w http.ResponseWriter, r *http.Request) {
-	p, tenant, aerr := s.scimAuthz(r, "user:write")
-	if aerr != nil {
-		writeSCIMError(w, *aerr)
-		return
-	}
+func (s *Server) scimReplaceUser(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	p := mc.Principal
+	tenant := mc.Tenant
 	id := model.ID(chi.URLParam(r, "id"))
 	var body scim.UserBodyType
 	if err := decodeSCIMBody(w, r, &body); err != nil {
-		writeSCIMError(w, scim.NewError(http.StatusBadRequest, scim.TypeInvalidSyntax, "invalid SCIM body"))
+		writeSCIMError(w, scim.NewError(http.StatusBadRequest, scim.TypeInvalidSyntax, RequestBodyErrorMessage(err, "invalid SCIM body")))
 		return
 	}
 	in := scim.DecodeUser(body)
@@ -275,12 +256,9 @@ func (s *Server) scimReplaceUser(w http.ResponseWriter, r *http.Request) {
 	writeSCIM(w, http.StatusOK, scim.EncodeUser(u, scimUsersURL(r)))
 }
 
-func (s *Server) scimPatchUser(w http.ResponseWriter, r *http.Request) {
-	p, tenant, aerr := s.scimAuthz(r, "user:write")
-	if aerr != nil {
-		writeSCIMError(w, *aerr)
-		return
-	}
+func (s *Server) scimPatchUser(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	p := mc.Principal
+	tenant := mc.Tenant
 	id := model.ID(chi.URLParam(r, "id"))
 	cur, err := s.authr.SCIMGetMember(r.Context(), tenant, id)
 	if err != nil {
@@ -289,7 +267,7 @@ func (s *Server) scimPatchUser(w http.ResponseWriter, r *http.Request) {
 	}
 	var body scim.PatchBody
 	if err := decodeSCIMBody(w, r, &body); err != nil {
-		writeSCIMError(w, scim.NewError(http.StatusBadRequest, scim.TypeInvalidSyntax, "invalid PatchOp body"))
+		writeSCIMError(w, scim.NewError(http.StatusBadRequest, scim.TypeInvalidSyntax, RequestBodyErrorMessage(err, "invalid PatchOp body")))
 		return
 	}
 	// The resource is a member of this tenant, so it is active in the tenant's
@@ -317,12 +295,9 @@ func (s *Server) scimPatchUser(w http.ResponseWriter, r *http.Request) {
 	writeSCIM(w, http.StatusOK, scim.EncodeUser(u, scimUsersURL(r)))
 }
 
-func (s *Server) scimDeleteUser(w http.ResponseWriter, r *http.Request) {
-	p, tenant, aerr := s.scimAuthz(r, "user:write")
-	if aerr != nil {
-		writeSCIMError(w, *aerr)
-		return
-	}
+func (s *Server) scimDeleteUser(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	p := mc.Principal
+	tenant := mc.Tenant
 	id := model.ID(chi.URLParam(r, "id"))
 	if _, err := s.authr.SCIMGetMember(r.Context(), tenant, id); err != nil {
 		s.scimNotFoundOr(w, r, err)
@@ -337,29 +312,17 @@ func (s *Server) scimDeleteUser(w http.ResponseWriter, r *http.Request) {
 
 // --- Discovery ---------------------------------------------------------------
 
-func (s *Server) scimSPConfig(w http.ResponseWriter, r *http.Request) {
-	if _, _, aerr := s.scimAuthz(r, "user:read"); aerr != nil {
-		writeSCIMError(w, *aerr)
-		return
-	}
+func (s *Server) scimSPConfig(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
 	writeSCIM(w, http.StatusOK, scim.ServiceProviderConfig(scimBaseURL(r)+"/ServiceProviderConfig"))
 }
 
-func (s *Server) scimResourceTypes(w http.ResponseWriter, r *http.Request) {
-	if _, _, aerr := s.scimAuthz(r, "user:read"); aerr != nil {
-		writeSCIMError(w, *aerr)
-		return
-	}
+func (s *Server) scimResourceTypes(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
 	types := scim.ResourceTypes(scimBaseURL(r))
 	page := scim.Page{StartIndex: 1, Count: scim.MaxPageSize}
 	writeSCIM(w, http.StatusOK, scim.ListResponse(len(types), page, types))
 }
 
-func (s *Server) scimResourceType(w http.ResponseWriter, r *http.Request) {
-	if _, _, aerr := s.scimAuthz(r, "user:read"); aerr != nil {
-		writeSCIMError(w, *aerr)
-		return
-	}
+func (s *Server) scimResourceType(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
 	if rt, ok := scim.ResourceTypeByID(scimBaseURL(r), chi.URLParam(r, "type")); ok {
 		writeSCIM(w, http.StatusOK, rt)
 		return
@@ -367,21 +330,13 @@ func (s *Server) scimResourceType(w http.ResponseWriter, r *http.Request) {
 	writeSCIMError(w, scim.NewError(http.StatusNotFound, "", "unknown resource type"))
 }
 
-func (s *Server) scimSchemas(w http.ResponseWriter, r *http.Request) {
-	if _, _, aerr := s.scimAuthz(r, "user:read"); aerr != nil {
-		writeSCIMError(w, *aerr)
-		return
-	}
+func (s *Server) scimSchemas(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
 	schemas := scim.Schemas(scimBaseURL(r))
 	page := scim.Page{StartIndex: 1, Count: scim.MaxPageSize}
 	writeSCIM(w, http.StatusOK, scim.ListResponse(len(schemas), page, schemas))
 }
 
-func (s *Server) scimSchema(w http.ResponseWriter, r *http.Request) {
-	if _, _, aerr := s.scimAuthz(r, "user:read"); aerr != nil {
-		writeSCIMError(w, *aerr)
-		return
-	}
+func (s *Server) scimSchema(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
 	if sc, ok := scim.SchemaByID(scimBaseURL(r), chi.URLParam(r, "urn")); ok {
 		writeSCIM(w, http.StatusOK, sc)
 		return

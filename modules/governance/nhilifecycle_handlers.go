@@ -29,7 +29,7 @@ func decodeOptionalJSON(w http.ResponseWriter, r *http.Request, v any) bool {
 	// the previous copy returned success after the first document and never
 	// rejected a trailing value or a stray-bracket tail.
 	if err := api.DecodeRequestBody(w, r, v, api.RequestBodySpec{MaxBytes: 1 << 20, Optional: true}); err != nil {
-		writeJSON(w, http.StatusBadRequest, errorBody("invalid JSON body"))
+		writeJSON(w, http.StatusBadRequest, errorBody(api.RequestBodyErrorMessage(err, "invalid JSON body")))
 		return false
 	}
 	return true

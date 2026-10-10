@@ -9,29 +9,25 @@ import (
 	"crypto/ed25519"
 	"errors"
 	"fmt"
-	"io"
-	"log/slog"
-	"os"
-	"os/exec"
-	"path/filepath"
-	"strconv"
-	"strings"
-	"time"
-
 	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
 	"github.com/olivaresai/olivares/cmd/olivares/internal/agenttoolsapi"
 	"github.com/olivaresai/olivares/cmd/olivares/internal/githostdiff"
+	"github.com/olivaresai/olivares/cmd/olivares/internal/inferencepep"
+	"github.com/olivaresai/olivares/cmd/olivares/internal/mcpgateway"
 	mcpc "github.com/olivaresai/olivares/connectors/mcp"
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/api/ratelimit"
 	"github.com/olivaresai/olivares/core/api/ratelimit/pgstore"
 	"github.com/olivaresai/olivares/core/audit"
 	"github.com/olivaresai/olivares/core/auth"
+	"github.com/olivaresai/olivares/core/driverfacts"
+	coreengine "github.com/olivaresai/olivares/core/engine"
+	"github.com/olivaresai/olivares/core/envconfig"
 	"github.com/olivaresai/olivares/core/eventbus"
-	"github.com/olivaresai/olivares/core/eventbus/natsbus"
 	"github.com/olivaresai/olivares/core/license"
 	"github.com/olivaresai/olivares/core/metrics"
 	"github.com/olivaresai/olivares/core/model"
+	"github.com/olivaresai/olivares/core/modulespec"
 	obstrace "github.com/olivaresai/olivares/core/observability/trace"
 	"github.com/olivaresai/olivares/core/release"
 	"github.com/olivaresai/olivares/core/residency"
@@ -42,12 +38,23 @@ import (
 	"github.com/olivaresai/olivares/core/suspension"
 	"github.com/olivaresai/olivares/core/updatecheck"
 	"github.com/olivaresai/olivares/core/webaddr"
+	"github.com/olivaresai/olivares/modules/gitpublish"
 	"github.com/olivaresai/olivares/modules/governance"
 	"github.com/olivaresai/olivares/modules/knowledge"
 	securitymodule "github.com/olivaresai/olivares/modules/security"
 	"github.com/olivaresai/olivares/modules/sessions"
 	"github.com/olivaresai/olivares/modules/sessions/accounthome"
+	"github.com/olivaresai/olivares/modules/sessions/confine"
 	"github.com/olivaresai/olivares/sdk"
+	"io"
+	"log/slog"
+	"net/http"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"time"
 )
 
 const (
@@ -258,6 +265,8 @@ func loadLogCaptureLevel(getenv func(string) string, log *slog.Logger) *slog.Lev
 
 // bootConfig holds the engine boot parameters from flags/env.
 type bootConfig struct {
+	// Only the installed package serve path supplies this root-owned request file.
+	upgradeSnapshotRequest string
 	// LoginTrustedProxies is already resolved by the serve family. A nil value
 	// resolves the environment for direct boot callers; a zero set trusts none.
 	LoginTrustedProxies *auth.TrustedLoginProxies
@@ -299,7 +308,9 @@ type bootConfig struct {
 	// ServeMode is true only for the long-lived `serve`/`quickstart` path. Other
 	// commands that reach boot() (audit, dr) get a short-lived engine and must NOT
 	// start the background update-check goroutine (no surprise outbound calls, no
-	// goroutine that outlives the command)..
+	// goroutine that outlives the command).. Nor may they run the
+	// serve-owned work: Cedar reactivation, session runtime recovery and the
+	// recovery of launches waiting for an approval.
 	ServeMode bool
 	// pdpListOrgs is a test-only seam for the serve-time Cedar reactivation
 	// inventory. Production leaves it nil and uses the authoritative System scope.
@@ -313,6 +324,9 @@ type bootConfig struct {
 	// focal prove the exact OnPromote callback reaches a G→G+1 reload before
 	// visibility, without widening governance's production API.
 	pdpReload func(context.Context, model.TenantID) error
+	// workOutboxPumpPrepared is a test-only seam to wrap the nudge drain before
+	// registration starts its goroutine. Production leaves it nil.
+	workOutboxPumpPrepared func(*workOutboxPump)
 	// ReadOnly marks a boot that must not MANUFACTURE the installation it was
 	// asked to read. A read-only boot creates no data directory, mints no
 	// signing key and creates no store file: if there is nothing at the resolved
@@ -404,7 +418,7 @@ func installationExistsAt(dir string) bool {
 	// second installation elsewhere — silently unreadable sealed secrets and a new
 	// certificate. Found by the sol-max contrast.
 	for _, name := range []string{
-		"olivares.db", "audit-signing.key", "catalog-signing.key", "policy-signing.key",
+		"olivares.db", "audit-signing.key", "catalog-signing.key", "policy-signing.key", memoryPortabilityKeyFile,
 		"tls.key", "secret-store.key", "eventing-secret.key", "sso-secret.key",
 		"setup.token", licenseFileName, "install-id",
 	} {
@@ -511,7 +525,7 @@ type engine struct {
 	sessionHooks     *sessionHookCredentials
 	sessionMCP       *mcpManagement
 	agentTools       *agenttoolsapi.Module
-	gatewayConfig    *agentGatewayConfig
+	gatewayConfig    *mcpgateway.Config
 	editionResources []io.Closer
 	store            store.Store
 	rt               *runtime.Runtime
@@ -611,6 +625,9 @@ type engine struct {
 	// when no bridge is configured.
 	approvalBridge  *approvalBridge
 	engineApprovals *governance.EngineApprovals
+	// gitpublish is the running publication module, which the session publish
+	// proposal tools call after a person approves; nil when it does not run.
+	gitpublish *gitpublish.Module
 	// policyEval is the composed live PDP (governance native ABAC + external/authored
 	// Cedar overlay), the SAME evaluator the Authorizer ANDs into every request. The
 	// hooks PEP consults it as a deny-overlay for a tool-call. Restrict-only.
@@ -650,9 +667,9 @@ type engine struct {
 	// gate; finops the in-band budget admission; inferenceProxy the per-tenant config +
 	// DLP policy; residencyReg the data-residency check. nil-safe: the proxy mounts
 	// nothing when unconfigured.
-	models         modelAccessGate
+	models         inferencepep.ModelAccessGate
 	finops         budgetChecker
-	inferenceProxy proxyPolicySource
+	inferenceProxy inferencepep.PolicySource
 	residencyReg   *residency.Registry
 	// contentFirewall is the moduleSet's Messages proxy attachment recorder, written once by
 	// buildClaudeMessagesProxyServer (contentfirewallstatus.go).
@@ -661,9 +678,9 @@ type engine struct {
 	// command arms the HTTP listener with it (optional client-cert request) so
 	// the handlers can read the verified peer certificate.
 	pivConfig *auth.PIVConfig
-	// fedSvc is the managed SSO config service, held so the serve command's
-	// enterprise SP-metadata endpoint can resolve the SAME live SAML provider
-	// login uses and publish its metadata. nil only in embedders that skip it.
+	// fedSvc is the managed SSO config service, held so the enterprise build's
+	// routes (the httpRoutes edition port) use the SAME live federation service login uses.
+	// nil only in embedders that skip it.
 	fedSvc *auth.FederationService
 	// bus is the event bus boot constructed and OWNS: the in-proc default
 	// or the NATS-bridged hybrid. The runtime never closes an injected bus, so
@@ -702,6 +719,8 @@ type engine struct {
 	retirementPump *retirementPump
 	// retirementStop ends the pump's loop; nil when it was not started.
 	retirementStop context.CancelFunc
+	// legacyAdoptStop ends the naming of legacy provider profiles; nil when none was started.
+	legacyAdoptStop context.CancelFunc
 	// standing is the standing reader every fenced writer reads through
 	// (standingport.go).
 	standing *standingPort
@@ -722,14 +741,174 @@ type nhiEnforcer interface {
 // into the authorizer, and builds the API server with every module's routes mounted.
 // It does not start any listener.
 func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
-	loginProxies, err := (loginProxyOptions{resolved: cfg.LoginTrustedProxies}).resolve(osGetenv)
-	if err != nil {
+	if err := checkCMEKInstall(cfg.DataDir); err != nil {
 		return nil, err
 	}
-	log := cfg.Logger
-	if log == nil {
-		log = slog.Default()
+	if cfg.Engine == "" || cfg.Engine == "sqlite" {
+		if err := checkCMEKSQLiteStoreRef(ctx, cfg.DSN); err != nil {
+			return nil, err
+		}
 	}
+	b := &bootState{cfg: cfg}
+	defer b.unwind()
+
+	if err := b.configure(ctx); err != nil {
+		return nil, err
+	}
+	if err := b.loadSigningCustody(ctx); err != nil {
+		return nil, err
+	}
+	if err := b.buildRuntime(ctx); err != nil {
+		return nil, err
+	}
+	if err := b.openStore(ctx); err != nil {
+		return nil, err
+	}
+	if err := b.bindIdentityAndLeadership(ctx); err != nil {
+		return nil, err
+	}
+	if err := b.bindServices(ctx); err != nil {
+		return nil, err
+	}
+	if err := b.bindSources(ctx); err != nil {
+		return nil, err
+	}
+	if err := b.buildAPI(ctx); err != nil {
+		return nil, err
+	}
+	if err := b.bindJobs(ctx); err != nil {
+		return nil, err
+	}
+	if err := b.bindSessionGovernance(ctx); err != nil {
+		return nil, err
+	}
+	b.composeEngine()
+	if err := b.startRuntime(ctx); err != nil {
+		return nil, err
+	}
+	return b.finish(ctx)
+}
+
+// bootState carries values between the ordered startup phases. It is private to
+// one boot; the returned engine retains ownership of the running components.
+type bootState struct {
+	cfg                         bootConfig
+	loginProxies                *auth.TrustedLoginProxies
+	log                         *slog.Logger
+	logBroker                   *api.LogBroker
+	webAuthn                    webAuthnPlan
+	storeIsRemote               bool
+	quickstartFresh             *postgresInit
+	eng                         store.Engine
+	dsn                         string
+	maxConns                    int
+	residencyReg                *residency.Registry
+	communicationActivation     communicationActivationConfig
+	communicationSealer         *communicationContentSealer
+	communicationCursorKeyring  *sessions.CommunicationCursorTokenKeyring
+	communicationCursorStatus   communicationCursorKeyringStatus
+	freshDirectoryInitialized   bool
+	prepareFreshCommunication   func()
+	preserveFreshModuleProfile  func() error
+	restorePublication          *coreengine.BootPublication
+	custody                     coreengine.CustodyRequirement
+	auditKey                    loadedSigningKey
+	catalogKey                  loadedSigningKey
+	policyKey                   loadedSigningKey
+	memoryKey                   loadedSigningKey
+	memoryKeyErr                error
+	custodyObserved             coreengine.CustodyObservation
+	signer                      *audit.Signer
+	tracer                      *obstrace.Provider
+	bootOK                      bool
+	legacyAdoptStop             context.CancelFunc
+	bus                         eventbus.Bus
+	gatedBus                    injectGatedBus
+	reg                         *metrics.Registry
+	busStats                    eventbus.StatsProvider
+	srcCfg                      sourcesConfig
+	set                         moduleSet
+	profile                     moduleProfile
+	running                     moduleSet
+	localCommunication          bool
+	rt                          *runtime.Runtime
+	declared                    []declaredModule
+	storeSchema                 func(store.ExtensionRegistry) error
+	storeQuiesce                func(context.Context) error
+	st                          store.Store
+	census                      store.CompositionCensus
+	sessionRuntimeRecoveryStore store.Store
+	sessionRuntimeRecoveryData  api.ModuleData
+	enumerable                  bool
+	notRunning                  *jobsNotRunning
+	data                        api.ModuleData
+	authr                       *auth.Authenticator
+	standing                    *standingPort
+	retirement                  *retirementPump
+	communicationComposition    *communicationComposition
+	loginCap                    loginCapabilityBoot
+	haCfg                       haLeaderConfig
+	haPublisher                 *haLeaderPublisher
+	policyEval                  auth.PolicyEvaluator
+	authz                       *auth.Authorizer
+	setupTok                    *secure.SetupToken
+	eventingSealerPresent       bool
+	federationSealerPresent     bool
+	fedSvc                      *auth.FederationService
+	secretStoreSealerPresent    bool
+	secretStore                 *auth.SecretStore
+	secretResolver              *secret.Resolver
+	settings                    *productSettings
+	tracingSettings             *tracingSettingsService
+	editionResources            []io.Closer
+	sourceStore                 *auth.SourceStore
+	connectorDir                string
+	sourceReconcilerSvc         *sourceReconciler
+	licSvc                      *licenseService
+	pivCfg                      *auth.PIVConfig
+	rlStore                     *pgstore.Store
+	agentTools                  *agenttoolsapi.Module
+	gatewayCfg                  mcpgateway.Config
+	gatewayManagement           *mcpManagement
+	apiSrv                      *api.Server
+	circuitBreaker              circuitBreakerEngine
+	archCfg                     auditArchiveConfig
+	arch                        *auditArchiveLoop
+	communicationPump           *workOutboxPump
+	stopDeny                    *stopDenyRecorder
+	sessionHooks                *sessionHookCredentials
+	demoTenant                  model.TenantID
+	runtimeEngine               *engine
+	cleanup                     []func()
+}
+
+// unwind runs the original boot defers in reverse registration order. Using
+// defer here also preserves Go's cleanup semantics if a cleanup itself panics.
+func (b *bootState) unwind() {
+	if !b.bootOK && b.legacyAdoptStop != nil {
+		b.legacyAdoptStop()
+	}
+	for _, close := range b.cleanup {
+		defer close()
+	}
+}
+
+func (b *bootState) configure(ctx context.Context) (err error) {
+	if b.cfg.Engine == "" && !b.cfg.storeEngineExplicit {
+		b.cfg.Engine = string(store.EngineSQLite)
+	}
+	if b.cfg.Engine != string(store.EngineSQLite) && b.cfg.Engine != string(store.EnginePostgres) {
+		return exitcode.New(exitcode.Usage, fmt.Errorf("--engine %q must be sqlite or postgres", b.cfg.Engine))
+	}
+	b.loginProxies, err = (loginProxyOptions{resolved: b.cfg.LoginTrustedProxies}).resolve(osGetenv)
+	if err != nil {
+		return err
+	}
+	b.log = b.cfg.Logger
+	if b.log == nil {
+		b.log = slog.Default()
+	}
+
 	// The console log surface is redacted at the broker. The canonical
 	// credential catalog is injected here rather than imported by core/api,
 	// because core must not depend on /modules (scripts/check-boundary.sh) and the
@@ -738,11 +917,18 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 	// RedactText: the log viewer keeps the network and contact identifiers that
 	// ARE the operator's diagnosis, and the support bundle, which leaves the
 	// machine, keeps the full PII catalog.
-	logBroker := api.NewLogBroker(
-		log.Handler(), logBrokerRingSize, loadLogCaptureLevel(osGetenv, log),
+	b.logBroker = api.NewLogBroker(
+		b.log.Handler(), logBrokerRingSize, loadLogCaptureLevel(osGetenv, b.log),
 		api.WithLogRedactor(securitymodule.RedactCredentials),
 	)
-	log = slog.New(logBroker)
+	b.log = slog.New(b.logBroker)
+
+	// unknown OLIVARES_* keys are an operator-visible contract violation,
+	// but boot remains backward-compatible. Report every key in one consolidated
+	// warning; `config effective --strict` is the CI/pre-production hard gate.
+	if unknown := unknownConfigEnvKeys(os.Environ()); len(unknown) > 0 {
+		b.log.Warn("unrecognized OLIVARES_* env keys ignored", "keys", unknown)
+	}
 
 	// AN EXPLICIT AUTHENTICATION CONFIGURATION IS SETTLED BEFORE ANYTHING MUTABLE
 	// HAPPENS. This runs before the data directory is created, before the store
@@ -755,37 +941,37 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 	// nothing named the cause. A half-set pair used to be dropped with a warning;
 	// it is now a refusal, because silently deriving a different authentication
 	// authority than the operator wrote is the behavior this closes.
-	webAuthn, err := resolveWebAuthnRP(cfg.PublicAddr, cfg.PublicAddrSource, osGetenv)
+	b.webAuthn, err = resolveWebAuthnRP(b.cfg.PublicAddr, b.cfg.PublicAddrSource, osGetenv)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	webAuthn.log(log)
+	b.webAuthn.log(b.log)
 
-	dataDirWasImplicit := cfg.DataDir == "" && os.Getenv("OLIVARES_DATA_DIR") == ""
-	if cfg.DataDir == "" {
+	dataDirWasImplicit := b.cfg.DataDir == "" && envconfig.Get("OLIVARES_DATA_DIR") == ""
+	if b.cfg.DataDir == "" {
 		resolved, err := defaultDataDir()
 		if err != nil {
-			return nil, err
+			return err
 		}
-		cfg.DataDir = resolved
+		b.cfg.DataDir = resolved
 	}
 	// The backend belongs to the installation, including a later `serve` or
 	// read-only CLI invocation. Explicit DSNs still select their own store.
-	if cfg.DSN == "" {
-		db, err := quickstartPostgresConfig(ctx, cfg.DataDir, "")
+	if b.cfg.DSN == "" {
+		db, err := quickstartPostgresConfig(ctx, b.cfg.DataDir, "")
 		if err != nil {
-			return nil, err
+			return err
 		}
 		if db.Engine == store.EnginePostgres {
-			if cfg.storeEngineExplicit && cfg.Engine != string(store.EnginePostgres) {
-				return nil, errors.New("this data directory uses PostgreSQL; omit --engine or choose a separate --data-dir for SQLite")
+			if b.cfg.storeEngineExplicit && b.cfg.Engine != string(store.EnginePostgres) {
+				return errors.New("this data directory uses PostgreSQL; omit --engine or choose a separate --data-dir for SQLite")
 			}
-			cfg.Engine, cfg.DSN = string(db.Engine), db.DSN
-			if cfg.OwnerDSN == "" {
-				cfg.OwnerDSN = db.OwnerDSN
+			b.cfg.Engine, b.cfg.DSN = string(db.Engine), db.DSN
+			if b.cfg.OwnerDSN == "" {
+				b.cfg.OwnerDSN = db.OwnerDSN
 			}
-			if cfg.AdminDSN == "" {
-				cfg.AdminDSN = db.AdminDSN
+			if b.cfg.AdminDSN == "" {
+				b.cfg.AdminDSN = db.AdminDSN
 			}
 		}
 	}
@@ -794,14 +980,14 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 	// the documented Postgres invocation (`audit verify --engine postgres --dsn
 	// env:DATABASE_URL`) for the sake of a directory it would never read — a
 	// consequence the sol-max contrast pointed out.
-	storeIsRemote := cfg.Engine == string(store.EnginePostgres) || strings.TrimSpace(cfg.DSN) != ""
+	b.storeIsRemote = b.cfg.Engine == string(store.EnginePostgres) || strings.TrimSpace(b.cfg.DSN) != ""
 	switch {
-	case cfg.ReadOnly && !storeIsRemote:
+	case b.cfg.ReadOnly && !b.storeIsRemote:
 		// Read, never install. An absent data dir is the answer, not a task.
-		if err := requireDataDir(cfg.DataDir); err != nil {
-			return nil, err
+		if err := requireDataDir(b.cfg.DataDir); err != nil {
+			return err
 		}
-	case cfg.NoImplicitInstall && dataDirWasImplicit && !storeIsRemote && !installationExistsAt(cfg.DataDir):
+	case b.cfg.NoImplicitInstall && dataDirWasImplicit && !b.storeIsRemote && !installationExistsAt(b.cfg.DataDir):
 		// A mutating CLI verb (`secrets put`, `sources set`, `audit checkpoint`, …)
 		// asked to write into an installation that is not there, at a RELATIVE
 		// default path nobody named. Creating it would mint three private signing
@@ -813,56 +999,56 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 		// The question is "is there an installation here", NOT "does the directory
 		// exist": an empty ./olivares-data/ let this through and the command minted
 		// key material inside it. Found by the sol-max contrast.
-		return nil, exitcode.New(exitcode.NotFound, fmt.Errorf(
+		return exitcode.New(exitcode.NotFound, fmt.Errorf(
 			"no installation at %s, and this command will not create one implicitly: "+
 				"it would mint signing keys in the current directory — run `olivares quickstart` "+
 				"(or `olivares setup`) to initialize, or pass --data-dir / OLIVARES_DATA_DIR to say "+
-				"where the installation is", absOrSame(cfg.DataDir)))
-	case cfg.ReadOnly:
+				"where the installation is", absOrSame(b.cfg.DataDir)))
+	case b.cfg.ReadOnly:
 		// Remote store: nothing local to require, and nothing to create either.
 	default:
 		// EnsureDataDir, not EnsureDir: the directory about to hold seven private keys
 		// carries its own .gitignore, so an operator who points --data-dir inside their
 		// own repository cannot commit the key material either (core/secure).
-		if err := secure.EnsureDataDir(cfg.DataDir); err != nil {
-			return nil, err
+		if err := secure.EnsureDataDir(b.cfg.DataDir); err != nil {
+			return err
 		}
 		// And when it CANNOT carry one — the data dir is a repository root, where a `*`
 		// rule would hide the operator's whole project — say so. A protection that
 		// quietly does not apply is the defect this whole change is about.
-		if w := secure.DataDirVCSWarning(cfg.DataDir); w != "" {
-			log.Warn("data directory: " + w)
+		if w := secure.DataDirVCSWarning(b.cfg.DataDir); w != "" {
+			b.log.Warn("data directory: " + w)
 		}
 	}
-	if cfg.dataDirReady != nil {
-		if err := cfg.dataDirReady(cfg.DataDir); err != nil {
-			return nil, err
+	if b.cfg.dataDirReady != nil {
+		if err := b.cfg.dataDirReady(b.cfg.DataDir); err != nil {
+			return err
 		}
 	}
 	// quickstartFresh is the PostgreSQL database quickstart provisioned in this start,
 	// if any: it gets the tenant inventory once the store has migrated it (below).
-	var quickstartFresh *postgresInit
-	if cfg.quickstartPostgres != nil && *cfg.quickstartPostgres != "" {
-		init, err := initPostgresConfig(ctx, cfg.DataDir, *cfg.quickstartPostgres, store.PgProvisionSpec{}, true)
+
+	if b.cfg.quickstartPostgres != nil && *b.cfg.quickstartPostgres != "" {
+		init, err := initPostgresConfig(ctx, b.cfg.DataDir, *b.cfg.quickstartPostgres, store.PgProvisionSpec{}, true)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		db := init.config
 		if init.fresh && db.Engine == store.EnginePostgres {
-			quickstartFresh = &init
+			b.quickstartFresh = &init
 		}
 		if db.Engine == store.EnginePostgres {
-			cfg.Engine, cfg.DSN, cfg.OwnerDSN = string(db.Engine), db.DSN, db.OwnerDSN
-			if cfg.AdminDSN == "" {
-				cfg.AdminDSN = db.AdminDSN
+			b.cfg.Engine, b.cfg.DSN, b.cfg.OwnerDSN = string(db.Engine), db.DSN, db.OwnerDSN
+			if b.cfg.AdminDSN == "" {
+				b.cfg.AdminDSN = db.AdminDSN
 			}
 		}
 	}
 	// load the enterprise activation manifest into the osGetenv overlay
 	// BEFORE buildModules reads any add-on's OLIVARES_*_CONFIG. A corrupt manifest
 	// degrades to "nothing activated" (logged), never fails boot.
-	if err := initActivationManifest(cfg.DataDir); err != nil {
-		log.Warn("enterprise-activation: could not read the activation manifest; no preset add-ons activated this boot", "err", err)
+	if err := initActivationManifest(b.cfg.DataDir); err != nil {
+		b.log.Warn("enterprise-activation: could not read the activation manifest; no preset add-ons activated this boot", "err", err)
 	}
 	// start with a clean slate so a config removed since a prior boot (or a
 	// previous boot in the same test process) does not leak a stale cleartext-secret
@@ -877,31 +1063,31 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 	for _, r := range []struct {
 		label string
 		dst   *string
-	}{{"--dsn", &cfg.DSN}, {"--owner-dsn", &cfg.OwnerDSN}, {"--admin-dsn", &cfg.AdminDSN}} {
+	}{{"--dsn", &b.cfg.DSN}, {"--owner-dsn", &b.cfg.OwnerDSN}, {"--admin-dsn", &b.cfg.AdminDSN}} {
 		resolved, err := resolveDSNRef(ctx, r.label, *r.dst, osGetenv)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		*r.dst = resolved
 	}
 
-	eng := store.EngineSQLite
-	if cfg.Engine == string(store.EnginePostgres) {
-		eng = store.EnginePostgres
+	b.eng = store.EngineSQLite
+	if b.cfg.Engine == string(store.EnginePostgres) {
+		b.eng = store.EnginePostgres
 	}
-	dsn := cfg.DSN
-	if eng == store.EngineSQLite && dsn == "" {
-		dsn = filepath.Join(cfg.DataDir, "olivares.db")
+	b.dsn = b.cfg.DSN
+	if b.eng == store.EngineSQLite && b.dsn == "" {
+		b.dsn = filepath.Join(b.cfg.DataDir, "olivares.db")
 		// The SQLite driver creates the file it is pointed at, so under ReadOnly
 		// the absence has to be caught HERE — opening the store would otherwise
 		// materialize an empty 6 MB database that the command then reports as
 		// containing nothing. Only the path this function DERIVED is checked: an
 		// operator-supplied --dsn is theirs to name.
-		if cfg.ReadOnly && !fileExistsAt(dsn) {
-			return nil, exitcode.New(exitcode.NotFound, fmt.Errorf(
+		if b.cfg.ReadOnly && !fileExistsAt(b.dsn) {
+			return exitcode.New(exitcode.NotFound, fmt.Errorf(
 				"no store at %s: this is not an initialized Olivares data directory, and a "+
 					"read-only command never creates one — run `olivares quickstart`, or point "+
-					"--data-dir (or OLIVARES_DATA_DIR) at the installation", dsn))
+					"--data-dir (or OLIVARES_DATA_DIR) at the installation", b.dsn))
 		}
 	}
 	// Bound the Postgres application pool. It was unbounded (database/sql
@@ -911,26 +1097,26 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 	// max_connections. Default to a conservative per-node cap (leaving headroom for
 	// the lock + admin connections under the typical 100-connection server limit);
 	// OLIVARES_DB_MAX_CONNS overrides. SQLite is single-connection by construction.
-	maxConns := 0
-	if eng == store.EnginePostgres {
-		maxConns = postgresMaxConns(osGetenv, log)
+	b.maxConns = 0
+	if b.eng == store.EnginePostgres {
+		b.maxConns = postgresMaxConns(osGetenv, b.log)
 	}
 
 	// build the multi-region residency registry from --region/--known-regions.
 	// A malformed region config fails the boot HERE — before the store opens — rather
 	// than at request time. nil/non-enforcing in single-region mode (no --region).
-	residencyReg, err := residency.NewRegistry(cfg.Region, cfg.KnownRegions)
+	b.residencyReg, err = residency.NewRegistry(b.cfg.Region, b.cfg.KnownRegions)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	// K3 activation is REQUESTED configuration, parsed first so a malformed
 	// request refuses boot before the store opens. Custody that is not declared
 	// is recorded as a blocker on the request, never as a boot error: K3 custody
 	// belongs to K3 alone. Effective readiness is decided later, per witness.
-	communicationActivation, err := loadCommunicationActivationConfig(osGetenv)
+	b.communicationActivation, err = loadCommunicationActivationConfig(osGetenv)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	// K3 content custody is explicit and boot-only. An absent path leaves the
 	// sealer unbound; a declared path must load, unwrap and self-test before the
@@ -939,33 +1125,37 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 	// it IS requested, the failure is a K3 custody blocker: the sealer stays
 	// unbound, the K3 lane is not composed, and core/K1/K2 boot and serve. No
 	// key is minted, no other key is tried, no ciphertext is touched.
-	communicationSealer, err := loadCommunicationContentSealer(
+	b.communicationSealer, err = loadCommunicationContentSealer(
 		ctx,
 		osGetenv(envCommunicationContentKeyringFile),
 		openCommunicationContentKeyringOperatorConfig,
 	)
 	if err != nil {
-		if !communicationActivation.Requested {
-			return nil, fmt.Errorf("load %s: %w", envCommunicationContentKeyringFile, err)
+		if !b.communicationActivation.Requested {
+			return fmt.Errorf("load %s: %w", envCommunicationContentKeyringFile, err)
 		}
-		communicationActivation.blockCustody(envCommunicationContentKeyringFile, err.Error())
-		communicationSealer = nil
-		log.Error("sessions: K3 content keyring custody is unusable; the requested activation stays OFF with this cause while core, K1 and K2 boot",
+		b.communicationActivation.blockCustody(envCommunicationContentKeyringFile, err.Error())
+		b.communicationSealer = nil
+		b.log.Error("sessions: K3 content keyring custody is unusable; the requested activation stays OFF with this cause while core, K1 and K2 boot",
 			"env", envCommunicationContentKeyringFile, "err", err)
 	}
-	communicationCursorKeyring, communicationCursorStatus, err := loadCommunicationCursorKeyring(
-		ctx, communicationActivation.CursorKeyringPath, openCommunicationContentKeyringOperatorConfig, time.Now(),
+	b.communicationCursorKeyring, b.communicationCursorStatus, err = loadCommunicationCursorKeyring(
+		ctx, b.communicationActivation.CursorKeyringPath, openCommunicationContentKeyringOperatorConfig, time.Now(),
 	)
 	if err != nil {
-		if !communicationActivation.Requested {
-			return nil, fmt.Errorf("load %s: %w", envCommunicationCursorKeyringFile, err)
+		if !b.communicationActivation.Requested {
+			return fmt.Errorf("load %s: %w", envCommunicationCursorKeyringFile, err)
 		}
-		communicationActivation.blockCustody(envCommunicationCursorKeyringFile, err.Error())
-		communicationCursorKeyring, communicationCursorStatus = nil, communicationCursorKeyringStatus{}
-		log.Error("sessions: K3 cursor keyring custody is unusable; the requested activation stays OFF with this cause while core, K1 and K2 boot",
+		b.communicationActivation.blockCustody(envCommunicationCursorKeyringFile, err.Error())
+		b.communicationCursorKeyring, b.communicationCursorStatus = nil, communicationCursorKeyringStatus{}
+		b.log.Error("sessions: K3 cursor keyring custody is unusable; the requested activation stays OFF with this cause while core, K1 and K2 boot",
 			"env", envCommunicationCursorKeyringFile, "err", err)
 	}
 
+	return nil
+}
+
+func (b *bootState) loadSigningCustody(ctx context.Context) (err error) {
 	// THE LOCAL RESTORE GUARD, TAKEN HERE — BEFORE ANY KEY IS LOADED OR MINTED.
 	//
 	// Position is the guarantee, and the version that checked and released would have
@@ -996,32 +1186,67 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 	// boot never holds a SECOND, independently mutable connection config that could
 	// name a different destination than the one it fenced. The only field bound later
 	// is SignEvent, from the audit signer built out of the key loaded below.
-	auditSpoolMaxBytes, auditSpoolOnFull, err := loadAuditSpoolConfig(osGetenv, log)
+	auditSpoolMaxBytes, auditSpoolOnFull, err := loadAuditSpoolConfig(osGetenv, b.log)
 	if err != nil {
-		return nil, fmt.Errorf("load audit spool operator config: %w", err)
+		return fmt.Errorf("load audit spool operator config: %w", err)
 	}
-	auditMetaBlinding, err := loadAuditMetaBlinding(osGetenv, log)
+	auditMetaBlinding, err := loadAuditMetaBlinding(osGetenv, b.log)
 	if err != nil {
-		return nil, fmt.Errorf("load audit metadata blinding operator config: %w", err)
+		return fmt.Errorf("load audit metadata blinding operator config: %w", err)
+	}
+	b.freshDirectoryInitialized = false
+
+	b.preserveFreshModuleProfile = func() error {
+		if !b.cfg.ApplyModuleProfile {
+			return nil
+		}
+		if _, found, readErr := loadNodeModuleDocument(b.cfg.DataDir); readErr == nil && !found {
+			initial := moduleSelectionDoc{Selected: standardModuleSelection(), ImportPending: true}
+			if b.cfg.DemoSeed {
+				// The demo promises its access graph. Its rows belong to the
+				// core, so the module-table census cannot select its reader.
+				initial.Selected = append(initial.Selected, "accessmap")
+			}
+			if err := saveNodeModuleDocument(b.cfg.DataDir, initial, time.Now()); err != nil {
+				return fmt.Errorf("preserve the fresh module selection before initialization: %w", err)
+			}
+		}
+		return nil
 	}
 	storeCfg := store.Config{
-		Engine:              eng,
-		DSN:                 dsn,
-		AdminDSN:            cfg.AdminDSN,
-		OwnerDSN:            cfg.OwnerDSN,
-		MaxConns:            maxConns,
-		AllowPrivilegedRole: cfg.AllowPrivilegedDBRole,
+		InitializeDirectoryWriter: func() error {
+			b.freshDirectoryInitialized = true
+			if err := b.preserveFreshModuleProfile(); err != nil {
+				return err
+			}
+			if b.prepareFreshCommunication != nil {
+				b.prepareFreshCommunication()
+			}
+			return nil
+		},
+		Engine:              b.eng,
+		DSN:                 b.dsn,
+		AdminDSN:            b.cfg.AdminDSN,
+		OwnerDSN:            b.cfg.OwnerDSN,
+		MaxConns:            b.maxConns,
+		AllowPrivilegedRole: b.cfg.AllowPrivilegedDBRole,
 		AuditSpoolMaxBytes:  auditSpoolMaxBytes,
 		AuditSpoolOnFull:    auditSpoolOnFull,
 		AuditMetaBlinding:   auditMetaBlinding,
 	}
-	restorePublication, err := acquireBootPublication(ctx, storeCfg, cfg.DataDir)
+	b.restorePublication, err = acquireBootPublication(ctx, storeCfg, b.cfg.DataDir)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	// Deferred against every early failure between here and the explicit release
 	// below; Close is idempotent, so both paths are safe.
-	defer restorePublication.Close()
+	b.cleanup = append(b.cleanup, b.restorePublication.Close)
+
+	if b.cfg.ServeMode && !b.cfg.ReadOnly && b.cfg.upgradeSnapshotRequest != "" {
+		if err := snapshotPackageUpgrade(ctx, b.cfg.upgradeSnapshotRequest, b.cfg.DataDir, storeCfg); err != nil {
+			return fmt.Errorf("package upgrade: pre-migration snapshot failed; no migrations applied: %w", err)
+		}
+	}
 
 	// WHAT THE DESTINATION DEMANDS OF THE THREE LOADERS, asked BEFORE any of them runs.
 	//
@@ -1034,12 +1259,12 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 	// The admission has already refused every other verdict: pending, indeterminate,
 	// quarantined, malformed, unreadable, and absent-with-a-bound-witness never reach
 	// this line.
-	custody := restorePublication.CustodyRequirement()
-	keyOpts := cfg.keyLoadOptions()
-	if custody.CustodyRequired() {
+	b.custody = b.restorePublication.CustodyRequirement()
+	keyOpts := b.cfg.keyLoadOptions()
+	if b.custody.CustodyRequired() {
 		keyOpts = append(keyOpts, withEnrolledCustody())
-		log.Info("this destination carries a completed restore control, so its signing keys are LOADED under the custody that operation published and none is minted",
-			"destination", custody.Destination(), "operation", custody.OperationID(), "keyset", custody.KeysetSHA256())
+		b.log.Info("this destination carries a completed restore control, so its signing keys are LOADED under the custody that operation published and none is minted",
+			"destination", b.custody.Destination(), "operation", b.custody.OperationID(), "keyset", b.custody.KeysetSHA256())
 	}
 
 	// Load the audit signing key UP FRONT (it only touches a file/env/KEK, not the
@@ -1049,12 +1274,12 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 	// same key (the ledger does not fork at failover); under CMEK custody it
 	// is unwrapped IN MEMORY through the customer's KMS KEK and never exists in
 	// clear at rest; single-node/dev mints it on first boot.
-	auditKey, err := loadAuditSigningKey(cfg.DataDir, log, keyOpts...)
+	b.auditKey, err = loadAuditSigningKey(b.cfg.DataDir, b.log, keyOpts...)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	if auditKey.created {
-		log.Warn("generated a new audit signing key; back it up", "path", filepath.Join(cfg.DataDir, "audit-signing.key"))
+	if b.auditKey.created {
+		b.log.Warn("generated a new audit signing key; back it up", "path", filepath.Join(b.cfg.DataDir, "audit-signing.key"))
 	}
 	// Load the catalog signing key UP FRONT too — an INDEPENDENT artifact-signing
 	// key, NEVER the audit key — so module XIV ships SIGNING its approved registry
@@ -1062,23 +1287,35 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 	// §5). Same shared-or-local resolution as the audit key (shareable in HA so every
 	// replica verifies pinned entries identically); a node without one keeps the
 	// honest unpinned posture.
-	catalogKey, err := loadCatalogSigningKey(cfg.DataDir, log, keyOpts...)
+	b.catalogKey, err = loadCatalogSigningKey(b.cfg.DataDir, b.log, keyOpts...)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	if catalogKey.created {
-		log.Warn("generated a new catalog signing key; back it up", "path", filepath.Join(cfg.DataDir, "catalog-signing.key"))
+	if b.catalogKey.created {
+		b.log.Warn("generated a new catalog signing key; back it up", "path", filepath.Join(b.cfg.DataDir, "catalog-signing.key"))
 	}
 	// the policy-artifact signing key — INDEPENDENT of both the audit and
 	// catalog keys — backing the claude-policy distribution truth loop: publish
 	// signs the exact distributed bytes, pull agents verify against its pinned
 	// fingerprint. Same shared-or-local resolution as the catalog key.
-	policyKey, err := loadPolicySigningKey(cfg.DataDir, log, keyOpts...)
+	b.policyKey, err = loadPolicySigningKey(b.cfg.DataDir, b.log, keyOpts...)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	if policyKey.created {
-		log.Warn("generated a new policy signing key; back it up and pin its fingerprint in the pull agents", "path", filepath.Join(cfg.DataDir, "policy-signing.key"))
+	if b.policyKey.created {
+		b.log.Warn("generated a new policy signing key; back it up and pin its fingerprint in the pull agents", "path", filepath.Join(b.cfg.DataDir, "policy-signing.key"))
+	}
+	memoryKeyOpts := append([]keyLoadOption(nil), keyOpts...)
+	if b.auditKey.mode != custodyModeMinted {
+		// Shared audit custody identifies a replicated installation. Provision the
+		// dedicated portability file on every replica before enabling portability.
+		memoryKeyOpts = append(memoryKeyOpts, withoutMinting())
+	}
+	b.memoryKey, b.memoryKeyErr = loadMemoryPortabilityKey(b.cfg.DataDir, memoryKeyOpts...)
+	if b.memoryKeyErr != nil {
+		b.log.Warn("memory portability unavailable; restore the installation's memory-portability.key with owner-only permissions (0600), then restart", "err", b.memoryKeyErr)
+	} else if b.memoryKey.created {
+		b.log.Info("generated a dedicated memory portability key; include it in installation backups", "path", filepath.Join(b.cfg.DataDir, memoryPortabilityKeyFile))
 	}
 	// THE ONE OBSERVATION, BUILT FROM THE KEY OBJECTS THEMSELVES.
 	//
@@ -1089,24 +1326,24 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 	// fingerprints that, so there is no path by which a durable record could be read
 	// back into a value called "observed": the measurement is of this process's keys or
 	// it does not exist.
-	custodyObserved, err := observeSelectedCustody(auditKey, catalogKey, policyKey)
+	b.custodyObserved, err = observeSelectedCustody(b.auditKey, b.catalogKey, b.policyKey)
 	if err != nil {
-		return nil, fmt.Errorf("observe the selected signing custody: %w", err)
+		return fmt.Errorf("observe the selected signing custody: %w", err)
 	}
 	// Optional off-box (KMS/HSM) checkpoint signer (R5). With none
 	// configured, the default on-box Ed25519 signer is used unchanged. Per-event
 	// signing always stays on-box (the hot path is never routed off-box).
 	var signerOpts []audit.Option
-	ck, ckErr := buildCheckpointKey(log)
+	ck, ckErr := buildCheckpointKey(b.log)
 	if ckErr != nil {
-		return nil, fmt.Errorf("ledger checkpoint signer: %w", ckErr)
+		return fmt.Errorf("ledger checkpoint signer: %w", ckErr)
 	}
 	if ck != nil {
 		signerOpts = append(signerOpts, audit.WithCheckpointKey(ck))
 	}
-	signer, err := audit.NewSigner(auditKey.priv, signerOpts...)
+	b.signer, err = audit.NewSigner(b.auditKey.priv, signerOpts...)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	// Custody governance: validate the DECLARED posture against the ACTUAL
 	// wiring and fail closed on any mismatch — a buyer that mandated BYOK/CMEK/HYOK
@@ -1114,56 +1351,60 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 	// log the effective posture once, so every boot states its custody plainly.
 	assertions, err := loadCustodyAssertions()
 	if err != nil {
-		return nil, err
+		return err
 	}
-	if err := assertions.verify(auditKey.mode, ck != nil); err != nil {
-		return nil, fmt.Errorf("key custody: %w", err)
+	if err := assertions.verify(b.auditKey.mode, ck != nil); err != nil {
+		return fmt.Errorf("key custody: %w", err)
 	}
 	checkpointPosture := "on-box ed25519"
 	if ck != nil {
 		checkpointPosture = "off-box " + string(ck.Algorithm()) + " " + ck.KeyID()
 	}
-	log.Info("key custody posture",
-		"audit_key", auditKey.mode, "audit_kek", orDash(auditKey.kek),
-		"audit_prior_generations", len(auditKey.priors),
-		"catalog_key", catalogKey.mode, "checkpoints", checkpointPosture,
+	b.log.Info("key custody posture",
+		"audit_key", b.auditKey.mode, "audit_kek", orDash(b.auditKey.kek),
+		"audit_prior_generations", len(b.auditKey.priors),
+		"catalog_key", b.catalogKey.mode, "checkpoints", checkpointPosture,
 		"declared_key_custody", orDash(assertions.auditKey), "declared_ledger_custody", orDash(assertions.ledger))
 	// A migration source left declared in the environment is inert HERE — the boot
-	// path resolves custody through loadKeyWrapConfig alone and never consults it,
+	// path resolves custody through the Business signing-key adapter and never consults it,
 	// so the runtime keeps exactly one custody root. It is still said out loud
 	// rather than ignored: the operator's CLI ceremonies WILL open with it, and a
 	// variable nobody remembers setting is how the next rewrap becomes a mystery.
 	// Only its presence and kind are logged; nothing else in that namespace is read.
-	if kind := strings.TrimSpace(os.Getenv(envKeyWrapOld)); kind != "" {
-		log.Warn("a KEK migration source is declared in the environment and this engine is IGNORING it — the boot path has one custody root by design; it changes which KEK `olivares keys` ceremonies OPEN with, so unset it once the migration window is closed",
+	if kind := strings.TrimSpace(envconfig.Get(envKeyWrapOld)); kind != "" {
+		b.log.Warn("a KEK migration source is declared in the environment and this engine is IGNORING it — the boot path has one custody root by design; it changes which KEK `olivares keys` ceremonies OPEN with, so unset it once the migration window is closed",
 			"env", envKeyWrapOld, "kind", kind)
 	}
 
+	return nil
+}
+
+func (b *bootState) buildRuntime(ctx context.Context) (err error) {
 	// OBS-03: build the W3C Trace Context provider from env (opt-in; a no-op exporter
 	// when no collector is configured). It NEVER blocks boot (OTLP connects lazily) and
 	// a tracing fault never breaks a request. The instrumented HTTP client it returns
 	// is the engine→Claude transport (traceparent injection + gen_ai span/metrics),
 	// threaded into the inference seam via buildModules; the same provider's ingress
 	// middleware is wired into the API server below.
-	tracer, err := obstrace.New(ctx, obstrace.FromEnv(cfg.Version))
+	b.tracer, err = obstrace.New(ctx, obstrace.FromEnv(b.cfg.Version))
 	if err != nil {
-		return nil, fmt.Errorf("init tracing: %w", err)
+		return fmt.Errorf("init tracing: %w", err)
 	}
-	if tracer.Enabled() {
-		log.Info("observability: W3C Trace Context + OTLP export enabled (OBS-03)")
+	if b.tracer.Enabled() {
+		b.log.Info("observability: W3C Trace Context + OTLP export enabled (OBS-03)")
 	}
 	// On any boot error AFTER this point the engine struct is never returned, so its
 	// Close() (which shuts the tracer down) never runs. Shut the tracer down here on
 	// the error paths to avoid leaking the OTLP exporter's background goroutines;
 	// cleared on the success path below so Close() owns shutdown thereafter.
-	bootOK := false
-	defer func() {
-		if !bootOK {
+	b.bootOK = false
+	b.cleanup = append(b.cleanup, func() {
+		if !b.bootOK {
 			sctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			_ = tracer.Shutdown(sctx)
+			_ = b.tracer.Shutdown(sctx)
 			cancel()
 		}
-	}()
+	})
 
 	// boot constructs (and owns) the event bus instead of letting the
 	// runtime default one, so the serve path can select the distributed NATS
@@ -1174,66 +1415,59 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 	// NATS bridge has the same standby write-gate noise, and on a single node
 	// (always-leader elector) ErrNotLeader simply never fires.
 	demoteNotLeader := func(err error) bool { return errors.Is(err, store.ErrNotLeader) }
-	busCfg, err := loadBusConfig(osGetenv, log)
+	busCfg, err := loadBusConfig(osGetenv, b.log)
 	if err != nil {
 		// Fail-boot-closed (the buildCheckpointKey family): a declared distributed
 		// bus that cannot be honored must never silently degrade to in-proc — the
 		// node would run partitioned from the cluster.
-		return nil, fmt.Errorf("event bus: %w", err)
+		return fmt.Errorf("event bus: %w", err)
 	}
-	// the durable backend and the open Core-NATS bridge are mutually exclusive —
+	// the durable backend and the Core-NATS bridge are mutually exclusive —
 	// the durable config already carries the NATS connection, so a second
 	// OLIVARES_BUS_CONFIG is ambiguous intent. Refuse up front (deny-closed), before
 	// either backend is constructed (so no connection leaks on this error path).
 	if busCfg != nil && strings.TrimSpace(osGetenv(envDurableBusConfig)) != "" {
-		return nil, fmt.Errorf("event bus: set only one of %s or %s", envDurableBusConfig, envBusConfig)
+		return fmt.Errorf("event bus: set only one of %s or %s", envDurableBusConfig, envBusConfig)
 	}
-	var bus eventbus.Bus
-	// gatedBus is the chosen bus when it supports HA leader gating (the open NATS
+
+	// gatedBus is the chosen bus when it supports HA leader gating (the NATS
 	// bridge or the enterprise durable backend); nil for the single-node in-proc
 	// default. boot installs the leader predicate on it once leadership is resolved.
-	var gatedBus injectGatedBus
+
 	// the enterprise durable JetStream backend (build-tag gated). In the
-	// community build newDurableBus returns (nil,nil) unconfigured and an ERROR when
+	// community durableBus port returns (nil,nil) unconfigured and an ERROR when
 	// OLIVARES_DURABLE_BUS_CONFIG is set (fail-boot-closed — durability is enterprise).
-	// Under -tags enterprise it returns the durable bus (licensed) or the open
-	// Core-NATS bridge built from the same connection config (unlicensed fallback).
-	durableBus, derr := newDurableBus(osGetenv, busPayloadDecoders(), demoteNotLeader, log, cfg.LicenseFile, cfg.DataDir)
+	// Identity & Scale returns the declared NATS backend only with a valid entitlement.
+	durableBus, derr := thisEdition.durableBus(osGetenv, busPayloadDecoders(), demoteNotLeader, b.log, b.cfg.LicenseFile, b.cfg.DataDir)
 	if derr != nil {
-		return nil, fmt.Errorf("event bus: %w", derr)
+		return fmt.Errorf("event bus: %w", derr)
 	}
 	switch {
 	case durableBus != nil:
-		bus, gatedBus = durableBus, durableBus
+		b.bus, b.gatedBus = durableBus, durableBus
 	case busCfg != nil:
-		nb, nerr := natsbus.New(*busCfg, natsbus.Options{
-			Logger: log, DemoteError: demoteNotLeader, Decoders: busPayloadDecoders(),
-		})
-		if nerr != nil {
-			return nil, fmt.Errorf("event bus: %w", nerr)
-		}
-		bus, gatedBus = nb, nb
+		return fmt.Errorf("event bus: the Core NATS bridge is unavailable in this edition; use Business Identity & Scale")
 	default:
-		bus = eventbus.NewInProc(eventbus.Options{Logger: log, DemoteError: demoteNotLeader})
+		b.bus = eventbus.NewInProc(eventbus.Options{Logger: b.log, DemoteError: demoteNotLeader})
 	}
-	defer func() {
-		if !bootOK {
-			_ = bus.Close()
+	b.cleanup = append(b.cleanup, func() {
+		if !b.bootOK {
+			_ = b.bus.Close()
 		}
-	}()
+	})
 
 	// The shared metrics registry: built here (not inside api.New) so the bus
 	// collectors and the audit checkpointer (cmd_serve) register scrape-time
 	// families on the same /metrics exposition the API serves.
-	reg := metrics.New(cfg.Version, time.Now())
-	registerBusMetrics(reg, bus)
-	busStats, _ := bus.(eventbus.StatsProvider)
+	b.reg = metrics.New(b.cfg.Version, time.Now())
+	registerBusMetrics(b.reg, b.bus)
+	b.busStats, _ = b.bus.(eventbus.StatsProvider)
 
 	// if the operator REQUIRED a semantic embedder (OLIVARES_EMBEDDINGS_REQUIRE)
 	// but none is configured, refuse to boot rather than silently serve the lexical
 	// local-hash fallback as if it were semantic (docs/SECURITY-HARDENING.md — never a silent gap).
 	if err := checkEmbeddingsRequirement(osGetenv); err != nil {
-		return nil, fmt.Errorf("embeddings requirement: %w", err)
+		return fmt.Errorf("embeddings requirement: %w", err)
 	}
 
 	// Load the operator's connector-wiring config ONCE (sources + identity roster +
@@ -1241,57 +1475,91 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 	// the knowledge module's pull sources; wireSources/wireRoster (below, after the
 	// store) consume Sources/Identity. One read, one place the wiring decision is made
 	// (12 §7.3 IDN-06).
-	srcCfg, err := loadSourcesConfig(log)
+	b.srcCfg, err = loadSourcesConfig(b.log)
 	if err != nil {
-		return nil, fmt.Errorf("load sources operator config: %w", err)
+		return fmt.Errorf("load sources operator config: %w", err)
 	}
 
-	// Construct and register every Fase C module (wire.go is the only file that
-	// imports both /core and /modules). They must be added to the runtime BEFORE the
-	// store opens so rt.RegisterSchema fans their schema out at construction.
-	set, err := buildModules(signer, catalogKey.priv, policyKey.priv, auditKey.priors, tracer.AnthropicHTTPClient(nil), srcCfg, editionConfigFrom(cfg), cfg.DataDir, log)
+	// Construct the module set through buildModules in wire.go. Register the
+	// modules with the runtime before opening the store so rt.RegisterSchema
+	// includes their schema at store construction.
+	var memoryKnowledgeOpts []knowledge.Option
+	if b.memoryKeyErr == nil {
+		memoryKnowledgeOpts = append(memoryKnowledgeOpts, knowledge.WithMemoryPortabilityKeys(b.memoryKey.priv, b.memoryKey.priv.Public().(ed25519.PublicKey)))
+	}
+	b.set, err = buildModules(&sessions.Dependencies{}, b.signer, b.catalogKey.priv, b.policyKey.priv, b.auditKey.priors, b.tracer.AnthropicHTTPClient(nil), b.tracer, b.srcCfg, editionConfigFrom(b.cfg), b.cfg.DataDir, b.log, memoryKnowledgeOpts...)
 	if err != nil {
-		return nil, fmt.Errorf("load module operator config: %w", err)
+		return fmt.Errorf("load module operator config: %w", err)
 	}
 	// The modules this node runs (moduleprofile.go), decided before the store opens
 	// from this node's copy of the selection; serve reconciles it with the
 	// deployment settings before listening. Every module is still built and
 	// registered for its schema; one outside the profile is dormant, and `running`
 	// is the view of the set that optional wiring and periodic jobs receive.
-	var profile moduleProfile // the zero profile runs every module
-	if cfg.ApplyModuleProfile {
-		profile = bootModuleProfile(cfg.DataDir, storeIsRemote || fileExistsAt(dsn), log)
+	// the zero profile runs every module
+	if b.cfg.ApplyModuleProfile {
+		b.profile = bootModuleProfile(b.cfg.DataDir, b.storeIsRemote || fileExistsAt(b.dsn), b.log)
 	}
-	running := set.running(profile)
-	if running.recorder == nil {
-		set.gov.UseRecordingGate(nil) // break-glass stays deny-closed without recording
-	}
-	if communicationSealer != nil {
-		if set.sessions == nil {
-			return nil, fmt.Errorf("bind %s: sessions module is unavailable",
-				envCommunicationContentKeyringFile)
-		}
-		set.sessions.UseCommunicationContentSealer(communicationSealer)
-	}
-	var sourceAdmission runtime.SourceRegistrationAdmission
-	if set.sessions != nil {
-		sourceAdmission = set.sessions.AdmitSourceRegistration
-	}
-	rt := runtime.New(runtime.Options{Logger: log, Bus: bus, SourceRegistrationAdmission: sourceAdmission})
-	for _, m := range set.all {
-		sm, ok := m.(sdk.Module)
-		if !ok {
-			return nil, fmt.Errorf("module %q does not satisfy sdk.Module", m.APINamespace())
-		}
-		add := rt.AddModule
-		if !profile.Active(m.APINamespace()) {
-			add = rt.AddDormantModule
-		}
-		if err := add(sm, sdk.Config{}); err != nil {
-			return nil, fmt.Errorf("register module %q: %w", m.APINamespace(), err)
+	b.running = b.set.running(b.profile)
+	// Automatic local custody does not change an explicit activation, shared key
+	// configuration, encrypted operator custody, or a saved Eventing OFF choice.
+	b.localCommunication = b.eng == store.EngineSQLite && b.running.eventing != nil &&
+		strings.TrimSpace(osGetenv(envCommunicationActivation)) == "" &&
+		osGetenv(envCommunicationContentKeyringFile) == "" && osGetenv(envCommunicationCursorKeyringFile) == "" &&
+		strings.TrimSpace(osGetenv(envKeyWrap)) == ""
+	if b.localCommunication {
+		b.communicationSealer, b.communicationCursorKeyring, b.communicationCursorStatus = prepareLocalCommunicationCustody(ctx, b.cfg.DataDir, false, &b.communicationActivation)
+		if !b.cfg.ReadOnly && !b.custody.CustodyRequired() {
+			b.prepareFreshCommunication = func() {
+				b.communicationSealer, b.communicationCursorKeyring, b.communicationCursorStatus = prepareLocalCommunicationCustody(ctx, b.cfg.DataDir, true, &b.communicationActivation)
+			}
 		}
 	}
 
+	if b.running.recorder == nil {
+		b.set.gov.UseRecordingGate(nil) // break-glass stays deny-closed without recording
+	}
+	if b.communicationSealer != nil {
+		if b.set.sessions == nil {
+			return fmt.Errorf("bind %s: sessions module is unavailable",
+				envCommunicationContentKeyringFile)
+		}
+		b.set.sessionDependencies.CommunicationSealer = b.communicationSealer
+	}
+	var sourceAdmission runtime.SourceRegistrationAdmission
+	if b.set.sessions != nil {
+		sourceAdmission = b.set.sessions.AdmitSourceRegistration
+	}
+	b.rt = runtime.New(runtime.Options{Logger: b.log, Bus: b.bus, SourceRegistrationAdmission: sourceAdmission})
+	for _, m := range b.set.all {
+		if consumer, ok := m.(interface{ UseProducerStatus(func(string) bool) }); ok {
+			consumer.UseProducerStatus(func(namespace string) bool {
+				name := moduleCatalog[namespace].Name
+				for _, status := range b.rt.Status() {
+					if status.Type == sdk.TypeModule && status.Name == name {
+						return status.Status == runtime.StatusRunning
+					}
+				}
+				return false
+			})
+		}
+		sm, ok := m.(sdk.Module)
+		if !ok {
+			return fmt.Errorf("module %q does not satisfy sdk.Module", m.APINamespace())
+		}
+		add := b.rt.AddModule
+		if !b.profile.Active(m.APINamespace()) {
+			add = b.rt.AddDormantModule
+		}
+		if err := add(sm, modulespec.DefaultConfig(m.APINamespace())); err != nil {
+			return fmt.Errorf("register module %q: %w", m.APINamespace(), err)
+		}
+	}
+
+	return nil
+}
+
+func (b *bootState) openStore(ctx context.Context) (err error) {
 	// THE ADMISSION OPENS THE STORE, rather than the boot calling a constructor that
 	// would have to take the destination all over again.
 	//
@@ -1312,26 +1580,22 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 	// a KEK grant revoked while this boot prepares, so the selection is measured once
 	// more through the same strict load-only path and any difference refuses. It
 	// detects; it does not immobilize an external KMS, and it never substitutes a key.
-	if custody.CustodyRequired() {
-		if rerr := recheckSelectedCustody(cfg.DataDir, cfg.keyLoadOptions(), custodyObserved); rerr != nil {
-			return nil, rerr
+	if b.custody.CustodyRequired() {
+		if rerr := recheckSelectedCustody(b.cfg.DataDir, b.cfg.keyLoadOptions(), b.custodyObserved); rerr != nil {
+			return rerr
 		}
 	}
 	// The modules this composition and its edition declare to the census, with
 	// their retirement steps; their readers are declared with the schema, below.
 	contributions := censusContributions()
-	declared := declaredModules(set, contributions)
-	// THE ADMISSION OPENS THE STORE with the audit signer bound to it and the
-	// measurement of the custody this boot actually loaded.
-	//
-	// Only SignEvent is supplied here: the destination configuration was frozen when
-	// the admission was taken, so there is no second Config for this call to name a
-	// different destination with. Signing every audit event at write time is what makes
-	// the ledger tamper-evident per event rather than only at the periodic checkpoints
-	// (it closes the between-checkpoints tail-rewrite window); the same key signs the
-	// checkpoints, and `audit verify --pubkey` checks them off-box (docs/SECURITY-HARDENING.md).
-	st, err := restorePublication.Open(ctx, signer.SignEvent, custodyObserved, func(reg store.ExtensionRegistry) error {
-		if err := rt.RegisterSchema(reg); err != nil {
+	b.declared = declaredModules(b.set, contributions)
+	// The register func the store opens with. The console restore opens its scratch
+	// store with the same one (consoleDRConfig): the guard edition derives from the
+	// registered tables, so a scratch registry that held only the core tables would
+	// compute an edition the snapshot was never written under.
+	declared := b.declared
+	b.storeSchema = func(reg store.ExtensionRegistry) error {
+		if err := b.rt.RegisterSchema(reg); err != nil {
 			return err
 		}
 		// the tool-pin table is engine schema (tenant data), registered in
@@ -1347,9 +1611,20 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 			return err
 		}
 		// The retirement readers are declared before the registry closes, so the
-		// census verdict computed at open covers them.
+		// census verdict computed at open covers them. b.declared is replaced after
+		// the open (withAuthPartition), so this closure keeps the set the open saw.
 		return declareCompositionReaders(reg, declared, contributions)
-	})
+	}
+	// THE ADMISSION OPENS THE STORE with the audit signer bound to it and the
+	// measurement of the custody this boot actually loaded.
+	//
+	// Only SignEvent is supplied here: the destination configuration was frozen when
+	// the admission was taken, so there is no second Config for this call to name a
+	// different destination with. Signing every audit event at write time is what makes
+	// the ledger tamper-evident per event rather than only at the periodic checkpoints
+	// (it closes the between-checkpoints tail-rewrite window); the same key signs the
+	// checkpoints, and `audit verify --pubkey` checks them off-box (docs/SECURITY-HARDENING.md).
+	b.st, err = b.restorePublication.Open(ctx, b.signer.SignEvent, b.custodyObserved, b.storeSchema)
 	// THE ADMISSION IS RELEASED HERE, and not earlier or later.
 	//
 	// Not earlier, because everything above — key loading, minting, and the store's own
@@ -1358,68 +1633,72 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 	// process would claim an exclusion over already-published stores that the ratified
 	// contract explicitly does not promise. Client drain stays the operator's
 	// prerequisite.
-	restorePublication.Close()
-	if err != nil {
-		return nil, fmt.Errorf("open store: %w", err)
+	if err == nil && b.localCommunication && b.communicationSealer != nil {
+		b.set.sessionDependencies.CommunicationSealer = b.communicationSealer
 	}
-	if cfg.ApplyModuleProfile {
-		// 26.10.0 always wrote SYSTEM before serving. Read it before this boot's
-		// EnsureSystemTenant: DSNs and local files cannot distinguish a fresh
-		// PostgreSQL store from an installation with enabled but empty modules.
-		profile.existingInstallation, err = moduleInstallationExists(ctx, st)
-		if err != nil {
-			_ = st.Close()
-			return nil, fmt.Errorf("read the module installation state: %w", err)
+	b.restorePublication.Close()
+	if err != nil {
+		return fmt.Errorf("open store: %w", err)
+	}
+	// Retain the concrete pool drain before the residency/suspension wrappers.
+	if q, ok := b.st.(interface{ QuiesceForSQLiteRestore(context.Context) error }); ok {
+		b.storeQuiesce = q.QuiesceForSQLiteRestore
+	}
+	if b.cfg.ApplyModuleProfile {
+		// SYSTEM identifies an existing installation unless this Open created it.
+		if !b.freshDirectoryInitialized {
+			b.profile.existingInstallation, err = moduleInstallationExists(ctx, b.st)
+			if err != nil {
+				_ = b.st.Close()
+				return fmt.Errorf("read the module installation state: %w", err)
+			}
+		} else {
+			b.profile.existingInstallation = false
 		}
-		if !profile.existingInstallation {
-			// Preserve the fresh default before SYSTEM makes a retry look like an
-			// old installation. This automatic copy remains pending until the
-			// first import also accounts for any demo/seeded module data.
-			if _, found, readErr := loadNodeModuleDocument(cfg.DataDir); readErr == nil && !found {
-				initial := moduleSelectionDoc{Selected: standardModuleSelection(), ImportPending: true}
-				if cfg.DemoSeed {
-					// The demo promises its access graph. Its rows belong to the
-					// core, so the module-table census cannot select its reader.
-					initial.Selected = append(initial.Selected, "accessmap")
-				}
-				if err := saveNodeModuleDocument(cfg.DataDir, initial, time.Now()); err != nil {
-					_ = st.Close()
-					return nil, fmt.Errorf("preserve the fresh module selection before initialization: %w", err)
-				}
+		if !b.profile.existingInstallation {
+			if err := b.preserveFreshModuleProfile(); err != nil {
+				_ = b.st.Close()
+				return err
 			}
 		}
 	}
+
 	// The composition census is read from the store as opened, before the
 	// service guards below wrap it and hide its optional capabilities; so is the
 	// auth partition's reader, which the store declared itself.
-	census, _ := st.(store.CompositionCensus)
+	b.census, _ = b.st.(store.CompositionCensus)
+	if b.census != nil {
+		if readiness := b.census.CompositionReadiness(); !readiness.Ready() {
+			b.log.Warn("retirement: composition census is unready; account retirement is blocked", "cause", readiness.Cause())
+		}
+	}
 	// A database quickstart provisioned in this start gets the tenant inventory now that
 	// the engine has migrated it (the routine reads the core tables), before anything
 	// lists tenants: retention, legal hold and audit checkpoints then cover every
 	// tenant without the admin role. A refusal (managed PostgreSQL without a
 	// superuser) is a warning; those jobs stay off and say so.
-	if quickstartFresh != nil {
-		if err := installTenantInventory(ctx, quickstartFresh.maintenance, quickstartFresh.spec); err != nil {
-			log.Warn(tenantInventoryNotInstalled(err))
+	if b.quickstartFresh != nil {
+		if err := installTenantInventory(ctx, b.quickstartFresh.maintenance, b.quickstartFresh.spec); err != nil {
+			b.log.Warn(tenantInventoryNotInstalled(err))
 		}
 	}
-	declared = withAuthPartition(st, declared)
+	b.declared = withAuthPartition(b.st, b.declared)
 	// in a region-scoped deployment wrap the store with the deny-closed
 	// residency guard, so every tenant-scoped unit of work for a tenant pinned to
 	// another region is refused (store.ErrResidencyViolation) rather than silently
 	// served an empty set. In single-region mode Guard returns st untouched (zero
 	// overhead). System/Auth (including the leadership bootstrap below) pass through;
 	// everything downstream (module data, authenticator, API) uses the wrapped store.
-	if residencyReg.Enforces() {
-		st = residency.Guard(st, residencyReg, log)
-		log.Info("residency: region-scoped instance active — serving only this region's tenants, cross-region denied",
-			"home_region", residencyReg.Home().String(), "known_regions", residencyReg.Known())
+	if b.residencyReg.Enforces() {
+		b.st = residency.Guard(b.st, b.residencyReg, b.log)
+		b.log.Info("residency: region-scoped instance active — serving only this region's tenants, cross-region denied",
+			"home_region", b.residencyReg.Home().String(), "known_regions", b.residencyReg.Known())
 	}
 	// Promotion recovery is custody, not service: it must be able to withdraw
 	// credentials from a suspended local tenant, but it must retain this residency
 	// guard and therefore cannot touch a tenant pinned to another region.
-	sessionRuntimeRecoveryStore := st
-	sessionRuntimeRecoveryData := api.NewModuleData(sessionRuntimeRecoveryStore)
+	b.sessionRuntimeRecoveryStore = b.st
+	b.sessionRuntimeRecoveryData = api.NewModuleData(b.sessionRuntimeRecoveryStore)
 	// wrap with the deny-closed service-withdrawal guard, so a tenant whose
 	// org is suspended is not served by ANY path — REST, gRPC, or the in-process
 	// background pumps, which all re-enter through View/Mutate. It is wrapped
@@ -1429,25 +1708,29 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 	// Always armed (any deployment can suspend a tenant); System/Auth pass through
 	// so the operator can always restore, and a suspended tenant's users can still
 	// authenticate and be told why they are refused.
-	st = suspension.Guard(st, log)
+	b.st = suspension.Guard(b.st, b.log)
 	// Whether this store can enumerate every tenant: a job that must cover every
 	// tenant and cannot is listed in server-info (jobsnotrunning.go).
-	enumerable := estateEnumerable(ctx, st, log)
-	notRunning := &jobsNotRunning{log: log}
+	b.enumerable = estateEnumerable(ctx, b.st, b.log)
+	b.notRunning = &jobsNotRunning{log: b.log}
 
+	return nil
+}
+
+func (b *bootState) bindIdentityAndLeadership(ctx context.Context) (err error) {
 	// Bind module data and the two private runtime credential issuers before the
 	// first leadership acquisition. OnPromote must recover every durable runtime
 	// handle before IsLeader becomes visible; wiring these after Leader.Run would
 	// leave the initial leader with a post-promotion revocation window.
-	data := api.NewModuleData(st)
-	finData := finopsData{ModuleData: data, st: st}
-	for _, m := range set.all {
+	b.data = api.NewModuleData(b.st)
+	finData := finopsData{ModuleData: b.data, st: b.st}
+	for _, m := range b.set.all {
 		if dc, ok := m.(api.DataConsumer); ok {
-			if set.finops != nil && m == set.finops {
+			if b.set.finops != nil && m == b.set.finops {
 				dc.UseData(finData)
 				continue
 			}
-			dc.UseData(data)
+			dc.UseData(b.data)
 		}
 	}
 	// Bind the inventory's durable sweep scope alongside UseData, and
@@ -1461,160 +1744,155 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 	// this process happened to observe, and it does not make Start fail — failing
 	// Start would unsubscribe C1 ingestion too (core/runtime/lifecycle.go:124-126),
 	// which would turn "freshness cannot advance" into "nothing is discovered".
-	if set.inventory != nil {
-		set.inventory.UseSweepScopeSource(inventorySweepScopeSource{st: st, reg: residencyReg})
+	if b.set.inventory != nil {
+		b.set.inventory.UseSweepScopeSource(inventorySweepScopeSource{st: b.st, reg: b.residencyReg})
 	}
-	authr := auth.NewAuthenticator(st, nil)
-	authr.SetTrustedLoginProxies(*loginProxies)
+	b.authr = auth.NewAuthenticator(b.st, nil)
+	b.authr.SetTrustedLoginProxies(*b.loginProxies)
 	// the TOTP seed sealer. A key failure leaves the factor unwired:
 	// enrolment refuses (503 totp_unavailable) and a stored factor's challenges
 	// fail closed — loud, never a boot abort, and never a cleartext seed.
-	if sealer, serr := newTOTPSeedSealer(cfg.DataDir, osGetenv); serr != nil {
-		log.Error("totp: seed sealer unavailable; TOTP enrolment and verification are disabled until fixed", "err", serr)
+	if sealer, serr := newTOTPSeedSealer(b.cfg.DataDir, osGetenv); serr != nil {
+		b.log.Error("totp: seed sealer unavailable; TOTP enrolment and verification are disabled until fixed", "err", serr)
 	} else {
-		authr.WithTOTPSeedSealer(sealer)
+		b.authr.WithTOTPSeedSealer(sealer)
 	}
 	// The guards above hide the store's census, so the authenticator is handed
 	// the one read at open for the retirement's absence proof.
-	if census != nil {
-		authr.UseCompositionCensus(census)
+	if b.census != nil {
+		b.authr.UseCompositionCensus(b.census)
 	}
 	// One standing port for every fenced writer: routes read it from their
 	// module context, and modules that write outside a request receive it here,
 	// before Start.
-	standing := &standingPort{reader: authr}
-	for _, m := range set.all {
+	b.standing = &standingPort{reader: b.authr}
+	for _, m := range b.set.all {
 		if sc, ok := m.(auth.StandingConsumer); ok {
-			sc.UseStanding(standing)
+			sc.UseStanding(b.standing)
 		}
 	}
 	// The retirement pump: an offboard in this process wakes it, and it is
 	// started below, once boot cannot fail, on the active writer only.
-	retirement := newRetirementPump(authr, declared, log)
-	authr.SetRetirementWaker(retirement.wake)
+	b.retirement = newRetirementPump(b.authr, b.declared, b.reg, b.log)
+	b.authr.SetRetirementWaker(b.retirement.wake)
 	var communicationStoreWitness *communicationGuardStoreWitness
-	var communicationComposition *communicationComposition
-	if set.sessions != nil {
-		set.sessions.UseRuntimeCredentialRecoveryData(sessionRuntimeRecoveryData)
-		recoveryAuthr := auth.NewAuthenticator(sessionRuntimeRecoveryStore, nil)
-		set.sessions.UseRuntimeCredentialRecoverySources(
-			sessionWorkCredentialSource{authenticator: recoveryAuthr},
-			sessionCommunicationCredentialSource{authenticator: recoveryAuthr},
-		)
-		set.sessions.UseOrchestrationWorkScopeSource(sessionOrchestrationWorkScope{st: st, module: set.sessions})
-		set.sessions.UseWorkSessionCredentialSource(
-			sessionWorkCredentialSource{authenticator: authr, module: set.sessions},
-		)
-		set.sessions.UseCommunicationSessionCredentialSource(
-			sessionCommunicationCredentialSource{authenticator: authr},
-		)
+
+	if b.set.sessions != nil {
+		b.set.sessionDependencies.RecoveryData = b.sessionRuntimeRecoveryData
+		recoveryAuthr := auth.NewAuthenticator(b.sessionRuntimeRecoveryStore, nil)
+		b.set.sessionDependencies.RecoveryWorkSessionCreds, b.set.sessionDependencies.RecoveryCommunicationSessionCreds = sessionWorkCredentialSource{authenticator: recoveryAuthr}, sessionCommunicationCredentialSource{authenticator: recoveryAuthr}
+		b.set.sessionDependencies.OrchestrationScopes = sessionOrchestrationWorkScope{st: b.st, module: b.set.sessions}
+		b.set.sessionDependencies.WorkSessionCreds = sessionWorkCredentialSource{authenticator: b.authr, module: b.set.sessions}
+		b.set.sessionDependencies.CommunicationSessionCreds = sessionCommunicationCredentialSource{authenticator: b.authr}
 		// K3 guard repair is a leadership bootstrap, not tenant service. Bind its
 		// closure-only, guard-scoped adapter over the pre-suspension store. The
 		// residency wrapper remains load-bearing authority on every tenant mutation;
 		// however the global witness below refuses CLEAN entirely when residency is
 		// enforcing until a region-move ceremony can prove both sides of a repin.
-		set.sessions.UseCommunicationGuardReconciliationData(
-			sessions.NewCommunicationGuardReconciliationData(sessionRuntimeRecoveryData),
-		)
+		b.set.sessionDependencies.CommunicationGuardData = sessions.NewCommunicationGuardReconciliationData(b.sessionRuntimeRecoveryData)
 		communicationStoreWitness = newCommunicationGuardStoreWitness(
 			func(ctx context.Context) ([]model.Org, error) {
 				var orgs []model.Org
-				err := st.System(ctx, func(sys store.SystemScope) error {
+				err := b.st.System(ctx, func(sys store.SystemScope) error {
 					var err error
 					orgs, err = sys.ListOrgs(ctx)
 					return err
 				})
 				return orgs, err
 			},
-			residencyReg,
-			set.sessions,
-			st.Leader().IsLeader,
+			b.residencyReg,
+			b.set.sessions,
+			b.st.Leader().IsLeader,
 		)
-		set.sessions.UseCommunicationStoreReadinessWitness(communicationStoreWitness)
+		b.set.sessionDependencies.CommunicationStoreReadiness = communicationStoreWitness
 		// K3 lot A composition: real directory resolver, publication attestor,
 		// grant closure and the composite store proof are bound on every boot;
 		// the pump witness and the dual credential posture only when activation
 		// was requested. It runs BEFORE Leader.Run so the promotion recovery
 		// below observes the enabled posture on the very first election.
-		communicationComposition, err = bindCommunicationComposition(
-			ctx, communicationActivation, st, set.sessions, set.gov, communicationStoreWitness,
-			communicationCursorKeyring, communicationCursorStatus, running.eventing != nil, log,
+		b.communicationComposition, err = bindCommunicationComposition(
+			ctx, b.communicationActivation, b.st, b.set.sessions, b.set.gov, communicationStoreWitness,
+			b.communicationCursorKeyring, b.communicationCursorStatus, b.running.eventing != nil, b.log,
 		)
 		if err != nil {
-			_ = st.Close()
-			return nil, fmt.Errorf("bind communication composition: %w", err)
+			_ = b.st.Close()
+			return fmt.Errorf("bind communication composition: %w", err)
 		}
 	}
+	// Only serve owns session runtimes. An offline command booted against the
+	// same SQLite file holds no runtime handle, so recovering there would mark
+	// every session the running engine still drives as stopped and revoke its
+	// credentials while the process keeps running (always-leader SQLite promotes
+	// every process that opens the file).
+	listSessionOrgs := func(ctx context.Context) ([]model.Org, error) {
+		var orgs []model.Org
+		err := b.st.System(ctx, func(sys store.SystemScope) error {
+			var err error
+			orgs, err = sys.ListOrgs(ctx)
+			return err
+		})
+		return orgs, err
+	}
 	recoverSessionRuntimeCredentials := func(ctx context.Context) error {
-		return recoverSessionRuntimeCredentialsForPromotion(
-			ctx,
-			func(ctx context.Context) ([]model.Org, error) {
-				var orgs []model.Org
-				err := st.System(ctx, func(sys store.SystemScope) error {
-					var err error
-					orgs, err = sys.ListOrgs(ctx)
-					return err
-				})
-				return orgs, err
-			},
-			residencyReg,
-			set.sessions,
-		)
+		if !b.cfg.ServeMode {
+			return nil
+		}
+		return recoverSessionRuntimeCredentialsForPromotion(ctx, listSessionOrgs, b.residencyReg, b.set.sessions)
 	}
 	// Build the Cedar reactivation barrier before registering OnPromote. The callback
 	// runs before IsLeader becomes visible, including each later HA promotion; doing
 	// this only after the first Run would let a promoted standby enforce its stale
 	// in-memory G while durable authority has already reached G+1 elsewhere.
-	pdpListOrgs := cfg.pdpListOrgs
+	pdpListOrgs := b.cfg.pdpListOrgs
 	if pdpListOrgs == nil {
 		pdpListOrgs = func(ctx context.Context, st store.Store) ([]model.Org, error) {
 			var orgs []model.Org
 			err := st.System(ctx, func(sys store.SystemScope) error {
 				var listErr error
-				orgs, listErr = pdpVisibleTenantInventory(ctx, sys, log)
+				orgs, listErr = pdpVisibleTenantInventory(ctx, sys, b.log)
 				return listErr
 			})
 			return orgs, err
 		}
 	}
-	pdpReload := cfg.pdpReload
+	pdpReload := b.cfg.pdpReload
 	if pdpReload == nil {
-		pdpReload = set.gov.ReloadActivePDP
+		pdpReload = b.set.gov.ReloadActivePDP
 	}
 	reactivatePDPForPromotion := func(ctx context.Context) error {
-		if !cfg.ServeMode {
+		if !b.cfg.ServeMode {
 			return nil
 		}
 		return reloadPDPForPromotion(ctx, func(ctx context.Context) ([]model.Org, error) {
-			return pdpListOrgs(ctx, st)
-		}, pdpReload, log)
+			return pdpListOrgs(ctx, b.st)
+		}, pdpReload, b.log)
 	}
 
 	// K1 durable work ports are composed only after the store exists and its
 	// residency and suspension wrappers are installed. Sessions receives narrow adapters,
 	// never another module's concrete implementation.
-	if set.sessions != nil {
-		set.sessions.UseWorkIdentityResolver(workIdentityResolver{
-			st: st, sessions: set.sessions, agentLifecycle: set.gov,
-		})
-		set.sessions.UseProtocolLocalResourceResolver(protocolLocalResourceResolver{
-			store: st, channels: set.sessions,
-		})
-		set.sessions.UseWorkContentGuard(workContentGuard{})
-		set.sessions.UseWorkEventSink(workEventSink{eventing: running.eventing, notRunning: running.eventing == nil})
+	if b.set.sessions != nil {
+		b.set.sessionDependencies.WorkIdentity = workIdentityResolver{
+			st: b.st, sessions: b.set.sessions, agentLifecycle: b.set.gov,
+		}
+		b.set.sessionDependencies.ProtocolLocalResourceResolver = protocolLocalResourceResolver{
+			store: b.st, channels: b.set.sessions,
+		}
+		b.set.sessionDependencies.WorkContent = workContentGuard{}
+		b.set.sessionDependencies.WorkEventSink = workEventSink{eventing: b.running.eventing, notRunning: b.running.eventing == nil}
 	}
 	// Login-enforcement capability (R5). Classified from the host selection and this
 	// artifact's compiled capability before the election, so promotion and the later
 	// policy assertion share one decision. An absent artifact reconciles against the
 	// stored observation and the configured demand in a single read-only snapshot.
-	loginCap := newLoginCapabilityBoot(osGetenv, cfg.Version)
-	if err := loginCap.observeFollower(ctx, st); err != nil {
-		_ = st.Close()
-		return nil, fmt.Errorf("login enforcement: capability snapshot: %w", err)
+	b.loginCap = newLoginCapabilityBoot(osGetenv, b.cfg.Version)
+	if err := b.loginCap.observeFollower(ctx, b.st); err != nil {
+		_ = b.st.Close()
+		return fmt.Errorf("login enforcement: capability snapshot: %w", err)
 	}
-	if loginCap.refusesStartup() {
-		_ = st.Close()
-		return nil, fmt.Errorf("login enforcement: this deployment recorded the component and a global/default posture is configured, but this artifact does not link it; install an artifact that carries it or clear the posture")
+	if b.loginCap.refusesStartup() {
+		_ = b.st.Close()
+		return fmt.Errorf("login enforcement: this deployment recorded the component and a global/default posture is configured, but this artifact does not link it; install an artifact that carries it or clear the posture")
 	}
 
 	// Active-passive HA leadership. EnsureSystemTenant is the write-side
@@ -1634,16 +1912,17 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 	// the election so a misconfigured HA pod fails loudly at boot instead of
 	// serving unroutable.
 	haCfg, haErr := loadHALeaderConfig(osGetenv)
+	b.haCfg = haCfg
 	if haErr != nil {
-		_ = st.Close()
-		return nil, fmt.Errorf("ha leader-routing config: %w", haErr)
+		_ = b.st.Close()
+		return fmt.Errorf("ha leader-routing config: %w", haErr)
 	}
-	var haPublisher *haLeaderPublisher
-	if haCfg.PublishLabel {
-		haPublisher, haErr = newHALeaderPublisher(haCfg, log)
+
+	if b.haCfg.PublishLabel {
+		b.haPublisher, haErr = newHALeaderPublisher(b.haCfg, b.log)
 		if haErr != nil {
-			_ = st.Close()
-			return nil, fmt.Errorf("ha leader-label publisher: %w", haErr)
+			_ = b.st.Close()
+			return fmt.Errorf("ha leader-label publisher: %w", haErr)
 		}
 		// Publish STANDBY before the election. A pod object outlives its container:
 		// after a crash-restart this pod may still carry the `leader` label of its
@@ -1651,13 +1930,17 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 		// that no longer holds the lock (they would fail closed, but the outage would
 		// be silent). Refusing to boot when this cannot be published is deliberate:
 		// an HA pod that cannot manage its own label is not safe to route to.
-		if err := haPublisher.publishRole(ctx, haRoleStandby); err != nil {
-			_ = st.Close()
-			return nil, fmt.Errorf("ha: could not publish the initial standby role label (a stale leader label from a previous incarnation would misroute traffic): %w", err)
+		if err := b.haPublisher.publishRole(ctx, haRoleStandby); err != nil {
+			_ = b.st.Close()
+			return fmt.Errorf("ha: could not publish the initial standby role label (a stale leader label from a previous incarnation would misroute traffic): %w", err)
 		}
 	}
+	// The naming of legacy provider profiles outlives a promotion, so it runs on a
+	// context the engine owns: Close cancels it, as does a boot that fails.
+	adoptCtx, adoptStop := context.WithCancel(context.Background())
+	b.legacyAdoptStop = adoptStop
 	promote := func(ctx context.Context) error {
-		if err := st.System(ctx, func(sys store.SystemScope) error {
+		if err := b.st.System(ctx, func(sys store.SystemScope) error {
 			if _, e := sys.EnsureSystemTenant(ctx); e != nil {
 				return e
 			}
@@ -1674,10 +1957,10 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 		// must precede every directory, user-authority and audit lock. A refusal here
 		// refuses the promotion; it never closes the store, because a later promotion
 		// of a running follower must leave the node serving as a follower.
-		if err := loginCap.recordAtPromotion(ctx, st); err != nil {
+		if err := b.loginCap.recordAtPromotion(ctx, b.st); err != nil {
 			return err
 		}
-		if communicationComposition != nil {
+		if b.communicationComposition != nil {
 			// The composite proof runs the guard estate ceremony and then proves
 			// the directory status, schema and epochs. A failed or incomplete
 			// proof keeps K3 store readiness OFF, with blockers logged when activation
@@ -1699,34 +1982,50 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 			// it when the proof is only un-activated, WARN when requested activation
 			// has another blocker. An unrequested communication plane is not a boot
 			// failure.
-			if err := communicationComposition.reconcileAndVerify(ctx); err != nil {
-				proof := communicationComposition.store.Proof()
+			if err := b.communicationComposition.reconcileAndVerify(ctx); err != nil {
+				proof := b.communicationComposition.store.Proof()
 				if proof.AwaitingActivation {
-					log.Info("sessions: the communication store is staged and not activated, so K3 store readiness is off",
+					b.log.Info("sessions: the communication store is staged and not activated, so K3 store readiness is off",
 						"remedy", "olivares db activate-directory-writer, then restart the engine",
 						"blockers", strings.Join(proof.Blockers, "; "),
 						"unaffected", "sessions, providers and every other surface of this engine")
-				} else if communicationComposition.activation.Requested {
-					log.Warn("sessions: communication store proof incomplete; K3 store readiness remains off",
+				} else if b.communicationComposition.activation.Requested {
+					b.log.Warn("sessions: communication store proof incomplete; K3 store readiness remains off",
 						"err", err, "proof", proof)
 				}
 			} else {
-				log.Info("sessions: communication store proof established",
-					"proof", communicationComposition.store.Proof())
+				b.log.Info("sessions: communication store proof established",
+					"proof", b.communicationComposition.store.Proof())
 			}
 		} else if communicationStoreWitness != nil {
 			if err := communicationStoreWitness.ReconcileAndVerify(ctx); err != nil {
-				log.Error("sessions: communication guard bootstrap incomplete; K3 store readiness remains off",
+				b.log.Error("sessions: communication guard bootstrap incomplete; K3 store readiness remains off",
 					"err", err)
 			} else {
-				log.Info("sessions: communication guard estate reconciled and verified")
+				b.log.Info("sessions: communication guard estate reconciled and verified")
 			}
 		}
 		if err := recoverSessionRuntimeCredentials(ctx); err != nil {
 			return err
 		}
+		if b.cfg.ServeMode && !b.cfg.ReadOnly && b.set.sessions != nil {
+			// Off the promotion path: it waits for leadership to be visible, which
+			// only happens after this hook returns.
+			startLegacyProfileAdoption(adoptCtx, listSessionOrgs, b.residencyReg, b.set.sessions, b.st.Leader().IsLeader, b.log)
+		}
 		if err := reactivatePDPForPromotion(ctx); err != nil {
 			return fmt.Errorf("pdp: cannot establish a complete tenant inventory for authored Cedar reactivation: %w", err)
+		}
+		if b.cfg.ServeMode && b.set.sessions != nil {
+			// Initial election precedes module composition and Start, which owns
+			// the first recovery. Later promotions re-arm waits created while this
+			// node was a standby, using the same best-effort inventory and workers.
+			for _, status := range b.rt.Status() {
+				if status.Type == sdk.TypeModule && status.Name == sessions.Name && status.Status == runtime.StatusRunning {
+					b.set.sessions.RecoverWaitingLaunchesForAllTenants(ctx)
+					break
+				}
+			}
 		}
 		// Stage-2: the leader label is NOT published from here. This callback
 		// runs while the elector is still `promoting` — leadership is not yet
@@ -1736,13 +2035,13 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 		// IsLeader() flips, which is the same predicate the request gates use.
 		return nil
 	}
-	if cfg.pdpPromotionRegistered != nil {
-		cfg.pdpPromotionRegistered(promote)
+	if b.cfg.pdpPromotionRegistered != nil {
+		b.cfg.pdpPromotionRegistered(promote)
 	}
-	st.Leader().OnPromote(promote)
-	if err := st.Leader().Run(ctx); err != nil {
-		_ = st.Close()
-		return nil, fmt.Errorf("leader election / provision system tenant: %w", err)
+	b.st.Leader().OnPromote(promote)
+	if err := b.st.Leader().Run(ctx); err != nil {
+		_ = b.st.Close()
+		return fmt.Errorf("leader election / provision system tenant: %w", err)
 	}
 	// The resync loop that converges the label onto live leadership is started at the
 	// very END of boot (just before the engine is returned), so no failure path
@@ -1752,12 +2051,16 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 	// store durably appends its HIGH auto-pin event. The community build binds
 	// nothing; the enterprise overlay attaches this store-backed recorder before
 	// any MCP resource server can accept traffic.
-	bindToolPinAudit(set.pinVerifier, st, log)
+	if thisEdition.bindToolPinAudit != nil {
+		thisEdition.bindToolPinAudit(b.set.pinVerifier, b.st, b.log)
+	}
 	// rebuild pins/drifts from the tenant-scoped table and write through
 	// from here on — a restart no longer clears pins, so compatibility TOFU can
 	// no longer re-legitimate a rug-pull across restarts. Community binds
 	// nothing (nil verifier).
-	bindToolPinPersistence(ctx, set.pinVerifier, st, log)
+	if thisEdition.bindToolPinPersistence != nil {
+		thisEdition.bindToolPinPersistence(ctx, b.set.pinVerifier, b.st, b.log)
+	}
 	// arm the bridge's inject gate now that leadership exists. Remote
 	// events reach local subscribers ONLY on the active node — one predicate at
 	// the bus boundary instead of a standby-side-effect patch in every module
@@ -1769,24 +2072,28 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 	// the same call arms the enterprise durable bus's leader-gated JetStream
 	// consumer lifecycle (it binds the durable consumer on promotion, stops it on
 	// demotion) — the durable consumer's server-side position survives failover.
-	if gatedBus != nil {
-		gatedBus.SetInjectGate(st.Leader().Active)
+	if b.gatedBus != nil {
+		b.gatedBus.SetInjectGate(b.st.Leader().Active)
 	}
 	// liveingest's observed-ref derivation is leader-gated for the same
 	// reason — a stateless republisher has no store write to fence it, and the
 	// leader already sees every node's edges over the bridge (exactly-once
 	// derivation cluster-wide). Single-node (always-leader elector) unchanged.
-	set.live.UseLeadership(st.Leader().Active)
+	b.set.live.UseLeadership(b.st.Leader().Active)
 
 	// Honest posture (R2): without a dedicated BYPASSRLS admin pool, authoritative
 	// cross-tenant ceremonies on a properly secured Postgres app role fail with
 	// ErrEnumerationNotAuthoritative. Explicit best-effort visible reads may still
 	// be partial; neither outcome is silently treated as a complete org list.
 	// SQLite needs no admin pool (no roles).
-	if eng == store.EnginePostgres && cfg.AdminDSN == "" {
-		log.Warn("no --admin-dsn configured: authoritative cross-tenant ceremonies fail closed with ErrEnumerationNotAuthoritative; explicitly best-effort visible reads may be partial; provision a NOSUPERUSER BYPASSRLS admin role (deploy/postgres/01-app-role.sql) and set --admin-dsn for full coverage")
+	if b.eng == store.EnginePostgres && b.cfg.AdminDSN == "" {
+		b.log.Warn("no --admin-dsn configured: authoritative cross-tenant ceremonies fail closed with ErrEnumerationNotAuthoritative; explicitly best-effort visible reads may be partial; provision a NOSUPERUSER BYPASSRLS admin role (deploy/postgres/01-app-role.sql) and set --admin-dsn for full coverage")
 	}
 
+	return nil
+}
+
+func (b *bootState) bindServices(ctx context.Context) (err error) {
 	// Module data was bound before leader election so session credential recovery
 	// participates in the promotion barrier. The remaining late-bound consumers
 	// below reuse that same accessor before the runtime starts.
@@ -1794,30 +2101,30 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 	// guard, which was constructed in buildModules before the store existed (the
 	// approval-bridge late-binding pattern). It resolves agent→identity→groups/
 	// clearance/region from the governed identity plane on each retrieval.
-	if set.knowledgeGuard != nil {
-		set.knowledgeGuard.useData(data)
+	if b.set.knowledgeGuard != nil {
+		b.set.knowledgeGuard.useData(b.data)
 	}
-	if set.knowledgeEmbedder != nil {
-		set.knowledgeEmbedder.UseData(data)
+	if b.set.knowledgeEmbedder != nil {
+		b.set.knowledgeEmbedder.UseData(b.data)
 	}
-	if set.knowledgeStatus != nil {
-		set.knowledgeStatus.useGuardPostureStore(st, set.sourceScopeResolver)
+	if b.set.knowledgeStatus != nil {
+		b.set.knowledgeStatus.useGuardPostureStore(b.st, b.set.sourceScopeResolver)
 	}
 	// late-bind the raw store into the account eraser — it needs the AUTH
 	// partition (Store.AuthMutate), which no tenant-scoped data handle can reach —
 	// and the engine's authenticator, whose offboard wakes the retirement pump.
-	if set.accountEraser != nil {
-		set.accountEraser.use(st, authr)
+	if b.set.accountEraser != nil {
+		b.set.accountEraser.use(b.st, b.authr)
 	}
 	// late-bind the same data handle into the policy truth-loop seams, both
 	// constructed in buildModules before the store existed. Until bound, the
 	// distributor is deny-closed (publish reports enqueue-failed, never
 	// "distributed") and the observed provider reports "could not be read".
-	if set.policyDist != nil {
-		set.policyDist.UseData(data)
+	if b.set.policyDist != nil {
+		b.set.policyDist.UseData(b.data)
 	}
-	if set.policyObserved != nil {
-		set.policyObserved.UseData(data)
+	if b.set.policyObserved != nil {
+		b.set.policyObserved.UseData(b.data)
 	}
 
 	// C: serving processes establish every tenant's active Cedar PDP inside
@@ -1831,15 +2138,26 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 	// (AND, never widens; nil-safe). It shares its data handle via UseData above. The
 	// SAME composed evaluator is captured for the hooks PEP, which consults it as a
 	// deny-overlay for a tool-call (one source of policy truth, never a second copy).
-	policyEval := set.gov.Evaluator()
+	b.policyEval = b.set.gov.Evaluator()
 	// the MAIN request authorizer additionally consults the per-tenant SCOPED-GRANT
 	// engine (Cedar) BESIDE the deny-overlay, so authorization is no longer flat RBAC ∩
 	// deny: a permit GRANTS within the scope tree, a forbid still RESTRICTS, default-
 	// deny stands. RequestEvaluator() is the deny-overlay WITHOUT the authored policy (the
 	// scoped seam evaluates that policy once — grants and forbids together). A tenant with
 	// no authored grants makes the scoped engine abstain before any store read.
-	authz := auth.NewAuthorizer(set.gov.RequestEvaluator(), auth.WithScopedGrants(set.gov.ScopedGrants()))
-	setupTok := secure.NewSetupToken(filepath.Join(cfg.DataDir, "setup.token"))
+	b.authz = auth.NewAuthorizer(b.set.gov.RequestEvaluator(), auth.WithScopedGrants(b.set.gov.ScopedGrants()))
+	if b.set.sessions != nil {
+		b.set.sessionDependencies.WorkspaceSnapshotAuthority = workspaceSnapshotAuthority{data: b.st, principals: b.authr, authz: b.authz, scopes: b.set.sourceScopeResolver}.Check
+	}
+	if b.set.skills != nil && b.set.sessions != nil {
+		b.set.skills.UseTargets(skillsTargetAuthority{principals: b.authr, st: b.st, authz: b.authz, sessions: b.set.sessions}, b.set.sessions.RefuseReferencedSkillsPack)
+	}
+	if b.running.skills != nil && b.running.sessions != nil {
+		if err := b.set.sessions.UseSessionSkills(sessionSkillsSource{st: b.st, sessions: b.set.sessions, catalog: b.set.skills}, filepath.Join(b.cfg.DataDir, "session-skill-homes")); err != nil {
+			return err
+		}
+	}
+	b.setupTok = secure.NewSetupToken(filepath.Join(b.cfg.DataDir, "setup.token"))
 
 	// late-bind the eventing platform's two seams. The SAME composed
 	// authorizer (RBAC ∩ governance ABAC) that gates live requests gates every
@@ -1850,33 +2168,33 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 	// secret_unavailable and dead-letter if the sealer never returns — visible
 	// in the DLQ, recoverable by redeliver) — loud, never a cleartext downgrade
 	// and never a boot abort.
-	set.eventing.UseAuthorizer(authz)
-	if set.sessions != nil {
-		set.sessions.UseCommunicationRequestAuthority(authr, authz)
-		set.sessions.UseWorkAuthorizer(authz)
-		set.sessions.UseQueuedCredentialCapture(authr.BindQueuedCredential)
-		set.sessions.UseQueuedLaunchAuthorization(func(ctx context.Context, tenant model.TenantID, credential auth.QueuedCredential, runID string, workspace model.ID) (auth.Principal, error) {
-			return authorizeQueuedSessionLaunch(ctx, authr, authz, tenant, credential, runID, workspace)
-		})
+	b.set.eventing.UseAuthorizer(b.authz)
+	if b.set.sessions != nil {
+		b.set.sessionDependencies.CommunicationAuthority = sessions.NewCommunicationRequestAuthority(b.authr, b.authz)
+		b.set.sessionDependencies.WorkAuthorizer = b.authz
+		b.set.sessionDependencies.QueuedCredentialCapture = b.authr.BindQueuedCredential
+		b.set.sessionDependencies.QueuedLaunchAuthorization = func(ctx context.Context, tenant model.TenantID, credential auth.QueuedCredential, runID string, workspace model.ID) (auth.Principal, error) {
+			return authorizeQueuedSessionLaunch(ctx, b.authr, b.authz, tenant, credential, runID, workspace)
+		}
 		// P2/W3: the managed Stop's composition ports. The resolver reconstructs a
 		// caller's evidence from its credential reference, the authorizer is the same
 		// composed request authorizer that gates live routes, and the elector is the
 		// store's own durable leader fence. No private route calls StopManagedRun yet
 		// (W4); binding the ports makes the module's own admission answerable.
-		set.sessions.UseManagedStopAuthority(authr, authz, st.Leader())
+		b.set.sessionDependencies.ManagedStopAuthority = sessions.NewManagedStopAuthority(b.authr, b.authz, b.st.Leader())
 	}
 	// CM-10: a workflow run binds to the exact credential that starts it, and its
 	// reauthorization binds the successor, through the serving Authenticator. The
 	// binding is resolved at each communication effect by the pair bound above;
 	// orchestration only keeps the opaque handle.
-	if set.orchestration != nil {
-		set.orchestration.UseWorkflowCredentialBinder(authr)
+	if b.set.orchestration != nil {
+		b.set.orchestration.UseWorkflowCredentialBinder(b.authr)
 	}
 	// J10-S3: each publication effect rebuilds its caller from the exact
 	// credential through the serving Authenticator and is authorized by the
 	// same composed Authorizer that gates live routes. Unbound is deny-closed.
-	if set.gitpublish != nil {
-		set.gitpublish.UseAuthority(authr, authz)
+	if b.set.gitpublish != nil {
+		b.set.gitpublish.UseAuthority(b.authr, b.authz)
 	}
 	// Unit G: late-bind the deployment's DURABLE disposition for the egress
 	// destination control. Without it an absent policy permits on every deployment,
@@ -1889,11 +2207,11 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 	// The alternative is the failure this campaign has already shipped: a control that
 	// is present in the code, absent from the binary's behavior, and indistinguishable
 	// from a working one until somebody audits it.
-	if rollout, ok := newEventingEgressRollout(st); ok {
-		set.eventing.UseEgressRollout(rollout)
-		logEventingEgressRollout(ctx, log, rollout, osGetenv(envEventingEgressPolicy) != "")
+	if rollout, ok := newEventingEgressRollout(b.st); ok {
+		b.set.eventing.UseEgressRollout(rollout)
+		logEventingEgressRollout(ctx, b.log, rollout, osGetenv(envEventingEgressPolicy) != "")
 	} else {
-		return nil, fmt.Errorf("eventing: the store does not expose durable rollout state, so the egress destination control cannot establish whether it is in force")
+		return fmt.Errorf("eventing: the store does not expose durable rollout state, so the egress destination control cannot establish whether it is in force")
 	}
 	// Unit H: the writer fence's own durable disposition. Its own key, its own epoch —
 	// deriving it from the destination control's classification is the critical defect an
@@ -1901,18 +2219,18 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 	// eventing.EgressWriterFenceControlKey). Boot-fatal for the same reason as above: a control
 	// present in the code and absent from the binary's behavior is what this campaign has
 	// already shipped once.
-	if fence, ok := newEventingWriterFence(st); ok {
-		set.eventing.UseEgressWriterFence(fence)
-		logEventingWriterFence(ctx, log, fence)
+	if fence, ok := newEventingWriterFence(b.st); ok {
+		b.set.eventing.UseEgressWriterFence(fence)
+		logEventingWriterFence(ctx, b.log, fence)
 	} else {
-		return nil, fmt.Errorf("eventing: the store does not expose durable rollout state, so the egress writer fence cannot establish whether it is armed")
+		return fmt.Errorf("eventing: the store does not expose durable rollout state, so the egress writer fence cannot establish whether it is armed")
 	}
-	eventingSealerPresent := false
-	if sealer, serr := newEventingSealer(cfg.DataDir, osGetenv); serr != nil {
-		log.Error("eventing: secret sealer unavailable; subscriptions are disabled until fixed", "err", serr)
+	b.eventingSealerPresent = false
+	if sealer, serr := newEventingSealer(b.cfg.DataDir, osGetenv); serr != nil {
+		b.log.Error("eventing: secret sealer unavailable; subscriptions are disabled until fixed", "err", serr)
 	} else {
-		set.eventing.UseSecretSealer(sealer)
-		eventingSealerPresent = true
+		b.set.eventing.UseSecretSealer(sealer)
+		b.eventingSealerPresent = true
 	}
 
 	// the managed SSO config service. It backs the console SSO endpoints
@@ -1921,21 +2239,21 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 	// single-IdP provider BUILDER is OPEN-CORE (newFederationBuilder is non-nil in
 	// BOTH builds), so the base AGPL build does real single-IdP login; the
 	// env-configured provider is the FALLBACK used only when no managed config row
-	// exists. The reserved MULTI-IdP capability (newFederationMultiIDP) is nil in the
+	// exists. The reserved MULTI-IdP capability (the federationMultiIDP port) is nil in the
 	// base build — that nil is what enforces the single-IdP cap (a second active IdP
 	// returns multi_idp_requires_enterprise) and limits Resolve to the global config.
 	// A sealer failure leaves the service without a sealer: config WRITES fail closed
 	// (never cleartext), reads/login still work — loud, never a boot abort, never a
 	// cleartext downgrade.
 	var fedSealer auth.FederationSealer
-	federationSealerPresent := false
-	if sealer, serr := newFederationSealer(cfg.DataDir, osGetenv); serr != nil {
-		log.Error("federation: SSO secret sealer unavailable; SSO config writes are disabled until fixed", "err", serr)
+	b.federationSealerPresent = false
+	if sealer, serr := newFederationSealer(b.cfg.DataDir, osGetenv); serr != nil {
+		b.log.Error("federation: SSO secret sealer unavailable; SSO config writes are disabled until fixed", "err", serr)
 	} else {
 		fedSealer = sealer
-		federationSealerPresent = true
+		b.federationSealerPresent = true
 	}
-	fedSvc := auth.NewFederationService(st, fedSealer, newFederationBuilder(), newFederation(osGetenv, log), newFederationMultiIDP())
+	b.fedSvc = auth.NewFederationService(b.st, fedSealer, newFederationBuilder(), newFederation(osGetenv, b.log), thisEdition.federationMultiIDP.get())
 	// U8: converge the derived home-realm domain index (federation_domain_claims) from the
 	// authoritative ClaimedDomains on every config, so an UPGRADED deployment's existing domains
 	// route via the indexed path and any legacy cross-config duplicate is quarantined (deny-closed
@@ -1944,11 +2262,15 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 	// late-bind the SSO posture the identity console reports at
 	// /v1/m/identity/sso. It happens HERE because the federation service needs the
 	// store and the config sealer, so it does not exist when buildModules runs.
-	if set.identityConsole != nil {
-		set.identityConsole.UseSsoPosture(fedSsoPosture{svc: fedSvc})
+	if b.set.identityConsole != nil {
+		b.set.identityConsole.UseSsoPosture(fedSsoPosture{svc: b.fedSvc})
 	}
-	if err := fedSvc.ReconcileDomainClaims(ctx); err != nil {
-		log.Error("federation: home-realm domain index reconcile failed; home-realm routing degraded to the global IdP until fixed", "err", err)
+	if err := b.fedSvc.ReconcileDomainClaims(ctx); errors.Is(err, store.ErrNotLeader) {
+		// A standby never writes: the active writer converges the index at its own boot,
+		// and a `dr backup` run beside a serving node is always a standby.
+		b.log.Info("federation: home-realm domain index not reconciled; this node is a standby and the active writer owns it")
+	} else if err != nil {
+		b.log.Error("federation: home-realm domain index reconcile failed; home-realm routing degraded to the global IdP until fixed", "err", err)
 	}
 
 	// the runtime secret store + reference resolver. The sealer seals stored
@@ -1961,44 +2283,71 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 	// external backends (vault + cloud secret managers) come from the secretref
 	// readers for whichever the environment configures.
 	var secretSealer auth.SecretSealer
-	secretStoreSealerPresent := false
-	if sealer, serr := newSecretSealer(cfg.DataDir, osGetenv); serr != nil {
-		log.Error("secret-store: sealer unavailable; secret writes and store: references are disabled until fixed", "err", serr)
+	b.secretStoreSealerPresent = false
+	if sealer, serr := newSecretSealer(b.cfg.DataDir, osGetenv); serr != nil {
+		b.log.Error("secret-store: sealer unavailable; secret writes and store: references are disabled until fixed", "err", serr)
 	} else {
 		secretSealer = sealer
-		secretStoreSealerPresent = true
+		b.secretStoreSealerPresent = true
 	}
-	secretStore := auth.NewSecretStore(st, secretSealer)
-	set.workspaceSecrets.vault = secretStore
-	secretResolver := newSecretResolver(secretStore, osGetenv, log)
+	b.secretStore = auth.NewSecretStore(b.st, secretSealer)
+	if b.set.deploySetup != nil {
+		b.set.deploySetup.secrets = b.secretStore
+	}
+	b.set.workspaceSecrets.vault = b.secretStore
+	if b.set.knowledge != nil {
+		b.set.knowledge.UseSourceOpener(workspaceKnowledgeSources{principals: b.authr, scopes: b.set.sourceScopeResolver, authz: b.authz, vault: b.secretStore}.Open)
+	}
+	b.secretResolver = newSecretResolver(b.secretStore, osGetenv, b.log)
+	if err := bindManagedSCIMModules(b.set.all, b.st, b.authr, b.secretStore, b.authz); err != nil {
+		return err
+	}
 
 	// One deployment settings writer for the edition, the activation routes and the
 	// module selection. It reads which modules hold data, so an add-on that is
 	// disabled keeps those of its modules selected (productSettings.write).
-	settings := newProductSettings(st, cfg.DataDir)
-	settings.used = func(ctx context.Context) ([]string, error) { return usedModules(ctx, st, census) }
+	b.settings = newProductSettings(b.st, b.cfg.DataDir)
+	b.settings.used = func(ctx context.Context) ([]string, error) { return usedModules(ctx, b.st, b.census) }
+	b.tracingSettings = newTracingSettingsService(b.settings, b.tracer, b.cfg.Version)
+	if err := b.tracingSettings.applyStored(ctx); err != nil {
+		// An unreadable optional tracing choice must not stop the core or enable export.
+		disabled := obstrace.FromEnv(b.cfg.Version)
+		disabled.Enabled = false
+		off, _ := obstrace.New(ctx, disabled)
+		swapCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		_ = b.tracer.Replace(swapCtx, off)
+		cancel()
+		b.log.Warn("tracing settings could not be applied; export is disabled")
+	}
 
 	// Live edition ports are bound only after the real Store, sessions data and
 	// request authorizer and secret resolver exist, before api.New mounts routes.
-	editionResources, err := editionBindModuleDependencies(ctx, editionConfigFrom(cfg), set.all,
-		EditionDependencies{
-			Store: st, Sessions: set.sessions, RuntimeLaunches: set.sessions,
-			Rows: api.NewReadRowAuthorizationPort(authz, authr), Mutations: authz,
-			Principals: authr, Governance: set.gov, Secrets: secretResolver,
-			Authenticator: authr, FederationService: fedSvc, SecretStore: secretStore,
-			RequestRestart: restartRequester(cfg.Restart), ProductSettings: settings,
-			RegisterJobNotRunning: notRunning.register,
-		}, log)
-	if err != nil {
-		_ = st.Close()
-		return nil, fmt.Errorf("bind edition module dependencies: %w", err)
-	}
-	defer func() {
-		if !bootOK {
-			closeEditionResources(editionResources, log)
+	if thisEdition.bindModuleDependencies != nil {
+		b.editionResources, err = thisEdition.bindModuleDependencies(ctx, editionConfigFrom(b.cfg), b.set.all,
+			EditionDependencies{
+				modules: &b.set,
+				Store:   b.st, Sessions: b.set.sessions, RuntimeLaunches: b.set.sessions,
+				Rows: api.NewReadRowAuthorizationPort(b.authz, b.authr), Mutations: b.authz,
+				Principals: b.authr, Governance: b.set.gov, Secrets: b.secretResolver,
+				Authenticator: b.authr, FederationService: b.fedSvc, SecretStore: b.secretStore,
+				RequestRestart: restartRequester(b.cfg.Restart), ProductSettings: b.settings,
+				RegisterJobNotRunning: b.notRunning.register,
+			}, b.log)
+		if err != nil {
+			_ = b.st.Close()
+			return fmt.Errorf("bind edition module dependencies: %w", err)
 		}
-	}()
+	}
+	b.cleanup = append(b.cleanup, func() {
+		if !b.bootOK {
+			closeEditionResources(b.editionResources, b.log)
+		}
+	})
 
+	return nil
+}
+
+func (b *bootState) bindSources(ctx context.Context) (err error) {
 	// the durable source roster (the store-backed successor to the file's
 	// `sources[]`) and the live reconciler that wires it into the running runtime
 	// without a restart. The connector scratch dir is created here (rather than just
@@ -2006,18 +2355,19 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 	// LIVE add too; it is removed on Close (or if the boot aborts). ConnectorTrust
 	// for external (third-party) plugins stays operator-file config (a restart-time
 	// trust decision), read once and handed to the reconciler.
-	sourceStore := auth.NewSourceStore(st)
-	connectorDir, derr := newConnectorScratchDir(cfg.DataDir)
+	b.sourceStore = auth.NewSourceStore(b.st)
+	connectorDir, derr := newConnectorScratchDir(b.cfg.DataDir)
+	b.connectorDir = connectorDir
 	if derr != nil {
-		_ = st.Close()
-		return nil, fmt.Errorf("connector scratch dir: %w", derr)
+		_ = b.st.Close()
+		return fmt.Errorf("connector scratch dir: %w", derr)
 	}
-	defer func() {
-		if !bootOK {
-			_ = os.RemoveAll(connectorDir)
+	b.cleanup = append(b.cleanup, func() {
+		if !b.bootOK {
+			_ = os.RemoveAll(b.connectorDir)
 		}
-	}()
-	sourceReconcilerSvc := newSourceReconciler(rt, sourceStore, secretResolver, secretStore, connectorDir, srcCfg.ConnectorTrust, log)
+	})
+	b.sourceReconcilerSvc = newSourceReconciler(b.rt, b.sourceStore, b.secretResolver, b.secretStore, b.connectorDir, b.srcCfg.ConnectorTrust, b.log)
 	// B1: this node's persistent execution-environment identity, resolved from
 	// node-local state (or the explicit override) — never from the license, a
 	// region, a tenant or a shared database row. Reconciled sources are registered
@@ -2025,76 +2375,92 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 	// module launches only profiles that name it and validates bindings through the
 	// narrow port below. Unavailable ⇒ new launches are deny-closed. Historical
 	// legacy reads and stops remain available without inventing a profile.
-	executionEnvRef, envErr := resolveExecutionEnvironmentRef(cfg.DataDir, !cfg.ReadOnly || !storeIsRemote, osGetenv, log)
+	executionEnvRef, envErr := resolveExecutionEnvironmentRef(b.cfg.DataDir, !b.cfg.ReadOnly || !b.storeIsRemote, osGetenv, b.log)
 	if envErr != nil {
-		_ = st.Close()
-		return nil, envErr
+		_ = b.st.Close()
+		return envErr
 	}
 	if executionEnvRef != "" {
-		sourceReconcilerSvc.useEnvironmentRef(executionEnvRef)
+		b.sourceReconcilerSvc.useEnvironmentRef(executionEnvRef)
 	}
-	if set.sessions != nil {
-		set.sessions.UseExecutionEnvironmentRef(executionEnvRef)
+	if b.set.sessions != nil {
+		b.set.sessions.UseExecutionEnvironmentRef(executionEnvRef)
 		// Where this node keeps the provider account homes it creates. The module
 		// holds no data directory and may import nothing from here, so the root is
 		// resolved once and handed over; a deployment that keeps the homes outside
 		// the data directory supplies its own root to the same seam. Unresolvable
 		// leaves the seam empty, and creating an account home stays deny-closed.
-		if accountsRoot, arErr := accounthome.Root(cfg.DataDir, ""); arErr == nil {
-			set.sessions.UseAccountsRoot(accountsRoot)
+		if accountsRoot, arErr := accounthome.Root(b.cfg.DataDir, ""); arErr == nil {
+			b.set.sessions.UseAccountsRoot(accountsRoot)
 		} else {
-			log.Warn("sessions: no accounts root on this node; creating a provider account home is deny-closed",
+			b.log.Warn("sessions: no accounts root on this node; creating a provider account home is deny-closed",
 				"error", arErr.Error())
 		}
 		// A profile that signs in with the tool's own login gets a HOME the product
 		// creates under the data directory, never the engine user's own home, and the
 		// login itself lives in the tenant's own home there too (FH 036).
-		if cfg.DataDir != "" {
-			if dataDir, absErr := filepath.Abs(cfg.DataDir); absErr == nil {
-				set.sessions.UseProfileHomesRoot(filepath.Join(dataDir, "profile-homes"))
-				set.sessions.UseToolLoginsRoot(filepath.Join(dataDir, toolLoginsDir))
+		if b.cfg.DataDir != "" {
+			if dataDir, absErr := filepath.Abs(b.cfg.DataDir); absErr == nil {
+				b.set.sessions.UseProfileHomesRoot(filepath.Join(dataDir, "profile-homes"))
+				b.set.sessions.UseToolLoginsRoot(filepath.Join(dataDir, toolLoginsDir))
 			}
 		}
-		set.sessions.UseProviderSourceResolver(&providerSourceResolver{
-			store: sourceStore, sr: sourceReconcilerSvc, authz: authz, env: executionEnvRef,
-		})
-		// B2: every session reader — list, detail, timeline, SSE, the runs lookup by
-		// live_ref, the credential→run→timeline export and the replay — understands
-		// profile-scoped rows (modules/sessions/live_scope.go), so the productive
-		// create endpoint now requires provider_profile_ref. This opens the option
-		// only: the module still refuses, deny-closed, a node without an execution
-		// environment identity, an unknown/disabled/retired/foreign profile and a
-		// driver it does not operate. Legacy rows remain readable/stoppable; new
-		// launches and unproven legacy continuations cannot use an ambient home.
-		set.sessions.EnableProfiledLaunches()
+		b.set.sessionDependencies.ProviderSources = &providerSourceResolver{
+			store: b.sourceStore, sr: b.sourceReconcilerSvc, authz: b.authz, env: executionEnvRef,
+		}
 		// The provider-record plane. The VAULT is wired only when the engine has
 		// a sealer — with none, registering a provider is refused with the wiring
 		// named, which is the honest answer: the engine never stores a credential it
 		// cannot protect. The PROBE is always available; it is an outbound model-list
 		// call and it sends no completion.
-		if secretStoreSealerPresent {
-			set.sessions.UseProviderSecretVault(providerSecretVault{store: secretStore})
+		if b.secretStoreSealerPresent {
+			b.set.sessionDependencies.ProviderVault = providerSecretVault{store: b.secretStore}
 		} else {
-			log.Warn("sessions: provider registration is disabled; no secret sealer is available",
+			b.log.Warn("sessions: provider registration is disabled; no secret sealer is available",
 				"effect", "the console and the CLI refuse to register a provider and say so",
 				"unchanged", "launching with the host credential variables")
 		}
-		set.sessions.UseProviderProbe(newProviderProbe())
+		b.set.sessionDependencies.ProviderProbe = newProviderProbe()
 	}
 	// J10-S3: the publication module's custody and closed git executor. Its
 	// approved bindings come from the operator's source roster, and each
 	// credential only from the sealed secret store under git-host/
 	// (gitpublishcustody.go). Without a sealer or a git executable, both stay
 	// unbound and every publication effect answers unavailable.
-	if set.gitpublish != nil {
-		if custody, executor, gerr := newGitPublication(cfg.DataDir, sourceStore, secretStore, secretStoreSealerPresent); gerr != nil {
-			log.Warn("gitpublish: Git-host publication is unavailable until fixed; every push, pull request and merge is refused", "err", gerr)
+	if b.set.gitpublish != nil {
+		if custody, executor, gerr := newGitPublication(b.cfg.DataDir, b.sourceStore, b.secretStore, b.secretStoreSealerPresent); gerr != nil {
+			b.log.Warn("gitpublish: Git-host publication is unavailable until fixed; every push, pull request and merge is refused, and so is a session's GitHub read credential (git_read)", "err", gerr)
 		} else {
-			set.gitpublish.UseCustody(custody)
-			set.gitpublish.UseGit(executor)
+			b.set.gitpublish.UseCustody(custody)
+			b.set.gitpublish.UseGit(executor)
+			// The same custody mints a session's GitHub read credential (git_read).
+			if dir, derr := filepath.Abs(b.cfg.DataDir); derr != nil {
+				b.log.Warn("sessions: a session's GitHub read credential (git_read) is unavailable; such launches are refused", "err", derr)
+			} else if b.set.sessions != nil {
+				b.set.sessionDependencies.GitRead, b.set.sessionDependencies.GitReadDataDir = custody, dir
+			}
+		}
+		// A push that names a session run fetches its commit from the folder the
+		// sessions module recorded for that run. Without sessions, such a push is
+		// refused; a push that names no run is unchanged.
+		if b.set.sessions != nil {
+			b.set.gitpublish.UseSessions(b.set.sessions)
 		}
 	}
 
+	return nil
+}
+
+// departmentService builds the Business department surface, or nil when this edition
+// has none: then the department move and the group placement answer 501.
+func (b *bootState) departmentService() api.DepartmentService {
+	if thisEdition.departmentService == nil {
+		return nil
+	}
+	return thisEdition.departmentService(b.st, b.authr)
+}
+
+func (b *bootState) buildAPI(ctx context.Context) (err error) {
 	// In-place edition: resolve the commercial license by precedence (explicit
 	// --license > OLIVARES_LICENSE_PATH > OLIVARES_LICENSE > the data-dir default
 	// file) and hold it in a LIVE, swappable holder so `license install` / the console
@@ -2104,29 +2470,29 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 	// accounts are unlimited in every tier (B10). A configured-but-unreadable source fails
 	// loudly (explicit operator intent); the absent data-dir default is just "none".
 	licPub := license.DefaultPublicKey()
-	licSrc, lerr := resolveLicense(cfg.LicenseFile, cfg.DataDir, osGetenv)
+	licSrc, lerr := resolveLicense(b.cfg.LicenseFile, b.cfg.DataDir, osGetenv)
 	if lerr != nil {
-		_ = st.Close()
-		return nil, fmt.Errorf("resolve license: %w", lerr)
+		_ = b.st.Close()
+		return fmt.Errorf("resolve license: %w", lerr)
 	}
 	// The holder verifies with the data directory's license trust keyring (the embedded key plus
 	// <data-dir>/license-trust.json), the same keyring install, upgrade and reload use.
-	licHolder := newDataDirLicenseHolder(cfg.DataDir, licSrc, time.Now, log)
+	licHolder := newDataDirLicenseHolder(b.cfg.DataDir, licSrc, time.Now, b.log)
 	// Boot posture: WARN if the engine starts already expired/invalid (honest
 	// degradation — the enterprise add-ons are off, but the engine never crashes,
 	// never loses data and never caps user accounts).
 	switch d := licHolder.display(); d.status {
 	case "grace":
-		log.Warn("license: the installed commercial license is past expiry but inside its grace window at boot — enterprise entitlements are maintained for now; renew before the grace ends (data and user accounts intact)", "licensee", d.licensee, "source", d.source.Kind)
+		b.log.Warn("license: the installed commercial license is past expiry but inside its grace window at boot — enterprise entitlements are maintained for now; renew before the grace ends (data and user accounts intact)", "licensee", d.licensee, "source", d.source.Kind)
 	case "expired":
-		log.Warn("license: the installed commercial license is EXPIRED at boot — running the community edition until renewed (data intact)", "licensee", d.licensee, "source", d.source.Kind)
+		b.log.Warn("license: the installed commercial license is EXPIRED at boot — running the community edition until renewed (data intact)", "licensee", d.licensee, "source", d.source.Kind)
 	case "invalid":
 		// The reason, not a guess at it: this line used to name the KEY unconditionally, and a
 		// signed container this build cannot read verifies against the key perfectly well.
-		log.Warn("license: the installed license could not be read — running the community edition",
+		b.log.Warn("license: the installed license could not be read — running the community edition",
 			"reason", errText(d.reason), "source", d.source.Kind)
 	case "valid", "perpetual":
-		log.Info("license: commercial license loaded", "status", d.status, "licensee", d.licensee, "source", d.source.Kind)
+		b.log.Info("license: commercial license loaded", "status", d.status, "licensee", d.licensee, "source", d.source.Kind)
 	}
 
 	// Seat seam (retained, display-only since B10). Self-hosted user accounts are
@@ -2135,35 +2501,36 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 	// no license state — valid, expired or absent — changes that. The wiring stays so
 	// the enterprise overlay keeps its injection point and the console keeps its
 	// (usage-only) figure. Set once here, before the server is built — race-free.
-	authr.WithSeatPolicy(newSeatPolicy(licHolder.claims, crlViewFromDataDir(cfg.DataDir)))
-	// Grant list and its live holder for the closed add-on gates. No-op in the
-	// AGPL build; the overlay owns any coherent license observation under the
-	// holder's existing lock, trust and source.
-	bindEnterpriseEntitlement(licHolder.grants, licHolder)
+	// The overlay binds all license consumers here, from the same live holder.
+	b.authr.WithSeatPolicy(thisEdition.seatPolicy(licHolder, crlViewFromDataDir(b.cfg.DataDir)))
 
 	// Login enforcement: require-SSO + network/IP allow-list over the login
-	// surface. The default (AGPL) build wires nil (newLoginPolicy → no enforcement,
+	// surface. The default (AGPL) build wires nil (no loginPolicy port → no enforcement,
 	// login byte-identical to today); the enterprise build injects the closed engine
 	// (enterprise/ssoenforce), which reads the stored posture via fedSvc.Posture and
 	// decides — the open binary never links the enforcement code. Set once here,
 	// before the server is built — race-free, like WithSeatPolicy.
-	authr.WithLoginPolicy(newLoginPolicy(osGetenv, fedSvc, log))
+	var loginPolicy auth.LoginPolicy
+	if thisEdition.loginPolicy != nil {
+		loginPolicy = thisEdition.loginPolicy(osGetenv, b.fedSvc, b.log)
+	}
+	b.authr.WithLoginPolicy(loginPolicy)
 	// The declared state and the policy actually wired must agree before any surface is
 	// exposed: Wired without a policy, or a non-Wired state with one, is a node whose
 	// own record contradicts what it serves.
-	if err := loginCap.installAndAssert(authr, fedSvc); err != nil {
-		_ = st.Close()
-		return nil, fmt.Errorf("login enforcement: %w", err)
+	if err := b.loginCap.installAndAssert(b.authr, b.fedSvc); err != nil {
+		_ = b.st.Close()
+		return fmt.Errorf("login enforcement: %w", err)
 	}
 
 	// Login-time group mapping: the default (AGPL) build wires nil
-	// (newGroupMapper → asserted IdP groups are extracted but never mapped to
+	// (no groupMapper port → asserted IdP groups are extracted but never mapped to
 	// grants); the enterprise build injects the reserved GroupMapper
 	// (enterprise/federation), which resolves the groups an IdP asserts at login to
 	// the tenant's directory groups so the existing MappedRole/group-subject grants
 	// fire. The open binary never links the mapping code. Set once here, before the
 	// server is built — race-free, like WithSeatPolicy/WithLoginPolicy.
-	authr.WithGroupMapper(newGroupMapper())
+	b.authr.WithGroupMapper(thisEdition.groupMapper.get())
 
 	// Agent-OBO lifecycle check: the governance module's
 	// CheckAgentForExchange method validates that a named agent exists with
@@ -2171,7 +2538,7 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 	// agent's registered human sponsor. Without this wiring, any token-exchange
 	// request with requested_actor is rejected (deny-closed). Set once here,
 	// before the server is built — race-free, like the seat/login policies.
-	authr.SetAgentLifecycleChecker(set.gov)
+	b.authr.SetAgentLifecycleChecker(b.set.gov)
 
 	// CAEP transmitter: emit agent-risk events to external SSF receivers.
 	// The community (AGPL) build wires nil — no events are pushed outbound and the
@@ -2181,32 +2548,39 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 	// endpoints (RFC 8935). Set once here before the server is built. Bus
 	// subscription over circuit-breaker and session-revoke events is wired in a
 	// follow-up task.
-	caepTx, err := newCAEPTransmitter(osGetenv, log)
-	if err != nil {
-		return nil, fmt.Errorf("load CAEP transmitter operator config: %w", err)
+	if thisEdition.caepTransmitter != nil {
+		// The transmitter is built to validate its operator config; its bus
+		// subscription is wired in a follow-up (Task 7).
+		if _, err := thisEdition.caepTransmitter(osGetenv, b.log); err != nil {
+			return fmt.Errorf("load CAEP transmitter operator config: %w", err)
+		}
 	}
-	_ = caepTx // bus subscription wired in follow-up (Task 7)
 
 	// The engine-side edition/license service backs the console/CLI install/status +
 	// the live server-info status. Pure edition plumbing — it never gates a feature
 	// (LICENSING.md); it persists/observes/hot-applies the artifact and enforces the
 	// downgrade-acknowledge guard against the LIVE active estate.
-	licSvc := newLicenseService(licHolder, authr, cfg.DataDir, cfg.LicenseFile, osGetenv, buildEdition, log)
+	b.licSvc = newLicenseService(licHolder, b.authr, b.cfg.DataDir, b.cfg.LicenseFile, osGetenv, thisEdition.name, b.log)
 
 	// the enterprise activation service backs the console /v1/console/activation
 	// surface (per-add-on state + enable/disable/promote). It is enterprise-only — the
-	// community build's seam returns nil (wire_noenterprise.go) so the routes 501. It
+	// community build has no activationService port, so the routes 501. It
 	// reads/writes the SAME governed activation manifest the CLI does and audits changes
 	// through the live store (SystemTenantID scope).
-	actSvc := recordingActivation(newActivationService(cfg.DataDir, st, buildEdition, log),
-		settings, restartRequester(cfg.Restart), log)
+	var activation api.ActivationService
+	if thisEdition.activationService != nil {
+		activation = thisEdition.activationService(b.cfg.DataDir, b.st, thisEdition.name, b.log)
+	}
+	actSvc := recordingActivation(activation, b.settings, restartRequester(b.cfg.Restart), b.log)
 
 	// Privileged login: the PIV/CAC route config is loaded once and shared
 	// between the API (verification) and the serve command (the HTTP listener
 	// must request the optional client certificate — engine.pivConfig).
-	pivCfg, err := loadPIVConfig(osGetenv, log)
-	if err != nil {
-		return nil, fmt.Errorf("load PIV operator config: %w", err)
+	if b.cfg.ServeMode {
+		b.pivCfg, err = loadPIVConfig(osGetenv, b.log)
+		if err != nil {
+			return fmt.Errorf("load PIV operator config: %w", err)
+		}
 	}
 
 	// OPS-5 inbound rate limiting, always non-nil (secure-by-default), with
@@ -2216,35 +2590,35 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 	// chart sets it when replicaCount > 1); single-node stays in-proc and pays
 	// no per-request round trip. Store outages degrade to per-node enforcement
 	// behind a circuit breaker — bounded, counted, alertable, never unlimited.
-	rlCfg, err := loadRateLimitConfig(osGetenv, log)
+	rlCfg, err := loadRateLimitConfig(osGetenv, b.log)
 	if err != nil {
-		return nil, fmt.Errorf("load rate limit operator config: %w", err)
+		return fmt.Errorf("load rate limit operator config: %w", err)
 	}
-	rlCfg.LogWarn = func(msg string, err error) { log.Warn(msg, "err", err) }
-	var rlStore *pgstore.Store
-	if useShared, serr := resolveRateLimitStore(osGetenv, eng); serr != nil {
-		return nil, fmt.Errorf("rate limit store: %w", serr)
+	rlCfg.LogWarn = func(msg string, err error) { b.log.Warn(msg, "err", err) }
+
+	if useShared, serr := resolveRateLimitStore(osGetenv, b.eng); serr != nil {
+		return fmt.Errorf("rate limit store: %w", serr)
 	} else if useShared {
-		ps, perr := pgstore.Open(ctx, dsn, pgstore.Options{
+		ps, perr := pgstore.Open(ctx, b.dsn, pgstore.Options{
 			IdleTTL:  ratelimit.IdleTTLFor(rlCfg.Tiers),
-			Registry: reg,
-			Logger:   log,
+			Registry: b.reg,
+			Logger:   b.log,
 			// Owner/app split: the bucket-table + take-function DDL needs
 			// CREATE on the schema, which the app role deliberately lacks.
-			DDLDSN: cfg.OwnerDSN,
+			DDLDSN: b.cfg.OwnerDSN,
 		})
 		if perr != nil {
-			return nil, fmt.Errorf("rate limit store: %w", perr)
+			return fmt.Errorf("rate limit store: %w", perr)
 		}
-		rlStore = ps
+		b.rlStore = ps
 		rlCfg.Store = ps
-		log.Info("rate limit: shared Postgres bucket store active (global quotas across nodes)")
+		b.log.Info("rate limit: shared Postgres bucket store active (global quotas across nodes)")
 	}
-	defer func() {
-		if !bootOK && rlStore != nil {
-			_ = rlStore.Close()
+	b.cleanup = append(b.cleanup, func() {
+		if !b.bootOK && b.rlStore != nil {
+			_ = b.rlStore.Close()
 		}
-	}()
+	})
 
 	// OTA update indicator: OPT-IN. With OLIVARES_UPDATE_ENDPOINT set AND a
 	// release key embedded, run a cached background check the console reads via the
@@ -2254,49 +2628,57 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 		updateStatusFn  func() updatecheck.Status
 		updateRefreshFn func(context.Context) updatecheck.Status
 	)
-	if ep := strings.TrimSpace(os.Getenv("OLIVARES_UPDATE_ENDPOINT")); cfg.ServeMode && ep != "" {
+	if ep := strings.TrimSpace(envconfig.Get("OLIVARES_UPDATE_ENDPOINT")); b.cfg.ServeMode && ep != "" {
 		if pk := release.EmbeddedKey(); pk != nil {
-			ch := strings.TrimSpace(os.Getenv("OLIVARES_UPDATE_CHANNEL"))
+			ch := strings.TrimSpace(envconfig.Get("OLIVARES_UPDATE_CHANNEL"))
 			if ch == "" {
 				ch = release.ChannelStable
 			}
 			checker := updatecheck.NewChecker(updatecheck.Config{
-				Endpoint: ep, Channel: ch, CurrentVersion: cfg.Version,
-				InstallID: resolveInstallID(cfg.DataDir), PubKey: pk,
+				Endpoint: ep, Channel: ch, CurrentVersion: b.cfg.Version,
+				InstallID: resolveInstallID(b.cfg.DataDir), PubKey: pk,
 			}, 6*time.Hour)
 			go checker.Run(ctx)
 			updateStatusFn = checker.Latest
 			updateRefreshFn = checker.Refresh
-			log.Info("update check enabled (console indicator)", "endpoint", ep, "channel", ch)
+			b.log.Info("update check enabled (console indicator)", "endpoint", ep, "channel", ch)
 		} else {
-			log.Warn("OLIVARES_UPDATE_ENDPOINT set but this build embeds no release key; update checking disabled")
+			b.log.Warn("OLIVARES_UPDATE_ENDPOINT set but this build embeds no release key; update checking disabled")
 		}
 	}
 
+	memoryKeyInfo := b.memoryKey.custodyInfo("memory-portability")
+	memoryKeyInfo.Present = b.memoryKeyErr == nil
 	keyCustody := api.KeyCustodyInfo{Keys: []api.KeyInfo{
-		auditKey.custodyInfo("audit"),
-		catalogKey.custodyInfo("catalog"),
-		policyKey.custodyInfo("policy"),
+		b.auditKey.custodyInfo("audit"),
+		b.catalogKey.custodyInfo("catalog"),
+		b.policyKey.custodyInfo("policy"),
+		memoryKeyInfo,
 		{
 			Purpose:     "license",
 			Algorithm:   "ed25519",
 			Origin:      license.KeyOrigin(),
 			Fingerprint: license.KeyFingerprint(),
 		},
-		sealerCustodyInfo("eventing", osGetenv(eventingSecretKeyEnv), eventingSealerPresent),
-		sealerCustodyInfo("sso", osGetenv(federationSecretKeyEnv), federationSealerPresent),
-		sealerCustodyInfo("secret-store", osGetenv(secretStoreKeyEnv), secretStoreSealerPresent),
+		sealerCustodyInfo("eventing", osGetenv(eventingSecretKeyEnv), b.eventingSealerPresent),
+		sealerCustodyInfo("sso", osGetenv(federationSecretKeyEnv), b.federationSealerPresent),
+		sealerCustodyInfo("secret-store", osGetenv(secretStoreKeyEnv), b.secretStoreSealerPresent),
 	}}
 
-	agentTools, err := agenttoolsapi.New(ctx, toolInstallEngine(ctx), filepath.Join(absOrSame(cfg.DataDir), "tools"), cfg.ReadOnly)
+	b.agentTools, err = agenttoolsapi.New(ctx, toolInstallEngine(ctx), filepath.Join(absOrSame(b.cfg.DataDir), "tools"), b.cfg.ReadOnly)
 	if err != nil {
-		return nil, fmt.Errorf("agent tools API: %w", err)
+		return fmt.Errorf("agent tools API: %w", err)
+	}
+	// The tools' logins, status reads, probes and Ollama run confined like a session child (#1114).
+	b.agentTools.SetChildCommand(confinedToolCommand(b.cfg.DataDir))
+	if state := confine.Probe(); state.Mode != confine.ModeLandlock {
+		b.log.Warn("agent tools: the tools' logins, status reads and probes run UNCONFINED on this node and can read what the engine user can; enable Landlock and run olivares doctor", "reason", state.Reason)
 	}
 	// Sign-in runs the same executable a session launch runs (sessionruntime.go).
-	toolObserver := newHostToolObserverForDataDir(cfg.DataDir, osGetenv)
-	agentTools.SetProgramResolver(func(driver string) string {
-		pins := map[string]string{"claude": envSessionClaudeBin, "codex": envSessionCodexBin}
-		if bin := strings.TrimSpace(osGetenv(pins[driver])); pins[driver] != "" && bin != "" {
+	toolObserver := newHostToolObserverForDataDir(b.cfg.DataDir, osGetenv)
+	b.agentTools.SetProgramResolver(func(driver string) string {
+		facts, _ := driverfacts.Lookup(driver)
+		if bin := strings.TrimSpace(osGetenv(facts.RuntimeBinEnv)); facts.RuntimeBinEnv != "" && bin != "" {
 			return bin
 		}
 		return installedSessionProgram(toolObserver, driver, exec.LookPath)
@@ -2304,10 +2686,10 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 	// FH 036: the tools' own logins live in a home the product creates per tenant
 	// under the data directory (<data>/tool-logins/<tenant>/<driver>), never in the
 	// engine user's own home; a tenant this node does not serve has none.
-	if dataDir, absErr := filepath.Abs(cfg.DataDir); cfg.DataDir != "" && absErr == nil {
+	if dataDir, absErr := filepath.Abs(b.cfg.DataDir); b.cfg.DataDir != "" && absErr == nil {
 		loginsRoot := filepath.Join(dataDir, toolLoginsDir)
-		agentTools.SetLoginHome(func(ctx context.Context, tenant model.TenantID, driver, accountRef string) (string, string, error) {
-			served, err := servesTenant(ctx, st, tenant)
+		b.agentTools.SetLoginHome(func(ctx context.Context, tenant model.TenantID, driver, accountRef string) (string, string, error) {
+			served, err := servesTenant(ctx, b.st, tenant)
 			if err != nil {
 				return "", "", err
 			}
@@ -2315,11 +2697,14 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 				return "", "", errors.New("that organization is not served by this node")
 			}
 			if accountRef != "" {
-				if set.sessions == nil {
+				if b.set.sessions == nil {
 					return "", "", errors.New("provider accounts are not available on this node")
 				}
-				home, configDir, err := set.sessions.ProviderLoginHome(ctx, tenant, driver, accountRef)
+				home, configDir, err := b.set.sessions.ProviderLoginHome(ctx, tenant, driver, accountRef)
 				return home, configDir, err
+			}
+			if driver == "opencode" && b.set.sessions != nil {
+				return b.set.sessions.DefaultToolLoginHome(ctx, tenant, driver)
 			}
 			home, configDir, ok := sessions.ToolLoginHome(loginsRoot, tenant, driver)
 			if !ok {
@@ -2328,54 +2713,61 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 			return home, configDir, nil
 		})
 	}
-	if set.sessions != nil {
+	if b.set.sessions != nil {
 		// The rule that picks a new session's profile reads the same sign-in
 		// status the AI tools page shows (POST provider-profiles/resolve).
-		set.sessions.UseToolLoginStatus(agentTools.LoginStatus)
+		b.set.sessionDependencies.ToolLogin = b.agentTools.LoginStatus
+		b.set.sessionDependencies.ProfileLogin = b.agentTools.LoginStatusForProfile
+	}
+	wireModelAvailability(b.set, b.st, b.sourceReconcilerSvc)
+	// A confirmed product sign-in queues a model-list refresh for that tenant
+	// (MODELS CONSUMERS.md: FH owns the sign-in callback; it does no I/O itself).
+	if b.set.models != nil {
+		b.agentTools.OnSignedIn(b.set.models.WakeAvailability)
 	}
 	// HU-R17: the installed Ollama, run by the engine on request, with its models under
 	// the data directory and its endpoint registered as a provider once it answers.
-	ollamaDir := filepath.Join(absOrSame(cfg.DataDir), "ollama")
-	agentTools.UseOllama(agenttoolsapi.OllamaConfig{
+	ollamaDir := filepath.Join(absOrSame(b.cfg.DataDir), "ollama")
+	b.agentTools.UseOllama(agenttoolsapi.OllamaConfig{
 		ModelsDir: filepath.Join(ollamaDir, "models"),
 		HomeDir:   filepath.Join(ollamaDir, "home"),
-		Command:   confinedOllamaCommand(cfg.DataDir),
-		Register:  registerLocalOllama(set.sessions, st),
+		Register:  registerLocalOllama(b.set.sessions, b.st),
 		StateFile: filepath.Join(ollamaDir, "started.json"),
 		Audit: func(ctx context.Context, draft model.AuditDraft) error {
-			return st.Mutate(ctx, model.SystemTenantID, func(sc store.Scope) error {
+			return b.st.Mutate(ctx, model.SystemTenantID, func(sc store.Scope) error {
 				_, err := sc.Audit().Append(ctx, draft)
 				return err
 			})
 		},
 	})
-	// HU2-14: the Ollama a person started comes back with the engine.
-	agentTools.RestartOllama()
-	defer func() {
-		if !bootOK {
-			agentTools.Close()
+	// The Ollama a person started comes back with the engine.
+	b.agentTools.RestartOllama()
+	b.cleanup = append(b.cleanup, func() {
+		if !b.bootOK {
+			b.agentTools.Close()
 		}
-	}()
-	set.all = set.apiModules(agentTools)
-	gatewayCfg, err := loadAgentGatewayConfig(log)
+	})
+	b.set.all = b.set.apiModules(b.agentTools)
+	b.gatewayCfg, err = loadAgentGatewayConfig(b.log)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	gatewayManagement, err := newMCPManagement(st, secretStore, gatewayCfg, os.Getenv("OLIVARES_AGENT_GATEWAY_CONFIG") != "")
+	b.gatewayManagement, err = newMCPManagement(b.st, b.secretStore, b.gatewayCfg, osGetenv("OLIVARES_AGENT_GATEWAY_CONFIG") != "")
 	if err != nil {
-		return nil, err
+		return err
 	}
 	// server-info's communication_ready, sampled at most once per ttl.
 	communicationReadiness := newCommunicationReady(func(ctx context.Context) (bool, error) {
-		r, err := set.sessions.EvaluateCommunicationReadiness(ctx)
+		r, err := b.set.sessions.EvaluateCommunicationReadiness(ctx)
 		return r.Effective, err
 	})
-	apiSrv, err := api.New(api.Options{
-		Store: st, Authenticator: authr, Authorizer: authz, Signer: signer, Standing: standing,
-		AuthorizationRecorder: set.gov,
+	b.apiSrv, err = api.New(api.Options{
+		Store: b.st, Authenticator: b.authr, Authorizer: b.authz, Signer: b.signer, Standing: b.standing,
+		// The guards hide the store's registry; the workspace contents route reads it.
+		Census: b.census, AuthorizationRecorder: b.set.gov,
 		// Invitations are mailed only through the deployment's own destination,
 		// with links to the console address the operator declared.
-		InviteSender: newInviteSender(osGetenv, notifyDispatcherOf(set), cfg.PublicAddr, log),
+		InviteSender: newInviteSender(osGetenv, notifyDispatcherOf(b.set), b.cfg.PublicAddr, b.log),
 		// ⛔ EL PRODUCTOR DE EVIDENCIA ES EL AUTENTICADOR, Y SIN ESTA LÍNEA UNA RUTA GOBERNADA
 		// IMPIDE ARRANCAR. checkGovernedRoutes se niega a montar un módulo que registre rutas
 		// gobernadas sin productor, así que mientras esto faltara, el día que un módulo real
@@ -2384,57 +2776,63 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 		//
 		// Es `authr` y NO `recoveryAuthr`: el de recuperación se construye sobre otro runtime
 		// de sesión y no es el que resuelve el alcance del principal de una petición normal.
-		PrincipalEvidenceProducer: authr,
-		NotEnabledModules:         notEnabledNamespaces(set.all, profile),
+		PrincipalEvidenceProducer: b.authr,
+		NotEnabledModules:         notEnabledNamespaces(b.set.all, b.profile),
 		CommunicationReady:        communicationReadiness.Ready,
-		SetupToken:                setupTok, Logger: log, LogBroker: logBroker, Version: cfg.Version,
+		SetupToken:                b.setupTok, Logger: b.log, LogBroker: b.logBroker, Version: b.cfg.Version,
 		// The build edition for server-info: the console shows only what this build serves.
-		Edition: buildEdition,
+		Edition: thisEdition.name,
 		// the boot-owned registry, shared with the bus collectors and the
 		// audit checkpointer so /metrics is one exposition.
-		Metrics:          reg,
+		Metrics:          b.reg,
 		LicensePublicKey: licPub,
 		KeyCustody:       keyCustody,
-		BusStats:         busStats,
-		TLSCertNotAfter:  cfg.TLSCertNotAfter,
+		BusStats:         b.busStats,
+		TLSCertNotAfter:  b.cfg.TLSCertNotAfter,
 		// The jobs this node composes but cannot run (server-info jobs_not_running).
-		JobsNotRunning: notRunning.list,
+		JobsNotRunning: b.notRunning.list,
 		// the LIVE edition/license service supersedes the static boot blob — it
 		// backs /v1/console/license and the live server-info status (hot-applied
 		// install/renewal/expiry reflects without a restart). Pure edition plumbing.
-		License: licSvc,
+		License: b.licSvc,
 		// enterprise activation surface (nil in the community build ⇒ 501).
 		Activation: actSvc,
-		Modules:    set.all,
+		// Departments and group places (nil in the community build ⇒ 501).
+		Departments:     b.departmentService(),
+		Modules:         b.set.all,
+		TracingSettings: b.tracingSettings,
 		// Which optional modules the engine runs (/v1/console/modules).
-		ModuleSelection: moduleSelectionService{settings: settings, running: profile,
-			restart: restartRequester(cfg.Restart), log: log, used: settings.used},
+		ModuleSelection: moduleSelectionService{settings: b.settings, running: b.profile,
+			restart: restartRequester(b.cfg.Restart), log: b.log, used: b.settings.used,
+			sessions: b.set.sessions.RunningSessions},
 		// whoami reports authority a tenant-scoped grant confers, not just what the
 		// ROLE confers. Same module that DECIDES the request through the ScopedAuthorizer
 		// above, in its reporting capacity — one source, two capabilities, so the set the
 		// console is handed cannot drift from the engine that produces the 403.
-		UnconditionalGrants: set.gov.UnconditionalGrants(),
+		UnconditionalGrants: b.set.gov.UnconditionalGrants(),
 		// SSO federation: the managed config service backs the console SSO
 		// endpoints AND resolves the live provider (store-driven, with the
 		// env-configured provider as the no-config fallback). The default build has
 		// no provider builder, so login answers 501 until rebuilt -tags enterprise.
-		FederationService: fedSvc,
+		FederationService: b.fedSvc,
 		// the runtime secret store backs the console/CLI secret CRUD endpoints
 		// (/v1/console/secrets). Superadmin + AAL3 gated; secrets are sealed at rest
 		// and only a non-secret hint is ever returned.
-		SecretStore: secretStore,
-		MCPGateway:  gatewayManagement, MCPGatewayRuntime: gatewayManagement,
+		SecretStore: b.secretStore,
+		MCPGateway:  b.gatewayManagement, MCPGatewayRuntime: b.gatewayManagement,
+		// A browser preview of a port a live session listens on (an internal design note (not shipped)).
+		SessionPreview: sessionPreviewHandler(b.set.sessions),
 		// the live source-reconfiguration surface backs the console/CLI source
 		// CRUD and POST /v1/console/runtime/reload — add/remove/rotate connectors in
 		// the running engine without a restart. Superadmin + AAL3 gated.
-		SourceRoster: sourceReconcilerSvc,
-		ContentDiff:  githostdiff.New(sourceReconcilerSvc, secretResolver), // J10-S1: reads the roster's running GitHub/GitLab sources.
+		SourceRoster: b.sourceReconcilerSvc,
+		ContentDiff:  githostdiff.New(b.sourceReconcilerSvc, b.secretResolver), // J10-S1: reads the roster's running GitHub/GitLab sources.
 		// the console connector-onboarding surface (same reconciler) backs the
 		// descriptor catalog + sealed-credential CRUD + test under
 		// /v1/console/connectors — it seals an inline credential into the secret store
 		// and persists a reference-only source it applies live.
-		ConnectorOnboarding: sourceReconcilerSvc,
-		KnowledgeStatus:     set.knowledgeStatus,
+		ConnectorOnboarding: b.sourceReconcilerSvc,
+		KnowledgeStatus:     b.set.knowledgeStatus,
 		// OTA update-availability indicator (nil unless OLIVARES_UPDATE_ENDPOINT set).
 		UpdateStatus:  updateStatusFn,
 		UpdateRefresh: updateRefreshFn,
@@ -2448,7 +2846,7 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 			// overrides one, so the environment is not what this engine is running
 			// on. Every other row keeps its live activation behaviour.
 			return effectiveConfigEntriesFor(os.Environ(), osGetenv, resolvedPublicAddr{
-				addr: cfg.PublicAddr, source: cfg.PublicAddrSource, known: true,
+				addr: b.cfg.PublicAddr, source: b.cfg.PublicAddrSource, known: true,
 			})
 		},
 		EffectiveConfigViolations: func() []string {
@@ -2460,20 +2858,20 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 		// Pod-Ready (and therefore dialable), so application routes re-check
 		// leadership and answer the retryable 503 not_leader on a standby. Off
 		// unless the deployment opts in — a legacy HA layout is unchanged.
-		LeaderRouteGate: haCfg.Gate,
+		LeaderRouteGate: b.haCfg.Gate,
 		// enable console DR; dr_handler resolves an empty BackupDir to
 		// <DataDir>/backups. The passphrase file — the CLI DR commands' own
 		// $OLIVARES_DR_PASSPHRASE_FILE — is what lets the backup schedule run
 		// unattended; without it the schedule runner refuses loudly instead of
 		// writing a bundle it could not seal.
-		DR: &api.DRConfig{DataDir: cfg.DataDir, EngineKind: string(eng), PassphraseFile: osGetenv("OLIVARES_DR_PASSPHRASE_FILE")},
+		DR: consoleDRConfig(b.cfg, b.eng, b.storeSchema, b.storeQuiesce),
 		// Enable the collector→core ingest endpoint on the gRPC server (CB-1 option
 		// C): pushed observations are authorized (ingest:write) and lifted onto the
 		// bus through the runtime. Remote use requires --grpc-client-ca (mTLS).
-		Ingest: rt,
+		Ingest: b.rt,
 		// OBS-03: the ingress trace-context extractor (continues the caller/mesh trace;
 		// no-op when no collector — never breaks a request).
-		Tracing: tracer,
+		Tracing: b.tracer,
 		// OPS-5: inbound per-tenant/per-endpoint-class rate limiting. Always
 		// non-nil (secure-by-default: production is rate-limited even unconfigured);
 		// OLIVARES_RATELIMIT_CONFIG overlays tiers/quotas/mode/per-tenant assignment;
@@ -2481,20 +2879,20 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 		RateLimit: rlCfg,
 		// the residency registry, so org provisioning validates a tenant's
 		// region pin against the configured regions (deny-closed).
-		Residency: residencyReg,
+		Residency: b.residencyReg,
 		// privileged-session recording — every module route is gated and
 		// captured through the recording module (deny-closed on recorded surfaces).
-		Recorder: sessionRecorderOf(running.recorder),
+		Recorder: sessionRecorderOf(b.running.recorder),
 		// V269 / COCKPIT-02 §3: the typed, sealed reader a module route uses when it
 		// declares EntityRef.CoreKind. It never leaves the composition root as anything
 		// wider than five facts.
-		CoreEntityResolver: coreEntityResolver{st: st},
+		CoreEntityResolver: coreEntityResolver{st: b.st},
 		// Privileged login: pinned WebAuthn relying party
 		// (zero value = per-request derivation) and the PIV/CAC client-cert
 		// route (nil = honest 501 seam, no elevation).
-		WebAuthn:         webAuthn.RP,
-		WebAuthnUnusable: webAuthn.Unusable,
-		PIV:              pivCfg,
+		WebAuthn:         b.webAuthn.RP,
+		WebAuthnUnusable: b.webAuthn.Unusable,
+		PIV:              b.pivCfg,
 		// /metrics access-control (env-configurable):
 		// OLIVARES_METRICS_TOKEN = static bearer token for scrape auth;
 		// OLIVARES_METRICS_ALLOWED_CIDRS = comma-separated CIDRs. Unset ⇒
@@ -2508,27 +2906,35 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 		AuthZen: loadAuthZenConfig(osGetenv),
 	})
 	if err != nil {
-		_ = st.Close()
-		return nil, err
+		_ = b.st.Close()
+		return err
 	}
 
-	// Bind every engine approval gate to governance's one in-process service before
-	// Start. No HTTP loopback or operator service credential is used.
-	if set.approvalBridge != nil {
-		set.approvalBridge.credMu.Lock()
-		set.approvalBridge.localProposer = set.gov.EngineApprovals()
-		set.approvalBridge.credMu.Unlock()
-		if set.sessions != nil {
+	return nil
+}
+
+func (b *bootState) bindJobs(ctx context.Context) (err error) {
+	if b.set.catalogDeploy != nil {
+		b.set.catalogDeploy.handler = b.apiSrv.Handler()
+	}
+	// Provider permissions use the local service with their session principal.
+	// Operator-configured bridge calls use the authenticated handler instead.
+	if b.set.approvalBridge != nil {
+		b.set.approvalBridge.UseLocalProposer(b.set.gov.EngineApprovals())
+		b.set.approvalBridge.UseHandler(b.apiSrv.Handler())
+		if b.set.sessions != nil && b.cfg.ServeMode {
 			// The tenants every install can enumerate, this node's region and
 			// service guards applied (servedWorkTenants): the default PostgreSQL
-			// install has no BYPASSRLS admin pool for ListOrgs.
-			set.sessions.UseApprovalRecoveryTenants(func(c context.Context) ([]model.TenantID, error) {
-				return servedWorkTenants(c, st)
-			})
+			// install has no BYPASSRLS admin pool for ListOrgs. Only serve owns
+			// the launches waiting for an approval: an offline command would
+			// start an approved one inside the CLI and end the others.
+			b.set.sessionDependencies.ApprovalRecoveryTenants = func(c context.Context) ([]model.TenantID, error) {
+				return servedWorkTenants(c, b.st)
+			}
 		}
-		if set.gov != nil {
-			set.gov.UseApprovalCapacity(authr.ApprovalCapacity)
-			set.gov.UseApprovalAuthority(authr, authz)
+		if b.set.gov != nil {
+			b.set.gov.UseApprovalCapacity(b.authr.ApprovalCapacity)
+			b.set.gov.UseApprovalAuthority(b.authr, b.authz)
 		}
 	}
 
@@ -2536,9 +2942,9 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 	// bridge's handler is bound (its governed actuator gates through that bridge). nil
 	// (opt-in OFF / unprovisioned) is a no-op. A subscribe error leaves the backstop
 	// inactive — never a boot failure — and the finops_budget_cap finding still stands.
-	if set.finopsBackstop != nil {
-		if err := set.finopsBackstop.subscribe(bus); err != nil {
-			log.Warn("finops-backstop: bus subscription failed; upstream-cap backstop inactive", "err", err)
+	if b.set.finopsBackstop != nil {
+		if err := b.set.finopsBackstop.subscribe(b.bus); err != nil {
+			b.log.Warn("finops-backstop: bus subscription failed; upstream-cap backstop inactive", "err", err)
 		}
 	}
 
@@ -2551,8 +2957,10 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 	// because TWO consumers need the SAME instance: the finding rail drives OnFinding
 	// below, and the inference proxy consults State() on every request. nil in the
 	// community build, so both consumers stay inert and behavior is unchanged.
-	circuitBreaker := newCircuitBreakerEngine(osGetenv, circuitBreakerDeps{Data: data, Gov: set.gov}, log)
-	subscribeCircuitBreaker(circuitBreaker, bus, log)
+	if thisEdition.circuitBreakerEngine != nil {
+		b.circuitBreaker = thisEdition.circuitBreakerEngine(osGetenv, circuitBreakerDeps{Data: b.data, Gov: b.set.gov}, b.log)
+	}
+	subscribeCircuitBreaker(b.circuitBreaker, b.bus, b.log)
 
 	// Late-bind the governed Chat execution adapter, here because this is the
 	// first point at which every dependency it must not run without exists — the store,
@@ -2563,25 +2971,26 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 	// explicit development activation selected it; a false result keeps Chat refused with
 	// chat_execution_not_ready rather than failing the whole boot, which is the right
 	// trade for a storeless or collector process that legitimately cannot serve it.
-	if set.chatExecutor != nil {
-		if set.chatExecutor.bind(chatExecutorDeps{
-			Store: st, Policy: set.inferenceProxy, ContextPolicy: set.knowledge,
-			Residency: residencyReg, Secrets: secretResolver, Approvals: set.approvalBridge,
-			Bus: bus, CircuitBreaker: circuitBreaker,
+	if b.set.chatExecutor != nil {
+		if b.set.chatExecutor.bind(chatExecutorDeps{
+			Providers: b.set.sessions,
+			Store:     b.st, Policy: b.set.inferenceProxy, ContextPolicy: b.set.knowledge,
+			Residency: b.residencyReg, Secrets: b.secretResolver, Approvals: b.set.approvalBridge,
+			Bus: b.bus, CircuitBreaker: b.circuitBreaker,
 		}) {
-			log.Info("models: governed Chat execution adapter bound (development_precheck)")
+			b.log.Info("models: governed Chat execution adapter bound (development_precheck)")
 		} else {
-			log.Error("models: governed Chat execution adapter could not be bound; POST /routing-policies/{id}/execute stays deny-closed for pinned Chat profiles")
+			b.log.Error("models: governed Chat execution adapter could not be bound; POST /routing-policies/{id}/execute stays deny-closed for pinned Chat profiles")
 		}
 	}
-	subscribeIncidentCloseLoop(ctx, osGetenv, bus, log)
+	subscribeIncidentCloseLoop(ctx, osGetenv, b.bus, b.log)
 
 	// subscribe the enterprise AI threat-intel feed engine (build-tag gated;
 	// nil and a no-op in the default AGPL build). It turns curated signed-feed
 	// content into ADDITIVE findings (agentic signatures over guardrail.observed,
 	// MCP reputation over finding.reported, model-lifecycle over cost.sampled). Opt-in
 	// + fail-inert; it never alters the open engine's decisions.
-	subscribeThreatIntel(ctx, osGetenv, bus, log)
+	subscribeThreatIntel(ctx, osGetenv, b.bus, b.log)
 
 	// late-bind the engine handler into the deploy IdentityBinder (the firm
 	// per-agent NHI binding via in-process) and the drift loop, and register the
@@ -2589,165 +2998,197 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 	// sync). Both were constructed in buildModules; nil when unconfigured (the module
 	// keeps its degraded-attribution / no-loop defaults). A drift call before binding
 	// fails closed (nil handler => the next tick runs).
-	if set.deployBinder != nil {
-		set.deployBinder.useHandler(apiSrv.Handler())
+	if b.set.deployBinder != nil {
+		b.set.deployBinder.useHandler(b.apiSrv.Handler())
 	}
-	if set.deployDrift != nil {
-		set.deployDrift.useHandler(apiSrv.Handler())
-		if err := set.deployDrift.register(rt); err != nil {
-			log.Warn("deploy-drift: could not register the drift loop on the scheduler; drift detection disabled", "err", err)
+	// C2 item 2: the drift loop registers only when deploy runs on this node
+	// (module profile). The binder wiring is harmless either way.
+	if deployDriftRegistrationEnabled(b.profile, b.set.deployDrift) {
+		b.set.deployDrift.useHandler(b.apiSrv.Handler())
+		if err := b.set.deployDrift.register(b.rt); err != nil {
+			b.log.Warn("deploy-drift: could not register the drift loop on the scheduler; drift detection disabled", "err", err)
 		}
 	}
 
-	// the retention sweep (contract §6) and the continuous ledger archival
-	// (§8.5), on the runtime's OWN periodic scheduler, registered before Start.
-	// Both hold the real store and are leader-gated per tick (the checkpointer
-	// pattern), so a promoted standby picks them up on its next tick. nil = the
-	// operator disabled the sweep / configured no archive sink (each warned).
-	if sweep := newRetentionSweepLoop(osGetenv, st, running.compliance, log); sweep != nil {
-		notRunning.coverageJob(enumerable, api.JobRetention, log)
-		if err := sweep.register(rt); err != nil {
-			log.Warn("retention-sweep: could not register the sweep loop on the scheduler; periodic retention disposition disabled", "err", err)
+	// The continuous ledger archival (contract §8.5) and its operator config are
+	// built BEFORE the job table: a config error fails the boot (unchanged), and
+	// the sink is wired to the crypto-shred coordinator below. The table only
+	// registers what was built.
+	// Offline reads and data exports do not construct or run archive sinks.
+	if !b.cfg.NoIngest && !b.cfg.ReadOnly {
+		b.archCfg = loadAuditArchiveConfig(osGetenv, b.log)
+		b.arch, err = newAuditArchiveLoop(b.archCfg, b.st, b.signer, b.auditKey.priors, b.log)
+		if err != nil {
+			return fmt.Errorf("load audit archive operator config: %w", err)
 		}
 	}
-	// The FinOps admission recovery, on the same scheduler and behind the same leader gate
-	// as the sweep above. Every minute it retires the claims of callers that stopped before
-	// publishing and releases the holds they named; such a hold is released before it lapses
-	// when two consecutive passes take under three and a half minutes together. Every five
-	// minutes it also sweeps lapsed holds and files the drift that is left. It visits every
-	// served tenant, whether or not a request reaches it (admissionreconcile.go).
-	if recon := newAdmissionReconciler(st, running.finops, log); recon != nil {
-		if err := recon.register(rt); err != nil {
-			log.Warn("finops-admission: could not register the recovery jobs on the scheduler; a stale claim is retired only when its key is retried, and a lapsed hold only expires by its TTL", "err", err)
-		}
-	}
-	// the report schedule pump — fires DUE scheduled reports per tenant
-	// and records each run. nil in the community build (the reporting scheduler is
-	// not wired) or when the operator disabled the cadence — no rug-pull.
-	if pump := newReportSchedulePump(osGetenv, st, running.reporting, log); pump != nil {
-		if err := pump.register(rt); err != nil {
-			log.Warn("reporting-schedule: could not register the schedule pump on the scheduler; scheduled reports disabled", "err", err)
-		}
-	}
-	// the console backup schedule pump — evaluates the PERSISTED DR
-	// schedule each tick and runs a due backup through the exact runBackup path
-	// the console trigger uses, then applies retention and records the run.
-	if pump := newDRSchedulePump(osGetenv, st, apiSrv, log); pump != nil {
-		if err := pump.register(rt); err != nil {
-			log.Warn("dr-schedule: could not register the backup schedule pump on the scheduler; scheduled backups disabled", "err", err)
-		}
-	}
-	archCfg := loadAuditArchiveConfig(osGetenv, log)
-	arch, err := newAuditArchiveLoop(archCfg, st, signer, auditKey.priors, log)
-	if err != nil {
-		return nil, fmt.Errorf("load audit archive operator config: %w", err)
-	}
-	if arch != nil {
-		notRunning.coverageJob(enumerable, api.JobAuditArchive, log)
-		if err := arch.register(rt); err != nil {
-			log.Warn("audit-archive: could not register the archival loop on the scheduler; continuous ledger archival disabled", "err", err)
-		}
-		// the long-horizon legal-hold orchestrator reconciles object-lock legal
-		// holds on the SAME archive sink with each tenant's active engine legal holds.
-		// nil in the community build / when the add-on is not opted in (newLongHorizonHold
-		// returns nil there ⇒ newLongHorizonHoldLoop returns nil) — no rug-pull.
-		if recon := newLongHorizonHold(osGetenv, arch.sink, set.compliance, log); recon != nil {
-			if loop := newLongHorizonHoldLoop(osGetenv, st, recon, log); loop != nil {
-				notRunning.coverageJob(enumerable, api.JobLegalHoldArchive, log)
-				if err := loop.register(rt); err != nil {
-					log.Warn("audit-legalhold: could not register the reconciliation loop on the scheduler; archive legal-hold reconciliation disabled", "err", err)
+	// communicationPump is the registered local outbox pump (K1/K2 lanes plus the
+	// J lane's own authority, used by the engine assembly below).
+
+	// C2 item 1: one job table owned per module. Boot schedules only the
+	// entries whose module this node's profile runs; every closure performs the
+	// same constructor nil-check, coverage registration and warn the inline
+	// block did.
+	scheduleModuleJobs(b.profile, []moduleJob{
+		{"compliance", "retention-sweep", func() {
+			// the retention sweep (contract §6). nil = the operator disabled it
+			// (warned); leader-gated per tick so a promoted standby picks it up.
+			if sweep := newRetentionSweepLoop(osGetenv, b.st, b.running.compliance, b.log); sweep != nil {
+				b.notRunning.coverageJob(b.enumerable, api.JobRetention, b.log)
+				if err := sweep.register(b.rt); err != nil {
+					b.log.Warn("retention-sweep: could not register the sweep loop on the scheduler; periodic retention disposition disabled", "err", err)
 				}
 			}
+		}},
+		{"finops", "finops-admission-recover", func() {
+			// The FinOps admission recovery: every minute it retires stale claims and
+			// releases their holds; every five it sweeps lapsed holds (admissionreconcile.go).
+			if recon := newAdmissionReconciler(b.st, b.running.finops, b.log); recon != nil {
+				if err := recon.register(b.rt); err != nil {
+					b.log.Warn("finops-admission: could not register the recovery jobs on the scheduler; a stale claim is retired only when its key is retried, and a lapsed hold only expires by its TTL", "err", err)
+				}
+			}
+		}},
+		{"reporting", "reporting-schedule", func() {
+			if thisEdition.reportScheduleJob != nil {
+				thisEdition.reportScheduleJob(b)
+			}
+		}},
+		{"", "dr-backup-schedule", func() {
+			// the console backup schedule pump — evaluates the PERSISTED DR
+			// schedule each tick and runs a due backup through the exact runBackup path.
+			if pump := newDRSchedulePump(osGetenv, b.st, b.apiSrv, b.log); pump != nil {
+				if err := pump.register(b.rt); err != nil {
+					b.log.Warn("dr-schedule: could not register the backup schedule pump on the scheduler; scheduled backups disabled", "err", err)
+				}
+			}
+		}},
+		{"", "audit-archive", func() {
+			if b.arch != nil {
+				b.notRunning.coverageJob(b.enumerable, api.JobAuditArchive, b.log)
+				if err := b.arch.register(b.rt); err != nil {
+					b.log.Warn("audit-archive: could not register the archival loop on the scheduler; continuous ledger archival disabled", "err", err)
+				}
+				// the long-horizon legal-hold orchestrator reconciles object-lock
+				// legal holds on the SAME archive sink (nil in the community build).
+				if hold := thisEdition.longHorizonHold; hold != nil {
+					if loop := newLongHorizonHoldLoop(osGetenv, b.st, hold(osGetenv, b.arch.sink, b.set.compliance, b.log), b.log); loop != nil {
+						b.notRunning.coverageJob(b.enumerable, api.JobLegalHoldArchive, b.log)
+						if err := loop.register(b.rt); err != nil {
+							b.log.Warn("audit-legalhold: could not register the reconciliation loop on the scheduler; archive legal-hold reconciliation disabled", "err", err)
+						}
+					}
+				}
+			}
+		}},
+		{"eventing", "eventing-dispatch", func() {
+			// the eventing dispatch pump (retry cadence, crash recovery,
+			// retention pruning), leader-gated per tick. nil = disabled (warned loudly).
+			if pump := newEventingPump(osGetenv, b.st, b.running.eventing, b.log); pump != nil {
+				if err := pump.register(b.rt); err != nil {
+					b.log.Warn("eventing-dispatch: could not register the pump on the scheduler; webhook retries and pruning disabled", "err", err)
+				}
+			}
+		}},
+		{"sessions", "sessions-work-outbox", func() {
+			// K1/K2: recover committed WorkOutbox rows and expired WorkLease owners
+			// after a process restart.
+			if pump := newWorkOutboxPump(osGetenv, b.st, b.set.sessions, b.log); pump != nil {
+				pump.useCommunication(b.communicationComposition.pumpWitness(), b.communicationComposition.outboxAuthority())
+				if b.cfg.workOutboxPumpPrepared != nil {
+					b.cfg.workOutboxPumpPrepared(pump)
+				}
+				if err := pump.register(b.rt); err != nil {
+					b.log.Warn("sessions-work-outbox: could not register the pump; durable work events remain pending (K3 lane stays OFF)", "err", err)
+				}
+				b.communicationPump = pump
+			}
+		}},
+		{"sessions", "run-lineage-repair", func() {
+			// P2/W3: the bounded run-lineage repair, leader-gated per tick and per
+			// page. nil only when the sessions module is not composed.
+			if loop := newRunLineageRepairLoop(b.st, b.set.sessions, b.log); loop != nil {
+				if err := loop.register(b.rt); err != nil {
+					b.log.Warn("run-lineage-repair: could not register the repair loop on the scheduler; runs without authorization lineage stay hidden from confined readers", "err", err)
+				}
+			}
+		}},
+		{"orchestration", "orchestration-cadence", func() {
+			// the orchestration cadence pump — the cadence-miss anti-evasion
+			// scan per business tenant. nil = the operator disabled it (warned).
+			if pump := newOrchCadencePump(osGetenv, b.st, b.running.orchestration, b.log); pump != nil {
+				if err := pump.register(b.rt); err != nil {
+					b.log.Warn("orchestration-cadence: could not register the pump on the scheduler; unattended cadence-miss detection disabled", "err", err)
+				}
+			}
+		}},
+		{"orchestration", "orchestration-workflow", func() {
+			// the workflow-run pump — advances running DAG workflows per
+			// business tenant. nil = the operator disabled it (warned).
+			if pump := newOrchWorkflowPump(osGetenv, b.st, b.running.orchestration, b.log); pump != nil {
+				if err := pump.register(b.rt); err != nil {
+					b.log.Warn("orchestration-workflow: could not register the pump on the scheduler; wait/approval-gate workflow steps will not advance in the background", "err", err)
+				}
+			}
+		}},
+		{"notify", "notify-dispatch", func() {
+			// the durable notification-outbox pump. With routing enqueue-only,
+			// this pump is what actually delivers, so a disable warns.
+			if pump := newNotifyPump(osGetenv, b.st, b.running.notify, b.log); pump != nil {
+				if err := pump.register(b.rt); err != nil {
+					b.log.Warn("notify-dispatch: could not register the pump on the scheduler; notifications will NOT be delivered", "err", err)
+				}
+			}
+		}},
+		{"gitpublish", "gitpublish-sweep", func() {
+			// J10-S3: the publication sweep settles stale dispatches and re-observes
+			// uncertain intents; it never dispatches. 0 disables it (warned).
+			if b.running.gitpublish != nil {
+				if interval, ok := gitpublishSweepInterval(osGetenv(gitpublishSweepIntervalEnv), b.log); ok {
+					if err := b.rt.SchedulePeriodic(gitpublishSweepJobName, interval, false, b.running.gitpublish.SweepPump(b.st.Leader(), gitpublishSweepTenants(b.st, b.log))); err != nil {
+						b.log.Warn("gitpublish-sweep: could not register the sweep on the scheduler; stale publications are not settled", "err", err)
+					}
+				}
+			}
+		}},
+		{"siemforward", "siem-ledger-forward", func() {
+			// the SIEM ledger-forward pump — walks each tenant's audit ledger
+			// from a cursor and forwards to SIEM towers over the eventing engine.
+			if pump := newLedgerForwardPump(osGetenv, b.st, b.running.siemforward, b.log); pump != nil {
+				if err := pump.register(b.rt); err != nil {
+					b.log.Warn("siem-ledger-forward: could not register the pump on the scheduler; the audit ledger will not reach SIEM towers", "err", err)
+				}
+			}
+		}},
+	})
+
+	// SR2C P2 (round 2): the work-outbox pump's nudge goroutine and the global
+	// sessions callback went live inside register() above. On any boot failure
+	// after this point (the hook-config refusal below is the reachable one) the
+	// bootOK unwind must stop the pump — cancel + join the goroutine and
+	// withdraw the callback — or a failed boot leaks both, pointing at a dead
+	// store. On success the engine's Close() owns stop.
+	b.cleanup = append(b.cleanup, func() {
+		if !b.bootOK && b.communicationPump != nil {
+			b.communicationPump.stop()
 		}
-	}
+	})
+
+	return nil
+}
+
+func (b *bootState) bindSessionGovernance(ctx context.Context) (err error) {
 	// bind the enterprise RTBF crypto-shred coordinator's evidence ports —
 	// the legal-hold checker over the compliance module and the SAME WORM archive
 	// sink the ledger archival writes to (nil when archival is off; the coordinator
 	// then blocks WORM-coordinated shreds, deny-closed). A no-op in the default
 	// build (wire_noenterprise.go) and when the coordinator is not configured.
 	var archSink audit.ArchiveSink
-	if arch != nil {
-		archSink = arch.sink
+	if b.arch != nil {
+		archSink = b.arch.sink
 	}
-	bindCryptoShredPorts(set.rtbfCoordinator, archSink, archCfg.sink, set.compliance, log)
-
-	// the eventing dispatch pump (retry cadence, crash recovery, retention
-	// pruning), on the runtime's OWN periodic scheduler, leader-gated per tick
-	// like the sweeps above. nil = the operator disabled it (warned loudly).
-	if pump := newEventingPump(osGetenv, st, running.eventing, log); pump != nil {
-		if err := pump.register(rt); err != nil {
-			log.Warn("eventing-dispatch: could not register the pump on the scheduler; webhook retries and pruning disabled", "err", err)
-		}
-	}
-	// K1/K2: recover committed WorkOutbox rows and expired WorkLease owners after
-	// a process restart. Only this leader-gated cadence makes recovery independent
-	// of receiving another command.
-	var communicationPump *workOutboxPump
-	if pump := newWorkOutboxPump(osGetenv, st, set.sessions, log); pump != nil {
-		pump.useCommunication(communicationComposition.pumpWitness(), communicationComposition.outboxAuthority())
-		if err := pump.register(rt); err != nil {
-			log.Warn("sessions-work-outbox: could not register the pump; durable work events remain pending (K3 lane stays OFF)", "err", err)
-		}
-		communicationPump = pump
-	}
-	// P2/W3: the bounded run-lineage repair, on the runtime's OWN periodic scheduler,
-	// registered before Start and leader-gated per tick and per page. nil only when
-	// the sessions module is not composed.
-	if loop := newRunLineageRepairLoop(st, set.sessions, log); loop != nil {
-		if err := loop.register(rt); err != nil {
-			log.Warn("run-lineage-repair: could not register the repair loop on the scheduler; runs without authorization lineage stay hidden from confined readers", "err", err)
-		}
-	}
-
-	// the orchestration cadence pump — runs the cadence-miss anti-evasion
-	// scan per business tenant so a silent schedule raises its Finding without
-	// anyone reading the console. Same posture as the eventing pump: runtime
-	// scheduler, leader-gated per tick. nil = the operator disabled it (warned).
-	if pump := newOrchCadencePump(osGetenv, st, running.orchestration, log); pump != nil {
-		if err := pump.register(rt); err != nil {
-			log.Warn("orchestration-cadence: could not register the pump on the scheduler; unattended cadence-miss detection disabled", "err", err)
-		}
-	}
-
-	// the workflow-run pump — advances running DAG workflows (waits,
-	// approval-gate polling, kill-switch-frozen resumes, crash-orphaned claims)
-	// per business tenant. Same posture: runtime scheduler, leader-gated per
-	// tick. nil = the operator disabled it (warned).
-	if pump := newOrchWorkflowPump(osGetenv, st, running.orchestration, log); pump != nil {
-		if err := pump.register(rt); err != nil {
-			log.Warn("orchestration-workflow: could not register the pump on the scheduler; wait/approval-gate workflow steps will not advance in the background", "err", err)
-		}
-	}
-
-	// the durable notification-outbox pump — delivers enqueued notifications with
-	// retry/backoff and dead-letters on exhaustion, out of band of the bus handler. Same
-	// posture as the eventing pump: runtime scheduler, leader-gated per tick. With
-	// routing now enqueue-only, this pump is what actually delivers, so a disable warns.
-	if pump := newNotifyPump(osGetenv, st, running.notify, log); pump != nil {
-		if err := pump.register(rt); err != nil {
-			log.Warn("notify-dispatch: could not register the pump on the scheduler; notifications will NOT be delivered", "err", err)
-		}
-	}
-
-	// J10-S3: the publication sweep settles stale dispatches as uncertain and
-	// re-observes uncertain intents; it never dispatches. The pump itself skips
-	// a standby node. 0 disables it (warned).
-	if running.gitpublish != nil {
-		if interval, ok := gitpublishSweepInterval(osGetenv(gitpublishSweepIntervalEnv), log); ok {
-			if err := rt.SchedulePeriodic(gitpublishSweepJobName, interval, false, running.gitpublish.SweepPump(st.Leader(), gitpublishSweepTenants(st, log))); err != nil {
-				log.Warn("gitpublish-sweep: could not register the sweep on the scheduler; stale publications are not settled", "err", err)
-			}
-		}
-	}
-
-	// the SIEM ledger-forward pump — walks each tenant's tamper-evident audit
-	// ledger from a cursor and forwards new records to SIEM control towers over the
-	// eventing engine. Same posture as the eventing pump: runtime scheduler,
-	// leader-gated per tick. nil = the module is unwired or the operator disabled it.
-	if pump := newLedgerForwardPump(osGetenv, st, running.siemforward, log); pump != nil {
-		if err := pump.register(rt); err != nil {
-			log.Warn("siem-ledger-forward: could not register the pump on the scheduler; the audit ledger will not reach SIEM towers", "err", err)
-		}
+	if thisEdition.bindCryptoShredPorts != nil {
+		thisEdition.bindCryptoShredPorts(b.set.rtbfCoordinator, archSink, b.archCfg.sink, b.set.compliance, b.log)
 	}
 
 	// late-bind the OPERATE governance onto module II (sessions) before Start —
@@ -2756,44 +3197,46 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 	// read-model backs the evals monitor), so its governance gates late-bind here, now
 	// that the store, the approval bridge and FinOps are all live. stopDeny is the
 	// shared throttled deny recorder (the engine reuses the same instance below).
-	stopDeny := newStopDenyRecorder(st, log)
-	sessionHooks := newSessionHookCredentials(authr, st, set.sessions, set.gov)
+	b.stopDeny = newStopDenyRecorder(b.st, b.log)
+	b.sessionHooks = newSessionHookCredentials(b.authr, b.st, b.set.sessions, b.set.gov)
 	// Bind ordinary turn costs to the same current session principal as hooks
 	// and provider approvals. The owning port publishes the cost event itself.
-	set.sessions.UseSessionCostSink(&sessionCostSink{credentials: sessionHooks.SessionCredentials, sessions: set.sessions})
-	sessions.WithProviderApprovalPrincipalResolver(func(c context.Context, tenant model.TenantID, runRef string) (auth.Principal, string, error) {
-		p, scope, err := sessionHooks.ResolveRun(c, tenant, runRef)
+	b.set.sessionDependencies.CostSink = &sessionCostSink{credentials: b.sessionHooks.SessionCredentials, sessions: b.set.sessions}
+	// A turn its tool metered and did not price (Codex) is priced at list price.
+	b.set.sessionDependencies.ListPricer = sessionListPrice
+	b.set.sessionDependencies.ProviderApprovalPrincipal = func(c context.Context, tenant model.TenantID, runRef string) (auth.Principal, string, error) {
+		p, scope, err := b.sessionHooks.ResolveRun(c, tenant, runRef)
 		return p, scope.SessionRef, err
-	})(set.sessions)
-	providerPolicy := sessionProviderPolicy{credentials: sessionHooks.SessionCredentials, eval: policyEval, scoped: set.gov.ScopedGrants(), approvals: set.gov.EngineApprovals(), store: st, redactSecrets: set.sessions.RedactSessionSecretsWithSpans}
-	sessions.WithProviderApprovalPolicy(providerPolicy.Decide)(set.sessions)
-	sessions.WithProviderApprovalGate(providerApprovalAdapter{bridge: set.approvalBridge, approvalWait: set.sessions.BeginApprovalWait, reviewFacts: providerPolicy.reviewFacts, reviewReason: providerPolicy.reviewReason})(set.sessions)
-	_, hookErr := loadHookPEPConfig(log)
-	if hookErr != nil {
-		return nil, hookErr
 	}
-	wireSessionGovernance(running, st, stopDeny, bus, osGetenv, log, sessionHooks.provisioner())
+	providerPolicy := sessionProviderPolicy{credentials: b.sessionHooks.SessionCredentials, eval: b.policyEval, scoped: b.set.gov.ScopedGrants(), authz: b.authz, approvals: b.set.gov.EngineApprovals(), store: b.st, redactSecrets: b.set.sessions.RedactSessionSecretsWithSpans}
+	b.set.sessionDependencies.ProviderApprovalPolicy = providerPolicy.Decide
+	b.set.sessionDependencies.ApprovalGate = providerApprovalAdapter{bridge: b.set.approvalBridge, approvalWait: b.set.sessions.BeginApprovalWait, reviewFacts: providerPolicy.reviewFacts, reviewReason: providerPolicy.reviewReason}
+	_, hookErr := loadHookPEPConfig(b.log)
+	if hookErr != nil {
+		return hookErr
+	}
+	wireSessionGovernance(b.running, b.st, b.stopDeny, b.bus, osGetenv, b.log, b.sessionHooks.provisioner())
 
 	// the guardian sweep pump — executes guardian containments whose HITL
 	// approval landed (the human's click takes effect within one tick). Same
 	// posture as the eventing pump: runtime scheduler, leader-gated per tick.
-	if pump := newGuardianPump(osGetenv, st, set.gov, log); pump != nil {
-		if err := pump.register(rt); err != nil {
-			log.Warn("guardian-sweep: could not register the pump on the scheduler; approved containments will not auto-execute", "err", err)
+	if pump := newGuardianPump(osGetenv, b.st, b.set.gov, b.log); pump != nil {
+		if err := pump.register(b.rt); err != nil {
+			b.log.Warn("guardian-sweep: could not register the pump on the scheduler; approved containments will not auto-execute", "err", err)
 		}
 	}
 
 	// Optionally provision a synthetic demo estate (org + agents + a seed source)
 	// BEFORE Start, so its agent-origin edges attribute and its observations flow
 	// through the real bus. Demo-only; never touches a real estate's data.
-	var demoTenant model.TenantID
-	if cfg.DemoSeed {
-		t, derr := seedDemoEstate(ctx, st, rt, time.Now())
+
+	if b.cfg.DemoSeed {
+		t, derr := seedDemoEstate(ctx, b.st, b.rt, time.Now())
 		if derr != nil {
-			_ = st.Close()
-			return nil, fmt.Errorf("seed demo estate: %w", derr)
+			_ = b.st.Close()
+			return fmt.Errorf("seed demo estate: %w", derr)
 		}
-		demoTenant = t
+		b.demoTenant = t
 	}
 
 	// CB-1 — wire the real ingestion as a PRODUCTION caller. Identity roster providers
@@ -2803,14 +3246,18 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 	// file's `sources[]` is imported once as a bootstrap seed (below), then the table
 	// is authoritative and the live reconciler — run just after Start — wires it. An
 	// unconfigured/un-embedded source or an empty roster warns honestly.
-	if set.deferredSecrets != nil {
-		set.deferredSecrets.rt = rt
-		set.deferredSecrets.connectorDir = connectorDir
+	if b.set.deferredSecrets != nil {
+		b.set.deferredSecrets.rt = b.rt
+		b.set.deferredSecrets.connectorDir = b.connectorDir
 	}
-	set.deferredSecrets.openAll(ctx, secretResolver, log)
-	seedSourceRosterIfEmpty(ctx, sourceStore, srcCfg, log)
-	wireRoster(ctx, rt, set.gov, set.wif, srcCfg, secretResolver, log)
+	b.set.deferredSecrets.openAll(ctx, b.secretResolver, b.log)
+	seedSourceRosterIfEmpty(ctx, b.sourceStore, b.srcCfg, b.log)
+	wireRoster(ctx, b.rt, b.set.gov, b.set.wif, b.srcCfg, b.secretResolver, b.log)
 
+	return nil
+}
+
+func (b *bootState) startRuntime(ctx context.Context) (err error) {
 	// Start the runtime: it opens outputs, Inits+subscribes+Starts modules, then fires
 	// the periodic scheduler (roster sync). Observation SOURCES are wired by the
 	// reconciler immediately AFTER Start (below) — outputs and modules have already
@@ -2823,25 +3270,25 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 	// asked to print or preview. The engine object is still usable for what those
 	// commands need (the store, the source store, the reconciler's prepare path);
 	// it simply is not running.
-	if cfg.NoIngest {
-		log.Debug("boot: roster-read boot — the runtime was not started and no source was wired")
+	if b.cfg.NoIngest {
+		b.log.Debug("boot: roster-read boot — the runtime was not started and no source was wired")
 	} else {
-		if err := rt.Start(ctx); err != nil {
-			_ = st.Close()
-			return nil, fmt.Errorf("start runtime: %w", err)
+		if err := b.rt.Start(ctx); err != nil {
+			_ = b.st.Close()
+			return fmt.Errorf("start runtime: %w", err)
 		}
 
 		// the initial source reconcile — wire every enabled roster row into the
 		// running engine. Identical to a later live reload, so boot and reload converge
 		// (the ReloadActivePDP precedent). Deny-closed per source; a per-source failure
 		// is logged, never aborts the boot.
-		if report, rerr := sourceReconcilerSvc.reconcile(ctx); rerr != nil {
-			log.Warn("ingest: initial source reconcile failed; the engine starts with no live sources until a reload succeeds", "err", rerr)
+		if report, rerr := b.sourceReconcilerSvc.reconcile(ctx); rerr != nil {
+			b.log.Warn("ingest: initial source reconcile failed; the engine starts with no live sources until a reload succeeds", "err", rerr)
 		} else {
-			log.Info("ingest: sources wired from the durable roster",
+			b.log.Info("ingest: sources wired from the durable roster",
 				"added", len(report.Added), "rejected", len(report.Rejected))
 			for _, rej := range report.Rejected {
-				log.Warn("ingest: source not wired (deny-closed)", "name", rej.Name, "reason", rej.Reason)
+				b.log.Warn("ingest: source not wired (deny-closed)", "name", rej.Name, "reason", rej.Reason)
 			}
 		}
 	}
@@ -2851,29 +3298,26 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 	// loaders degraded honestly above, but the boot must fail closed rather than
 	// run those subsystems silently unconfigured (docs/SECURITY-HARDENING.md: never a silent gap).
 	if scErr := sealedConfigFailure(); scErr != nil {
-		return nil, fmt.Errorf("key custody: %w (a sealed config that cannot be opened fails the boot; unseal or fix the KEK to proceed)", scErr)
+		return fmt.Errorf("key custody: %w (a sealed config that cannot be opened fails the boot; unseal or fix the KEK to proceed)", scErr)
 	}
 
 	// advisory — surface any operator config that carried CLEARTEXT secrets
 	// unsealed (one WARN per file; never fatal). See warnUnsealedSecretConfigs.
-	warnUnsealedSecretConfigs(log)
+	warnUnsealedSecretConfigs(b.log)
 
 	// a successful Postgres Open above proves every registered tenant table
 	// has ENABLE + FORCE RLS + tenant policy (the store conformance self-test). With
 	// the privileged-role opt-out disabled, it also proves the app role cannot bypass
 	// RLS. Replica count and load-balancer state are external and cannot be attested
 	// by this process, so this consolidated boot-report hook checks only the locally
-	// observable T2 posture and remains advisory.
-	warnUnsupportedProductionPosture(log, eng, eng == store.EnginePostgres && !cfg.AllowPrivilegedDBRole)
+	// observable posture. A single node is expected unless HA was requested.
+	warnUnsupportedProductionPosture(b.log, b.eng, b.eng == store.EnginePostgres && !b.cfg.AllowPrivilegedDBRole, b.haCfg.Gate)
 
-	// unknown OLIVARES_* keys are an operator-visible contract violation,
-	// but boot remains backward-compatible. Report every key in one consolidated
-	// warning; `config effective --strict` is the CI/pre-production hard gate.
-	if unknown := unknownConfigEnvKeys(os.Environ()); len(unknown) > 0 {
-		log.Warn("unrecognized OLIVARES_* env keys ignored", "keys", unknown)
-	}
+	return nil
+}
 
-	bootOK = true // success: the engine's Close() now owns tracer/bus shutdown
+func (b *bootState) finish(ctx context.Context) (*engine, error) {
+	b.bootOK = true // success: the engine's Close() now owns tracer/bus shutdown
 	// Stage-2: start the HA label resync loop now that boot cannot fail. It
 	// converges the pod label onto live leadership every tick: it republishes after a
 	// transient apiserver failure, restores a label edited out of band, and — since
@@ -2882,68 +3326,43 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 	// contract to the orchestrator) — demotes the label when this node loses the
 	// lock. Its context is owned by the engine and canceled by Close.
 	var haStop context.CancelFunc
-	if haPublisher != nil {
+	if b.haPublisher != nil {
 		haCtx, cancel := context.WithCancel(context.Background())
 		haStop = cancel
-		go haPublisher.run(haCtx, st.Leader().IsLeader)
+		go b.haPublisher.run(haCtx, b.st.Leader().IsLeader)
 	}
 	// The retirement pump runs for the life of the engine, a pass at a time and
 	// only while this node is the active writer; a new leader resumes from the
 	// records. A boot that does not start the runtime does not start it either.
 	var retirementStop context.CancelFunc
-	if !cfg.NoIngest {
+	if !b.cfg.NoIngest {
 		retirementCtx, cancel := context.WithCancel(context.Background())
 		retirementStop = cancel
-		go retirement.run(retirementCtx, st.Leader().Active)
+		go b.retirement.run(retirementCtx, b.st.Leader().Active)
 	}
 
-	runtimeEngine := &engine{
-		store: st, rt: rt, signer: signer, authr: authr, authz: authz,
-		editionResources: editionResources,
-		agentTools:       agentTools, setupTok: setupTok, api: apiSrv, tracer: tracer, dataDir: cfg.DataDir, log: log,
-		webAuthn:   webAuthn,
-		logBroker:  logBroker,
-		demoTenant: demoTenant, connectorDir: connectorDir, vectorIndex: set.vectorIndex, knowledgeMod: set.knowledge, sessionsMod: set.sessions, communicationPump: communicationPump,
-		communicationComposition:  communicationComposition,
-		workSink:                  workEventSink{eventing: running.eventing, notRunning: running.eventing == nil},
-		moduleProfile:             profile,
-		protocolBindingReconciler: set.protocolBindingReconciler,
-		sessionHooks:              sessionHooks,
-		engineApprovals:           set.gov.EngineApprovals(),
-		approvalBridge:            set.approvalBridge, policyEval: policyEval, scopedGrants: set.gov.ScopedGrants(), nhiEnforcer: set.gov,
-		killSwitch: set.gov, stopDeny: stopDeny, pinVerifier: set.pinVerifier,
-		circuitBreaker: circuitBreaker,
-		models:         set.models, finops: set.finops, inferenceProxy: set.inferenceProxy, residencyReg: residencyReg, contentFirewall: set.contentFirewall,
-		auditPriors: auditKey.priors, pivConfig: pivCfg, fedSvc: fedSvc, secretStore: secretStore,
-		sourceStore: sourceStore, sourceReconciler: sourceReconcilerSvc, licenseService: licSvc,
-		notifyDispatcher: set.deferredSecrets.notify, secretResolver: secretResolver,
-		bus: bus, metrics: reg, rlStore: rlStore, wifBroker: set.wifBroker,
-		haPublisher: haPublisher, haStop: haStop, haGate: haCfg.Gate,
-		census: census, declared: declared, retirementPump: retirement, retirementStop: retirementStop,
-		standing: standing,
-		// server-info's jobs_not_running (jobsnotrunning.go).
-		jobsNotRunning: notRunning, estateEnumerable: enumerable,
-	}
-	gatewayManagement.eng = runtimeEngine
-	gatewayManagement.UseSessionCredentials(runtimeEngine.sessionHooks.SessionCredentials)
-	runtimeEngine.sessionMCP = gatewayManagement
-	set.sessions.UseSessionMCPLaunchSource(gatewayManagement)
-	runtimeEngine.gatewayConfig = &gatewayCfg
-	return runtimeEngine, nil
+	b.runtimeEngine.haStop = haStop
+	b.runtimeEngine.retirementStop = retirementStop
+	b.runtimeEngine.legacyAdoptStop = b.legacyAdoptStop
+	return b.runtimeEngine, nil
 }
 
-func warnUnsupportedProductionPosture(log *slog.Logger, eng store.Engine, effectiveRLSAttested bool) {
+func warnUnsupportedProductionPosture(log *slog.Logger, eng store.Engine, effectiveRLSAttested, haRequested bool) {
 	if eng == store.EnginePostgres && effectiveRLSAttested {
 		return
 	}
 
 	if eng == store.EngineSQLite {
-		log.Warn("running on SQLite single-node — this is the evaluation/pilot profile, not the supported production profile (T2: HA active-passive, Postgres + RLS FORCE)",
-			"topology", "T1", "store", eng, "rls_force", false)
+		if haRequested {
+			log.Warn("HA requested with SQLite single-node; active-passive HA requires Postgres with RLS FORCE",
+				"topology", "T1", "store", eng, "rls_force", false)
+		} else {
+			log.Info("running on SQLite single-node", "topology", "T1", "store", eng, "rls_force", false)
+		}
 		return
 	}
 
-	log.Warn("Postgres privileged-role opt-out enabled — effective RLS FORCE is not attested; this is not the supported production profile (T2: HA active-passive, Postgres + RLS FORCE)",
+	log.Warn("Postgres privileged-role opt-out enabled — effective RLS FORCE is not attested",
 		"store", eng, "effective_rls_attested", effectiveRLSAttested)
 }
 
@@ -3016,6 +3435,9 @@ func (e *engine) Close() error {
 	}
 	if e.retirementStop != nil {
 		e.retirementStop()
+	}
+	if e.legacyAdoptStop != nil {
+		e.legacyAdoptStop()
 	}
 	if e.haPublisher != nil {
 		e.haPublisher.haShutdownLabel()
@@ -3096,7 +3518,7 @@ const legacyDataDirName = "olivares-data"
 //     that must be told to name its data directory, and every image and unit we ship
 //     already passes one.
 func defaultDataDir() (string, error) {
-	if d := os.Getenv("OLIVARES_DATA_DIR"); d != "" {
+	if d := envconfig.Get("OLIVARES_DATA_DIR"); d != "" {
 		return d, nil
 	}
 	if installationExistsAt(legacyDataDirName) {
@@ -3147,3 +3569,51 @@ func postgresMaxConns(getenv func(string) string, log *slog.Logger) int {
 // toolLoginsDir is where the tools' own logins live under the data directory, one
 // home per tenant and tool (sessions.ToolLoginHome, FH 036).
 const toolLoginsDir = "tool-logins"
+
+// composeEngine resolves the engine/session cycle before runtime startup. A
+// waiting launch recovered by sessions.Start sees the same MCP adapter and
+// engine instance that serves subsequent API requests.
+func (b *bootState) composeEngine() {
+	b.runtimeEngine = &engine{
+		store: b.st, rt: b.rt, signer: b.signer, authr: b.authr, authz: b.authz,
+		editionResources: b.editionResources,
+		agentTools:       b.agentTools, setupTok: b.setupTok, api: b.apiSrv, tracer: b.tracer, dataDir: b.cfg.DataDir, log: b.log,
+		webAuthn:   b.webAuthn,
+		logBroker:  b.logBroker,
+		demoTenant: b.demoTenant, connectorDir: b.connectorDir, vectorIndex: b.set.vectorIndex, knowledgeMod: b.set.knowledge, sessionsMod: b.set.sessions, communicationPump: b.communicationPump,
+		communicationComposition:  b.communicationComposition,
+		workSink:                  workEventSink{eventing: b.running.eventing, notRunning: b.running.eventing == nil},
+		moduleProfile:             b.profile,
+		protocolBindingReconciler: b.set.protocolBindingReconciler,
+		sessionHooks:              b.sessionHooks,
+		engineApprovals:           b.set.gov.EngineApprovals(),
+		gitpublish:                b.running.gitpublish,
+		approvalBridge:            b.set.approvalBridge, policyEval: b.policyEval, scopedGrants: b.set.gov.ScopedGrants(), nhiEnforcer: b.set.gov,
+		killSwitch: b.set.gov, stopDeny: b.stopDeny, pinVerifier: b.set.pinVerifier,
+		circuitBreaker: b.circuitBreaker,
+		models:         b.set.models, finops: b.set.finops, inferenceProxy: b.set.inferenceProxy, residencyReg: b.residencyReg, contentFirewall: b.set.contentFirewall,
+		auditPriors: b.auditKey.priors, pivConfig: b.pivCfg, fedSvc: b.fedSvc, secretStore: b.secretStore,
+		sourceStore: b.sourceStore, sourceReconciler: b.sourceReconcilerSvc, licenseService: b.licSvc,
+		notifyDispatcher: b.set.deferredSecrets.notify, secretResolver: b.secretResolver,
+		bus: b.bus, metrics: b.reg, rlStore: b.rlStore, wifBroker: b.set.wifBroker,
+		haPublisher: b.haPublisher, haGate: b.haCfg.Gate,
+		census: b.census, declared: b.declared, retirementPump: b.retirement,
+		standing: b.standing,
+		// server-info's jobs_not_running (jobsnotrunning.go).
+		jobsNotRunning: b.notRunning, estateEnumerable: b.enumerable,
+	}
+	b.gatewayManagement.eng = b.runtimeEngine
+	b.gatewayManagement.UseSessionCredentials(b.runtimeEngine.sessionHooks.SessionCredentials)
+	b.runtimeEngine.sessionMCP = b.gatewayManagement
+	b.set.sessionDependencies.SessionMCP = b.gatewayManagement
+	b.runtimeEngine.gatewayConfig = &b.gatewayCfg
+}
+
+// sessionPreviewHandler is the sessions module's preview server, or nil when the
+// module is not running, which leaves the preview prefix unmounted.
+func sessionPreviewHandler(m *sessions.Module) http.Handler {
+	if m == nil {
+		return nil
+	}
+	return http.HandlerFunc(m.ServePreviewHTTP)
+}

@@ -337,7 +337,9 @@ function codexItem(
   if (method === 'item/completed') {
     const item = asRecord(params.item)
     const kind = asString(item?.type)
-    const id = asString(item?.id)
+    const itemID = asString(item?.id)
+    const turnID = asString(params.turnId)
+    const id = itemID && turnID ? `${turnID}:${itemID}` : itemID
     if (kind === 'agentMessage' && typeof item?.text === 'string') {
       return {
         kind: 'assistant',
@@ -381,15 +383,24 @@ function codexItem(
     if (asString(turn?.status) === 'failed') {
       return {
         kind: 'system',
-        id: nextId('system', n),
+        id: nextId('system', n, asString(turn?.id)),
         summary: truncateSummary(codexErrorText(turn?.error) ?? 'Turn failed'),
         systemKind: 'turnFailed',
         raw: [raw],
       }
     }
+    if (asString(turn?.status) === 'interrupted') {
+      return {
+        kind: 'result',
+        id: nextId('result', n, asString(turn?.id)),
+        summary: 'Turn interrupted',
+        stopReason: 'cancelled',
+        raw: [raw],
+      }
+    }
     return {
       kind: 'result',
-      id: nextId('result', n),
+      id: nextId('result', n, asString(turn?.id)),
       summary: 'Turn completed',
       raw: [raw],
     }
@@ -709,11 +720,67 @@ export function foldConversationLine(
 
   const type = asString(frame.type)
 
+  if (type === 'olivares_conversation' && Array.isArray(frame.turns)) {
+    let restored = items
+    for (const value of frame.turns) {
+      const turn = asRecord(value)
+      if (!turn || !Array.isArray(turn.items)) continue
+      for (const item of turn.items) {
+        restored = foldConversationLine(
+          restored,
+          JSON.stringify({
+            method: 'item/completed',
+            params: { item, turnId: turn.id },
+          }),
+        )
+      }
+      // A running turn has no outcome yet. Never show it as completed.
+      if (['completed', 'failed', 'interrupted'].includes(String(turn.status)))
+        restored = foldConversationLine(
+          restored,
+          JSON.stringify({
+            method: 'turn/completed',
+            params: { turn },
+          }),
+        )
+    }
+    return restored
+  }
+
+  // The engine's own notice in the session's output (an approval Olivares refused, and
+  // why): one row in the engine's words, whole, never folded into a quiet block. Any code
+  // renders its message, so a new code needs no console change.
+  if (type === 'olivares_notice') {
+    const message = asString(frame.message)
+    if (message)
+      return [
+        ...items,
+        {
+          kind: 'system',
+          id: nextId('system', items.length),
+          summary: message,
+          systemKind: 'notice',
+          raw: [trimmed],
+        },
+      ]
+  }
+
   // Codex app-server frames are JSON-RPC notifications ({method, params}); the
   // ones that carry the conversation are told like Claude's. Everything else
   // stays an unknown item with its raw line, never dropped.
   const codex = codexItem(frame, trimmed, items.length)
-  if (codex) return foldRetry(items, codex)
+  if (codex) {
+    // Native item/turn identity, not matching words: repeated identical prompts
+    // remain distinct; a persisted item replayed by the live ring appears once.
+    const params = asRecord(frame.params)
+    const entity = asRecord(params?.item ?? params?.turn)
+    if (asString(entity?.id)) {
+      const existing = items.findIndex((item) => item.id === codex.id)
+      if (existing >= 0)
+        return items.map((item, index) => (index === existing ? codex : item))
+    }
+    return foldRetry(items, codex)
+  }
 
   const acp = foldAcp(items, frame, trimmed)
   if (acp) return acp

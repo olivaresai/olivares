@@ -32,10 +32,7 @@ func (s *Server) licenseSvc(w http.ResponseWriter, r *http.Request) (LicenseServ
 	return s.license, true
 }
 
-func (s *Server) handleLicenseStatus(w http.ResponseWriter, r *http.Request) {
-	if _, ok := s.authzSystem(w, r, "system:admin"); !ok {
-		return
-	}
+func (s *Server) handleLicenseStatus(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
 	svc, ok := s.licenseSvc(w, r)
 	if !ok {
 		return
@@ -48,11 +45,8 @@ func (s *Server) handleLicenseStatus(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, st)
 }
 
-func (s *Server) handleInstallLicense(w http.ResponseWriter, r *http.Request) {
-	p, ok := s.authzSystem(w, r, "system:admin")
-	if !ok {
-		return
-	}
+func (s *Server) handleInstallLicense(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	p := mc.Principal
 	if !s.requireStepUp(w, r, p) {
 		return
 	}
@@ -65,7 +59,7 @@ func (s *Server) handleInstallLicense(w http.ResponseWriter, r *http.Request) {
 		Acknowledge bool   `json:"acknowledge"`
 	}
 	if err := decodeJSON(w, r, &in); err != nil {
-		s.badRequest(w, r, "invalid JSON body")
+		s.badRequest(w, r, RequestBodyErrorMessage(err, "invalid JSON body"))
 		return
 	}
 	if strings.TrimSpace(in.License) == "" {
@@ -80,11 +74,8 @@ func (s *Server) handleInstallLicense(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, st)
 }
 
-func (s *Server) handleUninstallLicense(w http.ResponseWriter, r *http.Request) {
-	p, ok := s.authzSystem(w, r, "system:admin")
-	if !ok {
-		return
-	}
+func (s *Server) handleUninstallLicense(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	p := mc.Principal
 	if !s.requireStepUp(w, r, p) {
 		return
 	}

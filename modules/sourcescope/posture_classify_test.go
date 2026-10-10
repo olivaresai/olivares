@@ -52,7 +52,7 @@ func TestClassifyUpdateTable(t *testing.T) {
 		otherAllows int
 		wantRelax   bool
 	}{
-		// --- FORBID: the polarity ADR-0022 §5 had inverted ---------------------------
+		// --- FORBID: forbid scope changes ---------------------------
 		{"forbid: note edit on a standing restriction", bd(scopeUser, "u1", effectForbid, true), bd(scopeUser, "u1", effectForbid, true), 0, false},
 		{"forbid: scope moved within the tree", bd(scopeUser, "u1", effectForbid, true), bd(scopeUser, "u2", effectForbid, true), 0, true},
 		{"forbid: scope moved across trees", bd(scopeUser, "u1", effectForbid, true), bd(scopeWorkspace, "eng", effectForbid, true), 0, true},
@@ -205,7 +205,7 @@ func classifyUpdatePreS590(old, updated bindingDTO, otherEnabledAllows int) (boo
 }
 
 // TestClassifyUpdateOnlyEverAddsAGate checks, over the whole input space against the
-// verbatim pre classifier, the property ADR-0022 §5 promises in words: "it can only
+// verbatim pre classifier, the required property: "it can only
 // ever add a dual-control gate, never remove one".
 //
 // Removes gates from EXACTLY ONE declared shape, and this test pins that the exemption

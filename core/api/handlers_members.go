@@ -57,11 +57,9 @@ func toRosterMemberDTO(m auth.RosterMember) rosterMemberDTO {
 // isolation is the target_tenant_id filter, deny-closed by construction, so no
 // cross-tenant roster is ever reachable). The set is bounded and returned complete
 // (no paging), mirroring the SCIM member set.
-func (s *Server) handleListMembers(w http.ResponseWriter, r *http.Request) {
-	p, tenant, ok := s.authzTenant(w, r, "user:read")
-	if !ok {
-		return
-	}
+func (s *Server) handleListMembers(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	p := mc.Principal
+	tenant := mc.Tenant
 	roster, err := s.authr.TenantRoster(r.Context(), tenant)
 	if err != nil {
 		s.writeError(w, r, err)

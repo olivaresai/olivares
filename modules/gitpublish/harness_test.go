@@ -48,6 +48,8 @@ type fakeHost struct {
 	onCreate      func(h *fakeHost)
 	onMerge       func(h *fakeHost)
 	release       error
+	mintSecret    string // returned by Mint when set (the ssh key, say)
+	sshTarget     bool   // PushTarget answers the ssh transport
 }
 
 func newFakeHost() *fakeHost {
@@ -61,7 +63,7 @@ func (h *fakeHost) Mint(context.Context, gp.Effect) (gp.Token, error) {
 		return gp.Token{}, h.mintErr
 	}
 	h.mints++
-	return gp.Token{}, nil
+	return gp.NewToken(gp.NewSecret(h.mintSecret)), nil
 }
 
 func (h *fakeHost) Release(context.Context, gp.Token) error {
@@ -170,6 +172,9 @@ func (h *fakeHost) MergeChange(_ context.Context, _ gp.Token, n int, sha, _ stri
 }
 
 func (h *fakeHost) PushTarget(gp.Token) (string, string, gp.Secret) {
+	if h.sshTarget {
+		return "ssh://git@git.example/srv/git/widgets.git", "ssh", gp.Secret{}
+	}
 	return "https://git.example/acme/widgets.git", "https", gp.Secret{}
 }
 
@@ -187,6 +192,29 @@ type fakeGit struct {
 	localErr     error
 	lastReq      gp.PushRequest
 	afterApply   func()
+	// sessionTrees is what a session folder holds: a fetch adds it to treeFor.
+	sessionTrees map[string]string
+	fetches      []string
+	fetchErr     error
+	fetchBlocks  bool // the fetch runs until the deadline, then git is killed
+}
+
+func (g *fakeGit) Fetch(ctx context.Context, repo, source, commit string) error {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.fetches = append(g.fetches, repo+"|"+source+"|"+commit)
+	if g.fetchBlocks {
+		<-ctx.Done()
+		return gp.ErrContent
+	}
+	if g.fetchErr != nil {
+		return g.fetchErr
+	}
+	if t, ok := g.sessionTrees[commit]; ok {
+		g.treeFor[commit] = t
+		return nil
+	}
+	return gp.ErrContent
 }
 
 func (g *fakeGit) CommitTree(_ context.Context, _ string, c string) (string, error) {
@@ -344,6 +372,7 @@ type harness struct {
 	other   model.TenantID
 	ws      model.ID
 	target  Target
+	st      store.Store // set by newScopeHarnessOn, for a test that reopens it
 }
 
 func newHarness(t *testing.T) *harness {

@@ -22,26 +22,19 @@ control plane までを案内します。
 [シングルノードチュートリアル](/tutorials/getting-started/single-node/)でバイナリに
 対してエンドツーエンドで検証されたものと同じです。
 
-<Aside type="caution" title="公開済みの 26.10.1 イメージを digest で固定する">
-リリース **26.10.1** は署名済みイメージを公開しました。インストール面の証人は
-`26.10.1` の Docker Hub と GHCR を **published** と記録しています
-（`docs/releases/26.10.1-install-surfaces.json`）。同じ誠実さは
-[Docker でデプロイする](/how-to/docker-deployment/) にあります。
-`OLIVARES_IMAGE=docker.io/olivaresai/olivares@sha256:<digest>` を設定し、まず
-[検証](/how-to/verify-a-release/)してください — タグではなく digest で。代わりに開発ツリーを
-動かすには、堅牢化されたイメージをソースからビルドし、スタックをそれに向けます：
-
-```bash
-task image                                   # builds olivares:dev
-echo 'OLIVARES_IMAGE=olivares:dev' >> deploy/compose/.env
-```
+{/* release */}
+<Aside type="caution" title="Olivares 0.1">
+次のリリースは `0.1` で、GitHub ではまだ公開されていません。以下のコマンドは予定されている成果物を示します。公開まではソースからビルドし、公開後も使用前に各成果物を検証してください。観測した公開状況は `docs/releases/0.1-install-surfaces.json` に記録されています。
 </Aside>
+{/* /release */}
 
 ## 1. シングルノードスタックを立ち上げる（SQLite）
 
 <Steps>
 
 1. 起動します：
+
+   AppArmor がユーザー名前空間の作成を制御するホストでは、スタックを起動する前に Docker デーモンのホストで `deploy/compose/README.md` の「Session confinement on AppArmor hosts」の手順を実行してください。
 
    ```bash
    docker compose -f deploy/compose/docker-compose.yml up --wait --wait-timeout 120
@@ -80,6 +73,13 @@ echo 'OLIVARES_IMAGE=olivares:dev' >> deploy/compose/.env
    ```
 
 </Steps>
+
+<Aside type="note" title="現在の契約とホスト環境での検証">
+**Compose の readiness 契約。** 外部から隔離されたローカル HTTP/TLS フィクスチャは、
+プローブの 3 つの結果を証明します。200 → rc 0、受信した非 200 → rc 1、入力／TLS／
+トランスポート障害 → rc 2 です。**このコミットの dispatch ワークフローが成功するまで、
+Docker の適格性は未測定です。** チェックインされたワークフローは、Docker 実行が行われた証拠にはなりません。
+</Aside>
 
 <Aside type="tip" title="トークンを逃した？">
 再起動してもトークンは再印字されません（保存されるのはそのハッシュだけです）。管理者がまだ
@@ -142,15 +142,26 @@ pgAudit のログ末尾には、Postgres のログディレクトリもコンテ
 ## 3. 暗号化された DR バックアップ（`backup` プロファイル）
 
 スタックは、**暗号化され、ledger の連続性を損なわない**バンドル（`olivares dr backup`）を
-生成し、14日より古いバンドルをプルーニングするワンショットのバックアップサービスを同梱します：
+生成するワンショットのバックアップサービスを同梱します：
+
+パスフレーズはチェックアウトとイメージの外にある非公開ファイルに保管し、
+このホストとは別の安全な場所にもコピーを保管してください。パスフレーズがなければ、
+どのバンドルも復元できません。バックアップコンテナにはそのファイルへの読み取り専用アクセスを
+与えてください（イメージは UID `65532` で実行されます）：
 
 ```bash
-# Write your KEK passphrase once (keep it OUT of the repo / image):
-printf 'a strong DR passphrase' > deploy/compose/dr-pass
+sudo install -d -o 65532 -g 65532 -m 0700 /srv/olivares-dr
+sudo install -o 65532 -g 65532 -m 0400 /path/to/private-passphrase /srv/olivares-dr/dr-pass
 
+BACKUP_TS="$(date -u +%Y%m%dT%H%M%SZ)" \
 docker compose -f deploy/compose/docker-compose.yml \
                -f deploy/compose/docker-compose.backup.yml \
-               --profile backup run --rm backup
+               -f - --profile backup run --rm backup <<'YAML'
+services:
+  backup:
+    volumes:
+      - /srv/olivares-dr/dr-pass:/run/secrets/dr-pass:ro
+YAML
 ```
 
 スケジュールされた RPO のために、そのコマンドをホストの cron でラップし、**`olivares-backups`
@@ -166,9 +177,17 @@ docker compose -f deploy/compose/docker-compose.yml \
 row-level security がテナントのバックストップであるため、エンジンは特権ロールに対しては起動を
 *拒否*します）をプロビジョニングし、エンジンをそれに向けます：
 
+オーバーライドは `olivares_admin` もプロビジョニングします。この独立した
+`NOSUPERUSER BYPASSRLS` ロールは、エンジンのテーブルへの読み取り専用アクセスを持ちます。
+エンジンは `--admin-dsn` を通じて、初回セットアップを含むテナント横断の読み取りに使用します。
+
+まず3つの異なるパスワードを設定します。この Compose デモでは
+`A-Z a-z 0-9 . _ ~ -` のみを使用し、次にスタックを立ち上げます:
+
 ```bash
 cp deploy/compose/.env.example deploy/compose/.env
-# set POSTGRES_SUPERUSER_PASSWORD and OLIVARES_DB_PASSWORD in .env
+# set three distinct passwords in deploy/compose/.env:
+# POSTGRES_SUPERUSER_PASSWORD, OLIVARES_DB_PASSWORD, OLIVARES_ADMIN_PASSWORD
 
 docker compose -f deploy/compose/docker-compose.yml \
                -f deploy/compose/docker-compose.postgres.yml up -d

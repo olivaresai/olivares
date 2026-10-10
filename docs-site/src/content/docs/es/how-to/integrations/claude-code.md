@@ -31,8 +31,8 @@ emisor y una máquina alcanzable podría fabricar telemetría. El PEP gobernado 
 usa su propio socket local, autentica cada petición y registra la decisión.
 
 1. Entre en **Control console** (`/console`) y abra la pestaña **Connectors**. El roster de
-   conectores es global: se necesita una cuenta superadmin; guardar, probar y recargar requieren
-   elevación AAL3.
+   conectores es global: se necesita una cuenta superadmin. Guardar, probar y recargar siguen
+   la política de verificación adicional administrativa (`admin_step_up`, `none` por defecto).
 2. Añada una fuente con tipo `claude`, un nombre operativo estable —por ejemplo,
    `claude-code-prod`—, el tenant correspondiente, modo `live`, intervalo `0` y estado habilitado.
    Un intervalo cero es correcto: este conector mantiene receptores, no realiza sondeos por lotes.

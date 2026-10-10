@@ -20,9 +20,17 @@ fail=0
 tmp_noops="$(mktemp)"
 trap 'rm -f "$tmp_noops"' EXIT
 
+contract_lib_dirs="$(python3 - <<'PY'
+import runpy
+print(" ".join(sorted(runpy.run_path("scripts/lib/connector_census.py")["CONTRACT_LIB_DIRS"])))
+PY
+)"
 is_contract_lib() {
 	case "$1" in
-		contentsource|datasourceacl|identitysource|internal|interop|modelprovider|modelrouter|redact|secretref|siemsink|threatfeed|vectorindex|voice)
+		interop) return 0 ;;
+	esac
+	case " $contract_lib_dirs " in
+		*" $1 "*)
 			return 0
 			;;
 	esac
@@ -86,13 +94,13 @@ has_plugin_main() {
 # problemas de 0 conectores» y «no encontré ningún conector» son la misma frase con distinto
 # significado, y la segunda no es un verde.
 if [ ! -d connectors ]; then
-	echo "check-connectors: ⛔ NO HE PODIDO MIRAR: no existe connectors/ en este árbol." >&2
-	echo "                  No es un inventario deshonesto: es que no hay inventario." >&2
+	echo "check-connectors: ⛔ COULD NOT CHECK: missing connectors/ in this tree." >&2
+	echo "                  There is no inventory to check." >&2
 	exit 2
 fi
 if [ -z "$(find connectors -name '*.go' -type f -print -quit 2>/dev/null)" ]; then
-	echo "check-connectors: ⛔ NO HE PODIDO MIRAR: connectors/ no contiene ni un fichero .go." >&2
-	echo "                  Un conjunto vacío no se aprueba: o el árbol está a medias, o se movieron." >&2
+	echo "check-connectors: ⛔ COULD NOT CHECK: connectors/ contains no .go files." >&2
+	echo "                  An empty set cannot pass: the tree may be incomplete or the files may have moved." >&2
 	exit 2
 fi
 
@@ -170,7 +178,7 @@ for dir in connectors/*; do
 		#    sobrante de un censo, tumbó su push y le costó diez minutos buscando un registro ausente.
 		#    Git no versiona directorios vacíos, así que ni siquiera sale en un `git status`.
 		if [ -z "$(find "$dir" -name '*.go' -not -path '*/node_modules/*' -print -quit 2>/dev/null)" ]; then
-			echo "connector lint: $dir no contiene NINGÚN fichero .go — no es un conector sin clasificar, es residuo bajo connectors/. Bórralo o muévelo fuera." >&2
+			echo "connector lint: $dir contains no .go files; it is residue under connectors/, not an unclassified connector. Delete it or move it elsewhere." >&2
 		else
 			echo "connector lint: unclassified top-level connector dir: $dir" >&2
 		fi

@@ -1,11 +1,12 @@
 {
   "title": "プロバイダー",
-  "subtitle": "プロバイダープロファイルで選択するクラウドの認証情報またはローカルモデルのエンドポイント。",
+  "subtitle": "エージェントツールが使うクラウドの認証情報またはローカルモデルのエンドポイント。",
   "nav": "プロバイダー",
   "add": "プロバイダーを追加",
+  "rowMenu": "{{name}} の行操作",
   "empty": {
     "title": "まだプロバイダーが登録されていません",
-    "description": "API キーで Anthropic、OpenAI、xAI に接続するか、キー不要のローカル Ollama を追加します。接続をテストしてからプロファイルに関連付けます。",
+    "description": "API キーで Anthropic、OpenAI、xAI に接続するか、キー不要のローカル Ollama を追加して、接続をテストします。",
     "action": "最初のプロバイダーを追加"
   },
   "emptyFiltered": {
@@ -28,6 +29,7 @@
     "anthropic": "Anthropic",
     "openai": "OpenAI",
     "xai": "xAI",
+    "gemini": "Gemini",
     "openai_compatible": "OpenAI 互換",
     "ollama": "Ollama"
   },
@@ -35,6 +37,7 @@
     "anthropic": "Claude Code。ANTHROPIC_API_KEY を注入します。",
     "openai": "Codex。OPENAI_API_KEY を注入します。",
     "xai": "Grok。XAI_API_KEY を注入します。",
+    "gemini": "Google の公式 API を使う Gemini CLI。Gemini API キーを使用します。",
     "openai_compatible": "OpenAI 形式の任意のエンドポイント。OPENAI_API_KEY と OPENAI_BASE_URL を注入します。エンドポイントは必須です。",
     "ollama": "OpenCode 用のローカルモデル。API キーは不要です。Ollama のネイティブエンドポイントを使用し、テストではモデルのメタデータを読み取ります。"
   },
@@ -78,6 +81,7 @@
     "namePlaceholder": "Anthropic（本番）",
     "baseURL": "エンドポイント",
     "baseURLHint": "空のままにするとプロバイダーの公式エンドポイントを使います。https である必要があります。",
+    "baseURLLocalHint": "空のままにするとプロバイダーの公式エンドポイントを使います。指定する場合は https を使うか、ループバックまたはプライベートネットワークのアドレスでは http を使えます。",
     "baseURLPlaceholder": "https://llm.example.com",
     "apiKey": "API キー",
     "apiKeyHint": "一度だけ送信され、エンジンが封印し、このブラウザーには二度と返されません。",
@@ -85,11 +89,13 @@
     "submit": "プロバイダーを追加",
     "submitting": "封印中…",
     "cancel": "キャンセル",
-    "success": "プロバイダーを登録しました。接続をテストして動作を確認してください。",
+    "success": "プロバイダーを追加しました。",
     "testNext": "今すぐ接続をテスト",
     "registering": "登録中…",
     "localNameHint": "このエンドポイントの表示名です。選択リストに表示されます。",
-    "advanced": "Advanced: custom endpoint"
+    "advanced": "Advanced: custom endpoint",
+    "missingFields": "未入力の項目を入力してください: {{fields}}。",
+    "requiredEndpointHint": "サービスのエンドポイントを入力してください。https を使うか、ループバックまたはプライベートネットワークのアドレスでは http を使えます。"
   },
   "rotate": {
     "title": "このプロバイダーのキーを交換",
@@ -137,5 +143,24 @@
     "unavailable": "プロファイルの権限または互換性のある有効なプロファイルがありません。",
     "loadError": "プロファイルを読み込めませんでした。",
     "success": "プロバイダーをプロファイルに関連付けました。"
+  },
+  "defaultModel": {
+    "title": "既定のモデル",
+    "model": "モデル",
+    "hint": "別のモデルを選ばない限り、新しいセッションはこのモデルを使います。",
+    "modelsHint": "このプロバイダーの前回の接続テストで一覧に表示されたモデル。",
+    "native": "保存済みの既定モデルなし",
+    "save": "保存",
+    "success": "既定のモデルを保存しました。",
+    "createHint": "任意。空欄にすると、接続テスト後に既定のモデルを選びます。"
+  },
+  "prepare": {
+    "pending": "最初のセッション用に {{tool}} を準備しています…",
+    "installing": "最初のセッション用に {{tool}} をインストールしています: {{progress}}",
+    "ready": "セッションを開始できます。",
+    "start": "新しいセッション",
+    "failed": "プロバイダーは保存されました。セッションの準備に失敗しました: {{error}}",
+    "retry": "準備を再試行",
+    "incomplete": "ツールのインストール状態は {{state}} です。AI ツールを確認して再試行してください。"
   }
 }

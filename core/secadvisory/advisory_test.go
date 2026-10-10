@@ -48,7 +48,7 @@ func feed(t *testing.T, advs ...Advisory) Feed {
 // TestSignVerifyRoundTrip: a signed feed verifies with the same key.
 func TestSignVerifyRoundTrip(t *testing.T) {
 	pub, priv := testKey(t)
-	fb, sig, err := feed(t, advisory("GHSA-aaaa-bbbb-cccc", "0", "26.7.1")).Sign(priv)
+	fb, sig, err := feed(t, advisory("GHSA-aaaa-bbbb-cccc", "0", "1.701")).Sign(priv)
 	if err != nil {
 		t.Fatalf("Sign: %v", err)
 	}
@@ -64,7 +64,7 @@ func TestSignVerifyRoundTrip(t *testing.T) {
 // TestTamperedFeedRejected is a DoD item: a tampered advisories feed must be refused.
 func TestTamperedFeedRejected(t *testing.T) {
 	pub, priv := testKey(t)
-	fb, sig, err := feed(t, advisory("GHSA-x", "0", "26.7.1")).Sign(priv)
+	fb, sig, err := feed(t, advisory("GHSA-x", "0", "1.701")).Sign(priv)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,7 +81,7 @@ func TestTamperedFeedRejected(t *testing.T) {
 func TestWrongKeyRejected(t *testing.T) {
 	_, priv := testKey(t)
 	otherPub, _ := testKey(t)
-	fb, sig, _ := feed(t, advisory("GHSA-x", "0", "26.7.1")).Sign(priv)
+	fb, sig, _ := feed(t, advisory("GHSA-x", "0", "1.701")).Sign(priv)
 	if _, err := VerifyFeed(fb, sig, otherPub); err == nil {
 		t.Fatal("feed verified under the wrong key")
 	}
@@ -89,7 +89,7 @@ func TestWrongKeyRejected(t *testing.T) {
 
 func TestNilKeyFailsClosed(t *testing.T) {
 	_, priv := testKey(t)
-	fb, sig, _ := feed(t, advisory("GHSA-x", "0", "26.7.1")).Sign(priv)
+	fb, sig, _ := feed(t, advisory("GHSA-x", "0", "1.701")).Sign(priv)
 	if _, err := VerifyFeed(fb, sig, nil); err != sigbundle.ErrNoKey {
 		t.Fatalf("nil key: err=%v, want ErrNoKey", err)
 	}
@@ -98,16 +98,16 @@ func TestNilKeyFailsClosed(t *testing.T) {
 // TestCheckAffectedAndNot: the self-check core. An older version is affected; the fixed
 // version and newer are not.
 func TestCheckAffectedAndNot(t *testing.T) {
-	f := feed(t, advisory("GHSA-old", "0", "26.7.1"))
+	f := feed(t, advisory("GHSA-old", "0", "1.701"))
 
 	cases := []struct {
 		version string
 		want    bool
 	}{
-		{"26.6.0", true},  // before fixed
-		{"26.7.0", true},  // before fixed
-		{"26.7.1", false}, // exactly fixed -> safe
-		{"26.8.0", false}, // after fixed
+		{"1.600", true},  // before fixed
+		{"1.700", true},  // before fixed
+		{"1.701", false}, // exactly fixed -> safe
+		{"1.800", false}, // after fixed
 	}
 	for _, tc := range cases {
 		t.Run(tc.version, func(t *testing.T) {
@@ -120,8 +120,8 @@ func TestCheckAffectedAndNot(t *testing.T) {
 				t.Fatalf("version %s affected=%v, want %v (findings=%+v)", tc.version, affected, tc.want, got)
 			}
 			if affected {
-				if got.Findings[0].FixedIn != "26.7.1" {
-					t.Errorf("FixedIn = %q, want 26.7.1", got.Findings[0].FixedIn)
+				if got.Findings[0].FixedIn != "1.701" {
+					t.Errorf("FixedIn = %q, want 1.701", got.Findings[0].FixedIn)
 				}
 				if got.Findings[0].Severity == "" {
 					t.Errorf("Severity not surfaced")
@@ -134,17 +134,17 @@ func TestCheckAffectedAndNot(t *testing.T) {
 // TestCheckIntroducedRange: an advisory introduced at a specific version does not affect
 // earlier versions.
 func TestCheckIntroducedRange(t *testing.T) {
-	f := feed(t, advisory("GHSA-mid", "26.7.0", "26.7.3"))
-	for _, v := range []string{"26.6.9"} {
+	f := feed(t, advisory("GHSA-mid", "1.700", "1.703"))
+	for _, v := range []string{"1.609"} {
 		got, _ := f.Check(productModule, v)
 		if len(got.Findings) != 0 {
 			t.Errorf("version %s should be before the introduced range, got affected", v)
 		}
 	}
-	for _, v := range []string{"26.7.0", "26.7.2"} {
+	for _, v := range []string{"1.700", "1.702"} {
 		got, _ := f.Check(productModule, v)
 		if len(got.Findings) != 1 {
-			t.Errorf("version %s should be inside [26.7.0, 26.7.3), got %d findings", v, len(got.Findings))
+			t.Errorf("version %s should be inside [1.700, 1.703), got %d findings", v, len(got.Findings))
 		}
 	}
 }
@@ -154,7 +154,7 @@ func TestCheckOtherModuleIgnored(t *testing.T) {
 	a := advisory("GHSA-other", "0", "99.0.0")
 	a.Affected[0].Package.Name = "github.com/some/other"
 	f := feed(t, a)
-	got, _ := f.Check(productModule, "26.7.0")
+	got, _ := f.Check(productModule, "1.700")
 	if len(got.Findings) != 0 {
 		t.Fatalf("an advisory for another module affected us: %+v", got)
 	}
@@ -168,8 +168,8 @@ func TestCheckOtherModuleIgnored(t *testing.T) {
 
 // TestCheckMultipleFindingsSorted: several matching advisories come back sorted by id.
 func TestCheckMultipleFindingsSorted(t *testing.T) {
-	f := feed(t, advisory("GHSA-zzzz", "0", "26.8.0"), advisory("GHSA-aaaa", "0", "26.8.0"))
-	got, _ := f.Check(productModule, "26.7.0")
+	f := feed(t, advisory("GHSA-zzzz", "0", "1.800"), advisory("GHSA-aaaa", "0", "1.800"))
+	got, _ := f.Check(productModule, "1.700")
 	if len(got.Findings) != 2 || got.Findings[0].ID != "GHSA-aaaa" || got.Findings[1].ID != "GHSA-zzzz" {
 		t.Fatalf("findings not sorted by id: %+v", got)
 	}
@@ -186,7 +186,7 @@ func TestCheckOpenRange(t *testing.T) {
 		}},
 	}
 	f := feed(t, a)
-	got, _ := f.Check(productModule, "26.7.0")
+	got, _ := f.Check(productModule, "1.700")
 	if len(got.Findings) != 1 {
 		t.Fatalf("open range should affect us with no fix yet, got %d", len(got.Findings))
 	}
@@ -208,7 +208,7 @@ func TestCheckRefusesUnstampedBuild(t *testing.T) {
 	for _, v := range []string{"dev", "", "  ", "v", "vdev"} {
 		t.Run("version="+v, func(t *testing.T) {
 			// The "introduced":"0" catalog — the shape that fabricated AFFECTED.
-			zero := feed(t, advisory("GHSA-zero", "0", "26.7.2"))
+			zero := feed(t, advisory("GHSA-zero", "0", "1.702"))
 			got, err := zero.Check(productModule, v)
 			if err == nil {
 				t.Fatalf("unstamped %q got a verdict (%d finding(s)) instead of a refusal", v, len(got.Findings))
@@ -222,7 +222,7 @@ func TestCheckRefusesUnstampedBuild(t *testing.T) {
 
 			// The real-"introduced" catalog — the shape that fabricated CLEAN, and the
 			// one an operator reads as "I am safe". Same refusal, same reason.
-			real := feed(t, advisory("GHSA-real", "26.5.0", "26.7.2"))
+			real := feed(t, advisory("GHSA-real", "1.500", "1.702"))
 			got, err = real.Check(productModule, v)
 			if err == nil {
 				t.Fatalf("unstamped %q got a CLEAN verdict (%d finding(s)); that is the fabricated verdict", v, len(got.Findings))
@@ -240,8 +240,8 @@ func TestCheckRefusesUnstampedBuild(t *testing.T) {
 // fabricating, but it failed as a generic parse error; it now carries the same typed
 // refusal, so ONE caller-side branch covers every "I cannot evaluate this".
 func TestCheckRefusesUnorderableVersion(t *testing.T) {
-	f := feed(t, advisory("GHSA-zero", "0", "26.7.2"))
-	for _, v := range []string{"15f2fb57a", "26.7.x", "banana", "26.7.0.1"} {
+	f := feed(t, advisory("GHSA-zero", "0", "1.702"))
+	for _, v := range []string{"15f2fb57a", "26.7.x", "banana", "1.700.1"} {
 		got, err := f.Check(productModule, v)
 		if err == nil {
 			t.Fatalf("%q is not orderable but Check returned a verdict: %+v", v, got)
@@ -256,22 +256,22 @@ func TestCheckRefusesUnorderableVersion(t *testing.T) {
 // swallow the real answers. A stamped, orderable version keeps getting a MEASURED
 // verdict in both directions — this is the test a guard that over-fires dies on.
 func TestCheckStillAnswersForAStampedVersion(t *testing.T) {
-	f := feed(t, advisory("GHSA-zero", "0", "26.7.2"))
-	got, err := f.Check(productModule, "26.7.0")
+	f := feed(t, advisory("GHSA-zero", "0", "1.702"))
+	got, err := f.Check(productModule, "1.700")
 	if err != nil {
-		t.Fatalf("26.7.0 is a real version and must be checkable, got: %v", err)
+		t.Fatalf("1.700 is a real version and must be checkable, got: %v", err)
 	}
 	if len(got.Findings) != 1 || got.Findings[0].ID != "GHSA-zero" {
-		t.Fatalf("26.7.0 is inside [0,26.7.2) and must be reported affected, got %+v", got)
+		t.Fatalf("1.700 is inside [0,1.702) and must be reported affected, got %+v", got)
 	}
 	// And the clean direction, so "always refuse" and "always affected" both die here.
-	safe := feed(t, advisory("GHSA-old", "0", "26.6.0"))
-	got, err = safe.Check(productModule, "26.7.0")
+	safe := feed(t, advisory("GHSA-old", "0", "1.600"))
+	got, err = safe.Check(productModule, "1.700")
 	if err != nil {
-		t.Fatalf("26.7.0 past the fix must still be checkable, got: %v", err)
+		t.Fatalf("1.700 past the fix must still be checkable, got: %v", err)
 	}
 	if len(got.Findings) != 0 {
-		t.Fatalf("26.7.0 is past the 26.6.0 fix and must be clean, got %+v", got)
+		t.Fatalf("1.700 is past the 1.600 fix and must be clean, got %+v", got)
 	}
 }
 
@@ -283,12 +283,12 @@ func TestCheckStillAnswersForAStampedVersion(t *testing.T) {
 // inRange claimed the caller compensated by logging; no caller ever did.
 func TestUnparseableRangeIsUnevaluableNotClean(t *testing.T) {
 	for _, bad := range []struct{ introduced, fixed string }{
-		{"26.5.0.1", "26.7.2"}, // introduced has four numeric components
-		{"0", "twenty-six"},    // fixed is not a version
-		{"v26.5.x", "26.9.0"},  // introduced has a non-numeric component
+		{"1.500.1", "1.702"}, // introduced has four numeric components
+		{"0", "twenty-six"},  // fixed is not a version
+		{"v26.5.x", "1.900"}, // introduced has a non-numeric component
 	} {
 		f := feed(t, advisory("GHSA-bad-range", bad.introduced, bad.fixed))
-		got, err := f.Check(productModule, "26.7.0")
+		got, err := f.Check(productModule, "1.700")
 		if err != nil {
 			t.Fatalf("a malformed range is a per-advisory problem, not a whole-check failure: %v", err)
 		}
@@ -311,9 +311,9 @@ func TestUnparseableRangeIsUnevaluableNotClean(t *testing.T) {
 // orders SEMVER only, so any other type is UNREAD, not "does not apply" — the same
 // distinction, reached by a different door.
 func TestUnknownRangeTypeIsUnevaluable(t *testing.T) {
-	a := advisory("GHSA-git-range", "0", "26.7.2")
+	a := advisory("GHSA-git-range", "0", "1.702")
 	a.Affected[0].Ranges[0].Type = "GIT"
-	got, err := feed(t, a).Check(productModule, "26.7.0")
+	got, err := feed(t, a).Check(productModule, "1.700")
 	if err != nil {
 		t.Fatalf("Check: %v", err)
 	}
@@ -326,11 +326,11 @@ func TestUnknownRangeTypeIsUnevaluable(t *testing.T) {
 // another is unreadable, the answer for that advisory is KNOWN and it is the urgent one.
 // It must be a finding, not an abstention — an abstention here would bury a confirmed hit.
 func TestDefiniteMatchOutranksAnUnevaluableSibling(t *testing.T) {
-	a := advisory("GHSA-mixed", "0", "26.7.2") // this range matches 26.7.0
+	a := advisory("GHSA-mixed", "0", "1.702") // this range matches 1.700
 	a.Affected[0].Ranges = append(a.Affected[0].Ranges, Range{
 		Type: RangeSemver, Events: []Event{{Introduced: "not-a-version"}},
 	})
-	got, err := feed(t, a).Check(productModule, "26.7.0")
+	got, err := feed(t, a).Check(productModule, "1.700")
 	if err != nil {
 		t.Fatalf("Check: %v", err)
 	}

@@ -62,6 +62,8 @@ vi.mock('@/lib/auth/context', () => ({
 import i18n from 'i18next'
 import { AreasSheet, AreasTree } from './sidebar'
 import { NAV_AREAS } from '@/features/registry'
+import { FEATURE_EXTENSIONS } from '@/features/extensions'
+import { useModulesStore } from '@/stores/modules'
 import {
   authorizedEntries,
   buildNavSearchIndex,
@@ -154,14 +156,22 @@ describe('the area directory (N1)', () => {
       expect(heading).not.toBeNull()
       expect(g.contains(heading)).toBe(true)
     }
-    expect(
-      within(sections[0]).queryByRole('link', { name: 'Sessions' }),
-    ).toBeNull()
-    expect(
-      within(sections[0])
-        .getAllByRole('link')
-        .map((a) => a.getAttribute('href')),
-    ).toEqual(['/sessions', '/agentops'])
+    // One screen, one entry (the 26.10.1 review found three names for it): the
+    // /agentops door is not a second row for a principal who can open Sessions.
+    const leaves = within(sections[0]).getAllByRole('link')
+    // Edition extensions add their own screens beside the single Sessions entry.
+    const sessionExtensions = FEATURE_EXTENSIONS.filter(
+      (view) =>
+        !view.hideInNav &&
+        view.navigation.kind === 'feature' &&
+        view.navigation.areaId === 'ai' &&
+        view.navigation.sectionId === 'sessions',
+    )
+    expect(leaves.map((a) => a.getAttribute('href'))).toEqual([
+      '/sessions',
+      ...sessionExtensions.map((view) => view.path),
+    ])
+    expect(leaves[0]).toHaveTextContent('Sessions')
   })
 
   it('marks exactly one link as the current page and the containing area as the active branch', () => {
@@ -169,7 +179,10 @@ describe('the area directory (N1)', () => {
     renderIntel(<AreasTree />)
     const current = document.querySelectorAll('[aria-current="page"]')
     expect(current).toHaveLength(1)
-    expect(current[0]).toHaveAttribute('href', '/agentops')
+    // On the /agentops door the current page is the Sessions screen it opens, marked
+    // and styled the way the router marks an active link.
+    expect(current[0]).toHaveAttribute('href', '/sessions')
+    expect(current[0]).toHaveAttribute('data-status', 'active')
     expect(areaRow('ai')).toHaveAttribute('data-branch', 'active')
     expect(areaRow('system')).not.toHaveAttribute('data-branch')
     // The area link itself is NOT the current page while a leaf is.
@@ -201,7 +214,7 @@ describe('the area directory (N1)', () => {
     // Still on the same page: the current-page marker did not move.
     expect(document.querySelector('[aria-current="page"]')).toHaveAttribute(
       'href',
-      '/agentops',
+      '/sessions',
     )
     await user.click(toggleOf('ai'))
     expect(toggleOf('ai')).toHaveAttribute('aria-expanded', 'true')
@@ -274,6 +287,23 @@ describe('the area directory (N1)', () => {
   })
 })
 
+describe('the area directory search lists a page whose module is off', () => {
+  afterEach(() => useModulesStore.setState({ off: new Set() }))
+
+  it('tagged Off, in the ranked results as in the tree', async () => {
+    const user = userEvent.setup()
+    useModulesStore.setState({ off: new Set(['deploy']) })
+    renderIntel(<AreasTree />)
+    const rowFor = () =>
+      screen
+        .getAllByRole('link')
+        .find((a) => a.getAttribute('href') === '/deploy')!
+    expect(within(rowFor()).getByText('Off')).toBeInTheDocument()
+    await user.type(screen.getByRole('searchbox'), 'deploy')
+    expect(within(rowFor()).getByText('Off')).toBeInTheDocument()
+  })
+})
+
 describe('the area directory search (P2-12, N1 index)', () => {
   const filter = () => screen.getByRole('searchbox')
 
@@ -299,7 +329,9 @@ describe('the area directory search (P2-12, N1 index)', () => {
     expect(document.querySelector('[data-nav-area]')).toBeNull()
     expect(
       screen.getByRole('link', { name: /Data residency/ }),
-    ).toHaveTextContent('Security & identity › Governance boundaries')
+    ).toHaveTextContent(
+      'Security & identity › Policies and governance boundaries',
+    )
     expect(usePreferencesStore.getState().navAreas).toEqual(
       DEFAULT_AREA_EXPANSION,
     )
@@ -369,16 +401,25 @@ describe('the area directory search (P2-12, N1 index)', () => {
   it('finds a view by its path, by its former name and by its English label', async () => {
     const user = userEvent.setup()
     renderIntel(<AreasTree />)
+    await user.type(filter(), '/stored-budgets')
+    expect(hrefs()).toContain('/stored-budgets')
+    await user.clear(filter())
     await user.type(filter(), '/red-team')
-    expect(hrefs()).toContain('/red-team')
+    expect(
+      screen
+        .queryAllByRole('link')
+        .some((a) => a.getAttribute('href') === '/red-team'),
+    ).toBe(FEATURE_EXTENSIONS.some((view) => view.id === 'redteam'))
     await user.clear(filter())
     await user.type(filter(), 'control console')
     expect(hrefs()).toContain('/console')
     await user.clear(filter())
     await user.type(filter(), 'claude code')
+    // The former operate portal's name finds the one Sessions screen.
     expect(hrefs()).toEqual(
-      expect.arrayContaining(['/agentops', '/claude-policy', '/adoption']),
+      expect.arrayContaining(['/sessions', '/claude-policy', '/adoption']),
     )
+    expect(hrefs()).not.toContain('/agentops')
   })
 
   it('finds an area by its own name and keeps its directory link', async () => {

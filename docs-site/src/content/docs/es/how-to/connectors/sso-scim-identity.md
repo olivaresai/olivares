@@ -26,12 +26,12 @@ postura es honesta por construcción:
   mantiene del lado del servidor cada valor del flujo que porta secretos — el
   estado CSRF, el nonce OIDC, el verifier PKCE (solo el *challenge* S256 va al
   proveedor). Authorization Code + **PKCE está siempre activo**.
-- **El acceso OIDC/SAML con un único IdP está disponible en Community y Enterprise.**
+- **El acceso OIDC/SAML con un único IdP está disponible en todas las ediciones, Community incluida.**
   Se configura desde los ajustes SSO administrados de la consola. Si no hay
   configuración administrada, el motor usa las variables del arranque
   (`OLIVARES_SSO_PROTOCOL`, `OLIVARES_OIDC_*` o `OLIVARES_SAML_*`). Sin un
   proveedor configurado, `NoFederation` devuelve `501 sso_not_configured`:
-  indica que falta configuración, no que el protocolo sea exclusivo de Enterprise.
+  indica que falta configuración, no que el protocolo sea exclusivo de las ediciones comerciales.
 - La URI de redirect/ACS que tu IdP debe portar es **exacta**
   (`…/v1/auth/federation/callback` en el origen de tu consola — coincidencia
   exacta según RFC 9700, sin trucos de prefijo).
@@ -58,7 +58,7 @@ El control plane es un proveedor de servicio SCIM 2.0 (RFC 7644) estándar en:
   integración SCIM — el mismo modelo de token opaco que el resto de la API, sin
   un tipo de secreto SCIM aparte. El endpoint está siempre presente (no está
   detrás de un feature gate).
-- **Users** aprovisiona y desaprovisiona identidades en Community y Enterprise.
+- **Users** aprovisiona y desaprovisiona identidades en todas las ediciones, Community incluida.
   Los cambios dependen de la entrega y del procesamiento correcto de la solicitud
   SCIM; comprueba su respuesta y el acceso afectado, en lugar de considerar un
   evento de RRHH como prueba de una revocación completada. SCIM no elimina

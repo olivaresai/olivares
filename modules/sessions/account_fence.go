@@ -27,7 +27,7 @@ var _ auth.StandingConsumer = (*Module)(nil)
 
 // UseStanding implements auth.StandingConsumer: it binds the standing port of
 // the writers that run outside a request.
-func (m *Module) UseStanding(r auth.StandingReader) { m.standing = r }
+func (m *Module) UseStanding(r auth.StandingReader) { m.Standing = r }
 
 // requestStandingKey carries a route's standing port to the kernel it calls.
 type requestStandingKey struct{}
@@ -47,7 +47,7 @@ func (m *Module) standingFor(ctx context.Context) auth.StandingReader {
 	if v, ok := ctx.Value(requestStandingKey{}).(requestStanding); ok {
 		return v.reader
 	}
-	return m.standing
+	return m.Standing
 }
 
 // userAccount returns the account a (kind, ref) pair names: a "user" kind with

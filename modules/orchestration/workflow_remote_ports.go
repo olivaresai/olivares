@@ -8,9 +8,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
-
 	"github.com/olivaresai/olivares/core/model"
+	"strings"
 )
 
 // RemoteWorkOutcome is the connector-independent three-way outcome of a

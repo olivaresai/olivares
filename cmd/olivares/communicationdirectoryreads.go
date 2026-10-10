@@ -423,19 +423,44 @@ func readDirectoryAgentGroup(
 			return err
 		}
 		sort.Slice(members, func(i, j int) bool { return members[i].ID.String() < members[j].ID.String() })
+		// CUTS A4: the agents read in ONE batched IN query instead of a Get per
+		// member (AU2-06 measured 1,001 queries for one group). Absent agents
+		// (a dangling member) are skipped, exactly as the not-found continue did.
+		ids := make([]model.ID, 0, len(members))
 		for _, member := range members {
-			agent, err := sc.Agents().Get(ctx, member.AgentID)
+			ids = append(ids, member.AgentID)
+		}
+		byID := make(map[model.ID]model.ID, len(ids))
+		// One bounded List per chunk: a chunk never exceeds the page cap, and
+		// no single query binds more than 500 parameters — PostgreSQL admits at
+		// most 65,535, so a larger group must never reach the driver in one IN
+		// (SR5C round 2; the same bound core/auth's groupsByIDs and
+		// sourcescope's idChunk use). The loop below iterates members, so
+		// chunking never touches the membership order.
+		const idChunk = 500
+		for start := 0; start < len(ids); start += idChunk {
+			end := start + idChunk
+			if end > len(ids) {
+				end = len(ids)
+			}
+			agents, _, err := sc.Agents().List(ctx, model.Query{
+				Filters: []model.Filter{{Column: model.ColID, Op: model.OpIn, Value: ids[start:end]}},
+				Limit:   idChunk,
+			})
 			if err != nil {
-				if errors.Is(err, store.ErrNotFound) {
-					continue
-				}
 				return err
 			}
-			if agent.IdentityID.IsZero() {
+			for _, a := range agents {
+				byID[a.ID] = a.IdentityID
+			}
+		}
+		for _, member := range members {
+			identity, ok := byID[member.AgentID]
+			if !ok || identity.IsZero() {
 				continue
 			}
 			out.Members = append(out.Members, directoryGroupMember{
-				Ref: agent.IdentityID,
+				Ref: identity,
 				Fact: store.AuthorizationFactRef{
 					Kind: directoryFactAgentGroupMember, ID: member.ID, Version: member.Version,
 				},

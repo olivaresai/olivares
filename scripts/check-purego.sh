@@ -31,14 +31,14 @@ cd "${ROOT}"
 # el hecho real (no hay árbol que mirar) queda sin decir. Medido el 2026-08-18 corriendo los 63
 # gates contra un señuelo sin sujeto: éste era uno de los once que contestaban «roto» a una ausencia.
 [ -f go.work ] || {
-	echo "check-purego: ⛔ NO HE PODIDO MIRAR: no hay go.work en ${ROOT}, así que no hay módulos" >&2
-	echo "              que examinar. Eso no es un fallo de purego: es un árbol sin nada que mirar." >&2
+	echo "check-purego: ⛔ COULD NOT CHECK: no go.work in ${ROOT}, so there are no modules" >&2
+	echo "              to examine. The check has no input; this is not a purego defect." >&2
 	exit 2
 }
 mapfile -t MODULES < <(go work edit -json | sed -n 's/.*"DiskPath": "\(.*\)".*/\1/p')
 # Misma clase: un `go.work` que no enumera módulos no es un producto roto, es un examen imposible.
 [ "${#MODULES[@]}" -gt 0 ] || {
-	echo "check-purego: ⛔ NO HE PODIDO MIRAR: go.work no enumera ningún módulo." >&2
+	echo "check-purego: ⛔ COULD NOT CHECK: go.work lists no modules." >&2
 	exit 2
 }
 

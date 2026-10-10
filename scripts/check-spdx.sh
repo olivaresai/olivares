@@ -66,11 +66,7 @@
 # both measured:
 #   * `task lint:spdx` was GREEN with 405 lines of commercial engine under cmd/ — the licence
 #     gate had been TOLD that was correct, so it was not failing to notice.
-#   * ADR-0020:39-41 (status: accepted) says the public repository "no longer contains the
-#     enterprise/ tree, the //go:build enterprise cmd/olivares wiring", and the file sat at
-#     position 191 of the 7,184-path export manifest, the ONLY one declaring a commercial
-#     licence, shipping beside LICENSING.md:35 telling the reader commercial code is in a
-#     "separate private repository — not in this repo".
+#   * Commercial implementation stays in the private repository, outside public source.
 # A GLOB NEVER EXPIRES: while that arm existed, the next `cmd/*/*_enterprise.go` would be
 # blessed on arrival, with nobody deciding anything. What replaces it is ONE named path with
 # a date and a reason, and a ratchet that makes it fail once its subject is gone.
@@ -87,10 +83,18 @@
 # Filenames containing newlines are unsupported (pathological, policy-rejected).
 #
 # Usage:  scripts/check-spdx.sh [root]   (root defaults to repo root / CWD)
+#         scripts/check-spdx.sh --files <path>...   (only these paths, from the repo root)
 
 set -eu
 
-ROOT="${1:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
+files_mode=0
+if [ "${1:-}" = "--files" ]; then
+  files_mode=1
+  shift
+  ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+else
+  ROOT="${1:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
+fi
 cd "$ROOT"
 
 # ⛔ LA VENTANA DEL SELFTEST: si `test-check-spdx.sh` esta plantando ahora mismo sus sondas en ESTE
@@ -227,6 +231,11 @@ classify() {
   # to the suffixes: a .line or .record anywhere else is still unclassified (exit 2).
   case "$1" in
     scripts/fixtures/package-upgrade/records-v1/*.line|scripts/fixtures/package-upgrade/records-v1/*.record)
+      echo data; return ;;
+    # The built-in skills catalog archives hold third-party upstream bytes under their own
+    # licenses, so no inline header can be added. REUSE.toml licenses them, and
+    # scripts/skills-catalog.py rebuilds them from the pinned commits.
+    modules/skills/builtin/*.tar.gz)
       echo data; return ;;
     # This template renders the shipped DNF repository configuration and already
     # carries its source license header. Other template formats remain unknown.
@@ -495,7 +504,13 @@ unknown_exts=''  # space-separated, deduplicated, for the report
 # shell (no subshell) and counters survive (a pipe would lose them under POSIX sh).
 tmplist="$(mktemp)"
 trap 'rm -f "$tmplist"' EXIT
-list_files >"$tmplist"
+# With --files only the named paths are checked (the pre-push hook passes the files a push
+# changes); otherwise the whole tree is, and the population floor below applies.
+if [ "$files_mode" = 1 ]; then
+  printf '%s\n' "$@" >"$tmplist"
+else
+  list_files >"$tmplist"
+fi
 
 while IFS= read -r f; do
   [ -n "$f" ] || continue
@@ -561,7 +576,8 @@ stale=0
 # absent BY DESIGN, and PUBLIC-EXPORT.md is again the discriminator. The end state this debt
 # owes is the file leaving scripts/ — and on the day it does, this line goes red until the
 # entry above is deleted, which is the whole point of a ratchet.
-if [ ! -f "$INTERNAL_DEBT" ] && [ ! -f PUBLIC-EXPORT.md ]; then
+# A --files run checks the named paths, not the tree, so it does not judge this ratchet.
+if [ "$files_mode" = 0 ] && [ ! -f "$INTERNAL_DEBT" ] && [ ! -f PUBLIC-EXPORT.md ]; then
   printf 'STALE    %s  (named licence debt D-2 whose subject no longer exists: delete INTERNAL_DEBT from this script)\n' "$INTERNAL_DEBT"
   stale=$((stale + 1))
 fi
@@ -622,7 +638,7 @@ if [ "$unknown" -ne 0 ]; then
   cannot_look=1
 fi
 
-if [ "${checked}" -lt "${SPDX_MIN_CHECKED}" ]; then
+if [ "$files_mode" = 0 ] && [ "${checked}" -lt "${SPDX_MIN_CHECKED}" ]; then
   echo
   if [ "${checked}" -eq 0 ]; then
     echo "SPDX check CANNOT LOOK: zero licensed source files were examined." >&2

@@ -5,11 +5,12 @@ package sessions
 import (
 	"context"
 	"encoding/json"
+	"testing"
+	"time"
+
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
-	"testing"
-	"time"
 )
 
 func TestRunWorkScopeProjectionDenyUnknownAndCorrupt(t *testing.T) {
@@ -58,9 +59,9 @@ func TestRunWorkScopeWorkerPersistedBeforeSpawnAndAcrossStopResume(t *testing.T)
 	inspector := &inspectingWorkLaunchRunner{inner: runner}
 	m, _, tenant, clk := newRuntimeHarness(t, WithRunner(inspector), WithCredentialSource(staticCred()))
 	spy := &workSessionCredentialSpy{mintCredential: WorkSessionCredential{ID: model.NewID(), Token: "fixture-work-token", NotAfter: clk.get().Add(30 * time.Minute)}}
-	m.UseWorkSessionCredentialSource(spy)
+	m.WorkSessionCreds = spy
 	inspector.before = func() error {
-		return m.data.View(ctx, tenant, func(sc store.Scope) error {
+		return m.Data.View(ctx, tenant, func(sc store.Scope) error {
 			repo, err := sc.Ext(runKind)
 			if err != nil {
 				return err
@@ -75,7 +76,7 @@ func TestRunWorkScopeWorkerPersistedBeforeSpawnAndAcrossStopResume(t *testing.T)
 			return nil
 		})
 	}
-	created, err := m.createRun(ctx, tenant, CreateRunParams{Name: "scope-before-spawn", Transport: TransportStreamJSON, Isolation: IsolationNative, Actor: "fixture-human", ActorKind: model.ActorUser})
+	created, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{Name: "scope-before-spawn", Transport: TransportStreamJSON, Isolation: IsolationNative, Actor: "fixture-human", ActorKind: model.ActorUser})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -117,9 +118,9 @@ func TestRunWorkScopeOrchestrationSnapshotChangesOnlyOnGovernedResume(t *testing
 	ctx := context.Background()
 	m, st, tenant, clk := newRuntimeHarness(t, WithRunner(&fakeRunner{initSID: "scope-orchestrator"}), WithCredentialSource(staticCred()))
 	spy := &workSessionCredentialSpy{mintCredential: WorkSessionCredential{ID: model.NewID(), Token: "fixture-work-token", NotAfter: clk.get().Add(30 * time.Minute)}}
-	m.UseWorkSessionCredentialSource(spy)
+	m.WorkSessionCreds = spy
 	m.UseExecutionEnvironmentRef(testEnvRef)
-	m.UseWorkAuthorizer(auth.NewAuthorizer(nil))
+	WithWorkAuthorizer(auth.NewAuthorizer(nil))(m)
 	profile := mustCreateProfile(t, m, tenant, CreateProfileInput{Driver: "claude", ConfigHome: t.TempDir(), UserHome: t.TempDir(), AuthSource: AuthSourceAccountHome})
 	actor, err := auth.NewSystemOperator("test:work-scope", "test launch scope snapshots")
 	if err != nil {
@@ -142,7 +143,7 @@ func TestRunWorkScopeOrchestrationSnapshotChangesOnlyOnGovernedResume(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	created, err := m.createRun(ctx, tenant, CreateRunParams{Transport: TransportStreamJSON, Isolation: IsolationNative, ProviderProfileRef: profile.Ref, Actor: "fixture-human", ActorKind: model.ActorUser, AgentRef: "agent-fixture"})
+	created, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{Transport: TransportStreamJSON, Isolation: IsolationNative, ProviderProfileRef: profile.Ref, Actor: "fixture-human", ActorKind: model.ActorUser, AgentRef: "agent-fixture"})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -151,8 +151,8 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 			{Name: colSlug, Kind: model.KindText, Indexed: true, Principal: model.None("a lowercase identifier slug, validated and matched only: entries.go:55-58, entries.go:126")},
 			{Name: colVersion, Kind: model.KindText, Principal: model.None("a semantic version string, validated: entries.go:59-62")},
 			{Name: colStatus, Kind: model.KindText, Indexed: true, Principal: model.None("an entry lifecycle status from a closed set: entries.go:176, entries.go:347-352, entries.go:405-409, entries.go:456")},
-			{Name: colSummary, Kind: model.KindText, Nullable: true, Principal: model.None("entry summary prose, hashed and rendered only: sign.go:35-39, entries.go:85")},
-			{Name: colSpec, Kind: model.KindJSON, Nullable: true, Principal: model.None("a free-form curated spec; readers take only a model version ref and an artifact digest from it, hash it and render it: modeladmission.go:86, connectoradmission.go:714, sign.go:35-39, entries.go:85")},
+			{Name: colSummary, Kind: model.KindText, Nullable: true, Principal: model.None("entry summary prose, hashed and rendered only: sign.go:35-39, entries.go:85; activation verifies its hash and pins the deploy spec: instances.go")},
+			{Name: colSpec, Kind: model.KindJSON, Nullable: true, Principal: model.None("a free-form curated spec; readers take only a model version ref and an artifact digest from it, hash it and render it: modeladmission.go:86, connectoradmission.go:714, sign.go:35-39, entries.go:85; activation verifies its hash and pins the deploy spec: instances.go")},
 			// A caller-declared owner label in no fixed encoding, hashed and
 			// rendered only, so it is evidence.
 			{Name: colOwnerRef, Kind: model.KindText, Nullable: true, Principal: model.Scan(model.ClassEvidence)},
@@ -192,7 +192,7 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 			{Name: colEntrySlug, Kind: model.KindText, Principal: model.None("the source entry's slug, copied and rendered only: instances.go:102, instances.go:38")},
 			{Name: colEntryVersion, Kind: model.KindText, Principal: model.None("the source entry's semantic version, copied and rendered only: instances.go:103, instances.go:39")},
 			{Name: colInstName, Kind: model.KindText, Principal: model.None("an instance name, unique per entry, only rendered: instances.go:104, instances.go:39")},
-			{Name: colTargetRef, Kind: model.KindText, Nullable: true, Principal: model.None("a caller-supplied target label, stored and rendered only: instances.go:105, instances.go:40")},
+			{Name: colTargetRef, Kind: model.KindText, Nullable: true, Principal: model.None("a deployment definition reference, never an account; activation validates it as a UUID before routing to deploy: cmd/olivares/catalogdeploy.go:27-31")},
 			{Name: colInstStatus, Kind: model.KindText, Indexed: true, Principal: model.None("an instance status from a closed set: instances.go:209-212, instances.go:227")},
 			{Name: colRequestedBy, Kind: model.KindText, Nullable: true, Principal: pdeclActorEvidence},
 			{Name: colDecidedBy, Kind: model.KindText, Nullable: true, Principal: pdeclActorEvidence},

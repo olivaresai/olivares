@@ -90,9 +90,9 @@ elige_scratch() {
 	return 1
 }
 BIN_DIR="$(elige_scratch)" || {
-	echo "check-openapi-op-descriptions: CANNOT LOOK — ningun scratch dir sirve: hace falta uno" >&2
-	echo "  escribible Y EJECUTABLE porque este gate compila un binario y lo corre." >&2
-	echo "  Probados: TMPDIR=${TMPDIR:-sin fijar}, \$ROOT/.openapi-op-tmp, /var/tmp." >&2
+	echo "check-openapi-op-descriptions: CANNOT LOOK — no scratch directory is usable; this check requires" >&2
+	echo "  a writable directory that supports execution because it compiles and runs a binary." >&2
+	echo "  Tried: TMPDIR=${TMPDIR:-unset}, \$ROOT/.openapi-op-tmp, /var/tmp." >&2
 	exit 2
 }
 trap 'rm -rf "$BIN_DIR"' EXIT

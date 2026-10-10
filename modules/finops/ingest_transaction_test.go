@@ -314,7 +314,7 @@ func startIngest(t *testing.T, ctx context.Context, m *Module, tenant model.Tena
 	t.Helper()
 	b := &bgCall{role: role, ch: make(chan error, 1)}
 	go func() {
-		b.ch <- m.onCost(withProbeRole(ctx, role), tenant, c, nil)
+		b.ch <- m.onCost(withProbeRole(ctx, role), tenant, c, nil, nil)
 		close(b.ch)
 	}()
 	t.Cleanup(func() {
@@ -474,7 +474,7 @@ func TestCostIngestConflictAfterLedgerWriteRollsBackEverything(t *testing.T) {
 		probe := &txProbe{watch: costSampleKind, createErr: store.ErrConflict}
 		m.UseData(probeData{ModuleData: m.data, p: probe})
 
-		err := m.onCost(ctx, tenant, mkCost("openai", "gpt-x", "s-1", 1, 1, 12*oneUSD, baseTime), auditingIngest(t))
+		err := m.onCost(ctx, tenant, mkCost("openai", "gpt-x", "s-1", 1, 1, 12*oneUSD, baseTime), auditingIngest(t), nil)
 		t.Logf("err=%v events=%s", err, probe)
 		if err == nil {
 			t.Fatalf("the insert conflict was swallowed: the ingestion reported success")
@@ -522,7 +522,7 @@ func TestCostIngestAuditFailureLeavesNothing(t *testing.T) {
 	m.UseData(probeData{ModuleData: m.data, p: probe})
 
 	err := m.onCost(context.Background(), tenant, mkCost("openai", "gpt-x", "s-1", 1, 1, oneUSD, baseTime),
-		func(context.Context, store.Scope) error { return boom })
+		func(context.Context, store.Scope) error { return boom }, nil)
 	if !errors.Is(err, boom) {
 		t.Fatalf("err = %v, want the audit failure", err)
 	}
@@ -841,7 +841,7 @@ func TestCostIngestDoesNotSerializeAcrossTenants(t *testing.T) {
 	holder.awaitLock(t, holderLocked, probe)
 
 	otherErr := m.onCost(withProbeRole(ctx, "other"), tenantB,
-		mkCost("anthropic", "claude-opus-4-8", "", 1, 1, 900, baseTime), nil)
+		mkCost("anthropic", "claude-opus-4-8", "", 1, 1, 900, baseTime), nil, nil)
 	close(otherDone)
 	holderErr := holder.wait(t)
 
@@ -905,7 +905,7 @@ func TestAnOmittedInstantIsTheOneFromBeforeTheTransaction(t *testing.T) {
 	submitted := baseTime
 	delayed := baseTime.Add(admissionDelay)
 	omitted := mkCost("anthropic", "claude-opus-4-8", "s-omitted", 10, 5, 600, time.Time{})
-	if err := m.onCost(context.Background(), tenant, omitted, nil); err != nil {
+	if err := m.onCost(context.Background(), tenant, omitted, nil, nil); err != nil {
 		t.Fatalf("onCost: %v", err)
 	}
 
@@ -948,7 +948,7 @@ func TestAnOmittedInstantIsTheOneFromBeforeTheTransaction(t *testing.T) {
 	// A sample that DOES carry an instant is untouched by any of this: the fallback is
 	// the only thing the clock decides.
 	explicit := baseTime.Add(-2 * time.Hour)
-	if err := m.onCost(context.Background(), tenant, mkCost("anthropic", "claude-opus-4-8", "s-explicit", 1, 1, 60, explicit), nil); err != nil {
+	if err := m.onCost(context.Background(), tenant, mkCost("anthropic", "claude-opus-4-8", "s-explicit", 1, 1, 60, explicit), nil, nil); err != nil {
 		t.Fatalf("onCost (explicit instant): %v", err)
 	}
 	for _, r := range costSampleRows(t, st, tenant) {

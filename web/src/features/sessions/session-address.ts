@@ -41,12 +41,17 @@ export const SESSION_PARAM = 'session'
 export const PANE_PARAM = 'pane'
 /** Which evidence block in the narrative is expanded. */
 export const EVIDENCE_PARAM = 'evidence'
+/** Which tab of the side pane is in front (`context`, `changes`, `files`, or a registered panel). */
+export const PANEL_PARAM = 'panel'
+/** Which Sessions view is in front; an absent tab means the session list. */
+export const TAB_PARAM = 'tab'
 
 /** The keys this surface OWNS. Anything else on the route is left untouched. */
 export const SESSION_ADDRESS_KEYS = [
   SESSION_PARAM,
   PANE_PARAM,
   EVIDENCE_PARAM,
+  PANEL_PARAM,
 ] as const
 
 /**
@@ -141,6 +146,8 @@ export interface SessionAddress {
   address: string | null
   pane: WorkPane
   evidence: EvidenceBlock
+  /** The side pane's tab, when the address names one. Absent means Context. */
+  panel?: string
 }
 
 /**
@@ -185,5 +192,18 @@ export function decodeSessionAddress(raw: {
     else issues.push(EVIDENCE_PARAM)
   }
 
-  return { value: { address, pane, evidence }, issues }
+  // A panel id is a short lowercase word: what a registered panel may be called, and
+  // nothing a link could use to carry text. Whether it names a panel THIS build has is
+  // the pane's to say; an unknown one reads as Context.
+  const rawPanel = raw[PANEL_PARAM]
+  let panel: string | undefined
+  if (rawPanel !== undefined) {
+    if (/^[a-z][a-z0-9-]{0,31}$/.test(rawPanel)) panel = rawPanel
+    else issues.push(PANEL_PARAM)
+  }
+
+  return {
+    value: { address, pane, evidence, ...(panel ? { panel } : {}) },
+    issues,
+  }
 }

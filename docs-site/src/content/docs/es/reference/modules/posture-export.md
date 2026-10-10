@@ -6,6 +6,8 @@ description: >-
   seguridad — que una torre de control extrae para enriquecer su propia vista.
   Una proyección en JSON neutral, no un push nativo verificado.
 ---
+SIEM and ITSM push, OTLP downloads, external trace and metric delivery, and posture export require Business. Community keeps local observability, trace-context propagation, saved settings and `olivares dr backup`. Generic chat, email and webhook notifications remain available in Community.
+
 
 La exportación de postura (`modules/posture-export`) es la **superficie de postura
 saliente** del motor: un único endpoint de solo lectura que una torre de control
@@ -64,4 +66,4 @@ etiqueta como autoritativa.
 - [Honestidad y límites](/es/start/honesty-and-limits/) — por qué esto es una
   proyección, no un push verificado.
 - [Catálogo de módulos](/es/reference/modules/overview/) — dónde se sitúa la
-  exportación de postura entre los 31 módulos entregados.
+  exportación de postura entre los 32 módulos entregados.

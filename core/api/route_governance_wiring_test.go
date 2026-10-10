@@ -337,6 +337,14 @@ func TestAConcealingRouteStillAnswers404WhenPolicyDenies(t *testing.T) {
 		t.Errorf("the handler ran %d time(s) on a denied route: the HTTP effect happened without "+
 			"an authorization that allowed it", m.ran.Load())
 	}
+
+	// A denial is final: Retry-After belongs to the undecided answer only, and on a refusal it
+	// would tell a client to retry what nobody will ever allow.
+	for _, r := range []resp{concealed, plain} {
+		if got := r.hdr.Get("Retry-After"); got != "" {
+			t.Errorf("a policy denial (%d) carries Retry-After %q", r.code, got)
+		}
+	}
 }
 
 // TestUndecidedAnswersIdenticallyWithAndWithoutConceal is the half almost nobody writes.

@@ -9,6 +9,8 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -120,22 +122,75 @@ func TestArgumentErrorsKeepTheirUsageExitCodeThroughEveryClient(t *testing.T) {
 // its own, and for a control plane that is genuinely unreachable. Preserving an
 // inner code must not stop the fallback from applying.
 func TestTransportFailuresStillExitServerThroughEveryClient(t *testing.T) {
-	// A CA bundle that does not exist: loadCLIRootCAs returns a PLAIN error with
-	// no exit code attached, so the call site's own fallback is what must answer.
+	// Failure to write the mandatory --insecure warning is an unclassified
+	// transport-construction error, unlike an invalid operator-supplied CA.
 	for site, base := range theFourRewrapSites {
-		t.Run(site+" / unreadable --ca-cert", func(t *testing.T) {
+		t.Run(site+" / unwritable TLS warning", func(t *testing.T) {
+			t.Chdir(t.TempDir())
+			t.Setenv("OLIVARES_CLI_CONFIG", t.TempDir()+"/config.yaml")
+			stderr, err := os.CreateTemp(t.TempDir(), "stderr")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := stderr.Close(); err != nil {
+				t.Fatal(err)
+			}
 			argv := append(append([]string(nil), base...),
 				"--server", "https://plane.invalid", "--token", rewrapToken,
-				"--ca-cert", t.TempDir()+"/no-such-bundle.pem")
-			code, _, _, err := runCLIExit(t, argv...)
-			if err == nil {
-				t.Fatalf("%s accepted a missing CA bundle", site)
+				"--insecure")
+			root := newRootCmd()
+			root.SetErr(stderr)
+			root.SetArgs(argv)
+			_, err = root.ExecuteC()
+			if err == nil || !strings.Contains(err.Error(), "write TLS warning") {
+				t.Fatalf("%s did not report the warning write failure: %v", site, err)
 			}
+			code := exitcode.From(err)
 			if code != exitcode.Server {
 				t.Fatalf("exit = %d, want %d (server): an unclassified transport failure lost its "+
 					"fallback code in %s: %v", code, exitcode.Server, site, err)
 			}
 		})
+	}
+}
+
+func TestCAArgumentErrorsExitUsageThroughEveryClient(t *testing.T) {
+	dir := t.TempDir()
+	badCA := filepath.Join(dir, "not-pem.crt")
+	if err := os.WriteFile(badCA, []byte("not a PEM certificate"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	sites := map[string][]string{
+		"users ls":         {"users", "ls"},
+		"agent session ls": {"agent", "session", "ls", "--tenant", rewrapTenant},
+		"status":           {"status"},
+	}
+	for site, base := range theFourRewrapSites {
+		sites[site] = base
+	}
+	for site, base := range sites {
+		for name, ca := range map[string]string{
+			"missing CA": filepath.Join(dir, "missing.crt"),
+			"non-PEM CA": badCA,
+		} {
+			t.Run(site+" / "+name, func(t *testing.T) {
+				argv := append(append([]string(nil), base...),
+					"--server", "https://plane.invalid", "--ca-cert", ca)
+				if site != "status" {
+					argv = append(argv, "--token", rewrapToken)
+				}
+				code, stdout, _, err := runCLIExit(t, argv...)
+				if err == nil || !strings.Contains(err.Error(), "CA certificate") {
+					t.Fatalf("%s did not report the CA error: %v", site, err)
+				}
+				if code != exitcode.Usage {
+					t.Fatalf("exit = %d, want %d (usage): %v", code, exitcode.Usage, err)
+				}
+				if strings.TrimSpace(stdout) != "" {
+					t.Errorf("a refused invocation wrote to stdout: %q", stdout)
+				}
+			})
+		}
 	}
 }
 

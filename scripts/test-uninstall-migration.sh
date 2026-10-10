@@ -10,17 +10,17 @@ export LC_ALL
 root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 scratch_parent="${TMPDIR:-}"
 case "$scratch_parent" in /*) ;; *)
-	printf '%s\n' 'test-uninstall-migration: NO HE PODIDO MIRAR — TMPDIR must be absolute' >&2
+	printf '%s\n' 'test-uninstall-migration: COULD NOT CHECK — TMPDIR must be absolute' >&2
 	exit 2
 	;;
 esac
 [[ -d "$scratch_parent" ]] || {
-	printf 'test-uninstall-migration: NO HE PODIDO MIRAR — TMPDIR is absent: %s\n' "$scratch_parent" >&2
+	printf 'test-uninstall-migration: COULD NOT CHECK — TMPDIR is absent: %s\n' "$scratch_parent" >&2
 	exit 2
 }
 for tool in cat chmod cp go grep mkdir mktemp python3 rm sed; do
 	command -v "$tool" >/dev/null 2>&1 || {
-		printf 'test-uninstall-migration: NO HE PODIDO MIRAR — missing %s\n' "$tool" >&2
+		printf 'test-uninstall-migration: COULD NOT CHECK — missing %s\n' "$tool" >&2
 		exit 2
 	}
 done

@@ -159,8 +159,8 @@
     }
   },
   "seam": {
-    "synthetic": "Synthetische Daten: nicht verkabelt",
-    "syntheticData": "Die Generierung synthetischer Daten ist ein dokumentierter Erweiterungspunkt nach v1 — in dieser Version nicht implementiert."
+    "synthetic": "Lokale Datengenerierung",
+    "syntheticData": "Reproduzierbare Szenario-Eingaben über die Sandbox-API aus begrenzten lokalen Vorlagen erzeugen. Keine Modell- oder Netzwerkanfragen."
   },
   "empty": {
     "runs": {

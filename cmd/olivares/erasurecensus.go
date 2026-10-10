@@ -9,6 +9,7 @@ import (
 	"fmt"
 
 	"github.com/olivaresai/olivares/core/auth"
+	"github.com/olivaresai/olivares/core/modulespec"
 	"github.com/olivaresai/olivares/core/store"
 	"github.com/olivaresai/olivares/modules/knowledge"
 )
@@ -69,10 +70,7 @@ func (authPartitionStep) RetireUser(context.Context, auth.RetirementRequest) (au
 // store declares it. The list is the composition's own, not read from what a
 // build links: a declared module a build lacks, or that gives no retirement
 // step, stays declared and is reported missing.
-var communityCensusModules = []string{
-	"governance", "sourcescope", "models", "sessions",
-	"orchestration", "eventing", "finops", "compliance",
-}
+var communityCensusModules = modulespec.RetirementModules()
 
 // communityCensusContribution is the Community composition's contribution to the
 // census: its declared modules, and no table outside the registry.
@@ -83,7 +81,7 @@ func communityCensusContribution() store.CompositionContribution {
 // censusContributions returns every contribution this build declares: the
 // Community composition's, then this edition's.
 func censusContributions() []store.CompositionContribution {
-	return append([]store.CompositionContribution{communityCensusContribution()}, editionCensusContributions()...)
+	return append([]store.CompositionContribution{communityCensusContribution()}, thisEdition.censusContributions.get()...)
 }
 
 // declaredModules returns the modules the contributions declare, each with the

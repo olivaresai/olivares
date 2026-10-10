@@ -161,15 +161,15 @@
     }
   },
   "airgap": {
-    "title": "Lot air-gap et chart Helm OCI",
-    "description": "Un bundle vérifiable hors ligne et un chart Helm OCI doublement signé. Rien dans ce chemin n'appelle vers l'extérieur.",
-    "bundleTitle": "Lot air-gap",
-    "bundleIntro": "Le chemin basé sur une clé ne nécessite ni Rekor ni Fulcio. Les mainteneurs construisent un lot autonome en ligne une seule fois ; le site déconnecté le vérifie et le met en miroir.",
+    "title": "Lot hors ligne et paquet Helm Business",
+    "description": "Distribution privée : un lot hors ligne et un paquet de chart Business signé. La publication reste non vérifiée.",
+    "bundleTitle": "Lot hors ligne",
+    "bundleIntro": "Le chemin basé sur une clé ne nécessite ni Rekor ni Fulcio. Les mainteneurs construisent le lot une fois en ligne depuis la distribution privée assemblée ; le site déconnecté le vérifie et le met en miroir.",
     "buildCommand": "Construire (en ligne une fois)",
     "mirrorCommand": "Mettre en miroir (hors internet)",
-    "chartTitle": "Chart Helm OCI",
-    "ociCoordinate": "Coordonnée OCI",
-    "cosignManifest": "cosign (manifeste)",
+    "chartTitle": "Paquet Helm Business",
+    "distribution": "Distribution",
+    "cosignPackage": "cosign (paquet)",
     "gpgProv": "GPG .prov",
     "verifyCommand": "Commande de vérification"
   },

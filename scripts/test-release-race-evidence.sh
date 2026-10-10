@@ -47,7 +47,7 @@ WF_REAL="${OLIVARES_RACE_EVIDENCE_WORKFLOW:-${ROOT}/.github/workflows/release.ym
 STEP_NAME="preflight — a green race-full ran on the EXACT tagged SHA"
 
 blind() {
-	echo "test-release-race-evidence: NO HE PODIDO MIRAR: $*" >&2
+	echo "test-release-race-evidence: COULD NOT CHECK: $*" >&2
 	exit 2
 }
 for tool in git awk sed; do
@@ -138,6 +138,7 @@ chmod +x "$WORK/bin/gh"
 # --- fixture history ----------------------------------------------------------------------------
 #   B  base: main.go, README, .github/workflows/release.yml
 #   W  B + a release.yml change                (workflow-only)
+#   M  merge of B and W, with W's exact tree   (no file changes)
 #   P  W + a main.go change                    (product)
 #   L  W + 3,000 product files, names > 64 KiB (product, above the pipe buffer)
 #   S  B + .github/workflows/extra.yml         (workflow-only; only under refs/keep/, NOT cloned)
@@ -160,7 +161,8 @@ g() { git -C "$SRC" -c user.name=battery -c user.email=battery@example.invalid -
 		printf 'package main\n\nfunc main() {}\n' >"$SRC/main.go" &&
 		g add -- main.go &&
 		g commit -q -m product &&
-		P="$(g rev-parse HEAD)"
+		P="$(g rev-parse HEAD)" &&
+		M="$(g commit-tree "$(g rev-parse "$W^{tree}")" -p "$B" -p "$W" -m identical-tree-merge)"
 } || blind "could not build the fixture history"
 # L through plumbing: one blob, 3,000 index entries, no 3,000 file writes.
 {
@@ -185,7 +187,7 @@ check "the large diff's name list is above the pipe buffer ($names_bytes bytes)"
 	git init -q --bare "$ORIGIN" &&
 		git -C "$ORIGIN" config uploadpack.allowAnySHA1InWant true &&
 		git -C "$ORIGIN" fetch -q "$SRC" "$P:refs/heads/main" "$L:refs/heads/large" \
-			"$B:refs/tags/v0" "$S:refs/keep/side"
+			"$B:refs/tags/v0" "$S:refs/keep/side" "$M:refs/heads/merged"
 } || blind "could not build the origin"
 
 n=0
@@ -226,6 +228,10 @@ check "A1 a green race-full on the exact tagged SHA admits the tag" "equality" $
 run_case "$P" 0 "$B"
 [ "$rc" -ne 0 ] && out_has "::error::no successful race-full run exists on the tagged SHA $P"
 check "A2 no exact green and only a product diff refuses" "equality stays the rule" $?
+run_case "$M" 0 "$W"
+[ "$rc" -eq 0 ] && out_has "race-full evidence: green run on $W; tree identical to $M" &&
+	! out_has "exists for the exact tagged SHA" && full_clone_intact
+check "A3 a merge with the green commit's exact tree admits with an honest label" "identical tree" $?
 
 # --- B: the workflow-only admission -------------------------------------------------------------
 run_case "$W" 0 "$B"

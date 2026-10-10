@@ -17,9 +17,9 @@ import (
 
 // agentcoreexportgate.go wires the governed AgentCore exporter's HITL seam
 // (agentcore.ExportGate) to the approval bridge, mirroring
-// adminactiongate.go. Normal create/update plans are recoverable and use gateOnce
+// internal/approvalbridge/adminaction.go. Normal create/update plans are recoverable and use GateOnce
 // (break-glass allowed); weakening plans (delete or ACTIVE→LOG_ONLY downgrade) use
-// gateOnceNoBreakGlass and the default CRITICAL action classification, so the
+// GateOnceNoBreakGlass and the default CRITICAL action classification, so the
 // engine applies the AC-3(2) two-person floor and the connector re-verifies the
 // distinct approvers.
 
@@ -55,9 +55,9 @@ func (a *agentCoreExportApprovalAdapter) Authorize(ctx context.Context, req agen
 	subjectRef := strings.TrimSpace(req.EngineID)
 	var ref, status, boundHash string
 	if req.Weakens {
-		ref, status, boundHash, err = a.b.gateOnceNoBreakGlass(ctx, tid, capability, subjectKind, subjectRef, req.PlanHash, reason, req.RequestedBy)
+		ref, status, boundHash, err = a.b.GateOnceNoBreakGlass(ctx, tid, capability, subjectKind, subjectRef, req.PlanHash, reason, req.RequestedBy)
 	} else {
-		ref, status, boundHash, err = a.b.gateOnce(ctx, tid, capability, subjectKind, subjectRef, req.PlanHash, reason, req.RequestedBy)
+		ref, status, boundHash, err = a.b.GateOnce(ctx, tid, capability, subjectKind, subjectRef, req.PlanHash, reason, req.RequestedBy)
 	}
 	if err != nil {
 		return agentcore.ExportGateDecision{}, err
@@ -67,8 +67,8 @@ func (a *agentCoreExportApprovalAdapter) Authorize(ctx context.Context, req agen
 	if status == nbApproved && req.Weakens {
 		// Credentials for provenance, distinct PEOPLE for the quorum the connector
 		// re-checks; a read failure degrades to zero of both (deny-closed).
-		if cred, ok := a.b.cred(tid); ok {
-			ev := a.b.approvalApproverEvidence(ctx, cred, ref)
+		if cred, ok := a.b.Cred(tid); ok {
+			ev := a.b.ApprovalApproverEvidence(ctx, cred, ref)
 			dec.Approvers, dec.ApproverPersons = ev.Actors, ev.Persons
 		}
 	}

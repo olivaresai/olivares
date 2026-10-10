@@ -357,6 +357,51 @@ describe('ConnectorsTab', () => {
     ).not.toBeInTheDocument()
   })
 
+  it.each([true, false])(
+    'reports a saved connector with applied=%s using the matching toast intent',
+    async (applied) => {
+      api.putConnector.mockResolvedValue({
+        name: 'vault-prod',
+        action: 'added',
+        persisted: true,
+        applied,
+        note: 'source rejected',
+      })
+      const user = userEvent.setup()
+      wrap(<ConnectorsTab />)
+      await user.click(
+        await screen.findByRole('button', { name: /add connector/i }),
+      )
+      const dialog = await screen.findByRole('dialog')
+      await user.type(within(dialog).getByLabelText(/^name/i), 'vault-prod')
+      await user.type(within(dialog).getByLabelText(/^tenant/i), 'acme')
+      await user.type(
+        within(dialog).getByLabelText(/^base_url/),
+        'https://v:8200',
+      )
+      await user.type(within(dialog).getByLabelText(/^token/), 'fixture-token')
+      await user.click(
+        within(dialog).getByRole('button', { name: /save connector/i }),
+      )
+      await waitFor(() =>
+        expect(
+          applied ? toastMock.success : toastMock.warning,
+        ).toHaveBeenCalledTimes(1),
+      )
+      expect(
+        applied ? toastMock.success : toastMock.warning,
+      ).toHaveBeenCalledWith(
+        applied
+          ? 'Connector saved and applied.'
+          : 'Connector saved, but not applied live: source rejected',
+        undefined,
+      )
+      expect(
+        applied ? toastMock.warning : toastMock.success,
+      ).not.toHaveBeenCalled()
+    },
+  )
+
   it('adds a connector with an inline credential (PUT seals it into secrets)', async () => {
     api.putConnector.mockResolvedValue({
       name: 'vault-prod',
@@ -583,6 +628,7 @@ describe('ConnectorsTab', () => {
       await screen.findByText(/a restart is still required/i),
     ).toBeInTheDocument()
     expect(screen.getByText('HTTP/gRPC listeners and TLS')).toBeInTheDocument()
+    expect(toastMock.warning).not.toHaveBeenCalled()
     // No plain success: the success toast carries the restart qualifier.
     await waitFor(() => expect(toastMock.success).toHaveBeenCalledTimes(1))
     expect(toastMock.success).toHaveBeenCalledWith(
@@ -593,7 +639,7 @@ describe('ConnectorsTab', () => {
 
   it('renders rejected sources per name + reason and suppresses a plain success', async () => {
     // PINS honesty (d): rejected[] is shown per name + reason and the outcome is a
-    // qualified PARTIAL — the success toast says "in part", never a clean success.
+    // qualified PARTIAL — a warning says "in part", never a green success.
     const user = userEvent.setup()
     wrap(<ConnectorsTab />)
     await reload(user, {
@@ -611,9 +657,10 @@ describe('ConnectorsTab', () => {
     ).toBeInTheDocument()
     expect(screen.getByText('gh-live')).toBeInTheDocument()
     expect(screen.getByText(/unknown kind/)).toBeInTheDocument()
-    // Suppress plain success: exactly one, qualified as partial.
-    await waitFor(() => expect(toastMock.success).toHaveBeenCalledTimes(1))
-    expect(toastMock.success).toHaveBeenCalledWith(
+    // The partial result is a warning, with no green success signal.
+    await waitFor(() => expect(toastMock.warning).toHaveBeenCalledTimes(1))
+    expect(toastMock.success).not.toHaveBeenCalled()
+    expect(toastMock.warning).toHaveBeenCalledWith(
       expect.stringMatching(/in part/i),
       undefined,
     )

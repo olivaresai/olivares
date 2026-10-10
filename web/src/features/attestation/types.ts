@@ -312,12 +312,12 @@ export interface AirgapContract {
   status: VerificationStatus
 }
 
-/** OCI Helm chart contract (SCP-05) — dual-signing. */
+/** Business chart package contract (SCP-05). */
 export interface HelmChartContract {
-  /** The OCI coordinate the chart is published to. */
-  oci_coordinate: string
-  /** cosign signature over the OCI manifest, by digest (keyless OIDC in CI). */
-  cosign_manifest: string
+  /** The private package distribution channel and publication status. */
+  distribution: string
+  /** cosign signature bundle for the chart package (keyless OIDC in private CI). */
+  cosign_package: string
   /** The Helm-native GPG `.prov` provenance (maintainer local-signing path). */
   gpg_prov: string
   /** The verify command consumers run. */

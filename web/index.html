@@ -121,6 +121,10 @@
           return LINES[lang] || LINES.en
         }
         function reloadOnce() {
+          // Offline a reload cannot help: it would replace the running console with the
+          // browser's error page. The failure stays with its caller (a language whose
+          // dictionary did not load falls back to English).
+          if (navigator.onLine === false) return false
           try {
             var last = Number(sessionStorage.getItem(KEY) || 0)
             if (Date.now() - last < WINDOW_MS) return false

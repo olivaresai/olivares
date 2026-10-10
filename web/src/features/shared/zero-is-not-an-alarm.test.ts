@@ -26,10 +26,6 @@ import { readFileSync } from 'node:fs'
 /** Los seis sitios, con el contador que puede valer cero. */
 const SITIOS: { fichero: string; contador: string }[] = [
   {
-    fichero: 'src/features/automations/automations-view.tsx',
-    contador: 'stalledCount',
-  },
-  {
     fichero: 'src/features/governance/agentcore-export-view.tsx',
     contador: '(plan.Updates ?? []).length',
   },

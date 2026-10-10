@@ -29,8 +29,6 @@ import (
 
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/auth"
-	"github.com/olivaresai/olivares/core/model"
-	"github.com/olivaresai/olivares/core/store"
 	"github.com/olivaresai/olivares/sdk"
 )
 
@@ -45,19 +43,11 @@ const Namespace = "posture"
 // reads it projects, but the export action is always audited.
 const permExportRead auth.Permission = "posture:export:read"
 
-// Caps bound a single export so one request never builds an unbounded transaction;
-// the response reports truncation honestly (docs/SECURITY-HARDENING.md — a partial export is labeled
-// partial, never authoritative).
-const (
-	exportInventoryCap = 1000
-	exportFindingsCap  = 1000
-	exportDriftCap     = 1000
-)
-
 // Module is the posture-export module. Route-only: it owns no entities and reads via
 // the request-scoped data handle each route receives.
 type Module struct {
-	log *slog.Logger
+	log             *slog.Logger
+	producerRunning func(namespace string) bool
 }
 
 // Compile-time proofs.
@@ -69,6 +59,12 @@ var (
 // New returns the posture-export module.
 func New() *Module { return &Module{} }
 
+// UseProducerStatus binds the runtime's running status before the module starts.
+// An unbound status source never implies ready projections.
+func (m *Module) UseProducerStatus(running func(namespace string) bool) {
+	m.producerRunning = running
+}
+
 // Descriptor returns the module's self-description.
 func (m *Module) Descriptor() sdk.Descriptor {
 	return sdk.Descriptor{
@@ -77,7 +73,7 @@ func (m *Module) Descriptor() sdk.Descriptor {
 		APIVersion:  sdk.APIVersion,
 		Type:        sdk.TypeModule,
 		Title:       "Posture export",
-		Description: "Read-only export of the ground-truth access graph, least-privilege drift, discovered inventory and security posture for a control tower (Agent 365 / ServiceNow AI Control Tower) to ingest. Outbound posture only — never identity. Filters by tenant/severity/category; redact applied; the export is audited.",
+		Description: "Retains posture producer data and the authenticated export route. Read-only posture export to a control tower requires Business; the export is filtered, redacted and audited.",
 	}
 }
 
@@ -103,65 +99,10 @@ func (m *Module) APIRoutes(reg api.RouteRegistrar) {
 	reg.Handle("GET", "/export", permExportRead, m.handleExport)
 }
 
-// handleExport assembles the posture projection inside ONE audited tenant scope and
-// returns it. Filters: ?severity=<floor> (applied IN GO — finding severity is a text
-// column, not lexically ordered), ?category=<x> (matches a finding kind OR
-// subject_kind — there is no category column), ?kind=<x> (inventory entity kind). The
-// tenant is implicit (the scope is pinned).
-func (m *Module) handleExport(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
-	q := r.URL.Query()
-	floor := model.Severity(q.Get("severity"))
-	if floor != "" && severityRank(floor) == 0 {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "severity must be one of low, medium, high, critical"})
-		return
+// writeResponse retains this route family's media type, nil and cache policy.
+func writeResponse(w http.ResponseWriter, status int, v any) {
+	if v == nil {
+		v = json.RawMessage("null")
 	}
-	category := q.Get("category")
-	invKind := q.Get("kind")
-
-	var doc exportDocument
-	doc.Tenant = mc.Tenant.String()
-	doc.Note = exportNote
-	err := mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
-		// The export moves posture off-box: audit it with the real principal in the
-		// SAME transaction as the reads (docs/SECURITY-HARDENING.md). The Meta is counts/filters only.
-		if _, e := sc.Audit().Append(r.Context(), model.AuditDraft{
-			Actor: mc.Principal.Actor(), ActorKind: mc.Principal.ActorKind(), Action: "posture.export",
-			Meta: map[string]any{"severity_floor": string(floor), "category": category, "kind": invKind},
-		}); e != nil {
-			return e
-		}
-		inv, invTrunc, e := readInventory(r.Context(), sc, invKind)
-		if e != nil {
-			return e
-		}
-		doc.Inventory, doc.InventoryTruncated = inv, invTrunc
-
-		drift, e := readDrift(r.Context(), sc)
-		if e != nil {
-			return e
-		}
-		doc.Drift = drift
-
-		find, findTrunc, e := readFindings(r.Context(), sc, floor, category)
-		if e != nil {
-			return e
-		}
-		doc.Findings, doc.FindingsTruncated = find, findTrunc
-		return nil
-	})
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "export failed"})
-		if m.log != nil {
-			m.log.Warn("posture-export: projection failed", "err", err)
-		}
-		return
-	}
-	writeJSON(w, http.StatusOK, doc)
-}
-
-// writeJSON writes v as a JSON response with the given status.
-func writeJSON(w http.ResponseWriter, status int, v any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(v)
+	api.WriteJSON(w, status, v, "application/json")
 }

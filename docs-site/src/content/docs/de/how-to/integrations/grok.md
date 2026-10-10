@@ -17,8 +17,8 @@ installieren oder zu verifizieren, eine Probe-Quittung aufzuzeichnen und eine
 gesteuerte Session zu starten oder zu stoppen, verwenden Sie
 [Die Grok-CLI installieren](/how-to/install-grok-cli/). Der Betriebspfad ist
 [Eine Anbieter-Session betreiben](/how-to/operate-provider-sessions/)
-(`OLIVARES_SESSION_RUNTIME_GROK_BIN` oder die Quittung einer verwalteten
-Installation, plus ein Anbieterprofil). Kompatibilität mit einem authentifizierten
+(`OLIVARES_SESSION_RUNTIME_GROK_BIN` als explizite Auswahl; sonst die neueste verifizierte verwaltete
+Installation, danach `grok` im `PATH` der Engine, plus ein Anbieterprofil). Kompatibilität mit einem authentifizierten
 offiziellen Grok-Konto wird dort nicht behauptet.
 
 ## Grok Build hinzufügen
@@ -31,7 +31,9 @@ offiziellen Grok-Konto wird dort nicht behauptet.
 - Die Berechtigung des Olivares-Servicekontos, `~/.grok/config.toml`,
   `/etc/grok/requirements.toml`, `~/.grok/disabled-hooks` und, falls konfiguriert, die kompatible
   `managed-settings.json` zu lesen.
-- Ein Superadmin-Konto mit AAL3-Elevation, wenn die Quelle über die Konsole erstellt wird.
+- Ein Superadmin-Konto, wenn die Quelle über die Konsole erstellt wird. Administrative
+  Schreibvorgänge folgen der Richtlinie für zusätzliche Authentifizierung (`admin_step_up`,
+  standardmäßig `none`).
 
 Geben Sie für diese Quelle keinen xAI-Key ein. Sie hat kein Secret-Feld und führt keine
 Inference-API-Aufrufe aus.

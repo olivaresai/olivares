@@ -246,9 +246,8 @@ func (variantScorer) Score(_ context.Context, _ model.TenantID, req ScoreRequest
 	return v, nil
 }
 
-// TestSyntheticDataAbsent asserts the POST-v1 extension point ships NO generator: the
-// default produces ZERO samples + errSyntheticDataPostV1, there is no WithSynthetic*
-// option, and no route generates data.
+// TestSyntheticDataAbsent preserves the explicit refusal adapter and unused route aliases.
+// Local generation is served only by /synthetic-data.
 func TestSyntheticDataAbsent(t *testing.T) {
 	var gen SyntheticDataGenerator = noSyntheticData{}
 	samples, err := gen.Generate(context.Background(), model.TenantID("t"), GenSpec{SubjectKind: "agent", Count: 10})
@@ -259,7 +258,7 @@ func TestSyntheticDataAbsent(t *testing.T) {
 		t.Fatalf("err = %v, want errSyntheticDataPostV1", err)
 	}
 
-	// No route on the module generates synthetic data: probe the obvious candidates.
+	// Do not introduce ambiguous aliases for the generation route.
 	h := newHarness(t)
 	admin := h.adminLogin()
 	tenant := h.createOrg(admin, "acme")

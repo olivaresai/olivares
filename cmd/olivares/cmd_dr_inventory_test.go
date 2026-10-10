@@ -18,9 +18,10 @@ import (
 // TestDRBackupInventory pins the CONTRACT of what a DR bundle must contain, so a
 // change that silently omits a captured artifact (or that stops capturing a whole
 // class of signing key) fails the build. The rule (docs/DR-RUNBOOK.md §2, "minimal
-// data"): the bundle carries EVERY *-signing.key in the data dir plus the store
-// snapshot, and NOTHING else from the data dir (no TLS material, setup token or
-// license — those come from the deployment).
+// data"): the bundle carries EVERY *-signing.key and memory-portability.key plus local communication custody, the four
+// sealer keys (secret store, TOTP seed, SSO, eventing: what they sealed opens under
+// no other key) and the store snapshot, and NOTHING else from the data dir (no TLS
+// material, setup token or license — those come from the deployment).
 func TestDRBackupInventory(t *testing.T) {
 	src := t.TempDir()
 	seedDataDir(t, src) // olivares.db + audit-signing.key + catalog-signing.key
@@ -58,18 +59,19 @@ func TestDRBackupInventory(t *testing.T) {
 		t.Fatalf("extract: %v", err)
 	}
 
-	// 1) EVERY signing key in the data dir is captured — audit, catalog AND the new one.
+	// 1) Every installation signing key is captured, including the dedicated portability key.
 	captured := map[string]bool{}
 	for _, kr := range m.Keys {
 		captured[kr.Name] = true
 	}
-	for _, want := range []string{"audit-signing.key", "catalog-signing.key", "custom-signing.key"} {
+	for _, want := range []string{"audit-signing.key", "catalog-signing.key", "custom-signing.key", memoryPortabilityKeyFile, "communication-content-keyring.json", "communication-cursor-keyring.json",
+		secretStoreKeyFile, totpSeedKeyFile, federationSecretKeyFile, eventingSecretKeyFile} {
 		if !captured[want] {
-			t.Fatalf("backup OMITTED signing key %q — the bundle must carry every *-signing.key; captured=%v", want, captured)
+			t.Fatalf("backup omitted installation signing key %q; captured=%v", want, captured)
 		}
 	}
-	// The omission invariant: the bundle must carry EXACTLY the *-signing.key files
-	// present in the data dir — no more, no fewer. If boot mints a new signing-key
+	// The omission invariant: the bundle must carry exactly the *-signing.key files
+	// plus memory portability, the two default communication keyrings and the four sealer keys. If boot mints a new signing-key
 	// class (this test discovered policy-signing.key alongside audit/catalog) it is
 	// captured automatically; if capture were ever narrowed, count < files and this
 	// fails.
@@ -77,8 +79,8 @@ func TestDRBackupInventory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(m.Keys) != len(onDisk) {
-		t.Fatalf("backup captured %d signing keys but the data dir has %d — an omission; captured=%v, on-disk=%v", len(m.Keys), len(onDisk), captured, onDisk)
+	if len(m.Keys) != len(onDisk)+3+4 {
+		t.Fatalf("backup captured %d keys but the data dir has %d — an omission; captured=%v, on-disk=%v", len(m.Keys), len(onDisk)+3+4, captured, onDisk)
 	}
 
 	// 2) The store snapshot is present (the other half of the DR set).
@@ -92,7 +94,7 @@ func TestDRBackupInventory(t *testing.T) {
 	// 3) Non-DR material is NEVER escrowed (minimal data).
 	for _, forbidden := range []string{"tls.crt", "tls.key", "setup-token", "license.jwt"} {
 		if captured[forbidden] {
-			t.Fatalf("backup escrowed non-DR material %q — bundles must carry only signing keys + the store", forbidden)
+			t.Fatalf("backup escrowed non-DR material %q — bundles must carry only installation custody + the store", forbidden)
 		}
 	}
 }

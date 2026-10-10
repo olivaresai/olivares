@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"io/fs"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -93,11 +94,32 @@ type RunnerInspector interface {
 // operator reading a console full of "check incomplete" deserves to find the
 // reason in the boot log rather than deduce it.
 func (m *Module) LaunchInspectionAvailable() bool {
-	if _, unwired := m.rt.runner.(unwiredRunner); unwired {
+	if _, unwired := m.rt.Runner.(unwiredRunner); unwired {
 		return false
 	}
-	_, ok := m.rt.runner.(RunnerInspector)
+	_, ok := m.rt.Runner.(RunnerInspector)
 	return ok
+}
+
+// refuseUnsupportedIsolation rejects a known runner mismatch before launch has
+// side effects. An absent or inconclusive inspection keeps the existing Launch
+// contract: the runner must still enforce the requested isolation at spawn.
+func (m *Module) refuseUnsupportedIsolation(ctx context.Context, isolation Isolation) error {
+	if isolation != IsolationContainer && isolation != IsolationSandbox {
+		return nil
+	}
+	inspector, ok := m.rt.Runner.(RunnerInspector)
+	if !ok {
+		return nil
+	}
+	// Only the isolation answer is needed; no provider program has been resolved yet.
+	obs, err := inspector.InspectLaunch(ctx, RunnerInspection{Isolation: isolation})
+	if err != nil || obs.Isolation != RunnerIsolationUnsupported {
+		return nil
+	}
+	return &codedRunErr{&runErr{http.StatusUnprocessableEntity,
+		"the configured runner does not support the requested isolation; the built-in runner requires isolation=native"},
+		codeIsolationUnsupported}
 }
 
 // InspectLaunch is the NATIVE implementation: the same resolution rules

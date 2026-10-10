@@ -182,3 +182,14 @@ func microUSDToDecimal(micro int64) string {
 	}
 	return s
 }
+
+func windowBilled(since time.Time, hasSince bool, until time.Time, hasUntil bool) []model.Filter {
+	f := []model.Filter{{Column: colProvenance, Op: model.OpEq, Value: provenanceBilled}}
+	if hasSince {
+		f = append(f, model.Filter{Column: colOccurredAt, Op: model.OpGte, Value: model.NewTimestamp(since).String()})
+	}
+	if hasUntil {
+		f = append(f, model.Filter{Column: colOccurredAt, Op: model.OpLte, Value: model.NewTimestamp(until).String()})
+	}
+	return f
+}

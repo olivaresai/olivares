@@ -171,7 +171,7 @@ func TestModelAccessForbidRoute(t *testing.T) {
 	)
 	r := httptest.NewRequest("POST", "/x", nil)
 	dec := chainOf("claude-opus-4-8", "claude-sonnet-4-6")
-	if status, denied := m.modelAccessDeniesRoute(r, mcFor(tenant, adminRole(tenant)), &dec, "sess-1", ""); denied || status != 0 {
+	if status, denied := m.modelAccessDeniesRoute(r.Context(), mcFor(tenant, adminRole(tenant)), &dec, "sess-1", ""); denied || status != 0 {
 		t.Fatalf("partial forbid: want (0,false), got (%d,%v)", status, denied)
 	}
 	if dec.Primary == nil || dec.Primary.ModelRef != "claude-sonnet-4-6" || len(dec.Chain) != 1 {

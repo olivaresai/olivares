@@ -21,16 +21,16 @@ CANON="${OLIVARES_ECO01_CANON:-design/PRICING-CANON.md}"
 [ -r "$CANON" ] || cannot "missing $CANON"
 
 grep -q 'Hoy NO existe' "$DOC" \
-  || fail "prepare doc lost Hoy NO existe"
+  || fail "prepare doc lost its explicit activation-unavailable statement"
 grep -q 'eco-01-implemented: no' "$DOC" \
   || fail "prepare doc lost eco-01-implemented: no"
 grep -q 'activation: customer-toggleable-per-module' "$CANON" \
   || fail "PRICING-CANON lost A.2 activation: customer-toggleable-per-module"
 grep -q 'Hoy NO existe' "$CANON" \
-  || fail "PRICING-CANON lost Hoy NO existe — the hole this lote pins"
+  || fail "PRICING-CANON lost its activation-unavailable statement — the gap this batch preserves"
 if grep -qiE 'ya existe el punto de entrada|--modules shipped' "$DOC"; then
   fail "prepare doc claims the entry exists"
 fi
 
-say "check-eco-01-activation-hold: CLEAN — A.2 layer 3 signed; Hoy NO existe; this lote does not add it."
+say "check-eco-01-activation-hold: CLEAN — A.2 layer 3 signed; activation remains unavailable; this batch does not add it."
 exit 0

@@ -13,6 +13,8 @@ payload 的 step kind：图只能在现有 gate 下重新排列 estate 已公开
 工作流既要求 admin tier，*也*要求人类审批，因此绝不能借此触及原本无法直接
 触及的对象。
 
+**版本：** Business Identity & Scale。Community 对这些路由返回 `501`，不包含编排控制台或执行引擎，并保留已存储的数据供导出。
+
 ## 图的结构
 
 工作流由一组 **step** 构成。每个 step 都有一个在工作流内唯一的短 `ref`、一个
@@ -33,6 +35,13 @@ payload 的 step kind：图只能在现有 gate 下重新排列 estate 已公开
 ingestion。
 
 ## 1. 声明工作流
+
+全新安装默认关闭 `orchestration`。请以管理员身份在
+**Settings > Edition & modules** 中启用 `orchestration`，并保留其他已选模块。
+使用 CLI 时，先通过 `olivares login` 以管理员身份登录此引擎，
+然后运行 `olivares modules on orchestration`。每次都要等待引擎重启完成后再继续；
+运行中的会话会停止，可以恢复。否则，这些 API 调用会返回
+`404 module_not_enabled`。
 
 ```bash
 curl -sS -X POST "$OLIVARES/v1/m/orchestration/workflows" \

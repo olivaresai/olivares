@@ -225,28 +225,29 @@ func TestBootBindsEditionRuntimeCapabilities(t *testing.T) {
 	}
 	// The same producer names also appear in api.Options; target the edition
 	// literal as a group so each mutation alters only the actual edition bind.
-	const identityBindings = "Authenticator: authr, FederationService: fedSvc, SecretStore: secretStore,"
+	const identityBindings = "Authenticator: b.authr, FederationService: b.fedSvc, SecretStore: b.secretStore,"
 	for _, tc := range []struct{ name, from, to string }{
-		{"missing resolver", "Principals: authr,", ""},
-		{"nil resolver", "Principals: authr", "Principals: nil"},
-		{"wrong resolver", "Principals: authr", "Principals: otherAuthr"},
-		{"missing governance", "Governance: set.gov,", ""},
-		{"nil governance", "Governance: set.gov", "Governance: nil"},
-		{"wrong governance", "Governance: set.gov", "Governance: otherGov"},
-		{"missing secrets", "Governance: set.gov, Secrets: secretResolver,", "Governance: set.gov,"},
-		{"nil secrets", "Governance: set.gov, Secrets: secretResolver", "Governance: set.gov, Secrets: nil"},
-		{"wrong secrets", "Governance: set.gov, Secrets: secretResolver", "Governance: set.gov, Secrets: otherResolver"},
-		{"second resolver", "Governance: set.gov, Secrets: secretResolver", "Governance: set.gov, Secrets: newSecretResolver(secretStore, osGetenv, log)"},
-		{"missing authenticator", identityBindings, "FederationService: fedSvc, SecretStore: secretStore,"},
-		{"nil authenticator", identityBindings, "Authenticator: nil, FederationService: fedSvc, SecretStore: secretStore,"},
-		{"second authenticator", identityBindings, "Authenticator: auth.NewAuthenticator(st, nil), FederationService: fedSvc, SecretStore: secretStore,"},
-		{"missing federation service", identityBindings, "Authenticator: authr, SecretStore: secretStore,"},
-		{"nil federation service", identityBindings, "Authenticator: authr, FederationService: nil, SecretStore: secretStore,"},
-		{"second federation service", identityBindings, "Authenticator: authr, FederationService: auth.NewFederationService(st, fedSealer, nil, nil, nil), SecretStore: secretStore,"},
-		{"missing secret store", identityBindings, "Authenticator: authr, FederationService: fedSvc,"},
-		{"nil secret store", identityBindings, "Authenticator: authr, FederationService: fedSvc, SecretStore: nil,"},
-		{"second secret store", identityBindings, "Authenticator: authr, FederationService: fedSvc, SecretStore: auth.NewSecretStore(st, secretSealer),"},
-		{"missing binding", "editionBindModuleDependencies(", "unrelatedBinding("},
+		{"missing resolver", "Principals: b.authr,", ""},
+		{"nil resolver", "Principals: b.authr", "Principals: nil"},
+		{"wrong resolver", "Principals: b.authr", "Principals: otherAuthr"},
+		{"missing governance", "Governance: b.set.gov,", ""},
+		{"nil governance", "Governance: b.set.gov", "Governance: nil"},
+		{"wrong governance", "Governance: b.set.gov", "Governance: otherGov"},
+		{"missing secrets", "Governance: b.set.gov, Secrets: b.secretResolver,", "Governance: b.set.gov,"},
+		{"nil secrets", "Governance: b.set.gov, Secrets: b.secretResolver", "Governance: b.set.gov, Secrets: nil"},
+		{"wrong secrets", "Governance: b.set.gov, Secrets: b.secretResolver", "Governance: b.set.gov, Secrets: otherResolver"},
+		{"second resolver", "Governance: b.set.gov, Secrets: b.secretResolver", "Governance: b.set.gov, Secrets: newSecretResolver(b.secretStore, osGetenv, b.log)"},
+		{"missing authenticator", identityBindings, "FederationService: b.fedSvc, SecretStore: b.secretStore,"},
+		{"nil authenticator", identityBindings, "Authenticator: nil, FederationService: b.fedSvc, SecretStore: b.secretStore,"},
+		{"second authenticator", identityBindings, "Authenticator: auth.NewAuthenticator(b.st, nil), FederationService: b.fedSvc, SecretStore: b.secretStore,"},
+		{"missing federation service", identityBindings, "Authenticator: b.authr, SecretStore: b.secretStore,"},
+		{"nil federation service", identityBindings, "Authenticator: b.authr, FederationService: nil, SecretStore: b.secretStore,"},
+		{"second federation service", identityBindings, "Authenticator: b.authr, FederationService: auth.NewFederationService(b.st, fedSealer, nil, nil, nil), SecretStore: b.secretStore,"},
+		{"missing secret store", identityBindings, "Authenticator: b.authr, FederationService: b.fedSvc,"},
+		{"nil secret store", identityBindings, "Authenticator: b.authr, FederationService: b.fedSvc, SecretStore: nil,"},
+		{"second secret store", identityBindings, "Authenticator: b.authr, FederationService: b.fedSvc, SecretStore: auth.NewSecretStore(b.st, secretSealer),"},
+		{"missing binding", "thisEdition.bindModuleDependencies(", "thisEdition.unrelatedBinding("},
+		{"inverted binder check", "if thisEdition.bindModuleDependencies != nil {", "if thisEdition.bindModuleDependencies == nil {"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if bytes.Count(src, []byte(tc.from)) != 1 {
@@ -260,8 +261,8 @@ func TestBootBindsEditionRuntimeCapabilities(t *testing.T) {
 	}
 	// Move the actual producer line beyond the binding. Parsing still works,
 	// but the binding must not run before its secret capability exists.
-	creation := "\tsecretResolver := newSecretResolver(secretStore, osGetenv, log)\n"
-	mount := "\tapiSrv, err := api.New("
+	creation := "\tb.secretResolver = newSecretResolver(b.secretStore, osGetenv, b.log)\n"
+	mount := "\tb.apiSrv, err = api.New("
 	if bytes.Count(src, []byte(creation)) != 1 || bytes.Count(src, []byte(mount)) != 1 {
 		t.Fatal("boot order mutant targets moved")
 	}
@@ -277,33 +278,53 @@ func TestBootBindsEditionRuntimeCapabilities(t *testing.T) {
 	if err := checkEditionRuntimeBindings([]byte(earlyMount)); err == nil {
 		t.Fatal("API mounted before edition binding passed")
 	}
+	// Reordering the phase calls must fail even when method declarations stay put.
+	reordered := strings.NewReplacer("b.bindServices(ctx)", "b.buildAPI(ctx)", "b.buildAPI(ctx)", "b.bindServices(ctx)").Replace(string(src))
+	if err := checkEditionRuntimeBindings([]byte(reordered)); err == nil {
+		t.Fatal("API phase before edition binding passed")
+	}
+
 }
 
 func checkEditionRuntimeBindings(src []byte) error {
+	var err error
+	src, err = expandedBootSource(src)
+	if err != nil {
+		return err
+	}
 	fset := token.NewFileSet()
 	file, err := parser.ParseFile(fset, "boot.go", src, 0)
 	if err != nil {
 		return err
 	}
 	var calls, resolverCalls, apiCalls []*ast.CallExpr
+	var guarded int // binding calls inside `if thisEdition.bindModuleDependencies != nil`
 	for _, decl := range file.Decls {
 		fn, ok := decl.(*ast.FuncDecl)
 		if !ok || fn.Name.Name != "boot" || fn.Recv != nil {
 			continue
 		}
 		ast.Inspect(fn.Body, func(node ast.Node) bool {
-			if call, ok := node.(*ast.CallExpr); ok {
-				if name, ok := call.Fun.(*ast.Ident); ok {
-					switch name.Name {
-					case "editionBindModuleDependencies":
-						calls = append(calls, call)
-					case "newSecretResolver":
-						resolverCalls = append(resolverCalls, call)
+			if guard, ok := node.(*ast.IfStmt); ok && isBindingPresentCheck(guard.Cond) {
+				ast.Inspect(guard.Body, func(inner ast.Node) bool {
+					if call, ok := inner.(*ast.CallExpr); ok && isBindingCall(call) {
+						guarded++
 					}
+					return true
+				})
+			}
+			if call, ok := node.(*ast.CallExpr); ok {
+				if name, ok := call.Fun.(*ast.Ident); ok && name.Name == "newSecretResolver" {
+					resolverCalls = append(resolverCalls, call)
 				}
-				if selector, ok := call.Fun.(*ast.SelectorExpr); ok && selector.Sel.Name == "New" {
-					if pkg, ok := selector.X.(*ast.Ident); ok && pkg.Name == "api" {
-						apiCalls = append(apiCalls, call)
+				if selector, ok := call.Fun.(*ast.SelectorExpr); ok {
+					if x, ok := selector.X.(*ast.Ident); ok {
+						switch {
+						case isBindingCall(call):
+							calls = append(calls, call)
+						case x.Name == "api" && selector.Sel.Name == "New":
+							apiCalls = append(apiCalls, call)
+						}
 					}
 				}
 			}
@@ -312,6 +333,9 @@ func checkEditionRuntimeBindings(src []byte) error {
 	}
 	if len(calls) != 1 || len(calls[0].Args) != 5 {
 		return errors.New("boot must pass edition dependencies once")
+	}
+	if guarded != 1 {
+		return errors.New("boot must bind edition dependencies exactly when the edition has a binder")
 	}
 	if len(resolverCalls) != 1 || len(apiCalls) != 1 ||
 		resolverCalls[0].Pos() >= calls[0].Pos() || calls[0].Pos() >= apiCalls[0].Pos() {
@@ -349,4 +373,29 @@ func checkEditionRuntimeBindings(src []byte) error {
 		return fmt.Errorf("boot omitted edition dependencies: %v", want)
 	}
 	return nil
+}
+
+// isBindingCall matches thisEdition.bindModuleDependencies(...).
+func isBindingCall(call *ast.CallExpr) bool {
+	selector, ok := call.Fun.(*ast.SelectorExpr)
+	if !ok {
+		return false
+	}
+	x, ok := selector.X.(*ast.Ident)
+	return ok && x.Name == "thisEdition" && selector.Sel.Name == "bindModuleDependencies"
+}
+
+// isBindingPresentCheck matches thisEdition.bindModuleDependencies != nil.
+func isBindingPresentCheck(cond ast.Expr) bool {
+	binary, ok := cond.(*ast.BinaryExpr)
+	if !ok || binary.Op != token.NEQ {
+		return false
+	}
+	selector, ok := binary.X.(*ast.SelectorExpr)
+	if !ok || selector.Sel.Name != "bindModuleDependencies" {
+		return false
+	}
+	x, ok := selector.X.(*ast.Ident)
+	nilIdent, isIdent := binary.Y.(*ast.Ident)
+	return ok && x.Name == "thisEdition" && isIdent && nilIdent.Name == "nil"
 }

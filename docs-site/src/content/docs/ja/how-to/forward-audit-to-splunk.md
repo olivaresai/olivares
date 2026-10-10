@@ -6,6 +6,10 @@ description: >-
   Splunk に取り込む。どのストリームがどれかを正直に。
 ---
 
+:::note[Business]
+監査エクスポート（`GET /v1/audit/export`、`olivares audit export`）、ディレクトリアーカイブ、外部アーカイブの検証には Business が必要です。Community では署名付き台帳、`olivares audit verify`、`olivares dr backup` を引き続き利用できます。エクスポートは HTTP 501 または終了コード 9 を返します。監査転送および監査セグメントを含む DDIL 転送にも Business が必要です。
+:::
+
 Olivares AI のデータは、ネイティブコネクタを待たずに **今すぐ** Splunk に取り込めます:
 データをファイルに書き出し、そこに **Splunk Universal Forwarder（UF）** を向けるだけです。
 UF が Splunk-to-Splunk（S2S）でインデクサーへのホップを処理します。

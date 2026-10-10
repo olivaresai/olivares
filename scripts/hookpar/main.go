@@ -51,17 +51,17 @@ type hallazgo struct {
 }
 
 func main() {
-	raiz := flag.String("raiz", ".", "raíz del árbol a censar")
+	raiz := flag.String("raiz", ".", "root of the tree to inspect")
 	flag.Parse()
 
 	paquetes, err := censarPaquetes(*raiz)
 	if err != nil {
 		// Tercera respuesta: no he podido mirar. NUNCA un verde.
-		fmt.Fprintf(os.Stderr, "hookpar: ⛔ NO HE PODIDO MIRAR: %v\n", err)
+		fmt.Fprintf(os.Stderr, "hookpar: ⛔ COULD NOT LOOK: %v\n", err)
 		os.Exit(2)
 	}
 	if len(paquetes) == 0 {
-		fmt.Println("hookpar: limpio — el árbol no tiene ficheros Go de test.")
+		fmt.Println("hookpar: clean — the tree has no Go test files.")
 		return
 	}
 
@@ -70,7 +70,7 @@ func main() {
 	for _, dir := range paquetes {
 		hs, n, err := revisarPaquete(dir)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "hookpar: ⛔ NO HE PODIDO MIRAR %s: %v\n", dir, err)
+			fmt.Fprintf(os.Stderr, "hookpar: ⛔ COULD NOT LOOK %s: %v\n", dir, err)
 			os.Exit(2)
 		}
 		nFich += n
@@ -85,15 +85,15 @@ func main() {
 	})
 
 	if len(todos) == 0 {
-		fmt.Printf("hookpar: CLEAN — %d paquete(s), %d fichero(s) de test, 0 hallazgos.\n",
+		fmt.Printf("hookpar: CLEAN — %d package(s), %d test file(s), 0 findings.\n",
 			len(paquetes), nFich)
 		return
 	}
 	for _, h := range todos {
-		fmt.Fprintf(os.Stderr, "hookpar: ⛔ %s:%d — %s asigna la variable de paquete `%s` %s\n",
+		fmt.Fprintf(os.Stderr, "hookpar: ⛔ %s:%d — %s assigns package variable `%s` %s\n",
 			h.fichero, h.linea, h.test, h.varname, h.motivo)
 	}
-	fmt.Fprintf(os.Stderr, "hookpar: %d hallazgo(s) en %d paquete(s), %d fichero(s) de test.\n",
+	fmt.Fprintf(os.Stderr, "hookpar: %d finding(s) in %d package(s), %d test file(s).\n",
 		len(todos), len(paquetes), nFich)
 	os.Exit(1)
 }
@@ -151,7 +151,7 @@ func revisarPaquete(dir string) ([]hallazgo, int, error) {
 		if err != nil {
 			// Un fichero que no parsea es «no he podido mirar» para TODO el paquete: sin él
 			// no sé qué nombres son de paquete, así que un verde aquí sería inventado.
-			return nil, 0, fmt.Errorf("%s no parsea: %w", f, err)
+			return nil, 0, fmt.Errorf("%s could not be parsed: %w", f, err)
 		}
 		archivos[f] = a
 		for _, d := range a.Decls {
@@ -360,7 +360,7 @@ func recorrer(fset *token.FileSet, ruta, test string, b *ast.BlockStmt, varsPaqu
 					linea:   fset.Position(id.Pos()).Line,
 					varname: id.Name,
 					test:    test,
-					motivo:  "dentro de un ámbito paralelo: otro test del paquete puede pisarla y la aserción juzgaría un dato ajeno",
+					motivo:  "inside a parallel scope: another test in the package can overwrite it, causing the assertion to inspect unrelated data",
 				})
 			}
 		}

@@ -150,5 +150,5 @@ if [ "${OLIVARES_CFG06_LIVE:-}" = "1" ]; then
 fi
 
 say "check-community-updates-prep: CLEAN — carrier ${CARRIER}; client and producer agree on"
-say "  '<channel>-manifest.json[.sig]'; NO publicado; live GET not in this gate."
+say "  '<channel>-manifest.json[.sig]'; not published; live GET not in this gate."
 exit 0

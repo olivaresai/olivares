@@ -293,7 +293,7 @@ func cd2ScopedSDKDiagnostic(t *testing.T, e *scopedEngine, req auth.Request) ced
 	if !loaded || state.set == nil {
 		t.Fatal("control failed: the fixture installed no compiled scoped set")
 	}
-	em, resUID, pUID, err := e.resolver.resolve(context.Background(), req)
+	em, resUID, pUID, _, err := e.resolver.resolve(context.Background(), req)
 	if err != nil {
 		t.Fatalf("control failed: resolve: %v", err)
 	}

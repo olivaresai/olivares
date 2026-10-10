@@ -356,8 +356,9 @@ func TestRunLineageRepairLoopRegistersOnTheSchedulerBeforeStart(t *testing.T) {
 		t.Fatal("a composition without the sessions module must not build the loop")
 	}
 	l := newRunLineageRepairLoop(f.st, f.sm, discardLog())
-	if l == nil || l.interval != time.Minute || runLineageRepairJobName != "sessions.run_lineage_repair" {
-		t.Fatalf("loop = %+v, job %q; want the job-owned one-minute sessions.run_lineage_repair", l, runLineageRepairJobName)
+	// C2 item 6: once at boot (immediate), then every 15 minutes.
+	if l == nil || l.interval != 15*time.Minute || runLineageRepairJobName != "sessions.run_lineage_repair" {
+		t.Fatalf("loop = %+v, job %q; want the job-owned 15-minute sessions.run_lineage_repair", l, runLineageRepairJobName)
 	}
 	rt := runtime.New(runtime.Options{Logger: discardLog()})
 	if err := l.register(rt); err != nil {

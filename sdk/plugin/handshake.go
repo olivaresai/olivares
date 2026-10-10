@@ -3,10 +3,11 @@
 
 // Package plugin is the transport layer of the Olivares AI connector/module
 // SDK: the versioned gRPC/protobuf wire contract (package genpb) plus the
-// hashicorp/go-plugin glue that lets a SourceConnector, OutputConnector,
-// ContentSource or Module written against ./sdk run out-of-process and talk to
-// the engine over gRPC. It is Apache-2.0 and, like ./sdk, never imports the
-// engine (./core).
+// hashicorp/go-plugin glue that lets a SourceConnector, OutputConnector or
+// ContentSource written against ./sdk run out-of-process and talk to the
+// engine over gRPC. It is Apache-2.0 and, like ./sdk, never imports the
+// engine (./core). Modules run in-process only; the out-of-process module
+// transport is deprecated (ModulePluginName).
 //
 // A plugin author calls Serve with their component; the engine loads the plugin
 // binary and dispenses a client that satisfies the same sdk interface, so the
@@ -56,8 +57,13 @@ const (
 	OutputPluginName = "output"
 	// ContentSourcePluginName is the dispense key for a ContentSource plugin.
 	ContentSourcePluginName = "content_source"
-	// ModulePluginName is the dispense key for a Module plugin. The out-of-process
-	// module transport is defined but not wired in v1 (modules run in-process).
+	// ModulePluginName is the dispense key for a Module plugin.
+	//
+	// Deprecated: the out-of-process module transport was never wired — no host
+	// glue dispenses this key and no Serve* function serves it — so it is
+	// deprecated rather than built (modules run in-process). The constant keeps
+	// its value until removal in a future major, per the deprecation policy in
+	// VERSIONING.md; nothing can have depended on it.
 	ModulePluginName = "module"
 )
 

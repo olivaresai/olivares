@@ -25,23 +25,18 @@ import (
 // HONESTY: verified-deployed inspection AT THE RS PEP only. A client that
 // does not transit the RS evades it (the documented limitation, rs.go).
 
-// newMCPRenderInspector is implemented per build tag: -tags enterprise wires
-// the commercial inspector; the default build returns nil (no inspection,
-// no rug-pull). Declared in wire_noenterprise.go / wire_enterprise.go.
-// (The function signature is declared here for documentation; the actual
-// implementations are in the build-tag files.)
-
-// newMCPElicitationMediator is implemented per build tag: -tags enterprise
-// wires the commercial mediator; the default build returns nil (no mediation,
+// The render inspector and the elicitation mediator are edition ports
+// (mcpRenderInspector, mcpElicitationMediator): -tags enterprise wires the
+// commercial ones; the default build has neither (no inspection, no mediation,
 // no rug-pull).
 
 // mcpContentGateLog emits a one-time startup message when the MCP content
 // gates are wired, for operator visibility.
 func mcpContentGateLog(log *slog.Logger, ri mcpc.RenderInspector, em mcpc.ElicitationMediator) {
 	if ri != nil {
-		log.Info("mcp-gateway: render content inspector wired (enterprise depth)")
+		log.Info("mcp-gateway: render content inspector wired (Business: AI Runtime Security)")
 	}
 	if em != nil {
-		log.Info("mcp-gateway: elicitation/sampling mediator wired (enterprise depth)")
+		log.Info("mcp-gateway: elicitation/sampling mediator wired (Business: AI Runtime Security)")
 	}
 }

@@ -89,10 +89,10 @@ func newWorkflowCommunicationFixtureFromDirect(
 	fixture.source.evidence.Facts = append([]store.AuthorizationFactRef(nil), authorityFacts...)
 	fixture.source.evidence.ObservedAt = fixture.now
 	fixture.source.evidence.FreshUntil = fixture.now.Add(5 * time.Minute)
-	fixture.m.communicationDirectoryResolver = &directNoticeReadDirectoryResolver{
+	fixture.m.CommunicationDirectoryResolver = &directNoticeReadDirectoryResolver{
 		now: fixture.now, epoch: fixture.epoch,
 	}
-	fixture.m.communicationGrantClosure = &directNoticeReadClosureResolver{
+	fixture.m.CommunicationGrantClosure = &directNoticeReadClosureResolver{
 		now: fixture.now, epoch: fixture.epoch,
 	}
 	grantID := model.NewID()

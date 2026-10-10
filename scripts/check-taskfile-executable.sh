@@ -41,19 +41,19 @@
 set -uo pipefail
 cd "$(dirname "$0")/.."
 . scripts/lib/git-env.sh 2>/dev/null || {
-	printf 'check-taskfile-executable: FATAL: no puedo cargar scripts/lib/git-env.sh\n' >&2
+	printf 'check-taskfile-executable: FATAL: cannot load scripts/lib/git-env.sh\n' >&2
 	exit 2
 }
 
 di() { printf '%s\t%s\n' "$1" "$2"; }
-no_puedo() { di unreadable "$1"; exit 2; }
+cannot_check() { di unreadable "$1"; exit 2; }
 
 BASE="${OLIVARES_TASKFILE_BASE:-origin/main}"
 [ "${1:-}" = "--self-test" ] && exec bash scripts/test-check-taskfile-executable.sh
-[ "${1:-}" = "--base" ] && { BASE="${2:-}"; [ -n "$BASE" ] || no_puedo "--base sin valor"; }
+[ "${1:-}" = "--base" ] && { BASE="${2:-}"; [ -n "$BASE" ] || cannot_check "--base requires a value"; }
 
-command -v git >/dev/null 2>&1 || no_puedo "git no es ejecutable"
-[ -f Taskfile.yml ] || no_puedo "no encuentro Taskfile.yml en la raiz"
+command -v git >/dev/null 2>&1 || cannot_check "check-taskfile-executable: git is not executable"
+[ -f Taskfile.yml ] || cannot_check "cannot find Taskfile.yml in the root"
 
 # Las tareas sin nada ejecutable, de un fichero cualquiera. `deps:` cuenta: una tarea que solo
 # depende de otras es legitima, y exigir `cmds:` a secas produce falsos y acaba con el gate apagado.
@@ -74,34 +74,34 @@ sin_ejecutable() {
 }
 
 AHORA=$(sin_ejecutable Taskfile.yml | LC_ALL=C sort) ||
-	no_puedo "no he reconocido NINGUNA tarea en Taskfile.yml — la gramatica no encaja y un cero asi no es 'limpio'"
+	cannot_check "no tasks recognized in Taskfile.yml; the grammar does not match and an empty scan cannot pass"
 
 BASE_SHA=$(git rev-parse -q --verify "${BASE}^{commit}" 2>/dev/null) ||
-	no_puedo "no puedo resolver la base '${BASE}' — sin base no se puede separar lo nuevo de lo heredado"
-BTMP=$(mktemp "${TMPDIR:-/tmp}/tfexec.XXXXXX") || no_puedo "mktemp fallo"
+	cannot_check "cannot resolve base '${BASE}'; a base is required to distinguish new tasks from existing ones"
+BTMP=$(mktemp "${TMPDIR:-/tmp}/tfexec.XXXXXX") || cannot_check "check-taskfile-executable: mktemp failed"
 trap 'rm -f "$BTMP"' EXIT
 git show "${BASE_SHA}:Taskfile.yml" > "$BTMP" 2>/dev/null ||
-	no_puedo "la base '${BASE}' no tiene Taskfile.yml"
+	cannot_check "base '${BASE}' has no Taskfile.yml"
 ANTES=$(sin_ejecutable "$BTMP" | LC_ALL=C sort) ||
-	no_puedo "no he reconocido ninguna tarea en el Taskfile de la base"
+	cannot_check "no tasks recognized in the base Taskfile"
 
 NUEVAS=$(comm -13 <(printf '%s\n' "$ANTES") <(printf '%s\n' "$AHORA") 2>/dev/null | grep . || true)
 HEREDADAS=$(printf '%s\n' "$ANTES" | grep -c . || true)
 
 if [ -n "$NUEVAS" ]; then
 	{
-		printf 'check-taskfile-executable: estas tareas NO PUEDEN EJECUTAR NADA y no estaban asi en %s:\n' "$BASE"
+		printf 'check-taskfile-executable: these tasks cannot execute and were executable at %s:\n' "$BASE"
 		printf '%s\n' "$NUEVAS" | sed 's/^/  · /'
-		printf '\n  Una tarea sin `cmds:`, `deps:` ni `cmd:` tiene dos finales, y el segundo es peor:\n'
-		printf '    · si su valor quedo como CADENA, `task` la manda al shell y muere con 127;\n'
-		printf '    · si solo le quedo `desc:`, correrla NO HACE NADA y **sale 0** — un gate que\n'
-		printf '      responde «limpio» sin haber mirado.\n'
-		printf '\n  Casi siempre es una fusion que conservo la prosa y perdio la clave. Busca la\n'
-		printf '  descripcion que quedo sin su `desc:` o el `- bash ...` sin su `cmds:` encima.\n'
+		printf '\n  A task without `cmds:`, `deps:`, or `cmd:` has two outcomes; the second is worse:\n'
+		printf '    · if its value is a string, `task` sends it to the shell and exits 127;\n'
+		printf '    · if only `desc:` remains, running it does nothing and exits 0, reporting\n'
+		printf '      a pass without checking anything.\n'
+		printf '\n  This usually comes from a merge that kept the prose but lost the key. Look for a\n'
+		printf '  description without its `desc:` or a `- bash ...` without its `cmds:` above.\n'
 	} >&2
 	di finding "$(printf '%s' "$NUEVAS" | tr '\n' ' ' | sed 's/ $//')"
 	exit 1
 fi
 
-di clean "ninguna tarea nueva quedo inejecutable (heredadas de ${BASE}: ${HEREDADAS}, no son de este push)"
+di clean "no new task became unexecutable (inherited from ${BASE}: ${HEREDADAS}, outside this push)"
 exit 0

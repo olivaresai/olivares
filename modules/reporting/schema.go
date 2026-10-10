@@ -14,9 +14,10 @@ import (
 // is registered UNCONDITIONALLY (community and enterprise builds alike) so the two
 // editions carry byte-identical schema — an in-place community⇆enterprise swap on
 // the same data dir never lands in a partial-upgrade state (the invariant the
-// schema-parity gate enforces). The community build simply never WIRES a provider
-// over these tables (newReportScheduler/Branding/CustomTemplates return nil), so
-// the tables stay empty there — the feature is gated by wiring, not by schema.
+// schema-parity gate enforces). The store-backed providers over these tables are
+// Business and live outside this tree; the community build WIRES none (the
+// reportScheduler/Branding/CustomTemplates edition ports are nil), so the tables
+// stay empty there — the feature is gated by wiring, not by schema.
 
 const (
 	scheduleKind    model.Kind = "reporting.schedule"
@@ -69,9 +70,9 @@ const (
 // Principal declarations shared by more than one column below.
 var (
 	// pdeclNoneReportType is a built-in report type from a closed set.
-	pdeclNoneReportType = model.None("a closed report-type set: api.go:385-391, enterprise.go:178, enterprise.go:318")
+	pdeclNoneReportType = model.None("a closed report-type set: api.go:29-34, enterprise.go:180, enterprise.go:322")
 	// pdeclNoneBranding is a branding display value, only placed into rendered reports or returned by the branding read.
-	pdeclNoneBranding = model.None("a branding display value, only placed into rendered reports or returned by the branding read: engine.go:76-81, enterprise.go:265")
+	pdeclNoneBranding = model.None("a stored branding display value returned by the branding read, never resolved to a principal: enterprise.go:262, enterprise.go:267")
 )
 
 var _ interface {
@@ -86,11 +87,11 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		Table: scheduleTable,
 		Fields: []model.FieldSpec{
 			{Name: colSchedReportType, Kind: model.KindText, Indexed: true, Principal: pdeclNoneReportType},
-			{Name: colSchedFormat, Kind: model.KindText, Principal: model.None("a closed format set html|pdf: store_providers.go:52-54, types.go:29-30")},
-			{Name: colSchedCron, Kind: model.KindText, Principal: model.None("a cron spec, validated before storage: store_providers.go:49, cron.go:24")},
-			{Name: colSchedFramework, Kind: model.KindText, Nullable: true, Principal: model.None("a compliance-framework filter passed to the compliance source: enterprise.go:475, api.go:171")},
-			{Name: colSchedTeam, Kind: model.KindText, Nullable: true, Principal: model.None("a finops team filter label that no gatherer reads: types.go:48, enterprise.go:476, api.go:225-251")},
-			{Name: colSchedLocale, Kind: model.KindText, Nullable: true, Principal: model.None("an i18n locale key: enterprise.go:479-481, i18n.go:39-41")},
+			{Name: colSchedFormat, Kind: model.KindText, Principal: model.None("a closed format set html|pdf: enterprise.go:184-186, types.go:29-30")},
+			{Name: colSchedCron, Kind: model.KindText, Principal: model.None("a cron spec, validated before storage: enterprise.go:187, cron.go:24")},
+			{Name: colSchedFramework, Kind: model.KindText, Nullable: true, Principal: model.None("a stored framework filter returned in schedule metadata, never resolved to a principal: types.go:228, enterprise.go:167")},
+			{Name: colSchedTeam, Kind: model.KindText, Nullable: true, Principal: model.None("a stored team filter returned in schedule metadata, never resolved to a principal: types.go:229, enterprise.go:167")},
+			{Name: colSchedLocale, Kind: model.KindText, Nullable: true, Principal: model.None("a stored locale key returned in schedule metadata, never resolved to a principal: types.go:230, enterprise.go:167")},
 			{Name: colSchedEnabled, Kind: model.KindBool},
 		},
 	}); err != nil {
@@ -101,12 +102,12 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		Kind:  scheduleRunKind,
 		Table: scheduleRunTbl,
 		Fields: []model.FieldSpec{
-			{Name: colRunScheduleID, Kind: model.KindText, Indexed: true, Principal: model.None("a schedule row id or a reserved digest-cadence id: enterprise.go:451, enterprise.go:425")},
-			{Name: colRunReportType, Kind: model.KindText, Principal: model.None("a report type from a closed set: enterprise.go:452, api.go:385-391, enterprise.go:414-424")},
-			{Name: colRunFormat, Kind: model.KindText, Principal: model.None("a closed format set html|pdf|json: enterprise.go:453, store_providers.go:52-54, enterprise.go:427")},
+			{Name: colRunScheduleID, Kind: model.KindText, Indexed: true, Principal: model.None("a schedule row id or a reserved digest-cadence id: enterprise.go:461, enterprise.go:435")},
+			{Name: colRunReportType, Kind: model.KindText, Principal: model.None("a report type rendered in run metadata, never resolved to a principal: enterprise.go:462, enterprise.go:436, enterprise.go:227")},
+			{Name: colRunFormat, Kind: model.KindText, Principal: model.None("a closed format set html|pdf|json: enterprise.go:463, enterprise.go:184-186, enterprise.go:437")},
 			{Name: colRunRanAt, Kind: model.KindTimestamp, Indexed: true},
-			{Name: colRunStatus, Kind: model.KindText, Principal: model.None("a closed status set ok|failed: enterprise.go:431-437, enterprise.go:458-462")},
-			{Name: colRunError, Kind: model.KindText, Nullable: true, Principal: model.None("a render or gather error message, listed only: enterprise.go:431, enterprise.go:458, enterprise.go:225")},
+			{Name: colRunStatus, Kind: model.KindText, Principal: model.None("a closed status set ok|failed: enterprise.go:440-447, enterprise.go:468-472")},
+			{Name: colRunError, Kind: model.KindText, Nullable: true, Principal: model.None("a render or gather error message, listed only: enterprise.go:440-445, enterprise.go:468-470, enterprise.go:225")},
 			{Name: colRunOutput, Kind: model.KindBytes, Nullable: true, Principal: model.Scan(model.ClassEvidence)},
 		},
 	}); err != nil {
@@ -132,7 +133,7 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		Table: templateTable,
 		Fields: []model.FieldSpec{
 			{Name: colTmplReportType, Kind: model.KindText, Indexed: true, Principal: pdeclNoneReportType},
-			{Name: colTmplHTML, Kind: model.KindText, Principal: model.None("an operator-authored report template, parsed and executed only as markup: engine.go:117-118, engine.go:96, enterprise.go:307-309")},
+			{Name: colTmplHTML, Kind: model.KindText, Principal: model.None("stored operator-authored report markup returned as bytes, never resolved to a principal: enterprise.go:302, enterprise.go:311-313")},
 		},
 	})
 }

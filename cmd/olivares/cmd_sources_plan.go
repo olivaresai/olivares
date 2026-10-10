@@ -48,22 +48,8 @@ import (
 // gate and no prior-plan requirement. A missing verb is fixed by adding the verb,
 // never by fencing the one that works.
 //
-// All three boot through rosterReadBoot: read-only AND without starting the
-// runtime or reconciling the roster, so a preview does not open every connector
-// a deployment has. The cost is one honest divergence — in a data directory that
-// holds no installation, `set` would create one and `plan` reports there is
-// nothing here — and it is named in plan's help.
-//
-// ⚠ WHAT THESE VERBS STILL DO, because the sol-max contrast measured it and a
-// comfortable silence here would be worse than the defect: booting still OPENS
-// AND MIGRATES the store, bootstraps leadership, and CREATES any missing sealer
-// key. The contrast removed secret-store.key from an installation, ran
-// `sources plan`, and the plan recreated it and then printed "NOTHING WAS
-// WRITTEN". That belongs to boot() and is identical for every read-only verb in
-// this binary (`sources ls`, `secrets ls`, `audit verify`); closing it needs a
-// genuinely minimal read path, which is a unit of its own. Until then the
-// commands say "no source was written or wired", which is what they can honestly
-// promise, and NOT "writes nothing".
+// Plan and validate use the offline auth reader without migrations or keys.
+// The explicit test verb retains source preparation and credential resolution.
 
 // sourceEdit is the set of flags that DESCRIBE a source. plan, test and set share
 // one declaration so the verbs cannot drift apart in what they accept, and so a
@@ -528,10 +514,7 @@ func sourcesPlanCmd() *cobra.Command {
 			"flags you passed the way set would, and prints the field-by-field difference, whether the\n" +
 			"result would be accepted, and what a running engine would do with it at its next reload.\n" +
 			"NO source row is written and NO connector is opened.\n\n" +
-			"It is not a no-side-effect command, and saying otherwise would be a lie you only discover\n" +
-			"later: opening an installation migrates its store and creates any missing sealer key, the\n" +
-			"same as every other read-only verb in this binary. What it will not do is touch the roster\n" +
-			"or dial a source.\n\n" +
+			"It reads the existing store without migrations, key creation or engine startup.\n\n" +
 			"It boots the store READ-ONLY, so unlike `set` it will not create an installation that is not\n" +
 			"there: in an empty --data-dir it reports that there is no installation instead of planning\n" +
 			"against one it would have to make first.\n\n" +
@@ -563,7 +546,7 @@ func sourcesPlanCmd() *cobra.Command {
 				Name:    e.name,
 				Exists:  found,
 				Changes: diffSourceDefs(existing, found, def),
-				Check:   checkSourceOffline(def, eng.sourceReconciler.trust),
+				Check:   checkSourceOffline(def, eng.trust),
 			}
 			rep.LiveEffect = planLiveEffect(existing, found, def, rep.Check)
 			switch {
@@ -703,7 +686,7 @@ func sourcesValidateCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			trust := eng.sourceReconciler.trust
+			trust := eng.trust
 
 			var reports []sourceValidateReport
 			if e.name != "" {
@@ -795,7 +778,7 @@ func sourcesTestCmd() *cobra.Command {
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			eng, err := rosterReadBoot(cmd, dataDir, engine, dsn)
+			eng, err := sourceProbeBoot(cmd, dataDir, engine, dsn)
 			if err != nil {
 				return err
 			}
@@ -897,6 +880,9 @@ func probeSource(ctx context.Context, sr *sourceReconciler, def model.SourceDef,
 		}
 		if errors.Is(err, runtime.ErrSourceOpenFailed) {
 			return false, "the connector could not be opened with the supplied configuration", detail
+		}
+		if errors.Is(err, runtime.ErrSourceDidNotAnswer) {
+			return false, "the source did not answer with the supplied configuration (it opened, and the call that contacts it failed)", detail
 		}
 		// NOT the same fact as "it did not answer": the source DID open. Reported
 		// separately so an operator does not go hunting a connectivity problem.

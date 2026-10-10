@@ -1,6 +1,6 @@
 ---
 title: "Erläuterung"
-description: "Verständnisorientierter Überblick über Olivares AI: wie es Enterprise-AI als eine Ground Truth: Claude Code auf der tiefsten Stufe, Codex und Grok Build daneben integriert, verwaltet und absichert — seine modulare Architektur über 31 Module, die read-first Access Map und das Open-Core-Modell."
+description: "Verständnisorientierter Überblick über Olivares AI: wie es Enterprise-AI als eine Ground Truth: Claude Code auf der tiefsten Stufe, Codex und Grok Build daneben integriert, verwaltet und absichert — seine modulare Architektur über 32 Module, die read-first Access Map und das Open-Core-Modell."
 ---
 
 Dieser Abschnitt ist verständnisorientiert. Er erklärt, *warum* Olivares AI so
@@ -30,7 +30,7 @@ kein einzelnes Werkzeug: Eine **Core-Engine** stellt die gemeinsamen Subsysteme
 bereit — Ingest und einen in-process Event Bus, das Connector SDK, die Module
 Runtime, ein mandantenfähiges Datenmodell, die REST-/gRPC-API, Authentifizierung
 und Autorisierung und das append-only Audit-Ledger — und jede Fähigkeit ist eines
-von **31 Modulen**, das an diesen Subsystemen hängt, ohne den Core neu zu
+von **32 Modulen**, das an diesen Subsystemen hängt, ohne den Core neu zu
 architektieren. **Konnektoren** speisen die Engine von außen über ein stabiles
 SDK; ein Konnektor importiert niemals aus dem Core, was die Lizenzgrenze sauber
 hält.
@@ -38,7 +38,7 @@ hält.
 Der Standard-Store ist SQLite (reines Go) für Single-Node- und air-gapped Nutzung
 und wechselt zu Postgres mit Row-Level Security für Mandantenfähigkeit und
 Skalierung. Der Event Bus ist standardmäßig in-process; NATS ist eine optionale
-verteilte Anbindung, keine Voraussetzung. Die Plattform liefert heute **31 Module**
+verteilte Anbindung, keine Voraussetzung. Die Plattform liefert heute **32 Module**
 aus, jedes mit seinem eigenen ehrlichen Reifegrad — die meisten live und
 end-to-end verdrahtet, einige teilweise oder opt-in — über neun Fähigkeitsbereiche;
 eine Own-Model-Registry und Fine-Tuning ist eine **geplante Fähigkeit**, kein
@@ -92,19 +92,14 @@ Postgres) oder vollständig air-gapped mit null Egress und einer Offline-Lizenz
 laufen; eine Managed-Option ist Zukunftsarbeit.
 
 Die Lizenzierung ist Open-Core. Der Engine-Core, die Module und das Web-UI sind
-AGPL-3.0-only; das SDK und die Konnektoren sind Apache-2.0; eine Enterprise-Stufe
-ist kommerziell. Diese Trennung ist es, die Dritten erlaubt, Konnektoren zu bauen,
+AGPL-3.0-only; das SDK und die Konnektoren sind Apache-2.0; die Editionen Business und Enterprise
+sind kommerziell. Diese Trennung ist es, die Dritten erlaubt, Konnektoren zu bauen,
 ohne dass die Copyleft-Grenze ihren Code erreicht.
 
 → Lesen Sie [Open Core und Lizenzierung](/de/explanation/open-core-and-licensing/) für
 die Lizenz-Map pro Verzeichnis und was sie in der Praxis bedeutet.
 
 ## Architekturentscheidungen
-
-Die Begründung hinter den tragenden Entscheidungen — opake Bearer-Token statt JWTs,
-der austauschbare Autorisierungs-PDP hinter einer einzigen Naht,
-SQLite-zu-Postgres, das hash-chained und signierte Audit-Ledger — ist als
-Architecture Decision Records festgehalten.
 
 ## Regulierung, Positionierung & Passung
 

@@ -55,6 +55,8 @@
       "maxDuration": "Durée maximale de session (minutes)",
       "allowedTools": "Outils autorisés",
       "allowedToolsPlaceholder": "ex. Bash,Read,Edit",
+      "requireTruncateProtection": "Exiger la protection contre la troncature pour les sessions en lecture seule",
+      "truncateProtectionHint": "Les sessions en lecture seule de ce modèle ne démarreront pas sur les anciens noyaux qui ne peuvent pas appliquer cette protection.",
       "recordIo": "Enregistrer les E/S",
       "peersSameTemplate": "Les sessions de ce modèle peuvent s'écrire entre elles"
     }

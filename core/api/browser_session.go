@@ -80,12 +80,8 @@ func SessionEnvelope(w http.ResponseWriter, r *http.Request, token string, sess 
 
 // handleBrowserSession restores metadata after reload, or migrates a legacy
 // bearer once. Migration rotates the secret and preserves the exact expiry.
-func (s *Server) handleBrowserSession(w http.ResponseWriter, r *http.Request) {
-	p, ok := principalFrom(r.Context())
-	if !ok || p.Kind != auth.KindUser {
-		s.writeError(w, r, auth.ErrUnauthenticated)
-		return
-	}
+func (s *Server) handleBrowserSession(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	p := mc.Principal
 	if !BrowserSameOrigin(r) {
 		s.writeError(w, r, errForbidden)
 		return

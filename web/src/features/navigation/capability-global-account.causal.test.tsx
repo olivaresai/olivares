@@ -27,6 +27,10 @@ const TENANT = 't1'
 
 const auth = vi.hoisted(() => ({
   superadmin: false,
+  /** The setup administrator's shape: superadmin AND a grant in the active tenant. */
+  owner: false,
+  /** The tenant the owner grant is in; another value models a grant elsewhere. */
+  grantTenant: 't1',
   perms: new Set<string>(),
 }))
 vi.mock('@/lib/auth/context', () => ({
@@ -38,6 +42,9 @@ vi.mock('@/lib/auth/context', () => ({
       user_id: '0192f2c0-eeee-7000-8000-00000000000a',
       actor: 'user:0192f2c0-eeee-7000-8000-00000000000a',
       superadmin: auth.superadmin,
+      grants: auth.owner
+        ? [{ tenant: auth.grantTenant, role: 'owner', permissions: [] }]
+        : [],
     },
     activeTenant: TENANT,
   }),
@@ -122,6 +129,8 @@ function route(): RouteAccess {
 
 beforeEach(() => {
   auth.superadmin = false
+  auth.owner = false
+  auth.grantTenant = TENANT
   auth.perms = new Set<string>()
   routerSearch.value = ''
   useWorkspaceStore.setState({ activeWorkspace: WS })
@@ -342,6 +351,85 @@ describe('the account moves and the rendered authority moves with it', () => {
     // Unknown is not an established refusal, so the table of contents is unchanged.
     expect(hook.result.current.navigable(ADMINISTRATION)).toBe(true)
     expect(fetchSpy).toHaveBeenCalledTimes(0)
+    hook.unmount()
+  })
+})
+
+describe('the setup administrator is a member of its own organization', () => {
+  // #503: the first boot creates ONE account, superadmin AND owner of the organization.
+  // It holds a grant in the active tenant, so it is not the global family: the engine
+  // answers its question (measured reachable/admitted), and suppressing it told the
+  // owner to "use a member account" it already was.
+  const admitted = () =>
+    new Response(
+      JSON.stringify({
+        schema_version: 2,
+        results: [
+          {
+            id: 'q',
+            kind: 'surface',
+            state: 'reachable',
+            code: 'admitted',
+            refresh_after_ms: 30_000,
+          },
+        ],
+      }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } },
+    )
+
+  it('submits the declared question and opens the protected child', async () => {
+    vi.useFakeTimers()
+    auth.superadmin = true
+    auth.owner = true
+    const fetchSpy = vi.fn(async () => admitted())
+    vi.stubGlobal('fetch', fetchSpy)
+    const { Wrapper } = mounted()
+    render(
+      <Wrapper>
+        <RequirePermission view={ADMINISTRATION}>
+          <div data-slot="protected-child">the collection</div>
+        </RequirePermission>
+      </Wrapper>,
+    )
+    await drain()
+
+    expect(fetchSpy.mock.calls.length).toBeGreaterThanOrEqual(1)
+    expect(
+      document.querySelector('[data-slot="capability-global-account"]'),
+    ).toBeNull()
+    expect(
+      document.querySelector('[data-slot="protected-child"]'),
+    ).not.toBeNull()
+  })
+
+  it('CONTROL: a superadmin whose grant is in ANOTHER tenant stays the global family', async () => {
+    vi.useFakeTimers()
+    auth.superadmin = true
+    auth.owner = true
+    auth.grantTenant = 't2'
+    const fetchSpy = vi.fn(async () => admitted())
+    vi.stubGlobal('fetch', fetchSpy)
+    const decision = route()
+    await drain()
+    await twelveSeconds()
+
+    expect(fetchSpy).toHaveBeenCalledTimes(0)
+    expect(decision.kind).toBe('unavailable')
+    expect(decision.globalAccount).toBe(true)
+  })
+
+  it('navigation asks too, and reports the answer', async () => {
+    vi.useFakeTimers()
+    auth.superadmin = true
+    auth.owner = true
+    const fetchSpy = vi.fn(async () => admitted())
+    vi.stubGlobal('fetch', fetchSpy)
+    const { Wrapper } = mounted()
+    const hook = renderHook(() => useViewAccess(), { wrapper: Wrapper })
+    await drain()
+
+    expect(fetchSpy.mock.calls.length).toBeGreaterThanOrEqual(1)
+    expect(hook.result.current.state(ADMINISTRATION)).toBe('allowed')
     hook.unmount()
   })
 })

@@ -81,7 +81,7 @@ func newDRHarnessAt(
 		open = observeOpen[0]
 	}
 	return newHarnessOptsFromStoreSource(t, harnessStoreSource{borrowed: st, open: open}, func(o *api.Options) {
-		o.Version = "26.9.0"
+		o.Version = "26.900"
 		o.DR = &api.DRConfig{DataDir: dir, EngineKind: "sqlite"}
 		o.Clock = clk
 	})

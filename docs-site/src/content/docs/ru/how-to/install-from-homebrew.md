@@ -2,9 +2,11 @@
 title: Установка через Homebrew
 description: >-
   Координата macOS Homebrew cask для Olivares AI, что cask делает с
-  Gatekeeper, и состояние публикации bump tap 26.10.1.
+  Gatekeeper, и состояние публикации его bump tap.
 draft: false
 ---
+
+Следующий выпуск — <!-- release -->`0.1`<!-- /release -->; его релиз на GitHub ещё не опубликован. Команды ниже описывают планируемые артефакты. До публикации собирайте из исходников, а после публикации проверяйте каждый артефакт перед использованием. Наблюдаемый статус записан в <!-- release -->`docs/releases/0.1-install-surfaces.json`<!-- /release -->.
 
 Это путь macOS, который `INSTALL.md` называет рекомендованным. Он ставит
 подписанный двоичный файл `olivares` через cask Homebrew и снимает карантин
@@ -13,7 +15,7 @@ Gatekeeper. Это не путь пакетов Linux
 ([Развёртывание с Docker](/how-to/docker-deployment/)).
 
 :::note[Бета — cask 26.10 опубликован]
-`Casks/olivares.rb` в tap обновлён для 26.10 2026-10-01: он называет версию 26.10.1 и четыре
+`Casks/olivares.rb` в tap обновлён для 26.10 2026-10-01: он называет версию 26.10.1<!-- release-fixed --> и четыре
 архива платформ, чьи SHA-256 совпадают с подписанным `checksums.txt` релиза. Производитель — `.goreleaser.yaml`
 `homebrew_casks:`; cask tap поднимает задание выпуска. Команда ниже — координата,
 которую называет `INSTALL.md` (`brew install olivaresai/tap/olivares`).
@@ -40,7 +42,7 @@ Cask ставит подписанный двоичный файл и **сним
 olivares quickstart
 ```
 
-Безопасные значения по умолчанию: TLS включён, loopback, нет учётных данных
+Безопасные значения по умолчанию: TLS включён, слушатели на всех интерфейсах, нет учётных данных
 по умолчанию. Движок печатает URL консоли и одноразовый токен установки.
 Продолжайте с [Ваш первый час](/how-to/first-hour/).
 
@@ -48,7 +50,8 @@ olivares quickstart
 посмотреть:
 
 ```sh
-olivares serve --seed-demo --insecure --data-dir "$(mktemp -d)"
+olivares serve --seed-demo --insecure --listen 127.0.0.1:8443 --grpc-listen 127.0.0.1:8444 \
+  --data-dir "$(mktemp -d)"
 ```
 
 `--seed-demo` не экскурсия по продукту. См.

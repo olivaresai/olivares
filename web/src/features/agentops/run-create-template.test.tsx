@@ -34,6 +34,10 @@ vi.mock('@/features/workspace-templates/api', () => ({
     detail: (t: string | null, id: string) => ['tpl', t, 'detail', id],
   },
 }))
+vi.mock('@tanstack/react-router', async (orig) => ({
+  ...(await orig<typeof import('@tanstack/react-router')>()),
+  useNavigate: () => vi.fn(),
+}))
 vi.mock('@/components/ui/toaster', () => ({
   toast: { success: vi.fn(), error: vi.fn() },
 }))
@@ -66,6 +70,14 @@ function wrap(initialTemplateId?: string) {
       />
     </QueryClientProvider>,
   )
+}
+
+/** The template choice and the profile's requirements in full are
+ * under Advanced options; a template opened from the catalog opens them. */
+async function openAdvanced() {
+  const toggle = await screen.findByRole('button', { name: 'Advanced options' })
+  if (toggle.getAttribute('aria-expanded') !== 'true')
+    await userEvent.click(toggle)
 }
 
 beforeEach(() => {
@@ -111,6 +123,7 @@ describe('RunCreateDialog — workspace templates', () => {
     wrap()
     await userEvent.click(await screen.findByLabelText('Provider profile'))
     await userEvent.click(await screen.findByRole('option', { name: /Home A/ }))
+    await openAdvanced()
     expect(
       await screen.findByText('Loaded 17 templates; there are more'),
     ).toBeVisible()
@@ -128,9 +141,7 @@ describe('RunCreateDialog — workspace templates', () => {
       await screen.findByText('Local requirements checked'),
     ).toBeInTheDocument()
 
-    await userEvent.click(
-      screen.getByRole('button', { name: /request launch/i }),
-    )
+    await userEvent.click(screen.getByRole('button', { name: 'Start' }))
     await waitFor(() => expect(agentOpsApi.createRun).toHaveBeenCalled())
 
     // `as unknown as` y no un cast directo: `CreateRunRequest` es CERRADO y TypeScript rechaza la
@@ -149,12 +160,11 @@ describe('RunCreateDialog — workspace templates', () => {
     wrap()
     await userEvent.click(await screen.findByLabelText('Provider profile'))
     await userEvent.click(await screen.findByRole('option', { name: /Home A/ }))
+    await openAdvanced()
     expect(
       await screen.findByText('Local requirements checked'),
     ).toBeInTheDocument()
-    await userEvent.click(
-      screen.getByRole('button', { name: /request launch/i }),
-    )
+    await userEvent.click(screen.getByRole('button', { name: 'Start' }))
     await waitFor(() => expect(agentOpsApi.createRun).toHaveBeenCalled())
 
     // `as unknown as` y no un cast directo: `CreateRunRequest` es CERRADO y TypeScript rechaza la
@@ -182,7 +192,7 @@ describe('RunCreateDialog — workspace templates', () => {
     expect(
       await screen.findByText(/does not provision hooks/i),
     ).toBeInTheDocument()
-    const submit = screen.getByRole('button', { name: /request launch/i })
+    const submit = screen.getByRole('button', { name: 'Start' })
     await waitFor(() => expect(submit).toBeDisabled())
     expect(agentOpsApi.createRun).not.toHaveBeenCalled()
   })
@@ -231,9 +241,7 @@ describe('RunCreateDialog — workspace templates', () => {
     ).toBeInTheDocument()
     // An override is not a refusal: the launch stays available.
     await waitFor(() =>
-      expect(
-        screen.getByRole('button', { name: /request launch/i }),
-      ).not.toBeDisabled(),
+      expect(screen.getByRole('button', { name: 'Start' })).not.toBeDisabled(),
     )
   })
 })

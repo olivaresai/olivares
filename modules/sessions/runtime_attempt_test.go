@@ -20,7 +20,7 @@ func TestRuntimeAttemptOperationsRefuseReplacementWhileWaitingForRunLock(t *test
 		t.Run(operation, func(t *testing.T) {
 			runner := &fakeRunner{initSID: "exact-attempt-provider"}
 			m, _, tenant, _ := newRuntimeHarness(t, WithRunner(runner), WithCredentialSource(staticCred()))
-			dto, err := m.createRun(context.Background(), tenant, CreateRunParams{Transport: TransportStreamJSON, Isolation: IsolationNative, Actor: "user:operator", ActorKind: model.ActorUser})
+			dto, err := createProfiledTestRun(t, m, context.Background(), tenant, CreateRunParams{Transport: TransportStreamJSON, Isolation: IsolationNative, Actor: "user:operator", ActorKind: model.ActorUser})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -66,7 +66,7 @@ func TestRuntimeAttemptOperationsRefuseReplacementWhileWaitingForRunLock(t *test
 func TestRuntimeAttemptOutputUsesOriginalRing(t *testing.T) {
 	runner := &fakeRunner{initSID: "exact-output-provider"}
 	m, _, tenant, _ := newRuntimeHarness(t, WithRunner(runner), WithCredentialSource(staticCred()))
-	dto, err := m.createRun(context.Background(), tenant, CreateRunParams{Transport: TransportStreamJSON, Isolation: IsolationNative, Actor: "user:operator", ActorKind: model.ActorUser})
+	dto, err := createProfiledTestRun(t, m, context.Background(), tenant, CreateRunParams{Transport: TransportStreamJSON, Isolation: IsolationNative, Actor: "user:operator", ActorKind: model.ActorUser})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -125,7 +125,7 @@ func TestRuntimeAttemptInterruptKeepsOwnedProcessAndRecordsReason(t *testing.T) 
 func TestRuntimeAttemptOutputDrainsFinalTailAndEnd(t *testing.T) {
 	runner := &fakeRunner{initSID: "finished-output-provider"}
 	m, _, tenant, _ := newRuntimeHarness(t, WithRunner(runner), WithCredentialSource(staticCred()))
-	dto, err := m.createRun(context.Background(), tenant, CreateRunParams{Transport: TransportStreamJSON, Isolation: IsolationNative, Actor: "user:operator", ActorKind: model.ActorUser})
+	dto, err := createProfiledTestRun(t, m, context.Background(), tenant, CreateRunParams{Transport: TransportStreamJSON, Isolation: IsolationNative, Actor: "user:operator", ActorKind: model.ActorUser})
 	if err != nil {
 		t.Fatal(err)
 	}

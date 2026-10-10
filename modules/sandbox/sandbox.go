@@ -161,6 +161,8 @@ func (m *Module) Permissions() []auth.Permission {
 // the resolved tenant; the privileged actions (create scenario, launch run/replay,
 // compare) additionally self-audit (docs/SECURITY-HARDENING.md).
 func (m *Module) APIRoutes(reg api.RouteRegistrar) {
+	reg.Handle("POST", "/synthetic-data", permScenarioWrite, m.handleGenerateSynthetic)
+
 	// Scenarios: synthetic, operator-authored fixtures (steps + mocks).
 	reg.Handle("GET", "/scenarios", permScenarioRead, m.handleListScenarios)
 	reg.Handle("POST", "/scenarios", permScenarioWrite, m.handleCreateScenario)

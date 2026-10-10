@@ -242,8 +242,8 @@ func gitopsSanitizeLabel(s string) string {
 // the bytes and therefore surfaces as an "update" in the plan.
 func (g *GitOpsBackend) gitopsRenderManifest(d Desired) string {
 	name := gitopsWorkloadName(d)
-	replicas := d.Replicas
-	if replicas < 0 {
+	replicas := kubeDesiredReplicas(d)
+	if d.Replicas < 0 {
 		replicas = 0
 	}
 	var b strings.Builder

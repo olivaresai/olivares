@@ -34,10 +34,10 @@ func TestFindGRPCFilesSkipsThrowawayExportCopies(t *testing.T) {
 
 	copia := filepath.Join(root, ".export-tmp", "tmp.ABC123", "public", "core", "api", "genpb", "apiv1")
 	if err := os.MkdirAll(copia, 0o755); err != nil {
-		t.Fatalf("mkdir copia: %v", err)
+		t.Fatalf("mkdir copy: %v", err)
 	}
 	if err := os.WriteFile(filepath.Join(copia, "api_grpc.pb.go"), []byte("package apiv1\n"), 0o644); err != nil {
-		t.Fatalf("write copia: %v", err)
+		t.Fatalf("write copy: %v", err)
 	}
 
 	got, err := findGRPCFiles(root)
@@ -47,8 +47,8 @@ func TestFindGRPCFilesSkipsThrowawayExportCopies(t *testing.T) {
 
 	quiero := "core/api/genpb/apiv1/api_grpc.pb.go"
 	if len(got) != 1 || got[0] != quiero {
-		t.Fatalf("el walk devolvió %v; quería exactamente [%s] — ni el residuo de .export-tmp\n"+
-			"ni, en la otra dirección, un walk que se saltara también el fichero real", got, quiero)
+		t.Fatalf("walk returned %v; wanted exactly [%s] — neither .export-tmp residue\n"+
+			"nor, in the opposite direction, a walk that also skipped the real file", got, quiero)
 	}
 }
 
@@ -71,6 +71,6 @@ func TestFindGRPCFilesStillWalksWithoutResidue(t *testing.T) {
 	}
 	quiero := "sdk/plugin/genpb/olivaresv1/v1_grpc.pb.go"
 	if len(got) != 1 || got[0] != quiero {
-		t.Fatalf("el walk devolvió %v; quería [%s]", got, quiero)
+		t.Fatalf("walk returned %v; wanted [%s]", got, quiero)
 	}
 }

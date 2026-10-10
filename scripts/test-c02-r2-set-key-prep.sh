@@ -14,7 +14,7 @@ mkdir -p "$_tmp_base"
 TMP="$(mktemp -d "$_tmp_base/c02r2prep.XXXXXX")"
 trap 'rm -rf "$TMP"' EXIT
 if [ ! -r "$ROOT/scripts/publish-enterprise-artifacts.sh" ]; then
-  printf 'SKIP %s: publish-enterprise-artifacts.sh es hub-only y no esta en este arbol\n' \
+  printf 'SKIP %s: publish-enterprise-artifacts.sh is hub-only and is absent from this tree\n' \
     "$(basename "${BASH_SOURCE[0]}")"
   exit 0
 fi

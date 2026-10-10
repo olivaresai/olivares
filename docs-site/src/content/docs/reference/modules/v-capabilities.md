@@ -14,6 +14,16 @@ its version history, and its basic connection health. It sits in the **Managemen
 layer** and has **no actuation surface**: it catalogs, governs and audits, but never
 runs a tool or mutates a live MCP runtime.
 
+## Saved MCP definitions
+
+The managed configs in `/capabilities` and `/v1/m/capabilities/configs` are
+**observation metadata**, with audited changes and immutable revision history.
+Saving, changing `enabled`, or deleting a definition does not configure the MCP
+gateway, start or stop a server, resolve a secret reference, or change a discovered
+server’s transport or endpoint. The gateway uses its own configuration seam.
+Stored definitions and their history remain available after a restart or after
+turning the capabilities module off and back on.
+
 ## What it is
 
 The module is an overlay built **on top of** the passive discovery of module I and

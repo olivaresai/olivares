@@ -20,6 +20,7 @@ stage() {
   cp "$ROOT/design/alc-01-s3-motor-hold-prep-2026-08-20.json" "$TMP/tree/design/"
   cp "$ROOT/design/ALC-01-S3-MOTOR-HOLD-PREP-2026-08-20.md" "$TMP/tree/design/"
   cp "$ROOT/cmd/olivares/wire_noenterprise.go" "$TMP/tree/cmd/olivares/"
+  cp "$ROOT/cmd/olivares/edition_ports.go" "$TMP/tree/cmd/olivares/"
   cp "$CHECK" "$TMP/tree/scripts/"
   chmod +x "$TMP/tree/scripts/check-alc-01-s3-motor-prep.sh"
 }

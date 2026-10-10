@@ -471,11 +471,9 @@ func TestCommunicationChannelCatalogFreshHTTP(t *testing.T) {
 		}
 		before := communicationHTTPTestEffects(t, eng, tenant)
 		realClosure := sessions.ChannelGrantSubjectClosureResolver(eng.communicationComposition.closure)
-		eng.sessionsMod.UseCommunicationChannelGrantSubjectClosureResolver(
-			communicationHTTPUnknownGrantClosureResolver{ChannelGrantSubjectClosureResolver: realClosure},
-		)
+		eng.sessionsMod.CommunicationGrantClosure = communicationHTTPUnknownGrantClosureResolver{ChannelGrantSubjectClosureResolver: realClosure}
 		unknown := catalog(reader.token, wsQuery+"&limit=5")
-		eng.sessionsMod.UseCommunicationChannelGrantSubjectClosureResolver(realClosure)
+		eng.sessionsMod.CommunicationGrantClosure = realClosure
 		if unknown.status != http.StatusServiceUnavailable || !strings.Contains(string(unknown.raw), "evidence_unavailable") ||
 			strings.Contains(string(unknown.raw), readWrite.Channel.ID.String()) {
 			t.Fatalf("UNKNOWN closure catalog = %d: %s", unknown.status, unknown.raw)

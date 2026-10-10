@@ -39,6 +39,7 @@ const (
 	colRunQueuedActorKind         = "queued_actor_kind"
 	colRunEnvAllow                = "env_allow_names"
 	colRunSecretEnv               = "secret_env_names"
+	colRunGitRead                 = "git_read"
 	colRunQueuedIntent            = "queued_intent"
 	colRunRef                     = "run_ref"
 	colRunPeers                   = "peers"
@@ -93,6 +94,15 @@ const (
 	colStartedAt            = "started_at"
 	colLastActivityAt       = "last_activity_at"
 	colStoppedAt            = "stopped_at"
+
+	// colRunWorktreeBranch is the branch of the git worktree this module made for the
+	// run (runtime_worktree.go), and its presence is the proof that the directory in
+	// colRunWorkspacePath is that worktree. Like colRunWorkspaceDirOwned it is a column
+	// and not a marker in the folder, because the child can write the folder.
+	// Nullable: a run that asked for no worktree, or predates the column, has none,
+	// and resume and release leave its directory alone.
+	colRunWorktreeBranch = "worktree_branch"
+
 	// Governance facts: the non-sensitive launch-decision posture persisted
 	// on the run so the portal renders the per-session governance panel without the
 	// secrets that decided it. References and flags only — never a token, env value,
@@ -163,6 +173,7 @@ const (
 	colRunProfileEnvRef     = "provider_environment_ref"
 	colRunProfileConfigHome = "provider_config_home"
 	colRunProfileUserHome   = "provider_user_home"
+	colRunSkillsSelection   = "skills_selection"
 	// The AUTHORIZED authentication source this run was launched under, and the
 	// readiness the provider itself reported. Two different things: the first is a
 	// decision somebody made before the launch (and it travels in the K4 dispatch
@@ -184,6 +195,10 @@ const (
 	// never a lookup by bare external id. NULL for a legacy run and for a profiled
 	// run whose id was never captured.
 	colRunLiveRef = "live_ref"
+	// colRunCoreSessionID is the core Session the run's current launch attempt opened
+	// in the transaction that stamped its launch id (runtime_core_session.go), the row
+	// the session cockpit lists. NULL before a first launch and on a historical run.
+	colRunCoreSessionID = "core_session_id"
 
 	// The metering of the governed turns this run has taken, credited from the
 	// official CLI's own result frames (runtime_usage.go). Counts and money, never
@@ -197,6 +212,12 @@ const (
 	colRunOutputTokens  = "output_tokens"
 	colRunCostMicroUSD  = "cost_micro_usd"
 	colRunUsageModelRef = "usage_model_ref"
+
+	// colRunToolMode is the session's mode as the TOOL last reported it
+	// (runtime_tool_mode.go): Claude Code's permission mode, Codex's approval
+	// policy and sandbox. It is not colPermissionMode, which is what the launch
+	// asked for. NULL means the tool has not said.
+	colRunToolMode = "tool_mode"
 )
 
 // sessions.run_event columns (append-only ledger; per-session hash anchor).
@@ -244,6 +265,7 @@ func (m *Module) registerRuntimeSchema(reg store.ExtensionRegistry) error {
 			{Name: colRunQueuedActorKind, Kind: model.KindText, Nullable: true, Principal: model.None("actor kind of the queued launch, not a principal reference: runtime_approval_wait.go:57")},
 			{Name: colRunEnvAllow, Kind: model.KindText, Nullable: true, Principal: model.None("JSON array of permitted environment variable names; never their values: runtime.go:1332-1333")},
 			{Name: colRunSecretEnv, Kind: model.KindText, Nullable: true, Principal: model.None("JSON array of {env, secret} NAMES of the vault secrets a run is given; never their values: session_secret_env.go:151, session_secret_env.go:165, runtime.go:1499")},
+			{Name: colRunGitRead, Kind: model.KindText, Nullable: true, Principal: model.None("the approved repository binding id a run gets a GitHub read credential for; never the token: session_git_read.go:144-157, runtime_dto.go:173")},
 			{Name: colRunQueuedIntent, Kind: model.KindText, Nullable: true, Principal: model.None("references-only launch question pinned to the original approval: runtime_approval_wait.go:53")},
 			{Name: colRunName, Kind: model.KindText, Nullable: true, Principal: model.None("an operator-chosen run label, shown only: runtime_dto.go:119")},
 			{Name: colTransport, Kind: model.KindText, Principal: model.None("a run transport, a closed set: runtime_ports.go:39-49, runtime_dto.go:120")},
@@ -259,6 +281,9 @@ func (m *Module) registerRuntimeSchema(reg store.ExtensionRegistry) error {
 			// that predates it cannot PROVE the directory is this plane's, so release
 			// leaves it alone instead of removing a path it cannot account for.
 			{Name: colRunWorkspaceDirOwned, Kind: model.KindBool, Nullable: true},
+			// Nullable for the same expand-contract reason: an existing sessions_run gains
+			// it on the next boot and a row that predates it names no worktree.
+			{Name: colRunWorktreeBranch, Kind: model.KindText, Nullable: true, Principal: model.None("a git branch name this plane made for the run's worktree, read for resume and release, never an account: runtime_worktree.go:442-443, runtime_worktree.go:523-524, runtime_dto.go:169")},
 			// the template this run was last launched under. A reference, never the
 			// template's body — the terms are re-resolved from the template row on every
 			// launch and resume, so a tightened template governs the next relaunch rather
@@ -324,6 +349,7 @@ func (m *Module) registerRuntimeSchema(reg store.ExtensionRegistry) error {
 			{Name: colRunProfileEnvRef, Kind: model.KindText, Nullable: true, Principal: pdeclNoneEnvRef},
 			{Name: colRunProfileConfigHome, Kind: model.KindText, Nullable: true, Principal: pdeclNoneHomePath},
 			{Name: colRunProfileUserHome, Kind: model.KindText, Nullable: true, Principal: pdeclNoneHomePath},
+			{Name: colRunSkillsSelection, Kind: model.KindJSON, Nullable: true, Principal: pdeclSkillsSelection},
 			// Nullable for the same expand-contract reason as the B1 stamp above: an
 			// existing sessions_run gains them on the next boot (reconcileColumns) and a
 			// row that predates them reads as "no authorized source, readiness unknown".
@@ -331,6 +357,7 @@ func (m *Module) registerRuntimeSchema(reg store.ExtensionRegistry) error {
 			{Name: colRunProviderAuthState, Kind: model.KindText, Nullable: true, Principal: model.None("the provider's reported authentication readiness, a closed set: runtime_provider_auth.go:55-57, runtime_driver.go:893")},
 			{Name: colRunProviderRecordRef, Kind: model.KindText, Nullable: true, Principal: pdeclNoneProviderRecordRef},
 			{Name: colRunLiveRef, Kind: model.KindText, Nullable: true, Principal: model.None("the id of the plane's managed live row for the run: runtime_profile.go:337, runtime_dto.go:156")},
+			{Name: colRunCoreSessionID, Kind: model.KindText, Nullable: true, Principal: model.None("the id of the core Session this run's current launch attempt opened, never an account: runtime_core_session.go:47, runtime_core_session.go:77, runtime_dto.go:198")},
 			// Nullable = UNKNOWN, never zero: see the constants. A run that predates
 			// these columns gains them on the next boot (reconcileColumns) and reads as
 			// "the provider reported no usage", which is what was true.
@@ -338,6 +365,7 @@ func (m *Module) registerRuntimeSchema(reg store.ExtensionRegistry) error {
 			{Name: colRunOutputTokens, Kind: model.KindInt, Nullable: true},
 			{Name: colRunCostMicroUSD, Kind: model.KindInt, Nullable: true},
 			{Name: colRunUsageModelRef, Kind: model.KindText, Nullable: true, Principal: model.None("the model id reported with the run's usage, shown only: runtime_usage.go:374, runtime_dto.go:160")},
+			{Name: colRunToolMode, Kind: model.KindText, Nullable: true, Principal: model.None("the session's mode as the tool reported it, shown only: runtime_tool_mode.go:29-39, runtime_tool_mode.go:45-51, runtime_dto.go:211")},
 		},
 		// The run's authorization lineage. Unset is HIDDEN, never the tenant
 		// default: see colRunAuthzWorkspaceID. Declaring it is also what turns a
@@ -356,6 +384,12 @@ func (m *Module) registerRuntimeSchema(reg store.ExtensionRegistry) error {
 			{
 				Name:    "sessions_run_dispatch_key_uniq",
 				Columns: []string{model.ColTenantID, colRunWorkDispatchKey},
+				Unique:  true,
+			},
+			{
+				// One run per core Session: ReadCoreSessionRunInScope reads it by equality.
+				Name:    "sessions_run_core_session_uniq",
+				Columns: []string{model.ColTenantID, colRunCoreSessionID},
 				Unique:  true,
 			},
 		},

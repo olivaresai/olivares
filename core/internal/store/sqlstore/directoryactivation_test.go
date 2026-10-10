@@ -41,7 +41,7 @@ func TestDirectoryActivationSQLiteCutoverRetryAndReopen(t *testing.T) {
 	if err != nil || !supported {
 		t.Fatalf("initial DirectoryStatus = %+v supported=%t err=%v", cached, supported, err)
 	}
-	if cached.Enabled || cached.EpochCoverageComplete || cached.InventoryUnavailableReason != "system_bootstrap_pending" ||
+	if cached.Enabled || cached.EpochCoverageComplete || cached.InventoryUnavailableReason != "system_bootstrap_pending" || //nolint:staticcheck // SA1019: pins the deprecated field's published false until removal
 		cached.ControlMode != store.DirectoryControlStaged ||
 		cached.WriterPosture != store.DirectoryWriterSQLiteCapability ||
 		cached.ExpectedGeneration != 1 {
@@ -52,7 +52,7 @@ func TestDirectoryActivationSQLiteCutoverRetryAndReopen(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ActivateDirectoryWriter: %v", err)
 	}
-	if !changed || !before.EpochCoverageComplete || before.InventoryOrgCount != 2 || after.Enabled || !after.EpochCoverageComplete ||
+	if !changed || !before.EpochCoverageComplete || before.InventoryOrgCount != 2 || after.Enabled || !after.EpochCoverageComplete || //nolint:staticcheck // SA1019: pins the deprecated field's published false until removal
 		after.ControlMode != store.DirectoryControlEnforced ||
 		after.WriterPosture != store.DirectoryWriterSQLiteCapability ||
 		after.ExpectedGeneration != 2 {
@@ -89,7 +89,7 @@ func TestDirectoryActivationSQLiteCutoverRetryAndReopen(t *testing.T) {
 			}
 			if gotChanged || gotBefore.ControlMode != store.DirectoryControlEnforced ||
 				gotAfter.ControlMode != store.DirectoryControlEnforced ||
-				gotAfter.ExpectedGeneration != 2 || gotAfter.Enabled {
+				gotAfter.ExpectedGeneration != 2 || gotAfter.Enabled { //nolint:staticcheck // SA1019: pins the deprecated field's published false until removal
 				t.Fatalf("ActivateDirectoryWriter(%d) = before:%+v after:%+v changed:%t",
 					expected, gotBefore, gotAfter, gotChanged)
 			}
@@ -109,7 +109,7 @@ func TestDirectoryActivationSQLiteCutoverRetryAndReopen(t *testing.T) {
 	}
 	defer reopened.Close() //nolint:errcheck
 	reopenedStatus, ok, err := reopened.(store.DirectoryStatuser).DirectoryStatus(ctx)
-	if err != nil || !ok || reopenedStatus.Enabled ||
+	if err != nil || !ok || reopenedStatus.Enabled || //nolint:staticcheck // SA1019: pins the deprecated field's published false until removal
 		reopenedStatus.ControlMode != store.DirectoryControlEnforced ||
 		reopenedStatus.ExpectedGeneration != 2 || !reopenedStatus.EpochCoverageComplete {
 		t.Fatalf("reopened DirectoryStatus = %+v supported=%t err=%v",

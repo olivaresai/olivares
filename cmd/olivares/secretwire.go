@@ -18,6 +18,7 @@ import (
 	"github.com/olivaresai/olivares/connectors/contentsource"
 	"github.com/olivaresai/olivares/connectors/secretref"
 	"github.com/olivaresai/olivares/core/auth"
+	"github.com/olivaresai/olivares/core/dr"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/runtime"
 	"github.com/olivaresai/olivares/core/secret"
@@ -42,10 +43,10 @@ const (
 	// secretStoreKeyEnv supplies the 32-byte base64 sealer key directly (the HA
 	// path: every node must seal/open with the SAME key). Unset => a per-node key
 	// file in the data dir.
-	secretStoreKeyEnv = "OLIVARES_SECRET_STORE_KEY"
+	secretStoreKeyEnv = dr.SecretStoreKeyEnv
 	// secretStoreKeyFile is the on-disk key minted on first boot (0600,
 	// fail-closed on wider permissions — the shared secure-package posture).
-	secretStoreKeyFile = "secret-store.key"
+	secretStoreKeyFile = dr.SecretStoreKeyFile
 )
 
 // newSecretSealer builds the AES-256-GCM sealer for the runtime secret store over

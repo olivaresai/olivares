@@ -59,6 +59,10 @@ func ValidChannel(name string) bool {
 	return false
 }
 
+// EditionCommunity is the only Manifest.Edition value that lets `olivares upgrade --bundle`
+// install without a license (REL.4b).
+const EditionCommunity = "community"
+
 // ManifestSchemaVersion is the current on-the-wire schema. The verifier rejects a
 // manifest it does not understand (a newer major schema) rather than guess.
 const ManifestSchemaVersion = 1
@@ -67,7 +71,7 @@ const ManifestSchemaVersion = 1
 type Manifest struct {
 	SchemaVersion int        `json:"schema_version"`
 	Channel       string     `json:"channel"`
-	Version       string     `json:"version"`               // semver of the release this manifest points at
+	Version       string     `json:"version"`               // MAJOR.MINOR of the release this manifest points at
 	MinVersion    string     `json:"min_version,omitempty"` // a direct jump requires current >= this
 	ReleasedAt    time.Time  `json:"released_at"`
 	Security      bool       `json:"security,omitempty"`   // this release carries a security fix
@@ -87,6 +91,13 @@ type Manifest struct {
 	// verifier predates it (ParseManifest's DisallowUnknownFields would have
 	// rejected it there).
 	Revoked *RevokedSet `json:"revoked,omitempty"`
+	// Edition is the signer's statement of which edition the artifacts are. Only
+	// EditionCommunity means anything to a verifier: every other value, and absence,
+	// keeps the license gate on `upgrade --bundle`, so a bundle signed before the field
+	// existed keeps the gate it was published under. The public channel manifest leaves
+	// it out: binaries built before the field decode with DisallowUnknownFields and would
+	// refuse it, so only the air-gap bundle producer sets it.
+	Edition string `json:"edition,omitempty"`
 }
 
 // RevokedSet is the flat license CRL. Scale doctrine (design §5.2): this
@@ -194,12 +205,15 @@ func ParseManifest(b []byte) (Manifest, error) {
 	if !ValidChannel(m.Channel) {
 		return Manifest{}, manifestErr("release: manifest channel %q is not one of %s", m.Channel, strings.Join(Channels, "|"))
 	}
-	if _, err := ParseVersion(m.Version); err != nil || strings.TrimSpace(m.Version) == "" {
-		return Manifest{}, manifestErr("release: manifest version %q is not a valid semver", m.Version)
+	if _, err := ParseVersion(m.Version); err != nil || IsUnstamped(m.Version) {
+		return Manifest{}, manifestErr("release: manifest version %q is not a valid MAJOR.MINOR version", m.Version)
 	}
-	if strings.TrimSpace(m.MinVersion) != "" {
-		if _, err := ParseVersion(m.MinVersion); err != nil {
-			return Manifest{}, manifestErr("release: manifest min_version %q is not a valid semver", m.MinVersion)
+	if m.Edition != "" && !validEdition(m.Edition) {
+		return Manifest{}, manifestErr("release: manifest edition %q is not a lowercase slug of at most 32 characters", m.Edition)
+	}
+	if m.MinVersion != "" {
+		if _, err := ParseVersion(m.MinVersion); err != nil || IsUnstamped(m.MinVersion) {
+			return Manifest{}, manifestErr("release: manifest min_version %q is not a valid MAJOR.MINOR version", m.MinVersion)
 		}
 	}
 	if m.Rollout.Percentage != nil && (*m.Rollout.Percentage < 0 || *m.Rollout.Percentage > 100) {
@@ -222,6 +236,20 @@ func ParseManifest(b []byte) (Manifest, error) {
 		return Manifest{}, err
 	}
 	return m, nil
+}
+
+// validEdition accepts a lowercase slug (a-z, 0-9, '+', '-'; first a letter; at most 32),
+// so a commercial producer can name its edition without this verifier refusing the manifest.
+func validEdition(e string) bool {
+	if e == "" || len(e) > 32 || e[0] < 'a' || e[0] > 'z' {
+		return false
+	}
+	for _, c := range e {
+		if (c < 'a' || c > 'z') && (c < '0' || c > '9') && c != '+' && c != '-' {
+			return false
+		}
+	}
+	return true
 }
 
 // validate applies the structural bounds to a manifest's CRL. An entry that is
@@ -591,7 +619,7 @@ func (m Manifest) CheckPolicy(now time.Time, b PolicyBounds) (warnings []string,
 	if mv := strings.TrimSpace(m.MinVersion); mv != "" {
 		minV, perr := ParseVersion(mv)
 		if perr != nil {
-			refuse("min_version %q is not a valid semver", mv)
+			refuse("min_version %q is not a valid MAJOR.MINOR version", mv)
 		} else if tgt, terr := ParseVersion(m.Version); terr == nil && Compare(minV, tgt) >= 0 {
 			// EQUAL is a kill switch too, not just GREATER: MinTooOld is
 			// Compare(current, min) < 0, so min_version == version fails every node
@@ -762,6 +790,11 @@ func (m Manifest) PolicySummary(now time.Time) []PolicyField {
 		{Name: "channel", Value: m.Channel, Alert: m.Channel == ChannelSecurity},
 		{Name: "version", Value: m.Version},
 		{Name: "released_at", Value: m.ReleasedAt.UTC().Format(time.RFC3339)},
+	}
+	if m.Edition != "" {
+		f = append(f, PolicyField{Name: "edition", Alert: true, Value: m.Edition + cndStr(m.Edition == EditionCommunity,
+			"  <- `upgrade --bundle` installs this WITHOUT a license; binaries built before this field cannot read this manifest",
+			"  <- `upgrade --bundle` still needs a license")})
 	}
 	minV := "none (any version may jump directly to this release)"
 	if mv := strings.TrimSpace(m.MinVersion); mv != "" {

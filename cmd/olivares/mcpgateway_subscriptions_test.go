@@ -16,6 +16,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/olivaresai/olivares/cmd/olivares/internal/mcpgateway"
 	mcpc "github.com/olivaresai/olivares/connectors/mcp"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
@@ -55,7 +56,7 @@ func mcpSubscriptionEventIDs(body string) []string {
 
 func TestMCPDurableSubscriptionsOperatorConfig(t *testing.T) {
 	const raw = `{"mcp":{"durable_subscriptions":{"workspace_id":"11111111-1111-7111-8111-111111111111"}}}`
-	var decoded agentGatewayConfig
+	var decoded mcpgateway.Config
 	if err := json.Unmarshal([]byte(raw), &decoded); err != nil {
 		t.Fatalf("decode durable subscription config: %v", err)
 	}
@@ -70,7 +71,7 @@ func TestMCPDurableSubscriptionsOperatorConfig(t *testing.T) {
 	tenant, workspace := model.NewTenantID(), model.NewID()
 	configured, err := buildMCPSubscriptionLedger(
 		&engine{sessionsMod: sessions.New()}, tenant,
-		&mcpDurableSubscriptionsConfig{WorkspaceID: workspace.String()},
+		&mcpgateway.DurableSubscriptionsConfig{WorkspaceID: workspace.String()},
 		"HTTPS://MCP.EXAMPLE/gateway/",
 	)
 	if err != nil {
@@ -98,7 +99,7 @@ func TestMCPDurableSubscriptionsOperatorConfig(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			got, err := buildMCPSubscriptionLedger(
-				tc.eng, tc.tenant, &mcpDurableSubscriptionsConfig{WorkspaceID: tc.workspace}, tc.peer,
+				tc.eng, tc.tenant, &mcpgateway.DurableSubscriptionsConfig{WorkspaceID: tc.workspace}, tc.peer,
 			)
 			if err == nil || got != nil {
 				t.Fatalf("invalid durable subscription config = (%T, %v), want nil + error", got, err)
@@ -146,13 +147,13 @@ func TestMCPGatewaySubscriptionRelayWiresDurableSessionsAndResumes(t *testing.T)
 	defer upstream.Close()
 
 	token, jwks := mintReviewToken(t, mcpReviewResource, "tools:read")
-	cfg := &mcpGatewayConfig{
+	cfg := &mcpgateway.MCPConfig{
 		Resource: mcpReviewResource, AuthorizationServers: []string{"https://auth.review.example"},
 		Issuer: "https://auth.review.example", IssuerJWKS: json.RawMessage(jwks),
 		Tenant: tenant.String(), UpstreamURL: upstream.URL, UpstreamAuth: "Bearer upstream-only",
 		Tools:                []mcpc.ToolPolicy{{Name: "search", RequiredScope: "tools:read"}},
 		NextRevisionHeaders:  true,
-		DurableSubscriptions: &mcpDurableSubscriptionsConfig{WorkspaceID: workspaceID.String()},
+		DurableSubscriptions: &mcpgateway.DurableSubscriptionsConfig{WorkspaceID: workspaceID.String()},
 	}
 	eng := &engine{store: st, sessionsMod: sessionsModule, log: discardLogger()}
 	firstRS, _, err := buildMCPResourceServer(eng, cfg, discardLogger())
@@ -222,7 +223,7 @@ func TestMCPGatewaySubscriptionRelayWithoutDurableLedgerReturns503(t *testing.T)
 	var calls int
 	upstream := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { calls++ }))
 	defer upstream.Close()
-	cfg := &mcpGatewayConfig{
+	cfg := &mcpgateway.MCPConfig{
 		Resource: mcpReviewResource, AuthorizationServers: []string{"https://auth.review.example"},
 		Issuer: "https://auth.review.example", IssuerJWKS: json.RawMessage(jwks),
 		Tenant: model.NewTenantID().String(), UpstreamURL: upstream.URL,

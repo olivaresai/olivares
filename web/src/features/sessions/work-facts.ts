@@ -32,8 +32,11 @@ export type FactTranslate = (
 export interface FactFormatters {
   /** Milliseconds → "15.0s". The console's own `formatDuration`. */
   duration: (ms: number) => string
-  /** Micro-USD → "$0.042". The console's own `formatMicroUsd`. */
-  cost: (microUsd: number) => string
+  /**
+   * Micro-USD → "$0.042". The console's own `formatMicroUsd`. Absent: another part
+   * of the screen says the cost (or that it is unknown), and this line does not.
+   */
+  cost?: (microUsd: number) => string
 }
 
 /**
@@ -57,7 +60,7 @@ export function workFacts(
     s.event_count > 0
       ? t('sessions:work.events', { count: s.event_count })
       : null,
-    s.cost_micro_usd > 0 ? fmt.cost(s.cost_micro_usd) : null,
+    s.cost_micro_usd > 0 && fmt.cost ? fmt.cost(s.cost_micro_usd) : null,
     s.model_ref ?? null,
   ].filter((f): f is string => f !== null)
 }

@@ -2,13 +2,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// ⛔ ESTA LISTA ES DE CREDENCIALES VIVAS, y por eso su recorte silencioso es el más caro de la
-// consola: un token que no se ve aquí SIGUE AUTENTICANDO, y no hay forma de revocarlo desde esta
-// pantalla. `handleListTokens` (`core/api/handlers_core.go`) usa `parseListQuery` y publica
-// `has_more`; sin `limit` el store paginaba a 100 y la pantalla se leía «éstas son nuestras
-// claves». Lo señaló el contraste externo de como la siguiente superficie por coste.
+// This list contains live credentials. A token omitted by silent truncation still
+// authenticates and cannot be revoked from this screen. `handleListTokens`
+// (`core/api/handlers_core.go`) uses `parseListQuery` and publishes `has_more`; without
+// `limit`, the store paginated at 100 while the screen appeared to show every key.
+// The external review identified this as the next high-cost surface.
 //
-// Este fichero no existía.
+// This file did not previously exist.
 import type { ReactElement } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
@@ -85,8 +85,8 @@ describe('ApiKeysTab — el techo se pide y el recorte se declara', () => {
     expect(
       await screen.findByText('Loaded 1 keys; there are more'),
     ).toBeVisible()
-    // ⛔ CARDINALIDAD EXACTA, no presencia: dos avisos que dicen lo mismo con palabras distintas
-    //    pasan cualquier `findByText`. Contraste (F-01) contó 2 aquí.
+    // Assert exact cardinality: differently worded duplicate notices pass `findByText`.
+    // Review (F-01) counted two here.
     expect(screen.getAllByText(/there are more/i)).toHaveLength(1)
 
     cleanup()

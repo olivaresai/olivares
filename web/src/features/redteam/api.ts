@@ -22,17 +22,16 @@ import type {
 const BASE = '/v1/m/redteam'
 
 /**
- * ⛔ EL TECHO SE PIDE, PERO SÓLO DONDE HAY ALGO QUE RECORTAR — y esta vez lo comprobé en el motor
- *    ANTES de escribir el cliente, que es la lección de.
+ * Request a ceiling only where truncation is possible. The engine behavior was checked
+ * before writing this client, following the lesson from.
  *
- *    `handleListTargets` y `handleListRuns` pasan por `listQuery(r)` (`modules/redteam/consent.go`,
- *    `scorecard.go`): consumen `limit`, el store aplica 100 por defecto y acepta hasta 1000. Ésas
- *    llevan techo y aviso. `handleListResults` NO: usa `listAll` y devuelve todos los resultados de
- *    la ejecución sin poner `HasMore`, así que no hay recorte que declarar y un aviso sería
- *    inalcanzable.
+ * `handleListTargets` and `handleListRuns` use `listQuery(r)` (`modules/redteam/consent.go`,
+ * `scorecard.go`): they consume `limit`, default to 100, and accept up to 1000. Those lists
+ * need ceilings and warnings. `handleListResults` uses `listAll` and returns all run results
+ * without `HasMore`, so a truncation warning would be unreachable.
  *
- *    Aquí la ausencia también es la afirmación: un objetivo que no sale se lee como que **nadie lo
- *    está probando**, y una ejecución que no sale, como que **no se ha ejecutado**.
+ * Absence also makes a claim: a missing target appears untested, and a missing run appears
+ * never to have executed.
  */
 const REDTEAM_PAGE = 1000
 

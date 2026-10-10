@@ -26,8 +26,8 @@ import './i18n'
 export function useReadyTool(): SessionTool | null | undefined {
   // The first-hour rule, the one the New session dialog uses: installed and signed in
   // with the tool's own login, or with an API key saved in Providers (HU 029).
-  const { ready, isLoading, checking } = useReadyTools()
-  if (isLoading || checking) return undefined
+  const { ready, isLoading } = useReadyTools()
+  if (isLoading) return undefined
   return ready[0] ?? null
 }
 
@@ -40,13 +40,7 @@ export function NowStart() {
   const codex = useToolStatus('codex')
   const readyTools = useReadyTools()
   if (!can('sessions:run:write')) return null
-  if (
-    claude.isLoading ||
-    codex.isLoading ||
-    readyTools.isLoading ||
-    readyTools.checking
-  )
-    return null
+  if (claude.isLoading || codex.isLoading || readyTools.isLoading) return null
   const tools: [ToolKey, typeof claude.data][] = [
     ['claude', claude.data],
     ['codex', codex.data],
@@ -54,22 +48,32 @@ export function NowStart() {
   // Any tool the engine can start names the line, Grok Build and OpenCode included (HU 043).
   const ready = readyTools.ready[0]
   const installed = tools.find(([, s]) => s?.installed)
+  // The key's refusal leads to Providers, so only a person who can open Providers gets it.
+  const refusal =
+    installed &&
+    can('sessions:provider:read') &&
+    readyTools.boundKey(installed[0])
+      ? readyTools.refusal(installed[0])
+      : undefined
   // A status this principal cannot read is not "nothing installed": offer the dialog,
   // which says what is missing.
   // Only a system administrator reads the tools' own status (useToolStatus).
   const unknown = !isSuperadmin || (claude.isError && codex.isError)
-  const setup = () => void navigate({ to: '/onboarding' as never } as never)
+  const setup = () =>
+    void navigate({ to: refusal ? '/providers' : '/onboarding' } as never)
 
   const [text, action] = ready
     ? [t('start.ready', { tool: TOOL_NAMES[ready] }), null]
     : unknown
       ? [null, null]
-      : installed
-        ? [
-            t('start.signIn', { tool: TOOL_NAMES[installed[0]] }),
-            t('start.signInAction'),
-          ]
-        : [t('start.install'), t('start.installAction')]
+      : refusal
+        ? [refusal, t('firstHour:start.openProviders')]
+        : installed
+          ? [
+              t('start.signIn', { tool: TOOL_NAMES[installed[0]] }),
+              t('start.signInAction'),
+            ]
+          : [t('start.install'), t('start.installAction')]
 
   return (
     <div

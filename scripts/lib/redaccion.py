@@ -190,8 +190,8 @@ def abre(pet, timeout=30):
                     return super().redirect_request(req, fp, code, msg, headers, destino)
                 raise urllib.error.HTTPError(
                     req.full_url, code,
-                    "redireccion REHUSADA (%s): seguirla mandaria la cabecera Authorization a OTRO "
-                    "origen. Destino: %s" % (msg, Redactor()(destino)),
+                    "redirect REFUSED (%s): following it would send the Authorization header to another "
+                    "origin. Destination: %s" % (msg, Redactor()(destino)),
                     headers, fp)
 
         _ABRIDOR = urllib.request.build_opener(_SoloMismoOrigen)
@@ -220,7 +220,7 @@ def instala_excepthook(redactor, etiqueta="olivares"):
             anterior(tipo, valor, tb)
             return
         texto = "".join(_tb.format_exception(tipo, valor, tb))
-        print(redactor(f"{etiqueta}: ⛔ NO HE PODIDO MIRAR: excepcion no capturada\n{texto}"),
+        print(redactor(f"{etiqueta}: ⛔ COULD NOT CHECK: uncaught exception\n{texto}"),
               file=sys.stderr, end="")
 
     sys.excepthook = _hook

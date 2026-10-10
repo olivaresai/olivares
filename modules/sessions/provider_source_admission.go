@@ -19,7 +19,7 @@ import (
 // binding supplied by a connector or inherited from a previous observation.
 func (m *Module) AdmitSourceRegistration(ctx context.Context, tenant string, reg event.SourceRegistration) (event.SourceRegistration, error) {
 	reg.BindingRef = ""
-	if m.data == nil {
+	if m.Data == nil {
 		return reg, errNoData
 	}
 	if tenant == "" || !reg.Valid() {
@@ -27,13 +27,13 @@ func (m *Module) AdmitSourceRegistration(ctx context.Context, tenant string, reg
 	}
 	attempt := func() error {
 		reg.BindingRef = ""
-		return m.data.Mutate(ctx, model.TenantID(tenant), func(sc store.Scope) error {
+		return m.Data.Mutate(ctx, model.TenantID(tenant), func(sc store.Scope) error {
 			repo, err := sc.Ext(providerBindingKind)
 			if err != nil {
 				return err
 			}
 			rows, _, err := repo.List(ctx, model.Query{Filters: []model.Filter{
-				eq(colPBSourceID, reg.SourceID), model.Filter{Column: colPBSourceRev, Op: model.OpEq, Value: reg.SourceRevision}, eq(colPBEnvRef, reg.EnvironmentRef), eq(colPBSelector, SelectorDedicated),
+				eq(colPBSourceID, reg.SourceID), {Column: colPBSourceRev, Op: model.OpEq, Value: reg.SourceRevision}, eq(colPBEnvRef, reg.EnvironmentRef), eq(colPBSelector, SelectorDedicated),
 			}, Limit: 1})
 			if err != nil || len(rows) == 0 {
 				return err

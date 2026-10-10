@@ -414,7 +414,7 @@ func TestClaim_F5_ReadPathRecordsTheLapse(t *testing.T) {
 	clk.advance(2 * time.Minute)
 	_ = m.Authority(ctx, tenant, sid, "session-A", lease.Fence) // a READ observes it
 
-	if err := m.data.View(ctx, tenant, func(sc store.Scope) error {
+	if err := m.Data.View(ctx, tenant, func(sc store.Scope) error {
 		rec, found, err := findClaim(ctx, sc, sid)
 		if err != nil || !found {
 			t.Fatalf("claim missing: %v", err)

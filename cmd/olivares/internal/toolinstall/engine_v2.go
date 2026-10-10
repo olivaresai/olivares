@@ -290,23 +290,32 @@ func (e *Engine) revalidateV2(ctx context.Context, root *os.Root, p PackageProvi
 // called damaged). Those plans differ only in the channel, the requested version
 // and the pointer; the version, platform, source, package, checksum and layout
 // they bind are the same, and the rest of revalidation still checks the release
-// on disk against its receipt. An adapter that cannot name its pointers keeps the
-// exact digest match.
+// on disk against its receipt. A release planned from another of its official
+// checksum documents is the same release too (an install planned from GitHub's API
+// metadata, now planned from the release's own checksum file). An adapter that
+// cannot name its pointers keeps the exact digest match.
 func sameReleaseOtherRoute(p PackageProviderV2, plan *PlanV2, digest string) bool {
 	routes, ok := p.(releaseRoutes)
 	if !ok {
 		return false
 	}
-	for _, channel := range []string{ChannelExact, ChannelLatest, ChannelStable} {
-		alt := &PlanV2{Schema: plan.Schema, Selection: plan.Selection}
-		alt.Selection.Channel = channel
-		alt.Selection.RequestedVersion = channel
-		if channel == ChannelExact {
-			alt.Selection.RequestedVersion = plan.Selection.Version
-		}
-		alt.Selection.Source.Pointer = URLRef{State: URLStatePresent, URL: routes.routePointer(plan.Selection, channel)}
-		if ComputeDigestV2(alt) == digest {
-			return true
+	checksums := []URLRef{plan.Selection.Source.Checksums}
+	if other, ok := p.(releaseChecksumRoutes); ok {
+		checksums = append(checksums, other.otherChecksums(plan.Selection)...)
+	}
+	for _, sums := range checksums {
+		for _, channel := range []string{ChannelExact, ChannelLatest, ChannelStable} {
+			alt := &PlanV2{Schema: plan.Schema, Selection: plan.Selection}
+			alt.Selection.Channel = channel
+			alt.Selection.RequestedVersion = channel
+			if channel == ChannelExact {
+				alt.Selection.RequestedVersion = plan.Selection.Version
+			}
+			alt.Selection.Source.Checksums = sums
+			alt.Selection.Source.Pointer = URLRef{State: URLStatePresent, URL: routes.routePointer(alt.Selection, channel)}
+			if ComputeDigestV2(alt) == digest {
+				return true
+			}
 		}
 	}
 	return false
@@ -329,7 +338,7 @@ func (s stagingAccess) OpenFile(rel string) (*os.File, error) {
 // root. It is used to pin a session runtime to a managed install. It does not
 // execute anything.
 func (e *Engine) LatestInstalled(ctx context.Context, root, driver string) (Installed, bool, error) {
-	inv, err := e.List(ctx, root)
+	inv, err := e.list(ctx, root, driver)
 	if err != nil {
 		return Installed{}, false, err
 	}

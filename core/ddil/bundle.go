@@ -3,7 +3,7 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 
 // Package ddil assembles and reconciles the air-gap bundle a disconnected Olivares
-// edge deployment carries across a gap by sneakernet (ADR-0024): a single signed
+// edge deployment carries across a gap by sneakernet: a single signed
 // envelope holding the site's policy snapshot, its accumulated audit segments, and
 // evidence exports.
 //
@@ -62,7 +62,7 @@ type Index struct {
 	// PolicyRevision identifies the policy snapshot carried under policy/. It is the
 	// value the importer compares to decide whether the bundle advances local policy.
 	PolicyRevision string `json:"policy_revision,omitempty"`
-	// PolicyMaxStaleness is the ratified offline-trust bound (ADR-0024 Q1): after this
+	// PolicyMaxStaleness is the ratified offline-trust bound: after this
 	// duration without a refresh, positive grants expire deny-closed while deny rules
 	// stay enforced. It travels with the policy so the edge honors the centre's
 	// chosen bound. Zero means "unset" (the deployment default applies).
@@ -201,7 +201,7 @@ type Imported struct {
 	// the only clock in the bundle an importer may trust: policy adoption stamps the
 	// tenant's freshness window from it (never from the importer's wall clock), so a
 	// courier delay or a replayed old bundle can never extend the offline-trust
-	// window beyond what the exporting center actually signed (ADR-0024 Q1).
+	// window beyond what the exporting center actually signed.
 	CreatedAt time.Time
 }
 

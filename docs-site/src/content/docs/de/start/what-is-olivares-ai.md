@@ -70,7 +70,7 @@ Modus `unknown` — das Produkt erfindet niemals eine Klassifizierung.
 Die Zugriffskarte ist eine Fähigkeit unter vielen. Das Produkt ist eine **modulare
 Plattform** (im Geiste von Grafana oder Backstage): eine Engine plus Module plus
 Connectors, so entworfen, dass sich jedes Modul anbinden lässt, ohne den Rest neu
-zu architektieren. Es liefert **31 Module** — Inventar und Live-Sessions, die
+zu architektieren. Es liefert **32 Module** — Inventar und Live-Sessions, die
 R/RW-Karte, Agenten-Orchestrierung (A2A, in Entwicklung), MCP- und Skill-Management, Identität und
 nicht-menschliche Identität, Deployment, Wissen und Kontext, Security und
 Guardrails, Modell- und Provider-Management, Cost/FinOps, Evals und eine
@@ -78,10 +78,12 @@ Test-Sandbox, Red-Teaming, Compliance und Belege, einen internen Katalog,
 Output-Integrationen und SIEM-Push, Voice/Realtime und Health/SLA — plus
 Plattform-Fähigkeiten, die nicht zu den 30 gezählt werden (seine eigene API und
 Manage-as-Code, Mandantenfähigkeit, Executive-Dashboards) — über
-**159 Integrationen** hinweg (eine Zahl, die von `scripts/check-public-counts.sh` aus dem
+**136 Integrationen** hinweg (eine Zahl, die von `scripts/check-public-counts.sh` aus dem
 Code gemessen wird). Einige wenige Fähigkeiten sind pre-v1 oder
 deny-closed-Nahtstellen, bis sie bereitgestellt sind; die Dokumentation ist
 explizit darüber, welche.
+
+Community behält lokale Observability, gespeicherte Einstellungen und den Backup-Export. SIEM/ITSM-Versand, externe Telemetrieübertragung und Posture-Export gehören zur Business-Basisedition.
 
 Siehe den [Modul-Katalog](/de/reference/modules/overview/) für die vollständige Liste
 und die [Architektur-Übersicht](/de/explanation/architecture/overview/) dazu, wie die
@@ -89,12 +91,20 @@ Engine und die Module zusammenpassen.
 
 ## Wie es beobachtet: read-first, minimal-data
 
-Olivares AI ist **read-first**: die Engine beobachtet über Logs, OpenTelemetry und
-eBPF; sie sitzt **nicht** im Datenpfad des Agenten, sodass ein Ausfall des
-Collectors niemals Ihren Produktiv-Traffic unterbricht. Und sie ist **minimal-data
-by design**: der Zugriffsgraph speichert **Relationen** — Ursprung → Ressource,
-read/write, Quelle, Confidence, Zeitstempel — **niemals Payloads, SQL-Bodies,
-Secrets oder PII**. Was nicht gespeichert wird, kann nicht leaken.
+Die Access Map beobachtet Logs, OpenTelemetry und eBPF außerhalb des Datenpfads.
+Ein Ausfall eines Beobachtungs-Collectors erzeugt eine Sichtbarkeitslücke, ohne
+den Agentenverkehr zu sperren. Der Zugriffsgraph speichert Relationen — Ursprung
+→ Ressource, read/write, Quelle, Konfidenz, Zeitstempel — niemals Payloads,
+SQL-Bodies, Secrets oder PII.
+
+Durchsetzungspunkte arbeiten inline und deny-closed. Verwaltete Claude-Code-Sitzungen
+installieren Tool-Aufruf-Hooks, die den Policy Enforcement Point (PEP) der Engine
+aufrufen. Die Engine stellt diesen Hook-PEP standardmäßig bereit. Ist er während
+eines Engine-Ausfalls oder Neustarts nicht erreichbar, wird jeder geregelte
+Tool-Aufruf verweigert. Planen Sie die Engine-Verfügbarkeit entsprechend.
+Der Inline-Inferenz-Proxy, das MCP-tools/call-Gate und das A2A-Delegations-Gate
+setzen Regeln für den durch sie geleiteten Verkehr durch; Modellaufrufe laufen
+standardmäßig nicht durch den Inferenz-Proxy.
 
 Das ist auch der Grund, warum es self-hostbar und air-gap-freundlich ist: Es gibt keine
 verpflichtende Telemetrie und standardmäßig keinen Egress der Control Plane. Ihren

@@ -7,6 +7,9 @@ description: >-
   limites honnêtes de chacun.
 ---
 
+> L’API REST reste disponible dans Community. Le fournisseur Terraform est un artefact de déploiement Business ; son code et ses paquets sont distribués via le canal Business.
+
+
 Le module XIX n'est pas une fonctionnalité greffée sur le moteur — il **est** la surface du moteur.
 Tout autre module atteint le monde extérieur via la même API first-party, et
 l'interface web est une couche de présentation sur ce contrat exact, pas un contrat parallèle. Cette page

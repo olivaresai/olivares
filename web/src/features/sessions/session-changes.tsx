@@ -13,6 +13,8 @@ import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
 import type { RunDTO } from '@/features/agentops/types'
+import { HeadDiff } from '@/features/shared/head-diff'
+import { headUnavailable } from '@/features/shared/head-unavailable'
 import { RelTimeLabel } from '@/features/shared'
 import { useAuth } from '@/lib/auth/context'
 import { formatBytes } from '@/lib/format'
@@ -40,6 +42,26 @@ export function SessionChanges({ run }: { run: RunDTO }) {
     queryFn: ({ signal }) =>
       agentOpsApi.changedFile(run.run_ref, open!, { signal }),
     enabled: open !== null,
+  })
+  // What git HEAD holds for the open file. A 404 (no repository, a file the agent
+  // created) is an answer: the file shows without a Changes view. Any other failure is
+  // said so under the file. Nothing is asked for a binary or cut-off file, which cannot
+  // be compared, and a focus change does not ask again.
+  const head = useQuery({
+    queryKey: [
+      ...agentOpsKeys.runChanges(activeTenant, run.run_ref),
+      'file',
+      open,
+      'head',
+    ],
+    queryFn: ({ signal }) =>
+      agentOpsApi.changedFile(run.run_ref, open!, { signal, rev: 'HEAD' }),
+    enabled:
+      open !== null &&
+      file.data !== undefined &&
+      !file.data.binary &&
+      !file.data.truncated,
+    refetchOnWindowFocus: false,
   })
   const data = changes.data
   // The folder Olivares created for the run is named by the run's id: no name to show.
@@ -82,12 +104,25 @@ export function SessionChanges({ run }: { run: RunDTO }) {
             </p>
           ) : (
             <>
-              <pre
-                data-testid="changes-file"
-                className="max-h-96 overflow-auto whitespace-pre-wrap break-all rounded-md border border-border bg-muted p-2 font-mono text-caption text-foreground"
+              <HeadDiff
+                unavailable={headUnavailable(head.error)}
+                committed={
+                  head.data &&
+                  !head.data.binary &&
+                  !head.data.truncated &&
+                  !file.data.truncated
+                    ? head.data.text
+                    : undefined
+                }
+                current={file.data.text}
               >
-                {file.data.text}
-              </pre>
+                <pre
+                  data-testid="changes-file"
+                  className="max-h-96 overflow-auto whitespace-pre-wrap break-all rounded-md border border-border bg-muted p-2 font-mono text-caption text-foreground"
+                >
+                  {file.data.text}
+                </pre>
+              </HeadDiff>
               {file.data.truncated ? (
                 <p className="text-caption text-muted-foreground">
                   {t('changes.fileTruncated')}

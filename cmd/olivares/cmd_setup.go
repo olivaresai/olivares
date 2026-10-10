@@ -6,6 +6,7 @@ package main
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"net/url"
@@ -368,6 +369,9 @@ func askPostgres(cmd *cobra.Command, p *prompter, plan *installPlan, secretsDir 
 		if wantAdmin {
 			spec.Admin = &store.PgRole{Name: adminRole, Password: adminPw}
 		}
+		if err := checkCMEKInstall(""); err != nil {
+			return err
+		}
 		res, err := coreengine.ProvisionPostgres(cmd.Context(), superDSN, spec, true)
 		if err != nil {
 			return fmt.Errorf("db init during setup: %w", err)
@@ -419,15 +423,34 @@ func splitInitHint(split bool, ownerRole string, admin bool, adminRole string) s
 
 // writePlan writes the secret files (0600) and the env file, then prints next steps.
 func writePlan(out io.Writer, plan installPlan, envPath string, force bool) error {
-	// Secret files first, in their own 0700 directory.
+	// Refuse before writing anything, so a refusal never leaves secret files behind.
 	for _, s := range plan.Secrets {
-		if err := os.MkdirAll(filepath.Dir(s.Path), 0o700); err != nil {
+		if err := refuseExisting(s.Path, force); err != nil {
+			return err
+		}
+	}
+	envForce := force
+	if plan.Profile != profileK8s { // k8s writes no env file
+		envForce = envFileForce(envPath, force)
+		if err := refuseExisting(envPath, envForce); err != nil {
+			return err
+		}
+	}
+	// Root owns the directory entries; the service group can traverse it.
+	for _, s := range plan.Secrets {
+		dir := filepath.Dir(s.Path)
+		if err := os.MkdirAll(dir, 0o750); err != nil {
 			return fmt.Errorf("create secrets dir: %w", err)
 		}
+		// MkdirAll keeps existing permissions, including an older setup's 0700.
+		if err := os.Chmod(dir, 0o750); err != nil {
+			return fmt.Errorf("set secrets dir permissions: %w", err)
+		}
+		chownToServiceUser(out, dir, false)
 		if err := writeFileGuarded(s.Path, []byte(s.Content+"\n"), 0o600, force); err != nil {
 			return err
 		}
-		chownToServiceUser(out, s.Path)
+		chownToServiceUser(out, s.Path, true)
 	}
 	if plan.Profile == profileK8s {
 		// k8s output is an artifact to drop into Helm values, not an on-disk env file.
@@ -436,10 +459,10 @@ func writePlan(out io.Writer, plan installPlan, envPath string, force bool) erro
 		fmt.Fprintln(out, "\nApply it via the Helm chart (deploy/helm) and mount the DSN(s) from Secrets.")
 		return nil
 	}
-	if err := writeFileGuarded(envPath, []byte(plan.render()), 0o640, force); err != nil {
+	if err := writeFileGuarded(envPath, []byte(plan.render()), 0o640, envForce); err != nil {
 		return err
 	}
-	chownToServiceUser(out, envPath)
+	chownToServiceUser(out, envPath, false)
 
 	fmt.Fprintf(out, "\nWrote %s (profile %s).\n", envPath, plan.Profile)
 	if len(plan.Secrets) > 0 {
@@ -450,22 +473,43 @@ func writePlan(out io.Writer, plan installPlan, envPath string, force bool) erro
 	return nil
 }
 
-// chownToServiceUser best-effort gives a file to the packaged `olivares` service
-// user/group so the engine (which drops to that user) can read it. It is a no-op
-// with a note when the user does not exist (a non-packaged host) or we lack
-// permission — never fatal.
-func chownToServiceUser(out io.Writer, path string) {
-	u, uerr := user.Lookup("olivares")
+// setupServiceUser and setupChown are the account lookup and chown setup uses;
+// tests replace them to stand in for a service account the test process is not.
+var (
+	setupServiceUser = func() (*user.User, error) { return user.Lookup("olivares") }
+	setupChown       = os.Chown
+)
+
+// chownToServiceUser best-effort makes a path accessible to the packaged `olivares`
+// service account. A 0600 secret the engine reads itself goes to that user and
+// group (serviceOwns). The env file goes to root with group olivares: systemd
+// reads EnvironmentFile as root, and the service account must not be able to
+// rewrite the flags its own unit passes it (root:olivares 0640, as the package
+// postinstall, install-service.sh and `doctor --mode system` expect). The secrets
+// directory also stays root-owned with group olivares, permitting traversal
+// without allowing the account to replace its entries. This is a no-op with a
+// note when the user does not exist (a non-packaged host) or we
+// lack permission — never fatal.
+func chownToServiceUser(out io.Writer, path string, serviceOwns bool) {
+	u, uerr := setupServiceUser()
 	if uerr != nil {
 		// Not a packaged install (no service user). Don't fail, but don't stay silent:
 		// a 0600 secret owned by the current user may be unreadable by whatever account
 		// actually runs the engine.
-		fmt.Fprintf(out, "note: no `olivares` service user on this host; ensure the account that runs the engine can read %s (it is mode 0600/0640, owned by the current user).\n", path)
+		fmt.Fprintf(out, "note: no `olivares` service user on this host; ensure the account that runs the engine can access %s (owned by the current user).\n", path)
 		return
 	}
-	uid, _ := strconv.Atoi(u.Uid)
-	gid, _ := strconv.Atoi(u.Gid)
-	if err := os.Chown(path, uid, gid); err != nil {
-		fmt.Fprintf(out, "note: could not chown %s to the olivares user (%v); ensure the service user can read it.\n", path, err)
+	owner := "0"
+	if serviceOwns {
+		owner = u.Uid
+	}
+	uid, uerr := strconv.Atoi(owner)
+	gid, gerr := strconv.Atoi(u.Gid)
+	if err := errors.Join(uerr, gerr); err != nil {
+		fmt.Fprintf(out, "note: the `olivares` account has a non-numeric uid/gid (%v); %s was not chowned.\n", err, path)
+		return
+	}
+	if err := setupChown(path, uid, gid); err != nil {
+		fmt.Fprintf(out, "note: could not chown %s to uid %d gid %d (%v); rerun with sudo, or give it that owner yourself.\n", path, uid, gid, err)
 	}
 }

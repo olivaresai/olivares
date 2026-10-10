@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
@@ -65,13 +66,37 @@ exit 2
 `
 
 // stubGrok prints what Grok Build's device login prints (strings of the 1.0.46 binary:
-// "Open this URL in your browser to approve:", "Code: ", "Waiting for approval"),
+// "Open this URL in your browser to approve:", "Code: ", "Waiting for approval…" with U+2026),
 // with a code that has no dash, and stores its login where Grok keeps it.
 const stubGrok = `#!/bin/sh
 case "$1 $2" in
 "login --device-auth")
-  printf 'Sign in to Grok\nOpen this URL in your browser to approve:\n  https://accounts.x.ai/device\nCode: K7M2QX9P\nWaiting for approval...\n'
+  printf 'Sign in to Grok\nOpen this URL in your browser to approve:\n  https://accounts.x.ai/device\nCode: K7M2QX9P\nWaiting for approval…\n'
   sleep 1; mkdir -p "$GROK_HOME"; echo '{}' > "$GROK_HOME/auth.json"; exit 0;;
+esac
+exit 2
+`
+
+// OpenCode v1.18.30 selects its built-in ChatGPT device method by label,
+// prints "Go to:" + "Enter code:", and auth list exposes provider + type only.
+const stubOpenCode = `#!/bin/sh
+[ "$PWD" = "$HOME" ] || exit 3
+[ "$OPENCODE_CONFIG_DIR" = "$HOME/.config/opencode" ] || exit 4
+[ "$XDG_DATA_HOME" = "$HOME/.local/share" ] || exit 5
+[ "$OPENCODE_DISABLE_AUTOUPDATE" = "1" ] || exit 6
+case "$1 $2" in
+"auth login")
+  [ "$3 $4 $5" = "--provider openai --method" ] || exit 7
+  [ "$6" = "ChatGPT Pro/Plus (headless)" ] || exit 8
+  printf '┌  Add credential\n│\n●  Go to: https://auth.openai.com/codex/device\n●  Enter code: ABCD-12345\n'
+  sleep 1
+  mkdir -p "$XDG_DATA_HOME/opencode"
+  echo '{"openai":{"type":"oauth","refresh":"fixture","access":"fixture","expires":0}}' > "$XDG_DATA_HOME/opencode/auth.json"
+  echo 'Login successful'; exit 0;;
+"auth list")
+  printf '┌  Credentials ~/.local/share/opencode/auth.json\n│\n'
+  if [ -f "$XDG_DATA_HOME/opencode/auth.json" ]; then printf '●  OpenAI oauth\n│\n└  1 credentials\n'; else printf '└  0 credentials\n'; fi
+  exit 0;;
 esac
 exit 2
 `
@@ -82,7 +107,7 @@ exit 2
 func signedInDecoy(t *testing.T) string {
 	t.Helper()
 	engineHome := t.TempDir()
-	for _, f := range []string{".claude/.credentials.json", ".codex/auth.json", ".grok/auth.json"} {
+	for _, f := range []string{".claude/.credentials.json", ".codex/auth.json", ".grok/auth.json", ".local/share/opencode/auth.json"} {
 		p := filepath.Join(engineHome, f)
 		if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
 			t.Fatal(err)
@@ -95,13 +120,15 @@ func signedInDecoy(t *testing.T) string {
 	t.Setenv("CLAUDE_CONFIG_DIR", filepath.Join(engineHome, ".claude"))
 	t.Setenv("CODEX_HOME", filepath.Join(engineHome, ".codex"))
 	t.Setenv("GROK_HOME", filepath.Join(engineHome, ".grok"))
+	t.Setenv("XDG_DATA_HOME", filepath.Join(engineHome, ".local", "share"))
+	t.Setenv("OPENCODE_CONFIG_DIR", filepath.Join(engineHome, ".config", "opencode"))
 	return engineHome
 }
 
 // testLoginHome is the composition's layout for the tests: <root>/<tenant>/<driver>.
 func testLoginHome(root string) LoginHomeFunc {
 	return func(_ context.Context, tenant model.TenantID, driver, accountRef string) (string, string, error) {
-		rel, ok := map[string]string{"claude": ".claude", "codex": ".codex", "grok": ".grok"}[driver]
+		rel, ok := map[string]string{"claude": ".claude", "codex": ".codex", "grok": ".grok", "opencode": ".config/opencode", "gemini-cli": ".gemini"}[driver]
 		if !ok || tenant.IsZero() {
 			return "", "", errors.New("no login home")
 		}
@@ -122,7 +149,7 @@ func newSignInServer(t *testing.T, configure ...func(m *Module, bin string)) (ca
 	signedInDecoy(t)
 	loginRoot := t.TempDir()
 	bin := toolinstalltest.ExecCapableDir(t)
-	for name, script := range map[string]string{"claude": stubClaude, "codex": stubCodex, "grok": stubGrok} {
+	for name, script := range map[string]string{"claude": stubClaude, "codex": stubCodex, "grok": stubGrok, "opencode": stubOpenCode} {
 		if err := os.WriteFile(filepath.Join(bin, name), []byte(script), 0o755); err != nil {
 			t.Fatal(err)
 		}
@@ -238,7 +265,10 @@ func TestClaudeSignInRefusesAWrongCodeWithoutStoringALogin(t *testing.T) {
 	_, s := call("POST", "/v1/m/agenttools/sign-in", map[string]string{"driver": "claude"})
 	id := s["id"].(string)
 	call("POST", "/v1/m/agenttools/sign-in/"+id+"/code", map[string]string{"code": "wrong"})
-	pollSignIn(t, call, id, "failed")
+	// The tool's refusal is the reason, though it also sends the sign-in back to needs_code.
+	if got := pollSignIn(t, call, id, "failed")["message"]; got != "Claude Code stopped (exit status 1): Invalid code. Fix that, then start the sign-in again." {
+		t.Fatalf("message = %q", got)
+	}
 	if _, err := os.Stat(filepath.Join(home, "claude", ".claude", ".credentials.json")); err == nil {
 		t.Fatal("a refused code left a login behind")
 	}
@@ -331,10 +361,11 @@ func TestSignInBodiesAreStrictJSON(t *testing.T) {
 }
 
 func TestSignInRefusesAToolThatIsNotInstalled(t *testing.T) {
-	call, _ := newSignInServer(t)
-	// Grok Build signs in since HU-R15; OpenCode has no login of its own to relay.
-	if code, s := call("POST", "/v1/m/agenttools/sign-in", map[string]string{"driver": "opencode"}); code != 400 {
-		t.Fatalf("opencode = %d %v, want 400 (claude, codex or grok)", code, s)
+	call, _ := newSignInServer(t, func(m *Module, _ string) {
+		m.SetProgramResolver(func(string) string { return "" })
+	})
+	if code, s := call("POST", "/v1/m/agenttools/sign-in", map[string]string{"driver": "opencode"}); code != 409 {
+		t.Fatalf("opencode = %d %v, want 409 (install first)", code, s)
 	}
 }
 
@@ -387,7 +418,7 @@ func TestAFreshInstallIsNotSignedInWhateverTheEngineUserHas(t *testing.T) {
 	call, _ := newSignInServer(t)
 	engineHome := os.Getenv("HOME")
 	before, _ := os.ReadDir(filepath.Join(engineHome, ".claude"))
-	for _, driver := range []string{"claude", "codex", "grok"} {
+	for _, driver := range []string{"claude", "codex", "grok", "opencode"} {
 		if code, st := call("GET", "/v1/m/agenttools/sign-in?driver="+driver, nil); code != 200 || st["installed"] != true || st["signed_in"] != false {
 			t.Fatalf("%s on a fresh install = %d %v, want installed and NOT signed in", driver, code, st)
 		}
@@ -482,4 +513,159 @@ func TestAccountSignInStatusAndCompletionStayWithTheSelectedHome(t *testing.T) {
 		t.Fatal(err)
 	}
 	call("DELETE", "/v1/m/agenttools/sign-in/"+second, nil)
+}
+
+func TestOpenCodeSignInShowsTheDeviceCodeAndUsesItsNativeHome(t *testing.T) {
+	call, home := newSignInServer(t)
+	statusPath := "/v1/m/agenttools/sign-in?driver=opencode"
+	if code, st := call("GET", statusPath, nil); code != 200 || st["installed"] != true || st["signed_in"] != false {
+		t.Fatalf("fresh status = %d %v, want installed and not signed in", code, st)
+	}
+	code, flow := call("POST", "/v1/m/agenttools/sign-in", map[string]string{"driver": "opencode", "account_ref": "ppf_opencode"})
+	if code != 202 || flow["state"] != "waiting" || flow["url"] != "https://auth.openai.com/codex/device" || flow["user_code"] != "ABCD-12345" {
+		t.Fatalf("start = %d %v, want OpenCode's device link and code", code, flow)
+	}
+	pollSignIn(t, call, flow["id"].(string), "signed_in")
+	if _, err := os.Stat(filepath.Join(home, "opencode", "ppf_opencode", ".local", "share", "opencode", "auth.json")); err != nil {
+		t.Fatalf("OpenCode did not store its own login: %v", err)
+	}
+	if code, st := call("GET", statusPath+"&account_ref=ppf_opencode", nil); code != 200 || st["signed_in"] != true || st["method"] != "ChatGPT" {
+		t.Fatalf("selected account status = %d %v", code, st)
+	}
+	if code, st := call("GET", statusPath, nil); code != 200 || st["signed_in"] != false {
+		t.Fatalf("named account signed in the default home: %d %v", code, st)
+	}
+	code, other := call("POST", "/v1/system/orgs", map[string]string{"name": "OpenCode other", "slug": "opencode-other"})
+	if code != 201 {
+		t.Fatalf("organization = %d %v", code, other)
+	}
+	if code, st := call("GET", statusPath+"&tenant_id="+other["tenant_id"].(string), nil); code != 200 || st["signed_in"] != false {
+		t.Fatalf("another organization used this login: %d %v", code, st)
+	}
+	for _, key := range []string{"access", "refresh", "token", "key"} {
+		if _, ok := flow[key]; ok {
+			t.Fatalf("sign-in returned credential field %q", key)
+		}
+	}
+}
+
+// A native status read must not leave a remote catalog refresh that
+// delays the following login. Login itself retains the native catalog settings.
+func TestOpenCodeStatusSkipsCatalogFetchWithoutChangingNativeLogin(t *testing.T) {
+	call, _ := newSignInServer(t, func(_ *Module, bin string) {
+		script := strings.Replace(stubOpenCode, "\"auth login\")\n",
+			"\"auth login\")\n  [ \"${OPENCODE_DISABLE_MODELS_FETCH+x}\" != \"x\" ] || exit 9\n", 1)
+		script = strings.Replace(script, "\"auth list\")\n",
+			"\"auth list\")\n  if [ \"$OPENCODE_DISABLE_MODELS_FETCH\" != \"1\" ]; then echo 'OpenAI api'; exit 0; fi\n", 1)
+		if err := os.WriteFile(filepath.Join(bin, "opencode"), []byte(script), 0755); err != nil {
+			t.Fatal(err)
+		}
+	})
+	const statusPath = "/v1/m/agenttools/sign-in?driver=opencode"
+	if code, status := call("GET", statusPath, nil); code != 200 || status["signed_in"] != false {
+		t.Fatalf("fresh native status = %d %v", code, status)
+	}
+	code, flow := call("POST", "/v1/m/agenttools/sign-in", map[string]string{"driver": "opencode"})
+	if code != 202 || flow["state"] != "waiting" || flow["user_code"] != "ABCD-12345" {
+		t.Fatalf("unchanged native login = %d %v", code, flow)
+	}
+	pollSignIn(t, call, flow["id"].(string), "signed_in")
+	if code, status := call("GET", statusPath, nil); code != 200 || status["signed_in"] != true {
+		t.Fatalf("status child did not skip remote catalog fetch: %d %v", code, status)
+	}
+}
+
+// Native auth list can succeed with zero or unrelated credentials. Neither is a
+// ChatGPT login, and a failed status command must not reuse positive output.
+func TestOpenCodeStatusRequiresItsOwnOAuthCredential(t *testing.T) {
+	for _, tc := range []struct {
+		name, output string
+		exit         int
+	}{
+		{"empty", "└  0 credentials", 0},
+		{"api-key", "●  OpenAI api\n└  1 credentials", 0},
+		{"other-provider", "●  Anthropic oauth\n└  1 credentials", 0},
+		{"failed-command", "●  OpenAI oauth\n└  1 credentials", 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			call, home := newSignInServer(t, func(_ *Module, bin string) {
+				script := "#!/bin/sh\nprintf '%s\\n' '" + tc.output + "'\nexit " + strconv.Itoa(tc.exit) + "\n"
+				if err := os.WriteFile(filepath.Join(bin, "opencode"), []byte(script), 0755); err != nil {
+					t.Fatal(err)
+				}
+			})
+			// Even an auth.json in the correct native home is not proof by itself.
+			path := filepath.Join(home, "opencode", ".local", "share", "opencode", "auth.json")
+			if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(path, []byte("{}"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			code, st := call("GET", "/v1/m/agenttools/sign-in?driver=opencode", nil)
+			if tc.exit != 0 {
+				if code != 503 {
+					t.Fatalf("failed native status = %d %v, want unavailable", code, st)
+				}
+			} else if code != 200 || st["signed_in"] != false {
+				t.Fatalf("status = %d %v, want not signed in", code, st)
+			}
+		})
+	}
+}
+
+// MODELS CONSUMERS.md: a sign-in the tool confirmed tells the engine, so the models
+// module refreshes that tenant's model lists; a refused sign-in tells it nothing.
+func TestAConfirmedSignInWakesModelAvailabilityForItsTenant(t *testing.T) {
+	var mu sync.Mutex
+	var woke []model.TenantID
+	wakes := func() []model.TenantID { mu.Lock(); defer mu.Unlock(); return append([]model.TenantID(nil), woke...) }
+	call, _ := newSignInServer(t, func(m *Module, _ string) {
+		m.OnSignedIn(func(tenant model.TenantID) { mu.Lock(); woke = append(woke, tenant); mu.Unlock() })
+	})
+	_, s := call("POST", "/v1/m/agenttools/sign-in", map[string]string{"driver": "codex"})
+	pollSignIn(t, call, s["id"].(string), "signed_in")
+	deadline := time.Now().Add(5 * time.Second)
+	for len(wakes()) == 0 && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if got := wakes(); len(got) != 1 || got[0].IsZero() {
+		t.Fatalf("wakes after a confirmed sign-in = %v, want one for the tenant", got)
+	}
+	_, s = call("POST", "/v1/m/agenttools/sign-in", map[string]string{"driver": "claude"})
+	id := s["id"].(string)
+	call("POST", "/v1/m/agenttools/sign-in/"+id+"/code", map[string]string{"code": "wrong"})
+	pollSignIn(t, call, id, "failed")
+	time.Sleep(100 * time.Millisecond)
+	if got := wakes(); len(got) != 1 {
+		t.Fatalf("wakes after a refused sign-in = %v, want still one", got)
+	}
+}
+
+func TestProfileLoginStatusReadsOnlyTheSelectedHome(t *testing.T) {
+	var m *Module
+	call, home := newSignInServer(t, func(module *Module, _ string) { m = module })
+	tenant := model.TenantID(filepath.Base(home))
+	const selected = "ppf_selected"
+	check := func(tenant model.TenantID, ref string, want bool) {
+		t.Helper()
+		installed, signedIn, err := m.LoginStatusForProfile(t.Context(), tenant, "opencode", ref)
+		if err != nil || !installed || signedIn != want {
+			t.Fatalf("selected native status = installed:%v signed-in:%v err:%v", installed, signedIn, err)
+		}
+	}
+	check(tenant, selected, false)
+	code, flow := call("POST", "/v1/m/agenttools/sign-in", map[string]string{"driver": "opencode", "account_ref": selected})
+	if code != 202 {
+		t.Fatalf("native sign-in start = %d", code)
+	}
+	pollSignIn(t, call, flow["id"].(string), "signed_in")
+	check(tenant, selected, true)
+	check(tenant, "", false)
+	check(tenant, "ppf_other", false)
+	check(model.TenantID(model.NewID()), selected, false)
+	if err := os.Remove(filepath.Join(home, "opencode", selected, ".local", "share", "opencode", "auth.json")); err != nil {
+		t.Fatal(err)
+	}
+	check(tenant, selected, false)
 }

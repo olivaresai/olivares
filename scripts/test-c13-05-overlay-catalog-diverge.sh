@@ -40,7 +40,7 @@ import json, sys
 from pathlib import Path
 sold = json.load(open(sys.argv[1], encoding="utf-8"))
 keys = sorted({e["slug"] for e in sold["entries"]})
-assert keys, "control: el mapa vendido no trajo slugs"
+assert keys, "control: the sold map contained no slugs"
 body = "package activation\n\nvar Catalog = []struct{ Key string }{\n" + "".join(
     '\t{Key: "%s"},\n' % k for k in keys
 ) + "}\n"
@@ -76,7 +76,7 @@ python3 - "$TMP/ent/enterprise/activation/catalog.go" <<'PY'
 import sys
 from pathlib import Path
 p = Path(sys.argv[1]); t = p.read_text()
-assert '{Key: "iso42001"},' in t, "control de mutacion: iso42001 no estaba en el catalogo"
+assert '{Key: "iso42001"},' in t, "mutation control: iso42001 was absent from the catalog"
 p.write_text(t.replace('\t{Key: "iso42001"},\n', ""))
 PY
 run
@@ -94,7 +94,7 @@ python3 - "$TMP/ent/enterprise/activation/catalog.go" <<'PY'
 import sys
 from pathlib import Path
 p = Path(sys.argv[1]); t = p.read_text()
-assert 'ghost-module' not in t, "control de mutacion: ghost-module ya estaba"
+assert 'ghost-module' not in t, "mutation control: ghost-module was already present"
 p.write_text(t.replace("}\n", '\t{Key: "ghost-module"},\n}\n'))
 PY
 run
@@ -124,7 +124,7 @@ import json, sys
 from pathlib import Path
 p = Path(sys.argv[1])
 d = json.loads(p.read_text())
-assert d["overlay_matches_sold"] is True, "control de mutacion: ya estaba en false"
+assert d["overlay_matches_sold"] is True, "mutation control: already false"
 d["overlay_matches_sold"] = False
 p.write_text(json.dumps(d))
 PY
@@ -143,7 +143,7 @@ import sys
 from pathlib import Path
 p = Path(sys.argv[1]); t = p.read_text()
 anchor = "**El lado que iba por detrás era el hub, no el overlay.**"
-assert anchor in t, "control de mutacion: la frase no estaba"
+assert anchor in t, "mutation control: the phrase was absent"
 p.write_text(t.replace(anchor, ""))
 PY
 run

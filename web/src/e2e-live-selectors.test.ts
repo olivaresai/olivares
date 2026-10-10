@@ -9,8 +9,10 @@ import nav from '@/lib/i18n/locales/en/nav.json'
 
 const E2E = join(__dirname, '..', 'e2e')
 
+/** A spec with its whitespace collapsed: the formatter wraps a long selector across lines, and a
+ * selector is the same selector however it is wrapped. */
 function spec(name: string): string {
-  return readFileSync(join(E2E, name), 'utf8')
+  return readFileSync(join(E2E, name), 'utf8').replace(/\s+/g, ' ')
 }
 
 /** The nav catalogue read the other way round: the address a name is reached at. */
@@ -65,10 +67,10 @@ describe('live end-to-end specs name what the console paints', () => {
     expect(src.indexOf(`goto('/agentops')`)).toBeLessThan(
       src.indexOf(`getByRole('link', { name: '${nav.items.agentops}'`),
     )
-    expect(src).toContain(
-      `getByRole('heading', { name: '${sessions.operateTitle}'`,
-    )
-    expect(src).not.toContain(`getByRole('link', { name: 'Claude Code'`)
+    // Whichever door opened it, the page is titled as navigation names it.
+    expect(nav.items.agentops).toBe(sessions.title)
+    expect(src).toContain(`getByRole('heading', { name: '${sessions.title}'`)
+    expect(src).not.toContain(`name: 'Claude Code'`)
   })
 
   it('signed-in waits use the overview link and the Playwright base URL', () => {
@@ -96,6 +98,33 @@ describe('live end-to-end specs name what the console paints', () => {
       waits.push(...waitsASignInCannotPaint(file, spec(file)))
     }
     expect(waits).toEqual([])
+  })
+
+  it('Deploy first boot waits for the shell before its page helper and help link', () => {
+    const src = spec('deploy-executor.spec.ts')
+    const after = src.slice(src.indexOf('name: /^sign in$/i'))
+    const link = /getByRole\(\s*'link',\s*\{([^}]*)\}/.exec(after)
+    expect(link?.[1].trim()).toBe(`name: '${nav.items.home}', exact: true`)
+    expect(link?.index).toBeLessThan(after.indexOf('async function openDeploy'))
+  })
+
+  it.each([
+    ['a closed leaf', '', `name: '${nav.items.inventory}', exact: true`],
+    ['an inexact overview', '', `name: '${nav.items.home}'`],
+    [
+      'an arbitrary help link',
+      "await page.goto('/deploy')",
+      "name: 'How to connect an executor'",
+    ],
+  ])('rejects %s as the first sign-in wait', (_name, navigation, body) => {
+    const src = [
+      "await page.getByRole('button', { name: /^sign in$/i }).click()",
+      navigation,
+      `await expect(page.getByRole('link', { ${body} })).toBeVisible()`,
+    ].join(' ')
+    expect(waitsASignInCannotPaint('unsafe.spec.ts', src)).toEqual([
+      `unsafe.spec.ts: ${body}`,
+    ])
   })
 
   // The exemption is a match, not a hole: going somewhere does not license waiting for

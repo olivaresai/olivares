@@ -15,8 +15,10 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { DataTable, type TableColumn } from '@/components/data/data-table'
 import { usePrivilegedMutation } from '@/lib/hooks/use-privileged-mutation'
 import { formatDateTime } from '@/lib/format'
-import { useSessionStore } from '@/stores/session'
-import { useTenantStore } from '@/stores/tenant'
+import { toast } from '@/components/ui/toaster'
+import { apiFetchRaw } from '@/lib/api/client'
+import { downloadBlob } from '@/lib/api/download'
+import { ApiError } from '@/lib/api/errors'
 import { drApi, drKeys } from './api'
 import { BackupInspectSheet } from './backup-inspect-sheet'
 import type { BackupListItem } from './types'
@@ -192,34 +194,21 @@ function RowActions({
   onDelete: () => void
 }) {
   const { t } = useTranslation('backups')
-  const handleDownload = () => {
-    // Build an authenticated download by creating a temporary anchor. The route
-    // requires auth headers so we fetch the blob with credentials and save it.
-    const url = drApi.downloadUrl(backup.id)
-    const token = useSessionStore.getState().csrfToken
-    const tenant = useTenantStore.getState().activeTenant
-    const headers = new Headers()
-    if (token) headers.set('X-CSRF-Token', token)
-    if (tenant) headers.set('X-Olivares-Tenant', tenant)
-
-    void fetch(url, { method: 'GET', headers, credentials: 'same-origin' })
-      .then((res) => {
-        if (!res.ok)
-          throw new Error(
-            t('list.actions.downloadFailed', { status: res.status }),
-          )
-        return res.blob()
+  const handleDownload = async () => {
+    // The route needs the session, so the bytes come through the shared client and are
+    // saved under the backup's own name; a failure is said, never dropped.
+    try {
+      const res = await apiFetchRaw(drApi.downloadUrl(backup.id), {
+        headers: { Accept: '*/*' },
       })
-      .then((blob) => {
-        const href = URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = href
-        a.download = backup.filename
-        document.body.appendChild(a)
-        a.click()
-        a.remove()
-        URL.revokeObjectURL(href)
-      })
+      downloadBlob(await res.blob(), backup.filename)
+    } catch (err) {
+      toast.error(
+        t('list.actions.downloadFailed', {
+          status: err instanceof ApiError ? err.status : (err as Error).message,
+        }),
+      )
+    }
   }
 
   return (
@@ -233,7 +222,7 @@ function RowActions({
         title={t('list.actions.download')}
         onClick={(e) => {
           e.stopPropagation()
-          handleDownload()
+          void handleDownload()
         }}
       >
         <Download className="size-4" />

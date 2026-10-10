@@ -7,6 +7,7 @@
 import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { useStepUpSatisfied } from '@/features/identity/assurance'
 import { cn } from '@/lib/utils'
 import {
   actionAuthority,
@@ -23,7 +24,9 @@ export function IntentStateBadge({ state }: { state: IntentState }) {
   return <Badge variant={stateTone(state)}>{t(`states.${state}`)}</Badge>
 }
 
-/** The authority the engine mounts an action with, stated before the operator acts. */
+/** The authority the engine mounts an action with, stated before the operator acts. An
+ * AAL3 route floor is the administrative step-up, which the deployment's policy decides
+ * (off by default), so the extra check is named only when this session does not meet it. */
 export function AuthorityNote({
   action,
   className,
@@ -32,11 +35,12 @@ export function AuthorityNote({
   className?: string
 }) {
   const { t } = useTranslation('gitpublish')
+  const stepUpSatisfied = useStepUpSatisfied()
   const { permission, aal3 } = actionAuthority(action)
   return (
     <p className={cn('text-caption text-muted-foreground', className)}>
-      {aal3
-        ? t('authority.requiresAal3', { permission })
+      {aal3 && !stepUpSatisfied
+        ? t('authority.requiresStepUp', { permission })
         : t('authority.requires', { permission })}
     </p>
   )

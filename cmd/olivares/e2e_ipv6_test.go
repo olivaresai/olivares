@@ -163,7 +163,7 @@ func startIPv6RealServer(t *testing.T, httpListen, grpcListen string) *ipv6RealS
 	}
 
 	httpSrv := eng.api.NewHTTPServer(httpLis.Addr().String())
-	httpSrv.Handler = withEnterpriseHTTP(newSPAHandler(eng.api.Handler(), webui.FS()), eng, log)
+	httpSrv.Handler = thisEdition.routes(newSPAHandler(eng.api.Handler(), webui.FS()), eng, log)
 	if err := configureHTTPServerTLS(httpSrv, tlsLoader); err != nil {
 		_ = eng.Close()
 		_ = httpLis.Close()

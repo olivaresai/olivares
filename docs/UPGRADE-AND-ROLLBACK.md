@@ -20,19 +20,19 @@ upgrade.
 The engine is a single binary; an upgrade is a **new image/binary over the same data
 directory** (the SQLite store or your Postgres, the audit signing key and the TLS
 material persist). On boot the engine applies any new schema migrations itself,
-idempotently, using the online **expand-contract** model — so a routine upgrade needs no
-maintenance window and no manual SQL. Because every schema change ships as an *additive*
-expand first and its *destructive* contract only in a **later** release, the previous
-release's binary keeps working against the upgraded schema — which is what makes rollback
-"redeploy the previous image", not "reverse the database".
+idempotently, using the **expand-contract** model. An older binary refuses a core schema
+version newer than it supports, including additive migrations. Take a DR backup before
+upgrading; returning to an older release after a schema advance requires restoring that
+pre-upgrade point (§5).
 
 There are **two ways to move the binary forward**, both landing on that same
 image/binary-over-the-same-data model: **(a)** your platform's package/image swap (Docker,
 Compose, systemd package, Helm — §4), and **(b)** the self-serve **`olivares upgrade`**
 command, which downloads the next signed release for your **channel**, verifies it
-**offline** against the embedded OTA key, and swaps the binary atomically with automatic
-rollback (§7). The Kubernetes/Helm path is **declarative** — you set the image and the
-operator/StatefulSet rolls it — so you do not run `olivares upgrade` inside a pod; the
+**offline** against the embedded OTA key, and swaps the binary atomically. Automatic
+rollback covers a failed executable version probe, not database recovery (§7). The
+Kubernetes/Helm path is **declarative** — you set the image and the
+Business operator source rolls it — so you do not run `olivares upgrade` inside a pod; the
 command is for binary/systemd/compose installs.
 
 > **No hot-patching — ever.** A Go binary is **not** live-patched in place. An upgrade
@@ -45,8 +45,8 @@ command is for binary/systemd/compose installs.
 
 ## 1. Versioning and the image coordinate
 
-Releases use CalVer (`vYY.M.PATCH`, e.g. `26.10.1`); container tags drop the leading `v`
-(`:26.10.1`, `:latest`, `:26.10.1-fips`, `:26.10.1-stig`). See [`../INSTALL.md`](../INSTALL.md#versioning).
+Release and container tags use bare `MAJOR.MINOR`: release <!-- release -->`0.1`<!-- /release -->, image tags <!-- release -->`:0.1`<!-- /release --> and `:latest`;
+FIPS/STIG variants are Business artifacts. See [versioning](../INSTALL.md#versioning).
 
 The official registry is **Docker Hub**:
 
@@ -61,13 +61,15 @@ Reach for it when Docker Hub is unreachable or its **anonymous-pull rate limit**
 ghcr.io does not rate-limit anonymous pulls of public images. **In production, pin by
 digest** — a tag is mutable, a digest is exactly what you verified:
 
+<!-- release -->
 ```sh
-cosign verify docker.io/olivaresai/olivares:26.10.1 \
-  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v?[0-9]+\.[0-9]+(\.[0-9]+)?$' \
+cosign verify docker.io/olivaresai/olivares:0.1 \
+  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/[0-9]+\.[0-9]+$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 # then resolve and use the digest you verified (same value on either registry):
-crane digest docker.io/olivaresai/olivares:26.10.1   # -> sha256:<…>
+crane digest docker.io/olivaresai/olivares:0.1   # -> sha256:<…>
 ```
+<!-- /release -->
 
 ---
 
@@ -138,19 +140,27 @@ against a live engine. For a deployment under systemd, run it as the service use
 ## 3. Before you upgrade
 
 > [!IMPORTANT]
-> **Configuration compatibility note.** A configured-but-unreadable file or malformed JSON now aborts startup, instead of warning and silently omitting the requested control, for `OLIVARES_AGENTCORE_EXPORT_CONFIG`, `OLIVARES_AGENT_GATEWAY_CONFIG`, `OLIVARES_APPROVAL_BRIDGE_CONFIG`, `OLIVARES_AUDIT_ARCHIVE_CONFIG`, `OLIVARES_CLAUDE_ADMIN_ACTUATOR_CONFIG`, `OLIVARES_CLAUDE_ERASER_CONFIG`, `OLIVARES_CLAUDE_FILES_CONFIG`, `OLIVARES_DEPLOY_EXECUTOR_CONFIG`, `OLIVARES_HITL_CONFIG`, `OLIVARES_HOOK_PEP_CONFIG`, `OLIVARES_INFERENCE_PROXY_CONFIG`, `OLIVARES_NHI_ACTUATORS_CONFIG`, `OLIVARES_NOTIFY_CONFIG`, `OLIVARES_ORCH_DISPATCH_CONFIG`, `OLIVARES_PIV_CONFIG`, `OLIVARES_RATELIMIT_CONFIG`, `OLIVARES_SANDBOX_RUNTIME_CONFIG`, `OLIVARES_SOURCES_CONFIG`, `OLIVARES_VOICE_CALL_CONFIG`, and `OLIVARES_VOICE_DISPATCH_CONFIG`; invalid `OLIVARES_AUDIT_SPOOL_MAX_BYTES` likewise aborts. Unset values remain optional. The new `OLIVARES_SESSION_BUDGET_AVAILABILITY` and `OLIVARES_SESSION_CONTEXT_AVAILABILITY` controls accept `fail-open` or `fail-closed`; when unset, both default to `fail-open` in the community edition and `fail-closed` in the enterprise edition (an invalid posture resolves fail-closed).
+> **Configuration compatibility note.** A configured-but-unreadable file or malformed JSON now aborts startup, instead of warning and silently omitting the requested control, for `OLIVARES_AGENTCORE_EXPORT_CONFIG`, `OLIVARES_AGENT_GATEWAY_CONFIG`, `OLIVARES_APPROVAL_BRIDGE_CONFIG`, `OLIVARES_AUDIT_ARCHIVE_CONFIG`, `OLIVARES_CLAUDE_ADMIN_ACTUATOR_CONFIG`, `OLIVARES_CLAUDE_ERASER_CONFIG`, `OLIVARES_CLAUDE_FILES_CONFIG`, `OLIVARES_DEPLOY_EXECUTOR_CONFIG`, `OLIVARES_HITL_CONFIG`, `OLIVARES_HOOK_PEP_CONFIG`, `OLIVARES_INFERENCE_PROXY_CONFIG`, `OLIVARES_NHI_ACTUATORS_CONFIG`, `OLIVARES_NOTIFY_CONFIG`, `OLIVARES_ORCH_DISPATCH_CONFIG`, `OLIVARES_PIV_CONFIG`, `OLIVARES_RATELIMIT_CONFIG`, `OLIVARES_SANDBOX_RUNTIME_CONFIG`, `OLIVARES_SOURCES_CONFIG`, `OLIVARES_VOICE_CALL_CONFIG`, and `OLIVARES_VOICE_DISPATCH_CONFIG`; invalid `OLIVARES_AUDIT_SPOOL_MAX_BYTES` likewise aborts. Unset values remain optional. The new `OLIVARES_SESSION_BUDGET_AVAILABILITY` and `OLIVARES_SESSION_CONTEXT_AVAILABILITY` controls accept `fail-open` or `fail-closed`; when unset, both are `fail-closed` in every edition (until 26.10.1<!-- release-fixed --> the community edition defaulted to `fail-open`; set it explicitly to keep that behavior), and an invalid posture resolves fail-closed.
 
 1. **Record the current digest** so you have an exact rollback target:
    ```sh
    docker inspect --format '{{index .RepoDigests 0}}' olivares   # Docker
    # Compose: note the OLIVARES_IMAGE digest in your .env; Helm: the live image.digest value
    ```
-2. **Back up.** Take a DR bundle (store snapshot + signing keys + chain tips) — see
-   [`DR-RUNBOOK.md`](DR-RUNBOOK.md). A backup is the only thing that makes a *data* problem
-   recoverable; rollback alone is not.
+2. **Back up.** Before upgrading, use the currently installed release to take a DR bundle
+   (store snapshot + signing and sealer keys + chain tips) — see [`DR-RUNBOOK.md`](DR-RUNBOOK.md).
+   Keep its passphrase separately, along with the original TLS material, any sealer key
+   supplied by an environment variable, and configuration; the bundle does not replace those. `olivares upgrade` backs up the
+   executable only, not the database.
+   For the PostgreSQL recovery route in §5, use native `pg_dump` and `pg_restore` tools
+   whose major version matches both the source and restore servers. Confirm all four
+   versions before taking the backup. PostgreSQL does not guarantee that output from a
+   newer `pg_dump` will load into an older server, even when the dump came from that server
+   ([PostgreSQL notes](https://www.postgresql.org/docs/17/app-pgdump.html#APP-PGDUMP-NOTES)).
+   Restores across PostgreSQL major versions need separate validation.
 3. **Note the current migration state:** `olivares migrate status …` (above). After the
-   upgrade you compare, and the new rows' phases tell you whether a later rollback is safe
-   (§5).
+   upgrade you compare. Migration phases alone do not establish that an older binary can
+   open the upgraded store (§5).
 
 ### 3.1 PostgreSQL owner/app split: the effective-privilege preflight
 
@@ -262,23 +272,76 @@ docker run -d --name olivares -p 127.0.0.1:8443:8443 -p 127.0.0.1:8444:8444 \
 keeps it loopback-only on the host.)
 
 **Docker Compose**
+
+Keep every Compose override used for installation, including
+`-f deploy/compose/docker-compose.postgres.yml` for PostgreSQL. The commands below
+are for the base SQLite installation; dropping the PostgreSQL override changes
+the engine's database selection.
+
 ```sh
 # set OLIVARES_IMAGE to the new digest in deploy/compose/.env, then:
+docker compose -f deploy/compose/docker-compose.yml pull
 docker compose -f deploy/compose/docker-compose.yml up --wait --wait-timeout 120
 # recreates with the data volume reused and returns only after /readyz is healthy
+docker compose -f deploy/compose/docker-compose.yml exec olivares olivares version
 ```
 
-**Native packages (systemd)**
+**Native DEB/RPM packages (systemd)**
+
 ```sh
-sudo dpkg -i olivares_<new>_linux_amd64.deb      # or: rpm -U … / apk add …
-sudo systemctl restart olivares                  # /etc/olivares/olivares.env and /var/lib/olivares persist
+sudo dpkg -i olivares_<new>_linux_amd64.deb      # or: sudo rpm -Uvh olivares_<new>_linux_amd64.rpm
+sudo systemctl status olivares
+sudo journalctl -u olivares --since '5 minutes ago'
 ```
 
-**Helm**
+Upgrading from 0.1<!-- release-fixed --> requests a restart of an active, unmasked service without
+changing its enablement. A stopped service stays stopped; its next start performs
+the snapshot. The appliance package-phase owner still owns its restart. Configuration,
+data, and operator-edited systemd drop-ins persist. Fresh installation does not start
+the service. Older packages whose removal script stops/disables the service still
+print their existing recovery instruction.
+
+If the restart fails, inspect `journalctl -u olivares` and repair the reported cause.
+Retry package configuration, then run `sudo systemctl start olivares`. Configuration
+retry alone does not start a service left failed or inactive by the unsuccessful
+restart. The explicit start preserves the service's enablement.
+
+Before the installed `/usr/bin/olivares serve` opens the store or applies migrations,
+it consumes the package's durable request using the service's resolved database
+configuration. It writes one completed snapshot per package transaction and database
+under `<data-dir>/backups/pre-upgrade/<request-digest>/`: `olivares.db` for SQLite
+(`VACUUM INTO`, including committed WAL data), or `dump.pgcustom` for PostgreSQL.
+Directories are private and snapshot files are mode `0600`. A service restart reuses
+that transaction's completed snapshot; another package upgrade retains it and creates
+a new one. An installation that has never created its SQLite store has nothing to copy.
+
+For PostgreSQL, install the matching PostgreSQL client (`pg_dump`) and configure the
+service's `--admin-dsn` with a cross-tenant backup role on the same live database as
+`--dsn`/`--owner-dsn` (see [DR-RUNBOOK.md](DR-RUNBOOK.md)). Secret `file:`/`env:` references
+are resolved by boot, and dump credentials never enter process arguments. An explicit
+`--allow-privileged-db-role` remains supported: a proven privileged application
+connection may supply the dump when no admin DSN is configured. An ordinary
+RLS-limited application connection is never a backup fallback.
+
+A snapshot error, including a failure to sync the snapshot or its directory entries
+to storage, blocks that boot before migration; correct the reported cause and restart
+the service. A retry syncs the completed snapshot's directories again without replacing
+the original database copy. Package-manager success only means the restart was requested:
+verify `/readyz` and the new running version afterward. Keep sufficient disk space;
+snapshots are retained until the operator removes them. They protect the local package
+startup path, not concurrent migrations initiated by another binary or another host.
+They contain the database only, so retain a full DR backup with the installation's
+signing keys for disaster recovery. No automatic database rollback or additional
+package downgrade guard is introduced; the store's existing downgrade refusal still
+applies (§5). APK/OpenRC keeps its existing upgrade procedure.
+
+**Helm (Business)**
+
+Use the chart supplied with the Business distribution.
 ```sh
 # from the source chart of a checkout at the release you upgrade to: the OCI chart's
 # publication is unverified, so no remote chart is offered here
-helm upgrade olivares deploy/helm/olivares \
+helm upgrade olivares ./business-chart \
   --set image.digest=<new-sha256> --reuse-values
 ```
 On a Postgres HA release (`replicaCount>1`) this is a rolling update: the StatefulSet
@@ -301,24 +364,48 @@ olivares migrate status --data-dir /var/lib/olivares    # confirm the new versio
 > is acquired. See [`LOGIN-ENFORCEMENT-OPERATIONS.md`](LOGIN-ENFORCEMENT-OPERATIONS.md) §6
 > and §7 before planning that downgrade.
 
-The expand-contract discipline means **the previous release's binary runs against the
-upgraded schema** (every destructive change ships a release *after* the additive one it
-finishes). So the rollback is simply: **redeploy the digest you recorded in §3.** The data
-volume and the (forward-only) schema stay exactly as they are; you do not reverse the
-database.
+An older binary refuses to open a store whose core schema version exceeds its supported
+version. This applies even to adjacent releases and additive migrations. Reinstalling the
+old binary or image does not undo a schema advance; do not edit migration history or
+bypass the refusal.
+
+To recover after a schema advance, stop every engine using the store and preserve the
+upgraded data. Use the previous release's binary to restore the DR bundle taken before
+the upgrade, following [`DR-RUNBOOK.md`](DR-RUNBOOK.md):
+
+- SQLite: use `dr restore --in-place` with `--operator` and `--reason` when restoring over
+  the existing data directory. Keep the automatically preserved pre-restore files until
+  recovery is confirmed.
+- PostgreSQL: provision an empty restore target with `olivares db init`. In the owner/app
+  split, supply the target's `--dsn`, `--owner-dsn` and `--admin-dsn` to `dr restore`,
+  together with a fresh data directory for the restored signing key.
+
+Use your private passphrase file for the restore. Require successful ledger and audit-key
+verification before starting the old release.
+
+Before restarting any PostgreSQL engine, point every runtime DSN reference (app, owner
+and any admin) at the verified restored target. Update service configuration, environment files and
+Compose/Helm secrets or values. Point the data-dir, volume and signing-key mappings at
+the matching restored signing custody, or deliberately promote it into the original path.
+Keep the original configuration backup, TLS material and sealer keys.
+
+Once the store is compatible with the old release, redeploy the digest recorded in §3:
 
 - Docker / Compose: recreate with the *previous* `@sha256:` digest (§4 with the old digest).
-- systemd: `dpkg -i` / `rpm -U` / `apk add` the *previous* package, then `systemctl restart`.
-- Helm: `helm rollback olivares <previous-revision>` (or `helm upgrade … --set image.digest=<old>`).
+- systemd: install the previous package using the package manager's downgrade procedure,
+  then restart the service.
+- Helm: use `helm rollback olivares <previous-revision>` only if that revision's DSNs and
+  volume/key mappings already select the restored target and signing custody. Otherwise
+  use `helm upgrade … --set image.digest=<old>` with the corrected restore-target values.
+
+After restarting, sign in and check the recovered data.
 
 > [!IMPORTANT]
-> **The one unsafe case: rolling back *across* a `contract` migration.** A contract removes
-> something (a column, a table, a constraint), so a binary from *before* that contract
-> shipped may depend on what it removed. Before rolling back more than one release, run
-> `olivares migrate status` and check the **phase** of the migrations applied by the
-> version you are leaving: if any are `contract`, do **not** roll the binary back past them
-> — restore from a DR backup taken before the upgrade instead ([`DR-RUNBOOK.md`](DR-RUNBOOK.md)).
-> Routine same-release and adjacent-release rollbacks (expands only) are safe.
+> **Recovery returns to the saved point.** Writes made after the pre-upgrade backup are
+> absent from the recovered store. Preserve the upgraded store for reconciliation. A
+> missing pre-upgrade bundle or passphrase cannot be replaced by the executable backup.
+> A `contract` migration can remove data an older release needs, and an additive migration
+> can still advance the core schema beyond that release's supported version.
 
 ### 5.1 Rolling back past the egress writer fence
 
@@ -416,7 +503,7 @@ cannot silently drift from the code:
 
 ---
 
-## 7. Editions and the in-place upgrade (community ↔ enterprise)
+## 7. Editions and the in-place upgrade (community ↔ commercial build)
 
 The edition is a function of **(a) which binary runs** and **(b) a valid commercial
 license for the additive add-ons** — never a re-install or a data migration. This is the Grafana/GitLab/Elastic
@@ -425,18 +512,18 @@ it.
 
 - **The community (default, AGPL) binary** is the complete open product. It **never reads a
   license to change behavior** — it does not gate a feature, degrade a request, or block a
-  boot on a license check, and it runs air-gapped (ADR-0010,
-  `docs/adr/0010-license-attestation-only.md`; `LICENSING.md`). It *does*
+  boot on a license check, and it runs air-gapped (see
+  [`LICENSING.md`](../LICENSING.md)). It *does*
   install, display and hot-apply the license **artifact** (so you can stage it before the
-  swap), but the only consumer of an attested claim is the closed enterprise build.
-- **The enterprise binary** (`-tags enterprise`) is a strict **superset** that reads the
+  swap), but the only consumer of an attested claim is the closed commercial build.
+- **The commercial binary** (`-tags enterprise`, Business and Enterprise) is a strict **superset** that reads the
   **same** store and config. Without a valid license it runs **identically** to community —
   the add-ons stay inactive, and since the licensing decision of 2026-07-27 there are no
   "community caps" left for it to fall
   back to (user accounts are unlimited in every edition) — so it is a safe drop-in *first*,
   license *after*.
 
-**The upgrade community → enterprise is therefore: stop, swap the binary (same version),
+**The upgrade community → commercial build is therefore: stop, swap the binary (same version),
 start — one restart.** The license itself needs no restart (below).
 
 ### Self-serve upgrades: `olivares upgrade`
@@ -445,15 +532,14 @@ start — one restart.** The license itself needs no restart (below).
 binary to the next signed release of the **same edition** on a **channel** (§8), verified
 offline and swapped atomically with a kept backup. On the **public channel** the community
 edition needs **no license and no token**; `--enterprise` adds the license gate and the
-gated download, and **installing from `--bundle` is license-gated too** (§10 — it is a route
-by which the same bytes arrive, and a signed bundle does not say which edition it carries;
-`--bundle --check` stays ungated because it installs nothing).
+gated download. Installing from `--bundle` requires the Enterprise binary (§10); Community refuses before reading a license or bundle.
+`--bundle --check` is never gated because it installs nothing.
 
 ```bash
 olivares upgrade --check                      # community: show the plan (current -> available, CVEs), no swap
 olivares upgrade                              # community: install the latest stable release
 olivares upgrade --channel security           # take only security releases (§8)
-olivares upgrade --enterprise --token <TOKEN> # licensed enterprise superset (needs a live license)
+olivares upgrade --enterprise --token <TOKEN> # licensed Business edition (needs a live license)
 olivares upgrade --enterprise --connect --data-dir /var/lib/olivares  # connected enterprise: no pasted token
 # → after any swap, restart the service to run the new binary (§9 for zero downtime)
 ```
@@ -479,17 +565,20 @@ olivares upgrade --enterprise --connect --data-dir /var/lib/olivares  # connecte
   Declare it instead with **`--current-version <version>`**, which keeps both guards armed
   (and the audit record truthful) rather than bypassing them:
 
+  <!-- release -->
   ```bash
-  olivares upgrade --target /opt/olivares/olivares --current-version 26.10.1
+  olivares upgrade --target /opt/olivares/olivares --current-version 0.1
   ```
+  <!-- /release -->
 
   Released binaries are unaffected — every published artifact is stamped at build time, so
   this only ever applies to a binary you compiled yourself or staged for another platform.
 - **The swap is atomic with a kept backup.** The new binary is written beside the current
   one, **exec-probed** (`<new> version` must run) BEFORE anything is replaced, then renamed
   into place; the previous binary is kept at `<path>.bak-<ts>-<unique>`. If the installed
-  binary fails its post-swap probe it is **rolled back automatically**. The running process is
-  untouched until you restart it; manual rollback is `mv <path>.bak-* <path>` (symmetric, §5).
+  binary fails its post-swap `version` probe it is **rolled back automatically**. This
+  does not test engine startup or restore the database. The running process is untouched
+  until you restart it. Before a later rollback, follow the data recovery procedure in §5.
 - **One upgrade agent per binary, and the guards are re-checked against the file that is
   still there.** The command takes an exclusive lock on the target across the whole
   prepare → download → swap sequence, so a second concurrent run **exits `5` (Conflict)**
@@ -564,7 +653,7 @@ window.
 
 ### Activation: `olivares enterprise enable <preset>` (buying turns something ON)
 
-An enterprise binary starts **byte-identical to community** — its add-ons are opt-in and
+A commercial binary starts **byte-identical to community** — its add-ons are opt-in and
 fail-inert, each gated by its own `OLIVARES_*_CONFIG`. So a fresh upgrade adds capability but
 no behaviour change until you turn something on. The activation pack does that in one step,
 governed and auditable:
@@ -613,7 +702,7 @@ license is managed out-of-band) — never a silently shadowed file.*
 ### Expiry and downgrade — graceful, never destructive
 
 - **Expiry / invalidation.** The engine **does not crash or lose data**. It reverts to
-  community behavior (enterprise add-ons go read-only/off), logs a `WARN`, and the console
+  community behavior (commercial add-ons go read-only/off), logs a `WARN`, and the console
   shows a renewal banner. Install a renewed license to restore it — live. **Your user
   accounts are untouched**: they are unlimited in every edition, so a lapse never caps,
   disables or deletes one.
@@ -630,11 +719,11 @@ can check it yourself the same way CI does — diff `olivares migrate manifest` 
 builds and expect no difference — so a binary swap in **either** direction can never land in a
 partial-upgrade state.
 
-### Rollback enterprise → community is symmetric
+### Rollback commercial build → community is symmetric
 
-Roll back the **binary, not the schema** (§5). Swapping the enterprise binary back to the
-community one on the **same data directory** works: any enterprise-written rows stay
-**dormant, not deleted**. The community binary simply stops serving the enterprise
+Roll back the **binary, not the schema** (§5). Swapping the commercial binary back to the
+community one on the **same data directory** works: any rows written by the commercial build stay
+**dormant, not deleted**. The community binary simply stops serving the commercial
 surfaces; user accounts are unaffected in either direction (they are never capped).
 
 ---
@@ -761,58 +850,23 @@ reconciliation at the next startup converges it again.
 
 ## 10. Air-gapped updates
 
-An air-gapped deployment upgrades from a **local bundle**, verified **offline** — no
-network, no cosign, no Rekor. On a connected host, build the signed bundle for a release:
+Offline bundle installation is an Enterprise capability. Community verifies a bundle without
+reading a license or installing anything:
 
 ```sh
-scripts/export-update-bundle.sh --dir <release-dir> --channel stable --version 26.10.1 \
-  --sign-key <dedicated-ed25519-ota-key> --out olivares-update-26.10.1.tar.gz
+olivares upgrade --bundle olivares-update.tar.gz --pubkey <release.pub> --check
 ```
 
-The bundle is a tarball of the signed `manifest.json`, its signature, and the platform
-archives it lists. Move it across the air gap. **Installing needs a live license present on
-the box** — `--check` does not — so stage the license first (it is a file; it crosses the air
-gap the way the bundle does):
+Verification checks the signature, channel, freshness and version ordering and prints the
+upgrade plan. An install request from a Community binary refuses even when the signed manifest
+says `community` or a live license is installed. The bundle producer and installation journey
+are distributed with Enterprise; see [editions](editions.md).
 
-```sh
-olivares upgrade --bundle olivares-update-26.10.1.tar.gz --pubkey <release.pub> --check
-olivares license install ./license.key   # once. Verified OFFLINE, against the license key
-                                         # embedded in this binary — no call is made
-olivares upgrade --bundle olivares-update-26.10.1.tar.gz --pubkey <release.pub> --yes
-```
+### Which bundles need a license
 
-`--bundle` runs the identical verify → anti-rollback → SHA-bind → atomic-swap path as the
-online upgrade, but reads only from the bundle — so an air-gapped install verifies
-byte-identically to a connected one. This is coherent with
-[`RELEASE-VERIFICATION.md`](RELEASE-VERIFICATION.md) and the DDIL store-and-forward posture.
-
-### Why installing from a bundle is license-gated, and what that costs
-
-A bundle is a tarball, and tarballs travel. Until 2026-08-17 this route returned its source
-**before** the license check ran, so holding a release tarball was enough to install from it
-— no credential, no token, no network — while `--help` advertised exactly that ("100%
-offline"). The gate was not weak here; it was not here.
-
-The check is **offline and local**: the installed license is read at rest and verified
-against the license key embedded in the running binary. There is **no registry call and no
-entitlement lookup**, because requiring one would contradict the air gap this route exists
-for — "air-gapped" and "gated" have to be able to hold at the same time.
-
-It applies to **every** bundle, not only an enterprise one, and that edge is deliberately
-blunt: nothing authenticated inside a bundle says which edition its artifact is (the signed
-manifest carries no edition field, and the artifact's shape is a heuristic rather than a
-signed claim), so the route cannot tell a community bundle from an enterprise one and
-refuses closed for both. **What that costs today:** an operator with no license has no
-offline route for a community **install** — the public channel (§8) needs a reachable
-endpoint. When the signed manifest carries the edition, this gate can narrow to what a
-bundle declares; it cannot narrow on a guess.
-
-**`--check` is not gated**, because what is closed is an unlicensed *install* and `--check`
-installs nothing — it verifies the signature, the channel, the freshness and the version
-ordering, prints the plan and stops. It also hands the holder of a leaked tarball nothing
-they do not already have: they hold the bytes. So checking a bundle stays free, on purpose:
-a gate that refused `--check` would push you to run `--yes` blind, which is worse than
-whatever it protected.
+Community reads no license for a bundle. Enterprise retains offline verification of its
+installed license for commercial bundles. Checking a bundle requires no license in either
+edition. The online Community update channel remains available without a license.
 
 ---
 
@@ -825,11 +879,19 @@ release is available — with a **security** badge when the available release ca
 security fix. The check is read-only: it never changes the binary (that stays the operator's
 explicit `olivares upgrade`).
 
-It is **air-gap-honest**: with no endpoint configured the engine makes **no outbound calls**
-and the console shows **no indicator** — silence, never an error. A transient check failure
-is captured and surfaced quietly, never as a crash. The check verifies the manifest against
+It is **air-gap-honest**: with no endpoint configured the engine makes **no outbound calls**.
+The console explains why **Check now** is unavailable and offers **Update instructions**,
+which can be read without a network request. Use an official release with an embedded OTA
+verification key, set `OLIVARES_UPDATE_ENDPOINT` to an approved signed channel in the service
+configuration, and restart to enable checks. Leave it unset to keep checks off. A development
+build without that key cannot check a signed channel. For a manual package or image upgrade,
+back up, verify the replacement, and keep the same data directory (§4).
+
+The unconfigured check-now API continues to return **501**, never an "up to date" result.
+A transient configured check failure remains visible and retryable. The check verifies the manifest against
 the embedded OTA key exactly as `olivares upgrade` does, so "an update is available"
-means the same signed, anti-rollback-aware decision.
+identifies a verified newer release. Installation still requires the upgrade CLI's
+eligibility and artifact integrity checks.
 
 ---
 
@@ -866,3 +928,5 @@ stopped-store ceremony for staged and already enforced legacy installations,
 the PostgreSQL noAdmin inventory role, exact retry and commit reconciliation.
 Core v10 preserves v1–v9 history; its activation advances protocol, H coverage and
 business G atomically. This foundation does not claim whole F2 readiness.
+
+The local `./business-chart` examples refer to an extracted, verified Business chart package supplied through the Business channel. Publication is unverified here; obtain and authenticate the package using that channel’s instructions.

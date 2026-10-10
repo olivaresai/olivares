@@ -24,14 +24,14 @@ DOC="${OLIVARES_ALC01A_DOC:-design/ALC-01A-PROGRAM-PREP-2026-08-20.md}"
 grep -q 'Unique leftover unique vs `#956`' "$DOC" \
   || fail "prepare doc lost uniqueness vs #956"
 grep -q 'No es el motor' "$DOC" \
-  || fail "prepare doc lost No es el motor"
+  || fail "prepare doc lost its explicit distinction from the engine"
 grep -q 'ALC-01 no arranca sin esto' "$DOC" \
-  || fail "prepare doc lost ALC-01 no arranca sin esto"
+  || fail "prepare doc lost the ALC-01 prerequisite hold"
 
 grep -q 'No es el motor' "$PROG" \
-  || fail "program lost No es el motor"
+  || fail "program lost its explicit distinction from the engine"
 grep -q 'ALC-01 no arranca sin esto' "$PROG" \
-  || fail "program lost ALC-01 no arranca sin esto"
+  || fail "program lost the ALC-01 prerequisite hold"
 grep -q 'ALC-01-S1' "$PROG" || fail "program lost ALC-01-S1"
 grep -q 'ALC-01-S2' "$PROG" || fail "program lost ALC-01-S2"
 grep -q 'ALC-01-S3' "$PROG" || fail "program lost ALC-01-S3"

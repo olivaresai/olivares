@@ -31,10 +31,11 @@ import (
 
 // ── the fixture tree ───────────────────────────────────────────────────────────────────
 
-// fixtureViews builds a console above the population floor: 45 registered views spread
-// over the five hubs plus the five routes mounted outside the registry.
+// fixtureViews builds a console above the population floor: 45 registered views, the first
+// the root of the navigation and the rest spread over five areas, plus the five routes
+// mounted outside the registry.
 func fixtureViews() (views []string, census []string) {
-	hubs := []string{"operate", "automate", "connect", "govern", "prove"}
+	areas := []string{"infrastructure", "ai", "automation", "security-identity", "system"}
 	for i := 0; i < 45; i++ {
 		id := fmt.Sprintf("view%02d", i)
 		p := "/" + id
@@ -46,9 +47,13 @@ func fixtureViews() (views []string, census []string) {
 		if i == 9 {
 			hide = `"hideInNav": true, `
 		}
+		area := areas[i%len(areas)]
+		if i == 0 {
+			area = "" // the root of the structure
+		}
 		views = append(views, fmt.Sprintf(
-			`{"id": %q, "path": %q, "hub": %q, %s%s"helpHref": "/reference/fixture", "where": "web/src/features/registry.tsx:%d"}`,
-			id, p, hubs[i%len(hubs)], perm, hide, 100+i))
+			`{"id": %q, "path": %q, "area": %q, %s%s"helpHref": "/reference/fixture", "where": "web/src/features/registry.tsx:%d"}`,
+			id, p, area, perm, hide, 100+i))
 		census = append(census, p)
 	}
 	return views, census
@@ -188,18 +193,18 @@ type fixture struct {
 	views      []string
 	census     []string
 	standalone string
-	hubOrder   string
+	areaOrder  string
 }
 
 func (f *fixture) writeDump() error {
 	body := fmt.Sprintf(`{
   "schema": %q,
-  "hubOrder": %s,
+  "areaOrder": %s,
   "census": ["%s"],
   "views": [%s],
   "standalone": %s
 }
-`, dumpSchema, f.hubOrder, strings.Join(f.census, `", "`), strings.Join(f.views, ",\n    "), f.standalone)
+`, dumpSchema, f.areaOrder, strings.Join(f.census, `", "`), strings.Join(f.views, ",\n    "), f.standalone)
 	return os.WriteFile(f.dumpPath, []byte(body), 0o600)
 }
 
@@ -223,11 +228,11 @@ func newFixture(base string) (*fixture, error) {
 		dumpPath:   filepath.Join(base, "console-dump.json"),
 		views:      views,
 		standalone: fixtureStandalone,
-		hubOrder:   `["operate", "automate", "connect", "govern", "prove"]`,
+		areaOrder:  `["infrastructure", "ai", "automation", "security-identity", "system"]`,
 	}
 	f.census = append(census, "/accept-invite", "/login", "/settings", "/setup", "/status-page")
 
-	nav := `{"hubs": {"operate": "Operate", "automate": "Automate", "connect": "Connect", "govern": "Govern", "prove": "Prove"},
+	nav := `{"areas": {"infrastructure": {"label": "Infrastructure"}, "ai": {"label": "AI"}, "automation": {"label": "Automation"}, "security-identity": {"label": "Security & identity"}, "system": {"label": "System & settings"}},
  "items": {` + navPairs("items") + `},
  "descriptions": {` + navPairs("descriptions") + `}}`
 	if err := write(base, navEnRel, nav); err != nil {
@@ -478,7 +483,7 @@ func runSelfTest() int {
 
 	// ── RED: the roster moved and the page did not ─────────────────────────────────────
 	add("route-added-not-regenerated", 1, "/view99", func(f *fixture) error {
-		f.views = append(f.views, `{"id": "view99", "path": "/view99", "hub": "operate", "permission": "mod99:thing:read", "helpHref": "/reference/fixture", "where": "web/src/features/registry.tsx:999"}`)
+		f.views = append(f.views, `{"id": "view99", "path": "/view99", "area": "ai", "permission": "mod99:thing:read", "helpHref": "/reference/fixture", "where": "web/src/features/registry.tsx:999"}`)
 		f.census = append(f.census, "/view99")
 		return f.writeDump()
 	})
@@ -618,7 +623,7 @@ func runSelfTest() int {
 
 	// ── RED: the console mounts something the census does not record ───────────────────
 	add("route-mounted-and-not-in-the-census", 1, "does not record it", func(f *fixture) error {
-		f.views = append(f.views, `{"id": "sneak", "path": "/sneak", "hub": "operate", "permission": "x:y:read", "helpHref": "/reference/fixture", "where": "web/src/features/registry.tsx:1234"}`)
+		f.views = append(f.views, `{"id": "sneak", "path": "/sneak", "area": "ai", "permission": "x:y:read", "helpHref": "/reference/fixture", "where": "web/src/features/registry.tsx:1234"}`)
 		return f.writeDump()
 	})
 
@@ -666,12 +671,25 @@ func runSelfTest() int {
 		return f.writeDump()
 	})
 
+	add("area-without-a-label", 1, `area "system" has no label`, func(f *fixture) error {
+		nav := `{"areas": {"infrastructure": {"label": "Infrastructure"}, "ai": {"label": "AI"}, "automation": {"label": "Automation"}, "security-identity": {"label": "Security & identity"}, "system": {}},
+ "items": {` + navPairs("items") + `},
+ "descriptions": {` + navPairs("descriptions") + `}}`
+		return write(f.dir, navEnRel, nav)
+	})
+
+	add("view-in-an-undeclared-area", 1, "not in NAV_AREAS", func(f *fixture) error {
+		f.views = append(f.views, `{"id": "stray", "path": "/stray", "area": "nowhere", "permission": "x:y:read", "helpHref": "/reference/fixture", "where": "web/src/features/registry.tsx:4321"}`)
+		f.census = append(f.census, "/stray")
+		return f.writeDump()
+	})
+
 	add("dump-speaks-another-schema", 2, "this gate speaks", func(f *fixture) error {
 		raw, err := os.ReadFile(f.dumpPath)
 		if err != nil {
 			return err
 		}
-		return os.WriteFile(f.dumpPath, []byte(strings.Replace(string(raw), dumpSchema, "olivares.console.routes/2", 1)), 0o600)
+		return os.WriteFile(f.dumpPath, []byte(strings.Replace(string(raw), dumpSchema, "olivares.console.routes/1", 1)), 0o600)
 	})
 
 	add("dump-absent", 2, "stage 1", func(f *fixture) error {
@@ -898,13 +916,13 @@ func appendLine(base, rel, line string) error {
 func stage1RegistrySrc(perm string) string {
 	var b strings.Builder
 	b.WriteString("import { lazy } from 'react'\n")
-	b.WriteString("export const HUB_ORDER: HubId[] = ['operate', 'automate', 'connect', 'govern', 'prove']\n")
+	b.WriteString("export const NAV_AREAS: readonly NavArea[] = [{ id: 'ai', path: '/areas/ai' }, { id: 'system', path: '/areas/system' }]\n")
 	b.WriteString("export const FEATURE_VIEWS: FeatureView[] = [\n")
-	fmt.Fprintf(&b, "  { id: 'alpha', path: '/alpha', hub: 'operate', helpHref: '/reference/fixture', permission: %s, element: lazyView(A) },\n", perm)
+	fmt.Fprintf(&b, "  { id: 'alpha', path: '/alpha', navigation: { kind: 'root' }, helpHref: '/reference/fixture', permission: %s, element: lazyView(A) },\n", perm)
 	b.WriteString("  // A commented-out entry: { id: 'ghost', path: '/ghost', permission: 'ghost:read' }\n")
-	b.WriteString("  { id: 'beta', path: '/beta', hub: 'govern', helpHref: '/reference/fixture', element: lazyView(B) },\n")
+	b.WriteString("  { id: 'beta', path: '/beta', navigation: { kind: 'feature', areaId: 'system', sectionId: 'x' }, helpHref: '/reference/fixture', element: lazyView(B) },\n")
 	for i := 0; i < 24; i++ {
-		fmt.Fprintf(&b, "  { id: 'bulk%02d', path: '/bulk%02d', hub: 'prove', helpHref: '/reference/fixture', permission: 'bulk:read', element: lazyView(C) },\n", i, i)
+		fmt.Fprintf(&b, "  { id: 'bulk%02d', path: '/bulk%02d', navigation: { kind: 'feature', areaId: 'ai', sectionId: 'x' }, helpHref: '/reference/fixture', permission: 'bulk:read', element: lazyView(C) },\n", i, i)
 	}
 	b.WriteString("]\n")
 	return b.String()
@@ -1017,27 +1035,47 @@ func stage1Cases(base, script string) []caseResult {
 	})
 	run1("frozen-receiver-is-computed", 2, "not as an array literal", func(dir string) error {
 		return write(dir, "web/src/features/registry.tsx",
-			"export const HUB_ORDER = ['operate']\nexport const FEATURE_VIEWS = Object.freeze(buildViews().map((view) => Object.freeze(view)))\n")
+			"export const NAV_AREAS = [{ id: 'ai', path: '/areas/ai' }]\nexport const FEATURE_VIEWS = Object.freeze(buildViews().map((view) => Object.freeze(view)))\n")
 	})
 
 	// RED: the registry stopped being an array literal, so nothing could be enumerated.
 	run1("registry-is-not-an-array", 2, "not as an array literal", func(dir string) error {
 		return write(dir, "web/src/features/registry.tsx",
-			"export const HUB_ORDER: HubId[] = ['operate']\nexport const FEATURE_VIEWS: FeatureView[] = buildViews()\n")
+			"export const NAV_AREAS = [{ id: 'ai', path: '/areas/ai' }]\nexport const FEATURE_VIEWS: FeatureView[] = buildViews()\n")
 	})
 
 	// RED: the roster shrank to a handful. A dumper that emitted it would let the Go half
 	// regenerate a four-screen console over a fifty-screen one and call it in sync.
 	run1("roster-below-the-population-floor", 2, "not a console", func(dir string) error {
 		return write(dir, "web/src/features/registry.tsx",
-			"export const HUB_ORDER: HubId[] = ['operate']\nexport const FEATURE_VIEWS: FeatureView[] = [\n"+
-				"  { id: 'alpha', path: '/alpha', hub: 'operate', helpHref: '/x', element: lazyView(A) },\n]\n")
+			"export const NAV_AREAS = [{ id: 'ai', path: '/areas/ai' }]\nexport const FEATURE_VIEWS: FeatureView[] = [\n"+
+				"  { id: 'alpha', path: '/alpha', navigation: { kind: 'root' }, helpHref: '/x', element: lazyView(A) },\n]\n")
 	})
 
 	// RED: a permission written as an expression. "Computed and unreadable" must never
 	// collapse into "this view needs no permission" — they are opposite facts.
 	run1("permission-is-a-computed-expression", 2, "non-literal expression", func(dir string) error {
 		return write(dir, "web/src/features/registry.tsx", stage1RegistrySrc("PERMS.alpha"))
+	})
+
+	// RED: a place written as an expression. The guide groups each screen by its area, and
+	// a place it cannot read must stop the dump, not file the screen under no heading.
+	run1("navigation-is-a-computed-expression", 2, "no literal navigation", func(dir string) error {
+		return write(dir, "web/src/features/registry.tsx",
+			strings.Replace(stage1RegistrySrc("'a:b:read'"), "navigation: { kind: 'root' }", "navigation: PLACES.alpha", 1))
+	})
+
+	// RED: a misspelled kind. A place this dump cannot read must stop it, not file the screen
+	// as the root of the structure.
+	run1("navigation-kind-is-misspelled", 2, "cannot read", func(dir string) error {
+		return write(dir, "web/src/features/registry.tsx",
+			strings.Replace(stage1RegistrySrc("'a:b:read'"), "navigation: { kind: 'feature', areaId: 'system'", "navigation: { kind: 'feture', areaId: 'system'", 1))
+	})
+
+	// RED: no NAV_AREAS, so the guide has no section order and no area directories.
+	run1("registry-declares-no-areas", 2, "declares no NAV_AREAS", func(dir string) error {
+		return write(dir, "web/src/features/registry.tsx",
+			strings.Replace(stage1RegistrySrc("'a:b:read'"), "export const NAV_AREAS", "export const OTHER", 1))
 	})
 
 	// RED: the census went missing. Without it there is no roster to cover.

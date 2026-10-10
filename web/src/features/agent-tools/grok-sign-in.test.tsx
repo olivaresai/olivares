@@ -7,7 +7,7 @@
 // the row offers it, then shows the link and the one-time code; an xAI API key from
 // Providers stays the other way.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, expect, it, vi } from 'vitest'
 import './i18n'
@@ -15,6 +15,25 @@ import './i18n'
 const { api, auth, signIn } = vi.hoisted(() => ({
   api: {
     inventory: vi.fn(),
+    // The providers section reads its own snapshot; these cases are about the rows below.
+    providers: vi.fn(() =>
+      Promise.resolve({
+        providers: [
+          {
+            instance: 'grok',
+            driver: 'grok',
+            default: true,
+            config_dir: '/home/op/.grok',
+            state: 'not_signed_in',
+            installed: true,
+            limits: [],
+            models: [],
+            checked_at: '2026-10-09T10:00:00Z',
+            source: 'grok',
+          },
+        ],
+      }),
+    ),
     plan: vi.fn(),
     install: vi.fn(),
     job: vi.fn(),
@@ -31,7 +50,10 @@ const { api, auth, signIn } = vi.hoisted(() => ({
   signIn: { status: vi.fn(), start: vi.fn(), get: vi.fn(), cancel: vi.fn() },
 }))
 vi.mock('@/lib/auth/context', () => ({ useAuth: () => auth }))
-vi.mock('./api', () => ({ agentToolsApi: api }))
+vi.mock('./api', async (orig) => ({
+  ...(await orig<typeof import('./api')>()),
+  agentToolsApi: api,
+}))
 vi.mock('@/components/ui/toaster', () => ({
   toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
 }))
@@ -83,27 +105,35 @@ it('offers Grok Build its own sign-in and relays the link and the code', async (
     </QueryClientProvider>,
   )
   const card = await screen.findByTestId('tool-grok')
-  expect(await within(card).findByText('Not signed in')).toBeInTheDocument()
-  // Changed, stated (ca0e828c, HU2-18): the key form opens on Grok's own provider.
   expect(
-    within(card).getByRole('link', { name: 'Use an API key instead' }),
-  ).toHaveAttribute('href', '/providers?add=xai')
-  // Each tool card carries the API key link; the page adds no copy of it (Root's capture
-  // review, 26.10.1).
-  for (const link of screen.getAllByRole('link', {
-    name: 'Use an API key instead',
-  })) {
-    expect(link.closest('[data-testid^="tool-"]')).not.toBeNull()
-  }
-  await userEvent.click(
-    within(card).getByRole('button', { name: 'Sign in with your xAI account' }),
-  )
+    await within(card).findByText('Account · not signed in'),
+  ).toBeInTheDocument()
+  await userEvent.click(within(card).getByRole('button', { name: /^Sign in/ }))
   // The login is the organization's own (FH 036): the start names it.
-  expect(signIn.start).toHaveBeenCalledWith('grok', 'tenant-a')
-  expect(await within(card).findByTestId('device-code')).toHaveTextContent(
+  const dialog = await screen.findByRole('dialog', {
+    name: /Sign in Grok Build/,
+  })
+  await waitFor(() =>
+    expect(signIn.start).toHaveBeenCalledWith('grok', 'tenant-a'),
+  )
+  expect(await within(dialog).findByTestId('device-code')).toHaveTextContent(
     'K7M2QX9P',
   )
   expect(
-    within(card).getByRole('link', { name: /open the sign-in page/i }),
+    within(dialog).getByRole('link', { name: /open the sign-in page/i }),
   ).toHaveAttribute('href', 'https://accounts.x.ai/device')
+  // Changed, stated (ca0e828c, HU2-18): the key form opens on Grok's own provider. The
+  // dialog keeps the link for the default login, and says the terminal way too.
+  expect(
+    within(dialog).getByText('olivares tool login grok'),
+  ).toBeInTheDocument()
+  expect(
+    within(dialog).getByRole('link', {
+      name: 'Use an API key instead',
+      hidden: true,
+    }),
+  ).toHaveAttribute(
+    'href',
+    expect.stringMatching(/^\/providers\?add=xai&returnTo=/),
+  )
 })

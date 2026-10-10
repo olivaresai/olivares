@@ -46,7 +46,7 @@ func publishAfterObservedPendingRead(t *testing.T, m *Module, tenant model.Tenan
 			return
 		}
 		now := m.clock.Now().Time()
-		budgets, _, err := m.budgetTargets(ctx, tenant, req.Dims, now)
+		budgets, _, err := m.budgetTargets(ctx, tenant, req.Dims, req.ActorRef, now)
 		if err != nil {
 			finished <- ""
 			return

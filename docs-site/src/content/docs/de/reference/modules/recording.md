@@ -55,8 +55,10 @@ Oberfläche wurzelt unter `/v1/m/recording/` (`sessions`, `replay`, `verify`,
 - Bei einer **aktiven** Session sind Frames nach dem letzten periodischen Anker
   nur durch die Kettenspitze gebunden, bis zum nächsten Anker oder Seal; `verify`
   meldet `anchored_through`, sodass die Grenze explizit und nie impliziert ist.
-- Es implementiert **kein Purge und kein Legal-Hold** — Retention/Legal-Hold
-  besitzt die Löschung; Ledger-Anker überleben jedes Purge.
+- Compliance unterstützt Aufbewahrungspläne und klassenbezogene Legal Holds für
+  `privileged-session-recording`. **Purge ist nicht verfügbar**, da Frames
+  Append-only-Evidenz sind. `retention_days` ist nur ein Hinweis;
+  `retention_enforced` bleibt false, eine automatische Löschung wird nicht versprochen.
 - Dies ist das Recording-Subsystem, das das **agentops-Governance-Panel** für die
   I/O-Aufzeichnung pro Session nutzt: jeder gebrückte Claude-Code-Frame wird in
   dasselbe hash-verkettete, ledger-verankerte Muster eingefaltet.

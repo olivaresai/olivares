@@ -18,10 +18,10 @@ description: "面向信息的参考：REST API、事件总线、模块目录、C
 
 | 领域 | 它记录什么 | 真相之源 |
 |---|---|---|
-| **[REST API](/reference/api/)** | control-plane HTTP API：auth、setup、tenancy、agent、R/RW access map、token 与 audit ledger。 | 本产品的 **OpenAPI 3.1** 契约（70 条核心路径），在构建时从真实文件渲染——不是副本。 |
+| **[REST API](/reference/api/)** | control-plane HTTP API：auth、setup、tenancy、agent、R/RW access map、token 与 audit ledger。 | 本产品的 **OpenAPI 3.1** 契约（128 条核心路径），在构建时从真实文件渲染——不是副本。 |
 | **[模块路由（beta）](/reference/api-beta/)** | 产品的模块路由（`/v1/m/<ns>/…`）——finops、compliance、governance、sessions、models、knowledge 等——作为独立的 **beta** OpenAPI 文档。 | 同一份 OpenAPI 3.1 契约，在构建时从模块实际注册的路由反射得出。 |
 | **[稳定性策略](/zh/reference/api-stability/)** | 版本管理、稳定性层级、弃用/停用信令，以及 API、provider 与客户端 SDK 的最短支持窗口。 | 代码内的弃用表及其会使构建失败的窗口测试。 |
-| **[gRPC](/zh/reference/grpc/)** | 引擎的 gRPC 镜像，以及每个进程外连接器与模块用于通信的版本化插件线协议。 | 服务器交给 gRPC 的 `grpc.ServiceDesc` 注册表。 |
+| **[gRPC](/zh/reference/grpc/)** | 引擎的 gRPC 镜像，以及每个进程外连接器用于通信的版本化插件线协议。 | 服务器交给 gRPC 的 `grpc.ServiceDesc` 注册表。 |
 | **[事件总线](/zh/reference/events/)** | 内部事件总线：事件信封、第一方事件类型，以及连接器提升其上的观测 payload。 | 一份从 Go SDK 手工推导的 **AsyncAPI 3.0** 契约。 |
 | **[控制台界面](/zh/reference/console/)** | 控制台发布的每条路由、其所需的 RBAC 权限，以及其产品内帮助链接打开的参考页。 | 控制台路由清查，钉住到已构建的路由器。 |
 | **[模块目录](/zh/reference/modules/overview/)** | 30 个产品模块——每个是什么、其状态，以及它在核心 API 之外暴露哪些路由（如有）。 | 产品能力目录与类型化的模块接口。 |
@@ -37,13 +37,13 @@ description: "面向信息的参考：REST API、事件总线、模块目录、C
 tenancy、agent、读/写 access map（`GET /v1/access-edges`；其已对账的最小权限 *drift* 由
 access-map 模块而非核心面提供）、token 管理与 audit ledger。
 
-该契约描述 **70 条核心路径**。这是刻意为之：它是 control plane 稳定、带版本的面，而非引擎能应答的
+该契约描述 **128 条核心路径**。这是刻意为之：它是 control plane 稳定、带版本的面，而非引擎能应答的
 每一条路由。“stable” 所承诺的内容——版本管理、弃用信令与最短支持窗口——即
 [API 稳定性策略](/zh/reference/api-stability/)。
 
 :::note[模块路由是独立的 beta 契约]
 模块路由——例如 access-map 模块的 `/v1/m/accessmap/graph`、
-`/v1/m/accessmap/neighbors` 与 `/v1/m/accessmap/drift`——**不**属于包含 54 条路径的
+`/v1/m/accessmap/neighbors` 与 `/v1/m/accessmap/drift`——**不**属于包含 128 条路径的
 稳定核心文档。它们作为独立的 **beta** OpenAPI 文档发布在
 [模块路由参考](/reference/api-beta/)（服务于 `/openapi.beta.json`，并从模块实际
 注册的路由反射得出），从而让稳定面保持可识别，同时完整产品面仍可编程。
@@ -71,7 +71,7 @@ verify），用于偏好类型化二进制契约之处（例如 collector）。�
 
 ## 模块目录
 
-[模块目录](/zh/reference/modules/overview/)列举位于核心引擎之上的 **31 个模块**，横跨九个能力领域。
+[模块目录](/zh/reference/modules/overview/)列举位于核心引擎之上的 **32 个模块**，横跨九个能力领域。
 其中最有用的之一是带 **Permitted-vs-Observed** 差异的 **R/RW access map**：它从日志、OTEL 以及
 （作为非协作后备的）eBPF 读取，而非位于数据路径中，并且只存储*哪个 agent 能读或写哪个 resource*
 这一关系——绝不存储 payload、secret 或 PII。
@@ -79,7 +79,7 @@ verify），用于偏好类型化二进制契约之处（例如 collector）。�
 该目录对状态与覆盖是诚实的。每个模块携带其自身的成熟度——多数实时且端到端集成，部分为局部或
 选择性启用。被动观测按存储类型**分层**——SQL、对象与数仓存储为 clean；文档与向量存储为 lossy；
 内存或嵌入式存储在无协作时不可行——且目录标记某模块处于设计阶段之处。自有 model 注册与微调是一项
-**计划中的能力**，而非已发布的 31 个模块之一。
+**计划中的能力**，而非已发布的 32 个模块之一。
 
 ## CLI
 

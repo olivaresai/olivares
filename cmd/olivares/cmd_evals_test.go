@@ -9,10 +9,15 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
 )
 
 // evalsGateServer is a canned control plane for the gate CLI: it returns body for
@@ -98,6 +103,53 @@ func TestEvalsGateExitMapping(t *testing.T) {
 	}
 }
 
+// TestEvalsUsesTheSavedSignInAndKeepsItsMissingValueMessages: after a sign-in the
+// gate reaches the engine with the saved credential; with nothing configured it
+// keeps its own message and exit 1, and its longer timeout.
+func TestEvalsUsesTheSavedSignInAndKeepsItsMissingValueMessages(t *testing.T) {
+	for _, name := range []string{"OLIVARES_SERVER_URL", "OLIVARES_TOKEN", "OLIVARES_TENANT"} {
+		t.Setenv(name, "")
+	}
+	config := filepath.Join(t.TempDir(), "client.yaml")
+	t.Setenv(cliConfigOverrideEnv, config)
+	cmd := newEvalsGateCmd()
+	cmd.SetOut(io.Discard)
+	cmd.SetErr(io.Discard)
+	cmd.SetArgs([]string{"--check-id", "g1"})
+	if err := cmd.Execute(); err == nil || err.Error() != "no server: set --server or OLIVARES_SERVER_URL" || exitcode.From(err) != exitcode.Err {
+		t.Fatalf("nothing configured = %v (exit %d)", err, exitcode.From(err))
+	}
+	if d := cmd.Flags().Lookup("timeout").DefValue; d != "10m0s" {
+		t.Fatalf("timeout default = %s", d)
+	}
+	srv := evalsGateServer(t, "", `{"id":"g1","verdict":"pass","effective_verdict":"pass","sampled":2,"total_cases":5}`)
+	defer srv.Close()
+	if err := writeCLIConfig(config, cliConfig{CurrentContext: "selected", Contexts: []cliContext{{Name: "selected", Server: srv.URL, Token: "tok", Tenant: "t1"}}}); err != nil {
+		t.Fatal(err)
+	}
+	cmd = newEvalsGateCmd()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"--check-id", "g1"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("gate after sign-in = %v (%s)", err, out.String())
+	}
+	// A connection given in full never reads the saved file, so an unrelated
+	// unreadable one does not stop it.
+	if err := os.WriteFile(config, []byte("{{"), 0o600); err != nil || os.Chmod(config, 0o644) != nil {
+		t.Fatal(err)
+	}
+	cmd = newEvalsGateCmd()
+	out.Reset()
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"--server", srv.URL, "--token", "tok", "--tenant", "t1", "--check-id", "g1"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("explicit gate with an unreadable saved file = %v (%s)", err, out.String())
+	}
+}
+
 // TestRunLabelSession drives the labeling loop against a canned plane: an already-
 // labeled key is skipped (resume), p/f labels post immediately with the right
 // human_passed, s skips, q ends the session.
@@ -135,7 +187,11 @@ func TestRunLabelSession(t *testing.T) {
 	}, "\n")
 	stdin := "p\nf\ns\nq\n"
 
-	cfg := &evalsClientConfig{server: srv.URL, token: "tok", tenant: "t1", timeout: 0}
+	t.Setenv(cliConfigOverrideEnv, filepath.Join(t.TempDir(), "client.yaml"))
+	cfg := &evalsClientConfig{agentClientConfig{server: srv.URL, token: "tok", tenant: "t1"}}
+	if err := cfg.resolve(); err != nil {
+		t.Fatal(err)
+	}
 	var out bytes.Buffer
 	err := runLabelSession(context.Background(), cfg, strings.NewReader(stdin), &out,
 		strings.NewReader(candidates), "ref", "criterion X")

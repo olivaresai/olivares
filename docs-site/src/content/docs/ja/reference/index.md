@@ -19,10 +19,10 @@ description: "情報指向のリファレンス: REST API、イベントバス�
 
 | 領域 | 何を文書化するか | 真実の源 |
 |---|---|---|
-| **[REST API](/reference/api/)** | control-plane HTTP API: auth、setup、テナンシー、エージェント、R/RW access map、トークン、監査台帳。 | 本製品の **OpenAPI 3.1** 契約（70 のコアパス）。実ファイルからビルド時にレンダリングされる —— コピーではない。 |
+| **[REST API](/reference/api/)** | control-plane HTTP API: auth、setup、テナンシー、エージェント、R/RW access map、トークン、監査台帳。 | 本製品の **OpenAPI 3.1** 契約（128 のコアパス）。実ファイルからビルド時にレンダリングされる —— コピーではない。 |
 | **[モジュールルート（beta）](/reference/api-beta/)** | 製品のモジュールルート（`/v1/m/<ns>/…`）—— FinOps、compliance、governance、sessions、models、knowledge、… —— を独立した **beta** OpenAPI ドキュメントとして公開する。 | 同じ OpenAPI 3.1 契約。モジュールが登録するルートからビルド時に反映される。 |
 | **[安定性ポリシー](/ja/reference/api-stability/)** | バージョニング、安定性階層、非推奨/サンセットのシグナリング、そして API・プロバイダ・クライアント SDK の最小サポートウィンドウ。 | コード内の非推奨テーブルと、ビルドを失敗させるウィンドウテスト。 |
-| **[gRPC](/ja/reference/grpc/)** | エンジンの gRPC ミラーと、すべてのプロセス外コネクタおよびモジュールが使用するバージョン管理された plugin wire 契約。 | サーバーが gRPC に渡す `grpc.ServiceDesc` 登録テーブル。 |
+| **[gRPC](/ja/reference/grpc/)** | エンジンの gRPC ミラーと、すべてのプロセス外コネクタが使用するバージョン管理された plugin wire 契約。 | サーバーが gRPC に渡す `grpc.ServiceDesc` 登録テーブル。 |
 | **[イベントバス](/ja/reference/events/)** | 内部イベントバス: イベントエンベロープ、ファーストパーティのイベント型、そしてコネクタがそこに持ち上げる観測ペイロード。 | **AsyncAPI 3.0** 契約。Go SDK から手作業で導出。 |
 | **[コンソール画面](/ja/reference/console/)** | コンソールが公開するすべてのルート、そのルートが要求する RBAC permission、製品内ヘルプリンクが開くリファレンスページ。 | ビルド済み router に固定されたコンソールの route census。 |
 | **[モジュールカタログ](/ja/reference/modules/overview/)** | 30 の製品モジュール —— それぞれが何であるか、そのステータス、そして（もしあれば）コア API の外にどのルートを公開するか。 | 製品の能力カタログと型付きモジュールインターフェース。 |
@@ -40,13 +40,13 @@ description: "情報指向のリファレンス: REST API、イベントバス�
 （`GET /v1/access-edges`。その reconcile された least-privilege *drift* はコア面ではなく access-map
 モジュールが提供する）、トークン管理、監査台帳をカバーする。
 
-契約は **70 のコアパス**を記述する。これは意図的である: それは control plane の安定したバージョン管理
+契約は **128 のコアパス**を記述する。これは意図的である: それは control plane の安定したバージョン管理
 された面であって、エンジンが応答できるすべてのルートではない。「stable」が約束するもの —— バージョニング、
 非推奨シグナリング、最小サポートウィンドウ —— は [API 安定性ポリシー](/ja/reference/api-stability/) である。
 
 :::note[モジュールルートは独立した beta 契約]
 モジュールルート —— 例えば access-map モジュールの `/v1/m/accessmap/graph`、
-`/v1/m/accessmap/neighbors`、`/v1/m/accessmap/drift` —— は、54 パスの安定コアドキュメントには
+`/v1/m/accessmap/neighbors`、`/v1/m/accessmap/drift` —— は、128 パスの安定コアドキュメントには
 含まれない。これらは独立した **beta** OpenAPI ドキュメント
 [`/reference/api-beta/`](/reference/api-beta/)（`/openapi.beta.json` で提供され、モジュールが実際に
 登録するルートから反映される）として公開されるため、安定サーフェスを識別可能に保ちながら、製品全体の
@@ -78,7 +78,7 @@ finding レポート）である。バスがまだ何かを形式化していな
 
 ## モジュールカタログ
 
-[モジュールカタログ](/ja/reference/modules/overview/) は、コアエンジンの上に座る **31 のモジュール**を、
+[モジュールカタログ](/ja/reference/modules/overview/) は、コアエンジンの上に座る **32 のモジュール**を、
 9 つの能力領域にわたって列挙する。最も有用なものの 1 つは、**Permitted-vs-Observed** diff を持つ
 **R/RW access map** である: それはデータパスに座るのではなく、ログ、OTEL、そして（非協調的バックストップ
 として）eBPF から読み取り、*どのエージェントがどのリソースを読み書きできるか*という関係のみを保存する
@@ -89,7 +89,7 @@ finding レポート）である。バスがまだ何かを形式化していな
 **階層化**される —— SQL、オブジェクト、ウェアハウスのストアは clean、ドキュメントとベクトルのストアは
 lossy、インメモリまたは組み込みストアは協調なしには impossible —— そしてカタログはモジュールが設計段階で
 ある箇所をマークする。自前モデルのレジストリとファインチューニングは**計画された能力**であって、出荷済みの
-31 モジュールの 1 つではない。
+32 モジュールの 1 つではない。
 
 ## CLI
 

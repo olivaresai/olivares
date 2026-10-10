@@ -1,0 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+# One record per GitHub login, added by a maintainer after receiving the signed PDF.
+# Format: <github-login> <YYYY-MM-DD> <CLA version>
+# Versions: HA-CLA-I-1.0 (individual), HA-CLA-E-1.0 (entity).
+# Keep PDFs, email addresses and other personal information out of this file.
+# Signing steps: CONTRIBUTING.md#dco-sign-off-and-cla

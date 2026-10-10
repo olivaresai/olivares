@@ -1,6 +1,6 @@
 {
   "title": "Copia de seguridad y restauración",
-  "description": "Gestiona instantáneas de recuperación ante desastres del plano de control.",
+  "description": "Gestiona instantáneas de recuperación ante desastres de Olivares AI.",
   "tabs": {
     "backups": "Copias de seguridad",
     "schedule": "Programación"
@@ -75,7 +75,7 @@
   "trigger": {
     "started": "Copia iniciada",
     "title": "Crear copia",
-    "description": "Crea una instantánea cifrada de todo el plano de control.",
+    "description": "Crea una instantánea cifrada de Olivares AI.",
     "notes": "Notas",
     "notesPlaceholder": "Descripción opcional para esta copia",
     "passphrase": "Frase de paso",
@@ -110,7 +110,7 @@
     "uploadFailed": "Error al subir",
     "started": "Restauración iniciada",
     "title": "Restaurar desde copia",
-    "description": "Sube un archivo .drbundle para restaurar el estado del plano de control.",
+    "description": "Sube un archivo .drbundle para restaurar el estado de Olivares AI.",
     "apply": "Aplicar restauración",
     "confirmTitle": "Confirmar restauración",
     "confirmDescription": "Esto sobrescribirá todos los datos actuales con el contenido de la copia. Esta operación no se puede deshacer.",
@@ -149,7 +149,7 @@
   "empty": {
     "backup": {
       "title": "Aún no hay instantáneas de copia de seguridad",
-      "description": "Crea una copia cifrada desde esta consola si usas SQLite; con PostgreSQL, crea el paquete mediante la CLI de DR en el directorio de copias configurado."
+      "description": "Crea una copia de seguridad cifrada desde esta consola."
     }
   }
 }

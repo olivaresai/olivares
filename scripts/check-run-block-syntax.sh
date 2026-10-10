@@ -52,35 +52,35 @@ export LC_ALL
 # ⇒ La raiz se fija con OLIVARES_ROOT y el directorio con OLIVARES_RUNBLOCK_WFDIR. Cualquier
 # argumento posicional es una intencion que este guion NO puede cumplir, y callarla seria mentir.
 if [ "$#" -gt 0 ]; then
-	echo "check-run-block-syntax: ⛔ NO HE PODIDO MIRAR: he recibido $# argumento(s) posicional(es) y no honro ninguno." >&2
-	echo "  La raiz se fija con OLIVARES_ROOT; el directorio de workflows, con OLIVARES_RUNBLOCK_WFDIR." >&2
-	echo "  Recibido: $*" >&2
+	echo "check-run-block-syntax: received $# arguments; expected no arguments or --self-test" >&2
+	echo "  Set the root with OLIVARES_ROOT and the workflow directory with OLIVARES_RUNBLOCK_WFDIR." >&2
+	echo "  Received: $*" >&2
 	exit 2
 fi
 
 RAIZ="${OLIVARES_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || echo "")}"
-[ -n "$RAIZ" ] || { echo "check-run-block-syntax: ⛔ NO HE PODIDO MIRAR: no estoy en un repositorio." >&2; exit 2; }
-cd "$RAIZ" || { echo "check-run-block-syntax: ⛔ NO HE PODIDO MIRAR: no entro en $RAIZ." >&2; exit 2; }
+[ -n "$RAIZ" ] || { echo "check-run-block-syntax: ⛔ COULD NOT CHECK: outside a repository." >&2; exit 2; }
+cd "$RAIZ" || { echo "check-run-block-syntax: ⛔ COULD NOT CHECK: cannot enter $RAIZ." >&2; exit 2; }
 WFDIR="${OLIVARES_RUNBLOCK_WFDIR:-.github/workflows}"
 MIN="${OLIVARES_RUNBLOCK_MIN:-50}"
-command -v python3 >/dev/null 2>&1 || { echo "check-run-block-syntax: ⛔ NO HE PODIDO MIRAR: no hay python3." >&2; exit 2; }
-[ -d "$WFDIR" ] || { echo "check-run-block-syntax: ⛔ NO HE PODIDO MIRAR: no existe $WFDIR." >&2; exit 2; }
+command -v python3 >/dev/null 2>&1 || { echo "check-run-block-syntax: ⛔ COULD NOT CHECK: python3 is not installed." >&2; exit 2; }
+[ -d "$WFDIR" ] || { echo "check-run-block-syntax: ⛔ COULD NOT CHECK: missing $WFDIR." >&2; exit 2; }
 
 python3 - "$WFDIR" "$MIN" <<'PY'
 import glob, os, re, subprocess, sys, tempfile
 
 wfdir, minimo = sys.argv[1], int(sys.argv[2])
 def cannot(m):
-    print(f"check-run-block-syntax: ⛔ NO HE PODIDO MIRAR: {m}", file=sys.stderr); sys.exit(2)
+    print(f"check-run-block-syntax: ⛔ COULD NOT CHECK: {m}", file=sys.stderr); sys.exit(2)
 try:
     import yaml
 except Exception:
-    cannot("no puedo importar yaml para leer los workflows")
+    cannot("cannot import yaml to read the workflows")
 
 EXPR = re.compile(r"\$\{\{.*?\}\}", re.S)
 ficheros = sorted(glob.glob(os.path.join(wfdir, "*.yml")) + glob.glob(os.path.join(wfdir, "*.yaml")))
 if not ficheros:
-    cannot(f"cero workflows en {wfdir}")
+    cannot(f"no workflows in {wfdir}")
 
 analizados = 0
 omitidos = []
@@ -89,7 +89,7 @@ for f in ficheros:
     try:
         doc = yaml.safe_load(open(f, encoding="utf-8"))
     except Exception as e:
-        cannot(f"{f} no parsea como YAML: {e}")
+        cannot(f"{f} cannot be parsed as YAML: {e}")
     if not isinstance(doc, dict):
         continue
     # el shell por defecto puede venir del workflow o del job; el del paso manda sobre los dos
@@ -102,7 +102,7 @@ for f in ficheros:
             if not isinstance(s, dict) or "run" not in s:
                 continue
             shell = (s.get("shell") or job_shell or "bash").split()[0]
-            quien = f"{os.path.basename(f)} · {jn} · paso {i} ({s.get('id') or s.get('name') or '<sin nombre>'})"
+            quien = f"{os.path.basename(f)} · {jn} · step {i} ({s.get('id') or s.get('name') or '<unnamed>'})"
             if shell not in ("bash", "sh"):
                 omitidos.append(f"{quien} — shell: {shell}")
                 continue
@@ -113,26 +113,26 @@ for f in ficheros:
             r = subprocess.run([shell, "-n", ruta], capture_output=True, text=True)
             os.unlink(ruta)
             if r.returncode != 0:
-                err = (r.stderr.strip().splitlines() or ["<sin mensaje>"])[-1]
-                err = err.replace(ruta, "<bloque>")
+                err = (r.stderr.strip().splitlines() or ["<no message>"])[-1]
+                err = err.replace(ruta, "<block>")
                 malos.append(f"{quien}\n      {err}")
 
 # CONTROL POSITIVO. Con cero bloques analizados, «todos parsean» seria cierto y vacio a la vez —
 # el mismo cero que en este arbol ya ha disfrazado dos censos rotos. Un conjunto vacio no aprueba.
 if analizados < minimo:
-    cannot(f"solo {analizados} bloque(s) analizable(s) (minimo {minimo}); la extraccion no esta casando")
+    cannot(f"only {analizados} inspectable block(s) (minimum {minimo}); extraction is not matching")
 
 if malos:
-    print(f"check-run-block-syntax: ⛔ {len(malos)} bloque(s) `run:` NO parsean:", file=sys.stderr)
+    print(f"check-run-block-syntax: ⛔ {len(malos)} `run:` block(s) do not parse:", file=sys.stderr)
     for m in malos:
         print(f"    {m}", file=sys.stderr)
-    print("  Bash sale 2 ante un error de sintaxis y NO imprime nada del guion: en CI eso es un", file=sys.stderr)
-    print("  paso rojo sin una sola linea, y el job muere ahi. Se ve aqui en <1 s o alli cuando ese", file=sys.stderr)
-    print("  job corra — que para release.yml es el dia del release.", file=sys.stderr)
+    print("  Bash exits 2 on a syntax error without printing the script's output. CI shows a failed", file=sys.stderr)
+    print("  step with no diagnostic, stopping the job. This check catches it in under one second;", file=sys.stderr)
+    print("  otherwise it appears only when the job runs, which for release.yml is release day.", file=sys.stderr)
     sys.exit(1)
 
-extra = f" · {len(omitidos)} omitido(s) por shell no-bash" if omitidos else ""
-print(f"check-run-block-syntax: {analizados} bloque(s) `run:` parsean{extra} (expresiones ${{{{ }}}} sustituidas por un token)")
+extra = f" · {len(omitidos)} skipped for a non-Bash shell" if omitidos else ""
+print(f"check-run-block-syntax: {analizados} `run:` block(s) parse{extra} (${{{{ }}}} expressions replaced with a token)")
 for o in omitidos:
-    print(f"  omitido: {o}")
+    print(f"  skipped: {o}")
 PY

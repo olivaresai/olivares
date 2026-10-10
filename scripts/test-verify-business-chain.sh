@@ -24,9 +24,9 @@ set -u -o pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/.." && pwd)"
 SUT="$ROOT/scripts/verify-business-chain.sh"
-[ -f "$SUT" ] || { echo "test-verify-business-chain: NO HE PODIDO MIRAR: no encuentro $SUT" >&2; exit 2; }
-command -v python3 >/dev/null 2>&1 || { echo "test-verify-business-chain: NO HE PODIDO MIRAR: falta python3" >&2; exit 2; }
-command -v curl >/dev/null 2>&1 || { echo "test-verify-business-chain: NO HE PODIDO MIRAR: falta curl" >&2; exit 2; }
+[ -f "$SUT" ] || { echo "test-verify-business-chain: COULD NOT CHECK: cannot find $SUT" >&2; exit 2; }
+command -v python3 >/dev/null 2>&1 || { echo "test-verify-business-chain: COULD NOT CHECK: missing python3" >&2; exit 2; }
+command -v curl >/dev/null 2>&1 || { echo "test-verify-business-chain: COULD NOT CHECK: missing curl" >&2; exit 2; }
 
 T="$(mktemp -d "${TMPDIR:-/tmp}/tvbc.XXXXXX")" || exit 2
 [ -d "$T" ] || exit 2
@@ -50,7 +50,7 @@ fi
 
 if [ "$sub" = "release" ] && [ "${1:-}" = "manifest" ]; then
 	shift
-	out=""; ver="26.8.0"
+	out=""; ver=""
 	while [ $# -gt 0 ]; do
 		case "$1" in
 		--out) out="$2"; shift 2 ;;
@@ -58,6 +58,7 @@ if [ "$sub" = "release" ] && [ "${1:-}" = "manifest" ]; then
 		*) shift ;;
 		esac
 	done
+	[[ "$ver" =~ ^[0-9]+\.[0-9]+$ ]] || { echo "fake: manifest version must be MAJOR.MINOR" >&2; exit 2; }
 	[ -n "$out" ] || { echo "fake: no --out" >&2; exit 1; }
 	mkdir -p "$(dirname "$out")"
 	printf '{"channel":"stable","version":"%s"}\n' "$ver" > "$out"
@@ -93,7 +94,10 @@ if [ "$sub" = "upgrade" ]; then
 		--endpoint) base="$2"; shift 2 ;;
 		--pubkey) pubkey="$2"; shift 2 ;;
 		--data-dir) ddir="$2"; shift 2 ;;
-		--check|--current-version|--token) [ "$1" = "--check" ] && shift || shift 2 ;;
+		--current-version)
+			[[ "$2" =~ ^[0-9]+\.[0-9]+$ ]] || { echo "fake: current version must be MAJOR.MINOR" >&2; exit 2; }
+			shift 2 ;;
+		--check|--token) [ "$1" = "--check" ] && shift || shift 2 ;;
 		*) shift ;;
 		esac
 	done
@@ -156,11 +160,11 @@ chmod +x "$T/fake-olivares"
 # rechazaba como «no ejecutable» — la batería salía 1 con 9 de 11 casos rojos por una propiedad del
 # MONTAJE, no del sujeto. Lo destapó el contraste externo corriéndola con el TMPDIR por defecto.
 "$T/fake-olivares" version >/dev/null 2>&1 || {
-	echo "test-verify-business-chain: NO HE PODIDO MIRAR: no puedo EJECUTAR ficheros bajo ${TMPDIR:-/tmp} (¿montado noexec?); exporta un TMPDIR ejecutable" >&2
+	echo "test-verify-business-chain: COULD NOT CHECK: cannot EXECUTE files under ${TMPDIR:-/tmp} (mounted noexec?); export an executable TMPDIR" >&2
 	exit 2; }
 for _tool in node tar sha256sum cut timeout; do
 	command -v "$_tool" >/dev/null 2>&1 || {
-		echo "test-verify-business-chain: NO HE PODIDO MIRAR: falta $_tool" >&2; exit 2; }
+		echo "test-verify-business-chain: COULD NOT CHECK: missing $_tool" >&2; exit 2; }
 done
 
 # The walker mints a fresh key per run and passes it to the client; the fake pins the FIRST
@@ -242,7 +246,7 @@ check "mutant accept-live-with-random-key: a client that returns 0 in the LIVE l
 rm -f "$T/pinned.key"
 out="$(OLIVARES_FAKE_MUTANT=live-accepts-anything OLIVARES_FAKE_LIVE_SENTINEL="http://127.0.0.1:1/" \
 	bash "$SUT" --binary "$T/olivares" --only channel-hermetic 2>&1)"; rc=$?
-check "y ese mismo mutante NO toca la pata hermética: sigue limpia" 0 "$rc" "$out" "4 check(s)"
+check "and the same mutant does NOT affect the hermetic leg: it remains clean" 0 "$rc" "$out" "4 check(s)"
 
 # Y su no-disparo, que es la mitad que impide que la guarda de arriba sea «rechaza siempre»: un
 # cliente honesto contra un endpoint muerto NO puede salir 0, y eso tiene que leerse como hallazgo
@@ -272,7 +276,7 @@ printf 'no-es-un-token\n' > "$T/fake.token"
 out="$(OLIVARES_FAKE_DEAD_ENDPOINT="http://127.0.0.1:1" bash "$SUT" --binary "$T/olivares" --live \
 	--only enterprise-client --enterprise-endpoint "http://127.0.0.1:1" --license "$T/fake.license" \
 	--download-token "$T/fake.token" 2>&1)"; rc=$?
-check "una pata seleccionada con una mitad sin medir sale 2, no 0" 2 "$rc" "$out" "PARTIAL"
+check "a selected leg with one half unmeasured exits 2, not 0" 2 "$rc" "$out" "PARTIAL"
 
 # ── EL TERCER CONTROL NEGATIVO: UNA CREDENCIAL REVOCADA ─────────────────────────────────
 # El encargo pide tres controles negativos y el guion tenia dos: sin derecho no hay bytes, y un
@@ -294,7 +298,7 @@ GOOD = os.environ["GATE_GOOD"]
 REVOKED = os.environ["GATE_REVOKED"]
 MODE = os.environ.get("GATE_MODE", "honest")
 ARTIFACT = b"x" * 4096
-MANIFEST = b'{"channel":"stable","version":"29.12.0"}'
+MANIFEST = b'{"channel":"stable","version":"29.12"}'
 # El cliente falso hace `body="$(curl ...)"` y luego `printf '%s\n' "$body" | sha256sum`, o sea que
 # firma el cuerpo MAS un salto de linea. La firma se calcula igual o la verificacion no casaria.
 SIG = hashlib.sha256(MANIFEST + b"\n").hexdigest().encode()
@@ -353,22 +357,22 @@ run_client_leg() { # $@ = extra args
 }
 
 if ! start_gate honest; then
-	echo "FAIL - la puerta falsa no arranco en el puerto ${gate_port}: estos tres casos no se han medido"
+	echo "FAIL - the fake gate did not start on port ${gate_port}: these three cases were not measured"
 	fails=$((fails + 1)); cases=$((cases + 3))
 else
 	# CONTROL POSITIVO de la pata entera: con una puerta honesta y las cuatro credenciales, la pata
 	# enterprise pasa. Sin el, los dos casos de abajo los aprobaria una pata que siempre falla.
 	out="$(run_client_leg --revoked-token "$T/revoked.token")"; rc=$?
-	check "puerta honesta: la pata enterprise entera pasa (instala, sirve al comprador, rehusa al resto)" 0 "$rc" "$out" "enterprise-client/revoked"
+	check "honest gate: the entire enterprise leg passes (installs, serves the buyer, rejects others)" 0 "$rc" "$out" "enterprise-client/revoked"
 
 	# EL MUTANTE: la MISMA puerta, cambiando UNA cosa - sigue sirviendo a la credencial revocada.
 	stop_gate
 	if ! start_gate serves-revoked; then
-		echo "FAIL - la puerta mutante no arranco: el caso que de verdad importa no se ha medido"
+		echo "FAIL - the mutant gate did not start: the decisive case was not measured"
 		fails=$((fails + 1)); cases=$((cases + 1))
 	else
 		out="$(run_client_leg --revoked-token "$T/revoked.token")"; rc=$?
-		check "mutante sirve-al-revocado: entregar bytes a un derecho REVOCADO es HALLAZGO" 1 "$rc" "$out" "enterprise-client/revoked"
+		check "serves-revoked mutant: serving bytes to a REVOKED entitlement is a FINDING" 1 "$rc" "$out" "enterprise-client/revoked"
 	fi
 	stop_gate
 
@@ -376,10 +380,10 @@ else
 	# que nadie ejercio.
 	if start_gate honest; then
 		out="$(run_client_leg)"; rc=$?
-		check "sin --revoked-token: el control de revocacion NO medido es rc=2, no un verde" 2 "$rc" "$out" "enterprise-client/revoked"
+		check "without --revoked-token: the unmeasured revocation control returns rc=2, not a pass" 2 "$rc" "$out" "enterprise-client/revoked"
 		stop_gate
 	else
-		echo "FAIL - la puerta honesta no rearranco: el caso de la opcion ausente no se ha medido"
+		echo "FAIL - the honest gate did not restart: the missing-option case was not measured"
 		fails=$((fails + 1)); cases=$((cases + 1))
 	fi
 fi
@@ -405,14 +409,14 @@ done < <(grep -oE '^[[:space:]]*--[a-z-]+\) need_value' "$SUT" | grep -oE '\-\-[
 # verde vacio: comprobaria cero opciones y diria «la ayuda las nombra todas». Me paso al escribirlo
 # —el ancla era `^\t` y no casaba nada—, asi que la ausencia de opciones es un fallo, no un pase.
 if [ "$(grep -cE '^[[:space:]]*--[a-z-]+\) need_value' "$SUT")" -lt 5 ]; then
-	help_missing="$help_missing (la derivacion de opciones no encontro el parser: caso vacio)"
+	help_missing="$help_missing (option derivation did not find the parser: empty case)"
 fi
 if [ "$rc" -ne 0 ]; then
-	echo "FAIL - --help salio rc=$rc"; fails=$((fails + 1))
+	echo "FAIL - --help exited with rc=$rc"; fails=$((fails + 1))
 elif [ -n "$help_missing" ]; then
-	echo "FAIL - la ayuda no nombra:$help_missing"; fails=$((fails + 1))
+	echo "FAIL - help does not name:$help_missing"; fails=$((fails + 1))
 else
-	echo "ok   - la ayuda nombra las cinco patas y todas las opciones con valor del parser"
+	echo "ok   - help names the five legs and all value-taking parser options"
 fi
 
 # ── UN HALLAZGO NO SE ENTIERRA BAJO UNA CEGUERA POSTERIOR ───────────────────────────────
@@ -425,18 +429,18 @@ fi
 rm -f "$T/pinned.key"
 out="$(OLIVARES_FAKE_MUTANT=accept-anything bash "$SUT" --binary "$T/olivares" --live \
 	--enterprise-endpoint "http://127.0.0.1:1" 2>&1)"; rc=$?
-check "un hallazgo con una pata ciega detras sale 1, no 2" 1 "$rc" "$out" "FINDINGS"
+check "a finding followed by an unmeasured leg exits 1, not 2" 1 "$rc" "$out" "FINDINGS"
 cases=$((cases + 1))
 if grep -q "NOT measured either" <<<"$out"; then
-	echo "ok   - el resumen del hallazgo declara ademas lo que no se midio"
+	echo "ok   - the finding summary also declares what was not measured"
 else
-	echo "FAIL - un rc=1 con patas sin medir no lo dice: el lector supone que se midio todo"
+	echo "FAIL - rc=1 with unmeasured legs does not say so: the reader assumes everything was measured"
 	fails=$((fails + 1))
 fi
 
 # ── THE THIRD ANSWER: could-not-look must not be reported as clean ──────────────────────
 out="$(bash "$SUT" --binary "$T/does-not-exist" 2>&1)"; rc=$?
-check "no binary is rc=2 (could not look), never 0" 2 "$rc" "$out" "NO HE PODIDO MIRAR"
+check "no binary is rc=2 (could not look), never 0" 2 "$rc" "$out" "COULD NOT LOOK"
 
 out="$(bash "$SUT" --binary "$T/olivares" --only no-such-leg 2>&1)"; rc=$?
 check "a run where NO leg matched is rc=2, not a green" 2 "$rc" "$out" "no leg ran"

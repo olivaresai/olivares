@@ -336,6 +336,10 @@ type reservationTarget struct {
 	// aggregate and whether it was scan-truncated (a truncated aggregate is only a
 	// lower bound, so it forces a fail-closed deny, exactly like CheckBudget).
 	spend func(ctx context.Context, sc store.Scope) (aggResult, error)
+	// applies rechecks a moving department under the monetary writer transaction.
+	// Candidates include initially nonmatching workspace budgets, so a move in
+	// cannot escape a parent cap and a move out cannot charge its former parent.
+	applies func(ctx context.Context, sc store.Scope) (bool, error)
 	// failClosed marks a target whose spend read must produce a DENY rather than
 	// bubble up as an error the caller fails open on. It is set for a group budget
 	// that declared fail_closed: its members may be unresolvable, and the operator
@@ -429,7 +433,7 @@ func (m *Module) ReserveBudget(ctx context.Context, tenant model.TenantID, dims 
 		return BudgetReservation{}, fmt.Errorf("finops: reservation estimate must not be negative")
 	}
 	now := m.clock.Now().Time()
-	targets, truncated, err := m.budgetTargets(ctx, tenant, dims, now)
+	targets, truncated, err := m.budgetTargets(ctx, tenant, dims, "", now)
 	if err != nil {
 		// The census this admission binds, or an identity or group resolution it needs,
 		// could not be read, and the frontier has not been consulted either — this
@@ -448,12 +452,15 @@ func (m *Module) ReserveBudget(ctx context.Context, tenant model.TenantID, dims 
 }
 
 // budgetTargets reads, before any write transaction, the enforcing budgets that scope
-// dims, and turns each into a reservation target at now. truncated says the budget
-// set could not be read whole, which a caller answers with a refusal. An error is a
-// read that failed and has decided nothing. ReserveBudget and the admission's create
-// build their budget phase here, so the two bind the same budgets.
-func (m *Module) budgetTargets(ctx context.Context, tenant model.TenantID, dims SpendDims, now time.Time) ([]reservationTarget, bool, error) {
+// dims and actor, and turns each into a reservation target at now. actor is the
+// admission's ActorRef, the same actor the settled spend is recorded under, so an
+// actor budget holds the calls it reports on; ReserveBudget has no actor and passes "".
+// truncated says the budget set could not be read whole, which a caller answers with a
+// refusal. An error is a read that failed and has decided nothing. ReserveBudget and
+// the admission's create build their budget phase here, so the two bind the same budgets.
+func (m *Module) budgetTargets(ctx context.Context, tenant model.TenantID, dims SpendDims, actor string, now time.Time) ([]reservationTarget, bool, error) {
 	attr := attributionFromDims(dims)
+	attr.Actor = actor
 
 	// EVERY page, and a truncation is a DENY — the same enumeration CheckBudget does.
 	//
@@ -467,10 +474,25 @@ func (m *Module) budgetTargets(ctx context.Context, tenant model.TenantID, dims 
 		budgets   []model.Policy
 		truncated bool
 	)
+	specs := make(map[model.ID]budgetSpec)
 	if err := m.data.View(ctx, tenant, func(sc store.Scope) error {
 		var lerr error
 		budgets, truncated, lerr = listAllBudgets(ctx, sc)
-		return lerr
+		if lerr != nil || truncated {
+			return lerr
+		}
+		for _, p := range budgets {
+			spec := parseBudgetSpec(p.Spec)
+			spec.fillDefaults()
+			if !p.Enabled || spec.Action == budgetActionAlert {
+				continue
+			}
+			if err := spec.resolveWorkspace(ctx, sc); err != nil {
+				return err
+			}
+			specs[p.ID] = spec
+		}
+		return nil
 	}); err != nil {
 		return nil, false, err
 	}
@@ -510,9 +532,8 @@ func (m *Module) budgetTargets(ctx context.Context, tenant model.TenantID, dims 
 		if !p.Enabled {
 			continue
 		}
-		spec := parseBudgetSpec(p.Spec)
-		spec.fillDefaults()
-		if spec.Action == budgetActionAlert || !spec.matches(attr) {
+		spec, enforcing := specs[p.ID]
+		if !enforcing || (spec.Dimension != "workspace" && !spec.matches(attr)) {
 			continue // alert-only never denies; non-matching budgets don't apply
 		}
 		pStart, hasLower := periodStart(spec.Period, now)
@@ -522,6 +543,16 @@ func (m *Module) budgetTargets(ctx context.Context, tenant model.TenantID, dims 
 		// summed over the members the directory resolves. Handing a group target the
 		// column filters instead would read zero on a ledger whose members are over the
 		// cap, and admit.
+		var applies func(ctx context.Context, sc store.Scope) (bool, error)
+		if spec.Dimension == "workspace" {
+			applies = func(ctx context.Context, sc store.Scope) (bool, error) {
+				spec.workspaceRefs = nil
+				if err := spec.resolveWorkspace(ctx, sc); err != nil {
+					return false, err
+				}
+				return spec.matches(attr), nil
+			}
+		}
 		var read func(ctx context.Context, sc store.Scope) (aggResult, error)
 		if isGroupDimension(spec.Dimension) {
 			dimension, key := spec.Dimension, spec.Key
@@ -529,9 +560,10 @@ func (m *Module) budgetTargets(ctx context.Context, tenant model.TenantID, dims 
 				return aggregateGroupPeriod(ctx, sc, userGroups.get, dimension, key, pStart, hasLower, pEnd, hasLower)
 			}
 		} else {
-			filters := spec.sampleFilters()
 			read = func(ctx context.Context, sc store.Scope) (aggResult, error) {
-				return aggregatePeriod(ctx, sc, filters, pStart, hasLower, pEnd, hasLower)
+				// Workspace applicability resolved this scope in the same write;
+				// the spend read uses exactly that department set.
+				return aggregatePeriod(ctx, sc, spec.sampleFilters(), pStart, hasLower, pEnd, hasLower)
 			}
 		}
 		targets = append(targets, reservationTarget{
@@ -539,7 +571,7 @@ func (m *Module) budgetTargets(ctx context.Context, tenant model.TenantID, dims 
 			dimension: spec.Dimension, scopeKey: spec.Key, period: spec.Period, periodStart: pStart,
 			periodEnd: pEnd, hasBounds: hasLower,
 			ceiling: spec.LimitMicroUSD, staticReserved: spec.ReservedMicroUSD,
-			spend: read,
+			spend: read, applies: applies,
 			// A group budget that DECLARED fail-closed must deny when its members cannot be
 			// resolved. CheckBudget turns exactly that failure into a normal deny; this path
 			// used to return an allowed result carrying the error, which the seam's documented
@@ -789,7 +821,7 @@ type reserveOutcome struct {
 // without it the reserve is errHoldIdentityRequired and inserts nothing.
 //
 // An estimate of zero HOLDS NOTHING: every target is still read and judged, so a cap
-// already past its limit still refuses, but no row is inserted and no handle issued.
+// spent to or past its limit still refuses, but no row is inserted and no handle issued.
 //
 // A refusal returns errReservationDenied once every target was visited, so block can
 // outrank throttle; the caller returns it from its callback and the whole transaction
@@ -816,6 +848,15 @@ func reserveInScope(ctx context.Context, sc store.Scope, targets []reservationTa
 	// inserted for an earlier target — so a multi-budget reserve is all-or-nothing
 	// without a pre-pass. We still visit EVERY target so block can outrank throttle.
 	for _, tg := range targets {
+		if tg.applies != nil {
+			applies, err := tg.applies(ctx, sc)
+			if err != nil {
+				return out, err
+			}
+			if !applies {
+				continue
+			}
+		}
 		// deny records this target's refusal with the same precedence the
 		// no-headroom path has always used (first denial wins; a block outranks
 		// a throttle already recorded) and marks the transaction for rollback.
@@ -920,7 +961,13 @@ func reserveInScope(ctx context.Context, sc store.Scope, targets []reservationTa
 		}
 		// A truncated spend aggregate is a lower bound: fail closed (deny), the
 		// same posture CheckBudget takes on truncation.
-		if agg.Truncated || !effective.OK || !ceilingSum.OK || ceilingSum.Value > tg.ceiling {
+		//
+		// An amount may land exactly on the limit. An admission with no amount (a
+		// session on a subscription plan) asks whether the cap is reached, and a cap
+		// spent to its limit is reached, as CheckBudget and the budget status say:
+		// spend+0 > limit would admit it at the limit where a metered call is refused.
+		if agg.Truncated || !effective.OK || !ceilingSum.OK || ceilingSum.Value > tg.ceiling ||
+			(!holds && effective.Value >= tg.ceiling) {
 			reason := fmt.Sprintf("budget %q %s cap reached (%s): no headroom to reserve %d µUSD", tg.name, tg.action, tg.period, estimate)
 			switch {
 			case agg.Truncated:

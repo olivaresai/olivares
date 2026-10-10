@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// El `X-Request-ID` en pantalla, contra un MOTOR REAL.
+// Display `X-Request-ID` against a real engine.
 //
-// ⛔ Lo que esto ve y el unit test no: que `client.ts` LEA la cabecera de una respuesta HTTP de
-//    verdad (el mock la inyecta ya parseada), que `AsyncSection` monte el `ErrorState` en la ruta
-//    real, y que la clave `errors:requestId` RESUELVA en el bundle servido. El fallo del que nace
-//    Era justo de esa clase: el dato existía y no llegaba a la pantalla.
+// This checks what the unit test cannot: `client.ts` reads the header from a real HTTP response
+// (the mock injects it already parsed), `AsyncSection` mounts `ErrorState` on the real route,
+// and `errors:requestId` resolves in the served bundle. Arose from this exact failure:
+// the data existed but never reached the screen.
 import { test, expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
 

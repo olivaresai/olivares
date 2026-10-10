@@ -20,7 +20,7 @@ import (
 // the test body never joins: createRun starts `go m.bridge(lr)` (runtime.go:384) and the
 // bridge reads Module.now() (runtime.go:1291) twice over — once per frame at the top of
 // its pump (runtime_bridge.go:32), and again, one frame deeper, down
-// onStdout → captureSessionID → bindProviderSession (runtime_bridge.go:104), which is the
+// onStdout → captureProfiledSessionID → bindManagedProviderAliasWithin (runtime_bridge.go:104), which is the
 // stack CI printed. A test body writing the field at the same time is a real data race,
 // and it landed as a red main, in someone else's run, blaming the wrong pull request. The
 // clock is mutex-guarded now (live_test.go:24-33) — nothing else stopped the bare field
@@ -51,7 +51,7 @@ import (
 //
 // The three assertions at the end are the second half of not being vacuous. Two of them
 // pin the reported stack — the launch took a claim, and the provider id resolves to the
-// canonical session that claim named, which is observable only if bindProviderSession
+// canonical session that claim named, which is observable only if bindManagedProviderAliasWithin
 // ran its body. The third pins the thing the other two do not: that the bridge actually
 // CALLED the clock, counted on the double itself. Without it, production could keep the
 // capture and the alias while losing both reads and this file would still be green.
@@ -145,7 +145,7 @@ func TestRuntime_TheBridgeReadsTheClockWhileTheTestBodyMovesIt(t *testing.T) {
 		WithLaunchGate(gate),
 		WithClock(clk)) // applied after the harness's own clock, so this one wins
 
-	dto, err := m.createRun(ctx, tenant, CreateRunParams{
+	dto, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative,
 		WorkspaceRef: registerTestWorkspace(t, m, tenant, t.TempDir()),
 		Actor:        "user:u1", ActorKind: "user",
@@ -165,12 +165,12 @@ func TestRuntime_TheBridgeReadsTheClockWhileTheTestBodyMovesIt(t *testing.T) {
 			}
 		}
 	})
-	// bindProviderSession returns BEFORE reading the clock when the launch took no
+	// bindManagedProviderAliasWithin returns BEFORE reading the clock when the launch took no
 	// claim. Without a claim this test would still pass, and would be testing the early
 	// return instead of the reported stack.
 	claimSID := gate.last(t).ClaimSID
 	if claimSID == "" {
-		t.Fatal("the launch acquired no claim, so bindProviderSession returns before it ever " +
+		t.Fatal("the launch acquired no claim, so bindManagedProviderAliasWithin returns before it ever " +
 			"reads the clock: this test would be exercising the early return, not the race")
 	}
 	// The baseline is taken here: createRun's own reads are on THIS goroutine and are
@@ -190,7 +190,7 @@ func TestRuntime_TheBridgeReadsTheClockWhileTheTestBodyMovesIt(t *testing.T) {
 	}
 
 	// The init envelope drives the stack the detector printed:
-	// onStdout → captureSessionID → bindProviderSession → Module.now().
+	// onStdout → captureProfiledSessionID → bindManagedProviderAliasWithin → Module.now().
 	handoff("init", `{"type":"system","subtype":"init","session_id":"`+clockRaceSID+`"}`)
 	clk.advance(time.Second)
 
@@ -217,18 +217,18 @@ func TestRuntime_TheBridgeReadsTheClockWhileTheTestBodyMovesIt(t *testing.T) {
 		d, _ := m.getRun(ctx, tenant, dto.RunRef)
 		return d.ClaudeSessionID == clockRaceSID
 	})
-	// captureSessionID is only the door. The reported read is one frame further in, in
-	// bindProviderSession's body — which is observable exactly here: the provider id now
+	// captureProfiledSessionID is only the door. The reported read is one frame further in, in
+	// bindManagedProviderAliasWithin's body — which is observable exactly here: the provider id now
 	// resolves to the SAME canonical session the launch's claim named. If that body had
 	// been skipped, this resolve would mint a fresh identity and the ids would differ.
-	sid, err := m.ResolveSession(ctx, tenant, SessionBinding{Provider: "claude", ExternalID: clockRaceSID})
-	if err != nil {
+	alias, found, err := m.LookupScopedAlias(ctx, tenant, dto.ProviderProfileRef, "claude", clockRaceSID)
+	if err != nil || !found {
 		t.Fatalf("resolve the provider alias: %v", err)
 	}
-	if sid != claimSID {
+	if alias.SID != claimSID {
 		t.Fatalf("the provider session id resolves to %q instead of the launch's canonical session %q: "+
-			"bindProviderSession never ran its body, so the clock read this test is built on never happened",
-			sid, claimSID)
+			"bindManagedProviderAliasWithin never ran its body, so the clock read this test is built on never happened",
+			alias.SID, claimSID)
 	}
 
 	if _, err := m.stopRun(ctx, tenant, dto.RunRef, "user:u1", "user"); err != nil {

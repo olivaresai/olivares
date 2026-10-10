@@ -71,16 +71,18 @@ ohne Override-Datei.
 
 Pinnen Sie die Engine per Digest und verifizieren Sie sie zuerst:
 
+<!-- release -->
 ```sh
 # verify the engine image you run (it is cosign-signed)
-cosign verify docker.io/olivaresai/olivares:26.10.1 \
-  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v?[0-9]+\.[0-9]+(\.[0-9]+)?$' \
+cosign verify docker.io/olivaresai/olivares:0.1 \
+  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/[0-9]+\.[0-9]+$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 
 export OLIVARES_IMAGE=docker.io/olivaresai/olivares@sha256:<digest>
 export OLIVARES_BIND=127.0.0.1
 docker compose -f deploy/compose/docker-compose.yml up -d
 ```
+<!-- /release -->
 
 ### Claude Code installieren und anmelden
 
@@ -101,11 +103,38 @@ nie eine Anmeldung aus dem Home des Server-Kontos.
 Engine und `claude` auf dem Host; systemd betreibt die Engine, die `claude` dirigiert. Der
 Workspace liegt unter `/var/lib/olivares/workspaces`.
 
-### Ein Befehl
+### Herunterladen, prüfen, dann ausführen
 
+Leiten Sie das Installationsskript nie in eine Shell. Prüfen Sie die signierte
+Prüfsummenliste des Releases, checken Sie genau den Commit aus, den sie nennt, und führen
+Sie das Skript aus diesem Checkout aus. Es liest `install.sh` und seine Paketdateien dann
+aus dem Checkout, nie aus einem Branch. Der Block läuft in einer Subshell mit `set -eu`: Er
+bricht beim ersten fehlgeschlagenen Schritt ab und startet das Skript nie nach einer
+fehlgeschlagenen Prüfung.
+
+<!-- release -->
 ```sh
-curl -fsSL https://raw.githubusercontent.com/olivaresai/olivares/main/scripts/install-agentops.sh | sh
+(
+set -eu
+cd "$(mktemp -d)"
+ver=0.1
+base=https://github.com/olivaresai/olivares/releases/download/$ver
+curl -fsSLO $base/checksums.txt
+curl -fsSLO $base/checksums.txt.sig
+curl -fsSLO $base/checksums.txt.pem
+curl -fsSLO $base/release-commit.txt
+cosign verify-blob \
+  --certificate checksums.txt.pem --signature checksums.txt.sig \
+  --certificate-identity "https://github.com/olivaresai/olivares/.github/workflows/release.yml@refs/tags/$ver" \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  checksums.txt
+grep ' release-commit.txt$' checksums.txt | sha256sum --check
+git clone https://github.com/olivaresai/olivares.git
+cd olivares && git checkout --detach "$(cat ../release-commit.txt)"
+OLIVARES_TOPOLOGY=native OLIVARES_VERSION=$ver sh scripts/install-agentops.sh
+)
 ```
+<!-- /release -->
 
 Es erkennt die native Topologie automatisch, installiert das **verifizierte** Engine-Binary
 (das cosign-gegatete `install.sh`), installiert `claude` aus dem signierten
@@ -119,10 +148,14 @@ Entscheidung.
 
 - `packaging/systemd/olivares.service.d/agentops.conf` — ein Drop-in, das dem dirigierten
   `claude` ein beschreibbares `HOME` für `~/.claude` gibt (unter `/var/lib/olivares`
-  gehalten, sodass `ProtectHome=true` echte Benutzer weiterhin abschirmt), sicherstellt,
-  dass das Workspace-Verzeichnis existiert, und genau **eine** Sandbox-Eigenschaft anhebt:
-  `MemoryDenyWriteExecute` (die `claude`-Laufzeit JIT-kompiliert und braucht
-  W→X-Speicher). Jede andere Härtungsdirektive der Basiseinheit bleibt in Kraft.
+  gehalten), sicherstellt, dass das Workspace-Verzeichnis existiert, und die
+  Dateisystem-Richtlinie der Basiseinheit wiederholt: `ProtectSystem=full`,
+  `ProtectHome=false`, `PrivateTmp=false` und `MemoryDenyWriteExecute=false` (die
+  `claude`-Laufzeit JIT-kompiliert und braucht W→X-Speicher). Home-Verzeichnisse und
+  `/tmp` bleiben für die Engine sichtbar, damit die gewählten Ordner erreichbar bleiben;
+  das `claude` jeder Session und seine stdio-MCP-Server laufen stattdessen unter der
+  ordnerbezogenen Landlock-Eingrenzung des Produkts. Jede andere Härtungsdirektive der
+  Basiseinheit bleibt in Kraft.
 - `/etc/olivares/agentops.env` — die Session-Runtime-Konfiguration (Token-Datei, TTL,
   optionale Gateway-Basis-URL, optionaler BYO-`claude`-Pfad).
 
@@ -237,8 +270,9 @@ Bis dahin ist der sichere Standard die Co-Lokation.
   `0.0.0.0`; die Host-Port-Zuordnung steuert den Zugriff. Auch native/systemd-Listener
   binden standardmäßig alle Schnittstellen; konfigurieren Sie ihre Listen-Adressen.
 - **Non-root, Least Privilege.** uid/gid 65532, schreibgeschütztes Root-Dateisystem,
-  `cap_drop: ALL`, `no-new-privileges` (Docker) / der volle `Protect*`/`Restrict*`-Satz
-  abzüglich der einen dokumentierten W^X-Lockerung (systemd).
+  `cap_drop: ALL`, `no-new-privileges` (Docker) / die Kernel- und Namespace-Direktiven
+  `Protect*`/`Restrict*`, wobei Home-Verzeichnisse und `/tmp` sichtbar bleiben, W^X erlaubt
+  ist und jede Session per Landlock auf ihren Ordner eingegrenzt wird (systemd).
 - **Minimal-Data, allowlist-basierte Env.** Das Kind-`claude` erbt nur eine explizite
   Allowlist (PATH, HOME, Locale…) plus das In-Memory-Inferenz-Token — **keine**
   `OLIVARES_*`-Signing-Keys, **kein** ambientes `ANTHROPIC_*`/`CLAUDE_CODE_*`, das die

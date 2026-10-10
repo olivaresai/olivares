@@ -48,7 +48,7 @@ RAICES=(
 # otras rutas que las declaradas y no lo cuenta es el mismo defecto que un cero sin la lista.
 if [ -n "${OLIVARES_SCAN_ROOTS:-}" ]; then
 	IFS=':' read -r -a RAICES <<<"${OLIVARES_SCAN_ROOTS}"
-	echo "scan-box-secrets: AVISO — raices sustituidas por OLIVARES_SCAN_ROOTS (${#RAICES[@]})"
+	echo "scan-box-secrets: WARNING — roots overridden by OLIVARES_SCAN_ROOTS (${#RAICES[@]})"
 fi
 
 # Nombres de credencial que se buscan seguidos de un valor largo. La lista es explícita: un
@@ -79,28 +79,28 @@ mirados=0
 no_mirados=0
 excluidos=0
 
-echo "scan-box-secrets: raices declaradas y su veredicto"
+echo "scan-box-secrets: declared roots and their verdicts"
 for r in "${RAICES[@]}"; do
 	if [ ! -e "$r" ]; then
-		printf '  %-44s NO EXISTE\n' "$r"
+		printf '  %-44s DOES NOT EXIST\n' "$r"
 		continue
 	fi
 	if [ ! -r "$r" ]; then
-		printf '  %-44s ILEGIBLE (no es un verde)\n' "$r"
+		printf '  %-44s UNREADABLE (not a pass)\n' "$r"
 		no_mirados=$((no_mirados + 1))
 		continue
 	fi
-	printf '  %-44s revisada\n' "$r"
+	printf '  %-44s inspected\n' "$r"
 	mirados=$((mirados + 1))
 done
 
 if [ "$mirados" -eq 0 ]; then
-	echo "scan-box-secrets: NO HE PODIDO MIRAR — ninguna raiz revisable" >&2
+	echo "scan-box-secrets: COULD NOT LOOK — no inspectable root" >&2
 	exit 2
 fi
 
 echo
-echo "scan-box-secrets: hallazgos (NOMBRE · fichero · longitud del valor; el valor NUNCA se imprime)"
+echo "scan-box-secrets: findings (NAME · file · value length; the value is NEVER printed)"
 for r in "${RAICES[@]}"; do
 	[ -d "$r" ] && [ -r "$r" ] || continue
 	# -s: sólo ficheros regulares no vacíos. El barrido es binario a propósito: un volcado no
@@ -128,7 +128,7 @@ for r in "${RAICES[@]}"; do
 		# ni siquiera identifica al secreto fuera de esta lista.
 		etiqueta="$(LC_ALL=C grep -aoE "(${NOMBRES})=[A-Za-z0-9_.:/+-]{${MIN_VALOR},}" "$f" 2>/dev/null \
 			| head -1 | sed 's/^[^=]*=//' | tr -d '\n' | sha256sum | cut -c1-12)"
-		printf '  %-28s [%s] %s  (%d ocurrencia(s), valor de ~%d caracteres)\n' \
+		printf '  %-28s [%s] %s  (%d occurrence(s), value length ~%d characters)\n' \
 			"${nombre:-?}" "$etiqueta" "$f" "$n" "$((largo - 1))"
 		hallazgos=$((hallazgos + n))
 	done < <(find "$r" -type f -size +0c 2>/dev/null)
@@ -136,19 +136,19 @@ done
 
 echo
 if [ "$INCLUIR_CACHES" -eq 0 ]; then
-	echo "scan-box-secrets: exclusiones por ruta aplicadas (--incluir-caches las levanta):"
+	echo "scan-box-secrets: path exclusions applied (--incluir-caches disables them):"
 	for x in "${EXCLUIDAS[@]}"; do
-		printf '  %-20s tabla de cadenas de binarios: literales contiguos se leen como un valor\n' "$x"
+		printf '  %-20s binary string tables: adjacent literals read as one value\n' "$x"
 	done
-	echo "  ficheros saltados por esas rutas: ${excluidos}"
+	echo "  files skipped under those paths: ${excluidos}"
 fi
 if [ "$no_mirados" -gt 0 ]; then
-	echo "scan-box-secrets: ${no_mirados} ruta(s) ILEGIBLES — el veredicto es PARCIAL" >&2
+	echo "scan-box-secrets: ${no_mirados} UNREADABLE path(s) — the verdict is PARTIAL" >&2
 fi
 if [ "$hallazgos" -gt 0 ]; then
-	echo "scan-box-secrets: ${hallazgos} hallazgo(s) en ${mirados} raiz(ces) revisada(s)." >&2
-	echo "  ⛔ Borrar el fichero NO cierra la exposicion: la credencial se ROTA primero." >&2
+	echo "scan-box-secrets: ${hallazgos} finding(s) in ${mirados} inspected root(s)." >&2
+	echo "  ⛔ Deleting the file does NOT end the exposure: ROTATE the credential first." >&2
 	exit 1
 fi
-echo "scan-box-secrets: CLEAN — 0 hallazgos en ${mirados} raiz(ces) revisada(s), con la lista arriba."
+echo "scan-box-secrets: CLEAN — 0 findings in ${mirados} inspected root(s), listed above."
 exit 0

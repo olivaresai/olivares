@@ -39,41 +39,41 @@ export LC_ALL
 
 RAIZ="${OLIVARES_CLONE:-$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")/.." && pwd -P)}"
 cd "$RAIZ/cmd/olivares" 2>/dev/null || {
-	echo "check-connector-onboard: ⛔ NO HE PODIDO MIRAR: no existe $RAIZ/cmd/olivares" >&2
+	echo "check-connector-onboard: ⛔ COULD NOT CHECK: missing $RAIZ/cmd/olivares" >&2
 	exit 2
 }
 
 PRUEBAS="TestConnectorCatalogCoversSwitch|TestConnectorDocsListEveryWiredKind"
-salida="$(go test -run "$PRUEBAS" -count=1 -v . 2>&1)"
+output="$(go test -run "$PRUEBAS" -count=1 -v . 2>&1)"
 rc=$?
 
 # ── El control positivo, ANTES de mirar el rc ────────────────────────────────────────────
 # Se comprueba que CADA prueba se ejecutó, por su nombre. Un `-run` que no casa nada, un paquete
 # que no compila con `-run` filtrado, o una prueba renombrada, salen todos por aquí y NUNCA por 0.
-faltan=""
+missing_inputs=""
 for t in TestConnectorCatalogCoversSwitch TestConnectorDocsListEveryWiredKind; do
 	# ⛔ AQUI HABIA UNA TUBERIA, y bajo `pipefail` devuelve 141 EN EXITO: `grep -q` cierra su
 	# entrada al primer acierto, `printf` recibe SIGPIPE, y el codigo de la tuberia pasa a ser
 	# 141 — es decir, el caso que ACIERTA se lee como fallo. Es la trampa que `lint:sigpipe-booleans`
 	# vigila, y que le costo una jornada a `check-egress-claims.sh`. La forma sin tuberia es una
 	# here-string.
-	grep -qE "^(--- )?(PASS|FAIL): +${t}\b" <<<"$salida" || faltan="${faltan} ${t}"
+	grep -qE "^(--- )?(PASS|FAIL): +${t}\b" <<<"$output" || missing_inputs="${missing_inputs} ${t}"
 done
-if [ -n "$faltan" ]; then
-	echo "check-connector-onboard: ⛔ NO HE PODIDO MIRAR: estas pruebas no llegaron a ejecutarse:${faltan}" >&2
-	echo "                        Un 'go test -run' que no casa nada sale 0, así que esto NO es un pase." >&2
-	echo "                        ¿Las han renombrado o movido de paquete? Actualiza PRUEBAS aquí." >&2
-	printf '%s\n' "$salida" | tail -12 | sed 's/^/  /' >&2
+if [ -n "$missing_inputs" ]; then
+	echo "check-connector-onboard: ⛔ COULD NOT CHECK: these tests did not run:${missing_inputs}" >&2
+	echo "                        'go test -run' exits 0 when no tests match; that is not a pass." >&2
+	echo "                        Were they renamed or moved to another package? Update PRUEBAS here." >&2
+	printf '%s\n' "$output" | tail -12 | sed 's/^/  /' >&2
 	exit 2
 fi
 
 if [ "$rc" -ne 0 ]; then
-	echo "check-connector-onboard: ⛔ un conector cableado NO está ofrecido o NO está en la página pública:" >&2
-	printf '%s\n' "$salida" | grep -E "^\s+--- FAIL|_test\.go:|cableado|wired" | head -12 | sed 's/^/  /' >&2
-	echo "                        Ofrecer: inProcConnectorKinds en cmd/olivares. Publicar:" >&2
+	echo "check-connector-onboard: ⛔ a wired connector is not offered or is missing from the public page:" >&2
+	printf '%s\n' "$output" | grep -E "^\s+--- FAIL|_test\.go:|cableado|wired" | head -12 | sed 's/^/  /' >&2
+	echo "                        Offer: inProcConnectorKinds in cmd/olivares. Publish:" >&2
 	echo "                        docs-site/src/content/docs/reference/connectors.md" >&2
 	exit 1
 fi
 
-echo "check-connector-onboard: OK — los conectores cableados están ofrecidos y publicados (2 prueba(s) ejecutadas)."
+echo "check-connector-onboard: OK — wired connectors are offered and published (2 tests executed)."
 exit 0

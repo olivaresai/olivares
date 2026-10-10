@@ -38,7 +38,7 @@ ADJ="${OLIVARES_C1301R_ADJ:-design/OVERLAY-FACT-GATES-ADJUDICATION-2026-09-05.md
 grep -q 'HOLD' "$DOC" || fail "$DOC lost HOLD"
 grep -q 'Catalog not on overlay main' "$DOC" || fail "$DOC lost catalog-absent"
 if grep -qiE 'iso42001 catalog landed|FIRMA A claimed' "$DOC"; then
-	fail "$DOC claims a close this lote does not have"
+	fail "$DOC claims a close this batch does not have"
 fi
 grep -q 'C13-01' "$ADJ" || fail "$ADJ no longer names C13-01"
 grep -q 'daa083e56f331af6158475fc304fee633acbfc2b' "$ADJ" \
@@ -54,7 +54,7 @@ data = json.load(open(sys.argv[1], encoding="utf-8"))
 if data.get("schema") != "c13-01-iso42001-remeasure/v1":
     raise SystemExit("unknown schema %r" % data.get("schema"))
 if data.get("lote") != "C13-01":
-    raise SystemExit("the acta no longer says which lote it belongs to")
+    raise SystemExit("the record no longer identifies its batch")
 if data.get("iso42001_in_catalog") is not False:
     raise SystemExit("iso42001_in_catalog must stay false: it is what was OBSERVED on bada7f7")
 if data.get("iso42001_in_sold_map") is not True:

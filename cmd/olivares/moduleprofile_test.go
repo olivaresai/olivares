@@ -15,11 +15,11 @@ func TestModuleProfileRunsTheSelectionItsRequirementsAndTheKernel(t *testing.T) 
 		selected []string
 		active   []string
 	}{
-		{nil, []string{"governance", "liveingest", "sessions"}},
-		{[]string{"orchestration"}, []string{"finops", "governance", "liveingest", "notify", "orchestration", "sessions"}},
-		{[]string{"siemforward"}, []string{"eventing", "governance", "liveingest", "sessions", "siemforward"}},
-		{[]string{"inferenceproxy"}, []string{"compliance", "finops", "governance", "inferenceproxy", "knowledge", "liveingest", "models", "sessions", "sourcescope"}},
-		{[]string{"sandbox", "sandbox"}, []string{"evals", "governance", "liveingest", "sandbox", "sessions"}},
+		{nil, []string{"governance", "sessions"}},
+		{[]string{"orchestration"}, []string{"finops", "governance", "notify", "orchestration", "sessions"}},
+		{[]string{"siemforward"}, []string{"eventing", "governance", "sessions", "siemforward"}},
+		{[]string{"inferenceproxy"}, []string{"accessmap", "compliance", "finops", "governance", "inferenceproxy", "knowledge", "models", "sessions", "sourcescope"}},
+		{[]string{"sandbox", "sandbox"}, []string{"evals", "governance", "sandbox", "sessions"}},
 	} {
 		p, err := resolveModuleProfile(tc.selected)
 		if err != nil {
@@ -67,7 +67,7 @@ func TestModuleProfileNamesWhatRequiresAModule(t *testing.T) {
 // Every requirement names a catalog module, and every catalog module resolves.
 func TestModuleCatalogRequirementsNameCatalogModules(t *testing.T) {
 	for name, spec := range moduleCatalog {
-		for _, req := range spec.requires {
+		for _, req := range spec.Requires {
 			if _, ok := moduleCatalog[req]; !ok {
 				t.Errorf("%s requires %q, which is not in the catalog", name, req)
 			}
@@ -87,6 +87,58 @@ func TestZeroModuleProfileRunsEveryModule(t *testing.T) {
 	for name := range moduleCatalog {
 		if !p.Active(name) {
 			t.Fatalf("zero profile turned %s off", name)
+		}
+	}
+}
+
+// Consumers keep their data/event owners active even when the administrator did
+// not select those owners; the console explains why and releases them afterwards.
+func TestModuleProfileKeepsDataAndEventOwnersActive(t *testing.T) {
+	for _, tc := range []struct {
+		selected   []string
+		owner      string
+		requiredBy []string
+	}{
+		{[]string{"compliance"}, "accessmap", []string{"compliance"}},
+		{[]string{"posture"}, "accessmap", []string{"posture"}},
+		{[]string{"compliance", "posture"}, "accessmap", []string{"compliance", "posture"}},
+		{[]string{"reporting"}, "accessmap", []string{"compliance"}},
+	} {
+		t.Run(tc.owner+"/"+tc.selected[0], func(t *testing.T) {
+			p, err := resolveModuleProfile(tc.selected)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !p.Active(tc.owner) {
+				t.Errorf("%s dormant with %v selected", tc.owner, tc.selected)
+			}
+			if got := p.requiredBy(tc.owner); !slices.Equal(got, tc.requiredBy) {
+				t.Errorf("requiredBy(%s) = %v, want %v", tc.owner, got, tc.requiredBy)
+			}
+			if slices.Contains(p.Selected(), tc.owner) {
+				t.Errorf("dependency %s added to saved selection", tc.owner)
+			}
+			empty, err := resolveModuleProfile(nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if empty.Active(tc.owner) {
+				t.Errorf("%s still active without a consumer", tc.owner)
+			}
+		})
+	}
+}
+
+// The 26.10.1 upgrade keeps liveingest on (sessions forced it there); that must
+// not start voice or finops, which that release did not run.
+func TestModuleProfileLiveIngestDoesNotStartVoiceOrFinops(t *testing.T) {
+	p, err := resolveModuleProfile([]string{"capabilities", "claude-policy", "consoleviews", "identity", "liveingest"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"voice", "finops"} {
+		if p.Active(name) {
+			t.Errorf("%s runs because liveingest is selected", name)
 		}
 	}
 }

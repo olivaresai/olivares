@@ -1,6 +1,28 @@
 {
+  "git": {
+    "title": "Git",
+    "branch": "Rama",
+    "newBranch": "Nueva rama",
+    "branchName": "Nombre de la rama",
+    "createBranch": "Crear rama",
+    "commitMessage": "Mensaje del commit",
+    "commit": "Crear commit",
+    "stage": "Preparar {{path}}",
+    "unstage": "Quitar {{path}} del área de preparación",
+    "stageButton": "Preparar",
+    "unstageButton": "Quitar",
+    "refresh": "Actualizar estado de Git",
+    "loading": "Leyendo el estado de Git…",
+    "readOnly": "Los permisos de esta sesión no permiten cambios con Git.",
+    "clean": "Árbol de trabajo limpio.",
+    "detached": "HEAD separado",
+    "cancel": "Cancelar",
+    "truncated": "Se muestran los primeros 200 archivos o ramas. Actualiza después de reducir los cambios.",
+    "fileStatus": "Índice: {{index}}; árbol de trabajo: {{worktree}}",
+    "commitHint": "Solo se incluyen los cambios preparados, con el nombre y correo de tu perfil.",
+    "working": "Procesando…"
+  },
   "title": "Sesiones",
-  "subtitle": "Operación de agentes en vivo: qué hace cada sesión ahora mismo, sus tokens, coste y cadencia, actualizado por un flujo en directo.",
   "refresh": "Actualizar",
   "search": "Buscar sesión, agente, acción…",
   "untitled": "Sesión sin título",
@@ -83,7 +105,7 @@
   },
   "empty": {
     "title": "Todavía no hay sesiones",
-    "description": "Las sesiones aparecen aquí en cuanto los agentes empiezan a trabajar: las que Olivares descubre por sus conectores y las que lances desde esta pantalla."
+    "description": "Aquí aparecen las sesiones que inicies y las que encuentre Olivares."
   },
   "filtered": {
     "title": "Ninguna sesión coincide con estos filtros",
@@ -93,8 +115,6 @@
     "title": "Sesiones no autorizadas",
     "description": "Tu rol no incluye permiso para ver las sesiones en vivo."
   },
-  "operateTitle": "Claude Code",
-  "operateSubtitle": "Crea, conéctate y gobierna sesiones de Claude Code, sin SSH. Las sesiones que Olivares solo observa están en esta misma lista y abren la misma ficha.",
   "launch": "Nueva sesión",
   "allSources": "Todos los orígenes",
   "tabs": {
@@ -182,7 +202,9 @@
     "unclaimed": "Se ha visto actividad de una sesión que no mantiene ninguna reclamación viva. El motor lo informa; no es la misma señal que una posible evasión.",
     "relayedIO": "Su E/S se retransmite a la nube de Anthropic, así que Olivares no puede mostrarla aquí. El control de ciclo de vida sigue vigente.",
     "observedNotRead": "No se ha leído la mitad observada: tu rol no incluye sessions:live:read.",
-    "noObservationYet": "Todavía no se ha observado nada de esta sesión: no ha llegado telemetría al plano con esta referencia.",
+    "noObservationYet": "Todavía no hay actividad en esta sesión.",
+    "failureReasonMissing": "Esta sesión ha fallado. El servidor no ha indicado el motivo.",
+    "hostIsolationRemedy": "Pide al administrador del servidor que permita los espacios de nombres de usuario y red sin privilegios y Landlock; después inicia la sesión de nuevo.",
     "actionFailed": "No se ha podido completar la acción.",
     "activeRun": "en uso",
     "pickRun": "Varias ejecuciones gobiernan esta sesión. Elige una para conectarte a ella, gobernarla o pararla.",
@@ -237,26 +259,13 @@
   },
   "rail": {
     "label": "Carril de trabajo",
-    "group": {
-      "active": "Activas",
-      "attention": "Esperándote",
-      "settled": "Cerradas"
-    },
-    "groupEmpty": {
-      "active": "Ahora mismo no hay nada en marcha.",
-      "attention": "No hay nada esperándote.",
-      "settled": "Todavía no se ha cerrado ninguna sesión."
-    },
     "pin": "Fijar",
     "unpin": "Dejar de fijar",
     "pinnedMark": "Fijada",
     "rowMenu": "Acciones de {{name}}",
-    "noObservation": "Todavía no ha llegado telemetría de esta sesión.",
-    "emptyTitle": "Todavía no hay sesiones",
-    "emptyDescription": "Cada sesión que este despliegue observa o lanza aparece aquí, agrupada por lo que necesita de ti."
+    "noObservation": "Todavía no ha llegado telemetría de esta sesión."
   },
   "surface": {
-    "paneSwitcher": "Elegir panel",
     "closeContext": "Cerrar el contexto",
     "backTo": "Volver a {{pane}}",
     "pane": {
@@ -272,6 +281,20 @@
     "notReadTitle": "No se ha podido leer esta sesión",
     "menu": "Acciones de {{name}}",
     "terminal": "En un terminal"
+  },
+  "meter": {
+    "mode": "Modo: {{mode}}",
+    "modeTitle": "{{tool}} indica: {{mode}}",
+    "theTool": "la herramienta",
+    "usageLabel": "Uso de esta sesión",
+    "tokens": "{{input}} de entrada / {{output}} de salida (tokens)",
+    "costTitle": "Una estimación, no una factura: la cifra de la propia herramienta o el precio de lista de un turno que no valoró",
+    "costUnknown": "coste no informado",
+    "planLabel": "Ventanas de uso del plan del inicio de sesión de esta sesión",
+    "planNotRead": "ventana del plan no leída",
+    "resets": "Se restablece {{when}} ({{at}})",
+    "stale": "último conocido",
+    "readAt": "Leído {{at}}"
   },
   "evidence": {
     "checks": {
@@ -298,7 +321,7 @@
     "noneTitle": "Ninguna sesión seleccionada",
     "noneDescription": "Aquí aparecen el ámbito con el que se ejecutó una sesión y las referencias que necesitas para buscarla.",
     "scopeTitle": "Ámbito",
-    "scopeHint": "A qué se aplica esta sesión. Son los valores con los que se ejecutó, no los seleccionados ahora.",
+    "scopeHint": "A qué se aplica esta sesión. Son los valores con los que se ejecutó, no los seleccionados ahora. Las carpetas de solo lectura protegen el contenido de los archivos y las entradas de directorio (sin escritura, truncado, creación, eliminación ni cambio de nombre); los permisos, la propiedad, los atributos extendidos y las marcas de tiempo siguen los permisos normales del host.",
     "tenant": "Organización",
     "workspace": "Espacio de trabajo",
     "environment": "Entorno",
@@ -330,12 +353,11 @@
     "wireHint": "El marco en bruto de la línea seleccionada. La conversación es la vista por defecto.",
     "wireEmpty": "Selecciona una línea de la conversación para ver su marco en bruto.",
     "thisNode": "Este nodo",
-    "noWorkspace": "Sin espacio de trabajo",
-    "cwdWarning": "Esta sesión no tiene espacio de trabajo. El controlador ha informado de su directorio de trabajo como {{cwd}}.",
     "workTitle": "Autoridad de trabajo de la sesión",
     "workHint": "Registrada para el último lanzamiento. Cada acción comprueba la autorización actual.",
     "processState": "Estado del proceso",
     "activityState": "Actividad",
+    "toolMode": "Modo según la herramienta",
     "workRole": "Rol concedido",
     "workWorkspace": "Workspace de trabajo",
     "workActions": "Acciones concedidas",
@@ -345,7 +367,17 @@
       "orchestrator": "Orquestador"
     },
     "details": "Detalles",
-    "echoes": "También registrada como"
+    "echoes": "También registrada como",
+    "folder": "Carpeta",
+    "temporaryFolder": "Carpeta temporal de esta sesión",
+    "panels": "Paneles",
+    "tabChanges": "Cambios",
+    "tabFiles": "Archivos",
+    "noFiles": "Esta sesión no tiene una carpeta que explorar.",
+    "noChanges": "Olivares no inició esta sesión, así que no hay cambios que mostrar.",
+    "filesUnavailable": "Esta carpeta no está disponible para explorar.",
+    "filesNoAccess": "Tu rol no puede explorar esta carpeta.",
+    "filesFailed": "No se pudo leer la carpeta."
   },
   "conversation": {
     "log": "Conversación",
@@ -353,10 +385,7 @@
     "empty": "Aún no hay turnos. Envía una frase abajo.",
     "ended": "El flujo de E/S de la sesión ha terminado.",
     "lag": "{{count}} marco(s) perdidos — la salida de abajo continúa después del hueco.",
-    "operator": "Tú",
-    "assistant": "Asistente",
     "tool": "Herramienta",
-    "system": "Sistema",
     "result": "Resultado",
     "unknown": "Marco no reconocido",
     "inspect": "Mostrar en el inspector",
@@ -364,7 +393,6 @@
     "toolResult": "Resultado",
     "toolFailed": "Falló",
     "tokens": "{{input}} entrada · {{output}} salida",
-    "cwdWarning": "Esta sesión no tiene espacio de trabajo. El controlador ha informado de su directorio de trabajo como {{cwd}}.",
     "protocol": "Tramas de protocolo: {{count}}",
     "stop": {
       "cancelled": "Cancelado",
@@ -376,7 +404,14 @@
     "retrying": "Reintentando ({{count}}): {{message}}",
     "keyRefused": "El proveedor rechazó la clave de API. Reemplázala en Proveedores.",
     "output": "Salida de la herramienta ({{count}}): {{first}}",
-    "notSent": "No se envió: {{reason}}"
+    "notSent": "No se envió: {{reason}}",
+    "waitingApproval": "Se enviará cuando se apruebe el inicio y la sesión arranque.",
+    "workingFolder": "Carpeta de trabajo: {{cwd}}",
+    "temporaryFolder": "Carpeta de trabajo: carpeta temporal de esta sesión",
+    "workedFor": "Trabajó {{duration}}",
+    "toolsFolded_one": "+{{count}} llamada a herramienta",
+    "toolsFolded_many": "+{{count}} llamadas a herramientas",
+    "toolsFolded_other": "+{{count}} llamadas a herramientas"
   },
   "changes": {
     "title": "Cambios en {{folder}}",
@@ -391,11 +426,46 @@
     "fileTruncated": "Se muestran los primeros 256 KB.",
     "truncated": "Se muestran los {{count}} ficheros más recientes."
   },
+  "preview": {
+    "title": "Vista previa",
+    "hint": "La aplicación que esta sesión sirve en un puerto local. Se ejecuta en tu navegador, aislada de la consola y fuera de los límites de red de la sesión.",
+    "loading": "Buscando los puertos de la sesión…",
+    "none": "Esta sesión no sirve nada en un puerto local.",
+    "notRunning": "La sesión no está en marcha, así que no sirve nada.",
+    "error": "No se pudieron leer los puertos de la sesión. Inténtalo de nuevo en un momento.",
+    "notAllowed": "Abrir una vista previa requiere permiso para operar esta sesión.",
+    "port": "Puerto",
+    "path": "Ruta",
+    "open": "Abrir",
+    "reload": "Recargar",
+    "newTab": "Abrir en una pestaña nueva",
+    "openError": "No se pudo abrir la vista previa. Puede que el puerto se haya cerrado.",
+    "frameTitle": "Vista previa del puerto {{port}}"
+  },
+  "branchChanges": {
+    "title": "Cambios de la rama",
+    "hint": "Lo que contiene la rama de esta sesión y no contiene el commit actual del espacio de trabajo. Solo trabajo confirmado.",
+    "range": "De {{base}} a {{head}}",
+    "loading": "Leyendo la rama…",
+    "error": "No se pudieron leer los cambios de la rama. Inténtalo de nuevo en un momento.",
+    "empty": "Esta rama no contiene nada que el commit actual del espacio de trabajo no contenga.",
+    "back": "Todos los cambios de la rama",
+    "binary": "Archivo binario, no se muestra.",
+    "truncated": "Se muestran los primeros {{count}} archivos cambiados.",
+    "fileTruncated": "Se muestran los primeros 64 KB de cada lado.",
+    "original": "En la base",
+    "modified": "En la punta de la rama",
+    "status": {
+      "added": "Añadido",
+      "modified": "Modificado",
+      "deleted": "Eliminado"
+    }
+  },
   "peers": {
     "button_one": "Puede escribir a {{count}} otra sesión",
     "button_many": "Puede escribir a {{count}} otras sesiones",
     "button_other": "Puede escribir a {{count}} otras sesiones",
-    "buttonNone": "No puede escribir a otras sesiones",
+    "buttonNone": "Elegir sesiones a las que escribir",
     "template": "Puede escribir a las sesiones de esta plantilla",
     "title": "Sesiones a las que puede escribir",
     "hint": "Las sesiones a las que esta puede escribir o pasar trabajo. El motor rechaza cualquier otra.",
@@ -403,5 +473,21 @@
     "none": "No hay otra sesión activa en este espacio de trabajo.",
     "save": "Guardar",
     "saved": "Permisos de mensajes guardados."
+  },
+  "list": {
+    "group": {
+      "attention": "Te necesita",
+      "active": "En marcha",
+      "settled": "Inactiva"
+    },
+    "more": "Más",
+    "back": "Volver a las sesiones",
+    "showTable": "Ver como tabla",
+    "filter": "Filtrar sesiones…",
+    "noMatch": "Ninguna sesión coincide."
+  },
+  "thread": {
+    "copyReference": "Copiar referencia",
+    "terminalHint": "La misma sesión desde una terminal."
   }
 }

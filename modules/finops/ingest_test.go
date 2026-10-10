@@ -88,16 +88,16 @@ func TestIngestRepulledBucketUpserts(t *testing.T) {
 	if got := countCosts(t, st, tenant); got != 1 {
 		t.Fatalf("cost records after re-pull = %d, want 1 (upsert, not append)", got)
 	}
-	var spend spendResponse
+	var spend aggResult
 	if err := st.View(context.Background(), tenant, func(sc store.Scope) error {
 		var e error
-		spend, e = spendByDimension(context.Background(), sc, "model", time.Time{}, false, time.Time{}, false)
+		spend, e = aggregatePeriod(context.Background(), sc, nil, time.Time{}, false, time.Time{}, false)
 		return e
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if spend.TotalMicroUSD != 1000 {
-		t.Errorf("spend after re-pull = %d, want 1000 (latest value, not 600+1000)", spend.TotalMicroUSD)
+	if spend.Cost != 1000 {
+		t.Errorf("spend after re-pull = %d, want 1000 (latest value, not 600+1000)", spend.Cost)
 	}
 	// The canonical ledger tracks the read-model (latest value, not first-seen).
 	if err := st.View(context.Background(), tenant, func(sc store.Scope) error {

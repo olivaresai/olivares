@@ -27,7 +27,7 @@ type crossFolderPeerPolicy struct {
 
 func (p *crossFolderPeerPolicy) Evaluate(_ context.Context, req auth.Request) (auth.Decision, error) {
 	if req.Permission == permRunRead && req.Resource.ID == p.runID {
-		return auth.Decision{Allow: !p.deny.Load() && req.Resource.Kind == "sessions.run" && req.Resource.WorkspaceID == p.workspace}, nil
+		return auth.Decision{Allow: !p.deny.Load() && req.Resource.Kind == "run" && req.Resource.WorkspaceID == p.workspace}, nil
 	}
 	return auth.Decision{Allow: true}, nil
 }
@@ -57,7 +57,6 @@ func TestSessionPeersAcrossAuthorizedFolders(t *testing.T) {
 			resolver := newK2WorkIdentity()
 			m := New(WithRunner(&fakeRunner{}), WithCredentialSource(staticCred()),
 				WithWorkIdentityResolver(resolver), WithWorkContentGuard(allowWorkContent{}))
-			m.EnableProfiledLaunches()
 			m.UseExecutionEnvironmentRef(testEnvRef)
 			m.UseSessionWorkspaceRoot(t.TempDir())
 			f := newReadinessFixture(t, be, m)
@@ -67,8 +66,8 @@ func TestSessionPeersAcrossAuthorizedFolders(t *testing.T) {
 				t.Fatal(err)
 			}
 			authenticator := auth.NewAuthenticator(f.h.st, nil)
-			m.UseWorkSessionCredentialSource(&orchestrationTestCredentials{m: m, a: authenticator, actor: actor})
-			m.UseOrchestrationWorkScopeSource(orchestrationTestScope{f.h})
+			m.WorkSessionCreds = &orchestrationTestCredentials{m: m, a: authenticator, actor: actor}
+			m.OrchestrationScopes = orchestrationTestScope{f.h}
 			launch := func(tenant model.TenantID, coreWorkspace model.ID) (string, string, string) {
 				t.Helper()
 				folder := f.h.doJSON("POST", "/v1/m/sessions/workspaces", f.admin,
@@ -141,7 +140,7 @@ func TestSessionPeersAcrossAuthorizedFolders(t *testing.T) {
 				t.Fatal(err)
 			}
 			policy := &crossFolderPeerPolicy{runID: peerRecord.String(model.ColID), workspace: workspace}
-			m.UseWorkAuthorizer(auth.NewAuthorizer(policy))
+			WithWorkAuthorizer(auth.NewAuthorizer(policy))(m)
 			selectPeer := func(sid string, want int) {
 				t.Helper()
 				got := f.h.doJSON("PUT", "/v1/m/sessions/runs/"+senderRun+"/peers", f.admin, map[string]any{"peers": []string{sid}}, tenantHdr(f.tenant))

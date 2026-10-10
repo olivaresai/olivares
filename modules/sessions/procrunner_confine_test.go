@@ -103,7 +103,7 @@ func TestProcRunnerWithoutPolicyRunsUnconfined(t *testing.T) {
 }
 
 func TestSessionConfinementGrantsFolderAndHomes(t *testing.T) {
-	m := &Module{rt: newRuntimeState()}
+	m := &Module{Dependencies: &Dependencies{}, rt: newRuntimeState(nil)}
 	if p := m.sessionConfinement("/w", nil, PresetNone); p != nil {
 		t.Fatalf("unwired node confines: %+v", p)
 	}
@@ -123,7 +123,7 @@ func TestSessionConfinementGrantsFolderAndHomes(t *testing.T) {
 // The engine user's own home is never granted whole because a profile names it
 // as HOME; the tool's configuration home is.
 func TestSessionConfinementDoesNotOpenTheEngineUsersHome(t *testing.T) {
-	m := &Module{rt: newRuntimeState()}
+	m := &Module{Dependencies: &Dependencies{}, rt: newRuntimeState(nil)}
 	WithConfinement([]string{"/data"}, false)(m)
 	saved := engineUserHome
 	engineUserHome = func() string { return "/home/engine" }
@@ -162,7 +162,7 @@ echo scratch > "$TMPDIR/scratch" && echo tmp-ok
 	if err := os.WriteFile(agent, []byte(script), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	m := &Module{rt: newRuntimeState()}
+	m := &Module{Dependencies: &Dependencies{}, rt: newRuntimeState(nil)}
 	WithConfinement([]string{data}, true)(m)
 	for _, tc := range []struct {
 		preset string
@@ -211,16 +211,16 @@ func TestReadOnlySessionRequiresConfinementBeforeSpawn(t *testing.T) {
 		mode     string
 		required bool
 	}{{"plan", true}, {"default", false}, {"acceptEdits", false}} {
-		p := CreateRunParams{PermissionMode: tc.mode, Transport: TransportStreamJSON, Isolation: IsolationNative, WorkspaceDir: "/fixture-folder"}
-		if spec := wired.buildLaunchSpec(p, Credential{}, WorkSessionCredential{}, CommunicationSessionCredential{}, "", nil, nil, nil); spec.ConfinementRequired != tc.required {
+		p := CreateRunParams{PermissionMode: tc.mode, Transport: TransportStreamJSON, Isolation: IsolationNative, WorkspaceDir: "/fixture-folder", ProviderHome: &ProviderHomeSnapshot{Driver: providerDriverClaude}}
+		if spec := wired.childSpec(p, childDecision{}); spec.ConfinementRequired != tc.required {
 			t.Errorf("permission mode %s: confinement required = %v, want %v", tc.mode, spec.ConfinementRequired, tc.required)
 		}
 	}
 
 	folder := t.TempDir()
 	unwired := New()
-	p := CreateRunParams{PermissionMode: "plan", Transport: TransportStreamJSON, Isolation: IsolationNative, WorkspaceDir: folder}
-	spec := unwired.buildLaunchSpec(p, Credential{}, WorkSessionCredential{}, CommunicationSessionCredential{}, "", nil, nil, nil)
+	p := CreateRunParams{PermissionMode: "plan", Transport: TransportStreamJSON, Isolation: IsolationNative, WorkspaceDir: folder, ProviderHome: &ProviderHomeSnapshot{Driver: providerDriverClaude}}
+	spec := unwired.childSpec(p, childDecision{})
 	spec.Program, spec.Args = "/bin/sh", []string{"-c", "echo written > spawned.txt"}
 	if proc, err := NewProcRunner().Launch(context.Background(), spec); err == nil {
 		for range proc.Output() {
@@ -275,7 +275,7 @@ func TestReadOnlyFolderIsNotWidenedByAnOverlappingProfileHome(t *testing.T) {
 			}
 			m := New(WithConfinement([]string{data}, true))
 			p := CreateRunParams{PermissionMode: "plan", Transport: TransportStreamJSON, Isolation: IsolationNative, WorkspaceDir: folder, ProviderHome: &home}
-			spec := m.buildLaunchSpec(p, Credential{}, WorkSessionCredential{}, CommunicationSessionCredential{}, "", nil, nil, nil)
+			spec := m.childSpec(p, childDecision{})
 			spec.Program, spec.Args, spec.WaitDelay = agent, []string{home.ConfigHome}, 2*time.Second
 			proc, err := NewProcRunner().Launch(context.Background(), spec)
 			if err != nil {
@@ -327,8 +327,8 @@ func TestReadOnlyFolderIsNotReopenedByRunnerOrDeviceGrants(t *testing.T) {
 				t.Setenv("TMPDIR", folder)
 			}
 			m := New(WithConfinement([]string{data}, true))
-			p := CreateRunParams{PermissionMode: "plan", Transport: TransportStreamJSON, Isolation: IsolationNative, WorkspaceDir: folder}
-			spec := m.buildLaunchSpec(p, Credential{}, WorkSessionCredential{}, CommunicationSessionCredential{}, "", nil, nil, nil)
+			p := CreateRunParams{PermissionMode: "plan", Transport: TransportStreamJSON, Isolation: IsolationNative, WorkspaceDir: folder, ProviderHome: &ProviderHomeSnapshot{Driver: providerDriverClaude}}
+			spec := m.childSpec(p, childDecision{})
 			spec.Program, spec.Args = "/bin/sh", []string{"-c", `printf x > direct.txt; printf x > "$TMPDIR/state"`}
 			proc, err := NewProcRunner().Launch(context.Background(), spec)
 			if err == nil {

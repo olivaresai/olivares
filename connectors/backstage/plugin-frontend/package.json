@@ -31,7 +31,7 @@
   "scripts": {
     "build": "tsc --declaration --emitDeclarationOnly --outDir dist-types && backstage-cli package build",
     "lint": "backstage-cli package lint",
-    "test": "tsc -p tsconfig.test.json && node --test \".test-out/**/*.test.js\"",
+    "test": "tsc -p tsconfig.test.json && node --test \".test-out/**/*.test.js\" && node --test tests/material-table.test.cjs",
     "clean": "backstage-cli package clean"
   },
   "peerDependencies": {
@@ -72,10 +72,12 @@
       "@octokit/request": "8.4.1",
       "@octokit/request-error": "5.1.1",
       "@octokit/plugin-paginate-rest": "9.2.2",
-      "@yarnpkg/core>got": "11.8.6"
+      "@yarnpkg/core>got": "11.8.6",
+      "@material-table/core>uuid": "11.1.1"
     },
     "patchedDependencies": {
-      "got@11.8.6": "../patches/got-11.8.6.patch"
+      "got@11.8.6": "../patches/got-11.8.6.patch",
+      "@material-table/core@3.2.5": "../patches/material-table-core-3.2.5.patch"
     }
   }
 }

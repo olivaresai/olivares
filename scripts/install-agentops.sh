@@ -10,7 +10,11 @@
 # command. The control plane CONDUCTS governed `claude` sessions as child processes via
 # the native procRunner — no Docker socket, no privilege escalation.
 #
-#   curl -fsSL https://raw.githubusercontent.com/olivaresai/olivares/main/scripts/install-agentops.sh | sh
+#   OLIVARES_VERSION=<release> sh scripts/install-agentops.sh
+#
+# Run it from a checkout of the commit a release names in release-commit.txt, after verifying
+# the release's cosign-signed checksums.txt; never pipe it into a shell. INSTALL.md shows the
+# download, verify, then run steps.
 #
 # It detects the topology, VERIFIES every artifact before running it (cosign — the
 # engine binary/image is signed; claude is installed from Anthropic's GPG-SIGNED
@@ -67,10 +71,8 @@ set -eu
 # '^https://github.com/olivaresai/olivares' also accepted `.../olivares-anything/...`
 # and any workflow file on any branch -- i.e. far more identities than the one that
 # actually signs a release.
-# `v?` — releases before the 2026-09-29 tag-name correction carry the v prefix (v26.9.0);
-# current release tags are bare CalVer (26.10.0). The default's claim is 'this repository's
-# release workflow on a release tag', both shapes of it; pin one release with --source-tag.
-DEFAULT_CERT_IDENTITY='^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v?[0-9]+\.[0-9]+(\.[0-9]+)?$'
+# Signatures must name this repository's workflow at a bare MAJOR.MINOR tag.
+DEFAULT_CERT_IDENTITY='^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/[0-9]+\.[0-9]+$'
 
 REPO="olivaresai/olivares"
 RAW="https://raw.githubusercontent.com/${REPO}/main"
@@ -1416,7 +1418,8 @@ install_native() (
     say ""
     say "Next (running a governance plane is your explicit decision):"
     say "  1) edit $NATIVE_RUNTIME_ENV — wire the short-lived inference token (refresher)"
-    say "  2) sudo systemctl enable --now olivares     # loopback-only by default"
+    say "  2) sudo systemctl enable --now olivares     # listens on every interface (:8443/:8444);"
+    say "     to keep it on this host, set OLIVARES_EXTRA_ARGS=\"--listen 127.0.0.1:8443 --grpc-listen 127.0.0.1:8444\" in /etc/olivares/olivares.env first"
     say "  3) register a workspace + launch the first governed session (see the how-to)"
   fi
 )

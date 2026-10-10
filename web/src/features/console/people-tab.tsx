@@ -44,6 +44,7 @@ import { ListTruncationBadge } from '@/features/_intel'
 import { ApiError } from '@/lib/api/errors'
 import { isEngineEmail } from '@/lib/email'
 import { useAuth } from '@/lib/auth/context'
+import { useServerInfo } from '@/lib/hooks/use-server-info'
 import { usePrivilegedMutation } from '@/lib/hooks/use-privileged-mutation'
 import {
   consoleApi,
@@ -158,6 +159,8 @@ export function PeopleTab({
     onDone: () => setToggle(null),
   })
 
+  // No invitation mailer (server-info): a resend would only answer 409.
+  const invitesOff = useServerInfo().data?.invite_delivery_unavailable === true
   const items = invites.data?.items ?? []
   const roster = members.data?.items ?? []
   const activeOwners = roster.filter(
@@ -344,7 +347,7 @@ export function PeopleTab({
                             <Button
                               variant="ghost"
                               size="sm"
-                              disabled={resendMutation.isPending}
+                              disabled={invitesOff || resendMutation.isPending}
                               onClick={() => resendMutation.mutate(inv.id)}
                             >
                               <Send />
@@ -681,7 +684,11 @@ function OnboardForm({
   const [email, setEmail] = useState('')
   const [displayName, setDisplayName] = useState('')
   const [role, setRole] = useState('editor')
-  const [mode, setMode] = useState<'password' | 'invite'>(initialMode)
+  const [chosenMode, setMode] = useState<'password' | 'invite'>(initialMode)
+  // No invitation mailer (server-info): the engine answers invite mode 409, so the
+  // form offers the initial password only and says why.
+  const invitesOff = useServerInfo().data?.invite_delivery_unavailable === true
+  const mode = invitesOff ? 'password' : chosenMode
   const [password, setPassword] = useState('')
   const [invite, setInvite] = useState<OnboardResult['invite'] | null>(null)
   const [consent, setConsent] = useState(false)
@@ -700,8 +707,13 @@ function OnboardForm({
         password: mode === 'password' ? password : undefined,
       })
     },
+    // A 409 too: invite mode the engine cannot mail, when server-info had not said so yet.
     onError: (err) => {
-      if (!(err instanceof ApiError) || err.status !== 400 || !err.message)
+      if (
+        !(err instanceof ApiError) ||
+        !(err.status === 400 || err.code === 'invite_delivery_unavailable') ||
+        !err.message
+      )
         return false
       setRefused(err.message)
       return true
@@ -821,7 +833,13 @@ function OnboardForm({
             </SelectContent>
           </Select>
         </Field>
-        <Field label={t('console:onboard.mode')} htmlFor="ob-mode">
+        <Field
+          label={t('console:onboard.mode')}
+          htmlFor="ob-mode"
+          description={
+            invitesOff ? t('console:onboard.inviteUnavailable') : undefined
+          }
+        >
           <Select
             value={mode}
             onValueChange={(v) => setMode(v as 'password' | 'invite')}
@@ -833,7 +851,7 @@ function OnboardForm({
               <SelectItem value="password">
                 {t('console:onboard.modePassword')}
               </SelectItem>
-              <SelectItem value="invite">
+              <SelectItem value="invite" disabled={invitesOff}>
                 {t('console:onboard.modeInvite')}
               </SelectItem>
             </SelectContent>

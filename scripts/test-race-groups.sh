@@ -30,8 +30,8 @@ errhas() { grep -qF "$1" "${TMP}/err"; }
 
 # (a) el reparto vivo está completo — si esto falla, todo lo demás miente
 stage; run check
-if [ "$(rc)" = 0 ] && grep -q 'CLEAN' "${TMP}/out"; then ok "el reparto vivo cubre el workspace entero"
-else bad "el vivo debería ser CLEAN (rc=$(rc): $(head -1 "${TMP}/err"))"; fi
+if [ "$(rc)" = 0 ] && grep -q 'CLEAN' "${TMP}/out"; then ok "the live partition covers the entire workspace"
+else bad "the live partition should be CLEAN (rc=$(rc): $(head -1 "${TMP}/err"))"; fi
 
 # (b) ⛔ EL CASO QUE PIDE EL ENCARGO: un paquete fuera de todos los grupos es rojo.
 #     Se retira el grupo de connectors entero — 178 paquetes quedan sin dueño.
@@ -44,8 +44,8 @@ d["groups"] = [g for g in d["groups"] if g["name"] != "connectors"]
 json.dump(d, open(p, "w", encoding="utf-8"))
 PY
 run check
-if [ "$(rc)" = 1 ] && errhas "NO pertenecen a ningún grupo"; then ok "mutante (un grupo entero retirado → paquetes huérfanos) muere"
-else bad "huérfanos no detectados (rc=$(rc): $(head -1 "${TMP}/err"))"; fi
+if [ "$(rc)" = 1 ] && errhas "belong to NO group"; then ok "mutant (an entire group removed → orphan packages) is killed"
+else bad "orphan packages not detected (rc=$(rc): $(head -1 "${TMP}/err"))"; fi
 
 # (c) y con UN SOLO paquete descubierto, no 178: el control no puede necesitar un
 #     agujero grande para verlo.
@@ -67,8 +67,8 @@ for g in d["groups"]:
 json.dump(d, open(p, "w", encoding="utf-8"))
 PY
 run check
-if [ "$(rc)" = 1 ] && errhas "NO pertenecen a ningún grupo"; then ok "mutante (UN paquete descubierto) muere"
-else bad "un solo huérfano pasó desapercibido (rc=$(rc): $(head -1 "${TMP}/err"))"; fi
+if [ "$(rc)" = 1 ] && errhas "belong to NO group"; then ok "mutant (ONE uncovered package) is killed"
+else bad "a single orphan package went undetected (rc=$(rc): $(head -1 "${TMP}/err"))"; fi
 
 # (d) un patrón que ya no casa con nada declara cobertura que no existe
 stage
@@ -80,8 +80,8 @@ d["groups"][0]["patterns"].append("github.com/olivaresai/olivares/core/ya-no-exi
 json.dump(d, open(p, "w", encoding="utf-8"))
 PY
 run check
-if [ "$(rc)" = 1 ] && errhas "rancio"; then ok "mutante (patrón rancio) muere"
-else bad "patrón rancio no detectado (rc=$(rc): $(head -1 "${TMP}/err"))"; fi
+if [ "$(rc)" = 1 ] && errhas "stale"; then ok "mutant (stale pattern) is killed"
+else bad "stale pattern not detected (rc=$(rc): $(head -1 "${TMP}/err"))"; fi
 
 # (e) y la MISMA rancidez en la lista de EXCLUSIONES: una exclusión que ya no
 #     excluye nada es una excusa escrita para un problema que se fue.
@@ -94,8 +94,8 @@ d["excluded"].append({"pattern": "github.com/olivaresai/olivares/no/existe/...",
 json.dump(d, open(p, "w", encoding="utf-8"))
 PY
 run check
-if [ "$(rc)" = 1 ] && errhas "rancio"; then ok "mutante (exclusión rancia) muere"
-else bad "exclusión rancia no detectada (rc=$(rc): $(head -1 "${TMP}/err"))"; fi
+if [ "$(rc)" = 1 ] && errhas "stale"; then ok "mutant (stale exclusion) is killed"
+else bad "stale exclusion not detected (rc=$(rc): $(head -1 "${TMP}/err"))"; fi
 
 # (f) el mismo patrón en dos grupos: gana el más largo y el otro miente
 stage
@@ -107,8 +107,8 @@ d["groups"][1]["patterns"].append(d["groups"][0]["patterns"][0])
 json.dump(d, open(p, "w", encoding="utf-8"))
 PY
 run check
-if [ "$(rc)" = 1 ] && errhas "dos grupos"; then ok "mutante (patrón duplicado en dos grupos) muere"
-else bad "duplicado no detectado (rc=$(rc): $(head -1 "${TMP}/err"))"; fi
+if [ "$(rc)" = 1 ] && errhas "two groups"; then ok "mutant (pattern duplicated across two groups) is killed"
+else bad "duplicate not detected (rc=$(rc): $(head -1 "${TMP}/err"))"; fi
 
 # (f-bis) renombrar un grupo NO puede desactivar `task test:cloud` en silencio:
 #     el `if:` del workflow compara con cloud_task_group, y un `if:` que no casa
@@ -124,32 +124,32 @@ for g in d["groups"]:
 json.dump(d, open(p, "w", encoding="utf-8"))
 PY
 run check
-if [ "$(rc)" = 1 ] && errhas "cloud_task_group"; then ok "mutante (grupo del cloud renombrado) muere"
-else bad "el renombrado desactivaría task test:cloud sin rojo (rc=$(rc): $(head -1 "${TMP}/err"))"; fi
+if [ "$(rc)" = 1 ] && errhas "cloud_task_group"; then ok "mutant (renamed cloud group) is killed"
+else bad "the rename would disable task test:cloud without a failure (rc=$(rc): $(head -1 "${TMP}/err"))"; fi
 
 # (g) grupo DESCONOCIDO y grupo VACÍO son causas distintas y tienen mensajes distintos
 stage; run run no-existe
-if [ "$(rc)" = 1 ] && errhas "grupo desconocido"; then ok "grupo desconocido se nombra como tal"
-else bad "grupo desconocido mal reportado (rc=$(rc): $(head -1 "${TMP}/err"))"; fi
+if [ "$(rc)" = 1 ] && errhas "unknown group"; then ok "unknown group is reported as such"
+else bad "unknown group incorrectly reported (rc=$(rc): $(head -1 "${TMP}/err"))"; fi
 
 # (h) sin especificación no se inventa un veredicto
 stage; rm -f "${SPEC}"; run check
-if [ "$(rc)" = 2 ] && errhas "COULD NOT LOOK"; then ok "sin especificación es COULD NOT LOOK, no verde"
-else bad "spec ausente debería ser rc=2 (rc=$(rc): $(head -1 "${TMP}/err"))"; fi
+if [ "$(rc)" = 2 ] && errhas "COULD NOT LOOK"; then ok "missing specification reports COULD NOT LOOK, not a pass"
+else bad "missing spec should return rc=2 (rc=$(rc): $(head -1 "${TMP}/err"))"; fi
 
 # (i) el ensamblado de la orden: -race, -count=1 y el -timeout de la especificación
 stage
 OLIVARES_RACE_GROUPS="${SPEC}" OLIVARES_RACE_DRYRUN=1 bash "${SUT}" run heavy-stores >"${TMP}/dry" 2>&1 || true
 if grep -q -- '-race' "${TMP}/dry" && grep -q -- '-count=1' "${TMP}/dry" && grep -qE -- '-timeout [0-9]+m' "${TMP}/dry"; then
-  ok "la orden lleva -race, -count=1 y un -timeout con minutos"
-else bad "ensamblado incompleto: $(tail -1 "${TMP}/dry" | cut -c1-90)"; fi
+  ok "the command includes -race, -count=1 and -timeout in minutes"
+else bad "incomplete command assembly: $(tail -1 "${TMP}/dry" | cut -c1-90)"; fi
 
 # (j) y el -timeout de Go va POR DEBAJO del techo del paso, que es justamente lo
 #     que mató a race-root: su reloj arranca DESPUÉS de compilar con -race.
 ceil="$(python3 -c 'import json;print(json.load(open("scripts/race-groups.json"))["step_ceiling_minutes"])')"
 gto="$(python3 -c 'import json;print(json.load(open("scripts/race-groups.json"))["go_timeout_minutes"])')"
-if [ "${gto}" -lt "${ceil}" ]; then ok "go_timeout (${gto}m) < techo del paso (${ceil}m): queda margen para compilar"
-else bad "go_timeout ${gto}m no deja margen bajo el techo ${ceil}m — es el defecto de race-root"; fi
+if [ "${gto}" -lt "${ceil}" ]; then ok "go_timeout (${gto}m) < step ceiling (${ceil}m): leaves time to compile"
+else bad "go_timeout ${gto}m leaves no margin below ceiling ${ceil}m — this is the race-root defect"; fi
 
 # ── EL REPARTO DEL PAQUETE RAIZ (`-run`) ─────────────────────────────────────────
 # Aqui el fallo silencioso es peor: un `-run` que no casa con nada SALE 0. Un turno
@@ -167,8 +167,8 @@ s["tests_now"] = -1          # la cifra se recalcula, no se ajusta a ojo
 json.dump(d, open(p, "w", encoding="utf-8"))
 PY
 run check
-if [ "$(rc)" = 1 ] && errhas "no caen en ningun turno"; then ok "mutante (familia retirada) muere por HUERFANOS, no por la cifra"
-else bad "familia retirada no detectada (rc=$(rc): $(head -1 "${TMP}/err"))"; fi
+if [ "$(rc)" = 1 ] && errhas "belong to no shard"; then ok "mutant (removed family) is killed by ORPHANS, not the count"
+else bad "removed family not detected (rc=$(rc): $(head -1 "${TMP}/err"))"; fi
 
 # (l) un turno cuyas familias no existen: su -run saldria 0 sin correr nada
 stage
@@ -181,8 +181,8 @@ d["root_shards"].append({"name": "root-fantasma", "tests_now": 1,
 json.dump(d, open(p, "w", encoding="utf-8"))
 PY
 run check
-if [ "$(rc)" = 1 ] && errhas "sus familias son rancias"; then ok "mutante (turno que no casa con ningun test) muere"
-else bad "turno fantasma no detectado (rc=$(rc): $(head -1 "${TMP}/err"))"; fi
+if [ "$(rc)" = 1 ] && errhas "its families are stale"; then ok "mutant (shard matching no tests) is killed"
+else bad "phantom shard not detected (rc=$(rc): $(head -1 "${TMP}/err"))"; fi
 
 # (m) A family prefix in another shard must cause duplicate test ownership.
 #     Construct the overlap; a valid partition need not contain redundant prefixes.
@@ -204,7 +204,7 @@ raise SystemExit("no root family can form a nonempty proper prefix")
 PY
 run check
 # Require the duplicate-ownership diagnosis, not an unrelated count failure.
-if [ "$(rc)" = 1 ] && errhas "caen en DOS turnos"; then ok "mutant (overlapping prefix in another root shard) rejected for duplicate ownership"
+if [ "$(rc)" = 1 ] && errhas "belong to TWO shards"; then ok "mutant (overlapping prefix in another root shard) rejected for duplicate ownership"
 else bad "duplicate ownership passed or failed for another reason (rc=$(rc): $(head -1 "${TMP}/err"))"; fi
 
 # (n) el -timeout de la raiz tambien va POR DEBAJO de su techo
@@ -217,8 +217,8 @@ d["root_go_timeout_minutes"] = d["root_step_ceiling_minutes"]
 json.dump(d, open(p, "w", encoding="utf-8"))
 PY
 run check
-if [ "$(rc)" = 1 ] && errhas "no deja margen"; then ok "mutante (reloj de Go igual al techo) muere"
-else bad "el empate de relojes paso (rc=$(rc): $(head -1 "${TMP}/err"))"; fi
+if [ "$(rc)" = 1 ] && errhas "leaves no headroom"; then ok "mutant (Go timeout equal to the ceiling) is killed"
+else bad "equal timeouts passed (rc=$(rc): $(head -1 "${TMP}/err"))"; fi
 
 # (o) un turno que se lleva media raiz es el paso que no cabe en el techo del job. Este es
 #     el control que SUSTITUYE a la igualdad de cifras, asi que tiene que morir de verdad.
@@ -233,8 +233,8 @@ b["families"] = ["ZzzNoExisteNadaAsi"]
 json.dump(d, open(p, "w", encoding="utf-8"))
 PY
 run check
-if [ "$(rc)" = 1 ]; then ok "mutante (un turno se lleva media raiz) muere"
-else bad "el desequilibrio pasó (rc=$(rc): $(head -1 "${TMP}/err"))"; fi
+if [ "$(rc)" = 1 ]; then ok "mutant (one shard takes half the root package) is killed"
+else bad "the imbalance passed (rc=$(rc): $(head -1 "${TMP}/err"))"; fi
 
 # (p) y una exclusión rancia SIN la marca de «ausente en el publicado» sigue siendo roja:
 #     la marca no puede convertirse en el camino cómodo para callar cualquier rancidez.
@@ -247,8 +247,8 @@ d["excluded"].append({"pattern": "github.com/olivaresai/olivares/no/existe/...",
 json.dump(d, open(p, "w", encoding="utf-8"))
 PY
 run check
-if [ "$(rc)" = 1 ] && errhas "rancio"; then ok "una exclusión rancia SIN la marca sigue muriendo"
-else bad "la marca se convirtió en comodín (rc=$(rc): $(head -1 "${TMP}/err"))"; fi
+if [ "$(rc)" = 1 ] && errhas "stale"; then ok "a stale exclusion WITHOUT the marker still fails"
+else bad "the marker became a wildcard (rc=$(rc): $(head -1 "${TMP}/err"))"; fi
 
 # (q) una duracion guardada contra un grupo que ya no existe es la cifra con la que se
 #     reequilibraria el proximo reparto: atarla a un muerto es peor que no tenerla.
@@ -261,8 +261,8 @@ d.setdefault("measured_run", {}).setdefault("minutes", {})["grupo-que-ya-no-exis
 json.dump(d, open(p, "w", encoding="utf-8"))
 PY
 run check
-if [ "$(rc)" = 1 ] && errhas "ya no existe"; then ok "mutante (duracion atada a un grupo muerto) muere"
-else bad "la medida rancia paso (rc=$(rc): $(head -1 "${TMP}/err"))"; fi
+if [ "$(rc)" = 1 ] && errhas "no longer exists"; then ok "mutant (duration bound to a removed group) is killed"
+else bad "the stale measurement passed (rc=$(rc): $(head -1 "${TMP}/err"))"; fi
 
 # (r) los TURNOS DE GRUPO: una familia retirada deja tests sin turno
 stage
@@ -276,8 +276,8 @@ for g in d["groups"]:
 json.dump(d, open(p, "w", encoding="utf-8"))
 PY
 run check
-if [ "$(rc)" = 1 ] && errhas "no caen en ningun turno"; then ok "mutante (familia retirada de un turno de grupo) muere"
-else bad "huerfanos de grupo no detectados (rc=$(rc): $(head -1 "${TMP}/err"))"; fi
+if [ "$(rc)" = 1 ] && errhas "belong to no shard"; then ok "mutant (family removed from a group shard) is killed"
+else bad "group orphans not detected (rc=$(rc): $(head -1 "${TMP}/err"))"; fi
 
 # (s) Construct the same prefix overlap between shards of a workspace group.
 stage
@@ -297,7 +297,7 @@ for g in d["groups"]:
 raise SystemExit("no group family can form a nonempty proper prefix")
 PY
 run check
-if [ "$(rc)" = 1 ] && errhas "caen en DOS turnos"; then ok "mutant (overlapping prefix in another group shard) rejected for duplicate ownership"
+if [ "$(rc)" = 1 ] && errhas "belong to TWO shards"; then ok "mutant (overlapping prefix in another group shard) rejected for duplicate ownership"
 else bad "group duplicate ownership passed (rc=$(rc): $(head -1 "${TMP}/err"))"; fi
 
 # (t) un grupo cuyo `go_timeout_minutes` se pasa del techo del PASO. Sin la guarda por grupo el
@@ -314,11 +314,34 @@ for g in d["groups"]:
         g["go_timeout_minutes"] = techo          # >= techo: margen cero
         json.dump(d, open(p, "w", encoding="utf-8"))
         sys.exit(0)
-raise SystemExit("ningun grupo declara go_timeout_minutes: el caso no puede fabricar su mutante")
+raise SystemExit("no group declares go_timeout_minutes: the case cannot construct its mutant")
 PYT
 run check
-if [ "$(rc)" = 1 ] && errhas "no deja margen bajo el techo del paso"; then ok "mutante (timeout de grupo sin margen bajo el techo) muere"
-else bad "un go_timeout de grupo sin margen paso (rc=$(rc): $(head -1 "${TMP}/err"))"; fi
+if [ "$(rc)" = 1 ] && errhas "no headroom below the step limit"; then ok "mutant (group timeout with no margin below the ceiling) is killed"
+else bad "a group go_timeout without margin passed (rc=$(rc): $(head -1 "${TMP}/err"))"; fi
+
+# (split) what race-full races a turn at a time: the root package and the packages of a group
+#     with shards, never one of a group without them; a group that loses its shards leaves it.
+stage; run split
+if [ "$(rc)" = 0 ] && grep -qx 'github.com/olivaresai/olivares/cmd/olivares' "${TMP}/out" \
+  && grep -qx 'github.com/olivaresai/olivares/core/auth' "${TMP}/out" \
+  && ! grep -q '^github.com/olivaresai/olivares/modules/health' "${TMP}/out"; then
+  ok "split names the root package and the packages of groups with shards"
+else bad "split (rc=$(rc): $(head -1 "${TMP}/err"))"; fi
+stage
+python3 - "${SPEC}" <<'PYT'
+import json, sys
+p = sys.argv[1]
+d = json.load(open(p, encoding="utf-8"))
+for g in d["groups"]:
+    if g["name"] == "core-hot":
+        del g["shards"]
+json.dump(d, open(p, "w", encoding="utf-8"))
+PYT
+run split
+if [ "$(rc)" = 0 ] && ! grep -q '^github.com/olivaresai/olivares/core/auth$' "${TMP}/out"; then
+  ok "mutant (core-hot without shards) leaves core/auth out of split"
+else bad "split ignores a group's shards (rc=$(rc))"; fi
 
 echo "race-groups selftest: ${pass} passed, ${fail} failed"
 [ "${fail}" -eq 0 ]

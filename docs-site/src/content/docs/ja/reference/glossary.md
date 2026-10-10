@@ -14,7 +14,7 @@ description: >-
 **リソース**のグラフ。すべてのエッジは [mode](#mode) によって分類され、その [signal source](#signal-sourceシグナルソース)、
 [attribution](#attributionconfidence)、[coverage tier](#coverage-tierカバレッジ階層) でタグ付けされる。差別化された
 鍵となる能力の 1 つ ——
-31 モジュールのうちの 1 つであって、製品全体ではない。
+32 モジュールのうちの 1 つであって、製品全体ではない。
 [Olivares AI とは？](/ja/start/what-is-olivares-ai/) を参照。
 
 ### Actuation states: `v1` / `on-demand` / `seam`
@@ -141,11 +141,7 @@ guardrail / posture / red-team / forensic な観測。機密な詳細そのも�
 
 ### Guardian agent
 
-*他の* AI エージェントを監視または介入する AI を指す **Gartner の**用語。Olivares AI はそのカテゴリの
-**ガバナンス成果**を提供する —— observe、permitted-vs-observed を diff、deny-closed でゲート、不変に
-記録 —— ただしデータパスの**外にある read-first な control plane** として行い、ガードに立つインライン
-LLM としてではない。[アナリストの語彙](/ja/explanation/positioning/analyst-vocabulary/) を参照。
-製品内の [guardian loop](#guardian-loop) と対比すること。
+**Gartner** の用語で、*他の* AI エージェントを監視または介入する AI を指す。Olivares AI は、このカテゴリの**ガバナンスの成果**——観測、Permitted-vs-Observed の差分、deny-closed のゲート、不変の記録——を、**帯域外の観測と deny-closed のインライン制御**として提供し、LLM を見張り役には使わない。管理された Claude Code のフックはエンジンの PEP に依存し、PEP に到達できなければ統制対象のツール呼び出しを拒否する。[アナリストの語彙](/ja/explanation/positioning/analyst-vocabulary/)を参照。製品内の [guardian loop](#guardian-loop) と対比。
 
 ### Guardian loop
 
@@ -168,7 +164,7 @@ findings を監視し、コンテインメントを自動的に作動させる �
 
 ### live_ref
 
-サーバーが割り当てる **1** 件のライブセッション行の識別です。26.10.1 は観測を
+サーバーが割り当てる **1** 件のライブセッション行の識別です。Olivares <!-- release -->0.1<!-- /release --> は観測を
 `(観測スコープ, 外部 id)` でキー付けし、同じセッション id を告げる 2 つの
 プロバイダーホームが 2 行のままになるようにします。「この行」を意味する
 コンソールと API の読み取りは `live_ref` を使い、素のプロバイダー id は使いません。

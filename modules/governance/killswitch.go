@@ -48,8 +48,8 @@ import (
 //     approval and AAL3 step-up on every decision), and this handler
 //     additionally re-verifies STRUCTURALLY, in the same transaction, that at
 //     least two distinct humans approved — so even an operator approval policy
-//     that downgrades the tier (resolveRiskTier honors explicit risk_tier both
-//     ways) can never make re-enable single-handed. There is deliberately NO
+//     that downgrades the tier (Business honors an explicit lower risk_tier)
+//     can never make re-enable single-handed. There is deliberately NO
 //     break-glass path here: break-glass exists to bypass a quorum in an
 //     emergency, and "the estate stays stopped" IS the safe state.
 //   - FORCED POST-REVIEW closes the incident: a second re-enable of the same
@@ -122,18 +122,13 @@ type engageKillSwitchRequest struct {
 	Reason    string `json:"reason"`
 }
 
-// ksFindingSubject names WHO a stop is about, for a finding title.
+// ksFindingSubject identifies the subject of a stop in its finding title.
+// Measured six real stops producing identical rows in Security > Findings.
+// During an incident, operators need the subject and reason without opening each row.
+// This follows tierfloor.go, which already named the agent and tier in its title.
 //
-// ⛔ POR QUÉ EXISTE, y no es cosmético. Los títulos de los findings de parada eran CONSTANTES:
-// seis paradas distintas producían seis filas IDÉNTICAS en Security > Findings, indistinguibles
-// salvo abriendo cada una. Lo midió y no era el seed. Un operador que mira esa lista
-// durante un incidente necesita saber a QUIÉN se paró y POR QUÉ sin abrir seis filas.
-//
-// El modelo es `tierfloor.go`, que ya nombraba el agente y el tier en su título. Esto lo lleva a
-// las paradas manuales.
-//
-// La fila guarda tres identificadores de menos a más internos; gana el primero no vacío, para que
-// el operador lea el nombre que él escribió y no un id que no reconoce.
+// Prefer the first nonempty identifier, from the operator's external name to the
+// internal references, so the title uses a name the operator recognizes.
 func ksFindingSubject(d killSwitchDTO) string {
 	if d.ScopeKind == ksScopeEstate {
 		return "the whole estate"

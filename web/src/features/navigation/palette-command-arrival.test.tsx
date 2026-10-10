@@ -31,7 +31,6 @@ import {
 import { useEffect } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import '@/features/alerting/i18n'
-import '@/features/orchestration/i18n'
 
 const { toastMock } = vi.hoisted(() => ({
   toastMock: {
@@ -43,54 +42,36 @@ const { toastMock } = vi.hoisted(() => ({
 }))
 vi.mock('@/components/ui/toaster', () => ({ toast: toastMock }))
 
-const { notify, orch, recordingApiMock, searchMock, authState } = vi.hoisted(
-  () => ({
-    notify: {
-      listRoutes: vi.fn(),
-      getRoute: vi.fn(),
-      createRoute: vi.fn(),
-      updateRoute: vi.fn(),
-      deleteRoute: vi.fn(),
-      testRoute: vi.fn(),
-      routeRevisions: vi.fn(),
-      restoreRoute: vi.fn(),
-      listDestinations: vi.fn(),
-      listMatchTypes: vi.fn(),
-      evaluateRoutes: vi.fn(),
-      listDeliveries: vi.fn(),
-      listOutbox: vi.fn(),
-      redeliverOutbox: vi.fn(),
-    },
-    orch: {
-      graph: vi.fn(),
-      flows: vi.fn(),
-      schedules: vi.fn(),
-      scheduleDecisions: vi.fn(),
-      decisions: vi.fn(),
-      timeline: vi.fn(),
-    },
-    recordingApiMock: { notice: vi.fn(), acknowledge: vi.fn() },
-    searchMock: vi.fn(),
-    authState: {
-      can: (_p: string): boolean => false,
-      activeTenant: 't1' as string | null,
-      logout: vi.fn(),
-    },
-  }),
-)
+const { notify, recordingApiMock, searchMock, authState } = vi.hoisted(() => ({
+  notify: {
+    listRoutes: vi.fn(),
+    getRoute: vi.fn(),
+    createRoute: vi.fn(),
+    updateRoute: vi.fn(),
+    deleteRoute: vi.fn(),
+    testRoute: vi.fn(),
+    routeRevisions: vi.fn(),
+    restoreRoute: vi.fn(),
+    listDestinations: vi.fn(),
+    listMatchTypes: vi.fn(),
+    evaluateRoutes: vi.fn(),
+    listDeliveries: vi.fn(),
+    listOutbox: vi.fn(),
+    redeliverOutbox: vi.fn(),
+  },
+  recordingApiMock: { notice: vi.fn(), acknowledge: vi.fn() },
+  searchMock: vi.fn(),
+  authState: {
+    can: (_p: string): boolean => false,
+    activeTenant: 't1' as string | null,
+    logout: vi.fn(),
+  },
+}))
 vi.mock('@/lib/auth/context', () => ({ useAuth: () => authState }))
 vi.mock('@/features/alerting/api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/features/alerting/api')>()),
   notifyApi: notify,
 }))
-vi.mock('@/features/orchestration/api', async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import('@/features/orchestration/api')>()
-  return {
-    ...actual,
-    orchestrationApi: { ...actual.orchestrationApi, ...orch },
-  }
-})
 vi.mock('@/features/recordings/api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/features/recordings/api')>()),
   recordingApi: recordingApiMock,
@@ -104,8 +85,6 @@ import '@/features/_intel'
 import { CommandMenu } from '@/components/layout/command-menu'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { AlertingView } from '@/features/alerting/alerting-view'
-import { OrchestrationView } from '@/features/orchestration/orchestration-view'
-import { flowsFixture, graphFixture } from '@/features/orchestration/fixtures'
 import { queryKeys } from '@/lib/api/query'
 import { liveCapabilityContext } from '@/lib/auth/capabilities'
 import { useCommandStore } from '@/stores/command'
@@ -123,11 +102,6 @@ const PRINCIPAL = {
 }
 
 const ALERTING = ['notify:route:read', 'notify:route:write']
-const ORCHESTRATION = [
-  'orchestration:graph:read',
-  'orchestration:schedule:read',
-  'orchestration:schedule:write',
-]
 
 /** A principal holding exactly `permissions`, read at render like the real projection. */
 function holding(...permissions: string[]) {
@@ -160,11 +134,6 @@ function mount(initial: string) {
         getParentRoute: () => root,
         path: '/alerting',
         component: AlertingRoute,
-      }),
-      createRoute({
-        getParentRoute: () => root,
-        path: '/orchestration',
-        component: OrchestrationView,
       }),
       createRoute({
         getParentRoute: () => root,
@@ -258,12 +227,6 @@ beforeEach(() => {
     recorded_namespaces: [],
     consent_required: false,
   })
-  orch.graph.mockResolvedValue(graphFixture)
-  orch.flows.mockResolvedValue({ items: flowsFixture, has_more: false })
-  orch.timeline.mockResolvedValue(EMPTY)
-  orch.schedules.mockResolvedValue(EMPTY)
-  orch.scheduleDecisions.mockResolvedValue(EMPTY)
-  orch.decisions.mockResolvedValue(EMPTY)
 })
 
 describe('a palette verb opens its form on the arrival it was selected for', () => {
@@ -398,57 +361,6 @@ describe('a palette verb opens its form on the arrival it was selected for', () 
 
     await goTo(router, '/alerting')
     expect(await screen.findByText('sec-alerts')).toBeInTheDocument()
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-    expect(useCommandStore.getState().pendingAction).toBeNull()
-  })
-
-  it('orchestration: the verb selects the Schedules tab and opens the form there', async () => {
-    holding(...ORCHESTRATION)
-    const { router } = mount('/elsewhere')
-    expect(await screen.findByText('elsewhere')).toBeInTheDocument()
-    const user = userEvent.setup()
-
-    await selectVerb(user, 'New schedule')
-
-    expect(router.state.location.pathname).toBe('/orchestration')
-    expect(
-      await screen.findByRole('dialog', { name: /new schedule/i }),
-    ).toBeInTheDocument()
-    expect(useCommandStore.getState().pendingAction).toBeNull()
-  })
-
-  it('orchestration: ordinary navigation still lands on the default Graph tab', async () => {
-    // CONTROL for the cell above: the tab moves for an explicit selection and for nothing
-    // else, which is what "preserve the default tab" means.
-    holding(...ORCHESTRATION)
-    const { router } = mount('/elsewhere')
-    expect(await screen.findByText('elsewhere')).toBeInTheDocument()
-    await goTo(router, '/orchestration')
-    expect(
-      await screen.findByRole('tab', { name: 'Communication graph' }),
-    ).toHaveAttribute('data-state', 'active')
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-  })
-
-  it('orchestration: a reader of the graph alone is offered nothing and opens nothing', async () => {
-    holding('orchestration:graph:read', 'orchestration:schedule:read')
-    const { qc, router } = mount('/elsewhere')
-    expect(await screen.findByText('elsewhere')).toBeInTheDocument()
-    const user = userEvent.setup()
-    act(() => useCommandStore.getState().setOpen(true))
-    await user.type(await screen.findByRole('combobox'), 'New schedule')
-    expect(
-      screen.queryByRole('option', { name: 'New schedule' }),
-    ).not.toBeInTheDocument()
-    await user.keyboard('{Escape}')
-    await waitFor(() => expect(useCommandStore.getState().open).toBe(false))
-
-    // And a command forced into the store for that principal is refused and retired.
-    queueWithoutNavigating(qc, 'orchestration', 'createSchedule')
-    await goTo(router, '/orchestration')
-    expect(
-      await screen.findByRole('tab', { name: 'Communication graph' }),
-    ).toHaveAttribute('data-state', 'active')
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(useCommandStore.getState().pendingAction).toBeNull()
   })

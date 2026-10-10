@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
@@ -40,9 +41,10 @@ func parseQuickstartPostgresURL(raw string) (*url.URL, error) {
 		query.Set("sslmode", "require")
 		query.Del("ssl")
 	}
+	socketURL := u.Hostname() == "" && len(query["host"]) == 1 && filepath.IsAbs(query.Get("host"))
 	for key := range query {
-		if key == "host" && u.Hostname() == "" && len(query[key]) == 1 && filepath.IsAbs(query.Get(key)) {
-			continue // libpq's Unix-socket URL form has no authority host.
+		if socketURL && (key == "host" || key == "port" && len(query[key]) == 1) {
+			continue // pgx validates the socket URL and its optional query port below.
 		}
 		switch strings.TrimSpace(key) {
 		case "host", "hostaddr", "port", "database", "dbname", "user", "password", "service", "servicefile":
@@ -174,6 +176,12 @@ func initPostgresConfig(ctx context.Context, dataDir, maintenance string, reques
 			return init, err
 		}
 		id := hex.EncodeToString(suffix[:])
+		// pg_dump runs under FORCE ROW LEVEL SECURITY only as a role that bypasses it,
+		// so the console backup needs one: a new installation gets it like the others,
+		// when the maintenance role is able to create it.
+		if requested.Admin == nil && maintenanceCanCreateAdmin(ctx, base) {
+			requested.Admin = &store.PgRole{}
+		}
 		// A distinct database and role pair avoids changing another installation.
 		spec := postgresSpecNames(requested, splitOwner, "_"+id)
 		if spec.Admin != nil && (spec.Admin.Name == spec.App.Name || spec.Admin.Name == spec.Owner.Name) {
@@ -242,6 +250,10 @@ func initPostgresConfig(ctx context.Context, dataDir, maintenance string, reques
 	if maintenance == "" {
 		return init, nil // restart without retaining or asking for the DBA credential
 	}
+	baseConfig, err := pgx.ParseConfig(base.String())
+	if err != nil {
+		return init, errors.New("--postgres needs a valid maintenance PostgreSQL URL")
+	}
 	roles := make(map[string]*url.URL)
 	roleNames := []string{"app", "owner"}
 	if init.config.AdminDSN != "" {
@@ -256,7 +268,12 @@ func initPostgresConfig(ctx context.Context, dataDir, maintenance string, reques
 		if err != nil {
 			return init, err
 		}
-		if u.Host != base.Host || u.Query().Get("host") != base.Query().Get("host") {
+		savedConfig, err := pgx.ParseConfig(u.String())
+		if err != nil {
+			return init, errors.New("saved PostgreSQL credentials need a valid PostgreSQL URL")
+		}
+		// Compare the driver's target, including defaults and socket query ports.
+		if !slices.Equal(postgresConnectionAddresses(savedConfig), postgresConnectionAddresses(baseConfig)) {
 			return init, errors.New("this data directory uses another PostgreSQL address; use its original maintenance URL or a separate --data-dir")
 		}
 		roles[role] = u
@@ -333,6 +350,15 @@ func initPostgresConfig(ctx context.Context, dataDir, maintenance string, reques
 	if err != nil {
 		return init, fmt.Errorf("PostgreSQL provisioning failed: %w", err)
 	}
+	if fresh && spec.Admin != nil {
+		// The first start opens the admin pool and refuses to run without it.
+		if init.result.AdminPosture == nil {
+			return init, errors.New("PostgreSQL admin role was not verified")
+		}
+		if _, accepted := checkVerdict(*init.result.AdminPosture, true); !accepted {
+			return init, errors.New("PostgreSQL admin role verification failed")
+		}
+	}
 	if adminStaging != "" {
 		if init.result.AdminPosture == nil {
 			return init, errors.New("PostgreSQL admin role was not verified; existing installation remains unchanged")
@@ -351,6 +377,26 @@ func initPostgresConfig(ctx context.Context, dataDir, maintenance string, reques
 	return init, nil
 }
 
+// maintenanceCanCreateAdmin: only a superuser, or a role that already bypasses row
+// security, can create the BYPASSRLS admin role. Managed PostgreSQL without one keeps
+// provisioning the other roles, as before, and its backup path is unchanged.
+func maintenanceCanCreateAdmin(ctx context.Context, maintenance *url.URL) bool {
+	posture, err := coreengine.ProbeRole(ctx, store.Config{Engine: store.EnginePostgres, DSN: maintenance.String()})
+	return err == nil && posture.Reachable && (posture.Superuser || posture.BypassRLS)
+}
+
+func postgresConnectionAddresses(config *pgx.ConnConfig) []string {
+	addresses := []string{net.JoinHostPort(config.Host, fmt.Sprint(config.Port))}
+	for _, fallback := range config.Fallbacks {
+		address := net.JoinHostPort(fallback.Host, fmt.Sprint(fallback.Port))
+		// TLS fallback attempts may repeat an address; they do not change the target.
+		if address != addresses[len(addresses)-1] {
+			addresses = append(addresses, address)
+		}
+	}
+	return addresses
+}
+
 func postgresSpecNames(spec store.PgProvisionSpec, splitOwner bool, suffix string) store.PgProvisionSpec {
 	if spec.Database == "" {
 		spec.Database = "olivares" + suffix
@@ -360,6 +406,9 @@ func postgresSpecNames(spec store.PgProvisionSpec, splitOwner bool, suffix strin
 	}
 	if splitOwner && spec.Owner.Name == "" {
 		spec.Owner.Name = "olivares_owner" + suffix
+	}
+	if spec.Admin != nil && spec.Admin.Name == "" {
+		spec.Admin.Name = "olivares_admin" + suffix
 	}
 	return spec
 }

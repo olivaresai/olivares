@@ -2,19 +2,17 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// el TECHO de las listas del nucleo, medido en la URL que el cliente construye.
+// core list ceilings, measured in the client's actual URL.
 //
-// ⛔ POR QUE UN TESTIGO DE TRANSPORTE Y NO UNA LECTURA DEL FUENTE. `scripts/check-list-truncation-
-//    witness.sh` comprueba que la palabra `limit` aparece cerca de la llamada — es un censo de
-//    TEXTO y lo dice de si mismo. Un `limit` en un comentario, en una rama muerta o en un objeto
-//    que nadie serializa lo satisface igual. Lo unico que prueba que el techo LLEGA es mirar la
-//    query string que sale.
+// A transport test proves what a source scan cannot. `scripts/check-list-truncation-witness.sh`
+// checks for `limit` near a call and declares itself a textual inventory. A comment, dead
+// branch, or unserialized object can satisfy it. Only the outgoing query string proves
+// the ceiling reaches the engine.
 //
-// ⛔ Y LA CELDA QUE DE VERDAD IMPORTA ES LA DEL ORDEN. `{ limit: X, ...params }` y
-//    `{ ...params, limit: X }` se leen casi igual y hacen lo contrario: con el segundo, el techo
-//    PISA en silencio el limite que pida la vista. Ningun lint lo ve, el testigo de recorte
-//    tampoco —los dos contienen la palabra— y la consola seguiria "funcionando". Por eso hay una
-//    celda que fija que el llamante GANA.
+// Property order matters: `{ limit: X, ...params }` and `{ ...params, limit: X }` look similar
+// but behave differently. The latter silently overrides the view's requested limit.
+// Neither lint nor the truncation scan detects this because both contain `limit`.
+// The order test therefore ensures the caller's value wins.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useSessionStore } from '@/stores/session'
 import { useTenantStore } from '@/stores/tenant'

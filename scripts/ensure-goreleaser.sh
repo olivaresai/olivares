@@ -36,7 +36,7 @@ export LC_ALL
 VER=2.17.0
 me=ensure-goreleaser
 refuse() {
-	printf '%s: NO HE PODIDO MIRAR — %s\n' "$me" "$*" >&2
+	printf '%s: COULD NOT LOOK — %s\n' "$me" "$*" >&2
 	exit 2
 }
 usage() {

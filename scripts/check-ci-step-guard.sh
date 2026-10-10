@@ -80,13 +80,13 @@ DIR="${1:-$RAIZ/.github/workflows}"
 
 case "$UMBRAL" in
 '' | *[!0-9]*)
-	printf 'check-ci-step-guard: ⛔ NO HE PODIDO MIRAR: OLIVARES_STEP_GUARD_MIN=%s no es un entero\n' "$UMBRAL" >&2
+	printf 'check-ci-step-guard: ⛔ COULD NOT CHECK: OLIVARES_STEP_GUARD_MIN=%s is not an integer\n' "$UMBRAL" >&2
 	exit 2
 	;;
 esac
 
 if [ ! -d "$DIR" ]; then
-	printf 'check-ci-step-guard: ⛔ NO HE PODIDO MIRAR: no existe el directorio %s\n' "$DIR" >&2
+	printf 'check-ci-step-guard: ⛔ COULD NOT CHECK: missing directory %s\n' "$DIR" >&2
 	exit 2
 fi
 
@@ -112,7 +112,7 @@ ilegibles=0
 for wf in "$DIR"/*.yml "$DIR"/*.yaml; do
 	[ -e "$wf" ] || continue
 	if [ ! -r "$wf" ]; then
-		printf 'check-ci-step-guard: ⛔ NO HE PODIDO MIRAR: no puedo leer %s\n' "$wf" >&2
+		printf 'check-ci-step-guard: ⛔ COULD NOT CHECK: cannot read %s\n' "$wf" >&2
 		ilegibles=$((ilegibles + 1))
 		continue
 	fi
@@ -155,7 +155,7 @@ for wf in "$DIR"/*.yml "$DIR"/*.yaml; do
 	)
 	rc=$?
 	if [ "$rc" -ne 0 ]; then
-		printf 'check-ci-step-guard: ⛔ NO HE PODIDO MIRAR: awk falló (rc=%s) sobre %s\n' "$rc" "$wf" >&2
+		printf 'check-ci-step-guard: ⛔ COULD NOT CHECK: awk failed (rc=%s) on %s\n' "$rc" "$wf" >&2
 		ilegibles=$((ilegibles + 1))
 		continue
 	fi
@@ -163,29 +163,29 @@ for wf in "$DIR"/*.yml "$DIR"/*.yaml; do
 	while IFS=$'\t' read -r f j t; do
 		[ -n "${j:-}" ] || continue
 		hallazgos=$((hallazgos + 1))
-		printf 'check-ci-step-guard: ⛔ %s: el job «%s» tiene techo %s min y NINGUNA guarda de paso.\n' "$f" "$j" "$t"
-		printf '                       Un techo de JOB cancela los pasos que quedan, así que el reportero\n'
-		printf '                       de fallos no llega a publicar y el rojo sale MUDO. Ponle\n'
-		printf '                       `timeout-minutes:` al paso que puede tardar, por debajo de %s.\n' "$t"
+		printf 'check-ci-step-guard: ⛔ %s: job «%s» has a %s min timeout and no step timeout.\n' "$f" "$j" "$t"
+		printf '                       A job timeout cancels the remaining steps, preventing the failure\n'
+		printf '                       reporter from publishing a diagnostic. Add\n'
+		printf '                       `timeout-minutes:` below %s to the step that may take longer.\n' "$t"
 	done <<EOF
 $salida
 EOF
 done
 
 if [ "$ilegibles" -gt 0 ]; then
-	printf 'check-ci-step-guard: ⛔ NO HE PODIDO MIRAR %d fichero(s); no declaro limpio lo que no he leído.\n' "$ilegibles" >&2
+	printf 'check-ci-step-guard: ⛔ COULD NOT CHECK %d file(s); unread files cannot be reported as clean.\n' "$ilegibles" >&2
 	exit 2
 fi
 
 if [ "$mirados" -eq 0 ]; then
-	printf 'check-ci-step-guard: ⛔ NO HE PODIDO MIRAR: cero workflows en %s\n' "$DIR" >&2
+	printf 'check-ci-step-guard: ⛔ COULD NOT CHECK: no workflows in %s\n' "$DIR" >&2
 	exit 2
 fi
 
 if [ "$hallazgos" -gt 0 ]; then
-	printf 'check-ci-step-guard: %d job(s) por encima de %s min sin guarda de paso.\n' "$hallazgos" "$UMBRAL" >&2
+	printf 'check-ci-step-guard: %d job(s) above %s min without step timeouts.\n' "$hallazgos" "$UMBRAL" >&2
 	exit 1
 fi
 
-printf 'check-ci-step-guard: CLEAN — %d workflow(s); ningún job por encima de %s min sin guarda de paso.\n' "$mirados" "$UMBRAL"
+printf 'check-ci-step-guard: CLEAN — %d workflow(s); no jobs above %s min without step timeouts.\n' "$mirados" "$UMBRAL"
 exit 0

@@ -71,7 +71,10 @@ If you prefer to run the checks yourself, this is what the script does:
 2. **Artifact integrity** — every downloaded artifact must match `checksums.txt`:
 
    ```bash
-   sha256sum --check checksums.txt
+   # checksums.txt lists all release artifacts; skip files you did not download.
+   # Before use, ensure each downloaded artifact is listed and reports OK.
+   # GNU sha256sum fails if no listed file is present or a checksum mismatches.
+   sha256sum --check --ignore-missing checksums.txt
    ```
 
 3. **SBOM (SPDX) attestation:**

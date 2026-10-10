@@ -950,7 +950,7 @@ test('tenant lifecycle and API playground destructive send change disposable sta
   await page.goto('/status-page')
   await publicRead
   await expect(
-    page.getByRole('heading', { name: 'Olivares Control Plane — Status' }),
+    page.getByRole('heading', { name: 'Olivares AI — Status' }),
   ).toBeVisible()
   const publicRefresh = observe(page, 'GET', '/status', 200)
   await page.getByRole('button', { name: 'Refresh' }).click()

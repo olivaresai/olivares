@@ -38,15 +38,15 @@ cannot() { printf 'race-full-report: COULD NOT LOOK — %s\n' "$*" >&2; exit 2; 
 REPO="${1:-}"; RUN="${2:-}"
 JOBS_SRC="${OLIVARES_RACE_REPORT_JOBS:-}"
 if [ -z "${JOBS_SRC}" ]; then
-  [ -n "${REPO}" ] && [ -n "${RUN}" ] || cannot "uso: $0 <owner/repo> <run_id>"
-  command -v gh >/dev/null 2>&1 || cannot "no hay gh y no se ha dado OLIVARES_RACE_REPORT_JOBS"
+  [ -n "${REPO}" ] && [ -n "${RUN}" ] || cannot "usage: $0 <owner/repo> <run_id>"
+  command -v gh >/dev/null 2>&1 || cannot "gh is unavailable and OLIVARES_RACE_REPORT_JOBS was not supplied"
   JOBS_SRC="$(mktemp "${TMPDIR:-/tmp}/racereport.XXXXXX")"
   trap 'rm -f "${JOBS_SRC}"' EXIT
   gh api "repos/${REPO}/actions/runs/${RUN}/jobs?per_page=100" > "${JOBS_SRC}" \
-    || cannot "la API no devolvio los jobs de ${REPO} run ${RUN}"
+    || cannot "the API did not return jobs for ${REPO} run ${RUN}"
 fi
-[ -s "${JOBS_SRC}" ] || cannot "el JSON de jobs esta vacio: ${JOBS_SRC}"
-[ -f "${SPEC}" ] || cannot "no encuentro ${SPEC} (de ahi salen los techos)"
+[ -s "${JOBS_SRC}" ] || cannot "the jobs JSON is empty: ${JOBS_SRC}"
+[ -f "${SPEC}" ] || cannot "cannot find ${SPEC} (the source of timeout limits)"
 
 # El .jsonl de race-root: si no se da por seam, se intenta el artefacto. Que NO este no es
 # un error — el paso puede haber muerto antes de subirlo.
@@ -66,7 +66,7 @@ spec = json.load(open(sys.argv[2], encoding="utf-8"))
 jsonl = sys.argv[3] if len(sys.argv) > 3 else ""
 
 if not jobs:
-    print("race-full-report: COULD NOT LOOK — la corrida no trae ni un job", file=sys.stderr)
+    print("race-full-report: COULD NOT LOOK — the run contains no jobs", file=sys.stderr)
     sys.exit(2)
 
 def when(s):
@@ -108,7 +108,7 @@ def measuring_step(job):
 def verdict(step, dur, ceil):
     c = (step or {}).get("conclusion")
     if c == "success":
-        return "verde", False
+        return "passed", False
     if c == "cancelled":
         # ⛔ MATIZ MEDIDO, y corrige la regla tal y como me llego: «cancelled = muerte por
         # tiempo» vale cuando el paso llego a su techo, pero en una corrida alojada del 2026-08-31
@@ -120,15 +120,15 @@ def verdict(step, dur, ceil):
         # Lo que NO cambia, que es el fondo de la regla: cancelled NUNCA es verde y NUNCA
         # es una medida.
         if dur is not None and dur >= ceil - 1:
-            return "MUERTO POR TIEMPO (cancelled en su techo)", True
-        return "CANCELADO DESDE FUERA (no midio; %.0f%% del techo)" % (
+            return "TIMED OUT (canceled at its limit)", True
+        return "CANCELED EXTERNALLY (not measured; %.0f%% of the limit)" % (
             100.0 * dur / ceil if dur is not None and ceil else 0), True
     if c == "failure":
         agotado = dur is not None and dur >= ceil - 1
-        return ("MUERTO POR TIEMPO (techo del paso)" if agotado else "ROJO"), True
+        return ("TIMED OUT (step limit)" if agotado else "FAILED"), True
     if c in ("skipped", None):
-        return "NO MEDIDO", True
-    return "desconocido: %s" % c, True
+        return "NOT MEASURED", True
+    return "unknown: %s" % c, True
 
 rows, bad, notmeasured, encurso = [], 0, 0, 0
 for j in sorted(jobs, key=lambda x: x.get("name", "")):
@@ -142,7 +142,7 @@ for j in sorted(jobs, key=lambda x: x.get("name", "")):
         # ⛔ SU TECHO NO ESTA EN LA SPEC DE HOY: era 75 en la epoca del paso unico. Comparar
         # contra el de la matriz daria un «margen» inventado, asi que no se compara: el
         # veredicto sale del paso y el techo se imprime como desconocido.
-        etiqueta, ceil, to = "workspace (paso unico, pre-matriz)", None, None
+        etiqueta, ceil, to = "workspace (single step, before matrix)", None, None
     elif name == "race-root":
         etiqueta, ceil, to = "race-root", CEIL_R, TO_R
     else:
@@ -152,12 +152,12 @@ for j in sorted(jobs, key=lambda x: x.get("name", "")):
     # la lectura que hace parar un acto que iba bien. Se dice EN CURSO y no cuenta como
     # muerte — pero tampoco como verde: la corrida no tiene veredicto todavia.
     if j.get("status") != "completed":
-        rows.append((etiqueta, None, ceil, to, "EN CURSO (%s)" % j.get("status"), 0))
+        rows.append((etiqueta, None, ceil, to, "IN PROGRESS (%s)" % j.get("status"), 0))
         encurso += 1
         continue
     st = measuring_step(j)
     if st is None:
-        rows.append((etiqueta, None, ceil, to, "COULD NOT LOOK: sin paso de medida", 0))
+        rows.append((etiqueta, None, ceil, to, "COULD NOT LOOK: no measurement step", 0))
         notmeasured += 1
         bad += 1
         continue
@@ -184,22 +184,22 @@ for j in sorted(jobs, key=lambda x: x.get("name", "")):
         bad += 1
     notmeasured += saltados
 
-print("grupo                          | dur    | techo | margen | %techo | veredicto")
+print("group                          | dur    | limit | margin | %limit | verdict")
 print("-------------------------------+--------+-------+--------+--------+------------------------------")
 for etiqueta, dur, ceil, to, v, salt in rows:
     if dur is None or ceil is None:
         d_ = "  —" if dur is None else "%5.1fm" % dur
         c_ = "  —" if ceil is None else "%5d" % ceil
-        nota = "" if ceil is not None else "  (techo de esa epoca no esta en la spec de hoy)"
+        nota = "" if ceil is not None else "  (the limit for that period is absent from the current specification)"
         print("%-30s | %-6s | %5s | %-6s | %-6s | %s%s" % (etiqueta[:30], d_, c_, "  —", "  —", v, nota))
         continue
     marg = ceil - dur
     pct = 100.0 * dur / ceil
-    extra = "" if salt == 0 else "  (+%d paso(s) SALTADO(s) = no medidos)" % salt
+    extra = "" if salt == 0 else "  (+%d SKIPPED step(s) = not measured)" % salt
     print("%-30s | %5.1fm | %5d | %5.1fm | %5.1f%% | %s%s" % (etiqueta[:30], dur, ceil, marg, pct, v, extra))
 
 print()
-print("techos leidos de %s: grupos paso %dm / go %dm · raiz paso %dm / go %dm"
+print("limits read from %s: groups step %dm / go %dm · root step %dm / go %dm"
       % (sys.argv[2], CEIL_G, TO_G, CEIL_R, TO_R))
 
 # ── race-root: lo que el .jsonl dice y ninguna otra fuente ────────────────────
@@ -208,7 +208,7 @@ if jsonl:
         ev = [json.loads(l) for l in open(jsonl, encoding="utf-8") if l.strip()]
     except Exception as e:                                    # noqa: BLE001
         ev = []
-        print("aviso: no pude leer %s (%s)" % (jsonl, e))
+        print("warning: could not read %s (%s)" % (jsonl, e))
     if ev:
         # ⛔ EL PRIMER EVENTO ES LA CIFRA QUE FALTABA PARA LA CUENTA DEL RELOJ: el
         # `-timeout` de Go arranca DESPUES de compilar con -race, asi que el hueco entre
@@ -229,35 +229,35 @@ if jsonl:
         norm = re.sub(r"\.[0-9]+Z?$", "", raw).rstrip("Z")
         first = when(norm + "Z") if norm else None
         if t0 and first:
-            print("race-root: primer evento del test a los %.1f min del inicio del paso "
-                  "⇒ COMPILACION con -race ~%.1f min (es el sumando que faltaba en "
-                  "techo = -timeout + compilacion + margen)" % ((first - t0).total_seconds() / 60.0,
+            print("race-root: first test event %.1f min after the step started "
+                  "⇒ COMPILATION with -race ~%.1f min (the previously omitted term in "
+                  "limit = -timeout + compilation + margin)" % ((first - t0).total_seconds() / 60.0,
                                                                 (first - t0).total_seconds() / 60.0))
         lentos = sorted((e for e in ev if e.get("Action") in ("pass", "fail") and e.get("Test")
                          and e.get("Elapsed") is not None),
                         key=lambda e: -e["Elapsed"])[:10]
         if lentos:
-            print("race-root: los 10 tests mas lentos (para el reparto por -run):")
+            print("race-root: the 10 slowest tests (for partitioning with -run):")
             for e in lentos:
                 print("    %8.1fs  %s" % (e["Elapsed"], e["Test"]))
     else:
-        print("race-root: el .jsonl no trae eventos legibles — no se infiere nada de el")
+        print("race-root: the .jsonl contains no readable events — nothing is inferred from it")
 else:
-    print("race-root: sin .jsonl (artefacto ausente o paso muerto antes de subirlo). "
-          "NO se deduce la compilacion de ningun otro sitio.")
+    print("race-root: no .jsonl (artifact missing or step stopped before upload). "
+          "Compilation time is NOT inferred from another source.")
 
 print()
 # Una muerte es decisiva aunque queden jobs vivos: no hace falta esperar para saber que esa
 # corrida ya no sirve para la puerta.
 if bad:
-    print("race-full-report: %d job(s) NO verdes; %d paso(s) sin medir%s. La corrida NO es "
-          "evidencia de nada para la puerta del release."
-          % (bad, notmeasured, "; %d aun EN CURSO" % encurso if encurso else ""), file=sys.stderr)
+    print("race-full-report: %d job(s) NOT passing; %d step(s) not measured%s. This run is NOT "
+          "evidence for the release gate."
+          % (bad, notmeasured, "; %d still IN PROGRESS" % encurso if encurso else ""), file=sys.stderr)
     sys.exit(1)
 if encurso:
-    print("race-full-report: SIN VEREDICTO TODAVIA — %d de %d job(s) siguen EN CURSO. Los "
-          "terminados van verdes. No es un verde de corrida: vuelve a leerlo al acabar."
+    print("race-full-report: NO VERDICT YET — %d of %d job(s) remain IN PROGRESS. Completed "
+          "jobs passed. This run is not yet passing: check again when it finishes."
           % (encurso, len(rows)), file=sys.stderr)
     sys.exit(2)
-print("race-full-report: CLEAN — %d job(s), todos verdes por PASOS, 0 pasos sin medir." % len(rows))
+print("race-full-report: CLEAN — %d job(s), all STEPS passing, 0 unmeasured steps." % len(rows))
 PY

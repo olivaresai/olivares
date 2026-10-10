@@ -1089,30 +1089,28 @@ export const orchestrationGraph = {
 }
 export const eventingTypes = { event_types: [] }
 
-// ⛔ LAS CINCO QUE FALTABAN, y por qué importa que estén: `fixtureFor` devuelve `null` cuando
-// nada casa, así que una ruta sin fixture no da una pantalla vacía — la tira al *error
-// boundary*. `/eventing` era 1 de las 59 del censo de accesibilidad y caía en los dos temas por
-// esto, NO por un defecto de producción (`modules/eventing/egressapi.go:66` sirve la superficie
-// y `web/src/features/eventing/api.ts:77` la pide). Un arnés que no sirve una ruta no mide esa
-// pantalla: la reprueba.
+// The five missing fixtures matter: `fixtureFor` returns `null` when nothing matches,
+// so a route without a fixture reaches the error boundary. `/eventing` was one of the 59
+// routes in the accessibility inventory and failed in both themes because of this harness gap,
+// not a production defect (`modules/eventing/egressapi.go:66` serves the surface and
+// `web/src/features/eventing/api.ts:77` requests it). A harness that cannot serve a route
+// cannot measure that screen.
 //
-// ⛔ `egress-policy` y su `/compat` SÍ se sirven desde aquí desde el lote del pre-push: la
-// integración trajo las definiciones TIPADAS de `main` (#1622) y the maintainer añadió
-// sus dos entradas de ruta, que la unión de definiciones por sí sola no traía. Antes decía
-// `#1622` (`sol/truncation-honesty`, creada a las 12:34 de hoy, antes que esto) y los añade
-// MEJOR — tipados contra `EgressPolicyStatus` de `features/eventing/types`, con
-// `classified_mode`, `generation` y la razón del digest escrita. Los míos eran objetos
-// sueltos. Declararlos en los dos sitios no era una redundancia inofensiva: son el MISMO
-// nombre en el MISMO fichero, y `merge-tree` lo confirma como conflicto de contenido.
-// Aquí quedan las TRES que esa PR no cubre.
+// `egress-policy` and `/compat` are served here since the pre-push batch. Integration brought
+// the typed definitions from main (#1622), and the maintainer added both route entries,
+// which the definition union alone did not supply. #1622 (`sol/truncation-honesty`, created
+// at 12:34 that day) added better fixtures typed against `EgressPolicyStatus` from
+// `features/eventing/types`, including `classified_mode`, `generation`, and the digest reason.
+// The earlier fixtures were untyped objects. Declaring both versions was a content conflict,
+// confirmed by `merge-tree`: the same names in the same file. The three fixtures not covered
+// by that PR remain here.
 //
-// El relevo nombraba SOLO `egress-policy`. Medidas las rutas que llama la feature contra las que
-// el arnés servía, faltaban CUATRO (`dead-letters`, `deliveries`, `egress-policy`,
-// `subscriptions`) más `egress-policy/compat`. Se sirven las cinco: arreglar una y dejar cuatro
-// habría movido el error boundary de sitio en vez de quitarlo.
+// The handoff named only `egress-policy`. Comparing the feature's requests with harness routes
+// found four missing routes (`dead-letters`, `deliveries`, `egress-policy`, `subscriptions`)
+// plus `egress-policy/compat`. Serving all five removes the error boundary instead of moving
+// it.
 //
-// Listas VACÍAS a propósito: el arnés compara capturas, y datos inventados moverían las líneas
-// base de pantallas que hoy pasan.
+// The lists are deliberately empty: invented data would change screenshot baselines that pass.
 export const eventingDeliveries = { items: [], has_more: false }
 export const eventingDeadLetters = { items: [], has_more: false }
 export const eventingSubscriptions = { items: [], has_more: false }

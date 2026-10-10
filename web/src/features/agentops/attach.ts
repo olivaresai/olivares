@@ -45,6 +45,8 @@ export interface UseRunAttachOptions {
   /** Restarts the attempt when session state/transport (or equivalent) changes. */
   sessionKey?: string
   onFrame: (frame: AttachFrame) => void
+  /** Opts into a stored conversation snapshot on attach at cursor zero. */
+  onHistory?: (line: string) => void
   onLag?: (lag: AttachLag) => void
   onNotice?: (notice: AttachNotice) => void
   onEnd?: () => void
@@ -65,6 +67,7 @@ export function useRunAttach({
   enabled = true,
   sessionKey,
   onFrame,
+  onHistory,
   onLag,
   onNotice,
   onEnd,
@@ -82,10 +85,10 @@ export function useRunAttach({
   }, [])
 
   // Stable callback refs so the stream effect doesn't restart on every render.
-  const cbRef = useRef({ onFrame, onLag, onNotice, onEnd })
+  const cbRef = useRef({ onFrame, onHistory, onLag, onNotice, onEnd })
   useEffect(() => {
-    cbRef.current = { onFrame, onLag, onNotice, onEnd }
-  }, [onFrame, onLag, onNotice, onEnd])
+    cbRef.current = { onFrame, onHistory, onLag, onNotice, onEnd }
+  }, [onFrame, onHistory, onLag, onNotice, onEnd])
 
   // Cursor owner is compared privately; the bearer is never placed in React
   // state, a key, or a log. credentialGeneration is the non-secret counter.
@@ -105,6 +108,7 @@ export function useRunAttach({
   }, [ownerKey])
 
   const active = enabled && !!runRef && !!token
+  const requestHistory = !!onHistory
 
   useEffect(() => {
     if (!active || !runRef) return
@@ -118,6 +122,19 @@ export function useRunAttach({
       if (cancelled) return
       const cb = cbRef.current
       switch (msg.event) {
+        case 'history': {
+          try {
+            const history = JSON.parse(msg.data) as { line?: unknown }
+            if (
+              typeof history.line === 'string' &&
+              history.line.length <= 1 << 20
+            )
+              cb.onHistory?.(history.line)
+          } catch {
+            /* ignore malformed history without advancing the output cursor */
+          }
+          break
+        }
         case 'output': {
           let f: AttachFrame
           try {
@@ -177,7 +194,10 @@ export function useRunAttach({
             token,
             tenant,
             signal: controller.signal,
-            query: { from: String(cursorRef.current) },
+            query: {
+              from: String(cursorRef.current),
+              history: requestHistory ? '1' : undefined,
+            },
             onOpen: () => {
               attempt = 0
               setStatus('open')
@@ -209,7 +229,7 @@ export function useRunAttach({
       cancelled = true
       controller.abort()
     }
-  }, [active, runRef, token, tenant, sessionKey, generation])
+  }, [active, runRef, token, tenant, sessionKey, generation, requestHistory])
 
   return {
     status: active ? status : 'closed',

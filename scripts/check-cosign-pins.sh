@@ -36,8 +36,8 @@ export COSIGN_PINS_ROOT="${COSIGN_PINS_ROOT:-$ROOT}"
 # del llamante, porque la raíz se resuelve desde `$0`— y aquí queda reproducido en los dos
 # sentidos: sin guarda rc=1 con el error del shell; con ella, rc=2 nombrando lo que falta.
 if ! cd "$ROOT/cmd/olivares" 2>/dev/null; then
-	echo "cosign-pins: NO HE PODIDO MIRAR: falta $ROOT/cmd/olivares, así que no puedo construir la" >&2
-	echo "cosign-pins: herramienta que juzga. Esto no es un árbol limpio: es un árbol que no he leído." >&2
+	echo "cosign-pins: COULD NOT CHECK: missing $ROOT/cmd/olivares, so cannot build the" >&2
+	echo "cosign-pins: checker. An unread tree cannot be reported as clean." >&2
 	exit 2
 fi
 # ⛔ `go run` COLAPSA EL CÓDIGO DE SALIDA DE LA HERRAMIENTA, y con él la TERCERA RESPUESTA.
@@ -63,12 +63,12 @@ fi
 . "$ROOT/scripts/lib/exec-workdir.sh" || {
 	# Sin la lib el guion esta CIEGO, y eso es 2 — no el error crudo del shell. La bateria
 	# lo comprueba copiando este fichero solo a un arbol vacio.
-	echo "check-cosign-pins: NO HE PODIDO MIRAR: falta scripts/lib/exec-workdir.sh" >&2
+	echo "check-cosign-pins: COULD NOT CHECK: missing scripts/lib/exec-workdir.sh" >&2
 	exit 2
 }
 BINDIR="$(olivares_pick_exec_workdir gatebin)" || {
-	echo "cosign-pins: NO HE PODIDO MIRAR: ningun candidato permite crear y EJECUTAR un binario" >&2
-	echo "             probados: OLIVARES_GATE_BINDIR, RUNNER_TEMP, TMPDIR, /tmp, HOME y el scratch del contenedor" >&2
+	echo "cosign-pins: COULD NOT CHECK: no candidate supports creating and executing a binary" >&2
+	echo "             tried: OLIVARES_GATE_BINDIR, RUNNER_TEMP, TMPDIR, /tmp, HOME, and container scratch space" >&2
 	exit 2
 }
 
@@ -79,7 +79,7 @@ BINDIR="$(olivares_pick_exec_workdir gatebin)" || {
 if [ -z "${GOCACHE:-}" ] && [ -z "${HOME:-}" ] && [ -z "${XDG_CACHE_HOME:-}" ]; then
 	GOCACHE="$BINDIR/gocache"
 	mkdir -p "$GOCACHE" || {
-		echo "cosign-pins: NO HE PODIDO MIRAR: sin GOCACHE ni HOME, y no puedo crear una cache" >&2
+		echo "cosign-pins: COULD NOT CHECK: neither GOCACHE nor HOME is set, and cannot create a cache" >&2
 		exit 2
 	}
 	export GOCACHE
@@ -88,7 +88,7 @@ cleanup() { rm -rf "$BINDIR"; }
 trap cleanup EXIT HUP INT TERM
 
 if ! go build -o "$BINDIR/checkcosignpins" ./tools/checkcosignpins; then
-	echo "cosign-pins: NO HE PODIDO MIRAR: la herramienta no compila" >&2
+	echo "cosign-pins: COULD NOT CHECK: the checker does not compile" >&2
 	exit 2
 fi
 "$BINDIR/checkcosignpins"

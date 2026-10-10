@@ -22,10 +22,6 @@ type OrchestrationWorkScopeSource interface {
 	WithScope(context.Context, auth.Principal, model.TenantID, bool, func(store.Scope) error) error
 }
 
-func (m *Module) UseOrchestrationWorkScopeSource(source OrchestrationWorkScopeSource) {
-	m.orchestrationScopes = source
-}
-
 type orchestrationLaunchProfileKey struct{}
 
 // This launch term stays outside ProviderHomeSnapshot and its historical digest.
@@ -54,14 +50,14 @@ func lockOrchestrationProfile(ctx context.Context, sc store.Scope, profile strin
 // missing grant selects the unchanged worker issuer. A malformed or changed
 // grant refuses rather than substituting either worker or operator authority.
 func (m *Module) OrchestrationCredentialSpec(ctx context.Context, req WorkSessionCredentialRequest, mint bool) (*auth.OrchestrationSessionCredentialSpec, error) {
-	if m.data == nil {
+	if m.Data == nil {
 		return nil, errNoData
 	}
 	if mint && req.OrchestrationGrant == "" {
 		return nil, nil
 	}
 	var result *auth.OrchestrationSessionCredentialSpec
-	err := m.data.View(ctx, req.Tenant, func(sc store.Scope) error {
+	err := m.Data.View(ctx, req.Tenant, func(sc store.Scope) error {
 		ref := req.OrchestrationProfileRef
 		if !mint {
 			repo, err := sc.Ext(runKind)
@@ -242,11 +238,11 @@ type orchestrationWorkRegistrar struct {
 func (r orchestrationWorkRegistrar) wrap(pattern string, handler api.ModuleHandler) api.ModuleHandler {
 	return func(w http.ResponseWriter, req *http.Request, mc api.ModuleContext) {
 		if mc.Principal.IsOrchestrationSessionCredential() {
-			if pattern == "/work-events/{event_id}/replay" || r.module.orchestrationScopes == nil {
+			if pattern == "/work-events/{event_id}/replay" || r.module.OrchestrationScopes == nil {
 				writeWorkError(w, broken(http.StatusForbidden, "forbidden"))
 				return
 			}
-			mc.Data = orchestrationWorkData{ScopedData: mc.Data, source: r.module.orchestrationScopes, principal: mc.Principal, tenant: mc.Tenant}
+			mc.Data = orchestrationWorkData{ScopedData: mc.Data, source: r.module.OrchestrationScopes, principal: mc.Principal, tenant: mc.Tenant}
 		}
 		handler(w, req, mc)
 	}

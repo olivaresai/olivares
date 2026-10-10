@@ -181,9 +181,9 @@ func main() {}
 EOF
   OUT="$(cd "$C" && GOPATH="$GP_VACIO" GOSEC="$_gs" bash scripts/sast.sh 2>&1)"
   RC=$?
-  green "con gosec resoluble y el mismo GOPATH vacio, pasa (control del par)" "sast: clean"
+  green "with resolvable gosec and the same empty GOPATH, passes (paired control)" "sast: clean"
 else
-  printf 'NO-MIRADO  el par del caso ausente: no hay gosec en esta caja\n' >&2
+  printf 'NOT CHECKED  the missing-tool paired control: this host has no gosec\n' >&2
 fi
 rm -rf "$GP_VACIO"
 

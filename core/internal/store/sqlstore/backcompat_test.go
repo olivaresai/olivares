@@ -106,7 +106,7 @@ func TestEnsureDefaultWorkspacesBackfill(t *testing.T) {
 	if _, err := ss.db.ExecContext(ctx, `
 INSERT INTO temp.workspaces
 SELECT id, ?, created_at, updated_at, version,
-       name, slug, status, settings
+       name, slug, status, settings, parent_id, path
 FROM main.workspaces
 WHERE tenant_id = ? AND slug = ?`,
 		missing.String(), intact.String(), model.DefaultWorkspaceSlug,

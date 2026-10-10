@@ -18,7 +18,7 @@ import (
 	"github.com/olivaresai/olivares/core/store"
 )
 
-var _ func(*Module, *auth.Authenticator, *auth.Authorizer) = (*Module).UseCommunicationRequestAuthority
+var _ func(communicationPrincipalAuthorityResolver, communicationAuthorizationEvidenceSource) *communicationRequestAuthoritySources = NewCommunicationRequestAuthority
 
 type communicationAuthorityResolverRecorder struct {
 	resolved auth.Principal
@@ -187,7 +187,7 @@ func TestModuleCommunicationRequestAuthorityRequiresCompletePair(t *testing.T) {
 	source := &communicationAuthoritySourceRecorder{}
 
 	module.useCommunicationRequestAuthoritySources(resolver, nil)
-	if module.communicationAuthoritySources != nil {
+	if module.CommunicationAuthority != nil {
 		t.Fatal("resolver-only authority pair remained bound")
 	}
 	if _, err := module.bindCurrentCommunicationRequestAuthority(
@@ -197,7 +197,7 @@ func TestModuleCommunicationRequestAuthorityRequiresCompletePair(t *testing.T) {
 	}
 
 	module.useCommunicationRequestAuthoritySources(nil, source)
-	if module.communicationAuthoritySources != nil {
+	if module.CommunicationAuthority != nil {
 		t.Fatal("source-only authority pair remained bound")
 	}
 	if _, err := module.bindCurrentCommunicationRequestAuthority(
@@ -208,16 +208,16 @@ func TestModuleCommunicationRequestAuthorityRequiresCompletePair(t *testing.T) {
 
 	var typedNilResolver *communicationAuthorityResolverRecorder
 	module.useCommunicationRequestAuthoritySources(typedNilResolver, source)
-	if module.communicationAuthoritySources != nil {
+	if module.CommunicationAuthority != nil {
 		t.Fatal("typed-nil resolver remained bound")
 	}
 	var typedNilSource *communicationAuthoritySourceRecorder
 	module.useCommunicationRequestAuthoritySources(resolver, typedNilSource)
-	if module.communicationAuthoritySources != nil {
+	if module.CommunicationAuthority != nil {
 		t.Fatal("typed-nil source remained bound")
 	}
 
-	module.communicationAuthoritySources = &communicationRequestAuthoritySources{
+	module.CommunicationAuthority = &communicationRequestAuthoritySources{
 		resolver: typedNilResolver,
 		source:   source,
 	}
@@ -227,7 +227,7 @@ func TestModuleCommunicationRequestAuthorityRequiresCompletePair(t *testing.T) {
 		t.Fatalf("malformed resolver bundle bind = %v, calls %d/%d",
 			err, resolver.calls, source.calls)
 	}
-	module.communicationAuthoritySources = &communicationRequestAuthoritySources{
+	module.CommunicationAuthority = &communicationRequestAuthoritySources{
 		resolver: resolver,
 		source:   typedNilSource,
 	}
@@ -242,8 +242,8 @@ func TestModuleCommunicationRequestAuthorityRequiresCompletePair(t *testing.T) {
 func TestModuleUseCommunicationRequestAuthorityBindsConcretePair(t *testing.T) {
 	fixture := newCommunicationAuthorityTestFixture(t)
 	authorizer := auth.NewAuthorizer(nil)
-	fixture.module.UseCommunicationRequestAuthority(fixture.authenticator, authorizer)
-	sources := fixture.module.communicationAuthoritySources
+	fixture.module.CommunicationAuthority = NewCommunicationRequestAuthority(fixture.authenticator, authorizer)
+	sources := fixture.module.CommunicationAuthority
 	if sources == nil || sources.resolver != fixture.authenticator || sources.source != authorizer {
 		t.Fatalf("public authority sources = %#v, want exact concrete pair", sources)
 	}
@@ -290,8 +290,8 @@ func TestModuleUseCommunicationRequestAuthorityBindsConcretePair(t *testing.T) {
 		},
 	}
 	typedAuthorizer := auth.NewAuthorizer(nil, auth.WithScopedGrants(scoped))
-	fixture.module.UseCommunicationRequestAuthority(fixture.authenticator, typedAuthorizer)
-	sources = fixture.module.communicationAuthoritySources
+	fixture.module.CommunicationAuthority = NewCommunicationRequestAuthority(fixture.authenticator, typedAuthorizer)
+	sources = fixture.module.CommunicationAuthority
 	if sources == nil || sources.resolver != fixture.authenticator || sources.source != typedAuthorizer {
 		t.Fatalf("typed public authority sources = %#v, want exact concrete pair", sources)
 	}
@@ -306,14 +306,14 @@ func TestModuleUseCommunicationRequestAuthorityBindsConcretePair(t *testing.T) {
 	}
 
 	var nilResolver *auth.Authenticator
-	fixture.module.UseCommunicationRequestAuthority(nilResolver, typedAuthorizer)
-	if fixture.module.communicationAuthoritySources != nil {
+	fixture.module.CommunicationAuthority = NewCommunicationRequestAuthority(nilResolver, typedAuthorizer)
+	if fixture.module.CommunicationAuthority != nil {
 		t.Fatal("typed-nil public resolver retained authority pair")
 	}
-	fixture.module.UseCommunicationRequestAuthority(fixture.authenticator, typedAuthorizer)
+	fixture.module.CommunicationAuthority = NewCommunicationRequestAuthority(fixture.authenticator, typedAuthorizer)
 	var nilAuthorizer *auth.Authorizer
-	fixture.module.UseCommunicationRequestAuthority(fixture.authenticator, nilAuthorizer)
-	if fixture.module.communicationAuthoritySources != nil {
+	fixture.module.CommunicationAuthority = NewCommunicationRequestAuthority(fixture.authenticator, nilAuthorizer)
+	if fixture.module.CommunicationAuthority != nil {
 		t.Fatal("typed-nil public authorizer retained authority pair")
 	}
 }
@@ -336,7 +336,7 @@ func TestModuleCommunicationRequestAuthorityRebindsOneExactBundle(t *testing.T) 
 	resolverA := &communicationAuthorityResolverRecorder{resolved: fixture.principal}
 	sourceA := &communicationAuthoritySourceRecorder{evidence: evidence}
 	fixture.module.useCommunicationRequestAuthoritySources(resolverA, sourceA)
-	firstBundle := fixture.module.communicationAuthoritySources
+	firstBundle := fixture.module.CommunicationAuthority
 	if firstBundle == nil {
 		t.Fatal("complete authority pair was not retained")
 	}
@@ -349,8 +349,8 @@ func TestModuleCommunicationRequestAuthorityRebindsOneExactBundle(t *testing.T) 
 	resolverB := &communicationAuthorityResolverRecorder{resolved: fixture.principal}
 	sourceB := &communicationAuthoritySourceRecorder{evidence: evidence}
 	fixture.module.useCommunicationRequestAuthoritySources(resolverB, sourceB)
-	if fixture.module.communicationAuthoritySources == nil ||
-		fixture.module.communicationAuthoritySources == firstBundle {
+	if fixture.module.CommunicationAuthority == nil ||
+		fixture.module.CommunicationAuthority == firstBundle {
 		t.Fatal("authority rebind did not replace the indivisible bundle")
 	}
 	if _, err := fixture.module.bindCurrentCommunicationRequestAuthority(
@@ -373,7 +373,7 @@ func TestModuleCommunicationRequestAuthorityRebindsOneExactBundle(t *testing.T) 
 	}
 
 	fixture.module.useCommunicationRequestAuthoritySources(resolverB, nil)
-	if fixture.module.communicationAuthoritySources != nil {
+	if fixture.module.CommunicationAuthority != nil {
 		t.Fatal("partial rebind retained an old authority half")
 	}
 	if _, err := fixture.module.bindCurrentCommunicationRequestAuthority(
@@ -384,19 +384,19 @@ func TestModuleCommunicationRequestAuthorityRebindsOneExactBundle(t *testing.T) 
 
 	fixture.module.useCommunicationRequestAuthoritySources(resolverB, sourceB)
 	fixture.module.useCommunicationRequestAuthoritySources(nil, sourceB)
-	if fixture.module.communicationAuthoritySources != nil {
+	if fixture.module.CommunicationAuthority != nil {
 		t.Fatal("nil resolver rebind retained an old authority bundle")
 	}
 	fixture.module.useCommunicationRequestAuthoritySources(resolverB, sourceB)
 	var typedNilResolver *communicationAuthorityResolverRecorder
 	fixture.module.useCommunicationRequestAuthoritySources(typedNilResolver, sourceB)
-	if fixture.module.communicationAuthoritySources != nil {
+	if fixture.module.CommunicationAuthority != nil {
 		t.Fatal("typed-nil resolver rebind retained an old authority bundle")
 	}
 	fixture.module.useCommunicationRequestAuthoritySources(resolverB, sourceB)
 	var typedNilSource *communicationAuthoritySourceRecorder
 	fixture.module.useCommunicationRequestAuthoritySources(resolverB, typedNilSource)
-	if fixture.module.communicationAuthoritySources != nil {
+	if fixture.module.CommunicationAuthority != nil {
 		t.Fatal("typed-nil source rebind retained an old authority bundle")
 	}
 }
@@ -453,8 +453,8 @@ func TestCommunicationRequestAuthorityCannotRelabelEffectQuestion(t *testing.T) 
 	tamperedPermission := question
 	tamperedPermission.permission = permDeliveryAdmin
 
-	counting := &countingCommunicationModuleData{inner: fixture.module.data}
-	fixture.module.data = counting
+	counting := &countingCommunicationModuleData{inner: fixture.module.Data}
+	fixture.module.Data = counting
 	callbackCalls := 0
 	for name, expected := range map[string]communicationAuthorityQuestion{
 		"entity":     differentEntity,
@@ -560,8 +560,8 @@ func TestCommunicationRequestAuthorityRejectsForgedEmptyConsumptionBeforeMutate(
 	) (communicationRequestAuthorityAccessResult, error) {
 		return communicationRequestAuthorityAccessResult{}, nil
 	}}
-	counting := &countingCommunicationModuleData{inner: fixture.module.data}
-	fixture.module.data = counting
+	counting := &countingCommunicationModuleData{inner: fixture.module.Data}
+	fixture.module.Data = counting
 	callbackCalls := 0
 	err = fixture.module.mutateCommunicationWithAuthority(
 		context.Background(), question, forged, CommunicationClaimAuthoritySnapshot{},
@@ -669,8 +669,8 @@ func TestCommunicationSessionRequestAuthorityRequiresItsExactClaim(t *testing.T)
 		t.Fatalf("bind communication-session authority: %v", err)
 	}
 
-	counting := &countingCommunicationModuleData{inner: fixture.module.data}
-	fixture.module.data = counting
+	counting := &countingCommunicationModuleData{inner: fixture.module.Data}
+	fixture.module.Data = counting
 	callbackCalls := 0
 	callback := func(*communicationTx, communicationRequestAuthorityContext) error {
 		callbackCalls++

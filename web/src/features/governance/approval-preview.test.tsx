@@ -17,13 +17,12 @@ vi.mock('@/components/ui/toaster', () => ({
   toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
   Toaster: () => null,
 }))
-vi.mock('@/lib/auth/context', () => ({
-  useAuth: () => ({
-    activeTenant: 't1',
-    can: () => true,
-    principal: { actor: 'user:reviewer', kind: 'user' },
-  }),
+const auth = vi.hoisted(() => ({
+  activeTenant: 't1',
+  can: (_permission: string): boolean => true,
+  principal: { actor: 'user:reviewer', kind: 'user' },
 }))
+vi.mock('@/lib/auth/context', () => ({ useAuth: () => auth }))
 const api = vi.hoisted(() => ({
   listApprovals: vi.fn(),
   getApproval: vi.fn(),
@@ -45,6 +44,8 @@ import { agentOpsApi } from '@/features/agentops/api'
 import { sessionsApi } from '@/features/sessions/api'
 import GovernanceView from './governance-view'
 import { approvalCommandUnknown } from './approval-preview'
+import { ApprovalPreview, AskedBy } from './approval-preview'
+import { consoleApi } from '@/features/console/api'
 
 function wrap(ui: ReactNode) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -73,6 +74,7 @@ const hookRequest: ApprovalDTO = {
 }
 
 beforeEach(() => {
+  auth.can = () => true
   // The sessions and runs reads are spied per test: no call carries over.
   vi.restoreAllMocks()
   for (const fn of Object.values(api)) fn.mockReset()
@@ -102,6 +104,7 @@ beforeEach(() => {
         run_ref: 'run-1',
         name: 'Fix the build',
         workspace_ref: 'ws-1',
+        state: 'running',
         pending_approval_ref: 'apr-1',
       } as never,
     ],
@@ -284,7 +287,7 @@ describe('Approvals: what will run, before Approve', () => {
       has_more: false,
     })
     wrap(<GovernanceView />)
-    expect(await screen.findByText('user:u-7')).toBeInTheDocument()
+    expect(await screen.findByText('A member')).toBeInTheDocument()
     await waitFor(() => expect(sessionsApi.live).not.toHaveBeenCalled())
   })
 
@@ -301,6 +304,35 @@ describe('Approvals: what will run, before Approve', () => {
     })
     wrap(<GovernanceView />)
     expect(await screen.findByText('Bash · Fix the build')).toBeInTheDocument()
+    expect(await screen.findByText('/srv/app')).toBeInTheDocument()
+  })
+
+  // #502: a launch held for its approval names it in approval_ref, not pending_approval_ref.
+  it('the session and folder come from the launch held for this request', async () => {
+    vi.mocked(sessionsApi.live).mockResolvedValue({
+      items: [],
+      has_more: false,
+    })
+    vi.mocked(agentOpsApi.listRuns).mockResolvedValue({
+      items: [
+        {
+          run_ref: 'run-2',
+          name: 'Writes a classified folder',
+          workspace_ref: 'ws-1',
+          state: 'waiting_approval',
+          approval_ref: 'apr-1',
+        } as never,
+      ],
+      has_more: false,
+    })
+    api.listApprovals.mockResolvedValue({
+      items: [hookRequest],
+      has_more: false,
+    })
+    wrap(<GovernanceView />)
+    expect(
+      await screen.findByText('Bash · Writes a classified folder'),
+    ).toBeInTheDocument()
     expect(await screen.findByText('/srv/app')).toBeInTheDocument()
   })
 })
@@ -323,4 +355,103 @@ describe('the queue row keeps its actions in view', () => {
       within(cell).getByText('Open to approve or reject').className,
     ).toMatch(/md:hidden/)
   })
+})
+
+it('hides cached requester and policy names when their read permissions leave', async () => {
+  const request = {
+    ...hookRequest,
+    action: 'deployment.release',
+    subject_kind: 'deployment',
+    requested_by: 'user:u-7',
+    policy_ref: 'policy-a',
+    review: undefined,
+  }
+  vi.spyOn(consoleApi, 'listMembers').mockResolvedValue({
+    items: [
+      {
+        user_id: 'u-7',
+        email: 'ada@example.test',
+        display_name: 'Ada',
+        status: 'active',
+        sso_only: false,
+        role: 'admin',
+      },
+    ],
+    has_more: false,
+  })
+  api.listPolicies.mockResolvedValue({
+    items: [{ id: 'policy-a', name: 'Release policy' }],
+    has_more: false,
+  })
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  })
+  const content = () => (
+    <QueryClientProvider client={client}>
+      <ApprovalPreview approval={request} />
+    </QueryClientProvider>
+  )
+  const mounted = render(content())
+  expect(await screen.findByText('Ada')).toBeVisible()
+  expect(await screen.findByText('Release policy')).toBeVisible()
+  expect(
+    screen.getByText('This request does not include what will run.'),
+  ).toBeVisible()
+  auth.can = (permission) =>
+    !['user:read', 'governance:policy:read'].includes(permission)
+  mounted.rerender(content())
+  expect(screen.queryByText('Ada')).toBeNull()
+  expect(screen.queryByText('Release policy')).toBeNull()
+  expect(screen.getByText('A member')).toBeVisible()
+})
+
+it('names the launcher of a new session in both requester displays and withdraws cached names without user read', async () => {
+  const request = {
+    ...hookRequest,
+    action: 'sessions.run.launch',
+    subject_kind: 'sessions.run',
+    requested_by: 'session:osn_01a0fc45',
+    launched_by: 'user:u-7',
+    review: undefined,
+    reason:
+      'A new session that writes to a classified folder: it edits files and asks before commands; tools Read, Edit.',
+  }
+  const members = vi.spyOn(consoleApi, 'listMembers').mockResolvedValue({
+    items: [
+      {
+        user_id: 'u-7',
+        email: 'ada@example.test',
+        display_name: 'Ada',
+        status: 'active',
+        sso_only: false,
+        role: 'admin',
+      },
+    ],
+    has_more: false,
+  })
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  })
+  const content = () => (
+    <QueryClientProvider client={client}>
+      <AskedBy approval={request} />
+      <ApprovalPreview approval={request} />
+    </QueryClientProvider>
+  )
+  const mounted = render(content())
+  expect(await screen.findAllByText('Ada for a new session')).toHaveLength(2)
+  expect(screen.getByText(request.reason)).toBeVisible()
+  expect(
+    screen.getByText('This request does not include what will run.'),
+  ).toBeVisible()
+  const details = screen.getByText('Details').closest('details')!
+  expect(details).not.toHaveAttribute('open')
+  expect(within(details).getByText(request.requested_by)).toBeInTheDocument()
+  expect(within(details).getByText(request.launched_by)).toBeInTheDocument()
+  const reads = members.mock.calls.length
+  auth.can = (permission) => permission !== 'user:read'
+  mounted.rerender(content())
+  expect(screen.queryByText('Ada for a new session')).toBeNull()
+  expect(screen.getAllByText('A member for a new session')).toHaveLength(2)
+  expect(members).toHaveBeenCalledTimes(reads)
 })

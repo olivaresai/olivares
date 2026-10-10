@@ -104,7 +104,7 @@ func TestDRInPlaceRestoreDoesNotPromoteWhenItsReportCannotBeRendered(t *testing.
 	// Se sella el SENUELO, no se ablanda la guarda: su contrato es explicito y relajarlo la
 	// dejaria sin sentido. Mismo patron que cmd_security_unstamped_test.go:229-231.
 	prevVersion := version
-	version = "26.9.0"
+	version = "1.900"
 	t.Cleanup(func() { version = prevVersion })
 	src, bundle, pf := drDeclarationFixture(t)
 	live := filepath.Join(src, "olivares.db")

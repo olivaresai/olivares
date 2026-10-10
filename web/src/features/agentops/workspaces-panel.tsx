@@ -1,11 +1,12 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
-import { useInfiniteQuery } from '@tanstack/react-query'
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { FolderTree, HardDrive } from 'lucide-react'
 import { useMemo, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { DataTable, type TableColumn } from '@/components/data/data-table'
+import { QueryErrorState } from '@/components/layout/query-error-state'
 import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import {
@@ -39,7 +40,11 @@ import { usePrivilegedMutation } from '@/lib/hooks/use-privileged-mutation'
 import { cn } from '@/lib/utils'
 import { agentOpsApi, agentOpsKeys } from './api'
 import { WorkspaceBrowser } from './workspace-browser'
-import type { CreateWorkspaceRequest, WorkspaceDTO } from './types'
+import {
+  DEFAULT_DLP_MODE,
+  type CreateWorkspaceRequest,
+  type WorkspaceDTO,
+} from './types'
 import './i18n'
 
 const PAGE = 100
@@ -238,12 +243,142 @@ export function WorkspacesPanel() {
                   {browse.root_path}
                 </SheetDescription>
               </SheetHeader>
+              <ReadOnlyFolders workspace={browse} canAdmin={canAdmin} />
               <WorkspaceBrowser workspace={browse} />
             </>
           )}
         </SheetContent>
       </Sheet>
     </div>
+  )
+}
+
+/** The folders a session in this workspace may read and never change (HU2-21). The list is the
+ * engine's own: read fresh, replaced whole on save, then read again. Nothing is listed or edited
+ * before that read succeeds: a pending or failed read is not an empty list, and a save from it
+ * would replace the saved list. The console does not canonicalize or probe a path; the engine
+ * refuses one it cannot hold, in its own words. */
+function ReadOnlyFolders({
+  workspace,
+  canAdmin,
+}: {
+  workspace: WorkspaceDTO
+  canAdmin: boolean
+}) {
+  const { t } = useTranslation('agentops')
+  const { activeTenant } = useAuth()
+  const workspaceRef = workspace.workspace_ref
+  const current = useQuery({
+    queryKey: agentOpsKeys.workspace(activeTenant, workspaceRef),
+    queryFn: () => agentOpsApi.getWorkspace(workspaceRef),
+  })
+  const [draft, setDraft] = useState<string[] | null>(null)
+  const [path, setPath] = useState('')
+  const folders = draft ?? current.data?.read_only_folders ?? []
+  const save = usePrivilegedMutation<string[], WorkspaceDTO>({
+    mutationFn: (list) =>
+      agentOpsApi.setWorkspaceReadOnlyFolders(workspaceRef, list),
+    invalidateKeys: () => [
+      agentOpsKeys.workspace(activeTenant, workspaceRef),
+      agentOpsKeys.workspaces(activeTenant),
+    ],
+    successMessage: t('workspaces.readOnly.saved'),
+    onDone: () => setDraft(null),
+  })
+  const add = () => {
+    if (path && !folders.includes(path)) setDraft([...folders, path])
+    setPath('')
+  }
+  return (
+    <section className="flex flex-col gap-2 rounded-md border border-border p-3">
+      <h3 className="text-body font-medium text-foreground">
+        {t('workspaces.readOnly.title')}
+      </h3>
+      <p className="text-caption text-muted-foreground">
+        {t('workspaces.readOnly.description')}
+      </p>
+      {current.isPending ? (
+        <Spinner />
+      ) : current.isError ? (
+        <QueryErrorState
+          error={current.error}
+          retry={() => current.refetch()}
+        />
+      ) : folders.length === 0 ? (
+        <p className="text-caption text-muted-foreground">
+          {t('workspaces.readOnly.empty')}
+        </p>
+      ) : (
+        <ul className="flex flex-col gap-1">
+          {folders.map((folder) => (
+            <li
+              key={folder}
+              className="flex items-center justify-between gap-2"
+            >
+              <span className="min-w-0 font-mono text-caption break-all text-foreground">
+                {folder}
+              </span>
+              {canAdmin && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  aria-label={t('workspaces.readOnly.removeLabel', { folder })}
+                  onClick={() => setDraft(folders.filter((f) => f !== folder))}
+                >
+                  {t('workspaces.readOnly.remove')}
+                </Button>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      {canAdmin && current.isSuccess && (
+        <>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault()
+              add()
+            }}
+            className="flex flex-wrap items-end gap-2"
+          >
+            <Field
+              label={t('workspaces.readOnly.folder')}
+              className="min-w-0 flex-1"
+            >
+              <Input
+                value={path}
+                onChange={(e) => setPath(e.target.value)}
+                placeholder={t('workspaces.readOnly.folderPlaceholder')}
+                mono
+              />
+            </Field>
+            <Button
+              type="submit"
+              variant="secondary"
+              size="sm"
+              disabled={!path}
+            >
+              {t('workspaces.readOnly.add')}
+            </Button>
+          </form>
+          <div className="flex justify-end gap-2">
+            {draft !== null && (
+              <Button variant="ghost" size="sm" onClick={() => setDraft(null)}>
+                {t('workspaces.readOnly.discard')}
+              </Button>
+            )}
+            <Button
+              variant="primary"
+              size="sm"
+              disabled={draft === null || save.isPending}
+              onClick={() => draft && save.mutate(draft)}
+            >
+              {t('workspaces.readOnly.save')}
+            </Button>
+          </div>
+        </>
+      )}
+    </section>
   )
 }
 
@@ -289,7 +424,9 @@ function WorkspaceCreateDialog({
   const [containerTarget, setContainerTarget] = useState('')
   const [allowSubpaths, setAllowSubpaths] = useState('')
   const [maxRead, setMaxRead] = useState(String(DEFAULT_MAX_READ))
-  const [dlpMode, setDlpMode] = useState<'label' | 'deny' | 'off'>('label')
+  const [dlpMode, setDlpMode] = useState<'label' | 'deny' | 'off'>(
+    DEFAULT_DLP_MODE,
+  )
 
   const reset = () => {
     setName('')
@@ -298,7 +435,7 @@ function WorkspaceCreateDialog({
     setContainerTarget('')
     setAllowSubpaths('')
     setMaxRead(String(DEFAULT_MAX_READ))
-    setDlpMode('label')
+    setDlpMode(DEFAULT_DLP_MODE)
   }
 
   // ⛔ AQUÍ SÍ HABÍA UN FALLO ALCANZABLE HOY, y trazado de punta a punta:

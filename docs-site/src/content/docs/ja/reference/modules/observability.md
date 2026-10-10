@@ -7,7 +7,7 @@ description: >-
   あること。エンティティを一切所有せず、何も永続化しない。
 ---
 
-オブザーバビリティ（`modules/observability`）は 31 個のモジュールのひとつであり、
+オブザーバビリティ（`modules/observability`）は 32 個のモジュールのひとつであり、
 [live-ingest](/ja/reference/modules/live-ingest/) と同様に、能力スロットを埋めるという
 よりもアーキテクチャ上の役割を担う。これはエンジン自身を表す **read-model** であり、
 `/v1/m/observability/` 配下の 3 つの読み取り専用サーフェスとして、管理コンソールの

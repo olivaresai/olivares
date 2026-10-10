@@ -1,4 +1,10 @@
 {
+  "edition": {
+    "viewPolicy": "Показать политику",
+    "editingRequiresBusiness": "Для редактирования пользовательских политик, ролей и разрешений требуется Business.",
+    "disablePolicy": "Отключить политику",
+    "disablePolicyDescription": "Созданная политика перестанет применяться. Ее история и другие действующие политики будут сохранены."
+  },
   "errors": {
     "generic": "Произошла ошибка"
   },
@@ -214,8 +220,8 @@
       "sessionResumed": "{{actor}} возобновил сессию",
       "sessionResumed_you": "Вы возобновили сессию",
       "sessionFailed": "Сессию не удалось запустить",
-      "approvalRequested": "Сессия {{actor}} запрашивает одобрение",
-      "approvalRequested_you": "Ваша сессия запрашивает одобрение",
+      "approvalRequested": "{{actor}} запросил одобрение",
+      "approvalRequested_you": "Вы запросили одобрение",
       "killswitchEngaged": "{{actor}} включил аварийный выключатель",
       "killswitchEngaged_you": "Вы включили аварийный выключатель",
       "killswitchReleased": "{{actor}} отключил аварийный выключатель",
@@ -228,14 +234,37 @@
       "workspaceCreated": "{{actor}} создал рабочее пространство",
       "workspaceCreated_you": "Вы создали рабочее пространство",
       "workspaceUpdated": "{{actor}} изменил рабочее пространство",
-      "workspaceUpdated_you": "Вы изменили рабочее пространство"
+      "workspaceUpdated_you": "Вы изменили рабочее пространство",
+      "signedIn": "{{actor}} вошёл в систему",
+      "workCreated": "{{actor}} создал рабочий элемент",
+      "workReady": "{{actor}} пометил рабочий элемент как готовый",
+      "workCompleted": "{{actor}} завершил рабочий элемент",
+      "workBlocked": "{{actor}} заблокировал рабочий элемент",
+      "workCanceled": "{{actor}} отменил рабочий элемент",
+      "approvalDecided": "{{actor}} записал решение об одобрении",
+      "approvalCanceled": "{{actor}} отменил запрос одобрения",
+      "policyCreated": "{{actor}} создал политику",
+      "policyUpdated": "{{actor}} обновил политику",
+      "policyDeleted": "{{actor}} удалил политику",
+      "signedIn_you": "Вы вошли в систему",
+      "workCreated_you": "Вы создали рабочий элемент",
+      "workReady_you": "Вы пометили рабочий элемент как готовый",
+      "workCompleted_you": "Вы завершили рабочий элемент",
+      "workBlocked_you": "Вы заблокировали рабочий элемент",
+      "workCanceled_you": "Вы отменили рабочий элемент",
+      "approvalDecided_you": "Вы записали решение об одобрении",
+      "approvalCanceled_you": "Вы отменили запрос одобрения",
+      "policyCreated_you": "Вы создали политику",
+      "policyUpdated_you": "Вы обновили политику",
+      "policyDeleted_you": "Вы удалили политику"
     },
     "actors": {
       "you": "Вы",
       "member": "Участник",
       "token": "API-токен",
       "system": "Olivares"
-    }
+    },
+    "includeInternal": "Включить внутренние записи"
   },
   "passphrase": {
     "tooShort": "Парольная фраза должна содержать не менее {{min}} символов",

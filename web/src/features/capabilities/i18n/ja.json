@@ -4,7 +4,6 @@
   "tabs": {
     "servers": "サーバー",
     "tools": "ツール",
-    "toolPins": "ツールピン",
     "skills": "スキル",
     "wiring": "配線",
     "configs": "マネージド構成"
@@ -44,7 +43,7 @@
     "consumers": "配線先",
     "consumersHint": "このサーバーに接続されているセッションとエージェント。",
     "noConfig": "マネージド構成なし",
-    "noConfigHint": "このサーバーは検出された設定で実行されています。マネージド構成を追加して、そのトランスポートとシークレット参照を統制してください。",
+    "noConfigHint": "保存された定義を追加して、このサーバーのトランスポートとシークレット参照を記録します。",
     "manageConfig": "構成を管理",
     "editConfig": "構成を編集",
     "deleteConfig": "構成を削除",
@@ -64,46 +63,9 @@
     "schemaHash": "スキーマハッシュ",
     "readOnly": "読み取り専用",
     "destructive": "破壊的",
-    "untrustedNote": "アノテーションは MCP サーバーが自己申告するものであり、検証されていません。シグナルとしてのみ表示され、コントロールプレーンがそれらに基づいて強制することはありません。",
+    "untrustedNote": "MCP アノテーションはサーバーによる未検証の申告です。Olivares AI はシグナルとして表示するだけで、それに基づいて強制することはありません。",
     "empty": "ツールは検出されていません",
     "truncated": "{{n}} 件のツールを読み込みました。さらに存在します"
-  },
-  "toolPins": {
-    "title": "現在のピン",
-    "description": "現在の認可ベースラインを構成する、承認済み MCP ツールフィンガープリントです。",
-    "search": "ツールピンを検索…",
-    "tool": "ツール",
-    "fingerprint": "フィンガープリント",
-    "pinnedAt": "ピン日時",
-    "pinCount": "ピン回数",
-    "actions": "操作",
-    "empty": "ツールピンはありません",
-    "emptyHint": "このテナントには固定された MCP ツールフィンガープリントがありません。",
-    "enterprise": "ツールピンは Enterprise 機能です。このビルドには Enterprise 検証機能がまだ接続されていません。",
-    "driftsTitle": "保留中のドリフト",
-    "driftsHint": "観測されたフィンガープリントが承認済みの認可ベースラインと異なります。承認前に各変更を確認してください。",
-    "pinnedFingerprint": "固定済みフィンガープリント",
-    "driftFingerprint": "ドリフト後のフィンガープリント",
-    "driftObserved": "観測日時",
-    "approve": "ドリフトを承認",
-    "approveAria": "{{tool}} のドリフトを承認",
-    "approveTitle": "「{{tool}}」のドリフトを承認しますか？",
-    "approveBody": "固定済みフィンガープリントを現在のドリフト後の値に置き換え、ツールの認可ベースラインを変更します。",
-    "approveConfirm": "ドリフトを承認",
-    "approveDone": "ツールのドリフトを承認しました",
-    "unpin": "ピンを解除",
-    "unpinAria": "{{tool}} のピンを解除",
-    "unpinTitle": "「{{tool}}」のピンを解除しますか？",
-    "unpinBody": "ツールの固定済み認可ベースラインを削除します。今後の使用には新しいピンの承認が必要です。",
-    "unpinConfirm": "ピンを解除",
-    "unpinDone": "ツールのピンを解除しました",
-    "conflictTitle": "確認中に「{{tool}}」が変更されました",
-    "conflictBody": "エンジンは変更を拒否しました。読み取りと書き込みの間にピンの状態が変わっています。何も適用されていません。確認した内容と現在の内容を比較し、あらためて判断してください。",
-    "conflictReviewed": "確認した内容 (ベースバージョン {{version}})",
-    "conflictCurrent": "現在 (ベースバージョン {{version}})",
-    "conflictGone": "このツールにはピンがなくなりました。確認中に他の担当者が取り消しています。",
-    "conflictDismiss": "閉じる",
-    "conflictReloading": "現在の状態を再読み込みしています…"
   },
   "skills": {
     "search": "スキルを検索…",
@@ -150,14 +112,15 @@
     "secretsCount_other": "{{count}} 件の参照",
     "newConfig": "新規構成",
     "empty": "マネージド構成はありません",
-    "emptyHint": "マネージド構成を作成して、MCP サーバーのトランスポート、スコープ、シークレット参照を統制してください。",
-    "truncated": "{{n}} 件の設定を読み込みました。さらに存在します"
+    "emptyHint": "MCP サーバーのトランスポート、スコープ、シークレット参照の定義を、観測とバージョン履歴のために保存します。",
+    "truncated": "{{n}} 件の設定を読み込みました。さらに存在します",
+    "observationNotice": "保存された定義は観測用のメタデータです。定義を保存、有効化、削除しても、MCP ゲートウェイや実行中のサーバーは変更されません。"
   },
   "editor": {
     "createTitle": "新規マネージド構成",
     "editTitle": "マネージド構成を編集",
     "serverRef": "サーバー参照",
-    "serverRefHint": "この構成が統制する MCP サーバー名。作成後は変更できません。",
+    "serverRefHint": "この定義が記述する MCP サーバー名。作成後は変更できません。",
     "transport": "トランスポート",
     "endpoint": "エンドポイント",
     "endpointHint": "参照のみ — エンドポイントにクレデンシャルを埋め込まないでください。",
@@ -219,7 +182,7 @@
   "empty": {
     "config": {
       "title": "マネージド構成はまだ作成されていません",
-      "description": "マネージド構成を作成して、MCP サーバーのトランスポート、スコープ、シークレット参照を統制してください。"
+      "description": "MCP サーバーのトランスポート、スコープ、シークレット参照の定義を、観測とバージョン履歴のために保存します。"
     },
     "server": {
       "title": "MCP サーバーはまだ検出されていません",

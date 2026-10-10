@@ -18,6 +18,7 @@ import (
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/modules/governance"
+	"github.com/olivaresai/olivares/modules/sessions/hookpep"
 )
 
 func TestSessionClaudeReviewRefusesMaskedShellOperations(t *testing.T) {
@@ -112,13 +113,13 @@ func checkSessionShellReview(t *testing.T, h *harness, command string, rewrite b
 	service := h.set.gov.EngineApprovals()
 	h.set.gov.UseApprovalCapacity(h.authr.ApprovalCapacity)
 	h.set.gov.UseApprovalAuthority(h.authr, auth.NewAuthorizer(h.set.gov.RequestEvaluator(), auth.WithScopedGrants(h.set.gov.ScopedGrants())))
-	rule := hookPolicyRule{Tool: "Bash", Decision: "ask"}
+	rule := hookpep.PolicyRule{Tool: "Bash", Decision: "ask"}
 	original := command
 	if rewrite {
 		original = "echo visible"
 		rule.Rewrite = map[string]any{"command": command}
 	}
-	d := &claudeHookDecider{defaultPolicy: &hookPolicyDoc{Default: "allow", Rules: []hookPolicyRule{rule}}, authr: credentials, eval: h.set.gov.Evaluator(), scoped: h.set.gov.ScopedGrants(), approvals: service, store: h.st, clock: time.Now, log: discardLog()}
+	d := newClaudeHookDecider(&hookpep.Decider{DefaultPolicy: &hookpep.PolicyDoc{Default: "allow", Rules: []hookpep.PolicyRule{rule}}, Authr: credentials, Eval: h.set.gov.Evaluator(), Authz: harnessAuthz(h), Scoped: h.set.gov.ScopedGrants(), Approvals: service, Store: h.st, Clock: time.Now, Log: discardLog()})
 	raw, _ := json.Marshal(map[string]any{"hook_event_name": "PreToolUse", "tool_name": "Bash", "tool_input": map[string]any{"command": original}})
 	ctx, cancel := context.WithTimeout(t.Context(), 4*time.Second)
 	defer cancel()
@@ -129,7 +130,7 @@ func checkSessionShellReview(t *testing.T, h *harness, command string, rewrite b
 	go func() { defer close(done); claude.NewHookPEP(d, nil, time.Now).ServeHTTP(rec, req) }()
 	defer func() { cancel(); <-done }()
 	for {
-		items, _, err := service.List(ctx, tenant, hookActionCapability, "pending", "")
+		items, _, err := service.List(ctx, tenant, hookpep.ActionCapability, "pending", "")
 		if err != nil {
 			t.Fatal(err)
 		}

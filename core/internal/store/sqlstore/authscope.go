@@ -334,9 +334,13 @@ func (a *authAuditLog) LockAppends(ctx context.Context) error {
 // it for RLS; this is the deliberate, RLS-enforced path to the credential tables,
 // NOT the GUC-clearing System path.
 func (s *sqlStore) AuthView(ctx context.Context, fn func(store.AuthScope) error) error {
-	return s.View(ctx, model.SystemTenantID, func(sc store.Scope) error {
+	return s.authView(ctx, fn, true)
+}
+
+func (s *sqlStore) authView(ctx context.Context, fn func(store.AuthScope) error, bindSQLite bool) error {
+	return s.view(ctx, model.SystemTenantID, func(sc store.Scope) error {
 		return fn(&authScope{ts: sc.(*tenantScope)})
-	})
+	}, bindSQLite)
 }
 
 // AuthMutate runs fn against the auth partition in a read-write transaction

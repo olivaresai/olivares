@@ -12,18 +12,19 @@ func TestParseVersion(t *testing.T) {
 		wantErr             bool
 		maj, min, pat, nPre int
 	}{
-		{in: "26.7.0", maj: 26, min: 7, pat: 0},
-		{in: "v26.7.1", maj: 26, min: 7, pat: 1},
-		{in: "26.8.0-rc.1", maj: 26, min: 8, pat: 0, nPre: 2},
-		{in: "1.2.3+build.5", maj: 1, min: 2, pat: 3}, // build metadata dropped
-		{in: "dev"}, // zero version, no error
-		{in: ""},    // zero version, no error
-		{in: "26.7", maj: 26, min: 7},
-		{in: "26", wantErr: true},
-		{in: "26.7.0.1", wantErr: true},
-		{in: "26.x.0", wantErr: true},
-		{in: "26.7.-1", wantErr: true},
-		{in: "26.8.0-", wantErr: true},
+		{in: "1.0", maj: 1},
+		{in: "1.10", maj: 1, min: 10},
+		{in: "1.299", maj: 1, min: 299},
+		{in: "2.0", maj: 2},
+		{in: "dev"},
+		{in: ""},
+		{in: "1.0.1", wantErr: true},
+		{in: "26.10.2", wantErr: true},
+		{in: "v1.0", wantErr: true},
+		{in: "1.0-rc.1", wantErr: true},
+		{in: "1.0+build.5", wantErr: true},
+		{in: "1.-1", wantErr: true},
+		{in: "1.x", wantErr: true},
 	}
 	for _, c := range cases {
 		v, err := ParseVersion(c.in)
@@ -45,20 +46,8 @@ func TestParseVersion(t *testing.T) {
 
 func TestCompareOrder(t *testing.T) {
 	// Strictly increasing precedence, incl. SemVer prerelease rules and dev-lowest.
-	order := []string{
-		"dev",
-		"25.0.0",
-		"26.6.9",
-		"26.7.0-alpha",
-		"26.7.0-alpha.1",
-		"26.7.0-alpha.2",
-		"26.7.0-beta",
-		"26.7.0-rc.1",
-		"26.7.0",
-		"26.7.1",
-		"26.8.0",
-		"27.0.0",
-	}
+	order := []string{"dev", "1.0", "1.1", "1.9", "1.10", "1.299", "2.0"}
+
 	vs := make([]Version, len(order))
 	for i, s := range order {
 		v, err := ParseVersion(s)
@@ -77,13 +66,13 @@ func TestCompareOrder(t *testing.T) {
 		}
 	}
 	// Newer is the anti-rollback predicate.
-	a, _ := ParseVersion("26.7.0")
-	b, _ := ParseVersion("26.7.1")
+	a, _ := ParseVersion("1.0")
+	b, _ := ParseVersion("1.1")
 	if !a.Newer(b) {
-		t.Error("26.7.0.Newer(26.7.1) must be true")
+		t.Error("1.0.Newer(1.1) must be true")
 	}
 	if b.Newer(a) {
-		t.Error("26.7.1.Newer(26.7.0) must be false (that is a rollback)")
+		t.Error("1.1.Newer(1.0) must be false (that is a rollback)")
 	}
 	if a.Newer(a) {
 		t.Error("equal versions are not newer")

@@ -3,16 +3,18 @@ title: "Reporting — プロフェッショナルな HTML/PDF レポート"
 description: >-
   プラットフォームのコンプライアンス、監査、FinOps データからダウンロード可能な
   HTML/PDF レポートを生成します。5 種類の組み込みレポートをオンデマンドで提供し、
-  スケジュールレポートは enterprise add-on として提供します。
+  スケジュールレポートは Business に含まれます。
 ---
 
 Reporting（`modules/reporting`）は **LIVE** です。プラットフォームのコンプライアンス、
 監査、FinOps データを 1 つのプロフェッショナルな文書にまとめ、監査担当者が複数の API
 から JSON をコピー＆ペーストする代わりに、証拠をダウンロードできるようにします。
 
+**エディション:** Business Compliance Packs は、フレームワークカタログ、評価、規制カレンダー、DORA/HIPAA ビュー、エビデンスの封印、OSCAL エクスポート、オンデマンド HTML/PDF レポートを提供します。Community はこれらの機能に `501` を返し、リスク、データ所在地、記録管理、保存済みエビデンスの JSON/CSV エクスポートを維持します。アップグレードで既存の記録は保持されます。
+
 ## 組み込みレポート
 
-open-core モジュールは、次の 5 種類をオンデマンドで提供します。
+Business Compliance Packs は、次の 5 種類をオンデマンドで提供します。
 
 - `compliance-evidence` — フレームワーク別のコンプライアンス状況、統制の状態と証拠。
 - `audit-summary` — 監査イベントの集計と ledger の完全性検証。
@@ -24,12 +26,6 @@ open-core モジュールは、次の 5 種類をオンデマンドで提供し�
 `GET /v1/m/reporting/reports/{type}` で生成し、既定は HTML、
 `?format=pdf` で PDF をダウンロードします。ルートには
 `reporting:report:read` が必要です。
-
-## Open core と enterprise
-
-オンデマンド HTML は open-core バイナリに含まれます。オンデマンド PDF は Chromium
-互換の実行ファイルが利用できる場合に含まれます。**Enterprise add-on:** スケジュール
-レポート生成は build tag でゲートされ、community runtime には含まれません。
 
 ## 境界と制限
 
@@ -45,4 +41,4 @@ open-core モジュールは、次の 5 種類をオンデマンドで提供し�
 
 - [コンプライアンスと規制](/ja/reference/modules/xiii-compliance/) — 状況と証拠のデータソース。
 - [コストと AI FinOps](/ja/reference/modules/xi-finops/) — 支出の正本。
-- [モジュールカタログ](/ja/reference/modules/overview/) — 接続済み 31 モジュールと正直な成熟度。
+- [モジュールカタログ](/ja/reference/modules/overview/) — 接続済み 32 モジュールと正直な成熟度。

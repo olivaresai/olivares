@@ -6,6 +6,7 @@ package sessions
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -88,7 +89,7 @@ func TestRuntime_StopCheckedBeforeLaunchGate(t *testing.T) {
 	lg := &recordingLaunchGate{dec: LaunchDecision{Allowed: true}}
 	m, st, tenant, _ := newRuntimeHarness(t, WithRunner(fr), WithCredentialSource(staticCred()),
 		WithLaunchGate(lg), WithStopGate(&flipStopGate{stopped: true}))
-	_, err := m.createRun(context.Background(), tenant, CreateRunParams{
+	_, err := createProfiledTestRun(t, m, context.Background(), tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative, Actor: "user:u1", ActorKind: "user",
 	})
 	if err == nil {
@@ -114,7 +115,7 @@ func TestRuntime_LaunchDecisionStatusMapped(t *testing.T) {
 	fr := &fakeRunner{}
 	lg := &recordingLaunchGate{dec: LaunchDecision{Allowed: false, Reason: "budget hard cap reached", DeniedStatus: 402}}
 	m, _, tenant, _ := newRuntimeHarness(t, WithRunner(fr), WithCredentialSource(staticCred()), WithLaunchGate(lg))
-	_, err := m.createRun(context.Background(), tenant, CreateRunParams{
+	_, err := createProfiledTestRun(t, m, context.Background(), tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative, Actor: "user:u1", ActorKind: "user",
 	})
 	re, ok := err.(*runErr)
@@ -141,7 +142,7 @@ func TestRuntime_PEPEnvInjectedAndIORecorded(t *testing.T) {
 	}}
 	m, _, tenant, _ := newRuntimeHarness(t, WithRunner(fr), WithCredentialSource(staticCred()),
 		WithLaunchGate(lg), WithRecorder(rec))
-	dto, err := m.createRun(ctx, tenant, CreateRunParams{
+	dto, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative,
 		WorkspaceRef: registerTestWorkspace(t, m, tenant, t.TempDir()), Actor: "user:u1", ActorKind: "user",
 	})
@@ -163,7 +164,7 @@ func TestRuntime_PEPEnvInjectedAndIORecorded(t *testing.T) {
 	lg2 := &recordingLaunchGate{dec: LaunchDecision{Allowed: true}}
 	m2, _, tenant2, _ := newRuntimeHarness(t, WithRunner(fr2), WithCredentialSource(staticCred()),
 		WithLaunchGate(lg2), WithRecorder(rec2))
-	d2, err := m2.createRun(ctx, tenant2, CreateRunParams{
+	d2, err := createProfiledTestRun(t, m2, ctx, tenant2, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative,
 		WorkspaceRef: registerTestWorkspace(t, m2, tenant2, t.TempDir()), Actor: "user:u1", ActorKind: "user",
 	})
@@ -196,7 +197,7 @@ func TestRuntime_RejectsInjectedEnvironmentThatCanOverrideRuntimeAuthority(t *te
 			fr := &fakeRunner{}
 			gate := &recordingLaunchGate{dec: LaunchDecision{Allowed: true, InjectEnv: tc.env}}
 			m, _, tenant, _ := newRuntimeHarness(t, WithRunner(fr), WithCredentialSource(staticCred()), WithLaunchGate(gate))
-			_, err := m.createRun(context.Background(), tenant, CreateRunParams{
+			_, err := createProfiledTestRun(t, m, context.Background(), tenant, CreateRunParams{
 				Transport: TransportStreamJSON, Isolation: IsolationNative,
 				Actor: "user:u1", ActorKind: model.ActorUser,
 			})
@@ -214,10 +215,62 @@ func TestRuntime_RejectsInjectedEnvironmentThatCanOverrideRuntimeAuthority(t *te
 
 	// NO-FIRE control: the managed hook PEP env is legitimate governance
 	// configuration and remains reachable.
-	if err := validateLaunchInjectedEnv([]EnvVar{{
+	if err := validateGateEnv([]EnvVar{{
 		Name: "OLIVARES_HOOK_PEP_URL", Value: "http://127.0.0.1:8447/",
-	}}); err != nil {
+	}}, providerDriverClaude); err != nil {
 		t.Fatalf("legitimate PEP env rejected: %v", err)
+	}
+}
+
+// Every provider family is refused at both doors: the host environment a child
+// inherits and the environment a launch gate injects. The names are literal on
+// purpose, one per family, so a family dropped from the shared list fails here.
+// The governance name is the control: the same harness launches it.
+func TestRuntime_ProviderEnvFamiliesRefusedFromHostAndLaunchGate(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name    string
+		refused bool
+	}{
+		{"ANTHROPIC_API_KEY", true},
+		{"CLAUDE_CODE_USE_BEDROCK", true},
+		{"CODEX_HOME", true},
+		{"OPENAI_API_KEY", true},
+		{"GROK_HOME", true},
+		{"XAI_API_KEY", true},
+		{"OPENCODE_CONFIG", true},
+		{"GEMINI_CLI_SYSTEM_SETTINGS_PATH", true},
+		{"OLIVARES_HOOK_PEP_URL", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if tc.refused && !forbiddenInheritedEnvName(tc.name) {
+				t.Errorf("%s may be inherited from the host", tc.name)
+			}
+			fr := &fakeRunner{}
+			gate := &recordingLaunchGate{dec: LaunchDecision{Allowed: true, InjectEnv: []EnvVar{{Name: tc.name, Value: "gate"}}}}
+			m, _, tenant, _ := newRuntimeHarness(t, WithRunner(fr), WithCredentialSource(staticCred()), WithLaunchGate(gate))
+			_, err := createProfiledTestRun(t, m, context.Background(), tenant, CreateRunParams{
+				Transport: TransportStreamJSON, Isolation: IsolationNative,
+				Actor: "user:u1", ActorKind: model.ActorUser,
+			})
+			fr.mu.Lock()
+			launched := len(fr.specs)
+			fr.mu.Unlock()
+			if !tc.refused {
+				if err != nil || launched != 1 {
+					t.Fatalf("a launch gate that injects %s: err=%v specs=%d, want one launch", tc.name, err, launched)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), "launch gate returned an invalid environment") {
+				t.Errorf("a launch gate that injects %s: err=%v, want the injection refused", tc.name, err)
+			}
+			if launched != 0 {
+				t.Errorf("runner received %d launch specs after injecting %s", launched, tc.name)
+			}
+		})
 	}
 }
 
@@ -236,7 +289,7 @@ func TestRuntime_ContextPolicySummaryRecordedInLaunchLedger(t *testing.T) {
 		ContextPolicySummary: ctxSummary,
 	}}
 	m, st, tenant, _ := newRuntimeHarness(t, WithRunner(fr), WithCredentialSource(staticCred()), WithLaunchGate(lg))
-	dto, err := m.createRun(ctx, tenant, CreateRunParams{
+	dto, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative,
 		WorkspaceRef: registerTestWorkspace(t, m, tenant, t.TempDir()),
 		Actor:        "agent:a1", ActorKind: "agent",
@@ -279,7 +332,7 @@ func TestRuntime_KillSwitchSweepTerminatesRunning(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = m.Stop(context.Background()) })
 
-	dto, err := m.createRun(ctx, tenant, CreateRunParams{
+	dto, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative,
 		WorkspaceRef: registerTestWorkspace(t, m, tenant, t.TempDir()), Actor: "agent:a1", ActorKind: "agent",
 	})
@@ -325,7 +378,7 @@ func TestRuntime_GovernanceFactsPersisted(t *testing.T) {
 	}}
 	m, _, tenant, _ := newRuntimeHarness(t, WithRunner(fr), WithCredentialSource(staticCred()),
 		WithLaunchGate(lg), WithRecorder(&capturingRecorder{}))
-	dto, err := m.createRun(ctx, tenant, CreateRunParams{
+	dto, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative,
 		WorkspaceRef: registerTestWorkspace(t, m, tenant, t.TempDir()),
 		Actor:        "agent:a1", ActorKind: "agent",
@@ -369,7 +422,7 @@ func TestRuntime_GovernanceFactsDefault(t *testing.T) {
 	fr := &fakeRunner{initSID: "sess-gov2"}
 	lg := &recordingLaunchGate{dec: LaunchDecision{Allowed: true}} // no env, no record, not critical
 	m, _, tenant, _ := newRuntimeHarness(t, WithRunner(fr), WithCredentialSource(staticCred()), WithLaunchGate(lg))
-	dto, err := m.createRun(ctx, tenant, CreateRunParams{
+	dto, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative,
 		WorkspaceRef: registerTestWorkspace(t, m, tenant, t.TempDir()),
 		Actor:        "user:u1", ActorKind: "user",
@@ -401,7 +454,7 @@ func TestRuntime_GovernanceFactsRederivedOnResume(t *testing.T) {
 	m, _, tenant, _ := newRuntimeHarness(t, WithRunner(fr), WithCredentialSource(staticCred()),
 		WithLaunchGate(lg), WithRecorder(&capturingRecorder{}))
 	ws := registerTestWorkspace(t, m, tenant, t.TempDir())
-	dto, err := m.createRun(ctx, tenant, CreateRunParams{
+	dto, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative, WorkspaceRef: ws,
 		Actor: "agent:a1", ActorKind: "agent",
 	})

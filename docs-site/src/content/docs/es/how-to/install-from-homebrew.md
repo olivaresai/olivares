@@ -2,9 +2,11 @@
 title: Instalar con Homebrew
 description: >-
   La coordenada del cask de Homebrew en macOS para Olivares AI, lo que el cask
-  hace con Gatekeeper y el estado de publicación del bump del tap 26.10.1.
+  hace con Gatekeeper y el estado de publicación de su bump del tap.
 draft: false
 ---
+
+La próxima release es <!-- release -->`0.1`<!-- /release -->; todavía no está publicada en GitHub. Los comandos siguientes describen los artefactos previstos. Compila desde el código fuente hasta su publicación y verifica cada artefacto antes de usarlo. El estado observado está en <!-- release -->`docs/releases/0.1-install-surfaces.json`<!-- /release -->.
 
 Esta es la vía macOS que `INSTALL.md` nombra como recomendada. Instala el
 binario `olivares` firmado mediante el cask de Homebrew y limpia la
@@ -13,7 +15,7 @@ cuarentena de Gatekeeper. No es la vía de paquetes Linux
 ([Desplegar con Docker](/how-to/docker-deployment/)).
 
 :::note[Beta — el cask 26.10 está publicado]
-`Casks/olivares.rb` del tap se actualizó para 26.10 el 2026-10-01: nombra la versión 26.10.1 y
+`Casks/olivares.rb` del tap se actualizó para 26.10 el 2026-10-01: nombra la versión 26.10.1<!-- release-fixed --> y
 cuatro archivos de plataforma cuyos SHA-256 coinciden con el `checksums.txt` firmado de la
 release. El productor es
 `.goreleaser.yaml` `homebrew_casks:`; el trabajo de release actualiza el cask del tap. El
@@ -42,14 +44,15 @@ manual.
 olivares quickstart
 ```
 
-Valores seguros: TLS activo, loopback, sin credenciales predeterminadas. El
+Valores seguros: TLS activo, escucha en todas las interfaces, sin credenciales predeterminadas. El
 motor imprime la URL de la consola y el token de configuración de un solo
 uso. Sigue con [Tu primera hora](/how-to/first-hour/).
 
 Un estate sintético efímero (loopback, texto plano) es solo para mirar:
 
 ```sh
-olivares serve --seed-demo --insecure --data-dir "$(mktemp -d)"
+olivares serve --seed-demo --insecure --listen 127.0.0.1:8443 --grpc-listen 127.0.0.1:8444 \
+  --data-dir "$(mktemp -d)"
 ```
 
 `--seed-demo` no es un recorrido del producto. Véase

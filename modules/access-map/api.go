@@ -105,8 +105,8 @@ func direction(s string) model.Direction {
 // tenant_suspended, tenant_not_in_service, not_leader and residency_violation —
 // were absent from all but two of the thirty-six copies, so the same refusal was
 // answered 423/503/403 by a core route and 500 "internal error" by every module
-// route. The per-arm reasoning (ADR-0024 Q2 for the audit spool/B-03 for
-// workspace confinement for the standby) now lives beside statusFor, once.
+// route. The per-arm reasoning (audit-spool policy for audit spool capacity and
+// standby workspace confinement) now lives beside statusFor, once.
 func writeStoreError(w http.ResponseWriter, err error) {
 	if err == nil {
 		writeJSON(w, http.StatusOK, nil)

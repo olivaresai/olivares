@@ -7,9 +7,6 @@ package sessions
 import (
 	"context"
 	"encoding/json"
-	"errors"
-	"sync"
-	"sync/atomic"
 )
 
 // ACP `session/request_permission` — the ONE server→client request this driver
@@ -40,36 +37,7 @@ import (
 // tool name is provider TEXT: it is never parsed into an authorization, and it
 // never reaches a row or an API answer from here.
 
-// The ACP permission option kinds.
-const (
-	grokPermissionAllowOnce    = "allow_once"
-	grokPermissionAllowAlways  = "allow_always"
-	grokPermissionRejectOnce   = "reject_once"
-	grokPermissionRejectAlways = "reject_always"
-)
-
-// The two `RequestPermissionOutcome` arms.
-const (
-	grokOutcomeSelected  = "selected"
-	grokOutcomeCancelled = "cancelled"
-)
-
-// grokReqRequestPermission is the only agent→client request with an answer here.
-const grokReqRequestPermission = "session/request_permission"
-
-// grokKindToolCallPermission is the codec family carried to the governed
-// authority. ACP has ONE permission surface, so there is one kind — inventing a
-// finer taxonomy from the tool call's own text would be this driver deciding what
-// another product's tools mean.
-const grokKindToolCallPermission = "tool_call_permission"
-
 // --- wire types ---------------------------------------------------------------
-
-type grokPermissionOption struct {
-	OptionID string `json:"optionId"`
-	Name     string `json:"name"`
-	Kind     string `json:"kind"`
-}
 
 // grokToolCall is the subset of the tool call this driver reads. The id and kind
 // are references; the title and the raw input are provider TEXT and are read by
@@ -80,67 +48,12 @@ type grokToolCall struct {
 }
 
 type grokRequestPermissionParams struct {
-	SessionID string                 `json:"sessionId"`
-	ToolCall  grokToolCall           `json:"toolCall"`
-	Options   []grokPermissionOption `json:"options"`
-}
-
-type grokPermissionOutcome struct {
-	Outcome  string `json:"outcome"`
-	OptionID string `json:"optionId,omitempty"`
-}
-
-type grokRequestPermissionResponse struct {
-	Outcome grokPermissionOutcome `json:"outcome"`
-}
-
-// grokCancelledOutcome is the protocol's own no-grant answer. It is a VALID
-// response, not a hang and not an error: the agent learns the client will not
-// decide, and grants nothing.
-func grokCancelledOutcome() any {
-	return grokRequestPermissionResponse{Outcome: grokPermissionOutcome{Outcome: grokOutcomeCancelled}}
-}
-
-func grokSelectedOutcome(optionID string) any {
-	return grokRequestPermissionResponse{
-		Outcome: grokPermissionOutcome{Outcome: grokOutcomeSelected, OptionID: optionID},
-	}
+	SessionID string                `json:"sessionId"`
+	ToolCall  grokToolCall          `json:"toolCall"`
+	Options   []acpPermissionOption `json:"options"`
 }
 
 // --- validation ---------------------------------------------------------------
-
-// grokValidPermissionRequest reports whether the request can be answered by
-// SELECTION at all, and names why not.
-//
-// A duplicate option id fails the WHOLE request rather than picking the first
-// match: two options sharing an id make "the option the authority named"
-// ambiguous, and an ambiguous grant is a grant nobody authorized. An option whose
-// kind this client does not know is not a failure — it is simply not selectable,
-// which is the deny-closed reading.
-func grokValidPermissionRequest(p grokRequestPermissionParams) (string, bool) {
-	if p.SessionID == "" {
-		return "the request named no conversation", false
-	}
-	if len(p.Options) == 0 {
-		return "the request offered no options to select", false
-	}
-	seen := make(map[string]bool, len(p.Options))
-	known := false
-	for _, opt := range p.Options {
-		if opt.OptionID == "" {
-			return "the request offered an option with no id", false
-		}
-		if seen[opt.OptionID] {
-			return "the request offered two options with the same id", false
-		}
-		seen[opt.OptionID] = true
-		known = known || grokKnownPermissionKind(opt.Kind)
-	}
-	if !known {
-		return "the request offered no option of a kind this client understands", false
-	}
-	return "", true
-}
 
 // grokKnownPermissionKind reports an option kind this client understands. An
 // unknown kind is not an error in itself — the protocol may grow kinds — it is
@@ -149,23 +62,12 @@ func grokValidPermissionRequest(p grokRequestPermissionParams) (string, bool) {
 // says so rather than picking one by position.
 func grokKnownPermissionKind(kind string) bool {
 	switch kind {
-	case grokPermissionAllowOnce, grokPermissionAllowAlways,
-		grokPermissionRejectOnce, grokPermissionRejectAlways:
+	case acpPermissionAllowOnce, acpPermissionAllowAlways,
+		acpPermissionRejectOnce, acpPermissionRejectAlways:
 		return true
 	default:
 		return false
 	}
-}
-
-// grokOfferedOptionIDs is what the AUTHORITY is shown: exactly the ids the agent
-// offered, in wire order. A grant is intersected with this, so an authority can
-// neither invent an option nor widen the one it was shown.
-func grokOfferedOptionIDs(options []grokPermissionOption) []string {
-	out := make([]string, 0, len(options))
-	for _, opt := range options {
-		out = append(out, opt.OptionID)
-	}
-	return out
 }
 
 // grokSelectGrant picks the option to SELECT for an authorized decision, or
@@ -176,7 +78,7 @@ func grokOfferedOptionIDs(options []grokPermissionOption) []string {
 // decision actually authorizes. `allow_always` is a PERSISTENT grant that outlives
 // this tool call, so it needs the authority to have asked for session scope; a
 // turn-scoped decision cannot be upgraded by the agent's choice of options.
-func grokSelectGrant(options []grokPermissionOption, dec ProviderApprovalDecision) (string, bool) {
+func grokSelectGrant(options []acpPermissionOption, dec ProviderApprovalDecision) (string, bool) {
 	granted := make(map[string]bool, len(dec.Granted))
 	for _, id := range dec.Granted {
 		granted[id] = true
@@ -186,9 +88,9 @@ func grokSelectGrant(options []grokPermissionOption, dec ProviderApprovalDecisio
 			continue
 		}
 		switch opt.Kind {
-		case grokPermissionAllowOnce:
+		case acpPermissionAllowOnce:
 			return opt.OptionID, true
-		case grokPermissionAllowAlways:
+		case acpPermissionAllowAlways:
 			if dec.SessionScope {
 				return opt.OptionID, true
 			}
@@ -197,57 +99,22 @@ func grokSelectGrant(options []grokPermissionOption, dec ProviderApprovalDecisio
 	return "", false
 }
 
-// grokSelectRefusal picks the option that REFUSES this tool call and nothing
-// more.
-//
-// Only `reject_once` qualifies. `reject_always` is a persistent decision — a
-// standing "never" recorded against this project — and it is not what a
-// turn-scoped refusal means, however convenient it would be when it is the only
-// rejection on offer. When no one-shot rejection is offered, the answer is the
-// protocol's cancellation, which grants nothing and records nothing.
-func grokSelectRefusal(options []grokPermissionOption) (string, bool) {
-	for _, opt := range options {
-		if opt.Kind == grokPermissionRejectOnce {
-			return opt.OptionID, true
-		}
-	}
-	return "", false
-}
-
 // --- dispatch -----------------------------------------------------------------
 
-// grokServerRequest is one in-flight agent→client request. once guarantees that
-// it is answered EXACTLY ONCE, whichever of the three racing paths gets there
-// first: the authority, the deadline, or a cancellation from interrupt/stop.
-type grokServerRequest struct {
-	id     json.RawMessage
-	method string
-	once   sync.Once
-	// answered records that the ONE reply has been CLAIMED. It is stored INSIDE the
-	// once and BEFORE the write, so it is true from the instant a path commits to
-	// answering rather than from the instant the bytes leave — and a resolver that
-	// reads it true is reading a request that already has its only answer.
-	//
-	// It is request-local, not session or turn state, because it has to survive both:
-	// the turn it was answered for can end, and the session can go on, while this
-	// request stays answered for as long as its resolver may still be running.
-	answered atomic.Bool
-}
-
 func (s *grokSession) onServerRequest(id json.RawMessage, method string, params json.RawMessage) {
-	if method != grokReqRequestPermission {
+	if method != acpReqRequestPermission {
 		// Answered, not ignored: an unanswered request stalls the agent's turn for
 		// ever, and answering it with a grant would be worse than stalling. This is
 		// also where the capabilities this client did NOT advertise come home — an
 		// `fs/read_text_file` or a `terminal/create` gets a protocol error rather than
 		// a synthesized answer that would make the client look capable.
 		go func() {
-			_ = s.conn.respondError(context.Background(), id, grokErrMethodNotSupported,
+			_ = s.conn.respondError(context.Background(), id, acpErrMethodNotSupported,
 				"this client does not implement "+method)
 		}()
 		return
 	}
-	req := &grokServerRequest{id: id, method: method}
+	req := &acpServerRequest{id: id, method: method}
 	key := string(id)
 	s.mu.Lock()
 	if s.closed {
@@ -289,27 +156,27 @@ func (s *grokSession) onServerRequest(id json.RawMessage, method string, params 
 // authority, then, after the authority has spent whatever time it needs,
 // the turn AND the durable launch authority again. Everything before the
 // selection is deny-closed.
-func (s *grokSession) resolveServerRequest(req *grokServerRequest, key string, raw json.RawMessage, session, turn string, cancellingAtArrival bool) {
+func (s *grokSession) resolveServerRequest(req *acpServerRequest, key string, raw json.RawMessage, session, turn string, cancellingAtArrival bool) {
 	defer s.forgetServerRequest(key)
 
 	var params grokRequestPermissionParams
 	if err := json.Unmarshal(raw, &params); err != nil {
 		s.warn("sessions: a provider permission request could not be read and was refused",
 			"run_ref", s.cfg.RunRef, "method", req.method)
-		s.answer(req, grokCancelledOutcome())
+		s.answer(req, acpCancelledOutcome())
 		return
 	}
-	if why, ok := grokValidPermissionRequest(params); !ok {
+	if why, ok := acpValidPermissionRequest(params.SessionID, params.Options, grokKnownPermissionKind); !ok {
 		s.warn("sessions: a provider permission request was malformed and was refused",
 			"run_ref", s.cfg.RunRef, "method", req.method, "why", why)
-		s.answer(req, grokCancelledOutcome())
+		s.answer(req, acpCancelledOutcome())
 		return
 	}
 	if session == "" || params.SessionID != session {
 		// A request naming another conversation is not ours to answer with a grant.
 		s.warn("sessions: a provider permission request named a foreign conversation and was refused",
 			"run_ref", s.cfg.RunRef, "method", req.method)
-		s.answer(req, grokCancelledOutcome())
+		s.answer(req, acpCancelledOutcome())
 		return
 	}
 	if turn == "" {
@@ -320,7 +187,7 @@ func (s *grokSession) resolveServerRequest(req *grokServerRequest, key string, r
 		// not exist.
 		s.warn("sessions: a provider permission request arrived with no active turn and was refused",
 			"run_ref", s.cfg.RunRef, "method", req.method)
-		s.answer(req, grokCancelledOutcome())
+		s.answer(req, acpCancelledOutcome())
 		return
 	}
 	// ⛔ AND A TURN THE OPERATOR HAS ALREADY STOPPED IS NOT ONE AN AUTHORITY IS
@@ -381,13 +248,13 @@ func (s *grokSession) resolveServerRequest(req *grokServerRequest, key string, r
 	ctx, cancel := context.WithTimeout(context.Background(), deadline)
 	defer cancel()
 
-	offered := grokOfferedOptionIDs(params.Options)
+	offered := acpOfferedOptionIDs(params.Options)
 	dec := ProviderApprovalDecision{}
 	if s.cfg.Approve != nil {
 		got, err := s.cfg.Approve(ctx, ProviderApprovalRequest{
 			Driver: providerDriverGrok, RunRef: s.cfg.RunRef, ProfileRef: s.cfg.ProfileRef,
 			ConversationID: session, TurnID: turn,
-			Method: req.method, Kind: grokKindToolCallPermission,
+			Method: req.method, Kind: acpKindToolCallPermission,
 			// Exactly what the agent offered: an authority cannot widen a request it
 			// was shown, because a selection is checked back against this list.
 			Requested: offered,
@@ -395,7 +262,7 @@ func (s *grokSession) resolveServerRequest(req *grokServerRequest, key string, r
 		if err != nil {
 			// An authority that could not decide never means "allow".
 			s.warn("sessions: the provider approval authority failed; refusing deny-closed",
-				"run_ref", s.cfg.RunRef, "method", req.method)
+				"run_ref", s.cfg.RunRef, "method", req.method, "cause", errorCause(err, "unavailable"))
 			s.refuse(req, params.Options)
 			return
 		}
@@ -442,7 +309,7 @@ func (s *grokSession) resolveServerRequest(req *grokServerRequest, key string, r
 	if turn != s.ActiveTurn() {
 		s.warn("sessions: a provider permission was authorized after its turn ended; refusing it",
 			"run_ref", s.cfg.RunRef, "method", req.method)
-		s.answer(req, grokCancelledOutcome())
+		s.answer(req, acpCancelledOutcome())
 		return
 	}
 	// And the DURABLE authority, last of all. A turn that is still active proves
@@ -453,7 +320,7 @@ func (s *grokSession) resolveServerRequest(req *grokServerRequest, key string, r
 		if err := s.cfg.AuthorityCheck(ctx); err != nil {
 			s.warn("sessions: a provider permission lost its launch authority before the grant; refusing it",
 				"run_ref", s.cfg.RunRef, "method", req.method)
-			s.answer(req, grokCancelledOutcome())
+			s.answer(req, acpCancelledOutcome())
 			return
 		}
 	}
@@ -467,56 +334,5 @@ func (s *grokSession) resolveServerRequest(req *grokServerRequest, key string, r
 		s.refuse(req, params.Options)
 		return
 	}
-	s.answer(req, grokSelectedOutcome(optionID))
-}
-
-// refuse answers with the agent's own one-shot rejection when it offered one, and
-// with the protocol's cancellation when it did not.
-func (s *grokSession) refuse(req *grokServerRequest, options []grokPermissionOption) {
-	if optionID, ok := grokSelectRefusal(options); ok {
-		s.answer(req, grokSelectedOutcome(optionID))
-		return
-	}
-	s.answer(req, grokCancelledOutcome())
-}
-
-// answer writes the reply exactly once.
-func (s *grokSession) answer(req *grokServerRequest, reply any) {
-	req.once.Do(func() {
-		// The claim is recorded BEFORE the write, and that order is the whole point:
-		// this store is the ordering side of the admission check in
-		// `resolveServerRequest`. It is NOT a claim that nothing is held while the
-		// write runs — `once.Do` holds its own internal mutex across this entire
-		// function, `respond` included, which is the pre-existing serialization of the
-		// ONE reply and is untouched here. What the admission check needs is narrower
-		// and is true: that read takes neither `s.mu` nor this once, so a resolver can
-		// still reject while this write is blocked on the child's stdin.
-		req.answered.Store(true)
-		if err := s.conn.respond(context.Background(), req.id, reply); err != nil &&
-			!errors.Is(err, errRPCClosed) {
-			s.warn("sessions: could not answer a provider permission request",
-				"run_ref", s.cfg.RunRef, "method", req.method)
-		}
-	})
-}
-
-func (s *grokSession) forgetServerRequest(key string) {
-	s.mu.Lock()
-	delete(s.pending, key)
-	s.mu.Unlock()
-}
-
-// cancelPendingApprovals answers every in-flight request with the protocol's own
-// cancellation before the turn is interrupted or the process is torn down, so the
-// agent is never left waiting on a request whose turn no longer exists.
-func (s *grokSession) cancelPendingApprovals(context.Context) {
-	s.mu.Lock()
-	pending := make([]*grokServerRequest, 0, len(s.pending))
-	for _, req := range s.pending {
-		pending = append(pending, req)
-	}
-	s.mu.Unlock()
-	for _, req := range pending {
-		s.answer(req, grokCancelledOutcome())
-	}
+	s.answer(req, acpSelectedOutcome(optionID))
 }

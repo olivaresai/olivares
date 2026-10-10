@@ -11,7 +11,7 @@ from typing import TypedDict, cast
 from urllib.parse import quote
 
 API_VERSION = "v1"
-SPEC_HASH = "0a3ae0cb1b43e677bf5a00cfdb62b1e11a54ce076180aafa0c7537d78cf6357b"
+SPEC_HASH = "016b467b0934c254bc48f178ff02d7d1242a4feb05b0f97d0467ddd459ea2c45"
 STABILITY_POLICY = "https://olivares.ai/docs"
 
 class _AuthCapabilityQuestionRequired(TypedDict):
@@ -267,6 +267,34 @@ class _SessionsCommunicationCursorTokenResultRequired(TypedDict):
 class SessionsCommunicationCursorTokenResult(_SessionsCommunicationCursorTokenResultRequired, total=False):
     cursor_id: str
 
+class _SessionsCommunicationDecisionRequestResponseBodyRequired(TypedDict):
+    response: SessionsCommunicationDecisionRequestResponseBodyResponse
+    transition: str
+
+class SessionsCommunicationDecisionRequestResponseBody(_SessionsCommunicationDecisionRequestResponseBodyRequired, total=False):
+    blocker_work_item_id: str
+
+class _SessionsCommunicationDecisionRequestResponseBodyResponseRequired(TypedDict):
+    reason: SessionsCommunicationReason
+
+class SessionsCommunicationDecisionRequestResponseBodyResponse(_SessionsCommunicationDecisionRequestResponseBodyResponseRequired, total=False):
+    choice_key: str
+
+class _SessionsCommunicationDecisionRequestResponseResultRequired(TypedDict):
+    audit_seq: int
+    command_id: str
+    etag: str
+    event_id: str
+    message_id: str
+    request_id: str
+    response_id: str
+    state: str
+    version: int
+    work_item_id: str
+
+class SessionsCommunicationDecisionRequestResponseResult(_SessionsCommunicationDecisionRequestResponseResultRequired, total=False):
+    work_decision_id: str
+
 class _SessionsCommunicationDeliveryViewRequired(TypedDict):
     available_at: str
     delivery_seq: int
@@ -299,7 +327,9 @@ class _SessionsCommunicationHandoffContentRequired(TypedDict):
 
 class SessionsCommunicationHandoffContent(_SessionsCommunicationHandoffContentRequired, total=False):
     artifact_refs: list[SessionsCommunicationContentReference]
+    branch: str
     risk: str
+    sha: str
 
 class _SessionsCommunicationHandoffOfferBodyRequired(TypedDict):
     ack_deadline: str
@@ -513,6 +543,13 @@ class OperationsMixin:
         """
         return self._do_raw("GET", "/metrics", "/metrics", query=query, tenant=tenant)
 
+    def get_openapi_beta_json(self, *, tenant=None, **query):
+        """GET /openapi.beta.json — The BETA module-route OpenAPI document (/v1/m/<ns>/…), reflected from the routes the modules register.
+
+        Stability: stable.
+        """
+        return self._do("GET", "/openapi.beta.json", "/openapi.beta.json", query=query, tenant=tenant)
+
     def get_openapi_json(self, *, tenant=None, **query):
         """GET /openapi.json — This OpenAPI document.
 
@@ -547,6 +584,69 @@ class OperationsMixin:
         Stability: stable.
         """
         return self._do("GET", "/v1/access-edges", "/v1/access-edges", query=query, tenant=tenant)
+
+    def post_v1_account_password(self, body=None, *, tenant=None, **query):
+        """POST /v1/account/password — Change your password and revoke your other sign-ins; requires the current password and a human session.
+
+        Stability: stable.
+        """
+        return self._do("POST", "/v1/account/password", "/v1/account/password", body=body, query=query, tenant=tenant)
+
+    def get_v1_agent_groups(self, *, tenant=None, **query):
+        """GET /v1/agent-groups — List agent groups in the resolved tenant.
+
+        Stability: stable.
+        """
+        return self._do("GET", "/v1/agent-groups", "/v1/agent-groups", query=query, tenant=tenant)
+
+    def post_v1_agent_groups(self, body=None, *, tenant=None, **query):
+        """POST /v1/agent-groups — Create an agent group (name, slug and optional workspace scope)
+
+        Stability: stable.
+        """
+        return self._do("POST", "/v1/agent-groups", "/v1/agent-groups", body=body, query=query, tenant=tenant)
+
+    def get_v1_agent_groups_by_id(self, id, *, tenant=None, **query):
+        """GET /v1/agent-groups/{id} — Get an agent group by ID.
+
+        Stability: stable.
+        """
+        return self._do("GET", "/v1/agent-groups/{id}", "/v1/agent-groups/" + quote(str(id), safe=""), query=query, tenant=tenant)
+
+    def patch_v1_agent_groups_by_id(self, id, body=None, *, tenant=None, **query):
+        """PATCH /v1/agent-groups/{id} — Update an agent group; only fields present in the request are touched.
+
+        Stability: stable.
+        """
+        return self._do("PATCH", "/v1/agent-groups/{id}", "/v1/agent-groups/" + quote(str(id), safe=""), body=body, query=query, tenant=tenant)
+
+    def delete_v1_agent_groups_by_id(self, id, *, tenant=None, **query):
+        """DELETE /v1/agent-groups/{id} — Delete a group and its roster (the membership rows), never the member agents themselves.
+
+        Stability: stable.
+        """
+        return self._do("DELETE", "/v1/agent-groups/{id}", "/v1/agent-groups/" + quote(str(id), safe=""), query=query, tenant=tenant)
+
+    def get_v1_agent_groups_by_id_members(self, id, *, tenant=None, **query):
+        """GET /v1/agent-groups/{id}/members — List the agents that are members of one group.
+
+        Stability: stable.
+        """
+        return self._do("GET", "/v1/agent-groups/{id}/members", "/v1/agent-groups/" + quote(str(id), safe="") + "/members", query=query, tenant=tenant)
+
+    def put_v1_agent_groups_by_id_members_by_agentid(self, id, agentid, body=None, *, tenant=None, **query):
+        """PUT /v1/agent-groups/{id}/members/{agentID} — Add an agent to a group. Idempotent: 200 with the existing row when already a member, 201 for a fresh add.
+
+        Stability: stable.
+        """
+        return self._do("PUT", "/v1/agent-groups/{id}/members/{agentID}", "/v1/agent-groups/" + quote(str(id), safe="") + "/members/" + quote(str(agentid), safe=""), body=body, query=query, tenant=tenant)
+
+    def delete_v1_agent_groups_by_id_members_by_agentid(self, id, agentid, *, tenant=None, **query):
+        """DELETE /v1/agent-groups/{id}/members/{agentID} — Remove an agent from a group (404 when the agent is not a member)
+
+        Stability: stable.
+        """
+        return self._do("DELETE", "/v1/agent-groups/{id}/members/{agentID}", "/v1/agent-groups/" + quote(str(id), safe="") + "/members/" + quote(str(agentid), safe=""), query=query, tenant=tenant)
 
     def get_v1_agents(self, *, tenant=None, **query):
         """GET /v1/agents — List agents in the resolved tenant.
@@ -645,6 +745,13 @@ class OperationsMixin:
         headers = {}
         return cast(AuthCapabilityResults, self._do_json_required("POST", "/v1/auth/capabilities", "/v1/auth/capabilities", body=body, query=query, headers=headers, tenant=tenant))
 
+    def get_v1_auth_effective_rights(self, *, tenant=None, **query):
+        """GET /v1/auth/effective-rights — One trustee's effective rights over one node: the subject, the node, the assurance the answer holds, the lineage path and each right's state. Needs authz:admin; answers 404 while the operator has the AuthZEN search surface disabled and 403 outside its permitted network.
+
+        Stability: stable.
+        """
+        return self._do("GET", "/v1/auth/effective-rights", "/v1/auth/effective-rights", query=query, tenant=tenant)
+
     def post_v1_auth_login(self, body=None, *, tenant=None, **query):
         """POST /v1/auth/login — Exchange email/password for a session token.
 
@@ -658,6 +765,48 @@ class OperationsMixin:
         Stability: stable.
         """
         return self._do("POST", "/v1/auth/logout", "/v1/auth/logout", body=body, query=query, tenant=tenant)
+
+    def post_v1_auth_os_account_bindings(self, body=None, *, tenant=None, **query):
+        """POST /v1/auth/os-account-bindings — Start an OS-account binding under the current administrator's user authorization and configured step-up; direct TLS required.
+
+        Stability: stable.
+        """
+        return self._do("POST", "/v1/auth/os-account-bindings", "/v1/auth/os-account-bindings", body=body, query=query, tenant=tenant)
+
+    def post_v1_auth_os_account_bindings_complete(self, body=None, *, tenant=None, **query):
+        """POST /v1/auth/os-account-bindings/complete — Complete from the subject's own session with fresh native PAM authentication and Account validation; direct TLS required. Returns public mapping metadata only.
+
+        Stability: stable.
+        """
+        return self._do("POST", "/v1/auth/os-account-bindings/complete", "/v1/auth/os-account-bindings/complete", body=body, query=query, tenant=tenant)
+
+    def get_v1_auth_os_account_bindings_by_id(self, id, *, tenant=None, **query):
+        """GET /v1/auth/os-account-bindings/{id} — Read administrative mapping metadata and its audit digest; direct TLS and current administrative step-up required.
+
+        Stability: stable.
+        """
+        return self._do("GET", "/v1/auth/os-account-bindings/{id}", "/v1/auth/os-account-bindings/" + quote(str(id), safe=""), query=query, tenant=tenant)
+
+    def delete_v1_auth_os_account_bindings_by_id(self, id, *, tenant=None, **query):
+        """DELETE /v1/auth/os-account-bindings/{id} — Revoke current authority while permanently retaining the immutable account/UID/subject reservation; direct TLS and current administrative step-up required.
+
+        Stability: stable.
+        """
+        return self._do("DELETE", "/v1/auth/os-account-bindings/{id}", "/v1/auth/os-account-bindings/" + quote(str(id), safe=""), query=query, tenant=tenant)
+
+    def post_v1_auth_piv_elevate(self, body=None, *, tenant=None, **query):
+        """POST /v1/auth/piv/elevate — Verify the presented PIV certificate (chain, OCSP, user binding) and elevate the calling session to AAL3 (method piv)
+
+        Stability: stable.
+        """
+        return self._do("POST", "/v1/auth/piv/elevate", "/v1/auth/piv/elevate", body=body, query=query, tenant=tenant)
+
+    def get_v1_auth_piv_status(self, *, tenant=None, **query):
+        """GET /v1/auth/piv/status — The calling session's presented PIV smart-card certificate status (501 when no PIV verifier roots are configured)
+
+        Stability: stable.
+        """
+        return self._do("GET", "/v1/auth/piv/status", "/v1/auth/piv/status", query=query, tenant=tenant)
 
     def post_v1_auth_refresh(self, body=None, *, tenant=None, **query):
         """POST /v1/auth/refresh — Renew the calling session token (rotates the credential, extends expiry)
@@ -729,6 +878,55 @@ class OperationsMixin:
         """
         return self._do("GET", "/v1/auth/totp/status", "/v1/auth/totp/status", query=query, tenant=tenant)
 
+    def post_v1_auth_webauthn_authenticate(self, body=None, *, tenant=None, **query):
+        """POST /v1/auth/webauthn/authenticate — Verify the browser's assertion and elevate the calling session to AAL3.
+
+        Stability: stable.
+        """
+        return self._do("POST", "/v1/auth/webauthn/authenticate", "/v1/auth/webauthn/authenticate", body=body, query=query, tenant=tenant)
+
+    def post_v1_auth_webauthn_authenticate_options(self, body=None, *, tenant=None, **query):
+        """POST /v1/auth/webauthn/authenticate/options — Issue WebAuthn assertion options (challenge) for a step-up of the calling session.
+
+        Stability: stable.
+        """
+        return self._do("POST", "/v1/auth/webauthn/authenticate/options", "/v1/auth/webauthn/authenticate/options", body=body, query=query, tenant=tenant)
+
+    def get_v1_auth_webauthn_credentials(self, *, tenant=None, **query):
+        """GET /v1/auth/webauthn/credentials — The calling user's registered authenticators — id, label and registration time only, never key material.
+
+        Stability: stable.
+        """
+        return self._do("GET", "/v1/auth/webauthn/credentials", "/v1/auth/webauthn/credentials", query=query, tenant=tenant)
+
+    def patch_v1_auth_webauthn_credentials_by_id(self, id, body=None, *, tenant=None, **query):
+        """PATCH /v1/auth/webauthn/credentials/{id} — Update the display name of one of the calling user's authenticators (owner-only, no step-up: a metadata change)
+
+        Stability: stable.
+        """
+        return self._do("PATCH", "/v1/auth/webauthn/credentials/{id}", "/v1/auth/webauthn/credentials/" + quote(str(id), safe=""), body=body, query=query, tenant=tenant)
+
+    def delete_v1_auth_webauthn_credentials_by_id(self, id, *, tenant=None, **query):
+        """DELETE /v1/auth/webauthn/credentials/{id} — Unregister one of the calling user's authenticators (lost/stolen-key remediation; step-up required)
+
+        Stability: stable.
+        """
+        return self._do("DELETE", "/v1/auth/webauthn/credentials/{id}", "/v1/auth/webauthn/credentials/" + quote(str(id), safe=""), query=query, tenant=tenant)
+
+    def post_v1_auth_webauthn_register(self, body=None, *, tenant=None, **query):
+        """POST /v1/auth/webauthn/register — Verify the browser's attestation and persist the credential (403 on any ceremony failure, 409 on an already-registered credential id)
+
+        Stability: stable.
+        """
+        return self._do("POST", "/v1/auth/webauthn/register", "/v1/auth/webauthn/register", body=body, query=query, tenant=tenant)
+
+    def post_v1_auth_webauthn_register_options(self, body=None, *, tenant=None, **query):
+        """POST /v1/auth/webauthn/register/options — Issue WebAuthn creation options (challenge) to register a new authenticator for the calling session's user.
+
+        Stability: stable.
+        """
+        return self._do("POST", "/v1/auth/webauthn/register/options", "/v1/auth/webauthn/register/options", body=body, query=query, tenant=tenant)
+
     def get_v1_auth_whoami(self, *, tenant=None, **query):
         """GET /v1/auth/whoami — The calling principal and its tenant grants.
 
@@ -742,6 +940,27 @@ class OperationsMixin:
         Stability: stable.
         """
         return self._do("GET", "/v1/connectors/health", "/v1/connectors/health", query=query, tenant=tenant)
+
+    def get_v1_console_activation(self, *, tenant=None, **query):
+        """GET /v1/console/activation — The edition's activation view: current edition and preset, each add-on's state and each preset's add-on keys.
+
+        Stability: stable.
+        """
+        return self._do("GET", "/v1/console/activation", "/v1/console/activation", query=query, tenant=tenant)
+
+    def post_v1_console_activation_apply(self, body=None, *, tenant=None, **query):
+        """POST /v1/console/activation/apply — Enable or disable a preset, or promote one add-on (AAL3 step-up; 501 without the activation service)
+
+        Stability: stable.
+        """
+        return self._do("POST", "/v1/console/activation/apply", "/v1/console/activation/apply", body=body, query=query, tenant=tenant)
+
+    def post_v1_console_activation_preview(self, body=None, *, tenant=None, **query):
+        """POST /v1/console/activation/preview — Preview a preset change as a per-add-on diff (activate, stage, unchanged or console) without applying it.
+
+        Stability: stable.
+        """
+        return self._do("POST", "/v1/console/activation/preview", "/v1/console/activation/preview", body=body, query=query, tenant=tenant)
 
     def get_v1_console_bus(self, *, tenant=None, **query):
         """GET /v1/console/bus — Event-bus subscriber, saturation, loss, and optional bridge snapshot.
@@ -785,6 +1004,97 @@ class OperationsMixin:
         """
         return self._do("POST", "/v1/console/connectors/test", "/v1/console/connectors/test", body=body, query=query, tenant=tenant)
 
+    def post_v1_console_dr_backup(self, body=None, *, tenant=None, **query):
+        """POST /v1/console/dr/backup — Start an encrypted disaster-recovery backup and return its job id (501 without the DR service)
+
+        Stability: stable.
+        """
+        return self._do("POST", "/v1/console/dr/backup", "/v1/console/dr/backup", body=body, query=query, tenant=tenant)
+
+    def get_v1_console_dr_backups(self, *, tenant=None, **query):
+        """GET /v1/console/dr/backups — List the backup directory's .drbundle files, newest first, with each bundle's manifest summary.
+
+        Stability: stable.
+        """
+        return self._do("GET", "/v1/console/dr/backups", "/v1/console/dr/backups", query=query, tenant=tenant)
+
+    def get_v1_console_dr_backups_by_id(self, id, *, tenant=None, **query):
+        """GET /v1/console/dr/backups/{id} — One backup's manifest and size by bundle id.
+
+        Stability: stable.
+        """
+        return self._do("GET", "/v1/console/dr/backups/{id}", "/v1/console/dr/backups/" + quote(str(id), safe=""), query=query, tenant=tenant)
+
+    def delete_v1_console_dr_backups_by_id(self, id, *, tenant=None, **query):
+        """DELETE /v1/console/dr/backups/{id} — Delete one backup bundle by id.
+
+        Stability: stable.
+        """
+        return self._do("DELETE", "/v1/console/dr/backups/{id}", "/v1/console/dr/backups/" + quote(str(id), safe=""), query=query, tenant=tenant)
+
+    def get_v1_console_dr_backups_by_id_download(self, id, *, tenant=None, **query):
+        """GET /v1/console/dr/backups/{id}/download — Download one backup bundle's verbatim bytes (.drbundle)
+
+        Stability: stable.
+        """
+        return self._do_raw("GET", "/v1/console/dr/backups/{id}/download", "/v1/console/dr/backups/" + quote(str(id), safe="") + "/download", query=query, tenant=tenant)
+
+    def get_v1_console_dr_jobs(self, *, tenant=None, **query):
+        """GET /v1/console/dr/jobs — The DR job list (backup and restore) with phase and progress.
+
+        Stability: stable.
+        """
+        return self._do("GET", "/v1/console/dr/jobs", "/v1/console/dr/jobs", query=query, tenant=tenant)
+
+    def get_v1_console_dr_jobs_by_id_stream(self, id, *, tenant=None, **query):
+        """GET /v1/console/dr/jobs/{id}/stream — Server-Sent Events stream of one DR job's progress: event: job frames with the DRJob payload, heartbeats as comments, until the job completes or fails.
+
+        Stability: stable.
+        """
+        return self._do_raw("GET", "/v1/console/dr/jobs/{id}/stream", "/v1/console/dr/jobs/" + quote(str(id), safe="") + "/stream", query=query, tenant=tenant)
+
+    def get_v1_console_dr_restore_pending(self, *, tenant=None, **query):
+        """GET /v1/console/dr/restore/pending — Restore requests awaiting a second approver, newest first, so a distinct admin can find and approve one.
+
+        Stability: stable.
+        """
+        return self._do("GET", "/v1/console/dr/restore/pending", "/v1/console/dr/restore/pending", query=query, tenant=tenant)
+
+    def post_v1_console_dr_restore_upload(self, body=None, *, tenant=None, **query):
+        """POST /v1/console/dr/restore/upload — Upload a raw .drbundle file for restore pre-flight (the body is the file's verbatim bytes, at most 10 GiB); the manifest is inspected and returned with the upload id.
+
+        Stability: stable.
+        """
+        return self._do("POST", "/v1/console/dr/restore/upload", "/v1/console/dr/restore/upload", body=body, raw_request_content_type="application/octet-stream", query=query, tenant=tenant)
+
+    def post_v1_console_dr_restore_by_id_apply(self, id, body=None, *, tenant=None, **query):
+        """POST /v1/console/dr/restore/{id}/apply — Apply an uploaded bundle: with the dual-control gate armed this records an intent for a second administrator to approve (request_id); otherwise it starts the restore job (job_id)
+
+        Stability: stable.
+        """
+        return self._do("POST", "/v1/console/dr/restore/{id}/apply", "/v1/console/dr/restore/" + quote(str(id), safe="") + "/apply", body=body, query=query, tenant=tenant)
+
+    def post_v1_console_dr_restore_by_id_approve(self, id, body=None, *, tenant=None, **query):
+        """POST /v1/console/dr/restore/{id}/approve — Approve a dual-control restore as a DISTINCT administrator account (403 when the requester self-approves)
+
+        Stability: stable.
+        """
+        return self._do("POST", "/v1/console/dr/restore/{id}/approve", "/v1/console/dr/restore/" + quote(str(id), safe="") + "/approve", body=body, query=query, tenant=tenant)
+
+    def get_v1_console_dr_schedule(self, *, tenant=None, **query):
+        """GET /v1/console/dr/schedule — The scheduled-backup configuration and its last run's outcome.
+
+        Stability: stable.
+        """
+        return self._do("GET", "/v1/console/dr/schedule", "/v1/console/dr/schedule", query=query, tenant=tenant)
+
+    def put_v1_console_dr_schedule(self, body=None, *, tenant=None, **query):
+        """PUT /v1/console/dr/schedule — Save the schedule (enabled, cron, retention); the dual-control restore gate's armed state is preserved, and server-owned bookkeeping fields are ignored.
+
+        Stability: stable.
+        """
+        return self._do("PUT", "/v1/console/dr/schedule", "/v1/console/dr/schedule", body=body, query=query, tenant=tenant)
+
     def get_v1_console_health_summary(self, *, tenant=None, **query):
         """GET /v1/console/health-summary — Operational health summary for the console dashboard.
 
@@ -819,6 +1129,20 @@ class OperationsMixin:
         Stability: stable.
         """
         return self._do("DELETE", "/v1/console/license", "/v1/console/license", query=query, tenant=tenant)
+
+    def get_v1_console_logs_buffer(self, *, tenant=None, **query):
+        """GET /v1/console/logs/buffer — The engine log's ring-buffer snapshot, newest last, with the match total and whether older matches were left out.
+
+        Stability: stable.
+        """
+        return self._do("GET", "/v1/console/logs/buffer", "/v1/console/logs/buffer", query=query, tenant=tenant)
+
+    def get_v1_console_logs_stream(self, *, tenant=None, **query):
+        """GET /v1/console/logs/stream — Server-Sent Events stream of the engine log: event: log frames with one entry's payload, heartbeats as comments; filtered by the same parameters as the buffer.
+
+        Stability: stable.
+        """
+        return self._do_raw("GET", "/v1/console/logs/stream", "/v1/console/logs/stream", query=query, tenant=tenant)
 
     def get_v1_console_mcp_gateway(self, *, tenant=None, **query):
         """GET /v1/console/mcp-gateway — Read the effective MCP gateway configuration and governance.
@@ -861,6 +1185,27 @@ class OperationsMixin:
         Stability: stable.
         """
         return self._do("PUT", "/v1/console/mcp-gateway/session-tools", "/v1/console/mcp-gateway/session-tools", body=body, query=query, tenant=tenant)
+
+    def get_v1_console_modules(self, *, tenant=None, **query):
+        """GET /v1/console/modules — The module catalog and, for each module, whether it is selected, running, always-on, holds data, and who keeps it on.
+
+        Stability: stable.
+        """
+        return self._do("GET", "/v1/console/modules", "/v1/console/modules", query=query, tenant=tenant)
+
+    def put_v1_console_modules(self, body=None, *, tenant=None, **query):
+        """PUT /v1/console/modules — Set which optional modules the engine runs; the engine restarts itself to apply the change (AAL3 step-up)
+
+        Stability: stable.
+        """
+        return self._do("PUT", "/v1/console/modules", "/v1/console/modules", body=body, query=query, tenant=tenant)
+
+    def post_v1_console_runtime_reload(self, body=None, *, tenant=None, **query):
+        """POST /v1/console/runtime/reload — Reconcile the durable source roster against the running engine and re-resolve the license (AAL3 step-up); the report names what applied and what needs a restart.
+
+        Stability: stable.
+        """
+        return self._do("POST", "/v1/console/runtime/reload", "/v1/console/runtime/reload", body=body, query=query, tenant=tenant)
 
     def get_v1_console_secrets(self, *, tenant=None, **query):
         """GET /v1/console/secrets — List sealed secrets (names and hints, never values)
@@ -911,6 +1256,13 @@ class OperationsMixin:
         """
         return self._do("DELETE", "/v1/console/sources", "/v1/console/sources", query=query, tenant=tenant)
 
+    def get_v1_console_sources_diff(self, *, tenant=None, **query):
+        """GET /v1/console/sources/diff — A bounded content diff between two refs of one repository owned by a configured source (501 when no git-host diff reader is wired; 422 when the diff exceeds the read cap)
+
+        Stability: stable.
+        """
+        return self._do("GET", "/v1/console/sources/diff", "/v1/console/sources/diff", query=query, tenant=tenant)
+
     def get_v1_console_sso(self, *, tenant=None, **query):
         """GET /v1/console/sso — Current SSO/IdP configuration.
 
@@ -931,6 +1283,104 @@ class OperationsMixin:
         Stability: stable.
         """
         return self._do("DELETE", "/v1/console/sso", "/v1/console/sso", query=query, tenant=tenant)
+
+    def get_v1_console_sso_idps(self, *, tenant=None, **query):
+        """GET /v1/console/sso/idps — List every IdP configured under the deployment-wide global scope, default first; no secrets, only hints.
+
+        Stability: stable.
+        """
+        return self._do("GET", "/v1/console/sso/idps", "/v1/console/sso/idps", query=query, tenant=tenant)
+
+    def get_v1_console_sso_idps_by_alias(self, alias, *, tenant=None, **query):
+        """GET /v1/console/sso/idps/{alias} — Get one additional IdP's configuration by alias.
+
+        Stability: stable.
+        """
+        return self._do("GET", "/v1/console/sso/idps/{alias}", "/v1/console/sso/idps/" + quote(str(alias), safe=""), query=query, tenant=tenant)
+
+    def put_v1_console_sso_idps_by_alias(self, alias, body=None, *, tenant=None, **query):
+        """PUT /v1/console/sso/idps/{alias} — Create or update one additional IdP by alias (AAL3 step-up)
+
+        Stability: stable.
+        """
+        return self._do("PUT", "/v1/console/sso/idps/{alias}", "/v1/console/sso/idps/" + quote(str(alias), safe=""), body=body, query=query, tenant=tenant)
+
+    def delete_v1_console_sso_idps_by_alias(self, alias, *, tenant=None, **query):
+        """DELETE /v1/console/sso/idps/{alias} — Remove one additional IdP by alias (AAL3 step-up)
+
+        Stability: stable.
+        """
+        return self._do("DELETE", "/v1/console/sso/idps/{alias}", "/v1/console/sso/idps/" + quote(str(alias), safe=""), query=query, tenant=tenant)
+
+    def post_v1_console_sso_idps_by_alias_test(self, alias, body=None, *, tenant=None, **query):
+        """POST /v1/console/sso/idps/{alias}/test — Validate a candidate additional-IdP config (OIDC discovery / SAML metadata fetch) without persisting it; 501 when no SSO provider service is wired.
+
+        Stability: stable.
+        """
+        return self._do("POST", "/v1/console/sso/idps/{alias}/test", "/v1/console/sso/idps/" + quote(str(alias), safe="") + "/test", body=body, query=query, tenant=tenant)
+
+    def get_v1_console_sso_tenants_by_tenant(self, tenant_path, *, tenant=None, **query):
+        """GET /v1/console/sso/tenants/{tenant} — Get the tenant's primary SSO/IdP configuration.
+
+        Stability: stable.
+        """
+        return self._do("GET", "/v1/console/sso/tenants/{tenant}", "/v1/console/sso/tenants/" + quote(str(tenant_path), safe=""), query=query, tenant=tenant)
+
+    def put_v1_console_sso_tenants_by_tenant(self, tenant_path, body=None, *, tenant=None, **query):
+        """PUT /v1/console/sso/tenants/{tenant} — Create or update the tenant's primary SSO/IdP configuration (AAL3 step-up)
+
+        Stability: stable.
+        """
+        return self._do("PUT", "/v1/console/sso/tenants/{tenant}", "/v1/console/sso/tenants/" + quote(str(tenant_path), safe=""), body=body, query=query, tenant=tenant)
+
+    def delete_v1_console_sso_tenants_by_tenant(self, tenant_path, *, tenant=None, **query):
+        """DELETE /v1/console/sso/tenants/{tenant} — Remove the tenant's primary SSO/IdP configuration (AAL3 step-up)
+
+        Stability: stable.
+        """
+        return self._do("DELETE", "/v1/console/sso/tenants/{tenant}", "/v1/console/sso/tenants/" + quote(str(tenant_path), safe=""), query=query, tenant=tenant)
+
+    def get_v1_console_sso_tenants_by_tenant_idps(self, tenant_path, *, tenant=None, **query):
+        """GET /v1/console/sso/tenants/{tenant}/idps — List every IdP configured under the tenant's scope, default first; no secrets, only hints.
+
+        Stability: stable.
+        """
+        return self._do("GET", "/v1/console/sso/tenants/{tenant}/idps", "/v1/console/sso/tenants/" + quote(str(tenant_path), safe="") + "/idps", query=query, tenant=tenant)
+
+    def get_v1_console_sso_tenants_by_tenant_idps_by_alias(self, tenant_path, alias, *, tenant=None, **query):
+        """GET /v1/console/sso/tenants/{tenant}/idps/{alias} — Get one of the tenant's additional IdPs by alias.
+
+        Stability: stable.
+        """
+        return self._do("GET", "/v1/console/sso/tenants/{tenant}/idps/{alias}", "/v1/console/sso/tenants/" + quote(str(tenant_path), safe="") + "/idps/" + quote(str(alias), safe=""), query=query, tenant=tenant)
+
+    def put_v1_console_sso_tenants_by_tenant_idps_by_alias(self, tenant_path, alias, body=None, *, tenant=None, **query):
+        """PUT /v1/console/sso/tenants/{tenant}/idps/{alias} — Create or update one of the tenant's additional IdPs by alias (AAL3 step-up)
+
+        Stability: stable.
+        """
+        return self._do("PUT", "/v1/console/sso/tenants/{tenant}/idps/{alias}", "/v1/console/sso/tenants/" + quote(str(tenant_path), safe="") + "/idps/" + quote(str(alias), safe=""), body=body, query=query, tenant=tenant)
+
+    def delete_v1_console_sso_tenants_by_tenant_idps_by_alias(self, tenant_path, alias, *, tenant=None, **query):
+        """DELETE /v1/console/sso/tenants/{tenant}/idps/{alias} — Remove one of the tenant's additional IdPs by alias (AAL3 step-up)
+
+        Stability: stable.
+        """
+        return self._do("DELETE", "/v1/console/sso/tenants/{tenant}/idps/{alias}", "/v1/console/sso/tenants/" + quote(str(tenant_path), safe="") + "/idps/" + quote(str(alias), safe=""), query=query, tenant=tenant)
+
+    def post_v1_console_sso_tenants_by_tenant_idps_by_alias_test(self, tenant_path, alias, body=None, *, tenant=None, **query):
+        """POST /v1/console/sso/tenants/{tenant}/idps/{alias}/test — Validate a candidate tenant-scoped IdP config without persisting it; 501 when no SSO provider service is wired.
+
+        Stability: stable.
+        """
+        return self._do("POST", "/v1/console/sso/tenants/{tenant}/idps/{alias}/test", "/v1/console/sso/tenants/" + quote(str(tenant_path), safe="") + "/idps/" + quote(str(alias), safe="") + "/test", body=body, query=query, tenant=tenant)
+
+    def post_v1_console_sso_tenants_by_tenant_test(self, tenant_path, body=None, *, tenant=None, **query):
+        """POST /v1/console/sso/tenants/{tenant}/test — Test the tenant's primary SSO/IdP connectivity (AAL3 step-up)
+
+        Stability: stable.
+        """
+        return self._do("POST", "/v1/console/sso/tenants/{tenant}/test", "/v1/console/sso/tenants/" + quote(str(tenant_path), safe="") + "/test", body=body, query=query, tenant=tenant)
 
     def post_v1_console_sso_test(self, body=None, *, tenant=None, **query):
         """POST /v1/console/sso/test — Test SSO/IdP connectivity.
@@ -953,6 +1403,62 @@ class OperationsMixin:
         """
         return self._do("POST", "/v1/console/update-check", "/v1/console/update-check", body=body, query=query, tenant=tenant)
 
+    def get_v1_groups(self, *, tenant=None, **query):
+        """GET /v1/groups — List the tenant's provisioned groups with their mapped roles and member counts — the operator's view of what the IdP pushed and what each group confers.
+
+        Stability: stable.
+        """
+        return self._do("GET", "/v1/groups", "/v1/groups", query=query, tenant=tenant)
+
+    def put_v1_groups_by_id_parent(self, id, body=None, *, tenant=None, **query):
+        """PUT /v1/groups/{id}/parent — Nest (or, with an empty parent_id, un-nest) a group under another group of the same tenant; a member of the child is then also a member of the parent for authorization (409 on a cycle)
+
+        Stability: stable.
+        """
+        return self._do("PUT", "/v1/groups/{id}/parent", "/v1/groups/" + quote(str(id), safe="") + "/parent", body=body, query=query, tenant=tenant)
+
+    def put_v1_groups_by_id_role(self, id, body=None, *, tenant=None, **query):
+        """PUT /v1/groups/{id}/role — Set (or clear, with an empty role) the role a group's members are elevated to in the group's tenant; ceiling-checked against the caller's authority.
+
+        Stability: stable.
+        """
+        return self._do("PUT", "/v1/groups/{id}/role", "/v1/groups/" + quote(str(id), safe="") + "/role", body=body, query=query, tenant=tenant)
+
+    def put_v1_groups_by_id_workspace(self, id, body=None, *, tenant=None, **query):
+        """PUT /v1/groups/{id}/workspace — Place a user group in a workspace of the same tenant, or clear its place with an empty workspace_id; membership and authorization are unchanged.
+
+        Stability: stable.
+        """
+        return self._do("PUT", "/v1/groups/{id}/workspace", "/v1/groups/" + quote(str(id), safe="") + "/workspace", body=body, query=query, tenant=tenant)
+
+    def get_v1_invites(self, *, tenant=None, **query):
+        """GET /v1/invites — List the tenant's pending (unaccepted, unexpired) invitations, without any token material.
+
+        Stability: stable.
+        """
+        return self._do("GET", "/v1/invites", "/v1/invites", query=query, tenant=tenant)
+
+    def post_v1_invites_accept(self, body=None, *, tenant=None, **query):
+        """POST /v1/invites/accept — Redeem an invitation token: set the password, activate the account and mint a session (the single-use token is the gate; no authentication)
+
+        Stability: stable.
+        """
+        return self._do("POST", "/v1/invites/accept", "/v1/invites/accept", body=body, query=query, tenant=tenant)
+
+    def delete_v1_invites_by_id(self, id, *, tenant=None, **query):
+        """DELETE /v1/invites/{id} — Delete a pending invitation.
+
+        Stability: stable.
+        """
+        return self._do("DELETE", "/v1/invites/{id}", "/v1/invites/" + quote(str(id), safe=""), query=query, tenant=tenant)
+
+    def post_v1_invites_by_id_resend(self, id, body=None, *, tenant=None, **query):
+        """POST /v1/invites/{id}/resend — Rotate a pending invitation's secret and mail the new link to the invitee (409 invite_delivery_unavailable without a mailer)
+
+        Stability: stable.
+        """
+        return self._do("POST", "/v1/invites/{id}/resend", "/v1/invites/" + quote(str(id), safe="") + "/resend", body=body, query=query, tenant=tenant)
+
     def get_v1_members(self, *, tenant=None, **query):
         """GET /v1/members — List the resolved tenant's member roster (role, workspace scoping, groups)
 
@@ -966,6 +1472,13 @@ class OperationsMixin:
         Stability: stable.
         """
         return self._do("POST", "/v1/memberships", "/v1/memberships", body=body, query=query, tenant=tenant)
+
+    def post_v1_onboard(self, body=None, *, tenant=None, **query):
+        """POST /v1/onboard — Create-or-reuse an account and grant its tenant membership (membership:write, AAL3 step-up; mode invite emails a single-use token)
+
+        Stability: stable.
+        """
+        return self._do("POST", "/v1/onboard", "/v1/onboard", body=body, query=query, tenant=tenant)
 
     def get_v1_search(self, *, tenant=None, **query):
         """GET /v1/search — Federated console search: fan out to every searchable kind, deny-closed per kind on its own read permission.
@@ -1030,8 +1543,22 @@ class OperationsMixin:
         """
         return self._do("GET", "/v1/system/residency", "/v1/system/residency", query=query, tenant=tenant)
 
+    def get_v1_system_tracing(self, *, tenant=None, **query):
+        """GET /v1/system/tracing — Read saved and effective tracing settings (superadmin)
+
+        Stability: stable.
+        """
+        return self._do("GET", "/v1/system/tracing", "/v1/system/tracing", query=query, tenant=tenant)
+
+    def put_v1_system_tracing(self, body=None, *, tenant=None, **query):
+        """PUT /v1/system/tracing — Save and apply tracing settings (superadmin, configured step-up)
+
+        Stability: stable.
+        """
+        return self._do("PUT", "/v1/system/tracing", "/v1/system/tracing", body=body, query=query, tenant=tenant)
+
     def get_v1_tokens(self, *, tenant=None, **query):
-        """GET /v1/tokens — List API tokens for the calling user.
+        """GET /v1/tokens — List API tokens visible to the caller.
 
         Stability: stable.
         """
@@ -1134,6 +1661,27 @@ class OperationsMixin:
         Stability: stable.
         """
         return self._do("PATCH", "/v1/workspaces/{id}", "/v1/workspaces/" + quote(str(id), safe=""), body=body, query=query, tenant=tenant)
+
+    def get_v1_workspaces_by_id_contents(self, id, *, tenant=None, **query):
+        """GET /v1/workspaces/{id}/contents — Every kind that declares workspace lineage, counted in the workspace and sorted by kind; a capped count is a floor (501 when the census is not wired)
+
+        Stability: stable.
+        """
+        return self._do("GET", "/v1/workspaces/{id}/contents", "/v1/workspaces/" + quote(str(id), safe="") + "/contents", query=query, tenant=tenant)
+
+    def put_v1_workspaces_by_id_parent(self, id, body=None, *, tenant=None, **query):
+        """PUT /v1/workspaces/{id}/parent — Place a workspace (a department) under another workspace of the same tenant, or make it a root with an empty parent_id; the subtree moves with it (owner, AAL3 step-up)
+
+        Stability: stable.
+        """
+        return self._do("PUT", "/v1/workspaces/{id}/parent", "/v1/workspaces/" + quote(str(id), safe="") + "/parent", body=body, query=query, tenant=tenant)
+
+    def get_v1_workspaces_by_id_summary(self, id, *, tenant=None, **query):
+        """GET /v1/workspaces/{id}/summary — A workspace with counts of its scoped entities; a *_capped count is a FLOOR (at least N), never a total.
+
+        Stability: stable.
+        """
+        return self._do("GET", "/v1/workspaces/{id}/summary", "/v1/workspaces/" + quote(str(id), safe="") + "/summary", query=query, tenant=tenant)
 
     def get_v1_m_accessmap_attack_paths_escalation(self, *, tenant=None, **query):
         """GET /v1/m/accessmap/attack-paths/escalation — Serves GET /attack-paths/escalation?agent_id=...
@@ -1289,8 +1837,15 @@ class OperationsMixin:
         """
         return self._do_json_required("POST", "/v1/m/agenttools/plans", "/v1/m/agenttools/plans", body=body, query=query, tenant=tenant)
 
+    def get_v1_m_agenttools_providers(self, *, tenant=None, **query):
+        """GET /v1/m/agenttools/providers — Reports one snapshot per tool instance on this node.
+
+        Stability: beta.
+        """
+        return self._do("GET", "/v1/m/agenttools/providers", "/v1/m/agenttools/providers", query=query, tenant=tenant)
+
     def get_v1_m_agenttools_sign_in(self, *, tenant=None, **query):
-        """GET /v1/m/agenttools/sign-in — Reports what an installed Claude Code, Codex or Grok Build says about its own login on this node: installed, signed in, and with which account.
+        """GET /v1/m/agenttools/sign-in — Reports the tool's native login status and the active flow for this selection, so a reloaded page can continue polling the same flow.
 
         Stability: beta.
         """
@@ -2255,6 +2810,20 @@ class OperationsMixin:
         """
         return self._do_json_required("PUT", "/v1/m/consoleviews/favorites", "/v1/m/consoleviews/favorites", body=body, query=query, tenant=tenant)
 
+    def get_v1_m_consoleviews_ui_state(self, *, tenant=None, **query):
+        """GET /v1/m/consoleviews/ui-state — Returns the caller's own console interface state; stored is false when none was saved yet.
+
+        Stability: beta.
+        """
+        return self._do("GET", "/v1/m/consoleviews/ui-state", "/v1/m/consoleviews/ui-state", query=query, tenant=tenant)
+
+    def put_v1_m_consoleviews_ui_state(self, body, *, tenant=None, **query):
+        """PUT /v1/m/consoleviews/ui-state — Replaces the caller's console interface state.
+
+        Stability: beta.
+        """
+        return self._do_json_required("PUT", "/v1/m/consoleviews/ui-state", "/v1/m/consoleviews/ui-state", body=body, query=query, tenant=tenant)
+
     def get_v1_m_consoleviews_views(self, *, tenant=None, **query):
         """GET /v1/m/consoleviews/views — Returns the caller's own views plus the tenant's shared views, optionally scoped with ?feature_id=.
 
@@ -2366,6 +2935,34 @@ class OperationsMixin:
         Stability: beta.
         """
         return self._do("POST", "/v1/m/deploy/definitions/{id}/verify", "/v1/m/deploy/definitions/" + quote(str(id), safe="") + "/verify", query=query, tenant=tenant)
+
+    def get_v1_m_deploy_executor(self, *, tenant=None, **query):
+        """GET /v1/m/deploy/executor — Reports whether a runtime executor is configured, which plan, verify, apply and retire need to reach infrastructure.
+
+        Stability: beta.
+        """
+        return self._do("GET", "/v1/m/deploy/executor", "/v1/m/deploy/executor", query=query, tenant=tenant)
+
+    def get_v1_m_deploy_executor_config(self, *, tenant=None, **query):
+        """GET /v1/m/deploy/executor/config — deploy module route (requires deploy:deployment:admin)
+
+        Stability: beta.
+        """
+        return self._do("GET", "/v1/m/deploy/executor/config", "/v1/m/deploy/executor/config", query=query, tenant=tenant)
+
+    def put_v1_m_deploy_executor_config(self, body, *, tenant=None, **query):
+        """PUT /v1/m/deploy/executor/config — deploy module route (requires deploy:deployment:admin)
+
+        Stability: beta.
+        """
+        return self._do_json_required("PUT", "/v1/m/deploy/executor/config", "/v1/m/deploy/executor/config", body=body, query=query, tenant=tenant)
+
+    def post_v1_m_deploy_executor_test(self, *, tenant=None, **query):
+        """POST /v1/m/deploy/executor/test — deploy module route (requires deploy:deployment:admin)
+
+        Stability: beta.
+        """
+        return self._do("POST", "/v1/m/deploy/executor/test", "/v1/m/deploy/executor/test", query=query, tenant=tenant)
 
     def get_v1_m_deploy_operations(self, *, tenant=None, **query):
         """GET /v1/m/deploy/operations — Lists the append-only operation ledger, optionally filtered by definition_id, op or status.
@@ -2718,7 +3315,7 @@ class OperationsMixin:
         return self._do("GET", "/v1/m/finops/alerts", "/v1/m/finops/alerts", query=query, tenant=tenant)
 
     def get_v1_m_finops_analytics_team_summary(self, *, tenant=None, **query):
-        """GET /v1/m/finops/analytics/team-summary — Returns team-level cost aggregation with project/model breakdown and a per-calendar-day trend series for a fixed period (7d/30d/90d).
+        """GET /v1/m/finops/analytics/team-summary — finops module route (requires finops:spend:read)
 
         Stability: beta.
         """
@@ -2767,7 +3364,7 @@ class OperationsMixin:
         return self._do("GET", "/v1/m/finops/budgets/{id}/status", "/v1/m/finops/budgets/" + quote(str(id), safe="") + "/status", query=query, tenant=tenant)
 
     def get_v1_m_finops_comparison(self, *, tenant=None, **query):
-        """GET /v1/m/finops/comparison — Serves GET /comparison — the model cost comparison endpoint.
+        """GET /v1/m/finops/comparison — finops module route (requires finops:spend:read)
 
         Stability: beta.
         """
@@ -2844,49 +3441,49 @@ class OperationsMixin:
         return self._do("GET", "/v1/m/finops/forecast", "/v1/m/finops/forecast", query=query, tenant=tenant)
 
     def get_v1_m_finops_model_rates(self, *, tenant=None, **query):
-        """GET /v1/m/finops/model-rates — Lists rate catalog entries with optional provider/model filters, sorted by effective_from descending (most recent first).
+        """GET /v1/m/finops/model-rates — finops module route (requires finops:spend:read)
 
         Stability: beta.
         """
         return self._do("GET", "/v1/m/finops/model-rates", "/v1/m/finops/model-rates", query=query, tenant=tenant)
 
     def post_v1_m_finops_model_rates(self, body, *, tenant=None, **query):
-        """POST /v1/m/finops/model-rates — Creates a new rate catalog entry after validating input and checking uniqueness of the (provider, model, effective_from) tuple.
+        """POST /v1/m/finops/model-rates — finops module route (requires finops:budget:write)
 
         Stability: beta.
         """
         return self._do_json_required("POST", "/v1/m/finops/model-rates", "/v1/m/finops/model-rates", body=body, query=query, tenant=tenant)
 
     def get_v1_m_finops_model_rates_by_id(self, id, *, tenant=None, **query):
-        """GET /v1/m/finops/model-rates/{id} — Returns a single rate catalog entry by ID.
+        """GET /v1/m/finops/model-rates/{id} — finops module route (requires finops:spend:read)
 
         Stability: beta.
         """
         return self._do("GET", "/v1/m/finops/model-rates/{id}", "/v1/m/finops/model-rates/" + quote(str(id), safe=""), query=query, tenant=tenant)
 
     def put_v1_m_finops_model_rates_by_id(self, id, body, *, tenant=None, **query):
-        """PUT /v1/m/finops/model-rates/{id} — Replaces a rate catalog entry by ID.
+        """PUT /v1/m/finops/model-rates/{id} — finops module route (requires finops:budget:write)
 
         Stability: beta.
         """
         return self._do_json_required("PUT", "/v1/m/finops/model-rates/{id}", "/v1/m/finops/model-rates/" + quote(str(id), safe=""), body=body, query=query, tenant=tenant)
 
     def delete_v1_m_finops_model_rates_by_id(self, id, *, tenant=None, **query):
-        """DELETE /v1/m/finops/model-rates/{id} — Removes a rate catalog entry by ID.
+        """DELETE /v1/m/finops/model-rates/{id} — finops module route (requires finops:budget:write)
 
         Stability: beta.
         """
         return self._do("DELETE", "/v1/m/finops/model-rates/{id}", "/v1/m/finops/model-rates/" + quote(str(id), safe=""), query=query, tenant=tenant)
 
     def get_v1_m_finops_outcomes(self, *, tenant=None, **query):
-        """GET /v1/m/finops/outcomes — Lists graded outcomes, optionally filtered by subject.
+        """GET /v1/m/finops/outcomes — finops module route (requires finops:spend:read)
 
         Stability: beta.
         """
         return self._do("GET", "/v1/m/finops/outcomes", "/v1/m/finops/outcomes", query=query, tenant=tenant)
 
     def post_v1_m_finops_outcomes(self, body, *, tenant=None, **query):
-        """POST /v1/m/finops/outcomes — Ingests one graded outcome over HTTP (the operator/automation bridge), auditing the principal's privileged write atomically with its effect.
+        """POST /v1/m/finops/outcomes — finops module route (requires finops:outcomes:write)
 
         Stability: beta.
         """
@@ -2900,14 +3497,14 @@ class OperationsMixin:
         return self._do("GET", "/v1/m/finops/recommendations", "/v1/m/finops/recommendations", query=query, tenant=tenant)
 
     def post_v1_m_finops_seats(self, body, *, tenant=None, **query):
-        """POST /v1/m/finops/seats — Upserts one provider/day seat snapshot (202 Accepted: a re-posted day replaces its values — a snapshot, never additive).
+        """POST /v1/m/finops/seats — finops module route (requires finops:seats:write)
 
         Stability: beta.
         """
         return self._do_json_required("POST", "/v1/m/finops/seats", "/v1/m/finops/seats", body=body, query=query, tenant=tenant)
 
     def get_v1_m_finops_seats_utilization(self, *, tenant=None, **query):
-        """GET /v1/m/finops/seats/utilization — Joins the seat denominators with the per-day distinct active actors for a provider over an inclusive [from, to] day range.
+        """GET /v1/m/finops/seats/utilization — finops module route (requires finops:spend:read)
 
         Stability: beta.
         """
@@ -2991,14 +3588,14 @@ class OperationsMixin:
         return self._do_raw("GET", "/v1/m/finops/statements/{id}/export", "/v1/m/finops/statements/" + quote(str(id), safe="") + "/export", query=query, tenant=tenant)
 
     def get_v1_m_finops_value(self, *, tenant=None, **query):
-        """GET /v1/m/finops/value — Serves the cost-per-outcome breakdown by ?dimension (agent|identity| session, default agent) over the standard since/until window.
+        """GET /v1/m/finops/value — finops module route (requires finops:spend:read)
 
         Stability: beta.
         """
         return self._do("GET", "/v1/m/finops/value", "/v1/m/finops/value", query=query, tenant=tenant)
 
     def get_v1_m_finops_value_summary(self, *, tenant=None, **query):
-        """GET /v1/m/finops/value/summary — Serves the CFO panel (totals + cancellation-risk list).
+        """GET /v1/m/finops/value/summary — finops module route (requires finops:spend:read)
 
         Stability: beta.
         """
@@ -3075,21 +3672,21 @@ class OperationsMixin:
         return self._do("DELETE", "/v1/m/gitpublish/targets/{id}", "/v1/m/gitpublish/targets/" + quote(str(id), safe=""), query=query, tenant=tenant)
 
     def post_v1_m_gitpublish_targets_by_id_merges(self, id, body, *, tenant=None, **query):
-        """POST /v1/m/gitpublish/targets/{id}/merges — Merges one pull request only while its head is still the reviewed expected_head, and returns the publication intent with the merge commit and tree it recorded.
+        """POST /v1/m/gitpublish/targets/{id}/merges — gitpublish module route (requires gitpublish:merge:admin)
 
         Stability: beta.
         """
         return self._do_json_required("POST", "/v1/m/gitpublish/targets/{id}/merges", "/v1/m/gitpublish/targets/" + quote(str(id), safe="") + "/merges", body=body, query=query, tenant=tenant)
 
     def post_v1_m_gitpublish_targets_by_id_pull_requests(self, id, body, *, tenant=None, **query):
-        """POST /v1/m/gitpublish/targets/{id}/pull-requests — Opens a pull request from a branch under the target's push prefix into an allowed merge base, or adopts the matching open one, and returns the publication intent with its receipt.
+        """POST /v1/m/gitpublish/targets/{id}/pull-requests — gitpublish module route (requires gitpublish:pull_request:write)
 
         Stability: beta.
         """
         return self._do_json_required("POST", "/v1/m/gitpublish/targets/{id}/pull-requests", "/v1/m/gitpublish/targets/" + quote(str(id), safe="") + "/pull-requests", body=body, query=query, tenant=tenant)
 
     def post_v1_m_gitpublish_targets_by_id_pushes(self, id, body, *, tenant=None, **query):
-        """POST /v1/m/gitpublish/targets/{id}/pushes — Pushes one exact commit to a branch under the target's push prefix, leased on the branch's expected current value, and returns the publication intent with its receipt.
+        """POST /v1/m/gitpublish/targets/{id}/pushes — gitpublish module route (requires gitpublish:push:write)
 
         Stability: beta.
         """
@@ -3229,14 +3826,14 @@ class OperationsMixin:
         return self._do("GET", "/v1/m/governance/bindings", "/v1/m/governance/bindings", query=query, tenant=tenant)
 
     def get_v1_m_governance_breakglass(self, *, tenant=None, **query):
-        """GET /v1/m/governance/breakglass — Lists grants, optionally filtered by stored status; a grant past its expiry reads as "expired" in its DTO regardless.
+        """GET /v1/m/governance/breakglass — governance module route (requires governance:breakglass:read)
 
         Stability: beta.
         """
         return self._do("GET", "/v1/m/governance/breakglass", "/v1/m/governance/breakglass", query=query, tenant=tenant)
 
     def post_v1_m_governance_breakglass(self, body, *, tenant=None, **query):
-        """POST /v1/m/governance/breakglass — Opens an emergency window.
+        """POST /v1/m/governance/breakglass — governance module route (requires governance:breakglass:admin)
 
         Stability: beta.
         """
@@ -3250,28 +3847,28 @@ class OperationsMixin:
         return self._do_json_required("POST", "/v1/m/governance/breakglass/consume", "/v1/m/governance/breakglass/consume", body=body, query=query, tenant=tenant)
 
     def get_v1_m_governance_breakglass_by_id(self, id, *, tenant=None, **query):
-        """GET /v1/m/governance/breakglass/{id} — Returns one grant with its effective status.
+        """GET /v1/m/governance/breakglass/{id} — governance module route (requires governance:breakglass:read)
 
         Stability: beta.
         """
         return self._do("GET", "/v1/m/governance/breakglass/{id}", "/v1/m/governance/breakglass/" + quote(str(id), safe=""), query=query, tenant=tenant)
 
     def post_v1_m_governance_breakglass_by_id_review(self, id, body, *, tenant=None, **query):
-        """POST /v1/m/governance/breakglass/{id}/review — Records the FORCED post-review of a terminal grant.
+        """POST /v1/m/governance/breakglass/{id}/review — governance module route (requires governance:breakglass:admin)
 
         Stability: beta.
         """
         return self._do_json_required("POST", "/v1/m/governance/breakglass/{id}/review", "/v1/m/governance/breakglass/" + quote(str(id), safe="") + "/review", body=body, query=query, tenant=tenant)
 
     def post_v1_m_governance_breakglass_by_id_revoke(self, id, *, tenant=None, **query):
-        """POST /v1/m/governance/breakglass/{id}/revoke — Closes an active grant early.
+        """POST /v1/m/governance/breakglass/{id}/revoke — governance module route (requires governance:breakglass:admin)
 
         Stability: beta.
         """
         return self._do("POST", "/v1/m/governance/breakglass/{id}/revoke", "/v1/m/governance/breakglass/" + quote(str(id), safe="") + "/revoke", query=query, tenant=tenant)
 
     def get_v1_m_governance_breakglass_by_id_uses(self, id, *, tenant=None, **query):
-        """GET /v1/m/governance/breakglass/{id}/uses — Returns the immutable use trail for a grant — what actually proceeded under the emergency window (the post-review's evidence).
+        """GET /v1/m/governance/breakglass/{id}/uses — governance module route (requires governance:breakglass:read)
 
         Stability: beta.
         """
@@ -3487,6 +4084,13 @@ class OperationsMixin:
         """
         return self._do("GET", "/v1/m/governance/pdp/active", "/v1/m/governance/pdp/active", query=query, tenant=tenant)
 
+    def delete_v1_m_governance_pdp_active(self, *, tenant=None, **query):
+        """DELETE /v1/m/governance/pdp/active — Selects a fixed empty authored Cedar policy; it cannot accept replacement source or reactivate history.
+
+        Stability: beta.
+        """
+        return self._do("DELETE", "/v1/m/governance/pdp/active", "/v1/m/governance/pdp/active", query=query, tenant=tenant)
+
     def post_v1_m_governance_pdp_dry_run(self, body, *, tenant=None, **query):
         """POST /v1/m/governance/pdp/dry-run — governance module route (requires governance:policy:read)
 
@@ -3502,14 +4106,14 @@ class OperationsMixin:
         return self._do_json_required("POST", "/v1/m/governance/pdp/explain", "/v1/m/governance/pdp/explain", body=body, query=query, tenant=tenant)
 
     def post_v1_m_governance_pdp_publish(self, body, *, tenant=None, **query):
-        """POST /v1/m/governance/pdp/publish — Persists a versioned Cedar/OPA policy and, for Cedar, ACTIVATES it on the live hot path (recomposes the per-tenant overlay).
+        """POST /v1/m/governance/pdp/publish — Publishes and selects an authored policy revision.
 
         Stability: beta.
         """
         return self._do_json_required("POST", "/v1/m/governance/pdp/publish", "/v1/m/governance/pdp/publish", body=body, query=query, tenant=tenant)
 
     def post_v1_m_governance_pdp_rollback(self, body, *, tenant=None, **query):
-        """POST /v1/m/governance/pdp/rollback — Re-activates an existing immutable revision by appending an activation record.
+        """POST /v1/m/governance/pdp/rollback — Selects a prior immutable policy revision.
 
         Stability: beta.
         """
@@ -3619,6 +4223,34 @@ class OperationsMixin:
         Stability: beta.
         """
         return self._do("DELETE", "/v1/m/governance/rbac/grants/{id}", "/v1/m/governance/rbac/grants/" + quote(str(id), safe=""), query=query, tenant=tenant)
+
+    def get_v1_m_governance_rbac_inheritance_filters(self, *, tenant=None, **query):
+        """GET /v1/m/governance/rbac/inheritance-filters — governance module route (requires governance:rbac:read)
+
+        Stability: beta.
+        """
+        return self._do("GET", "/v1/m/governance/rbac/inheritance-filters", "/v1/m/governance/rbac/inheritance-filters", query=query, tenant=tenant)
+
+    def post_v1_m_governance_rbac_inheritance_filters(self, body, *, tenant=None, **query):
+        """POST /v1/m/governance/rbac/inheritance-filters — governance module route (requires governance:rbac:admin)
+
+        Stability: beta.
+        """
+        return self._do_json_required("POST", "/v1/m/governance/rbac/inheritance-filters", "/v1/m/governance/rbac/inheritance-filters", body=body, query=query, tenant=tenant)
+
+    def get_v1_m_governance_rbac_inheritance_filters_by_id(self, id, *, tenant=None, **query):
+        """GET /v1/m/governance/rbac/inheritance-filters/{id} — governance module route (requires governance:rbac:read)
+
+        Stability: beta.
+        """
+        return self._do("GET", "/v1/m/governance/rbac/inheritance-filters/{id}", "/v1/m/governance/rbac/inheritance-filters/" + quote(str(id), safe=""), query=query, tenant=tenant)
+
+    def delete_v1_m_governance_rbac_inheritance_filters_by_id(self, id, *, tenant=None, **query):
+        """DELETE /v1/m/governance/rbac/inheritance-filters/{id} — governance module route (requires governance:rbac:admin)
+
+        Stability: beta.
+        """
+        return self._do("DELETE", "/v1/m/governance/rbac/inheritance-filters/{id}", "/v1/m/governance/rbac/inheritance-filters/" + quote(str(id), safe=""), query=query, tenant=tenant)
 
     def get_v1_m_governance_rbac_permission_groups(self, *, tenant=None, **query):
         """GET /v1/m/governance/rbac/permission-groups — governance module route (requires governance:rbac:read)
@@ -4397,6 +5029,13 @@ class OperationsMixin:
         """
         return self._do("GET", "/v1/m/models/aiboms", "/v1/m/models/aiboms", query=query, tenant=tenant)
 
+    def get_v1_m_models_availability(self, *, tenant=None, **query):
+        """GET /v1/m/models/availability — Lists the tenant's observed model IDs and discovery states for configured providers and tool accounts without triggering discovery.
+
+        Stability: beta.
+        """
+        return self._do("GET", "/v1/m/models/availability", "/v1/m/models/availability", query=query, tenant=tenant)
+
     def get_v1_m_models_catalog(self, *, tenant=None, **query):
         """GET /v1/m/models/catalog — Returns the declared reference catalog.
 
@@ -4916,70 +5555,70 @@ class OperationsMixin:
         return self._do("GET", "/v1/m/observability/traces/{id}", "/v1/m/observability/traces/" + quote(str(id), safe=""), query=query, tenant=tenant)
 
     def get_v1_m_observability_traces_by_id_export(self, id, *, tenant=None, **query):
-        """GET /v1/m/observability/traces/{id}/export — Exports one trace as OTLP-compatible JSON so the operator can import it into Jaeger, Grafana Tempo, Datadog, or any OTLP-aware tool.
+        """GET /v1/m/observability/traces/{id}/export — observability module route (requires observability:traces:read)
 
         Stability: beta.
         """
         return self._do("GET", "/v1/m/observability/traces/{id}/export", "/v1/m/observability/traces/" + quote(str(id), safe="") + "/export", query=query, tenant=tenant)
 
     def get_v1_m_orchestration_decisions(self, *, tenant=None, **query):
-        """GET /v1/m/orchestration/decisions — Lists the whole append-only fire/miss ledger for the tenant.
+        """GET /v1/m/orchestration/decisions — orchestration module route (requires orchestration:schedule:read)
 
         Stability: beta.
         """
         return self._do("GET", "/v1/m/orchestration/decisions", "/v1/m/orchestration/decisions", query=query, tenant=tenant)
 
     def get_v1_m_orchestration_flows(self, *, tenant=None, **query):
-        """GET /v1/m/orchestration/flows — Returns the derived multi-agent flows (a supervisor and the workers it delegates to) with a read-time-derived lifecycle state — a privileged, self-audited read.
+        """GET /v1/m/orchestration/flows — orchestration module route (requires orchestration:graph:read)
 
         Stability: beta.
         """
         return self._do("GET", "/v1/m/orchestration/flows", "/v1/m/orchestration/flows", query=query, tenant=tenant)
 
     def get_v1_m_orchestration_graph(self, *, tenant=None, **query):
-        """GET /v1/m/orchestration/graph — Returns the React-Flow communication/delegation graph, derived from the relation table, with honest coverage.
+        """GET /v1/m/orchestration/graph — orchestration module route (requires orchestration:graph:read)
 
         Stability: beta.
         """
         return self._do("GET", "/v1/m/orchestration/graph", "/v1/m/orchestration/graph", query=query, tenant=tenant)
 
     def get_v1_m_orchestration_graph_neighbors(self, *, tenant=None, **query):
-        """GET /v1/m/orchestration/graph/neighbors — Returns the subgraph around one node (its incoming and/or outgoing relations) — a privileged, self-audited read.
+        """GET /v1/m/orchestration/graph/neighbors — orchestration module route (requires orchestration:graph:read)
 
         Stability: beta.
         """
         return self._do("GET", "/v1/m/orchestration/graph/neighbors", "/v1/m/orchestration/graph/neighbors", query=query, tenant=tenant)
 
     def get_v1_m_orchestration_schedules(self, *, tenant=None, **query):
-        """GET /v1/m/orchestration/schedules — Lists governed schedules.
+        """GET /v1/m/orchestration/schedules — orchestration module route (requires orchestration:schedule:read)
 
         Stability: beta.
         """
         return self._do("GET", "/v1/m/orchestration/schedules", "/v1/m/orchestration/schedules", query=query, tenant=tenant)
 
     def post_v1_m_orchestration_schedules(self, body, *, tenant=None, **query):
-        """POST /v1/m/orchestration/schedules — Declares a governed schedule (write-tier, self-audited).
+        """POST /v1/m/orchestration/schedules — orchestration module route (requires orchestration:schedule:write)
 
         Stability: beta.
         """
         return self._do_json_required("POST", "/v1/m/orchestration/schedules", "/v1/m/orchestration/schedules", body=body, query=query, tenant=tenant)
 
     def get_v1_m_orchestration_schedules_by_id(self, id, *, tenant=None, **query):
-        """GET /v1/m/orchestration/schedules/{id} — Returns one schedule with its derived health and last observed activity.
+        """GET /v1/m/orchestration/schedules/{id} — orchestration module route (requires orchestration:schedule:read)
 
         Stability: beta.
         """
         return self._do("GET", "/v1/m/orchestration/schedules/{id}", "/v1/m/orchestration/schedules/" + quote(str(id), safe=""), query=query, tenant=tenant)
 
     def patch_v1_m_orchestration_schedules_by_id(self, id, body, *, tenant=None, **query):
-        """PATCH /v1/m/orchestration/schedules/{id} — Enables/disables/retargets a schedule (write-tier, self-audited).
+        """PATCH /v1/m/orchestration/schedules/{id} — orchestration module route (requires orchestration:schedule:write)
 
         Stability: beta.
         """
         return self._do_json_required("PATCH", "/v1/m/orchestration/schedules/{id}", "/v1/m/orchestration/schedules/" + quote(str(id), safe=""), body=body, query=query, tenant=tenant)
 
     def get_v1_m_orchestration_schedules_by_id_decisions(self, id, *, tenant=None, **query):
-        """GET /v1/m/orchestration/schedules/{id}/decisions — Lists the append-only fire/miss ledger for one schedule.
+        """GET /v1/m/orchestration/schedules/{id}/decisions — orchestration module route (requires orchestration:schedule:read)
 
         Stability: beta.
         """
@@ -4993,77 +5632,77 @@ class OperationsMixin:
         return self._do("POST", "/v1/m/orchestration/schedules/{id}/fire", "/v1/m/orchestration/schedules/" + quote(str(id), safe="") + "/fire", body=body, query=query, tenant=tenant)
 
     def post_v1_m_orchestration_schedules_by_id_restore(self, id, body, *, tenant=None, **query):
-        """POST /v1/m/orchestration/schedules/{id}/restore — Re-applies the mutable shape of an earlier revision via the patch verb's exact application path (same validation, same cadence-miss clearing, same plan_hash consequence).
+        """POST /v1/m/orchestration/schedules/{id}/restore — orchestration module route (requires orchestration:schedule:write)
 
         Stability: beta.
         """
         return self._do_json_required("POST", "/v1/m/orchestration/schedules/{id}/restore", "/v1/m/orchestration/schedules/" + quote(str(id), safe="") + "/restore", body=body, query=query, tenant=tenant)
 
     def get_v1_m_orchestration_schedules_by_id_revisions(self, id, *, tenant=None, **query):
-        """GET /v1/m/orchestration/schedules/{id}/revisions — Lists a schedule's revision ledger, keyset-paginated by the time-ordered row id (chronological by ingestion, the decision-ledger convention).
+        """GET /v1/m/orchestration/schedules/{id}/revisions — orchestration module route (requires orchestration:schedule:read)
 
         Stability: beta.
         """
         return self._do("GET", "/v1/m/orchestration/schedules/{id}/revisions", "/v1/m/orchestration/schedules/" + quote(str(id), safe="") + "/revisions", query=query, tenant=tenant)
 
     def get_v1_m_orchestration_stream(self, *, tenant=None, **query):
-        """GET /v1/m/orchestration/stream — Serves the live comm graph as server-sent events, pinned to the request's single authorized tenant so a client only ever sees its own tenant's relations.
+        """GET /v1/m/orchestration/stream — orchestration module route (requires orchestration:graph:read)
 
         Stability: beta.
         """
         return self._do_raw("GET", "/v1/m/orchestration/stream", "/v1/m/orchestration/stream", query=query, tenant=tenant)
 
     def get_v1_m_orchestration_timeline(self, *, tenant=None, **query):
-        """GET /v1/m/orchestration/timeline — Returns one subject's merged orchestration history (its delegation activity and its fire/miss decisions) in reverse-chronological order — a privileged, self-audited read.
+        """GET /v1/m/orchestration/timeline — orchestration module route (requires orchestration:graph:read)
 
         Stability: beta.
         """
         return self._do("GET", "/v1/m/orchestration/timeline", "/v1/m/orchestration/timeline", query=query, tenant=tenant)
 
     def get_v1_m_orchestration_workflows(self, *, tenant=None, **query):
-        """GET /v1/m/orchestration/workflows — Lists the tenant's workflows (list shape, no graphs).
+        """GET /v1/m/orchestration/workflows — orchestration module route (requires orchestration:workflow:read)
 
         Stability: beta.
         """
         return self._do("GET", "/v1/m/orchestration/workflows", "/v1/m/orchestration/workflows", query=query, tenant=tenant)
 
     def post_v1_m_orchestration_workflows(self, body, *, tenant=None, **query):
-        """POST /v1/m/orchestration/workflows — Declares a workflow (write-tier, self-audited, revisioned).
+        """POST /v1/m/orchestration/workflows — orchestration module route (requires orchestration:workflow:write)
 
         Stability: beta.
         """
         return self._do_json_required("POST", "/v1/m/orchestration/workflows", "/v1/m/orchestration/workflows", body=body, query=query, tenant=tenant)
 
     def get_v1_m_orchestration_workflows_by_id(self, id, *, tenant=None, **query):
-        """GET /v1/m/orchestration/workflows/{id} — Returns one workflow with its full canonical graph.
+        """GET /v1/m/orchestration/workflows/{id} — orchestration module route (requires orchestration:workflow:read)
 
         Stability: beta.
         """
         return self._do("GET", "/v1/m/orchestration/workflows/{id}", "/v1/m/orchestration/workflows/" + quote(str(id), safe=""), query=query, tenant=tenant)
 
     def patch_v1_m_orchestration_workflows_by_id(self, id, body, *, tenant=None, **query):
-        """PATCH /v1/m/orchestration/workflows/{id} — Updates description/enabled (write-tier, revisioned).
+        """PATCH /v1/m/orchestration/workflows/{id} — orchestration module route (requires orchestration:workflow:write)
 
         Stability: beta.
         """
         return self._do_json_required("PATCH", "/v1/m/orchestration/workflows/{id}", "/v1/m/orchestration/workflows/" + quote(str(id), safe=""), body=body, query=query, tenant=tenant)
 
     def post_v1_m_orchestration_workflows_by_id_dry_run(self, id, *, tenant=None, **query):
-        """POST /v1/m/orchestration/workflows/{id}/dry-run — Computes the execution plan for a workflow as declared, with ZERO effects (read-tier).
+        """POST /v1/m/orchestration/workflows/{id}/dry-run — orchestration module route (requires orchestration:workflow:read)
 
         Stability: beta.
         """
         return self._do("POST", "/v1/m/orchestration/workflows/{id}/dry-run", "/v1/m/orchestration/workflows/" + quote(str(id), safe="") + "/dry-run", query=query, tenant=tenant)
 
     def post_v1_m_orchestration_workflows_by_id_restore(self, id, body, *, tenant=None, **query):
-        """POST /v1/m/orchestration/workflows/{id}/restore — Re-applies the MUTABLE shape of an earlier revision — description, enabled, steps — through the exact same validation as the live verbs (the restore rule).
+        """POST /v1/m/orchestration/workflows/{id}/restore — orchestration module route (requires orchestration:workflow:write)
 
         Stability: beta.
         """
         return self._do_json_required("POST", "/v1/m/orchestration/workflows/{id}/restore", "/v1/m/orchestration/workflows/" + quote(str(id), safe="") + "/restore", body=body, query=query, tenant=tenant)
 
     def get_v1_m_orchestration_workflows_by_id_revisions(self, id, *, tenant=None, **query):
-        """GET /v1/m/orchestration/workflows/{id}/revisions — Lists a workflow's append-only revision ledger.
+        """GET /v1/m/orchestration/workflows/{id}/revisions — orchestration module route (requires orchestration:workflow:read)
 
         Stability: beta.
         """
@@ -5077,35 +5716,35 @@ class OperationsMixin:
         return self._do("POST", "/v1/m/orchestration/workflows/{id}/run", "/v1/m/orchestration/workflows/" + quote(str(id), safe="") + "/run", body=body, query=query, tenant=tenant)
 
     def get_v1_m_orchestration_workflows_by_id_runs(self, id, *, tenant=None, **query):
-        """GET /v1/m/orchestration/workflows/{id}/runs — Lists a workflow's runs, newest-first pagination by id.
+        """GET /v1/m/orchestration/workflows/{id}/runs — orchestration module route (requires orchestration:workflow:read)
 
         Stability: beta.
         """
         return self._do("GET", "/v1/m/orchestration/workflows/{id}/runs", "/v1/m/orchestration/workflows/" + quote(str(id), safe="") + "/runs", query=query, tenant=tenant)
 
     def get_v1_m_orchestration_workflows_by_id_runs_by_run(self, id, run, *, tenant=None, **query):
-        """GET /v1/m/orchestration/workflows/{id}/runs/{run} — Returns one run's timeline.
+        """GET /v1/m/orchestration/workflows/{id}/runs/{run} — orchestration module route (requires orchestration:workflow:read)
 
         Stability: beta.
         """
         return self._do("GET", "/v1/m/orchestration/workflows/{id}/runs/{run}", "/v1/m/orchestration/workflows/" + quote(str(id), safe="") + "/runs/" + quote(str(run), safe=""), query=query, tenant=tenant)
 
     def post_v1_m_orchestration_workflows_by_id_runs_by_run_reauthorize(self, id, run, body, *, tenant=None, **query):
-        """POST /v1/m/orchestration/workflows/{id}/runs/{run}/reauthorize — Continues a run paused for reauthentication: it binds the caller's own fresh credential as the run's successor binding and resumes the paused steps.
+        """POST /v1/m/orchestration/workflows/{id}/runs/{run}/reauthorize — orchestration module route (requires orchestration:workflow:admin)
 
         Stability: beta.
         """
         return self._do_json_required("POST", "/v1/m/orchestration/workflows/{id}/runs/{run}/reauthorize", "/v1/m/orchestration/workflows/" + quote(str(id), safe="") + "/runs/" + quote(str(run), safe="") + "/reauthorize", body=body, query=query, tenant=tenant)
 
     def put_v1_m_orchestration_workflows_by_id_steps(self, id, body, *, tenant=None, **query):
-        """PUT /v1/m/orchestration/workflows/{id}/steps — Replaces the whole step graph atomically (write-tier, revisioned).
+        """PUT /v1/m/orchestration/workflows/{id}/steps — orchestration module route (requires orchestration:workflow:write)
 
         Stability: beta.
         """
         return self._do_json_required("PUT", "/v1/m/orchestration/workflows/{id}/steps", "/v1/m/orchestration/workflows/" + quote(str(id), safe="") + "/steps", body=body, query=query, tenant=tenant)
 
     def get_v1_m_posture_export(self, *, tenant=None, **query):
-        """GET /v1/m/posture/export — Assembles the posture projection inside ONE audited tenant scope and returns it.
+        """GET /v1/m/posture/export — posture module route (requires posture:export:read)
 
         Stability: beta.
         """
@@ -5203,63 +5842,63 @@ class OperationsMixin:
         return self._do("POST", "/v1/m/recording/sweep", "/v1/m/recording/sweep", query=query, tenant=tenant)
 
     def get_v1_m_redteam_catalog(self, *, tenant=None, **query):
-        """GET /v1/m/redteam/catalog — Returns the battery taxonomy (metadata + OWASP/ATLAS coverage).
+        """GET /v1/m/redteam/catalog — redteam module route (requires redteam:run:read)
 
         Stability: beta.
         """
         return self._do("GET", "/v1/m/redteam/catalog", "/v1/m/redteam/catalog", query=query, tenant=tenant)
 
     def get_v1_m_redteam_runs(self, *, tenant=None, **query):
-        """GET /v1/m/redteam/runs — Lists the tenant's red-team runs (newest selectable by target).
+        """GET /v1/m/redteam/runs — redteam module route (requires redteam:run:read)
 
         Stability: beta.
         """
         return self._do("GET", "/v1/m/redteam/runs", "/v1/m/redteam/runs", query=query, tenant=tenant)
 
     def post_v1_m_redteam_runs(self, body, *, tenant=None, **query):
-        """POST /v1/m/redteam/runs — Runs a battery against an AUTHORIZED target and records the scorecard.
+        """POST /v1/m/redteam/runs — redteam module route (requires redteam:scan:admin)
 
         Stability: beta.
         """
         return self._do_json_required("POST", "/v1/m/redteam/runs", "/v1/m/redteam/runs", body=body, query=query, tenant=tenant)
 
     def get_v1_m_redteam_runs_by_id(self, id, *, tenant=None, **query):
-        """GET /v1/m/redteam/runs/{id} — Returns one run with its per-family breakdown recomputed from the stored result rows (the run row holds the aggregates; the breakdown is derived).
+        """GET /v1/m/redteam/runs/{id} — redteam module route (requires redteam:run:read)
 
         Stability: beta.
         """
         return self._do("GET", "/v1/m/redteam/runs/{id}", "/v1/m/redteam/runs/" + quote(str(id), safe=""), query=query, tenant=tenant)
 
     def get_v1_m_redteam_runs_by_id_results(self, id, *, tenant=None, **query):
-        """GET /v1/m/redteam/runs/{id}/results — Lists one run's per-probe results.
+        """GET /v1/m/redteam/runs/{id}/results — redteam module route (requires redteam:run:read)
 
         Stability: beta.
         """
         return self._do("GET", "/v1/m/redteam/runs/{id}/results", "/v1/m/redteam/runs/" + quote(str(id), safe="") + "/results", query=query, tenant=tenant)
 
     def get_v1_m_redteam_targets(self, *, tenant=None, **query):
-        """GET /v1/m/redteam/targets — Lists the tenant's registered targets.
+        """GET /v1/m/redteam/targets — redteam module route (requires redteam:target:read)
 
         Stability: beta.
         """
         return self._do("GET", "/v1/m/redteam/targets", "/v1/m/redteam/targets", query=query, tenant=tenant)
 
     def post_v1_m_redteam_targets(self, body, *, tenant=None, **query):
-        """POST /v1/m/redteam/targets — Registers a client-governed agent as a candidate target.
+        """POST /v1/m/redteam/targets — redteam module route (requires redteam:target:admin)
 
         Stability: beta.
         """
         return self._do_json_required("POST", "/v1/m/redteam/targets", "/v1/m/redteam/targets", body=body, query=query, tenant=tenant)
 
     def get_v1_m_redteam_targets_by_id(self, id, *, tenant=None, **query):
-        """GET /v1/m/redteam/targets/{id} — Returns one target.
+        """GET /v1/m/redteam/targets/{id} — redteam module route (requires redteam:target:read)
 
         Stability: beta.
         """
         return self._do("GET", "/v1/m/redteam/targets/{id}", "/v1/m/redteam/targets/" + quote(str(id), safe=""), query=query, tenant=tenant)
 
     def post_v1_m_redteam_targets_by_id_authorize(self, id, body, *, tenant=None, **query):
-        """POST /v1/m/redteam/targets/{id}/authorize — Grants or revokes CONSENT to red-team a target.
+        """POST /v1/m/redteam/targets/{id}/authorize — redteam module route (requires redteam:target:admin)
 
         Stability: beta.
         """
@@ -5475,6 +6114,13 @@ class OperationsMixin:
         """
         return self._do_json_required("POST", "/v1/m/sandbox/scenarios/{id}/run", "/v1/m/sandbox/scenarios/" + quote(str(id), safe="") + "/run", body=body, query=query, tenant=tenant)
 
+    def post_v1_m_sandbox_synthetic_data(self, body, *, tenant=None, **query):
+        """POST /v1/m/sandbox/synthetic-data — Generates bounded local template samples for scenario steps and audits only their count, without storing inputs or making network requests.
+
+        Stability: beta.
+        """
+        return self._do_json_required("POST", "/v1/m/sandbox/synthetic-data", "/v1/m/sandbox/synthetic-data", body=body, query=query, tenant=tenant)
+
     def get_v1_m_security_anomalies(self, *, tenant=None, **query):
         """GET /v1/m/security/anomalies — Computes the tenant's prioritized anomalies on demand: the permitted-vs-observed drift (consumed via the store, not recomputed), egress/exfil-relevant drift labeled from the resource, and the correlated/high security findings (incl. the joined anti_evasion mark).
 
@@ -5511,7 +6157,7 @@ class OperationsMixin:
         return self._do_json_required("PATCH", "/v1/m/security/cases/{id}", "/v1/m/security/cases/" + quote(str(id), safe=""), body=body, query=query, tenant=tenant)
 
     def get_v1_m_security_cases_by_id_export(self, id, *, tenant=None, **query):
-        """GET /v1/m/security/cases/{id}/export — Exports a case's relevant ledger events in a SIEM format (every format audit.Formats() lists), re-verifiable offline.
+        """GET /v1/m/security/cases/{id}/export — security module route (requires security:case:read)
 
         Stability: beta.
         """
@@ -5674,6 +6320,14 @@ class OperationsMixin:
         headers = {}
         headers["If-Match"] = str(if_match)
         return cast(SessionsCommunicationChannelMutationResult, self._do("POST", "/v1/m/sessions/channels/{id}/grants/{grant_id}/revoke", "/v1/m/sessions/channels/" + quote(str(id), safe="") + "/grants/" + quote(str(grant_id), safe="") + "/revoke", query=query, headers=headers, tenant=tenant))
+
+    def post_v1_m_sessions_decision_requests_by_id_responses(self, id: str, body: SessionsCommunicationDecisionRequestResponseBody, *, if_match: str, idempotency_key: str, tenant: str | None = None) -> SessionsCommunicationDecisionRequestResponseResult:
+        """POST /v1/m/sessions/decision-requests/{id}/responses — typed published communication contract."""
+        query = {}
+        headers = {}
+        headers["If-Match"] = str(if_match)
+        headers["Idempotency-Key"] = str(idempotency_key)
+        return cast(SessionsCommunicationDecisionRequestResponseResult, self._do_json_required("POST", "/v1/m/sessions/decision-requests/{id}/responses", "/v1/m/sessions/decision-requests/" + quote(str(id), safe="") + "/responses", body=body, query=query, headers=headers, tenant=tenant))
 
     def get_v1_m_sessions_decisions(self, *, tenant=None, **query):
         """GET /v1/m/sessions/decisions — sessions module route (requires sessions:decision:read)
@@ -5914,7 +6568,7 @@ class OperationsMixin:
         return self._do("GET", "/v1/m/sessions/provider-accounts/{ref}", "/v1/m/sessions/provider-accounts/" + quote(str(ref), safe=""), query=query, tenant=tenant)
 
     def patch_v1_m_sessions_provider_accounts_by_ref(self, ref, body, *, tenant=None, **query):
-        """PATCH /v1/m/sessions/provider-accounts/{ref} — Edits the display name and/or color without changing the account's stable name, reference, home or launch configuration; an empty string clears that field.
+        """PATCH /v1/m/sessions/provider-accounts/{ref} — Edits the account's name, display label and/or color; a rename changes only the name, never the reference, home or launch configuration, and an empty display label or color clears that field.
 
         Stability: beta.
         """
@@ -5940,6 +6594,13 @@ class OperationsMixin:
         Stability: beta.
         """
         return self._do_json_required("POST", "/v1/m/sessions/provider-profiles", "/v1/m/sessions/provider-profiles", body=body, query=query, tenant=tenant)
+
+    def get_v1_m_sessions_provider_profiles_readiness(self, *, tenant=None, **query):
+        """GET /v1/m/sessions/provider-profiles/readiness — Answers whether a new session can start on each tool now: what it would run on (its own login, or a key or local model from Providers), or a stable code and the one sentence that says why not (not installed, nothing to run on, a refused key, an unreadable sign-in); it creates nothing.
+
+        Stability: beta.
+        """
+        return self._do("GET", "/v1/m/sessions/provider-profiles/readiness", "/v1/m/sessions/provider-profiles/readiness", query=query, tenant=tenant)
 
     def get_v1_m_sessions_provider_profiles_resolve(self, *, tenant=None, **query):
         """GET /v1/m/sessions/provider-profiles/resolve — Answers what a new session of a driver would run on, without creating anything: the tool's own login when it is signed in, otherwise the key or local model from Providers that the resolve rule picks, or the sentence that says what to add.
@@ -6110,18 +6771,32 @@ class OperationsMixin:
         return self._do("GET", "/v1/m/sessions/runs/{ref}/changes", "/v1/m/sessions/runs/" + quote(str(ref), safe="") + "/changes", query=query, tenant=tenant)
 
     def get_v1_m_sessions_runs_by_ref_changes_file(self, ref, *, tenant=None, **query):
-        """GET /v1/m/sessions/runs/{ref}/changes/file — Returns the current text of one file in the run's folder (?path=, relative to the folder; at most 256 KiB).
+        """GET /v1/m/sessions/runs/{ref}/changes/file — Returns the current text of one file in the run's folder, or with rev=HEAD the text git HEAD holds for it (?path=, relative to the folder; at most 256 KiB; 404 when the folder has no readable git history or HEAD has no such file).
 
         Stability: beta.
         """
         return self._do("GET", "/v1/m/sessions/runs/{ref}/changes/file", "/v1/m/sessions/runs/" + quote(str(ref), safe="") + "/changes/file", query=query, tenant=tenant)
 
-    def post_v1_m_sessions_runs_by_ref_cleanup(self, ref, *, tenant=None, **query):
+    def post_v1_m_sessions_runs_by_ref_cleanup(self, ref, body=None, *, tenant=None, **query):
         """POST /v1/m/sessions/runs/{ref}/cleanup — sessions module route (requires sessions:run:admin)
 
         Stability: beta.
         """
-        return self._do("POST", "/v1/m/sessions/runs/{ref}/cleanup", "/v1/m/sessions/runs/" + quote(str(ref), safe="") + "/cleanup", query=query, tenant=tenant)
+        return self._do("POST", "/v1/m/sessions/runs/{ref}/cleanup", "/v1/m/sessions/runs/" + quote(str(ref), safe="") + "/cleanup", body=body, query=query, tenant=tenant)
+
+    def get_v1_m_sessions_runs_by_ref_diff(self, ref, *, tenant=None, **query):
+        """GET /v1/m/sessions/runs/{ref}/diff — Lists the paths the run's worktree branch changed since it left the workspace's current commit.
+
+        Stability: beta.
+        """
+        return self._do("GET", "/v1/m/sessions/runs/{ref}/diff", "/v1/m/sessions/runs/" + quote(str(ref), safe="") + "/diff", query=query, tenant=tenant)
+
+    def get_v1_m_sessions_runs_by_ref_diff_file(self, ref, *, tenant=None, **query):
+        """GET /v1/m/sessions/runs/{ref}/diff/file — Returns one path of the run's worktree branch at the base and at the branch tip (?path=, relative to the repository's top folder; each side keeps the workspace's read limit and the 64 KiB Git output cap).
+
+        Stability: beta.
+        """
+        return self._do("GET", "/v1/m/sessions/runs/{ref}/diff/file", "/v1/m/sessions/runs/" + quote(str(ref), safe="") + "/diff/file", query=query, tenant=tenant)
 
     def get_v1_m_sessions_runs_by_ref_events(self, ref, *, tenant=None, **query):
         """GET /v1/m/sessions/runs/{ref}/events — sessions module route (requires sessions:run:read)
@@ -6129,6 +6804,41 @@ class OperationsMixin:
         Stability: beta.
         """
         return self._do("GET", "/v1/m/sessions/runs/{ref}/events", "/v1/m/sessions/runs/" + quote(str(ref), safe="") + "/events", query=query, tenant=tenant)
+
+    def get_v1_m_sessions_runs_by_ref_git(self, ref, *, tenant=None, **query):
+        """GET /v1/m/sessions/runs/{ref}/git — sessions module route (requires sessions:run:read)
+
+        Stability: beta.
+        """
+        return self._do("GET", "/v1/m/sessions/runs/{ref}/git", "/v1/m/sessions/runs/" + quote(str(ref), safe="") + "/git", query=query, tenant=tenant)
+
+    def post_v1_m_sessions_runs_by_ref_git_branch(self, ref, body, *, tenant=None, **query):
+        """POST /v1/m/sessions/runs/{ref}/git/branch — sessions module route (requires sessions:run:write)
+
+        Stability: beta.
+        """
+        return self._do_json_required("POST", "/v1/m/sessions/runs/{ref}/git/branch", "/v1/m/sessions/runs/" + quote(str(ref), safe="") + "/git/branch", body=body, query=query, tenant=tenant)
+
+    def post_v1_m_sessions_runs_by_ref_git_commit(self, ref, body, *, tenant=None, **query):
+        """POST /v1/m/sessions/runs/{ref}/git/commit — sessions module route (requires sessions:run:write)
+
+        Stability: beta.
+        """
+        return self._do_json_required("POST", "/v1/m/sessions/runs/{ref}/git/commit", "/v1/m/sessions/runs/" + quote(str(ref), safe="") + "/git/commit", body=body, query=query, tenant=tenant)
+
+    def post_v1_m_sessions_runs_by_ref_git_stage(self, ref, body, *, tenant=None, **query):
+        """POST /v1/m/sessions/runs/{ref}/git/stage — sessions module route (requires sessions:run:write)
+
+        Stability: beta.
+        """
+        return self._do_json_required("POST", "/v1/m/sessions/runs/{ref}/git/stage", "/v1/m/sessions/runs/" + quote(str(ref), safe="") + "/git/stage", body=body, query=query, tenant=tenant)
+
+    def post_v1_m_sessions_runs_by_ref_git_unstage(self, ref, body, *, tenant=None, **query):
+        """POST /v1/m/sessions/runs/{ref}/git/unstage — sessions module route (requires sessions:run:write)
+
+        Stability: beta.
+        """
+        return self._do_json_required("POST", "/v1/m/sessions/runs/{ref}/git/unstage", "/v1/m/sessions/runs/" + quote(str(ref), safe="") + "/git/unstage", body=body, query=query, tenant=tenant)
 
     def post_v1_m_sessions_runs_by_ref_input(self, ref, body, *, tenant=None, **query):
         """POST /v1/m/sessions/runs/{ref}/input — sessions module route (requires sessions:run:write)
@@ -6150,6 +6860,20 @@ class OperationsMixin:
         Stability: beta.
         """
         return self._do_json_required("PUT", "/v1/m/sessions/runs/{ref}/peers", "/v1/m/sessions/runs/" + quote(str(ref), safe="") + "/peers", body=body, query=query, tenant=tenant)
+
+    def get_v1_m_sessions_runs_by_ref_preview(self, ref, *, tenant=None, **query):
+        """GET /v1/m/sessions/runs/{ref}/preview — sessions module route (requires sessions:run:read)
+
+        Stability: beta.
+        """
+        return self._do("GET", "/v1/m/sessions/runs/{ref}/preview", "/v1/m/sessions/runs/" + quote(str(ref), safe="") + "/preview", query=query, tenant=tenant)
+
+    def post_v1_m_sessions_runs_by_ref_preview(self, ref, body, *, tenant=None, **query):
+        """POST /v1/m/sessions/runs/{ref}/preview — sessions module route (requires sessions:run:write)
+
+        Stability: beta.
+        """
+        return self._do_json_required("POST", "/v1/m/sessions/runs/{ref}/preview", "/v1/m/sessions/runs/" + quote(str(ref), safe="") + "/preview", body=body, query=query, tenant=tenant)
 
     def post_v1_m_sessions_runs_by_ref_resume(self, ref, *, tenant=None, **query):
         """POST /v1/m/sessions/runs/{ref}/resume — sessions module route (requires sessions:run:write)
@@ -6396,6 +7120,13 @@ class OperationsMixin:
         """
         return self._do("GET", "/v1/m/sessions/workspaces/{ref}", "/v1/m/sessions/workspaces/" + quote(str(ref), safe=""), query=query, tenant=tenant)
 
+    def patch_v1_m_sessions_workspaces_by_ref(self, ref, body, *, tenant=None, **query):
+        """PATCH /v1/m/sessions/workspaces/{ref} — Replaces a workspace's additional read-only host folders.
+
+        Stability: beta.
+        """
+        return self._do_json_required("PATCH", "/v1/m/sessions/workspaces/{ref}", "/v1/m/sessions/workspaces/" + quote(str(ref), safe=""), body=body, query=query, tenant=tenant)
+
     def delete_v1_m_sessions_workspaces_by_ref(self, ref, *, tenant=None, **query):
         """DELETE /v1/m/sessions/workspaces/{ref} — sessions module route (requires sessions:workspace:admin)
 
@@ -6451,6 +7182,76 @@ class OperationsMixin:
         Stability: beta.
         """
         return self._do("GET", "/v1/m/sessions/workspaces/{ref}/files/stat", "/v1/m/sessions/workspaces/" + quote(str(ref), safe="") + "/files/stat", query=query, tenant=tenant)
+
+    def get_v1_m_skills_assignments(self, *, tenant=None, **query):
+        """GET /v1/m/skills/assignments — Lists pinned skills assignments for an authorized workspace, template, agent group, agent, or session target with cursor pagination.
+
+        Stability: beta.
+        """
+        return self._do("GET", "/v1/m/skills/assignments", "/v1/m/skills/assignments", query=query, tenant=tenant)
+
+    def post_v1_m_skills_assignments(self, body, *, tenant=None, **query):
+        """POST /v1/m/skills/assignments — Creates or updates a target's pin to an immutable skills revision and selected members for new conversations.
+
+        Stability: beta.
+        """
+        return self._do_json_required("POST", "/v1/m/skills/assignments", "/v1/m/skills/assignments", body=body, query=query, tenant=tenant)
+
+    def put_v1_m_skills_assignments_by_id(self, id, body, *, tenant=None, **query):
+        """PUT /v1/m/skills/assignments/{id} — Creates or updates a target's pin to an immutable skills revision and selected members for new conversations.
+
+        Stability: beta.
+        """
+        return self._do_json_required("PUT", "/v1/m/skills/assignments/{id}", "/v1/m/skills/assignments/" + quote(str(id), safe=""), body=body, query=query, tenant=tenant)
+
+    def delete_v1_m_skills_assignments_by_id(self, id, *, tenant=None, **query):
+        """DELETE /v1/m/skills/assignments/{id} — Removes a skills assignment from its authorized target at the expected version so new conversations no longer inherit that pin.
+
+        Stability: beta.
+        """
+        return self._do("DELETE", "/v1/m/skills/assignments/{id}", "/v1/m/skills/assignments/" + quote(str(id), safe=""), query=query, tenant=tenant)
+
+    def get_v1_m_skills_packs(self, *, tenant=None, **query):
+        """GET /v1/m/skills/packs — Lists the tenant's skills packs, including retired packs, with cursor pagination.
+
+        Stability: beta.
+        """
+        return self._do("GET", "/v1/m/skills/packs", "/v1/m/skills/packs", query=query, tenant=tenant)
+
+    def post_v1_m_skills_packs(self, body, *, tenant=None, **query):
+        """POST /v1/m/skills/packs — Validates a Git, registered-workspace, or uploaded archive source and publishes an immutable skills revision, creating or updating a pack.
+
+        Stability: beta.
+        """
+        return self._do_json_required("POST", "/v1/m/skills/packs", "/v1/m/skills/packs", body=body, query=query, tenant=tenant)
+
+    def get_v1_m_skills_packs_by_id(self, id, *, tenant=None, **query):
+        """GET /v1/m/skills/packs/{id} — Returns a skills pack and a cursor-paged history of its complete immutable revisions, including manifests and import provenance.
+
+        Stability: beta.
+        """
+        return self._do("GET", "/v1/m/skills/packs/{id}", "/v1/m/skills/packs/" + quote(str(id), safe=""), query=query, tenant=tenant)
+
+    def delete_v1_m_skills_packs_by_id(self, id, *, tenant=None, **query):
+        """DELETE /v1/m/skills/packs/{id} — Retires an unreferenced skills pack at the expected version while retaining its immutable revisions and provenance.
+
+        Stability: beta.
+        """
+        return self._do("DELETE", "/v1/m/skills/packs/{id}", "/v1/m/skills/packs/" + quote(str(id), safe=""), query=query, tenant=tenant)
+
+    def get_v1_m_skills_packs_by_id_assignments(self, id, *, tenant=None, **query):
+        """GET /v1/m/skills/packs/{id}/assignments — Lists the pinned skills assignments of an authorized pack whose targets the caller can read natively, with cursor pagination.
+
+        Stability: beta.
+        """
+        return self._do("GET", "/v1/m/skills/packs/{id}/assignments", "/v1/m/skills/packs/" + quote(str(id), safe="") + "/assignments", query=query, tenant=tenant)
+
+    def post_v1_m_skills_packs_by_id_revisions(self, id, body, *, tenant=None, **query):
+        """POST /v1/m/skills/packs/{id}/revisions — Validates a Git, registered-workspace, or uploaded archive source and publishes an immutable skills revision, creating or updating a pack.
+
+        Stability: beta.
+        """
+        return self._do_json_required("POST", "/v1/m/skills/packs/{id}/revisions", "/v1/m/skills/packs/" + quote(str(id), safe="") + "/revisions", body=body, query=query, tenant=tenant)
 
     def get_v1_m_sourcescope_assignments(self, *, tenant=None, **query):
         """GET /v1/m/sourcescope/assignments — Lists connector→workspace assignments, optionally filtered by ?connector_name / ?workspace_ref.

@@ -372,7 +372,7 @@ func weakerConfidence(a, b sdkmodel.Confidence) string {
 func (m *Module) handleReachability(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
 	agentID := model.ID(r.URL.Query().Get("agent_id"))
 	if agentID.IsZero() {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "agent_id is required"})
+		writeJSON(w, http.StatusBadRequest, api.ErrorBody("bad_request", "agent_id is required"))
 		return
 	}
 	paths, err := m.Reachability(r.Context(), mc.Tenant, mc.Principal.Actor(), mc.Principal.ActorKind(), agentID)
@@ -390,7 +390,7 @@ func (m *Module) handleReachability(w http.ResponseWriter, r *http.Request, mc a
 func (m *Module) handleEscalation(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
 	agentID := model.ID(r.URL.Query().Get("agent_id"))
 	if agentID.IsZero() {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "agent_id is required"})
+		writeJSON(w, http.StatusBadRequest, api.ErrorBody("bad_request", "agent_id is required"))
 		return
 	}
 	paths, err := m.EscalationPaths(r.Context(), mc.Tenant, mc.Principal.Actor(), mc.Principal.ActorKind(), agentID)
@@ -408,7 +408,7 @@ func (m *Module) handleEscalation(w http.ResponseWriter, r *http.Request, mc api
 func (m *Module) handleExfil(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
 	resourceID := model.ID(r.URL.Query().Get("resource_id"))
 	if resourceID.IsZero() {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "resource_id is required"})
+		writeJSON(w, http.StatusBadRequest, api.ErrorBody("bad_request", "resource_id is required"))
 		return
 	}
 	paths, err := m.ExfilRoutes(r.Context(), mc.Tenant, mc.Principal.Actor(), mc.Principal.ActorKind(), resourceID)

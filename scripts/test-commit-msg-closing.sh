@@ -32,7 +32,7 @@ unset _olivares_git_env
 export LC_ALL=C
 
 HOOK_SRC="${HOOK_SRC:-.githooks/commit-msg}"
-[ -f "$HOOK_SRC" ] || { printf 'no encuentro %s\n' "$HOOK_SRC" >&2; exit 2; }
+[ -f "$HOOK_SRC" ] || { printf 'cannot find %s\n' "$HOOK_SRC" >&2; exit 2; }
 HOOK_ABS="$(cd "$(dirname "$HOOK_SRC")" && pwd)/$(basename "$HOOK_SRC")"
 
 pass=0; fail=0
@@ -40,25 +40,22 @@ check() { # check <descripción> <detalle> <rc-esperado> <rc-obtenido>
 	if [ "$3" = "$4" ]; then
 		printf '  ok    %-62s %s\n' "$1" "$2"; pass=$((pass + 1))
 	else
-		printf '  FAIL  %-62s %s (esperaba %s, obtuve %s)\n' "$1" "$2" "$3" "$4"; fail=$((fail + 1))
+		printf '  FAIL  %-62s %s (expected %s, got %s)\n' "$1" "$2" "$3" "$4"; fail=$((fail + 1))
 	fi
 }
 
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/commitmsg-closing.XXXXXX")"
 trap 'rm -rf "$WORK"' EXIT
+mkdir -p "$WORK/.githooks" "$WORK/scripts"
+cp "$(dirname "$HOOK_ABS")/../scripts/check-commit-trailers.sh" "$WORK/scripts/"
 
-# Un repositorio desechable: la guarda consulta el índice, así que necesita uno de verdad.
-#
-# LAS RUTAS QUE SE LE PASAN NO PUEDEN SER RUTAS REALES DEL HUB, y esto no es estética. Esta
-# función CREA cada fichero dentro de un `git init` temporal; no lee nada del árbol de trabajo.
-# Pero scripts/check-export-closure.sh lee este fichero estáticamente y no puede distinguir
-# «ruta que se crea» de «ruta que se lee»: una ruta que el hub tiene y el export quita se
-# clasifica como dependencia rota del árbol publicado. Con `an internal design note (not shipped)` como
-# fixture, este script sostuvo cinco de las seis roturas de `lint:export-closure` en `main`
-# —todas falsas— durante días. La guarda del hook clasifica por EXTENSIÓN
-# (`.githooks/commit-msg:49`, `grep -qvE '(\.md|\.txt)$'`), así que el nombre concreto nunca
-# importó: sólo la extensión. Sus hermanas ya lo hacían bien (`modules/x/main.go`,
-# `docs/guide.txt`). Usa rutas que no existan en el repo.
+# Use a disposable real Git repository: the guard queries the index.
+# Fixture paths must not be real internal paths. This function creates files in a
+# temporary git init, but check-export-closure.sh reads this script statically and
+# cannot distinguish created fixtures from live dependencies. an internal design note (not shipped)
+# caused five of main's six false closure failures for days. The commit-msg guard
+# classifies only by extension (.githooks/commit-msg:49, grep -qvE '(\.md|\.txt)$');
+# use nonexistent paths, as sibling fixtures modules/x/main.go and docs/guide.txt do.
 repo() { # repo <ficheros-a-estacionar...>
 	rm -rf "$WORK/r"; mkdir -p "$WORK/r"; cd "$WORK/r"
 	git init -q .
@@ -68,64 +65,64 @@ repo() { # repo <ficheros-a-estacionar...>
 }
 
 run() { # run <hook> <mensaje> -> imprime rc
-	printf '%s\n' "$2" > "$WORK/msg"
+	printf '%s\n\nSigned-off-by: Test <test@example.invalid>\n' "$2" > "$WORK/msg"
 	( cd "$WORK/r" && sh "$1" "$WORK/msg" >/dev/null 2>&1 ) && printf 0 || printf $?
 }
 
 # La copia mutada permite comprobar que la aserción cae POR SU RAZÓN y no por otra.
 mutant() { # mutant <sed-expr> -> ruta del hook mutado
-	sed "$1" "$HOOK_ABS" > "$WORK/mutant"; printf '%s' "$WORK/mutant"
+	sed "$1" "$HOOK_ABS" > "$WORK/.githooks/mutant"; printf '%s' "$WORK/.githooks/mutant"
 }
 
-printf '\n== la guarda rechaza lo que debe ==\n'
+printf '\n== the guard rejects what it should ==\n'
 repo "docs/board.md"
 for kw in "closed: #484" "closes #7" "close #7" "fixes #123" "fixed #123" "fix #123" \
 	"resolves #9" "resolved #9" "resolve #9" "Closes #7" "CLOSED: #484"; do
 	rc="$(run "$HOOK_ABS" "docs(status): board update
 
 the message says $kw and that is the problem")"
-	check "rechaza «$kw» en un commit solo-docs" "rc=$rc" 1 "$rc"
+	check "rejects «$kw» in a docs-only commit" "rc=$rc" 1 "$rc"
 done
 
-printf '\n== la guarda NO rechaza lo que no debe ==\n'
+printf '\n== the guard does NOT reject valid input ==\n'
 repo "docs/board.md"
 rc="$(run "$HOOK_ABS" "docs(status): board update
 
 the pull request #484 is closed, and its closure is recorded here")"
-check "acepta la MISMA idea sin la palabra gatillo" "rc=$rc" 0 "$rc"
+check "accepts the SAME idea without the trigger word" "rc=$rc" 0 "$rc"
 
 rc="$(run "$HOOK_ABS" "docs(status): board update
 
 see #484 and #7 for context")"
-check "acepta referencias desnudas a números" "rc=$rc" 0 "$rc"
+check "accepts bare issue number references" "rc=$rc" 0 "$rc"
 
 # El caso que separa esta guarda de una prohibición: un commit CON código sí puede cerrar.
 repo "modules/x/main.go" "docs/board.md"
 rc="$(run "$HOOK_ABS" "fix(x): the thing
 
 closes #7")"
-check "acepta el cierre en un commit que SÍ lleva código" "rc=$rc" 0 "$rc"
+check "accepts closure in a commit that DOES contain code" "rc=$rc" 0 "$rc"
 
 repo "docs/guide.txt"
 rc="$(run "$HOOK_ABS" "docs(guide): text
 
 closes #7")"
-check "también cubre .txt, no solo .md" "rc=$rc" 1 "$rc"
+check "also covers .txt, not just .md" "rc=$rc" 1 "$rc"
 
-printf '\n== VERIFICACIÓN POR MUTACIÓN — cada rama cae por SU razón ==\n'
+printf '\n== MUTATION VERIFICATION — each branch fails for ITS reason ==\n'
 repo "docs/board.md"
 
 m="$(mutant 's/clos(e|es|ed)|fix(|es|ed)|resolv(e|es|ed)/__nunca__/')"
 rc="$(run "$m" "docs(status): x
 
 closes #7")"
-check "MUTANTE: sin el juego de palabras clave -> deja pasar" "rc=$rc" 0 "$rc"
+check "MUTANT: no keyword set -> accepts" "rc=$rc" 0 "$rc"
 
 m="$(mutant 's/grep -inE/grep -nE/')"
 rc="$(run "$m" "docs(status): x
 
 CLOSES #7")"
-check "MUTANTE: sin -i -> las mayúsculas escapan" "rc=$rc" 0 "$rc"
+check "MUTANT: no -i -> uppercase escapes" "rc=$rc" 0 "$rc"
 
 # OJO al sentido del mutante: sustituir la CONDICIÓN por `true` haría que la función
 # retornase 0 antes de mirar nada, que es dejar pasar más, no menos. Para comprobar que la
@@ -137,14 +134,14 @@ repo "modules/x/main.go"
 rc="$(run "$m" "fix(x): y
 
 closes #7")"
-check "MUTANTE: sin la excepción de código -> rechaza un commit legítimo" "rc=$rc" 1 "$rc"
+check "MUTANT: no code exemption -> rejects a valid commit" "rc=$rc" 1 "$rc"
 
 repo "docs/board.md"
 m="$(mutant 's/^closing_keyword_guard || exit 1$/:/')"
 rc="$(run "$m" "docs(status): x
 
 closes #7")"
-check "MUTANTE: guarda no invocada -> deja pasar" "rc=$rc" 0 "$rc"
+check "MUTANT: guard not invoked -> accepts" "rc=$rc" 0 "$rc"
 
 printf '\ncommit-msg-closing: %d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

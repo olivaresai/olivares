@@ -16,7 +16,8 @@ Esta página es la vía del **conector y del hook PEP**. Para instalar o verific
 CLI oficial, registrar un recibo de sondeo y lanzar o detener una sesión gobernada,
 use [Instalar la CLI de Grok](/how-to/install-grok-cli/). La vía de operación es
 [Operar una sesión de proveedor](/how-to/operate-provider-sessions/)
-(`OLIVARES_SESSION_RUNTIME_GROK_BIN` o el recibo de una instalación gestionada,
+(`OLIVARES_SESSION_RUNTIME_GROK_BIN` como selección explícita; si no está definido, la instalación
+gestionada verificada más reciente y después `grok` en el `PATH` del motor,
 más un perfil de proveedor). Allí no se afirma compatibilidad con una cuenta
 oficial de Grok autenticada.
 
@@ -30,7 +31,8 @@ oficial de Grok autenticada.
 - Permisos del usuario de servicio de Olivares para leer `~/.grok/config.toml`,
   `/etc/grok/requirements.toml`, `~/.grok/disabled-hooks` y, si se declara, el
   `managed-settings.json` compatible.
-- Una cuenta superadmin con AAL3 si el alta se realiza desde la consola.
+- Una cuenta superadmin si el alta se realiza desde la consola. Las escrituras administrativas
+  siguen la política de verificación adicional (`admin_step_up`, `none` por defecto).
 
 No introduzca una clave xAI en esta fuente: no hay ningún campo secreto y no se realiza ninguna
 llamada a la API de inferencia.

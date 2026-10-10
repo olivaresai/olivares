@@ -2,11 +2,18 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { expect, test, type Locator, type Page } from '@playwright/test'
-import { accessGraph, fixtureFor, sessionsLive } from './fixtures'
+import {
+  accessGraph,
+  browserSession,
+  fixtureFor,
+  sessionsLive,
+} from './fixtures'
 
 async function mockApi(page: Page, theme: string, longLabels = false) {
   await page.route('**/v1/**', async (route) => {
     const p = new URL(route.request().url()).pathname
+    if (p === '/v1/auth/browser-session')
+      return route.fulfill({ json: browserSession })
     if (p.endsWith('/stream')) {
       return route.fulfill({
         status: 200,
@@ -121,6 +128,69 @@ async function expectFullText(locator: Locator) {
     }),
   )
   expect(clipped, 'full text fits its rendered box').toEqual([])
+}
+
+for (const theme of ['light', 'dark']) {
+  for (const width of [1920, 1280, 768, 390, 320]) {
+    test(`provider profiles header remains readable at ${width} in ${theme}`, async ({
+      page,
+    }, testInfo) => {
+      await page.setViewportSize({ width, height: 1080 })
+      await mockApi(page, theme)
+      await page.goto('/provider-profiles')
+      const header = page.locator('[data-slot="page-header"]')
+      const title = header.locator('h1')
+      await expect(title).toHaveText('Provider profiles')
+      await expect(
+        page.getByText('No provider profiles', { exact: true }),
+      ).toBeVisible()
+      await page.evaluate(() => document.fonts.ready)
+
+      const checkHeader = async () => {
+        // Visibility alone misses a title that paints one letter per line, or
+        // a paragraph clipped by the page's scroll container.
+        const dimensions = await title.evaluate((el) => ({
+          width: el.getBoundingClientRect().width,
+          height: el.getBoundingClientRect().height,
+          lineHeight: parseFloat(getComputedStyle(el).lineHeight),
+        }))
+        expect(dimensions.width).toBeGreaterThanOrEqual(160)
+        expect(dimensions.height).toBeLessThanOrEqual(2 * dimensions.lineHeight)
+        await expect(title).toBeInViewport({ ratio: 1 })
+        await expect(header.locator('p')).toBeInViewport({ ratio: 1 })
+        await expectFullText(header.locator('h1, p'))
+        expect(
+          await page.evaluate(() => document.documentElement.scrollWidth),
+        ).toBeLessThanOrEqual(width)
+      }
+
+      try {
+        await checkHeader()
+        await page.screenshot({
+          path: testInfo.outputPath('provider-profiles.png'),
+        })
+        if (width < 640) await page.getByTestId('page-actions-toggle').click()
+        await page
+          .getByRole('button', { name: 'Register profile', exact: true })
+          .click()
+        const dialog = page.getByRole('dialog', {
+          name: 'Register a provider profile',
+        })
+        await expect(dialog).toBeVisible()
+        // The reported collapse remained visible behind this dialog. Measure
+        // the background DOM even though Radix hides it from the accessibility tree.
+        await checkHeader()
+        await page.screenshot({
+          path: testInfo.outputPath('register-profile.png'),
+        })
+        await page.keyboard.press('Escape')
+        await expect(dialog).not.toBeVisible()
+        await checkHeader()
+      } finally {
+        await page.screenshot({ path: testInfo.outputPath('final.png') })
+      }
+    })
+  }
 }
 
 for (const theme of ['light', 'dark']) {

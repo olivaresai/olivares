@@ -25,6 +25,7 @@ import {
 import {
   SETTINGS_UTILITY,
   activeAreaId,
+  authorizedEntries,
   authorizedSections,
   breadcrumbTrail,
   buildNavSearchIndex,
@@ -40,8 +41,10 @@ import {
 /** Ratified route placements, as `id: [area, section]` (`root` for `/`). */
 const RATIFIED: Record<string, [AreaId, string] | 'root'> = {
   home: 'root',
+  storedBudgets: ['observation', 'cost-adoption'],
   workspaceDashboard: ['infrastructure', 'estate'],
   inventory: ['infrastructure', 'estate'],
+  estate: ['infrastructure', 'estate'],
   sessions: ['ai', 'sessions'],
   agentops: ['ai', 'sessions'],
   providers: ['ai', 'environments'],
@@ -59,17 +62,16 @@ const RATIFIED: Record<string, [AreaId, string] | 'root'> = {
   rateLimits: ['ai', 'provider-reference'],
   capabilities: ['data-context', 'capabilities'],
   catalog: ['data-context', 'capabilities'],
+  skills: ['data-context', 'capabilities'],
   knowledge: ['data-context', 'knowledge'],
-  agentArtifacts: ['data-context', 'artifacts'],
+  agentArtifacts: ['data-context', 'knowledge'],
   work: ['work-communications', 'work'],
-  protocolBindings: ['work-communications', 'communications'],
-  communications: ['work-communications', 'communications'],
-  communicationsInbox: ['work-communications', 'communications'],
-  communicationsNew: ['work-communications', 'communications'],
-  communicationsAdministration: ['work-communications', 'communications'],
-  communicationsHandoffs: ['work-communications', 'communications'],
-  automations: ['automation', 'workflows'],
-  orchestration: ['automation', 'workflows'],
+  protocolBindings: ['work-communications', 'work'],
+  communications: ['work-communications', 'work'],
+  communicationsInbox: ['work-communications', 'work'],
+  communicationsNew: ['work-communications', 'work'],
+  communicationsAdministration: ['work-communications', 'work'],
+  communicationsHandoffs: ['work-communications', 'work'],
   eventing: ['automation', 'events'],
   alerting: ['automation', 'events'],
   accessMap: ['security-identity', 'access'],
@@ -79,26 +81,21 @@ const RATIFIED: Record<string, [AreaId, string] | 'root'> = {
   routinePolicies: ['security-identity', 'policy'],
   inferenceProxy: ['security-identity', 'policy'],
   security: ['security-identity', 'defense'],
-  redteam: ['security-identity', 'defense'],
   killswitch: ['security-identity', 'defense'],
-  agentcoreExport: ['security-identity', 'boundaries'],
-  residency: ['security-identity', 'boundaries'],
+  agentcoreExport: ['security-identity', 'policy'],
+  residency: ['security-identity', 'policy'],
   deploy: ['deployment', 'deployments'],
   gitPublication: ['deployment', 'deployments'],
   health: ['observation', 'operations'],
   observability: ['observation', 'operations'],
   dashboards: ['observation', 'operations'],
-  finops: ['observation', 'cost-adoption'],
-  'team-costs': ['observation', 'cost-adoption'],
   adoption: ['observation', 'cost-adoption'],
   audit: ['observation', 'audit-recordings'],
   recordings: ['observation', 'audit-recordings'],
   'session-viewer': ['observation', 'audit-recordings'],
-  evals: ['observation', 'evaluation-evidence'],
-  compliance: ['observation', 'evaluation-evidence'],
-  postureExport: ['observation', 'evaluation-evidence'],
-  reporting: ['observation', 'evaluation-evidence'],
-  attestation: ['observation', 'evaluation-evidence'],
+  evals: ['observation', 'audit-recordings'],
+  compliance: ['observation', 'audit-recordings'],
+  attestation: ['observation', 'audit-recordings'],
   console: ['system', 'administration'],
   sourceDiff: ['system', 'administration'],
   tenants: ['system', 'administration'],
@@ -150,6 +147,12 @@ describe('route map — every route sits where root ratified it', () => {
         if (
           area.id === SETTINGS_UTILITY.areaId &&
           s === SETTINGS_UTILITY.sectionId
+        )
+          continue
+        if (
+          area.id === 'automation' &&
+          s === 'workflows' &&
+          !FEATURE_VIEWS.some((v) => v.id === 'orchestration')
         )
           continue
         expect(used.has(s), `${area.id}/${s} has no view`).toBe(true)
@@ -279,7 +282,7 @@ describe('resolveLocation and the trail', () => {
     ])
     expect(labels('/agentops')).toEqual([
       ['AI', '/areas/ai'],
-      ['Operate sessions', undefined],
+      ['Sessions', undefined],
     ])
     expect(labels('/session-viewer/sess-a11y')).toEqual([
       ['Observability & evidence', '/areas/observation'],
@@ -332,6 +335,38 @@ describe('visibility is the union of authorized leaves', () => {
         .flatMap((s) => s.views)
         .some((v) => v.id === 'providerProfiles'),
     ).toBe(false)
+  })
+
+  // 26.10.1 review: Sessions, Observe sessions and Operate sessions were three
+  // entries for one screen. /agentops is a second door into it, under its own
+  // permission: navigation lists it only to a principal who cannot open /sessions.
+  it('lists one Sessions entry, and the operate door only when Sessions cannot be opened', () => {
+    const leaves = (gate: typeof allow) =>
+      authorizedSections('ai', gate).flatMap((s) => s.views.map((v) => v.id))
+    const listed = (gate: typeof allow) =>
+      authorizedEntries(buildNavSearchIndex(t), gate)
+        .filter((e) => e.kind === 'view')
+        .map((e) => e.id)
+    expect(leaves(allow)).toContain('sessions')
+    expect(leaves(allow)).not.toContain('agentops')
+    expect(listed(allow)).toContain('sessions')
+    expect(listed(allow)).not.toContain('agentops')
+    const runsOnly = permissionGate((p: string) => p === 'sessions:run:read')
+    expect(leaves(runsOnly)).toEqual(['agentops'])
+    expect(listed(runsOnly)).toContain('agentops')
+    expect(listed(runsOnly)).not.toContain('sessions')
+    // Both doors read as the one screen they open.
+    const label = i18n.getFixedT(null, 'nav')
+    expect(label('items.sessions')).toBe('Sessions')
+    expect(label('items.agentops')).toBe('Sessions')
+    // The former names still find it.
+    const found = (q: string) =>
+      rankNavMatches(authorizedEntries(buildNavSearchIndex(t), allow), q).map(
+        (e) => e.id,
+      )
+    expect(found('operate sessions')[0]).toBe('sessions')
+    expect(found('observe sessions')[0]).toBe('sessions')
+    expect(found('agentops')[0]).toBe('sessions')
   })
 
   it('treats an unpermissioned leaf as open to every signed-in principal', () => {
@@ -401,9 +436,14 @@ describe('search ranking — one index for the sidebar and the palette', () => {
     // several descriptions mention models.
     const hits = ids('models')
     expect(hits[0]).toBe('models')
-    expect(hits.indexOf('modelOps')).toBeLessThan(hits.indexOf('finops'))
-    // A description-only hit still appears, after every label hit.
-    expect(hits).toContain('finops')
+    expect(hits).toContain('modelOps')
+    if (FEATURE_EXTENSIONS.some((view) => view.id === 'finops')) {
+      // The Business description-only hit follows every label hit.
+      expect(hits).toContain('finops')
+      expect(hits.indexOf('modelOps')).toBeLessThan(hits.indexOf('finops'))
+    } else {
+      expect(hits).not.toContain('finops')
+    }
   })
 
   it('finds an area by its own name and by a section name', () => {

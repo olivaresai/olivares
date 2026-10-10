@@ -995,14 +995,14 @@ func (m *Module) preflightDirectNoticePublish(
 	idempotencyHash []byte,
 	requestDigest []byte,
 ) (directNoticePublishPreflight, error) {
-	if !communicationPortBound(m.communicationOperationAuthorizer) {
+	if !communicationPortBound(m.CommunicationOperationAuthorizer) {
 		return directNoticePublishPreflight{}, communicationError(
 			ErrCommunicationEvidenceUnknown, "message-send authorizer is unavailable",
 		)
 	}
 	wantEntity := EntityRef{TenantID: scope.TenantID, Kind: channelKind,
 		ID: cmd.ChannelID, WorkspaceID: scope.WorkspaceID}
-	coreWitness, err := m.communicationOperationAuthorizer.AuthorizeEntityOperation(
+	coreWitness, err := m.CommunicationOperationAuthorizer.AuthorizeEntityOperation(
 		ctx, principal, wantEntity, CommunicationMessageSend,
 	)
 	if err != nil {
@@ -1098,8 +1098,8 @@ func (m *Module) preflightDirectNoticePublishBody(
 			return directNoticePublishPreflight{}, err
 		}
 	}
-	if !communicationPortBound(m.communicationAudienceAttestor) ||
-		!communicationPortBound(m.communicationGrantClosure) {
+	if !communicationPortBound(m.CommunicationAudienceAttestor) ||
+		!communicationPortBound(m.CommunicationGrantClosure) {
 		return directNoticePublishPreflight{}, communicationError(
 			ErrCommunicationEvidenceUnknown, "direct notice preflight ports are unavailable",
 		)
@@ -1231,7 +1231,7 @@ func (m *Module) preflightDirectNoticePublishBody(
 			ErrInvalidCommunicationModel, "message content schema is unavailable",
 		)
 	}
-	payload, err := PrepareProtectedPayload(ctx, m.communicationSealer, PayloadSlotMessage, policy, ContentAAD{
+	payload, err := PrepareProtectedPayload(ctx, m.CommunicationSealer, PayloadSlotMessage, policy, ContentAAD{
 		TenantID: scope.TenantID, WorkspaceID: scope.WorkspaceID, ChannelID: channel.ID,
 		EntityKind: messageKind, EntityID: ids.Message, Schema: schema,
 		ProtectionGeneration: channel.ProtectionGeneration,

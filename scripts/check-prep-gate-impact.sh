@@ -34,7 +34,7 @@ export LC_ALL=C
 _olivares_git_env="$(cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")" && pwd)/lib/git-env.sh"
 # shellcheck source=/dev/null
 . "$_olivares_git_env" || {
-	echo "check-prep-gate-impact: FATAL: no puedo cargar $_olivares_git_env (aislamiento git-env)" >&2
+	echo "check-prep-gate-impact: FATAL: cannot load $_olivares_git_env (Git environment isolation)" >&2
 	exit 2
 }
 unset _olivares_git_env

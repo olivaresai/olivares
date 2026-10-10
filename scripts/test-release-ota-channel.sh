@@ -101,38 +101,38 @@ mkdir -p "$adv"
 echo "== release-ota-channel: the DENY-CLOSED direction (must NOT produce security) =="
 
 # The overwhelmingly common case: an ordinary release. No file, no security manifest.
-run "no advisories file at all => none" 0 "none	" -- 26.8.0 "$adv"
+run "no advisories file at all => none" 0 "none	" -- 26.800 "$adv"
 
-# A file for ANOTHER version must not enrol this one. Without this, cutting 26.8.1 after a
-# security 26.8.0 would silently re-publish a security manifest with last release's CVEs.
-printf 'CVE-2026-0001\n' >"$adv/26.8.0.txt"
-run "advisories for a DIFFERENT version => none" 0 "none	" -- 26.8.1 "$adv"
+# A file for ANOTHER version must not enrol this one. Without this, cutting 26.801 after a
+# security 26.800 would silently re-publish a security manifest with last release's CVEs.
+printf 'CVE-2026-0001\n' >"$adv/26.800.txt"
+run "advisories for a DIFFERENT version => none" 0 "none	" -- 26.801 "$adv"
 
 # A directory that does not exist is "no declaration", not an error: the stable path must
 # keep working in a tree that has never cut a security release.
-run "advisories dir absent => none" 0 "none	" -- 26.8.0 "$tmp/nope"
+run "advisories dir absent => none" 0 "none	" -- 26.800 "$tmp/nope"
 
 echo
 echo "== release-ota-channel: the FIRING direction (must produce security) =="
 
-run "one advisory => security, id carried" 0 "security	CVE-2026-0001" -- 26.8.0 "$adv"
+run "one advisory => security, id carried" 0 "security	CVE-2026-0001" -- 26.800 "$adv"
 
-printf 'CVE-2026-0001\nGHSA-aaaa-bbbb-cccc\n' >"$adv/26.9.0.txt"
-run "two advisories => comma-joined, order kept" 0 "security	CVE-2026-0001,GHSA-aaaa-bbbb-cccc" -- 26.9.0 "$adv"
+printf 'CVE-2026-0001\nGHSA-aaaa-bbbb-cccc\n' >"$adv/26.900.txt"
+run "two advisories => comma-joined, order kept" 0 "security	CVE-2026-0001,GHSA-aaaa-bbbb-cccc" -- 26.900 "$adv"
 
 # Comments and blank lines are editorial, not data. A release note in the file must not
 # become an "advisory id" the console shows to an operator.
-printf '# the Q3 batch\n\nCVE-2026-0002\n\n#trailing\n' >"$adv/26.9.1.txt"
-run "comments and blanks ignored" 0 "security	CVE-2026-0002" -- 26.9.1 "$adv"
+printf '# the Q3 batch\n\nCVE-2026-0002\n\n#trailing\n' >"$adv/26.901.txt"
+run "comments and blanks ignored" 0 "security	CVE-2026-0002" -- 26.901 "$adv"
 
 # CRLF: a file edited on Windows must not yield an id with a trailing \r, which would be
 # carried verbatim into a signed manifest and shown to an operator.
-printf 'CVE-2026-0003\r\nCVE-2026-0004\r\n' >"$adv/26.9.2.txt"
-run "CRLF stripped" 0 "security	CVE-2026-0003,CVE-2026-0004" -- 26.9.2 "$adv"
+printf 'CVE-2026-0003\r\nCVE-2026-0004\r\n' >"$adv/26.902.txt"
+run "CRLF stripped" 0 "security	CVE-2026-0003,CVE-2026-0004" -- 26.902 "$adv"
 
 # Leading/trailing whitespace is editorial too.
-printf '  CVE-2026-0005  \n' >"$adv/26.9.3.txt"
-run "surrounding whitespace trimmed" 0 "security	CVE-2026-0005" -- 26.9.3 "$adv"
+printf '  CVE-2026-0005  \n' >"$adv/26.903.txt"
+run "surrounding whitespace trimmed" 0 "security	CVE-2026-0005" -- 26.903 "$adv"
 
 echo
 echo "== release-ota-channel: the AMBIGUOUS declaration REFUSES (never silently 'none') =="
@@ -141,20 +141,20 @@ echo "== release-ota-channel: the AMBIGUOUS declaration REFUSES (never silently 
 # release and gave nothing to act on. Treating it as "none" would silently downgrade a
 # security release to an ordinary one — the failure mode with no symptom. core/release/
 # manifest.go:587 refuses the same shape downstream; refusing here names it at the source.
-: >"$adv/27.0.0.txt"
-run "empty advisories file => REFUSE" 2 "refuse	" -- 27.0.0 "$adv"
+: >"$adv/27.0.txt"
+run "empty advisories file => REFUSE" 2 "refuse	" -- 27.0 "$adv"
 
-printf '# only a comment\n\n\n' >"$adv/27.0.1.txt"
-run "comments only => REFUSE" 2 "refuse	" -- 27.0.1 "$adv"
+printf '# only a comment\n\n\n' >"$adv/27.1.txt"
+run "comments only => REFUSE" 2 "refuse	" -- 27.1 "$adv"
 
 # A control character in an advisory id reaches a custodian's terminal and the console.
 # manifest.go:602 refuses it downstream; the producer must not build the bytes at all.
-printf 'CVE-2026-0006\033[31m\n' >"$adv/27.0.2.txt"
-run "control characters => REFUSE" 2 "refuse	" -- 27.0.2 "$adv"
+printf 'CVE-2026-0006\033[31m\n' >"$adv/27.2.txt"
+run "control characters => REFUSE" 2 "refuse	" -- 27.2 "$adv"
 
 # A comma inside an id would forge two advisories out of one in the joined output.
-printf 'CVE-2026-0007,CVE-2026-0008\n' >"$adv/27.0.3.txt"
-run "comma inside an id => REFUSE" 2 "refuse	" -- 27.0.3 "$adv"
+printf 'CVE-2026-0007,CVE-2026-0008\n' >"$adv/27.3.txt"
+run "comma inside an id => REFUSE" 2 "refuse	" -- 27.3 "$adv"
 
 echo
 echo "== release-ota-channel: bad usage REFUSES (a missing argument is not 'none') =="
@@ -163,7 +163,7 @@ run "no version argument => REFUSE" 2 "refuse	" --
 run "empty version argument => REFUSE" 2 "refuse	" -- "" "$adv"
 # A version with a path separator must never be able to read outside the advisories dir.
 run "path traversal in version => REFUSE" 2 "refuse	" -- "../../etc/passwd" "$adv"
-run "version with a slash => REFUSE" 2 "refuse	" -- "26.8/0" "$adv"
+run "version with a slash => REFUSE" 2 "refuse	" -- "26.800/0" "$adv"
 # The SHAPE half of the version guard, which no case reached before. A version carrying no
 # path separator at all still has to be refused, or the separator guard is the only thing
 # between a stray argument and a file read. Found by the mutation round, not by review:
@@ -178,16 +178,16 @@ echo "== release-ota-channel: a WRONG-TYPE or SYMLINKED declaration REFUSES =="
 # following one turns an arbitrary file's contents into advisory ids inside a signed
 # manifest -- the path-traversal guard arriving by a different door.
 printf 'CVE-2026-9001\n' >"$tmp/outside.txt"
-ln -s "$tmp/outside.txt" "$adv/28.0.0.txt"
-run "symlinked declaration => REFUSE" 2 "refuse	" -- 28.0.0 "$adv"
+ln -s "$tmp/outside.txt" "$adv/28.0.txt"
+run "symlinked declaration => REFUSE" 2 "refuse	" -- 28.0 "$adv"
 
 # A dangling symlink is still a symlink: it must refuse, not fall through to "none".
-ln -s "$tmp/does-not-exist.txt" "$adv/28.0.1.txt"
-run "dangling symlink => REFUSE (not none)" 2 "refuse	" -- 28.0.1 "$adv"
+ln -s "$tmp/does-not-exist.txt" "$adv/28.1.txt"
+run "dangling symlink => REFUSE (not none)" 2 "refuse	" -- 28.1 "$adv"
 
 # A directory where the declaration belongs is a half-made declaration, not an absent one.
-mkdir -p "$adv/28.0.2.txt"
-run "directory where the file belongs => REFUSE" 2 "refuse	" -- 28.0.2 "$adv"
+mkdir -p "$adv/28.2.txt"
+run "directory where the file belongs => REFUSE" 2 "refuse	" -- 28.2 "$adv"
 
 echo
 echo "== release-ota-channel: a NUL is refused on the FILE'S BYTES =="
@@ -198,17 +198,17 @@ echo "== release-ota-channel: a NUL is refused on the FILE'S BYTES =="
 # this file exited 0 and answered `security<TAB>CVE-2026-0001ATTACK`, an id that appears
 # nowhere in the reviewed declaration and that would have travelled into a signed security
 # manifest. (the model contrast, 2026-08-09.)
-printf 'CVE-2026-0001\0ATTACK\n' >"$adv/29.0.0.txt"
-run "NUL inside an advisory => REFUSE" 2 "refuse	" -- 29.0.0 "$adv"
+printf 'CVE-2026-0001\0ATTACK\n' >"$adv/29.0.txt"
+run "NUL inside an advisory => REFUSE" 2 "refuse	" -- 29.0 "$adv"
 
 # A NUL anywhere in the file is enough, including on a line that would be discarded as a
 # comment: the answer must not depend on where in the file the byte happens to sit.
-printf '# note\0\nCVE-2026-0002\n' >"$adv/29.0.1.txt"
-run "NUL in a comment line => REFUSE" 2 "refuse	" -- 29.0.1 "$adv"
+printf '# note\0\nCVE-2026-0002\n' >"$adv/29.1.txt"
+run "NUL in a comment line => REFUSE" 2 "refuse	" -- 29.1 "$adv"
 
 # NON-FIRING DIRECTION: a guard that refused every file would pass both cases above.
-printf 'CVE-2026-0003\n' >"$adv/29.0.2.txt"
-run "a NUL-free file is still accepted" 0 "security	CVE-2026-0003" -- 29.0.2 "$adv"
+printf 'CVE-2026-0003\n' >"$adv/29.2.txt"
+run "a NUL-free file is still accepted" 0 "security	CVE-2026-0003" -- 29.2 "$adv"
 
 echo
 echo "== mutation: the NUL guard must be load-bearing =="
@@ -225,7 +225,7 @@ elif ! bash -n "$mut" 2>/dev/null; then
 	fail=$((fail + 1))
 	failed_names+=("NUL mutant invalid")
 else
-	mut_out="$(bash "$mut" 29.0.0 "$adv" 2>/dev/null)"
+	mut_out="$(bash "$mut" 29.0 "$adv" 2>/dev/null)"
 	mut_rc=$?
 	if [ "$mut_rc" -eq 0 ] && [ "$mut_out" = "security	CVE-2026-0001ATTACK" ]; then
 		printf '  killed       %-52s rc 2 -> 0, id welded to %s\n' \
@@ -246,14 +246,14 @@ fi
 run "version 1x2 is not a version" 2 "refuse" -- 1x2 "$adv"
 run "version with a space is not a version" 2 "refuse" -- "1 2" "$adv"
 run "a bare integer is not a version" 2 "refuse" -- 12 "$adv"
-run "monthly release has no zero patch" 0 "none	" -- 26.11 "$adv"
+run "monthly release has no zero patch" 0 "none	" -- 26.1100 "$adv"
 run "four fields are not a version" 2 "refuse" -- 1.2.3.4 "$adv"
 run "a leading zero is not a field" 2 "refuse" -- 01.2.3 "$adv"
 run "an empty pre-release suffix refuses" 2 "refuse" -- 1.2.3- "$adv"
 run "a non-numeric field is not a version" 2 "refuse" -- 1.2.x "$adv"
 # NON-FIRING: real versions must pass the grammar and reach the ordinary `none` answer.
-run "MAJOR.MINOR.PATCH passes the grammar" 0 "none	" -- 9.9.9 "$adv"
-run "an all-zero version passes" 0 "none	" -- 0.0.0 "$adv"
+run "MAJOR.MINOR passes the grammar" 0 "none	" -- 9.9 "$adv"
+run "an all-zero version passes" 0 "none	" -- 0.0 "$adv"
 # SUFFIXES ARE REFUSED, and that is the honest contract rather than a pretend one: the check
 # only asked that a suffix be non-empty, so `1.2.3-01`, `1.2.3-a_b`, `1.2.3-a b`, `1.2.3-a+b+c`,
 # `1.2.3+meta+again` and `1.2.3-?` all passed as versions. Production releases core tags only.
@@ -266,7 +266,7 @@ run "a question mark in a suffix refuses" 2 "refuse" -- "1.2.3-?" "$adv"
 run "a well-formed pre-release ALSO refuses" 2 "refuse" -- 1.2.3-rc.1 "$adv"
 run "a well-formed build suffix ALSO refuses" 2 "refuse" -- 1.2.3+build.7 "$adv"
 # NON-FIRING for the restriction: the core forms this project actually releases still pass.
-run "a plain core version passes" 0 "none	" -- 1.2.3 "$adv"
+run "a plain core version passes" 0 "none	" -- 1.2 "$adv"
 
 # --- the NUL guard's own tools -------------------------------------------------------------
 # `wc` and `tr` ANSWER the NUL question, so their failure is not a detail: with no `set -e`
@@ -276,8 +276,8 @@ run "a plain core version passes" 0 "none	" -- 1.2.3 "$adv"
 nulwork="$tmp/nultools"
 mkdir -p "$nulwork/release/advisories" "$nulwork/bin"
 ln -sf "$(command -v bash)" "$nulwork/bin/bash"
-printf 'CVE-2026-0001\000ATTACK\n' >"$nulwork/release/advisories/26.8.0.txt"
-nt_out="$(cd "$nulwork" && env -i PATH="$nulwork/bin" bash "$sut" 26.8.0 2>/dev/null)"
+printf 'CVE-2026-0001\000ATTACK\n' >"$nulwork/release/advisories/26.800.txt"
+nt_out="$(cd "$nulwork" && env -i PATH="$nulwork/bin" bash "$sut" 26.800 2>/dev/null)"
 nt_rc=$?
 # calibration: the tools really are unreachable, or this case proves nothing
 env -i PATH="$nulwork/bin" bash -c 'command -v wc >/dev/null 2>&1 || command -v tr >/dev/null 2>&1'

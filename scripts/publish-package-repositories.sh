@@ -56,8 +56,8 @@ while [[ "$#" -gt 0 ]]; do
 	esac
 done
 
-blind() { printf 'publish-package-repositories: NO HE PODIDO MIRAR — %s\n' "$*" >&2; exit 2; }
-fail() { printf 'publish-package-repositories: HALLAZGO — %s\n' "$*" >&2; exit 1; }
+blind() { printf 'publish-package-repositories: COULD NOT LOOK — %s\n' "$*" >&2; exit 2; }
+fail() { printf 'publish-package-repositories: FINDING — %s\n' "$*" >&2; exit 1; }
 
 case "$mode" in
 stage | verify-stage | promote | pacman-render) ;;
@@ -79,7 +79,7 @@ chmod 0700 "$scratch"
 
 pacman_key_rel=keys/olivares-pacman-repository.gpg
 pacman_channels=(stable security)
-pacman_object_re='^(stable|security)/pacman/x86_64/(olivares\.(db|files)(\.sig)?|olivares_[0-9]+\.[0-9]+(\.[0-9]+)?_linux_amd64\.pkg\.tar\.zst(\.sig)?)$'
+pacman_object_re='^(stable|security)/pacman/x86_64/(olivares\.(db|files)(\.sig)?|olivares_[0-9]+\.[0-9]+_linux_amd64\.pkg\.tar\.zst(\.sig)?)$'
 
 # pacman_key_primaries KEYRING: the primary fingerprints of the keys in KEYRING, one per
 # line, read without importing them anywhere.
@@ -181,7 +181,7 @@ pacman_render() {
 	pacman_fpr="${OLIVARES_PACMAN_SIGNING_FINGERPRINT:-}"
 	[[ "$pacman_packages" == /* && -d "$pacman_packages" && ! -L "$pacman_packages" ]] ||
 		blind '--pacman-packages must be an existing absolute directory'
-	[[ "$release_version" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]] || blind '--version must be YY.M or YY.M.N'
+	[[ "$release_version" =~ ^[0-9]+\.[0-9]+$ ]] || blind '--version must be MAJOR.MINOR'
 	[[ "$source_date_epoch" =~ ^[0-9]+$ ]] || blind '--source-date-epoch must be a Unix time'
 	if [[ -z "$repo_add" ]]; then repo_add="$(command -v repo-add || true)"; fi
 	[[ "$repo_add" == /* && -x "$repo_add" ]] || blind 'repo-add is not an absolute executable'
@@ -381,7 +381,7 @@ put_and_verify() {
 	put_object "$key" "$source" "$cache" || return 1
 	get_object "$key" "$check" || return 1
 	cmp -s "$source" "$check" || {
-		printf 'publish-package-repositories: HALLAZGO — remote digest differs after put: %s\n' "$key" >&2
+		printf 'publish-package-repositories: FINDING — remote digest differs after put: %s\n' "$key" >&2
 		return 1
 	}
 }
@@ -393,7 +393,7 @@ verify_stage() {
 		rm -f -- "$check"
 		get_object "$stage_prefix/$rel" "$check" || return 1
 		cmp -s "$tree/$rel" "$check" || {
-			printf 'publish-package-repositories: HALLAZGO — staged digest differs: %s\n' "$rel" >&2
+			printf 'publish-package-repositories: FINDING — staged digest differs: %s\n' "$rel" >&2
 			return 1
 		}
 	done
@@ -446,7 +446,7 @@ rollback() {
 		fi
 	done < <(tac "$changed")
 	if [[ "$rollback_failed" -ne 0 ]]; then
-		printf 'publish-package-repositories: HALLAZGO — rollback incomplete; staging source remains at %s\n' "$stage_prefix" >&2
+		printf 'publish-package-repositories: FINDING — rollback incomplete; staging source remains at %s\n' "$stage_prefix" >&2
 	fi
 	exit "$original_rc"
 }
@@ -464,7 +464,7 @@ promote_one() {
 		if grep -Eiq '10007|does not exist|not found' "$err_file"; then
 			state=absent
 		else
-			printf 'publish-package-repositories: NO HE PODIDO MIRAR — cannot distinguish absent canonical object from a failed read (rc=%d): %s\n' \
+			printf 'publish-package-repositories: COULD NOT LOOK — cannot distinguish absent canonical object from a failed read (rc=%d): %s\n' \
 				"$rc" "$rel" >&2
 			return 2
 		fi
@@ -474,7 +474,7 @@ promote_one() {
 			printf 'publish-package-repositories: immutable canonical object already matches: %s\n' "$rel"
 			return 0
 		fi
-		printf 'publish-package-repositories: HALLAZGO — immutable canonical object differs; refusing overwrite: %s\n' \
+		printf 'publish-package-repositories: FINDING — immutable canonical object differs; refusing overwrite: %s\n' \
 			"$rel" >&2
 		return 1
 	fi

@@ -20,7 +20,7 @@
 //     and flattens user-enumeration timing.
 //   - The Federation (SSO) seam: the open-core single-IdP OIDC/SAML provider in
 //     core/auth/federation implements it and links into the base build, so
-//     go-oidc / crewjam-saml ARE in core's dependency tree; multi-IdP, enforcement
+//     go-oidc / gosaml2 ARE in core's dependency tree; multi-IdP, enforcement
 //     and managed SCIM stay enterprise (LICENSING.md). NoFederation is the default.
 //
 // Tenant isolation is enforced by binding the store Scope to the request's

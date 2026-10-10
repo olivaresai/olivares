@@ -54,33 +54,33 @@ BASE_REF="${OLIVARES_DUP_BASE_REF:-origin/main}"
 BASELINE="${OLIVARES_DUP_BASELINE:-docs/session-number-duplicates-baseline.txt}"
 
 die_unreadable() {
-	echo "check-session-duplicates: ⛔ NO HE PODIDO MIRAR: $1" >&2
-	echo "                          Un censo que no ha podido leer el árbol no es «cero" >&2
-	echo "                          duplicados»: es no haber mirado." >&2
+	echo "check-session-duplicates: ⛔ COULD NOT CHECK: $1" >&2
+	echo "                          An inventory that cannot read the tree has not found zero" >&2
+	echo "                          duplicates; it has not inspected them." >&2
 	exit 2
 }
 
 for _a in "$@"; do
 	case "$_a" in
 	--list) LIST=1 ;;
-	*) die_unreadable "argumento desconocido: $_a" ;;
+	*) die_unreadable "unknown argument: $_a" ;;
 	esac
 done
 
-command -v git >/dev/null 2>&1 || die_unreadable "no encuentro git"
-git rev-parse --git-dir >/dev/null 2>&1 || die_unreadable "no estoy dentro de un repositorio"
+command -v git >/dev/null 2>&1 || die_unreadable "git is unavailable"
+git rev-parse --git-dir >/dev/null 2>&1 || die_unreadable "not inside a repository"
 git rev-parse --verify --quiet "$BASE_REF" >/dev/null 2>&1 ||
-	die_unreadable "no resuelvo '${BASE_REF}' — un ref ausente no es un árbol limpio"
+	die_unreadable "cannot resolve '${BASE_REF}' — a missing ref is not a clean tree"
 
 RUTAS="$(git ls-tree -r --name-only "$BASE_REF" -- sessions/ 2>/dev/null)" ||
-	die_unreadable "git ls-tree sobre ${BASE_REF} falló"
+	die_unreadable "git ls-tree on ${BASE_REF} failed"
 
 # CONTROL POSITIVO, y hace falta: «0 duplicados de 0 ficheros» y «0 duplicados de 749» son
 # la misma frase con distinto significado, y la primera no es un verde. Si el barrido deja
 # de alcanzar `sessions/` —otra ruta, otro layout— este guion tiene que decirlo, no aprobar.
 TOTAL="$(printf '%s\n' "$RUTAS" | grep -c '^sessions/S[0-9]' || true)"
 if [ "${TOTAL:-0}" -lt 100 ]; then
-	die_unreadable "sólo ${TOTAL:-0} fichero(s) de sesión en ${BASE_REF} (esperaba cientos)"
+	die_unreadable "only ${TOTAL:-0} session file(s) in ${BASE_REF} (expected hundreds)"
 fi
 
 # Un número está DUPLICADO cuando dos rutas distintas lo llevan. Sin colapsar nada: ver la
@@ -94,33 +94,33 @@ if [ "${LIST:-0}" = "1" ]; then
 	exit 0
 fi
 
-[ -r "$BASELINE" ] || die_unreadable "no leo la línea base ${BASELINE}"
+[ -r "$BASELINE" ] || die_unreadable "cannot read baseline ${BASELINE}"
 
 NUEVOS="$(printf '%s\n' "$ACTUAL" | grep -vxF -f "$BASELINE" 2>/dev/null | grep . || true)"
 IDOS="$(grep -vxF -f <(printf '%s\n' "$ACTUAL") "$BASELINE" 2>/dev/null | grep . || true)"
 n_act="$(printf '%s\n' "$ACTUAL" | grep -c . || true)"
 n_base="$(grep -c . "$BASELINE" || true)"
 
-echo "check-session-duplicates: ${n_act} número(s) con más de un fichero en ${BASE_REF}, de ${TOTAL} fichero(s) · línea base ${n_base}"
+echo "check-session-duplicates: ${n_act} number(s) shared by multiple files in ${BASE_REF}, out of ${TOTAL} file(s) · baseline ${n_base}"
 
 if [ -n "$NUEVOS" ]; then
-	echo "check-session-duplicates: ⛔ UN NÚMERO QUE ANTES NO ERA AMBIGUO LO ES AHORA:" >&2
+	echo "check-session-duplicates: ⛔ A PREVIOUSLY UNAMBIGUOUS NUMBER IS NOW AMBIGUOUS:" >&2
 	printf '%s\n' "$NUEVOS" | while IFS= read -r _n; do
 		[ -n "$_n" ] || continue
 		echo "  ${_n}" >&2
 		printf '%s\n' "$RUTAS" | grep "^sessions/${_n}[-/]" | sed 's/^/      /' >&2
 	done
 	echo "check-session-duplicates:" >&2
-	echo "  Si son DOS SESIONES distintas, renombra la que llegó después y arréglalo aquí," >&2
-	echo "  no en main. Si es un anexo de la misma sesión, añade el número a ${BASELINE}" >&2
-	echo "  EN ESTE MISMO COMMIT y di en el mensaje por qué no es una colisión." >&2
+	echo "  If these are TWO DISTINCT SESSIONS, rename the later one and fix it here," >&2
+	echo "  before merging to main. If this is an appendix to the same session, add its number to ${BASELINE}" >&2
+	echo "  IN THIS COMMIT and explain in the commit message why it is not a collision." >&2
 	exit 1
 fi
 
 if [ -n "$IDOS" ]; then
-	echo "check-session-duplicates: ✔ $(printf '%s\n' "$IDOS" | grep -c .) resuelto(s) — baja la línea base en el mismo commit:"
+	echo "check-session-duplicates: ✔ $(printf '%s\n' "$IDOS" | grep -c .) resolved — reduce the baseline in the same commit:"
 	printf '%s\n' "$IDOS" | sed 's/^/    /'
-	echo "  Una línea base que no baja cuando el duplicado se arregla convierte el trinquete en un techo."
+	echo "  A baseline that does not shrink when a duplicate is fixed turns the ratchet into a ceiling."
 fi
 
-echo "check-session-duplicates: OK — ningún número nuevo se vuelve ambiguo."
+echo "check-session-duplicates: OK — no new number becomes ambiguous."

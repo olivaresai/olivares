@@ -4,7 +4,7 @@
 # pg-majors — the PostgreSQL 15/16/17/18 support matrix.
 #
 # ONE job, FOUR service containers, one build-cache warmup, four independent
-# passes of the same packages with only the DSN triple changing. Not a
+# passes of the same packages with per-major DSNs and declared scope. Not a
 # strategy.matrix: the db-capable runner pool has size 1, so four legs would
 # serialize anyway and pay the fixed overhead (checkout, setup-go, image pulls)
 # four times.
@@ -19,13 +19,12 @@
 # is NOT closed by PR CI — that release rule is the only thing between a shape
 # change and a release.
 #
-# WHAT A GREEN RUN CLAIMS — and what it does not: it claims the
-# listed packages pass, skip-free, against real servers of the four majors,
-# each pass floor-checked against ci/pg-majors-expectations.json. It does NOT
-# claim the F-09/F-10 guard conditions hold: those need the guard-side code
-# (verifiedPostgresMajors as a SET, the 16+ reachability predicate, the skip
-# removal) that a separate change owns. Landing this workflow first is the
-# permanent net; that change closes the findings.
+# WHAT A GREEN RUN CLAIMS: the declared scope in
+# ci/pg-majors-expectations.json passes without failures or skips on each real
+# major. The evaluator publishes every exact pre-execution exclusion and reason;
+# floors remain mandatory. PostgreSQL 16 retains optional bounded-read coverage,
+# and every major exercises its native capability verdict. Historical v9 producer
+# qualification is separate (testdata/F2A-V9-FIXTURE.md), not claimed here.
 
 name: pg-majors
 
@@ -39,7 +38,6 @@ on:
 
 permissions:
   contents: read
-  issues: write   # scheduled-run failure telemetry only (issue; no PR exists)
 
 concurrency:
   group: pg-majors
@@ -190,10 +188,8 @@ jobs:
               exit 1
             fi
             # RECEIPT, honestly labelled: this proves the EXPORTED DSN points at
-            # major $m. The harness-side assertion (pgtest reading
-            # OLIVARES_TEST_PG_EXPECT_MAJOR and comparing on its OWN connection)
-            # is guard-lane code and pending; until it lands, a
-            # harness that ignored the DSN would not be caught by this line.
+            # major $m. pgtest independently corroborates
+            # OLIVARES_TEST_PG_EXPECT_MAJOR on its own connection before provisioning.
             echo "PG_MAJOR_DSN_VERIFIED|major=$m|port=$port|server_version_num=$svn" | tee -a pg-majors-receipts.txt
             base="postgres://postgres@127.0.0.1:${port}"
             psql "$base/postgres" -v ON_ERROR_STOP=1 -v app_password=apppw -f deploy/postgres/01-app-role.sql
@@ -241,6 +237,9 @@ jobs:
           echo "PG_MAJOR_DSNS_BUILT|majors=15,16,17,18" | tee -a pg-majors-receipts.txt
           for m in 15 16 17 18; do
             port=$(eval "echo \${PGPORT_$m}")
+            other=$((15 + (m - 15 + 1) % 4))
+            other_port=$(eval "echo \${PGPORT_$other}")
+            skip=$(python3 scripts/pg-majors-evaluate.py --skip-pattern "$m")
             echo "== pass pg$m (host port $port) =="
             # This job provisions PostgreSQL, so an unreachable server must fail the pass.
             # Keep the DSNs and strict flags on the same env invocation as go test.
@@ -253,7 +252,9 @@ jobs:
               OLIVARES_TEST_POSTGRES_REQUIRED=1 \
               OLIVARES_TEST_PG_EXPECT_MAJOR="$m" \
               OLIVARES_TEST_POSTGRES_MAJOR_DSNS="$MAJOR_DSNS" \
-              go test -json -count=1 -timeout 45m $pkgs > "gotest-$m.json" 2>&1; then
+              OLIVARES_TEST_POSTGRES_OTHER_DSN="postgres://postgres:postgres@127.0.0.1:${other_port}/postgres?sslmode=disable" \
+              OLIVARES_TEST_POSTGRES_OTHER_EXPECT_MAJOR="$other" \
+              go test -json -skip "$skip" -count=1 -timeout 45m $pkgs > "gotest-$m.json" 2>&1; then
               pass_rc=0
             else
               pass_rc=$?
@@ -269,9 +270,23 @@ jobs:
           # ever been seen passing has never been seen working.
           bash scripts/test-pg-majors-evaluate.sh
           python3 scripts/pg-majors-evaluate.py
+      - name: Preserve evidence on the runner
+        if: always()
+        continue-on-error: true
+        uses: ./.github/actions/ci-evidence
+        with:
+          name: pg-majors-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            gotest-15.json
+            gotest-16.json
+            gotest-17.json
+            gotest-18.json
+            pg-majors-exits.txt
+            pg-majors-receipts.txt
       - name: retain PostgreSQL matrix diagnostics
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        continue-on-error: true
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: pg-majors-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
@@ -282,20 +297,23 @@ jobs:
             pg-majors-exits.txt
             pg-majors-receipts.txt
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 1
+  report-failure:
+    needs: pg-majors
+    if: always() && needs.pg-majors.result == 'failure' && github.event_name == 'schedule'
+    runs-on: ${{ vars.CI_RUNNER_LIGHT || vars.CI_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
       - name: failure telemetry (scheduled runs have no PR to report to)
-        if: failure() && github.event_name == 'schedule'
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          # Guard the CLI: self-hosted runners do not all ship gh (measured:
-          # "gh: command not found" once killed a notify step silently).
-          # Context values reach the shell via env, never inline in run:.
-          if command -v gh >/dev/null 2>&1; then
-            gh issue create --title "pg-majors scheduled run failed ($(date -u +%F))" \
-              --body "Run: ${RUN_URL}. See the step summary for which major/package broke." \
-              --label ci 2>/dev/null || echo "::warning::could not open the failure issue"
-          else
-            echo "::warning::gh not on this runner; failure recorded in the step summary only"
-          fi
+          set -euo pipefail
+          gh issue create --repo "$GH_REPO" \
+            --title "pg-majors scheduled run failed ($(date -u +%F))" \
+            --body "Run: ${RUN_URL}. See the matrix job summary and diagnostic artifact for failures and qualification scope." \
+            --label github_actions

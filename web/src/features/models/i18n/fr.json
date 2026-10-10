@@ -271,5 +271,19 @@
     "truncatedHint": "Il y a plus de règles d'accès que celles affichées ; cette page prend des lignes par id. Les marques de ces lignes ne reflètent QUE les règles chargées : des allow qui introduiraient un confinement ou ajouteraient des cibles autorisées peuvent manquer, et des forbid qui retirent de l'accès aussi — cette page peut donc paraître plus large OU plus étroite que la réalité, et un sujet sans aucune règle chargée n'apparaît même pas. N'en déduis pas l'accès effectif : le moteur parcourt toutes les pages avant de décider, et résout un principal par utilisateur, rôle et groupe à la fois, ce qu'une ligne ne peut pas montrer.",
     "groupsTruncated": "{{n}} groupes chargés ; il y en a d'autres",
     "groupsTruncatedHint": "Il y a plus de groupes de modèles que ceux affichés ; cette page prend des lignes par id. Un groupe absent ici ne démontre pas qu'il n'existe pas — une règle peut toujours le viser."
+  },
+  "availability": {
+    "label": "Modèle",
+    "placeholder": "Utiliser le modèle par défaut de l’outil ou saisir un modèle",
+    "default": "Utiliser le modèle par défaut de l’outil",
+    "discovering": "La découverte des modèles est en cours.",
+    "stale": "La liste des modèles est obsolète",
+    "failed": "Les modèles n’ont pas pu être actualisés. Vérifiez la connexion au fournisseur ou reconnectez-vous.",
+    "unsupported": "La découverte automatique des modèles n’est pas disponible pour cet outil. Utilisez son modèle par défaut.",
+    "empty": "Ce fournisseur n’a indiqué aucun modèle.",
+    "provider": "Fournisseur : {{provider}}",
+    "observed": "Dernière observation : {{time}}",
+    "checked": "Dernière vérification : {{time}}",
+    "connection": "Ouvrir les paramètres du fournisseur"
   }
 }

@@ -24,6 +24,7 @@ stage() {
 	cp "$ROOT/design/alc-01-s1-named-nil.json" "$TMP/tree/design/"
 	cp "$ROOT/design/ALC-01-S1-NAMED-NIL-2026-08-20.md" "$TMP/tree/design/"
 	cp "$ROOT/cmd/olivares/wire_noenterprise.go" "$TMP/tree/cmd/olivares/"
+	cp "$ROOT/cmd/olivares/edition_ports.go" "$TMP/tree/cmd/olivares/"
 	cp "$ROOT/cmd/olivares/wire.go" "$TMP/tree/cmd/olivares/"
 }
 
@@ -45,11 +46,11 @@ else
 fi
 
 stage
-python3 - "$TMP/tree/cmd/olivares/wire_noenterprise.go" <<'PY'
+python3 - "$TMP/tree/cmd/olivares/edition_ports.go" <<'PY'
 from pathlib import Path
 import sys
 p = Path(sys.argv[1])
-p.write_text(p.read_text().replace("func newManagedSCIM() any {", "func newManagedSCIMRemoved() any {", 1))
+p.write_text(p.read_text().replace("\tmanagedSCIM editionPort[any]\n", "\tmanagedSCIMRemoved editionPort[any]\n", 1))
 PY
 run
 if [ "$(cat "$TMP/rc")" = 1 ]; then
@@ -63,7 +64,7 @@ python3 - "$TMP/tree/cmd/olivares/wire_noenterprise.go" <<'PY'
 from pathlib import Path
 import sys
 p = Path(sys.argv[1])
-p.write_text(p.read_text().replace("func newManagedSCIM() any {\n	return nil\n}", "func newManagedSCIM() any {\n	return struct{}{}\n}", 1))
+p.write_text(p.read_text().replace('\t\tname: "community",\n', '\t\tname: "community",\n\t\tmanagedSCIM: func() any { return struct{}{} },\n', 1))
 PY
 run
 if [ "$(cat "$TMP/rc")" = 1 ]; then
@@ -89,7 +90,7 @@ else
 fi
 
 stage
-echo 'newManagedSCIM()' >>"$TMP/tree/cmd/olivares/wire.go"
+echo 'var _ = thisEdition.managedSCIM.get()' >>"$TMP/tree/cmd/olivares/wire.go"
 run
 if [ "$(cat "$TMP/rc")" = 1 ]; then
 	ok "firing: shared wire call is FAIL"

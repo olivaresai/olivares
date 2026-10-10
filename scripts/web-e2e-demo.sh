@@ -9,7 +9,7 @@
 # event bus), resolves the demo tenant id, and runs the Playwright demo and focused
 # console-functional specs against live backend data.
 #
-# Usage: scripts/web-e2e-demo.sh
+# Usage: scripts/web-e2e-demo.sh [Playwright arguments]
 # Requires: go, pnpm, Playwright chromium (`pnpm --dir web exec playwright install chromium`).
 set -euo pipefail
 
@@ -18,6 +18,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 # The engine binary is built ONE way outside a release: see scripts/lib/build-bin.sh.
 # Writing the flags out longhand here is what let five scripts drift from build:bin.
 . "$(cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")" && pwd)/lib/build-bin.sh"
+. "$ROOT/scripts/lib/session-conversation-fixture.sh"
 PORT="${E2E_PORT:-8466}"
 GRPC_PORT="$((PORT + 1))"
 # ⛔ EL TRAP SE ARMA ANTES DEL PRIMER TEMPORAL (the reviewer, A-02). Estaba DESPUES en los cuatro, y
@@ -27,7 +28,8 @@ GRPC_PORT="$((PORT + 1))"
 #    cuesta nada y cierra la ventana entera.
 cleanup() {
   [ -n "${PID:-}" ] && kill "$PID" 2>/dev/null || true
-  rm -rf "$DATA" ${EXEC_TMP:+"$EXEC_TMP"}
+  [ -n "${PID:-}" ] && wait "$PID" 2>/dev/null || true
+  rm -rf "${DATA:-}" ${EXEC_TMP:+"$EXEC_TMP"}
 }
 trap cleanup EXIT
 
@@ -52,12 +54,12 @@ BIN="$ROOT/bin/olivares"
 #    recarga, en silencio y deny-closed, que es exactamente el fallo que este guion existe para
 #    cerrar. Un control que avisa y sigue no es un control: es un comentario con `echo`.
 EXEC_TMP="$(olivares_exec_tmpdir)" || {
-  echo "$(basename "$0"): ⛔ NO ARRANCO: ningun directorio temporal EJECUTA." >&2
-  echo "   El motor extrae sus plugins de conector a \$TMPDIR y los LANZA" >&2
-  echo "   (cmd/olivares/boot.go), y aqui ninguno de los candidatos permite execve —" >&2
-  echo "   tipicamente porque /tmp esta montado noexec. Arrancar igual dejaria el plano de" >&2
-  echo "   conectores muerto SIN decirlo." >&2
-  echo "   Remedio: exporta OLIVARES_EXEC_TMPDIR a un directorio que ejecute." >&2
+  echo "$(basename "$0"): ⛔ CANNOT START: no temporary directory allows EXECUTION." >&2
+  echo "   The engine extracts its connector plugins to \$TMPDIR and LAUNCHES them" >&2
+  echo "   (cmd/olivares/boot.go), but none of the candidate directories here allows execve —" >&2
+  echo "   typically because /tmp is mounted noexec. Starting anyway would silently leave the" >&2
+  echo "   connector plane unavailable." >&2
+  echo "   Remedy: export OLIVARES_EXEC_TMPDIR pointing to a directory that permits execution." >&2
   exit 2
 }
 
@@ -81,6 +83,8 @@ if port_is_open "$PORT" || port_is_open "$GRPC_PORT"; then
   echo "ERROR: port $PORT or $GRPC_PORT is already occupied" >&2
   exit 1
 fi
+
+prepare_conversation_fixture
 
 echo "==> Booting engine (insecure, demo-seeded) on 127.0.0.1:$PORT"
 TMPDIR="${EXEC_TMP:-${TMPDIR:-/tmp}}" \
@@ -149,6 +153,7 @@ if [ -z "$TENANT" ]; then
   exit 1
 fi
 echo "==> Demo tenant: $TENANT"
+seed_conversation_fixture
 
 if ! kill -0 "$PID" 2>/dev/null; then
   echo "ERROR: engine exited before Playwright" >&2
@@ -177,4 +182,4 @@ cd "$ROOT/web"
 PLAYWRIGHT_BASE_URL="http://127.0.0.1:$PORT" DEMO_TENANT="$TENANT" \
   pnpm exec playwright test e2e/demo-graph.spec.ts e2e/console-func-l4.spec.ts \
   e2e/console-keyboard-routes.spec.ts e2e/first-screens.spec.ts \
-  e2e/session-work-surface.spec.ts e2e/console-wide-standard.spec.ts
+  e2e/session-work-surface.spec.ts e2e/console-wide-standard.spec.ts "$@"

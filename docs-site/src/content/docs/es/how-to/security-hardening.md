@@ -37,6 +37,19 @@ ejemplo el flag de texto plano para desarrollo, o permitir un rol de base de dat
 no configuraste ninguno, está desactivado. La postura completa de valores seguros por defecto y las
 garantías criptográficas del audit ledger están en el [modelo de seguridad](/es/explanation/security/security-model/).
 
+### Ajustes de inicio de sesión y seguridad
+
+Abre **Ajustes → Inicio de sesión y seguridad** para ver los métodos de inicio de
+sesión, la duración de sesión del motor, la política de verificación adicional
+administrativa y tus passkeys registradas. La duración de sesión es de solo
+lectura; renovar una sesión renueva su caducidad. Registra o renombra tus passkeys
+y configura una aplicación de autenticación en esta página. Los administradores
+del sistema pueden cambiar las políticas existentes de verificación adicional y
+autenticación; los demás usuarios ven el requisito sin un control de edición.
+Exigir una passkey o un código de autenticación requiere primero demostrar que
+tu sesión puede usarlo. Usa **Gestionar proveedores de identidad** para configurar
+el inicio de sesión único.
+
 ### TLS mutuo para colectores remotos
 
 En la topología distribuida, los colectores de borde envían observaciones al core mediante

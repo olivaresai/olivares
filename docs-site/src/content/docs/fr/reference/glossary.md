@@ -17,7 +17,7 @@ Le graphe du module III des **origines** (agents, identités, sessions) et des
 **ressources** qu'elles touchent, chaque arête classée par [mode](#mode) et étiquetée
 avec sa [signal source](#signal-source), son [attribution](#attribution-confiance)
 et son [niveau de couverture](#niveau-de-couverture). Une capacité différenciante clé — l'un
-des 31 modules, pas l'ensemble du produit.
+des 32 modules, pas l'ensemble du produit.
 Voir [Qu'est-ce qu'Olivares AI ?](/fr/start/what-is-olivares-ai/).
 
 ### États d'actuation : `v1` / `on-demand` / `seam`
@@ -160,8 +160,9 @@ détail sensible plutôt que le détail. Routée sur le rail de notification et 
 Le terme de **Gartner** pour une AI qui surveille ou intervient sur *d'autres* agents
 AI. Olivares AI délivre le **résultat de gouvernance** de la catégorie — observer,
 differ permitted-vs-observed, gater deny-closed, enregistrer de façon immuable — mais
-en tant que **control plane read-first en dehors du data path**, pas un LLM inline
-montant la garde. Voir [Vocabulaire d'analyste](/fr/explanation/positioning/analyst-vocabulary/) ;
+avec **observation hors du chemin des données et application inline avec refus
+en cas d’échec**, sans LLM montant la garde. Les hooks Claude Code gérés dépendent
+du PEP du moteur ; un PEP inaccessible refuse les appels d’outil gouvernés. Voir [Vocabulaire d'analyste](/fr/explanation/positioning/analyst-vocabulary/) ;
 à contraster avec la [boucle de gardien](#guardian-loop) intégrée au produit.
 
 ### Guardian loop
@@ -186,7 +187,7 @@ processus à un agent. Voir [eBPF/Tetragon](/fr/how-to/connectors/ebpf-tetragon/
 
 ### live_ref
 
-Identité attribuée par le serveur d’**une** ligne de session live. 26.10.1
+Identité attribuée par le serveur d’**une** ligne de session live. Olivares <!-- release -->0.1<!-- /release -->
 classe l’observation par `(périmètre d’observation, id externe)` afin que deux
 homes fournisseur qui annoncent le même id de session restent deux lignes. Les
 lectures console et API qui signifient « cette ligne » utilisent `live_ref`,

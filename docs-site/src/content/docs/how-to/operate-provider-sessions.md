@@ -1,186 +1,124 @@
 ---
 title: Operate a provider session
 description: >-
-  Register a provider profile for an existing Claude, Codex or Grok home on this
-  node, pin the official driver binary, launch a governed session from the
-  console or CLI, then interrupt or stop the turn without inventing a runner.
+  Choose an AI tool and its account or provider, work in a project folder,
+  approve actions, interrupt a turn, stop and resume from the console or CLI.
 ---
 
-This page is the **operate** path for official provider CLIs. The control plane
-launches an owned child process under a **provider profile**. It does not install
-the provider, create its home, or start an interactive browser sign-in.
+Complete [Your first hour](/how-to/first-hour/) before starting here.
+Tools run on the engine's host, including inside the container for a Compose
+installation. Your client terminal's login and folders are not automatically
+available there.
 
-It is not the connector/hook path. To inventory or govern Grok Build or Codex
-configuration files, use [Integrate Grok Build](/how-to/integrations/grok/) or
-[Integrate Codex](/how-to/integrations/codex/). To co-deploy Claude Code on the
-same host, use [Run Claude Code with Olivares](/how-to/run-claude-code-with-olivares/).
+## Choose how the tool connects
 
-Source for this behavior: `CHANGELOG.md` section `[26.9.0]` (provider
-profiles, Codex driver, Grok driver), the generated
-[console](/reference/console/) and [configuration](/reference/configuration/)
-references, `cmd/olivares/sessionruntime.go`, and
-`web/src/features/agentops/types.ts`.
+**AI tools** (`/agent-tools`) installs tools and runs their own login flows.
+On a native engine, the default tool instance uses the engine user's own login;
+accounts signed in through Olivares remain separate instances. Select the
+account you want to use. The account snapshot shows the email, plan, usage
+windows and models the tool reports. Missing values stay unavailable, and
+failed refreshes are marked stale.
 
-## Preconditions
+**Providers** (`/providers`) holds API keys and local-model endpoints. Add and
+test the provider there, then use it from New session. A provider key and a tool
+subscription are different ways to connect. Ollama needs a reachable endpoint
+and a model, with no API key. See [Add a provider](/how-to/add-a-provider/).
 
-Complete these before a launch. A missing item is a refusal, not a fallback.
+For Claude profiles with `managed_injection` that name **no** provider,
+`OLIVARES_SESSION_RUNTIME_WIF` or `OLIVARES_SESSION_RUNTIME_TOKEN_FILE` supplies
+the host-wide inference credential. A profile bound to a Providers record uses
+that record instead; if its credential cannot be opened, launch is refused
+without falling back to the host credential. A `provider_account_home` profile
+uses its authorized tool login and needs neither variable. See
+[where the environment variables apply](/how-to/add-a-provider/#the-environment-variables-and-where-they-still-apply).
 
-1. Olivares AI is installed and the first administrator exists.
-   See [Your first hour](/how-to/first-hour/) for the setup token.
-   Administrative step-up (`admin_step_up`) defaults to `none`. If an
-   administrator enables `totp` or `passkey`, satisfy that policy before
-   privileged operations (`core/api/middleware.go` `requireStepUp`).
-2. The official provider CLI is already installed on **this node**. The profile
-   registers homes that already exist. The server resolves the paths (absolute,
-   symlinks resolved, existing directory) and does not create, install, or log
-   in (`web/src/features/agentops/types.ts` `CreateProfileRequest`).
-3. You hold `sessions:profile:read` to open **Provider profiles**
-   (`/provider-profiles`) and `sessions:profile:write` to register.
-   Binding a source needs `sessions:profile-binding:write` plus source
-   administration. Launching a run needs `sessions:run:write`.
-   Permissions: [Console reference](/reference/console/).
-4. The matching driver is **registered on this node** by pinning its official
-   binary. Readiness is per driver. There is no shared switch
-   (`cmd/olivares/sessionruntime.go`).
+## Start and talk
 
-| Driver | Pin this environment variable | When it is unset |
-|---|---|---|
-| Claude Code | `OLIVARES_SESSION_RUNTIME_CLAUDE_BIN` (default `claude`) | the Claude path uses the default executable name |
-| Codex | `OLIVARES_SESSION_RUNTIME_CODEX_BIN` | If unset, a **registered** managed install (`olivares agent tool install --driver codex`) pins the receipt executable. Otherwise Codex profiles stay observable and are not launchable. The engine does not search `PATH`. |
-| Grok | `OLIVARES_SESSION_RUNTIME_GROK_BIN` | If unset, a **registered** managed install (`olivares agent tool install --driver grok`) pins the receipt executable. Otherwise Grok profiles stay observable and are not launchable. The engine does not search `PATH`. |
+Open **Sessions → New session** and choose a ready tool. The engine fills the
+profile and folder. For the README Compose installation, choose **Change folder**
+and enter `/project` to work on your mounted host project. Leaving the default
+folder needs no typed path. Leave First message empty to start, then type in
+the conversation, or enter it before pressing **Start**.
 
-The value is the official binary this node may operate. The engine does not
-resolve `codex` or `grok` off `PATH`. The generated configuration table also
-lists `OLIVARES_SESSION_RUNTIME_OPENCODE_BIN` with the same registration rule;
-this page does not add further OpenCode claims.
+A tool using a provider key uses its saved model or lets you select a model
+returned by the connection test. If the model is required but the test has not
+returned any, test the connection in **Providers** first. Claude Code can use
+its native default model.
 
-Claude launches still need one inference credential source
-(`OLIVARES_SESSION_RUNTIME_WIF` or `OLIVARES_SESSION_RUNTIME_TOKEN_FILE`).
-See [Your first hour §3](/how-to/first-hour/#3-launching-a-claude-code-session-from-the-console).
-Codex and Grok use the profile's AUTHORIZED `auth_source` only:
-`provider_account_home` or `managed_injection`, with no fallback between them
-and no default (`CHANGELOG.md` `[26.9.0]`; `ProviderProfileDTO.auth_source`).
+For the README Compose installation, run the CLI inside the engine container.
+It finds the local engine and its certificate there. Sign in with the Olivares
+administrator account you created during setup, not your tool subscription.
 
-:::caution[What this page does not claim]
-`CHANGELOG.md` `[26.9.0]` states that Grok driver behavior is proven against an
-owned fake ACP child through the real HTTP, runtime, store and process group.
-**Compatibility with an authenticated official Grok account is separate work
-and is not asserted here.**
-:::
+When using a provider key with a tool that requires a model, such as Codex,
+save a default in **Providers** before running `session start` below. If neither
+the provider nor the tool's profile has a configured model, append
+`--model <tested-model-id>` to the `session start` command, replacing the
+placeholder with a model ID returned
+by the connection test. A model selected in **New session** applies only to
+that console launch; it does not set the model for a CLI launch.
 
-## 1. Register a provider profile
-
-A provider profile is the durable identity of **one** configured provider
-instance on **one** execution environment: driver, owning environment, and the
-canonical `config_home` / `user_home` the child runs under. It is configuration
-and storage identity, not an authenticated provider account
-(`CHANGELOG.md` `[26.9.0]` B1; console copy `agentops.profiles.subtitle`).
-
-### Console
-
-1. Open **Provider profiles** (`/provider-profiles`).
-2. Select **Register profile**.
-3. Set the driver (`claude`, `codex`, or `grok`), the existing `config_home`,
-   and the existing `user_home`. `environment_ref` may be omitted (this node).
-4. Save. The list shows `profile_ref`, driver, state, and whether the profile
-   is enabled in this environment. Paths are **not** in the ordinary list.
-5. To see stored homes, use **Reveal configuration** (`sessions:profile:admin`).
-   That read is on demand and is dropped when hidden. It still carries no
-   credential value.
-
-Rename, disable and enable keep the same id and homes. **Retire** is
-irreversible, confirmed by typing, and frees the home for a **new** id.
-
-### What the engine refuses
-
-- A profile whose driver is not registered on this node stays visible and is
-  not launchable (`operable` is not a launch guarantee;
-  `GET …/launch-readiness` is the requirements panel).
-- A profile that belongs to another execution environment is shown as foreign
-  and is never launched from this node.
-- A launch that forwards `HOME`, `CLAUDE_CONFIG_DIR`, `CODEX_HOME` or
-  `GROK_HOME` is refused. Those names belong to the profile
-  (`agentops.create.profileEnvConflict`).
-
-There is no screenshot of this screen in the published capture set. Do not
-treat a Connectors-tab image as this form.
-
-## 2. Bind a source (optional, for observed attribution)
-
-A source can be dedicated to a profile at the exact roster revision this node
-applied. The key is the roster row's persistent id, never its editable name
-(`CHANGELOG.md` `[26.9.0]` B1; **Source bindings** `/provider-bindings`).
-
-1. Open **Source bindings** (`/provider-bindings`).
-2. Bind the source's persistent `id` and the `applied_revision` this node's
-   reconciler wired. `GET /v1/console/sources` reports both.
-3. Revoke the binding to stop **new** profile attribution. An earlier envelope
-   keeps its historical binding during replay.
-
-Without a binding, a known registration still appears as a `source`
-observation row. It is not merged into a managed run. See
-[Live operation & sessions](/reference/modules/ii-sessions/).
-
-## 3. Launch
-
-The productive create endpoint requires `provider_profile_ref`. Omitting it
-keeps the older request body, which this API refuses
-(`CHANGELOG.md` `[26.9.0]` B2; CLI flag `--provider-profile`).
-
-The launch dialog offers the **active** profiles. No profile is pre-selected.
-Workspace and template selections may be cleared; the profile may not
-(`CHANGELOG.md` `[26.9.0]` Fixed).
-
-### Console
-
-1. Open **Operate sessions** (`/agentops`) or **Observe sessions** (`/sessions`).
-   They share a screen ([console reference](/reference/console/)).
-2. Open the launch dialog.
-3. Select **Provider profile** (`agentops.create.profile`). The hint states a
-   profile is required.
-4. Optionally set workspace, template, model and effort. Model and effort stay
-   provider-owned open strings on the official agent flags for Grok
-   (`CHANGELOG.md` `[26.9.0]`).
-5. Submit **Request launch**. Only the profile **reference** is posted. The
-   server resolves the homes.
-
-### CLI
+Set the Compose file once in your host terminal:
 
 ```sh
-olivares agent session create --provider-profile <profile_ref>
+export COMPOSE_FILE="$HOME/olivares/deploy/compose/docker-compose.yml"
+docker compose exec olivares olivares login
+docker compose exec olivares olivares tool ls
+docker compose exec olivares olivares tool providers
+docker compose exec olivares olivares session start /project --name first-hour
+docker compose exec olivares olivares session send first-hour "Explain this project."
 ```
 
-Add `--server`, `--tenant` and `--token` (or the active client context) as in
-the [CLI reference](/reference/cli/). Isolation is `native` this release;
-`container` and `sandbox` are accepted by the API and refused by the launcher
-until those runners ship (generated CLI help).
+For a native installation, run the same Olivares commands directly on the
+engine host and replace `/project` with your project path. The client prints
+which tool and connection it chose. With several tools, select
+one using `--tool`; `--profile` selects an existing profile. Closing the client
+terminal leaves the session running on the engine. To reconnect to its output:
 
-Result: a run resource. The managed live row is unique per observation scope
-and external id. Reads that name a row use `live_ref`, not the bare provider
-session id two homes may share.
+```sh
+docker compose exec olivares olivares session follow first-hour
+```
 
-## 4. Interrupt or stop
+## Approve, interrupt, stop and resume
 
-| Intent | Console | CLI | Result |
-|---|---|---|---|
-| End the active turn, keep the process and conversation | interrupt control on the live session | `olivares agent session interrupt <run-ref>` | the turn ends; the process stays usable for the next turn (`CHANGELOG.md` `[26.9.0]`) |
-| End the run | stop control | `olivares agent session stop <run-ref>` | the run resource; runtime still reaps the child |
+Under **More options**, **Ask before each action** makes the tool ask before
+acting. In **Approvals**, inspect the pending request, choose **Approve** or
+**Deny**, and confirm. A launch that requires an organization approval waits
+there too; send your message once the launch is approved.
 
-Work-bound runs send their exact lease fence. Stale or uncertain results stay
-explicit. Resume continues only on the same proven home.
+Use **Interrupt** to end the current turn while leaving the conversation open.
+Use **Stop** to end the process, confirming if asked. **Resume** restarts that
+same session on the same profile, account and folder; it rechecks credentials
+and policy. Send a new message after resuming.
 
-A Grok interrupt uses ACP `session/cancel`, which is a notification with no
-acknowledgement. The interrupt resolves pending approvals, cancels, and leaves
-the turn open until the prompt's own correlated result returns
-(`CHANGELOG.md` `[26.9.0]`). Do not treat a silent cancel as a confirmed
-provider receipt.
+```sh
+docker compose exec olivares olivares session interrupt first-hour
+docker compose exec olivares olivares session stop first-hour
+docker compose exec olivares olivares session resume first-hour
+docker compose exec olivares olivares session send first-hour "Continue explaining this project."
+```
 
-## Related
+A changed or unavailable account is a launch refusal, not permission to switch
+to another login. An interrupted Grok turn uses ACP cancellation without an
+acknowledgment; wait for the correlated turn result before treating it as ended.
 
-- [Your first hour](/how-to/first-hour/) — setup token, administrative step-up, Claude credential source.
-- [Run Claude Code with Olivares](/how-to/run-claude-code-with-olivares/) — co-deployment topologies.
-- [Integrate Codex](/how-to/integrations/codex/) / [Integrate Grok Build](/how-to/integrations/grok/) — connector and PEP hook.
-- [Session runtime API](/reference/session-runtime-api/) — list, attach, input, stop; Community PTY and edition cut.
-- [Live operation & sessions](/reference/modules/ii-sessions/) — `live_ref` and attribution.
-- [Configuration](/reference/configuration/) — driver pin variables.
-- [CLI reference](/reference/cli/) — `olivares agent session *` (generated from the binary).
+## Optional profile and git settings
+
+For an existing configured tool home, **Provider profiles** (`/provider-profiles`)
+lets an administrator register a profile and inspect launch readiness.
+The homes must exist on the execution host. Use **More options → Advanced launch
+options** in New session to select that profile. Binary overrides choose an
+executable; otherwise the engine tries the newest verified managed install,
+then the tool on its `PATH`. See [Configuration](/reference/configuration/).
+
+For a git repository's top folder with at least one commit, **Work in a new git
+worktree** creates a branch and working directory for the session. Resume reuses
+these. A handoff with a branch and commit offers **Open in a new session worktree**;
+choose a registered folder whose repository contains that commit. The engine
+refuses unsupported or unsafe repository settings before creating the worktree.
+
+Cleanup refuses to discard uncommitted or unmerged work. **Also discard the
+worktree and branch** explicitly authorizes that loss; ignored files are removed
+with the worktree. Worktrees share the repository's git metadata. See the
+[session CLI reference](/reference/cli/#command-olivares-session-start) for
+worktree options and [session runtime API](/reference/session-runtime-api/) for
+profile permissions, lifecycle calls and isolation limits.

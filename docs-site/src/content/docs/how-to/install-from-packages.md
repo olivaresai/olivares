@@ -8,14 +8,16 @@ description: >-
 draft: false
 ---
 
+The next release is <!-- release -->`0.1`<!-- /release -->; its GitHub release is not published yet. The commands below describe the planned artifacts. Build from source until publication, then verify each artifact before use. See <!-- release -->`docs/releases/0.1-install-surfaces.json`<!-- /release --> for the observed publication state.
+
 :::note[Published package names]
-The 26.10.1 GitHub release publishes `.deb`, `.rpm` and `.apk` assets for both `amd64`
+The Olivares <!-- release -->0.1<!-- /release --> GitHub release publishes `.deb`, `.rpm` and `.apk` assets for both `amd64`
 and `arm64`, with `checksums.txt`, `checksums.txt.sig` and `checksums.txt.pem`. The
 commands below use the literal `amd64` names from that release; replace `amd64` with
 `arm64` on a 64-bit ARM host. Install from those verified release assets. Repository
 metadata producers in a source tree are not installation instructions for this guide.
 
-**DIST-24-05 qualification.** What CI qualifies is the verified **shell installer** and
+**Installer qualification.** What CI qualifies is the verified **shell installer** and
 its service/doctor contract, not `dpkg`, `rpm` or `apk`: a dispatch/pull-request matrix
 runs it against the published release in Debian stable, Ubuntu 24.04 LTS,
 Fedora, openSUSE Leap and Alpine container userlands and on a hosted macOS 14 runner,
@@ -26,7 +28,7 @@ upgrade of a running OpenRC service and removal — has been exercised locally i
 disposable Alpine guest; that is evidence for this tree, not a signed, hosted or
 preproduction qualification, which remains pending.
 
-**DIST-24-06 proposed repositories (not a live install surface).** The source tree
+**Proposed package repositories (not a live install surface).** The source tree
 contains deterministic apt, rpm-md and APK repository producers, a signed-index verifier,
 a clean-client qualification and a staged publication workflow whose dispatch stays inert
 until a reviewer approves it. **No package-repository URL is live**, no DNS name is
@@ -47,8 +49,10 @@ you to take the download on faith. Put the package, `checksums.txt` and the sign
 directory and run the verifier **from that directory**:
 
 ```bash
+# The verifier is in a source checkout of the release tag, not a release asset; running it
+# trusts the checkout. Without one, INSTALL.md shows the cosign + sha256sum commands.
 # keyless / Sigstore (default; reaches Rekor over the network)
-./verify-release.sh
+/path/to/olivares/scripts/verify-release.sh
 ```
 
 Releases are signed keyless and do not publish a cosign public key, so use the keyless command
@@ -72,16 +76,18 @@ survive an upgrade), the data directory `/var/lib/olivares`, and the licence tex
 `systemctl` presence. The Linux archives carry the same service adapters:
 `scripts/install-service.sh` and `packaging/service/`.
 
+<!-- release -->
 ```bash
 # Debian / Ubuntu
-sudo dpkg -i olivares_26.10.1_linux_amd64.deb
+sudo dpkg -i olivares_0.1_linux_amd64.deb
 
 # RHEL / Fedora / SUSE
-sudo rpm -Uvh olivares_26.10.1_linux_amd64.rpm
+sudo rpm -Uvh olivares_0.1_linux_amd64.rpm
 
 # Alpine
-sudo apk add --allow-untrusted olivares_26.10.1_linux_amd64.apk
+sudo apk add --allow-untrusted olivares_0.1_linux_amd64.apk
 ```
+<!-- /release -->
 
 Installing **creates the system user and group `olivares`** (with `/usr/sbin/nologin` as
 its shell and `/var/lib/olivares` as its home), creates `/var/lib/olivares` mode `0750`
@@ -123,11 +129,31 @@ sudo -u olivares olivares serve --data-dir=/var/lib/olivares \
 The packaged systemd unit runs the engine as the unprivileged `olivares` user with an empty
 capability bounding set — it holds no capabilities at all, ambient or bounding — and
 `NoNewPrivileges=true`, so nothing it launches can gain any. On top of that it carries
-`ProtectSystem=strict` (the filesystem is read-only except `ReadWritePaths=/var/lib/olivares`),
-`ProtectHome`, `PrivateTmp`, `PrivateDevices`, the four `ProtectKernel*`/`ProtectClock`
-directives, `RestrictNamespaces`, `RestrictSUIDSGID`, `RestrictRealtime`, `LockPersonality`,
-`MemoryDenyWriteExecute`, `SystemCallArchitectures=native`, a `@system-service` syscall
+`ProtectSystem=full` (`/usr`, `/boot`, `/efi` and `/etc` are read-only),
+`PrivateDevices=true`, `ProtectClock=true`, `ProtectKernelTunables=true`,
+`ProtectKernelModules=true`, `ProtectKernelLogs=true`, `ProtectControlGroups=true`,
+`RestrictNamespaces=user net` (a session gets its own user and network namespace; every
+other namespace type is denied), `RestrictSUIDSGID=true`, `RestrictRealtime=true`,
+`LockPersonality=true`, `SystemCallArchitectures=native`, a `@system-service` syscall
 filter that additionally drops `@privileged` and `@resources`, and `UMask=0027`.
+
+The unit does **not** hide home or temporary directories, and it allows executable memory:
+it sets `ProtectHome=false`, `PrivateTmp=false` and `MemoryDenyWriteExecute=false`. The
+engine can reach whatever ordinary file permissions allow the `olivares` account, including
+`/home`, `/tmp` and `/var/tmp`, so the folders you choose for sessions stay reachable. The
+confinement is per session instead: before each agent tool or stdio MCP server runs, the
+engine applies a Landlock policy that lets it write to its session folder, its tool home
+and its temporary directory, and never reach the engine's data directory, `/etc/olivares`
+or the engine account's own credentials. Node/V8 agent and MCP runtimes need executable
+JIT memory, which is why `MemoryDenyWriteExecute=false`. On a kernel without Landlock the
+engine refuses to start sessions; `olivares doctor` names the cause.
+
+26.10.0<!-- release-fixed --> shipped a stricter unit: the whole file system read-only except the data directory,
+homes hidden, a private `/tmp` and no writable executable memory. 26.10.1<!-- release-fixed --> relaxed it to the
+values above. You can add any of those settings back in a drop-in (`systemctl edit
+olivares`). Session folders under homes or `/tmp` and JIT-based tools then stop working, and
+with a read-only file system every session folder outside the data directory needs its own
+`ReadWritePaths=` line.
 
 On default Alpine those systemd directives do not apply to a **previously published**
 `.apk`, because that payload's systemd unit is not running. `.apk` packages built from
@@ -177,8 +203,8 @@ check_scratch_mount() {
 check_scratch_mount /var/lib/olivares
 ```
 
-If it says `noexec`, point `TMPDIR` at a directory that is writable under
-`ProtectSystem=strict` **and** lies on an exec-capable mount:
+If it says `noexec`, point `TMPDIR` at a directory that the `olivares` user can write
+**and** that lies on an exec-capable mount:
 
 ```bash
 sudo install -d -o olivares -g olivares -m 0750 /run/olivares-exec-tmp
@@ -286,9 +312,7 @@ Three flags matter to a packaged install specifically:
 
 - **`--endpoint`** — take updates from a GitHub repository you control rather than the
   default. This is the escape hatch for a mirror or a fork.
-- **`--bundle`** — install from a local bundle directory or `.tar.gz` with **no network at
-  all**. Building that bundle and moving it across is
-  [Install in an air-gapped environment](/how-to/air-gap-install/).
+- **`--bundle`** — Offline installation requires Enterprise. Community verifies a bundle with `--bundle --check` without reading a license or installing it.
 - **`--install-timer`** — emit an **opt-in systemd** timer and service that check for updates
   on a schedule. Nothing installs this for you; see
   [what the package does not do](#8-what-the-package-does-not-do). It is a systemd generator.

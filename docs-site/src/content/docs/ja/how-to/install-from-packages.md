@@ -8,14 +8,16 @@ description: >-
 draft: false
 ---
 
+次のリリースは <!-- release -->`0.1`<!-- /release --> で、GitHub ではまだ公開されていません。以下のコマンドは予定されている成果物を示します。公開まではソースからビルドし、公開後も使用前に各成果物を検証してください。観測した公開状況は <!-- release -->`docs/releases/0.1-install-surfaces.json`<!-- /release --> に記録されています。
+
 :::note[公開されているパッケージ名]
-GitHub の 26.10.1 リリースは `amd64` と `arm64` 向けの `.deb`、`.rpm`、`.apk` を公開し、
+GitHub の Olivares <!-- release -->0.1<!-- /release --> リリースは `amd64` と `arm64` 向けの `.deb`、`.rpm`、`.apk` を公開し、
 あわせて `checksums.txt`、`checksums.txt.sig`、`checksums.txt.pem` を置く。以下のコマンドは
 そのリリースのリテラルな `amd64` 名を使う。64 ビット ARM ホストでは `amd64` を `arm64` に
 置き換える。このガイドでは、それらの検証済みリリース成果物からインストールする。ソースツリー
 にあるリポジトリメタデータ生成器は、このガイドのインストール手順ではない。
 
-**DIST-24-05 の認定。** CI が認定するのは検証済みの **シェルインストーラ** とそのサービス/doctor
+**インストーラの認定。** CI が認定するのは検証済みの **シェルインストーラ** とそのサービス/doctor
 契約であり、`dpkg`、`rpm`、`apk` ではない。dispatch/pull request のマトリクスが、公開済み
 リリースに対して Debian stable、Ubuntu 24.04 LTS、Fedora、openSUSE Leap、Alpine の
 コンテナ userland とホスト型 macOS 14 ランナーでそれを実行し、公開リリースに到達できないときは
@@ -25,7 +27,7 @@ dry-run をカバレッジに数えず「測定不能」として失敗する。
 は使い捨ての Alpine ゲストでローカルに実行した。それはこのツリーの証拠であり、署名済み・
 ホスト済み・preproduction の認定ではない。それらは未了のままである。
 
-**DIST-24-06 提案中のリポジトリ（稼働中のインストール面ではない）。** ソースツリーには決定的な
+**提案中のパッケージリポジトリ（稼働中のインストール面ではない）。** ソースツリーには決定的な
 apt、rpm-md、APK リポジトリ生成器、署名付きインデックスの検証器、クリーンクライアントの認定、
 レビュアーが承認するまで dispatch が不活性のままの段階的公開ワークフローがある。**稼働中の
 パッケージリポジトリ URL は存在しない**。委譲された DNS 名も、本番のリポジトリ署名鍵も
@@ -47,8 +49,10 @@ Debian/Ubuntu と RHEL/Fedora/SUSE のデフォルトは **systemd** である�
 検証器を **そのディレクトリから** 実行する。
 
 ```bash
+# The verifier is in a source checkout of the release tag, not a release asset; running it
+# trusts the checkout. Without one, INSTALL.md shows the cosign + sha256sum commands.
 # keyless / Sigstore (default; reaches Rekor over the network)
-./verify-release.sh
+/path/to/olivares/scripts/verify-release.sh
 ```
 
 リリースはキーレスで署名され、cosign の公開鍵は公開されない。したがって、リリースから
@@ -69,16 +73,18 @@ Debian/Ubuntu と RHEL/Fedora/SUSE のデフォルトは **systemd** である�
 `systemctl` の有無から推測しないよう明示的な `package-init` スタンプを添える。Linux アーカイブは
 同じサービスアダプタ `scripts/install-service.sh` と `packaging/service/` を運ぶ。
 
+<!-- release -->
 ```bash
 # Debian / Ubuntu
-sudo dpkg -i olivares_26.10.1_linux_amd64.deb
+sudo dpkg -i olivares_0.1_linux_amd64.deb
 
 # RHEL / Fedora / SUSE
-sudo rpm -Uvh olivares_26.10.1_linux_amd64.rpm
+sudo rpm -Uvh olivares_0.1_linux_amd64.rpm
 
 # Alpine
-sudo apk add --allow-untrusted olivares_26.10.1_linux_amd64.apk
+sudo apk add --allow-untrusted olivares_0.1_linux_amd64.apk
 ```
+<!-- /release -->
 
 インストールは **システムユーザーとグループ `olivares` を作成する**（シェルは
 `/usr/sbin/nologin`、ホームは `/var/lib/olivares`）。`/var/lib/olivares` をそのユーザー所有の
@@ -120,11 +126,31 @@ sudo -u olivares olivares serve --data-dir=/var/lib/olivares \
 同梱の systemd ユニットは、空の capability bounding set を持つ非特権ユーザー `olivares`
 としてエンジンを動かす。ambient も bounding も capability を持たず、
 `NoNewPrivileges=true` なので、起動したものが権限を得ることはない。その上に
-`ProtectSystem=strict`（ファイルシステムは `ReadWritePaths=/var/lib/olivares` 以外読み取り専用）、
-`ProtectHome`、`PrivateTmp`、`PrivateDevices`、4 つの `ProtectKernel*`/`ProtectClock`
-指令、`RestrictNamespaces`、`RestrictSUIDSGID`、`RestrictRealtime`、`LockPersonality`、
-`MemoryDenyWriteExecute`、`SystemCallArchitectures=native`、`@privileged` と
-`@resources` をさらに落とす `@system-service` syscall フィルタ、`UMask=0027` を載せる。
+`ProtectSystem=full`（`/usr`、`/boot`、`/efi`、`/etc` は読み取り専用）、`PrivateDevices=true`、
+`ProtectClock=true`、`ProtectKernelTunables=true`、`ProtectKernelModules=true`、
+`ProtectKernelLogs=true`、`ProtectControlGroups=true`、`RestrictNamespaces=user net`
+（セッションは専用のユーザー名前空間とネットワーク名前空間を持ち、それ以外の種類は拒否される）、
+`RestrictSUIDSGID=true`、`RestrictRealtime=true`、`LockPersonality=true`、
+`SystemCallArchitectures=native`、`@privileged` と `@resources` をさらに落とす
+`@system-service` syscall フィルタ、`UMask=0027` を載せる。
+
+ユニットはホームディレクトリも一時ディレクトリも**隠さず**、実行可能メモリを許可する。
+`ProtectHome=false`、`PrivateTmp=false`、`MemoryDenyWriteExecute=false` を設定している。
+エンジンは通常のファイル権限が `olivares` アカウントに許す範囲すべてに届き、`/home`、`/tmp`、
+`/var/tmp` も含まれる。そのため、セッション用に選んだフォルダーに到達できる。閉じ込めは代わりに
+セッションごとに行う。各エージェントツールや stdio MCP サーバーが動く前に、エンジンは Landlock
+ポリシーを適用し、そのセッションフォルダー、ツールのホーム、一時ディレクトリへの書き込みを許し、
+エンジンのデータディレクトリ、`/etc/olivares`、エンジンアカウント自身の認証情報には決して
+届かせない。Node/V8 のエージェントや MCP ランタイムは実行可能な JIT メモリを必要とするため、
+`MemoryDenyWriteExecute=false` である。Landlock のないカーネルでは、エンジンはセッションの
+起動を拒否し、`olivares doctor` がその原因を示す。
+
+26.10.0<!-- release-fixed --> はより厳しいユニットを出荷していた。データディレクトリ以外のファイルシステム全体を
+読み取り専用にし、ホームを隠し、専用の `/tmp` を持ち、書き込み可能な実行メモリを許さなかった。
+26.10.1<!-- release-fixed --> で上記の値に緩められた。これらの設定はドロップイン（`systemctl edit olivares`）で
+戻せる。その場合ホームや `/tmp` 配下のセッションフォルダーと JIT を使うツールは動かなくなり、
+ファイルシステムを読み取り専用にすると、データディレクトリ外の各セッションフォルダーに
+専用の `ReadWritePaths=` 行が必要になる。
 
 デフォルトの Alpine では、**以前に公開された** `.apk` にこれらの systemd 指令は適用されない。
 そのペイロードの systemd ユニットが動いていないからだ。このソースから構築した `.apk` は代わりに
@@ -171,7 +197,7 @@ check_scratch_mount() {
 check_scratch_mount /var/lib/olivares
 ```
 
-`noexec` と出たら、`ProtectSystem=strict` の下で書け、**かつ** 実行可能なマウント上にある
+`noexec` と出たら、`olivares` ユーザーが書け、**かつ** 実行可能なマウント上にある
 ディレクトリへ `TMPDIR` を向ける:
 
 ```bash
@@ -277,9 +303,7 @@ sudo olivares upgrade --yes      # do it
 
 - **`--endpoint`** — 既定ではなく、自分が制御する GitHub リポジトリから更新を取る。
   ミラーやフォークの逃げ道である。
-- **`--bundle`** — ローカルのバンドルディレクトリまたは `.tar.gz` から **ネットワークなし**
-  でインストールする。そのバンドルを作って運ぶ手順は
-  [エアギャップ環境にインストールする](/ja/how-to/air-gap-install/) にある。
+- **`--bundle`** — オフラインのインストールには Enterprise が必要です。Community は `--bundle --check` でバンドルを検証し、ライセンスの読み取りやインストールは行いません。
 - **`--install-timer`** — 予定に従って更新を確認する **任意の systemd** タイマーとサービスを
   出力する。何も代わりに入れてくれない。
   [パッケージがしないこと](#8-パッケージがしないこと) を参照。systemd の生成器である。

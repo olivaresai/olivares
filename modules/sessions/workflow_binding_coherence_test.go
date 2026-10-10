@@ -131,14 +131,14 @@ func TestBindingReadThenSupersessionRefusesTheOldEffect(t *testing.T) {
 					return err == nil && !sent.MessageID.IsZero(), err
 				}
 
-				sources := f.m.communicationAuthoritySources
+				sources := f.m.CommunicationAuthority
 				resolver := &supersedingResolver{
 					Authenticator: f.authr, beforeAuthority: tc.hook == "before-authority",
 				}
 				if tc.hook != "" {
 					resolver.hook = supersede
 				}
-				f.m.communicationAuthoritySources = &communicationRequestAuthoritySources{
+				f.m.CommunicationAuthority = &communicationRequestAuthoritySources{
 					resolver: resolver, source: sources.source,
 				}
 

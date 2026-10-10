@@ -105,7 +105,7 @@ func terminalEventOf(t *testing.T, m *Module, st store.Store, tenant model.Tenan
 func launchedRun(t *testing.T, m *Module, tenant model.TenantID) (string, string) {
 	t.Helper()
 	ctx := context.Background()
-	dto, err := m.createRun(ctx, tenant, CreateRunParams{
+	dto, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative,
 		Actor: "user:u1", ActorKind: model.ActorUser,
 	})

@@ -16,6 +16,7 @@
 // ⚠ Y por eso la aserción es sobre las CLAVES y no sobre un render: el defecto no está en lo que se
 // pinta, está en dos arrays que no encajan. Una celda de componente lo taparía en cuanto el doble
 // devolviera la lista ya actualizada.
+import { QueryClient } from '@tanstack/react-query'
 import { describe, expect, it } from 'vitest'
 import { agentOpsKeys } from './api'
 
@@ -27,6 +28,42 @@ function esPrefijo(prefijo: readonly unknown[], clave: readonly unknown[]) {
 
 describe('claves de invalidación de agentops', () => {
   const t = 'tenant-1'
+
+  it('keeps the branch file key compatible with the existing diff prefix', () => {
+    expect(agentOpsKeys.runWorktreeDiffFile(t, 'run-1', 'README')).toEqual([
+      ...agentOpsKeys.runWorktreeDiff(t, 'run-1'),
+      'file',
+      'README',
+    ])
+    expect(agentOpsKeys.runWorktreeDiffFile(null, 'run-1', null)).toEqual([
+      ...agentOpsKeys.runWorktreeDiff(null, 'run-1'),
+      'file',
+      null,
+    ])
+  })
+
+  it('isolates branch files by tenant, run and path and invalidates only the run', async () => {
+    const client = new QueryClient()
+    const key = agentOpsKeys.runWorktreeDiffFile(t, 'run-1', 'README')
+    const siblings = [
+      agentOpsKeys.runWorktreeDiffFile('tenant-2', 'run-1', 'README'),
+      agentOpsKeys.runWorktreeDiffFile(t, 'run-2', 'README'),
+      agentOpsKeys.runWorktreeDiffFile(t, 'run-1', 'other.txt'),
+    ]
+    client.setQueryData(key, 'branch text')
+    for (const sibling of siblings) {
+      expect(client.getQueryData(sibling)).toBeUndefined()
+      client.setQueryData(sibling, 'other text')
+    }
+    await client.invalidateQueries({
+      queryKey: agentOpsKeys.runWorktreeDiff(t, 'run-1'),
+    })
+    expect(client.getQueryState(key)?.isInvalidated).toBe(true)
+    expect(
+      siblings.map((sibling) => client.getQueryState(sibling)?.isInvalidated),
+    ).toEqual([false, false, true])
+    client.clear()
+  })
 
   it('la clave sin params es prefijo de la que usa la LISTA', () => {
     const lista = agentOpsKeys.workspaces(t, { limit: 50 })

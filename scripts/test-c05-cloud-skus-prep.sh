@@ -23,7 +23,7 @@ bad() { printf 'FAIL %s\n' "$1" >&2; fail=$((fail + 1)); }
 # entorno, y ponia rojo el push de cualquier carril que trabaje donde trabajamos todos.
 # Va por stderr Y al RESUMEN a proposito: un caso no ejecutado contado como pasado es un verde
 # silencioso, que es peor que el rojo que sustituye.
-nolook() { printf 'NO-MIRADO %s\n' "$1" >&2; nolook=$((nolook + 1)); }
+nolook() { printf 'NOT CHECKED %s\n' "$1" >&2; nolook=$((nolook + 1)); }
 
 stage() {
   rm -rf "$TMP/tree"
@@ -155,6 +155,6 @@ else bad "no-fire should stay CLEAN ($(cat "$TMP/err"))"; fi
 
 echo "check-c05-cloud-skus-prep selftest: $pass passed, $fail failed, $nolook NOT RUN"
 if [ "$nolook" -ne 0 ]; then
-  echo "check-c05-cloud-skus-prep: ⚠ $nolook caso(s) NO EJECUTADO(S) — este veredicto es PARCIAL." >&2
+  echo "check-c05-cloud-skus-prep: ⚠ $nolook case(s) NOT RUN — this verdict is PARTIAL." >&2
 fi
 if [ "$fail" -ne 0 ]; then exit 1; fi

@@ -31,7 +31,7 @@ grep -q 'EvaluateOverride is NO-GATE' "$DOC" \
 grep -q 'not to identity-scale' "$DOC" \
   || fail "prepare doc lost the wrong-pack refusal"
 if grep -qiE 'durableLicensed now scoped|EvaluateOverride gated|FIRMA A claimed' "$DOC"; then
-  fail "prepare doc claims a motor this lote does not have"
+  fail "prepare doc claims a motor this batch does not have"
 fi
 
 python3 - "$JSON" <<'PY' || exit $?

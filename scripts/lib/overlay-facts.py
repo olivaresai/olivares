@@ -178,7 +178,7 @@ def load_acta(acta_path):
     try:
         acta = json.load(io.open(acta_path, encoding="utf-8"))
     except (OSError, ValueError) as exc:
-        look("acta %s is not readable JSON (%s)" % (acta_path, exc))
+        look("record %s is not readable JSON (%s)" % (acta_path, exc))
 
     if acta.get("schema") != ACTA_SCHEMA:
         fail("unknown schema %r" % acta.get("schema"))
@@ -209,15 +209,15 @@ def is_import_list(value):
 def validate_constructions(acta):
     """The two whole reviewed profiles, closed: every key, count, absence and support slot."""
     if acta.get("reviewed_digest_schema") != DIGEST_SCHEMA:
-        fail("acta reviewed_digest_schema must be %s: the declaration digest preimage is versioned "
+        fail("record reviewed_digest_schema must be %s: the declaration digest preimage is versioned "
              "apart from the report" % DIGEST_SCHEMA)
     reviewed = acta.get("reviewed_constructions")
     if not isinstance(reviewed, dict) or set(reviewed) != set(CONSTRUCTIONS):
         got = sorted(reviewed) if isinstance(reviewed, dict) else reviewed
-        fail("acta reviewed_constructions must be exactly %s, got %r" % (sorted(CONSTRUCTIONS), got))
+        fail("record reviewed_constructions must be exactly %s, got %r" % (sorted(CONSTRUCTIONS), got))
     for cid in sorted(CONSTRUCTIONS):
         spec, entry = CONSTRUCTIONS[cid], reviewed[cid]
-        where = "acta reviewed_constructions[%s]" % cid
+        where = "record reviewed_constructions[%s]" % cid
         if not isinstance(entry, dict) or set(entry) != CONSTRUCTION_FIELDS:
             got = sorted(entry) if isinstance(entry, dict) else entry
             fail("%s must have exactly the fields %s, got %r" % (where, sorted(CONSTRUCTION_FIELDS), got))
@@ -229,7 +229,7 @@ def validate_constructions(acta):
         if not isinstance(digests, dict) or set(digests) != present:
             got = sorted(digests) if isinstance(digests, dict) else []
             fail("%s.reviewed_node_digests must be exactly the %d present nodes %s, got %s "
-                 "(a missing target plus a missing acta key cannot drop a reviewed decision)"
+                 "(a missing target plus a missing record key cannot drop a reviewed decision)"
                  % (where, len(present), sorted(present), got))
         for key in sorted(digests):
             if not isinstance(digests[key], str) or not HEX64.match(digests[key]):
@@ -257,7 +257,7 @@ def validate_constructions(acta):
     if not isinstance(sources, dict) or set(sources) != set(CONSTRUCTIONS) or not all(
             isinstance(sources[c], dict) and set(sources[c]) == {"overlay", "community"}
             and all(isinstance(v, str) and HEX40.match(v) for v in sources[c].values()) for c in CONSTRUCTIONS):
-        fail("acta reviewed_construction_sources must name the exact reviewed overlay and Community "
+        fail("record reviewed_construction_sources must name the exact reviewed overlay and Community "
              "commit of each construction")
 
 
@@ -306,21 +306,21 @@ def construction_mismatch(report, cid, entry, where):
         fn = nodes.get(key) or {}
         if key in absent:
             if fn.get("found") or fn.get("digest"):
-                return ("estructura no verificada: %s is present, and construction %s requires it absent"
+                return ("unverified structure: %s is present, and construction %s requires it absent"
                         % (key, cid))
             continue
         if not fn.get("found"):
             return "%s is absent from the %s overlay (construction %s)" % (key, where, cid)
         got = fn.get("digest") or ""
         if not isinstance(got, str) or not HEX64.match(got):
-            return "estructura no verificada: %s is readable but has no closed-form digest" % key
+            return "unverified structure: %s is readable but has no closed-form digest" % key
         if got != entry["reviewed_node_digests"][key]:
-            return ("estructura no verificada: %s is readable but is not the reviewed closed form of "
+            return ("unverified structure: %s is readable but is not the reviewed closed form of "
                     "construction %s (needs an explicit contract update and a behaviour test)" % (key, cid))
     got_files = report.get("files") or {}
     for path in BLOB_PATHS:
         if entry["reviewed_imports"][path] != (got_files.get(path) or {}).get("imports"):
-            return ("estructura no verificada: import bindings of %s are not the reviewed bindings of "
+            return ("unverified structure: import bindings of %s are not the reviewed bindings of "
                     "construction %s (the same function AST with an altered package import is a "
                     "different decision)" % (path, cid))
     return None
@@ -361,7 +361,7 @@ def evaluate_overlay(ent, pin, community_repo, community_commit, acta, ast_bin, 
     if report.get("schema") != READER_SCHEMA:
         fail("the AST reader declared schema %r, not %s" % (report.get("schema"), READER_SCHEMA))
     if acta.get("reviewed_surface_schema") != READER_SCHEMA:
-        fail("acta reviewed_surface_schema must be %s: the closed node manifest is versioned" % READER_SCHEMA)
+        fail("record reviewed_surface_schema must be %s: the closed node manifest is versioned" % READER_SCHEMA)
     if set(report.get("surface") or []) != set(REQUIRED_NODES):
         fail("the AST reader surface is not the frozen reviewed-node set")
     if report.get("digestSchema") != DIGEST_SCHEMA:
@@ -408,18 +408,18 @@ def evaluate_overlay(ent, pin, community_repo, community_commit, acta, ast_bin, 
         fail(why)
     matched = [cid for cid in sorted(profiles) if construction_mismatch(report, cid, profiles[cid], where) is None]
     if matched != [construction]:
-        fail("acta reviewed_constructions is invalid: this report matches %s; exactly one whole "
+        fail("record reviewed_constructions is invalid: this report matches %s; exactly one whole "
              "construction may" % matched)
 
     want_sets = acta.get("reviewed_set_code_packs")
     got_sets = report.get("setCodePacks") or {}
     if not isinstance(want_sets, dict) or want_sets != got_sets:
-        fail("estructura no verificada: setCodePacks is %s and the acta records %s"
+        fail("unverified structure: setCodePacks is %s and the record specifies %s"
              % (got_sets, want_sets))
     want_pids = acta.get("reviewed_pack_product_ids")
     got_pids = report.get("packProductIDs") or {}
     if not isinstance(want_pids, dict) or want_pids != got_pids:
-        fail("estructura no verificada: packProductID is %s and the acta records %s"
+        fail("unverified structure: packProductID is %s and the record specifies %s"
              % (got_pids, want_pids))
 
     if acta.get("legal_hold_evaluation_consults_purchase") is not False:
@@ -449,18 +449,18 @@ def evaluate_overlay(ent, pin, community_repo, community_commit, acta, ast_bin, 
         fail("the iso42001 row's Pack is %r and no Pack constant declares its value: a pack that "
              "names nothing sells nothing" % row.get("pack"))
     if pack_value != acta.get("iso42001_pack"):
-        fail("iso42001 is sold by pack %r and the acta records %r" % (pack_value, acta.get("iso42001_pack")))
+        fail("iso42001 is sold by pack %r and the record specifies %r" % (pack_value, acta.get("iso42001_pack")))
     if row.get("kind") != acta.get("iso42001_kind"):
-        fail("iso42001 Kind is %r and the acta records %r" % (row.get("kind"), acta.get("iso42001_kind")))
+        fail("iso42001 Kind is %r and the record specifies %r" % (row.get("kind"), acta.get("iso42001_kind")))
     if row.get("disp") != acta.get("iso42001_disposition"):
-        fail("iso42001 Disp is %r and the acta records %r" % (row.get("disp"), acta.get("iso42001_disposition")))
+        fail("iso42001 Disp is %r and the record specifies %r" % (row.get("disp"), acta.get("iso42001_disposition")))
 
     pack_const = (checks.get("durable.pack") or {}).get("detail") or ""
     durable_pack_value = pack_consts.get(pack_const)
     if not durable_pack_value:
         fail("durableLicensed selects on %r and the catalog declares no such Pack constant" % pack_const)
     if durable_pack_value != acta.get("durable_purchase_pack"):
-        fail("durableLicensed selects pack %r and the acta records %r"
+        fail("durableLicensed selects pack %r and the record specifies %r"
              % (durable_pack_value, acta.get("durable_purchase_pack")))
 
     # ── 5 · the cut: KindWired is not "in every artifact" ─────────────────────────────────
@@ -468,10 +468,10 @@ def evaluate_overlay(ent, pin, community_repo, community_commit, acta, ast_bin, 
     cut_build = (files.get(P_CUT) or {}).get("build")
     stub_build = (files.get(P_STUB) or {}).get("build")
     if cut_build != acta.get("iso42001_cut_build_tag"):
-        fail("%s is built under %r and the acta records %r"
+        fail("%s is built under %r and the record specifies %r"
              % (P_CUT, cut_build, acta.get("iso42001_cut_build_tag")))
     if stub_build != acta.get("iso42001_stub_build_tag"):
-        fail("%s is built under %r and the acta records %r"
+        fail("%s is built under %r and the record specifies %r"
              % (P_STUB, stub_build, acta.get("iso42001_stub_build_tag")))
 
     # ── 5b · the support closure, last: success needs every binding ───────────────────────
@@ -481,7 +481,7 @@ def evaluate_overlay(ent, pin, community_repo, community_commit, acta, ast_bin, 
     for want, got in zip(profiles[construction]["support_blobs"], support):
         for field in ("blob", "bytes", "sha256"):
             if want[field] != got[field]:
-                fail("estructura no verificada: %s support %s at %s changed (%s %s, reviewed %s from %s): "
+                fail("unverified structure: %s support %s at %s changed (%s %s, reviewed %s from %s): "
                      "the durable trust and observed-revocation facts of %s need an explicit review"
                      % (got["role"], got["path"], got["commit"][:9], field, got[field], want[field],
                         want["review_source"][:9], construction))
@@ -554,11 +554,11 @@ def evaluate_public_map(root, community, acta, label):
         look("the public slug map at %s is not readable as the sold map (%s)" % (community[:9], exc))
     present = "iso42001" in entries
     if present is not acta.get("iso42001_in_public_slug_map"):
-        fail("the public slug map at %s %s iso42001 and the acta records %r"
+        fail("the public slug map at %s %s iso42001 and the record specifies %r"
              % (community[:9], "names" if present else "does not name",
                 acta.get("iso42001_in_public_slug_map")))
     if present and entries["iso42001"] != acta.get("iso42001_public_package"):
-        fail("the public slug map sells iso42001 as %r and the acta records %r"
+        fail("the public slug map sells iso42001 as %r and the record specifies %r"
              % (entries["iso42001"], acta.get("iso42001_public_package")))
     return {"present": present, "input": input_identity(root, community, P_PUBLIC_MAP, "community", raw)}
 

@@ -215,13 +215,8 @@ func runDirectoryActivation(ctx context.Context, s *sqlStore, authority director
 				return err
 			}
 		}
-		query := s.dia.Rebind("UPDATE " + directoryWriterRelation(s.dia, dialect.DirectoryWriterControlTable) + " SET mode=?,expected_generation=expected_generation+1,coverage_protocol=? WHERE control_key=? AND mode=? AND expected_generation=? AND coverage_protocol=? AND expected_generation<?")
-		result, err := tx.ExecContext(ctx, query, string(directoryWriterEnforced), coverageProtocolTarget, directoryWriterLockKey, string(state.Mode), expectedGeneration, coverageProtocolLegacy, int64(math.MaxInt64))
-		if err != nil {
+		if err := advanceDirectoryWriter(ctx, tx, s.dia, state); err != nil {
 			return err
-		}
-		if n, err := result.RowsAffected(); err != nil || n != 1 {
-			return fmt.Errorf("%w: directory activation CAS did not affect one row: %v", store.ErrConflict, err)
 		}
 		// No source, H or G DML follows the exact cutover CAS.
 		after, err := readDirectoryWriterControlState(ctx, tx, s.dia)
@@ -289,4 +284,16 @@ func directoryActivationTargetMatches(attempt, observed directoryActivationAttem
 
 func directoryActivationPrestateMatches(attempt, observed directoryActivationAttempt) bool {
 	return observed.state == attempt.prestate && reflect.DeepEqual(observed.inventory, attempt.beforeInventory) && reflect.DeepEqual(observed.users, attempt.beforeUsers)
+}
+
+func advanceDirectoryWriter(ctx context.Context, tx *sql.Tx, dia dialect.Dialect, state directoryWriterControlState) error {
+	query := dia.Rebind("UPDATE " + directoryWriterRelation(dia, dialect.DirectoryWriterControlTable) + " SET mode=?,expected_generation=expected_generation+1,coverage_protocol=? WHERE control_key=? AND mode=? AND expected_generation=? AND coverage_protocol=? AND expected_generation<?")
+	result, err := tx.ExecContext(ctx, query, string(directoryWriterEnforced), coverageProtocolTarget, directoryWriterLockKey, string(state.Mode), state.ExpectedGeneration, coverageProtocolLegacy, int64(math.MaxInt64))
+	if err != nil {
+		return err
+	}
+	if n, err := result.RowsAffected(); err != nil || n != 1 {
+		return fmt.Errorf("%w: directory activation CAS did not affect one row: %v", store.ErrConflict, err)
+	}
+	return nil
 }

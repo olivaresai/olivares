@@ -9,9 +9,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"time"
 
+	"github.com/olivaresai/olivares/core/envconfig"
 	"github.com/spf13/cobra"
 )
 
@@ -232,7 +232,7 @@ func completeFromAPI(path string, fields ...string) ([]string, cobra.ShellCompDi
 		// The env opt-in is kept so a self-signed dev plane still completes, but
 		// it is now the ONLY thing it skips: the CA bundle and the SPKI pins from
 		// the active context are honored on this path exactly as everywhere else.
-		Insecure: os.Getenv("OLIVARES_INSECURE") == "1",
+		Insecure: envconfig.Get("OLIVARES_INSECURE") == "1",
 		Timeout:  3 * time.Second,
 		Stderr:   io.Discard,
 	})

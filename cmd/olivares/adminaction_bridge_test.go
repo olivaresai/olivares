@@ -30,7 +30,7 @@ func TestAdminGateWorkspaceArchiveFlooredAtTwoApprovers(t *testing.T) {
 	br := buildBridge(t, h, h.mintBoundToken(t, auth.RoleEditor))
 	tid := tenantAID(t, h)
 	ctx := context.Background()
-	gate := br.adminGate(tid)
+	gate := br.AdminGate(tid)
 
 	req := claudeapi.AdminActionRequest{
 		Tenant: tid.String(), Action: claudeapi.ActionArchiveWorkspace, SubjectKind: "workspace",
@@ -77,7 +77,7 @@ func TestAdminGateRecoverableSingleApproval(t *testing.T) {
 	br := buildBridge(t, h, h.mintBoundToken(t, auth.RoleEditor))
 	tid := tenantAID(t, h)
 	ctx := context.Background()
-	gate := br.adminGate(tid)
+	gate := br.AdminGate(tid)
 
 	req := claudeapi.AdminActionRequest{
 		Tenant: tid.String(), Action: claudeapi.ActionDeactivateKey, SubjectKind: "api_key",

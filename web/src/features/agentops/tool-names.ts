@@ -5,7 +5,13 @@
 // The tools a session runs, by their own product names (not translated). The drivers are
 // the engine's (modules/sessions resolveTools): the console names them and starts them,
 // it does not decide which exist.
-export const SESSION_TOOLS = ['claude', 'codex', 'grok', 'opencode'] as const
+export const SESSION_TOOLS = [
+  'claude',
+  'codex',
+  'grok',
+  'opencode',
+  'gemini-cli',
+] as const
 export type SessionTool = (typeof SESSION_TOOLS)[number]
 
 export const TOOL_NAMES: Readonly<Record<SessionTool, string>> = {
@@ -13,6 +19,7 @@ export const TOOL_NAMES: Readonly<Record<SessionTool, string>> = {
   codex: 'Codex',
   grok: 'Grok Build',
   opencode: 'OpenCode',
+  'gemini-cli': 'Gemini CLI',
 }
 
 /** A driver's product name; an unknown driver is named by itself. */

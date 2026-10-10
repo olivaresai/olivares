@@ -10,20 +10,7 @@ ROOT="$(
 )" || exit 2
 CHECK="$ROOT/scripts/check-c05-webhook-sku-prep.sh"
 
-# ⛔ EL SCRATCH SE ELIGE, NO SE HEREDA — mismo defecto y misma cura que su hermana
-#    scripts/test-c05-dodo-sku-prep.sh, donde esta escrito el mecanismo entero. Resumen: esta
-#    bateria monta una COPIA de cloud/control-plane bajo el scratch y corre `go test` sobre ella;
-#    si el llamador apuntaba TMPDIR DENTRO del repositorio, esa copia caia bajo el `go.work` de la
-#    raiz y Go se negaba («directory cmd/cloud-cp is contained in a module that is not one of the
-#    workspace modules listed in go.work»), que se lee como «falta un modulo» y no falta nada.
-#
-#    Medido sobre origin/main LIMPIO (8eee6c362), cambiando UNA sola variable:
-#      TMPDIR dentro del repo  -> 2 passed, 7 failed
-#      TMPDIR fuera del repo   -> 9 passed, 0 failed
-#
-#    La bateria no se encontro por lectura sino MIDIENDOLA: el censo de guiones que montan un arbol
-#    de Go bajo su scratch dio cuatro candidatos y solo dos caen — `test-aws-estate` da 103/0 en las
-#    dos condiciones. Deducir cual sufre por parecido habria acertado aqui y fallado alli.
+# Keep fixture Go modules outside an ancestor workspace.
 sin_go_work() { # 0 si ni el dir ni ningun ancestro tiene go.work
   local p
   p="$(cd -- "$1" 2>/dev/null && pwd -P)" || return 1
@@ -35,10 +22,9 @@ sin_go_work() { # 0 si ni el dir ni ningun ancestro tiene go.work
 }
 elige_scratch() {
   local base d
-  # ⛔ `RUNNER_TEMP` VA EN LA LISTA por el contraste de: en un runner de CI el scratch
-  #    bueno lo aporta el runner, y sin nombrarlo caeriamos a /var/tmp cuando hay algo mejor
-  #    y previsto. Se PRUEBA como los demas, no se privilegia: lo unico que decide es que
-  #    quede fuera de cualquier arbol con go.work.
+  # Include RUNNER_TEMP after the review: CI supplies its preferred scratch path,
+  # so omitting it falls back unnecessarily to /var/tmp. Probe it like every candidate;
+  # the only deciding condition is being outside every go.work tree.
   for base in "${TMPDIR:-}" "${RUNNER_TEMP:-}" /workspace/.olivares-tmptest /var/tmp; do
     [ -n "$base" ] || continue
     mkdir -p "$base" 2>/dev/null || continue
@@ -49,9 +35,9 @@ elige_scratch() {
   return 1
 }
 TMP="$(elige_scratch)" || {
-  echo "test-c05-webhook-sku-prep: COULD NOT LOOK — ningun scratch sirve: hace falta uno FUERA de" >&2
-  echo "  cualquier arbol con go.work, porque esta bateria monta cloud/control-plane y lo compila." >&2
-  echo "  Probados: TMPDIR=${TMPDIR:-sin fijar}, RUNNER_TEMP=${RUNNER_TEMP:-sin fijar}," >&2
+  echo "test-c05-webhook-sku-prep: COULD NOT LOOK — no scratch directory works: one is needed OUTSIDE" >&2
+  echo "  any tree with go.work, because this test stages cloud/control-plane and compiles it." >&2
+  echo "  Tried: TMPDIR=${TMPDIR:-unset}, RUNNER_TEMP=${RUNNER_TEMP:-unset}," >&2
   echo "  /workspace/.olivares-tmptest, /var/tmp." >&2
   exit 2
 }

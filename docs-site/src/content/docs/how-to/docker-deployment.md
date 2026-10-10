@@ -7,6 +7,12 @@ description: >-
   digest-pinning.
 ---
 
+> Business deployment packages are supplied through the Business channel; their publication is unverified here. Verify the chart package and its publisher using the channel instructions before using the local chart below. The flat manifest example uses a Business-supplied file named `business-install.yaml`. Air-gapped installation requires Enterprise.
+
+
+> Helm, Kubernetes operators, Terraform, appliance and FIPS/STIG images are Business deployment artifacts. The source paths below are in the Business distribution. Air-gapped installation requires Enterprise.
+
+
 This guide is for engineers and SREs putting the Olivares AI control plane into
 production with Docker. The whole product is a single image — the engine
 with the web UI embedded — so a single host can run the SQLite topology with no
@@ -16,11 +22,11 @@ tools) and run as a non-root user. Every path keeps the same secure defaults: no
 a one-time setup token and TLS on by default. The host port is published on every
 interface, because this is a server — restrict it deliberately, as shown below.
 
-:::note[Beta — images published for 26.10.1]
-Olivares AI is **beta**. The image coordinates below resolve: release `26.10.1` published them to
-Docker Hub and `ghcr.io` (install-surface witness `docs/releases/26.10.1-install-surfaces.json`).
-Treat this as the deployment shape you will use, not a production-ready guarantee.
+<!-- release -->
+:::note[Olivares 0.1]
+The next release is `0.1`; its GitHub release is not published yet. The commands below describe the planned artifacts. Build from source until publication, then verify each artifact before use. See `docs/releases/0.1-install-surfaces.json` for the observed publication state.
 :::
+<!-- /release -->
 
 For the decision-page view of all deployment options and their defaults, see
 [Self-host the control plane](/how-to/self-hosting/). For disconnected sites, see
@@ -31,16 +37,18 @@ the Kubernetes/Helm path below.
 
 The official container pull is **Docker Hub**:
 
+<!-- release -->
 ```bash
-docker pull docker.io/olivaresai/olivares:26.10.1
+docker pull docker.io/olivaresai/olivares:0.1
 ```
+<!-- /release -->
 
 The same content is also published to `ghcr.io/olivaresai/olivares` — identical by digest,
 and used as the build registry and the fallback. Docker Hub rate-limits **anonymous**
 pulls; ghcr.io does not rate-limit anonymous pulls of public images, so `docker login`
 or the ghcr.io coordinate is the way out if a CI node or a large fleet hits the ceiling.
-Tags carry **no leading `v`**:
-`:26.10.1` pins a release, `:latest` floats, and `:26.10.1-fips` / `:26.10.1-stig` are
+Tags carry **no leading `v`**: <!-- release -->
+`:0.1`<!-- /release --> pins a release, `:latest` floats, and <!-- release -->`:0.1-fips`<!-- /release --> / <!-- release -->`:0.1-stig`<!-- /release --> are
 the hardened variants. The base and `:latest` tags are multi-arch
 (`linux/amd64`, `linux/arm64`); `fips`/`stig` are `amd64`-only.
 
@@ -49,18 +57,20 @@ A control plane is a security product, so verify before you run. Signing is
 identically against either registry — the signatures and attestations are copied to
 Docker Hub by `cosign copy`, so the digest is the same:
 
+<!-- release -->
 ```bash
 IMAGE=docker.io/olivaresai/olivares          # fallback: ghcr.io/olivaresai/olivares (same digest)
-DIGEST="$(crane digest "$IMAGE:26.10.1")"
+DIGEST="$(crane digest "$IMAGE:0.1")"
 REF="$IMAGE@$DIGEST"
 
 cosign verify "$REF" \
-  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v?[0-9]+\.[0-9]+(\.[0-9]+)?$' \
+  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/[0-9]+\.[0-9]+$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 cosign verify-attestation "$REF" --type spdxjson \
-  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v?[0-9]+\.[0-9]+(\.[0-9]+)?$' \
+  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/[0-9]+\.[0-9]+$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
+<!-- /release -->
 
 The full chain — checksums signature, SBOM, OpenVEX, SLSA provenance — is in
 [Verify what you downloaded](/how-to/verify-a-release/). Once verified, deploy by the
@@ -75,6 +85,7 @@ it with ingress; the host-side port mapping decides exposure. It publishes on ev
 host interface below — use `-p 127.0.0.1:8443:8443` instead to keep the console on the
 host itself. Run it non-root, read-only, with all capabilities dropped:
 
+<!-- release -->
 ```bash
 docker volume create olivares-data
 
@@ -87,13 +98,14 @@ docker run -d --name olivares \
   -v olivares-data:/var/lib/olivares \
   -p 8443:8443 \
   -p 8444:8444 \
-  docker.io/olivaresai/olivares:26.10.1 \
+  docker.io/olivaresai/olivares:0.1 \
   serve \
     --listen=0.0.0.0:8443 \
     --grpc-listen=0.0.0.0:8444 \
     --data-dir=/var/lib/olivares \
     --checkpoint-interval=1h
 ```
+<!-- /release -->
 
 | Flag | Why |
 |---|---|
@@ -152,10 +164,12 @@ the `olivares-data` volume.
 ## 3. Multi-tenant Postgres
 
 For the multi-tenant topology, layer the Postgres override on top of the base file.
-Set the two passwords first, then bring the stack up:
+Set three distinct passwords first, using only `A-Z a-z 0-9 . _ ~ -` for this
+Compose demo, then bring the stack up:
 
 ```bash
-cp deploy/compose/.env.example deploy/compose/.env   # set POSTGRES_SUPERUSER_PASSWORD + OLIVARES_DB_PASSWORD
+cp deploy/compose/.env.example deploy/compose/.env   # set three distinct passwords in deploy/compose/.env:
+# POSTGRES_SUPERUSER_PASSWORD, OLIVARES_DB_PASSWORD, OLIVARES_ADMIN_PASSWORD
 docker compose -f deploy/compose/docker-compose.yml \
                -f deploy/compose/docker-compose.postgres.yml up -d
 ```
@@ -165,6 +179,10 @@ The override brings up `postgres:16-alpine`, provisions the **least-privilege**
 `deploy/postgres/01-app-role.sql` via `initdb/10-app-role.sh`), and points the engine
 at that non-superuser role with `--engine=postgres`. This makes the FORCE-RLS tenant
 backstop real: the engine **refuses to start** against a superuser/`BYPASSRLS` role.
+
+The override also provisions `olivares_admin`, a separate `NOSUPERUSER BYPASSRLS`
+role with read-only access to the engine tables. The engine uses it through
+`--admin-dsn` for cross-tenant reads, including first setup.
 
 :::caution[`sslmode=disable` is for the in-network demo only]
 The DSN in the override uses `sslmode=disable` because both containers share a Docker
@@ -177,16 +195,25 @@ prefer the Helm chart with a DSN Secret and a managed (or your own) Postgres —
 
 The backup profile produces scheduled, ledger-continuity-safe DR bundles: the store
 snapshot plus the signing keys, encrypted under your KEK, with a manifest of the
-per-tenant chain tips. Write your passphrase to a file kept **out of the repo and
-image**, then run the one-shot `backup` profile:
+per-tenant chain tips.
+
+Keep the passphrase in a private file outside the checkout and the image, and keep
+a copy somewhere safe off this host: without it, no bundle can be restored. Give
+the backup container read-only access to it (the image runs as UID `65532`):
 
 ```bash
-printf 'a strong DR passphrase' > deploy/compose/dr-pass
-# the host stamps the bundle name:
+sudo install -d -o 65532 -g 65532 -m 0700 /srv/olivares-dr
+sudo install -o 65532 -g 65532 -m 0400 /path/to/private-passphrase /srv/olivares-dr/dr-pass
+
 BACKUP_TS="$(date -u +%Y%m%dT%H%M%SZ)" \
 docker compose -f deploy/compose/docker-compose.yml \
                -f deploy/compose/docker-compose.backup.yml \
-               --profile backup run --rm backup
+               -f - --profile backup run --rm backup <<'YAML'
+services:
+  backup:
+    volumes:
+      - /srv/olivares-dr/dr-pass:/run/secrets/dr-pass:ro
+YAML
 ```
 
 The job shares the engine's data volume, writes the bundle to the `olivares-backups`
@@ -196,7 +223,7 @@ the run in host cron for a scheduled RPO and **mirror the `olivares-backups` vol
 offsite** — a same-host backup is not disaster recovery. Restore and verify with:
 
 ```bash
-olivares dr restore --in <bundle> --data-dir <dir> --passphrase-file dr-pass
+olivares dr restore --in <bundle> --data-dir <dir> --passphrase-file /path/to/private-passphrase
 ```
 
 The full RPO/RTO, key-custody and DR-drill procedure lives with the repository's DR
@@ -300,7 +327,7 @@ image before recreating.
 
 ## 8. Pin by digest for production
 
-Mutable tags (`:26.10.1`, `:latest`) are for evaluation. In production, pin the
+Mutable tags (<!-- release -->`:0.1`<!-- /release -->, `:latest`) are for evaluation. In production, pin the
 **digest** you verified — a digest is immutable and is exactly what you signed off on:
 
 ```bash
@@ -313,7 +340,7 @@ For Compose, set the digest reference in `deploy/compose/.env`:
 OLIVARES_IMAGE=docker.io/olivaresai/olivares@sha256:<digest>
 ```
 
-For scale-out and multi-node, use the chart source at `deploy/helm/olivares` and pin
+For scale-out and multi-node, use the chart source at `./business-chart` and pin
 the published container image by digest. The chart's OCI publication is unverified (`publication-unverified`): it has never been published from this repository, and the registry side is not observable.
 See [Self-host the control plane](/how-to/self-hosting/) for the source command and
 [Install in an air-gapped environment](/how-to/air-gap-install/) for fully

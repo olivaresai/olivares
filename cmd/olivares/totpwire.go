@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	"github.com/olivaresai/olivares/core/auth"
+	"github.com/olivaresai/olivares/core/dr"
 	"github.com/olivaresai/olivares/core/model"
 )
 
@@ -25,8 +26,8 @@ import (
 // key and its own AAD purpose so a TOTP seed can never be opened as an SSO
 // secret or vice versa.
 const (
-	totpSeedKeyEnv  = "OLIVARES_TOTP_SEED_KEY"
-	totpSeedKeyFile = "totp-seed.key"
+	totpSeedKeyEnv  = dr.TOTPSeedKeyEnv
+	totpSeedKeyFile = dr.TOTPSeedKeyFile
 )
 
 // newTOTPSeedSealer builds the AES-256-GCM TOTP seed sealer over the

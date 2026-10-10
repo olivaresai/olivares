@@ -70,6 +70,9 @@ type createApprovalRequest struct {
 	RequiredApprovals int                        `json:"required_approvals,omitempty"`
 	ExpiresInSeconds  int64                      `json:"expires_in_seconds,omitempty"`
 	EscalateInSeconds int64                      `json:"escalate_in_seconds,omitempty"`
+	// LaunchedBy is the audit actor of the person who launched the session an engine
+	// launch approval is for. Internal only, never wire input, display only.
+	LaunchedBy string `json:"-"`
 }
 
 // approvalDTO is the request view. Status is the EFFECTIVE status (expiry derived
@@ -84,6 +87,7 @@ type approvalDTO struct {
 	SubjectRef        string          `json:"subject_ref,omitempty"`
 	Action            string          `json:"action,omitempty"`
 	RequestedBy       string          `json:"requested_by,omitempty"`
+	LaunchedBy        string          `json:"launched_by,omitempty"`
 	Status            string          `json:"status"`
 	RiskTier          string          `json:"risk_tier"`
 	RequiredApprovals int64           `json:"required_approvals"`
@@ -99,16 +103,28 @@ type approvalDTO struct {
 }
 
 func toApprovalDTO(rec model.Record, now model.Timestamp, tier ActionRiskTier) approvalDTO {
+	required := actionApprovalFloor(rec.String(colAction), rec.Int(colRequiredApproval), tier)
+	status := approvalGrantStatus(rec, now, tier)
 	return approvalDTO{
 		ID: rec.String(model.ColID), SessionRef: rec.String(colApprovalSessionRef), SubjectKind: rec.String(colSubjectKind), SubjectRef: rec.String(colSubjectRef),
-		Action: rec.String(colAction), RequestedBy: rec.String(colRequestedBy), Status: effectiveStatus(rec, now),
+		Action: rec.String(colAction), RequestedBy: rec.String(colRequestedBy), LaunchedBy: rec.String(colLaunchedBy), Status: status,
 		RiskTier:          string(tier),
-		RequiredApprovals: rec.Int(colRequiredApproval), ApproveCount: rec.Int(colApproveCount), RejectCount: rec.Int(colRejectCount),
+		RequiredApprovals: required, ApproveCount: rec.Int(colApproveCount), RejectCount: rec.Int(colRejectCount),
 		Reason: rec.String(colReason), PolicyRef: rec.String(colPolicyRef),
 		Review:    storedApprovalReview(rec),
 		ExpiresAt: rec.String(colExpiresAt), EscalateAt: rec.String(colEscalateAt),
 		Escalated: rec.String(colEscalatedAt) != "", DecidedAt: rec.String(colDecidedAt),
 	}
+}
+
+// approvalGrantStatus leaves terminal decision history untouched while exposing
+// an under-floor approved grant as unavailable to all read and consume callers.
+func approvalGrantStatus(rec model.Record, now model.Timestamp, tier ActionRiskTier) string {
+	status := effectiveStatus(rec, now)
+	if status == statusApproved && rec.Int(colApproveCount) < actionApprovalFloor(rec.String(colAction), rec.Int(colRequiredApproval), tier) {
+		return statusExpired
+	}
+	return status
 }
 
 // effectiveStatus is the authoritative status: the stored status unless the
@@ -216,9 +232,7 @@ func (m *Module) openApprovalRecord(ctx context.Context, sc store.Scope, actor, 
 	// quorum (one by default). Neither the requester nor a matching policy
 	// can open it lower (deny-closed; handleDecide re-derives the same floor).
 	tier := resolveRiskTier(spec, matched, in.Action)
-	if in.Action != "sessions.run.launch" {
-		required = floorRequiredApprovals(required, tier)
-	}
+	required = actionApprovalFloor(in.Action, required, tier)
 	if in.Action == "sessions.run.launch" && len(capacity) > 0 && required > capacity[0] {
 		required = capacity[0]
 	}
@@ -230,6 +244,9 @@ func (m *Module) openApprovalRecord(ctx context.Context, sc store.Scope, actor, 
 		colRequestedBy: actor, colRequestedByUser: userID,
 		colStatus: statusPending, colRequiredApproval: required, colApproveCount: int64(0), colRejectCount: int64(0),
 		colReason: in.Reason, colPolicyRef: policyRef,
+	}
+	if in.LaunchedBy != "" {
+		rec[colLaunchedBy] = in.LaunchedBy
 	}
 	if in.Review != nil {
 		encoded, err := json.Marshal(in.Review)
@@ -335,12 +352,12 @@ func (m *Module) handleListApprovals(w http.ResponseWriter, r *http.Request, mc 
 		if err != nil {
 			return err
 		}
-		recs, page, err := listEffectiveApprovals(r.Context(), repo, q, status, now)
+		// One policy load per list call; status and live tier share this snapshot.
+		pols, err := loadApprovalPolicies(r.Context(), sc)
 		if err != nil {
 			return err
 		}
-		// One policy load per list call; the live tier is derived per item.
-		pols, err := loadApprovalPolicies(r.Context(), sc)
+		recs, page, err := listEffectiveApprovals(r.Context(), repo, q, status, now, pols)
 		if err != nil {
 			return err
 		}
@@ -398,7 +415,7 @@ func (m *Module) handleGetApproval(w http.ResponseWriter, r *http.Request, mc ap
 
 // decisionDTO is one immutable entry of the action→human decision trail. It carries
 // BOTH identities of the decider, for the reason core/auth.PersonRef states as a type
-// and breakglass.go already stores as a pair (activated_by + activated_by_user): they
+// and the Business emergency-grant lifecycle stores as a pair (activated_by + activated_by_user): they
 // answer different questions and a two-person control needs both. Decider is WHICH
 // CREDENTIAL decided — the provenance the trail must show — and DeciderUser is WHO
 // decided, the stable person, the ONLY sound basis for counting humans.
@@ -656,9 +673,7 @@ func (m *Module) decideApproval(ctx context.Context, data approvalData, mc api.M
 			// threshold crossing — a request created before this control (or
 			// before a policy made its action critical) can never cross to
 			// approved with a single human (deny-closed).
-			if rec.String(colAction) != "sessions.run.launch" {
-				required = floorRequiredApprovals(required, tier)
-			}
+			required = actionApprovalFloor(rec.String(colAction), required, tier)
 			if rec.String(colAction) == "sessions.run.launch" && required > capacity {
 				required = capacity
 			}
@@ -737,6 +752,9 @@ func (m *Module) cancelApproval(ctx context.Context, data approvalData, mc api.M
 	}
 	now := m.clock.Now()
 	var out Approval
+	// Asked before the writer opens: the admission seam may read grants from the same store.
+	// A session never inherits the human admin bypass, so it is not asked.
+	tenantAdmin := mc.Principal.SessionIdentity == "" && mc.Admits(ctx, permApprovalAdmin, auth.ResourceFor(permApprovalAdmin))
 	err := data.Mutate(ctx, func(sc store.Scope) error {
 		repo, err := sc.Ext(approvalKind)
 		if err != nil {
@@ -746,7 +764,7 @@ func (m *Module) cancelApproval(ctx context.Context, data approvalData, mc api.M
 		if err != nil {
 			return err
 		}
-		if !canCancel(mc, rec) {
+		if !canCancel(mc, rec, tenantAdmin) {
 			return approvalDecisionError{Status: http.StatusForbidden, Message: "only the requester or a tenant admin may cancel this request"}
 		}
 		pols, err := loadApprovalPolicies(ctx, sc)
@@ -887,9 +905,19 @@ func (m *Module) consumeApproval(ctx context.Context, data approvalData, mc api.
 			// still be spent long after its window. Re-anchor here — an approved grant past its
 			// expiry ceiling is NOT spendable (a direct consume must honor the same outer
 			// time-box the pending state did). Cheap: one compare on the already-loaded row. The
-			// bridge already refuses to reuse a stale grant (approvalbridge.go withinGrant); this
+			// bridge already refuses to reuse a stale grant (internal/approvalbridge withinGrant); this
 			// is the defense-in-depth backstop for a direct consume that skips it.
 			if exp, ok := tsValue(rec, colExpiresAt); ok && !now.Before(exp) {
+				resp = ApprovalConsumption{Granted: false, Status: statusExpired}
+				return nil
+			}
+
+			pols, err := loadApprovalPolicies(ctx, sc)
+			if err != nil {
+				return err
+			}
+			tier := liveRiskTier(pols, rec)
+			if approvalGrantStatus(rec, now, tier) != statusApproved {
 				resp = ApprovalConsumption{Granted: false, Status: statusExpired}
 				return nil
 			}
@@ -972,8 +1000,9 @@ func (m *Module) emitApprovalReplayFinding(ctx context.Context, tenant model.Ten
 }
 
 // canCancel admits the requesting session, the human requester (stable user id),
-// or a human tenant admin/owner. A session never inherits the human admin bypass.
-func canCancel(mc api.ModuleContext, rec model.Record) bool {
+// or a principal the admission seam admits at approval admin. A session never
+// inherits the human admin bypass.
+func canCancel(mc api.ModuleContext, rec model.Record, tenantAdmin bool) bool {
 	if sid := mc.Principal.SessionIdentity; sid != "" {
 		// A session acts only as its own requester, regardless of its launcher's
 		// administrator role. The human cancellation rules remain below.
@@ -982,10 +1011,7 @@ func canCancel(mc api.ModuleContext, rec model.Record) bool {
 	if u := mc.Principal.UserID.String(); u != "" && u == rec.String(colRequestedByUser) {
 		return true
 	}
-	if role, ok := mc.Principal.RoleIn(mc.Tenant); ok && auth.RoleRank(role) >= auth.RoleRank(auth.RoleAdmin) {
-		return true
-	}
-	return false
+	return tenantAdmin
 }
 
 // UseApprovalCapacity bounds session quorums by the deployment's available humans.
@@ -1025,6 +1051,12 @@ func normalizeApprovalRequest(in *createApprovalRequest) error {
 	}
 	if len(in.SessionRef) > maxMatchLen || containsInlineCredential(in.SessionRef) {
 		return errors.New("invalid session_ref")
+	}
+	// A display-only fact never blocks an approval: anything but a person's actor on a
+	// session launch is dropped.
+	if in.SessionRef == "" || len(in.LaunchedBy) > maxMatchLen ||
+		!(strings.HasPrefix(in.LaunchedBy, "user:") || strings.HasPrefix(in.LaunchedBy, "token:")) {
+		in.LaunchedBy = ""
 	}
 	if len(in.SubjectRef) > maxNoteLen {
 		return errors.New("subject_ref too long")

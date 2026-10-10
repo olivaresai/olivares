@@ -60,7 +60,7 @@ func runtimeInputModeAdmissionForTest(t *testing.T, f *managedStopFixture, reque
 	original := runtimeInputTargetForTest(t, f, request.Target.RunRef)
 	var validationErr error
 	var before []int64
-	err := f.m.data.Mutate(ctx, f.tenant, func(sc store.Scope) error {
+	err := f.m.Data.Mutate(ctx, f.tenant, func(sc store.Scope) error {
 		now, err := sc.(store.TransactionClock).TransactionNow(ctx)
 		if err != nil {
 			return err

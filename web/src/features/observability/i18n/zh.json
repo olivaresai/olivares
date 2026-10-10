@@ -30,7 +30,8 @@
       "active": "活跃",
       "available": "可用",
       "opt_in_off": "未启用",
-      "blocked": "已阻断"
+      "blocked": "已阻断",
+      "unavailable": "需要 Business"
     },
     "optInOff": "约定处于开发阶段——默认关闭；通过连接器门控启用。",
     "gate": "门控",
@@ -128,7 +129,8 @@
       "ok": "OK",
       "error": "错误",
       "unset": "未设置"
-    }
+    },
+    "exportFailed": "链路导出失败"
   },
   "empty": {
     "ingestionHealth": {
@@ -147,5 +149,10 @@
       "title": "此追踪尚无 span 时序记录",
       "description": "账本事件必须携带引擎 span ID，此视图才能显示每个 span 的起始偏移、时长、参与者和状态。"
     }
+  },
+  "inferenceCoverage": {
+    "inference_metadata_only": "仅保留推理元数据。无法重建提供商的工作上下文。",
+    "provider_context_may_change": "已请求压缩或上下文编辑。保留的元数据无法重建提供商的工作上下文。",
+    "provider_context_unknown": "此推理中提供商的上下文编辑情况未知。保留的元数据无法重建其工作上下文。"
   }
 }

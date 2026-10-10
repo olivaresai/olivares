@@ -22,7 +22,7 @@ staging_id=""
 inside=0
 
 usage() {
-	printf '%s\n' 'usage: package-repository-client-ci.sh --family apt|rpm|apk --image IMAGE (--repository ABS|--repository-url HTTPS) --assets ABS --version X.Y.Z [--evidence-file ABS --staging-id run-N-attempt-N]'
+	printf '%s\n' 'usage: package-repository-client-ci.sh --family apt|rpm|apk --image IMAGE (--repository ABS|--repository-url HTTPS) --assets ABS --version MAJOR.MINOR [--evidence-file ABS --staging-id run-N-attempt-N]'
 }
 
 while [[ "$#" -gt 0 ]]; do
@@ -42,10 +42,10 @@ while [[ "$#" -gt 0 ]]; do
 done
 
 case "$family" in apt | rpm | apk) ;; *) usage >&2; exit 2 ;; esac
-[[ "$version" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]] || { usage >&2; exit 2; }
+[[ "$version" =~ ^[0-9]+\.[0-9]+$ ]] || { usage >&2; exit 2; }
 
-fail() { printf 'package-repository-client: HALLAZGO — %s\n' "$*" >&2; exit 1; }
-blind() { printf 'package-repository-client: NO HE PODIDO MIRAR — %s\n' "$*" >&2; exit 2; }
+fail() { printf 'package-repository-client: FINDING — %s\n' "$*" >&2; exit 1; }
+blind() { printf 'package-repository-client: COULD NOT LOOK — %s\n' "$*" >&2; exit 2; }
 
 # The published rpm repository carries S3's re-signed rpms and is checked by
 # dnf-repository-client.sh (pkg_gpgcheck=1, repo_gpgcheck=1, pinned key). This

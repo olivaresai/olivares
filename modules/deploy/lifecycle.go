@@ -6,8 +6,10 @@ package deploy
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -76,6 +78,15 @@ type mutationRequest struct {
 	ApprovalRef string `json:"approval_ref,omitempty"`
 }
 
+type applyRequest struct {
+	mutationRequest
+	CatalogSource *struct {
+		SourceRef   string          `json:"source_ref"`
+		SubjectKind string          `json:"subject_kind"`
+		Spec        json.RawMessage `json:"spec"`
+	} `json:"catalog_source,omitempty"`
+}
+
 // execContext bundles the loaded definition state a lifecycle handler needs.
 type execContext struct {
 	def        model.Record
@@ -125,20 +136,8 @@ func (ec execContext) subjectLabel() string {
 // execUnavailable maps the fail-closed no-executor sentinel to 503 with a clear,
 // honest message; any other executor error is a 502 (the backend infra failed).
 //
-// IT IS A MEMBER OF THE MAPPER FAMILY BY SIGNATURE AND NOT BY SUBJECT, and the
-// StoreErrorStatus call below is how it earns that without an exemption. Measured
-// 2026-08-12: all five call sites pass an error returned by the executor interface
-// (m.exec.Plan/Apply/Verify/Retire at lifecycle.go:163,251,310,393,514), never one
-// from the store — so ok is false for everything this function receives today, and
-// the 502 is still what runs. Nothing changes.
-//
-// It is here because the alternative was an allowlist entry, and this repository
-// has already written down what those cost: an exemption whose reason has expired
-// is a hole with a comment on it (scripts/test-pg-test-env.sh:2150). The reason
-// here is a premise about five call sites, which is exactly the kind that expires
-// quietly. Consulting the shared mapping instead means the day a store error does
-// reach this writer it gets 404/409/423/503 rather than a 502 blaming an executor
-// that never ran.
+// Preserve shared store error mappings when loading saved setup fails. Backend
+// failures remain 502; an unwired executor remains the explicit 503 sentinel.
 func execUnavailable(w http.ResponseWriter, err error) {
 	if err == errNoExecutor {
 		writeJSON(w, http.StatusServiceUnavailable, errorBody(errNoExecutor.Error()))
@@ -177,7 +176,12 @@ func (m *Module) handlePlan(w http.ResponseWriter, r *http.Request, mc api.Modul
 		writeJSON(w, http.StatusNotFound, errorBody("not found"))
 		return
 	}
-	changes, err := m.exec.Plan(r.Context(), ec.execRequestOf(mc.Tenant))
+	exec, binding, setupErr := m.executorFor(r.Context(), mc)
+	if setupErr != nil {
+		execUnavailable(w, setupErr)
+		return
+	}
+	changes, err := exec.Plan(r.Context(), ec.execRequestOf(mc.Tenant))
 	if err != nil {
 		execUnavailable(w, err)
 		return
@@ -185,7 +189,7 @@ func (m *Module) handlePlan(w http.ResponseWriter, r *http.Request, mc api.Modul
 	if changes == nil {
 		changes = []Change{}
 	}
-	planHash := planHashOf(id.String(), ec.appliedVer, ec.currentVer, ec.specHash)
+	planHash := planHashOf(id.String(), ec.appliedVer, ec.currentVer, executorSpecHash(ec.specHash, binding))
 	out := planResponse{PlanHash: planHash, FromVersion: ec.appliedVer, ToVersion: ec.currentVer, UpToDate: len(changes) == 0, Changes: changes}
 	if err := mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
 		if err := recordOperation(r.Context(), sc, m.clock, id, opPlan, ec.appliedVer, ec.currentVer, planHash, "", StatusNotRequired, opStatusPlanned, mc.Principal.Actor(), changeSummary(changes)); err != nil {
@@ -224,7 +228,7 @@ func (m *Module) handleApply(w http.ResponseWriter, r *http.Request, mc api.Modu
 		writeJSON(w, http.StatusBadRequest, errorBody("invalid id"))
 		return
 	}
-	var in mutationRequest
+	var in applyRequest
 	if r.ContentLength != 0 && !decodeJSON(w, r, &in) {
 		return
 	}
@@ -254,6 +258,16 @@ func (m *Module) handleApply(w http.ResponseWriter, r *http.Request, mc api.Modu
 		writeJSON(w, http.StatusConflict, errorBody("definition is retired; roll back or update it before applying"))
 		return
 	}
+	// A catalog dispatch is pinned to the approved artifact in this same load,
+	// before planning, governance or the executor can act on another revision.
+	if source := in.CatalogSource; source != nil {
+		spec, msg := parseSpec(source.Spec)
+		_, hash, err := spec.canonical()
+		if msg != "" || err != nil || !strings.HasPrefix(source.SourceRef, "catalog entry ") || ec.def.String(colSourceRef) != source.SourceRef || ec.specHash != hash || ec.def.String(colSubjectKind) != source.SubjectKind {
+			writeJSON(w, http.StatusConflict, errorBody("deployment does not match the approved catalog source"))
+			return
+		}
+	}
 
 	// Estate kill switch: an active stop (estate-wide, or this subject
 	// agent) freezes BOTH phases of apply — even an already-approved one. Note
@@ -264,11 +278,16 @@ func (m *Module) handleApply(w http.ResponseWriter, r *http.Request, mc api.Modu
 		return
 	}
 
+	exec, binding, setupErr := m.executorFor(r.Context(), mc)
+	if setupErr != nil {
+		execUnavailable(w, setupErr)
+		return
+	}
 	req := ec.execRequestOf(mc.Tenant)
-	planHash := planHashOf(id.String(), ec.appliedVer, ec.currentVer, ec.specHash)
+	planHash := planHashOf(id.String(), ec.appliedVer, ec.currentVer, executorSpecHash(ec.specHash, binding))
 
 	// Idempotent no-op: the real state already matches the desired spec.
-	changes, err := m.exec.Plan(r.Context(), req)
+	changes, err := exec.Plan(r.Context(), req)
 	if err != nil {
 		execUnavailable(w, err)
 		return
@@ -322,7 +341,7 @@ func (m *Module) handleApply(w http.ResponseWriter, r *http.Request, mc api.Modu
 	}
 
 	// Approved — execute the external mutation, then record the outcome.
-	result, aerr := m.exec.Apply(r.Context(), req)
+	result, aerr := exec.Apply(r.Context(), req)
 	if aerr != nil {
 		if err := mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
 			return recordOperation(r.Context(), sc, m.clock, id, opApply, ec.appliedVer, ec.currentVer, planHash, in.ApprovalRef, decision.Status, opStatusFailed, mc.Principal.Actor(), "apply failed")
@@ -410,7 +429,12 @@ func (m *Module) handleVerify(w http.ResponseWriter, r *http.Request, mc api.Mod
 		writeJSON(w, http.StatusNotFound, errorBody("not found"))
 		return
 	}
-	result, err := m.exec.Verify(r.Context(), ec.execRequestOf(mc.Tenant))
+	exec, binding, setupErr := m.executorFor(r.Context(), mc)
+	if setupErr != nil {
+		execUnavailable(w, setupErr)
+		return
+	}
+	result, err := exec.Verify(r.Context(), ec.execRequestOf(mc.Tenant))
 	if err != nil {
 		execUnavailable(w, err)
 		return
@@ -419,7 +443,7 @@ func (m *Module) handleVerify(w http.ResponseWriter, r *http.Request, mc api.Mod
 		result.Changes = []Change{}
 	}
 	inSync := len(result.Changes) == 0
-	planHash := planHashOf(id.String(), ec.appliedVer, ec.currentVer, ec.specHash)
+	planHash := planHashOf(id.String(), ec.appliedVer, ec.currentVer, executorSpecHash(ec.specHash, binding))
 	if err := mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
 		if depID := model.ID(ec.def.String(colDeploymentID)); !depID.IsZero() {
 			if dep, err := sc.Deployments().Get(r.Context(), depID); err == nil {
@@ -483,9 +507,14 @@ func (m *Module) handleRetire(w http.ResponseWriter, r *http.Request, mc api.Mod
 		return
 	}
 
+	exec, binding, setupErr := m.executorFor(r.Context(), mc)
+	if setupErr != nil {
+		execUnavailable(w, setupErr)
+		return
+	}
 	req := ec.execRequestOf(mc.Tenant)
 	// The retire plan hash is bound to the applied version being torn down.
-	planHash := planHashOf(id.String(), ec.appliedVer, 0, "retire:"+ec.specHash)
+	planHash := planHashOf(id.String(), ec.appliedVer, 0, "retire:"+executorSpecHash(ec.specHash, binding))
 
 	// PHASE 1 — request approval, mutate nothing.
 	if in.ApprovalRef == "" {
@@ -529,47 +558,52 @@ func (m *Module) handleRetire(w http.ResponseWriter, r *http.Request, mc api.Mod
 		return
 	}
 
-	result, rerr := m.exec.Retire(r.Context(), req)
+	result, rerr := exec.Retire(r.Context(), req)
+	// The executor still obeys request cancellation. Once it returns, retain
+	// its actual outcome even if the client disconnected during stop/remove.
+	// Preserve tenant/principal context values and bound the evidence write.
+	outcomeCtx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), 5*time.Second)
+	defer cancel()
 	if rerr != nil {
-		if err := mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
-			return recordOperation(r.Context(), sc, m.clock, id, opRetire, ec.appliedVer, 0, planHash, in.ApprovalRef, decision.Status, opStatusFailed, mc.Principal.Actor(), "retire failed")
+		if err := mc.Data.Mutate(outcomeCtx, func(sc store.Scope) error {
+			return recordOperation(outcomeCtx, sc, m.clock, id, opRetire, ec.appliedVer, 0, planHash, in.ApprovalRef, decision.Status, opStatusFailed, mc.Principal.Actor(), "retire failed")
 		}); err != nil {
 			m.errorf("deploy: failed to record retire-failure operation", "definition", id.String(), "err", err)
 		}
 		execUnavailable(w, rerr)
 		return
 	}
-	if err := mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
+	if err := mc.Data.Mutate(outcomeCtx, func(sc store.Scope) error {
 		defRepo, err := sc.Ext(definitionKind)
 		if err != nil {
 			return err
 		}
-		rec, err := defRepo.Get(r.Context(), id)
+		rec, err := defRepo.Get(outcomeCtx, id)
 		if err != nil {
 			return err
 		}
 		rec[colDesiredStatus] = desiredRetired
 		rec[colAppliedVer] = int64(0)
-		if _, err := defRepo.Update(r.Context(), rec); err != nil {
+		if _, err := defRepo.Update(outcomeCtx, rec); err != nil {
 			return err
 		}
-		if err := m.revokeWirings(r.Context(), sc, id); err != nil {
+		if err := m.revokeWirings(outcomeCtx, sc, id); err != nil {
 			return err
 		}
 		if depID := model.ID(rec.String(colDeploymentID)); !depID.IsZero() {
-			if dep, err := sc.Deployments().Get(r.Context(), depID); err == nil {
+			if dep, err := sc.Deployments().Get(outcomeCtx, depID); err == nil {
 				dep.Status = "retired"
-				if _, err := sc.Deployments().Update(r.Context(), dep); err != nil {
+				if _, err := sc.Deployments().Update(outcomeCtx, dep); err != nil {
 					return err
 				}
 			} else if !isNotFound(err) {
 				return err
 			}
 		}
-		if err := recordOperation(r.Context(), sc, m.clock, id, opRetire, ec.appliedVer, 0, planHash, in.ApprovalRef, decision.Status, opStatusRetired, mc.Principal.Actor(), result.Detail); err != nil {
+		if err := recordOperation(outcomeCtx, sc, m.clock, id, opRetire, ec.appliedVer, 0, planHash, in.ApprovalRef, decision.Status, opStatusRetired, mc.Principal.Actor(), result.Detail); err != nil {
 			return err
 		}
-		return auditEvent(r.Context(), sc, mc, "deploy.retire", definitionKind, id, map[string]any{"approval_ref": in.ApprovalRef, "plan_hash": planHash})
+		return auditEvent(outcomeCtx, sc, mc, "deploy.retire", definitionKind, id, map[string]any{"approval_ref": in.ApprovalRef, "plan_hash": planHash})
 	}); err != nil {
 		writeStoreError(w, err)
 		return

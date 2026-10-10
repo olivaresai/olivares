@@ -6,9 +6,9 @@
 How a deployment behaves when login enforcement is configured, what the engine does at
 startup and at promotion when the artifact running cannot enforce it, and how to recover.
 
-Related: [`08-SECURITY-AND-COMPLIANCE.md`](08-SECURITY-AND-COMPLIANCE.md) §4 (AuthN/AuthZ),
-[`07-LICENSE-AND-OPEN-CORE.md`](07-LICENSE-AND-OPEN-CORE.md) §9.1 (the SSO open/enterprise
-line), [`UPGRADE-AND-ROLLBACK.md`](UPGRADE-AND-ROLLBACK.md) §5 (rollback) and §7 (edition
+Related: [`SECURITY-HARDENING.md`](SECURITY-HARDENING.md) (AuthN/AuthZ),
+[`editions.md`](editions.md) (SSO edition placement),
+[`UPGRADE-AND-ROLLBACK.md`](UPGRADE-AND-ROLLBACK.md) §5 (rollback) and §7 (edition
 changes).
 
 ## 1. What is open and what is additive

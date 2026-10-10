@@ -1,6 +1,28 @@
 {
+  "git": {
+    "title": "Git",
+    "branch": "Branch",
+    "newBranch": "Neuer Branch",
+    "branchName": "Branchname",
+    "createBranch": "Branch erstellen",
+    "commitMessage": "Commit-Nachricht",
+    "commit": "Commit erstellen",
+    "stage": "{{path}} vormerken",
+    "unstage": "{{path}} aus dem Index entfernen",
+    "stageButton": "Vormerken",
+    "unstageButton": "Entfernen",
+    "refresh": "Git-Status aktualisieren",
+    "loading": "Git-Status wird gelesen…",
+    "readOnly": "Die Berechtigungen dieser Sitzung erlauben keine Git-Änderungen.",
+    "clean": "Arbeitsverzeichnis sauber.",
+    "detached": "Losgelöster HEAD",
+    "cancel": "Abbrechen",
+    "truncated": "Die ersten 200 Dateien oder Branches werden angezeigt. Nach dem Eingrenzen der Änderungen aktualisieren.",
+    "fileStatus": "Index: {{index}}; Arbeitsverzeichnis: {{worktree}}",
+    "commitHint": "Nur vorgemerkte Änderungen werden mit Name und E-Mail deines Profils committet.",
+    "working": "Wird ausgeführt…"
+  },
   "title": "Sitzungen",
-  "subtitle": "Live-Betrieb von Agenten — was jede Sitzung gerade tut, ihre Tokens, Kosten und Taktung, aktualisiert über einen Live-Stream.",
   "refresh": "Aktualisieren",
   "search": "Sitzung, Agent, Aktion suchen…",
   "untitled": "Unbenannte Sitzung",
@@ -82,7 +104,7 @@
   },
   "empty": {
     "title": "Noch keine Sitzungen",
-    "description": "Sitzungen erscheinen hier, sobald Agenten zu arbeiten beginnen: die, die Olivares über seine Konnektoren entdeckt, und die, die Sie hier starten."
+    "description": "Hier erscheinen die Sitzungen, die Sie starten, und die, die Olivares findet."
   },
   "filtered": {
     "title": "Keine Sitzungen entsprechen diesen Filtern",
@@ -92,8 +114,6 @@
     "title": "Sitzungen nicht autorisiert",
     "description": "Ihre Rolle umfasst keine Berechtigung zum Anzeigen von Live-Sitzungen."
   },
-  "operateTitle": "Claude Code",
-  "operateSubtitle": "Claude-Code-Sitzungen anlegen, sich aufschalten und regeln – ohne SSH. Sitzungen, die Olivares nur beobachtet, stehen in derselben Liste und öffnen dieselbe Karte.",
   "launch": "Neue Sitzung",
   "allSources": "Alle Herkünfte",
   "tabs": {
@@ -181,7 +201,9 @@
     "unclaimed": "Aktivität einer Sitzung ohne aktiven Anspruch. Die Engine meldet das; es ist nicht dasselbe Signal wie eine mögliche Umgehung.",
     "relayedIO": "Ihre E/A wird an Anthropics Cloud weitergereicht, daher kann Olivares sie hier nicht zeigen. Die Lebenszyklus-Steuerung gilt weiterhin.",
     "observedNotRead": "Die beobachtete Hälfte wurde nicht gelesen: Ihre Rolle enthält sessions:live:read nicht.",
-    "noObservationYet": "Für diese Sitzung wurde noch nichts beobachtet – unter dieser Referenz ist keine Telemetrie auf der Ebene eingetroffen.",
+    "noObservationYet": "Noch keine Aktivität in dieser Sitzung.",
+    "failureReasonMissing": "Diese Sitzung ist fehlgeschlagen. Der Server hat keinen Grund angegeben.",
+    "hostIsolationRemedy": "Bitte den Serveradministrator, unprivilegierte Benutzer- und Netzwerk-Namensräume sowie Landlock zu erlauben. Starte die Sitzung danach erneut.",
     "actionFailed": "Die Aktion konnte nicht abgeschlossen werden.",
     "activeRun": "in Verwendung",
     "pickRun": "Mehrere Läufe steuern diese Sitzung. Wählen Sie einen aus, um sich aufzuschalten, ihn zu regeln oder zu stoppen.",
@@ -234,26 +256,13 @@
   },
   "rail": {
     "label": "Arbeitsleiste",
-    "group": {
-      "active": "Aktiv",
-      "attention": "Wartet auf Sie",
-      "settled": "Abgeschlossen"
-    },
-    "groupEmpty": {
-      "active": "Derzeit läuft nichts.",
-      "attention": "Nichts wartet auf Sie.",
-      "settled": "Noch wurde keine Sitzung abgeschlossen."
-    },
     "pin": "Anheften",
     "unpin": "Lösen",
     "pinnedMark": "Angeheftet",
     "rowMenu": "Aktionen für {{name}}",
-    "noObservation": "Für diese Sitzung ist noch keine Telemetrie eingetroffen.",
-    "emptyTitle": "Noch keine Sitzungen",
-    "emptyDescription": "Jede Sitzung, die diese Installation beobachtet oder startet, erscheint hier, gruppiert danach, was sie von Ihnen braucht."
+    "noObservation": "Für diese Sitzung ist noch keine Telemetrie eingetroffen."
   },
   "surface": {
-    "paneSwitcher": "Bereich wählen",
     "closeContext": "Kontext schließen",
     "backTo": "Zurück zu {{pane}}",
     "pane": {
@@ -269,6 +278,20 @@
     "notReadTitle": "Diese Sitzung konnte nicht gelesen werden",
     "menu": "Aktionen für {{name}}",
     "terminal": "Im Terminal"
+  },
+  "meter": {
+    "mode": "Modus: {{mode}}",
+    "modeTitle": "{{tool}} meldet: {{mode}}",
+    "theTool": "das Tool",
+    "usageLabel": "Verbrauch dieser Sitzung",
+    "tokens": "{{input}} ein / {{output}} aus (Tokens)",
+    "costTitle": "Eine Schätzung, keine Rechnung: die eigene Zahl des Tools oder der Listenpreis eines Durchgangs, den es nicht bepreist hat",
+    "costUnknown": "Kosten nicht gemeldet",
+    "planLabel": "Nutzungsfenster des Plans der Anmeldung dieser Sitzung",
+    "planNotRead": "Plan-Fenster nicht gelesen",
+    "resets": "Wird {{when}} zurückgesetzt ({{at}})",
+    "stale": "zuletzt bekannt",
+    "readAt": "Gelesen {{at}}"
   },
   "evidence": {
     "checks": {
@@ -293,7 +316,7 @@
     "noneTitle": "Keine Sitzung ausgewählt",
     "noneDescription": "Hier erscheinen der Geltungsbereich, unter dem eine Sitzung lief, und die Referenzen, mit denen Sie sie nachschlagen.",
     "scopeTitle": "Geltungsbereich",
-    "scopeHint": "Worauf sich diese Sitzung bezieht. Dies sind die Werte, unter denen sie lief, nicht die jetzt ausgewählten.",
+    "scopeHint": "Worauf sich diese Sitzung bezieht. Dies sind die Werte, unter denen sie lief, nicht die jetzt ausgewählten. Schreibgeschützte Ordner schützen Dateiinhalte und Verzeichniseinträge (kein Schreiben, Kürzen, Erstellen, Entfernen oder Umbenennen); Berechtigungen, Eigentümer, erweiterte Attribute und Zeitstempel unterliegen den normalen Berechtigungen des Hosts.",
     "tenant": "Organisation",
     "workspace": "Arbeitsbereich",
     "environment": "Umgebung",
@@ -325,12 +348,11 @@
     "wireHint": "Der Rohrahmen der gewählten Zeile. Die Unterhaltung ist die Standardansicht.",
     "wireEmpty": "Wählen Sie eine Zeile in der Unterhaltung, um ihren Rohrahmen zu sehen.",
     "thisNode": "Dieser Knoten",
-    "noWorkspace": "Kein Arbeitsbereich",
-    "cwdWarning": "Diese Sitzung hat keinen Arbeitsbereich. Der Treiber hat sein Arbeitsverzeichnis als {{cwd}} gemeldet.",
     "workTitle": "Arbeitsberechtigung der Sitzung",
     "workHint": "Für den letzten Start aufgezeichnet. Jede Aktion prüft die aktuelle Berechtigung.",
     "processState": "Prozesszustand",
     "activityState": "Aktivität",
+    "toolMode": "Modus laut Werkzeug",
     "workRole": "Erteilte Rolle",
     "workWorkspace": "Arbeitsbereich",
     "workActions": "Erteilte Aktionen",
@@ -340,7 +362,17 @@
       "orchestrator": "Orchestrator"
     },
     "details": "Details",
-    "echoes": "Auch gemeldet als"
+    "echoes": "Auch gemeldet als",
+    "folder": "Ordner",
+    "temporaryFolder": "Temporärer Ordner dieser Sitzung",
+    "panels": "Bereiche",
+    "tabChanges": "Änderungen",
+    "tabFiles": "Dateien",
+    "noFiles": "Diese Sitzung hat keinen Ordner zum Durchsuchen.",
+    "noChanges": "Olivares hat diese Sitzung nicht gestartet, daher gibt es keine Änderungen zu zeigen.",
+    "filesUnavailable": "Dieser Ordner kann nicht durchsucht werden.",
+    "filesNoAccess": "Ihre Rolle darf diesen Ordner nicht durchsuchen.",
+    "filesFailed": "Der Ordner konnte nicht gelesen werden."
   },
   "conversation": {
     "log": "Unterhaltung",
@@ -348,10 +380,7 @@
     "empty": "Noch keine Züge. Senden Sie unten einen Satz.",
     "ended": "Der E/A-Strom der Sitzung ist beendet.",
     "lag": "{{count}} Rahmen verloren — die Ausgabe darunter setzt nach der Lücke fort.",
-    "operator": "Sie",
-    "assistant": "Assistent",
     "tool": "Werkzeug",
-    "system": "System",
     "result": "Ergebnis",
     "unknown": "Unbekannter Rahmen",
     "inspect": "Im Inspektor zeigen",
@@ -359,7 +388,6 @@
     "toolResult": "Ergebnis",
     "toolFailed": "Fehlgeschlagen",
     "tokens": "{{input}} ein · {{output}} aus",
-    "cwdWarning": "Diese Sitzung hat keinen Arbeitsbereich. Der Treiber hat sein Arbeitsverzeichnis als {{cwd}} gemeldet.",
     "protocol": "Protokoll-Frames: {{count}}",
     "stop": {
       "cancelled": "Abgebrochen",
@@ -371,7 +399,13 @@
     "retrying": "Neuer Versuch ({{count}}): {{message}}",
     "keyRefused": "Der Anbieter hat den API-Schlüssel abgelehnt. Ersetzen Sie ihn unter Anbieter.",
     "output": "Ausgabe des Tools ({{count}}): {{first}}",
-    "notSent": "Nicht gesendet: {{reason}}"
+    "notSent": "Nicht gesendet: {{reason}}",
+    "waitingApproval": "Wird gesendet, sobald der Start genehmigt ist und die Sitzung läuft.",
+    "workingFolder": "Arbeitsordner: {{cwd}}",
+    "temporaryFolder": "Arbeitsordner: temporärer Ordner dieser Sitzung",
+    "workedFor": "Gearbeitet: {{duration}}",
+    "toolsFolded_one": "+{{count}} Tool-Aufruf",
+    "toolsFolded_other": "+{{count}} Tool-Aufrufe"
   },
   "changes": {
     "title": "Änderungen in {{folder}}",
@@ -386,10 +420,45 @@
     "fileTruncated": "Die ersten 256 KB werden angezeigt.",
     "truncated": "Die {{count}} neuesten Dateien werden angezeigt."
   },
+  "preview": {
+    "title": "Vorschau",
+    "hint": "Die App, die diese Sitzung auf einem lokalen Port bereitstellt. Sie läuft in deinem Browser, von der Konsole isoliert und außerhalb der Netzwerkgrenzen der Sitzung.",
+    "loading": "Ports der Sitzung werden gesucht…",
+    "none": "Diese Sitzung stellt nichts auf einem lokalen Port bereit.",
+    "notRunning": "Die Sitzung läuft nicht und stellt daher nichts bereit.",
+    "error": "Die Ports der Sitzung konnten nicht gelesen werden. Versuche es gleich noch einmal.",
+    "notAllowed": "Zum Öffnen einer Vorschau ist die Berechtigung nötig, diese Sitzung zu bedienen.",
+    "port": "Port",
+    "path": "Pfad",
+    "open": "Öffnen",
+    "reload": "Neu laden",
+    "newTab": "In neuem Tab öffnen",
+    "openError": "Die Vorschau konnte nicht geöffnet werden. Der Port wurde eventuell geschlossen.",
+    "frameTitle": "Vorschau von Port {{port}}"
+  },
+  "branchChanges": {
+    "title": "Änderungen am Branch",
+    "hint": "Was der Branch dieser Sitzung enthält, das der aktuelle Commit des Arbeitsbereichs nicht enthält. Nur committete Arbeit.",
+    "range": "Von {{base}} bis {{head}}",
+    "loading": "Branch wird gelesen…",
+    "error": "Die Branch-Änderungen konnten nicht gelesen werden. Versuchen Sie es gleich noch einmal.",
+    "empty": "Dieser Branch enthält nichts, was der aktuelle Commit des Arbeitsbereichs nicht enthält.",
+    "back": "Alle Branch-Änderungen",
+    "binary": "Binärdatei, nicht angezeigt.",
+    "truncated": "Die ersten {{count}} geänderten Dateien werden angezeigt.",
+    "fileTruncated": "Es werden die ersten 64 KB jeder Seite angezeigt.",
+    "original": "Am Ausgangspunkt",
+    "modified": "An der Branch-Spitze",
+    "status": {
+      "added": "Hinzugefügt",
+      "modified": "Geändert",
+      "deleted": "Gelöscht"
+    }
+  },
   "peers": {
     "button_one": "Darf an {{count}} andere Sitzung schreiben",
     "button_other": "Darf an {{count}} andere Sitzungen schreiben",
-    "buttonNone": "Darf an keine andere Sitzung schreiben",
+    "buttonNone": "Sitzungen für Nachrichten auswählen",
     "template": "Darf an Sitzungen aus dieser Vorlage schreiben",
     "title": "Sitzungen, an die sie schreiben darf",
     "hint": "Die Sitzungen, denen diese schreiben oder Arbeit übergeben darf. Die Engine lehnt alle anderen ab.",
@@ -397,5 +466,21 @@
     "none": "Keine andere aktive Sitzung in diesem Arbeitsbereich.",
     "save": "Speichern",
     "saved": "Nachrichtenrechte gespeichert."
+  },
+  "list": {
+    "group": {
+      "attention": "Braucht Sie",
+      "active": "Läuft",
+      "settled": "Untätig"
+    },
+    "more": "Mehr",
+    "back": "Zurück zu den Sitzungen",
+    "showTable": "Als Tabelle anzeigen",
+    "filter": "Sitzungen filtern…",
+    "noMatch": "Keine Sitzung passt."
+  },
+  "thread": {
+    "copyReference": "Referenz kopieren",
+    "terminalHint": "Dieselbe Sitzung im Terminal."
   }
 }

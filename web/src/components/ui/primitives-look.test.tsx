@@ -2,12 +2,14 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// THE PAGE PRIMITIVES WEAR THE v26.10 LOOK, WITH THE SAME API. Each case names the part of the
-// look the design fixes for that primitive (the redesign's tokens and component rules): the
-// orange fill with its border for the one primary action, a dashed boundary and the third
-// text tone for a control that cannot act, a 2 px focus outline (an outline, so forced-colors
-// mode keeps it), controls on the canvas, the orange for a checked switch and the selected
-// tab, and the state panels in the state set's words and tones.
+// THE PAGE PRIMITIVES WEAR THE 1.0 LOOK, WITH THE SAME API (console 1.0). Each
+// case names the part of the look the design fixes for that primitive: the orange fill for the
+// one primary action; every other labelled action a tonal fill with no border (`outline` is the
+// same button); a control that cannot act keeps its text legible in the third tone with no
+// dashed border; links in the text colour; icon buttons with a 40 px hit area; a 2 px focus
+// outline (an outline, so forced-colors mode keeps it); controls on the canvas; the orange for
+// a checked switch; the selected tab as a raised segment; and the state panels in the state
+// set's words and tones.
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import { Button } from './button'
@@ -35,19 +37,70 @@ describe('the v26.10 look of the page primitives', () => {
     )
   })
 
-  it('Button: a control that cannot act is dashed, in the third tone, never faded', () => {
+  it('Button: a control that cannot act stays legible in the third tone, with no dashed border', () => {
     render(<Button aria-disabled="true">Deploy</Button>)
     const c = classes(screen.getByRole('button'))
     expect(c).toEqual(
       expect.arrayContaining([
-        'aria-disabled:border-dashed',
-        'aria-disabled:border-ctl-border',
         'aria-disabled:text-text-3',
-        'disabled:border-dashed',
         'disabled:text-text-3',
       ]),
     )
+    expect(c.some((k) => k.includes('border-dashed'))).toBe(false)
     expect(c).not.toContain('disabled:opacity-50')
+  })
+
+  it('Button: secondary is a tonal fill with no border, and outline is the same button', () => {
+    render(
+      <>
+        <Button variant="secondary">Export</Button>
+        <Button variant="outline">Filters</Button>
+      </>,
+    )
+    const secondary = classes(screen.getByRole('button', { name: 'Export' }))
+    const outline = classes(screen.getByRole('button', { name: 'Filters' }))
+    expect(secondary).toEqual(
+      expect.arrayContaining(['bg-active', 'text-text']),
+    )
+    expect(secondary).not.toContain('border-line-strong')
+    expect(outline).toEqual(secondary)
+  })
+
+  it('Button: a link is the text colour, never orange', () => {
+    render(<Button variant="link">Show details</Button>)
+    const c = classes(screen.getByRole('button'))
+    expect(c).toContain('text-text')
+    expect(c).not.toContain('text-accent-text')
+  })
+
+  it('Button: an icon button has a 40 px hit area around its 32 or 28 px face', () => {
+    render(
+      <>
+        <Button size="icon" variant="ghost" aria-label="Stop">
+          ■
+        </Button>
+        <Button size="icon-sm" variant="ghost" aria-label="Close">
+          ×
+        </Button>
+      </>,
+    )
+    const hitArea = ['relative', 'after:absolute', "after:content-['']"]
+    expect(classes(screen.getByRole('button', { name: 'Stop' }))).toEqual(
+      expect.arrayContaining([
+        'size-8',
+        'm-1',
+        'after:-inset-[5px]',
+        ...hitArea,
+      ]),
+    )
+    expect(classes(screen.getByRole('button', { name: 'Close' }))).toEqual(
+      expect.arrayContaining([
+        'size-7',
+        'm-1.5',
+        'after:-inset-[7px]',
+        ...hitArea,
+      ]),
+    )
   })
 
   it('Button: focus is a 2 px outline in the focus color', () => {
@@ -107,7 +160,7 @@ describe('the v26.10 look of the page primitives', () => {
     )
   })
 
-  it('Tabs: the selected tab is marked by the selection orange, the others are the second tone', () => {
+  it('Tabs: the selected tab is a raised segment, the others the second tone, no orange rule', () => {
     render(
       <Tabs defaultValue="items">
         <TabsList aria-label="Work">
@@ -121,9 +174,13 @@ describe('the v26.10 look of the page primitives', () => {
       expect.arrayContaining([
         'text-text-2',
         'data-[state=active]:text-text',
-        'data-[state=active]:border-accent-strong',
+        'data-[state=active]:bg-raised',
+        // A ring, not a theme shadow: --shadow-card is no Tailwind token and is none in dark.
+        'data-[state=active]:shadow-[0_0_0_1px_var(--line-strong)]',
       ]),
     )
+    expect(c).not.toContain('data-[state=active]:border-accent-strong')
+    expect(c).not.toContain('data-[state=active]:shadow-card')
   })
 
   it('EmptyState: the description is the second tone at the small step', () => {

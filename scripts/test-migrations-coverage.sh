@@ -48,6 +48,8 @@ new_repo() {
 	mkdir -p "${sb}/scripts" "${sb}/modules/eventing/migrations/postgres" \
 		"${sb}/cloud/control-plane/migrations" "${sb}/commercial/license-worker/migrations" || return 1
 	cp "${GATE}" "${sb}/scripts/check-migrations.sh" || return 1
+	cp "$(dirname "$GATE")/check-migration-hashes.py" "${sb}/scripts/" || return 1
+	cp -R "$(dirname "$GATE")/migrationhash" "${sb}/scripts/" || return 1
 	printf 'ALTER TABLE t ADD COLUMN c TEXT;\n' > "${sb}/modules/eventing/migrations/postgres/0001_seed.sql"
 	printf 'CREATE TABLE tenants (id TEXT PRIMARY KEY);\n' > "${sb}/cloud/control-plane/migrations/001_base.up.sql"
 	printf 'DROP TABLE tenants;\n' > "${sb}/cloud/control-plane/migrations/001_base.down.sql"
@@ -63,7 +65,7 @@ new_repo() {
 expect() {
 	local what="$1" sb="$2" want_rc="$3" want_txt="$4" out rc
 	cases=$((cases + 1))
-	out="$(cd "${sb}" && bash scripts/check-migrations.sh 2>&1)"; rc=$?
+	out="$(cd "${sb}" && OLIVARES_MIGRATION_BASE=HEAD bash scripts/check-migrations.sh 2>&1)"; rc=$?
 	if [ "${rc}" -ne "${want_rc}" ]; then
 		printf '✗ %s\n    expected exit %s, got %s\n' "${what}" "${want_rc}" "${rc}"
 		printf '%s\n' "${out}" | sed 's/^/      /' | head -4
@@ -117,7 +119,7 @@ expect "CASE 4: a migration-shaped fixture under testdata is not schema" "${sb}"
 sb="$(new_repo no_migrations)" || exit 2
 git -C "${sb}" rm -q -r --cached modules cloud commercial >/dev/null
 find "${sb}" -name '*.sql' -delete
-expect "CASE 5: an empty enumeration is UNVERIFIED (exit 2), never a clean green" "${sb}" 2 "UNVERIFIED"
+expect "CASE 5: deleting the migration history is refused" "${sb}" 1 "immutable"
 
 # --- CASE 6. THE INDEX CENSUS CONTROL. A tracked migration the pattern stops matching must turn the
 # gate red rather than quietly shrink the graded set. Reached by numbering with TWO digits, which the

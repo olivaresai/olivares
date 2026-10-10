@@ -2,7 +2,7 @@
 title: Open Core & Lizenzierung
 description: >-
   Open Core: das vollständige Produkt steht unter AGPL-3.0-only, das SDK und die
-  Connectors stehen unter Apache-2.0, und eine kleine additive Enterprise-Linie ist
+  Connectors stehen unter Apache-2.0, und eine kleine additive Linie, die Editionen Business und Enterprise, ist
   kommerziell. Der AGPL-Build wird nie beschnitten, um zum Kauf zu drängen, ist aber
   nicht identisch mit der kommerziellen Edition. Was das für Self-Hoster und
   Connector-Autoren bedeutet.
@@ -25,13 +25,13 @@ Grenze wird in CI durchgesetzt (ein Connector darf niemals die Engine importiere
 | Pfad | Lizenz | Was es ist |
 |---|---|---|
 | `core/` | **AGPL-3.0-only** | die Engine: Ingest, Event-Bus, Datenmodell, Modul-Runtime, API, Authz, Audit |
-| `modules/` | **AGPL-3.0-only** | die 31 Module (Inventar, die R/RW-Map, FinOps, Evals, Guardrails, …) |
+| `modules/` | **AGPL-3.0-only** | die 32 Module (Inventar, die R/RW-Map, FinOps, Evals, Guardrails, …) |
 | `web/` | **AGPL-3.0-only** | die React-Oberfläche |
 | `sdk/` | **Apache-2.0** | die Connector-/Modul-Schnittstellen, der gRPC-Kontrakt und die gemeinsamen Typen |
 | `connectors/` | **Apache-2.0** | die Connectors (Claude, OpenAI, pgAudit, eBPF, Cloud, Slack, SIEM, …) |
-| `enterprise/` | **kommerziell** | additive Module, per Build-Tag gated, niemals im öffentlichen Binary: Multi-IdP-Federation, Content-Firewall/DLP, Hook-Hardening, kompilierter Threat-Intel-Katalog, Server-Tool-Egress, CyberArk Conjur, Incident-Close-Loop (`LicenseRef-Olivares-Commercial`) |
+| `enterprise/` | **kommerziell** | additive Module, per Build-Tag gated, niemals im öffentlichen Binary (`LicenseRef-Olivares-Commercial`) |
 
-Die Dokumentationsseite, die Sie gerade lesen, ist Teil des AGPL-Produkts.
+Die Dokumentationsseite, die Sie gerade lesen, ist Teil des AGPL-Produkts. Welche Fähigkeit in welcher Edition liegt, steht nur an einer Stelle, in `docs/editions.md` im Repository; diese Seite wiederholt es nicht.
 
 ## Was das für Sie bedeutet
 
@@ -58,8 +58,8 @@ Die Dokumentationsseite, die Sie gerade lesen, ist Teil des AGPL-Produkts.
 | Edition | Preis | Umfang |
 | --- | --- | --- |
 | Community | Kostenlos, AGPL-3.0-only | Unbegrenzte Benutzer; ein aktiver Identitätsanbieter (IdP). |
-| Business | 129 USD/Monat oder 1.290 USD/Jahr | Unbegrenzte Benutzer; eine juristische Person; bis zu zwei Produktionsdeployments mit je einem Staging-Deployment; insgesamt bis zu fünf aktive IdPs. |
-| Enterprise | Kontaktieren Sie uns | Mehrere juristische Personen, weitere Deployments oder IdPs, Air-Gap-Mirrors, individuelles LTS und andere vereinbarte Anforderungen. |
+| Business | 129 USD/Monat oder 1.290 USD/Jahr | Unbegrenzte Benutzer; eine juristische Person; eine gleichzeitig aktive Instanz. |
+| Enterprise | Kontaktieren Sie uns | Vertraglich vereinbarte Bedingungen und die Fähigkeiten, die von ihnen abhängen: mehrere juristische Personen, weitere Deployments oder IdPs, Air-Gap-Mirrors, individuelles LTS und begrenzte Upstream-Credentials per OAuth-2.0-Token-Exchange (RFC 8693). |
 
 Business enthält **Regulated Operations**, **AI Runtime Security**,
 **Compliance Packs** und **Identity & Scale**. Jede Familie behält ihren eigenen Code
@@ -72,32 +72,34 @@ Binary außerhalb des öffentlichen Repositorys verteilt.
 Nein. Die vier genannten Familien sind im Business-Abonnement enthalten.
 Wählen Sie monatliche oder jährliche Abrechnung unter [Preise](https://olivares.ai/pricing).
 
-### Was gilt, wenn ich mehr Deployments oder Identitätsanbieter benötige?
+### Was gilt, wenn ich mehr als eine gleichzeitig aktive Instanz benötige?
 
-Kontaktieren Sie **enterprise@olivares.ai** für Enterprise. Business erlaubt bis zu
-zwei Produktionsdeployments und insgesamt fünf aktive IdPs, nicht fünf pro Deployment.
+Kontaktieren Sie **enterprise@olivares.ai** für Enterprise. Eine Business-Lizenz ist
+gleichzeitig auf einer Instanz aktiv; Sie geben sie auf einer Instanz frei und
+aktivieren sie auf einer anderen, so oft wie nötig. Enterprise umfasst
+mehrere gleichzeitig aktive Instanzen.
 
 
-## Was offen ist gegenüber Enterprise
+## Was offen ist und was kommerziell ist
 
-Das offene Binary ist die gesamte Governance-Plattform; die `enterprise/`-Linie ist
+Das offene Binary ist die gesamte Governance-Plattform; die kommerzielle `enterprise/`-Linie ist
 **additiv**. Zwei Grenzen sind besonders hervorzuheben, weil der offene Build sie
 ehrlich beantwortet, statt sie vorzutäuschen:
 
-- **SSO** — Single-IdP-Login (OIDC + SAML 2.0) ist im Standard-Binary **offen**:
-  echtes Login, kein `-tags enterprise`. Mehrere aktive IdPs (pro Tenant / nach
-  Domain), SSO-Enforcement und managed SCIM sind die reservierte Enterprise-Linie;
-  das Aktivieren eines zweiten aktiven IdP gibt `multi_idp_requires_enterprise`
+- **SSO** — Single-IdP-Login (OIDC + SAML 2.0) und eingehendes SCIM sind im
+  Standard-Binary **offen**: echtes Login, kein `-tags enterprise`. Mehrere aktive
+  IdPs (pro Tenant / nach Domain), Gruppenzuordnung beim Login und SSO-Pflicht
+  gehören zu Business (Identity & Scale); das Aktivieren eines zweiten aktiven IdP gibt `multi_idp_requires_enterprise`
   zurück.
 - **Benutzerkonten** — **unbegrenzt in jeder Edition**. Der Community-Build hat kein
-  Benutzerlimit, der Enterprise-Build ebenso wenig: kein Lizenzzustand (gültig,
+  Benutzerlimit, der kommerzielle Build ebenso wenig: kein Lizenzzustand (gültig,
   abgelaufen, keine) kann begrenzen, wie viele Konten eine Bereitstellung betreibt. Das
   Limit von drei aktiven Konten, das vor dem 2026-07-27 galt, wurde vollständig
   entfernt; die Seat-Naht bleibt als Kompatibilitäts-No-op im Code, die nichts
   ablehnt, und ein Lizenzablauf begrenzt, deaktiviert oder löscht nie ein Konto.
 
 Siehe [Ehrlichkeit & Grenzen](/de/start/honesty-and-limits/) für das vollständige Bild
-von offen gegenüber Enterprise.
+von offen gegenüber kommerziell.
 
 ## Der Lizenzschlüssel beschränkt niemals das offene Produkt
 
@@ -107,13 +109,13 @@ und welchen Status sie hat; sie **deaktiviert, degradiert oder blockiert niemals
 eine Anfrage, ein Modul oder den Boot-Vorgang aufgrund einer Lizenzprüfung, und sie
 läuft **offline** (eine Ed25519-Signatur, kein Lizenzserver), weshalb das offene
 Produkt air-gapped (vom Netz getrennt) funktioniert. Die einzige Stelle, an der die
-Lizenz *konsumiert* statt nur angezeigt wird, ist der geschlossene Enterprise-Build,
+Lizenz *konsumiert* statt nur angezeigt wird, ist der geschlossene kommerzielle Build,
 und nur um die von der kommerziellen Vereinbarung abgedeckten Module zu
 berechtigen, ausgewertet pro Modul — eine lokale Entscheidung in der
 kommerziellen Edition, niemals eine Prüfung im offenen Binary. Benutzer werden nie
 gedeckelt: Konten sind in jeder Edition unbegrenzt. So ist der offene Build wirklich
 vollständig und nicht per Lizenz gedeckelt; was sich in der kommerziellen Edition
-unterscheidet, sind die additiven `enterprise/`-Module, nicht ein Lizenzschlüssel,
+unterscheidet, sind die additiven kommerziellen `enterprise/`-Module, nicht ein Lizenzschlüssel,
 der Funktionen innerhalb desselben Binary umlegt.
 
 ## Warum dieses Modell
@@ -138,8 +140,8 @@ Prozess finden Sie im `CONTRIBUTING`-Leitfaden des Repositorys.
 
 ## Verwandt
 
-- [Eine Lizenz installieren und zu Enterprise wechseln](/de/how-to/install-a-license/) —
-  wohin eine erworbene Lizenz gehört und wie der Community-→-Enterprise-Austausch in-place
+- [Eine Lizenz installieren und zu Business wechseln](/de/how-to/install-a-license/) —
+  wohin eine erworbene Lizenz gehört und wie der Community-→-Business-Austausch in-place
   erfolgt. Diese Seite erklärt das Modell; die andere beschreibt die Schritte.
 - [Sicherheitsmodell](/de/explanation/security/security-model/) — warum
   attestierungsbasierte Lizenzierung für ein air-gapped Sicherheitsprodukt wichtig ist.

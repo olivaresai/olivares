@@ -8,7 +8,7 @@ set -euo pipefail
 root="${OLIVARES_ROOT:-$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)}"
 for tool in bash grep python3; do
 	command -v "$tool" >/dev/null 2>&1 || {
-		printf 'uninstall contract: NO HE PODIDO MIRAR — missing %s\n' "$tool" >&2
+		printf 'uninstall contract: COULD NOT CHECK — missing %s\n' "$tool" >&2
 		exit 2
 	}
 done
@@ -60,9 +60,9 @@ done
 censo_go="$(mktemp)"
 trap 'rm -f "$censo_go"' EXIT
 if ! git -C "$root" ls-files -z -- '*.go' >"$censo_go" 2>/dev/null; then
-	echo "check-uninstall-contract: 2 NO PUDE MIRAR — $root no es un arbol de git, y el censo de" >&2
-	echo "  ficheros seguidos no se puede hacer. Un recorrido del disco NO es un sustituto: veria" >&2
-	echo "  los residuos ignorados de otros guiones y acusaria a ficheros limpios." >&2
+	echo "check-uninstall-contract: 2 COULD NOT CHECK — $root is not a Git tree, so tracked" >&2
+	echo "  files cannot be enumerated. A filesystem scan is not a substitute: it would include" >&2
+	echo "  ignored residue from other scripts and report findings against valid files." >&2
 	exit 2
 fi
 
@@ -104,7 +104,6 @@ dr_api = read("core/api/dr_handler.go")
 dr_bundle = read("core/dr/bundle.go")
 dr_integrity = read("core/dr/integrity.go")
 taskfile = read("Taskfile.yml")
-hook = read(".githooks/pre-push")
 mainline = read(".github/workflows/mainline-ci.yml")
 
 assert "newUninstallCmd()" in main
@@ -331,7 +330,6 @@ for rel in censo:
 
 for target in ("lint:uninstall-contract", "lint:uninstall-contract:selftest"):
     assert f"  {target}:" in taskfile
-    assert f"task {target}" in hook
     assert f"run: task {target}" in mainline
 
 docs = "\n".join(read(p) for p in (

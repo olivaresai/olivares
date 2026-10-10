@@ -544,7 +544,84 @@ func openRecoveryAttackDB(t *testing.T, f recoveryCLIFixture) *sql.DB {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { _ = raw.Close() })
+	// Bind the fixture explicitly: the engine can leave another tenant's scope
+	// pinned. The audit-head tenant guard must still apply to these raw writes.
+	if _, err := raw.Exec("DELETE FROM _scope_tenant"); err != nil {
+		t.Fatalf("clear recovery attack scope: %v", err)
+	}
+	if _, err := raw.Exec("INSERT INTO _scope_tenant(tenant_id) VALUES(?)", f.tenant.String()); err != nil {
+		t.Fatalf("bind recovery attack tenant: %v", err)
+	}
 	return raw
+}
+
+func TestRecoveryAttackHelpersReplaceRetainedTenantScope(t *testing.T) {
+	for _, attack := range []string{"rewrite", "truncate"} {
+		t.Run(attack, func(t *testing.T) {
+			f := newRecoveryCLIFixture(t, false, false)
+			carrierSeq := appendRecoveryAttackCarrier(t, f)
+			raw, err := sql.Open("sqlite", filepath.Join(f.dataDir, "olivares.db"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer raw.Close()
+			// A previous scope can belong to any tenant after the engine closes.
+			if _, err := raw.Exec("DELETE FROM _scope_tenant"); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := raw.Exec("INSERT INTO _scope_tenant(tenant_id) VALUES(?)", model.NewTenantID().String()); err != nil {
+				t.Fatal(err)
+			}
+			wantSeq := carrierSeq
+			if attack == "rewrite" {
+				rewriteRecoveryAttackCarrier(t, f, carrierSeq, "{}", []byte("garbage-signature"))
+			} else {
+				wantSeq--
+				truncateRecoveryLedgerToMarker(t, f, wantSeq)
+			}
+			var pins int
+			var pinnedTenant string
+			if err := raw.QueryRow("SELECT COUNT(*), COALESCE(MIN(tenant_id), '') FROM _scope_tenant").Scan(&pins, &pinnedTenant); err != nil {
+				t.Fatal(err)
+			}
+			if pins != 1 || pinnedTenant != f.tenant.String() {
+				t.Fatalf("scope pin = (%d, %q), want (1, %q)", pins, pinnedTenant, f.tenant.String())
+			}
+			var seq int64
+			if err := raw.QueryRow("SELECT seq FROM audit_heads WHERE tenant_id = ?", f.tenant.String()).Scan(&seq); err != nil {
+				t.Fatal(err)
+			}
+			if seq != wantSeq {
+				t.Fatalf("attack head = %d, want %d", seq, wantSeq)
+			}
+		})
+	}
+}
+
+func TestRecoveryAttackDBPreservesAuditGuards(t *testing.T) {
+	f := newRecoveryCLIFixture(t, false, false)
+	raw := openRecoveryAttackDB(t, f)
+	defer raw.Close()
+	if _, err := raw.Exec("DELETE FROM _scope_tenant"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := raw.Exec("INSERT INTO _scope_tenant(tenant_id) VALUES(?)", model.NewTenantID().String()); err != nil {
+		t.Fatal(err)
+	}
+	for _, probe := range []struct {
+		name, query, refusal string
+	}{
+		{"foreign head update", "UPDATE audit_heads SET seq = seq WHERE tenant_id = ?", "tenant scope violation"},
+		{"event update", "UPDATE audit_events SET action = 'tampered' WHERE tenant_id = ?", "audit_events is append-only"},
+		{"event delete", "DELETE FROM audit_events WHERE tenant_id = ?", "audit_events is append-only"},
+	} {
+		t.Run(probe.name, func(t *testing.T) {
+			if _, err := raw.Exec(probe.query, f.tenant.String()); err == nil || !strings.Contains(err.Error(), probe.refusal) {
+				t.Fatalf("guard refusal = %v, want %q", err, probe.refusal)
+			}
+		})
+	}
 }
 
 func recoveryAttackEventHash(tenant string, seq int64, occurredAt, actor, actorKind, action, targetKind, targetID, meta string, payloadHash, prevHash []byte) []byte {

@@ -8,19 +8,9 @@ import (
 	"fmt"
 )
 
-// EmbeddingsClient is a provider-neutral, model-backed text embedder over the
-// OpenAI-compatible POST /v1/embeddings shape ({"model","input":[...]} ->
-// {"data":[{"index","embedding":[...]}]}). It exists because Anthropic exposes NO
-// first-party embeddings endpoint: the Messages API generates, it does not embed.
-// The knowledge module's Embedder seam is explicitly the "Model-backed"
-// seam — provider-neutral — so this targets the operator's configured embeddings
-// provider. Voyage AI (Anthropic's documented embeddings recommendation) is
-// OpenAI-compatible at this shape, as are OpenAI and most gateways.
-//
-// It is an egressing embedder by construction (it sends text to a hosted provider),
-// so the composition-root adapter that wraps it MUST report AllowsEgress()=true; the
-// knowledge module then refuses to ingest a local_only / residency-locked KB with it
-// (the docs/SECURITY-HARDENING.md red line). It never logs the input text or the credential.
+// EmbeddingsClient sends text to a configured OpenAI-compatible /v1/embeddings endpoint.
+// Its adapter must report AllowsEgress()=true so local-only/residency-locked ingestion
+// can refuse egress. It never logs input text or credentials.
 type EmbeddingsClient struct {
 	client *InferenceClient
 	model  string
@@ -86,12 +76,7 @@ func (e *EmbeddingsClient) Embed(ctx context.Context, texts []string) ([][]float
 	if len(resp.Data) != len(texts) {
 		return nil, fmt.Errorf("modelprovider: embeddings returned %d vectors for %d inputs", len(resp.Data), len(texts))
 	}
-	// Place each vector at its DECLARED index (the provider may return out of order),
-	// validating index integrity: every index must be in range and unique. A count
-	// match alone is not enough — a duplicate/gap (e.g. [0,0,2] for 3 inputs, from a
-	// 1-based or partially-retried gateway) would otherwise silently misalign a chunk
-	// to the wrong embedding. Fail closed rather than corrupt retrieval (ports.go: "in
-	// input order", ARCHITECTURE.md).
+	// Return vectors in input order; reject out-of-range and duplicate provider indices.
 	out := make([][]float32, len(texts))
 	seen := make([]bool, len(texts))
 	for _, d := range resp.Data {

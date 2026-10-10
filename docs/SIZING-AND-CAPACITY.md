@@ -143,7 +143,7 @@ implementation** at v1 scale.
 ### 2-bis.4 Bus fan-out (unchanged magnitude)
 
 7.20 M ev/s (1 subscriber), 3.05 M ev/s (4) — the bus remains ~3 orders of magnitude above the
-durable-write ceiling. The NATS bridge does not sit on this local path (ADR-0017).
+durable-write ceiling. The NATS bridge does not sit on this local path.
 
 ---
 

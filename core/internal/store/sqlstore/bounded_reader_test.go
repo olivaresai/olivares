@@ -303,6 +303,53 @@ func TestBoundedReaderExtensionScalarsNullAndEmpty(t *testing.T) {
 	}
 }
 
+// TestBoundedReaderNullOperatorsBindNothing: IS NULL and IS NOT NULL bind no
+// argument, so a filter after them still binds to its own placeholder.
+func TestBoundedReaderNullOperatorsBindNothing(t *testing.T) {
+	ctx := context.Background()
+	st := openSQLiteTest(t, registerBoundedTestEntities)
+	tenant := provisionTenant(t, st, "bounded-null-ops")
+	var nullID, fullID model.ID
+	if err := st.Mutate(ctx, tenant, func(sc store.Scope) error {
+		ws, err := sc.DefaultWorkspace(ctx)
+		if err != nil {
+			return err
+		}
+		nullID = seedBoundedItem(ctx, t, sc, ws.ID, "null")
+		fullID = seedBoundedItem(ctx, t, sc, ws.ID, "full")
+		rawBoundedExec(ctx, t, sc, "UPDATE brt_item SET note = NULL WHERE id = ?", nullID.String())
+		rawBoundedExec(ctx, t, sc, "UPDATE brt_item SET note = 'x' WHERE id = ?", fullID.String())
+		return nil
+	}); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	if err := st.View(ctx, tenant, func(sc store.Scope) error {
+		reader := newBoundedTestReader(t, sc, boundedTestLimits())
+		for _, c := range []struct {
+			op    model.Op
+			label string
+			want  model.ID
+		}{
+			{model.OpIsNull, "null", nullID},
+			{model.OpNotNull, "full", fullID},
+		} {
+			recs, _, err := reader.ListExtensions(ctx, boundedTestEntity.Kind, model.Query{Limit: 10, Filters: []model.Filter{
+				{Column: "note", Op: c.op},
+				{Column: "label", Op: model.OpEq, Value: c.label},
+			}})
+			if err != nil {
+				return err
+			}
+			if len(recs) != 1 || model.ID(recs[0].String(model.ColID)) != c.want {
+				t.Errorf("%s note AND label=%q = %v, want only %s", c.op, c.label, recs, c.want)
+			}
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("view: %v", err)
+	}
+}
+
 func TestBoundedReaderOversizeRowRefusedBeforePayload(t *testing.T) {
 	ctx := context.Background()
 	st := openSQLiteTest(t, nil)

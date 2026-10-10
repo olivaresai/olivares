@@ -202,7 +202,7 @@ func licenseTrustCmd() *cobra.Command {
 		Short: "Show or change which license signing keys this deployment trusts (current, verify-only, revoked, epoch fence)",
 		Long: "trust manages the license trust keyring of a data directory: the key embedded in this build plus\n" +
 			"the optional administrative document <data-dir>/" + licenseTrustFileName + ". Boot, reload, license\n" +
-			"install, the enterprise upgrade and bundle gates and the connected client all verify licenses with\n" +
+			"install, the Business upgrade and bundle gates and the connected client all verify licenses with\n" +
 			"this keyring. It holds PUBLIC keys only and nothing here contacts a network.",
 		Example: "  olivares license trust status --data-dir /var/lib/olivares\n" +
 			"  olivares license trust fence --data-dir /var/lib/olivares --min-key-epoch 2",

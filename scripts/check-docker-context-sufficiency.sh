@@ -31,6 +31,11 @@
 # from .goreleaser.yaml; the stage graph comes from the Dockerfile. A new `dockers:` entry is in
 # scope the day it is added, and a Dockerfile that grows a new COPY is caught by the next run.
 #
+# Scripted CI builds of the same Dockerfiles (qualification, first-hour) assemble their own context
+# with assemble-runtime-context.sh. Every script or workflow that copies a Dockerfile into a context
+# must call it, and its real output must satisfy the same reached COPYs, binaries aside: a COPY
+# source added for GoReleaser alone broke those builds once (.license-notices, 2026-10-05).
+#
 # Three answers: 0 CLEAN · 1 an entry cannot build · 2 could not look (missing file, unparseable).
 # "Could not look" is never spent as a pass: a config this cannot read is a refusal.
 set -uo pipefail
@@ -44,7 +49,7 @@ set -uo pipefail
 _olivares_git_env="$(cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")" && pwd)/lib/git-env.sh"
 # shellcheck source=/dev/null
 . "$_olivares_git_env" || {
-	echo "check-docker-context-sufficiency: 2 · no puedo cargar $_olivares_git_env (aislamiento git-env)" >&2
+	echo "check-docker-context-sufficiency: 2 · cannot load $_olivares_git_env (git-env isolation)" >&2
 	exit 2
 }
 unset _olivares_git_env
@@ -59,25 +64,25 @@ CFG="${OLIVARES_GORELEASER_CONFIG:-.goreleaser.yaml}"
 [ -f "$CFG" ] || { echo "check-docker-context-sufficiency: 2 · no $CFG" >&2; exit 2; }
 
 python3 - "$CFG" <<'PY'
-import re, sys, os
+import re, sys, os, glob, subprocess, tempfile
 
 try:
     import yaml
 except Exception as e:                                   # pragma: no cover - environment
-    print(f"check-docker-context-sufficiency: 2 · no puedo importar yaml ({e})", file=sys.stderr)
+    print(f"check-docker-context-sufficiency: 2 · cannot import yaml ({e})", file=sys.stderr)
     sys.exit(2)
 
 cfg_path = sys.argv[1]
 try:
     cfg = yaml.safe_load(open(cfg_path, encoding='utf-8'))
 except Exception as e:
-    print(f"check-docker-context-sufficiency: 2 · {cfg_path} no parsea ({e})", file=sys.stderr)
+    print(f"check-docker-context-sufficiency: 2 · {cfg_path} cannot be parsed ({e})", file=sys.stderr)
     sys.exit(2)
 
 binaries = {b.get('id'): (b.get('binary') or b.get('id')) for b in (cfg.get('builds') or [])}
 entries  = cfg.get('dockers') or []
 if not entries:
-    print("check-docker-context-sufficiency: 2 · no hay entradas `dockers:`; eso no es un arbol limpio", file=sys.stderr)
+    print("check-docker-context-sufficiency: 2 · no `dockers:` entries; cannot report an unchecked tree as clean", file=sys.stderr)
     sys.exit(2)
 
 
@@ -151,15 +156,15 @@ def covered(path, allowed_files, allowed_dirs):
     return any(p == d or p.startswith(d.rstrip('/') + '/') for d in allowed_dirs)
 
 
-rc, checked = 0, 0
+rc, checked, reached = 0, 0, []
 for e in entries:
-    eid  = e.get('id') or '<sin id>'
+    eid  = e.get('id') or '<no id>'
     dfp  = e.get('dockerfile')
     if not dfp:
-        print(f"check-docker-context-sufficiency: 2 · la entrada {eid} no nombra dockerfile", file=sys.stderr)
+        print(f"check-docker-context-sufficiency: 2 · entry {eid} does not name a dockerfile", file=sys.stderr)
         sys.exit(2)
     if not os.path.isfile(dfp):
-        print(f"check-docker-context-sufficiency: 2 · {eid} apunta a {dfp}, que no existe", file=sys.stderr)
+        print(f"check-docker-context-sufficiency: 2 · {eid} points to missing {dfp}", file=sys.stderr)
         sys.exit(2)
 
     args = {}
@@ -176,7 +181,7 @@ for e in entries:
 
     stages, edges, ctx = parse_dockerfile(dfp)
     if not stages:
-        print(f"check-docker-context-sufficiency: 2 · {dfp} no tiene ningun FROM", file=sys.stderr)
+        print(f"check-docker-context-sufficiency: 2 · {dfp} has no FROM instruction", file=sys.stderr)
         sys.exit(2)
     seen, unresolved = reachable(stages, edges, args)
 
@@ -189,6 +194,7 @@ for e in entries:
     faltan = []
     for st in sorted(seen):
         for p in ctx.get(st, []):
+            reached.append((eid, dfp, st, p, allowed_files - set(extra)))
             if not covered(p, allowed_files, allowed_dirs):
                 faltan.append((st, p))
     checked += 1
@@ -203,6 +209,28 @@ for e in entries:
         print("            of the graph for this entry (a build-arg selecting a prebuilt-binary")
         print("            stage, as Dockerfile.fips does). A source-build stage cannot be fixed")
         print("            with extra_files: it needs the whole repository.")
+
+HELPER = 'scripts/assemble-runtime-context.sh'
+callers = [f for f in sorted(glob.glob('scripts/*.sh') + glob.glob('.github/workflows/*.yml'))
+           if not os.path.basename(f).startswith('test-')
+           and re.search(r'cp\s+"?Dockerfile\.', open(f, encoding='utf-8').read())]
+for f in callers:
+    if HELPER not in open(f, encoding='utf-8').read():
+        rc = 1
+        print(f"check-docker-context-sufficiency: HAND-BUILT CONTEXT — {f}")
+        print(f"    copies a Dockerfile into its own context without {HELPER}")
+if callers:
+    with tempfile.TemporaryDirectory() as tmp:
+        built = subprocess.run(['bash', HELPER, tmp, 'NOTICE'], capture_output=True, text=True)
+        if built.returncode:
+            print(f"check-docker-context-sufficiency: 2 · {HELPER} failed: {built.stderr.strip()}", file=sys.stderr)
+            sys.exit(2)
+        for eid, dfp, st, p, binaries_here in reached:
+            if p not in binaries_here and not os.path.exists(os.path.join(tmp, p)):
+                rc = 1
+                print(f"check-docker-context-sufficiency: SCRIPTED CONTEXT CANNOT BUILD — {eid} ({dfp})")
+                print(f"    stage `{st}` COPYs `{p}`, and {HELPER} does not provide it")
+                print(f"    to {', '.join(callers)}")
 
 if rc == 0:
     print(f"check-docker-context-sufficiency: CLEAN — {checked} dockers entr{'y' if checked==1 else 'ies'}, every context COPY is satisfied.")

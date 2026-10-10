@@ -174,9 +174,11 @@ type harness struct {
 // late-bound with the harness store's data handle — the boot() pattern for the
 // store-backed truth-loop seams.
 type harnessOpts struct {
+	// ingest enables the optional collector service for transport admission tests.
+	ingest        api.ObservationPublisher
 	policyOpts    []governance.PolicyConsoleOption
 	dataConsumers []api.DataConsumer
-	// offlineStaleness, when > 0, engages the ADR-0024 Q1 offline-trust bound on the
+	// offlineStaleness, when > 0, engages the offline-policy staleness offline-trust bound on the
 	// scoped-grant engine (positive grants expire deny-closed past it). Zero ⇒ the
 	// connected-node default (grants never expire).
 	offlineStaleness time.Duration
@@ -279,6 +281,7 @@ func newHarnessWith(t *testing.T, hopts harnessOpts) *harness {
 		Store: st, Authenticator: authr,
 		Authorizer: auth.NewAuthorizer(gov.RequestEvaluator(), auth.WithScopedGrants(gov.ScopedGrants())),
 		Signer:     signer, SetupToken: tok, Version: "test",
+		Ingest:                hopts.ingest,
 		AuthorizationRecorder: gov,
 		Modules:               []api.Module{gov, policy, agents, identity},
 		Recorder:              recGate,
@@ -448,4 +451,12 @@ func contains(haystack []string, needle string) bool {
 		}
 	}
 	return false
+}
+
+func findingKinds(fs []sdkmodel.FindingReport) []string {
+	out := make([]string, 0, len(fs))
+	for _, f := range fs {
+		out = append(out, f.Kind)
+	}
+	return out
 }

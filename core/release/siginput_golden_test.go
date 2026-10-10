@@ -16,7 +16,7 @@ import (
 // issued release signature stops verifying, so this test must never be "fixed" to
 // match a new output: a red result means the refactor broke the wire, not the test.
 func TestManifestSigningInputGolden(t *testing.T) {
-	manifest := []byte(`{"schema_version":1,"channel":"stable","version":"26.7.0"}`)
+	manifest := []byte(`{"schema_version":1,"channel":"stable","version":"26.700"}`)
 
 	// The pre definition, inlined so this test is self-contained and does not
 	// depend on the code under test to describe its own contract.
@@ -42,7 +42,7 @@ func TestManifestSigningInputGolden(t *testing.T) {
 	// block is inside the signed message. Nothing may ever canonicalise,
 	// re-order or strip it between signer and verifier: un-signing the CRL is
 	// exactly the attack the OTA key domain exists to stop (design §5.2).
-	withCRL := []byte(`{"schema_version":1,"channel":"stable","version":"26.7.0","revoked":{"serials":["OL-2026-000123"],"holder_ids":["org-acme"],"license_key_epoch":1767225600}}`)
+	withCRL := []byte(`{"schema_version":1,"channel":"stable","version":"26.700","revoked":{"serials":["OL-2026-000123"],"holder_ids":["org-acme"],"license_key_epoch":1767225600}}`)
 	gotCRL := ManifestSigningInput(withCRL)
 	wantCRL := append(append([]byte(nil), wantTag...), withCRL...)
 	if !bytes.Equal(gotCRL, wantCRL) {

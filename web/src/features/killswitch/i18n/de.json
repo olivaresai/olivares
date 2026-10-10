@@ -77,7 +77,13 @@
   },
   "reenable": {
     "title": "Diesen Stopp wieder freigeben",
-    "body": "Der Neustart ist nie die Entscheidung einer einzelnen Person: Zwei verschiedene Benutzerkonten müssen zustimmen, und niemand kann seine eigene Anfrage genehmigen. Jede genehmigende Person muss eine stärkere Anmeldung (AAL3) verwenden, außer eine Genehmigungsregel senkt die Risikostufe dieser Aktion; die Zwei-Konten-Regel gilt auch dann. Es gibt keinen Notfallweg daran vorbei, denn gestoppt zu bleiben ist der sichere Zustand. Die Engine prüft, dass die Konten verschieden sind; sie kann nicht prüfen, dass zwei verschiedene Personen sie nutzen.",
+    "body": "Der Neustart ist nie die Entscheidung einer einzelnen Person: Zwei verschiedene Benutzerkonten müssen zustimmen, und niemand kann seine eigene Anfrage genehmigen. {{stepUp}} Es gibt keinen Notfallweg daran vorbei, denn gestoppt zu bleiben ist der sichere Zustand. Die Engine prüft, dass die Konten verschieden sind; sie kann nicht prüfen, dass zwei verschiedene Personen sie nutzen.",
+    "stepUp": {
+      "none": "Die zusätzliche Prüfung für administrative Aktionen ist auf diesem Server ausgeschaltet; jede genehmigende Person genehmigt daher mit ihrer üblichen Anmeldung.",
+      "totp": "Jede genehmigende Person muss sich mit einem Authenticator-Code oder per Single Sign-on mit MFA angemeldet haben oder mit einem Passkey bestätigen, außer eine Genehmigungsregel senkt die Risikostufe dieser Aktion; die Zwei-Konten-Regel gilt auch dann.",
+      "passkey": "Jede genehmigende Person muss mit einem Passkey bestätigen (AAL3), außer eine Genehmigungsregel senkt die Risikostufe dieser Aktion; die Zwei-Konten-Regel gilt auch dann.",
+      "unknown": "Jede genehmigende Person muss die zusätzliche Prüfung für administrative Aktionen dieses Servers bestehen, außer eine Genehmigungsregel senkt die Risikostufe dieser Aktion; die Zwei-Konten-Regel gilt auch dann."
+    },
     "reason": "Notiz",
     "reasonHint": "Optional — wird der Anfrage im Vier-Augen-Prinzip für die Genehmigenden beigefügt.",
     "existingApproval": "Für diesen Stopp ist bereits eine Genehmigung im Vier-Augen-Prinzip ({{id}}) offen. Die Prüfung meldet deren Fortschritt und schließt die Wiederfreigabe ab, sobald beide Konten genehmigt haben.",

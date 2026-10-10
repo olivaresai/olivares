@@ -6,7 +6,6 @@ package siemforward
 
 import (
 	"context"
-	"errors"
 	"log/slog"
 
 	"github.com/olivaresai/olivares/core/api"
@@ -26,15 +25,6 @@ const Namespace = "siemforward"
 // auditSource is the eventing source stamped on forwarded ledger records; a ledger
 // sink subscription matches it (or matches any source with an empty filter).
 const auditSource = "olivares.audit"
-
-// forwardBatch bounds one ForwardDue pass: a single pass walks at most this many
-// ledger records past the cursor, so a large backlog drains over several passes
-// without an unbounded read.
-const forwardBatch = 256
-
-// errStopWalk stops the audit Walk once a batch is collected (the closed Walk API
-// has no limit parameter).
-var errStopWalk = errors.New("siemforward: batch full")
 
 // Entity: the per-tenant forward cursor — the highest ledger Seq already enqueued
 // for SIEM forwarding. It is the at-least-once anchor: a crash or restart resumes
@@ -75,7 +65,7 @@ func (m *Module) Descriptor() sdk.Descriptor {
 		APIVersion:  sdk.APIVersion,
 		Type:        sdk.TypeModule,
 		Title:       "SIEM ledger forwarder",
-		Description: "Walks the tamper-evident audit ledger from a per-tenant cursor and forwards each sealed record to SIEM control towers over the eventing platform (durable retries/replay/DLQ). Provides the SinkRenderer that re-shapes ledger and findings events into OCSF 1.8/CEF/LEEF and the sink envelope.",
+		Description: "Retains the per-tenant audit ledger forward cursor. Delivery of sealed records to SIEM control towers over the durable eventing platform requires Business.",
 	}
 }
 
@@ -124,107 +114,4 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 			Unique:  true,
 		}},
 	})
-}
-
-// ForwardDue runs ONE bounded forward pass for a tenant: read the forward cursor,
-// walk the ledger from the next seq, and hand each sealed record to the durable
-// engine (IngestAudit). The cursor advances only to the last record successfully
-// enqueued, so a mid-pass failure is resumed (and re-enqueued idempotently) next
-// pass — at-least-once from the tamper-evident ledger, the authoritative source.
-// It is exported for the leader-gated composition-root pump; it must run
-// single-writer per tenant (the pump is leader-gated, like the eventing pump).
-func (m *Module) ForwardDue(ctx context.Context, tenant model.TenantID) (int, error) {
-	if m.data == nil || m.evt == nil {
-		return 0, nil
-	}
-	var fromSeq int64
-	var batch []model.AuditEvent
-	err := m.data.View(ctx, tenant, func(sc store.Scope) error {
-		var rerr error
-		fromSeq, rerr = m.readCursor(ctx, sc)
-		if rerr != nil {
-			return rerr
-		}
-		batch = batch[:0]
-		werr := sc.Audit().Walk(ctx, fromSeq+1, func(ev model.AuditEvent) error {
-			batch = append(batch, ev)
-			if len(batch) >= forwardBatch {
-				return errStopWalk
-			}
-			return nil
-		})
-		if werr != nil && !errors.Is(werr, errStopWalk) {
-			return werr
-		}
-		return nil
-	})
-	if err != nil {
-		return 0, err
-	}
-
-	forwarded := 0
-	last := fromSeq
-	for _, ev := range batch {
-		if err := ctx.Err(); err != nil {
-			break
-		}
-		if ferr := m.Forward(ctx, ev); ferr != nil {
-			if m.log != nil {
-				m.log.Debug("siemforward: forward failed; will resume from cursor", "tenant", tenant.String(), "seq", ev.Seq, "err", ferr)
-			}
-			break // do not advance past a failed record; next pass resumes here
-		}
-		last = ev.Seq
-		forwarded++
-	}
-
-	if last > fromSeq {
-		if werr := m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
-			return m.writeCursor(ctx, sc, last)
-		}); werr != nil {
-			return forwarded, werr
-		}
-	}
-	return forwarded, nil
-}
-
-// readCursor returns the tenant's last-forwarded ledger seq (0 if none yet).
-func (m *Module) readCursor(ctx context.Context, sc store.Scope) (int64, error) {
-	repo, err := sc.Ext(cursorKind)
-	if err != nil {
-		return 0, err
-	}
-	recs, _, err := repo.List(ctx, model.Query{Limit: 1})
-	if err != nil {
-		return 0, err
-	}
-	if len(recs) == 0 {
-		return 0, nil
-	}
-	return recs[0].Int(colCurLastForwarded), nil
-}
-
-// writeCursor advances the tenant's forward cursor to seq (creating the row on
-// first use). Single-writer by the leader gate, so an optimistic version conflict
-// is not expected; a concurrent pass would simply re-walk idempotently.
-func (m *Module) writeCursor(ctx context.Context, sc store.Scope, seq int64) error {
-	repo, err := sc.Ext(cursorKind)
-	if err != nil {
-		return err
-	}
-	recs, _, err := repo.List(ctx, model.Query{Limit: 1})
-	if err != nil {
-		return err
-	}
-	if len(recs) == 0 {
-		_, err = repo.Create(ctx, model.Record{colCurLastForwarded: seq})
-		return err
-	}
-	rec := recs[0]
-	if rec.Int(colCurLastForwarded) >= seq {
-		return nil // never regress
-	}
-	rec[colCurLastForwarded] = seq
-	_, err = repo.Update(ctx, rec)
-	return err
 }

@@ -44,20 +44,21 @@ test('Claude Code portal: setup → login → navigate → create form → works
   // asserted, and still clicked.
   await page.goto('/agentops')
 
-  // The portal is registered in the sidebar as "Operate sessions". `exact` is
-  // load-bearing: neighbouring entries still mention Claude Code, so a substring
-  // match would resolve to more than one link.
+  // The operate door opens the one Sessions screen, and navigation names it Sessions
+  // too (26.10.1 review: "Operate sessions" opened a page titled "Claude Code").
+  // `exact` is load-bearing: neighbouring entries mention sessions.
   const navLink = page.getByRole('link', {
-    name: 'Operate sessions',
+    name: 'Sessions',
     exact: true,
   })
   await expect(navLink).toBeVisible()
   await navLink.click()
 
-  // The portal renders its heading and the honest empty state (a fresh estate has no
-  // sessions at all yet) — no SSH, no fabricated rows. The heading is the operate
-  // room's own title; the nav entry that opens it is the broader "Operate sessions".
-  await expect(page.getByRole('heading', { name: 'Claude Code' })).toBeVisible()
+  // The page's title is its navigation entry, and an empty estate is one honest empty
+  // state — no SSH, no fabricated rows.
+  await expect(
+    page.getByRole('heading', { name: 'Sessions', level: 1 }),
+  ).toBeVisible()
   await expect(page.getByText('No sessions yet')).toBeVisible()
   // The origin facet is the whole point of the merge: one place to look, whether the
   // session was discovered or launched.
@@ -87,7 +88,8 @@ test('Claude Code portal: setup → login → navigate → create form → works
   await expect(page.getByText('New Claude Code session')).toBeHidden()
 
   // The workspaces tab is the governed file plane.
-  await page.getByRole('tab', { name: 'Workspaces' }).click()
+  await page.getByTestId('sessions-list-menu').click()
+  await page.getByRole('menuitem', { name: 'Workspaces' }).click()
   await expect(page.getByText('No workspaces registered')).toBeVisible()
 
   await page.screenshot({ path: 'playwright-report/agentops.png' })

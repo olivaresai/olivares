@@ -153,17 +153,13 @@ var trailingInterpRe = regexp.MustCompile(`([^/])\$\{[^{}]*(?:\{[^{}]*\}[^{}]*)*
 // Agnóstico del método, como el `fetch` crudo y por lo mismo: el verbo lo decide el helper.
 var consoleStreamRe = regexp.MustCompile(`(?s)\b(?:useLiveStream|subscribeStream)\s*(?:<[^(]*?>)?\s*\(\s*\{[^}]*?path:\s*(` + "`" + `[^` + "`" + `]*` + "`" + `|'[^']*')`)
 
-// consoleStreamOpaqueRe casa la MISMA suscripción cuando el `path:` NO es literal:
-// `path: runAttachPath(runRef)`. Esos helpers viven en OTRO fichero y `pathFns` se construye por
-// fichero, así que el parser no puede resolverlos sin un mapa cruzado — y un mapa cruzado hace
-// colisionar nombres iguales de features distintas, que es cambiar una ceguera por un error.
-//
-// ⇒ Se DECLARAN como sitio irresoluble en vez de dejar sus rutas calladas en el cubo de «sin
-// superficie». La ruta existe y alguien la llama; lo que falta es mi capacidad de leerla, y ésa es
-// justo la distinción que este fichero entero existe para no perder.
+// A stream path helper may be imported from its sibling API module. Resolve that
+// named import in the caller's scope; unsupported helpers remain explicitly unresolved.
 var consoleStreamOpaqueRe = regexp.MustCompile(`(?s)\b(?:useLiveStream|subscribeStream)\s*(?:<[^(]*?>)?\s*\(\s*\{[^}]*?path:\s*([A-Za-z_$][\w$]*\([^)]*\))`)
 
-var consoleFetchRe = regexp.MustCompile(`\bfetch\s*\(\s*(` + "`" + `[^` + "`" + `]*` + "`" + `|'[^']*')`)
+// Authenticated downloads use apiFetchRaw and return the same unread Response as fetch.
+// Both go through the existing method-agnostic raw-path checks.
+var consoleFetchRe = regexp.MustCompile(`\b(?:fetch|apiFetchRaw)\s*\(\s*(` + "`" + `[^` + "`" + `]*` + "`" + `|'[^']*')`)
 
 // constRe matches a module-level absolute-path constant the calls interpolate.
 var constRe = regexp.MustCompile(`(?m)^\s*const\s+([A-Za-z_$][\w$]*)\s*=\s*'(/[^']*)'`)
@@ -240,6 +236,89 @@ var tmplConstRe = regexp.MustCompile("(?m)^\\s*(?:export\\s+)?const\\s+([A-Za-z_
 // unresolvable purely because the shared prefix had been factored into a function.
 var pathFnRe = regexp.MustCompile("(?ms)^\\s*(?:export\\s+)?(?:const\\s+([A-Za-z_$][\\w$]*)\\s*=\\s*\\([^)]*\\)(?:\\s*:\\s*string)?\\s*=>|function\\s+([A-Za-z_$][\\w$]*)\\s*\\([^)]*\\)(?:\\s*:\\s*string)?\\s*\\{\\s*return)\\s*`([^`]*)`")
 
+// Only sibling modules and named value imports are supported, with optional aliases.
+// This is not a global symbol map: identical helper names in other features cannot
+// supply a path for this call, and an import alone never supplies coverage.
+var consoleSiblingImportRe = regexp.MustCompile(`(?m)^[ \t]*import\s*\{([^}]+)\}\s*from\s*'(\./[A-Za-z_$][\w$-]*)'`)
+
+func consolePathConsts(text string) map[string]string {
+	consts := map[string]string{}
+	for _, m := range constRe.FindAllStringSubmatchIndex(text, -1) {
+		if !consoleBindingInComment(text, m[0]) {
+			consts[text[m[2]:m[3]]] = text[m[4]:m[5]]
+		}
+	}
+	for _, m := range tmplConstRe.FindAllStringSubmatchIndex(text, -1) {
+		if _, taken := consts[text[m[2]:m[3]]]; !taken && !consoleBindingInComment(text, m[0]) {
+			consts[text[m[2]:m[3]]] = text[m[4]:m[5]]
+		}
+	}
+	return consts
+}
+
+func consoleImportedPathFn(t *testing.T, file, text, name string) (string, bool) {
+	t.Helper()
+	for _, imp := range consoleSiblingImportRe.FindAllStringSubmatchIndex(text, -1) {
+		if consoleBindingInComment(text, imp[0]) {
+			continue
+		}
+		for _, symbol := range strings.Split(text[imp[2]:imp[3]], ",") {
+			fields := strings.Fields(symbol)
+			if len(fields) != 1 && !(len(fields) == 3 && fields[1] == "as") {
+				continue
+			}
+			if fields[len(fields)-1] != name {
+				continue
+			}
+			module := filepath.Join(filepath.Dir(file), text[imp[4]:imp[5]]+".ts")
+			src, err := os.ReadFile(module)
+			if os.IsNotExist(err) {
+				return "", false
+			}
+			if err != nil {
+				t.Fatalf("reading imported console path module %s: %v", module, err)
+			}
+			consts := consolePathConsts(string(src))
+			resolveConsts(consts)
+			for _, loc := range pathFnRe.FindAllStringSubmatchIndex(string(src), -1) {
+				// Support an exported function returning exactly one template. A
+				// concatenation or another expression must stay unresolved.
+				if consoleBindingInComment(string(src), loc[0]) ||
+					loc[4] < 0 || string(src[loc[4]:loc[5]]) != fields[0] ||
+					!strings.HasPrefix(strings.TrimSpace(string(src[loc[0]:loc[1]])), "export ") ||
+					!strings.HasPrefix(strings.TrimSpace(string(src[loc[1]:])), "}") {
+					continue
+				}
+				p := simpleInterpRe.ReplaceAllStringFunc(string(src[loc[6]:loc[7]]), func(s string) string {
+					if v, ok := consts[simpleInterpRe.FindStringSubmatch(s)[1]]; ok {
+						return v
+					}
+					return s
+				})
+				return p, strings.HasPrefix(p, "/v1/") && !esCondicionalInterp(p)
+			}
+			return "", false
+		}
+	}
+	return "", false
+}
+
+// Skip quoted text and line comments before recognizing a block comment. A URL
+// wildcard in prose or a string must not hide a later live route binding.
+var consoleNonCodeRe = regexp.MustCompile("(?s)'(?:\\\\.|[^'\\\\])*'|\"(?:\\\\.|[^\"\\\\])*\"|`(?:\\\\.|[^`\\\\])*`|//[^\\n]*|/\\*.*?(?:\\*/|$)")
+
+func consoleBindingInComment(text string, off int) bool {
+	for _, span := range consoleNonCodeRe.FindAllStringIndex(text, -1) {
+		if span[0] > off {
+			break
+		}
+		if off < span[1] {
+			return true
+		}
+	}
+	return enComentario(text, off)
+}
+
 // transportFnRe casa un ENVOLTORIO DE TRANSPORTE local: una función que recibe la ruta como
 // PRIMER parámetro y se la pasa tal cual a un `http.<verbo>`. `postDocument(path, document)` en
 // `features/compliance/api.ts:214` es el caso que lo destapó.
@@ -285,7 +364,7 @@ func transporteVerbo(cuerpo, param string) (string, bool) {
 		// de depth y evidence—. Se resuelve AGNÓSTICO DEL MÉTODO, que es la decisión que este
 		// fichero ya documenta para el fetch crudo: el verbo vive en el objeto de init, a veces
 		// varias líneas más abajo, y suponer GET convertiría un POST legítimo en un falso rojo.
-		if regexp.MustCompile(`\bfetch\s*\(\s*` + regexp.QuoteMeta(param) + `\s*[,)]`).MatchString(cuerpo) {
+		if regexp.MustCompile(`\b(?:fetch|apiFetchRaw)\s*\(\s*` + regexp.QuoteMeta(param) + `\s*[,)]`).MatchString(cuerpo) {
 			return "fetch", true
 		}
 		return "", false
@@ -904,15 +983,14 @@ var consoleMachineFacing = map[string]string{
 	"DELETE /v1/scim/v2/Groups":     "aprovisionamiento de grupos: lo escribe el IdP",
 	"POST /v1/scim/v2/Events":       "señales SCIM ENTRANTES: las empuja el IdP",
 
-	// El CANJE de una aprobación lo hace la máquina, no el operador: la consola APRUEBA
-	// (`${BASE}/approvals` list/create/get/sweep en `features/governance/api.ts:102-122`) y el
-	// PUENTE canjea el token — `cmd/olivares/approvalbridge.go:514` y `:554` son sus dos únicos
-	// llamantes, con `file:line`, no por parecido de nombre.
-	// ⚠ La clave es la ruta COMPLETA del canje, no `…/approvals`: escrita corta, el prefijo se
-	// tragaba `cancel`, `decisions` y `sweep`, que la consola SÍ llama — y la guarda lo dijo
-	// nombrando las cuatro. Tercera vez hoy que me caza una declaración demasiado ancha.
-	"POST /v1/m/governance/approvals/{}/consume": "el canje lo hace el puente (approvalbridge.go:554), no un operador",
-	"POST /v1/m/governance/breakglass/consume":   "lo canjea el puente (approvalbridge.go:514); la consola concede, no consume",
+	// A machine consumes an approval; the operator approves it through the console
+	// (${BASE}/approvals list/create/get/sweep in features/governance/api.ts:102-122).
+	// The bridge consumes the token: cmd/olivares/internal/approvalbridge/approvalbridge.go:648
+	// and :692 were its only two callers in this measurement, identified by file and line.
+	// Keep the FULL consume route as the key: an approvals prefix also matched cancel,
+	// decisions and sweep, which the console calls. The guard identified all four overlaps.
+	"POST /v1/m/governance/approvals/{}/consume": "el canje lo hace el puente (internal/approvalbridge/approvalbridge.go:692), no un operador",
+	"POST /v1/m/governance/breakglass/consume":   "lo canjea el puente de Business; la consola concede, no consume",
 
 	// FinOps admission: the three steps of one billable effect and the reconciliation JOB.
 	// Whoever reserves settles, with the handle it was answered with: the engine's own
@@ -927,7 +1005,9 @@ var consoleMachineFacing = map[string]string{
 	"POST /v1/m/finops/admission/reconcile": "the reconciliation JOB (budget write): the engine's scheduler runs it; the operator reads GET /admission/reconciliation",
 
 	"/v1/auth/federation/": "arranque y retorno de federación: son NAVEGACIONES del navegador, no XHR",
-	"POST /v1/auth/token":  "JWT-bearer OAuth grant: machine client, not the console agent-launch token exchange",
+	"/session/preview/": "browser-only passthrough to the session's app: session-preview.tsx loads the " +
+		"URL returned by POST /v1/m/sessions/runs/{}/preview in an iframe or link, not through a typed client",
+	"POST /v1/auth/token": "JWT-bearer OAuth grant: machine client, not the console agent-launch token exchange",
 }
 
 var consoleUnresolvedSites = map[string]map[string]int{
@@ -952,15 +1032,6 @@ var consoleUnresolvedSites = map[string]map[string]int{
 		// dio DECLARACIÓN PODRIDA, que es su tercer modo de fallo —una entrada declarada que ya
 		// no aparece— y el que un simple contador nunca habría notado. Eran DIECIOCHO rutas
 		// `/v1/console/sso/*` contadas como «sin superficie» que la consola llama todas.
-	},
-	// El helper COMPARTIDO de flujos con una ruta que sale de OTRO fichero. No es una ceguera
-	// nueva del parser: es la misma de siempre —`pathFns` se construye por fichero— dicha en voz
-	// alta en vez de dejar sus rutas calladas en el cubo de «sin superficie».
-	"web/src/features/agentops/attach.ts": {
-		"runAttachPath(runRef) (stream helper: path from a CROSS-FILE helper, not resolvable here)": 1,
-	},
-	"web/src/features/sandbox/stream.ts": {
-		"runStreamPath(runId) (stream helper: path from a CROSS-FILE helper, not resolvable here)": 1,
 	},
 	"web/src/features/work/api.ts": {
 		// intent.path es un valor de tiempo de ejecución: la intención decide la ruta.
@@ -1051,7 +1122,7 @@ func walkBoundRoutes(t *testing.T) map[string]bool {
 		t.Fatalf("bind production routes: %v", err)
 	}
 	t.Cleanup(func() { _ = eng.Close() })
-	router, ok := withEnterpriseHTTP(eng.api.Handler(), eng, log).(chi.Routes)
+	router, ok := thisEdition.routes(eng.api.Handler(), eng, log).(chi.Routes)
 	if !ok {
 		t.Fatal("the production HTTP wrapper does not expose its registered routes")
 	}
@@ -1141,18 +1212,13 @@ func parseConsoleClientCalls(t *testing.T, root string) (calls []clientCall, unr
 		if err != nil {
 			return err
 		}
-		text := directAPIFetchesAsHTTP(string(src))
-		consts := map[string]string{}
-		for _, m := range constRe.FindAllStringSubmatch(text, -1) {
-			consts[m[1]] = m[2]
+		text, scopedUnresolved := scopedTransportsAsHTTP(string(src))
+		for _, call := range scopedUnresolved {
+			call.file, _ = filepath.Rel(filepath.Join("..", ".."), path)
+			unresolved = append(unresolved, call)
 		}
-		// Constants built from other constants, then flattened. Registered after the
-		// single-quoted ones so a plain literal always wins a name clash.
-		for _, m := range tmplConstRe.FindAllStringSubmatch(text, -1) {
-			if _, taken := consts[m[1]]; !taken {
-				consts[m[1]] = m[2]
-			}
-		}
+		text = directAPIFetchesAsHTTP(text)
+		consts := consolePathConsts(text)
 		// Mapas de rutas hermanas (`const M: Record<K, string> = {…}`), resueltos DESPUÉS de las
 		// constantes porque sus valores interpolan alguna (`${BASE}/…`).
 		pathMaps := mapaDeRutas(text, consts)
@@ -1328,6 +1394,21 @@ func parseConsoleClientCalls(t *testing.T, root string) (calls []clientCall, unr
 			if enComentario(text, loc[0]) {
 				enComentarios++
 				continue
+			}
+			expr := text[loc[2]:loc[3]]
+			name := strings.SplitN(expr, "(", 2)[0]
+			tail := strings.TrimSpace(text[loc[3]:])
+			complete := strings.HasPrefix(tail, ",") || strings.HasPrefix(tail, "}")
+			if p, ok := consoleImportedPathFn(t, path, string(src), name); ok && complete {
+				p = interpRe.ReplaceAllString(p, "{}")
+				p = strings.SplitN(p, "?", 2)[0]
+				p = normalisePath(p)
+				if !gluedParamSegment(p) {
+					rawFetches = append(rawFetches, clientCall{
+						path: p, file: rel, line: 1 + strings.Count(text[:loc[0]], "\n"),
+					})
+					continue
+				}
 			}
 			unresolved = append(unresolved, clientCall{
 				method: "",
@@ -1567,6 +1648,9 @@ func parseConsoleClientCalls(t *testing.T, root string) (calls []clientCall, unr
 	return calls, unresolved, rawFetches
 }
 
+// Build-specific declarations use the same stale-entry checks as the JSON register.
+var consoleEditionSeams []consoleSeam
+
 func loadConsoleSeams(t *testing.T) []consoleSeam {
 	t.Helper()
 	b, err := os.ReadFile(consoleSeamsPath)
@@ -1579,6 +1663,7 @@ func loadConsoleSeams(t *testing.T) []consoleSeam {
 	if err := json.Unmarshal(b, &doc); err != nil {
 		t.Fatalf("parsing %s: %v", consoleSeamsPath, err)
 	}
+	doc.Seams = append(doc.Seams, consoleEditionSeams...)
 	for i, s := range doc.Seams {
 		if strings.TrimSpace(s.Reason) == "" || strings.TrimSpace(s.Owner) == "" {
 			t.Errorf("seam %d (%s %s) has no reason/owner: an undeclared reason is an allow-list, "+
@@ -1865,7 +1950,7 @@ const consoleUncoveredBudget = 37
 // gap to remain named when it is not delivered in the same lot. Every entry must still be a live
 // route and must have no resolved console caller. Adding a caller or retiring a route turns this
 // declaration red until the stale entry is removed.
-var consoleDeferredOperatorSurface = map[string]string{
+var consoleDeferredOperatorSurface = withCommunityOrchestrationSurfaces(map[string]string{
 	// The first console increment of K3 (I1, web/src/features/communications) delivered the
 	// EIGHT callers of the journey channel → notice → inbox → delivery/message → Ack; the second
 	// (I2, an internal design note (not shipped)) delivered the SEVEN of
@@ -1899,6 +1984,266 @@ var consoleDeferredOperatorSurface = map[string]string{
 		"has no decision-detail screen that would show a reconstruction yet",
 	"GET /v1/m/sessions/providers/{}": "the providers screen lists, adds, tests, rotates and revokes; " +
 		"list and get return the same record, and there is no detail route that would read one",
+	// The Roles tab reads complete records from the collection endpoints. Individual
+	// lookups remain REST/CLI surfaces until a console detail view needs them.
+	"GET /v1/m/governance/rbac/roles/{}": "`olivares governance rbac roles get` reads one role; " +
+		"the Roles tab lists the same role DTOs and edits the selected record without a detail read",
+	"GET /v1/m/governance/rbac/permission-groups/{}": "`olivares governance rbac permission-groups get` " +
+		"reads one group; the Roles tab lists the same group DTOs and edits the selected record without a detail read",
+	"GET /v1/m/governance/rbac/grants/{}": "`olivares governance rbac grants get` reads one grant; " +
+		"the Roles tab lists the same grant DTOs and revokes the selected record without a detail read",
+	"GET /v1/m/governance/rbac/inheritance-filters/{}": "the inheritance-filters section lists, sets and " +
+		"removes; list and get return the same record, and there is no detail screen that would read one",
+	"POST /v1/auth/os-account-bindings": "`olivares auth os-account begin` starts the audited administrator " +
+		"step-up ceremony; this increment has no console control for choosing its subject and native account",
+	"POST /v1/auth/os-account-bindings/complete": "`olivares auth os-account complete` sends the subject's " +
+		"own fresh native password proof over HTTPS; this increment has no console subject-proof form",
+	"GET /v1/auth/os-account-bindings/{}": "`olivares auth os-account get` reads administrative mapping metadata; " +
+		"this increment has no console binding-detail screen",
+	"DELETE /v1/auth/os-account-bindings/{}": "`olivares auth os-account revoke` confirms audited revocation " +
+		"while retaining the permanent account reservation; this increment has no console revocation control",
+
+	// Skills catalog imports, retirement, revision publishing, target-filtered assignment
+	// lists and binding edits remain CLI and REST/SDK surfaces. Remove each entry when its
+	// console flow gains a caller; the existing stale-declaration checks enforce it.
+	"POST /v1/m/skills/packs": "reviewed Git/folder/archive imports use `olivares skills install`; " +
+		"the console has no catalog source-selection or upload flow",
+	"DELETE /v1/m/skills/packs/{}": "unused pack retirement uses `olivares skills rm`; " +
+		"the console has no catalog retirement confirmation or pack-version state",
+	"POST /v1/m/skills/packs/{}/revisions": "publishing another immutable revision uses `olivares skills update`; " +
+		"the console has no catalog revision import or retry-key flow",
+	"GET /v1/m/skills/assignments": "target-filtered bindings use `olivares skills assignments`; " +
+		"the console has no workspace/template/session catalog-assignment panel",
+	"PUT /v1/m/skills/assignments/{}": "binding changes use `olivares skills assign --assignment --version`; " +
+		"the console has no catalog binding editor with expected-version state",
+	// ARCH.C3: the console and the CLI read every tool's readiness in one answer
+	// (GET provider-profiles/readiness: this preview's rule plus the verdict of the key it
+	// picks). The one-tool preview stays a published REST and SDK read.
+	"GET /v1/m/sessions/provider-profiles/resolve": "the one-tool preview is REST and SDK; the console " +
+		"renders GET provider-profiles/readiness, the same rule for every tool with the key's verdict",
+	//-executor.md ships saved Docker setup as REST APIs without console controls.
+	// The deployment console still reads structural readiness through GET /executor.
+	"GET /v1/m/deploy/executor/config": "saved executor setup is a documented administrator REST read; " +
+		"the deployment console reads GET /executor readiness and has no saved-setup form",
+	"PUT /v1/m/deploy/executor/config": "saved executor configuration is a documented administrator REST write; " +
+		"the deployment console has no socket and sealed-secret-reference setup form",
+	"POST /v1/m/deploy/executor/test": "the documented administrator REST probe tests saved Docker setup; " +
+		"the deployment console has no saved-setup connection-test control",
+	// Departments are Business (docs/editions.md, #966): the Community build answers 501
+	// departments_unavailable on these two, and their console control is a Business panel
+	// (PANEL_EXTENSIONS.scopesCards), not part of web/src.
+	"PUT /v1/workspaces/{}/parent": "Business department move: Community answers 501 " +
+		"departments_unavailable; the department tree is a Business console panel",
+	"PUT /v1/groups/{}/workspace": "Business group placement: Community answers 501 " +
+		"departments_unavailable; placing a group is a Business console panel",
+})
+
+// These detail reads must remain accounted for even when unrelated coverage
+// improvements leave room under the aggregate ratchet.
+func TestRBACDetailRoutesHaveConsoleDisposition(t *testing.T) {
+	routed := walkEveryRoute(t)
+	calls, _, _ := parseConsoleClientCalls(t, filepath.Join("..", "..", "web", "src"))
+	called := map[string]bool{}
+	for _, c := range calls {
+		called[c.method+" "+c.path] = true
+	}
+	for _, collection := range []string{"roles", "permission-groups", "grants"} {
+		t.Run(collection, func(t *testing.T) {
+			list := "GET /v1/m/governance/rbac/" + collection
+			detail := list + "/{}"
+			if !routed[list] || !routed[detail] {
+				t.Fatal("the collection and detail reads must remain registered")
+			}
+			if !called[list] {
+				t.Fatal("the Roles tab must retain its collection read")
+			}
+			if !called[detail] && strings.TrimSpace(consoleDeferredOperatorSurface[detail]) == "" {
+				t.Errorf("%s has neither a console caller nor a declared deferral reason", detail)
+			}
+		})
+	}
+}
+
+func TestPreviewAndExecutorRoutesHaveConsoleDisposition(t *testing.T) {
+	routed := walkEveryRoute(t)
+	calls, _, _ := parseConsoleClientCalls(t, filepath.Join("..", "..", "web", "src"))
+	called := map[string]bool{}
+	for _, c := range calls {
+		called[c.method+" "+c.path] = true
+	}
+	t.Run("browser preview", func(t *testing.T) {
+		for _, method := range []string{"GET", "POST"} {
+			key := method + " /v1/m/sessions/runs/{}/preview"
+			if !routed[key] || !called[key] {
+				t.Errorf("preview must retain its registered typed console call: %s", key)
+			}
+		}
+		if !routed["GET /session/preview/*"] {
+			t.Fatal("the browser preview proxy must remain registered")
+		}
+		if strings.TrimSpace(consoleMachineFacing["/session/preview/"]) == "" {
+			t.Error("the browser-only preview proxy has no declared transport reason")
+		}
+	})
+	t.Run("REST executor setup", func(t *testing.T) {
+		if !called["GET /v1/m/deploy/executor"] {
+			t.Fatal("the deployment console must retain its executor readiness read")
+		}
+		for _, key := range []string{
+			"GET /v1/m/deploy/executor/config",
+			"PUT /v1/m/deploy/executor/config",
+			"POST /v1/m/deploy/executor/test",
+		} {
+			if !routed[key] {
+				t.Errorf("executor setup must remain registered: %s", key)
+			}
+			if !called[key] && strings.TrimSpace(consoleDeferredOperatorSurface[key]) == "" {
+				t.Errorf("%s has neither a console caller nor a declared deferral reason", key)
+			}
+		}
+	})
+}
+
+func TestRawClientTransportSurfaces(t *testing.T) {
+	for _, transport := range []string{"fetch", "apiFetchRaw"} {
+		for _, wrapper := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/wrapper=%t", transport, wrapper), func(t *testing.T) {
+				source := "const BASE = '/v1/m/compliance'\n"
+				call := transport
+				if wrapper {
+					source += "async function download(path: string, filename: string): Promise<Response> {\n" +
+						"  return " + transport + "(path, { headers: { Accept: 'text/csv' } })\n}\n"
+					call = "download"
+				}
+				source += "export const exportEvidence = (id: string) =>\n  " + call +
+					"(`${BASE}/evidence/${encodeURIComponent(id)}/export?format=csv`, { headers: { Accept: 'text/csv' } })\n"
+				_, _, raw := parseTS(t, source)
+				if len(raw) != 1 || raw[0].path != "/v1/m/compliance/evidence/{}/export" || raw[0].method != "" {
+					t.Fatalf("raw transport must expose the download path without inventing a verb: %v", raw)
+				}
+				// Keeping the URL while removing its transport must remove coverage.
+				_, _, raw = parseTS(t, strings.ReplaceAll(source, transport+"(", "withoutTransport("))
+				if len(raw) != 0 {
+					t.Fatalf("a path without a transport must not count as a console surface: %v", raw)
+				}
+			})
+		}
+	}
+}
+
+func TestConsoleStreamImportedPathFunctions(t *testing.T) {
+	const guardHelper = "export function streamPath(ref: string): string {\n" +
+		"  return `/v1/m/sandbox/runs/${encodeURIComponent(ref)}/stream`\n}\n"
+	const guardSource = "import { streamPath } from './api'\n" +
+		"subscribeStream({ path: streamPath(ref), token })\n"
+	for _, tc := range []struct{ name, helper, source string }{
+		{"caller suffix", guardHelper, strings.Replace(guardSource, "streamPath(ref)", "streamPath(ref) + '/typo'", 1)},
+		{"commented import", guardHelper, strings.Replace(guardSource, "import { streamPath } from './api'", "/*\nimport { streamPath } from './api'\n*/", 1)},
+		{"commented definition", "/*\n" + guardHelper + "*/\n", guardSource},
+		{"commented constant", "/*\nconst BASE = '/v1/m/sandbox'\n*/\n" +
+			strings.Replace(guardHelper, "/v1/m/sandbox", "${BASE}", 1), guardSource},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			for name, content := range map[string]string{"api.ts": tc.helper, "stream.ts": tc.source} {
+				if err := os.WriteFile(filepath.Join(root, name), []byte(content), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			_, unresolved, raw := parseConsoleClientCalls(t, root)
+			if len(raw) != 0 || len(unresolved) != 1 {
+				t.Fatalf("unsupported stream must remain unresolved: raw=%v unresolved=%v", raw, unresolved)
+			}
+		})
+	}
+	root := t.TempDir()
+	for _, feature := range []string{"first", "second"} {
+		dir := filepath.Join(root, feature)
+		if err := os.Mkdir(dir, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		helper := "const BASE = '/v1/m/" + feature + "'\n" +
+			"export function streamPath(ref: string): string {\n" +
+			"  return `${BASE}/runs/${encodeURIComponent(ref)}/stream`\n}\n"
+		if err := os.WriteFile(filepath.Join(dir, "api.ts"), []byte(helper), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		// The same exported name in different modules must not collide. An alias
+		// belongs only to the importing file, just like a TypeScript named import.
+		source := "import { streamPath as pathForRun } from './api'\n" +
+			"subscribeStream({ path: pathForRun(ref), token })\n"
+		path := filepath.Join(dir, "stream.ts")
+		if err := os.WriteFile(path, []byte(source), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	assertStreams := func(wantRaw, wantUnresolved int) {
+		t.Helper()
+		_, unresolved, raw := parseConsoleClientCalls(t, root)
+		var paths []string
+		for _, c := range raw {
+			paths = append(paths, c.path)
+		}
+		sort.Strings(paths)
+		if len(raw) != wantRaw || len(unresolved) != wantUnresolved {
+			t.Fatalf("streams=%v unresolved=%v; want %d streams and %d unresolved sites", paths, unresolved, wantRaw, wantUnresolved)
+		}
+		if wantRaw == 2 && !mismasRutas(paths, []string{"/v1/m/first/runs/{}/stream", "/v1/m/second/runs/{}/stream"}) {
+			t.Fatalf("imports lost their module scope: %v", paths)
+		}
+	}
+	assertStreams(2, 0)
+	// Wildcard paths in prose and strings are not block-comment openings.
+	for _, prefix := range []string{"// Routes under /v1/m/first/*\n", "const prose = '/v1/m/first/*'\n"} {
+		t.Run(prefix, func(t *testing.T) {
+			module := filepath.Join(root, "first", "api.ts")
+			original, err := os.ReadFile(module)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() {
+				if err := os.WriteFile(module, original, 0o600); err != nil {
+					t.Fatal(err)
+				}
+			})
+			if err := os.WriteFile(module, append([]byte(prefix), original...), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			_, unresolved, raw := parseConsoleClientCalls(t, root)
+			if len(raw) != 2 || len(unresolved) != 0 {
+				t.Fatalf("wildcard text hid live bindings: raw=%v unresolved=%v", raw, unresolved)
+			}
+		})
+	}
+
+	module := filepath.Join(root, "first", "api.ts")
+	helper, err := os.ReadFile(module)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, mutant := range []string{
+		strings.Replace(string(helper), "export function", "function", 1),
+		strings.Replace(string(helper), "/stream`", "/stream` + suffix", 1),
+	} {
+		if err := os.WriteFile(module, []byte(mutant), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		assertStreams(1, 1)
+	}
+	if err := os.WriteFile(module, helper, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// A matching function elsewhere cannot rescue an import of a missing export.
+	if err := os.WriteFile(filepath.Join(root, "first", "stream.ts"), []byte(
+		"import { missingPath as pathForRun } from './api'\nsubscribeStream({ path: pathForRun(ref), token })\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	assertStreams(1, 1)
+	if err := os.WriteFile(filepath.Join(root, "second", "stream.ts"), []byte(
+		"import { streamPath as pathForRun } from './api'\nwithoutTransport({ path: pathForRun(ref), token })\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	assertStreams(0, 1)
 }
 
 func TestDirectAPIFetchSurfaceMutation(t *testing.T) {
@@ -2083,4 +2428,41 @@ func TestNullishCoalescingIsNotATernary(t *testing.T) {
 			t.Errorf("%s: esCondicionalInterp(%q) = %v, quiero %v", c.nombre, c.ruta, got, c.quiero)
 		}
 	}
+}
+
+func withCommunityOrchestrationSurfaces(surfaces map[string]string) map[string]string {
+	if !orchestrationReadersLinked() {
+		maps.Copy(surfaces, map[string]string{
+			// Business orchestration retains these authenticated 501 contracts in Community.
+			// The private console owns their controls; each exact entry is still checked
+			// for stale registration or a returned Community caller.
+			"GET /v1/m/orchestration/graph":                             "Business orchestration: Community answers 501; its console control is private",
+			"GET /v1/m/orchestration/graph/neighbors":                   "Business orchestration: Community answers 501; its console control is private",
+			"GET /v1/m/orchestration/flows":                             "Business orchestration: Community answers 501; its console control is private",
+			"GET /v1/m/orchestration/timeline":                          "Business orchestration: Community answers 501; its console control is private",
+			"GET /v1/m/orchestration/stream":                            "Business orchestration: Community answers 501; its console control is private",
+			"GET /v1/m/orchestration/schedules":                         "Business orchestration: Community answers 501; its console control is private",
+			"POST /v1/m/orchestration/schedules":                        "Business orchestration: Community answers 501; its console control is private",
+			"GET /v1/m/orchestration/schedules/{}":                      "Business orchestration: Community answers 501; its console control is private",
+			"PATCH /v1/m/orchestration/schedules/{}":                    "Business orchestration: Community answers 501; its console control is private",
+			"POST /v1/m/orchestration/schedules/{}/fire":                "Business orchestration: Community answers 501; its console control is private",
+			"GET /v1/m/orchestration/schedules/{}/decisions":            "Business orchestration: Community answers 501; its console control is private",
+			"GET /v1/m/orchestration/schedules/{}/revisions":            "Business orchestration: Community answers 501; its console control is private",
+			"POST /v1/m/orchestration/schedules/{}/restore":             "Business orchestration: Community answers 501; its console control is private",
+			"GET /v1/m/orchestration/decisions":                         "Business orchestration: Community answers 501; its console control is private",
+			"GET /v1/m/orchestration/workflows":                         "Business orchestration: Community answers 501; its console control is private",
+			"POST /v1/m/orchestration/workflows":                        "Business orchestration: Community answers 501; its console control is private",
+			"GET /v1/m/orchestration/workflows/{}":                      "Business orchestration: Community answers 501; its console control is private",
+			"PATCH /v1/m/orchestration/workflows/{}":                    "Business orchestration: Community answers 501; its console control is private",
+			"PUT /v1/m/orchestration/workflows/{}/steps":                "Business orchestration: Community answers 501; its console control is private",
+			"GET /v1/m/orchestration/workflows/{}/revisions":            "Business orchestration: Community answers 501; its console control is private",
+			"POST /v1/m/orchestration/workflows/{}/restore":             "Business orchestration: Community answers 501; its console control is private",
+			"POST /v1/m/orchestration/workflows/{}/dry-run":             "Business orchestration: Community answers 501; its console control is private",
+			"POST /v1/m/orchestration/workflows/{}/run":                 "Business orchestration: Community answers 501; its console control is private",
+			"GET /v1/m/orchestration/workflows/{}/runs":                 "Business orchestration: Community answers 501; its console control is private",
+			"GET /v1/m/orchestration/workflows/{}/runs/{}":              "Business orchestration: Community answers 501; its console control is private",
+			"POST /v1/m/orchestration/workflows/{}/runs/{}/reauthorize": "Business orchestration: Community answers 501; its console control is private",
+		})
+	}
+	return surfaces
 }

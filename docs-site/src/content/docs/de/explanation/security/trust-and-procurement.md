@@ -23,8 +23,8 @@ unterzogen** und ist **nicht** im CSA STAR Registry gelistet. Was stattdessen
 existiert — und vor Vertragsabschluss wohl nützlicher ist — ist ein überprüfbares
 Bereitschaftspaket: Kontrolle-für-Kontrolle-Zuordnungen zu Nachweisen, die Sie
 selbst aus einer laufenden Bereitstellung abrufen können, plus die explizite
-Liste der Entscheidungen (Zertifizierungsaufträge, Pentest-Beauftragung,
-Aktivierung des kommerziellen Supports), die noch offen sind. FedRAMP/ATO ist für
+Liste der Entscheidungen (Zertifizierungsaufträge, Pentest-Beauftragung),
+die noch offen sind. FedRAMP/ATO ist für
 das selbst gehostete Produkt explizit außerhalb des Geltungsbereichs.
 :::
 
@@ -95,10 +95,12 @@ eigenen Bereitstellung überprüfen.
 
 ## Support und Barrierefreiheit
 
-- Das Support-Modell (Stufen, schweregradbasierte Reaktionsziele, Eskalation)
-  ist in `SUPPORT.md` veröffentlicht — einschließlich der ehrlichen Offenlegung,
-  dass der kommerzielle Support zwar definiert, aber noch nicht erwerbbar ist,
-  und dass die Eskalationskette heute eine Person tief ist.
+- Business beinhaltet E-Mail-Support während der Geschäftszeiten nach bestem
+  Bemühen, ohne Reaktionsziel. Enterprise ergänzt unverbindliche Ziele für die
+  erste Antwort, die im Vertrag vereinbart werden. Das Support-Modell und der
+  Eskalationsweg stehen in `SUPPORT.md` und im
+  [aktuellen Angebot](https://olivares.ai/pricing); die Eskalationskette umfasst
+  heute eine Person.
 - Der Barrierefreiheits-Konformitätsbericht ist ein vollständiger **VPAT
   2.5Rev INT**-Edition-ACR (WCAG 2.1/2.2 AA + Revised Section 508 + EN 301 549
   V3.2.1) unter `docs/accessibility/VPAT-olivares-admin.md`, wobei der formale

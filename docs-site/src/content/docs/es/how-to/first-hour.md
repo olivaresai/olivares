@@ -58,18 +58,17 @@ es `:8443` — **todas las interfaces**, porque esto es un servidor
 restringirla a esta máquina. Medido en esta caja el 2026-09-17,
 `quickstart --quiet` imprimió el token en **3 s**.
 
-El panel de bienvenida imprime:
+El inicio nativo muestra una de estas instrucciones según el estado de la
+configuración. Solo imprime un token cuando acaba de emitirlo:
 
 ```text
-     (HTTPS with a self-signed certificate on first boot — your browser will
-      warn once; that is expected for a local install.)
-  2. Complete setup with this one-time token (shown once, single-use):
-
-         olst_…
+Next: Open the console; it guides setup, sign-in and your first session.
+Next: Open the console and sign in to continue your work.
+Next: Open the console to finish setup with the one-time token issued earlier.
 ```
 
 Para el bind comodín predeterminado, el banner imprime
-`https://localhost:8443` y lista debajo del token todas las demás direcciones
+`https://localhost:8443` y lista las demás direcciones
 en las que responde este host: sirven para llegar a la consola desde otra
 máquina. Si el banner ya se ha ido de la pantalla, `olivares first-boot`
 vuelve a imprimir la dirección o direcciones de la consola y el estado de la
@@ -182,6 +181,10 @@ curl -sf "$BASE/v1/audit?action=hook.tool.deny&limit=100" \
 task smoke:first-hour
 ```
 
+Cada decisión gobernada añade `hook.tool.allow` o `hook.tool.deny` al ledger del
+tenant (`modules/sessions/hookpep/claudehookpep.go`). El smoke test comprueba que
+existan ambas filas.
+
 ## Forma 2 — Equipo (Postgres y Docker)
 
 Este contenedor **no tiene Docker**. PostgreSQL **no está en marcha** aquí.
@@ -212,7 +215,7 @@ aplicándose la autenticación, los permisos, el aislamiento entre tenants y
 la auditoría; los tokens de API no satisfacen esta verificación.
 
 Para exigir AAL3 reciente en esas acciones, registra una passkey en
-`https://localhost:PORT` y completa una verificación reciente con passkey/PIV
+`https://localhost:PORT` y completa una verificación reciente con passkey
 en esa dirección de la consola. En **Settings → Sign-in → Extra check for
 administrative actions**, selecciona **Passkey**. El equivalente por API es
 `PUT /v1/auth/step-up-policy` con `{"admin_step_up":"passkey"}`. El motor
@@ -229,12 +232,23 @@ están deny-closed:
 session runtime: no inference credential source configured; stream-json launches are deny-closed
 ```
 
-(`cmd/olivares/sessionruntime.go`). Fija **una** de
-`OLIVARES_SESSION_RUNTIME_WIF` o `OLIVARES_SESSION_RUNTIME_TOKEN_FILE`.
-A partir de 26.10, esa ya no es la única vía: registra la credencial en la consola
-y vincúlala a un perfil. Véase
-[Añadir un proveedor y lanzar un agente](/es/how-to/add-a-provider/) y
-[Operar una sesión de proveedor](/how-to/operate-provider-sessions/).
+Para los perfiles de Claude con `managed_injection` que no nombran un proveedor,
+`OLIVARES_SESSION_RUNTIME_WIF` o `OLIVARES_SESSION_RUNTIME_TOKEN_FILE` aporta la
+credencial de inferencia del host. Un perfil vinculado a un proveedor usa su
+credencial; si falla, se rechaza el inicio sin recurrir a la del host.
+Un perfil con `provider_account_home` usa el inicio de sesión autorizado de la
+herramienta y no necesita ninguna de las dos variables. Consulta
+[Añadir un proveedor](/es/how-to/add-a-provider/).
+
+## Comprobaciones de estado de OpenCode
+
+Si la comprobación del estado de inicio de sesión de OpenCode agota el tiempo o
+falla durante la configuración, el motor informa de que no pudo leer el estado.
+Reintenta la comprobación; un fallo no significa que la herramienta tenga la
+sesión cerrada. Las comprobaciones concurrentes para la misma organización y
+cuenta comparten un único comando nativo. Los resultados correctos se reutilizan
+durante un máximo de 30 segundos y se actualizan cuando cambia el archivo de
+inicio de sesión o el ejecutable instalado.
 
 ## Relacionado
 

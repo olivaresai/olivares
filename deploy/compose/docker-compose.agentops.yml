@@ -70,13 +70,13 @@ services:
       - olivares-runtime:/run/olivares
     # --- hardening is INHERITED from the base service (user 65532, read_only root,
     # tmpfs /tmp, cap_drop ALL, no-new-privileges, restart). The writable surfaces are
-    # exactly the four volumes above — nothing else.
-    # Raise the ceiling: the base sizes the engine alone (1G); here a conducted claude
-    # runs in the same container, so give it headroom (tune for your concurrency).
+    # exactly the four volumes above plus the base file's /project mount — nothing else.
+    # A conducted claude runs in the same container as the engine, so give it headroom
+    # (tune for your concurrency). No CPU limit, as in docker-compose.yml: a Docker
+    # daemon refuses one above its CPU count.
     deploy:
       resources:
         limits:
-          cpus: "2.0"
           memory: 2G
         reservations:
           cpus: "0.25"

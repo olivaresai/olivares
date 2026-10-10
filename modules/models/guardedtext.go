@@ -9,7 +9,6 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"net/http"
-	"strconv"
 	"strings"
 
 	mp "github.com/olivaresai/olivares/connectors/modelprovider"
@@ -32,8 +31,8 @@ import (
 //
 // ⛔ AND NOTHING IN THIS FILE IS A BEARER PERMIT. A ChatExecutionRequest is an ordinary
 // struct value: constructing one authenticates nobody and authorizes nothing. The real
-// authority is the route wrapper that already authenticated the caller and checked
-// models:routing:admin, the resolved routing policy, the deny-closed gates the handler
+// authority is ExecuteText's authenticated context and admission for the stored
+// models routing policy, the deny-closed gates the shared operation
 // runs before this branch, and the ORDERED sequence the composition operation enforces.
 // A caller that could build this struct could already call the route.
 
@@ -76,7 +75,7 @@ type ChatExecutionRequest struct {
 type ChatBudgetCheck func(ctx context.Context) (status int, denied bool)
 
 // ChatExecutor is the deny-closed composition seam. The only production caller is the
-// profiled branch of handleExecuteRouting. It is deliberately NOT exposed as an HTTP
+// profiled branch of ExecuteText. It is deliberately NOT exposed as an HTTP
 // endpoint, a durable replay API, or an Authorize→permit→Dispatch protocol: there is one
 // synchronous operation and its internal ordering is not a caller's to reassemble.
 type ChatExecutor interface {
@@ -424,16 +423,16 @@ func routingSpecDigest(s routingSpec) ([32]byte, error) {
 	return out, nil
 }
 
-// executeChatProfile is the profiled branch of handleExecuteRouting. Everything it hands
+// executeChatProfile is the profiled branch of ExecuteText. Everything it hands
 // the port was decided upstream against AUTHENTICATED state: the tenant the route
-// resolved, the principal the route authenticated, the resource and witness the route
-// wrapper produced, the policy identity read in the decision transaction, the profile the
+// resolved, the authenticated principal, the admitted stored models resource,
+// the policy identity read in the decision transaction, the profile the
 // registry content-verified, and the primary that survived every deny-closed gate. The
 // only caller-supplied values are the prompt, the token bound and the attribution ref.
 func (m *Module) executeChatProfile(
-	w http.ResponseWriter, r *http.Request, mc api.ModuleContext, in executeRequestDTO,
+	ctx context.Context, mc api.ModuleContext, in executeRequestDTO,
 	dec decisionDTO, profile ExecutionProfile, policyID model.ID, policyVersion int64, specDigest [32]byte,
-) {
+) (TextExecutionResult, error) {
 	executor := m.chatExecutor
 	if executor == nil { // a nil option value must refuse exactly like the default
 		executor = unavailableChatExecutor{}
@@ -459,7 +458,7 @@ func (m *Module) executeChatProfile(
 			target := *dec.Primary
 			local.Primary = &target
 		}
-		return m.budgetDeniesRoute(r.WithContext(ctx), mc, &local, in.SessionRef)
+		return m.budgetDeniesRoute(ctx, mc, &local, in.SessionRef)
 	})
 
 	req := ChatExecutionRequest{
@@ -472,13 +471,12 @@ func (m *Module) executeChatProfile(
 		req.MaxTokens = defaultExecuteMaxTokens
 	}
 
-	res, err := executor.ExecuteChat(r.Context(), req, budget)
+	res, err := executor.ExecuteChat(ctx, req, budget)
 	if err != nil {
 		// The expected target travels with the failure: it is the primary these gates
 		// left standing and the one the attempt was made against, and losing it was
 		// half of what R1 returned.
-		writeChatExecutionError(w, *dec.Primary, profile, res, err)
-		return
+		return chatExecutionErrorResponse(*dec.Primary, profile, res, err)
 	}
 	body := chatExecuteResponseDTO{
 		Decision: dec, Served: *dec.Primary, FallbackUsed: false,
@@ -487,10 +485,10 @@ func (m *Module) executeChatProfile(
 	if res.Usage != nil {
 		body.InputTokens, body.OutputTokens = res.Usage.PromptTokens, res.Usage.CompletionTokens
 	}
-	writeJSON(w, http.StatusOK, body)
+	return textResponse(http.StatusOK, body)
 }
 
-// writeChatExecutionError renders a closed error.
+// chatExecutionErrorResponse projects a closed error for both entry points.
 //
 // The split is by whether an attempt REF EXISTS, and it is the honest one. Before a ref is
 // minted nothing was prepared, nothing was decided against a target and no counter can
@@ -503,18 +501,15 @@ func (m *Module) executeChatProfile(
 // receives a 403 after the gateway reported 11 prompt and 7 completion tokens must not
 // read it as "nothing was consumed", and a 429 that followed a real dispatch must not read
 // as "nothing happened".
-func writeChatExecutionError(w http.ResponseWriter, expected targetDTO, profile ExecutionProfile, res ChatExecutionResult, err error) {
+func chatExecutionErrorResponse(expected targetDTO, profile ExecutionProfile, res ChatExecutionResult, err error) (TextExecutionResult, error) {
 	status, code, message, retryAfter := chatErrorResponse(err)
-	if retryAfter != nil {
-		w.Header().Set("Retry-After", strconv.FormatInt(*retryAfter, 10))
-	}
 	if strings.TrimSpace(res.AttemptRef) == "" {
 		if code == ChatErrExecutionUnavailable {
-			writeExecutionProfileError(w, chatExecutionUnavailable())
-			return
+			return textProfileError(chatExecutionUnavailable())
 		}
-		writeJSON(w, status, map[string]any{"error": map[string]string{"code": code, "message": message}})
-		return
+		result, failure := textResponse(status, map[string]any{"error": map[string]string{"code": code, "message": message}})
+		result.retryAfter = retryAfter
+		return result, failure
 	}
 	body := chatErrorResponseDTO{
 		Error:          chatErrorObjectDTO{Code: code, Message: message},
@@ -531,5 +526,7 @@ func writeChatExecutionError(w http.ResponseWriter, expected targetDTO, profile 
 		// report stays null, and an explicit zero stays zero.
 		body.InputTokens, body.OutputTokens = res.Usage.PromptTokens, res.Usage.CompletionTokens
 	}
-	writeJSON(w, status, body)
+	result, failure := textResponse(status, body)
+	result.retryAfter = retryAfter
+	return result, failure
 }

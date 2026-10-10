@@ -56,6 +56,49 @@ beforeEach(() => {
 })
 
 describe('ApprovalDetailSheet — the reason a reviewer approves', () => {
+  it('lets the launcher decide a session-proposed request while naming the launcher', async () => {
+    api.getApproval.mockResolvedValue({
+      ...toolApproval,
+      action: 'sessions.run.launch',
+      subject_kind: 'sessions.run',
+      requested_by: 'session:osn_new',
+      launched_by: 'user:reviewer',
+      reason: 'A new session that writes to a classified folder.',
+    })
+    wrap(
+      <ApprovalDetailSheet approvalId="a-cmd" open onOpenChange={() => {}} />,
+    )
+    expect(await screen.findByText('You for a new session')).toBeVisible()
+    expect(screen.getByRole('button', { name: /^approve$/i })).toBeEnabled()
+    expect(screen.getByRole('button', { name: /^reject$/i })).toBeEnabled()
+    expect(
+      screen.queryByText(
+        'You cannot approve your own request. Another administrator must decide.',
+      ),
+    ).toBeNull()
+    expect(screen.getByRole('button', { name: /^cancel$/i })).toBeEnabled()
+    expect(screen.getByText('session:osn_new')).toBeInTheDocument()
+    expect(api.decide).not.toHaveBeenCalled()
+  })
+
+  it('explains why a requester cannot decide their own pending request', async () => {
+    api.getApproval.mockResolvedValue({
+      ...toolApproval,
+      requested_by: 'user:reviewer',
+    })
+    wrap(
+      <ApprovalDetailSheet approvalId="a-cmd" open onOpenChange={() => {}} />,
+    )
+    expect(
+      await screen.findByText(
+        'You cannot approve your own request. Another administrator must decide.',
+      ),
+    ).toBeVisible()
+    expect(screen.queryByRole('button', { name: /^approve$/i })).toBeNull()
+    expect(screen.queryByRole('button', { name: /^reject$/i })).toBeNull()
+    expect(screen.getByRole('button', { name: /^cancel$/i })).toBeEnabled()
+  })
+
   it('shows a 16 KiB tool command whole, as code that wraps at any character', async () => {
     api.getApproval.mockResolvedValue(toolApproval)
     wrap(
@@ -84,7 +127,7 @@ describe('ApprovalDetailSheet — the reason a reviewer approves', () => {
       <ApprovalDetailSheet approvalId="a-cmd" open onOpenChange={() => {}} />,
     )
 
-    const value = await screen.findByText(prose)
+    const value = await screen.findByText(prose, { selector: 'dd' })
     expect(value.tagName).toBe('DD')
     expect(value.className).toMatch(/\[overflow-wrap:anywhere\]/)
   })

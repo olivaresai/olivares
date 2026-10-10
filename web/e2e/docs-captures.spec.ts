@@ -16,24 +16,13 @@ import {
 import { esperarExportacionDePostura } from './posture-export-terminal'
 import { EXTENSION_ROUTES } from '../src/features/extensions'
 
-/**
- * — real console captures for the public docs ("what you'll see in the
- * console" sections). Unlike the hermetic visual spec, this runs against the
- * REAL binary serving REAL seeded data (scripts/docs-captures.sh boots
- * `serve --insecure --seed-demo` and passes DEMO_TENANT), performs the real
- * login, and screenshots each view in light and dark at a fixed viewport.
- *
- * Output: web/playwright-report/docs/<view>-<theme>.png. The docs session
- * curates which captures are embedded under docs-site/src/assets/console/ —
- * nothing here is mocked, so every embedded capture shows the product as it
- * actually renders.
- */
+// Capture the running console in English, with seeded data and declared response
+// fixtures, in both themes. The runner supplies the engine and tenant; PNGs and
+// per-image evidence go under playwright-report/docs.
 
 const demoTenant = process.env.DEMO_TENANT ?? ''
 
-// Todas las rutas de clave de los locales `en`, con y sin namespace: el universo contra el que se
-// decide si un token de la pantalla es una clave SIN TRADUCIR o un dato con puntos. Se calcula una
-// vez; son ~19 000 rutas y el coste es una lectura de ficheros al arrancar el fichero de test.
+// Index English locale keys with and without namespaces to identify untranslated text.
 const CLAVES_I18N: string[] = (() => {
   const salida: string[] = []
   const recorre = (o: unknown, pre: string[]) => {
@@ -67,8 +56,7 @@ const CLAVES_I18N: string[] = (() => {
       recorre(d, [])
       recorre(d, [ns])
     } catch {
-      // Un locale ilegible NO se cuenta como "sin claves": se dice y se sigue, porque un
-      // universo mas pequeno hace que la sonda vea MENOS de lo que hay.
+      // Warn when a locale cannot be read: the resulting key index is incomplete.
       console.warn(
         `[i18n] no pude leer ${f} — la sonda de claves crudas mide de menos`,
       )
@@ -79,18 +67,8 @@ const CLAVES_I18N: string[] = (() => {
 const DEMO_EMAIL = 'demo@olivares.local'
 const DEMO_PASSWORD = 'olivares-demo-estate'
 
-/**
- * «El shell de la app montó su navegación» — el oráculo que cada toma espera tras el login.
- *
- * ⛔ Hasta N1 (2026-09-06) era el enlace lateral «Inventory». La barra lateral ya no es plana:
- *    las hojas viven dentro de nueve ÁREAS plegadas (web/src/features/registry.tsx NAV_AREAS),
- *    y al aterrizar en `/` ningún área está abierta, así que ese enlace no está visible y las
- *    122 tomas morían a los 30 s (medido en la corrida de publicación de esta rama). Lo que
- *    SIEMPRE se pinta para el superadmin de la demo es el enlace del área «Infrastructure»,
- *    acotado al landmark de la barra lateral para que la portada `/areas/infrastructure` —cuyo
- *    breadcrumb repite ese nombre como `role="link"`— no lo vuelva ambiguo (la misma clase de
- *    ambigüedad que el `exact: true` de antes cerraba para «Inventory»).
- */
+// The exact Infrastructure link in the Primary sidebar identifies the global account
+// shell without requiring a collapsed child link.
 const navReady = (page: import('@playwright/test').Page) =>
   page
     .getByRole('complementary', { name: 'Primary' })
@@ -99,77 +77,15 @@ const navReady = (page: import('@playwright/test').Page) =>
 // One entry per view the docs reference. `settle` gives slow views (graph
 // layout, charts) extra time after networkidle before the shot. `live` views
 // poll continuously, so networkidle never fires — they settle on a timer only.
-/**
- * ⛔ EL DEFECTO QUE `heading` EXISTE PARA CERRAR, medido el 2026-08-17 y probado con la imagen:
- *    la única aserción de este harness era **«hay algún `<h1>`»**, y eso lo cumple CUALQUIER página
- *    de esta app — incluida la de error. La entrada `/executive` llevaba dos capturas en verde que
- *    eran literalmente un **«Page not found»**, y el docs las trata como producto.
- *
- *    Es la familia de sonda que contesta lo mismo para cualquier entrada. Y el caso peligroso no es
- *    la ruta que no existe —ésa al menos se puede buscar en el registro—: es **una ruta que un día
- *    redirige a otra pantalla**. La captura saldría verde enseñando la pantalla EQUIVOCADA, y el
- *    material público mentiría sin que nada se pusiera rojo.
- *
- *    `heading` es el ORÁCULO POR VISTA: el texto que ese `<h1>` debe decir. Se toma **del producto
- *    corriendo** (lo emite `evidence.json`, no se adivina del fuente) y por eso distingue lo que
- *    importa: que el router sirvió el componente que se pidió.
- *
- * ⚠ SU COSTE, dicho para que nadie lo descubra a golpes: si una vista cambia su título, esta celda
- *   se pone roja y hay que actualizarla. Es el coste correcto para un harness cuya salida se
- *   publica — un título que cambia SÍ debe obligar a mirar las capturas otra vez.
- */
-/**
- * ⛔ `prepara` ES EL SEMBRADO POR RUTA DE C10-02, y existe porque una lista de rutas no basta.
- *
- *    Medido: `/workspace` salía con **1 panel vacío y 114 caracteres** en su región principal —
- *    de lejos la captura más pobre de las 55. No era un hueco de DATOS: la vista pinta
- *    «selecciona un espacio de trabajo» mientras `activeWorkspace` esté vacío, y el arnés sembraba
- *    el TENANT y no el espacio. La documentación pública enseñaba el aviso de «elige algo» como si
- *    fuese el panel del producto.
- *
- * ⚠ Y NO se siembra escribiendo en `localStorage`, que era lo obvio: `stores/workspace.ts` dice
- *   que al cambiar de tenant el espacio **se limpia solo** (`providers.tsx` se suscribe al store de
- *   tenant y lo borra). Un seed puesto antes del arranque puede quedar barrido justo después, y el
- *   fallo sería una captura pobre otra vez, sin nada rojo. Se conduce la interfaz, que es lo que
- *   hace un cliente y lo que ninguna suscripción puede deshacer.
- */
-/**
- * ⛔ `count()` NO ESPERA, y por eso hace falta esto ANTES de contar nada. Devuelve al instante,
- *    asi que ejecutado justo tras `goto` mide la pantalla MIENTRAS las consultas vuelan y
- *    acusaria de «hueco de sembrado» a un estate perfectamente sembrado — una causa FALSA, que
- *    es justo lo que la precondicion existia para evitar. Lo vio the reviewer al releer.
- *
- *    `DataTable` marca la espera con `aria-busy` (`components/data/data-table.tsx:600`) y
- *    mientras tanto pinta `SkeletonRows`, que son `<tr>` DE VERDAD: contar filas durante la
- *    carga cuenta el esqueleto, no los datos. `toHaveCount` si reintenta hasta su timeout.
- */
+// Each heading identifies the requested view, including redirects. A title change
+// requires reviewing the corresponding capture.
+// Prepare workspace selection through the interface after login; tenant changes can
+// clear a preloaded selection.
+// Wait for loading before counting data rows; skeleton rows are also table rows.
 async function esperaTablasCargadas(page: import('@playwright/test').Page) {
-  // ⛔⛔ Y SE ESPERA POR CSS (`locator('table')`), NO POR ROL. `getByRole('table')` NO CASA
-  //     NINGUNA de estas tablas: `DataTable` pone `role={nav ? 'grid' : undefined}` y
-  //     `gridNavigation` vale **true por defecto** (`components/data/data-table.tsx:166,288`),
-  //     asi que su rol accesible es `grid` y el explicito pisa al implicito. Medido corriendo
-  //     las tres escenas contra el motor real: fallaban a los 22,5 s —MI espera de 20 s, no el
-  //     timeout de 30 del click— y habrian fallado en cualquier pantalla con DataTable.
-  //     El elemento SI es un `<table>`; lo que varia es su rol.
-  //
-  // ⛔ PRIMERO QUE LA TABLA EXISTA, y no es un paso de mas: `aria-busy` es
-  //    `isLoading || undefined`, asi que cuando NO carga el atributo **no esta**. Esperar solo
-  //    a que `[aria-busy="true"]` valga 0 no distingue «ya termino» de «aun no ha empezado»
-  //    —justo tras el `goto` puede no haberse puesto todavia— y saldriamos igual de pronto que
-  //    sin esperar nada. Con la tabla presente, el 0 significa lo que queremos.
-  // ⛔⛔ Y LA TABLA PUEDE NO EXISTIR. Esperarla 20 s como condicion DURA mato la vista paginada
-  //     de `/work`, cuyo panel de decisiones no pinta ninguna `<table>`: 23,5 s y mi precondicion
-  //     ni llego a ejecutarse. Es la TERCERA vez que supongo la forma de una pantalla en vez de
-  //     derivarla —antes fue el rol `grid`, antes el `people` renombrado—, y la leccion es la
-  //     misma: una espera generica no puede exigir una estructura concreta.
-  //
-  //     Se le da una espera CORTA y se tolera su ausencia: si hay tabla, sirve de guarda de
-  //     arranque —el `aria-busy` es `isLoading || undefined` y sin ella no distingue «ya termino»
-  //     de «aun no ha empezado»—; si no la hay, no es un fallo, es otra clase de pantalla.
-  //
-  //     ⚠ Limite declarado: en una pantalla SIN tabla, el `aria-busy` puede consultarse antes de
-  //     que arranque ninguna consulta. Ahi esta espera vale menos, y quien dependa de un estado
-  //     cargado en una superficie asi tiene que esperar a SU elemento, no a esto.
+  // DataTable may expose a grid role, so find its table element. Allow table-free
+  // views, then wait for aria-busy to clear. Views without tables must wait for their
+  // own loaded element.
   await page
     .locator('table')
     .first()
@@ -180,31 +96,14 @@ async function esperaTablasCargadas(page: import('@playwright/test').Page) {
   })
 }
 
-/**
- * ⛔ D09: TWO PUBLISHED CAPTURES WERE OF A LOADING SKELETON, and this is why.
- *    `049-communications` and `053-communications-inbox` in the 2026-09-18 review set
- *    show six grey placeholder bars where the table should be. Their cells called
- *    `eligeWorkspaceConcretoK3`, which is what STARTS the K3 read — and then photographed
- *    the screen without waiting for it. The harness's own oracles passed, because the
- *    heading and the tab were correct: the picture was of the right screen, mid-flight.
- *
- *    Choosing the workspace and waiting for what that choice loads are one step, so they
- *    are one function. `esperaTablasCargadas` REFUSES (its `toHaveCount(0)` fails) rather
- *    than publishing if the read never settles, which is the half that matters: a capture
- *    that cannot be taken must not be taken.
- */
+// Choose the communications workspace and wait for its read to settle before capturing.
 async function eligeWorkspaceK3YEspera(page: import('@playwright/test').Page) {
   await eligeWorkspaceConcretoK3(page)
   await esperaTablasCargadas(page)
 }
 
-/**
- * K3 I1 — the three doors of the communications room need an EXPLICIT workspace, like
- * protocol-bindings above: with «All workspaces» selected the product paints «Select a
- * workspace» and makes no K3 request, so the capture would be a notice, not the screen.
- * Same mechanism as that entry, written once for the three: open the switcher, choose
- * any concrete workspace. Its absence is SEEDING, and the error says so.
- */
+// Communications requires a concrete workspace. Treat an absent switcher or choice as
+// missing seed data.
 async function eligeWorkspaceConcretoK3(page: import('@playwright/test').Page) {
   const conmutador = page.getByRole('button', { name: 'All workspaces' })
   try {
@@ -232,28 +131,9 @@ async function eligeWorkspaceConcretoK3(page: import('@playwright/test').Page) {
   await alguno.click()
 }
 
-/**
- * The ONE principal a docs capture uses besides the demo global superadmin, ratified by Root on
- * 2026-09-11 for the communications-handoffs door only. K3 re-binds identity on every personal
- * read and a global superadmin session cannot be scoped to a tenant, so that door answers 503
- * evidence_unavailable to the demo login while a tenant editor reads it with 200 (measured on one
- * activated engine: both principals, same workspace, same moment).
- *
- * The actor is provisioned the way the K3 browser journey provisions its members — POST /v1/users,
- * then POST /v1/memberships, authenticated by the demo superadmin's own login — and then signs in
- * through the ordinary login form. Nothing is forged, patched or impersonated. Its secret is random
- * per run and lives only in this process: it never reaches a capture, the evidence, a log or Git.
- * The evidence records the role, the tenant, the user id and the basis.
- *
- * ⛔ THE ROLE IS A PARAMETER, AND THE DOOR CHOOSES IT. Measured 2026-09-18: with `editor` the
- *    administration door answers "Not authorized — You do not have permission to view this",
- *    because it is gated on `sessions:channel:admin` (`registry.tsx:1224`,
- *    `modules/sessions/api.go:44`) and the `admin` VERB is granted from the `admin` role up
- *    (`core/auth/permission.go:33`: "RoleAdmin can additionally manage tenant IAM and settings").
- *    The handoffs door is a personal read and keeps `editor` — the LOWEST role that can open it,
- *    which is the honest thing for a capture to photograph. Minting `admin` for every door would
- *    hide exactly that distinction.
- */
+// Provision the required tenant role through users and memberships, then sign in
+// normally. Handoffs uses editor and administration uses admin. Generate a password per
+// run and keep it out of captures, evidence and logs.
 async function provisionaMiembroK3(
   page: import('@playwright/test').Page,
   rol: 'editor' | 'admin',
@@ -317,30 +197,22 @@ const VIEWS: {
   live?: boolean
   heading?: RegExp
   prepara?: (page: import('@playwright/test').Page) => Promise<void>
-  // ⛔ FALTABA, Y LA USABAN DOS ENTRADAS. `despues` se invoca en `:908` y NO estaba declarada aqui;
-  //    en TypeScript eso seria un error de compilacion si algun `tsconfig` mirase este fichero, y
-  //    ninguno lo mira (`tsconfig.app.json` incluye solo `src`, `tsconfig.node.json` solo
-  //    `vite.config.ts`, y nada menciona `e2e`). El dano no es el tipo desactualizado: es que un
-  //    typo —`despuess`— no falla, sale falsa la condicion, no se pincha nada y la captura se
-  //    guarda con la pestaña POR DEFECTO mientras su `id` promete el estado interno. Lo caza
-  //    `scripts/check-capture-view-keys.py`, que es lo que `tsc` haria si mirase esto.
-  // What `despues` returns travels into the take's evidence as its witness (today only the
-  // handoffs door returns one); `undefined` adds nothing.
+  // The post-navigation hook may return a data witness for the capture.
+  // check-capture-view-keys.py validates hook names because the app tsconfig excludes
+  // e2e files.
   despues?: (
     page: import('@playwright/test').Page,
   ) => Promise<void | Record<string, unknown>>
-  // The principal this cell is photographed as when it is NOT the demo global superadmin. One
-  // value exists, ratified for communications-handoffs only; every other cell keeps the superadmin.
+  // Use a provisioned tenant member when scoped access excludes the demo global
+  // account.
   actor?: 'k3-tenant-editor' | 'k3-tenant-admin'
-  // Ver la excepcion documentada en `tomar`: sólo para tomas cuyo sujeto ES un diálogo.
+  // Modal captures temporarily close the dialog to change the theme.
   modal?: boolean
-  // La superficie que la toma acredita, cuando NO es el `<h1>` de la vista. Las entradas que no
-  // lo declaran la derivan de `heading`, que es el caso de las 79 paginas ordinarias.
+  // A capture can name a target surface instead of the page heading.
   objetivo?: (
     page: import('@playwright/test').Page,
   ) => import('@playwright/test').Locator
-  // Recorte DECLARADO (ver `tomar`): el disparo sigue siendo 1440x1000 @2x y sólo se guarda
-  // el rectángulo que esta función devuelve, que además queda escrito en la evidencia.
+  // Crop the fixed-size viewport and record the crop rectangle.
   recorte?: (
     page: import('@playwright/test').Page,
   ) => Promise<{ x: number; y: number; width: number; height: number }>
@@ -350,28 +222,15 @@ const VIEWS: {
     path,
     heading: new RegExp(`^${heading.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`),
   })),
-  // ═══ LAS SEIS TOMAS QUE ENSEÑAN EL ESTADO INTERNO (R8-V3, criterio de VITRINA) ═══════════
-  //
-  // ⛔ EL CRITERIO ES «SI NO SE VE, NO CUENTA». Una toma de la RUTA no vale: los seis contratos de
-  //    consola viven en un diálogo, un menú o una pestaña que no es la de por omisión, así que
-  //    re-fotografiar su vista daría la misma pantalla con otro sha256. Cada una de éstas fuerza el
-  //    estado y lo deja a la vista.
-  //
-  // ⛔ Y SE FUERZA INTERCEPTANDO, NO SEMBRANDO, donde se puede: una intercepción es determinista y
-  //    no depende de que el estate traiga el dato justo. `prepara` corre ANTES de montar la vista
-  //    (`:687`), que es exactamente donde una ruta interceptada tiene efecto.
+  // Expose the requested dialog, tab or menu state. Install response interceptions
+  // before navigation.
   {
     id: 'work-decisions',
     path: '/work',
     heading: /^Work$/,
     settle: 800,
-    // ⛔ `live` PORQUE EL PANEL SONDEA. El arnés espera `networkidle` salvo en las vistas
-    //    marcadas así (`:578`), y el panel de decisiones mantiene consultas abiertas: la
-    //    toma expiraba en la espera **con el estado YA ALCANZADO** — la instantánea del
-    //    fallo enseña `tab "Decisions" [selected]` y su `tabpanel` renderizado.
     live: true,
-    // La pestaña NO está en la URL (`work-view.tsx:146`, `defaultValue="items"`), así que se
-    // pincha DESPUÉS de montar. Sólo se pinta con `sessions:decision:read` (`work-view.tsx:149`).
+    // Open Decisions after the view mounts; it requires sessions:decision:read.
     despues: async (page) => {
       await page.getByRole('tab', { name: /^decisions$/i }).click()
     },
@@ -381,33 +240,14 @@ const VIEWS: {
     path: '/work',
     heading: /^Work$/,
     settle: 800,
-    // ⛔ `live` PORQUE EL PANEL SONDEA. El arnés espera `networkidle` salvo en las vistas
-    //    marcadas así (`:578`), y el panel de decisiones mantiene consultas abiertas: la
-    //    toma expiraba en la espera **con el estado YA ALCANZADO** — la instantánea del
-    //    fallo enseña `tab "Decisions" [selected]` y su `tabpanel` renderizado.
     live: true,
-    // C-13: al pasar de página las filas YA LEÍDAS siguen ahí. Una foto de la primera página no
-    // lo demuestra — hay que pasar y ver que la lista CRECIÓ.
+    // Load another page to show that earlier decisions remain in the list.
     despues: async (page) => {
       await page.getByRole('tab', { name: /^decisions$/i }).click()
-      // ⛔ MISMA MEDICINA QUE LAS ESCENAS DE VIDEO: si no hay segunda pagina, «Load more» no
-      //    existe y el click agota los 30 s del test sin nombrar ninguna causa. Medido en el
-      //    ensayo del 2026-08-30 sobre `main`+#2134: esta fue la UNICA de las seis vistas nuevas
-      //    que cayo, y a 30,3 s — las otras cinco capturaron en ~3 s. La razon esta escrita en
-      //    la fila de SEMBRADO: sin B14 el estate no tiene decisiones suficientes para paginar.
-      // ⛔ Y ESPERAR ANTES DE CONTAR: `count()` no reintenta, asi que aqui —justo tras pulsar
-      //    la pestaña— podria devolver 0 con el panel a medio cargar y acusar de SEMBRADO a un
-      //    estate sano. Es el defecto que ya me encontraron una vez esta noche.
+      // Wait for loading before checking pagination.
       await esperaTablasCargadas(page)
-      // ⛔⛔ SE ESPERA A SU PROPIO ELEMENTO, no a una demora ajena. `count()` MUESTREA UNA VEZ, y
-      //     en `/work` no hay tabla, asi que el ayudante de arriba solo demora ~5 s: una carga
-      //     sana pero lenta habria dado 0 y esta precondicion habria acusado de SEMBRADO a un
-      //     estate correcto. Es EXACTAMENTE la clase que cure hace una hora en la fila de
-      //     `Launched`, reaparecida en el boton — la arregle en un sitio y no barri su clase.
-      //
-      //     `waitFor` SI reintenta hasta su plazo, asi que el veredicto deja de depender de
-      //     cuanto tarde otra cosa. Al vencer, se lanza el MISMO error nombrado: el negativo
-      //     conserva su causa.
+      // Wait for Load more itself; an immediate count cannot distinguish slow loading
+      // from absent seed data.
       const mas = page.getByRole('button', { name: /^load more$/i }).first()
       try {
         await mas.waitFor({ timeout: 8_000 })
@@ -425,12 +265,9 @@ const VIEWS: {
     path: '/work',
     heading: /^Work$/,
     settle: 800,
-    // `/work` sondea — la entrada preexistente `work` ya va con `live`. Sin esto la toma
-    // expira en `networkidle` con el diálogo del rechazo ya en pantalla.
     live: true,
-    // C-14: el motivo del motor, no una categoría. El sobre es el que `work_api.go writeWorkError`
-    // emite —`{verdict, code, error:{message}}`— y el cliente lee el `message` ANIDADO
-    // (`work/api.ts:127`). Interceptar es lo único determinista: un rechazo real depende del estado.
+    // Exercise the engine error envelope, including error.message, with a deterministic
+    // refusal.
     prepara: async (page) => {
       await page.route('**/v1/m/sessions/work-items/**', async (route) => {
         if (route.request().method() !== 'POST') return route.fallback()
@@ -454,9 +291,7 @@ const VIEWS: {
     path: '/workspace-templates',
     heading: /^Workspace Templates$/,
     settle: 800,
-    // C-15: los permisos son POR ACCIÓN. `can()` es pertenencia al conjunto que devuelve
-    // `/v1/auth/whoami` (`lib/auth/rbac.ts:13`), así que se le quita UNA concesión y se ve qué
-    // acciones quedan deshabilitadas — que es lo que hay que documentar, no su ausencia.
+    // Remove only template write/admin permissions so read access remains.
     prepara: async (page) => {
       await page.route('**/v1/auth/whoami', async (route) => {
         const res = await route.fetch()
@@ -479,8 +314,8 @@ const VIEWS: {
     path: '/automations',
     heading: /^Automations$/,
     settle: 800,
-    // C-10: un fallo del historial NO es «no hay ejecuciones». Con la consulta en error la
-    // pantalla debe decir «no se pudo cargar» y ofrecer reintentar.
+    // A history request failure must show a retryable error rather than an empty
+    // history.
     prepara: async (page) => {
       await page.route('**/v1/m/orchestration/**/runs**', async (route) => {
         await route.fulfill({
@@ -494,13 +329,9 @@ const VIEWS: {
   {
     id: 'list-truncated',
     path: '/console',
-    // El h1 real es «Administration» (antes «Control console»), no «Console». Lo cazó el oráculo del arnés,
-    // que existe para negarse a fotografiar una pantalla que no es la pedida.
     heading: /^Administration$/,
     settle: 800,
-    // El aviso de recorte, que hoy no aparece en NINGUNA captura publicada. Se fuerza `has_more`
-    // en una lista de consola: es la afirmación que el aviso hace, así que interceptarla la hace
-    // cierta para esa respuesta en vez de fingirla.
+    // Exercise the partial-list notice with has_more in the response.
     prepara: async (page) => {
       await page.route('**/v1/members**', async (route) => {
         const res = await route.fetch()
@@ -517,32 +348,17 @@ const VIEWS: {
     heading: /^Access map$/,
   },
   { id: 'inventory', path: '/inventory', heading: /^Inventory$/ },
-  // K5 shipped this console screen with the protocol-binding kernel and nothing
-  // photographed it, which is what lint:screenshot-coverage caught on the way in.
   {
     id: 'communications-protocol-bindings',
     path: '/communications/protocol-bindings',
     heading: /^Protocol bindings$/,
-    // ⛔ ESTA VISTA EXIGE UN WORKSPACE CONCRETO, y sin el no enseña su contenido sino
-    //    «Select a workspace — Protocol bindings require an explicit workspace scope». El arnes
-    //    captura con «All workspaces» puesto, asi que la toma publicada era un cartel, no la
-    //    pantalla. Lo vi ABRIENDO EL PNG de la corrida del 2026-08-30: ninguna sonda del
-    //    manifiesto lo distingue de una pantalla vacia — `filas 0`, `tablas_vacias 0`, 253
-    //    caracteres— y mi curador la clasifico como hueco de sembrado, que es lo que NO es.
-    //
-    //    Va en `despues` y no en `prepara` a proposito: `prepara` corre ANTES del `goto` (:820),
-    //    asi que cambiar el ambito ahi no tendria efecto sobre una vista que aun no ha montado.
+    // Choose a concrete workspace after the view mounts; All workspaces cannot supply
+    // this scope.
     despues: async (page) => {
-      // ⛔ Y LA AUSENCIA DEL CONMUTADOR TAMBIEN SE NOMBRA. El producto NO lo monta con cero o
-      //    un workspace (`components/layout/workspace-switcher.tsx:44`,
-      //    `if (workspaces.length <= 1) return null`), asi que un click a secas moriria en un
-      //    timeout generico —«esperando un boton»— y no en la causa. Que no haya conmutador es
-      //    un dato de SEMBRADO, no un selector roto, y hay que poder leerlo del fallo.
+      // The switcher requires multiple workspaces; its absence is a seed-data
+      // precondition.
       const conmutador = page.getByRole('button', { name: 'All workspaces' })
-      // ⛔ EL `click` VA DENTRO DEL `try`, no sólo la espera. Un trigger que se desprende entre
-      //    el `waitFor` y el `click` —re-render, lista que llega tarde— fallaria GENERICO justo
-      //    despues de la guarda que existe para evitarlo. La guarda tiene que cubrir el ACTO, no
-      //    su antesala: tercera vez hoy que envuelvo la mitad.
+      // Keep both waiting and clicking within the same error boundary.
       try {
         await conmutador.waitFor({ timeout: 8_000 })
         await conmutador.click()
@@ -553,8 +369,8 @@ const VIEWS: {
             'no puede elegir ambito. Es SEMBRADO, no un selector roto.',
         )
       }
-      // Se elige POR LO QUE NO ES: cualquier entrada que no sea la de «todos». Elegir por
-      // posicion —`.nth(1)`— es el error que ya me costo las escenas de video.
+      // Choose a concrete workspace by excluding All workspaces, rather than by
+      // position.
       const alguno = page
         .getByRole('menuitem')
         .filter({ hasNotText: 'All workspaces' })
@@ -571,9 +387,8 @@ const VIEWS: {
       await alguno.click()
     },
   },
-  // K3 I1 — the three doors of the communications room. Each heading is the h1 of its
-  // door (features/communications/i18n/en.json `doors.*.title`), so a Forbidden page or
-  // the login screen cannot pass as the capture.
+  // Require each communications route to show its own heading rather than login or an
+  // authorization error.
   {
     id: 'communications',
     path: '/communications',
@@ -592,20 +407,15 @@ const VIEWS: {
     heading: /^New channel$/,
     despues: eligeWorkspaceConcretoK3,
   },
-  // K3 I3 — the handoffs door (`doors.handoffs.title`). Its `despues` does the same
-  // workspace seeding as its neighbours AND then proves the Handoffs tab is the one
-  // selected: the five doors mount ONE room, so a capture named for this door with
-  // the catalog tab open would be a picture of another screen wearing this id.
+  // Choose a workspace and require the Handoffs tab to be selected.
   {
     id: 'communications-handoffs',
     path: '/communications/handoffs',
     heading: /^Handoffs$/,
     actor: 'k3-tenant-editor',
     despues: async (page) => {
-      // ⛔ POSITIVE WITNESS BEFORE ANY PIXEL. The door makes no K3 request until a concrete
-      //    workspace is chosen, so the wait is armed BEFORE choosing one and takes the FIRST
-      //    collection read: a 503 or a 403 is the verdict, not something to retry past. Missing,
-      //    unknown or denied evidence is not permission, and it is not an empty list either.
+      // Arm the first collection-read witness before choosing a workspace. Missing,
+      // denied or unavailable evidence cannot qualify a capture.
       const lectura = page.waitForResponse(
         (r) =>
           r.request().method() === 'GET' &&
@@ -639,8 +449,8 @@ const VIEWS: {
           'docs-captures: la coleccion de handoffs contesto 200 sin la forma {items, has_more}.',
         )
       }
-      // The collection has to be the one for the workspace the reader SEES. The id comes from the
-      // read itself; its name is resolved with that same request's own headers, kept in memory.
+      // Resolve the visible workspace name with the collection request principal and
+      // headers.
       const propias = await respuesta.request().allHeaders()
       const espacios = await page.request.get('/v1/workspaces', {
         headers: {
@@ -693,12 +503,8 @@ const VIEWS: {
             `(aria-selected=${seleccionada}). La captura enseñaria otra pantalla con este id.`,
         )
       }
-      // The selected tab is not yet the loaded door. Measured 2026-09-11: without the K3
-      // activation ceremony the engine answers 503 to GET /v1/m/sessions/inbox/handoffs, the
-      // DataTable paints SkeletonRows while the query retries, and this cell still passed with
-      // the right heading and tab — `exigirInstanteLimpio` looks only for the crash boundary and
-      // role="progressbar". The capture has to show what the engine answered: the table is no
-      // longer busy, and it is not the error the retries end in.
+      // The selected tab must finish loading; its heading alone does not prove a
+      // successful collection read.
       try {
         await esperaTablasCargadas(page)
       } catch {
@@ -708,10 +514,8 @@ const VIEWS: {
             'foto seria el esqueleto de la tabla.',
         )
       }
-      // By role, not by a selector string: Tailwind's source scan reads this file, and a bracketed
-      // selector ending in `:visible` is a class candidate. Measured on this change: that one
-      // string added a CSS rule and renamed every hashed chunk of the committed bundle.
-      // getByRole already skips hidden elements.
+      // Role locators skip hidden alerts and avoid selector strings that Tailwind might
+      // treat as classes.
       const errores = await page
         .locator('[data-slot="data-table"]')
         .getByRole('alert')
@@ -725,21 +529,8 @@ const VIEWS: {
       return testigo
     },
   },
-  // K3 I2 — the administration door (`doors.administration.title`).
-  //
-  // ⛔ IT IS READ AS A MEMBER, LIKE THE HANDOFFS DOOR, AND FOR A REASON THE PRODUCT STATES.
-  //    The administration route is the console's ONE capability view, and a global account
-  //    never submits its question: `useViewAccess` passes `null` instead of the declared
-  //    surface question when `principal.superadmin === true`
-  //    (`features/navigation/authorization.ts:112`, `globalAccount()` at :177), so the route
-  //    gate renders `GlobalAccountNotice` — "Sign in with a member account … Global accounts
-  //    cannot check access to this view" (`require-permission.tsx:81,133`).
-  //
-  //    Measured 2026-09-18: the harness signed in as the demo global superadmin and this cell
-  //    waited 30 s for `Channel administration` while `main` held that notice. The AUTHORITY
-  //    moved (`7df0764036`, 2026-09-11); the heading did not. The remedy is the one the
-  //    handoffs door already carries — read it as the provisioned tenant editor — and not a
-  //    weaker oracle, because photographing the notice would publish a refusal as the door.
+  // The administration capability view requires a tenant admin. A global account cannot
+  // submit its scoped access question.
   {
     id: 'communications-administration',
     path: '/communications/administration',
@@ -747,13 +538,12 @@ const VIEWS: {
     heading: /^Channel administration$/,
     despues: eligeWorkspaceConcretoK3,
   },
-  // Las dos patas que el REGISTRO DE FEATURES no conoce y el censo sí. Estaban montadas y sin
-  // captura desde siempre: la guarda de cobertura leía el registro (53 rutas) y el árbol monta 58.
+  // These routes are mounted outside the feature registry.
   { id: 'settings', path: '/settings', heading: /^Settings$/ },
   {
     id: 'status-page',
     path: '/status-page',
-    heading: /^Olivares Control Plane — Status$/,
+    heading: /^Olivares AI — Status$/,
   },
   {
     id: 'sessions',
@@ -761,36 +551,22 @@ const VIEWS: {
     live: true,
     settle: 2500,
     heading: /^Sessions$/,
-    // ⛔ FILTRADA A «Launched», Y NO ES COSMETICA. Sin filtro la tabla la ocupan las sesiones
-    //    de relleno del sembrador de volumen —`demo-mobile`/`demo-data` con `— · — · 0/0 ·
-    //    $0.00`—, o sea una tabla de ceros en la vista que la guia de Claude Code usa para
-    //    enseñar modelo, tokens y coste. Las que SI tienen esos datos son las que el plano
-    //    LANZO (`sess-coder-*`), y «launched» es exactamente eso: «al menos un run enlaza con
-    //    esta sesion» (`provenance.ts:26`). El filtro no maquilla nada — elige el subconjunto
-    //    del que la guia habla. (Veredicto de the planner sobre las 142, 2026-08-31.)
+    // Filter to launched sessions, whose run records supply the metrics shown in the
+    // guide.
     despues: async (page) => {
-      // ⛔ THE TABLE IS A TAB NOW, AND THIS CAPTURE IS OF THE TABLE. `/sessions` leads with
-      //    the three-pane work surface and keeps the list beside it as a `Table` tab
-      //    (`sessions-workspace-view.tsx:1380-1394`: `TabsTrigger value="table"`, with its
-      //    own comment — "the answer to a problem is never to remove a function"). The source
-      //    filter this capture drives lives in that tab's toolbar, so a click on the combobox
-      //    from the default tab waits 30 s for a control that is not mounted. Measured
-      //    2026-09-18: `locator.click` timed out on `getByRole('combobox', { name: 'All
-      //    sources' })` while the page snapshot showed `tab "Sessions" [selected]`.
-      //    The CONTROL moved; nothing about it is broken.
-      await page.getByRole('tab', { name: 'Table', exact: true }).click()
+      // The source filter is in the Table tab.
+      await page.getByTestId('sessions-list-menu').click()
+      await page.getByRole('menuitem', { name: 'Show as table' }).click()
       await page.getByRole('combobox', { name: 'All sources' }).click()
       await page.getByRole('option', { name: 'Launched', exact: true }).click()
-      // ⛔ EL ANILLO DE FOCO SALE EN LA FOTO. Radix devuelve el foco al disparador al cerrar
-      //    el menu, asi que el desplegable queda con su anillo naranja — un estado que el
-      //    lector no puede reproducir y que r4 marco en la revision A-F. Retirar el raton no
-      //    basta: el foco es del TECLADO. Se suelta explicitamente.
+      // Blur keyboard focus so the capture does not retain the selector focus ring.
       await page.evaluate(() =>
         (document.activeElement as HTMLElement | null)?.blur(),
       )
     },
   },
   { id: 'capabilities', path: '/capabilities', heading: /^MCP & skills$/ },
+  { id: 'skills', path: '/skills', heading: /^Skills catalog$/ },
   {
     id: 'identity',
     path: '/identity',
@@ -798,6 +574,7 @@ const VIEWS: {
     heading: /^Identity & NHI$/,
   },
   { id: 'finops', path: '/finops', settle: 1000, heading: /^Cost & FinOps$/ },
+  { id: 'stored-budgets', path: '/stored-budgets', heading: /^Budgets$/ },
   { id: 'security', path: '/security', heading: /^Security & forensics$/ },
   {
     id: 'dashboards',
@@ -817,49 +594,21 @@ const VIEWS: {
     path: '/observability',
     heading: /^Observability & interop$/,
     settle: 800,
-    // ⛔ ENCUADRADA SOBRE LOS CONTADORES VIVOS, que es donde estan los datos. Arriba de la
-    //    pagina hay dos cajas de aviso y la tabla «Per-standard ingestion health» con `—` en
-    //    RECORDS y LAST SEEN en sus siete filas — y ese `—` es HONESTO, lo explica el propio
-    //    UI («un valor ausente significa 'no atribuible con solidez', no cero»). Pero una
-    //    captura que empieza ahi enseña avisos y guiones, y deja fuera de cuadro lo unico que
-    //    prueba que el plano ingiere: `olivares.claude · 49 records · Edge 48 · Finding 1 ·
-    //    otel 48`. Se baja hasta esa seccion antes de disparar. (Veredicto de the planner sobre
-    //    las 142: «NO (encuadre)».)
+    // Frame the live bus counters; absent per-standard health values remain unavailable
+    // rather than zero.
     despues: async (page) => {
-      // ⛔ `scrollIntoViewIfNeeded()` NO SIRVE AQUI, y lo comprobe gastando una corrida: la
-      //    seccion ya asomaba por el borde inferior, asi que Playwright la considero visible
-      //    y NO HIZO NADA — la captura salio identica salvo el reloj. El «IfNeeded» es
-      //    exactamente el problema. Se pide el scroll explicito, alineando la seccion arriba.
-      // ⛔ POR ROL Y NO POR TEXTO, y con el encabezado al BORDE SUPERIOR. Apuntando al nodo
-      //    de texto la vista quedaba empezando en la COLA de la tabla de estandares, sin su
-      //    titulo: parecia un recorte (veredicto A-F de r4). El encabezado es el ancla real
-      //    de la seccion, y `scrollIntoView(true)` lo alinea arriba, con la tabla y su nota
-      //    debajo dentro del alto de 2000 px.
+      // Align the section heading explicitly; partial visibility does not trigger
+      // scrollIntoViewIfNeeded.
       const anclaObs = page.getByRole('heading', {
         name: 'Live counters by bus source',
       })
       await anclaObs.evaluate((el) => el.scrollIntoView(true))
-      // ⛔ Y ESTE ES EL TOPE REAL, MEDIDO — no se puede subir mas, asi que nadie lo intente:
-      //      headingTop 406 · container `flex-1 overflow-y-auto` cTop 48 · scrollTop 425 ·
-      //      maxScroll 425
-      //    El contenedor esta EN SU MAXIMO (425 de 425). Llevar el encabezado al borde del
-      //    contenedor (y=48) pediria 358 px MAS de desplazamiento, y no existen: esta seccion
-      //    es el ultimo contenido de la pagina. A 1440x1000 el encabezado no puede subir de
-      //    406 px, y lo que SI entra entero debajo es la tabla de nueve fuentes y su nota.
-      //    (Antes medi `document.scrollingElement` y daba maxScroll 0 — engañoso: la pagina
-      //    no desplaza la ventana, desplaza un contenedor interno. Medir el elemento
-      //    equivocado da un cero que parece una respuesta.)
+      // At the scroll limit, the last section cannot always align with the top of the
+      // container.
     },
   },
-  // ⛔ LA SECCION DE CONTADORES, RECORTADA — decision de the planner tras medir que no cabe.
-  //    `observability` entero no puede empezar en este titulo: el contenedor esta en su
-  //    maximo (scrollTop 425 = maxScroll 425) y llevar el encabezado al borde pediria 358 px
-  //    que no existen, porque la seccion es el ultimo contenido de la pagina. En vez de
-  //    fingir un encuadre imposible, la imagen de la guia ES la seccion: se dispara igual
-  //    que las demas (1440x1000 @2x, mismo instante para los dos temas) y se guarda el
-  //    rectangulo, declarado en la evidencia.
-  //    Los 16 px de aire arriba y abajo son de r4: sin ellos el recorte corta a ras y parece
-  //    un error de captura en vez de un encuadre.
+  // Capture the counters section with the same viewport and a declared crop, including
+  // sixteen pixels of vertical padding.
   {
     id: 'observability-counters',
     path: '/observability',
@@ -893,7 +642,6 @@ const VIEWS: {
       }
     },
   },
-  // Views added as the product grew (health catalog knowledge audit workspace backups); captured for docs/README curation.
   {
     id: 'knowledge',
     path: '/knowledge',
@@ -919,18 +667,9 @@ const VIEWS: {
     id: 'workspace',
     path: '/workspace',
     settle: 1500,
-    // ⛔ EL TESTIGO CAMBIA CON EL SEMBRADO, y descubrirlo es el mejor argumento para tenerlo.
-    //    Era `/^Workspace overview$/`, que es el título del aviso «elige un espacio» — es decir,
-    //    **el oráculo certificaba la pantalla vacía**: dos cosas de acuerdo sobre la captura
-    //    equivocada. Con un espacio seleccionado el `<h1>` es su NOMBRE, y esta celda se puso roja
-    //    diciendo exactamente eso («el <h1> dice “Billing”») en cuanto el sembrado empezó a
-    //    funcionar. Un testigo que no cambia cuando cambia la pantalla no estaba midiendo nada.
+    // The selected workspace name is the page heading.
     heading: /^Billing$/,
-    // El selector del topbar sólo se renderiza con MÁS DE UN espacio: `workspace-switcher.tsx`
-    // hace `if (workspaces.length <= 1) return null`. El estate demo siembra el predeterminado
-    // MÁS uno llamado «Billing» (cmd/olivares/seed/seed.go:52), así que hay dos y aparece. Si un
-    // día el sembrado se quedara en uno, este paso fallaría EN VOZ ALTA en vez de volver a
-    // fotografiar el aviso de «elige un espacio».
+    // The workspace switcher requires multiple workspaces; the demo supplies Billing.
     prepara: async (page) => {
       await page.getByRole('button', { name: /All workspaces/i }).click()
       await page.getByRole('menuitem', { name: /Billing/i }).click()
@@ -943,22 +682,9 @@ const VIEWS: {
     settle: 1000,
     heading: /^Backup & Restore$/,
   },
-  // ⛔ LAS 31 QUE FALTABAN (2026-08-17). El backlog pedía «re-capturar las 52 rutas» y el harness
-  //    llevaba 20: la cifra 52 no era una estimación, es `web/src/features/registry.tsx`, de donde
-  //    `app/routes.tsx:89` GENERA una ruta por vista. Se añaden SIN `heading` a propósito — el
-  //    oráculo se toma del producto corriendo, no se adivina—, pero el suelo del «page not found»
-  //    ya las cubre desde la primera corrida.
-  //
-  //    `live` va en las de flujo vivo que el integrador midió (`/work`, `/agentops`, `/logs`, más
-  //    `/sessions` y `/health` que ya lo tenían): en ellas `networkidle` NO se estabiliza nunca y
-  //    la celda esperaría hasta agotar el tiempo.
-  //
-  //    ⚠ FUERA, CON MOTIVO: `/session-viewer/$id` lleva parámetro y sin una sesión sembrada
-  //      concreta la captura sería de un estado de error. Capturarla exige elegir un id del estate
-  //      sembrado; queda declarada como no cubierta en vez de fingida.
+  // Parameterized and first-boot routes use their own setup below.
   { id: 'home', path: '/', settle: 1000, heading: /^Overview$/ },
-  // N1 — the nine area directory pages. Each is a page of links generated from the
-  // registry; the h1 is the area's own nav label, which is the oracle here.
+  // Area directory headings match their registry labels.
   {
     id: 'areas-infrastructure',
     path: '/areas/infrastructure',
@@ -1049,6 +775,7 @@ const VIEWS: {
     heading: /^Git publication$/,
   },
   { id: 'work', path: '/work', settle: 1000, live: true, heading: /^Work$/ },
+  { id: 'estate', path: '/estate', heading: /^Estate$/ },
   {
     id: 'agentops',
     path: '/agentops',
@@ -1056,10 +783,8 @@ const VIEWS: {
     live: true,
     heading: /^Claude Code$/,
   },
-  // The provider plane: the credential a session launches with. On a clean install
-  // this capture is the EMPTY state, which is the point — it is the first screen a
-  // new operator sees here, so it is the one that has to name the next action.
-  { id: 'agent-tools', path: '/agent-tools', heading: /^Agent tools$/ },
+  // Capture the clean-install AI tools state and its next action.
+  { id: 'agent-tools', path: '/agent-tools', heading: /^AI tools$/ },
   { id: 'mcpServers', path: '/mcp-servers', heading: /^MCP servers$/ },
   {
     id: 'providers',
@@ -1067,8 +792,7 @@ const VIEWS: {
     settle: 1000,
     heading: /^Providers$/,
   },
-  // B1 provider-profile plane: the two doors of one administration view. Each takes
-  // the tab its entrance names, under its own h1.
+  // Each administration route opens its corresponding tab.
   {
     id: 'provider-profiles',
     path: '/provider-profiles',
@@ -1129,17 +853,10 @@ const VIEWS: {
     path: '/adoption',
     settle: 1000,
     heading: /^Claude Code Adoption$/,
-    // ⛔ LA TENDENCIA NACE EN LA LENTE VACIA, Y NO ES UN HUECO DE SEMBRADO. Las dos lentes se
-    //    pintan lado a lado (`adoption-view.tsx:103-116`), asi que las tarjetas SI traen datos;
-    //    lo que arranca en `analytics` es la GRAFICA (`:232`, `useState<LensId>('analytics')`),
-    //    y esa lente es la Admin Analytics API de Anthropic, que en una finca de demo se queda
-    //    en cero POR DISENO. Sin este gancho la captura ensena una grafica plana y quien la vea
-    //    concluira que falta sembrado: medido, con `?lens=telemetry` hay 28 dias de tendencia.
+    // Use the telemetry trend for seeded metrics; the demo does not populate
+    // organization analytics.
     despues: async (page) => {
-      // ⛔ LA LENTE VIVE DENTRO DE UNA PESTANA, y esto lo corrige una corrida real: la primera
-      //    version buscaba el selector nada mas montar y moria en su propia guarda. `/adoption`
-      //    tiene CUATRO pestanas (`adoption-view.tsx:92-95`) y el selector es del panel `Trend`
-      //    (`TrendTab`), asi que antes hay que abrirla. Lo vi ABRIENDO EL PNG del fallo.
+      // The lens selector is inside the Trend tab.
       const pestana = page.getByRole('tab', { name: /^Trend$/ })
       try {
         await pestana.waitFor({ timeout: 8_000 })
@@ -1161,53 +878,24 @@ const VIEWS: {
             'con la lente `analytics`, que esta vacia POR DISENO y se lee como falta de sembrado.',
         )
       }
-      // Se elige por el TEXTO de la lente viva, no por posicion: `.nth(1)` es el error que ya
-      // costo las escenas de video en este mismo fichero.
+      // Choose the live telemetry lens by its label.
       await page.getByRole('option', { name: /live telemetry/i }).click()
     },
   },
   {
-    // ⛔ ESTA PESTANA NO ESTABA FOTOGRAFIADA, y son 142 capturas. La escena `adoption` de arriba
-    //    navega a `Trend` para arreglar la grafica y AHI SE QUEDA, asi que `Overview` —la que
-    //    contesta la pregunta del producto, «cuanto de lo que Claude propone se queda»— no aparece
-    //    en NINGUNA toma del acto. No lo dijo un contador: lo vi ABRIENDO las dos imagenes, la
-    //    publicada en `4cb5218d8` y la de la re-toma, y las dos ensenan `Trend`.
-    //
-    //    Y solo tiene sentido fotografiarla DESDE HOY. Hasta la cura del sembrado OTLP el plano de
-    //    adopcion recibia CINCO de las SIETE metricas y ninguna con dimensiones, asi que la tasa de
-    //    aceptacion salia sobre «0 de 0» y la baldosa de tiempo activo NI SE PINTABA
-    //    (`components.tsx:114`, `active_time_ms > 0 ? … : null`). La foto habria sido de un hueco.
-    //    Medido contra la API con el sembrado curado: 907 aceptadas de 1.026, 0,884 de tasa,
-    //    63.085.000 ms de tiempo activo.
-    //
-    //    NO hay pestana que abrir: `Overview` es la de por defecto (`adoption-view.tsx:90`,
-    //    `<Tabs defaultValue="overview">`) y pinta las DOS lentes lado a lado (`:97-116`), asi que
-    //    aqui no hay selector que tocar — el de lente vive dentro de `Trend`, que es justo lo que
-    //    la otra escena existe para resolver. El `despues` de abajo es de ENCUADRE, no de estado.
-    //
-    //    ⚠ En esta foto la tarjeta `analytics` sale A CERO, y es POR DISENO, no un hueco: esa lente
-    //      es la Admin Analytics API de Anthropic y una finca de demo no la alimenta. Queda dicho
-    //      aqui porque quien vea la captura va a preguntarselo, y la respuesta tiene que estar
-    //      donde va a mirar.
+    // Overview shows both lenses by default. Organization analytics stays empty in this
+    // demo.
     id: 'adoption-overview',
     path: '/adoption',
     settle: 1000,
     heading: /^Claude Code Adoption$/,
-    // ⛔ SIN ESTE DESPLAZAMIENTO LA FOTO MIENTE POR ENCUADRE, y lo vi ABRIENDO EL PNG de la primera
-    //    version: la toma es del VIEWPORT, no de la pagina entera, asi que salia la tarjeta
-    //    `admin Analytics` —CERO POR DISENO— con su «TOOL ACCEPTANCE —, 0 of 0 accepted» bien
-    //    grande, y la de telemetria CORTADA justo antes de su tasa. Es decir: la captura que existe
-    //    para ensenar que el producto mide la aceptacion ensenaba un guion en el sitio de la cifra.
-    //    Encuadre equivocado y dato correcto se ven igual de bien en verde.
+    // Frame the telemetry acceptance card rather than the empty organization analytics
+    // card.
     despues: async (page) => {
       const viva = page.getByText(/Per session \(live telemetry\)/i).first()
       try {
         await viva.waitFor({ timeout: 8_000 })
-        // ⛔ `scrollIntoViewIfNeeded()` NO SIRVE AQUI, y lo aprendi comparando los dos PNG: no hace
-        //    NADA si el elemento ya asoma, y la cabecera de esta tarjeta asomaba por el borde de
-        //    abajo. La foto salio IDENTICA a la de antes del arreglo — un remedio que no se ejecuta
-        //    y un remedio que no hace falta se ven exactamente igual en verde. `scrollIntoView`
-        //    con `block: 'start'` desplaza SIEMPRE y deja la tarjeta arriba, con sus baldosas.
+        // Align the card at the top even when its heading is already partly visible.
         await viva.evaluate((el) => el.scrollIntoView({ block: 'start' }))
       } catch {
         throw new Error(
@@ -1224,33 +912,33 @@ const VIEWS: {
     settle: 1000,
     heading: /^Recordings$/,
   },
-  {
-    id: 'posture-export',
-    path: '/posture-export',
-    settle: 1000,
-    heading: /^Posture export$/,
-    // La vista nace con los filtros y NADA mas: el resultado del export es lo que esta pantalla
-    // existe para ensenar. El boton lo dispara (`posture-export-view.tsx:231`, que remata en
-    // `toast.success(t('export.done'))`).
-    despues: async (page) => {
-      const boton = page.getByRole('button', { name: 'Export posture' })
-      try {
-        await boton.waitFor({ timeout: 8_000 })
-        await boton.click()
-      } catch {
-        throw new Error(
-          'docs-captures: no se encontro el boton `Export posture` en /posture-export ' +
-            '(i18n `export.action`). Sin el, la captura sale con los filtros vacios y no ensena ' +
-            'lo unico que esta vista tiene que ensenar.',
-        )
-      }
-      // El toast confirma que el export TERMINO. Esperar al toast y no a un plazo fijo es la
-      // diferencia entre capturar el resultado y capturar el estado intermedio.
-      // Y no vale cualquier toast: el helper separa exito, fallo y ausencia de terminal, y solo
-      // el exito deja seguir a la captura. Su banco esta en `posture-export-terminal.spec.ts`.
-      await esperarExportacionDePostura(page)
-    },
-  },
+  ...(EXTENSION_ROUTES.some((route) => route.id === 'postureExport')
+    ? [
+        {
+          id: 'posture-export',
+          path: '/posture-export',
+          settle: 1000,
+          heading: /^Posture export$/,
+          // Run a posture export before capturing its result.
+          despues: async (page: import('@playwright/test').Page) => {
+            const boton = page.getByRole('button', { name: 'Export posture' })
+            try {
+              await boton.waitFor({ timeout: 8_000 })
+              await boton.click()
+            } catch {
+              throw new Error(
+                'docs-captures: no se encontro el boton `Export posture` en /posture-export ' +
+                  '(i18n `export.action`). Sin el, la captura sale con los filtros vacios y no ensena ' +
+                  'lo unico que esta vista tiene que ensenar.',
+              )
+            }
+            // Require the successful export terminal; a failure or missing terminal cannot
+            // qualify the capture.
+            await esperarExportacionDePostura(page)
+          },
+        },
+      ]
+    : []),
   {
     id: 'orchestration',
     path: '/orchestration',
@@ -1295,16 +983,10 @@ const VIEWS: {
     path: '/api-playground',
     settle: 1000,
     heading: /^API Playground$/,
-    // ⛔ LA PESTANA `History` SOLA NO ARREGLA NADA, y por eso el gancho hace DOS cosas. El panel
-    //    derecho nace en `Response` (`api-playground-view.tsx:40`) y el historial se alimenta de
-    //    peticiones hechas EN LA SESION (`:50`, `history`), asi que saltar a la pestana sin haber
-    //    enviado nada cambia una pantalla vacia por otra. Primero se envia, y entonces se mira.
+    // Send a request before opening History; the tab lists requests made in this
+    // session.
     despues: async (page) => {
-      // ⛔ EL BOTON `Send` NO EXISTE HASTA QUE HAY UN ENDPOINT ELEGIDO, y tambien lo corrige una
-      //    corrida real: el panel central nace VACIO —lo vi en el PNG del fallo— porque
-      //    `request-panel.tsx` solo monta con una seleccion. Se filtra primero para no pinchar a
-      //    ciegas entre 765 endpoints, y se elige uno que devuelve datos SEMBRADOS, no `/healthz`:
-      //    una captura de documentacion tiene que ensenar una respuesta de verdad.
+      // Select the seeded agents endpoint before Send can mount.
       const filtro = page.getByPlaceholder('Filter endpoints…')
       try {
         await filtro.waitFor({ timeout: 8_000 })
@@ -1315,10 +997,8 @@ const VIEWS: {
             '(i18n `filterPlaceholder`). Sin el, elegir un endpoint entre 765 es a ciegas.',
         )
       }
-      // ⛔ ANCLADO A PROPOSITO. Playwright casa `name` por SUBCADENA y sin distinguir mayusculas,
-      //    asi que `'GET /v1/agents'` casaba TAMBIEN `GET /v1/agents/{id}` y el localizador moria
-      //    por modo estricto — dentro de mi propia guarda, que entonces culpaba al arbol. Lo vi en
-      //    el PNG: el filtro habia funcionado y las cinco filas estaban ahi.
+      // Match the collection endpoint exactly so its detail route cannot make the
+      // locator ambiguous.
       const endpoint = page.getByRole('button', {
         name: /^GET\s+\/v1\/agents$/,
       })
@@ -1362,8 +1042,7 @@ const VIEWS: {
     heading: /^Log Viewer$/,
   },
   {
-    // C07-02. El testigo es el h1 de la vista, no su id: una captura que se guardara con el
-    // esqueleto puesto pasaría cualquier comprobación de «existe el fichero», y ya pasó una vez.
+    // Require the view heading rather than inferring identity from the output filename.
     id: 'tenants',
     path: '/tenants',
     heading: /^Tenants$/,
@@ -1374,80 +1053,23 @@ const VIEWS: {
     settle: 1000,
     heading: /^Data residency$/,
   },
-  // ⛔ AQUÍ HABÍA `{ id: 'executive', path: '/executive', settle: 1500 }`, con el comentario «the
-  //    public marketing site also embeds this view (its public/product/ set)». RETIRADA el
-  //    2026-08-17 porque **la ruta no existe y sus dos capturas eran un «Page not found»** — y
-  //    salían VERDES.
-  //
-  //    Lo que hay de verdad: `web/src/features/executive/` no tiene entrada en el registro de
-  //    features (de donde `app/routes.tsx:29` GENERA el árbol de rutas), y sus únicos importadores
-  //    son los de `features/home/` — sus tiles se reusan en la portada `/`, exactamente como
-  //    explica `features/executive/components.tsx:64`. `executive-view.tsx` existe y nadie lo
-  //    monta.
-  //
-  //    ⇒ Si el set `public/product/` de la web comercial embebe «executive», está publicando la
-  //    pantalla de error como si fuera producto. Es un repo separado y esta sesión no lo toca:
-  //    queda dicho aquí y escalado al integrador.
 
-  // ═══ LAS CUATRO TOMAS DE LAS GUIAS DE INTEGRACION ══════════════════════════════
-  //
-  // ⛔ Y SON CUATRO, NO NUEVE. Las guias de Claude Code, Codex y Grok marcaban nueve huecos,
-  //    pero CINCO de ellos son vistas que este arnes YA fotografia — /sessions, /security,
-  //    /finops, /observability y /health son justo las que la tabla «Control console» de cada
-  //    guia manda abrir, y estan en el set de 71. Fabricar nueve ids nuevos habria producido
-  //    cinco casi-duplicados con otro nombre, que es peor que no tenerlos: dos ficheros que se
-  //    creen distintos derivan.
-  //
-  // ⛔ LO QUE DE VERDAD FALTABA es la pestaña Connectors. `console` fotografia la pestaña POR
-  //    OMISION (Users & groups), y Connectors NO es ruta de primer nivel: es `?tab=connectors`
-  //    del deep link de (`console-view.tsx`, TAB_VALUES). Sin esto las tres guias abren
-  //    sobre una pantalla que el lector no puede reconocer.
-  //
-  // Los tres conectores los siembra `scripts/seed-guide-connectors.sh` antes de montar nada:
-  // claude-code-prod, codex-enterprise y grok-demo son ejemplos de la PROSA de las guias y no
-  // existen en ningun sitio del arbol, asi que sin sembrarlos esta pestaña sale vacia y la
-  // captura diria que el producto no tiene conectores.
+  // The guide connector list is the Connectors tab. Its named example connectors are
+  // seeded before navigation.
   {
     id: 'guias-connectors',
     path: '/console?tab=connectors',
     heading: /^Administration$/,
     settle: 800,
   },
-  // ⛔ LAS TRES FICHAS DE CONFIGURACION NO SE PUEDEN FOTOGRAFIAR, Y NO ES UN FALLO DE SELECTOR.
-  //    Estuvieron aqui y fallaron las seis (3 conectores x 2 temas). El clic en «Edit» FUNCIONA;
-  //    lo que aparece detras es el dialogo del producto:
-  //
-  //      «Step-up authentication required — This action requires AAL3 (hardware,
-  //       phishing-resistant). Your session is AAL1 (password). […]
-  //       Privileged read — recorded in the audit ledger.»
-  //
-  //    Es decir: abrir la configuracion de un conector es una LECTURA PRIVILEGIADA que exige
-  //    una llave hardware. Una sesion de Playwright es AAL1, asi que no hay forma de llegar a
-  //    esa pantalla desde este arnes — y no debe haberla: el control esta haciendo su trabajo.
-  //    El propio runner ya lo avisaba para la API («contesta step_up_required (AAL3)») y yo
-  //    entre por la UI a la misma puerta.
-  //
-  //    ⇒ APROBADO POR the planner (2026-08-31): la imagen de los huecos 2/5/8 es EL PROPIO DIALOGO
-  //      de step-up. Enseña la gobernanza en vez de describirla, y es literalmente lo que el
-  //      lector con sesion de contraseña VERA cuando intente abrir la ficha. Sin cuenta AAL3
-  //      falsa: la foto vale porque el control esta actuando de verdad.
+  // Under an AAL3 policy, a password session shows the elevated-authentication notice
+  // rather than privileged connector configuration.
   {
     id: 'guias-config-step-up',
     path: '/console?tab=connectors',
     settle: 800,
     modal: true,
-    // ⛔ EL DIALOGO QUE ABRE «Edit» YA NO ES EL DEL ANFITRION DE STEP-UP. Aqui se nombraba
-    //    `This action needs an elevated session`, que es el DialogTitle de `StepUpHost`
-    //    (`common.json:159`). Medido el 2026-09-18: el dialogo que aparece es el PROPIO del
-    //    conector —`dialog "Edit connector"`— y el step-up se pinta DENTRO de el como panel,
-    //    con el encabezado `Step-up authentication required`
-    //    (`features/identity/assurance.tsx:361`, `assurance.stepUpTitle`).
-    //
-    //    Se nombra el encabezado del PANEL, y eso no es rendirse al DOM: es lo que el lector
-    //    ve y lo que la captura publicada de esta misma vista ya enseñaba
-    //    (`docs-site/public/console/guias-config-step-up-light.png`), donde el DialogTitle
-    //    viejo nunca fue visible. La toma sigue acreditando la misma cosa —el control AAL3
-    //    actuando— por el elemento que la enseña.
+    // The target is the assurance panel heading inside Edit connector.
     objetivo: (page) =>
       encabezadoDeDialogo(page, 'Step-up authentication required'),
     despues: async (page) => {
@@ -1460,15 +1082,8 @@ const VIEWS: {
   },
 ]
 
-/**
- * La toma, compartida por las TRES familias de celdas (vistas, overlay del héroe y pestañas de
- * consola) para que ninguna se quede sin la comprobación ni sin evidencia.
- *
- * Emite un `<id>-<theme>.evidence.json` junto al PNG: qué ruta se pidió, qué `<h1>` se vio y el
- * sha256 de la imagen. `scripts/docs-captures.sh` los funde en `manifest.json` con el commit de la
- * toma — se hace por fichero y no appendando a uno solo **a propósito**: Playwright reparte las
- * celdas entre varios workers y dos escrituras concurrentes sobre el mismo fichero se pisan.
- */
+// Write each image and its evidence separately to avoid concurrent workers overwriting
+// a shared manifest. The runner later combines them.
 async function tomar(
   page: import('@playwright/test').Page,
   {
@@ -1486,9 +1101,9 @@ async function tomar(
     id: string
     theme: string
     ruta: string
-    // La superficie que esta toma acredita, elegida por la celda. Ver `capture-target.ts`.
+    // The declared target identifies the captured surface.
     objetivo: import('@playwright/test').Locator
-    // Estado que el encabezado no distingue: la pestaña seleccionada, el panel abierto.
+    // Markers identify state that the heading cannot distinguish.
     marcadores?: import('@playwright/test').Locator[]
     settle?: number
     live?: boolean
@@ -1501,74 +1116,23 @@ async function tomar(
     testigo?: Record<string, unknown>
   },
 ) {
-  // El shell expone encabezados propios antes de que la ruta perezosa monte el suyo, asi que se
-  // espera al que la celda declara. Un dialogo modal oculta del arbol de accesibilidad el H1 del
-  // fondo, y por eso su superficie tambien se declara en vez de deducirse.
+  // Wait for the declared route or modal heading; the shell heading can appear before
+  // the view mounts.
   const texto = await esperarEncabezado(page, { id, ruta, objetivo })
   if (marcadores) await exigirMarcadores(id, marcadores)
 
   if (!live) await page.waitForLoadState('networkidle')
   if (settle) await page.waitForTimeout(settle)
 
-  // Va aqui, despues de `networkidle` y del settle: el encabezado solo dice que el router sirvio
-  // la vista, y entre esa espera y la foto pasan todas las peticiones. Una que conteste 4xx deja
-  // la pagina ociosa con el error boundary puesto — ociosa no es cargada.
+  // Check for errors after loading and settling, immediately before the screenshot.
   await exigirInstanteLimpio(page, id)
 
-  // ⚠ SE REGISTRA, NO SE FALLA. Una pantalla que sale vacía puede ser correcta —el estate sembrado
-  //    no puebla todo— y puede ser un hueco de sembrado que la documentación pública enseña como si
-  //    fuese el producto. El arnés no sabe cuál de las dos es, así que **no adjudica**.
-  //
-  // ⛔ Y NO SE GUARDA UN BOOLEANO, porque un booleano MIENTE aquí. La primera versión guardaba
-  //    «¿hay algún estado vacío?» y daba 22 vistas de 55 — un número que se lee como «22 pantallas
-  //    vacías» y que es falso: `killswitch` entra en esa lista y muestra el formulario de paro
-  //    ENTERO con un único panel vacío al final («No stops recorded»), que es el estado CORRECTO de
-  //    un estate sano. Un panel vacío dentro de una pantalla llena no es un hueco de sembrado.
-  //
-  // ⇒ Se guardan las dos magnitudes que separan un caso del otro: cuántos paneles vacíos hay, y
-  //    cuánto texto tiene la región principal. Una pantalla llena con un panel vacío tiene mucho
-  //    texto; una que sólo pinta su hueco, muy poco. La triaje la hace una persona con las dos
-  //    cifras delante, no el arnés con un booleano.
+  // Record empty-panel counts and main-text size without assigning a cause to empty
+  // content.
   const vacios = await page.locator('[data-slot="empty-state"]:visible').count()
-  // ⛔ EL `.catch()` NO EVITA LA ESPERA — medido el 2026-08-18 al capturar las patas públicas.
-  //    `innerText()` sobre un locator que no casa con nada **espera**, y sin `actionTimeout` espera
-  //    hasta agotar el TIEMPO DEL TEST: cuatro mediciones de `/login`, `/setup`, `/accept-invite` y
-  //    `/status-page` murieron a los 30 s. El `catch` recogía el error, pero para entonces el test ya
-  //    estaba muerto, y el veredicto que salía era un **timeout pelado** — que no dice «esta página no
-  //    tiene `<main>`», dice «algo tardó». Un fallo que no nombra su causa cuesta la sesión siguiente.
-  //
-  //    `count()` NO espera: devuelve 0 al instante. Por eso la guarda va delante y la lectura detrás.
-  //
-  // ⛔⛔ Y `hay_main` SE GUARDA APARTE, porque si no el arreglo de arriba crea el defecto que este
-  //    fichero lleva medio fichero combatiendo: con la guarda puesta, `texto_main: 0` significa **dos
-  //    cosas** —«hay región principal y está vacía» y «no hay región principal»— y sólo una de las dos
-  //    es un hueco de sembrado. Un cero que colapsa dos estados no se puede triar.
-  // ⛔⛔ Y `texto_main` TAMPOCO DISCRIMINA EN LA BANDA QUE IMPORTA — medido el 2026-08-18, y es la
-  //    SEGUNDA vez que una métrica de esta función engaña. La primera fue un booleano que decía
-  //    «22 vistas vacías de 55» contando `killswitch`, que está llena. La sustituí por estas dos
-  //    cifras… y al mirar las IMÁGENES de las cinco peores —`catalog` 393, `eventing` 444,
-  //    `model-operations` 459, `work` 464, `deploy` 468— resulta que **las cinco están ENTERAS
-  //    vacías**: «No catalog entries created yet», «No deployments declared yet». Yo las había
-  //    triado como «pantallas llenas con un panel vacío legítimo» leyendo sólo los números.
-  //
-  //    La causa es que **el cromo es verboso**: título, subtítulo, pestañas, filtros, cabeceras de
-  //    columna y el propio texto del estado vacío suman ~400 caracteres SIN una sola fila de datos.
-  //    Una pantalla con dos filas puntúa igual. El número no separa lo que hay que separar.
-  //
-  // ⇒ `filas` es la señal que sí: cuántas filas de DATOS hay, descontando la que ocupa el estado
-  //   vacío. Cero filas con cabeceras presentes es un hueco de sembrado; no hace falta interpretar
-  //   nada. Se sigue registrando, no fallando — el arnés no adjudica, sólo deja de mentir.
-  //
-  // ⛔⛔ Y `filas` SOLA TAMPOCO BASTA — tercera métrica de esta función con punto ciego, y salió en
-  //    el mismo censo que la estrenó. `filas = 0` significa dos cosas: «la tabla está vacía» y
-  //    **«no hay tabla»**. En el censo completo dieron cero filas 19 vistas, y entre ellas
-  //    `killswitch` (1672 caracteres) e `inference-proxy` (2274), que son pantallas de FORMULARIO
-  //    llenas de conmutadores y sin una sola tabla. Contarlas como huecos de sembrado sería repetir
-  //    el error del booleano que empezó todo esto.
-  //
-  // ⇒ `tablas_vacias` separa los dos casos sin interpretar nada: tablas que TIENEN cabeceras de
-  //   columna y NO tienen ni una fila de datos. Un formulario da 0 porque no hay tablas; un listado
-  //   sin sembrar da ≥1.
+  // Check main presence before reading it to avoid waiting on an absent element. Count
+  // data rows separately from empty-state rows, and empty tables separately from
+  // table-free forms.
   const { filas, tablasVacias } = await page.evaluate(() => {
     const raiz = document.querySelector('main') ?? document.body
     const esDato = (tr: Element) =>
@@ -1587,44 +1151,14 @@ async function tomar(
     ).length
     return { filas, tablasVacias }
   })
-  // ⛔ CLAVES DE i18n SIN TRADUCIR, y esta sonda esta CALIBRADA — la primera version no lo estaba.
-  //    `check-i18n-usage.mjs` declara fuera de alcance las claves dinamicas (`t(\`live.${estado}\`)`),
-  //    asi que una que falte se pinta CRUDA en la foto y ningun gate lo dice. Hay que medir la
-  //    PANTALLA.
-  //
-  // ⛔ PERO «PARECE UNA CLAVE» NO ES «ES UNA CLAVE», y esa confusion me costo una corrida entera.
-  //    La primera version contaba tokens con FORMA de clave (`a.b.c`) y en las 122 capturas de B7
-  //    saco **924**. Ninguno era una clave sin traducir: eran nombres de accion de auditoria y de
-  //    eventos de bus que el producto ense~na COMO DATO —`governance.approval.create`,
-  //    `org.create`, `edge.observed`, `cost.sampled`— y que tienen exactamente esa forma. Calibrado
-  //    despues contra las rutas reales de los locales: **42 de 42 tokens muestreados eran falsos
-  //    positivos, 0 eran claves**.
-  //
-  // ⇒ La logica se INVIERTE: no «tiene forma de clave» sino «ESTA en los locales». Un token solo
-  //   cuenta si existe como ruta de clave real, con namespace o sin el; asi el vocabulario de
-  //   dominio no puede disparar la sonda por mucho que se le parezca.
+  // Match untranslated text against known locale keys rather than treating dotted
+  // domain names as keys.
   const clavesCrudas = await page.evaluate((conocidas: string[]) => {
     const raiz = document.querySelector('main') ?? document.body
     const texto = (raiz as HTMLElement).innerText ?? ''
     const set = new Set(conocidas)
-    // ⛔ TERCERA CALIBRACION, Y LAS DOS ANTERIORES SE SUMAN EN VEZ DE SUSTITUIRSE.
-    //    v1 marcaba «tiene FORMA de clave» (`a.b.c`) y saco 924 falsos positivos: el
-    //    vocabulario de dominio tambien lleva puntos (`cost.sampled`, `org.create`).
-    //    v2 lo cambio por «ES una ruta de clave», y eso trae la familia contraria: de las
-    //    ~9 300 rutas, muchas son hojas de UNA palabra corriente (`status`, `groups`,
-    //    `empty`, `unavailable`), asi que una FRASE BIEN TRADUCIDA las dispara.
-    //
-    // ⚠ Medido el 2026-08-29 sobre las 126 tomas del dry-run: **252 marcas, y la pagina
-    //   `rate-limits` esta integramente en ingles** — sus seis marcas (`status`,
-    //   `unavailable` x3, `empty`, `groups`) son palabras dentro de oraciones correctas.
-    //   El manifiesto declara que «cero es la unica cifra aceptable», y con v2 ese cero
-    //   era INALCANZABLE: `api-playground` define la clave `beta` con el valor `"beta"`,
-    //   asi que una insignia BIEN traducida es indistinguible de una clave cruda.
-    //
-    // ⇒ El predicado es la CONJUNCION: lleva punto **Y** es ruta de clave real. Una
-    //   clave sin traducir que i18next pinta cruda conserva sus puntos; el vocabulario de
-    //   dominio los lleva pero no esta en los locales; la prosa no los lleva. Verificado
-    //   contra las dos familias: 0 de las 252 marcas de hoy y 0 de los 4 tokens de v1.
+    // Require both a dot and a known locale key; ordinary translated words can equal
+    // undotted keys.
     return texto.split(/\s+/).filter((t) => t.includes('.') && set.has(t))
   }, CLAVES_I18N)
 
@@ -1639,22 +1173,13 @@ async function tomar(
       ).trim().length
     : 0
 
-  // ⛔ EL ANILLO DE FOCO, AQUI Y NO EN CADA VISTA. Radix devuelve el foco al disparador al
-  //    cerrar un menu o un select, asi que CUALQUIER vista cuyo `despues` pulse una pestaña,
-  //    un select o un menu se fotografia con el anillo naranja — un estado que el lector no
-  //    puede reproducir. Lo marco r4 en `sessions` revisando las doce.
-  //    ⚠ APARCAR EL RATON NO LO QUITA: el arnes ya mueve el puntero a 0,0 y el anillo seguia,
-  //      porque ese foco es de TECLADO. Son cosas distintas y hacen falta las dos.
+  // Blur keyboard focus separately from moving the pointer.
   await page.evaluate(() =>
     (document.activeElement as HTMLElement | null)?.blur(),
   )
 
   const png = `playwright-report/docs/${id}-${theme}.png`
-  // ⛔ RECORTE DECLARADO, NO OTRO VIEWPORT. Cuando una vista trae `recorte`, la toma se acota
-  //    a ese rectangulo y el rectangulo QUEDA ESCRITO en la evidencia. La distincion importa:
-  //    el disparo sigue siendo a 1440x1000 @2x como las demas (criterio F), y lo unico que
-  //    cambia es que se guarda un trozo. Un viewport distinto cambiaria el LAYOUT; un recorte
-  //    no toca nada de lo que se ve.
+  // A declared crop preserves the viewport layout; record its rectangle with the image.
   const clip = recorte ? await recorte(page) : undefined
   await page.screenshot(clip ? { path: png, clip } : { path: png })
   const sha = createHash('sha256').update(fs.readFileSync(png)).digest('hex')
@@ -1673,8 +1198,7 @@ async function tomar(
         texto_main: textoMain,
         claves_crudas: clavesCrudas.length,
         claves_crudas_vistas: clavesCrudas.slice(0, 8),
-        // el recorte va DECLARADO en la evidencia: quien audite la imagen sabe que es un
-        // trozo y de donde sale, sin tener que deducirlo del tamaño del PNG.
+        // Record the crop rectangle so the saved image can be interpreted.
         recorte_declarado: clip ?? null,
         ...(actor ? { actor } : {}),
         ...(testigo ? { testigo_coleccion: testigo } : {}),
@@ -1685,15 +1209,7 @@ async function tomar(
     )}\n`,
   )
 
-  // ⛔ UN PAR DE TEMAS IDENTICO ES UNA MENTIRA SILENCIOSA, y ningun `passed` lo delata: si el tema
-  //    no llega a cambiar, se guardan DOS VECES LA MISMA FOTO con nombres distintos y la galeria
-  //    publica un par que no es un par. Medido en `status-page`: su conmutador no existe —es una
-  //    vista publica sin cabecera— y el clic expiraba; al curarlo, lo unico que probo que el tema
-  //    HABIA cambiado fue comparar los dos `md5` A MANO. Esto lo hace el arnes, para TODAS.
-  //
-  //    Se compara el `sha256` que la evidencia ya calcula: coste cero, y cubre cualquier causa
-  //    futura —un conmutador renombrado, un store que no repinta, una vista sin tokens de tema—
-  //    sin tener que preverla.
+  // The light and dark images must have different hashes.
   if (theme === 'dark') {
     const claro = path.join(
       'playwright-report',
@@ -1714,27 +1230,11 @@ async function tomar(
   }
 }
 
-// VIEWPORT — 1440x1000 @2x, not 1440x900 @1x (criterion F of the planner's review of the 142
-// console captures, 2026-08-31).
-//
-// The height is a DEFECT FIX, not a preference. At 900 the sidebar does not fit: the fixed
-// "Settings" footer sits on top of "Setup wizard" in EVERY console capture — the approved
-// ones included — which is pattern P10 of that review, and it is charged to the harness
-// because nothing in the product is wrong. 1000 gives the nav its last row back, and the
-// extra 100px also relieves P2 (framing that cuts a row or a panel in half) without
-// re-framing anything on purpose.
-//
-// deviceScaleFactor: 2 renders at 2880x2000 and downsamples to a 1440-wide slot, which is
-// what stops the small type in tables and badges from going soft on a HiDPI screen. It is
-// the reason a screenshot of a dense console reads at all when a reader zooms.
-//
-// ⚠ It also makes every PNG roughly four times the bytes. That is the accepted cost of the
-// criterion, but it is a real one on a repository that ships 142 of them, so it is written
-// here rather than discovered later in a diff.
+// Use a 1440×1000 viewport at scale factor two. The height keeps navigation visible;
+// the higher pixel density preserves small text at the cost of larger PNGs.
 test.use({ viewport: { width: 1440, height: 1000 }, deviceScaleFactor: 2 })
 
-// Una entrada declara su superficie con `objetivo`, o la deriva del `<h1>` que ya declaraba en
-// `heading`. Sin una de las dos no hay nada que acreditar y la celda no debe disparar.
+// Require a declared target or heading before capturing a view.
 function objetivoDeLaVista(
   page: import('@playwright/test').Page,
   view: (typeof VIEWS)[number],
@@ -1752,17 +1252,18 @@ test.describe('Docs captures over real seeded data', () => {
     'DEMO_TENANT not set — run via scripts/docs-captures.sh',
   )
 
-  // ⛔ LOS DOS TEMAS SALEN DE LA MISMA CARGA — ES EL CRITERIO D, NO UNA OPTIMIZACION.
-  //    Aqui habia DOS tests por vista (uno por tema), cada uno con su login y su `goto`: DOS
-  //    INSTANTES DE DATOS. Lo delata cualquier cifra derivada del reloj — the planner midio en
-  //    `finops` FORECAST $5.062,42 en light y $5.062,37 en dark, con el mismo total y los
-  //    mismos tokens. Eso no es un par: son dos fotos de dos momentos.
-  //    Ahora se carga UNA vez, se dispara light, se cambia el tema POR LA INTERFAZ y se dispara
-  //    dark SIN volver a navegar: `setTheme` solo alterna la clase `dark` en `<html>`
-  //    (`stores/theme.ts`), asi que se re-pinta sin pedir datos otra vez.
+  // Capture both themes from one page load; toggle the theme without navigating again.
   for (const view of VIEWS) {
     {
-      test(`capture ${view.id}`, async ({ page }) => {
+      test(`capture ${view.id}`, async ({ page, request }) => {
+        if (view.id === 'orchestration' || view.id === 'automations') {
+          const info = await request.get('/v1/server-info')
+          expect(info.ok()).toBe(true)
+          test.skip(
+            (await info.json()).edition === 'Community',
+            'Business Identity & Scale view',
+          )
+        }
         await page.addInitScript(
           ([tenant]) => {
             localStorage.setItem(
@@ -1773,25 +1274,14 @@ test.describe('Docs captures over real seeded data', () => {
               'olivares.lang',
               JSON.stringify({ state: { lang: 'en' }, version: 0 }),
             )
-            // theme store reads this RAW (no JSON) before first paint.
+            // The theme store reads a plain string before first paint.
             localStorage.setItem('olivares.theme', 'light')
           },
           [demoTenant],
         )
 
-        // ⛔ `exact: true` NO ES COSMETICA — sin ella este oraculo es AMBIGUO y falla al azar.
-        //    Medido en una corrida completa de 122 tomas el 2026-08-20: DOS tomas cayeron con
-        //    «strict mode violation: getByRole('link', { name: 'Inventory' }) resolved to 2
-        //    elements», y las dos eran vistas SANAS —cada una paso en el otro tema—. Los dos
-        //    elementos son el enlace del `nav` lateral y la TARJETA del panel, que comparte
-        //    `href="/inventory"` y cuyo nombre accesible es «Inventory 25 3 agents · 3».
-        //
-        //    Playwright nombra el remedio en su propio error («aka … exact: true»), y es el que
-        //    ESTRECHA la comprobacion: `.first()` habria hecho pasar el test dejando la ambiguedad
-        //    dentro, que es apagar el oraculo para que no moleste. El oraculo dice «el shell de la
-        //    app monto su navegacion», y con `exact` sigue diciendo eso y solo eso.
-        // communications-handoffs only (Root, 2026-09-11): K3 cannot scope a global superadmin
-        // session, so that door is read as a tenant editor provisioned through the public API.
+        // Use an exact sidebar link for the global account and the ordinary member
+        // login for scoped captures.
         const actor = view.actor
           ? await provisionaMiembroK3(
               page,
@@ -1805,8 +1295,8 @@ test.describe('Docs captures over real seeded data', () => {
           .fill(actor ? actor.clave : DEMO_PASSWORD)
         await page.getByRole('button', { name: /^sign in$/i }).click()
         if (actor) {
-          // The K3 journey's own login oracle for its members: the form let this actor in. The
-          // superadmin's sidebar landmark is not a promise an editor's shell has to keep.
+          // A member login need not mount the global account sidebar; require departure
+          // from the login route.
           await page.waitForURL((u) => !u.pathname.startsWith('/login'), {
             timeout: 60_000,
           })
@@ -1816,34 +1306,24 @@ test.describe('Docs captures over real seeded data', () => {
           })
         }
 
-        // El sembrado por ruta va DESPUÉS del login y ANTES de navegar: necesita la sesión, y lo
-        // que prepara tiene que estar puesto cuando la vista monte.
+        // Prepare authenticated state before navigation so it is present when the view
+        // mounts.
         if (view.prepara) await view.prepara(page)
 
         await page.goto(view.path)
-        // El estado que sólo existe con la vista ya montada.
+        // Apply state that requires the mounted view after navigation.
         const testigo = view.despues ? await view.despues(page) : undefined
 
         for (const theme of ['light', 'dark'] as const) {
           if (theme === 'dark') {
-            // ⛔ UN MODAL TAPA EL CONMUTADOR. El dialogo pone `aria-hidden` sobre el fondo, asi
-            //    que «Toggle theme» deja de ser alcanzable y el clic expira a los 30 s — medido
-            //    en `guias-config-step-up`. Se cierra, se cambia el tema y se vuelve a abrir con
-            //    el MISMO `despues`: seguimos sin navegar, o sea el mismo instante de datos.
+            // Close a blocking modal, change the theme and reopen it without
+            // navigating.
             if (view.modal) {
               await page.keyboard.press('Escape')
               await expect(page.getByRole('dialog')).toBeHidden()
             }
-            // Se cambia por el TOGGLE REAL y no escribiendo la clase a mano: hay componentes
-            // que leen `resolved` del store (colores de grafico), y tocar solo la clase los
-            // dejaria en el tema anterior — el par saldria incoherente de otra forma.
-            //
-            // ⛔ PERO NO TODAS LAS VISTAS TIENEN CROMO, y eso tumbaba la tanda entera. `/status-page`
-            //    es PUBLICA: no monta la cabecera de la aplicacion, asi que «Toggle theme» no
-            //    existe y el clic expiraba a los 30 s. Medido en el snapshot de accesibilidad del
-            //    fallo: en esa pagina solo hay `heading "Olivares Control Plane — Status"` y un
-            //    `button "Refresh"`. Un fallo, y el contrato de publicacion —con razon— no publica
-            //    una tanda roja: el juego completo se quedaba sin salir por una vista sin cabecera.
+            // Use the theme control so store-driven charts update too. Header-free
+            // views use the CSS-class fallback.
             const conmutador = page.getByRole('button', {
               name: 'Toggle theme',
             })
@@ -1853,25 +1333,8 @@ test.describe('Docs captures over real seeded data', () => {
                 .getByRole('menuitem', { name: 'Dark', exact: true })
                 .click()
             } else {
-              // Y AQUI SI SE ALTERNA LA CLASE A MANO, porque la razon de la prohibicion de arriba
-              // NO APLICA — y esto se mide, no se supone: esa regla existe porque hay componentes
-              // que leen `resolved` del store y quedarian en el tema anterior. Sobre
-              // `web/src/features/health/status-page.tsx`: CERO usos de `useTheme`, `resolved`,
-              // `Chart` o `recharts`. No hay nada que se quede descolgado.
-              //
-              // Y que la clase BASTE para repintarla tambien esta medido, no supuesto: esa vista
-              // tiene CERO variantes `dark:` y CUATRO tokens de tema (`text-foreground`,
-              // `border-border`, `text-muted-foreground`), o sea que su color sale de variables
-              // CSS que la clase de `<html>` gobierna. Si usara colores fijos, los dos temas
-              // saldrian iguales y este apaño seria una mentira silenciosa.
-              //
-              // ⚠ Y se sigue SIN NAVEGAR, que es lo que el criterio D protege: los dos temas
-              //   salen de la MISMA carga y del mismo instante de datos. La regla no se revierte;
-              //   se le extiende el universo a las vistas que no tienen cromo.
-              //
-              // ⚠ Si el tema NO cambiara, los dos temas saldrian IGUALES y el par seria una
-              //   mentira silenciosa. Por eso el `expect` de abajo NO es decorativo: es la unica
-              //   prueba de que el cambio ocurrio, y corre en las dos ramas.
+              // This fallback applies to CSS-token views without a theme control. The
+              // class and image-hash assertions still verify the change.
               await page
                 .locator('html')
                 .evaluate((el) => el.classList.add('dark'))
@@ -1879,8 +1342,7 @@ test.describe('Docs captures over real seeded data', () => {
             await expect(page.locator('html')).toHaveClass(/dark/)
             if (view.modal && view.despues) await view.despues(page)
           }
-          // ⛔ RATON FUERA DEL ENCUADRE. Playwright deja el puntero donde ocurrio el ultimo
-          //    clic, y un `:hover` pintado es un estado que el lector no puede reproducir.
+          // Move the pointer away from captured controls to clear hover state.
           await page.mouse.move(0, 0)
           await tomar(page, {
             id: view.id,
@@ -1898,7 +1360,7 @@ test.describe('Docs captures over real seeded data', () => {
     }
   }
 
-  // The drift overlay is the product's hero — capture it open, both themes.
+  // Capture the drift overlay while open in both themes.
   for (const theme of ['light', 'dark'] as const) {
     test(`capture access-map drift overlay — ${theme}`, async ({ page }) => {
       await page.addInitScript(
@@ -1929,8 +1391,7 @@ test.describe('Docs captures over real seeded data', () => {
         timeout: 60_000,
       })
       await page.getByRole('button', { name: /permitted vs observed/i }).click()
-      // El sujeto es el panel, no la vista: su `aside` lleva el H2 que lo nombra mientras el H1
-      // de `/access-map` sigue visible detras.
+      // Identify the overlay by its own heading while the page heading remains visible.
       await tomar(page, {
         id: 'access-map-drift',
         theme,
@@ -1945,8 +1406,7 @@ test.describe('Docs captures over real seeded data', () => {
     })
   }
 
-  //the console's granularity surfaces are tabs, not routes — navigate to
-  // the console and click the tab trigger before the shot.
+  // Open each console tab before capturing its state.
   const CONSOLE_TABS = [
     { id: 'console-agents', trigger: /^agents$/i },
     { id: 'console-bindings', trigger: /^source bindings$/i },
@@ -1979,13 +1439,12 @@ test.describe('Docs captures over real seeded data', () => {
 
         await page.goto('/console')
         await page.getByRole('tab', { name: tab.trigger }).click()
-        // Las dos pestañas comparten el H1 de `/console`, asi que el encabezado acredita la vista
-        // y el marcador acredita CUAL de las dos quedo seleccionada. El `click` solo dice que se
-        // pincho algo.
+        // These tabs share a page heading; the selected-tab marker identifies the
+        // captured state.
         await tomar(page, {
           id: tab.id,
           theme,
-          ruta: `/console (pestaña ${tab.id})`,
+          ruta: `/console (tab ${tab.id})`,
           objetivo: encabezadoDePagina(page, 'Administration'),
           marcadores: [
             page.getByRole('tab', { name: tab.trigger, selected: true }),
@@ -1996,66 +1455,17 @@ test.describe('Docs captures over real seeded data', () => {
     }
   }
 
-  // ═══ C10-04 · las CUATRO escenas con interaccion del guion de video ═══════════════════════
-  //
-  // `docs/launch/video-demo-script.md` marca once escenas `CAPTURE-TODO` y dice literalmente
-  // «real capture via scripts/docs-captures.sh»: es ESTE arnes, no otro. Siete se sirven con las
-  // entradas de `VIEWS` de arriba (una ruta, una foto). Las cuatro de aqui NO: exigen interactuar
-  // —pasar el raton por una arista, abrir una pestaña, abrir un panel— y por eso viven en su
-  // propio bloque, igual que el overlay de deriva.
-  //
-  // ⛔ LOS SELECTORES SE VERIFICARON CONTRA EL CODIGO ANTES DE ESCRIBIRLOS, y no es celo: este
-  //    bloque **no se puede ejecutar hasta que aterrice B3** (capturar la consola vieja es trabajo
-  //    tirado), asi que un selector inventado no fallaria HOY — fallaria en la unica pasada, que es
-  //    justo cuando no queremos descubrirlo. Verificacion, fichero por fichero:
-  //      · arista del mapa   -> access-map-view.tsx:442 `edgeTypes={accessEdgeTypes}` (React Flow)
-  //      · pestañas Live/Gov -> an internal design note (not shipped):284-296, que monta `LiveConsole` (:320)
-  //                             y `GovernancePanel` (:333)
-  //      · fila de sesion    -> sessions-workspace-view.tsx:551 `onRowClick` -> `setTarget(...)`
-  //      · Browse files      -> agentops/workspaces-panel.tsx:152 `t('workspaces.open')`
-  //
-  // ⛔ Y UNA CORRECCION AL GUION QUE ESTE BLOQUE OBLIGA: las escenas 7 y 8 dicen «the detail
-  //    sheet». Esa hoja —`agentops/run-detail.tsx` `RunDetailSheet`— esta EXPORTADA y **no la monta
-  //    nadie** (cero importadores fuera de su fichero; `agentops/index.tsx` ni la exporta). Lo
-  //    alcanzable es la TARJETA de sesion. El guion queda corregido en el mismo commit; la hoja
-  //    muerta es una fila aparte y no se toca aqui.
-  // ═══ /accept-invite: RETIRADA ENTERA el 2026-08-29 ═══════════════════════════════════════
-  //
-  // Aqui vivia la toma de una invitacion VIVA, sembrada conduciendo el producto: `/console` ->
-  // «Users & groups» -> «Onboard user» -> el enlace de un solo uso -> navegar a el. Es el diseño
-  // correcto y por eso se documenta su retirada en vez de borrarla en silencio.
-  //
-  // ⛔ NO SE PUEDE EJECUTAR: pulsar «Onboard user» abre «Step-up authentication required — AAL3
-  //    (hardware, phishing-resistant). Your session is AAL1». Medido el 2026-08-29 en dos
-  //    corridas completas: los dos temas agotan los 30 s ahi. Es el MISMO control que el
-  //    manifiesto ya declara para `console` en `empty_by_control`.
-  //
-  // ⇒ No hay arreglo de arnes que no debilite ese control, y eso esta descartado de raiz.
-  //   Adjudicado por the planner: se retira la toma ENTERA —esta y la de sin-token, que era la
-  //   pantalla de error— y la ruta se declara como AUSENCIA CON RAZON en el manifiesto
-  //   (`not_captured_by_control`). Un PNG que nunca podra refrescarse es una mina de reloj, y
-  //   una pantalla de error publicada como si fuera la vista es autoridad falsa.
-  //
-  // Para reponerla hace falta que el arnes pueda satisfacer AAL3, no un selector nuevo.
+  // These scenes exercise graph interaction, session panels and workspace browsing.
+  // Invitation provisioning must satisfy any AAL3 policy; an error page cannot
+  // substitute for it.
 
-  /**
-   * Abre la tarjeta de una sesion OPERADA — la unica que tiene las pestañas condicionales.
-   *
-   * ⛔ Y SI NO HAY NINGUNA, LO DICE. Un `click` sobre un locator que no casa espera hasta agotar el
-   *    test y el veredicto que sale es «timeout de 30 s», que no nombra ninguna causa: en el ensayo
-   *    del 2026-08-30 costo leer seis fallos identicos para averiguar que la fila no tenia run. Con
-   *    la comprobacion delante, el fallo dice QUE falta y en un segundo.
-   */
+  // Open a launched session with a run; name missing seed data before attempting a tab
+  // that cannot exist.
 
   async function abreSesionOperada(page: import('@playwright/test').Page) {
-    // ⛔ THE ROW LIVES IN THE `Table` TAB. `/agentops` mounts the SAME view as `/sessions`
-    //    (`registry.tsx:1425`, `SessionsWorkspaceView` with `entrance: 'operate'`), and that
-    //    view now leads with the three-pane work surface: the `Origin` column this helper
-    //    reads — and therefore the word `Launched` — is only painted by the table beside it.
-    //    Measured 2026-09-18: scenes 7 and 8 failed in both themes on a seeded estate whose
-    //    five governed sessions HAD been created and corroborated, which is why the helper's
-    //    own message ("this is a SEEDING gap") was wrong here. The tab is where it moved.
-    await page.getByRole('tab', { name: 'Table', exact: true }).click()
+    // Launched rows and their Origin values live in the Table tab.
+    await page.getByTestId('sessions-list-menu').click()
+    await page.getByRole('menuitem', { name: 'Show as table' }).click()
     await esperaTablasCargadas(page)
     const fila = page.getByRole('row').filter({ hasText: 'Launched' }).first()
     try {
@@ -2074,25 +1484,16 @@ test.describe('Docs captures over real seeded data', () => {
     id: string
     escena: number
     ruta: string
-    // ⛔ `live` MARCA LAS QUE NO PUEDEN QUEDARSE QUIETAS. `tomar()` espera `networkidle` salvo que
-    //    se le diga, y la tarjeta de sesion de `/agentops` mantiene una conexion ABIERTA —hay
-    //    telemetria en vivo— sea cual sea la pestaña: la red no llega a estar ociosa NUNCA y el
-    //    test muere en `page.waitForLoadState`. MEDIDO: las escenas 7 y 8 fallaron con ese error
-    //    exacto en la misma corrida, y son pestañas DISTINTAS de la MISMA tarjeta — o sea que no
-    //    es la pestaña «Live»: es la tarjeta.
-    //
-    //    El tipo de las vistas normales ya tenia esta bandera y ocho la usan; a este bucle se le
-    //    olvido, asi que le pedia quietud a lo unico que el producto promete que se mueve.
+    // Live session streams cannot reach networkidle.
     live?: boolean
     prepara: (page: import('@playwright/test').Page) => Promise<void>
-    // La superficie que la escena acredita. Los sheets la resuelven por `aria-labelledby`, que es
-    // asincrono, de ahi la promesa.
+    // Resolve dynamic dialog headings asynchronously through their accessible label.
     objetivo: (
       page: import('@playwright/test').Page,
     ) =>
       | import('@playwright/test').Locator
       | Promise<import('@playwright/test').Locator>
-    // Estado que el encabezado no distingue: la pestaña seleccionada dentro del sheet.
+    // The selected-tab marker identifies state within the dialog.
     marcadores?: (
       page: import('@playwright/test').Page,
     ) => import('@playwright/test').Locator[]
@@ -2104,51 +1505,29 @@ test.describe('Docs captures over real seeded data', () => {
       objetivo: (page) => encabezadoDePagina(page, 'Access map'),
       prepara: async (page) => {
         await page.goto('/access-map')
-        // La arista es el sujeto: si no hay ninguna, el seed no trae grafo y la celda debe
-        // fallar AQUI, no sacar una foto de un lienzo vacio y llamarla escena 5.
+        // Require a graph edge before capturing the interaction.
         const arista = page.locator('.react-flow__edge').first()
         await expect(arista).toBeAttached({ timeout: 60_000 })
-        // ⛔ `hover()` APUNTA AL CENTRO DEL BOUNDING BOX, y en una arista SVG CURVA ese punto no cae
-        //    sobre el trazo: Playwright dice «element is visible and stable», intenta el hover, no
-        //    acierta, y REINTENTA hasta agotar el plazo. Medido en el log del fallo: «45 x waiting
-        //    for element to be visible and stable / retrying hover action» sobre un
-        //    `<path d="M212,180 C284.5,180 ...">` de casi dos mil pixeles de alto.
-        //
-        //    Y por eso subir el plazo no arreglaba nada —lo probe con 120 s esta mañana—: no
-        //    esperaba a que algo llegara, REINTENTABA una accion que no puede acertar. Se despacha
-        //    el evento sobre el elemento, que es lo que la escena necesita para que la arista se
-        //    resalte; no se simula un raton que en una captura no existe.
+        // A curved SVG edge may miss a bounding-box-center hover. Dispatch the hover
+        // events to the edge itself.
         await arista.dispatchEvent('mouseover')
         await arista.dispatchEvent('mouseenter')
       },
     },
-    // ⛔ LA FILA SE ELIGE POR LO QUE TIENE, NO POR SU POSICION. Estas dos escenas hacian
-    //    `getByRole('row').nth(1)` —la primera fila, sea cual sea— y las pestañas que buscan
-    //    despues son CONDICIONALES: `an internal design note (not shipped):285-295` solo monta `live`,
-    //    `governance` y `lifecycle` cuando la sesion tiene `run`; `overview` y `details` salen
-    //    siempre. Si la primera fila es una sesion sin run, la pestaña NO EXISTE y el `click`
-    //    agota los 30 s del test.
-    //
-    //    Medido en el ensayo del 2026-08-30 sobre el candidato: SEIS fallos (escenas 7, 8 y 10 en
-    //    claro y oscuro) con `waiting for getByRole('tab', { name: /^live$/i })`. Descartado que
-    //    fuera la etiqueta (`card.tabs.live` ES 'Live') y que fuera sembrado (`agentops` capturo
-    //    `filas: 6`): la tabla estaba llena y la fila elegida no tenia run.
-    //
-    //    `Launched` es la columna `Origin` («A launch record links this session to Olivares»), que
-    //    es exactamente la condicion que hace existir la pestaña. `Discovered` es lo contrario.
+    // Choose a launched row with a run: Live, Governance and Lifecycle tabs depend on
+    // it.
 
     {
       id: 'video-07-live',
       live: true,
       escena: 7,
-      ruta: '/agentops (tarjeta de sesion, pestaña Live)',
+      ruta: '/agentops (session card, tab Live)',
       prepara: async (page) => {
         await page.goto('/agentops')
         await abreSesionOperada(page)
         await page.getByRole('tab', { name: /^live$/i }).click()
       },
-      // El titulo del sheet es dinamico (lleva el nombre de la sesion), asi que se resuelve por
-      // el `aria-labelledby` del dialogo en vez de por el orden de sus h2.
+      // Resolve the dynamic session heading through the dialog label.
       objetivo: (page) => encabezadoDelDialogoAbierto(page),
       marcadores: (page) => [
         page
@@ -2160,14 +1539,13 @@ test.describe('Docs captures over real seeded data', () => {
       id: 'video-08-governance',
       live: true,
       escena: 8,
-      ruta: '/agentops (tarjeta de sesion, pestaña Governance)',
+      ruta: '/agentops (session card, tab Governance)',
       prepara: async (page) => {
         await page.goto('/agentops')
         await abreSesionOperada(page)
         await page.getByRole('tab', { name: /^governance$/i }).click()
       },
-      // El titulo del sheet es dinamico (lleva el nombre de la sesion), asi que se resuelve por
-      // el `aria-labelledby` del dialogo en vez de por el orden de sus h2.
+      // Resolve the dynamic session heading through the dialog label.
       objetivo: (page) => encabezadoDelDialogoAbierto(page),
       marcadores: (page) => [
         page
@@ -2179,21 +1557,16 @@ test.describe('Docs captures over real seeded data', () => {
       id: 'video-10-workspace-browser',
       live: true,
       escena: 10,
-      ruta: '/agentops (pestaña Workspaces, Browse files)',
+      ruta: '/agentops (tab Workspaces, Browse files)',
       prepara: async (page) => {
         await page.goto('/agentops')
-        await page.getByRole('tab', { name: /^workspaces$/i }).click()
-        // ⛔ MISMA RAZON QUE ARRIBA: sin workspaces registrados no hay ningun «Browse files», y
-        //    un `click` a ciegas agota los 30 s sin nombrar la causa. La etiqueta esta bien
-        //    (`agentops/i18n/en.json` → `workspaces.open` = 'Browse files'), asi que si no hay
-        //    boton es que el panel esta VACIO — sembrado, no selector.
-        // Misma razon: sin esperar, `count()` mide el panel a medio cargar.
+        await page.getByTestId('sessions-list-menu').click()
+        await page.getByRole('menuitem', { name: /^workspaces$/i }).click()
+        // Wait for the workspace panel to load before judging whether Browse files is
+        // absent.
         await esperaTablasCargadas(page)
-        // ⛔ `.first()` ANTES DE ESPERAR. El panel pinta UN boton POR FILA
-        //    (`agentops/workspaces-panel.tsx:144-153`, `cell: ({ row }) => <Button…>`), asi que
-        //    con dos workspaces el locator es AMBIGUO: `waitFor` estricto lanza, mi `catch` lo
-        //    recoge y lo rebautiza «panel vacio» — una CAUSA FALSA, que es justo el pecado que
-        //    esta precondicion existe para evitar. La forma de la pantalla decide el selector.
+        // Choose one Browse files button before waiting; each workspace row supplies
+        // one.
         const abrir = page
           .getByRole('button', { name: /^browse files$/i })
           .first()
@@ -2216,23 +1589,8 @@ test.describe('Docs captures over real seeded data', () => {
       test(`capture ${escena.id} (guion escena ${escena.escena}) — ${theme}`, async ({
         page,
       }) => {
-        // ⛔ AQUI PUSE `test.setTimeout(120_000)` Y LO RETIRO, porque MEDIRLO lo desmintio y el
-        //    error de diagnostico vale mas que el parche. El razonamiento original era correcto de
-        //    forma: la escena 5 pide `toBeAttached({ timeout: 60_000 })` y el test corre con el
-        //    plazo por defecto de Playwright —30 s, porque `playwright.config.ts` no fija
-        //    `timeout`—, asi que ese 60_000 era decorativo. Cierto, y AUN ASI no era la causa: con
-        //    120 s la escena sigue fallando y ahora tarda dos minutos en hacerlo.
-        //
-        //    La causa la enseño el PNG del fallo, no el log: con la finca sembrada `/access-map`
-        //    pasa a 56 origenes y 18 recursos, react-flow hace auto-fit y el grafo queda una madeja
-        //    microscopica. Las aristas SE PINTAN —`/v1/m/accessmap/graph` devuelve 66— pero a ese
-        //    zoom son sub-pixel y el `hover` no llega a ser accionable nunca. NO ES TIEMPO: ES
-        //    TAMAÑO.
-        //
-        //    Y el plazo se deja por defecto a proposito: subirlo hacia que seis tomas que no pueden
-        //    pasar costaran 120 s cada una en vez de 30 —medido en la re-corrida: la escena 7 paso
-        //    de 30 s a 1,1 min— sin arreglar ninguna. Un plazo mas largo sobre una espera imposible
-        //    solo compra un fallo mas caro.
+        // Keep the normal test timeout; increasing it cannot make a sub-pixel graph
+        // target actionable.
         await page.addInitScript(
           ([tenant, th]) => {
             localStorage.setItem(
@@ -2269,12 +1627,7 @@ test.describe('Docs captures over real seeded data', () => {
   }
 })
 
-// ⛔ ESTAS DOS NO PUEDEN IR EN EL BUCLE DE ARRIBA, y no es organización: es que el bucle **se
-//    autentica**, y una sesión iniciada hace que `/login` redirija a la aplicación. Capturarlas desde
-//    allí guardaría la pantalla equivocada — el mismo fallo que el oráculo `heading` vino a cerrar.
-//
-//    Son el camino que recorre un cliente NUEVO antes de ver nada más, y hasta hoy la documentación
-//    pública no enseñaba ninguna de las dos.
+// Capture login without an authenticated session so it cannot redirect to the app.
 test.describe('Docs captures — las patas sin autenticar', () => {
   test.skip(
     !demoTenant,
@@ -2283,12 +1636,8 @@ test.describe('Docs captures — las patas sin autenticar', () => {
 
   const PUBLICAS: { id: string; path: string; heading: RegExp }[] = [
     { id: 'login', path: '/login', heading: /^Sign in$/ },
-    // ⛔ AQUI ESTABA `accept-invite` SIN TOKEN, y su toma era la pantalla de ERROR
-    //    «This invitation link is incomplete». RETIRADA el 2026-08-29 por adjudicacion de
-    //    the planner: el estado CON token exige sembrar una invitacion viva, y eso choca con
-    //    step-up AAL3 (`console` ya lo declara en `empty_by_control`). Debilitar el control
-    //    por una foto esta descartado, y un PNG que NUNCA podra refrescarse es una mina.
-    //    La ruta se declara como AUSENCIA con su razon en el manifiesto, no se fotografia.
+    // A valid invitation capture requires its token and authorized provisioning. An
+    // AAL3 requirement must be satisfied rather than bypassed.
   ]
 
   for (const theme of ['light', 'dark'] as const) {
@@ -2303,9 +1652,8 @@ test.describe('Docs captures — las patas sin autenticar', () => {
         }, theme)
 
         await page.goto(vista.path)
-        // ⛔ EL TESTIGO QUE ESTE BLOQUE NECESITA Y EL DE ARRIBA NO: aquí lo que puede salir mal no es
-        //    que el router falle, es que la página REDIRIJA por haber sesión. `heading` lo caza —
-        //    `/login` y la app tienen h1 distintos— pero la URL lo dice antes y más claro.
+        // Require the requested path so a sign-in redirect cannot qualify as this
+        // public page.
         expect(
           new URL(page.url()).pathname,
           `${vista.id}: la navegación acabó en otra ruta — ¿había sesión iniciada?`,
@@ -2321,29 +1669,9 @@ test.describe('Docs captures — las patas sin autenticar', () => {
   }
 })
 
-// ⛔ EL ASISTENTE DE PRIMER ARRANQUE NO SE PUEDE FOTOGRAFIAR CON EL MOTOR DE ARRIBA, Y ESO ERA UNA
-//    EXCEPCION DECLARADA, NO UN OLVIDO. `registry.capture-coverage.test.ts` la llevaba escrita con
-//    su medida: *«redirige a /login sobre un estate ya instalado (medido); exige un arranque sin
-//    sembrar»*. `setup.tsx:68-69` es la razon en el codigo — *«Setup is a one-time door: once an
-//    admin exists, it is closed»* — y devuelve `<Navigate to="/login" />`.
-//
-//    ⇒ La excepcion era CORRECTA mientras el arnes tuviera un solo motor. Lo que se hace aqui no es
-//    levantarla: es quitarle el motivo. `scripts/docs-captures.sh` arranca un SEGUNDO motor con su
-//    propio `--data-dir` y SIN `--seed-demo`, comprueba contra `/v1/server-info` que ese motor
-//    responde `setup_required: true`, y pasa su URL en `SETUP_BASE_URL`.
-//
-// ⛔ Y EL CONTROL POSITIVO NO ES CEREMONIA, es la unica cosa que separa esta captura de la que el
-//    test declarado predijo: si el segundo motor viniera instalado, la vista redirige y guardariamos
-//    LA PANTALLA DE LOGIN etiquetada como el asistente de instalacion. Por eso se comprueba la
-//    ruta final Y el h1 —«First-boot setup», que no se parece a «Sign in»—, y por eso el bloque se
-//    SALTA en vez de pasar cuando la variable no viene: un skip dice «no lo he mirado» y un verde
-//    sin motor diria «esta bien».
-// ⛔ LA RUTA SE DECLARA CON LA MISMA FORMA QUE VE EL GUARDIAN, y esto NO es ceremonia.
-//    `web/src/features/registry.capture-coverage.test.ts` empareja por el literal `path: '<ruta>'`
-//    en ESTE fichero — no navega, no ejecuta: lee. Estos dos bloques no salen de `VIEWS`, asi que
-//    sin el literal el guardian los daria por AUSENTES y exigiria devolverlos a `SIN_CAPTURA`,
-//    justo despues de haberles quitado el motivo. Medido al escribirlo: sin esta linea, la celda
-//    «toda ruta registrada tiene entrada» se pone roja nombrando /setup.
+// Setup uses a separate unseeded engine whose server-info reports setup_required. Skip
+// without SETUP_BASE_URL; require both the final path and heading. Keep the literal
+// path for registry coverage.
 const VISTA_SETUP = {
   id: 'setup',
   path: '/setup',
@@ -2382,32 +1710,9 @@ test.describe('Docs captures — el asistente de primer arranque', () => {
   }
 })
 
-// ⛔ LA RUTA PARAMETRICA, Y POR QUE NO ESTABA. `registry.capture-coverage.test.ts` la declaraba
-//    —*«parametrica: exige sembrar una sesion y navegar a su id (C10-02)»*— y anadia *«cuando
-//    C10-02 aterrice, esta entrada se borra»*. Esto es ese aterrizaje para esta ruta: el id NO se
-//    codifica, lo resuelve `scripts/docs-captures.sh` contra el estate sembrado
-//    (`GET /v1/m/recording/sessions`) y lo pasa en `DEMO_SESSION_ID`.
-//
-// ⚠ Un id CODIFICADO seria PEOR que no tener captura: el dia que el sembrado cambie de ids, la
-//    vista serviria su estado de «no encontrada» y la foto saldria igual de verde. Por eso se
-//    resuelve en vivo, y por eso el bloque se SALTA sin la variable en vez de pasar.
-//
-// ⛔ AQUI ESCRIBI QUE ESTA VISTA NO PODIA LLEVAR ORACULO `heading` «porque su h1 es el NOMBRE de la
-//    sesion, que depende del estate». **ES FALSO, y lo refuto el contraste con el codigo delante**:
-//    `viewer-header.tsx:94-97` pasa `title={t('title')}`, no el nombre; la cadena inglesa es el
-//    literal estable `Session Recording Viewer` (`session-viewer/i18n/en.json:2`); y `PageHeader`
-//    lo pinta como `h1` (`components/ui/page-header.tsx:43-46`).
-//
-// ⭐ Y el oraculo es MAS fuerte de lo que yo suponia, no menos: ese header **solo se monta despues
-//    de resolver una sesion real** (`session-viewer-page.tsx:357-365`), asi que exigir ese h1 exacto
-//    es a la vez testigo de identidad de pagina Y testigo de carga. Yo habia deducido el sujeto en
-//    vez de abrirlo — la misma clase que este fichero lleva media pagina documentando.
-//
-// ⚠ Lo que este oraculo NO prueba, dicho para que nadie lea de mas: el pathname prueba QUE SE PIDIO,
-//    y el h1 prueba QUE VISTA MONTO. Ninguno de los dos prueba que el backend devolviera ESA fila.
-// Misma razon que arriba: el guardian lee el literal, no la navegacion. Aqui ademas el literal
-// es la forma PARAMETRICA (`$id`), que es como la nombra `route-census.json`, mientras la
-// navegacion usa el id resuelto en vivo. Las dos cosas conviven a proposito.
+// Resolve the recording session ID from the seeded engine and skip without it. The
+// viewer heading proves page identity and loading, not the exact backend row. Keep the
+// parameterized path literal for registry coverage.
 const VISTA_VISOR = { id: 'session-viewer', path: '/session-viewer/$id' }
 
 test.describe('Docs captures — el visor de sesion (ruta parametrica)', () => {

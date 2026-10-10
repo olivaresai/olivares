@@ -23,27 +23,19 @@ control plane с резервными копиями.
 действие, — тот же, что проверен от начала до конца против бинарника в
 [туториале по одному узлу](/tutorials/getting-started/single-node/).
 
-<Aside type="caution" title="Закрепите опубликованный образ 26.10.1 по digest">
-Релиз **26.10.1** опубликовал подписанные образы: свидетель поверхностей установки
-записывает Docker Hub и GHCR для `26.10.1` как **published**
-(`docs/releases/26.10.1-install-surfaces.json`). Та же честность есть в
-[Развёртывание с Docker](/how-to/docker-deployment/). Установите
-`OLIVARES_IMAGE=docker.io/olivaresai/olivares@sha256:<digest>` и сначала
-[проверьте его](/how-to/verify-a-release/) — по digest, никогда по тегу. Чтобы вместо этого
-запустить дерево разработки, соберите укреплённый образ из исходников и направьте
-на него стек:
-
-```bash
-task image                                   # builds olivares:dev
-echo 'OLIVARES_IMAGE=olivares:dev' >> deploy/compose/.env
-```
+{/* release */}
+<Aside type="caution" title="Olivares 0.1">
+Следующий выпуск — `0.1`; его релиз на GitHub ещё не опубликован. Команды ниже описывают планируемые артефакты. До публикации собирайте из исходников, а после публикации проверяйте каждый артефакт перед использованием. Наблюдаемый статус записан в `docs/releases/0.1-install-surfaces.json`.
 </Aside>
+{/* /release */}
 
 ## 1. Поднимите одноузловой стек (SQLite)
 
 <Steps>
 
 1. Запустите его:
+
+   Если AppArmor контролирует создание пользовательских пространств имён, перед запуском выполните инструкции «Session confinement on AppArmor hosts» из `deploy/compose/README.md` на хосте демона Docker.
 
    ```bash
    docker compose -f deploy/compose/docker-compose.yml up --wait --wait-timeout 120
@@ -82,6 +74,14 @@ echo 'OLIVARES_IMAGE=olivares:dev' >> deploy/compose/.env
    ```
 
 </Steps>
+
+<Aside type="note" title="Текущий контракт и проверка в размещённой среде">
+**Контракт готовности Compose.** Изолированные локальные HTTP/TLS-фикстуры
+доказывают три ответа проверки: 200 → rc 0, полученный ответ не-200 → rc 1,
+ошибка входа/TLS/транспорта → rc 2. **Проверка Docker остаётся неизмеренной до
+успешного выполнения запускаемого вручную workflow** для этого коммита; наличие
+workflow в репозитории не доказывает, что его прогон Docker состоялся.
+</Aside>
 
 <Aside type="tip" title="Пропустили токен?">
 Перезапуск не печатает его повторно (хранится только его хеш). Пока администратора ещё
@@ -144,16 +144,26 @@ docker compose -f deploy/compose/docker-compose.yml logs olivares | grep "ingest
 ## 3. Зашифрованные DR-резервные копии (профиль `backup`)
 
 Стек поставляет одноразовый сервис резервного копирования, который создаёт
-**зашифрованный, безопасный для непрерывности ledger** bundle (`olivares dr backup`) и
-удаляет bundle-ы старше 14 дней:
+**зашифрованный, безопасный для непрерывности ledger** bundle (`olivares dr backup`):
+
+Храните парольную фразу в закрытом файле вне репозитория и образа, а её копию —
+в безопасном месте вне этого хоста: без неё нельзя восстановить ни один бандл.
+Предоставьте контейнеру резервного копирования доступ к файлу только для чтения
+(образ запускается с UID `65532`):
 
 ```bash
-# Write your KEK passphrase once (keep it OUT of the repo / image):
-printf 'a strong DR passphrase' > deploy/compose/dr-pass
+sudo install -d -o 65532 -g 65532 -m 0700 /srv/olivares-dr
+sudo install -o 65532 -g 65532 -m 0400 /path/to/private-passphrase /srv/olivares-dr/dr-pass
 
+BACKUP_TS="$(date -u +%Y%m%dT%H%M%SZ)" \
 docker compose -f deploy/compose/docker-compose.yml \
                -f deploy/compose/docker-compose.backup.yml \
-               --profile backup run --rm backup
+               -f - --profile backup run --rm backup <<'YAML'
+services:
+  backup:
+    volumes:
+      - /srv/olivares-dr/dr-pass:/run/secrets/dr-pass:ro
+YAML
 ```
 
 Оберните эту команду в host cron для запланированного RPO и **зеркалируйте том
@@ -169,9 +179,17 @@ docker compose -f deploy/compose/docker-compose.yml \
 `BYPASSRLS` — движок *отказывается* запускаться против привилегированной роли, потому
 что row-level security — это подстраховка арендности) и направляет на неё движок:
 
+Override также создаёт `olivares_admin`, отдельную роль `NOSUPERUSER BYPASSRLS`
+с доступом только для чтения к таблицам движка. Движок использует её через
+`--admin-dsn` для чтения данных разных арендаторов, в том числе при первичной настройке.
+
+Сначала задайте три разных пароля, используя только `A-Z a-z 0-9 . _ ~ -`
+для этой демо-топологии Compose, затем поднимите стек:
+
 ```bash
 cp deploy/compose/.env.example deploy/compose/.env
-# set POSTGRES_SUPERUSER_PASSWORD and OLIVARES_DB_PASSWORD in .env
+# set three distinct passwords in deploy/compose/.env:
+# POSTGRES_SUPERUSER_PASSWORD, OLIVARES_DB_PASSWORD, OLIVARES_ADMIN_PASSWORD
 
 docker compose -f deploy/compose/docker-compose.yml \
                -f deploy/compose/docker-compose.postgres.yml up -d

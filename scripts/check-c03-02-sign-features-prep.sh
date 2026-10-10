@@ -29,7 +29,7 @@ grep -F -q 'Unique leftover unique vs `check-c03-02-sign-features.sh`' "$DOC" \
 grep -q 'informational; never a gate' "$DOC" \
   || fail "prepare doc lost informational never-a-gate pin"
 if grep -qiE 'addongate reads --features|FIRMA A claimed' "$DOC"; then
-  fail "prepare doc claims a close this lote does not have"
+  fail "prepare doc claims a close this batch does not have"
 fi
 grep -q 'featuresCSV' "$SRC" || fail "sign command lost the --features variable"
 grep -q 'StringVar(&featuresCSV, "features"' "$SRC" \

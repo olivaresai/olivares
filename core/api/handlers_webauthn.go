@@ -8,12 +8,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"net/url"
 
 	"github.com/go-chi/chi/v5"
 
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
+	"github.com/olivaresai/olivares/core/webaddr"
 )
 
 // WebAuthn privileged-login ceremony endpoints — the backend
@@ -50,15 +50,15 @@ func (s *Server) webauthnRP(r *http.Request) (auth.WebAuthnRP, error) {
 	if s.webauthn.ID != "" {
 		return s.webauthn, nil
 	}
-	origin := schemeHost(r)
-	host := r.Host
-	if fwd := r.Header.Get("X-Forwarded-Host"); fwd != "" {
-		host = fwd
+	addr, err := webaddr.Parse("the request origin", schemeHost(r))
+	if err != nil {
+		return auth.WebAuthnRP{}, fmt.Errorf("%w: %w", auth.ErrWebAuthnRelyingParty, err)
 	}
-	if u, err := url.Parse(origin); err == nil && u.Hostname() != "" {
-		host = u.Hostname()
+	rp, ok := auth.WebAuthnRPFromAddress(addr)
+	if !ok {
+		return auth.WebAuthnRP{}, fmt.Errorf("%w: the request address cannot be a relying party", auth.ErrWebAuthnRelyingParty)
 	}
-	return auth.WebAuthnRP{ID: host, DisplayName: "Olivares AI", Origins: []string{origin}}, nil
+	return rp, nil
 }
 
 // sessionPrincipal returns the calling SESSION principal or writes the error:
@@ -86,11 +86,8 @@ type credentialEnvelope struct {
 
 // handleWebAuthnRegisterOptions issues creation options (challenge) to register
 // a new authenticator for the calling session's user.
-func (s *Server) handleWebAuthnRegisterOptions(w http.ResponseWriter, r *http.Request) {
-	p, ok := s.sessionPrincipal(w, r)
-	if !ok {
-		return
-	}
+func (s *Server) handleWebAuthnRegisterOptions(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	p := mc.Principal
 	rp, err := s.webauthnRP(r)
 	if err != nil {
 		s.writeError(w, r, err)
@@ -107,14 +104,11 @@ func (s *Server) handleWebAuthnRegisterOptions(w http.ResponseWriter, r *http.Re
 // handleWebAuthnRegister verifies the browser's attestation and persists the
 // credential. 403 webauthn_verification_failed on any ceremony failure; 409 on
 // an already-registered credential id.
-func (s *Server) handleWebAuthnRegister(w http.ResponseWriter, r *http.Request) {
-	p, ok := s.sessionPrincipal(w, r)
-	if !ok {
-		return
-	}
+func (s *Server) handleWebAuthnRegister(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	p := mc.Principal
 	var in credentialEnvelope
 	if err := decodeJSON(w, r, &in); err != nil || len(in.Credential) == 0 {
-		s.badRequest(w, r, "invalid JSON body: expected {credential: ...}")
+		s.badRequest(w, r, RequestBodyErrorMessage(err, "invalid JSON body: expected {credential: ...}"))
 		return
 	}
 	rp, rperr := s.webauthnRP(r)
@@ -132,11 +126,8 @@ func (s *Server) handleWebAuthnRegister(w http.ResponseWriter, r *http.Request) 
 
 // handleWebAuthnAuthOptions issues assertion options (challenge) for a step-up
 // of the calling session.
-func (s *Server) handleWebAuthnAuthOptions(w http.ResponseWriter, r *http.Request) {
-	p, ok := s.sessionPrincipal(w, r)
-	if !ok {
-		return
-	}
+func (s *Server) handleWebAuthnAuthOptions(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	p := mc.Principal
 	rp, err := s.webauthnRP(r)
 	if err != nil {
 		s.writeError(w, r, err)
@@ -152,14 +143,11 @@ func (s *Server) handleWebAuthnAuthOptions(w http.ResponseWriter, r *http.Reques
 
 // handleWebAuthnAuthenticate verifies the browser's assertion and elevates the
 // calling session to AAL3 (the panel re-reads whoami to lift its gate).
-func (s *Server) handleWebAuthnAuthenticate(w http.ResponseWriter, r *http.Request) {
-	p, ok := s.sessionPrincipal(w, r)
-	if !ok {
-		return
-	}
+func (s *Server) handleWebAuthnAuthenticate(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	p := mc.Principal
 	var in credentialEnvelope
 	if err := decodeJSON(w, r, &in); err != nil || len(in.Credential) == 0 {
-		s.badRequest(w, r, "invalid JSON body: expected {credential: ...}")
+		s.badRequest(w, r, RequestBodyErrorMessage(err, "invalid JSON body: expected {credential: ...}"))
 		return
 	}
 	rp, rperr := s.webauthnRP(r)
@@ -188,11 +176,8 @@ func (s *Server) logCeremonyFailure(leg string, rp auth.WebAuthnRP, err error) {
 
 // handleWebAuthnList returns the calling user's registered authenticators —
 // id, label and registration time only, never key material.
-func (s *Server) handleWebAuthnList(w http.ResponseWriter, r *http.Request) {
-	p, ok := s.sessionPrincipal(w, r)
-	if !ok {
-		return
-	}
+func (s *Server) handleWebAuthnList(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	p := mc.Principal
 	rows, err := s.authr.ListWebAuthnCredentials(r.Context(), p)
 	if err != nil {
 		s.writeError(w, r, err)
@@ -219,11 +204,8 @@ func (s *Server) handleWebAuthnList(w http.ResponseWriter, r *http.Request) {
 
 // handleWebAuthnDelete unregisters one of the calling user's authenticators
 // (lost/stolen-key remediation). AAL3-required and ledgered in core/auth.
-func (s *Server) handleWebAuthnDelete(w http.ResponseWriter, r *http.Request) {
-	p, ok := s.sessionPrincipal(w, r)
-	if !ok {
-		return
-	}
+func (s *Server) handleWebAuthnDelete(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	p := mc.Principal
 	id := model.ID(chi.URLParam(r, "id"))
 	if id.IsZero() {
 		s.badRequest(w, r, "invalid credential id")
@@ -238,11 +220,8 @@ func (s *Server) handleWebAuthnDelete(w http.ResponseWriter, r *http.Request) {
 
 // handleWebAuthnRename updates the display name of one of the calling user's
 // authenticators. Owner-only, no AAL3 required (metadata change), ledgered.
-func (s *Server) handleWebAuthnRename(w http.ResponseWriter, r *http.Request) {
-	p, ok := s.sessionPrincipal(w, r)
-	if !ok {
-		return
-	}
+func (s *Server) handleWebAuthnRename(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	p := mc.Principal
 	id := model.ID(chi.URLParam(r, "id"))
 	if id.IsZero() {
 		s.badRequest(w, r, "invalid credential id")

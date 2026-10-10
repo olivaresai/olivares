@@ -28,7 +28,7 @@ grep -Eq 'No se decide' "$PKG" || fail "package no longer says it does not decid
 grep -q 'AB-01' "$PKG" || fail "package lost the AB-01 signature vehicle"
 grep -q 'does not sign, fund' "$PKG" || fail "package no longer refuses to dictate"
 if grep -qiE 'I adopt S-B|selected_rate_row: S-B|FIRMA A claimed' "$PKG"; then
-	fail "package claims a close this lote does not have"
+	fail "package claims a close this batch does not have"
 fi
 
 grep -q '\[ \] ADOPTO S-B' "$AB" || fail "AB-01 lost the S-B signature box"

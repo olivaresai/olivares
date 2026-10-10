@@ -36,6 +36,17 @@ example the development plaintext flag, or allowing a privileged database role).
 did not set one, it is off. The full secure-defaults posture and the cryptographic
 guarantees of the audit ledger are in the [security model](/explanation/security/security-model/).
 
+### Sign-in and security settings
+
+Open **Settings → Sign-in and security** to see sign-in methods, the engine's
+session lifetime, the administrative step-up policy and your registered passkeys.
+The session lifetime is read-only; refreshing a session renews its expiry.
+Register or rename your passkeys and enroll an authenticator app on this page.
+System administrators can change the existing step-up and authenticator policies;
+other users see the step-up requirement without an editing control. Requiring a
+passkey or authenticator code first requires proof that your session can use it.
+Use **Manage identity providers** to configure single sign-on.
+
 ### Mutual TLS for remote collectors
 
 In the distributed topology, edge collectors push observations to the core over

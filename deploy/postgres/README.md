@@ -179,7 +179,7 @@ OLIVARES_DR_PASSPHRASE_FILE=/run/secrets/dr-pass \
 - For **near-zero RPO**, use PITR (`backup/pitr-setup.md`) + a `dr backup --pitr-ref`
   companion bundle (keys + chain-tip manifest).
 - For **Kubernetes**, the Helm chart ships an opt-in backup CronJob
-  (`backup.enabled=true` in `deploy/helm`); a postgres-client initContainer runs
+  (`backup.enabled=true` in Business Helm distribution); a postgres-client initContainer runs
   `pg_dump` through the dedicated NOSUPERUSER BYPASSRLS admin DSN, then the engine
   bundles the complete multi-tenant dump. The NOBYPASSRLS app DSN cannot perform
   this dump against FORCE-RLS tables. In the owner/app split, also set

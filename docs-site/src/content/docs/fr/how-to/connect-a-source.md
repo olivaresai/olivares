@@ -11,13 +11,14 @@ Une source fait un seul travail : elle **observe** un système externe et **éme
 
 Concrètement, une source implémente une petite interface — `Open` (configurer une fois), `Gather` (s'exécuter, en émettant), `Close` (libérer) — et pendant `Gather` elle remet au moteur une observation à la fois à travers un sink. Le moteur possède l'ordonnancement : une source en flux (un tail de log, un récepteur) se bloque dans `Gather` et émet jusqu'à son annulation ; une source par lots fait son travail et retourne, et le moteur décide quand la relancer. Le connecteur ne possède jamais son propre minuteur.
 
-Il existe exactement trois sortes d'observations qu'une source peut émettre :
+Il existe exactement quatre sortes d'observations qu'une source peut émettre :
 
 | Observation | Ce qu'elle transporte | Utilisée par |
 |---|---|---|
 | `edge` | Une origine (agent / identité / session) a touché une ressource, avec un mode lecture/écriture | Le R/RW access map |
 | `cost` | Coût d'usage modèle/fournisseur | FinOps |
 | `finding` | Un finding de guardrail / red-team / forensique | Sécurité |
+| `metric` | Une mesure autre qu’un coût | Métriques de productivité et d’adoption |
 
 L'ensemble est fermé par conception — un tiers ne peut pas introduire une nouvelle sorte d'observation. Le moteur **relève** chaque observation émise sur le bus d'événements in-process, où les modules la consomment sans se coupler à la source qui l'a produite. Pour l'access map en particulier, le moteur résout les références sous forme de chaînes du connecteur en entités et fusionne l'observation dans une arête d'accès persistée.
 
@@ -140,13 +141,13 @@ Les clés exactes à l'intérieur du bloc `config` de chaque connecteur (chemins
 
 ### Une source non configurée avertit honnêtement
 
-Le moteur échoue en sécurité, pas en bruit, quand rien n'est câblé :
+Le démarrage distingue une variable non définie d'un fichier configuré :
 
 - Si `OLIVARES_SOURCES_CONFIG` est **non défini**, le moteur démarre sans aucune source.
-- Si le fichier est **manquant, illisible, ou pas du JSON valide**, le moteur **avertit et continue** sans aucune source — il ne plante pas au démarrage.
+- Si le fichier configuré est **absent, illisible ou contient du JSON invalide**, `olivares serve` **se termine avec le code `1`**. L’erreur commence par `load sources operator config: OLIVARES_SOURCES_CONFIG` et contient `refusing to start instead of silently omitting operator configuration`.
 - Si la liste de sources est **vide**, le moteur avertit qu'aucun connecteur n'ingèrera et que l'estate tourne sans aucun trafic en direct.
 
-Dans tous les cas, le log de démarrage vous dit clairement que rien de réel n'est câblé, plutôt que d'apparaître silencieusement sain avec un map vide. Un avertissement honnête est le design : un access map vide ne devrait jamais ressembler à un map propre.
+Pour un fichier configuré, corrigez le chemin, les droits de lecture ou le JSON, puis redémarrez. Le moteur refuse d’omettre silencieusement la configuration de l’opérateur.
 
 ## Où cela s'exécute
 

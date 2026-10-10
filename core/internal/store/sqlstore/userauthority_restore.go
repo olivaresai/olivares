@@ -29,7 +29,8 @@ var postgresRestoreAuthorityLegacyRollbackTestHook func(*sql.Tx) error
 // RestorePostgresUserAuthorityPrivileges closes the privileges a logical
 // pg_restore --no-privileges cannot carry, in ONE transaction, before any Store can
 // be published: the two compiled H functions, and — from core v13 — the login
-// capability relation's ACL. It publishes no Store, runs no migrations and never
+// capability relation's ACL, plus custody relation ACLs from core v19.
+// It publishes no Store, runs no migrations and never
 // creates or replaces a function. A recognized pre-H predecessor is a read-only
 // no-op, preserving restore→upgrade. AdminDSN and AllowPrivilegedRole confer no
 // authority on this operation.
@@ -206,6 +207,11 @@ func RestorePostgresUserAuthorityPrivileges(ctx context.Context, cfg store.Confi
 				return err
 			}
 		}
+		if version >= coreFinOpsCustodyControlMigrationVersion {
+			if err := restoreFinOpsCustodyACL(ctx, tx, dia, roles); err != nil {
+				return err
+			}
+		}
 		if postgresRestoreAuthorityCommitTestHook != nil {
 			if err := postgresRestoreAuthorityCommitTestHook(tx); err != nil {
 				return err
@@ -245,6 +251,27 @@ func restoreLoginCapabilityACL(ctx context.Context, tx *sql.Tx, roles guardRoles
 	}
 	if err := verifyPostgresLoginCapabilityRelation(ctx, tx, resolved); err != nil {
 		return fmt.Errorf("sqlstore: logical restore login capability ACL: %w", err)
+	}
+	return nil
+}
+
+// restoreFinOpsCustodyACL restores the birth migration's grants after a no-privileges import.
+func restoreFinOpsCustodyACL(ctx context.Context, tx *sql.Tx, dia dialect.Dialect, roles guardRoles) error {
+	if err := finOpsCustodyRequireTopology([]guardRoles{roles}); err != nil {
+		return err
+	}
+	stmts := []string{dialect.PostgresFinOpsCustodyPublicACLStmt()}
+	if guardMetadataTopologyOf(roles) == guardTopologySplit {
+		stmts = append(stmts, finOpsCustodySplitACLStmts(roles.App.bindable())...)
+	}
+	for _, stmt := range stmts {
+		// #nosec G202 -- compiled table names and a quoted resolved role.
+		if _, err := tx.ExecContext(ctx, stmt); err != nil {
+			return fmt.Errorf("sqlstore: logical restore custody ACL: %w", err)
+		}
+	}
+	if err := verifyFinOpsCustodyControlMigrationAfter(ctx, tx, dia, roles); err != nil {
+		return fmt.Errorf("sqlstore: logical restore custody ACL: %w", err)
 	}
 	return nil
 }

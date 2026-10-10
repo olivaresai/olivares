@@ -40,7 +40,7 @@ func TestProviderCanceledWaitClosesItsSessionRequest(t *testing.T) {
 			h.set.gov.UseApprovalCapacity(h.authr.ApprovalCapacity)
 			h.set.gov.UseApprovalAuthority(h.authr, auth.NewAuthorizer(h.set.gov.RequestEvaluator(), auth.WithScopedGrants(h.set.gov.ScopedGrants())))
 			bridge := newApprovalBridge(approvalBridgeConfig{}, discardLog())
-			bridge.localProposer = service
+			bridge.LocalProposer = service
 			limit := 3 * time.Second
 			if scenario == "deadline" {
 				limit = 350 * time.Millisecond

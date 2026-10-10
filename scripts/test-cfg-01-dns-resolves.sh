@@ -28,6 +28,7 @@ stage() {
 		"$TMP/tree/commercial/license-worker/"
 	mkdir -p "$TMP/tree/commercial/license-worker/config/production"
 	cp "$ROOT/design/PRODUCTION-STATE-2026-09-24.json" "$TMP/tree/design/"
+	cp "$ROOT/RELEASE-VERSION" "$TMP/tree/"
 	cp "$ROOT/commercial/license-worker/config/production/dodo-checkout-offers.json" \
 		"$TMP/tree/commercial/license-worker/config/production/"
 }

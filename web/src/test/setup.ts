@@ -10,6 +10,8 @@
 import '@testing-library/jest-dom/vitest'
 import { afterEach, vi } from 'vitest'
 import { cleanup, configure } from '@testing-library/react'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 
 // ⛔ EL LIMITE QUE DISPARA NO ES EL QUE SE VE. `vitest.config.ts` declara
 // `testTimeout: 30_000`, y eso se lee como «hay treinta segundos». No los hay para un
@@ -34,6 +36,33 @@ import { cleanup, configure } from '@testing-library/react'
 // Afecta a los 139 ficheros de prueba que usan findBy/waitFor: el defecto era de la clase, no
 // de esta pantalla.
 configure({ asyncUtilTimeout: 5_000 })
+
+// The console fetches its non-English auth dictionaries by URL (lib/i18n/index.ts). In a test
+// the URL is the source path and nothing serves it, so the dictionary is read from the tree;
+// every other request goes to whatever fetch the test installed.
+const passThrough = globalThis.fetch
+globalThis.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
+  const href =
+    typeof input === 'string'
+      ? input
+      : input instanceof URL
+        ? input.href
+        : input.url
+  const dictionary = /\/locales\/([a-z]{2})\/auth\.json(?:\?.*)?$/.exec(href)
+  if (!dictionary) return passThrough(input, init)
+  const file = join(
+    __dirname,
+    '../lib/i18n/locales',
+    dictionary[1],
+    'auth.json',
+  )
+  return Promise.resolve(
+    new Response(readFileSync(file, 'utf8'), {
+      headers: { 'content-type': 'application/json' },
+    }),
+  )
+}) as typeof fetch
+
 // Initialize i18n once so components using useTranslation render real (English) copy.
 import { i18nReady } from '@/lib/i18n'
 await i18nReady

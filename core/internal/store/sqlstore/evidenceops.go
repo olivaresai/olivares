@@ -27,6 +27,9 @@ import (
 // claim: whatever races past the in-transaction read is stopped here.
 // Refs and digests only — no raw parameters, result bodies, bearer material or
 // reason text (docs/SECURITY-HARDENING.md).
+// Keep the historical citation literals below immutable with the descriptor.
+// Current readers: cmd/olivares/internal/mcpgateway/auditor.go:36 (surface)
+// and cmd/olivares/internal/mcpgateway/auditor.go:43 (action).
 var evidenceOpDescriptor = model.EntityDescriptor{
 	Kind:  "core.evidence_operation",
 	Table: "evidence_operations",

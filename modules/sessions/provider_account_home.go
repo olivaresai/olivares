@@ -65,7 +65,7 @@ func (m *Module) CreateProviderAccount(ctx context.Context, actor auth.Principal
 	if _, confined := actor.ConfinedWorkspaceIn(tenant); confined {
 		return ProviderAccount{}, forbiddenErr("workspace confined account writer")
 	}
-	if m.data == nil {
+	if m.Data == nil {
 		return ProviderAccount{}, errNoData
 	}
 	env, err := m.localEnvironment()
@@ -97,7 +97,7 @@ func (m *Module) CreateProviderAccount(ctx context.Context, actor auth.Principal
 	}
 	// This transaction's scope refuses confined callers before root resolution,
 	// directory creation, mode changes, staging, or any other filesystem effect.
-	err = m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
+	err = m.Data.Mutate(ctx, tenant, func(sc store.Scope) error {
 		profiles, ops, err := accountHomeAdmission(ctx, sc, tenant)
 		if err != nil {
 			return err
@@ -119,7 +119,7 @@ func (m *Module) CreateProviderAccount(ctx context.Context, actor auth.Principal
 		}
 		allocated := name
 		if allocated == "" {
-			allocated, err = accountname.NextName(driver, taken)
+			allocated, err = accountname.NextName(accountNameStem(driver), taken)
 			if err != nil {
 				return accountNameRefusal(err)
 			}
@@ -144,7 +144,7 @@ func (m *Module) CreateProviderAccount(ctx context.Context, actor auth.Principal
 		return ProviderAccount{}, errAccountHomeRetry
 	}
 	var out ProviderAccount
-	err = m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
+	err = m.Data.Mutate(ctx, tenant, func(sc store.Scope) error {
 		profiles, ops, err := accountHomeAdmission(ctx, sc, tenant)
 		if err != nil {
 			return err

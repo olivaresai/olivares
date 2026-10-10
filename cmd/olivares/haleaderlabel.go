@@ -16,11 +16,11 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/olivaresai/olivares/core/envconfig"
 	"github.com/olivaresai/olivares/core/store"
 )
 
@@ -138,7 +138,7 @@ func haBoolEnv(getenv func(string) string, key string) (bool, error) {
 	if raw == "" {
 		return false, nil
 	}
-	v, err := strconv.ParseBool(raw)
+	v, err := (envconfig.Reader{Source: getenv}).Bool(key, false)
 	if err != nil {
 		return false, fmt.Errorf("%s=%q is not a boolean (use 1/0, true/false)", key, raw)
 	}

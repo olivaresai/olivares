@@ -6,11 +6,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/olivaresai/olivares/core/auth"
-	"github.com/olivaresai/olivares/core/model"
 	"net/http"
 	"testing"
 	"time"
+
+	"github.com/olivaresai/olivares/core/auth"
+	"github.com/olivaresai/olivares/core/model"
 )
 
 func TestCommunicationAdmissionClassificationNeverFallsBack(t *testing.T) {
@@ -39,7 +40,7 @@ func TestCommunicationAdmissionClassificationNeverFallsBack(t *testing.T) {
 				source := &communicationAuthoritySourceRecorder{}
 				var err error
 				if collection {
-					f.module.communicationAuthoritySources = &communicationRequestAuthoritySources{resolver: resolver, source: source}
+					f.module.CommunicationAuthority = &communicationRequestAuthoritySources{resolver: resolver, source: source}
 					_, err = f.module.bindCurrentCommunicationIdentity(ctx, scope, f.ref, requireChannelCatalogPrincipal)
 				} else {
 					_, err = bindCommunicationRequestAuthority(ctx, resolver, source, f.ref, question)

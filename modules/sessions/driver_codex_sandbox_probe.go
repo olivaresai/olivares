@@ -26,12 +26,12 @@ func (m *Module) prepareCodexSandbox(ctx context.Context, p *CreateRunParams, sp
 	if runtime.GOOS != "linux" || launchPreset(*p) == PresetFull {
 		return nil
 	}
-	runner, native := m.rt.runner.(*procRunner)
+	runner, native := m.rt.Runner.(*procRunner)
 	if !native {
 		return nil
 	}
 	probe := *spec
-	probe.Args = []string{"-c", "check_for_update_on_startup=false", "-c", `sandbox_mode="read-only"`, "sandbox", "linux", "--", "/bin/true"}
+	probe.Args = []string{"-c", "check_for_update_on_startup=false", "-c", `sandbox_mode="read-only"`, "sandbox", "--", "/bin/true"}
 	probe.Env, probe.EnvAllow = nil, nil
 	for _, item := range spec.Env {
 		if item.Name == envUserHome || item.Name == envCodexHome {
@@ -86,9 +86,12 @@ func (m *Module) prepareCodexSandbox(ctx context.Context, p *CreateRunParams, sp
 	return checkCodexBoundProviderConfig(ctx, spec)
 }
 
-func codexSandboxDetail(p CreateRunParams) string {
-	if p.codexSandboxFallback {
-		return "Codex native sandbox unavailable; OS confinement enforced; network not confined"
+func codexSandboxDetail(p CreateRunParams, spec LaunchSpec) string {
+	switch {
+	case !p.codexSandboxFallback:
+		return ""
+	case spec.NetworkPolicy != nil:
+		return "Codex native sandbox unavailable; OS confinement enforced; network confined to the bound provider"
 	}
-	return ""
+	return "Codex native sandbox unavailable; OS confinement enforced; network not confined"
 }

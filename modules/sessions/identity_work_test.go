@@ -94,7 +94,7 @@ func TestSessionActsForAgentRefusesAnAmbiguousOperatedAlias(t *testing.T) {
 
 func seedRunRow(t *testing.T, f workFixture, runRef, agentRef string) {
 	t.Helper()
-	if err := f.m.data.Mutate(context.Background(), f.tenant, func(sc store.Scope) error {
+	if err := f.m.Data.Mutate(context.Background(), f.tenant, func(sc store.Scope) error {
 		repo, err := sc.Ext(runKind)
 		if err != nil {
 			return err

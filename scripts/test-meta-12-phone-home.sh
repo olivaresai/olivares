@@ -3,15 +3,12 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 #
-# ⛔ ESTA BATERÍA PROBABA LA POLARIDAD CONTRARIA, Y ESO NO ES UN DETALLE: su caso
-# «mutant (applied to docs-site) is killed» exigía que poner `applied_to_docs_site = true`
-# devolviera rc 1 — es decir, **certificaba que el trabajo correcto enrojeciera**. Era coherente el
-# 2026-08-20 (META-12 redactaba, C09-05 aplicaba en otro carril) y quedó al revés el día en que
-# C09-05 se ejecutó. Se invierte con su gate en el mismo PR (2026-08-28).
-#
-# Y se añade lo que faltaba desde el principio: el mutante del ÁRBOL. Antes todos los mutantes
-# tocaban un JSON o una cabecera; ninguno tocaba una página. Un gate cuyo único sujeto es un flag
-# escrito a mano no puede distinguir «aplicado» de «declarado aplicado».
+# The old suite asserted the opposite polarity: applied_to_docs_site = true had to
+# return 1, certifying failure for correct work. That matched the 2026-08-20 split
+# between META-12 writing and C09-05 applying copy, but became stale when C09-05 ran.
+# Update the suite and its gate together (2026-08-28).
+# Add the missing tree mutant: earlier cases changed only JSON or a header, never
+# a live page. A handwritten flag cannot distinguish applied from merely declared.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CHECK="$ROOT/scripts/check-meta-12-phone-home.sh"
@@ -94,12 +91,11 @@ if grep -q '^\*\*REDACTADO\. NO APLICADO al docs-site\.\*\*$' "$_doc"; then
   if [ "$(cat "$TMP/rc")" = 1 ]; then ok "mutant (header claims NOT applied) is killed"
   else bad "doc not-applied stayed rc=$(cat "$TMP/rc") ($(cat "$TMP/err"))"; fi
 else
-  bad "el mutante de cabecera NO se inyectó — el caso no dice nada del gate"
+  bad "the header mutant was NOT injected — the case says nothing about the gate"
 fi
 
-# ⭐ EL MUTANTE DEL ÁRBOL — el que faltaba, y el único que distingue «aplicado» de «declarado».
-# Se reintroduce la promesa RETIRADA en una página viva, con el literal exacto que recibió
-# por correo el 2026-08-28. Si esto no enrojece, el gate mide un flag y no el producto.
+# Tree mutant: reintroduce the removed promise on a live page using the exact mail
+# literal received on 2026-08-28. A pass would mean the gate checks a flag, not the product.
 stage
 printf '\nThe licence never phones home, and validates fully offline.\n' >> "$TMP/tree/$PAGE"
 run
@@ -132,7 +128,7 @@ if grep -q 'Nothing else happens' "$_lic"; then
     ok "mutant (LICENSING.md loses the commercial half) is killed and names the missing wording"
   else bad "anchor mutant stayed rc=$(cat "$TMP/rc") ($(head -3 "$TMP/err"))"; fi
 else
-  bad "el mutante del ancla NO se inyectó — el caso no dice nada del gate"
+  bad "the anchor mutant was NOT injected — the case says nothing about the gate"
 fi
 
 # Y sin el canon no se juzga: «no he podido mirar», nunca «aplicado».

@@ -594,7 +594,7 @@ export function SlaPanel({ pv }: { pv: PatchVelocity }) {
   )
 }
 
-// --- 7. Air-gap bundle + OCI Helm chart --------------------------------------
+// --- 7. Enterprise offline bundle + Business Helm package --------------------
 
 export function AirgapPanel({
   airgap,
@@ -608,9 +608,9 @@ export function AirgapPanel({
     <div className="flex flex-col gap-5">
       <div className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center gap-2">
-          <p className="text-body font-medium text-foreground">
+          <h3 className="text-body font-medium text-foreground">
             {t('airgap.bundleTitle')}
-          </p>
+          </h3>
           <VerifyStatusBadge status={airgap.status} />
         </div>
         <p className="text-caption text-muted-foreground">
@@ -644,19 +644,17 @@ export function AirgapPanel({
 
       <div className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center gap-2">
-          <p className="text-body font-medium text-foreground">
+          <h3 className="text-body font-medium text-foreground">
             {t('airgap.chartTitle')}
-          </p>
+          </h3>
           <VerifyStatusBadge status={helm.status} />
           <span className="font-mono text-caption text-muted-foreground">
             {helm.scp}
           </span>
         </div>
         <dl>
-          <Row label={t('airgap.ociCoordinate')} mono>
-            {helm.oci_coordinate}
-          </Row>
-          <Row label={t('airgap.cosignManifest')}>{helm.cosign_manifest}</Row>
+          <Row label={t('airgap.distribution')}>{helm.distribution}</Row>
+          <Row label={t('airgap.cosignPackage')}>{helm.cosign_package}</Row>
           <Row label={t('airgap.gpgProv')}>{helm.gpg_prov}</Row>
           <Row label={t('airgap.verifyCommand')} mono>
             {helm.verify_command}

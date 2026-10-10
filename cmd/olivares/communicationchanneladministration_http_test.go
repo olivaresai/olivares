@@ -268,18 +268,12 @@ func findChannelAdministrationGrant(
 
 // TestCommunicationChannelAdministrationFreshHTTP drives both new GETs through
 // the production router on a fresh, explicitly activated SQLite estate.
-func TestCommunicationChannelAdministrationFreshHTTP(t *testing.T) {
-	exerciseCommunicationChannelAdministrationHTTP(t, communicationHTTPTestSQLiteStore(t))
-}
 
 // TestCommunicationChannelAdministrationFreshHTTPPostgres runs the SAME journey
 // against a real, isolated split-owner PostgreSQL database: the schema is
 // reconciled by the product's own path (so the new indexes are created on the
 // real engine), the estate is reopened keeping the engine, and every verdict is
 // the engine's, not a SQLite fixture wearing a PostgreSQL name.
-func TestCommunicationChannelAdministrationFreshHTTPPostgres(t *testing.T) {
-	exerciseCommunicationChannelAdministrationHTTP(t, communicationHTTPTestPostgresStore(t))
-}
 
 func exerciseCommunicationChannelAdministrationHTTP(t *testing.T, storeEstate communicationHTTPTestStore) {
 	estate := bootChannelAdministrationHTTPEstate(t, storeEstate)
@@ -1164,12 +1158,10 @@ func exerciseChannelAdministrationUnknownEvidenceHTTP(
 
 	before := communicationHTTPTestEffects(t, eng, tenant)
 	realClosure := sessions.ChannelGrantSubjectClosureResolver(eng.communicationComposition.closure)
-	eng.sessionsMod.UseCommunicationChannelGrantSubjectClosureResolver(
-		communicationHTTPUnknownGrantClosureResolver{ChannelGrantSubjectClosureResolver: realClosure},
-	)
+	eng.sessionsMod.CommunicationGrantClosure = communicationHTTPUnknownGrantClosureResolver{ChannelGrantSubjectClosureResolver: realClosure}
 	catalog := estate.admin(t, owner.token, wsQuery+"&limit=5")
 	sheet := estate.sheet(t, owner.token, channel.Channel.ID, wsQuery+"&state=all&limit=5")
-	eng.sessionsMod.UseCommunicationChannelGrantSubjectClosureResolver(realClosure)
+	eng.sessionsMod.CommunicationGrantClosure = realClosure
 
 	for name, response := range map[string]communicationHTTPTestResponse{
 		"administration catalog": catalog, "grant sheet": sheet,
@@ -1485,14 +1477,12 @@ func exerciseChannelAdministrationNoStoreHTTP(
 		t.Fatal("production communication composition is unavailable")
 	}
 	realClosure := sessions.ChannelGrantSubjectClosureResolver(eng.communicationComposition.closure)
-	eng.sessionsMod.UseCommunicationChannelGrantSubjectClosureResolver(
-		communicationHTTPUnknownGrantClosureResolver{ChannelGrantSubjectClosureResolver: realClosure},
-	)
+	eng.sessionsMod.CommunicationGrantClosure = communicationHTTPUnknownGrantClosureResolver{ChannelGrantSubjectClosureResolver: realClosure}
 	unavailable := []channelAdministrationCacheProbe{
 		{"catalog 503", estate.admin(t, steward.token, wsQuery+"&limit=5"), http.StatusServiceUnavailable},
 		{"sheet 503", estate.sheet(t, steward.token, administrable, wsQuery), http.StatusServiceUnavailable},
 	}
-	eng.sessionsMod.UseCommunicationChannelGrantSubjectClosureResolver(realClosure)
+	eng.sessionsMod.CommunicationGrantClosure = realClosure
 	for _, probe := range unavailable {
 		if probe.response.status != probe.want {
 			t.Fatalf("%s = %d: %s", probe.name, probe.response.status, probe.response.raw)

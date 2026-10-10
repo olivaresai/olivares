@@ -1,14 +1,13 @@
 # Contributing to Olivares AI
 
-Thank you for your interest. Olivares AI is in **beta**: the architecture, data model, SDK, and API are still stabilizing. Please open an issue to discuss any non-trivial change before sending a pull request.
+Olivares AI is in beta; the architecture, data model, SDK and API are still stabilizing.
+Discuss non-trivial changes in an issue before sending a pull request.
 
 ## Development setup
 
-The fastest path is the **dev container** ([`.devcontainer/`](.devcontainer/)): open the
-repo in a container-capable editor (VS Code "Reopen in Container", or `devcontainer up`)
-and it provisions the pinned Go (`.devcontainer/devcontainer.json`), Node 24, the GitHub CLI,
-the pinned dev tools and the git
-hooks for you (`task tools && task setup`). Skip to [the gate](#the-gate) once it finishes.
+The [dev container](.devcontainer/) provisions pinned Go and development tools,
+Node 24, the GitHub CLI and Git hooks through `task tools && task setup`. Open it
+with VS Code's "Reopen in Container" or `devcontainer up`, then run [the gate](#the-gate).
 
 To set up locally instead, install:
 
@@ -28,6 +27,32 @@ task build    # compile the olivares binary (web + first-party connectors embedd
 `task setup` installs the `commit-msg` hook, so your commit messages are validated
 locally exactly as in CI. Run `task` with no arguments to list every available task.
 
+### Release versions
+
+`RELEASE-VERSION` owns the current release number. Every place that names the
+current or next release carries a release mark, the same in every language. In
+Markdown the mark is a pair of HTML comments whose text is `release` and
+`/release`, around a word, a code span, a link or a whole fenced block; in MDX
+it is the JSX comment pair `{/* release */}` and `{/* /release */}`; in any
+other file it is a comment line `# release` (or `// release`) before the lines
+and `# /release` after them. After changing `RELEASE-VERSION`,
+run `task release:stamp`: it rewrites the versions inside marks and nothing
+else; the public export runs the same generator. `task lint:release-version`
+refuses a `1.x` version outside a mark unless it is a record (a dated changelog
+entry, an install witness, a compatibility floor, a section citation) or a row
+of `NOT_RELEASES` in `scripts/check-release-version.sh` names what it versions.
+Attach `<!-- release-fixed -->` immediately after a fixed historical version
+(such as a deprecation date); it stays fixed and must not exceed the release
+baseline. The annotation applies only to that token, not to other versions on
+its line.
+
+Engine builds share `scripts/build-ldflags.sh`: version comes from that file,
+commit from Git, and date from the commit timestamp (or `SOURCE_DATE_EPOCH`).
+Source archives use commit `none` and epoch zero. Container `VERSION`/`COMMIT`
+arguments remain supported. GoReleaser snapshots derive their names from the
+same release record; a release whose tag disagrees is refused before building.
+Stripping flags and the two release trust anchors remain build policy.
+
 ### The gate
 
 Before submitting a pull request for acceptance, run these local checks:
@@ -46,92 +71,56 @@ set. The slow root-package race tail has separate `race-full` qualification. Rea
 the workflow's jobs and steps for the exact candidate; these commands do not claim
 that every required check has run or passed.
 
-> ### ⛔ Touched anything under `web/`? Run `task build:web` and COMMIT `core/internal/webui/dist`.
->
-> The console bundle is `go:embed`-ed into the binary, so a stale `dist` means a release build ships
-> a console that does not match the sources every gate measured. CI catches it — `web:check` fails
-> with *«the committed console bundle is STALE vs web/ sources»*, and `web` is a **required**
-> context. Check it before merge on the candidate; a check after merge is evidence
-> for that later commit, not a substitute for the candidate's check.
->
-> **This paragraph exists because the duty was written NOWHERE a contributor reads.** Measured
-> 2026-08-17: no contributor-facing document mentioned `task build:web` at all — the single mention
-> in the whole tree was inside the push hook. The consequence was not theoretical: the bundle went
-> stale **three times in one day**, and each time it had to be rebuilt on someone else's behalf. A
-> duty that only exists in a tool's error message is a duty nobody can perform in advance.
+For changes under `web/`, commit the sources only. Generated files under
+`core/internal/webui/dist` and `bundle-source.stamp` are ignored. `task web:check`
+builds once and checks the fresh output; PR and mainline CI retain that output as
+an artifact for their Go consumers. Those jobs require the shipped-document CSP
+check to run; a missing bundle fails instead of skipping the check.
+The release build runs the same builder before embedding the console. Go-only
+development builds contain a placeholder until `task build:web` has run.
+The required `web` check must pass on the candidate before merge; a later check
+qualifies only that later commit.
 
-**What the `pre-push` hook runs depends on where your commits land** (GATES v3, since
-2026-08-02). It classifies the push by its *remote ref* — the rule is
-[`scripts/prepush-refclass.sh`](scripts/prepush-refclass.sh), proved by
-`task lint:prepush-refclass` without executing any gate:
+The `pre-push` hook ([`.githooks/pre-push`](.githooks/pre-push)) checks what a push
+changes, over the commits the remote does not have yet, in under two minutes:
 
-- `refs/heads/main` and `refs/tags/*` — the fast lints **and** the full gate
-  (`test:license-worker`, `build:cloud`, `test:cloud:norace`, `check:web`, `tokens:check`, `lint:format-ratchet`, `lint:guide-docs`, `lint:cockpit-strings`, `lint:cockpit-strings:selftest`, `lint:raw-palette`, `test:web`, `web:check`, `build:go`, `test`, `sdk:check`),
-  under the same host-wide mutex this repository already had. The split changed *who* takes
-  that lock — every contributor on the box used to; now only pushes classified `full` do: main,
-  tags, and any deny-closed promotion (unknown namespace, malformed line) — and nothing
-  about the lock itself; its known weaknesses are listed by name in the hook's header.
-- Any other `refs/heads/*` — the fast lints only. **The three commands above are yours
-  to run**, or the maintainer's on the batch.
-- A deletion, `refs/gate-locks/*`, `refs/integration-claims/*`, an empty push — nothing to gate.
-  The claim ref is a POINTER a maintainer publishes before pushing a batch; it used to score
-  `full` as an unrecognised namespace, which made obeying that protocol cost a full gate and taught
-  people to reach for `--no-verify`. Strictest-wins still applies: a claim travelling with
-  `main` pays the full gate.
-- Anything it cannot parse, or a namespace it does not recognise — the full gate. Not
-  knowing what something is costs more than a feature branch, never less.
+- `gitleaks` over the pushed commits;
+- SPDX headers of the changed files (`scripts/check-spdx.sh --files`);
+- no generated console output in the push (`scripts/check-web-bundle-freshness.sh`);
+- the license boundary (`task lint:boundary`) when Go code or modules changed;
+- `go vet` on the touched packages and their tests (`scripts/changed-go-packages.sh`);
+- the commit identity of the pushed commits (`task lint:commit-identity`), a hub-only leg
+  that answers NOT APPLICABLE in the public tree.
 
-On a feature branch the hook does **not** run the full build/test gate: run `task test`
-and the applicable web/SDK checks, or document the scope of a focused `-race` run for
-branch review. The maintainer still requires the complete applicable candidate checks.
-A draft PR can preserve work with failures or checks not yet run; it is not acceptance
-for integration. Use the normal hooks and merge checks: declaring `--no-verify` or an
-admin bypass does not satisfy missing checks.
+It checks each pushed commit itself, in a temporary checkout when that commit is not your clean
+`HEAD`, with this checkout's scripts. It needs `gitleaks`, `task` and Go on `PATH`
+(`task tools`). Pull-request CI runs SPDX, the license boundary and the build again, and
+gitleaks runs on every push to main, so the hook is your first secret scan. Run the build and
+test checks above yourself for the scope of your change. A draft PR can preserve work with
+failures or checks not yet run; it is not acceptance for integration. Use the normal hooks and
+merge checks: declaring `--no-verify` or an admin bypass does not satisfy missing checks.
 
-**Without `task` on `PATH` the hook refuses the push** — a gate that cannot run has not
-cleared anything. There is exactly **one named exception, the pure-deletion push**: when
-*every* ref line is a deletion (`git push --delete old-branch`, `git push origin :old`)
-there are no commits to lint, build or test on any path, so it needs no toolchain to run
-nothing and the hook lets it through, saying which exception it applied. A deletion
-travelling with anything else — another ref, the gate-lock ref, a line the rule cannot
-read — is not that class and still refuses.
+Full `task lint`, including `golangci-lint`, remains outside the check set because
+the code has unresolved findings. It is not a toolchain failure.
+The issue limits in `.golangci.yml` are both `0`; counts must include all findings.
+Most `misspell` findings concern British spelling against the configured US locale
+or false positives. Check identifiers before editing: renaming one can change an API.
 
-> `task lint` (the *full* lint, including `golangci-lint`) is **not** part of the gate yet, and
-> the reason is **the code, not the toolchain**. Do not read its red as expected noise, and do not
-> try to close it in one sitting: the volume is a campaign of its own.
->
-> **Two things about the numbers, because both have already misled someone here.**
->
-> 1. **`golangci-lint` truncates by default.** `max-issues-per-linter: 50` and `max-same-issues: 3`
->    are on unless you turn them off, and a count taken with them is a CEILING, not a total. This
->    file used to quote one such ceiling as the total; with the caps at `0` the real figure was
->    almost three times larger. Both caps are now `0` in `.golangci.yml`, so what you see is what
->    there is. The cost of the old reading was not the number: a campaign planned against a
->    truncated count never converges, because the cap keeps releasing what it was hiding as you fix
->    things, and nothing says so.
-> 2. **The largest linter by volume is `misspell`, and it contains no typographical errors.** It is
->    almost entirely British spelling measured against the `locale: US` this repository fixes, plus
->    a tail of genuine false positives. That makes most of it a mechanical sweep rather than a set
->    of defects — with one exception that needs judgement, the findings that sit on
->    **identifiers**, where a rename is an API change and not a spelling fix.
->
-> **Run the census instead of copying a figure from prose:**
->
-> ```sh
-> bash scripts/misspell-census.sh   # per-category counts, derived from the tree, and it FAILS
->                                   # if its own rows stop summing to its total
-> ```
->
-> A number written into a paragraph goes stale silently; that is exactly how this section came to
-> carry two different totals for the same fact. CI gates on the structural lints, plus
-> `govulncheck` and a full-history `gitleaks` scan. `task fmt` formats Go and web.
+```sh
+bash scripts/misspell-census.sh   # derive category counts; fail if they do not sum to the total
+```
+
+Use `--clase "comment"` to list locations in a class. Every displayed class label
+and its existing alias is accepted.
+
+CI runs the structural lints, `govulncheck` and a full-history `gitleaks` scan.
+`task fmt` formats Go and web sources.
 
 ### PostgreSQL for tests
 
-The Go suite has a **server-gated PostgreSQL leg**: without the DSNs below it skips
-locally (and **fails** in CI, where the fixture is promised — a skipped regression is
-not evidence). A run without PostgreSQL configured is a **PARTIAL** run, not a green
-one; several past defects were only visible with the leg on.
+PostgreSQL tests require the DSNs below. They skip locally when no server is
+configured and fail in CI when its promised fixture is absent. A run that skips
+them is partial and cannot establish PostgreSQL behavior.
 
 ```sh
 export OLIVARES_TEST_POSTGRES_SUPERUSER_DSN='postgres://postgres:<superuser-pw>@127.0.0.1:5432/postgres?sslmode=disable'
@@ -158,63 +147,41 @@ export OLIVARES_TEST_POSTGRES_DSN='postgres://olivares_app:<app-pw>@127.0.0.1:54
   `pids.max`) turn into fork failures and handshake garbage that read like product
   bugs. One suite at a time.
 
-**Supported PostgreSQL: 15–18.** The floor advances with upstream EOL. Verified by
-execution on 15.x (local) and 16.x (CI service); 17/18 were supported by contract
-until the topology matrix grows execution legs for them (tracked as residual R5)
-> *(Updated 2026-08-15: 17/18 DO have an execution leg now — `.github/workflows/pg-majors.yml`
-> runs all four majors against real service containers on a schedule. It is deliberately NOT on
-> `pull_request` and not a required check, so PR CI still does not cover them. R5 still owns the
-> managed-backup client strategy — the pinned pg_dump 16 client cannot dump 17/18 servers — so the
-> honest state there remains "contract + DR pending". "today" was replaced by a date on purpose:
-> that word is what let this sentence rot silently.)* — and
-note R5 also owns the managed-backup client strategy: the Helm/Operator defaults pin a
-pg_dump 16 client, which upstream defines as unable to dump 17/18 servers, so until R5
-lands the honest 17/18 state is "contract + DR pending", never plain "supported".
-Pre-release majors (beta/RC) are rejected at boot by default.
+**PostgreSQL versions: 15–18.** The minimum advances with upstream end of life.
+Local tests exercised 15.x and the CI service uses 16.x.
+[The scheduled major-version workflow](.github/workflows/pg-majors.yml) exercises
+all four versions; it does not run on pull requests and is not a required check.
+The managed-backup strategy remains pending for 17/18: Helm and Operator defaults
+pin `pg_dump` 16, which cannot dump those servers. Their documented state remains
+"contract + DR pending". Pre-release majors are rejected at boot by default.
+
 ### Adding a documentation page
 
-The docs site ships English plus six locales (`es`, `zh`, `ru`, `ja`, `de`, `fr`). **A new
-English page under `docs-site/src/content/docs/` opens a gap in all six**, and neither
-`lint:i18n` (console UI keys) nor `lint:i18n-anchors` (in-page anchors) can see a missing
-page — that is how 44 pages once sat untranslated behind a green gate.
+The docs site publishes English and six locales (`es`, `zh`, `ru`, `ja`, `de`, `fr`).
+For a new page under `docs-site/src/content/docs/`, add its translations or a
+dated exemption in `docs-site/i18n-parity-waivers.json`. Console key and anchor
+checks do not detect missing pages.
 
 ```sh
-task lint:docs-parity   # lists every English page with no translation, per locale
+task lint:docs-parity   # list missing translated pages by locale
 ```
 
-It runs in **informed mode** (`--informed --summary`, `Taskfile.yml:1575`) and **it can fail your
-push**: a page missing in EVERY locale is the English-only backlog — reported, not blocking — while
-a page missing in SOME locales, an orphan, a route collision, a missing locale directory or any
-waiver defect exits 1 (`scripts/check-docs-parity.mjs:651`, called from `.githooks/pre-push:606`). Either translate the page, or declare the exemption
-explicitly in `docs-site/i18n-parity-waivers.json` with an explicit locale list (`"*"` is
-rejected), a real `reason` of at least 20 characters, and a real `date` (an `expires` is
-preferred). There is no silent exemption, and a waiver that stops suppressing anything
-becomes a finding itself.
-
-> *(Corrected 2026-08-15. This paragraph was written on 2026-07-29 in `4aec142dd`, when the task
-> did pass `--report` and the text was true. Since 2026-08-01 it passes NEITHER flag: `--report`
-> was examined and **deliberately rejected** — a gate that cannot fail is not a gate — so there is
-> no `--report` left to change. Run `node scripts/check-docs-parity.mjs --strict` yourself if you
-> want the stricter verdict; do not quote a page count from this file, measure it.)*
+The informed mode (`--informed --summary`) reports pages absent from every locale.
+It fails for a page absent from some locales, an orphan, a route collision, a
+missing locale directory or an invalid waiver. A waiver requires an explicit
+locale list (`"*"` is rejected), a reason of at least 20 characters and a real
+date; an expiry is preferred. A waiver that no longer suppresses a finding fails.
+Use `node scripts/check-docs-parity.mjs --strict` for the stricter check.
 
 The locale list lives in `docs-site/src/site-locales.mjs`, which `astro.config.mjs` and this
 gate both import. Adding a locale there is the only change needed: the site and the parity gate
 pick it up.
 
-**Architecture decisions are recorded, and the register is internal.** The project keeps its
-architecture decisions in MADR form in the development repository; that register is not part of
-this tree and is not published on the documentation site. Until 2026-08-25 the site carried 229
-generated pages for it — the project owner withdrew the whole section that day, because
-architecture decision records are internal development documentation and publishing them can
-compromise the integrity and security of the project and its paid business/enterprise part.
-
-**So there is nothing here to edit and nothing to republish**: the generator and its sync gate
-were removed with the pages. To propose an architecture decision, open an issue as described at
-the top of this guide and it is taken up there. A gate holds the line in the other direction:
+Propose architecture changes through an issue. Keep internal development
+records out of the public repository and documentation site.
 
 ```sh
-task lint:adr-not-published   # fails if a page, an ADR-shaped filename, a live link to the
-                              # withdrawn route, or the generator comes back to docs-site
+task lint:adr-not-published   # reject internal decision pages, links or a publisher in docs-site
 ```
 
 To exercise the product end-to-end against the real binary:
@@ -250,12 +217,8 @@ governing Claude Code tool-calls, OpenTelemetry GenAI ingest, and scaffolding a 
   can skip the private-dev jobs; skipped or absent checks are not passes.
 - **Conventional Commits**, in English: `feat:`, `fix:`, `refactor:`, `docs:`, `test:`, `chore:`, etc. Commit messages are linted by the `commit-msg` hook locally and by CI.
 - Keep pull requests focused; describe what changed and why, and link the issue.
-- **Write commit bodies with `git commit -F -` and a QUOTED heredoc, never `-m`.** A body containing
-  backticks, `$`, or quotes is shell input until git sees it, and the shell wins. Measured on
-  2026-08-18, twice in one day by two different people: `` `_ = caepTx` `` inside `-m "…"` ran as a
-  command substitution and published a sentence with a hole; an unquoted `<<EOF` ate `` `push` ``
-  and `` `main` `` out of three paragraphs. **Both pushes SUCCEEDED** — that is what makes it
-  expensive: the corruption is silent and lands in published history that cannot be rewritten.
+- Write commit bodies with `git commit -F -` and a quoted heredoc so the shell
+  preserves backticks, `$` and quotes.
 
   ```sh
   git commit -s -F - <<'EOF'   # ← the QUOTES around EOF disable every expansion
@@ -265,10 +228,35 @@ governing Claude Code tool-calls, OpenTelemetry GenAI ingest, and scaffolding a 
   EOF
   ```
 
-  `-m` is for one-line subjects with no backticks. And if the body needs to SHOW a heredoc, build it
-  with a script: an inner `EOF` closes the outer one and the shell dies with `unmatched`.
+  Use `-m` only for one-line subjects without backticks. If the body includes
+  a heredoc, build it with a script or use distinct delimiters.
 
 ## DCO sign-off and CLA
+
+Attribution trailers (`Co-Authored-By`, `Co-Developed-By`, `Assisted-By`,
+`Generated-By`, and `Generated-With`) are refused regardless of the address.
+The commit-msg hook and PR CI use `scripts/check-commit-trailers.sh` for this policy.
+The hook checks the message under the invoking `git commit` or `git merge` cleanup
+mode, including command-line overrides of `commit.cleanup`. Verbose commit diffs
+and scissors sections are discarded before checking DCO and attribution.
+On Linux it reads that process's arguments from procfs without logging them.
+When those arguments are unavailable, ordinary edited commits and merges still work: the
+hook moves Git's trailing editor comment block before the existing trailer
+paragraph, preserving the body, comments, and sign-offs. For a verbose/scissors
+appendix, it instead inserts Git's native `---` patch divider before the editor
+footer, keeping the existing sign-off above the scissors cut. This divider remains
+in the stored message; the original footer and diff stay available for Git's
+cleanup. It validates the result
+as stored text and under comment/scissors cleanup before updating the message;
+it never adds a sign-off or removes attribution. This also keeps a copied editor
+footer valid if Git retains comments with `--cleanup=verbatim`. Messages without
+an editor footer are accepted unchanged when the policy holds under every cleanup
+mode. If cleanup could discard the only sign-off or retain invalid trailing prose,
+the hook refuses the message instead of guessing.
+Plain message-file and CI range checks inspect the stored text without rewriting it.
+Automatic comment-marker recovery uses Git's English editor hints or scissors
+marker. If those hints are removed or translated, keep `core.commentChar` fixed
+when editing: Git does not export its automatically selected marker either.
 
 Every commit must be signed off under the [Developer Certificate of Origin](https://developercertificate.org/):
 
@@ -279,6 +267,33 @@ git commit -s -m "feat: ..."
 This appends a `Signed-off-by:` trailer with your name and email; configure `git config user.name` / `user.email` accordingly. The DCO check on pull requests rejects commits without it (a required status check, provisioned with the public repository).
 
 Because the product is dual-licensed (AGPL plus a private commercial exception, alongside separately-licensed additive add-ons), the project also requires a **Contributor License Agreement (CLA)**. The CLA grants Olivares.AI the rights needed to offer the commercial exception while you retain ownership of your contribution. The project does **not** use an automated CLA bot: sign the CLA manually per [`CLA.md`](CLA.md) — download the Harmony Agreements PDF, sign it, and email it to `enterprise@olivares.ai` before your first contribution is merged (one-time).
+
+The `CLA / cla` pull-request check (`pull_request_target`, base code only) passes maintainers, whose GitHub
+author association is `OWNER`, `MEMBER` or `COLLABORATOR`. For every other author it reads
+`.github/CLA-SIGNATURES` from the base commit. After receiving the signed PDF, a
+maintainer adds `<github-login> <YYYY-MM-DD> HA-CLA-I-1.0` (or `HA-CLA-E-1.0`
+for an entity) in a separate change to the base branch. Update the PR branch
+from that base to rerun the check. A signature added only in the contributor's
+PR does not grant access. The public record contains no PDFs or email addresses.
+
+Third-party Go dependencies in both editions must use MIT, BSD-2-Clause,
+BSD-3-Clause, ISC, Apache-2.0, or unmodified MPL-2.0. The shared gate uses the
+actual build tags and refuses unknown licenses. Its default roots include the
+engine and the embedded connectors from `scripts/build-connectors.sh --list`.
+Use repeated `--target GOOS/GOARCH` arguments to collect the union for a release. MPL replacements, vendored
+copies and modified module-cache contents are rejected. Run it with:
+
+```sh
+go install github.com/google/go-licenses/v2@v2.0.1
+python3 scripts/license-gate.py --tags release
+```
+
+The console build emits `licenses/console.json`. After building the console, use
+`--notice .license-notices/NOTICE-community` to generate the Community NOTICE
+from the first-party notice, Go license and upstream NOTICE texts, and the
+console dependency metadata and available license texts. Release archives, native packages and images carry
+this generated notice. An assembled private build calls the same script with
+its own `--tags`, `--edition`, `--notice`, and package arguments.
 
 ## License frontier and mandatory SPDX headers
 
@@ -307,17 +322,30 @@ claim that the whole tree is clean. In a `go.work` workspace, lint runs per-modu
 - **Web (`web/`):** ESLint and Prettier; TypeScript strict mode.
 - Keep dependencies minimal and pinned — this is a security product and the dependency surface is part of the threat model.
 
+Use US English for comments, diagnostics, and test names. Keep locale JSON and
+Unicode fixture values. For inline test or locale data, use a plain quoted string
+assignment with `# language-data: fixture` or `// language-data: fixture`. In JavaScript
+and TypeScript, declare the variable with `const`, `let`, or `var`. Comments, call
+arguments, and executable interpolation remain checked. Review each marker to confirm
+that its value is input data.
+Run `python3 scripts/test-source-language.py`, then check staged or committed changes
+with `python3 scripts/check-source-language.py --base origin/main`.
+Run `task lint:tooling-language` to check all existing contributor-facing descriptions,
+workflow names and annotations, and script diagnostics in the public file set.
+This check also runs during public export and works without Git metadata; published
+task names and script paths remain unchanged. The check matches
+common Spanish patterns; review the remaining wording.
+
 ## Adding a connector
 
-Connectors are the breadth moat and the cleanest place to contribute. The single hard rule:
+Connectors extend the product through the SDK:
 
 > A connector imports **only** from `sdk/`. It must never import from `core/`.
 
 This keeps the Apache-2.0 / AGPL boundary clean and lets your connector ship without copyleft obligations. The boundary is enforced in CI by `task lint:boundary` (a `go list -deps` check over the real build graph).
 
-**Start from the scaffold.** The fastest way to a correct connector is the generator,
-which emits a complete, compiling, boundary-clean repository — including a lifecycle
-test and a standalone boundary check:
+The scaffold generates a compiling connector with a lifecycle test and a
+standalone license-boundary check:
 
 ```sh
 go run ./sdk/scaffold/cmd/olivares-connector-new \
@@ -343,4 +371,44 @@ runnable walkthrough, and `go doc ./sdk` for the contract. The lifecycle is:
 A *first-party* connector lives under `connectors/<name>/` and is embedded in the
 binary; a *third-party* connector ships as its own signed, distributed artifact (see
 the generated `README.md` and [`docs/contracts/S142-external-connector-sdk.md`](docs/contracts/S142-external-connector-sdk.md)).
-The set of first-party connectors is small and high-value by design; breadth comes from the community.
+Third-party connectors extend the first-party set.
+
+## Migration history
+
+Run `bash scripts/check-migrations.sh` before submitting migration changes. It
+compares SHA-256 content hashes with the branch's merge base against `origin/main`;
+on main it uses the preceding commit, and in a repository without that remote it
+uses `HEAD`. Set `OLIVARES_MIGRATION_BASE=<commit>` to select an explicit baseline.
+PR CI pins this to the pull request's base SHA. Missing history or unreadable
+source is an error, never an empty successful comparison.
+
+The same entry point checks SQL migrations (including D1), core Go migrations,
+Go callback/generator dependencies and plan-call bindings (including local
+initializers), auxiliary runner plans and their tracker namespaces, core descriptor
+declarations, and module trigger transitions. Existing files and versions cannot be removed or rewritten;
+add a forward migration. New versions and new descriptor declarations are allowed.
+Go hashes use formatted syntax without comments; SQL hashes cover exact bytes.
+The Go guard is deliberately conservative about shared source: preserve historical
+constructors and helpers, and put new behavior in new helpers. It does not execute
+callbacks or add checksums to deployed databases. Historical metadata, including
+core v4's `expand` label, is preserved rather than silently relabeled.
+
+Schema installation uses `core/migrate`. Core v21 adopts descriptor schema and OS
+account reservations, v22 normalizes federation aliases, and v23 adopts audit
+blinding schema. Each commits with its version record. New schema changes require
+a new version and immutable historical descriptor inputs. Module descriptors use
+version 1 in `schema_migrations_tbl_<table>`; existing `applied_module_tables` rows
+are retained. Later module changes use the module's numbered SQL migrations.
+Rollout, scope, lineage, directory guards, leader epochs and PostgreSQL rate-limit
+storage use the same runner with separate tracking tables.
+
+Use `Apply` for a migration-owned transaction or `ApplyTx` when schema and boot
+admission/data must share a transaction. `ReconcileTx` is restricted to immutable,
+forward-only security repair plans: staged directory guards retain their published
+restart repair behavior without rewriting migration history. Schema evolution is
+one-shot; per-boot security verification and privilege reconciliation still run.
+Missing/changed enforced guards and reverted repair records refuse boot.
+
+`python3 scripts/test-migration-immutability.py` exercises edits, deletions,
+callback definitions and injection changes, registration removal, new versions
+and unavailable baselines.

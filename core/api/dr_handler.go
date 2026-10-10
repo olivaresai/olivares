@@ -6,6 +6,9 @@ package api
 
 import (
 	"context"
+	"crypto/sha256"
+	"crypto/subtle"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -16,47 +19,67 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unicode/utf8"
 
 	"github.com/go-chi/chi/v5"
+	"modernc.org/sqlite"
 
 	"github.com/olivaresai/olivares/core/audit"
 	"github.com/olivaresai/olivares/core/auth"
+	"github.com/olivaresai/olivares/core/cron"
 	"github.com/olivaresai/olivares/core/dr"
+	"github.com/olivaresai/olivares/core/envconfig"
+	"github.com/olivaresai/olivares/core/store"
 )
 
-// DRConfig configures the disaster-recovery console surface. When set in
-// Options, the console backup/restore and schedule endpoints are available. nil
-// leaves them answering 501 (an embedder/test that did not opt in).
+// DRBackupSnapshot retains the native payload check until the bundle is written.
+type DRBackupSnapshot struct {
+	Store    dr.StoreSnapshot
+	Validate func() error
+}
+
+// DRConfig enables the disaster-recovery console surface when set in Options.
+// PostgreSQL snapshots are supplied by the native command composition root.
 type DRConfig struct {
-	DataDir    string
-	EngineKind string
-	BackupDir  string
-	// PassphraseFile is the path of the file holding the backup passphrase used
-	// by SCHEDULED backups (the same $OLIVARES_DR_PASSPHRASE_FILE the CLI DR
-	// commands read — an unattended cron run has no admin to type one). Empty
-	// leaves the schedule runner refusing to run, loudly, until it is set: a
-	// backup that cannot seal its keys must not pretend to have run.
+	DataDir          string
+	EngineKind       string
+	BackupDir        string
+	PostgresSnapshot func(context.Context, string) (DRBackupSnapshot, error)
+	// PassphraseFile supplies scheduled backups with their encryption passphrase.
+	// An empty path makes the runner refuse the backup.
 	PassphraseFile string
+	// SealKeys supplies the installation custody required to recover stored content,
+	// and the sealer probes a restore checks its keys against. A failure aborts the
+	// backup; the signing-only fallback is used only when nil.
+	SealKeys func(*dr.KeyCipher) (map[string][]byte, []dr.KeyRef, []dr.SealerProbe, error)
+	// Getenv reads the effective sealer overrides used by the engine at boot.
+	// Nil uses the process environment for standalone API compositions.
+	Getenv func(string) string
+	// RegisterSchema is the register func the live store was opened with. Backup and restore
+	// scratch verification opens the snapshot with it: the guard edition and epoch derive
+	// from the registered tables, so a registry holding only the core tables computes a
+	// different edition from the one the snapshot records and refuses every real install.
+	RegisterSchema func(store.ExtensionRegistry) error
+	// QuiesceStore stops and drains the boot-owned SQLite pool. It must leave
+	// serving unavailable until restart, including on failure.
+	QuiesceStore func(context.Context) error
 }
 
 // drService wraps the DR configuration and in-memory job tracker.
 type drService struct {
 	cfg  DRConfig
 	jobs *drJobTracker
-	// schedule is the current backup schedule + DR policy. Unlike the job tracker
-	// it is PERSISTED: the config — including the RequireDualControl
-	// security gate — is stored in the estate (dr_schedule.go) and reloaded at
-	// boot, so a restart never silently resets it. Guarded by smu: the console
-	// handlers and the background schedule runner touch it concurrently.
+	// Serving stays unavailable once promotion starts; restart reloads custody.
+	restartRequired atomic.Bool
+	maintenanceJob  string // protected by smu
+	// Schedule and restore policy persist in estate settings and reload at boot.
+	// smu protects snapshots; scheduleOpMu serializes reloads and updates.
 	smu          sync.Mutex
 	scheduleOpMu sync.Mutex
 	schedule     *drSchedule
-	// pending holds restore requests awaiting a second approver (dual-control). It is
-	// in-memory like the job tracker (the design); a process restart clears
-	// pending requests, which is safe — an unconsumed restore intent simply has to
-	// be re-requested.
+	// Pending approvals are process-local; restart requires a new restore request.
 	pmu     sync.Mutex
 	pending map[string]*pendingRestore
 }
@@ -75,107 +98,28 @@ type drSchedule struct {
 	// instead of a silent gap in the backup directory.
 	LastRunStatus string `json:"last_run_status,omitempty"`
 	LastRunError  string `json:"last_run_error,omitempty"`
-	// RequireDualControl gates CONSOLE restore behind a second, DISTINCT
-	// administrator (dual-control). Default false so a solo operator can still
-	// restore; when true the initiator requests and a different admin approves.
-	// Restore is the most destructive console operation, so this is the control an
-	// estate with more than one admin should enable.
-	//
-	// What it does NOT reach, said here because the console's own copy promised
-	// otherwise: `olivares dr restore` on the host. That path has no session and no
-	// principal, and this very file sends Postgres estates to it (runRestore refuses
-	// any non-sqlite engine with "use CLI for postgres"), so on the default
-	// production engine this gate covers no restore at all. The command-line path
-	// carries its own control — a declared operator and reason, sealed into the
-	// restored ledger (cmd/olivares/dr_declaration.go) — which is a
-	// declaration, not a second party. An estate that needs two approvers on EVERY
-	// restore needs host access controlled as well; this flag cannot do it.
-	//
-	// On the wire this field reports the gate's EFFECTIVE state — what actually gates
-	// a restore right now — which is not always the stored bool: see DisarmAt.
+	// RequireDualControl reports the effective console restore gate. When armed,
+	// a distinct administrator account must approve; two accounts need not be
+	// two humans. CLI restore uses a declared-operator record, not this gate,
+	// so estates requiring approval for every restore must also control host access.
 	RequireDualControl bool `json:"require_dual_control_restore"`
-	// DisarmAt is the instant a REQUESTED disarm of RequireDualControl takes effect
-	// (RFC3339, empty when none is pending). It exists because the gate used to
-	// protect the restore and not itself: one admin PUT the flag false and the very
-	// next apply ran — two requests, one account, no second party anywhere.
-	//
-	// The rule it encodes is "strengthen now, weaken later". Arming is immediate;
-	// disarming is recorded, stays visible, and does not take effect until this
-	// instant passes, during which the gate still holds and ANY admin can countermand
-	// it by re-arming. It is persisted (dr_schedule.go) and the gate is COMPUTED from
-	// it — never a timer, which a restart would skip.
-	//
-	// The alternative — requiring two parties to disarm — was rejected with its
-	// reason: it is a permanent lockout in exactly the disaster the control exists
-	// for. With the gate armed and the second admin unreachable, the estate could
-	// then neither restore NOR disarm, ever. A delay refuses the measured attack
-	// (two requests, one account, seconds apart) without ever trapping a solo operator.
+	// DisarmAt is the persisted RFC3339 instant when a requested disarm takes effect.
+	// Arming is immediate; disarming waits, remains visible and can be countermanded.
+	// The server computes the instant; restart must not skip the delay.
 	DisarmAt string `json:"dual_control_disarm_effective_at,omitempty"`
-	// DisarmBy is the STABLE ACCOUNT that asked for the disarm — not the credential.
-	// It is what makes the delay a control rather than a wait.
-	//
-	// "Strengthen now, weaken later" closed the two-requests-in-one-sitting bypass
-	// and left the same bypass with an hour in it: one admin turned the gate off,
-	// waited, and restored alone. A delay is not a two-person control; it is a
-	// one-person control with patience, and the suite's own test required exactly
-	// that solo restore, so the behavior was contract rather than oversight.
-	//
-	// The rule this field carries is: WEAKENING A CONTROL IS NEVER A PATH TO THE ACT
-	// IT PROTECTS, FOR THE ACCOUNT THAT WEAKENED IT. Once the cool-down passes the gate
-	// is off for the estate — any other admin restores unencumbered — and it keeps
-	// holding against whoever requested the disarm, so waiting buys them nothing.
-	//
-	// It deliberately SURVIVES the collapse of a spent DisarmAt: forgetting who
-	// asked would make "ask again after it takes effect" a one-request bypass.
-	//
-	// It is cleared by RE-ARMING — and then the next disarm re-records WHOEVER ASKS,
-	// so re-arming is not an escape hatch the disarmer can use on themselves: an
-	// admin who re-arms and disarms again is simply the disarmer again. The exit is a
-	// SECOND ACCOUNT requesting the disarm, which is the two-party control doing its
-	// job rather than a hole in it. Measured in
-	// TestDRDualControlTheProvenanceFOLLOWSWhoeverAsksLast, which is where that got
-	// corrected — the first draft of this comment claimed re-arming was the exit.
-	//
-	// This is NOT the two-parties-to-disarm rule rejected with the delay, and that
-	// rejection stands: requiring two would be a permanent lockout with the second
-	// admin gone, since the estate could then neither restore nor disarm. Here the
-	// estate is never locked: the disarm frees everyone else at once, and a
-	// genuinely solo operator still has `olivares dr restore` on the host, which
-	// carries its own declared-operator record (cmd/olivares/dr_declaration.go).
-	//
-	// What it does not reach, said plainly: a superadmin who can CREATE a second
-	// superadmin can always manufacture a second ACCOUNT — which is why nothing in
-	// this file promises two HUMANS. That is a property of
-	// every dual control in this product, not of this field — and minting an admin
-	// is a loud, recorded act, which flipping a boolean and waiting was not.
+	// DisarmBy identifies the stable account requesting a disarm, not its credential.
+	// After the delay, the gate still holds against that account and anonymous tokens.
+	// It survives a spent DisarmAt and clears only on re-arming; the next disarm
+	// records its requester again. Other administrators can restore after the delay.
 	DisarmBy string `json:"dual_control_disarm_requested_by,omitempty"`
 }
 
-// drDualControlDisarmDelay is how long a requested weakening of the dual-control
-// restore gate waits before it takes effect.
-//
-// It is a constant rather than a setting on purpose: a configurable window is
-// itself a control, so shortening it would be a weakening that would need this
-// same delay — one more surface, protecting nothing that the constant does not.
-// One hour is the smallest value that does the job it has: it must outlast the
-// sitting in which a restore is attempted (the measured bypass was seconds), and
-// it must be long enough for a notification to reach a second admin who can
-// countermand it. It costs nothing to an estate with two admins available — two
-// administrators who agree never need to disarm, because they can simply perform the
-// restore under the control they would be disarming.
+// drDualControlDisarmDelay is the fixed cool-down before a restore-gate disarm.
+// Making it configurable would create another way to weaken the same control.
 const drDualControlDisarmDelay = time.Hour
 
-// disarmInstant parses DisarmAt. ok is false when there is no READABLE pending
-// instant — either none was recorded, or the stored value cannot be parsed (a
-// hand-edited or corrupt estate).
-//
-// Both callers need that distinction rather than just "armed or not", and getting
-// it from one place is what keeps an unreadable instant from becoming a LOCKOUT:
-// it must leave the gate armed (fail closed) while still being replaceable by a
-// fresh disarm request. Treating it as a pending disarm instead would arm the gate
-// permanently — no request could ever schedule an instant, because one would
-// already appear to be scheduled — which is precisely the trap that the delay
-// design exists to avoid.
+// disarmInstant parses a pending disarm. An absent or unreadable instant leaves
+// the gate armed while allowing a fresh request to replace the corrupt state.
 func (d drSchedule) disarmInstant() (time.Time, bool) {
 	if d.DisarmAt == "" {
 		return time.Time{}, false
@@ -187,17 +131,8 @@ func (d drSchedule) disarmInstant() (time.Time, bool) {
 	return when, true
 }
 
-// dualControlArmed reports whether the restore gate ACTUALLY holds at instant now.
-// A pending disarm leaves the gate armed until its instant passes; an unreadable
-// DisarmAt is no disarm at all, so corrupt state fails CLOSED.
-// A disarm with NO REQUESTER on record is not a disarm either. There is nobody to
-// hold it against, so honoring it would open the estate for everyone including
-// whoever wrote it — and a stored record with the gate armed, an elapsed instant
-// and an empty DisarmBy is exactly what a hand-edit, or an estate written before
-// the provenance existed, produces (the contrast's C-03). It fails closed
-// like an unreadable instant does, and like that one it stays replaceable: a fresh
-// disarm request records a requester and schedules a real instant, so fail-closed
-// never becomes fail-shut.
+// dualControlArmed reports the estate-wide gate at now. An armed gate stays
+// armed until a readable disarm with a recorded requester takes effect.
 func (d drSchedule) dualControlArmed(now time.Time) bool {
 	if !d.RequireDualControl {
 		return false
@@ -219,26 +154,10 @@ func (d drSchedule) disarmPending(now time.Time) bool {
 	return d.RequireDualControl && ok && now.Before(when)
 }
 
-// dualControlHoldsFor reports whether the restore gate holds against THIS account.
-//
-// It is the estate-wide answer OR the per-account one: an elapsed disarm frees the
-// estate but never its own requester (drSchedule.DisarmBy). account is the stable
-// user, so a second credential of the same account is the same account — the
-// correction, applied to the disarm as well as to the approval.
-//
-// A caller with NO stable account — a standalone superadmin API token, whose
-// model.APIToken.UserID is zero — is held too, and that is the whole point rather
-// than a detail. The comparison is over an account, so an anonymous credential
-// matches no DisarmBy; the admin who disarmed had only to come back through a
-// token of theirs and the gate read off. That is lesson (one account holds a
-// session AND their own tokens) arriving at the disarm instead of at the approval,
-// and the answer is the same: a party the estate cannot ATTRIBUTE cannot be told
-// apart from the one it is holding, so it is refused rather than compared.
-//
-// It costs nothing to an estate that never armed the gate: with no disarm on
-// record there is nothing to consume, and an anonymous token restores exactly as
-// before. And it is not a lockout — the refusal is by name (errNoStableIdentity),
-// and any nameable admin who did not disarm restores unencumbered.
+// dualControlHoldsFor includes the estate-wide gate and the disarmer's account.
+// An elapsed disarm frees other accounts, never its requester or an anonymous
+// credential that cannot be distinguished from the requester. Credentials of
+// the same account count as one party.
 func (d drSchedule) dualControlHoldsFor(account string, now time.Time) bool {
 	if d.dualControlArmed(now) {
 		return true
@@ -282,12 +201,8 @@ func (ds *drService) requireDualControlRestoreFor(account string, now time.Time)
 	return ds.schedule.dualControlHoldsFor(account, now)
 }
 
-// pendingRestore is a restore intent awaiting a second approver. It carries BOTH
-// identities of the requester: the credential actor string (Initiator, e.g.
-// "token:<id>") and the stable user ACCOUNT behind it (InitiatorUser). The account is
-// what the dual-control comparison uses; the actor stays so the trail still names which
-// credential was used. Recording only the actor made the trail show two actors without
-// revealing they were one account (breakglass.go does the same).
+// pendingRestore records both the requester's stable account, used for the
+// distinct-approver check, and its credential actor, retained in the audit trail.
 type pendingRestore struct {
 	RequestID     string `json:"request_id"`
 	UploadID      string `json:"upload_id"`
@@ -311,26 +226,13 @@ func newDRService(cfg DRConfig) *drService {
 // dual-control outcomes for a restore approval.
 var (
 	errNoPendingRestore = errors.New("no pending restore for this request — it may have expired or already run")
-	// errSelfApprove names the unit the gate actually compares: two DIFFERENT user
-	// ACCOUNTS. It deliberately stops short of "two people". The engine cannot
-	// verify that — one human may hold both accounts and two humans may share one
-	// (core/auth/person.go, "WHAT THIS FILE DECIDES") — and this text is read by an
-	// operator who is deciding whether they are protected. It promised "two DIFFERENT
-	// people" until following PersonSame's doc, which invited exactly that.
+	// Accounts, rather than credentials or humans, are the compared parties.
 	errSelfApprove = errors.New("dual-control: a restore must be requested and approved by two DIFFERENT user accounts; a second credential of the same account is the same requester")
-	// errNoStableIdentity refuses a party that no user ACCOUNT stands behind. Dual
-	// control counts accounts, and a credential with no user (model.APIToken.UserID
-	// zero — "a standalone system token", core/model/auth.go) cannot be counted as
-	// one of the two. Comparing its credential string instead would certify a
-	// second party that nobody can name (mirroring killswitch.go).
+	// An anonymous system token cannot be counted as a distinct account.
 	errNoStableIdentity = errors.New("dual-control: a restore needs a stable user identity on both sides; a system token cannot request or approve one")
 )
 
-// registerPending records a restore intent awaiting a second approver. It stores BOTH
-// halves of the requester's identity (auth.PersonRef): the stable user ACCOUNT, which is
-// what the distinct-approver rule compares, and the credential actor, which is what the
-// trail must show. Storing only the actor is why the comparison could not be made by
-// account.
+// registerPending stores the requester's stable account and credential actor.
 func (ds *drService) registerPending(uploadID string, initiator auth.PersonRef, now string) *pendingRestore {
 	pr := &pendingRestore{
 		RequestID:     "drr_" + generateJobID()[4:],
@@ -345,20 +247,9 @@ func (ds *drService) registerPending(uploadID string, initiator auth.PersonRef, 
 	return pr
 }
 
-// approvePending consumes a pending restore under dual-control: it must exist, match
-// the upload, and be approved by a DIFFERENT USER ACCOUNT than the one that requested it
-// (the structural separation check). The comparison is over the stable user
-// identity, NOT the credential actor string: one account holds a session and its own
-// tokens, so an actor-string check counted one account as two. A party with no
-// user behind it is refused outright rather than compared. On success the pending
-// entry is removed and returned; a refused approval LEAVES the entry in place, so a
-// genuine second account can still approve.
-//
-// It does NOT establish two humans, and no caller may say it does: the requester can
-// create the approving account and choose its password (this file already says so on
-// drSchedule.DisarmBy — "a superadmin who can CREATE a second superadmin can always
-// manufacture a second person"). Moved that admission out of one field's comment
-// and into the text the operator reads.
+// approvePending requires a matching restore intent and a distinct stable
+// approver account. Success consumes the intent; refusal leaves it pending.
+// This establishes two accounts, not two humans.
 func (ds *drService) approvePending(requestID, uploadID string, approver auth.PersonRef) (*pendingRestore, error) {
 	ds.pmu.Lock()
 	defer ds.pmu.Unlock()
@@ -367,12 +258,7 @@ func (ds *drService) approvePending(requestID, uploadID string, approver auth.Pe
 		return nil, errNoPendingRestore
 	}
 	initiator := auth.PersonRef{User: pr.InitiatorUser, Actor: pr.Initiator}
-	// ONE call, THREE outcomes. The two-step form this replaces — a Stable()
-	// floor, then a same-account comparison — is correct and lets a caller forget the
-	// floor, which is the silent pass the whole class is made of: an unattributable
-	// party compares unequal to every real account, so skipping the floor ADMITS it.
-	// RefuseWhenUndetermined because this gate's promise to the operator is two
-	// separate administrator accounts.
+	// Refuse unattributable parties rather than treating them as different accounts.
 	switch ok, verdict := auth.TwoDistinctPeople(initiator, approver, auth.RefuseWhenUndetermined); {
 	case ok:
 		// two distinct accounts — consume the request
@@ -389,13 +275,8 @@ func (ds *drService) ensureBackupDir() error {
 	return os.MkdirAll(ds.cfg.BackupDir, 0o700)
 }
 
-// minDRPassphraseLen is the floor (in runes) for a passphrase that encrypts a
-// NEW DR bundle. The bundle carries the estate's signing keys and the
-// passphrase is its ONLY protection at rest — accepting 1 character made the
-// encryption theater. 12 characters is the NIST SP 800-63B-4 §3.1.1.2 floor for
-// memorized secrets chosen by the operator. Restore deliberately does not apply
-// this creation policy: legacy bundles encrypted with a shorter passphrase must
-// remain recoverable.
+// minDRPassphraseLen is the creation floor in runes for encrypted bundles.
+// Restore accepts legacy shorter passphrases so existing bundles remain recoverable.
 const minDRPassphraseLen = 12
 
 // drPassphraseFloorError returns a client-facing message when the passphrase is
@@ -455,33 +336,16 @@ type restoreApproveRequest struct {
 	Passphrase string `json:"passphrase"`
 }
 
-// drScheduleRequest is the PUT body. It is deliberately NOT drSchedule, for two
-// reasons that were both live defects:
-//
-//   - RequireDualControl is a *bool so ABSENT is distinguishable from false.
-//     Decoding into the stored struct made every edit that omitted the field a
-//     silent disarm of the estate's two-person restore gate.
-//   - it has no DisarmAt. A client that could name the instant a disarm takes
-//     effect could name one in the past, which is the delay removed by the same
-//     request that is subject to it. The instant is computed here, never accepted.
+// drScheduleRequest preserves the gate when RequireDualControl is omitted.
+// The server owns the disarm instant and run bookkeeping.
 type drScheduleRequest struct {
 	Enabled            bool   `json:"enabled"`
 	Cron               string `json:"cron"`
 	Retain             int    `json:"retain_days"`
 	RequireDualControl *bool  `json:"require_dual_control_restore"`
 
-	// The rest are SERVER-OWNED and ignored. They are declared only so a client
-	// that reads the schedule, edits one field and PUTs the whole object back
-	// still works: decodeJSON sets DisallowUnknownFields, so a type that merely
-	// omitted them would 400 on every round-trip — which the previous type, being
-	// the stored struct itself, accepted. Narrowing the writable set must not
-	// narrow the ACCEPTED set.
-	//
-	// Ignoring is the point for DisarmAt in particular: a client that could name
-	// the instant could name one already past, which is the delay deleted by the
-	// same request it is supposed to delay. Measured: a PUT carrying
-	// "dual_control_disarm_effective_at":"2020-01-01T00:00:00Z" leaves the gate
-	// armed and the pending instant untouched.
+	// Accept read-modify-write round trips, but ignore server-owned fields.
+	// A client must not choose an earlier disarm instant or another requester.
 	IgnoredDisarmAt      string `json:"dual_control_disarm_effective_at"`
 	IgnoredDisarmBy      string `json:"dual_control_disarm_requested_by"`
 	IgnoredLastRun       string `json:"last_run"`
@@ -494,11 +358,8 @@ type drScheduleRequest struct {
 
 var errDRUnavailable = fmt.Errorf("dr service unavailable")
 
-func (s *Server) handleTriggerBackup(w http.ResponseWriter, r *http.Request) {
-	p, ok := s.authzSystem(w, r, "system:admin")
-	if !ok {
-		return
-	}
+func (s *Server) handleTriggerBackup(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	p := mc.Principal
 	if s.drSvc == nil {
 		s.writeError(w, r, errDRUnavailable)
 		return
@@ -506,7 +367,7 @@ func (s *Server) handleTriggerBackup(w http.ResponseWriter, r *http.Request) {
 
 	var req triggerBackupRequest
 	if err := decodeJSON(w, r, &req); err != nil {
-		s.badRequest(w, r, "invalid request body")
+		s.badRequest(w, r, RequestBodyErrorMessage(err, "invalid request body"))
 		return
 	}
 	if req.Passphrase == "" {
@@ -561,44 +422,56 @@ func (s *Server) runBackup(ctx context.Context, jobID, passphrase, notes, actor 
 	update("scanning_keys", 10)
 
 	dataDir := svc.cfg.DataDir
-	keyFiles, err := filepath.Glob(filepath.Join(dataDir, "*-signing.key"))
-	if err != nil {
-		fail(fmt.Errorf("scan keys: %w", err))
-		return
-	}
-
-	sealedKeys := make(map[string][]byte)
+	var sealedKeys map[string][]byte
 	var keyRefs []dr.KeyRef
-	for _, kf := range keyFiles {
-		raw, err := os.ReadFile(kf)
+	var sealerProbes []dr.SealerProbe
+	if svc.cfg.SealKeys != nil {
+		sealedKeys, keyRefs, sealerProbes, err = svc.cfg.SealKeys(cipher)
 		if err != nil {
-			fail(fmt.Errorf("read key %s: %w", filepath.Base(kf), err))
+			fail(fmt.Errorf("seal installation custody: %w", err))
 			return
 		}
-		name := filepath.Base(kf)
-		bundlePath := "keys/" + name + ".enc"
-		sealed, err := cipher.Seal(raw)
+	} else {
+		sealedKeys = make(map[string][]byte)
+		keyFiles, err := filepath.Glob(filepath.Join(dataDir, "*-signing.key"))
 		if err != nil {
-			fail(fmt.Errorf("seal key %s: %w", name, err))
+			fail(fmt.Errorf("scan keys: %w", err))
 			return
 		}
-		sealedKeys[bundlePath] = sealed
-		fp, _ := dr.PubFingerprintFromSigningKey(raw)
-		role := dr.RoleOther
-		if strings.HasPrefix(name, "audit") {
-			role = dr.RoleAudit
-		} else if strings.HasPrefix(name, "catalog") {
-			role = dr.RoleCatalog
+
+		for _, kf := range keyFiles {
+			raw, err := os.ReadFile(kf)
+			if err != nil {
+				fail(fmt.Errorf("read key %s: %w", filepath.Base(kf), err))
+				return
+			}
+			name := filepath.Base(kf)
+			bundlePath := "keys/" + name + ".enc"
+			sealed, err := cipher.Seal(raw)
+			if err != nil {
+				fail(fmt.Errorf("seal key %s: %w", name, err))
+				return
+			}
+			sealedKeys[bundlePath] = sealed
+			fp, _ := dr.PubFingerprintFromSigningKey(raw)
+			role := dr.RoleOther
+			if strings.HasPrefix(name, "audit") {
+				role = dr.RoleAudit
+			} else if strings.HasPrefix(name, "catalog") {
+				role = dr.RoleCatalog
+			}
+			keyRefs = append(keyRefs, dr.KeyRef{
+				File: bundlePath, Name: name, Role: role, PubSHA256: fp,
+			})
 		}
-		keyRefs = append(keyRefs, dr.KeyRef{
-			File: bundlePath, Name: name, Role: role, PubSHA256: fp,
-		})
 	}
 
 	update("snapshot", 25)
 
 	var snapshotPath string
 	var ss dr.StoreSnapshot
+	var validateSnapshot func() error
+	tipMatch := dr.TipExact
 
 	if svc.cfg.EngineKind == "sqlite" {
 		dbPath := filepath.Join(dataDir, "olivares.db")
@@ -620,6 +493,21 @@ func (s *Server) runBackup(ctx context.Context, jobID, passphrase, notes, actor 
 			SizeBytes: size,
 			SHA256:    hash,
 		}
+	} else if svc.cfg.EngineKind == "postgres" && svc.cfg.PostgresSnapshot != nil {
+		snapshotPath = filepath.Join(svc.cfg.BackupDir, fmt.Sprintf("snapshot-%s.pgcustom", jobID))
+		defer func() { _ = os.Remove(snapshotPath) }()
+		snapshot, err := svc.cfg.PostgresSnapshot(ctx, snapshotPath)
+		if err != nil {
+			fail(fmt.Errorf("snapshot: %w", err))
+			return
+		}
+		if snapshot.Validate == nil {
+			fail(fmt.Errorf("PostgreSQL snapshot has no payload verification"))
+			return
+		}
+		ss, validateSnapshot = snapshot.Store, snapshot.Validate
+		// The native dump and the manifest read the live store separately.
+		tipMatch = dr.TipAdvisory
 	} else {
 		fail(fmt.Errorf("engine %q not supported for web backup (use CLI for postgres)", svc.cfg.EngineKind))
 		return
@@ -629,19 +517,53 @@ func (s *Server) runBackup(ctx context.Context, jobID, passphrase, notes, actor 
 
 	eventPub := s.signer.PublicKey()
 	cpVerifier := audit.NewCheckpointVerifier().AddEd25519(eventPub)
+	if svc.cfg.EngineKind == "postgres" {
+		cpVerifier, err = s.signer.CheckpointVerifier(ctx)
+		if err != nil {
+			fail(fmt.Errorf("checkpoint verifier: %w", err))
+			return
+		}
+	}
 
-	manifest, err := dr.BuildManifest(ctx, s.st, eventPub, cpVerifier, dr.BuildOptions{
+	manifestStore := s.st
+	if svc.cfg.EngineKind == "sqlite" {
+		scratchDir, err := os.MkdirTemp(svc.cfg.BackupDir, "manifest-*")
+		if err != nil {
+			fail(fmt.Errorf("stage snapshot manifest: %w", err))
+			return
+		}
+		defer func() { _ = os.RemoveAll(scratchDir) }()
+		scratch, err := openScratchSnapshot(ctx, snapshotPath, filepath.Join(scratchDir, "olivares.db"), s.signer, svc.cfg.RegisterSchema)
+		if err != nil {
+			fail(fmt.Errorf("open snapshot to build manifest: %w", err))
+			return
+		}
+		defer func() { _ = scratch.Close() }()
+		// TipExact describes the bundled snapshot, even while live requests append.
+		manifestStore = scratch
+	}
+	manifest, err := dr.BuildManifest(ctx, manifestStore, eventPub, cpVerifier, dr.BuildOptions{
 		EngineKind: svc.cfg.EngineKind,
 		Version:    s.version,
 		Store:      ss,
 		Keys:       keyRefs,
-		TipMatch:   dr.TipExact,
+		TipMatch:   tipMatch,
 		Now:        time.Now().UTC(),
 		Notes:      notes + " [via console by " + actor + "]",
 	})
 	if err != nil {
 		fail(fmt.Errorf("build manifest: %w", err))
 		return
+	}
+	manifest.SealerProbes = sealerProbes
+
+	if svc.cfg.EngineKind == "postgres" {
+		for _, tip := range manifest.Tenants {
+			if !tip.VerifiedAtBackup {
+				fail(fmt.Errorf("backup refused: unverified tenant %s (%s); repair the ledger before creating a backup", tip.Tenant, tip.VerifyReason))
+				return
+			}
+		}
 	}
 
 	update("bundle", 70)
@@ -650,6 +572,12 @@ func (s *Server) runBackup(ctx context.Context, jobID, passphrase, notes, actor 
 	bundleName := fmt.Sprintf("olivares-%s-%s.drbundle", ts, svc.cfg.EngineKind)
 	bundlePath := filepath.Join(svc.cfg.BackupDir, bundleName)
 
+	if validateSnapshot != nil {
+		if err := validateSnapshot(); err != nil {
+			fail(err)
+			return
+		}
+	}
 	f, err := os.Create(bundlePath)
 	if err != nil {
 		fail(fmt.Errorf("create bundle: %w", err))
@@ -686,10 +614,7 @@ func (s *Server) runBackup(ctx context.Context, jobID, passphrase, notes, actor 
 	s.log.Info("dr: backup completed", "job", jobID, "bundle", bundleName, "actor", actor)
 }
 
-func (s *Server) handleListBackups(w http.ResponseWriter, r *http.Request) {
-	if _, ok := s.authzSystem(w, r, "system:admin"); !ok {
-		return
-	}
+func (s *Server) handleListBackups(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
 	if s.drSvc == nil {
 		s.writeError(w, r, errDRUnavailable)
 		return
@@ -758,10 +683,7 @@ func (s *Server) inspectBundle(path string) *dr.Manifest {
 	return m
 }
 
-func (s *Server) handleGetBackup(w http.ResponseWriter, r *http.Request) {
-	if _, ok := s.authzSystem(w, r, "system:admin"); !ok {
-		return
-	}
+func (s *Server) handleGetBackup(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
 	if s.drSvc == nil {
 		s.writeError(w, r, errDRUnavailable)
 		return
@@ -794,10 +716,7 @@ func (s *Server) handleGetBackup(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (s *Server) handleDownloadBackup(w http.ResponseWriter, r *http.Request) {
-	if _, ok := s.authzSystem(w, r, "system:admin"); !ok {
-		return
-	}
+func (s *Server) handleDownloadBackup(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
 	if s.drSvc == nil {
 		s.writeError(w, r, errDRUnavailable)
 		return
@@ -834,11 +753,8 @@ func (s *Server) handleDownloadBackup(w http.ResponseWriter, r *http.Request) {
 	_, _ = io.Copy(w, f)
 }
 
-func (s *Server) handleDeleteBackup(w http.ResponseWriter, r *http.Request) {
-	p, ok := s.authzSystem(w, r, "system:admin")
-	if !ok {
-		return
-	}
+func (s *Server) handleDeleteBackup(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	p := mc.Principal
 	if s.drSvc == nil {
 		s.writeError(w, r, errDRUnavailable)
 		return
@@ -868,10 +784,7 @@ func (s *Server) handleDeleteBackup(w http.ResponseWriter, r *http.Request) {
 // maxBundleUpload caps the restore upload at 10 GiB.
 const maxBundleUpload = 10 << 30
 
-func (s *Server) handleRestoreUpload(w http.ResponseWriter, r *http.Request) {
-	if _, ok := s.authzSystem(w, r, "system:admin"); !ok {
-		return
-	}
+func (s *Server) handleRestoreUpload(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
 	if s.drSvc == nil {
 		s.writeError(w, r, errDRUnavailable)
 		return
@@ -879,6 +792,11 @@ func (s *Server) handleRestoreUpload(w http.ResponseWriter, r *http.Request) {
 
 	r.Body = http.MaxBytesReader(w, r.Body, maxBundleUpload)
 
+	// A fresh install has never made a backup, so the directory may not exist yet.
+	if err := s.drSvc.ensureBackupDir(); err != nil {
+		s.writeError(w, r, fmt.Errorf("backup dir: %w", err))
+		return
+	}
 	tmpFile, err := os.CreateTemp(s.drSvc.cfg.BackupDir, "restore-upload-*.drbundle")
 	if err != nil {
 		s.writeError(w, r, fmt.Errorf("create temp: %w", err))
@@ -910,11 +828,8 @@ func (s *Server) handleRestoreUpload(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (s *Server) handleRestoreApply(w http.ResponseWriter, r *http.Request) {
-	p, ok := s.authzSystem(w, r, "system:admin")
-	if !ok {
-		return
-	}
+func (s *Server) handleRestoreApply(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	p := mc.Principal
 	if s.drSvc == nil {
 		s.writeError(w, r, errDRUnavailable)
 		return
@@ -928,7 +843,7 @@ func (s *Server) handleRestoreApply(w http.ResponseWriter, r *http.Request) {
 
 	var req restoreApplyRequest
 	if err := decodeJSON(w, r, &req); err != nil {
-		s.badRequest(w, r, "invalid request body")
+		s.badRequest(w, r, RequestBodyErrorMessage(err, "invalid request body"))
 		return
 	}
 
@@ -938,23 +853,9 @@ func (s *Server) handleRestoreApply(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Dual-control: register the restore INTENT and require a distinct second admin
-	// to approve (with the passphrase) before it runs. The passphrase is not accepted
-	// or held here — the approver supplies it, so no secret sits in memory awaiting a
-	// second approver.
-	//
-	// NOTE on delegation: PersonRefOf reads Principal.UserID, i.e. the credential's
-	// OWNER. A token-exchanged credential also carries ActAsUserID (the account whose
-	// authority it exercises, core/auth/tokenexchange.go:210-211). That is not a hole
-	// today because ExchangeToken refuses a superadmin subject and always mints
-	// IsSuperadmin=false, so a delegated credential can never pass authzSystem here.
-	// If that ever changes, "Bob acting for Alice" would count as Bob and could
-	// approve Alice's own restore — this rule would then need the acted-for user.
-	//
-	// The question is asked FOR THIS ACCOUNT, not for the estate: an elapsed disarm
-	// frees everyone except the account that asked for it, so waiting out the
-	// cool-down is not a way past the gate (drSchedule.DisarmBy). Resolving
-	// the account therefore has to happen BEFORE the gate is consulted.
+	// A gated restore records an intent; its distinct approver supplies the passphrase.
+	// Compare the account before consulting its gate. Delegated credentials cannot
+	// pass authzSystem; if that changes, the comparison must use the acted-for account.
 	initiator := auth.PersonRefOf(p)
 	if s.drSvc.requireDualControlRestoreFor(initiator.User, s.clock.Now().Time().UTC()) {
 		if !initiator.Stable() {
@@ -973,28 +874,17 @@ func (s *Server) handleRestoreApply(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	job := s.drSvc.jobs.create(drJobRestore, "restore "+uploadID)
+	s.rememberRestoreReceipt(job.ID, r, p.Actor())
 	// The detached job must survive cancellation when the 202 response completes.
 	go s.runRestore(context.WithoutCancel(r.Context()), job.ID, bundlePath, req.Passphrase, p.Actor())
 	writeJSON(w, http.StatusAccepted, restoreApplyResponse{JobID: job.ID})
 }
 
-// handleRestoreApprove is the dual-control second step: a DIFFERENT USER ACCOUNT holding
-// the system role approves a pending restore and supplies the passphrase. The requester
-// cannot self-approve through ANY credential of that account — the check is over the
-// stable user, so minting a token for oneself does not manufacture a second approver
-// (corrected in).
-//
-// That makes two ACCOUNTS real FOR THIS ENDPOINT — not two humans, which this engine
-// cannot verify (core/auth/person.go). Two other
-// ways past it were measured and closed elsewhere rather than here, and neither was
-// a flaw in this comparison: the gate could be switched off by the same admin in the
-// next request (now delayed, see drSchedule.DisarmAt), and the command-line restore
-// never reaches this code at all (see RequireDualControl).
-func (s *Server) handleRestoreApprove(w http.ResponseWriter, r *http.Request) {
-	p, ok := s.authzSystem(w, r, "system:admin")
-	if !ok {
-		return
-	}
+// handleRestoreApprove requires a distinct stable administrator account and
+// its passphrase. Another credential of the requester cannot self-approve.
+// CLI restore is outside this console gate.
+func (s *Server) handleRestoreApprove(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	p := mc.Principal
 	if s.drSvc == nil {
 		s.writeError(w, r, errDRUnavailable)
 		return
@@ -1007,7 +897,7 @@ func (s *Server) handleRestoreApprove(w http.ResponseWriter, r *http.Request) {
 	}
 	var req restoreApproveRequest
 	if err := decodeJSON(w, r, &req); err != nil {
-		s.badRequest(w, r, "invalid request body")
+		s.badRequest(w, r, RequestBodyErrorMessage(err, "invalid request body"))
 		return
 	}
 	if req.RequestID == "" {
@@ -1036,8 +926,8 @@ func (s *Server) handleRestoreApprove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	job := s.drSvc.jobs.create(drJobRestore, "restore "+uploadID+" (dual-control: "+pr.Initiator+"→"+p.Actor()+")")
-	// Log the ACCOUNTS alongside the credentials: two actor strings alone never
-	// revealed whether two accounts were involved.
+	s.rememberRestoreReceipt(job.ID, r, p.Actor())
+	// Record the accounts alongside their credential actors.
 	s.log.Info("dr: restore approved under dual-control", "job", job.ID,
 		"initiator", pr.Initiator, "initiator_user", pr.InitiatorUser,
 		"approver", approver.Actor, "approver_user", approver.User)
@@ -1056,8 +946,10 @@ func (s *Server) runRestore(ctx context.Context, jobID, bundlePath, passphrase, 
 		})
 	}
 
+	promoted := false
 	fail := func(err error) {
 		svc.jobs.update(jobID, func(j *drJob) {
+			j.restartSafe = !promoted
 			j.Status = drJobFailed
 			j.Error = err.Error()
 			j.DoneAt = time.Now().UTC().Format(time.RFC3339)
@@ -1065,22 +957,27 @@ func (s *Server) runRestore(ctx context.Context, jobID, bundlePath, passphrase, 
 		s.log.Error("dr: restore failed", "job", jobID, "err", err)
 	}
 
-	// THE LOCAL RESTORE GUARD, TAKEN BEFORE THE FIRST BYTE IS READ AND HELD TO THE END.
-	//
-	// This handler's critical section is not one write: it overwrites every signing key
-	// in the data directory one file at a time and only then replaces the store. A guard
-	// checked at the top and released would leave that section open to a concurrent boot
-	// — which mints keys — or to a second restore, either of which produces an
-	// installation whose custody and whose data came from different generations.
-	//
-	// It is exclusive and it REFUSES rather than queues: a queued destructive operation
-	// is one the user was told had not started.
+	// Console restore is SQLite-only. Refuse before opening a bundle, taking a
+	// filesystem lease, or staging anything in the live data directory.
+	if svc.cfg.EngineKind != "sqlite" {
+		fail(fmt.Errorf("engine %q not supported for web restore (use CLI for postgres)", svc.cfg.EngineKind))
+		return
+	}
+
+	// Hold the exclusive restore guard from the first read through key/store
+	// replacement. Refuse concurrent boot or restore rather than queueing it.
 	guard, gerr := acquireConsoleRestoreGuard(svc.cfg)
 	if gerr != nil {
 		fail(gerr)
 		return
 	}
 	defer guard.release()
+	// A request authorized before maintenance may start after the first job
+	// released its guard. Keep that job's custody and recovery advice intact.
+	if svc.restartRequired.Load() {
+		fail(fmt.Errorf("live store is stopped for an earlier restore; follow that job's recovery or restart instruction before applying another bundle"))
+		return
+	}
 
 	update("extracting", 10)
 
@@ -1134,11 +1031,8 @@ func (s *Server) runRestore(ctx context.Context, jobID, bundlePath, passphrase, 
 
 	update("verifying_bundle", 40)
 
-	// Prove the bundle restores to a continuity-safe ledger in a SCRATCH directory
-	// BEFORE overwriting anything live. A corrupt, tampered, wrong-key or incomplete
-	// bundle is refused HERE, with the live data dir untouched — the console never
-	// promotes a restore it has not verified (the most destructive console op).
-	if rep, verr := verifyBundleScratch(ctx, tmpDir, manifest, cipher); verr != nil {
+	// Verify ledger continuity in scratch before overwriting live keys or data.
+	if rep, verr := verifyBundleScratch(ctx, tmpDir, manifest, cipher, svc.cfg.RegisterSchema); verr != nil {
 		fail(fmt.Errorf("pre-restore verification: %w", verr))
 		return
 	} else if !rep.OK {
@@ -1147,59 +1041,219 @@ func (s *Server) runRestore(ctx context.Context, jobID, bundlePath, passphrase, 
 	}
 
 	dataDir := svc.cfg.DataDir
-	for _, kr := range manifest.Keys {
-		encPath := filepath.Join(tmpDir, filepath.FromSlash(kr.File))
-		sealed, err := os.ReadFile(encPath)
-		if err != nil {
-			fail(fmt.Errorf("read sealed key %s: %w", kr.Name, err))
-			return
-		}
-		plain, err := cipher.Open(sealed)
-		if err != nil {
-			fail(fmt.Errorf("decrypt key %s (wrong passphrase?): %w", kr.Name, err))
-			return
-		}
-		dstPath := filepath.Join(dataDir, kr.Name)
-		if err := os.WriteFile(dstPath, plain, 0o600); err != nil {
-			fail(fmt.Errorf("write key %s: %w", kr.Name, err))
-			return
-		}
-	}
-
-	update("restoring_store", 50)
-
-	if svc.cfg.EngineKind == "sqlite" {
-		snapshotPath := filepath.Join(tmpDir, filepath.FromSlash(manifest.Store.File))
-		dbPath := filepath.Join(dataDir, "olivares.db")
-		if err := dr.CopyFile(snapshotPath, dbPath); err != nil {
-			fail(fmt.Errorf("restore store: %w", err))
-			return
-		}
-	} else {
-		fail(fmt.Errorf("engine %q not supported for web restore (use CLI for postgres)", svc.cfg.EngineKind))
+	stage, err := stageConsoleRestoreKeys(dataDir, tmpDir, manifest, cipher)
+	if err != nil {
+		fail(err)
 		return
 	}
+	defer func() {
+		if err := os.RemoveAll(stage.dir); err != nil {
+			s.log.Error("dr: private restore staging cleanup failed", "path", stage.dir, "err", err)
+		}
+	}()
+	same := dr.SameInstallation(dataDir, manifest)
+
+	if svc.cfg.QuiesceStore == nil {
+		fail(fmt.Errorf("live store cannot drain safely for console restore; use CLI restore with the engine stopped"))
+		return
+	}
+	svc.beginMaintenance(jobID)
+	update("draining_store", 45)
+	drainCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	err = svc.cfg.QuiesceStore(drainCtx)
+	cancel()
+	if err != nil {
+		fail(fmt.Errorf("drain store: %w; live data and keys were not replaced; restart the engine before retrying", err))
+		return
+	}
+	suffix := ".pre-restore-" + jobID
+	if err := stage.preserve(ctx, dataDir, suffix); err != nil {
+		fail(fmt.Errorf("preserve current state: %w; live data and keys were not replaced; restart the engine before retrying", err))
+		return
+	}
+	preservation := fmt.Sprintf("previous state preserved as *%s in %s (remove once satisfied)", suffix, dataDir)
+	svc.jobs.update(jobID, func(j *drJob) { j.Notes = preservation })
+	update("restoring_store", 50)
+	snapshotPath := filepath.Join(tmpDir, filepath.FromSlash(manifest.Store.File))
+	if err := promoteSQLiteSnapshot(ctx, snapshotPath, filepath.Join(dataDir, "olivares.db")); err != nil {
+		fail(fmt.Errorf("restore store: %w; the signing keys were not replaced; restart the engine before retrying", err))
+		return
+	}
+	promoted = true
+	count, err := stage.promoteKeys(dataDir)
+	if err != nil {
+		if rollbackErr := stage.rollback(dataDir, count); rollbackErr != nil {
+			fail(fmt.Errorf("%w; rollback failed: %w; do not restart until the database and all custody keys are recovered from the preserved state or the complete bundle", err, rollbackErr))
+		} else {
+			promoted = false
+			fail(fmt.Errorf("%w; rolled back to the pre-restore state; restart the engine before retrying", err))
+		}
+		return
+	}
+	getenv := svc.cfg.Getenv
+	if getenv == nil {
+		getenv = envconfig.Get
+	}
+	custody := dr.RestoreCustodyNote("restore verified and promoted in place", manifest, dataDir, same, getenv)
 
 	update("promoted", 90)
 
-	// The bundle was proven continuity-safe in scratch before promotion; the RUNNING
-	// engine still holds the old store open, so a restart is required to load the
-	// restored one (the live swap is not hot-reloaded by design).
-	s.log.Warn("dr: restore verified in scratch and promoted — restart the engine to load the restored store",
+	// The closed store cannot sign any restored event until restart reloads custody.
+	s.log.Warn("dr: restore verified in scratch and promoted — restart the engine to load the restored keys and module state",
 		"job", jobID, "actor", actor, "engine", manifest.EngineKind)
 
 	svc.jobs.update(jobID, func(j *drJob) {
 		j.Status = drJobCompleted
-		j.Phase = "complete"
+		j.Phase = "restart_required"
+		j.Notes = custody + ". " + preservation
 		j.Progress = 100
 		j.DoneAt = time.Now().UTC().Format(time.RFC3339)
 	})
 }
 
-func (s *Server) handleDRJobStream(w http.ResponseWriter, r *http.Request) {
-	if _, ok := s.authzSystem(w, r, "system:admin"); !ok {
+// beginMaintenance pins the job whose recovery advice applies until restart.
+func (svc *drService) beginMaintenance(jobID string) {
+	svc.smu.Lock()
+	svc.maintenanceJob = jobID
+	svc.smu.Unlock()
+	svc.restartRequired.Store(true)
+}
+
+// rememberRestoreReceipt grants only this job's progress to the credential that
+// already passed system:admin and the restore policy. The grant expires in ten
+// minutes or at restart; it cannot authorize another request or any store write.
+func (s *Server) rememberRestoreReceipt(jobID string, r *http.Request, actor string) {
+	token, _, err := requestCredential(r)
+	if err != nil || token == "" {
 		return
 	}
+	hash := sha256.Sum256([]byte(token))
+	s.drSvc.jobs.update(jobID, func(j *drJob) {
+		j.receiptHash = hash
+		j.receiptUntil = time.Now().Add(10 * time.Minute)
+		j.receiptActor = actor
+	})
+}
+
+// restoreMaintenance answers before authentication touches the closed store.
+// The restore administrator can reconnect to its read-only job receipt; all
+// other requests remain unavailable until custody and module state reload.
+func (s *Server) restoreMaintenance(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		svc := s.drSvc
+		if svc == nil || !svc.restartRequired.Load() {
+			next.ServeHTTP(w, r)
+			return
+		}
+		// Liveness must not restart a pod during promotion or key recovery.
+		// These existing handlers never touch the stopped store; readiness does.
+		if r.Method == http.MethodGet {
+			switch r.URL.Path {
+			case "/livez":
+				s.handleLivez(w, r, ModuleContext{})
+				return
+			case "/healthz":
+				s.handleHealth(w, r, ModuleContext{})
+				return
+			}
+		}
+		svc.smu.Lock()
+		jobID := svc.maintenanceJob
+		svc.smu.Unlock()
+		job, ok := svc.jobs.get(jobID)
+		token, cookieAuth, err := requestCredential(r)
+		if err != nil {
+			s.writeError(w, r, err)
+			return
+		}
+		if cookieAuth && !validBrowserCSRF(r, token) {
+			s.writeError(w, r, errForbidden)
+			return
+		}
+		hash := sha256.Sum256([]byte(token))
+		receipt := ok && token != "" && time.Now().Before(job.receiptUntil) && subtle.ConstantTimeCompare(hash[:], job.receiptHash[:]) == 1
+		if receipt && r.Method == http.MethodGet {
+			w.Header().Set("Cache-Control", "no-store")
+			if h := actorHolderFrom(r.Context()); h != nil {
+				h.actor = job.receiptActor
+			}
+			switch r.URL.Path {
+			case "/v1/console/dr/jobs":
+				writeJSON(w, http.StatusOK, map[string]any{"items": []drJob{job}})
+				return
+			case "/v1/console/dr/jobs/" + jobID + "/stream":
+				s.streamDRJob(w, r, jobID)
+				return
+			}
+		}
+		var body errorBody
+		body.Error.Code = "restore_restart_required"
+		switch {
+		case !ok || job.Status == drJobPending || job.Status == drJobRunning:
+			body.Error.Message = "Restore is still running with the live store stopped. Wait for its result before restarting."
+		case job.Status == drJobFailed && !job.restartSafe:
+			body.Error.Message = "Restore requires complete custody recovery. Do not restart until all custody keys from the bundle are restored, including keys not yet attempted; consult the restore job or DR runbook."
+		default:
+			body.Error.Message = "The live store is stopped. Restart the engine to load the signing keys and module state before continuing."
+		}
+		w.Header().Set("Retry-After", "30")
+		writeJSON(w, http.StatusServiceUnavailable, body)
+	})
+}
+
+// validRestoredKeyName accepts only a plain file name. The key files are written into the
+// data dir after the store is restored, and a name from the bundle's manifest must not pick
+// another directory or the store's own files; it is checked before anything changes.
+func validRestoredKeyName(name string) error {
+	if name == "" || name == "." || name == ".." || name == ".gitignore" || name != filepath.Base(name) || strings.HasPrefix(name, "olivares.db") {
+		return fmt.Errorf("bundle key name %q is not a plain file name", name)
+	}
+	return nil
+}
+
+// promoteSQLiteSnapshot restores through SQLite's backup API. SQLite owns the
+// destination write transaction and WAL, so active connections cannot replay old
+// pages over the snapshot, and a failed copy rolls back without unlinking live files.
+func promoteSQLiteSnapshot(ctx context.Context, snapshot, dbPath string) error {
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = db.Close() }()
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = conn.Close() }()
+	// The engine pool is drained; an external SQLite writer can still hold a transaction.
+	if _, err := conn.ExecContext(ctx, "PRAGMA busy_timeout = 5000"); err != nil {
+		return fmt.Errorf("restore busy_timeout: %w", err)
+	}
+	return conn.Raw(func(raw any) error {
+		restorer, ok := raw.(interface {
+			NewRestore(string) (*sqlite.Backup, error)
+		})
+		if !ok {
+			return fmt.Errorf("SQLite driver does not support snapshot restore")
+		}
+		backup, err := restorer.NewRestore(snapshot)
+		if err != nil {
+			return err
+		}
+		for more := true; more; {
+			if err = ctx.Err(); err != nil {
+				break
+			}
+			more, err = backup.Step(128)
+			if err != nil {
+				break
+			}
+		}
+		return errors.Join(err, backup.Finish())
+	})
+}
+
+func (s *Server) handleDRJobStream(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
 	if s.drSvc == nil {
 		s.writeError(w, r, errDRUnavailable)
 		return
@@ -1211,9 +1265,13 @@ func (s *Server) handleDRJobStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.streamDRJob(w, r, jobID)
+}
+
+func (s *Server) streamDRJob(w http.ResponseWriter, r *http.Request, jobID string) {
 	rc := http.NewResponseController(w)
 	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Accel-Buffering", "no")
 
@@ -1227,6 +1285,9 @@ func (s *Server) handleDRJobStream(w http.ResponseWriter, r *http.Request) {
 	if current, ok := s.drSvc.jobs.get(jobID); ok {
 		payload, _ := json.Marshal(current)
 		if writeFrame(rc, w, fmt.Sprintf("event: job\ndata: %s\n\n", payload)) != nil {
+			return
+		}
+		if current.Status == drJobCompleted || current.Status == drJobFailed {
 			return
 		}
 	}
@@ -1260,10 +1321,7 @@ func (s *Server) handleDRJobStream(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *Server) handleGetDRSchedule(w http.ResponseWriter, r *http.Request) {
-	if _, ok := s.authzSystem(w, r, "system:admin"); !ok {
-		return
-	}
+func (s *Server) handleGetDRSchedule(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
 	if s.drSvc == nil {
 		s.writeError(w, r, errDRUnavailable)
 		return
@@ -1271,11 +1329,8 @@ func (s *Server) handleGetDRSchedule(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, s.drScheduleView())
 }
 
-func (s *Server) handlePutDRSchedule(w http.ResponseWriter, r *http.Request) {
-	p, ok := s.authzSystem(w, r, "system:admin")
-	if !ok {
-		return
-	}
+func (s *Server) handlePutDRSchedule(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	p := mc.Principal
 	if s.drSvc == nil {
 		s.writeError(w, r, errDRUnavailable)
 		return
@@ -1283,7 +1338,7 @@ func (s *Server) handlePutDRSchedule(w http.ResponseWriter, r *http.Request) {
 
 	var req drScheduleRequest
 	if err := decodeJSON(w, r, &req); err != nil {
-		s.badRequest(w, r, "invalid request body")
+		s.badRequest(w, r, RequestBodyErrorMessage(err, "invalid request body"))
 		return
 	}
 	req.Cron = strings.TrimSpace(req.Cron)
@@ -1291,10 +1346,9 @@ func (s *Server) handlePutDRSchedule(w http.ResponseWriter, r *http.Request) {
 		s.badRequest(w, r, "retain_days must be >= 0")
 		return
 	}
-	// Validate the cron spec up front — an enabled schedule with a spec the
-	// runner cannot parse would be configuration without execution.
+	// Use the runner's grammar when validating a schedule.
 	if req.Cron != "" {
-		if _, err := parseDRCron(req.Cron); err != nil {
+		if _, err := cron.Parse(req.Cron); err != nil {
 			s.badRequest(w, r, "invalid cron: "+err.Error())
 			return
 		}
@@ -1304,9 +1358,7 @@ func (s *Server) handlePutDRSchedule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Persist FIRST (fail closed): if the estate cannot store the config — the
-	// dual-control restore gate included — the in-memory state must not start
-	// telling the console a lie that a restart would expose.
+	// Persist the schedule and restore policy before publishing in-memory state.
 	s.drSvc.scheduleOpMu.Lock()
 	defer s.drSvc.scheduleOpMu.Unlock()
 	now := s.clock.Now().Time().UTC()
@@ -1328,31 +1380,10 @@ func (s *Server) handlePutDRSchedule(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, s.drScheduleView())
 }
 
-// applyDualControlRequest folds a PUT's dual-control intent into next under the
-// "strengthen now, weaken later" rule, and reports what it did (for the trail).
-//
-// The three intents are deliberately distinct, and the third is the one that used
-// to be a bypass in its own right:
-//
-//   - want == nil — the caller did not mention the gate. Leave it, AND leave any
-//     pending disarm, completely alone. The handler used to decode the request into
-//     the same struct it stores, so a retention edit that never named the gate
-//     decoded Go's zero value (false) and disarmed it.
-//   - *want — arm. Immediate, and it CANCELS a disarm in flight: that is how a
-//     second admin who sees the pending disarm countermands it. Arming is also what
-//     SPENDS the provenance, so DisarmBy is cleared here and nowhere else.
-//   - !*want — disarm. If the gate is not actually armed there is nothing to
-//     protect, so the state simply normalises to off. If it IS armed, the request
-//     is RECORDED — with the instant it takes effect and WHO asked — and the gate
-//     keeps holding until then. Re-asking is idempotent: an existing pending
-//     instant is never moved, so repeating the request cannot bring it closer (nor
-//     push it away), and it cannot change whose disarm it is either.
-//
-// account is the requester's stable user. The one place it must NOT be forgotten is
-// the collapse of a spent instant: that branch clears DisarmAt because the config
-// should stop carrying a fired timer, and clearing DisarmBy alongside it would make
-// "wait for the disarm, then ask once more" a complete bypass of the rule the field
-// exists for.
+// applyDualControlRequest preserves an omitted gate, arms immediately and
+// records delayed disarms. Re-arming cancels a disarm and clears its requester.
+// Repeated disarms keep their instant and requester; collapsing a spent instant
+// keeps DisarmBy so the disarmer cannot restore by asking again.
 func applyDualControlRequest(next *drSchedule, want *bool, now time.Time, account string) string {
 	switch {
 	case want == nil:
@@ -1386,31 +1417,21 @@ func applyDualControlRequest(next *drSchedule, want *bool, now time.Time, accoun
 	}
 }
 
-// drScheduleView is the wire shape of the schedule: the stored config plus the
-// DERIVED next-run instant (never persisted — it is a function of the cron).
-//
-// It also reports the dual-control gate as the console must read it — its
-// EFFECTIVE state, not the stored bool. While a disarm is pending the gate is
-// still armed, and the response says so AND carries the instant it stops being
-// armed; once that instant has passed the gate reads off and the spent instant is
-// dropped. Reporting the stored bool instead would tell an operator the gate was
-// off while their restores were still being held for a second approver.
+// drScheduleView derives next_run and reports the effective restore gate.
+// Pending disarms remain visible; spent instants are omitted from the response.
 func (s *Server) drScheduleView() drSchedule {
 	now := s.clock.Now().Time().UTC()
 	sched := s.drSvc.scheduleSnapshot()
 	sched.NextRun = ""
 	if sched.Enabled && sched.Cron != "" {
-		if spec, err := parseDRCron(sched.Cron); err == nil {
-			if next, ok := spec.nextAfter(s.clock.Now().Time()); ok {
+		if spec, err := cron.Parse(sched.Cron); err == nil {
+			if next, ok := nextDRCronAfter(spec, s.clock.Now().Time()); ok {
 				sched.NextRun = next.UTC().Format(time.RFC3339)
 			}
 		}
 	}
-	// Order matters: both answers are functions of DisarmAt, so compute them BEFORE
-	// clearing a spent instant. Clearing first makes a stored `RequireDualControl:
-	// true` with an ELAPSED disarm read as armed forever — the cool-down would never
-	// end and a solo operator would be locked out by the very field meant to prevent
-	// that.
+	// Compute both answers before omitting a spent instant; clearing it first
+	// would make the stored armed flag hold the gate indefinitely.
 	armed, pending := sched.dualControlArmed(now), sched.disarmPending(now)
 	if !pending {
 		sched.DisarmAt = ""
@@ -1421,10 +1442,7 @@ func (s *Server) drScheduleView() drSchedule {
 
 // handleListPendingRestores lists restore requests awaiting a second approver, so a
 // distinct admin can find and approve one (dual-control).
-func (s *Server) handleListPendingRestores(w http.ResponseWriter, r *http.Request) {
-	if _, ok := s.authzSystem(w, r, "system:admin"); !ok {
-		return
-	}
+func (s *Server) handleListPendingRestores(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
 	if s.drSvc == nil {
 		s.writeError(w, r, errDRUnavailable)
 		return
@@ -1439,10 +1457,7 @@ func (s *Server) handleListPendingRestores(w http.ResponseWriter, r *http.Reques
 	writeJSON(w, http.StatusOK, map[string]any{"items": items})
 }
 
-func (s *Server) handleListDRJobs(w http.ResponseWriter, r *http.Request) {
-	if _, ok := s.authzSystem(w, r, "system:admin"); !ok {
-		return
-	}
+func (s *Server) handleListDRJobs(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
 	if s.drSvc == nil {
 		s.writeError(w, r, errDRUnavailable)
 		return

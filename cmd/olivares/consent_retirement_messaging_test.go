@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -81,12 +82,63 @@ var messagingSiblings = map[string]string{
 	"sessions.handoff.to_ref":                 "from_ref",
 }
 
+// Hold the real setup handoff between intake and outbox settlement. Returning
+// the estate here would let a no-effects baseline race the setup publication.
+func TestMessagingEstateWaitsForSetupOutboxSettlement(t *testing.T) {
+	entered, release := make(chan struct{}), make(chan struct{})
+	resume := sync.OnceFunc(func() { close(release) })
+	done := make(chan struct{})
+	defer func() { // Release and join before engine cleanup joins the pump.
+		resume()
+		<-done
+	}()
+	ready := make(chan *consentEstate, 1)
+	go func() {
+		defer close(done)
+		ready <- bootMessagingEstateWithSink(t, "sqlite", func(event sessions.WorkEventEnvelope) {
+			if event.Type == "work.handoff.offered" {
+				close(entered)
+				<-release
+			}
+		})
+	}()
+	select {
+	case <-entered:
+	case <-ready:
+		t.Fatal("messaging estate returned before setup handoff publication settled")
+	case <-time.After(2 * time.Minute): // Restarted estate setup also runs under -race.
+		t.Fatal("setup handoff did not reach the real sink")
+	}
+	select {
+	case <-ready:
+		t.Fatal("messaging estate returned while setup handoff settlement was held")
+	case <-time.After(time.Second):
+	}
+	resume()
+	select {
+	case e := <-ready:
+		states := communicationHTTPTestOutboxStates(t, e.eng, e.tT)
+		if len(states) != 1 || states["published"] == 0 {
+			t.Fatalf("messaging setup outbox is still unsettled: %v", states)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("messaging estate did not return after setup publication settled")
+	}
+}
+
 // bootMessagingEstate boots the composition on engineName with the
 // communication kernel activated, claims it, creates T and B and restarts it,
 // as a configured installation does after its first tenants. In T it creates
 // the sender (an owner) and the control member (an editor), a storage channel
 // the sender administers and has granted to both, and the control rows.
 func bootMessagingEstate(t *testing.T, engineName string) *consentEstate {
+	t.Helper()
+	return bootMessagingEstateWithSink(t, engineName, nil)
+}
+
+// bootMessagingEstateWithSink allows a test to pause settlement after the real
+// sink accepts a setup event. Publication and storage still use the real ports.
+func bootMessagingEstateWithSink(t *testing.T, engineName string, after func(sessions.WorkEventEnvelope)) *consentEstate {
 	t.Helper()
 	backing := consentBacking(t, engineName)
 	eng := bootActivatedCommunicationHTTPTestEngine(t, backing)
@@ -114,7 +166,15 @@ func bootMessagingEstate(t *testing.T, engineName string) *consentEstate {
 	}}
 	e.comm.handoffs.channelID = e.createStorageChannel()
 	e.comm.handoffs.grantChannel(t, map[string]any{"kind": "user", "ref": control.id}, "control")
+	if after != nil {
+		sessions.WithWorkEventSink(stoppingWorkSink{inner: e.eng.workSink, after: after})(e.eng.sessionsMod)
+	}
 	e.seedControls()
+	// Finish setup effects before callers snapshot rows to detect new effects.
+	eventually(t, "messaging setup outbox publication", func() bool {
+		states := communicationHTTPTestOutboxStates(t, e.eng, e.tT)
+		return len(states) == 1 && states["published"] > 0
+	})
 	return e
 }
 

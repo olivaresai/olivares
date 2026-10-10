@@ -196,6 +196,18 @@ export function ApprovalDetailSheet({
           )}
         </ScrollArea>
 
+        {detail &&
+        isPending &&
+        detail.action !== REENABLE_ACTION &&
+        detail.requested_by === principal?.actor ? (
+          <p
+            className="border-t border-border pt-3 text-body text-text-2"
+            role="status"
+          >
+            {t('detail.cannotDecideOwn')}
+          </p>
+        ) : null}
+
         {/* HU 047: the requester of an estate re-enable cannot decide it, and the sheet
             offered nothing else. It says what is needed and where to do it. */}
         {detail &&

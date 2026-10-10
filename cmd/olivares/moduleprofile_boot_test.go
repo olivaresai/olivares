@@ -109,8 +109,12 @@ func TestBootModuleProfileOfANewInstallationIsTheStandardSelection(t *testing.T)
 	if got := p.Selected(); !slices.Equal(got, standardModuleSelection()) {
 		t.Fatalf("new installation selection = %v, want %v", got, standardModuleSelection())
 	}
-	if p.Active("eventing") {
-		t.Fatal("a new installation runs eventing without selecting it")
+	// Eventing is selected by default for fresh local communication.
+	if !p.Active("eventing") {
+		t.Fatal("a new installation does not run selected eventing")
+	}
+	if p.Active("finops") {
+		t.Fatal("a new installation runs finops without selecting it")
 	}
 	// An existing store without a node copy runs everything until it is reconciled.
 	full := bootModuleProfile(t.TempDir(), true, slog.New(slog.NewTextHandler(io.Discard, nil)))
@@ -165,5 +169,9 @@ func TestConsoleModulesReportsWhichModulesHoldData(t *testing.T) {
 	}
 	if !holds["consoleviews"] || holds["finops"] {
 		t.Fatalf("holds_data consoleviews=%v finops=%v, want true/false: %s", holds["consoleviews"], holds["finops"], raw)
+	}
+	// Always sent, also when none run: a missing count is never read as none (#507).
+	if n, ok := body["running_sessions"].(float64); !ok || n != 0 {
+		t.Fatalf("running_sessions = %v, want 0 on the wire: %s", body["running_sessions"], raw)
 	}
 }

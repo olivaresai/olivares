@@ -43,9 +43,18 @@ function walk(dir, accept, out = []) {
   return out.sort()
 }
 
-function keyPaths(value, prefix = '', out = new Set()) {
-  if (prefix) out.add(prefix)
-  if (value && typeof value === 'object' && !Array.isArray(value)) {
+function keyPaths(value, prefix = '', out = new Map()) {
+  const branch = Boolean(
+    value && typeof value === 'object' && !Array.isArray(value),
+  )
+  if (prefix) {
+    // A branch replaced by a leaf can erase child keys at runtime. Refuse
+    // conflicting shapes rather than depend on feature registration order.
+    if (out.has(prefix) && out.get(prefix) !== branch)
+      throw new Error(`conflicting English i18n key shape: ${prefix}`)
+    out.set(prefix, branch)
+  }
+  if (branch) {
     for (const [key, child] of Object.entries(value))
       keyPaths(child, prefix ? `${prefix}.${key}` : key, out)
   }
@@ -79,11 +88,15 @@ function loadResources() {
     p.endsWith(`${path.sep}i18n${path.sep}en.json`),
   )) {
     const namespace = namespaceForFeature(file)
-    if (resources.has(namespace))
-      throw new Error(`duplicate English i18n namespace: ${namespace}`)
+    // registerTranslations deep-merges bundles into an existing namespace.
+    // Edition extensions contribute keys alongside the shared feature catalog.
     resources.set(
       namespace,
-      keyPaths(JSON.parse(fs.readFileSync(file, 'utf8'))),
+      keyPaths(
+        JSON.parse(fs.readFileSync(file, 'utf8')),
+        '',
+        resources.get(namespace),
+      ),
     )
   }
   return resources
@@ -347,9 +360,9 @@ const baselineCount = [...baselineSeen.values()].reduce(
 //    miró. Medido el 2026-08-17 sobre un árbol vacío, este guion salía 0.
 if (!(checked > 0)) {
   console.error(
-    `⛔ NO HE PODIDO MIRAR: el escaneo examinó 0 llamadas literales a t(). Un árbol sin nada que examinar NO es un
-árbol en orden — es un escáner que dejó de reconocer la disposición. Revisa las rutas antes de
-leer esto como verde.`,
+    `⛔ COULD NOT LOOK: the scan examined 0 literal t() calls. A tree with nothing to examine is NOT a
+verified tree — the scanner no longer recognizes its layout. Check the paths before
+treating this as passing.`,
   )
   process.exit(2)
 }

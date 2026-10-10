@@ -3,6 +3,7 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { useEffect } from 'react'
 import { create } from 'zustand'
+import { CONSOLE_ENTRIES } from '@/features/module-spec.gen'
 import { useServerInfo } from '@/lib/hooks/use-server-info'
 
 /**
@@ -36,30 +37,38 @@ export function moduleOfPermission(permission?: string): string | undefined {
   return i > 0 ? moduleKey(permission!.slice(0, i)) : undefined
 }
 
-/** Views whose module is not their permission's first segment (ARCH, 2026-10-01): the
- * Claude policy console reads governance:claude-policy:* from /v1/m/claude-policy, the
- * Observability page is the observability module's, and
- * the K3 communication screens read sessions permissions but work only while the
+/** The built-in module that names each view among its console entries (core/modulespec;
+ * generated). It need not be the permission's first segment: the Claude policy console
+ * asks governance:claude-policy:* of the claude-policy module, and the Observability page
+ * asks health:status:read of the observability module (EU18). */
+const MODULE_OF_VIEW: ReadonlyMap<string, string> = new Map(
+  Object.entries(CONSOLE_ENTRIES).flatMap(([module, views]) =>
+    views.map((view) => [view, module] as const),
+  ),
+)
+
+/** The K3 communication screens are sessions views that work only while the
  * communication plane is effective ("communication" is this console's flag for that,
  * not an engine module id). */
-const VIEW_MODULE: Readonly<Record<string, string>> = {
-  claudePolicy: 'claude-policy',
-  // The Observability page asks health:status:read but reads /v1/m/observability (EU18).
-  observability: 'observability',
-  communications: 'communication',
-  communicationsInbox: 'communication',
-  communicationsNew: 'communication',
-  communicationsHandoffs: 'communication',
-  communicationsAdministration: 'communication',
-}
+const COMMUNICATION_VIEWS: ReadonlySet<string> = new Set([
+  'communications',
+  'communicationsInbox',
+  'communicationsNew',
+  'communicationsHandoffs',
+  'communicationsAdministration',
+])
 
-/** The module a view belongs to: its own entry, else its permission's first segment. */
+/** The module a view belongs to: the communication plane for its screens, else the spec
+ * row that names it. A view no built-in row names (an edition view) falls back to its
+ * permission's first segment. */
 export function moduleOfView(
   permission?: string,
   viewId?: string,
 ): string | undefined {
+  if (viewId && COMMUNICATION_VIEWS.has(viewId)) return 'communication'
   return (
-    (viewId ? VIEW_MODULE[viewId] : undefined) ?? moduleOfPermission(permission)
+    (viewId ? MODULE_OF_VIEW.get(viewId) : undefined) ??
+    moduleOfPermission(permission)
   )
 }
 

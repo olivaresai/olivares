@@ -15,21 +15,21 @@ func TestL4B2CurrentRows(t *testing.T) {
 	fable51, ctx, out, ok := pricingFor("claude-fable-5-1")
 	if !ok || fable51.InputPerMTokUSD != 10 || fable51.OutputPerMTokUSD != 50 ||
 		fable51.CacheWritePerMTokUSD != 12.50 || fable51.CacheWrite1hPerMTokUSD != 20 ||
-		fable51.CacheReadPerMTokUSD != 0.25 || fable51.AsOf != "2026-09-27" ||
+		fable51.CacheReadPerMTokUSD != 0.25 || fable51.AsOf != "2026-09-25" ||
 		ctx != 1_000_000 || out != 128_000 {
-		t.Fatalf("claude-fable-5-1 = %+v ctx %d out %d ok %v, want 10/50 cache 12.50/20/0.25 as of 2026-09-27, 1M/128K", fable51, ctx, out, ok)
+		t.Fatalf("claude-fable-5-1 = %+v ctx %d out %d ok %v, want 10/50 cache 12.50/20/0.25 as of 2026-09-25, 1M/128K", fable51, ctx, out, ok)
 	}
 	fable5, _, _, _ := pricingFor("claude-fable-5")
-	if fable5.CacheReadPerMTokUSD != 1 || fable5.AsOf != "2026-06-09" {
-		t.Fatalf("claude-fable-5 must keep cache read 1 as of 2026-06-09, got %+v", fable5)
+	if fable5.CacheReadPerMTokUSD != 1 || fable5.AsOf != "2026-09-25" {
+		t.Fatalf("claude-fable-5 must keep cache read 1 (dataset stamp 2026-09-25), got %+v", fable5)
 	}
 
 	opus55, ctx, out, ok := pricingFor("claude-opus-5-5")
 	if !ok || opus55.InputPerMTokUSD != 4 || opus55.OutputPerMTokUSD != 20 ||
 		opus55.CacheWritePerMTokUSD != 5 || opus55.CacheWrite1hPerMTokUSD != 8 ||
-		opus55.CacheReadPerMTokUSD != 0.20 || opus55.AsOf != "2026-09-27" ||
+		opus55.CacheReadPerMTokUSD != 0.20 || opus55.AsOf != "2026-09-25" ||
 		ctx != 1_000_000 || out != 128_000 {
-		t.Fatalf("claude-opus-5-5 = %+v ctx %d out %d ok %v, want 4/20 cache 5/8/0.20 as of 2026-09-27", opus55, ctx, out, ok)
+		t.Fatalf("claude-opus-5-5 = %+v ctx %d out %d ok %v, want 4/20 cache 5/8/0.20 as of 2026-09-25", opus55, ctx, out, ok)
 	}
 	if def, levels, ok := DefaultEffortFor("claude-opus-5-5"); !ok || def != "medium" || len(levels) != 5 {
 		t.Fatalf("claude-opus-5-5 effort = %q %v ok %v, want medium and five levels", def, levels, ok)
@@ -50,15 +50,15 @@ func TestL4B2CurrentRows(t *testing.T) {
 	sonnet, ctx, out, ok := pricingFor("claude-sonnet-5")
 	if !ok || sonnet.InputPerMTokUSD != 2 || sonnet.OutputPerMTokUSD != 10 ||
 		sonnet.CacheWritePerMTokUSD != 2.50 || sonnet.CacheWrite1hPerMTokUSD != 4 ||
-		sonnet.CacheReadPerMTokUSD != 0.20 || sonnet.AsOf != "2026-09-27" ||
+		sonnet.CacheReadPerMTokUSD != 0.20 || sonnet.AsOf != "2026-09-25" ||
 		ctx != 1_000_000 || out != 128_000 {
-		t.Fatalf("claude-sonnet-5 = %+v ctx %d out %d ok %v, want 2/10 cache 2.50/4/0.20 as of 2026-09-27", sonnet, ctx, out, ok)
+		t.Fatalf("claude-sonnet-5 = %+v ctx %d out %d ok %v, want 2/10 cache 2.50/4/0.20 as of 2026-09-25", sonnet, ctx, out, ok)
 	}
 
 	haiku, ctx, out, ok := pricingFor("claude-haiku-4-5-20251001")
 	if !ok || haiku.InputPerMTokUSD != 1 || haiku.OutputPerMTokUSD != 5 ||
 		haiku.CacheWritePerMTokUSD != 1.25 || haiku.CacheWrite1hPerMTokUSD != 2 ||
-		haiku.CacheReadPerMTokUSD != 0.10 || haiku.AsOf != "2026-09-27" ||
+		haiku.CacheReadPerMTokUSD != 0.10 || haiku.AsOf != "2026-09-25" ||
 		ctx != 200_000 || out != 64_000 {
 		t.Fatalf("claude-haiku-4-5-20251001 = %+v ctx %d out %d ok %v", haiku, ctx, out, ok)
 	}
@@ -66,8 +66,8 @@ func TestL4B2CurrentRows(t *testing.T) {
 		t.Fatalf("dated Haiku 4.5 effort = %q ok %v, want none", def, ok)
 	}
 	alias, _, _, ok := pricingFor("claude-haiku-4-5")
-	if !ok || alias.AsOf != "2026-06-09" || alias.InputPerMTokUSD != 1 {
-		t.Fatalf("haiku alias = %+v ok %v, want the 2026-06-09 $1 row", alias, ok)
+	if !ok || alias.AsOf != "2026-09-25" || alias.InputPerMTokUSD != 1 {
+		t.Fatalf("haiku alias = %+v ok %v, want the dataset $1 row", alias, ok)
 	}
 
 	for _, id := range []string{"claude-fable-5-1", "claude-opus-5-5", "claude-haiku-4-5-20251001"} {

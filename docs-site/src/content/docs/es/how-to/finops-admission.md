@@ -8,6 +8,9 @@ sidebar:
   order: 21
 ---
 
+Los presupuestos y el análisis de gasto de FinOps son funciones de **[Business](https://olivares.ai/pricing)**. Community conserva el seguimiento de costes por sesión y la exportación de datos. Los presupuestos guardados antes de 0.1 se pueden consultar y eliminar, y se aplican mientras el módulo FinOps esté activo; Community no puede crearlos ni modificarlos. Las evaluaciones y los entornos de prueba siguen en Community.
+
+
 Un efecto facturable **reserva** su gasto estimado antes de ejecutarse y recibe
 **un único handle**. Cuando el efecto se ha ejecutado, quien llama **confirma**
 (commit) el coste medido con ese handle. Si no se ejecutó, **libera** la

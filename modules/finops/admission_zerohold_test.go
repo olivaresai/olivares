@@ -82,6 +82,42 @@ func runReserveOfZeroStillRefusesAnExhaustedCap(t *testing.T, cfg store.Config) 
 	}
 }
 
+// TestReserveOfZeroRefusesACapSpentToItsLimit is the boundary the over-cap test above
+// does not reach: a cap spent exactly to its limit is reached, as CheckBudget and the
+// budget status report it, so an admission with no amount (a session on a subscription
+// plan) is refused there too. One micro-USD of headroom still admits it.
+func TestReserveOfZeroRefusesACapSpentToItsLimit(t *testing.T) {
+	forEachAdmissionEngine(t, runReserveOfZeroRefusesACapSpentToItsLimit)
+}
+
+func runReserveOfZeroRefusesACapSpentToItsLimit(t *testing.T, cfg store.Config) {
+	m, st, tenant, _ := openFinCfg(t, cfg)
+	m.clock = &fakeClock{t: baseTime}
+	ctx := context.Background()
+	createBudget(t, st, tenant, "global-block", budgetSpec{
+		Dimension: "global", Period: "monthly", LimitMicroUSD: oneUSD, Action: "block",
+	})
+	m.ingest(t, tenant, mkCost("anthropic", "model", "s1", 1, 1, oneUSD-1, baseTime))
+
+	under, err := m.Reserve(ctx, tenant, AdmissionRequest{Scope: AdmissionScopeSessionLaunch, IdempotencyKey: "zero-under"})
+	if err != nil || !under.Allowed {
+		t.Fatalf("a zero-amount admission with 1 µUSD of headroom was refused: %+v err=%v", under, err)
+	}
+
+	m.ingest(t, tenant, mkCost("anthropic", "model", "s2", 1, 1, 1, baseTime))
+
+	at, err := m.Reserve(ctx, tenant, AdmissionRequest{Scope: AdmissionScopeSessionLaunch, IdempotencyKey: "zero-at"})
+	if err != nil {
+		t.Fatalf("reserve: %v", err)
+	}
+	if at.Allowed || at.Action != "block" {
+		t.Fatalf("a cap spent exactly to its limit admitted a zero-amount call: %+v", at)
+	}
+	if got := ledgerCounts(t, st, tenant, baseTime); got != (ledgerCount{}) {
+		t.Fatalf("zero-amount admissions left %+v in the ledger; they must hold nothing", got)
+	}
+}
+
 // TestReserveOfZeroIsReEvaluatedUnderAStableKey is the half of idempotency a hold of
 // zero cannot buy. A replay hands a retry the hold its call took; an admission that took
 // no hold has nothing to hand back, so replaying it would only freeze its answer. A
@@ -208,5 +244,44 @@ func runResumeUnderHeadroomIsAllowedAgain(t *testing.T, cfg store.Config) {
 	}
 	if resume.Handle != "" {
 		t.Fatalf("a launch holds nothing, so it is handed no handle: %q", resume.Handle)
+	}
+}
+
+// TestBudgetHoldsBeforeTheCallWithOrWithoutAnAmount pins that admission refuses a
+// call before it reaches the model once the cap is spent, whatever the call holds.
+// A metered model-gateway call holds the proxy's floor estimate; a session on a
+// subscription plan holds nothing because its marginal price is zero. The spend sits
+// exactly at the limit, so any further spend overruns it: a zero amount must not be
+// the one door that stays open.
+func TestBudgetHoldsBeforeTheCallWithOrWithoutAnAmount(t *testing.T) {
+	forEachAdmissionEngine(t, runBudgetHoldsBeforeTheCallWithOrWithoutAnAmount)
+}
+
+func runBudgetHoldsBeforeTheCallWithOrWithoutAnAmount(t *testing.T, cfg store.Config) {
+	m, st, tenant, _ := openFinCfg(t, cfg)
+	m.clock = &fakeClock{t: baseTime}
+	ctx := context.Background()
+	createBudget(t, st, tenant, "global-block", budgetSpec{
+		Dimension: "global", Period: "monthly", LimitMicroUSD: oneUSD, Action: "block",
+	})
+	m.ingest(t, tenant, mkCost("anthropic", "model", "s1", 1, 1, oneUSD, baseTime))
+
+	for _, tc := range []struct {
+		name string
+		req  AdmissionRequest
+	}{
+		// 10_000 µUSD is the inference proxy's floor (cmd/olivares proxyEstimateFloorMicroUSD).
+		{name: "metered", req: AdmissionRequest{Scope: AdmissionScopeModelGateway, EstimateMicroUSD: 10_000, IdempotencyKey: "metered"}},
+		{name: "subscription", req: AdmissionRequest{Scope: AdmissionScopeSessionLaunch, IdempotencyKey: "subscription"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			res, err := m.Reserve(ctx, tenant, tc.req)
+			if err != nil {
+				t.Fatalf("reserve: %v", err)
+			}
+			if res.Allowed || res.Action != "block" {
+				t.Fatalf("a cap spent to its limit admitted a %s call: %+v", tc.name, res)
+			}
+		})
 	}
 }

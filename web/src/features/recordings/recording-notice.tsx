@@ -11,6 +11,7 @@
 // 403 `recording_consent_required` until /ack), this dialog is how the operator
 // answers it. "Acknowledge and continue" POSTs /ack and invalidates the recording
 // queries; "Cancel" navigates back.
+import type { ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { CircleDot } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -38,12 +39,15 @@ export function RecordingNotice({
   namespace,
   always = false,
   className,
+  fallback = null,
 }: {
   /** The mounting view's module namespace (matched against recorded_namespaces). */
   namespace: string
   /** Render the strip regardless of the recorded set (the recordings view itself). */
   always?: boolean
   className?: string
+  /** Notice to show when this surface has no recording notice. */
+  fallback?: ReactNode
 }) {
   const { t } = useTranslation('recordings')
   const { activeTenant } = useAuth()
@@ -78,8 +82,9 @@ export function RecordingNotice({
   // malformed/empty body (no recorded_namespaces) is treated as "not recorded",
   // never a crash, so a transient bad read can't take down a recorded surface.
   const notice = noticeQuery.data
-  if (!notice) return null
-  if (!always && !notice.recorded_namespaces?.includes(namespace)) return null
+  if (!notice) return fallback
+  if (!always && !notice.recorded_namespaces?.includes(namespace))
+    return fallback
 
   return (
     <>

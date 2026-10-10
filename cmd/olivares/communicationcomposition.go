@@ -141,13 +141,13 @@ func bindCommunicationComposition(
 
 	authority := newCommunicationOutboxAuthority(sm)
 
-	sm.UseCommunicationDirectorySnapshotResolver(resolver)
-	sm.UseCommunicationPublicationAudienceAttestor(attestor)
-	sm.UseCommunicationChannelGrantSubjectClosureResolver(closure)
-	sm.UseCommunicationStoreReadinessWitness(proof)
-	sm.UseWorkOutboxClaimAuthority(authority)
+	sm.CommunicationDirectoryResolver = resolver
+	sm.CommunicationAudienceAttestor = attestor
+	sm.CommunicationGrantClosure = closure
+	sm.CommunicationStoreReadiness = proof
+	sm.WorkOutboxAuthority = authority
 	if cursor != nil {
-		sm.UseCommunicationCursorTokenKeyring(cursor)
+		sm.CursorKeyring = (cursor).Snapshot()
 	}
 	composition := &communicationComposition{
 		activation: activation, reads: reads, resolver: resolver, closure: closure,
@@ -178,7 +178,7 @@ func bindCommunicationComposition(
 	}
 	composition.pump = newCommunicationPumpWitness(ctx, st, sinkBound)
 	authority.composeLane(composition.pump, nil)
-	sm.UseCommunicationPumpReadinessWitness(composition.pump)
+	sm.CommunicationPumpReadiness = composition.pump
 	log.Info("sessions: communication activation requested; dual runtime credentials enabled, effective readiness decides issuance",
 		"cursor_signing_kid", cursorStatus.SigningKID,
 		"cursor_verification_kids", len(cursorStatus.VerificationKIDs),

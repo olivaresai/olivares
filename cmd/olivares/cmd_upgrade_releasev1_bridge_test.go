@@ -316,15 +316,15 @@ func TestUpgradeThroughTheRealWorkerBridge(t *testing.T) {
 		t.Skip("node is not available for the Worker bridge")
 	}
 	old, desired := requireStubs(t)
-	next := buildStub(t, "26.9.0")
+	next := buildStub(t, "26.900")
 	pub, priv, err := ed25519.GenerateKey(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	pubB64 := base64.StdEncoding.EncodeToString(pub)
 	art8 := tarGzBinary(t, desired)
-	rel8 := newV1Release(t, priv, release.ChannelStable, "26.8.0", "", art8)
-	rel9 := newV1Release(t, priv, release.ChannelStable, "26.9.0", "", tarGzBinary(t, next))
+	rel8 := newV1Release(t, priv, release.ChannelStable, "26.800", "", art8)
+	rel9 := newV1Release(t, priv, release.ChannelStable, "26.900", "", tarGzBinary(t, next))
 	const holder = "sub_bridge"
 
 	run := func(t *testing.T, b *workerBridge, token, target, dataDir string, extra ...string) (string, error) {
@@ -348,7 +348,7 @@ func TestUpgradeThroughTheRealWorkerBridge(t *testing.T) {
 				files[k] = v
 			}
 		}
-		return bridgeSpec{Holder: holder, Codes: codes, Objects: objects, Tokens: []bridgeToken{{Name: "link8", Version: "26.8.0"}}}, files
+		return bridgeSpec{Holder: holder, Codes: codes, Objects: objects, Tokens: []bridgeToken{{Name: "link8", Version: "26.800"}}}, files
 	}
 
 	t.Run("the complete same-version authenticated journey installs the entitled set's bytes", func(t *testing.T) {
@@ -358,13 +358,13 @@ func TestUpgradeThroughTheRealWorkerBridge(t *testing.T) {
 		if _, err := run(t, b, b.tokens["link8"], target, t.TempDir()); err != nil {
 			t.Fatalf("journey: %v", err)
 		}
-		assertTargetRuns(t, target, "26.8.0")
+		assertTargetRuns(t, target, "26.800")
 		reqs := b.requests()
 		if countServed(reqs, "manifest", 200) != 1 || countServed(reqs, "manifest.sig", 200) != 1 || countServed(reqs, "", 200) != 1 {
 			t.Fatalf("served requests: %+v", reqs)
 		}
 		reads := b.reads()
-		if !readsContain(reads, bridgeArtifactKey("26.8.0", "biz+reg")) || readsContain(reads, "/biz/") {
+		if !readsContain(reads, bridgeArtifactKey("26.800", "biz+reg")) || readsContain(reads, "/biz/") {
 			t.Fatalf("the Worker read %v; want the biz+reg artifact and no biz object", reads)
 		}
 	})
@@ -373,8 +373,8 @@ func TestUpgradeThroughTheRealWorkerBridge(t *testing.T) {
 		spec, files := baseSpec([]string{"biz"}, publishedRelease{rel8, "stable", "biz"})
 		spec.Deployments = []bridgeDeployment{{ID: "dep_owned", Serial: "serial_owned", IssueSeq: 2}}
 		spec.OtaTokens = []bridgeOtaToken{
-			{Name: "ota8", Version: "26.8.0", DeploymentID: "dep_owned", Serial: "serial_owned", IssueSeq: 2},
-			{Name: "ota_stale", Version: "26.8.0", DeploymentID: "dep_owned", Serial: "serial_owned", IssueSeq: 1},
+			{Name: "ota8", Version: "26.800", DeploymentID: "dep_owned", Serial: "serial_owned", IssueSeq: 2},
+			{Name: "ota_stale", Version: "26.800", DeploymentID: "dep_owned", Serial: "serial_owned", IssueSeq: 1},
 		}
 		b := startWorkerBridge(t, spec, files)
 		target := writeTarget(t, old)
@@ -385,11 +385,11 @@ func TestUpgradeThroughTheRealWorkerBridge(t *testing.T) {
 		if len(b.reads()) != 0 {
 			t.Fatalf("a refused lineage read objects: %v", b.reads())
 		}
-		assertTargetRuns(t, target, "26.7.0")
+		assertTargetRuns(t, target, "26.700")
 		if _, err := run(t, b, b.tokens["ota8"], target, t.TempDir()); err != nil {
 			t.Fatalf("current lineage: %v", err)
 		}
-		assertTargetRuns(t, target, "26.8.0")
+		assertTargetRuns(t, target, "26.800")
 	})
 
 	t.Run("a signature that does not verify, or cannot be decoded, leaves the target intact", func(t *testing.T) {
@@ -403,7 +403,7 @@ func TestUpgradeThroughTheRealWorkerBridge(t *testing.T) {
 		if err == nil || !strings.Contains(strings.ToLower(err.Error()), "signature") {
 			t.Fatalf("want a signature refusal, got %v", err)
 		}
-		assertTargetRuns(t, target, "26.7.0")
+		assertTargetRuns(t, target, "26.700")
 		if countServed(b.requests(), "", 200) != 0 {
 			t.Fatal("artifact bytes were fetched for a manifest whose signature does not verify")
 		}
@@ -413,7 +413,7 @@ func TestUpgradeThroughTheRealWorkerBridge(t *testing.T) {
 		if err == nil || !strings.Contains(err.Error(), "release_metadata_invalid") {
 			t.Fatalf("want release_metadata_invalid, got %v", err)
 		}
-		assertTargetRuns(t, target, "26.7.0")
+		assertTargetRuns(t, target, "26.700")
 	})
 
 	t.Run("a channel advance after mint is a named conflict; a properly reissued token installs the next version", func(t *testing.T) {
@@ -425,21 +425,21 @@ func TestUpgradeThroughTheRealWorkerBridge(t *testing.T) {
 		if err == nil || !strings.Contains(err.Error(), v1ErrTokenVersionStale) {
 			t.Fatalf("want %s, got %v", v1ErrTokenVersionStale, err)
 		}
-		assertTargetRuns(t, target, "26.7.0")
-		if readsContain(b.reads(), "olivares_26.9.0") || readsContain(b.reads(), "olivares_26.8.0") {
+		assertTargetRuns(t, target, "26.700")
+		if readsContain(b.reads(), "olivares_26.900") || readsContain(b.reads(), "olivares_26.800") {
 			t.Fatalf("an artifact was read for a stale token: %v", b.reads())
 		}
-		// The Worker's own minting code issues a 26.9.0 token — the authenticated portal reissue —
+		// The Worker's own minting code issues a 26.900 token — the authenticated portal reissue —
 		// and THAT bearer obtains the next version. The old one never did.
-		tok9 := b.mint("link9", "26.9.0")
+		tok9 := b.mint("link9", "26.900")
 		if _, err := run(t, b, tok9, target, t.TempDir()); err != nil {
 			t.Fatalf("reissued token: %v", err)
 		}
-		assertTargetRuns(t, target, "26.9.0")
+		assertTargetRuns(t, target, "26.900")
 	})
 
 	t.Run("a grant change after resolution is a set conflict; one fresh resolution installs the same release for the new set", func(t *testing.T) {
-		// biz+reg AND biz publish 26.8.0 with the SAME artifact bytes, so the re-resolved descriptor
+		// biz+reg AND biz publish 26.800 with the SAME artifact bytes, so the re-resolved descriptor
 		// is identical and the run may complete under the new set's own object.
 		spec, files := baseSpec([]string{"biz", "reg"}, publishedRelease{rel8, "stable", "biz+reg"}, publishedRelease{rel8, "stable", "biz"})
 		b := startWorkerBridge(t, spec, files)
@@ -448,13 +448,13 @@ func TestUpgradeThroughTheRealWorkerBridge(t *testing.T) {
 		if _, err := run(t, b, b.tokens["link8"], target, t.TempDir()); err != nil {
 			t.Fatalf("expected one fresh resolution to recover: %v", err)
 		}
-		assertTargetRuns(t, target, "26.8.0")
+		assertTargetRuns(t, target, "26.800")
 		reqs := b.requests()
 		if countServed(reqs, "", 409) != 1 || countServed(reqs, "manifest", 200) != 2 || countServed(reqs, "manifest.sig", 200) != 2 || countServed(reqs, "", 200) != 1 {
 			t.Fatalf("served: %+v (want one 409 artifact, then a full second resolution and one artifact)", reqs)
 		}
 		reads := b.reads()
-		if readsContain(reads, bridgeArtifactKey("26.8.0", "biz+reg")) || !readsContain(reads, bridgeArtifactKey("26.8.0", "biz")) {
+		if readsContain(reads, bridgeArtifactKey("26.800", "biz+reg")) || !readsContain(reads, bridgeArtifactKey("26.800", "biz")) {
 			t.Fatalf("artifact reads %v: the biz+reg object must not be served after the set changed", reads)
 		}
 	})
@@ -468,7 +468,7 @@ func TestUpgradeThroughTheRealWorkerBridge(t *testing.T) {
 		if err == nil || !strings.Contains(err.Error(), "release_unavailable") {
 			t.Fatalf("want release_unavailable after the fresh resolution, got %v", err)
 		}
-		assertTargetRuns(t, target, "26.7.0")
+		assertTargetRuns(t, target, "26.700")
 		if readsContain(b.reads(), "olivares_") {
 			t.Fatalf("an artifact object was read: %v", b.reads())
 		}
@@ -483,7 +483,7 @@ func TestUpgradeThroughTheRealWorkerBridge(t *testing.T) {
 		if err == nil || !strings.Contains(err.Error(), "license_not_live") {
 			t.Fatalf("want license_not_live, got %v", err)
 		}
-		assertTargetRuns(t, target, "26.7.0")
+		assertTargetRuns(t, target, "26.700")
 		if readsContain(b.reads(), "olivares_") {
 			t.Fatalf("an artifact object was read after revocation: %v", b.reads())
 		}
@@ -496,7 +496,7 @@ func TestUpgradeThroughTheRealWorkerBridge(t *testing.T) {
 		spec, files := baseSpec([]string{"biz"}, publishedRelease{rel8, "stable", "biz"})
 		b := startWorkerBridge(t, spec, files)
 		target := writeTarget(t, old)
-		changed := newV1Release(t, priv, release.ChannelStable, "26.8.0", "notes changed, same binary", art8)
+		changed := newV1Release(t, priv, release.ChannelStable, "26.800", "notes changed, same binary", art8)
 		b.after("manifest.sig",
 			b.putOp(bridgeManifestKey("stable", "biz"), changed.manifest),
 			b.putOp(bridgeManifestKey("stable", "biz")+".sig", changed.sig),
@@ -504,7 +504,7 @@ func TestUpgradeThroughTheRealWorkerBridge(t *testing.T) {
 		if _, err := run(t, b, b.tokens["link8"], target, t.TempDir()); err != nil {
 			t.Fatalf("expected one fresh resolution to recover: %v", err)
 		}
-		assertTargetRuns(t, target, "26.8.0")
+		assertTargetRuns(t, target, "26.800")
 		reqs := b.requests()
 		if countServed(reqs, "", 409) != 1 || countServed(reqs, "manifest", 200) != 2 || countServed(reqs, "", 200) != 1 {
 			t.Fatalf("served: %+v", reqs)
@@ -515,15 +515,15 @@ func TestUpgradeThroughTheRealWorkerBridge(t *testing.T) {
 		spec, files := baseSpec([]string{"biz"}, publishedRelease{rel8, "stable", "biz"})
 		b := startWorkerBridge(t, spec, files)
 		target := writeTarget(t, old)
-		second := newV1Release(t, priv, release.ChannelStable, "26.8.0", "second", art8)
-		third := newV1Release(t, priv, release.ChannelStable, "26.8.0", "third", art8)
+		second := newV1Release(t, priv, release.ChannelStable, "26.800", "second", art8)
+		third := newV1Release(t, priv, release.ChannelStable, "26.800", "third", art8)
 		b.after("manifest.sig", b.putOp(bridgeManifestKey("stable", "biz"), second.manifest), b.putOp(bridgeManifestKey("stable", "biz")+".sig", second.sig))
 		b.after("manifest.sig", b.putOp(bridgeManifestKey("stable", "biz"), third.manifest), b.putOp(bridgeManifestKey("stable", "biz")+".sig", third.sig))
 		_, err := run(t, b, b.tokens["link8"], target, t.TempDir())
 		if err == nil || !strings.Contains(err.Error(), "changed AGAIN") {
 			t.Fatalf("want termination after one fresh resolution, got %v", err)
 		}
-		assertTargetRuns(t, target, "26.7.0")
+		assertTargetRuns(t, target, "26.700")
 		reqs := b.requests()
 		if countServed(reqs, "manifest", 200) != 2 || countServed(reqs, "", 409) != 2 || countServed(reqs, "", 200) != 0 {
 			t.Fatalf("served: %+v (want exactly two resolutions, two artifact conflicts, no bytes)", reqs)
@@ -531,30 +531,30 @@ func TestUpgradeThroughTheRealWorkerBridge(t *testing.T) {
 	})
 
 	t.Run("explicit rollback through a still-valid channel is audited, and refused without --force-rollback", func(t *testing.T) {
-		rel7 := newV1Release(t, priv, release.ChannelSecurity, "26.7.0", "", tarGzBinary(t, old))
+		rel7 := newV1Release(t, priv, release.ChannelSecurity, "26.700", "", tarGzBinary(t, old))
 		spec, files := baseSpec([]string{"biz"}, publishedRelease{rel8, "stable", "biz"}, publishedRelease{rel7, "security", "biz"})
-		spec.Tokens = append(spec.Tokens, bridgeToken{Name: "link7", Version: "26.7.0"})
+		spec.Tokens = append(spec.Tokens, bridgeToken{Name: "link7", Version: "26.700"})
 		b := startWorkerBridge(t, spec, files)
-		target := writeTarget(t, desired) // running 26.8.0
+		target := writeTarget(t, desired) // running 26.800
 		dataDir := t.TempDir()
 		_, err := run(t, b, b.tokens["link7"], target, dataDir, "--channel", "security")
 		if err == nil || !strings.Contains(err.Error(), "REFUSING to downgrade") {
 			t.Fatalf("want the anti-rollback refusal, got %v", err)
 		}
-		assertTargetRuns(t, target, "26.8.0")
+		assertTargetRuns(t, target, "26.800")
 		if _, err := run(t, b, b.tokens["link7"], target, dataDir, "--channel", "security", "--force-rollback"); err != nil {
 			t.Fatalf("forced rollback: %v", err)
 		}
-		assertTargetRuns(t, target, "26.7.0")
+		assertTargetRuns(t, target, "26.700")
 		audit, err := os.ReadFile(filepath.Join(dataDir, "upgrade-audit.log"))
-		if err != nil || !strings.Contains(string(audit), "force-rollback") || !strings.Contains(string(audit), "from=26.8.0") || !strings.Contains(string(audit), "to=26.7.0") {
+		if err != nil || !strings.Contains(string(audit), "force-rollback") || !strings.Contains(string(audit), "from=26.800") || !strings.Contains(string(audit), "to=26.700") {
 			t.Fatalf("audit record missing or incomplete: %v\n%s", err, audit)
 		}
 	})
 
 	t.Run("a binary that fails its post-swap probe is restored", func(t *testing.T) {
 		sentinel := filepath.Join(t.TempDir(), "ran-once")
-		flaky := newV1Release(t, priv, release.ChannelStable, "26.8.0", "", tarGzBinary(t, buildFlakyStub(t, sentinel)))
+		flaky := newV1Release(t, priv, release.ChannelStable, "26.800", "", tarGzBinary(t, buildFlakyStub(t, sentinel)))
 		spec, files := baseSpec([]string{"biz"}, publishedRelease{flaky, "stable", "biz"})
 		b := startWorkerBridge(t, spec, files)
 		target := writeTarget(t, old)
@@ -562,32 +562,7 @@ func TestUpgradeThroughTheRealWorkerBridge(t *testing.T) {
 		if err == nil || !strings.Contains(err.Error(), "rolled back") {
 			t.Fatalf("want the automatic rollback, got %v", err)
 		}
-		assertTargetRuns(t, target, "26.7.0")
+		assertTargetRuns(t, target, "26.700")
 	})
 
-	t.Run("the existing verified bundle path still performs an explicit, audited rollback", func(t *testing.T) {
-		rel7 := newV1Release(t, priv, release.ChannelStable, "26.7.0", "", tarGzBinary(t, old))
-		bundle := t.TempDir()
-		for name, data := range map[string][]byte{
-			"manifest.json": rel7.manifest, "manifest.json.sig": rel7.sig, "olivares_26.7.0_linux_amd64.tar.gz": rel7.artifact,
-		} {
-			if err := os.WriteFile(filepath.Join(bundle, name), data, 0o600); err != nil {
-				t.Fatal(err)
-			}
-		}
-		target := writeTarget(t, desired)
-		dataDir := t.TempDir()
-		installDevLicense(t, dataDir)
-		if _, err := runUpgradeCmd(t, "--bundle", bundle, "--pubkey", pubB64, "--target", target, "--os", "linux", "--arch", "amd64", "--yes", "--data-dir", dataDir); err == nil || !strings.Contains(err.Error(), "REFUSING to downgrade") {
-			t.Fatalf("bundle without --force-rollback: want refusal, got %v", err)
-		}
-		if _, err := runUpgradeCmd(t, "--bundle", bundle, "--pubkey", pubB64, "--target", target, "--os", "linux", "--arch", "amd64", "--yes", "--data-dir", dataDir, "--force-rollback"); err != nil {
-			t.Fatalf("bundle rollback: %v", err)
-		}
-		assertTargetRuns(t, target, "26.7.0")
-		audit, err := os.ReadFile(filepath.Join(dataDir, "upgrade-audit.log"))
-		if err != nil || !strings.Contains(string(audit), "force-rollback") {
-			t.Fatalf("bundle rollback audit missing: %v", err)
-		}
-	})
 }

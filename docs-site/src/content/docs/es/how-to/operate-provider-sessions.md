@@ -44,25 +44,29 @@ no un respaldo.
    Vincular un origen necesita `sessions:profile-binding:write` más
    administración de orígenes. Lanzar una ejecución necesita `sessions:run:write`.
    Permisos: [referencia de consola](/reference/console/).
-4. El controlador correspondiente está **registrado en este nodo** al fijar su
-   binario oficial. La preparación es por controlador. No hay un interruptor
-   compartido (`cmd/olivares/sessionruntime.go`).
+4. El controlador necesita un ejecutable en **este nodo**. Un binario fijado
+   explícitamente tiene prioridad; si no se fija, el motor lo resuelve al
+   iniciar. Siguen aplicándose las comprobaciones de preparación y política
+   de cada controlador.
 
 | Controlador | Fija esta variable de entorno | Si no está definida |
 |---|---|---|
-| Claude Code | `OLIVARES_SESSION_RUNTIME_CLAUDE_BIN` (predeterminado `claude`) | la vía Claude usa el nombre de ejecutable predeterminado |
-| Codex | `OLIVARES_SESSION_RUNTIME_CODEX_BIN` | Si no está definida, una instalación gestionada **registrada** (`olivares agent tool install --driver codex`) fija el ejecutable del recibo. En caso contrario, los perfiles Codex siguen observables y no se pueden lanzar. El motor no busca en `PATH`. |
-| Grok | `OLIVARES_SESSION_RUNTIME_GROK_BIN` | Si no está definida, una instalación gestionada **registrada** (`olivares agent tool install --driver grok`) fija el ejecutable del recibo. En caso contrario, los perfiles Grok siguen observables y no se pueden lanzar. El motor no busca en `PATH`. |
+| Claude Code | `OLIVARES_SESSION_RUNTIME_CLAUDE_BIN` | Instalación gestionada verificada más reciente; después, `claude` en el `PATH` del motor. |
+| Codex | `OLIVARES_SESSION_RUNTIME_CODEX_BIN` | Instalación gestionada verificada más reciente; después, `codex` en el `PATH` del motor. |
+| Grok | `OLIVARES_SESSION_RUNTIME_GROK_BIN` | Instalación gestionada verificada más reciente; después, `grok` en el `PATH` del motor. |
 
-El valor es el binario oficial que este nodo puede operar. El motor no
-resuelve `codex` ni `grok` desde `PATH`. La tabla de configuración generada
-también lista `OLIVARES_SESSION_RUNTIME_OPENCODE_BIN` con la misma regla de
-registro; esta página no añade más afirmaciones sobre OpenCode.
+El valor fija el ejecutable oficial que este nodo puede operar. Sin un valor
+fijado, instalar una herramienta la hace disponible sin reiniciar el motor.
+Si no hay instalación gestionada ni ejecutable en `PATH`, se rechaza el inicio.
+`OLIVARES_SESSION_RUNTIME_OPENCODE_BIN` sigue el mismo orden de resolución.
 
-Los lanzamientos de Claude siguen necesitando una fuente de credencial de
-inferencia (`OLIVARES_SESSION_RUNTIME_WIF` o
-`OLIVARES_SESSION_RUNTIME_TOKEN_FILE`). Consulta
-[Tu primera hora §3](/es/how-to/first-hour/#3-iniciar-una-sesión-de-claude-code-desde-la-consola).
+Para los perfiles de Claude con `managed_injection` que no nombran un proveedor,
+`OLIVARES_SESSION_RUNTIME_WIF` o `OLIVARES_SESSION_RUNTIME_TOKEN_FILE` aporta la
+credencial de inferencia del host. Un perfil vinculado a un proveedor usa su
+credencial; si falla, se rechaza el inicio sin recurrir a la del host.
+Un perfil con `provider_account_home` usa el inicio de sesión autorizado de la
+herramienta y no necesita ninguna de las dos variables. Consulta
+[Añadir un proveedor](/es/how-to/add-a-provider/).
 Codex y Grok usan solo el `auth_source` AUTORIZADO del perfil:
 `provider_account_home` o `managed_injection`, sin respaldo entre ellos y sin
 valor predeterminado (`CHANGELOG.md` `[26.9.0]`; `ProviderProfileDTO.auth_source`).
@@ -136,22 +140,83 @@ El extremo productivo de creación exige `provider_profile_ref`. Omitirlo
 conserva el cuerpo de petición anterior, que esta API deniega
 (`CHANGELOG.md` `[26.9.0]` B2; flag CLI `--provider-profile`).
 
-El diálogo de lanzamiento ofrece los perfiles **activos**. Ningún perfil
-viene preseleccionado. Las selecciones de workspace y plantilla se pueden
-borrar; el perfil no (`CHANGELOG.md` `[26.9.0]` Fixed).
+El diálogo de lanzamiento ofrece los perfiles **activos**. Si solo hay un
+perfil activo, viene preseleccionado; si hay varios, ninguno, y **Start** pide
+elegir uno. Las selecciones de workspace y plantilla se pueden borrar; el
+perfil no (`CHANGELOG.md` `[26.9.0]` Fixed).
 
 ### Consola
 
-1. Abre **Operate sessions** (`/agentops`) u **Observe sessions** (`/sessions`).
-   Comparten pantalla ([referencia de consola](/reference/console/)).
-2. Abre el diálogo de lanzamiento.
-3. Elige **Provider profile** (`agentops.create.profile`). La pista indica
-   que el perfil es obligatorio.
-4. Opcionalmente indica workspace, plantilla, modelo y effort. Modelo y
-   effort siguen siendo cadenas abiertas del proveedor en los flags oficiales
-   del agente para Grok (`CHANGELOG.md` `[26.9.0]`).
-5. Envía **Request launch**. Solo se publica la **referencia** del perfil. El
-   servidor resuelve los homes.
+1. Abre **Sesiones** (`/sessions`). `/agentops` abre la misma pantalla
+   ([referencia de consola](/reference/console/)).
+2. Abre **New session** y luego **Advanced launch options** (dentro de
+   **More options** cuando hay una herramienta lista).
+3. Comprueba **Provider profile** (`agentops.create.profile`) y escribe el
+   **First message** si quieres uno.
+4. Opcionalmente indica workspace, plantilla, modelo y effort en
+   **Advanced options**. Modelo y effort siguen siendo cadenas abiertas del
+   proveedor en los flags oficiales del agente para Grok
+   (`CHANGELOG.md` `[26.9.0]`).
+5. Pulsa **Start**. Mientras no pueda iniciar, la línea bajo el botón dice qué
+   falta. Solo se publica la **referencia** del perfil. El servidor resuelve
+   los homes.
+
+### Un worktree Git propio (opcional)
+
+Por defecto la sesión trabaja en la carpeta elegida. Si esta es la raíz de un
+repositorio Git, marca **Trabajar en un nuevo worktree Git** bajo **Carpeta**, o
+ejecuta `olivares session start . --worktree`. La sesión trabaja en una rama nueva
+(`olivares/` más ocho caracteres de su id) dentro de su propio worktree: dos
+sesiones no comparten archivos. Fusiona la rama desde tu checkout habitual.
+
+- Los worktrees viven bajo `<directorio de datos>/session-worktrees`.
+  `OLIVARES_SESSION_WORKTREE_DIR` cambia la ubicación y
+  `OLIVARES_SESSION_WORKTREE_BRANCH_PREFIX` el prefijo de rama.
+- **Reanudar** continúa en el mismo worktree. Si solo se borró su directorio,
+  el motor lo restaura en la misma rama.
+- **Limpiar**, **Borrar** y `olivares session rm` eliminan worktree y rama cuando
+  la rama está fusionada en la rama actual del workspace, el worktree está en
+  esa rama y no tiene cambios sin commit. En otro caso se rechaza con 409 y se
+  indica qué se perdería: trabajo sin fusionar, HEAD separado o en otra rama,
+  o un worktree inaccesible. Marca **Descartar también el worktree y la rama**
+  o añade `--discard-worktree` para continuar; si el worktree es inaccesible se
+  libera la sesión y se deja el worktree donde está. Los archivos ignorados por
+  Git, como las builds, se eliminan con el worktree.
+- Se rechaza con 422 antes de crear nada para una carpeta que no sea la raíz de
+  un repositorio Git, un repositorio sin commit, un workspace o carpetas de solo
+  lectura, aislamiento no nativo o configuración Git con filtros
+  (`filter.<name>.clean`, `smudge` o `process`) o inclusión de otros archivos.
+  Las sesiones sin esta opción no cambian.
+- El motor ejecuta Git sin hooks ni monitor de archivos, sin tu configuración
+  Git (los archivos Git LFS aparecen como punteros) y con límites de tiempo y
+  salida. El directorio Git compartido sigue siendo común: un worktree aísla
+  archivos, no metadatos Git.
+
+### Abrir el trabajo nombrado en un traspaso
+
+El contenido de un traspaso admite `branch` y `sha` opcionales, este último un id
+de commit completo. Ofrécelo por API o mediante
+`olivares message handoff offer --context-file`, cuyo JSON puede incluir ambos.
+Un traspaso que no nombre ninguno no cambia.
+
+Al leerlo, el panel muestra la rama y el commit como texto. **Abrir en un nuevo
+worktree de sesión** abre el lanzamiento con el worktree seleccionado y su punto
+de partida visible. El inicio espera a que elijas el workspace cuyo repositorio
+contiene el commit. Limpiar la selección de carpeta mantiene esa petición; desmarca
+explícitamente el worktree para iniciar una sesión normal. Desde la CLI:
+
+```sh
+olivares session start . --worktree-from <commit or branch> --name review
+```
+
+`--worktree-from` implica `--worktree`. La sesión usa su propia rama nueva en ese
+commit; la rama del emisor y tu checkout no se mueven. Si el commit no está en el
+repositorio del workspace, se rechaza con 422 antes de crear nada: haz fetch allí
+primero. También se rechaza un commit que no pertenezca a ninguna rama, tag o rama
+remota. El panel **Cambios de rama** muestra los cambios de su rama respecto al commit actual del workspace y abre el texto de cada ruta en la base de
+fusión y en la punta de la rama. Solo muestra trabajo con commit, dentro de las
+subrutas permitidas y la postura DLP del workspace; los cambios sin commit están
+en **Cambios**.
 
 ### CLI
 
@@ -159,10 +224,10 @@ borrar; el perfil no (`CHANGELOG.md` `[26.9.0]` Fixed).
 olivares agent session create --provider-profile <profile_ref>
 ```
 
-Añade `--server`, `--tenant` y `--token` (o el contexto de cliente activo)
+Añade `--server`, `--tenant` y `--token-file` (o el contexto de cliente activo)
 como en la [referencia CLI](/reference/cli/). El aislamiento es `native` en
-esta versión; `container` y `sandbox` los acepta la API y el lanzador los
-deniega hasta que existan esos ejecutores (ayuda CLI generada).
+esta versión; `container` y `sandbox` devuelven HTTP 422 antes de crear una
+ejecución. Selecciona `native` para usar el ejecutor integrado.
 
 Resultado: un recurso de ejecución. La fila viva gestionada es única por
 ámbito de observación e id externo. Las lecturas que nombran una fila usan

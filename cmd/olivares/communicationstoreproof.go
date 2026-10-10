@@ -31,7 +31,9 @@ type communicationStoreProof struct {
 	// HistoricalEnabled is DirectoryStatus.Enabled, the boot witness flag the
 	// store keeps deliberately false. It is reported, never required: making it
 	// a prerequisite of the readiness that is supposed to earn it would be
-	// circular, and redefining it here would lie about the store.
+	// circular, and redefining it here would lie about the store. The field is
+	// deprecated; this proof keeps reporting it under its published names (the
+	// Go field and the JSON tag) until its removal so consumers keep their shape.
 	HistoricalEnabled bool      `json:"historical_enabled"`
 	GuardVerified     bool      `json:"guard_verified"`
 	SchemaVerified    bool      `json:"schema_verified"`
@@ -146,7 +148,7 @@ func (w *communicationStoreProofWitness) prove(ctx context.Context, guardVerifie
 	}
 	proof.ControlMode, proof.WriterPosture = status.ControlMode, status.WriterPosture
 	proof.EpochCoverageComplete, proof.ExpectedGeneration = status.EpochCoverageComplete, status.ExpectedGeneration
-	proof.HistoricalEnabled = status.Enabled
+	proof.HistoricalEnabled = status.Enabled //nolint:staticcheck // SA1019: reports the deprecated field under its published names until removal
 	// activationPending counts the blockers the operator's OWN ceremony clears, so a
 	// caller can tell an un-activated posture from a broken one without parsing the
 	// sentences this function prints.

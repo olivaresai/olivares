@@ -1,4 +1,10 @@
 {
+  "edition": {
+    "viewPolicy": "ポリシーを表示",
+    "editingRequiresBusiness": "カスタムポリシー、ロール、権限の編集には Business が必要です。",
+    "disablePolicy": "ポリシーを無効化",
+    "disablePolicyDescription": "作成したポリシーは適用されなくなります。履歴と他の適用中のポリシーは保持されます。"
+  },
   "errors": {
     "generic": "エラーが発生しました"
   },
@@ -214,8 +220,8 @@
       "sessionResumed": "{{actor}} がセッションを再開しました",
       "sessionResumed_you": "セッションを再開しました",
       "sessionFailed": "セッションを開始できませんでした",
-      "approvalRequested": "{{actor}} のセッションが承認を求めています",
-      "approvalRequested_you": "あなたのセッションが承認を求めています",
+      "approvalRequested": "{{actor}}が承認を要求しました",
+      "approvalRequested_you": "あなたが承認を要求しました",
       "killswitchEngaged": "{{actor}} がキルスイッチを作動させました",
       "killswitchEngaged_you": "キルスイッチを作動させました",
       "killswitchReleased": "{{actor}} がキルスイッチを解除しました",
@@ -228,14 +234,37 @@
       "workspaceCreated": "{{actor}} がワークスペースを作成しました",
       "workspaceCreated_you": "ワークスペースを作成しました",
       "workspaceUpdated": "{{actor}} がワークスペースを更新しました",
-      "workspaceUpdated_you": "ワークスペースを更新しました"
+      "workspaceUpdated_you": "ワークスペースを更新しました",
+      "signedIn": "{{actor}}がサインインしました",
+      "workCreated": "{{actor}}が作業項目を作成しました",
+      "workReady": "{{actor}}が作業項目を準備完了にしました",
+      "workCompleted": "{{actor}}が作業項目を完了しました",
+      "workBlocked": "{{actor}}が作業項目をブロックしました",
+      "workCanceled": "{{actor}}が作業項目を取り消しました",
+      "approvalDecided": "{{actor}}が承認判断を記録しました",
+      "approvalCanceled": "{{actor}}が承認リクエストを取り消しました",
+      "policyCreated": "{{actor}}がポリシーを作成しました",
+      "policyUpdated": "{{actor}}がポリシーを更新しました",
+      "policyDeleted": "{{actor}}がポリシーを削除しました",
+      "signedIn_you": "あなたがサインインしました",
+      "workCreated_you": "あなたが作業項目を作成しました",
+      "workReady_you": "あなたが作業項目を準備完了にしました",
+      "workCompleted_you": "あなたが作業項目を完了しました",
+      "workBlocked_you": "あなたが作業項目をブロックしました",
+      "workCanceled_you": "あなたが作業項目を取り消しました",
+      "approvalDecided_you": "あなたが承認判断を記録しました",
+      "approvalCanceled_you": "あなたが承認リクエストを取り消しました",
+      "policyCreated_you": "あなたがポリシーを作成しました",
+      "policyUpdated_you": "あなたがポリシーを更新しました",
+      "policyDeleted_you": "あなたがポリシーを削除しました"
     },
     "actors": {
       "you": "あなた",
       "member": "メンバー",
       "token": "API トークン",
       "system": "Olivares"
-    }
+    },
+    "includeInternal": "内部記録を含める"
   },
   "passphrase": {
     "tooShort": "パスフレーズは{{min}}文字以上で入力してください",

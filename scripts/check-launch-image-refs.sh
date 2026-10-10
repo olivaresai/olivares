@@ -29,25 +29,25 @@ export LC_ALL
 
 RAIZ="${OLIVARES_CLONE:-$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")/.." && pwd -P)}"
 cd "$RAIZ" 2>/dev/null || {
-	echo "check-launch-image-refs: ⛔ NO HE PODIDO MIRAR: no existe $RAIZ" >&2
+	echo "check-launch-image-refs: ⛔ COULD NOT CHECK: missing $RAIZ" >&2
 	exit 2
 }
 DIR="${OLIVARES_LAUNCH_DIR:-docs/launch}"
 DECLARADAS="${OLIVARES_LAUNCH_IMG_DEBT:-docs/launch/broken-image-refs.tsv}"
 
 [ -d "$DIR" ] || {
-	echo "check-launch-image-refs: ⛔ NO HE PODIDO MIRAR: no existe $DIR/" >&2
+	echo "check-launch-image-refs: ⛔ COULD NOT CHECK: missing $DIR/" >&2
 	exit 2
 }
 
 python3 - "$DIR" "$DECLARADAS" <<'PY'
 import os, re, sys, glob
 
-dir_, deuda_path = sys.argv[1], sys.argv[2]
-ficheros = sorted(glob.glob(os.path.join(dir_, '**', '*.md'), recursive=True))
+dir_, debt_path = sys.argv[1], sys.argv[2]
+source_files = sorted(glob.glob(os.path.join(dir_, '**', '*.md'), recursive=True))
 # CONTROL POSITIVO: cero ficheros no es «cero rotas», es no haber mirado.
-if not ficheros:
-    print(f'check-launch-image-refs: ⛔ NO HE PODIDO MIRAR: cero .md en {dir_}/', file=sys.stderr)
+if not source_files:
+    print(f'check-launch-image-refs: ⛔ COULD NOT CHECK: no .md files in {dir_}/', file=sys.stderr)
     raise SystemExit(2)
 
 # Los code spans se BORRAN antes de buscar, para que la prosa que CITA la sintaxis no cuente.
@@ -55,7 +55,7 @@ SPAN = re.compile(r'`[^`\n]*`')
 IMG = re.compile(r'!\[([^\]]*)\]\(([^)\s]+)')
 
 rotas, total = [], 0
-for f in ficheros:
+for f in source_files:
     texto = SPAN.sub('', open(f, encoding='utf8', errors='replace').read())
     for m in IMG.finditer(texto):
         alt, ref = m.group(1), m.group(2)
@@ -67,14 +67,14 @@ for f in ficheros:
             rotas.append((f, ref, alt))
 
 declaradas = set()
-if os.path.exists(deuda_path):
-    for linea in open(deuda_path, encoding='utf8'):
+if os.path.exists(debt_path):
+    for linea in open(debt_path, encoding='utf8'):
         linea = linea.rstrip('\n')
         if not linea.strip() or linea.lstrip().startswith('#'):
             continue
         campos = linea.split('\t')
         if len(campos) < 3 or not campos[2].strip():
-            print(f'check-launch-image-refs: ⛔ NO HE PODIDO MIRAR: línea sin motivo en {deuda_path}: {linea!r}',
+            print(f'check-launch-image-refs: ⛔ COULD NOT CHECK: line without a reason in {debt_path}: {linea!r}',
                   file=sys.stderr)
             raise SystemExit(2)
         declaradas.add((campos[0], campos[1]))
@@ -82,23 +82,23 @@ if os.path.exists(deuda_path):
 nuevas = [r for r in rotas if (r[0], r[1]) not in declaradas]
 muertas = sorted(declaradas - {(r[0], r[1]) for r in rotas})
 
-print(f'check-launch-image-refs: {total} referencia(s) de imagen · {len(rotas)} rota(s) · '
-      f'{len(declaradas)} declarada(s)')
+print(f'check-launch-image-refs: {total} image reference(s) · {len(rotas)} broken · '
+      f'{len(declaradas)} declared')
 rc = 0
 for f, ref, alt in nuevas:
     print(f'check-launch-image-refs: ⛔ {f} → {ref}', file=sys.stderr)
     print(f'    alt: {alt[:100]}', file=sys.stderr)
     rc = 1
 if nuevas:
-    print('  Captúrala, o decláralas en ' + deuda_path + ' con su MOTIVO — la ausencia sin motivo es'
-          ' indistinguible del olvido.', file=sys.stderr)
+    print('  Capture the image, or declare the missing references in ' + debt_path + ' with a reason; an unexplained absence is'
+          ' with a reason; an unexplained absence is indistinguishable from an oversight.', file=sys.stderr)
 for f, ref in muertas:
-    print(f'check-launch-image-refs: ⛔ declarada y YA existe: {f} → {ref}', file=sys.stderr)
+    print(f'check-launch-image-refs: ⛔ declared as missing but now exists: {f} → {ref}', file=sys.stderr)
     rc = 1
 if muertas:
-    print('  Bórrala de la deuda en el mismo commit: una lista que no encoge acaba afirmando huecos'
-          ' que alguien llenó.', file=sys.stderr)
+    print('  Remove it from the backlog in this commit: a list that never shrinks keeps reporting gaps'
+          ' that have already been filled.', file=sys.stderr)
 if rc == 0:
-    print('check-launch-image-refs: ✔ las rotas son EXACTAMENTE las declaradas')
+    print('check-launch-image-refs: ✔ broken references exactly match the declared list')
 raise SystemExit(rc)
 PY

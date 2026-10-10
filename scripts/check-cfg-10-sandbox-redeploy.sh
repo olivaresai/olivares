@@ -23,7 +23,7 @@ WRA="${OLIVARES_CFG10_WRA:-commercial/license-worker/wrangler.jsonc}"
 
 grep -q 'NOT DEPLOYED' "$DOC" || fail "$DOC lost NOT DEPLOYED"
 if grep -qiE 'live deploy succeeded|opened production' "$DOC"; then
-	fail "$DOC claims a result this lote does not have"
+	fail "$DOC claims a result this batch does not have"
 fi
 
 python3 - "$JSON" "$WRA" <<'PY' || fail "JSON/wrangler failed the CFG-10 contract"

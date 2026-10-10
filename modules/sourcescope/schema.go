@@ -62,7 +62,7 @@ const (
 	SourceData      = sourceData
 )
 
-// Scope-tree kinds a binding is bounded to. Two families (ADR-0022):
+// Scope-tree kinds a binding is bounded to. Two families:
 //
 //   - CONTAINMENT trees (the axis; mirror scopeSpec): scopeWorkspace,
 //     scopeAgentGroup and scopeFolder. An actor IN the scope is contained. These
@@ -87,7 +87,7 @@ const (
 
 	// Subject trees. scope_ref is: session external_id, agent external_id, user id,
 	// UserGroup.ID (S256 directory group, matched via principal.GroupsIn), or a tenant
-	// role name. See ADR-0022 §1 and the source-scoping-axes contract.
+	// role name. See the source-scoping-axes contract.
 	scopeSession   = "session"
 	scopeAgent     = "agent"
 	scopeUser      = "user"
@@ -119,7 +119,7 @@ const (
 	colFolderPath = "folder_path"
 	// colEffect is the binding's effect: "allow" (the default; an empty stored
 	// value is an allow, back-compat) or "forbid". A forbid SUBTRACTS — it overrides any
-	// allow for the actor it names (forbid-overrides-allow, absolute; ADR-0022 §2), the
+	// allow for the actor it names (forbid-overrides-allow), the
 	// same algebra as model-access row-level effect. It is NOT part of the natural
 	// key: an allow and a forbid for the same (source, tree, ref) are contradictory and
 	// the unique index correctly forbids both (the effect is updated in place).

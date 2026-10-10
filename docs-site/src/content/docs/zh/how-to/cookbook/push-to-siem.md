@@ -7,6 +7,12 @@ description: >-
 sidebar:
   order: 6
 ---
+SIEM and ITSM push, OTLP downloads, external trace and metric delivery, and posture export require Business. Community keeps local observability, trace-context propagation, saved settings and `olivares dr backup`. Generic chat, email and webhook notifications remain available in Community.
+
+
+:::note[Business]
+审计导出（`GET /v1/audit/export`、`olivares audit export`）、目录归档和外部归档验证需要 Business。Community 保留签名账本、`olivares audit verify` 和 `olivares dr backup`；导出返回 HTTP 501 或退出码 9。审计转发和携带审计段的 DDIL 传输也需要 Business。
+:::
 
 **目标：** 让你的 SIEM 以推送方式接收 control plane 的发现项*以及*其篡改可检测审计账本，
 无需用 forwarder 去 tail 文件。
@@ -17,6 +23,15 @@ sidebar:
 而对于实时 SIEM 摄取，push 才是正确的形态。
 
 ## 1. 创建接收端订阅
+
+先启用可选择的账本转发模块；这也会启用其 eventing 依赖：
+
+```bash
+olivares modules on siemforward
+```
+
+等待引擎重启完成，然后运行 `olivares modules ls`。
+创建订阅前，确认 `siemforward` 和 `eventing` 均在运行。
 
 ```bash
 curl -ks -X POST "$BASE/v1/m/eventing/subscriptions" \
@@ -71,9 +86,10 @@ curl -ks -X POST "$BASE/v1/m/eventing/subscriptions/$ID/test" \
 
 ## 2. 对账本推送的诚实描述
 
-订阅 **`audit.recorded`** 会开启账本泵（ledger pump）：forwarder 会从
-每个租户专属的游标开始遍历该租户封存的审计账本，并将每条记录入队到
-持久投递引擎——**至少一次（at-least-once）**、有序、可恢复。每条记录都携带
+**启用 `siemforward` 后**，账本泵从每个租户保存的游标开始遍历封存的审计账本。
+**`audit.recorded`** 订阅接收在创建订阅后加入持久投递队列的记录，
+以**至少一次（at-least-once）**方式投递，
+可恢复。每条记录都携带
 其链完整性字段（原样携带），因此 SIEM 侧的副本所支持的与 pull 导出完全相同，
 也仅止于此：链的**衔接**（n+1 的 `prev_hash` 等于 n 的 `hash`）以及对 `hash` 的
 检查点签名都可以离线校验。而且现在可以从**一行**导出内容**重新推导**出某条记录的
@@ -91,8 +107,9 @@ curl -ks -X POST "$BASE/v1/m/eventing/subscriptions/$ID/test" \
 
 有三个值得了解的特性：
 
-- **没有订阅，就没有工作。** 在没有 `audit.recorded` 订阅者时，泵不会写入
-  任何内容——在你主动请求之前，这条路径没有任何开销。
+- **没有订阅时游标仍会前进。** 没有 `audit.recorded` 订阅者时，不会创建投递，
+  但已启用的泵仍会保存游标。新接收端不会补发游标已经经过的记录；
+  请使用拉取导出获取历史记录。
 - **至少一次意味着重投递时可能出现重复**；按每个租户的记录序列号进行去重。
 - **泵在 HA 下受 leader 选举门控**——恰好只有一个节点进行转发。
 

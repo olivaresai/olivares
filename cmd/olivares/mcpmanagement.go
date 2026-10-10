@@ -13,15 +13,18 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"net"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"sync"
 	"syscall"
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/olivaresai/olivares/cmd/olivares/internal/mcpgateway"
 	mcpc "github.com/olivaresai/olivares/connectors/mcp"
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/egress"
@@ -38,7 +41,7 @@ type mcpManagement struct {
 	cacheMu              sync.Mutex
 	store                *auth.MCPGatewayStore
 	secrets              *auth.SecretStore
-	cfg                  agentGatewayConfig
+	cfg                  mcpgateway.Config
 	source               string
 	eng                  *engine
 	cache                map[string]managedMCPServer
@@ -51,8 +54,8 @@ type managedMCPServer struct {
 	server  *mcpc.ResourceServer
 }
 
-func newMCPManagement(st store.Store, secrets *auth.SecretStore, cfg agentGatewayConfig, filePresent bool) (*mcpManagement, error) {
-	if err := validateAgentGatewaySource(cfg); err != nil {
+func newMCPManagement(st store.Store, secrets *auth.SecretStore, cfg mcpgateway.Config, filePresent bool) (*mcpManagement, error) {
+	if err := mcpgateway.ValidateSource(cfg); err != nil {
 		return nil, err
 	}
 	source := cfg.MCPSource
@@ -90,7 +93,7 @@ func (m *mcpManagement) Get(ctx context.Context, tenant model.TenantID) (auth.MC
 }
 
 func managedMCPGovernance() map[string]string {
-	return map[string]string{"configuration": "tenant_store", "credential": "tenant_sealed_reference", "session_listener": "control_plane_http_listener", "content_gate": "declared_inventory_and_consent", "deep_content_inspection": "not_configured", "egress": "exact_https_destination_and_pinned_addresses", "redirects": "refused", "tool_policy": "explicit_scope_and_destructive_approval", "tasks": "not_provisioned", "subscriptions": "not_provisioned", "local_execution": "session_runner_engine_user_session_folder", "process_confinement": "reported_by_session_runner", "network_confinement": "not_supplied_for_local_commands"}
+	return map[string]string{"configuration": "tenant_store", "credential": "tenant_sealed_reference", "session_listener": "control_plane_http_listener", "content_gate": "declared_inventory_and_consent", "deep_content_inspection": "not_configured", "egress": "exact_https_destination_and_pinned_addresses", "redirects": "refused", "tool_policy": "explicit_scope_and_destructive_approval", "tasks": "not_provisioned", "subscriptions": "not_provisioned", "local_execution": "session_runner_engine_user_session_folder", "process_confinement": "reported_by_session_runner", "network_confinement": "listed_egress_hosts_for_local_commands"}
 }
 
 func safeMCPConfigURL(raw string) string {
@@ -107,6 +110,18 @@ func safeMCPConfigURL(raw string) string {
 	return u.String()
 }
 
+// mcpSecretMissing is a store:mcp/<name> reference this organization's secrets do
+// not hold: auth.ErrSecretNotFound (404 not_found) in a sentence that names the
+// scope. It never says whether the deployment-wide store holds the name, which an
+// organization admin may not read.
+type mcpSecretMissing string
+
+func (n mcpSecretMissing) Error() string {
+	return fmt.Sprintf("No secret %q is stored for this organization.", string(n))
+}
+
+func (mcpSecretMissing) Unwrap() error { return auth.ErrSecretNotFound }
+
 func (m *mcpManagement) PutServer(ctx context.Context, p auth.Principal, tenant model.TenantID, version int64, id string, in auth.MCPGatewayServerInput) (auth.MCPGatewaySnapshot, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -114,7 +129,11 @@ func (m *mcpManagement) PutServer(ctx context.Context, p auth.Principal, tenant 
 		return auth.MCPGatewaySnapshot{}, auth.ErrMCPGatewayFileOwned
 	}
 	in = in.WithDefaults()
-	for _, reference := range in.EnvSecretRefs {
+	references := slices.Collect(maps.Values(in.EnvSecretRefs))
+	if in.CredentialRef != "" {
+		references = append(references, in.CredentialRef)
+	}
+	for _, reference := range references {
 		ref, ok := secret.ParseReference(reference)
 		if !ok || ref.Scheme != secret.SchemeStore || reference != "store:"+ref.Locator || !strings.HasPrefix(ref.Locator, "mcp/") {
 			return auth.MCPGatewaySnapshot{}, auth.ErrMCPGatewayInvalid
@@ -125,23 +144,7 @@ func (m *mcpManagement) PutServer(ctx context.Context, p auth.Principal, tenant 
 		if _, found, err := m.secrets.Get(ctx, tenant, ref.Locator); err != nil {
 			return auth.MCPGatewaySnapshot{}, err
 		} else if !found {
-			return auth.MCPGatewaySnapshot{}, auth.ErrSecretNotFound
-		}
-	}
-	if in.CredentialRef != "" {
-		ref, ok := secret.ParseReference(in.CredentialRef)
-		if !ok || ref.Scheme != secret.SchemeStore || in.CredentialRef != "store:"+ref.Locator || !strings.HasPrefix(ref.Locator, "mcp/") {
-			return auth.MCPGatewaySnapshot{}, auth.ErrMCPGatewayInvalid
-		}
-		if m.secrets == nil {
-			return auth.MCPGatewaySnapshot{}, auth.ErrMCPGatewayUnavailable
-		}
-		_, found, err := m.secrets.Get(ctx, tenant, ref.Locator)
-		if err != nil {
-			return auth.MCPGatewaySnapshot{}, err
-		}
-		if !found {
-			return auth.MCPGatewaySnapshot{}, auth.ErrSecretNotFound
+			return auth.MCPGatewaySnapshot{}, mcpSecretMissing(ref.Locator)
 		}
 	}
 	if in.Enabled && in.Trust.Resource != "" && !managedMCPResourcePath(in.Trust.Resource, tenant, id) {
@@ -382,7 +385,7 @@ func (m *mcpManagement) TestServer(ctx context.Context, p auth.Principal, tenant
 			credential := tenantMCPCredentialProvider{store: m.secrets, tenant: tenant, ref: row.CredentialRef, target: row.URL}
 			header, cerr := credential.Credential(ctx, row.URL)
 			if cerr == nil {
-				_, cerr = mcpCredentialPatterns(header)
+				_, cerr = mcpgateway.CredentialPatterns(header)
 				if cerr != nil && m.eng != nil && m.eng.log != nil {
 					m.eng.log.Warn("mcp-gateway: upstream credential configuration refused", "reason", cerr)
 				}
@@ -392,7 +395,7 @@ func (m *mcpManagement) TestServer(ctx context.Context, p auth.Principal, tenant
 			} else {
 				ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 				defer cancel()
-				status := &mcpProbeStatus{inner: mcpCredentialTransport{inner: client.Transport}}
+				status := &mcpProbeStatus{inner: mcpgateway.CredentialTransport{Inner: client.Transport}}
 				client.Transport = status
 				reader, createErr := mcpc.NewHTTPInspectionClient(row.URL, map[string]string{"Authorization": header}, client)
 				if createErr != nil {
@@ -496,11 +499,11 @@ func (m *mcpManagement) buildServer(tenant model.TenantID, row auth.MCPGatewaySe
 	if err != nil {
 		return nil, err
 	}
-	upstream := &mcpUpstreamForwarder{url: row.URL, client: client, credProv: tenantMCPCredentialProvider{store: m.secrets, tenant: tenant, ref: row.CredentialRef, target: row.URL}}
-	enableManagedMCPForwarding(upstream)
-	cfg := &mcpGatewayConfig{Resource: row.Trust.Resource, Issuer: row.Trust.Issuer, IssuerJWKS: row.Trust.JWKS, JWKSURL: row.Trust.JWKSURL,
+	upstream := &mcpgateway.UpstreamForwarder{URL: row.URL, Client: client, CredProv: tenantMCPCredentialProvider{store: m.secrets, tenant: tenant, ref: row.CredentialRef, target: row.URL}}
+	mcpgateway.EnableManagedForwarding(upstream)
+	cfg := &mcpgateway.MCPConfig{Resource: row.Trust.Resource, Issuer: row.Trust.Issuer, IssuerJWKS: row.Trust.JWKS, JWKSURL: row.Trust.JWKSURL,
 		AuthorizationServers: []string{row.Trust.Issuer}, Tenant: tenant.String(), UpstreamURL: row.URL, UpstreamRevision: "2025-11-25", RevisionMode: "legacy",
-		managedUpstream: upstream, managedUpstreamDescriptor: "managed-https:" + row.URL + "|server:" + row.ID + "|credential-ref:" + row.CredentialRef}
+		ManagedUpstream: upstream, ManagedUpstreamDescriptor: "managed-https:" + row.URL + "|server:" + row.ID + "|credential-ref:" + row.CredentialRef}
 	for _, policy := range row.AllowedTools {
 		cfg.Tools = append(cfg.Tools, mcpc.ToolPolicy{Name: policy.Name, RequiredScope: policy.RequiredScope, Destructive: policy.Destructive})
 	}
@@ -578,10 +581,11 @@ func (m *mcpManagement) ServeSessionHTTP(w http.ResponseWriter, r *http.Request)
 	if m.sessionAuthenticator != nil {
 		authenticator = m.sessionAuthenticator
 	}
-	h := &sessionMCPHandler{authr: authenticator, issuedSessionOnly: m.sessionAuthenticator != nil, work: m.eng.sessionsMod.CallSessionWork, managed: m.serveManagedSession, managedTools: m.aggregateSessionTools, managedCall: m.aggregateSessionCall, enabled: func(ctx context.Context, tenant model.TenantID) (bool, error) {
+	h := &sessionMCPHandler{authr: authenticator, issuedSessionOnly: m.sessionAuthenticator != nil, admits: m.eng.admits(), work: m.eng.sessionsMod.CallSessionWork, managed: m.serveManagedSession, managedTools: m.aggregateSessionTools, managedCall: m.aggregateSessionCall, enabled: func(ctx context.Context, tenant model.TenantID) (bool, error) {
 		snapshot, err := m.store.Get(ctx, tenant)
 		return sessionMCPAvailable(snapshot), err
 	},
+		configurer: m.eng, publisher: m.eng.sessionPublisher(),
 		checkOrchestration: func(ctx context.Context, p auth.Principal, tenant model.TenantID) error {
 			return scope.WithScope(ctx, p, tenant, false, func(store.Scope) error { return nil })
 		}}

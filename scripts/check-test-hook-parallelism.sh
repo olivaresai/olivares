@@ -39,32 +39,31 @@
 # lo que NO puede hacer es pasar sin haber podido leerlo.
 set -euo pipefail
 
-cannot() { echo "check-test-hook-parallelism: ⛔ NO HE PODIDO MIRAR: $*" >&2; exit 2; }
+cannot() { echo "check-test-hook-parallelism: ⛔ COULD NOT CHECK: $*" >&2; exit 2; }
 
 # ⛔ EL SUJETO Y LA HERRAMIENTA SON DOS RAÍCES DISTINTAS, y confundirlas fue un defecto real de
 # la primera versión de este envoltorio: `OLIVARES_ROOT` es lo que la BATERÍA apunta a un árbol de
 # fixtures, así que buscar ahí el analizador lo hacía «no he podido mirar» en cada caso. La fuente
 # se resuelve SIEMPRE desde la ubicación de este guion; el sujeto, desde `OLIVARES_ROOT`.
-AQUI="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)" || cannot "no resuelvo mi propia ubicación"
+AQUI="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)" || cannot "cannot resolve the script location"
 # El sujeto se acepta de TRES formas, y el orden importa: argumento posicional (es como lo llama
 # scripts/test-test-hook-parallelism.sh, y omitirlo hizo que sus veinte casos midieran el repo real
 # en vez del fixture — veinte verdes que no probaban nada), luego OLIVARES_ROOT, luego yo mismo.
 RAIZ="${1:-${OLIVARES_ROOT:-$AQUI}}"
-[ -d "$RAIZ" ] || cannot "no existe el sujeto $RAIZ"
+[ -d "$RAIZ" ] || cannot "missing input tree $RAIZ"
 
-command -v go >/dev/null || cannot "no hay toolchain de Go para el analizador"
+command -v go >/dev/null || cannot "no Go toolchain available for the analyzer"
 FUENTE="$AQUI/scripts/hookpar"
-[ -r "$FUENTE/go.mod" ] && [ -r "$FUENTE/main.go" ] || cannot "falta el analizador bajo scripts/hookpar"
+[ -r "$FUENTE/go.mod" ] && [ -r "$FUENTE/main.go" ] || cannot "missing analyzer under scripts/hookpar"
 
 _tmp_base="${TMPDIR:-/workspace/.olivares-tmptest}"
-mkdir -p "$_tmp_base" || cannot "no puedo crear $_tmp_base"
-_bin="$(mktemp "$_tmp_base/hookpar.XXXXXX")" || cannot "no puedo reservar el binario"
+mkdir -p "$_tmp_base" || cannot "cannot create $_tmp_base"
+_bin="$(mktemp "$_tmp_base/hookpar.XXXXXX")" || cannot "cannot reserve a path for the binary"
 trap 'rm -f "$_bin"' EXIT
 
-# GOWORK=off: el módulo es deliberadamente independiente del workspace —sólo stdlib— para que
-# construirlo no arrastre el grafo del monorepo ni lo contamine. Mismo patrón que hcl-module-guard.
+# GOWORK=off keeps this standard-library-only helper independent of workspace dependencies.
 if ! (cd "$FUENTE" || exit 2; GOWORK=off go build -o "$_bin" .); then
-	cannot "no puedo construir el analizador"
+	cannot "cannot build the analyzer"
 fi
 
 rc=0
@@ -74,9 +73,9 @@ case "$rc" in
 0)
 	# La palabra «limpio» va a propósito: es el patrón que busca la batería, y cambiarla
 	# habría roto veinte casos de cobertura léxica heredada sin que nada lo dijera.
-	echo "check-test-hook-parallelism: limpio — sin asignaciones a var de paquete en ámbito paralelo."
+	echo "check-test-hook-parallelism: CLEAN — no package-variable assignments in parallel scopes."
 	exit 0
 	;;
 1 | 2) exit "$rc" ;;
-*) cannot "el analizador salió con $rc, que no es ninguna de las tres respuestas" ;;
+*) cannot "analyzer exited $rc, outside its three defined exit codes" ;;
 esac

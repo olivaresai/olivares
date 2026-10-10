@@ -2,35 +2,29 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// Toda ruta registrada tiene entrada en el arnés de capturas de documentación.
+// Every registered route must appear in the documentation screenshot harness.
 //
-// ⛔ POR QUÉ ESTA GUARDA Y NO DERIVAR LA LISTA. Lo natural sería que `docs-captures.spec.ts`
-// sacara sus rutas del registro y dejara de poder quedarse corta — que es lo que hace
-// `console:walk`, y su propia descripción dice por qué: *«rather than from a hand-written list
-// that goes stale the day a screen is added»*.
+// Keep this guard rather than deriving the list. `console:walk` derives routes from the
+// registry to avoid a manual list becoming stale when a screen is added. The screenshot
+// list has a different requirement: each entry's `heading` is the view's actual h1 and
+// proves the screen loaded. Without it, a skeleton screenshot passes file-existence checks.
+// The registry does not contain that heading, and it cannot be invented.
 //
-// **Aquí no se puede, y el motivo es lo que hace buena a esa lista**: cada entrada lleva un
-// `heading` — el h1 real de la vista — que es el TESTIGO de que la pantalla cargó. Sin él, una
-// captura del esqueleto se guarda igual y pasa cualquier comprobación de «existe el fichero».
-// Ese testigo no está en el registro y no se puede inventar.
+// Keep the manual list with its witness, and guard against missing routes. Measured on
+// 2026-08-18: after `/tenants` was added, the harness captured 108 images of 54 views and
+// passed without capturing it, although the route appeared in the sidebar.
 //
-// ⇒ Se conserva la lista escrita a mano CON su testigo, y se hace imposible que se quede corta.
-//    Medido el 2026-08-18: añadí `/tenants` y el arnés capturó 108 imágenes de 54 vistas sin
-//    incluirla, en verde — la ruta salía en el sidebar de la captura y no tenía captura propia.
+// The original denominator was wrong, corrected on 2026-08-18. This guard read
+// `FEATURE_VIEWS` (53 routes), but the tree mounted 58. The missing five (`/login`, `/setup`,
+// `/accept-invite`, `/settings`, `/status-page`) could never fail the guard, despite being
+// the path a new customer follows before anything else and having no published PNGs.
 //
-// ⛔⛔ Y EL DENOMINADOR ERA LA LISTA EQUIVOCADA — corregido el 2026-08-18 con la medida delante.
-// Esta guarda leía `FEATURE_VIEWS` (**53** rutas) y el árbol monta **58**: las cinco de diferencia
-// —`/login`, `/setup`, `/accept-invite`, `/settings`, `/status-page`— **no podían romperla nunca**,
-// porque no estaban en la lista contra la que comparaba. No es una laguna cualquiera: son el camino
-// que recorre un cliente NUEVO antes de ver nada más, y ninguna tiene PNG publicado.
+// An oracle derived from one source cannot detect omissions in that source. the maintainer
+// caught this by counting three independent route lists: registry 53, inventory 58,
+// harness spec 53.
 //
-// Es exactamente el fallo que esta guarda existe para impedir, cometido por ella misma: **un oráculo
-// sacado de una de las fuentes que vigila no puede ver lo que a esa fuente le falta.** Lo cazó
-// the maintainer contando las TRES listas de rutas que hay en el árbol y que no derivan una de otra
-// (registro 53 · censo 58 · spec del arnés 53).
-//
-// ⇒ El denominador es ahora la **UNIÓN** de censo y registro. Una ruta escondida en cualquiera de
-//   las dos rompe esta celda; para taparla habría que borrarla de las dos a la vez.
+// The denominator is now the union of inventory and registry. Hiding a route in either
+// list fails this test; concealing it would require removing it from both.
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'

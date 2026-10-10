@@ -26,7 +26,8 @@ HELPER = "scripts/capture-web-generation.py"
 INPUT_PATHS = ["web", ".node-version", "package.json", "pnpm-lock.yaml",
                "pnpm-workspace.yaml", ".npmrc", ".taskrc.yml", ".olivares-public-export",
                "Taskfile.yml", ".github/workflows/pr-ci.yml", HELPER,
-               "scripts/web-bundle-source-digest.sh"]
+               "scripts/web-bundle-source-digest.sh", "scripts/build-web.sh",
+               "scripts/check-web-bundle-freshness.sh"]
 REQUIRED = {"web/package.json", "web/pnpm-lock.yaml", "web/vite.config.ts",
             "web/tsconfig.json", "web/index.html", ".node-version", "package.json",
             "pnpm-lock.yaml", "Taskfile.yml", ".github/workflows/pr-ci.yml", HELPER}
@@ -114,10 +115,9 @@ def outputs():
 
 def capture():
     checkout = command(["git", "rev-parse", "HEAD"])
-    require(checkout == os.environ["GITHUB_SHA"] and re.fullmatch(r"[0-9a-f]{40}", checkout),
-            "unexpected checkout identity")
     pr_head = os.environ["PR_HEAD"]
-    require(re.fullmatch(r"[0-9a-f]{40}", pr_head), "invalid PR identity")
+    require(checkout == pr_head and re.fullmatch(r"[0-9a-f]{40}", pr_head),
+            "unexpected PR checkout identity")
     repository = os.environ["GITHUB_REPOSITORY"]
     require(re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository), "invalid repository")
     run_id, attempt = os.environ["GITHUB_RUN_ID"], os.environ["GITHUB_RUN_ATTEMPT"]
@@ -167,7 +167,7 @@ def capture():
         require(outputs() == inventory and inputs() == before, "capture inputs or outputs changed")
         manifest = {
             "schema": "olivares.web-generation/v1",
-            "qualification": "development generation only; freshness and product acceptance remain due",
+            "qualification": "development generation only; product acceptance remains due",
             "checkout_sha": checkout, "pr_head_sha": pr_head, "repository": repository,
             "run_id": run_id, "run_attempt": attempt, "build_command": ["task", "build:web"],
             "build_exit": 0, "tool_versions": versions, "inputs": before, "outputs": inventory,

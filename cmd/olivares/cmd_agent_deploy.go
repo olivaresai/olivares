@@ -18,6 +18,7 @@ import (
 	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
 	"github.com/olivaresai/olivares/cmd/olivares/internal/termrender"
 	"github.com/olivaresai/olivares/cmd/olivares/internal/toolinstall"
+	"github.com/olivaresai/olivares/core/driverfacts"
 )
 
 // cmd_agent_deploy.go is the one verb behind "deploy Claude Code": find the
@@ -74,7 +75,7 @@ func newAgentDeployCmd() *cobra.Command {
 			if driver == "" {
 				return sessionCLIUsage("name the driver to deploy: claude, codex, grok or opencode")
 			}
-			// HU-07: homes are typed only when the operator names one. Otherwise the
+			// Homes are typed only when the operator names one. Otherwise the
 			// engine makes and keeps them; $HOME/.claude was the engine user's own
 			// login, refused when missing and never launched when present.
 			homesGiven := strings.TrimSpace(configHome) != "" || strings.TrimSpace(userHome) != ""
@@ -113,24 +114,14 @@ func newAgentDeployCmd() *cobra.Command {
 			if err := cfg.resolve(); err != nil {
 				return err
 			}
-			// AUTH SOURCE IS DECLARED IN BOTH BRANCHES, and the branch without a
-			// provider is the one that was missing.
-			//
-			// MEASURED 2026-09-18, walking the first hour on a clean machine:
-			// `olivares agent deploy grok` created a profile, reported "PROFILE
-			// ready" and exited 0 — and that profile could never launch. The
-			// server refuses a launch whose profile declares no auth source
-			// ("set auth_source to provider_account_home or managed_injection"),
-			// the home is then OCCUPIED so `agent profile create` answers 409,
-			// and there is no `agent profile update` or `rm`. The shortest
-			// documented path to a first session ended in a state the CLI could
-			// not leave.
+			// The auth source is declared in both branches. A profile without one
+			// can never launch (the server refuses it), and its home is then
+			// occupied, so `agent profile create` would answer 409: the shortest
+			// path to a first session would end in a state the CLI cannot leave.
 			//
 			// The value is not a new decision: this command's own help already
 			// says what the no-provider case means — "the host's own credential
 			// variables decide" — and that is exactly provider_account_home.
-			// Leaving the field out did not keep the choice open; it made the
-			// profile unusable and said nothing.
 			body := map[string]any{
 				"driver": driver, "display_name": deployProfileName(name, driver),
 				"auth_source": "provider_account_home",
@@ -210,17 +201,11 @@ func deployProfile(cmd *cobra.Command, cfg *agentClientConfig, body map[string]a
 // layout differs passes --config-home, and the SERVER refuses either one if it does
 // not exist.
 func driverConfigHome(driver, home string) string {
-	switch driver {
-	case "claude":
-		return filepath.Join(home, ".claude")
-	case "codex":
-		return filepath.Join(home, ".codex")
-	case "grok":
-		return filepath.Join(home, ".grok")
-	case "opencode":
-		return filepath.Join(home, ".config", "opencode")
+	facts, ok := driverfacts.Lookup(driver)
+	if !ok || !facts.Session {
+		return ""
 	}
-	return ""
+	return filepath.Join(home, filepath.FromSlash(facts.ConfigDir))
 }
 
 func resolveDeployHomes(driver, configHome, userHome string) (deployHomes, error) {
@@ -249,12 +234,9 @@ func resolveDeployHomes(driver, configHome, userHome string) (deployHomes, error
 
 // preferRegistered picks which candidate `deploy` reports as "installed".
 //
-// MEASURED 2026-09-18: after `olivares agent tool install --driver grok --root R`
-// placed a verified release in R and recorded its receipt, `olivares agent deploy
-// grok --root R` reported the operator's OWN ~/.grok binary — classified
-// "unregistered-observed" — and hid the release it had just installed under
-// "1 more candidate(s)". Detection returns PATH candidates first, and this
-// command printed found[0].
+// Detection returns PATH candidates first, so reporting found[0] would name the
+// operator's own ~/.grok binary over a release `agent tool install` just placed
+// and verified.
 //
 // A REGISTERED release is one this product placed, whose bytes it verified
 // against a signed manifest and whose receipt it wrote. An observed path is a

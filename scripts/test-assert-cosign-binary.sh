@@ -235,7 +235,7 @@ out_none="$(run_without_cosign "$S1" 2>&1)"
 rc_none=$?
 if [ "$rc_none" -ne 0 ] && grep -q "hard failure, not a skip"; then check "no cosign at all is a hard failure" "rc!=0" 0; else check "no cosign at all is a hard failure" "rc!=0" 1; fi <<<"$out_none"
 # 1 is the missing-cosign verdict; 2 is the subject's "a prerequisite is missing, could not look".
-if [ "$rc_none" -eq 1 ] && ! grep -q "NO HE PODIDO MIRAR"; then
+if [ "$rc_none" -eq 1 ] && ! grep -q "COULD NOT LOOK"; then
 	check "and it is the missing-cosign answer, not a missing-tool one" "rc=1" 0
 else
 	check "and it is the missing-cosign answer, not a missing-tool one" "rc=$rc_none" 1
@@ -283,7 +283,7 @@ done
 unset tool
 out_nosha="$(PATH="$NO_SHA_PATH" "$BASH_BIN" "$S1" 2>&1)"
 rc_nosha=$?
-if [ "$rc_nosha" -eq 2 ] && grep -q "NO HE PODIDO MIRAR: 'sha256sum'"; then
+if [ "$rc_nosha" -eq 2 ] && grep -q "COULD NOT LOOK: 'sha256sum'"; then
 	check "control: without sha256sum it is the could-not-look answer" "rc=2" 0
 else
 	check "control: without sha256sum it is the could-not-look answer" "rc=$rc_nosha" 1

@@ -20,6 +20,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/olivaresai/olivares/cmd/olivares/internal/mcpgateway"
 	mcpc "github.com/olivaresai/olivares/connectors/mcp"
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/audit"
@@ -322,7 +323,7 @@ func TestMCPDurableTaskSQLiteRestartKeepsFinalLifecycleAndCursor(t *testing.T) {
 	upstream := newMCPRestartUpstream(t, taskID, taskCreatedAt)
 	defer upstream.server.Close()
 	upstreamDescriptor := fmt.Sprintf(
-		"https-forward:%s|cred-provider:%T", upstream.server.URL, newUpstreamCredentialProvider(""),
+		"https-forward:%s|cred-provider:%T", upstream.server.URL, thisEdition.upstreamCredentialProvider(""),
 	)
 	activeSpec := activateMCPRestartSpec(t, module, tenant, workspace, upstream.server.URL)
 	interruptRoute := sessions.ProtocolInterruptRoute{
@@ -338,7 +339,7 @@ func TestMCPDurableTaskSQLiteRestartKeepsFinalLifecycleAndCursor(t *testing.T) {
 		t.Fatalf("compose first durable task store: %v", err)
 	}
 	token, jwks := mintReviewToken(t, mcpReviewResource, "tools:read")
-	gatewayConfig := &mcpGatewayConfig{
+	gatewayConfig := &mcpgateway.MCPConfig{
 		Resource: mcpReviewResource, AuthorizationServers: []string{"https://auth.review.example"},
 		Issuer: "https://auth.review.example", IssuerJWKS: json.RawMessage(jwks),
 		Tenant: tenant.String(), UpstreamURL: upstream.server.URL,

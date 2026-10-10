@@ -69,19 +69,9 @@ func (s *Server) NewGRPCServer(opts ...grpc.ServerOption) *grpc.Server {
 // the principal in the context. A present-but-invalid token is rejected; an absent
 // one leaves the request anonymous (GetServerInfo allows it).
 func (s *Server) grpcAuthInterceptor(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
-	md, ok := metadata.FromIncomingContext(ctx)
-	if ok {
-		if vals := md.Get("authorization"); len(vals) > 0 {
-			token, hasPrefix := strings.CutPrefix(vals[0], "Bearer ")
-			if !hasPrefix {
-				return nil, grpcError(auth.ErrUnauthenticated)
-			}
-			p, err := s.authr.Authenticate(ctx, strings.TrimSpace(token))
-			if err != nil {
-				return nil, grpcError(auth.ErrUnauthenticated)
-			}
-			ctx = s.withStepUpPolicy(withPrincipal(ctx, p))
-		}
+	ctx, err := s.grpcAuthenticate(ctx)
+	if err != nil {
+		return nil, err
 	}
 	return handler(ctx, req)
 }
@@ -92,21 +82,34 @@ func (s *Server) grpcAuthInterceptor(ctx context.Context, req any, _ *grpc.Unary
 // then denies it). The authenticated principal is threaded to the handler through
 // a context-replacing stream wrapper.
 func (s *Server) grpcStreamAuthInterceptor(srv any, ss grpc.ServerStream, _ *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-	ctx := ss.Context()
-	if md, ok := metadata.FromIncomingContext(ctx); ok {
-		if vals := md.Get("authorization"); len(vals) > 0 {
-			token, hasPrefix := strings.CutPrefix(vals[0], "Bearer ")
-			if !hasPrefix {
-				return grpcError(auth.ErrUnauthenticated)
-			}
-			p, err := s.authr.Authenticate(ctx, strings.TrimSpace(token))
-			if err != nil {
-				return grpcError(auth.ErrUnauthenticated)
-			}
-			ctx = s.withStepUpPolicy(withPrincipal(ctx, p))
-		}
+	ctx, err := s.grpcAuthenticate(ss.Context())
+	if err != nil {
+		return err
 	}
 	return handler(srv, &wrappedServerStream{ServerStream: ss, ctx: ctx})
+}
+
+// grpcAuthenticate applies the same header normalization as the HTTP transport.
+// Empty values leave the caller anonymous; nonempty invalid credentials fail.
+func (s *Server) grpcAuthenticate(ctx context.Context) (context.Context, error) {
+	md, _ := metadata.FromIncomingContext(ctx)
+	vals := md.Get("authorization")
+	if len(vals) == 0 {
+		return ctx, nil
+	}
+	header := strings.TrimSpace(vals[0])
+	if header == "" {
+		return ctx, nil
+	}
+	token, hasPrefix := strings.CutPrefix(header, "Bearer ")
+	if !hasPrefix {
+		return nil, grpcError(auth.ErrUnauthenticated)
+	}
+	p, err := s.authr.Authenticate(ctx, strings.TrimSpace(token))
+	if err != nil {
+		return nil, grpcError(auth.ErrUnauthenticated)
+	}
+	return s.withStepUpPolicy(withPrincipal(ctx, p)), nil
 }
 
 // grpcLeaderGateExempt reports whether a full gRPC method name is operational —
@@ -180,7 +183,7 @@ func (s *Server) grpcAuthorizeEntity(ctx context.Context, perm auth.Permission, 
 }
 
 // grpcAuthorizeResource is the shared core: tenant resolution, the per-tenant rate
-// limiter, and authorization of perm against res. Identical semantics to REST.
+// limiter, and admission of perm against res through admit, as REST.
 func (s *Server) grpcAuthorizeResource(ctx context.Context, perm auth.Permission, tenantStr string, res auth.ResourceAttrs) (auth.Principal, model.TenantID, error) {
 	if !s.isSetupComplete(ctx) {
 		return auth.Principal{}, "", errSetupRequired
@@ -219,8 +222,12 @@ func (s *Server) grpcAuthorizeResource(ctx context.Context, perm auth.Permission
 	// buffer: retain this question here, before its caller opens store callbacks.
 	ctx, flush := s.beginAuthorizationRecording(ctx)
 	defer flush()
-	if dec := s.authz.Authorize(ctx, auth.Request{Principal: p, Permission: perm, Tenant: tenant, Resource: res}); !dec.Allow {
-		return auth.Principal{}, "", errForbidden
+	// The gRPC adapter of admit. Every ControlPlane RPC's REST twin is an ungoverned
+	// tenant or entity route (core_routes.go entityRoute), so it asks the same
+	// question: no route metadata, the generic denial, no witness. IngestService.Push
+	// has no REST twin and asks the same. grpcError keeps the codes.
+	if _, err := s.admit(ctx, auth.Request{Principal: p, Permission: perm, Tenant: tenant, Resource: res}, errForbidden, ungovernedRoute); err != nil {
+		return auth.Principal{}, "", err
 	}
 	return p, tenant, nil
 }
@@ -239,13 +246,18 @@ func (g *grpcService) GetServerInfo(ctx context.Context, _ *apiv1.Empty) (*apiv1
 }
 
 func (g *grpcService) ListAgents(ctx context.Context, req *apiv1.ListAgentsRequest) (*apiv1.ListAgentsResponse, error) {
-	_, tenant, err := g.s.grpcAuthorize(ctx, "agent:read", req.GetTenant())
+	p, tenant, err := g.s.grpcAuthorize(ctx, "agent:read", req.GetTenant())
 	if err != nil {
 		return nil, grpcError(err)
 	}
+	q := model.Query{Limit: int(req.GetLimit()), Cursor: req.GetCursor()}
+	if workspace, confined := p.ConfinedWorkspaceIn(tenant); confined {
+		q.Filters = append(q.Filters, model.Filter{Column: "workspace_id", Op: model.OpEq, Value: workspace.String()})
+	}
 	out := &apiv1.ListAgentsResponse{}
-	err = g.s.st.View(ctx, tenant, func(sc store.Scope) error {
-		agents, page, err := sc.Agents().List(ctx, model.Query{Limit: int(req.GetLimit()), Cursor: req.GetCursor()})
+	// Same boundary as REST handleListAgents: the confined scope, not the OpEq filter.
+	err = NewScopedData(g.s.st, tenant).View(withModuleRequestBoundary(ctx, tenant, p), func(sc store.Scope) error {
+		agents, page, err := sc.Agents().List(ctx, q)
 		if err != nil {
 			return err
 		}

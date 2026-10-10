@@ -37,13 +37,14 @@ import (
 // Governance uses its real deny overlay and scoped-grant engine, no authored
 // policies/grants. Recorder is explicitly not required in this fixture.
 type streamConfinementFixture struct {
+	gov *governance.Module
 	*harness
 	authr  *auth.Authenticator
 	authz  *auth.Authorizer
 	server *httptest.Server
 }
 
-func newStreamConfinementFixture(t *testing.T, cfg store.Config) *streamConfinementFixture {
+func newStreamConfinementFixture(t *testing.T, cfg store.Config, configure ...func(*api.Options)) *streamConfinementFixture {
 	t.Helper()
 	m, gov := New(), governance.New()
 	ctx := context.Background()
@@ -82,10 +83,14 @@ func newStreamConfinementFixture(t *testing.T, cfg store.Config) *streamConfinem
 	}
 	authr := auth.NewAuthenticator(st, nil)
 	authz := auth.NewAuthorizer(gov.RequestEvaluator(), auth.WithScopedGrants(gov.ScopedGrants()))
-	srv, err := api.New(api.Options{
+	opts := api.Options{
 		Store: st, Authenticator: authr, Authorizer: authz, Signer: signer,
 		SetupToken: setup, Version: "test", Modules: []api.Module{m, gov},
-	})
+	}
+	for _, c := range configure {
+		c(&opts)
+	}
+	srv, err := api.New(opts)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -94,7 +99,7 @@ func newStreamConfinementFixture(t *testing.T, cfg store.Config) *streamConfinem
 	t.Log("mounted Sessions + Governance; real auth/RBAC/scoped grants; no authored policies; recorder not required")
 	return &streamConfinementFixture{
 		harness: &harness{t: t, m: m, srv: srv, st: st, setupTok: plaintext},
-		authr:   authr, authz: authz, server: ts,
+		gov:     gov, authr: authr, authz: authz, server: ts,
 	}
 }
 
@@ -699,7 +704,7 @@ func TestSessionsStreamHeartbeatAndWriteFailure(t *testing.T) {
 				go m.handleStream(w, req, api.ModuleContext{Data: streamAuditUnavailable{}})
 				synctest.Wait()
 				body, deadlines, _ := w.state()
-				if body != ": connected\n\n" || len(deadlines) != 1 {
+				if body != ": connected\n\n" || len(deadlines) != 2 || !deadlines[1].IsZero() {
 					t.Fatal("connected frame/deadline missing")
 				}
 				if _, n := streamBrokerCounts(m); n != 1 {
@@ -709,7 +714,7 @@ func TestSessionsStreamHeartbeatAndWriteFailure(t *testing.T) {
 				time.Sleep(heartbeatInterval)
 				synctest.Wait()
 				body, deadlines, flushed := w.state()
-				if len(deadlines) != 2 || deadlines[1].Sub(deadlines[0]) != heartbeatInterval || deadlines[1].Sub(time.Now()) != streamWriteTimeout {
+				if len(deadlines) != 4 || deadlines[2].Sub(deadlines[0]) != heartbeatInterval || deadlines[2].Sub(time.Now()) != streamWriteTimeout || !deadlines[3].IsZero() {
 					t.Fatalf("per-frame deadlines=%v", deadlines)
 				}
 				if mode == "heartbeat" {

@@ -9,15 +9,17 @@ description: >-
 draft: false
 ---
 
+Das nächste Release ist <!-- release -->`0.1`<!-- /release -->; es ist noch nicht auf GitHub veröffentlicht. Die folgenden Befehle beschreiben die geplanten Artefakte. Bauen Sie bis zur Veröffentlichung aus dem Quellcode und prüfen Sie danach jedes Artefakt vor der Verwendung. Der beobachtete Veröffentlichungsstand steht in <!-- release -->`docs/releases/0.1-install-surfaces.json`<!-- /release -->.
+
 :::note[Veröffentlichte Paketnamen]
-Die GitHub-Release 26.10.1 veröffentlicht `.deb`-, `.rpm`- und `.apk`-Artefakte für
+Die GitHub-Release <!-- release -->0.1<!-- /release --> veröffentlicht `.deb`-, `.rpm`- und `.apk`-Artefakte für
 `amd64` und `arm64`, zusammen mit `checksums.txt`, `checksums.txt.sig` und
 `checksums.txt.pem`. Die Befehle unten verwenden die wörtlichen `amd64`-Namen dieser
 Release; ersetzen Sie `amd64` auf einem 64-Bit-ARM-Host durch `arm64`. Installieren
 Sie aus diesen verifizierten Release-Artefakten. Repository-Metadatenproduzenten in
 einem Quellbaum sind keine Installationsanleitung für diese Seite.
 
-**Qualifikation DIST-24-05.** Was die CI qualifiziert, ist der verifizierte
+**Qualifikation des Installers.** Was die CI qualifiziert, ist der verifizierte
 **Shell-Installer** und sein Service/Doctor-Vertrag, nicht `dpkg`, `rpm` oder `apk`: eine
 Dispatch/Pull-Request-Matrix führt ihn gegen die veröffentlichte Release in
 Container-Userlands von Debian stable, Ubuntu 24.04 LTS, Fedora, openSUSE Leap und Alpine
@@ -29,7 +31,7 @@ Neustart, Upgrade eines laufenden OpenRC-Dienstes und Entfernen — wurde lokal 
 verwerfbaren Alpine-Gast ausgeübt; das ist ein Nachweis für diesen Baum, keine signierte,
 gehostete oder Preproduction-Qualifikation, die weiterhin aussteht.
 
-**Vorgeschlagene Repositories DIST-24-06 (keine aktive Installationsoberfläche).** Der
+**Vorgeschlagene Paket-Repositories (keine aktive Installationsoberfläche).** Der
 Quellbaum enthält deterministische apt-, rpm-md- und APK-Repository-Produzenten, einen
 Prüfer für signierte Indizes, eine Clean-Client-Qualifikation und einen gestuften
 Veröffentlichungs-Workflow, dessen Dispatch inert bleibt, bis ein Reviewer ihn freigibt.
@@ -55,8 +57,10 @@ das Paket, `checksums.txt` und die Signatur in ein Verzeichnis und führen Sie d
 Prüfer **aus diesem Verzeichnis** aus:
 
 ```bash
+# The verifier is in a source checkout of the release tag, not a release asset; running it
+# trusts the checkout. Without one, INSTALL.md shows the cosign + sha256sum commands.
 # keyless / Sigstore (default; reaches Rekor over the network)
-./verify-release.sh
+/path/to/olivares/scripts/verify-release.sh
 ```
 
 Releases werden schlüssellos signiert und veröffentlichen keinen öffentlichen cosign-Schlüssel;
@@ -81,16 +85,18 @@ unter `/etc/init.d/olivares` ab, mit einem expliziten `package-init`-Stempel, da
 Hooks nicht aus dem Vorhandensein von `systemctl` auf dem Host raten. Die Linux-Archive
 tragen dieselben Dienst-Adapter: `scripts/install-service.sh` und `packaging/service/`.
 
+<!-- release -->
 ```bash
 # Debian / Ubuntu
-sudo dpkg -i olivares_26.10.1_linux_amd64.deb
+sudo dpkg -i olivares_0.1_linux_amd64.deb
 
 # RHEL / Fedora / SUSE
-sudo rpm -Uvh olivares_26.10.1_linux_amd64.rpm
+sudo rpm -Uvh olivares_0.1_linux_amd64.rpm
 
 # Alpine
-sudo apk add --allow-untrusted olivares_26.10.1_linux_amd64.apk
+sudo apk add --allow-untrusted olivares_0.1_linux_amd64.apk
 ```
+<!-- /release -->
 
 Die Installation **erzeugt den Systembenutzer und die Gruppe `olivares`** (mit
 `/usr/sbin/nologin` als Shell und `/var/lib/olivares` als Home), erzeugt
@@ -135,14 +141,36 @@ sudo -u olivares olivares serve --data-dir=/var/lib/olivares \
 Die mitgelieferte systemd-Unit führt die Engine als unprivilegierten Benutzer
 `olivares` mit leerem Capability-Bounding-Set aus — sie hält keinerlei Capabilities,
 weder ambient noch bounding — und `NoNewPrivileges=true`, sodass nichts, was sie
-startet, welche gewinnen kann. Darüber hinaus trägt sie `ProtectSystem=strict` (das
-Dateisystem ist schreibgeschützt außer `ReadWritePaths=/var/lib/olivares`),
-`ProtectHome`, `PrivateTmp`, `PrivateDevices`, die vier
-`ProtectKernel*`/`ProtectClock`-Direktiven, `RestrictNamespaces`,
-`RestrictSUIDSGID`, `RestrictRealtime`, `LockPersonality`,
-`MemoryDenyWriteExecute`, `SystemCallArchitectures=native`, einen
+startet, welche gewinnen kann. Darüber hinaus trägt sie `ProtectSystem=full` (`/usr`,
+`/boot`, `/efi` und `/etc` sind schreibgeschützt), `PrivateDevices=true`,
+`ProtectClock=true`, `ProtectKernelTunables=true`, `ProtectKernelModules=true`,
+`ProtectKernelLogs=true`, `ProtectControlGroups=true`, `RestrictNamespaces=user net`
+(eine Session erhält ihren eigenen User- und Netzwerk-Namespace; jeder andere
+Namespace-Typ wird verweigert), `RestrictSUIDSGID=true`, `RestrictRealtime=true`,
+`LockPersonality=true`, `SystemCallArchitectures=native`, einen
 `@system-service`-Syscall-Filter, der zusätzlich `@privileged` und `@resources`
 entfernt, und `UMask=0027`.
+
+Die Unit verbirgt **keine** Home- oder temporären Verzeichnisse und erlaubt ausführbaren
+Speicher: Sie setzt `ProtectHome=false`, `PrivateTmp=false` und
+`MemoryDenyWriteExecute=false`. Die Engine erreicht alles, was die normalen Dateirechte
+dem Konto `olivares` erlauben, auch `/home`, `/tmp` und `/var/tmp`, damit die Ordner, die
+Sie für Sessions wählen, erreichbar bleiben. Die Eingrenzung erfolgt stattdessen pro
+Session: Bevor ein Agenten-Tool oder ein stdio-MCP-Server startet, wendet die Engine eine
+Landlock-Richtlinie an, die ihm das Schreiben in seinen Session-Ordner, sein Tool-Home und
+sein temporäres Verzeichnis erlaubt und das Datenverzeichnis der Engine, `/etc/olivares`
+und die eigenen Zugangsdaten des Engine-Kontos nie erreichen lässt. Node/V8-Agenten- und
+MCP-Laufzeiten brauchen ausführbaren JIT-Speicher, deshalb
+`MemoryDenyWriteExecute=false`. Auf einem Kernel ohne Landlock verweigert die Engine den
+Start von Sessions; `olivares doctor` nennt den Grund.
+
+26.10.0<!-- release-fixed --> lieferte eine strengere Unit aus: das ganze Dateisystem schreibgeschützt außer dem
+Datenverzeichnis, Home-Verzeichnisse verborgen, ein privates `/tmp` und kein beschreibbarer
+ausführbarer Speicher. 26.10.1<!-- release-fixed --> lockerte sie auf die obigen Werte. Sie können jede dieser
+Einstellungen in einem Drop-in (`systemctl edit olivares`) wieder hinzufügen. Dann
+funktionieren Session-Ordner unter Home-Verzeichnissen oder `/tmp` und JIT-basierte Tools
+nicht mehr, und bei schreibgeschütztem Dateisystem braucht jeder Session-Ordner außerhalb
+des Datenverzeichnisses eine eigene `ReadWritePaths=`-Zeile.
 
 Auf Standard-Alpine greifen diese systemd-Direktiven bei einer **zuvor veröffentlichten**
 `.apk` nicht, weil die systemd-Unit dieser Nutzlast nicht läuft. Aus diesem
@@ -194,8 +222,8 @@ check_scratch_mount() {
 check_scratch_mount /var/lib/olivares
 ```
 
-Wenn dort `noexec` steht, zeigen Sie `TMPDIR` auf ein Verzeichnis, das unter
-`ProtectSystem=strict` beschreibbar **und** auf einem ausführbaren Mount liegt:
+Wenn dort `noexec` steht, zeigen Sie `TMPDIR` auf ein Verzeichnis, das der Benutzer
+`olivares` schreiben kann **und** das auf einem ausführbaren Mount liegt:
 
 ```bash
 sudo install -d -o olivares -g olivares -m 0750 /run/olivares-exec-tmp
@@ -311,9 +339,7 @@ Drei Flags sind für eine paketierte Installation besonders relevant:
 
 - **`--endpoint`** — Updates aus einem GitHub-Repository, das Sie kontrollieren, statt
   der Vorgabe. Das ist der Ausweg für einen Spiegel oder einen Fork.
-- **`--bundle`** — Installation aus einem lokalen Bundle-Verzeichnis oder `.tar.gz`
-  **ohne jedes Netz**. Dieses Bundle zu bauen und zu transportieren beschreibt
-  [In einer air-gapped Umgebung installieren](/de/how-to/air-gap-install/).
+- **`--bundle`** — Offline-Installation erfordert Enterprise. Community prüft ein Bundle mit `--bundle --check`, ohne eine Lizenz zu lesen oder es zu installieren.
 - **`--install-timer`** — gibt einen **optionalen systemd**-Timer und -Dienst aus, der
   nach Plan nach Updates sucht. Nichts installiert das für Sie; siehe
   [was das Paket nicht tut](#8-was-das-paket-nicht-tut). Es ist ein systemd-Generator.

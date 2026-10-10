@@ -265,6 +265,12 @@ func TestProviderRecord_Validation(t *testing.T) {
 		{"openai_compatible with no endpoint", CreateProviderRecordInput{
 			Kind: ProviderKindOpenAICompatible, DisplayName: "x", APIKey: testProviderKey,
 		}, http.StatusBadRequest},
+		{"xai public http endpoint", CreateProviderRecordInput{
+			Kind: ProviderKindXAI, DisplayName: "x", APIKey: testProviderKey, BaseURL: "http://api.example.com/v1",
+		}, http.StatusBadRequest},
+		{"xai local http endpoint carrying a credential", CreateProviderRecordInput{
+			Kind: ProviderKindXAI, DisplayName: "x", APIKey: testProviderKey, BaseURL: "http://user:secret@127.0.0.1:18490/v1",
+		}, http.StatusBadRequest},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -494,8 +500,8 @@ func TestRecordServesDriver(t *testing.T) {
 		{ProviderKindOllama, providerDriverOpenCode, true},
 		{ProviderKindOllama, providerDriverClaude, false},
 		{ProviderKindOllama, providerDriverGrok, false},
-		// openai_compatible holds only Codex to its address (Root 2026-10-02 21:16Z:
-		// a bound session reaches only its record's endpoint, or it does not start).
+		// openai_compatible holds only Codex to its address:
+		// a bound session reaches only its record's endpoint, or it does not start.
 		{ProviderKindOpenAICompatible, providerDriverCodex, true},
 		{ProviderKindOpenAICompatible, providerDriverClaude, false},
 		{ProviderKindOpenAICompatible, providerDriverGrok, false},
@@ -573,34 +579,60 @@ func countProviderRecordRows(t *testing.T, st store.Store, tenant model.TenantID
 // HU-R14: the OpenAI-compatible kind serves every driver, and local servers are
 // plain http. Plain http is accepted only for loopback and private-network
 // addresses (localhost, RFC 1918, fc00::/7); a public http host is refused, and
-// https keeps working anywhere. The other kinds stay https-only: the value that
+// https keeps working anywhere. xAI and Anthropic follow the same rule: they are
+// the kinds Grok Build and Claude Code bind, so a local compatible server is
+// their only local model. The other kinds stay https-only: the value that
 // travels over their URL is a credential.
 func TestValidProviderBaseURLHTTPOnlyForLocalHosts(t *testing.T) {
 	t.Parallel()
-	for _, tc := range []struct {
-		name    string
-		url     string
-		wantErr bool
-	}{
-		{"https public", "https://api.example.com", false},
-		{"http loopback IP", "http://127.0.0.1:11434", false},
-		{"http localhost", "http://localhost:11434", false},
-		{"http RFC1918 10/8", "http://10.1.2.3:11434", false},
-		{"http RFC1918 192.168", "http://192.168.1.20:11434", false},
-		{"http IPv6 ULA", "http://[fd00::1]:11434", false},
-		{"http public host", "http://api.example.com", true},
-		{"http public IP", "http://203.0.113.10:11434", true},
-		{"http carrying credentials", "http://user:secret@127.0.0.1:11434", true},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			_, err := validProviderBaseURL(ProviderKindOpenAICompatible, tc.url)
-			if (err != nil) != tc.wantErr {
-				t.Fatalf("validProviderBaseURL(openai_compatible, %q) err = %v, wantErr %v", tc.url, err, tc.wantErr)
-			}
-		})
+	for _, kind := range []string{ProviderKindOpenAICompatible, ProviderKindXAI, ProviderKindAnthropic} {
+		for _, tc := range []struct {
+			name    string
+			url     string
+			wantErr bool
+		}{
+			{"https public", "https://api.example.com", false},
+			{"http loopback IP", "http://127.0.0.1:11434", false},
+			{"http localhost", "http://localhost:11434", false},
+			{"http RFC1918 10/8", "http://10.1.2.3:11434", false},
+			{"http RFC1918 192.168", "http://192.168.1.20:11434", false},
+			{"http IPv6 ULA", "http://[fd00::1]:11434", false},
+			{"http public host", "http://api.example.com", true},
+			{"http public IP", "http://203.0.113.10:11434", true},
+			{"http carrying credentials", "http://user:secret@127.0.0.1:11434", true},
+		} {
+			t.Run(kind+"/"+tc.name, func(t *testing.T) {
+				_, err := validProviderBaseURL(kind, tc.url)
+				if (err != nil) != tc.wantErr {
+					t.Fatalf("validProviderBaseURL(%s, %q) err = %v, wantErr %v", kind, tc.url, err, tc.wantErr)
+				}
+			})
+		}
 	}
-	// The credential kinds keep the https rule even for local servers.
+	// The OpenAI credential kind keeps the https rule even for local servers.
 	if _, err := validProviderBaseURL(ProviderKindOpenAI, "http://127.0.0.1:11434"); err == nil {
 		t.Fatal("the OpenAI kind must stay https-only even on loopback")
+	}
+}
+
+// Grok Build binds only the xai kind, so a local xAI-compatible server is registered as one:
+// the record keeps the endpoint as given (no trailing slash), and that same value is the
+// address a session is launched on. The model-list probe asks that address plus /models
+// (modelsURL in cmd/olivares, TestModelsURLCompatibleBaseMatchesLaunchEndpoint).
+func TestProviderRecord_XAILocalHTTPEndpointIsLaunchedAsGiven(t *testing.T) {
+	t.Parallel()
+	m, _, tenant, _, _ := providerHarness(t)
+	rec := mustCreateRecord(t, m, tenant, CreateProviderRecordInput{
+		Kind: ProviderKindXAI, DisplayName: "Local Grok", APIKey: testProviderKey, BaseURL: " http://127.0.0.1:18490/v1/ ",
+	})
+	const want = "http://127.0.0.1:18490/v1"
+	if rec.BaseURL != want {
+		t.Fatalf("stored base_url = %q, want %q", rec.BaseURL, want)
+	}
+	if got, ok := recordEndpoint(rec); !ok || got != want {
+		t.Fatalf("launch endpoint = %q, %v; want %q", got, ok, want)
+	}
+	if got, ok := recordEndpoint(ProviderRecord{Kind: ProviderKindXAI}); !ok || got != "https://api.x.ai/v1" {
+		t.Fatalf("vendor launch endpoint = %q, %v; want https://api.x.ai/v1", got, ok)
 	}
 }

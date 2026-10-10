@@ -162,6 +162,7 @@ describe('LiveConsole interrupt contract', () => {
       expect(http.post).toHaveBeenLastCalledWith(
         '/v1/m/sessions/runs/run_1/input',
         { text: 'next turn draft' },
+        undefined,
       ),
     )
     expect(
@@ -546,7 +547,11 @@ describe('LiveConsole controls after the work item is submitted', () => {
     wrap(bound)
     await send('one more thing')
     await waitFor(() => expect(http.post).toHaveBeenCalled())
-    expect(http.get).toHaveBeenCalledWith('/v1/m/sessions/runs/run_1')
+    expect(http.get).toHaveBeenCalledTimes(1)
+    expect(http.get).toHaveBeenCalledWith(
+      '/v1/m/sessions/runs/run_1',
+      undefined,
+    )
     expect(posted()).toEqual({
       path: '/v1/m/sessions/runs/run_1/input',
       body: { text: 'one more thing' },
@@ -587,5 +592,100 @@ describe('LiveConsole controls after the work item is submitted', () => {
       path: '/v1/m/sessions/runs/run_1/interrupt',
       body: { work_lease_fence: 7 },
     })
+  })
+})
+
+// A disabled Send says why and what unblocks it, in visible text it points at.
+describe('LiveConsole — a disabled Send says why', () => {
+  it('asks for a sentence while the box is empty', async () => {
+    const user = userEvent.setup()
+    wrap(codexRun)
+    const send = screen.getAllByRole('button', { name: 'Send' })[0]
+    expect(send).toBeDisabled()
+    expect(send).toHaveAccessibleDescription('Type something to send.')
+    await user.type(screen.getByRole('textbox', { name: 'Session turn' }), 'hi')
+    expect(send).toBeEnabled()
+    expect(send).not.toHaveAttribute('aria-describedby')
+  })
+
+  // `idle` is a running session quiet for a while: the engine still takes its input,
+  // so nothing needs starting or resuming.
+  it('sends on an idle session', async () => {
+    const user = userEvent.setup()
+    wrap({ ...codexRun, state: 'idle' })
+    await user.type(screen.getByRole('textbox', { name: 'Session turn' }), 'hi')
+    await user.type(
+      screen.getByRole('textbox', { name: 'Session input line' }),
+      'x',
+    )
+    for (const send of screen.getAllByRole('button', { name: 'Send' })) {
+      expect(send).toBeEnabled()
+      expect(send).not.toHaveAttribute('aria-describedby')
+    }
+  })
+
+  it('names the session state when the session is not running', () => {
+    wrap({ ...codexRun, state: 'stopped' })
+    const send = screen.getAllByRole('button', { name: 'Send' })[0]
+    expect(send).toBeDisabled()
+    expect(send).toHaveAccessibleDescription(
+      'Start or resume the session to send.',
+    )
+  })
+
+  it('names the launch approval when the session waits for it', () => {
+    wrap({ ...codexRun, state: 'waiting_approval', approval_ref: 'apr_launch' })
+    for (const send of screen.getAllByRole('button', { name: 'Send' })) {
+      expect(send).toBeDisabled()
+      expect(send).toHaveAccessibleDescription(
+        'The launch waits for an approval; Send works once it is approved.',
+      )
+    }
+  })
+
+  it('says the sentence is on its way while it is being sent', async () => {
+    const user = userEvent.setup()
+    vi.mocked(http.post).mockReturnValue(new Promise(() => {}))
+    wrap(codexRun)
+    await user.type(screen.getByRole('textbox', { name: 'Session turn' }), 'hi')
+    const send = screen.getAllByRole('button', { name: 'Send' })[0]
+    await user.click(send)
+    await waitFor(() => expect(send).toBeDisabled())
+    expect(send).toHaveAccessibleDescription(
+      'Sending… Wait for the session to accept it.',
+    )
+  })
+})
+
+describe('LiveConsole — the advanced line Send says why', () => {
+  const wireSend = () => screen.getAllByRole('button', { name: 'Send' })[1]
+
+  it('reads its own box, not the sentence box', async () => {
+    const user = userEvent.setup()
+    wrap(codexRun)
+    await user.type(screen.getByRole('textbox', { name: 'Session turn' }), 'hi')
+    expect(wireSend()).toBeDisabled()
+    expect(wireSend()).toHaveAccessibleDescription('Type something to send.')
+  })
+
+  it('names the session state when the session is not running', () => {
+    wrap({ ...codexRun, state: 'stopped' })
+    expect(wireSend()).toBeDisabled()
+    expect(wireSend()).toHaveAccessibleDescription(
+      'Start or resume the session to send.',
+    )
+  })
+
+  it('says a sentence is on its way while one is being sent', async () => {
+    const user = userEvent.setup()
+    vi.mocked(http.post).mockReturnValue(new Promise(() => {}))
+    wrap(codexRun)
+    await user.type(screen.getByRole('textbox', { name: 'Session turn' }), 'hi')
+    await user.click(screen.getAllByRole('button', { name: 'Send' })[0])
+    await waitFor(() =>
+      expect(wireSend()).toHaveAccessibleDescription(
+        'Sending… Wait for the session to accept it.',
+      ),
+    )
   })
 })

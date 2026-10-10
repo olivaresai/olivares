@@ -23,7 +23,7 @@ CANON="${OLIVARES_ECO17_CANON:-design/PRICING-CANON.md}"
 
 grep -q 'NOT CREATED' "$DOC" || fail "$DOC lost NOT CREATED"
 if grep -qiE 'objects created|ids invented|provider_object_id filled' "$DOC"; then
-	fail "$DOC claims a creation this lote does not have"
+	fail "$DOC claims a creation this batch does not have"
 fi
 grep -q 'forbidden-until-non-object-gates' "$CANON" || \
 	fail "canon lost live_creation_state forbidden"

@@ -77,12 +77,17 @@ type fakeOpener struct {
 	consumeCalls  int
 }
 
-func (f *fakeOpener) gateOnce(_ context.Context, _ model.TenantID, _, _, _, _, _, _ string) (string, string, string, error) {
+func (f *fakeOpener) GateOnceForSession(_ context.Context, _ model.TenantID, _, _, _, _, _, _, _ string) (string, string, string, error) {
 	f.calls++
 	return "appr-1", f.status, "ph", f.err
 }
 
-func (f *fakeOpener) consumeApproval(_ context.Context, _ model.TenantID, _, _, _ string) (bool, bool, error) {
+func (f *fakeOpener) StatusScoped(_ context.Context, _ model.TenantID, _, _, _, _, _ string) (string, string, error) {
+	f.calls++
+	return f.status, "ph", f.err
+}
+
+func (f *fakeOpener) ConsumeApproval(_ context.Context, _ model.TenantID, _, _, _ string) (bool, bool, error) {
 	f.consumeCalls++
 	if f.consumeErr != nil {
 		return false, false, f.consumeErr
@@ -113,7 +118,7 @@ func TestSessionLaunchGate_BudgetDeniesWithStatus(t *testing.T) {
 		{"throttle", 429},
 	}
 	for _, tc := range cases {
-		g := &sessionLaunchGate{fin: fakeBudget{chk: finops.BudgetCheck{Allowed: false, Action: tc.action}}, recordAvailable: true, log: slog.Default()}
+		g := &sessionLaunchGate{fin: fakeBudget{chk: finops.BudgetCheck{Allowed: false, Action: tc.action}}, log: slog.Default()}
 		dec, err := g.Authorize(context.Background(), "t1", sessions.LaunchIntent{Transport: sessions.TransportStreamJSON, PermissionMode: "default"})
 		if err != nil {
 			t.Fatalf("Authorize(%s): %v", tc.action, err)
@@ -131,7 +136,7 @@ func TestSessionLaunchGate_BudgetDeniesWithStatus(t *testing.T) {
 }
 
 func TestSessionLaunchGate_BudgetFailsOpen(t *testing.T) {
-	g := &sessionLaunchGate{fin: fakeBudget{err: errors.New("finops down")}, recordAvailable: true, log: slog.Default()}
+	g := &sessionLaunchGate{fin: fakeBudget{err: errors.New("finops down")}, budgetPosture: availabilityFailOpen, log: slog.Default()}
 	dec, err := g.Authorize(context.Background(), "t1", sessions.LaunchIntent{Transport: sessions.TransportStreamJSON, PermissionMode: "default"})
 	if err != nil || !dec.Allowed {
 		t.Fatalf("a FinOps read error must fail OPEN (allow), got allowed=%v err=%v", dec.Allowed, err)
@@ -171,7 +176,7 @@ func TestSessionLaunchGate_CriticalHITL(t *testing.T) {
 
 	// Pending approval ⇒ the launch is DENIED (with the ref) until approved out-of-band.
 	op := &fakeOpener{status: nbPending}
-	g := &sessionLaunchGate{bridge: op, recordAvailable: true, log: slog.Default()}
+	g := &sessionLaunchGate{bridge: op, log: slog.Default()}
 	dec, _ := g.Authorize(context.Background(), "t1", critical)
 	if dec.Allowed {
 		t.Fatal("a pending approval must deny a CRITICAL launch")
@@ -181,7 +186,7 @@ func TestSessionLaunchGate_CriticalHITL(t *testing.T) {
 	}
 
 	// Approved ⇒ allowed, and the run is recorded (privileged ⇒ RecordIO).
-	g2 := &sessionLaunchGate{bridge: &fakeOpener{status: nbApproved}, recordAvailable: true, log: slog.Default()}
+	g2 := &sessionLaunchGate{bridge: &fakeOpener{status: nbApproved}, log: slog.Default()}
 	dec2, _ := g2.Authorize(context.Background(), "t1", critical)
 	if !dec2.Allowed {
 		t.Fatal("an approved CRITICAL launch must be allowed")
@@ -191,14 +196,14 @@ func TestSessionLaunchGate_CriticalHITL(t *testing.T) {
 	}
 
 	// Rejected/other ⇒ denied.
-	g3 := &sessionLaunchGate{bridge: &fakeOpener{status: nbRejected}, recordAvailable: true, log: slog.Default()}
+	g3 := &sessionLaunchGate{bridge: &fakeOpener{status: nbRejected}, log: slog.Default()}
 	if dec3, _ := g3.Authorize(context.Background(), "t1", critical); dec3.Allowed {
 		t.Fatal("a rejected approval must deny the launch")
 	}
 }
 
 // TestSessionLaunchGate_CriticalApprovalIsSingleUse pins-FIX §F4: a human approval of
-// a PRIVILEGED (bypassPermissions) launch authorizes ONE launch, not a 24h-reusable pass —
+// a CRITICAL launch authorizes ONE launch, not a 24h-reusable pass —
 // the same replay root as the tool-call PEP on a MORE privileged surface. The gate SPENDS
 // the approval single-use; a launch reusing an already-consumed grant is denied would-replay;
 // break-glass is NOT double-consumed (the engine recorded its one-shot use at grant time).
@@ -208,7 +213,7 @@ func TestSessionLaunchGate_CriticalApprovalIsSingleUse(t *testing.T) {
 
 	// Approved: the launch proceeds and SPENDS the approval exactly once.
 	op := &fakeOpener{status: nbApproved}
-	g := &sessionLaunchGate{bridge: op, recordAvailable: true, log: slog.Default()}
+	g := &sessionLaunchGate{bridge: op, log: slog.Default()}
 	if dec, _ := g.Authorize(context.Background(), "t1", critical); !dec.Allowed {
 		t.Fatal("an approved privileged launch must be allowed on first use")
 	}
@@ -218,14 +223,14 @@ func TestSessionLaunchGate_CriticalApprovalIsSingleUse(t *testing.T) {
 
 	// Replay: the approval was already consumed ⇒ the launch is denied would-replay.
 	opReplay := &fakeOpener{status: nbApproved, consumeReplay: true}
-	g2 := &sessionLaunchGate{bridge: opReplay, recordAvailable: true, log: slog.Default()}
+	g2 := &sessionLaunchGate{bridge: opReplay, log: slog.Default()}
 	if dec, _ := g2.Authorize(context.Background(), "t1", critical); dec.Allowed {
 		t.Fatal("a privileged launch reusing an already-consumed approval must be denied (would-replay)")
 	}
 
 	// Break-glass: allowed, but NOT double-consumed (the engine already recorded the use).
 	opBG := &fakeOpener{status: nbBreakGlass}
-	g3 := &sessionLaunchGate{bridge: opBG, recordAvailable: true, log: slog.Default()}
+	g3 := &sessionLaunchGate{bridge: opBG, log: slog.Default()}
 	if dec, _ := g3.Authorize(context.Background(), "t1", critical); !dec.Allowed {
 		t.Fatal("a break-glass privileged launch must be allowed")
 	}
@@ -238,15 +243,42 @@ func TestSessionLaunchGate_CriticalDenyClosed(t *testing.T) {
 	critical := sessions.LaunchIntent{Transport: sessions.TransportStreamJSON, PermissionMode: "dontAsk"}
 
 	// No HITL bridge ⇒ a CRITICAL launch is denied (deny-closed).
-	g := &sessionLaunchGate{bridge: nil, recordAvailable: true, log: slog.Default()}
+	g := &sessionLaunchGate{bridge: nil, log: slog.Default()}
 	if dec, _ := g.Authorize(context.Background(), "t1", critical); dec.Allowed {
 		t.Fatal("a CRITICAL launch with no HITL bridge must be denied (deny-closed)")
 	}
+}
 
-	// No recorder ⇒ a CRITICAL launch is denied (privileged sessions must be recordable).
-	g2 := &sessionLaunchGate{bridge: &fakeOpener{status: nbApproved}, recordAvailable: false, log: slog.Default()}
-	if dec, _ := g2.Authorize(context.Background(), "t1", critical); dec.Allowed {
-		t.Fatal("a CRITICAL launch that cannot be recorded must be denied (deny-closed)")
+// TestSessionLaunchGate_CriticalLaunchIsFlaggedForRecording pins the gate's half of
+// "a privileged session is recorded": every way a CRITICAL launch goes on (approved,
+// break-glass) or waits (pending approval) carries RecordIO, and a plain launch is not
+// forced. The other half, the recorder wired with the gate, is
+// TestComposedEngineRecordsAFlaggedRun.
+func TestSessionLaunchGate_CriticalLaunchIsFlaggedForRecording(t *testing.T) {
+	critical := sessions.LaunchIntent{Transport: sessions.TransportStreamJSON, PermissionMode: "dontAsk", Actor: "user:u1"}
+	for _, status := range []string{nbApproved, nbBreakGlass, nbPending} {
+		t.Run(status, func(t *testing.T) {
+			g := &sessionLaunchGate{bridge: &fakeOpener{status: status}, log: slog.Default()}
+			dec, err := g.Authorize(context.Background(), "t1", critical)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if status == nbPending {
+				if dec.Allowed || dec.DeniedStatus != http.StatusAccepted || dec.ApprovalRef == "" {
+					t.Fatalf("a pending CRITICAL launch must wait for its approval (202), got %+v", dec)
+				}
+			} else if !dec.Allowed {
+				t.Fatalf("an approved or break-glass CRITICAL launch must go on, got %+v", dec)
+			}
+			if !dec.RecordIO || !dec.Critical {
+				t.Fatalf("a CRITICAL launch must be flagged critical and for I/O recording, got %+v", dec)
+			}
+		})
+	}
+	plain := &sessionLaunchGate{log: slog.Default()}
+	dec, err := plain.Authorize(context.Background(), "t1", sessions.LaunchIntent{Transport: sessions.TransportStreamJSON, PermissionMode: "default"})
+	if err != nil || !dec.Allowed || dec.RecordIO {
+		t.Fatalf("a plain launch is allowed and not forced to record: %+v %v", dec, err)
 	}
 }
 
@@ -256,7 +288,7 @@ func TestSessionLaunchGate_AllowsWithPEPEnv(t *testing.T) {
 	prov := &sessionPEPProvisioner{url: "http://127.0.0.1:8447/", mint: func(context.Context, model.TenantID, string) (string, error) {
 		return "bearer-xyz", nil
 	}}
-	g := &sessionLaunchGate{pep: prov, recordAvailable: true, log: slog.Default()}
+	g := &sessionLaunchGate{pep: prov, log: slog.Default()}
 	dec, err := g.Authorize(context.Background(), "t1", sessions.LaunchIntent{
 		Transport: sessions.TransportStreamJSON, PermissionMode: "default", AgentRef: "agent:a1",
 	})
@@ -297,7 +329,7 @@ func TestSessionLaunchGate_ContextPolicyInjectsAndSummarizes(t *testing.T) {
 		Strategy:         "summarize",
 		WinningScope:     "agent:agent:a1",
 	}}
-	g := &sessionLaunchGate{contextPolicy: cp, recordAvailable: true, log: slog.Default()}
+	g := &sessionLaunchGate{contextPolicy: cp, log: slog.Default()}
 	dec, err := g.Authorize(context.Background(), "t1", sessions.LaunchIntent{
 		Transport: sessions.TransportStreamJSON, PermissionMode: "default",
 		AgentRef: "agent:a1", WorkspaceRef: "workspace:w1", Model: "claude-opus-4-8",
@@ -332,7 +364,7 @@ func TestSessionLaunchGate_ContextPolicyInjectsAndSummarizes(t *testing.T) {
 
 func TestSessionLaunchGate_ContextPolicyDenyBlocksLaunch(t *testing.T) {
 	cp := &fakeSessionContextPolicy{pol: knowledge.EffectivePolicy{Deny: true}}
-	g := &sessionLaunchGate{contextPolicy: cp, recordAvailable: true, log: slog.Default()}
+	g := &sessionLaunchGate{contextPolicy: cp, log: slog.Default()}
 	dec, err := g.Authorize(context.Background(), "t1", sessions.LaunchIntent{
 		Transport: sessions.TransportStreamJSON, PermissionMode: "default", AgentRef: "agent:a1",
 	})
@@ -352,7 +384,7 @@ func TestSessionLaunchGate_ContextPolicyDenyBlocksLaunch(t *testing.T) {
 
 func TestSessionLaunchGate_ContextPolicyFailsOpen(t *testing.T) {
 	cp := &fakeSessionContextPolicy{err: errors.New("knowledge unavailable")}
-	g := &sessionLaunchGate{contextPolicy: cp, recordAvailable: true, log: slog.Default()}
+	g := &sessionLaunchGate{contextPolicy: cp, contextPosture: availabilityFailOpen, log: slog.Default()}
 	dec, err := g.Authorize(context.Background(), "t1", sessions.LaunchIntent{
 		Transport: sessions.TransportStreamJSON, PermissionMode: "default", AgentRef: "agent:a1",
 	})
@@ -399,6 +431,46 @@ func TestSessionStopGate(t *testing.T) {
 }
 
 // --- I/O recorder: ledger anchoring + verify --------------------------------
+
+// TestComposedEngineRecordsAFlaggedRun pins what the launch gate's recording flag relies
+// on: the composed engine wires the ledger recorder, so a run flagged for recording (here
+// by its template; a CRITICAL launch is flagged by the gate) leaves its sealed I/O anchor
+// in the signed ledger. Real boot, API and a protocol stub for the CLI.
+func TestComposedEngineRecordsAFlaggedRun(t *testing.T) {
+	s := bootStubSessionEngine(t, false)
+	ws := s.do("POST", "/v1/m/sessions/workspaces", map[string]any{"root_path": s.folder, "name": "folder"}, http.StatusCreated)
+	profile := s.do("POST", "/v1/m/sessions/provider-profiles", map[string]any{"driver": "claude", "config_home": s.home, "user_home": s.home, "auth_source": "provider_account_home", "display_name": "stub"}, http.StatusCreated)
+	tpl := s.do("POST", "/v1/m/sessions/templates", map[string]any{"name": "recorded", "body": map[string]any{"policies": map[string]any{"record_io": true}}}, http.StatusCreated)
+	run := s.do("POST", "/v1/m/sessions/runs", map[string]any{"name": "recorded", "transport": "stream-json", "permission_mode": "default", "isolation": "native", "workspace_ref": ws["workspace_ref"], "provider_profile_ref": profile["profile_ref"], "template_id": tpl["id"]}, http.StatusCreated)
+	ref, _ := run["run_ref"].(string)
+	if run["state"] != "running" || run["record_io"] != true || ref == "" {
+		t.Fatalf("launch state=%v record_io=%v run_ref=%q, want running, true and a reference", run["state"], run["record_io"], ref)
+	}
+	// The run carries the stub's session id once its init frame went through the bridge,
+	// which is where a frame is recorded.
+	eventually(t, "the stub's init frame", func() bool {
+		return s.do("GET", "/v1/m/sessions/runs/"+ref, nil, http.StatusOK)["claude_session_id"] == "dormant-stub"
+	})
+	s.do("POST", "/v1/m/sessions/runs/"+ref+"/stop", map[string]any{}, http.StatusOK)
+	eventually(t, "the run's sealed I/O anchor in the ledger", func() bool {
+		sealed := false
+		if err := s.eng.store.View(context.Background(), model.TenantID(s.tenant), func(sc store.Scope) error {
+			cw, ok := sc.Audit().(store.CanonicalWalker)
+			if !ok {
+				return errors.New("audit log does not expose WalkCanonical")
+			}
+			return cw.WalkCanonical(context.Background(), 0, func(ev model.AuditEvent, meta string, _ []byte) error {
+				if ev.Action == sessionIOAction && ev.TargetID == model.ID(ref) && bytes.Contains([]byte(meta), []byte(`"sealed"`)) {
+					sealed = true
+				}
+				return nil
+			})
+		}); err != nil {
+			t.Fatalf("walk the ledger: %v", err)
+		}
+		return sealed
+	})
+}
 
 func TestSessionIORecorder_VerifyChain(t *testing.T) {
 	_, st, tenant := newSessionsStore(t)
@@ -685,7 +757,7 @@ func (s *spyProberBudget) Reserve(ctx context.Context, tenant model.TenantID, re
 // reserves — zero finops writes at launch.
 func TestSessionLaunchGate_NoAdmissionTargetsSkipsReserve(t *testing.T) {
 	spy := &spyProberBudget{fakeBudget: fakeBudget{chk: finops.BudgetCheck{Allowed: true}}, hasTargets: false}
-	g := &sessionLaunchGate{fin: spy, recordAvailable: true, log: slog.Default()}
+	g := &sessionLaunchGate{fin: spy, log: slog.Default()}
 	dec, err := g.Authorize(context.Background(), "t1", sessions.LaunchIntent{Transport: sessions.TransportStreamJSON, PermissionMode: "default"})
 	if err != nil || !dec.Allowed {
 		t.Fatalf("a targetless tenant must launch, got allowed=%v err=%v", dec.Allowed, err)
@@ -702,13 +774,13 @@ func TestSessionLaunchGate_NoAdmissionTargetsSkipsReserve(t *testing.T) {
 // decision is byte-equal to the unconditional path.
 func TestSessionLaunchGate_WithTargetsDecisionIsByteEqual(t *testing.T) {
 	intent := sessions.LaunchIntent{Transport: sessions.TransportStreamJSON, PermissionMode: "default", AgentRef: "agent:a1"}
-	baseline := &sessionLaunchGate{fin: fakeBudget{chk: finops.BudgetCheck{Allowed: true}}, recordAvailable: true, log: slog.Default()}
+	baseline := &sessionLaunchGate{fin: fakeBudget{chk: finops.BudgetCheck{Allowed: true}}, log: slog.Default()}
 	wantDec, err := baseline.Authorize(context.Background(), "t1", intent)
 	if err != nil {
 		t.Fatalf("baseline Authorize: %v", err)
 	}
 	spy := &spyProberBudget{fakeBudget: fakeBudget{chk: finops.BudgetCheck{Allowed: true}}, hasTargets: true}
-	gotDec, err := (&sessionLaunchGate{fin: spy, recordAvailable: true, log: slog.Default()}).Authorize(context.Background(), "t1", intent)
+	gotDec, err := (&sessionLaunchGate{fin: spy, log: slog.Default()}).Authorize(context.Background(), "t1", intent)
 	if err != nil {
 		t.Fatalf("Authorize: %v", err)
 	}
@@ -726,7 +798,7 @@ func TestSessionLaunchGate_WithTargetsDecisionIsByteEqual(t *testing.T) {
 // Reserve, which owns the unreachable postures.
 func TestSessionLaunchGate_ProbeErrorKeepsReserve(t *testing.T) {
 	spy := &spyProberBudget{fakeBudget: fakeBudget{chk: finops.BudgetCheck{Allowed: true}}, probeErr: errors.New("ledger down")}
-	g := &sessionLaunchGate{fin: spy, recordAvailable: true, log: slog.Default()}
+	g := &sessionLaunchGate{fin: spy, log: slog.Default()}
 	dec, err := g.Authorize(context.Background(), "t1", sessions.LaunchIntent{Transport: sessions.TransportStreamJSON, PermissionMode: "default"})
 	if err != nil || !dec.Allowed {
 		t.Fatalf("probe error must keep today's behavior (reserve then allow), got allowed=%v err=%v", dec.Allowed, err)

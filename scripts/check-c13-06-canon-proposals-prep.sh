@@ -18,7 +18,7 @@ cd "$ROOT" || cannot "cannot enter $ROOT"
 JSON="${OLIVARES_C1306P_JSON:-design/c13-06-canon-proposals-prep-2026-08-20.json}"
 DOC="${OLIVARES_C1306P_DOC:-design/C13-06-CANON-PROPOSALS-PREP-2026-08-20.md}"
 CANON="${OLIVARES_C1306P_CANON:-design/PRICING-CANON.md}"
-WIRE="${OLIVARES_C1306P_WIRE:-cmd/olivares/wire_noenterprise.go}"
+WIRE="${OLIVARES_C1306P_WIRE:-cmd/olivares/edition_ports.go}"
 
 [ -r "$JSON" ] || cannot "missing $JSON"
 [ -r "$DOC" ] || cannot "missing $DOC"
@@ -33,7 +33,7 @@ grep -F -q 'Unique leftover unique vs `#1400`' "$DOC" \
 grep -q 'NO ELEGIDO' "$DOC" || fail "prepare doc lost NO ELEGIDO"
 grep -q 'NO APLICADO' "$DOC" || fail "prepare doc lost NO APLICADO"
 if grep -qiE 'aplicamos la propuesta|applied proposal|canon rewritten|FIRMA A claimed' "$DOC"; then
-  fail "prepare doc claims an application this lote does not have"
+  fail "prepare doc claims an application this batch does not have"
 fi
 
 grep -q 'modules_day_one:' "$CANON" || fail "$CANON lost modules_day_one: — C13-06 must not apply proposal 1"

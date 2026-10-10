@@ -96,10 +96,10 @@ cd "$ROOT"
 # release con cero conectores), asi que su ausencia es una precondicion ausente, no un defecto:
 # la respuesta correcta es NO HE PODIDO MIRAR, diciendo que falta y como se consigue.
 if [ ! -e "$BINS/claude-source" ]; then
-	echo "test-key-domain-separation: ⛔ NO HE PODIDO MIRAR: falta $BINS/claude-source" >&2
-	echo "                 Las compilaciones de abajo llevan \`-tags release\`, y ese fichero es una" >&2
-	echo "                 guarda de compilacion: sin el, \`go build\` muere en el \`go:embed\` sin decir" >&2
-	echo "                 por que. Lo puebla \`task build:release\` (scripts/build-connectors.sh)." >&2
+	echo "test-key-domain-separation: ⛔ COULD NOT CHECK: missing $BINS/claude-source" >&2
+	echo "                 The builds below use \`-tags release\`, and that file is a" >&2
+	echo "                 build guard: without it, \`go build\` fails at \`go:embed\` without explaining" >&2
+	echo "                 why. It is populated by \`task build:release\` (scripts/build-connectors.sh)." >&2
 	exit 2
 fi
 
@@ -140,7 +140,7 @@ fi
 
 echo "==> building a community release binary with both embedded anchors"
 CGO_ENABLED=0 go build -tags release \
-  -ldflags "-X main.version=26.8.0 -X github.com/olivaresai/olivares/core/license.releasePublicKeyB64=$license_pub -X github.com/olivaresai/olivares/core/release.artifactVerifyKeyB64=$ota_pub" \
+  -ldflags "-X main.version=1.0 -X github.com/olivaresai/olivares/core/license.releasePublicKeyB64=$license_pub -X github.com/olivaresai/olivares/core/release.artifactVerifyKeyB64=$ota_pub" \
   -o "$WORK/olivares" ./cmd/olivares
 version_out="$("$WORK/olivares" version)"
 case "$version_out" in
@@ -161,9 +161,9 @@ fi
 
 echo "==> proving OTA signatures stay in the OTA domain"
 mkdir -p "$WORK/channel"
-printf 'synthetic community archive\n' > "$WORK/channel/olivares_26.9.0_linux_amd64.tar.gz"
+printf 'synthetic community archive\n' > "$WORK/channel/olivares_1.1_linux_amd64.tar.gz"
 "$WORK/olivares" release manifest --dir "$WORK/channel" --channel stable \
-  --version v26.9.0 --out "$WORK/channel/manifest.json" \
+  --version 1.1 --out "$WORK/channel/manifest.json" \
   --sign-key "@$WORK/ota.key" >/dev/null
 "$WORK/olivares" upgrade --bundle "$WORK/channel" --check \
   --target "$WORK/olivares" --data-dir "$WORK/data" --os linux --arch amd64 >/dev/null
@@ -183,7 +183,7 @@ mv "$WORK/channel/manifest.ota.sig" "$WORK/channel/manifest.json.sig"
 
 echo "==> proving a binary with no OTA anchor fails verification closed"
 CGO_ENABLED=0 go build -tags release \
-  -ldflags "-X main.version=26.8.0 -X github.com/olivaresai/olivares/core/license.releasePublicKeyB64=$license_pub" \
+  -ldflags "-X main.version=1.0 -X github.com/olivaresai/olivares/core/license.releasePublicKeyB64=$license_pub" \
   -o "$WORK/olivares-no-ota" ./cmd/olivares
 if "$WORK/olivares-no-ota" upgrade --bundle "$WORK/channel" --check \
     --target "$WORK/olivares-no-ota" --data-dir "$WORK/no-ota-data" \
@@ -198,7 +198,7 @@ fi
 # collision has to be visible on the artifact itself at RUNTIME.
 echo "==> proving a key-reusing binary built around the gate warns at runtime"
 CGO_ENABLED=0 go build -tags release \
-  -ldflags "-X main.version=26.8.0 -X github.com/olivaresai/olivares/core/license.releasePublicKeyB64=$license_pub -X github.com/olivaresai/olivares/core/release.artifactVerifyKeyB64=$license_pub" \
+  -ldflags "-X main.version=1.0 -X github.com/olivaresai/olivares/core/license.releasePublicKeyB64=$license_pub -X github.com/olivaresai/olivares/core/release.artifactVerifyKeyB64=$license_pub" \
   -o "$WORK/olivares-shared-anchor" ./cmd/olivares
 shared_warning="$("$WORK/olivares-shared-anchor" version 2>&1 >/dev/null || true)"
 case "$shared_warning" in
@@ -214,12 +214,12 @@ esac
 # cosign. Nothing forces the two to agree unless the ceremony cross-checks them, so
 # a manifest substituted on the draft release would be signed blind.
 echo "==> proving a substituted manifest cannot pass the ceremony cross-check"
-archive="$WORK/channel/olivares_26.9.0_linux_amd64.tar.gz"
+archive="$WORK/channel/olivares_1.1_linux_amd64.tar.gz"
 real_digest="$(sha256sum "$archive" | cut -d' ' -f1)"
-printf '%s  olivares_26.9.0_linux_amd64.tar.gz\n' "$real_digest" > "$WORK/channel/checksums.txt"
+printf '%s  olivares_1.1_linux_amd64.tar.gz\n' "$real_digest" > "$WORK/channel/checksums.txt"
 "$WORK/olivares" release verify-manifest --manifest "$WORK/channel/manifest.json" \
   --sig "$WORK/channel/manifest.json.sig" --checksums "$WORK/channel/checksums.txt" \
-  --dir "$WORK/channel" --expect-channel stable --expect-version 26.9.0 >/dev/null
+  --dir "$WORK/channel" --expect-channel stable --expect-version 1.1 >/dev/null
 printf 'malicious archive the attacker uploaded\n' > "$WORK/evil.tar.gz"
 evil_digest="$(sha256sum "$WORK/evil.tar.gz" | cut -d' ' -f1)"
 sed "s/$real_digest/$evil_digest/" "$WORK/channel/manifest.json" > "$WORK/channel/swapped-manifest.json"
@@ -240,7 +240,7 @@ fi
 # refuses BY DEFAULT. Requiring the bound used to be opt-in: forget the flag and you
 # got 'anti-freeze DISABLED' followed by a reassuring 'OK:'.
 "$WORK/olivares" release manifest --dir "$WORK/channel" --channel stable \
-  --version v26.9.0 --no-expiry --out "$WORK/channel/unbounded-manifest.json" >/dev/null
+  --version 1.1 --no-expiry --out "$WORK/channel/unbounded-manifest.json" >/dev/null
 if "$WORK/olivares" release verify-manifest --manifest "$WORK/channel/unbounded-manifest.json" \
     --checksums "$WORK/channel/checksums.txt" >/dev/null 2>&1; then
   echo "FATAL: a manifest with no freshness bound was accepted BY DEFAULT" >&2
@@ -255,7 +255,7 @@ fi
 # checksums.txt binds DIGESTS and nothing else. A manifest whose digests are all honest
 # but whose POLICY locks the whole fleet out of every future upgrade must not pass.
 echo "==> proving a hostile POLICY cannot pass the ceremony cross-check either"
-sed 's/"version": "26.9.0",/"version": "26.9.0",\n  "min_version": "99.0.0",/' \
+sed 's/"version": "1.1",/"version": "1.1",\n  "min_version": "99.0",/' \
   "$WORK/channel/manifest.json" > "$WORK/channel/policy-manifest.json"
 if "$WORK/olivares" release verify-manifest --manifest "$WORK/channel/policy-manifest.json" \
     --checksums "$WORK/channel/checksums.txt" >/dev/null 2>&1; then

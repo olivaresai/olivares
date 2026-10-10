@@ -6,9 +6,10 @@ package api
 
 import (
 	"errors"
-	"github.com/olivaresai/olivares/core/model"
 	"net/http"
 	"strings"
+
+	"github.com/olivaresai/olivares/core/model"
 
 	"github.com/olivaresai/olivares/core/auth"
 )
@@ -109,11 +110,8 @@ func (s *Server) secretNameInScope(w http.ResponseWriter, r *http.Request, scope
 	return true
 }
 
-func (s *Server) handleListSecrets(w http.ResponseWriter, r *http.Request) {
-	_, scope, ok := s.secretScope(w, r)
-	if !ok {
-		return
-	}
+func (s *Server) handleListSecrets(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	scope := mc.Tenant
 	svc, ok := s.secretSvc(w, r)
 	if !ok {
 		return
@@ -134,11 +132,9 @@ func (s *Server) handleListSecrets(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, out)
 }
 
-func (s *Server) handlePutSecret(w http.ResponseWriter, r *http.Request) {
-	p, scope, ok := s.secretScope(w, r)
-	if !ok {
-		return
-	}
+func (s *Server) handlePutSecret(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	p := mc.Principal
+	scope := mc.Tenant
 	if !s.requireStepUp(w, r, p) {
 		return
 	}
@@ -148,10 +144,16 @@ func (s *Server) handlePutSecret(w http.ResponseWriter, r *http.Request) {
 	}
 	var in secretInput
 	if err := decodeJSON(w, r, &in); err != nil {
-		s.badRequest(w, r, "invalid JSON body")
+		s.badRequest(w, r, RequestBodyErrorMessage(err, "invalid JSON body"))
 		return
 	}
 	if !s.secretNameInScope(w, r, scope, in.Name) {
+		return
+	}
+	// Sessions read env/ secrets only in the tenant scope. Keep legacy global
+	// values readable and deletable, but refuse misleading writes here.
+	if scope == auth.GlobalSecretScope && strings.HasPrefix(strings.TrimSpace(in.Name), "env/") {
+		s.badRequest(w, r, "session secrets belong in the tenant store; use New session > More options > Manage session secrets, or scope=tenant")
 		return
 	}
 	view, err := svc.Put(r.Context(), p, scope, in.Name, in.Value, in.Description)
@@ -162,11 +164,9 @@ func (s *Server) handlePutSecret(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, toSecretDTO(view))
 }
 
-func (s *Server) handleDeleteSecret(w http.ResponseWriter, r *http.Request) {
-	p, scope, ok := s.secretScope(w, r)
-	if !ok {
-		return
-	}
+func (s *Server) handleDeleteSecret(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	p := mc.Principal
+	scope := mc.Tenant
 	if !s.requireStepUp(w, r, p) {
 		return
 	}
@@ -176,7 +176,7 @@ func (s *Server) handleDeleteSecret(w http.ResponseWriter, r *http.Request) {
 	}
 	var in secretInput
 	if err := decodeJSON(w, r, &in); err != nil {
-		s.badRequest(w, r, "invalid JSON body")
+		s.badRequest(w, r, RequestBodyErrorMessage(err, "invalid JSON body"))
 		return
 	}
 	if !s.secretNameInScope(w, r, scope, in.Name) {

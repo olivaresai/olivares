@@ -69,6 +69,7 @@ import type {
   ProtocolSpecApplyOutcome,
 } from './types'
 import { StaticTable } from '@/components/data/static-table'
+import { downloadBlob } from '@/lib/api/download'
 
 const STEPS = [
   'connection',
@@ -1568,19 +1569,12 @@ function ReviewStep({
     const blob = new Blob([JSON.stringify(documentValue, null, 2)], {
       type: 'application/json',
     })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
     const filenameKey =
       draft.bindingKey
         .trim()
         .replace(/[^a-zA-Z0-9._-]+/g, '-')
         .slice(0, 96) || 'protocol-binding'
-    link.download = `${filenameKey}-generation-${draft.generation}.json`
-    document.body.appendChild(link)
-    link.click()
-    link.remove()
-    URL.revokeObjectURL(url)
+    downloadBlob(blob, `${filenameKey}-generation-${draft.generation}.json`)
   }
   return (
     <div className="space-y-4">

@@ -125,13 +125,7 @@ describe('the action a session reports renders as an identifier', () => {
   })
 
   it('the front door row names it the same way', () => {
-    renderIntel(
-      <RecentWork
-        sessions={asSessions([live()])}
-        state="ready"
-        canStartSession
-      />,
-    )
+    renderIntel(<RecentWork sessions={asSessions([live()])} state="ready" />)
     const rowEl = screen.getByTestId('home-recent-row')
     expect(rowEl.querySelector('code')).toHaveTextContent('web.search')
     expect(plainDotted(rowEl)).toEqual([])
@@ -153,7 +147,7 @@ describe('the action a session reports renders as an identifier', () => {
         /<WorkClause\b[^>]*text=\{naming\.name\}/,
       ],
       [
-        'src/features/sessions/session-narrative.tsx',
+        'src/features/sessions/session-overview.tsx',
         /<WorkClause\b[^>]*text=\{line\.text\}/,
       ],
       ['src/features/home/recent-work.tsx', /<WorkClause\b[^>]*text=\{name\}/],

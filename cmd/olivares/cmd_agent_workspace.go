@@ -38,19 +38,61 @@ func readLocalFile(path string) ([]byte, error) {
 // RBAC, DLP and audit logic lives server-side (the CLI never touches the filesystem).
 
 func newAgentWorkspaceCmd() *cobra.Command {
+	var cfg agentClientConfig
+	var readOnlyFolders []string
 	cmd := &cobra.Command{
-		Use:   "workspace",
+		Use:   "workspace [ref]",
 		Short: "Manage governed workspaces and their files (browse/read/write/move/delete)",
 		Long: "workspace registers the host directories a governed session is allowed to see,\n" +
 			"and gives the operator the same governed file access the session gets: list,\n" +
 			"stat, read, write, move and delete — each subject to the workspace's mode and\n" +
 			"DLP posture rather than to the caller's own filesystem permissions.\n\n" +
 			"rm deletes content INSIDE a workspace; rm-workspace deregisters the workspace\n" +
-			"and never touches the host files.",
+			"and never touches the host files.\n\n" +
+			"Use workspace <ref> --read-only-folder <absolute-server-path> to replace the\n" +
+			"additional folders a native session may read; repeat the flag for each folder.\n" +
+			"Use --read-only-folder= to remove all additional access. These folders protect\n" +
+			"file content and directory entries; permissions, ownership, extended attributes\n" +
+			"and timestamps follow the host's normal permissions.",
 		Example: "  olivares agent workspace ls -o json\n" +
 			"  olivares agent workspace add /srv/projects/acme --name acme --mode ro --dlp deny\n" +
-			"  olivares agent workspace get ws-123 reports/q3.csv > q3.csv",
+			"  olivares agent workspace get ws-123 reports/q3.csv > q3.csv\n" +
+			"  olivares agent workspace ws-123 --read-only-folder /srv/toolchains/go --read-only-folder /srv/go/modules\n" +
+			"  olivares agent workspace ws-123 --read-only-folder=",
+		ValidArgsFunction: completeWorkspaces,
+		Args: func(cmd *cobra.Command, args []string) error {
+			if cmd.Flags().Changed("read-only-folder") {
+				return cobra.ExactArgs(1)(cmd, args)
+			}
+			if len(args) > 0 {
+				return fmt.Errorf("unknown command %q for %q", args[0], cmd.CommandPath())
+			}
+			return nil
+		},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if !cmd.Flags().Changed("read-only-folder") {
+				return cmd.Help()
+			}
+			if err := cfg.resolve(); err != nil {
+				return err
+			}
+			if len(readOnlyFolders) == 1 && readOnlyFolders[0] == "" {
+				readOnlyFolders = []string{}
+			}
+			status, b, err := cfg.do(cmd.Context(), http.MethodPatch,
+				"/v1/m/sessions/workspaces/"+url.PathEscape(args[0]),
+				map[string]any{"read_only_folders": readOnlyFolders}, http.StatusOK)
+			if err != nil {
+				return err
+			}
+			return printWorkspace(cmd, status, b, http.StatusOK)
+		},
 	}
+	cfg.addFlags(cmd)
+	cmd.Flags().StringArrayVar(&readOnlyFolders, "read-only-folder", nil, "additional server folder for native sessions (repeatable; replaces the list; empty clears it)")
+	_ = cmd.RegisterFlagCompletionFunc("read-only-folder", func(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	})
 	cmd.AddCommand(
 		newWorkspaceAddCmd(),
 		newWorkspaceListCmd(),
@@ -74,9 +116,11 @@ func newWorkspaceAddCmd() *cobra.Command {
 		subpaths                []string
 	)
 	cmd := &cobra.Command{
-		Use:     "add <root-path>",
-		Short:   "Register a host directory as a governed workspace",
-		Long:    "add registers a host directory with its mount mode, container target, DLP posture and optional allowed subpaths.",
+		Use:   "add <root-path>",
+		Short: "Register a host directory as a governed workspace",
+		Long: "add registers a host directory with its mount mode, container target, DLP posture and optional allowed subpaths.\n\n" +
+			"The default DLP posture label requires a launch approval for every read-write session.\n" +
+			"Use --dlp off to register without classification, as session start does by default.",
 		Example: "  olivares agent workspace add /srv/projects/acme --name acme --mode ro --dlp deny",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -127,12 +171,9 @@ func newWorkspaceListCmd() *cobra.Command {
 			if err := cfg.resolve(); err != nil {
 				return err
 			}
-			status, b, err := cfg.do(cmd.Context(), "GET", "/v1/m/sessions/workspaces", nil, http.StatusOK)
+			_, b, err := cfg.do(cmd.Context(), "GET", "/v1/m/sessions/workspaces", nil, http.StatusOK)
 			if err != nil {
 				return err
-			}
-			if status != http.StatusOK {
-				return httpErr(status, b)
 			}
 			var resp struct {
 				Items []map[string]any `json:"items"`
@@ -165,12 +206,8 @@ func newWorkspaceRemoveCmd() *cobra.Command {
 			if err := cfg.resolve(); err != nil {
 				return err
 			}
-			status, b, err := cfg.do(cmd.Context(), "DELETE", "/v1/m/sessions/workspaces/"+args[0], nil, http.StatusOK)
-			if err != nil {
+			if _, _, err := cfg.do(cmd.Context(), "DELETE", "/v1/m/sessions/workspaces/"+args[0], nil, http.StatusOK); err != nil {
 				return err
-			}
-			if status != http.StatusOK {
-				return httpErr(status, b)
 			}
 			return nil
 		},
@@ -195,12 +232,9 @@ func newWorkspaceFilesCmd() *cobra.Command {
 			if err := cfg.resolve(); err != nil {
 				return err
 			}
-			status, b, err := cfg.do(cmd.Context(), "GET", filesPath(args[0], "", path), nil, http.StatusOK)
+			_, b, err := cfg.do(cmd.Context(), "GET", filesPath(args[0], "", path), nil, http.StatusOK)
 			if err != nil {
 				return err
-			}
-			if status != http.StatusOK {
-				return httpErr(status, b)
 			}
 			var resp struct {
 				Entries []map[string]any `json:"entries"`
@@ -233,12 +267,9 @@ func newWorkspaceStatCmd() *cobra.Command {
 			if err := cfg.resolve(); err != nil {
 				return err
 			}
-			status, b, err := cfg.do(cmd.Context(), "GET", filesPath(args[0], "stat", args[1]), nil, http.StatusOK)
+			_, b, err := cfg.do(cmd.Context(), "GET", filesPath(args[0], "stat", args[1]), nil, http.StatusOK)
 			if err != nil {
 				return err
-			}
-			if status != http.StatusOK {
-				return httpErr(status, b)
 			}
 			return printRaw(cmd, b)
 		},
@@ -260,12 +291,9 @@ func newWorkspaceGetCmd() *cobra.Command {
 			if err := cfg.resolve(); err != nil {
 				return err
 			}
-			status, b, err := cfg.do(cmd.Context(), "GET", filesPath(args[0], "raw", args[1]), nil, http.StatusOK)
+			_, b, err := cfg.do(cmd.Context(), "GET", filesPath(args[0], "raw", args[1]), nil, http.StatusOK)
 			if err != nil {
 				return err
-			}
-			if status != http.StatusOK {
-				return httpErr(status, b)
 			}
 			var resp struct {
 				Encoding string `json:"encoding"`
@@ -339,12 +367,9 @@ func newWorkspaceMkdirCmd() *cobra.Command {
 			if err := cfg.resolve(); err != nil {
 				return err
 			}
-			status, b, err := cfg.do(cmd.Context(), "POST", filesPath(args[0], "dir", args[1]), nil, http.StatusCreated)
+			_, b, err := cfg.do(cmd.Context(), "POST", filesPath(args[0], "dir", args[1]), nil, http.StatusCreated)
 			if err != nil {
 				return err
-			}
-			if status != http.StatusCreated {
-				return httpErr(status, b)
 			}
 			return printRaw(cmd, b)
 		},
@@ -414,12 +439,8 @@ func newWorkspaceRmCmd() *cobra.Command {
 				}
 				path += "&recursive=true"
 			}
-			status, b, err := cfg.do(cmd.Context(), "DELETE", path, nil, http.StatusOK)
-			if err != nil {
+			if _, _, err := cfg.do(cmd.Context(), "DELETE", path, nil, http.StatusOK); err != nil {
 				return err
-			}
-			if status != http.StatusOK {
-				return httpErr(status, b)
 			}
 			return nil
 		},

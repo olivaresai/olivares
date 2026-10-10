@@ -27,13 +27,16 @@ const (
 )
 
 // exactConfigEnvKeys is the production OLIVARES_* contract. Keep it in sync by
-// running `grep -rhoE 'OLIVARES_[A-Z0-9_]+' cmd/olivares core modules | sort -u`,
+// reviewing scripts/config-env-catalog.tsv and the readers in cmd/olivares, core,
+// modules, connectors, deploy and operator. The catalog coverage test guards engine
+// inputs, including deployment DSN references and secret-reference backends;
 // then classify runtime-constructed families and test-only sentinels in the lists
 // below. Exclude registry/test literals themselves when checking for removals.
 var exactConfigEnvKeys = []string{
 	// the default for `--actor` on the decision-bearing verbs
 	// (cmd_eventing_egress.go:353, cmd_eventing_fence.go:570).
 	"OLIVARES_ACTOR",
+	"OLIVARES_ADMIN_DSN",
 	"OLIVARES_AGENTCORE_EXPORT_CONFIG",
 	"OLIVARES_AGENT_GATEWAY_CONFIG",
 	// C08-01: the environment form of --allow-cleartext (clitransport.go:38). It is
@@ -120,6 +123,7 @@ var exactConfigEnvKeys = []string{
 	"OLIVARES_DR_OFFSITE_SESSION_TOKEN_FILE",
 	"OLIVARES_DR_PASSPHRASE_FILE",
 	"OLIVARES_DR_SCHEDULE_INTERVAL",
+	"OLIVARES_DSN",
 	"OLIVARES_DURABLE_BUS_CONFIG",
 	"OLIVARES_ELICITATION_MEDIATOR_CONFIG", // T9 addon_airs input, see OLIVARES_COMPUTER_USE_CONFIG
 	"OLIVARES_EMBEDDINGS_BASE_URL",
@@ -251,6 +255,7 @@ var exactConfigEnvKeys = []string{
 	"OLIVARES_OTEL_PROTOCOL",
 	"OLIVARES_OTEL_SAMPLE_RATIO",
 	"OLIVARES_OTEL_SERVICE_NAME",
+	"OLIVARES_PDF_RENDER_TIMEOUT",
 	"OLIVARES_PDP_CEDAR_FILE",
 	"OLIVARES_PDP_ENGINE",
 	"OLIVARES_PDP_OPA_PATH",
@@ -304,6 +309,8 @@ var exactConfigEnvKeys = []string{
 	"OLIVARES_SESSION_RUNTIME_TOKEN_TTL",
 	"OLIVARES_SESSION_RUNTIME_WIF",
 	"OLIVARES_SESSION_RUNTIME_WIF_RULE",
+	"OLIVARES_SESSION_WORKTREE_BRANCH_PREFIX",
+	"OLIVARES_SESSION_WORKTREE_DIR",
 	"OLIVARES_SIEM_FORWARD_INTERVAL",
 	"OLIVARES_SOURCES_CONFIG",
 	"OLIVARES_SSO_PROTOCOL",
@@ -363,6 +370,7 @@ var prefixConfigEnvKeys = []string{
 	"OLIVARES_OIDC_",
 	"OLIVARES_OTEL_",
 	"OLIVARES_SAML_",
+	"OLIVARES_SECRETREF_",
 	"OLIVARES_SESSION_RUNTIME_",
 	"OLIVARES_VECTOR_",
 	"OLIVARES_WIF_",
@@ -587,9 +595,10 @@ func redactEffectiveConfigValue(key, value string) string {
 			return redactedConfigValue
 		}
 	}
-	// Reuse custody.go's strong inline-credential detector: a DSN reference/path is
-	// safe to show, while a DSN carrying user:password credentials is not.
-	if strings.Contains(key, "DSN") && hasInlineSecretValue(value) {
+	// References and paths are safe to show. Reuse the install wizard's password
+	// check for URL and libpq credentials, plus the strong inline-credential detector.
+	// Backend addresses can carry URL credentials just as DSNs can.
+	if dsnInlinesSecret(value) || hasInlineSecretValue(value) {
 		return redactedConfigValue
 	}
 	return value

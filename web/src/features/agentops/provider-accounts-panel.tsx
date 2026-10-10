@@ -53,6 +53,7 @@ import { agentOpsApi, agentOpsKeys, PROFILE_PAGE } from './api'
 import { AuthorityLostError, useAuthBoundary } from './auth-boundary'
 import { ProviderAccountCreate } from './provider-account-create'
 import { ProviderAccountMetadata } from './provider-account-metadata'
+import { ProviderAccountSignIn } from './provider-account-signin'
 import { ProfileListError, StateBadge } from './profiles-panel'
 import type { ProviderAccountDTO } from './types'
 import './i18n'
@@ -718,6 +719,13 @@ function AccountSheetBody({ initial }: { initial: ProviderAccountDTO }) {
         account.state !== 'retired' && (
           <ProviderAccountMetadata key={boundary.key} account={account} />
         )}
+
+      {account && !detail.isError ? (
+        <ProviderAccountSignIn
+          key={`${boundary.key}|${account.account_ref}`}
+          account={account}
+        />
+      ) : null}
 
       {detail.isPending ? (
         <p role="status" className="text-caption text-muted-foreground">

@@ -30,7 +30,7 @@ MGR="${OLIVARES_C0503_MGR:-cloud/control-plane/internal/tenant/manager.go}"
 grep -q 'HOLD' "$DOC" || fail "$DOC lost HOLD"
 grep -q 'Seat six on Cloud Standard' "$DOC" || fail "$DOC lost seat-six fact"
 if grep -qiE 'sixth seat refused|C05-03 closed|FIRMA A claimed|sandbox e2e passed' "$DOC"; then
-	fail "$DOC claims a close this lote does not have"
+	fail "$DOC claims a close this batch does not have"
 fi
 
 python3 - "$JSON" "$MAP" "$ENT" "$ADMIN" "$MGR" <<'PY' || fail "JSON/map/doors drifted"

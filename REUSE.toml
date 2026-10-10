@@ -69,6 +69,13 @@ precedence = "override"
 SPDX-FileCopyrightText = "2025 Astral Software Inc."
 SPDX-License-Identifier = "MIT"
 
+# Upstream OpenAI Whisper license, shipped with the console beside the model it covers.
+[[annotations]]
+path = ["web/public/licenses/whisper/Whisper-MIT.txt"]
+precedence = "override"
+SPDX-FileCopyrightText = "2022 OpenAI"
+SPDX-License-Identifier = "MIT"
+
 # --- Product documentation site (docs-site/) ---------------------------------
 # The docs site and its content are part of the AGPL product (like /web). Its
 # non-code files use extensions the repo-wide default does not cover (.mdx,
@@ -128,6 +135,31 @@ precedence = "override"
 SPDX-FileCopyrightText = "OCSF contributors (https://github.com/ocsf/ocsf-schema)"
 SPDX-License-Identifier = "Apache-2.0"
 
+# Docker's default seccomp profile (github.com/moby/profiles, seccomp v0.2.3,
+# Apache-2.0) with one change, stated in its two "comment" fields: the clone
+# rule also allows the user and network namespaces of a session.
+[[annotations]]
+path = ["deploy/seccomp/olivares-sessions.json"]
+precedence = "override"
+SPDX-FileCopyrightText = ["The Moby Authors (https://github.com/moby/profiles)", "2026 Olivares.AI"]
+SPDX-License-Identifier = "Apache-2.0"
+
+# Built-in skills catalog (modules/skills/builtin/): deterministic archives of
+# upstream bytes, pinned in PIN.json and rebuilt by scripts/skills-catalog.py. The
+# archives cannot carry inline headers; each holds the upstream LICENSE it ships
+# under.
+[[annotations]]
+path = ["modules/skills/builtin/ecc-*.tar.gz", "modules/skills/builtin/data/ecc-*.tar.gz"]
+precedence = "override"
+SPDX-FileCopyrightText = "2026 Affaan Mustafa (https://github.com/affaan-m/ECC)"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = ["modules/skills/builtin/mattpocock-*.tar.gz"]
+precedence = "override"
+SPDX-FileCopyrightText = "2026 Matt Pocock (https://github.com/mattpocock/skills)"
+SPDX-License-Identifier = "MIT"
+
 # NOTE: the commercial enterprise subtree is no longer in this repository:
 # the additive Enterprise Edition is distributed separately under
 # LicenseRef-Olivares-Commercial, so there is no enterprise/** override here.
@@ -161,3 +193,10 @@ path = ["scripts/fixtures/package-upgrade/records-v1/**"]
 precedence = "aggregate"
 SPDX-FileCopyrightText = "2026 Olivares.AI"
 SPDX-License-Identifier = "AGPL-3.0-only"
+
+# Docker default AppArmor policy with the modifications recorded in its header.
+[[annotations]]
+path = ["deploy/apparmor/olivares-sessions.conf"]
+precedence = "override"
+SPDX-FileCopyrightText = ["The Moby Authors (https://github.com/moby/moby)", "2026 Olivares.AI"]
+SPDX-License-Identifier = "Apache-2.0"

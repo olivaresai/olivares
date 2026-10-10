@@ -16,8 +16,8 @@ skips=0
 ok() { printf '  ok    %s\n' "$1"; }
 mal() { printf '  FAIL  %s — %s\n' "$1" "$2"; fallos=$((fallos + 1)); }
 
-[ -r "$GATE" ] || { echo "test-ci-timeout-arithmetic: 2 NO PUDE MIRAR — sin $GATE" >&2; exit 2; }
-[ -r "$AYUDA" ] || { echo "test-ci-timeout-arithmetic: 2 NO PUDE MIRAR — sin $AYUDA" >&2; exit 2; }
+[ -r "$GATE" ] || { echo "test-ci-timeout-arithmetic: 2 CANNOT INSPECT — missing $GATE" >&2; exit 2; }
+[ -r "$AYUDA" ] || { echo "test-ci-timeout-arithmetic: 2 CANNOT INSPECT — missing $AYUDA" >&2; exit 2; }
 
 # corre_fixture <contenido del workflow> -> imprime el rc
 #
@@ -60,7 +60,7 @@ corre_fixture() {
 	fi
 }
 
-echo "test-ci-timeout-arithmetic: el techo de un job contra la suma de sus pasos"
+echo "test-ci-timeout-arithmetic: a job cap versus the sum of its steps"
 
 rc="$(corre_fixture 'on: push
 jobs:
@@ -71,7 +71,7 @@ jobs:
         timeout-minutes: 20
       - name: b
         timeout-minutes: 20')"
-[ "$rc" = "1" ] && ok "techo 30 bajo una suma de 40: HALLAZGO (1)" || mal "techo por debajo" "rc=$rc, esperaba 1"
+[ "$rc" = "1" ] && ok "cap 30 below sum 40: FINDING (1)" || mal "cap below sum" "rc=$rc, expected 1"
 
 rc="$(corre_fixture 'on: push
 jobs:
@@ -82,7 +82,7 @@ jobs:
         timeout-minutes: 20
       - name: b
         timeout-minutes: 20')"
-[ "$rc" = "0" ] && ok "techo 50 sobre una suma de 40: limpio (0)" || mal "techo por encima" "rc=$rc, esperaba 0"
+[ "$rc" = "0" ] && ok "cap 50 above sum 40: clean (0)" || mal "cap above sum" "rc=$rc, expected 0"
 
 # La FRONTERA exacta. Un techo IGUAL a la suma no deja ni un segundo para checkout ni setup, asi
 # que cuenta como hallazgo: `<=`, no `<`. Sin este caso, un `<` se colaria.
@@ -95,7 +95,7 @@ jobs:
         timeout-minutes: 20
       - name: b
         timeout-minutes: 20')"
-[ "$rc" = "1" ] && ok "techo IGUAL a la suma: HALLAZGO, la frontera es <= y no <" || mal "frontera" "rc=$rc, esperaba 1"
+[ "$rc" = "1" ] && ok "cap EQUAL to sum: FINDING, boundary is <= rather than <" || mal "boundary" "rc=$rc, expected 1"
 
 rc="$(corre_fixture 'on: push
 jobs:
@@ -104,7 +104,7 @@ jobs:
     steps:
       - name: a
       - name: b')"
-[ "$rc" = "0" ] && ok "un job sin guardas de paso no es asunto de este gate" || mal "sin guardas" "rc=$rc, esperaba 0"
+[ "$rc" = "0" ] && ok "a job without step guards is outside this gate scope" || mal "without guards" "rc=$rc, expected 0"
 
 # ⛔ ESTE CASO APROBABA POR OTRA RAZON, y lo encontro el contraste. Su etiqueta decia «no
 # parsea», pero por la via de repuesto NO hay deteccion de error de parseo: el lector plano no
@@ -117,23 +117,23 @@ cp "$GATE" "$AYUDA" "$caja/scripts/"
 printf '%s\n' 'esto: no es
   - un workflow
     valido: [' > "$caja/.github/workflows/prueba.yml"
-salida_con="$(bash "$caja/scripts/check-ci-timeout-arithmetic.sh" 2>&1)"; rc_con=$?
-salida_sin="$(OLIVARES_CI_TIMEOUTS_NO_YAML=1 bash "$caja/scripts/check-ci-timeout-arithmetic.sh" 2>&1)"; rc_sin=$?
+yaml_output="$(bash "$caja/scripts/check-ci-timeout-arithmetic.sh" 2>&1)"; rc_con=$?
+plain_output="$(OLIVARES_CI_TIMEOUTS_NO_YAML=1 bash "$caja/scripts/check-ci-timeout-arithmetic.sh" 2>&1)"; rc_sin=$?
 rm -rf -- "$caja"
 if [ "$rc_con" = "2" ] && [ "$rc_sin" = "2" ]; then
-	case "$salida_sin" in
-		*"no devolvio ningun job"*)
-			ok "un workflow invalido es 2 por las dos vias — y por la de repuesto lo es porque no reconoce NADA, no porque detecte el error" ;;
-		*) mal "no parsea (via de repuesto)" "rc=2 pero por un mensaje inesperado: $(printf '%s' "$salida_sin" | head -1)" ;;
+	case "$plain_output" in
+		*"helper returned no jobs"*)
+			ok "an invalid workflow returns 2 through both paths — the fallback recognizes NOTHING rather than detecting the error" ;;
+		*) mal "cannot parse (fallback path)" "rc=2 with an unexpected message: $(printf '%s' "$plain_output" | head -1)" ;;
 	esac
 else
-	mal "no parsea" "rc_con=$rc_con rc_sin=$rc_sin, esperaba 2 y 2"
+	mal "cannot parse" "rc_con=$rc_con rc_sin=$rc_sin, expected 2 and 2"
 fi
 
 # --- sobre el ARBOL REAL ---------------------------------------------------------------------
 bash "$GATE" >/dev/null 2>&1
 rc=$?
-[ "$rc" = "0" ] && ok "el arbol real esta limpio" || mal "arbol real" "rc=$rc: hay jobs con la cuenta imposible"
+[ "$rc" = "0" ] && ok "the real tree is clean" || mal "real tree" "rc=$rc: jobs have impossible timing totals"
 
 # --- CONTROL NEGATIVO sobre el arbol real ----------------------------------------------------
 # Se copia el arbol de workflows y se le baja el techo a UN job por debajo de su suma. Tiene que
@@ -176,14 +176,14 @@ then
 	# El arbol real lo leen las dos vias, asi que aqui SI se exige el mismo 1 — y ademas se prohibe
 	# explicitamente el unico resultado inaceptable: que la plana lo absuelva.
 	if [ "$rc" = "1" ] && [ "$rcsin" = "1" ]; then
-		ok "CONTROL NEGATIVO: bajando un techo a 1, el gate lo caza por las dos vias"
+		ok "NEGATIVE CONTROL: lowering a cap to 1 is detected through both paths"
 	elif [ "$rcsin" = "0" ]; then
-		mal "CONTROL NEGATIVO" "la lectura de repuesto ABSUELVE un defecto que la de PyYAML caza (con=$rc sin=$rcsin): falso verde"
+		mal "NEGATIVE CONTROL" "the fallback APPROVES a defect detected by PyYAML (with=$rc without=$rcsin): false success"
 	else
-		mal "CONTROL NEGATIVO" "rc=$rc (con yaml) / $rcsin (sin yaml), esperaba 1 y 1: el gate no ve el defecto"
+		mal "NEGATIVE CONTROL" "rc=$rc (with yaml) / $rcsin (without yaml), expected 1 and 1: the gate misses the defect"
 	fi
 else
-	mal "CONTROL NEGATIVO" "no he sabido plantar el mutante: no aplica, y no cuenta como aprobado"
+	mal "NEGATIVE CONTROL" "could not plant the mutant: not applied and does not count as passed"
 fi
 rm -rf -- "$caja"
 
@@ -196,23 +196,23 @@ rm -rf -- "$caja"
 # la lectura, no un arbol limpio — y hay que verlo por las DOS vias.
 for modo in por-defecto forzada-plana; do
 	if [ "$modo" = "forzada-plana" ]; then
-		salida="$(OLIVARES_CI_TIMEOUTS_NO_YAML=1 bash "$GATE" 2>&1)"
+		output="$(OLIVARES_CI_TIMEOUTS_NO_YAML=1 bash "$GATE" 2>&1)"
 	else
-		salida="$(bash "$GATE" 2>&1)"
+		output="$(bash "$GATE" 2>&1)"
 	fi
-	vistos="$(printf '%s' "$salida" | sed -n 's/.*CLEAN — \([0-9][0-9]*\) de .*/\1/p')"
+	vistos="$(printf '%s' "$output" | sed -n 's/.*CLEAN — \([0-9][0-9]*\) of .*/\1/p')"
 	# ⛔ La etiqueta NO afirma que se haya usado PyYAML: en una caja sin la biblioteca, `por_yaml`
 	# devuelve None y la via «por defecto» cae al lector plano igual. Decir «con yaml» ahi seria
 	# afirmar de mas, asi que se nombra la VIA INVOCADA y se dice cual se resolvio de verdad.
 	if [ "$modo" = "por-defecto" ] && ! python3 -c 'import yaml' >/dev/null 2>&1; then
-		_real="(sin PyYAML en esta caja: la via por defecto resuelve al lector plano)"
+		_real="(no PyYAML on this machine: the default path uses the plain reader)"
 	else
 		_real=""
 	fi
 	if [ -n "$vistos" ] && [ "$vistos" -ge 1 ] 2>/dev/null; then
-		ok "CONTROL POSITIVO (via $modo): el gate ve $vistos job(s) con guardas, no cero $_real"
+		ok "POSITIVE CONTROL (path $modo): the gate sees $vistos guarded job(s), not zero $_real"
 	else
-		mal "CONTROL POSITIVO (via $modo)" "no he podido leer un recuento >=1 en: $(printf '%s' "$salida" | head -1)"
+		mal "POSITIVE CONTROL (path $modo)" "could not read a count >=1 in: $(printf '%s' "$output" | head -1)"
 	fi
 done
 
@@ -223,20 +223,20 @@ caja="$(mktemp -d)"
 mkdir -p "$caja/scripts" "$caja/.github/workflows"
 cp "$GATE" "$caja/scripts/"
 cp "$RAIZ/.github/workflows/mainline-ci.yml" "$caja/.github/workflows/"
-salida="$(bash "$caja/scripts/check-ci-timeout-arithmetic.sh" 2>&1)"
+output="$(bash "$caja/scripts/check-ci-timeout-arithmetic.sh" 2>&1)"
 rc=$?
 rm -rf -- "$caja"
 # ⛔ Se comprueba el MENSAJE y no solo el rc. Hay DOS guardas capaces de devolver 2 aqui — la
 # explicita (`[ -f "$AYUDANTE" ]`) y el `||` que recoge la muerte de python3 — y un caso que solo
 # mire el rc mide la que dispare SEGUNDA: retirar la primera lo dejaba VERDE. Medido con un
 # mutante el 2026-08-23, que sobrevivio por esto exactamente.
-case "$rc/$salida" in
-	2/*"NO PUDE MIRAR — sin "*)
-		ok "sin el ayudante, NO PUDE MIRAR (2) por la guarda explicita, y no CLEAN" ;;
+case "$rc/$output" in
+	2/*"COULD NOT CHECK — missing "*)
+		ok "missing helper => CANNOT INSPECT (2) through the explicit guard, not CLEAN" ;;
 	2/*)
-		mal "ayudante ausente" "rc=2 pero por otra guarda: $(printf '%s' "$salida" | head -1)" ;;
+		mal "missing helper" "rc=2 through another guard: $(printf '%s' "$output" | head -1)" ;;
 	*)
-		mal "ayudante ausente" "rc=$rc, esperaba 2" ;;
+		mal "missing helper" "rc=$rc, expected 2" ;;
 esac
 
 # --- la lectura de repuesto REHUSA una forma que no sabe leer ---------------------------------
@@ -260,8 +260,8 @@ jobs:
 OLIVARES_CI_TIMEOUTS_NO_YAML=1 bash "$caja/scripts/check-ci-timeout-arithmetic.sh" >/dev/null 2>&1
 rc=$?
 rm -rf -- "$caja"
-[ "$rc" = "2" ] && ok "la lectura de repuesto REHUSA una forma que no sabe leer (2)" \
-	|| mal "forma desconocida" "rc=$rc, esperaba 2: la lectura plana ha adivinado"
+[ "$rc" = "2" ] && ok "the fallback REFUSES a form it cannot read (2)" \
+	|| mal "unknown form" "rc=$rc, expected 2: the plain reader guessed"
 
 
 # --- que el interruptor de camino CONMUTE de verdad -------------------------------------------
@@ -297,13 +297,13 @@ if python3 -c 'import yaml' >/dev/null 2>&1; then
 	sin=$?
 	rm -rf -- "$caja"
 	if [ "$con" = "0" ] && [ "$sin" = "2" ]; then
-		ok "el interruptor CONMUTA: con PyYAML 0, forzando la lectura plana 2"
+		ok "the switch WORKS: PyYAML returns 0, forced plain reading returns 2"
 	else
-		mal "el interruptor no conmuta" "con=$con sin=$sin, esperaba 0 y 2"
+		mal "the switch does not work" "with=$con without=$sin, expected 0 and 2"
 	fi
 else
 	skips=$((skips + 1))
-	printf '  skip  el interruptor CONMUTA: NO MEDIBLE en esta caja, no hay PyYAML con que contrastar\n'
+	printf '  skip  the switch WORKS: UNMEASURABLE on this machine, no PyYAML for comparison\n'
 fi
 
 
@@ -324,9 +324,9 @@ rc="$(corre_fixture 'jobs:
 # de repuesto no sabe leer esa forma y rehusa con 2. Anclar a `2` exigia que el lector bueno se
 # equivocase igual que el otro.
 case "$rc" in
-1) ok "REGRESION: una clave de paso en la linea del guion la LEE el lector real — 1, el hallazgo real" ;;
-2) ok "REGRESION: una clave de paso en la linea del guion es NO PUDE MIRAR (2), no un CLEAN falso" ;;
-*) mal "REGRESION clave inline" "rc=$rc, esperaba 1 (lector real) o 2 (repuesto) — nunca 0, que fue el falso verde medido (10 contra 20 y salia 0)" ;;
+1) ok "REGRESSION: the real reader READS an inline step key — 1, the actual finding" ;;
+2) ok "REGRESSION: an inline step key means CANNOT INSPECT (2), not false CLEAN" ;;
+*) mal "REGRESSION inline key" "rc=$rc, expected 1 (real reader) or 2 (fallback) — never 0, the measured false success (10 versus 20 returned 0)" ;;
 esac
 
 rc="$(corre_fixture 'jobs: # un comentario perfectamente valido
@@ -335,8 +335,8 @@ rc="$(corre_fixture 'jobs: # un comentario perfectamente valido
     steps:
       - name: a
         timeout-minutes: 20')"
-[ "$rc" = "1" ] && ok "REGRESION: jobs con comentario inline se LEE, y su defecto sale como HALLAZGO (1)" \
-	|| mal "REGRESION jobs comentado" "rc=$rc, esperaba 1 — antes el fichero ENTERO desaparecia en silencio"
+[ "$rc" = "1" ] && ok "REGRESSION: jobs with an inline comment are READ, and their defect is reported as FINDING (1)" \
+	|| mal "REGRESSION commented jobs" "rc=$rc, expected 1 — previously the ENTIRE file silently disappeared"
 
 # M7 · LA TRANSICION QUE APAGA `en_steps`, que ningun caso ejercitaba: el fixture de forma
 # desconocida pone `strategy` ANTES de `steps`, asi que nunca necesita la transicion que dice
@@ -361,9 +361,9 @@ rc="$(corre_fixture 'jobs:
 # con el mutante que apaga la transicion: con 30 el caso falla (rc=1); con 100 pasa.
 # La propiedad es «el 40 NUNCA se atribuye a los pasos», o sea «no salga 1».
 case "$rc" in
-0) ok "M7: el lector real apaga la transicion — 30 contra una suma de 20, CLEAN, y el 40 no cuenta" ;;
-2) ok "M7: un techo bajo otra clave DESPUES de steps hace rehusar al repuesto — la transicion off ya tiene testigo" ;;
-*) mal "M7 transicion off" "rc=$rc, esperaba 0 (lector real) o 2 (repuesto) — un 1 seria el 40 atribuido a los pasos" ;;
+0) ok "M7: the real reader disables the transition — 30 versus sum 20, CLEAN, and 40 is not counted" ;;
+2) ok "M7: a cap under another key AFTER steps makes the fallback refuse — the disabled transition now has a witness" ;;
+*) mal "M7 transition off" "rc=$rc, expected 0 (real reader) or 2 (fallback) — 1 would mean 40 was attributed to steps" ;;
 esac
 
 # MARGEN. Entra en `techo <= suma + margen`, asi que uno NEGATIVO relaja el predicado hasta
@@ -386,8 +386,8 @@ OLIVARES_CI_TIMEOUT_MARGIN=abc bash "$caja/scripts/check-ci-timeout-arithmetic.s
 OLIVARES_CI_TIMEOUT_MARGIN=100 bash "$caja/scripts/check-ci-timeout-arithmetic.sh" >/dev/null 2>&1; rc_100=$?
 rm -rf -- "$caja"
 [ "$rc_def" = "1" ] && [ "$rc_neg" = "2" ] && [ "$rc_abc" = "2" ] && [ "$rc_100" = "1" ] \
-	&& ok "MARGEN: defecto 1 · negativo 2 (antes CERTIFICABA el defecto) · no entero 2 (antes 1 con traceback) · valido 1" \
-	|| mal "MARGEN" "defecto=$rc_def negativo=$rc_neg noentero=$rc_abc valido=$rc_100, esperaba 1/2/2/1"
+	&& ok "MARGIN: default 1 · negative 2 (previously CERTIFIED the defect) · noninteger 2 (previously 1 with traceback) · valid 1" \
+	|| mal "MARGIN" "default=$rc_def negative=$rc_neg noninteger=$rc_abc valid=$rc_100, expected 1/2/2/1"
 
 # M8 · UNA FILA ILEGIBLE DEL AYUDANTE. Ningun caso inyectaba una, asi que el mutante que cambia
 # ese `exit 2` por un `continue` sobrevivia entero: imprimia «NO PUDE MIRAR», seguia, imprimia
@@ -403,12 +403,12 @@ printf '%s\n' 'jobs:
     timeout-minutes: 5
     steps:
       - name: a' > "$caja/.github/workflows/prueba.yml"
-salida="$(bash "$caja/scripts/check-ci-timeout-arithmetic.sh" 2>&1)"; rc=$?
+output="$(bash "$caja/scripts/check-ci-timeout-arithmetic.sh" 2>&1)"; rc=$?
 rm -rf -- "$caja"
-case "$rc/$salida" in
-	2/*"fila ilegible"*) ok "M8: una fila ilegible del ayudante corta con 2 y NO sigue hasta imprimir CLEAN" ;;
-	2/*) mal "M8 fila ilegible" "rc=2 pero por otra guarda: $(printf '%s' "$salida" | head -1)" ;;
-	*) mal "M8 fila ilegible" "rc=$rc, esperaba 2 — el gate sigue leyendo tras una fila que no entiende" ;;
+case "$rc/$output" in
+	2/*"unreadable helper row"*) ok "M8: an unreadable helper row blocks with 2 and does NOT continue to print CLEAN" ;;
+	2/*) mal "M8 unreadable row" "rc=2 through another guard: $(printf '%s' "$output" | head -1)" ;;
+	*) mal "M8 unreadable row" "rc=$rc, expected 2 — the gate continues reading after a row it cannot understand" ;;
 esac
 
 # M9 · EL RECUENTO DE PASOS DEL DIAGNOSTICO. Quitar `pasos += 1` deja los veredictos intactos
@@ -428,13 +428,13 @@ printf '%s\n' 'jobs:
         timeout-minutes: 20
       - name: sin-guarda-uno
       - name: sin-guarda-dos' > "$caja/.github/workflows/prueba.yml"
-salida="$(bash "$caja/scripts/check-ci-timeout-arithmetic.sh" 2>&1)"; rc=$?
+output="$(bash "$caja/scripts/check-ci-timeout-arithmetic.sh" 2>&1)"; rc=$?
 rm -rf -- "$caja"
 # Cuatro pasos, dos con guarda -> el diagnostico tiene que decir exactamente 2 sin guarda.
-if [ "$rc" = "1" ] && printf '%s' "$salida" | command grep -q '(+2 paso(s) sin guarda)'; then
-	ok "M9: el diagnostico cuenta bien los pasos sin guarda (2 de 4), no solo acierta el veredicto"
+if [ "$rc" = "1" ] && printf '%s' "$output" | command grep -q '(+2 step(s) without timeouts)'; then
+	ok "M9: the diagnostic correctly counts unguarded steps (2 of 4), beyond producing the correct verdict"
 else
-	mal "M9 recuento de pasos" "rc=$rc y el diagnostico no dice '+2 paso(s) sin guarda': $(printf '%s' "$salida" | command grep 'techo' | tail -1)"
+	mal "M9 step count" "rc=$rc and the diagnostic does not report '+2 unguarded step(s)': $(printf '%s' "$output" | command grep 'job limit' | tail -1)"
 fi
 
 # --- LA LOGICA DEL VEREDICTO, probada por PARES y no por comportamiento --------------------------
@@ -454,7 +454,7 @@ _veredicto() {
 }
 _par() {
 	local got; got="$(_veredicto "$1" "$2")"
-	[ "$got" = "$3" ] || mal "logica del veredicto" "con=$1 sin=$2 -> $got, esperaba $3"
+	[ "$got" = "$3" ] || mal "verdict logic" "with=$1 without=$2 -> $got, expected $3"
 }
 _antes=$fallos
 _par 0 0 0             ; _par 1 1 1             ; _par 2 2 2
@@ -462,12 +462,12 @@ _par 0 2 0             ; _par 1 2 1
 _par 1 0 DISCREPA:1/0  ; _par 0 1 DISCREPA:0/1
 _par 2 0 DISCREPA:2/0  ; _par 2 1 DISCREPA:2/1
 if [ "$fallos" -eq "$_antes" ]; then
-	ok "la logica del veredicto es de UNA direccion: la plana puede rehusar, nunca absolver (9 pares)"
+	ok "verdict logic is ONE-WAY: the plain reader may refuse, never approve (9 pairs)"
 fi
 
 if [ "$fallos" -eq 0 ]; then
-	echo "test-ci-timeout-arithmetic: 0 CLEAN — $((19 - skips)) casos, $skips no medible(s) en esta caja"
+	echo "test-ci-timeout-arithmetic: 0 CLEAN — $((19 - skips)) cases, $skips unmeasurable on this machine"
 	exit 0
 fi
-echo "test-ci-timeout-arithmetic: 1 — $fallos caso(s) mal"
+echo "test-ci-timeout-arithmetic: 1 — $fallos failed case(s)"
 exit 1

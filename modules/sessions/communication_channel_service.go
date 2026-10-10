@@ -1054,7 +1054,7 @@ func (m *Module) mutateChannelAdmin(
 	if err != nil {
 		return ChannelMutationResult{}, err
 	}
-	closure, err := m.communicationGrantClosure.ResolveChannelGrantSubjects(ctx, scope, inspected.principal)
+	closure, err := m.CommunicationGrantClosure.ResolveChannelGrantSubjects(ctx, scope, inspected.principal)
 	if err != nil || closure.Outcome != ReadAllow {
 		return ChannelMutationResult{}, communicationError(
 			ErrCommunicationForbidden, "channel admin grant is unavailable",

@@ -25,6 +25,16 @@ const authState = vi.hoisted(() => ({
   principal: null as { actor: string; kind: string } | null,
 }))
 vi.mock('@/lib/auth/context', () => ({ useAuth: () => authState }))
+// Exercise the Community composition even when the tests are assembled into a paid tree.
+vi.mock('@/features/extensions', () => ({
+  PANEL_EXTENSIONS: {
+    capabilitiesTabs: [],
+    complianceTabs: [],
+    reportingCards: [],
+    licenseCards: [],
+    governanceTabs: [],
+  },
+}))
 
 const api = vi.hoisted(() => ({
   listIdentities: vi.fn(),
@@ -40,6 +50,7 @@ const api = vi.hoisted(() => ({
   updatePolicy: vi.fn(),
   deletePolicy: vi.fn(),
   listApprovals: vi.fn(),
+  listBreakGlass: vi.fn(),
   createApproval: vi.fn(),
   getApproval: vi.fn(),
   listDecisions: vi.fn(),
@@ -98,6 +109,7 @@ beforeEach(() => {
   toast.warning.mockReset()
   // Default resolutions so background tab queries never reject.
   api.listApprovals.mockResolvedValue({ items: [], has_more: false })
+  api.listBreakGlass.mockResolvedValue({ items: [], has_more: false })
   api.listPolicies.mockResolvedValue({ items: [], has_more: false })
   api.listIdentities.mockResolvedValue({ items: [], has_more: false })
   api.listGroups.mockResolvedValue({ items: [], has_more: false })
@@ -105,9 +117,23 @@ beforeEach(() => {
   api.getApproval.mockResolvedValue(pendingApproval)
   api.listDecisions.mockResolvedValue({ items: [], has_more: false })
 })
-afterEach(() => vi.clearAllMocks())
+afterEach(() => {
+  vi.clearAllMocks()
+  window.history.replaceState({}, '', '/')
+})
 
 describe('GovernanceView — approval queue (HITL)', () => {
+  it('Community omits the break-glass panel, including a stored deep link', () => {
+    window.history.replaceState({}, '', '/permissions?tab=break-glass')
+    wrap(<GovernanceView />)
+    expect(
+      screen.queryByRole('tab', { name: /emergency access/i }),
+    ).not.toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /approvals/i })).toHaveAttribute(
+      'data-state',
+      'active',
+    )
+  })
   // Changed by the SC sweep on 09b (Root): the list leads with what will run; the action
   // and the references moved to the review's Details, so they are not in the row.
   it('lists pending approval requests with what will run, requester and escalation cue', async () => {
@@ -122,6 +148,18 @@ describe('GovernanceView — approval queue (HITL)', () => {
     // requester rendered as an audit-actor handle, never an email.
     expect(screen.getByText('user:u-7')).toBeInTheDocument()
     expect(screen.getByText('token:t-3')).toBeInTheDocument()
+    const requesterDetails = screen.getByText('user:u-7').closest('details')!
+    expect(requesterDetails).not.toHaveAttribute('open')
+    expect(screen.getByText('A member')).toBeVisible()
+    const requesterSummary = within(requesterDetails).getByText('Details')
+    await userEvent.click(requesterSummary)
+    expect(requesterDetails).toHaveAttribute('open')
+    expect(screen.queryByRole('dialog')).toBeNull()
+    requesterSummary.focus()
+    await userEvent.keyboard('{Enter}')
+    expect(screen.queryByRole('dialog')).toBeNull()
+    await userEvent.keyboard(' ')
+    expect(screen.queryByRole('dialog')).toBeNull()
     // escalated request carries the warning badge.
     expect(screen.getByText('Escalated')).toBeInTheDocument()
   })
@@ -508,26 +546,37 @@ describe('IdentitiesView — roster, bindings RBAC + shared cue', () => {
     expect(screen.queryByRole('button', { name: /unbind/i })).toBeNull()
   })
 
-  it('shows the resync action and confirms it (identity:admin)', async () => {
-    api.listIdentities.mockResolvedValue({ items: [], has_more: false })
-    api.syncRoster.mockResolvedValue({
-      sources: 1,
-      providers_configured: 1,
-      identities: 4,
-      collections: 2,
-      memberships: 6,
-    })
-    wrap(<IdentitiesView />)
-    await userEvent.click(
-      await screen.findByRole('button', { name: /resync roster/i }),
-    )
-    const dialog = await screen.findByRole('dialog')
-    await userEvent.click(
-      within(dialog).getByRole('button', { name: /^resync$/i }),
-    )
-    await waitFor(() => expect(api.syncRoster).toHaveBeenCalledTimes(1))
-    await waitFor(() => expect(toast.success).toHaveBeenCalled())
-  })
+  it.each([
+    ['complete', 1, [], 'success'],
+    ['partial', 2, [{ provider: 'vault', reason: 'unreachable' }], 'warning'],
+    ['no providers', 0, [], 'warning'],
+  ] as const)(
+    'reports a %s resync with the matching toast intent',
+    async (_label, providers_configured, providers_failed, intent) => {
+      api.listIdentities.mockResolvedValue({ items: [], has_more: false })
+      api.syncRoster.mockResolvedValue({
+        sources: 1,
+        providers_configured,
+        providers_failed,
+        identities: 4,
+        collections: 2,
+        memberships: 6,
+      })
+      wrap(<IdentitiesView />)
+      await userEvent.click(
+        await screen.findByRole('button', { name: /resync roster/i }),
+      )
+      const dialog = await screen.findByRole('dialog')
+      await userEvent.click(
+        within(dialog).getByRole('button', { name: /^resync$/i }),
+      )
+      await waitFor(() => expect(api.syncRoster).toHaveBeenCalledTimes(1))
+      await waitFor(() => expect(toast[intent]).toHaveBeenCalledTimes(1))
+      expect(
+        toast[intent === 'success' ? 'warning' : 'success'],
+      ).not.toHaveBeenCalled()
+    },
+  )
 })
 
 describe('GovernanceView — ?tab= deep link (console remake slice 4)', () => {

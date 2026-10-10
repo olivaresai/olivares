@@ -95,7 +95,12 @@
         "hint": "Die Entscheidung, auf der dieser Akt beruht. Ohne sie nimmt die Engine ihn nicht an.",
         "placeholder": "ID der Entscheidung"
       }
-    }
+    },
+    "details": "Details",
+    "readyTitle": "'{{title}}' als bereit markieren",
+    "actionTitle": "{{action}}: {{title}}",
+    "waitsFor": "'{{title}}' wartet darauf, dass '{{dependency}}' abgeschlossen wird.",
+    "dependencyWaiting": "Dieses Element wartet auf den Abschluss seiner Abhängigkeiten."
   },
   "checks": {
     "evidence": "Nachweis {{ref}}"
@@ -103,6 +108,19 @@
   "common": {
     "refresh": "Aktualisieren",
     "loadMore": "Mehr laden"
+  },
+  "create": {
+    "action": "Neue Einheit",
+    "title": "Neue Arbeitseinheit",
+    "description": "Erfasse eine Arbeitseinheit, für die du verantwortlich bist. Ihr Plan wird angezeigt, bevor etwas geschrieben wird; sobald sie existiert, kannst du sie als Übergabe anbieten.",
+    "workspace": "Arbeitsbereich",
+    "workspaceNone": "Hier steht dir kein Arbeitsbereich zur Verfügung. Wähle einen im Arbeitsbereich-Umschalter oder frage eine Administratorin oder einen Administrator.",
+    "workspaceError": "Die Liste der Arbeitsbereiche konnte nicht gelesen werden. Schließe dies und versuche es erneut.",
+    "itemTitle": "Titel",
+    "brief": "Beschreibung",
+    "briefHint": "Was zu tun ist und warum.",
+    "doneWhen": "Fertig, wenn",
+    "doneWhenHint": "Das Abnahmekriterium, das sagt, dass die Einheit erledigt ist."
   },
   "decisions": {
     "title": "Entscheidungen",

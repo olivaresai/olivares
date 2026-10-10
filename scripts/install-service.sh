@@ -401,6 +401,7 @@ fi
 
 render_content() {
   sed \
+    -e '/^@STATE_DIRECTORY_LINE@$/d' \
     -e "s|@USER_LINE@|$user_line|g" \
     -e "s|@GROUP_LINE@|$group_line|g" \
     -e "s|@WANTED_BY@|$wanted_by|g" \

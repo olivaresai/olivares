@@ -2,15 +2,17 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// E5a: the audit-spool budget the API emits (ADR-0024 Q2) is typed
+// E5a: the audit-spool budget the API emits is typed
 // and rendered — present = a card with status/mode/usage; absent = silence
 // (never a fabricated "OK"), like the OTA indicator.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactElement, ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '@/lib/api/errors'
+import { consoleKeys } from '@/features/console/api'
+import type { HealthSummaryDTO, UpdateStatusDTO } from '@/features/console/api'
 import './i18n'
 
 const { api } = vi.hoisted(() => ({
@@ -53,7 +55,20 @@ const baseSummary = {
 
 function wrap(ui: ReactElement) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  return render(<QueryClientProvider client={qc}>{ui}</QueryClientProvider>)
+  return {
+    ...render(<QueryClientProvider client={qc}>{ui}</QueryClientProvider>),
+    queryClient: qc,
+  }
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (reason: Error) => void
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise
+    reject = rejectPromise
+  })
+  return { promise, resolve, reject }
 }
 
 beforeEach(() => {
@@ -315,8 +330,35 @@ describe('SystemHealthTab infrastructure cards', () => {
     expect(screen.getByText('Redacted')).toBeInTheDocument()
   })
 
-  it('shows an honest notice when update checking is unconfigured', async () => {
+  it('offers local recovery instructions without checking on an unconfigured default', async () => {
     api.healthSummary.mockResolvedValue(baseSummary)
+    const user = userEvent.setup()
+    wrap(<SystemHealthTab />)
+
+    const check = await screen.findByRole('button', { name: 'Check now' })
+    await waitFor(() => expect(check).toBeDisabled())
+    expect(check).toHaveAccessibleDescription(
+      /Update checking is not configured/,
+    )
+    await user.click(screen.getByText('Update instructions'))
+    expect(screen.getByText(/embedded verification key/)).toBeVisible()
+    expect(screen.getByText(/OLIVARES_UPDATE_ENDPOINT/)).toBeVisible()
+    expect(screen.getByText(/restart Olivares/)).toBeVisible()
+    expect(api.updateCheck).not.toHaveBeenCalled()
+    expect(screen.queryByText('Up to date')).not.toBeInTheDocument()
+  })
+
+  it('offers recovery after a 501 without retaining a stale up-to-date claim', async () => {
+    api.healthSummary.mockResolvedValue({
+      ...baseSummary,
+      update: {
+        enabled: true,
+        up_to_date: true,
+        available: false,
+        channel: 'stable',
+        current_version: '1.0',
+      },
+    })
     api.updateCheck.mockRejectedValue(
       new ApiError(501, 'not_implemented', 'update checking not configured'),
     )
@@ -328,6 +370,261 @@ describe('SystemHealthTab infrastructure cards', () => {
     expect(
       await screen.findByText(/Update checking is not configured/),
     ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Check now' })).toBeDisabled()
+    await user.click(screen.getByText('Update instructions'))
+    expect(screen.getByText(/embedded verification key/)).toBeVisible()
+    expect(screen.queryByText('Up to date')).not.toBeInTheDocument()
+  })
+
+  it('checks a configured channel and displays the fresh result', async () => {
+    api.healthSummary.mockResolvedValue({
+      ...baseSummary,
+      update: {
+        enabled: true,
+        up_to_date: false,
+        available: false,
+        channel: 'stable',
+        current_version: '1.0',
+      },
+    })
+    api.updateCheck.mockResolvedValue({
+      enabled: true,
+      up_to_date: false,
+      available: true,
+      channel: 'stable',
+      current_version: '1.0',
+      latest_version: '1.1',
+    })
+    const user = userEvent.setup()
+    wrap(<SystemHealthTab />)
+
+    await screen.findByText('sqlite')
+    await user.click(screen.getByRole('button', { name: 'Check now' }))
+    expect(await screen.findByText('1.1')).toBeVisible()
+    expect(api.updateCheck).toHaveBeenCalledTimes(1)
+    expect(screen.queryByText('Update instructions')).not.toBeInTheDocument()
+  })
+
+  it('allows checking after a newer health response confirms recovery from a 501', async () => {
+    const configured = {
+      ...baseSummary,
+      update: {
+        enabled: true,
+        up_to_date: false,
+        available: false,
+        channel: 'stable',
+        current_version: '1.0',
+      },
+    }
+    api.healthSummary.mockResolvedValue(configured)
+    api.updateCheck.mockRejectedValueOnce(
+      new ApiError(501, 'not_implemented', 'update checking not configured'),
+    )
+    const user = userEvent.setup()
+    const { queryClient } = wrap(<SystemHealthTab />)
+    await screen.findByText('sqlite')
+    await user.click(screen.getByRole('button', { name: 'Check now' }))
+    await screen.findByText(/Update checking is not configured/)
+
+    await act(async () => {
+      await queryClient.refetchQueries({
+        queryKey: consoleKeys.healthSummary(),
+      })
+    })
+
+    expect(api.healthSummary).toHaveBeenCalledTimes(2)
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Check now' })).toBeEnabled(),
+    )
+    await user.click(screen.getByRole('button', { name: 'Check now' }))
+    expect(await screen.findByText('Up to date')).toBeVisible()
+    expect(api.updateCheck).toHaveBeenCalledTimes(2)
+    expect(screen.queryByText('Update instructions')).not.toBeInTheDocument()
+  })
+
+  it('allows an explicit check when the health summary could not load', async () => {
+    api.healthSummary.mockRejectedValue(new Error('Health summary unavailable'))
+    const user = userEvent.setup()
+    wrap(<SystemHealthTab />)
+    const check = await screen.findByRole('button', { name: 'Check now' })
+    await waitFor(() => expect(check).toBeEnabled())
+    await user.click(check)
+    expect(await screen.findByText('Up to date')).toBeVisible()
+    expect(api.updateCheck).toHaveBeenCalledTimes(1)
+  })
+
+  it('honors a 501 that arrives after an overlapping health refresh', async () => {
+    api.healthSummary.mockResolvedValue({
+      ...baseSummary,
+      update: {
+        enabled: true,
+        up_to_date: true,
+        available: false,
+        channel: 'stable',
+        current_version: '1.0',
+      },
+    })
+    let rejectCheck!: (reason: Error) => void
+    api.updateCheck.mockReturnValue(
+      new Promise((_, reject) => {
+        rejectCheck = reject
+      }),
+    )
+    const user = userEvent.setup()
+    const { queryClient } = wrap(<SystemHealthTab />)
+    await screen.findByText('sqlite')
+    await user.click(screen.getByRole('button', { name: 'Check now' }))
+    await act(async () => {
+      await queryClient.refetchQueries({
+        queryKey: consoleKeys.healthSummary(),
+      })
+    })
+    expect(api.healthSummary).toHaveBeenCalledTimes(2)
+    await act(async () => {
+      rejectCheck(
+        new ApiError(501, 'not_implemented', 'update checking not configured'),
+      )
+    })
+
+    expect(
+      await screen.findByText(/Update checking is not configured/),
+    ).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Check now' })).toBeDisabled()
+    expect(screen.queryByText('Up to date')).not.toBeInTheDocument()
+  })
+
+  describe.each(['health first', 'check first'] as const)(
+    'overlapping refresh: %s',
+    (order) => {
+      it.each(['501', 'verification error', 'available release'] as const)(
+        'preserves the newer %s result and allows a later health read',
+        async (outcome) => {
+          const staleSummary = {
+            ...baseSummary,
+            update: {
+              enabled: true,
+              available: false,
+              up_to_date: true,
+              channel: 'stable',
+              current_version: '1.0',
+            },
+          }
+          const health = deferred<HealthSummaryDTO>()
+          const check = deferred<UpdateStatusDTO>()
+          api.healthSummary
+            .mockResolvedValue(staleSummary)
+            .mockResolvedValueOnce(staleSummary)
+            .mockReturnValueOnce(health.promise)
+          api.updateCheck.mockReturnValueOnce(check.promise)
+          const user = userEvent.setup()
+          const { queryClient } = wrap(<SystemHealthTab />)
+          await screen.findByText('Up to date')
+          await user.click(screen.getByRole('button', { name: 'Check now' }))
+
+          const refresh = queryClient.refetchQueries({
+            queryKey: consoleKeys.healthSummary(),
+          })
+          await waitFor(() =>
+            expect(api.healthSummary).toHaveBeenCalledTimes(2),
+          )
+          const completeHealth = async () => {
+            await act(async () => {
+              health.resolve(staleSummary)
+              await refresh
+              // Query notifications are scheduled after the response settles.
+              await new Promise((resolve) => setTimeout(resolve, 0))
+            })
+          }
+          if (order === 'health first') await completeHealth()
+          await act(async () => {
+            if (outcome === '501') {
+              check.reject(
+                new ApiError(
+                  501,
+                  'not_implemented',
+                  'update checking not configured',
+                ),
+              )
+            } else {
+              check.resolve({
+                ...staleSummary.update,
+                up_to_date: false,
+                available: outcome === 'available release',
+                ...(outcome === 'verification error'
+                  ? { error: 'signature does not verify' }
+                  : { latest_version: '1.1' }),
+              })
+            }
+          })
+          const expectCheckResult = async () => {
+            if (outcome === '501') {
+              expect(
+                await screen.findByText(/Update checking is not configured/),
+              ).toBeVisible()
+              expect(screen.getByText('Update instructions')).toBeVisible()
+              expect(
+                screen.getByRole('button', { name: 'Check now' }),
+              ).toBeDisabled()
+            } else if (outcome === 'verification error') {
+              expect(await screen.findByRole('alert')).toHaveTextContent(
+                'signature does not verify',
+              )
+            } else {
+              expect(await screen.findByText('1.1')).toBeVisible()
+              expect(screen.getByText('Update available')).toBeVisible()
+            }
+            expect(screen.queryByText('Up to date')).not.toBeInTheDocument()
+          }
+          await expectCheckResult()
+          if (order === 'check first') {
+            await completeHealth()
+            await expectCheckResult()
+          }
+
+          await act(async () => {
+            await queryClient.refetchQueries({
+              queryKey: consoleKeys.healthSummary(),
+            })
+          })
+          expect(api.healthSummary).toHaveBeenCalledTimes(3)
+          expect(await screen.findByText('Up to date')).toBeVisible()
+          expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+          expect(screen.queryByText('1.1')).not.toBeInTheDocument()
+          expect(
+            screen.queryByText('Update instructions'),
+          ).not.toBeInTheDocument()
+          expect(
+            screen.getByRole('button', { name: 'Check now' }),
+          ).toBeEnabled()
+        },
+      )
+    },
+  )
+
+  it('keeps a failed configured check retryable and surfaces its error', async () => {
+    api.healthSummary.mockResolvedValue({
+      ...baseSummary,
+      update: {
+        enabled: true,
+        up_to_date: false,
+        available: false,
+        channel: 'stable',
+        current_version: '1.0',
+      },
+    })
+    api.updateCheck.mockRejectedValue(
+      new ApiError(503, 'unavailable', 'Channel unreachable'),
+    )
+    const user = userEvent.setup()
+    wrap(<SystemHealthTab />)
+
+    await screen.findByText('sqlite')
+    await user.click(screen.getByRole('button', { name: 'Check now' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Channel unreachable',
+    )
+    expect(screen.getByRole('button', { name: 'Check now' })).toBeEnabled()
+    expect(screen.queryByText('Update instructions')).not.toBeInTheDocument()
   })
 
   it('confirms and downloads the support bundle through raw fetch', async () => {

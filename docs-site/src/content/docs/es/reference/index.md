@@ -23,13 +23,13 @@ contrato general.
 
 | Área | Qué documenta | Fuente de verdad |
 |---|---|---|
-| **[API REST](/reference/api/)** | La API HTTP del control plane: auth, setup, tenancy, agentes, el access map R/RW, tokens y el audit ledger. | El contrato **OpenAPI 3.1** del producto (70 paths core), renderizado en tiempo de build desde el fichero real — no una copia. |
+| **[API REST](/reference/api/)** | La API HTTP del control plane: auth, setup, tenancy, agentes, el access map R/RW, tokens y el audit ledger. | El contrato **OpenAPI 3.1** del producto (128 paths core), renderizado en tiempo de build desde el fichero real — no una copia. |
 | **[Rutas de módulos (beta)](/reference/api-beta/)** | Las rutas de módulos del producto (`/v1/m/<ns>/…`) — FinOps, compliance, gobernanza, sesiones, modelos, knowledge, … — como documento OpenAPI **beta** separado. | El mismo contrato OpenAPI 3.1, reflejado en tiempo de build a partir de las rutas que registran los módulos. |
 | **[Política de estabilidad](/es/reference/api-stability/)** | Versionado, niveles de estabilidad, señalización de deprecación/sunset y las ventanas de soporte mínimas para la API, el proveedor y los SDKs cliente. | La tabla de deprecación en código y sus tests de ventana que hacen fallar el build. |
-| **[gRPC](/es/reference/grpc/)** | El espejo gRPC del motor y el contrato de wire versionado para plugins que usa todo conector y módulo fuera de proceso. | Las tablas de registro `grpc.ServiceDesc` que los servidores entregan a gRPC. |
+| **[gRPC](/es/reference/grpc/)** | El espejo gRPC del motor y el contrato de wire versionado para plugins que usa todo conector fuera de proceso. | Las tablas de registro `grpc.ServiceDesc` que los servidores entregan a gRPC. |
 | **[Bus de eventos](/es/reference/events/)** | El bus de eventos interno: el envelope del evento, los tipos de evento de primera parte, y los payloads de observación que los conectores elevan a él. | Un contrato **AsyncAPI 3.0**, derivado a mano del SDK de Go. |
 | **[Pantallas de la consola](/es/reference/console/)** | Cada ruta que publica la consola, con el permiso RBAC que exige y la página de referencia que abre su enlace de ayuda dentro del producto. | El censo de rutas de la consola, fijado contra el router compilado. |
-| **[Catálogo de módulos](/es/reference/modules/overview/)** | Los 31 módulos del producto — qué es cada uno, su estado, y qué rutas (si las hay) expone fuera de la API core. | El catálogo de capacidades del producto y las interfaces de módulo tipadas. |
+| **[Catálogo de módulos](/es/reference/modules/overview/)** | Los 32 módulos del producto — qué es cada uno, su estado, y qué rutas (si las hay) expone fuera de la API core. | El catálogo de capacidades del producto y las interfaces de módulo tipadas. |
 | **[Contrato de la pasarela de modelos](/reference/model-gateway-contract/)** | Matriz driver × protocolo × transporte para CreateMessage, streaming, cancelación y uso. Etiquetas de celda honestas. | `connectors/modelprovider/gateway` y su suite de conformidad. |
 | **[CLI](/es/reference/cli/)** | El binario `olivares` y sus subcomandos — `serve`, `collector`, `audit`, `license`, `openapi`, `version` — y sus flags. | Las definiciones de comando compiladas. |
 | **[Configuración](/es/reference/configuration/)** | Variables de entorno y opciones de runtime: el directorio de datos, el cableado de fuentes, el motor de autorización y la firma del ledger. | Los cargadores de configuración del motor. |
@@ -46,7 +46,7 @@ identidad y tenancy, agentes, el access map de lectura/escritura
 módulo de access-map en lugar de la superficie core), gestión de tokens y el audit
 ledger.
 
-El contrato describe **70 paths core**. Eso es deliberado: es la superficie estable,
+El contrato describe **128 paths core**. Eso es deliberado: es la superficie estable,
 versionada, del control plane, no toda ruta que el motor pueda responder.
 A qué se compromete "estable" — versionado, señalización de deprecación y ventanas de
 soporte mínimas — es la [política de estabilidad de la API](/es/reference/api-stability/).
@@ -54,7 +54,7 @@ soporte mínimas — es la [política de estabilidad de la API](/es/reference/ap
 :::note[Las rutas de módulos son un contrato beta separado]
 Las rutas de módulos — por ejemplo las `/v1/m/accessmap/graph`,
 `/v1/m/accessmap/neighbors` y `/v1/m/accessmap/drift` del módulo de access-map —
-**no** forman parte del documento estable de 54 paths del núcleo. Se publican como un
+**no** forman parte del documento estable de 128 paths del núcleo. Se publican como un
 documento OpenAPI **beta** separado en [`/reference/api-beta/`](/reference/api-beta/)
 (servido en `/openapi.beta.json` y reflejado a partir de las rutas que registran realmente
 los módulos), de modo que la superficie estable siga siendo identificable mientras la
@@ -89,7 +89,7 @@ lo dice en lugar de inventarlo.
 
 ## Catálogo de módulos
 
-El [catálogo de módulos](/es/reference/modules/overview/) enumera los **31 módulos**
+El [catálogo de módulos](/es/reference/modules/overview/) enumera los **32 módulos**
 que se asientan sobre el motor core, a través de nueve áreas de capacidad. Uno de los más
 útiles es el **access map R/RW** con su diff **Permitido-frente-a-Observado**: lee
 de logs, OTEL y (como respaldo no cooperativo) eBPF en lugar de situarse
@@ -102,7 +102,7 @@ pasiva está **escalonada** por tipo de almacén — limpia para almacenes SQL, 
 con pérdidas para almacenes de documentos y vectoriales; imposible sin cooperación para
 almacenes en memoria o embebidos — y el catálogo marca dónde un módulo está
 en fase de diseño. El registro de modelos propios y el fine-tuning es una **capacidad planificada**, no
-uno de los 31 módulos entregados.
+uno de los 32 módulos entregados.
 
 ## CLI
 

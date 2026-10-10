@@ -110,9 +110,9 @@ mkdir -p "$t/commercial/license-worker"
 out="$(bash "$t/scripts/private-leg.sh" probe commercial/license-worker true 2>&1)"
 rc=$?
 [ "$rc" -eq 3 ] && printf '%s' "$out" | grep -q "CANNOT LOOK"
-check "package.json sin node_modules: ciega con exit 3" "exit 3 + CANNOT LOOK" $?
+check "package.json without node_modules: unavailable evidence, exit 3" "exit 3 + CANNOT LOOK" $?
 printf '%s' "$out" | grep -q "per worktree, not per container"
-check "la ciega nombra el AMBITO correcto (worktree, no contenedor)" "consejo accionable" $?
+check "unavailable evidence names the correct SCOPE (worktree, not container)" "actionable advice" $?
 
 # 9) INERTE, y es el que da valor al 8: una pierna CON node_modules no debe imprimir nada de esto.
 #    Sin este caso, un mensaje impreso siempre pasaria el 8 y seria ruido en cada corrida buena.
@@ -120,7 +120,7 @@ mkdir -p "$t/commercial/license-worker/node_modules"
 : >"$t/commercial/license-worker/node_modules/.keep"
 out="$(bash "$t/scripts/private-leg.sh" probe commercial/license-worker true 2>&1)"
 printf '%s' "$out" | grep -q "per worktree" && rc=1 || rc=0
-check "con node_modules: NO imprime el consejo" "silencio en el caso bueno" "$rc"
+check "with node_modules: does NOT print the advice" "silence in the passing case" "$rc"
 
 printf 'private-leg: %d ok, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

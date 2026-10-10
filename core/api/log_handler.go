@@ -21,10 +21,7 @@ const (
 	maxLogBufferLimit     = 10000
 )
 
-func (s *Server) handleLogStream(w http.ResponseWriter, r *http.Request) {
-	if _, ok := s.authzSystem(w, r, "system:admin"); !ok {
-		return
-	}
+func (s *Server) handleLogStream(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
 	if s.logBroker == nil {
 		s.writeError(w, r, errLogBrokerUnavailable)
 		return
@@ -75,10 +72,7 @@ func (s *Server) handleLogStream(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *Server) handleLogBuffer(w http.ResponseWriter, r *http.Request) {
-	if _, ok := s.authzSystem(w, r, "system:admin"); !ok {
-		return
-	}
+func (s *Server) handleLogBuffer(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
 	if s.logBroker == nil {
 		s.writeError(w, r, errLogBrokerUnavailable)
 		return

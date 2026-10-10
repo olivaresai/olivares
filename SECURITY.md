@@ -31,15 +31,97 @@ We will keep you updated through triage and fix, and we are glad to credit repor
 
 ## Supported versions
 
-The project is **beta**; the latest tagged release is `26.10.1`. Security fixes are applied to the `main` branch and ship as the next signed release — there is no separate maintenance branch yet. Each release's cut date is in its own [`CHANGELOG.md`](CHANGELOG.md) section.
+The project is **beta**; the next release is <!-- release -->`0.1`<!-- /release -->. Security fixes are applied to the `main` branch and ship as the next signed release — there is no separate maintenance branch yet. Each release's cut date is in its own [`CHANGELOG.md`](CHANGELOG.md) section.
 
 | Version | Supported |
 |---|---|
 | `main` (development) | Yes |
-| `26.10.1` (latest release) | Yes — fixes ship as the next release |
+| Olivares <!-- release -->`0.1`<!-- /release --> (next release) | Yes — fixes ship as the next release |
 | Older tagged releases | No — upgrade to the latest release |
 
 This table grows into a real support matrix as releases accumulate.
+
+## Session network isolation
+
+A Claude Code or Codex session bound to a provider key runs in its own user and
+network namespace with only loopback. Its traffic leaves through a per-session smokescreen
+proxy outside that namespace, which allows only the exact host and port of the key's
+endpoint. The session reaches that endpoint or it does not start: a failed namespace,
+seccomp or Landlock setup refuses the launch before the tool runs.
+
+**Other sessions are not network-isolated yet.** Grok Build and OpenCode sessions,
+every account-login session and Claude Code sessions routed through the engine's
+inference gateway can reach any host the network permits.
+Provider binding still configures those tools to use the bound provider; it does not
+stop a child process from connecting elsewhere.
+
+For Codex, Grok Build and OpenCode, an inventory has been taken.
+In one test turn bound to a synthetic provider at a local TLS endpoint, plus 12 seconds
+of background work, each tool's process tree sent HTTP requests and opened TCP
+connections only to that endpoint. Each trusted the endpoint's certificate authority
+through the trust variables the boundary uses:
+
+| Tool | Requests to the bound endpoint |
+| --- | --- |
+| Codex 0.160.1, OpenAI key | inference |
+| Grok Build 1.0.13, xAI key | model list, key check, inference |
+| OpenCode 1.18.34, local model | inference |
+
+OpenCode on an Anthropic key requested only the vendor's API host. Without the models
+base URL that the launch sets, Grok Build also contacted its vendor's chat proxy.
+The inventory does not cover UDP or DNS, connections shorter than its 50 ms sampling,
+the vendors' default endpoints, resumed sessions or long-running background work.
+Codex joined the boundary after its turn passed inside the namespace, with its
+seccomp and Landlock filters, while the proxy refused a second loopback host and a
+public host. Grok Build and OpenCode sessions can still reach any host the network
+permits; each joins the boundary once the same turn has passed.
+
+How the boundary works:
+
+- DNS is resolved once per launch and pinned; a resume or relaunch resolves again.
+  Failover uses only addresses pinned at launch, each rechecked by smokescreen.
+  Inherited proxy settings cannot widen the policy.
+- HTTPS CONNECT terminates TLS at the proxy, which checks SNI and every HTTP authority
+  before forwarding and verifies upstream certificates with the engine's trust roots.
+  The tool receives only a per-launch CA certificate, through its private scratch
+  directory and standard trust variables; the CA signing key stays in engine memory
+  and no system trust store changes.
+- The tool and its descendants keep the filesystem Landlock policy and receive a
+  seccomp filter that denies host Unix sockets, other socket families, namespace
+  changes, descriptor theft and io_uring. IP sockets work inside the namespace;
+  anonymous stream socket pairs remain available for subprocess IPC.
+- Hook and session MCP endpoints use an HTTP relay with exact path checks and no
+  CONNECT access to the engine API. Managed stdio companions inherit the session's
+  policy. Operator-configured remote MCP services are engine operations outside it.
+
+A bound Claude Code or Codex session cannot reach any other host: git remotes,
+package registries, pages fetched by the tool and SSH included, so such a session
+cannot use a `git_read` binding. It cannot reach host Unix
+sockets such as ssh-agent, gpg-agent or the Docker socket. Clients that pin
+certificates, speak only HTTP/2 or upgrade the protocol (WebSocket) are refused.
+An allowed upstream can itself forward data elsewhere; this boundary does not
+constrain the provider's own services.
+
+Requirements: Linux amd64 or arm64 with Landlock and unprivileged user and network
+namespaces.
+
+- The systemd units shipped in the packages allow exactly those two namespace types.
+- Docker Compose uses `deploy/seccomp/olivares-sessions.json`: Docker's default
+  profile plus those two namespace types.
+  AppArmor hosts that mediate user namespace creation also need the shipped
+  `deploy/apparmor/olivares-sessions.conf` profile loaded and selected, as the
+  [README install](README.md#install) shows. It retains Docker default restrictions
+  and permits `userns` for the engine container.
+- Both settings apply to every process the engine starts, including sessions outside
+  this boundary and stdio MCP servers, so those may also create user and network
+  namespaces. Inside a bound session the seccomp filter denies it again.
+- Kubernetes `RuntimeDefault` refuses them; Business chart documentation shows how to use
+  the same profile.
+- A host that restricts unprivileged user namespaces, such as Ubuntu 23.10 and later
+  through AppArmor or an SELinux domain without the user namespace permission,
+  refuses these sessions until the engine is allowed to create one.
+- The proxy socket lives under the engine's `TMPDIR`, which must leave the socket path
+  within the 107-byte Unix limit (about 70 bytes for `TMPDIR`).
 
 ## Scope
 
@@ -52,7 +134,8 @@ Out of scope: third-party dependencies (report upstream; tell us so we can pin/p
 For a security product, build integrity is part of the trust model, not an afterthought:
 
 - **Signed releases** with cosign / Sigstore, published **SBOMs** (syft), and checksums —
-  26.10.1 is available now, and `scripts/verify-release.sh` verifies its chain before use.
+  Olivares <!-- release -->0.1<!-- /release --> is the next release, not yet published. Once its artifacts are available,
+  `scripts/verify-release.sh` verifies their chain before use.
 - **Minimal, non-root** container images on a digest-pinned Debian 13 slim base (the STIG image on UBI 9 minimal), and a single static, memory-safe Go binary, which removes whole classes of C memory-corruption CVEs.
 - **Minimal, pinned dependencies**; no `curl | bash` without checksums.
 - **CI gates:** dependency scanning with `govulncheck` and secret scanning on every change.

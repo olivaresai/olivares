@@ -7,7 +7,6 @@ package main
 import (
 	"context"
 	"log/slog"
-	"os"
 	"strings"
 
 	claudeapi "github.com/olivaresai/olivares/connectors/claude-api"
@@ -39,7 +38,7 @@ type claudeFilesConfig struct {
 // yields an empty config (the plane stays not-wired, honest); a supplied path must be
 // readable and contain valid JSON or startup fails closed.
 func loadClaudeFilesConfig(_ *slog.Logger) (claudeFilesConfig, error) {
-	path := os.Getenv("OLIVARES_CLAUDE_FILES_CONFIG")
+	path := osGetenv("OLIVARES_CLAUDE_FILES_CONFIG")
 	if path == "" {
 		return claudeFilesConfig{}, nil
 	}

@@ -16,7 +16,7 @@ import (
 	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
 )
 
-// HU2-24: `olivares provider add` required --kind and --name, which the console no longer
+// `olivares provider add` required --kind and --name, which the console no longer
 // asks for, and did not test the key it had just added, which the console does. The kind
 // comes from the key (or openai_compatible with --base-url), the name from the kind, and
 // the key is tested at once; explicit flags are kept and --no-test skips the test.

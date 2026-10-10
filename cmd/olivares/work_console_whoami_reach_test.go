@@ -30,7 +30,7 @@ import (
 //     sessions module is mounted, so it cannot see the failure mode that matters.
 //   - the permission catalog (core/api.buildPermCatalog) is built from the modules the
 //     server ACTUALLY MOUNTS. A module compiled but not composed declares nothing, and
-//     tools/permsdump builds its own module set rather than the server's.
+//     the offline census cannot prove which configured modules reach whoami.
 //   - modules/sessions.Module.Permissions() is a declaration; whoami serves the
 //     intersection of that declaration with RoleGrants over the mounted catalog.
 //

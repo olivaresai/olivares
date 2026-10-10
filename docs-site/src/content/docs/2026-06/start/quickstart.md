@@ -47,7 +47,7 @@ task build                      # compiles ./bin/olivares with the web UI embedd
 engine, the embedded web UI and the first-party connector plugins. The **container and
 Kubernetes installs wrap this same binary**: a published image plus a Compose file
 ([self-hosting](/2026-06/how-to/self-hosting/)), or a flat manifest you `kubectl apply -f
-deploy/manifests/install.yaml` (no Helm required). The hero you see below is identical
+./business-install.yaml` (no Helm required). The hero you see below is identical
 on all three — only the demo seed differs (loopback-only, never in a real install).
 
 ## 2. Boot the demo estate (loopback only)

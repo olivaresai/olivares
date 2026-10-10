@@ -8,6 +8,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -24,6 +25,7 @@ import (
 
 	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
 	"github.com/olivaresai/olivares/cmd/olivares/internal/termrender"
+	"github.com/olivaresai/olivares/core/driverfacts"
 )
 
 // cmd_tool.go is `olivares tool`: install the agent tools sessions run, see them,
@@ -34,33 +36,41 @@ import (
 
 const agentToolsPath = "/v1/m/agenttools"
 
-// toolNames are the names people know the drivers by.
-var toolNames = map[string]string{
-	"claude": "Claude Code", "codex": "Codex", "grok": "Grok Build", "opencode": "OpenCode", "ollama": "Ollama",
-}
-
 func toolName(driver string) string {
-	if n := toolNames[driver]; n != "" {
-		return n
+	if facts, ok := driverfacts.Lookup(driver); ok {
+		return facts.Name
 	}
 	return driver
 }
 
+// signInToolWords are the words a person types for the tools that can sign in:
+// each tool's name stem (its alias when it has one, so gemini for gemini-cli).
+func signInToolWords() []string {
+	var words []string
+	for _, f := range driverfacts.All() {
+		if f.SignIn != "" {
+			words = append(words, f.NameStem())
+		}
+	}
+	return words
+}
+
 // toolSignsIn reports whether the engine can run this tool's own login.
 func toolSignsIn(driver string) bool {
-	return driver == "claude" || driver == "codex" || driver == "grok"
+	facts, _ := driverfacts.Lookup(driver)
+	return facts.SignIn != ""
 }
 
 func newToolCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "tool",
 		Aliases: []string{"tools"},
-		Short:   "Install and sign in the agent tools sessions run (Claude Code, Codex, Grok Build, OpenCode)",
+		Short:   "Install and sign in the agent tools sessions run (Claude Code, Codex, Grok Build, OpenCode, Gemini CLI)",
 		Long: "Install an agent tool on the engine's host from its official signed release, sign it in\n" +
-			"with its own login (your Claude or ChatGPT subscription), and see what is installed.",
+			"with its own login (your Claude, ChatGPT or Google account), and see what is installed.",
 		Example: "  olivares tool install claude\n  olivares tool login claude\n  olivares tool ls",
 	}
-	cmd.AddCommand(newToolListCmd(), newToolInstallCmd(), newToolLoginCmd(), newToolStartCmd())
+	cmd.AddCommand(newToolListCmd(), newToolProvidersCmd(), newToolInstallCmd(), newToolLoginCmd(), newToolStartCmd(), newToolPullCmd())
 	return cmd
 }
 
@@ -87,8 +97,10 @@ func newToolListCmd() *cobra.Command {
 		Short:   "List the agent tools on the engine's host and whether each is signed in",
 		Long: "ls prints one row per agent tool: the version sessions run (or \"on this host\" when it\n" +
 			"was installed outside Olivares), and whether it is installed and signed in. When one is\n" +
-			"missing, the last line names the next step. Use it before you start a session.",
-		Example: "  olivares tool ls\n  olivares tool ls -o json",
+			"missing, the last line names the next step. Use it before you start a session.\n\n" +
+			"Use --account <name> to read one existing provider account's sign-in. Find account names\n" +
+			"with olivares provider account ls. You can also pass a profile reference to read its login.",
+		Example: "  olivares tool ls\n  olivares tool ls -o json\n  olivares tool ls --account work",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if err := cfg.resolve(); err != nil {
@@ -148,14 +160,20 @@ func newToolListCmd() *cobra.Command {
 			}
 			// A tool that can run a session now makes the session the next step, as in
 			// `olivares` and `session start` (an OpenCode on a local model needs no login).
+			// With none ready, a key its provider refused is named: it is why.
+			var refused string
 			if !cmd.Flags().Changed("account") {
-				if _, ok := cfg.firstReadyTool(cmd.Context()); ok {
+				var ready string
+				if ready, refused = cfg.firstReadyTool(cmd.Context()); ready != "" {
 					next = "olivares session start <folder>"
 				}
 			}
 			return renderOut(cmd, func(w io.Writer) error {
 				rr := renderTo(w)
 				rr.Table(table)
+				if refused != "" {
+					rr.Line(refused)
+				}
 				rr.Next(next)
 				return nil
 			}, rows)
@@ -177,7 +195,10 @@ func (c *agentClientConfig) toolRows(ctx context.Context) ([]toolRow, error) {
 		return nil, toolHTTPErr(status, b)
 	}
 	var inv struct {
-		Drivers   []string `json:"drivers"`
+		Drivers  []string `json:"drivers"`
+		Presence map[string]struct {
+			Present bool `json:"present"`
+		} `json:"presence"`
 		Inventory struct {
 			Installed []struct {
 				Driver      string    `json:"driver"`
@@ -208,7 +229,12 @@ func (c *agentClientConfig) toolRows(ctx context.Context) ([]toolRow, error) {
 		}
 		rows[it.Driver].Installed = true
 	}
-	// For Claude Code, Codex and Grok Build the engine's sign-in status asks the program a
+	for driver, presence := range inv.Presence {
+		if _, exists := rows[driver]; !exists {
+			rows[driver] = &toolRow{Driver: driver, Installed: presence.Present}
+		}
+	}
+	// For tools with native sign-in, the engine's status asks the program a
 	// session would run, so it also finds a tool on PATH (HU, R1 refresh 01).
 	for d, r := range rows {
 		if !toolSignsIn(d) {
@@ -226,7 +252,7 @@ func (c *agentClientConfig) toolRows(ctx context.Context) ([]toolRow, error) {
 	for _, r := range rows {
 		out = append(out, *r)
 	}
-	order := map[string]int{"claude": 0, "codex": 1, "grok": 2, "opencode": 3, "ollama": 4}
+	order := map[string]int{"claude": 0, "codex": 1, "grok": 2, "opencode": 3, "gemini-cli": 4, "ollama": 5}
 	sort.Slice(out, func(i, j int) bool {
 		oi, iok := order[out[i].Driver]
 		oj, jok := order[out[j].Driver]
@@ -257,7 +283,7 @@ func (c *agentClientConfig) toolSignInStatus(ctx context.Context, driver string)
 }
 
 func (c *agentClientConfig) readToolSignInStatus(ctx context.Context, driver, accountRef string) (toolSignInState, error) {
-	// The own login is the organization's (FH 036): the status is asked for the
+	// The own login is the organization's: the status is asked for the
 	// tenant of the saved sign-in, by name, because the route ignores the selection.
 	path := agentToolsPath + "/sign-in?driver=" + url.QueryEscape(driver) + "&tenant_id=" + url.QueryEscape(c.tenant)
 	if accountRef != "" {
@@ -283,7 +309,7 @@ func newToolInstallCmd() *cobra.Command {
 		version string
 	)
 	cmd := &cobra.Command{
-		Use:   "install <claude|codex|grok|opencode|ollama>",
+		Use:   "install <claude|codex|grok|opencode|gemini|ollama>",
 		Short: "Install an agent tool on the engine's host from its official signed release",
 		Long: "install asks the engine to resolve the tool's official release, verify it (signature or\n" +
 			"published digest, per tool) and place it where sessions find it. Sessions use it\n" +
@@ -292,6 +318,9 @@ func newToolInstallCmd() *cobra.Command {
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			driver := strings.ToLower(strings.TrimSpace(args[0]))
+			if driver == "gemini" {
+				driver = "gemini-cli"
+			}
 			requestedVersion := version
 			if driver == "grok" && !cmd.Flags().Changed("version") {
 				requestedVersion = "stable"
@@ -409,20 +438,28 @@ type toolSignIn struct {
 
 func newToolLoginCmd() *cobra.Command {
 	var cfg agentClientConfig
-	var accountName string
+	var accountName, method string
 	cmd := &cobra.Command{
-		Use:   "login <claude|codex|grok>",
-		Short: "Sign an agent tool in with its own login (Claude, ChatGPT or xAI account)",
+		Use:   "login <" + strings.Join(signInToolWords(), "|") + ">",
+		Short: "Sign an agent tool in with its own login (Claude, ChatGPT, xAI or Google account)",
 		Long: "login runs the tool's own sign-in on the engine's host and shows you its link. For\n" +
-			"Claude Code, open the link, sign in, and paste the code the page shows. For Codex and\n" +
-			"Grok Build, open the link and enter the code shown here. The login is stored where the\n" +
-			"tool keeps it.",
-		Example: "  olivares tool login claude\n  olivares tool login codex\n  olivares tool login grok",
-		Args:    cobra.ExactArgs(1),
+			"Claude Code or Gemini CLI, open the link, sign in, and paste the code the page shows. For Codex,\n" +
+			"Grok Build and OpenCode (ChatGPT headless), open the link and enter the code shown here.\n" +
+			"The login is stored where the tool keeps it.\n\n" +
+			"Use --method <id> to choose among the official login methods a tool offers; without it\n" +
+			"the default runs. An unknown id is refused with the valid ones (exit 2).\n\n" +
+			"Use --account <name> to sign in an existing provider account. Find account names with\n" +
+			"olivares provider account ls. You can also pass a profile reference to sign in that profile.",
+		Example: "  olivares tool login claude\n  olivares tool login codex\n  olivares tool login grok\n" +
+			"  olivares tool login claude --account work\n  olivares tool login gemini --account personal",
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) (err error) {
 			driver := strings.ToLower(strings.TrimSpace(args[0]))
+			if driver == "gemini" {
+				driver = "gemini-cli"
+			}
 			if !toolSignsIn(driver) {
-				return sentence(exitcode.Usage, "%s has no sign-in here. Use claude, codex or grok.", toolName(driver))
+				return sentence(exitcode.Usage, "%s has no sign-in here. Use %s.", toolName(driver), driverfacts.JoinList(signInToolWords(), "or"))
 			}
 			if err := cfg.resolve(); err != nil {
 				return err
@@ -456,16 +493,24 @@ func newToolLoginCmd() *cobra.Command {
 				_, err := fmt.Fprintf(out, "%s is already signed in%s.\n", toolName(driver), who)
 				return err
 			}
-			// The login is the organization's own (FH 036), named because the route
+			// The login is the organization's own, named because the route
 			// ignores the tenant selection.
 			body := map[string]any{"driver": driver, "tenant_id": cfg.tenant}
 			if accountRef != "" {
 				body["account_ref"] = accountRef
 			}
+			if cmd.Flags().Changed("method") {
+				body["method"] = method
+			}
 			status, b, err := cfg.do(ctx, "POST", agentToolsPath+"/sign-in", body, http.StatusAccepted, http.StatusNotFound)
 			if err != nil && ctx.Err() != nil {
 				fmt.Fprintf(cmd.ErrOrStderr(), "\nCancelled. A sign-in the engine had started ends by itself within 15 minutes.\n")
 				return exitcode.New(exitcode.Err, nil)
+			}
+			var refusal *apiRefusal
+			if err != nil && errors.As(err, &refusal) && refusal.status == http.StatusBadRequest && cmd.Flags().Changed("method") {
+				// The engine lists the valid ids in its sentence.
+				return exitcode.New(exitcode.Usage, err)
 			}
 			if err != nil {
 				return err
@@ -497,15 +542,21 @@ func newToolLoginCmd() *cobra.Command {
 				}
 				err = exitcode.New(exitcode.Err, nil)
 			}()
-			if s.URL == "" {
-				return toolSignInFailed(driver, s)
+			if s.State == "starting" {
+				fmt.Fprintf(out, "Starting %s sign-in...\n", toolName(driver))
 			}
-			fmt.Fprintf(out, "Open this link and sign in:\n\n  %s\n\n", termSafe(s.URL))
-			if driver != "claude" && s.UserCode != "" {
-				fmt.Fprintf(out, "Enter this code there: %s\n\n", termSafe(s.UserCode))
-			}
-			lines := toolLoginLines(ctx, cmd.InOrStdin())
+			flowCtx, cancelFlow := context.WithTimeout(ctx, 15*time.Minute)
+			defer cancelFlow()
+			lines := toolLoginLines(flowCtx, cmd.InOrStdin())
+			linkShown := false
 			for {
+				if !linkShown && s.State != "starting" && s.URL != "" {
+					fmt.Fprintf(out, "Open this link and sign in:\n\n  %s\n\n", termSafe(s.URL))
+					if driver != "claude" && s.UserCode != "" {
+						fmt.Fprintf(out, "Enter this code there: %s\n\n", termSafe(s.UserCode))
+					}
+					linkShown = true
+				}
 				switch s.State {
 				case "signed_in":
 					fmt.Fprintf(out, "%s is signed in.\n", toolName(driver))
@@ -513,14 +564,17 @@ func newToolLoginCmd() *cobra.Command {
 				case "failed":
 					return toolSignInFailed(driver, s)
 				case "needs_code":
+					if s.URL == "" {
+						return toolSignInFailed(driver, s)
+					}
 					if s.Message != "" {
 						fmt.Fprintln(out, termSafe(s.Message))
 					}
 					fmt.Fprint(out, "Paste the code from the page: ")
 					var line toolLoginLine
 					select {
-					case <-ctx.Done():
-						return ctx.Err()
+					case <-flowCtx.Done():
+						return flowCtx.Err()
 					case line = <-lines:
 					}
 					// A terminal echoes the Enter that ends the code; a pipe does not, and the
@@ -535,14 +589,17 @@ func newToolLoginCmd() *cobra.Command {
 						}
 						continue
 					}
-					status, b, err = cfg.do(ctx, "POST", agentToolsPath+"/sign-in/"+url.PathEscape(s.ID)+"/code", map[string]any{"code": code}, http.StatusOK, http.StatusAccepted)
+					status, b, err = cfg.do(flowCtx, "POST", agentToolsPath+"/sign-in/"+url.PathEscape(s.ID)+"/code", map[string]any{"code": code}, http.StatusOK, http.StatusAccepted)
 				default:
+					if s.State != "starting" && s.URL == "" {
+						return toolSignInFailed(driver, s)
+					}
 					select {
-					case <-ctx.Done():
-						return ctx.Err()
+					case <-flowCtx.Done():
+						return flowCtx.Err()
 					case <-time.After(2 * time.Second):
 					}
-					status, b, err = cfg.do(ctx, "GET", agentToolsPath+"/sign-in/"+url.PathEscape(s.ID), nil)
+					status, b, err = cfg.do(flowCtx, "GET", agentToolsPath+"/sign-in/"+url.PathEscape(s.ID), nil)
 				}
 				if err != nil {
 					return err
@@ -558,6 +615,7 @@ func newToolLoginCmd() *cobra.Command {
 	}
 	cfg.addFlags(cmd)
 	cmd.Flags().StringVar(&accountName, "account", "", "sign in an existing provider account (name or profile reference)")
+	cmd.Flags().StringVar(&method, "method", "", "the tool's official login method, when it offers several (the default otherwise)")
 	return cmd
 }
 
@@ -676,11 +734,11 @@ func toolLoginLines(ctx context.Context, r io.Reader) <-chan toolLoginLine {
 }
 
 func toolSignInFailed(driver string, s toolSignIn) error {
-	msg := strings.TrimSpace(termSafe(s.Message))
-	if msg == "" {
-		msg = "The tool did not finish its sign-in."
+	// The engine's message is the tool's reason and its one next step (#470).
+	if msg := strings.TrimSpace(termSafe(s.Message)); msg != "" {
+		return sentence(exitcode.Err, "%s is not signed in. %s", toolName(driver), msg)
 	}
-	return sentence(exitcode.Err, "%s is not signed in. %s Try again: olivares tool login %s", toolName(driver), msg, driver)
+	return sentence(exitcode.Err, "%s is not signed in. The tool did not finish its sign-in. Try again: olivares tool login %s", toolName(driver), driver)
 }
 
 // toolHTTPErr is httpErr with the two refusals a person meets here put plainly: an
@@ -703,7 +761,7 @@ func toolHTTPErr(status int, b []byte) error {
 var ollamaStartWait = 75 * time.Second
 
 // newToolStartCmd starts the installed Ollama as the engine's own service, the CLI
-// side of AI tools › Ollama › Start (Root on FH 108: the CLI could not start it).
+// side of AI tools › Ollama › Start (the CLI could not start it before).
 func newToolStartCmd() *cobra.Command {
 	var cfg agentClientConfig
 	cmd := &cobra.Command{
@@ -728,12 +786,8 @@ func newToolStartCmd() *cobra.Command {
 			if t := strings.TrimSpace(cfg.tenant); t != "" {
 				body["tenant_id"] = t
 			}
-			status, b, err := cfg.do(ctx, "POST", agentToolsPath+"/ollama/start", body, http.StatusAccepted)
-			if err != nil {
+			if _, _, err := cfg.do(ctx, "POST", agentToolsPath+"/ollama/start", body, http.StatusAccepted); err != nil {
 				return err
-			}
-			if status != http.StatusAccepted {
-				return toolHTTPErr(status, b)
 			}
 			var st struct {
 				State    string   `json:"state"`

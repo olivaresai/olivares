@@ -11,7 +11,7 @@ Le binaire Community enregistre un descripteur de disponibilité pour l'espace
 de noms API `session-cockpit`. Cet espace de noms a actuellement **zéro
 gestionnaire** et **aucun cockpit interactif**. Les requêtes sous
 `/v1/m/session-cockpit` reçoivent **404 par absence**. Le descripteur n'est
-pas l'un des 31 modules produit du catalogue.
+pas l'un des 32 modules produit du catalogue.
 
 ## Disponibilité actuelle
 
@@ -34,7 +34,7 @@ Vérifiez que les surfaces de session livrées fonctionnent toujours :
 1. Les routes du module de sessions en direct sous l'espace de noms
    `sessions` —
    [Exploitation en direct et sessions](/fr/reference/modules/ii-sessions/).
-2. La console **Sessions** (`/sessions`), **Claude Code** (`/agentops`) et
+2. La console **Sessions** (`/sessions`, aussi `/agentops`) et
    **Work** (`/work`) — [référence de la console](/fr/reference/console/).
 3. Le cycle de vie des CLI officielles dans la section suivante.
 

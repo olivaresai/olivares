@@ -7,8 +7,8 @@ package main
 // circuitbreakerwiring.go is the AGPL composition-root glue for the OPTIONAL commercial
 // runtime circuit-breaker (enterprise/circuitbreaker). Same shape as
 // incidentloopwiring.go: the build-independent seams live here and the closed engine is
-// reached only through newCircuitBreakerEngine (real in the enterprise overlay, nil in
-// wire_noenterprise.go), so the default artifact never references the closed module.
+// reached only through the circuitBreakerEngine edition port (filled by the enterprise
+// overlay, nil in Community), so the default artifact never references the closed module.
 //
 // WHY THIS FILE EXISTS AT ALL. It did not, and that was the defect. Everything else
 // was already built -- the interface, the gate, the engine, the open stub -- and NOTHING
@@ -52,7 +52,7 @@ const (
 // enterprise engine ever writes to them; the community artifact carries the tables and
 // leaves them empty, exactly like the tool-pin table.
 func registerCircuitBreakerSchema(reg store.ExtensionRegistry) error {
-	rule := circuitBreakerDeclarations()
+	rule := thisEdition.circuitBreakerDeclarations()
 	if err := reg.Register(model.EntityDescriptor{
 		Kind:  cbRuleKind,
 		Table: cbRuleTable,
@@ -84,11 +84,11 @@ func registerCircuitBreakerSchema(reg store.ExtensionRegistry) error {
 		Table: cbStateTable,
 		Fields: []model.FieldSpec{
 			{Name: "rule_id", Kind: model.KindUUID, Indexed: true,
-				Principal: model.None("the rule that tripped, surfaced as the state's rule reference: cmd/olivares/circuitbreaker.go:23")},
+				Principal: model.None("the rule that tripped, surfaced as the state's rule reference: cmd/olivares/internal/inferencepep/circuitbreakergate.go:20")},
 			{Name: "agent_ref", Kind: model.KindText, Indexed: true,
-				Principal: model.None("the agent the breaker state is kept for, resolved as an agent: cmd/olivares/circuitbreakergate.go:23, modules/governance/agentrisk.go:513")},
+				Principal: model.None("the agent the breaker state is kept for, resolved as an agent: cmd/olivares/internal/inferencepep/circuitbreakergate.go:37, modules/governance/agentrisk.go:513")},
 			{Name: "state", Kind: model.KindText, Indexed: true,
-				Principal: model.None("closed, open or half_open: cmd/olivares/circuitbreaker.go:22, cmd/olivares/circuitbreakergate.go:27")},
+				Principal: model.None("closed, open or half_open: cmd/olivares/internal/inferencepep/circuitbreakergate.go:19, cmd/olivares/internal/inferencepep/circuitbreakergate.go:41")},
 			{Name: "trip_count", Kind: model.KindInt},
 			{Name: "current_count", Kind: model.KindInt},
 			{Name: "window_start", Kind: model.KindTimestamp, Nullable: true},
@@ -107,7 +107,7 @@ func registerCircuitBreakerSchema(reg store.ExtensionRegistry) error {
 
 // circuitBreakerRuleDecls declares what the breaker rule table's text columns
 // say about principals. The edition that links the rules' writer and readers
-// supplies them (circuitBreakerDeclarations), so no edition declares another's.
+// supplies them (the circuitBreakerDeclarations port), so no edition declares another's.
 type circuitBreakerRuleDecls struct {
 	// Config declares the rule's label, match configuration, response and note.
 	Config *model.ColumnDecl

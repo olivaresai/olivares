@@ -150,7 +150,7 @@ if [ "$_rc" -eq 126 ] || [ "$_rc" -eq 127 ]; then
 fi
 _frc=0
 olivares_overlay_measure_finish "$_reader_rc" \
-	"the captured current overlay main contradicts the live acta: legal-hold consults no entitlement; durableLicensed applies the purchase composition; iso42001 catalogued with its build-tag cut; public slug map read at the CURRENT gitlink" \
+	"the captured current overlay main contradicts the live record: legal-hold consults no entitlement; durableLicensed applies the purchase composition; iso42001 catalogued with its build-tag cut; public slug map read at the CURRENT gitlink" \
 	|| _frc=$?
 case "$_frc" in
 2) cannot "$OLIVARES_OVERLAY_FINAL_WHY" ;;

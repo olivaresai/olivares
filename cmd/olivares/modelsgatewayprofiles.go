@@ -23,9 +23,11 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/olivaresai/olivares/connectors/modelprovider"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/secret"
 	"github.com/olivaresai/olivares/modules/models"
+	"github.com/olivaresai/olivares/modules/sessions"
 )
 
 const (
@@ -169,7 +171,7 @@ func validateModelGatewayProfile(raw modelGatewayProfileConfig) (modelGatewayPro
 	if p.Action != models.ExecutionActionTextGenerate {
 		return modelGatewayProfileConfig{}, "", errors.New("action is unsupported")
 	}
-	if p.Protocol != models.ExecutionProtocolChatTextV1 || p.AdapterID != models.ExecutionAdapterModelProviderChat ||
+	if p.Protocol != models.ExecutionProtocolChatTextV1 || (p.AdapterID != models.ExecutionAdapterModelProviderChat && p.AdapterID != models.ExecutionAdapterDeepSeekText) ||
 		p.AdapterVersion != models.ExecutionAdapterVersion1 {
 		return modelGatewayProfileConfig{}, "", errors.New("protocol or adapter is unsupported")
 	}
@@ -183,9 +185,15 @@ func validateModelGatewayProfile(raw modelGatewayProfileConfig) (modelGatewayPro
 	if p.CredentialAudience == "" || p.CredentialAudience != origin {
 		return modelGatewayProfileConfig{}, "", errors.New("credential_audience must exactly equal the endpoint origin")
 	}
+	if p.AdapterID == models.ExecutionAdapterDeepSeekText {
+		ref, _, valid := sessions.ParseProviderCredentialReference(p.CredentialRef)
+		if p.Endpoint != modelprovider.DeepSeekChatURL || p.AllowHTTP || p.AuthScheme != "bearer" || !valid || ref != p.ProviderRef {
+			return modelGatewayProfileConfig{}, "", errors.New("DeepSeek requires its exact endpoint and a pinned registered provider credential")
+		}
+	}
 	switch p.AuthScheme {
 	case "bearer":
-		if !secret.IsReference(p.CredentialRef) {
+		if p.AdapterID != models.ExecutionAdapterDeepSeekText && !secret.IsReference(p.CredentialRef) {
 			return modelGatewayProfileConfig{}, "", errors.New("credential_ref must use a recognized secret-reference scheme for bearer auth")
 		}
 	case "none":

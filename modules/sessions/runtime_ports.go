@@ -7,16 +7,17 @@ package sessions
 import (
 	"context"
 	"errors"
+	"os"
 	"time"
 
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/modules/sessions/confine"
+	"github.com/olivaresai/olivares/modules/sessions/egress"
 )
 
-// This file declares the OPERATE seams for — the governed Claude Code
-// session runtime (FASE V). They live in modules/sessions (module II), which
-// Chose to EXTEND rather than fork into a new module: the observe overlay
+// This file declares the OPERATE seams of the governed session runtime. They live
+// in modules/sessions rather than a module of their own: the observe overlay
 // (sessions.live/timeline) and the operate runtime share the "sessions" plane.
 //
 // Every seam is declared in the module's OWN terms and defaults DENY-CLOSED for
@@ -54,12 +55,12 @@ func ValidTransport(t Transport) bool {
 type Isolation string
 
 const (
-	// IsolationNative runs `claude` as a host process (the v1 default, fully
-	// implemented and tested's choice for self-hosted single-tenant).
+	// IsolationNative runs `claude` as a host process (the default, fully
+	// implemented and tested, for self-hosted single-tenant).
 	IsolationNative Isolation = "native"
 	// IsolationContainer is a FORWARD-COMPAT seam value: a per-session hardened
 	// container via core/runtime/executor with a docker attach/hijack stdio bridge.
-	// It is NOT wired this release — Chose the socket-free combined-image +
+	// It is NOT wired: the release ships the socket-free combined image and the
 	// native procRunner; the container Runner is a documented follow-up. The native
 	// runner REFUSES this value rather than run unisolated (procrunner.go).
 	IsolationContainer Isolation = "container"
@@ -89,7 +90,7 @@ const (
 )
 
 // Permission modes accepted by Claude Code's --permission-mode (verified against
-// the deployed claude binary, 2026-06-16: default|acceptEdits|plan|auto|dontAsk|
+// the deployed claude binary: default|acceptEdits|plan|auto|dontAsk|
 // bypassPermissions). bypassPermissions is accepted but the container/sandbox
 // boundary — not the flag — is the real safety frontier under it.
 var validPermissionModes = map[string]bool{
@@ -136,8 +137,15 @@ type LaunchSpec struct {
 	// Env is the EXPLICIT environment (the governed token by value) the runner sets
 	// on the child; it is authoritative over any host value.
 	Env []EnvVar
+	// SessionMCPURL and SessionMCPTokenEnv describe the server carried by ACP.
+	// The credential remains in Env until sent over the owned child's stdin.
+	SessionMCPURL      string `json:"-"`
+	SessionMCPTokenEnv string `json:"-"`
 	// BoundProvider is the non-secret provider authority resolved for this spawn.
 	BoundProvider BoundProvider
+	// NetworkPolicy is server-resolved launch authority. A non-nil empty policy
+	// refuses launch; it never falls back to the host network.
+	NetworkPolicy *egress.Policy `json:"-"`
 	// EnvAllow is the operator-chosen ALLOWLIST of host environment variable NAMES
 	// to pass through to the child, ON TOP of the runner's minimal safe base. Nothing
 	// else is inherited — the control-plane's OLIVARES_* secrets never reach the child.
@@ -156,6 +164,10 @@ type LaunchSpec struct {
 	// Confinement, when set, is where the child may write and read; the native
 	// runner starts it through package confine. Nil runs the child unconfined.
 	Confinement *confine.Policy
+	// ConfinementFiles are borrowed native launch handles, never a serialized policy.
+	ConfinementFiles []*os.File `json:"-"`
+	// ConfinementRequireTruncateProtection is the saved template launch requirement.
+	ConfinementRequireTruncateProtection bool `json:"-"`
 	// ConfinementRequired refuses the launch when the host cannot confine.
 	ConfinementRequired bool
 }
@@ -172,7 +184,7 @@ func (s *LaunchSpec) AllowRead(path string) {
 // WorkspaceMount is one resolved workspace bind for a containerized launch.
 // HostPath is the canonical host root, ContainerTarget is where it mounts inside the
 // container, and ReadOnly reflects the workspace's mount_mode. The native runner
-// ignores it (it uses LaunchSpec.Dir)'s container runner consumes it.
+// ignores it (it uses LaunchSpec.Dir); a container runner consumes it.
 type WorkspaceMount struct {
 	HostPath        string
 	ContainerTarget string
@@ -196,13 +208,13 @@ const (
 // Process is a launched, live `claude` process. It is the long-running,
 // streamed handle that core/runtime/executor (detached reconcile) and
 // core/runtime/sandboxrt (one-shot capture) deliberately do NOT provide — this
-// is the net-new surface adds, adapted from the connectors/mcp stdio
+// is the surface this runtime adds, adapted from the connectors/mcp stdio
 // transport pattern.
 type Process interface {
 	// Send writes one line to the process's stdin (a stream-json user/control
 	// message). It is a no-op error for a transport with no bridged input.
 	//
-	// ⛔ THE CONTEXT IS THE BOUND, AND AN IMPLEMENTATION OWES IT. A caller that
+	// The context is the bound, and an implementation owes it. A caller that
 	// wraps this in a deadline — every driver dispatch does — is promised a return
 	// by then even if the child has stopped reading its stdin; io.Writer has no
 	// context, so honouring it takes a mechanism the writer actually supports
@@ -377,7 +389,7 @@ type CommunicationSessionCredentialRequest struct {
 }
 
 // CommunicationSessionCredential is the purpose-restricted bearer used only by
-// an admitted session process to reach the K3 communication surface. Token is
+// an admitted session process to reach the communication surface. Token is
 // show-once launch material; ID and NotAfter are non-sensitive recovery data.
 type CommunicationSessionCredential struct {
 	ID          model.ID
@@ -420,7 +432,7 @@ const (
 )
 
 // LaunchIntent is the references-only attribution the launch gate scopes on. It
-// carries NO secrets/payloads (docs/SECURITY-HARDENING.md): only the actor/agent references the
+// carries NO secrets/payloads: only the actor/agent references the
 // budget/HITL/kill-switch decisions key on and the launch parameters the CRITICAL
 // determination reads. The workspace flags are derived by the module from the
 // RESOLVED workspace so the gate need not re-read the workspace table.
@@ -455,7 +467,7 @@ type LaunchIntent struct {
 	// (dlp_mode != off) — i.e. it is marked as holding classifiable/sensitive content.
 	WorkspaceClassified bool
 	// WorkspaceReadWrite is true when the resolved workspace mounts read-write.
-	// Classified && read-write is a CRITICAL launch signal (2026-06-16).
+	// Classified && read-write is a CRITICAL launch signal.
 	WorkspaceReadWrite bool
 	// RecordRequested is the operator's per-launch opt-in to full I/O recording for a
 	// non-CRITICAL session (a CRITICAL session is recorded regardless).
@@ -466,7 +478,7 @@ type LaunchIntent struct {
 	// that opens a human approval can bind it to what was approved: a template is mutable
 	// and is re-read on every launch, so an approval keyed only on transport/mode/model/
 	// workspace could be opened for one tool allowlist and spent on a wider one. References
-	// and a version — never the template body, never instructions (minimal-data, docs/SECURITY-HARDENING.md).
+	// and a version — never the template body, never instructions (minimal data).
 	TemplateRef     string
 	TemplateVersion int64
 	AllowedTools    []string
@@ -477,12 +489,14 @@ type LaunchIntent struct {
 	// variables: variable and secret NAMES, never values. Here for the same reason
 	// as AllowedTools: an approval opened for these secrets cannot be spent on more.
 	SecretEnv []SecretEnvRef `json:"SecretEnv,omitempty"`
+	// GitRead names the repository binding the child gets a read credential for
+	// (session_git_read.go): an approval opened without it cannot be spent with it.
+	GitRead string `json:"GitRead,omitempty"`
 
-	// --- SG-02-b: the admission plane's three references. ---
+	// --- The admission plane's three references. ---
 	//
 	// A launch ACQUIRES the claim on the session it is about to drive; it does not
-	// verify one the caller presents, because until the claim routes exist (SG-02-c)
-	// no caller has a token to present. These three carry the acquisition's outcome to
+	// verify one the caller presents, because a launch carries no claim token. These three carry the acquisition's outcome to
 	// the gate, and the same holder/fence pair is STAMPED on the run row so every later
 	// governed write compares against something durable rather than against a value the
 	// server looked up for itself at the moment of asking.
@@ -502,8 +516,8 @@ type LaunchIntent struct {
 	ClaimSID string
 
 	// ProviderProfileRef / ProviderEnvironmentRef are the profile and execution
-	// environment a PROFILED launch was resolved to (B1), references only — no home
-	// path reaches a gate. Empty for an unprofiled launch. They are here so a gate's
+	// environment every launch was resolved to, references only — no home
+	// path reaches a gate. They are here so a gate's
 	// decision is bound to the terms the launch will actually run under.
 	ProviderProfileRef     string
 	ProviderEnvironmentRef string
@@ -519,7 +533,7 @@ type LaunchDecision struct {
 	// child ON TOP of the module's own env (e.g. the OLIVARES_HOOK_PEP_* the managed
 	// PreToolUse hook reads to reach the governed PEP). It is authoritative over any
 	// host value and is held in memory for the launch only — a per-session PEP bearer
-	// is used and discarded, never persisted (docs/SECURITY-HARDENING.md). Empty for the no-op default.
+	// is used and discarded, never persisted. Empty for the no-op default.
 	InjectEnv []EnvVar
 	// ContextPolicySummary is a short, non-sensitive description of the effective
 	// launch context policy. The runtime records it in the lifecycle ledger's launch
@@ -531,7 +545,7 @@ type LaunchDecision struct {
 	// DeniedStatus is the HTTP status the API should return for a denial (Allowed
 	// false). 0 ⇒ 403 Forbidden (the deny-closed default). The budget gate sets 402
 	// (PaymentRequired, hard cap) or 429 (TooManyRequests, throttle) so a session at
-	// its budget cap fails the launch with the right code (2026-06-16).
+	// its budget cap fails the launch with the right code.
 	DeniedStatus int
 	// Critical marks a privileged launch — bypassPermissions/dontAsk, or a read-write
 	// mount of a classified workspace — the launch that drove the CRITICAL HITL + the
@@ -545,8 +559,8 @@ type LaunchDecision struct {
 }
 
 // LaunchGate authorizes a launch/resume and returns the governance instructions
-// (PEP env to inject, whether to record I/O). Wires budget + the
-// CRITICAL-launch HITL + the PEP provisioning behind this single seam; the
+// (PEP env to inject, whether to record I/O). The budget, the CRITICAL-launch HITL
+// and the PEP provisioning are wired behind this single seam; the
 // default allows with no instructions so the runtime works standalone.
 type LaunchApprovalReader interface {
 	ApprovalStatus(context.Context, model.TenantID, LaunchIntent, string) (string, error)
@@ -645,7 +659,7 @@ type SessionCostSample struct {
 	// CostFromProviderClient records that the money above came from the official
 	// CLI's OWN result frame rather than from a token count this plane priced.
 	//
-	// ⛔ IT IS NOT "BILLED". The estate's cost vocabulary reserves `billed` for a
+	// It is not "billed". The estate's cost vocabulary reserves `billed` for a
 	// figure the provider's own COST API reported and a finance team can reconcile
 	// against an invoice; an official CLI's `total_cost_usd` is the client's own
 	// arithmetic over its own usage. The consumer therefore labels these samples
@@ -656,12 +670,21 @@ type SessionCostSample struct {
 	OccurredAt time.Time
 }
 
+// TurnTokens is one turn's metered tokens, split the way list prices are.
+type TurnTokens struct {
+	UncachedInput, CacheRead, CacheWrite, Output int64
+}
+
+// ListPricer is the cost of t at provider's declared list price for modelRef,
+// in micro-USD; ok is false when it has no price for them. The composition root
+// supplies the release-embedded genai-prices table.
+type ListPricer func(provider, modelRef string, t TurnTokens) (costMicroUSD int64, ok bool)
+
 // SessionCostSink posts a governed turn's cost to the tenant's spend ledger.
 //
-// ⛔ UNWIRED IS A NAMED GAP, NOT A DEFAULT. There is no no-op implementation
-// here: the module warns once per run that the session's cost reaches no ledger,
-// because that is exactly the state the golden path measured (a real turn, a real
-// price on the wire, `samples 0` on the ledger) and it must not be able to look
+// Unwired is a named gap, not a default. There is no no-op implementation here:
+// the module warns once per run that the session's cost reaches no ledger (a real
+// turn with a real price and no sample on the ledger), so that state can never look
 // like success. The session's own counters are recorded either way.
 type SessionCostSink interface {
 	PublishSessionCost(ctx context.Context, tenant model.TenantID, sample SessionCostSample) error
@@ -670,10 +693,11 @@ type SessionCostSink interface {
 // Recorder receives the live I/O of an operated session for governed recording.
 // Record is offered one bridged frame; Finalize is called once when the session's
 // I/O ends (the process exited and the output drained) so the recorder can flush and
-// seal its evidence chain. Both are best-effort from the bridge's perspective — a
-// recorder failure must not corrupt the live stream — and the recorder emits its own
-// loud gap evidence; the deny-closed posture for privileged sessions is enforced at
-// the LaunchGate (a CRITICAL session that cannot be recorded is not launched).
+// seal its evidence chain. A recording failure stops a recorded run and a seal
+// failure makes its terminal state failed, with a safe I/O evidence reason. The
+// bridge keeps draining output during teardown. The recorder retains a failed
+// seal for retry. The LaunchGate flags every CRITICAL session for recording, and
+// the engine composition wires its recorder together with that gate.
 type Recorder interface {
 	Record(ctx context.Context, tenant model.TenantID, runRef string, frame RecordedFrame) error
 	Finalize(ctx context.Context, tenant model.TenantID, runRef string) error

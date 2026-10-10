@@ -3,6 +3,12 @@ title: "配置参考"
 description: "Olivares AI control plane 经过验证的配置接口面：serve 标志、环境变量、存储选择，以及开箱即来的安全默认值。"
 ---
 
+:::note[Business]
+审计导出（`GET /v1/audit/export`、`olivares audit export`）、目录归档和外部归档验证需要 Business。Community 保留签名账本、`olivares audit verify` 和 `olivares dr backup`；导出返回 HTTP 501 或退出码 9。审计转发和携带审计段的 DDIL 传输也需要 Business。
+:::
+
+从 0.1 起，由 KMS 密封的签名密钥和配置文件（CMEK）需要 Business 二进制文件。BYOK、主机外的检查点签名（HYOK）和 `keys status` 仍属于 Community。Community 会在打开存储或创建密钥之前拒绝已配置 CMEK 的安装。请使用 Business 和客户的 KMS 执行 `dr backup` 和 `keys unseal`；恢复不需要有效许可证。
+
 本页记录 control plane 引擎 —— 那个名为 `olivares` 的单一 Go 二进制文件 —— 的配置接口面。它涵盖 `serve` 子命令所接受的标志、引擎在启动时读取的环境变量、存储与策略决策点（policy decision point）如何被选定，以及在完全没有任何配置时即生效的安全默认值。
 
 此处列出的一切都取自引擎自身的命令定义与组合根（composition root）。凡是无法在源代码中确认的设置，均不列出。关于这些默认值背后的概念性安全姿态，参见 [安全模型](/zh/explanation/security/security-model/)；关于可运行的端到端路径，参见 [自托管](/zh/how-to/self-hosting/)。
@@ -10,6 +16,8 @@ description: "Olivares AI control plane 经过验证的配置接口面：serve �
 :::note[配置哲学]
 引擎由标志和环境变量配置，而非由一个庞杂的配置文件。它读取的每个变量都列在下文，并从源码本身生成。配置真实数据源的密钥保留在由环境变量引用的、运营方持有的文件中 —— 绝不进入存储。默认值的选择以失败时关闭（fail closed）为准：TLS 开启、不存在默认凭据、设置令牌单次使用。绑定是双栈通配符（`:8443`、`:8444`）——这是一台服务器，而绑定从来不是让它安全的东西。
 :::
+
+**NATS 事件传递：** Core NATS 桥接和 NATS JetStream 需要 Business Identity & Scale。Community 在进程内传递事件。
 
 ## `serve` 子命令
 
@@ -59,14 +67,14 @@ TLS 默认开启。在未提供 `--tls-cert`/`--tls-key` 时，引擎会在任�
 
 `OLIVARES_SOURCES_CONFIG` 是非演示信号源与身份名册提供方据以解析的唯一输入。它是运营方持有密钥的配置，并被刻意保留在存储之外。引擎在启动期间读取它，并在运行时启动**之前**注册每一个源。
 
-其处理方式是诚实的，而非快速失败（fail-fast）：
+启动时会区分未设置的变量和已指定的配置文件：
 
 - 一个**缺失的**变量产生一份空配置，引擎会告警：没有配置任何真实数据源。
-- 一个**不可读或 JSON 无效**的文件会告警并产生一份空配置 —— 它绝不中止启动。
+- 如果指定的文件**缺失、不可读或不是有效 JSON**，`olivares serve` 会**以退出码 `1` 退出**。错误以 `load sources operator config: OLIVARES_SOURCES_CONFIG` 开头，并包含 `refusing to start instead of silently omitting operator configuration`。
 - 一个已配置但**为空**的源列表会告警：没有连接器将进行摄取，因此该 estate 在没有任何实时流量的情况下运行，而不是悄然显得健康。
 - 一个空的**身份**列表会告警：名册保持为空，名册同步是一次空操作（no-op）。
 
-这是有意为之：一个未配置的源会浮现一条告警，而不是使 control plane 崩溃或假装在工作。要真正填充访问图谱（access map），请至少配置一个源 —— 参见 [连接一个数据源](/zh/how-to/connect-a-source/)，以及对于通过 OpenTelemetry 与 MCP 的协作式 Claude Code 路径，参见 [连接 Claude Code](/zh/how-to/connect-claude-code/)。
+如果已指定文件，请修复路径、读取权限或 JSON，然后重启。引擎拒绝静默省略运维方配置。 要填充访问图谱（access map），请至少配置一个源 —— 参见 [连接一个数据源](/zh/how-to/connect-a-source/)，以及对于通过 OpenTelemetry 与 MCP 的协作式 Claude Code 路径，参见 [连接 Claude Code](/zh/how-to/connect-claude-code/)。
 
 ### 授权决策点（PDP）
 
@@ -96,7 +104,7 @@ TLS 默认开启。在未提供 `--tls-cert`/`--tls-key` 时，引擎会在任�
 
 ### Complete variable reference
 
-The table below is generated from the product's own sources: 299 variables and 17 runtime-constructed families, covering the engine, the CLI, the Kubernetes operator, the Terraform provider and the connectors. It is regenerated and checked against those sources on every change, so it does not fall behind the binary.
+The table below is generated from the product's own sources: 296 variables and 18 runtime-constructed families, covering the engine, the CLI and the connectors. It is regenerated and checked against those sources on every change, so it does not fall behind the binary.
 
 **Required** means the feature that reads the variable does not start without it; most variables are optional and the engine runs with none of them set.
 
@@ -107,14 +115,13 @@ The table below is generated from the product's own sources: 299 variables and 1
 | `OLIVARES_AGENTCORE_EXPORT_CONFIG` | No | — | Path to the JSON configuration of the AgentCore usage export. |
 | `OLIVARES_AGENT_GATEWAY_CONFIG` | No | — | Path to the JSON configuration of the MCP agent gateway. |
 | `OLIVARES_ALLOW_CLEARTEXT` | No | — | Dangerous opt-in: lets a request carrying a credential reach a NON-loopback host over plain HTTP, for surfaces with no --allow-cleartext flag of their own. |
-| `OLIVARES_API_TOKEN` | No | — | API token the Terraform provider authenticates with, when the provider block does not set one. |
 | `OLIVARES_APPROVAL_BRIDGE_CONFIG` | No | — | Path to the JSON configuration of the bridge that routes approvals to an external system. |
-| `OLIVARES_AUDIT_ARCHIVE_CONFIG` | No | — | Path to the JSON settings for the `s3archive` sink. Secret-bearing, so it is a file rather than a value. |
+| `OLIVARES_AUDIT_ARCHIVE_CONFIG` | No | — | Path to the JSON settings for the Business Regulated Operations `s3archive` sink. Secret-bearing, so it is a file rather than a value. |
 | `OLIVARES_AUDIT_ARCHIVE_DIR` | No | — | Root directory for the `dir` archive sink. |
 | `OLIVARES_AUDIT_ARCHIVE_INTERVAL` | No | `24h` | How often sealed audit segments are archived, as a Go duration. |
 | `OLIVARES_AUDIT_ARCHIVE_RETAIN_DAYS` | No | `2555` | How long archived audit segments are retained, in days. |
 | `OLIVARES_AUDIT_ARCHIVE_SEGMENT_EVENTS` | No | — | How many events a sealed archive segment holds before the next one is started. |
-| `OLIVARES_AUDIT_ARCHIVE_SINK` | No | — | Where sealed audit segments are archived: unset for off, `dir` for a local directory, `s3archive` for object storage. |
+| `OLIVARES_AUDIT_ARCHIVE_SINK` | No | — | Where sealed audit segments are archived: unset for off, `dir` for a local directory, `s3archive` for object storage in Business Regulated Operations. |
 | `OLIVARES_AUDIT_LEGALHOLD_INTERVAL` | No | — | How often the long-horizon legal-hold sweep runs, as a Go duration. |
 | `OLIVARES_AUDIT_LEGALHOLD_RECONCILE` | No | — | 布尔开关（不是文件路径），用于长周期法务保留（legal hold）协调器：该协调器会对处于有效法务保留状态的租户，在其已归档的审计分段上施加 Object Lock 法务保留。仅由使用 `enterprise` 和 `addon_reg` 构建标签编译的构建在引擎启动时读取；修改在重启后生效。只有 `strconv.ParseBool` 接受为 true 的值（例如 `true` 或 `1`）才会启用它；未设置、false 或无法解析的值会使其保持关闭，且不会报错。此外，除非审计归档配置在能够施加 Object Lock 法务保留的 sink 上，否则它仍保持关闭。 |
 | `OLIVARES_AUDIT_META_BLINDING` | No | — | Whether audit metadata commitments are written blinded, and how strictly that is required. |
@@ -127,7 +134,7 @@ The table below is generated from the product's own sources: 299 variables and 1
 | `OLIVARES_AUTHZEN_DISABLED` | No | — | Set to a true value to turn the AuthZEN decision endpoint off. |
 | `OLIVARES_AUTHZEN_EXPORT_DISABLED` | No | — | Set to a true value to turn the AuthZEN export endpoint off. |
 | `OLIVARES_AUTHZEN_SEARCH_DISABLED` | No | — | Set to a true value to turn the AuthZEN search endpoints off while leaving decisions on. |
-| `OLIVARES_BASE_URL` | No | — | Public base URL of this control plane, used where an absolute link back to it has to be produced. |
+| `OLIVARES_BASE_URL` | No | — | Public base URL of this engine, used where an absolute link back to it has to be produced. |
 | `OLIVARES_BUS_CONFIG` | No | — | Path to the JSON configuration of the message bus the engine publishes on. |
 | `OLIVARES_CAEP_TRANSMITTER_CONFIG` | No | — | Path to the JSON configuration of the CAEP transmitter that pushes shared-signal events. |
 | `OLIVARES_CATALOG_SIGNING_KEY` | No | — | Catalog signing key, inline. Prefer the file form. |
@@ -202,8 +209,6 @@ The table below is generated from the product's own sources: 299 variables and 1
 | `OLIVARES_EMBEDDINGS_VOYAGE_GEO` | No | — | Region or data-residency hint sent to the voyage provider. |
 | `OLIVARES_EMBEDDINGS_VOYAGE_KEY` | No | — | Api key for the voyage embeddings provider. |
 | `OLIVARES_EMBEDDINGS_VOYAGE_MODEL` | No | — | Embedding model requested from the voyage provider. |
-| `OLIVARES_ENDPOINT` | No | — | Control-plane base URL the Terraform provider talks to, when the provider block does not set one. |
-| `OLIVARES_ENGINE` | No | — | Store engine the Kubernetes operator selects for the engine it manages: `sqlite` or `postgres`. |
 | `OLIVARES_EVALS_MONITOR_WINDOW` | No | — | Time window the evaluation monitor scores, as a Go duration. |
 | `OLIVARES_EVENTING_ALLOW_LOOPBACK` | No | — | Set to a true value to allow loopback destinations. Single-box development only, because the default refusal is what blocks server-side request forgery. |
 | `OLIVARES_EVENTING_DISPATCH_INTERVAL` | No | `15s` | How often queued events are dispatched, as a Go duration. `0` disables the pump. |
@@ -233,7 +238,7 @@ The table below is generated from the product's own sources: 299 variables and 1
 | `OLIVARES_HOOK_PEP_TENANT` | No | — | Tenant the Claude Code hook client reports. |
 | `OLIVARES_HOOK_PEP_TOKEN` | No | — | Token the Claude Code hook client presents to the enforcement point. |
 | `OLIVARES_HOOK_PEP_URL` | No | — | Base URL of the enforcement point the Claude Code hook client calls. |
-| `OLIVARES_INCIDENTLOOP_CONFIG` | No | — | Path to the JSON configuration of the incident close-the-loop subscriber. Read by builds compiled with the `enterprise` tag. |
+| `OLIVARES_INCIDENTLOOP_CONFIG` | No | — | Path to the JSON configuration of the incident close-the-loop subscriber. Read by the Business edition. |
 | `OLIVARES_INFERENCE_PROXY_CONFIG` | No | — | Path to the JSON configuration of the governed inference proxy. |
 | `OLIVARES_INGEST_TOKEN` | No | — | Bearer token the collector ingest endpoint requires from telemetry senders. |
 | `OLIVARES_INSECURE` | No | — | Set to `1` to let the CLI talk to a plaintext or untrusted-TLS endpoint. Local development only. |
@@ -274,11 +279,11 @@ The table below is generated from the product's own sources: 299 variables and 1
 | `OLIVARES_MODEL_GATEWAY_CHAT_MODE` | 否 | `disabled` | 同步受治理 Chat 调度的启用模式。未设置或设为 `disabled` 时保持禁用；`development_precheck` 会显式启用现有的非原子、fail-open 路由预检，它并非严格的金额预算。任何其他值都会阻止启动。 |
 | `OLIVARES_MODEL_GATEWAY_PROFILES_CONFIG` | 否 | — | 包含不可变模型网关执行配置文件的本地 JSON 文件路径。未设置时不加载任何配置文件；文件不可读或无效时会阻止启动。 |
 | `OLIVARES_NHI_ACTUATORS_CONFIG` | No | — | Path to the JSON configuration of the actuators that act on non-human identities. |
-| `OLIVARES_NIS2INCIDENT_CONFIG` | No | — | Path to the JSON configuration of NIS2 incident reporting. Read by builds compiled with the `enterprise` tag. |
+| `OLIVARES_NIS2INCIDENT_CONFIG` | No | — | Path to the JSON configuration of NIS2 incident reporting. Read by the Business edition. |
 | `OLIVARES_NOTIFY_CONFIG` | No | — | Path to the JSON list of notification destinations. Secret-bearing, so it stays out of the store. |
 | `OLIVARES_NOTIFY_DISPATCH_INTERVAL` | No | — | How often queued notifications are dispatched, as a Go duration. `0` disables the pump. |
-| `OLIVARES_OIDC_CLIENT_ID` | Yes | — | OIDC client id for this control plane. Required when the protocol is `oidc`. |
-| `OLIVARES_OIDC_CLIENT_SECRET` | Yes | — | OIDC client secret for this control plane. Required when the protocol is `oidc`. |
+| `OLIVARES_OIDC_CLIENT_ID` | Yes | — | OIDC client id for this engine. Required when the protocol is `oidc`. |
+| `OLIVARES_OIDC_CLIENT_SECRET` | Yes | — | OIDC client secret for this engine. Required when the protocol is `oidc`. |
 | `OLIVARES_OIDC_GROUPS_CLAIM` | No | — | ID-token or UserInfo claim carrying group membership. Unset leaves group mapping off. |
 | `OLIVARES_OIDC_ISSUER` | Yes | — | OIDC issuer URL. Required when the protocol is `oidc`. |
 | `OLIVARES_ONBOARDING_CONFIG` | No | — | 接入（onboarding）就绪评估器的 JSON 配置路径。由使用 `enterprise` 构建标签编译的构建在每次运行 `olivares enterprise readiness` 时读取，而不是在引擎启动时读取。`{}` 选择标准配置方案。未设置，或文件无法读取或解析时，该命令会报告接入就绪未配置。 |
@@ -302,19 +307,18 @@ The table below is generated from the product's own sources: 299 variables and 1
 | `OLIVARES_PDP_OPA_PATH` | No | — | Decision path queried under the Open Policy Agent endpoint. |
 | `OLIVARES_PDP_OPA_TOKEN` | No | — | Bearer token for the Open Policy Agent endpoint. |
 | `OLIVARES_PDP_OPA_URL` | No | — | Base URL of the Open Policy Agent endpoint, for the `opa` decision point. |
-| `OLIVARES_PIV_CONFIG` | No | — | Path to the JSON configuration for smart-card privileged login. |
+| `OLIVARES_PIV_CONFIG` | No | — | Path to the JSON configuration for Business Identity & Scale smart-card privileged login. Community refuses serving with this setting; data backup remains available. |
 | `OLIVARES_PLUGIN` | No | — | Handshake cookie an out-of-process connector plugin must present. Set by the engine when it launches the plugin, not by the operator. |
 | `OLIVARES_POLICY_MAX_STALENESS` | No | — | How stale a cached policy decision may be before it is refused, as a Go duration. |
 | `OLIVARES_POLICY_SIGNING_KEY` | No | — | Policy bundle signing key, inline. Prefer the file form. |
 | `OLIVARES_POLICY_SIGNING_KEY_FILE` | No | — | Path to the policy bundle signing key. |
 | `OLIVARES_POLICY_SIGNING_KEY_WRAPPED_FILE` | No | — | Path to the policy signing key wrapped by a key management service. |
-| `OLIVARES_PORTAL_TLS_DIRECTORY` | No | — | 运维人员存放 Appliance Console TLS 证书和密钥的目录；服务单元指定该目录，并将这对文件作为凭据传给控制台。 |
 | `OLIVARES_PQC_POSTURE_CONFIG` | No | — | 后量子态势评估器的 JSON 配置路径。由使用 `enterprise` 构建标签编译的构建在每次运行 `olivares enterprise pqc-posture` 时读取，而不是在引擎启动时读取。`{}` 选择 CNSA 2.0，目标年份为 2033。未设置，或文件无法读取或解析时，该命令会报告 PQC 态势未配置。 |
 | `OLIVARES_PUBLIC_URL` | No | — | The address a browser reaches this console at, as scheme://host[:port]. It is what the startup panel prints and what the WebAuthn relying party is derived from, and it is independent of the listen address. The --public-url flag wins over this variable, and passing that flag empty clears it. Read at start-up only: a change takes a restart. Refused values are reported by field and failure class and are never echoed, and support bundles keep this value redacted. |
 | `OLIVARES_RATELIMIT_CONFIG` | No | — | Path to the JSON rate-limit policy the engine applies to its own endpoints. |
 | `OLIVARES_RATELIMIT_STORE` | No | — | Where rate-limit counters live, which decides whether limits are per replica or shared. |
 | `OLIVARES_RENDER_INSPECTOR_CONFIG` | No | — | 已渲染 MCP App 内容检查器的 JSON 策略文件路径。仅由使用 `enterprise` 和 `addon_airs` 构建标签编译的构建读取。未设置时该检查保持关闭；文件无法读取或解析时，检查器会拒绝所有已渲染内容，直到修复该文件并重启引擎为止。 |
-| `OLIVARES_REPORTING_CONFIG` | No | — | Path to the JSON configuration of the reporting add-on. Read by builds compiled with the `enterprise` tag. |
+| `OLIVARES_REPORTING_CONFIG` | No | — | Path to the JSON configuration of the reporting add-on. Read by the Business edition. |
 | `OLIVARES_REPORTING_SCHEDULE_INTERVAL` | No | — | How often scheduled reports are generated, as a Go duration. |
 | `OLIVARES_REPORT_CACHE_DIR` | No | — | Directory where generated report artifacts are cached. |
 | `OLIVARES_RETENTION_GOVERNOR_CONFIG` | No | — | 监管保留期下限治理器的 JSON 配置路径。仅由使用 `enterprise` 和 `addon_reg` 构建标签编译的构建在引擎启动时读取。未设置时不强制任何保留期下限；文件无法读取或解析时，会将每个保留类别的下限设为 100 年，直到修复该文件并重启引擎为止。 |
@@ -326,7 +330,7 @@ The table below is generated from the product's own sources: 299 variables and 1
 | `OLIVARES_SAML_IDP_METADATA_URL` | No | — | Identity-provider metadata URL, from which the SAML endpoints and certificate are read. |
 | `OLIVARES_SAML_IDP_SSO_URL` | No | — | Identity-provider single sign-on URL, for the path where metadata is not fetched. |
 | `OLIVARES_SAML_SP_CERT_PEM` | No | — | Service-provider encryption certificate in PEM, published as the encryption key descriptor. |
-| `OLIVARES_SAML_SP_ENTITY_ID` | Yes | — | Entity id this control plane presents as the SAML service provider. Required when the protocol is `saml`. |
+| `OLIVARES_SAML_SP_ENTITY_ID` | Yes | — | Entity id this engine presents as the SAML service provider. Required when the protocol is `saml`. |
 | `OLIVARES_SAML_SP_KEY_PEM` | No | — | Service-provider encryption private key in PEM, which decrypts encrypted assertions. |
 | `OLIVARES_SAML_SP_SIGN_CERT_PEM` | No | — | Service-provider signing certificate in PEM, published as the signing key descriptor. |
 | `OLIVARES_SAML_SP_SIGN_KEY_PEM` | No | — | Service-provider signing private key in PEM, which signs authentication requests. |
@@ -350,7 +354,7 @@ The table below is generated from the product's own sources: 299 variables and 1
 | `OLIVARES_SECRETREF_VAULT_TOKEN` | No | — | Token used against HashiCorp Vault. |
 | `OLIVARES_SECRET_STORE_KEY` | No | — | Key that encrypts operator secrets held in the store. |
 | `OLIVARES_SERVERTOOL_EGRESS_CONFIG` | No | — | 内联代理中提供商服务器工具（网页搜索、网页抓取、代码执行）的出站（egress）门控的 JSON 授权（grants）文件路径。仅由使用 `enterprise` 和 `addon_airs` 构建标签编译的构建读取。未设置时这些工具保持仅观察模式；文件无法读取或解析时，会拒绝每个已识别的出站服务器工具，直到修复该文件并重启引擎为止。 |
-| `OLIVARES_SERVER_URL` | No | — | Base URL of the control plane the CLI talks to, when `--server` is not given. |
+| `OLIVARES_SERVER_URL` | No | — | Base URL of the engine the CLI talks to, when `--server` is not given. |
 | `OLIVARES_SESSIONS_AGENT_LINK_LISTEN` | No | — | 代理连接的监听地址，格式为 `host:port`：基于此源码树构建的版本为其节点代理提供的双向 TLS 端点。在启动时读取；默认值为空，表示不启用监听器。Community 构建不会读取此变量。 |
 | `OLIVARES_SESSIONS_MANAGED_STOP_ADMISSION_TIMEOUT` | No | `10s` | 接纳受管理的 Stop 请求所允许的最长时间，使用带单位的正 Go duration 表示。启动时读取；无效值或非正值会阻止启动。不限制进程终止过程的耗时。 |
 | `OLIVARES_SESSION_BUDGET_AVAILABILITY` | No | — | Whether session budget enforcement is required, and what happens when the budget service cannot answer. |
@@ -360,13 +364,16 @@ The table below is generated from the product's own sources: 299 variables and 1
 | `OLIVARES_SESSION_PEP_URL` | No | — | Base URL of the policy enforcement point a governed agent session calls before acting. |
 | `OLIVARES_SESSION_RUNTIME_BASE_URL` | No | — | Base URL the launched session runtime calls back to. |
 | `OLIVARES_SESSION_RUNTIME_CLAUDE_BIN` | No | `claude` | Executable the session runtime launches. |
-| `OLIVARES_SESSION_RUNTIME_CODEX_BIN` | No | — | Pinned official Codex executable the session runtime may operate. Setting it REGISTERS that driver on this node; unset, codex profiles stay observable and not launchable. |
-| `OLIVARES_SESSION_RUNTIME_GROK_BIN` | No | — | Pinned official Grok executable the session runtime may operate. Setting it REGISTERS that driver on this node; unset, grok profiles stay observable and not launchable. |
-| `OLIVARES_SESSION_RUNTIME_OPENCODE_BIN` | No | — | 会话运行时可以使用的、明确指定的官方 OpenCode 可执行文件。设置此变量后，会在此节点上注册 OpenCode ACP 驱动程序；未设置时，OpenCode 配置仍可被观测，但无法启动。其他提供商的驱动程序不受影响。 |
+| `OLIVARES_SESSION_RUNTIME_CODEX_BIN` | No | — | Explicit override selecting the official Codex executable instead of the newest verified managed install or `codex` on the engine's `PATH`. The driver is registered at boot even when unset; launch is refused if no executable resolves. |
+| `OLIVARES_SESSION_RUNTIME_GEMINI_BIN` | No | — | Pinned official Gemini CLI executable the session runtime may operate; unset, the Gemini CLI installed on this node is found when a session launches. |
+| `OLIVARES_SESSION_RUNTIME_GROK_BIN` | No | — | Explicit override selecting the official Grok executable instead of the newest verified managed install or `grok` on the engine's `PATH`. The driver is registered at boot even when unset; launch is refused if no executable resolves. |
+| `OLIVARES_SESSION_RUNTIME_OPENCODE_BIN` | No | — | 显式选择官方 OpenCode 可执行文件，覆盖最新的已验证托管安装或引擎 `PATH` 中的 `opencode`。即使未设置此变量，驱动程序也会在引擎启动时注册；找不到可执行文件时，引擎会拒绝启动会话。 |
 | `OLIVARES_SESSION_RUNTIME_TOKEN_FILE` | No | — | Path to the file holding the session runtime's credential, refreshed by rotation. |
 | `OLIVARES_SESSION_RUNTIME_TOKEN_TTL` | No | `15m` | Lifetime of a minted session runtime credential, as a Go duration. |
 | `OLIVARES_SESSION_RUNTIME_WIF` | No | — | Whether the session runtime takes its credential from workload identity federation instead of a token file. |
 | `OLIVARES_SESSION_RUNTIME_WIF_RULE` | No | — | Which federation rule the session runtime exchanges its workload identity under. |
+| `OLIVARES_SESSION_WORKTREE_BRANCH_PREFIX` | No | `olivares/` | Prefix of the branch a session gets when it is started with a new git worktree; git checks the resulting branch name. |
+| `OLIVARES_SESSION_WORKTREE_DIR` | No | — | Directory that holds the git worktrees of sessions started with a new worktree; the default is session-worktrees in the data directory. |
 | `OLIVARES_SIEM_FORWARD_INTERVAL` | No | — | How often signed ledger records are forwarded to the configured SIEM, as a Go duration. |
 | `OLIVARES_SOURCES_CONFIG` | No | — | Path to the JSON file that wires real observation sources and identity roster providers before the engine starts. |
 | `OLIVARES_SSO_PROTOCOL` | No | — | Single sign-on protocol to wire: `oidc` or `saml`. Unset means no federation, and the endpoints report it rather than half-wiring one. |
@@ -374,9 +381,9 @@ The table below is generated from the product's own sources: 299 variables and 1
 | `OLIVARES_TARGET_BINDING_KEY` | No | — | Key that binds an orchestration target to this deployment, inline. Prefer the file form. |
 | `OLIVARES_TARGET_BINDING_KEY_FILE` | No | — | Path to the orchestration target binding key. |
 | `OLIVARES_TENANT` | No | — | Default tenant for CLI commands, when `--tenant` is not given. |
-| `OLIVARES_THREATINTEL_CONFIG` | No | — | Path to the JSON configuration of threat-intelligence ingest. Read by builds compiled with the `enterprise` tag. |
+| `OLIVARES_THREATINTEL_CONFIG` | No | — | Path to the JSON configuration of threat-intelligence ingest. Read by the Business edition. |
 | `OLIVARES_THREATINTEL_SIGNING_KEY` | No | — | Signing key for threat-intelligence bundles the engine publishes. |
-| `OLIVARES_TOKEN` | No | — | API token the CLI authenticates with, when `--token` is not given. |
+| `OLIVARES_TOKEN` | No | — | API token the CLI authenticates with, when no token flag such as `--token-file` is given. |
 | `OLIVARES_TOOL_PIN_CONFIG` | No | — | MCP 工具固定（tool-pin）存储的可选 JSON 配置（`require_pin_approval`）路径；无论是否设置此变量，使用 `enterprise` 构建标签编译的构建都会运行该存储。在引擎启动时读取。未设置时保持首次使用即信任（trust on first use）；文件无法读取或解析时，未知工具需要运营方批准，直到修复该文件并重启引擎为止。 |
 | `OLIVARES_TOTP_SEED_KEY` | No | — | 以 Base64 编码的 32 字节密钥，用于封存静态存储的 TOTP 种子。HA 节点须设置相同的密钥；未设置时，引擎会在其数据目录中创建私有的 totp-seed.key。 |
 | `OLIVARES_UPDATE_CHANNEL` | No | — | Release channel the update check asks for, such as `stable`. |
@@ -398,8 +405,6 @@ The table below is generated from the product's own sources: 299 variables and 1
 | `OLIVARES_WIF_SPIFFE_SOCKET` | No | — | Path to the SPIFFE workload API socket the engine fetches its identity from. |
 | `OLIVARES_WIF_TRUST_DOMAIN` | No | — | SPIFFE trust domain accepted for workload identity. |
 | `OLIVARES_WORK_OUTBOX_INTERVAL` | No | — | How often the work-kernel outbox is drained, as a Go duration. `0` disables the pump. |
-| `OLIVARES_WORK_RUN_REF` | No | — | Run reference the engine passes to a launched work session. Set by the engine per run, not by the operator. |
-| `OLIVARES_WORK_SESSION_ID` | No | — | Session reference the engine passes to a launched work session. Set by the engine per run, not by the operator. |
 | `OLIVARES_WORK_TOKEN` | No | — | 会话自身的工作凭据，作用域受限，由会话启动器注入并由工作命令读取。操作人员不得提供。其值始终被遮蔽。 |
 
 ### Variable families
@@ -421,6 +426,7 @@ These prefixes name families whose member variables are built at runtime — the
 | `OLIVARES_OIDC_` | No | — | Family prefix for the OIDC federation settings listed above. |
 | `OLIVARES_OTEL_` | No | — | Family prefix for the trace export settings listed above. |
 | `OLIVARES_SAML_` | No | — | Family prefix for the SAML federation settings listed above. |
+| `OLIVARES_SECRETREF_` | No | — | Family of settings for external secret-reference backends, including token-file references. |
 | `OLIVARES_SESSION_RUNTIME_` | No | — | Family prefix for the session runtime settings listed above. |
 | `OLIVARES_VECTOR_` | No | — | Family prefix for the vector index settings listed above. |
 | `OLIVARES_WIF_` | No | — | Family prefix for the workload identity federation settings listed above. |

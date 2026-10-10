@@ -5,8 +5,10 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"sort"
 	"strings"
@@ -27,12 +29,12 @@ func newConfigCmd() *cobra.Command {
 			"olivares.env (or a Kubernetes snippet) from flags, check that the OLIVARES_*\n" +
 			"keys already in the environment are ones the engine accepts, and print what\n" +
 			"the engine would actually read, with every secret redacted.\n\n" +
-			"Use `olivares setup` instead when a guided, interactive run is wanted.",
+			"Use `olivares setup` instead when a guided, interactive run is wanted.\n\n" + configEnvironmentHelp,
 		Example: "  olivares config generate --profile eval\n" +
 			"  olivares config validate\n" +
 			"  olivares config effective",
 	}
-	root.AddCommand(configGenerateCmd(), configEffectiveCmd(), configValidateCmd())
+	root.AddCommand(configGenerateCmd(), configEffectiveCmd(), configValidateCmd(), newTracingCmd())
 	return root
 }
 
@@ -203,7 +205,7 @@ func configGenerateCmd() *cobra.Command {
 				_, err := fmt.Fprint(cmd.OutOrStdout(), content)
 				return err
 			}
-			if err := writeFileGuarded(out, []byte(content), 0o640, force); err != nil {
+			if err := writeFileGuarded(out, []byte(content), 0o640, envFileForce(out, force)); err != nil {
 				return err
 			}
 			fmt.Fprintf(cmd.OutOrStdout(), "wrote %s (profile %s). Restart the engine to apply: systemctl restart olivares\n", out, plan.Profile)
@@ -254,21 +256,84 @@ func splitCSV(in []string) []string {
 	return out
 }
 
+// envFileHoldsConfig reports whether the env file at path carries operator
+// configuration: any line that is not blank, a comment, or an empty KEY=. The file
+// the deb and rpm install is exactly the empty-keys-and-comments example, so a file
+// that holds nothing is one whose replacement loses nothing. Anything but a small
+// regular file (a symlink, device, FIFO, directory) or a file that cannot be read
+// counts as configured: we never replace what we cannot look at.
+func envFileHoldsConfig(path string) bool {
+	const maxEnvFileBytes = 64 << 10
+	if fi, err := os.Lstat(path); err != nil || !fi.Mode().IsRegular() || fi.Size() > maxEnvFileBytes {
+		return true
+	}
+	body, err := os.ReadFile(path) //nolint:gosec // operator-owned config path
+	if err != nil {
+		return true
+	}
+	// A bare \r separates lines for systemd, so it separates them here too.
+	for _, line := range strings.FieldsFunc(string(body), func(r rune) bool { return r == '\n' || r == '\r' }) {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		key, value, ok := strings.Cut(line, "=")
+		if !ok || strings.TrimSpace(key) == "" {
+			return true
+		}
+		if v := strings.TrimSpace(value); v != "" && v != `""` && v != "''" {
+			return true
+		}
+	}
+	return false
+}
+
+// refuseExisting is the one refusal message for a target that exists and may not be replaced.
+// A target that cannot be inspected is refused too, never treated as absent.
+func refuseExisting(path string, force bool) error {
+	if force {
+		return nil
+	}
+	_, err := os.Stat(path)
+	switch {
+	case err == nil:
+		return fmt.Errorf("%s already exists — pass --force to overwrite (the previous file is backed up to %s.bak)", path, path)
+	case !errors.Is(err, fs.ErrNotExist):
+		return fmt.Errorf("inspect %s: %w", path, err)
+	}
+	return nil
+}
+
+// envFileForce is the force flag the env file itself is written with: the operator's
+// --force, or a file that holds no configuration (the package default), which setup
+// and config generate replace after backing it up, as INSTALL.md's plain
+// `sudo olivares setup` needs.
+func envFileForce(path string, force bool) bool {
+	return force || !envFileHoldsConfig(path)
+}
+
 // writeFileGuarded writes content to path with mode, refusing to clobber an existing
 // file unless force is set. On a force-overwrite it first copies the existing file
 // to path+".bak" (so a regeneration never loses the previous configuration). Parent
 // directories must already exist (the package postinstall creates /etc/olivares).
 func writeFileGuarded(path string, content []byte, mode os.FileMode, force bool) error {
+	if err := refuseExisting(path, force); err != nil {
+		return err
+	}
 	if _, statErr := os.Stat(path); statErr == nil {
-		if !force {
-			return fmt.Errorf("%s already exists — pass --force to overwrite (the previous file is backed up to %s.bak)", path, path)
-		}
 		// Back up the previous file at the SAME tight mode (never the old, possibly
 		// looser, perms — the backup of a secret must not be world-readable).
-		if old, rerr := os.ReadFile(path); rerr == nil { //nolint:gosec // operator-owned config path
-			if werr := os.WriteFile(path+".bak", old, mode); werr == nil {
-				_ = os.Chmod(path+".bak", mode)
-			}
+		// A backup that cannot be made stops the write: the original is never replaced
+		// without the copy this function promises.
+		old, err := os.ReadFile(path) //nolint:gosec // operator-owned config path
+		if err != nil {
+			return fmt.Errorf("back up %s: %w", path, err)
+		}
+		if err := os.WriteFile(path+".bak", old, mode); err != nil {
+			return fmt.Errorf("back up %s: %w", path, err)
+		}
+		if err := os.Chmod(path+".bak", mode); err != nil {
+			return fmt.Errorf("back up %s: %w", path, err)
 		}
 	}
 	if err := os.WriteFile(path, content, mode); err != nil {

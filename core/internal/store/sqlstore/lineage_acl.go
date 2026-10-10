@@ -53,6 +53,42 @@ func reconcileLineageACL(ctx context.Context, tx *sql.Tx, dia dialect.Dialect, h
 			}
 		}
 	}
+	if err := reconcileLineageRoutineACL(ctx, tx, dia, hardened, roles); err != nil {
+		return err
+	}
+
+	if hardened {
+		sources := make([]string, 0, len(lineageRelations))
+		for _, r := range lineageRelations {
+			sources = append(sources, "public."+quoteIdent(r.table))
+		}
+		for _, role := range []string{"PUBLIC", app} {
+			if _, err := tx.ExecContext(ctx, "REVOKE TRIGGER,TRUNCATE ON TABLE "+strings.Join(sources, ",")+" FROM "+role); err != nil {
+				return err
+			}
+		}
+
+		for _, r := range lineageRelations {
+			for _, privilege := range []string{"TRIGGER", "TRUNCATE"} {
+				var has bool
+				if err := tx.QueryRowContext(ctx, "SELECT pg_catalog.has_table_privilege($1,$2,$3)", roles.App.Role, "public."+r.table, privilege).Scan(&has); err != nil {
+					return err
+				}
+				if has {
+					return fmt.Errorf("lineage source %s retains app %s", r.table, privilege)
+				}
+			}
+		}
+		if err := verifyPostgresDirectoryWriterRoleClosure(ctx, tx, roles.App.Role); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// reconcileLineageRoutineACL restores the compiled routine grants at birth and logical recovery.
+func reconcileLineageRoutineACL(ctx context.Context, tx *sql.Tx, dia dialect.Dialect, hardened bool, roles guardRoles) error {
+	app := quoteIdent(roles.App.Role)
 	for _, object := range lineageGuardObjects(dia) {
 		if object.body == "" {
 			continue
@@ -82,32 +118,6 @@ func reconcileLineageACL(ctx context.Context, tx *sql.Tx, dia dialect.Dialect, h
 		}
 		if has != object.exposed {
 			return fmt.Errorf("lineage routine execute ACL drift")
-		}
-	}
-	if hardened {
-		sources := make([]string, 0, len(lineageRelations))
-		for _, r := range lineageRelations {
-			sources = append(sources, "public."+quoteIdent(r.table))
-		}
-		for _, role := range []string{"PUBLIC", app} {
-			if _, err := tx.ExecContext(ctx, "REVOKE TRIGGER,TRUNCATE ON TABLE "+strings.Join(sources, ",")+" FROM "+role); err != nil {
-				return err
-			}
-		}
-
-		for _, r := range lineageRelations {
-			for _, privilege := range []string{"TRIGGER", "TRUNCATE"} {
-				var has bool
-				if err := tx.QueryRowContext(ctx, "SELECT pg_catalog.has_table_privilege($1,$2,$3)", roles.App.Role, "public."+r.table, privilege).Scan(&has); err != nil {
-					return err
-				}
-				if has {
-					return fmt.Errorf("lineage source %s retains app %s", r.table, privilege)
-				}
-			}
-		}
-		if err := verifyPostgresDirectoryWriterRoleClosure(ctx, tx, roles.App.Role); err != nil {
-			return err
 		}
 	}
 	return nil

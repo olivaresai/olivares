@@ -39,6 +39,18 @@ Datenbankrolle). Wenn Sie keines gesetzt haben, ist es aus. Die vollständige
 Secure-Defaults-Haltung und die kryptografischen Garantien des Audit-Ledgers stehen im
 [Sicherheitsmodell](/de/explanation/security/security-model/).
 
+### Anmeldung und Sicherheitseinstellungen
+
+Öffnen Sie **Einstellungen → Anmeldung und Sicherheit**, um Anmeldemethoden,
+Sitzungsdauer der Engine, administrative Step-up-Policy und registrierte Passkeys
+anzusehen. Die Sitzungsdauer ist schreibgeschützt; eine Sitzungsaktualisierung
+verlängert den Ablaufzeitpunkt. Registrieren oder benennen Sie hier Ihre Passkeys
+um und richten Sie eine Authenticator-App ein. Systemadministratoren können die
+bestehenden Step-up- und Authenticator-Policies ändern; andere Nutzer sehen die
+Step-up-Anforderung ohne Bearbeitungsmöglichkeit. Bevor Sie einen Passkey oder
+Authenticator-Code verlangen, müssen Sie nachweisen, dass Ihre Sitzung ihn nutzen
+kann. Über **Identitätsanbieter verwalten** konfigurieren Sie Single Sign-on.
+
 ### Mutual TLS für entfernte Collectors
 
 In der verteilten Topologie pushen Edge-Collectors Beobachtungen über

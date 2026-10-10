@@ -12,7 +12,7 @@ import "testing"
 // same profile with no key bound still reports what is missing.
 func TestCredentialSourceCheck_AKeyBoundProfileIsReady(t *testing.T) {
 	t.Parallel()
-	m := &Module{rt: &runtimeState{}}
+	m := &Module{Dependencies: &Dependencies{}, rt: &runtimeState{Dependencies: &Dependencies{}}}
 	sel := LaunchReadinessSelection{Transport: string(TransportStreamJSON), Isolation: string(IsolationNative)}
 	for _, driver := range []string{"claude", "codex", "grok"} {
 		got := m.credentialSourceCheck(ProviderProfile{

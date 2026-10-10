@@ -1,0 +1,8 @@
+{
+  "source": "会在该节点注册该驱动程序|注册 OpenCode ACP 驱动程序|通过固定官方二进制|不能启动|无法启动",
+  "flags": "",
+  "noProvider": {
+    "source": "未指定提供方",
+    "flags": ""
+  }
+}

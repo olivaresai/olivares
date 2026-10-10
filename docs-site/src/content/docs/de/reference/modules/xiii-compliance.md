@@ -14,6 +14,8 @@ Modul der Intelligence-Schicht: es erfasst **nichts Neues** — es aggregiert un
 das, was der Kern und die anderen Module bereits aufzeichnen, und es **beansprucht niemals eine
 Zertifizierung**.
 
+**Edition:** Business Compliance Packs bietet Framework-Kataloge, Bewertungen, den regulatorischen Kalender, DORA/HIPAA-Ansichten, das Versiegeln von Nachweisen, OSCAL-Exporte und HTML/PDF-Berichte auf Abruf. Community antwortet für diese Funktionen mit `501` und behält Risiko, Datenresidenz, Records Management und JSON/CSV-Exporte gespeicherter Nachweise. Updates erhalten bestehende Datensätze.
+
 ## Was es ist
 
 Modul XIII hat fünf Flächen, alle lesen-und-ableiten über bestehende Daten:

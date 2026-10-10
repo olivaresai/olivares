@@ -60,7 +60,7 @@ func (m *Module) CommunicationSessionRecipient(
 	sid string,
 ) (CommunicationSessionRecipientWitness, error) {
 	out := CommunicationSessionRecipientWitness{SID: sid, ObservedAt: m.now()}
-	if m == nil || m.data == nil {
+	if m == nil || m.Data == nil {
 		return out, unknown("evidence_unavailable", errors.New("sessions: session identity plane is not wired"))
 	}
 	if !validCanonicalSID(sid) || workspace.IsZero() {
@@ -73,7 +73,7 @@ func (m *Module) CommunicationSessionRecipient(
 		runRef    string
 		agentRef  string
 	)
-	if err := m.data.View(ctx, tenant, func(sc store.Scope) error {
+	if err := m.Data.View(ctx, tenant, func(sc store.Scope) error {
 		target, err := resolveMerge(ctx, sc, sid)
 		if err != nil {
 			return err

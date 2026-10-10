@@ -99,6 +99,10 @@ func TestUserAuthorityPostgresInventoryClosure(t *testing.T) {
 	// Effective manual grants remain valid after future-object defaults disappear.
 	runSQL("ALTER DEFAULT PRIVILEGES FOR ROLE "+quoteIdent(owner)+" IN SCHEMA public REVOKE ALL ON TABLES FROM "+quoteIdent(app), "ALTER DEFAULT PRIVILEGES FOR ROLE "+quoteIdent(owner)+" IN SCHEMA public REVOKE EXECUTE ON FUNCTIONS FROM "+quoteIdent(app))
 	positive()
+	major := drMeasuredMajor(t, super)
+	grant := func(role, member, options string) string {
+		return "GRANT " + quoteIdent(role) + " TO " + quoteIdent(member) + drFixtureMembershipOptions(major, options)
+	}
 	const mid = "f2a_inventory_mid"
 	runSQL("CREATE ROLE " + mid + " NOLOGIN NOINHERIT NOBYPASSRLS NOCREATEROLE NOCREATEDB NOREPLICATION")
 	defer runSQL("DROP ROLE " + mid)
@@ -119,11 +123,11 @@ func TestUserAuthorityPostgresInventoryClosure(t *testing.T) {
 		{"body", []string{strings.Replace(strings.Replace(postgresDirectoryInventoryDDL, "CREATE FUNCTION", "CREATE OR REPLACE FUNCTION", 1), "NULL::pg_catalog.int8", "42::pg_catalog.int8", 1)}, []string{strings.Replace(postgresDirectoryInventoryDDL, "CREATE FUNCTION", "CREATE OR REPLACE FUNCTION", 1)}},
 		{"search_path", []string{"ALTER FUNCTION public.olivares_directory_inventory_v1() SET search_path TO public,pg_catalog"}, []string{"ALTER FUNCTION public.olivares_directory_inventory_v1() SET search_path TO pg_catalog"}},
 		{"PUBLIC_execute", []string{"GRANT EXECUTE ON FUNCTION public.olivares_directory_inventory_v1() TO PUBLIC"}, []string{"REVOKE EXECUTE ON FUNCTION public.olivares_directory_inventory_v1() FROM PUBLIC"}},
-		{"indirect_SET_app_to_inventory", []string{"GRANT " + directoryInventoryOwner + " TO " + mid + " WITH INHERIT FALSE, SET TRUE", "GRANT " + mid + " TO " + quoteIdent(app) + " WITH INHERIT FALSE, SET TRUE"}, []string{"REVOKE " + mid + " FROM " + quoteIdent(app), "REVOKE " + directoryInventoryOwner + " FROM " + mid}},
-		{"indirect_INHERIT_app_to_inventory", []string{"GRANT " + directoryInventoryOwner + " TO " + mid + " WITH INHERIT TRUE, SET FALSE", "GRANT " + mid + " TO " + quoteIdent(app) + " WITH INHERIT TRUE, SET FALSE"}, []string{"REVOKE " + mid + " FROM " + quoteIdent(app), "REVOKE " + directoryInventoryOwner + " FROM " + mid}},
-		{"indirect_ADMIN_app_to_inventory", []string{"GRANT " + directoryInventoryOwner + " TO " + mid + " WITH ADMIN TRUE, INHERIT FALSE, SET FALSE", "GRANT " + mid + " TO " + quoteIdent(app) + " WITH SET TRUE, INHERIT FALSE"}, []string{"REVOKE " + mid + " FROM " + quoteIdent(app), "REVOKE " + directoryInventoryOwner + " FROM " + mid}},
-		{"reverse_inventory_to_owner", []string{"GRANT " + quoteIdent(owner) + " TO " + mid + " WITH INHERIT FALSE, SET TRUE", "GRANT " + mid + " TO " + directoryInventoryOwner + " WITH INHERIT FALSE, SET TRUE"}, []string{"REVOKE " + mid + " FROM " + directoryInventoryOwner, "REVOKE " + quoteIdent(owner) + " FROM " + mid}},
-		{"intermediary_admin", []string{"ALTER ROLE " + mid + " CREATEDB", "GRANT " + mid + " TO " + directoryInventoryOwner + " WITH INHERIT FALSE, SET TRUE"}, []string{"REVOKE " + mid + " FROM " + directoryInventoryOwner, "ALTER ROLE " + mid + " NOCREATEDB"}},
+		{"indirect_SET_app_to_inventory", []string{grant(directoryInventoryOwner, mid, "INHERIT FALSE, SET TRUE"), grant(mid, app, "INHERIT FALSE, SET TRUE")}, []string{"REVOKE " + mid + " FROM " + quoteIdent(app), "REVOKE " + directoryInventoryOwner + " FROM " + mid}},
+		{"indirect_INHERIT_app_to_inventory", []string{grant(directoryInventoryOwner, mid, "INHERIT TRUE, SET FALSE"), grant(mid, app, "INHERIT TRUE, SET FALSE")}, []string{"REVOKE " + mid + " FROM " + quoteIdent(app), "REVOKE " + directoryInventoryOwner + " FROM " + mid}},
+		{"indirect_ADMIN_app_to_inventory", []string{grant(directoryInventoryOwner, mid, "ADMIN TRUE, INHERIT FALSE, SET FALSE"), grant(mid, app, "SET TRUE, INHERIT FALSE")}, []string{"REVOKE " + mid + " FROM " + quoteIdent(app), "REVOKE " + directoryInventoryOwner + " FROM " + mid}},
+		{"reverse_inventory_to_owner", []string{grant(owner, mid, "INHERIT FALSE, SET TRUE"), grant(mid, directoryInventoryOwner, "INHERIT FALSE, SET TRUE")}, []string{"REVOKE " + mid + " FROM " + directoryInventoryOwner, "REVOKE " + quoteIdent(owner) + " FROM " + mid}},
+		{"intermediary_admin", []string{"ALTER ROLE " + mid + " CREATEDB", grant(mid, directoryInventoryOwner, "INHERIT FALSE, SET TRUE")}, []string{"REVOKE " + mid + " FROM " + directoryInventoryOwner, "ALTER ROLE " + mid + " NOCREATEDB"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -150,9 +154,23 @@ func TestUserAuthorityPostgresInventoryClosure(t *testing.T) {
 			}
 		})
 	}
-	// A membership with no SET, INHERIT or ADMIN edge is inert on PostgreSQL 16.
-	runSQL("GRANT "+directoryInventoryOwner+" TO "+mid+" WITH INHERIT FALSE, SET FALSE, ADMIN FALSE", "GRANT "+mid+" TO "+quoteIdent(app)+" WITH INHERIT FALSE, SET TRUE")
-	positive()
+	// Per-edge SET FALSE makes this membership inert on 16+. PG15 always
+	// permits SET, so the same native membership must still be refused there.
+	runSQL(grant(directoryInventoryOwner, mid, "INHERIT FALSE, SET FALSE, ADMIN FALSE"), grant(mid, app, "INHERIT FALSE, SET TRUE"))
+	if major >= 16 {
+		positive()
+	} else {
+		raw, err := Open(ctx, cfg, nil)
+		if raw != nil {
+			raw.Close()
+		}
+		if err == nil {
+			t.Fatal("PG15 live SET membership admitted ordinary Open")
+		}
+		if _, _, _, err := OpenDirectoryWriterMaintenance(ctx, cfg, nil, 1); err == nil {
+			t.Fatal("PG15 live SET membership admitted maintenance")
+		}
+	}
 	runSQL("REVOKE "+mid+" FROM "+quoteIdent(app), "REVOKE "+directoryInventoryOwner+" FROM "+mid)
 	positive()
 }

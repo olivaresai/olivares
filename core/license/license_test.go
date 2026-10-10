@@ -66,8 +66,7 @@ func TestTamperRejected(t *testing.T) {
 // CHANGED BY and the reason is the whole point of the test.
 //
 // It used to assert that a blob with no expiry is PERPETUAL, and it passed for as long
-// as that was the product. The v8 package made every offer term-only and LICENSING.md
-// §ADR-0010 signs "no perpetual fallback", so a blob that attests no term now attests no
+// as that was the product. A license is term-only, so a blob that attests no term attests no
 // right. Leaving the old assertion would have kept a signed-but-termless blob entitling
 // the closed build's add-ons for ever — measured, not hypothetical: the enterprise
 // durable-bus gate grants on `Status(...) != StatusExpired`.
@@ -276,7 +275,7 @@ func TestGracePeriodBoundaries(t *testing.T) {
 
 	// The canon figure itself, pinned so a silent edit of the constant fails here.
 	if license.MaxGracePeriod != 168*time.Hour {
-		t.Fatalf("MaxGracePeriod = %v, want 168h (design/PRICING-CANON.md, docs/07 ADR-0010)", license.MaxGracePeriod)
+		t.Fatalf("MaxGracePeriod = %v, want 168h", license.MaxGracePeriod)
 	}
 }
 

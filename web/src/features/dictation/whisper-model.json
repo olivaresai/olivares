@@ -1,0 +1,34 @@
+{
+  "repository": "onnx-community/whisper-tiny",
+  "revision": "ff4177021cc41f7db950912b73ea4fdf7d01d8e7",
+  "files": {
+    "config.json": {
+      "sha256": "46aeea0a406afbeb563fc8e59ca10609203df4299af6a83f73752fef369efd2d",
+      "size": 2243
+    },
+    "generation_config.json": {
+      "sha256": "f5c67e5a4f7102f8cb4d058bc95da276bbc19eeec997267c3bb0f25ef68facd1",
+      "size": 3772
+    },
+    "preprocessor_config.json": {
+      "sha256": "a6a76d28c93edb273669eb9e0b0636a2bddbb1272c3261e47b7ca6dfdbac1b8d",
+      "size": 339
+    },
+    "tokenizer.json": {
+      "sha256": "27fc476bfe7f17299480be2273fc0608e4d5a99aba2ab5dec5374b4482d1a566",
+      "size": 2480466
+    },
+    "tokenizer_config.json": {
+      "sha256": "2a4c4281cf9f51ac6ccc406fdc711a087afe6530f671fa7b80953edc498275ce",
+      "size": 282683
+    },
+    "onnx/encoder_model_quantized.onnx": {
+      "sha256": "2af4a414ca47aa30f61246017e5fe82b0a8d229281d1255ba666a2a7f6b84d19",
+      "size": 10124990
+    },
+    "onnx/decoder_model_merged_quantized.onnx": {
+      "sha256": "25e807a962b6349356d0ea5d0dfe530b7e5bf0e2a484aeca0359d03143faddd3",
+      "size": 30719241
+    }
+  }
+}

@@ -62,19 +62,47 @@ const api = vi.hoisted(() => ({
   retire: vi.fn(),
   listWirings: vi.fn(),
   listOperations: vi.fn(),
+  executor: vi.fn(),
 }))
 vi.mock('./api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./api')>()
   return { ...actual, deployApi: api }
 })
 
+// The Subject is chosen from what exists: the agents and the MCP servers of the tenant.
+const subjects = vi.hoisted(() => ({
+  agents: vi.fn(),
+  servers: vi.fn(),
+}))
+vi.mock('@/lib/api/endpoints', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/api/endpoints')>()
+  return {
+    ...actual,
+    agentsApi: { ...actual.agentsApi, list: subjects.agents },
+  }
+})
+vi.mock('@/features/capabilities/api', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@/features/capabilities/api')>()
+  return {
+    ...actual,
+    capabilitiesApi: {
+      ...actual.capabilitiesApi,
+      listServers: subjects.servers,
+    },
+  }
+})
+
 import DeployView from './deploy-view'
 import { DefinitionDetailSheet } from './definition-detail'
 import { ApiError } from '@/lib/api/errors'
 import { useStepUpStore } from '@/stores/step-up'
+import { useModulesStore } from '@/stores/modules'
 import { DefinitionEditorDialog } from './definition-editor'
 import { WiringsTable } from './wirings-table'
 import { OperationsTable } from './operations-table'
+import { PageActionsProvider } from '@/components/ui/page-actions'
+import * as deployLocales from './i18n'
 
 function wrap(ui: ReactNode) {
   const qc = new QueryClient({
@@ -151,6 +179,7 @@ const operationRow: OperationDTO = {
 }
 
 beforeEach(() => {
+  useModulesStore.getState().setOff([])
   authState.can = () => true
   for (const fn of Object.values(api)) fn.mockReset()
   toast.success.mockReset()
@@ -159,7 +188,32 @@ beforeEach(() => {
   // Sensible defaults so polling queries in the detail sheet never reject.
   api.listOperations.mockResolvedValue({ items: [], has_more: false })
   api.listRevisions.mockResolvedValue({ items: [], has_more: false })
+  api.executor.mockResolvedValue({ configured: true })
+  subjects.agents.mockReset()
+  subjects.servers.mockReset()
+  subjects.agents.mockResolvedValue({
+    items: [
+      { id: 'a1', name: 'billing-bot' },
+      { id: 'a2', name: 'ops-bot' },
+    ],
+    has_more: false,
+  })
+  subjects.servers.mockResolvedValue({
+    items: [{ id: 's1', name: 'github-mcp' }],
+    has_more: false,
+  })
 })
+
+// The page with its header slots, as the console mounts it.
+function wrapPage() {
+  return wrap(
+    <PageActionsProvider>
+      <DeployView />
+    </PageActionsProvider>,
+  )
+}
+const primarySlot = () =>
+  document.querySelector('[data-page-primary-action]') as HTMLElement
 afterEach(() => vi.clearAllMocks())
 
 // --- (a) the main list renders rows ------------------------------------------
@@ -200,9 +254,9 @@ describe('DeployView — definitions list', () => {
     expect(screen.queryByRole('tab', { name: /^wirings$/i })).toBeNull()
   })
 
-  it('empty state says what the screen lists, keeps Declare as its action and links to launched sessions', async () => {
+  it('with an executor, the empty state says what the screen lists, keeps Declare as its action and links to launched sessions', async () => {
     api.listDefinitions.mockResolvedValue({ items: [], has_more: false })
-    wrap(<DeployView />)
+    wrapPage()
     const title = await screen.findByText('No deployments declared yet')
     const empty = title.closest('[data-slot="empty-state"]')
     expect(empty).not.toBeNull()
@@ -211,16 +265,124 @@ describe('DeployView — definitions list', () => {
       name: 'Operate sessions',
     })
     expect(link).toHaveAttribute('href', '/agentops')
-    // The screen's own verb stays the PRIMARY action of its empty state; the way out to
-    // the sessions is the quieter one. And the sentence that says what reconciling needs
-    // is still there: an empty screen must not promise more than the product does.
+    // The screen's own verb stays the PRIMARY action, in the empty state and in the
+    // page header; the way out to the sessions is the quieter one.
     expect(
       within(empty as HTMLElement).getByRole('button', {
         name: /declare deployment/i,
       }),
     ).toBeInTheDocument()
-    expect(empty).toHaveTextContent(/runtime executor/i)
-    expect(empty).toHaveTextContent(/503/)
+    expect(
+      within(primarySlot()).getByRole('button', {
+        name: /declare deployment/i,
+      }),
+    ).toBeInTheDocument()
+    // A status code is engine vocabulary: the console never shows one.
+    expect(document.body).not.toHaveTextContent(/\b503\b|\bHTTP\b/)
+  })
+})
+
+// --- (a2) no runtime executor: say what Deploy needs before offering a form -----
+
+describe('DeployView — without a runtime executor', () => {
+  beforeEach(() => {
+    api.executor.mockResolvedValue({ configured: false })
+  })
+
+  it('says in one sentence what Deploy needs and how to connect it, and does not offer the form first', async () => {
+    api.listDefinitions.mockResolvedValue({ items: [], has_more: false })
+    wrapPage()
+    const title = await screen.findByText('Deploying needs a runtime executor')
+    const empty = title.closest('[data-slot="empty-state"]') as HTMLElement
+    expect(empty).toHaveTextContent('OLIVARES_DEPLOY_EXECUTOR_CONFIG')
+    // The way forward is the guide to connecting one, not an unrelated screen.
+    expect(
+      within(empty).getByRole('link', { name: 'How to connect an executor' }),
+    ).toHaveAttribute(
+      'href',
+      'https://docs.olivares.ai/reference/modules/vii-deploy/#connect-an-executor',
+    )
+    expect(
+      within(empty).queryByRole('link', { name: 'Operate sessions' }),
+    ).toBeNull()
+    expect(document.body).not.toHaveTextContent(/\b503\b|\bHTTP\b/)
+    // Neither the empty state nor the header's primary slot opens the form.
+    expect(
+      within(empty).queryByRole('button', { name: /declare deployment/i }),
+    ).toBeNull()
+    expect(within(primarySlot()).queryByRole('button')).toBeNull()
+    // Declaring desired state stays possible, as a quieter header action.
+    await userEvent.click(
+      screen.getByRole('button', { name: /declare deployment/i }),
+    )
+    expect(
+      await screen.findByRole('dialog', { name: 'Declare deployment' }),
+    ).toBeInTheDocument()
+  })
+
+  it('says in one plain sentence what Deploy does, in every locale', async () => {
+    api.listDefinitions.mockResolvedValue({ items: [], has_more: false })
+    wrapPage()
+    expect(
+      await screen.findByText(
+        'Declare which agents and MCP servers run where, then plan, approve and apply each change, or roll it back.',
+      ),
+    ).toBeInTheDocument()
+    for (const [locale, strings] of Object.entries(deployLocales)) {
+      // Arrows and "vs" were the old subtitle's shorthand, not words.
+      expect(strings.subtitle, locale).not.toMatch(/→|\bvs\b/)
+      expect(strings.noExecutor.guide, locale).toBeTruthy()
+    }
+  })
+
+  it('keeps the list and states what Plan and Apply need above it', async () => {
+    api.listDefinitions.mockResolvedValue({
+      items: [definitionRow],
+      has_more: false,
+    })
+    wrapPage()
+    expect(await screen.findByText('billing-bot')).toBeInTheDocument()
+    expect(
+      screen.getByText('Deploying needs a runtime executor'),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(/OLIVARES_DEPLOY_EXECUTOR_CONFIG/),
+    ).toBeInTheDocument()
+    expect(within(primarySlot()).queryByRole('button')).toBeNull()
+    // The detail sheet a row opens knows it too.
+    api.getDefinition.mockResolvedValue(definitionDetail)
+    await userEvent.click(screen.getByText('billing-bot'))
+    expect(
+      await screen.findByRole('button', { name: /^plan$/i }),
+    ).toHaveAttribute('aria-disabled', 'true')
+  })
+
+  it('shows rows without waiting for the executor answer, and places the verb only once it arrives', async () => {
+    api.executor.mockReturnValue(new Promise(() => {}))
+    api.listDefinitions.mockResolvedValue({
+      items: [definitionRow],
+      has_more: false,
+    })
+    wrapPage()
+    expect(await screen.findByText('billing-bot')).toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: /declare deployment/i }),
+    ).toBeNull()
+  })
+
+  it('an unreadable executor state claims nothing: the page keeps its full layout', async () => {
+    api.executor.mockRejectedValue(new ApiError(500, 'internal', 'boom'))
+    api.listDefinitions.mockResolvedValue({ items: [], has_more: false })
+    wrapPage()
+    expect(
+      await screen.findByText('No deployments declared yet'),
+    ).toBeInTheDocument()
+    expect(screen.queryByText('Deploying needs a runtime executor')).toBeNull()
+    expect(
+      within(primarySlot()).getByRole('button', {
+        name: /declare deployment/i,
+      }),
+    ).toBeInTheDocument()
   })
 })
 
@@ -287,9 +449,11 @@ describe('DefinitionEditorDialog — secrets are references, never values', () =
     )
     // Fill the required base fields so only the credential guard blocks submit.
     // Accessible-name role queries exclude the aria-hidden required "*".
-    await userEvent.type(
-      screen.getByRole('textbox', { name: /^subject$/i }),
-      'agent/x',
+    await userEvent.click(
+      await screen.findByRole('combobox', { name: /^subject$/i }),
+    )
+    await userEvent.click(
+      await screen.findByRole('option', { name: 'billing-bot' }),
     )
     await userEvent.type(screen.getByRole('textbox', { name: /^name$/i }), 'x')
     await userEvent.type(
@@ -316,6 +480,256 @@ describe('DefinitionEditorDialog — secrets are references, never values', () =
       screen.getAllByText(/looks like a credential/i).length,
     ).toBeGreaterThan(0)
     expect(create).toBeDisabled()
+  })
+})
+
+describe('DefinitionEditorDialog — the Subject is chosen from what exists', () => {
+  async function fillPlacement() {
+    await userEvent.type(
+      screen.getByRole('textbox', { name: /^name$/i }),
+      'billing',
+    )
+    await userEvent.type(
+      screen.getByRole('textbox', { name: /^environment$/i }),
+      'prod',
+    )
+    await userEvent.type(
+      screen.getByRole('textbox', { name: /^target$/i }),
+      'docker.host/node1',
+    )
+  }
+
+  it('offers the agents of this tenant and declares the one chosen', async () => {
+    subjects.agents.mockResolvedValue({
+      items: [
+        { id: 'a1', name: 'billing-bot', external_id: 'billing-bot' },
+        { id: 'a2', name: 'ops-bot', external_id: 'ops-primary' },
+      ],
+      has_more: false,
+    })
+    api.createDefinition.mockResolvedValue({ ...definitionRow, id: 'new' })
+    wrap(
+      <DefinitionEditorDialog open onOpenChange={() => {}} definition={null} />,
+    )
+    // The kind reads as product words, not identifiers.
+    expect(
+      screen.getByRole('combobox', { name: /subject kind/i }),
+    ).toHaveTextContent('Agent')
+    expect(screen.queryByRole('textbox', { name: /^subject$/i })).toBeNull()
+    await userEvent.click(
+      await screen.findByRole('combobox', { name: /^subject$/i }),
+    )
+    expect(
+      await screen.findByRole('option', { name: 'ops-bot' }),
+    ).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('option', { name: 'billing-bot' }))
+    await fillPlacement()
+    await userEvent.click(
+      screen.getByRole('button', { name: /declare deployment/i }),
+    )
+    await waitFor(() => expect(api.createDefinition).toHaveBeenCalledTimes(1))
+    expect(api.createDefinition.mock.calls[0][0]).toMatchObject({
+      subject_kind: 'agent',
+      subject_ref: 'billing-bot',
+      name: 'billing',
+    })
+  })
+
+  it('offers the MCP servers when the kind is MCP server, and forgets the agent chosen before', async () => {
+    wrap(
+      <DefinitionEditorDialog open onOpenChange={() => {}} definition={null} />,
+    )
+    await userEvent.click(
+      await screen.findByRole('combobox', { name: /^subject$/i }),
+    )
+    await userEvent.click(
+      await screen.findByRole('option', { name: 'billing-bot' }),
+    )
+    await userEvent.click(
+      screen.getByRole('combobox', { name: /subject kind/i }),
+    )
+    await userEvent.click(
+      await screen.findByRole('option', { name: 'MCP server' }),
+    )
+    const subject = await screen.findByRole('combobox', { name: /^subject$/i })
+    expect(subject).toHaveTextContent('Choose an MCP server')
+    await userEvent.click(subject)
+    expect(
+      await screen.findByRole('option', { name: 'github-mcp' }),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: 'billing-bot' })).toBeNull()
+  })
+
+  it('declares an MCP reference without reading Capabilities when that module is off', async () => {
+    useModulesStore.getState().setOff(['capabilities'])
+    api.createDefinition.mockResolvedValue({ ...definitionRow, id: 'new' })
+    wrap(
+      <DefinitionEditorDialog open onOpenChange={() => {}} definition={null} />,
+    )
+    // The agent roster remains available independently of Capabilities.
+    await userEvent.click(
+      await screen.findByRole('combobox', { name: /^subject$/i }),
+    )
+    await userEvent.click(
+      await screen.findByRole('option', { name: 'billing-bot' }),
+    )
+    await userEvent.click(
+      screen.getByRole('combobox', { name: /subject kind/i }),
+    )
+    await userEvent.click(
+      await screen.findByRole('option', { name: 'MCP server' }),
+    )
+    expect(subjects.servers).not.toHaveBeenCalled()
+    const subject = await screen.findByRole('textbox', { name: /^subject$/i })
+    expect(subject).toHaveValue('')
+    await userEvent.type(subject, 'github-mcp')
+    await fillPlacement()
+    await userEvent.click(
+      screen.getByRole('button', { name: /declare deployment/i }),
+    )
+    await waitFor(() => expect(api.createDefinition).toHaveBeenCalledTimes(1))
+    expect(api.createDefinition.mock.calls[0][0]).toMatchObject({
+      subject_kind: 'mcp_server',
+      subject_ref: 'github-mcp',
+    })
+    expect(subjects.servers).not.toHaveBeenCalled()
+  })
+
+  it('says so when nothing of that kind exists yet, and the form cannot be sent', async () => {
+    subjects.agents.mockResolvedValue({ items: [], has_more: false })
+    wrap(
+      <DefinitionEditorDialog open onOpenChange={() => {}} definition={null} />,
+    )
+    expect(await screen.findByText('No agents yet.')).toBeInTheDocument()
+    await fillPlacement()
+    expect(
+      screen.getByRole('button', { name: /declare deployment/i }),
+    ).toBeDisabled()
+  })
+
+  it.each([
+    ...['\u0085billing', 'billing\u0085', '\u0085billing\u0085'].map(
+      (name, index) => ({
+        scenario: `Go trims U+0085 from the agent name (case ${index + 1})`,
+        items: [
+          { id: 'a1', name: 'billing', external_id: 'billing-primary' },
+          { id: 'a2', name, external_id: 'billing-secondary' },
+        ],
+      }),
+    ),
+    {
+      scenario: 'JavaScript trims U+FEFF from the agent name',
+      items: [
+        { id: 'a1', name: 'billing', external_id: 'billing-primary' },
+        {
+          id: 'a2',
+          name: '\ufeffbilling\ufeff',
+          external_id: 'billing-secondary',
+        },
+      ],
+    },
+    {
+      scenario: 'an agent name changes when the submitted reference is trimmed',
+      items: [
+        { id: 'a1', name: 'billing', external_id: 'billing-primary' },
+        { id: 'a2', name: ' billing ', external_id: 'billing-secondary' },
+      ],
+    },
+    {
+      scenario: 'a padded agent name has no unpadded counterpart',
+      items: [
+        { id: 'a2', name: '\tbilling\n', external_id: 'billing-secondary' },
+      ],
+    },
+    {
+      scenario: 'agents have duplicate names',
+      items: [
+        { id: 'a1', name: 'billing-bot', external_id: 'billing-primary' },
+        { id: 'a2', name: 'billing-bot', external_id: 'billing-secondary' },
+      ],
+    },
+    {
+      scenario: "an agent name matches another agent's external ID",
+      items: [
+        { id: 'a1', name: 'ops', external_id: 'billing' },
+        { id: 'a2', name: 'billing', external_id: 'billing-secondary' },
+      ],
+    },
+    {
+      scenario: 'the name/external-ID collision appears in reverse order',
+      items: [
+        { id: 'a2', name: 'billing', external_id: 'billing-secondary' },
+        { id: 'a1', name: 'ops', external_id: 'billing' },
+      ],
+    },
+  ])('preserves external-ID entry when $scenario', async ({ items }) => {
+    subjects.agents.mockResolvedValue({ items, has_more: false })
+    api.createDefinition.mockResolvedValue({ ...definitionRow, id: 'new' })
+    wrap(
+      <DefinitionEditorDialog open onOpenChange={() => {}} definition={null} />,
+    )
+    const subject = await screen.findByRole('textbox', { name: /^subject$/i })
+    expect(screen.queryByRole('combobox', { name: /^subject$/i })).toBeNull()
+    await userEvent.type(subject, 'billing-secondary')
+    await fillPlacement()
+    await userEvent.click(
+      screen.getByRole('button', { name: /declare deployment/i }),
+    )
+    await waitFor(() => expect(api.createDefinition).toHaveBeenCalledTimes(1))
+    expect(api.createDefinition.mock.calls[0][0]).toMatchObject({
+      subject_kind: 'agent',
+      subject_ref: 'billing-secondary',
+      name: 'billing',
+    })
+  })
+
+  it('falls back to typing the reference when the list is longer than one page', async () => {
+    subjects.agents.mockResolvedValue({
+      items: [{ id: 'a1', name: 'billing-bot' }],
+      has_more: true,
+    })
+    wrap(
+      <DefinitionEditorDialog open onOpenChange={() => {}} definition={null} />,
+    )
+    expect(
+      await screen.findByRole('textbox', { name: /^subject$/i }),
+    ).toBeEnabled()
+    expect(screen.queryByRole('combobox', { name: /^subject$/i })).toBeNull()
+  })
+
+  it('editing keeps the declared Subject and asks for no list', async () => {
+    wrap(
+      <DefinitionEditorDialog
+        open
+        onOpenChange={() => {}}
+        definition={definitionDetail}
+      />,
+    )
+    const subject = screen.getByRole('textbox', { name: /^subject$/i })
+    expect(subject).toBeDisabled()
+    expect(subject).toHaveValue('agent/billing')
+    expect(subjects.agents).not.toHaveBeenCalled()
+    expect(subjects.servers).not.toHaveBeenCalled()
+  })
+
+  it('falls back to typing the reference when the list cannot be read', async () => {
+    subjects.agents.mockRejectedValue(new ApiError(403, 'forbidden', 'no'))
+    api.createDefinition.mockResolvedValue({ ...definitionRow, id: 'new' })
+    wrap(
+      <DefinitionEditorDialog open onOpenChange={() => {}} definition={null} />,
+    )
+    await userEvent.type(
+      await screen.findByRole('textbox', { name: /^subject$/i }),
+      'acme-bot',
+    )
+    await fillPlacement()
+    await userEvent.click(
+      screen.getByRole('button', { name: /declare deployment/i }),
+    )
+    await waitFor(() => expect(api.createDefinition).toHaveBeenCalledTimes(1))
+    expect(api.createDefinition.mock.calls[0][0]).toMatchObject({
+      subject_ref: 'acme-bot',
+    })
   })
 })
 
@@ -428,6 +842,41 @@ describe('DefinitionDetailSheet — a step-up refusal is not a role refusal', ()
 
     await waitFor(() => expect(toast.warning).toHaveBeenCalledOnce())
     expect(useStepUpStore.getState().request).toBeNull()
+  })
+})
+
+describe('DefinitionDetailSheet — without a runtime executor', () => {
+  it('disables Plan, Verify, Apply and Retire and says what they need', async () => {
+    api.getDefinition.mockResolvedValue(definitionDetail)
+    wrap(
+      <DefinitionDetailSheet
+        definitionId="d1"
+        open
+        onOpenChange={() => {}}
+        noExecutor
+      />,
+    )
+    await screen.findByText(/desired specification/i)
+    for (const name of [/^plan$/i, /^verify$/i, /^apply$/i, /^retire$/i]) {
+      const button = screen.getByRole('button', { name })
+      expect(button).toHaveAttribute('aria-disabled', 'true')
+      await userEvent.click(button)
+    }
+    for (const title of [
+      'Run a dry-run plan?',
+      'Verify against live infrastructure?',
+      'Apply to live infrastructure?',
+      'Retire from live infrastructure?',
+    ])
+      expect(screen.queryByRole('dialog', { name: title })).toBeNull()
+    for (const call of [api.plan, api.verify, api.apply, api.retire])
+      expect(call).not.toHaveBeenCalled()
+    expect(
+      screen.getAllByText(/OLIVARES_DEPLOY_EXECUTOR_CONFIG/).length,
+    ).toBeGreaterThan(0)
+    expect(document.body).not.toHaveTextContent(/\b503\b|\bHTTP\b/)
+    // Editing the desired state stays available.
+    expect(screen.getByRole('button', { name: /^edit$/i })).toBeEnabled()
   })
 })
 
@@ -545,6 +994,29 @@ describe('DefinitionDetailSheet — governed apply flow (two-phase HITL)', () =>
 })
 
 // --- operations ledger -------------------------------------------------------
+
+describe('OperationsTable — empty ledger', () => {
+  it('without an executor, says when entries will appear, with no status code', async () => {
+    wrap(<OperationsTable noExecutor />)
+    expect(
+      await screen.findByText('No deployment operations recorded yet'),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(/once a runtime executor is connected/i),
+    ).toBeInTheDocument()
+    expect(document.body).not.toHaveTextContent(/\b503\b|\bHTTP\b/)
+  })
+
+  it('with an executor, says what the ledger records', async () => {
+    wrap(<OperationsTable />)
+    expect(
+      await screen.findByText(
+        'Every plan, apply, verify and retire is recorded here.',
+      ),
+    ).toBeInTheDocument()
+    expect(document.body).not.toHaveTextContent(/\b503\b|\bHTTP\b/)
+  })
+})
 
 describe('OperationsTable — change-management ledger', () => {
   it('renders ledger rows with op, status and a gate badge', async () => {

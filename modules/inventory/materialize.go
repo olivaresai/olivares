@@ -14,6 +14,14 @@ import (
 	sdkmodel "github.com/olivaresai/olivares/sdk/model"
 )
 
+// The connector's fixed signal is retained in the immutable v1 projected facts.
+// This annotation is historical discovery, never current governance authority.
+const (
+	aiEndpointSignal          sdkmodel.SignalSource = "egress_proxy_ai"
+	aiDiscoveryMetadata                             = "inventory_ai_discovery"
+	aiUnregisteredAtDiscovery                       = "unregistered_at_discovery"
+)
+
 // onEdge materializes the estate from one access-edge observation: it resolves
 // the edge's natural origin and resource references to core entities (creating
 // them on first sight) and records a catalog entry for each. It is the
@@ -124,7 +132,7 @@ func (m *Module) materializeResource(ctx context.Context, sc store.Scope, edge s
 		return m.cat(ctx, sc, kindMCPServer, serverID, ref, ref, source, edge, at, p)
 
 	case rkMCPResource, rkMCPResourceTemplate:
-		resID, err := foResource(ctx, sc, rk, ref, resourceName(rk, ref))
+		resID, err := foResource(ctx, sc, rk, ref, resourceName(rk, ref), false)
 		if err != nil {
 			return err
 		}
@@ -239,7 +247,7 @@ func (m *Module) materializeResource(ctx context.Context, sc store.Scope, edge s
 		if ref == "" {
 			return nil
 		}
-		resID, err := foResource(ctx, sc, rk, ref, resourceName(rk, ref))
+		resID, err := foResource(ctx, sc, rk, ref, resourceName(rk, ref), false)
 		if err != nil {
 			return err
 		}
@@ -249,7 +257,8 @@ func (m *Module) materializeResource(ctx context.Context, sc store.Scope, edge s
 		// file / http.url / shell / web.search / agent.task / unknown → a Resource,
 		// plus a Tool when the edge names the tool that performed the access.
 		name := resourceName(rk, ref)
-		resID, err := foResource(ctx, sc, rk, ref, name)
+		discoveredAI := edge.Source == aiEndpointSignal && (rk == "http.api" || rk == "net.endpoint")
+		resID, err := foResource(ctx, sc, rk, ref, name, discoveredAI)
 		if err != nil {
 			return err
 		}

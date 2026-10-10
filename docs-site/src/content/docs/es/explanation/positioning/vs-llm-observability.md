@@ -43,7 +43,7 @@ contrario.
 | Dimensión | Gateway de LLM + observabilidad | Olivares AI |
 |---|---|---|
 | **Unidad de interés** | Una llamada al modelo (prompt → completion) | Un agente y cada recurso que lee/escribe — BD, almacenes de objetos, MCP, herramientas, ficheros |
-| **Punto de observación** | **En la ruta de la petición** (proxy/SDK); ve lo que la aplicación envía | **Fuera de banda, read-first**; observa telemetría, auditoría nativa y un backstop de kernel — nunca en la ruta de datos |
+| **Punto de observación** | **En la ruta de la petición** (proxy/SDK); ve lo que la aplicación envía | **Observación fuera de banda** de telemetría, auditoría nativa y un backstop de kernel; **enforcement inline** para las acciones gobernadas |
 | **Fuente de verdad** | Lo que la aplicación/proxy **reporta** | Telemetría autorreportada **corroborada contra el propio ledger del sistema** — pgAudit (lectura vs escritura), CloudTrail (acceso a objetos), backstop eBPF |
 | **La pregunta clave** | "¿Qué hizo este prompt y cuánto costó?" | "¿Está este agente usando un acceso **que nadie concedió**?" — [deriva Permitido-vs-Observado](/es/explanation/#el-access-map-read-first-minimal-data-permitted-vs-observed) |
 | **Enforcement** | La gateway puede gatear **llamadas al modelo** (claves, presupuestos) | Puertas deny-closed sobre **acciones y acceso a recursos**: aprobaciones, el [PEP de hooks de Claude Code](/es/how-to/connectors/claude-code-hooks-pep/), gating de herramientas MCP, kill switches |
@@ -59,11 +59,19 @@ para entender por qué esa es la primera de nuestras tres líneas.
 
 ## Es "y", no "o" — ingerimos tu telemetría
 
-Olivares AI **no** es un reemplazo de tu gateway ni de tu herramienta de trazado, y no
-quiere estar en la ruta de la petición que ellos ocupan. **Consume la misma señal**:
-el control plane ingiere spans de la convención semántica **OpenTelemetry GenAI**, la
-misma telemetría gen-ai que estas herramientas emiten y consumen. Así que una
-disposición sana es:
+El access map consume spans de las convenciones semánticas OpenTelemetry GenAI
+de tu gateway o herramienta de trazado. Las llamadas al modelo no usan el proxy
+de inferencia inline de Olivares AI por defecto; este aplica sus controles a las
+llamadas encaminadas por él, junto a los gates MCP tools/call y de delegación A2A
+en sus respectivas rutas.
+
+Las sesiones gestionadas de Claude Code instalan hooks de llamadas a herramientas
+que llaman al PEP del motor, montado por defecto. Estos hooks son inline y
+deny-closed: si el PEP resulta inaccesible durante una caída o un reinicio del
+motor, se deniega toda llamada gobernada a herramientas. La disponibilidad del
+motor importa incluso cuando las llamadas al modelo van directamente al proveedor.
+
+Para usar la ruta de observación junto a tu stack actual:
 
 - Mantén **LiteLLM** como tu gateway de modelos y **Langfuse** para el trazado
   orientado al desarrollador y el trabajo con prompts.

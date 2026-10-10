@@ -11,10 +11,17 @@ import (
 const defaultAnthropicVersion = "2023-06-01"
 
 // AnthropicDriver speaks POST /v1/messages (HTTP JSON and SSE).
+//
+// Deprecated: Olivares does not use this API. It keeps working in this release series;
+// its removal will be announced in the release notes beforehand.
 type AnthropicDriver struct{ *httpDriver }
 
 var _ Driver = (*AnthropicDriver)(nil)
 
+// NewAnthropic creates an Anthropic Messages driver.
+//
+// Deprecated: Olivares does not use this API. It keeps working in this release series;
+// its removal will be announced in the release notes beforehand.
 func NewAnthropic(cfg Config) (*AnthropicDriver, error) {
 	extra := copyHeaders(cfg.Headers)
 	if extra == nil {

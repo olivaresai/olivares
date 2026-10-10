@@ -10,13 +10,15 @@ import (
 	"github.com/olivaresai/olivares/connectors/contentsource"
 )
 
-// LiveACLSyncer is the interface the enterprise add-on implements to provide
-// near-real-time ACL synchronization from a data source. The base connectors
-// sync ACL in batch (LiveSource.FetchACL); a LiveACLSyncer upgrades to
-// webhook-driven or high-frequency polling with exponential backoff.
+// LiveACLSyncer is the interface the enterprise add-on was to implement to
+// provide near-real-time ACL synchronization from a data source. The base
+// connectors sync ACL in batch (LiveSource.FetchACL); a LiveACLSyncer would
+// upgrade to webhook-driven or high-frequency polling with exponential
+// backoff.
 //
-// The implementation is in the private enterprise repo behind
-// //go:build enterprise. This interface is the open seam.
+// The implementation was to live in the private enterprise repo behind
+// //go:build enterprise. It was never built; this interface is the orphaned
+// seam (see the package deprecation note).
 type LiveACLSyncer interface {
 	// StartWatch begins watching a source for ACL changes. The watcher calls
 	// back via the provided Callback when it detects a change. It honors ctx
@@ -72,7 +74,8 @@ type PurviewLabel struct {
 
 // PurviewClassifier reads Microsoft Purview sensitivity labels and maps them
 // to contentsource.Document.ExternalLabels entries ("purview:<label>"). The
-// enterprise add-on implements this against the Purview REST API.
+// enterprise add-on was to implement this against the Purview REST API; no
+// implementation was ever built.
 type PurviewClassifier interface {
 	// Classify returns the external labels for a document identified by docID.
 	// The labels are in the "purview:<lowercase_name>" format.

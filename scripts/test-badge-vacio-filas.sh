@@ -11,6 +11,14 @@
 #    inútil se desactiva, que es la forma en que estos mueren.
 set -u
 
+_olivares_git_env="$(cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")" && pwd)/lib/git-env.sh"
+# shellcheck source=/dev/null
+. "$_olivares_git_env" || {
+	echo "FATAL: cannot source $_olivares_git_env (git-env isolation)" >&2
+	exit 2
+}
+unset _olivares_git_env
+
 AQUI="$(cd "$(dirname "$0")" && pwd)"
 GUION="$AQUI/check-badge-vacio-filas.sh"
 
@@ -27,12 +35,12 @@ GUION_COPIA=""
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
-pasan=0
-fallan=0
-ok() { pasan=$((pasan + 1)); printf 'ok   %-56s %s\n' "$1" "${2:-}"; }
+pass_count=0
+fail_count=0
+ok() { pass_count=$((pass_count + 1)); printf 'ok   %-56s %s\n' "$1" "${2:-}"; }
 malo() {
-	fallan=$((fallan + 1))
-	printf 'FALLO %-55s %s\n' "$1" "${2:-}"
+	fail_count=$((fail_count + 1))
+	printf 'FAIL  %-55s %s\n' "$1" "${2:-}"
 }
 
 # Árbol sintético: `web/src/…` porque el guion recorta la ruta contra la raíz del repo.
@@ -68,28 +76,28 @@ FIN
 corre() { bash "$GUION_COPIA" >"$WORK/out.txt" 2>&1; printf '%s' "$?"; }
 base() { cp "$1" "$BASE_FALSA"; }
 
-echo "== check-badge-vacio-filas =="
+echo "== Empty-row badge checks =="
 
 # 1 · el caso que separa los conjuntos: sin `filas` pero SIN vacío → NO cuenta.
 pinta a.tsx sin-filas sin-vacio
 : >"$BASE_FALSA"
 comprueba_rc="$(corre)"
-[ "$comprueba_rc" = "0" ] && ok "sin filas y SIN <EmptyState> => no cuenta" "rc=0" || { malo "contó un montaje que no puede superponerse"; cat "$WORK/out.txt" | head -3; }
+[ "$comprueba_rc" = "0" ] && ok "no filas and NO <EmptyState> => not counted" "rc=0" || { malo "counted a mount that cannot overlap"; cat "$WORK/out.txt" | head -3; }
 
 # 2 · con `filas` y con vacío → tampoco cuenta.
 pinta a.tsx con-filas con-vacio
-[ "$(corre)" = "0" ] && ok "con filas => no cuenta" || malo "contó uno que ya pasa filas"
+[ "$(corre)" = "0" ] && ok "with filas => not counted" || malo "counted a mount that already passes filas"
 
 # 3 · ⛔ EL CASO DE RIESGO: sin `filas` Y con vacío, y NO está en la baseline => rojo con ruta:línea
 pinta a.tsx sin-filas con-vacio
-[ "$(corre)" = "1" ] && ok "sin filas Y con <EmptyState> => rojo" "rc=1" || malo "el caso de riesgo NO cortó"
-grep -q 'NUEVO' "$WORK/out.txt" && ok "y lo llama NUEVO" || malo "no lo marca como nuevo"
-grep -qE 'a\.tsx:[0-9]+' "$WORK/out.txt" && ok "y da fichero:línea" || malo "no da la línea"
-grep -q 'Remedio' "$WORK/out.txt" && ok "y el remedio literal" || malo "sin remedio"
+[ "$(corre)" = "1" ] && ok "without filas AND with <EmptyState> => red" "rc=1" || malo "the risky case did NOT block"
+grep -q 'NEW' "$WORK/out.txt" && ok "and labels it NEW" || malo "does not label it as new"
+grep -qE 'a\.tsx:[0-9]+' "$WORK/out.txt" && ok "and reports file:line" || malo "does not report the line"
+grep -q 'Fix' "$WORK/out.txt" && ok "and the exact remedy" || malo "no remedy"
 
 # 4 · con la baseline al día, ese mismo árbol es verde.
 printf 'web/src/features/a.tsx\t1\n' >"$BASE_FALSA"
-[ "$(corre)" = "0" ] && ok "en la baseline => verde" || malo "con baseline al día salió rojo"
+[ "$(corre)" = "0" ] && ok "in the baseline => green" || malo "an up-to-date baseline returned red"
 
 # 5 · ⛔ SUBIR es rojo (dos montajes donde la baseline dice uno).
 cat >"$SRC/a.tsx" <<'FIN'
@@ -101,13 +109,13 @@ export function V() {
   </div>)
 }
 FIN
-[ "$(corre)" = "1" ] && ok "subir de 1 a 2 => rojo" || malo "una subida no cortó"
-grep -q 'SUBE' "$WORK/out.txt" && ok "y lo llama SUBE" || malo "no distingue subida de nuevo"
+[ "$(corre)" = "1" ] && ok "increase from 1 to 2 => red" || malo "an increase did not block"
+grep -q 'INCREASE' "$WORK/out.txt" && ok "and labels it INCREASE" || malo "does not distinguish an increase from a new entry"
 
 # 6 · ⛔ BAJAR sin actualizar la baseline TAMBIÉN es rojo: si no, el trinquete no aprieta nunca.
 pinta a.tsx con-filas con-vacio
-[ "$(corre)" = "1" ] && ok "resolver sin bajar la baseline => rojo" || malo "el trinquete no aprieta"
-grep -q 'RESUELTO' "$WORK/out.txt" && ok "y dice que quite la línea" || malo "no dice cómo apretarlo"
+[ "$(corre)" = "1" ] && ok "resolve without lowering the baseline => red" || malo "the ratchet does not tighten"
+grep -q 'RESOLVED' "$WORK/out.txt" && ok "and says to remove the line" || malo "does not say how to tighten it"
 
 # 8 · ⛔ UN RENOMBRADO NO PUEDE LEERSE COMO UN EMPEORAMIENTO. Mover un fichero produce un NUEVO y
 #    un RESUELTO por una edición que no cambió una línea de JSX. Sigue siendo rojo —la baseline
@@ -117,12 +125,12 @@ rm -f "$SRC"/*.tsx
 pinta renombrado.tsx sin-filas con-vacio
 printf 'web/src/features/original.tsx\t1\n' >"$BASE_FALSA"
 rc="$(corre)"
-[ "$rc" = "1" ] && ok "renombrado => sigue siendo rojo" "rc=1" || malo "un renombrado no cortó"
-grep -q 'RENOMBRADO o un reparto' "$WORK/out.txt" && ok "y lo NOMBRA como posible renombrado" || malo "lo acusa de empeoramiento"
-grep -q 'TAMBIEN con' "$WORK/out.txt" && ok "y NO afirma que nadie añadió nada" || malo "⛔ afirma lo que no puede saber"
-grep -q 'EL TOTAL NO HA CAMBIADO (1)' "$WORK/out.txt" && ok "y cita el total invariante" || malo "no dice que el total no cambió"
-grep -q -- '- web/src/features/original.tsx' "$WORK/out.txt" && ok "y da la línea a quitar" || malo "no da la edición"
-grep -q -- '+ web/src/features/renombrado.tsx' "$WORK/out.txt" && ok "y la línea a poner" || malo "no da la línea nueva"
+[ "$rc" = "1" ] && ok "rename => still red" "rc=1" || malo "a rename did not block"
+grep -q 'rename or a redistribution' "$WORK/out.txt" && ok "and NAMES it as a possible rename" || malo "reports it as a regression"
+grep -q 'or a resolved case plus a new one' "$WORK/out.txt" && ok "and does NOT claim that nothing was added" || malo "⛔ claims something it cannot know"
+grep -q 'THE TOTAL IS UNCHANGED (1)' "$WORK/out.txt" && ok "and cites the unchanged total" || malo "does not say that the total is unchanged"
+grep -q -- '- web/src/features/original.tsx' "$WORK/out.txt" && ok "and reports the line to remove" || malo "does not provide the edit"
+grep -q -- '+ web/src/features/renombrado.tsx' "$WORK/out.txt" && ok "and the line to add" || malo "does not provide the new line"
 
 # 8 bis · y un empeoramiento REAL no se disfraza de renombrado: el total sube, así que no hay aviso.
 cat >"$SRC/renombrado.tsx" <<'FIN'
@@ -135,7 +143,7 @@ export function V() {
 }
 FIN
 corre >/dev/null
-grep -q 'RENOMBRADO o un reparto' "$WORK/out.txt" && malo "⛔ llamó renombrado a un empeoramiento real" || ok "un empeoramiento real NO se disfraza" "el total sube"
+grep -q 'rename or a redistribution' "$WORK/out.txt" && malo "⛔ called an actual regression a rename" || ok "an actual regression is NOT disguised" "the total increases"
 
 # 8 ter · ⛔⛔ EL CASO QUE ROMPE EL AVISO DE RENOMBRADO, y que mi primer negativo NO cubria: un
 #     total invariante tambien sale de «uno ARREGLADO + uno NUEVO». Si el aviso afirmara que nadie
@@ -146,10 +154,10 @@ pinta C.tsx sin-filas con-vacio      # A renombrado a C
 pinta B.tsx con-filas con-vacio      # B arreglado
 pinta D.tsx sin-filas con-vacio      # D NUEVO — el empeoramiento escondido
 printf 'web/src/features/A.tsx\t1\nweb/src/features/B.tsx\t1\n' >"$BASE_FALSA"
-[ "$(corre)" = "1" ] && ok "renombrado + arreglo + alta => rojo" "rc=1" || malo "no cortó"
-grep -q 'TAMBIEN con «uno arreglado + uno nuevo»' "$WORK/out.txt" && ok "y NOMBRA la otra lectura" || malo "⛔ el aviso afirma que es una mudanza"
-grep -q 'NO puedo distinguirlos' "$WORK/out.txt" && ok "y admite que no distingue" || malo "no admite el limite"
-grep -qE '\+ web/src/features/D\.tsx' "$WORK/out.txt" && ok "y el alta real sale en la lista" || malo "el alta no se ve"
+[ "$(corre)" = "1" ] && ok "rename + fix + addition => red" "rc=1" || malo "did not block"
+grep -q 'or a resolved case plus a new one' "$WORK/out.txt" && ok "and NAMES the alternative interpretation" || malo "⛔ the notice claims it is a move"
+grep -q 'cannot distinguish them' "$WORK/out.txt" && ok "and admits it cannot distinguish them" || malo "does not acknowledge the limit"
+grep -qE '\+ web/src/features/D\.tsx' "$WORK/out.txt" && ok "and the actual addition appears in the list" || malo "the addition is not shown"
 
 # 9 · ⛔⛔ EL TRINQUETE DE VERDAD: no basta con casar con la baseline PRESENTE. Un commit que
 #     suba el riesgo en el JSX **y** suba la baseline a la vez salia VERDE — la baseline nueva se
@@ -174,10 +182,10 @@ rm -f "$SRC"/a.tsx "$SRC"/renombrado.tsx "$SRC"/B.tsx "$SRC"/C.tsx "$SRC"/D.tsx
 printf 'web/src/features/M.tsx\t1\n' >"$WORK/antes.txt"
 printf 'web/src/features/M.tsx\t2\n' >"$WORK/ahora.txt"
 [ "$(mono "$WORK/antes.txt" "$WORK/ahora.txt")" = "1" ] &&
-	ok "sube JSX + sube baseline => ROJO" "rc=1" || malo "⛔ la baseline se autorizó a sí misma"
-grep -q 'SUBE EL RIESGO RESPECTO A LA BASE' "$WORK/m.txt" && ok "y lo dice con esas palabras" || malo "no nombra la causa"
-grep -q 'web/src/features/M.tsx: 1 → 2' "$WORK/m.txt" && ok "y nombra la ruta con el salto" || malo "no da la ruta"
-grep -q 'El TOTAL sube respecto a la base' "$WORK/m.txt" && ok "y también por total" || malo "no comprueba el total"
+	ok "JSX increases + baseline increases => RED" "rc=1" || malo "⛔ the baseline authorized itself"
+grep -q 'RISK INCREASED FROM THE BASE' "$WORK/m.txt" && ok "and says so explicitly" || malo "does not name the cause"
+grep -q 'web/src/features/M.tsx: 1 → 2' "$WORK/m.txt" && ok "and names the path with the increase" || malo "does not provide the path"
+grep -q 'TOTAL increased from the base' "$WORK/m.txt" && ok "and also checks the total" || malo "does not check the total"
 
 # ⛔ EL NEGATIVO: una BAJADA real sigue siendo verde, o el trinquete impediria mejorar.
 cat >"$SRC/M.tsx" <<'FIN'
@@ -190,53 +198,52 @@ export function V() {
 FIN
 : >"$WORK/vacia.txt"
 [ "$(mono "$WORK/antes.txt" "$WORK/vacia.txt")" = "0" ] &&
-	ok "arreglar y vaciar la baseline => VERDE" "el trinquete deja mejorar" || { malo "una bajada real salió roja"; head -4 "$WORK/m.txt"; }
+	ok "fix and empty the baseline => GREEN" "the ratchet allows improvements" || { malo "an actual decrease returned red"; head -4 "$WORK/m.txt"; }
 
 # ⛔ Y SIN forma de leer la base, se DECLARA parcial: no es verde silencioso.
 cp "$WORK/vacia.txt" "$BASE_FALSA"
 bash "$GUION_COPIA" >"$WORK/m2.txt" 2>&1
-grep -q 'PARCIAL' "$WORK/m2.txt" && ok "sin git ni base => lo DECLARA parcial" || malo "se calló que no comprobó la mitad monótona"
-grep -q 'NO esta verificado aqui' "$WORK/m2.txt" && ok "y dice QUÉ no verificó" || malo "no dice qué falta"
+grep -q 'PARTIAL' "$WORK/m2.txt" && ok "no git or baseline => DECLARES it partial" || malo "did not disclose that the monotonic half was not checked"
+grep -q 'could not verify that the baseline' "$WORK/m2.txt" && ok "and says WHAT was not verified" || malo "does not say what is missing"
 
-# 10 · ⛔⛔ LOS OVERRIDES NO PUEDEN DEBILITAR EL GATE, y en la v4 SÍ podían: la raíz se sustituía
-#      ANTES de preguntar a git, así que fijar `BADGE_RAIZ=<subdir sin git>` movía la pregunta a
-#      donde git no contesta y el MISMO árbol pasaba de rc 1 a rc 0 `PARCIAL`. Lo midió the reviewer.
-#      El comentario prometía justo lo contrario cuatro líneas más arriba — una garantía escrita
-#      donde no había control. Aquí está el control.
+# 10 · Overrides must not weaken the gate. v4 replaced the root before querying Git,
+# so BADGE_RAIZ=<nongit-subdirectory> changed the same tree from rc 1 to rc 0 PARCIAL.
+# the reviewer measured it. This case enforces the opposite guarantee the comment had
+# already claimed without a control.
 rm -f "$SRC"/*.tsx
 pinta OV.tsx sin-filas con-vacio
 : >"$BASE_FALSA"                       # baseline vacía ⇒ el montaje es NUEVO ⇒ rojo
 rc_normal="$(corre)"
-[ "$rc_normal" = "1" ] && ok "sin override, el árbol de prueba es rojo" "rc=1" || malo "el fixture no era rojo"
+[ "$rc_normal" = "1" ] && ok "without an override, the test tree is red" "rc=1" || malo "the fixture was not red"
 mkdir -p "$WORK/sin-git"
 : >"$WORK/baseline-mentirosa"
 BADGE_RAIZ="$WORK/sin-git" BADGE_SRC="$WORK/no-existe" BADGE_BASELINE="$WORK/baseline-mentirosa" \
 	bash "$GUION_COPIA" >"$WORK/ov.txt" 2>&1
 rc_ov="$?"
 [ "$rc_ov" = "1" ] &&
-	ok "las TRES variables son INERTES: el gate sigue rojo" "rc=1" ||
-	malo "⛔ el override apagó el gate (rc=$rc_ov)"
+	ok "all THREE variables are INERT: the gate stays red" "rc=1" ||
+	malo "⛔ the override disabled the gate (rc=$rc_ov)"
 # ⛔ Se busca el USO EJECUTABLE, no la palabra: el guion documenta en prosa por que se retiro
 #    la palanca, y una sonda por token contaria ese comentario como si fuera codigo.
 # ⛔ Y LA SONDA BUSCA LAS TRES, no la que me señalaron. Retire `BADGE_RAIZ` y deje vivas a sus
 #    dos hermanas: al quitar una palanca se barre su CLASE.
 _vivas="$(grep -vE '^[[:space:]]*#' "$GUION" | grep -cE 'BADGE_(RAIZ|SRC|BASELINE)' || true)"
 if [ "${_vivas:-0}" -eq 0 ]; then
-	ok "ninguna de las tres tiene uso ejecutable" "solo la prosa que lo explica"
+	ok "none of the three has executable uses" "only explanatory prose"
 else
-	malo "⛔ quedan $_vivas uso(s) ejecutable(s) de BADGE_RAIZ/SRC/BASELINE"
+	malo "⛔ $_vivas executable use(s) of BADGE_RAIZ/SRC/BASELINE remain"
 fi
-grep -q 'NUEVO' "$WORK/ov.txt" && ok "y sigue nombrando el hallazgo" || malo "el override se comió el detalle"
+grep -q 'NEW' "$WORK/ov.txt" && ok "and still names the finding" || malo "the override hid the details"
 
 # 7 · «no puedo mirar» ≠ «está limpio»
 mv "$FALSO/web/src" "$FALSO/web/src-guardado"
 bash "$GUION_COPIA" >/dev/null 2>&1
-[ "$?" = "2" ] && ok "fuente ausente => rc=2" || malo "no distingue 'no puedo mirar'"
+[ "$?" = "2" ] && ok "missing source => rc=2" || malo "does not distinguish 'could not inspect'"
 mv "$FALSO/web/src-guardado" "$FALSO/web/src"
 mv "$BASE_FALSA" "$WORK/base-guardada"
 bash "$GUION_COPIA" >/dev/null 2>&1
-[ "$?" = "2" ] && ok "baseline ausente => rc=2" || malo "sin baseline no dijo que no podía mirar"
+[ "$?" = "2" ] && ok "missing baseline => rc=2" || malo "without a baseline, did not report that inspection was impossible"
 
 echo
-echo "test-badge-vacio-filas: $pasan pasan, $fallan fallan"
-[ "$fallan" -eq 0 ]
+echo "test-badge-vacio-filas: $pass_count passed, $fail_count failed"
+[ "$fail_count" -eq 0 ]

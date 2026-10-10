@@ -15,11 +15,22 @@ import { useWorkspaceStore } from '@/stores/workspace'
 import { NowQueue } from './now-queue'
 import './i18n'
 
-const auth = vi.hoisted(() => ({ superadmin: true }))
+const auth = vi.hoisted(() => ({ superadmin: true, owner: false }))
 vi.mock('@/lib/auth/context', () => ({
   useAuth: () => ({
     ...DEFAULT_AUTH,
-    principal: { superadmin: auth.superadmin },
+    principal: {
+      superadmin: auth.superadmin,
+      grants: auth.owner
+        ? [
+            {
+              tenant: DEFAULT_AUTH.activeTenant,
+              role: 'owner',
+              permissions: [],
+            },
+          ]
+        : [],
+    },
     isSuperadmin: auth.superadmin,
     can: () => true,
   }),
@@ -66,6 +77,7 @@ function live(over: Partial<LiveDTO> = {}): LiveDTO {
 
 afterEach(() => {
   auth.superadmin = true
+  auth.owner = false
   useWorkspaceStore.setState({ activeWorkspace: null } as never)
   vi.restoreAllMocks()
 })
@@ -167,6 +179,22 @@ describe('NowQueue — what needs a person', () => {
     )
   })
 
+  it('the setup administrator (superadmin and owner here) is offered handoffs too (#503)', async () => {
+    auth.owner = true
+    useWorkspaceStore.setState({ activeWorkspace: 'w1' } as never)
+    const inbox = vi
+      .spyOn(communications, 'listHandoffInbox')
+      .mockResolvedValue({ items: [] } as never)
+    renderIntel(<NowQueue state="ready" sessions={[]} />)
+    await vi.waitFor(() =>
+      expect(inbox).toHaveBeenCalledWith(
+        expect.objectContaining({ workspace_id: 'w1', state: 'offered' }),
+        expect.anything(),
+        expect.anything(),
+      ),
+    )
+  })
+
   it('puts pending approvals first, with their progress, each opening the queue', () => {
     renderIntel(
       <NowQueue
@@ -190,11 +218,49 @@ describe('NowQueue — what needs a person', () => {
     )
     const row = screen.getByTestId('now-approval-row')
     expect(row.getAttribute('href')).toBe('/permissions?tab=approvals')
-    expect(row).toHaveTextContent('mcp.tools/call')
-    expect(row).toHaveTextContent('github/create_issue')
+    // The Approvals list's own words, not the engine's action name in code type.
+    expect(row).toHaveTextContent('Mcp tools/call')
+    expect(row).not.toHaveTextContent('mcp_tool github/create_issue')
     expect(row).toHaveTextContent('1 of 2')
     // An approval alone is something waiting: never "Nothing waits for you."
     expect(screen.queryByText('Nothing waits for you.')).toBeNull()
+    expectNoRawI18nKeys(document.body)
+  })
+
+  it('says who waits for what in the words the Approvals list uses (HU, binary 12)', () => {
+    renderIntel(
+      <NowQueue
+        state="ready"
+        sessions={[]}
+        approvals={[
+          {
+            id: 'ap-3',
+            action: 'sessions.provider.approval',
+            subject_kind: 'session_run',
+            subject_ref: '01a1029d-0000-7000-8000-000000000001',
+            requested_by: 'user:ada',
+            review: {
+              tool: 'Command',
+              text: "/bin/zsh -lc 'echo lane-b > b.txt'",
+            },
+            status: 'pending',
+            required_approvals: 1,
+            approve_count: 0,
+            reject_count: 0,
+            escalated: false,
+          },
+        ]}
+      />,
+    )
+    const row = screen.getByTestId('now-approval-row')
+    expect(row).toHaveTextContent('Command')
+    expect(row).toHaveTextContent("/bin/zsh -lc 'echo lane-b > b.txt'")
+    expect(row).not.toHaveTextContent('sessions.provider.approval')
+    expect(row).not.toHaveTextContent('session_run')
+    // The list's fixed 20rem column would overflow a narrow card: here it fills the row.
+    const cell = row.querySelector('[data-slot="approval-request"]')
+    expect(cell).toHaveClass('w-full', 'max-w-full')
+    expect(cell).not.toHaveClass('w-[20rem]')
     expectNoRawI18nKeys(document.body)
   })
 
@@ -220,7 +286,7 @@ describe('NowQueue — what needs a person', () => {
       />,
     )
     expect(screen.getByTestId('now-approval-row')).toHaveTextContent(
-      'deploy.promote',
+      'Deploy promote',
     )
     // Nothing about sessions it may not read: no failure line, no session read.
     expect(screen.queryByText('The sessions could not be read.')).toBeNull()

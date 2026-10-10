@@ -1,0 +1,13 @@
+{
+  "assets": [
+    {
+      "browser_download_url": "https://github.com/google-gemini/gemini-cli/releases/download/v0.62.0/gemini-cli-bundle.zip",
+      "digest": "sha256:68c199ca0c352ee3107e33d121faea24486f4416534224994357b567576e431c",
+      "name": "gemini-cli-bundle.zip",
+      "size": 21137054
+    }
+  ],
+  "draft": false,
+  "prerelease": false,
+  "tag_name": "v0.62.0"
+}

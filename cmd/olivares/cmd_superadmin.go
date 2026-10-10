@@ -31,8 +31,8 @@ func newSuperadminCmd() *cobra.Command {
 		Use:   "superadmin",
 		Short: "Enable/disable internal superadmin accounts (never deletes)",
 		Example: "  olivares superadmin status --data-dir /var/lib/olivares\n" +
-			"  olivares superadmin disable --email admin@example.com\n" +
-			"  olivares superadmin enable --email admin@example.com",
+			"  olivares superadmin disable --email admin@example.com --actor ops-oncall --reason offboarding\n" +
+			"  olivares superadmin enable --email admin@example.com --actor ops-oncall --reason leave-ended",
 		Long: "List the internal superadmin accounts and their active/inactive status, and enable\n" +
 			"or disable one. Disabling is non-destructive and reversible: the account is marked\n" +
 			"inactive and its live sessions/tokens are revoked, but it is never deleted — re-enable\n" +
@@ -139,7 +139,7 @@ func superadminSetActiveCmd(use string, active bool, short string) *cobra.Comman
 		Use:     use,
 		Short:   short,
 		Long:    short + ". The mutation is audited and targets exactly one account selected by --id or --email.",
-		Example: "  olivares superadmin " + use + " --email admin@example.com",
+		Example: "  olivares superadmin " + use + " --email admin@example.com --actor ops-oncall --reason maintenance",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			eng, err := auditBoot(cmd, dataDir, engine, dsn)

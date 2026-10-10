@@ -1,6 +1,6 @@
 {
   "title": "API-плейграунд",
-  "description": "Интерактивное изучение и тестирование API управляющего контура",
+  "description": "Изучение и тестирование API Olivares AI.",
   "filterPlaceholder": "Фильтр эндпоинтов…",
   "selectEndpoint": "Выберите эндпоинт на левой панели",
   "send": "Отправить",
@@ -32,7 +32,7 @@
     "networkError": "Ошибка сети",
     "failedNetworkHint": "Запрос не выполнен — проверьте сетевое подключение.",
     "blockedDestination": "Адрес назначения заблокирован",
-    "blockedDestinationHint": "API Playground может отправлять запросы только в эту плоскость управления.",
+    "blockedDestinationHint": "API Playground может отправлять запросы только на этот сервер Olivares AI.",
     "enterPathParam": "Введите {{name}}",
     "headerNamePlaceholder": "Имя заголовка",
     "headerValuePlaceholder": "Значение",

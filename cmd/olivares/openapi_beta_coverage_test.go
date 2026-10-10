@@ -46,7 +46,7 @@ func TestBetaOpenAPICoversEveryMountedModuleRoute(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	set, err := buildModules(signer, nil, nil, nil, nil, sourcesConfig{}, EditionConfig{}, t.TempDir(), log)
+	set, err := buildModules(nil, signer, nil, nil, nil, nil, nil, sourcesConfig{}, EditionConfig{}, t.TempDir(), log)
 	if err != nil {
 		t.Fatalf("build modules: %v", err)
 	}
@@ -140,7 +140,7 @@ func TestBetaOpenAPIClassifiesEveryMutationRequestBody(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	set, err := buildModules(signer, nil, nil, nil, nil, sourcesConfig{}, EditionConfig{}, t.TempDir(), log)
+	set, err := buildModules(nil, signer, nil, nil, nil, nil, nil, sourcesConfig{}, EditionConfig{}, t.TempDir(), log)
 	if err != nil {
 		t.Fatalf("build modules: %v", err)
 	}
@@ -163,6 +163,10 @@ func TestBetaOpenAPIClassifiesEveryMutationRequestBody(t *testing.T) {
 			case "schema-published", "opaque-body":
 				if !hasBody {
 					t.Errorf("%s %s: disposition %s requires requestBody", strings.ToUpper(method), path, disposition)
+					continue
+				}
+				if problem := requestBodySchemaProblem(op["requestBody"], disposition); problem != "" {
+					t.Errorf("%s %s: %s", strings.ToUpper(method), path, problem)
 				}
 			case "bodyless":
 				if hasBody {
@@ -195,7 +199,7 @@ func TestBetaModuleRouteSetIsDepIndependent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	nilDeps, err := buildModules(sg1, nil, nil, nil, nil, sourcesConfig{}, EditionConfig{}, t.TempDir(), log)
+	nilDeps, err := buildModules(nil, sg1, nil, nil, nil, nil, nil, sourcesConfig{}, EditionConfig{}, t.TempDir(), log)
 	if err != nil {
 		t.Fatalf("build nil-dependency modules: %v", err)
 	}
@@ -210,8 +214,8 @@ func TestBetaModuleRouteSetIsDepIndependent(t *testing.T) {
 	_, catalogKey, _ := ed25519.GenerateKey(nil)
 	_, policyKey, _ := ed25519.GenerateKey(nil)
 	priorPub, _, _ := ed25519.GenerateKey(nil)
-	realDeps, err := buildModules(sg2, catalogKey, policyKey, []ed25519.PublicKey{priorPub},
-		http.DefaultClient, sourcesConfig{}, EditionConfig{}, t.TempDir(), log)
+	realDeps, err := buildModules(nil, sg2, catalogKey, policyKey, []ed25519.PublicKey{priorPub},
+		http.DefaultClient, nil, sourcesConfig{}, EditionConfig{}, t.TempDir(), log)
 	if err != nil {
 		t.Fatalf("build real-dependency modules: %v", err)
 	}
@@ -249,4 +253,63 @@ func minus(a, b []string) []string {
 		}
 	}
 	return out
+}
+
+// requestBodySchemaProblem checks the published body against its disposition: a
+// schema-published body carries a non-empty schema, an opaque one invents no
+// properties.
+func requestBodySchemaProblem(requestBody any, disposition string) string {
+	body, _ := requestBody.(map[string]any)
+	content, _ := body["content"].(map[string]any)
+	if len(content) == 0 {
+		return disposition + " requestBody has no content"
+	}
+	for mediaType, rawMedia := range content {
+		media, _ := rawMedia.(map[string]any)
+		schema, ok := media["schema"].(map[string]any)
+		if !ok {
+			return disposition + " requestBody " + mediaType + " has no schema object"
+		}
+		if disposition == "schema-published" && len(schema) == 0 {
+			return disposition + " requestBody " + mediaType + " has an empty schema"
+		}
+		if _, invented := schema["properties"]; disposition == "opaque-body" && invented {
+			return disposition + " requestBody " + mediaType + " publishes schema properties"
+		}
+	}
+	return ""
+}
+
+// TestBetaModulesImplementTheDocumenterTheyDeclare fails when a module declares
+// an OperationDocumentation method that is not api.ModuleOperationDocumenter
+// (wrong signature or receiver): the core would skip it without an error and
+// publish the generic envelope for every route of the module.
+func TestBetaModulesImplementTheDocumenterTheyDeclare(t *testing.T) {
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	_, priv, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	signer, err := audit.NewSigner(priv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	set, err := buildModules(nil, signer, nil, nil, nil, nil, nil, sourcesConfig{}, EditionConfig{}, t.TempDir(), log)
+	if err != nil {
+		t.Fatalf("build modules: %v", err)
+	}
+	documenters := 0
+	for _, m := range set.all {
+		if _, declares := reflect.TypeOf(m).MethodByName("OperationDocumentation"); !declares {
+			continue
+		}
+		if _, ok := m.(api.ModuleOperationDocumenter); !ok {
+			t.Errorf("%s declares OperationDocumentation but is not an api.ModuleOperationDocumenter", m.APINamespace())
+			continue
+		}
+		documenters++
+	}
+	if documenters == 0 {
+		t.Fatal("no production module documents its operations")
+	}
 }

@@ -7,21 +7,46 @@
 package main
 
 import (
+	"reflect"
+	"slices"
 	"testing"
-	"time"
 
-	"github.com/olivaresai/olivares/core/license"
+	"github.com/olivaresai/olivares/modules/sessioncockpit"
 )
 
-func TestCommunityEntitlementBindingDoesNotConsultLicense(t *testing.T) {
-	holder := &licenseHolder{clock: func() time.Time {
-		t.Fatal("Community binder consulted the license holder")
-		return time.Time{}
-	}}
-	bindEnterpriseEntitlement(func() ([]license.Grant, bool) {
-		t.Fatal("Community binder consulted license grants")
-		return nil, false
-	}, holder)
-	// A Community deployment without commercial inputs has the same no-op.
-	bindEnterpriseEntitlement(nil, nil)
+// Community is the zero value of editionPorts plus its real behaviors. A port filled
+// here would be a Community stand-in for a Business capability; a behavior dropped
+// here would leave a caller with a nil it never handled.
+func TestCommunityEditionIsTheZeroValuePlusItsBehaviors(t *testing.T) {
+	want := []string{"name", "seatPolicy", "upstreamCredentialProvider", "durableBus",
+		"moduleRegistrars", "circuitBreakerDeclarations"}
+	ports := reflect.ValueOf(editionPortsForBuild())
+	var filled []string
+	for i := range ports.NumField() {
+		if !ports.Field(i).IsZero() {
+			filled = append(filled, ports.Type().Field(i).Name)
+		}
+	}
+	slices.Sort(filled)
+	slices.Sort(want)
+	if !slices.Equal(filled, want) {
+		t.Fatalf("Community fills %v, want exactly %v", filled, want)
+	}
+	if thisEdition.name != "community" {
+		t.Fatalf("edition name %q, want community", thisEdition.name)
+	}
+	mods := thisEdition.moduleRegistrars(EditionConfig{})
+	if len(mods) != 1 {
+		t.Fatalf("Community mounts %d edition modules, want only the placeholder", len(mods))
+	}
+	if _, ok := mods[0].(*sessioncockpit.Placeholder); !ok {
+		t.Fatalf("Community edition module is %T, want the session-cockpit placeholder", mods[0])
+	}
+	if limit, ok := thisEdition.seatPolicy(nil, nil).MaxActiveUsers(); ok || limit > 0 {
+		t.Fatalf("Community seat policy reports %d (ok=%v), want unlimited", limit, ok)
+	}
+	provider, ok := thisEdition.upstreamCredentialProvider("Bearer static").(*staticCredentialProvider)
+	if !ok || provider.authHeader != "Bearer static" {
+		t.Fatalf("Community upstream credential provider %#v, want the static header", provider)
+	}
 }

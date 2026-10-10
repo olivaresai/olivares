@@ -242,7 +242,7 @@ func (p *grokFixturePeer) handle(frame map[string]json.RawMessage) {
 	p.rec.Methods = append(p.rec.Methods, method)
 	p.rec.Envelopes = append(p.rec.Envelopes, envelope)
 	if !hasID {
-		if method == grokMethodSessionCancel {
+		if method == acpMethodSessionCancel {
 			p.releaseHeldPrompt("cancelled")
 		}
 		p.flush()
@@ -266,7 +266,7 @@ func (p *grokFixturePeer) handle(frame map[string]json.RawMessage) {
 	p.flush()
 
 	switch method {
-	case grokMethodInitialize:
+	case acpMethodInitialize:
 		if raw, ok := params["clientCapabilities"]; ok {
 			p.rec.ClientCaps = append(json.RawMessage(nil), raw...)
 		}
@@ -284,7 +284,7 @@ func (p *grokFixturePeer) handle(frame map[string]json.RawMessage) {
 			return
 		}
 		p.reply(id, map[string]any{})
-	case grokMethodSessionNew:
+	case acpMethodSessionNew:
 		cwd := ""
 		if raw, ok := params["cwd"]; ok {
 			_ = json.Unmarshal(raw, &cwd)
@@ -293,12 +293,12 @@ func (p *grokFixturePeer) handle(frame map[string]json.RawMessage) {
 		p.flush()
 		p.waitFor(p.cfg.HoldNewPath)
 		if p.cfg.NewSessionAuthRequired {
-			p.replyError(id, grokErrAuthRequired, "Authentication required")
+			p.replyError(id, acpErrAuthRequired, "Authentication required")
 			return
 		}
 		p.session = p.cfg.SessionID
 		p.reply(id, map[string]any{"sessionId": p.session})
-	case grokMethodSessionResume, grokMethodSessionLoad:
+	case acpMethodSessionResume, acpMethodSessionLoad:
 		requested := ""
 		if raw, ok := params["sessionId"]; ok {
 			_ = json.Unmarshal(raw, &requested)
@@ -325,7 +325,7 @@ func (p *grokFixturePeer) handle(frame map[string]json.RawMessage) {
 			// A null result: the protocol's own legal success for a load.
 			p.replyNull(id)
 		}
-	case grokMethodSessionPrompt:
+	case acpMethodSessionPrompt:
 		text := ""
 		if raw, ok := params["prompt"]; ok {
 			var blocks []struct {
@@ -338,10 +338,10 @@ func (p *grokFixturePeer) handle(frame map[string]json.RawMessage) {
 		p.rec.PromptTexts = append(p.rec.PromptTexts, text)
 		p.flush()
 		p.onPrompt(id)
-	case grokMethodSessionClose:
+	case acpMethodSessionClose:
 		p.reply(id, map[string]any{})
 	default:
-		p.replyError(id, grokErrMethodNotSupported, "the fixture peer does not implement "+method)
+		p.replyError(id, acpErrMethodNotSupported, "the fixture peer does not implement "+method)
 	}
 }
 
@@ -362,7 +362,7 @@ func (p *grokFixturePeer) onPrompt(id json.RawMessage) {
 	}
 	if p.cfg.PermissionOnTurn != "" {
 		p.send(map[string]any{
-			"jsonrpc": "2.0", "id": "srv-1", "method": grokReqRequestPermission,
+			"jsonrpc": "2.0", "id": "srv-1", "method": acpReqRequestPermission,
 			"params": map[string]any{
 				"sessionId": p.session,
 				"toolCall": map[string]any{
@@ -378,7 +378,7 @@ func (p *grokFixturePeer) onPrompt(id json.RawMessage) {
 		// The delayed result: the turn stays in flight until the process ends.
 		return
 	case "auth":
-		p.replyError(id, grokErrAuthRequired, "Authentication required")
+		p.replyError(id, acpErrAuthRequired, "Authentication required")
 	case "hold":
 		p.mu.Lock()
 		p.heldPrompt = append(json.RawMessage(nil), id...)
@@ -412,7 +412,7 @@ func (p *grokFixturePeer) releaseHeldPrompt(reason string) {
 func (p *grokFixturePeer) initializeResult() map[string]any {
 	version := p.cfg.ProtocolVersion
 	if version == 0 {
-		version = grokProtocolVersion
+		version = acpProtocolVersion
 	}
 	sessionCaps := map[string]any{"list": map[string]any{}, "close": map[string]any{}}
 	if !p.cfg.NoResumeCapability {
@@ -452,10 +452,10 @@ func (p *grokFixturePeer) initializeResult() map[string]any {
 // given tool call is NOT observed, which is exactly why the driver decides over
 // what it is sent rather than over a table.
 func grokFixturePermissionOptions(name string) []any {
-	allowOnce := map[string]any{"optionId": "allow-once", "name": "Allow once", "kind": grokPermissionAllowOnce}
-	allowAlways := map[string]any{"optionId": "allow-always", "name": "Always allow", "kind": grokPermissionAllowAlways}
-	rejectOnce := map[string]any{"optionId": "reject-once", "name": "Reject", "kind": grokPermissionRejectOnce}
-	rejectAlways := map[string]any{"optionId": "reject-always", "name": "Never allow", "kind": grokPermissionRejectAlways}
+	allowOnce := map[string]any{"optionId": "allow-once", "name": "Allow once", "kind": acpPermissionAllowOnce}
+	allowAlways := map[string]any{"optionId": "allow-always", "name": "Always allow", "kind": acpPermissionAllowAlways}
+	rejectOnce := map[string]any{"optionId": "reject-once", "name": "Reject", "kind": acpPermissionRejectOnce}
+	rejectAlways := map[string]any{"optionId": "reject-always", "name": "Never allow", "kind": acpPermissionRejectAlways}
 	switch name {
 	case "allow-only":
 		return []any{allowOnce, allowAlways}
@@ -463,7 +463,7 @@ func grokFixturePermissionOptions(name string) []any {
 		return []any{allowAlways, rejectAlways}
 	case "duplicate":
 		return []any{allowOnce, map[string]any{
-			"optionId": "allow-once", "name": "Allow once again", "kind": grokPermissionRejectOnce,
+			"optionId": "allow-once", "name": "Allow once again", "kind": acpPermissionRejectOnce,
 		}}
 	case "unknown-kinds":
 		return []any{map[string]any{"optionId": "mystery", "name": "?", "kind": "teleport"}}
@@ -476,7 +476,7 @@ func grokFixturePermissionOptions(name string) []any {
 
 func (p *grokFixturePeer) sendUpdate(session, kind, text string) {
 	p.send(map[string]any{
-		"jsonrpc": "2.0", "method": grokNotifySessionUpdate,
+		"jsonrpc": "2.0", "method": acpNotifySessionUpdate,
 		"params": map[string]any{
 			"sessionId": session,
 			"update": map[string]any{

@@ -9,10 +9,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"slices"
 	"sort"
 	"testing"
 
+	coreengine "github.com/olivaresai/olivares/core/engine"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/residency"
 	"github.com/olivaresai/olivares/core/store"
@@ -343,26 +345,8 @@ func assertCommunicationWP3OffTerms(t *testing.T, phase string, eng *engine, wan
 	}
 }
 
-// TestBootWiresCommunicationStoreWitnessButKeepsWP3OffSQLite proves the two
-// store phases boot actually declares on a fresh SQLite estate with activation
-// and every K3 custody setting unset:
-//
-//   - staged: a fresh estate starts with the directory writer control staged
-//     at generation 1, so the composite proof (communicationstoreproof.go)
-//     names exactly the two activation blockers and StoreReady is false, even
-//     though the guard estate ceremony and the schema proof already passed at
-//     the promotion barrier;
-//   - enforced: after the operator ceremony `olivares db
-//     activate-directory-writer` on the CLOSED store and a reopen, the same
-//     proof is ready with no blockers and StoreReady is true.
-//
-// WP3 stays OFF in both phases and is asserted term by term: the resolver and
-// the request-authority bundle are bound deliberately on every boot
-// (ea711842e5 composed K3 lot A; 34adc27bb made the bundle the PermissionsReady
-// term), while credentials, the sealer, the pump witness and the cursor keyring
-// stay unbound because nothing requested them. The fresh-tenant initializer
-// invariant is proved in both phases and the promotion proof of the enforced
-// phase covers the tenant created while staged.
+// A legacy staged estate needs explicit writer activation. With communication
+// unrequested, its credentials, sealer and pump stay off in both store phases.
 func TestBootWiresCommunicationStoreWitnessButKeepsWP3OffSQLite(t *testing.T) {
 	t.Setenv(envKeyWrap, "")
 	t.Setenv(envCommunicationActivation, "")
@@ -370,8 +354,19 @@ func TestBootWiresCommunicationStoreWitnessButKeepsWP3OffSQLite(t *testing.T) {
 	t.Setenv(envCommunicationCursorKeyringFile, "")
 	ctx := context.Background()
 	dir := t.TempDir()
+	registrar, err := bootSchemaRegistrar(discardLogger())
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacy, err := coreengine.Open(ctx, store.Config{Engine: store.EngineSQLite, DSN: filepath.Join(dir, "olivares.db")}, registrar)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := legacy.Close(); err != nil {
+		t.Fatal(err)
+	}
 
-	// Phase 1: fresh estate, writer control staged at generation 1.
+	// The legacy estate starts staged at generation 1.
 	var eng *engine
 	t.Cleanup(func() {
 		if eng != nil {

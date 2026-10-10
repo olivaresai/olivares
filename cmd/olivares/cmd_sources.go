@@ -32,8 +32,8 @@ func newSourcesCmd() *cobra.Command {
 		Short: "Manage the durable source roster (connectors the engine ingests from)",
 		Example: "  olivares sources ls --data-dir /var/lib/olivares\n" +
 			"  olivares sources plan --name vault-prod --tenant t_abc123\n" +
-			"  olivares sources set --name vault-prod --kind vault --tenant t_abc123\n" +
-			"  olivares sources rm --name vault-prod",
+			"  olivares sources set --name vault-prod --kind vault --tenant t_abc123 --actor ops-oncall --reason onboarding\n" +
+			"  olivares sources rm --name vault-prod --yes --actor ops-oncall --reason retired-integration",
 		Long: "Author the observation-source connectors the engine ingests from, persisted so they\n" +
 			"survive a restart and reconcile into a running engine WITHOUT one (reload via the API\n" +
 			"or SIGHUP). Config carries secret REFERENCES (store:<name>), never values.\n\n" +
@@ -66,7 +66,7 @@ func sourcesListCmd() *cobra.Command {
 		Example: "  olivares sources ls --data-dir /var/lib/olivares",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			eng, err := auditBootRO(cmd, dataDir, engine, dsn)
+			eng, err := authReadBoot(cmd, dataDir, engine, dsn)
 			if err != nil {
 				return err
 			}
@@ -127,30 +127,8 @@ type sourceGetItem struct {
 	Config      map[string]string `json:"config"`
 }
 
-// sourcesGetCmd closes the gap docs/CLI-VERB-PARITY.md records as a REAL GAP: a
-// source's configuration is writable and not readable. `ls` renders six columns and
-// not the config (:49-56), and `plan` does not fill the hole — on an unchanged row it
-// prints NO-OP with an empty change set, because it reports a DIFF, not a state.
-//
-// Why it matters beyond ergonomics: the roster's contract is that config carries
-// REFERENCES, never values (:18-26). An operator who cannot see WHICH reference a
-// source resolves at Open cannot audit that contract.
-//
-// ⛔ AND IT MASKS THROUGH `planValue`, WHICH IS NOT A COURTESY. The parity note states
-// the constraint: a row written before the inline-secret guard existed can still hold a
-// literal, so printing config verbatim would publish to stdout — and to `-o json` — a
-// credential that `set` would refuse today. Reusing the plan's rule rather than a fresh
-// one is deliberate: `planValue` asks the connector's OWN secret declaration first, and
-// the sol-max contrast caught an earlier version that skipped exactly that and printed a
-// `ghp_...` in full. One masking rule, one place to fix it.
-//
-// ⚠ Y EL LÍMITE DE ESA REGLA SE DICE AQUÍ, porque este verbo invita a confiar en ella más
-// que `plan`: para una fuente de PLUGIN, `secretConfigKeys` devuelve el conjunto VACÍO
-// (cmd_sources_plan.go:289-291 — el descriptor del conector vive en un binario externo y no
-// se puede consultar en proceso). Ahí el enmascarado se apoya sólo en las dos heurísticas,
-// así que un literal en una clave que ninguna reconozca se imprimiría. Es la conducta que
-// `plan` ya tiene y no la cambio por mi cuenta; queda escrita para que quien lea `get` no
-// suponga que la máscara es completa.
+// Source reads preserve the preview's masking rules. A plugin's descriptor is
+// unavailable in process, so its masking still depends on the existing heuristics.
 func sourcesGetCmd() *cobra.Command {
 	var dataDir, engine, dsn string
 	cmd := &cobra.Command{
@@ -163,7 +141,7 @@ func sourcesGetCmd() *cobra.Command {
 		Example: "  olivares sources get github-main --data-dir /var/lib/olivares",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			eng, err := auditBootRO(cmd, dataDir, engine, dsn)
+			eng, err := authReadBoot(cmd, dataDir, engine, dsn)
 			if err != nil {
 				return err
 			}
@@ -247,10 +225,11 @@ func sourcesSetCmd() *cobra.Command {
 			"nothing. A plan is not required — it is offered.",
 		Example: `  # Add a Vault connector source
   olivares sources set --name vault-prod --kind vault --tenant t_abc123 \
-    --config addr=https://vault.internal:8200 --config token=store:vault/token
+    --config addr=https://vault.internal:8200 --config token=store:vault/token \
+    --actor ops-oncall --reason onboarding
 
   # Disable an existing source without changing anything else
-  olivares sources set --name vault-prod --enabled=false`,
+  olivares sources set --name vault-prod --enabled=false --actor ops-oncall --reason maintenance-window`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			// EVERY refusal that can be decided from the ARGUMENTS ALONE is decided
@@ -438,7 +417,7 @@ func sourcesRemoveCmd() *cobra.Command {
 		Use:     "rm",
 		Short:   "Delete a source from the roster",
 		Long:    "rm removes one named connector from the durable source roster; reload a running engine to stop it immediately.",
-		Example: "  olivares sources rm --name vault-prod",
+		Example: "  olivares sources rm --name vault-prod --yes --actor ops-oncall --reason retired-integration",
 		Args:    cobra.NoArgs,
 		Aliases: []string{"remove", "delete"},
 		RunE: func(cmd *cobra.Command, _ []string) error {

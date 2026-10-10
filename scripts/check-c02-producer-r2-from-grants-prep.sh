@@ -39,7 +39,7 @@ grep -F -q 'Unique leftover unique vs `check-c02-producer-r2-from-grants.sh`' "$
   || fail "prepare doc lost uniqueness vs original producer-R2 check"
 grep -q 'delivery NOT CLOSED' "$DOC" || fail "prepare doc lost delivery NOT CLOSED"
 if grep -qiE 'bytes are real|FIRMA A claimed|stub gone' "$DOC"; then
-  fail "prepare doc claims a close this lote does not have"
+  fail "prepare doc claims a close this batch does not have"
 fi
 # ⛔ LA PROPIEDAD ES «LA CLAVE LLEVA EL CONJUNTO», Y HOY SE PUEDE ESCRIBIR DE DOS FORMAS.
 # Este check exigia el literal `enterprise/${VERSION}/${SET}/` DENTRO del publicador. `f42b3442b`
@@ -62,9 +62,9 @@ if [ "$_set_ok" -eq 0 ] && grep -Fq 'leer_contrato keys.artifact' "$PUB"; then
   # El publicador toma la clave del contrato: sin el contrato NO SE PUEDE MIRAR, y eso no es
   # lo mismo que estar roto. Un senuelo que copia el publicador y olvida el contrato caia
   # aqui como FAIL y acusaba al arbol de un defecto del banco.
-  [ -r "$CONTRATO" ] || cannot "el publicador lee keys.artifact y no encuentro $CONTRATO"
+  [ -r "$CONTRATO" ] || cannot "the publisher reads keys.artifact, but cannot find $CONTRATO"
   _art="$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["keys"]["artifact"])' "$CONTRATO" 2>/dev/null)" \
-    || cannot "el publicador lee keys.artifact del contrato y el contrato no lo declara"
+    || cannot "the publisher reads keys.artifact, but the contract does not declare it"
   case "$_art" in
     */'{set}'/*) _set_ok=1 ;;
     'enterprise/{version}/olivares'*) _unscoped=1 ;;

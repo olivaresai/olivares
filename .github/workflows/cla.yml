@@ -1,0 +1,29 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+name: CLA
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, edited, ready_for_review]
+permissions:
+  contents: read
+jobs:
+  cla:
+    # Outside contributors sign the CLA in the public repository.
+    # Bot accounts (Dependabot) cannot sign a CLA; GitHub sets this type, a person cannot.
+    if: github.repository == 'olivaresai/olivares' && github.event.pull_request.user.type != 'Bot'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # The workflow itself also comes from the trusted base via pull_request_target.
+      # Never check out or execute the PR head in this job.
+      # Both the program and record come from the base, never from the PR.
+      # A contributor cannot record their own signature or replace the checker.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
+      - name: Require a recorded CLA or maintainer exemption
+        env:
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          PR_AUTHOR_ASSOCIATION: ${{ github.event.pull_request.author_association }}
+        run: python3 scripts/check-cla.py "$PR_AUTHOR" "$PR_AUTHOR_ASSOCIATION" .github/CLA-SIGNATURES

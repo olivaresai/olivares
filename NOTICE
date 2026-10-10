@@ -16,8 +16,9 @@ specific language governing permissions and limitations under the License.
 
 The remainder of this repository (including /core, /modules, /web and /cmd) is
 licensed under the GNU Affero General Public License, version 3 (AGPL-3.0-only).
-The separate, additive Enterprise Edition is distributed privately under the
-Olivares.AI Commercial License and is not included in this repository. See
+The separate, additive commercial editions (Business and Enterprise) are
+distributed privately under the Olivares.AI Commercial License and are not
+included in this repository. See
 LICENSING.md for the full per-directory breakdown and the dual-license exception.
 Which license governs a given file is stated by that file's SPDX header, and for a
 released artifact by the SBOM published with it; the per-directory breakdown
@@ -41,6 +42,20 @@ Apache-2.0.
 
 NOTICES FOR THIRD-PARTY COMPONENTS:
 
+  * Stripe smokescreen v0.1.0 (github.com/stripe/smokescreen), unmodified Go module.
+    Copyright (c) 2016 Stripe. MIT License; see LICENSES/third-party/smokescreen.txt.
+    Its Stripe goproxy dependency is BSD-3-Clause; see LICENSES/third-party/goproxy.txt.
+
+  * Docker's default seccomp profile (deploy/seccomp/olivares-sessions.json), from
+    github.com/moby/profiles seccomp v0.2.3, modified only in its clone namespace
+    mask as its "comment" fields state. Copyright The Moby Authors.
+    Licensed under the Apache License, Version 2.0.
+
+  * Docker default AppArmor policy (deploy/apparmor/olivares-sessions.conf), from
+    github.com/moby/moby v26.1.5 profiles/apparmor/template.go. Profile and daemon
+    signal peer names are fixed; user namespace creation is permitted.
+    Copyright The Moby Authors. Licensed under the Apache License, Version 2.0.
+
   * Official OCSF schema files (sdk/siemwire/testdata/ocsf/), vendored verbatim
     from the OCSF schema project (https://github.com/ocsf/ocsf-schema).
     Copyright OCSF contributors. Licensed under the Apache License, Version 2.0.
@@ -57,6 +72,30 @@ NOTICES FOR THIRD-PARTY COMPONENTS:
     Copyright 2020 The JetBrains Mono Project Authors.
     Licensed under the SIL Open Font License, Version 1.1; the license text ships
     with the console as web/public/licenses/fonts/JetBrainsMono-OFL.txt.
+
+  * OpenAI Whisper tiny speech model (multilingual), in the ONNX export
+    onnx-community/whisper-tiny at revision ff4177021cc41f7db950912b73ea4fdf7d01d8e7
+    (https://huggingface.co/onnx-community/whisper-tiny): its 8-bit encoder and
+    decoder, configuration and tokenizer, unmodified, fetched at build time against the
+    SHA-256 pinned in web/src/features/dictation/whisper-model.json and embedded in the
+    console under assets/voice/ for in-browser dictation. Copyright (c) 2022 OpenAI.
+    MIT License; the license text ships with the console as
+    web/public/licenses/whisper/Whisper-MIT.txt.
+
+  * ECC (https://github.com/affaan-m/ECC), release v2.2.3, commit
+    c05b2d6614f62f6db0047669aa4eefb223d478f9: 285 of its skills, with file contents
+    unmodified, as the built-in skills catalog (modules/skills/builtin/, pinned in
+    PIN.json); its agents and rules are kept beside them in the source tree and are
+    not in the binary. Copyright (c) 2026 Affaan Mustafa. MIT License; see
+    LICENSES/third-party/ecc.txt, which each catalog pack also carries as LICENSE.
+    The upstream repository has no NOTICE file. The eight skills it licenses under
+    Apache-2.0 (its supply-chain skills) are not part of the catalog.
+
+  * Matt Pocock's skills (https://github.com/mattpocock/skills), commit
+    d81f3a183412e71a5b1e84ca21bc1a35eea03a60: 26 skills of its engineering and
+    productivity categories, with file contents unmodified, in the same catalog. Copyright (c)
+    2026 Matt Pocock. MIT License; see LICENSES/third-party/mattpocock-skills.txt, which each
+    pack also carries as LICENSE.
 
 Notices for any component vendored later must be appended to this list as required
 by that component's license. The components actually present in a given artifact

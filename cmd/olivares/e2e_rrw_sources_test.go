@@ -60,7 +60,7 @@ func newSourcesHarness(t *testing.T, mkSources func(tenant string) []sourceSpec)
 	}
 
 	rt := runtime.New(runtime.Options{Logger: log})
-	set, err := buildModules(signer, nil, nil, nil, nil, sourcesConfig{}, EditionConfig{}, t.TempDir(), log)
+	set, err := buildModules(nil, signer, nil, nil, nil, nil, nil, sourcesConfig{}, EditionConfig{}, t.TempDir(), log)
 	if err != nil {
 		t.Fatalf("build modules: %v", err)
 	}

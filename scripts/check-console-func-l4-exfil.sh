@@ -27,22 +27,22 @@ AGENT_CLUSTER_MSG='EXFIL_AGENT_CLUSTER_CONTRACT: synthetic agent clusters must e
 URL_STATE_MSG='URL_STATE_ROUTER_CONTRACT: subscribed searchStr must win before window.location catches up'
 
 cannot() {
-	printf '%s: NO PUDE MIRAR — %s\n' "$NAME" "$*" >&2
+	printf '%s: COULD NOT CHECK — %s\n' "$NAME" "$*" >&2
 	exit 2
 }
 
 _olivares_git_env="$(cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")" && pwd)/lib/git-env.sh"
-. "$_olivares_git_env" || cannot "no puedo cargar $_olivares_git_env (aislamiento git-env)"
+. "$_olivares_git_env" || cannot "cannot load $_olivares_git_env (Git environment isolation)"
 unset _olivares_git_env
 
-command -v git >/dev/null 2>&1 || cannot 'git no está disponible'
-command -v pnpm >/dev/null 2>&1 || cannot 'pnpm no está disponible'
-command -v awk >/dev/null 2>&1 || cannot 'awk no está disponible'
-command -v grep >/dev/null 2>&1 || cannot 'grep no está disponible'
-command -v mktemp >/dev/null 2>&1 || cannot 'mktemp no está disponible'
+command -v git >/dev/null 2>&1 || cannot 'git is unavailable'
+command -v pnpm >/dev/null 2>&1 || cannot 'pnpm is unavailable'
+command -v awk >/dev/null 2>&1 || cannot 'awk is unavailable'
+command -v grep >/dev/null 2>&1 || cannot 'grep is unavailable'
+command -v mktemp >/dev/null 2>&1 || cannot 'mktemp is unavailable'
 
 ROOT=${OLIVARES_L4_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null)}
-[ -n "$ROOT" ] || cannot 'no resuelvo la raíz del repositorio'
+[ -n "$ROOT" ] || cannot 'cannot resolve the repository root'
 WEB=${OLIVARES_L4_WEB_DIR:-$ROOT/web}
 
 API_TEST="$WEB/src/features/access-map/api.test.ts"
@@ -50,7 +50,7 @@ PANEL_TEST="$WEB/src/features/access-map/attack-paths.test.tsx"
 SELECTION_TEST="$WEB/src/features/access-map/selection.test.ts"
 URL_STATE_TEST="$WEB/src/lib/hooks/use-url-state.test.tsx"
 for required in "$WEB/package.json" "$API_TEST" "$PANEL_TEST" "$SELECTION_TEST" "$URL_STATE_TEST"; do
-	[ -r "$required" ] || cannot "no leo $required"
+	[ -r "$required" ] || cannot "cannot read $required"
 done
 
 require_assertion_marker() {
@@ -70,24 +70,24 @@ require_assertion_marker() {
 	[ "$count" -eq 1 ] || cannot "$diagnostic (marcadores=$count, quiero 1)"
 }
 
-require_assertion_marker "$API_TEST" "$QUERY_MSG" 'falta el diagnóstico EXFIL_QUERY_CONTRACT'
-require_assertion_marker "$PANEL_TEST" "$SUBJECT_MSG" 'falta el diagnóstico EXFIL_SUBJECT_CONTRACT'
-require_assertion_marker "$PANEL_TEST" "$RESOURCE_IDLE_MSG" 'falta el diagnóstico EXFIL_RESOURCE_IDLE_CONTRACT'
-require_assertion_marker "$PANEL_TEST" "$AUDIT_ONCE_MSG" 'falta el diagnóstico EXFIL_AUDIT_CONTRACT one-click'
-require_assertion_marker "$PANEL_TEST" "$AUDIT_REOPEN_MSG" 'falta el diagnóstico EXFIL_AUDIT_CONTRACT reopen'
-require_assertion_marker "$PANEL_TEST" "$SHAPE_MSG" 'falta el diagnóstico EXFIL_SHAPE_CONTRACT'
-require_assertion_marker "$PANEL_TEST" "$NULL_SHAPE_MSG" 'falta el diagnóstico EXFIL_NULL_SHAPE_CONTRACT'
-require_assertion_marker "$PANEL_TEST" "$PATH_SHAPE_MSG" 'falta el diagnóstico EXFIL_PATH_SHAPE_CONTRACT'
-require_assertion_marker "$PANEL_TEST" "$EMPTY_STEPS_MSG" 'falta el diagnóstico EXFIL_EMPTY_STEPS_CONTRACT'
-require_assertion_marker "$PANEL_TEST" "$KIND_MSG" 'falta el diagnóstico EXFIL_KIND_CONTRACT'
-require_assertion_marker "$SELECTION_TEST" "$CLUSTER_MAP_MSG" 'falta el diagnóstico EXFIL_CLUSTER_CONTRACT'
-require_assertion_marker "$PANEL_TEST" "$CLUSTER_EXPAND_MSG" 'falta el diagnóstico EXFIL_CLUSTER_EXPAND_CONTRACT'
-require_assertion_marker "$PANEL_TEST" "$CLUSTER_PANEL_MSG" 'falta el diagnóstico EXFIL_CLUSTER_PANEL_CONTRACT'
-require_assertion_marker "$PANEL_TEST" "$AGENT_CLUSTER_MSG" 'falta el diagnóstico EXFIL_AGENT_CLUSTER_CONTRACT'
-require_assertion_marker "$URL_STATE_TEST" "$URL_STATE_MSG" 'falta el diagnóstico URL_STATE_ROUTER_CONTRACT'
+require_assertion_marker "$API_TEST" "$QUERY_MSG" 'missing diagnostic EXFIL_QUERY_CONTRACT'
+require_assertion_marker "$PANEL_TEST" "$SUBJECT_MSG" 'missing diagnostic EXFIL_SUBJECT_CONTRACT'
+require_assertion_marker "$PANEL_TEST" "$RESOURCE_IDLE_MSG" 'missing diagnostic EXFIL_RESOURCE_IDLE_CONTRACT'
+require_assertion_marker "$PANEL_TEST" "$AUDIT_ONCE_MSG" 'missing diagnostic EXFIL_AUDIT_CONTRACT one-click'
+require_assertion_marker "$PANEL_TEST" "$AUDIT_REOPEN_MSG" 'missing diagnostic EXFIL_AUDIT_CONTRACT reopen'
+require_assertion_marker "$PANEL_TEST" "$SHAPE_MSG" 'missing diagnostic EXFIL_SHAPE_CONTRACT'
+require_assertion_marker "$PANEL_TEST" "$NULL_SHAPE_MSG" 'missing diagnostic EXFIL_NULL_SHAPE_CONTRACT'
+require_assertion_marker "$PANEL_TEST" "$PATH_SHAPE_MSG" 'missing diagnostic EXFIL_PATH_SHAPE_CONTRACT'
+require_assertion_marker "$PANEL_TEST" "$EMPTY_STEPS_MSG" 'missing diagnostic EXFIL_EMPTY_STEPS_CONTRACT'
+require_assertion_marker "$PANEL_TEST" "$KIND_MSG" 'missing diagnostic EXFIL_KIND_CONTRACT'
+require_assertion_marker "$SELECTION_TEST" "$CLUSTER_MAP_MSG" 'missing diagnostic EXFIL_CLUSTER_CONTRACT'
+require_assertion_marker "$PANEL_TEST" "$CLUSTER_EXPAND_MSG" 'missing diagnostic EXFIL_CLUSTER_EXPAND_CONTRACT'
+require_assertion_marker "$PANEL_TEST" "$CLUSTER_PANEL_MSG" 'missing diagnostic EXFIL_CLUSTER_PANEL_CONTRACT'
+require_assertion_marker "$PANEL_TEST" "$AGENT_CLUSTER_MSG" 'missing diagnostic EXFIL_AGENT_CLUSTER_CONTRACT'
+require_assertion_marker "$URL_STATE_TEST" "$URL_STATE_MSG" 'missing diagnostic URL_STATE_ROUTER_CONTRACT'
 
-TMP=$(mktemp -d "${TMPDIR:-/tmp}/console-func-l4.XXXXXX") || cannot 'no creo el temporal'
-[ -d "$TMP" ] || cannot 'mktemp no devolvió un directorio'
+TMP=$(mktemp -d "${TMPDIR:-/tmp}/console-func-l4.XXXXXX") || cannot 'cannot create the temporary directory'
+[ -d "$TMP" ] || cannot 'mktemp did not return a directory'
 trap 'rm -rf -- "$TMP"' EXIT
 
 (
@@ -104,10 +104,10 @@ cat "$TMP/vitest.log"
 
 if [ "$rc" -eq 0 ]; then
 	grep -Eq '^[[:space:]]*Test Files[[:space:]]+4 passed \(4\)[[:space:]]*$' "$TMP/vitest.log" ||
-		cannot 'vitest rc0 sin las cuatro suites focales'
+		cannot 'vitest exited 0 without running the four focused suites'
 	grep -Eq '^[[:space:]]*Tests[[:space:]]+38 passed \(38\)[[:space:]]*$' "$TMP/vitest.log" ||
-		cannot 'vitest rc0 sin las 38 celdas focales'
-	printf '%s: FUNCIONA — exfil y estado URL verificados en cuatro suites\n' "$NAME"
+		cannot 'vitest exited 0 without running the 38 focused cases'
+	printf '%s: PASS — exfiltration and URL state verified in four suites\n' "$NAME"
 	exit 0
 fi
 
@@ -128,9 +128,9 @@ for message in \
 	"$AGENT_CLUSTER_MSG" \
 	"$URL_STATE_MSG"; do
 	if grep -Fq "AssertionError: $message" "$TMP/vitest.log"; then
-		printf '%s: ROTO — %s\n' "$NAME" "$message" >&2
+		printf '%s: FAIL — %s\n' "$NAME" "$message" >&2
 		exit 1
 	fi
 done
 
-cannot "vitest terminó rc=$rc sin ejecutar una aserción contractual etiquetada"
+cannot "vitest exited rc=$rc without running a labeled contract assertion"

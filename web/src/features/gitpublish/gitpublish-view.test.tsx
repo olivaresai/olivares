@@ -11,10 +11,16 @@ import type { PublicationIntent, PublicationTarget } from './types'
 
 const auth = vi.hoisted(() => ({
   can: (_permission: string): boolean => true,
+  principal: undefined as
+    { aal: number; step_up_satisfied?: boolean } | undefined,
 }))
 
 vi.mock('@/lib/auth/context', () => ({
-  useAuth: () => ({ activeTenant: 'tenant-1', can: auth.can }),
+  useAuth: () => ({
+    activeTenant: 'tenant-1',
+    can: auth.can,
+    principal: auth.principal,
+  }),
 }))
 
 const SHA = 'a'.repeat(40)
@@ -23,6 +29,7 @@ const TREE = 'b'.repeat(40)
 const listed: PublicationTarget = {
   id: 'tg-1',
   workspace_id: 'ws-1',
+  host: 'github',
   push_prefix: 'agents/',
   merge_bases: ['main'],
   version: 2,
@@ -53,6 +60,7 @@ function intent(over: Partial<PublicationIntent> = {}): PublicationIntent {
 beforeEach(() => {
   vi.restoreAllMocks()
   auth.can = () => true
+  auth.principal = undefined
   useWorkspaceStore.getState().setActiveWorkspace('ws-1', 'Agents')
   vi.spyOn(gitpublishApi, 'targets').mockResolvedValue({ items: [listed] })
   vi.spyOn(gitpublishApi, 'target').mockResolvedValue(administered)
@@ -89,6 +97,48 @@ async function requestPush() {
 }
 
 describe('publication targets', () => {
+  it.each(['git', undefined] as const)(
+    'offers only push when the target host is %s',
+    async (host) => {
+      vi.spyOn(gitpublishApi, 'target').mockResolvedValue({
+        ...administered,
+        host,
+      })
+      const sheet = await openTarget()
+      expect(
+        await within(sheet).findByRole('button', { name: 'Push' }),
+      ).toBeInTheDocument()
+      expect(
+        within(sheet).queryByRole('button', { name: 'Open pull request' }),
+      ).not.toBeInTheDocument()
+      expect(
+        within(sheet).queryByRole('button', { name: 'Merge' }),
+      ).not.toBeInTheDocument()
+      expect(
+        within(sheet).queryByText('Requires gitpublish:pull_request:write'),
+      ).not.toBeInTheDocument()
+    },
+  )
+
+  it.each(['github', 'gitlab'] as const)(
+    'keeps pull request and merge actions for %s',
+    async (host) => {
+      vi.spyOn(gitpublishApi, 'target').mockResolvedValue({
+        ...administered,
+        host,
+      })
+      const sheet = await openTarget()
+      expect(
+        await within(sheet).findByRole('button', { name: 'Push' }),
+      ).toBeInTheDocument()
+      expect(
+        within(sheet).getByRole('button', { name: 'Open pull request' }),
+      ).toBeInTheDocument()
+      expect(
+        within(sheet).getByRole('button', { name: 'Merge' }),
+      ).toBeInTheDocument()
+    },
+  )
   it('lists each target with its push prefix and merge bases, without its bindings', async () => {
     renderIntel(<GitPublicationView />)
     const row = (await screen.findByText('agents/')).closest('tr')!
@@ -97,12 +147,39 @@ describe('publication targets', () => {
   })
 
   it('shows the target’s bindings and the authority each action requires', async () => {
+    // A configured policy (totp or passkey) this password session does not meet.
+    auth.principal = { aal: 1, step_up_satisfied: false }
     const sheet = await openTarget()
     expect(await within(sheet).findByText('cb-github')).toBeInTheDocument()
     expect(within(sheet).getByText('rb-app')).toBeInTheDocument()
-    expect(within(sheet).getByText(/gitpublish:push:write/)).toBeInTheDocument()
     expect(
-      within(sheet).getByText(/gitpublish:merge:admin.*AAL3/),
+      within(sheet).getByText('Requires gitpublish:push:write'),
+    ).toBeInTheDocument()
+    expect(
+      within(sheet).getByText(
+        'Requires gitpublish:merge:admin and the extra check for administrative actions',
+      ),
+    ).toBeInTheDocument()
+  })
+
+  it('asks for no extra check when this session already meets the deployment’s policy', async () => {
+    // The default policy (none): a password session satisfies the step-up, as the engine says.
+    auth.principal = { aal: 1, step_up_satisfied: true }
+    const sheet = await openTarget()
+    expect(
+      await within(sheet).findByText('Requires gitpublish:merge:admin'),
+    ).toBeInTheDocument()
+    expect(
+      within(sheet).queryByText(/AAL3|extra check/),
+    ).not.toBeInTheDocument()
+  })
+
+  it('asks for no extra check from a session an older engine reports at AAL3', async () => {
+    // An engine without step_up_satisfied: a hardware step-up meets any policy.
+    auth.principal = { aal: 3 }
+    const sheet = await openTarget()
+    expect(
+      await within(sheet).findByText('Requires gitpublish:merge:admin'),
     ).toBeInTheDocument()
   })
 
@@ -159,6 +236,8 @@ describe('a governed publication request', () => {
       acknowledge_intent: '',
     })
     expect(body.operation_id).toMatch(/^[A-Za-z0-9._:-]{1,128}$/)
+    // A push that names no session run sends the request it always sent.
+    expect(body).not.toHaveProperty('session_run')
     expect(request).toEqual({ tenant: 'tenant-1' })
 
     // The request cannot be sent again from here, and nothing offers to.
@@ -176,6 +255,28 @@ describe('a governed publication request', () => {
       expect(reconcile).toHaveBeenCalledWith('in-1', { tenant: 'tenant-1' }),
     )
     expect(push).toHaveBeenCalledTimes(1)
+  })
+
+  it('sends the session run an operator names, so the engine fetches the commit from it', async () => {
+    const run = '0b3f6c1e-5d2a-4c8e-9f10-2a3b4c5d6e7f'
+    const push = vi
+      .spyOn(gitpublishApi, 'push')
+      .mockResolvedValue(intent({ state: 'applied', receipt: 'caused' }))
+    const sheet = await openTarget()
+    await userEvent.click(within(sheet).getByRole('button', { name: 'Push' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Push a commit' })
+    await pasteInto(
+      within(dialog).getByLabelText(/Branch ref/),
+      'refs/heads/agents/fix',
+    )
+    await pasteInto(within(dialog).getByLabelText(/^Commit/), SHA)
+    await pasteInto(within(dialog).getByLabelText(/^Tree/), TREE)
+    await pasteInto(within(dialog).getByLabelText(/^Session run/), run)
+    await userEvent.click(
+      within(dialog).getByRole('button', { name: 'Request push' }),
+    )
+    await within(dialog).findByText('The request is settled')
+    expect(push.mock.calls[0]![1]).toMatchObject({ session_run: run })
   })
 
   it('shows the refusal the engine returns, with its code and the intent it names', async () => {

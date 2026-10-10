@@ -11,6 +11,8 @@ import (
 	"os"
 	"strings"
 	"sync"
+
+	"github.com/olivaresai/olivares/core/envconfig"
 )
 
 // engineLogBuffer retains startup records until boot resolves the data directory.
@@ -154,8 +156,8 @@ func cliBootLogger(floor slog.Level) *slog.Logger {
 		return slog.Default()
 	}
 	level := floor
-	if strings.TrimSpace(os.Getenv(envLogLevel)) != "" {
-		level, _ = engineLogLevel(os.Getenv, false)
+	if strings.TrimSpace(envconfig.Get(envLogLevel)) != "" {
+		level, _ = engineLogLevel(envconfig.Get, false)
 	}
 	log := slog.New(engineLogHandler(os.Stderr, level))
 	slog.SetDefault(log)

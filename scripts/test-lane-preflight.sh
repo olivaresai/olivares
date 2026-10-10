@@ -32,7 +32,7 @@ unset _olivares_git_env
 RAIZ="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd -P)"
 GATE="$RAIZ/scripts/check-lane-preflight.sh"
 [ -r "$GATE" ] || {
-	echo "test-lane-preflight: ⛔ NO HE PODIDO MIRAR: no existe $GATE" >&2
+	echo "test-lane-preflight: ⛔ COULD NOT CHECK: $GATE does not exist" >&2
 	exit 2
 }
 # El banco va FUERA del repositorio a propósito: dentro, el caso «TMPDIR fuera de un repo» sería
@@ -40,24 +40,24 @@ GATE="$RAIZ/scripts/check-lane-preflight.sh"
 BANCO="$(mktemp -d "${TMPDIR:-/tmp}/lpf-XXXXXX")" || exit 2
 trap 'rm -rf "$BANCO"' EXIT
 
-pasan=0
-fallan=0
+pass_count=0
+fail_count=0
 comprobar() {
 	if [ "$3" -eq "$2" ]; then
 		printf '  ok    %-58s rc=%s\n' "$1" "$3"
-		pasan=$((pasan + 1))
+		pass_count=$((pass_count + 1))
 	else
-		printf '  FALLA %-58s rc=%s (quiere %s)\n' "$1" "$3" "$2"
-		fallan=$((fallan + 1))
+		printf '  FAIL  %-58s rc=%s (expected %s)\n' "$1" "$3" "$2"
+		fail_count=$((fail_count + 1))
 	fi
 }
 dice() {
 	if grep -q "$2" "$BANCO/out.log" 2>/dev/null; then
-		printf '  ok    %-58s lo NOMBRA\n' "$1"
-		pasan=$((pasan + 1))
+		printf '  ok    %-58s NAMES it\n' "$1"
+		pass_count=$((pass_count + 1))
 	else
-		printf '  FALLA %-58s no dice «%s»\n' "$1" "$2"
-		fallan=$((fallan + 1))
+		printf '  FAIL  %-58s does not say «%s»\n' "$1" "$2"
+		fail_count=$((fail_count + 1))
 	fi
 }
 
@@ -78,20 +78,20 @@ correr() { # correr <tmpdir>
 	(cd "$BANCO/repo" && TMPDIR="$1" bash "$GATE") >"$BANCO/out.log" 2>&1
 }
 
-monta_repo || { echo "test-lane-preflight: ⛔ NO HE PODIDO MIRAR: no pude montar el repo señuelo" >&2; exit 2; }
+monta_repo || { echo "test-lane-preflight: ⛔ COULD NOT CHECK: could not set up the fixture repo" >&2; exit 2; }
 
 FUERA="$BANCO/tmp-fuera"
 mkdir -p "$FUERA"
 
 # ── 1 · EL DEFECTO QUE TRAJO ESTE GATE: falta node_modules de una pata pesada ──────────────────
 correr "$FUERA"
-comprobar "sin node_modules de una pata pesada, RECHAZA" 1 "$?"
-dice "y NOMBRA el directorio" "priv"
+comprobar "missing node_modules in a heavy leg is REJECTED" 1 "$?"
+dice "and NAMES the directory" "priv"
 
 # ── 2 · SUELO: con node_modules, pasa ─────────────────────────────────────────────────────────
 mkdir -p "$BANCO/repo/priv/node_modules"
 correr "$FUERA"
-comprobar "con node_modules, pasa" 0 "$?"
+comprobar "with node_modules, passes" 0 "$?"
 
 # ── 3 · NO SOBRE-BLOQUEA: un package.json que NINGUNA pata pesada usa no cuenta ────────────────
 # La primera versión de este gate exigía node_modules en TODO package.json con dependencias y
@@ -101,12 +101,12 @@ printf '{"dependencies":{"y":"1"}}\n' >"$BANCO/repo/otro/package.json"
 git -C "$BANCO/repo" add -A >/dev/null 2>&1
 git -C "$BANCO/repo" -c user.email=b@b -c user.name=b commit -qm y >/dev/null 2>&1
 correr "$FUERA"
-comprobar "un package.json que ninguna pata pesada usa NO bloquea" 0 "$?"
+comprobar "a package.json used by no heavy leg does NOT block" 0 "$?"
 
-# ── 3-bis · POSTGRES: la plantilla del clúster (a repository gate) ──────────────────────────────────────
-# Se ejercita contra el servidor REAL si lo hay, apuntando la costura a bases señuelo que esta
-# batería crea y borra. Lo inyectado es A QUIÉN se pregunta; la consulta y la decisión son las de
-# producción. Sin servidor NO se dan por buenos: se declara que no se ejercitaron.
+# 3-bis · Postgres cluster template (a repository gate).
+# Use the real server when available, selecting disposable databases this suite creates
+# and removes. Only the queried database is injected; query and decision are production
+# code. Without a server, report these cases as unexercised rather than passed.
 PGP="${PGPASSWORD:-postgres}"
 export PGPASSWORD="$PGP"
 PGDSN="${OLIVARES_TEST_POSTGRES_SUPERUSER_DSN:-postgres://postgres:postgres@127.0.0.1:5432/postgres?sslmode=disable}"
@@ -115,30 +115,30 @@ if command -v psql >/dev/null 2>&1 && psql "$PGDSN" -tAc 'select 1' >/dev/null 2
 	psql "$PGDSN" -q -c "DROP DATABASE IF EXISTS $SENUELO" >/dev/null 2>&1
 	if psql "$PGDSN" -q -c "CREATE DATABASE $SENUELO TEMPLATE template0 ENCODING 'LATIN1' LC_COLLATE 'C' LC_CTYPE 'C'" >/dev/null 2>&1; then
 		(cd "$BANCO/repo" && TMPDIR="$FUERA" OLIVARES_PREFLIGHT_TEMPLATE_DB="$SENUELO" bash "$GATE") >"$BANCO/out.log" 2>&1
-		comprobar "plantilla LATIN1, RECHAZA" 1 "$?"
-		dice "y nombra el encoding que encontro" "LATIN1"
+		comprobar "LATIN1 template is REJECTED" 1 "$?"
+		dice "and names the encoding it found" "LATIN1"
 		# ⛔ EL TESTIGO ERA `datistemplate` A SECAS Y UN MUTANTE LO SOBREVIVIO (2026-09-03): la cura
 		#    lleva DOS lineas con esa palabra, asi que borrar una dejaba pasar la comprobacion.
 		#    Un testigo que es subcadena de otra cosa comprueba la prosa, no la propiedad. Se
 		#    ancla a las dos mitades que hacen la cura CORRECTA: cambiar el encoding, y RESTAURAR
 		#    la plantilla — un mensaje que manda DROP sin el restore deja el cluster roto.
-		dice "y la cura cambia el encoding" "TEMPLATE template0"
-		dice "y la cura RESTAURA la plantilla" "datistemplate=true"
+		dice "and the remedy changes the encoding" "TEMPLATE template0"
+		dice "and the remedy RESTORES the template" "datistemplate=true"
 		psql "$PGDSN" -q -c "DROP DATABASE $SENUELO" >/dev/null 2>&1
 	else
-		printf '  AVISO no pude crear la base senuelo LATIN1: el caso rojo NO se ejercito\n'
+		printf '  NOTICE could not create the LATIN1 fixture database: the failing case was NOT exercised\n'
 	fi
 	# y el verde: la plantilla real de la caja, que hoy debe ser UTF8
 	(cd "$BANCO/repo" && TMPDIR="$FUERA" bash "$GATE") >"$BANCO/out.log" 2>&1
 	rc_utf8=$?
 	enc_real="$(psql "$PGDSN" -tAc "select pg_encoding_to_char(encoding) from pg_database where datname='template1'" 2>/dev/null | tr -d '[:space:]')"
 	if [ "$enc_real" = "UTF8" ]; then
-		comprobar "plantilla UTF8 real, PASA" 0 "$rc_utf8"
+		comprobar "real UTF8 template PASSES" 0 "$rc_utf8"
 	else
-		printf '  AVISO template1 de esta caja es %s, no UTF8: el caso verde NO se ejercito\n' "$enc_real"
+		printf '  NOTICE template1 on this host is %s, not UTF8: the passing case was NOT exercised\n' "$enc_real"
 	fi
 else
-	printf '  AVISO sin PostgreSQL alcanzable: los 4 casos de plantilla NO se ejercitaron\n'
+	printf '  NOTICE PostgreSQL is unreachable: the 4 template cases were NOT exercised\n'
 fi
 
 # ── 3-ter · NO SOBRE-BLOQUEA: sin servidor, la seccion de Postgres calla y deja pasar ──────────
@@ -159,9 +159,9 @@ if command -v psql >/dev/null 2>&1; then
 	#    `superDSN != ""`, sin comprobar que nadie conteste. Con el DSN puesto la pata VA a
 	#    correr contra una plantilla que nadie miro, que es la clase de los 240 minutos. Un
 	#    banco que exige el verde del defecto no lo pasa por alto: lo CERTIFICA.
-	comprobar "con DSN inalcanzable, NO es verde: es NO HE PODIDO MIRAR" 2 "$rc_inalcanzable"
+	comprobar "with an unreachable DSN, does NOT pass: reports COULD NOT CHECK" 2 "$rc_inalcanzable"
 else
-	comprobar "sin psql y con DSN inalcanzable, NO HE PODIDO MIRAR" 2 "$rc_inalcanzable"
+	comprobar "without psql and with an unreachable DSN, reports COULD NOT CHECK" 2 "$rc_inalcanzable"
 fi
 # ⛔ EL BANCO DISTINGUE POR MECANISMO, NO POR LA CADENA QUE ESPERA VER.
 #
@@ -176,13 +176,13 @@ fi
 if command -v psql >/dev/null 2>&1; then
 	# El literal cambia con la asercion de arriba y por la misma razon: el gate ya no puede
 	# decir «se auto-saltan» cuando hay DSN, porque no es verdad.
-	dice "y dice que NO se auto-saltan" "NO se auto-saltan"
+	dice "and says they do NOT skip themselves" "tests will not skip automatically"
 else
 		# El literal se COPIA del gate (check-lane-preflight.sh), no se parafrasea: alli va en
 		# MAYUSCULAS y `dice` compara con grep sensible a mayusculas, asi que la version en
 		# minusculas no casa con NADA y el caso acusaba al gate de callar cuando si habla.
-	dice "y DICE que no pudo mirar la plantilla" "NO HE PODIDO MIRAR: hay un DSN de PostgreSQL"
-	printf '  AVISO sin psql en esta caja: la rama del DSN INALCANZABLE no se ejercitó\n'
+	dice "and SAYS it could not check the template" "COULD NOT CHECK: a PostgreSQL DSN is configured"
+	printf '  NOTICE this host has no psql: the UNREACHABLE DSN branch was not exercised\n'
 fi
 
 # ── 3-quater · SIN `psql`: la condición es «¿van a correr los tests?», no «¿hay cliente?» ─────
@@ -201,23 +201,23 @@ for h in sh bash env git python3 mktemp rm mkdir chmod grep sed awk printf cat t
 	o="$(command -v "$h" 2>/dev/null)" && [ -n "$o" ] && ln -sf "$o" "$SINPSQL/$h" 2>/dev/null
 done
 if PATH="$SINPSQL" command -v psql >/dev/null 2>&1; then
-	printf '  AVISO el senuelo de PATH aun ve psql: los 2 casos sin cliente NO se ejercitaron\n'
+	printf '  NOTICE the PATH fixture still sees psql: the 2 cases without a client were NOT exercised\n'
 else
 	# (a) sin psql y SIN DSN: nada va a correr ⇒ 0, y lo DICE
 	(cd "$BANCO/repo" && PATH="$SINPSQL" TMPDIR="$FUERA" \
 		OLIVARES_TEST_POSTGRES_SUPERUSER_DSN= OLIVARES_TEST_POSTGRES_DSN= OLIVARES_TEST_POSTGRES_ADMIN_DSN= \
 		"$SINPSQL/bash" "$GATE") >"$BANCO/out.log" 2>&1
-	comprobar "sin psql y sin DSN, NO bloquea" 0 "$?"
-	dice "y dice que la pata no va a correr" "no va a correr"
-	dice "y la linea final NO reclama haber mirado la plantilla" "NO se comprobo\|NO se comprobó"
+	comprobar "without psql and without a DSN, does NOT block" 0 "$?"
+	dice "and says the leg will not run" "will not run"
+	dice "and the final line does NOT claim the template was checked" "was not checked"
 
 	# (b) sin psql y CON DSN: los tests SI corren ⇒ 2, no 0 y no 1
 	(cd "$BANCO/repo" && PATH="$SINPSQL" TMPDIR="$FUERA" \
 		OLIVARES_TEST_POSTGRES_SUPERUSER_DSN='postgres://x:x@127.0.0.1:5432/x?sslmode=disable' \
 		"$SINPSQL/bash" "$GATE") >"$BANCO/out.log" 2>&1
-	comprobar "sin psql y CON DSN, es NO HE PODIDO MIRAR (2)" 2 "$?"
-	dice "y nombra el motivo" "NO HE PODIDO MIRAR"
-	dice "y ofrece las DOS salidas" "desconfigura el DSN"
+	comprobar "without psql and WITH a DSN, reports COULD NOT CHECK (2)" 2 "$?"
+	dice "and names the reason" "COULD NOT CHECK"
+	dice "and offers BOTH remedies" "unset the DSN"
 fi
 
 # ── 3-quinquies · UNA PATA PESADA QUE EXIGE POSTGRES, SIN NADIE ESCUCHANDO ────────────────────
@@ -243,21 +243,21 @@ emite_dsn() { # emite_dsn <puerto>
 # (a) nadie escucha en ese puerto -> RECHAZA y NOMBRA la pata
 emite_dsn 5999
 (cd "$LPG" && TMPDIR="$FUERA" bash "$GATE") >"$BANCO/out.log" 2>&1
-comprobar "pata pesada con Postgres y nadie escuchando, RECHAZA" 1 "$?"
-dice "y NOMBRA la pata que morira" "test:pesada-pg"
-dice "y dice que NO se saltara" "with-pg-env.sh"
+comprobar "heavy leg with Postgres and no listener is REJECTED" 1 "$?"
+dice "and NAMES the leg that will fail" "test:pesada-pg"
+dice "and says it will NOT be skipped" "with-pg-env.sh"
 
 # (b) NO sobre-bloquea: sin ninguna pata pesada envuelta, calla
 printf '  test:sin-pg:\n    cmds: ["true"]\n  otra:\n' >"$LPG/Taskfile.yml"
 printf 'pre-push: running the FULL gate locally (build + test + web).\ntask test:sin-pg\n' >"$LPG/.githooks/pre-push"
 (cd "$LPG" && TMPDIR="$FUERA" bash "$GATE") >"$BANCO/out.log" 2>&1
-comprobar "sin patas pesadas que usen Postgres, NO bloquea" 0 "$?"
-if grep -q "nadie escucha" "$BANCO/out.log" 2>/dev/null; then
-	printf '  FALLA %-58s habla de Postgres sin que ninguna pata lo use\n' "y no habla de Postgres"
-	fallan=$((fallan + 1))
+comprobar "without heavy legs using Postgres, does NOT block" 0 "$?"
+if grep -q "No listener" "$BANCO/out.log" 2>/dev/null; then
+	printf '  FAIL  %-58s mentions Postgres when no leg uses it\n' "and does not mention Postgres"
+	fail_count=$((fail_count + 1))
 else
-	printf '  ok    %-58s calla\n' "y no habla de Postgres"
-	pasados_pg=1; pasan=$((pasan + 1))
+	printf '  ok    %-58s silent\n' "and does not mention Postgres"
+	pasados_pg=1; pass_count=$((pass_count + 1))
 fi
 
 # (c) ALGO ESCUCHA Y NO ES POSTGRES -> RECHAZA. Anadido 2026-09-04 (r27) por el HIGH-01 del tercer
@@ -290,8 +290,8 @@ if command -v python3 >/dev/null 2>&1; then
 	if [ -n "$NOPG_PUERTO" ]; then
 		emite_dsn "$NOPG_PUERTO"
 		(cd "$LPG" && TMPDIR="$FUERA" bash "$GATE") >"$BANCO/out.log" 2>&1
-		comprobar "algo escucha y NO habla Postgres (HTTP), RECHAZA" 1 "$?"
-		dice "y dice que no contesta al SSLRequest" "NO habla PostgreSQL"
+		comprobar "a listener that does NOT speak Postgres (HTTP) is REJECTED" 1 "$?"
+		dice "and says it does not answer SSLRequest" "does not speak PostgreSQL"
 		# ⛔ Y EL CASO QUE DE VERDAD DUELE: un listener SSH. Su bandera «SSH-2.0-…» EMPIEZA POR 'S',
 		#    que es una de las dos respuestas validas al SSLRequest, asi que una sonda de un solo
 		#    byte lo acepta como PostgreSQL. Es el «tunel SSH que satisface el preflight» del
@@ -318,18 +318,18 @@ PYSSH
 		if [ -n "$SSH_PUERTO" ]; then
 			emite_dsn "$SSH_PUERTO"
 			(cd "$LPG" && TMPDIR="$FUERA" bash "$GATE") >"$BANCO/out.log" 2>&1
-			comprobar "un listener SSH NO pasa por PostgreSQL" 1 "$?"
-			dice "y lo dice: su bandera empieza por S y no es Postgres" "NO habla PostgreSQL"
+			comprobar "an SSH listener is NOT accepted as PostgreSQL" 1 "$?"
+			dice "and reports it: its banner starts with S and it is not Postgres" "does not speak PostgreSQL"
 		else
-			printf '  AVISO no pude levantar el senuelo SSH: ese caso NO se ejercito\n'
+			printf '  NOTICE could not start the SSH fixture: that case was NOT exercised\n'
 		fi
 		kill "$SSH_PID" 2>/dev/null
 	else
-		printf '  AVISO no pude levantar el senuelo que no habla Postgres: el caso NO se ejercito\n'
+		printf '  NOTICE could not start the non-Postgres fixture: the case was NOT exercised\n'
 	fi
 	kill "$NOPG_PID" 2>/dev/null
 else
-	printf '  AVISO sin python3: el caso del listener que no habla Postgres NO se ejercito\n'
+	printf '  NOTICE no python3: the non-Postgres listener case was NOT exercised\n'
 fi
 
 # (d) EL HELPER FALLA -> NO HE PODIDO MIRAR (2), NUNCA verde. Anadido 2026-09-04 (r27) por el
@@ -346,13 +346,13 @@ fi
 printf '#!/usr/bin/env bash\nprintf "%%s\\n" "export FOO=(((sintaxis rota"\nexit 0\n' >"$LPG/scripts/pg-test-env.sh"
 chmod +x "$LPG/scripts/pg-test-env.sh"
 (cd "$LPG" && TMPDIR="$FUERA" bash "$GATE") >"$BANCO/out.log" 2>&1
-comprobar "si el helper emite shell invalido, NO HE PODIDO MIRAR (2)" 2 "$?"
+comprobar "if the helper emits invalid shell, reports COULD NOT CHECK (2)" 2 "$?"
 
 printf '#!/usr/bin/env bash\necho "pg-test-env de prueba: rehuso" >&2\nexit 2\n' >"$LPG/scripts/pg-test-env.sh"
 chmod +x "$LPG/scripts/pg-test-env.sh"
 (cd "$LPG" && TMPDIR="$FUERA" bash "$GATE") >"$BANCO/out.log" 2>&1
-comprobar "si pg-test-env.sh falla, NO HE PODIDO MIRAR (2)" 2 "$?"
-dice "y nombra el rc del productor" "fallo con rc 2"
+comprobar "if pg-test-env.sh fails, reports COULD NOT CHECK (2)" 2 "$?"
+dice "and names the producer rc" "exited 2"
 
 
 # ── 3-sexies · EL AVISO DE LA PLANTILLA NO PUEDE LLEVAR LA CONTRASEÑA ─────────────────────────
@@ -370,28 +370,28 @@ mkdir -p "$FAKEBIN"
 printf '#!/usr/bin/env bash\n[ "${1:-}" = "--version" ] && { echo "psql (PostgreSQL) 15.0"; exit 0; }\necho LATIN1\n' >"$FAKEBIN/psql"
 chmod +x "$FAKEBIN/psql"
 MARCA='CONTRASENA-QUE-NO-DEBE-SALIR'
-salida_pw="$( (cd "$BANCO/repo" && PATH="$FAKEBIN:$PATH" TMPDIR="$FUERA" \
+playwright_output="$( (cd "$BANCO/repo" && PATH="$FAKEBIN:$PATH" TMPDIR="$FUERA" \
 	OLIVARES_TEST_POSTGRES_SUPERUSER_DSN="postgres://usr:${MARCA}@127.0.0.1:5432/db?sslmode=disable" \
 	bash "$GATE") 2>&1 || true )"
-if case "$salida_pw" in *"es LATIN1"*) true;; *) false;; esac; then
-	printf '  ok    %-58s emitido\n' "el aviso de plantilla se emite (precondicion del caso)"
-	pasan=$((pasan + 1))
-	if case "$salida_pw" in *"$MARCA"*) true;; *) false;; esac; then
-		printf '  FALLA %-58s la contrasena APARECE\n' "el aviso NO lleva la contrasena del DSN"
-		fallan=$((fallan + 1))
+if case "$playwright_output" in *"uses LATIN1"*) true;; *) false;; esac; then
+	printf '  ok    %-58s emitted\n' "the template notice is emitted (case precondition)"
+	pass_count=$((pass_count + 1))
+	if case "$playwright_output" in *"$MARCA"*) true;; *) false;; esac; then
+		printf '  FAIL  %-58s the password APPEARS\n' "the notice does NOT contain the DSN password"
+		fail_count=$((fail_count + 1))
 	else
-		printf '  ok    %-58s no aparece\n' "el aviso NO lleva la contrasena del DSN"
-		pasan=$((pasan + 1))
+		printf '  ok    %-58s absent\n' "the notice does NOT contain the DSN password"
+		pass_count=$((pass_count + 1))
 	fi
-	if case "$salida_pw" in *OLIVARES_TEST_POSTGRES_SUPERUSER_DSN*) true;; *) false;; esac; then
-		printf '  ok    %-58s por NOMBRE\n' "y cita la variable en vez de su valor"
-		pasan=$((pasan + 1))
+	if case "$playwright_output" in *OLIVARES_TEST_POSTGRES_SUPERUSER_DSN*) true;; *) false;; esac; then
+		printf '  ok    %-58s by NAME\n' "and cites the variable instead of its value"
+		pass_count=$((pass_count + 1))
 	else
-		printf '  FALLA %-58s ni valor ni nombre: el aviso dejo de ser util\n' "y cita la variable en vez de su valor"
-		fallan=$((fallan + 1))
+		printf '  FAIL  %-58s neither value nor name: the notice is no longer useful\n' "and cites the variable instead of its value"
+		fail_count=$((fail_count + 1))
 	fi
 else
-	printf '  AVISO el aviso de plantilla no se emitio: el caso de la contrasena NO se ejercito\n'
+	printf '  NOTICE the template notice was not emitted: the password case was NOT exercised\n'
 fi
 
 
@@ -424,7 +424,7 @@ printf '#!/usr/bin/env bash\nexit 0\n' >"$LPM/scripts/pg-test-env.sh"; chmod +x 
 (cd "$LPM" && PATH="$PSQLMUDO:$PATH" TMPDIR="$FUERA" \
 	OLIVARES_TEST_POSTGRES_SUPERUSER_DSN='' OLIVARES_TEST_POSTGRES_DSN='' OLIVARES_TEST_POSTGRES_ADMIN_DSN='' \
 	bash "$GATE") >"$BANCO/out.log" 2>&1
-comprobar "pata envuelta pero SIN DSN efectiva, NO bloquea" 0 "$?"
+comprobar "wrapped leg WITHOUT an effective DSN does NOT block" 0 "$?"
 
 # (b) el helper SI emite DSN y hay algo que habla Postgres detras: la pata VA a correr contra una
 #     plantilla que nadie miro -> 2. El senuelo contesta al SSLRequest para que la sonda pase y el
@@ -453,14 +453,14 @@ if command -v python3 >/dev/null 2>&1; then
 		printf '#!/usr/bin/env bash\nprintf %%s\\n "export OLIVARES_TEST_POSTGRES_SUPERUSER_DSN=\\"postgres://u:p@127.0.0.1:%s/db?sslmode=disable\\""\n' "$PGF_PUERTO" >"$LPM/scripts/pg-test-env.sh"
 		chmod +x "$LPM/scripts/pg-test-env.sh"
 		(cd "$LPM" && PATH="$PSQLMUDO:$PATH" TMPDIR="$FUERA" bash "$GATE") >"$BANCO/out.log" 2>&1
-		comprobar "con DSN efectiva y postura sin mirar, NO HE PODIDO MIRAR (2)" 2 "$?"
-		dice "y dice que un listener no es una sesion" "no es que la sesion sirva"
+		comprobar "with an effective DSN and an unchecked configuration, reports COULD NOT CHECK (2)" 2 "$?"
+		dice "and says a listener is not a session" "does not establish a usable session"
 	else
-		printf '  AVISO no pude levantar el Postgres de pega: la mitad (b) NO se ejercito\n'
+		printf '  NOTICE could not start the fake Postgres: half (b) was NOT exercised\n'
 	fi
 	kill "$PGF_PID" 2>/dev/null
 else
-	printf '  AVISO sin python3: la mitad (b) NO se ejercito\n'
+	printf '  NOTICE no python3: half (b) was NOT exercised\n'
 fi
 
 
@@ -482,7 +482,7 @@ comprueba_roto() { # comprueba_roto <etiqueta> <salida>
 	#    otros, cometida al escribir la guarda. La forma es la que el propio gate imprime.
 	roto_grep="$(printf '%s' "$2" | grep -inE 'command not found|syntax error|unbound variable' || true)"
 	if [ -n "$roto_grep" ]; then
-		printf '  FALLA %-58s %s\n' "el sujeto no se rompe: $1" "$(printf '%s\n' "$roto_grep" | head -1)"
+		printf '  FAIL  %-58s %s\n' "the subject does not fail: $1" "$(printf '%s\n' "$roto_grep" | head -1)"
 		printf '%s\n' "$roto_grep" | head -2 | sed 's/^/          /'
 		rotos=$((rotos + 1))
 	fi
@@ -490,14 +490,14 @@ comprueba_roto() { # comprueba_roto <etiqueta> <salida>
 PSQLMUDO2="$BANCO/psqlmudo2"; mkdir -p "$PSQLMUDO2"
 printf '#!/usr/bin/env bash\n[ "${1:-}" = "--version" ] && { echo "psql (PostgreSQL) 15.0"; exit 0; }\nexit 1\n' >"$PSQLMUDO2/psql"
 chmod +x "$PSQLMUDO2/psql"
-comprueba_roto "sin DSN"  "$( (cd "$BANCO/repo" && PATH="$PSQLMUDO2:$PATH" TMPDIR="$FUERA" bash "$GATE") 2>&1 || true )"
-comprueba_roto "con DSN"  "$( (cd "$BANCO/repo" && PATH="$PSQLMUDO2:$PATH" TMPDIR="$FUERA" OLIVARES_TEST_POSTGRES_SUPERUSER_DSN='postgres://u:p@127.0.0.1:5999/d' bash "$GATE") 2>&1 || true )"
-comprueba_roto "sin psql" "$( (cd "$BANCO/repo" && TMPDIR="$FUERA" bash "$GATE") 2>&1 || true )"
+comprueba_roto "without a DSN"  "$( (cd "$BANCO/repo" && PATH="$PSQLMUDO2:$PATH" TMPDIR="$FUERA" bash "$GATE") 2>&1 || true )"
+comprueba_roto "with a DSN"  "$( (cd "$BANCO/repo" && PATH="$PSQLMUDO2:$PATH" TMPDIR="$FUERA" OLIVARES_TEST_POSTGRES_SUPERUSER_DSN='postgres://u:p@127.0.0.1:5999/d' bash "$GATE") 2>&1 || true )"
+comprueba_roto "without psql" "$( (cd "$BANCO/repo" && TMPDIR="$FUERA" bash "$GATE") 2>&1 || true )"
 if [ "$rotos" -eq 0 ]; then
-	printf '  ok    %-58s 3 caminos\n' "el sujeto no se rompe en ningun camino"
-	pasan=$((pasan + 1))
+	printf '  ok    %-58s 3 paths\n' "the subject does not fail on any path"
+	pass_count=$((pass_count + 1))
 else
-	fallan=$((fallan + rotos))
+	fail_count=$((fail_count + rotos))
 fi
 
 # ── 3-nonies · LOS CUATRO HUECOS QUE EL CONTRASTE NOMBRO Y LA BATERIA NO CUBRIA ───────────────
@@ -512,16 +512,16 @@ printf '#!/usr/bin/env bash\nprintf %%s\\n "export OLIVARES_TEST_POSTGRES_SUPERU
 chmod +x "$LCEN/scripts/pg-test-env.sh"
 git -C "$LCEN" init -q 2>/dev/null
 (cd "$LCEN" && TMPDIR="$FUERA" bash "$GATE") >"$BANCO/out.log" 2>&1
-comprobar "una pata INDENTADA con Postgres tambien se censa" 1 "$?"
-dice "y la nombra" "test"
+comprobar "an INDENTED leg with Postgres is also counted" 1 "$?"
+dice "and names it" "test"
 
 # (g) MEDIO-01 · app/admin sin superusuario es HALLAZGO (1), no «no pude mirar» (2).
 if ! command -v psql >/dev/null 2>&1; then
 	(cd "$BANCO/repo" && TMPDIR="$FUERA" OLIVARES_TEST_POSTGRES_DSN='postgres://u:p@127.0.0.1:5999/d' bash "$GATE") >"$BANCO/out.log" 2>&1
-	comprobar "solo DSN de app, sin super: HALLAZGO (1), no 2" 1 "$?"
-	dice "y nombra gateMisconfigured por su fuente" "pgtest.go:289-298"
+	comprobar "only app DSN, without superuser: FINDING (1), not 2" 1 "$?"
+	dice "and names gateMisconfigured by its source" "pgtest.go:289-298"
 else
-	printf '  AVISO esta caja TIENE psql: la rama app-only sin cliente NO se ejercito\n'
+	printf '  NOTICE this host HAS psql: the app-only branch without a client was NOT exercised\n'
 fi
 
 # (h) MEDIO-02 · la respuesta valida `S` (PgBouncer/Postgres con TLS) tambien es Postgres.
@@ -549,15 +549,15 @@ if command -v python3 >/dev/null 2>&1; then
 		emite_dsn "$SP"
 		(cd "$LPG" && TMPDIR="$FUERA" bash "$GATE") >"$BANCO/out.log" 2>&1
 		rc_s=$?
-		if [ "$rc_s" -eq 1 ] && grep -q "NO habla PostgreSQL" "$BANCO/out.log" 2>/dev/null; then
-			printf '  FALLA %-58s la respuesta S se rechazo\n' "un servidor que contesta S ES PostgreSQL"
-			fallan=$((fallan + 1))
+		if [ "$rc_s" -eq 1 ] && grep -q "does not speak PostgreSQL" "$BANCO/out.log" 2>/dev/null; then
+			printf '  FAIL  %-58s the S response was rejected\n' "a server answering S IS PostgreSQL"
+			fail_count=$((fail_count + 1))
 		else
-			printf '  ok    %-58s no lo rechaza\n' "un servidor que contesta S ES PostgreSQL"
-			pasan=$((pasan + 1))
+			printf '  ok    %-58s does not reject it\n' "a server answering S IS PostgreSQL"
+			pass_count=$((pass_count + 1))
 		fi
 	else
-		printf '  AVISO no pude levantar el senuelo S: MEDIO-02 NO se ejercito\n'
+		printf '  NOTICE could not start the S fixture: MEDIO-02 was NOT exercised\n'
 	fi
 	kill "$PGS_PID" 2>/dev/null
 fi
@@ -585,16 +585,16 @@ if command -v python3 >/dev/null 2>&1; then
 	if [ -n "$MP" ]; then
 		emite_dsn "$MP"
 		(cd "$LPG" && TMPDIR="$FUERA" bash "$GATE") >"$BANCO/out.log" 2>&1
-		comprobar "un listener que CALLA no es 'nadie escucha'" 1 "$?"
-		if grep -q "nadie escucha" "$BANCO/out.log" 2>/dev/null; then
-			printf '  FALLA %-58s lo llama ausencia\n' "y lo diagnostica como que no habla Postgres"
-			fallan=$((fallan + 1))
+		comprobar "a SILENT listener is not 'no listener'" 1 "$?"
+		if grep -q "No listener" "$BANCO/out.log" 2>/dev/null; then
+			printf '  FAIL  %-58s reports absence\n' "and diagnoses it as not speaking Postgres"
+			fail_count=$((fail_count + 1))
 		else
-			printf '  ok    %-58s no lo llama ausencia\n' "y lo diagnostica como que no habla Postgres"
-			pasan=$((pasan + 1))
+			printf '  ok    %-58s does not report absence\n' "and diagnoses it as not speaking Postgres"
+			pass_count=$((pass_count + 1))
 		fi
 	else
-		printf '  AVISO no pude levantar el senuelo mudo: MEDIO-04 NO se ejercito\n'
+		printf '  NOTICE could not start the silent fixture: MEDIO-04 was NOT exercised\n'
 	fi
 	kill "$MUDO_PID" 2>/dev/null
 fi
@@ -618,24 +618,24 @@ except OSError: sys.exit(1)
 	printf '#!/usr/bin/env bash\nprintf %%s\\n "export OLIVARES_TEST_POSTGRES_SUPERUSER_DSN=\\"postgres://u:p@%s:5432/db\\""\n' "$AGUJERO" >"$LPG/scripts/pg-test-env.sh"
 	chmod +x "$LPG/scripts/pg-test-env.sh"
 	(cd "$LPG" && TMPDIR="$FUERA" bash "$GATE") >"$BANCO/out.log" 2>&1
-	comprobar "un destino que descarta el SYN: NO es 'nadie escucha'" 1 "$?"
-	if grep -q "nadie escucha" "$BANCO/out.log" 2>/dev/null; then
-		printf '  FALLA %-58s lo llama ausencia\n' "y un timeout al conectar se diagnostica aparte"
-		fallan=$((fallan + 1))
+	comprobar "a destination dropping SYN: NOT 'no listener'" 1 "$?"
+	if grep -q "No listener" "$BANCO/out.log" 2>/dev/null; then
+		printf '  FAIL  %-58s reports absence\n' "and a connection timeout is diagnosed separately"
+		fail_count=$((fail_count + 1))
 	else
-		printf '  ok    %-58s no lo llama ausencia\n' "y un timeout al conectar se diagnostica aparte"
-		pasan=$((pasan + 1))
+		printf '  ok    %-58s does not report absence\n' "and a connection timeout is diagnosed separately"
+		pass_count=$((pass_count + 1))
 	fi
 else
-	printf '  AVISO %s no da timeout en esta red: MEDIO-04 (connect) NO se ejercito\n' "$AGUJERO"
+	printf '  NOTICE %s does not time out on this network: MEDIO-04 (connect) was NOT exercised\n' "$AGUJERO"
 fi
 
 # ── 4 · EL MUTANTE DEL TMPDIR: dentro de un repositorio ───────────────────────────────────────
 # Tumbó lint:mid-operation con 14/1 mientras el árbol estaba impecable.
 mkdir -p "$BANCO/repo/.tmp-dentro"
 correr "$BANCO/repo/.tmp-dentro"
-comprobar "TMPDIR DENTRO de un repositorio, RECHAZA" 1 "$?"
-dice "y dice que está dentro" "DENTRO de un repositorio"
+comprobar "TMPDIR INSIDE a repository is REJECTED" 1 "$?"
+dice "and reports that it is inside" "INSIDE a repository"
 
 # ── 5 · TMPDIR que no ejecuta ─────────────────────────────────────────────────────────────────
 # Se monta quitando el bit de ejecución al directorio, que es lo que un noexec produce a efectos
@@ -646,12 +646,12 @@ if command -v setfacl >/dev/null 2>&1 || true; then :; fi
 # Sin privilegios para montar noexec, se comprueba la OTRA mitad del predicado: un TMPDIR ausente
 # es NO HE PODIDO MIRAR, nunca limpio.
 correr "$BANCO/no-existe-este-tmpdir"
-comprobar "un TMPDIR ausente es NO HE PODIDO MIRAR" 2 "$?"
+comprobar "a missing TMPDIR reports COULD NOT CHECK" 2 "$?"
 
 # ── 6 · Y fuera de un repositorio, el gate no adivina ─────────────────────────────────────────
 (cd "$BANCO" && TMPDIR="$FUERA" bash "$GATE") >"$BANCO/out.log" 2>&1
-comprobar "fuera de un repositorio es NO HE PODIDO MIRAR, no limpio" 2 "$?"
+comprobar "outside a repository reports COULD NOT CHECK, not clean" 2 "$?"
 
-echo "test-lane-preflight: $pasan pasan, $fallan fallan"
-[ "$fallan" -eq 0 ] || exit 1
+echo "test-lane-preflight: $pass_count passed, $fail_count failed"
+[ "$fail_count" -eq 0 ] || exit 1
 exit 0

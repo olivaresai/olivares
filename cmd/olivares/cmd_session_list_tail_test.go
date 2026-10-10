@@ -32,7 +32,7 @@ func TestSessionListTellsApartSessionsWithTheSameName(t *testing.T) {
 			t.Fatalf("ls does not tell the two notes sessions apart (%q):\n%s", want, out)
 		}
 	}
-	// HU2-09 gave every row an id column, so the tail is on the docs row too; what stays
+	// Every row has an id column, so the tail is on the docs row too; what stays
 	// as it is is the NAME of a session no other row shares.
 	if strings.Contains(out, "docs …") {
 		t.Fatalf("a name no other row carries got a tail:\n%s", out)

@@ -9,6 +9,7 @@ package sessions
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -79,13 +80,44 @@ type codexFixture struct {
 	// CompleteTurn emits turn/completed right after answering turn/start.
 	CompleteTurn bool `json:"complete_turn"`
 	// ApprovalOnTurn asks for that approval method after answering turn/start.
-	ApprovalOnTurn string `json:"approval_on_turn"`
+	ApprovalOnTurn       string `json:"approval_on_turn"`
+	CompleteApprovalTurn bool   `json:"complete_approval_turn"`
 	// SpawnChild forks a grandchild that inherits stdout, so a stop has something
 	// to reap that the direct SIGTERM would not reach.
 	SpawnChild bool `json:"spawn_child"`
 	// AuthRecovery, when set, emits the provider's own authentication-recovery
 	// notification after answering turn/start.
 	AuthRecovery string `json:"auth_recovery"`
+	// ApprovalPolicy and SandboxType override what the thread answer says the
+	// thread runs under ("" ⇒ "untrusted" and "readOnly"), so a test can tell the
+	// mode Codex reports from the one the launch asked for.
+	ApprovalPolicy json.RawMessage `json:"approval_policy,omitempty"`
+	SandboxType    string          `json:"sandbox_type"`
+	// TurnUsage is the running thread total the peer reports after answering each
+	// turn/start, one thread/tokenUsage/updated per entry, for the turn it started.
+	TurnUsage []codexFixtureTokens `json:"turn_usage"`
+	// ResumeUsage is the total a resumed thread reports at once, before any turn,
+	// for its previous turn: what codex-cli 0.160.1 does (measured 2026-10-07).
+	ResumeUsage *codexFixtureTokens `json:"resume_usage"`
+	// ResumeUsageAfterPath holds that report until the test creates this file, so it
+	// arrives after the handshake has bound the thread.
+	ResumeUsageAfterPath string `json:"resume_usage_after_path"`
+	// UsageBeforeTurnReply sends a turn's usage BEFORE the turn/start answer, so a
+	// test proves crediting does not depend on which of the two is read first.
+	UsageBeforeTurnReply bool `json:"usage_before_turn_reply"`
+	// ForeignUsage is a total the peer reports for ANOTHER thread (a subagent's)
+	// after each turn/start; it must never reach this run.
+	ForeignUsage *codexFixtureTokens `json:"foreign_usage"`
+	// Model overrides the model the thread answer names ("" ⇒ "the model").
+	Model string `json:"model"`
+}
+
+// codexFixtureTokens is one TokenUsageBreakdown, in the wire's own field names.
+type codexFixtureTokens struct {
+	InputTokens           int64 `json:"inputTokens"`
+	CachedInputTokens     int64 `json:"cachedInputTokens"`
+	CacheWriteInputTokens int64 `json:"cacheWriteInputTokens"`
+	OutputTokens          int64 `json:"outputTokens"`
 }
 
 // codexFixtureRecord is what the peer observed. It records credential-bearing
@@ -142,7 +174,10 @@ func TestMain(m *testing.M) {
 			if cfg.SandboxSignal {
 				_ = syscall.Kill(os.Getpid(), syscall.SIGKILL)
 			}
-			os.Exit(cfg.SandboxExit)
+			if cfg.SandboxExit != 0 {
+				os.Exit(cfg.SandboxExit)
+			}
+			os.Exit(runCodexFixtureSandboxCommand(args[1:]))
 		case "app-server":
 			os.Exit(runCodexFixturePeer())
 		case "agent":
@@ -151,7 +186,7 @@ func TestMain(m *testing.M) {
 			os.Exit(runOpenCodeFixturePeer())
 		case confine.HelperArg:
 			// The confinement helper: procRunner re-executes this test binary.
-			os.Exit(confine.RunHelper(args[1:]))
+			os.Exit(RunConfinementHelper(args[1:]))
 		case "fixture-grandchild":
 			// A grandchild that holds the inherited stdout open. Only a PROCESS GROUP
 			// teardown ends it; a signal to the direct child alone leaves it running
@@ -161,6 +196,31 @@ func TestMain(m *testing.M) {
 		}
 	}
 	os.Exit(m.Run())
+}
+
+// runCodexFixtureSandboxCommand runs what `codex sandbox [COMMAND]...` runs once
+// the native sandbox is up. The official parser (0.145.0 to 0.160.1) takes a
+// leading `--` as the separator and every later word as the command, so
+// `sandbox linux -- /bin/true` executes `linux` and fails.
+func runCodexFixtureSandboxCommand(command []string) int {
+	if len(command) > 0 && command[0] == "--" {
+		command = command[1:]
+	}
+	if len(command) == 0 {
+		fmt.Fprintln(os.Stderr, "fixture sandbox: no command")
+		return 2
+	}
+	cmd := exec.Command(command[0], command[1:]...)
+	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
+	if err := cmd.Run(); err != nil {
+		var exit *exec.ExitError
+		if errors.As(err, &exit) {
+			return exit.ExitCode()
+		}
+		fmt.Fprintf(os.Stderr, "fixture sandbox: %v\n", err)
+		return 1
+	}
+	return 0
 }
 
 type codexFixturePeer struct {
@@ -269,6 +329,9 @@ func (p *codexFixturePeer) handle(frame map[string]json.RawMessage) {
 			p.rec.Replies = append(p.rec.Replies, append(json.RawMessage(nil), raw...))
 		}
 		p.flush()
+		if p.cfg.CompleteApprovalTurn {
+			p.send(map[string]any{"method": codexNotifyTurnCompleted, "params": map[string]any{"threadId": p.thread, "turn": map[string]any{"id": fmt.Sprintf("turn-%d", p.turn), "status": "interrupted"}}})
+		}
 		return
 	}
 	p.flush()
@@ -308,6 +371,15 @@ func (p *codexFixturePeer) handle(frame map[string]json.RawMessage) {
 			p.thread = p.cfg.ResumeThreadID
 		}
 		p.reply(id, p.threadResult(p.thread))
+		if p.cfg.ResumeUsage != nil && p.cfg.ResumeUsageAfterPath != "" {
+			go func(thread string, total codexFixtureTokens) {
+				if waitForFile(p.cfg.ResumeUsageAfterPath) { // never released: no replay, and the test's wait fails
+					p.tokenUsageFor(thread, "turn-of-an-earlier-process", total)
+				}
+			}(p.thread, *p.cfg.ResumeUsage)
+		} else if p.cfg.ResumeUsage != nil {
+			p.tokenUsage("turn-of-an-earlier-process", *p.cfg.ResumeUsage)
+		}
 	case codexMethodTurnStart:
 		p.turn++
 		turnID := fmt.Sprintf("turn-%d", p.turn)
@@ -318,9 +390,22 @@ func (p *codexFixturePeer) handle(frame map[string]json.RawMessage) {
 		p.rec.Efforts = append(p.rec.Efforts, effort)
 		p.recordInput(params)
 		p.flush()
+		if p.cfg.UsageBeforeTurnReply {
+			for _, total := range p.cfg.TurnUsage {
+				p.tokenUsage(turnID, total)
+			}
+		}
 		p.reply(id, map[string]any{
 			"turn": map[string]any{"id": turnID, "status": "inProgress", "items": []any{}},
 		})
+		if !p.cfg.UsageBeforeTurnReply {
+			for _, total := range p.cfg.TurnUsage {
+				p.tokenUsage(turnID, total)
+			}
+		}
+		if p.cfg.ForeignUsage != nil {
+			p.tokenUsageFor("thread-of-a-subagent", "turn-of-a-subagent", *p.cfg.ForeignUsage)
+		}
 		if p.cfg.ApprovalOnTurn != "" {
 			p.requestApproval(p.cfg.ApprovalOnTurn, turnID)
 		}
@@ -372,15 +457,51 @@ func (p *codexFixturePeer) recordInput(params map[string]json.RawMessage) {
 }
 
 func (p *codexFixturePeer) threadResult(id string) map[string]any {
+	var approval any = "untrusted"
+	if len(p.cfg.ApprovalPolicy) > 0 {
+		approval = p.cfg.ApprovalPolicy
+	}
+	sandbox := "readOnly"
+	if p.cfg.SandboxType != "" {
+		sandbox = p.cfg.SandboxType
+	}
+	model := "gpt-5.6-sol"
+	if p.cfg.Model != "" {
+		model = p.cfg.Model
+	}
 	return map[string]any{
 		"thread": map[string]any{
 			"id": id, "parentThreadId": nil, "agentRole": nil, "model": "gpt-5.6-sol",
 			"cliVersion": "0.153.4", "modelProvider": "openai",
 		},
-		"model": "gpt-5.6-sol", "modelProvider": "openai",
-		"cwd": p.rec.Cwd, "approvalPolicy": "untrusted",
-		"sandbox": map[string]any{"mode": "read-only"}, "approvalsReviewer": "user",
+		"model": model, "modelProvider": "openai",
+		"cwd": p.rec.Cwd, "approvalPolicy": approval,
+		// The shape codex-cli 0.160.1 answers (measured 2026-10-07): a tagged object.
+		"sandbox":           map[string]any{"type": sandbox, "networkAccess": false},
+		"approvalsReviewer": "user",
 	}
+}
+
+// tokenUsage sends thread/tokenUsage/updated with total as the thread's running
+// total, in the measured shape. `last` (the last response alone) is a different
+// figure on purpose, so reading the wrong one cannot pass.
+func (p *codexFixturePeer) tokenUsage(turnID string, total codexFixtureTokens) {
+	p.tokenUsageFor(p.thread, turnID, total)
+}
+
+func (p *codexFixturePeer) tokenUsageFor(threadID, turnID string, total codexFixtureTokens) {
+	breakdown := func(t codexFixtureTokens) map[string]any {
+		return map[string]any{
+			"inputTokens": t.InputTokens, "cachedInputTokens": t.CachedInputTokens,
+			"cacheWriteInputTokens": t.CacheWriteInputTokens, "outputTokens": t.OutputTokens,
+			"reasoningOutputTokens": 0, "totalTokens": t.InputTokens + t.OutputTokens,
+		}
+	}
+	last := codexFixtureTokens{InputTokens: 1, OutputTokens: 1}
+	p.send(map[string]any{"method": "thread/tokenUsage/updated", "params": map[string]any{
+		"threadId": threadID, "turnId": turnID,
+		"tokenUsage": map[string]any{"total": breakdown(total), "last": breakdown(last), "modelContextWindow": 400000},
+	}})
 }
 
 func (p *codexFixturePeer) requestApproval(method, turnID string) {
@@ -404,16 +525,21 @@ func (p *codexFixturePeer) requestApproval(method, turnID string) {
 // waitForRelease blocks thread/start until the test creates the release file, so
 // a test can inspect the plane WHILE the launch's handshake is still open.
 func (p *codexFixturePeer) waitForRelease() {
-	if p.cfg.HoldStartPath == "" {
-		return
+	if p.cfg.HoldStartPath != "" {
+		waitForFile(p.cfg.HoldStartPath)
 	}
+}
+
+// waitForFile reports whether path came to exist within 30 seconds.
+func waitForFile(path string) bool {
 	deadline := time.Now().Add(30 * time.Second)
 	for time.Now().Before(deadline) {
-		if _, err := os.Stat(p.cfg.HoldStartPath); err == nil {
-			return
+		if _, err := os.Stat(path); err == nil {
+			return true
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
+	return false
 }
 
 func (p *codexFixturePeer) reply(id json.RawMessage, result any) {

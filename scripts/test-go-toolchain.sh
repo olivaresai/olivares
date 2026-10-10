@@ -151,10 +151,9 @@ mkdir -p "$d/.github/workflows"
 printf 'jobs:\n  x:\n    steps:\n      - uses: actions/setup-go@v5\n        with:\n          go-version-file: go.work\n' > "$d/.github/workflows/release.yml"
 run "$d" 0 "go-version-file: go.work is not a pin and must not be graded" "0 builder pin(s)"
 
-# ⛔ LAS DOS GRAFÍAS QUE EL EXTRACTOR NO VEÍA, y una de ellas escondía un defecto real:
-# `cloud/control-plane/Dockerfile` llevaba `FROM golang:1.25-alpine` sobre un módulo que
-# declara `go 1.26.6`, y el gate contaba «5 builder pin(s) … all equal» sin ese fichero
-# dentro. No es un caso teórico: es el defecto con su fecha (2026-08-27).
+# Two spellings the extractor missed, including a live defect: on 2026-08-27,
+# cloud/control-plane/Dockerfile used FROM golang:1.25-alpine for a module declaring
+# go 1.26.6, yet the gate reported five matching builder pins without scanning that file.
 d=$(mk builder_two_part "$WK"); mod "$d" a 1.26.5; mod "$d" b 1.26.5
 printf 'FROM golang:1.25-alpine AS build\n' > "$d/Dockerfile"
 run "$d" 1 "a TWO-part golang tag is a finding, not an invisible pin" "two-part tag, which floats"

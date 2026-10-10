@@ -1,31 +1,4 @@
-# The single source of truth for the CURRENT PUBLISHED RELEASE, the install baseline, in
-# CalVer: vYY.M.PATCH for every release before 26.10, bare YY.M.PATCH from 26.10 on (the
-# tag-name correction of 2026-09-29; a v-prefixed 26.10.0 and a bare 26.9.0 are both refused
-# by scripts/check-release-version.sh). Every release-bearing surface (README ×7, the CHANGELOG masthead, INSTALL,
-# the docs-site install and verify pages, the trust one-pager, and the deploy/, packaging/ and
-# operator/ coordinates) is checked against this value by scripts/check-release-version.sh on
-# every push and in CI. SECURITY.md is not one of those surfaces: scripts/check-install-docs.sh
-# requires it to contain this value (its supported-release row), and binds this value to its
-# dated witness, docs/releases/<this value>-install-surfaces.json.
-#
-# THE VALUE NAMES A PUBLISHED RELEASE, NOT A PLAN. 26.10.0 was: public tag 26.10.0, GitHub
-# release 400733329, published 2026-10-01T07:44:12Z; its install surfaces were read on
-# 2026-10-01 and are recorded in its witness. Every published release (v26.8.0, v26.9.0,
-# 26.10.0) keeps its own CHANGELOG.md section unchanged.
-#
-# THIS IS THE 26.10.1 CUT, PREPARED TO APPLY AT RELEASE TIME: the canon, the dated changelog
-# section and every bound surface in their 26.10.1 state. Its witness,
-# docs/releases/26.10.1-install-surfaces.json, is a STAND-IN, marked so in its $comment: the
-# real witness is observed from the published surfaces at publication time and replaces it.
-#
-# HOW A NUMBER IS DERIVED: CalVer takes it from the date of the cut. YY is the two-digit year,
-# M the month with no leading zero, and PATCH the release number within that month. The
-# calendar derives the number; WHETHER and WHEN a cut happens is the owner's decision.
-#
-# THERE IS NO UNDECIDED. The checker once answered the value UNDECIDED with a census and
-# exit 0; that report mode was removed on 2026-09-23, because it certified a tree with no
-# canon behind it. UNDECIDED, or any value outside the two-era CalVer contract above, is
-# refused before any
-# surface is read, and scripts/check-install-docs.sh binds the current install surfaces to
-# the value below through its dated witness.
-26.10.1
+# The next Community and Enterprise release. Run task release:stamp after changing it.
+# Releases use bare MAJOR.MINOR only: 1.0, 1.1, 1.10. A breaking release increments MAJOR.
+# Published tags and dated changelog entries remain unchanged.
+0.1

@@ -774,13 +774,30 @@ func l3MoveSigningKeysOutOfTheDataDir(t *testing.T, dataDir, vault string) strin
 // Both panes are asserted, and the text one includes the note as its FIRST line —
 // under -o json that note moves to stderr, and dropping it instead would take away
 // the operator's only warning that this bundle cannot be verified alone.
+//
+// The data dir still holds the default communication keyrings, which are not
+// signing keys and are carried whatever the signing-key custody. Counting them as
+// signing keys turned this case into an ordinary self-escrowing backup.
 func TestDRBackupJSONFlagsABundleThatEscrowsNoKeyMaterial(t *testing.T) {
-	const note = "note: signing keys are externally custodied (BYOK/CMEK) — the bundle escrows NO key " +
-		"material; at restore time provision the key from your Secret/KMS envelope before verifying\n"
+	const note = "note: signing keys are externally custodied (BYOK/CMEK) — the bundle escrows NO signing " +
+		"key; at restore time provision the key from your Secret/KMS envelope before verifying\n"
+	noSigningKey := func(m dr.Manifest) {
+		t.Helper()
+		for _, kr := range m.Keys {
+			if kr.PubSHA256 != "" {
+				t.Fatalf("the bundle escrowed signing key %s; this case is supposed to escrow none: %+v", kr.Name, m.Keys)
+			}
+		}
+	}
 
 	src := t.TempDir()
 	seedDataDir(t, src)
 	t.Setenv(envAuditKeyFile, l3MoveSigningKeysOutOfTheDataDir(t, src, t.TempDir()))
+	// The move took the sealer key files too; this deployment supplies them from
+	// its variables, as serve does, so the backup has every sealer key in effect.
+	for _, k := range drSealerKeys {
+		t.Setenv(k.env, drValidSealerKey)
+	}
 	pf := l3Passphrase(t)
 
 	bundle := filepath.Join(t.TempDir(), "byok.drbundle")
@@ -789,9 +806,7 @@ func TestDRBackupJSONFlagsABundleThatEscrowsNoKeyMaterial(t *testing.T) {
 		t.Fatalf("dr backup under external custody: %v\n%s", err, errOut)
 	}
 	m := l3Manifest(t, bundle)
-	if len(m.Keys) != 0 {
-		t.Fatalf("the bundle escrowed %d key(s); this case is supposed to escrow none", len(m.Keys))
-	}
+	noSigningKey(m)
 	assertExactStdout(t, "dr backup BYOK", out, note+fmt.Sprintf(
 		"DR bundle written: %s\n  taken: %s (RPO basis)\n  engine: %s  tenants: %d  keys: %d\n",
 		bundle, m.CreatedAt, m.EngineKind, len(m.Tenants), len(m.Keys)))
@@ -812,9 +827,11 @@ func TestDRBackupJSONFlagsABundleThatEscrowsNoKeyMaterial(t *testing.T) {
 		t.Fatal(err)
 	}
 	// The document and the note answer the same question, and they are driven by the
-	// same predicate: keys == 0 with the field true is what makes them one answer.
-	if decoded.Keys != 0 {
-		t.Fatalf("keys = %d, want 0 under external custody: %#v", decoded.Keys, decoded)
+	// same predicate: no signing key with the field true is what makes them one answer.
+	jm := l3Manifest(t, jsonBundle)
+	noSigningKey(jm)
+	if decoded.Keys != len(jm.Keys) {
+		t.Fatalf("keys = %d, want the %d the bundle carries: %#v", decoded.Keys, len(jm.Keys), decoded)
 	}
 	if !strings.Contains(errOut, note) {
 		t.Fatalf("the custody note must move to stderr under -o json, not vanish; stderr = %q", errOut)

@@ -165,7 +165,7 @@ func registerWorkflowSchema(reg store.ExtensionRegistry) error {
 			// The opaque handle of the run's credential binding. Only core/auth
 			// resolves it, and only for this run's own subject; it names no account.
 			{Name: colWrCredentialBinding, Kind: model.KindText, Nullable: true, Principal: model.None(
-				"an opaque credential-binding handle, parsed as such: modules/orchestration/workflow_work_run.go:19")},
+				"an opaque credential-binding handle, parsed as such: modules/orchestration/workflow_work_run.go:20")},
 			{Name: colWrStartedAt, Kind: model.KindTimestamp},
 			{Name: colWrFinished, Kind: model.KindTimestamp, Nullable: true},
 		},

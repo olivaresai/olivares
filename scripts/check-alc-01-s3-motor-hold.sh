@@ -16,15 +16,17 @@ cd "$ROOT" || cannot "cannot enter $ROOT"
 JSON="${OLIVARES_ALC01S3_JSON:-design/alc-01-s3-motor-hold.json}"
 DOC="${OLIVARES_ALC01S3_DOC:-design/ALC-01-S3-MOTOR-HOLD-2026-08-20.md}"
 WIRE="${OLIVARES_ALC01S3_WIRE:-cmd/olivares/wire_noenterprise.go}"
+PORTS="${OLIVARES_ALC01S3_PORTS:-cmd/olivares/edition_ports.go}"
 
 [ -f "$JSON" ] || cannot "missing $JSON"
 [ -f "$DOC" ] || cannot "missing $DOC"
 [ -f "$WIRE" ] || cannot "missing default wire"
+[ -f "$PORTS" ] || cannot "missing edition ports"
 
 grep -q 'HOLD' "$DOC" || fail "$DOC lost HOLD"
 grep -q 'NO IMPLEMENTADO' "$DOC" || fail "$DOC lost NO IMPLEMENTADO"
 if grep -qiE 'managed SCIM shipped|S3 motor live|FIRMA A claimed' "$DOC"; then
-	fail "$DOC claims a motor this lote does not have"
+	fail "$DOC claims a motor this batch does not have"
 fi
 
 python3 - "$JSON" <<'PY' || fail "JSON flags drifted"
@@ -48,8 +50,10 @@ for key in ("hub", "overlay"):
         raise SystemExit("%s is not a 40-hex object id" % key)
 PY
 
-grep -q 'func newManagedSCIM()' "$WIRE" || fail "default wire lost the named nil seam"
-if ! grep -qE 'return nil' "$WIRE"; then
+grep -q 'managedSCIM editionPort\[any\]' "$PORTS" || fail "default wire lost the named nil seam"
+grep -q '^func editionPortsForBuild()' "$WIRE" \
+	|| fail "the default wire no longer fills the Community edition; the nil check below would prove nothing"
+if grep -q 'managedSCIM' "$WIRE"; then
 	fail "default wire lost the nil managed-SCIM seam"
 fi
 

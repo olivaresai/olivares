@@ -9,7 +9,7 @@ package sessions
 import "testing"
 
 // Grok Build on a key from Providers is held to the carrier's endpoint by its documented
-// variables; a launch on its own sign-in keeps its own (Root 2026-10-02 21:22Z).
+// variables; a launch on its own sign-in keeps its own.
 func TestGrokKeyLaunchIsHeldToItsEndpoint(t *testing.T) {
 	bound := envMap(grokDriver{}.LaunchEnv(DriverLaunch{BoundProvider: BoundProvider{Kind: ProviderKindXAI, Endpoint: "https://api.x.ai/v1"}}))
 	for _, name := range []string{envGrokXAIAPIBaseURL, envGrokModelsBaseURL} {

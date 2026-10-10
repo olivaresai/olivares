@@ -12,11 +12,12 @@ import (
 
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/auth"
+	"github.com/olivaresai/olivares/core/model"
 )
 
 // Permission tiers for the WORKSPACE / governed file surface. Read covers
 // list/stat/read; write covers write/mkdir/move/delete (the file edits a session
-// makes); admin covers register/deregister (granting/revoking filesystem reach).
+// makes); admin covers register/configure/deregister (granting/revoking filesystem reach).
 const (
 	permWsRead  auth.Permission = "sessions:workspace:read"
 	permWsWrite auth.Permission = "sessions:workspace:write"
@@ -39,6 +40,7 @@ func (m *Module) workspaceRoutes(reg api.RouteRegistrar) {
 	reg.Handle("POST", "/workspaces", permWsAdmin, m.handleCreateWorkspace)
 	reg.Handle("GET", "/workspaces", permWsRead, m.handleListWorkspaces)
 	reg.Handle("GET", "/workspaces/{ref}", permWsRead, m.handleGetWorkspace)
+	reg.Handle("PATCH", "/workspaces/{ref}", permWsAdmin, m.handlePatchWorkspace)
 	reg.Handle("DELETE", "/workspaces/{ref}", permWsAdmin, m.handleDeleteWorkspace)
 	reg.Handle("GET", "/workspaces/{ref}/files", permWsRead, m.handleListFiles)
 	reg.Handle("GET", "/workspaces/{ref}/files/stat", permWsRead, m.handleStatFile)
@@ -50,7 +52,7 @@ func (m *Module) workspaceRoutes(reg api.RouteRegistrar) {
 }
 
 func (m *Module) handleCreateWorkspace(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
-	if m.data == nil {
+	if m.Data == nil {
 		writeJSON(w, http.StatusServiceUnavailable, errorBody("workspace registry not available"))
 		return
 	}
@@ -61,7 +63,8 @@ func (m *Module) handleCreateWorkspace(w http.ResponseWriter, r *http.Request, m
 	dto, err := m.createWorkspace(r.Context(), mc.Tenant, CreateWorkspaceParams{
 		Name: body.Name, RootPath: body.RootPath, MountMode: body.MountMode,
 		ContainerTarget: body.ContainerTarget, AllowSubpaths: body.AllowSubpaths,
-		MaxReadBytes: body.MaxReadBytes, DLPMode: body.DLPMode,
+		ReadOnlyFolders: body.ReadOnlyFolders,
+		MaxReadBytes:    body.MaxReadBytes, DLPMode: body.DLPMode,
 		Actor: mc.Principal.Actor(), ActorKind: mc.Principal.ActorKind(),
 	})
 	if err != nil {
@@ -71,8 +74,39 @@ func (m *Module) handleCreateWorkspace(w http.ResponseWriter, r *http.Request, m
 	writeJSON(w, http.StatusCreated, dto)
 }
 
+// handlePatchWorkspace replaces a workspace's additional read-only host folders.
+// Requires workspace administrator permission; an empty array removes access.
+func (m *Module) handlePatchWorkspace(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
+	if m.Data == nil {
+		writeJSON(w, http.StatusServiceUnavailable, errorBody("workspace registry not available"))
+		return
+	}
+	var body struct {
+		ReadOnlyFolders *[]string `json:"read_only_folders"`
+	}
+	if !decodeJSONBody(w, r, &body) {
+		return
+	}
+	if body.ReadOnlyFolders == nil {
+		writeRunErr(w, badRequest("read_only_folders must be an array; use [] to remove access"))
+		return
+	}
+	dto, err := m.patchWorkspaceReadOnlyFolders(r.Context(), mc.Tenant, chi.URLParam(r, "ref"), *body.ReadOnlyFolders, mc.Principal.Actor(), mc.Principal.ActorKind())
+	if err != nil {
+		writeRunErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, dto)
+}
+
 func (m *Module) handleListWorkspaces(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
-	out, err := m.listWorkspaces(r.Context(), mc.Tenant, listQuery(r))
+	q := listQuery(r)
+	for _, column := range []string{colWsRootPath, colWsState} {
+		if value := r.URL.Query().Get(column); value != "" {
+			q.Filters = append(q.Filters, model.Filter{Column: column, Op: model.OpEq, Value: value})
+		}
+	}
+	out, err := m.listWorkspaces(r.Context(), mc.Tenant, q)
 	if err != nil {
 		writeRunErr(w, err)
 		return
@@ -119,7 +153,18 @@ func (m *Module) handleStatFile(w http.ResponseWriter, r *http.Request, mc api.M
 }
 
 func (m *Module) handleReadFile(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
-	resp, err := m.readFile(r.Context(), mc.Tenant, chi.URLParam(r, "ref"),
+	// ?rev=HEAD asks for the content git HEAD holds for the file instead (404 when the
+	// workspace has no readable git history or HEAD has no such file).
+	read := m.readFile
+	switch rev := r.URL.Query().Get("rev"); rev {
+	case "":
+	case headRev:
+		read = m.readFileAtHead
+	default:
+		writeRunErr(w, badRequest("rev must be HEAD"))
+		return
+	}
+	resp, err := read(r.Context(), mc.Tenant, chi.URLParam(r, "ref"),
 		r.URL.Query().Get("path"), mc.Principal.Actor(), mc.Principal.ActorKind())
 	if err != nil {
 		writeRunErr(w, err)

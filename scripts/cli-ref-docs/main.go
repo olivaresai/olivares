@@ -16,7 +16,7 @@
 //
 // WHERE THE ENUMERATION COMES FROM, and why not from the sources. The tree is
 // built by RUNNING code — newRootCmd() adds groups conditionally
-// (enterpriseRootCommands, hideUnavailableAddOns) — and the data a reference
+// (the rootCommands edition port, hideUnavailableAddOns) — and the data a reference
 // needs (every flag's name, shorthand, type, default, usage, hidden/required
 // status) lives in pflag structs, not in text. No parse of the sources and no
 // grep can enumerate that. cmd/olivares/clirefdump_test.go walks the real tree

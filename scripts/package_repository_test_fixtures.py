@@ -17,7 +17,7 @@ from pathlib import Path
 
 
 EPOCH = 1704067200
-VERSION = "26.9.0"
+VERSION = "26.900"
 
 
 def gzip_bytes(payload: bytes) -> bytes:
@@ -99,7 +99,7 @@ def make_rpm(arch: str, variant: str) -> bytes:
     lead = bytearray(96)
     lead[:4] = b"\xed\xab\xee\xdb"
     lead[4:6] = b"\x03\x00"
-    lead[10:10 + len(b"olivares-26.9.0-1")] = b"olivares-26.9.0-1"
+    lead[10:10 + len(b"olivares-26.900-1")] = b"olivares-26.900-1"
     signature = rpm_header([])
     entries: list[tuple[int, int, object]] = [
         (1000, 6, "olivares"),

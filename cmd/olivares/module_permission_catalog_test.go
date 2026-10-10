@@ -58,7 +58,7 @@ func liveModules(t *testing.T) moduleSet {
 	if err != nil {
 		t.Fatal(err)
 	}
-	set, err := buildModules(sg, nil, nil, nil, http.DefaultClient, sourcesConfig{}, EditionConfig{}, t.TempDir(), log)
+	set, err := buildModules(nil, sg, nil, nil, nil, http.DefaultClient, nil, sourcesConfig{}, EditionConfig{}, t.TempDir(), log)
 	if err != nil {
 		t.Fatal(err)
 	}

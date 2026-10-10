@@ -141,7 +141,7 @@ func (f *advanceFixture) endpoint(path string) string {
 func TestVerifyChannelAdvanceResolverRefusalIsDisplaySafe(t *testing.T) {
 	// ⛔ THE MEASURED DEFECT. Every one of these is refused by release.ResolveChannel BEFORE
 	// buildCommunitySource, so the wrapper the upgrade path relies on was never reached.
-	cand := writeManifestFile(t, chanManifest(t, "stable", "26.8.1"))
+	cand := writeManifestFile(t, chanManifest(t, "stable", "26.801"))
 	key := newSigner(t).pub
 	cases := []struct {
 		name     string
@@ -188,7 +188,7 @@ func TestVerifyChannelAdvanceResolverRefusalIsDisplaySafe(t *testing.T) {
 func TestVerifyChannelAdvancePinnedRefusalNamesNoTag(t *testing.T) {
 	// The pinned refusal is a SHAPE refusal: it needs no value from the endpoint to be
 	// actionable, and every value it could quote is unbounded operator input.
-	cand := writeManifestFile(t, chanManifest(t, "stable", "26.8.1"))
+	cand := writeManifestFile(t, chanManifest(t, "stable", "26.801"))
 	key := newSigner(t).pub
 	var hits atomic.Int64
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -201,14 +201,14 @@ func TestVerifyChannelAdvancePinnedRefusalNamesNoTag(t *testing.T) {
 		name     string
 		endpoint string
 	}{
-		{"a plain pinned tag with a credential", fmt.Sprintf("http://%s:%s@%s/o/r/releases/tag/v26.8.0", advUser, advPass, host)},
-		{"a pinned download base", fmt.Sprintf("http://%s:%s@%s/o/r/releases/download/v26.8.0", advUser, advPass, host)},
+		{"a plain pinned tag with a credential", fmt.Sprintf("http://%s:%s@%s/o/r/releases/tag/26.800", advUser, advPass, host)},
+		{"a pinned download base", fmt.Sprintf("http://%s:%s@%s/o/r/releases/download/26.800", advUser, advPass, host)},
 		// ⛔ A TAG CARRYING TERMINAL ESCAPES. Tag() is percent-DECODED, so this arrives as raw
 		// ESC bytes; the old refusal wrote it to stderr with %s.
 		{"an encoded control-byte tag", fmt.Sprintf("http://%s:%s@%s/o/r/releases/tag/%%1b%%5b31mPWNED%%1b%%5b0m-%s", advUser, advPass, host, strings.Repeat("Z", 200))},
 		// A tag with an encoded slash resolves to ONE pinned release since the encoding fix,
 		// so it is refused here rather than fetched as a static base.
-		{"a branch-shaped tag", fmt.Sprintf("http://%s:%s@%s/o/r/releases/tag/rel%%2Fv26.8.0", advUser, advPass, host)},
+		{"a branch-shaped tag", fmt.Sprintf("http://%s:%s@%s/o/r/releases/tag/rel%%2F26.800", advUser, advPass, host)},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -228,7 +228,7 @@ func TestVerifyChannelAdvancePinnedRefusalNamesNoTag(t *testing.T) {
 			if !strings.Contains(err.Error(), "http://"+host) {
 				t.Fatalf("the refusal must name the host it refused, got: %v", err)
 			}
-			for _, echoed := range []string{"/releases/", "v26.8.0", "rel/v26.8.0", "ZZZZ"} {
+			for _, echoed := range []string{"/releases/", "26.800", "rel/26.800", "ZZZZ"} {
 				if strings.Contains(err.Error(), echoed) {
 					t.Fatalf("the refusal echoed %q from the endpoint: %v", echoed, err)
 				}
@@ -247,8 +247,8 @@ func TestVerifyChannelAdvancePinnedRefusalNamesNoTag(t *testing.T) {
 // credential and still reaches the ADVANCES verdict, while stdout names neither.
 func TestVerifyChannelAdvanceKeepsTheRequestAndTheCredential(t *testing.T) {
 	sg := newSigner(t)
-	f := newAdvanceFixture(t, chanManifest(t, "stable", "26.8.0"), sg)
-	cand := writeManifestFile(t, chanManifest(t, "stable", "26.8.1"))
+	f := newAdvanceFixture(t, chanManifest(t, "stable", "26.800"), sg)
+	cand := writeManifestFile(t, chanManifest(t, "stable", "26.801"))
 	endpoint := f.endpoint("/o/r/releases/latest/download")
 	stdout, stderr, err := runChannelAdvanceSeparated(t,
 		"--candidate", cand, "--endpoint", endpoint, "--pubkey", sg.pub)
@@ -313,8 +313,8 @@ func TestVerifyChannelAdvanceEncodedPathReachesTheServerVerbatim(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			sg := newSigner(t)
-			f := newAdvanceFixture(t, chanManifest(t, "stable", "26.8.0"), sg)
-			cand := writeManifestFile(t, chanManifest(t, "stable", "26.8.1"))
+			f := newAdvanceFixture(t, chanManifest(t, "stable", "26.800"), sg)
+			cand := writeManifestFile(t, chanManifest(t, "stable", "26.801"))
 			stdout, stderr, err := runChannelAdvanceSeparated(t,
 				"--candidate", cand, "--endpoint", f.endpoint(c.path), "--pubkey", sg.pub)
 			if err != nil {

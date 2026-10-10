@@ -86,6 +86,7 @@ func newComplianceCmd() *cobra.Command {
 	}
 	flags.addPersistent(root)
 	root.AddCommand(
+		newComplianceRiskCmd(&flags),
 		newComplianceHoldsCmd(&flags),
 		newComplianceErasureCmd(&flags),
 		newComplianceSubjectCmd(&flags),
@@ -244,7 +245,7 @@ func complianceHTTPError(status int, body []byte) error {
 		var b strings.Builder
 		switch env.Error.Code {
 		case "rtbf_coordinator":
-			b.WriteString("blocked by the enterprise RTBF readiness check (this is NOT a legal hold)")
+			b.WriteString("blocked by the Business RTBF readiness check (this is NOT a legal hold)")
 			for _, x := range env.Error.Blockers {
 				fmt.Fprintf(&b, "\n  blocker: %s", x)
 			}
@@ -1538,15 +1539,15 @@ func newComplianceDoraCmd(flags *authClientFlags) *cobra.Command {
 		Short: "Inspect DORA registers and classified incidents",
 		Long: "dora lists the Register of Information and the classified major-incident\n" +
 			"records this build has stored, and exports a stored register with its\n" +
-			"ledger anchor. Generating them is provided by the enterprise\n" +
-			"doraregister add-on (Compliance Packs).\n\n" +
+			"ledger anchor. Generating them is provided by\n" +
+			"Business (Compliance Packs).\n\n" +
 			"An exported register is a DRAFT: it does not make the tenant DORA-compliant\n" +
 			"and is not a certification. Incident-report export stays on the console.",
 		Example: "  olivares compliance dora registers\n  olivares compliance dora export dr-1 -o json",
 	}
 	cmd.AddCommand(
 		simpleListCmd(flags, "registers", "List DORA registers of information",
-			"Lists the DORA Registers of Information generated for this tenant. A register is the\ninventory of ICT third-party arrangements a financial entity must keep and file with its\ncompetent authority; generation is an enterprise capability, and this read lists what exists.",
+			"Lists the DORA Registers of Information generated for this tenant. A register is the\ninventory of ICT third-party arrangements a financial entity must keep and file with its\ncompetent authority; generation is a Business capability (Compliance Packs), and this read lists what exists.",
 			"  olivares compliance dora registers\n  olivares compliance dora registers -o json",
 			"/dora/register",
 			[]string{"ID", "REGULATION", "ENTITY", "ERRORS", "GENERATED"},
@@ -1558,7 +1559,7 @@ func newComplianceDoraCmd(flags *authClientFlags) *cobra.Command {
 				}
 			}),
 		simpleListCmd(flags, "incidents", "List classified DORA incidents",
-			"Lists ICT incidents classified under DORA's major-incident criteria. Classification is an\nenterprise capability; this read shows what has been classified and when, so the reporting\nclock for each one can be audited after the fact.",
+			"Lists ICT incidents classified under DORA's major-incident criteria. Classification is a\nBusiness capability; this read shows what has been classified and when, so the reporting\nclock for each one can be audited after the fact.",
 			"  olivares compliance dora incidents\n  olivares compliance dora incidents -o json",
 			"/dora/incidents",
 			[]string{"ID", "REFERENCE", "MAJOR", "CLASSIFIED"},
@@ -1590,7 +1591,7 @@ func newComplianceAimsCmd(flags *authClientFlags) *cobra.Command {
 	cmd.AddCommand(
 		simpleListCmd(flags, "ls", "List ISO/IEC 42001 AIMS packs",
 			"Lists the AIMS packs stored for this tenant (id, standard, organisation, error\n"+
-				"count, generated_at). Generation is the enterprise iso42001 add-on; an open\n"+
+				"count, generated_at). Generation is a Business capability (Compliance Packs); an open\n"+
 				"build lists none rather than fabricating a Statement of Applicability.",
 			"  olivares compliance aims ls\n  olivares compliance aims ls -o json",
 			"/aims/pack",
@@ -1612,7 +1613,7 @@ func newDoraExportRegisterCmd(flags *authClientFlags) *cobra.Command {
 		Short: "Export one DORA Register of Information",
 		Long: "export fetches the structured Register of Information for one stored id,\n" +
 			"with the live ledger anchor and the honesty disclaimer. Generation is the\n" +
-			"enterprise doraregister add-on; without it POST /dora/register answers 501\n" +
+			"Business capability (Compliance Packs); without it POST /dora/register answers 501\n" +
 			"and there is nothing to export. The payload is a DRAFT a competent person\n" +
 			"must review: it does not make the tenant DORA-compliant and is not a\n" +
 			"certification.",
@@ -1652,13 +1653,13 @@ func newDoraExportRegisterCmd(flags *authClientFlags) *cobra.Command {
 func newComplianceOscalCmd(flags *authClientFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "oscal",
-		Long:    "oscal exposes the NIST OSCAL surface: the machine-readable control catalogs,\nprofiles and system security plans a US federal program exchanges instead of\nspreadsheets. Ingestion of profiles and SSPs is an enterprise capability and answers\n501 without it; the export of what this deployment already knows is open.",
+		Long:    "oscal exposes the NIST OSCAL surface: the machine-readable control catalogs,\nprofiles and system security plans a US federal program exchanges instead of\nspreadsheets. Ingestion and OSCAL export belong to Business Compliance Packs.\nCommunity retains stored evidence and its JSON/CSV exports; OSCAL export answers 501.",
 		Short:   "Inspect ingested OSCAL profiles and SSPs",
 		Example: "  olivares compliance oscal ls\n  olivares compliance oscal get op-1 -o json",
 	}
 	cmd.AddCommand(
 		simpleListCmd(flags, "ls", "List registered OSCAL documents",
-			"Lists the OSCAL profiles registered on this deployment. OSCAL is NIST's machine-readable\ncontrol catalog format; a profile selects and tailors controls from a catalog. Profile and\nSSP ingestion is an enterprise capability, so on an open build this list is honestly empty.",
+			"Lists the OSCAL profiles registered on this deployment. OSCAL is NIST's machine-readable\ncontrol catalog format; a profile selects and tailors controls from a catalog. Profile and\nSSP ingestion is a Business capability (Compliance Packs), so on an open build this list is honestly empty.",
 			"  olivares compliance oscal ls\n  olivares compliance oscal ls -o json",
 			"/oscal/profiles",
 			[]string{"ID", "FRAMEWORK", "KIND", "SELECTED", "REGISTERED"},
@@ -1679,7 +1680,7 @@ func newOscalGetCmd(flags *authClientFlags) *cobra.Command {
 		Short: "Show one ingested OSCAL profile or SSP",
 		Long: "get shows one registered OSCAL profile or SSP: framework, document kind,\n" +
 			"selected-control count, document hash and the honesty disclaimer. Ingestion\n" +
-			"is the enterprise oscalingest add-on (Compliance Packs); without it POST\n" +
+			"is a Business capability (Compliance Packs); without it POST\n" +
 			"/oscal/profiles answers 501 and this get is a 404 on an empty store.",
 		Example: "  olivares compliance oscal get op-1\n  olivares compliance oscal get op-1 -o json",
 		Args:    cobra.ExactArgs(1),
@@ -1720,7 +1721,7 @@ func newComplianceDepthCmd(flags *authClientFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "depth",
 		Short:   "Inspect compliance-depth packs and control monitoring",
-		Long:    "depth groups the surfaces that go BELOW the base framework catalog: the\njurisdiction packs (US state law), the sector overlays, FedRAMP 20x KSIs, and\ncontinuous control monitoring with its snapshots and drift. All five are\nread-only listings; pack generation and monitoring are enterprise capabilities,\nso an open build lists honestly empty rather than fabricating rows.",
+		Long:    "depth groups the surfaces that go BELOW the base framework catalog: the\njurisdiction packs (US state law), the sector overlays, FedRAMP 20x KSIs, and\ncontinuous control monitoring with its snapshots and drift. All five are\nread-only listings; pack generation and monitoring are Business capabilities,\nso an open build lists honestly empty rather than fabricating rows.",
 		Example: "  olivares compliance depth us-law\n  olivares compliance depth fedramp",
 	}
 	cmd.AddCommand(
@@ -1758,7 +1759,7 @@ func newComplianceDepthCmd(flags *authClientFlags) *cobra.Command {
 				}
 			}),
 		simpleListCmd(flags, "fedramp", "List FedRAMP 20x KSI packs",
-			"Lists the FedRAMP 20x Key Security Indicator packs stored for this tenant.\nGeneration is the enterprise compliancedepth add-on (Compliance Packs); without\nit POST /depth/fedramp answers 501 and this list is honestly empty. A listed\npack is a DRAFT: it does not make the tenant FedRAMP authorized.",
+			"Lists the FedRAMP 20x Key Security Indicator packs stored for this tenant.\nGeneration is a Business capability (Compliance Packs); without\nit POST /depth/fedramp answers 501 and this list is honestly empty. A listed\npack is a DRAFT: it does not make the tenant FedRAMP authorized.",
 			"  olivares compliance depth fedramp\n  olivares compliance depth fedramp -o json",
 			"/depth/fedramp",
 			[]string{"ID", "SYSTEM", "IMPACT", "ERRORS", "GENERATED"},

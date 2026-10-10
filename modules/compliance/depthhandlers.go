@@ -243,7 +243,7 @@ func (m *Module) handleGenerateUSStatePack(
 			errorBody(
 				"US state AI law compliance pack "+
 					"generation requires the Olivares "+
-					"enterprise add-on "+
+					"Business edition "+
 					"(compliancedepth); "+
 					"not linked in this build"))
 		return
@@ -522,7 +522,7 @@ func (m *Module) handleGenerateSectorPack(
 			errorBody(
 				"Sector-overlay compliance pack "+
 					"generation requires the Olivares "+
-					"enterprise add-on "+
+					"Business edition "+
 					"(compliancedepth); "+
 					"not linked in this build"))
 		return
@@ -797,7 +797,7 @@ func (m *Module) handleTriggerCCMSnapshot(
 			errorBody(
 				"Continuous controls monitoring "+
 					"(CCM) requires the Olivares "+
-					"enterprise add-on "+
+					"Business edition "+
 					"(compliancedepth); "+
 					"not linked in this build"))
 		return
@@ -977,8 +977,8 @@ func (m *Module) handleDetectDrift(
 		writeJSON(w, http.StatusNotImplemented,
 			errorBody(
 				"CCM drift detection requires "+
-					"the Olivares enterprise "+
-					"add-on (compliancedepth); "+
+					"the Olivares Business "+
+					"edition (compliancedepth); "+
 					"not linked in this build"))
 		return
 	}
@@ -1163,7 +1163,7 @@ func (m *Module) handleGenerateFedRAMPKSIs(
 			errorBody(
 				"FedRAMP 20x KSI generation "+
 					"requires the Olivares "+
-					"enterprise add-on "+
+					"Business edition "+
 					"(compliancedepth); "+
 					"not linked in this build"))
 		return

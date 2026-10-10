@@ -70,7 +70,7 @@ func newGrokProfile(t *testing.T, m *Module, tenant model.TenantID, name, authSo
 
 func grokLaunch(t *testing.T, m *Module, tenant model.TenantID, prof ProviderProfile) (runDTO, error) {
 	t.Helper()
-	return m.createRun(context.Background(), tenant, CreateRunParams{
+	return createProfiledTestRun(t, m, context.Background(), tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative,
 		Actor: "user:u1", ActorKind: model.ActorUser,
 		ProviderProfileRef: prof.Ref,
@@ -92,7 +92,6 @@ func newGrokHTTPFixture(t *testing.T, org, authSource string, opts ...Option) *g
 	t.Helper()
 	m := New(grokRuntimeOptions(append(opts, WithSessionWorkspaceRoot(t.TempDir()))...)...)
 	m.UseExecutionEnvironmentRef(testEnvRef)
-	m.EnableProfiledLaunches()
 	h := newHarness(t, m)
 	admin := h.adminLogin()
 	tenant := h.createOrg(admin, org)
@@ -160,7 +159,7 @@ func TestGrokRuntimeRegistrationIsIndependentOfTheOtherDrivers(t *testing.T) {
 	if m.toProfileDTO(codexProf).Operable {
 		t.Fatal("registering grok must not make a codex profile launchable")
 	}
-	_, err := m.createRun(ctx, tenant, CreateRunParams{
+	_, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative,
 		Actor: "user:u1", ActorKind: model.ActorUser, ProviderProfileRef: codexProf.Ref,
 	})
@@ -263,7 +262,7 @@ func TestGrokRuntimeLaunchOwnsTheChildAndBindsItsConversation(t *testing.T) {
 	}
 	// The handshake is the documented order, every frame carried the ACP envelope,
 	// and the client advertised no capability it does not implement.
-	want := []string{grokMethodInitialize, grokMethodAuthenticate, grokMethodSessionNew}
+	want := []string{acpMethodInitialize, grokMethodAuthenticate, acpMethodSessionNew}
 	if len(peer.Methods) < len(want) {
 		t.Fatalf("methods = %v", peer.Methods)
 	}
@@ -378,10 +377,10 @@ func TestGrokRuntimeResumeUsesTheStoredConversationAndRefusesToFallBack(t *testi
 		t.Fatal("a resume must keep the Olivares canonical session")
 	}
 	peer := readGrokFixtureRecord(t, resumeRecord)
-	if countMethod(peer.Methods, grokMethodSessionResume) != 1 {
+	if countMethod(peer.Methods, acpMethodSessionResume) != 1 {
 		t.Fatalf("the resume did not use session/resume: %v", peer.Methods)
 	}
-	if countMethod(peer.Methods, grokMethodSessionNew) != 0 {
+	if countMethod(peer.Methods, acpMethodSessionNew) != 0 {
 		t.Fatalf("a resume must never start a conversation: %v", peer.Methods)
 	}
 	if len(peer.ResumeIDs) != 1 || peer.ResumeIDs[0] != "conv-resume" {
@@ -398,10 +397,10 @@ func TestGrokRuntimeResumeUsesTheStoredConversationAndRefusesToFallBack(t *testi
 		t.Fatal("a refused resume must not report success")
 	}
 	failed := readGrokFixtureRecord(t, failRecord)
-	if countMethod(failed.Methods, grokMethodSessionNew) != 0 {
+	if countMethod(failed.Methods, acpMethodSessionNew) != 0 {
 		t.Fatalf("a refused resume fell back to session/new: %v", failed.Methods)
 	}
-	if countMethod(failed.Methods, grokMethodSessionLoad) != 0 {
+	if countMethod(failed.Methods, acpMethodSessionLoad) != 0 {
 		t.Fatalf("a refused resume fell back to session/load: %v", failed.Methods)
 	}
 	// The stored conversation is untouched, so a later resume can still try it.
@@ -570,17 +569,17 @@ func TestGrokRuntimeAnEmptyAuthAdvertisementIsRequiredAndNoPromptCrosses(t *test
 			}
 			if tc.wantPrompts > 0 {
 				waitFor(t, "the turn reached the child", func() bool {
-					return countMethod(readGrokFixtureRecord(t, record).Methods, grokMethodSessionPrompt) == tc.wantPrompts
+					return countMethod(readGrokFixtureRecord(t, record).Methods, acpMethodSessionPrompt) == tc.wantPrompts
 				})
 			}
 
 			peer := readGrokFixtureRecord(t, record)
 			// The record is CURRENT — the handshake it already holds is what proves the
 			// peer has been writing it — so a zero below is an absence, not a stale read.
-			if countMethod(peer.Methods, grokMethodSessionNew) != 1 {
+			if countMethod(peer.Methods, acpMethodSessionNew) != 1 {
 				t.Fatalf("the child never opened its conversation: %v", peer.Methods)
 			}
-			if got := countMethod(peer.Methods, grokMethodSessionPrompt); got != tc.wantPrompts {
+			if got := countMethod(peer.Methods, acpMethodSessionPrompt); got != tc.wantPrompts {
 				t.Fatalf("session/prompt reached the child %d time(s), want %d: %v", got, tc.wantPrompts, peer.Methods)
 			}
 			// And an advertisement with nothing usable in it is never authenticated
@@ -624,7 +623,7 @@ func TestGrokRuntimeRefusesAMismatchedProtocolVersion(t *testing.T) {
 		t.Fatal("a mismatched protocol version must fail the launch")
 	}
 	peer := readGrokFixtureRecord(t, record)
-	if countMethod(peer.Methods, grokMethodSessionNew) != 0 {
+	if countMethod(peer.Methods, acpMethodSessionNew) != 0 {
 		t.Fatalf("the driver kept talking after a version mismatch: %v", peer.Methods)
 	}
 	if countMethod(peer.Methods, grokMethodAuthenticate) != 0 {
@@ -648,7 +647,7 @@ func TestGrokRuntimeDelayedPromptResultLeavesTheAPIResponsive(t *testing.T) {
 		t.Fatalf("the first turn = %d %s", accepted.code, accepted.raw)
 	}
 	waitFor(t, "the prompt reached the child", func() bool {
-		return countMethod(readGrokFixtureRecord(t, record).Methods, grokMethodSessionPrompt) == 1
+		return countMethod(readGrokFixtureRecord(t, record).Methods, acpMethodSessionPrompt) == 1
 	})
 	// The turn is still in flight — nobody answered it — and the endpoint answers
 	// anyway, with the refusal that says why.
@@ -656,7 +655,7 @@ func TestGrokRuntimeDelayedPromptResultLeavesTheAPIResponsive(t *testing.T) {
 	if second.code != http.StatusConflict {
 		t.Fatalf("a second turn while one is in flight = %d %s, want 409", second.code, second.raw)
 	}
-	if got := countMethod(readGrokFixtureRecord(t, record).Methods, grokMethodSessionPrompt); got != 1 {
+	if got := countMethod(readGrokFixtureRecord(t, record).Methods, acpMethodSessionPrompt); got != 1 {
 		t.Fatalf("the refused second turn reached the child: %d prompts", got)
 	}
 	// And the read plane is untouched: the run is running, with its conversation.
@@ -716,7 +715,7 @@ func TestGrokRuntimeInterruptCancelsTheTurnAndTheSameChildTakesANewOne(t *testin
 	// The cancellation reached the child as a NOTIFICATION, and the prompt's own
 	// correlated result is what ends the turn.
 	waitFor(t, "the child received the cancellation", func() bool {
-		return countMethod(readGrokFixtureRecord(t, record).Methods, grokMethodSessionCancel) == 1
+		return countMethod(readGrokFixtureRecord(t, record).Methods, acpMethodSessionCancel) == 1
 	})
 	waitFor(t, "the correlated prompt result ended the turn", func() bool {
 		return lr.session.ActiveTurn() == ""
@@ -727,13 +726,13 @@ func TestGrokRuntimeInterruptCancelsTheTurnAndTheSameChildTakesANewOne(t *testin
 		t.Fatalf("input after interrupt = %d %s", accepted.code, accepted.raw)
 	}
 	waitFor(t, "a new turn started on the same child", func() bool {
-		return countMethod(readGrokFixtureRecord(t, record).Methods, grokMethodSessionPrompt) == 2
+		return countMethod(readGrokFixtureRecord(t, record).Methods, acpMethodSessionPrompt) == 2
 	})
 	if !processRunning(pid) {
 		t.Fatal("the second turn ran on another process")
 	}
 	peer := readGrokFixtureRecord(t, record)
-	if countMethod(peer.Methods, grokMethodSessionNew) != 1 {
+	if countMethod(peer.Methods, acpMethodSessionNew) != 1 {
 		t.Fatalf("an interrupt must not start another conversation: %v", peer.Methods)
 	}
 }
@@ -792,11 +791,11 @@ func TestGrokRuntimeApprovalSelectsOnlyAnOfferedOptionTheAuthorityNamed(t *testi
 		return len(readGrokFixtureRecord(t, record).Replies) > 0
 	})
 	peer := readGrokFixtureRecord(t, record)
-	var reply grokRequestPermissionResponse
+	var reply acpRequestPermissionResponse
 	if err := json.Unmarshal(peer.Replies[0], &reply); err != nil {
 		t.Fatalf("the approval answer is not a permission response: %s", peer.Replies[0])
 	}
-	if reply.Outcome.Outcome != grokOutcomeSelected || reply.Outcome.OptionID != "allow-once" {
+	if reply.Outcome.Outcome != acpOutcomeSelected || reply.Outcome.OptionID != "allow-once" {
 		t.Fatalf("outcome = %+v, want the one-shot option the authority named", reply.Outcome)
 	}
 	// The authority saw exactly what the agent offered, bound to THIS conversation
@@ -813,7 +812,7 @@ func TestGrokRuntimeApprovalSelectsOnlyAnOfferedOptionTheAuthorityNamed(t *testi
 		if strings.Join(req.Requested, ",") != strings.Join(want, ",") {
 			t.Fatalf("the authority was shown %v, want exactly the offered options %v", req.Requested, want)
 		}
-		if req.Kind != grokKindToolCallPermission || req.Method != grokReqRequestPermission {
+		if req.Kind != acpKindToolCallPermission || req.Method != acpReqRequestPermission {
 			t.Fatalf("the authority was shown method %q kind %q", req.Method, req.Kind)
 		}
 	default:
@@ -835,37 +834,37 @@ func TestGrokRuntimeApprovalNeverWidensBeyondTheOfferedOptions(t *testing.T) {
 			"an id nobody offered",
 			"all",
 			ProviderApprovalDecision{Allow: true, Granted: []string{"allow-everything"}},
-			"reject-once", grokOutcomeSelected,
+			"reject-once", acpOutcomeSelected,
 		},
 		{
 			"a persistent option under a turn-scoped decision",
 			"persistent-only",
 			ProviderApprovalDecision{Allow: true, Granted: []string{"allow-always"}},
-			"", grokOutcomeCancelled,
+			"", acpOutcomeCancelled,
 		},
 		{
 			"a plain denial",
 			"all",
 			ProviderApprovalDecision{},
-			"reject-once", grokOutcomeSelected,
+			"reject-once", acpOutcomeSelected,
 		},
 		{
 			"a denial with no one-shot rejection on offer",
 			"allow-only",
 			ProviderApprovalDecision{},
-			"", grokOutcomeCancelled,
+			"", acpOutcomeCancelled,
 		},
 		{
 			"two options with the same id",
 			"duplicate",
 			ProviderApprovalDecision{Allow: true, Granted: []string{"allow-once"}},
-			"", grokOutcomeCancelled,
+			"", acpOutcomeCancelled,
 		},
 		{
 			"no option of a kind this client understands",
 			"unknown-kinds",
 			ProviderApprovalDecision{Allow: true, Granted: []string{"mystery"}},
-			"", grokOutcomeCancelled,
+			"", acpOutcomeCancelled,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -887,7 +886,7 @@ func TestGrokRuntimeApprovalNeverWidensBeyondTheOfferedOptions(t *testing.T) {
 			waitFor(t, "the child received the approval answer", func() bool {
 				return len(readGrokFixtureRecord(t, record).Replies) > 0
 			})
-			var reply grokRequestPermissionResponse
+			var reply acpRequestPermissionResponse
 			if err := json.Unmarshal(readGrokFixtureRecord(t, record).Replies[0], &reply); err != nil {
 				t.Fatalf("the approval answer is not a permission response: %v", err)
 			}
@@ -928,11 +927,11 @@ func TestGrokRuntimeApprovalRefusesWhenTheCurrentAuthorityIsGone(t *testing.T) {
 	waitFor(t, "the child received the approval answer", func() bool {
 		return len(readGrokFixtureRecord(t, record).Replies) > 0
 	})
-	var reply grokRequestPermissionResponse
+	var reply acpRequestPermissionResponse
 	if err := json.Unmarshal(readGrokFixtureRecord(t, record).Replies[0], &reply); err != nil {
 		t.Fatalf("the approval answer is not a permission response: %v", err)
 	}
-	if reply.Outcome.Outcome != grokOutcomeCancelled {
+	if reply.Outcome.Outcome != acpOutcomeCancelled {
 		t.Fatalf("outcome = %+v, want cancelled: the authority behind this launch is gone", reply.Outcome)
 	}
 	// The runtime can still reap its own child — reaping is not a holder's power.
@@ -985,11 +984,11 @@ func TestGrokRuntimeInterruptResolvesAPendingApproval(t *testing.T) {
 	waitFor(t, "the pending approval was resolved by the interrupt", func() bool {
 		return len(readGrokFixtureRecord(t, record).Replies) > 0
 	})
-	var reply grokRequestPermissionResponse
+	var reply acpRequestPermissionResponse
 	if err := json.Unmarshal(readGrokFixtureRecord(t, record).Replies[0], &reply); err != nil {
 		t.Fatalf("the approval answer is not a permission response: %v", err)
 	}
-	if reply.Outcome.Outcome != grokOutcomeCancelled {
+	if reply.Outcome.Outcome != acpOutcomeCancelled {
 		t.Fatalf("outcome = %+v, want the protocol's cancellation", reply.Outcome)
 	}
 }
@@ -1020,8 +1019,8 @@ func TestGrokRuntimeRefusesAnUnadvertisedCapabilityRequest(t *testing.T) {
 	if err := json.Unmarshal(readGrokFixtureRecord(t, record).Replies[0], &refusal); err != nil {
 		t.Fatalf("the answer is not a protocol error: %v", err)
 	}
-	if refusal.Code != grokErrMethodNotSupported {
-		t.Fatalf("code = %d, want %d", refusal.Code, grokErrMethodNotSupported)
+	if refusal.Code != acpErrMethodNotSupported {
+		t.Fatalf("code = %d, want %d", refusal.Code, acpErrMethodNotSupported)
 	}
 }
 
@@ -1128,7 +1127,7 @@ func TestGrokRuntimeRefusesAProfileWithNoAuthorizedSource(t *testing.T) {
 func TestGrokRuntimeRefusesHomeOverridesFromEveryDirection(t *testing.T) {
 	for _, name := range []string{"HOME", envGrokHome, envCodexHome, envClaudeConfigDir} {
 		m, _, tenant, prof := grokHarness(t, AuthSourceAccountHome)
-		_, err := m.createRun(context.Background(), tenant, CreateRunParams{
+		_, err := createProfiledTestRun(t, m, context.Background(), tenant, CreateRunParams{
 			Transport: TransportStreamJSON, Isolation: IsolationNative,
 			Actor: "user:u1", ActorKind: model.ActorUser,
 			ProviderProfileRef: prof.Ref, EnvAllow: []string{name},
@@ -1323,7 +1322,7 @@ func TestGrokRuntimeStopReapsTheOwnedProcessGroup(t *testing.T) {
 	waitFor(t, "the grandchild is gone", func() bool { return !processRunning(peer.ChildPID) })
 	// The graceful half ran first, and session/close is NOT what ended the process.
 	final := readGrokFixtureRecord(t, record)
-	if countMethod(final.Methods, grokMethodSessionClose) != 1 {
+	if countMethod(final.Methods, acpMethodSessionClose) != 1 {
 		t.Fatalf("a terminal stop must first release the conversation: %v", final.Methods)
 	}
 }

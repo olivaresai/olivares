@@ -191,9 +191,7 @@ func TestWhoamiReportsWhatATenantScopedStructuredGrantAllows(t *testing.T) {
 		"subject_kind": "user", "subject_ref": uid,
 		"role": auth.RoleEditor, "scope_tree": "tenant",
 	}
-	if r := h.do("POST", "/v1/m/governance/rbac/grants", admin, grant, hdr); r.code != http.StatusCreated {
-		t.Fatalf("create scoped grant = %d %s", r.code, r.raw)
-	}
+	createGrant(t, h, admin, tenant, grant)
 
 	// The engine allows it...
 	if r := h.do("POST", "/v1/agents", viewer, map[string]any{"name": "b1", "kind": "claude-code"}, hdr); r.code != http.StatusCreated {
@@ -236,9 +234,7 @@ func TestWhoamiDoesNotReportAWorkspaceScopedStructuredGrant(t *testing.T) {
 		"subject_kind": "user", "subject_ref": uid,
 		"role": auth.RoleEditor, "scope_tree": "workspace", "scope_ref": "payments",
 	}
-	if r := h.do("POST", "/v1/m/governance/rbac/grants", admin, grant, hdr); r.code != http.StatusCreated {
-		t.Fatalf("create workspace-scoped grant = %d %s", r.code, r.raw)
-	}
+	createGrant(t, h, admin, tenant, grant)
 
 	// Control: the grant is LIVE — it authorizes inside its workspace. Without this the
 	// assertion below would pass against a grant that was simply never created.
@@ -292,9 +288,7 @@ func TestWhoamiReportsTheDelegationPermitOfAScopedGrant(t *testing.T) {
 		"subject_kind": "user", "subject_ref": uid,
 		"role": auth.RoleAdmin, "scope_tree": "workspace", "scope_ref": "payments",
 	}
-	if r := h.do("POST", "/v1/m/governance/rbac/grants", root, grant, hdr); r.code != http.StatusCreated {
-		t.Fatalf("create workspace-scoped admin grant = %d %s", r.code, r.raw)
-	}
+	createGrant(t, h, root, tenant, grant)
 
 	// The control: the delegation authority is REAL — the principal reaches the RBAC API,
 	// which is a tenant-level collection route no scope-conditioned permit could authorize.
@@ -348,7 +342,7 @@ func TestWorkspaceScopedGrantCannotReachACollectionRoute(t *testing.T) {
 // TestWhoamiStopsReportingAGrantThatHasExpiredOffline is the other case the contrast
 // found: the reported set must follow the same CLOCK the engine decides by.
 //
-// ADR-0024 Q1: past policy_max_staleness a positive grant expires deny-closed — the engine
+// offline-policy staleness: past policy_max_staleness a positive grant expires deny-closed — the engine
 // turns its Cedar Allow into an ABSTAIN and the request falls back to RBAC (grants.go
 // grantExpired). The stored ROWS do not change when that happens, so a reporter reading
 // rows alone keeps offering authority the engine has already stopped honoring. An
@@ -368,9 +362,7 @@ func TestWhoamiStopsReportingAGrantThatHasExpiredOffline(t *testing.T) {
 		"subject_kind": "user", "subject_ref": uid,
 		"role": auth.RoleEditor, "scope_tree": "tenant",
 	}
-	if r := h.do("POST", "/v1/m/governance/rbac/grants", root, grant, hdr); r.code != http.StatusCreated {
-		t.Fatalf("create tenant-scoped grant = %d %s", r.code, r.raw)
-	}
+	createGrant(t, h, root, tenant, grant)
 	// C3 anchors local policy freshness to the store's transaction clock. Align the
 	// deterministic evaluator clock before advancing the offline window; otherwise
 	// this test compares its June fixture time with an unrelated live DB timestamp.

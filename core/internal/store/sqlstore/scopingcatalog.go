@@ -35,6 +35,13 @@ var workspaceDescriptor = model.EntityDescriptor{
 		pdecl(field("status", model.KindText, false), pdeclNoneLifecycle),
 		pdecl(field("settings", model.KindJSON, true),
 			model.None("free-form, non-sensitive workspace configuration: core/model/scoping.go:49")),
+		// Core v25 tree columns, nullable and appended last: parent_id NULL is a
+		// root; path is the store-maintained materialized path, indexed so a
+		// subtree is one prefix scan (the resources pattern).
+		pdecl(indexedField("parent_id", model.KindUUID, true),
+			model.None("the parent workspace row: core/model/scoping.go:55")),
+		pdecl(indexedField("path", model.KindText, true),
+			model.None("the store-maintained path of ancestor workspace ids: core/model/scoping.go:59")),
 	},
 	// Slug is unique per tenant: it is the stable handle, and the reserved
 	// "default" slug must resolve to exactly one row per tenant (the index is the
@@ -52,7 +59,7 @@ var workspaceCodec = model.Codec[model.Workspace]{
 			return nil, err
 		}
 		return model.Record{"name": w.Name, "slug": w.Slug, "status": string(w.Status),
-			"settings": settings}, nil
+			"settings": settings, "parent_id": encOptID(w.ParentID), "path": encOptStr(w.Path)}, nil
 	},
 	Decode: func(b model.BaseFields, r model.Record) (model.Workspace, error) {
 		settings, err := decJSON(r, "settings")
@@ -60,7 +67,8 @@ var workspaceCodec = model.Codec[model.Workspace]{
 			return model.Workspace{}, err
 		}
 		return model.Workspace{BaseFields: b, Name: r.String("name"), Slug: r.String("slug"),
-			Status: model.LifecycleStatus(r.String("status")), Settings: settings}, nil
+			Status: model.LifecycleStatus(r.String("status")), Settings: settings,
+			ParentID: decID(r, "parent_id"), Path: r.String("path")}, nil
 	},
 }
 

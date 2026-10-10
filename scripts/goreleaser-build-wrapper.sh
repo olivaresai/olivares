@@ -7,7 +7,7 @@
 # for the olivares builds (.goreleaser.yaml). Before each target's `go build` it
 # refreshes cmd/olivares/firstparty/bins with the first-party connector plugins
 # compiled FOR THAT TARGET (GOOS/GOARCH are in the env GoReleaser sets), then
-# execs the real `go` with the original arguments (E1: releases previously
+# adds the shared version stamps and execs `go` (E1: releases previously
 # ran no connector build at all, so every published artifact embedded ZERO
 # plugins and `serve` warned "connector not embedded in this build").
 #
@@ -28,7 +28,21 @@ if [ "${1:-}" != "build" ] || [ -z "${GOOS:-}" ] || [ -z "${GOARCH:-}" ]; then
   exec go "$@"
 fi
 
+# GoReleaser owns snapshot naming; the helper owns the three linker assignments.
+version_flags="$(sh "${repo_root}/scripts/build-ldflags.sh" \
+  "${OLIVARES_BUILD_VERSION:?}" "${OLIVARES_BUILD_COMMIT:?}" "${OLIVARES_BUILD_DATE:?}")"
+args=()
+stamped=0
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    -ldflags) args+=("$1" "${2:?missing ldflags value} $version_flags"); stamped=1; shift 2 ;;
+    -ldflags=*) args+=("$1 $version_flags"); stamped=1; shift ;;
+    *) args+=("$1"); shift ;;
+  esac
+done
+if [ "$stamped" = 0 ]; then args=("${args[0]}" "-ldflags" "$version_flags" "${args[@]:1}"); fi
+
 exec 9>"${repo_root}/.connector-embed.lock"
 flock 9
 bash "${repo_root}/scripts/build-connectors.sh" "${GOOS}" "${GOARCH}"
-exec go "$@"
+exec go "${args[@]}"

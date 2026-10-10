@@ -1914,7 +1914,14 @@ func validatePreparedParent(v AttemptView) error {
 				t.LimitMicroUSD == nil || *t.LimitMicroUSD <= 0 || len(t.Membership) != 0 {
 				return bad()
 			}
-			if t.Dimension == "global" {
+			if len(t.WorkspaceRefs) != 0 {
+				fact := v.Binding.Attribution["workspace"]
+				if t.Dimension != "workspace" || !validWorkspaceRefs(t.WorkspaceRefs) ||
+					!contains(t.WorkspaceRefs, t.ScopeKey) || fact.State != factKnown || len(fact.Values) != 1 ||
+					!contains(t.WorkspaceRefs, fact.Values[0]) {
+					return bad()
+				}
+			} else if t.Dimension == "global" {
 				if t.ScopeKey != "" {
 					return bad()
 				}
@@ -1922,7 +1929,7 @@ func validatePreparedParent(v AttemptView) error {
 				return bad()
 			}
 		case policyKindSpendLimit:
-			if !v.Binding.ApplySeatLimits || t.Dimension != "spend_limit" || t.ScopeKey != v.Binding.Subject.ActorRef || t.Period == "total" ||
+			if len(t.WorkspaceRefs) != 0 || !v.Binding.ApplySeatLimits || t.Dimension != "spend_limit" || t.ScopeKey != v.Binding.Subject.ActorRef || t.Period == "total" ||
 				*t.StaticReservedMicroUSD != 0 || seatPeriods[t.Period] {
 				return bad()
 			}
@@ -2024,7 +2031,7 @@ func validateAttemptCommitments(tenant model.TenantID, view AttemptView, origina
 		}
 		// An imported target never carries resolved policy facts: they were unknown
 		// history and are not filled in from the policy as it stands today.
-		if t.PolicyVersion != nil || t.PolicySpecDigest != nil ||
+		if len(t.WorkspaceRefs) != 0 || t.PolicyVersion != nil || t.PolicySpecDigest != nil ||
 			t.LimitMicroUSD != nil || t.StaticReservedMicroUSD != nil {
 			return bad(nil)
 		}

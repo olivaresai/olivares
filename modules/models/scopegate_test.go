@@ -57,7 +57,7 @@ func TestScopeGateAllowsAll(t *testing.T) {
 	m := newModuleWithScope(fakeScopeGate{})
 	dec := chainOf("a", "b", "c")
 	r := httptest.NewRequest("POST", "/x", nil)
-	if status, denied := m.scopeDeniesRoute(r, mc(), &dec, "sess-1"); denied || status != 0 {
+	if status, denied := m.scopeDeniesRoute(r.Context(), mc(), &dec, "sess-1"); denied || status != 0 {
 		t.Fatalf("all in scope: want (0,false), got (%d,%v)", status, denied)
 	}
 	if len(dec.Chain) != 3 || dec.Primary == nil || dec.Primary.ModelRef != "a" {
@@ -71,7 +71,7 @@ func TestScopeGateDropsOutOfScope(t *testing.T) {
 	m := newModuleWithScope(fakeScopeGate{deny: map[string]bool{"a": true}})
 	dec := chainOf("a", "b", "c")
 	r := httptest.NewRequest("POST", "/x", nil)
-	if status, denied := m.scopeDeniesRoute(r, mc(), &dec, "sess-1"); denied || status != 0 {
+	if status, denied := m.scopeDeniesRoute(r.Context(), mc(), &dec, "sess-1"); denied || status != 0 {
 		t.Fatalf("partial filter: want (0,false), got (%d,%v)", status, denied)
 	}
 	if dec.Primary == nil || dec.Primary.ModelRef != "b" || len(dec.Chain) != 2 {
@@ -89,7 +89,7 @@ func TestScopeGateDeniesWhenAllOutOfScope(t *testing.T) {
 	m := newModuleWithScope(fakeScopeGate{deny: map[string]bool{"a": true, "b": true}})
 	dec := chainOf("a", "b")
 	r := httptest.NewRequest("POST", "/x", nil)
-	status, denied := m.scopeDeniesRoute(r, mc(), &dec, "sess-1")
+	status, denied := m.scopeDeniesRoute(r.Context(), mc(), &dec, "sess-1")
 	if !denied || status != 403 {
 		t.Fatalf("all out of scope: want (403,true), got (%d,%v)", status, denied)
 	}
@@ -104,7 +104,7 @@ func TestScopeGateErrorIsDenyClosed(t *testing.T) {
 	m := newModuleWithScope(fakeScopeGate{errOnAll: true})
 	dec := chainOf("a", "b")
 	r := httptest.NewRequest("POST", "/x", nil)
-	status, denied := m.scopeDeniesRoute(r, mc(), &dec, "sess-1")
+	status, denied := m.scopeDeniesRoute(r.Context(), mc(), &dec, "sess-1")
 	if !denied || status != 403 {
 		t.Fatalf("gate error must be deny-closed (403,true), got (%d,%v)", status, denied)
 	}

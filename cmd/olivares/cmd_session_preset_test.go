@@ -16,7 +16,7 @@ import (
 // stored "default". Every tool now gets the chosen preset; the engine applies it in the
 // tool's own settings (or refuses it, TestSessionStartPrintsTheEnginesPresetRefusal).
 func TestSessionStartSendsThePresetForEveryTool(t *testing.T) {
-	for _, tool := range []string{"claude", "codex", "grok", "opencode"} {
+	for _, tool := range []string{"claude", "codex", "grok", "opencode", "gemini-cli"} {
 		for _, tc := range []struct{ permission, mode, template string }{
 			{"edits-and-commands", "", "tpl-edit-run"}, {"edits-only", "acceptEdits", ""},
 			{"read-only", "plan", ""}, {"ask", "default", ""},
@@ -51,4 +51,38 @@ func TestSessionStartPrintsTheEnginesPresetRefusal(t *testing.T) {
 	if err == nil || err.Error() != f.launchRefusal || !errors.As(err, &refusal) || refusal.status != http.StatusUnprocessableEntity {
 		t.Fatalf("err = %v, want the engine's sentence alone (422)", err)
 	}
+}
+
+// A saved stricter read-only template reaches the same launch route as the console.
+func TestSessionStartUsesTheSelectedTemplate(t *testing.T) {
+	f := newFakeSessionEngine(t)
+	_, stderr, err := execSessionCLI(t, nil, append([]string{"session", "start", t.TempDir(), "--permission", "read-only", "--template", "tpl-strict-read-only"}, sessionCreds(f.URL)...)...)
+	if err != nil {
+		t.Fatalf("selected template: %v\n%s", err, stderr)
+	}
+	runs := f.postsTo(sessionRunsPath)
+	if len(runs) != 1 || runs[0]["template_id"] != "tpl-strict-read-only" || runs[0]["permission_mode"] != "plan" {
+		t.Fatalf("selected template launch=%v", runs)
+	}
+}
+
+func TestSessionTemplateKeepsTheEditsAndCommandsContract(t *testing.T) {
+	t.Run("template supplies its own mode", func(t *testing.T) {
+		f := newFakeSessionEngine(t)
+		_, stderr, err := execSessionCLI(t, nil, append([]string{"session", "start", t.TempDir(), "--template", "tpl-strict-read-only"}, sessionCreds(f.URL)...)...)
+		if err != nil {
+			t.Fatalf("template default: %v\n%s", err, stderr)
+		}
+		runs := f.postsTo(sessionRunsPath)
+		if len(runs) != 1 || runs[0]["template_id"] != "tpl-strict-read-only" || runs[0]["permission_mode"] != "" {
+			t.Fatalf("template default launch=%v", runs)
+		}
+	})
+	t.Run("explicit enforcing preset cannot be replaced", func(t *testing.T) {
+		f := newFakeSessionEngine(t)
+		_, _, err := execSessionCLI(t, nil, append([]string{"session", "start", t.TempDir(), "--permission", "edits-and-commands", "--template", "tpl-custom"}, sessionCreds(f.URL)...)...)
+		if err == nil || len(f.postsTo(sessionRunsPath)) != 0 || len(f.postsTo(sessionWorkspacesPath)) != 0 {
+			t.Fatalf("conflicting template had effects: %v", err)
+		}
+	})
 }

@@ -77,7 +77,7 @@ func TestCommunicationIdentityBindingKeepsDistinctDiagnostics(t *testing.T) {
 		if tc.sources {
 			fixture.module.useCommunicationRequestAuthoritySources(tc.resolver, source)
 		} else {
-			fixture.module.communicationAuthoritySources = nil
+			fixture.module.CommunicationAuthority = nil
 		}
 		_, inboxErr := fixture.module.bindCurrentCommunicationInboxIdentity(tc.ctx, scope, tc.ref)
 		_, neutralErr := fixture.module.bindCurrentCommunicationIdentity(

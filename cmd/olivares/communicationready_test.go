@@ -13,9 +13,18 @@ import (
 )
 
 // server-info carries the communication plane's readiness, so the console never
-// has to ask a route that answers 503 to learn it. A default install's plane is
-// staged, not effective.
+// has to ask a route that answers 503 to learn it. A default install ACTIVATES
+// fresh local communication (29a03b1f: eventing is standard, local custody is
+// minted at fresh genesis, the directory writer is enforced with it), so its
+// plane reads effective. A legacy estate stays staged until the operator's
+// explicit activation, which its own tests pin.
 func TestServerInfoCarriesCommunicationReadiness(t *testing.T) {
+	// Pin the default path: ambient operator settings must not divert the boot
+	// to the explicit-custody lane this default pin does not measure.
+	t.Setenv(envCommunicationActivation, "")
+	t.Setenv(envCommunicationContentKeyringFile, "")
+	t.Setenv(envCommunicationCursorKeyringFile, "")
+	t.Setenv(envKeyWrap, "")
 	eng, err := boot(t.Context(), bootConfig{DataDir: t.TempDir(), Engine: "sqlite", Version: version, Logger: discardLogger(), ApplyModuleProfile: true})
 	if err != nil {
 		t.Fatal(err)
@@ -29,8 +38,8 @@ func TestServerInfoCarriesCommunicationReadiness(t *testing.T) {
 	if !ok {
 		t.Fatalf("server-info has no communication_ready: %s", raw)
 	}
-	if ready {
-		t.Fatalf("a default install's communication plane reads ready: %s", raw)
+	if !ready {
+		t.Fatalf("a default install's communication plane reads staged: %s", raw)
 	}
 }
 

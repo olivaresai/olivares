@@ -83,6 +83,11 @@ chmod +x "$RUNNER_TEMP/olivares"
 SH
 cat > "${TMP}/bin/task" <<'SH'
 #!/usr/bin/env bash
+# The real web task installs the locked dependencies before compiling Vite.
+# Keep that boundary in the fixture; result codes below belong to the walk.
+if [ "$*" = build:web ]; then
+  exec pnpm --dir web install --frozen-lockfile
+fi
 if [ "$WALK_TEST_RC" = 2 ]; then
   exec env -u OLIVARES_WALK_PW node "$WALK_TEST_TMP/layout/scripts/console-walk.mjs"
 fi
@@ -264,31 +269,31 @@ grep -q '404.*api/missing' "${TMP}/walk.log" \
 # mismo, y el único «hallazgo» de un walk sobre un `main` limpio resultó ser comportamiento
 # correcto — 55 pantallas para señalar la puerta comercial de reporting.
 grep -q 'GATEADO 501 .*reporting/schedules' "${TMP}/walk.log" \
-  || { cat "${TMP}/walk.log" >&2; fail "el 501 GATEADO no se reconocio como tal"; }
+  || { cat "${TMP}/walk.log" >&2; fail "the gated 501 was not recognized"; }
 grep -q 'route/gated501.*gated=1' "${TMP}/walk.log" \
-  || { cat "${TMP}/walk.log" >&2; fail "la pantalla del 501 gateado no lo conto en su propio cubo"; }
+  || { cat "${TMP}/walk.log" >&2; fail "the gated 501 screen did not count it in its own bucket"; }
 # Control en la otra direccion, el que impide que esto sea un silenciador: el 501 SIN puerta
 # sigue apareciendo como peticion fallida.
 grep -qE '^ +501 GET /v1/m/nadie-gatea-esto/x' "${TMP}/walk.log" \
-  || { cat "${TMP}/walk.log" >&2; fail "el 501 SIN puerta debia seguir contando como hallazgo"; }
+  || { cat "${TMP}/walk.log" >&2; fail "an ungated 501 must still count as a finding"; }
 # ⛔ Y EL CONTROL QUE DE VERDAD IMPIDE EL SILENCIADOR, escrito en negativo sobre la cadena
 # exacta. Sin esta linea, una puerta que se tragara TODOS los 501 pasaba este leg entero:
 # medido el 2026-08-13 mutando `esGateado` por `x.status === 501` — el mutante SOBREVIVIO.
 if grep -q 'GATEADO 501 .*nadie-gatea-esto' "${TMP}/walk.log"; then
   cat "${TMP}/walk.log" >&2
-  fail "el 501 SIN puerta se marco como GATEADO: la puerta se traga cualquier 501"
+  fail "the ungated 501 was marked gated: the gate suppresses every 501"
 fi
 grep -q 'route/roto501.*gated=0' "${TMP}/walk.log" \
-  || { cat "${TMP}/walk.log" >&2; fail "la pantalla del 501 sin puerta no debia contar ningun gateado"; }
+  || { cat "${TMP}/walk.log" >&2; fail "the ungated 501 screen must not count any gated response"; }
 
 # ⛔ EL VECINO: mismo modulo que una puerta declarada, RUTA distinta. La primera version de la
 # derivacion gateaba el PREFIJO entero y se lo tragaba; lo encontro el contraste sol max.
 if grep -q 'GATEADO 501 .*reporting/otra-cosa' "${TMP}/walk.log"; then
   cat "${TMP}/walk.log" >&2
-  fail "un 501 en OTRA ruta del mismo modulo se marco como GATEADO: la puerta cubre el prefijo"
+  fail "a 501 on ANOTHER route in the same module was marked gated: the gate covers the entire prefix"
 fi
 grep -qE '^ +501 GET /v1/m/reporting/otra-cosa' "${TMP}/walk.log" \
-  || { cat "${TMP}/walk.log" >&2; fail "el 501 vecino debia seguir contando como hallazgo"; }
+  || { cat "${TMP}/walk.log" >&2; fail "the neighboring 501 must still count as a finding"; }
 
 # The summary and the exit code must agree with the per-screen marks.
 grep -qE 'route/sse' <(sed -n '/screen(s), .* with findings/,$p' "${TMP}/walk.log") \

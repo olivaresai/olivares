@@ -102,6 +102,11 @@ type ScopedEvidenceDecision struct {
 	Facts         []store.AuthorizationFactRef
 	ObservedAt    time.Time
 	FreshUntil    time.Time
+	// InheritanceFiltered is ScopedDecision.InheritanceFiltered for the typed path: the
+	// target sits under an inheritance filter for its class, so the RBAC term and the
+	// owner's implicit grant are removed and only Effect (already reduced to what is at or
+	// below the filtered node) can carry the request.
+	InheritanceFiltered bool
 }
 
 // ScopedEvidenceAuthorizer is an optional extension implemented by a scoped
@@ -161,6 +166,17 @@ type readEvidenceContributions struct {
 }
 
 func (az *Authorizer) authorizeEvidence(ctx context.Context, req Request, consulted *readEvidenceContributions) (out AuthorizationEvidence) {
+	return az.authorizeEvidenceWithPrincipal(ctx, req, consulted, nil)
+}
+
+// Only issuer reconstruction supplies this contribution for a narrowed session
+// launcher. Ordinary evidence still requires the principal's native seal.
+type sessionLauncherEvidence struct {
+	fact   store.AuthorizationFactRef
+	window evidenceWindow
+}
+
+func (az *Authorizer) authorizeEvidenceWithPrincipal(ctx context.Context, req Request, consulted *readEvidenceContributions, launcher *sessionLauncherEvidence) (out AuthorizationEvidence) {
 	ctx, capture := beginAuthorizationCapture(ctx, req)
 	at := az.clock()
 	defer func() {
@@ -218,6 +234,10 @@ func (az *Authorizer) authorizeEvidence(ctx context.Context, req Request, consul
 	}
 
 	corePermission := CheckEvidence{Verdict: CheckUnknown, Code: "core_permission_unavailable"}
+	// An inheritance filter on the target's lineage removes the inherited terms below, as
+	// Authorize does; an engine that did not report is never read as "not filtered" for a
+	// positive answer, because an unreported scoped contribution is UNKNOWN in the fold.
+	filtered := scoped.known && scoped.decision.InheritanceFiltered
 	switch {
 	case restricted && restrictionAllows:
 		corePermission = CheckEvidence{Verdict: CheckClean, Code: "credential_ceiling_permitted"}
@@ -239,9 +259,9 @@ func (az *Authorizer) authorizeEvidence(ctx context.Context, req Request, consul
 	// and a route flag was never about it. Falling through does not deny by itself either: the
 	// arms below still let a positive scoped grant carry the request, which is what keeps a
 	// principal authorized by policy on its path.
-	case baseRequest.Route.rbacPermitted(baseRequest, az.rbacAllows(baseRequest)):
+	case !filtered && baseRequest.Route.rbacPermitted(baseRequest, az.rbacAllows(baseRequest)):
 		corePermission = CheckEvidence{Verdict: CheckClean, Code: "rbac_permitted"}
-	case ownerImplicitScopedGrant(baseRequest):
+	case !filtered && ownerImplicitScopedGrant(baseRequest):
 		corePermission = CheckEvidence{Verdict: CheckClean, Code: "owner_scoped_grant_permitted"}
 	case !scoped.known:
 		// A legacy/unavailable scoped engine might have supplied the positive grant
@@ -257,10 +277,11 @@ func (az *Authorizer) authorizeEvidence(ctx context.Context, req Request, consul
 	principalWindow := evidenceWindow{}
 	if corePermission.Verdict == CheckClean {
 		var ok bool
-		principalFact, principalWindow, ok = principalAuthorizationEvidence(
-			baseRequest.Principal,
-			baseRequest.Tenant,
-		)
+		if launcher != nil {
+			principalFact, principalWindow, ok = launcher.fact, launcher.window, true
+		} else {
+			principalFact, principalWindow, ok = principalAuthorizationEvidence(baseRequest.Principal, baseRequest.Tenant)
+		}
 		if !ok {
 			corePermission = CheckEvidence{
 				Verdict: CheckUnknown,

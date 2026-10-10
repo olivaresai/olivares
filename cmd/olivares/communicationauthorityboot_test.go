@@ -5,36 +5,43 @@
 package main
 
 import (
+	"bytes"
+	"fmt"
 	"go/ast"
+	"go/format"
 	"go/parser"
+	"go/scanner"
 	"go/token"
+	"os"
 	"testing"
 )
 
 func TestBootWiresExactCommunicationRequestAuthoritySourcesOnly(t *testing.T) {
-	parsed, err := parser.ParseFile(token.NewFileSet(), "boot.go", nil, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var boot *ast.FuncDecl
-	for _, declaration := range parsed.Decls {
-		candidate, ok := declaration.(*ast.FuncDecl)
-		if ok && candidate.Name.Name == "boot" {
-			boot = candidate
-			break
-		}
-	}
-	if boot == nil || boot.Body == nil {
-		t.Fatal("boot function not found")
-	}
+	boot := gitpublishBootFunc(t, "boot.go", "boot")
 
 	var authrAssignments, authzAssignments []*ast.AssignStmt
 	var bindCalls, runtimeStarts, compositionBinds, leaderRuns, binderCalls []*ast.CallExpr
 	forbidden := map[string]bool{}
+	forbiddenPaths := map[string]bool{
+		"set.sessionDependencies.CommunicationReadAuthorizer":      true,
+		"set.sessionDependencies.CommunicationOperationAuthorizer": true,
+		"set.sessionDependencies.CommunicationPumpReadiness":       true,
+		"set.sessions.EnableCommunicationSessionCredentials":       true,
+		"set.sessionDependencies.WorkOutboxAuthority":              true,
+	}
 	ast.Inspect(boot.Body, func(node ast.Node) bool {
 		switch value := node.(type) {
 		case *ast.AssignStmt:
 			for _, target := range value.Lhs {
+				path := communicationBootSelectorPath(target)
+				if forbiddenPaths[path] {
+					forbidden[path] = true
+				}
+				if path == "set.sessionDependencies.CommunicationAuthority" && len(value.Rhs) == 1 {
+					if call, ok := communicationBootCall(value.Rhs[0], "sessions.NewCommunicationRequestAuthority", 2); ok {
+						bindCalls = append(bindCalls, call)
+					}
+				}
 				identifier, ok := target.(*ast.Ident)
 				if !ok {
 					continue
@@ -48,8 +55,6 @@ func TestBootWiresExactCommunicationRequestAuthoritySourcesOnly(t *testing.T) {
 			}
 		case *ast.CallExpr:
 			switch communicationBootSelectorPath(value.Fun) {
-			case "set.sessions.UseCommunicationRequestAuthority":
-				bindCalls = append(bindCalls, value)
 			case "set.orchestration.UseWorkflowCredentialBinder":
 				binderCalls = append(binderCalls, value)
 			case "rt.Start":
@@ -58,19 +63,9 @@ func TestBootWiresExactCommunicationRequestAuthoritySourcesOnly(t *testing.T) {
 				compositionBinds = append(compositionBinds, value)
 			case "st.Leader().Run":
 				leaderRuns = append(leaderRuns, value)
-			case "set.sessions.UseCommunicationCoreEntityReadAuthorizer",
-				"set.sessions.UseCommunicationCoreEntityOperationAuthorizer",
-				"set.sessions.UseCommunicationPumpReadinessWitness",
-				"set.sessions.EnableCommunicationSessionCredentials",
-				"set.sessions.UseWorkOutboxClaimAuthority":
-				// The two identity-only ports stay out of production for the reason
-				// recorded in communication_readiness.go. Pump readiness, the dual
-				// credential posture and the mandatory outbox authority are
-				// ACTIVATION: boot reaches them only through
-				// bindCommunicationComposition, which gates them on the requested
-				// configuration and its custody (K3 lot A, 2026-09-05) and never
-				// fabricates a cluster fact. A direct call here would bypass that
-				// gate or bind an authority the composition does not report on.
+			case "set.sessions.EnableCommunicationSessionCredentials":
+				// Activation remains owned by bindCommunicationComposition,
+				// before leadership, with the same requested/custody gates.
 				forbidden[communicationBootSelectorPath(value.Fun)] = true
 			}
 		}
@@ -141,13 +136,12 @@ func TestBootWiresExactCommunicationRequestAuthoritySourcesOnly(t *testing.T) {
 		}
 		for _, guarded := range conditional.Body.List {
 			switch guardedStatement := guarded.(type) {
-			case *ast.ExprStmt:
-				call, ok := guardedStatement.X.(*ast.CallExpr)
-				if ok && communicationBootSelectorPath(call.Fun) ==
-					"set.sessions.UseCommunicationRequestAuthority" {
-					directBinds++
-				}
 			case *ast.AssignStmt:
+				if len(guardedStatement.Lhs) == 1 && len(guardedStatement.Rhs) == 1 && communicationBootSelectorPath(guardedStatement.Lhs[0]) == "set.sessionDependencies.CommunicationAuthority" {
+					if _, ok := communicationBootCall(guardedStatement.Rhs[0], "sessions.NewCommunicationRequestAuthority", 2); ok {
+						directBinds++
+					}
+				}
 				for _, rhs := range guardedStatement.Rhs {
 					call, ok := rhs.(*ast.CallExpr)
 					if ok && communicationBootSelectorPath(call.Fun) == "bindCommunicationComposition" {
@@ -163,13 +157,7 @@ func TestBootWiresExactCommunicationRequestAuthoritySourcesOnly(t *testing.T) {
 	if guardedCompositionBinds != 1 {
 		t.Fatalf("composition binds under exact sessions guard = %d, want one", guardedCompositionBinds)
 	}
-	for _, path := range []string{
-		"set.sessions.UseCommunicationCoreEntityReadAuthorizer",
-		"set.sessions.UseCommunicationCoreEntityOperationAuthorizer",
-		"set.sessions.UseCommunicationPumpReadinessWitness",
-		"set.sessions.EnableCommunicationSessionCredentials",
-		"set.sessions.UseWorkOutboxClaimAuthority",
-	} {
+	for path := range forbiddenPaths {
 		if forbidden[path] {
 			t.Fatalf("preparatory authority composition activated %q", path)
 		}
@@ -211,7 +199,7 @@ func communicationBootCall(expression ast.Expr, path string, arguments int) (*as
 }
 
 func communicationBootAuthenticatorAssignment(assignment *ast.AssignStmt) bool {
-	if assignment == nil || assignment.Tok != token.DEFINE || len(assignment.Lhs) != 1 ||
+	if assignment == nil || assignment.Tok != token.ASSIGN || len(assignment.Lhs) != 1 ||
 		len(assignment.Rhs) != 1 || !communicationBootIdentifier(assignment.Lhs[0], "authr") {
 		return false
 	}
@@ -221,7 +209,7 @@ func communicationBootAuthenticatorAssignment(assignment *ast.AssignStmt) bool {
 }
 
 func communicationBootAuthorizerAssignment(assignment *ast.AssignStmt) bool {
-	if assignment == nil || assignment.Tok != token.DEFINE || len(assignment.Lhs) != 1 ||
+	if assignment == nil || assignment.Tok != token.ASSIGN || len(assignment.Lhs) != 1 ||
 		len(assignment.Rhs) != 1 || !communicationBootIdentifier(assignment.Lhs[0], "authz") {
 		return false
 	}
@@ -253,4 +241,137 @@ func communicationBootSessionsNonNil(expression ast.Expr) bool {
 	return ok && comparison.Op == token.NEQ &&
 		communicationBootSelectorPath(comparison.X) == "set.sessions" &&
 		communicationBootIdentifier(comparison.Y, "nil")
+}
+
+func TestExpandedBootSourcePreservesDirectAuthorityCalls(t *testing.T) {
+	src, err := os.ReadFile("boot.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	finish := []byte("\treturn b.finish(ctx)")
+	if bytes.Count(src, finish) != 1 {
+		t.Fatal("boot finish mutant target moved")
+	}
+	for _, tc := range []struct {
+		name, statement, path string
+		want                  int
+	}{
+		{"forbidden authority", "b.set.sessionDependencies.CommunicationReadAuthorizer = nil", "set.sessionDependencies.CommunicationReadAuthorizer", 1},
+		{"duplicate publication binding", "b.set.gitpublish.UseAuthority(b.authr, b.authz)", "set.gitpublish.UseAuthority", 2},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			mutant := bytes.Replace(src, finish, []byte("\t"+tc.statement+"\n"+string(finish)), 1)
+			expanded, err := expandedBootSource(mutant)
+			if err != nil {
+				t.Fatal(err)
+			}
+			file, err := parser.ParseFile(token.NewFileSet(), "expanded.go", expanded, 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			calls := 0
+			ast.Inspect(file, func(node ast.Node) bool {
+				if assignment, ok := node.(*ast.AssignStmt); ok {
+					for _, target := range assignment.Lhs {
+						if communicationBootSelectorPath(target) == tc.path {
+							calls++
+						}
+					}
+				}
+				if call, ok := node.(*ast.CallExpr); ok && communicationBootSelectorPath(call.Fun) == tc.path {
+					calls++
+				}
+				return true
+			})
+			if calls != tc.want {
+				t.Fatalf("wiring guards see %d %s calls, want %d", calls, tc.path, tc.want)
+			}
+		})
+	}
+}
+
+// expandedBootSource follows the phase calls, then reparses their bodies in that
+// order so the existing wiring guards still compare execution order, not the
+// locations of method declarations. Original statements remain visible to the
+// guards, including direct wiring outside phases. State selectors are rendered
+// as the former local names; string literals and comments are never rewritten.
+func expandedBootSource(src []byte) ([]byte, error) {
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, "boot.go", src, 0)
+	if err != nil {
+		return nil, err
+	}
+	var boot *ast.FuncDecl
+	phases := map[string]*ast.FuncDecl{}
+	for _, decl := range file.Decls {
+		fn, ok := decl.(*ast.FuncDecl)
+		if !ok {
+			continue
+		}
+		if fn.Name.Name == "boot" && fn.Recv == nil {
+			boot = fn
+		}
+		if fn.Recv != nil && len(fn.Recv.List) == 1 {
+			if ptr, ok := fn.Recv.List[0].Type.(*ast.StarExpr); ok && communicationBootIdentifier(ptr.X, "bootState") {
+				phases[fn.Name.Name] = fn
+			}
+		}
+	}
+	if boot == nil {
+		return nil, fmt.Errorf("boot function not found")
+	}
+	var body []ast.Stmt
+	expandedPhase := false
+	for _, statement := range boot.Body.List {
+		body = append(body, statement)
+		ast.Inspect(statement, func(node ast.Node) bool {
+			if _, ok := node.(*ast.DeferStmt); ok {
+				return false
+			}
+			call, ok := node.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+			selector, ok := call.Fun.(*ast.SelectorExpr)
+			if !ok || !communicationBootIdentifier(selector.X, "b") {
+				return true
+			}
+			if phase := phases[selector.Sel.Name]; phase != nil {
+				body = append(body, phase.Body.List...)
+				expandedPhase = true
+			}
+			return true
+		})
+	}
+	if !expandedPhase {
+		return nil, fmt.Errorf("boot calls no startup phases")
+	}
+	boot.Body.List = body
+	var rendered bytes.Buffer
+	rendered.WriteString("package main\n")
+	if err := format.Node(&rendered, token.NewFileSet(), boot); err != nil {
+		return nil, err
+	}
+	source := rendered.Bytes()
+	var scan scanner.Scanner
+	tokens := token.NewFileSet().AddFile("expanded.go", -1, len(source))
+	scan.Init(tokens, source, nil, 0)
+	var output bytes.Buffer
+	copied := 0
+	for {
+		pos, kind, literal := scan.Scan()
+		if kind == token.EOF {
+			break
+		}
+		if kind != token.IDENT || literal != "b" {
+			continue
+		}
+		dot, next, _ := scan.Scan()
+		if next == token.PERIOD {
+			output.Write(source[copied:tokens.Offset(pos)])
+			copied = tokens.Offset(dot) + 1
+		}
+	}
+	output.Write(source[copied:])
+	return output.Bytes(), nil
 }

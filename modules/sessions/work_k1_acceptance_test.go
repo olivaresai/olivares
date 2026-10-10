@@ -146,7 +146,7 @@ func TestWorkContentAndIdentityPreflightsHaveThreeOutcomes(t *testing.T) {
 	defer f.st.Close()
 	cmd := baseCreateCommand(f, "preflight outcomes")
 
-	f.m.UseWorkContentGuard(fixedWorkContent{decision: ContentDecision{Allowed: false, Code: "secret_rejected"}})
+	WithWorkContentGuard(fixedWorkContent{decision: ContentDecision{Allowed: false, Code: "secret_rejected"}})(f.m)
 	if assessment, err := f.m.Validate(context.Background(), f.tenant, f.principal, cmd); err != nil ||
 		assessment.Verdict != VerdictBroken || assessment.Code != "secret_rejected" {
 		t.Fatalf("content rejection = %#v, %v", assessment, err)
@@ -155,28 +155,28 @@ func TestWorkContentAndIdentityPreflightsHaveThreeOutcomes(t *testing.T) {
 		t.Fatalf("content rejection wrote %d work items", got)
 	}
 
-	f.m.UseWorkContentGuard(fixedWorkContent{err: errors.New("scanner offline")})
+	WithWorkContentGuard(fixedWorkContent{err: errors.New("scanner offline")})(f.m)
 	if assessment, err := f.m.Validate(context.Background(), f.tenant, f.principal, cmd); err != nil ||
 		assessment.Verdict != VerdictUnknown || assessment.Code != "policy_unavailable" {
 		t.Fatalf("content outage = %#v, %v", assessment, err)
 	}
 
-	f.m.UseWorkContentGuard(allowWorkContent{})
-	f.m.UseWorkIdentityResolver(fixedWorkIdentity{participant: Participant{
+	WithWorkContentGuard(allowWorkContent{})(f.m)
+	WithWorkIdentityResolver(fixedWorkIdentity{participant: Participant{
 		Kind: cmd.OwnerKind, CanonicalRef: cmd.OwnerRef, Active: false, WorkspaceEligible: true,
-	}})
+	}})(f.m)
 	if assessment, err := f.m.Validate(context.Background(), f.tenant, f.principal, cmd); err != nil ||
 		assessment.Verdict != VerdictBroken || assessment.Code != "owner_ineligible" {
 		t.Fatalf("inactive owner = %#v, %v", assessment, err)
 	}
 
-	f.m.UseWorkIdentityResolver(fixedWorkIdentity{err: errors.New("identity store offline")})
+	WithWorkIdentityResolver(fixedWorkIdentity{err: errors.New("identity store offline")})(f.m)
 	if assessment, err := f.m.Validate(context.Background(), f.tenant, f.principal, cmd); err != nil ||
 		assessment.Verdict != VerdictUnknown || assessment.Code != "evidence_unavailable" {
 		t.Fatalf("identity outage = %#v, %v", assessment, err)
 	}
 
-	f.m.UseWorkIdentityResolver(allowWorkIdentity{})
+	WithWorkIdentityResolver(allowWorkIdentity{})(f.m)
 	if result, err := f.m.Apply(context.Background(), f.tenant, f.principal, cmd); err != nil || result.Code != "applied" {
 		t.Fatalf("clean neighboring preflights = %#v, %v", result, err)
 	}
@@ -193,8 +193,8 @@ func TestWorkExactReplaySurvivesObserverOutage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	f.m.UseWorkContentGuard(fixedWorkContent{err: errors.New("scanner offline")})
-	f.m.UseWorkIdentityResolver(fixedWorkIdentity{err: errors.New("identity store offline")})
+	WithWorkContentGuard(fixedWorkContent{err: errors.New("scanner offline")})(f.m)
+	WithWorkIdentityResolver(fixedWorkIdentity{err: errors.New("identity store offline")})(f.m)
 	replay, err := f.m.Apply(context.Background(), f.tenant, f.principal, cmd)
 	if err != nil || !replay.Replayed || replay.CommandID != first.CommandID || replay.ResultID != first.ResultID {
 		t.Fatalf("exact replay during observer outage = %#v, %v; original=%#v", replay, err, first)
@@ -207,7 +207,7 @@ func TestWorkExactReplaySurvivesObserverOutage(t *testing.T) {
 	} else if we := asWorkError(err); we == nil || we.verdict != VerdictUnknown || we.code != "policy_unavailable" {
 		t.Fatalf("new delivery with content outage = %v", err)
 	}
-	f.m.UseWorkContentGuard(allowWorkContent{})
+	WithWorkContentGuard(allowWorkContent{})(f.m)
 	newDelivery.IdempotencyKey = model.NewID().String()
 	if _, err := f.m.Apply(context.Background(), f.tenant, f.principal, newDelivery); err == nil {
 		t.Fatal("new delivery passed while identity evidence was unavailable")
@@ -598,10 +598,10 @@ func TestWorkOwnerAuthorityComesFromPrincipalNotCommandBody(t *testing.T) {
 
 func workFixtureForBackend(t *testing.T, m *Module, tenant model.TenantID) workFixture {
 	t.Helper()
-	m.UseWorkIdentityResolver(allowWorkIdentity{})
-	m.UseWorkContentGuard(allowWorkContent{})
+	WithWorkIdentityResolver(allowWorkIdentity{})(m)
+	WithWorkContentGuard(allowWorkContent{})(m)
 	var workspace model.ID
-	if err := m.data.View(context.Background(), tenant, func(sc store.Scope) error {
+	if err := m.Data.View(context.Background(), tenant, func(sc store.Scope) error {
 		ws, err := sc.DefaultWorkspace(context.Background())
 		if err == nil {
 			workspace = ws.ID
@@ -687,7 +687,7 @@ func assertWorkDependencyGuardCommitted(
 	workspace model.ID,
 ) {
 	t.Helper()
-	if err := m.data.View(context.Background(), tenant, func(sc store.Scope) error {
+	if err := m.Data.View(context.Background(), tenant, func(sc store.Scope) error {
 		repo, err := sc.Ext(workGuardKind)
 		if err != nil {
 			return err
@@ -1150,7 +1150,7 @@ func workDecisions(t *testing.T, f workFixture, itemID model.ID, key string) ([]
 	t.Helper()
 	var decisions []model.Record
 	var head model.Record
-	if err := f.m.data.View(context.Background(), f.tenant, func(sc store.Scope) error {
+	if err := f.m.Data.View(context.Background(), f.tenant, func(sc store.Scope) error {
 		repo, err := sc.Ext(workDecisionKind)
 		if err != nil {
 			return err
@@ -1261,7 +1261,7 @@ func TestWorkDecisionHistoryRowsRejectMutationAcrossBackends(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			updateErr := m.data.Mutate(context.Background(), tenant, func(sc store.Scope) error {
+			updateErr := m.Data.Mutate(context.Background(), tenant, func(sc store.Scope) error {
 				repo, err := sc.Ext(workDecisionKind)
 				if err != nil {
 					return err
@@ -1276,7 +1276,7 @@ func TestWorkDecisionHistoryRowsRejectMutationAcrossBackends(t *testing.T) {
 			if updateErr == nil {
 				t.Fatal("append-only decision accepted update")
 			}
-			deleteErr := m.data.Mutate(context.Background(), tenant, func(sc store.Scope) error {
+			deleteErr := m.Data.Mutate(context.Background(), tenant, func(sc store.Scope) error {
 				repo, err := sc.Ext(workDecisionKind)
 				if err != nil {
 					return err

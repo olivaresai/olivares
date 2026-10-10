@@ -11,7 +11,15 @@ import (
 	"time"
 
 	"github.com/olivaresai/olivares/core/auth"
-	"github.com/olivaresai/olivares/core/model"
+)
+
+// Fixed private causes become non-sensitive codes only in the sealed audit.
+type runtimeAccessStopCause uint8
+
+const (
+	accessStopNone runtimeAccessStopCause = iota
+	accessStopOwnerEnded
+	accessStopCredentialExpired
 )
 
 // StopForAccessChange retires only the exact supervised generation whose session
@@ -19,19 +27,19 @@ import (
 // cannot prevent teardown. It starts bounded graceful stop/finalize, whose
 // single terminal event makes the same run resumable.
 func (m *Module) StopForAccessChange(ctx context.Context, scope auth.SessionScope, user string) error {
-	return m.stopForAccessLoss(ctx, scope, "Access changed for "+accessLossUser(user)+"; resume to continue with the new access", false)
+	return m.stopForAccessLoss(ctx, scope, "Access changed for "+accessLossUser(user)+"; resume to continue with the new access", accessStopNone)
 }
 
 // StopForAccessEnded gracefully stops the exact generation whose owner was
 // offboarded or lost standing. Current launch authorization still refuses resume.
 func (m *Module) StopForAccessEnded(ctx context.Context, scope auth.SessionScope, user string) error {
-	return m.stopForAccessLoss(ctx, scope, "Access ended for "+accessLossUser(user), true)
+	return m.stopForAccessLoss(ctx, scope, "Access ended for "+accessLossUser(user), accessStopOwnerEnded)
 }
 
-// UseSessionAccessCheck binds the one issuer's owner-standing check at composition,
-// before Start. It adds no per-tool read and shares the existing active stop loop.
-func (m *Module) UseSessionAccessCheck(check func(context.Context, model.TenantID, string) (auth.SessionScope, string, error)) {
-	m.rt.sessionAccessCheck = check
+// StopForCredentialExpiry retires the exact generation at its original bearer
+// deadline. The operator must explicitly start a successor session.
+func (m *Module) StopForCredentialExpiry(ctx context.Context, scope auth.SessionScope) error {
+	return m.stopForAccessLoss(ctx, scope, auth.SessionCredentialExpiryReason, accessStopCredentialExpired)
 }
 
 func accessLossUser(user string) string {
@@ -42,7 +50,7 @@ func accessLossUser(user string) string {
 	return user
 }
 
-func (m *Module) stopForAccessLoss(ctx context.Context, scope auth.SessionScope, reason string, accessEnded bool) error {
+func (m *Module) stopForAccessLoss(ctx context.Context, scope auth.SessionScope, reason string, cause runtimeAccessStopCause) error {
 	if scope.TenantID.IsZero() || scope.TenantID.IsSystem() || scope.WorkspaceID.IsZero() || scope.SessionRef == "" || scope.RunRef == "" || scope.Holder == "" || scope.Fence < 1 {
 		return auth.ErrUnauthenticated
 	}
@@ -74,7 +82,7 @@ func (m *Module) stopForAccessLoss(ctx context.Context, scope auth.SessionScope,
 	}
 	lr.stopRequested = true
 	lr.stopReason = reason
-	lr.ownerAccessEnded = accessEnded
+	lr.accessStopCause = cause
 	lr.mu.Unlock()
 	// A tool call can discover this loss inside its own ResolveRun. Draining
 	// that call on its resolver stack would wait on its deferred completion.

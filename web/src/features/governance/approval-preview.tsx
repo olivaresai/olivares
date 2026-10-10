@@ -16,9 +16,13 @@ import { KvList, KvRow } from '@/components/ui/kv'
 import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
 import { sessionNameLadder } from '@/features/home/work-line'
 import { sessionsApi, sessionsKeys } from '@/features/sessions/api'
+import { runAwaitedApproval } from '@/features/sessions/provenance'
+import { useMemberNames } from '@/features/shared'
+import { readableAction } from '@/components/layout/bell-events'
 import { useAuth } from '@/lib/auth/context'
 import { cn } from '@/lib/utils'
 import './i18n'
+import { governanceApi, governanceKeys } from './api'
 import type { ApprovalDTO } from './types'
 
 const SESSION_ACTOR = 'session:'
@@ -33,7 +37,7 @@ export function approvalSessionId(a: ApprovalDTO): string | undefined {
 }
 
 /** The session's name and folder, from the reads the Sessions page makes. A waiting run
- * names its request (`pending_approval_ref` is this approval's id, the join the rail's
+ * names its request (`runAwaitedApproval` is this approval's id, the join the rail's
  * "Needs you" already makes); otherwise the session's live row. Unread or not permitted:
  * undefined, and the preview says less rather than guessing. */
 export function useApprovalSession(approval: ApprovalDTO) {
@@ -44,11 +48,11 @@ export function useApprovalSession(approval: ApprovalDTO) {
   const runs = useQuery({
     queryKey: agentOpsKeys.runs(activeTenant, runParams),
     queryFn: () => agentOpsApi.listRuns(runParams),
-    enabled: can('sessions:run:read'),
+    enabled: !!id && can('sessions:run:read'),
     staleTime: 10_000,
   })
   const waiting = runs.data?.items.find(
-    (r) => r.pending_approval_ref === approval.id,
+    (r) => runAwaitedApproval(r) === approval.id,
   )
   const params = { session_ref: id ?? '', limit: 5 }
   const live = useQuery({
@@ -85,11 +89,27 @@ export function useApprovalSession(approval: ApprovalDTO) {
 }
 
 /** Who asks, in words: the session itself, or the actor the engine recorded. */
-function askedBy(a: ApprovalDTO, t: (k: string) => string): string {
-  if (!a.requested_by) return '—'
-  return a.requested_by.startsWith(SESSION_ACTOR)
+function askedBy(
+  a: ApprovalDTO,
+  t: (k: string, options?: { name: string }) => string,
+  name?: string | null,
+  actor?: string | null,
+): string {
+  const requester = a.launched_by || a.requested_by
+  if (!requester) return '—'
+  const person = requester.startsWith(SESSION_ACTOR)
     ? t('preview.askedBySession')
-    : a.requested_by
+    : (name ??
+      (requester === actor
+        ? t('preview.you')
+        : requester.startsWith('user:')
+          ? t('preview.member')
+          : requester.startsWith('token:')
+            ? t('preview.apiToken')
+            : t('detail.requestedBy')))
+  return a.launched_by
+    ? t('preview.askedByForSession', { name: person })
+    : person
 }
 
 /** The action of a tool's own permission request (cmd/olivares/providerapproval.go). */
@@ -184,15 +204,31 @@ export function ReviewText({
 export function ApprovalPreview({ approval }: { approval: ApprovalDTO }) {
   const { t } = useTranslation('governance')
   const session = useApprovalSession(approval)
+  const members = useMemberNames()
+  const { principal, activeTenant, can } = useAuth()
+  const requester = approval.launched_by || approval.requested_by
+  const policies = useQuery({
+    queryKey: governanceKeys.policies(activeTenant),
+    queryFn: () => governanceApi.listPolicies(),
+    enabled: !!approval.policy_ref && can('governance:policy:read'),
+    staleTime: 60_000,
+  })
+  const policyName = can('governance:policy:read')
+    ? policies.data?.items.find((p) => p.id === approval.policy_ref)?.name
+    : undefined
   const review = approval.review
   const unknown = approvalCommandUnknown(approval)
+  const toolCall = approval.subject_kind?.endsWith('.tool')
   return (
     <section
       className="flex min-w-0 flex-col gap-2"
-      aria-label={t('preview.title')}
+      aria-label={toolCall ? t('preview.title') : t('preview.requestSummary')}
       data-slot="approval-preview"
     >
       <KvList>
+        {policyName ? (
+          <KvRow label={t('detail.policyRef')}>{policyName}</KvRow>
+        ) : null}
         {session.name ? (
           <KvRow label={t('preview.session')}>{session.name}</KvRow>
         ) : null}
@@ -201,11 +237,15 @@ export function ApprovalPreview({ approval }: { approval: ApprovalDTO }) {
             {session.folder}
           </KvRow>
         ) : null}
-        <KvRow
-          label={t('preview.askedBy')}
-          mono={!approval.requested_by?.startsWith(SESSION_ACTOR)}
-        >
-          {askedBy(approval, t)}
+        <KvRow label={t('preview.askedBy')}>
+          {askedBy(
+            approval,
+            t,
+            can('user:read') && requester?.startsWith('user:')
+              ? members.nameOf(requester)
+              : null,
+            principal?.actor,
+          )}
         </KvRow>
         {review?.tool ? (
           <KvRow label={t('preview.tool')}>{review.tool}</KvRow>
@@ -224,6 +264,18 @@ export function ApprovalPreview({ approval }: { approval: ApprovalDTO }) {
             {t('preview.willRun')}
           </span>
           <ReviewText text={review.text} />
+        </div>
+      ) : !toolCall ? (
+        <div className="flex flex-col gap-1 text-body">
+          {approval.action ? (
+            <p className="font-medium">{readableAction(approval.action)}</p>
+          ) : null}
+          {approval.reason ? (
+            <p className="break-words text-text-2">{approval.reason}</p>
+          ) : null}
+          <p className="text-text-2" data-slot="approval-no-review">
+            {t('preview.noReview')}
+          </p>
         </div>
       ) : (
         <p className="text-body text-text-2" data-slot="approval-no-review">
@@ -283,16 +335,29 @@ export function ApprovalDetails({
 
 /** The list's Request cell: session and tool on the first line, what runs on the second
  * (one line; whole in the review), the folder on the third. */
-export function ApprovalRequestCell({ approval }: { approval: ApprovalDTO }) {
+export function ApprovalRequestCell({
+  approval,
+  className,
+}: {
+  approval: ApprovalDTO
+  /** Another surface's width (Now's card fills its row); the list keeps its fixed column. */
+  className?: string
+}) {
   const { t } = useTranslation('governance')
   const session = useApprovalSession(approval)
   const review = approval.review
-  const head = [review?.tool, session.name].filter(Boolean).join(' · ')
+  const toolCall = approval.subject_kind?.endsWith('.tool')
+  const head =
+    [review?.tool, session.name].filter(Boolean).join(' · ') ||
+    (!toolCall && approval.action ? readableAction(approval.action) : '')
   return (
     // A fixed width with every line cut to one: a long folder widened the column and
     // pushed Approve and Reject off the right edge at 1280 (Root, 09b capture review).
     <div
-      className="flex w-[20rem] min-w-0 max-w-[20rem] flex-col gap-0.5"
+      className={cn(
+        'flex w-[20rem] min-w-0 max-w-[20rem] flex-col gap-0.5',
+        className,
+      )}
       data-slot="approval-request"
     >
       {head ? (
@@ -308,9 +373,19 @@ export function ApprovalRequestCell({ approval }: { approval: ApprovalDTO }) {
       ) : review?.text ? (
         <ReviewText text={review.text} compact />
       ) : (
-        <span className="text-caption text-text-2">
-          {t('preview.noReview')}
-        </span>
+        <>
+          {!toolCall && approval.reason ? (
+            <span
+              className="truncate text-caption text-text-2"
+              title={approval.reason}
+            >
+              {approval.reason}
+            </span>
+          ) : null}
+          <span className="text-caption text-text-2">
+            {t('preview.noReview')}
+          </span>
+        </>
       )}
       {session.folder ? (
         <span
@@ -334,19 +409,49 @@ export function ApprovalRequestCell({ approval }: { approval: ApprovalDTO }) {
   )
 }
 
-/** Who asks, for the list's column. */
+/** Who asks, for the list's column. The engine's handle remains in Details. */
 export function AskedBy({ approval }: { approval: ApprovalDTO }) {
   const { t } = useTranslation('governance')
-  const session = approval.requested_by?.startsWith(SESSION_ACTOR)
+  const members = useMemberNames()
+  const { principal, can } = useAuth()
+  const requester = approval.launched_by || approval.requested_by
   return (
-    <span
-      className={cn(
-        'block max-w-[12rem] truncate text-caption',
-        session ? 'text-foreground' : 'font-mono text-muted-foreground',
-      )}
-      title={approval.requested_by}
-    >
-      {askedBy(approval, t)}
-    </span>
+    <div className="min-w-0">
+      <span
+        className={cn(
+          'block max-w-[12rem] truncate text-caption',
+          'text-foreground',
+        )}
+        title={requester}
+      >
+        {askedBy(
+          approval,
+          t,
+          can('user:read') && requester?.startsWith('user:')
+            ? members.nameOf(requester)
+            : null,
+          principal?.actor,
+        )}
+      </span>
+      <details
+        onClick={(event) => event.stopPropagation()}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ')
+            event.stopPropagation()
+        }}
+      >
+        <summary className="cursor-pointer text-caption text-text-2">
+          {t('preview.details')}
+        </summary>
+        {approval.launched_by ? (
+          <span className="block break-all font-mono text-caption">
+            {approval.launched_by}
+          </span>
+        ) : null}
+        <span className="block break-all font-mono text-caption">
+          {approval.requested_by}
+        </span>
+      </details>
+    </div>
   )
 }

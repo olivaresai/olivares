@@ -20,6 +20,7 @@ import threading
 import time
 import warnings
 from dataclasses import dataclass
+from http.client import HTTPResponse
 from urllib import error as _urlerror
 from urllib import request as _urlrequest
 from urllib.parse import urlencode
@@ -52,6 +53,16 @@ _RETRYABLE_GET_ONLY = {503}  # not_leader HA handoff — idempotent reads only
 #: authority rather than to re-send.
 COMMIT_OUTCOME_UNKNOWN = "commit_outcome_unknown"
 _BODY_LIMIT = 64 << 20
+
+
+def _read_body(response) -> bytes:
+    # A sized HTTPResponse.read tolerates a short Content-Length body. Use its
+    # strict native read when the remaining framed body already fits our cap.
+    reader = response.fp if isinstance(response, _urlerror.HTTPError) else response
+    if (isinstance(reader, HTTPResponse) and reader.length is not None
+            and reader.length <= _BODY_LIMIT):
+        return response.read()
+    return response.read(_BODY_LIMIT)
 
 
 @dataclass(frozen=True)
@@ -237,14 +248,15 @@ class ClientCore:
         try:
             with self._opener.open(req, timeout=self._timeout) as resp:
                 self._notice_deprecation(method, route, path, resp.headers)
-                return resp.read(_BODY_LIMIT)
+                return _read_body(resp)
         except _urlerror.HTTPError as e:
-            self._notice_deprecation(method, route, path, e.headers)
-            raise self._api_error(e) from None
+            with e:
+                self._notice_deprecation(method, route, path, e.headers)
+                raise self._api_error(e) from None
 
     @staticmethod
     def _api_error(e: _urlerror.HTTPError) -> APIError:
-        raw = e.read(_BODY_LIMIT)
+        raw = _read_body(e)
         code, message = f"http_{e.code}", raw.decode(errors="replace").strip()
         try:
             envelope = json.loads(raw)["error"]

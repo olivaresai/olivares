@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"os"
 	"regexp"
 	"strings"
 	"testing"
@@ -116,6 +117,24 @@ func TestQuickstartWelcomePointsToConsoleFlow(t *testing.T) {
 			t.Errorf("default panel contains %q:\n%s", forbidden, got)
 		}
 	}
+
+	// scripts/quickstart-argv-smoke.sh asserts this panel on the built binary, but only the
+	// export check runs it, so a reworded panel left it failing a correct quickstart. Every
+	// fixed string it greps for must be printed here, where the package tests catch a reword.
+	script, err := os.ReadFile("../../scripts/quickstart-argv-smoke.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	smokeExpects := regexp.MustCompile(`command grep -qF ('[^']+'|"[^"]+") "\$LOG"`).FindAllStringSubmatch(string(script), -1)
+	if n := strings.Count(string(script), "grep -qF"); n == 0 || n != len(smokeExpects) {
+		t.Fatalf("scripts/quickstart-argv-smoke.sh has %d grep -qF assertions; this test read %d", n, len(smokeExpects))
+	}
+	for _, m := range smokeExpects {
+		want := strings.ReplaceAll(m[1][1:len(m[1])-1], "$PORT", "8443")
+		if !strings.Contains(got, want) {
+			t.Errorf("scripts/quickstart-argv-smoke.sh expects %q, which the first-run panel does not print:\n%s", want, got)
+		}
+	}
 }
 
 func TestQuickstartPendingSetupPointsToConsoleAndTokenRecovery(t *testing.T) {
@@ -137,7 +156,9 @@ func TestQuickstartPendingSetupPointsToConsoleAndTokenRecovery(t *testing.T) {
 
 func TestQuickstartReturningRunUsesReturningGuidance(t *testing.T) {
 	dir := t.TempDir()
-	eng, err := boot(context.Background(), bootConfig{DataDir: dir, Engine: "sqlite", Version: "test",
+	// Use quickstart's fresh module profile, rather than a profile-free legacy
+	// installation whose first serving start deliberately asks main to re-exec.
+	eng, err := boot(context.Background(), bootConfig{DataDir: dir, Engine: "sqlite", Version: "test", ApplyModuleProfile: true,
 		Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
 	if err != nil {
 		t.Fatal(err)
@@ -149,15 +170,21 @@ func TestQuickstartReturningRunUsesReturningGuidance(t *testing.T) {
 	if err := eng.Close(); err != nil {
 		t.Fatal(err)
 	}
-	got := runQuickstart(t, regexp.MustCompile("sign in"), "--data-dir", dir,
-		"--listen", fmt.Sprintf("127.0.0.1:%d", freeLoopbackPort(t)),
-		"--grpc-listen", fmt.Sprintf("127.0.0.1:%d", freeLoopbackPort(t)))
-	if !strings.Contains(got, "Next: Open the console and sign in to continue your work.") {
-		t.Errorf("returning run lacks its next step:\n%s", got)
-	}
-	for _, forbidden := range []string{"FIRST RUN", "setup token", "passkey", "POST /v1/", "olivares doctor"} {
-		if strings.Contains(strings.ToLower(got), strings.ToLower(forbidden)) {
-			t.Errorf("returning output contains %q:\n%s", forbidden, got)
+	for _, name := range []string{"returning", "returning again"} {
+		if !t.Run(name, func(t *testing.T) {
+			got := runQuickstart(t, regexp.MustCompile("sign in"), "--data-dir", dir,
+				"--listen", fmt.Sprintf("127.0.0.1:%d", freeLoopbackPort(t)),
+				"--grpc-listen", fmt.Sprintf("127.0.0.1:%d", freeLoopbackPort(t)))
+			if !strings.Contains(got, "Next: Open the console and sign in to continue your work.") {
+				t.Errorf("returning run lacks its next step:\n%s", got)
+			}
+			for _, forbidden := range []string{"FIRST RUN", "setup token", "passkey", "POST /v1/", "olivares doctor"} {
+				if strings.Contains(strings.ToLower(got), strings.ToLower(forbidden)) {
+					t.Errorf("returning output contains %q:\n%s", forbidden, got)
+				}
+			}
+		}) {
+			break
 		}
 	}
 }

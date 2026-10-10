@@ -90,7 +90,7 @@ caso() { # <nombre> <rc esperado> <raiz> [texto que debe aparecer]
     local r; r="$(corre "$3")"
     local rc="${r%%$'\t'*}" out="${r#*$'\t'}"
     if [ "$rc" != "$2" ]; then
-        echo "  FALLO $1: rc=$rc, esperaba $2"; echo "$out" | sed 's/^/        /' | head -4
+        echo "  FAIL $1: rc=$rc, expected $2"; echo "$out" | sed 's/^/        /' | head -4
         CASOS=$((CASOS+1)); FALLOS=$((FALLOS+1)); return
     fi
     # ⛔ `case`, NO `printf … | grep -q`. Con `pipefail`, `grep -q` sale en cuanto encuentra, el
@@ -99,7 +99,7 @@ caso() { # <nombre> <rc esperado> <raiz> [texto que debe aparecer]
     if [ -n "${4:-}" ]; then
         case "$out" in
             *"$4"*) : ;;
-            *)  echo "  FALLO $1: rc correcto pero no dijo «$4»"
+            *)  echo "  FAIL $1: correct rc but missing “$4”"
                 printf '%s\n' "$out" | head -4 | sed 's/^/        /'
                 CASOS=$((CASOS+1)); FALLOS=$((FALLOS+1)); return ;;
         esac
@@ -109,16 +109,16 @@ caso() { # <nombre> <rc esperado> <raiz> [texto que debe aparecer]
 
 # 1) Una captura anterior al último cambio de la UI es un hallazgo.
 D="$(señuelo)"
-caso "una captura anterior a la UI sale 1 y se nombra" 1 "$D" "vista-light.png"
+caso "a screenshot older than the UI returns 1 and is named" 1 "$D" "vista-light.png"
 
 # 7) EL CASO QUE HABRÍA CAZADO EL DEFECTO REAL: `docs-site/public/console/` tiene que ENTRAR en el
 #    examen. Se afirma sobre el recuento de examinadas, no sobre el veredicto, porque el veredicto
 #    puede salir bien por casualidad mientras el fichero ni se mira.
 R="$(corre "$D")"
 case "${R#*$'\t'}" in
-    *"· 1 examinadas"*)
-        CASOS=$((CASOS+1)); echo "  ok    docs-site/public/console ENTRA en el examen (el punto ciego que costó el héroe)" ;;
-    *)  echo "  FALLO docs-site/public/console no entró en el examen"; CASOS=$((CASOS+1)); FALLOS=$((FALLOS+1)) ;;
+    *"· 1 examined"*)
+        CASOS=$((CASOS+1)); echo "  ok    docs-site/public/console IS inspected (the previous hero-image blind spot)" ;;
+    *)  echo "  FAIL docs-site/public/console was not inspected"; CASOS=$((CASOS+1)); FALLOS=$((FALLOS+1)) ;;
 esac
 
 # ⛔⛔ LOS CASOS DEL PIN, y existen porque la primera versión del registro ERA una lista de
@@ -136,61 +136,61 @@ DOC='docs-site/src/content/docs/2026-06'
 
 # 2) El par legítimo: activo congelado + consumidor congelado que LO USA.
 printf '%s\tsnapshot-de-version\t%s\tLa doc de 2026-06 describe ese producto.\n' "$ACT" "$DOC" > "$PIN"
-caso "un snapshot con consumidor congelado que lo usa pasa" 0 "$D" "1 con antigüedad declarada"
+caso "a snapshot with a frozen consumer using it passes" 0 "$D" "1 with declared age"
 
 # 2-bis) …y se IMPRIME. Un mecanismo que silencia material público sin decir qué silencia se
 #        convierte en el sitio donde se esconden cosas.
-caso "el pin honrado se imprime con su clase y su anclaje" 0 "$D" "· fijada $ACT [snapshot-de-version"
+caso "an honored pin reports its class and anchor" 0 "$D" "· pinned $ACT [snapshot-de-version"
 
 # 3) ⭐ EL ABUSO DEL PANEL, TEXTUAL. La línea que silenciaba el árbol entero ya no PARSEA.
 printf 'docs-site/public/console/\tpendiente\n' > "$PIN"
-caso "la línea del panel («<ruta><TAB>pendiente») sale 2" 2 "$D" "no trae los cuatro campos"
+caso "the panel line (<path><TAB>pending) returns 2" 2 "$D" "is missing fields"
 
 # 3-bis) ⭐ Y con los cuatro campos tampoco: una ruta sin marca de versión NO ES EXPRESABLE como
 #        snapshot. Es la pata que cierra el agujero — no se detecta la mentira, es que no se puede
 #        escribir.
 printf 'docs-site/public/console/\tsnapshot-de-version\t%s\tpendiente de re-capturar\n' "$DOC" > "$PIN"
-caso "una ruta sin marca de versión no se puede fijar" 2 "$D" "no lleva marca de versión"
+caso "a path without a version marker cannot be pinned" 2 "$D" "has no version marker"
 
 # 3-ter) Versión que no casa: el activo es de 2026-06 y el consumidor declarado de 2025-01.
 mkdir -p "$D/docs-site/src/content/docs/2025-01"
 printf 'nada\n' > "$D/docs-site/src/content/docs/2025-01/x.mdx"
 printf '%s\tsnapshot-de-version\tdocs-site/src/content/docs/2025-01\tconsumidor de otra versión\n' "$ACT" > "$PIN"
-caso "un consumidor de OTRA versión sale 2" 2 "$D" "es de '2025-01'"
+caso "a consumer from ANOTHER version returns 2" 2 "$D" "belongs to '2025-01'"
 
 # 3-quater) El consumidor es de la versión correcta pero NO USA ninguna de esas imágenes.
 printf 'texto sin imágenes\n' > "$D/docs-site/src/content/docs/2026-06/x.mdx"
 git -C "$D" add -A && (cd "$D" && commitear "$T_VIEJO" "consumidor sin imágenes")
 printf '%s\tsnapshot-de-version\t%s\tdice ser su consumidor\n' "$ACT" "$DOC" > "$PIN"
-caso "un consumidor que no usa las imágenes sale 2" 2 "$D" "no usa ninguna imagen"
+caso "a consumer not using the images returns 2" 2 "$D" "uses no images"
 printf 'img: ../../../../../assets/console/2026-06/vista-light.png\n' > "$D/docs-site/src/content/docs/2026-06/x.mdx"
 git -C "$D" add -A && (cd "$D" && commitear "$T_VIEJO" "consumidor restaurado")
 
 # 3-quinquies) Clase desconocida: el conjunto es CERRADO. No saber qué es algo no autoriza a fijarlo.
 printf '%s\tpor-ahora\t%s\tuna clase inventada\n' "$ACT" "$DOC" > "$PIN"
-caso "una clase desconocida sale 2" 2 "$D" "clase desconocida"
+caso "an unknown class returns 2" 2 "$D" "unknown class"
 
 # 3-sexies) ⭐ Y LA SEGUNDA CLASE TIENE QUE CERRAR LA MISMA PUERTA, o el agujero sólo se ha movido:
 #           la ruta del panel declarada como evidencia fechada tampoco pasa, porque su ruta no lleva
 #           la fecha. Las DOS clases rechazan una ruta sin marca temporal, que es lo que hace que la
 #           línea de la refutación no sea expresable en ninguna de ellas.
 printf 'docs-site/public/console/\tevidencia-fechada\t2026-06-30\tevidencia de aquel día\n' > "$PIN"
-caso "la ruta del panel tampoco pasa como evidencia fechada" 2 "$D" "no lleva esa fecha"
+caso "the panel path also fails as dated evidence" 2 "$D" "does not contain that date"
 
 # 3-sexies-bis) Un anclaje que no es una fecha ISO.
 printf 'design/seo/30062026/\tevidencia-fechada\tjunio de 2026\tprosa en vez de fecha\n' > "$PIN"
-caso "un anclaje que no es fecha ISO sale 2" 2 "$D" "debe ser una fecha ISO"
+caso "a non-ISO-date anchor returns 2" 2 "$D" "must be an ISO date"
 
 # 3-septies) …y la forma DDMMAAAA sí se reconoce (control: la regla no es más estrecha que la verdad).
 mkdir -p "$D/design/seo/30062026"
 printf 'png' > "$D/design/seo/30062026/screenshot-search.png"
 git -C "$D" add -A && (cd "$D" && commitear "$T_VIEJO" "evidencia seo")
 printf '%s\tsnapshot-de-version\t%s\tok\ndesign/seo/30062026/\tevidencia-fechada\t2026-06-30\tSu valor es su fecha.\n' "$ACT" "$DOC" > "$PIN"
-caso "la fecha en forma DDMMAAAA se reconoce" 0 "$D" "2 con antigüedad declarada"
+caso "DDMMYYYY date format is recognized" 0 "$D" "2 with declared age"
 
 # 4) Una declaración que ya no cubre nada se pudre: 2, no verde.
 printf '%s\tsnapshot-de-version\t%s\tya se re-capturó\n' "${ACT}inexistente/" "$DOC" > "$PIN"
-caso "una declaración que no cubre nada sale 2" 2 "$D" "no cubre ninguna captura"
+caso "a declaration covering nothing returns 2" 2 "$D" "covers no screenshots"
 rm -rf "$D"
 
 # ⛔ EL MARGEN DE RETRASO. Sustituyó primero a un `|| true` y después a un techo de CONTEO que era
@@ -204,26 +204,26 @@ rm -rf "$D"
 D="$(señuelo)"
 r="$(OLIVARES_CLONE="$D" OLIVARES_SCREENSHOT_MAX_LAG_DAYS=200 bash "$GATE" 2>&1; echo "rc=$?")"
 case "$r" in
-    *"rc=0"*) CASOS=$((CASOS+1)); echo "  ok    una captura DENTRO del margen no es un hallazgo" ;;
-    *) echo "  FALLO el margen no absorbió un retraso menor que él"; CASOS=$((CASOS+1)); FALLOS=$((FALLOS+1)) ;;
+    *"rc=0"*) CASOS=$((CASOS+1)); echo "  ok    a screenshot WITHIN tolerance is not a finding" ;;
+    *) echo "  FAIL tolerance did not absorb a smaller delay"; CASOS=$((CASOS+1)); FALLOS=$((FALLOS+1)) ;;
 esac
 # …y la dirección que SÍ tiene que disparar: el mismo retraso contra un margen menor.
 r="$(OLIVARES_CLONE="$D" OLIVARES_SCREENSHOT_MAX_LAG_DAYS=100 bash "$GATE" 2>&1; echo "rc=$?")"
 case "$r" in
-    *"rc=1"*) CASOS=$((CASOS+1)); echo "  ok    el mismo retraso contra un margen menor enrojece" ;;
-    *) echo "  FALLO un retraso por encima del margen no enrojeció"; CASOS=$((CASOS+1)); FALLOS=$((FALLOS+1)) ;;
+    *"rc=1"*) CASOS=$((CASOS+1)); echo "  ok    the same delay fails against a smaller tolerance" ;;
+    *) echo "  FAIL delay exceeding tolerance did not fail"; CASOS=$((CASOS+1)); FALLOS=$((FALLOS+1)) ;;
 esac
 # …y el informe dice CUÁNTO va la peor, que es el número con el que se decide.
 case "$r" in
-    *"peor: 151"*) CASOS=$((CASOS+1)); echo "  ok    el informe nombra el retraso de la peor" ;;
-    *) echo "  FALLO el informe no dijo cuánto va la peor"; CASOS=$((CASOS+1)); FALLOS=$((FALLOS+1))
+    *"worst: 151"*) CASOS=$((CASOS+1)); echo "  ok    the report names the worst delay" ;;
+    *) echo "  FAIL report did not quantify the worst delay"; CASOS=$((CASOS+1)); FALLOS=$((FALLOS+1))
        printf '%s\n' "$r" | head -3 | sed 's/^/        /' ;;
 esac
 # …y una tolerancia que no es un número es «no he podido mirar», nunca «sin margen».
 r="$(OLIVARES_CLONE="$D" OLIVARES_SCREENSHOT_MAX_LAG_DAYS=mucho bash "$GATE" 2>&1; echo "rc=$?")"
 case "$r" in
-    *"rc=2"*) CASOS=$((CASOS+1)); echo "  ok    una tolerancia no numérica sale 2" ;;
-    *) echo "  FALLO una tolerancia no numérica no salió 2"; CASOS=$((CASOS+1)); FALLOS=$((FALLOS+1)) ;;
+    *"rc=2"*) CASOS=$((CASOS+1)); echo "  ok    nonnumeric tolerance returns 2" ;;
+    *) echo "  FAIL nonnumeric tolerance did not return 2"; CASOS=$((CASOS+1)); FALLOS=$((FALLOS+1)) ;;
 esac
 rm -rf "$D"
 
@@ -231,7 +231,7 @@ rm -rf "$D"
 D="$(señuelo)"
 printf 'png nuevo' > "$D/docs-site/public/console/vista-light.png"
 git -C "$D" add -A && (cd "$D" && commitear "$T_NUEVO" "re-capturada")
-caso "una captura posterior a la UI sale 0" 0 "$D" "0 por detrás más de"
+caso "a screenshot newer than the UI returns 0" 0 "$D" "0 more than"
 rm -rf "$D"
 
 # 6) Cero capturas reconocidas: 2. Un conjunto vacío no se aprueba.
@@ -240,7 +240,7 @@ git -C "$D" init -q
 mkdir -p "$D/web/src/features"
 printf 'export const X = 1\n' > "$D/web/src/features/x.tsx"
 git -C "$D" add -A && (cd "$D" && commitear "$T_UI" "sólo UI")
-caso "cero capturas reconocidas sale 2" 2 "$D" "cero capturas"
+caso "zero recognized screenshots returns 2" 2 "$D" "no screenshots found"
 rm -rf "$D"
 
 # ── a repository gate: el gate se acota al DIFF del push ─────────────────────────────────────────
@@ -266,7 +266,7 @@ señuelo_con_tronco() { # imprime la raíz; deja origin/main en el commit de la 
 D="$(señuelo_con_tronco)"
 printf 'export const Y = 2\n' > "$D/web/src/features/y.tsx"
 git -C "$D" add -A && (cd "$D" && commitear "$T_NUEVO" "el push toca la UI")
-caso "(GAT-35) un push que toca la UI paga la antigüedad" 1 "$D" "vista-light.png"
+caso "(GAT-35) a push changing the UI checks screenshot age" 1 "$D" "vista-light.png"
 rm -rf "$D"
 
 # (21) Dirección NO disparadora, que es la mitad por la que existe esto: el push no toca la
@@ -274,7 +274,7 @@ rm -rf "$D"
 D="$(señuelo_con_tronco)"
 printf '#!/bin/sh\necho ajeno\n' > "$D/scripts/ajeno.sh"
 git -C "$D" add -A && (cd "$D" && commitear "$T_NUEVO" "push ajeno")
-caso "(GAT-35) un push ajeno NO paga, y lo dice" 0 "$D" "NO toca ninguna de ellas"
+caso "(GAT-35) an unrelated push skips age enforcement and reports that" 0 "$D" "changes none of them"
 rm -rf "$D"
 
 # (22) La tercera vía de cobro: el push toca un fichero que REFERENCIA la captura. Sin este
@@ -283,13 +283,13 @@ rm -rf "$D"
 D="$(señuelo_con_tronco)"
 printf 'Mira docs-site/public/console/vista-light.png\n' > "$D/docs-site/guia.md"
 git -C "$D" add -A && (cd "$D" && commitear "$T_NUEVO" "un doc que la referencia")
-caso "(GAT-35) un push que referencia la captura paga" 1 "$D" "vista-light.png"
+caso "(GAT-35) a push referencing a screenshot checks its age" 1 "$D" "vista-light.png"
 rm -rf "$D"
 
 # (23) EL BORDE QUE PROTEGE A `main`: HEAD == origin/main ⇒ el rango es VACÍO. Leerlo como «no
 #      toca nada» apagaría el gate justo en el tronco. Vacío = no he podido acotar = se cobra.
 D="$(señuelo_con_tronco)"
-caso "(GAT-35) un rango vacío COBRA, no absuelve" 1 "$D" "vista-light.png"
+caso "(GAT-35) an empty range ENFORCES age checks" 1 "$D" "vista-light.png"
 rm -rf "$D"
 
 # (24)(25) EL CAMINO DE RESERVA, MEDIDO — lo pidió el contraste de P y tenía razón: los cuatro
@@ -304,7 +304,7 @@ D="$(señuelo_con_tronco)"
 git -C "$D" update-ref -d refs/remotes/origin/main
 printf '#!/bin/sh\necho ajeno\n' > "$D/scripts/ajeno.sh"
 git -C "$D" add -A && (cd "$D" && commitear "$T_NUEVO" "push ajeno, pero sin tronco")
-caso "(GAT-35) sin tronco NO se absuelve: se cobra" 1 "$D" "vista-light.png"
+caso "(GAT-35) without a base branch, age checks remain enforced" 1 "$D" "vista-light.png"
 rm -rf "$D"
 
 # Historias inconexas: el tronco EXISTE y `merge-base` no devuelve nada. Sin este caso, alguien
@@ -321,7 +321,7 @@ ARBOL_VACIO="$(git -C "$D" hash-object -t tree /dev/null)"
 SIN_PADRE="$(GIT_AUTHOR_DATE="$T_UI" GIT_COMMITTER_DATE="$T_UI" \
     git -C "$D" -c user.email=t@t -c user.name=T commit-tree "$ARBOL_VACIO" -m "tronco sin parentesco")"
 git -C "$D" update-ref refs/remotes/origin/main "$SIN_PADRE"
-caso "(GAT-35) sin merge-base tampoco se absuelve" 1 "$D" "vista-light.png"
+caso "(GAT-35) without a merge-base, age checks remain enforced" 1 "$D" "vista-light.png"
 rm -rf "$D"
 
 # ── a repository gate: la edad se mide contra LA FUENTE QUE RETRATA ──────────────────────────────
@@ -342,12 +342,12 @@ señuelo_con_fuente() { # imprime la raíz; la captura retrata `vista-view.tsx` 
     printf '%s\n' "$d"
 }
 
-# (26) LA DIRECCIÓN QUE JUSTIFICA a repository gate: otra pantalla se mueve y la captura NO envejece.
-#      Con `UI_TS` global esto es ROJO — es exactamente el falso positivo que costó los pushes.
+# (26) a repository gate's purpose: another screen changes without aging this capture.
+# A global UI_TS falsely rejects it, the false positive that previously blocked pushes.
 D="$(señuelo_con_fuente)"
 printf 'export const O = 2\n' > "$D/web/src/features/otra/otra-view.tsx"
 git -C "$D" add -A && (cd "$D" && commitear "$T_NUEVO" "se mueve OTRA pantalla")
-caso "(GAT-36) otra pantalla se mueve y la captura fiel NO envejece" 0 "$D" "por su FUENTE"
+caso "(GAT-36) changes to another screen do NOT age an accurate screenshot" 0 "$D" "from source imports"
 rm -rf "$D"
 
 # (27) Y la contraria, o el gate no serviría para nada: su PROPIA fuente se mueve ⇒ rojo.
@@ -355,34 +355,30 @@ D="$(señuelo_con_fuente)"
 printf "import { Boton } from '@/components/ui/boton'\nexport const V = 2\n" \
     > "$D/web/src/features/vista/vista-view.tsx"
 git -C "$D" add -A && (cd "$D" && commitear "$T_NUEVO" "se mueve SU vista")
-caso "(GAT-36) su propia fuente se mueve y la captura envejece" 1 "$D" "vista-light.png"
+caso "(GAT-36) changes to its own source age the screenshot" 1 "$D" "vista-light.png"
 rm -rf "$D"
 
-# (28) EL PUNTO CIEGO SIMÉTRICO que midió y que la derivación por IMPORTS cierra sola:
-#      `components/ui/` NO está en `UI_TS`, así que un restyle del botón cambiaría TODAS las
-#      capturas y el gate callaría. Siguiendo imports entra por donde debe: por quien lo usa.
+# (28) Symmetric blind spot measured by: components/ui/ is outside UI_TS,
+# so a button restyle could change every capture unnoticed. Deriving the clock through
+# imports reaches shared components through their actual consumers.
 D="$(señuelo_con_fuente)"
 printf 'export const Boton = 2 // restyle\n' > "$D/web/src/components/ui/boton.tsx"
 git -C "$D" add -A && (cd "$D" && commitear "$T_NUEVO" "restyle del boton COMPARTIDO")
-caso "(GAT-36) un restyle de un ui/ importado SÍ envejece la captura" 1 "$D" "vista-light.png"
+caso "(GAT-36) restyling an imported ui/ component ages the screenshot" 1 "$D" "vista-light.png"
 rm -rf "$D"
 
 # (29) DENY-CLOSED: una captura que no resuelve fuente se mide contra UI_TS, como siempre. Lo pidió
 #      el contraste de P: un camino de reserva que nunca se ve ejecutar es código muerto.
 D="$(señuelo)"   # su captura se llama vista-light.png y NO hay vista.tsx: no resuelve
-caso "(GAT-36) sin fuente resoluble se cae a UI_TS y sigue cobrando" 1 "$D" "por UI_TS"
+caso "(GAT-36) unresolved source falls back to UI_TS and enforces age checks" 1 "$D" "from UI_TS"
 rm -rf "$D"
 
-# ⛔⛔ (30-31) EL MUTANTE QUE DESTAPÓ ESTO, VERSIONADO — antes lo corría una persona a mano.
-#
-# El contraste de Codex `sol max` del 2026-08-30 mató a repository gate a mano: puso el reloj global de vuelta
-# y vio caer los casos 26 y 28. Y su reproche es el que importa: **un banco que no incorpora el
-# mutante que lo destapó no protege de la regresión.** Los casos 26-29 prueban que el gate hace lo
-# que dice HOY; sólo esto prueba que dejará de estar verde si alguien deshace la derivación por
-# fuente — que es la única forma en que este trabajo se pierde en silencio.
-#
-# La mutación no borra la función: le anula el cuerpo dejando el `RELOJ="$UI_TS"` que ya se fija en
-# su primera línea. Es decir, el mutante ES el gate anterior a a repository gate, y sigue ejecutándose entero.
+# (30-31) Keep the mutant that exposed the defect as a permanent regression test.
+# Codex sol max restored the global clock on 2026-08-30 and saw cases 26 and 28 fail.
+# Cases 26-29 prove current behavior; this mutant ensures reverting source derivation
+# cannot silently pass. Preserve the clock function but remove its body after its
+# initial RELOJ="$UI_TS" assignment: this recreates the pre-a repository gate gate while still
+# running the full checker.
 mutante_reloj_global() { # imprime la ruta de un gate con el reloj por FUENTE anulado
     local m; m="$(mktemp)"
     sed 's@^    fuentes_de_captura "$1" || return 0$@    return 0  # MUTANTE-RELOJ-GLOBAL@' \
@@ -394,13 +390,13 @@ caso_mutante() { # <nombre> <rc esperado CON el mutante> <raiz> <gate mutado> <t
     local out rc
     out="$(OLIVARES_CLONE="$3" bash "$4" 2>&1)"; rc=$?
     if [ "$rc" != "$2" ]; then
-        echo "  FALLO $1: el mutante SOBREVIVIÓ — rc=$rc, esperaba $2"
+        echo "  FAIL $1: mutant SURVIVED — rc=$rc, expected $2"
         printf '%s\n' "$out" | head -4 | sed 's/^/        /'
         CASOS=$((CASOS+1)); FALLOS=$((FALLOS+1)); return
     fi
     case "$out" in
         *"$5"*) : ;;
-        *)  echo "  FALLO $1: rc correcto pero el mutante no dijo «$5»"
+        *)  echo "  FAIL $1: correct rc but mutant did not report “$5”"
             printf '%s\n' "$out" | head -4 | sed 's/^/        /'
             CASOS=$((CASOS+1)); FALLOS=$((FALLOS+1)); return ;;
     esac
@@ -414,22 +410,22 @@ MUT="$(mutante_reloj_global)"
 #    batería estaría acreditando una mutación que nunca ocurrió. Es «no he podido mirar», y sale 2.
 MUT_MARCAS="$(grep -c 'MUTANTE-RELOJ-GLOBAL' "$MUT" || true)"
 if [ "$MUT_MARCAS" != "1" ]; then
-    echo "test-screenshot-freshness: ⛔ NO HE PODIDO MIRAR: la mutación del reloj no se" >&2
-    echo "        aplicó ($MUT_MARCAS marcas, esperaba 1). Si el gate cambió de forma, re-ancla el sed." >&2
+    echo "test-screenshot-freshness: ⛔ COULD NOT CHECK: the clock mutation was not" >&2
+    echo "        applied ($MUT_MARCAS markers, expected 1). If the check changed format, update the sed anchor." >&2
     rm -f "$MUT"; exit 2
 fi
 if ! bash -n "$MUT" 2>/dev/null; then
-    echo "test-screenshot-freshness: ⛔ NO HE PODIDO MIRAR: el mutante no es sintácticamente" >&2
-    echo "        válido, así que su rojo mediría el sed y no el gate." >&2
+    echo "test-screenshot-freshness: ⛔ COULD NOT CHECK: the mutant is not syntactically" >&2
+    echo "        valid, so its failure would measure sed instead of the check." >&2
     rm -f "$MUT"; exit 2
 fi
 
-# (30) Con el reloj global vuelve el FALSO POSITIVO: otra pantalla se mueve y la captura fiel
-#      envejece. Es literalmente el rojo que costó los pushes de.
+# (30) Restoring the global clock restores the false positive: changing another screen
+# ages an accurate capture, the exact failure that blocked pushes.
 D="$(señuelo_con_fuente)"
 printf 'export const O = 2\n' > "$D/web/src/features/otra/otra-view.tsx"
 git -C "$D" add -A && (cd "$D" && commitear "$T_NUEVO" "se mueve OTRA pantalla")
-caso_mutante "(GAT-36) el reloj global resucita el falso positivo del caso 26" 1 "$D" "$MUT" "vista-light.png"
+caso_mutante "(GAT-36) global clock restores the false positive from case 26" 1 "$D" "$MUT" "vista-light.png"
 rm -rf "$D"
 
 # (31) Y vuelve el FALSO NEGATIVO simétrico: `components/ui/` no está en `UI_TS`, así que el
@@ -437,7 +433,7 @@ rm -rf "$D"
 D="$(señuelo_con_fuente)"
 printf 'export const Boton = 2 // restyle\n' > "$D/web/src/components/ui/boton.tsx"
 git -C "$D" add -A && (cd "$D" && commitear "$T_NUEVO" "restyle del boton COMPARTIDO")
-caso_mutante "(GAT-36) el reloj global vuelve a callar ante el restyle del caso 28" 0 "$D" "$MUT" "0 por detrás"
+caso_mutante "(GAT-36) global clock misses the restyle from case 28" 0 "$D" "$MUT" "0 more than"
 rm -rf "$D"
 rm -f "$MUT"
 
@@ -476,15 +472,15 @@ _lote="$(git -C "$D" log --format='C%ct' --name-only |
 
 CASOS=$((CASOS + 1))
 if [ "$_padres" -ne 2 ]; then
-    echo "  FALLO (lote) el señuelo no produjo un MERGE: $_padres padre(s). Sin merge, este caso no mide nada."
+    echo "  FAIL (batch) fixture produced no MERGE: $_padres parent(s). Without a merge this case measures nothing."
     FALLOS=$((FALLOS + 1))
 elif [ "$_suelta" = "$_lote" ]; then
-    echo "  FALLO (lote) la pasada por lote coincidió con la llamada suelta ($_suelta)."
-    echo "        Si git ha cambiado y ya NO pierde los merges, el rechazo del lote hay que RE-MEDIRLO"
-    echo "        contra el árbol real antes de adoptarlo — no basta con que este señuelo coincida."
+    echo "  FAIL (batch) batch pass matched the individual call ($_suelta)."
+    echo "        If Git changed and no longer misses merges, batch rejection must be RE-MEASURED"
+    echo "        against the actual tree before adoption — matching this fixture alone is insufficient."
     FALLOS=$((FALLOS + 1))
 else
-    echo "  ok    (lote) --name-only pierde el merge: suelta=$_suelta lote=$_lote — el lote NO es equivalente"
+    echo "  ok    (batch) --name-only misses the merge: individual=$_suelta batch=$_lote — batching is NOT equivalent"
 fi
 rm -rf "$D"
 
@@ -533,8 +529,8 @@ caso_head_movido() { # <nombre> <patrón> <lo que la TRAZA debe contener>
     d="$(señuelo)"
     antes="$(git -C "$d" rev-parse HEAD)"
     if ! shim="$(mueve_head_en "$pat")"; then
-        echo "test-screenshot-freshness: ⛔ NO HE PODIDO MIRAR: no pude montar un git interpuesto" >&2
-        echo "        EJECUTABLE bajo \${TMPDIR:-/workspace/.olivares-tmptest} (¿noexec?)." >&2
+        echo "test-screenshot-freshness: ⛔ COULD NOT CHECK: could not create a Git shim" >&2
+        echo "        EXECUTABLE under \${TMPDIR:-/workspace/.olivares-tmptest} (noexec?)." >&2
         rm -rf "$d"; exit 2
     fi
     out="$(OLV_REPO="$d" OLV_MOVIDO="$shim/hecho" OLV_TRAZA="$shim/traza" PATH="$shim:$PATH" \
@@ -543,26 +539,26 @@ caso_head_movido() { # <nombre> <patrón> <lo que la TRAZA debe contener>
     traza="$(cat "$shim/traza" 2>/dev/null || true)"
     CASOS=$((CASOS + 1))
     if [ "$antes" = "$despues" ]; then
-        echo "  FALLO $nombre: el HEAD NO se movió (${antes:0:9}); el caso no midió nada."
-        echo "        Si el gate dejó de invocar «$pat», re-ancla el disparador."
+        echo "  FAIL $nombre: HEAD did NOT move (${antes:0:9}); the case measured nothing."
+        echo "        If the check stopped invoking “$pat”, update the trigger anchor."
         FALLOS=$((FALLOS + 1)); rm -rf "$d" "$shim"; return
     fi
     case "$traza" in
     *"$espera"*) : ;;
-    *)  echo "  FALLO $nombre: disparó en el sitio EQUIVOCADO — la traza no contiene «$espera»."
-        echo "        traza: ${traza:-(vacía)}"
-        echo "        Un testigo que no prueba DÓNDE disparó no acredita el extremo que dice."
+    *)  echo "  FAIL $nombre: triggered at the WRONG location — trace does not contain “$espera”."
+        echo "        trace: ${traza:-(empty)}"
+        echo "        A probe that does not prove WHERE it triggered cannot verify the claimed endpoint."
         FALLOS=$((FALLOS + 1)); rm -rf "$d" "$shim"; return ;;
     esac
     if [ "$rc" != "2" ]; then
-        echo "  FALLO $nombre: HEAD ${antes:0:9} -> ${despues:0:9} y el gate salió $rc, esperaba 2."
+        echo "  FAIL $nombre: HEAD ${antes:0:9} -> ${despues:0:9} and check returned $rc, expected 2."
         printf '%s\n' "$out" | head -3 | sed 's/^/        /'
         FALLOS=$((FALLOS + 1)); rm -rf "$d" "$shim"; return
     fi
     case "$out" in
-    *"el árbol se movió durante la medida"*)
-        echo "  ok    $nombre: HEAD ${antes:0:9} -> ${despues:0:9}, disparó en «$espera», rc 2 y lo NOMBRA" ;;
-    *)  echo "  FALLO $nombre: rc 2 correcto pero por otra razón — no dijo «el árbol se movió»."
+    *"the tree changed during measurement"*)
+        echo "  ok    $nombre: HEAD ${antes:0:9} -> ${despues:0:9}, triggered at “$espera”, rc 2 and names it" ;;
+    *)  echo "  FAIL $nombre: correct rc 2 for another reason — did not report “the tree changed”."
         printf '%s\n' "$out" | head -3 | sed 's/^/        /'
         FALLOS=$((FALLOS + 1)) ;;
     esac
@@ -572,16 +568,16 @@ caso_head_movido() { # <nombre> <patrón> <lo que la TRAZA debe contener>
 # (33) EXTREMO TEMPRANO: al enumerar las capturas (`git ls-files`), que ocurre DESPUÉS de fijar el
 #      sujeto y ANTES de donde lo fijaba la versión mala. Es donde el contraste movió el HEAD real y
 #      el gate publicó un verde. Acredita el ANCLAJE.
-caso_head_movido "(sujeto) HEAD movido al enumerar capturas sale 2" 'ls-files' 'ls-files'
+caso_head_movido "(subject) HEAD moving while screenshots are enumerated returns 2" 'ls-files' 'ls-files'
 
 # (34) EXTREMO TARDÍO: midiendo la edad de UNA CAPTURA concreta, ya dentro del bucle principal — o
 #      sea, DESPUÉS incluso de donde la versión mala fijaba el sujeto. Acredita la RELECTURA final.
 #      El disparador va atado al nombre del PNG a propósito: el patrón genérico `log -1 --format=%ct`
 #      casa antes en `UI_TS` y convertía este caso en un duplicado del 33 sin que se notara.
-caso_head_movido "(sujeto) HEAD movido midiendo la edad de una captura sale 2" 'vista-light.png' 'vista-light.png'
+caso_head_movido "(subject) HEAD moving while screenshot age is measured returns 2" 'vista-light.png' 'vista-light.png'
 
 if [ "$FALLOS" -gt 0 ]; then
-    echo "test-screenshot-freshness: $FALLOS caso(s) rojo(s)" >&2
+    echo "test-screenshot-freshness: $FALLOS failed case(s)" >&2
     exit 1
 fi
 # ⛔ EL RECUENTO NO SE ESCRIBE A MANO. Decía «7 casos» mientras corrían 15: un número en prosa
@@ -591,8 +587,8 @@ fi
 #    Y lleva SUELO: si alguien borra casos, la batería enrojece en vez de felicitarse con menos.
 SUELO=34
 if [ "$CASOS" -lt "$SUELO" ]; then
-    echo "test-screenshot-freshness: ⛔ NO HE PODIDO MIRAR: corrieron $CASOS casos y el suelo es $SUELO." >&2
-    echo "                                       Si la batería adelgaza a propósito, baja el suelo EN EL MISMO commit." >&2
+    echo "test-screenshot-freshness: ⛔ COULD NOT CHECK: $CASOS cases ran; minimum is $SUELO." >&2
+    echo "                                       If the test suite intentionally shrinks, lower the minimum IN THE SAME commit." >&2
     exit 2
 fi
-echo "test-screenshot-freshness: OK — $CASOS casos"
+echo "test-screenshot-freshness: OK — $CASOS cases"

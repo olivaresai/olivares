@@ -37,7 +37,7 @@ LIMITES DEL CAMINO DE REPUESTO, declarados porque aqui no se pueden contrastar:
     sepa leer con certeza, **no adivina: imprime NOPUEDO** y el gate vuelve a
     rehusar, que es el estado de hoy y nunca un falso verde.
   * En ESTA caja no se puede contrastar contra PyYAML, porque PyYAML es justamente
-    lo que falta. Por eso existe `OLIVARES_CI_TIMEOUTS_NO_YAML=1`: la bateria corre
+    lo que missing_items. Por eso existe `OLIVARES_CI_TIMEOUTS_NO_YAML=1`: la bateria corre
     cada caso por las DOS vias y exige el mismo veredicto, asi que en cualquier caja
     que SI tenga la biblioteca el camino de repuesto queda contrastado contra el de
     siempre en cada push. Declarar el limite no bastaba: un camino que solo se
@@ -51,12 +51,12 @@ import sys
 DIRECTORIO = sys.argv[1]
 
 
-def no_puedo(razon):
+def cannot_check(razon):
     print("NOPUEDO\t%s" % str(razon).replace("\n", " ")[:160])
     raise SystemExit(0)
 
 
-def ficheros():
+def source_files():
     fs = sorted(glob.glob(os.path.join(DIRECTORIO, "*.yml")))
     fs += sorted(glob.glob(os.path.join(DIRECTORIO, "*.yaml")))
     return fs
@@ -83,7 +83,7 @@ def por_yaml(fs):
             with open(f, encoding="utf-8") as fh:
                 d = yaml.safe_load(fh)
         except Exception as exc:
-            no_puedo("%s no parsea: %s" % (os.path.basename(f), exc))
+            cannot_check("%s could not be parsed: %s" % (os.path.basename(f), exc))
         if not isinstance(d, dict):
             continue
         for nombre, job in (d.get("jobs") or {}).items():
@@ -142,9 +142,9 @@ def por_lectura_plana(fs):
             with open(f, encoding="utf-8") as fh:
                 lineas = fh.read().split("\n")
         except Exception as exc:
-            no_puedo("%s no se puede leer: %s" % (base, exc))
+            cannot_check("%s could not be read: %s" % (base, exc))
         if any("\t" in ln for ln in lineas):
-            no_puedo("%s tiene TABs: la lectura plana no los sabe leer" % base)
+            cannot_check("%s contains TABs: the plain-text reader cannot handle them" % base)
 
         en_jobs = False
         job = None
@@ -194,7 +194,7 @@ def por_lectura_plana(fs):
             if t:
                 col, valor = len(t.group(1)), t.group(2)
                 if not valor.isdigit():
-                    no_puedo("%s/%s: timeout-minutes no literal (%r)" % (base, job, valor))
+                    cannot_check("%s/%s: timeout-minutes is not a literal (%r)" % (base, job, valor))
                 valor = int(valor)
                 if col == 4:
                     techo = valor
@@ -204,20 +204,20 @@ def por_lectura_plana(fs):
                     suma += valor
                     atribuidas += 1
                 else:
-                    no_puedo("%s/%s: timeout-minutes a columna %d, forma desconocida"
+                    cannot_check("%s/%s: timeout-minutes at column %d, unsupported format"
                              % (base, job, col))
         cerrar()
         if menciones != atribuidas:
-            no_puedo("%s: %d mencion(es) de timeout-minutes y solo %d atribuida(s) — hay una forma "
-                     "que no se leer, y adivinarla seria un falso verde"
+            cannot_check("%s: %d mention(s) of timeout-minutes and only %d attributed — an unsupported format "
+                     "was found; guessing would produce a false pass"
                      % (base, menciones, atribuidas))
     return filas
 
 
 def main():
-    fs = ficheros()
+    fs = source_files()
     if not fs:
-        no_puedo("no hay workflows en %s" % DIRECTORIO)
+        cannot_check("no workflows in %s" % DIRECTORIO)
     filas = por_yaml(fs)
     if filas is None:
         filas = por_lectura_plana(fs)

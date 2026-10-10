@@ -12,7 +12,18 @@
 //    never dispatches (modules/gitpublish/reconcile.go), and abandon, which records that an
 //    administrator takes responsibility and proves nothing about the host.
 import { ApiError, NetworkError } from '@/lib/api/errors'
-import type { IntentState, PublicationEffect, PublicationIntent } from './types'
+import type {
+  IntentState,
+  PublicationEffect,
+  PublicationIntent,
+  PublicationTarget,
+} from './types'
+
+/** Only hosts with a change API can open pull requests or merge them. Unknown host
+ * metadata does not promise either action; pushing still uses the existing route. */
+export function hasChangeAPI(target: PublicationTarget): boolean {
+  return target.host === 'github' || target.host === 'gitlab'
+}
 
 /** The closed refusal vocabulary the module answers with (errors.go, targets.go,
  * publish.go, reconcile.go, routes.go `decode`). Each code has copy under `refusals.<code>`. */
@@ -38,9 +49,13 @@ export const REFUSAL_CODES = [
   'protected_branch_refused',
   'push_prefix_overlaps_base',
   'ref_not_allowed',
+  'repository_config_refused',
   'repository_outside_binding',
   'runtime_credential_refused',
   'scoped_grant_required',
+  'separation_of_duty',
+  'session_source_refused',
+  'session_source_unavailable',
   'stale_lease',
   'step_up_required',
   'subject_mismatch',

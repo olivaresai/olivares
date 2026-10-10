@@ -68,13 +68,20 @@ const setupRollbackTimeout = 15 * time.Second
 // the tenant is rolled back by rollbackFirstOrg. The reverse order would close
 // setup (a user exists ⇒ ErrSetupComplete) before its tenant existed, leaving an
 // install that can neither be used nor re-set-up.
-func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
 	var in setupInput
 	if err := decodeJSON(w, r, &in); err != nil {
-		s.badRequest(w, r, "invalid JSON body")
+		s.badRequest(w, r, RequestBodyErrorMessage(err, "invalid JSON body"))
 		return
 	}
-	if !s.setupTok.Verify(in.Token) {
+	ok, err := s.setupTok.Match(in.Token)
+	if err != nil {
+		// The engine cannot read its own token (#530): a deployment fault, so it
+		// answers setup_token_unreadable and logs the path and the errno.
+		s.writeError(w, r, err)
+		return
+	}
+	if !ok {
 		s.writeError(w, r, errForbidden)
 		return
 	}
@@ -258,14 +265,14 @@ func orgSlugFrom(name string) string {
 // handleLogin validates email/password and returns a session token — or, when
 // the account's second factor gates the login, the pending challenge the
 // caller completes at /v1/auth/totp/challenge (or enrols through first).
-func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
 	if wantsBrowserSession(r) && !BrowserSameOrigin(r) {
 		s.writeError(w, r, errForbidden)
 		return
 	}
 	var in loginInput
 	if err := decodeJSON(w, r, &in); err != nil {
-		s.badRequest(w, r, "invalid JSON body")
+		s.badRequest(w, r, RequestBodyErrorMessage(err, "invalid JSON body"))
 		return
 	}
 	if err := auth.ValidateEmail(in.Email); err != nil {
@@ -303,12 +310,8 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 // returning a fresh token (the old one stops working). Like logout it applies only to
 // session principals; an API token is reissued via /v1/tokens, not refreshed
 // (deny-closed for non-renewable principals). Same response shape as login.
-func (s *Server) handleRefresh(w http.ResponseWriter, r *http.Request) {
-	p, ok := principalFrom(r.Context())
-	if !ok {
-		s.writeError(w, r, auth.ErrUnauthenticated)
-		return
-	}
+func (s *Server) handleRefresh(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	p := mc.Principal
 	if p.Kind != auth.KindUser {
 		s.badRequest(w, r, "refresh applies to session principals; tokens are reissued via /v1/tokens")
 		return
@@ -322,12 +325,8 @@ func (s *Server) handleRefresh(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleLogout revokes the calling session. It does not apply to token principals.
-func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
-	p, ok := principalFrom(r.Context())
-	if !ok {
-		s.writeError(w, r, auth.ErrUnauthenticated)
-		return
-	}
+func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	p := mc.Principal
 	if p.Kind != auth.KindUser {
 		s.badRequest(w, r, "logout applies to session principals; revoke tokens via /v1/tokens")
 		return
@@ -357,12 +356,8 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 // is resolved per request from the store and is NOT expressible here; see
 // auth.EffectivePermissions for the full statement of what this set does and does not
 // carry.
-func (s *Server) handleWhoami(w http.ResponseWriter, r *http.Request) {
-	p, ok := principalFrom(r.Context())
-	if !ok {
-		s.writeError(w, r, auth.ErrUnauthenticated)
-		return
-	}
+func (s *Server) handleWhoami(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	p := mc.Principal
 	grants := make([]map[string]any, 0)
 	names := s.ownTenantNames(r.Context(), p.Tenants())
 	for _, t := range p.Tenants() {
@@ -389,11 +384,15 @@ func (s *Server) handleWhoami(w http.ResponseWriter, r *http.Request) {
 		"superadmin":   p.Superadmin,
 		"grants":       grants,
 	}
+	if p.Kind == auth.KindUser && p.Email != "" {
+		out["email"] = p.Email
+	}
 	// the session's verified assurance (contract: aal is a NUMBER,
 	// amr a string list). Emitted only for session principals — a token carries
 	// no human assurance and the panel fails closed to AAL1 on absence.
 	if p.Kind == auth.KindUser && p.AAL > 0 {
 		out["aal"] = p.AAL
+		out["session_ttl_seconds"] = auth.DefaultSessionTTL.Seconds()
 		if len(p.AMR) > 0 {
 			out["amr"] = p.AMR
 		}

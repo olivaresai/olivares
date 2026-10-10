@@ -135,12 +135,18 @@ func TestCompleteSessionsQueriesRunsEndpoint(t *testing.T) {
 func TestEveryVisibleCommandIsGrouped(t *testing.T) {
 	root := newRootCmd()
 	root.InitDefaultHelpCmd()
+	groups := make(map[string]bool)
+	for _, g := range root.Groups() {
+		groups[g.ID] = true
+	}
 	for _, c := range root.Commands() {
 		if c.Hidden {
 			continue
 		}
 		if c.GroupID == "" {
 			t.Errorf("visible command %q has no help group — add it to commandGroups", c.Name())
+		} else if !groups[c.GroupID] {
+			t.Errorf("visible command %q has unregistered help group %q", c.Name(), c.GroupID)
 		}
 	}
 }

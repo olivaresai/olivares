@@ -16,7 +16,7 @@ pays for it.
 
 ## What funds the work today
 
-The **commercial subscription** for the additive `enterprise/` line. If your
+The **commercial subscription** (Business and Enterprise) for the additive `enterprise/` line. If your
 organisation needs those modules, buying them is what funds the AGPL core everyone
 else runs for free — including the people who never pay anything.
 

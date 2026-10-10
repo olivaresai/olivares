@@ -23,18 +23,18 @@ import (
 // wrapper narrows only the reserved assignment and leaves System provisioning
 // and the explicit legacy-backfill repair on their raw engine-owned seams.
 type stableWorkspaceRepo struct {
-	inner      store.Repository[model.Workspace]
+	inner      store.WorkspaceRepo
 	tracker    *directoryWriteTracker
 	readOnly   bool
 	initialize func(context.Context, model.Workspace) error
 }
 
 func newStableWorkspaceRepo(
-	inner store.Repository[model.Workspace],
+	inner store.WorkspaceRepo,
 	tracker *directoryWriteTracker,
 	readOnly bool,
 	initialize func(context.Context, model.Workspace) error,
-) store.Repository[model.Workspace] {
+) store.WorkspaceRepo {
 	return &stableWorkspaceRepo{
 		inner: inner, tracker: tracker, readOnly: readOnly, initialize: initialize,
 	}
@@ -125,6 +125,29 @@ func (r *stableWorkspaceRepo) Delete(
 		return immutableDefaultWorkspaceError()
 	}
 	return r.inner.Delete(ctx, id)
+}
+
+// SetParent moves a workspace in the organization tree. The reserved default
+// workspace stays a root: rows with no workspace resolve to it, so placing it
+// under a department would move all of them at once. It can still be a parent.
+func (r *stableWorkspaceRepo) SetParent(
+	ctx context.Context,
+	node, parent model.ID,
+) (_ model.Workspace, retErr error) {
+	if r.readOnly {
+		return r.inner.SetParent(ctx, node, parent)
+	}
+	defer func() { r.poison(retErr) }()
+	if !parent.IsZero() {
+		cur, err := r.inner.Get(ctx, node)
+		if err != nil {
+			return model.Workspace{}, err
+		}
+		if cur.Slug == model.DefaultWorkspaceSlug {
+			return model.Workspace{}, fmt.Errorf("%w: the reserved default workspace stays a root", store.ErrConflict)
+		}
+	}
+	return r.inner.SetParent(ctx, node, parent)
 }
 
 func (r *stableWorkspaceRepo) poison(err error) {

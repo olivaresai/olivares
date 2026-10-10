@@ -1327,6 +1327,7 @@ func (m *Module) enforceDataProductIngest(ctx context.Context, mc api.ModuleCont
 			status: http.StatusUnprocessableEntity,
 			msg:    "data contract violation",
 			body: map[string]any{"error": map[string]any{
+				"code":    "module_error",
 				"message": "data contract violation",
 				"details": violations,
 			}},

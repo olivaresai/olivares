@@ -12,7 +12,7 @@ import (
 )
 
 func TestMonthlyReleaseOrdering(t *testing.T) {
-	groups := [][]string{{"v26.9.0"}, {"26.10.0", "26.10"}, {"26.10.1"}, {"26.11"}, {"26.11.1"}, {"26.12"}, {"27.1"}}
+	groups := [][]string{{"1.0"}, {"1.1"}, {"1.9"}, {"1.10"}, {"1.299"}, {"2.0"}}
 	for i, left := range groups {
 		for j, right := range groups {
 			for _, a := range left {
@@ -50,39 +50,39 @@ func TestMonthlySignedManifestUpgrade(t *testing.T) {
 		t.Fatal(err)
 	}
 	m := goodManifest()
-	m.Version = "26.11"
-	m.MinVersion = "26.10"
+	m.Version = "26.1100"
+	m.MinVersion = "26.1000"
 	for i := range m.Artifacts {
-		m.Artifacts[i].Filename = strings.ReplaceAll(m.Artifacts[i].Filename, "26.8.0", "26.11")
+		m.Artifacts[i].Filename = strings.ReplaceAll(m.Artifacts[i].Filename, "26.800", "26.1100")
 	}
 	body, sig := signManifestBytes(t, m, priv)
 	verified, err := VerifyManifest(body, sig, pub)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, current := range []string{"26.10.0", "26.10.1", "26.11", "26.11.1"} {
+	for _, current := range []string{"26.1000", "26.1001", "26.1100", "26.1101"} {
 		p, err := verified.PlanUpgrade(current, "linux", "amd64", "monthly-node", m.ReleasedAt)
 		if err != nil {
 			t.Fatal(err)
 		}
 		want := 1
-		if current == "26.11" {
+		if current == "26.1100" {
 			want = 0
 		}
-		if current == "26.11.1" {
+		if current == "26.1101" {
 			want = -1
 		}
 		if p.Direction != want || p.MinTooOld || !p.HasArtifact {
-			t.Fatalf("%s -> 26.11: %+v", current, p)
+			t.Fatalf("%s -> 26.1100: %+v", current, p)
 		}
 	}
-	if verified.Version != "26.11" {
+	if verified.Version != "26.1100" {
 		t.Fatal("signed display version changed")
 	}
 }
 
 func TestMonthlyChannelArtifactURLs(t *testing.T) {
-	for _, row := range []struct{ version, tag string }{{"26.11", "26.11"}, {"26.11.1", "26.11.1"}, {"26.10.0", "26.10.0"}, {"26.9.0", "v26.9.0"}} {
+	for _, row := range []struct{ version, tag string }{{"26.1100", "26.1100"}, {"26.1101", "26.1101"}, {"26.1000", "26.1000"}, {"26.900", "26.900"}} {
 		l, err := ResolveChannel("https://github.com/olivaresai/olivares", ChannelStable)
 		if err != nil {
 			t.Fatal(err)

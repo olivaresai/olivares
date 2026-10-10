@@ -1,11 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
-import { useModuleName } from '@/features/settings/module-names'
 import { useRouterState } from '@tanstack/react-router'
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
-import { EmptyState } from '@/components/ui/empty-state'
 import { PageHeader } from '@/components/ui/page-header'
 import { ForbiddenState } from '@/components/ui/error-state'
 import { Spinner } from '@/components/ui/spinner'
@@ -13,8 +11,8 @@ import { useRouteAccess } from '@/features/navigation/authorization'
 import { viewLabel } from '@/features/navigation/model'
 import { PermittedVisit } from '@/features/navigation/permitted-visit'
 import type { FeatureView } from '@/features/registry'
-import { moduleOfView, useModuleEnabled } from '@/stores/modules'
-import { ModuleEnableAction } from '@/components/layout/query-error-state'
+import { useModuleEnabled } from '@/stores/modules'
+import { ModuleOffPage } from './module-off-page'
 // ⛔ THE MODULE THAT TRANSLATES REGISTERS ITS NAMESPACE. This gate renders four
 //    `communications:capability.*` sentences and never loaded their bundle, so in a chunk
 //    that had not already pulled the feature in they resolved to raw dotted keys — the
@@ -76,60 +74,41 @@ export function RequirePermission({
   //
   //    A view that declares nothing renders exactly what it rendered before.
   const Continuity = view.continuity
-  const notice = !moduleOn ? (
-    <NotEnabledNotice module={moduleOfView(view.permission, view.id)} />
-  ) : access.kind === 'permitted' ? null : access.kind === 'checking' ? (
-    <CheckingNotice />
-  ) : access.kind === 'forbidden' ? (
-    <ForbiddenNotice />
-  ) : access.globalAccount ? (
-    <GlobalAccountNotice />
-  ) : (
-    <NeutralNotice undisclosed={access.kind === 'undisclosed'} />
-  )
+  const notice =
+    access.kind === 'permitted' ? null : access.kind === 'checking' ? (
+      <CheckingNotice />
+    ) : access.kind === 'forbidden' ? (
+      <ForbiddenNotice />
+    ) : access.globalAccount ? (
+      <GlobalAccountNotice />
+    ) : (
+      <NeutralNotice undisclosed={access.kind === 'undisclosed'} />
+    )
   // A notice stands in for the whole view, so it keeps the page's one heading: the view's own
   // label, as the sidebar and the breadcrumb name it. Without it the page had no h1 at all.
-  const body = notice ? (
-    <>
-      <PageHeader title={viewLabel(t, view.id)} />
-      {notice}
-    </>
-  ) : (
-    <>
-      {children}
-      <PermittedVisit id={view.id} />
-    </>
-  )
+  // A view whose module is off has a calm page of its own, with its own heading, once the
+  // person is established as allowed. A refusal, or an answer not established yet, outranks
+  // it: a person who may not open the view is told nothing about its module.
+  const body =
+    !moduleOn && access.kind === 'permitted' ? (
+      <ModuleOffPage view={view} />
+    ) : notice ? (
+      <>
+        <PageHeader title={viewLabel(t, view.id)} />
+        {notice}
+      </>
+    ) : (
+      <>
+        {children}
+        <PermittedVisit id={view.id} />
+      </>
+    )
   return Continuity ? (
     <Continuity admitted={access.kind === 'permitted'} access={access.observed}>
       {body}
     </Continuity>
   ) : (
     body
-  )
-}
-
-/** The view's engine module is switched off on this installation (ARCH C1): a plain
- * statement, never an error and never a refusal. */
-function NotEnabledNotice({ module }: { module?: string }) {
-  const { t } = useTranslation('errors')
-  const name = useModuleName(module)
-  return (
-    <div
-      data-slot="module-not-enabled"
-      className="flex min-h-[60vh] items-center justify-center"
-    >
-      <EmptyState
-        title={
-          name
-            ? t('moduleNotEnabled.named', { module: name })
-            : t('moduleNotEnabled.title')
-        }
-        description={t('moduleNotEnabled.description')}
-        // An administrator turns it on from here (EU): the same selection and restart.
-        action={<ModuleEnableAction module={module} />}
-      />
-    </div>
   )
 }
 

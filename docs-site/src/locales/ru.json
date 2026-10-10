@@ -1,0 +1,308 @@
+{
+  "API & manage-as-code (platform)": {
+    "ru": "API и управление как код (платформа)"
+  },
+  "API stability & deprecation policy": {
+    "ru": "Стабильность API и политика устаревания"
+  },
+  "Access & resource map (R/RW)": {
+    "ru": "Карта доступа и ресурсов (R/RW)"
+  },
+  "Agent simulation/testing sandbox": {
+    "ru": "Песочница для симуляции и тестирования агентов"
+  },
+  "Architecture": {
+    "ru": "Архитектура"
+  },
+  "Architecture decisions (ADR)": {
+    "ru": "Архитектурные решения (ADR)"
+  },
+  "Back up and restore": {
+    "ru": "Резервное копирование и восстановление"
+  },
+  "Build and ship a connector": {
+    "ru": "Создание и публикация коннектора"
+  },
+  "CLI": {
+    "ru": "CLI"
+  },
+  "Claude Code adoption": {
+    "ru": "Внедрение Claude Code"
+  },
+  "Compliance & regulatory": {
+    "ru": "Соответствие и нормативные требования"
+  },
+  "Console screens & permissions": {
+    "ru": "Экраны консоли и разрешения"
+  },
+  "Configuration": {
+    "ru": "Конфигурация"
+  },
+  "Connect & observe": {
+    "ru": "Подключение и наблюдение"
+  },
+  "Connect Claude Code": {
+    "ru": "Подключить Claude Code"
+  },
+  "Connect a source": {
+    "ru": "Подключить источник"
+  },
+  "Connector guides": {
+    "ru": "Руководства по коннекторам"
+  },
+  "Connectors & coverage tiers": {
+    "ru": "Коннекторы и уровни охвата"
+  },
+  "Cookbook": {
+    "ru": "Сборник рецептов"
+  },
+  "Cost & AI FinOps": {
+    "ru": "Затраты и AI FinOps"
+  },
+  "Data, knowledge & context": {
+    "ru": "Данные, знания и контекст"
+  },
+  "Deploy with Docker": {
+    "ru": "Развёртывание с Docker"
+  },
+  "Deployment & integration": {
+    "ru": "Развёртывание и интеграция"
+  },
+  "EU AI Act evidence from runtime data": {
+    "ru": "Доказательства EU AI Act из данных времени выполнения"
+  },
+  "Enterprise OTel for Claude Code": {
+    "ru": "Корпоративный OTel для Claude Code"
+  },
+  "Event bus (AsyncAPI 3.0)": {
+    "ru": "Шина событий (AsyncAPI 3.0)"
+  },
+  "Eventing & webhooks": {
+    "ru": "События и вебхуки"
+  },
+  "Executive dashboards & reporting (console)": {
+    "ru": "Управленческие дашборды и отчётность (консоль)"
+  },
+  "Explanation": {
+    "ru": "Пояснение"
+  },
+  "Forward to Splunk": {
+    "ru": "Пересылка в Splunk"
+  },
+  "From zero to a read/write access graph": {
+    "ru": "От нуля до графа доступа на чтение/запись"
+  },
+  "Getting started by scenario": {
+    "ru": "Начало работы по сценариям"
+  },
+  "gRPC services & methods": {
+    "ru": "Сервисы и методы gRPC"
+  },
+  "Glossary": {
+    "ru": "Глоссарий"
+  },
+  "Govern & build": {
+    "ru": "Управление и разработка"
+  },
+  "Govern and approve": {
+    "ru": "Управление и согласование"
+  },
+  "Govern Postgres content": {
+    "ru": "Управление контентом Postgres"
+  },
+  "Govern your file server": {
+    "ru": "Управление файловым сервером"
+  },
+  "Governed data for Claude": {
+    "ru": "Управляемые данные для Claude"
+  },
+  "Harden a deployment": {
+    "ru": "Усиление защиты развёртывания"
+  },
+  "Health, SLA & uptime": {
+    "ru": "Состояние, SLA и доступность"
+  },
+  "Honesty & limits": {
+    "ru": "Честность и ограничения"
+  },
+  "How this documentation is organized": {
+    "ru": "Как организована эта документация"
+  },
+  "How-to guides": {
+    "ru": "Практические руководства"
+  },
+  "Identity, permissions & governance": {
+    "ru": "Идентификация, разрешения и управление"
+  },
+  "Inline inference proxy (PEP)": {
+    "ru": "Встроенный прокси вывода (PEP)"
+  },
+  "Install & operate": {
+    "ru": "Установка и эксплуатация"
+  },
+  "Install air-gapped": {
+    "ru": "Установка в изолированной среде"
+  },
+  "Install from a package": {
+    "ru": "Установка из пакета"
+  },
+  "Install with Homebrew": {
+    "ru": "Установка через Homebrew"
+  },
+  "Internal catalog & marketplace": {
+    "ru": "Внутренний каталог и маркетплейс"
+  },
+  "Inventory & discovery": {
+    "ru": "Инвентаризация и обнаружение"
+  },
+  "Live operation & sessions": {
+    "ru": "Работа в реальном времени и сессии"
+  },
+  "Live-ingest": {
+    "ru": "Приём в реальном времени"
+  },
+  "MCP, skills & capabilities": {
+    "ru": "MCP, навыки и возможности"
+  },
+  "Manage as code (Terraform)": {
+    "ru": "Управление как код (Terraform)"
+  },
+  "Model & provider management": {
+    "ru": "Управление моделями и провайдерами"
+  },
+  "Model operations (own models)": {
+    "ru": "Операции с моделями (собственные модели)"
+  },
+  "Modules catalog": {
+    "ru": "Каталог модулей"
+  },
+  "Monitor with Prometheus": {
+    "ru": "Мониторинг с Prometheus"
+  },
+  "Multi-tenancy & org management (platform)": {
+    "ru": "Мультитенантность и управление организацией (платформа)"
+  },
+  "Observability": {
+    "ru": "Наблюдаемость"
+  },
+  "Olivares AI control plane API": {
+    "ru": "API плоскости управления Olivares AI"
+  },
+  "Open core & licensing": {
+    "ru": "Открытое ядро и лицензирование"
+  },
+  "Supporting the project": {
+    "ru": "Поддержка проекта"
+  },
+  "Orchestration & A2A": {
+    "ru": "Оркестрация и A2A"
+  },
+  "Output integrations & notifications": {
+    "ru": "Интеграции вывода и уведомления"
+  },
+  "Overview": {
+    "ru": "Обзор"
+  },
+  "Overview — the 35 selectable modules": {
+    "ru": "Обзор — 35 выбираемых модулей"
+  },
+  "Skills catalog & assignments": {
+    "ru": "Каталог навыков и закрепления"
+  },
+  "Fine-tuning & inference execution (planned)": {
+    "ru": "Исполнение fine-tuning и инференса (планируется)"
+  },
+  "Paths by role": {
+    "ru": "Маршруты по ролям"
+  },
+  "Positioning & fit": {
+    "ru": "Позиционирование и применимость"
+  },
+  "Posture export to control towers": {
+    "ru": "Экспорт состояния защиты в центры управления"
+  },
+  "Privileged-session recording": {
+    "ru": "Запись привилегированных сессий"
+  },
+  "Quality, evals & testing": {
+    "ru": "Качество, оценки и тестирование"
+  },
+  "Quickstart": {
+    "ru": "Быстрый старт"
+  },
+  "REST API": {
+    "ru": "REST API"
+  },
+  "Red-teaming & adversarial testing": {
+    "ru": "Red-teaming и состязательное тестирование"
+  },
+  "Reference": {
+    "ru": "Справочник"
+  },
+  "Reporting (HTML/PDF)": {
+    "ru": "Отчёты (HTML/PDF)"
+  },
+  "Run Claude Code with Olivares": {
+    "ru": "Запуск Claude Code с Olivares"
+  },
+  "Add a provider and launch an agent": {
+    "ru": "Добавить провайдера и запустить агента"
+  },
+  "Operate a provider session": {
+    "ru": "Управлять сеансом провайдера"
+  },
+  "SIEM/ITSM forwarder": {
+    "ru": "Пересыльщик SIEM/ITSM"
+  },
+  "Session cockpit (availability)": {
+    "ru": "Сессионный кокпит (доступность)"
+  },
+  "Saved console views": {
+    "ru": "Сохранённые представления консоли"
+  },
+  "Security & threat model": {
+    "ru": "Безопасность и модель угроз"
+  },
+  "Security, guardrails & audit": {
+    "ru": "Безопасность, ограничители и аудит"
+  },
+  "Self-host the control plane": {
+    "ru": "Самостоятельный хостинг плоскости управления"
+  },
+  "Source & credential scoping": {
+    "ru": "Ограничение области источников и учётных данных"
+  },
+  "Start here": {
+    "ru": "Начните здесь"
+  },
+  "Troubleshooting": {
+    "ru": "Устранение неполадок"
+  },
+  "Tutorials": {
+    "ru": "Учебные пособия"
+  },
+  "Upgrade and roll back": {
+    "ru": "Обновление и откат"
+  },
+  "Use the client SDKs": {
+    "ru": "Использование клиентских SDK"
+  },
+  "SIEM & telemetry egress": {
+    "ru": "Экспорт в SIEM и телеметрия"
+  },
+  "Verified connectors (third-party)": {
+    "ru": "Проверенные коннекторы (сторонние)"
+  },
+  "Verify a release": {
+    "ru": "Проверка релиза"
+  },
+  "Voice & realtime agents": {
+    "ru": "Голосовые агенты и агенты реального времени"
+  },
+  "What is Olivares AI?": {
+    "ru": "Что такое Olivares AI?"
+  },
+  "Your first hour (local, team, hybrid)": {
+    "ru": "Первый час (локально, команда, гибрид)"
+  }
+}

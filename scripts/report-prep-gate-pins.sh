@@ -47,12 +47,12 @@ export LC_ALL=C
 export GIT_OPTIONAL_LOCKS=0
 
 ROOT="${OLIVARES_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
-cd "$ROOT" || { echo "report-prep-gate-pins: ⛔ NO HE PODIDO MIRAR: la raiz no es accesible." >&2; exit 2; }
+cd "$ROOT" || { echo "report-prep-gate-pins: ⛔ COULD NOT LOOK: the root is inaccessible." >&2; exit 2; }
 
-no_puedo() { printf 'report-prep-gate-pins: ⛔ NO HE PODIDO MIRAR: %s\n' "$1" >&2; exit 2; }
+cannot_check() { printf 'report-prep-gate-pins: ⛔ COULD NOT LOOK: %s\n' "$1" >&2; exit 2; }
 
-command -v git >/dev/null 2>&1 || no_puedo "no hay git"
-git rev-parse --git-dir >/dev/null 2>&1 || no_puedo "esto no es un repositorio git"
+command -v git >/dev/null 2>&1 || cannot_check "git is unavailable"
+git rev-parse --git-dir >/dev/null 2>&1 || cannot_check "this is not a Git repository"
 
 # ── FASE 1 — censo derivado. Nada de listas escritas a mano: envejecen hacia el lado ciego.
 declare -a GATE_FILE=() GATE_NAME=() GATE_PATH=()
@@ -76,12 +76,12 @@ for f in scripts/check-*-prep.sh; do
 	done <<<"$rutas"
 done
 
-[ "$n_prep" -gt 0 ] || no_puedo "no hay ningun scripts/check-*-prep.sh — el censo no puede estar vacio"
-[ "${#GATE_FILE[@]}" -gt 0 ] && : || no_puedo "ningun gate quedo tras el filtro: la derivacion esta rota, no el arbol"
+[ "$n_prep" -gt 0 ] || cannot_check "no scripts/check-*-prep.sh found — the census cannot be empty"
+[ "${#GATE_FILE[@]}" -gt 0 ] && : || cannot_check "no gates remain after filtering: the derivation is broken, not the tree"
 
-printf 'report-prep-gate-pins: %s guion(es) *-prep · %s con afirmacion congelada · %s anclan CODIGO con NO-DEBE-ATERRIZAR\n' \
+printf 'report-prep-gate-pins: %s *-prep script(s) · %s with frozen assertions · %s anchor CODE with MUST-NOT-LAND\n' \
 	"$n_prep" "$n_frozen" "$n_block"
-printf '                       %s par(es) gate→ruta vigilada\n' "${#GATE_FILE[@]}"
+printf '                       %s gate→watched-path pair(s)\n' "${#GATE_FILE[@]}"
 
 # ── FASE 2 — línea base. Un gate ya rojo no puede acusar a nadie.
 declare -A BASE_ROJO=()
@@ -92,15 +92,15 @@ while [ "$i" -lt "${#GATE_FILE[@]}" ]; do
 	if [ -z "${BASE_ROJO[$f]+x}" ]; then
 		if timeout 120 bash "$f" >/dev/null 2>&1; then BASE_ROJO["$f"]=0; else
 			BASE_ROJO["$f"]=1; rojos_base=$((rojos_base + 1))
-			printf '  ⛔ YA ROJO sobre el arbol limpio: %s — su rojo con una PR puesta NO acusa a la PR\n' "${GATE_NAME[$i]}"
+			printf '  ⛔ ALREADY FAILING on the clean tree: %s — failure with a PR applied does NOT implicate that PR\n' "${GATE_NAME[$i]}"
 		fi
 	fi
 	i=$((i + 1))
 done
-printf 'report-prep-gate-pins: linea base — %s gate(s) rojo(s) sobre el arbol actual\n' "$rojos_base"
+printf 'report-prep-gate-pins: baseline — %s failing gate(s) on the current tree\n' "$rojos_base"
 
 if [ "${OLIVARES_PINS_NO_NET:-0}" = "1" ]; then
-	echo "report-prep-gate-pins: OLIVARES_PINS_NO_NET=1 — censo y linea base solamente; no se consulta la cola."
+	echo "report-prep-gate-pins: OLIVARES_PINS_NO_NET=1 — census and baseline only; the queue is not queried."
 	exit 0
 fi
 
@@ -108,14 +108,14 @@ fi
 if [ "$#" -gt 0 ]; then
 	PRS=("$@")
 else
-	command -v gh >/dev/null 2>&1 || no_puedo "no hay gh y no se ha pasado ninguna PR como argumento"
+	command -v gh >/dev/null 2>&1 || cannot_check "gh is unavailable and no PR was passed as an argument"
 	mapfile -t PRS < <(gh pr list --state open --limit 300 --json number --jq '.[].number' 2>/dev/null || true)
-	[ "${#PRS[@]}" -gt 0 ] || no_puedo "gh no devolvio ninguna PR abierta — no se distingue «cola vacia» de «no pude preguntar»"
+	[ "${#PRS[@]}" -gt 0 ] || cannot_check "gh returned no open PRs — an empty queue cannot be distinguished from a failed query"
 fi
-printf 'report-prep-gate-pins: %s PR(s) a medir\n\n' "${#PRS[@]}"
+printf 'report-prep-gate-pins: %s PR(s) to measure\n\n' "${#PRS[@]}"
 
 sucio=$(git status --porcelain | grep -c . || true)
-[ "${sucio:-0}" -eq 0 ] || no_puedo "el arbol de trabajo NO esta limpio ($sucio entrada(s)): esta medida ESCRIBE ficheros y los restaura, y no puede hacerlo sobre trabajo sin commitear"
+[ "${sucio:-0}" -eq 0 ] || cannot_check "the working tree is NOT clean ($sucio entry/entries): this measurement WRITES and restores files, so it cannot run over uncommitted work"
 
 clavadas=0
 for n in "${PRS[@]}"; do
@@ -147,14 +147,14 @@ for n in "${PRS[@]}"; do
 	done
 	if [ -n "$hits" ]; then
 		clavadas=$((clavadas + 1))
-		printf '  CLAVADA  #%-6s → %s\n' "$n" "$(printf '%s' "$hits" | tr ' ' '\n' | grep . | sort -u | tr '\n' ' ')"
+		printf '  PINNED   #%-6s → %s\n' "$n" "$(printf '%s' "$hits" | tr ' ' '\n' | grep . | sort -u | tr '\n' ' ')"
 	fi
 done
 
 resto=$(git status --porcelain | grep -c . || true)
-[ "${resto:-0}" -eq 0 ] || no_puedo "la medida dejo $resto entrada(s) en el arbol: la restauracion fallo y el veredicto no es fiable"
+[ "${resto:-0}" -eq 0 ] || cannot_check "the measurement left $resto entry/entries in the tree: restoration failed and the verdict is unreliable"
 
-printf '\nreport-prep-gate-pins: %s de %s PR(s) enrojecerian un gate al aterrizar TAL CUAL.\n' "$clavadas" "${#PRS[@]}"
-echo "                       Medido por EJECUCION y con cada ruta AISLADA: una PR puede traer en su"
-echo "                       mismo lote la correccion de la premisa del gate. Horquilla, no techo."
+printf '\nreport-prep-gate-pins: %s of %s PR(s) would fail a gate if landed AS IS.\n' "$clavadas" "${#PRS[@]}"
+echo "                       Measured by EXECUTION with each path ISOLATED: a PR may include a correction to"
+echo "                       the gate premise in the same batch. This is a range, not an upper bound."
 [ "$clavadas" -eq 0 ]

@@ -11,7 +11,7 @@ import {
   Plus,
   Trash2,
 } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { DataTable, type TableColumn } from '@/components/data/data-table'
 import { StatusBadge } from '@/components/data/badges'
@@ -90,6 +90,12 @@ export function ChecksTab({ tenant }: { tenant: string | null }) {
   const [createOpen, setCreateOpen] = useState(false)
   const [editing, setEditing] = useState<StatusDTO | null>(null)
   const [deleting, setDeleting] = useState<StatusDTO | null>(null)
+  const checkActionRef = useRef<HTMLButtonElement | null>(null)
+  const editActionIdRef = useRef<string | null>(null)
+  const restoreCheckFocus = (event: Event) => {
+    event.preventDefault()
+    checkActionRef.current?.focus()
+  }
 
   const query = useQuery({
     queryKey: healthKeys.checks(tenant, { limit: CHECK_LIMIT }),
@@ -258,7 +264,17 @@ export function ChecksTab({ tenant }: { tenant: string | null }) {
                             ),
                           })}
                           title={t('health:checks.actions.edit')}
-                          onClick={() => setEditing(check)}
+                          ref={(node) => {
+                            // Table cells can remount while the dialog closes.
+                            if (node && editActionIdRef.current === check.id) {
+                              checkActionRef.current = node
+                            }
+                          }}
+                          onClick={(event) => {
+                            editActionIdRef.current = check.id
+                            checkActionRef.current = event.currentTarget
+                            setEditing(check)
+                          }}
                         >
                           <Pencil aria-hidden />
                         </Button>
@@ -364,7 +380,11 @@ export function ChecksTab({ tenant }: { tenant: string | null }) {
             type="button"
             variant="primary"
             size="sm"
-            onClick={() => setCreateOpen(true)}
+            onClick={(event) => {
+              editActionIdRef.current = null
+              checkActionRef.current = event.currentTarget
+              setCreateOpen(true)
+            }}
           >
             <Plus aria-hidden />
             {t('health:checks.create')}
@@ -398,6 +418,7 @@ export function ChecksTab({ tenant }: { tenant: string | null }) {
           tenant={tenant}
           open
           onOpenChange={setCreateOpen}
+          onCloseAutoFocus={restoreCheckFocus}
         />
       ) : null}
 
@@ -407,6 +428,7 @@ export function ChecksTab({ tenant }: { tenant: string | null }) {
           tenant={tenant}
           open
           check={editing}
+          onCloseAutoFocus={restoreCheckFocus}
           onOpenChange={(open) => {
             if (!open) setEditing(null)
           }}
@@ -500,11 +522,13 @@ function CheckDialog({
   open,
   check,
   onOpenChange,
+  onCloseAutoFocus,
 }: {
   tenant: string | null
   open: boolean
   check?: StatusDTO
   onOpenChange: (open: boolean) => void
+  onCloseAutoFocus: (event: Event) => void
 }) {
   const { t } = useTranslation(['health', 'common'])
   const queryClient = useQueryClient()
@@ -603,7 +627,7 @@ function CheckDialog({
         if (!mutation.isPending) onOpenChange(next)
       }}
     >
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-lg" onCloseAutoFocus={onCloseAutoFocus}>
         <DialogHeader>
           <DialogTitle>
             {editing

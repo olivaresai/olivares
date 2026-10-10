@@ -13,11 +13,9 @@
 // Adding a route here that DOES something is not a shortcut — it moves a paid
 // capability into the open artifact.
 //
-// What this package is for: a build without the add-on still has to answer the console
-// and the CLI honestly. A missing route is a 404 an operator reads as a broken install;
-// a 501 with a code says "this artifact does not include it", which is true and
-// actionable. It is the same polarity the activation and log-broker seams already use
-// (core/api/errors.go: activation_unavailable, log_broker_unavailable).
+// This package preserves the edition descriptor and its declared read permission.
+// It mounts no HTTP handler: the router answers 404 by absence, including for the
+// retired /availability path. It provides no interactive console or CLI operation.
 //
 // Contract: docs/contracts/COCKPIT-06-api-cli.md §3.
 package sessioncockpit
@@ -40,7 +38,7 @@ const Namespace = "session-cockpit"
 // promise the artifact cannot keep.
 const PermAvailabilityRead auth.Permission = "session-cockpit:availability:read"
 
-// Placeholder is the availability-only module. It is what editionModuleRegistrars
+// Placeholder is the availability-only module. It is what the moduleRegistrars edition port
 // returns in a build without `addon_ids`; the overlay returns the real engine instead,
 // under the SAME namespace, so exactly one module ever owns /v1/m/session-cockpit.
 type Placeholder struct{}
@@ -122,6 +120,6 @@ func (p *Placeholder) Permissions() []auth.Permission {
 // not to register it.
 //
 // What survives is what phase 0 actually needs this package for: it proves the
-// `editionModuleRegistrars` seam carries a real `api.Module`, and its Descriptor strings
+// `moduleRegistrars` edition port carries a real `api.Module`, and its Descriptor strings
 // are the literals the community-artifact gate hunts for in a build without the add-on.
 func (p *Placeholder) APIRoutes(api.RouteRegistrar) {}

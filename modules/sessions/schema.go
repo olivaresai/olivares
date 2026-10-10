@@ -48,6 +48,10 @@ const (
 	// NULL one (sqlstore/schema.go:646-651), and a populated sessions_live must
 	// keep working across the upgrade.
 	colUnclaimedAt = "unclaimed_at"
+	// colLiveEndedAt is set on the plane's own live row when its run stops or
+	// fails, and cleared when the session resumes: the row's last activity is recent,
+	// but the session is over. NULLABLE for the same additive-reconcile reason.
+	colLiveEndedAt = "ended_at"
 	// colEngine and colPosture (SG-01) name WHICH engine drives a session and how
 	// firmly it is governed. They exist because the live view previously had no way
 	// to tell a Claude session from a Codex one — the provider is on the wire and was
@@ -155,6 +159,7 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 			{Name: colGoal, Kind: model.KindText, Nullable: true, Principal: model.None("a session goal label no writer of this module sets, shown only: dto.go:97")},
 			{Name: colSummary, Kind: model.KindText, Nullable: true, Principal: model.None("a bounded finding title from a context-compaction finding, shown only: live.go:216-217, dto.go:98")},
 			{Name: colUnclaimedAt, Kind: model.KindTimestamp, Nullable: true},
+			{Name: colLiveEndedAt, Kind: model.KindTimestamp, Nullable: true},
 			{Name: colEngine, Kind: model.KindText, Nullable: true, Principal: model.None("an engine label from the profile driver or the producing connector, shown only: live.go:95-98, dto.go:83")},
 			{Name: colPosture, Kind: model.KindText, Nullable: true, Principal: model.None("an enforcement-posture label from the producing connector, shown only: live.go:100-103, dto.go:84")},
 			{Name: colObservationScope, Kind: model.KindText, Nullable: true, Principal: model.None("a server-computed attribution scope over profile, source and session ids, read only as a fold key and an attribution label: live_scope.go:69-81, live_scope.go:122-124, dto.go:102")},

@@ -65,7 +65,7 @@ func (m *Module) foldEdge(ctx context.Context, tenantRef string, reg *event.Sour
 	at := nonZeroTime(edge.ObservedAt, m.clock)
 
 	var snap *liveSnapshot
-	err := m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
+	err := m.Data.Mutate(ctx, tenant, func(sc store.Scope) error {
 		scope, err := m.scopeForRegistration(ctx, sc, reg)
 		if err != nil {
 			return err
@@ -112,7 +112,7 @@ func (m *Module) foldCost(ctx context.Context, tenantRef string, reg *event.Sour
 	at := nonZeroTime(cost.OccurredAt, m.clock)
 
 	var snap *liveSnapshot
-	err := m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
+	err := m.Data.Mutate(ctx, tenant, func(sc store.Scope) error {
 		scope, err := m.scopeForRegistration(ctx, sc, reg)
 		if err != nil {
 			return err
@@ -156,7 +156,7 @@ func (m *Module) foldFinding(ctx context.Context, tenantRef string, reg *event.S
 	at := nonZeroTime(f.OccurredAt, m.clock)
 
 	var snap *liveSnapshot
-	err := m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
+	err := m.Data.Mutate(ctx, tenant, func(sc store.Scope) error {
 		scope, err := m.scopeForRegistration(ctx, sc, reg)
 		if err != nil {
 			return err
@@ -293,6 +293,9 @@ func (m *Module) deriveCC(rec model.Record) string {
 		if t, err := model.ParseTimestamp(ev); err == nil && now.Sub(t.Time()) <= m.idleWindow {
 			return ccEvasion
 		}
+	}
+	if rec.String(colLiveEndedAt) != "" {
+		return ccEnded
 	}
 	if t, err := model.ParseTimestamp(rec.String(colLastEventAt)); err == nil {
 		switch d := now.Sub(t.Time()); {

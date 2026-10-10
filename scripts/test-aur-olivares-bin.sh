@@ -14,7 +14,7 @@ LC_ALL=C
 export LC_ALL
 
 could_not_look() {
-	printf 'test-aur-olivares-bin: NO HE PODIDO MIRAR — %s\n' "$*" >&2
+	printf 'test-aur-olivares-bin: COULD NOT CHECK — %s\n' "$*" >&2
 	exit 2
 }
 root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"

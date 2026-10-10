@@ -21,7 +21,7 @@ import (
 // It exercises buildSessionLaunchGate, the constructor wireSessionGovernance calls,
 // and its mutant is one line: make that function `return inner`, and this goes red.
 // What it does NOT cover is the CALL SITE: a mutant that hands the inner gate
-// straight to UseLaunchGate, bypassing this constructor, leaves this test green.
+// straight to Dependencies.LaunchGate, bypassing this constructor, leaves this test green.
 // A contrast measured that, so it is written here rather than implied away. Closing
 // it needs an assertion driven through wireSessionGovernance itself — pack SG-02-f.
 func TestBuildSessionLaunchGate_ComposesClaimAdmission(t *testing.T) {
@@ -96,7 +96,7 @@ func (f launchGateStub) Authorize(context.Context, model.TenantID, sessions.Laun
 // that says no — that distinction is the whole point of the tests below.
 //
 // The two failures are separate fields because they are separate call sites, and one
-// field could not reach both: gateOnce returns on its own error, so a fake that always
+// field could not reach both: GateOnce returns on its own error, so a fake that always
 // failed could never exercise the consume path at all. Separate fields are what makes
 // each path configurable — not, as this comment first claimed, what makes a regression
 // in either detectable.
@@ -106,14 +106,18 @@ type brokenBridge struct {
 	status     string
 }
 
-func (b brokenBridge) gateOnce(context.Context, model.TenantID, string, string, string, string, string, string) (string, string, string, error) {
+func (b brokenBridge) GateOnceForSession(context.Context, model.TenantID, string, string, string, string, string, string, string) (string, string, string, error) {
 	if b.openErr != nil {
 		return "", "", "", b.openErr
 	}
 	return "appr-1", b.status, "", nil
 }
 
-func (b brokenBridge) consumeApproval(context.Context, model.TenantID, string, string, string) (bool, bool, error) {
+func (b brokenBridge) StatusScoped(context.Context, model.TenantID, string, string, string, string, string) (string, string, error) {
+	return b.status, "", b.openErr
+}
+
+func (b brokenBridge) ConsumeApproval(context.Context, model.TenantID, string, string, string) (bool, bool, error) {
 	return false, false, b.consumeErr
 }
 

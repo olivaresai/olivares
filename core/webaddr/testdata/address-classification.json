@@ -81,7 +81,7 @@
     "kind": "domain",
     "ip": false,
     "loopback": false,
-    "relyingParty": true
+    "relyingParty": false
   },
   {
     "host": "example..",

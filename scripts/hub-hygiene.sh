@@ -35,12 +35,12 @@ for arg in "$@"; do
 	case "$arg" in
 	--apply)
 		printf '%s\n' \
-			'hub-hygiene: --apply se ha retirado (exit 2): dos contrastes NO APTO dejaron abiertas cuatro clases de pérdida; véase design/audits/2026-08-04-codex-hub-hygiene-recontrast.md.' >&2
+			'hub-hygiene: --apply was removed (exit 2): two failed rechecks left four classes of data loss unresolved; see design/audits/2026-08-04-codex-hub-hygiene-recontrast.md.' >&2
 		exit 2
 		;;
 	--dry-run) ;;
 	*)
-		printf 'hub-hygiene: argumento desconocido: %s\n' "$arg" >&2
+		printf 'hub-hygiene: unknown argument: %s\n' "$arg" >&2
 		exit 2
 		;;
 	esac
@@ -54,7 +54,7 @@ if [ -n "${HUB_ROOT:-}" ]; then
 elif HUB="$(git rev-parse --show-toplevel 2>/dev/null)" && [ -n "$HUB" ]; then
 	: # raíz del repositorio que invoca
 else
-	printf 'hub-hygiene: no estoy dentro de un repositorio Git y HUB_ROOT no está definido.\n' >&2
+	printf 'hub-hygiene: not inside a Git repository and HUB_ROOT is not set.\n' >&2
 	exit 2
 fi
 
@@ -271,14 +271,14 @@ refresh_remote_snapshot() {
 
 	if ! run_nul_command git -C "$HUB" config --null --get-all remote.origin.url ||
 		[ "${#NUL_RECORDS[@]}" != "1" ] || [ -z "${NUL_RECORDS[0]}" ]; then
-		REMOTE_ERROR="no se puede resolver la URL de origin"
+		REMOTE_ERROR="cannot resolve the origin URL"
 		return 1
 	fi
 	origin_url="${NUL_RECORDS[0]}"
 	# Sólo las refs anunciadas ahora por origin autorizan un candidato; las tracking refs locales
 	# no deciden nada. `ls-remote` no actualiza el almacén ni las refs locales.
 	if ! output="$(git -C "$HUB" ls-remote --heads --refs origin 2>/dev/null)"; then
-		REMOTE_ERROR="ls-remote no ha podido consultar origin sin escribir"
+		REMOTE_ERROR="ls-remote could not query origin without writing"
 		return 1
 	fi
 
@@ -290,13 +290,13 @@ refresh_remote_snapshot() {
 			rest="${line#*$'\t'}"
 			;;
 		*)
-			REMOTE_ERROR="origin ha devuelto una línea sin separador"
+			REMOTE_ERROR="origin returned a line without a separator"
 			return 1
 			;;
 		esac
 		case "$rest" in
 		*$'\t'*)
-			REMOTE_ERROR="origin ha devuelto una línea con campos extra"
+			REMOTE_ERROR="origin returned a line with extra fields"
 			return 1
 			;;
 		esac
@@ -304,7 +304,7 @@ refresh_remote_snapshot() {
 		if [[ ! "$oid" =~ ^([0-9a-f]{40}|[0-9a-f]{64})$ ]] ||
 			[[ "$ref" != refs/heads/* ]] ||
 			! git check-ref-format "$ref" >/dev/null 2>&1; then
-			REMOTE_ERROR="origin ha devuelto una referencia no válida"
+			REMOTE_ERROR="origin returned an invalid ref"
 			return 1
 		fi
 		REMOTE_OIDS+=("$oid")
@@ -449,7 +449,7 @@ process_uses_worktree() {
 		fi
 		cwd="${NUL_RECORDS[0]}"
 		if [ "$cwd" = "$worktree_real" ] || [[ "$cwd" == "$worktree_real/"* ]]; then
-			PROCESS_DETAIL="PID $pid tiene su cwd dentro del worktree (alcance: este contenedor)"
+			PROCESS_DETAIL="PID $pid has its working directory inside the worktree (scope: this container)"
 			return 0
 		fi
 	done
@@ -480,7 +480,7 @@ inspect_worktree() {
 	local artifacts="" artifact_count=0 hidden_untracked=0 has_gitlink=0 stash_rc=0
 	local oid reflog_key="" process_rc=0 registration_rc=0 admin_stat admin_hash
 	INSPECT_RESULT="unknown"
-	INSPECT_REASON="inspección incompleta"
+	INSPECT_REASON="incomplete inspection"
 	INSPECT_KIB=""
 	INSPECT_HEAD=""
 	INSPECT_ADMIN_ID=""
@@ -493,12 +493,12 @@ inspect_worktree() {
 	INSPECT_REMOTE_REF=""
 
 	if ! path_exists "$wt" || [ ! -d "$wt" ]; then
-		INSPECT_REASON="la ruta ya no es un directorio existente"
+		INSPECT_REASON="the path is no longer an existing directory"
 		return 0
 	fi
 	if ! run_nul_command readlink --canonicalize-existing --zero -- "$wt" ||
 		[ "${#NUL_RECORDS[@]}" != "1" ]; then
-		INSPECT_REASON="no se puede resolver la identidad física de la ruta"
+		INSPECT_REASON="cannot resolve the physical identity of the path"
 		return 0
 	fi
 	INSPECT_REALPATH="${NUL_RECORDS[0]}"
@@ -508,20 +508,20 @@ inspect_worktree() {
 		registration_rc=$?
 	fi
 	if [ "$registration_rc" = "2" ]; then
-		INSPECT_REASON="no se puede revalidar el registro NUL de worktrees"
+		INSPECT_REASON="cannot revalidate the NUL-delimited worktree record"
 		return 0
 	fi
 	if [ "$registration_rc" = "1" ] || [ "$REGISTRATION_FOUND" != "1" ]; then
-		INSPECT_REASON="la ruta ya no figura en el registro de worktrees"
+		INSPECT_REASON="the path is no longer listed in the worktree registry"
 		return 0
 	fi
 	if [ "$REGISTRATION_LOCKED" = "1" ]; then
 		INSPECT_RESULT="keep"
-		INSPECT_REASON="Git lo marca como worktree bloqueado"
+		INSPECT_REASON="Git marks it as a locked worktree"
 		return 0
 	fi
 	if ! measure_kib "$wt"; then
-		INSPECT_REASON="no se puede medir su tamaño completo"
+		INSPECT_REASON="cannot measure its total size"
 		return 0
 	fi
 	INSPECT_KIB="$MEASURED_KIB"
@@ -531,14 +531,14 @@ inspect_worktree() {
 		! admin_stat="$(stat -c '%d:%i:%s' -- "$wt/.git" 2>/dev/null)" ||
 		! admin_hash="$(git hash-object -- "$wt/.git" 2>/dev/null)" ||
 		[ -z "$admin_stat" ] || [ -z "$admin_hash" ]; then
-		INSPECT_REASON="no se puede medir la identidad administrativa del worktree"
+		INSPECT_REASON="cannot inspect the administrative identity of the worktree"
 		return 0
 	fi
 	INSPECT_ADMIN_ID="$admin_stat:$admin_hash"
 
 	config_value="$(git -C "$wt" config --get status.showUntrackedFiles 2>/dev/null)" || config_rc=$?
 	if [ "$config_rc" -gt 1 ]; then
-		INSPECT_REASON="no se puede leer status.showUntrackedFiles"
+		INSPECT_REASON="cannot read status.showUntrackedFiles"
 		return 0
 	fi
 	if [ "$config_rc" = "1" ]; then
@@ -552,14 +552,14 @@ inspect_worktree() {
 		# MUTATION-ANCHOR: hidden-untracked-config
 		if [ "$hidden_untracked" = "1" ]; then
 			INSPECT_RESULT="keep"
-			INSPECT_REASON="status.showUntrackedFiles=$config_value oculta estado"
+			INSPECT_REASON="status.showUntrackedFiles=$config_value hides state"
 			return 0
 		fi
 	fi
 
 	if ! run_nul_command git -c status.showUntrackedFiles=all -C "$wt" status \
 		--porcelain=v1 -z --untracked-files=all --ignored=matching --ignore-submodules=none; then
-		INSPECT_REASON="git status no ha podido enumerar todo el estado"
+		INSPECT_REASON="git status could not enumerate the complete state"
 		return 0
 	fi
 	status_count="${#NUL_RECORDS[@]}"
@@ -577,10 +577,10 @@ inspect_worktree() {
 				if resolve_ignored_leaf "$wt" "$status_path"; then
 					printf -v quoted_path '%q' "$IGNORED_LEAF"
 					# MUTATION-ANCHOR: ignored-blocker-detail
-					blocker="ignorado posible trabajo único fichero=$quoted_path; detalle de git status=$status_count registro(s) NUL"
+					blocker="ignored file may contain unique work=$quoted_path; git status detail=$status_count NUL-delimited record(s)"
 				else
 					printf -v quoted_path '%q' "$status_path"
-					blocker="ignorado no enumerado ruta=$quoted_path; NO HE PODIDO concretar su contenido; detalle de git status=$status_count registro(s) NUL"
+					blocker="ignored path not enumerated=$quoted_path; COULD NOT identify its contents; git status detail=$status_count NUL-delimited record(s)"
 				fi
 			fi
 		elif [ -z "$blocker" ]; then
@@ -589,15 +589,15 @@ inspect_worktree() {
 				status_path="${record:3}"
 				printf -v quoted_status '%q' "$status_code"
 				printf -v quoted_path '%q' "$status_path"
-				blocker="cambio local status=$quoted_status fichero=$quoted_path; detalle de git status=$status_count registro(s) NUL"
+				blocker="local change status=$quoted_status file=$quoted_path; git status detail=$status_count NUL record(s)"
 			else
 				printf -v quoted_record '%q' "$record"
-				blocker="registro de git status no reconocido=$quoted_record; detalle=$status_count registro(s) NUL"
+				blocker="unrecognized git status record=$quoted_record; detail=$status_count NUL-delimited record(s)"
 			fi
 		fi
 	done
 	INSPECT_STATUS_KEY="$status_key"
-	INSPECT_ARTIFACTS="${artifacts:-ninguno}"
+	INSPECT_ARTIFACTS="${artifacts:-none}"
 	# MUTATION-ANCHOR: complete-status-guard
 	if [ -n "$blocker" ]; then
 		INSPECT_RESULT="keep"
@@ -608,7 +608,7 @@ inspect_worktree() {
 	# Se conserva cualquier gitlink. Una ruta que parece un artefacto no demuestra que las refs,
 	# stashes y objetos de su repositorio inicializado sean reproducibles fuera de este worktree.
 	if ! run_nul_command git -C "$wt" ls-files --stage -z; then
-		INSPECT_REASON="no se puede inventariar el índice para detectar submódulos"
+		INSPECT_REASON="cannot inventory the index to detect submodules"
 		return 0
 	fi
 	for record in "${NUL_RECORDS[@]}"; do
@@ -617,7 +617,7 @@ inspect_worktree() {
 	# MUTATION-ANCHOR: submodule-gitlink-guard
 	if [ "$has_gitlink" = "1" ]; then
 		INSPECT_RESULT="keep"
-		INSPECT_REASON="contiene al menos un submódulo; se conservan sus refs, stash y objetos"
+		INSPECT_REASON="contains at least one submodule; preserving its refs, stash, and objects"
 		return 0
 	fi
 
@@ -629,45 +629,45 @@ inspect_worktree() {
 	# MUTATION-ANCHOR: stash-guard
 	if [ "$stash_rc" = "0" ]; then
 		INSPECT_RESULT="keep"
-		INSPECT_REASON="el repositorio tiene refs/stash"
+		INSPECT_REASON="the repository has refs/stash"
 		return 0
 	fi
 	if [ "$stash_rc" != "1" ]; then
-		INSPECT_REASON="no se puede comprobar refs/stash"
+		INSPECT_REASON="cannot check refs/stash"
 		return 0
 	fi
 
 	if ! INSPECT_HEAD="$(git -C "$wt" rev-parse --verify HEAD 2>/dev/null)" ||
 		[[ ! "$INSPECT_HEAD" =~ ^([0-9a-f]{40}|[0-9a-f]{64})$ ]]; then
-		INSPECT_REASON="no se puede leer un HEAD válido"
+		INSPECT_REASON="cannot read a valid HEAD"
 		return 0
 	fi
 	local author
 	author="$(git -C "$wt" log -1 --format=%ae HEAD 2>/dev/null)" || {
-		INSPECT_REASON="no se puede leer el autor de HEAD"
+		INSPECT_REASON="cannot read the HEAD author"
 		return 0
 	}
 	# MUTATION-ANCHOR: selftest-evidence-guard
 	if [ "$author" = "selftest@olivares.invalid" ]; then
 		INSPECT_RESULT="evidence"
-		INSPECT_REASON="HEAD es evidencia creada por un selftest"
+		INSPECT_REASON="HEAD is evidence created by a self-test"
 		return 0
 	fi
 
 	if ! run_nul_command git -C "$wt" reflog show --format=%H -z HEAD; then
-		INSPECT_REASON="no se puede enumerar el reflog de HEAD"
+		INSPECT_REASON="cannot enumerate the HEAD reflog"
 		return 0
 	fi
 	for oid in "${NUL_RECORDS[@]}"; do
 		if [[ ! "$oid" =~ ^([0-9a-f]{40}|[0-9a-f]{64})$ ]]; then
-			INSPECT_REASON="el reflog de HEAD contiene un OID no válido"
+			INSPECT_REASON="the HEAD reflog contains an invalid OID"
 			return 0
 		fi
 		reflog_key+="${#oid}:$oid|"
 		# MUTATION-ANCHOR: reflog-publication-guard
 		if ! remote_contains_oid "$oid"; then
 			INSPECT_RESULT="keep"
-			INSPECT_REASON="el reflog de HEAD conserva $oid, no alcanzable desde una rama viva de origin"
+			INSPECT_REASON="the HEAD reflog retains $oid, unreachable from a live origin branch"
 			return 0
 		fi
 	done
@@ -675,7 +675,7 @@ inspect_worktree() {
 
 	if ! remote_contains_oid "$INSPECT_HEAD"; then
 		INSPECT_RESULT="keep"
-		INSPECT_REASON="HEAD $INSPECT_HEAD no es alcanzable desde una rama viva de origin"
+		INSPECT_REASON="HEAD $INSPECT_HEAD is unreachable from a live origin branch"
 		return 0
 	fi
 	INSPECT_REMOTE_REF="$REMOTE_MATCH_REF"
@@ -692,13 +692,13 @@ inspect_worktree() {
 		return 0
 	fi
 	if [ "$process_rc" = "2" ]; then
-		INSPECT_REASON="no se puede inspeccionar el cwd de todos los procesos de este contenedor"
+		INSPECT_REASON="cannot inspect the working directories of all processes in this container"
 		return 0
 	fi
 
 	INSPECT_RESULT="safe"
-	INSPECT_REASON="sin cambios tracked/untracked; $artifact_count ignorado(s) en la lista cerrada"
-	INSPECT_EVIDENCE="git status NUL: $status_count registro(s), 0 cambios y $artifact_count artefacto(s); sin gitlinks ni refs/stash; HEAD y reflog publicados en $INSPECT_REMOTE_REF; ningún cwd local dentro"
+	INSPECT_REASON="no tracked/untracked changes; $artifact_count ignored item(s) in the explicit allowlist"
+	INSPECT_EVIDENCE="git status NUL: $status_count record(s), 0 changes, and $artifact_count artifact(s); no gitlinks or refs/stash; HEAD and reflog published at $INSPECT_REMOTE_REF; no local working directory inside"
 }
 
 # ⛔ GUARDA DE FRESCURA — sólo CONSERVA, nunca retira de más. Añadida 2026-08-24 por
@@ -740,8 +740,8 @@ worktree_demasiado_fresco() {
 add_worktree_candidate() {
 	local wt="$1"
 	if worktree_demasiado_fresco "$wt"; then
-		print_classification "CONSERVAR" "$wt" "$INSPECT_KIB" \
-			"su último commit tiene menos de ${WORKTREE_FRESH_HOURS} h: está VIVO aunque esté limpio y publicado"
+		print_classification "KEEP" "$wt" "$INSPECT_KIB" \
+			"its latest commit is less than ${WORKTREE_FRESH_HOURS} h old: it is ACTIVE even if clean and published"
 		return 0
 	fi
 	CANDIDATE_PATHS+=("$wt")
@@ -754,36 +754,36 @@ add_worktree_candidate() {
 
 print_candidate() {
 	local i="$1"
-	printf '    CANDIDATO[%s]  ruta=%q  tamaño=%s KiB  HEAD=%s  remoto=%s\n' \
+	printf '    CANDIDATE[%s]  path=%q  size=%s KiB  HEAD=%s  remote=%s\n' \
 		"$((i + 1))" "${CANDIDATE_PATHS[$i]}" "${CANDIDATE_KIB[$i]}" \
 		"${CANDIDATE_HEADS[$i]:0:12}" "${CANDIDATE_REMOTE_REFS[$i]}"
-	printf '        razón=%s; artefactos clasificados=%s\n' \
+	printf '        reason=%s; classified artifacts=%s\n' \
 		"$INSPECT_REASON" "${CANDIDATE_ARTIFACTS[$i]}"
-	printf '        EVIDENCIA=%s\n' "${CANDIDATE_EVIDENCE[$i]}"
-	say "        comprobación manual obligatoria: confirme que no hay contenido ignorado, refs/configuración privada ni procesos o descriptores activos en ningún contenedor."
-	printf '        comando manual (no ejecutado): git -C %q worktree %s -- %q\n' \
+	printf '        EVIDENCE=%s\n' "${CANDIDATE_EVIDENCE[$i]}"
+	say "        required manual check: confirm there are no ignored contents, private refs/configuration, or active processes/file descriptors in any container."
+	printf '        manual command (not run): git -C %q worktree %s -- %q\n' \
 		"$HUB" "remove" "${CANDIDATE_PATHS[$i]}"
 }
 
 print_classification() {
 	local label="$1" wt="$2" kib="$3" reason="$4"
-	printf '    %-10s ruta=%q' "$label" "$wt"
-	[ -z "$kib" ] || printf '  tamaño=%s KiB' "$kib"
+	printf '    %-10s path=%q' "$label" "$wt"
+	[ -z "$kib" ] || printf '  size=%s KiB' "$kib"
 	printf '  — %s\n' "$reason"
 }
 
 # --------------------------------------------------------------------------------------
 # FASE 0 — declarar el alcance real de la exclusión.
 # --------------------------------------------------------------------------------------
-hdr "fase 0 — alcance de concurrencia"
-say "    Procesos y cwd: sólo este contenedor (/proc local); sirven para conservar worktrees."
-say "    Recursos compartidos entre contenedores: fuera de alcance; no se limpian en esta pasada."
-say "    Un pgrep local no autoriza ninguna acción sobre /workspace, GOCACHE, uv ni pnpm."
+hdr "phase 0 — concurrency scope"
+say "    Processes and working directories: this container only (local /proc); used to preserve worktrees."
+say "    Resources shared across containers: out of scope; this run does not clean them."
+say "    A local pgrep does not authorize any action on /workspace, GOCACHE, uv, or pnpm."
 
 # --------------------------------------------------------------------------------------
 # FASE 1 — candidatos reparentados. Sólo información: PPID 1 no demuestra abandono.
 # --------------------------------------------------------------------------------------
-hdr "fase 1 — procesos reparentados (sólo informe)"
+hdr "phase 1 — reparented processes (report only)"
 process_rows=""
 if process_rows="$(ps -eo pid=,ppid=,sid=,tty=,etimes=,comm=,args= 2>/dev/null)"; then
 	reparented=0
@@ -795,29 +795,29 @@ if process_rows="$(ps -eo pid=,ppid=,sid=,tty=,etimes=,comm=,args= 2>/dev/null)"
 		case "$comm $args" in
 		*claude*) criterion="texto claude" ;;
 		*codex*) criterion="texto codex" ;;
-		*'go test'*) criterion="texto go test" ;;
-		*vitest*) criterion="texto vitest" ;;
-		*wrangler*) criterion="texto wrangler" ;;
+		*'go test'*) criterion="go test command text" ;;
+		*vitest*) criterion="vitest command text" ;;
+		*wrangler*) criterion="wrangler command text" ;;
 		*) continue ;;
 		esac
 		reparented=$((reparented + 1))
-		cwd="NO_HE_PODIDO_LEER"
+		cwd="UNAVAILABLE"
 		if run_nul_command readlink --canonicalize-existing --zero -- "/proc/$pid/cwd" &&
 			[ "${#NUL_RECORDS[@]}" = "1" ]; then
 			cwd="${NUL_RECORDS[0]}"
 		fi
-		cgroup="NO_HE_PODIDO_LEER"
+		cgroup="UNAVAILABLE"
 		if [ -r "/proc/$pid/cgroup" ]; then
-			cgroup="$(tr '\n' '|' <"/proc/$pid/cgroup" 2>/dev/null)" || cgroup="NO_HE_PODIDO_LEER"
+			cgroup="$(tr '\n' '|' <"/proc/$pid/cgroup" 2>/dev/null)" || cgroup="UNAVAILABLE"
 		fi
-		printf '    CANDIDATO reparentado pid=%s ppid=%s sid=%s tty=%s edad=%ss criterio=%q cwd=%q cgroup=%q cmd=%q\n' \
+		printf '    REPARENTED CANDIDATE pid=%s ppid=%s sid=%s tty=%s age=%ss criterion=%q cwd=%q cgroup=%q cmd=%q\n' \
 			"$pid" "$ppid" "$sid" "$tty" "$etimes" "$criterion" "$cwd" \
 			"${cgroup:0:160}" "${args:0:160}"
 	done <<<"$process_rows"
-	[ "$reparented" = "0" ] && say "    ninguno según el criterio informativo"
-	[ "$reparented" = "0" ] || say "    PPID 1 sólo prueba reparentado; no se mata ni se afirma abandono."
+	[ "$reparented" = "0" ] && say "    none according to the reporting criteria"
+	[ "$reparented" = "0" ] || say "    PPID 1 only proves reparenting; no process is killed or assumed abandoned."
 else
-	say "    NO HE PODIDO MIRAR — ps ha fallado; no se infiere que no haya candidatos."
+	say "    COULD NOT LOOK — ps failed; absence of candidates cannot be inferred."
 fi
 
 # --------------------------------------------------------------------------------------
@@ -828,19 +828,19 @@ hub_real=""
 if ! run_nul_command readlink --canonicalize-existing --zero -- "$HUB" ||
 	[ "${#NUL_RECORDS[@]}" != "1" ] ||
 	! git -C "$HUB" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-	say "    NO HE PODIDO MIRAR — HUB_ROOT no identifica un worktree Git legible."
+	say "    COULD NOT LOOK — HUB_ROOT does not identify a readable Git worktree."
 else
 	hub_real="${NUL_RECORDS[0]}"
 	remote_ready=1
 	if ! refresh_remote_snapshot; then
 		remote_ready=0
-		printf '    NO HE PODIDO MIRAR origin — %s; no se marca ningún worktree como candidato.\n' \
+		printf '    COULD NOT LOOK origin — %s; no worktree is marked as a candidate.\n' \
 			"$REMOTE_ERROR"
 	else
-		say "    origin verificado mediante ls-remote de sólo lectura; una relación no demostrable se conserva."
+		say "    origin verified using read-only ls-remote; unverified relationships are preserved."
 	fi
 	if ! enumerate_worktrees; then
-		say "    NO HE PODIDO MIRAR — git worktree list no ha producido un inventario NUL válido."
+		say "    COULD NOT LOOK — git worktree list did not produce a valid NUL-delimited inventory."
 	else
 		# La inspección individual vuelve a enumerar el registro. Se itera sobre esta foto separada
 		# para que una carrera no desplace índices del bucle exterior.
@@ -853,11 +853,11 @@ else
 				continue
 			fi
 			if [ "${plan_worktree_locked[$i]}" = "1" ]; then
-				print_classification "CONSERVAR" "$wt" "" "Git lo anuncia como bloqueado"
+				print_classification "KEEP" "$wt" "" "Git lo anuncia como bloqueado"
 				continue
 			fi
 			if [ "$remote_ready" != "1" ]; then
-				print_classification "NO SÉ" "$wt" "" "la publicación remota no se ha podido verificar"
+				print_classification "UNKNOWN" "$wt" "" "remote publication could not be verified"
 				continue
 			fi
 			inspect_worktree "$wt"
@@ -866,9 +866,9 @@ else
 				add_worktree_candidate "$wt"
 				print_candidate "$((${#CANDIDATE_PATHS[@]} - 1))"
 				;;
-			keep) print_classification "CONSERVAR" "$wt" "$INSPECT_KIB" "$INSPECT_REASON" ;;
-			evidence) print_classification "EVIDENCIA" "$wt" "$INSPECT_KIB" "$INSPECT_REASON" ;;
-			*) print_classification "NO SÉ" "$wt" "$INSPECT_KIB" "$INSPECT_REASON" ;;
+			keep) print_classification "KEEP" "$wt" "$INSPECT_KIB" "$INSPECT_REASON" ;;
+			evidence) print_classification "EVIDENCE" "$wt" "$INSPECT_KIB" "$INSPECT_REASON" ;;
+			*) print_classification "UNKNOWN" "$wt" "$INSPECT_KIB" "$INSPECT_REASON" ;;
 			esac
 		done
 	fi
@@ -877,11 +877,11 @@ fi
 # --------------------------------------------------------------------------------------
 # FASE 3 — recursos compartidos: abstención explícita.
 # --------------------------------------------------------------------------------------
-hdr "fase 3 — cachés y temporales compartidos"
+hdr "phase 3 — shared caches and temporary directories"
 # MUTATION-ANCHOR: shared-resource-abstention
-say "    CONSERVAR — /workspace/.gobuildtmp y /workspace/.olivares-tmptest no tienen leases fiables."
-say "    CONSERVAR — GOCACHE, uv y pnpm no se tocan; no se presupone reproducción offline."
-say "    No se adquiere refs/gate-locks/heavy porque esta pasada no crea ninguna acción compartida."
+say "    KEEP — /workspace/.gobuildtmp and /workspace/.olivares-tmptest have no reliable leases."
+say "    KEEP — GOCACHE, uv, and pnpm are left untouched; offline reproducibility is not assumed."
+say "    refs/gate-locks/heavy is not acquired because this run performs no shared action."
 
 # --------------------------------------------------------------------------------------
 # FASE 4 — el clon compartido y la rama por defecto.
@@ -906,17 +906,17 @@ say "    No se adquiere refs/gate-locks/heavy porque esta pasada no crea ninguna
 # hace fetch: mide contra la ref local de origin, que puede estar tan atrasada como el clon, y
 # lo dice.
 # --------------------------------------------------------------------------------------
-hdr "fase 4 — clon compartido y rama por defecto"
+hdr "phase 4 — shared clone and default branch"
 # MUTATION-ANCHOR: shared-clone-default-branch
 default_ref="$(git -C "$HUB" symbolic-ref -q refs/remotes/origin/HEAD 2>/dev/null || true)"
 if [ -n "$default_ref" ]; then
 	default_branch="${default_ref#refs/remotes/origin/}"
 else
 	default_branch="main"
-	say "    origin/HEAD no está definido en este clon; se asume ${default_branch} y se dice."
+	say "    origin/HEAD is not set in this clone; assuming ${default_branch} explicitly."
 fi
 if ! enumerate_worktree_branches; then
-	say "    NO HE PODIDO MIRAR — git worktree list no ha producido un inventario NUL válido."
+	say "    COULD NOT LOOK — git worktree list did not produce a valid NUL-delimited inventory."
 else
 	clone_root="${WT_BR_PATHS[0]}"
 	holder=""
@@ -934,34 +934,34 @@ else
 		clone_branch=""
 	fi
 	if [ "$clone_branch" = "$default_branch" ]; then
-		printf '    CONSERVAR — el clon compartido tiene %q tomada (ruta=%q).\n' \
+		printf '    KEEP — the shared clone has %q checked out (path=%q).\n' \
 			"$default_branch" "$clone_root"
-		say "    En ese estado un 'git worktree add … ${default_branch}' falla con un fatal VISIBLE, que es el objetivo."
+		say "    In this state, 'git worktree add … ${default_branch}' fails with a VISIBLE fatal error, as intended."
 	elif [ -n "$holder" ] && [ "$holder" != "$clone_root" ]; then
-		printf '    EVIDENCIA — el clon compartido NO puede estar en %q: la tiene el worktree %q.\n' \
+		printf '    EVIDENCE — the shared clone CANNOT be on %q: worktree %q has it checked out.\n' \
 			"$default_branch" "$holder"
-		say "    Ésa es la CAUSA, no el síntoma: 'git checkout ${default_branch}' en el clon dará fatal mientras siga tomada."
+		say "    That is the CAUSE: 'git checkout ${default_branch}' in the clone fails while it remains checked out elsewhere."
 	elif [ -z "$clone_branch" ]; then
-		printf '    EVIDENCIA — el clon compartido está en HEAD SEPARADO y nadie tiene %q tomada.\n' \
+		printf '    EVIDENCE — the shared clone has a DETACHED HEAD and nobody has %q checked out.\n' \
 			"$default_branch"
-		say "    No lo explica un worktree: alguien lo separó a mano, o un rebase/bisect quedó a medias."
+		say "    No worktree accounts for this: HEAD was detached manually, or a rebase/bisect remains incomplete."
 	else
-		printf '    CONSERVAR — el clon compartido está en la rama %q, distinta de la por defecto.\n' \
+		printf '    KEEP — the shared clone is on branch %q, which is not the default branch.\n' \
 			"$clone_branch"
 	fi
 	if [ -z "$clone_branch" ]; then
 		if ! head_oid="$(git -C "$clone_root" rev-parse -q --verify HEAD 2>/dev/null)"; then
-			say "    NO HE PODIDO MIRAR — el clon compartido no resuelve HEAD; no se infiere nada de su contenido."
+			say "    COULD NOT LOOK — the shared clone cannot resolve HEAD; nothing is inferred about its contents."
 		elif ! git -C "$clone_root" rev-parse -q --verify "refs/remotes/origin/${default_branch}" >/dev/null 2>&1; then
-			say "    NO HE PODIDO MIRAR — no hay refs/remotes/origin/${default_branch} local con la que comparar (no se hace fetch)."
+			say "    COULD NOT LOOK — no local refs/remotes/origin/${default_branch} for comparison (fetch is not performed)."
 		elif git -C "$clone_root" merge-base --is-ancestor "$head_oid" "refs/remotes/origin/${default_branch}" 2>/dev/null; then
 			behind="$(git -C "$clone_root" rev-list --count "${head_oid}..refs/remotes/origin/${default_branch}" 2>/dev/null || echo '?')"
-			printf '    Su HEAD ya está en origin/%s y va %s commit(s) por detrás: no sostiene nada propio.\n' \
+			printf '    Its HEAD is already in origin/%s and is %s commit(s) behind: it retains no unique work.\n' \
 				"$default_branch" "$behind"
-			say "    Medido contra la ref LOCAL de origin, que puede estar tan atrasada como el clon."
+			say "    Measured against the LOCAL origin ref, which may be as stale as the clone."
 		else
-			say "    ⛔ Su HEAD NO es antecesor de origin/${default_branch}: SOSTIENE trabajo que no está publicado."
-			say "    No lo muevas. Publícalo o pásaselo a su dueño; 'git status' limpio no habría enseñado esto."
+			say "    ⛔ Its HEAD is NOT an ancestor of origin/${default_branch}: it RETAINS unpublished work."
+			say "    Leave it in place. Publish it or hand it to its owner; a clean 'git status' would not reveal this."
 		fi
 	fi
 fi
@@ -974,7 +974,7 @@ candidate_kib=0
 for kib in "${CANDIDATE_KIB[@]}"; do
 	candidate_kib=$((candidate_kib + kib))
 done
-printf '    %s candidato(s); %s KiB medidos dentro de los árboles candidatos.\n' \
+printf '    %s candidate(s); %s KiB measured inside candidate trees.\n' \
 	"${#CANDIDATE_PATHS[@]}" "$candidate_kib"
-say "    Esa medida no promete bytes físicos recuperados: hardlinks, sparse files y concurrencia varían df."
-say "    INFORME solamente; no se ha cambiado ninguna ref, worktree, caché ni proceso."
+say "    That measurement does not promise recovered physical bytes: hardlinks, sparse files, and concurrency affect df."
+say "    REPORT only; no ref, worktree, cache, or process was changed."

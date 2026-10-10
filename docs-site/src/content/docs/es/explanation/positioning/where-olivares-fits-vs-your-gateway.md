@@ -17,9 +17,16 @@ contenido en esa llamada. Ambos son reales, ambos son buenos en lo que hacen, y 
 lo que Olivares es.
 
 :::tip[La versión breve]
-**Olivares AI no es una gateway de IA.** No enruta, cachea, balancea la carga ni se sitúa
-en la ruta caliente de tu tráfico de modelos, y nunca lo hará. Se sitúa **junto y detrás**
-de tu gateway como el *plano de gobernanza y evidencia*: aplicación in-process dentro del
+**Olivares AI complementa tu gateway de IA.** Las llamadas al modelo de las
+sesiones evitan el proxy de inferencia de Olivares por defecto. Las llamadas
+encaminadas explícitamente por él pasan por su enforcement inline antes de
+reenviarse. El access map observa fuera de banda; un fallo del colector reduce
+la cobertura. Las sesiones gestionadas de Claude Code instalan por defecto hooks
+de llamadas a herramientas que llaman al PEP del motor. Si ese PEP resulta
+inaccesible durante una caída o un reinicio del motor, los hooks deniegan toda
+llamada gobernada a herramientas (deny-closed).
+
+Olivares añade el *plano de gobernanza y evidencia*: enforcement in-process dentro del
 runtime del agente, un ledger de evidencia con alteraciones detectables, ciclo de vida de
 identidades no humanas, y human-in-the-loop / break-glass / kill-switch sobre **sesiones
 en vivo**. Tu gateway gobierna la *petición*; Olivares gobierna el *agente y todo lo que

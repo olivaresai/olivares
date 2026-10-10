@@ -69,6 +69,7 @@ import type {
   GuardrailSurface,
 } from './types'
 import './i18n'
+import { downloadBlob } from '@/lib/api/download'
 
 const FINDING_STATUSES: FindingStatus[] = [
   'open',
@@ -138,14 +139,7 @@ function downloadFindingsExport(res: FindingsExportResult) {
   const blob = new Blob([res.text], {
     type: res.content_type || 'application/json',
   })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = res.filename
-  document.body.appendChild(a)
-  a.click()
-  a.remove()
-  URL.revokeObjectURL(url)
+  downloadBlob(blob, res.filename)
 }
 
 function FindingsTab({ canTriage }: { canTriage: boolean }) {

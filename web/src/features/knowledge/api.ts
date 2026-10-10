@@ -6,15 +6,13 @@
 // the core HTTP client against /v1/m/knowledge (ARCHITECTURE.md — no logic here). The
 // active tenant header is attached automatically; tenant-scoped keys cache-isolate
 // per tenant (query.ts contract).
-import { apiFetch, http } from '@/lib/api'
+import { apiFetch, apiFetchRaw, http } from '@/lib/api'
 import type { TenantListOptions, TenantRequestOptions } from '@/lib/api/client'
 // El techo de una lista paginada es UNO en todo el arbol y vive donde nacio: es el maximo real
 // del store (`core/internal/store/sqlstore/generic.go`: defaultLimit 100, maxLimit 1000). Definir
 // aqui otra constante con el mismo 1000 fabricaria dos copias de un control que envejecen aparte.
 import { EVIDENCE_PAGE } from '@/features/models/api'
-import { ApiError, NetworkError } from '@/lib/api/errors'
-import { useSessionStore } from '@/stores/session'
-import { useTenantStore } from '@/stores/tenant'
+import { ApiError } from '@/lib/api/errors'
 import type { ListResponse } from '@/lib/api/types'
 import type {
   AddRevisionResponse,
@@ -438,34 +436,26 @@ export async function fetchMemoryExport(params?: {
   const search = new URLSearchParams()
   if (params?.agent_ref) search.set('agent_ref', params.agent_ref)
 
-  const headers = new Headers({ Accept: 'application/x-ndjson' })
-  const token = useSessionStore.getState().csrfToken
-  if (token) headers.set('X-CSRF-Token', token)
-  const tenant = useTenantStore.getState().activeTenant
-  if (tenant) headers.set('X-Olivares-Tenant', tenant)
-
-  const qs = search.toString()
   let res: Response
   try {
-    res = await fetch(`${BASE}/memory/export?${qs}`, {
-      method: 'GET',
-      headers,
-      credentials: 'same-origin',
+    res = await apiFetchRaw(`${BASE}/memory/export?${search.toString()}`, {
+      headers: { Accept: 'application/x-ndjson' },
     })
-  } catch (cause) {
-    throw new NetworkError('The control plane is unreachable.', cause)
-  }
-  if (!res.ok) {
+  } catch (err) {
     // ⛔ El 501 de aquí NO es la costura open-core. `handleExportMemory` falla CERRADO con 501
     //    cuando la clave de firma de portabilidad no está cableada — «it never emits an unsigned
     //    bundle». Leerlo como «tu edición no lo incluye» manda a alguien a comprar un add-on por
     //    una clave que le falta.
-    throw new ApiError(
-      res.status,
-      res.status === 501 ? 'portability_key_unwired' : 'export_failed',
-      res.statusText || 'Export failed',
-      res.headers.get('X-Request-ID') ?? undefined,
-    )
+    if (err instanceof ApiError && err.status === 501)
+      throw new ApiError(
+        501,
+        'portability_key_unwired',
+        err.message,
+        err.requestId,
+        err.details,
+        err.body,
+      )
+    throw err
   }
   const raw = await res.text()
   const primera = raw.split('\n', 1)[0] ?? ''

@@ -50,6 +50,21 @@ vi.mock('@/components/ui/toaster', () => ({
 vi.mock('@/lib/hooks/use-url-state', () => ({
   useUrlState: () => [urlState.value, vi.fn()],
 }))
+// The launch dialog has its own tests (agentops/run-create-worktree-from.test.tsx); here
+// only what the room hands the shell's one host is measured, so it is a probe that records
+// its props.
+vi.mock('@/features/first-hour/first-hour', () => ({
+  NewSessionDialog: () => null,
+}))
+vi.mock('@/features/agentops/run-create-dialog', () => ({
+  RunCreateDialog: (props: { open: boolean; initialWorktreeFrom?: string }) => (
+    <div
+      data-testid="run-create-probe"
+      data-open={String(props.open)}
+      data-from={props.initialWorktreeFrom}
+    />
+  ),
+}))
 const api = vi.hoisted(() => ({
   listChannels: vi.fn(),
   listInbox: vi.fn(),
@@ -95,6 +110,8 @@ vi.mock('@/lib/auth/capabilities', async (orig) => {
 import { communicationsKeys } from './api'
 import { ApiError } from '@/lib/api/errors'
 import { workKeys } from '@/features/work/api'
+import { NewSessionHost } from '@/features/first-hour/new-session-host'
+import { useNewSessionDialog } from '@/features/first-hour/new-session-store'
 import { CommunicationsView } from './communications-view'
 import {
   adminItemOf,
@@ -122,6 +139,7 @@ const DR = 'sessions:delivery:read'
 const EXP = '2030-01-01T00:00:00Z'
 
 beforeEach(() => {
+  useNewSessionDialog.setState({ open: false, opener: null, advanced: null })
   auth.perms = new Set()
   auth.tenant = 't1'
   auth.principal = 'u-a'
@@ -705,6 +723,44 @@ describe('CommunicationsView — the handoffs door', () => {
     // THE ORDINARY `delivery` KEY KEEPS ITS OWN MEANING: this link opened the
     //    handoff sheet and did NOT drag the plain delivery read along with it.
     expect(api.getDelivery).not.toHaveBeenCalled()
+  })
+
+  it('a handoff that names its commit offers to open the work only to someone who may start a session, and hands the commit to the launch', async () => {
+    const SHA = '0123456789abcdef0123456789abcdef01234567'
+    const detail = handoffDetailOf()
+    Object.assign(detail.content, { branch: 'olivares/3f9a1c20', sha: SHA })
+    api.getHandoffDetail.mockResolvedValue(detail)
+    urlState.value = { handoff: HANDOFF_DELIVERY_ID }
+    const open = () =>
+      screen.queryByRole('button', { name: 'Open in a new session worktree' })
+
+    // Without sessions:run:write the refs are shown and nothing is offered.
+    auth.perms = new Set([DR])
+    const first = renderWithQuery(() => (
+      <CommunicationsView entrance="handoffs" />
+    ))
+    expect(await screen.findByText(SHA)).toBeVisible()
+    expect(open()).toBeNull()
+    expect(screen.queryByTestId('run-create-probe')).toBeNull()
+    first.result.unmount()
+
+    // With it, the action closes the sheet (the protected context leaves the page) and
+    // opens the launch with only the commit.
+    auth.perms = new Set([DR, 'sessions:run:write'])
+    renderWithQuery(() => (
+      <>
+        <CommunicationsView entrance="handoffs" />
+        <NewSessionHost />
+      </>
+    ))
+    expect(await screen.findByText(SHA)).toBeVisible()
+    await userEvent.setup().click(open() as HTMLElement)
+    const probe = await screen.findByTestId('run-create-probe')
+    expect(probe).toHaveAttribute('data-open', 'true')
+    expect(probe).toHaveAttribute('data-from', SHA)
+    await waitFor(() =>
+      expect(screen.queryByText('Deploy freeze needs an owner')).toBeNull(),
+    )
   })
 
   it('a NON-canonical handoff URL value opens nothing and reads nothing', async () => {

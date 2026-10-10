@@ -216,7 +216,7 @@ func TestProtocolBindingStorageGuardsLifecycleAcrossBackends(t *testing.T) {
 			work := addWorkLeaseDomainItem(t, f, "protocol storage guards "+be.name)
 			active := applyProtocolSpecForTest(t, m, tenant,
 				protocolSpecInputForTest(f.workspace, BindingProtocolA2A, "storage-guards-"+be.name, 1, model.ID("")))
-			if err := m.data.Mutate(context.Background(), tenant, func(sc store.Scope) error {
+			if err := m.Data.Mutate(context.Background(), tenant, func(sc store.Scope) error {
 				repo, err := sc.Ext(protocolBindingSpecKind)
 				if err != nil {
 					return err
@@ -245,7 +245,7 @@ func TestProtocolBindingStorageGuardsLifecycleAcrossBackends(t *testing.T) {
 
 			reject := func(label string, mutate func(store.GenericRepo, model.Record) error) {
 				t.Helper()
-				err := m.data.Mutate(context.Background(), tenant, func(sc store.Scope) error {
+				err := m.Data.Mutate(context.Background(), tenant, func(sc store.Scope) error {
 					repo, err := sc.Ext(protocolBindingKind)
 					if err != nil {
 						return err
@@ -291,7 +291,7 @@ func TestProtocolBindingStorageGuardsLifecycleAcrossBackends(t *testing.T) {
 				kind model.Kind
 				id   model.ID
 			}{{protocolBindingSpecKind, active.ID}, {protocolBindingKind, binding.ID}} {
-				err := m.data.Mutate(context.Background(), tenant, func(sc store.Scope) error {
+				err := m.Data.Mutate(context.Background(), tenant, func(sc store.Scope) error {
 					repo, err := sc.Ext(kindID.kind)
 					if err != nil {
 						return err

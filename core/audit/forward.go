@@ -40,13 +40,13 @@ type Forwarder interface {
 }
 
 // NopForwarder is the default Forwarder for a deployment that forwards no ledger
-// (the pull export remains the supported path). It accepts and drops every event
+// (Business supplies the real export implementation). It accepts and drops every event
 // (never mutating it), so the composition root can wire the seam unconditionally; the
 // real, eventing-backed forwarder (modules/siemforward) replaces it when SIEM
 // forwarding is configured.
 type NopForwarder struct{}
 
-// Forward discards the event; the pull export remains the supported path.
+// Forward discards the event; Business supplies the real export implementation.
 func (NopForwarder) Forward(context.Context, model.AuditEvent) error { return nil }
 
 // Compile-time proof NopForwarder satisfies the seam.

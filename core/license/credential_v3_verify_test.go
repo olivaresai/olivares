@@ -84,9 +84,9 @@ func TestVerifyEnvelopeReadsTheSignedTypeScriptVector(t *testing.T) {
 	// The three labels a v3 does not carry stay EMPTY instead of being filled from the
 	// nearest-looking field. support_tier is the one that matters: the credential's envelope has
 	// `support_profile`, whose value here is "business" — a PRODUCT tier, where SupportTier's
-	// domain is the support relationship ("standard", "enterprise"). Mapping it by name would put
-	// a fact nobody signed into a slot that means something else, in a console badge. It is
-	// reachable under its own name and nowhere else.
+	// domain is the free-form support relationship. Even when the labels match, mapping by name
+	// would put a fact nobody signed into a different slot in a console badge. It is reachable
+	// under its own name and nowhere else.
 	if got := v.SupportTier(); got != "" {
 		t.Fatalf("SupportTier() = %q for a v3, want empty: support_profile is a different field, not a rename", got)
 	}

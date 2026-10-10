@@ -32,17 +32,29 @@ type fakeToolEngine struct {
 	pending     bool
 	started     chan struct{}
 	startedOnce sync.Once
-	// ready are the tools the resolve preview answers 200 for (others 409); ollama is
-	// the product's Ollama service: started by POST /ollama/start, for ollamaTenant.
-	ready         map[string]bool
+	polling     chan struct{}
+	pollingOnce sync.Once
+	// ready are the tools the readiness answer says can start; ollama is the product's
+	// Ollama service: started by POST /ollama/start, for ollamaTenant.
+	ready map[string]bool
+	// refused: OpenCode's only key was refused at its last test. As in the engine, the
+	// preview still names that key (200) while the readiness says OpenCode cannot start.
+	refused       bool
 	ollamaStarted bool
 	ollamaTenant  any
 	planRequest   map[string]any
+	// providers is what GET providers answers (nil: an engine without the route).
+	providers []map[string]any
+	// presence is the inventory's session-tool presence answer (nil: an engine
+	// older than it): session tools with no installer or sign-in (driverfacts).
+	presence map[string]any
+	// signInFailure, when set, is the message of a Codex sign-in the tool ended.
+	signInFailure string
 }
 
 func newFakeToolEngine(t *testing.T) *fakeToolEngine {
 	t.Helper()
-	f := &fakeToolEngine{signedIn: map[string]bool{}, signInRts: true, onPath: map[string]bool{}, started: make(chan struct{})}
+	f := &fakeToolEngine{signedIn: map[string]bool{}, signInRts: true, onPath: map[string]bool{}, started: make(chan struct{}), polling: make(chan struct{})}
 	f.Server = httptest.NewServer(http.HandlerFunc(f.serve))
 	t.Cleanup(f.Close)
 	return f
@@ -64,8 +76,18 @@ func (f *fakeToolEngine) serve(w http.ResponseWriter, r *http.Request) {
 	}
 	p := strings.TrimPrefix(r.URL.Path, agentToolsPath)
 	switch {
+	case r.URL.Path == profilesPath+"/readiness" && r.Method == "GET":
+		answer := fakeReadiness(f.ready)
+		if f.refused {
+			for _, tool := range answer["tools"].([]map[string]any) {
+				if tool["driver"] == "opencode" {
+					tool["reason"], tool["code"], tool["message"] = "api_key", "key_refused", refusedKeySentence("opencode")
+				}
+			}
+		}
+		reply(200, answer)
 	case r.URL.Path == profilesPath+"/resolve" && r.Method == "GET":
-		if f.ready[r.URL.Query().Get("driver")] {
+		if d := r.URL.Query().Get("driver"); f.ready[d] || (f.refused && d == "opencode") {
 			reply(200, map[string]any{"reason": "api_key"})
 			return
 		}
@@ -79,14 +101,28 @@ func (f *fakeToolEngine) serve(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		reply(200, map[string]any{"installed": true, "state": "stopped", "models": []string{}})
+	case p == "/providers" && r.Method == "GET":
+		if f.providers == nil {
+			reply(404, map[string]any{"error": map[string]any{"code": "not_found", "message": "no route"}})
+			return
+		}
+		if r.URL.Query().Get("tenant_id") != "tenant-a" {
+			reply(400, map[string]any{"error": map[string]any{"code": "bad_request", "message": "tenant_id must name an organization."}})
+			return
+		}
+		reply(200, map[string]any{"providers": f.providers})
 	case p == "/inventory":
-		reply(200, map[string]any{
+		answer := map[string]any{
 			"drivers": []string{"claude", "codex", "grok", "ollama", "opencode"},
 			"inventory": map[string]any{"installed": []map[string]any{
 				{"driver": "claude", "version": "2.1.280", "state": "installed", "installed_at": "2026-09-01T00:00:00Z"},
 				{"driver": "claude", "version": "2.1.286", "state": "installed", "installed_at": "2026-10-01T09:45:19Z"},
 			}},
-		})
+		}
+		if f.presence != nil {
+			answer["presence"] = f.presence
+		}
+		reply(200, answer)
 	case p == "/plans":
 		f.planRequest = body
 		reply(200, map[string]any{"digest": "d1", "driver": body["driver"], "version": "0.159.3", "verification": "sigstore-cosign"})
@@ -115,8 +151,16 @@ func (f *fakeToolEngine) serve(w http.ResponseWriter, r *http.Request) {
 			reply(400, map[string]any{"error": map[string]any{"code": "bad_request", "message": "Name the organization the login is for (tenant_id)."}})
 			return
 		}
+		if body["driver"] == "opencode" && f.pending {
+			reply(202, map[string]any{"id": "s3", "driver": "opencode", "state": "starting"})
+			return
+		}
 		if body["driver"] == "claude" {
 			reply(202, map[string]any{"id": "s1", "driver": "claude", "state": "needs_code", "url": "https://claude.ai/oauth/authorize?x=1"})
+			return
+		}
+		if f.signInFailure != "" {
+			reply(202, map[string]any{"id": "s2", "driver": "codex", "state": "failed", "message": f.signInFailure})
 			return
 		}
 		reply(202, map[string]any{"id": "s2", "driver": "codex", "state": "waiting", "url": "https://auth.openai.com/codex/device", "user_code": "ABCD-1234"})
@@ -141,6 +185,9 @@ func (f *fakeToolEngine) serve(w http.ResponseWriter, r *http.Request) {
 		}
 		f.signedIn["codex"] = true
 		reply(200, map[string]any{"id": "s2", "state": "signed_in"})
+	case p == "/sign-in/s3" && r.Method == "GET":
+		f.pollingOnce.Do(func() { close(f.polling) })
+		reply(200, map[string]any{"id": "s3", "driver": "opencode", "state": "starting"})
 	case strings.HasPrefix(p, "/sign-in/") && r.Method == "DELETE":
 		reply(200, map[string]any{})
 	default:
@@ -170,6 +217,51 @@ func TestToolListShowsVersionAndSignIn(t *testing.T) {
 	}
 }
 
+// Inventory presence remains compatible with older engines that did not install
+// or sign Gemini CLI in. A host executable is still discoverable.
+func TestToolListPreservesOlderGeminiPresenceAnswers(t *testing.T) {
+	geminiRow := func(out string) string {
+		for _, line := range strings.Split(out, "\n") {
+			if strings.HasPrefix(line, "Gemini CLI") {
+				return line
+			}
+		}
+		return ""
+	}
+	t.Run("present on the host", func(t *testing.T) {
+		f := newFakeToolEngine(t)
+		f.presence = map[string]any{"gemini-cli": map[string]any{"program": "gemini", "present": true}}
+		out, errb, err := execSessionCLI(t, nil, append([]string{"tool", "ls"}, sessionCreds(f.URL)...)...)
+		if err != nil {
+			t.Fatalf("tool ls: %v\n%s", err, errb)
+		}
+		if row := geminiRow(out); row == "" || !strings.Contains(row, "(on this host)") {
+			t.Fatalf("Gemini CLI row = %q in\n%s", row, out)
+		}
+	})
+	t.Run("absent from the host", func(t *testing.T) {
+		f := newFakeToolEngine(t)
+		f.presence = map[string]any{"gemini-cli": map[string]any{"program": "gemini", "present": false}}
+		out, errb, err := execSessionCLI(t, nil, append([]string{"tool", "ls"}, sessionCreds(f.URL)...)...)
+		if err != nil {
+			t.Fatalf("tool ls: %v\n%s", err, errb)
+		}
+		if row := geminiRow(out); row == "" || !strings.Contains(row, "not installed") {
+			t.Fatalf("Gemini CLI row = %q in\n%s", row, out)
+		}
+	})
+	t.Run("an engine older than the presence answer lists no row", func(t *testing.T) {
+		f := newFakeToolEngine(t)
+		out, errb, err := execSessionCLI(t, nil, append([]string{"tool", "ls"}, sessionCreds(f.URL)...)...)
+		if err != nil {
+			t.Fatalf("tool ls: %v\n%s", err, errb)
+		}
+		if row := geminiRow(out); row != "" {
+			t.Fatalf("Gemini CLI row = %q against an engine without presence\n%s", row, out)
+		}
+	})
+}
+
 func TestToolInstallGoesThroughTheEnginesPlanAndJob(t *testing.T) {
 	f := newFakeToolEngine(t)
 	out, errb, err := execSessionCLI(t, nil, append([]string{"tool", "install", "codex"}, sessionCreds(f.URL)...)...)
@@ -190,7 +282,7 @@ func TestToolInstallGoesThroughTheEnginesPlanAndJob(t *testing.T) {
 
 func TestToolInstallUsesTheConsoleReleaseDefaultAndKeepsExplicitVersions(t *testing.T) {
 	for _, tool := range []struct{ driver, defaultVersion string }{
-		{"claude", "latest"}, {"codex", "latest"}, {"grok", "stable"}, {"opencode", "latest"}, {"ollama", "latest"},
+		{"claude", "latest"}, {"codex", "latest"}, {"grok", "stable"}, {"opencode", "latest"}, {"gemini", "latest"}, {"ollama", "latest"},
 	} {
 		for _, version := range []string{"", "latest", "stable", "0.159.3"} {
 			name, want := version, version
@@ -208,8 +300,12 @@ func TestToolInstallUsesTheConsoleReleaseDefaultAndKeepsExplicitVersions(t *test
 				}
 				f.mu.Lock()
 				defer f.mu.Unlock()
-				if f.planRequest["driver"] != tool.driver || f.planRequest["version"] != want {
-					t.Fatalf("plan request = %v, want driver %q version %q", f.planRequest, tool.driver, want)
+				wantDriver := tool.driver
+				if wantDriver == "gemini" {
+					wantDriver = "gemini-cli"
+				}
+				if f.planRequest["driver"] != wantDriver || f.planRequest["version"] != want {
+					t.Fatalf("plan request = %v, want driver %q version %q", f.planRequest, wantDriver, want)
 				}
 			})
 		}
@@ -234,6 +330,61 @@ func TestToolLoginClaudeTakesThePastedCode(t *testing.T) {
 	}
 	if strings.Contains(f.allHits(), "DELETE") {
 		t.Fatal("a finished sign-in must not be cancelled")
+	}
+}
+
+// A native tool can still be starting when the POST returns after ten
+// seconds. That live flow later supplies its device link, or a terminal refusal.
+func TestToolLoginWaitsForTheNativeDeviceFlowToStart(t *testing.T) {
+	for _, terminal := range []string{"signed_in", "failed"} {
+		t.Run(terminal, func(t *testing.T) {
+			polls := 0
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				flow := map[string]any{"id": "native-starting", "driver": "opencode", "state": "starting"}
+				switch {
+				case r.Method == "GET" && r.URL.Path == agentToolsPath+"/sign-in":
+					flow = map[string]any{"installed": true, "signed_in": false}
+				case r.Method == "POST" && r.URL.Path == agentToolsPath+"/sign-in":
+					w.WriteHeader(http.StatusAccepted)
+				case r.Method == "GET" && r.URL.Path == agentToolsPath+"/sign-in/native-starting":
+					polls++
+					if polls == 2 && terminal == "failed" {
+						flow["state"], flow["message"] = "failed", "Native authorization could not start."
+					} else if polls >= 2 {
+						flow["state"], flow["url"], flow["user_code"] = "waiting", "https://auth.openai.com/codex/device", "ABCD-12345"
+						if polls >= 3 {
+							flow["state"] = "signed_in"
+						}
+					}
+				case r.Method == "DELETE" && r.URL.Path == agentToolsPath+"/sign-in/native-starting":
+					flow = map[string]any{"ok": true}
+				default:
+					t.Errorf("unexpected native flow request: %s %s", r.Method, r.URL.Path)
+					w.WriteHeader(http.StatusNotFound)
+				}
+				_ = json.NewEncoder(w).Encode(flow)
+			}))
+			defer server.Close()
+			out, _, err := execSessionCLI(t, nil, append([]string{"tool", "login", "opencode"}, sessionCreds(server.URL)...)...)
+			if strings.Count(out, "Starting OpenCode sign-in...") != 1 {
+				t.Fatalf("startup guidance must appear once: %q", out)
+			}
+			if terminal == "failed" {
+				if err == nil || !strings.Contains(err.Error(), "Native authorization could not start.") {
+					t.Fatalf("native refusal = %v, want its terminal message", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("live native startup was refused: %v", err)
+			}
+			for _, want := range []string{"https://auth.openai.com/codex/device", "ABCD-12345", "OpenCode is signed in."} {
+				if strings.Count(out, want) != 1 {
+					t.Fatalf("want %q once in %q", want, out)
+				}
+			}
+		})
 	}
 }
 
@@ -266,6 +417,18 @@ func TestToolLoginCodexShowsTheDeviceCodeAndWaits(t *testing.T) {
 	if !strings.Contains(out, "https://auth.openai.com/codex/device") || !strings.Contains(out, "Enter this code there: ABCD-1234") ||
 		!strings.Contains(out, "Codex is signed in.") {
 		t.Fatalf("tool login codex =\n%s", out)
+	}
+}
+
+// #470: a failed sign-in shows the tool's own reason and the engine's one next
+// step, not a second "Try again" after it.
+func TestToolLoginFailureShowsTheToolsReasonAndOneNextStep(t *testing.T) {
+	f := newFakeToolEngine(t)
+	f.signInFailure = "Codex stopped (exit status 1): device code request failed with status 403 Forbidden. Fix that, then start the sign-in again."
+	_, _, err := execSessionCLI(t, nil, append([]string{"tool", "login", "codex"}, sessionCreds(f.URL)...)...)
+	want := "Codex is not signed in. " + f.signInFailure
+	if exitcode.From(err) != exitcode.Err || err == nil || err.Error() != want {
+		t.Fatalf("err = %v (exit %d)\nwant  %s", err, exitcode.From(err), want)
 	}
 }
 

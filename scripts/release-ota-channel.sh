@@ -50,56 +50,8 @@ adv_dir="${2-release/advisories}"
 
 [ -n "$version" ] || refuse "no version given (usage: release-ota-channel.sh <version> [advisories-dir])"
 
-# The version becomes a PATH component below, so it is validated as data before it is used
-# as a path. A `..` or a `/` here would read an arbitrary file and turn its contents into
-# advisory ids in a signed manifest. Only the release grammar the preflight already pins
-# (vMAJOR.MINOR.PATCH, core only — no pre-release or build suffix) is accepted.
-case "$version" in
-*/* | *\\* | ..* | *..*) refuse "version $(printf '%q' "$version") is not a bare version (path separators and .. are refused)" ;;
-esac
-# THE GLOB THAT USED TO BE HERE WAS NOT THIS GRAMMAR. `[0-9]*[0-9] | [0-9]*[0-9][-+]*`
-# accepts anything that starts and ends with a digit: measured, `1x2`, `1 2` and `12` all
-# passed as versions (the model QA, 2026-08-10, P3-06). Both production callers validate
-# more strictly upstream, so no release bypass was observed — but the script's own contract
-# was false, and "version that is not a version" only ever killed an alphabetic sample.
-#
-# Checked FIELD BY FIELD, in shell, with no external parser (same reason as the guard in
-# release.yml: no binary to be missing, no regex dialect to differ). Each of the three parts
-# must be a non-empty run of digits with no leading zero, unless it is exactly "0".
-# RESTRICTED TO THE CORE, HONESTLY. The comment used to promise "an optional pre-release/build
-# suffix" and the check only asked that the suffix be non-empty, so `1.2.3-01`, `1.2.3-a_b`,
-# `1.2.3-a b`, `1.2.3-a+b+c`, `1.2.3+meta+again` and `1.2.3-?` were all accepted as versions
-# (the model repair audit, 2026-08-10, P3-05). Implementing SemVer 2.0's identifier grammar
-# would be the other honest option; it is not what this project releases. The production tag
-# regex is `^v[0-9]+\.[0-9]+\.[0-9]+$` — core only — so the classifier now says exactly that
-# and refuses every suffix rather than pretending to validate one.
-_v_rest="$version"
-_v_ok=1
-case "$version" in
-*[-+]*) _v_ok=0 ;;
-esac
-case "$_v_rest" in
-*.*.*.*) _v_ok=0 ;;                  # four fields or more
-*.*.* | *.*) ;;
-*) _v_ok=0 ;;                        # fewer than three
-esac
-if [ "$_v_ok" -eq 1 ]; then
-	_v_major="${_v_rest%%.*}"
-	_v_tail="${_v_rest#*.}"
-	_v_minor="${_v_tail%%.*}"
-	case "$_v_tail" in *.*) _v_patch="${_v_tail#*.}" ;; *) _v_patch=0 ;; esac
-	for _v_part in "$_v_major" "$_v_minor" "$_v_patch"; do
-		case "$_v_part" in
-		'' | *[!0-9]*) _v_ok=0 ;;    # empty, or carries a non-digit
-		0) ;;                        # a bare zero is the one legal leading zero
-		0*) _v_ok=0 ;;               # 01 is not a field
-		esac
-	done
-fi
-if [ "$_v_ok" -ne 1 ]; then
-	refuse "version $(printf '%q' "$version") does not look like MAJOR.MINOR.PATCH"
-fi
-unset _v_rest _v_ok _v_major _v_minor _v_patch _v_part
+# The version becomes a path component, so validate before looking up advisories.
+[[ "$version" =~ ^[0-9]+\.[0-9]+$ ]] || refuse "version must be MAJOR.MINOR"
 
 file="${adv_dir%/}/${version}.txt"
 

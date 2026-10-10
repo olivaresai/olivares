@@ -18,12 +18,18 @@ func TestWarnUnsupportedProductionPosture(t *testing.T) {
 		name                 string
 		engine               store.Engine
 		effectiveRLSAttested bool
+		haRequested          bool
 		wantWarning          string
 	}{
 		{
-			name:        "SQLite evaluation profile warns",
+			name:   "SQLite single-node does not warn",
+			engine: store.EngineSQLite,
+		},
+		{
+			name:        "SQLite with declared HA warns",
 			engine:      store.EngineSQLite,
-			wantWarning: "evaluation/pilot profile, not the supported production profile",
+			haRequested: true,
+			wantWarning: "HA requested with SQLite single-node",
 		},
 		{
 			name:                 "Postgres with RLS FORCE does not warn",
@@ -42,7 +48,7 @@ func TestWarnUnsupportedProductionPosture(t *testing.T) {
 			var buf bytes.Buffer
 			log := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelWarn}))
 
-			warnUnsupportedProductionPosture(log, tt.engine, tt.effectiveRLSAttested)
+			warnUnsupportedProductionPosture(log, tt.engine, tt.effectiveRLSAttested, tt.haRequested)
 
 			got := buf.String()
 			if tt.wantWarning == "" {

@@ -6,7 +6,6 @@ package main
 
 import (
 	"log/slog"
-	"os"
 	"strings"
 
 	"github.com/olivaresai/olivares/core/runtime/sandboxrt"
@@ -41,6 +40,7 @@ type gvisorCfgJSON struct {
 	HarnessPath string `json:"harness_path"`
 	Platform    string `json:"platform"`
 	Network     string `json:"network"`
+	ProxySocket bool   `json:"proxy_socket,omitempty"`
 	TimeoutSecs int    `json:"timeout_seconds"`
 }
 
@@ -60,7 +60,7 @@ type fcCfgJSON struct {
 // is an empty config (no runtime wired; the modules keep safe defaults). A supplied
 // path must be readable and contain valid JSON or startup fails closed.
 func loadSandboxRuntimeConfig(_ *slog.Logger) (sandboxRuntimeConfig, error) {
-	path := os.Getenv("OLIVARES_SANDBOX_RUNTIME_CONFIG")
+	path := osGetenv("OLIVARES_SANDBOX_RUNTIME_CONFIG")
 	if path == "" {
 		return sandboxRuntimeConfig{}, nil
 	}
@@ -117,7 +117,7 @@ func newSandboxRuntime(cfg sandboxRuntimeConfig, log *slog.Logger) *sandboxrt.En
 func (c gvisorCfgJSON) to() sandboxrt.GVisorConfig {
 	return sandboxrt.GVisorConfig{
 		Binary: c.Binary, StateRoot: c.StateRoot, BundleRoot: c.BundleRoot, RootfsDir: c.RootfsDir,
-		HarnessPath: c.HarnessPath, Platform: c.Platform, Network: c.Network, Timeout: secs(c.TimeoutSecs),
+		HarnessPath: c.HarnessPath, Platform: c.Platform, Network: c.Network, ProxySocket: c.ProxySocket, Timeout: secs(c.TimeoutSecs),
 	}
 }
 

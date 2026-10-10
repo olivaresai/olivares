@@ -28,9 +28,9 @@ const selectClass =
   'h-9 w-full min-w-0 rounded-md border border-border bg-background px-3 text-body focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
 
 /** The active records this driver can run on, by the engine's one rule (recordServesDriver
- * in providers/kinds.ts). The server revalidates record state, tenant and compatibility at
- * write and launch. */
-export function useProfileProviders(driver: string, enabled: boolean) {
+ * in providers/kinds.ts); every active record for `null`. The server revalidates record
+ * state, tenant and compatibility at write and launch. */
+export function useProfileProviders(driver: string | null, enabled: boolean) {
   const { activeTenant, can } = useAuth()
   const boundary = useProviderBoundary()
   const allowed = can('sessions:provider:read')
@@ -57,7 +57,7 @@ export function useProfileProviders(driver: string, enabled: boolean) {
       ? (query.data?.pages.flatMap((page) => page.items) ?? []).filter(
           (r) =>
             r.state === 'active' &&
-            recordServesDriver(r.kind, r.base_url, driver),
+            (driver === null || recordServesDriver(r.kind, r.base_url, driver)),
         )
       : []
   return { query, records, allowed }

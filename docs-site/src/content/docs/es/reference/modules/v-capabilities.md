@@ -15,6 +15,16 @@ su historial de versiones y su salud de conexión básica. Se sitúa en la **cap
 gestión** y **no tiene superficie de actuación**: cataloga, gobierna y audita,
 pero nunca ejecuta una herramienta ni muta un runtime MCP en vivo.
 
+## Definiciones MCP guardadas
+
+Las configuraciones gestionadas en `/capabilities` y `/v1/m/capabilities/configs`
+son **metadatos de observación**, con cambios auditados e historial de revisiones
+inmutable. Guardar, cambiar `enabled` o borrar una definición no configura la
+gateway MCP, ni inicia o detiene un servidor, ni resuelve una referencia de secreto ni
+cambia el transporte o endpoint de un servidor descubierto. La gateway usa su
+propia costura de configuración. Las definiciones y su historial siguen disponibles
+tras un reinicio o tras desactivar y volver a activar el módulo capabilities.
+
 ## Qué es
 
 El módulo es una capa construida **sobre** el descubrimiento pasivo del módulo I y

@@ -6,6 +6,8 @@ description: >-
   die ein Control-Tower abruft, um seine eigene Sicht anzureichern. Eine
   Neutral-JSON-Projektion, kein verifizierter nativer Push.
 ---
+SIEM and ITSM push, OTLP downloads, external trace and metric delivery, and posture export require Business. Community keeps local observability, trace-context propagation, saved settings and `olivares dr backup`. Generic chat, email and webhook notifications remain available in Community.
+
 
 Posture-Export (`modules/posture-export`) ist die **ausgehende
 Posture-Oberfläche** der Engine: ein einzelner schreibgeschützter Endpunkt, den
@@ -32,6 +34,12 @@ drei Projektionen:
   Inventar-Grants.
 - **`findings`** — Security-Findings projiziert nur als Refs und ein
   `detail_hash`, filterbar nach `?severity=`-Untergrenze und `?category=`.
+- **`projection_readiness`** — Booleans für `inventory`, `posture_drift` und
+  `findings`, die melden, ob die Inventar-, Access-Map- und Security-Produzenten
+  laufen. Dies bescheinigt weder Aktualität noch vollständige Abdeckung. Ein
+  gestoppter oder nicht verfügbarer Produzent ergänzt `note` um eine Warnung vor
+  unvollständiger Evidenz; gespeicherte Daten bleiben exportierbar. CLI-Zusammenfassung
+  und heruntergeladenes Dokument enthalten denselben Hinweis.
 
 Jeder Export ist **minimal-data** — nur Refs, Hashes und Relationen, nie ein
 roher Payload oder ein Secret — und ein defensiver Maskierungsdurchlauf bereinigt

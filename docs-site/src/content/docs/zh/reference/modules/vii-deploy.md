@@ -31,6 +31,42 @@ description: >-
 （Tofu/Terraform、GitOps、Kubernetes、Docker、Nomad、Crossplane）外加一个短时、按操作、经过证明的
 凭据来源，**只在操作员配置时**才会接入；在此之前，该模块绝不会静默地实施操作。
 
+## 接入执行器
+
+在管理员接入执行器之前，Deploy 只保存部署定义，不会更改任何基础设施。接入步骤如下：
+
+1. 编写一个 JSON 文件，为每个部署目标运行时（`docker`、`k8s`、`nomad`、`tofu`、`terraform`、
+   `gitops` 或 `crossplane`）写一个块，并加上一个 `credential` 块。只有文件中列出的运行时会被接入。
+   同一主机上的 Docker 示例：
+
+   ```json
+   {
+     "docker": { "socket_path": "/var/run/docker.sock" },
+     "credential": {
+       "kind": "file",
+       "path_template": "/run/olivares/deploy/{env}-{mode}.token",
+       "ttl_seconds": 900
+     }
+   }
+   ```
+
+   每次操作时，Olivares 从 `path_template` 读取一个短期令牌：`{env}` 是定义的环境，`{mode}`
+   是 `read`（计划、校验）或 `write`（应用、退役）。该目录由你已在运行的工具（例如 Vault Agent
+   或 SPIFFE 辅助程序）创建，令牌文件也由它写入并轮换。没有令牌时，每个操作都会被拒绝。对于 Docker，服务用户
+   `olivares` 还必须能打开该套接字；加入 `docker` 组即授予它对该主机的 root 级访问权限。
+2. 让 Olivares 指向该文件。使用 deb 或 rpm 软件包时，在 `/etc/olivares/olivares.env` 中加入这一行：
+
+   ```sh
+   OLIVARES_DEPLOY_EXECUTOR_CONFIG=/etc/olivares/deploy-executor.json
+   ```
+
+   用户 `olivares` 必须能读取该 JSON 文件，例如属主为 `root:olivares`、权限为 `0640`。
+
+3. 用 `sudo systemctl restart olivares` 重启 Olivares。如果文件无法读取或内容无效，Olivares
+   不会启动，并在日志中说明原因。
+
+之后，Deploy 页面会将 **声明部署** 作为主要操作，计划与应用会到达运行时。每次应用和退役仍需等待审批。
+
 ## 实体与所声明的契约
 
 该模块声明了四个带命名空间的实体，外加作为已应用快照的核心 `Deployment`：

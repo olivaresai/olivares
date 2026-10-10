@@ -49,6 +49,182 @@ func TestUnknownConfigEnvKeys(t *testing.T) {
 	}
 }
 
+func TestConfigRegistryAcceptsDSNAndSecretRefKeys(t *testing.T) {
+	environ := []string{
+		"OLIVARES_DSN=x",
+		"OLIVARES_ADMIN_DSN=y",
+		"OLIVARES_SECRETREF_VAULT_ADDR=http://127.0.0.1:19851",
+		"OLIVARES_SECRETREF_VAULT_TOKEN_FILE=/missing/token",
+	}
+	if got := unknownConfigEnvKeys(environ); len(got) != 0 {
+		t.Fatalf("runtime configuration keys reported as ignored: %v", got)
+	}
+}
+
+// The catalog includes inputs to other executables and child-process outputs.
+// Every remaining row is an engine input and must pass the config gates.
+func TestConfigRegistryCoversEngineCatalogKeys(t *testing.T) {
+	nonEngineKeys := map[string]string{
+		"OLIVARES_API_TOKEN":            "Terraform provider credential",
+		"OLIVARES_ENDPOINT":             "Terraform provider endpoint",
+		"OLIVARES_ENGINE":               "operator output; engine selection uses --engine",
+		"OLIVARES_PLUGIN":               "SDK plugin handshake cookie",
+		"OLIVARES_PORTAL_TLS_DIRECTORY": "appliance portal TLS directory",
+		"OLIVARES_WORK_":                "session child-process output family",
+		"OLIVARES_WORK_RUN_REF":         "session child-process output",
+		"OLIVARES_WORK_SESSION_ID":      "session child-process output",
+	}
+	body, err := os.ReadFile("../../scripts/config-env-catalog.tsv")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var checked int
+	for _, line := range strings.Split(string(body), "\n") {
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		fields := strings.Split(line, "\t")
+		if len(fields) != 4 || !strings.HasPrefix(fields[0], "OLIVARES_") {
+			t.Fatalf("invalid catalog row: %q", line)
+		}
+		key := fields[0]
+		if _, nonEngine := nonEngineKeys[key]; nonEngine {
+			continue
+		}
+		checked++
+		if mode := configEnvKeyMode(key); mode != configKeyExact && mode != configKeyPrefix && !sortedContains(prefixConfigEnvKeys, key+"_") {
+			t.Errorf("engine catalog key %s is not registered", key)
+		}
+	}
+	if checked == 0 {
+		t.Fatal("catalog contained no engine keys")
+	}
+	t.Logf("checked %d engine catalog keys", checked)
+}
+
+func TestConfigEffectiveRedactsKeywordDSN(t *testing.T) {
+	for _, key := range []string{"OLIVARES_DSN", "OLIVARES_ADMIN_DSN", "OLIVARES_VECTOR_DSN"} {
+		for _, credential := range []string{"password", "sslpassword", "oauth_client_secret"} {
+			values := []string{"host='db'" + credential + "=synthetic-secret dbname=db"}
+			for _, whitespace := range []string{" ", "\t", "\n", "\r", "\v", "\f"} {
+				values = append(values,
+					"host=db"+whitespace+credential+"=synthetic-secret dbname=db",
+					"host=db "+credential+whitespace+"=synthetic-secret dbname=db",
+				)
+			}
+			for i, value := range values {
+				settings, err := postgresKeywordSettings(value, "dbname")
+				if err != nil || settings.Get(credential) != "synthetic-secret" {
+					t.Fatalf("invalid %s keyword fixture %d", credential, i)
+				}
+				if got := redactEffectiveConfigValue(key, value); got != redactedConfigValue {
+					t.Errorf("%s %s keyword fixture %d was not redacted", key, credential, i)
+				}
+			}
+		}
+		const safe = "host=db application_name='https://worker/%ZZ' dbname=db"
+		if got := redactEffectiveConfigValue(key, safe); got != safe {
+			t.Errorf("%s passwordless keyword DSN containing a URL must remain visible", key)
+		}
+	}
+	const metadata = `{"homepage":"https://worker/%ZZ"}`
+	if got := redactEffectiveConfigValue("OLIVARES_INSTANCE_NAME", metadata); got != metadata {
+		t.Error("non-secret metadata containing a URL must remain visible")
+	}
+}
+
+func TestConfigEffectiveRedactsURLQueryDSNPasswords(t *testing.T) {
+	for _, key := range []string{"OLIVARES_DSN", "OLIVARES_ADMIN_DSN", "OLIVARES_VECTOR_DSN"} {
+		for _, tc := range []struct{ name, value string }{
+			{"query password", "postgres://app@localhost/db?password=synthetic-secret"},
+			{"TLS key password", "postgres://app@localhost/db?sslpassword=synthetic-secret"},
+			{"OAuth client secret", "postgres://app@localhost/db?oauth_client_secret=synthetic-secret"},
+			{"encoded TLS key password", "postgres://app@localhost/db?%73slpassword=synthetic-secret"},
+			{"encoded OAuth client secret", "postgres://app@localhost/db?oauth_client%5fsecret=synthetic-secret"},
+			{"encoded query key", "postgres://app@localhost/db?%70assword=synthetic-secret"},
+			{"literal semicolon", "postgres://app@localhost/db?password=synthetic;secret"},
+			{"malformed value escape", "postgres://app@localhost/db?password=synthetic%ZZ"},
+			{"malformed key escape", "postgres://app@localhost/db?password%ZZ=synthetic-secret"},
+			{"malformed path escape", "postgres://app@localhost/%ZZ?password=synthetic-secret"},
+			{"malformed user escape", "postgres://app%ZZ@localhost/db?password=synthetic-secret"},
+		} {
+			if got := redactEffectiveConfigValue(key, tc.value); got != redactedConfigValue {
+				t.Errorf("%s %s was not redacted", key, tc.name)
+			}
+		}
+		const safe = "postgres://app@localhost/db?application_name=worker;safe"
+		if got := redactEffectiveConfigValue(key, safe); got != safe {
+			t.Errorf("%s passwordless URL with a semicolon must remain visible", key)
+		}
+	}
+}
+
+func TestConfigEffectiveRedactsSecretRefURLCredentials(t *testing.T) {
+	for _, key := range []string{
+		"OLIVARES_SECRETREF_VAULT_ADDR",
+		"OLIVARES_SECRETREF_AZURE_VAULT_URL",
+		"OLIVARES_SECRETREF_GCP_ENDPOINT",
+		"OLIVARES_SECRETREF_INFISICAL_URL",
+		"OLIVARES_SECRETREF_K8S_APISERVER",
+	} {
+		for _, value := range []string{"https://app:synthetic-secret@localhost", "https://:synthetic-secret@localhost", "https://:synthetic%ZZ-secret@localhost", "https://localhost/%ZZ?password=synthetic-secret"} {
+			if got := redactEffectiveConfigValue(key, value); got != redactedConfigValue {
+				t.Errorf("%s URL credential was not redacted", key)
+			}
+		}
+	}
+}
+
+func TestEffectiveConfigEntriesRedactDSNAndSecretRefCredentials(t *testing.T) {
+	values := map[string]string{
+		"OLIVARES_DSN":                  "postgres://app@localhost/db?password=synthetic-secret",
+		"OLIVARES_SECRETREF_VAULT_ADDR": "https://app:synthetic-secret@localhost",
+	}
+	var environ []string
+	for key, value := range values {
+		environ = append(environ, key+"="+value)
+	}
+	got := effectiveConfigEntries(environ, func(key string) string { return values[key] })
+	want := []api.EffectiveConfigEntry{
+		{Key: "OLIVARES_DSN", Value: redactedConfigValue, Redacted: true, Source: "env"},
+		{Key: "OLIVARES_SECRETREF_VAULT_ADDR", Value: redactedConfigValue, Redacted: true, Source: "env"},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatal("API projection must report both configured inputs with their credentials redacted")
+	}
+}
+
+func TestConfigVerbsAcceptDSNAndSecretRefKeys(t *testing.T) {
+	clearOlivaresEnv(t)
+	values := map[string]string{
+		"OLIVARES_DSN":                            "postgres://app:synthetic-dsn-secret@localhost/db",
+		"OLIVARES_ADMIN_DSN":                      "password=synthetic-admin-secret dbname=db",
+		"OLIVARES_SECRETREF_VAULT_ADDR":           "http://127.0.0.1:19851",
+		"OLIVARES_SECRETREF_VAULT_NAMESPACE":      "fixture",
+		"OLIVARES_SECRETREF_VAULT_TOKEN":          "synthetic-vault-secret",
+		"OLIVARES_SECRETREF_VAULT_TOKEN_FILE":     "/missing/token",
+		"OLIVARES_SECRETREF_AZURE_TOKEN_FILE":     "/missing/azure-token",
+		"OLIVARES_SECRETREF_GCP_TOKEN_FILE":       "/missing/gcp-token",
+		"OLIVARES_SECRETREF_INFISICAL_TOKEN_FILE": "/missing/infisical-token",
+	}
+	want := make(map[string]string, len(values))
+	for key, value := range values {
+		t.Setenv(key, value)
+		want[key] = value
+		if strings.Contains(key, "DSN") || strings.Contains(key, "TOKEN") {
+			want[key] = redactedConfigValue
+		}
+	}
+	out := assertConfigVerbsAccept(t, want)
+	if strings.Contains(out, "synthetic-") {
+		t.Fatal("effective config disclosed a synthetic credential")
+	}
+	t.Setenv(envConfigStrict, "1")
+	if _, err := executeConfigCommand("effective"); err != nil {
+		t.Fatalf("effective with OLIVARES_CONFIG_STRICT=1: %v", err)
+	}
+}
+
 func TestLoadLogCaptureLevel(t *testing.T) {
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	tests := []struct {
@@ -457,16 +633,25 @@ func clearOlivaresEnv(t *testing.T) {
 //     passes "OLIVARES_EMBEDDINGS" to a helper that appends _BASE_URL/_KEY/_MODEL, and
 //     the registry holds the family as the prefix "OLIVARES_EMBEDDINGS_".
 func TestConfigRegistryCoversEveryEnvKeyThisPackageReads(t *testing.T) {
-	entries, err := os.ReadDir(".")
-	if err != nil {
-		t.Fatalf("read package dir: %v", err)
+	// The package plus the pipelines that left it and still read engine keys:
+	// internal/mcpgateway reads OLIVARES_MCP_TASK_KILLSWITCH_SWEEP.
+	var names []string
+	for _, dir := range []string{".", "internal/mcpgateway"} {
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			t.Fatalf("read package dir %s: %v", dir, err)
+		}
+		for _, e := range entries {
+			if !e.IsDir() {
+				names = append(names, filepath.Join(dir, e.Name()))
+			}
+		}
 	}
 	fset := token.NewFileSet()
 	envRe := regexp.MustCompile(`^OLIVARES_[A-Z0-9_]+$`)
 	var scanned int
-	for _, e := range entries {
-		name := e.Name()
-		if e.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+	for _, name := range names {
+		if !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
 			continue
 		}
 		// The two exclusions, each with its reason rather than a bare skip:

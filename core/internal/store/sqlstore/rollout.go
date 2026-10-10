@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/olivaresai/olivares/core/internal/store/dialect"
+	"github.com/olivaresai/olivares/core/migrate"
 	"github.com/olivaresai/olivares/core/store"
 )
 
@@ -152,15 +153,19 @@ func classifyRolloutControls(
 	// transaction checked". The rows and receipts already present are preserved either way:
 	// the loop below validates them and never restates one.
 	if freshBootstrap != nil {
+		if err := verifyVersionedRolloutCheckpoint(ctx, tx, dia, controls); err != nil {
+			return err
+		}
 		if _, err := verifyFreshRolloutPreState(ctx, tx, dia, controls); err != nil {
 			return err
 		}
 	}
 
-	for _, ddl := range []string{rolloutStateDDL, rolloutTransitionDDL, rolloutClassificationDDL} {
-		if _, err := tx.ExecContext(ctx, ddl); err != nil {
-			return fmt.Errorf("sqlstore: reconcile rollout tables: %w", err)
-		}
+	if err := migrate.ApplyTx(ctx, tx, dia, "schema_migrations_rollout", []migrate.Migration{{
+		Version: 1, Name: "rollout_tables",
+		Stmts: []string{rolloutStateDDL, rolloutTransitionDDL, rolloutClassificationDDL},
+	}}); err != nil {
+		return fmt.Errorf("sqlstore: rollout schema: %w", err)
 	}
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	sel := dia.Rebind(rolloutSelect + " WHERE control_key = ?")
@@ -446,16 +451,8 @@ func corroborateWitness(ctx context.Context, q dialect.Querier, dia dialect.Dial
 // It is the evidence that distinguishes "never classified" from "the state row was lost". The
 // history table is created by the same transaction that would seed the state, so its absence is
 // not a case this has to handle: by the time this runs, both tables exist.
-// reconcileRolloutEvidenceGuards puts the append-only guard on the relations that record
-// one-way decisions, on every boot.
-//
-// WHY IT IS NOT IN THE CREATION DDL, which is where every other guard lives: these
-// relations exist on every deployment already, and their creation statement will never run
-// again there. A guard emitted only at creation would arrive on new installs and never on
-// the ones with a history long enough to have decisions worth protecting. The sweep that
-// found this shelved the fix on the grounds that "it is one-shot DDL, it would not
-// converge" — which is false: rollout.go's DDL loop re-runs under the migration lock on
-// every boot, and so does this.
+// reconcileRolloutEvidenceGuards installs append-only evidence guards through
+// their versioned repair plan on every boot, including after guard loss.
 //
 // WHY IT RUNS HERE AND NOT IN classifyRolloutControls: the trigger function
 // olivares_block_mutation is created by the core schema, which migrate.Apply installs, and
@@ -483,14 +480,21 @@ func reconcileRolloutEvidenceGuards(ctx context.Context, mdb dialect.Execer, dia
 		}
 		tables = append(tables, dialect.ControlAppendOnlyScopeTable)
 	}
-	for _, t := range tables {
-		for _, stmt := range dia.AppendOnlyGuardStmts(t) {
-			if _, err := mdb.ExecContext(ctx, stmt); err != nil {
-				return fmt.Errorf("sqlstore: append-only guard for %q: %w", t, err)
-			}
-		}
+	var stmts []string
+	for _, table := range tables {
+		stmts = append(stmts, dia.AppendOnlyGuardStmts(table)...)
 	}
-	return nil
+	tx, err := mdb.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback() //nolint:errcheck // commit below owns success
+	if err := migrate.ReconcileTx(ctx, tx, dia, "schema_migrations_rollout_guards", []migrate.Migration{{
+		Version: 1, Name: "rollout_evidence_guards", Stmts: stmts,
+	}}); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 // classificationReceiptExists reports whether this control was EVER classified on this

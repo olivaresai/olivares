@@ -12,7 +12,7 @@ import (
 )
 
 // A SESSION BOUND TO A PROVIDER RECORD REACHES ONLY THAT RECORD'S ENDPOINT, OR IT DOES NOT
-// START (Root 2026-10-02 21:16Z). A driver x record pair with no native way to hold the tool
+// START. A driver x record pair with no native way to hold the tool
 // to the record's address is refused when it is bound and again when it launches, with one
 // sentence naming what the tool runs on.
 func TestARecordTheToolCannotBeHeldToIsRefusedOnBindAndLaunch(t *testing.T) {
@@ -56,7 +56,7 @@ func TestResolveDoesNotPickARecordTheToolCannotBeHeldTo(t *testing.T) {
 
 // A Claude key with no base_url is held to Anthropic's own API. On a node that sends Claude
 // Code sessions through its deployment gateway, the launch would inherit the gateway; it is
-// refused before spawn instead (Root 21:21Z, SR5C).
+// refused before spawn instead.
 func TestClaudeKeyNeverInheritsTheDeploymentGateway(t *testing.T) {
 	runner := &fakeRunner{}
 	m, _, tenant, _ := newRuntimeHarness(t, WithRunner(runner), WithCredentialSource(&countingCredentialSource{}),

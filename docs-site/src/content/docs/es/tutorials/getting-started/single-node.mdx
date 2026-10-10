@@ -22,21 +22,10 @@ Es el mismo motor que el [quickstart](/es/start/quickstart/) demuestra en cinco
 minutos; la diferencia es la postura. Si primero quieres echar un vistazo
 instantáneo, haz el quickstart y luego vuelve aquí para la instalación real.
 
-Cada comando de esta página se ejecutó, tal cual está escrito, contra el binario
-actual (el banner de primer arranque, la vía de recuperación del token, el
-cableado de pgAudit y el grafo de abajo se ejercitan con
-`scripts/quickstart-smoke.sh` y se reverificaron para esta guía).
-
 ## Requisitos previos
 
 - Un host Linux con systemd y `curl`.
-- **Go 1.26+** para compilar el binario (el almacén es SQLite puro en Go, así que
-  no hace falta toolchain de C). La versión publicada **26.10.1** incluye archivos firmados y
-  paquetes nativos: el testigo de superficies de instalación registra ambos como **published**
-  (`docs/releases/26.10.1-install-surfaces.json`). Este tutorial compila desde un checkout; el
-  instalador verificado en `main` (`scripts/install.sh`) instala en su lugar la versión
-  publicada. [Verificar una versión](/es/how-to/verify-a-release/) es la cadena para esos
-  artefactos.
+- **Go 1.26+**. Build this tutorial from source; Olivares {/* release */}`0.1`{/* /release */} is the next release, not yet published.
 
 ## 1. Compila e instala el binario
 
@@ -253,6 +242,14 @@ sobre un mapa vacío — consulta [resolución de problemas](/es/how-to/troubles
 para los avisos exactos y qué significa cada uno.
 
 ## 6. Alcanza el grafo
+
+En una instalación nueva, `accessmap` está desactivado. Como administrador, activa
+`accessmap` en **Settings > Edition & modules**, manteniendo los demás módulos
+seleccionados activos. Para la CLI, inicia sesión primero como administrador
+en este motor con `olivares login` y después ejecuta `olivares modules on accessmap`. Espera a
+que termine cada reinicio del motor antes de continuar; las sesiones activas
+se detienen y se pueden reanudar. De lo contrario, estas llamadas a la API
+devuelven `404 module_not_enabled`.
 
 ```bash
 curl -ksf "https://127.0.0.1:8443/v1/m/accessmap/graph?limit=200" \

@@ -30,6 +30,11 @@ type sessionView struct {
 	// engineSupplied is set when the engine supplies the run's credential: signing the tool
 	// in would not fix its refusal.
 	engineSupplied bool
+	// noOneAsked is set when the run's permission mode answers every request of the tool
+	// (dontAsk, bypassPermissions). A deployment review policy can still ask a person,
+	// and the engine registers that wait later, so the line stays
+	// neutral until a decision is known.
+	noOneAsked bool
 	// lastText is the last assistant text shown, so a result that only repeats it
 	// (an API error arrives as both) is not printed twice.
 	lastText string
@@ -71,6 +76,8 @@ func (v *sessionView) render(line string) bool {
 		return false
 	}
 	switch str(frame, "type") {
+	case "olivares_notice":
+		v.say(str(frame, "message"), termrender.RoleWarn)
 	case "system":
 		v.system(frame)
 	case "assistant":
@@ -107,12 +114,11 @@ func (v *sessionView) render(line string) bool {
 	return false
 }
 
-// codex reads a Codex app-server frame by the console's rules (FH 634d6d00): an
+// codex reads a Codex app-server frame by the console's rules: an
 // agentMessage item is the reply, a tool item (command, file change, MCP or
 // dynamic tool, web search) one line, turn/completed the footer. The driver's own
 // handshake responses and streaming deltas stay quiet; an error is shown. A
-// notification it cannot name is one quiet line, never dropped. HU 016: follow
-// printed these frames raw.
+// notification it cannot name is one quiet line, never dropped.
 func (v *sessionView) codex(frame map[string]any, line string) bool {
 	method := str(frame, "method")
 	params, _ := frame["params"].(map[string]any)
@@ -195,11 +201,7 @@ func (v *sessionView) codex(frame map[string]any, line string) bool {
 		v.say("! "+str(params, "message"), termrender.RoleWarn)
 	case strings.HasSuffix(method, "/requestApproval"), method == "execCommandApproval", method == "applyPatchApproval":
 		// The engine's approval authority answers it; the operator sees that it waits.
-		what := "Codex is waiting for approval"
-		if cmd := str(params, "command"); cmd != "" {
-			what += " to run " + truncateSummary(cmd)
-		}
-		v.say("! "+what, termrender.RoleWarn)
+		v.permissionRequest("Codex", str(params, "command"))
 	case codexProgress(method):
 		// Progress the completed item and the turn's end already tell.
 	default:
@@ -208,13 +210,34 @@ func (v *sessionView) codex(frame map[string]any, line string) bool {
 	return false
 }
 
+// permissionRequest is the line for a tool asking to run something. When the
+// run's permissions answer every request, the session does not wait for a person by
+// default, so it does not say so; nor does it say no one is asked, since a review
+// policy may still ask one. It says the decision is pending.
+func (v *sessionView) permissionRequest(tool, what string) {
+	if what != "" {
+		what = " to run " + truncateSummary(what)
+	}
+	if v.noOneAsked {
+		v.quiet("· " + tool + " asks" + what + "; waiting for the approval decision")
+		return
+	}
+	v.say("! "+tool+" is waiting for approval"+what, termrender.RoleWarn)
+}
+
+// noOneAsked reports whether a run's permission mode answers every tool request itself.
+func noOneAsked(run map[string]any) bool {
+	mode := str(run, "permission_mode")
+	return mode == "dontAsk" || mode == "bypassPermissions"
+}
+
 // acp reads an Agent Client Protocol frame (OpenCode, Grok Build) by the same rules:
 // the agent_message_chunk texts of one message joined into the reply, a tool call one
 // line, a failed tool call its error, a permission request the line that says the
 // session waits, and the session/prompt result (stopReason, usage) the turn's footer.
 // The person's own message (user_message_chunk, sent when a conversation is replayed)
 // is shown after "›". Private reasoning, command lists, mode, configuration and plan
-// updates stay quiet; an update it cannot name is one quiet line. HU2-01: follow
+// updates stay quiet; an update it cannot name is one quiet line. Follow once
 // printed only "· session/update" and the reply was never shown.
 func (v *sessionView) acp(frame map[string]any) (ended, handled bool) {
 	method := str(frame, "method")
@@ -225,16 +248,13 @@ func (v *sessionView) acp(frame map[string]any) (ended, handled bool) {
 		return false, true
 	case method == "session/request_permission":
 		v.flushACP()
-		what := " is waiting for approval"
-		if call, _ := params["toolCall"].(map[string]any); str(call, "title") != "" {
-			what += " to run " + truncateSummary(str(call, "title"))
-		}
-		v.say("! "+toolName(v.driver)+what, termrender.RoleWarn)
+		call, _ := params["toolCall"].(map[string]any)
+		v.permissionRequest(toolName(v.driver), str(call, "title"))
 		return false, true
 	case method != "":
 		return false, false
 	}
-	if e, ok := frame["error"].(map[string]any); ok && (v.driver == "opencode" || v.driver == "grok") {
+	if e, ok := frame["error"].(map[string]any); ok && (v.driver == "opencode" || v.driver == "grok" || v.driver == "gemini-cli") {
 		// An ACP prompt that fails is answered with an error instead of a stopReason.
 		v.flushACP()
 		v.say("✗ "+str(e, "message"), termrender.RoleFail)
@@ -314,7 +334,7 @@ func (v *sessionView) acpUpdate(raw any) {
 
 // finish shows what the view still holds when the stream stops before a turn's end
 // (it ended, failed, or the command was cancelled): an ACP reply already received is
-// never dropped (SR2C on cfa80204).
+// never dropped.
 func (v *sessionView) finish() { v.flushACP() }
 
 // flushACP shows the ACP message gathered so far: the agent's reply as text, the
@@ -409,7 +429,7 @@ func (v *sessionView) system(frame map[string]any) {
 	}
 }
 
-// apiRetry says why the tool retries its provider call, once per cause (HU2-13): a
+// apiRetry says why the tool retries its provider call, once per cause: a
 // refused API key printed "· api retry" up to ten times and never the 401 every frame
 // carried. A refused credential is a failure with what fixes it; another cause is one
 // warning with its status.
@@ -628,7 +648,7 @@ func scanSSE(body io.Reader, fn func(event, data string) bool) error {
 // sequences (CSI, and OSC/DCS/SOS/PM/APC up to their terminator — an OSC 52 would
 // write the clipboard) and every other C0/C1 control except newline and tab.
 // Session output, names and paths come from the engine and the agent, so none of
-// them may drive the operator's terminal (SR2 on 36e31097).
+// them may drive the operator's terminal.
 func termSafe(s string) string {
 	if !strings.ContainsFunc(s, func(r rune) bool { return r < 0x20 || (r >= 0x7f && r <= 0x9f) }) {
 		return s

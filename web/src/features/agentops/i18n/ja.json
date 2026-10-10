@@ -85,10 +85,17 @@
     "attach": "アタッチ",
     "detach": "デタッチ"
   },
+  "discardWorktree": {
+    "label": "worktree とブランチ {{branch}} も破棄する",
+    "hint": "ブランチがマージ済みで worktree がクリーンな場合に削除されます。未マージまたは未コミットの作業を破棄するにはチェックしてください。"
+  },
   "create": {
     "title": "新しいセッション",
     "titleTool": "新しい {{tool}} セッション",
-    "description": "Olivares がプロセスを起動・ガバナンスします。CLI 起動の視覚的な等価物であり、ポリシーがインラインで適用されます。",
+    "description": "最初に何をするかを書いてください。その他の起動設定は「詳細オプション」にあります。",
+    "prompt": "最初のメッセージ (任意)",
+    "promptPlaceholder": "最初に何をしますか?",
+    "advanced": "詳細オプション",
     "name": "名前",
     "namePlaceholder": "表示用ラベル（任意）",
     "transport": "トランスポート",
@@ -97,32 +104,34 @@
     "effortDefault": "モデルのデフォルト",
     "model": "モデル",
     "modelPlaceholder": "opus  ·  claude-opus-4-8  （任意）",
-    "workspace": "ワークスペース",
-    "workspaceNone": "なし（ランナーのデフォルト作業ディレクトリ）",
+    "workspace": "フォルダー",
+    "workspaceNone": "このセッションの一時フォルダー",
+    "worktree": "新しい git worktree で作業する",
+    "worktreeHint": "専用の worktree に新しいブランチを作成し、同じリポジトリのセッション同士でファイルを共有しません。フォルダはリポジトリの最上位フォルダである必要があります。",
+    "worktreeFrom": "開始位置",
     "isolation": "分離",
     "isolationNativeOnly": "本リリースで配線されているのはネイティブのみです。コンテナ／サンドボックスは拒否されます。",
     "envAllow": "ホスト環境変数を転送（名前）",
     "envAllowPlaceholder": "PATH, HOME, TERM",
     "envAllowHint": "通過させるホスト環境変数の名前の許可リスト（値は決して送信されません）。",
-    "submit": "起動を依頼",
-    "submitting": "依頼中…",
+    "submit": "開始",
+    "submitting": "開始中…",
     "criticalWarning": "これは特権起動です（ツールごとのプロンプトが無効になります）。二者による承認が必要で、記録されます。承認されるまで保留中のままになる場合があります。",
     "classifiedWarning": "機密ワークスペースの読み書きマウントは特権起動です（承認＋記録）。",
     "success": "セッションを起動しました",
     "template": "テンプレート",
     "templateNone": "テンプレートなし",
-    "templateHint": "エンジンは起動ゲートの前にテンプレートの条件を上記の項目に統合し、セッションのプロセス自体に書き込みます。このコンソールを使わない呼び出しにも制限が適用されます。",
+    "templateHint": "テンプレートのルールはここで選んだ対応する項目を置き換え、セッション全体に適用されます。",
     "templateUnenforceable": "このテンプレートには、この起動では強制できない条件が含まれています。条件なしで起動せず、起動を拒否します:",
     "templateOverrides_other": "テンプレートが指定内容のうち {{count}} 件を上書きします:",
     "profile": "プロバイダープロファイル",
     "profileNone": "プロファイルを選択",
-    "profileHint": "このセッションのプロバイダープロファイルを選んでください。プロファイルは必須です。ローカル要件はテンプレートのプレビュー後に、現在の選択について確認します。",
     "profileNotOperable": "この環境では有効ではありません",
-    "profilesNotRead": "プロバイダープロファイルを読み取れませんでした。プロファイルなしでも起動できます。",
     "profileEnvConflict": "HOME、CLAUDE_CONFIG_DIR、CODEX_HOME、GROK_HOME はプロファイルが所有します。いずれかを転送する起動はここで拒否されます。その他の名前は引き続きサーバー側の検証を受けます。",
     "identity": {
       "title": "起動時のID",
       "hint": "人間のスポンサーの代理となる承認済みエージェントを選択します。人間のアクセス権だけでエージェント権限は付与されません。",
+      "humanHint": "セッションはあなた自身のアクセス権で実行されます。",
       "human": "現在の人間のオペレーター",
       "agent": "承認済みエージェント（スポンサーの代理）",
       "required": "オーケストレーションには独立して認証されたエージェントIDが必要です。",
@@ -133,6 +142,19 @@
       "loading": "エージェントIDを読み込み中…",
       "loadFailed": "ID一覧を取得できません。",
       "loadMore": "さらに読み込む"
+    },
+    "blocked": {
+      "profilesForbidden": "あなたのロールはプロバイダープロファイルを読めない (sessions:profile:read) ため、ここではセッションを開始できません。",
+      "profilesFailed": "プロバイダープロファイルを読み込めませんでした。",
+      "profilesLoading": "プロバイダープロファイルを読み込み中…",
+      "noProfile": "プロバイダープロファイルがまだありません。先にプロバイダーを追加してください。",
+      "openProviders": "プロバイダーを開く",
+      "chooseProfile": "プロバイダープロファイルを選択してください。",
+      "worktreeFolder": "worktree 用のリポジトリフォルダーを選択してください。",
+      "chooseAgent": "このセッションを実行する承認済みエージェントを選ぶか、あなた自身として実行してください。",
+      "envConflict": "ホスト環境変数の転送にプロファイル所有の変数が含まれています。「詳細オプション」で削除してください。",
+      "templateRefused": "このテンプレートは、この起動では適用できない条件を求めています。「詳細オプション」で別のものを選んでください。",
+      "readinessFailed": "プロファイルの要件を読み込めませんでした。"
     }
   },
   "detail": {
@@ -158,6 +180,7 @@
     "workspace": "ワークスペース",
     "workspaceDirectory": "作業ディレクトリ",
     "workspaceDirectoryOwn": "このセッション専用のディレクトリ",
+    "worktreeBranch": "worktree のブランチ",
     "created": "作成日時",
     "started": "開始日時",
     "lastActivity": "最終アクティビティ",
@@ -195,7 +218,13 @@
     "interruptFailed": "ターンを中断できませんでした。",
     "interruptFenceUnavailable": "中断する前に実行を更新して、現在の作業世代を取得してください。",
     "interruptUnknown": "中断の結果を確認できませんでした。再試行する前にセッションを確認してください。",
-    "interruptWorkConflict": "現在の作業状態では、このセッションを中断できません。実行を更新して状態を確認してください。"
+    "interruptWorkConflict": "現在の作業状態では、このセッションを中断できません。実行を更新して状態を確認してください。",
+    "blocked": {
+      "notLive": "送信するにはセッションを開始または再開してください。",
+      "approval": "起動は承認待ちです。承認されると送信できます。",
+      "sending": "送信中… セッションが受け付けるまでお待ちください。",
+      "empty": "送信する内容を入力してください。"
+    }
   },
   "gov": {
     "title": "ガバナンス態勢",
@@ -294,7 +323,20 @@
     "deleteBody": "これは登録のみを削除します。ホスト上のファイルには決して触れません。これを指しているセッションは起動に失敗します。",
     "deleteConfirm": "登録解除",
     "deleted": "ワークスペースの登録を解除しました",
-    "open": "ファイルを参照"
+    "open": "ファイルを参照",
+    "readOnly": {
+      "title": "読み取り専用フォルダー",
+      "description": "読み取り専用フォルダーは、ファイルの内容とディレクトリエントリを保護します（書き込み、切り詰め、作成、削除、名前変更はできません）。権限、所有者、拡張属性、タイムスタンプはホストの通常の権限に従います。",
+      "empty": "読み取り専用フォルダーはありません。",
+      "folder": "このサーバー上のフォルダー",
+      "folderPlaceholder": "/srv/reference",
+      "add": "追加",
+      "remove": "削除",
+      "removeLabel": "{{folder}} を削除",
+      "discard": "変更を破棄",
+      "save": "フォルダーを保存",
+      "saved": "読み取り専用フォルダーを保存しました。"
+    }
   },
   "browser": {
     "title": "ファイル",
@@ -751,9 +793,9 @@
     "requesting": "依頼中…",
     "requestHintReady": "起動の依頼は認可・発行・プロセス開始の検査をすべて通ります。プロバイダーにログイン済みである証明にはなりません。",
     "requestHintUnknown": "検査は完了していません。起動は依頼できます。サーバーがすべてを再検証します。これは ready ではありません。",
-    "requestBlocked": "起動依頼は出せません。この選択は実行不能だと分かっています。",
-    "noWrite": "要件は見られますが、起動の依頼には sessions:run:write が必要です。",
-    "waitingPreview": "有効なトランスポートの要件を読む前に、テンプレートのプレビューを待っています。",
+    "requestBlocked": "このプロファイルではここでセッションを開始できません。理由は「詳細オプション」の要件に表示されます。",
+    "noWrite": "セッションの開始には sessions:run:write 権限が必要です。",
+    "waitingPreview": "プロファイルを確認する前にテンプレートを読み込んでいます…",
     "providerAuth": "プロバイダーへのログインはここでは観測しません。有効なホームや実行ファイルは認証済みアカウントではありません。",
     "launchAuth": "起動の認可は送信時に決まり、sessions:run:write が必要です。",
     "remoteControl": "ライフサイクルのみ。会話の入出力はプロバイダー側に残り、ブリッジされたターンコンソールはありません。",
@@ -858,6 +900,7 @@
       "codex_app_server": "Codex app-server",
       "grok_acp": "Grok ACP",
       "opencode_acp": "OpenCode ACP",
+      "gemini_acp": "Gemini CLI ACP",
       "unknown": "不明なプロトコル"
     }
   },

@@ -251,23 +251,24 @@ type obsTraceDetail struct {
 func newObservabilityTracesCmd(flags *authClientFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "traces",
-		Short: "List, open and export ledger-derived traces",
+		Short: "List and open ledger-derived traces",
 		Long: "traces correlates audit-ledger events by their trace_id stamp. The LIST is the\n" +
-			"shallow read every viewer sees; opening one trace and exporting it are the\n" +
-			"deeper read on their own permission, so a stricter role model can withhold the\n" +
+			"shallow read every viewer sees; opening one trace is the\n" +
+			"deeper read on its own permission, so a stricter role model can withhold the\n" +
 			"drill-down without hiding the list.\n\n" +
 			"Durations are the ledger-event window (last minus first), NOT OTel span\n" +
 			"durations, and the status column is always \"unset\" because the ledger stores no\n" +
 			"span status.",
 		Example: "  olivares observability traces ls\n" +
-			"  olivares observability traces get 4bf92f3577b34da6a3ce929d0e0e4736\n" +
-			"  olivares observability traces export 4bf92f3577b34da6a3ce929d0e0e4736 -o json",
+			"  olivares observability traces get 4bf92f3577b34da6a3ce929d0e0e4736",
 	}
 	cmd.AddCommand(
 		newObservabilityTracesListCmd(flags),
 		newObservabilityTracesGetCmd(flags),
-		newObservabilityTracesExportCmd(flags),
 	)
+	if export := newObservabilityTracesExportCmd(flags); export != nil {
+		cmd.AddCommand(export)
+	}
 	return cmd
 }
 
@@ -371,33 +372,6 @@ func newObservabilityTracesGetCmd(flags *authClientFlags) *cobra.Command {
 				}
 				return tw.Flush()
 			}, observeJSON(res.raw))
-		},
-	}
-}
-
-func newObservabilityTracesExportCmd(flags *authClientFlags) *cobra.Command {
-	return &cobra.Command{
-		Use:   "export <trace-id>",
-		Short: "Export one trace as OTLP-compatible JSON",
-		Long: "export emits this trace as OTLP/JSON. It is not tested against a named backend.\n" +
-			"The document is the engine's, not this command's: it is written through\n" +
-			"unmodified so that what a collector ingests is byte-for-byte what the control\n" +
-			"plane produced.",
-		Example: "  olivares observability traces export 4bf92f3577b34da6a3ce929d0e0e4736\n" +
-			"  olivares observability traces export 4bf92f3577b34da6a3ce929d0e0e4736 > trace.json",
-		Args: cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			res, err := observeCall{
-				flags: flags, ns: observabilityNS, method: http.MethodGet,
-				path: "/traces" + observeIDPath(args[0]) + "/export",
-			}.do(cmd)
-			if err != nil {
-				return err
-			}
-			// No table: an OTLP document has no rows worth flattening, and a
-			// hand-picked subset would be a different document. Both output modes
-			// therefore carry the engine's JSON.
-			return observeValue(cmd, res.raw, "")
 		},
 	}
 }

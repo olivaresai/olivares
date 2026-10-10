@@ -62,6 +62,13 @@ func TestDescribeAPIRefusalLeadsWithWhatHappened(t *testing.T) {
 			"the engine failed to handle this request (HTTP 502): upstream proxy: 502 Bad Gateway",
 		},
 		{
+			// HU-R37: the 401 a password change leaves behind said only
+			// "auth: unauthenticated (HTTP 401 unauthenticated)".
+			"an ended sign-in says to sign in again", http.StatusUnauthorized,
+			`{"error":{"code":"unauthenticated","message":"auth: unauthenticated"}}`,
+			"this sign-in has ended (a password change or a sign-out ends it): sign in again with olivares login, or pass a valid --token-file",
+		},
+		{
 			"an empty body says so instead of trailing off", http.StatusForbidden, "",
 			"the engine refused this request, and said nothing about why (HTTP 403)",
 		},

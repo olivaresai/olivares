@@ -10,6 +10,7 @@ import (
 	"net/http"
 
 	"github.com/olivaresai/olivares/core/api"
+	"github.com/olivaresai/olivares/core/driverfacts"
 	"github.com/olivaresai/olivares/core/model"
 )
 
@@ -38,12 +39,18 @@ type runDTO struct {
 	// 2026-09-18 could only answer "where is this session working" by reading the
 	// child's own init frame — and the answer then was the engine's own directory.
 	// Empty on a run that predates the column, which reads as "not recorded".
-	WorkspacePath   string `json:"workspace_path,omitempty"`
+	WorkspacePath string `json:"workspace_path,omitempty"`
+	// WorktreeBranch is the branch of the session's own git worktree, named by the
+	// plane that made it. Empty for a session that works in its workspace directly.
+	WorktreeBranch  string `json:"worktree_branch,omitempty"`
 	TemplateID      string `json:"template_id,omitempty"`
 	TemplateVersion int64  `json:"template_version,omitempty"`
 	// SecretEnv names the vault secrets this session receives as environment
 	// variables. Names only: no read of a run ever returns a value.
-	SecretEnv       []SecretEnvRef   `json:"secret_env,omitempty"`
+	SecretEnv []SecretEnvRef `json:"secret_env,omitempty"`
+	// GitRead names the repository binding this session gets a read credential
+	// for. The binding only: no read of a run returns the token.
+	GitRead         string           `json:"git_read,omitempty"`
 	MaxDurationSecs int64            `json:"max_duration_secs,omitempty"`
 	Isolation       string           `json:"isolation"`
 	State           string           `json:"state"`
@@ -107,6 +114,10 @@ type runDTO struct {
 	// first: a home path and an injected value are not proof of an account.
 	ProviderAuthSource string `json:"provider_auth_source,omitempty"`
 	ProviderAuthState  string `json:"provider_auth_state,omitempty"`
+	// ProviderInstance is the AI tools instance (GET /v1/m/agenttools/providers) whose
+	// login this run uses, when it runs on the organization's own login of its tool;
+	// absent for a run on a key or on homes of its own. A name, never a path.
+	ProviderInstance string `json:"provider_instance,omitempty"`
 	// What the governed turns of this session have cost, credited from the
 	// provider's own result frames (runtime_usage.go). POINTERS, because the
 	// difference between "the driver reported no usage" and "the turn was free" is
@@ -122,12 +133,23 @@ type runDTO struct {
 	OutputTokens  *int64 `json:"output_tokens,omitempty"`
 	CostMicroUSD  *int64 `json:"cost_micro_usd,omitempty"`
 	UsageModelRef string `json:"usage_model_ref,omitempty"`
+	// ToolMode is the session's mode as the tool itself last reported it (Claude
+	// Code's permission mode; Codex's approval policy and sandbox), beside the
+	// permission_mode the launch asked for. Absent until the tool says.
+	ToolMode string `json:"tool_mode,omitempty"`
 
 	// LiveRef (B2) is the opaque id of the plane's managed live row for this run,
 	// present only once the bridge proved the run owns its provider id. A console
 	// navigates from a profiled run to its session by THIS, never by the bare
 	// claude_session_id, which two homes may share.
 	LiveRef string `json:"live_ref,omitempty"`
+
+	// CanonicalSID is this session's canonical osn_ ID: what a peer send names and
+	// what another run's `peers` holds (no read of a run showed it).
+	CanonicalSID string `json:"canonical_sid,omitempty"`
+	// CoreSessionID is the core Session of the current launch attempt, the row the
+	// session cockpit lists. Empty before a first launch and on old runs.
+	CoreSessionID string `json:"core_session_id,omitempty"`
 }
 
 // toRunDTO projects a run record, deriving the displayed state at read time.
@@ -144,9 +166,11 @@ func (m *Module) toRunDTO(rec model.Record) runDTO {
 		WorkspaceRef:           rec.String(colWorkspaceRef),
 		AuthzWorkspaceID:       rec.String(colRunAuthzWorkspaceID),
 		WorkspacePath:          rec.String(colRunWorkspacePath),
+		WorktreeBranch:         rec.String(colRunWorktreeBranch),
 		TemplateID:             rec.String(colTemplateID),
 		TemplateVersion:        rec.Int(colTemplateVersion),
 		SecretEnv:              storedSecretEnvNames(rec),
+		GitRead:                rec.String(colRunGitRead),
 		MaxDurationSecs:        rec.Int(colTemplateCeiling),
 		Isolation:              rec.String(colIsolation),
 		State:                  m.deriveRunState(rec),
@@ -184,11 +208,19 @@ func (m *Module) toRunDTO(rec model.Record) runDTO {
 		OutputTokens:           intPtr(rec, colRunOutputTokens),
 		CostMicroUSD:           intPtr(rec, colRunCostMicroUSD),
 		UsageModelRef:          rec.String(colRunUsageModelRef),
+		ToolMode:               rec.String(colRunToolMode),
+	}
+	if sid := rec.String(colRunClaimSID); validCanonicalSID(sid) {
+		out.CanonicalSID = sid
+	}
+	out.CoreSessionID = rec.String(colRunCoreSessionID)
+	if m.usesOwnToolLogin(model.TenantID(rec.String(model.ColTenantID)), out.ProviderDriver, out.ProviderAuthSource, rec.String(colRunProfileConfigHome)) {
+		out.ProviderInstance = driverfacts.OlivaresLoginInstance(out.ProviderDriver)
 	}
 	if runHasWorkBinding(rec) {
 		out.WorkLeaseState = "unknown"
 	}
-	if out.ProviderDriver == providerDriverGrok || out.ProviderDriver == providerDriverOpenCode {
+	if out.ProviderDriver == providerDriverGrok || out.ProviderDriver == providerDriverOpenCode || out.ProviderDriver == providerDriverGemini {
 		out.MCPGovernanceWarning = "MCP servers configured in this tool's own settings are not governed by Olivares."
 	}
 	return out
@@ -275,15 +307,38 @@ type createRunRequest struct {
 	TemplateID     string   `json:"template_id"`
 	Isolation      string   `json:"isolation"`
 	EnvAllow       []string `json:"env_allow"`
+	// Worktree opts the session into a git worktree and branch of its own, made from
+	// the workspace's repository. Absent or false keeps today's default: the session
+	// runs in the workspace folder itself (runtime_worktree.go).
+	Worktree bool `json:"worktree"`
+	// WorktreeFrom starts that worktree at a commit id or a local branch of the
+	// workspace's repository instead of the workspace's HEAD (the work a handoff names).
+	// Absent keeps today's start; it needs Worktree.
+	WorktreeFrom string `json:"worktree_from"`
 	// SecretEnv names vault secrets (env/…) the child receives as environment
 	// variables. Names only; the server opens the values and needs tenant
 	// administration from the caller.
 	SecretEnv []SecretEnvRef `json:"secret_env"`
+	// GitRead names one approved repository binding ("<binding id>:<owner>/<name>")
+	// the session gets a short-lived GitHub read credential for. Needs tenant
+	// administration, like SecretEnv.
+	GitRead string `json:"git_read"`
 	// ProviderProfileRef (B1) names the provider profile to launch under. Only the
 	// reference: no home, environment, driver, binding, canonical sid, process
 	// handle or authentication source is accepted from a client — the source is an
 	// authorization held by the profile, and a request body cannot grant one.
 	ProviderProfileRef string `json:"provider_profile_ref"`
+}
+
+// cleanupRunRequest is the optional POST /runs/{ref}/cleanup body; the endpoint has
+// always accepted none, and it still takes any body: handleCleanupRun reads this
+// leniently, so only an explicit true counts. DiscardWorktree confirms that the
+// session's worktree and branch may be removed although the branch is not merged, the
+// worktree holds uncommitted files or its HEAD is off the branch, and that a worktree
+// this node cannot reach may be left in place; without it a release that would
+// destroy or orphan that work is refused.
+type cleanupRunRequest struct {
+	DiscardWorktree bool `json:"discard_worktree"`
 }
 
 // inputRequest is the POST /runs/{ref}/input body (one NDJSON message to stdin).
@@ -345,7 +400,7 @@ func decodeOptionalJSONBody(w http.ResponseWriter, r *http.Request, v any) bool 
 	// Optional: a chunked/unknown-length body that turns out to be empty also
 	// keeps v at its zero value.
 	if err := api.DecodeRequestBody(w, r, v, api.RequestBodySpec{MaxBytes: 1 << 20, Optional: true}); err != nil {
-		writeJSON(w, http.StatusBadRequest, errorBody("invalid request body"))
+		writeJSON(w, http.StatusBadRequest, errorBody(api.RequestBodyErrorMessage(err, "invalid request body")))
 		return false
 	}
 	return true
@@ -355,14 +410,13 @@ func decodeOptionalJSONBody(w http.ResponseWriter, r *http.Request, v any) bool 
 // It writes a 400 and returns false on any decode error.
 func decodeJSONBody(w http.ResponseWriter, r *http.Request, v any) bool {
 	if err := api.DecodeRequestBody(w, r, v, api.RequestBodySpec{MaxBytes: 1 << 20}); err != nil {
-		writeJSON(w, http.StatusBadRequest, errorBody("invalid request body"))
+		writeJSON(w, http.StatusBadRequest, errorBody(api.RequestBodyErrorMessage(err, "invalid request body")))
 		return false
 	}
 	return true
 }
 
-// decodeOptionalJSONBody vivía DOS VECES en este fichero tras componer con K2, y las dos
-// compilaban por separado. Se queda la de arriba porque es estrictamente más fuerte, no por ser
-// la primera: guarda `r.Body == nil || r.ContentLength == 0` ANTES de tocar el decodificador —un
-// cuerpo nil hace panic en el otro— y usa `errors.Is(err, io.EOF)` en vez de `err == io.EOF`, que
-// no desenvuelve. La eliminada no aportaba ningún caso que la superviviente no cubra.
+// And K2 integration left two independent implementations of
+// decodeOptionalJSONBody here. The retained version guarded a nil or zero-length
+// body before decoding and used errors.Is(err, io.EOF) instead of direct equality
+// to recognize wrapped EOF errors. The removed copy covered no additional case.

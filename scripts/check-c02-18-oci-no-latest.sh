@@ -23,7 +23,7 @@ HUBGR="${OLIVARES_C0218_HUBGR:-.goreleaser.yaml}"
 
 grep -q 'NOT PROVISIONED' "$DOC" || fail "$DOC lost NOT PROVISIONED"
 if grep -qiE 'registry provisioned|published :latest as commercial|images pushed' "$DOC"; then
-	fail "$DOC claims a publish this lote does not have"
+	fail "$DOC claims a publish this batch does not have"
 fi
 # Hub build already refuses a latest manifest (promotion is a later job).
 grep -q 'NO `latest` manifest here' "$HUBGR" \

@@ -34,6 +34,10 @@ vi.mock('@/lib/auth/context', () => ({
     principal: { user_id: auth.principal, aal: 1 },
   }),
 }))
+vi.mock('@tanstack/react-router', async (orig) => ({
+  ...(await orig<typeof import('@tanstack/react-router')>()),
+  useNavigate: () => vi.fn(),
+}))
 vi.mock('@/components/ui/toaster', () => ({
   toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
   Toaster: () => null,

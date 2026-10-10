@@ -199,7 +199,7 @@ func TestCommunicationWorkspaceInitializerSeedsExactlyTwoGuardsAcrossBackends(t 
 
 			ctx := context.Background()
 			var secondWorkspace model.ID
-			if err := fixture.m.data.Mutate(ctx, fixture.tenant, func(scope store.Scope) error {
+			if err := fixture.m.Data.Mutate(ctx, fixture.tenant, func(scope store.Scope) error {
 				workspace, err := scope.Workspaces().Create(ctx, model.Workspace{
 					Name: "Second", Slug: "second", Status: model.StatusActive,
 				})
@@ -221,7 +221,7 @@ func TestCommunicationWorkspaceInitializerSeedsExactlyTwoGuardsAcrossBackends(t 
 			}); err != nil {
 				t.Fatalf("create second tenant: %v", err)
 			}
-			if err := fixture.m.data.View(ctx, secondTenant, func(scope store.Scope) error {
+			if err := fixture.m.Data.View(ctx, secondTenant, func(scope store.Scope) error {
 				workspace, err := scope.DefaultWorkspace(ctx)
 				secondDefault = workspace.ID
 				return err
@@ -398,9 +398,10 @@ func TestCommunicationGuardReconcilePersistsTimeHWMWhenSequenceIsAheadSQLite(t *
 		inner: api.NewModuleData(fixture.st), clock: clock,
 	}
 	fixture.m.UseData(rollbackData)
-	fixture.m.UseCommunicationGuardReconciliationData(
-		NewCommunicationGuardReconciliationData(rollbackData),
-	)
+	func() {
+		fixture.m.CommunicationGuardData = NewCommunicationGuardReconciliationData(rollbackData)
+		fixture.m.normalize()
+	}()
 
 	// Seed a low historical delivery at t0, then put its guard well ahead. The
 	// later t2 update must advance the temporal HWM even though max(seq)+1 remains
@@ -429,7 +430,7 @@ func TestCommunicationGuardReconcilePersistsTimeHWMWhenSequenceIsAheadSQLite(t *
 	if err != nil {
 		t.Fatalf("create low-sequence temporal-HWM Delivery: %v", err)
 	}
-	if err := fixture.m.data.Mutate(ctx, fixture.tenant, func(raw store.Scope) error {
+	if err := fixture.m.Data.Mutate(ctx, fixture.tenant, func(raw store.Scope) error {
 		confined, err := store.ConfineWorkspace(ctx, raw, fixture.workspace)
 		if err != nil {
 			return err
@@ -693,7 +694,7 @@ func communicationObserveGuardSource(
 	t.Helper()
 	ctx := context.Background()
 	var observation communicationGuardSourceObservation
-	if err := fixture.m.data.Mutate(ctx, fixture.tenant, func(raw store.Scope) error {
+	if err := fixture.m.Data.Mutate(ctx, fixture.tenant, func(raw store.Scope) error {
 		confined, err := store.ConfineWorkspace(ctx, raw, fixture.workspace)
 		if err != nil {
 			return err
@@ -789,9 +790,10 @@ func TestCommunicationGuardUpgradeNeedsExplicitReconcileSQLite(t *testing.T) {
 	t.Cleanup(func() { _ = upgraded.Close() })
 	module.UseData(api.NewModuleData(upgraded))
 	bindStoreStanding(module, upgraded)
-	module.UseCommunicationGuardReconciliationData(
-		NewCommunicationGuardReconciliationData(api.NewModuleData(upgraded)),
-	)
+	func() {
+		module.CommunicationGuardData = NewCommunicationGuardReconciliationData(api.NewModuleData(upgraded))
+		module.normalize()
+	}()
 	if err := module.VerifyCommunicationGuards(ctx, tenant); !errors.Is(err, ErrCommunicationEvidenceUnknown) {
 		t.Fatalf("upgrade verify before reconcile = %v, want evidence unknown", err)
 	}
@@ -1069,7 +1071,7 @@ func TestCommunicationGuardReconcileLockAndClockOrderSQLite(t *testing.T) {
 	ctx := context.Background()
 	var steps []string
 	var sourceSorts []string
-	if err := fixture.m.data.Mutate(ctx, fixture.tenant, func(raw store.Scope) error {
+	if err := fixture.m.Data.Mutate(ctx, fixture.tenant, func(raw store.Scope) error {
 		confined, err := store.ConfineWorkspace(ctx, raw, fixture.workspace)
 		if err != nil {
 			return err
@@ -1253,7 +1255,7 @@ func TestCommunicationGuardWorkspacePaginationRejectsCyclesAndDuplicates(t *test
 		t.Run(test.name, func(t *testing.T) {
 			probe := &communicationGuardPageProbe{pages: test.pages}
 			module := New()
-			module.communicationGuardData = probe
+			module.CommunicationGuardData = probe
 			err := module.ReconcileCommunicationGuards(
 				context.Background(), tenant, CommunicationGuardReconcileStaged,
 			)
@@ -1329,7 +1331,10 @@ func TestCommunicationGuardReconcileBoundsTransactionsAndPreservesProgressSQLite
 	fault := &communicationGuardFaultData{
 		inner: data, failMutateAt: failAt, failure: lateFailure,
 	}
-	module.UseCommunicationGuardReconciliationData(NewCommunicationGuardReconciliationData(fault))
+	func() {
+		module.CommunicationGuardData = NewCommunicationGuardReconciliationData(fault)
+		module.normalize()
+	}()
 
 	err = module.ReconcileCommunicationGuards(
 		ctx, tenant, CommunicationGuardReconcileStaged,
@@ -1349,7 +1354,10 @@ func TestCommunicationGuardReconcileBoundsTransactionsAndPreservesProgressSQLite
 		t.Fatalf("guards committed before late failure = %d, want %d", got, 2*(failAt-1))
 	}
 
-	module.UseCommunicationGuardReconciliationData(NewCommunicationGuardReconciliationData(data))
+	func() {
+		module.CommunicationGuardData = NewCommunicationGuardReconciliationData(data)
+		module.normalize()
+	}()
 	if err := module.ReconcileCommunicationGuards(
 		ctx, tenant, CommunicationGuardReconcileStaged,
 	); err != nil {
@@ -1368,7 +1376,7 @@ func communicationCountGuards(t *testing.T, module *Module, tenant model.TenantI
 	t.Helper()
 	ctx := context.Background()
 	count := 0
-	if err := module.data.View(ctx, tenant, func(scope store.Scope) error {
+	if err := module.Data.View(ctx, tenant, func(scope store.Scope) error {
 		repo, err := scope.Ext(communicationGuardKind)
 		if err != nil {
 			return err
@@ -1408,7 +1416,7 @@ func communicationAssertGuardSet(
 	if wantRoute == 0 && wantDelivery == 0 {
 		wantCount = 0
 	}
-	if err := module.data.View(ctx, tenant, func(raw store.Scope) error {
+	if err := module.Data.View(ctx, tenant, func(raw store.Scope) error {
 		confined, err := store.ConfineWorkspace(ctx, raw, workspace)
 		if err != nil {
 			return err

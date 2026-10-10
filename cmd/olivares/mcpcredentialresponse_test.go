@@ -16,6 +16,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/olivaresai/olivares/cmd/olivares/internal/mcpgateway"
 	mcpc "github.com/olivaresai/olivares/connectors/mcp"
 )
 
@@ -52,7 +53,7 @@ func TestMCPUpstreamCredentialMinimumLength(t *testing.T) {
 					provider = nil
 				}
 				calls := 0
-				f := &mcpUpstreamForwarder{url: endpoint, credProv: provider, client: &http.Client{Transport: credentialFixtureTransport{body: `{"jsonrpc":"2.0","id":1,"result":{"description":"healthy prose with alphabet abc"}}`, authorization: header, calls: &calls}}}
+				f := &mcpgateway.UpstreamForwarder{URL: endpoint, CredProv: provider, Client: &http.Client{Transport: credentialFixtureTransport{body: `{"jsonrpc":"2.0","id":1,"result":{"description":"healthy prose with alphabet abc"}}`, authorization: header, calls: &calls}}}
 				res, err := f.Forward(t.Context(), mcpc.UpstreamRequest{Method: "tools/list"})
 				if length < 8 {
 					if err == nil || calls != 0 || res.State != mcpc.DispatchNotSent || len(res.Result) != 0 {
@@ -86,7 +87,7 @@ func TestMCPBasicCredentialFormsAndShortPasswordPolicy(t *testing.T) {
 				}
 				for _, prefix := range []string{`"result":{"echo":`, `"error":{"code":-32603,"message":"refused","data":`} {
 					body := `{"jsonrpc":"2.0","id":1,` + prefix + string(encoded) + `}}`
-					f := &mcpUpstreamForwarder{url: "https://fixture.test/mcp", credProv: &staticCredentialProvider{authHeader: header}, client: &http.Client{Transport: credentialFixtureTransport{body: body, authorization: header}}}
+					f := &mcpgateway.UpstreamForwarder{URL: "https://fixture.test/mcp", CredProv: &staticCredentialProvider{authHeader: header}, Client: &http.Client{Transport: credentialFixtureTransport{body: body, authorization: header}}}
 					res, err := f.Forward(t.Context(), mcpc.UpstreamRequest{Method: "tools/list"})
 					if err == nil || res.State != mcpc.DispatchUnknown || len(res.Result) != 0 {
 						t.Fatal("decoded Basic credential result/error released")
@@ -94,7 +95,7 @@ func TestMCPBasicCredentialFormsAndShortPasswordPolicy(t *testing.T) {
 				}
 				stream := "data: {\"jsonrpc\":\"2.0\",\"method\":\"notifications/subscriptions/acknowledged\",\"params\":{\"_meta\":{\"io.modelcontextprotocol/subscriptionId\":1}}}\n\n" +
 					`data: {"jsonrpc":"2.0","method":"notifications/tools/list_changed","params":{"_meta":{"io.modelcontextprotocol/subscriptionId":1},"echo":` + string(encoded) + "}}\n\n"
-				f := &mcpUpstreamForwarder{url: "https://fixture.test/mcp", credProv: &staticCredentialProvider{authHeader: header}, client: &http.Client{Transport: credentialFixtureTransport{body: stream, authorization: header, contentType: "text/event-stream"}}}
+				f := &mcpgateway.UpstreamForwarder{URL: "https://fixture.test/mcp", CredProv: &staticCredentialProvider{authHeader: header}, Client: &http.Client{Transport: credentialFixtureTransport{body: stream, authorization: header, contentType: "text/event-stream"}}}
 				emitted := 0
 				if err := f.Listen(t.Context(), mcpc.SubscriptionListenRequest{Filter: mcpc.SubscriptionFilter{ToolsListChanged: true}}, func(mcpc.SubscriptionEvent) error { emitted++; return nil }); err == nil || emitted != 0 {
 					t.Fatal("decoded Basic credential stream emitted")
@@ -110,7 +111,7 @@ func TestMCPForwarderRefusesURLCredentialEcho(t *testing.T) {
 	header := "Basic " + base64.StdEncoding.EncodeToString([]byte(pair))
 	for _, echo := range []string{header, pair, "fixture-url-secret", `\u0066ixture-url-secret`} {
 		body := `{"jsonrpc":"2.0","id":1,"result":{"echo":"` + echo + `"}}`
-		f := &mcpUpstreamForwarder{url: endpoint, client: &http.Client{Transport: credentialFixtureTransport{body: body, authorization: header}}}
+		f := &mcpgateway.UpstreamForwarder{URL: endpoint, Client: &http.Client{Transport: credentialFixtureTransport{body: body, authorization: header}}}
 		res, err := f.Forward(t.Context(), mcpc.UpstreamRequest{Method: "tools/list"})
 		if err == nil || res.State != mcpc.DispatchUnknown || len(res.Result) != 0 {
 			t.Fatal("URL credential echo released")
@@ -140,7 +141,7 @@ func TestMCPSubscriptionRefusesCredentialBeforeEmit(t *testing.T) {
 		body := ": ignored comment with an unmatched quote \"\n\n" + "data: {\"jsonrpc\":\"2.0\",\"method\":\"notifications/subscriptions/acknowledged\",\"params\":{\"_meta\":{\"io.modelcontextprotocol/subscriptionId\":1}}}\n\n" +
 			`data: {"jsonrpc":"2.0","method":"notifications/tools/list_changed","params":{"_meta":{"io.modelcontextprotocol/subscriptionId":1},"echo":"` + echo + "\"}}\n\n" +
 			"data: {\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{}}\n\n"
-		f := &mcpUpstreamForwarder{url: "https://fixture.test/mcp", credProv: &staticCredentialProvider{authHeader: "Bearer fixture-cut-secret"}, client: &http.Client{Transport: credentialFixtureTransport{body: body, authorization: "Bearer fixture-cut-secret", contentType: "text/event-stream"}}}
+		f := &mcpgateway.UpstreamForwarder{URL: "https://fixture.test/mcp", CredProv: &staticCredentialProvider{authHeader: "Bearer fixture-cut-secret"}, Client: &http.Client{Transport: credentialFixtureTransport{body: body, authorization: "Bearer fixture-cut-secret", contentType: "text/event-stream"}}}
 		emitted := 0
 		err := f.Listen(t.Context(), mcpc.SubscriptionListenRequest{Filter: mcpc.SubscriptionFilter{ToolsListChanged: true}}, func(mcpc.SubscriptionEvent) error { emitted++; return nil })
 		if err == nil || emitted != 0 {
@@ -179,7 +180,7 @@ func TestMCPForwarderRefusesCredentialResultsAndErrors(t *testing.T) {
 		{"escaped_error_data", `{"jsonrpc":"2.0","id":1,"error":{"code":-32603,"message":"refused","data":"\u0066ixture-cut-secret"}}`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			f := &mcpUpstreamForwarder{url: "https://fixture.test/mcp", credProv: &staticCredentialProvider{authHeader: header}, client: &http.Client{Transport: credentialFixtureTransport{body: tc.body, authorization: header}}}
+			f := &mcpgateway.UpstreamForwarder{URL: "https://fixture.test/mcp", CredProv: &staticCredentialProvider{authHeader: header}, Client: &http.Client{Transport: credentialFixtureTransport{body: tc.body, authorization: header}}}
 			res, err := f.Forward(context.Background(), mcpc.UpstreamRequest{Method: "tools/list"})
 			if err == nil || len(res.Result) != 0 || res.State != mcpc.DispatchUnknown {
 				t.Fatalf("credential response released or incorrectly settled: state=%s error=%v", res.State, err != nil)
@@ -194,7 +195,7 @@ func TestMCPForwarderRefusesCredentialResultsAndErrors(t *testing.T) {
 		if auth == "" {
 			body = `{"jsonrpc":"2.0","id":1,"result":{"description":"fixture-cut-secret"}}`
 		}
-		f := &mcpUpstreamForwarder{url: "https://fixture.test/mcp", credProv: &staticCredentialProvider{authHeader: auth}, client: &http.Client{Transport: credentialFixtureTransport{body: body, authorization: auth}}}
+		f := &mcpgateway.UpstreamForwarder{URL: "https://fixture.test/mcp", CredProv: &staticCredentialProvider{authHeader: auth}, Client: &http.Client{Transport: credentialFixtureTransport{body: body, authorization: auth}}}
 		if res, err := f.Forward(t.Context(), mcpc.UpstreamRequest{Method: "tools/list"}); err != nil || res.State != mcpc.DispatchCompleted {
 			t.Fatal("non-disclosing response changed")
 		}
@@ -207,8 +208,8 @@ func TestManagedMCPRefusesEscapedCredentialSSE(t *testing.T) {
 		`data: {"jsonrpc":"2.0","id":1,"error":{"code":-32603,"message":"refused","data":"\u0066ixture-cut-secret"}}` + "\n\n",
 		`data: {"jsonrpc":"2.0","method":"notifications/progress","params":{"echo":"\u0066ixture-cut-secret"}}` + "\n\n",
 	} {
-		f := &mcpUpstreamForwarder{url: "https://fixture.test/mcp", credProv: &staticCredentialProvider{authHeader: "Bearer fixture-cut-secret"}, client: &http.Client{Transport: credentialFixtureTransport{body: body, authorization: "Bearer fixture-cut-secret", contentType: "text/event-stream"}}}
-		enableManagedMCPForwarding(f)
+		f := &mcpgateway.UpstreamForwarder{URL: "https://fixture.test/mcp", CredProv: &staticCredentialProvider{authHeader: "Bearer fixture-cut-secret"}, Client: &http.Client{Transport: credentialFixtureTransport{body: body, authorization: "Bearer fixture-cut-secret", contentType: "text/event-stream"}}}
+		mcpgateway.EnableManagedForwarding(f)
 		res, err := f.Forward(t.Context(), mcpc.UpstreamRequest{Method: "initialize", Subject: "agent:fixture"})
 		if res.State != mcpc.DispatchUnknown || len(res.Result) != 0 || !errors.Is(err, mcpc.ErrUpstreamCredentialDisclosure) {
 			t.Fatal("managed SSE credential refusal lost its classification")

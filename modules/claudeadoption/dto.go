@@ -5,7 +5,6 @@
 package claudeadoption
 
 import (
-	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
@@ -170,17 +169,9 @@ func timeWindow(r *http.Request) (since time.Time, hasSince bool, until time.Tim
 	return since, hasSince, until, hasUntil, badSince || badUntil
 }
 
-func errorBody(msg string) map[string]any {
-	return map[string]any{"error": map[string]string{"message": msg}}
-}
+var errorBody = api.ModuleErrorBody
 
-func writeJSON(w http.ResponseWriter, status int, v any) {
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.WriteHeader(status)
-	if v != nil {
-		_ = json.NewEncoder(w).Encode(v)
-	}
-}
+var writeJSON = api.WriteJSON
 
 // writeStoreError maps a store error to an HTTP status. Everything except this
 // module's own unknown-entity answer is api.StoreErrorStatus

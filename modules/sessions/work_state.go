@@ -130,7 +130,7 @@ func decodeHash(s string, required bool) ([]byte, error) {
 	s = strings.TrimPrefix(s, "sha256:")
 	b, err := hex.DecodeString(s)
 	if err != nil || len(b) != sha256.Size {
-		return nil, brokenField(400, "invalid_command", "provenance_hash|evidence_hash (sha256 de 32 bytes, con o sin prefijo «sha256:»)")
+		return nil, brokenField(400, "invalid_command", "provenance_hash|evidence_hash (32-byte sha256, with or without the sha256: prefix)")
 	}
 	return b, nil
 }
@@ -196,7 +196,7 @@ func rejectFractionalNumbers(v any) error {
 
 func validateRefs(refs []ContextRef) error {
 	if len(refs) > 64 {
-		return brokenField(400, "invalid_command", "context_refs (maximo 64)")
+		return brokenField(400, "invalid_command", "context_refs (at most 64)")
 	}
 	for _, ref := range refs {
 		if bad := firstBadField(
@@ -211,7 +211,7 @@ func validateRefs(refs []ContextRef) error {
 	}
 	b, err := canonicalJSON(refs)
 	if err != nil || len(b) > 16*1024 {
-		return brokenField(400, "invalid_command", "context_refs (el conjunto excede 16 KiB serializado)")
+		return brokenField(400, "invalid_command", "context_refs (the set exceeds 16 KiB serialized)")
 	}
 	return nil
 }
@@ -222,19 +222,19 @@ func validateAcceptanceInput(in AcceptanceInput, evaluating bool) error {
 	// formada. La guarda escaneaba SOLO el cuerpo de `validateCommandSyntax`: un test que
 	// mide un trozo del camino declara limpio el resto. Ahora cubre el fichero entero.
 	if bad := firstBadField(
-		fieldCheck{"criterion_id (no se envia al CREAR un criterio)", in.ID.IsZero()},
-		fieldCheck{"criterion_key (bandera --criterion-key)", in.Key == "" || boundedToken(in.Key, 64)},
+		fieldCheck{"criterion_id (not sent when creating a criterion)", in.ID.IsZero()},
+		fieldCheck{"criterion_key (flag --criterion-key)", in.Key == "" || boundedToken(in.Key, 64)},
 		fieldCheck{"ordinal", in.Ordinal >= 0},
-		fieldCheck{"statement (bandera --statement)", in.Statement == "" || boundedText(in.Statement, 1, 4*1024)},
+		fieldCheck{"statement (flag --statement)", in.Statement == "" || boundedText(in.Statement, 1, 4*1024)},
 	); bad != "" {
 		return brokenField(400, "invalid_command", bad)
 	}
 	if !evaluating {
 		if bad := firstBadField(
-			fieldCheck{"state (al crear solo vale «pending» o vacio)", in.State == "" || in.State == "pending"},
-			fieldCheck{"evidence_ref (no se envia al crear)", in.EvidenceRef == ""},
-			fieldCheck{"evidence_hash (no se envia al crear)", in.EvidenceHash == ""},
-			fieldCheck{"waiver_decision_id (no se envia al crear)", in.WaiverDecisionID.IsZero()},
+			fieldCheck{"state (only pending, or empty, when creating)", in.State == "" || in.State == "pending"},
+			fieldCheck{"evidence_ref (not sent when creating)", in.EvidenceRef == ""},
+			fieldCheck{"evidence_hash (not sent when creating)", in.EvidenceHash == ""},
+			fieldCheck{"waiver_decision_id (not sent when creating)", in.WaiverDecisionID.IsZero()},
 		); bad != "" {
 			return brokenField(400, "invalid_command", bad)
 		}
@@ -242,17 +242,17 @@ func validateAcceptanceInput(in AcceptanceInput, evaluating bool) error {
 		// Evaluation changes custody state/evidence only. Criterion definition is
 		// frozen once execution begins and cannot ride this PATCH implicitly.
 		if bad := firstBadField(
-			fieldCheck{"criterion_key (la definicion esta congelada al evaluar)", in.Key == ""},
-			fieldCheck{"ordinal (congelado al evaluar)", in.Ordinal == 0},
-			fieldCheck{"statement (congelado al evaluar)", in.Statement == ""},
-			fieldCheck{"required (congelado al evaluar)", !in.Required},
+			fieldCheck{"criterion_key (the definition is frozen once evaluated)", in.Key == ""},
+			fieldCheck{"ordinal (frozen once evaluated)", in.Ordinal == 0},
+			fieldCheck{"statement (frozen once evaluated)", in.Statement == ""},
+			fieldCheck{"required (frozen once evaluated)", !in.Required},
 		); bad != "" {
 			return brokenField(400, "invalid_command", bad)
 		}
 		if bad := firstBadField(
-			fieldCheck{"state (bandera --state)", acceptanceStates[in.State]},
-			fieldCheck{"evidence_ref (no vale con state=pending)", in.State != "pending" || in.EvidenceRef == ""},
-			fieldCheck{"evidence_hash (no vale con state=pending)", in.State != "pending" || in.EvidenceHash == ""},
+			fieldCheck{"state (flag --state)", acceptanceStates[in.State]},
+			fieldCheck{"evidence_ref (not valid with state=pending)", in.State != "pending" || in.EvidenceRef == ""},
+			fieldCheck{"evidence_hash (not valid with state=pending)", in.State != "pending" || in.EvidenceHash == ""},
 		); bad != "" {
 			return brokenField(400, "invalid_command", bad)
 		}
@@ -268,7 +268,7 @@ func validateAcceptanceInput(in AcceptanceInput, evaluating bool) error {
 			return brokenField(422, "acceptance_incomplete", fldWaiverDecision)
 		}
 		if in.State != "waived" && !in.WaiverDecisionID.IsZero() {
-			return brokenField(400, "invalid_command", "waiver_decision_id (solo con state=waived)")
+			return brokenField(400, "invalid_command", "waiver_decision_id (only with state=waived)")
 		}
 	}
 	return nil
@@ -300,21 +300,21 @@ func validWorkOwnerRef(kind, ref string) bool {
 // que se teclea dos veces es un hecho en dos sitios, y un hecho en dos sitios DERIVA. Los cortos
 // (`work_item_id`, `fence`) se dejan literales: no tienen nada que divergir.
 const (
-	fldCriterionKey = "criterion_key (bandera --criterion-key, o acceptance[].key)"
-	fldStatement    = "statement (bandera --statement, o acceptance[].statement)"
-	fldAcceptance1  = "acceptance (exactamente un criterio)"
+	fldCriterionKey = "criterion_key (flag --criterion-key, or acceptance[].key)"
+	fldStatement    = "statement (flag --statement, or acceptance[].statement)"
+	fldAcceptance1  = "acceptance (exactly one criterion)"
 
 	// Los seis de abajo salian MUDOS (`broken`, sin campo) hasta 2026-08-25: el camino de
 	// aceptacion contestaba `acceptance_incomplete` para CINCO causas distintas, asi que
 	// nombrar el codigo no decia nada. Vocabulario del LLAMANTE: la bandera del CLI
 	// (cmd_work.go:100-127) mas el nombre JSON, que es lo unico que quien llama puede teclear.
-	fldEvidenceRef     = "evidence_ref (bandera --evidence-ref; obligatorio con state=passed|failed)"
-	fldEvidenceHash    = "evidence_hash (bandera --evidence-hash; obligatorio con state=passed)"
-	fldWaiverDecision  = "waiver_decision_id (bandera --waiver-decision-id; obligatorio con state=waived)"
-	fldAcceptanceRange = "acceptance (entre 1 y 64 criterios)"
-	fldCriterionDup    = "criterion_key (bandera --criterion-key; duplicada en este mismo comando)"
-	fldRequiredOne     = "required (bandera --required; al menos un criterio obligatorio)"
-	fldOwnerRef        = "owner_ref (el id del participante, sin prefijo: `<uuid>`, no `user:<uuid>`)"
+	fldEvidenceRef     = "evidence_ref (flag --evidence-ref; required with state=passed|failed)"
+	fldEvidenceHash    = "evidence_hash (flag --evidence-hash; required with state=passed)"
+	fldWaiverDecision  = "waiver_decision_id (flag --waiver-decision-id; required with state=waived)"
+	fldAcceptanceRange = "acceptance (1 to 64 criteria)"
+	fldCriterionDup    = "criterion_key (flag --criterion-key; duplicated in this same command)"
+	fldRequiredOne     = "required (flag --required; at least one required criterion)"
+	fldOwnerRef        = "owner_ref (the participant id without a prefix: `<uuid>`, not `user:<uuid>`)"
 )
 
 func validateCommandSyntax(cmd WorkCommand) error {
@@ -387,7 +387,7 @@ func validateCommandSyntax(cmd WorkCommand) error {
 		if cmd.Title == "" && cmd.BriefMD == "" && cmd.Priority == "" && cmd.ContextRefs == nil && cmd.DueAt == "" {
 			// Nada que actualizar: el campo que falta es CUALQUIERA de estos cinco, y decirlo
 			// asi es mas util que elegir uno.
-			return brokenField(400, "invalid_command", "title|brief_md|priority|context_refs|due_at (al menos uno)")
+			return brokenField(400, "invalid_command", "title|brief_md|priority|context_refs|due_at (at least one)")
 		}
 		if cmd.Title != "" && !boundedText(cmd.Title, 1, 256) {
 			return brokenField(400, "invalid_command", "title")
@@ -417,9 +417,9 @@ func validateCommandSyntax(cmd WorkCommand) error {
 		// `normalizeWorkCommand` acepta `blocked_code` para `item.block` y `terminal_code`
 		// para `item.fail`/`item.cancel`, y los vuelca los dos sobre `Code`. Decir «code» a
 		// secas mandaria a la bandera equivocada a quien uso la que el CLI le ofrece.
-		codeField, reasonField := "terminal_code (o code)", "terminal_reason (o reason)"
+		codeField, reasonField := "terminal_code (or code)", "terminal_reason (or reason)"
 		if cmd.Command == "item.block" {
-			codeField, reasonField = "blocked_code (o code)", "blocked_reason (o reason)"
+			codeField, reasonField = "blocked_code (or code)", "blocked_reason (or reason)"
 		}
 		if bad := firstBadField(
 			fieldCheck{"work_item_id", !cmd.WorkItemID.IsZero()},
@@ -440,14 +440,14 @@ func validateCommandSyntax(cmd WorkCommand) error {
 		if bad := firstBadField(
 			fieldCheck{"work_item_id", !cmd.WorkItemID.IsZero()},
 			fieldCheck{"depends_on_id", !cmd.DependsOnID.IsZero()},
-			fieldCheck{"depends_on_id (no puede ser el propio work_item_id)", cmd.WorkItemID != cmd.DependsOnID},
+			fieldCheck{"depends_on_id (cannot be the work_item_id itself)", cmd.WorkItemID != cmd.DependsOnID},
 		); bad != "" {
 			return brokenField(400, "invalid_command", bad)
 		}
 	case "dependency.remove":
 		if bad := firstBadField(
 			fieldCheck{"work_item_id", !cmd.WorkItemID.IsZero()},
-			fieldCheck{"target_id (o dependency_id)", !cmd.TargetID.IsZero()},
+			fieldCheck{"target_id (or dependency_id)", !cmd.TargetID.IsZero()},
 		); bad != "" {
 			return brokenField(400, "invalid_command", bad)
 		}
@@ -491,13 +491,13 @@ func validateCommandSyntax(cmd WorkCommand) error {
 		// The criterion key is immutable. Definition PATCH replaces the three
 		// editable fields as one unambiguous document while the item is draft.
 		if bad := firstBadField(
-			fieldCheck{"criterion_key (inmutable: no se envia en un update)", input.Key == ""},
+			fieldCheck{"criterion_key (immutable: not sent on an update)", input.Key == ""},
 			fieldCheck{"ordinal", input.Ordinal >= 0},
 			fieldCheck{"statement", boundedText(input.Statement, 1, 4*1024)},
-			fieldCheck{"state (no editable aqui)", input.State == ""},
-			fieldCheck{"evidence_ref (no editable aqui)", input.EvidenceRef == ""},
-			fieldCheck{"evidence_hash (no editable aqui)", input.EvidenceHash == ""},
-			fieldCheck{"waiver_decision_id (no editable aqui)", input.WaiverDecisionID.IsZero()},
+			fieldCheck{"state (not editable here)", input.State == ""},
+			fieldCheck{"evidence_ref (not editable here)", input.EvidenceRef == ""},
+			fieldCheck{"evidence_hash (not editable here)", input.EvidenceHash == ""},
+			fieldCheck{"waiver_decision_id (not editable here)", input.WaiverDecisionID.IsZero()},
 		); bad != "" {
 			return brokenField(400, "invalid_command", bad)
 		}
@@ -506,7 +506,7 @@ func validateCommandSyntax(cmd WorkCommand) error {
 			fieldCheck{"work_item_id", !cmd.WorkItemID.IsZero()},
 			fieldCheck{"decision_key", boundedToken(cmd.DecisionKey, 128)},
 			fieldCheck{"authority_ref", boundedText(cmd.AuthorityRef, 1, 512)},
-			fieldCheck{"statement_md (o statement)", boundedText(cmd.StatementMD, 1, 16*1024)},
+			fieldCheck{"statement_md (or statement)", boundedText(cmd.StatementMD, 1, 16*1024)},
 			fieldCheck{"rationale_md", boundedText(cmd.RationaleMD, 1, 16*1024)},
 		); bad != "" {
 			return brokenField(400, "invalid_command", bad)
@@ -527,7 +527,7 @@ func validateCommandSyntax(cmd WorkCommand) error {
 			fieldCheck{"work_item_id", !cmd.WorkItemID.IsZero()},
 			fieldCheck{"holder_sid", validCanonicalSID(cmd.HolderSID)},
 			fieldCheck{"ttl_seconds", validWorkLeaseTTL(cmd.TTLSeconds)},
-			fieldCheck{"fence (obligatorio en lease.takeover)", cmd.Command != "lease.takeover" || cmd.Fence >= 1},
+			fieldCheck{"fence (required for lease.takeover)", cmd.Command != "lease.takeover" || cmd.Fence >= 1},
 			fieldCheck{"holder_run_ref", cmd.HolderRunRef == "" || boundedText(cmd.HolderRunRef, 1, 512)},
 			fieldCheck{"holder_agent_ref", cmd.HolderAgentRef == "" || boundedText(cmd.HolderAgentRef, 1, 512)},
 		); bad != "" {
@@ -535,9 +535,9 @@ func validateCommandSyntax(cmd WorkCommand) error {
 		}
 		if cmd.Force {
 			if bad := firstBadField(
-				fieldCheck{"force (solo en lease.takeover)", cmd.Command == "lease.takeover"},
-				fieldCheck{"reason (obligatorio con force)", boundedText(cmd.Reason, 1, 2*1024)},
-				fieldCheck{"decision_id (obligatorio con force)", !cmd.DecisionID.IsZero()},
+				fieldCheck{"force (only for lease.takeover)", cmd.Command == "lease.takeover"},
+				fieldCheck{"reason (required with force)", boundedText(cmd.Reason, 1, 2*1024)},
+				fieldCheck{"decision_id (required with force)", !cmd.DecisionID.IsZero()},
 			); bad != "" {
 				return brokenField(400, "invalid_command", bad)
 			}
@@ -582,7 +582,7 @@ func validateCommandSyntax(cmd WorkCommand) error {
 		}
 	case "lease.expire":
 		if bad := firstBadField(
-			fieldCheck{"command (lease.expire es interno: no se acepta del exterior)", cmd.internal},
+			fieldCheck{"command (lease.expire is internal: not accepted from outside)", cmd.internal},
 			fieldCheck{"work_item_id", !cmd.WorkItemID.IsZero()},
 			fieldCheck{"fence", cmd.Fence >= 1},
 			fieldCheck{"holder_sid", validCanonicalSID(cmd.HolderSID)},
@@ -591,7 +591,7 @@ func validateCommandSyntax(cmd WorkCommand) error {
 		}
 	case "lease.owner_died":
 		if bad := firstBadField(
-			fieldCheck{"command (lease.owner_died es interno: no se acepta del exterior)", cmd.internal},
+			fieldCheck{"command (lease.owner_died is internal: not accepted from outside)", cmd.internal},
 			fieldCheck{"work_item_id", !cmd.WorkItemID.IsZero()},
 			fieldCheck{"fence", cmd.Fence >= 1},
 			fieldCheck{"holder_sid", validCanonicalSID(cmd.HolderSID)},
@@ -603,7 +603,7 @@ func validateCommandSyntax(cmd WorkCommand) error {
 	default:
 		// No es un campo que falte: es que el comando no existe. Decirlo asi ahorra el
 		// viaje que gasto un CLI de tercero para distinguir «desconocido» de «mal formado».
-		return brokenField(400, "invalid_command", "command (comando no reconocido)")
+		return brokenField(400, "invalid_command", "command (unrecognized command)")
 	}
 	return nil
 }

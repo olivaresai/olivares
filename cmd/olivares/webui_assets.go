@@ -9,6 +9,7 @@ import (
 	"compress/gzip"
 	"crypto/sha256"
 	"fmt"
+	"io"
 	"mime"
 	"net/http"
 	"path"
@@ -18,6 +19,37 @@ import (
 	"sync"
 	"time"
 )
+
+// assetCSP is the policy of every /assets/ response. A browser applies it only where such a
+// response becomes a document or a worker, and a worker takes its policy from its own
+// response, not from the page that starts it. The console's dictation worker loads its speech
+// model and runtime from here; this keeps it, and the audio it holds, on the engine's origin.
+// 'wasm-unsafe-eval' lets it compile that runtime; it grants no string-to-code eval.
+const assetCSP = "default-src 'self'; connect-src 'self'; script-src 'self' 'wasm-unsafe-eval'; " +
+	"object-src 'none'; base-uri 'none'; frame-ancestors 'none'"
+
+// maxCachedAsset bounds the assets kept in memory with a gzip copy. Larger ones, the dictation
+// model and runtime, stream from the embedded bundle as they are: their bytes barely compress,
+// and copies of them would stay resident for the life of the engine.
+const maxCachedAsset = 8 << 20
+
+// serveLargeAsset streams an asset above maxCachedAsset and reports whether it did.
+func (s *spaServer) serveLargeAsset(w http.ResponseWriter, r *http.Request, name string) bool {
+	f, err := s.fsys.Open(name)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+	info, err := f.Stat()
+	content, seekable := f.(io.ReadSeeker)
+	if err != nil || !seekable || info.Size() <= maxCachedAsset {
+		return false
+	}
+	setSecurityHeaders(w)
+	w.Header().Set("Content-Security-Policy", assetCSP)
+	http.ServeContent(spaAssetResponseWriter{w, int(info.Size())}, r, name, time.Time{}, content)
+	return true
+}
 
 type spaAsset struct {
 	data        []byte
@@ -40,6 +72,7 @@ func assetETag(data []byte) string { return fmt.Sprintf(`"%x"`, sha256.Sum256(da
 
 func (a *spaAsset) serve(w http.ResponseWriter, r *http.Request, name string) {
 	setSecurityHeaders(w)
+	w.Header().Set("Content-Security-Policy", assetCSP)
 	w.Header().Add("Vary", "Accept-Encoding")
 	encoding, acceptable := assetEncoding(strings.Join(r.Header.Values("Accept-Encoding"), ","))
 	if !acceptable {
@@ -52,8 +85,7 @@ func (a *spaAsset) serve(w http.ResponseWriter, r *http.Request, name string) {
 		a.gzipOnce.Do(func() {
 			var b bytes.Buffer
 			z := gzip.NewWriter(&b)
-			// bytes.Buffer cannot fail a write; compression is derived from the
-			// immutable source without modifying the embedded bundle or its stamp.
+			// bytes.Buffer writes cannot fail.
 			_, _ = z.Write(a.data)
 			_ = z.Close()
 			a.gzipData = b.Bytes()
@@ -61,8 +93,7 @@ func (a *spaAsset) serve(w http.ResponseWriter, r *http.Request, name string) {
 		})
 		data, etag = a.gzipData, a.gzipETag
 		w.Header().Set("Content-Encoding", "gzip")
-		// A multipart body is not itself a gzip stream. Ignore multiple ranges
-		// for gzip rather than label multipart framing as compressed content.
+		// Multipart framing is not a gzip stream.
 		if strings.Contains(r.Header.Get("Range"), ",") {
 			r = r.Clone(r.Context())
 			r.Header.Del("Range")
@@ -70,19 +101,15 @@ func (a *spaAsset) serve(w http.ResponseWriter, r *http.Request, name string) {
 	}
 	w.Header().Set("Content-Type", a.contentType)
 	w.Header().Set("ETag", etag)
-	// RFC 9110 section 14.2 defines Range only for GET; HEAD describes the
-	// whole selected representation while retaining request preconditions.
+	// RFC 9110 section 14.2: Range applies only to GET.
 	if r.Method == http.MethodHead && r.Header.Get("Range") != "" {
 		r = r.Clone(r.Context())
 		r.Header.Del("Range")
 	}
-	// Ranges address bytes of the selected representation. ServeContent also
-	// handles If-Range, If-Match and If-None-Match against its representation ETag.
 	http.ServeContent(spaAssetResponseWriter{w, len(data)}, r, name, time.Time{}, bytes.NewReader(data))
 }
 
-// ServeContent can reject a precondition before clearing representation headers.
-// Apply length and cache policy only once its final response status is known.
+// Apply representation headers after ServeContent chooses its status.
 type spaAssetResponseWriter struct {
 	http.ResponseWriter
 	length int
@@ -91,12 +118,10 @@ type spaAssetResponseWriter struct {
 func (w spaAssetResponseWriter) WriteHeader(status int) {
 	switch status {
 	case http.StatusOK:
-		// ServeContent omits the full length when Content-Encoding is set. Our
-		// bytes are already encoded, so the length is known (including HEAD).
+		// ServeContent omits length for encoded content, even on HEAD.
 		w.Header().Set("Content-Length", strconv.Itoa(w.length))
 		fallthrough
 	case http.StatusPartialContent, http.StatusNotModified:
-		// Preserve ServeContent's range length and bodyless 304 metadata.
 		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 	default:
 		w.Header().Set("Cache-Control", "no-store")
@@ -109,8 +134,7 @@ func (w spaAssetResponseWriter) WriteHeader(status int) {
 
 var assetQuality = regexp.MustCompile(`^(0(\.[0-9]{0,3})?|1(\.0{0,3})?)$`)
 
-// assetEncoding follows RFC 9110 section 12.5.3. Without a preference, keep
-// identity; otherwise prefer gzip unless an explicit identity weight is higher.
+// assetEncoding follows RFC 9110 section 12.5.3.
 func assetEncoding(header string) (string, bool) {
 	quality := map[string]float64{}
 	for item := range strings.SplitSeq(header, ",") {

@@ -52,10 +52,10 @@ else
 		echo "  subject here and never will. In the full source tree it still grades the hook."
 		exit 0
 	fi
-	echo "test-guard-bash: no existe .claude/hooks/guard-bash.sh (hub-only); no puedo probarlo" >&2
+	echo "test-guard-bash: .claude/hooks/guard-bash.sh does not exist (hub-only); cannot test it" >&2
 	exit 2
 fi
-command -v jq >/dev/null 2>&1 || { echo "test-guard-bash: sin jq no puedo construir la entrada" >&2; exit 2; }
+command -v jq >/dev/null 2>&1 || { echo "test-guard-bash: without jq cannot construct input" >&2; exit 2; }
 
 pass=0; fail=0
 caso() { # caso <nombre> <rc-esperado> <comando>
@@ -64,29 +64,29 @@ caso() { # caso <nombre> <rc-esperado> <comando>
 	# export lo quita; la llamada va GUARDADA aqui mismo porque una declaracion excusa una llamada
 	# guardada, no un fichero: sin la guarda, en el arbol publicado esta linea moriria con exit 127.
 	if [ ! -f "$H" ]; then
-		printf 'FAIL  %-58s (el hook desaparecio a mitad)\n' "$nombre"; fail=$((fail + 1)); return
+		printf 'FAIL  %-58s (hook disappeared during the run)\n' "$nombre"; fail=$((fail + 1)); return
 	fi
 	printf '%s' "$(jq -nc --arg c "$cmd" '{tool_input:{command:$c}}')" | bash "$H" >/dev/null 2>&1 || rc=$?
 	if [ "$rc" -eq "$want" ]; then
 		printf 'ok    %-58s rc=%s\n' "$nombre" "$rc"; pass=$((pass + 1))
 	else
-		printf 'FAIL  %-58s rc=%s, esperado %s\n' "$nombre" "$rc" "$want"; fail=$((fail + 1))
+		printf 'FAIL  %-58s rc=%s, expected %s\n' "$nombre" "$rc" "$want"; fail=$((fail + 1))
 	fi
 }
 
 # --- CORTA (rc 2) · cada uno con la medida que lo puso en el hook ---
-caso "for sobre variable sin comillas (zsh no divide en palabras)" 2 'for x in $VAR; do echo $x; done'
-caso "sonda /dev/tcp (zsh no la implementa: dice cerrado siempre)"  2 '(echo > /dev/tcp/localhost/5432) 2>/dev/null'
-caso "matar por patron en un host compartido"                        2 'pkill -f algo'
-caso "git add sin ruta en un clon compartido"                        2 'git add -A'
-caso "comm sobre listas ordenadas con sort -n"                       2 'comm -23 <(sort -n a) <(sort -n b)'
+caso "for over an unquoted variable (zsh does not split words)" 2 'for x in $VAR; do echo $x; done'
+caso "/dev/tcp probe (zsh does not implement it: always reports closed)"  2 '(echo > /dev/tcp/localhost/5432) 2>/dev/null'
+caso "kill by pattern on a shared host"                        2 'pkill -f algo'
+caso "git add without a path in a shared clone"                        2 'git add -A'
+caso "comm over lists sorted with sort -n"                       2 'comm -23 <(sort -n a) <(sort -n b)'
 
 # --- DEJA PASAR (rc 0): un falso positivo cuesta trabajo real ---
-caso "for sobre una variable ENTRECOMILLADA"                         0 'for x in "$VAR"; do echo "$x"; done'
-caso "while read, la forma correcta en zsh"                          0 'while IFS= read -r x; do echo "$x"; done < f'
-caso "git add CON ruta explicita"                                    0 'git add core/algo.go'
-caso "comm sobre listas en orden lexicografico"                      0 'comm -23 a.lex b.lex'
-caso "sort -n suelto, sin comm"                                      0 'sort -n fichero.txt'
+caso "for over a QUOTED variable"                         0 'for x in "$VAR"; do echo "$x"; done'
+caso "while read, the correct form in zsh"                          0 'while IFS= read -r x; do echo "$x"; done < f'
+caso "git add WITH an explicit path"                                    0 'git add core/algo.go'
+caso "comm over lexicographically sorted lists"                      0 'comm -23 a.lex b.lex'
+caso "standalone sort -n, without comm"                                      0 'sort -n input.txt'
 # ⛔ LIMITACION CONOCIDA, FIJADA A PROPOSITO CON rc=2. El hook casa la PALABRA, no el sujeto:
 #    la palabra prohibida DENTRO de una cadena dispara igual. Medido dos veces el 2026-08-31, las
 #    dos con la palabra en un `echo` de prosa explicativa.
@@ -95,11 +95,11 @@ caso "sort -n suelto, sin comm"                                      0 'sort -n 
 #    vea que el cambio es deliberado: si algun dia deja de cortar, esta fila enrojece y obliga a
 #    decidirlo, en vez de que el control se afloje sin que nadie lo note.
 #    El escape documentado (`# guard:ok`) es la salida para el caso legitimo.
-caso "LIMITACION: la palabra en prosa TAMBIEN dispara"               2 'echo "no uses pkill aqui"' 
-caso "kill por PID, que es la forma sancionada"                      0 'kill -TERM 1234'
+caso "LIMITATION: the word in prose ALSO triggers"               2 'echo "no uses pkill aqui"'
+caso "kill by PID, the approved form"                      0 'kill -TERM 1234'
 
 # --- el escape documentado ---
-caso "escape guard:ok sobre un comando que si se corta"              0 'git add -A # guard:ok'
+caso "guard:ok escape on a blocked command"              0 'git add -A # guard:ok'
 
 # --- FALLA ABIERTO: es su postura, y se fija para que no se invierta sin querer ---
 sin_jq=0
@@ -118,23 +118,23 @@ if [ -f "$H" ]; then
 		| PATH="$_sinjq" bash "$H" >/dev/null 2>&1 || sin_jq=$?
 fi
 if [ "$sin_jq" -eq 0 ]; then
-	printf 'ok    %-58s rc=0\n' "sin jq FALLA ABIERTO (postura declarada)"; pass=$((pass + 1))
+	printf 'ok    %-58s rc=0\n' "without jq FAILS OPEN (declared behavior)"; pass=$((pass + 1))
 else
-	printf 'FAIL  %-58s rc=%s, esperado 0\n' "sin jq FALLA ABIERTO (postura declarada)" "$sin_jq"; fail=$((fail + 1))
+	printf 'FAIL  %-58s rc=%s, expected 0\n' "without jq FAILS OPEN (declared behavior)" "$sin_jq"; fail=$((fail + 1))
 fi
 
 # --- GUARDA 6: `pgrep -f` cuyo resultado se MATA en el mismo comando -----------------------------
 # El patron viaja en la linea de comandos que `pgrep` inspecciona, asi que se casa a SI MISMO. No es
 # un descuido: es estructural, y `-f` lo garantiza. El caso que la puso aqui es del 2026-09-01 y es
 # propio — un `pgrep -f` mio caso mi shell y el `kill` de al lado le mando SIGTERM (rc 144).
-caso "pgrep -f cuyo resultado se mata en el mismo comando"  2 'pgrep -f foo | xargs kill'
-caso "y la forma de bucle, que es la que me mordio"         2 'for p in $(pgrep -f foo); do kill $p; done'
-caso "y --full, que es lo mismo escrito largo"              2 'pgrep --full foo && kill 123'
+caso "pgrep -f result killed in the same command"  2 'pgrep -f foo | xargs kill'
+caso "and the loop form that caused the failure"         2 'for p in $(pgrep -f foo); do kill $p; done'
+caso "and --full, the equivalent long option"              2 'pgrep --full foo && kill 123'
 # ⚠ LOS TRES NEGATIVOS IMPORTAN TANTO COMO LOS POSITIVOS: sin ellos la guarda podria estar
 #    bloqueando TODO y estas filas no lo verian.
-caso "mirar no mata: pgrep -f solo, sin kill, PASA"         0 'pgrep -f foo'
-caso "matar por PID sin pgrep PASA"                         0 'kill -TERM 1234'
-caso "y sin -f no aplica: pgrep -l no inspecciona cmdline"  0 'pgrep -l foo | wc -l'
+caso "inspection does not kill: pgrep -f alone, without kill, PASSES"         0 'pgrep -f foo'
+caso "kill by PID without pgrep PASSES"                         0 'kill -TERM 1234'
+caso "without -f it does not apply: pgrep -l does not inspect cmdline"  0 'pgrep -l foo | wc -l'
 
 # Public export: the hook is curated out with `.claude/`. Exit 2 there is a CI red
 # by construction. The witness must answer SCOPED when hub-leg classifies `public`.

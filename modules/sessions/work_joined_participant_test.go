@@ -40,8 +40,8 @@ func TestAJoinedWorkItemResolvesNoParticipantInsideTheOwningTransaction(t *testi
 	f := newWorkFixture(t, filepath.Join(t.TempDir(), "joined-participant.db"), nil)
 	defer f.st.Close()
 	calls := &joinedPortCalls{tenant: f.tenant}
-	f.m.workIdentity = joinedCheckedParticipants{calls: calls}
-	f.m.standing = &joinedCheckedStanding{next: f.m.standing, calls: calls}
+	f.m.WorkIdentity = joinedCheckedParticipants{calls: calls}
+	f.m.Standing = &joinedCheckedStanding{next: f.m.Standing, calls: calls}
 	claim := ProtocolReplayClaim{
 		WorkspaceID: f.workspace, Protocol: BindingProtocolA2A,
 		PeerAuthority: "https://joined-participant.example", Kind: ProtocolReplayMessageID,

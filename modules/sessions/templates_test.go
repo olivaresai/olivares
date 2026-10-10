@@ -538,7 +538,7 @@ func TestSeedBuiltins_UpdatesContent(t *testing.T) {
 
 	// Verify a known builtin's body contains expected settings.
 	var body string
-	_ = m.data.View(ctx, tenant, func(sc store.Scope) error {
+	_ = m.Data.View(ctx, tenant, func(sc store.Scope) error {
 		repo, _ := sc.Ext(templateKind)
 		recs, _, _ := repo.List(ctx, model.Query{
 			Filters: []model.Filter{
@@ -567,7 +567,7 @@ func TestSeedBuiltins_UpdatesContent(t *testing.T) {
 func countBuiltins(t *testing.T, m *Module, ctx context.Context, tenant model.TenantID) int {
 	t.Helper()
 	var count int
-	_ = m.data.View(ctx, tenant, func(sc store.Scope) error {
+	_ = m.Data.View(ctx, tenant, func(sc store.Scope) error {
 		repo, _ := sc.Ext(templateKind)
 		recs, _, _ := repo.List(ctx, model.Query{
 			Filters: []model.Filter{{Column: colTplBuiltin, Op: model.OpEq, Value: true}},

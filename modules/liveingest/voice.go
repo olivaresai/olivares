@@ -18,7 +18,9 @@ import (
 // fabricates nothing: with no realtime voice backend in this build, nothing calls
 // this method, so the observe half stays honestly empty and visible,
 // not falsely full. A future voice realtime dispatcher that produces turn
-// metadata routes it here.
+// metadata routes it here. liveingest does not require voice (no
+// production caller exists); a first production caller must restore that requires
+// edge in core/modulespec/modules.json, since a dormant voice has no consumer.
 //
 // The payload is a typed voice.Telemetry, so by construction it can carry no field
 // outside the allow-list — never audio, transcript text or PII (the transcript

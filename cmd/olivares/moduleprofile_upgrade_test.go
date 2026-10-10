@@ -5,8 +5,9 @@
 package main
 
 import (
-	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"os"
@@ -48,11 +49,7 @@ func startModuleUpgradeEngine(t *testing.T, cfg bootConfig) *engine {
 func reconcileModuleUpgradeEngine(t *testing.T, cfg bootConfig, eng *engine) *engine {
 	t.Helper()
 	for attempt := 0; attempt < 2; attempt++ {
-		p := newProductSettings(eng.store, eng.dataDir)
-		mods := &moduleReconcile{booted: eng.moduleProfile, used: func(ctx context.Context) ([]string, error) {
-			return usedModules(ctx, eng.store, eng.census)
-		}}
-		err := reconcileSettings(t.Context(), p, mods, discardLogger())
+		err := reconcileBeforeServing(t.Context(), eng, discardLogger())
 		if err == nil {
 			return eng
 		}
@@ -91,6 +88,9 @@ func moduleUpgradeAdministrator(t *testing.T, eng *engine) (string, string) {
 
 func assertEmptyRedteamRoutes(t *testing.T, eng *engine, admin, tenant string, want int) {
 	t.Helper()
+	if want == http.StatusOK && thisEdition.name == "community" {
+		want = http.StatusNotImplemented
+	}
 	for _, path := range []string{"/v1/m/redteam/targets", "/v1/m/redteam/runs", "/v1/m/redteam/catalog"} {
 		if code, _, raw := doDemoViewJSON(t, eng.api.Handler(), http.MethodGet, path, admin, tenant, nil); code != want {
 			t.Errorf("%s = %d: %s, want %d", path, code, raw, want)
@@ -114,7 +114,7 @@ func assertModuleSelectionImportedOnce(t *testing.T, eng *engine) {
 	}
 }
 
-// COMPATB module-case-b001: 26.10.0 booted every module but wrote no module
+// COMPATB module-case-b001: 26.1000 booted every module but wrote no module
 // profile. Redteam has no persisted targets or runs, yet its routes must remain
 // available after the first candidate serving boot, including its reconciliation.
 func TestCOMPATB26_10_0ModuleProfileUpgradeKeepsEmptyRedteam(t *testing.T) {
@@ -131,8 +131,19 @@ func TestCOMPATB26_10_0ModuleProfileUpgradeKeepsEmptyRedteam(t *testing.T) {
 		candidate := reconcileModuleUpgradeEngine(t, cfg, startModuleUpgradeEngine(t, cfg))
 		assertEmptyRedteamRoutes(t, candidate, admin, tenant, http.StatusOK)
 		assertModuleSelectionImportedOnce(t, candidate)
+		if serverInfoHidesPreviews(t, candidate) {
+			t.Error("a 26.1000 upgrade's console navigation hides the pages it listed")
+		}
 		p := newProductSettings(candidate.store, candidate.dataDir)
-		want := allModuleSelection() // every catalog module was enabled in 26.10.0
+		// The published selection is fixed; later catalog additions stay opt-in.
+		want := []string{
+			"accessmap", "adoption", "capabilities", "catalog", "claude-agents",
+			"claude-policy", "compliance", "consoleviews", "deploy", "evals", "eventing",
+			"finops", "gitpublish", "governance", "health", "identity", "inferenceproxy",
+			"inventory", "knowledge", "liveingest", "models", "notify", "observability",
+			"orchestration", "posture", "recording", "redteam", "reporting", "sandbox",
+			"security", "sessions", "siemforward", "sourcescope", "voice",
+		}
 		if got := recordedSelection(t, p); !slices.Equal(got, want) {
 			t.Errorf("upgrade selection = %v, want published selection %v", got, want)
 		}
@@ -147,6 +158,87 @@ func TestCOMPATB26_10_0ModuleProfileUpgradeKeepsEmptyRedteam(t *testing.T) {
 		nodeAfter, err := os.ReadFile(moduleProfilePath(cfg.DataDir))
 		if err != nil || string(nodeAfter) != string(nodeBefore) {
 			t.Fatalf("second boot rewrote the imported node profile: %v", err)
+		}
+	})
+}
+
+// serverInfoHidesPreviews reads server-info's previews_hidden: whether this
+// installation's console navigation lists the first job only.
+func serverInfoHidesPreviews(t *testing.T, eng *engine) bool {
+	t.Helper()
+	code, info, raw := doDemoViewJSON(t, eng.api.Handler(), http.MethodGet, "/v1/server-info", "", "", nil)
+	if code != http.StatusOK {
+		t.Fatalf("server-info = %d: %s", code, raw)
+	}
+	hidden, _ := info["previews_hidden"].(bool)
+	return hidden
+}
+
+// A new installation's console navigation lists the first job only, across
+// restarts. An installation whose deployment settings an earlier release
+// recorded keeps listing every page (the 26.1000 upgrade is checked in
+// TestCOMPATB26_10_0ModuleProfileUpgradeKeepsEmptyRedteam).
+func TestNewInstallationHidesPreviewsAndAnUpgradeKeepsThem(t *testing.T) {
+	moduleUpgradeBackends(t, func(t *testing.T, cfg bootConfig, _ enginetest.DSNs) {
+		cfg.ApplyModuleProfile = true
+		eng := reconcileModuleUpgradeEngine(t, cfg, startModuleUpgradeEngine(t, cfg))
+		if !serverInfoHidesPreviews(t, eng) {
+			t.Fatal("a new installation's console navigation lists its preview pages")
+		}
+		_ = eng.Close()
+		eng = reconcileModuleUpgradeEngine(t, cfg, startModuleUpgradeEngine(t, cfg))
+		if !serverInfoHidesPreviews(t, eng) {
+			t.Fatal("a restart lists the preview pages of a new installation")
+		}
+
+		// The record as a release without the field wrote it: the same document
+		// with no previews_hidden.
+		err := eng.store.AuthMutate(t.Context(), func(as store.AuthScope) error {
+			rows, _, err := as.DeploymentSettings().List(t.Context(), model.Query{Filters: []model.Filter{}})
+			if err != nil || len(rows) != 1 {
+				return fmt.Errorf("deployment settings rows = %d: %v", len(rows), err)
+			}
+			var doc map[string]any
+			if err := json.Unmarshal([]byte(rows[0].Doc), &doc); err != nil {
+				return err
+			}
+			delete(doc, "previews_hidden")
+			raw, err := json.Marshal(doc)
+			if err != nil {
+				return err
+			}
+			rows[0].Doc = string(raw)
+			_, err = as.DeploymentSettings().Update(t.Context(), rows[0])
+			return err
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = eng.Close()
+		eng = reconcileModuleUpgradeEngine(t, cfg, startModuleUpgradeEngine(t, cfg))
+		if serverInfoHidesPreviews(t, eng) {
+			t.Fatal("an upgraded installation's console navigation hides the pages it listed")
+		}
+	})
+}
+
+// An administrator's own module selection ends the first run: from the next
+// start the console lists every page.
+func TestAnAdministratorsModuleSelectionListsEveryPage(t *testing.T) {
+	moduleUpgradeBackends(t, func(t *testing.T, cfg bootConfig, _ enginetest.DSNs) {
+		cfg.ApplyModuleProfile = true
+		eng := reconcileModuleUpgradeEngine(t, cfg, startModuleUpgradeEngine(t, cfg))
+		if !serverInfoHidesPreviews(t, eng) {
+			t.Fatal("a new installation's console navigation lists its preview pages")
+		}
+		p := newProductSettings(eng.store, eng.dataDir)
+		if err := p.writeModules(t.Context(), operator(t), "deployment.settings.modules", standardModuleSelection()); err != nil {
+			t.Fatal(err)
+		}
+		_ = eng.Close()
+		eng = reconcileModuleUpgradeEngine(t, cfg, startModuleUpgradeEngine(t, cfg))
+		if serverInfoHidesPreviews(t, eng) {
+			t.Fatal("after an administrator chose the modules, the console still lists the first job only")
 		}
 	})
 }
@@ -227,6 +319,11 @@ func TestModuleProfileFreshInitializationRecovery(t *testing.T) {
 					t.Fatalf("reconciled profile did not finish its bootstrap: found=%v pending=%v err=%v", found, node.ImportPending, err)
 				}
 				assertModuleSelectionImportedOnce(t, eng)
+				// Still a new installation, whose console lists the first job only;
+				// the seeded demo lists the pages it shows.
+				if got := serverInfoHidesPreviews(t, eng); got != !cfg.DemoSeed {
+					t.Fatalf("server-info previews_hidden = %v, want %v", got, !cfg.DemoSeed)
+				}
 			})
 		})
 	}

@@ -2,24 +2,20 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// useResumeGuard — envuelve el reintento que se entrega a la ceremonia para que NO ejecute la
-// escritura de un formulario que ya no existe.
+// useResumeGuard wraps the retry passed to step-up so an unmounted form cannot write.
 //
-// ⛔ POR QUÉ HACE FALTA, medido por el contraste Codex `sol max` sobre. El reintento no se
-// queda en el componente: `useFailedActionReporter` lo mete en un store GLOBAL
-// (`lib/hooks/use-privileged-mutation.ts:33-46`) y el host vive junto a toda la aplicación
-// (`app/providers.tsx:45-55`). Cerrar el diálogo o navegar **desmonta el formulario pero no el
-// host**, así que al terminar la ceremonia se ejecuta el callback de una acción que el operador
-// ya abandonó.
+// The Codex `sol max` review of demonstrated why: `useFailedActionReporter` stores
+// the retry globally (`lib/hooks/use-privileged-mutation.ts:33-46`), and the host lives
+// alongside the whole application (`app/providers.tsx:45-55`). Closing a dialog or
+// navigating unmounts the form but leaves the host alive. Completing step-up would then
+// call an action the operator abandoned.
 //
-// Y no es un `setState` inocuo: `useMutation` conserva un callback que llama a `observer.mutate`,
-// y `MutationObserver.mutate` construye y ejecuta una `Mutation` nueva aunque haya perdido sus
-// listeners. Es decir, **la escritura sale**.
+// This can perform a real write: `useMutation` retains a callback to `observer.mutate`,
+// and `MutationObserver.mutate` creates and executes a new Mutation even without listeners.
 //
-// El panel no se queda colgado: el host hace `clear()` ANTES de invocar el retry
-// (`components/layout/step-up-host.tsx:77-84`), así que la ceremonia se cierra sola. Lo único
-// que hay que impedir es la escritura huérfana — y decirlo, porque la copy del panel promete
-// «the action resumes» y callarse sería cambiar una promesa rota por otra.
+// The host calls `clear()` before retry (`components/layout/step-up-host.tsx:77-84`), so
+// step-up closes normally. Prevent the orphaned write and explain why it did not resume,
+// because the panel promises that the action resumes.
 import { useCallback, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from '@/components/ui/toaster'

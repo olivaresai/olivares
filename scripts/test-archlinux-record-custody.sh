@@ -20,6 +20,9 @@
 #      are never imported; root's own record carries them.
 #   R  the readers: when the engine refuses the record (link, FIFO, directory, untrusted),
 #      pre_remove still completes with the safe stop and touches no victim.
+#   C  the service env file: post_install and post_upgrade leave it root:olivares with a
+#      mode doctor accepts (0400, 0440, 0600, 0640; anything else becomes 0640), keep the
+#      operator's content, and never follow a link at its name.
 # Exit 0: every cell holds. Exit 1: a measured cell failed. Exit 2: could not look.
 set -euo pipefail
 LC_ALL=C
@@ -27,7 +30,7 @@ export LC_ALL
 me=test-archlinux-record-custody
 
 could_not_look() {
-	printf '%s: NO HE PODIDO MIRAR — %s\n' "$me" "$*" >&2
+	printf '%s: COULD NOT CHECK — %s\n' "$me" "$*" >&2
 	exit 2
 }
 root="${OLIVARES_ROOT:-$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)}"
@@ -101,6 +104,12 @@ printf 'systemctl %s\n' "$*" >>"$OLIVARES_TEST_BOX/calls"
 case "$1" in
   is-enabled) cat "$OLIVARES_TEST_BOX/state/enabled"; exit 1 ;;
   is-active) cat "$OLIVARES_TEST_BOX/state/active"; exit 3 ;;
+  disable)
+    if [ -f "$OLIVARES_TEST_BOX/state/stop-fails" ]; then
+      echo "Removed /etc/systemd/system/multi-user.target.wants/olivares.service." >&2
+      echo "System has not been booted with systemd as init system (PID 1). Can't operate." >&2
+      exit 1
+    fi ;;
 esac
 exit 0
 STUB
@@ -137,7 +146,18 @@ if [ -L "$m" ] || [ ! -f "$m" ] || [ -f "$OLIVARES_TEST_BOX/state/record-untrust
   echo "local install manifest must be a regular file owned by root, not a link: $m" >&2
   exit 2
 fi
-case "$2" in --preserve|--purge) systemctl disable --now olivares ;; esac
+# Representative engine stdout is input to the real script's reporting boundary.
+# The script must suppress it without losing the engine's stderr or exit status.
+cat <<'REPORT'
+ACTION        ROLE          PATH
+keep          binary        /usr/bin/olivares
+keep          config        /etc/olivares/olivares.env
+keep          unit          /usr/lib/systemd/system/olivares.service
+REPORT
+# A failed stop is a plain error, exit 1, as in localinstall.stopService; a refused record is 2.
+case "$2" in --preserve|--purge)
+  systemctl disable --now olivares || { echo "Error: stop/disable systemd service: exit status 1" >&2; exit 1; } ;;
+esac
 exit 0
 STUB
 	# Observing shadows: each logs, fires a one-shot hook, then runs the real tool.
@@ -350,6 +370,39 @@ elif ! grep -q '"user_created": true' "$box/$M" || ! grep -q '"group_created": t
 	not_ok "$case_id: the second install lost root's own record of the account"
 else ok "$case_id: created, then carried by root's own record"; fi
 
+# --- C: the service env file ----------------------------------------------------------------
+E=etc/olivares/olivares.env
+# env_case ID BEFORE WANT FUNCTION ARGS...: BEFORE is the mode of the file pacman left (the
+# payload, or an operator-edited backup file it kept); WANT is the mode after the scriptlet.
+env_case() {
+	local id=$1 before=$2 want=$3 gid
+	shift 3
+	new_box "c-$before"; installed
+	printf 'OLIVARES_EXTRA_ARGS=--listen=127.0.0.1:8443\n# operator edit\n' >"$box/$E"
+	chmod "$before" "$box/$E"
+	run "$@"
+	gid=$(id -g)
+	if [[ "$last_rc" -ne 0 ]]; then not_ok "$id: rc=$last_rc $(err)"
+	elif [[ "$(stat -c %a "$box/$E")" != "$want" ]]; then not_ok "$id: mode $(stat -c %a "$box/$E"), want $want"
+	elif ! grep -qx "chown root:$gid $box/$E" "$box/calls"; then not_ok "$id: the file was not given to root:olivares"
+	elif ! grep -qx '# operator edit' "$box/$E"; then not_ok "$id: the operator's content was replaced"
+	else ok "$id: mode $want, root:olivares, content kept"; fi
+}
+env_case "C1 post_upgrade keeps an operator-edited 0644 env file and closes it" 644 640 post_upgrade 26.10.1-1 26.10.0-1
+env_case "C2 post_install of the 0640 payload gives the group to the service account" 640 640 post_install 26.10.1-1
+env_case "C3 an operator's stricter 0600 is kept" 600 600 post_upgrade 26.10.1-1 26.10.0-1
+env_case "C3b an operator's 0440 is kept" 440 440 post_upgrade 26.10.1-1 26.10.0-1
+
+case_id="C4 a link at the env file's name is not followed"
+new_box c4; installed
+printf 'victim\n' >"$box/victim-env"; chmod 0644 "$box/victim-env"
+ln -s "$box/victim-env" "$box/$E"
+run post_upgrade 26.10.1-1 26.10.0-1
+if [[ "$last_rc" -ne 0 ]]; then not_ok "$case_id: rc=$last_rc $(err)"
+elif [[ "$(stat -c %a "$box/victim-env")" != 644 ]] || grep -qE "^ch(own|mod) .*$box/$E\$" "$box/calls"; then
+	not_ok "$case_id: root changed the link's target"
+else ok "$case_id: the victim untouched"; fi
+
 # --- R: the readers --------------------------------------------------------------------------
 # reader_case ID HOW FORMAT: seed an install, damage the record HOW, remove the package.
 reader_case() {
@@ -384,6 +437,51 @@ reader_case "R1 the engine refuses an untrusted record, pacman -R" untrusted deb
 reader_case "R2 a link to a victim at the record's name, pacman -R" link deb
 reader_case "R3 a FIFO at the record's name, pacman -R" fifo deb
 reader_case "R4 a directory at the record's name, pacman -R" directory deb
+
+# --- S: the stop that fails ------------------------------------------------------------------
+# The engine exits 2 for a record it refuses and 1 for a stop that failed (a host where
+# systemctl cannot stop the unit). The removal completes either way and names the true cause.
+# stop_case ID HOW STOP: remove the package; HOW is trusted|untrusted, STOP ok|fails.
+stop_case() {
+	local id=$1 how=$2 stop=$3
+	new_box "s-$how-$stop"; installed
+	run post_install 26.10.0-1
+	[[ "$last_rc" -eq 0 ]] || { not_ok "$id: seed install rc=$last_rc $(err)"; return; }
+	[[ "$how" == untrusted ]] && : >"$box/state/record-untrusted"
+	[[ "$stop" == fails ]] && : >"$box/state/stop-fails"
+	: >"$box/calls"
+	run pre_remove 26.10.0-1
+	if [[ "$last_rc" -ne 0 ]]; then not_ok "$id: the removal failed, rc=$last_rc $(err)"
+	elif grep -Eq '^keep[[:space:]]+(binary|config|unit)[[:space:]]' "$last_out.stdout"; then
+		not_ok "$id: the engine's keep table reached package-removal stdout"
+	elif ! grep -Fq "package manager will remove binary $box/usr/bin/olivares and unit $box/usr/lib/systemd/system/olivares.service" "$last_out.stdout"; then
+		not_ok "$id: package-owned binary/unit removal is not disclosed"
+	elif ! grep -Fq "config $box/etc/olivares/olivares.env follows pacman package-manager policy" "$last_out.stdout"; then
+		not_ok "$id: config policy is not disclosed"
+	elif ! grep -Fq "data $box/var/lib/olivares, keys and service account are preserved" "$last_out.stdout"; then
+		not_ok "$id: retained data/keys/account are not disclosed"
+	elif [[ "$how" == trusted ]] && grep -Fq 'install record refused' "$last_out.stderr"; then
+		not_ok "$id: a record the engine accepted was reported refused: $(err)"
+	elif [[ "$how" == trusted && "$stop" == fails ]] && ! grep -Fq 'Error: stop/disable systemd service: exit status 1' "$last_out.stderr"; then
+		not_ok "$id: the engine's stop diagnostic was swallowed"
+	elif [[ "$how" == untrusted ]] && ! grep -Fq 'local install manifest must be a regular file owned by root, not a link' "$last_out.stderr"; then
+		not_ok "$id: the engine's refusal diagnostic was swallowed"
+	elif [[ "$how" == trusted && "$stop" == fails ]] && ! grep -Fq 'uninstall engine failed (exit 1)' "$last_out.stderr"; then
+		not_ok "$id: the engine failure is not named: $(err)"
+	elif [[ "$how" == untrusted ]] && ! grep -Fq 'install record refused' "$last_out.stderr"; then
+		not_ok "$id: the refusal is not reported: $(err)"
+	elif [[ "$stop" == ok ]] && grep -Fq 'could not be stopped' "$last_out.stderr"; then
+		not_ok "$id: a stop that worked was reported as failed: $(err)"
+	elif [[ "$stop" == fails ]] && { ! grep -Fq 'could not be stopped' "$last_out.stderr" ||
+		! grep -F 'could not be stopped' "$last_out.stderr" | grep -Fq "Can't operate" ||
+		! grep -Fq 'stop it yourself' "$last_out.stderr"; }; then
+		not_ok "$id: the failed stop is not named with its reason: $(err)"
+	else ok "$id: the cause is named truthfully"; fi
+}
+stop_case "S0 control: a trusted record, the stop works, pacman -R" trusted ok
+stop_case "S1 a trusted record, the stop fails: the stop is named, pacman -R" trusted fails
+stop_case "S2 a refused record, the stop fails: both causes named, pacman -R" untrusted fails
+stop_case "S3 a refused record, the stop works: the safe stop, pacman -R" untrusted ok
 
 printf '%s: %d cells, %d failed\n' "$me" "$cells" "$failures"
 [[ "$failures" -eq 0 ]]

@@ -15,10 +15,9 @@ import (
 	"github.com/olivaresai/olivares/cmd/olivares/internal/termrender"
 )
 
-// cmd_agent_profile.go closes a measured gap: the provider-profile plane has had a
-// full HTTP surface and a console screen since its first release, and NO CLI verb. `agent session
-// create` requires a profile reference, and the only ways to obtain one were the
-// console or curl.
+// cmd_agent_profile.go is the CLI of the provider-profile plane, beside its HTTP
+// surface and console screen: `agent session create` takes a profile reference,
+// and the CLI is where a script obtains one.
 //
 // These are thin HTTP clients against /v1/m/sessions/provider-profiles*. Nothing
 // here validates a home: the SERVER canonicalises and validates the paths, on the
@@ -396,7 +395,7 @@ func newAgentProfileCreateCmd() *cobra.Command {
 
 func profileTable(items []map[string]any) termrender.Table {
 	t := termrender.Table{
-		Header: []string{"profile", "name", "driver", "state", "auth source", "provider"},
+		Header: []string{"profile", "name", "driver", "state", "auth source", "provider", "account"},
 		Empty:  "No provider profiles registered.",
 	}
 	for _, rec := range items {
@@ -408,12 +407,22 @@ func profileTable(items []map[string]any) termrender.Table {
 		if source == "" {
 			source = "none authorized"
 		}
+		account := accountOrNone(str(rec, "account_name"))
 		t.Rows = append(t.Rows, []string{
 			str(rec, "profile_ref"), str(rec, "display_name"), str(rec, "driver"),
-			str(rec, "state"), source, provider,
+			str(rec, "state"), source, provider, account,
 		})
 	}
 	return t
+}
+
+// accountOrNone is the account name a profile carries, or "-" for a profile
+// nobody has named.
+func accountOrNone(name string) string {
+	if name == "" {
+		return "-"
+	}
+	return name
 }
 
 func printProfileTable(w io.Writer, items []map[string]any) error {
@@ -438,7 +447,7 @@ func profileRecordFields(rec map[string]any) []termrender.Field {
 	if mode == "" {
 		mode = "not declared (each launch keeps its own)"
 	}
-	return []termrender.Field{
+	fields := []termrender.Field{
 		{Key: "profile", Value: str(rec, "profile_ref")},
 		{Key: "name", Value: str(rec, "display_name")},
 		{Key: "driver", Value: str(rec, "driver")},
@@ -449,6 +458,11 @@ func profileRecordFields(rec map[string]any) []termrender.Field {
 		{Key: "tools", Value: profileToolsSentence(rec)},
 		{Key: "permission mode", Value: mode},
 	}
+	// Only a named profile shows the line, so the form of an unnamed one is as it was.
+	if account := str(rec, "account_name"); account != "" {
+		fields = append(fields[:2], append([]termrender.Field{{Key: "account", Value: account}}, fields[2:]...)...)
+	}
+	return fields
 }
 
 func printProfileRecord(w io.Writer, rec map[string]any) error {

@@ -19,15 +19,15 @@ import (
 // must fail here.
 func TestDeliveryClassForModule(t *testing.T) {
 	cases := map[string]eventbus.DeliveryClass{
-		"observability": eventbus.ClassTelemetry,   // in-memory counters, persists nothing
-		"notify":        eventbus.ClassState,       // durable outbox intent — must block, not drop
-		"security":      eventbus.ClassEnforcement, // durable detections feed containment
-		"finops":        eventbus.ClassEnforcement, // durable cost ledger
-		"eventing":      eventbus.ClassEnforcement, // durable capture + replay boundary
-		"governance":    eventbus.ClassEnforcement, // PEP/containment
-		"recording":     eventbus.ClassEnforcement, // audit ledger
-		"access-map":    eventbus.ClassEnforcement, // durable graph projection
-		"brand-new-mod": eventbus.ClassEnforcement, // unknown ⇒ durable by default
+		"olivares.observability": eventbus.ClassTelemetry,   // in-memory counters, persists nothing
+		"olivares.notify":        eventbus.ClassState,       // durable outbox intent — must block, not drop
+		"olivares.security":      eventbus.ClassEnforcement, // durable detections feed containment
+		"olivares.finops":        eventbus.ClassEnforcement, // durable cost ledger
+		"olivares.eventing":      eventbus.ClassEnforcement, // durable capture + replay boundary
+		"olivares.governance":    eventbus.ClassEnforcement, // PEP/containment
+		"olivares.recording":     eventbus.ClassEnforcement, // audit ledger
+		"olivares.access-map":    eventbus.ClassEnforcement, // durable graph projection
+		"brand-new-mod":          eventbus.ClassEnforcement, // unknown ⇒ durable by default
 	}
 	for name, want := range cases {
 		if got := deliveryClassForModule(name); got != want {
@@ -42,7 +42,7 @@ func TestDeliveryClassForModule(t *testing.T) {
 // the bus before the outbox persists the intent — silently losing security-alert and HITL
 // delivery. ClassEnforcement and ClassState are the blocking lanes; Notify/Telemetry drop.
 func TestCampaignNotifyLaneIsDurable(t *testing.T) {
-	c := deliveryClassForModule("notify")
+	c := deliveryClassForModule("olivares.notify")
 	if c == eventbus.ClassNotify || c == eventbus.ClassTelemetry {
 		t.Fatalf("notify is on a DROPPABLE lane %v — the durable outbox's intent would be lost at the bus before it is persisted; it must be a blocking lane", c)
 	}
@@ -55,7 +55,7 @@ func TestModuleHost_AssignsDeliveryClass(t *testing.T) {
 	bus := eventbus.NewInProc(eventbus.Options{})
 	defer bus.Close()
 
-	for _, name := range []string{"observability", "notify", "security"} {
+	for _, name := range []string{"olivares.observability", "olivares.notify", "olivares.security"} {
 		h := &moduleHost{bus: bus, name: name, class: deliveryClassForModule(name)}
 		cancel, err := h.Subscribe([]event.Type{event.Type("x")}, func(context.Context, event.Event) error { return nil })
 		if err != nil {
@@ -69,9 +69,9 @@ func TestModuleHost_AssignsDeliveryClass(t *testing.T) {
 		t.Fatal("bus must implement StatsProvider")
 	}
 	want := map[string]eventbus.DeliveryClass{
-		"observability": eventbus.ClassTelemetry,
-		"notify":        eventbus.ClassState,
-		"security":      eventbus.ClassEnforcement,
+		"olivares.observability": eventbus.ClassTelemetry,
+		"olivares.notify":        eventbus.ClassState,
+		"olivares.security":      eventbus.ClassEnforcement,
 	}
 	seen := map[string]bool{}
 	for _, s := range sp.BusStats().Subscribers {

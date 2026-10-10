@@ -37,7 +37,7 @@ set -uo pipefail
 _olivares_git_env="$(cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")" && pwd)/lib/git-env.sh"
 # shellcheck source=/dev/null
 . "$_olivares_git_env" || {
-	echo "test-public-counts-verdicts: FATAL: no puedo cargar $_olivares_git_env (aislamiento git-env)" >&2
+	echo "test-public-counts-verdicts: FATAL: cannot load $_olivares_git_env (git-env isolation)" >&2
 	exit 2
 }
 unset _olivares_git_env
@@ -47,7 +47,7 @@ export LC_ALL
 RAIZ="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd -P)"
 GATE="$RAIZ/scripts/check-public-counts.sh"
 [ -r "$GATE" ] || {
-	echo "test-public-counts-verdicts: ⛔ NO HE PODIDO MIRAR: no existe $GATE" >&2
+	echo "test-public-counts-verdicts: ⛔ CANNOT INSPECT: $GATE does not exist" >&2
 	exit 2
 }
 cd "$RAIZ" || exit 2
@@ -59,68 +59,62 @@ cd "$RAIZ" || exit 2
 #    NO está en `.gitignore`, así que no había ni esa red. Va al PADRE: mismo sistema de ficheros
 #    (lo necesita el `cp -al` de abajo) y fuera del alcance de cualquier `git add`.
 BANCO="$(mktemp -d "$(dirname -- "$RAIZ")/.cpc-verdicts-XXXXXX")" || {
-	echo "test-public-counts-verdicts: ⛔ NO HE PODIDO MIRAR: no se pudo crear el banco" >&2
+	echo "test-public-counts-verdicts: ⛔ CANNOT INSPECT: could not create the test workspace" >&2
 	exit 2
 }
-# ⛔ EL TRAP YA NO RESTAURA NADA, PORQUE YA NO SE MUTA NADA DEL ÁRBOL REAL.
-#
-#    Escribí esta batería mutando `README.md` EN EL ÁRBOL y devolviéndolo dos líneas después.
-#    metió el `cp` de vuelta en el trap (`9361223a2`) para que sobreviviera a que maten el
-#    proceso, y eso era cierto y necesario. **Pero cierra una mitad**: el trap responde por «me
-#    matan a mí», no por «otro carril hace `git add -A` durante la ventana». Y ésa es justo la
-#    distinción que la REGLA CERO de `CLAUDE.md` fija con estas palabras: reducir la ventana
-#    **no la cierra**, porque el problema no es cómo commiteas tú, es cuánto tiempo dejas algo a
-#    medias donde otro puede recogerlo. Un README público con «157 integrations» commiteado por
-#    un tercero es un defecto de producto, no del test.
-#
-#    ⇒ El control negativo corre contra un SEÑUELO POR HARDLINK del árbol (`cp -al`, 981 ms
-#    medidos, `.git` excluido). El `sed -i` crea un fichero nuevo y renombra, así que el inode
-#    DIVERGE y el original no se entera — verificado: señuelo 56530459 / real 16692728, mutado 1
-#    / real 0. El árbol real no se toca en ningún instante, ni siquiera durante.
+# The trap no longer restores files because the suite no longer mutates the real tree.
+# The first version edited README.md then restored it added trap restoration
+# (9361223a2) for process death. That did not prevent another worker's git add -A
+# from collecting the intermediate “157 integrations” copy. Shortening the exposure
+# window did not close it, as CLAUDE.md's rule zero explains.
+# Run the negative control in a hardlink fixture tree (cp -al, .git excluded;
+# 981 ms measured). sed -i replaces the inode, leaving the original untouched.
+# Verified fixture inode 56530459 / real 16692728, mutated count 1 / real 0:
+# the actual tree is never temporarily modified.
 trap '[ -n "${BANCO:-}" ] && rm -rf "$BANCO"' EXIT
 
-pasan=0
-fallan=0
+pass_count=0
+fail_count=0
 comprobar() {
 	if [ "$3" -eq "$2" ]; then
 		printf '  ok    %-56s rc=%s\n' "$1" "$3"
-		pasan=$((pasan + 1))
+		pass_count=$((pass_count + 1))
 	else
-		printf '  FALLA %-56s rc=%s (quiere %s)\n' "$1" "$3" "$2"
-		fallan=$((fallan + 1))
+		printf '  FAIL %-56s rc=%s (expected %s)\n' "$1" "$3" "$2"
+		fail_count=$((fail_count + 1))
 	fi
 }
 
 # ── SUELO: el árbol sano tiene que salir 0, o todo lo demás mide otra cosa ────────────────
 bash "$GATE" >"$BANCO/0.log" 2>&1
-comprobar "el árbol sano sale limpio" 0 "$?"
+comprobar "the healthy tree passes" 0 "$?"
 
 # ── 1 · Censo de aplicación ausente ⇒ NO HE PODIDO MIRAR ─────────────────────────────────
 CPC_ENFORCEMENT_CENSUS="$BANCO/no-existe.tsv" bash "$GATE" >"$BANCO/1.log" 2>&1
-comprobar "censo ausente es NO HE PODIDO MIRAR" 2 "$?"
+comprobar "missing census means CANNOT INSPECT" 2 "$?"
 
 # ── 2 · Censo presente pero VACÍO ⇒ medición desaparecida, no un cero ─────────────────────
 : >"$BANCO/vacio.tsv"
 CPC_ENFORCEMENT_CENSUS="$BANCO/vacio.tsv" bash "$GATE" >"$BANCO/2.log" 2>&1
-comprobar "censo vacío es NO HE PODIDO MIRAR, no un cero" 2 "$?"
+comprobar "empty census means CANNOT INSPECT, not zero" 2 "$?"
 
 # ── 3 · Contrato OpenAPI ilegible ⇒ no se pudo contar ────────────────────────────────────
 printf '{no soy json' >"$BANCO/malo.json"
 CPC_OPENAPI_CONTRACT="$BANCO/malo.json" bash "$GATE" >"$BANCO/3.log" 2>&1
-comprobar "contrato ilegible es NO HE PODIDO MIRAR" 2 "$?"
+comprobar "unreadable contract means CANNOT INSPECT" 2 "$?"
 
 # ── 4 · Contrato válido y SIN rutas ⇒ tampoco es un cero ─────────────────────────────────
 printf '{"paths":{}}' >"$BANCO/sin-rutas.json"
 CPC_OPENAPI_CONTRACT="$BANCO/sin-rutas.json" bash "$GATE" >"$BANCO/4.log" 2>&1
-comprobar "contrato sin rutas es NO HE PODIDO MIRAR" 2 "$?"
+comprobar "contract without routes means CANNOT INSPECT" 2 "$?"
 
 # ── 5 · El mensaje del 2 dice que NO se pudo comprobar ───────────────────────────────────
 if grep -q "UNVERIFIED" "$BANCO/1.log" 2>/dev/null; then
-	printf '  ok    %-56s\n' "el 2 se explica con UNVERIFIED"
-	pasan=$((pasan + 1))
+	printf '  ok    %-56s\n' "exit 2 is explained with UNVERIFIED"
+	pass_count=$((pass_count + 1))
 else
-	printf '  FALLA %-56s\n' "el 2 salió sin decir que no se pudo comprobar"
-	fallan=$((fallan + 1))
+	printf '  FAIL %-56s\n' "exit 2 did not explain inability to verify"
+	fail_count=$((fail_count + 1))
 fi
 
 # ── 6 · CONTROL NEGATIVO: una cifra REALMENTE equivocada sigue siendo un hallazgo (1) ─────
@@ -135,7 +129,7 @@ if ! cp -al $(ls -A "$RAIZ" | grep -v '^\.git$' | sed "s|^|$RAIZ/|") "$ARBOL/" 2
 	# Sin hardlinks (otro sistema de ficheros) se copia de verdad: más lento, mismo resultado.
 	rm -rf "${ARBOL:?}"/* 2>/dev/null
 	cp -a $(ls -A "$RAIZ" | grep -v '^\.git$' | sed "s|^|$RAIZ/|") "$ARBOL/" 2>>"$BANCO/6.cp" || {
-		echo "test-public-counts-verdicts: ⛔ NO HE PODIDO MIRAR: no se pudo montar el señuelo" >&2
+		echo "test-public-counts-verdicts: ⛔ CANNOT INSPECT: could not stage the decoy" >&2
 		exit 2
 	}
 fi
@@ -171,8 +165,8 @@ base_rc=$?
 # Con el aborto la respuesta sólo puede ser **verde** o **«no puedo correr aquí»**. Nunca «5 fallan»
 # en una caja y «8» en otra sobre el mismo commit.
 if [ "$base_rc" -ne 0 ]; then
-	echo "test-public-counts-verdicts: ⛔ NO HE PODIDO CORRER: el señuelo SIN mutar ya sale ${base_rc}, no 0." >&2
-	echo "  La línea base está rota, así que ninguna celda posterior mediría el gate: medirían el señuelo." >&2
+	echo "test-public-counts-verdicts: ⛔ CANNOT RUN: the UNMUTATED decoy already exits ${base_rc}, not 0." >&2
+	echo "  The baseline is broken, so subsequent cells would measure the decoy rather than the gate." >&2
 
 	# ⛔ EL DIAGNÓSTICO SE MIDE AQUÍ, NO SE RECITA.
 	#
@@ -188,25 +182,25 @@ if [ "$base_rc" -ne 0 ]; then
 	# curar una cifra que no estaba rota. Es el mismo defecto que este fichero denuncia doce líneas
 	# más arriba: **un recuento PARECE un diagnóstico**.
 	if [ ! -d "$ARBOL/web/node_modules" ]; then
-		echo "  Comprobado: falta \`web/node_modules\` en el árbol de pruebas. Es UNA causa conocida de" >&2
-		echo "  base rota — no necesariamente LA de hoy: el veredicto lo dan los hallazgos de abajo." >&2
-		echo "  Remedio, y es el camino documentado: \`task setup\` (Taskfile.yml:16 — «git hooks + cosign" >&2
-		echo "  containment + commit tooling + web deps»). El arranque de sesión instala SOLO la herramienta" >&2
-		echo "  de commits y remite a \`task setup\` cuando la sesión toca /web, así que un worktree recién" >&2
-		echo "  creado NO tiene la cadena y este gate no puede correr en él." >&2
+		echo "  Verified: \`web/node_modules\` is missing from the test tree. This is ONE known cause of a" >&2
+		echo "  broken baseline — not necessarily TODAY'S cause: the findings below determine the verdict." >&2
+		echo "  Documented remedy: \`task setup\` (Taskfile.yml:16 — «git hooks + cosign" >&2
+		echo "  containment + commit tooling + web deps»). Session startup installs ONLY the commit tooling" >&2
+		echo "  and refers to \`task setup\` when a session touches /web, so a newly created worktree" >&2
+		echo "  does NOT have the toolchain and this gate cannot run there." >&2
 	else
-		echo "  \`web/node_modules\` SÍ está, así que descartada la falta de cadena web. La causa está en" >&2
-		echo "  los hallazgos de abajo, y se curan donde vivan." >&2
+		echo "  \`web/node_modules\` IS present, ruling out the missing web toolchain. The cause appears in" >&2
+		echo "  the findings below; fix them at their source." >&2
 	fi
 
-	echo "  Lo que el gate encontró de verdad (sus hallazgos, no su preámbulo):" >&2
+	echo "  What the gate actually found (its findings, not its preamble):" >&2
 	if ! grep -aE '^\s*(FAIL|.*:[[:space:]]*(⛔|BROKEN))|^\s{2,}[a-z-]+:' "$BANCO/6.log" 2>/dev/null \
 		| grep -avE 'NOTE|EXCLUDED|^\s*OK ' | head -12 | sed 's/^/    /' >&2; then
-		echo "    (no he sabido aislarlos; log íntegro en $BANCO/6.log)" >&2
+		echo "    (could not isolate findings; full log in $BANCO/6.log)" >&2
 	fi
 	exit 2
 fi
-comprobar "el señuelo SIN mutar sale limpio (si no, mide el señuelo)" 0 "$base_rc"
+comprobar "the UNMUTATED decoy passes (otherwise the test measures the decoy)" 0 "$base_rc"
 
 # ── 7 · y mutado, el gate tiene que decir HALLAZGO ─────────────────────────────────────
 # La cifra que se muta es la que el README declara hoy, no un literal: un literal caduca con
@@ -215,34 +209,128 @@ comprobar "el señuelo SIN mutar sale limpio (si no, mide el señuelo)" 0 "$base
 real_readme="$(sha256sum < "$RAIZ/README.md")"
 n="$(grep -oE '(^|[^0-9])[0-9]+ integrations' "$ARBOL/README.md" | head -1 | grep -oE '[0-9]+')"
 [ -n "$n" ] || {
-	echo "test-public-counts-verdicts: ⛔ NO HE PODIDO MIRAR: el README del señuelo no declara integraciones" >&2
+	echo "test-public-counts-verdicts: ⛔ CANNOT INSPECT: the decoy README declares no integrations" >&2
 	exit 2
 }
 m=$((n - 1))
 sed -i "s/\b$n integrations\b/$m integrations/" "$ARBOL/README.md" || exit 2
 grep -q "\b$m integrations\b" "$ARBOL/README.md" || {
-	echo "test-public-counts-verdicts: ⛔ NO HE PODIDO MIRAR: el señuelo no quedó mutado ($n → $m)" >&2
+	echo "test-public-counts-verdicts: ⛔ CANNOT INSPECT: the decoy was not mutated ($n → $m)" >&2
 	exit 2
 }
 bash "$ARBOL/scripts/check-public-counts.sh" >"$BANCO/7.log" 2>&1
-comprobar "una cifra pública equivocada sigue siendo un HALLAZGO" 1 "$?"
+comprobar "an incorrect public count remains a FINDING" 1 "$?"
+
+# ── 7b · a broken delegated leg must not silence the counts ────────
+# The gate ran its three delegated legs BEFORE the count body and exited on the first
+# failure, so a leg that could not look (2) hid every count finding behind it — measured
+# on main 2026-10-08: exit at the config-env leg with zero count findings while the count
+# body held 338. With the README still mutated by cell 7, break one leg and demand BOTH
+# verdicts in one run: rc 1 (the false claim outranks the blindness) and the count
+# finding still present. The fake leg lands through `mv` — a plain `>` would truncate the
+# hardlink's shared inode and clobber the real tree, exactly what cell 8 guards against.
+printf '#!/bin/sh\nexit 2\n' >"$BANCO/fake-leg.sh"
+mv "$BANCO/fake-leg.sh" "$ARBOL/scripts/check-config-env-docs.sh"
+bash "$ARBOL/scripts/check-public-counts.sh" >"$BANCO/7b.log" 2>&1
+comprobar "a broken delegated leg does not silence the counts" 1 "$?"
+if grep -q "integrations (measured" "$BANCO/7b.log" && grep -q "configuration reference" "$BANCO/7b.log"; then
+	printf '  ok    %-56s\n' "broken leg recorded, count finding still visible"
+	pass_count=$((pass_count + 1))
+else
+	printf '  FAIL %-56s\n' "the broken leg hid the count or was not recorded" >&2
+	fail_count=$((fail_count + 1))
+fi
+
+# ── 7c · a DRIFTING delegated leg must not silence the counts either ─────────────────
+# 7b covers the leg that could not look (2); the measured incident on main was DRIFT (1)
+# at the config-env leg — and a plausible regression is "keep stopping on real drift".
+# Same demand with an exit-1 stub: the count finding stays the verdict and the leg's
+# drift wording is recorded in the same log.
+printf '#!/bin/sh\nexit 1\n' >"$BANCO/fake-leg-drift.sh"
+mv "$BANCO/fake-leg-drift.sh" "$ARBOL/scripts/check-config-env-docs.sh"
+bash "$ARBOL/scripts/check-public-counts.sh" >"$BANCO/7c.log" 2>&1
+comprobar "a drifting delegated leg does not silence the counts" 1 "$?"
+if grep -q "integrations (measured" "$BANCO/7c.log" && grep -q "out of date" "$BANCO/7c.log"; then
+	printf '  ok    %-56s\n' "drifting leg recorded, count finding still visible"
+	pass_count=$((pass_count + 1))
+else
+	printf '  FAIL %-56s\n' "the drifting leg hid the count or was not recorded" >&2
+	fail_count=$((fail_count + 1))
+fi
+
+# ── 7d/7e · the combined-exit TAIL itself, on counts that are CLEAN ────────────────────
+# In 7b/7c the rc 1 comes from the count body (the mutated README), so a tail that
+# swapped its branches — or never ran — would still pass those cells. These two run the
+# UNMUTATED decoy (README restored to canon) so the verdict is produced by the tail
+# alone: drift leg ⇒ 1 with "reported drift", blind leg ⇒ 2 with "counts themselves
+# were checked".
+sed -i "s/\b$m integrations\b/$n integrations/" "$ARBOL/README.md"
+bash "$ARBOL/scripts/check-public-counts.sh" >"$BANCO/7d.log" 2>&1
+comprobar "clean counts + drifting leg exits 1 via the tail" 1 "$?"
+if grep -q "reported drift" "$BANCO/7d.log"; then
+	printf '  ok    %-56s\n' "tail drift verdict recorded"
+	pass_count=$((pass_count + 1))
+else
+	printf '  FAIL %-56s\n' "tail drift verdict missing" >&2
+	fail_count=$((fail_count + 1))
+fi
+printf '#!/bin/sh\nexit 2\n' >"$BANCO/fake-leg-blind.sh"
+mv "$BANCO/fake-leg-blind.sh" "$ARBOL/scripts/check-config-env-docs.sh"
+bash "$ARBOL/scripts/check-public-counts.sh" >"$BANCO/7e.log" 2>&1
+comprobar "clean counts + blind leg exits 2 via the tail" 2 "$?"
+if grep -q "could not look (exit 2" "$BANCO/7e.log"; then
+	printf '  ok    %-56s\n' "tail blind verdict recorded"
+	pass_count=$((pass_count + 1))
+else
+	printf '  FAIL %-56s\n' "tail blind verdict missing" >&2
+	fail_count=$((fail_count + 1))
+fi
+
+# Abnormal exits are inability to compare, not evidence of a false claim. Exercise
+# each delegate through the real gate with clean counts, including shell noexec /
+# not-found statuses and a simulated signal status. Restore files via rename.
+cp "$ARBOL/scripts/check-config-env-docs.sh" "$BANCO/saved-env.sh"
+printf '#!/bin/sh\nexit 0\n' >"$BANCO/clean-env.sh"
+mv "$BANCO/clean-env.sh" "$ARBOL/scripts/check-config-env-docs.sh"
+for leg in check-config-env-docs check-cli-ref-docs check-openapi-op-descriptions; do
+	cp "$ARBOL/scripts/$leg.sh" "$BANCO/saved-leg.sh"
+	for abnormal_rc in 126 127 137; do
+		printf '#!/bin/sh\nexit %s\n' "$abnormal_rc" >"$BANCO/abnormal-leg.sh"
+		mv "$BANCO/abnormal-leg.sh" "$ARBOL/scripts/$leg.sh"
+		log="$BANCO/$leg-$abnormal_rc.log"
+		bash "$ARBOL/scripts/check-public-counts.sh" >"$log" 2>&1
+		comprobar "clean counts + $leg exit $abnormal_rc" 2 "$?"
+		if grep -q "died abnormally (exit $abnormal_rc)" "$log" \
+			&& grep -q "CANNOT LOOK" "$log" \
+			&& grep -q "could not look (exit 2" "$log" \
+			&& ! grep -qE 'reported drift|out of date|--write' "$log"; then
+			printf '  ok    %-56s\n' "$leg exit $abnormal_rc explains inability to compare"
+			pass_count=$((pass_count + 1))
+		else
+			printf '  FAIL %-56s\n' "$leg exit $abnormal_rc misclassified" >&2
+			fail_count=$((fail_count + 1))
+		fi
+	done
+	mv "$BANCO/saved-leg.sh" "$ARBOL/scripts/$leg.sh"
+done
+mv "$BANCO/saved-env.sh" "$ARBOL/scripts/check-config-env-docs.sh"
 
 # ── 8 · y el árbol REAL no se ha tocado en ningún momento ──────────────────────────────
 # Es la celda que responde por el arreglo entero, y además cubre un riesgo NUEVO que el
 # hardlink introduce: si el gate escribiera EN SITIO sobre un fichero enlazado, corrompería el
 # original. Si alguien reintroduce la mutación en el árbol, o el gate escribe, esto se pone rojo.
 if [ "$(sha256sum < "$RAIZ/README.md")" != "$real_readme" ]; then
-	printf '  FALLA %-56s\n' "el árbol real quedó MUTADO" >&2
-	fallan=$((fallan + 1))
+	printf '  FAIL %-56s\n' "the real tree was MUTATED" >&2
+	fail_count=$((fail_count + 1))
 else
-	printf '  ok    %-56s\n' "el árbol real no se toca en ningún instante"
-	pasan=$((pasan + 1))
+	printf '  ok    %-56s\n' "the real tree is never touched"
+	pass_count=$((pass_count + 1))
 fi
 
 # Y el árbol queda como estaba: una batería que deja el repo tocado es peor que no tenerla.
 bash "$GATE" >"$BANCO/7.log" 2>&1
-comprobar "el árbol vuelve a estar limpio tras la mutación" 0 "$?"
+comprobar "the tree is clean again after the mutation" 0 "$?"
 
-echo "test-public-counts-verdicts: $pasan pasan, $fallan fallan"
-[ "$fallan" -eq 0 ] || exit 1
+echo "test-public-counts-verdicts: $pass_count passed, $fail_count failed"
+[ "$fail_count" -eq 0 ] || exit 1
 exit 0

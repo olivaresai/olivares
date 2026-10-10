@@ -15,14 +15,15 @@ cost を読み取ります。`codex-managed-config` コネクターは、配備�
 プローブのレシートの記録、ガバナンス対象セッションの起動や停止には
 [Codex CLI をインストールする](/how-to/install-codex-cli/) を使います。運用経路は
 [プロバイダーセッションを運用する](/how-to/operate-provider-sessions/)
-です（`OLIVARES_SESSION_RUNTIME_CODEX_BIN` または管理対象インストールのレシートと、
-プロバイダープロファイル）。
+です（`OLIVARES_SESSION_RUNTIME_CODEX_BIN` による明示的な選択、未設定なら最新の検証済み管理インストール、
+次にエンジンの `PATH` 上の `codex`、およびプロバイダープロファイル）。
 
 ## Codex を追加する
 
 ### 前提条件
 
-- Olivares AI enterprise tenant と、roster 操作用の AAL3 elevation を持つ superadmin account。
+- Olivares AI enterprise tenant と superadmin account。roster 操作は管理操作の
+  追加認証ポリシー（`admin_step_up`、デフォルトは `none`）に従います。
 - enterprise ingestion では、必要な read scope を持つ platform API key または workspace access token
   と `workspace_id`。ChatGPT 経由で Codex CLI にサインインしても、コネクターの credential にはなりません。
 - `/etc/codex/requirements.toml`、`/etc/codex/managed_config.toml`、trusted hook を配布するための

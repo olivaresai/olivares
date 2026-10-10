@@ -9,13 +9,13 @@
 // wide), so its key carries no tenant.
 import { http } from '@/lib/api'
 import {
-  ensureFreshSession,
-  notifyUnauthorized,
+  apiFetchRaw,
   type RequestOptions,
   type TenantListOptions,
   type TenantRequestOptions,
 } from '@/lib/api/client'
-import { ApiError, NetworkError, parseErrorEnvelope } from '@/lib/api/errors'
+import { downloadBlob, serverFilename } from '@/lib/api/download'
+import { ApiError } from '@/lib/api/errors'
 // El techo de las listas de /v1/m/models es UNO, y vive donde nacio. Definir aqui una
 // segunda constante con el mismo 1000 fabrica dos copias de un control, que envejecen
 // aparte: la primera vez que alguien suba una y no la otra, estas dos listas y el resto
@@ -23,8 +23,6 @@ import { ApiError, NetworkError, parseErrorEnvelope } from '@/lib/api/errors'
 import { EVIDENCE_PAGE } from '@/features/models/api'
 import type { AgentDTO, ListResponse } from '@/lib/api/types'
 import type { SourceMode } from '@/features/shared'
-import { useSessionStore } from '@/stores/session'
-import { useTenantStore } from '@/stores/tenant'
 
 // --- types -------------------------------------------------------------------
 
@@ -109,6 +107,9 @@ export interface WorkspaceDTO {
   slug: string
   status: string
   is_default: boolean
+  /** The parent department in the organization tree; absent on a root, and
+   *  hidden from a workspace-confined caller. */
+  parent_id?: string
   created_at: string
   updated_at: string
   version: number
@@ -211,34 +212,18 @@ export interface SSOConfigDTO {
   // The cert is public and round-trips; only a hint of the sealed key is ever returned.
   saml_sp_sign_cert_pem?: string
   saml_sp_sign_key_hint?: string
-  // Login-enforcement posture (protocol-independent). `require_sso` is the
-  // operator intent to block password login; `network_allowlist` is the IP CIDR
-  // allow-list (always present, may be empty). `enforced_by` has THREE values, not two:
-  // "enterprise" (this build enforces THIS row's posture), "unavailable" (it never
-  // enforces — the open build), and "out_of_scope" (it enforces, but not over this row —
-  // the posture it reads is the deployment-wide primary's). Test for "enterprise"
-  // explicitly: treating anything that is not "unavailable" as enforced is the false green
-  // badge this replaced.
+  // Stored login posture, group sources and claimed domains (always present; the lists
+  // may be empty). Every PUT replaces them, so the console sends them back as stored.
+  // `enforced_by` says whether this engine enforces the stored posture; Settings › Sign-in
+  // reads it ("enterprise" only means enforced).
   require_sso: boolean
   network_allowlist: string[]
   enforced_by: string
-  // Group mapping + JIT coherence. `oidc_groups_claim` / `saml_groups_attr`
-  // name where the provider reads the subject's directory groups; `scim_authoritative`
-  // makes SCIM the sole identity authority (SSO login never JIT-creates). `groups_mapped_by`
-  // is "enterprise" when this build turns an asserted group into a grant at login, or
-  // "unavailable" when it extracts groups but never maps them (the open build) — symmetric
-  // with `enforced_by`.
   oidc_groups_claim?: string
   saml_groups_attr?: string
+  // SCIM is the sole identity authority: an SSO login never creates an account.
   scim_authoritative: boolean
-  groups_mapped_by: string
-  //U5 home-realm routing: the email domains this IdP claims (always an array). An
-  // email-first login for user@<domain> routes to the IdP that claims <domain>.
-  // `routed_by` is "enterprise" when THIS build routes by domain, or "unavailable" when it
-  // stores the domains but resolves the single global IdP (the open build) — symmetric
-  // with `enforced_by` / `groups_mapped_by`.
   claimed_domains: string[]
-  routed_by: string
   updated_at?: string
 }
 
@@ -265,16 +250,13 @@ export interface SSOConfigInput {
   // request signing broke (core/auth/federation_config.go, PutConfigIdP).
   saml_sp_sign_cert_pem?: string
   saml_sp_sign_key_pem?: string
-  // Login-enforcement posture (protocol-independent). Malformed CIDRs are
-  // rejected by the backend (HTTP 400, code "bad_request").
+  // Replaced verbatim on every PUT. The backend rejects a malformed CIDR (400) and a
+  // malformed (400) or already-claimed (409) domain.
   require_sso?: boolean
   network_allowlist?: string[]
-  // Group mapping + JIT coherence (replaced verbatim on every PUT).
   oidc_groups_claim?: string
   saml_groups_attr?: string
   scim_authoritative?: boolean
-  //U5 home-realm domains. Malformed (400) or already-claimed (409) domains are
-  // rejected by the backend.
   claimed_domains?: string[]
 }
 
@@ -679,6 +661,16 @@ export interface ScopedGrantDTO {
   created_by?: string
 }
 
+// An inheritance filter (modules/governance/inheritance_filter.go): on a container node, rights
+// that reach one resource class from above the node stop applying; grants at or below still do.
+export interface InheritanceFilterDTO {
+  id?: string
+  scope_tree: 'workspace' | 'agent_group' | 'folder'
+  scope_ref: string
+  scope_class: string
+  created_by?: string
+}
+
 // --- S256 provisioned groups (membership-scoped, operator-managed) --------
 
 export interface GroupDTO {
@@ -688,6 +680,9 @@ export interface GroupDTO {
   provisioned_by?: string
   mapped_role: string
   parent_group_id: string
+  /** The workspace (department) the group is placed in; empty when unplaced
+   *  (organization-wide) or concealed from a workspace-confined caller. */
+  workspace_id?: string
   members: number
 }
 
@@ -796,6 +791,27 @@ export interface AccessReviewPack {
   integrity: { pack_sha256: string; sealed: boolean; audit_seq?: number }
 }
 
+// GET /v1/auth/effective-rights (handlers_effective_rights.go): the eight trustee rights a
+// subject holds at one node, each asked of the Authorizer, and the node's path outermost first.
+// `unknown` is an engine that could not decide (logged server-side), never a deny.
+export type EffectiveRightState =
+  'held' | 'not_held' | 'unknown' | 'not_applicable'
+
+export interface EffectiveRightsRequest {
+  subject_type: 'user' | 'token'
+  subject_id: string
+  kind: 'agent' | 'session' | 'resource'
+  id: string
+}
+
+export interface EffectiveRightsResponse {
+  subject: { kind: string; id: string }
+  node: { kind: string; id: string }
+  assurance: number
+  path: { kind: string; ref: string; workspace?: string }[]
+  rights: { name: string; state: EffectiveRightState }[]
+}
+
 // --- live edition / license ---------------------------------------------
 // The deployment-wide edition surface: install / observe / HOT-APPLY a commercial
 // license without a restart (the Grafana/Elastic in-place model). It is pure edition
@@ -819,7 +835,7 @@ export interface LicenseStatusDTO {
   managed_externally: boolean
   licensee?: string
   plan?: string
-  /** Attested support relationship (e.g. standard | enterprise); display-only, never gates. */
+  /** Attested support relationship (e.g. business | enterprise); display-only, never gates. */
   support_tier?: string
   features?: string[]
   /** @deprecated Attested seat figure (0 = unlimited). IGNORED since B10 — no build
@@ -961,7 +977,7 @@ export interface UpdateStatusDTO {
   error?: string
 }
 
-// AuditSpoolDTO is the audit-spool budget indicator (ADR-0024 Q2). Present
+// AuditSpoolDTO is the audit-spool budget indicator. Present
 // only when an audit-ledger budget is declared; absent otherwise — silence, not
 // error (mirrors core/api/dto.go auditSpoolDTO).
 export interface AuditSpoolDTO {
@@ -1074,93 +1090,26 @@ export function isUpdateCheckingUnavailable(err: unknown): boolean {
   return err instanceof ApiError && err.status === 501
 }
 
-/** Fetch the AAL3-gated support archive with the same auth/tenant headers as the
- * shared JSON client. The response is binary, so it cannot use the shared
- * JSON http client. (No backticks in this comment: the export scrubber's
- * tokenizer treats a backtick in a comment as a template-literal opener and
- * stops rewriting the rest of the file.) */
+/** Fetch the AAL3-gated support archive through the client's raw download. A 403 keeps
+ * the engine's code (step_up_required, core/api/handlers_support_bundle.go), so
+ * ApiError.isStepUpRequired holds; the archive is named by the server. */
 export async function fetchSupportBundle(): Promise<FetchedSupportBundle> {
-  // La renovación va ANTES de la petición: este camino rodea `apiFetch`, así que sin esto
-  // sería el único del console que sigue muriendo por caducidad. Comparte el vuelo único.
-  // ⛔ EL INQUILINO SE LEE ANTES DE LA ESPERA. Este camino rodea `apiFetch`, así que no
-  //    hereda la fijación de `apiFetchWithMeta`: si se leyera después del refresco, un
-  //    cambio de inquilino durante la renovación mandaría la petición al inquilino nuevo.
-  const tenant = useTenantStore.getState().activeTenant
-  await ensureFreshSession()
-  const headers = new Headers({ Accept: 'application/octet-stream' })
-  const token = useSessionStore.getState().csrfToken
-  if (token) headers.set('X-CSRF-Token', token)
-  if (tenant) headers.set('X-Olivares-Tenant', tenant)
-
-  let response: Response
-  try {
-    response = await fetch('/v1/console/support-bundle', {
-      method: 'POST',
-      headers,
-      credentials: 'same-origin',
-    })
-  } catch (cause) {
-    throw new NetworkError('The control plane is unreachable.', cause)
-  }
-
-  if (!response.ok) {
-    if (response.status === 401) notifyUnauthorized()
-    // ⛔ EL CÓDIGO DEL MOTOR SE CONSERVA. Esto fijaba `code: 'support_bundle_failed'` para
-    // CUALQUIER fallo y sólo leía el mensaje del sobre, de modo que toda decisión por código era
-    // imposible en esta ruta — y hay una que importa: el handler responde 403 con
-    // `step_up_required` (core/api/handlers_support_bundle.go:28-37, con prueba de wire en
-    // core/api/handlers_console_wave2_test.go:160-168). Con el código aplastado,
-    // `ApiError.isStepUpRequired` —que compara el CÓDIGO (lib/api/errors.ts:71-79)— era falso
-    // por construcción, y la consola trataba una ceremonia pendiente como una negativa de rol.
-    //
-    // Se reusa `parseErrorEnvelope`, que es el parser canónico del cliente compartido
-    // (lib/api/client.ts:168): que esta ruta devuelva BINARIO obliga a no usar el cliente JSON,
-    // no a re-implementar la lectura del sobre de error. Lo levantó el contraste Codex sol max.
-    let parsed: unknown
-    try {
-      parsed = await response.json()
-    } catch {
-      // Cuerpo no-JSON: `parseErrorEnvelope` cae al mensaje de reserva.
-      parsed = undefined
-    }
-    const { code, message, details } = parseErrorEnvelope(
-      parsed,
-      response.statusText || 'Support bundle generation failed',
-    )
-    throw new ApiError(
-      response.status,
-      code,
-      message,
-      response.headers.get('X-Request-ID') ?? undefined,
-      details,
-      parsed,
-    )
-  }
-
-  const disposition = response.headers.get('Content-Disposition') ?? ''
-  // Built via the RegExp constructor, not a regex literal: the export
-  // scrubber's lexer has no regex concept, and a literal containing an odd
-  // number of double quotes desynchronizes its string tracking for the whole
-  // rest of the file (which un-scrubs later comments).
-  const filenameMatch = new RegExp('filename="([^"]+)"', 'i').exec(disposition)
+  const response = await apiFetchRaw('/v1/console/support-bundle', {
+    method: 'POST',
+    headers: { Accept: 'application/octet-stream' },
+  })
   return {
     blob: await response.blob(),
-    filename:
-      filenameMatch?.[1] ??
+    filename: serverFilename(
+      response.headers,
       `olivares-support-${new Date().toISOString().slice(0, 10)}.tar.gz`,
+    ),
   }
 }
 
 /** Save a fetched support bundle using the browser's native download affordance. */
 export function downloadSupportBundle(bundle: FetchedSupportBundle): void {
-  const url = URL.createObjectURL(bundle.blob)
-  const anchor = document.createElement('a')
-  anchor.href = url
-  anchor.download = bundle.filename
-  document.body.appendChild(anchor)
-  anchor.click()
-  anchor.remove()
-  URL.revokeObjectURL(url)
+  downloadBlob(bundle.blob, bundle.filename)
 }
 
 function bindingApplyResult(
@@ -1255,8 +1204,8 @@ export const consoleApi = {
    *  `listWorkspaces()` —que sirve UNA pagina— devolvia `undefined` en cuanto el
    *  workspace no cabia, y el llamante caia al id crudo como filtro: la consulta
    *  siguiente no casaba nada y la pantalla afirmaba «no hay conectores». */
-  getWorkspaceByID: (id: string) =>
-    http.get<WorkspaceDTO>(`/v1/workspaces/${encodeURIComponent(id)}`),
+  getWorkspaceByID: (id: string, opts?: { signal?: AbortSignal }) =>
+    http.get<WorkspaceDTO>(`/v1/workspaces/${encodeURIComponent(id)}`, opts),
   createWorkspace: (input: { name: string; slug: string }) =>
     http.post<WorkspaceDTO>('/v1/workspaces', input),
   updateWorkspace: (id: string, input: { name?: string; status?: string }) =>
@@ -1375,12 +1324,12 @@ export const consoleApi = {
   reloadRuntime: () =>
     http.post<SourceReloadReport>('/v1/console/runtime/reload', {}),
 
-  //connector→workspace assignments (tenant-resident, module route).
-  // ⛔ `limit` NO ES OPCIONAL DE HECHO, y es la MISMA trampa que dejó documentada para
-  //    `guard-postures`: el handler devuelve `has_more` sin drenar el cursor
-  //    (`modules/sourcescope/assignment.go:109`) y el repositorio genérico pagina a 100
-  //    (`core/internal/store/sqlstore/generic.go:28`). Pedir el máximo reduce la ventana; NO la
-  //    cierra, y por eso quien consuma esto tiene que mirar `has_more` además.
+  //connector-to-workspace assignments (tenant-resident module route).
+  // `limit` is effectively required, as documented for `guard-postures`.
+  // The handler returns `has_more` without draining the cursor
+  // (`modules/sourcescope/assignment.go:109`), and the generic repository paginates at 100
+  // (`core/internal/store/sqlstore/generic.go:28`). Requesting the maximum reduces truncation;
+  // consumers must still inspect `has_more`.
   listAssignments: (params?: {
     connector_name?: string
     workspace_ref?: string
@@ -1556,6 +1505,13 @@ export const consoleApi = {
   revokeGrant: (id: string) =>
     http.delete<void>(`${RBAC}/grants/${encodeURIComponent(id)}`),
 
+  listInheritanceFilters: () =>
+    http.get<ListResponse<InheritanceFilterDTO>>(`${RBAC}/inheritance-filters`),
+  createInheritanceFilter: (input: InheritanceFilterDTO) =>
+    http.post<InheritanceFilterDTO>(`${RBAC}/inheritance-filters`, input),
+  removeInheritanceFilter: (id: string) =>
+    http.delete<void>(`${RBAC}/inheritance-filters/${encodeURIComponent(id)}`),
+
   // Live edition / license (global, superadmin-gated; writes need an AAL3
   // step-up). getLicense reads the live status + seat usage; installLicense verifies,
   // persists and hot-applies (acknowledge confirms a seat downgrade); uninstallLicense
@@ -1675,6 +1631,10 @@ export const consoleApi = {
     http.post<AuthZenSearchResponse>('/access/v1/search/resource', input),
   accessReviewExport: (input: AccessReviewRequest) =>
     http.post<AccessReviewPack>('/access/v1/access-review/export', input),
+  effectiveRights: (input: EffectiveRightsRequest) =>
+    http.get<EffectiveRightsResponse>('/v1/auth/effective-rights', {
+      query: { ...input },
+    }),
 
   //API token management (programmatic credentials).
   /** ⛔ EL CUERPO TIRABA TODO SALVO `include_revoked`, así que añadir `limit?` al TIPO no habría
@@ -1789,6 +1749,8 @@ export const consoleKeys = {
   roles: (t: string | null) => ['console', t, 'roles'] as const,
   permGroups: (t: string | null) => ['console', t, 'permGroups'] as const,
   grants: (t: string | null) => ['console', t, 'grants'] as const,
+  inheritanceFilters: (t: string | null) =>
+    ['console', t, 'inheritanceFilters'] as const,
   // The edition/license is deployment-global, not tenant-scoped.
   license: () => ['console', 'license'] as const,
   //enterprise activation is deployment-global.

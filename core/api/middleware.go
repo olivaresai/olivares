@@ -46,7 +46,12 @@ func (s *Server) recoverer(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if rec := recover(); rec != nil {
-				s.log.Error("api: handler panic", "panic", rec, "path", r.URL.Path, "request_id", requestID(r.Context()))
+				// A proxied stream that broke mid-body aborts the connection on
+				// purpose (net/http); a 500 appended to it would read as complete.
+				if rec == http.ErrAbortHandler {
+					panic(rec)
+				}
+				s.log.Error("api: handler panic", "panic", rec, "path", logPath(r.URL.Path), "request_id", requestID(r.Context()))
 				w.Header().Set("Content-Type", "application/json; charset=utf-8")
 				w.WriteHeader(http.StatusInternalServerError)
 				_, _ = w.Write([]byte(`{"error":{"code":"internal","message":"internal error"}}`))
@@ -92,21 +97,33 @@ func (s *Server) accessLog(next http.Handler) http.Handler {
 		rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
 		ctx, holder := withActorHolder(r.Context())
 		s.mInflight.Inc()
+		// A handler that panics (an aborted proxy stream included) still leaves
+		// the gauge and gets its line; the panic goes on to the recoverer.
+		defer func() {
+			p := recover()
+			dur := time.Since(start)
+			status := rec.status
+			if p != nil && p != http.ErrAbortHandler {
+				status = http.StatusInternalServerError
+			}
+			s.mInflight.Dec()
+			s.recordRequest(r.Method, status, dur)
+			s.log.Log(r.Context(), accessLogLevel(r.Method, status), "api request",
+				"method", r.Method, "path", logPath(r.URL.Path), "status", status,
+				"dur_ms", dur.Milliseconds(), "actor", holder.actor,
+				"request_id", requestID(r.Context()))
+			if p != nil {
+				panic(p)
+			}
+		}()
 		next.ServeHTTP(rec, r.WithContext(ctx))
-		dur := time.Since(start)
-		s.mInflight.Dec()
-		s.recordRequest(r.Method, rec.status, dur)
-		s.log.Log(r.Context(), accessLogLevel(r.Method, rec.status), "api request",
-			"method", r.Method, "path", r.URL.Path, "status", rec.status,
-			"dur_ms", dur.Milliseconds(), "actor", holder.actor,
-			"request_id", requestID(r.Context()))
 	})
 }
 
 // accessLogLevel is DEBUG for a read that succeeded and INFO for everything else: a
 // write, a refusal, an error. The console polls (GET /v1/m/sessions/runs about
 // twice a second with a session open), and one INFO line per poll filled
-// olivares.log with polling (HU2-11). The request metrics still count every read.
+// olivares.log with polling. The request metrics still count every read.
 func accessLogLevel(method string, status int) slog.Level {
 	switch method {
 	case http.MethodGet, http.MethodHead, http.MethodOptions:
@@ -128,31 +145,22 @@ func accessLogLevel(method string, status int) slog.Level {
 // anonymous).
 func (s *Server) authenticate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if s.isMCPProtocolRequest(r) || (r.URL.Path == "/metrics" && s.metricsGate != nil) {
+		if s.isMCPProtocolRequest(r) || s.isSessionPreviewRequest(r) || (r.URL.Path == "/metrics" && s.metricsGate != nil) {
 			next.ServeHTTP(w, r)
 			return
 		}
-		if r.Header.Get("X-Olivares-Session") == "cookie" && !BrowserSameOrigin(r) {
-			s.writeError(w, r, errForbidden)
+		token, cookieAuth, err := requestCredential(r)
+		if err != nil {
+			s.writeError(w, r, err)
 			return
 		}
-		h := r.Header.Get("Authorization")
-		var token string
-		cookieAuth := false
-		if h != "" {
-			var ok bool
-			token, ok = strings.CutPrefix(h, "Bearer ")
-			if !ok {
-				s.writeError(w, r, auth.ErrUnauthenticated)
-				return
-			}
-			token = strings.TrimSpace(token)
-		} else if browserCookieApplies(r) {
-			if cookie, err := r.Cookie(browserSessionCookie); err == nil {
-				token, cookieAuth = cookie.Value, true
-			}
-		}
 		if token == "" {
+			// A session call (ServeSession) arrives with its principal already resolved.
+			if p, ok := principalFrom(r.Context()); ok {
+				if h := actorHolderFrom(r.Context()); h != nil {
+					h.actor = p.Actor()
+				}
+			}
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -176,6 +184,27 @@ func (s *Server) authenticate(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r.WithContext(s.withStepUpPolicy(withPrincipal(r.Context(), p))))
 	})
+}
+
+// requestCredential is the shared bearer/cookie transport parser. A restore
+// receipt uses the identical origin rules as normal authentication.
+func requestCredential(r *http.Request) (string, bool, error) {
+	if r.Header.Get("X-Olivares-Session") == "cookie" && !BrowserSameOrigin(r) {
+		return "", false, errForbidden
+	}
+	if h := r.Header.Get("Authorization"); h != "" {
+		token, ok := strings.CutPrefix(h, "Bearer ")
+		if !ok {
+			return "", false, auth.ErrUnauthenticated
+		}
+		return strings.TrimSpace(token), false, nil
+	}
+	if browserCookieApplies(r) {
+		if cookie, err := r.Cookie(browserSessionCookie); err == nil {
+			return cookie.Value, true, nil
+		}
+	}
+	return "", false, nil
 }
 
 // RootEnginePaths are the engine's root-level, non-/v1, unauthenticated endpoints:
@@ -250,7 +279,7 @@ func (s *Server) prepareGovernedPrincipal(w http.ResponseWriter, r *http.Request
 	undecided := func(why string, cause error) (*http.Request, bool) {
 		if s.log != nil {
 			s.log.Info("api: the principal's authority could not be reconstructed",
-				"why", why, "err", cause, "path", r.URL.Path, "producer_ms", espera.Milliseconds())
+				"why", why, "err", cause, "path", logPath(r.URL.Path), "producer_ms", espera.Milliseconds())
 		}
 		w.Header().Set("Retry-After", "5")
 		s.writeError(w, r, auth.ErrRouteUndecided)
@@ -439,33 +468,10 @@ const (
 )
 
 // authzTenantResourcePolicy is the same flow with the route's SEALED metadata carried into
-// the decision (V269 / architecture §7.1).
-//
-// ⛔ AQUI DECIA «THE ZERO METADATA IS BIT-FOR-BIT THE OLD BEHAVIOUR». ERA CIERTO Y DEJO DE
-// SERLO EN EL MISMO COMMIT QUE ESTE COMENTARIO SOBREVIVIO, y la suite lo desmintio con
-// CINCUENTA tests en rojo sirviendo 503 en rutas ordinarias — crear un agente, listar,
-// auditar.
-//
-// Lo que la frase afirmaba de la METADATA sigue siendo verdad: cada arma de rbacPermitted
-// solo RETIRA el termino RBAC, y el resolvedor consulta SessionInheritsAgentGroups solo
-// cuando es true, asi que el cero es inerte. Pero la equivalencia no vivia ahi. Vivia en que
-// las dos puertas llamaban a la MISMA funcion, y al cambiarla a AuthorizeRoute la divergencia
-// se mudo de eje: `Authorize` pregunta «¿RBAC o grant permiten?», y `AuthorizeEvidence`
-// pregunta ademas «¿respalda a este principal un hecho de epoca de directorio, sellado y con
-// ventana?» (evidence.go, principalAuthorizationEvidence). Un principal sin ese hecho no da
-// CheckBroken sino CheckUnknown, y un desconocido no es una denegacion: es ErrRouteUndecided,
-// o sea 503 — el API entero caido, no un permiso de menos.
-//
-// ⇒ LA LECCION, que es lo unico que impide repetirlo: un comentario que afirma equivalencia
-// nombra el eje en el que la comprobo. Este nombraba la metadata, seguia siendo cierto sobre
-// la metadata, y el sistema habia divergido por otro lado. Una afirmacion de equivalencia
-// envejece cuando cambia CUALQUIERA de sus dos lados, no solo el que cita.
-//
-// ⛔ AND MinimumAAL IS CHECKED HERE, BEFORE THE DECISION, NOT INSIDE THE AUTHORIZER. A
-// step-up is a precondition of authentication, not a term of the algebra: folding it in
-// would make "prove who you are again" indistinguishable from "you may not do this", two
-// answers with different remedies. Checking it BEFORE also means a principal who must step
-// up learns nothing about what waited behind it.
+// the decision (V269 / architecture §7.1). It is the REST adapter of admit: it answers 401
+// without an authenticated principal, resolves the tenant from the request, asks admit and
+// writes the refusal. An undecided answer carries Retry-After: 5, so a client can tell it from
+// a refusal.
 func (s *Server) authzTenantResourcePolicy(
 	w http.ResponseWriter,
 	r *http.Request,
@@ -486,111 +492,17 @@ func (s *Server) authzTenantResourcePolicy(
 		s.writeError(w, r, err)
 		return auth.Principal{}, "", none, false
 	}
-	// Dedicated orchestration collection authority is the immutable credential
-	// workspace. The work service checks its live profile and confines every row.
-	if p.IsOrchestrationSessionCredential() && res.ID == "" && res.WorkspaceID.IsZero() {
-		switch perm {
-		case "sessions:work:read", "sessions:work:write", "sessions:decision:read", "sessions:decision:write":
-			res.WorkspaceID = p.SessionWorkspaceID
+	witness, err := s.admit(r.Context(), auth.Request{
+		Principal: p, Permission: perm, Tenant: tenant, Resource: res, Route: meta,
+	}, denial, governed)
+	if err != nil {
+		if errors.Is(err, auth.ErrRouteUndecided) {
+			w.Header().Set("Retry-After", "5")
 		}
-	}
-	if meta.RequiresStepUp(r.Context(), p) {
-		s.authz.RecordStepUpRefusal(r.Context(), auth.Request{
-			Principal: p, Permission: perm, Tenant: tenant, Resource: res, Route: meta,
-		})
-		s.writeError(w, r, auth.StepUpRequiredFor(auth.StepUpPolicyFrom(r.Context())))
+		s.writeError(w, r, err)
 		return auth.Principal{}, "", none, false
 	}
-
-	// ⛔ EL CAMINO LO ELIGE LA PUERTA, Y NO LA METADATA. Una ruta NO gobernada no declaro
-	// politica alguna, asi que exigirle la evidencia sellada del camino de testigo le impone un
-	// requisito que nadie escribio para ella — y su fallo no es «un permiso menos», es 503.
-	//
-	// ⛔ Y NO SE RAMIFICA SOBRE meta.IsZero(), aunque hoy distinguiria los mismos casos. Seria
-	// la familia «un valor a cero apaga la comprobacion»: una ruta GOBERNADA cuya metadata
-	// quedara vacia —por un refactor, por un literal a medio rellenar— se degradaria al camino
-	// booleano en silencio y sin que ningun test lo notara. La gobernanza es una propiedad de
-	// la GRAMATICA DE REGISTRO (invariante IV), que es donde no puede derivar a cero sola, y por
-	// eso viaja como parametro con tipo propio en vez de deducirse de un valor.
-	if !governed {
-		authorize := s.authz.Authorize
-		if errors.Is(denial, store.ErrNotFound) && perm.Verb() == auth.VerbRead {
-			// A concealed read must do the same policy work for missing,
-			// foreign and policy-hidden rows. Preserve every native deny while
-			// evaluating the overlay once; ordinary reads and action gates
-			// retain their authorization path, as does governed evidence below.
-			authorize = s.authz.AuthorizeDisclosure
-		}
-		if dec := authorize(r.Context(), auth.Request{
-			Principal: p, Permission: perm, Tenant: tenant, Resource: res, Route: meta,
-		}); !dec.Allow {
-			s.writeError(w, r, denial)
-			return auth.Principal{}, "", none, false
-		}
-		return p, tenant, none, true
-	}
-
-	// ⛔ AuthorizeRoute Y NO Authorize: ESTA RUTA TIENE QUE PRODUCIR UN TESTIGO. Con el booleano,
-	// nada de lo que el testigo liga sobrevivia a la decision, asi que ninguna invariante suya
-	// alcanzaba al efecto HTTP (invariante V). Ahora el testigo viaja hasta el handler en el
-	// ModuleContext y `CheckRowSet` puede exigir que responda a la pregunta de ESTA peticion.
-	// Bound this evidence decision without imposing a lifetime on the handler
-	// (which may stream). An existing earlier request deadline remains binding.
-	decisionCtx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
-	defer cancel()
-	witness, aerr := s.authz.AuthorizeRoute(decisionCtx, auth.Request{
-		Principal: p, Permission: perm, Tenant: tenant, Resource: res, Route: meta,
-	})
-	switch {
-	case aerr == nil:
-		ownerScopedGrant := witness.UsesOwnerScopedGrant()
-		if ownerScopedGrant || p.Superadmin {
-			action, source := "auth.superadmin.tenant_entry", "superadmin_tenant_owner"
-			if ownerScopedGrant {
-				action, source = "auth.owner_scoped_grant", "tenant_owner"
-			}
-			err := s.st.Mutate(decisionCtx, tenant, func(sc store.Scope) error {
-				event, err := sc.Audit().Append(decisionCtx, model.AuditDraft{
-					Actor: p.Actor(), ActorKind: p.ActorKind(), Action: action,
-					Meta: map[string]any{"grant_source": source, "role": auth.RoleOwner, "permission": string(perm),
-						"cedar_action": witness.CedarAction.String(), "superadmin": p.Superadmin},
-				})
-				if err == nil && event.Seq == 0 {
-					return store.ErrAuditSpoolFull
-				}
-				return err
-			})
-			if err != nil {
-				s.log.Error("api: tenant owner admission audit unavailable", "err", err)
-				w.Header().Set("Retry-After", "5")
-				s.writeError(w, r, auth.ErrRouteUndecided)
-				return auth.Principal{}, "", none, false
-			}
-		}
-		return p, tenant, witness, true
-
-	// ⛔ EL step-up SIGUE SIENDO SUYO: "vuelve a demostrar quien eres" no es "no puedes", y las
-	// dos respuestas tienen remedios distintos. Ya se servia asi antes de este cambio.
-	case errors.Is(aerr, auth.ErrStepUpRequired):
-		s.writeError(w, r, auth.ErrStepUpRequired)
-
-	// ⛔ EL TERCER ESTADO, que en este camino NO EXISTIA: hasta ahora una decision que no pudo
-	// establecerse se servia como denegacion. Va con su propia forma (503) y ANTES de cualquier
-	// lectura de fila, para que no pueda correlacionar con la existencia; y la ruta con conceal y
-	// la ruta sin conceal responden IGUAL, porque un undecided que distinguiera seria justo el
-	// oraculo que el conceal existe para cerrar.
-	case errors.Is(aerr, auth.ErrRouteUndecided):
-		w.Header().Set("Retry-After", "5")
-		s.writeError(w, r, aerr)
-
-	// ⛔ Y LA DENEGACION DE POLITICA SIGUE ESCRIBIENDO EL `denial` QUE LA RUTA PASO. Cambiarlo por
-	// el error tipado convertiria en 403 lo que hoy es 404 en toda ruta con
-	// ConcealDeniedAsNotFound — y eso no es presentacion: CONFIRMA QUE LA FILA EXISTE. Seria
-	// curar el testigo y abrir un oraculo de existencia en el mismo commit.
-	default:
-		s.writeError(w, r, denial)
-	}
-	return auth.Principal{}, "", none, false
+	return p, tenant, witness, true
 }
 
 // requireStepUp is the administrative step-up gate for privileged CONFIGURE
@@ -632,7 +544,7 @@ func (s *Server) authzSystem(w http.ResponseWriter, r *http.Request, perm auth.P
 		return auth.Principal{}, false
 	}
 	if dec := s.authz.Authorize(r.Context(), auth.Request{Principal: p, Permission: perm, Tenant: model.SystemTenantID, Resource: auth.ResourceFor(perm)}); !dec.Allow {
-		s.writeError(w, r, errForbidden)
+		s.writeError(w, r, forbiddenFor(perm, true))
 		return auth.Principal{}, false
 	}
 	return p, true
@@ -641,13 +553,14 @@ func (s *Server) authzSystem(w http.ResponseWriter, r *http.Request, perm auth.P
 // resolveTenant determines the single canonical tenant for an HTTP request from
 // the X-Olivares-Tenant header (delegating to the shared resolver).
 func (s *Server) resolveTenant(r *http.Request, p auth.Principal) (model.TenantID, error) {
-	return s.resolveTenantValue(p, strings.TrimSpace(r.Header.Get("X-Olivares-Tenant")))
+	return s.resolveTenantValue(p, r.Header.Get("X-Olivares-Tenant"))
 }
 
 // resolveTenantValue is the single tenant-resolution rule shared by REST (header)
 // and gRPC (request field). It rejects any disagreement between a bound token and
 // the supplied tenant, and never resolves the reserved system tenant.
 func (s *Server) resolveTenantValue(p auth.Principal, raw string) (model.TenantID, error) {
+	raw = strings.TrimSpace(raw)
 	var hdr model.TenantID
 	if raw != "" {
 		t, err := model.ParseTenantID(raw)
@@ -741,7 +654,9 @@ func (s *Server) authzScopedCollectionPolicy(
 		s.writeError(w, r, errBadRequest)
 		return auth.Principal{}, "", resource, none, false
 	case workspaceAdmissionNotAdmissible:
-		s.writeError(w, r, errForbidden)
+		// The same bytes admit writes for a denial of perm (#491), or the
+		// sentence would tell which workspaces exist.
+		s.writeError(w, r, forbiddenFor(perm, false))
 		return auth.Principal{}, "", resource, none, false
 	default:
 		s.writeError(w, r, errEntityAuthorizationUnavailable)
@@ -756,4 +671,22 @@ func (s *Server) authzScopedCollectionPolicy(
 		w, r, perm, resource, meta, errForbidden, governed,
 	)
 	return p, tenant, resource, witness, decided
+}
+
+// SessionPreviewPathPrefix is where the engine serves a session's browser preview.
+// The next path segment is the preview's only credential.
+const SessionPreviewPathPrefix = "/session/preview/"
+
+// isSessionPreviewRequest reports a preview request. Its token authorizes it, so
+// engine authentication must not consume the previewed app's own headers.
+func (s *Server) isSessionPreviewRequest(r *http.Request) bool {
+	return s.sessionPreview != nil && strings.HasPrefix(r.URL.Path, SessionPreviewPathPrefix)
+}
+
+// logPath is a request path as logs may hold it: without a preview token.
+func logPath(p string) string {
+	if strings.HasPrefix(p, SessionPreviewPathPrefix) {
+		return SessionPreviewPathPrefix + "…"
+	}
+	return p
 }

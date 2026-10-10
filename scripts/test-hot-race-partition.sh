@@ -52,6 +52,36 @@ run_rc() {
 	fi
 }
 
+# The extracted authorization tests belong to the package race sub-leg, not to
+# the root-package regex. Read the actual task so dropping that package cannot
+# make a clean root census silently leave authorization unraced.
+run_rc 0 "the root sub-leg races the complete inference authorization package" -- \
+	python3 - "${ROOT}/Taskfile.yml" <<'PY'
+import shlex
+import sys
+
+import yaml
+
+with open(sys.argv[1], encoding="utf-8") as handle:
+    task = yaml.safe_load(handle)["tasks"]["test:race-hot:root"]
+for command in task["cmds"]:
+    argv = shlex.split(command)
+    if len(argv) != 5 or argv[:4] != ["bash", "scripts/with-pg-env.sh", "bash", "-c"]:
+        continue
+    inner = shlex.split(argv[4])
+    prefix = ["cd", "cmd/olivares", "&&", "go", "test"]
+    if inner[:5] != prefix:
+        continue
+    flags = inner[5:]
+    if ("./internal/inferencepep/..." in flags and "-race" in flags
+            and "-count=1" in flags and "-timeout" in flags
+            and flags[flags.index("-timeout") + 1] == "10m"
+            and not any(flag.startswith("-run") for flag in flags)):
+        break
+else:
+    sys.exit("root sub-leg does not race all internal/inferencepep tests at the existing 10m cap")
+PY
+
 # Exercise the actual consumer before partition-only checks. A helper can emit the
 # correct selection yet use shell grammar the mandatory PostgreSQL reader cannot
 # verify. Keep that composition failure in this helper's own cheap feedback loop.
@@ -120,11 +150,11 @@ owner_of() { # <name> -> OWNER
 	done
 }
 OWNER=""
-owner_of "TestOrchCadencePumpRunOncePassesAllBusinessTenants"
+owner_of "TestEventingPumpRunOncePassesAllBusinessTenants"
 case "${OWNER}" in
 "" ) no "the entry the CI panic named is owned by NO partition" ;;
 *" "*" " ) no "that entry is owned by more than one partition: ${OWNER}" ;;
-* ) ok "TestOrchCadencePumpRunOncePassesAllBusinessTenants is owned by exactly one partition (${OWNER% })" ;;
+* ) ok "TestEventingPumpRunOncePassesAllBusinessTenants is owned by exactly one partition (${OWNER% })" ;;
 esac
 
 # The uncosted-entry case, on a FIXTURE TREE so the real census is untouched: `scripts/` is a
@@ -140,7 +170,7 @@ FIXTURE_COSTS="${WORK}/tree/scripts/hot-race-costs.tsv"
 # The fixture tree must agree with the real one before anything is mutated, or a later red
 # would not tell a fixture defect from a helper defect.
 run_rc 0 "the unmutated fixture tree reproduces the real verdict" -- bash "${FIXTURE}" --census 4
-UNCOSTED="TestProxyAuthorizeHappyPath"
+UNCOSTED="TestLicenseHolderHotApply"
 grep -vxF -- "$(grep -F "${UNCOSTED}	" "${COSTS}")" "${COSTS}" >"${FIXTURE_COSTS}"
 if grep -qF "${UNCOSTED}	" "${FIXTURE_COSTS}"; then
 	no "the fixture failed to remove the cost row for ${UNCOSTED}"
@@ -252,16 +282,17 @@ census_case() { # <label> <expected-exit> <census-content>
 		no "census: $1 expected exit $2, got ${rc}" "$(tail -1 "${WORK}/err")"
 	fi
 }
-census_case "a row with no TAB is malformed" 2 "TestProxyAuthorizeHappyPath 4200"
-census_case "a row with three fields is malformed" 2 "TestProxyAuthorizeHappyPath	42	7"
-census_case "a non-numeric cost is malformed" 2 "TestProxyAuthorizeHappyPath	fast"
-census_case "a zero cost is refused" 2 "TestProxyAuthorizeHappyPath	0"
-census_case "a negative cost is refused" 2 "TestProxyAuthorizeHappyPath	-5"
+census_case "a row with no TAB is malformed" 2 "TestLicenseHolderHotApply 4200"
+census_case "a row with three fields is malformed" 2 "TestLicenseHolderHotApply	42	7"
+census_case "a non-numeric cost is malformed" 2 "TestLicenseHolderHotApply	fast"
+census_case "a zero cost is refused" 2 "TestLicenseHolderHotApply	0"
+census_case "a negative cost is refused" 2 "TestLicenseHolderHotApply	-5"
 census_case "a name that is not an entry point is refused" 2 "BenchmarkProxyAuthorize	10"
-census_case "a duplicate name is a property failure" 1 "TestProxyAuthorizeHappyPath	10
-TestProxyAuthorizeHappyPath	20"
-census_case "an entry the live manifest no longer has is STALE" 1 "TestProxyAuthorizeHappyPath	10
+census_case "a duplicate name is a property failure" 1 "TestLicenseHolderHotApply	10
+TestLicenseHolderHotApply	20"
+census_case "an entry the live manifest no longer has is STALE" 1 "TestLicenseHolderHotApply	10
 TestThisTestWasDeletedLastWeek	20"
+census_case "a moved inference authorization entry is still STALE in the root census" 1 "TestProxyAuthorizeHappyPath	1"
 census_case "an empty census is refused" 2 "# only a comment"
 rm -f "${FIXTURE_COSTS}"
 census_rc=0

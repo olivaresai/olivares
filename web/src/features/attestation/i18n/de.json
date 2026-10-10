@@ -161,15 +161,15 @@
     }
   },
   "airgap": {
-    "title": "Air-Gap-Bundle & OCI-Helm-Chart",
-    "description": "Ein offline verifizierbares Bundle und ein doppelt signiertes OCI-Helm-Chart. Auf diesem Weg geht nichts nach außen.",
-    "bundleTitle": "Air-Gap-Bundle",
-    "bundleIntro": "Der schlüsselbasierte Pfad benötigt weder Rekor noch Fulcio. Maintainer erstellen einmalig online ein eigenständiges Bundle; der getrennte Standort verifiziert und spiegelt es.",
+    "title": "Offline-Bundle & Business-Helm-Paket",
+    "description": "Private Bereitstellung: ein Offline-Bundle und ein signiertes Business-Chart-Paket. Die Veröffentlichung ist noch nicht verifiziert.",
+    "bundleTitle": "Offline-Bundle",
+    "bundleIntro": "Der schlüsselbasierte Pfad benötigt weder Rekor noch Fulcio. Maintainer erstellen das Bundle einmalig online aus der privaten zusammengestellten Distribution; der getrennte Standort verifiziert und spiegelt es.",
     "buildCommand": "Erstellen (einmalig online)",
     "mirrorCommand": "Spiegeln (ohne Internet)",
-    "chartTitle": "OCI-Helm-Chart",
-    "ociCoordinate": "OCI-Koordinate",
-    "cosignManifest": "cosign (Manifest)",
+    "chartTitle": "Business-Helm-Paket",
+    "distribution": "Distribution",
+    "cosignPackage": "cosign (Paket)",
     "gpgProv": "GPG .prov",
     "verifyCommand": "Verifizierungsbefehl"
   },

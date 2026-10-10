@@ -23,7 +23,7 @@ PRIOR="${OLIVARES_VER01_PRIOR:-design/VER-ALC-MEDIDO-2026-08-18.md}"
 
 grep -q 'NOT CLOSED' "$DOC" || fail "$DOC lost NOT CLOSED"
 if grep -qiE 'B-02 closed on overlay main|overlay main assembled|cut battery passed' "$DOC"; then
-	fail "$DOC claims a close this lote does not have"
+	fail "$DOC claims a close this batch does not have"
 fi
 grep -q 'credminter' "$PRIOR" || fail "$PRIOR lost the credminter HOLD"
 

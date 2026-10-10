@@ -85,10 +85,17 @@
     "attach": "Verbinden",
     "detach": "Trennen"
   },
+  "discardWorktree": {
+    "label": "Worktree und Branch {{branch}} ebenfalls verwerfen",
+    "hint": "Wird entfernt, wenn der Branch gemergt und der Worktree sauber ist. Anhaken, um nicht gemergte oder nicht committete Arbeit zu verwerfen."
+  },
   "create": {
     "title": "Neue Sitzung",
     "titleTool": "Neue {{tool}}-Sitzung",
-    "description": "Olivares startet und steuert den Prozess — das visuelle Äquivalent zum CLI-Start, mit Richtlinie in line.",
+    "description": "Sagen Sie, was zuerst zu tun ist. Alle weiteren Startoptionen stehen unter Erweiterte Optionen.",
+    "prompt": "Erste Nachricht (optional)",
+    "promptPlaceholder": "Was soll es zuerst tun?",
+    "advanced": "Erweiterte Optionen",
     "name": "Name",
     "namePlaceholder": "Eine Anzeigebezeichnung (optional)",
     "transport": "Transport",
@@ -97,33 +104,35 @@
     "effortDefault": "Modellstandard",
     "model": "Modell",
     "modelPlaceholder": "opus  ·  claude-opus-4-8  (optional)",
-    "workspace": "Arbeitsbereich",
-    "workspaceNone": "Keiner (Standard-Arbeitsverzeichnis des Runners)",
+    "workspace": "Ordner",
+    "workspaceNone": "Temporärer Ordner dieser Sitzung",
+    "worktree": "In einem neuen Git-Worktree arbeiten",
+    "worktreeHint": "Startet einen neuen Branch in einem eigenen Worktree, damit Sitzungen im selben Repository keine Dateien teilen. Der Ordner muss der oberste Ordner des Repositorys sein.",
+    "worktreeFrom": "Startet bei",
     "isolation": "Isolation",
     "isolationNativeOnly": "In dieser Version ist nur nativ verkabelt; Container/Sandbox werden abgelehnt.",
     "envAllow": "Host-Umgebung weiterleiten (Namen)",
     "envAllowPlaceholder": "PATH, HOME, TERM",
     "envAllowHint": "Zulassungsliste der NAMEN von Host-Umgebungsvariablen, die durchgereicht werden (Werte werden niemals gesendet).",
-    "submit": "Start anfordern",
-    "submitting": "Anfordern…",
+    "submit": "Starten",
+    "submitting": "Wird gestartet…",
     "criticalWarning": "Dies ist ein privilegierter Start (er entfernt die Abfrage pro Werkzeug). Er erfordert eine Genehmigung im Vier-Augen-Prinzip und wird aufgezeichnet — er kann ausstehend bleiben, bis er genehmigt ist.",
     "classifiedWarning": "Eine Lesen/Schreiben-Einbindung eines klassifizierten Arbeitsbereichs ist ein privilegierter Start (Genehmigung + Aufzeichnung).",
     "success": "Sitzung gestartet",
     "template": "Vorlage",
     "templateNone": "Keine Vorlage",
-    "templateHint": "Die Engine führt die Vorgaben der Vorlage vor den Start-Gates über die obigen Felder zusammen und schreibt sie in den Prozess der Sitzung — die Einschränkung gilt also auch für Aufrufer, die diese Konsole nie öffnen.",
+    "templateHint": "Die Regeln einer Vorlage ersetzen die entsprechenden Angaben hier und gelten für die ganze Sitzung.",
     "templateUnenforceable": "Diese Vorlage deklariert Vorgaben, die dieser Start nicht durchsetzen kann; er wird daher abgelehnt, statt ohne sie zu starten:",
     "templateOverrides_one": "Die Vorlage überschreibt {{count}} Ihrer Angaben:",
     "templateOverrides_other": "Die Vorlage überschreibt {{count}} Ihrer Angaben:",
     "profile": "Provider-Profil",
     "profileNone": "Profil auswählen",
-    "profileHint": "Wählen Sie das Anbieterprofil für diese Sitzung. Ein Profil ist erforderlich. Lokale Anforderungen werden nach der Vorlagenvorschau für die aktuelle Auswahl gelesen.",
     "profileNotOperable": "in dieser Umgebung nicht aktiviert",
-    "profilesNotRead": "Die Provider-Profile konnten nicht gelesen werden; der Start ist ohne Profil weiterhin möglich.",
     "profileEnvConflict": "HOME, CLAUDE_CONFIG_DIR, CODEX_HOME und GROK_HOME gehören dem Profil: ein Start, der eine davon weiterreicht, wird hier abgelehnt. Andere Namen unterliegen weiterhin der Prüfung durch den Server.",
     "identity": {
       "title": "Startidentität",
       "hint": "Wählen Sie einen zugelassenen Agenten für seinen menschlichen Sponsor. Menschlicher Zugriff allein erteilt keine Agentenberechtigung.",
+      "humanHint": "Die Sitzung läuft mit Ihrem eigenen Zugriff.",
       "human": "Aktueller menschlicher Operator",
       "agent": "Zugelassener Agent (für den Sponsor)",
       "required": "Ein Orchestrierungsprofil erfordert eine separat authentifizierte Agentenidentität.",
@@ -134,6 +143,19 @@
       "loading": "Agentenidentitäten werden geladen…",
       "loadFailed": "Identitätsliste nicht verfügbar.",
       "loadMore": "Weitere Identitäten laden"
+    },
+    "blocked": {
+      "profilesForbidden": "Ihre Rolle kann keine Provider-Profile lesen (sessions:profile:read), daher kann hier keine Sitzung starten.",
+      "profilesFailed": "Die Provider-Profile konnten nicht gelesen werden.",
+      "profilesLoading": "Provider-Profile werden gelesen…",
+      "noProfile": "Noch kein Provider-Profil. Fügen Sie zuerst einen Anbieter hinzu.",
+      "openProviders": "Anbieter öffnen",
+      "chooseProfile": "Wählen Sie ein Provider-Profil.",
+      "worktreeFolder": "Wählen Sie einen Repository-Ordner für den Worktree.",
+      "chooseAgent": "Wählen Sie den zugelassenen Agenten, als der diese Sitzung läuft, oder starten Sie sie als Sie selbst.",
+      "envConflict": "Host-Umgebung weiterleiten nennt eine Variable, die zum Profil gehört: Entfernen Sie sie unter Erweiterte Optionen.",
+      "templateRefused": "Die Vorlage verlangt Bedingungen, die dieser Start nicht durchsetzen kann: Wählen Sie unter Erweiterte Optionen eine andere.",
+      "readinessFailed": "Die Anforderungen des Profils konnten nicht gelesen werden."
     }
   },
   "detail": {
@@ -159,6 +181,7 @@
     "workspace": "Arbeitsbereich",
     "workspaceDirectory": "Arbeitsverzeichnis",
     "workspaceDirectoryOwn": "eigenes Verzeichnis für diese Sitzung",
+    "worktreeBranch": "Worktree-Branch",
     "created": "Erstellt",
     "started": "Gestartet",
     "lastActivity": "Letzte Aktivität",
@@ -196,7 +219,13 @@
     "interruptFailed": "Der Turn konnte nicht unterbrochen werden.",
     "interruptFenceUnavailable": "Aktualisieren Sie den Lauf, um vor der Unterbrechung seine aktuelle Arbeitsgeneration abzurufen.",
     "interruptUnknown": "Das Ergebnis der Unterbrechung ist unbekannt. Prüfen Sie die Sitzung vor einem erneuten Versuch.",
-    "interruptWorkConflict": "Der aktuelle Arbeitsstatus der Sitzung lässt diese Unterbrechung nicht zu. Aktualisieren Sie den Lauf, um seinen Status zu prüfen."
+    "interruptWorkConflict": "Der aktuelle Arbeitsstatus der Sitzung lässt diese Unterbrechung nicht zu. Aktualisieren Sie den Lauf, um seinen Status zu prüfen.",
+    "blocked": {
+      "notLive": "Starten Sie die Sitzung oder setzen Sie sie fort, um zu senden.",
+      "approval": "Der Start wartet auf eine Freigabe; Senden ist möglich, sobald er freigegeben ist.",
+      "sending": "Wird gesendet… Warten Sie, bis die Sitzung es annimmt.",
+      "empty": "Geben Sie etwas zum Senden ein."
+    }
   },
   "gov": {
     "title": "Governance-Sicherheitslage",
@@ -295,7 +324,20 @@
     "deleteBody": "Dies entfernt nur die Registrierung — es berührt niemals Dateien auf dem Host. Sitzungen, die darauf verweisen, können nicht gestartet werden.",
     "deleteConfirm": "Abmelden",
     "deleted": "Arbeitsbereich abgemeldet",
-    "open": "Dateien durchsuchen"
+    "open": "Dateien durchsuchen",
+    "readOnly": {
+      "title": "Schreibgeschützte Ordner",
+      "description": "Schreibgeschützte Ordner schützen Dateiinhalte und Verzeichniseinträge (kein Schreiben, Kürzen, Anlegen, Entfernen oder Umbenennen); Berechtigungen, Eigentümer, erweiterte Attribute und Zeitstempel folgen den normalen Berechtigungen des Hosts.",
+      "empty": "Keine schreibgeschützten Ordner.",
+      "folder": "Ordner auf diesem Server",
+      "folderPlaceholder": "/srv/reference",
+      "add": "Hinzufügen",
+      "remove": "Entfernen",
+      "removeLabel": "{{folder}} entfernen",
+      "discard": "Änderungen verwerfen",
+      "save": "Ordner speichern",
+      "saved": "Schreibgeschützte Ordner gespeichert."
+    }
   },
   "browser": {
     "title": "Dateien",
@@ -752,9 +794,9 @@
     "requesting": "Anfordern…",
     "requestHintReady": "Eine Startanforderung durchläuft weiterhin Autorisierung, Mint und Prozessstart. Das belegt keine Anbieteranmeldung.",
     "requestHintUnknown": "Die Prüfung ist unvollständig. Sie können den Start trotzdem anfordern; der Server prüft alles erneut. Das ist kein „bereit“.",
-    "requestBlocked": "Es wird keine Startanforderung angeboten: diese Auswahl ist nachweislich nicht tragfähig.",
-    "noWrite": "Sie können diese Anforderungen sehen, aber eine Startanforderung braucht sessions:run:write.",
-    "waitingPreview": "Warten auf die Vorlagenvorschau, bevor die Anforderungen des wirksamen Transports gelesen werden.",
+    "requestBlocked": "Dieses Profil kann hier keine Sitzung starten. Seine Anforderungen unter Erweiterte Optionen sagen, warum.",
+    "noWrite": "Zum Starten einer Sitzung ist die Berechtigung sessions:run:write nötig.",
+    "waitingPreview": "Die Vorlage wird gelesen, bevor das Profil geprüft wird…",
     "providerAuth": "Die Anbieteranmeldung wird hier nicht beobachtet. Ein gültiges Home oder Programm ist kein authentifiziertes Konto.",
     "launchAuth": "Die Startautorisierung wird beim Senden entschieden und braucht sessions:run:write.",
     "remoteControl": "Nur Lebenszyklus — die Unterhaltung bleibt beim Anbieter; es gibt keine gebrückte Turn-Konsole.",
@@ -859,6 +901,7 @@
       "codex_app_server": "Codex app-server",
       "grok_acp": "Grok ACP",
       "opencode_acp": "OpenCode ACP",
+      "gemini_acp": "Gemini CLI ACP",
       "unknown": "Unbekanntes Protokoll"
     }
   },

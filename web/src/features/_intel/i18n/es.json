@@ -101,6 +101,7 @@
     "valueText": "{{consumed}} consumido, {{projected}} previsto"
   },
   "disclaimers": {
+    "aimsPack": "Paquete preliminar de preparación para la certificación ISO/IEC 42001:2023 basado en la evaluación actual de Olivares AI y el contexto proporcionado por el operador. Todos los documentos son borradores; una persona competente debe revisarlos antes de presentarlos a un organismo de certificación, auditor o comprador. Este paquete no proporciona ni certificación ni garantía de conformidad ni asesoramiento jurídico. La certificación requiere un organismo acreditado (ISO/IEC 42006:2025). El estado de los controles refleja la evidencia actual del tenant; las brechas siguen sin resolverse.",
     "report": "Correspondencia técnica del estado de los controles, derivada de la evidencia observada en la plataforma. NO es una certificación NI asesoramiento jurídico."
   },
   "gate": {
