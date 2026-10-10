@@ -195,15 +195,18 @@ const SIN_TECHO_CONOCIDAS: Record<string, Record<string, string>> = {
     traces: 'linea base 2026-08-28; sin clasificar drena/recorta',
   },
   // Identity & Scale assembles this API; keep its original ratchet there.
-  ...(existsSync(join(RAIZ, 'orchestration/api.ts')) ? {
-  orchestration: {
-    decisions: 'linea base 2026-08-28; sin clasificar drena/recorta',
-    flows: 'linea base 2026-08-28; sin clasificar drena/recorta',
-    scheduleDecisions: 'linea base 2026-08-28; sin clasificar drena/recorta',
-    schedules: 'linea base 2026-08-28; sin clasificar drena/recorta',
-    timeline: 'linea base 2026-08-28; sin clasificar drena/recorta',
-  },
-  } : {}),
+  ...(existsSync(join(RAIZ, 'orchestration/api.ts'))
+    ? {
+        orchestration: {
+          decisions: 'linea base 2026-08-28; sin clasificar drena/recorta',
+          flows: 'linea base 2026-08-28; sin clasificar drena/recorta',
+          scheduleDecisions:
+            'linea base 2026-08-28; sin clasificar drena/recorta',
+          schedules: 'linea base 2026-08-28; sin clasificar drena/recorta',
+          timeline: 'linea base 2026-08-28; sin clasificar drena/recorta',
+        },
+      }
+    : {}),
   recordings: {
     listSessions: 'linea base 2026-08-28; sin clasificar drena/recorta',
   },

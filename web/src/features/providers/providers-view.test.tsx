@@ -299,8 +299,13 @@ describe('ProvidersView', () => {
   // the key's last verdict: a test makes the first-hour screens ask again at once.
   it('a connection test makes the first hour ask the readiness again', async () => {
     providersApi.list.mockResolvedValue({ items: [registered] })
-    providersApi.test.mockResolvedValue({ ...registered, probe_state: 'refused' })
-    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    providersApi.test.mockResolvedValue({
+      ...registered,
+      probe_state: 'refused',
+    })
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
     const readiness = firstHourKeys.readiness('t1')
     qc.setQueryData(readiness, { tools: [] })
     const user = userEvent.setup()
@@ -641,7 +646,7 @@ describe('ProvidersView', () => {
     window.history.pushState({}, '', '/')
   })
 
-  it('forgets a failed preparation\'s download before Retry (#1086)', async () => {
+  it("forgets a failed preparation's download before Retry (#1086)", async () => {
     const user = userEvent.setup()
     preparation.status.mockResolvedValue({ installed: false, signed_in: false })
     preparation.install
@@ -672,7 +677,9 @@ describe('ProvidersView', () => {
     await user.click(await screen.findByRole('button', { name: 'Retry setup' }))
     expect(
       screen.getByRole('button', { name: 'Add provider' }),
-    ).toHaveAccessibleDescription('Preparing Claude Code for your first session…')
+    ).toHaveAccessibleDescription(
+      'Preparing Claude Code for your first session…',
+    )
     expect(screen.queryByText(/^Installing Claude Code/)).toBeNull()
     window.history.pushState({}, '', '/')
   })

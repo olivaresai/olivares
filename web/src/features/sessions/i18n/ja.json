@@ -276,7 +276,7 @@
   },
   "meter": {
     "mode": "モード: {{mode}}",
-    "modeTitle": "{{tool}} が報告するモード",
+    "modeTitle": "{{tool}} の報告: {{mode}}",
     "theTool": "ツール",
     "usageLabel": "このセッションの使用量",
     "tokens": "入力 {{input}} / 出力 {{output}} トークン",
@@ -345,6 +345,7 @@
     "workHint": "最後の起動時の記録です。各操作は現在の権限を確認します。",
     "processState": "プロセスの状態",
     "activityState": "アクティビティ",
+    "toolMode": "ツールが報告するモード",
     "workRole": "付与された役割",
     "workWorkspace": "作業ワークスペース",
     "workActions": "許可された操作",

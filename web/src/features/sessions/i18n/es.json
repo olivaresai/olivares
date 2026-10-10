@@ -282,7 +282,7 @@
   },
   "meter": {
     "mode": "Modo: {{mode}}",
-    "modeTitle": "El modo tal como lo indica {{tool}}",
+    "modeTitle": "{{tool}} indica: {{mode}}",
     "theTool": "la herramienta",
     "usageLabel": "Uso de esta sesión",
     "tokens": "{{input}} de entrada / {{output}} de salida (tokens)",
@@ -355,6 +355,7 @@
     "workHint": "Registrada para el último lanzamiento. Cada acción comprueba la autorización actual.",
     "processState": "Estado del proceso",
     "activityState": "Actividad",
+    "toolMode": "Modo según la herramienta",
     "workRole": "Rol concedido",
     "workWorkspace": "Workspace de trabajo",
     "workActions": "Acciones concedidas",

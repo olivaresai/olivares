@@ -322,6 +322,13 @@ export function SessionContextPane({
                   : t('context.notRecorded')}
               </span>
             </Row>
+            {run?.tool_mode ? (
+              <Row label={t('context.toolMode')}>
+                <span data-testid="context-tool-mode" className="text-caption">
+                  {run.tool_mode}
+                </span>
+              </Row>
+            ) : null}
             <Row label={t('context.workRole')}>
               <span className="text-caption">
                 {run?.work_scope

@@ -333,7 +333,9 @@ describe('CommandMenu', () => {
       expect.arrayContaining([
         expect.stringMatching(/^action:eventing:createSubscription /),
         expect.stringMatching(/^action:alerting:createRoute /),
-        ...(FEATURE_VIEWS.some((v) => v.id === 'orchestration') ? [expect.stringMatching(/^action:orchestration:createSchedule /)] : []),
+        ...(FEATURE_VIEWS.some((v) => v.id === 'orchestration')
+          ? [expect.stringMatching(/^action:orchestration:createSchedule /)]
+          : []),
       ]),
     )
     await user.click(screen.getByRole('option', { name: /New alert route/ }))
@@ -365,7 +367,9 @@ describe('CommandMenu', () => {
     for (const verb of [
       'action:eventing:createSubscription',
       'action:alerting:createRoute',
-      ...(FEATURE_VIEWS.some((v) => v.id === 'orchestration') ? ['action:orchestration:createSchedule'] : []),
+      ...(FEATURE_VIEWS.some((v) => v.id === 'orchestration')
+        ? ['action:orchestration:createSchedule']
+        : []),
     ]) {
       const option = screen
         .getAllByRole('option')
@@ -382,7 +386,9 @@ describe('CommandMenu', () => {
     for (const entry of [
       'view:alerting ',
       'view:eventing ',
-      ...(FEATURE_VIEWS.some((v) => v.id === 'orchestration') ? ['view:orchestration '] : []),
+      ...(FEATURE_VIEWS.some((v) => v.id === 'orchestration')
+        ? ['view:orchestration ']
+        : []),
       'theme:light ',
       'theme:dark ',
       'signout ',
@@ -402,7 +408,14 @@ describe('CommandMenu', () => {
   it.each([
     ['notify:route:write', 'action:alerting:createRoute'],
     ['eventing:subscription:write', 'action:eventing:createSubscription'],
-    ...(FEATURE_VIEWS.some((v) => v.id === 'orchestration') ? [['orchestration:schedule:write', 'action:orchestration:createSchedule']] : []),
+    ...(FEATURE_VIEWS.some((v) => v.id === 'orchestration')
+      ? [
+          [
+            'orchestration:schedule:write',
+            'action:orchestration:createSchedule',
+          ],
+        ]
+      : []),
   ])('offers exactly the verb %s buys', async (permission, expected) => {
     const user = userEvent.setup()
     holding([...READS, permission])

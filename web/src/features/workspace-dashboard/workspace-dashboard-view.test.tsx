@@ -235,8 +235,14 @@ describe('WorkspaceDashboardView', () => {
    * back and both cases fire.
    */
   describe.each([
-    ['the inventory module is off', () => useModulesStore.getState().setOff(['inventory'])],
-    ['the principal cannot read the inventory', () => granted.delete('inventory:catalog:read')],
+    [
+      'the inventory module is off',
+      () => useModulesStore.getState().setOff(['inventory']),
+    ],
+    [
+      'the principal cannot read the inventory',
+      () => granted.delete('inventory:catalog:read'),
+    ],
   ])('when %s', (_, close) => {
     it('offers no inventory action on the selection page', async () => {
       close()

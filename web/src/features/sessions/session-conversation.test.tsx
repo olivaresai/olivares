@@ -98,13 +98,11 @@ describe('SessionConversation', () => {
     act(() => onHistoryRef.current?.(JSON.stringify(nativeHistory)))
     expect(screen.getByText('initial CLI prompt')).toBeInTheDocument()
     act(() =>
-      useSessionStore
-        .getState()
-        .setSession({
-          csrfToken: 'history-session',
-          sessionId: 'history-session',
-          expiresAt: '2099-01-01T00:00:00Z',
-        }),
+      useSessionStore.getState().setSession({
+        csrfToken: 'history-session',
+        sessionId: 'history-session',
+        expiresAt: '2099-01-01T00:00:00Z',
+      }),
     )
     act(() => onHistoryRef.current?.(JSON.stringify(nativeHistory)))
     expect(screen.getByText('initial CLI prompt')).toBeInTheDocument()

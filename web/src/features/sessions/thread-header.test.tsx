@@ -209,9 +209,9 @@ describe('thread header — one line', () => {
     renderThread()
     const side = screen.getByTestId('context-side')
     expect(within(side).getByText('Managed by Olivares')).toBeInTheDocument()
-    expect(within(side).getByTestId('narrative-mode')).toHaveTextContent(
-      'Mode: untrusted · dangerFullAccess',
-    )
+    const mode = within(side).getByTestId('narrative-mode')
+    expect(mode).toHaveTextContent('Ask before each action')
+    expect(mode.textContent).not.toContain('dangerFullAccess')
     expect(within(side).getByTestId('conversation-folder')).toHaveTextContent(
       'Working folder: /home/olv/work/W320/job-5cfa2f96/projects/demo',
     )

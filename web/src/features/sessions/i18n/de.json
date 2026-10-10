@@ -279,7 +279,7 @@
   },
   "meter": {
     "mode": "Modus: {{mode}}",
-    "modeTitle": "Der Modus, wie {{tool}} ihn meldet",
+    "modeTitle": "{{tool}} meldet: {{mode}}",
     "theTool": "das Tool",
     "usageLabel": "Verbrauch dieser Sitzung",
     "tokens": "{{input}} ein / {{output}} aus (Tokens)",
@@ -350,6 +350,7 @@
     "workHint": "Für den letzten Start aufgezeichnet. Jede Aktion prüft die aktuelle Berechtigung.",
     "processState": "Prozesszustand",
     "activityState": "Aktivität",
+    "toolMode": "Modus laut Werkzeug",
     "workRole": "Erteilte Rolle",
     "workWorkspace": "Arbeitsbereich",
     "workActions": "Erteilte Aktionen",

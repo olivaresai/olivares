@@ -38,6 +38,12 @@ func OpenAuditReader(ctx context.Context, cfg store.Config) (store.AuditReader, 
 	return sqlstore.OpenAuditReader(ctx, cfg)
 }
 
+// OpenDRReader opens an existing SQLite snapshot for offline DR verification,
+// including authoritative tenant enumeration, without publishing a Store.
+func OpenDRReader(ctx context.Context, cfg store.Config) (store.DRReader, error) {
+	return sqlstore.OpenDRReader(ctx, cfg)
+}
+
 // AuthReader reads the auth partition without serving or mutation authority.
 type AuthReader interface {
 	AuthView(context.Context, func(store.AuthScope) error) error

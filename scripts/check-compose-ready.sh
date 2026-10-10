@@ -228,16 +228,8 @@ for readme in ("README.md", "README.de.md", "README.es.md", "README.fr.md", "REA
     assert "`OLIVARES_PROJECT_DIR`" in text and "`/project`" in text, (
         f"{readme} must document the project mount (`/project`, `OLIVARES_PROJECT_DIR`)"
     )
-# The install block must not run from the Olivares clone: there PWD is the clone, and the
-# container would get the product's own source as its session folder.
-for readme in ("README.md", "README.de.md", "README.es.md", "README.fr.md", "README.ja.md",
-               "README.ru.md", "README.zh.md"):
-    block = read(readme).split("```sh\n", 1)[1].split("```", 1)[0]
-    up = block.index("up --wait")
-    assert 'export OLIVARES_PROJECT_DIR="$PWD"' in block[:up] and "&& cd olivares" not in block, (
-        f"{readme} install block must set OLIVARES_PROJECT_DIR to the user's project folder "
-        "before `up` and must not cd into the clone"
-    )
+# The READMEs keep the published install methods and link to INSTALL.md for the Compose
+# details; the full Compose block, with the project folder and AppArmor steps, is INSTALL.md's.
 assert 'export OLIVARES_PROJECT_DIR=' in read("INSTALL.md").split("### Docker Compose", 1)[1].split("```", 2)[1], (
     "INSTALL.md Docker Compose block must set OLIVARES_PROJECT_DIR before `up`"
 )
@@ -248,9 +240,9 @@ assert "## Work on a host project folder" in read("deploy/compose/README.md"), (
 # preparation reachable from every documented quick install, before Compose starts.
 assert "apparmor=${OLIVARES_APPARMOR_PROFILE:-docker-default}" in compose
 assert "  userns," in read("deploy/apparmor/olivares-sessions.conf")
-for doc in [*root.glob("README*.md"), root / "INSTALL.md"]:
+for doc in [root / "INSTALL.md"]:
     text = doc.read_text(encoding="utf-8")
-    section = text.split("### Docker Compose", 1)[1] if doc.name == "INSTALL.md" else text
+    section = text.split("### Docker Compose", 1)[1]
     block = section.split("```", 2)[1]
     up = block.index(" up --wait")
     for token in ("set -e\n", "userns_create", "deploy/apparmor/olivares-sessions.conf",

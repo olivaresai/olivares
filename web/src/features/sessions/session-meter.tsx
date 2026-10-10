@@ -5,9 +5,9 @@
 // THE SESSION'S MODE AND WHAT IT HAS SPENT, on the session header (#427).
 //
 // ⛔ EVERY FIGURE IS ONE THE ENGINE SENT, AS THE TOOL SAID IT.
-//    - The mode is `tool_mode`: the tool's own word (Claude Code's permission mode,
-//      Codex's approval policy and sandbox), never `permission_mode`, which is only
-//      what the launch asked for. Absent, nothing is shown.
+//    - The mode is `tool_mode`, the tool's own word (Claude Code's permission mode,
+//      Codex's approval policy and sandbox). It is shown in the console's own words
+//      for a permission (see SessionMode); only an absent `tool_mode` shows nothing.
 //    - The usage is the run's own counters (an observed session's, its live row's).
 //      Absent tokens are unknown, and a cost the tool did not report is said to be
 //      unknown, never printed as $0.
@@ -18,6 +18,8 @@ import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
 import { agentToolsApi, agentToolsKeys } from '@/features/agent-tools/api'
+import { EDITS_AND_COMMANDS_TEMPLATE } from '@/features/agentops/session-launch'
+import type { PermissionChoice } from '@/features/agentops/session-launch'
 import type { RunDTO } from '@/features/agentops/types'
 import { toolName } from '@/features/agentops/tool-names'
 import { useAuth } from '@/lib/auth/context'
@@ -28,25 +30,91 @@ import {
   formatRelativeTime,
   formatTokens,
 } from '@/lib/format'
+import { templatesApi, templatesKeys } from '@/features/workspace-templates/api'
 import { useTenantStore } from '@/stores/tenant'
+import '@/features/first-hour/i18n'
 import type { SessionUsage } from './session-usage'
 import './i18n'
 
+/** The permission names New session offers, by the permission mode each one launches
+ * under (agentops/session-launch.ts: "Edit files and run commands" is the built-in
+ * allowlist template, which runs under dontAsk; a custom template may run under it too,
+ * so that wording needs the template read, see SessionMode). */
+const PERMISSION_WORDS: Record<string, PermissionChoice> = {
+  dontAsk: 'editsAndCommands',
+  acceptEdits: 'editsOnly',
+  plan: 'readOnly',
+  default: 'ask',
+}
+
+/** Codex joins its approval policy and sandbox with this ("on-request · workspaceWrite"). */
+const CODEX_MODE_JOINER = ' · '
+
 /**
- * The tool's own mode, as it reported it. It is a fact for the Context pane: the thread's
- * header is one line and does not carry it.
+ * The New session permission a run's mode is worded as, or undefined to show the tool's
+ * word as it said it. A tool's own single word (Claude Code's permission mode) is worded
+ * only from itself, so a session running wider than it was launched is never worded as
+ * the launch asked. Codex's composite word names its private sandbox, which Olivares
+ * confines from outside, so the permission Olivares enforced for the launch is the one
+ * the session has.
+ */
+function permissionChoice(
+  toolMode: string,
+  launchMode: string,
+): PermissionChoice | undefined {
+  const word = toolMode.includes(CODEX_MODE_JOINER) ? launchMode : toolMode
+  return Object.hasOwn(PERMISSION_WORDS, word)
+    ? PERMISSION_WORDS[word]
+    : undefined
+}
+
+/**
+ * The session's permission in the words New session offers, with the tool's own word for
+ * it one hover away. A tool's mode that is one of those permission modes (Claude Code's)
+ * is worded as the console words it; Codex's approval policy and sandbox are the tool's
+ * private names, so the permission the launch asked for is worded instead. A mode with no
+ * console wording stays as the tool said it, never guessed.
  */
 export function SessionMode({ run }: { run: RunDTO | null | undefined }) {
-  const { t } = useTranslation('sessions')
-  const tool = run?.provider_driver ? toolName(run.provider_driver) : ''
-  if (!run?.tool_mode) return null
+  const { t } = useTranslation(['sessions', 'firstHour'])
+  const tenant = useTenantStore((s) => s.activeTenant)
+  const toolMode = run?.tool_mode ?? ''
+  const choice = run
+    ? permissionChoice(toolMode, run.permission_mode)
+    : undefined
+  // dontAsk is the built-in "Edit files and run commands" allowlist, or any template a
+  // person wrote under that mode: the wording is the built-in's, so the run's template
+  // is read before the chip claims it.
+  const templateId =
+    choice === 'editsAndCommands' ? run?.template_id : undefined
+  const template = useQuery({
+    queryKey: templatesKeys.detail(tenant, templateId ?? ''),
+    queryFn: () => templatesApi.get(templateId ?? ''),
+    enabled: !!templateId,
+    staleTime: 60_000,
+  })
+  if (!run || !toolMode) return null
+  const tool = run.provider_driver ? toolName(run.provider_driver) : ''
+  const builtin =
+    template.data?.builtin === true &&
+    template.data.name === EDITS_AND_COMMANDS_TEMPLATE
+  // Not worded until the template answers: the chip never flashes the tool's private
+  // names, and a template that cannot be read keeps the tool's word, never a guess.
+  if (templateId && template.isPending) return null
+  const worded =
+    choice && (choice !== 'editsAndCommands' || builtin) ? choice : undefined
   return (
     <Badge
       variant="outline"
-      title={t('meter.modeTitle', { tool: tool || t('meter.theTool') })}
+      title={t('sessions:meter.modeTitle', {
+        tool: tool || t('sessions:meter.theTool'),
+        mode: toolMode,
+      })}
       data-testid="narrative-mode"
     >
-      {t('meter.mode', { mode: run.tool_mode })}
+      {worded
+        ? t(`firstHour:permission.${worded}`)
+        : t('sessions:meter.mode', { mode: toolMode })}
     </Badge>
   )
 }

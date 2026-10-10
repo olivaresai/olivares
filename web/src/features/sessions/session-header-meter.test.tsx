@@ -48,6 +48,12 @@ vi.mock('@/features/agent-tools/api', async (importOriginal) => {
     agentToolsApi: { ...(real.agentToolsApi as object), ...tools },
   }
 })
+const templates = vi.hoisted(() => ({ get: vi.fn() }))
+vi.mock('@/features/workspace-templates/api', async (importOriginal) => {
+  const real =
+    await importOriginal<typeof import('@/features/workspace-templates/api')>()
+  return { ...real, templatesApi: { ...real.templatesApi, ...templates } }
+})
 vi.mock('@/features/agentops/attach', () => ({
   useRunAttach: () => ({
     status: 'open',
@@ -153,25 +159,119 @@ beforeEach(() => {
   auth.isSuperadmin = false
   // The providers read names the organization, whose own logins are the instances.
   useTenantStore.setState({ activeTenant: 'tnt-demo' })
+  templates.get.mockImplementation(async (id: string) => ({
+    id,
+    name: id === 'tpl-ec' ? 'Edits and commands' : 'Only the docs folder',
+    builtin: id === 'tpl-ec',
+  }))
 })
 
 describe('session header — the tool’s own mode', () => {
   it('shows the mode the tool reported, not the one the launch asked for', () => {
     renderHeader(run({ permission_mode: 'default', tool_mode: 'plan' }))
     const mode = screen.getByTestId('narrative-mode')
-    expect(mode).toHaveTextContent('Mode: plan')
-    expect(mode).toHaveAttribute('title', 'The mode as Claude Code reports it')
+    expect(mode).toHaveTextContent('Read only')
+    expect(mode).toHaveAttribute('title', 'Claude Code reports: plan')
   })
 
-  it('shows Codex’s approval policy and sandbox as Codex said them', () => {
+  it('says the permission the person chose for Codex, not Codex’s own sandbox names', () => {
     renderHeader(
       run({
         provider_driver: 'codex',
+        permission_mode: 'default',
+        tool_mode: 'untrusted · dangerFullAccess',
+      }),
+    )
+    const mode = screen.getByTestId('narrative-mode')
+    expect(mode).toHaveTextContent('Ask before each action')
+    expect(mode).not.toHaveTextContent('dangerFullAccess')
+    expect(mode).not.toHaveTextContent('untrusted')
+    // Codex's own words stay one hover away, named as Codex's.
+    expect(mode).toHaveAttribute(
+      'title',
+      'Codex reports: untrusted · dangerFullAccess',
+    )
+  })
+
+  it.each([
+    ['dontAsk', 'Edit files and run commands'],
+    ['acceptEdits', 'Edit files only'],
+    ['plan', 'Read only'],
+    ['default', 'Ask before each action'],
+  ])(
+    'words the launch permission %s as New session does',
+    async (mode, words) => {
+      renderHeader(
+        run({
+          provider_driver: 'codex',
+          permission_mode: mode,
+          template_id: mode === 'dontAsk' ? 'tpl-ec' : undefined,
+          tool_mode: 'on-request · workspaceWrite',
+        }),
+      )
+      await waitFor(() =>
+        expect(screen.getByTestId('narrative-mode')).toHaveTextContent(words),
+      )
+    },
+  )
+
+  it('does not call a custom template under dontAsk "Edit files and run commands"', async () => {
+    renderHeader(
+      run({
+        provider_driver: 'codex',
+        permission_mode: 'dontAsk',
+        template_id: 'tpl-docs',
+        tool_mode: 'on-request · workspaceWrite',
+      }),
+    )
+    await waitFor(() =>
+      expect(screen.getByTestId('narrative-mode')).toHaveTextContent(
+        'Mode: on-request · workspaceWrite',
+      ),
+    )
+  })
+
+  it('does not word dontAsk without a template to prove it', () => {
+    renderHeader(
+      run({
+        provider_driver: 'codex',
+        permission_mode: 'dontAsk',
         tool_mode: 'on-request · workspaceWrite',
       }),
     )
     expect(screen.getByTestId('narrative-mode')).toHaveTextContent(
       'Mode: on-request · workspaceWrite',
+    )
+  })
+
+  it.each(['bypassPermissions', 'auto', 'constructor', '__proto__'])(
+    'never words a Claude session in %s as the launch permission',
+    (word) => {
+      renderHeader(run({ permission_mode: 'default', tool_mode: word }))
+      expect(screen.getByTestId('narrative-mode')).toHaveTextContent(
+        `Mode: ${word}`,
+      )
+    },
+  )
+
+  it.each([
+    ['acceptEdits', 'Edit files only'],
+    ['default', 'Ask before each action'],
+  ])('words a Claude session in %s from its own word', (word, words) => {
+    renderHeader(run({ permission_mode: 'plan', tool_mode: word }))
+    expect(screen.getByTestId('narrative-mode')).toHaveTextContent(words)
+  })
+
+  it('keeps a word it has no console wording for, rather than guessing one', () => {
+    renderHeader(
+      run({
+        provider_driver: 'codex',
+        permission_mode: 'bypassPermissions',
+        tool_mode: 'never · dangerFullAccess',
+      }),
+    )
+    expect(screen.getByTestId('narrative-mode')).toHaveTextContent(
+      'Mode: never · dangerFullAccess',
     )
   })
 

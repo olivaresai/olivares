@@ -47,7 +47,7 @@ export type PermissionChoice =
 export const DEFAULT_PERMISSION: PermissionChoice = 'editsAndCommands'
 /** The engine keys its built-in templates by name (modules/sessions/templates.go
  * seedBuiltins), as the CLI does (cmd/olivares/cmd_session.go). */
-const EDITS_AND_COMMANDS_TEMPLATE = 'Edits and commands'
+export const EDITS_AND_COMMANDS_TEMPLATE = 'Edits and commands'
 const PERMISSION_MODE: Record<PermissionChoice, string> = {
   editsAndCommands: '',
   editsOnly: 'acceptEdits',

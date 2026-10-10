@@ -67,7 +67,8 @@ export const RELEASE_ARTIFACTS: ReleaseArtifact[] = [
     id: 'sbom-image',
     name: 'olivares.spdx.sbom.json + image attestation',
     produced_by: 'syft + cosign attest',
-    signature_trust: 'one SBOM per release, generated from the shipped image and attested to it by digest',
+    signature_trust:
+      'one SBOM per release, generated from the shipped image and attested to it by digest',
     trust_mechanism: 'keyless',
     status: 'declared',
     scp: 'SCP-03',

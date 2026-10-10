@@ -279,7 +279,7 @@
   },
   "meter": {
     "mode": "Mode: {{mode}}",
-    "modeTitle": "The mode as {{tool}} reports it",
+    "modeTitle": "{{tool}} reports: {{mode}}",
     "theTool": "the tool",
     "usageLabel": "This session's usage",
     "tokens": "{{input}} in / {{output}} out tokens",
@@ -350,6 +350,7 @@
     "workHint": "Recorded for the last launch. Every action checks current authorization.",
     "processState": "Process state",
     "activityState": "Activity",
+    "toolMode": "Mode as the tool reports it",
     "workRole": "Granted role",
     "workWorkspace": "Work workspace",
     "workActions": "Granted actions",

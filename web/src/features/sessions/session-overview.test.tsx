@@ -132,7 +132,7 @@ describe('SessionOverview — the badges', () => {
   it('says who manages the session and the mode the tool reported', () => {
     renderOverview(run({ tool_mode: 'plan', provider_driver: 'claude' }))
     expect(screen.getByText('Managed by Olivares')).toBeInTheDocument()
-    expect(screen.getByTestId('narrative-mode')).toHaveTextContent('Mode: plan')
+    expect(screen.getByTestId('narrative-mode')).toHaveTextContent('Read only')
   })
 })
 

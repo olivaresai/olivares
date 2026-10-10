@@ -276,7 +276,7 @@
   },
   "meter": {
     "mode": "模式：{{mode}}",
-    "modeTitle": "{{tool}} 报告的模式",
+    "modeTitle": "{{tool}} 报告：{{mode}}",
     "theTool": "该工具",
     "usageLabel": "本会话的用量",
     "tokens": "输入 {{input}} / 输出 {{output}} 个令牌",
@@ -345,6 +345,7 @@
     "workHint": "记录于上次启动。每项操作都会检查当前授权。",
     "processState": "进程状态",
     "activityState": "活动",
+    "toolMode": "工具报告的模式",
     "workRole": "授予的角色",
     "workWorkspace": "工作空间",
     "workActions": "授予的操作",

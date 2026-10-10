@@ -6,12 +6,13 @@
 // mapping whose round trip keeps "protocol default" (null), "trust none" ([]) and "only
 // these" apart.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactElement, ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import './i18n'
-import type { SSOConfigDTO } from './api'
+import { ApiError, NetworkError } from '@/lib/api/errors'
+import { consoleKeys, type SSOConfigDTO } from './api'
 
 const { api } = vi.hoisted(() => ({
   api: {
@@ -44,7 +45,8 @@ import { SSOTab } from './sso-tab'
 
 function wrap(ui: ReactElement) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  return render(<QueryClientProvider client={qc}>{ui}</QueryClientProvider>)
+  render(<QueryClientProvider client={qc}>{ui}</QueryClientProvider>)
+  return qc
 }
 
 const base: SSOConfigDTO = {
@@ -85,6 +87,77 @@ async function openEditor() {
 const sent = () => api.putSSO.mock.calls.at(-1)![0] as Record<string, unknown>
 
 describe('SSO: the provider by name on its status card', () => {
+  it.each([
+    ['server failure', new ApiError(503, 'unavailable', 'SSO read failed')],
+    ['network failure', new NetworkError('SSO read failed')],
+  ])(
+    'shows a %s and retries the read before offering configuration',
+    async (_, error) => {
+      const user = userEvent.setup()
+      api.getSSO.mockRejectedValueOnce(error)
+      wrap(<SSOTab />)
+
+      expect(await screen.findByRole('alert')).toBeInTheDocument()
+      expect(screen.queryByText('Not configured')).not.toBeInTheDocument()
+      expect(
+        screen.queryByRole('button', {
+          name: /configure sso|edit configuration|remove configuration/i,
+        }),
+      ).not.toBeInTheDocument()
+
+      await user.click(screen.getByRole('button', { name: /retry/i }))
+      expect(await screen.findByText('Corporate Okta')).toBeInTheDocument()
+      expect(api.getSSO).toHaveBeenCalledTimes(2)
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+      expect(
+        screen.getByRole('button', { name: /edit configuration/i }),
+      ).toBeInTheDocument()
+    },
+  )
+
+  it('a failed refresh after a successful read replaces the cached configuration with the error', async () => {
+    const user = userEvent.setup()
+    const qc = wrap(<SSOTab />)
+    expect(await screen.findByText('Corporate Okta')).toBeInTheDocument()
+
+    api.getSSO.mockRejectedValueOnce(
+      new ApiError(503, 'unavailable', 'SSO read failed'),
+    )
+    await act(() => qc.refetchQueries({ queryKey: consoleKeys.sso() }))
+
+    expect(await screen.findByRole('alert')).toBeInTheDocument()
+    expect(screen.queryByText('Corporate Okta')).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', {
+        name: /configure sso|edit configuration|remove configuration/i,
+      }),
+    ).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /retry/i }))
+    expect(await screen.findByText('Corporate Okta')).toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('offers no configuration action while the first read is pending', () => {
+    api.getSSO.mockReturnValueOnce(new Promise<SSOConfigDTO>(() => {}))
+    wrap(<SSOTab />)
+    expect(
+      screen.queryByRole('button', {
+        name: /configure sso|edit configuration/i,
+      }),
+    ).not.toBeInTheDocument()
+    expect(screen.queryByText('Not configured')).not.toBeInTheDocument()
+  })
+
+  it('offers a working Configure action after reading an unconfigured provider', async () => {
+    const user = userEvent.setup()
+    api.getSSO.mockResolvedValue({ ...base, configured: false })
+    wrap(<SSOTab />)
+    expect(await screen.findByText('Not configured')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /configure sso/i }))
+    expect(await screen.findByLabelText(/issuer url/i)).toBeInTheDocument()
+  })
+
   it('the provider panel states its sign-in name and which values count as MFA', async () => {
     api.getSSO.mockResolvedValue({ ...primary, display_name: '' })
     wrap(<SSOTab />)

@@ -26,7 +26,7 @@ afterEach(() => vi.unstubAllGlobals())
 it.each([undefined, false, true])(
   'sends the selected path and recursive=%s in the DELETE URL without a body',
   async (recursive) => {
-    const path = 'generated/a b & #?%/café.txt'
+    const path = 'generated/a b & #?%/数据.txt'
     await expect(
       agentOpsApi.deleteFile('ws/one', path, recursive),
     ).resolves.toEqual({ deleted: true })

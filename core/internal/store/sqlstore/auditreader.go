@@ -37,6 +37,28 @@ func OpenAuthReader(ctx context.Context, cfg store.Config) (*auditReader, error)
 	return openOfflineReader(ctx, cfg)
 }
 
+// OpenDRReader reads SQLite snapshots without admitting their module census for
+// runtime use. PostgreSQL DR retains its existing role and admission preflights.
+func OpenDRReader(ctx context.Context, cfg store.Config) (store.DRReader, error) {
+	if cfg.Engine != store.EngineSQLite {
+		return nil, fmt.Errorf("sqlstore: offline DR snapshot reader requires SQLite")
+	}
+	return openOfflineReader(ctx, cfg)
+}
+
+func (r *auditReader) ListOrgs(ctx context.Context) ([]model.Org, error) {
+	if r.dia.Name() != store.EngineSQLite {
+		return nil, store.ErrEnumerationNotAuthoritative
+	}
+	tx, err := r.db.BeginTx(ctx, viewTxOptions(r.dia.Name()))
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback() //nolint:errcheck // read-only snapshot never commits
+	s := &sqlStore{engine: r.dia.Name(), db: r.db, dia: r.dia, clock: model.SystemClock{}}
+	return (&systemScope{s: s, tx: tx}).ListOrgs(ctx)
+}
+
 func openOfflineReader(ctx context.Context, cfg store.Config) (*auditReader, error) {
 	dia, ok := dialect.New(cfg.Engine)
 	if !ok {

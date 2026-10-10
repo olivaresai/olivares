@@ -64,7 +64,6 @@ const namespaces = Object.keys(data.en).sort()
 const others = LANGUAGE_CODES.filter((l) => l !== 'en')
 
 describe('i18n runtime parity', () => {
-
   it('registered the expected languages and a non-trivial namespace set', () => {
     expect([...LANGUAGE_CODES].sort()).toEqual([
       'de',

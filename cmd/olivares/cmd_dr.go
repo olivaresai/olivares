@@ -543,7 +543,7 @@ type pgOpts struct {
 }
 
 // backupSQLite snapshots the SQLite store with VACUUM INTO and builds the manifest
-// from a boot of that exact snapshot, so the recorded tips match the bundle bytes
+// from an offline read of that exact snapshot, so the tips match the bundle bytes
 // (TipExact). It never opens the LIVE engine, so it is safe to run while serve is
 // up (WAL allows the concurrent read).
 func backupSQLite(ctx context.Context, sf drFlags, work string, keyRefs []dr.KeyRef, notes string, now time.Time) (*dr.Manifest, string, error) {
@@ -561,20 +561,9 @@ func backupSQLite(ctx context.Context, sf drFlags, work string, keyRefs []dr.Key
 	}
 	sum, size := payload.sum, payload.size
 
-	// Build the manifest by booting a COPY of the snapshot with COPIES of the
-	// signing keys (so the engine's signer matches the source key). The copy is
-	// throwaway; the original snapshot's bytes are what get bundled and digested.
-	mdir, err := os.MkdirTemp(work, "manifest-")
-	if err != nil {
-		return nil, "", err
-	}
-	if err := dr.CopyFile(snap, filepath.Join(mdir, "olivares.db")); err != nil {
-		return nil, "", err
-	}
-	if err := copySigningKeys(sf.dataDir, mdir); err != nil {
-		return nil, "", err
-	}
-	eng, err := drBoot(ctx, drFlags{dataDir: mdir, engineKind: string(store.EngineSQLite)})
+	// Read the bundled snapshot itself with existing custody. No runtime boot,
+	// migrations, key minting or connector construction is needed to export it.
+	eng, err := drReadBoot(ctx, sf.dataDir, snap)
 	if err != nil {
 		return nil, "", fmt.Errorf("open snapshot to build manifest: %w", err)
 	}
@@ -584,7 +573,7 @@ func backupSQLite(ctx context.Context, sf drFlags, work string, keyRefs []dr.Key
 	if err != nil {
 		return nil, "", err
 	}
-	m, err := dr.BuildManifest(ctx, eng.store, eng.signer.PublicKey(), cpv, dr.BuildOptions{
+	m, err := dr.BuildManifestFromReader(ctx, eng.ledger, eng.signer.PublicKey(), cpv, dr.BuildOptions{
 		EngineKind: string(store.EngineSQLite), Version: version,
 		Store:    dr.StoreSnapshot{Method: dr.MethodVacuumInto, File: "store/olivares.db", SizeBytes: size, SHA256: sum},
 		Keys:     keyRefs,
@@ -1123,7 +1112,7 @@ func drVerifyCmd() *cobra.Command {
 			if err := dr.CopyFile(filepath.Join(work, m.Store.File), filepath.Join(vdir, "olivares.db")); err != nil {
 				return err
 			}
-			eng, err := drBoot(cmd.Context(), drFlags{dataDir: vdir, engineKind: string(store.EngineSQLite)})
+			eng, err := drReadBoot(cmd.Context(), vdir, filepath.Join(vdir, "olivares.db"))
 			if err != nil {
 				return err
 			}
@@ -1132,7 +1121,7 @@ func drVerifyCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			rep, err := dr.RestoreVerify(cmd.Context(), eng.store, m, eng.signer.PublicKey(), cpv)
+			rep, err := dr.RestoreVerifyFromReader(cmd.Context(), eng.ledger, m, eng.signer.PublicKey(), cpv)
 			if err != nil {
 				return err
 			}
@@ -1372,19 +1361,6 @@ func sealSigningKeys(dir string, cipher *dr.KeyCipher) (map[string][]byte, []dr.
 		refs = append(refs, dr.KeyRef{File: bundlePath, Name: name, Role: roleForKey(name), PubSHA256: fp})
 	}
 	return sealed, refs, sealerProbes(dir), nil
-}
-
-func copySigningKeys(srcDir, dstDir string) error {
-	files, err := signingKeyFiles(srcDir)
-	if err != nil {
-		return err
-	}
-	for _, path := range files {
-		if err := dr.CopyFile(path, filepath.Join(dstDir, filepath.Base(path))); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 // restoreInPlaceSQLite replaces a LIVE SQLite data dir safely: it stages the

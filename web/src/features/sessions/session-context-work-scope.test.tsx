@@ -102,6 +102,24 @@ it('shows the authorized launch role/workspace separately from process and activ
   expect(screen.getByTestId('context-activity-state')).toHaveTextContent('Idle')
   expect(within(section).getByText('Read work')).toBeInTheDocument()
 })
+it("keeps the tool's own mode words in Details, not in the permission chip", () => {
+  mount({
+    ...run,
+    provider_driver: 'codex',
+    tool_mode: 'untrusted · dangerFullAccess',
+  })
+  expect(screen.getByTestId('context-tool-mode')).toHaveTextContent(
+    'untrusted · dangerFullAccess',
+  )
+  expect(screen.getByTestId('context-details')).toContainElement(
+    screen.getByTestId('context-tool-mode'),
+  )
+})
+
+it('shows no tool mode row before the tool has reported one', () => {
+  mount(run)
+  expect(screen.queryByTestId('context-tool-mode')).toBeNull()
+})
 it('shows the branch changes of a session in its own worktree', () => {
   // What a session changed is the Changes tab's.
   mount({ ...run, worktree_branch: 'olivares/ab12cd34' }, undefined, 'changes')

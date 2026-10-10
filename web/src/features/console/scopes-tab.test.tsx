@@ -353,7 +353,10 @@ describe('ScopesTab organization tree', () => {
         Component: () => <p>Hidden card</p>,
       },
     ]
-    api.listWorkspaces.mockResolvedValue({ items: [workspace], has_more: false })
+    api.listWorkspaces.mockResolvedValue({
+      items: [workspace],
+      has_more: false,
+    })
     wrap(<ScopesTab />)
     expect(await screen.findByText('Fixture card')).toBeInTheDocument()
     expect(screen.queryByText('Hidden card')).not.toBeInTheDocument()

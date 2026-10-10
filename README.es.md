@@ -6,7 +6,7 @@
 
 **Ejecuta la IA que tu equipo ya usa, con el mismo control que tienes sobre el resto de tu infraestructura.**
 
-[Qué hace](#qué-hace) · [Instalación](#instalación) · [Consola](#un-vistazo-a-la-consola) · [Ediciones](#ediciones-y-precios) · [Documentación](#documentación) · [Comunidad](#comunidad) · [olivares.ai](https://olivares.ai)
+[Qué hace](#qué-hace) · [Instalación](#instalación) · [Ediciones](#ediciones-y-precios) · [Documentación](#documentación) · [Comunidad](#comunidad) · [olivares.ai](https://olivares.ai)
 
 [![License: AGPL-3.0-only](https://img.shields.io/badge/license-AGPL--3.0--only-blue)](LICENSING.md)
 [![SDK & connectors: Apache-2.0](https://img.shields.io/badge/SDK%20%26%20connectors-Apache--2.0-blue)](LICENSING.md) <!-- release -->
@@ -16,7 +16,6 @@
 
 </div>
 
-La próxima release es <!-- release -->`0.1`<!-- /release -->; todavía no está publicada en GitHub. Los comandos siguientes describen los artefactos previstos. Compila desde el código fuente hasta su publicación y verifica cada artefacto antes de usarlo. El estado observado está en <!-- release -->`docs/releases/0.1-install-surfaces.json`<!-- /release -->. Kubernetes OCI: `publication-unverified`.
 
 Tus desarrolladores trabajan con Claude Code y Codex. Los agentes llaman a servidores MCP, modelos y API internas, y las tareas programadas se ejecutan por su cuenta. Cada componente tiene sus propios registros y permisos, así que no es fácil responder a preguntas sencillas: ¿qué agente cambió este archivo?, ¿quién lo aprobó?, ¿cuánto nos costó la IA este mes?
 
@@ -42,70 +41,82 @@ Community conserva la observabilidad local, los ajustes guardados y la exportaci
 
 ## Instalación
 
-**Docker Compose.** The container qualification job exercises this installation path.
-Set the release image explicitly so a cached `:latest` image cannot select an
-older release.
+Elige un método y copia su bloque. Al terminar, `olivares quickstart` muestra la dirección de la consola y un token de un solo uso para crear el primer administrador. Todas las versiones están firmadas, y cada método verifica lo que descarga antes de instalarlo ([verificar una descarga por tu cuenta](INSTALL.md#verifying-a-release)).
+
+**Linux y macOS, un comando.** Detecta tu sistema, verifica la versión, instala solo el binario y nunca usa `sudo`.
+
+```sh
+curl -fsSL https://olivares.ai/olivares/install.sh | sh
+olivares quickstart
+```
+
+**Docker.** Multi-arquitectura. Las imágenes de contenedor se basan en Debian 13 slim (con Node.js 24 para las herramientas de agente) y se ejecutan como usuario no root. Escucha en todas las interfaces del host; añade `127.0.0.1:` antes de cada `-p` para limitarlo al equipo local.
 
 <!-- release -->
 ```sh
-set -e
-cd /path/to/your/project   # the host folder your sessions will work on
-export OLIVARES_PROJECT_DIR="$PWD"
-git clone --depth 1 https://github.com/olivaresai/olivares.git "$HOME/olivares"
-export OLIVARES_IMAGE=docker.io/olivaresai/olivares:0.1
-# On Linux hosts whose AppArmor policy mediates user namespace creation:
-if [ -r /sys/kernel/security/apparmor/features/namespaces/mask ] &&
-   grep -qw userns_create /sys/kernel/security/apparmor/features/namespaces/mask; then
-  sudo install -m 0644 "$HOME/olivares/deploy/apparmor/olivares-sessions.conf" /etc/apparmor.d/olivares-sessions
-  sudo apparmor_parser -r /etc/apparmor.d/olivares-sessions
-  export OLIVARES_APPARMOR_PROFILE=olivares-sessions
-fi
-docker compose -f "$HOME/olivares/deploy/compose/docker-compose.yml" up --wait --wait-timeout 120
-docker compose -f "$HOME/olivares/deploy/compose/docker-compose.yml" exec olivares \
-  olivares first-boot --data-dir /var/lib/olivares --new-token
+docker run -d --name olivares -p 8443:8443 -p 8444:8444 \
+  -v olivares-data:/var/lib/olivares \
+  docker.io/olivaresai/olivares:0.1 \
+  serve --listen :8443 --grpc-listen :8444 --data-dir /var/lib/olivares
 ```
 <!-- /release -->
 
-Open the console address printed by `first-boot --new-token` and use the replacement
-one-time setup token it prints to create the first administrator. This invalidates
-the previous setup token and is available only before the first administrator exists.
-The stack uses SQLite and a persistent data volume.
-The AppArmor step needs an AppArmor 4 parser and runs on the Docker daemon host.
-See [session confinement on AppArmor hosts](deploy/compose/README.md#session-confinement-on-apparmor-hosts).
-It publishes ports on every host interface by default; set `OLIVARES_BIND=127.0.0.1`
-to restrict access to this host.
+**Docker Compose.** SQLite en un solo nodo, con Postgres y copias de seguridad opcionales.
 
-Sessions in the container work on one host folder, mounted at `/project`: the absolute
-path in `OLIVARES_PROJECT_DIR`, set before `up`. Without it, `/project` is an empty Docker
-volume, never the directory you run Compose from. A session there can change everything in
-that folder: never set the variable to your home directory. In the console, choose **Change folder**
-on the New session form and enter `/project`. On a Linux host the container user
-(UID 65532) needs write access; see
-[work on a host project folder](deploy/compose/README.md#work-on-a-host-project-folder).
+```sh
+git clone --depth 1 https://github.com/olivaresai/olivares.git && cd olivares
+docker compose -f deploy/compose/docker-compose.yml up --wait --wait-timeout 120
+```
 
-Gate coverage is not a passing release result: see the `qualify-compose-ready` job in
-[container qualification](.github/workflows/compose-ready.yml). The release must also
-pass its first-hour journey before it is qualified.
+Las sesiones trabajan en una carpeta del host: define `OLIVARES_PROJECT_DIR` con su ruta absoluta antes de `up` y Compose la monta en `/project`. En hosts cuya política de AppArmor limita los espacios de nombres de usuario (Ubuntu 24.04 y posteriores), carga antes el perfil de sesiones: consulta [Docker Compose](INSTALL.md#docker-compose).
 
-Other installation methods are **not qualified** by the first-hour gate. Their commands
-and limits are in [INSTALL.md](INSTALL.md#installation-qualification), including the
-shell installer, standalone Docker, Kubernetes, native packages, Homebrew, source builds
-and offline installs. [Verify release artifacts](INSTALL.md#verifying-a-release) before
-running them; see [upgrading and uninstalling](INSTALL.md#upgrading--uninstalling) for an
-existing installation.
+**Debian y Ubuntu.** El paquete añade un usuario `olivares` sin inicio de sesión y un servicio reforzado; tú lo inicias.
 
-- Helm, el operador de Kubernetes y el proveedor de Terraform se distribuyen con Business. [Editions](https://olivares.ai/pricing).
-Install the chart from source; see [Kubernetes installation](INSTALL.md#kubernetes).
+```sh
+curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.1/olivares_0.1_linux_amd64.deb
+sudo dpkg -i olivares_0.1_linux_amd64.deb && sudo systemctl enable --now olivares
+```
 
-## Un vistazo a la consola
+**RHEL, Fedora y SUSE.**
 
-| | |
-|---|---|
-| <picture><source media="(prefers-color-scheme: dark)" srcset="docs-site/public/console/access-map-dark.png"><img src="docs-site/public/console/access-map-light.png" alt="Access map: what each agent reads and writes across your estate, origins on the left, resources on the right."></picture><br><sub><b>Mapa de acceso</b> — quién lee y escribe qué.</sub> | <picture><source media="(prefers-color-scheme: dark)" srcset="docs-site/public/console/access-map-drift-dark.png"><img src="docs-site/public/console/access-map-drift-light.png" alt="Least-privilege drift: unexpected accesses and unused grants overlaid on the access map."></picture><br><sub><b>Drift</b> — accesos que nadie autorizó y permisos que nadie usa.</sub> |
-| <picture><source media="(prefers-color-scheme: dark)" srcset="docs-site/public/console/agentops-dark.png"><img src="docs-site/public/console/agentops-light.png" alt="Claude Code sessions created, attached to and governed from the console."></picture><br><sub><b>Sesiones</b> — inicia, únete y detén sesiones de agentes desde el navegador.</sub> | <picture><source media="(prefers-color-scheme: dark)" srcset="docs-site/public/console/work-dark.png"><img src="docs-site/public/console/work-light.png" alt="Work: the durable cross-session backlog of work items and decisions."></picture><br><sub><b>Trabajo</b> — tareas, responsables y decisiones que perduran tras una sesión.</sub> |
-| <picture><source media="(prefers-color-scheme: dark)" srcset="docs-site/public/console/security-dark.png"><img src="docs-site/public/console/security-light.png" alt="Security and forensics: guardrail findings, the anomaly queue and tamper-evident forensics."></picture><br><sub><b>Seguridad</b> — acciones bloqueadas, anomalías y un registro en el que cualquier alteración se detecta.</sub> | <picture><source media="(prefers-color-scheme: dark)" srcset="docs-site/public/console/finops-dark.png"><img src="docs-site/public/console/finops-light.png" alt="FinOps: model spend, token usage, budgets and a run-rate projection."></picture><br><sub><b>Gasto</b> — coste por modelo y agente, presupuestos y previsiones.</sub> |
+```sh
+curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.1/olivares_0.1_linux_amd64.rpm
+sudo rpm -i olivares_0.1_linux_amd64.rpm && sudo systemctl enable --now olivares
+```
 
-Todas las pantallas: [referencia de la consola](docs-site/src/content/docs/reference/console.md).
+**Alpine.**
+
+```sh
+curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.1/olivares_0.1_linux_amd64.apk
+sudo apk add --allow-untrusted olivares_0.1_linux_amd64.apk && sudo rc-service olivares start
+```
+
+En servidores ARM, usa `arm64` en lugar de `amd64`. Todos los archivos de la versión: [página de la versión](https://github.com/olivaresai/olivares/releases/tag/0.1).
+
+**Homebrew.** macOS y Linux.
+
+```sh
+brew install olivaresai/tap/olivares && olivares quickstart
+```
+
+**Desde el código fuente.** Go 1.26+, [Task](https://taskfile.dev) y pnpm.
+
+```sh
+git clone --depth 1 https://github.com/olivaresai/olivares.git && cd olivares
+task build && ./bin/olivares quickstart
+```
+
+**Redes sin conexión:** reúne la imagen firmada, el chart y el material de verificación; después, [instala en un entorno aislado](docs-site/src/content/docs/how-to/air-gap-install.md). **Windows** aún no tiene un binario nativo: usa la imagen de Docker o WSL2. Actualizaciones y vuelta a una versión anterior: [guía](docs-site/src/content/docs/how-to/upgrade-and-rollback.md). Todas las opciones en detalle: [`INSTALL.md`](INSTALL.md).
+
+**Pruébalo primero con datos de demostración**, solo en tu equipo (la contraseña de la demo es pública):
+
+```sh
+olivares serve --seed-demo --insecure --listen 127.0.0.1:8901 --grpc-listen 127.0.0.1:8902 --data-dir "$(mktemp -d)"
+```
+
+Después, abre http://127.0.0.1:8901.
+
+Helm, el operador de Kubernetes, Terraform, el appliance y los artefactos de despliegue FIPS/STIG se distribuyen con Business; la instalación sin conexión requiere Enterprise. Consulta las [ediciones](docs/editions.md).
 
 ## Ediciones y precios
 

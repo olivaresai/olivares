@@ -17,3 +17,10 @@ type AuditReader interface {
 	ViewAudit(context.Context, model.TenantID, func(AuditLog) error) error
 	Close() error
 }
+
+// DRReader adds authoritative tenant enumeration to an offline SQLite snapshot
+// reader. It grants no runtime, migration or mutation authority.
+type DRReader interface {
+	AuditReader
+	ListOrgs(context.Context) ([]model.Org, error)
+}

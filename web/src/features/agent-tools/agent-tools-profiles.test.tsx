@@ -59,6 +59,7 @@ import type {
   ProviderProfileDTO,
 } from '@/features/agentops/types'
 import { readinessOf } from '@/features/first-hour/readiness.fixture'
+import { firstHourKeys } from '@/features/first-hour/api'
 import { ApiError } from '@/lib/api/errors'
 import { useTenantStore } from '@/stores/tenant'
 import { AgentToolsView } from './agent-tools-view'
@@ -122,8 +123,9 @@ const profile = (
   ...over,
 })
 
-function mount() {
-  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+function mount(
+  qc = new QueryClient({ defaultOptions: { queries: { retry: false } } }),
+) {
   return render(
     <QueryClientProvider client={qc}>
       <AgentToolsView />
@@ -321,6 +323,81 @@ it('keeps host presence unknown while a cold provider snapshot is refreshing', a
 })
 
 describe('AI tools: one boxed list per installed tool', () => {
+  it('shows signed-out Codex as ready on its resolved API key without asking for sign-in', async () => {
+    signIn.status.mockImplementation((driver: string) =>
+      Promise.resolve({ driver, installed: true, signed_in: false }),
+    )
+    vi.spyOn(agentOpsApi, 'toolsReadiness').mockResolvedValue(
+      readinessOf({
+        codex: {
+          provider: {
+            provider_ref: 'prv_codex',
+            kind: 'openai_compatible',
+            display_name: 'W320 stub',
+          },
+        },
+      }),
+    )
+    // The tool's own account probe still says signed out: session readiness wins.
+    api.providers.mockResolvedValue({
+      providers: [
+        snap('codex', {
+          state: 'not_signed_in',
+          next_command: 'codex login --device-auth',
+        }),
+      ],
+    })
+    providers.list.mockResolvedValue(page([]))
+    mount()
+    const codex = await screen.findByTestId('tool-codex')
+    const row = await within(codex).findByTestId('profile-default')
+    expect(
+      await within(row).findByText('API key · W320 stub'),
+    ).toBeInTheDocument()
+    expect(within(row).getByText('Ready')).toBeInTheDocument()
+    expect(within(codex).queryByText(/not signed in/i)).toBeNull()
+    expect(within(codex).queryByRole('button', { name: /^Sign in/ })).toBeNull()
+    expect(within(codex).queryByText(/codex login/)).toBeNull()
+
+    await userEvent.click(
+      within(row).getByRole('button', { name: /^Default sign-in/ }),
+    )
+    const sheet = await screen.findByRole('dialog', { name: 'Default sign-in' })
+    expect(within(sheet).getByText('API key · W320 stub')).toBeInTheDocument()
+    expect(within(sheet).getByText('Ready')).toBeInTheDocument()
+    expect(within(sheet).queryByRole('button', { name: /^Sign in/ })).toBeNull()
+  })
+
+  it('keeps sign-in available when Codex has only a refused API key', async () => {
+    signIn.status.mockImplementation((driver: string) =>
+      Promise.resolve({ driver, installed: true, signed_in: false }),
+    )
+    const answer = readinessOf({
+      codex: {
+        provider: { provider_ref: 'prv_codex', kind: 'openai' },
+        refused: true,
+      },
+    })
+    vi.spyOn(agentOpsApi, 'toolsReadiness').mockResolvedValue(answer)
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+    mount(qc)
+    const codex = await screen.findByTestId('tool-codex')
+    const row = await within(codex).findByTestId('profile-default')
+    expect(
+      await within(row).findByText('Account · not signed in'),
+    ).toBeInTheDocument()
+    await waitFor(() =>
+      expect(qc.getQueryData(firstHourKeys.readiness('t1'))).toEqual(answer),
+    )
+    expect(
+      within(row).getByRole('button', { name: /^Sign in/ }),
+    ).toBeInTheDocument()
+    expect(within(row).queryByText('Ready')).toBeNull()
+    expect(within(row).queryByText(/API key/)).toBeNull()
+  })
+
   it('lists a row per profile with how it signs in and one state', async () => {
     mount()
     const claude = await screen.findByTestId('tool-claude')

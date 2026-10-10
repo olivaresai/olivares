@@ -5,6 +5,7 @@
 package main
 
 import (
+	"context"
 	"crypto/ed25519"
 	"log/slog"
 
@@ -28,19 +29,7 @@ func auditVerifyBoot(cmd *cobra.Command, dataDir, engineName, dsn, ownerDSN stri
 	if err != nil {
 		return nil, err
 	}
-	key, err := loadAuditSigningKey(dir, slog.Default(), withoutMinting())
-	if err != nil {
-		return nil, err
-	}
-	var opts []audit.Option
-	checkpointKey, err := buildCheckpointKey(slog.Default())
-	if err != nil {
-		return nil, err
-	}
-	if checkpointKey != nil {
-		opts = append(opts, audit.WithCheckpointKey(checkpointKey))
-	}
-	signer, err := audit.NewSigner(key.priv, opts...)
+	signer, priors, err := loadOfflineAuditSigner(dir)
 	if err != nil {
 		return nil, err
 	}
@@ -48,5 +37,44 @@ func auditVerifyBoot(cmd *cobra.Command, dataDir, engineName, dsn, ownerDSN stri
 	if err != nil {
 		return nil, err
 	}
-	return &auditReadEngine{ledger: reader, signer: signer, auditPriors: key.priors}, nil
+	return &auditReadEngine{ledger: reader, signer: signer, auditPriors: priors}, nil
+}
+
+func loadOfflineAuditSigner(dir string) (*audit.Signer, []ed25519.PublicKey, error) {
+	key, err := loadAuditSigningKey(dir, slog.Default(), withoutMinting())
+	if err != nil {
+		return nil, nil, err
+	}
+	var opts []audit.Option
+	checkpointKey, err := buildCheckpointKey(slog.Default())
+	if err != nil {
+		return nil, nil, err
+	}
+	if checkpointKey != nil {
+		opts = append(opts, audit.WithCheckpointKey(checkpointKey))
+	}
+	signer, err := audit.NewSigner(key.priv, opts...)
+	if err != nil {
+		return nil, nil, err
+	}
+	return signer, key.priors, nil
+}
+
+type drReadEngine struct {
+	ledger store.DRReader
+	signer *audit.Signer
+}
+
+func (e *drReadEngine) Close() error { return e.ledger.Close() }
+
+func drReadBoot(ctx context.Context, dataDir, snapshot string) (*drReadEngine, error) {
+	signer, _, err := loadOfflineAuditSigner(dataDir)
+	if err != nil {
+		return nil, err
+	}
+	reader, err := coreengine.OpenDRReader(ctx, store.Config{Engine: store.EngineSQLite, DSN: snapshot})
+	if err != nil {
+		return nil, err
+	}
+	return &drReadEngine{ledger: reader, signer: signer}, nil
 }

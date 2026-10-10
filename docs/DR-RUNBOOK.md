@@ -224,6 +224,9 @@ olivares dr backup --data-dir /var/lib/olivares --engine sqlite \
 ```
 Safe to run with `serve` up (VACUUM INTO is a concurrent reader; it does not
 open the live engine).
+Community can also back up an existing Business SQLite installation offline.
+Backup reads the snapshot and existing audit keys without migrating its module
+schema, creating signing keys, or starting configured connectors.
 
 ### With offsite replication + GFS retention (recommended)
 ```sh
@@ -559,6 +562,10 @@ olivares dr verify --in /backups/olivares-dr-<ts>.drbundle --passphrase-file /ru
 # Postgres: checks digest + that the keys decrypt; the full chain
 #           verification requires restoring to a scratch Postgres (see §9).
 ```
+
+SQLite verification reads the restored snapshot offline, including Business
+snapshots verified by Community. It proves ledger continuity; `dr restore` and
+`serve` still apply the destination edition's runtime admission checks.
 
 `dr inspect` is metadata inspection only: it does not receive the KEK and therefore does
 not authenticate the manifest. Use `dr verify`, not `inspect`, for an integrity decision.

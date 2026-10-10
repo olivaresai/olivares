@@ -42,33 +42,31 @@ const { toastMock } = vi.hoisted(() => ({
 }))
 vi.mock('@/components/ui/toaster', () => ({ toast: toastMock }))
 
-const { notify, recordingApiMock, searchMock, authState } = vi.hoisted(
-  () => ({
-    notify: {
-      listRoutes: vi.fn(),
-      getRoute: vi.fn(),
-      createRoute: vi.fn(),
-      updateRoute: vi.fn(),
-      deleteRoute: vi.fn(),
-      testRoute: vi.fn(),
-      routeRevisions: vi.fn(),
-      restoreRoute: vi.fn(),
-      listDestinations: vi.fn(),
-      listMatchTypes: vi.fn(),
-      evaluateRoutes: vi.fn(),
-      listDeliveries: vi.fn(),
-      listOutbox: vi.fn(),
-      redeliverOutbox: vi.fn(),
-    },
-    recordingApiMock: { notice: vi.fn(), acknowledge: vi.fn() },
-    searchMock: vi.fn(),
-    authState: {
-      can: (_p: string): boolean => false,
-      activeTenant: 't1' as string | null,
-      logout: vi.fn(),
-    },
-  }),
-)
+const { notify, recordingApiMock, searchMock, authState } = vi.hoisted(() => ({
+  notify: {
+    listRoutes: vi.fn(),
+    getRoute: vi.fn(),
+    createRoute: vi.fn(),
+    updateRoute: vi.fn(),
+    deleteRoute: vi.fn(),
+    testRoute: vi.fn(),
+    routeRevisions: vi.fn(),
+    restoreRoute: vi.fn(),
+    listDestinations: vi.fn(),
+    listMatchTypes: vi.fn(),
+    evaluateRoutes: vi.fn(),
+    listDeliveries: vi.fn(),
+    listOutbox: vi.fn(),
+    redeliverOutbox: vi.fn(),
+  },
+  recordingApiMock: { notice: vi.fn(), acknowledge: vi.fn() },
+  searchMock: vi.fn(),
+  authState: {
+    can: (_p: string): boolean => false,
+    activeTenant: 't1' as string | null,
+    logout: vi.fn(),
+  },
+}))
 vi.mock('@/lib/auth/context', () => ({ useAuth: () => authState }))
 vi.mock('@/features/alerting/api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/features/alerting/api')>()),
@@ -366,6 +364,4 @@ describe('a palette verb opens its form on the arrival it was selected for', () 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(useCommandStore.getState().pendingAction).toBeNull()
   })
-
-
 })

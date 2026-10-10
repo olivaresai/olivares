@@ -53,10 +53,22 @@ type BuildOptions struct {
 // with VerifiedAtBackup=false and a reason, so the caller can refuse to capture a
 // corrupt ledger as if it were a good restore point.
 func BuildManifest(ctx context.Context, st store.Store, eventPub ed25519.PublicKey, cpVerifier *audit.CheckpointVerifier, opts BuildOptions) (*Manifest, error) {
+	return buildManifest(ctx, func() ([]model.TenantID, error) { return enumerateTenants(ctx, st) }, opts.auditView(st), eventPub, cpVerifier, opts)
+}
+
+// BuildManifestFromReader verifies and inventories an existing SQLite snapshot
+// without requiring a runtime Store or migrating the snapshot.
+func BuildManifestFromReader(ctx context.Context, reader store.DRReader, eventPub ed25519.PublicKey, cpVerifier *audit.CheckpointVerifier, opts BuildOptions) (*Manifest, error) {
+	return buildManifest(ctx, func() ([]model.TenantID, error) {
+		return enumerateTenantOrgs(ctx, reader.ListOrgs)
+	}, reader.ViewAudit, eventPub, cpVerifier, opts)
+}
+
+func buildManifest(ctx context.Context, enumerate func() ([]model.TenantID, error), view auditViewFunc, eventPub ed25519.PublicKey, cpVerifier *audit.CheckpointVerifier, opts BuildOptions) (*Manifest, error) {
 	if opts.TipMatch != TipExact && opts.TipMatch != TipAdvisory {
 		return nil, fmt.Errorf("dr: BuildManifest invalid TipMatch %q", opts.TipMatch)
 	}
-	tenants, err := enumerateTenants(ctx, st)
+	tenants, err := enumerate()
 	if err != nil {
 		return nil, err
 	}
@@ -70,7 +82,6 @@ func BuildManifest(ctx context.Context, st store.Store, eventPub ed25519.PublicK
 	// was not, and the report said otherwise. Reading a chain tip is custodial, so
 	// it goes through store.Custody (or opts.Ledger) and is no longer denied.
 	notes := opts.Notes
-	view := opts.auditView(st)
 
 	m := &Manifest{
 		Format:     ManifestFormat,
@@ -106,18 +117,23 @@ func BuildManifest(ctx context.Context, st store.Store, eventPub ed25519.PublicK
 // read itself for exactly that reason — a duty spread across callers is inherited
 // by whoever is written next — so there is no count for a caller to check any more.
 func enumerateTenants(ctx context.Context, st store.Store) ([]model.TenantID, error) {
-	var ids []model.TenantID
-	if err := st.System(ctx, func(sys store.SystemScope) error {
-		orgs, err := sys.ListOrgs(ctx)
-		if err != nil {
+	return enumerateTenantOrgs(ctx, func(ctx context.Context) (orgs []model.Org, err error) {
+		err = st.System(ctx, func(sys store.SystemScope) error {
+			orgs, err = sys.ListOrgs(ctx)
 			return err
-		}
-		for _, o := range orgs {
-			ids = append(ids, o.TenantID)
-		}
-		return nil
-	}); err != nil {
+		})
+		return orgs, err
+	})
+}
+
+func enumerateTenantOrgs(ctx context.Context, list func(context.Context) ([]model.Org, error)) ([]model.TenantID, error) {
+	orgs, err := list(ctx)
+	if err != nil {
 		return nil, err
+	}
+	var ids []model.TenantID
+	for _, o := range orgs {
+		ids = append(ids, o.TenantID)
 	}
 	// The system tenant holds auth + cross-tenant events; it has its own chain and
 	// must be captured even though it is not a business org.

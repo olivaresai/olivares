@@ -70,9 +70,13 @@ const report = auditRouteCensus({
 describe('route conservation', () => {
   it('records the approved Business placement without deleting published history', () => {
     expect(census.business_paths).toEqual(['/automations', '/orchestration'])
-    expect(census.business_paths.every((path) => census.paths.includes(path))).toBe(true)
+    expect(
+      census.business_paths.every((path) => census.paths.includes(path)),
+    ).toBe(true)
     for (const path of census.business_paths) {
-      expect(live.includes(path)).toBe(EXTENSION_ROUTES.some((route) => route.path === path))
+      expect(live.includes(path)).toBe(
+        EXTENSION_ROUTES.some((route) => route.path === path),
+      )
     }
   })
   it('mounts every declared alias as a redirect that preserves location state', () => {

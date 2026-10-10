@@ -48,9 +48,13 @@ vi.mock('@/features/claude-policy/cedar-opa-view', () => ({
 vi.mock('@/features/claude-policy/managed-agents-hitl', () => ({
   ManagedAgentsHitl: () => <div>ManagedAgentsHitl mounted</div>,
 }))
+// One sign-in status per session tool the engine drives, so none answers undefined.
 const status = vi.hoisted(() => ({
   claude: { driver: 'claude', installed: false, signed_in: false },
   codex: { driver: 'codex', installed: false, signed_in: false },
+  grok: { driver: 'grok', installed: false, signed_in: false },
+  opencode: { driver: 'opencode', installed: false, signed_in: false },
+  'gemini-cli': { driver: 'gemini-cli', installed: false, signed_in: false },
 }))
 const launch = vi.hoisted(() => ({ launchSession: vi.fn() }))
 vi.mock('@/features/agentops/session-launch', async (orig) => ({
@@ -62,7 +66,7 @@ vi.mock('@/features/first-hour/api', async (orig) => {
   return {
     ...real,
     signInApi: {
-      status: (d: 'claude' | 'codex') => Promise.resolve(status[d]),
+      status: (d: SessionTool) => Promise.resolve(status[d]),
       start: vi.fn(),
       get: vi.fn(),
       code: vi.fn(),
@@ -102,8 +106,10 @@ beforeEach(() => {
   localStorage.clear()
   useModulesStore.getState().setOff([])
   auth.admin = true
-  status.claude = { driver: 'claude', installed: false, signed_in: false }
-  status.codex = { driver: 'codex', installed: false, signed_in: false }
+  for (const s of Object.values(status)) {
+    s.installed = false
+    s.signed_in = false
+  }
   // What a tool runs on is the engine's answer (GET provider-profiles/readiness): its
   // own login once the stub says so; every other tool has nothing to run on yet.
   vi.spyOn(agentOpsApi, 'toolsReadiness').mockImplementation(async () =>
@@ -489,7 +495,7 @@ describe('the New session dialog: tool and preset', () => {
     const tools = await screen.findByRole('radiogroup', { name: 'Tool' })
     expect(
       [...tools.querySelectorAll('[role="radio"]')].map((r) => r.textContent),
-    ).toEqual(['Claude Code', 'Codex', 'Grok Build', 'OpenCode'])
+    ).toEqual(['Claude Code', 'Codex', 'Grok Build', 'OpenCode', 'Gemini CLI'])
     expect(screen.getByRole('radio', { name: 'Claude Code' })).toHaveAttribute(
       'aria-checked',
       'true',

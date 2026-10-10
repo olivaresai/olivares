@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query'
 import { KeyRound, ShieldAlert, Trash2 } from 'lucide-react'
 import { useState, type ComponentType, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
+import { QueryErrorState } from '@/components/layout/query-error-state'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
@@ -99,6 +100,8 @@ function SingleProviderTab() {
       <SSOOverview
         cfg={cfg}
         loading={sso.isLoading}
+        error={sso.error}
+        retry={() => void sso.refetch()}
         onEdit={() => setEditOpen(true)}
         onRemove={() => setRemoveOpen(true)}
       />
@@ -132,6 +135,8 @@ function SingleProviderTab() {
 export function SSOOverview({
   cfg,
   loading,
+  error,
+  retry,
   onEdit,
   onRemove,
   controls,
@@ -139,6 +144,8 @@ export function SSOOverview({
 }: {
   cfg?: SSOConfigDTO
   loading: boolean
+  error?: unknown
+  retry?: () => void
   onEdit: () => void
   onRemove: () => void
   controls?: ReactNode
@@ -156,20 +163,22 @@ export function SSOOverview({
             {t('console:sso.caption')}
           </p>
         </div>
-        <div className="flex gap-2">
-          {cfg?.configured && (
-            <Button variant="ghost" onClick={onRemove}>
-              <Trash2 />
-              {t('console:sso.delete')}
+        {cfg && !loading && !error && (
+          <div className="flex gap-2">
+            {cfg.configured && (
+              <Button variant="ghost" onClick={onRemove}>
+                <Trash2 />
+                {t('console:sso.delete')}
+              </Button>
+            )}
+            <Button onClick={onEdit}>
+              <KeyRound />
+              {cfg?.configured
+                ? t('console:sso.edit')
+                : t('console:sso.configure')}
             </Button>
-          )}
-          <Button onClick={onEdit}>
-            <KeyRound />
-            {cfg?.configured
-              ? t('console:sso.edit')
-              : t('console:sso.configure')}
-          </Button>
-        </div>
+          </div>
+        )}
       </div>
 
       {controls}
@@ -178,6 +187,8 @@ export function SSOOverview({
         <div className="flex justify-center py-8">
           <Spinner />
         </div>
+      ) : error || !cfg ? (
+        <QueryErrorState error={error} retry={retry} />
       ) : (
         <div className="flex flex-col gap-3 rounded-lg border border-border p-4">
           <div className="flex flex-wrap items-center gap-2">
