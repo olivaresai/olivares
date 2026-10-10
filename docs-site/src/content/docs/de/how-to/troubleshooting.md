@@ -34,7 +34,7 @@ einen wirklich frischen Start ein frisches `--data-dir`.
 
 ```text
 generated a new audit signing key; back it up path=/var/lib/olivares/audit-signing.key
-generated a self-signed TLS certificate; clients must trust it, or pin it with --pin-sha256=<pin_sha256> (that value, verbatim) cert=/var/lib/olivares/tls.crt cert_fingerprint_sha256=d38567e8…378c4e7f pin_sha256=JsdrhrY77Me8miAmobJsqamE3NDWIOSBrDTwbHkyCD0
+generated a local TLS certificate; clients must trust it, or pin it with --pin-sha256=<pin_sha256> (that value, verbatim) cert=/var/lib/olivares/tls.crt cert_fingerprint_sha256=d38567e8…378c4e7f pin_sha256=JsdrhrY77Me8miAmobJsqamE3NDWIOSBrDTwbHkyCD0
 ```
 
 Beides ist beabsichtigt, und das erste ist das, was Sie später beißt: es gibt **kein

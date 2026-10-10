@@ -64,7 +64,7 @@ There is one composition root, and no operational exemption from it. Read this s
 as a rule first and a list second: the rule decides, and no command is exempt because it
 is missing from a list below.
 
-**The rule.** Four functions construct the module set: `boot`, `moduleOpenAPIDocument`,
+**The rule.** Four functions construct the module set: `boot`, `moduleDocumentModules`,
 `collectSchemaManifest` and `bootSchemaRegistrar`. Each returns the configuration error
 to its caller, and no caller converts it to success. Therefore:
 
@@ -96,7 +96,7 @@ behaves identically:
 
 | Caller | Commands | Where it stops |
 | --- | --- | --- |
-| `moduleOpenAPIDocument` | `openapi --beta` | The beta module-route document is not produced. Plain `openapi` builds no modules and is unaffected. |
+| `moduleDocumentModules` | `openapi --beta`, internal `openapi --permission-inventory` | The beta module-route document or permission inventory is not produced. Plain `openapi` builds no modules and is unaffected. |
 | `collectSchemaManifest` | `migrate manifest`, support-bundle schema collection | The manifest is not collected. |
 | `bootSchemaRegistrar` | `migrate apply`, directory-writer activation | The registrar is not built, so the migration or maintenance operation does not run. |
 

@@ -44,6 +44,7 @@ import (
 	securitymodule "github.com/olivaresai/olivares/modules/security"
 	"github.com/olivaresai/olivares/modules/sessions"
 	"github.com/olivaresai/olivares/modules/sessions/accounthome"
+	"github.com/olivaresai/olivares/modules/sessions/confine"
 	"github.com/olivaresai/olivares/sdk"
 	"io"
 	"log/slog"
@@ -2668,6 +2669,11 @@ func (b *bootState) buildAPI(ctx context.Context) (err error) {
 	if err != nil {
 		return fmt.Errorf("agent tools API: %w", err)
 	}
+	// The tools' logins, status reads, probes and Ollama run confined like a session child (#1114).
+	b.agentTools.SetChildCommand(confinedToolCommand(b.cfg.DataDir))
+	if state := confine.Probe(); state.Mode != confine.ModeLandlock {
+		b.log.Warn("agent tools: the tools' logins, status reads and probes run UNCONFINED on this node and can read what the engine user can; enable Landlock and run olivares doctor", "reason", state.Reason)
+	}
 	// Sign-in runs the same executable a session launch runs (sessionruntime.go).
 	toolObserver := newHostToolObserverForDataDir(b.cfg.DataDir, osGetenv)
 	b.agentTools.SetProgramResolver(func(driver string) string {
@@ -2725,7 +2731,6 @@ func (b *bootState) buildAPI(ctx context.Context) (err error) {
 	b.agentTools.UseOllama(agenttoolsapi.OllamaConfig{
 		ModelsDir: filepath.Join(ollamaDir, "models"),
 		HomeDir:   filepath.Join(ollamaDir, "home"),
-		Command:   confinedOllamaCommand(b.cfg.DataDir),
 		Register:  registerLocalOllama(b.set.sessions, b.st),
 		StateFile: filepath.Join(ollamaDir, "started.json"),
 		Audit: func(ctx context.Context, draft model.AuditDraft) error {

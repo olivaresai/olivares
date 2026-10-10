@@ -2,8 +2,15 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { act, render, screen, waitFor, within } from '@testing-library/react'
-import type { ComponentProps } from 'react'
+import {
+  act,
+  render,
+  renderHook,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
+import type { ComponentProps, ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useModulesStore } from '@/stores/modules'
@@ -39,8 +46,7 @@ vi.mock('@tanstack/react-router', async (original) => ({
   ),
 }))
 
-import { SessionRailView } from './session-rail'
-import { useSessionRail } from './use-session-rail'
+import { useSessionRail, type SessionRailData } from './use-session-rail'
 
 const RUN = {
   run_ref: 'rail-run',
@@ -98,22 +104,20 @@ function deferredResponse() {
   })
   return { response, finish }
 }
-function Rail() {
-  const rail = useSessionRail()
-  return rail.visible ? (
-    <SessionRailView
-      groups={rail.groups}
-      status={rail.status}
-      allTo={rail.allTo}
-    />
-  ) : null
+function wrapper({ children }: { children: ReactNode }) {
+  return <QueryClientProvider client={client}>{children}</QueryClientProvider>
 }
 function mount() {
-  return render(
-    <QueryClientProvider client={client}>
-      <Rail />
-    </QueryClientProvider>,
+  return renderHook(() => useSessionRail(), { wrapper })
+}
+/** The rows the rail holds, each with the group it sits in. */
+function rowsOf(rail: SessionRailData) {
+  return rail.groups.flatMap((group) =>
+    group.rows.map((row) => ({ group: group.id, ...row })),
   )
+}
+function titlesOf(rail: SessionRailData) {
+  return rowsOf(rail).map((row) => row.title)
 }
 
 beforeEach(() => {
@@ -163,13 +167,11 @@ describe('session rail retrieval state', () => {
       if (path === HANDOFFS)
         useWorkspaceStore.setState({ activeWorkspace: 'rail-workspace' })
       replies.set(path, () => failed())
-      mount()
-      expect(
-        await screen.findByText('The sessions could not be read.'),
-      ).toBeInTheDocument()
-      expect(
-        screen.queryByText('Nothing waits for you.'),
-      ).not.toBeInTheDocument()
+      const { result } = mount()
+      await waitFor(() => expect(result.current.status.error).toBe(true))
+      expect(result.current.status.loading).toBe(false)
+      expect(result.current.visible).toBe(true)
+      expect(rowsOf(result.current)).toEqual([])
       expect(requests.filter((p) => p.startsWith('/v1/m/sessions/'))).toEqual([
         path,
       ])
@@ -179,39 +181,35 @@ describe('session rail retrieval state', () => {
   it('offers a handoff-only user their inbox and readable All destination', async () => {
     auth.permissions.add('sessions:delivery:read')
     useWorkspaceStore.setState({ activeWorkspace: 'rail-workspace' })
-    mount()
-    expect(
-      await screen.findByRole('link', {
-        name: /Handoff to you · from rail-agent/,
-      }),
-    ).toHaveAttribute('href', '/communications/handoffs?handoff=rail-delivery')
-    expect(screen.getByRole('link', { name: 'All' })).toHaveAttribute(
-      'href',
-      '/communications/handoffs',
-    )
+    const { result } = mount()
+    await waitFor(() => expect(rowsOf(result.current)).toHaveLength(1))
+    expect(rowsOf(result.current)[0]).toMatchObject({
+      group: 'needsYou',
+      kind: 'handoff',
+      state: 'need',
+      from: 'rail-agent',
+      href: '/communications/handoffs?handoff=rail-delivery',
+    })
+    expect(result.current.allTo).toBe('/communications/handoffs')
     expect(requests.filter((p) => p.startsWith('/v1/m/sessions/'))).toEqual([
       HANDOFFS,
     ])
   })
 
   it.each([
-    { failedPath: OBSERVED, kept: /Operated rail session/ },
-    { failedPath: RUNS, kept: /Observed rail session/ },
+    { failedPath: OBSERVED, kept: 'Operated rail session' },
+    { failedPath: RUNS, kept: 'Observed rail session' },
   ])(
     'keeps the other successful source visible alongside a read failure ($failedPath)',
     async ({ failedPath, kept }) => {
       auth.permissions = new Set(['sessions:live:read', 'sessions:run:read'])
       replies.set(failedPath, () => failed())
-      mount()
-      expect(
-        await screen.findByRole('link', { name: kept }),
-      ).toBeInTheDocument()
-      expect(
-        await screen.findByText('The sessions could not be read.'),
-      ).toBeInTheDocument()
-      expect(
-        screen.queryByText('Nothing waits for you.'),
-      ).not.toBeInTheDocument()
+      const { result } = mount()
+      await waitFor(() => {
+        expect(result.current.status.error).toBe(true)
+        expect(result.current.status.loading).toBe(false)
+      })
+      expect(titlesOf(result.current)).toEqual([kept])
     },
   )
 
@@ -219,51 +217,52 @@ describe('session rail retrieval state', () => {
     auth.permissions = new Set(['sessions:live:read', 'sessions:delivery:read'])
     useWorkspaceStore.setState({ activeWorkspace: 'rail-workspace' })
     replies.set(HANDOFFS, () => failed())
-    mount()
-    expect(
-      await screen.findByRole('link', { name: /Observed rail session/ }),
-    ).toBeInTheDocument()
-    expect(
-      await screen.findByText('The sessions could not be read.'),
-    ).toBeInTheDocument()
-    expect(screen.queryByText('Nothing waits for you.')).not.toBeInTheDocument()
+    const { result } = mount()
+    await waitFor(() => {
+      expect(result.current.status.error).toBe(true)
+      expect(result.current.status.loading).toBe(false)
+    })
+    expect(titlesOf(result.current)).toEqual(['Observed rail session'])
   })
 
   it('shows pending operated-run retrieval instead of an empty rail', async () => {
     auth.permissions.add('sessions:run:read')
     const gate = deferredResponse()
     replies.set(RUNS, () => gate.response)
-    mount()
-    expect(await screen.findByText('Reading sessions…')).toBeInTheDocument()
-    expect(screen.getByRole('region', { name: 'Sessions' })).toHaveAttribute(
-      'aria-busy',
-      'true',
-    )
-    expect(screen.queryByText('Nothing waits for you.')).not.toBeInTheDocument()
+    const { result } = mount()
+    await waitFor(() => expect(result.current.status.loading).toBe(true))
+    expect(result.current.visible).toBe(true)
+    expect(result.current.status.error).toBe(false)
+    expect(rowsOf(result.current)).toEqual([])
     await act(async () =>
       gate.finish(Response.json({ items: [RUN], has_more: false })),
     )
-    expect(
-      await screen.findByRole('link', { name: /Operated rail session/ }),
-    ).toBeInTheDocument()
+    await waitFor(() =>
+      expect(titlesOf(result.current)).toEqual(['Operated rail session']),
+    )
+    expect(result.current.status.loading).toBe(false)
   })
 
   it('keeps successful operated runs visible while observed sessions are pending', async () => {
     auth.permissions = new Set(['sessions:live:read', 'sessions:run:read'])
     const gate = deferredResponse()
     replies.set(OBSERVED, () => gate.response)
-    mount()
-    expect(
-      await screen.findByRole('link', { name: /Operated rail session/ }),
-    ).toBeInTheDocument()
-    expect(screen.getByText('Reading sessions…')).toBeInTheDocument()
-    expect(screen.queryByText('Nothing waits for you.')).not.toBeInTheDocument()
+    const { result } = mount()
+    await waitFor(() =>
+      expect(titlesOf(result.current)).toEqual(['Operated rail session']),
+    )
+    expect(result.current.status.loading).toBe(true)
+    expect(result.current.status.error).toBe(false)
     await act(async () =>
       gate.finish(Response.json({ items: [LIVE], has_more: false })),
     )
-    expect(
-      await screen.findByRole('link', { name: /Observed rail session/ }),
-    ).toBeInTheDocument()
+    await waitFor(() =>
+      expect(titlesOf(result.current).sort()).toEqual([
+        'Observed rail session',
+        'Operated rail session',
+      ]),
+    )
+    expect(result.current.status.loading).toBe(false)
   })
 
   it('reports a failed source while another read is still pending', async () => {
@@ -271,55 +270,38 @@ describe('session rail retrieval state', () => {
     const gate = deferredResponse()
     replies.set(OBSERVED, () => failed())
     replies.set(RUNS, () => gate.response)
-    mount()
-    expect(
-      await screen.findByText('The sessions could not be read.'),
-    ).toBeInTheDocument()
-    expect(screen.getByText('Reading sessions…')).toBeInTheDocument()
-    expect(screen.getByRole('region', { name: 'Sessions' })).toHaveAttribute(
-      'aria-busy',
-      'true',
-    )
+    const { result } = mount()
+    await waitFor(() => expect(result.current.status.error).toBe(true))
+    expect(result.current.status.loading).toBe(true)
     await act(async () =>
       gate.finish(Response.json({ items: [RUN], has_more: false })),
     )
-    expect(
-      await screen.findByRole('link', { name: /Operated rail session/ }),
-    ).toBeInTheDocument()
+    await waitFor(() =>
+      expect(titlesOf(result.current)).toEqual(['Operated rail session']),
+    )
+    expect(result.current.status).toEqual({ loading: false, error: true })
   })
 
   it('removes a cached source after a refused refresh and restores it only after a fresh successful read', async () => {
     auth.permissions = new Set(['sessions:live:read', 'sessions:run:read'])
-    mount()
-    await screen.findByRole('link', { name: /Operated rail session/ })
-    await screen.findByRole('link', { name: /Observed rail session/ })
+    const { result } = mount()
+    await waitFor(() => expect(titlesOf(result.current)).toHaveLength(2))
     replies.set(RUNS, () => failed(403))
     await act(async () => {
       await client.invalidateQueries({
         predicate: (query) => query.queryKey.includes('shell-rail'),
       })
     })
-    expect(
-      await screen.findByText('The sessions could not be read.'),
-    ).toBeInTheDocument()
-    expect(
-      screen.queryByRole('link', { name: /Operated rail session/ }),
-    ).not.toBeInTheDocument()
-    expect(
-      screen.getByRole('link', { name: /Observed rail session/ }),
-    ).toBeInTheDocument()
+    await waitFor(() => expect(result.current.status.error).toBe(true))
+    expect(titlesOf(result.current)).toEqual(['Observed rail session'])
     replies.set(RUNS, () => Response.json({ items: [RUN], has_more: false }))
     await act(async () => {
       await client.invalidateQueries({
         predicate: (query) => query.queryKey.includes('shell-rail'),
       })
     })
-    expect(
-      await screen.findByRole('link', { name: /Operated rail session/ }),
-    ).toBeInTheDocument()
-    expect(
-      screen.queryByText('The sessions could not be read.'),
-    ).not.toBeInTheDocument()
+    await waitFor(() => expect(titlesOf(result.current)).toHaveLength(2))
+    expect(result.current.status.error).toBe(false)
   })
 })
 afterEach(() => {
@@ -329,66 +311,58 @@ afterEach(() => {
 
 describe('session rail read authority', () => {
   it('offers no rail and makes no protected read without source authority', async () => {
-    mount()
+    const { result } = mount()
     await waitFor(() => expect(client.isFetching()).toBe(0))
-    expect(screen.queryByRole('link', { name: 'All' })).not.toBeInTheDocument()
+    expect(result.current.visible).toBe(false)
+    expect(rowsOf(result.current)).toEqual([])
     expect(requests).toEqual([])
   })
 
   it('offers run-only users their operated session and an allowed All destination without asking for live sessions', async () => {
     auth.permissions.add('sessions:run:read')
-    mount()
-    expect(
-      await screen.findByRole('link', {
-        name: /Working.*Operated rail session/,
-      }),
-    ).toHaveAttribute('href', '/agentops?session=run%3Arail-run')
-    expect(screen.getByRole('link', { name: 'All' })).toHaveAttribute(
-      'href',
-      '/agentops',
-    )
+    const { result } = mount()
+    await waitFor(() => expect(rowsOf(result.current)).toHaveLength(1))
+    expect(rowsOf(result.current)[0]).toMatchObject({
+      group: 'working',
+      title: 'Operated rail session',
+      href: '/agentops?session=run%3Arail-run',
+    })
+    expect(result.current.allTo).toBe('/agentops')
+    expect(result.current.sessionCounts).toEqual({ live: 1, needsYou: 0 })
     expect(requests).toEqual(['/v1/m/sessions/runs'])
   })
 
   it('offers live-only users their observed session without asking for operated runs', async () => {
     auth.permissions.add('sessions:live:read')
-    mount()
-    expect(
-      await screen.findByRole('link', {
-        name: /Working.*Observed rail session/,
-      }),
-    ).toHaveAttribute('href', '/sessions?session=sess%3Arail-live')
-    expect(screen.getByRole('link', { name: 'All' })).toHaveAttribute(
-      'href',
-      '/sessions',
-    )
+    const { result } = mount()
+    await waitFor(() => expect(rowsOf(result.current)).toHaveLength(1))
+    expect(rowsOf(result.current)[0]).toMatchObject({
+      group: 'working',
+      title: 'Observed rail session',
+      href: '/sessions?session=sess%3Arail-live',
+    })
+    expect(result.current.allTo).toBe('/sessions')
     expect(requests).toEqual(['/v1/m/sessions/live'])
   })
 
   it('removes cached run rows on permission withdrawal and does not refetch a run opened afterward', async () => {
     auth.permissions = new Set(['sessions:live:read', 'sessions:run:read'])
-    const view = mount()
-    await screen.findByRole('link', { name: /Working.*Operated rail session/ })
-    await screen.findByRole('link', { name: /Working.*Observed rail session/ })
+    const { result, rerender } = mount()
+    await waitFor(() => expect(titlesOf(result.current)).toHaveLength(2))
+    expect(rowsOf(result.current).map((row) => row.group)).toEqual([
+      'working',
+      'working',
+    ])
     const reads = requests.filter((p) => p.endsWith('/runs')).length
     act(() => {
       auth.permissions.delete('sessions:run:read')
       auth.search = { session: 'run:unreadable' }
     })
-    view.rerender(
-      <QueryClientProvider client={client}>
-        <Rail />
-      </QueryClientProvider>,
-    )
-    await waitFor(() => {
-      expect(
-        screen.queryByRole('link', { name: /Operated rail session/ }),
-      ).not.toBeInTheDocument()
-      expect(requests.filter((p) => p.endsWith('/runs'))).toHaveLength(reads)
-    })
-    expect(
-      screen.getByRole('link', { name: /Observed rail session/ }),
-    ).toBeInTheDocument()
+    rerender()
+    // A refetch of the withdrawn source would be in flight here: let it settle first.
+    await waitFor(() => expect(client.isFetching()).toBe(0))
+    expect(titlesOf(result.current)).toEqual(['Observed rail session'])
+    expect(requests.filter((p) => p.endsWith('/runs'))).toHaveLength(reads)
   })
 
   it.each([
@@ -411,12 +385,14 @@ describe('session rail read authority', () => {
       auth.permissions.add('sessions:run:read')
       for (const permission of permissions) auth.permissions.add(permission)
       pendingApproval = 'approval-needed'
-      mount()
-      expect(
-        await screen.findByRole('link', {
-          name: /Needs you.*Operated rail session/,
-        }),
-      ).toHaveAttribute('href', href)
+      const { result } = mount()
+      await waitFor(() => expect(rowsOf(result.current)).toHaveLength(1))
+      expect(rowsOf(result.current)[0]).toMatchObject({
+        group: 'needsYou',
+        title: 'Operated rail session',
+        href,
+      })
+      expect(result.current.sessionCounts).toEqual({ live: 1, needsYou: 1 })
       expect(requests).toEqual(['/v1/m/sessions/runs'])
     },
   )

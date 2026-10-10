@@ -231,7 +231,7 @@ http.server.HTTPServer((host, int(port)), Handler).serve_forever()
 			})
 			eng.agentTools.UseOllama(agenttoolsapi.OllamaConfig{Addr: addr,
 				ModelsDir: filepath.Join(dir, "ollama", "models"), HomeDir: filepath.Join(dir, "ollama", "home"),
-				Command: confinedOllamaCommand(dir), Register: registerLocalOllama(eng.sessionsMod, eng.store)})
+				Register: registerLocalOllama(eng.sessionsMod, eng.store)})
 			var token, tenant string
 			call := func(method, path string, body any, want int) map[string]any {
 				t.Helper()

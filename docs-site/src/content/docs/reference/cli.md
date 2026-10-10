@@ -132,7 +132,7 @@ The default emits the same contract the engine serves at `GET /openapi.json` (th
 
 ## Complete command reference
 
-This section is generated from the command tree of the community (AGPL) build of the `olivares` binary at this commit. It covers 928 command nodes — the root command and 927 subcommands, of which 200 are groups that carry subcommands and 19 are hidden diagnostics — together with the 3446 flags they declare. It is regenerated from the binary rather than kept by hand, so a command or flag added without a documentation change fails the push gate.
+This section is generated from the command tree of the community (AGPL) build of the `olivares` binary at this commit. It covers 928 command nodes — the root command and 927 subcommands, of which 200 are groups that carry subcommands and 23 are hidden diagnostics — together with the 3450 flags they declare. It is regenerated from the binary rather than kept by hand, so a command or flag added without a documentation change fails the push gate.
 
 Nothing here is a stability promise: see [Stability](#stability) below for what may still change.
 
@@ -433,7 +433,7 @@ All 928 commands, in alphabetical order.
 | [`olivares exit-codes`](#command-olivares-exit-codes) | What the exit codes of olivares mean _(hidden)_ |
 | [`olivares findings`](#command-olivares-findings) | Export governed security findings |
 | [`olivares findings export`](#command-olivares-findings-export) | Export all matching findings as SARIF 2.1.0 |
-| [`olivares finops`](#command-olivares-finops) | Report AI spend and value, and govern budgets, rates and cost centers |
+| [`olivares finops`](#command-olivares-finops) | Report AI spend and value, and govern budgets, rates and cost centers _(hidden)_ |
 | [`olivares finops admission`](#command-olivares-finops-admission) | Reserve spend before an effect, settle it, and reconcile the holds |
 | [`olivares finops admission commit`](#command-olivares-finops-admission-commit) | Commit a hold at its measured cost |
 | [`olivares finops admission reconcile`](#command-olivares-finops-admission-reconcile) | Run admission recovery and file a finding on drift |
@@ -514,10 +514,10 @@ All 928 commands, in alphabetical order.
 | [`olivares governance approvals get`](#command-olivares-governance-approvals-get) | Show one approval |
 | [`olivares governance approvals ls`](#command-olivares-governance-approvals-ls) | List approvals, pending and decided |
 | [`olivares governance approvals reject`](#command-olivares-governance-approvals-reject) | Reject a request that waits for a person |
-| [`olivares governance breakglass`](#command-olivares-governance-breakglass) | Emergency access grants: who has one, until when, and what they did with it |
-| [`olivares governance breakglass get`](#command-olivares-governance-breakglass-get) | Show one break-glass grant |
-| [`olivares governance breakglass ls`](#command-olivares-governance-breakglass-ls) | List break-glass grants, live and expired |
-| [`olivares governance breakglass uses`](#command-olivares-governance-breakglass-uses) | Every action actually taken under one grant |
+| [`olivares governance breakglass`](#command-olivares-governance-breakglass) | Break-glass grants (requires Business edition) _(hidden)_ |
+| [`olivares governance breakglass get`](#command-olivares-governance-breakglass-get) | Show a break-glass grant (requires Business edition) |
+| [`olivares governance breakglass ls`](#command-olivares-governance-breakglass-ls) | List break-glass grants (requires Business edition) |
+| [`olivares governance breakglass uses`](#command-olivares-governance-breakglass-uses) | Show actions under a break-glass grant (requires Business edition) |
 | [`olivares governance guardian`](#command-olivares-governance-guardian) | The rules that act on findings without a human, and what they have done |
 | [`olivares governance guardian actions`](#command-olivares-governance-guardian-actions) | What guardian actually did, rule by rule |
 | [`olivares governance guardian rules`](#command-olivares-governance-guardian-rules) | List the guardian rules and whether each is armed |
@@ -883,7 +883,7 @@ All 928 commands, in alphabetical order.
 | [`olivares recording sessions unified`](#command-olivares-recording-sessions-unified) | Show one session's frames and audit timeline merged |
 | [`olivares recording sessions verify`](#command-olivares-recording-sessions-verify) | Verify a session's hash chain — exit 7 when it does not verify |
 | [`olivares recording sweep`](#command-olivares-recording-sweep) | Seal every idle active session (the lazy-seal safety net) |
-| [`olivares redteam`](#command-olivares-redteam) | Run the consent-gated adversarial battery against your own agents |
+| [`olivares redteam`](#command-olivares-redteam) | Run the consent-gated adversarial battery against your own agents _(hidden)_ |
 | [`olivares redteam catalog`](#command-olivares-redteam-catalog) | List the probe battery and its OWASP/ATLAS coverage |
 | [`olivares redteam runs`](#command-olivares-redteam-runs) | Launch and inspect scored red-team runs |
 | [`olivares redteam runs get`](#command-olivares-redteam-runs-get) | Show one run's scorecard |
@@ -5156,6 +5156,8 @@ olivares findings export
 
 #### Command: olivares finops
 
+Hidden diagnostic: it does not appear in `--help` output and is not part of the supported surface.
+
 Report AI spend and value, and govern budgets, rates and cost centers
 
 ```
@@ -6192,7 +6194,9 @@ olivares governance approvals reject <approval-id>
 
 #### Command: olivares governance breakglass
 
-Emergency access grants: who has one, until when, and what they did with it
+Hidden diagnostic: it does not appear in `--help` output and is not part of the supported surface.
+
+Break-glass grants (requires Business edition)
 
 ```
 olivares governance breakglass
@@ -6202,7 +6206,7 @@ Declares no flags of its own; it takes those of [`olivares governance`](#command
 
 #### Command: olivares governance breakglass get
 
-Show one break-glass grant
+Show a break-glass grant (requires Business edition)
 
 ```
 olivares governance breakglass get <grant-id>
@@ -6212,7 +6216,7 @@ Declares no flags of its own; it takes those of [`olivares governance breakglass
 
 #### Command: olivares governance breakglass ls
 
-List break-glass grants, live and expired
+List break-glass grants (requires Business edition)
 
 ```
 olivares governance breakglass ls
@@ -6224,11 +6228,11 @@ Aliases: `list`
 |---|---|---|---|
 | `--cursor` | `string` | — | continue from the cursor printed by the previous page |
 | `--limit` | `int` | `0` | maximum rows to return in one page (left out: the engine's default) |
-| `--status` | `string` | — | only grants in this status (e.g. active) |
+| `--status` | `string` | — | filter by status |
 
 #### Command: olivares governance breakglass uses
 
-Every action actually taken under one grant
+Show actions under a break-glass grant (requires Business edition)
 
 ```
 olivares governance breakglass uses <grant-id>
@@ -10674,6 +10678,7 @@ olivares openapi
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--beta` | `bool` | `false` | print the BETA module-route document (/v1/m/&lt;ns&gt;/…) instead of the stable core contract |
+| `--permission-inventory` | `bool` | `false` | _hidden_. emit the native module permission census for console qualification |
 
 #### Command: olivares orchestration
 
@@ -11306,6 +11311,8 @@ olivares recording sweep
 Declares no flags of its own; it takes those of [`olivares recording`](#command-olivares-recording) and the root command.
 
 #### Command: olivares redteam
+
+Hidden diagnostic: it does not appear in `--help` output and is not part of the supported surface.
 
 Run the consent-gated adversarial battery against your own agents
 

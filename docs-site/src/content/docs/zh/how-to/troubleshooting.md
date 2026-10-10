@@ -21,7 +21,7 @@ description: >-
 
 ```text
 generated a new audit signing key; back it up path=/var/lib/olivares/audit-signing.key
-generated a self-signed TLS certificate; clients must trust it, or pin it with --pin-sha256=<pin_sha256> (that value, verbatim) cert=/var/lib/olivares/tls.crt cert_fingerprint_sha256=d38567e8…378c4e7f pin_sha256=JsdrhrY77Me8miAmobJsqamE3NDWIOSBrDTwbHkyCD0
+generated a local TLS certificate; clients must trust it, or pin it with --pin-sha256=<pin_sha256> (that value, verbatim) cert=/var/lib/olivares/tls.crt cert_fingerprint_sha256=d38567e8…378c4e7f pin_sha256=JsdrhrY77Me8miAmobJsqamE3NDWIOSBrDTwbHkyCD0
 ```
 
 两者都是有意为之，而第一个是日后会咬人的那个：**没有强制托管（escrow）** — 现在就把 `audit-signing.key` 拷贝到机器外，并把公钥（`GET /v1/audit/pubkey`）固定在机器外，否则未来一旦主机被攻破，你将无法证明自己的 ledger

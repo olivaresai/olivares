@@ -51,6 +51,7 @@ func (e *probeError) Unwrap() error { return e.err }
 
 // prober runs the read-only commands of one instance and fills its snapshot.
 type prober struct {
+	m       *Module
 	ctx     context.Context
 	program string
 	env     []string
@@ -72,7 +73,7 @@ func (m *Module) probeProvider(ctx context.Context, in providerInstance) (Provid
 		return snap, nil
 	}
 	snap.Installed = true
-	p := &prober{ctx: ctx, program: program, env: in.env, own: in.own, cfgDir: in.configDir, snap: &snap}
+	p := &prober{m: m, ctx: ctx, program: program, env: in.env, own: in.own, cfgDir: in.configDir, snap: &snap}
 	err := p.run(in.driver)
 	snap.Source = strings.Join(p.sources, "; ")
 	return snap, err
@@ -156,7 +157,7 @@ func (p *prober) status(driver string) (SignInStatus, error) {
 	facts, _ := driverfacts.Lookup(driver)
 	command := cmdLine(p.program, facts.StatusArgs...)
 	p.sources = append(p.sources, command)
-	st, err := readNativeStatus(p.ctx, SignInStatus{Driver: driver, Installed: true}, p.program, p.env)
+	st, err := p.m.readNativeStatus(p.ctx, SignInStatus{Driver: driver, Installed: true}, p.program, p.cfgDir, p.env)
 	if err == nil && st.unrecognized {
 		err = errors.New("the tool's answer was not recognized")
 	}
@@ -172,8 +173,12 @@ func (p *prober) output(timeout time.Duration, args ...string) (string, error) {
 	p.sources = append(p.sources, command)
 	ctx, cancel := context.WithTimeout(p.ctx, timeout)
 	defer cancel()
-	cmd := toolCommand(ctx, p.program, args...)
-	cmd.Env, cmd.Dir, cmd.WaitDelay = p.env, envValue(p.env, "HOME"), 200*time.Millisecond
+	cmd, release, err := p.m.command(ctx, p.snap.Driver, p.program, p.cfgDir, p.env, args...)
+	if err != nil {
+		return "", &probeError{command, err}
+	}
+	defer release()
+	cmd.Dir, cmd.WaitDelay = envValue(p.env, "HOME"), 200*time.Millisecond
 	raw, err := cmd.Output()
 	if err != nil {
 		return "", &probeError{command, commandFailure(ctx, err)}
@@ -481,8 +486,12 @@ func (p *prober) converse(timeout time.Duration, args []string, command string, 
 	got := map[string][]byte{}
 	ctx, cancel := context.WithTimeout(p.ctx, timeout)
 	defer cancel()
-	cmd := toolCommand(ctx, p.program, args...)
-	cmd.Env, cmd.Dir, cmd.WaitDelay = p.env, envValue(p.env, "HOME"), 200*time.Millisecond
+	cmd, release, err := p.m.command(ctx, p.snap.Driver, p.program, p.cfgDir, p.env, args...)
+	if err != nil {
+		return got, &probeError{command, err}
+	}
+	defer release()
+	cmd.Dir, cmd.WaitDelay = envValue(p.env, "HOME"), 200*time.Millisecond
 	in, err := cmd.StdinPipe()
 	if err != nil {
 		return got, &probeError{command, err}

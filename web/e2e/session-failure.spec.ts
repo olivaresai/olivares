@@ -1,7 +1,22 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+import { readFileSync } from 'node:fs'
 import { expect, test } from '@playwright/test'
+
+// Assert against the shipped catalogs, so a renamed string fails here instead of
+// silently passing a negative check.
+const sessionsCopy = Object.fromEntries(
+  (['en', 'es'] as const).map((lang) => [
+    lang,
+    JSON.parse(
+      readFileSync(
+        new URL(`../src/features/sessions/i18n/${lang}.json`, import.meta.url),
+        'utf8',
+      ),
+    ),
+  ]),
+)
 
 // A disposable engine and an actual refused launch, supplied by the journey harness.
 // No intercepted API response stands in for the persisted engine reason.
@@ -38,23 +53,18 @@ for (const lang of ['en', 'es'] as const) {
       await expect(failure).toBeVisible()
       await expect(failure).toContainText(reason!)
       await expect(page.getByTestId('work-composer')).toHaveCount(0)
-      await expect(
-        page.getByText(/Send a sentence below|Envía una frase abajo/),
-      ).toHaveCount(0)
+      const copy = sessionsCopy[lang]
+      await expect(page.getByText(copy.conversation.empty)).toHaveCount(0)
       await expect(failure).toContainText(
-        lang === 'en'
-          ? 'Ask the server administrator'
-          : 'Pide al administrador del servidor',
+        copy.card.hostIsolationRemedy.split('. ')[0].slice(0, 28),
       )
       await expect(
         page.getByRole('button', {
-          name: lang === 'en' ? 'Start again' : 'Volver a iniciar',
+          name: copy.card.actions.startAgain,
           exact: true,
         }),
       ).toHaveCount(0)
-      await expect(
-        page.getByText(/no telemetry|telemetría al plano/i),
-      ).toHaveCount(0)
+      await expect(page.getByText(copy.rail.noObservation)).toHaveCount(0)
       for (const width of [1280, 390]) {
         await page.setViewportSize({ width, height: 900 })
         await expect(failure).toBeVisible()

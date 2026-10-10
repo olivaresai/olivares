@@ -15,6 +15,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/modulespec"
 )
@@ -469,4 +470,38 @@ func TestModuleAdminVerbIsNeverGrantedToEditor(t *testing.T) {
 		t.Fatal("no admin-verb module permission was examined: the inventory or the shape test is wrong, not the tier")
 	}
 	t.Logf("examined %d admin-verb module permission(s)", checked)
+}
+
+// recordingRegistrar captures what APIRoutes mounts instead of serving it. It is
+// the only honest way to read the route requirement: the permission is an argument
+// to Handle, so nothing short of running APIRoutes observes conditional mounts.
+type recordingRegistrar struct {
+	out       *[]Route
+	namespace string
+}
+
+func (r recordingRegistrar) Handle(method, pattern string, perm auth.Permission, h api.ModuleHandler) {
+	*r.out = append(*r.out, Route{Method: method, Pattern: pattern, Perm: string(perm)})
+}
+
+// HandleEntity records an ENTITY route exactly as Handle records a collection one.
+// api.RouteRegistrar grew this second method after this tool was written, and the
+// compile error it caused is the good outcome: an interface that gains a mounting
+// verb MUST break every recorder, because the alternative is a recorder that keeps
+// compiling and silently stops seeing a whole class of route. Ignoring the entity
+// routes here would leave their permissions out of the inventory, and this tool
+// exists precisely so the console cannot ask for a permission the engine does not
+// mount — a hole in the inventory is that same drift with the evidence removed.
+//
+// The EntityRef is deliberately dropped: it declares the lineage the engine
+// authorizes against, which changes WHICH rows a grant reaches, never WHICH
+// permission the route requires. This inventory answers only the latter.
+func (r recordingRegistrar) HandleEntity(method, pattern string, perm auth.Permission, _ api.EntityRef, h api.ModuleHandler) {
+	r.Handle(method, pattern, perm, h)
+}
+
+// HandleSealed records the permission of a governed route. Its authority seal
+// changes how a request is admitted, not the permission declared by the module.
+func (r recordingRegistrar) HandleSealed(method, pattern string, perm auth.Permission, _ api.SealedRoute, h api.ModuleHandler) {
+	r.Handle(method, pattern, perm, h)
 }

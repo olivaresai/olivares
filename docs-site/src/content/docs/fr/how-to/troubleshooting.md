@@ -35,7 +35,7 @@ réellement neuf, utilisez un `--data-dir` frais.
 
 ```text
 generated a new audit signing key; back it up path=/var/lib/olivares/audit-signing.key
-generated a self-signed TLS certificate; clients must trust it, or pin it with --pin-sha256=<pin_sha256> (that value, verbatim) cert=/var/lib/olivares/tls.crt cert_fingerprint_sha256=d38567e8…378c4e7f pin_sha256=JsdrhrY77Me8miAmobJsqamE3NDWIOSBrDTwbHkyCD0
+generated a local TLS certificate; clients must trust it, or pin it with --pin-sha256=<pin_sha256> (that value, verbatim) cert=/var/lib/olivares/tls.crt cert_fingerprint_sha256=d38567e8…378c4e7f pin_sha256=JsdrhrY77Me8miAmobJsqamE3NDWIOSBrDTwbHkyCD0
 ```
 
 Les deux sont délibérés, et le premier est celui qui se retourne contre vous plus tard : il n'y

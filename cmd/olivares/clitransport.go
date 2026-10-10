@@ -389,7 +389,7 @@ func decodeSPKIPin(spec string) ([]byte, error) {
 		"invalid --pin-sha256 %q: expected the leaf certificate's SPKI SHA-256 digest — 32 bytes, "+
 			"written as base64 or hex. This is NOT the certificate fingerprint: the engine prints "+
 			"the value to use as pin_sha256 on the line where it reports the certificate "+
-			"(`generated a self-signed TLS certificate…` / `serving HTTPS…`). From a PEM: "+
+			"(`generated a local TLS certificate…` / `serving HTTPS…`). From a PEM: "+
 			"openssl x509 -in cert.pem -pubkey -noout | openssl pkey -pubin -outform der | "+
 			"openssl dgst -sha256 -binary | openssl base64", original))
 }

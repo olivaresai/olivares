@@ -14,7 +14,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -68,9 +67,6 @@ type OllamaConfig struct {
 	// key) are absolute directories the engine owns.
 	ModelsDir string
 	HomeDir   string
-	// Command builds the child with the paths it may write (rw) and read (ro); the
-	// composition confines it there. Nil runs the program unconfined.
-	Command func(ctx context.Context, rw, ro []string, program string, args ...string) (*exec.Cmd, error)
 	// Register runs once the service answers, with its endpoint, the person who
 	// started it and the tenant they started it from (Root on FH 033: only that
 	// tenant gets the record), and again after each model download succeeds, so the
@@ -129,7 +125,7 @@ type ollamaService struct {
 	ownerTenant model.TenantID
 }
 
-// UseOllama enables the service with the composition's directories, confinement and
+// UseOllama enables the service with the composition's directories and
 // registration. Without it the routes answer that this node cannot run Ollama.
 func (m *Module) UseOllama(cfg OllamaConfig) {
 	if cfg.Addr == "" {
@@ -404,15 +400,9 @@ func (m *Module) startOllama(program string, actor auth.Principal, tenant model.
 	}
 	_ = l.Close()
 	ctx, cancel := context.WithCancel(m.ctx)
-	build := cfg.Command
-	if build == nil {
-		build = func(ctx context.Context, _, _ []string, program string, args ...string) (*exec.Cmd, error) {
-			return toolCommand(ctx, program, args...), nil
-		}
-	}
 	// The release directory holds the program and its runtime libraries (lib/ollama).
 	release := filepath.Dir(filepath.Dir(program))
-	cmd, err := build(ctx, []string{cfg.ModelsDir, cfg.HomeDir}, []string{release}, program, "serve")
+	cmd, err := m.build()(ctx, []string{cfg.ModelsDir, cfg.HomeDir}, []string{release}, program, "serve")
 	if err != nil {
 		cancel()
 		return errors.New("Ollama could not be prepared on this node")

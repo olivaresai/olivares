@@ -89,7 +89,7 @@ The existing readers now derive their lists from this table:
 | `cmd/olivares/wire.go` | Default instances and registration order, via `modules/registry.Build` |
 | `moduleCatalog` | Selectable namespaces, kernel, requirements and fresh-install defaults |
 | `published26100ModuleSelection` | Frozen upgrade selection (`published_26100`) |
-| `tools/permsdump` | Default instances, each declaring its own routes and permissions |
+| `tools/permsdump` | Community default instances; Business native composition through `openapi --permission-inventory`. Both use the shared permission inventory producer. |
 | `communityCensusModules` | Declared account-retirement participants and their order |
 | `core/runtime` | Existing delivery-class keys and policy |
 | `check-public-counts.sh`, `ai-state.sh` and `gen-release-diagrams.mjs` | Unique selectable implementation packages |

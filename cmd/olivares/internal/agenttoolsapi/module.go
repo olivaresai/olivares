@@ -89,6 +89,8 @@ type Module struct {
 	signedIn func(model.TenantID)
 	// ollama is the local model service this engine runs (ollama.go).
 	ollama ollamaService
+	// childCommand builds every child this module starts (SetChildCommand).
+	childCommand ChildCommand
 }
 
 var _ api.Module = (*Module)(nil)

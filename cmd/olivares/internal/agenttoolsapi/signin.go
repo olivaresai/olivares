@@ -433,10 +433,10 @@ func (m *Module) readStatus(ctx context.Context, tenant model.TenantID, driver, 
 		}
 		return out, nil
 	}
-	return m.readCachedStatus(ctx, tenant, out, program, env)
+	return m.readCachedStatus(ctx, tenant, out, program, configDir, env)
 }
 
-func readNativeStatus(ctx context.Context, out SignInStatus, program string, env []string) (SignInStatus, error) {
+func (m *Module) readNativeStatus(ctx context.Context, out SignInStatus, program, configDir string, env []string) (SignInStatus, error) {
 	driver := out.Driver
 	ctx, cancel := context.WithTimeout(ctx, statusTimeout)
 	defer cancel()
@@ -449,9 +449,12 @@ func readNativeStatus(ctx context.Context, out SignInStatus, program string, env
 		// A status read must not refresh the native model catalog.
 		env = append(env, "OPENCODE_DISABLE_MODELS_FETCH=1")
 	}
-	cmd := toolCommand(ctx, program, args...)
+	cmd, release, err := m.command(ctx, driver, program, configDir, env, args...)
+	if err != nil {
+		return out, err
+	}
+	defer release()
 	cmd.WaitDelay = 200 * time.Millisecond
-	cmd.Env = env
 	cmd.Dir = envValue(env, "HOME") // the organization's login home, as for the login
 	var raw []byte
 	var runErr error
@@ -541,11 +544,77 @@ func validSignInDriver(driver string) bool {
 	return facts.SignIn != ""
 }
 
-// toolCommand builds every child this module starts (the tool's login and its
-// status read). It is the module's only spawn site, so the composition can
-// confine it like a session child: read-write the tool's own home, read-only
-// its program.
+// ChildCommand builds a child with the paths it may write (rw) and read (ro);
+// the composition confines it there like a session child, which also clears a
+// root engine's capabilities. The program itself is readable.
+type ChildCommand func(ctx context.Context, rw, ro []string, program string, args ...string) (*exec.Cmd, error)
+
+// SetChildCommand wires how every child this module starts is built: the tool's
+// login, its status read, the provider probes and Ollama. Without it they run
+// unconfined, as the engine user.
+func (m *Module) SetChildCommand(f ChildCommand) {
+	m.mu.Lock()
+	m.childCommand = f
+	m.mu.Unlock()
+}
+
+// toolCommand builds an unconfined child when the composition wired no
+// ChildCommand (tests substitute it).
 var toolCommand = exec.CommandContext
+
+// build is the composition's ChildCommand, or an unconfined one when none is wired.
+func (m *Module) build() ChildCommand {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.childCommand != nil {
+		return m.childCommand
+	}
+	return func(ctx context.Context, _, _ []string, program string, args ...string) (*exec.Cmd, error) {
+		return toolCommand(ctx, program, args...), nil
+	}
+}
+
+// command builds a child of a driver's tool with env, as for a session child: it
+// may write the tool's configuration home, its login home unless that is the
+// engine user's own home (granting it would let the tool write every project and
+// key in it), and a private temporary directory (TMPDIR) that release removes once
+// the child has exited.
+func (m *Module) command(ctx context.Context, driver, program, configDir string, env []string, args ...string) (*exec.Cmd, func(), error) {
+	tmp, err := os.MkdirTemp("", "olivares-tool-")
+	if err != nil {
+		return nil, nil, fmt.Errorf("the tool's temporary directory: %w", err)
+	}
+	release := func() { _ = os.RemoveAll(tmp) }
+	rw := []string{configDir, tmp}
+	home := envValue(env, "HOME")
+	if home != "" && !isEngineUserHome(home) {
+		rw = append(rw, home)
+	}
+	if driver == "opencode" {
+		// OpenCode keeps its login in its data home and writes its state and cache:
+		// below the login home for an organization, in the engine user's home for its own.
+		for name, dir := range map[string]string{"XDG_DATA_HOME": ".local/share", "XDG_STATE_HOME": ".local/state", "XDG_CACHE_HOME": ".cache"} {
+			if base := envValue(env, name); base != "" {
+				rw = append(rw, filepath.Join(base, "opencode"))
+			} else if home != "" {
+				rw = append(rw, filepath.Join(home, dir, "opencode"))
+			}
+		}
+	}
+	cmd, err := m.build()(ctx, rw, nil, program, args...)
+	if err != nil {
+		release()
+		return nil, nil, err
+	}
+	cmd.Env = append(append([]string{}, env...), "TMPDIR="+tmp)
+	return cmd, release, nil
+}
+
+// isEngineUserHome reports the engine user's own home directory.
+func isEngineUserHome(path string) bool {
+	home, err := os.UserHomeDir()
+	return err == nil && filepath.Clean(path) == filepath.Clean(home)
+}
 
 // handleSignInStatus reports the tool's native login status and the active flow
 // for this selection, so a reloaded page can continue polling the same flow.
@@ -715,8 +784,11 @@ func (m *Module) handleSignInCancel(w http.ResponseWriter, r *http.Request, mc a
 // the same tenant, driver and configuration home; other accounts keep theirs.
 func (m *Module) startSignIn(tenant model.TenantID, driver, accountRef, configDir, program string, args, env []string) (*SignIn, error) {
 	ctx, cancel := context.WithTimeout(m.ctx, signInTimeout)
-	cmd := toolCommand(ctx, program, args...)
-	cmd.Env = env
+	cmd, release, err := m.command(ctx, driver, program, configDir, env, args...)
+	if err != nil {
+		cancel()
+		return nil, err
+	}
 	// Cancel and expiry kill the login; its output pipe must not keep Wait waiting.
 	cmd.WaitDelay = 5 * time.Second
 	// The login runs IN the organization's login home, never in the engine user's
@@ -725,12 +797,14 @@ func (m *Module) startSignIn(tenant model.TenantID, driver, accountRef, configDi
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		cancel()
+		release()
 		return nil, err
 	}
 	pr, pw := io.Pipe()
 	cmd.Stdout, cmd.Stderr = pw, pw
 	if err := cmd.Start(); err != nil {
 		cancel()
+		release()
 		return nil, err
 	}
 	s := &SignIn{ID: model.NewID(), Driver: driver, AccountRef: accountRef, tenant: tenant, configDir: configDir, State: signInStarting, stdin: stdin, cancel: cancel, expires: time.Now().Add(signInTimeout)}
@@ -753,6 +827,7 @@ func (m *Module) startSignIn(tenant model.TenantID, driver, accountRef, configDi
 			_ = pw.Close()
 			_ = pr.Close()
 			_ = cmd.Wait()
+			release()
 			m.cancelSignIn(s.ID)
 			return nil, err
 		}
@@ -814,6 +889,7 @@ func (m *Module) startSignIn(tenant model.TenantID, driver, accountRef, configDi
 	go func() { // the login ends: confirm with the tool itself
 		defer m.wg.Done()
 		err := cmd.Wait()
+		release()
 		_ = pw.Close()
 		<-read // the last line is read before the outcome is told
 		// Even a failed or canceled native login may have changed its credentials.

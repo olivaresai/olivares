@@ -219,7 +219,7 @@ const CITATIONS = [
   {
     id: 'tls-selfsigned-first-boot',
     emitted:
-      'generated a self-signed TLS certificate; clients must trust it, or pin it with ' +
+      'generated a local TLS certificate; clients must trust it, or pin it with ' +
       '--pin-sha256=<pin_sha256> (that value, verbatim)',
     source: 'cmd/olivares/cmd_serve.go',
     cited: ['how-to/troubleshooting.md'],
@@ -430,14 +430,20 @@ const CITATIONS = [
 const NON_ENGINE_IDENTIFIERS = new Map([
   ['addon_airs', 'private add-on build constraint; it is not a Community engine output identifier'],
   ['addon_reg', 'private add-on build constraint; it is not a Community engine output identifier'],
+  ['declared_not_fired', 'fire status of the Business orchestration module (modules-overlay/orchestration/schedules.go, opStatusDeclaredNotFired); not in the Community Go corpus'],
+  ['export_complete', 'last-line marker of the Business audit pull export (core-overlay/api/handlers_audit_export_enterprise.go); not in the Community Go corpus'],
+  ['max_payload_bytes', 'field of the Business syslog connector (connectors-overlay/syslog/syslog.go); not in the Community Go corpus'],
+  ['orchestration_cadence_miss', 'finding kind of the Business orchestration module (modules-overlay/orchestration/findings.go, busCadenceMiss); not in the Community Go corpus'],
+  ['orchestration_ungoverned_fire', 'finding kind of the Business orchestration module (modules-overlay/orchestration/findings.go, busUngovernedFire); not in the Community Go corpus'],
+  ['posture_drift', 'JSON field of the Business posture export (modules-overlay/posture-export/project.go); not in the Community Go corpus'],
+  ['projection_readiness', 'JSON field of the Business posture export (modules-overlay/posture-export/project.go); not in the Community Go corpus'],
+  ['spec_canonical', 'computed attribute of the olivares_policy resource in the Business Terraform provider (deployment-overlay/terraform-provider-olivares/internal/provider/policy_resource.go); not in the Community Go corpus'],
   ['get_v1_agents', 'generated method name in the Python SDK, which is not a Go tree'],
   ['held_waiting_cohort', 'ledger state of the licence worker (TypeScript), which the commercial-cycle rehearsal page names; the worker is outside the Community Go corpus'],
   ['olivares_client', 'constructor name in the Python SDK, which is not a Go tree'],
   ['on_deprecation', 'a policy value in the API-stability contract prose, not an emitted identifier'],
   ['owner_group', 'a PostgreSQL role name in the operator-side setup, owned by Postgres, not by us'],
   ['portal_customer_accounts', 'a table of the licence worker, which the customer-authority page names; the worker is outside the Community Go corpus'],
-  ['require_pin_approval', 'JSON configuration field of the private Enterprise tool-pin store, outside the Community Go corpus'],
-  ['sandbox_access', 'a shell function of scripts/install-service.sh that the self-hosting page names by its location; the installer is not part of the Go corpus'],
   // The Terraform provider composes every resource type name at RUNTIME —
   // `resp.TypeName = req.ProviderTypeName + "_agent"` with ProviderTypeName "olivares"
   // (terraform-provider-olivares/internal/provider/*.go). The full name therefore exists
@@ -1723,7 +1729,7 @@ function selfTest() {
       'twelve chars\\n',
       'a line ended the windows way, long enough\\r\\n',
       '\\ttabbed\\ttext here\\t',
-      'ñandú — ünïcode 😀 longer text',
+      'ångström — ünïcode 😀 longer text',
     ]
     const GAPS = [' + ', ' + ', ' +\n\t\t', '+', ' + /* c */ ', ' + // c\n\t\t', ' + f(x) + ', ', ']
     const MIN = 12

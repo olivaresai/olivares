@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/olivaresai/olivares/cmd/olivares/internal/agenttoolsapi"
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
@@ -72,10 +73,13 @@ func registerLocalOllama(rt *sessions.Module, st store.Store) func(context.Conte
 	}
 }
 
-// confinedOllamaCommand confines the local Ollama like a session child: it may write
-// its models and its home, read its release, and never reach the engine's data,
-// configuration or the CLI credentials of the engine's user.
-func confinedOllamaCommand(dataDir string) func(context.Context, []string, []string, string, ...string) (*exec.Cmd, error) {
+// confinedToolCommand confines a child of the agent tools module (a tool's login,
+// its status read, a provider probe, the local Ollama) like a session child: it may
+// write what the module names, read its program, and never reach the engine's data,
+// configuration or the CLI credentials of the engine's user, and a root engine's
+// child holds no capability. A host that cannot confine runs it unconfined (boot
+// warns).
+func confinedToolCommand(dataDir string) agenttoolsapi.ChildCommand {
 	protect := sessionProtectPaths(dataDir)
 	return func(ctx context.Context, rw, ro []string, program string, args ...string) (*exec.Cmd, error) {
 		cmd, _, err := confine.Command(ctx, confine.Policy{ReadWrite: rw, ReadOnly: ro, Protect: protect}, program, args...)

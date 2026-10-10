@@ -149,7 +149,7 @@ func TestTheRenderedStartupLineYieldsACopyablePin(t *testing.T) {
 			return a
 		},
 	}))
-	logger.Warn("generated a self-signed TLS certificate", tlsTrustAttrs(certPath, fp)...)
+	logger.Warn("generated a local TLS certificate", tlsTrustAttrs(certPath, fp)...)
 	line := buf.String()
 
 	const key = "pin_sha256="

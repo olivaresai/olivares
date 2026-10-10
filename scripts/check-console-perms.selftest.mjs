@@ -58,7 +58,7 @@ const INVENTORY = {
       grants: { viewer: false, editor: true, admin: true, owner: true },
     },
   },
-  modules: [],
+  modules: [{ namespace: 'sessions', routes: [{ method: 'GET', pattern: '/control', permission: 'session:read' }] }],
 }
 
 const TSCONFIG = {
@@ -724,6 +724,181 @@ ${view("  return can(viewById('session')!.permission)")}`
   check('shadowed global spelling is not the standard global object',
     makeRepo({ 'web/src/features/global.tsx': registry('function unrelated(globalThis: any, key: string) { globalThis[key].freeze = (v: unknown) => v }') }), [])
 }
+
+// Edition census: protocol fixtures exercise the unmodified guard; the Go tests
+// separately prove the producer's classifications against the registered handlers.
+function editionCases() {
+  const grants = { viewer: true, editor: true, admin: true, owner: true }
+  const routes = Array.from({ length: 23 }, (_, i) => ({
+    method: 'GET', pattern: `/record-${i}`, permission: `paid:record-${i}:read`,
+    surface: i === 0 ? 'api-only' : 'edition-refusal',
+  }))
+  const inventory = {
+    ...INVENTORY,
+    declared: { ...INVENTORY.declared, ...Object.fromEntries(routes.map((r) =>
+      [r.permission, { forms: ['route:paid'], grants }])) },
+    modules: [{ namespace: 'paid', routes }],
+  }
+  const files = { 'web/src/features/control.tsx': view('  return control') }
+  checkExit('Community API export and edition refusals are accounted separately',
+    makeRepo(files, { inventory }), 0,
+    /0 route permission\(s\) have no console surface/, { args: [] })
+  const orphan = structuredClone(inventory)
+  orphan.modules[0].routes.forEach((r) => { r.surface = 'console' })
+  checkExit('23 genuine orphan permissions still exceed ratchet 22',
+    makeRepo(files, { inventory: orphan }), 1,
+    /23 route permission\(s\) have no console surface/, { args: [] })
+  check('JSON mode enforces the same orphan ratchet', makeRepo(files, { inventory: orphan }),
+    ['divergent - @ engine routes'])
+  const mixed = structuredClone(inventory)
+  mixed.modules[0].routes.push({ ...routes[0], pattern: '/live', surface: 'console' })
+  checkExit('API-only credit does not cover a live sibling sharing its permission',
+    makeRepo(files, { inventory: mixed }), 0,
+    /1 route permission\(s\) have no console surface/, { args: [] })
+  const invalid = structuredClone(inventory)
+  invalid.modules[0].routes[0].surface = 'mystery'
+  checkExit('unknown engine route surface fails closed', makeRepo(files, { inventory: invalid }),
+    2, /unknown.*surface/, { args: [] })
+
+  const ordinaryTargets = {
+    'web/src/features/links.tsx': `import { useAuth } from '@/lib/auth/context'
+export interface Target { permission: string }
+export function Links({ targets }: { targets: Target[] }) {
+  const { can } = useAuth()
+  return targets.filter(target => can(target.permission))
+}
+const targets: Target[] = [{ permission: 'session:read' }]
+export function View() { return <Links targets={targets} /> }`,
+  }
+  check('ordinary typed permission filters retain contextual producers', makeRepo(ordinaryTargets), [])
+  ordinaryTargets['web/src/features/links.tsx'] = ordinaryTargets['web/src/features/links.tsx'].replace(
+    "permission: 'session:read'", "permission: 'ghost:read'")
+  check('ordinary typed filters still reject unknown permissions', makeRepo(ordinaryTargets),
+    ['undeclared ghost:read @ web/src/features/links.tsx:5'])
+
+  const panelFiles = (array) => ({
+    'web/src/features/extensions.ts': `interface Panel { readonly permission?: string }
+export const PANEL_EXTENSIONS = Object.freeze({ cards: Object.freeze(${array}) })`,
+    'web/src/features/panels.tsx': `import { useAuth } from '@/lib/auth/context'
+export function useOfferedPanels<P extends { readonly permission?: string }>(panels: readonly P[]) {
+  const { can } = useAuth()
+  return panels.filter(p => p.permission === undefined || can(p.permission))
+}`,
+    'web/src/features/screen.tsx': `import { useOfferedPanels } from './panels'
+import { PANEL_EXTENSIONS } from './extensions'
+${view('  return useOfferedPanels(PANEL_EXTENSIONS.cards) && control')}`,
+  })
+  check('empty Community panels are known-empty rather than unreadable',
+    makeRepo(panelFiles('[]')), [])
+  check('installed Business panel permissions follow actual composition',
+    makeRepo(panelFiles("[Object.freeze({ permission: 'session:read' })]")), [])
+  check('unknown permission in installed Business panels remains a finding',
+    makeRepo(panelFiles("[Object.freeze({ permission: 'ghost:read' })]")),
+    ['undeclared ghost:read @ web/src/features/panels.tsx:4'])
+  check('opaque panel producer still fails closed',
+    makeRepo(panelFiles('loadPanels()')),
+    ['unreadable - @ web/src/features/panels.tsx:4'])
+  const filtered = panelFiles("[Object.freeze({ id: 'private', permission: 'ghost:read' })]")
+  filtered['web/src/features/screen.tsx'] = filtered['web/src/features/screen.tsx'].replace(
+    'useOfferedPanels(PANEL_EXTENSIONS.cards)',
+    "useOfferedPanels(PANEL_EXTENSIONS.cards.filter(p => p.id !== 'reserved'))")
+  check('prefiltered session panels retain installed permission witnesses', makeRepo(filtered),
+    ['undeclared ghost:read @ web/src/features/panels.tsx:4'])
+  for (const [name, array, extra] of [
+    ['mutable panel', "[{ permission: 'session:read' }]", ''],
+    ['mutated imported panel', '[p]', "const p = { permission: 'session:read' }; p.permission = opaque();"],
+    ['mutable nested collection', '[]', ''],
+    ['changed freeze', "[Object.freeze({ permission: 'session:read' })]", 'Object.freeze = replacement;'],
+    ['prototype composition', '[]', ''],
+  ]) {
+    const fixture = panelFiles(array)
+    fixture['web/src/features/extensions.ts'] = extra + '\n' + fixture['web/src/features/extensions.ts']
+    if (name === 'mutable nested collection') fixture['web/src/features/extensions.ts'] =
+      "export const PANEL_EXTENSIONS = Object.freeze({ cards: [] }); PANEL_EXTENSIONS.cards.push(opaque())"
+    if (name === 'prototype composition') fixture['web/src/features/extensions.ts'] =
+      "export const PANEL_EXTENSIONS = Object.freeze({ __proto__: { cards: opaque() } })"
+    check(name + ' cannot earn composition credit', makeRepo(fixture),
+      ['unreadable - @ web/src/features/panels.tsx:4'])
+  }
+  const mutatedCallback = panelFiles("[Object.freeze({ permission: 'session:read' })]")
+  mutatedCallback['web/src/features/panels.tsx'] = mutatedCallback['web/src/features/panels.tsx'].replace(
+    'p => p.permission === undefined || can(p.permission)',
+    'p => { p.permission = opaque(); return can(p.permission) }')
+  check('mutating permission callback fails closed', makeRepo(mutatedCallback),
+    ['unreadable - @ web/src/features/panels.tsx:4'])
+  const frozenPermissions = panelFiles('[]')
+  frozenPermissions['web/src/features/constants.ts'] =
+    "export const PERMISSIONS = Object.freeze({ read: 'session:read' })"
+  frozenPermissions['web/src/features/dictionary.tsx'] =
+    "import { PERMISSIONS } from './constants'\n" + view('  return can(PERMISSIONS.read) && control')
+  check('private view frozen permission constants resolve engine checks', makeRepo(frozenPermissions), [])
+  frozenPermissions['web/src/features/constants.ts'] =
+    "export const PERMISSIONS = Object.freeze({ read: 'ghost:read' })"
+  check('private frozen permission constants still reject unknown permissions', makeRepo(frozenPermissions),
+    ['undeclared ghost:read @ web/src/features/dictionary.tsx:5'])
+  const mutableEntry = panelFiles('[p]')
+  mutableEntry['web/src/features/extensions.ts'] =
+    "let p = Object.freeze({ permission: 'session:read' }); p = opaque();\n" +
+    mutableEntry['web/src/features/extensions.ts']
+  check('reassigned frozen panel binding is unreadable', makeRepo(mutableEntry),
+    ['unreadable - @ web/src/features/panels.tsx:4'])
+  const mutableScalar = panelFiles('[Object.freeze({ permission })]')
+  mutableScalar['web/src/features/extensions.ts'] =
+    "let permission = 'session:read'; permission = opaque();\n" +
+    mutableScalar['web/src/features/extensions.ts']
+  check('frozen panel capturing mutable scalar is unreadable', makeRepo(mutableScalar),
+    ['unreadable - @ web/src/features/panels.tsx:4'])
+  for (const [name, producer] of [
+    ['dictionary binding', "let PERMISSIONS = Object.freeze({ read: 'session:read' }); PERMISSIONS = opaque();"],
+    ['dictionary scalar', "let permission = 'session:read'; permission = opaque(); export const PERMISSIONS = Object.freeze({ read: permission });"],
+  ]) {
+    const fixture = { ...frozenPermissions,
+      'web/src/features/constants.ts': producer.replace('let PERMISSIONS', 'export let PERMISSIONS'),
+    }
+    check('mutable ' + name + ' fails closed', makeRepo(fixture),
+      ['unreadable - @ web/src/features/dictionary.tsx:5'])
+  }
+  const shorthand = panelFiles('[]')
+  shorthand['web/src/features/extensions.ts'] =
+    "let cards = Object.freeze([]); cards = opaque(); export const PANEL_EXTENSIONS = Object.freeze({ cards })"
+  check('mutable shorthand composition binding fails closed', makeRepo(shorthand),
+    ['unreadable - @ web/src/features/panels.tsx:4'])
+  for (const [name, assignment] of [
+    ['direct', 'panels = opaque();'],
+    ['destructured', '({ panels } = opaque());'],
+    ['escaped', 'mutate(panels);'],
+  ]) {
+    const fixture = panelFiles('[]')
+    fixture['web/src/features/panels.tsx'] = fixture['web/src/features/panels.tsx'].replace(
+      'return panels.filter', assignment + ' return panels.filter')
+    check(name + ' collection parameter change fails closed', makeRepo(fixture),
+      ['unreadable - @ web/src/features/panels.tsx:4'])
+  }
+  const aliasedFilter = panelFiles('[]')
+  aliasedFilter['web/src/features/screen.tsx'] = aliasedFilter['web/src/features/screen.tsx'].replace(
+    'export function View()',
+    'const filtered = PANEL_EXTENSIONS.cards.filter(p => true); filtered.push(opaque());\nexport function View()').replace(
+    'useOfferedPanels(PANEL_EXTENSIONS.cards)', 'useOfferedPanels(filtered)')
+  check('mutable aliased filter result fails closed', makeRepo(aliasedFilter),
+    ['unreadable - @ web/src/features/panels.tsx:4'])
+  const direct = {
+    ...panelFiles('[]'),
+    'web/src/features/direct.tsx': `import { useAuth } from '@/lib/auth/context'
+import { PANEL_EXTENSIONS } from './extensions'
+export function Direct() {
+  const { can } = useAuth()
+  return (PANEL_EXTENSIONS.cards ?? []).filter(way => way.permission === undefined || can(way.permission))
+}`,
+  }
+  check('direct empty sign-in extension filter resolves composition', makeRepo(direct), [])
+}
+if (process.argv.includes('--edition-only')) {
+  editionCases()
+  console.log(`edition regression: ${results.length - failures}/${results.length} pass`)
+  process.exit(failures ? 1 : 0)
+}
+editionCases()
+
 if (process.argv.includes('--global-only')) {
   computedGlobalCases()
   console.log(`computed-global regression: ${results.length - failures}/${results.length} pass`)

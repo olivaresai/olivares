@@ -40,7 +40,7 @@ func sameStatusFile(a, b os.FileInfo) bool {
 // that read. Authorize the home before reaching here; only stat the native
 // credential file, never open it. Native login/logout and executable replacement
 // invalidate the result, with a short lifetime for changes outside these files.
-func (m *Module) readCachedStatus(ctx context.Context, tenant model.TenantID, out SignInStatus, program string, env []string) (SignInStatus, error) {
+func (m *Module) readCachedStatus(ctx context.Context, tenant model.TenantID, out SignInStatus, program, configDir string, env []string) (SignInStatus, error) {
 	for {
 		if err := ctx.Err(); err != nil {
 			return out, err
@@ -70,7 +70,7 @@ func (m *Module) readCachedStatus(ctx context.Context, tenant model.TenantID, ou
 		case "opencode":
 			authPath = filepath.Join(envValue(env, "XDG_DATA_HOME"), "opencode", "auth.json")
 		default:
-			return readNativeStatus(ctx, out, program, env)
+			return m.readNativeStatus(ctx, out, program, configDir, env)
 		}
 		authInfo, err := os.Stat(authPath)
 		if err != nil && !os.IsNotExist(err) {
@@ -106,7 +106,7 @@ func (m *Module) readCachedStatus(ctx context.Context, tenant model.TenantID, ou
 		m.statusReads[key] = read
 		m.mu.Unlock()
 
-		read.status, read.err = readNativeStatus(ctx, out, program, env)
+		read.status, read.err = m.readNativeStatus(ctx, out, program, configDir, env)
 		read.callerEnded = read.err != nil && ctx.Err() != nil
 		m.mu.Lock()
 		// Invalidation while the process ran must not restore the old entry.

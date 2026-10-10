@@ -35,7 +35,7 @@ func TestCommunityGovernanceHelpOmitsBreakGlass(t *testing.T) {
 }
 
 func TestCommunityGovernanceBreakGlassRefusesWithoutHTTP(t *testing.T) {
-	for _, args := range [][]string{{"ls"}, {"get", "legacy"}, {"uses", "legacy"}} {
+	for _, args := range [][]string{{}, {"ls"}, {"list", "--status", "active", "--limit", "5", "--cursor", "legacy"}, {"get", "legacy"}, {"uses", "legacy"}} {
 		spy := newObserveSpy(t, http.StatusOK, "{}")
 		_, _, err := execRoot(t, observeArgs(spy.srv.URL, append([]string{"governance", "breakglass"}, args...)...)...)
 		if err == nil || exitcode.From(err) != exitcode.Edition {
@@ -44,5 +44,34 @@ func TestCommunityGovernanceBreakGlassRefusesWithoutHTTP(t *testing.T) {
 		if spy.count() != 0 {
 			t.Errorf("%v spent an HTTP request in Community", args)
 		}
+	}
+}
+
+func TestCommunityGovernanceBreakGlassReferenceDescriptions(t *testing.T) {
+	dump := buildCLIRefDump()
+	for _, path := range []string{
+		"olivares governance breakglass",
+		"olivares governance breakglass get",
+		"olivares governance breakglass ls",
+		"olivares governance breakglass uses",
+	} {
+		t.Run(path, func(t *testing.T) {
+			for _, cmd := range dump.Commands {
+				if cmd.Path != path {
+					continue
+				}
+				if strings.TrimSpace(cmd.Short) == "" {
+					t.Error("preserved Community command has no reference summary")
+				}
+				if !strings.Contains(cmd.Short, "Business edition") {
+					t.Errorf("summary %q must state Business edition availability", cmd.Short)
+				}
+				if cmd.Hidden != (path == "olivares governance breakglass") {
+					t.Errorf("hidden state changed: %v", cmd.Hidden)
+				}
+				return
+			}
+			t.Fatal("published breakglass command is absent from the reference tree")
+		})
 	}
 }
