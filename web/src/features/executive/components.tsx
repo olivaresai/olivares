@@ -8,14 +8,13 @@
 // trivially testable with fixtures and identical on screen and in the printed report.
 // Every pillar tile is a drill-down link to its operational view (a leadership reader
 // can always go deeper), and every coverage limit the rollup carries is shown.
-import { useMemo, type ReactNode } from 'react'
+import { type ReactNode } from 'react'
 import { Link } from '@tanstack/react-router'
 import {
   Activity,
   ArrowRight,
   Boxes,
   ChevronRight,
-  Coins,
   Minus,
   ScrollText,
   ShieldAlert,
@@ -25,17 +24,8 @@ import {
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
-import { Badge } from '@/components/ui/badge'
-import {
-  CategoryBarChart,
-  DonutChart,
-  ChartLegend,
-  RadialGauge,
-  Sparkline,
-  StatusBar,
-  TrendChart,
-  useChartTheme,
-} from '@/components/charts'
+
+import { StatusBar, useChartTheme } from '@/components/charts'
 import {
   CaveatNotice,
   DisclaimerNote,
@@ -45,20 +35,12 @@ import {
   SectionCard,
   SeverityBadge,
   StatGrid,
-  TruncatedNotice,
 } from '@/features/_intel'
-import {
-  formatInt,
-  formatMicroUsd,
-  formatPercent,
-  formatTokens,
-  formatDayKey,
-} from '@/lib/format'
-import type { SpendResponse } from '@/features/finops/types'
+import { formatInt, formatPercent } from '@/lib/format'
+
 import {
   SEVERITY_ORDER,
   type ComplianceKpi,
-  type CostKpi,
   type HealthKpi,
   type RiskKpi,
   type UsageKpi,
@@ -411,7 +393,7 @@ export function KpiTiles({
   risk,
   compliance,
 }: {
-  cost?: CostKpi | null
+  cost?: ReactNode
   usage?: UsageKpi | null
   /** WHY A USAGE HALF IS UNKNOWN — one line per half the container could not
    *  establish (restricted to the role, or could not load), rendered under the
@@ -437,34 +419,9 @@ export function KpiTiles({
   compliance?: ComplianceKpi | null
 }) {
   const { t } = useTranslation(['executive', 'nav'])
-  const theme = useChartTheme()
   return (
     <StatGrid>
-      {cost ? (
-        <LinkTile to="/finops">
-          <MetricStat
-            icon={<Coins />}
-            label={t('pillars.cost')}
-            value={formatMicroUsd(cost.totalMicroUsd, { compact: true })}
-            caption={t('pillars.costCaption')}
-            trend={
-              cost.trend.length > 1 ? (
-                <div className="flex items-center justify-between gap-2">
-                  <Sparkline
-                    data={cost.trend}
-                    dataKey="cost"
-                    color={theme.accent}
-                    className="max-w-[60%]"
-                  />
-                  <DeltaCaption pct={cost.deltaPct} />
-                </div>
-              ) : (
-                <DeltaCaption pct={cost.deltaPct} />
-              )
-            }
-          />
-        </LinkTile>
-      ) : null}
+      {cost}
 
       {usage ? (
         <CoverageLinkTile to="/inventory" partial={usagePartial}>
@@ -558,135 +515,8 @@ export function KpiTiles({
 
 // --- cost section ------------------------------------------------------------
 
-export function SpendSection({ cost }: { cost: CostKpi }) {
-  const { t, i18n } = useTranslation('executive')
-  // Ticks may abbreviate large sums; keyboard/pointer details keep micro-USD
-  // precision and the locale's complete currency label.
-  const spendCurrency = useMemo(
-    () =>
-      new Intl.NumberFormat(i18n.language, {
-        style: 'currency',
-        currency: 'USD',
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 6,
-      }),
-    [i18n.language],
-  )
-  return (
-    <SectionCard
-      title={t('cost.trendTitle')}
-      description={t('cost.trendDescription')}
-      actions={<DrillLink to="/finops">{t('cost.title')}</DrillLink>}
-    >
-      {cost.truncated ? <TruncatedNotice className="mb-3" /> : null}
-      <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <MiniStat
-          label={t('pillars.cost')}
-          value={formatMicroUsd(cost.totalMicroUsd, { compact: true })}
-        >
-          <DeltaCaption pct={cost.deltaPct} />
-        </MiniStat>
-        {cost.projectedMicroUsd !== null ? (
-          <MiniStat
-            label={t('cost.forecast')}
-            value={formatMicroUsd(cost.projectedMicroUsd, { compact: true })}
-            tone={cost.projectedOver ? 'warning' : undefined}
-          >
-            <span className="text-caption text-muted-foreground">
-              {t('cost.atRunRate')}
-            </span>
-          </MiniStat>
-        ) : null}
-        <MiniStat
-          label={t('cost.tokens')}
-          value={formatTokens(cost.inputTokens + cost.outputTokens)}
-        />
-        {cost.activeModels !== null ? (
-          <MiniStat
-            label={t('cost.models')}
-            value={formatInt(cost.activeModels)}
-          />
-        ) : (
-          <MiniStat label={t('cost.samples')} value={formatInt(cost.samples)} />
-        )}
-      </div>
-      <TrendChart
-        data={cost.trend}
-        xKey="key"
-        series={[{ key: 'cost', label: t('cost.seriesCost') }]}
-        valueFormatter={(v) =>
-          formatMicroUsd(v, { compact: true, locale: i18n.language })
-        }
-        tooltipValueFormatter={(v) => spendCurrency.format(v / 1_000_000)}
-        yAxis={{ width: 'auto', allowDecimals: false }}
-        xTickFormatter={(k) => formatDayKey(k, i18n.language)}
-        height={240}
-      />
-      {cost.projectedMicroUsd !== null ? (
-        <DisclaimerNote className="mt-3" text={t('cost.runRateNote')} />
-      ) : null}
-    </SectionCard>
-  )
-}
-
 /** Pure spend-by-dimension breakdown (the org/team/project summary). The dimension
  *  Select + query live in the container; this renders the chosen SpendResponse. */
-export function SpendBreakdownChart({ spend }: { spend: SpendResponse }) {
-  const { t } = useTranslation('executive')
-  const theme = useChartTheme()
-  const top = useMemo(
-    () =>
-      [...spend.buckets]
-        .sort((a, b) => b.cost_micro_usd - a.cost_micro_usd)
-        .slice(0, 8)
-        .map((b, i) => ({
-          ...b,
-          color: theme.series[i % theme.series.length],
-        })),
-    [spend.buckets, theme.series],
-  )
-  if (top.length === 0) {
-    return (
-      <p className="py-6 text-center text-body text-muted-foreground">
-        {t('cost.noAttribution')}
-      </p>
-    )
-  }
-  return (
-    <div className="grid gap-4 lg:grid-cols-[1.5fr_1fr]">
-      <CategoryBarChart
-        data={top}
-        categoryKey="key"
-        valueKey="cost_micro_usd"
-        valueFormatter={(v) => formatMicroUsd(v, { compact: true })}
-        height={Math.max(160, top.length * 30 + 24)}
-      />
-      <div className="flex flex-col gap-3">
-        <DonutChart
-          data={top.map((b) => ({
-            key: b.key,
-            label: b.key || '—',
-            value: b.cost_micro_usd,
-            color: b.color,
-          }))}
-          valueFormatter={(v) => formatMicroUsd(v, { compact: true })}
-          centerValue={formatMicroUsd(spend.total_micro_usd, { compact: true })}
-          centerLabel={t('cost.seriesCost')}
-          height={180}
-        />
-        <ChartLegend
-          items={top.map((b) => ({
-            key: b.key,
-            label: b.key || '—',
-            value: b.cost_micro_usd,
-            color: b.color,
-          }))}
-          valueFormatter={(v) => formatMicroUsd(v, { compact: true })}
-        />
-      </div>
-    </div>
-  )
-}
 
 // --- risk section ------------------------------------------------------------
 
@@ -714,15 +544,27 @@ export function SeverityRow({
   )
 }
 
-export function RiskSection({ risk }: { risk: RiskKpi }) {
+export function RiskSection({
+  risk,
+  robustness,
+  description,
+}: {
+  risk: RiskKpi
+  robustness?: ReactNode
+  description?: string
+}) {
   const { t } = useTranslation('executive')
   return (
     <SectionCard
       title={t('risk.title')}
-      description={t('risk.description')}
+      description={description ?? t('risk.sharedDescription')}
       actions={<DrillLink to="/security">{t('risk.title')}</DrillLink>}
     >
-      <div className="grid gap-4 md:grid-cols-3">
+      <div
+        className={
+          robustness ? 'grid gap-4 md:grid-cols-3' : 'grid gap-4 md:grid-cols-2'
+        }
+      >
         {/* findings */}
         <div className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-4">
           <span className="text-caption font-medium uppercase tracking-wide text-muted-foreground">
@@ -740,34 +582,7 @@ export function RiskSection({ risk }: { risk: RiskKpi }) {
           )}
         </div>
 
-        {/* robustness */}
-        <div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-border bg-surface p-4 text-center">
-          <span className="self-start text-caption font-medium uppercase tracking-wide text-muted-foreground">
-            {t('risk.robustness')}
-          </span>
-          {risk.robustness.score !== null ? (
-            <>
-              <RadialGauge
-                value={risk.robustness.score}
-                size={108}
-                caption="/100"
-                ariaLabel={t('risk.robustness')}
-              />
-              <span className="text-caption text-muted-foreground">
-                {t('risk.robustnessCaption')}
-              </span>
-            </>
-          ) : (
-            <div className="flex flex-1 flex-col items-center justify-center gap-2 py-3">
-              <Badge variant="warning">{t('risk.robustnessPending')}</Badge>
-              <span className="max-w-[14rem] text-caption leading-relaxed text-muted-foreground">
-                {risk.robustness.status
-                  ? t('risk.robustnessPendingHint')
-                  : t('risk.noRuns')}
-              </span>
-            </div>
-          )}
-        </div>
+        {robustness}
 
         {/* access drift */}
         <div className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-4">
@@ -1049,7 +864,7 @@ export function ReliabilitySection({ health }: { health: HealthKpi }) {
 
 // --- tiny stat (used by several sections) ------------------------------------
 
-function MiniStat({
+export function MiniStat({
   label,
   value,
   tone,

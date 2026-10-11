@@ -21,13 +21,13 @@ import (
 
 // handleHealth is the unauthenticated liveness probe. It exposes nothing beyond
 // liveness.
-func (s *Server) handleHealth(w http.ResponseWriter, _ *http.Request) {
+func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
 // handleServerInfo reports non-sensitive server facts, including whether setup is
 // still required and the informational license status (which gates nothing).
-func (s *Server) handleServerInfo(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleServerInfo(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
 	lic := s.licenseStatus()
 	// The license sub-object is the public "licensed-to" badge. status + licensee are
 	// always present; the attested plan / support-tier labels are added ONLY when a
@@ -87,20 +87,34 @@ func (s *Server) handleServerInfo(w http.ResponseWriter, r *http.Request) {
 	if s.communicationReady != nil {
 		info["communication_ready"] = s.communicationReady(r.Context())
 	}
+	// A new installation's console navigation lists the first job only; every
+	// other page keeps its address. Absent on an installation that existed before.
+	if s.previewsHidden {
+		info["previews_hidden"] = true
+	}
+	// No invitation mailer: invite mode answers 409 invite_delivery_unavailable, so
+	// the console offers the initial password only. Absent when invitations are mailed.
+	if s.inviteSender == nil {
+		info["invite_delivery_unavailable"] = true
+	}
 	writeJSON(w, http.StatusOK, info)
 }
 
 // --- Agents (representative tenant-scoped CRUD) ------------------------------
 
-func (s *Server) handleListAgents(w http.ResponseWriter, r *http.Request) {
-	p, tenant, ok := s.authzTenant(w, r, "agent:read")
-	if !ok {
-		return
-	}
+func (s *Server) handleListAgents(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	p := mc.Principal
+	tenant := mc.Tenant
 	confinedWS, _ := p.ConfinedWorkspaceIn(tenant)
 	var out listResponse[AgentDTO]
-	err := s.st.View(r.Context(), tenant, func(sc store.Scope) error {
-		agents, page, err := sc.Agents().List(r.Context(), parseFilteredListQuery(r, confinedWS))
+	// The confined scope is the boundary: it also matches rows without a workspace
+	// when the caller is confined to the default one, which the OpEq filter misses.
+	err := NewScopedData(s.st, tenant).View(withModuleRequestBoundary(r.Context(), tenant, p), func(sc store.Scope) error {
+		sc, err := listScope(r.Context(), r, sc, confinedWS)
+		if err != nil {
+			return err
+		}
+		agents, page, err := sc.Agents().List(r.Context(), parseFilteredListQuery(r, confinedWS, stableListDefaultLimit))
 		if err != nil {
 			return err
 		}
@@ -118,12 +132,9 @@ func (s *Server) handleListAgents(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, out)
 }
 
-func (s *Server) handleGetAgent(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleGetAgent(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
 	id := model.ID(chi.URLParam(r, "id"))
-	_, tenant, ok := s.authzTenantEntity(w, r, "agent:read", id)
-	if !ok {
-		return
-	}
+	tenant := mc.Tenant
 	var dto AgentDTO
 	err := s.st.View(r.Context(), tenant, func(sc store.Scope) error {
 		a, err := sc.Agents().Get(r.Context(), id)
@@ -140,14 +151,12 @@ func (s *Server) handleGetAgent(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, dto)
 }
 
-func (s *Server) handleCreateAgent(w http.ResponseWriter, r *http.Request) {
-	p, tenant, ok := s.authzTenant(w, r, "agent:write")
-	if !ok {
-		return
-	}
+func (s *Server) handleCreateAgent(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	p := mc.Principal
+	tenant := mc.Tenant
 	var in AgentInput
 	if err := decodeJSON(w, r, &in); err != nil {
-		s.badRequest(w, r, "invalid JSON body")
+		s.badRequest(w, r, RequestBodyErrorMessage(err, "invalid JSON body"))
 		return
 	}
 	var dto AgentDTO
@@ -168,15 +177,13 @@ func (s *Server) handleCreateAgent(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, dto)
 }
 
-func (s *Server) handleUpdateAgent(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleUpdateAgent(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
 	id := model.ID(chi.URLParam(r, "id"))
-	p, tenant, ok := s.authzTenantEntity(w, r, "agent:write", id)
-	if !ok {
-		return
-	}
+	p := mc.Principal
+	tenant := mc.Tenant
 	var in AgentInput
 	if err := decodeJSON(w, r, &in); err != nil {
-		s.badRequest(w, r, "invalid JSON body")
+		s.badRequest(w, r, RequestBodyErrorMessage(err, "invalid JSON body"))
 		return
 	}
 	var dto AgentDTO
@@ -200,12 +207,10 @@ func (s *Server) handleUpdateAgent(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, dto)
 }
 
-func (s *Server) handleDeleteAgent(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleDeleteAgent(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
 	id := model.ID(chi.URLParam(r, "id"))
-	p, tenant, ok := s.authzTenantEntity(w, r, "agent:write", id)
-	if !ok {
-		return
-	}
+	p := mc.Principal
+	tenant := mc.Tenant
 	err := s.st.Mutate(r.Context(), tenant, func(sc store.Scope) error {
 		if err := sc.Agents().Delete(r.Context(), id); err != nil {
 			return err
@@ -221,21 +226,19 @@ func (s *Server) handleDeleteAgent(w http.ResponseWriter, r *http.Request) {
 
 // --- Access graph (sensitive reads: self-audited) ----------------------------
 
-func (s *Server) handleListAccessEdges(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleListAccessEdges(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
 	// F2: the tenant-wide access graph is denied to a workspace-confined operator by the
 	// scoped-authz engine (accessgraph:read is an access-graph recon perm with no workspace to
 	// filter on), so the check below never admits a confined principal — the same guard covers
 	// the access-map module's /graph|/neighbors|/attack-paths routes and the authz reverse query.
-	p, tenant, ok := s.authzTenant(w, r, "accessgraph:read")
-	if !ok {
-		return
-	}
+	p := mc.Principal
+	tenant := mc.Tenant
 	var out listResponse[AccessEdgeDTO]
 	// A sensitive read runs in a committed Mutate so its self-audit persists
 	// (an Append inside a View would be rolled back). The self-audit is coarse:
 	// one event per call, not per row.
 	err := s.st.Mutate(r.Context(), tenant, func(sc store.Scope) error {
-		edges, page, err := sc.AccessEdges().List(r.Context(), parseListQuery(r))
+		edges, page, err := sc.AccessEdges().List(r.Context(), parseListQuery(r, stableListDefaultLimit))
 		if err != nil {
 			return err
 		}
@@ -265,13 +268,10 @@ func (s *Server) handleListAccessEdges(w http.ResponseWriter, r *http.Request) {
 
 // --- IAM: users (superadmin), tokens, memberships ----------------------------
 
-func (s *Server) handleListUsers(w http.ResponseWriter, r *http.Request) {
-	if _, ok := s.authzSystem(w, r, "user:read"); !ok {
-		return
-	}
+func (s *Server) handleListUsers(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
 	out := listResponse[UserDTO]{Items: []UserDTO{}}
 	err := s.st.AuthView(r.Context(), func(as store.AuthScope) error {
-		users, page, err := as.Users().List(r.Context(), parseListQuery(r))
+		users, page, err := as.Users().List(r.Context(), parseListQuery(r, stableListDefaultLimit))
 		if err != nil {
 			return err
 		}
@@ -288,11 +288,8 @@ func (s *Server) handleListUsers(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, out)
 }
 
-func (s *Server) handleCreateUser(w http.ResponseWriter, r *http.Request) {
-	p, ok := s.authzSystem(w, r, "user:write")
-	if !ok {
-		return
-	}
+func (s *Server) handleCreateUser(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	p := mc.Principal
 	// One rule for adding a person, here and in the console's onboarding: the
 	// deployment's administrative step-up (none by default). A superadmin made
 	// from the CLI no longer skips what an invitation asks for (HU-28).
@@ -301,7 +298,7 @@ func (s *Server) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 	}
 	var in createUserRequest
 	if err := decodeJSON(w, r, &in); err != nil {
-		s.badRequest(w, r, "invalid JSON body")
+		s.badRequest(w, r, RequestBodyErrorMessage(err, "invalid JSON body"))
 		return
 	}
 	nu := auth.NewUser{
@@ -400,10 +397,7 @@ func (s *Server) grantWorkspace(w http.ResponseWriter, r *http.Request, tenant m
 // status — the read side of the superadmin lifecycle surface. Superadmin-
 // scoped, read-only (no AAL3: it returns no secret, only the same non-secret shape
 // as GET /v1/users).
-func (s *Server) handleListSuperadmins(w http.ResponseWriter, r *http.Request) {
-	if _, ok := s.authzSystem(w, r, "user:read"); !ok {
-		return
-	}
+func (s *Server) handleListSuperadmins(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
 	admins, err := s.authr.ListSuperadmins(r.Context())
 	if err != nil {
 		s.writeError(w, r, err)
@@ -421,11 +415,8 @@ func (s *Server) handleListSuperadmins(w http.ResponseWriter, r *http.Request) {
 // superadmin-scoped AND AAL3-gated (a privileged account-lifecycle action, like
 // onboarding/SSO config), and deny-closed against total lockout in the service
 // layer (auth.ErrLastSuperadmin → 409). Disabling is non-destructive and reversible.
-func (s *Server) handleSetSuperadminActive(w http.ResponseWriter, r *http.Request, active bool) {
-	p, ok := s.authzSystem(w, r, "user:write")
-	if !ok {
-		return
-	}
+func (s *Server) handleSetSuperadminActive(w http.ResponseWriter, r *http.Request, mc ModuleContext, active bool) {
+	p := mc.Principal
 	if !s.requireStepUp(w, r, p) {
 		return
 	}
@@ -442,23 +433,19 @@ func (s *Server) handleSetSuperadminActive(w http.ResponseWriter, r *http.Reques
 	writeJSON(w, http.StatusOK, toUserDTO(u))
 }
 
-func (s *Server) handleDisableSuperadmin(w http.ResponseWriter, r *http.Request) {
-	s.handleSetSuperadminActive(w, r, false)
+func (s *Server) handleDisableSuperadmin(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	s.handleSetSuperadminActive(w, r, mc, false)
 }
 
-func (s *Server) handleEnableSuperadmin(w http.ResponseWriter, r *http.Request) {
-	s.handleSetSuperadminActive(w, r, true)
+func (s *Server) handleEnableSuperadmin(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	s.handleSetSuperadminActive(w, r, mc, true)
 }
 
-func (s *Server) handleIssueToken(w http.ResponseWriter, r *http.Request) {
-	p, ok := principalFrom(r.Context())
-	if !ok {
-		s.writeError(w, r, auth.ErrUnauthenticated)
-		return
-	}
+func (s *Server) handleIssueToken(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	p := mc.Principal
 	var in issueTokenInput
 	if err := decodeJSON(w, r, &in); err != nil {
-		s.badRequest(w, r, "invalid JSON body")
+		s.badRequest(w, r, RequestBodyErrorMessage(err, "invalid JSON body"))
 		return
 	}
 	spec := auth.TokenSpec{Name: in.Name, Role: in.Role, Superadmin: in.Superadmin}
@@ -476,7 +463,7 @@ func (s *Server) handleIssueToken(w http.ResponseWriter, r *http.Request) {
 		}
 		// The caller must hold token:write in the bound tenant.
 		if !s.allow(r.Context(), p, "token:write", bt) {
-			s.writeError(w, r, errForbidden)
+			s.writeError(w, r, forbiddenFor("token:write", false))
 			return
 		}
 		spec.BoundTenant = bt
@@ -491,12 +478,8 @@ func (s *Server) handleIssueToken(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (s *Server) handleRevokeToken(w http.ResponseWriter, r *http.Request) {
-	p, ok := principalFrom(r.Context())
-	if !ok {
-		s.writeError(w, r, auth.ErrUnauthenticated)
-		return
-	}
+func (s *Server) handleRevokeToken(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	p := mc.Principal
 	id := model.ID(chi.URLParam(r, "id"))
 	tok, err := s.authr.GetToken(r.Context(), id)
 	if err != nil {
@@ -523,13 +506,9 @@ func (s *Server) handleRevokeToken(w http.ResponseWriter, r *http.Request) {
 // handleListTokens returns tokens visible to the caller: a superadmin sees all
 // active tokens; a tenant admin sees tokens bound to their tenant. Revoked
 // tokens are excluded by default (?include_revoked=true to include them).
-func (s *Server) handleListTokens(w http.ResponseWriter, r *http.Request) {
-	p, ok := principalFrom(r.Context())
-	if !ok {
-		s.writeError(w, r, auth.ErrUnauthenticated)
-		return
-	}
-	q := parseListQuery(r)
+func (s *Server) handleListTokens(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	p := mc.Principal
+	q := parseListQuery(r, 0)
 	if r.URL.Query().Get("include_revoked") != "true" {
 		q.Filters = append(q.Filters, model.Filter{Column: "revoked", Op: model.OpEq, Value: false})
 	}
@@ -540,7 +519,7 @@ func (s *Server) handleListTokens(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if !s.allow(r.Context(), p, "token:read", tenant) {
-			s.writeError(w, r, errForbidden)
+			s.writeError(w, r, forbiddenFor("token:read", false))
 			return
 		}
 		q.Filters = append(q.Filters, model.Filter{Column: "bound_tenant_id", Op: model.OpEq, Value: string(tenant)})
@@ -566,12 +545,8 @@ func (s *Server) handleListTokens(w http.ResponseWriter, r *http.Request) {
 
 // handleRotateToken atomically creates a new token with the same spec and
 // revokes the old one. The new token value is returned (shown once).
-func (s *Server) handleRotateToken(w http.ResponseWriter, r *http.Request) {
-	p, ok := principalFrom(r.Context())
-	if !ok {
-		s.writeError(w, r, auth.ErrUnauthenticated)
-		return
-	}
+func (s *Server) handleRotateToken(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	p := mc.Principal
 	id := model.ID(chi.URLParam(r, "id"))
 	old, err := s.authr.GetToken(r.Context(), id)
 	if err != nil {
@@ -607,15 +582,11 @@ func (s *Server) handleRotateToken(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (s *Server) handleGrantMembership(w http.ResponseWriter, r *http.Request) {
-	p, ok := principalFrom(r.Context())
-	if !ok {
-		s.writeError(w, r, auth.ErrUnauthenticated)
-		return
-	}
+func (s *Server) handleGrantMembership(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	p := mc.Principal
 	var in grantMembershipInput
 	if err := decodeJSON(w, r, &in); err != nil {
-		s.badRequest(w, r, "invalid JSON body")
+		s.badRequest(w, r, RequestBodyErrorMessage(err, "invalid JSON body"))
 		return
 	}
 	tenant, err := model.ParseTenantID(in.Tenant)
@@ -624,7 +595,7 @@ func (s *Server) handleGrantMembership(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !s.allow(r.Context(), p, "membership:write", tenant) {
-		s.writeError(w, r, errForbidden)
+		s.writeError(w, r, forbiddenFor("membership:write", false))
 		return
 	}
 	// an OPTIONAL workspace confinement, validated in the GRANTED tenant.
@@ -650,10 +621,7 @@ func (s *Server) handleGrantMembership(w http.ResponseWriter, r *http.Request) {
 // The registry is already sorted by residency.Registry.Known. A nil registry is
 // the honest single-region/default posture, represented by an empty (not null)
 // region list.
-func (s *Server) handleResidencyRegistry(w http.ResponseWriter, r *http.Request) {
-	if _, ok := s.authzSystem(w, r, "system:admin"); !ok {
-		return
-	}
+func (s *Server) handleResidencyRegistry(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
 	out := residencyRegistryDTO{Regions: []string{}}
 	if s.residency != nil {
 		out.HomeRegion = s.residency.Home().String()
@@ -665,13 +633,10 @@ func (s *Server) handleResidencyRegistry(w http.ResponseWriter, r *http.Request)
 	writeJSON(w, http.StatusOK, out)
 }
 
-func (s *Server) handleCreateOrg(w http.ResponseWriter, r *http.Request) {
-	if _, ok := s.authzSystem(w, r, "system:admin"); !ok {
-		return
-	}
+func (s *Server) handleCreateOrg(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
 	var in createOrgInput
 	if err := decodeJSON(w, r, &in); err != nil {
-		s.badRequest(w, r, "invalid JSON body")
+		s.badRequest(w, r, RequestBodyErrorMessage(err, "invalid JSON body"))
 		return
 	}
 	// normalize and validate the residency pin against the registry BEFORE
@@ -719,11 +684,8 @@ func (s *Server) provisionOrg(ctx context.Context, name, slug, region string) (m
 // registry (deny-closed: known region, and the home region on a region-scoped
 // instance), then persisted via the System path with a version-checked update and an
 // audit event. An empty region clears the pin (the tenant becomes unpinned).
-func (s *Server) handleSetOrgRegion(w http.ResponseWriter, r *http.Request) {
-	p, ok := s.authzSystem(w, r, "system:admin")
-	if !ok {
-		return
-	}
+func (s *Server) handleSetOrgRegion(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	p := mc.Principal
 	if !s.requireStepUp(w, r, p) {
 		return
 	}
@@ -734,7 +696,7 @@ func (s *Server) handleSetOrgRegion(w http.ResponseWriter, r *http.Request) {
 	}
 	var in setOrgRegionInput
 	if err := decodeJSON(w, r, &in); err != nil {
-		s.badRequest(w, r, "invalid JSON body")
+		s.badRequest(w, r, RequestBodyErrorMessage(err, "invalid JSON body"))
 		return
 	}
 	region := string(residency.Normalize(in.DataRegion))
@@ -762,10 +724,7 @@ func (s *Server) handleSetOrgRegion(w http.ResponseWriter, r *http.Request) {
 // cloud control plane's 30-day grace period safety net has expired. It verifies
 // the tenant org exists before invoking DropTenant because DropTenant itself is a
 // destructive purge primitive that treats a missing tenant as a zero-row delete.
-func (s *Server) handleDropOrg(w http.ResponseWriter, r *http.Request) {
-	if _, ok := s.authzSystem(w, r, "system:admin"); !ok {
-		return
-	}
+func (s *Server) handleDropOrg(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
 	tenant, err := model.ParseTenantID(chi.URLParam(r, "tenant"))
 	if err != nil || tenant.IsZero() || tenant.IsSystem() {
 		s.badRequest(w, r, "valid tenant required")
@@ -803,10 +762,7 @@ func (s *Server) handleDropOrg(w http.ResponseWriter, r *http.Request) {
 // is that the customer pays and comes back. Enforcement lives in the store guard
 // (core/suspension), so this handler only records the decision; it does not have
 // to destroy anything to make the decision bite.
-func (s *Server) handleSetOrgStatus(w http.ResponseWriter, r *http.Request) {
-	if _, ok := s.authzSystem(w, r, "system:admin"); !ok {
-		return
-	}
+func (s *Server) handleSetOrgStatus(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
 	tenant, err := model.ParseTenantID(chi.URLParam(r, "tenant"))
 	if err != nil || tenant.IsZero() || tenant.IsSystem() {
 		s.badRequest(w, r, "valid tenant required")
@@ -814,7 +770,7 @@ func (s *Server) handleSetOrgStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	var in setOrgStatusInput
 	if err := decodeJSON(w, r, &in); err != nil {
-		s.badRequest(w, r, "invalid JSON body")
+		s.badRequest(w, r, RequestBodyErrorMessage(err, "invalid JSON body"))
 		return
 	}
 	status := model.LifecycleStatus(strings.TrimSpace(in.Status))
@@ -838,10 +794,7 @@ func (s *Server) handleSetOrgStatus(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, dto)
 }
 
-func (s *Server) handleListOrgs(w http.ResponseWriter, r *http.Request) {
-	if _, ok := s.authzSystem(w, r, "system:admin"); !ok {
-		return
-	}
+func (s *Server) handleListOrgs(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
 	out := listResponse[OrgDTO]{Items: []OrgDTO{}}
 	err := s.st.System(r.Context(), func(sys store.SystemScope) error {
 		orgs, err := sys.ListOrgs(r.Context())
@@ -880,9 +833,12 @@ func appendAudit(ctx context.Context, sc store.Scope, p auth.Principal, action s
 	return err
 }
 
-// parseListQuery builds a List query from ?limit and ?cursor.
-func parseListQuery(r *http.Request) model.Query {
-	q := model.Query{}
+const stableListDefaultLimit = 50
+
+// parseListQuery builds a List query from ?limit and ?cursor. A zero default
+// leaves the page size to the store for routes without the stable list contract.
+func parseListQuery(r *http.Request, defaultLimit int) model.Query {
+	q := model.Query{Limit: defaultLimit}
 	if c := r.URL.Query().Get("cursor"); c != "" {
 		q.Cursor = c
 	}
@@ -896,8 +852,8 @@ func parseListQuery(r *http.Request) model.Query {
 
 // parseFilteredListQuery extends parseListQuery with workspace_id filtering for
 // entities that carry the scoping column (agents, sessions, resources, agent-groups).
-func parseFilteredListQuery(r *http.Request, confinedWS model.ID) model.Query {
-	q := parseListQuery(r)
+func parseFilteredListQuery(r *http.Request, confinedWS model.ID, defaultLimit int) model.Query {
+	q := parseListQuery(r, defaultLimit)
 	// a workspace-confined caller sees ONLY rows in its own workspace — the forced
 	// filter OVERRIDES any caller-supplied ?workspace_id, so a confined operator can never
 	// enumerate other workspaces' entities (the reconnaissance leak the roster filter also
@@ -914,6 +870,36 @@ func parseFilteredListQuery(r *http.Request, confinedWS model.ID) model.Query {
 	return q
 }
 
+// listScope returns the scope a core list reads through. A confined caller already
+// holds the confined scope (ScopedData applies it), so it is returned as it is. A
+// tenant-wide caller that names ?workspace_id= reads through the same confinement to
+// that workspace: the confined scope is the one definition of a workspace's rows,
+// the rows without a workspace that belong to the default one included, which the
+// hand OpEq filter of parseFilteredListQuery misses. That filter stays and is
+// redundant on a confined scope, which replaces it. A name that is no workspace
+// keeps the empty page the hand filter answers; any other failure, a missing
+// default workspace included, fails the read.
+func listScope(ctx context.Context, r *http.Request, sc store.Scope, confinedWS model.ID) (store.Scope, error) {
+	if !confinedWS.IsZero() {
+		return sc, nil
+	}
+	id, err := model.ParseID(r.URL.Query().Get("workspace_id"))
+	if err != nil || id.IsZero() {
+		return sc, nil
+	}
+	if _, err := sc.Workspaces().Get(ctx, id); errors.Is(err, store.ErrNotFound) {
+		return sc, nil
+	} else if err != nil {
+		return nil, err
+	}
+	return store.ConfineWorkspace(ctx, sc, id)
+}
+
 // SetTLSPin gives server-info the pin of the certificate the engine serves (serve sets
 // it once TLS is ready, before the listener starts). nil or "" leaves the field out.
 func (s *Server) SetTLSPin(pin func() string) { s.tlsPin = pin }
+
+// SetPreviewsHidden tells server-info whether this installation's console
+// navigation lists the first job only (serve sets it from the deployment
+// settings before the listener starts).
+func (s *Server) SetPreviewsHidden(hidden bool) { s.previewsHidden = hidden }

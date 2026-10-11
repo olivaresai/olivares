@@ -218,6 +218,7 @@ EXEC_TMP="$(olivares_exec_tmpdir)" || {
 
 if [ ! -x "$BIN" ]; then
   note "building $BIN"
+  bash "$ROOT/scripts/build-web.sh"
   # shellcheck source=lib/build-bin.sh
   . "$ROOT/scripts/lib/build-bin.sh"
   build_olivares_bin "$BIN"

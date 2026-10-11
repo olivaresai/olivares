@@ -302,24 +302,22 @@ export interface AuditListResponse extends ListResponse<AuditEventDTO> {
   head_seq: number
 }
 
-/** Evidence ledger (tamper-evident audit) — core surface, RBAC-gated `audit:read`.
- * The web renders the engine's events and verdicts; it never recomputes or repairs
- * the chain (ARCHITECTURE.md, docs/SECURITY-HARDENING.md).
+/**
+ * Evidence ledger (tamper-evident audit): core surface gated by `audit:read`.
+ * The web renders engine events and verdicts; it never recomputes or repairs the chain
+ * (ARCHITECTURE.md section 8, docs/SECURITY-HARDENING.md section 5).
  *
- * ⛔ ESTAS DOS ERAN INVISIBLES PARA EL CENSO DE RECORTE, y por eso llevan techo desde.
+ * These two lists were invisible to the truncation inventory and gained ceilings in.
+ * `AuditListResponse` extends `ListResponse<AuditEventDTO>` above, so both can be truncated.
+ * `web/openapi/openapi.json` declares the truncation field in the 200 responses of
+ * `listAuditEvents` and `listSystemAuditEvents`. The shared-layer probe matched only the
+ * generic wrapper written directly at the call; these calls use the alias and were missed.
+ * They were never exempt. The same batch fixed the probe (`alias_de_lista`) and exposed them.
  *
- * `AuditListResponse` EXTIENDE `ListResponse<AuditEventDTO>` (arriba), asi que son listas
- * truncables — y el contrato lo dice: `web/openapi/openapi.json` declara el campo de recorte en el
- * 200 de `listAuditEvents` y `listSystemAuditEvents`. Pero la sonda de la capa compartida casaba
- * el envoltorio generico ESCRITO EN LA LLAMADA, y estas dos escriben el alias: **no las veia**. No
- * estaban exentas; no se miraban. Arreglado en este mismo lote (`alias_de_lista`), salieron a la
- * luz — y con ellas la pregunta que antes nadie hacia.
- *
- * ⚠ El literal que la sonda busca NO se reproduce en este comentario a proposito. La capa
- *   compartida no descontaba comentarios, asi que la frase que describia el patron se contaba como
- *   una llamada: «(sin nombre) endpoints.ts:199», sin techo, gate ROJO. **Documentar el punto
- *   ciego lo disparaba.** Tambien arreglado en este lote; la precaucion se queda porque cuesta
- *   nada y el habito es lo que sobrevive al arreglo.
+ * Do not repeat the probe's exact search literal in this comment. The shared layer previously
+ * counted comments, mistaking the pattern description for an unnamed call at endpoints.ts:199
+ * without a ceiling and failing the gate. That was also fixed in the batch; the precaution
+ * remains inexpensive and avoids repeating the mistake.
  */
 /** El techo del LEDGER, y NO es `LIST_CEILING` aunque el numero coincida.
  *

@@ -32,7 +32,7 @@ mirror or `--bundle` installs from a carried bundle.
 └───────────────┬────────────────────────────────────────────────────────┘
                 │ OTLP/gRPC over mTLS (push)
 ┌─ Zone B — Control plane (the engine) ──────────────────────────────────┐
-│  olivares binary ×N (HA): core + 31 modules + embedded web UI          │
+│  olivares binary ×N (HA): core + modules + embedded web UI             │
 │  store: SQLite (single-node) │ Postgres + RLS FORCE (HA/scale)         │
 │  audit ledger: append-only, hash-chained, Ed25519 per-event signatures │
 └───────┬───────────────────────────────┬────────────────────────────────┘
@@ -130,10 +130,10 @@ do not currently carry a production SLO target.
   establishment (X25519MLKEM768) by default.
 - **Tenancy:** Postgres RLS `FORCE` + application-layer tenant guard + SQLite
   triggers; region guard on top for T3.
-- **Crypto custody:** BYOK/CMEK envelope encryption (AWS/GCP/Azure KMS),
+- **Crypto custody:** operator-provided signing keys and off-box checkpoint signing in Community; CMEK envelope encryption (AWS/GCP/Azure KMS) in Business,
   fail-closed sealed configs; optional FIPS 140-3 build (CMVP cert #5247) and
   STIG-profiled image (OpenSCAP-scannable).
-- **Privileged access:** RBAC; AAL3 step-up (WebAuthn/PIV) for privileged actions;
+- **Privileged access:** RBAC; AAL3 step-up (Community WebAuthn; PIV/CAC in Business Identity & Scale) for privileged actions;
   dual-control approvals; audited break-glass; graduated estate kill switch with
   structural two-person re-enable.
 - **Supply chain:** signed releases (cosign), SBOM + SLSA Build L3 (SLSA v1.2) provenance + OpenVEX,
@@ -150,7 +150,7 @@ do not currently carry a production SLO target.
 | **Cloud management planes** | Read-only audit ingestion: AWS (CloudTrail), GCP (audit), Azure (activity) |
 | **Manage-as-code** | Terraform provider + client SDKs (Go/Python/TypeScript) + versioned REST API with published deprecation policy (RFC 9745/8594 headers) |
 | **Eventing** | Typed platform webhooks with retries/replay (cursor-based), SSRF-hardened |
-| **Storage/archive** | S3 Object Lock (COMPLIANCE mode) WORM archival of the ledger with chained, verifiable manifests |
+| **Storage/archive** | Business Regulated Operations S3 Object Lock (COMPLIANCE mode) WORM archival of the ledger with chained, verifiable manifests |
 | **KMS** | AWS KMS, GCP Cloud KMS, Azure Key Vault for BYOK envelope + signing custody |
 
 ## 7. What this architecture does **not** include (honesty corner)

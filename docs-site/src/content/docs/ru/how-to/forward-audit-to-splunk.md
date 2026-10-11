@@ -6,6 +6,10 @@ description: >-
   Splunk-to-Splunk. Честно о том, какой поток какой.
 ---
 
+:::note[Business]
+Экспорт аудита (`GET /v1/audit/export`, `olivares audit export`), архивы в каталогах и проверка внешних архивов требуют Business. Community сохраняет подписанный журнал, `olivares audit verify` и `olivares dr backup`; экспорт возвращает HTTP 501 или код выхода 9. Пересылка аудита и перенос DDIL с сегментами аудита также требуют Business.
+:::
+
 Вы можете доставить данные Olivares AI в Splunk **уже сегодня**, не дожидаясь
 нативного коннектора: запишите данные в файл и направьте на него **Splunk
 Universal Forwarder (UF)**. UF берёт на себя переход Splunk-to-Splunk (S2S) до

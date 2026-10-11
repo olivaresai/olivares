@@ -41,7 +41,7 @@ check() { # etiqueta esperado obtenido
 	if [ "$2" = "$3" ]; then
 		printf '  ok   %-56s %s\n' "$1" "$3"; pasados=$((pasados + 1))
 	else
-		printf '  FAIL %-56s esperado=%s obtenido=%s\n' "$1" "$2" "$3"; fallados=$((fallados + 1))
+		printf '  FAIL %-56s expected=%s got=%s\n' "$1" "$2" "$3"; fallados=$((fallados + 1))
 	fi
 }
 g() { git -c user.email=b@b -c user.name=b -c commit.gpgsign=false "$@"; }
@@ -57,9 +57,13 @@ g -C "$CLON" add -A >/dev/null; g -C "$CLON" commit -q -m base
 g -C "$CLON" remote add origin "$REMOTO"; g -C "$CLON" push -q origin main 2>/dev/null
 g -C "$CLON" fetch -q origin 2>/dev/null
 BASE_SHA="$(git -C "$CLON" rev-parse HEAD)"
-# Una punta que mueve FUENTE y no toca el bundle: es justo lo que este gate existe para cazar.
+# A source-only push needs no generated commit; CI builds it once.
 printf 'export const a = 2;\n' >"$CLON/web/src/a.ts"
 g -C "$CLON" add -A >/dev/null; g -C "$CLON" commit -q -m "mueve fuente sin reconstruir"
+rc=$(env OLIVARES_CLONE="$CLON" bash "$SUT" >"$BASE/out" 2>&1; echo $?)
+check "source-only push needs no generated commit" 0 "$rc"
+printf 'generated edit\n' >"$CLON/core/internal/webui/dist/app.js"
+g -C "$CLON" add -A >/dev/null; g -C "$CLON" commit -q -m "generated output"
 TIP="$(git -C "$CLON" rev-parse HEAD)"
 
 corre() { # corre [VAR=val ...] -> rc; salida en $BASE/out
@@ -69,24 +73,24 @@ corre() { # corre [VAR=val ...] -> rc; salida en $BASE/out
 
 # ─────────── (1) SIN la variable: el rango es base..HEAD y el bundle se queda atras ─────────────
 rc=$(corre)
-check "(1) sin el entorno del gancho, caza el bundle atrasado" 1 "$rc"
+check "(1) without the hook environment, refuses generated output" 1 "$rc"
 
 # ─── (2) CON la variable declarando un rango VACIO (la punta ya esta en el remoto declarado) ────
 REFS="$BASE/refs.txt"
 printf 'refs/heads/main %s refs/heads/main %s\n' "$TIP" "$TIP" >"$REFS"
 rc_g=$(corre OLIVARES_PUSH_REFS_FILE="$REFS")
-check "(2) con un rango vacio declarado, no hay nada que mirar" 0 "$rc_g"
+check "(2) a declared empty range has nothing to inspect" 0 "$rc_g"
 
 # ⛔ EL DIFERENCIAL, caso obligatorio: la variable decide QUE RANGO mira el gate, asi que los dos
 # pases tienen que dar distinto. Si dieran igual, la lectura no estaria haciendo nada y una
 # regresion que la quitara pasaria en verde — el gate seguiria contestando, pero sobre otro rango.
-check "(D) el diferencial limpio/gancho EXISTE" "1/0" "$rc/$rc_g"
+check "(D) the clean/hook difference EXISTS" "1/0" "$rc/$rc_g"
 
 # ─────────────────── (3) la variable puesta y el fichero ILEGIBLE: 2, nunca adivinar ────────────
 rc=$(corre OLIVARES_PUSH_REFS_FILE="$BASE/no-existe.txt")
-check "(3) fichero de refs ilegible -> 2" 2 "$rc"
-grep -q 'NO HE PODIDO MIRAR' "$BASE/out" && d=si || d=no
-check "(3) y lo dice como no he podido mirar" si "$d"
+check "(3) unreadable refs file -> 2" 2 "$rc"
+grep -q 'COULD NOT CHECK' "$BASE/out" && d=si || d=no
+check "(3) and reports that inspection was impossible" si "$d"
 
 # ─────────────────────────────────── el mutante del lector ─────────────────────────────────────
 # ⛔ El mutante necesita su `lib/` AL LADO: el sujeto carga `lib/git-env.sh` relativo a SU ruta, y
@@ -103,11 +107,11 @@ if v not in s:
     sys.exit(3)
 open(sys.argv[2], "w", encoding="utf-8").write(s.replace(v, 'if false; then', 1))
 MUTPY
-[ -s "$MUT" ] || { echo "  FAIL MUTANTE NO ESCRITO"; fallados=$((fallados + 1)); }
+[ -s "$MUT" ] || { echo "  FAIL MUTANT NOT WRITTEN"; fallados=$((fallados + 1)); }
 cmp -s "$SUT" "$MUT" && d=NO-DIFIERE || d=ok
-check "(M) el mutante REALMENTE difiere" ok "$d"
+check "(M) the mutant ACTUALLY differs" ok "$d"
 rcm=$(env OLIVARES_CLONE="$CLON" OLIVARES_PUSH_REFS_FILE="$REFS" bash "$MUT" >"$BASE/out.mut" 2>&1; echo $?)
-check "(M) sin leer los refs, vuelve a mirar OTRO rango" 1 "$rcm"
+check "(M) without reading refs, inspects ANOTHER range again" 1 "$rcm"
 
 echo "check-web-bundle-freshness: $pasados passed, $fallados failed"
 [ "$fallados" -eq 0 ] || exit 1

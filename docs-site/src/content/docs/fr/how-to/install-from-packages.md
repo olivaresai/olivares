@@ -9,15 +9,17 @@ description: >-
 draft: false
 ---
 
+La prochaine version est <!-- release -->`0.1`<!-- /release --> ; sa release GitHub n’est pas encore publiée. Les commandes ci-dessous décrivent les artefacts prévus. Compilez depuis les sources jusqu’à la publication, puis vérifiez chaque artefact avant utilisation. L’état observé figure dans <!-- release -->`docs/releases/0.1-install-surfaces.json`<!-- /release -->.
+
 :::note[Noms de paquets publiés]
-La release GitHub 26.10.1 publie des artefacts `.deb`, `.rpm` et `.apk` pour `amd64`
+La release GitHub d’Olivares <!-- release -->0.1<!-- /release --> publie des artefacts `.deb`, `.rpm` et `.apk` pour `amd64`
 et `arm64`, avec `checksums.txt`, `checksums.txt.sig` et `checksums.txt.pem`. Les
 commandes ci-dessous utilisent les noms littéraux `amd64` de cette release ;
 remplacez `amd64` par `arm64` sur un hôte ARM 64 bits. Installez depuis ces artefacts
 de release vérifiés. Les producteurs de métadonnées de dépôt dans un arbre source ne
 sont pas des instructions d'installation pour ce guide.
 
-**Qualification DIST-24-05.** Ce que la CI qualifie est l'**installateur shell** vérifié
+**Qualification de l’installateur.** Ce que la CI qualifie est l'**installateur shell** vérifié
 et son contrat service/doctor, pas `dpkg`, `rpm` ni `apk` : une matrice dispatch/pull
 request l'exécute contre la release publiée dans des userlands de conteneur
 Debian stable, Ubuntu 24.04 LTS, Fedora, openSUSE Leap et Alpine et sur un runner hébergé
@@ -29,7 +31,7 @@ d'un service OpenRC en cours et retrait — a été exercé localement dans un i
 jetable ; c'est une preuve pour cet arbre, pas une qualification signée, hébergée ni de
 préproduction, qui reste en attente.
 
-**Dépôts proposés DIST-24-06 (pas une surface d'installation active).** L'arbre source
+**Dépôts de paquets proposés (pas une surface d'installation active).** L'arbre source
 contient des producteurs déterministes de dépôts apt, rpm-md et APK, un vérificateur
 d'index signés, une qualification de client propre et un flux de publication par étapes
 dont le dispatch reste inerte tant qu'un relecteur ne l'approuve pas. **Aucune URL de
@@ -55,8 +57,10 @@ comptant. Placez le paquet, `checksums.txt` et la signature dans un même réper
 et exécutez le vérificateur **depuis ce répertoire** :
 
 ```bash
+# The verifier is in a source checkout of the release tag, not a release asset; running it
+# trusts the checkout. Without one, INSTALL.md shows the cosign + sha256sum commands.
 # keyless / Sigstore (default; reaches Rekor over the network)
-./verify-release.sh
+/path/to/olivares/scripts/verify-release.sh
 ```
 
 Les releases sont signées sans clé et ne publient aucune clé publique cosign : utilisez donc la
@@ -82,16 +86,18 @@ les crochets ne devinent pas d'après la présence de `systemctl` sur l'hôte. L
 Linux portent les mêmes adaptateurs de service : `scripts/install-service.sh` et
 `packaging/service/`.
 
+<!-- release -->
 ```bash
 # Debian / Ubuntu
-sudo dpkg -i olivares_26.10.1_linux_amd64.deb
+sudo dpkg -i olivares_0.1_linux_amd64.deb
 
 # RHEL / Fedora / SUSE
-sudo rpm -Uvh olivares_26.10.1_linux_amd64.rpm
+sudo rpm -Uvh olivares_0.1_linux_amd64.rpm
 
 # Alpine
-sudo apk add --allow-untrusted olivares_26.10.1_linux_amd64.apk
+sudo apk add --allow-untrusted olivares_0.1_linux_amd64.apk
 ```
+<!-- /release -->
 
 L'installation **crée l'utilisateur et le groupe système `olivares`** (avec
 `/usr/sbin/nologin` comme shell et `/var/lib/olivares` comme répertoire personnel),
@@ -135,13 +141,36 @@ sudo -u olivares olivares serve --data-dir=/var/lib/olivares \
 L'unité systemd empaquetée exécute le moteur sous l'utilisateur non privilégié
 `olivares` avec un ensemble de capacités vide — elle n'en détient aucune, ni
 ambiante ni de bornage — et `NoNewPrivileges=true`, de sorte que rien de ce qu'elle
-lance ne peut en gagner. Par-dessus, elle porte `ProtectSystem=strict` (le système de
-fichiers est en lecture seule sauf `ReadWritePaths=/var/lib/olivares`),
-`ProtectHome`, `PrivateTmp`, `PrivateDevices`, les quatre directives
-`ProtectKernel*`/`ProtectClock`, `RestrictNamespaces`, `RestrictSUIDSGID`,
-`RestrictRealtime`, `LockPersonality`, `MemoryDenyWriteExecute`,
-`SystemCallArchitectures=native`, un filtre d'appels système `@system-service` qui
-retire en plus `@privileged` et `@resources`, et `UMask=0027`.
+lance ne peut en gagner. Par-dessus, elle porte `ProtectSystem=full` (`/usr`, `/boot`,
+`/efi` et `/etc` sont en lecture seule), `PrivateDevices=true`, `ProtectClock=true`,
+`ProtectKernelTunables=true`, `ProtectKernelModules=true`, `ProtectKernelLogs=true`,
+`ProtectControlGroups=true`, `RestrictNamespaces=user net` (une session reçoit ses propres
+espaces de noms utilisateur et réseau ; tout autre type est refusé), `RestrictSUIDSGID=true`,
+`RestrictRealtime=true`, `LockPersonality=true`, `SystemCallArchitectures=native`, un
+filtre d'appels système `@system-service` qui retire en plus `@privileged` et
+`@resources`, et `UMask=0027`.
+
+L'unité ne masque **pas** les répertoires personnels ni temporaires, et elle autorise la
+mémoire exécutable : elle fixe `ProtectHome=false`, `PrivateTmp=false` et
+`MemoryDenyWriteExecute=false`. Le moteur atteint tout ce que les permissions de fichiers
+ordinaires accordent au compte `olivares`, y compris `/home`, `/tmp` et `/var/tmp`, afin
+que les dossiers que vous choisissez pour les sessions restent accessibles. Le
+confinement se fait par session : avant le lancement de chaque outil d'agent ou serveur
+MCP stdio, le moteur applique une politique Landlock qui l'autorise à écrire dans son
+dossier de session, son home d'outil et son répertoire temporaire, et ne lui laisse jamais
+atteindre le répertoire de données du moteur, `/etc/olivares` ni les identifiants propres
+du compte du moteur. Les runtimes d'agents et MCP Node/V8 ont besoin de mémoire JIT
+exécutable, d'où `MemoryDenyWriteExecute=false`. Sur un noyau sans Landlock, le moteur
+refuse de démarrer des sessions ; `olivares doctor` en indique la cause.
+
+26.10.0<!-- release-fixed --> livrait une unité plus stricte : tout le système de fichiers en lecture seule sauf
+le répertoire de données, les répertoires personnels masqués, un `/tmp` privé et aucune
+mémoire à la fois inscriptible et exécutable. 26.10.1<!-- release-fixed --> l'a assouplie aux valeurs ci-dessus.
+Vous pouvez rajouter chacun de ces réglages dans un drop-in (`systemctl edit olivares`).
+Les dossiers de session sous les répertoires personnels ou `/tmp` et les outils basés sur
+le JIT cessent alors de fonctionner, et avec un système de fichiers en lecture seule chaque
+dossier de session hors du répertoire de données a besoin de sa propre ligne
+`ReadWritePaths=`.
 
 Sur Alpine par défaut ces directives systemd ne s'appliquent pas à un `.apk` **publié
 précédemment**, parce que l'unité systemd de cette charge n'est pas en cours d'exécution. Les
@@ -192,8 +221,8 @@ check_scratch_mount() {
 check_scratch_mount /var/lib/olivares
 ```
 
-S'il indique `noexec`, pointez `TMPDIR` vers un répertoire inscriptible sous
-`ProtectSystem=strict` **et** situé sur un montage capable d'exécuter :
+S'il indique `noexec`, pointez `TMPDIR` vers un répertoire que l'utilisateur `olivares`
+peut écrire **et** situé sur un montage capable d'exécuter :
 
 ```bash
 sudo install -d -o olivares -g olivares -m 0750 /run/olivares-exec-tmp
@@ -314,9 +343,7 @@ Trois drapeaux importent spécifiquement pour une installation empaquetée :
 - **`--endpoint`** — prendre les mises à jour d'un dépôt GitHub que vous contrôlez
   plutôt que celui par défaut. C'est la voie de sortie pour un miroir ou une
   bifurcation.
-- **`--bundle`** — installer depuis un répertoire de bundle local ou un `.tar.gz`
-  **sans aucun réseau**. Construire ce bundle et le déplacer est décrit dans
-  [Installer dans un environnement isolé](/fr/how-to/air-gap-install/).
+- **`--bundle`** — L’installation hors ligne nécessite Enterprise. Community vérifie un bundle avec `--bundle --check`, sans lire de licence ni l’installer.
 - **`--install-timer`** — émettre un minuteur et un service **systemd optionnels**
   qui vérifient les mises à jour selon un calendrier. Rien ne l'installe pour vous ;
   voir [ce que le paquet ne fait pas](#8-ce-que-le-paquet-ne-fait-pas). C'est un

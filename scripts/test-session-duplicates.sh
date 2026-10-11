@@ -14,11 +14,11 @@ unset _olivares_git_env
 
 AQUI=$(cd "$(dirname "$0")" && pwd)
 SUT="$AQUI/check-session-duplicates.sh"
-[ -r "$SUT" ] || { echo "FATAL: no leo $SUT" >&2; exit 2; }
+[ -r "$SUT" ] || { echo "FATAL: cannot read $SUT" >&2; exit 2; }
 
-# ⛔ Los señuelos NO van en /tmp: en este contenedor está montado `noexec`, y aunque este
-#    guion sólo escriba ficheros, la lección de es que una batería que confía en /tmp
-#    se descubre rota el día que alguien le añade algo ejecutable. Base propia y comprobada.
+# Keep fixtures outside noexec /tmp. This script currently only writes files, but
+# showed a suite can become broken as soon as someone adds an executable.
+# Use an owned, verified base directory.
 BASE_TMP="${TMPDIR:-/tmp}"
 [ -w "$BASE_TMP" ] || BASE_TMP="${HOME:-/var/tmp}"
 W="$(mktemp -d "${BASE_TMP}/olivares-dupcensus-bat.XXXXXX")" || exit 1
@@ -57,59 +57,59 @@ correr() { # <dir> <fichero de base> -> imprime salida, deja rc en $rc
 	out=$(cd "$1" && OLIVARES_DUP_BASE_REF=main OLIVARES_DUP_BASELINE="$2" bash "$SUT" 2>&1); rc=$?
 }
 
-echo "--- (1) un duplicado que NO esta en la base es ROJO y se nombra ---------------------"
+echo "--- (1) a duplicate ABSENT from the baseline is RED and named ---"
 sembrar "$W/r1" 150 "S2000-primero.md" "S2000-segundo.md"
 : > "$W/base-vacia.txt"
 correr "$W/r1" "$W/base-vacia.txt"
 [ "$rc" -eq 1 ]
-check "(1) un duplicado nuevo sale 1" "rc=$rc" $?
+check "(1) a new duplicate returns 1" "rc=$rc" $?
 case "$out" in *S2000*) true ;; *) false ;; esac
-check "(1) lo ACUSA por su numero" "nombra S2000" $?
+check "(1) FLAGS its number" "names S2000" $?
 case "$out" in *S2000-primero.md*) true ;; *) false ;; esac
-check "(1) y enseña las DOS rutas, no solo el numero" "lista ficheros" $?
+check "(1) shows BOTH paths, not just the number" "lists files" $?
 
-echo "--- (2) el mismo arbol con el numero en la base es VERDE ----------------------------"
+echo "--- (2) the same tree with the number in the baseline is GREEN ---"
 printf 'S2000\n' > "$W/base-200.txt"
 correr "$W/r1" "$W/base-200.txt"
 [ "$rc" -eq 0 ]
-check "(2) un duplicado congelado no bloquea" "rc=$rc" $?
+check "(2) a frozen duplicate does not block" "rc=$rc" $?
 
-echo "--- (3) un numero de la base que ya NO esta duplicado pide bajar la base ------------"
+echo "--- (3) a baseline number that is no longer duplicated requires lowering the baseline ---"
 sembrar "$W/r3" 150
 printf 'S2000\n' > "$W/base-200b.txt"
 correr "$W/r3" "$W/base-200b.txt"
 [ "$rc" -eq 0 ]
-check "(3) resuelto no es un fallo" "rc=$rc" $?
-case "$out" in *"baja la línea base"*) true ;; *) false ;; esac
-check "(3) y PIDE bajar la base en el mismo commit" "lo dice" $?
+check "(3) resolved is not a failure" "rc=$rc" $?
+case "$out" in *"reduce the baseline"*) true ;; *) false ;; esac
+check "(3) ASKS to lower the baseline in the same commit" "says so" $?
 
-echo "--- (4) CONTROL POSITIVO: un arbol sin sesiones no es 'cero duplicados' -------------"
+echo "--- (4) POSITIVE CONTROL: a tree without sessions is not zero duplicates ---"
 sembrar "$W/r4" 3
 correr "$W/r4" "$W/base-vacia.txt"
 [ "$rc" -eq 2 ]
-check "(4) pocos ficheros -> NO HE PODIDO MIRAR" "rc=$rc" $?
+check "(4) too few files -> COULD NOT LOOK" "rc=$rc" $?
 
-echo "--- (5) sin linea base tampoco se aprueba nada --------------------------------------"
+echo "--- (5) no baseline also cannot pass ---"
 correr "$W/r1" "$W/no-existe.txt"
 [ "$rc" -eq 2 ]
-check "(5) base ausente -> 2, no 0" "rc=$rc" $?
+check "(5) missing baseline -> 2, not 0" "rc=$rc" $?
 
-echo "--- (6) un ref que no resuelve no es un arbol limpio --------------------------------"
+echo "--- (6) an unresolvable ref is not a clean tree ---"
 out=$(cd "$W/r1" && OLIVARES_DUP_BASE_REF=no-existe OLIVARES_DUP_BASELINE="$W/base-vacia.txt" bash "$SUT" 2>&1); rc=$?
 [ "$rc" -eq 2 ]
-check "(6) ref ausente -> 2" "rc=$rc" $?
+check "(6) missing ref -> 2" "rc=$rc" $?
 
-echo "--- (7) un argumento desconocido no se ignora ---------------------------------------"
+echo "--- (7) unknown arguments are not ignored ---"
 out=$(cd "$W/r1" && OLIVARES_DUP_BASE_REF=main OLIVARES_DUP_BASELINE="$W/base-vacia.txt" bash "$SUT" --loquesea 2>&1); rc=$?
 [ "$rc" -eq 2 ]
-check "(7) argumento desconocido -> 2" "rc=$rc" $?
+check "(7) unknown argument -> 2" "rc=$rc" $?
 
-echo "--- (8) un subdirectorio de encargos cuenta como fichero del numero -----------------"
+echo "--- (8) a task subdirectory counts as a file for its number ---"
 sembrar "$W/r8" 150 "S3000-brief.md" "S3000-encargos/E1.md"
 correr "$W/r8" "$W/base-vacia.txt"
 [ "$rc" -eq 1 ]
-check "(8) sessions/S3000-encargos/ cuenta para S3000" "rc=$rc" $?
+check "(8) sessions/S3000-encargos/ counts for S3000" "rc=$rc" $?
 
 echo
-echo "session-duplicates: ${PASS} pasan, ${FAIL} fallan"
+echo "session-duplicates: ${PASS} passed, ${FAIL} failed"
 [ "$FAIL" -eq 0 ]

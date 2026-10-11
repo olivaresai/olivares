@@ -8,6 +8,9 @@ sidebar:
   order: 2
 ---
 
+Los presupuestos y el análisis de gasto de FinOps son funciones de **[Business](https://olivares.ai/pricing)**. Community conserva el seguimiento de costes por sesión y la exportación de datos. Los presupuestos guardados antes de 0.1 se pueden consultar y eliminar, y se aplican mientras el módulo FinOps esté activo; Community no puede crearlos ni modificarlos. Las evaluaciones y los entornos de prueba siguen en Community.
+
+
 **Objetivo:** "los agentes de este equipo dejan de gastar a 500 $/mes" —
 declarado una vez, aplicado en vivo, con umbrales de alerta en el camino de
 subida.

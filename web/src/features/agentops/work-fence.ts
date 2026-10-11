@@ -19,6 +19,7 @@
 //    time.
 import { agentOpsApi } from './api'
 import type { RunDTO } from './types'
+import type { RequestOptions } from '@/lib/api/client'
 
 /** The four K2 authority links. A legacy or non-work run omits all of them. */
 export type WorkBinding = Pick<
@@ -88,11 +89,16 @@ export function controlFence(run: WorkBinding): number | undefined {
  * is presented and the engine decides (SR3 on 2339eb7d). */
 export async function currentControlFence(
   run: WorkBinding & Pick<RunDTO, 'run_ref'>,
+  options?: RequestOptions,
 ): Promise<number | undefined> {
   const stamp = workLeaseFenceFor(run)
   if (stamp === undefined) return undefined
   try {
-    return controlFence(await agentOpsApi.getRun(run.run_ref))
+    return controlFence(
+      await (options
+        ? agentOpsApi.getRun(run.run_ref, options)
+        : agentOpsApi.getRun(run.run_ref)),
+    )
   } catch {
     return stamp
   }

@@ -58,13 +58,13 @@ func (m *Module) classifyContent(_ context.Context, mode string, content []byte)
 	case dlpOff:
 		return nil, false
 	case dlpDeny:
-		if m.rt.classifier == nil {
+		if m.rt.Classifier == nil {
 			return nil, true // cannot prove safe → deny-closed
 		}
 		if !utf8.Valid(content) {
 			return []SensitivityHit{{Class: classBinary}}, true // unscannable → deny
 		}
-		hs, err := m.rt.classifier.Classify(string(content))
+		hs, err := m.rt.Classifier.Classify(string(content))
 		if err != nil {
 			return nil, true // classification failed → deny (never read-through on error)
 		}
@@ -73,10 +73,10 @@ func (m *Module) classifyContent(_ context.Context, mode string, content []byte)
 		if !utf8.Valid(content) {
 			return []SensitivityHit{{Class: classBinary}}, false
 		}
-		if m.rt.classifier == nil {
+		if m.rt.Classifier == nil {
 			return nil, false // no classifier wired: no labels, still returned
 		}
-		hs, err := m.rt.classifier.Classify(string(content))
+		hs, err := m.rt.Classifier.Classify(string(content))
 		if err != nil {
 			return nil, false // label mode never blocks; a classifier error just omits labels
 		}

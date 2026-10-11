@@ -112,7 +112,7 @@ func TestDrainWorkOutboxWithPolicyHoldsGatedFamiliesWithoutTouchingRows(t *testi
 	f := newWorkFixture(t, ":memory:", nil)
 	defer f.st.Close()
 	sink := &recordingWorkSink{}
-	f.m.UseWorkEventSink(sink)
+	WithWorkEventSink(sink)(f.m)
 	// One aggregate per seeded lane: the outbox delivers an aggregate in
 	// sequence, so a held event would otherwise hide the ones behind it. These
 	// three creates publish their seq-1 events through the online sink.
@@ -315,9 +315,9 @@ func TestWorkOutboxAuthorityGovernsEveryDrainEntryPoint(t *testing.T) {
 	f := newWorkFixture(t, ":memory:", nil)
 	defer f.st.Close()
 	sink := &recordingWorkSink{}
-	f.m.UseWorkEventSink(sink)
+	WithWorkEventSink(sink)(f.m)
 	authority := &recordingOutboxAuthority{allowClaim: false, allowEffect: true}
-	f.m.UseWorkOutboxClaimAuthority(authority)
+	func() { f.m.WorkOutboxAuthority = authority; f.m.normalize() }()
 	if !f.m.WorkOutboxClaimAuthorityBound() {
 		t.Fatal("authority not bound")
 	}
@@ -414,8 +414,8 @@ func TestWorkOutboxComposedModuleWithoutAuthorityHoldsK3AndUnknown(t *testing.T)
 	f := newWorkFixture(t, ":memory:", nil)
 	defer f.st.Close()
 	sink := &recordingWorkSink{}
-	f.m.UseWorkEventSink(sink)
-	f.m.UseCommunicationStoreReadinessWitness(&communicationReadinessStub{storeReady: true})
+	WithWorkEventSink(sink)(f.m)
+	f.m.CommunicationStoreReadiness = &communicationReadinessStub{storeReady: true}
 	if f.m.WorkOutboxClaimAuthorityBound() {
 		t.Fatal("authority bound on a module that never received one")
 	}
@@ -437,7 +437,7 @@ func TestWorkOutboxComposedModuleWithoutAuthorityHoldsK3AndUnknown(t *testing.T)
 	}
 	assertHeldRow(t, f, k3, "composed module, no authority, Apply nudge")
 	var typedNil *recordingOutboxAuthority
-	f.m.UseWorkOutboxClaimAuthority(typedNil)
+	func() { f.m.WorkOutboxAuthority = typedNil; f.m.normalize() }()
 	if f.m.WorkOutboxClaimAuthorityBound() {
 		t.Fatal("typed nil authority counted as bound")
 	}
@@ -461,9 +461,9 @@ func TestWorkOutboxEffectBoundaryReturnsClaimWithoutDelivery(t *testing.T) {
 	f := newWorkFixture(t, ":memory:", nil)
 	defer f.st.Close()
 	sink := &recordingWorkSink{}
-	f.m.UseWorkEventSink(sink)
+	WithWorkEventSink(sink)(f.m)
 	authority := &recordingOutboxAuthority{allowClaim: true, allowEffect: false}
-	f.m.UseWorkOutboxClaimAuthority(authority)
+	func() { f.m.WorkOutboxAuthority = authority; f.m.normalize() }()
 	item := applyCreate(t, f, "effect boundary")
 	k3 := insertOutboxEventForTest(t, f, workItemKind, item.ResultID, 2, "work.handoff.offered")
 

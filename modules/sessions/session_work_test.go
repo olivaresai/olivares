@@ -64,7 +64,7 @@ func TestSessionWorkUsesSharedPrincipalAndConcealsForeignWorkspace(t *testing.T)
 	if w := call("GET", "work-items", ""); w.Code != 200 || strings.Contains(w.Body.String(), "Foreign work") {
 		t.Fatalf("foreign workspace listed: %d %s", w.Code, w.Body.String())
 	}
-	f.h.m.UseWorkAuthorizer(permissionSetWorkAuthorizer{permWorkRead: true})
+	WithWorkAuthorizer(permissionSetWorkAuthorizer{permWorkRead: true})(f.h.m)
 	if w := call("POST", "work-items?mode=validate", `{"command":"item.create"}`); w.Code != http.StatusForbidden {
 		t.Fatalf("write ignored current authorization: %d %s", w.Code, w.Body.String())
 	}

@@ -301,13 +301,29 @@ func TestTenantOwnerImplicitScopedGrantIsAuditedOnGovernedRoute(t *testing.T) {
 type ownerAuditFailureStore struct {
 	store.Store
 	refuse bool
+	// drop answers every audit append the way the degrade policy does when it drops the
+	// evidence: a zero event and no error.
+	drop bool
 }
 
 func (s *ownerAuditFailureStore) Mutate(ctx context.Context, tenant model.TenantID, fn func(store.Scope) error) error {
 	if s.refuse {
 		return errors.New("fixture audit unavailable")
 	}
+	if s.drop {
+		return s.Store.Mutate(ctx, tenant, func(sc store.Scope) error { return fn(droppedAuditScope{sc}) })
+	}
 	return s.Store.Mutate(ctx, tenant, fn)
+}
+
+type droppedAuditScope struct{ store.Scope }
+
+func (s droppedAuditScope) Audit() store.AuditLog { return droppedAuditLog{s.Scope.Audit()} }
+
+type droppedAuditLog struct{ store.AuditLog }
+
+func (droppedAuditLog) Append(context.Context, model.AuditDraft) (model.AuditEvent, error) {
+	return model.AuditEvent{}, nil
 }
 
 func TestTenantOwnerImplicitGrantAuditFailureRefusesBeforeHandler(t *testing.T) {
@@ -327,5 +343,36 @@ func TestTenantOwnerImplicitGrantAuditFailureRefusesBeforeHandler(t *testing.T) 
 	reply := h.do("POST", "/v1/m/superadminentry/enter", admin, nil, tenantHdr(tenant))
 	if reply.code != http.StatusServiceUnavailable || m.calls != 0 {
 		t.Fatalf("unaudited implicit grant reached handler: %d %s calls=%d", reply.code, reply.raw, m.calls)
+	}
+	// Undecided is retryable, and the client learns that from Retry-After.
+	if got := reply.hdr.Get("Retry-After"); got != "5" {
+		t.Fatalf("undecided admission answered Retry-After %q, want 5", got)
+	}
+}
+
+// TestTenantOwnerImplicitGrantDroppedAuditRefusesBeforeHandler pins the other half of the
+// owner-entry audit: under the degrade policy a dropped append answers a zero event and no
+// error, and an implicit grant whose evidence was dropped is as unaudited as one whose append
+// failed.
+func TestTenantOwnerImplicitGrantDroppedAuditRefusesBeforeHandler(t *testing.T) {
+	m := &superadminEntryModule{meta: auth.RouteMetadata{RequireScopedGrant: true, CedarAction: "directory:admin"}}
+	policy := &decisionHorizonPolicy{}
+	var dropping *ownerAuditFailureStore
+	h := newHarnessOpts(t, func(o *api.Options) {
+		o.PrincipalEvidenceProducer = o.Authenticator
+		policy.store = o.Store
+		o.Authorizer = auth.NewAuthorizer(policy)
+		dropping = &ownerAuditFailureStore{Store: o.Store}
+		o.Store = dropping
+	}, m)
+	admin := h.adminLogin()
+	tenant := h.createOrg(admin, "owner-audit-dropped")
+	dropping.drop = true
+	reply := h.do("POST", "/v1/m/superadminentry/enter", admin, nil, tenantHdr(tenant))
+	if reply.code != http.StatusServiceUnavailable || m.calls != 0 {
+		t.Fatalf("implicit grant with dropped evidence reached handler: %d %s calls=%d", reply.code, reply.raw, m.calls)
+	}
+	if got := reply.hdr.Get("Retry-After"); got != "5" {
+		t.Fatalf("undecided admission answered Retry-After %q, want 5", got)
 	}
 }

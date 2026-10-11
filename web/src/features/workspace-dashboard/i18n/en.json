@@ -1,11 +1,13 @@
 {
   "truncation": {
     "label": "Loaded {{n}} rows; there are more",
-    "hint": "This workspace preview is capped. Use View all to inspect the wider inventory."
+    "hint": "This workspace preview is capped. Use View all to inspect the wider inventory.",
+    "hintCapped": "This workspace preview is capped."
   },
   "title": "Workspace overview",
   "selectTitle": "No workspace selected",
   "selectPrompt": "Select a workspace in the navigation rail to open this overview, or go to the tenant-wide inventory.",
+  "selectPromptWorkspaceOnly": "Select a workspace in the navigation rail to open this overview.",
   "viewInventory": "Open inventory",
   "agents": "Agents",
   "sessions": "Sessions",
@@ -24,5 +26,12 @@
   "viewAll": "View all",
   "defaultBadge": "Default",
   "created": "Created",
-  "lastUpdated": "Last updated"
+  "lastUpdated": "Last updated",
+  "contents": {
+    "title": "Workspace contents",
+    "count": "Count",
+    "loading": "Reading workspace contents…",
+    "empty": "This workspace holds nothing yet.",
+    "unavailable": "Workspace contents are unavailable."
+  }
 }

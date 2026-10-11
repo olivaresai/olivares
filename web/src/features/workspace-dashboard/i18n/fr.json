@@ -1,11 +1,13 @@
 {
   "truncation": {
     "label": "{{n}} lignes chargées ; il y en a d'autres",
-    "hint": "Cet aperçu du workspace est plafonné. Utilisez Tout afficher pour parcourir un inventaire plus large."
+    "hint": "Cet aperçu du workspace est plafonné. Utilisez Tout afficher pour parcourir un inventaire plus large.",
+    "hintCapped": "Cet aperçu du workspace est plafonné."
   },
   "title": "Vue de l'espace de travail",
   "selectTitle": "Aucun espace de travail sélectionné",
   "selectPrompt": "Sélectionnez un espace de travail dans le rail de navigation pour ouvrir cet aperçu, ou allez à l'inventaire du locataire.",
+  "selectPromptWorkspaceOnly": "Sélectionnez un espace de travail dans le rail de navigation pour ouvrir cet aperçu.",
   "viewInventory": "Ouvrir l'inventaire",
   "agents": "Agents",
   "sessions": "Sessions",
@@ -24,5 +26,12 @@
   "viewAll": "Voir tout",
   "defaultBadge": "Par défaut",
   "created": "Créé",
-  "lastUpdated": "Dernière mise à jour"
+  "lastUpdated": "Dernière mise à jour",
+  "contents": {
+    "title": "Contenu de l’espace de travail",
+    "count": "Nombre",
+    "loading": "Lecture du contenu de l’espace de travail…",
+    "empty": "Cet espace de travail ne contient encore rien.",
+    "unavailable": "Le contenu de l’espace de travail est indisponible."
+  }
 }

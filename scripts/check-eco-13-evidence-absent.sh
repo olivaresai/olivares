@@ -24,7 +24,7 @@ DOC="${OLIVARES_ECO13A_DOC:-design/ECO-13-EVIDENCE-ABSENT-2026-08-20.md}"
 grep -q 'HOLD' "$DOC" || fail "$DOC lost HOLD"
 grep -q 'NO IMPLEMENTADO' "$DOC" || fail "$DOC lost NO IMPLEMENTADO"
 if grep -qiE 'implemented the seven|opened cloud-scale|FIRMA A claimed' "$DOC"; then
-	fail "$DOC claims an opening this lote does not have"
+	fail "$DOC claims an opening this batch does not have"
 fi
 
 python3 - "$JSON" <<'PY' || fail "JSON flags no longer say the evidence is absent"

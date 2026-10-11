@@ -14,8 +14,8 @@ import "strings"
 // type: the auth.PolicyEvaluator seam is binary deny-only by contract, so risk
 // classification rides the approval policy ("approval" kind) where the
 // threshold already lives. An explicit `risk_tier` on a matching approval policy
-// is authoritative (the operator's audited word — Makes the set
-// configurable by policy); with no explicit classification the built-in default
+// is subject to the edition boundary (Community permits raising; Business also
+// permits lowering); with no explicit classification the built-in default
 // below applies. The tier is NEVER stored on the approval row: it is re-derived
 // from the CURRENT policy + default at every security decision, so a policy
 // change (or removal) takes effect immediately and a stale snapshot can never
@@ -68,7 +68,7 @@ func validRiskTier(s string) bool {
 // matches for the gate actions that exist today, domain prefixes for the decided
 // families whose actions land later (kill-switch secrets/PKI), and
 // destructive trailing verbs for the data-deletion family. An approval policy
-// with an explicit risk_tier overrides this default per action (configurable by policy).
+// with an explicit risk_tier can raise it; Business can also lower it.
 //
 // Not in the default CRITICAL set: "sessions.run.launch" (the privileged
 // launch, now only bypassPermissions or an unconfined dontAsk) and
@@ -153,15 +153,25 @@ func defaultActionRiskTier(action string) ActionRiskTier {
 	return RiskTierHigh
 }
 
-// resolveRiskTier is the one classification rule: the matched approval policy's
-// explicit risk_tier when it names one (the operator's audited, authoritative
-// word — it may raise OR lower the default, that is what "configurable by
-// policy" means), else the built-in default for the action.
+// resolveRiskTier derives the live classification from the matched policy and
+// the edition boundary, or the built-in default when no explicit tier is set.
 func resolveRiskTier(spec approvalSpec, matched bool, action string) ActionRiskTier {
 	if matched && spec.RiskTier != "" {
-		return ActionRiskTier(spec.RiskTier)
+		// Stored words may predate canonical authoring; every comparison below is exact.
+		explicit := strings.ToLower(strings.TrimSpace(spec.RiskTier))
+		return resolveEditionRiskTier(explicit, defaultActionRiskTier(action))
 	}
 	return defaultActionRiskTier(action)
+}
+
+// actionApprovalFloor is floorRequiredApprovals for one action: session launches
+// keep the configured quorum, which UseApprovalCapacity bounds by the humans a
+// deployment has; every other CRITICAL action floors at two.
+func actionApprovalFloor(action string, required int64, tier ActionRiskTier) int64 {
+	if action == "sessions.run.launch" {
+		return required
+	}
+	return floorRequiredApprovals(required, tier)
 }
 
 // floorRequiredApprovals applies the CRITICAL dual-authorization floor to a

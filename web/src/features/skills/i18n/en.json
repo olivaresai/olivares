@@ -1,0 +1,52 @@
+{
+  "title": "Skills catalog",
+  "subtitle": "Skill packs installed for this organization. Open a pack to see its skills and the departments, groups and agents it is assigned to.",
+  "packs": {
+    "name": "Pack",
+    "state": "State",
+    "revision": "Revision",
+    "updated": "Updated",
+    "enabled": "Enabled",
+    "retired": "Retired",
+    "search": "Search packs",
+    "emptyTitle": "No skill packs installed",
+    "emptyDescription": "Install a pack with olivares skills install; it then appears here to assign.",
+    "truncated": "Showing the first {{n}} packs",
+    "truncatedHint": "Use olivares skills ls --cursor to list the rest."
+  },
+  "detail": {
+    "skills": "Skills in this pack",
+    "revisions": "Revisions",
+    "revision": "revision {{n}}",
+    "revisionLine": "Revision {{n}} from {{source}}"
+  },
+  "kind": {
+    "workspace": "Department",
+    "agent_group": "Agent group",
+    "agent": "Agent",
+    "template": "Template",
+    "session": "Session"
+  },
+  "uses": {
+    "title": "Assigned to",
+    "none": "This pack is not assigned to any department, group or agent you can see.",
+    "unassign": "Unassign",
+    "unassigned": "Skill pack unassigned",
+    "confirmTitle": "Unassign this skill pack?",
+    "confirmDescription": "New sessions of {{target}} stop receiving these skills. Recorded conversations keep their snapshot.",
+    "truncated": "Showing the first {{n}} assignments",
+    "truncatedHint": "Use olivares skills assignments --pack with --cursor to list the rest.",
+    "unassignFrom": "Unassign from {{target}}"
+  },
+  "assign": {
+    "title": "Assign",
+    "kind": "Assign to",
+    "target": "Target",
+    "choose": "Choose a target",
+    "revision": "Revision",
+    "noTargets": "No targets of this kind that you can read.",
+    "submit": "Assign",
+    "done": "Skill pack assigned",
+    "directoryFailed": "The targets could not be loaded. Close and reopen the pack to retry."
+  }
+}

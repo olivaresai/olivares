@@ -1,21 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
-import { useEffect, useState, type ReactNode } from 'react'
+import { Fragment, useEffect, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
-import {
-  Folder,
-  Info,
-  KeyRound,
-  Keyboard,
-  Package,
-  Play,
-  Server,
-  Shield,
-  SlidersHorizontal,
-  Sparkles,
-} from 'lucide-react'
+import { Folder, Play, Server, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/ui/page-header'
 import {
@@ -37,10 +26,19 @@ import {
 } from '@/lib/i18n'
 import { isTypingTarget } from '@/lib/keybindings/model'
 import { KEYBINDINGS } from '@/lib/keybindings/table'
-import { StepUpPolicySetting } from '@/features/identity/step-up-policy'
+import { SignInSettings } from '@/features/settings/sign-in-settings'
 import { ModulesSettings } from '@/features/settings/modules-settings'
+import {
+  SETTINGS_SECTIONS,
+  settingsSections,
+  type SettingsSectionId,
+} from '@/features/settings/sections'
+import { useUrlState } from '@/lib/hooks/use-url-state'
 import { ReportSigningSettings } from '@/features/settings/report-signing-settings'
+import { TracingSettings } from '@/features/settings/tracing-settings'
+import { useViewAccess } from '@/features/navigation/authorization'
 import { viewById } from '@/features/navigation/model'
+import type { FeatureView } from '@/features/registry'
 import {
   CLIENT_SETTING_DEFAULTS,
   localTimeZone,
@@ -50,7 +48,7 @@ import {
   type StartPageId,
 } from '@/features/settings/preferences'
 import { usePreferencesStore, type Density } from '@/stores/preferences'
-import { useThemeStore, type Theme } from '@/stores/theme'
+import { DEFAULT_THEME, useThemeStore, type Theme } from '@/stores/theme'
 
 const THEMES = ['system', 'light', 'dark'] as const
 
@@ -70,32 +68,13 @@ const PREVIEW = {
   },
 } as const
 
-type SectionId =
-  | 'general'
-  | 'notifications'
-  | 'keyboard'
-  | 'sessionDefaults'
-  | 'signIn'
-  | 'edition'
-  | 'signing'
-  | 'about'
+type SectionId = SettingsSectionId | 'notifications' | 'sessionDefaults'
 
 const SECTIONS: readonly SectionId[] = [
-  'general',
+  ...SETTINGS_SECTIONS.map((s) => s.id),
   'notifications',
-  'keyboard',
   'sessionDefaults',
-  'signIn',
-  'edition',
-  'signing',
-  'about',
 ]
-
-/** A link can open one section (`/settings?section=signing`, from Reports). */
-function initialSection(): SectionId {
-  const wanted = new URLSearchParams(window.location.search).get('section')
-  return SECTIONS.find((s) => s === wanted) ?? 'general'
-}
 
 function ThemePreview({ kind }: { kind: Theme }) {
   if (kind === 'system') {
@@ -208,7 +187,7 @@ function RestoreAll() {
   const setReduceMotion = usePreferencesStore((s) => s.setReduceMotion)
   const restoreClient = useClientSettings((s) => s.restore)
   const onClick = () => {
-    setTheme('dark')
+    setTheme(DEFAULT_THEME)
     setDensity('comfortable')
     setReduceMotion(false)
     setLanguage('en')
@@ -244,8 +223,35 @@ export function SettingsPage() {
   const setStartPage = useClientSettings((s) => s.setStartPage)
   const confirmStop = useClientSettings((s) => s.confirmStop)
   const setConfirmStop = useClientSettings((s) => s.setConfirmStop)
-  const [section, setSection] = useState<SectionId>(initialSection)
-  const [query, setQuery] = useState('')
+  const [url, patchUrl] = useUrlState(['section', 'q'])
+  const section = SECTIONS.find((s) => s === url.section) ?? 'general'
+  const query = url.q ?? ''
+  const setQuery = (q: string) => patchUrl({ q })
+  const setSection = (section: SectionId) => patchUrl({ section, q: undefined })
+  const sectionButton = (id: SettingsSectionId) => {
+    const entry = settingsSections(isSuperadmin).find((s) => s.id === id)
+    if (!entry) return null
+    const Icon = entry.icon
+    return (
+      <NavButton
+        current={section === id && query.trim().length === 0}
+        onClick={() => setSection(id)}
+        icon={<Icon aria-hidden className="size-3.5" />}
+      >
+        {t(`nav.${id}`)}
+      </NavButton>
+    )
+  }
+  // A page this installation does not run, or this principal may not open, is neither
+  // linked nor offered as a start page: the same gate the sidebar uses (#474).
+  const { navigable } = useViewAccess()
+  const linked = (id: string) => {
+    const view = viewById(id)
+    return view && navigable(view) ? view : undefined
+  }
+  const aiTools = linked('providers')
+  const workspaces = linked('workspaceDashboard')
+  const deploy = linked('deploy')
   const lang = currentLanguage()
 
   useEffect(() => {
@@ -308,8 +314,8 @@ export function SettingsPage() {
         <div className="flex flex-wrap items-center gap-2 text-body font-medium text-text">
           <span>{themeName}</span>
           <ChangedReset
-            show={theme !== 'dark'}
-            onReset={() => setTheme('dark')}
+            show={theme !== DEFAULT_THEME}
+            onReset={() => setTheme(DEFAULT_THEME)}
           />
         </div>
         <p className="text-caption text-text-2">{themeHint}</p>
@@ -431,7 +437,9 @@ export function SettingsPage() {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {START_PAGE_IDS.map((id) => (
+              {START_PAGE_IDS.filter(
+                (id) => id === startPage || linked(id),
+              ).map((id) => (
                 <SelectItem key={id} value={id}>
                   {t(`nav:items.${id}`)}
                 </SelectItem>
@@ -497,48 +505,32 @@ export function SettingsPage() {
             <kbd className="text-caption text-text-3">/</kbd>
           </label>
           <NavGroup label={t('groups.you')}>
-            <NavButton
-              current={section === 'general' && q.length === 0}
-              onClick={() => setSection('general')}
-              icon={<SlidersHorizontal aria-hidden className="size-3.5" />}
-            >
-              {t('nav.general')}
-            </NavButton>
+            {sectionButton('general')}
             {/* Notifications and Session defaults are not stored yet: no section is
                 offered until it does something (HU-14). */}
-            <NavButton
-              current={section === 'keyboard' && q.length === 0}
-              onClick={() => setSection('keyboard')}
-              icon={<Keyboard aria-hidden className="size-3.5" />}
-            >
-              {t('nav.keyboard')}
-            </NavButton>
+            {sectionButton('keyboard')}
           </NavGroup>
-          <NavGroup label={t('groups.work')}>
-            <RegistryLink
-              id="providers"
-              label={t('nav.aiTools')}
-              icon={<Sparkles aria-hidden className="size-3.5" />}
-            />
-            <RegistryLink
-              id="workspaceDashboard"
-              label={t('nav.workspaces')}
-              icon={<Folder aria-hidden className="size-3.5" />}
-            />
-          </NavGroup>
+          {aiTools || workspaces ? (
+            <NavGroup label={t('groups.work')}>
+              <RegistryLink
+                view={aiTools}
+                label={t('nav.aiTools')}
+                icon={<Sparkles aria-hidden className="size-3.5" />}
+              />
+              <RegistryLink
+                view={workspaces}
+                label={t('nav.workspaces')}
+                icon={<Folder aria-hidden className="size-3.5" />}
+              />
+            </NavGroup>
+          ) : null}
           <NavGroup label={t('groups.installation')}>
             <RegistryLink
-              id="deploy"
+              view={deploy}
               label={t('nav.deploy')}
               icon={<Server aria-hidden className="size-3.5" />}
             />
-            <NavButton
-              current={section === 'signIn' && q.length === 0}
-              onClick={() => setSection('signIn')}
-              icon={<Shield aria-hidden className="size-3.5" />}
-            >
-              {t('nav.signIn')}
-            </NavButton>
+            {sectionButton('signIn')}
             <a
               href="/onboarding"
               className="flex h-8 items-center gap-2.5 rounded-[7px] px-2.5 text-caption font-medium text-text-2 hover:bg-hover hover:text-text"
@@ -546,29 +538,10 @@ export function SettingsPage() {
               <Play aria-hidden className="size-3.5" />
               {t('nav.setup')}
             </a>
-            <NavButton
-              current={section === 'edition' && q.length === 0}
-              onClick={() => setSection('edition')}
-              icon={<Package aria-hidden className="size-3.5" />}
-            >
-              {t('nav.edition')}
-            </NavButton>
-            {isSuperadmin ? (
-              <NavButton
-                current={section === 'signing' && q.length === 0}
-                onClick={() => setSection('signing')}
-                icon={<KeyRound aria-hidden className="size-3.5" />}
-              >
-                {t('nav.signing')}
-              </NavButton>
-            ) : null}
-            <NavButton
-              current={section === 'about' && q.length === 0}
-              onClick={() => setSection('about')}
-              icon={<Info aria-hidden className="size-3.5" />}
-            >
-              {t('nav.about')}
-            </NavButton>
+            {sectionButton('edition')}
+            {sectionButton('tracing')}
+            {sectionButton('signing')}
+            {sectionButton('about')}
           </NavGroup>
         </nav>
         <div className="min-w-0 overflow-auto">
@@ -600,17 +573,10 @@ export function SettingsPage() {
               />
             ) : null}
             {q.length === 0 && section === 'signIn' ? (
-              isSuperadmin ? (
-                <>
-                  <PageHeader title={t('nav.signIn')} />
-                  <StepUpPolicySetting />
-                </>
-              ) : (
-                <Unavailable
-                  title={t('nav.signIn')}
-                  reason={t('unavailable.signIn')}
-                />
-              )
+              <>
+                <PageHeader title={t('nav.signIn')} />
+                <SignInSettings key={principal?.user_id} />
+              </>
             ) : null}
             {q.length === 0 && section === 'keyboard' ? <KeyboardList /> : null}
             {q.length === 0 && section === 'edition' ? (
@@ -618,6 +584,9 @@ export function SettingsPage() {
                 edition={serverInfo.data?.edition}
                 manageModules={isSuperadmin}
               />
+            ) : null}
+            {q.length === 0 && section === 'tracing' && isSuperadmin ? (
+              <TracingSettings key={principal?.user_id} />
             ) : null}
             {q.length === 0 && section === 'signing' && isSuperadmin ? (
               <>
@@ -635,6 +604,7 @@ export function SettingsPage() {
                 license={serverInfo.data?.license.status}
                 licensee={serverInfo.data?.license.licensee}
                 displayName={principal?.display_name}
+                email={principal?.email}
                 actor={principal?.actor}
                 role={
                   isSuperadmin
@@ -695,15 +665,14 @@ function NavButton({
 }
 
 function RegistryLink({
-  id,
+  view,
   label,
   icon,
 }: {
-  id: string
+  view: FeatureView | undefined
   label: string
   icon: ReactNode
 }) {
-  const view = viewById(id)
   if (!view) return null
   return (
     <a
@@ -726,6 +695,13 @@ function Unavailable({ title, reason }: { title: string; reason: string }) {
 
 function KeyboardList() {
   const { t } = useTranslation(['settings', 'common'])
+  const commands = new Map<string, { command: string; keys: string[] }>()
+  for (const rule of KEYBINDINGS) {
+    const id = `${rule.command}:${rule.when ?? ''}`
+    const row = commands.get(id)
+    if (row) row.keys.push(rule.keys)
+    else commands.set(id, { command: rule.command, keys: [rule.keys] })
+  }
   return (
     <>
       <PageHeader
@@ -733,17 +709,24 @@ function KeyboardList() {
         description={t('keyboard.scope')}
       />
       <ul className="flex flex-col divide-y divide-line">
-        {KEYBINDINGS.map((rule) => (
+        {[...commands].map(([id, rule]) => (
           <li
-            key={`${rule.command}:${rule.keys}`}
+            key={id}
             className="flex items-center justify-between gap-3 py-2 text-body"
           >
             <span className="min-w-0 truncate">
               {t(`common:keys.command.${rule.command}`)}
             </span>
-            <kbd className="shrink-0 font-mono text-caption text-text-2">
-              {rule.keys}
-            </kbd>
+            <span className="flex shrink-0 gap-2">
+              {rule.keys.map((keys, index) => (
+                <Fragment key={keys}>
+                  {index > 0 ? <span className="text-text-3">/</span> : null}
+                  <kbd className="font-mono text-caption text-text-2">
+                    {keys}
+                  </kbd>
+                </Fragment>
+              ))}
+            </span>
           </li>
         ))}
       </ul>
@@ -817,6 +800,7 @@ function About({
   license,
   licensee,
   displayName,
+  email,
   actor,
   role,
   memberships,
@@ -826,6 +810,7 @@ function About({
   license?: string
   licensee?: string
   displayName?: string
+  email?: string
   actor?: string
   role: string
   memberships: number
@@ -843,7 +828,7 @@ function About({
           [t('about.licensee'), licensee || t('about.none')],
         ]),
     displayName ? [t('about.displayName'), displayName] : null,
-    [t('about.actor'), actor ?? '—'],
+    email ? [t('about.email'), email] : null,
     [t('about.role'), role],
     [t('about.memberships'), String(memberships)],
   ].filter((row): row is [string, string] => row !== null)
@@ -861,6 +846,14 @@ function About({
           </div>
         ))}
       </dl>
+      {actor ? (
+        <details className="mt-4 text-body text-text-2">
+          <summary className="cursor-pointer">{t('about.actor')}</summary>
+          <p className="mt-2 select-all break-all font-mono text-text">
+            {actor}
+          </p>
+        </details>
+      ) : null}
     </>
   )
 }

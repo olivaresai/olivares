@@ -28,6 +28,10 @@ const Name = "olivares.egress-proxy"
 // (ARCHITECTURE.md). The SDK does not seed it; a connector introduces its own.
 const SignalEgressProxy model.SignalSource = "egress_proxy"
 
+// SignalAIEndpoint is an allowed observation of an operator-configured AI host.
+// It certifies neither the log's completeness nor the endpoint's governance.
+const SignalAIEndpoint model.SignalSource = "egress_proxy_ai"
+
 // toolEgressVerdict is the ToolRef/Tool stamped on every observation — the surface
 // that rendered the verdict.
 const toolEgressVerdict = "egress_proxy.verdict"
@@ -46,8 +50,9 @@ var logExtensions = map[string]bool{".log": true, ".json": true, ".jsonl": true,
 // connection (see the package doc and the no-listener test). The zero value is not
 // usable; call New.
 type Source struct {
-	path string
-	now  func() time.Time // injectable clock (tests); nil => time.Now
+	path    string
+	aiHosts map[string]bool
+	now     func() time.Time // injectable clock (tests); nil => time.Now
 }
 
 // Compile-time proof that Source satisfies the source-connector contract.
@@ -68,6 +73,7 @@ func (s *Source) Descriptor() sdk.Descriptor {
 		Description: "Observes an agent egress proxy's allow/deny verdict log (FQDN allowlist) as read-first egress edges + permitted-path-violation findings. Pure file parser; opens no listener..",
 		ConfigFields: []sdk.ConfigField{
 			{Key: "path", Type: sdk.FieldString, Required: true, Description: "egress-proxy verdict log file, or a directory of *.log / *.json / *.jsonl / *.ndjson files (one JSON decision per line)."},
+			{Key: "ai_hosts", Type: sdk.FieldString, Description: "Optional comma-separated exact AI host names. No URLs, ports or wildcards. Classification covers only these hosts in this log; absence of observations proves no estate completeness."},
 		},
 	}
 }
@@ -82,7 +88,42 @@ func (s *Source) Open(_ context.Context, cfg sdk.Config) error {
 	if s.path == "" {
 		return errors.New("egress-proxy: path is required")
 	}
+	s.aiHosts = nil
+	if configured := strings.TrimSpace(cfg.Get("ai_hosts")); configured != "" {
+		s.aiHosts = make(map[string]bool)
+		for _, value := range strings.Split(configured, ",") {
+			host, ok := aiHost(value)
+			if !ok {
+				return errors.New("egress-proxy: ai_hosts requires exact host names without URLs, ports or wildcards")
+			}
+			s.aiHosts[host] = true
+		}
+	}
 	return nil
+}
+
+func aiHost(value string) (string, bool) {
+	value = strings.TrimSpace(value)
+	for _, c := range value {
+		if c > 127 {
+			return "", false
+		}
+	}
+	host := strings.TrimSuffix(strings.ToLower(value), ".")
+	if host == "" || len(host) > 253 {
+		return "", false
+	}
+	for _, label := range strings.Split(host, ".") {
+		if label == "" || len(label) > 63 || label[0] == '-' || label[len(label)-1] == '-' {
+			return "", false
+		}
+		for _, c := range label {
+			if c != '-' && (c < 'a' || c > 'z') && (c < '0' || c > '9') {
+				return "", false
+			}
+		}
+	}
+	return host, true
 }
 
 // Gather reads the configured verdict log(s) line by line and emits an edge per
@@ -90,7 +131,25 @@ func (s *Source) Open(_ context.Context, cfg sdk.Config) error {
 // are exhausted so the engine re-runs it; re-reading a file each run is safe because
 // the engine de-dups on the observation natural key. A blank/garbage line is
 // tolerated and skipped — it never fails the run.
-func (s *Source) Gather(ctx context.Context, sink sdk.Sink) error {
+func (s *Source) Gather(ctx context.Context, sink sdk.Sink) (err error) {
+	if len(s.aiHosts) != 0 {
+		defer func() {
+			if ctx.Err() != nil {
+				return
+			}
+			report := model.InventoryCollectionReport{State: "unknown", Reason: "scope_unproven", ObservedUntil: s.clock()}
+			if err != nil {
+				var pathError *os.PathError
+				if !errors.As(err, &pathError) {
+					return // preserve scanner, sink and cancellation errors
+				}
+				report.State, report.Reason = "unavailable", "gather_error"
+			}
+			// The native structured result carries the failure without file paths or
+			// raw log text. Successful parsing still proves no complete estate scope.
+			err = sink.Emit(ctx, report)
+		}()
+	}
 	files, err := s.listFiles()
 	if err != nil {
 		return err
@@ -157,8 +216,8 @@ func (s *Source) toMeshRecord(rec record) (meshobs.Record, bool) {
 	if !ok {
 		return meshobs.Record{}, false
 	}
-	ts, ok := parseTime(rec.timestamp)
-	if !ok {
+	ts, timeKnown := parseTime(rec.timestamp)
+	if !timeKnown {
 		ts = s.clock()
 	}
 	mr := meshobs.Record{
@@ -171,6 +230,14 @@ func (s *Source) toMeshRecord(rec record) (meshobs.Record, bool) {
 		Source:         SignalEgressProxy,
 		Tool:           toolEgressVerdict,
 		ObservedAt:     ts,
+	}
+	if host, valid := aiHost(rec.host); valid && s.aiHosts[host] && verdict == meshobs.VerdictAllowed {
+		mr.FQDN, mr.Source = host, SignalAIEndpoint
+		if !timeKnown {
+			// Reception time remains available natively; an absent log occurrence
+			// must not be presented as a source-declared timestamp.
+			mr.ObservedAt = time.Time{}
+		}
 	}
 	if verdict == meshobs.VerdictDenied {
 		// The deny reason rides the finding's (scrubbed, hashed) detail. No taxonomy is

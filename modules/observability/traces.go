@@ -61,18 +61,19 @@ const (
 
 // ledgerTraceEvent is one ledger event that carries a valid trace_id — the
 // minimal projection the read-model needs. Remaining meta keys are
-// deliberately NOT retained: even though ledger meta is already redacted by
-// contract (core/model/audit.go:36-37), the response emits only synthesized
-// ledger.* attributes, never raw meta passthrough.
+// deliberately NOT retained, except the closed inference coverage enum. Even
+// though ledger meta is already redacted by contract (core/model/audit.go:36-37),
+// the response emits only that enum and synthesized ledger.* attributes.
 type ledgerTraceEvent struct {
-	seq        int64
-	occurredAt time.Time
-	action     string
-	actor      string
-	actorKind  string
-	targetKind string
-	targetID   string
-	spanID     string // "" when the event carried no valid span_id
+	seq             int64
+	occurredAt      time.Time
+	action          string
+	actor           string
+	actorKind       string
+	targetKind      string
+	targetID        string
+	contextCoverage inferenceCoverage
+	spanID          string // "" when the event carried no valid span_id
 }
 
 // walkTraceWindow walks the tail window of the tenant's ledger chain (the last
@@ -111,19 +112,52 @@ func (m *Module) walkTraceWindow(r *http.Request, mc api.ModuleContext, fn func(
 				return nil // no (valid) trace correlation on this event — skip
 			}
 			fn(traceID, ledgerTraceEvent{
-				seq:        ev.Seq,
-				occurredAt: ev.OccurredAt.Time(),
-				action:     ev.Action,
-				actor:      ev.Actor,
-				actorKind:  ev.ActorKind,
-				targetKind: string(ev.TargetKind),
-				targetID:   ev.TargetID.String(),
-				spanID:     spanID,
+				seq:             ev.Seq,
+				occurredAt:      ev.OccurredAt.Time(),
+				action:          ev.Action,
+				actor:           ev.Actor,
+				actorKind:       ev.ActorKind,
+				targetKind:      string(ev.TargetKind),
+				targetID:        ev.TargetID.String(),
+				spanID:          spanID,
+				contextCoverage: inferenceTraceCoverage(ev.Action, metaCanonical),
 			})
 			return nil
 		})
 	})
 	return ok, err
+}
+
+// The trace projection owns its closed view of the inference metadata contract;
+// it does not import or compose the inferenceproxy module.
+type inferenceCoverage string
+
+const (
+	inferenceMetadataOnly  inferenceCoverage = "inference_metadata_only"
+	providerContextChange  inferenceCoverage = "provider_context_may_change"
+	providerContextUnknown inferenceCoverage = "provider_context_unknown"
+)
+
+// Only fixed inference labels can cross the ledger-to-trace projection.
+func inferenceTraceCoverage(action, raw string) inferenceCoverage {
+	switch action {
+	case "inference.proxy.authorized", "inference.proxy.recorded",
+		"inference.proxy.batch.authorized", "inference.proxy.batch.recorded":
+	default:
+		return ""
+	}
+	var meta struct {
+		Coverage inferenceCoverage `json:"context_coverage"`
+	}
+	if json.Unmarshal([]byte(raw), &meta) != nil {
+		return ""
+	}
+	switch meta.Coverage {
+	case inferenceMetadataOnly, providerContextChange, providerContextUnknown:
+		return meta.Coverage
+	default:
+		return ""
+	}
 }
 
 // traceIDsFromMeta parses one stored canonical meta JSON string and returns
@@ -460,7 +494,7 @@ func (m *Module) buildSpans(events []ledgerTraceEvent) []traceSpanDTO {
 			Status:     traceStatusUnset,
 			Actor:      clampStr(first.actor, 256),
 			ActorKind:  first.actorKind,
-			// Synthesized, bounded attributes (≤16 keys by construction — four —
+			// Synthesized, bounded attributes (≤16 keys by construction — five —
 			// values clamped to 256 chars): never raw meta passthrough.
 			Attributes: map[string]string{
 				"ledger.events":  strconv.Itoa(len(evs)),
@@ -468,6 +502,24 @@ func (m *Module) buildSpans(events []ledgerTraceEvent) []traceSpanDTO {
 				"ledger.actor":   clampStr(first.actor, 256),
 				"ledger.seq":     fmt.Sprintf("%d-%d", evs[0].seq, evs[len(evs)-1].seq),
 			},
+		}
+		var coverage inferenceCoverage
+		for _, ev := range evs {
+			switch ev.contextCoverage {
+			case providerContextUnknown:
+				coverage = providerContextUnknown
+			case providerContextChange:
+				if coverage != providerContextUnknown {
+					coverage = ev.contextCoverage
+				}
+			case inferenceMetadataOnly:
+				if coverage == "" {
+					coverage = ev.contextCoverage
+				}
+			}
+		}
+		if coverage != "" {
+			span.Attributes["inference.context_coverage"] = string(coverage)
 		}
 		if first.targetKind != "" {
 			span.EntityRef = clampStr(first.targetKind+":"+first.targetID, 256)

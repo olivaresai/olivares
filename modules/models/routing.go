@@ -6,6 +6,7 @@ package models
 
 import (
 	"context"
+	"errors"
 	"strings"
 
 	"github.com/olivaresai/olivares/connectors/modelrouter"
@@ -189,6 +190,50 @@ func buildCatalog(ctx context.Context, sc store.Scope) (mp.Catalog, error) {
 		cat.Models = append(cat.Models, mm)
 	}
 	return cat, nil
+}
+
+// resolveAvailableProfile selects only the registered provider/model observation
+// bound by a DeepSeek execution profile. Call outside a core store transaction:
+// AvailableModels opens its own tenant-local view. Reference data enriches an
+// observed ID; it supplies neither availability nor a credential identity.
+func (m *Module) resolveAvailableProfile(ctx context.Context, tenant model.TenantID, spec routingSpec, profile ExecutionProfile) (decisionDTO, error) {
+	items, err := m.AvailableModels(ctx, tenant)
+	if err != nil {
+		return decisionDTO{}, err
+	}
+	cat := mp.Catalog{}
+	for _, item := range items {
+		if item.State != "fresh" || item.Ref != profile.ProviderRef || item.ProviderRef != profile.ProviderRef || item.AccountRef != "" || item.Driver != "" {
+			continue
+		}
+		for _, observed := range item.Models {
+			if observed.ID != profile.ModelRef {
+				continue
+			}
+			candidate := mp.Model{ProviderRef: profile.ProviderRef, Ref: observed.ID, DisplayName: observed.ID}
+			if ref, ok := lookupReference(observed.ID); ok && ref.ProviderRef == mp.ProviderDeepSeek {
+				candidate.Capabilities, candidate.Pricing = ref.Capabilities, ref.Pricing
+				candidate.ContextWindow = ref.ContextWindow
+			}
+			cat.Models = append(cat.Models, candidate)
+		}
+	}
+	// Provider preferences name services in the legacy catalog. A DeepSeek
+	// preference filters this already bound registration without becoming its key.
+	for i, provider := range spec.PreferredProviders {
+		if provider == mp.ProviderDeepSeek {
+			spec.PreferredProviders = append([]string(nil), spec.PreferredProviders...)
+			spec.PreferredProviders[i] = profile.ProviderRef
+		}
+	}
+	dec, err := spec.resolve(ctx, cat)
+	if errors.Is(err, modelrouter.ErrNoCandidate) {
+		return unresolvedDecisionDTO(spec.Strategy), nil
+	}
+	if err != nil {
+		return decisionDTO{}, err
+	}
+	return toDecisionDTO(dec), nil
 }
 
 // operatorPricing is the operator-set per-token cost as a coarse blended price

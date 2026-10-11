@@ -4,11 +4,10 @@
 package a2a
 
 import (
+	"github.com/olivaresai/olivares/sdk/model"
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/olivaresai/olivares/sdk/model"
 )
 
 func TestAgentEdgeShape(t *testing.T) {

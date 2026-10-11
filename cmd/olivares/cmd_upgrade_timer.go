@@ -224,7 +224,7 @@ WantedBy=timers.target
 				return werr
 			}
 			if o.enterprise && !o.connect {
-				_, werr := fmt.Fprintln(w, "\nenterprise: put your download token in /etc/olivares/upgrade.env (0600):\n  OLIVARES_UPGRADE_TOKEN=<token-from-your-license-email>")
+				_, werr := fmt.Fprintln(w, "\nBusiness: put your download token in /etc/olivares/upgrade.env (0600):\n  OLIVARES_UPGRADE_TOKEN=<token-from-your-license-email>")
 				return werr
 			}
 			return nil
@@ -240,7 +240,7 @@ WantedBy=timers.target
 		fmt.Fprintln(w, "\n# Install: save the two blocks above, then:")
 		fmt.Fprintln(w, "#   sudo systemctl daemon-reload && sudo systemctl enable --now olivares-upgrade.timer")
 		if o.enterprise && !o.connect {
-			fmt.Fprintln(w, "# Enterprise: OLIVARES_UPGRADE_TOKEN=<token> in /etc/olivares/upgrade.env (chmod 0600).")
+			fmt.Fprintln(w, "# Business: OLIVARES_UPGRADE_TOKEN=<token> in /etc/olivares/upgrade.env (chmod 0600).")
 		}
 		_, werr := fmt.Fprintln(w, "# (Or write the files directly with:  olivares upgrade --install-timer --timer-dir <dir>)")
 		return werr

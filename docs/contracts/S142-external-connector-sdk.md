@@ -8,7 +8,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 **Gap:** *no third-party connector SDK / external marketplace (first-party
 in-tree only)*. **Decision (2026-06-09):** v1 = SDK + certification + signing;
 distribution over GitHub releases/OCI; **static curated "verified connectors" index in the docs
-site**; NO hosted marketplace (commercial decision deferred). Full rationale: **ADR-0016**.
+site**; NO hosted marketplace (commercial decision deferred).
 Consumes (never reimplements): S02 (SDK/plugin runtime), the connector pattern, the sources
 composition root, and `modelsign` signed admission.
 
@@ -81,7 +81,7 @@ composition root, and `modelsign` signed admission.
 
 ## 5. Distribution channel + verified index (design, no infra)
 
-- **ADR-0016**: GitHub release (binary + sha256 + Sigstore bundle) and/or OCI artifact (ORAS,
+- **Distribution:** GitHub release (binary + sha256 + Sigstore bundle) and/or OCI artifact (ORAS,
   attestation as referrer). Docs-site **`reference/verified-connectors`** is the curated index:
   listing by PR, re-verified per release (boundary, signature/provenance vs publisher identity,
   contract correctness, minimal-data spot review). The index documents verification performed —

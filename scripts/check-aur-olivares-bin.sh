@@ -14,7 +14,7 @@
 #   - .SRCINFO equals what makepkg 7.1.0 --printsrcinfo writes for this PKGBUILD
 #     (write_srcinfo_content in scripts/libmakepkg/srcinfo.sh.in), emulated here.
 #   - --checksums FILE: FILE.sig and FILE.pem, the release's cosign signature pair, verify
-#     FILE for the identity .github/workflows/release.yml@refs/tags/v<pkgver> (through
+#     FILE for the identity .github/workflows/release.yml@refs/tags/<pkgver> (through
 #     scripts/cosign-verified.sh, which needs the asserted OLIVARES_COSIGN_BIN); then the
 #     tarball sha256 equals FILE's row. Without the pair or cosign it cannot look (exit 2).
 #   - --makepkg: makepkg itself prints the .SRCINFO and verifies the sources
@@ -22,28 +22,19 @@
 # Exit 0 when every check holds, 1 on a finding, 2 when it could not look.
 set -euo pipefail
 
-# Release tags by era (the tag-name correction of 2026-09-29): v<version> before 26.10, bare
-# from 26.10 on. core/release/channelurl.go derives the same.
+# A release version is its bare tag.
 release_tag() {
-	local v="${1:?}"
-	local major="${v%%.*}"
-	local rest="${v#*.}"
-	local minor="${rest%%.*}"
-	if [ "$major" -lt 26 ] || { [ "$major" -eq 26 ] && [ "$minor" -lt 10 ]; }; then
-		printf 'v%s' "$v"
-	else
-		printf '%s' "$v"
-	fi
+	printf '%s' "${1:?}"
 }
 LC_ALL=C
 export LC_ALL
 
 could_not_look() {
-	printf 'check-aur-olivares-bin: NO HE PODIDO MIRAR — %s\n' "$*" >&2
+	printf 'check-aur-olivares-bin: COULD NOT CHECK — %s\n' "$*" >&2
 	exit 2
 }
 finding() {
-	printf 'check-aur-olivares-bin: HALLAZGO — %s\n' "$*" >&2
+	printf 'FINDING — %s\n' "$*" >&2
 	exit 1
 }
 root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -120,7 +111,7 @@ package_body="$(sed -n '/^package_body<<$/,$p' <<<"$values" | sed '1d')"
 
 pkgver="$(value pkgver)"
 [[ "$(value pkgname)" == olivares-bin ]] || finding 'pkgname must be olivares-bin'
-[[ "$pkgver" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]] || finding "pkgver is not a release version: $pkgver"
+[[ "$pkgver" =~ ^[0-9]+\.[0-9]+$ ]] || finding "pkgver is not a release version: $pkgver"
 [[ "$(value arch)" == x86_64 ]] || finding 'arch must be exactly x86_64: aarch64 is not a published target'
 [[ " $(value provides) " == *" olivares=$pkgver "* ]] || finding "provides must name olivares=$pkgver"
 [[ " $(value conflicts) " == *" olivares "* ]] || finding 'conflicts must name olivares'
@@ -160,8 +151,7 @@ rm -f -- "$printed"
 # test verifier is honored only under the explicit test-only latch.
 verify_checksums() {
 	local sums=$1
-	# The signing identity names the tag by era: v<pkgver> before 26.10, bare from 26.10 on
-	# (the tag-name correction of 2026-09-29).
+	# The signing identity names the exact release tag.
 	local identity="https://github.com/olivaresai/olivares/.github/workflows/release.yml@refs/tags/$(release_tag "${pkgver}")"
 	local issuer=https://token.actions.githubusercontent.com
 	[[ -f "$sums.sig" && -f "$sums.pem" ]] ||

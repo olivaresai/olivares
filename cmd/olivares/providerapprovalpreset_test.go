@@ -46,7 +46,7 @@ func TestProviderSessionPresetsApplyBeforeNativeApproval(t *testing.T) {
 					service := h.set.gov.EngineApprovals()
 					h.set.gov.UseApprovalCapacity(h.authr.ApprovalCapacity)
 					h.set.gov.UseApprovalAuthority(h.authr, auth.NewAuthorizer(h.set.gov.RequestEvaluator(), auth.WithScopedGrants(h.set.gov.ScopedGrants())))
-					policy := sessionProviderPolicy{credentials: credentials.SessionCredentials, eval: h.set.gov.Evaluator(), scoped: h.set.gov.ScopedGrants(), approvals: service, store: h.st}
+					policy := sessionProviderPolicy{credentials: credentials.SessionCredentials, eval: h.set.gov.Evaluator(), authz: harnessAuthz(h), scoped: h.set.gov.ScopedGrants(), approvals: service, store: h.st}
 					request := sessions.ProviderApprovalRequest{
 						Driver: driver, RunRef: intent.RunRef, SessionRef: scope.SessionRef, Principal: principal,
 						TurnID: "preset-turn", Kind: "tool_call_permission", Method: "session/request_permission", Requested: []string{"allow-once"},
@@ -72,7 +72,7 @@ func TestProviderSessionPresetsApplyBeforeNativeApproval(t *testing.T) {
 						return
 					}
 					bridge := newApprovalBridge(approvalBridgeConfig{}, discardLog())
-					bridge.localProposer = service
+					bridge.LocalProposer = service
 					ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
 					defer cancel()
 					type answer struct {
@@ -152,7 +152,7 @@ func TestProviderSessionNoPresetUsesLivePolicy(t *testing.T) {
 			if err != nil || scope.Preset != sessions.PresetNone {
 				t.Fatal("fixture did not launch without a preset choice")
 			}
-			policy := sessionProviderPolicy{credentials: credentials.SessionCredentials, eval: h.set.gov.Evaluator(), scoped: h.set.gov.ScopedGrants(), approvals: h.set.gov.EngineApprovals(), store: h.st}
+			policy := sessionProviderPolicy{credentials: credentials.SessionCredentials, eval: h.set.gov.Evaluator(), authz: harnessAuthz(h), scoped: h.set.gov.ScopedGrants(), approvals: h.set.gov.EngineApprovals(), store: h.st}
 			request := sessions.ProviderApprovalRequest{Driver: driver, RunRef: intent.RunRef, SessionRef: scope.SessionRef, Principal: principal, Kind: "tool_call_permission", Method: "session/request_permission"}
 			if driver == "codex" {
 				request.Kind, request.Method = "command_execution", "item/commandExecution/requestApproval"

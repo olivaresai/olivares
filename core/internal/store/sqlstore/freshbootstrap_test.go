@@ -159,7 +159,7 @@ func TestFreshBootstrapInventoryCoversTheInstalledProfile(t *testing.T) {
 				t.Fatal(err)
 			}
 			reg := freshBootstrapRegistry(t, tc.register)
-			set, err := buildManagedObjectSet(dia, coreDescriptors(), reg,
+			set, err := buildCurrentManagedObjectSet(dia, coreDescriptors(), reg,
 				freshBootstrapPlans(t, dia, reg))
 			if err != nil {
 				t.Fatalf("build the managed object set: %v", err)
@@ -383,6 +383,12 @@ func TestFreshBootstrapRefusesAPrecreatedManagedObject(t *testing.T) {
 		register func(store.ExtensionRegistry) error
 		seed     func(*testing.T, *sql.DB, dialect.Dialect)
 	}{
+		{
+			name: "custody relation in a foreign shape holding a row",
+			seed: func(t *testing.T, db *sql.DB, dia dialect.Dialect) {
+				seedStatements(t, db, "CREATE TABLE control_custody_proof (review TEXT)", "INSERT INTO control_custody_proof VALUES ('preserve-me')")
+			},
+		},
 		{
 			name: "orgs in a foreign shape holding a row, beside an empty tracker",
 			seed: func(t *testing.T, db *sql.DB, dia dialect.Dialect) {
@@ -1141,7 +1147,7 @@ func TestManagedObjectInventoryReadsEveryStatementThisBuildRenders(t *testing.T)
 			} {
 				t.Run(profile.name, func(t *testing.T) {
 					reg := freshBootstrapRegistry(t, profile.register)
-					set, err := buildManagedObjectSet(dia, coreDescriptors(), reg,
+					set, err := buildCurrentManagedObjectSet(dia, coreDescriptors(), reg,
 						freshBootstrapPlans(t, dia, reg))
 					if err != nil {
 						t.Fatalf("the inventory could not name a statement this build renders: %v", err)
@@ -1674,7 +1680,7 @@ func TestFreshBootstrapInventoryReadsTheRepositoryModuleMigrations(t *testing.T)
 				return nil
 			})
 			plans := freshBootstrapPlans(t, dia, reg)
-			set, err := buildManagedObjectSet(dia, coreDescriptors(), reg, plans)
+			set, err := buildCurrentManagedObjectSet(dia, coreDescriptors(), reg, plans)
 			if err != nil {
 				t.Fatalf("the real module migration files were rejected: %v", err)
 			}

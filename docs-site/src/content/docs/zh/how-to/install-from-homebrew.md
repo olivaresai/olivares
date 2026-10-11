@@ -2,9 +2,11 @@
 title: 使用 Homebrew 安装
 description: >-
   Olivares AI 的 macOS Homebrew cask 坐标、cask 对 Gatekeeper 的处理，以及
-  26.10.1 tap 提升的发布状态。
+  tap 提升的发布状态。
 draft: false
 ---
+
+下一个版本是 <!-- release -->`0.1`<!-- /release -->，其 GitHub 发行尚未发布。以下命令描述计划中的产物。发布前请从源码构建，发布后也应在使用前验证每个产物。观测到的发布状态记录在 <!-- release -->`docs/releases/0.1-install-surfaces.json`<!-- /release -->。
 
 这是 `INSTALL.md` 称为推荐的 macOS 路径。它通过 Homebrew cask 安装已签名的
 `olivares` 二进制文件，并清除 Gatekeeper 隔离。它不是 Linux 软件包路径
@@ -12,7 +14,7 @@ draft: false
 （[用 Docker 部署](/how-to/docker-deployment/)）。
 
 :::note[测试版 — 26.10 cask 已发布]
-tap 的 `Casks/olivares.rb` 已于 2026-10-01 为 26.10 更新：它标明版本 26.10.1，以及四个平台归档，
+tap 的 `Casks/olivares.rb` 已于 2026-10-01 为 26.10 更新：它标明版本 26.10.1<!-- release-fixed -->，以及四个平台归档，
 其 SHA-256 与该发布签名的 `checksums.txt` 一致。生产者是 `.goreleaser.yaml` `homebrew_casks:`；tap 的 cask
 由发布作业提升。下面的命令是 `INSTALL.md` 命名的坐标（`brew install olivaresai/tap/olivares`）。
 :::
@@ -36,13 +38,14 @@ Darwin 二进制文件由 cosign 签名（供应链信任），**尚未经 Apple
 olivares quickstart
 ```
 
-安全默认：TLS 开启、loopback、无默认凭据。引擎打印控制台 URL 和一次性安装
+安全默认：TLS 开启、监听所有接口、无默认凭据。引擎打印控制台 URL 和一次性安装
 令牌。继续见 [第一个小时](/how-to/first-hour/)。
 
 临时合成 estate（loopback、明文）仅供查看：
 
 ```sh
-olivares serve --seed-demo --insecure --data-dir "$(mktemp -d)"
+olivares serve --seed-demo --insecure --listen 127.0.0.1:8443 --grpc-listen 127.0.0.1:8444 \
+  --data-dir "$(mktemp -d)"
 ```
 
 `--seed-demo` 不是产品导览。见 [第一个小时](/how-to/first-hour/)。

@@ -34,11 +34,11 @@ MOD="$ROOT/commercial/commerce"
 if [ ! -d "$MOD" ]; then
 	if [ "$(bash "$ROOT/scripts/hub-leg.sh" --classify --root "$ROOT" 2>/dev/null)" = "public" ]; then
 		printf '%s\n' "commerce-core: SCOPED — public export; commercial/commerce is curated out."
-		printf '%s\n' "  El modulo comercial no viaja, asi que aqui no hay suite que correr. En el hub SI se corre."
+		printf '%s\n' "  The commercial module is excluded, so this suite does not apply to this checkout."
 		exit 0
 	fi
-	printf '%s\n' "commerce-core: COULD NOT LOOK — falta $MOD y este arbol NO es un export estampado." >&2
-	printf '%s\n' "  Un modulo ausente fuera del export es un arbol roto, no un alcance: no lo doy por verde." >&2
+	printf '%s\n' "commerce-core: COULD NOT LOOK — $MOD is missing and this tree is NOT a stamped export." >&2
+	printf '%s\n' "  A missing module outside the export indicates a broken tree; it cannot be reported as passing." >&2
 	exit 2
 fi
 

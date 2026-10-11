@@ -8,14 +8,12 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	mcpc "github.com/olivaresai/olivares/connectors/mcp"
+	"github.com/olivaresai/olivares/modules/sessions"
 	"slices"
 	"sort"
 	"strings"
 	"unicode"
-
-	a2a "github.com/olivaresai/olivares/connectors/a2a"
-	mcpc "github.com/olivaresai/olivares/connectors/mcp"
-	"github.com/olivaresai/olivares/modules/sessions"
 )
 
 func protocolConfiguredSpecLineage(
@@ -123,54 +121,6 @@ func protocolWorkMappingSource(item sessions.WorkItem) map[string]any {
 		"work.kind": item.WorkKind, "work.owner_ref": item.OwnerRef,
 		"work.priority": item.Priority, "work.context_refs": contextMetadata,
 	}
-}
-
-func protocolA2AInboundMappingSource(message a2a.InboundMessage) (map[string]any, error) {
-	parts := make([]any, 0, len(message.Parts))
-	sections := make([]string, 0, len(message.Parts))
-	for _, part := range message.Parts {
-		switch {
-		case part.Text != "":
-			parts = append(parts, part.Text)
-			sections = append(sections, part.Text)
-		case len(part.Data) != 0 && json.Valid(part.Data):
-			var value any
-			if err := json.Unmarshal(part.Data, &value); err != nil {
-				return nil, err
-			}
-			compact, err := json.Marshal(value)
-			if err != nil {
-				return nil, err
-			}
-			section := "```json\n" + string(compact) + "\n```"
-			parts = append(parts, section)
-			sections = append(sections, section)
-		case part.Kind == "file" && validInboundA2APartReference(part.Reference) &&
-			validInboundA2APartDigest(part.Digest):
-			section := fmt.Sprintf("A2A file reference: %s (sha256:%s)", part.Reference, part.Digest)
-			parts = append(parts, section)
-			sections = append(sections, section)
-		default:
-			return nil, fmt.Errorf("unsupported A2A message part")
-		}
-	}
-	metadata := make(map[string]any, len(message.Metadata))
-	for key, raw := range message.Metadata {
-		if !json.Valid(raw) {
-			return nil, fmt.Errorf("invalid A2A metadata")
-		}
-		var value any
-		if err := json.Unmarshal(raw, &value); err != nil {
-			return nil, err
-		}
-		metadata[key] = value
-	}
-	return map[string]any{
-		"message.text": strings.Join(sections, "\n\n"), "message.parts": parts,
-		"message.id": message.MessageID, "message.context_id": message.ContextID,
-		"message.reference": message.MessageID, "message.metadata": metadata,
-		"message.status": "submitted", "peer.subject": message.PeerSubject,
-	}, nil
 }
 
 func protocolMCPTaskMappingSource(intent mcpc.DurableTaskIntent) map[string]any {

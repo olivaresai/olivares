@@ -15,6 +15,7 @@ import {
 import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Spinner } from '@/components/ui/spinner'
+import { firstHourKeys } from '@/features/first-hour/api'
 import { useAuth } from '@/lib/auth/context'
 import { usePrivilegedMutation } from '@/lib/hooks/use-privileged-mutation'
 import { providerKeys, providersApi } from './api'
@@ -49,7 +50,11 @@ export function ProviderRotateDialog({
   const rotate = usePrivilegedMutation<void, ProviderRecordDTO>({
     mutationFn: () =>
       providersApi.patch(record.provider_ref, { api_key: apiKey }),
-    invalidateKeys: () => [providerKeys.list(activeTenant, boundary.epoch)],
+    // A new key is untested, so what a tool can start on changes (first hour).
+    invalidateKeys: () => [
+      providerKeys.list(activeTenant, boundary.epoch),
+      firstHourKeys.all(activeTenant),
+    ],
     successMessage: t('rotate.success'),
     stepUpAction: 'providers',
     onDone: () => {

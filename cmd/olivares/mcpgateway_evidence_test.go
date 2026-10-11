@@ -14,6 +14,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/olivaresai/olivares/cmd/olivares/internal/mcpgateway"
 	mcpc "github.com/olivaresai/olivares/connectors/mcp"
 	"github.com/olivaresai/olivares/core/audit"
 	coreengine "github.com/olivaresai/olivares/core/engine"
@@ -23,7 +24,7 @@ import (
 )
 
 // mcpgateway_evidence_test.go — Stage 3 composition-root proofs of the
-// enforced tools/call evidence seam (mcpGateAuditor over the REAL durable
+// enforced tools/call evidence seam (mcpgateway.GateAuditor over the REAL durable
 // journal): claim/replay/rebind/concurrency against a real store, degrade Seq==0
 // loss accounting, tenant-resolution strictness, fence + settlement behavior.
 //
@@ -33,9 +34,9 @@ import (
 // for the same exploits was captured connector-level in
 // connectors/mcp/evidence_test.go — see sessions-q1-mcp-evidence.md).
 
-func mcpEvidenceAuditor(f *mcpLedgerFixture) mcpGateAuditor {
-	return mcpGateAuditor{
-		log: slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)), store: f.store, tenant: f.tenant,
+func mcpEvidenceAuditor(f *mcpLedgerFixture) mcpgateway.GateAuditor {
+	return mcpgateway.GateAuditor{
+		Log: slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)), Store: f.store, Tenant: f.tenant,
 	}
 }
 
@@ -193,12 +194,12 @@ func TestMCPEvidenceConcurrentDuplicateClaims(t *testing.T) {
 // enforced allow with no store refuses ledger_unwired (never emittable), while a
 // policy DENY record remains a no-op refusal (denial never depends on evidence).
 func TestMCPEvidenceNilStoreRefusesEnforcedAllow(t *testing.T) {
-	a := mcpGateAuditor{
-		log: slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)), tenant: model.NewTenantID(),
+	a := mcpgateway.GateAuditor{
+		Log: slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)), Tenant: model.NewTenantID(),
 	}
 	binding := mcpEvidenceBinding("op-unwired-1", "digest-a")
 	rec := a.Record(context.Background(), mcpc.ToolDecision{
-		Tenant: a.tenant.String(), Subject: "agent:x", Tool: "deploy", Allowed: true,
+		Tenant: a.Tenant.String(), Subject: "agent:x", Tool: "deploy", Allowed: true,
 	}, binding)
 	if rec.State != mcpc.GateRecordRefused || rec.Receipt.Fault != sdk.EvidenceFaultLedgerUnwired {
 		t.Fatalf("nil-store enforced allow = %+v, want refused/ledger_unwired", rec)
@@ -212,10 +213,10 @@ func TestMCPEvidenceNilStoreRefusesEnforcedAllow(t *testing.T) {
 // Mutate) refuses the claim ledger_unavailable — the effect never runs there.
 func TestMCPEvidenceNotLeaderRefuses(t *testing.T) {
 	f := newMCPLedgerFixture(t)
-	a := mcpGateAuditor{
-		log:    slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)),
-		store:  notLeaderHookStore{f.store},
-		tenant: f.tenant,
+	a := mcpgateway.GateAuditor{
+		Log:    slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)),
+		Store:  notLeaderHookStore{f.store},
+		Tenant: f.tenant,
 	}
 	binding := mcpEvidenceBinding("op-standby-1", "digest-a")
 	rec := a.Record(context.Background(), mcpAllowDecision(f, "keyed"), binding)
@@ -271,8 +272,8 @@ func TestMCPEvidenceDegradeSeqZeroRefusesAndCountsLoss(t *testing.T) {
 	// Phase 2: reopen with a 1-byte spool budget in DEGRADE mode — every governed
 	// append drops with durable loss accounting.
 	st := openHookSpoolStore(t, dsn, signer, 1, store.AuditSpoolDegrade)
-	a := mcpGateAuditor{
-		log: slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)), store: st, tenant: tenant,
+	a := mcpgateway.GateAuditor{
+		Log: slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)), Store: st, Tenant: tenant,
 	}
 	base := hookPendingDrops(t, st)
 	binding := mcpEvidenceBinding("op-degrade-1", "digest-a")
@@ -352,7 +353,7 @@ func TestMCPEvidenceTenantResolution(t *testing.T) {
 
 	t.Run("legacy best-effort with malformed tenant is a loud gap, never a silent fallback", func(t *testing.T) {
 		var logs bytes.Buffer
-		loud := mcpGateAuditor{log: slog.New(slog.NewTextHandler(&logs, nil)), store: f.store, tenant: f.tenant}
+		loud := mcpgateway.GateAuditor{Log: slog.New(slog.NewTextHandler(&logs, nil)), Store: f.store, Tenant: f.tenant}
 		before := mcpLedgerHead(t, f.store, f.tenant)
 		loud.Record(ctx, mcpc.ToolDecision{
 			Tenant: "###broken###", Subject: "agent:x", Tool: "read", Allowed: false,
@@ -379,10 +380,10 @@ func TestMCPEvidenceSettlementFailureLeavesClaimAmbiguous(t *testing.T) {
 		t.Fatalf("claim = %+v", rec)
 	}
 	// The settlement leg hits a store whose Mutate refuses (standby shape).
-	failing := mcpGateAuditor{
-		log:    slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)),
-		store:  notLeaderHookStore{f.store},
-		tenant: f.tenant,
+	failing := mcpgateway.GateAuditor{
+		Log:    slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)),
+		Store:  notLeaderHookStore{f.store},
+		Tenant: f.tenant,
 	}
 	settlement := failing.Settle(ctx, mcpc.GateOutcome{Record: rec, State: mcpc.DispatchCompleted})
 	if settlement.FailureClass != sdk.FailureEvidenceFault {
@@ -417,7 +418,7 @@ func TestMCPEvidenceBeforeEffectFence(t *testing.T) {
 		t.Fatal("malformed fence token must refuse (fail closed)")
 	}
 
-	unwired := mcpGateAuditor{log: slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))}
+	unwired := mcpgateway.GateAuditor{Log: slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))}
 	if fence := unwired.BeforeEffect(ctx, rec); fence.Fault != sdk.EvidenceFaultLedgerUnwired {
 		t.Fatalf("unwired fence fault = %q, want ledger_unwired", fence.Fault)
 	}
@@ -427,7 +428,7 @@ func TestMCPEvidenceBeforeEffectFence(t *testing.T) {
 // The word "withheld" exists on BOTH sides of the license boundary —
 // connectors/mcp.DispatchWithheld and core/model.EvidenceOpWithheld — and the
 // gateway crosses it with raw string casts in both directions (Settle:
-// model.EvidenceOperationState(out.State) at mcpgateway.go; replay:
+// model.EvidenceOperationState(out.State) at internal/mcpgateway/auditor.go; replay:
 // mcpc.DispatchState(outcome.Op.State)). No connector-level test can pin the
 // pair, because connectors must never import /core, so the equality lives HERE,
 // in the composition root that imports both. Measured before this test existed:

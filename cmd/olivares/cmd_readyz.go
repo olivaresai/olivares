@@ -40,11 +40,14 @@ func newReadyzCmd() *cobra.Command {
 			"followed by one diagnosis and one remedy held in this binary; no response body or\n" +
 			"header is printed there, and no body can change the status-driven verdict or the\n" +
 			"exit code. An unmeasurable verdict is different: it reports the input, TLS or\n" +
-			"transport failure that stopped the probe, in that error's own unfiltered words.",
+			"transport failure that stopped the probe, in that error's own unfiltered words.\n\n" + textOnlyOutputHelp,
 		Example: "  olivares readyz --server https://127.0.0.1:8443 \\\n" +
 			"    --ca-cert /var/lib/olivares/tls.crt --timeout 3s",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			if err := requireTextOutput(cmd); err != nil {
+				return err
+			}
 			if !cmd.Flags().Changed("server") {
 				origin, ca := readyzTarget()
 				if origin != "" {

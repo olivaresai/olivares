@@ -50,7 +50,7 @@ command -v python3 >/dev/null || cannot "no python3"
 ERR="$(mktemp "${TMPDIR:-/tmp}/c1302-worker.XXXXXX")" || cannot "cannot create a scratch file"
 trap 'rm -f "$ERR" "$ERR.out"' EXIT
 set +e
-[ -r "$ROOT/scripts/module-catalog-go.sh" ] || cannot "falta scripts/module-catalog-go.sh: sin el envoltorio del derivador no hay con qué comparar (un 127 no es un veredicto)"
+[ -r "$ROOT/scripts/module-catalog-go.sh" ] || cannot "missing scripts/module-catalog-go.sh: the derivation wrapper is required for comparison (exit 127 is not a result)"
 bash "$ROOT/scripts/module-catalog-go.sh" check >"$ERR.out" 2>"$ERR"
 rc=$?
 set -e
@@ -61,7 +61,7 @@ set -e
 case "$rc" in
 0 | 1 | 2) ;;
 *)
-	say "check-c13-02-worker-map: COULD NOT LOOK — la derivación salió con un código que su contrato no define ($rc):" >&2
+	say "check-c13-02-worker-map: COULD NOT LOOK — derivation returned an exit code its contract does not define ($rc):" >&2
 	cat "$ERR" >&2 || true
 	exit 2
 	;;

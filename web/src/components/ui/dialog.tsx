@@ -60,7 +60,7 @@ export function DialogContent({
       <DialogOverlay />
       <DialogPrimitive.Content
         className={cn(
-          'fixed left-1/2 top-1/2 z-50 grid w-full max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4',
+          'fixed left-1/2 top-1/2 z-50 grid w-full max-w-lg max-h-[calc(100dvh-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto',
           'bg-elevated border border-border-strong rounded-xl shadow-xl p-6',
           'transition duration-200 ease-out',
           'data-[state=open]:opacity-100 data-[state=closed]:opacity-0',

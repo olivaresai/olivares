@@ -10,6 +10,8 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
+	"unicode/utf8"
 
 	"github.com/olivaresai/olivares/core/internal/store/canon"
 	"github.com/olivaresai/olivares/core/internal/store/dialect"
@@ -402,6 +404,12 @@ VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
 	if err := a.advanceHead(ctx, ev.Seq, ev.Hash); err != nil {
 		return err
 	}
+	// The Merkle tree grows in the row's own transaction, gap markers included, so
+	// on a ledger written since core v24 it is never behind the chain. A ledger that
+	// predates v24 is completed a bounded number of leaves at a time.
+	if err := a.extendTree(ctx, ev.Seq, auditTreeCatchUpPerAppend); err != nil {
+		return err
+	}
 	if a.spoolMaxBytes > 0 {
 		q = a.dia.Rebind("UPDATE " + a.relation(auditSpoolUsageTable) +
 			" SET bytes = bytes + ? WHERE id = 1")
@@ -441,7 +449,7 @@ func (a *auditLog) lockSpoolUsage(ctx context.Context) (int64, error) {
 // carries the derived COMMITMENT, not the blind that produced it: the blind is
 // stored material that never enters the in-memory event. Omitting it would
 // under-count every blinded row by BlindLen bytes, and this counter is not
-// bookkeeping — it gates ADR-0024 Q2 admission, which decides when evidence stops
+// bookkeeping — it gates audit-spool policy admission, which decides when evidence stops
 // being recorded and starts being declared dropped in a signed gap marker. An
 // under-count moves that threshold, so the ledger would admit more than the
 // operator's configured budget before degrading.
@@ -726,6 +734,94 @@ func (a *auditLog) Walk(ctx context.Context, fromSeq int64, fn func(model.AuditE
 		}
 	}
 	return rows.Err()
+}
+
+// WalkFiltered implements store.FilteredWalker (CUTS A3): the audit list's
+// filter set applied in SQL over the (tenant_id, seq) walk, so a filtered list
+// decodes only matching rows — the AU2-05 measurement was 63.7 ms of decode for
+// a needle filter, and the model for the same answer in SQL is 4.5 ms.
+// Prefixes compare as substr equality with a CHARACTER count (SR5C: a byte
+// count would truncate multibyte prefixes mid-string; SQLite and PostgreSQL
+// substr both count characters), never LIKE — exactly strings.HasPrefix.
+// Q is applied IN GO after the structural predicates, with the handler's own
+// Unicode rules (strings.ToLower + strings.Contains): SQLite's lower() folds
+// ASCII only and PostgreSQL has no instr, so no SQL rendering of Q keeps the
+// published semantics on both engines.
+func (a *auditLog) WalkFiltered(ctx context.Context, fromSeq int64, f store.AuditFilter, fn func(model.AuditEvent) error) error {
+	where := []string{"tenant_id = ?", "seq >= ?"}
+	args := []any{a.tenant.String(), fromSeq}
+	if f.Actor != "" {
+		where = append(where, "actor = ?")
+		args = append(args, f.Actor)
+	}
+	// Prefixes compare as EXACT BYTES (substr length-prefix equality), never as
+	// LIKE patterns: SQLite's LIKE is case-insensitive by default and _ / % are
+	// wildcards, while the contract is strings.HasPrefix.
+	if f.ActionPrefix != "" {
+		where = append(where, "substr(action, 1, ?) = ?")
+		args = append(args, utf8.RuneCountInString(f.ActionPrefix), f.ActionPrefix)
+	}
+	for _, excluded := range f.ExcludeActionPrefixes {
+		where = append(where, "substr(action, 1, ?) <> ?")
+		args = append(args, utf8.RuneCountInString(excluded), excluded)
+	}
+	if f.TargetKind != "" {
+		where = append(where, "target_kind = ?")
+		args = append(args, f.TargetKind)
+	}
+	if f.TargetID != "" {
+		where = append(where, "target_id = ?")
+		args = append(args, f.TargetID)
+	}
+	if f.Since != nil {
+		where = append(where, "occurred_at >= ?")
+		args = append(args, model.NewTimestamp(*f.Since).String())
+	}
+	if f.Until != nil {
+		where = append(where, "occurred_at <= ?")
+		args = append(args, model.NewTimestamp(*f.Until).String())
+	}
+	q := a.dia.Rebind("SELECT " + columnList(auditColumns) + " FROM " + a.relation(auditTable) +
+		" WHERE " + strings.Join(where, " AND ") + " ORDER BY seq ASC")
+	rows, err := a.tx.QueryContext(ctx, q, args...)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	// Q keeps the handler's Unicode rules exactly (SR5C), so it runs in Go on
+	// the structurally-narrowed rows — not in SQL, where lower() folds ASCII
+	// only on SQLite and instr does not exist on PostgreSQL.
+	var needle string
+	if f.Q != "" {
+		needle = strings.ToLower(f.Q)
+	}
+	for rows.Next() {
+		ev, _, _, err := scanAudit(rows)
+		if err != nil {
+			return err
+		}
+		if needle != "" && !auditQMatch(ev, needle) {
+			continue
+		}
+		if err := fn(ev); err != nil {
+			return err
+		}
+	}
+	return rows.Err()
+}
+
+// auditQMatch is the handler's q rule, verbatim: a case-insensitive substring
+// over action, actor, target kind and target id (Go's strings.ToLower, full
+// Unicode). needle is already lowered.
+func auditQMatch(ev model.AuditEvent, needle string) bool {
+	targetID := ""
+	if !ev.TargetID.IsZero() {
+		targetID = ev.TargetID.String()
+	}
+	return strings.Contains(strings.ToLower(ev.Action), needle) ||
+		strings.Contains(strings.ToLower(ev.Actor), needle) ||
+		strings.Contains(strings.ToLower(string(ev.TargetKind)), needle) ||
+		strings.Contains(strings.ToLower(targetID), needle)
 }
 
 // WalkCanonical implements store.CanonicalWalker: the same SELECT and ordering

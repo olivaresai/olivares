@@ -1,18 +1,15 @@
 <!-- SPDX-FileCopyrightText: 2026 Olivares.AI -->
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 
-# You already have an AI gateway — Olivares governs it
+<a id="you-already-have-an-ai-gateway--olivares-governs-it"></a>
 
-Olivares is **not** an AI gateway. It does not route traffic between models, load-balance,
-fail over, or sit on the inference hot path as a proxy (that decision was settled early — the
-inference PEP is a governance point, not a router). If you already run Envoy AI Gateway, Kong AI
-Gateway, LiteLLM, or Cloudflare AI Gateway, you keep them. Olivares treats each as a **surface to
-govern**: it ingests the gateway's declared configuration and its usage, correlates the traffic and
-cost with the identities in your estate, and reports where the gateway's own policy **drifts** from
-the policy you declared in Olivares.
+# AI gateway connectors
 
-The value lives *above the wire*: an identity-bound access map and an offline-verifiable audit
-ledger that span every gateway at once, rather than one request-scoped view per gateway.
+Olivares AI reads gateway configuration and usage, correlates traffic and cost
+with identities, and reports differences from the models and budgets you allow.
+These connectors do not route, load-balance, fail over or proxy model requests.
+They work with Envoy AI Gateway, Kong AI Gateway, LiteLLM and Cloudflare AI Gateway.
+The access map and offline-verifiable audit ledger span those gateways.
 
 ## What each connector ingests (read-only, minimal-data)
 
@@ -36,5 +33,4 @@ what the gateway is *actually configured to allow*. A model reachable through th
 your allowlist, or a LiteLLM budget that contradicts the one you declared, is surfaced as a finding —
 not as a claim that the gateway is wrong, but as a reconciliation point you own.
 
-No FUD: these gateways are good tools and Olivares complements them. It is the layer that asks, across
-all of them at once, *"what can the whole estate actually reach, and is that what we intended?"*
+Use the findings to reconcile gateway settings with your declared access and budgets.

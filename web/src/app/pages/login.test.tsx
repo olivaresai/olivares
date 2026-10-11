@@ -9,6 +9,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { queryKeys } from '@/lib/api/query'
 import type { Whoami } from '@/lib/api/types'
 import { useClientSettings } from '@/features/settings/preferences'
+import { useSessionStore } from '@/stores/session'
 import { useTenantStore } from '@/stores/tenant'
 
 const navigateMock = vi.fn()
@@ -288,5 +289,24 @@ describe('sign-in email: the engine rule', () => {
       await screen.findByText('Enter a valid email address.'),
     ).toBeInTheDocument()
     expect(auth.login).not.toHaveBeenCalled()
+  })
+})
+
+// HU-R37: after the engine ended the session, the sign-in page says why, in one line.
+describe('the sign-in page after a session ended', () => {
+  it.each([
+    ['ended', 'Your session ended. Sign in again.'],
+    ['expired', 'Your session expired. Sign in again.'],
+  ] as const)('says the session %s', (reason, line) => {
+    useSessionStore.setState({ endReason: reason })
+    renderLogin()
+    expect(screen.getByText(line)).toHaveAttribute('role', 'status')
+    useSessionStore.setState({ endReason: null })
+  })
+
+  it('says nothing on an ordinary visit', () => {
+    useSessionStore.setState({ endReason: null })
+    renderLogin()
+    expect(screen.queryByText(/Your session/)).toBeNull()
   })
 })

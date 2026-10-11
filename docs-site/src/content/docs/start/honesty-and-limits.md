@@ -5,12 +5,18 @@ description: >-
   product deliberately does not do. No fabricated capabilities.
 ---
 
+:::note[Business]
+Audit export (`GET /v1/audit/export`, `olivares audit export`), directory archives and external archive verification require Business. Community keeps the signed ledger, `olivares audit verify` and `olivares dr backup`; export routes and commands return HTTP 501 or exit 9. Audit forwarding and DDIL transfers carrying audit segments also require Business.
+:::
+
 A control plane for AI is a security product. If it overstates what it covers, it
 gives a false sense of safety — which is worse than no tool at all. So this page is
 the explicit contract about **what runs today, what is planned, and what is out of
 scope on purpose.** The rest of the documentation holds to it: commands in tutorials
 and how-to guides are meant to be run as written, and where the product does not yet
 cover something, the page says so rather than implying it does.
+
+**NATS event delivery:** The Core NATS bridge and NATS JetStream require Business Identity & Scale. Community uses in-process delivery.
 
 ## What runs today
 
@@ -22,10 +28,12 @@ cover something, the page says so rather than implying it does.
   reproduces exactly that path.
 - **First-run setup is credential-free.** A fresh install has **no default
   credentials**; the engine prints a one-time, single-use setup token on first boot.
-- **Official Codex and Grok CLIs are session drivers when pinned.** Setting
-  `OLIVARES_SESSION_RUNTIME_CODEX_BIN` or `OLIVARES_SESSION_RUNTIME_GROK_BIN`
-  registers that driver on the node. Unset, profiles for that driver stay
-  observable and are not launchable. Launches go through a
+- **Official Codex, Grok and OpenCode CLIs can run as provider sessions.**
+  The engine registers these drivers at boot. At launch, it uses the newest
+  verified managed install, then the CLI on the engine's `PATH`.
+  `OLIVARES_SESSION_RUNTIME_CODEX_BIN`, `OLIVARES_SESSION_RUNTIME_GROK_BIN`
+  and `OLIVARES_SESSION_RUNTIME_OPENCODE_BIN` override this resolution.
+  If no executable resolves, launch is refused. Launches go through a
   [provider profile](/how-to/operate-provider-sessions/).
   `CHANGELOG.md` `[26.9.0]` does **not** claim compatibility with an
   authenticated official Grok account.
@@ -35,23 +43,24 @@ cover something, the page says so rather than implying it does.
   in several SIEM formats.
 - **Releases are signed and verifiable.** Signatures, SLSA provenance, SBOM and OpenVEX can all be
   [verified](/how-to/verify-a-release/). Verification is not yet fully network-free: keyless checks need Sigstore trusted-root
-  material and the SLSA step has no offline mode. The product ships an [air-gap bundle](/how-to/air-gap-install/). The latest tagged release, **26.10.1**, is published with signed archives, native packages and container images; APIs, schemas and the module surface may still change before 1.0.
+  material and the SLSA step has no offline mode. The product ships an [air-gap bundle](/how-to/air-gap-install/). The next release is **<!-- release -->0.1<!-- /release -->**, not yet published.
 
-## Open core — what is open vs enterprise
+## Open core — what is open vs commercial
 
 The product is **open core**: the default (AGPL) binary is the whole governance
-platform, and a small, **additive** commercial line (`enterprise/`, built only with
-`-tags enterprise`, never in the public binary) holds the reserved features. Two
+platform, and a small, **additive** commercial line (Business and Enterprise; the
+`enterprise/` directory, built only with `-tags enterprise`, never in the public
+binary) holds the reserved features. Two
 boundaries matter for day-to-day use, and the open build answers for them honestly
 rather than faking them:
 
 - **SSO is open for a single IdP.** Single-IdP login — **OIDC** (Authorization Code
   + PKCE) and **SAML 2.0** (signed responses, anti-replay) — runs in the default
-  binary with **no** `-tags enterprise`. Running **more than one active IdP**
-  (per-tenant / by-domain), **SSO-enforcement** (require-SSO / block password login)
-  and **managed SCIM** are the reserved enterprise line; activating a second active
-  IdP returns `multi_idp_requires_enterprise` — an explicit product limit, never a
-  fake 501.
+  binary with **no** `-tags enterprise`, and so does inbound **SCIM**. Running
+  **more than one active IdP** (per-tenant / by-domain) and **SSO-enforcement**
+  (require-SSO / block password login) are Business (Identity & Scale); activating a
+  second active IdP returns `multi_idp_requires_enterprise` — an explicit product
+  limit, never a fake 501.
 - **There is no user cap — accounts are unlimited in every edition.** Community,
   Business and Enterprise self-hosted all admit an unlimited number of
   user accounts, whatever the license state: valid, expired, or none at all. The cap of
@@ -62,12 +71,13 @@ rather than faking them:
 - **The rest of the platform is open.** The full governance loop — inventory, the
   R/RW access map, RBAC/ABAC/Cedar policy, the sealed audit ledger, FinOps,
   compliance, SIEM egress, MCP, HA/distributed — runs in the open binary with no
-  license check. The additive `enterprise/` modules (multi-IdP federation, content
-  firewall/DLP, hook hardening, the compiled threat-intel catalog, server-tool egress, the
-  CyberArk Conjur connector, and the incident close-loop) are
-  new code that was never in the open product, not features removed from it. License
-  validation in the open binary is **attestation-only** — it never enables, disables
-  or blocks anything (see
+  license check. The additive `enterprise/` modules are new code that was never in
+  the open product, not features removed from it; which capability is in which edition
+  is written once, in
+  `docs/editions.md` in the repository.
+  License validation in the open binary is **attestation-only** — it never enables, disables
+  or blocks anything, except that installing an update bundle that does not state the
+  community edition needs a live license (see
   [Open core & licensing](/explanation/open-core-and-licensing/)).
 
 ## What is design-stage or pre-1.0
@@ -137,7 +147,7 @@ Treat module-level depth as **work in progress** unless a page states otherwise.
   Models you genuinely self-host (e.g. via vLLM/Ollama under module XXIII) can run
   air-gapped; brokered frontier models cannot.
 - **Module routes are a separate, beta contract.** The module endpoints (for
-  example the access-map graph and drift) are not part of the 70-path stable core
+  example the access-map graph and drift) are not part of the 128-path stable core
   contract; they are published as a separate **beta** document — the
   [module-route reference](/reference/api-beta/) (served at `/openapi.beta.json`).
   Beta means the shapes may change with notice, and field-level detail still lives

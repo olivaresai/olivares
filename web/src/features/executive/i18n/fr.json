@@ -20,7 +20,7 @@
     "tenant": "Organisation",
     "allOrgs": "Toutes les organisations",
     "range": "Plage de coût",
-    "footer": "Plan de contrôle Olivares AI — KPI agrégés uniquement ; aucune charge utile ni aucun secret."
+    "footer": "Olivares AI — KPI agrégés uniquement ; aucune charge utile ni aucun secret."
   },
   "empty": {
     "title": "Aucun KPI de direction disponible",
@@ -95,7 +95,8 @@
     "driftUnused": "Octrois inutilisés",
     "coverageNote": "Certains accès sont observés avec une couverture partielle (capture approximative ou opaque) ; les chiffres de dérive constituent une borne inférieure.",
     "noFindings": "Aucun constat ouvert.",
-    "noRuns": "Aucune exécution de l’équipe rouge pour l’instant."
+    "noRuns": "Aucune exécution de l’équipe rouge pour l’instant.",
+    "sharedDescription": "Constats de sécurité ouverts et dérive des accès."
   },
   "compliance": {
     "title": "Conformité",

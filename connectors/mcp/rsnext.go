@@ -192,24 +192,12 @@ func (rs *ResourceServer) enforceNextHeadersPreBody(ctx context.Context, w http.
 	}
 
 	// L7 policy pre-check for tools/call: the same deny-by-default toolset,
-	// scope and role gates the body path enforces, decided from Mcp-Name alone.
-	// Only the DENY is final here; an allow still passes through body parsing,
-	// header↔body consistency, and (for destructive tools) the approval gate.
+	// scope and role gates the body path enforces (admitEntry, verdict.go),
+	// decided from Mcp-Name alone. Only the DENY is final here; an allow still
+	// passes through body parsing, header↔body consistency, and the whole verdict.
 	if method == "tools/call" {
-		policy, ok := rs.toolset.resolve(name)
-		if !ok {
-			rs.auditTraced(ctx, tok, name, "", false, "deny-by-default at L7 (Mcp-Name not in server toolset)", "", "MCP01", trace)
-			rs.writeRPCError(w, http.StatusForbidden, nil, rpcAccessDenied, "tool not permitted by server policy")
-			return true
-		}
-		if !tok.hasScope(policy.RequiredScope) {
-			rs.auditTraced(ctx, tok, name, policy.RequiredScope, false, "insufficient scope at L7", "", "MCP02", trace)
-			rs.challengeScope(w, nil, policy.RequiredScope)
-			return true
-		}
-		if !roleAllowed(policy, tok.Roles) {
-			rs.auditTraced(ctx, tok, name, policy.RequiredScope, false, "caller role not permitted at L7", "", "MCP02", trace)
-			rs.writeRPCError(w, http.StatusForbidden, nil, rpcAccessDenied, "tool not permitted for caller role")
+		if _, f := rs.admitEntry(&gatedCall{tok: tok, trace: trace, tool: name}, headerEntry); f != nil {
+			rs.refuse(ctx, w, nil, f)
 			return true
 		}
 	}

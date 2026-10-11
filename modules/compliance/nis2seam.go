@@ -14,11 +14,10 @@ import "context"
 // commercial add-on enterprise/nis2incident, wired ONLY under -tags enterprise (the
 // RegulatoryPackager / AIMSPackager pattern). The open binary never links it.
 //
-// No rug-pull (LICENSING.md): the open framework catalog nis2 (frameworks.go), the
-// regulatory calendar (calendar.go — NIS 2 milestones with source + verified_on), the
-// on-demand live assessment (assess.go) and the evidence engine (evidence.go) are ALL
-// unchanged and stay open. Without a wired NIS2 incident packager the new endpoints answer
-// 501; the default binary is byte-identical.
+// NIS 2 framework catalogs, calendars and live assessments are Business
+// Compliance Packs. Stored-evidence reads and JSON/CSV export remain shared.
+// Without a wired NIS 2 incident packager its endpoints answer 501; the shared
+// interface and persisted records remain available.
 //
 // Honesty (docs/SECURITY-HARDENING.md): the control plane cannot MEASURE the significant-incident criteria
 // (operational disruption severity, financial loss, persons affected) — so it never derives
@@ -29,8 +28,8 @@ import "context"
 
 // NIS2IncidentPackager is the closed seam for NIS 2 Directive significant-incident
 // classification and tiered report drafting. The default is nil — without a wired packager
-// the NIS2 incident endpoints answer 501 and the open nis2 catalog/calendar surfaces keep
-// their behavior. The real implementation is enterprise/nis2incident, wired only under
+// the NIS2 incident endpoints answer 501. NIS2 catalogs and calendar belong to Business
+// Compliance Packs. The implementation is enterprise/nis2incident, wired under
 // -tags enterprise.
 type NIS2IncidentPackager interface {
 	// ClassifySignificantIncident applies the Art 23(3) criteria to operator-supplied

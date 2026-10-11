@@ -8,7 +8,9 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -81,6 +83,37 @@ func TestGPGVerifierGoodBadAndWrongKey(t *testing.T) {
 	// Malformed pin.
 	_, err = v.Verify(context.Background(), key.Public, "abc", sig, data)
 	requireKind(t, err, KindVerificationUnavailable)
+}
+
+func TestGPGVerifierLongTMPDIR(t *testing.T) {
+	toolinstalltest.RequireGPG(t)
+	v, err := NewGPGVerifier(context.Background(), exec.LookPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join("testdata", "claude-manifest-2.1.286.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	sig, err := os.ReadFile(filepath.Join("testdata", "claude-manifest-2.1.286.sig.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The engine's temporary directory can exceed a Unix socket's path limit.
+	tmp := filepath.Join(t.TempDir(), strings.Repeat("long-engine-tmpdir-", 10))
+	if err := os.Mkdir(tmp, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("TMPDIR", tmp)
+	rep, err := v.Verify(context.Background(), []byte(claudeReleaseKey), ClaudeReleaseKeyFingerprint, sig, data)
+	if err != nil {
+		t.Fatalf("official manifest with long TMPDIR: %v", err)
+	}
+	if rep.PrimaryFingerprint != ClaudeReleaseKeyFingerprint || rep.Verifier != v.Describe() || rep.Created.IsZero() {
+		t.Fatalf("report %+v", rep)
+	}
+	_, err = v.Verify(context.Background(), []byte(claudeReleaseKey), ClaudeReleaseKeyFingerprint, sig, append(data, ' '))
+	requireKind(t, err, KindSignatureInvalid)
 }
 
 func TestParseVerifyStatusPolicy(t *testing.T) {

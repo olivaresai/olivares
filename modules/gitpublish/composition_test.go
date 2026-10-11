@@ -13,6 +13,7 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/audit"
@@ -37,6 +38,138 @@ type server struct {
 	tenant model.TenantID
 	st     store.Store
 	authr  *auth.Authenticator
+}
+
+// Ordinary HTTP requests have no deadline. Exercise all admissions with the
+// serving authenticator and production authority, rather than fakeAuthority.
+func TestProductionIntentAdmissionWithoutRequestDeadline(t *testing.T) {
+	s := newServer(t)
+	requirePasskeyStepUp(t, s.st)
+	if code, _, raw := s.do("POST", "/v1/setup", "", map[string]any{"token": s.setup, "email": "root@x.io", "password": "supersecret1"}, ""); code != http.StatusCreated {
+		t.Fatalf("setup = %d %s", code, raw)
+	}
+	root := s.login("root@x.io", "supersecret1")
+	s.stepUp(root)
+	code, out, raw := s.do("POST", "/v1/system/orgs", root, map[string]any{"name": "acme", "slug": "acme"}, "")
+	if code != http.StatusCreated {
+		t.Fatalf("org = %d %s", code, raw)
+	}
+	s.tenant = model.TenantID(out["tenant_id"].(string))
+	admin, viewer := s.member(root, "admin"), s.member(root, "viewer")
+	s.stepUp(admin)
+	code, out, raw = s.do("POST", "/v1/m/gitpublish/targets", admin, map[string]any{
+		"workspace_id": model.NewID().String(), "credential_binding_id": "cb1", "repository_binding_id": "rb1", "push_prefix": "olivares/", "merge_bases": []string{"main"},
+	}, s.tenant)
+	if code != http.StatusCreated {
+		t.Fatalf("target = %d %s", code, raw)
+	}
+	target := out["id"].(string)
+	base := "/v1/m/gitpublish/"
+	push := func(op string) string {
+		t.Helper()
+		code, out, raw := s.do("POST", base+"targets/"+target+"/pushes", admin, map[string]any{
+			"operation_id": op, "ref": "refs/heads/olivares/" + op, "commit": shaCommit, "tree": shaTree,
+		}, s.tenant)
+		if code != http.StatusOK && code != http.StatusAccepted {
+			t.Fatalf("push = %d %s", code, raw)
+		}
+		return out["id"].(string)
+	}
+	id := push("applied")
+	readPaths := []string{"intents?target_id=" + target, "intents/" + id, "intents/" + id + "/observations"}
+	for _, path := range readPaths {
+		t.Run(path, func(t *testing.T) {
+			code, out, raw := s.do("GET", base+path, admin, nil, s.tenant)
+			if code != http.StatusOK {
+				t.Fatalf("read = %d %s", code, raw)
+			}
+			if path == "intents/"+id {
+				if out["id"] != id || out["state"] != StateApplied {
+					t.Fatalf("intent = %s", raw)
+				}
+			} else if items, ok := out["items"].([]any); !ok || len(items) == 0 {
+				t.Fatalf("stored records missing: %s", raw)
+			}
+		})
+	}
+	t.Run("admin binding IDs", func(t *testing.T) {
+		code, out, raw := s.do("GET", base+"targets/"+target, admin, nil, s.tenant)
+		if code != http.StatusOK || out["credential_binding_id"] != "cb1" || out["repository_binding_id"] != "rb1" {
+			t.Fatalf("admin target = %d %s", code, raw)
+		}
+	})
+	t.Run("viewer binding IDs concealed", func(t *testing.T) {
+		code, out, raw := s.do("GET", base+"targets/"+target, viewer, nil, s.tenant)
+		if code != http.StatusOK || out["credential_binding_id"] != nil || out["repository_binding_id"] != nil {
+			t.Fatalf("viewer target = %d %s", code, raw)
+		}
+	})
+	t.Run("settled state", func(t *testing.T) {
+		if code, out, raw := s.do("POST", base+"intents/"+id+"/reconcile", admin, nil, s.tenant); code != http.StatusOK || out["state"] != StateApplied {
+			t.Errorf("settled reconcile = %d %s", code, raw)
+		}
+		if code, _, raw := s.do("POST", base+"intents/"+id+"/abandon", admin, map[string]any{"reason": "settled"}, s.tenant); code != http.StatusConflict {
+			t.Errorf("settled abandon = %d %s", code, raw)
+		}
+	})
+	// A timed-out write stays uncertain while the host has not observed it.
+	s.m.opts.DispatchTimeout = 20 * time.Millisecond
+	s.git.hold = make(chan struct{})
+	defer close(s.git.hold)
+	unresolved := push("unresolved")
+	t.Run("uncertain reconcile and abandon", func(t *testing.T) {
+		path := base + "intents/" + unresolved
+		if code, out, raw := s.do("POST", path+"/reconcile", admin, nil, s.tenant); code != http.StatusAccepted || out["state"] != StateUncertain {
+			t.Errorf("uncertain reconcile = %d %s", code, raw)
+		}
+		if code, out, raw := s.do("POST", path+"/abandon", admin, map[string]any{"reason": "host outage"}, s.tenant); code != http.StatusOK || out["state"] != StateAbandoned || out["reason"] != "host outage" {
+			t.Errorf("uncertain abandon = %d %s", code, raw)
+		}
+	})
+	t.Run("viewer cannot reconcile or abandon", func(t *testing.T) {
+		for _, action := range []string{"reconcile", "abandon"} {
+			code, _, raw := s.do("POST", base+"intents/"+unresolved+"/"+action, viewer, map[string]any{}, s.tenant)
+			if code != http.StatusForbidden && code != http.StatusNotFound {
+				t.Errorf("viewer %s = %d %s", action, code, raw)
+			}
+		}
+	})
+	t.Run("token cannot step up", func(t *testing.T) {
+		code, out, raw := s.do("POST", "/v1/tokens", root, map[string]any{"name": "publication", "tenant": s.tenant.String(), "role": "admin"}, "")
+		if code != http.StatusCreated {
+			t.Fatalf("token = %d %s", code, raw)
+		}
+		code, _, raw = s.do("POST", base+"intents/"+unresolved+"/abandon", out["token"].(string), map[string]any{}, s.tenant)
+		if code != http.StatusForbidden {
+			t.Fatalf("token abandon = %d %s", code, raw)
+		}
+	})
+	t.Run("wrong tenant", func(t *testing.T) {
+		code, out, raw := s.do("POST", "/v1/system/orgs", root, map[string]any{"name": "other", "slug": "other"}, "")
+		if code != http.StatusCreated {
+			t.Fatalf("other org = %d %s", code, raw)
+		}
+		other := model.TenantID(out["tenant_id"].(string))
+		for _, path := range append(readPaths, "targets/"+target) {
+			code, _, raw := s.do("GET", base+path, root, nil, other)
+			if code != http.StatusNotFound {
+				t.Errorf("wrong tenant %s = %d %s", path, code, raw)
+			}
+		}
+	})
+	if code, _, raw := s.do("POST", "/v1/auth/logout", admin, map[string]any{}, ""); code >= 300 {
+		t.Fatalf("logout = %d %s", code, raw)
+	}
+	t.Run("revoked credential", func(t *testing.T) {
+		for _, path := range append(readPaths, "targets/"+target) {
+			if code, _, raw := s.do("GET", base+path, admin, nil, s.tenant); code != http.StatusUnauthorized {
+				t.Errorf("revoked %s = %d %s", path, code, raw)
+			}
+		}
+	})
+	if s.git.count() != 2 || s.host.mints != s.host.releases {
+		t.Fatalf("unexpected effects: dispatches=%d mints=%d releases=%d", s.git.count(), s.host.mints, s.host.releases)
+	}
 }
 
 func newServer(t *testing.T) *server {
@@ -145,7 +278,7 @@ func TestProductionCompositionThroughTheSealedDoor(t *testing.T) {
 		t.Fatalf("setup = %d %s", code, raw)
 	}
 	root := s.login("root@x.io", "supersecret1")
-	// Adding a person asks for the deployment's step-up (HU-28, 5ef7ef98): the
+	// Adding a person asks for the deployment's step-up: the
 	// administrator who adds the members steps up; the members under test do not.
 	s.stepUp(root)
 	code, out, raw := s.do("POST", "/v1/system/orgs", root, map[string]any{"name": "acme", "slug": "acme"}, "")

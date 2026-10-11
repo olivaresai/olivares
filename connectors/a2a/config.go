@@ -6,9 +6,8 @@ package a2a
 import (
 	"encoding/json"
 	"fmt"
-	"time"
-
 	"github.com/olivaresai/olivares/sdk"
+	"time"
 )
 
 // Name is the connector's globally unique dotted identifier.

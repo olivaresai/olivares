@@ -44,7 +44,7 @@ func serveManifest(t *testing.T, version string, sec bool, priv ed25519.PrivateK
 }
 
 func TestCheckAirGapIsSilent(t *testing.T) {
-	st := Check(context.Background(), Config{CurrentVersion: "26.7.0"}) // no endpoint, no key
+	st := Check(context.Background(), Config{CurrentVersion: "26.700"}) // no endpoint, no key
 	if st.Enabled {
 		t.Fatal("with no endpoint/key, checking must be disabled (air-gap silence, not error)")
 	}
@@ -55,21 +55,21 @@ func TestCheckAirGapIsSilent(t *testing.T) {
 
 func TestCheckAvailableAndUpToDate(t *testing.T) {
 	pub, priv, _ := ed25519.GenerateKey(nil)
-	srv := serveManifest(t, "26.8.0", true, priv, false)
+	srv := serveManifest(t, "26.800", true, priv, false)
 	cfg := Config{Endpoint: srv.URL, Channel: "stable", PubKey: pub, InstallID: "n1"}
 
 	// current older -> available, security + advisories propagate.
-	cfg.CurrentVersion = "26.7.0"
+	cfg.CurrentVersion = "26.700"
 	st := Check(context.Background(), cfg)
 	if !st.Enabled || !st.Available || st.UpToDate {
 		t.Fatalf("older current must see an available update: %+v", st)
 	}
-	if st.LatestVersion != "26.8.0" || !st.Security || len(st.Advisories) != 1 {
+	if st.LatestVersion != "26.800" || !st.Security || len(st.Advisories) != 1 {
 		t.Fatalf("available update must carry version/security/advisories: %+v", st)
 	}
 
 	// current equal -> up to date, no security noise.
-	cfg.CurrentVersion = "26.8.0"
+	cfg.CurrentVersion = "26.800"
 	st = Check(context.Background(), cfg)
 	if st.Available || !st.UpToDate {
 		t.Fatalf("equal current must be up to date: %+v", st)
@@ -79,7 +79,7 @@ func TestCheckAvailableAndUpToDate(t *testing.T) {
 	}
 
 	// current newer than channel -> still up to date (never a rollback nudge).
-	cfg.CurrentVersion = "26.9.0"
+	cfg.CurrentVersion = "26.900"
 	st = Check(context.Background(), cfg)
 	if st.Available || !st.UpToDate {
 		t.Fatalf("newer-than-channel must be up to date: %+v", st)
@@ -95,7 +95,7 @@ func TestCheckAvailableAndUpToDate(t *testing.T) {
 func TestCheckUnstampedBuildMakesNoClaim(t *testing.T) {
 	pub, priv, _ := ed25519.GenerateKey(nil)
 	// The channel serves an OLDER release than any plausible source build.
-	srv := serveManifest(t, "26.7.0", true, priv, false)
+	srv := serveManifest(t, "26.700", true, priv, false)
 	cfg := Config{Endpoint: srv.URL, Channel: "stable", PubKey: pub, InstallID: "n1"}
 
 	for _, unstamped := range []string{"dev", "", "  ", "vdev"} {
@@ -116,7 +116,7 @@ func TestCheckUnstampedBuildMakesNoClaim(t *testing.T) {
 	}
 
 	// Control: a stamped build behind the channel still gets a real answer.
-	cfg.CurrentVersion = "26.6.0"
+	cfg.CurrentVersion = "26.600"
 	if st := Check(context.Background(), cfg); !st.Available || st.Error != "" {
 		t.Fatalf("a stamped, older build must still see the update: %+v", st)
 	}
@@ -124,8 +124,8 @@ func TestCheckUnstampedBuildMakesNoClaim(t *testing.T) {
 
 func TestCheckVerifyFailureIsCapturedNotFatal(t *testing.T) {
 	pub, priv, _ := ed25519.GenerateKey(nil)
-	srv := serveManifest(t, "26.8.0", true, priv, true) // bad signature
-	st := Check(context.Background(), Config{Endpoint: srv.URL, PubKey: pub, CurrentVersion: "26.7.0"})
+	srv := serveManifest(t, "26.800", true, priv, true) // bad signature
+	st := Check(context.Background(), Config{Endpoint: srv.URL, PubKey: pub, CurrentVersion: "26.700"})
 	if !st.Enabled {
 		t.Fatal("a configured check stays Enabled even when it fails")
 	}
@@ -135,7 +135,7 @@ func TestCheckVerifyFailureIsCapturedNotFatal(t *testing.T) {
 
 	// Wrong key -> also captured, not fatal.
 	otherPub, _, _ := ed25519.GenerateKey(nil)
-	st = Check(context.Background(), Config{Endpoint: srv.URL, PubKey: otherPub, CurrentVersion: "26.7.0"})
+	st = Check(context.Background(), Config{Endpoint: srv.URL, PubKey: otherPub, CurrentVersion: "26.700"})
 	if st.Error == "" {
 		t.Fatal("wrong key must be captured as an error")
 	}
@@ -148,7 +148,7 @@ func TestCheckStaleManifestIsNotUpToDate(t *testing.T) {
 	past := time.Now().UTC().Add(-time.Hour)
 	sum := sha256.Sum256([]byte("artifact"))
 	m := release.Manifest{
-		SchemaVersion: release.ManifestSchemaVersion, Channel: release.ChannelStable, Version: "26.8.0",
+		SchemaVersion: release.ManifestSchemaVersion, Channel: release.ChannelStable, Version: "26.800",
 		ReleasedAt: past.Add(-24 * time.Hour), Expires: &past,
 		Artifacts: []release.Artifact{{OS: "linux", Arch: "amd64", Filename: "a.tgz", SHA256: hex.EncodeToString(sum[:])}},
 	}
@@ -162,7 +162,7 @@ func TestCheckStaleManifestIsNotUpToDate(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
 
-	st := Check(context.Background(), Config{Endpoint: srv.URL, PubKey: pub, CurrentVersion: "26.7.0"})
+	st := Check(context.Background(), Config{Endpoint: srv.URL, PubKey: pub, CurrentVersion: "26.700"})
 	if st.Available || st.UpToDate {
 		t.Fatalf("an expired manifest must not report available/up-to-date: %+v", st)
 	}
@@ -173,17 +173,17 @@ func TestCheckStaleManifestIsNotUpToDate(t *testing.T) {
 
 func TestCheckerCaches(t *testing.T) {
 	pub, priv, _ := ed25519.GenerateKey(nil)
-	srv := serveManifest(t, "26.8.0", false, priv, false)
-	c := NewChecker(Config{Endpoint: srv.URL, PubKey: pub, CurrentVersion: "26.7.0", InstallID: "n1"}, time.Hour)
+	srv := serveManifest(t, "26.800", false, priv, false)
+	c := NewChecker(Config{Endpoint: srv.URL, PubKey: pub, CurrentVersion: "26.700", InstallID: "n1"}, time.Hour)
 	// Before refresh: Enabled reflects config, no result yet.
 	if !c.Latest().Enabled {
 		t.Fatal("configured checker should report Enabled before first refresh")
 	}
 	got := c.Refresh(context.Background())
-	if !got.Available || got.LatestVersion != "26.8.0" {
+	if !got.Available || got.LatestVersion != "26.800" {
 		t.Fatalf("refresh should populate the available update: %+v", got)
 	}
-	if !strings.Contains(c.Latest().LatestVersion, "26.8.0") {
+	if !strings.Contains(c.Latest().LatestVersion, "26.800") {
 		t.Fatalf("Latest must return the cached refresh: %+v", c.Latest())
 	}
 }
@@ -201,7 +201,7 @@ func TestCheckReadsTheReleaseAssetLayout(t *testing.T) {
 	pub, priv, _ := ed25519.GenerateKey(nil)
 	sum := sha256.Sum256([]byte("artifact"))
 	m := release.Manifest{
-		SchemaVersion: release.ManifestSchemaVersion, Channel: release.ChannelStable, Version: "26.9.0",
+		SchemaVersion: release.ManifestSchemaVersion, Channel: release.ChannelStable, Version: "26.900",
 		ReleasedAt: time.Date(2026, 8, 27, 0, 0, 0, 0, time.UTC),
 		Artifacts: []release.Artifact{{OS: "linux", Arch: "amd64", Filename: "a.tgz",
 			SHA256: hex.EncodeToString(sum[:])}},
@@ -231,13 +231,13 @@ func TestCheckReadsTheReleaseAssetLayout(t *testing.T) {
 
 	st := Check(context.Background(), Config{
 		Endpoint: srv.URL + base, Channel: "stable", PubKey: pub,
-		CurrentVersion: "26.8.0", InstallID: "n1",
+		CurrentVersion: "26.800", InstallID: "n1",
 	})
 	if st.Error != "" {
 		t.Fatalf("the release-asset layout must be readable by this checker, got error %q (paths: %v)", st.Error, seen)
 	}
-	if !st.Enabled || st.LatestVersion != "26.9.0" || st.UpToDate {
-		t.Fatalf("status = %+v, want an available 26.9.0 over a running 26.8.0", st)
+	if !st.Enabled || st.LatestVersion != "26.900" || st.UpToDate {
+		t.Fatalf("status = %+v, want an available 26.900 over a running 26.800", st)
 	}
 	for _, p := range seen {
 		if p == "/stable/manifest.json" || p == "/stable/manifest.json.sig" {

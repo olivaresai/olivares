@@ -17,42 +17,25 @@ import (
 )
 
 // templateapply.go turns a workspace template from a DESCRIPTION of a restriction into
-// an APPLIED one. Until the /apply endpoint read the row and answered
-// `{"applied":true,"conflicts":[]}` unconditionally, with a comment saying the caller
-// performed the real merge "because the target configuration is client-side" — and the
-// caller did not: the console's only reaction was a toast
-// (web/src/features/workspace-templates/template-card.tsx). Eight built-in templates
-// are seeded into EVERY tenant describing themselves as security postures ("strict DLP
-// and read-only"), a dialog promised in seven languages that applying one overwrites
-// the session's settings, and nothing anywhere read a single one of their fields: no
-// run ever carried a template reference.
+// an APPLIED one. A restriction applied by the client is not a restriction: it is
+// skipped by not using the client. So the merge is the server's, it happens before the
+// governance gates see the launch (so the gates judge the RESTRICTED launch, not the
+// requested one), and its result reaches the child as argv the operator never chose.
 //
-// ⛔ THE RULE THIS FILE EXISTS TO KEEP, and it is the reason the merge cannot go back
-// to the client: THESE TEMPLATES ARE SOLD AS RESTRICTIONS, AND A RESTRICTION APPLIED BY
-// THE CLIENT IS NOT A RESTRICTION. It is skipped by not using the client. So the merge
-// is the server's, it happens before the governance gates see the launch (so the gates
-// judge the RESTRICTED launch, not the requested one), and its result reaches the child
-// as argv the operator never chose.
-//
-// ⛔ AND THE SECOND RULE, which is the one that is easy to get backwards: A TERM THIS
-// LAUNCH CANNOT KEEP REFUSES THE LAUNCH. It is never accepted and dropped. "Accepted and
-// not fulfilled" is precisely the defect above, and re-introducing it one field at a
-// time is how it would come back. unenforceableTerms names every such field and
-// applyLaunchTemplate turns it into a 422 that says which field and why.
+// A term this launch cannot keep refuses the launch; it is never accepted and dropped.
+// unenforceableTerms names every such field and applyLaunchTemplate turns it into a 422
+// that says which field and why.
 
 // ---------------------------------------------------------------------------
-// The enforcement facts this file is built on — measured, not assumed.
+// The enforcement facts this file is built on.
 // ---------------------------------------------------------------------------
 
 // permModeDontAsk is the only permission mode in which the DENIAL of a tool that matches
 // no allow rule is DOCUMENTED rather than inferred, which is why an allowlist pins it
 // rather than merely coexisting with it.
 //
-// ⚠ THAT SENTENCE IS NARROWER THAN THE ONE THIS COMMENT FIRST MADE, and the correction is
-// the point. It said dontAsk was the ONLY mode in which an allowlist confines anything —
-// and the repository's own model (connectors/claude SDKEvaluationOrder /
-// ResolveSDKDecision, verified 2026-06-19) does not say that. Walking a tool that is NOT
-// on the allowlist through the order:
+// The repository's own model (connectors/claude SDKEvaluationOrder / ResolveSDKDecision)
+// walks a tool that is NOT on the allowlist through the order:
 //
 //   - bypassPermissions approves EVERYTHING at the mode step, before the allow rules are
 //     ever consulted — the allowlist is dead code.
@@ -75,12 +58,10 @@ import (
 // it is a modeled inference and the failure direction is a session that looks confined and
 // is not. Widening it needs the resolver-absent behavior verified against the binary — at
 // which point this refusal should be relaxed, not quietly kept.
-// (Both the original overstatement and this correction came from the Codex sol max
-// contrast, 2026-08-11.)
 //
 // The consequence is deliberate and is NOT a side effect to be engineered away:
-// dontAsk is a CRITICAL launch (cmd/olivares/sessiongov.go isCriticalLaunch
-// 2026-06-16), so a tool-restricted session needs its governed human approval and is
+// dontAsk is a CRITICAL launch (cmd/olivares/sessiongov.go isCriticalLaunch), so a
+// tool-restricted session needs its governed human approval and is
 // recorded. A session that acts without a human is privileged whether or not its tool
 // set is small.
 const permModeDontAsk = "dontAsk"
@@ -132,8 +113,9 @@ type tplTerms struct {
 	requiresDLP string
 	// unenforceable names every field the template declares that this launch cannot keep.
 	// Non-empty ⇒ the launch is refused (422) and the /apply preview reports applied=false.
-	unenforceable []string
-	peersRule     string
+	unenforceable             []string
+	peersRule                 string
+	requireTruncateProtection bool
 }
 
 // templateTerms reduces a template body to the terms a launch can impose, and names
@@ -150,6 +132,7 @@ func templateTerms(body tplBody) tplTerms {
 		t.secretEnv = append([]SecretEnvRef(nil), s.SecretEnv...)
 	}
 	if p := body.Policies; p != nil {
+		t.requireTruncateProtection = p.RequireTruncateProtection
 		t.allowedTools = normalizeTools(p.AllowedTools)
 		if p.RecordIO != nil {
 			t.recordIO = *p.RecordIO
@@ -163,7 +146,7 @@ func templateTerms(body tplBody) tplTerms {
 	// --- what this launch cannot keep, named field by field ---
 
 	if h := body.Hooks; h != nil && h.declaresAny() {
-		// The launch builds argv and env (runtime_bridge.go buildLaunchSpec); it does not
+		// The launch builds argv and env (child_launch.go childSpec); it does not
 		// write the child's settings, and Claude Code takes hooks from settings files, not
 		// from a flag. Provisioning them is the operator's managed-settings posture
 		// (the governed hooks/PEP contract) — a different surface, with its own
@@ -192,27 +175,23 @@ func templateTerms(body tplBody) tplTerms {
 			t.unenforceable = append(t.unenforceable,
 				"policies.dlp_mode: unknown mode "+strconv.Quote(t.requiresDLP)+" (want off|label|deny)")
 		} else if dlpStrictness[t.requiresDLP] > 0 {
-			// ⛔ THE CORRECTION THAT MATTERS MOST IN THIS FILE, and it reversed my own first
-			// answer. I had this as a PRECONDITION: the resolved workspace must already
-			// declare at least this posture, else refuse. That check is real, and it is not
-			// what the field's name promises.
+			// A precondition (the resolved workspace already declares at least this
+			// posture) would be a real check, and not what the field's name promises.
 			//
 			// The classifier runs on ONE path — the workspace's own governed file API
 			// (workspace.go readFile → classifyContent). A NATIVE launch hands the workspace's
-			// host directory to the child as its working directory (runtime_bridge.go), and
+			// host directory to the child as its working directory (child_launch.go), and
 			// the contract for that plane says so with all the letters: native does not
 			// isolate the filesystem, the process can walk out of the root, and the API jail
 			// is a SEPARATE thing. So the child's own Read and Bash never traverse the
 			// classifier at all.
 			//
 			// ⇒ a template that says "strict DLP" and passes a metadata comparison would
-			// present a session as DLP-governed while the reads that matter bypass it. That is
-			// the exact defect this whole pack exists to remove, rebuilt one field over. A
+			// present a session as DLP-governed while the reads that matter bypass it. A
 			// metadata floor is a fine control, but it must not wear this field's name.
 			//
 			// Refused until the child's file access is ON the enforcement path (container or
-			// sandbox isolation, neither wired this release). Found by the Codex sol max
-			// contrast, 2026-08-11 — I had shipped it as enforcement.
+			// sandbox isolation, neither wired).
 			t.unenforceable = append(t.unenforceable,
 				"policies.dlp_mode="+strconv.Quote(t.requiresDLP)+": a native session reads the workspace "+
 					"directly and never traverses the DLP classifier, which runs only on the workspace file API — "+
@@ -220,13 +199,12 @@ func templateTerms(body tplBody) tplTerms {
 		}
 	}
 	if p := body.Policies; p != nil && p.RecordIO != nil && !*p.RecordIO {
-		// An explicit `false` is DISTINGUISHABLE from omission (the field is *bool) and was
-		// being accepted and quietly ignored: recording may only ever go UP, because the
+		// An explicit `false` is DISTINGUISHABLE from omission (the field is *bool):
+		// recording may only ever go UP, because the
 		// launch gate ORs its own CRITICAL floor over it and a template able to switch
 		// evidence off would be a way to launder a privileged session past that floor.
 		//
-		// Silently no-op'ing it was still "accepted and not done". The honest answer is to
-		// refuse the term (also found by the contrast).
+		// Silently ignoring it would be "accepted and not done", so the term is refused.
 		t.unenforceable = append(t.unenforceable,
 			"policies.record_io=false: a template cannot switch I/O recording off — the launch gate's "+
 				"recording floor outranks it, so honoring this would be a promise the gate is free to break")
@@ -340,6 +318,7 @@ func (t tplTerms) applyTo(p *CreateRunParams) []mergeConflict {
 	// This is a launch default. Only persistNewRun stores it; resume keeps the
 	// run's own peer choice, even if the template has changed in the meantime.
 	p.templatePeersRule = t.peersRule
+	p.requireTruncateProtection = t.requireTruncateProtection
 	var conflicts []mergeConflict
 	set := func(field string, cur *string, want string) {
 		if want == "" || *cur == want {
@@ -358,7 +337,7 @@ func (t tplTerms) applyTo(p *CreateRunParams) []mergeConflict {
 	if len(t.allowedTools) > 0 {
 		wantMode = permModeDontAsk
 	}
-	// SR2 on FH 031 (P2): the person's preset at launch is not widened by a template.
+	// The person's preset at launch is not widened by a template.
 	// A narrower mode the launch named stands; a template that needs its wider mode
 	// (an allowlist) was refused by refuseWiderTemplateMode before this. A resume
 	// re-applies today's template and is judged on the result (refuseUnrestrictedFor).
@@ -428,13 +407,12 @@ func (t tplTerms) applyTo(p *CreateRunParams) []mergeConflict {
 // the launch actually uses. It is separate from templateTerms because the reduction is a
 // pure value with no launch in it, and this question has no answer without one.
 //
-// ⛔ The case that exists, and it was shipping as a false EVIDENCE claim: a
-// remote-control session relays its I/O to Anthropic's cloud and Olivares never sees a
+// The case that exists would be a false EVIDENCE claim: a remote-control session relays its I/O to Anthropic's cloud and Olivares never sees a
 // frame of it (runtime_ports.go: the transport is lifecycle-only, honestly declared,
 // never faked). The bridge can only offer the recorder what comes out of the process, so
 // `record_io: true` on that transport anchors an empty chain — while the run row and the
 // governance panel both say the session is recorded. A CRITICAL launch is exactly where
-// somebody relies on that. Refused instead (Codex sol max contrast, 2026-08-11).
+// somebody relies on that, so it is refused.
 func unenforceableForTransport(t tplTerms, transport Transport) []string {
 	if t.recordIO && transport == TransportRemoteControl {
 		return []string{
@@ -475,7 +453,7 @@ func (m *Module) loadTemplate(ctx context.Context, tenant model.TenantID, id str
 		return templateDTO{}, badRequest("invalid template_id")
 	}
 	var dto templateDTO
-	err := m.data.View(ctx, tenant, func(sc store.Scope) error {
+	err := m.Data.View(ctx, tenant, func(sc store.Scope) error {
 		repo, rerr := sc.Ext(templateKind)
 		if rerr != nil {
 			return rerr
@@ -515,14 +493,14 @@ func unenforceableErr(name string, terms []string) error {
 // approval all judge is the RESTRICTED launch, never the one that was asked for.
 //
 // A run with no template_id is untouched: it returns immediately, no template is read,
-// no parameter changes, and no conflict is reported. That is load-bearing — this pack
-// must not move a single existing launch.
+// no parameter changes, and no conflict is reported. That is load-bearing: templates
+// must not move a single launch that names none.
 func (m *Module) applyLaunchTemplate(ctx context.Context, tenant model.TenantID, p *CreateRunParams) (templateDTO, []mergeConflict, error) {
 	p.TemplateID = strings.TrimSpace(p.TemplateID)
 	if p.TemplateID == "" {
 		return templateDTO{}, nil, nil
 	}
-	if m.data == nil {
+	if m.Data == nil {
 		return templateDTO{}, nil, &runErr{http.StatusServiceUnavailable, "templates are not available on this node"}
 	}
 	dto, err := m.loadTemplate(ctx, tenant, p.TemplateID)
@@ -544,8 +522,7 @@ func (m *Module) applyLaunchTemplate(ctx context.Context, tenant model.TenantID,
 	// mutable, they are re-read on every launch and resume, and without the version in the
 	// intent an approval opened for "allow Read" could be spent on a template that now
 	// says "allow Read, Bash" with every other launch parameter unchanged. That is the
-	// exact anti-TOCTOU boundary the approval's plan hash exists to draw (Codex sol max
-	// contrast, 2026-08-11).
+	// exact anti-TOCTOU boundary the approval's plan hash exists to draw.
 	p.TemplateVersion = dto.Version
 	p.TemplateBuiltin = dto.Builtin
 	return dto, conflicts, nil

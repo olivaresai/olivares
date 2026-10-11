@@ -1,61 +1,8 @@
 #!/usr/bin/env bash
 # SPDX-FileCopyrightText: 2026 Olivares.AI
 # SPDX-License-Identifier: AGPL-3.0-only
-#
-# TRINQUETE: guiones que pueden morir MUDOS saltandose su propio mensaje.
-#
-# ⛔ LA CLASE, medida el 2026-08-31 sobre un gate REAL de la casa (`check-aws-estate.sh`): bajo
-# `set -euo pipefail`, una asignacion por sustitucion cuyo comando usa el rc como DATO —`grep`,
-# `comm`, `diff`, `cmp`— mata el guion. Y lo que mata es la LINEA SIGUIENTE, que suele ser la que
-# explica el problema:
-#
-#     idle="$(grep -E 'tcp_idle_timeout *=' "$F" | head -1)"
-#     [ -n "$idle" ] || fail "could not read tcp_idle_timeout"      # ⛔ INALCANZABLE
-#
-# El mensaje que nombra la guarda es inalcanzable EXACTAMENTE cuando la condicion que describe es
-# verdadera. El sintoma es el silencio: rc≠0 y stderr vacio, indistinguible de un fallo de entorno.
-#
-# ⛔ Y FALLA EN LAS DOS DIRECCIONES, que es lo que no se espera. Medido con un log de 6,4 MB:
-# `grep … | head -1` muere SIN coincidencias **y muere igual con MUCHAS**, porque `head` cierra la
-# tuberia, `grep` recibe SIGPIPE (141) y `pipefail` lo propaga. ⇒ el guion muere justo cuando el
-# dato SI esta, y solo si el fichero es grande: con un fixture corto pasa. Verde en el banco, mudo
-# en produccion.
-#
-# LA CURA es un `|| true` DENTRO de la sustitucion, que absorbe el 1 y el 141:
-#     n="$( { grep -oE 'PATRON' "$F" || true; } | head -1 )"
-#
-# ⛔ POR QUE TRINQUETE Y NO GATE A SECAS. Hay deuda medida (censo de
-# `an internal design note (not shipped)`) en ficheros de varios carriles. Poner rojo hoy
-# bloquea a todos por algo que nadie introdujo hoy; cablear con linea base da el control YA y no
-# para a nadie. La linea base es una LISTA y no un numero, por lo mismo que el trinquete de
-# formato: un contador deja pasar la SUSTITUCION —arreglas uno, rompes otro, el total no se mueve—.
-#
-# ⛔ Y LA CLAVE ES `fichero:variable`, NO `fichero:linea`: las lineas se mueven con cualquier
-# edicion de arriba y la linea base se volveria ruido en una semana. El nombre de la variable
-# sobrevive al reformateo.
-#
-# ⛔ LIMITACION MEDIDA, y va aqui porque un trinquete que no declara su punto ciego se lee como
-#    un detector completo: el discriminante exige que el mensaje aparezca en las 4 lineas
-#    SIGUIENTES a la asignacion. Es una HEURISTICA, no una propiedad — y el recuento crece de
-#    forma monotona con esa ventana, medido el 2026-08-31 sobre `main`:
-#
-#        ventana  4 → 6 hallazgos      ventana  8 → 10
-#        ventana  6 → 8                ventana 12 → 14     ventana 20 → 19
-#
-#    No hay corte natural, asi que ensanchar es elegir un numero, no descubrir la verdad. Se deja
-#    en 4 a proposito: el trinquete existe para que la deuda NO SUBA, y con una ventana estrecha
-#    los positivos son solidos. Lo que NO se puede leer de un verde aqui es «no queda ninguno».
-#
-#    ⚠ EJEMPLO VIVO de lo que esta ventana NO ve, para que nadie lo descubra por sorpresa:
-#    `scripts/test-exec-tmpdir.sh:395` sigue siendo vulnerable —`ini="$(grep … | head -1 | cut …)"`
-#    bajo `set -euo pipefail`— y su `malo "NO HE PODIDO MIRAR…"` esta cinco lineas mas abajo. Estuvo
-#    en la linea base y salio del censo **sin curarse**: otro carril reordeno el bloque y alejo el
-#    mensaje. Un hallazgo que desaparece porque el codigo se movio no es un hallazgo resuelto.
-#
-# Tres respuestas, nunca dos:
-#   0  la deuda no sube (y dice si puede bajar)
-#   1  hay un incumplidor NUEVO — lo nombra con fichero, linea y la variable
-#   2  NO HE PODIDO MIRAR (sin python3, sin linea base, salida ilegible). Nunca es un verde.
+# Catch command substitutions that can exit before their diagnostic under pipefail.
+# Findings are identified by file and variable, with a bounded diagnostic search window.
 set -uo pipefail
 # ⛔ LOCALE FIJO. Las dos listas se ordenan con `LC_ALL=C sort -u` y `comm` heredaba el locale
 #    del usuario: bajo es_ES.UTF-8 su colacion es otra, avisa «file 1 is not in sorted order» y
@@ -70,14 +17,14 @@ for _a in "$@"; do [ "$_a" = "--gate" ] && GATE=1; done
 if [ "$GATE" -eq 1 ]; then
 	for _v in MUTE_PIPEFAIL_ROOT MUTE_PIPEFAIL_BASELINE; do
 		if [ -n "${!_v:-}" ]; then
-			echo "check-mute-pipefail: NO HE PODIDO MIRAR: $_v esta puesta y --gate no admite anulaciones" >&2
+			echo "check-mute-pipefail: COULD NOT CHECK: $_v is set and --gate does not allow overrides" >&2
 			exit 2
 		fi
 	done
 fi
 
 ROOT="${MUTE_PIPEFAIL_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || true)}"
-[ -n "$ROOT" ] || { echo "check-mute-pipefail: NO HE PODIDO MIRAR: no estoy en un arbol git" >&2; exit 2; }
+[ -n "$ROOT" ] || { echo "check-mute-pipefail: COULD NOT CHECK: outside a Git tree" >&2; exit 2; }
 # ⛔ DONDE VIVE LA LINEA BASE LO DECIDIERON DOS CONTROLES QUE TIRAN EN SENTIDO CONTRARIO, y la
 #    primera eleccion fallaba uno de los dos en silencio:
 #      · bajo `scripts/`, `check-claim-safety` la trata como un guion y exige el bit de ejecucion;
@@ -87,8 +34,8 @@ ROOT="${MUTE_PIPEFAIL_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || true)
 #    `ci/` viaja y ya aloja datos (`ci/download-contract.txt`), igual que la linea base del
 #    trinquete de formato viaja con el suyo. Satisface a los dos.
 BASE="${MUTE_PIPEFAIL_BASELINE:-$ROOT/ci/mute-pipefail-baseline.txt}"
-[ -f "$BASE" ] || { echo "check-mute-pipefail: NO HE PODIDO MIRAR: falta la linea base $BASE" >&2; exit 2; }
-command -v python3 >/dev/null 2>&1 || { echo "check-mute-pipefail: NO HE PODIDO MIRAR: no hay python3" >&2; exit 2; }
+[ -f "$BASE" ] || { echo "check-mute-pipefail: COULD NOT CHECK: missing baseline $BASE" >&2; exit 2; }
+command -v python3 >/dev/null 2>&1 || { echo "check-mute-pipefail: COULD NOT CHECK: python3 is not installed" >&2; exit 2; }
 
 CENSO="$(ROOT="$ROOT" GATE_BASENAME="$(basename "$0")" python3 - <<'PY'
 import os, re, subprocess, sys
@@ -295,7 +242,7 @@ for f in fs:
         if MSG.search(sig) and re.search(r'\$\{?'+var+r'\b', sig):
             print(f"{f}\t{var}\t{i+1}")
 PY
-)" || { echo "check-mute-pipefail: NO HE PODIDO MIRAR: el censo fallo" >&2; exit 2; }
+)" || { echo "check-mute-pipefail: COULD NOT CHECK: scan failed" >&2; exit 2; }
 
 # La salida vacia es legitima (cero hallazgos) y no se distingue de un fallo por el texto: por eso
 # el rc del censo se lee arriba y este bloque solo compara.
@@ -307,16 +254,16 @@ IDOS="$(comm -13 <(printf '%s\n' "$HOY") <(printf '%s\n' "$LB") | command grep -
 
 n_hoy=$(printf '%s\n' "$HOY" | command grep -c . || true)
 n_lb=$(printf '%s\n' "$LB" | command grep -c . || true)
-echo "check-mute-pipefail: $n_hoy incumplidor(es) hoy, $n_lb en la linea base."
+echo "check-mute-pipefail: $n_hoy current violation(s), $n_lb in the baseline."
 
 if [ -n "$IDOS" ]; then
-	echo "check-mute-pipefail: la deuda PUEDE BAJAR — estos ya no incumplen y siguen en la linea base:" >&2
+	echo "check-mute-pipefail: the backlog can shrink; these cases no longer violate the rule but remain in the baseline:" >&2
 	printf '%s\n' "$IDOS" | sed 's/^/    /' >&2
-	echo "    Retiralos de $BASE en el mismo commit que los cura." >&2
+	echo "    Remove them from $BASE in the commit that fixes them." >&2
 fi
 
 if [ -n "$NUEVOS" ]; then
-	echo "check-mute-pipefail: ⛔ INCUMPLIDOR NUEVO — puede morir mudo saltandose su propio mensaje:" >&2
+	echo "check-mute-pipefail: ⛔ NEW VIOLATION — may exit silently before its own diagnostic:" >&2
 	while IFS=$'\t' read -r f v; do
 		[ -n "$f" ] || continue
 		ln="$(printf '%s\n' "$CENSO" | awk -F'\t' -v a="$f" -v b="$v" '$1==a && $2==b {print $3; exit}')"
@@ -324,9 +271,9 @@ if [ -n "$NUEVOS" ]; then
 	done <<EOF_NUEVOS
 $NUEVOS
 EOF_NUEVOS
-	echo "    Cura: n=\"\$( { grep … || true; } | head -1 )\" — el \`|| true\` absorbe el 1 y el 141 de SIGPIPE." >&2
+	echo "    Fix: n=\"\$( { grep … || true; } | head -1 )\" — \`|| true\` handles exit 1 and SIGPIPE exit 141." >&2
 	exit 1
 fi
 
-echo "check-mute-pipefail: la deuda no sube."
+echo "check-mute-pipefail: the backlog has not increased."
 exit 0

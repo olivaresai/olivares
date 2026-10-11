@@ -6,5 +6,5 @@
 # Bateria de check-tenant-bound-writes.sh. La bateria vive en el propio guion (--selftest); este
 # fichero le da a la tarea de Taskfile el mismo nombre que a sus hermanas (test-<cosa>.sh).
 set -uo pipefail
-ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)" || { echo "test-tenant-bound-writes: 2 NO PUDE MIRAR — no resuelvo la raiz" >&2; exit 2; }
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)" || { echo "test-tenant-bound-writes: 2 COULD NOT CHECK — cannot resolve the root" >&2; exit 2; }
 exec bash "$ROOT/scripts/check-tenant-bound-writes.sh" --selftest

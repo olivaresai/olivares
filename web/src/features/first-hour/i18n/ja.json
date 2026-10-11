@@ -2,7 +2,9 @@
   "tools": {
     "claude": "Claude Code",
     "codex": "Codex",
-    "grok": "Grok Build"
+    "grok": "Grok Build",
+    "opencode": "OpenCode",
+    "gemini-cli": "Gemini CLI"
   },
   "status": {
     "installed": "インストール済み",
@@ -13,7 +15,7 @@
     "usesKey": "API キーを使用: {{name}}",
     "usesLocal": "ローカルのモデルサーバーを使用: {{name}}",
     "keyRefused": "API キー {{name}} が拒否されました。プロバイダーで置き換えてください。",
-    "keyUnchecked": "{{name}} のキーを確認できませんでした。プロバイダーでテストしてください。"
+    "noSignIn": "このツールにはここで実行できる公式のサインインがありません。「その他の方法」のターミナルコマンドを使ってください。"
   },
   "actions": {
     "install": "インストール",
@@ -23,7 +25,9 @@
     "signInClaude": "Claude でサインイン",
     "signInChatGPT": "ChatGPT でサインイン",
     "useApiKey": "代わりに API キーを使う",
-    "signInGrok": "xAI アカウントでサインイン"
+    "signInGrok": "xAI アカウントでサインイン",
+    "signInGoogle": "Google でログイン",
+    "signIn": "サインイン"
   },
   "signIn": {
     "openLink": "サインインページを開く",
@@ -32,7 +36,11 @@
     "continue": "続行",
     "enterCode": "サインインページで次のコードを入力してください:",
     "waiting": "サインインページでの操作が終わるのを待っています…",
-    "expires": "コードの有効期間は 15 分です。キャンセルすると、このサーバーでのサインインを中止します。"
+    "expires": "コードの有効期間は 15 分です。キャンセルすると、このサーバーでのサインインを中止します。",
+    "copy": "コピー",
+    "copied": "コピーしました",
+    "starting": "サインインを開始しています…",
+    "lostTouch": "サーバーとの接続が途切れました。サインインはまだ実行中の可能性があります。"
   },
   "errors": {
     "status": "ツールの状態を読み取れませんでした。",
@@ -44,7 +52,10 @@
   "steps": {
     "install": {
       "title": "エージェントツールをインストール",
-      "body": "Olivares はこのサーバーで公式の Claude Code または Codex を実行します。どちらか 1 つで十分です。"
+      "body": "Olivares はこのサーバーで公式の Claude Code または Codex を実行します。どちらか 1 つで十分です。",
+      "orUse": "または、代わりに API キーかローカルモデルを使います:",
+      "addKey": "API キーを追加",
+      "addLocal": "ローカルモデルを追加"
     },
     "signIn": {
       "title": "サインインする",
@@ -53,7 +64,7 @@
     },
     "start": {
       "title": "セッションを開始",
-      "body": "フォルダーを選び、必要なら最初にやることを伝えます。"
+      "body": "ツールを選び、必要なら最初にやることを伝えます。"
     },
     "progress": "3 件中 {{done}} 件完了"
   },
@@ -62,6 +73,9 @@
     "notReady": "{{tool}} はまだ開始できません。",
     "folder": "フォルダー",
     "folderHint": "このサーバー上のフォルダーです。空のままにすると新しいフォルダーで開始します。",
+    "folderNew": "このセッション用の新しいフォルダー",
+    "folderChange": "フォルダーを変更",
+    "readingFolder": "前回のセッションのフォルダーを読み込んでいます…",
     "prompt": "最初のメッセージ (任意)",
     "promptPlaceholder": "最初に何をしますか?",
     "more": "その他のオプション",
@@ -70,7 +84,7 @@
     "starting": "開始中…",
     "needTool": "まずツールをインストールしてサインインしてください。",
     "dialogTitle": "新しいセッション",
-    "dialogDescription": "フォルダーを選び、やることを伝えます。",
+    "dialogDescription": "ツールを選び、やることを伝えます。",
     "advanced": "詳細な起動オプション",
     "secrets": "環境変数としてのシークレット",
     "secretsHint": "セッションは、選んだ保管庫のシークレットを指定した変数から読み取ります。値が表示・記録されたり、フォルダーに書き込まれたりすることはありません。",
@@ -78,7 +92,23 @@
     "secretUse": "このセッションに {{name}} を渡す",
     "secretVariable": "{{name}} の変数",
     "secretsManage": "セッション用シークレットを管理",
-    "openTools": "AI ツールを開く"
+    "openTools": "AI ツールを開く",
+    "model": "モデル",
+    "providerDefault": "既定 ({{model}})",
+    "nativeDefault": "{{tool}} の既定",
+    "modelChoice": "このキーの前回の接続テストに合格したモデル。",
+    "chooseModel": "モデルを選択してください。このキーには既定のモデルがありません。",
+    "noTestedModel": "このキーのモデルはまだ接続テストに合格していません。「プロバイダー」でキーをテストしてください。",
+    "openProviders": "プロバイダーを開く",
+    "profile": "プロファイル",
+    "profileNotSignedIn": "未サインイン",
+    "profileNeedsKey": "キーが必要"
+  },
+  "lists": {
+    "runsTruncated": "最近のセッション：{{count}} 件読み込み済み。ほかにもあります。",
+    "runsHint": "古いセッションはこの一覧に含まれていません。",
+    "foldersTruncated": "登録済みフォルダー：{{count}} 件読み込み済み。ほかにもあります。",
+    "foldersHint": "一部の登録済みフォルダーはこの一覧に含まれていません。"
   },
   "permission": {
     "editsOnly": "ファイルの編集のみ",

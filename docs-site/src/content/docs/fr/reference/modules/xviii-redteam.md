@@ -6,6 +6,9 @@ description: >-
   Ce qu'il teste, la ligne rouge du consentement, et ses limites honnêtes.
 ---
 
+Le catalogue, les cibles et les exécutions red team sont des fonctions **[Business](https://olivares.ai/pricing)**. Community répond 501 sur ces routes API et masque le groupe de commandes et la page de console. Les cibles, exécutions et résultats enregistrés restent dans les exports et les sauvegardes de reprise. Les évaluations et les environnements de test restent dans Community.
+
+
 Le module XVIII est un **harnais de robustesse défensive**. Il sonde les agents gouvernés
 **propres** au client avec une batterie de cas de test adversariaux publiés — injection de
 prompt, jailbreak, exfiltration, empoisonnement d'outils — et note leur résistance, mappée au

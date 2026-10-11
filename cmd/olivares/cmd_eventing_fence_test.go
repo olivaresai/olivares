@@ -46,6 +46,7 @@ import (
 // classification.
 func bootFence(t *testing.T) *engine {
 	t.Helper()
+	prepareCompositionTestBoot(t)
 	eng, err := boot(context.Background(), bootConfig{
 		DataDir: t.TempDir(), Engine: "sqlite", DSN: ":memory:", Version: "test",
 	})
@@ -201,6 +202,7 @@ func bootFenceFile(t *testing.T) (*engine, string) {
 	t.Helper()
 	dir := t.TempDir()
 	dsn := filepath.Join(dir, "fence.db")
+	prepareCompositionTestBoot(t)
 	eng, err := boot(context.Background(), bootConfig{
 		DataDir: dir, Engine: "sqlite", DSN: dsn, Version: "test",
 	})
@@ -243,7 +245,9 @@ func TestAPartialFenceIsNotReportedAsEnforcing(t *testing.T) {
 	if len(st.Unenforced) != 1 || !strings.Contains(st.Unenforced[0], "sink profile DELETE") {
 		t.Fatalf("the status does not NAME the mutation that is still accepted (%v), which is what an operator needs to repair it", st.Unenforced)
 	}
-	// And `verify` exits non-zero, naming a repair that actually works.
+	// And `verify` exits non-zero, naming a repair that actually works. It is its own
+	// process in production, so the engine this test read the status from stops first.
+	_ = eng.Close()
 	verr := runFenceVerify(t, dsn)
 	if verr == nil {
 		t.Fatal("`fence verify` reported success with a governed mutation unenforced")
@@ -261,6 +265,7 @@ func runFenceVerify(t *testing.T, dsn string) error {
 	var out strings.Builder
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
+	prepareCompositionTestBoot(t)
 	return cmd.Execute()
 }
 
@@ -302,6 +307,7 @@ func TestAFailedArmingDoesNotBecomeASuccessOnTheSecondRun(t *testing.T) {
 		cmd.SetErr(&out)
 		// Execute FIRST. `return out.String(), cmd.Execute()` evaluates the operands left to right,
 		// so it would capture the buffer before the command ever wrote to it.
+		prepareCompositionTestBoot(t)
 		rerr := cmd.Execute()
 		return out.String(), rerr
 	}
@@ -472,6 +478,7 @@ func TestEnforcingDestinationsRefusesWhileTheFenceIsDormant(t *testing.T) {
 		var out strings.Builder
 		cmd.SetOut(&out)
 		cmd.SetErr(&out)
+		prepareCompositionTestBoot(t)
 		err := cmd.Execute()
 		return out.String(), err
 	}
@@ -487,6 +494,7 @@ func TestEnforcingDestinationsRefusesWhileTheFenceIsDormant(t *testing.T) {
 
 	// Now the dormant case, on its own data dir.
 	dir2 := t.TempDir()
+	prepareCompositionTestBoot(t)
 	eng2, err := boot(ctx, bootConfig{DataDir: dir2, Engine: "sqlite", Version: "test"})
 	if err != nil {
 		t.Fatalf("boot: %v", err)
@@ -514,6 +522,7 @@ func TestEnforcingDestinationsRefusesWhileTheFenceIsDormant(t *testing.T) {
 	var out strings.Builder
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
+	prepareCompositionTestBoot(t)
 	err = cmd.Execute()
 	if err == nil {
 		t.Fatal("enforcing destinations was accepted while the writer fence was dormant: the assertion would be recorded with nothing enforcing it")
@@ -571,6 +580,7 @@ func TestArmingAnUnarmedFenceLeavesItEnforcedAndVerifiable(t *testing.T) {
 		var out strings.Builder
 		cmd.SetOut(&out)
 		cmd.SetErr(&out)
+		prepareCompositionTestBoot(t)
 		rerr := cmd.Execute()
 		return out.String(), rerr
 	}
@@ -580,6 +590,7 @@ func TestArmingAnUnarmedFenceLeavesItEnforcedAndVerifiable(t *testing.T) {
 		t.Fatalf("arming an un-armed fence on a database that enforces failed:\n%s\nerr=%v", out, err)
 	}
 
+	prepareCompositionTestBoot(t)
 	eng2, err := boot(ctx, bootConfig{DataDir: filepath.Dir(dsn), Engine: "sqlite", DSN: dsn, Version: "test"})
 	if err != nil {
 		t.Fatalf("re-boot: %v", err)
@@ -613,7 +624,9 @@ func TestArmingAnUnarmedFenceLeavesItEnforcedAndVerifiable(t *testing.T) {
 		t.Fatalf("the arming rewrote ClassifiedMode from %q to %q: it is immutable on purpose, and overwriting it destroys the only record of how the engine first met this deployment", unarmed.ClassifiedMode, got.ClassifiedMode)
 	}
 
-	// And the ceremony's own verification agrees with the state it just wrote.
+	// And the ceremony's own verification agrees with the state it just wrote. It is its
+	// own process in production, so the engine that read the state stops first.
+	_ = eng2.Close()
 	if vout, verr := runCmd(newEventingFenceVerifyCmd()); verr != nil {
 		t.Fatalf("`verify` failed on the database `arm` had just reported success for:\n%s\nerr=%v", vout, verr)
 	}

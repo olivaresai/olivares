@@ -129,7 +129,7 @@ export function RestoreDialog({ open, onOpenChange }: RestoreDialogProps) {
           </DialogHeader>
 
           {jobId ? (
-            <JobProgress jobId={jobId} onFinished={() => {}} />
+            <JobProgress jobId={jobId} />
           ) : awaiting ? (
             <AwaitingApprovalStep requestId={awaiting.requestId} />
           ) : !upload ? (

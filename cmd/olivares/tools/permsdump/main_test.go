@@ -10,14 +10,14 @@ import (
 	"go/parser"
 	"go/token"
 	"io/fs"
-	"os"
 	"path/filepath"
 	"reflect"
-	"strconv"
 	"strings"
 	"testing"
 
+	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/auth"
+	"github.com/olivaresai/olivares/core/modulespec"
 )
 
 // The inventory's failure mode is OMISSION, and omission is silent: a module
@@ -114,71 +114,25 @@ func moduleTypesUnder(t *testing.T, root string) map[string]string {
 	return out
 }
 
-// TestModuleListMatchesCompositionRoot cross-checks allModules() against the real
-// composition root's module imports (cmd/olivares/wire.go). It is deliberately NOT
-// a check that the two lists were written the same way — it reads wire.go's import
-// block, which is what actually changes when a module joins the product.
-//
-// On its own this is NOT sufficient — see TestEveryModuleTypeIsInTheInventory for
-// why an import set cannot see one of several values from the same package go
-// missing. It is kept because it catches the other direction cheaply: a module
-// wired into the product whose package the inventory never imports at all.
+// The inventory and boot read the same spec. Compare actual namespaces, not
+// imports: one implementation package can own several API namespaces.
 func TestModuleListMatchesCompositionRoot(t *testing.T) {
-	const prefix = "github.com/olivaresai/olivares/modules/"
-	// ⛔ LA RAIZ DE COMPOSICION SON DOS FICHEROS, NO UNO, y esto era `wire.go` a secas hasta
-	// que las costuras de edicion existieron. `editionModuleRegistrars()` vive en
-	// wire_noenterprise.go y monta modulos en la build POR DEFECTO —hoy el placeholder de
-	// disponibilidad del session cockpit—, asi que un modulo puede entrar en el producto sin
-	// tocar wire.go. Leyendo solo wire.go, este cruce acusaba a allModules() de inventarse un
-	// modulo que el binario SI monta: un falso positivo, que es como una guarda se gana que la
-	// apaguen. El proposito declarado del test no cambia —leer los imports, que es lo que de
-	// verdad cambia cuando un modulo entra— sino DONDE se leen.
-	wire := moduleImportsOf(t, filepath.Join("..", "..", "wire.go"), prefix)
-	for path := range moduleImportsOf(t, filepath.Join("..", "..", "wire_noenterprise.go"), prefix) {
-		wire[path] = struct{}{}
-	}
-	mine := moduleImportsOf(t, "modules.go", prefix)
-
-	if len(wire) == 0 {
-		t.Fatal("read no module imports from wire.go — the parse silently returned nothing, " +
-			"which would make every assertion below vacuously true")
-	}
-	for path := range wire {
-		if _, ok := mine[path]; !ok {
-			t.Errorf("module %q is wired into the product (cmd/olivares/wire.go) but is NOT in "+
-				"allModules(): every permission it declares will be reported as undeclared", path)
+	got := map[string]bool{}
+	for _, m := range allModules() {
+		if got[m.APINamespace()] {
+			t.Fatalf("duplicate namespace %q", m.APINamespace())
 		}
+		got[m.APINamespace()] = true
 	}
-	for path := range mine {
-		if _, ok := wire[path]; !ok {
-			t.Errorf("module %q is in allModules() but NOT wired into the product: the inventory "+
-				"would declare permissions no running binary serves", path)
+	for _, spec := range modulespec.All() {
+		if !got[spec.Namespace] {
+			t.Errorf("spec module %q missing from permission inventory", spec.Namespace)
 		}
+		delete(got, spec.Namespace)
 	}
-}
-
-// moduleImportsOf returns the import paths of file that start with prefix.
-func moduleImportsOf(t *testing.T, file, prefix string) map[string]struct{} {
-	t.Helper()
-	src, err := os.ReadFile(file)
-	if err != nil {
-		t.Fatalf("read %s: %v", file, err)
+	if len(got) != 0 {
+		t.Errorf("inventory contains namespaces outside spec: %v", got)
 	}
-	f, err := parser.ParseFile(token.NewFileSet(), file, src, parser.ImportsOnly)
-	if err != nil {
-		t.Fatalf("parse %s: %v", file, err)
-	}
-	out := map[string]struct{}{}
-	for _, imp := range f.Imports {
-		p, err := strconv.Unquote(imp.Path.Value)
-		if err != nil {
-			t.Fatalf("%s: bad import path %s", file, imp.Path.Value)
-		}
-		if strings.HasPrefix(p, prefix) {
-			out[p] = struct{}{}
-		}
-	}
-	return out
 }
 
 // TestEveryRoutePermissionIsDeclared is the api.Module contract, enforced:
@@ -207,9 +161,10 @@ func TestEveryRoutePermissionIsDeclared(t *testing.T) {
 	}
 }
 
-// nonRoutePermissions are permissions a module may DECLARE without any mounted route
-// requiring them — for a surface that is not HTTP, such as the eventing module's
-// per-event RBAC filter. An entry added here must say what non-route surface
+// nonRoutePermissions are permissions a module may DECLARE without any mounted module
+// route requiring them — for enforcement outside the module router, such as the
+// eventing module's per-event RBAC filter or the apps gateway's admission seam.
+// An entry added here must say what surface outside the module router
 // enforces it, because an entry with no enforcement anywhere is the hole.
 //
 // It held exactly ONE entry when this tool could compile again: the map was written
@@ -227,6 +182,9 @@ var nonRoutePermissions = map[auth.Permission]string{
 	// modules/security declares it because that module owns the "security" namespace —
 	// eventing declaring it would let one module widen another's.
 	"security:observed:read": "eventing per-event RBAC filter (modules/eventing/catalog.go)",
+	// The apps gateway asks the admission seam before POST/DELETE spend-limit
+	// mutations. These HTTP handlers are outside the module route registrar.
+	"finops:budget:admin": "appsGatewayHandler.spendLimitAdminAllowed admission seam (cmd/olivares/appsgateway.go)",
 	// ⛔ ESTA ENTRADA NO ES «ENFORCEMENT EN OTRO SITIO» EN EL SENTIDO HTTP, y por eso lleva su
 	// razon entera: el placeholder del session cockpit monta CERO rutas a proposito (su ruta 501
 	// se retiro el 2026-09-02 porque lint:public-counts exige que las rutas de modulo igualen las
@@ -259,7 +217,6 @@ var pendingK3CommunicationRoutePermissions = map[auth.Permission]string{
 	"sessions:message:admin":          pendingK3CommunicationRouteReason,
 	"sessions:delivery:admin":         pendingK3CommunicationRouteReason,
 	"sessions:decision-request:read":  pendingK3CommunicationRouteReason,
-	"sessions:decision-request:write": pendingK3CommunicationRouteReason,
 	"sessions:decision-request:admin": pendingK3CommunicationRouteReason,
 	"sessions:handoff:read":           pendingK3CommunicationRouteReason,
 	"sessions:handoff:write":          pendingK3CommunicationRouteReason,
@@ -361,7 +318,7 @@ func TestEveryDeclaredPermissionIsRequiredByARoute(t *testing.T) {
 			}
 			t.Errorf("module %q declares %q but no mounted route requires it. A declaration "+
 				"nothing enforces reads as a real permission to every consumer while gating "+
-				"nothing; if a non-HTTP surface enforces it, say so in nonRoutePermissions", ns, p)
+				"nothing; if a surface outside the module router enforces it, say so in nonRoutePermissions", ns, p)
 		}
 	}
 }
@@ -513,4 +470,38 @@ func TestModuleAdminVerbIsNeverGrantedToEditor(t *testing.T) {
 		t.Fatal("no admin-verb module permission was examined: the inventory or the shape test is wrong, not the tier")
 	}
 	t.Logf("examined %d admin-verb module permission(s)", checked)
+}
+
+// recordingRegistrar captures what APIRoutes mounts instead of serving it. It is
+// the only honest way to read the route requirement: the permission is an argument
+// to Handle, so nothing short of running APIRoutes observes conditional mounts.
+type recordingRegistrar struct {
+	out       *[]Route
+	namespace string
+}
+
+func (r recordingRegistrar) Handle(method, pattern string, perm auth.Permission, h api.ModuleHandler) {
+	*r.out = append(*r.out, Route{Method: method, Pattern: pattern, Perm: string(perm)})
+}
+
+// HandleEntity records an ENTITY route exactly as Handle records a collection one.
+// api.RouteRegistrar grew this second method after this tool was written, and the
+// compile error it caused is the good outcome: an interface that gains a mounting
+// verb MUST break every recorder, because the alternative is a recorder that keeps
+// compiling and silently stops seeing a whole class of route. Ignoring the entity
+// routes here would leave their permissions out of the inventory, and this tool
+// exists precisely so the console cannot ask for a permission the engine does not
+// mount — a hole in the inventory is that same drift with the evidence removed.
+//
+// The EntityRef is deliberately dropped: it declares the lineage the engine
+// authorizes against, which changes WHICH rows a grant reaches, never WHICH
+// permission the route requires. This inventory answers only the latter.
+func (r recordingRegistrar) HandleEntity(method, pattern string, perm auth.Permission, _ api.EntityRef, h api.ModuleHandler) {
+	r.Handle(method, pattern, perm, h)
+}
+
+// HandleSealed records the permission of a governed route. Its authority seal
+// changes how a request is admitted, not the permission declared by the module.
+func (r recordingRegistrar) HandleSealed(method, pattern string, perm auth.Permission, _ api.SealedRoute, h api.ModuleHandler) {
+	r.Handle(method, pattern, perm, h)
 }

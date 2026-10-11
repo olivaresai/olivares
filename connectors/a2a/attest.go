@@ -6,12 +6,11 @@ package a2a
 import (
 	"encoding/json"
 	"fmt"
+	jose "github.com/go-jose/go-jose/v4"
+	jwt "github.com/go-jose/go-jose/v4/jwt"
 	"net/http"
 	"strings"
 	"time"
-
-	jose "github.com/go-jose/go-jose/v4"
-	jwt "github.com/go-jose/go-jose/v4/jwt"
 )
 
 // attest.go is the OPTIONAL attestation-based admission signal for inbound agent

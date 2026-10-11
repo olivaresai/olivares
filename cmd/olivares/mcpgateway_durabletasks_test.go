@@ -12,14 +12,15 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/olivaresai/olivares/cmd/olivares/internal/mcpgateway"
 	mcpc "github.com/olivaresai/olivares/connectors/mcp"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 	"github.com/olivaresai/olivares/modules/sessions"
 )
 
-func validMCPDurableTasksConfig() *mcpDurableTasksConfig {
-	return &mcpDurableTasksConfig{
+func validMCPDurableTasksConfig() *mcpgateway.DurableTasksConfig {
+	return &mcpgateway.DurableTasksConfig{
 		WorkspaceID: model.NewID().String(), BindingSpecID: model.NewID().String(),
 		BindingSpecGeneration: 3, OwnerKind: "agent", OwnerRef: "agent:operations",
 		InterruptChannelID: model.NewID().String(), InterruptSenderUserID: model.NewID().String(),
@@ -29,7 +30,7 @@ func validMCPDurableTasksConfig() *mcpDurableTasksConfig {
 
 func TestMCPDurableTasksOperatorJSONShape(t *testing.T) {
 	const raw = `{"mcp":{"durable_tasks":{"workspace_id":"11111111-1111-4111-8111-111111111111","binding_spec_id":"22222222-2222-4222-8222-222222222222","binding_spec_generation":7,"owner_kind":"agent","owner_ref":"agent:operations","interrupt_channel_id":"33333333-3333-4333-8333-333333333333","interrupt_sender_user_id":"44444444-4444-4444-8444-444444444444","interrupt_recipient_user_id":"55555555-5555-4555-8555-555555555555"}}}`
-	var cfg agentGatewayConfig
+	var cfg mcpgateway.Config
 	if err := json.Unmarshal([]byte(raw), &cfg); err != nil {
 		t.Fatalf("decode operator config: %v", err)
 	}
@@ -78,33 +79,33 @@ func TestMCPDurableTasksConfigOffAndExplicitRoute(t *testing.T) {
 
 func TestMCPDurableTasksConfigIncompleteRefusesComposition(t *testing.T) {
 	tenant := model.NewTenantID()
-	valid := func() *mcpDurableTasksConfig { return validMCPDurableTasksConfig() }
+	valid := func() *mcpgateway.DurableTasksConfig { return validMCPDurableTasksConfig() }
 	tests := []struct {
 		name   string
 		eng    *engine
 		tenant model.TenantID
-		mutate func(*mcpDurableTasksConfig)
+		mutate func(*mcpgateway.DurableTasksConfig)
 	}{
 		{name: "sessions kernel unavailable", eng: &engine{}, tenant: tenant},
 		{name: "tenant absent", eng: &engine{sessionsMod: sessions.New()}},
 		{name: "workspace absent", eng: &engine{sessionsMod: sessions.New()}, tenant: tenant,
-			mutate: func(cfg *mcpDurableTasksConfig) { cfg.WorkspaceID = "" }},
+			mutate: func(cfg *mcpgateway.DurableTasksConfig) { cfg.WorkspaceID = "" }},
 		{name: "binding spec absent", eng: &engine{sessionsMod: sessions.New()}, tenant: tenant,
-			mutate: func(cfg *mcpDurableTasksConfig) { cfg.BindingSpecID = "" }},
+			mutate: func(cfg *mcpgateway.DurableTasksConfig) { cfg.BindingSpecID = "" }},
 		{name: "binding generation absent", eng: &engine{sessionsMod: sessions.New()}, tenant: tenant,
-			mutate: func(cfg *mcpDurableTasksConfig) { cfg.BindingSpecGeneration = 0 }},
+			mutate: func(cfg *mcpgateway.DurableTasksConfig) { cfg.BindingSpecGeneration = 0 }},
 		{name: "owner kind invalid", eng: &engine{sessionsMod: sessions.New()}, tenant: tenant,
-			mutate: func(cfg *mcpDurableTasksConfig) { cfg.OwnerKind = "remote" }},
+			mutate: func(cfg *mcpgateway.DurableTasksConfig) { cfg.OwnerKind = "remote" }},
 		{name: "owner ref absent", eng: &engine{sessionsMod: sessions.New()}, tenant: tenant,
-			mutate: func(cfg *mcpDurableTasksConfig) { cfg.OwnerRef = "" }},
+			mutate: func(cfg *mcpgateway.DurableTasksConfig) { cfg.OwnerRef = "" }},
 		{name: "interrupt channel absent", eng: &engine{sessionsMod: sessions.New()}, tenant: tenant,
-			mutate: func(cfg *mcpDurableTasksConfig) { cfg.InterruptChannelID = "" }},
+			mutate: func(cfg *mcpgateway.DurableTasksConfig) { cfg.InterruptChannelID = "" }},
 		{name: "interrupt sender absent", eng: &engine{sessionsMod: sessions.New()}, tenant: tenant,
-			mutate: func(cfg *mcpDurableTasksConfig) { cfg.InterruptSenderUserID = "" }},
+			mutate: func(cfg *mcpgateway.DurableTasksConfig) { cfg.InterruptSenderUserID = "" }},
 		{name: "interrupt recipient absent", eng: &engine{sessionsMod: sessions.New()}, tenant: tenant,
-			mutate: func(cfg *mcpDurableTasksConfig) { cfg.InterruptRecipientUserID = "" }},
+			mutate: func(cfg *mcpgateway.DurableTasksConfig) { cfg.InterruptRecipientUserID = "" }},
 		{name: "interrupt route self-targets", eng: &engine{sessionsMod: sessions.New()}, tenant: tenant,
-			mutate: func(cfg *mcpDurableTasksConfig) { cfg.InterruptRecipientUserID = cfg.InterruptSenderUserID }},
+			mutate: func(cfg *mcpgateway.DurableTasksConfig) { cfg.InterruptRecipientUserID = cfg.InterruptSenderUserID }},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -123,7 +124,7 @@ func TestMCPGatewayDurableTasksAbsentKeepsResourceServerAvailable(t *testing.T) 
 	token, jwks := mintReviewToken(t, mcpReviewResource, "tools:read")
 	upstream := durableTasksCapabilityUpstream(t)
 	defer upstream.Close()
-	cfg := &mcpGatewayConfig{
+	cfg := &mcpgateway.MCPConfig{
 		Resource: mcpReviewResource, AuthorizationServers: []string{"https://auth.review.example"},
 		Issuer: "https://auth.review.example", IssuerJWKS: json.RawMessage(jwks),
 		Tenant:      model.NewTenantID().String(),
@@ -154,7 +155,7 @@ func TestMCPGatewayWiresConfiguredDurableTaskStore(t *testing.T) {
 	upstream := durableTasksCapabilityUpstream(t)
 	defer upstream.Close()
 	activeSpec := activateMCPRestartSpec(t, sessionsModule, tenant, workspaceID, upstream.URL)
-	cfg := &mcpGatewayConfig{
+	cfg := &mcpgateway.MCPConfig{
 		Resource: mcpReviewResource, AuthorizationServers: []string{"https://auth.review.example"},
 		Issuer: "https://auth.review.example", IssuerJWKS: json.RawMessage(jwks),
 		Tenant: tenant.String(), UpstreamURL: upstream.URL,
@@ -212,9 +213,9 @@ func initializeMCPCapabilities(t *testing.T, rs *mcpc.ResourceServer, token stri
 }
 
 func TestMCPGatewayIncompleteDurableTasksFailsBeforeMount(t *testing.T) {
-	cfg := &mcpGatewayConfig{
+	cfg := &mcpgateway.MCPConfig{
 		Resource: "https://mcp.example.com/mcp", Tenant: model.NewTenantID().String(),
-		DurableTasks: &mcpDurableTasksConfig{
+		DurableTasks: &mcpgateway.DurableTasksConfig{
 			WorkspaceID: model.NewID().String(), BindingSpecID: model.NewID().String(),
 			BindingSpecGeneration: 1, OwnerKind: "agent",
 		},

@@ -55,6 +55,8 @@
       "maxDuration": "Max session duration (minutes)",
       "allowedTools": "Allowed tools",
       "allowedToolsPlaceholder": "e.g. Bash,Read,Edit",
+      "requireTruncateProtection": "Require truncation protection for read-only sessions",
+      "truncateProtectionHint": "Read-only sessions from this template will not start on older kernels that cannot enforce it.",
       "recordIo": "Record I/O",
       "peersSameTemplate": "Sessions from this template can message each other"
     }

@@ -29,8 +29,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." || exit 2; pwd)"
 SUT="$ROOT/cloud/control-plane/deploy/roles-oneshot.sh"
 SQL="$ROOT/cloud/control-plane/deploy/cloud-control-roles.sql"
-[ -r "$SUT" ] || { echo "roles-oneshot selftest: COULD NOT LOOK — no está $SUT" >&2; exit 2; }
-[ -r "$SQL" ] || { echo "roles-oneshot selftest: COULD NOT LOOK — no está $SQL" >&2; exit 2; }
+[ -r "$SUT" ] || { echo "roles-oneshot selftest: COULD NOT LOOK — missing $SUT" >&2; exit 2; }
+[ -r "$SQL" ] || { echo "roles-oneshot selftest: COULD NOT LOOK — missing $SQL" >&2; exit 2; }
 
 _tmp_base="${TMPDIR:-/workspace/.olivares-tmptest}"
 mkdir -p "$_tmp_base"
@@ -150,7 +150,7 @@ expect() { # expect <rc> <trozo-de-frase|""> <rótulo>
     return
   fi
   if [ -n "$needle" ] && ! command grep -qF -- "$needle" "$TMP/out"; then
-    bad "$label — rc=$want pero el mensaje no nombra su guarda; salió: $(head -c 300 "$TMP/out")"
+    bad "$label — rc=$want but the message does not name its guard; output: $(head -c 300 "$TMP/out")"
     return
   fi
   ok "$label"
@@ -161,7 +161,7 @@ ALL_ROLES="$(created_roles)"
 
 # ── C-00 · El camino feliz, y lo que tiene que llevar la invocación ──────────
 mkpsql "$ALL_ROLES"; base_env
-expect 0 "OK" "el camino feliz provisiona y verifica"
+expect 0 "OK" "the happy path provisions and verifies"
 
 # ⛔ Y NO BASTA CON EL rc: hay que ver que la invocación llevó UN `-v` por rol. Sin esto, un
 # entrypoint que llamara a psql con NUEVE credenciales fallaría por la décima —el SQL falla— y
@@ -169,12 +169,12 @@ expect 0 "OK" "el camino feliz provisiona y verifica"
 if [ "$(command grep -c -- '<-f>' "$TMP/psql-calls" || true)" -ge 1 ]; then
   _vs="$(command grep -- '<-f>' "$TMP/psql-calls" | command grep -o -- '<cloud_cp_[a-z_]*_password=' | sort -u | wc -l | tr -d ' ')"
   if [ "$_vs" = "$N_ROLES" ]; then
-    ok "la invocación de psql lleva las $N_ROLES credenciales de rol"
+    ok "the psql invocation carries all $N_ROLES role credentials"
   else
-    bad "la invocación de psql lleva $_vs credenciales y el SQL exige $N_ROLES"
+    bad "the psql invocation carries $_vs credentials; SQL requires $N_ROLES"
   fi
 else
-  bad "el camino feliz no llegó a invocar psql con -f"
+  bad "the happy path did not invoke psql with -f"
 fi
 
 # ⛔ Y LA PAREJA IRREGULAR, que es la que un mapa escrito a mano se come: el rol
@@ -182,65 +182,68 @@ fi
 # mientras `cloud_cp_admin_ro` la recibe en `cloud_cp_admin_ro_password`, CON él.
 if command grep -q -- '<cloud_cp_sweeper_password=' "$TMP/psql-calls" \
    && command grep -q -- '<cloud_cp_admin_ro_password=' "$TMP/psql-calls"; then
-  ok "la pareja IRREGULAR rol↔variable se respeta (sweeper_ro→sweeper, admin_ro→admin_ro)"
+  ok "the IRREGULAR role↔variable mapping is preserved (sweeper_ro→sweeper, admin_ro→admin_ro)"
 else
-  bad "la pareja irregular no se respeta: $(command grep -o -- '<cloud_cp_[a-z_]*=' "$TMP/psql-calls" | tr '\n' ' ')"
+  bad "the irregular mapping is not preserved: $(command grep -o -- '<cloud_cp_[a-z_]*=' "$TMP/psql-calls" | tr '\n' ' ')"
 fi
 
 # ── C-01 · UNA credencial de menos. Es el defecto entero, en su forma mínima ─
 mkpsql "$ALL_ROLES"; base_env
 sed -i "/^$(env_for cloud_cp_billing)=/d" "$TMP/env.sh"
-expect 1 "ninguna DATABASE_*_URL trae ese" "una credencial de menos para ANTES de invocar psql"
+expected_message='ninguna DATABASE_*_URL trae ese'  # language-data: private producer assertion
+expect 1 "$expected_message" "one missing credential blocks BEFORE invoking psql"
 if [ -s "$TMP/psql-calls" ]; then
-  bad "con una credencial de menos NO se debe invocar psql, y se invocó"
+  bad "with one missing credential, psql must NOT be invoked, but was"
 else
-  ok "con una credencial de menos psql no llega a invocarse"
+  ok "with one missing credential, psql is not invoked"
 fi
 
 # ── C-02 · Ninguna credencial: el caso con el que nació el defecto ──────────
 mkpsql "$ALL_ROLES"; base_env
 sed -i '/^DATABASE_/d' "$TMP/env.sh"
-expect 1 "no llega ninguna DATABASE" "sin ninguna URL para, y lo dice"
+expected_message='no llega ninguna DATABASE'  # language-data: private producer assertion
+expect 1 "$expected_message" "without any URL, blocks and reports it"
 
 # ── C-03 · Una URL que no casa con ningún rol del SQL ────────────────────────
 mkpsql "$ALL_ROLES"; base_env
 echo 'DATABASE_GHOST_URL=postgres://cloud_cp_ghost:pw@db.internal:5432/cloudcp' >> "$TMP/env.sh"
-expect 1 "no declara ningun rol con ese" "una URL que ningún rol reclama es un hallazgo"
+expect 1 "no declara ningun rol con ese" "a URL claimed by no role is a finding"
 
 # ── C-04 · Las URLs describen DOS bases distintas ───────────────────────────
 mkpsql "$ALL_ROLES"; base_env
 sed -i "s|^\($(env_for cloud_cp_billing)=postgres://[^@]*@\)db.internal:5432/cloudcp|\1otra.internal:5432/cloudcp|" "$TMP/env.sh"
-expect 1 "tienen que describir una sola base" "URLs que apuntan a dos bases es un hallazgo"
+expect 1 "tienen que describir una sola base" "URLs pointing to two databases are a finding"
 
 # ── C-05 · Sin la credencial del master ─────────────────────────────────────
 mkpsql "$ALL_ROLES"; base_env
 sed -i '/^PGMASTER_USER=/d' "$TMP/env.sh"
-expect 1 "falta PGMASTER_USER" "sin la credencial del master para antes de conectarse"
+expected_message='falta PGMASTER_USER'  # language-data: private producer assertion
+expect 1 "$expected_message" "without the master credential, blocks before connecting"
 
 # ── C-06 · Una URL sin contraseña ───────────────────────────────────────────
 mkpsql "$ALL_ROLES"; base_env
 sed -i "s|^\($(env_for cloud_cp_tenant)=postgres://cloud_cp_tenant\):[^@]*@|\1:@|" "$TMP/env.sh"
-expect 1 "no trae contrasena" "una URL sin contraseña es un hallazgo"
+expect 1 "no trae contrasena" "a URL without a password is a finding"
 
 # ── C-07 · ⛔ EL RECUENTO POSTERIOR, que es lo que separa esto de un psql a pelo.
 #           psql sale 0 —el SQL siempre sale 0— y los roles NO están.
 mkpsql "$ALL_ROLES"; base_env
 echo "FAKE_ROLE_NAMES=" >> "$TMP/env.sh"
-expect 1 "estos roles NO estan" "psql en verde con cero roles creados es un hallazgo"
+expect 1 "estos roles NO estan" "psql success with zero created roles is a finding"
 
 # ── C-08 · Y su dirección de NO disparo: el recuento correcto no dispara ────
 mkpsql "$ALL_ROLES"; base_env
 echo "FAKE_ROLE_NAMES=\"$ALL_ROLES\"" >> "$TMP/env.sh"
-expect 0 "OK" "el recuento correcto NO dispara (dirección de no disparo)"
+expect 0 "OK" "the correct count does NOT trigger (no-trigger direction)"
 
 # ── C-09 · Contraseña con `%XX` y con `@`, que es donde un parser ingenuo cae ─
 mkpsql "$ALL_ROLES"; base_env
 sed -i "s|^\($(env_for cloud_cp_billing)=postgres://cloud_cp_billing\):[^@]*@|\1:p%40ss%3Aword@|" "$TMP/env.sh"
 run
 if [ "$(cat "$TMP/rc")" = 0 ] && command grep -qF -- '<cloud_cp_billing_password=p@ss:word>' "$TMP/psql-calls"; then
-  ok "una contraseña con %XX se decodifica antes de pasarla a psql"
+  ok "a password containing %XX is decoded before passing it to psql"
 else
-  bad "la contraseña con %XX no se decodificó: $(command grep -o -- '<cloud_cp_billing_password=[^>]*>' "$TMP/psql-calls" || echo '(no aparece)')"
+  bad "the password containing %XX was not decoded: $(command grep -o -- '<cloud_cp_billing_password=[^>]*>' "$TMP/psql-calls" || echo '(absent)')"
 fi
 
 # ── C-12 · ⛔ UNA CONTRASENA CON ESPACIO, que es el defecto F-02 del contraste y un falso verde
@@ -254,9 +257,9 @@ sed -i "s|^\($(env_for cloud_cp_billing)=postgres://cloud_cp_billing\):[^@]*@|\1
 run
 if [ "$(cat "$TMP/rc")" = 0 ] \
    && command grep -qF -- '<cloud_cp_billing_password=alpha cloudcp>' "$TMP/psql-calls"; then
-  ok "una contraseña con espacio viaja como UN argumento (F-02)"
+  ok "a password containing a space travels as ONE argument (F-02)"
 else
-  bad "la contraseña con espacio se partió: $(command grep -o -- '<cloud_cp_billing_password=[^>]*>' "$TMP/psql-calls" || echo '(no aparece)')"
+  bad "the password containing a space was split: $(command grep -o -- '<cloud_cp_billing_password=[^>]*>' "$TMP/psql-calls" || echo '(absent)')"
 fi
 
 # ── C-13 · Y un glob, que se habría expandido contra el directorio por la misma vía.
@@ -264,9 +267,9 @@ mkpsql "$ALL_ROLES"; base_env
 sed -i "s|^\($(env_for cloud_cp_tenant)=postgres://cloud_cp_tenant\):[^@]*@|\1:a%2Ab@|" "$TMP/env.sh"
 run
 if command grep -qF -- '<cloud_cp_tenant_password=a*b>' "$TMP/psql-calls"; then
-  ok "una contraseña con un glob viaja literal, sin expandirse"
+  ok "a password containing a glob travels literally without expansion"
 else
-  bad "el glob se expandió o se perdió: $(command grep -o -- '<cloud_cp_tenant_password=[^>]*>' "$TMP/psql-calls" || echo '(no aparece)')"
+  bad "the glob was expanded or lost: $(command grep -o -- '<cloud_cp_tenant_password=[^>]*>' "$TMP/psql-calls" || echo '(absent)')"
 fi
 
 # ── C-14 · ⛔ EL CONJUNTO, NO LA CUENTA (F-03). Un rol esperado que falta, COMPENSADO por otro
@@ -276,7 +279,7 @@ mkpsql "$ALL_ROLES"; base_env
 _swapped="$(printf '%s' "$ALL_ROLES" | sed 's/cloud_cp_billing /cloud_cp_ranciodeotrointento /')"
 echo "FAKE_ROLE_NAMES=\"$_swapped\"" >> "$TMP/env.sh"
 expect 1 "estos roles NO estan: cloud_cp_billing" \
-  "un rol que falta compensado por otro del mismo prefijo es un hallazgo (no basta la cuenta)"
+  "a missing role offset by another with the same prefix is a finding (count alone is insufficient)"
 
 # ── C-15 · ⛔ UN PARAMETRO QUE CAMBIA EL DESTINO. `?host=` lo honra el cliente del runtime
 #           (pgx), y la primera version de este guion tiraba la query entera en silencio: se
@@ -285,26 +288,26 @@ expect 1 "estos roles NO estan: cloud_cp_billing" \
 mkpsql "$ALL_ROLES"; base_env
 sed -i "s|^\($(env_for cloud_cp_billing)=.*cloudcp\)$|\1?host=otro.internal|" "$TMP/env.sh"
 expect 1 "puede cambiar el servidor o la base" \
-  "un parametro de consulta que puede mover el destino es un hallazgo"
+  "a query parameter that can change the destination is a finding"
 
 # ── C-16 · Y la direccion de NO disparo: `sslmode` no mueve el destino y no debe rechazarse.
 #           Sin este caso, la lista blanca podria estrecharse hasta romper URLs legitimas.
 mkpsql "$ALL_ROLES"; base_env
 sed -i "s|^\($(env_for cloud_cp_billing)=.*cloudcp\)$|\1?sslmode=require|" "$TMP/env.sh"
-expect 0 "OK" "sslmode NO se rechaza (dirección de no disparo de la lista blanca)"
+expect 0 "OK" "sslmode is NOT rejected (allowlist no-trigger direction)"
 
 # ── C-17 · Multi-host: libpq elige uno y este paso no puede saber cual.
 mkpsql "$ALL_ROLES"; base_env
 sed -i "s|@db.internal:5432/cloudcp|@db.internal,replica.internal:5432/cloudcp|" "$TMP/env.sh"
 expect 1 "declara varios hosts" \
-  "una URL con varios hosts es un hallazgo"
+  "a URL with multiple hosts is a finding"
 
 # ── C-18 · Un `%` que no abre un octeto valido: libpq lo rechaza y la version anterior lo
 #           dejaba pasar tal cual, cambiando la contrasena en silencio.
 mkpsql "$ALL_ROLES"; base_env
 sed -i "s|^\($(env_for cloud_cp_tenant)=postgres://cloud_cp_tenant\):[^@]*@|\1:100%pura@|" "$TMP/env.sh"
 expect 1 "no abre un octeto valido" \
-  "una codificacion porcentual mal formada es un hallazgo"
+  "malformed percent encoding is a finding"
 
 # ── C-19 · ⛔ «EXISTE» NO ES «SIRVE» (F-05, la mitad larga). Un rol creado, presente en el censo
 #           y sin LOGIN —o con la contrasena equivocada, o sin CONNECT a esa base— deja el plano
@@ -314,7 +317,7 @@ expect 1 "no abre un octeto valido" \
 mkpsql "$ALL_ROLES"; base_env
 echo 'FAKE_LOGIN_FAIL="cloud_cp_billing"' >> "$TMP/env.sh"
 expect 1 "NO conecta" \
-  "un rol que existe pero no conecta con su contraseña es un hallazgo"
+  "an existing role unable to connect with its password is a finding"
 
 # ── C-20 · Y que la sonda se haga DE VERDAD, una por rol de login: si no se invocara, el caso
 #           de arriba pasaria por no haber preguntado.
@@ -322,9 +325,9 @@ mkpsql "$ALL_ROLES"; base_env
 run
 _probes="$(command grep -c -- '<SELECT 1>' "$TMP/psql-calls" || true)"
 if [ "$_probes" = "$N_ROLES" ]; then
-  ok "se prueba el login de los $N_ROLES roles, uno por uno"
+  ok "login is tested for all $N_ROLES roles, one by one"
 else
-  bad "se hicieron $_probes sondas de login y hay $N_ROLES roles de login"
+  bad "$_probes login probes ran for $N_ROLES login roles"
 fi
 
 # ── C-21 · ⛔⛔ EL FALSO VERDE QUE LA SONDA DEBIA EXCLUIR Y CONFIRMABA. Medido por el contraste
@@ -339,7 +342,7 @@ fi
 mkpsql "$ALL_ROLES"; base_env
 sed -i "s|^\($(env_for cloud_cp_billing)=postgres://cloud_cp_billing\):[^@]*@|\1:alpha%0A@|" "$TMP/env.sh"
 expect 1 "lleva un salto de linea" \
-  "una contraseña con salto de linea se rechaza en vez de instalarse truncada"
+  "a password containing a newline is rejected rather than installed truncated"
 
 # ── C-22 · Y el porcentaje mal formado que la validacion no veia porque miraba el valor YA
 #           DECODIFICADO: `good%25abc%zz` decodifica a `good%abc%zz`, cuyo `%ab` satisfacia la
@@ -348,7 +351,7 @@ expect 1 "lleva un salto de linea" \
 mkpsql "$ALL_ROLES"; base_env
 sed -i "s|^\($(env_for cloud_cp_billing)=postgres://cloud_cp_billing\):[^@]*@|\1:good%25abc%zz@|" "$TMP/env.sh"
 expect 1 "no abre un octeto valido" \
-  "un % mal formado tras uno bien formado es un hallazgo (se valida la URL, no lo decodificado)"
+  "a malformed % after a valid one is a finding (validates the URL, not the decoded value)"
 
 # ── C-23 · ⛔ Y LA SONDA TIENE QUE USAR LA URL, no una reconstruccion: es lo unico que impide
 #           que dos errores identicos coincidan. Se comprueba en la invocacion.
@@ -356,9 +359,9 @@ mkpsql "$ALL_ROLES"; base_env
 run
 if command grep -q -- '<postgres://cloud_cp_billing:' "$TMP/psql-calls" \
    && command grep -q -- '<SELECT 1>' "$TMP/psql-calls"; then
-  ok "la sonda de login se conecta con la URL ORIGINAL, no con una reconstrucción"
+  ok "the login probe connects with the ORIGINAL URL, not a reconstruction"
 else
-  bad "la sonda no lleva la URL original: $(command grep -o -- '<postgres://[^>]*>' "$TMP/psql-calls" | head -1 || echo '(ninguna)')"
+  bad "the probe does not carry the original URL: $(command grep -o -- '<postgres://[^>]*>' "$TMP/psql-calls" | head -1 || echo '(none)')"
 fi
 
 # ── C-24 · ⛔ UNA CAIDA NO ES UN HALLAZGO. Un fallo de conexion puede ser la credencial —que es
@@ -369,14 +372,14 @@ fi
 mkpsql "$ALL_ROLES"; base_env
 echo 'FAKE_ALL_DOWN=1' >> "$TMP/env.sh"
 expect 2 "no he podido comprobar el login de" \
-  "si nada conecta, la respuesta es 2 «no he podido mirar», no 1"
+  "if nothing connects, the response is 2 «cannot inspect», not 1"
 
 # ── C-25 · Y la direccion contraria, que es la que da valor a la de arriba: si el master SI
 #           entra y el rol no, el rol es el problema y eso sigue siendo 1.
 mkpsql "$ALL_ROLES"; base_env
 echo 'FAKE_LOGIN_FAIL="cloud_cp_tenant"' >> "$TMP/env.sh"
 expect 1 "y el master SI" \
-  "si el master entra y el rol no, sigue siendo un hallazgo (1, no 2)"
+  "if the master connects but the role does not, still a finding (1, not 2)"
 
 # ── C-10 · Sin psql: es «no he podido mirar», no un hallazgo ────────────────
 #
@@ -395,12 +398,12 @@ if [ -x "$TMP/nopsql/sed" ] && [ ! -e "$TMP/nopsql/psql" ]; then
   ( set -a; . "$TMP/env.sh"; set +a
     PATH="$TMP/nopsql" OLIVARES_ROLES_SQL="$SQL" sh "$SUT" ) > "$TMP/out" 2>&1 || _rc=$?
   if [ "$_rc" = 2 ] && command grep -qF "no hay psql" "$TMP/out"; then
-    ok "sin psql la respuesta es 2, no 1 ni 0"
+    ok "without psql, the response is 2, not 1 or 0"
   else
-    bad "sin psql la respuesta fue $_rc: $(head -c 300 "$TMP/out")"
+    bad "without psql, the response was $_rc: $(head -c 300 "$TMP/out")"
   fi
 else
-  bad "no he podido construir el PATH sin psql"
+  bad "could not construct PATH without psql"
 fi
 
 # ── C-11 · ⛔ LA GUARDA QUE ESCRIBIÓ MI PROPIO FALLO: si el patrón de ALTER ROLE
@@ -419,12 +422,12 @@ if command grep -q '^alter role cloud_cp_billing' "$TMP/mutant.sql"; then
     PATH="$TMP/bin:$PATH" OLIVARES_ROLES_SQL="$TMP/mutant.sql" sh "$SUT" ) > "$TMP/out" 2>&1 || rc=$?
   # El SQL mutado sigue teniendo su guarda `\if`, así que la pareja perdida se detecta.
   if [ "$rc" = 2 ] && command grep -qF "no cubre la guarda" "$TMP/out"; then
-    ok "una extracción que pierde una pareja para con «no he podido mirar»"
+    ok "extraction losing a pair blocks with «cannot inspect»"
   else
-    bad "la extracción incompleta no paró — rc=$rc: $(head -c 300 "$TMP/out")"
+    bad "incomplete extraction did not block — rc=$rc: $(head -c 300 "$TMP/out")"
   fi
 else
-  bad "el mutante de espaciado no se aplicó al SQL"
+  bad "the spacing mutant was not applied to SQL"
 fi
 
 printf 'roles-oneshot selftest: %d passed, %d failed\n' "$pass" "$fail"

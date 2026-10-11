@@ -38,7 +38,7 @@ while [ $# -gt 0 ]; do
 		# fallo, `$#` no baja y el bucle se repite para siempre. Un gate que se cuelga con un
 		# argumento mal escrito es peor que uno que falla: no da veredicto y nadie sabe por qué.
 		if [ $# -lt 2 ] || [ -z "${2:-}" ]; then
-			echo "check-docs-site-live: ⛔ --host necesita un valor." >&2
+			echo "check-docs-site-live: ⛔ --host requires a value." >&2
 			exit 2
 		fi
 		HOST="$2"
@@ -56,15 +56,15 @@ REDIRECTS="$RAIZ/docs-site/public/_redirects"
 CONTENT="$RAIZ/docs-site/src/content/docs"
 
 command -v curl >/dev/null 2>&1 || {
-	echo "check-docs-site-live: ⛔ NO HE PODIDO MIRAR: no encuentro curl." >&2
+	echo "check-docs-site-live: ⛔ COULD NOT CHECK: curl is not installed." >&2
 	exit 2
 }
 [ -r "$REDIRECTS" ] || {
-	echo "check-docs-site-live: ✗ el árbol no contiene $REDIRECTS; no puede declarar sus redirecciones." >&2
+	echo "check-docs-site-live: ✗ the tree does not contain $REDIRECTS; redirects cannot be determined." >&2
 	exit 1
 }
 [ -d "$CONTENT" ] || {
-	echo "check-docs-site-live: ✗ el árbol no contiene $CONTENT; no puede declarar sus rutas." >&2
+	echo "check-docs-site-live: ✗ the tree does not contain $CONTENT; routes cannot be determined." >&2
 	exit 1
 }
 
@@ -102,14 +102,14 @@ echo "check-docs-site-live: https://$HOST"
 control="$(probe "https://$HOST/")" || control=""
 control_code="${control%% *}"
 if [ -z "$control" ] || [ "$control_code" = "000" ] || [ "$control_code" = "403" ]; then
-	echo "check-docs-site-live: ⛔ NO HE PODIDO MIRAR: el control positivo https://$HOST/ dio" \
-		"'${control:-sin respuesta}' en vez de 200. Sin él, un 404 no distingue un sitio roto de" \
-		"una red caída." >&2
+	echo "check-docs-site-live: ⛔ COULD NOT CHECK: positive control https://$HOST/ returned" \
+		"'${control:-no response}' instead of 200. Without it, a 404 cannot distinguish a broken site from" \
+		"an unavailable network." >&2
 	exit 2
 fi
 if [ "$control_code" != "200" ]; then
-	echo "check-docs-site-live: ✗ el control positivo https://$HOST/ respondió HTTP $control_code;" \
-		"el host fue observable pero la raíz publicada está rota." >&2
+	echo "check-docs-site-live: ✗ positive control https://$HOST/ returned HTTP $control_code;" \
+		"the host was reachable, but the published root is broken." >&2
 	exit 1
 fi
 nota "control positivo: / -> 200"
@@ -148,14 +148,14 @@ while IFS= read -r linea; do
 	[ -n "$sonda" ] || continue
 	reglas=$((reglas + 1))
 	respuesta="$(probe "https://$HOST$sonda")" || {
-		nota "⚠ NO HE PODIDO MIRAR $sonda (la petición falló)"
+		nota "⚠ COULD NOT CHECK $sonda (request failed)"
 		ciego=$((ciego + 1))
 		continue
 	}
 	got_code="${respuesta%% *}"
 	got_loc="${respuesta#* }"
 	if [ "$got_code" != "$code" ]; then
-		nota "✗ $sonda -> $got_code (el árbol promete $code hacia $dst)"
+		nota "✗ $sonda -> $got_code (the tree declares $code to $dst)"
 		hallazgos=$((hallazgos + 1))
 		continue
 	fi
@@ -183,12 +183,12 @@ while IFS= read -r linea; do
 	if [ "$loc_path" = "$dst" ] || [ "$loc_path" = "${dst%/}" ] || [ "$loc_path" = "${dst%/}/" ]; then
 		nota "✓ $sonda -> $got_code $loc_path"
 	else
-		nota "✗ $sonda -> $got_code pero hacia '$loc_path', no hacia '$dst'"
+		nota "✗ $sonda -> $got_code but redirects to '$loc_path', not '$dst'"
 		hallazgos=$((hallazgos + 1))
 	fi
 done <"$REDIRECTS"
 set +f
-nota "reglas de _redirects verificadas: $reglas (líneas ilegibles: $malformadas)"
+nota "_redirects rules verified: $reglas (unreadable lines: $malformadas)"
 # ⛔ POSTCONDICIÓN: CERO REGLAS NO ES LIMPIO. Un `_redirects` vacío, truncado o enteramente
 # malformado hacía que este bucle no comprobara NADA y el gate saliera 0 — «no he mirado» escrito
 # como «está bien», que es el defecto que este repositorio persigue por encima de todos. Cero
@@ -196,13 +196,13 @@ nota "reglas de _redirects verificadas: $reglas (líneas ilegibles: $malformadas
 # Cloudflare IGNORA en silencio toda regla que no cumpla `source destination [code]`: una regla
 # ilegible aquí es una redirección que en producción no existe.
 if [ "$reglas" -eq 0 ]; then
-	echo "check-docs-site-live: ✗ ninguna regla legible en $REDIRECTS." \
-		"Un fichero vacío o malformado no es un sitio sin redirecciones: es un gate sin entrada." >&2
+	echo "check-docs-site-live: ✗ no readable rules in $REDIRECTS." \
+		"An empty or malformed file leaves the check without input; it does not prove the site has no redirects." >&2
 	exit 1
 fi
 if [ "$malformadas" -gt 0 ]; then
-	nota "✗ $malformadas línea(s) de _redirects que este gate no puede leer — Cloudflare las ignora" \
-		"en silencio, así que prometen una redirección que en producción no existe"
+	nota "✗ $malformadas unreadable _redirects line(s) — Cloudflare ignores them" \
+		"silently, so they promise a redirect that is missing in production"
 	hallazgos=$((hallazgos + 1))
 fi
 
@@ -240,13 +240,13 @@ for dir in "$CONTENT"/*/; do
 	fi
 	rutas=$((rutas + 1))
 	respuesta="$(probe "https://$HOST/$nombre/")" || {
-		nota "⚠ NO HE PODIDO MIRAR /$nombre/"
+		nota "⚠ COULD NOT CHECK /$nombre/"
 		ciego=$((ciego + 1))
 		continue
 	}
 	got_code="${respuesta%% *}"
 	if [ "$got_code" != "200" ]; then
-		nota "✗ /$nombre/ -> $got_code (la sección existe en el árbol)"
+		nota "✗ /$nombre/ -> $got_code (the section exists in the tree)"
 		hallazgos=$((hallazgos + 1))
 	fi
 done
@@ -258,25 +258,25 @@ while IFS= read -r loc; do
 	[ -n "$loc" ] || continue
 	rutas=$((rutas + 1))
 	respuesta="$(probe "https://$HOST/$loc/")" || {
-		nota "⚠ NO HE PODIDO MIRAR /$loc/"
+		nota "⚠ COULD NOT CHECK /$loc/"
 		ciego=$((ciego + 1))
 		continue
 	}
 	got_code="${respuesta%% *}"
 	if [ "$got_code" != "200" ]; then
-		nota "✗ /$loc/ -> $got_code (el locale existe en el árbol)"
+		nota "✗ /$loc/ -> $got_code (the locale exists in the tree)"
 		hallazgos=$((hallazgos + 1))
 	fi
 done <<EOF
 $locales
 EOF
-nota "rutas estructurales verificadas: $rutas"
+nota "structural routes checked: $rutas"
 # ⛔ POSTCONDICIÓN, la hermana de la de reglas: si el descubrimiento no encuentra NADA —árbol
 # movido, ruta equivocada— este tramo no comprueba nada y el gate salía 0. Cero rutas es no haber
 # mirado, no un sitio correcto.
 if [ "$rutas" -eq 0 ]; then
-	echo "check-docs-site-live: ✗ cero rutas estructurales descubiertas bajo" \
-		"$CONTENT. Descubrir nada no es lo mismo que comprobar algo." >&2
+	echo "check-docs-site-live: ✗ no structural routes discovered under" \
+		"$CONTENT. Discovering no routes does not verify the site." >&2
 	exit 1
 fi
 
@@ -287,11 +287,11 @@ fi
 # ---------------------------------------------------------------------------------------------
 respuesta="$(probe "https://$HOST/olivares-negative-control-$$/")" || respuesta=""
 if [ -z "$respuesta" ]; then
-	nota "⚠ NO HE PODIDO MIRAR el control negativo"
+	nota "⚠ COULD NOT CHECK the negative control"
 	ciego=$((ciego + 1))
 elif [ "${respuesta%% *}" != "404" ]; then
-	nota "✗ control negativo: una ruta inexistente dio ${respuesta%% *}, no 404 — el sitio está" \
-		"sirviendo el índice para todo y los verdes de arriba no significan nada"
+	nota "✗ negative control: a nonexistent route returned ${respuesta%% *}, not 404 — the site is" \
+		"serving the index for every path, making the passes above meaningless"
 	hallazgos=$((hallazgos + 1))
 else
 	nota "control negativo: ruta inexistente -> 404"
@@ -299,13 +299,13 @@ fi
 
 # ---------------------------------------------------------------------------------------------
 if [ "$hallazgos" -gt 0 ]; then
-	echo "check-docs-site-live: $hallazgos hallazgo(s) — el sitio en vivo NO cumple lo que promete" \
-		"este árbol. Publica docs-site (workflow docs-site-deploy) y vuelve a medir." >&2
+	echo "check-docs-site-live: $hallazgos finding(s) — the live site does not match" \
+		"this tree. Publish docs-site (workflow docs-site-deploy), then measure again." >&2
 	exit 1
 fi
 if [ "$ciego" -gt 0 ]; then
-	echo "check-docs-site-live: ⛔ NO HE PODIDO MIRAR $ciego sonda(s). Eso no es un verde." >&2
+	echo "check-docs-site-live: ⛔ COULD NOT CHECK $ciego probe(s). This is not a pass." >&2
 	exit 2
 fi
-echo "check-docs-site-live: ✔ el sitio en vivo cumple lo que promete el árbol ($reglas redirecciones, $rutas rutas)"
+echo "check-docs-site-live: ✔ the live site matches the tree ($reglas redirects, $rutas routes)"
 exit 0

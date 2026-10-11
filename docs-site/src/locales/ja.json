@@ -1,0 +1,308 @@
+{
+  "API & manage-as-code (platform)": {
+    "ja": "API とコード管理 (プラットフォーム)"
+  },
+  "API stability & deprecation policy": {
+    "ja": "API の安定性と非推奨ポリシー"
+  },
+  "Access & resource map (R/RW)": {
+    "ja": "アクセスとリソースマップ (R/RW)"
+  },
+  "Agent simulation/testing sandbox": {
+    "ja": "エージェントのシミュレーション/テスト用サンドボックス"
+  },
+  "Architecture": {
+    "ja": "アーキテクチャ"
+  },
+  "Architecture decisions (ADR)": {
+    "ja": "アーキテクチャ決定 (ADR)"
+  },
+  "Back up and restore": {
+    "ja": "バックアップと復元"
+  },
+  "Build and ship a connector": {
+    "ja": "コネクターの構築と公開"
+  },
+  "CLI": {
+    "ja": "CLI"
+  },
+  "Claude Code adoption": {
+    "ja": "Claude Code の利用状況"
+  },
+  "Compliance & regulatory": {
+    "ja": "コンプライアンスと規制"
+  },
+  "Console screens & permissions": {
+    "ja": "コンソール画面と権限"
+  },
+  "Configuration": {
+    "ja": "設定"
+  },
+  "Connect & observe": {
+    "ja": "接続と観測"
+  },
+  "Connect Claude Code": {
+    "ja": "Claude Code を接続する"
+  },
+  "Connect a source": {
+    "ja": "ソースを接続する"
+  },
+  "Connector guides": {
+    "ja": "コネクターガイド"
+  },
+  "Connectors & coverage tiers": {
+    "ja": "コネクターとカバレッジ階層"
+  },
+  "Cookbook": {
+    "ja": "クックブック"
+  },
+  "Cost & AI FinOps": {
+    "ja": "コストと AI FinOps"
+  },
+  "Data, knowledge & context": {
+    "ja": "データ・ナレッジ・コンテキスト"
+  },
+  "Deploy with Docker": {
+    "ja": "Docker でデプロイする"
+  },
+  "Deployment & integration": {
+    "ja": "デプロイと連携"
+  },
+  "EU AI Act evidence from runtime data": {
+    "ja": "ランタイムデータからの EU AI Act 証跡"
+  },
+  "Enterprise OTel for Claude Code": {
+    "ja": "Claude Code 向けエンタープライズ OTel"
+  },
+  "Event bus (AsyncAPI 3.0)": {
+    "ja": "イベントバス (AsyncAPI 3.0)"
+  },
+  "Eventing & webhooks": {
+    "ja": "イベントと Webhook"
+  },
+  "Executive dashboards & reporting (console)": {
+    "ja": "エグゼクティブ向けダッシュボードとレポート (コンソール)"
+  },
+  "Explanation": {
+    "ja": "解説"
+  },
+  "Forward to Splunk": {
+    "ja": "Splunk へ転送する"
+  },
+  "From zero to a read/write access graph": {
+    "ja": "ゼロから読み取り/書き込みアクセスグラフまで"
+  },
+  "Getting started by scenario": {
+    "ja": "シナリオ別の入門"
+  },
+  "gRPC services & methods": {
+    "ja": "gRPC のサービスとメソッド"
+  },
+  "Glossary": {
+    "ja": "用語集"
+  },
+  "Govern & build": {
+    "ja": "ガバナンスと構築"
+  },
+  "Govern and approve": {
+    "ja": "ガバナンスと承認"
+  },
+  "Govern Postgres content": {
+    "ja": "Postgres コンテンツのガバナンス"
+  },
+  "Govern your file server": {
+    "ja": "ファイルサーバーのガバナンス"
+  },
+  "Governed data for Claude": {
+    "ja": "Claude 向けのガバナンス済みデータ"
+  },
+  "Harden a deployment": {
+    "ja": "デプロイを堅牢化する"
+  },
+  "Health, SLA & uptime": {
+    "ja": "ヘルス・SLA・稼働時間"
+  },
+  "Honesty & limits": {
+    "ja": "誠実さと制約"
+  },
+  "How this documentation is organized": {
+    "ja": "このドキュメントの構成"
+  },
+  "How-to guides": {
+    "ja": "ハウツーガイド"
+  },
+  "Identity, permissions & governance": {
+    "ja": "アイデンティティ・権限・ガバナンス"
+  },
+  "Inline inference proxy (PEP)": {
+    "ja": "インライン推論プロキシ (PEP)"
+  },
+  "Install & operate": {
+    "ja": "インストールと運用"
+  },
+  "Install air-gapped": {
+    "ja": "エアギャップ環境にインストールする"
+  },
+  "Install from a package": {
+    "ja": "パッケージからインストール"
+  },
+  "Install with Homebrew": {
+    "ja": "Homebrew でインストール"
+  },
+  "Internal catalog & marketplace": {
+    "ja": "社内カタログとマーケットプレイス"
+  },
+  "Inventory & discovery": {
+    "ja": "インベントリと検出"
+  },
+  "Live operation & sessions": {
+    "ja": "ライブ運用とセッション"
+  },
+  "Live-ingest": {
+    "ja": "ライブ取り込み"
+  },
+  "MCP, skills & capabilities": {
+    "ja": "MCP・スキル・ケイパビリティ"
+  },
+  "Manage as code (Terraform)": {
+    "ja": "コードとして管理 (Terraform)"
+  },
+  "Model & provider management": {
+    "ja": "モデルとプロバイダーの管理"
+  },
+  "Model operations (own models)": {
+    "ja": "モデルオペレーション (自社モデル)"
+  },
+  "Modules catalog": {
+    "ja": "モジュールカタログ"
+  },
+  "Monitor with Prometheus": {
+    "ja": "Prometheus で監視する"
+  },
+  "Multi-tenancy & org management (platform)": {
+    "ja": "マルチテナンシーと組織管理 (プラットフォーム)"
+  },
+  "Observability": {
+    "ja": "オブザーバビリティ"
+  },
+  "Olivares AI control plane API": {
+    "ja": "Olivares AI コントロールプレーン API"
+  },
+  "Open core & licensing": {
+    "ja": "オープンコアとライセンス"
+  },
+  "Supporting the project": {
+    "ja": "プロジェクトを支援する"
+  },
+  "Orchestration & A2A": {
+    "ja": "オーケストレーションと A2A"
+  },
+  "Output integrations & notifications": {
+    "ja": "出力連携と通知"
+  },
+  "Overview": {
+    "ja": "概要"
+  },
+  "Overview — the 35 selectable modules": {
+    "ja": "概要 — 選択可能な35個のモジュール"
+  },
+  "Skills catalog & assignments": {
+    "ja": "スキルカタログと割り当て"
+  },
+  "Fine-tuning & inference execution (planned)": {
+    "ja": "ファインチューニングと推論の実行 (予定)"
+  },
+  "Paths by role": {
+    "ja": "ロール別のパス"
+  },
+  "Positioning & fit": {
+    "ja": "ポジショニングと適合性"
+  },
+  "Posture export to control towers": {
+    "ja": "コントロールタワーへのポスチャエクスポート"
+  },
+  "Privileged-session recording": {
+    "ja": "特権セッションの記録"
+  },
+  "Quality, evals & testing": {
+    "ja": "品質・評価・テスト"
+  },
+  "Quickstart": {
+    "ja": "クイックスタート"
+  },
+  "REST API": {
+    "ja": "REST API"
+  },
+  "Red-teaming & adversarial testing": {
+    "ja": "レッドチームと敵対的テスト"
+  },
+  "Reference": {
+    "ja": "リファレンス"
+  },
+  "Reporting (HTML/PDF)": {
+    "ja": "レポート (HTML/PDF)"
+  },
+  "Run Claude Code with Olivares": {
+    "ja": "Olivares で Claude Code を実行する"
+  },
+  "Add a provider and launch an agent": {
+    "ja": "プロバイダーを追加してエージェントを起動する"
+  },
+  "Operate a provider session": {
+    "ja": "プロバイダーセッションを運用する"
+  },
+  "SIEM/ITSM forwarder": {
+    "ja": "SIEM/ITSM フォワーダー"
+  },
+  "Session cockpit (availability)": {
+    "ja": "セッションコックピット（可用性）"
+  },
+  "Saved console views": {
+    "ja": "保存済みコンソールビュー"
+  },
+  "Security & threat model": {
+    "ja": "セキュリティと脅威モデル"
+  },
+  "Security, guardrails & audit": {
+    "ja": "セキュリティ・ガードレール・監査"
+  },
+  "Self-host the control plane": {
+    "ja": "コントロールプレーンをセルフホストする"
+  },
+  "Source & credential scoping": {
+    "ja": "ソースと認証情報のスコープ設定"
+  },
+  "Start here": {
+    "ja": "ここから始める"
+  },
+  "Troubleshooting": {
+    "ja": "トラブルシューティング"
+  },
+  "Tutorials": {
+    "ja": "チュートリアル"
+  },
+  "Upgrade and roll back": {
+    "ja": "アップグレードとロールバック"
+  },
+  "Use the client SDKs": {
+    "ja": "クライアント SDK を使う"
+  },
+  "SIEM & telemetry egress": {
+    "ja": "SIEM とテレメトリの送出"
+  },
+  "Verified connectors (third-party)": {
+    "ja": "検証済みコネクター (サードパーティ)"
+  },
+  "Verify a release": {
+    "ja": "リリースを検証する"
+  },
+  "Voice & realtime agents": {
+    "ja": "音声・リアルタイムエージェント"
+  },
+  "What is Olivares AI?": {
+    "ja": "Olivares AI とは?"
+  },
+  "Your first hour (local, team, hybrid)": {
+    "ja": "最初の 1 時間（ローカル、チーム、ハイブリッド）"
+  }
+}

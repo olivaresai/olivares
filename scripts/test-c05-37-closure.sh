@@ -3,31 +3,22 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 #
-# Batería de scripts/check-c05-37-closure.sh — 37 casillas, con las TRES respuestas.
-#
-# ⛔ UN CONTROL QUE SOLO SE PRUEBA CON EL CASO QUE RECHAZA NO ESTA PROBADO: un gate que rechaza
-# TODO pasa cualquier batería de «rechaza». Por eso hay casillas de NO-DISPARO.
-#
-# ⛔ LA MITAD DE ESTAS CASILLAS LAS ESCRIBIO UN CONTRASTE, NO YO, y es el motivo de que existan.
-# La primera versión tenía 13 y `sol max` derivó ONCE mutantes del gate que sobrevivían a ella
-# (an internal design note (not shipped) §2). El patrón era siempre el mismo: **una
-# casilla que falla por DOS motivos a la vez no aísla ninguno**. El caso del método fallaba
-# también por ruta; el host malo no contenía al bueno, así que un `in` pasaba; el id malo no
-# contenía `msg_`, así que un `in` pasaba; el único estado negativo era `401`, así que rechazar
-# sólo `401` pasaba. Cada casilla nueva de abajo aísla exactamente una propiedad.
-#
-# ⛔ Y las casillas de PROSA llevan a propósito DOS frases prohibidas y distinta caja: con una
-# sola frase, un `claims[:1]` sobrevive; con la misma caja, quitar `.lower()` sobrevive.
-#
-# Cada caso comprueba el CODIGO DE SALIDA EXACTO, no «distinto de cero»: un rc=2 de entorno
-# pasaría cualquier aserción de «!= 0» y el gate podría estar roto y salir verde.
+# Test check-c05-37-closure.sh with 37 cases and all three answers.
+# Include acceptance controls: a gate rejecting everything passes rejection-only tests.
+# The original 13 cases left eleven mutants alive in sol max's review
+# (an internal design note (not shipped) §2). Each new case isolates one
+# property: the old method case also failed its route; bad host/id values did not
+# contain the valid substrings, letting `in` survive; 401 was the sole negative status.
+# Prose cases deliberately use two forbidden claims in different case: one claim lets
+# claims[:1] survive, while matching case lets removal of .lower() survive.
+# Assert exact exit codes: an environmental rc 2 must not satisfy a finding's rc 1.
 set -uo pipefail
 
 SUT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/check-c05-37-closure.sh"
-[ -r "$SUT" ] || { echo "test-c05-37-closure: NO HE PODIDO MIRAR: no leo $SUT" >&2; exit 2; }
+[ -r "$SUT" ] || { echo "test-c05-37-closure: COULD NOT LOOK: cannot read $SUT" >&2; exit 2; }
 
 T="$(mktemp -d "${TMPDIR:-/tmp}/c0537.XXXXXX")" || { echo "no mktemp" >&2; exit 2; }
-[ -d "$T" ] || { echo "mktemp no devolvió directorio" >&2; exit 2; }
+[ -d "$T" ] || { echo "mktemp did not return a directory" >&2; exit 2; }
 trap 'rm -rf "$T"' EXIT
 
 pass=0; failn=0
@@ -39,7 +30,7 @@ caso(){
   if [ "$got" = "$want" ]; then
     pass=$((pass+1)); printf '  ok   %-62s rc=%s\n' "$nombre" "$got"
   else
-    failn=$((failn+1)); printf '  FAIL %-62s rc=%s (esperado %s)\n' "$nombre" "$got" "$want"
+    failn=$((failn+1)); printf '  FAIL %-62s rc=%s (expected %s)\n' "$nombre" "$got" "$want"
     sed 's/^/         /' "$T/out"
   fi
 }
@@ -103,52 +94,52 @@ SENUELO='{"ts_utc":"t","method":"GET","url":"https://licenses-sandbox.olivares.a
 SENUELO="$SENUELO"'"status":200,"headers":{"host":"licenses-sandbox.olivares.ai","user-agent":"control"}}'
 BUENA_SEGUNDA="[$SENUELO,${BUENA#[}"
 
-echo "test-c05-37-closure: 37 casillas"
+echo "test-c05-37-closure: 37 cases"
 
 # ── NO-DISPARO ───────────────────────────────────────────────────────────────────────────────
-sembrar false false SIN;        caso "no-disparo · contrato en false, sin traza" 0
-sembrar false false "$BUENA";   caso "no-disparo · false con traza de sobra" 0
-sembrar true false "$BUENA";    caso "no-disparo · verde CON la llegada que NOMBRA" 0
-sembrar true false "$BUENA_SEGUNDA"; caso "no-disparo · la llegada buena va DETRAS de un señuelo" 0
+sembrar false false SIN;        caso "no trigger · contract false, no trace" 0
+sembrar false false "$BUENA";   caso "no trigger · false with an extra trace" 0
+sembrar true false "$BUENA";    caso "no trigger · green WITH the receipt it NAMES" 0
+sembrar true false "$BUENA_SEGUNDA"; caso "no trigger · valid receipt comes AFTER a decoy" 0
 
 # ── DISPARO ──────────────────────────────────────────────────────────────────────────────────
-sembrar true false "$SOLO_GET";          caso "verde y la traza sólo tiene GET a /health" 1
-sembrar true false "$GET_RUTA_BUENA";    caso "GET a la ruta BUENA — aísla el método" 1
-sembrar true false "$OTRO_HOST";         caso "la traza es de OTRO host" 1
-sembrar true false "$HOST_QUE_CONTIENE"; caso "host que CONTIENE al bueno — aísla la igualdad" 1
-sembrar true false "$RUTA_QUE_CONTIENE"; caso "ruta que CONTIENE a la buena — aísla la igualdad" 1
-sembrar true false "$RUTA_MALA";         caso "ruta equivocada" 1
-sembrar true false "$SONDA_PROPIA" "" msg_s1012replay_dead; caso "SONDA PROPIA (replay) — el fallo del 27" 1
-sembrar true false "$SIN_PREFIJO" "" probe-mia; caso "webhook-id sin el prefijo del remitente" 1
-sembrar true false "$PREFIJO_DENTRO" "" x-msg_REAL; caso "webhook-id que CONTIENE el prefijo sin empezar por él" 1
-sembrar true false "$RECHAZADA_401";     caso "llegada REAL que el Worker rechazó 401" 1
-sembrar true false "$ERROR_500";         caso "llegada con 500 — aísla que no se mira sólo el 401" 1
-sembrar true false "$UA_PROPIO";         caso "id del remitente pero user-agent NUESTRO" 1
-sembrar true false "$OTRO_WID";          caso "llegada buena de OTRO webhook-id que el nombrado" 1
-sembrar true false "$STATUS_CADENA";     caso "status como CADENA '202', no entero" 1
-sembrar false false SIN "C05-37 verde";  caso "prosa adelantada · minúsculas (aísla el .lower())" 1
-sembrar true false "$BUENA" "cadena de entrega CERRADA"; caso "prosa adelantada · 2.ª frase con sandbox YA verde" 1
-sembrar true true "$BUENA";              caso "producción verde con evidencia de SANDBOX" 1
+sembrar true false "$SOLO_GET";          caso "green with a trace containing only GET /health" 1
+sembrar true false "$GET_RUTA_BUENA";    caso "GET to the CORRECT path — isolates the method" 1
+sembrar true false "$OTRO_HOST";         caso "the trace is from ANOTHER host" 1
+sembrar true false "$HOST_QUE_CONTIENE"; caso "host that CONTAINS the correct host — isolates equality" 1
+sembrar true false "$RUTA_QUE_CONTIENE"; caso "path that CONTAINS the correct path — isolates equality" 1
+sembrar true false "$RUTA_MALA";         caso "wrong path" 1
+sembrar true false "$SONDA_PROPIA" "" msg_s1012replay_dead; caso "SELF PROBE (replay) — the failure from the 27th" 1
+sembrar true false "$SIN_PREFIJO" "" probe-mia; caso "webhook-id without the sender prefix" 1
+sembrar true false "$PREFIJO_DENTRO" "" x-msg_REAL; caso "webhook-id that CONTAINS the prefix without starting with it" 1
+sembrar true false "$RECHAZADA_401";     caso "REAL receipt rejected by the Worker with 401" 1
+sembrar true false "$ERROR_500";         caso "receipt with 500 — verifies that more than 401 is checked" 1
+sembrar true false "$UA_PROPIO";         caso "sender ID but OUR user-agent" 1
+sembrar true false "$OTRO_WID";          caso "valid receipt for a DIFFERENT webhook-id than the named one" 1
+sembrar true false "$STATUS_CADENA";     caso "status as STRING '202', not an integer" 1
+sembrar false false SIN "C05-37 verde";  caso "premature claim · lowercase (isolates .lower())" 1
+sembrar true false "$BUENA" "cadena de entrega CERRADA"; caso "premature claim · second phrase with sandbox ALREADY green" 1
+sembrar true true "$BUENA";              caso "production green with SANDBOX evidence" 1
 
 # ── NO HE PODIDO MIRAR ───────────────────────────────────────────────────────────────────────
-sembrar true false "$OTRA_SONDA_PROPIA" "" msg_s1056replay_mia; caso "sonda propia con OTRA convención de nombre" 1
-sembrar true false "$URL_CONTRADICE";  caso "cabecera del host bueno pero URL de otro host" 1
-sembrar true false "$BUENA" "" msg_REAL ev/otra/002.json; caso "no-disparo · la traza vive en otra ruta bajo trace_dir" 0
+sembrar true false "$OTRA_SONDA_PROPIA" "" msg_s1056replay_mia; caso "self probe with ANOTHER naming convention" 1
+sembrar true false "$URL_CONTRADICE";  caso "correct host header but URL for another host" 1
+sembrar true false "$BUENA" "" msg_REAL ev/otra/002.json; caso "no trigger · trace is at another path under trace_dir" 0
 # ⛔ CONTROL POSITIVO DE PRODUCCIÓN. Sin él, un mutante que hiciera fallar SIEMPRE con
 # production_green=true sobrevive, y la batería celebra que producción no pueda cerrar nunca.
-sembrar false true "$BUENA_PROD" "" msg_PROD; caso "no-disparo · PRODUCCIÓN verde con su propia evidencia" 0
-sembrar true false "$BUENA" "ya recibe de Svix"; caso "prosa adelantada · TERCERA frase de la lista" 1
-sembrar true false "$BUENA" "sin bloqueos pendientes"; caso "prosa adelantada · CUARTA frase de la lista" 1
-sembrar true false NOFILE;      caso "verde y la traza NOMBRADA no existe" 2
-sembrar true false "$SIN_STATUS";      caso "evento por lo demás válido SIN status — traza incompleta" 2
-OLV_SCHEMA="c05-37-closure/v99" sembrar true false "$BUENA"; caso "esquema desconocido en el contrato" 2
-sembrar true false "$BUENA" "" msg_REAL fuera/001.json; caso "la traza NOMBRADA vive FUERA de trace_dir" 2
-sembrar true false "$BUENA"; sed -i 's/"sandbox_green": true/"sandbox_green": "si"/' "$T/design/c05-37-closure.json"; caso "sandbox_green no es booleano" 2
-sembrar true false "$LISTA_ANIDADA_DESPUES"; caso "forma mala DESPUÉS del evento bueno — el orden no perdona" 2
-sembrar true false NOEVID;      caso "verde SIN evidencia nombrada" 2
-sembrar true false "$NO_ES_LISTA";    caso "la traza no es una lista" 2
-sembrar true false "$HEADERS_RAROS";  caso "headers de tipo inesperado — no una excepción" 2
-sembrar true false "$EVENTO_RARO";    caso "evento que no es un objeto — no una excepción" 2
+sembrar false true "$BUENA_PROD" "" msg_PROD; caso "no trigger · PRODUCTION green with its own evidence" 0
+sembrar true false "$BUENA" "ya recibe de Svix"; caso "premature claim · THIRD phrase in the list" 1
+sembrar true false "$BUENA" "sin bloqueos pendientes"; caso "premature claim · FOURTH phrase in the list" 1
+sembrar true false NOFILE;      caso "green and the NAMED trace does not exist" 2
+sembrar true false "$SIN_STATUS";      caso "otherwise valid event WITHOUT status — incomplete trace" 2
+OLV_SCHEMA="c05-37-closure/v99" sembrar true false "$BUENA"; caso "unknown contract schema" 2
+sembrar true false "$BUENA" "" msg_REAL fuera/001.json; caso "the NAMED trace is OUTSIDE trace_dir" 2
+sembrar true false "$BUENA"; sed -i 's/"sandbox_green": true/"sandbox_green": "si"/' "$T/design/c05-37-closure.json"; caso "sandbox_green is not boolean" 2
+sembrar true false "$LISTA_ANIDADA_DESPUES"; caso "invalid shape AFTER the valid event — order does not excuse it" 2
+sembrar true false NOEVID;      caso "green WITHOUT named evidence" 2
+sembrar true false "$NO_ES_LISTA";    caso "the trace is not a list" 2
+sembrar true false "$HEADERS_RAROS";  caso "unexpected headers type — no exception" 2
+sembrar true false "$EVENTO_RARO";    caso "event that is not an object — no exception" 2
 
-printf 'test-c05-37-closure: %d pasadas, %d fallos\n' "$pass" "$failn"
+printf 'test-c05-37-closure: %d passed, %d failed\n' "$pass" "$failn"
 [ "$failn" -eq 0 ] || exit 1

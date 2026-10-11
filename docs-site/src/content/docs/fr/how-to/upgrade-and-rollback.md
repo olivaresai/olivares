@@ -13,11 +13,11 @@ moteur applique lui-même les nouvelles migrations de schéma au démarrage. Cet
 l'opérateur de « dois-je installer cette version ? » à « je dois récupérer la précédente ».
 
 :::caution[Sauvegardez d'abord]
-Effectuez une sauvegarde avant chaque mise à niveau, y compris celles qui semblent ordinaires.
-L'écran **Backups** de la console (`/backups`) et [Sauvegarder et
-restaurer](/fr/how-to/backup-and-restore/) permettent tous deux de le faire. Rien dans cette
-page ne dépend de l'existence d'une sauvegarde, mais vous serez heureux de l'avoir le jour où
-quelque chose vous surprendra.
+Avant chaque mise à niveau, créez une sauvegarde DR avec le `dr backup` de la version installée.
+L'écran **Backups** (`/backups`) et [Sauvegarder et restaurer](/fr/how-to/backup-and-restore/)
+décrivent la procédure. **Après une avancée du schéma, la sauvegarde antérieure à la mise à
+niveau et sa phrase secrète privée ou sa KEK sont nécessaires pour revenir à la version précédente.**
+`olivares upgrade` conserve l'exécutable ; il ne sauvegarde pas la base de données.
 :::
 
 ## Quelle voie de mise à niveau vous correspond
@@ -49,9 +49,11 @@ minimale portent *sur* cette version installée ; aucune ne peut donc être éva
 refuse de deviner. Déclarez la version que vous savez installée et les protections resteront
 actives :
 
+<!-- release -->
 ```sh
-olivares upgrade --check --current-version 26.10.1
+olivares upgrade --check --current-version 0.1
 ```
+<!-- /release -->
 
 ## Canaux de publication
 
@@ -118,6 +120,9 @@ Voici ce que fait la commande, dans l'ordre, et la raison de chaque étape :
 Ajoutez `--yes` lorsque vous pilotez la commande depuis un script et que personne ne peut
 répondre à la demande de confirmation.
 
+Le retour automatique de l’étape 4 teste `version`, pas le démarrage du service ni la
+compatibilité de la base. Il ne récupère pas un store migré au redémarrage suivant.
+
 :::note[Il n'y a pas de correctif à chaud]
 Un binaire Go ne se corrige pas en place. Ici, « zéro interruption » signifie un drainage et
 un relais gracieux, ou un rolling restart — jamais un correctif dans le processus. Ce qui
@@ -131,28 +136,12 @@ Un déploiement air-gap ne contacte jamais un hôte de mise à jour. Transférez
 moyen auquel vous faites déjà confiance, puis installez-le depuis le fichier local : la
 vérification est identique, car ce n'est jamais le réseau qui inspirait confiance.
 
-**Installer depuis un bundle exige une licence active sur la machine.** Elle est vérifiée hors
-ligne avec la clé de licence intégrée à votre binaire : aucun appel n'est effectué, ce qui
-fonctionne derrière l'air gap. Si vous n'avez pas encore installé votre licence sur la machine,
-la page [Installer une licence et passer à Enterprise](/fr/how-to/install-a-license/) explique
-comment procéder.
-`--check` n'est pas soumis à cette condition ; vous pouvez donc
-vérifier un bundle avant de préparer quoi que ce soit :
+L’installation hors ligne nécessite Enterprise. Community vérifie un bundle avec `--bundle --check`, sans lire de licence ni l’installer.
 
 ```sh
-olivares upgrade --bundle ./olivares-release.tar.gz --check   # verify only; no license read
-olivares upgrade --bundle ./olivares-release.tar.gz --yes     # install; needs a live license
+olivares upgrade --bundle ./olivares-release.tar.gz --check
 ```
 
-Si votre build ne contient aucune clé de publication intégrée, ou si vous répliquez les
-versions sous votre propre clé de signature, indiquez à la commande la clé de vérification :
-
-```sh
-olivares upgrade --bundle ./olivares-release.tar.gz --pubkey @/etc/olivares/release.pub
-```
-
-Consultez [Installer en air-gap](/fr/how-to/air-gap-install/) pour savoir comment le bundle
-est produit et transféré.
 
 ## Déploiement progressif et vérifications sans surveillance
 
@@ -192,26 +181,49 @@ décrit dans [Superviser avec Prometheus](/fr/how-to/monitor-with-prometheus/).
 
 ## Revenir en arrière
 
-Le binaire précédent est conservé à côté de celui qui l'a remplacé, et la commande affiche
-son chemin lors du remplacement. Revenir en arrière consiste à restaurer ce fichier puis à
-redémarrer le service.
+L'exécutable précédent est conservé à côté du nouveau, et la commande affiche son chemin.
+Cette copie n'est pas un point de récupération des données.
 
-Le retour est sûr par conception, non par chance : chaque changement de schéma est d'abord
-livré sous forme d'expansion additive, et son contrat destructif seulement dans une version
-ultérieure. Le binaire de la version précédente continue donc de fonctionner avec le schéma
-mis à niveau. C'est pourquoi revenir en arrière signifie « remettre l'ancien binaire », et non
-« inverser la base de données ».
+**Un ancien binaire refuse une version du schéma core supérieure à celle qu'il prend en charge**,
+même après des migrations additives. Réinstaller le binaire ou l'image précédente n'annule pas
+l'avancée du schéma. Ne modifiez pas l'historique des migrations et ne contournez pas ce refus.
 
-Si vous devez installer une version antérieure plutôt que restaurer la sauvegarde conservée,
-la protection anti-retour la bloque jusqu'à votre confirmation explicite :
+1. Arrêtez tous les moteurs utilisant le store. Conservez les données mises à niveau, la configuration
+   du service, le matériel TLS et les clés de scellement externes.
+2. Avec le **binaire de la version précédente**, restaurez le bundle DR pris **avant** la mise à
+   niveau : [Sauvegarder et restaurer](/fr/how-to/backup-and-restore/). SQLite : répertoire neuf,
+   ou `dr restore --in-place` avec `--operator` et `--reason` ; conservez les fichiers préservés
+   jusqu'à confirmation de la récupération. PostgreSQL : cible vide avec `olivares db init`, ses
+   `--dsn`, `--owner-dsn` et `--admin-dsn`, et un répertoire neuf pour la clé de signature restaurée.
+3. Exigez une vérification réussie du ledger et de la clé d'audit. Faites pointer le répertoire de données,
+   les volumes et les DSN PostgreSQL du service vers le store restauré et les clés de signature
+   correspondantes avant de démarrer la version précédente.
+4. Connectez-vous et vérifiez les données récupérées et la santé du service.
 
-```sh
-olivares upgrade --force-rollback --yes
-```
+La récupération revient au point sauvegardé. Les écritures ultérieures sont absentes du store
+restauré ; conservez le store mis à niveau pour les réconcilier. Sans ce bundle et sa phrase
+secrète ou sa KEK, remplacer l'exécutable ne permet pas cette récupération.
 
-Le contournement est inscrit dans l'audit log. Le seuil de version minimale **ne peut pas**
-être contourné ainsi : si un manifeste déclare un minimum supérieur à votre version installée,
-passez par une version intermédiaire au lieu d'essayer de sauter cette étape.
+`--force-rollback` autorise l'installation d'un ancien exécutable et inscrit le contournement
+dans l'audit log. Il ne contourne ni la vérification du schéma core ni le seuil de version minimale
+et ne restaure aucune donnée. En dessous du seuil, passez par une version intermédiaire.
+
+### Tester la récupération avant la mise à niveau en production
+
+Démarrez la version précédente vérifiée avec un répertoire SQLite temporaire, terminez le setup,
+connectez-vous et arrêtez-la. Créez et vérifiez un bundle avec ses `dr backup` et `dr verify`.
+Démarrez le candidat sur le même store, connectez-vous et arrêtez-le. Si le schéma a dépassé
+le plafond de l'ancienne version, celle-ci doit échouer avec `core schema version newer than this binary supports`.
+Restaurez le bundle dans un répertoire neuf avec l'ancien `dr restore`. Exigez un code de sortie
+zéro et une vérification réussie du ledger ; démarrez-y l'ancienne version et vérifiez la connexion,
+la clé publique d'audit d'origine et les données sauvegardées. Un échec de restauration ou de
+connexion signifie que le test de récupération a échoué.
+
+Vérification SQLite mesurée (2026-10-08) : la version officielle 26.10.1<!-- release-fixed --> a créé le schéma core 18,
+un candidat plus récent l’a avancé à 27. L’ancien binaire a refusé le store avec le code 1
+(`database=27 binary=18`). Ses `dr backup`, `dr verify` et `dr restore` ont terminé avec le code 0.
+Après restauration du bundle antérieur dans un répertoire neuf, le compte d’origine et
+la clé publique d’audit d’origine ont été retrouvés.
 
 ## En cas de problème
 
@@ -219,7 +231,8 @@ passez par une version intermédiaire au lieu d'essayer de sauter cette étape.
 |---|---|---|
 | `--check` affiche `UNKNOWN` | La version installée n'a pas pu être mesurée ; aucun ordre ne peut donc être affirmé | Passez à `--current-version` la version que vous savez installée |
 | `min_ver` indique que votre version est trop ancienne | La version refuse de s'installer directement par-dessus la vôtre | Mettez d'abord à niveau vers la version intermédiaire indiquée |
-| Le nouveau binaire ne démarre pas | Le sondage après remplacement a échoué | La sauvegarde a déjà été rétablie ; consultez les logs et signalez la version |
+| L’exécutable installé échoue au sondage `version` après remplacement | La vérification de l’exécutable a échoué | La commande restaure l’exécutable conservé ; consultez les logs |
+| Le service échoue au redémarrage ou l’ancien binaire détecte un schéma core trop récent | Cela dépasse le sondage de l’exécutable | Arrêtez le service et restaurez le bundle DR antérieur selon Revenir en arrière |
 | `--install-timer` se déclenche mais rien ne se produit | Le nœud ne fait pas partie de la cohorte de déploiement progressif | Comportement attendu avec `--if-eligible` ; la cohorte s'élargit à mesure que le déploiement avance |
 | "another olivares upgrade is already installing", exit **5** | Une seule mise à niveau à la fois par binaire. Le verrou est détenu pendant toute la séquence de téléchargement et de remplacement | Attendez celle en cours et relancez. Si rien ne tourne, le noyau a déjà libéré le verrou : relancez maintenant |
 | "it CHANGED while this upgrade was downloading" | Quelque chose a remplacé le binaire après la préparation du plan : gestionnaire de paquets, déploiement d'image ou exécution de gestion de configuration | Relancez : les protections sont réévaluées face à ce qui est réellement installé. Si cela persiste, deux systèmes gèrent le même binaire |

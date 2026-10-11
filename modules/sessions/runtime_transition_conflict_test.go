@@ -39,7 +39,7 @@ import (
 func TestATransitionThatLosesItsCASReportsA409AndNotTheStoreSentinel(t *testing.T) {
 	m, _, tenant, _ := newRuntimeHarness(t, WithRunner(&fakeRunner{}), WithCredentialSource(staticCred()))
 	ctx := context.Background()
-	created, err := m.createRun(ctx, tenant, CreateRunParams{
+	created, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative,
 		Actor: "agent:cas", ActorKind: model.ActorAgent, AgentRef: "agent:cas",
 	})

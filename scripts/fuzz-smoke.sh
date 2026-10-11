@@ -39,7 +39,7 @@ FUZZ_PARALLEL=1
 # Tracked + working-tree fuzz test files, scoped to the source trees (never
 # node_modules / web). grep over the workspace source dirs picks up a target
 # added in this branch before it is committed.
-FUZZ_TREES=(cmd core modules connectors sdk operator clients terraform-provider-olivares)
+FUZZ_TREES=(cmd core modules connectors sdk clients)
 # cloud/ is hub-internal and absent from the curated public export — include it only
 # where it exists; every other missing tree still fails the premise check below.
 if [ -d cloud ]; then
@@ -99,7 +99,7 @@ for f in "${FUZZFILES[@]}"; do
 		# exactamente — habia `ok <pkg> <segundos>` y ninguna invocacion visible de la que deducir
 		# el tope. Y el tope aqui NO es ninguno: al no pasar -timeout rige el defecto de Go, 10m,
 		# que con FUZZTIME largo es alcanzable. Imprimirlo cuesta una linea.
-		echo "    GOMAXPROCS=${FUZZ_GOMAXPROCS} go test -run='^\$' -fuzz='^${fn}\$' -fuzztime=${FUZZTIME} -parallel=${FUZZ_PARALLEL} .   (sin -timeout: rige el defecto de Go, 10m)"
+		echo "    GOMAXPROCS=${FUZZ_GOMAXPROCS} go test -run='^\$' -fuzz='^${fn}\$' -fuzztime=${FUZZTIME} -parallel=${FUZZ_PARALLEL} .   (without -timeout: Go default applies, 10m)"
 		if ! ( cd "${dir}" && env ${goenv} GOMAXPROCS="${FUZZ_GOMAXPROCS}" go test -run='^$' -fuzz="^${fn}$" -fuzztime="${FUZZTIME}" -parallel="${FUZZ_PARALLEL}" . ); then
 			echo "!! fuzz FAILED: ${fn} (${dir})" >&2
 			rc=1

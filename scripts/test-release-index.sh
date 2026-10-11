@@ -11,7 +11,7 @@ ROOT="$(unset CDPATH; cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
 RENDER="$ROOT/scripts/render-release-index.sh"
 CHECK="$ROOT/scripts/check-release-index.sh"
 SCHEMA="$ROOT/docs/contracts/release-index.schema.json"
-blind() { printf 'test-release-index: NO HE PODIDO MIRAR — %s\n' "$*" >&2; exit 2; }
+blind() { printf 'test-release-index: COULD NOT CHECK — %s\n' "$*" >&2; exit 2; }
 
 for f in "$RENDER" "$CHECK" "$SCHEMA"; do [ -r "$f" ] || blind "missing $f"; done
 for tool in bash jq sha256sum cmp sed awk grep; do
@@ -22,7 +22,7 @@ W="$(mktemp -d "${TMPDIR:-/tmp}/test-release-index.XXXXXX")" || blind "cannot cr
 trap 'rm -rf "$W"' EXIT
 DIST="$W/dist"
 mkdir -p "$DIST"
-VER="${OLIVARES_INDEX_TEST_VERSION:-26.11}"
+VER="${OLIVARES_INDEX_TEST_VERSION:-1.0}"
 COMMIT=0123456789abcdef0123456789abcdef01234567
 IMAGE_DIGEST=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 printf '%s\n' "$COMMIT" >"$W/release-commit.txt"
@@ -104,6 +104,17 @@ if [ "$rc" = 0 ] && [ "$artifacts" = 6 ] && [ "$packages" = 3 ] &&
 	ok "positive: complete sorted index" "$rc"
 else
 	bad "positive: complete sorted index" "rc=$rc artifacts=$artifacts packages=$packages"
+fi
+
+# The renderer and checker share code, so exact re-derivation alone cannot
+# detect a shared wrong tag. Bind every URL to the bare tag in the contract.
+if jq -e '. as $index | all(.artifacts[];
+    .url == ("https://github.com/" + $index.repository +
+             "/releases/download/" + $index.tag + "/" + .name))' \
+    "$W/index.json" >/dev/null; then
+	ok "positive: URLs use the bare release tag" 0
+else
+	bad "positive: URLs use the bare release tag" "artifact URL differs from repository/tag/name"
 fi
 
 run_check "$W/index.json"

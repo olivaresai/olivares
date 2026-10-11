@@ -9,6 +9,9 @@ embedded pure-Go SQLite store — zero external dependencies, air-gap-ready.
 
 ## Quickstart (SQLite, one command)
 
+On hosts that mediate user namespace creation, complete
+[the AppArmor setup](#session-confinement-on-apparmor-hosts) before starting the stack.
+
 ```sh
 docker compose -f deploy/compose/docker-compose.yml up --wait --wait-timeout 120
 ```
@@ -54,12 +57,117 @@ replacement without a restart:
 docker compose -f deploy/compose/docker-compose.yml exec olivares olivares first-boot --new-token
 ```
 
-**DIST-24-12 current tree contract.** The image carries `olivares readyz`,
+**Compose readiness contract.** The image carries `olivares readyz`,
 and the reference stack invokes it directly—no shell, curl, or wget. The hermetic
 battery proves local HTTP 200 → rc 0, a received non-200 → rc 1, and an input/TLS/
 transport failure → rc 2; `up --wait` consumes that health state. **Docker qualification
 remains unmeasured until the dispatch workflow succeeds** for this commit, so the
 workflow's presence alone is not a recorded hosted-Docker result.
+
+## Agent tools and first-session resources
+
+The engine and its child tools share a ceiling of **2 GiB RAM** and the host's
+CPUs: the file sets no CPU limit, because a Docker daemon refuses a container
+whose CPU limit exceeds the daemon's CPU count, so any limit above 1 would stop
+`docker compose up` on a 1-CPU host. The reservation remains 0.1 CPU and 256 MiB.
+To cap the CPUs or lower the memory, add a Compose override, with a CPU limit of
+at most the host's CPU count:
+
+```yaml
+services:
+  olivares:
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+```
+
+Agent CLIs, including Claude Code, are not bundled in the image. Install them
+from **AI tools** after setup: the managed installer verifies vendor downloads
+and places them under `/var/lib/olivares/tools`, as UID 65532 with a read-only
+root filesystem. Keep the `olivares-data` volume when recreating the container;
+it also holds tool receipts, account homes and caches.
+
+The `managed-tools` PR job measures the former 1 CPU / 1 GiB limits and the
+shipped defaults on fresh volumes, installs OpenCode and Claude Code through
+the authenticated API, and checks cold tool status again after recreation.
+The default profile must answer each tool status request within five seconds.
+This does not qualify a provider login, a model response, or native deb/rpm
+installation; package install/upgrade qualification remains in the release gate.
+
+## Session confinement on AppArmor hosts
+
+On Linux hosts that mediate `userns_create`, Docker's `docker-default` AppArmor profile
+can refuse the user namespace needed by a provider-bound Claude Code or Codex session.
+The engine stays healthy, but starting the session fails before it reaches the project.
+Load the shipped Docker-default-derived profile with an AppArmor 4 parser **on the Docker
+daemon host**, then select it before `up`:
+
+```sh
+set -e
+sudo install -m 0644 deploy/apparmor/olivares-sessions.conf /etc/apparmor.d/olivares-sessions
+sudo apparmor_parser -r /etc/apparmor.d/olivares-sessions
+export OLIVARES_APPARMOR_PROFILE=olivares-sessions
+docker compose -f deploy/compose/docker-compose.yml up --wait --wait-timeout 120
+```
+
+The README install block checks the kernel's AppArmor namespace feature mask. Hosts
+without this mediation keep `docker-default`. Profile load errors must be fixed before
+`up`; a selected but unloaded profile makes Docker refuse to create the container.
+The installed file lets AppArmor load it again at boot. For later `up` commands, keep
+the export or set `OLIVARES_APPARMOR_PROFILE=olivares-sessions` in the Compose environment.
+If you use a remote Docker context, install/load it on that daemon's host and set the
+variable on the client; the client's feature mask describes only its own kernel.
+
+The profile retains [Docker's default AppArmor rules](https://github.com/moby/moby/blob/v26.1.5/profiles/apparmor/template.go)
+and adds `userns`, with the profile and daemon signal peer names fixed for this deployment.
+A daemon confined under a custom AppArmor profile needs that profile as an additional
+`signal (receive)` peer. This permission applies to every process in the engine container;
+it does not change the session's own Landlock or seccomp filters. Keep the non-root user,
+read-only root, dropped capabilities and `no-new-privileges` enabled.
+
+After uninstalling the stack (`down`), unload the profile with
+`sudo apparmor_parser -R /etc/apparmor.d/olivares-sessions`, then remove that file.
+Other containers using this profile must be stopped first.
+
+## Work on a host project folder
+
+The base file has one project mount at `/project`, read-write: the host folder whose
+absolute path is in `OLIVARES_PROJECT_DIR`, in `.env` or exported before `up`:
+
+```sh
+export OLIVARES_PROJECT_DIR=/home/you/code/my-app
+docker compose -f deploy/compose/docker-compose.yml up --wait --wait-timeout 120
+```
+
+In the console, choose **Change folder** on the New session form and enter `/project`; the
+form offers it again for the next session. A session in `/project` is confined to that
+folder like any session folder: Landlock, where the host kernel supports it, keeps the
+engine's data out of its reach.
+
+- **Without the variable.** `/project` is the empty `olivares-project` volume, never the
+  directory you run Compose from: that is usually this checkout, and `deploy/compose/`
+  holds `dr-pass` and `.env`. The container user cannot write to the volume.
+- **Use a dedicated project folder.** A session in `/project` can change everything in it,
+  including files that later run on your host, such as `.git/hooks`, `.envrc` and shell
+  startup files. Never point the variable at your home directory, `/` or this checkout.
+- **Check the path.** Give an absolute path: Compose resolves a relative one, such as `.`,
+  against `deploy/compose/`, which holds `dr-pass`. Compose 2 can create a missing folder as
+  root, and the container cannot write to it.
+- **Linux write access.** The container runs as UID 65532. Without write access to the
+  folder a session can read it and cannot change it. Grant it on the project folder only,
+  never on your home directory:
+  `setfacl -R -m u:65532:rwX -m d:u:65532:rwX "$OLIVARES_PROJECT_DIR"`. The grant covers every
+  file in the tree, including `.env` files and keys, and 65532 is the usual non-root user
+  of minimal images, so other containers share it. Files a session creates belong to
+  UID 65532 on the host.
+- **SELinux hosts (Fedora, RHEL).** Access from the container may be refused until the
+  folder is relabelled for containers. That relabels the whole tree, so it is your decision.
+  This path is not measured here.
+- **Changing the folder.** `/project` is the registered session folder, so pointing
+  `OLIVARES_PROJECT_DIR` elsewhere and running `up` again moves every session folder
+  registered at `/project` to the new host folder. The data volume is untouched.
 
 ## Postgres (multi-tenant)
 
@@ -230,7 +338,7 @@ digest) and verify it first:
 
 ```sh
 cosign verify docker.io/olivaresai/olivares@sha256:<digest> \
-  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v?[0-9]+\.[0-9]+(\.[0-9]+)?$' \
+  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/[0-9]+\.[0-9]+$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
 
@@ -241,13 +349,31 @@ not rate-limit anonymous pulls of public images, which is what the fallback is f
 (authenticate with `docker login` on Docker Hub, or point `OLIVARES_IMAGE` at the
 ghcr.io coordinate, if a CI node or a large fleet hits the ceiling).
 
-For Kubernetes use `../helm`; for the air-gapped path see `scripts/airgap-bundle.sh`
-and `../../docs/RELEASE-VERIFICATION.md`.
+Kubernetes deployment packages are supplied through Business; offline installation requires Enterprise. See `../../docs/RELEASE-VERIFICATION.md`.
 
 ## Upgrades, rollback & reconfiguration
 
-To move to a new version, set `OLIVARES_IMAGE` to the new (verified) digest and
-`docker compose … up --wait --wait-timeout 120` — the data volume is reused and schema migrations apply on
+To move to a new version, use that release's Compose files or set `OLIVARES_IMAGE`
+to the new (verified) digest. Remove an old `OLIVARES_IMAGE=…:latest` override from
+your environment or `.env` to use the release default. Keep the same Compose
+overrides used for installation so the engine keeps its database configuration.
+For the base SQLite installation, pull before recreating:
+
+```sh
+docker compose -f deploy/compose/docker-compose.yml pull
+docker compose -f deploy/compose/docker-compose.yml up --wait --wait-timeout 120
+docker compose -f deploy/compose/docker-compose.yml exec olivares olivares version
+```
+
+For PostgreSQL, include its override in each command:
+
+```sh
+docker compose -f deploy/compose/docker-compose.yml -f deploy/compose/docker-compose.postgres.yml pull
+docker compose -f deploy/compose/docker-compose.yml -f deploy/compose/docker-compose.postgres.yml up --wait --wait-timeout 120
+docker compose -f deploy/compose/docker-compose.yml -f deploy/compose/docker-compose.postgres.yml exec olivares olivares version
+```
+
+The last command reports the running binary's version. The data volume is reused and schema migrations apply on
 boot. Schema changes use the online expand-contract model, so **rollback is redeploying
 the previous digest**, not reversing the database (the one exception — rolling back across
 a destructive `contract` migration — and how to check for it with `olivares migrate
@@ -260,19 +386,29 @@ status`, plus the table of which config changes need a restart, are in the
 Scheduled, ledger-continuity-safe DR bundles — store snapshot + signing
 keys encrypted under your KEK + a manifest of the per-tenant chain tips:
 
-```sh
-printf 'a strong DR passphrase' > deploy/compose/dr-pass   # keep OUT of the repo/image
-# the host stamps the bundle name:
+Keep the passphrase in a private file outside the checkout and the image, and keep
+a copy somewhere safe off this host: without it, no bundle can be restored. Give
+the backup container read-only access to it (the image runs as UID `65532`):
+
+```bash
+sudo install -d -o 65532 -g 65532 -m 0700 /srv/olivares-dr
+sudo install -o 65532 -g 65532 -m 0400 /path/to/private-passphrase /srv/olivares-dr/dr-pass
+
 BACKUP_TS="$(date -u +%Y%m%dT%H%M%SZ)" \
 docker compose -f deploy/compose/docker-compose.yml \
                -f deploy/compose/docker-compose.backup.yml \
-               --profile backup run --rm backup
+               -f - --profile backup run --rm backup <<'YAML'
+services:
+  backup:
+    volumes:
+      - /srv/olivares-dr/dr-pass:/run/secrets/dr-pass:ro
+YAML
 ```
 
 Wrap that in host cron for a scheduled RPO, prune old bundles on the host
 (`find <backups> -name '*.drbundle' -mtime +14 -delete`), and **mirror the
 `olivares-backups` volume OFFSITE** (a same-host backup is not DR). Restore + verify
-with `olivares dr restore --in <bundle> --data-dir <dir> --passphrase-file dr-pass`.
+with `olivares dr restore --in <bundle> --data-dir <dir> --passphrase-file /path/to/private-passphrase`.
 The full procedure (RPO/RTO, key custody, DR drill) is `../../docs/DR-RUNBOOK.md`.
 
 The backup service runs as the image's non-root user (65532). The image seeds `/backups`
@@ -280,3 +416,8 @@ for that user with mode 0700, so a **fresh** `olivares-backups` volume is writab
 as the data volume is. A volume that already exists is not changed by a new image: check
 its ownership before relying on scheduled backups, and change it only as a deliberate
 operator step. Nothing in the image or in Compose chowns, empties or deletes it.
+
+## Release first-hour qualification
+
+See the [release verification contract](../../docs/RELEASE-VERIFICATION.md#container-first-hour-qualification)
+for the required pre-tag replay of this Quickstart on the candidate container.

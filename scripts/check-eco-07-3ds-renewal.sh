@@ -23,7 +23,7 @@ CANON="${OLIVARES_ECO07_CANON:-design/PRICING-CANON.md}"
 
 grep -q 'NOT CAPTURED' "$DOC" || fail "$DOC lost NOT CAPTURED"
 if grep -qiE '3DS renewal captured|captured in Test Mode|live renewal captured' "$DOC"; then
-	fail "$DOC claims a capture this lote does not have"
+	fail "$DOC claims a capture this batch does not have"
 fi
 grep -q 'three_ds: on' "$CANON" || fail "canon lost three_ds: on"
 

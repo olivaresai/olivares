@@ -21,7 +21,7 @@ Crypto-agility posture document, built on top of the existing FIPS-mode build
 |---|---|---|
 | Per-event ledger signature | Ed25519 (on-box, hot path) | `core/audit/eventsig.go` (domain `olivares.audit.event.v1`); verification candidates: `VerifyEventsWith` |
 | Checkpoint signature | Ed25519 on-box (default) / **ECDSA P-256·P-384, RSA off-box (HYOK)** | Registry `audit.SigAlg` + `CheckpointVerifier.candidateFor` (`core/audit/offbox.go`) — the ONLY TWO sites to extend for a new alg |
-| DEK wrap (CMEK) | AES-256-GCM local + customer KEK (AWS/GCP symmetric, Azure RSA-OAEP-256) | `core/secure/envelope.go` + `core/secure/kmswrap` (versioned format `olivares_sealed: 1`; records provider + KEK — the wrap alg is implied by the backend) |
+| DEK wrap (CMEK, Business from 0.1) | AES-256-GCM local + customer KEK (AWS/GCP symmetric, Azure RSA-OAEP-256) | Business implementation; shared metadata in `core/secure/envelope.go` (versioned format `olivares_sealed: 1`; records provider + KEK — the wrap alg is implied by the backend) |
 | TLS (API, gRPC ingest, collector mTLS) | TLS ≥1.2; on 1.3 **hybrid post-quantum KEM by default** (§2) | `core/secure/tls.go` — `CurvePreferences` is left to the Go defaults ON PURPOSE (the tests that pin it: `core/secure/pqc_test.go` for the seam, `cmd/olivares/pqc_listener_test.go` for the configs actually served) |
 | Artifact signature (catalog, modelsign) | Ed25519 | `core/secure/modelsign`, catalog key (`cmd/olivares/auditkey.go`) |
 | Build supply-chain | cosign keyless, SHA-256, SBOM | `.goreleaser.yaml` |
@@ -66,7 +66,7 @@ is the PQC risk with a real clock.
   A6650) — the post-quantum KEM does not force leaving the validated module.
 - Version gotcha, already resolved in this repo: under `fips140=only` the hybrids
   were broken from Go 1.25 to go1.26.2 (#78178; fixed in go1.26.3+). This
-  repo pins the workspace toolchain to `go1.26.8` (`go.work`) and the core module's
+  repo pins the workspace toolchain to `go1.26.9` (`go.work`) and the core module's
   language directive to `go 1.26.5` (`core/go.mod`); both are past the fix.
 
 **Measured against the running binary, not inferred (2026-08-06).** The

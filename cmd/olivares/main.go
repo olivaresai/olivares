@@ -24,15 +24,13 @@ import (
 	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
 	"github.com/olivaresai/olivares/core/license"
 	"github.com/olivaresai/olivares/core/release"
+	coreconfine "github.com/olivaresai/olivares/core/runtime/confine"
 	"github.com/olivaresai/olivares/core/webui"
+	"github.com/olivaresai/olivares/modules/sessions"
 	"github.com/olivaresai/olivares/modules/sessions/confine"
 )
 
-// Build metadata, overridable at link time, e.g.:
-//
-//	go build -ldflags "-X main.version=v26.6.0 \
-//	  -X main.commit=$(git rev-parse --short HEAD) \
-//	  -X main.date=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+// Build metadata is stamped by scripts/build-ldflags.sh, shared by all engine builds.
 var (
 	version = "dev"
 	commit  = "none"
@@ -43,7 +41,10 @@ func main() {
 	// A session child is started through this binary re-executed as the
 	// confinement helper; it never reaches the CLI.
 	if len(os.Args) > 1 && os.Args[1] == confine.HelperArg {
-		os.Exit(confine.RunHelper(os.Args[2:]))
+		if coreconfine.IsExplicitPolicy(os.Args[2:]) {
+			os.Exit(coreconfine.RunHelper(os.Args[2:]))
+		}
+		os.Exit(sessions.RunConfinementHelper(os.Args[2:]))
 	}
 	os.Exit(runMain())
 }
@@ -121,10 +122,11 @@ func newRootCmd() *cobra.Command {
 	root := &cobra.Command{
 		Use:   "olivares",
 		Short: "Olivares AI — self-hosted engine for enterprise AI",
-		Long: "olivares runs and governs AI coding agents (Claude Code, Codex, Grok Build, OpenCode)\n" +
+		Long: "olivares runs and governs AI coding agents (Claude Code, Codex, Grok Build, OpenCode, Gemini CLI)\n" +
 			"on your own server: one binary for the engine, its console and this CLI.\n" +
 			"Run `olivares` alone to see this installation's state and the next step.\n" +
-			"Exit codes: olivares help exit-codes",
+			"Exit codes: olivares help exit-codes\n" +
+			"Environment reference: olivares config --help",
 		Example: "  olivares quickstart\n" +
 			"  olivares login\n" +
 			"  olivares tool install claude\n" +
@@ -154,19 +156,24 @@ func newRootCmd() *cobra.Command {
 	root.PersistentFlags().VarP(&outputFlagValue{value: "text"}, "output", "o",
 		"global output format: text or json (report commands keep json unless -o is given)")
 	_ = root.RegisterFlagCompletionFunc("output", completeOutput)
-	root.AddCommand(newQuickstartCmd(), newFirstBootCmd(), newSetupCmd(), newConfigCmd(), newAuthCmd(), newDBCmd(), newMigrateCmd(), newVersionCmd(), newStatusCmd(), newReadyzCmd(), newDoctorCmd(), newWebUIFilesCmd(), newServeCmd(), newCollectorCmd(), newLicenseCmd(), newUpgradeCmd(), newUninstallCmd(), newReleaseCmd(), newAuditCmd(), newDDILCmd(), newDRCmd(), newOpenAPICmd(), newClaudeHookCmd(), newCodexHookCmd(), newGrokHookCmd(), newHookPEPCmd(), newKeysCmd(), newEvalsCmd(), newAgentCmd(), newSessionCmd(), newToolCmd(), newAuthLoginCmd(), newAuthLogoutCmd(), newProviderCmd(), newWorkCmd(), newMessageCmd(), newCodexCmd(), newGrokCmd(), newMCPCmd(), newThreatIntelCmd(), newHooksCmd(), newSecretsCmd(), newSourcesCmd(), newConnectorCmd(), newSuperadminCmd(), newEventingCmd(), newSecurityCmd(), newFindingsCmd(), newComplianceCmd(), newSupportCmd(), newCompletionCmd(root), newCommandsCmd(), newFirstPartyBinsCmd(), newExtractCmd(), newTokensCmd(), newUsersCmd(), newMembersCmd(), newTenantsCmd(), newGovernanceCmd(), newPolicyCmd(), newCapabilitiesCmd())
+	root.AddCommand(newQuickstartCmd(), newFirstBootCmd(), newSetupCmd(), newConfigCmd(), newAuthCmd(), newDBCmd(), newMigrateCmd(), newVersionCmd(), newStatusCmd(), newReadyzCmd(), newDoctorCmd(), newWebUIFilesCmd(), newServeCmd(), newCollectorCmd(), newLicenseCmd(), newUpgradeCmd(), newUninstallCmd(), newReleaseCmd(), newAuditCmd(), newDDILCmd(), newDRCmd(), newOpenAPICmd(), newClaudeHookCmd(), newCodexHookCmd(), newGrokHookCmd(), newHookPEPCmd(), newKeysCmd(), newEvalsCmd(), newAgentCmd(), newSessionCmd(), newToolCmd(), newAuthLoginCmd(), newAuthLogoutCmd(), newProviderCmd(), newWorkCmd(), newMessageCmd(), newCodexCmd(), newGrokCmd(), newMCPCmd(), newThreatIntelCmd(), newHooksCmd(), newSecretsCmd(), newSourcesCmd(), newConnectorCmd(), newSuperadminCmd(), newAdminCmd(), newEventingCmd(), newSecurityCmd(), newFindingsCmd(), newComplianceCmd(), newSupportCmd(), newCompletionCmd(root), newCommandsCmd(), newFirstPartyBinsCmd(), newExtractCmd(), newTokensCmd(), newUsersCmd(), newMembersCmd(), newTenantsCmd(), newWorkspacesCmd(), newGovernanceCmd(), newPolicyCmd(), newCapabilitiesCmd())
+	root.AddCommand(newAccountCmd(), newModulesCmd())
 	// The observe-and-report lane: one top-level command per module namespace it
 	// covers, named after the namespace so `olivares <ns>` and /v1/m/<ns>/ are the
 	// same word. Their shared transport is cmd_observeplane.go.
 	root.AddCommand(newReportingCmd(), newNotifyCmd(), newHealthCmd(), newAccessMapCmd(),
 		newObservabilityCmd(), newConsoleViewsCmd(), newAdoptionCmd(), newIdentityCmd(),
-		newInventoryCmd(), newPostureCmd())
+		newInventoryCmd())
 	// The model stack (C08-02 lot 1): the model estate and its governance, the
 	// gateway in front of it, and what it costs.
 	root.AddCommand(newModelsCmd(), newInferenceProxyCmd(), newFinOpsCmd())
 	// The governed-data lane (C09 lot 2): the corpus, who may reach it, and the
 	// admission gate the connectors and MCP servers carrying it pass through.
-	root.AddCommand(newKnowledgeCmd(), newSourceScopeCmd(), newCatalogCmd())
+	root.AddCommand(newKnowledgeCmd(), newSourceScopeCmd(), newCatalogCmd(), newSkillsCmd())
+	// The git publication lane (J10-S3): the /v1/m/gitpublish routes as
+	// scriptable verbs — targets, the three effects, and the intents that
+	// follow them.
+	root.AddCommand(newGitpublishCmd())
 	// The agent-execution plane (C09 lot 3): everything that runs an agent or
 	// governs its execution — how it is orchestrated, where it is tried out, what
 	// is recorded of it, how it is deployed, how it is attacked on purpose, how it
@@ -174,10 +181,10 @@ func newRootCmd() *cobra.Command {
 	root.AddCommand(newOrchestrationCmd(), newSandboxCmd(), newRecordingCmd(), newDeployCmd(),
 		newRedteamCmd(), newVoiceCmd(), newClaudePolicyCmd(), newClaudeAgentsCmd())
 	// Enterprise-only top-level commands (`enterprise enable/disable/status/promote`).
-	// The default (AGPL) build adds none — enterpriseRootCommands returns nil in
-	// wire_noenterprise.go, so the community binary never links the activation writer;
+	// The default (AGPL) build adds none — it has no rootCommands port, so the
+	// community binary never links the activation writer;
 	// the -tags enterprise overlay wires the real command group.
-	root.AddCommand(enterpriseRootCommands()...)
+	root.AddCommand(thisEdition.rootCommands.get()...)
 	root.AddCommand(newExitCodesTopic())
 	groupRootCommands(root)
 	hideUnavailableAddOns(root)
@@ -207,17 +214,21 @@ var commandGroups = map[string]string{
 	// accounts, sessions, approvals, policies, MCP servers, audit, license), then running the
 	// engine. Everything else works and may still change: it is listed as beta. Nothing here
 	// is removed; a command that is internal or does not work yet is hidden instead.
+	"account":    "manage",
+	"modules":    "manage",
+	"skills":     "beta",
 	"quickstart": "start", "login": "start", "tool": "start", "session": "start", "status": "start", "doctor": "start",
-	"auth": "manage", "logout": "manage", "users": "manage", "members": "manage", "tenants": "manage", "tokens": "manage", "provider": "manage", "mcp": "manage", "audit": "manage", "license": "manage", "agent": "manage",
-	"serve": "engine", "setup": "engine", "config": "engine", "db": "engine", "migrate": "engine", "first-boot": "engine", "readyz": "engine", "keys": "engine", "dr": "engine", "support": "engine", "upgrade": "engine", "uninstall": "engine", "version": "engine", "completion": "engine", "superadmin": "engine", "openapi": "engine",
+	"auth": "manage", "logout": "manage", "users": "manage", "members": "manage", "tenants": "manage", "workspaces": "manage", "tokens": "manage", "provider": "manage", "mcp": "manage", "audit": "manage", "license": "manage", "agent": "manage",
+	"serve": "engine", "setup": "engine", "config": "engine", "db": "engine", "migrate": "engine", "first-boot": "engine", "readyz": "engine", "keys": "engine", "dr": "engine", "support": "engine", "upgrade": "engine", "uninstall": "engine", "version": "engine", "completion": "engine", "superadmin": "engine", "admin": "engine", "openapi": "engine",
 	"connector": "beta", "collector": "beta", "codex": "beta", "grok": "beta", "eventing": "beta", "sources": "beta",
 	"secrets": "beta", "work": "beta", "message": "beta", "hookpep": "beta", "claude-hook": "beta", "codex-hook": "beta",
 	"grok-hook": "beta", "hooks": "beta", "evals": "beta", "ddil": "beta", "compliance": "beta", "models": "beta",
 	"inference-proxy": "beta", "finops": "beta", "security": "beta", "findings": "beta", "threatintel": "beta", "orchestration": "beta",
 	"sandbox": "beta", "deploy": "beta", "recording": "beta", "voice": "beta", "claude-policy": "beta", "claude-agents": "beta",
 	"redteam": "beta", "reporting": "beta", "health": "beta", "observability": "beta", "adoption": "beta", "inventory": "beta",
-	"consoleviews": "beta", "accessmap": "beta", "posture": "beta", "identity": "beta", "notify": "beta", "knowledge": "beta",
+	"consoleviews": "beta", "accessmap": "beta", "identity": "beta", "notify": "beta", "knowledge": "beta",
 	"sourcescope": "beta", "catalog": "beta", "governance": "beta", "policy": "beta", "capabilities": "beta",
+	"gitpublish": "beta",
 }
 
 // addOnOnlyCommands are the top-level groups whose every verb answers
@@ -251,10 +262,10 @@ var addOnOnlyCommands = []string{"hooks", "threatintel"}
 // They are HIDDEN, not removed. The commands stay registered and invocable, so
 // an existing script gets the same honest refusal rather than "unknown
 // command", `olivares hooks --help` still documents what the add-on does, and
-// the enterprise build (where enterpriseAddOnsLinked is true) lists them
+// the enterprise build (where thisEdition.addOnsLinked is true) lists them
 // normally. What goes away is the false offer to a first-time reader.
 func hideUnavailableAddOns(root *cobra.Command) {
-	if enterpriseAddOnsLinked {
+	if thisEdition.addOnsLinked {
 		return
 	}
 	for _, c := range root.Commands() {

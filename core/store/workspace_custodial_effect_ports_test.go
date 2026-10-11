@@ -116,7 +116,7 @@ func (s custodyMatrixScope) Health() Repository[model.HealthStatus] { return nil
 func (s custodyMatrixScope) Deployments() Repository[model.Deployment] {
 	return nil
 }
-func (s custodyMatrixScope) Workspaces() Repository[model.Workspace] { return s.workspaces }
+func (s custodyMatrixScope) Workspaces() WorkspaceRepo { return s.workspaces }
 func (s custodyMatrixScope) AgentGroups() Repository[model.AgentGroup] {
 	return nil
 }
@@ -161,6 +161,9 @@ func (r custodyMatrixWorkspaceRepo) Update(_ context.Context, w model.Workspace)
 	return w, nil
 }
 func (r custodyMatrixWorkspaceRepo) Delete(context.Context, model.ID) error { return nil }
+func (r custodyMatrixWorkspaceRepo) SetParent(context.Context, model.ID, model.ID) (model.Workspace, error) {
+	return model.Workspace{}, nil
+}
 
 // TestConfinedPortSelectionCoversEveryBaseAndPortCombination drives all 512
 // (base, port-set) pairs through the two production selection steps and checks

@@ -14,34 +14,22 @@ import (
 	"github.com/olivaresai/olivares/core/webaddr"
 )
 
-// THE ASYMMETRY THAT MAKES ONE PREDICATE INSUFFICIENT, pinned against the
-// LIBRARY itself rather than against a belief about it.
-//
-// go-webauthn's protocol.ValidateRPID accepts any value net.ParseIP parses. A
-// browser refuses an IP relying party outright. So a validator that asked only
-// the library would accept a pin that can never complete a ceremony anywhere —
-// which is exactly the deployment this work exists to stop shipping.
-//
-// The control positive is the first half of this test: if the library ever
-// started refusing an IP, the second half would still pass and the extra
-// predicate would look like dead weight. It asserts the library's behavior so
-// the reason stays visible.
-func TestTheVerifierAcceptsAnIPAndThisConfigurationDoesNot(t *testing.T) {
+// Both the installed verifier and this configuration refuse IP relying parties.
+// Keep the product refusal explicit and independent of the library diagnostic.
+func TestVerifierAndConfigurationRejectIPRelyingParties(t *testing.T) {
 	t.Parallel()
 	for _, ip := range []string{"10.1.2.3", "127.0.0.1", "::1"} {
-		if err := protocol.ValidateRPID(ip); err != nil {
-			t.Fatalf("the installed verifier now REFUSES %q (%v); the second predicate's stated reason is stale and must be re-derived", ip, err)
+		if err := protocol.ValidateRPID(ip); err == nil {
+			t.Fatalf("the installed verifier accepted IP relying-party ID %q", ip)
 		}
 		if _, err := auth.ValidateWebAuthnRP(auth.WebAuthnRP{
-			ID: ip, Origins: []string{"https://" + ip},
+			ID: ip, Origins: []string{"https://localhost"},
 		}); err == nil {
-			t.Errorf("ValidateWebAuthnRP accepted the IP %q the verifier would take and no browser will", ip)
+			t.Errorf("ValidateWebAuthnRP accepted IP relying-party ID %q", ip)
 		}
 	}
-	// And the other half of the asymmetry: a name the URL Standard calls a valid
-	// domain but the installed verifier refuses.
 	if err := protocol.ValidateRPID("olivares"); err == nil {
-		t.Fatal("the installed verifier now ACCEPTS a single-label name; the copy that attributes this limit to the library must be re-derived")
+		t.Fatal("the installed verifier accepted a single-label name other than localhost")
 	}
 }
 
@@ -231,5 +219,40 @@ func TestAPinIsNeverRewrittenByAMappingThatErasesALabel(t *testing.T) {
 	}
 	if got.ID != "xn--bcher-kva.example" {
 		t.Fatalf("rp id = %q, want it unchanged", got.ID)
+	}
+}
+
+func TestWebAuthnRootDotCanonicalizesExplicitAndDerivedIDs(t *testing.T) {
+	addr, err := webaddr.Parse("public URL", "https://panel.example.com.")
+	if err != nil {
+		t.Fatal(err)
+	}
+	derived, ok := auth.WebAuthnRPFromAddress(addr)
+	if !ok {
+		t.Fatal("a domain with one DNS root dot cannot derive a relying party")
+	}
+	explicit, err := auth.ValidateWebAuthnRP(auth.WebAuthnRP{
+		ID: "Panel.Example.COM.", Origins: []string{addr.Origin},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, rp := range []auth.WebAuthnRP{derived, explicit} {
+		if rp.ID != "panel.example.com" {
+			t.Errorf("RP ID = %q, want panel.example.com", rp.ID)
+		}
+		if err := protocol.ValidateRPID(rp.ID); err != nil {
+			t.Errorf("canonical RP ID is refused by the installed verifier: %v", err)
+		}
+		if len(rp.Origins) != 1 || rp.Origins[0] != addr.Origin {
+			t.Errorf("origin = %v, want the browser origin %s", rp.Origins, addr.Origin)
+		}
+	}
+	for _, bad := range []string{"example.com..", "a..example.com", "."} {
+		if _, err := auth.ValidateWebAuthnRP(auth.WebAuthnRP{
+			ID: bad, Origins: []string{"https://panel.example.com"},
+		}); err == nil {
+			t.Errorf("invalid ID %q was accepted", bad)
+		}
 	}
 }

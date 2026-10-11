@@ -26,7 +26,7 @@ type workOutboxClaim struct {
 }
 
 // DrainWorkOutbox publishes at most limit committed events under the module's
-// mandatory outbox authority (UseWorkOutboxClaimAuthority): K1/K2 work facts
+// mandatory outbox authority (Dependencies.WorkOutboxAuthority): K1/K2 work facts
 // recover unconditionally, the communication and unknown families only when
 // the authority allows them at the claim AND the effect boundary. Network/sink
 // work occurs outside every store transaction. A lost settlement is recovered
@@ -564,7 +564,7 @@ func (m *Module) drainWorkOutboxWithDataAndPolicy(
 	allowDeadLetter bool,
 	caller WorkOutboxClaimPolicy,
 ) error {
-	if m.workEventSink == nil {
+	if m.WorkEventSink == nil {
 		return errWorkEventSinkUnwired
 	}
 	if limit < 1 {
@@ -615,7 +615,7 @@ func (m *Module) drainWorkOutboxWithDataAndPolicy(
 			}
 			return effectErr
 		}
-		deliveryErr := m.workEventSink.IngestDurable(ctx, claim.envelope)
+		deliveryErr := m.WorkEventSink.IngestDurable(ctx, claim.envelope)
 		if err := m.settleWorkOutbox(ctx, data, claim, deliveryErr); err != nil {
 			return err
 		}
@@ -637,8 +637,10 @@ func (m *Module) claimWorkOutbox(
 	policy WorkOutboxClaimPolicy,
 ) (workOutboxClaim, bool, error) {
 	var claim workOutboxClaim
-	var found bool
-	err := data.Mutate(ctx, func(sc store.Scope) error {
+	// Discovery carries no claim or policy decision. A positive tick resamples
+	// time, candidates and authority in the existing writing transaction below.
+	due := false
+	err := data.View(ctx, func(sc store.Scope) error {
 		clock, ok := sc.(store.TransactionClock)
 		if !ok {
 			return unknown("clock_unavailable", nil)
@@ -651,20 +653,43 @@ func (m *Module) claimWorkOutbox(
 		if err != nil {
 			return err
 		}
-		pendingFilters := []model.Filter{
-			{Column: colOutboxState, Op: model.OpEq, Value: "pending"},
-			{Column: colOutboxNextAttemptAt, Op: model.OpLte, Value: now.String()},
+		pending, delivering := workOutboxDueFilters(now, allowDeadLetter)
+		for _, filters := range [][]model.Filter{pending, delivering} {
+			rows, _, err := repo.List(ctx, model.Query{Filters: filters, Limit: 1})
+			if err != nil {
+				return err
+			}
+			if len(rows) != 0 {
+				due = true
+				return nil
+			}
 		}
-		if !allowDeadLetter {
-			pendingFilters = append(pendingFilters, model.Filter{Column: colOutboxAttempts, Op: model.OpLt, Value: int64(9)})
+		return nil
+	})
+	if err != nil {
+		return claim, false, err
+	}
+	if err := ctx.Err(); err != nil {
+		return claim, false, err
+	}
+	if !due {
+		return claim, false, nil
+	}
+	var found bool
+	err = data.Mutate(ctx, func(sc store.Scope) error {
+		clock, ok := sc.(store.TransactionClock)
+		if !ok {
+			return unknown("clock_unavailable", nil)
 		}
-		deliveringFilters := []model.Filter{
-			{Column: colOutboxState, Op: model.OpEq, Value: "delivering"},
-			{Column: colOutboxClaimUntil, Op: model.OpLte, Value: now.String()},
+		now, err := clock.TransactionNow(ctx)
+		if err != nil {
+			return err
 		}
-		if !allowDeadLetter {
-			deliveringFilters = append(deliveringFilters, model.Filter{Column: colOutboxAttempts, Op: model.OpLt, Value: int64(9)})
+		repo, err := sc.Ext(workOutboxKind)
+		if err != nil {
+			return err
 		}
+		pendingFilters, deliveringFilters := workOutboxDueFilters(now, allowDeadLetter)
 		events, err := sc.Ext(workEventKind)
 		if err != nil {
 			return err
@@ -700,6 +725,23 @@ func (m *Module) claimWorkOutbox(
 		return nil
 	})
 	return claim, found, err
+}
+
+func workOutboxDueFilters(now model.Timestamp, allowDeadLetter bool) ([]model.Filter, []model.Filter) {
+	pending := []model.Filter{
+		{Column: colOutboxState, Op: model.OpEq, Value: "pending"},
+		{Column: colOutboxNextAttemptAt, Op: model.OpLte, Value: now.String()},
+	}
+	delivering := []model.Filter{
+		{Column: colOutboxState, Op: model.OpEq, Value: "delivering"},
+		{Column: colOutboxClaimUntil, Op: model.OpLte, Value: now.String()},
+	}
+	if !allowDeadLetter {
+		attempts := model.Filter{Column: colOutboxAttempts, Op: model.OpLt, Value: int64(9)}
+		pending = append(pending, attempts)
+		delivering = append(delivering, attempts)
+	}
+	return pending, delivering
 }
 
 func firstClaimableWorkOutbox(

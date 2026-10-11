@@ -6,6 +6,10 @@ description: >-
   ごとに分類したもの。出力先も含む。
 ---
 
+:::note[Business]
+監査エクスポート（`GET /v1/audit/export`、`olivares audit export`）、ディレクトリアーカイブ、外部アーカイブの検証には Business が必要です。Community では署名付き台帳、`olivares audit verify`、`olivares dr backup` を引き続き利用できます。エクスポートは HTTP 501 または終了コード 9 を返します。監査転送および監査セグメントを含む DDIL 転送にも Business が必要です。
+:::
+
 このページはファーストパーティコネクタの**カタログ**であり、それぞれについて、サポート可能な
 **正直なカバレッジ階層**を示す。これはコネクタの*モデル*（observe-only、minimal-data、3 種類の
 観測種別）を説明する [ソースを接続する](/ja/how-to/connect-a-source/) の姉妹編なので、まずそちらを
@@ -43,6 +47,22 @@ description: >-
 依然として難しい依存事項であり続ける（共有アカウントは clean 階層のストアですら `approximate` に
 崩壊させる）。
 :::
+
+## 種別ごとのプロセスモード
+
+各種別は、エンジンが固定する 1 つのプロセスモードで実行されます：
+
+- **プロセス外プラグイン。** エンジンはコネクターを独立したプログラムとして埋め込み、制限されたサブプロセス（スコープ付き環境、ホストが許す場合は専用ユーザーと cgroup）として起動し、AutoMTLS を使った gRPC で通信します。依存ツリーはエンジンにリンクされません。ソース種別は `claude`、`cowork`、`kafka`、`amqp`、`nats`、`mqtt`、`cloudqueue`、`debezium`、`envoy`、`hubble`、出力先種別は `kafka`、`amqp`、`cloudqueue` です。`task build:connectors` なしのビルドには含まれず、設定された各プラグインについて起動時に警告します。
+- **プロセス内。** このページのその他すべての種別です。コネクターはエンジンバイナリにリンクされ、そのプロセス内で動作します。panic は封じ込められ、ソースは `failed` と表示されます。
+- **外部プラグイン。** `plugin`（バイナリパス、固定ダイジェスト、`connector_trust` に対して検証された署名）で設定するソースまたは出力先は、常に同じ制限付きのプロセス外で動作します。プロセス内種別の `connectors/<kind>/cmd/` プログラムはリリースに含まれません。独立したプロセスで実行するには、それをビルドし、この方法で受け入れます（[プラグインの運用](/ja/how-to/build-a-connector/#5-運用あなたのユーザーが行うこと)）。
+
+**ソース**プラグインのプロセスが終了すると、エンジンは同じバイナリを再起動し、外部プラグインでは固定ダイジェストを再検証し、ソースの設定で開き直して収集を再開します。最初は約 1 秒待ち、その後は再起動ごとに待ち時間を倍にし、最大 5 分まで増やします。プラグインが 5 分間稼働すると 1 秒へ戻ります。終了を検出してから新しいプロセスが起動するまで、ソースは `failed` を報告し、試行が失敗する間は再起動エラーを示します。
+
+**出力先**プラグインも、配信が失敗してプロセスの終了が検出されると同様に再起動します。エンジンはバイナリを再起動し（外部プラグインの固定ダイジェストを再検証）、出力先の設定で開きます。終了を検出した配信は引き続き失敗として報告され、再起動が拒否された場合はそのエラーも示します。通知の再試行ラダーは新しいプロセスへ配信を再試行します。最初の再起動は即時、その後は 1 秒から倍増して最大 5 分まで待ち、最後の試行から 5 分を超えるとリセットします。配信がない出力先は、次の配信が届くまで再起動されません。
+
+再起動したプラグインは、最初にコネクターを開いた際の設定で開かれます。変更・ローテーションされたシークレットは、終了していないプラグインと同じく、設定の再読み込みまたはエンジンの再起動時に反映されます。
+
+プロセスは生きていても収集や配信が失敗するプラグインは再起動されません。その障害はコネクター自身のものです。
 
 ## Cooperative — Claude とベンダーテレメトリ
 
@@ -184,9 +204,10 @@ posture findings を出力する。実行のライブトレースではない。
 | `openhands` | OpenHands `config.toml` + env → sandbox/model-pinning/credential/telemetry posture、permitted MCP/action edges | 設定宣言のみ。native OTEL `gen_ai.*` 経由のライブ使用 |
 | `goose` | Goose (Block) `profiles.yaml` + env → admin-settings/model-pinning/extension/tool-approval posture、permitted extension edges | 設定宣言のみ |
 | `cline` | Cline / Kilo Code VSCode `settings.json` 名前空間 → auto-approve/MCP-allowlist/credential/model-pinning posture | 設定宣言のみ。上流にネイティブ OTEL はない |
-| `grok` | Grok Build (xAI) —— ローカル設定から読むターミナル用コーディングエージェント: hook 配線、文書化された veto 付き events、宣言可能な governance posture | **xAI API コネクタではない**（`xai` はカタログとコストを読み、モデルに `grok-build-0.1` を含む）。これはエージェントを読み、両者は重複しない。観測側は Grok Build がすでに出力する OTLP ingest を通る。`PostureEnforced` を主張するのは、文書化された veto を持つ唯一の event `PreToolUse` だけで、その他は `observed` |
+| `grok` | Grok Build (xAI) のターミナル用コーディングエージェント：ローカル設定、フック配線、拒否対応が文書化されたイベント、宣言されたガバナンスポスチャ | 設定で宣言されたエージェントのポスチャ。`xai` API コネクターはモデルカタログとコストを読み、モデルとして `grok-build-0.1` を含む。このコネクターはエージェントを読む。ライブ観測は Grok Build の OTLP ingest を使用する。`PostureEnforced` は拒否対応が文書化された唯一のイベント `PreToolUse` のみに適用され、その他は `observed` |
 | `openclaw` | OpenClaw `openclaw.json`（JSON5 discovery、制限された `$include`）→ エージェントごとの gateway/channel/tool/sandbox/skill/model posture、宣言 channel/skill/model edges | 設定宣言のみ。上流で inline PEP hook は検証されていない |
 | `hermes` | Hermes Agent `config.yaml` + profile trees + managed scope → terminal/channel/skill/security/model/MCP posture、宣言エッジ | 設定宣言のみ。上流で inline PEP hook も native OTEL も検証されていない |
+| `paperclip` | Paperclip REST API（board API キー、GET のみ）→ グループコレクションとしての会社と NHI 名簿行としてのエージェント（`paperclip/<adapterType>`、role、title、`reports_to`）、完了した日の日次実行数、参考コストサンプル（`cost_type=paperclip`） | 観測のみ。Paperclip のエージェントを起動・制限しない。生のコストイベント一覧がないため、コストは日次集計。拒否された取得経路はカバレッジ finding として報告される |
 | `google-adk` | export された Google ADK 2.0 Session JSON → agent/app inventory、sub-agents、tool function calls、transfers、approved-tool drift、Vertex `reasoningEngine` correlation | 読み取り専用 export。message content は決して読まない。`google-agent` platform 面とは別 |
 | `agents-md` | agent instruction files（AGENTS.md とエージェント別の memory/instruction files）の repo walk → SHA-256 baseline drift + instruction-injection / hidden-Unicode / secret scan | minimal-data: sanitized paths + hashed details。content は決して読まない |
 | `mcpb` | install/distribute された `.mcpb` desktop extensions → manifest posture scan、enterprise allowlist drift、PKCS#7 signature verification | extension 面の PERMITTED-vs-OBSERVED |
@@ -304,6 +325,7 @@ moat の**非協調的**な半分。協調パスがエージェントが*報告�
 | `egress-proxy` | Egress プロキシの判定ログ → L7 egress エッジ | approximate |
 | `kong-audit` | Kong 監査ログ → 設定変更の findings | approximate |
 | `ai-gateway` | Envoy AI Gateway の使用記録 → **コスト**サンプル（FinOps） | コストストリーム |
+| `git` | プレーン git の公開バインディング：gitpublish の push 用に 1 つの SSH または HTTPS git リモートを承認する名簿行 | 観測なし、push のみ（プレーンリモートに pull request や merge の API はない） |
 | `github` | エージェントのデータソースとしての GitHub repositories → observed R/RW access edges（webhook-first、API-poll reconciliation）+ permitted ACL edges | observed + permitted。ストリーミング（`poll_seconds: 0`） |
 | `gitlab` | GitLab repositories → observed R/RW access edges + permitted ACL edges | observed + permitted。ストリーミング（`poll_seconds: 0`） |
 
@@ -454,7 +476,7 @@ grant の OBSERVED 対応物を出力する。
 
 プロセス内の出力先 kind: `slack`、`teams`、`pagerduty`、`opsgenie`、`webhook`、`siem`、
 `splunkhec`、`syslog`、`servicenow`、`jira`、`email`、`twilio`、`chronicle`、`datadog`、
-`elastic`、`snmp`、`filelog`、`otlplog`（OTLP/HTTP logs）、`s3archive`（S3 Object Lock WORM sink ——
+`elastic`、`snmp`、`filelog`、`otlplog`（OTLP/HTTP logs）、`s3archive` (Business: Regulated Operations)（S3 Object Lock WORM sink ——
 通知ごとに不変の lock-verified object を 1 つ）。
 
 3 つの broker egress kind は組み込みプラグインとして**プロセス外**で実行する（プラグインソースと
@@ -497,9 +519,7 @@ R/RW 差分コネクタはデフォルトバイナリに配線されているが
   **Reader** ロールのみを必要とする —— その単一ロールが Resource Graph、サブスクリプション一覧、
   Activity Log をカバーする。`subscriptions` が未設定のとき、サブスクリプションは自動列挙される。
 
-両者とも依然として**プロセス内**（transport A）で動作する。それらをホスト近傍のプロセス外
-**コレクター**デプロイに隔離したい場合のために、`cmd/{pg-audit,s3-cloudtrail,ebpf-source}` の
-go-plugin バイナリが存在する。
+両方とも、[種別ごとのプロセスモード](#種別ごとのプロセスモード)でプラグインとして列挙されていないすべての種別と同じく、**プロセス内**で動作します。独立したプロセスで実行するには、`connectors/<kind>/cmd/` プログラムをビルドし、外部プラグインとして受け入れてください。
 
 すべてのソースは**オプトインかつ deny-closed** である: `log_path`/`path`/`events_path` の欠落は
 起動時の設定エラーであり（ソースは配線されない）、決して静かな no-op にはならない。デモ estate

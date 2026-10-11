@@ -7,7 +7,6 @@ package main
 import (
 	"context"
 	"log/slog"
-	"os"
 	"strings"
 	"time"
 
@@ -20,12 +19,14 @@ import (
 	aigateway "github.com/olivaresai/olivares/connectors/ai-gateway"
 	"github.com/olivaresai/olivares/connectors/aicontroltower"
 	"github.com/olivaresai/olivares/connectors/argocd"
+	"github.com/olivaresai/olivares/connectors/aws"
 	"github.com/olivaresai/olivares/connectors/awskms"
 	azureactivity "github.com/olivaresai/olivares/connectors/azure-activity"
 	azureblobaudit "github.com/olivaresai/olivares/connectors/azure-blob-audit"
 	azureopenai "github.com/olivaresai/olivares/connectors/azure-openai"
 	"github.com/olivaresai/olivares/connectors/azureaisearch"
 	"github.com/olivaresai/olivares/connectors/azurekeyvault"
+	"github.com/olivaresai/olivares/connectors/bedrock"
 	bedrockkb "github.com/olivaresai/olivares/connectors/bedrock-kb"
 	bigqueryaudit "github.com/olivaresai/olivares/connectors/bigquery-audit"
 	claudeapi "github.com/olivaresai/olivares/connectors/claude-api"
@@ -40,6 +41,8 @@ import (
 	claudewif "github.com/olivaresai/olivares/connectors/claude-wif"
 	"github.com/olivaresai/olivares/connectors/cline"
 	"github.com/olivaresai/olivares/connectors/cloudflare"
+	cfaigateway "github.com/olivaresai/olivares/connectors/cloudflare-ai-gateway"
+	cfmcpportals "github.com/olivaresai/olivares/connectors/cloudflare-mcp-portals"
 	"github.com/olivaresai/olivares/connectors/codex"
 	codexmanagedconfig "github.com/olivaresai/olivares/connectors/codex-managed-config"
 	"github.com/olivaresai/olivares/connectors/cohere"
@@ -67,6 +70,7 @@ import (
 	"github.com/olivaresai/olivares/connectors/gdrive"
 	"github.com/olivaresai/olivares/connectors/gemini"
 	geminicli "github.com/olivaresai/olivares/connectors/gemini-cli"
+	gitbinding "github.com/olivaresai/olivares/connectors/gitbinding"
 	githubsrc "github.com/olivaresai/olivares/connectors/github"
 	gitlabsrc "github.com/olivaresai/olivares/connectors/gitlab"
 	"github.com/olivaresai/olivares/connectors/glm"
@@ -95,6 +99,7 @@ import (
 	"github.com/olivaresai/olivares/connectors/mistral"
 	mongoaudit "github.com/olivaresai/olivares/connectors/mongo-audit"
 	mssqlaudit "github.com/olivaresai/olivares/connectors/mssql-audit"
+	"github.com/olivaresai/olivares/connectors/mysqlaudit"
 	"github.com/olivaresai/olivares/connectors/notion"
 	"github.com/olivaresai/olivares/connectors/oasf"
 	"github.com/olivaresai/olivares/connectors/onepassword"
@@ -106,6 +111,7 @@ import (
 	"github.com/olivaresai/olivares/connectors/openlineage"
 	"github.com/olivaresai/olivares/connectors/openrouter"
 	oracleaudit "github.com/olivaresai/olivares/connectors/oracle-audit"
+	"github.com/olivaresai/olivares/connectors/paperclip"
 	"github.com/olivaresai/olivares/connectors/pgaudit"
 	"github.com/olivaresai/olivares/connectors/pgcontent"
 	redshiftaudit "github.com/olivaresai/olivares/connectors/redshift-audit"
@@ -114,6 +120,7 @@ import (
 	"github.com/olivaresai/olivares/connectors/s3content"
 	"github.com/olivaresai/olivares/connectors/salesforce"
 	"github.com/olivaresai/olivares/connectors/sapodata"
+	"github.com/olivaresai/olivares/connectors/servicenow"
 	"github.com/olivaresai/olivares/connectors/sharepoint"
 	snowflakecontent "github.com/olivaresai/olivares/connectors/snowflake"
 	snowflakeaudit "github.com/olivaresai/olivares/connectors/snowflake-audit"
@@ -145,14 +152,18 @@ import (
 // sdk.SourceConnector — are resolved by knowledgeContentOptions for the knowledge
 // module (VIII) to drive, from the SAME operator config.
 //
-// Transports (CB-1, decided = option C):
-//   - (B) out-of-process plugin, AutoMTLS — the substrate. A first-party connector
-//     with a heavy dependency tree (claude/OTLP) is embedded (firstparty) and
-//     launched as an isolated subprocess, so its deps never link into the core.
+// Transports (CB-1, decided = option C). The process mode is fixed per kind, and
+// docs-site reference/connectors.md "Process mode per kind" names it:
+//   - (B) out-of-process plugin, AutoMTLS — exactly the kinds in pluginBinaryForKind
+//     (outputPluginForKind for destinations), whose dependency trees must never link
+//     into the core, plus every external (operator-admitted) plugin. The binary is
+//     embedded (firstparty) and launched as a confined subprocess; the runtime
+//     restarts a source or destination plugin whose process dies.
+//   - (A) in-process — every other first-party kind (inProcSourceFactories), linked
+//     into the engine binary. The release does not build its connectors/<kind>/cmd
+//     plugin program; that program exists to run it as an external plugin.
 //   - (C) remote collector push — the same source wiring runs in `collector` mode
 //     with a push Sink (collector.go); resolved through the SAME wireSources.
-//   - (A) in-process — the fast path, only for first-party connectors already
-//     linked for another reason (Vault, which is also a roster provider).
 
 // defaultRosterSyncInterval is how often the engine re-runs the roster SyncRoster
 // when the operator does not override it.
@@ -265,7 +276,7 @@ func (c sourcesConfig) rosterSyncInterval() time.Duration {
 // empty config (and the boot warns that nothing real is wired); a supplied path must be
 // readable and contain valid JSON or startup fails closed.
 func loadSourcesConfig(_ *slog.Logger) (sourcesConfig, error) {
-	path := os.Getenv("OLIVARES_SOURCES_CONFIG")
+	path := osGetenv("OLIVARES_SOURCES_CONFIG")
 	if path == "" {
 		return sourcesConfig{}, nil
 	}
@@ -313,641 +324,136 @@ var pluginBinaryForKind = map[string]string{
 	"hubble": "hubble-source",
 }
 
-// buildInProcSource constructs a first-party source connector cheap enough to run
-// IN-PROCESS (CB-1 transport A, the fast path). Only low-dependency connectors
-// already linked for another reason qualify — Vault, which is also a roster
-// provider, additionally streams permitted-access edges. Everything heavier goes
-// out-of-process (pluginBinaryForKind).
+// inProcSourceFactories constructs fresh observation sources and supplies the
+// canonical kinds offered by the connector catalog. Constructors do no I/O.
+var inProcSourceFactories = map[string]func() sdk.SourceConnector{
+	"cloudflare-mcp-portals": func() sdk.SourceConnector { return cfmcpportals.New() },
+
+	"a2a":                   func() sdk.SourceConnector { return a2a.New() },
+	"aaa":                   func() sdk.SourceConnector { return aaa.New() },
+	"agent365":              func() sdk.SourceConnector { return agent365.New() },
+	"agentcore":             func() sdk.SourceConnector { return agentcore.New() },
+	"agents-md":             func() sdk.SourceConnector { return agentsmd.New() },
+	"ai-gateway":            func() sdk.SourceConnector { return aigateway.New() },
+	"argocd":                func() sdk.SourceConnector { return argocd.New() },
+	"aws":                   func() sdk.SourceConnector { return aws.New() },
+	"aws-kms":               func() sdk.SourceConnector { return awskms.New() },
+	"azure-activity":        func() sdk.SourceConnector { return azureactivity.New() },
+	"azure-blob-audit":      func() sdk.SourceConnector { return azureblobaudit.New() },
+	"azure-key-vault":       func() sdk.SourceConnector { return azurekeyvault.New() },
+	"azure-openai":          func() sdk.SourceConnector { return azureopenai.New() },
+	"bedrock":               func() sdk.SourceConnector { return bedrock.New() },
+	"bedrock-kb":            func() sdk.SourceConnector { return bedrockkb.New() },
+	"bigquery-audit":        func() sdk.SourceConnector { return bigqueryaudit.New() },
+	"claude-api":            func() sdk.SourceConnector { return claudeapi.New() },
+	"claude-apps-gateway":   func() sdk.SourceConnector { return claudeappsgateway.New() },
+	"claude-batch":          func() sdk.SourceConnector { return claudebatch.New() },
+	"claude-compliance":     func() sdk.SourceConnector { return claudecompliance.New() },
+	"claude-config":         func() sdk.SourceConnector { return claudeconfig.New() },
+	"claude-managed-agents": func() sdk.SourceConnector { return claudemanagedagents.New() },
+	"claude-projects":       func() sdk.SourceConnector { return claudeprojects.New() },
+	"claude-routines":       func() sdk.SourceConnector { return clauderoutines.New() },
+	"cline":                 func() sdk.SourceConnector { return cline.New() },
+	"cloudflare":            func() sdk.SourceConnector { return cloudflare.New() },
+	"cloudflare-ai-gateway": func() sdk.SourceConnector { return cfaigateway.New() },
+	"codex":                 func() sdk.SourceConnector { return codex.New() },
+	"codex-managed-config":  func() sdk.SourceConnector { return codexmanagedconfig.New() },
+	"cohere":                func() sdk.SourceConnector { return cohere.New() },
+	"cowork-analytics":      func() sdk.SourceConnector { return coworkanalytics.New() },
+	"crossplane":            func() sdk.SourceConnector { return crossplane.New() },
+	"cursor":                func() sdk.SourceConnector { return cursor.New() },
+	"databricks-uc":         func() sdk.SourceConnector { return databricksuc.New() },
+	"deepseek":              func() sdk.SourceConnector { return deepseek.New() },
+	"delta-sharing":         func() sdk.SourceConnector { return deltasharing.New() },
+	"ebpf":                  func() sdk.SourceConnector { return ebpf.New() },
+	"edugain":               func() sdk.SourceConnector { return edugain.New() },
+	"egress-proxy":          func() sdk.SourceConnector { return egressproxy.New() },
+	"entra-agent":           func() sdk.SourceConnector { return entraagent.New() },
+	"envoy-ai-gateway":      func() sdk.SourceConnector { return envoyaigw.New() },
+	"external-secrets":      func() sdk.SourceConnector { return externalsecrets.New() },
+	"fal":                   func() sdk.SourceConnector { return fal.New() },
+	"flux":                  func() sdk.SourceConnector { return flux.New() },
+	"foundry-agents":        func() sdk.SourceConnector { return foundryagents.New() },
+	"gcp-audit":             func() sdk.SourceConnector { return gcpaudit.New() },
+	"gcp-kms":               func() sdk.SourceConnector { return gcpkms.New() },
+	"gcs-audit":             func() sdk.SourceConnector { return gcsaudit.New() },
+	"gemini":                func() sdk.SourceConnector { return gemini.New() },
+	"gemini-cli":            func() sdk.SourceConnector { return geminicli.New() },
+	"git":                   func() sdk.SourceConnector { return gitbinding.New() },
+	"github":                func() sdk.SourceConnector { return githubsrc.New() },
+	"gitlab":                func() sdk.SourceConnector { return gitlabsrc.New() },
+	"glm":                   func() sdk.SourceConnector { return glm.New() },
+	"google-adk":            func() sdk.SourceConnector { return googleadk.New() },
+	"google-agent":          func() sdk.SourceConnector { return googleagent.New() },
+	"goose":                 func() sdk.SourceConnector { return goose.New() },
+	"grok":                  func() sdk.SourceConnector { return grok.New() },
+	"hermes":                func() sdk.SourceConnector { return hermes.New() },
+	"iceberg-catalog":       func() sdk.SourceConnector { return icebergcatalog.New() },
+	"idp":                   func() sdk.SourceConnector { return idp.New() },
+	"inference-gateway":     func() sdk.SourceConnector { return inferencegateway.New() },
+	"infisical":             func() sdk.SourceConnector { return infisical.New() },
+	"istio-telemetry":       func() sdk.SourceConnector { return istiotelemetry.New() },
+	"kerberos":              func() sdk.SourceConnector { return kerberos.New() },
+	"kmip":                  func() sdk.SourceConnector { return kmip.New() },
+	"kong-agent-gateway":    func() sdk.SourceConnector { return kongagw.New() },
+	"kong-audit":            func() sdk.SourceConnector { return kongaudit.New() },
+	"ldap":                  func() sdk.SourceConnector { return ldap.New() },
+	"litellm":               func() sdk.SourceConnector { return litellm.New() },
+	"local":                 func() sdk.SourceConnector { return local.New() },
+	"managed-settings":      func() sdk.SourceConnector { return managedsettings.New() },
+	"mcp":                   func() sdk.SourceConnector { return mcpc.New() },
+	"mcpb":                  func() sdk.SourceConnector { return mcpb.New() },
+	"mistral":               func() sdk.SourceConnector { return mistral.New() },
+	"mongo-audit":           func() sdk.SourceConnector { return mongoaudit.New() },
+	"mssql-audit":           func() sdk.SourceConnector { return mssqlaudit.New() },
+	"mysql-audit":           func() sdk.SourceConnector { return mysqlaudit.New() },
+	"oasf":                  func() sdk.SourceConnector { return oasf.New() },
+	"onepassword":           func() sdk.SourceConnector { return onepassword.New() },
+	"openai":                func() sdk.SourceConnector { return openai.New() },
+	"openclaw":              func() sdk.SourceConnector { return openclaw.New() },
+	"opencode":              func() sdk.SourceConnector { return opencode.New() },
+	"openhands":             func() sdk.SourceConnector { return openhands.New() },
+	"openidfed":             func() sdk.SourceConnector { return openidfed.New() },
+	"openlineage":           func() sdk.SourceConnector { return openlineage.New() },
+	"openrouter":            func() sdk.SourceConnector { return openrouter.New() },
+	"oracle-audit":          func() sdk.SourceConnector { return oracleaudit.New() },
+	"paperclip":             func() sdk.SourceConnector { return paperclip.New() },
+	"pgaudit":               func() sdk.SourceConnector { return pgaudit.New() },
+	"redshift-audit":        func() sdk.SourceConnector { return redshiftaudit.New() },
+	"runtime":               func() sdk.SourceConnector { return runtimesource.New() },
+	"s3cloudtrail":          func() sdk.SourceConnector { return s3cloudtrail.New() },
+	"servicenow-cmdb":       func() sdk.SourceConnector { return servicenow.NewCMDBSource() },
+	"snowflake-audit":       func() sdk.SourceConnector { return snowflakeaudit.New() },
+	"sops":                  func() sdk.SourceConnector { return sops.New() },
+	"ssf":                   func() sdk.SourceConnector { return ssf.New() },
+	"tak":                   func() sdk.SourceConnector { return tak.New() },
+	"vault":                 func() sdk.SourceConnector { return vault.New() },
+	"vault-audit":           func() sdk.SourceConnector { return vault.NewAudit() },
+	"vertex":                func() sdk.SourceConnector { return vertex.New() },
+	"xai":                   func() sdk.SourceConnector { return xai.New() },
+}
+
+// Aliases remain valid in stored and file-based source definitions without adding
+// duplicate catalog entries.
+var inProcSourceAliases = map[string]string{
+	"entra":         "idp",
+	"okta":          "idp",
+	"pg-audit":      "pgaudit",
+	"s3-cloudtrail": "s3cloudtrail",
+}
+
+// buildInProcSource resolves first-party kinds and preserves the edition seam.
 func buildInProcSource(kind string) (sdk.SourceConnector, bool) {
-	switch kind {
-	case "vault":
-		return vault.New(), true
-	case "claude-api":
-		// Claude Admin-API cost + governance source (Apache). Read-only,
-		// minimal-dependency (only the modelprovider HTTP client), so it runs in-process
-		// (transport A). Its Gather streams CostSamples and emits the ANT2-03/04/05/06
-		// governance posture findings; offline (no admin_key) it is a no-op. NOTE: this
-		// Gather instance is owned by the runtime scheduler and is NOT what serves module
-		// routes — module-reachable reads construct their own dedicated instance in the
-		// composition root (the rate-limit inventory in modelsactuate.go, the
-		// platforms reference in platformsref.go); the CatalogProvider.Snapshot live
-		// catalog itself still has no module consumer.
-		return claudeapi.New(), true
-	case "claude-config":
-		// CLA-14: the static-config discovery feeder. Reads a Claude config tree
-		// (subagents/Skills/plugins/output-styles) and emits DECLARED-capability edges
-		// (Source=config) so the capability graph distinguishes declared from observed.
-		// Read-only, metadata-only (never a prompt body/skill content/secret), and a
-		// dependency-light pure-stdlib+yaml parser — so it runs IN-PROCESS (transport A)
-		// like claude-api, NOT out-of-process with the OTLP-heavy runtime claude source.
-		// A re-pollable batch source: set poll_seconds to re-scan; the reactor's upsert
-		// by (origin, capability) makes re-emission idempotent.
-		return claudeconfig.New(), true
-	case "claude-managed-agents":
-		// (C1-C5): the Claude Managed Agents control-plane source (Apache). Inventories +
-		// governs the CMA resources orthogonal to A2A/MCP — Vaults + MCP credentials, Memory
-		// Stores + immutable memory-version audit/redaction, permission-policies + outcome
-		// graders, the self-hosted work queue, and Skills — and terminates the signed CMA
-		// webhooks FAIL-CLOSED (HMAC-verified; unsigned/stale/replayed deliveries are rejected).
-		// Read-only (every API call is a GET) and pure-stdlib+httpx, so it runs IN-PROCESS
-		// (transport A). It is a STREAMING source: register it with poll_seconds=0 — it owns its
-		// own poll cadence (refresh_interval) and blocks in Gather running the webhook receiver
-		// and the GET-pollers; the engine never re-polls a streaming source. Offline (no
-		// api_key/webhook_secret) it is a no-op (never a fabricated inventory).
-		return claudemanagedagents.New(), true
-	case "codex":
-		// G4: OpenAI Codex governance source (Apache). Read-only and minimal-
-		// dependency (only the modelprovider HTTP client), so it runs in-process
-		// (transport A) exactly like claude-api. Its Gather streams Codex-attributed
-		// CostSamples (Analytics estimated + opt-in billed Costs API, CostType="codex"),
-		// the Codex Usage/Auth/Admin-Audit compliance logs and the org audit logs as
-		// external_activity evidence, and adoption findings; the catalog half (Snapshot:
-		// Codex models + workspace/access-token + admin-key inventory) is declared through
-		// the CatalogProvider seam (no module consumer reads it today). Auth = OpenAI API
-		// key OR a Codex workspace
-		// access token (never a consumer subscription, ToS). Offline (no api_key) it is a
-		// no-op; the sales-gated/UNVERIFIED Analytics/Compliance surfaces degrade to a
-		// posture finding rather than failing. cmd/codex-source exists for collector mode.
-		return codex.New(), true
-	case "grok":
-		// AGT-04: fuente de gobierno de Grok Build (Apache). Local y de sólo lectura — no
-		// habla con ninguna API, así que corre en proceso sin credencial. Su Gather emite el
-		// perfil de sandbox OBSERVADO y, siempre, el hallazgo de que ese perfil **no está
-		// impuesto**: se elige por tres vías (--sandbox, config.toml, GROK_SANDBOX) y x.ai no
-		// documenta ninguna imposición administrativa. La mitad de observación va por el
-		// ingest OTLP que ya existe (Grok emite OTLP por gRPC y HTTP, verificado en su
-		// Cargo.toml). El cable de hooks vive en connectors/grok/session.
-		return grok.New(), true
-	case "cursor":
-		// Cursor governance source (Apache). Read-only and minimal-
-		// dependency (a small Basic-auth HTTP client over the Cursor Admin API, plus the
-		// modelprovider cost helper), so it runs in-process (transport A) exactly like
-		// codex. Its Gather streams Cursor-attributed billed CostSamples (chargedCents,
-		// CostType="cursor"), the team audit logs as external_activity evidence, member
-		// inventory and per-user budget-posture findings. Auth = a Cursor Admin API key
-		// presented as the HTTP Basic username (never a consumer credential). Offline (no
-		// api_key) it is a no-op; a plan-gated 403/404 degrades to a posture finding
-		// rather than failing. cmd/cursor-source exists for collector mode.
-		return cursor.New(), true
-	case "gemini-cli":
-		// Gemini CLI governance source (Apache). Reads Google's Gemini CLI
-		// agent's LOCAL settings.json layers (system/user/workspace) read-only — pure
-		// stdlib, no network — so it runs in-process (transport A) like managed-settings.
-		// Its Gather emits PERMITTED config edges (configured MCP servers + allowed tools),
-		// posture findings on enforcement gaps (no admin settings, YOLO not disabled,
-		// telemetry off, prompt logging on, wide tool/MCP surface, auth not pinned), an
-		// effective-config inventory, an observe-coverage finding (live usage rides the
-		// Gen_ai.* OTel ingest, since the CLI emits gen_ai.*), and a Policy-Engine
-		// presence signal. It is NOT the Gemini API (that is the "gemini" kind). A
-		// re-pollable batch source: set poll_seconds to re-scan. cmd/gemini-cli-source
-		// exists for collector mode.
-		return geminicli.New(), true
-	case "openhands":
-		// OpenHands governance source (Apache). Reads the local config.toml
-		// + env vars (read-only, no network), so it runs in-process (transport A).
-		// Emits posture findings on enforcement gaps (sandbox type, model pinning,
-		// credential exposure, telemetry, iteration limits), PERMITTED MCP/action
-		// edges, an inventory summary, and a coverage finding. OpenHands has the
-		// best OSS OTEL gen_ai.* story — live usage arrives via the ingest.
-		// CostType="openhands". A re-pollable batch source: set poll_seconds.
-		return openhands.New(), true
-	case "goose":
-		// Goose (by Block) governance source (Apache). Reads profiles.yaml
-		// + env vars (read-only, no network), in-process (transport A). Posture
-		// findings on admin settings, model pinning, extension governance,
-		// telemetry, tool approval mode, code isolation. PERMITTED extension/tool
-		// edges. CostType="goose". A re-pollable batch source: set poll_seconds.
-		return goose.New(), true
-	case "cline":
-		// Cline / Kilo Code governance source (Apache). Reads VSCode
-		// settings.json (cline.*/kilocode.* namespace via variant config),
-		// in-process (transport A). Posture findings on auto-approve, MCP
-		// allowlist, credential exposure, model pinning, custom instructions,
-		// no native OTEL. CostType="cline". A re-pollable batch source.
-		return cline.New(), true
-	case "opencode":
-		// opencode (SST) agent-surface governance (Apache). Reads local opencode.json(c)
-		// (JSONC), in-process. Posture on permission model, admin/managed override layer, MCP
-		// allowlist, credential-in-config, share egress, OTEL coverage; permitted MCP/tool/agent
-		// edges; authoring fragment. CostType="opencode". Re-pollable.
-		return opencode.New(), true
-	case "openclaw":
-		// OpenClaw governance source (Apache). Reads the real
-		// ~/.openclaw/openclaw.json JSON5 surface (env/default/legacy/profile
-		// discovery, confined $include, ${VAR} validation), in-process
-		// (transport A). Evaluates gateway/channel/tool/sandbox/skill/plugin/model
-		// posture per agent, emits config-declared channel/skill/model edges,
-		// inventory and config-only diagnostics coverage. No inline PEP hook is
-		// verified upstream. Exports Meter with provider/model split. CostType=
-		// "openclaw". Re-pollable.
-		return openclaw.New(), true
-	case "hermes":
-		// Hermes Agent governance source (Apache). Reads the real
-		// $HERMES_HOME/config.yaml layout (default ~/.hermes/config.yaml),
-		// ~/.hermes/profiles/* profile trees, state-dir .env key names, and the
-		// /etc/hermes managed scope ($HERMES_MANAGED_DIR) with managed leaf
-		// overrides, in-process (transport A). Evaluates terminal/channel/skill/
-		// security/model/MCP posture, emits config-declared channel/skill/model/
-		// MCP edges, inventory and Langfuse-plugin coverage. No inline PEP hook
-		// or native OTEL exporter is verified upstream. Exports Meter with
-		// provider awareness. CostType="hermes". Re-pollable.
-		return hermes.New(), true
-	case "fal":
-		// G5: fal.ai governance + metering source (Apache). Read-only and minimal-
-		// dependency (only the modelprovider HTTP client, with the fal "Key" auth scheme),
-		// so it runs in-process (transport A). fal is API-key-only, pay-per-output, with no
-		// public usage/audit API — so Gather governs by KEY LIFECYCLE (inventory + rotation
-		// posture, the control point) and METERS cost around the queue API (the exported
-		// Meter helper prices a completed result; configured request ids meter from queue
-		// status) → CostSamples on the canonical path. Deep governance (SOC2/SSO/private
-		// endpoints) is sales-gated and surfaced as an honest UNVERIFIED caveat. Offline
-		// (no api_key) it is a no-op. cmd/fal-source exists for the collector mode.
-		return fal.New(), true
-	case "vertex":
-		// Google Vertex AI catalog + usage + cost + Model Armor source (Apache). The
-		// enterprise Google surface the gemini (AI Studio) connector does NOT cover. Read-only
-		// and minimal-dependency (stdlib JWT-bearer mint + the modelprovider contract), so it
-		// runs in-process (transport A) like the other model-provider connectors. Its Gather
-		// emits per-model token usage from Cloud Monitoring (CostSample, cost derived from list
-		// pricing, Gateway=vertex), opt-in billed cost from an operator-wired billing-export
-		// result (GCP has no real-time cost API), and opt-in Model Armor safety_posture findings
-		// (templates + floor settings); Snapshot exposes the Gemini + Claude-on-Vertex catalog.
-		// IAM/audit-log activity is deferred to the gcp-audit connector. Offline (no credential)
-		// Snapshot returns the declared catalog and Gather is a no-op. cmd/vertex-source exists
-		// for the collector mode.
-		return vertex.New(), true
-	case "azure-openai":
-		// Azure OpenAI / AI Foundry catalog + usage + cost source (Apache). The REAL
-		// Azure surfaces (ARM Cognitive Services deployments/models, Azure Monitor token
-		// metrics, Cost Management) — distinct from the openai connector's azure-openai mode,
-		// which calls OpenAI-org paths absent on Azure. Read-only and minimal-dependency
-		// (stdlib client-credentials mint + the modelprovider contract), so it runs in-process
-		// (transport A). Its Gather emits per-deployment token usage (CostSample, derived cost,
-		// Gateway=foundry) and opt-in billed cost (Cost Management, billed/estimated by calendar
-		// finalization); Snapshot exposes the deployment+model catalog incl. Claude-on-Foundry.
-		// Responsible-AI/content-filter posture is deferred to the azure-activity connector
-		// (enable_rai). Offline (no credential) it is a no-op. cmd/azure-openai-source exists for
-		// the collector mode.
-		return azureopenai.New(), true
-	case "openai":
-		// Composition gap closed 2026-08-09 (release contrast F.1 order 4): OpenAI (platform) usage/cost + model/key catalog source (Apache). The package
-		// existed and was complete since but was NEVER in this switch, so the product
-		// could not select it: a Tier-2 provider present in the tree and absent from the
-		// binary. Read-only and minimal-dependency (the modelprovider HTTP client), so it runs
-		// in-process (transport A) like the other model-provider connectors. Distinct from the
-		// azure-openai case above, which speaks the REAL Azure surfaces; this one speaks
-		// OpenAI-org paths. Offline (no api_key) it is a catalog-only no-op.
-		return openai.New(), true
-	case "gemini":
-		// Composition gap closed 2026-08-09 (release contrast F.1 order 4): Gemini (Google) API catalog + operator-wired usage export source (Apache).
-		// Wired for the same reason as openai above: the package was complete and unreachable.
-		// Distinct from the gemini-cli case, which observes LOCAL CLI settings/posture, and
-		// from vertex, which speaks the Vertex AI surfaces. Offline (no api_key) it is a
-		// catalog-only no-op.
-		return gemini.New(), true
-	case "local":
-		// Composition gap closed 2026-08-09 (release contrast F.1 order 4): local/self-hosted inference (Ollama + vLLM) catalog and vLLM token usage
-		// (Apache). The canon puts Ollama and self-hosted as ALWAYS PRESENT, and this was the
-		// third package built and never composed. Read-only, no credential by default (Ollama
-		// needs none on localhost), so it runs in-process. Offline (both URLs empty) it is a
-		// no-op.
-		return local.New(), true
-	case "deepseek":
-		// DeepSeek catalog + balance + sovereignty source (Apache). Read-only and
-		// minimal-dependency (only the modelprovider HTTP client), so it runs in-process
-		// (transport A) like the other model-provider connectors. Its Gather emits the hosted
-		// PRC sovereignty posture plus GET /user/balance account availability; Snapshot exposes
-		// the live/declarative DeepSeek catalog with v4 pricing and legacy retirement metadata.
-		// Cost remains metered around the inference path via the exported Meter helper because
-		// DeepSeek exposes no aggregate usage API. Offline (no api_key) it is a no-op.
-		// cmd/deepseek-source exists for the collector mode.
-		return deepseek.New(), true
-	case "glm":
-		// Zhipu GLM catalog + cost-metering + sovereignty source (Apache). PRC-nexus
-		// (parent Entity-Listed); catalog-only + Meter like deepseek/mistral (no usage API),
-		// sovereignty caveat on both z.ai and bigmodel.cn surfaces. Offline (no api_key) no-op.
-		return glm.New(), true
-	case "openrouter":
-		// OpenRouter aggregation-gateway governance (Apache). Read-only,
-		// minimal-dependency (only the modelprovider HTTP client), so it runs in-process
-		// like the other model-provider connectors. Snapshot exposes the live catalog
-		// (GET /api/v1/models) with per-token pricing converted to USD/MTok; Gather emits
-		// account usage/limit posture (GET /api/v1/auth/key) and the approved-model policy
-		// drift (denied-reachable / approved-missing) against the live catalog. Cost +
-		// per-call policy verdict are produced by the exported MeterCall helper (OpenRouter
-		// reports the billed cost). Offline (no api_key) it is a no-op.
-		return openrouter.New(), true
-	case "mistral":
-		// Mistral AI / la Plateforme catalog + cost-metering source (Apache). Read-only
-		// and minimal-dependency (only the modelprovider HTTP client), so it runs in-process
-		// (transport A) like the other model-provider connectors. Mistral exposes NO public
-		// usage/billing/spending-cap API (dashboard-only, primary-source verified) — so its
-		// REAL surface is the live model catalog (GET /v1/models + declared list pricing,
-		// Snapshot), Gather emits an honest "no public usage/billing API" coverage caveat plus
-		// an OPT-IN, UNVERIFIED-OFFLINE org/workspace/key inventory + rotation posture (default
-		// off, path-overridable, degrades 403/404), and cost is metered around the inference
-		// path via the exported Meter helper (estimated from list pricing, like fal — there is
-		// no usage API to pull). Offline (no api_key) it is a no-op. cmd/mistral-source exists
-		// for the collector mode.
-		return mistral.New(), true
-	case "xai":
-		// xAI / Grok governance + billing source (Apache). Read-only and
-		// minimal-dependency (the modelprovider HTTP client over two planes), so it runs
-		// in-process (transport A). Its Gather streams billed xAI CostSamples from the GET
-		// Management billing endpoints (finalized invoices + current-cycle preview,
-		// CostType="xai"), the API-key + ACL inventory's rotation + broad-ACL posture, and
-		// credit-balance / spending-limit FinOps posture; Snapshot exposes the live Grok
-		// catalog (GET /v1/language-models, prices derived from the API) or the declared set.
-		// Management key (keys+billing) and inference key (catalog) are distinct credentials;
-		// offline (no management key) Gather is a no-op. The POST usage-analytics endpoint is
-		// intentionally NOT used (it would break the GET-only read-first guarantee; billed
-		// invoices are the authoritative cost). cmd/xai-source exists for the collector mode.
-		return xai.New(), true
-	case "cohere":
-		// E3: Cohere catalog + cost-metering source (Apache). Read-only and
-		// minimal-dependency (only the modelprovider HTTP client), so it runs in-process
-		// (transport A) like the other model-provider connectors. Cohere exposes NO public
-		// usage/billing/org API (dashboard-only) — so Snapshot exposes the live model
-		// catalog (GET /v1/models, cursor-paginated), Gather emits an honest coverage
-		// caveat, and cost is metered around the inference path via the exported Meter
-		// helper (estimated from list pricing, like mistral/fal). Offline (no api_key)
-		// it is a no-op. A re-pollable batch source: set poll_seconds.
-		return cohere.New(), true
-	case "claude-projects":
-		// Claude Projects governance source (Apache). Read-only inventory of
-		// Organization Projects (name/membership/API keys) via the Admin API, with
-		// operator-configurable policy (forbidden name patterns, archive-after-days,
-		// member/key limits). Artifact lifecycle tracking derived from Compliance API
-		// activity events. Minimal-dependency (modelprovider HTTP client), so it runs
-		// in-process (transport A). Offline (no api_key) it is a no-op.
-		return claudeprojects.New(), true
-	case "claude-compliance":
-		// CLA-06/FIN-05: Claude Compliance API Activity Feed evidence source
-		// (Apache). Read-only and GET-only BY CONSTRUCTION (the shared GET-only
-		// modelprovider client cannot perform the destructive content-DELETE the
-		// Compliance API also exposes — that is HITL-gated, out of scope), and it
-		// depends only on the modelprovider HTTP client, so it runs in-process
-		// (transport A) exactly like claude-api. Its Gather paginates the feed and
-		// emits one minimal-data FindingReport per activity record (actor PII folded
-		// into a one-way hash, never surfaced — docs/SECURITY-HARDENING.md), which the engine appends
-		// to the tamper-evident ledger and the SIEM export forwards. No secret in the
-		// binary: the Activity-Feed Admin key (sk-ant-admin01- with
-		// read:compliance_activities) travels by operator Config, never persisted.
-		// Offline (no api_key) it is an honest no-op (no fabricated evidence).
-		return claudecompliance.New(), true
-	case "claude-apps-gateway":
-		// E1: Claude apps gateway posture, inventory, and audit-event ingest source
-		// (Apache). Reads an existing gateway.yaml, optional JSONL audit export, and
-		// optional unauthenticated live probe endpoints. Emits minimal-data topology edges,
-		// declared model grants, posture findings, audit findings, and event counters.
-		return claudeappsgateway.New(), true
-	case "claude-batch":
-		// E3: Anthropic Message Batches + Files API governance source (Apache).
-		// Read-only inventory of batches and file uploads (identifiers, status, counts,
-		// timestamps — never payloads or file content, docs/SECURITY-HARDENING.md), operator-declared
-		// batch policy enforcement (allowed models, line limits, allowed creators) and
-		// upload retention-expiry signals. Minimal-dependency (modelprovider HTTP
-		// client), so it runs in-process (transport A) exactly like claude-api. Offline
-		// (no admin_key) it emits an honest offline finding. A re-pollable batch
-		// source: set poll_seconds.
-		return claudebatch.New(), true
-	case "claude-routines":
-		// E3: Claude Code Routines (scheduled triggers / cron agents) inventory
-		// source (Apache). Read-only GETs against the Claude Code Remote API emitting
-		// inventory edges + governance findings (excessive cadence, unreviewed
-		// routines, anonymous triggers); prompt content is never stored, only hashed.
-		// Minimal-dependency (the shared httpx client), in-process (transport A). It is
-		// a STREAMING source: register it with poll_seconds=0 — it owns its own poll
-		// cadence (refresh) and blocks in Gather running the refresh loop; the engine
-		// never re-polls a streaming source. Offline (no api_key) Open fails closed.
-		return clauderoutines.New(), true
-	case "tak":
-		// TAK Server posture + governed Cursor-on-Target (CoT) ingest source
-		// (Apache). Stdlib-only, NO heavyweight dependency tree — posture reads a TAK
-		// Server CoreConfig.xml offline (plus an optional mTLS version probe) and the
-		// CoT ingest owns its own UDP/TCP listener sockets — so it runs IN-PROCESS
-		// (transport A) like the other minimal-dependency observers. CoT is minimal-data:
-		// positions and the free-form <detail> are digested and the emitting uid is
-		// hashed before it leaves the connector; the feed is scopeable as source_type=
-		// data (feed_ref). Offline (no server_url/config path and no listener) it is an
-		// honest no-op. The CoT wire format is a clean-room implementation from the
-		// public-release MITRE spec — it links no GPL TAK/ATAK code (connectors/tak/doc.go).
-		return tak.New(), true
-	case "a2a":
-		// the A2A (Agent2Agent v1.0) OBSERVATION source (Apache). Read-only —
-		// it discovers each configured agent's Card over HTTP, verifies the JWS/JCS
-		// signature, and turns observed task/message interactions into agent↔agent
-		// edges with a confidence reflecting the peer's verified trust. It never ACTS
-		// on a peer (the connector invariant): a task is observed, never dispatched.
-		// Minimal-dependency (net/http + stdlib crypto), so it runs in-process
-		// (transport A) like the other observers. It requires at least one configured
-		// agent or interaction — an empty config is honestly rejected at Open
-		// ("nothing to observe"), a config-error contract, not a silent no-op boot.
-		// Emitting SIGNED Agent Cards is a separate concern (connectors/a2a/issue.go E5), not this observe leg.
-		return a2a.New(), true
-	case "managed-settings":
-		// Reads a small JSON file on disk and emits PERMITTED policy edges + drift
-		// findings; cheap and low-dependency, so it runs in-process (CLA-05).
-		return managedsettings.New(), true
-	case "codex-managed-config":
-		// G4 (C2): the Codex enforcement-posture sibling of managed-settings —
-		// reads the host's system-tier requirements.toml + managed_config.toml (TOML),
-		// emits the allowed MCP servers / egress domains as PERMITTED edges and reports
-		// drift against the governance-authored Codex policy (constraints vs managed
-		// defaults). Read-only, pure-stdlib+TOML, so it runs in-process (transport A)
-		// exactly like managed-settings. The codex read-only governance source (kind
-		// "codex": analytics/costs/compliance/audit) is a SEPARATE connector; this one is
-		// the authoring+drift leg it lacked. cmd/codex-managed-config-source exists for
-		// the out-of-process collector mode.
-		return codexmanagedconfig.New(), true
-	case "agents-md":
-		// CUR-7: AGENTS.md/CLAUDE.md instruction-file integrity + injection
-		// scanner. Walks a governed repo read-only, verifies the live tree against
-		// the authored SHA-256 baseline (drift: altered/unbaselined/missing) and
-		// scans content for instruction-injection/hidden-Unicode/secret threats —
-		// minimal-data findings, never content. Pure stdlib filesystem batch
-		// source, so it runs in-process (the managed-settings sibling).
-		return agentsmd.New(), true
-	case "mcpb":
-		// CUR-7: Claude Desktop .mcpb extension governance. Inventories
-		// unpacked installs / bundle shares, posture-scans manifests and reports
-		// PERMITTED-vs-OBSERVED drift against the authored Enterprise allowlist
-		// (incl. signature-presence under require_signed). Pure stdlib (archive/
-		// zip) filesystem batch source, in-process like managed-settings.
-		return mcpb.New(), true
-	case "cowork-analytics":
-		// the Claude Cowork engagement source (Apache). Read-only, GET-only, and
-		// modelprovider-only (the Enterprise Analytics API), so it runs in-process
-		// (transport A) exactly like claude-api/claude-compliance. Its Gather emits the
-		// Cowork DAU/WAU/MAU + per-user activity engagement finding and a coverage
-		// posture finding; Cowork COST flows via the OTEL cowork source, not here.
-		// Offline (no api_key) it is an honest no-op. The OTLP-heavy runtime cowork
-		// source runs OUT-OF-PROCESS (pluginBinaryForKind["cowork"]).
-		return coworkanalytics.New(), true
-	case "kerberos":
-		//: tails KDC auth telemetry (Windows 4768/4769 or krb5kdc) and
-		// emits the Kerberoasting finding. A streaming tail (poll_seconds=0).
-		return kerberos.New(), true
-	case "aaa":
-		//: RADIUS/TACACS+ AAA observation — a log tail or the hardened
-		// loopback RADIUS receiver (a streaming source; poll_seconds=0).
-		return aaa.New(), true
-	case "ssf":
-		//: the SSF/CAEP receiver (agent kill-switch). A streaming inbound
-		// receiver, loopback-default (poll_seconds=0).
-		return ssf.New(), true
-	case "edugain":
-		//: verifies an eduGAIN/InCommon aggregate and emits the federation
-		// posture finding. A re-pollable batch source (set poll_seconds, e.g. daily).
-		return edugain.New(), true
-	case "openidfed":
-		//: resolves OpenID Federation 1.0 trust chains for configured
-		// entities. A re-pollable batch source (set poll_seconds).
-		return openidfed.New(), true
-
-	// Data-platform R/RW observers: each parses a platform's
-	// NATIVE audit/lineage EXPORT (a file the operator ships), classifies R/RW
-	// VERBATIM and emits EdgeObservation on the contract. They are pure-stdlib
-	// parsers (NO warehouse/cloud SDK, NO new dependency, never a DB connection), so
-	// they run IN-PROCESS (transport A) exactly like the observers above — there
-	// is no heavy dependency tree to isolate out-of-process. SAMPLING sources
-	// (snowflake/oracle/redshift/bigquery/gcs/databricks-uc/iceberg-catalog: batch,
-	// return nil at EOF) are re-run by the engine's re-poll scheduler — set
-	// poll_seconds; TAIL sources (mssql/azure-blob/mongo/openlineage/delta-sharing:
-	// follow=true) block in Gather until ctx is canceled (poll_seconds=0). Iceberg
-	// emits the PERMITTED side (policy grants + vended-credential NHIs), not observed.
-	case "snowflake-audit":
-		return snowflakeaudit.New(), true
-	case "databricks-uc":
-		return databricksuc.New(), true
-	case "bigquery-audit":
-		return bigqueryaudit.New(), true
-	case "mssql-audit":
-		return mssqlaudit.New(), true
-	case "oracle-audit":
-		return oracleaudit.New(), true
-	case "mongo-audit":
-		return mongoaudit.New(), true
-	case "redshift-audit":
-		return redshiftaudit.New(), true
-	case "gcs-audit":
-		return gcsaudit.New(), true
-	case "azure-blob-audit":
-		return azureblobaudit.New(), true
-	case "iceberg-catalog":
-		return icebergcatalog.New(), true
-	case "openlineage":
-		return openlineage.New(), true
-	case "delta-sharing":
-		return deltasharing.New(), true
-
-	// S165 cloud management-plane observers. Each is a live, read-only API
-	// client of an org/tenant management plane — Resource Manager/IAM + Cloud Audit
-	// Logs for GCP, Resource Graph + Azure Monitor Activity Log for Azure — with
-	// hand-rolled stdlib OAuth2 (SA jwt-bearer / AAD client-credentials), NO cloud
-	// SDK and no new dependency, so they run IN-PROCESS (transport A) like the live
-	// entra-agent identity source. They complete the tri-cloud management-plane
-	// parity with connectors/aws: org/folder/project + tenant/subscription topology
-	// (signal "gcp"/"azure") and identity→{gcp,azure}.api control-plane activity
-	// (signal "gcp_audit"/"azure_activity"). With no credential each is offline
-	// (Gather emits nothing); they NEVER read a payload, secret or key (docs/SECURITY-HARDENING.md).
-	case "gcp-audit":
-		return gcpaudit.New(), true
-	case "azure-activity":
-		return azureactivity.New(), true
-	case "cloudflare":
-		// E3: Cloudflare edge-estate inventory source (Apache). Read-only
-		// discovery of Workers, R2 buckets and Logpush jobs via the REST API v4
-		// (Bearer, scoped read-only token) emitting topology edges — the edge sibling
-		// of the S165 management-plane observers above. Pure stdlib HTTP, no cloud
-		// SDK, so it runs IN-PROCESS (transport A). Distinct from the
-		// cloudflare-ai-gateway and cloudflare-mcp-portals AI-surface connectors. A
-		// re-pollable batch source: set poll_seconds.
-		return cloudflare.New(), true
-	case "bedrock-kb":
-		// E3: Amazon Bedrock Knowledge Bases governance source (Apache).
-		// Read-only observation of Bedrock KB retrieval via the Agent Runtime
-		// Retrieve API (a health-check query — never RetrieveAndGenerate, which would
-		// trigger billable inference): connectivity/retrieval posture findings per KB
-		// plus KB→data-source topology edges. It does NOT store, index or embed
-		// documents (Bedrock manages its own vector store) and never reads full
-		// document content. Minimal-dependency (stdlib + the shared awssig SigV4
-		// signer), in-process (transport A). A re-pollable batch source: set
-		// poll_seconds.
-		return bedrockkb.New(), true
-
-	// Secrets/PKI/KMS observers. Each is a
-	// pure-stdlib parser (cloud audit export, ESO/SOPS manifests) or a pure-Go
-	// TTLV/TLS client (KMIP) — NO cloud SDK, no new dependency — so it runs
-	// IN-PROCESS (transport A) like the data-platform observers. They emit OBSERVED
-	// key/secret-access edges (cloud audit), provisioning edges (ESO/SOPS) or custody
-	// edges (KMIP); they NEVER read a secret value or key material (docs/SECURITY-HARDENING.md §2-3). All
-	// six are ALSO roster providers (buildRosterProvider) for the secret-store
-	// inventory, so an operator may wire them as an identity entry with
-	// as_source=true to get both the inventory and the edges.
-	case "aws-kms":
-		return awskms.New(), true
-	case "gcp-kms":
-		return gcpkms.New(), true
-	case "azure-key-vault":
-		return azurekeyvault.New(), true
-	case "external-secrets":
-		return externalsecrets.New(), true
-	case "sops":
-		return sops.New(), true
-	case "kmip":
-		return kmip.New(), true
-
-	// Network/mesh/gateway L7 observers. Each is a
-	// pure-stdlib/yaml parser of an exported artifact (Istio Telemetry CRDs, the K8s
-	// Gateway API Inference Extension CRDs, the egress-proxy verdict log, the Envoy AI
-	// Gateway usage records, Kong audit logs) — NO heavy dependency tree, NO live API,
-	// NO listener — so they run IN-PROCESS (transport A) like the observers.
-	// They emit L7 edges/findings (meshobs), permitted inference-routing edges
-	// (SignalPolicy), CostSamples (AI Gateway → module XXI) and config-change findings.
-	// The two proto-heavy connectors (envoy, hubble) run OUT-OF-PROCESS instead — see
-	// pluginBinaryForKind. SAMPLING parsers are re-run by the engine's re-poll
-	// scheduler (set poll_seconds); a tailing one blocks in Gather (poll_seconds=0).
-	case "istio-telemetry":
-		return istiotelemetry.New(), true
-	case "inference-gateway":
-		return inferencegateway.New(), true
-	case "egress-proxy":
-		return egressproxy.New(), true
-	case "ai-gateway":
-		return aigateway.New(), true
-	case "kong-audit":
-		return kongaudit.New(), true
-	// AI-gateway config-posture family: read the customer gateway's DECLARED
-	// config (not traffic) and emit posture + gateway-vs-Olivares policy drift. Each
-	// is a pure-stdlib/yaml parser of an EXPORTED artifact, IN-PROCESS (transport A),
-	// complementing the usage/audit siblings (ai-gateway, kong-audit).
-	case "envoy-ai-gateway":
-		return envoyaigw.New(), true
-	case "kong-agent-gateway":
-		return kongagw.New(), true
-	case "litellm":
-		return litellm.New(), true
-
-	// IaC/GitOps read-first observers. Each parses an EXPORTED
-	// CRD manifest (Argo CD Application, Flux Kustomization/HelmRelease/GitRepository,
-	// Crossplane XRD) — a pure-stdlib/yaml parser with NO Kubernetes/cloud SDK and no
-	// live API, so it runs IN-PROCESS (transport A) like the observers. They
-	// OBSERVE the GitOps/IDP estate (sync/health/drift, reconciliation status, composite
-	// API surface) and emit FindingReport posture; they never mutate the estate (acting
-	// on a deployment is module VII/HITL-gated). SAMPLING sources (batch, return nil
-	// at EOF) are re-run by the engine's re-poll scheduler — set poll_seconds.
-	case "argocd":
-		return argocd.New(), true
-	case "flux":
-		return flux.New(), true
-	case "crossplane":
-		return crossplane.New(), true
-
-	// (FASE P / B1) — the R/RW access-map DIFFERENTIAL connectors (README.md module III): the moat made configurable in a stock `serve`. Each is a
-	// pure-Go reader of a LOCAL artifact/stream — a PostgreSQL pgAudit log, an AWS
-	// CloudTrail export, a Tetragon kernel-event stream, the host runtime, or an MCP
-	// server's introspection — with NO heavy dependency tree (pgaudit/s3cloudtrail/
-	// ebpf/runtime are pure-stdlib; mcp adds only go-jose, already linked by the MCP
-	// gateway), so all run IN-PROCESS (transport A) exactly like the
-	// observers above. The cmd/{pg-audit,s3-cloudtrail,ebpf-source} go-plugin mains stay
-	// for the out-of-process collector mode (transport C). They emit EdgeObservation/
-	// FindingReport the access-map module (the SOLE writer of AccessEdge) fuses into the
-	// PERMITTED-vs-OBSERVED graph; honest coverage is per resource-kind tier (fusion.go)
-	// and per attribution confidence — NEVER claimed firm where it is not: eBPF is
-	// agent-anonymous (always `approximate`), and a shared pgAudit application_name / IAM
-	// role collapses to `approximate` too (hardens this). Deny-closed: each is
-	// opt-in (wired only when named in config), and pgAudit/CloudTrail/MCP hard-fail at
-	// Open without their required log_path/path/servers — never a silent no-op; eBPF
-	// defaults to reading stdin and runtime to procfs/k8s discovery, inert until pointed
-	// at a real Tetragon export / host. DEPLOYMENT (docs-site reference/connectors): eBPF
-	// consumes a Tetragon export written by a SEPARATE privileged DaemonSet (the connector
-	// needs no kernel capability — it reads a 0600 file/FIFO), and runtime needs host
-	// access (a GET-only docker.sock, the k8s ServiceAccount, procfs). Re-poll cadence: s3cloudtrail/runtime/
-	// mcp are batch (set poll_seconds); a pgAudit csvlog is a batch and a jsonlog tails
-	// (follow=true); eBPF is a streaming backstop that blocks in Gather (poll_seconds=0).
-	// (FED-1): the Vault audit-log ingest — the OBSERVED counterpart of the
-	// vault roster connector's SignalPolicy PERMITTED grants (same "entity:<name>"
-	// ref space, same "vault.path" resource kind, so module III diffs them). A
-	// pure-stdlib logtail JSON-lines parser of the file audit device (the pgaudit
-	// jsonlog sibling), in-process. Batch by default (set poll_seconds); follow=true
-	// tails and blocks in Gather (poll_seconds=0). It is a SOURCE, not a roster
-	// provider — the roster half stays "vault" (buildRosterProvider).
-	case "vault-audit":
-		return vault.NewAudit(), true
-	// (FED-1): the federation connectors whose Gather is a re-pollable BATCH
-	// scan (1Password item-usage edges; entra-agent/agentcore long-lived-credential
-	// drift findings; oasf badge findings) register here so a cfg.Sources entry
-	// with poll_seconds re-runs them — the identity entry's as_source=true path
-	// (rt.AddSource) runs a Gather ONCE per boot, which is wrong for an event feed
-	// and stale for a drift scan. Wire the ROSTER half as an identity entry
-	// WITHOUT as_source and the edges/findings half as a sources entry with
-	// poll_seconds; never both for the same kind (Descriptor names are unique —
-	// the second registration would fail as a duplicate).
-	case "onepassword":
-		return onepassword.New(), true
-	case "entra-agent":
-		return entraagent.New(), true
-	case "agent365":
-		return agent365.New(), true
-	case "google-agent":
-		return googleagent.New(), true
-	case "google-adk":
-		// governance of agents BUILT WITH Google's ADK 2.0 framework (Apache).
-		// Read-only: reads exported ADK Session JSON (agent/app inventory, sub-agents,
-		// users, tool function-calls, transfers, state/error counts — never message
-		// content), an approved-tool policy (drift), execution tracking, and Vertex
-		// reasoningEngine correlation. Distinct from google-agent (the Agent Platform
-		// surface). Offline (no session_dir) it is a no-op.
-		return googleadk.New(), true
-	case "foundry-agents":
-		return foundryagents.New(), true
-	case "agentcore":
-		return agentcore.New(), true
-	case "oasf":
-		return oasf.New(), true
-	// the identity sources whose Gather is now a re-pollable BATCH
-	// permitted-grant scan (ldap privileged-directory grants; idp Okta/Entra
-	// app/scope assignment grants; infisical project grants — vault, above, was
-	// always live) register here for the same reason as the kinds: a
-	// cfg.Sources entry with poll_seconds re-runs the scan, while the identity
-	// entry's as_source=true runs it ONCE per boot. okta/entra resolve to the
-	// SAME idp connector (Descriptor olivares.idp) — a shared DESCRIPTOR, which is
-	// no longer a shared identity: each registration carries its own configured
-	// name, so an estate can wire both, and the descriptor stays what it always
-	// was, the connector's type.
-	case "ldap":
-		return ldap.New(), true
-	case "idp", "okta", "entra":
-		return idp.New(), true
-	case "infisical":
-		return infisical.New(), true
-	// GitHub/GitLab source connectors — observe code repositories as data
-	// sources for coding agents, emitting R/RW access edges (observed) and ACL
-	// edges (permitted) to the access map. Webhook-first with API polling for
-	// reconciliation. Streaming sources (poll_seconds=0): Gather blocks running
-	// the webhook HTTP receiver and the API poller until ctx is canceled.
-	case "github":
-		return githubsrc.New(), true
-	case "gitlab":
-		return gitlabsrc.New(), true
-
-	case "pgaudit", "pg-audit":
-		return pgaudit.New(), true
-	case "s3cloudtrail", "s3-cloudtrail":
-		return s3cloudtrail.New(), true
-	case "ebpf":
-		return ebpf.New(), true
-	case "runtime":
-		return runtimesource.New(), true
-	case "mcp":
-		return mcpc.New(), true
-	default:
-		// Build-tag-gated commercial connectors (e.g. CyberArk Conjur). The
-		// default (AGPL) build resolves none (enterpriseInProcSource returns
-		// (nil,false) in wire_noenterprise.go); `-tags enterprise` wires them.
-		return enterpriseInProcSource(kind)
+	if canonical, ok := inProcSourceAliases[kind]; ok {
+		kind = canonical
 	}
+	if constructor, ok := inProcSourceFactories[kind]; ok {
+		return constructor(), true
+	}
+	if thisEdition.inProcSource == nil {
+		return nil, false
+	}
+	return thisEdition.inProcSource(kind)
 }
 
 // buildRosterProvider constructs an identity connector by kind, returning it both
@@ -1078,6 +584,12 @@ func buildRosterProvider(kind string) (identitysource.GraphProvider, sdk.SourceC
 	case "oasf":
 		c := oasf.New()
 		return c, c, true
+	case "paperclip":
+		// Observe-only (I2.P5): companies as groups and agents as NHIs on the
+		// roster; runs and cost reach the ledger when the identity entry also
+		// sets as_source=true, or through a sources entry with poll_seconds.
+		c := paperclip.New()
+		return c, c, true
 	case "agent365":
 		c := agent365.New()
 		return c, c, true
@@ -1120,9 +632,12 @@ func buildRosterProvider(kind string) (identitysource.GraphProvider, sdk.SourceC
 	default:
 		// Build-tag-gated commercial roster providers (e.g. CyberArk Conjur):
 		// hosts as NHI + the host→variable permitted grants. The default (AGPL) build
-		// resolves none (enterpriseRosterProvider returns (nil,nil,false) in
-		// wire_noenterprise.go); `-tags enterprise` wires them.
-		return enterpriseRosterProvider(kind)
+		// resolves none (it has no rosterProvider edition port); `-tags enterprise`
+		// wires them.
+		if thisEdition.rosterProvider == nil {
+			return nil, nil, false
+		}
+		return thisEdition.rosterProvider(kind)
 	}
 }
 

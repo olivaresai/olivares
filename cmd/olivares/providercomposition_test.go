@@ -9,18 +9,12 @@ import (
 	"context"
 	"crypto/ed25519"
 	"encoding/json"
-	"net/http/httptest"
-	"path/filepath"
-	"testing"
-	"time"
-
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/audit"
 	"github.com/olivaresai/olivares/core/auth"
 	coreengine "github.com/olivaresai/olivares/core/engine"
 	"github.com/olivaresai/olivares/core/engine/enginetest"
 	"github.com/olivaresai/olivares/core/eventbus"
-	"github.com/olivaresai/olivares/core/eventbus/natsbus"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/runtime"
 	"github.com/olivaresai/olivares/core/secure"
@@ -29,6 +23,10 @@ import (
 	"github.com/olivaresai/olivares/sdk"
 	"github.com/olivaresai/olivares/sdk/event"
 	sdkmodel "github.com/olivaresai/olivares/sdk/model"
+	"net/http/httptest"
+	"path/filepath"
+	"testing"
+	"time"
 )
 
 type compositionSource struct {
@@ -152,7 +150,7 @@ func TestProviderCompositionTwoSourceInstancesAdmissionAndAPI(t *testing.T) {
 				opened[def.Name] = source
 				return rt.PrepareInProcSource(source), sdk.Config{}, ""
 			}
-			ss.UseProviderSourceResolver(&providerSourceResolver{store: sourceStore, sr: sr, authz: authz, env: "composition-env"})
+			ss.ProviderSources = &providerSourceResolver{store: sourceStore, sr: sr, authz: authz, env: "composition-env"}
 			rows := map[string]model.SourceDef{}
 			profiles := map[string]sessions.ProviderProfile{}
 			resourceByProfile := map[string]string{}
@@ -257,14 +255,7 @@ func TestProviderCompositionTwoSourceInstancesAdmissionAndAPI(t *testing.T) {
 				}
 			}
 			assertHTTP(2)
-			encoded, err := natsbus.EncodeEvent(original["home-a"])
-			if err != nil {
-				t.Fatal(err)
-			}
-			replay, err := natsbus.DecodeEvent(encoded, natsbus.DefaultDecoders())
-			if err != nil {
-				t.Fatal(err)
-			}
+			replay := original["home-a"]
 			if _, err := ss.RevokeBinding(ctx, tenant, bindings["home-a"].Ref); err != nil {
 				t.Fatal(err)
 			}

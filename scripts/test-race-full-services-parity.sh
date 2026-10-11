@@ -45,7 +45,7 @@ MAINLINE="${OLIVARES_RACE_FULL_PARITY_MAINLINE:-$ROOT/.github/workflows/mainline
 RACEFULL="${OLIVARES_RACE_FULL_PARITY_RACEFULL:-$ROOT/.github/workflows/race-full.yml}"
 
 blind() {
-	printf 'race-full-services-parity: NO HE PODIDO MIRAR — %s\n' "$*" >&2
+	printf 'race-full-services-parity: COULD NOT CHECK — %s\n' "$*" >&2
 	exit 2
 }
 

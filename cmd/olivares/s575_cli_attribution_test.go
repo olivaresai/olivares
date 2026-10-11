@@ -156,6 +156,7 @@ func TestPrivilegedCommandsRefuseWithoutAttribution(t *testing.T) {
 		{"sources rm", []string{"sources", "rm", "--name", "x", "--yes"}},
 		{"superadmin enable", []string{"superadmin", "enable", "--email", "a@b.c"}},
 		{"superadmin disable", []string{"superadmin", "disable", "--email", "a@b.c"}},
+		{"admin recover", []string{"admin", "recover", "--email", "a@b.c", "--yes"}},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -164,6 +165,7 @@ func TestPrivilegedCommandsRefuseWithoutAttribution(t *testing.T) {
 			root.SetOut(&out)
 			root.SetErr(&errb)
 			root.SetArgs(append(append([]string{}, c.argv...), "--data-dir", t.TempDir()))
+			prepareCompositionTestBoot(t)
 			_, err := root.ExecuteC()
 			if err == nil {
 				t.Fatalf("`olivares %s` proceeded with no attribution", strings.Join(c.argv, " "))

@@ -121,10 +121,9 @@ func TestSessionLaunchGate_LaunchesLeaveNoHoldToSettle(t *testing.T) {
 			"limit_micro_usd": int64(5_000_000), "action": "block",
 		})
 		g := &sessionLaunchGate{
-			fin:             fin,
-			budgetPosture:   availabilityFailClosed,
-			recordAvailable: true,
-			log:             slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)),
+			fin:           fin,
+			budgetPosture: availabilityFailClosed,
+			log:           slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)),
 		}
 
 		const launches = 4

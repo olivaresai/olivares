@@ -58,19 +58,19 @@
 # workflows legibles que el mínimo: con cero, «todos caben» sería cierto y vacío a la vez).
 set -uo pipefail
 RAIZ="${OLIVARES_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || echo "")}"
-[ -n "$RAIZ" ] || { echo "check-ci-inner-timeouts: ⛔ NO HE PODIDO MIRAR: no estoy en un repositorio." >&2; exit 2; }
-cd "$RAIZ" || { echo "check-ci-inner-timeouts: ⛔ NO HE PODIDO MIRAR: no entro en $RAIZ." >&2; exit 2; }
+[ -n "$RAIZ" ] || { echo "check-ci-inner-timeouts: ⛔ COULD NOT CHECK: outside a repository." >&2; exit 2; }
+cd "$RAIZ" || { echo "check-ci-inner-timeouts: ⛔ COULD NOT CHECK: cannot enter $RAIZ." >&2; exit 2; }
 WFDIR="${OLIVARES_INNER_WFDIR:-.github/workflows}"
-[ -d "$WFDIR" ] || { echo "check-ci-inner-timeouts: ⛔ NO HE PODIDO MIRAR: no existe $WFDIR." >&2; exit 2; }
-command -v python3 >/dev/null 2>&1 || { echo "check-ci-inner-timeouts: ⛔ NO HE PODIDO MIRAR: sin python3." >&2; exit 2; }
-[ "$#" -eq 0 ] || { echo "check-ci-inner-timeouts: ⛔ recibí argumentos y no honro ninguno; usa OLIVARES_INNER_WFDIR." >&2; exit 2; }
+[ -d "$WFDIR" ] || { echo "check-ci-inner-timeouts: ⛔ COULD NOT CHECK: missing $WFDIR." >&2; exit 2; }
+command -v python3 >/dev/null 2>&1 || { echo "check-ci-inner-timeouts: ⛔ COULD NOT CHECK: python3 is not installed." >&2; exit 2; }
+[ "$#" -eq 0 ] || { echo "check-ci-inner-timeouts: ⛔ arguments are not supported; use OLIVARES_INNER_WFDIR." >&2; exit 2; }
 
 python3 - "$WFDIR" "${OLIVARES_INNER_MIN:-3}" "${OLIVARES_INNER_MARGEN:-1}" <<'PY'
 import glob, os, re, sys
 try:
     import yaml
 except Exception as e:
-    print(f"check-ci-inner-timeouts: ⛔ NO HE PODIDO MIRAR: sin PyYAML ({e})", file=sys.stderr); sys.exit(2)
+    print(f"check-ci-inner-timeouts: ⛔ COULD NOT CHECK: PyYAML is not installed ({e})", file=sys.stderr); sys.exit(2)
 
 wfdir, minimo, margen = sys.argv[1], int(sys.argv[2]), float(sys.argv[3])
 U = {'s': 1/60, 'm': 1, 'h': 60, 'd': 1440}
@@ -157,14 +157,14 @@ try:
 except FileNotFoundError:
     TAREAS = {}
 except Exception as e:
-    print(f"check-ci-inner-timeouts: ⛔ NO HE PODIDO MIRAR: Taskfile.yml no parsea ({e})", file=sys.stderr)
+    print(f"check-ci-inner-timeouts: ⛔ COULD NOT CHECK: Taskfile.yml cannot be parsed ({e})", file=sys.stderr)
     sys.exit(2)
 
-def cuerpo_tarea(nombre, vistas=None):
-    """Texto de los `cmds` de una tarea Y de todo lo que arrastra por `deps:`/`cmds: - task:`.
+def task_body(nombre, vistas=None):
+    """Texto de los `cmds` de una task_name Y de todo lo que arrastra por `deps:`/`cmds: - task:`.
 
     UNA pasada y CICLO-SEGURA: `vistas` corta la recursion, asi que un `a -> b -> a` no cuelga el
-    gate. Devuelve (texto, faltantes) — `faltantes` son los nombres de tarea que el Taskfile no
+    gate. Devuelve (texto, faltantes) — `faltantes` son los nombres de task_name que el Taskfile no
     tiene, y eso NO es «sin reloj»: es «no he podido mirar»."""
     if vistas is None: vistas = set()
     if nombre in vistas: return "", []
@@ -172,26 +172,26 @@ def cuerpo_tarea(nombre, vistas=None):
     t = TAREAS.get(nombre)
     if t is None: return "", [nombre]
     if not isinstance(t, dict): return str(t), []
-    trozos, faltan = [], []
+    trozos, missing_inputs = [], []
     for dep in (t.get('deps') or []):
         n2 = dep.get('task') if isinstance(dep, dict) else dep
         if n2:
-            tx, f2 = cuerpo_tarea(str(n2), vistas); trozos.append(tx); faltan += f2
+            tx, f2 = task_body(str(n2), vistas); trozos.append(tx); missing_inputs += f2
     for c in (t.get('cmds') or []):
         if isinstance(c, dict):
             n2 = c.get('task')
             if n2:
-                tx, f2 = cuerpo_tarea(str(n2), vistas); trozos.append(tx); faltan += f2
+                tx, f2 = task_body(str(n2), vistas); trozos.append(tx); missing_inputs += f2
         else:
             trozos.append(str(c))
-    return "\n".join(trozos), faltan
+    return "\n".join(trozos), missing_inputs
 
 leidos, hallazgos, mirados, conrun, sinresolver = 0, [], 0, 0, []
 for f in sorted(glob.glob(os.path.join(wfdir, '*.yml')) + glob.glob(os.path.join(wfdir, '*.yaml'))):
     try:
         d = yaml.safe_load(open(f, encoding='utf-8'))
     except Exception as e:
-        print(f"check-ci-inner-timeouts: ⛔ NO HE PODIDO MIRAR: {f} no parsea ({e})", file=sys.stderr); sys.exit(2)
+        print(f"check-ci-inner-timeouts: ⛔ COULD NOT CHECK: {f} cannot be parsed ({e})", file=sys.stderr); sys.exit(2)
     leidos += 1
     for jn, j in (d.get('jobs') or {}).items():
         if not isinstance(j, dict): continue
@@ -213,7 +213,7 @@ for f in sorted(glob.glob(os.path.join(wfdir, '*.yml')) + glob.glob(os.path.join
             # legibles. Un «no pude mirar» que se dispara de mas gasta la misma credibilidad que un
             # CLEAN que no mira.
             # ── y ahora lo que el paso DELEGA en `task <nombre>` ───────────────────────────
-            delegado, faltan, tareas_vistas = "", [], []
+            delegado, missing_inputs, seen_tasks = "", [], []
             # ⛔ `task` TIENE QUE ESTAR EN POSICION DE COMANDO. Un `(?<![\w./-])task\s+(\w+)` casa la
             # PROSA de los comentarios —«task no esta en PATH», «task that fails», un `lint:X` de
             # ejemplo— y me dio **24 falsos «no pude mirar»** en el primer intento: el gate diciendo
@@ -223,29 +223,29 @@ for f in sorted(glob.glob(os.path.join(wfdir, '*.yml')) + glob.glob(os.path.join
                 if _ln.lstrip().startswith('#'): continue
                 for mt in re.finditer(r'(?:^|[;&|]|&&|\|\||\$\()\s*task\s+([A-Za-z][\w:.-]*)', _ln):
                     nom = mt.group(1)
-                    tx, f2 = cuerpo_tarea(nom)
-                    if tx: delegado += "\n" + tx; tareas_vistas.append(nom)
-                    faltan += f2
-            if faltan:
+                    tx, f2 = task_body(nom)
+                    if tx: delegado += "\n" + tx; seen_tasks.append(nom)
+                    missing_inputs += f2
+            if missing_inputs:
                 sinresolver.append((os.path.basename(f), jn, str(s.get('id') or s.get('name','·'))[:34],
-                                    "tarea(s) que el Taskfile no tiene: " + ", ".join(sorted(set(faltan))[:3])))
+                                    "task(s) missing from the Taskfile: " + ", ".join(sorted(set(missing_inputs))[:3])))
                 continue
-            malt = [(d_, nom) for nom in tareas_vistas
-                    for d_, D_, K_ in relojes(cuerpo_tarea(nom)[0]) if D_ is None]
+            malt = [(d_, nom) for nom in seen_tasks
+                    for d_, D_, K_ in relojes(task_body(nom)[0]) if D_ is None]
             if malt:
                 sinresolver.append((os.path.basename(f), jn, str(s.get('id') or s.get('name','·'))[:34],
-                                    "reloj no legible dentro de `task %s`: %s" % (malt[0][1], malt[0][0])))
+                                    "unreadable timeout in `task %s`: %s" % (malt[0][1], malt[0][0])))
                 continue
 
             mal = [d_ for d_, D_, K_ in relojes(texto) if D_ is None]
             if mal:
                 sinresolver.append((os.path.basename(f), jn, str(s.get('id') or s.get('name','·'))[:34],
-                                    "la duracion no es legible: " + " · ".join(mal[:2])))
+                                    "unreadable duration: " + " · ".join(mal[:2])))
                 continue
             # el reloj delegado se juzga con la MISMA desigualdad, y su descripcion NOMBRA la tarea
-            for desc, D, K in relojes(texto) + [(f"{d_} (dentro de `task {nom}`)", D_, K_)
-                                                for nom in tareas_vistas
-                                                for d_, D_, K_ in relojes(cuerpo_tarea(nom)[0]) if D_ is not None]:
+            for desc, D, K in relojes(texto) + [(f"{d_} (inside `task {nom}`)", D_, K_)
+                                                for nom in seen_tasks
+                                                for d_, D_, K_ in relojes(task_body(nom)[0]) if D_ is not None]:
                 mirados += 1
                 techo = s.get('timeout-minutes') or j.get('timeout-minutes') or 360
                 exige = D + K + margen
@@ -258,33 +258,33 @@ for f in sorted(glob.glob(os.path.join(wfdir, '*.yml')) + glob.glob(os.path.join
 # ⛔ LO NO RESOLUBLE SALE 2 ANTES QUE NADA: un CLEAN que no ha podido leer un reloj es la misma
 # mentira que un verde sin mirar. Se nombra el paso, para que se pueda arreglar en vez de adivinar.
 if sinresolver:
-    print(f"check-ci-inner-timeouts: ⛔ NO HE PODIDO MIRAR {len(sinresolver)} paso(s) con reloj no resoluble:", file=sys.stderr)
+    print(f"check-ci-inner-timeouts: ⛔ COULD NOT CHECK {len(sinresolver)} step(s) with unresolved timeouts:", file=sys.stderr)
     for f_, jn_, sid_, por in sinresolver:
         print(f"    {f_} · {jn_} · {sid_} — {por}", file=sys.stderr)
-    print("  Da su duracion como literal, o fija la variable en `env:` con un valor estatico.", file=sys.stderr)
+    print("  Specify the duration as a literal, or set the variable to a static value in `env:`.", file=sys.stderr)
     sys.exit(2)
 
 if conrun == 0:
-    print(f"check-ci-inner-timeouts: ⛔ NO HE PODIDO MIRAR: {leidos} workflow(s) legibles y NINGUN paso con `run:`.", file=sys.stderr)
+    print(f"check-ci-inner-timeouts: ⛔ COULD NOT CHECK: {leidos} readable workflow(s), but no steps with `run:`.", file=sys.stderr)
     sys.exit(2)
 
 if leidos < minimo:
-    print(f"check-ci-inner-timeouts: ⛔ NO HE PODIDO MIRAR: {leidos} workflow(s) legibles, mínimo {minimo}.", file=sys.stderr)
+    print(f"check-ci-inner-timeouts: ⛔ COULD NOT CHECK: {leidos} readable workflow(s), minimum {minimo}.", file=sys.stderr)
     sys.exit(2)
 
 if hallazgos:
     # ⛔ LA CIFRA DE LO MIRADO VA TAMBIEN EN EL ROJO. Antes solo salia en el mensaje limpio, asi que
     # con hallazgos el lector sabia CUALES fallan y no SOBRE CUANTOS se juzgo — y sin denominador un
     # «3 fallan» no dice si el gate miro tres relojes o treinta.
-    print(f"check-ci-inner-timeouts: ⛔ {len(hallazgos)} de {mirados} reloj(es) interior(es) NO pueden disparar:")
+    print(f"check-ci-inner-timeouts: ⛔ {len(hallazgos)} of {mirados} inner timeout(s) cannot fire:")
     for f, jn, sid, techo, desc, D, K, exige in hallazgos:
         print(f"    {f} · {jn} · {sid}")
-        print(f"      techo del paso {techo} min · interior «{desc}» = {D:g} min"
-              + (f" + kill-after {K:g} min" if K else "") + f" · exige ≥ {exige:g}")
-    print("  Su rama fail-closed es INALCANZABLE: GitHub mata el paso antes de que el reloj interior")
-    print("  pueda devolver su diagnóstico. O sube el techo, o baja el reloj — pero no las dos cifras")
-    print("  a la vez sin decir cuál manda.")
+        print(f"      step timeout {techo} min · inner timeout «{desc}» = {D:g} min"
+              + (f" + kill-after {K:g} min" if K else "") + f" · requires ≥ {exige:g}")
+    print("  The fail-closed branch is unreachable: GitHub kills the step before the inner timeout")
+    print("  can report its diagnostic. Raise the step limit or lower the inner timeout; document")
+    print("  which limit governs if you change both values.")
     sys.exit(1)
-print(f"check-ci-inner-timeouts: limpio — {mirados} reloj(es) interior(es) caben en su techo"
-      f" ({conrun} paso(s) con `run:` en {leidos} workflow(s))")
+print(f"check-ci-inner-timeouts: CLEAN — {mirados} inner timeout(s) fit within their step limits"
+      f" ({conrun} step(s) with `run:` in {leidos} workflow(s))")
 PY

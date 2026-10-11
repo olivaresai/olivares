@@ -99,9 +99,45 @@ class LookupTests(unittest.TestCase):
         self.assertEqual(self.query("jobs:\n" + job("build"), "step-field", "build", "provider", "if"),
                          (0, "success()"))
 
+    def test_run_block_headers_preserve_the_body_or_fail_explicitly(self):
+        for header in ('|', '|-', '|+', '>', '>-', '>+', '| # command'):
+            with self.subTest(header=header):
+                text = ("jobs:\n  build:\n    steps:\n      - id: provider\n"
+                        f"        run: {header}\n          go test -run=TestExample ./api\n")
+                self.assertEqual(self.query(text, "step-field", "build", "provider", "run"),
+                                 (0, "go test -run=TestExample ./api\n"))
+        text = "jobs:\n  build:\n    steps:\n      - id: provider\n        run: |2\n          echo ready\n"
+        self.assertEqual(self.query(text, "step-field", "build", "provider", "run"), (2, ""))
+
     def test_task_command_is_preserved(self):
-        text = "tasks:\n  generate:\n    cmds:\n      - cmd: |\n          echo ready\n"
+        text = ("tasks:\n  generate:\n    cmds:\n      - cmd: |\n          echo ready\n"
+                "      - pnpm --dir web run codegen\n")
         self.assertEqual(self.query(text, "task-cmd", "generate", "ready"), (0, "echo ready\n"))
+
+    def test_quoted_scalars_are_decoded_before_shell_parsing(self):
+        for scalar, expected in (
+            ("'go test \"-run=TestExample\" ./api'", 'go test "-run=TestExample" ./api'),
+            (r'"go test \"-run=TestExample\" ./api"', 'go test "-run=TestExample" ./api'),
+            ("'echo ''ready''' # YAML comment", "echo 'ready'"),
+            ('"echo ready" # YAML comment', 'echo ready'),
+        ):
+            with self.subTest(scalar=scalar):
+                text = "jobs:\n" + job("build").replace("run: echo ready", "run: " + scalar)
+                self.assertEqual(self.query(text, "step-field", "build", "provider", "run"),
+                                 (0, expected))
+
+    def test_unsupported_step_keys_are_not_silently_skipped(self):
+        for step in ('"run": echo filtered', 'run : echo filtered', '{run: echo filtered}'):
+            with self.subTest(step=step):
+                text = "jobs:\n" + job("build") + f"      - {step}\n"
+                self.assertEqual(self.query(text, "step-field-anyjob", "provider", "run"), (2, ""))
+
+    def test_unsupported_quoted_scalars_fail_explicitly(self):
+        for scalar in (r'"go test \x2drun=TestExample ./api"', "'unfinished", '"unfinished',
+                       "'echo ready' trailing", '"echo ready" trailing'):
+            with self.subTest(scalar=scalar):
+                text = "jobs:\n" + job("build").replace("run: echo ready", "run: " + scalar)
+                self.assertEqual(self.query(text, "step-field", "build", "provider", "run"), (2, ""))
 
 
 if __name__ == "__main__":

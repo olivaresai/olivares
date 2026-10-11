@@ -12,7 +12,7 @@ import (
 	"github.com/olivaresai/olivares/core/model"
 )
 
-// assignmentposture_test.go proves the half of the ADR-0022 §5 dual-control: the
+// assignmentposture_test.go proves the half of the source-scope contract dual-control: the
 // ASSIGNMENT surface decides access exactly as bindings do (ConnectorAssigned is the
 // deny-closed gate for every unconfined source, resolver.go:257-264) and, until none
 // of its three writers was classified by anything.

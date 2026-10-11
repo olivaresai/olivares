@@ -238,8 +238,8 @@ func TestMessageDerivedReroutePreservesPredecessorReplaysConflictsAndRollsBack(t
 		beforeEvents := len(communicationRowsForTest(t, fixture, workEventKind))
 		beforeOutbox := len(communicationRowsForTest(t, fixture, workOutboxKind))
 		beforeReceipts := len(communicationRowsForTest(t, fixture, communicationCommandKind))
-		fixture.m.data = &directNoticeExactAckWriteFailureData{
-			inner: fixture.m.data, kind: communicationCommandKind,
+		fixture.m.Data = &directNoticeExactAckWriteFailureData{
+			inner: fixture.m.Data, kind: communicationCommandKind,
 			operation: "create_with_id", failure: errors.New("derived receipt unavailable"),
 		}
 		_, err = service.Reroute(messageLifecycleTestContext(t), fixture.scope, messageRerouteCommand{

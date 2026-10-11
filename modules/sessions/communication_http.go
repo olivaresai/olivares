@@ -27,8 +27,11 @@ func writeCommunicationError(w http.ResponseWriter, err error) {
 		return
 	}
 	message := code
-	if code == "tenant_admission_required" {
+	switch code {
+	case "tenant_admission_required":
 		message = "This operation requires a tenant-admitted directory identity. Global bootstrap authority cannot operate workspace communications."
+	case "not_owner":
+		message = "Only the current owner of this work item can offer it for handoff."
 	}
 	writeJSON(w, status, map[string]any{
 		"verdict": verdict,
@@ -68,6 +71,8 @@ func communicationHTTPDisposition(
 		return http.StatusPreconditionRequired, "version_required", VerdictBroken, true
 	case errors.Is(err, ErrCommunicationNotFound):
 		return http.StatusNotFound, "not_found", VerdictBroken, true
+	case errors.Is(err, errHandoffSenderNotOwner):
+		return http.StatusForbidden, "not_owner", VerdictBroken, true
 	case errors.Is(err, ErrCommunicationAdmissionRequired):
 		return http.StatusForbidden, "tenant_admission_required", VerdictBroken, true
 	case errors.Is(err, ErrCommunicationForbidden):

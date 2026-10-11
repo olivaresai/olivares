@@ -93,7 +93,7 @@
       "data-dir": "data directory"
     },
     "communityNote": "Community edition: applying a verified license displays its details here; it does not change this build.",
-    "expiredBanner": "This commercial license has expired: the enterprise modules are inactive and the deployment behaves as the community edition. Your data and your user accounts are intact — no account was capped, disabled or deleted. Install a renewed license to restore the modules.",
+    "expiredBanner": "This commercial license has expired: the Business modules are inactive and the deployment behaves as the community edition. Your data and your user accounts are intact — no account was capped, disabled or deleted. Install a renewed license to restore the modules.",
     "managedExternally": "The license is managed out-of-band (source: {{source}}). Edit that source to change it — installing from the console is disabled to avoid a shadowed file.",
     "installTitle": "Install or update the license",
     "installHint": "Paste the signed license blob, or upload the license file. It is verified against this build's key before it is stored, then applied live.",
@@ -192,6 +192,7 @@
     "mode": "How they sign in",
     "modePassword": "Set an initial password",
     "modeInvite": "Send an email invitation",
+    "inviteUnavailable": "This server cannot mail invitations (see OLIVARES_INVITE_MAIL_DESTINATION in the configuration reference), so set an initial password.",
     "password": "Initial password",
     "passwordHint": "At least 8 characters. The user can change it later.",
     "submit": "Onboard",
@@ -206,9 +207,9 @@
   },
   "sso": {
     "title": "Single sign-on",
-    "caption": "Connect your identity provider (OIDC or SAML). Secrets are encrypted at rest and never shown again. Configuring SSO is a deployment-wide, superadmin-only, step-up-protected action.",
+    "caption": "Connect your identity provider (OIDC or SAML). Secrets are encrypted at rest and never shown again. Configuring SSO is a deployment-wide, superadmin-only action.",
     "superadminOnly": "SSO is a deployment-wide setting; only a superadmin can view or change it.",
-    "builderUnavailable": "This build can store SSO configuration but cannot activate it. Rebuild with the enterprise tag to enable OIDC/SAML login.",
+    "builderUnavailable": "This build can store SSO configuration but cannot activate it: no OIDC/SAML provider is available in this engine.",
     "statusConfigured": "Configured",
     "statusNotConfigured": "Not configured",
     "statusEnabled": "Enabled",
@@ -243,64 +244,11 @@
     "deleteTitle": "Remove SSO configuration",
     "deleteBody": "SSO login will stop working and revert to local credentials. The stored secrets are deleted.",
     "deleted": "SSO configuration removed.",
-    "enforcement": {
-      "title": "Login enforcement",
-      "caption": "Optional deny-closed controls over how users sign in. Configured here; enforced by the business build.",
-      "requireSso": "Require SSO (disable password login)",
-      "requireSsoHint": "Blocks password login while an identity provider is active, so an absent or disabled IdP can never lock everyone out. The business build enforces it; an operator kill-switch is the break-glass.",
-      "networkAllowlist": "Network allow-list (CIDR)",
-      "networkAllowlistHint": "One CIDR per line (e.g. 10.0.0.0/8 or 2001:db8::/32). When set, logins are accepted only from these ranges; empty means no IP restriction. It guards the login surface (password and SSO completion) using the real connection IP, not a forwarded header — it is not a network firewall.",
-      "enforcedEnterprise": "Enforced by this build",
-      "enforcedUnavailable": "Stored, not enforced by this build",
-      "enforcedOutOfScope": "Not enforced for this provider",
-      "notConfigured": "No enforcement configured",
-      "requireSsoOn": "Password login disabled (SSO required)",
-      "requireSsoOff": "Password login allowed",
-      "noNetworkRestriction": "No IP restriction",
-      "unavailableBanner": "This build stores the enforcement posture but does not enforce it. Rebuild with the enterprise tag to enforce require-SSO and the network allow-list — it never silently enforces or fakes the control.",
-      "outOfScopeBanner": "This build enforces login policy, but only over the deployment-wide primary identity provider. The posture stored here is not the one it reads, so it is not applied. Set it on the deployment-wide primary to have it take effect.",
-      "noIdpWarning": "Require-SSO takes effect only once an identity provider is enabled above (anti-lockout)."
-    },
-    "groupsClaim": "Groups claim",
-    "groupsClaimHint": "Optional. The ID-token/UserInfo claim carrying the user's groups (e.g. \"groups\"). The business build maps them to roles at login.",
-    "groupsAttr": "Groups attribute",
-    "groupsAttrHint": "Optional. The multi-valued SAML attribute carrying the user's groups (e.g. \"memberOf\"). The business build maps them to roles at login.",
     "groups": {
-      "title": "Group mapping & provisioning",
-      "caption": "How directory groups from the IdP become roles, and whether SCIM is the sole authority for accounts. Configured here; mapped by the business build.",
       "provisioningTitle": "Provisioning",
       "provisioningCaption": "Whether SCIM is the sole authority for accounts.",
       "scimAuthoritative": "SCIM is authoritative",
-      "scimAuthoritativeHint": "When on, an SSO login never creates an account or changes group membership — SCIM owns the directory. When off, first login provisions the user and adds (never removes) the groups the IdP asserts.",
-      "unavailableBanner": "This build extracts groups from the assertion but does not map them to roles. The business build turns asserted groups into grants at login."
-    },
-    "scope": {
-      "label": "Scope",
-      "global": "Global (deployment-wide)",
-      "globalHint": "The default IdP used by every tenant that has no IdP of its own.",
-      "tenantHint": "This tenant's own IdP. It only takes effect at login in the business build (the multi-IdP capability); activating a second IdP requires it."
-    },
-    "idp": {
-      "label": "Identity provider",
-      "default": "Primary (default)",
-      "add": "+ Add an identity provider…",
-      "hint": "A tenant can use several active providers; each extra one must claim its own email domains. The deployment-wide scope uses only its primary provider.",
-      "addTitle": "Add an identity provider",
-      "addBody": "Give the new IdP a short alias. It identifies this IdP within the scope and is its login routing key.",
-      "aliasLabel": "Alias",
-      "aliasHint": "Lowercase letters, digits and hyphens (e.g. \"okta\", \"azure-ad\"). 1–31 characters.",
-      "addConfirm": "Continue",
-      "on": "on at sign-in",
-      "off": "off",
-      "activeNow": "Active at sign-in: {{names}}.",
-      "noneActive": "No identity provider is active at sign-in: people sign in with a password."
-    },
-    "domains": {
-      "title": "Home-realm routing",
-      "caption": "Route a login to this IdP by the user's email domain.",
-      "label": "Claimed email domains",
-      "hint": "One domain per line (e.g. corp.com). Each domain is globally unique across IdPs; an email-first login for that domain routes here.",
-      "unavailableBanner": "Domains are stored but this build does not route by them; home-realm routing requires the business edition."
+      "scimAuthoritativeHint": "When on, an SSO login never creates an account or changes group membership — SCIM owns the directory. When off, first login provisions the user and adds (never removes) the groups the IdP asserts."
     },
     "displayName": "Name on the sign-in button",
     "displayNameHint": "People see “Sign in with <name>”. Leave it empty to show “Single sign-on”. 80 characters at most.",
@@ -333,12 +281,14 @@
     "sealerUnavailable": "This build can list secrets but has no sealer wired, so values cannot be stored. Configure a sealer backend to enable the store.",
     "create": "New secret",
     "colName": "Name",
-    "colHint": "Fingerprint",
-    "colDescription": "Description",
     "rotate": "Rotate",
     "delete": "Delete",
     "none": "No secrets yet.",
-    "noneHint": "Add a secret to reference it from a connector config as store:<name>.",
+    "noneHint": {
+      "sources": "Add a secret to reference it from a connector config as store:<name>.",
+      "mcp": "Add a secret to reference it from an MCP server as store:<name>.",
+      "sessions": "Add a secret to give it to a session as an environment variable."
+    },
     "createTitle": "New secret",
     "editTitle": "Rotate secret",
     "name": "Name",
@@ -352,12 +302,40 @@
     "rotated": "Secret saved.",
     "deleted": "Secret deleted.",
     "deleteTitle": "Delete secret",
-    "deleteBody": "The secret is removed from the store. Any connector config that references store:<name> will fail to resolve until you recreate it.",
-    "sessionCaption": "Secrets a session can receive as environment variables. Names begin with env/. A value is never shown again."
+    "deleteBody": {
+      "sources": "The secret is removed from the store. Any connector config that references store:<name> will fail to resolve until you recreate it.",
+      "mcp": "The secret is removed from the store. Any MCP server that references store:<name> will fail to resolve it until you recreate it.",
+      "sessions": "The secret is removed from the store. A session that receives it keeps running, but it cannot be resumed, and a template that names it cannot launch, until you recreate it."
+    },
+    "sessionCaption": "Secrets a session can receive as environment variables. Names begin with env/. A value is never shown again.",
+    "colValue": "Value",
+    "colChanged": "Last changed",
+    "colReference": "Reference",
+    "colUsedBy": "Used by",
+    "rootFolder": "Top level",
+    "valueMasked": "Value hidden; the fingerprint changes when the value does",
+    "usedByLoading": "Checking…",
+    "usedByUnavailable": "Could not be checked",
+    "usedByNone": {
+      "sources": "No connector in the source roster",
+      "mcp": "No MCP server",
+      "sessions": "No session"
+    },
+    "useKind": {
+      "source": "Connector",
+      "mcp": "MCP server",
+      "session": "Session"
+    },
+    "externalTitle": "External references",
+    "externalCaption": "Connectors reference these secrets in another backend. They are kept and rotated there; this list only shows where they are used.",
+    "readOnly": "Read-only",
+    "usedByNoneRecent": "No session among the {{limit}} most recent",
+    "usedByUnwired": "Not available in this build",
+    "usedByMore": "and {{more}} more"
   },
   "connectors": {
     "title": "Connectors",
-    "caption": "Add and configure the connectors the engine ingests from, with their credentials sealed at rest. A change is applied to the running engine without a restart. Deployment-wide, superadmin-only and step-up protected.",
+    "caption": "Add and configure the connectors the engine ingests from, with their credentials sealed at rest. A change is applied to the running engine without a restart. Deployment-wide and superadmin-only.",
     "superadminOnly": "Connectors are a deployment-wide setting; only a superadmin can view or change them.",
     "unavailable": "This build did not wire connector onboarding; connectors are configured from the boot file instead.",
     "sourcesUnavailable": "This build does not serve the source roster; the connectors it runs cannot be listed here.",
@@ -477,7 +455,7 @@
       "restartBody": "These configuration domains are read once at boot and are NOT applied by this reload. A restart is required for them to take effect:"
     },
     "catalog": {
-      "caption": "Every connector this build can wire, read from the engine — {{count}} in total. Browsing is read-only; adding one still requires a step-up.",
+      "caption": "Every connector this build can wire, read from the engine — {{count}} in total. Browsing is read-only.",
       "noMatch": "No connector matches “{{query}}”.",
       "noMatchHint": "The catalog lists every connector this build can install. Clear the search to see all of them.",
       "search": "Filter by name or kind",
@@ -621,7 +599,8 @@
       "workspaceScope": "Workspace: {{ref}}",
       "groupScope": "Agent-group: {{ref}}",
       "classLabel": "limited to {{class}}",
-      "loadError": "Could not load your delegation authority. Try again."
+      "loadError": "Could not load your delegation authority. Try again.",
+      "folderScope": "Folder: {{ref}}"
     },
     "grants": {
       "title": "Scoped grants",
@@ -664,6 +643,26 @@
       "note": "Note",
       "noteHint": "Optional context recorded with the grant.",
       "submit": "Create grant"
+    },
+    "filters": {
+      "title": "Inheritance filters",
+      "caption": "On a workspace, agent group or folder, stop rights that reach one kind of resource from above the node. Grants at or below the node still apply; forbid rules still decide everywhere.",
+      "create": "New filter",
+      "none": "No inheritance filters yet.",
+      "noneHint": "Every node inherits the rights granted above it.",
+      "node": "Node",
+      "class": "Kind of resource",
+      "classHint": "Rights from above the node stop applying to this kind there. An agent group filters agents only.",
+      "createdBy": "Set by",
+      "actions": "Actions",
+      "folder": "Folder",
+      "remove": "Remove",
+      "removeTitle": "Remove filter",
+      "removeBody": "Rights from above this node apply to it again immediately. Only an admin of the node can remove it.",
+      "removed": "Filter removed.",
+      "created": "Filter set.",
+      "formTitle": "New inheritance filter",
+      "submit": "Set filter"
     },
     "defs": {
       "title": "Custom roles",
@@ -884,7 +883,23 @@
       "exportNotSealed": "Not sealed",
       "exportPopulation": "Population",
       "exportEntries": "Access entries",
-      "exportIntegrity": "Integrity"
+      "exportIntegrity": "Integrity",
+      "why": {
+        "tab": "Why",
+        "hint": "Which of the eight trustee rights a subject holds at one agent, session or resource, and the path of containers the node sits on. Each right is the authorization engine's own answer; this panel only shows it.",
+        "run": "Explain",
+        "path": "Path",
+        "inWorkspace": "(in workspace {{workspace}})",
+        "right": "Right",
+        "state": "State",
+        "states": {
+          "held": "Held",
+          "not_held": "Not held",
+          "unknown": "Unknown",
+          "not_applicable": "Not applicable"
+        },
+        "unknownHint": "Unknown means the engine could not decide that right; the cause is in the engine log. It is not a deny."
+      }
     }
   },
   "activation": {
@@ -1088,17 +1103,7 @@
     }
   },
   "entitlement": {
-    "title": "Modules",
-    "description": "Review the edition, license coverage, and activation status of each module.",
-    "helpSummary": "Understanding module status",
-    "threeQuestions": "Each column uses its own current information. Unknown means there is not enough information to determine that status. Use the status and retry controls to refresh unavailable information.",
-    "noVerifiedLicense": "Module coverage is unknown until a verified license is available.",
-    "colAddon": "Module",
-    "colBinary": "In this edition",
-    "colEntitled": "License coverage",
-    "colActivated": "Activation",
     "unknown": "not known",
-    "entitled": "entitled",
     "state": {
       "active": "on",
       "pending": "pending restart",
@@ -1109,15 +1114,6 @@
       "needsReview": "needs review",
       "needsInput": "needs input"
     },
-    "binaryUnknownWhy": "This edition ({{edition}}) belongs to the running binary. When the engine publishes whether a module is in this build, the column shows it; otherwise it stays not known. It is not inferred from packaging.",
-    "catalogueSourceHelp": "The available module information depends on the installed build. License installation updates license details; module availability is reported separately.",
-    "noAddons": "This installation returned an empty module catalog.",
-    "loading": "Loading the module catalog…",
-    "unavailable": "Module information is unavailable in this build.",
-    "unavailableAction": "Retry to request the module information again.",
-    "failed": "The module catalog could not be loaded. Module coverage is currently unknown.",
-    "failedAction": "Retry to request the module information again.",
-    "staleNotCurrent": "Previously loaded module information is no longer current.",
     "knownFacts": "Edition: {{edition}} · License status: {{status}}.",
     "knownFactsUnavailable": "Edition and license status were not provided.",
     "licenseRefreshFailed": "License status could not be refreshed. Current module coverage is unknown.",
@@ -1127,10 +1123,7 @@
     "licenseRefreshFailedAction": "Retry to refresh license status.",
     "licenseRetry": "Retry license status",
     "technicalSummary": "Technical detail",
-    "technicalDetail": "{{method}} {{endpoint}} · HTTP {{status}}{{codePart}}{{requestPart}}",
-    "inBuild": "in this edition",
-    "notInBuild": "not in this edition",
-    "notCovered": "not covered by the license"
+    "technicalDetail": "{{method}} {{endpoint}} · HTTP {{status}}{{codePart}}{{requestPart}}"
   },
   "mcpGateway": {
     "title": "MCP gateway",
@@ -1230,7 +1223,8 @@
       "legacy_forwarder": "Legacy file forwarding",
       "session_runner_engine_user_session_folder": "Session runner, as the engine user, in the session folder",
       "reported_by_session_runner": "As the session runner reports it",
-      "not_supplied_for_local_commands": "Not supplied for local commands"
+      "not_supplied_for_local_commands": "Not supplied for local commands",
+      "listed_egress_hosts_for_local_commands": "Only the listed hosts, for a local command that lists them"
     },
     "nameHint": "Shown in the server list. Empty takes the server's host name.",
     "advanced": "Advanced",
@@ -1289,6 +1283,41 @@
       "confirm": "Turn on"
     },
     "sessionOn": "On: turn it off to stop it.",
-    "sessionOff": "Off: sessions cannot message each other or use their assigned work."
+    "sessionOff": "Off: sessions cannot message each other or use their assigned work.",
+    "startersTitle": "Starter servers",
+    "startersHint": "Curated servers, each with its confinement and network limits. Add fills in the form; the server is saved off and runs nothing until you test and enable it.",
+    "starterAdd": "Add {{name}}",
+    "starterLicence": "License: {{licence}}",
+    "starterSource": "Source",
+    "egressHosts": "Allowed hosts",
+    "egressHostsHint": "The command reaches only these HTTPS hosts, one per line: host or host:port. Leave it empty to keep the session's network.",
+    "egressHostsInvalid": "Write each host as host or host:port, in lowercase and without https://, at most 16.",
+    "starters": {
+      "filesystem": {
+        "summary": "Reads and writes files in the session's folder.",
+        "profile": "Runs on this server with npx. It writes only in the session's folder and reaches only registry.npmjs.org, to fetch its pinned package.",
+        "setup": "Needs Node.js (npx) on this server. Save, test, then enable it."
+      },
+      "git": {
+        "summary": "Reads history and makes commits in the session's repositories.",
+        "profile": "Runs on this server with uvx. It writes only in the session's folder and reaches only pypi.org and files.pythonhosted.org, to fetch its pinned package.",
+        "setup": "Needs uv (uvx) on this server. Save, test, then enable it."
+      },
+      "github": {
+        "summary": "Issues, pull requests and code on GitHub, through GitHub's own server.",
+        "profile": "A remote server: the engine connects only to api.githubcopilot.com, at checked addresses and without redirects. Sessions never see your token.",
+        "setup": "Before testing, add the secret mcp/github in Manage credentials with the value Bearer followed by a GitHub personal access token, then choose it as Sign-in."
+      },
+      "gitlab": {
+        "summary": "Issues, merge requests and pipelines on GitLab, through GitLab's built-in server.",
+        "profile": "A remote server: the engine connects only to gitlab.com, at checked addresses and without redirects. For your own GitLab, change the address.",
+        "setup": "Before testing, add the secret mcp/gitlab in Manage credentials with the value Bearer followed by a GitLab OAuth token with the mcp scope, then choose it as Sign-in."
+      },
+      "playwright": {
+        "summary": "Opens and uses web pages in a headless browser.",
+        "profile": "Runs on this server with npx, in a fresh browser profile. It writes only in the session's folder and reaches only registry.npmjs.org.",
+        "setup": "Needs Node.js and Google Chrome on this server. Browsing behind this egress profile is not qualified yet: the browser may not trust the profile's HTTPS proxy."
+      }
+    }
   }
 }

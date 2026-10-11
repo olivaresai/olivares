@@ -25,7 +25,7 @@ EVID="${OLIVARES_ECO15_EVID:-commercial/dodo-sandbox/evidence}"
 
 grep -q 'NOT RUN' "$DOC" || fail "$DOC lost NOT RUN"
 if grep -qiE 'experiments ran|capture written|opened the lane' "$DOC"; then
-	fail "$DOC claims a run this lote does not have"
+	fail "$DOC claims a run this batch does not have"
 fi
 
 python3 - "$JSON" "$CANON" "$EVID" <<'PY' || fail "JSON/canon/evidence failed the ECO-15 contract"
@@ -71,7 +71,7 @@ if os.path.isdir(evid):
     blob = " ".join(names)
     for _id, evidence in want:
         if evidence in blob:
-            raise SystemExit("evidence %s already exists; lote still says HOLD" % evidence)
+            raise SystemExit("evidence %s already exists; batch still says HOLD" % evidence)
 PY
 
 say "check-eco-15-sandbox-experiments: CLEAN — two HOLDs, lanes closed, not run."

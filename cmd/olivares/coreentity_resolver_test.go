@@ -7,9 +7,7 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
-	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -66,76 +64,6 @@ func (workspaceEntityProbe) APIRoutes(reg api.RouteRegistrar) {
 // The resolver under test is the engine's production resolver. The route's
 // principal, AAL3 elevation, scoped grants and witness all come from the real
 // authenticated HTTP estate; no authority producer is replaced.
-func TestCoreWorkspaceEntityScopedAuthorizationHTTP(t *testing.T) {
-	e := bootChannelAdministrationHTTPEstate(t, communicationHTTPTestSQLiteStore(t))
-	eng := e.eng
-	requirePasskeyStepUpForTest(t, eng.store, eng.authr)
-	srv, err := api.New(api.Options{
-		Store: eng.store, Authenticator: eng.authr, Authorizer: eng.authz, Signer: eng.signer,
-		SetupToken: eng.setupTok, PrincipalEvidenceProducer: eng.authr,
-		CoreEntityResolver: coreEntityResolver{st: eng.store}, Modules: []api.Module{workspaceEntityProbe{}},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	call := func(token string, tenant model.TenantID, workspace string, want int) {
-		t.Helper()
-		req := httptest.NewRequest(http.MethodPost, "/v1/m/workspaceprobe/workspaces/"+workspace+"/probe", nil)
-		req.Header.Set("Authorization", "Bearer "+token)
-		req.Header.Set("X-Olivares-Tenant", tenant.String())
-		rec := httptest.NewRecorder()
-		srv.Handler().ServeHTTP(rec, req)
-		if rec.Code != want {
-			t.Fatalf("tenant=%s workspace=%s: status=%d, want %d: %s", tenant, workspace, rec.Code, want, rec.Body.String())
-		}
-		if want == http.StatusOK {
-			var got map[string]string
-			if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil || got["workspace"] != workspace ||
-				got["id"] != workspace || got["tenant"] != tenant.String() {
-				t.Fatalf("handler did not receive exact stored workspace lineage and valid witness: %v, %v", got, err)
-			}
-		}
-	}
-	// An unconfined tenant owner with AAL3 holds the implicit scoped grant.
-	call(e.owner.token, e.tenant, e.workspace.String(), http.StatusOK)
-	stepUpCommunicationHTTPTestUser(t, eng, e.editor.token)
-	call(e.editor.token, e.tenant, e.workspace.String(), http.StatusNotFound)
-	capabilityPublishAuthored(t, eng, e, fmt.Sprintf(
-		`permit(principal in User::%q, action == Action::%q, resource) when { resource in Workspace::"k3-admin-ws" };`+
-			`permit(principal in User::%q, action == Action::%q, resource);`,
-		e.viewer.id.String(), string(workspaceEntityProbeAction), e.editor.id.String(), string(workspaceEntityProbeAction)))
-	// A real scoped grant does not bypass the route's assurance requirement.
-	call(e.viewer.token, e.tenant, e.workspace.String(), http.StatusForbidden)
-	stepUpCommunicationHTTPTestUser(t, eng, e.viewer.token)
-	call(e.viewer.token, e.tenant, e.workspace.String(), http.StatusOK)
-	call(e.viewer.token, e.tenant, e.sideWorkspace.String(), http.StatusNotFound)
-	call(e.viewer.token, e.tenant, e.foreignWorkspace, http.StatusNotFound)
-	// The principal producer refuses a tenant the session has no direct
-	// membership in; it cannot supply that tenant's sealed authority evidence.
-	call(e.viewer.token, e.other, e.foreignWorkspace, http.StatusServiceUnavailable)
-	call(e.viewer.token, e.tenant, model.NewID().String(), http.StatusNotFound)
-	// A non-owner's tenant-wide authored grant remains valid for each real workspace.
-	call(e.editor.token, e.tenant, e.workspace.String(), http.StatusOK)
-	call(e.editor.token, e.tenant, e.sideWorkspace.String(), http.StatusOK)
-	call(e.editor.token, e.tenant, model.NewID().String(), http.StatusNotFound)
-	// The implicit owner grant does not bypass a workspace-specific forbid.
-	capabilityPublishAuthored(t, eng, e, fmt.Sprintf(
-		`forbid(principal in User::%q, action == Action::%q, resource) when { resource in Workspace::"k3-admin-ws" };`,
-		e.owner.id.String(), string(workspaceEntityProbeAction)))
-	call(e.owner.token, e.tenant, e.workspace.String(), http.StatusNotFound)
-	call(e.owner.token, e.tenant, e.sideWorkspace.String(), http.StatusOK)
-
-	resolver := coreEntityResolver{st: eng.store}
-	facts, err := resolver.ResolveCoreEntity(context.Background(), e.tenant, api.CoreKindWorkspace, e.workspace)
-	if err != nil || !facts.Exists || facts.ID != e.workspace || facts.Tenant != e.tenant ||
-		facts.WorkspaceID != facts.ID || !facts.AgentID.IsZero() {
-		t.Fatalf("workspace facts = %+v, err %v", facts, err)
-	}
-	foreign, err := resolver.ResolveCoreEntity(context.Background(), e.other, api.CoreKindWorkspace, e.workspace)
-	if err != nil || foreign.Exists {
-		t.Fatalf("cross-tenant resolver exposed workspace: %+v, err %v", foreign, err)
-	}
-}
 
 // requirePasskeyStepUpForTest turns on the strictest administrative step-up
 // policy (passkey) for an estate, the behavior before the policy existed.

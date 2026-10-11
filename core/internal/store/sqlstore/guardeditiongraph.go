@@ -48,6 +48,7 @@ const (
 	guardDeltaAccessEvidence                                     // DA, core access-evidence records
 	guardDeltaEvaluationComparison                               // DE, evaluation comparison evidence
 	guardDeltaGitPublication                                     // DG, Git publication observations
+	guardDeltaSkills                                             // DS, immutable Skills revisions
 )
 
 // guardEditionMembership is the set of deltas a node carries above its base census.
@@ -70,7 +71,7 @@ func (m guardEditionMembership) without(d guardEditionDelta) guardEditionMembers
 // a future delta cannot silently reorder an existing message.
 var guardEditionDeltaOrder = [...]guardEditionDelta{
 	guardDeltaDirectory, guardDeltaCommunication, guardDeltaProtocol, guardDeltaAccessEvidence,
-	guardDeltaEvaluationComparison, guardDeltaGitPublication,
+	guardDeltaEvaluationComparison, guardDeltaGitPublication, guardDeltaSkills,
 }
 
 func (d guardEditionDelta) String() string {
@@ -87,6 +88,8 @@ func (d guardEditionDelta) String() string {
 		return "DE/evaluation-comparison"
 	case guardDeltaGitPublication:
 		return "DG/git-publication"
+	case guardDeltaSkills:
+		return "DS/skills"
 	default:
 		return "unknown-delta"
 	}
@@ -121,6 +124,8 @@ func guardEditionDeltaTables(d guardEditionDelta) []string {
 		return []string{"evals_comparison"}
 	case guardDeltaGitPublication:
 		return []string{"gitpublish_observation"}
+	case guardDeltaSkills:
+		return []string{"skills_revision"}
 	default:
 		return nil
 	}
@@ -130,7 +135,7 @@ func guardEditionDeltaTables(d guardEditionDelta) []string {
 // installation. Core directory and access-evidence transitions keep their own migrations.
 func guardEditionModuleDelta(d guardEditionDelta) bool {
 	switch d {
-	case guardDeltaCommunication, guardDeltaProtocol, guardDeltaEvaluationComparison, guardDeltaGitPublication:
+	case guardDeltaCommunication, guardDeltaProtocol, guardDeltaEvaluationComparison, guardDeltaGitPublication, guardDeltaSkills:
 		return true
 	default:
 		return false
@@ -160,7 +165,8 @@ func guardEditionDeltaOf(table string) (guardEditionDelta, bool) {
 // editions over each of the three shapes a deployed database can be in. Editions
 // 8-10 add evaluation comparisons, 11-13 add Git publication observations, and
 // 14-16 carry both independent module deltas. These new modules require DA; the
-// historical nodes and their canonical manifests remain unchanged.
+// historical nodes and their canonical manifests remain unchanged. Editions 17-28
+// add Skills revisions over each DA-bearing shape, keeping editions 1-16 intact.
 var guardEditionNodes = []struct {
 	Epoch      int64
 	Membership guardEditionMembership
@@ -181,6 +187,18 @@ var guardEditionNodes = []struct {
 	{14, guardEditionMembership(guardDeltaDirectory | guardDeltaAccessEvidence | guardDeltaEvaluationComparison | guardDeltaGitPublication)},
 	{15, guardEditionMembership(guardDeltaDirectory | guardDeltaCommunication | guardDeltaAccessEvidence | guardDeltaEvaluationComparison | guardDeltaGitPublication)},
 	{16, guardEditionMembership(guardDeltaDirectory | guardDeltaCommunication | guardDeltaProtocol | guardDeltaAccessEvidence | guardDeltaEvaluationComparison | guardDeltaGitPublication)},
+	{17, guardEditionMembership(guardDeltaDirectory | guardDeltaAccessEvidence | guardDeltaSkills)},
+	{18, guardEditionMembership(guardDeltaDirectory | guardDeltaCommunication | guardDeltaAccessEvidence | guardDeltaSkills)},
+	{19, guardEditionMembership(guardDeltaDirectory | guardDeltaCommunication | guardDeltaProtocol | guardDeltaAccessEvidence | guardDeltaSkills)},
+	{20, guardEditionMembership(guardDeltaDirectory | guardDeltaAccessEvidence | guardDeltaEvaluationComparison | guardDeltaSkills)},
+	{21, guardEditionMembership(guardDeltaDirectory | guardDeltaCommunication | guardDeltaAccessEvidence | guardDeltaEvaluationComparison | guardDeltaSkills)},
+	{22, guardEditionMembership(guardDeltaDirectory | guardDeltaCommunication | guardDeltaProtocol | guardDeltaAccessEvidence | guardDeltaEvaluationComparison | guardDeltaSkills)},
+	{23, guardEditionMembership(guardDeltaDirectory | guardDeltaAccessEvidence | guardDeltaGitPublication | guardDeltaSkills)},
+	{24, guardEditionMembership(guardDeltaDirectory | guardDeltaCommunication | guardDeltaAccessEvidence | guardDeltaGitPublication | guardDeltaSkills)},
+	{25, guardEditionMembership(guardDeltaDirectory | guardDeltaCommunication | guardDeltaProtocol | guardDeltaAccessEvidence | guardDeltaGitPublication | guardDeltaSkills)},
+	{26, guardEditionMembership(guardDeltaDirectory | guardDeltaAccessEvidence | guardDeltaEvaluationComparison | guardDeltaGitPublication | guardDeltaSkills)},
+	{27, guardEditionMembership(guardDeltaDirectory | guardDeltaCommunication | guardDeltaAccessEvidence | guardDeltaEvaluationComparison | guardDeltaGitPublication | guardDeltaSkills)},
+	{28, guardEditionMembership(guardDeltaDirectory | guardDeltaCommunication | guardDeltaProtocol | guardDeltaAccessEvidence | guardDeltaEvaluationComparison | guardDeltaGitPublication | guardDeltaSkills)},
 }
 
 func guardEditionMembershipForEpoch(epoch int64) (guardEditionMembership, bool) {

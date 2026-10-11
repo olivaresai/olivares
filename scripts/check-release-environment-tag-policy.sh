@@ -12,7 +12,7 @@ environment="${OLIVARES_RELEASE_ENVIRONMENT:-ota-release-ceremony}"
 if ! command -v gh >/dev/null || ! command -v jq >/dev/null; then
   printf '%s\n' 'release environment policy: gh and jq are required' >&2; exit 2;
 fi
-# GitHub globs match both 26.11 and 26.11.1. Strict tag grammar belongs to preflight.
+# GitHub globs admit MAJOR.MINOR tags; preflight rejects malformed identities.
 want='[0-9]*.[0-9]*'
 if ! policies="$(gh api --paginate "repos/$repo/environments/$environment/deployment-branch-policies" 2>/dev/null)"; then
   printf '%s\n' 'release environment policy: could not read tag admission policies' >&2; exit 2;
@@ -21,7 +21,7 @@ if ! jq -s -e --arg want "$want" '
   length > 0 and all(.[]; (.branch_policies | type == "array")) and
   any(.[] | .branch_policies[]; .type == "tag" and .name == $want)
 ' <<<"$policies" >/dev/null; then
-  printf 'release environment policy: %s needs tag policy %s for monthly and patch releases\n' "$environment" "$want" >&2
+  printf 'release environment policy: %s needs tag policy %s for MAJOR.MINOR releases\n' "$environment" "$want" >&2
   exit 1
 fi
-printf 'release environment policy: %s admits monthly and patch tags\n' "$environment"
+printf 'release environment policy: %s admits MAJOR.MINOR tags\n' "$environment"

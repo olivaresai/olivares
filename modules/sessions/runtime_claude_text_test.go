@@ -19,7 +19,7 @@ func TestClaudeSessionTakesTextAsOneUserMessageLine(t *testing.T) {
 	fr := &fakeRunner{initSID: "sess-text"}
 	m, _, tenant, _ := newRuntimeHarness(t, WithRunner(fr), WithCredentialSource(staticCred()))
 	ctx := context.Background()
-	dto, err := m.createRun(ctx, tenant, CreateRunParams{
+	dto, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{
 		Transport: TransportStreamJSON, PermissionMode: "default", Isolation: IsolationNative,
 		WorkspaceRef: registerTestWorkspace(t, m, tenant, t.TempDir()), Actor: "user:u1", ActorKind: "user",
 	})

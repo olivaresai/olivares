@@ -71,12 +71,18 @@ modules fit together.
 
 ## How it observes: read-first, minimal-data
 
-Olivares AI is **read-first**: the engine observes through logs, OpenTelemetry and
-eBPF; it does **not** sit in the agent's data path, so a collector failure never
-breaks your production traffic. And it is **minimal-data by design**: the access
-graph stores **relations** — origin → resource, read/write, source, confidence,
-timestamp — **never payloads, SQL bodies, secrets or PII**. What is not stored
-cannot leak.
+The access map observes logs, OpenTelemetry and eBPF out of band. A failure of
+an observation collector creates a gap in visibility; it does not gate agent
+traffic. The access graph stores relations — origin → resource, read/write,
+source, confidence, timestamp — never payloads, SQL bodies, secrets or PII.
+
+Enforcement points are inline and deny closed. Managed Claude Code sessions
+install tool-call hooks that call the engine's policy enforcement point (PEP).
+The engine mounts this hook PEP by default. If it is unreachable during an engine
+outage or restart, every governed tool call is denied. Plan engine availability
+accordingly. The inline inference proxy, MCP tools/call gate and A2A delegation
+gate enforce the traffic routed through them; model calls do not pass through
+the inference proxy by default.
 
 This is also why it is self-hostable and air-gap friendly: the sensitive data stays
 at the customer, and the vendor never sees it — a strong argument for data

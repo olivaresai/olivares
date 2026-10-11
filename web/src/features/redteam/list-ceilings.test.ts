@@ -11,9 +11,9 @@ import {
 } from '@/test/list-ceiling-ratchet'
 
 /**
- * ⛔ MEDIDO EN EL MOTOR ANTES DE ESCRIBIR EL CLIENTE, que es la lección de.
- *    `handleListTargets` y `handleListRuns` pasan por `listQuery(r)`; `handleListResults` usa
- *    `listAll` y ni siquiera pone `HasMore`. Por eso son dos y no tres.
+ * Check the engine before writing the client, following lesson.
+ * `handleListTargets` and `handleListRuns` use `listQuery(r)`; `handleListResults` uses
+ * `listAll` and does not set `HasMore`. That is why there are two ceilings, not three.
  */
 const NO_PAGINAN: Record<string, string> = {
   results:

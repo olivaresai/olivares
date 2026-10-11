@@ -39,7 +39,7 @@ fi
 # The write-up must present, not apply.
 grep -q 'NO ELEGIDO' "$DOC" || fail "prep doc lost NO ELEGIDO"
 if grep -qiE 'elegido:|aplicamos la opción|the webhook writes verified' "$DOC"; then
-	fail "prep doc claims a decision or a writer this lote does not have"
+	fail "prep doc claims a decision or a writer this batch does not have"
 fi
 grep -q 'Operator insert' "$DOC" && grep -q 'Dodo as evidence' "$DOC" \
 	&& grep -q 'Dedicated verifier' "$DOC" \

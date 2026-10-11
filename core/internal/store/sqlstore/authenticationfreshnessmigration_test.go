@@ -58,6 +58,18 @@ func TestAuthenticationFreshnessSchemaAndAuthority(t *testing.T) {
 			if _, err := db.ExecContext(ctx, "ALTER TABLE auth_sessions DROP COLUMN aal_authenticated_at"); err != nil {
 				t.Fatal(err)
 			}
+			// v19 creates this relation with its version record. Remove both
+			// halves when reconstructing the predecessor, not just the record.
+			for _, table := range dialect.FinOpsCustodyControlTables() {
+				if _, err := db.ExecContext(ctx, "DROP TABLE "+table); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if engine == store.EnginePostgres {
+				if _, err := db.ExecContext(ctx, "DROP FUNCTION public."+dialect.PostgresCustodyGuardFunction+"()"); err != nil {
+					t.Fatal(err)
+				}
+			}
 			if _, err := db.ExecContext(ctx, s.dia.Rebind("DELETE FROM "+coreTrackingTable+" WHERE version > ?"), 15); err != nil {
 				t.Fatal(err)
 			}
@@ -140,7 +152,7 @@ func TestAuthenticationFreshnessMigrationPreservesPermanentGapAndHistoricalRende
 	for _, engine := range store.SupportedEngines() {
 		dia, _ := dialect.New(engine)
 		versions, err := CompiledCoreMigrationVersions(engine)
-		if err != nil || !slices.Equal(versions, []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 14, 15, 17, 18}) {
+		if err != nil || !slices.Equal(versions, []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 14, 15, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27}) {
 			t.Fatalf("plan: %v, %v", versions, err)
 		}
 		// The old descriptor is independent of the historical-render helper:

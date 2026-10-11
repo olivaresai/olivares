@@ -14,13 +14,15 @@ automation credential 读取 Analytics、Compliance、Audit Logs 和已结算成
 本页是 **连接器与 PEP hook** 路径。要安装或验证官方 CLI、记录探测回执、启动或停止受治理会话，
 请使用 [安装 Codex CLI](/how-to/install-codex-cli/)。运行路径是
 [运行提供商会话](/how-to/operate-provider-sessions/)
-（`OLIVARES_SESSION_RUNTIME_CODEX_BIN` 或托管安装的回执，加上提供商配置文件）。
+（用 `OLIVARES_SESSION_RUNTIME_CODEX_BIN` 显式选择可执行文件；未设置时，先使用最新的已验证托管安装，
+再查找引擎 `PATH` 中的 `codex`，并使用提供商配置文件）。
 
 ## 添加 Codex
 
 ### 前置条件
 
-- 一个 Olivares AI enterprise tenant，以及可为 roster 操作执行 AAL3 elevation 的 superadmin 账户。
+- 一个 Olivares AI enterprise tenant 和 superadmin 账户。roster 操作遵循管理操作的
+  追加认证策略（`admin_step_up`，默认为 `none`）。
 - 对于企业 ingestion，需要具有所需 read scope 的 platform API key 或 workspace access token，
   以及 `workspace_id`。通过 ChatGPT 登录 Codex CLI 不会提供连接器 credential。
 - 对主机系统层的管理访问权限，用于分发 `/etc/codex/requirements.toml`、

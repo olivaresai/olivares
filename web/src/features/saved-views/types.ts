@@ -41,3 +41,14 @@ export interface FavoritesResponse {
   stored: boolean
   updated_at?: string
 }
+
+/** The person's interface state on the engine: today only the sidebar width. */
+export interface UiState {
+  sidebar: 'full' | 'rail'
+}
+
+export interface UiStateResponse extends Partial<UiState> {
+  /** False until the person changes the state for the first time. */
+  stored: boolean
+  updated_at?: string
+}

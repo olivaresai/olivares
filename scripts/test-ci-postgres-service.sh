@@ -18,7 +18,7 @@ fail=0
 skip=0
 
 could_not_look() {
-	echo "test-ci-postgres-service: NO HE PODIDO MIRAR — $*" >&2
+	echo "test-ci-postgres-service: COULD NOT CHECK — $*" >&2
 	exit 2
 }
 
@@ -284,9 +284,10 @@ import re, sys
 # The caller scope of scripts/ci-postgres-service.sh, in document order. HR1 split the
 # hot-race work out into its own job (mainline-ci.yml race-hot-manifest); that job owns a
 # Postgres service of its own, so it resolves and provisions exactly like the other three.
+# All mainline fixture consumers share the resolver and role provisioner.
 # This list is the contract: a caller that is not on it, or one on it that stopped calling,
 # is the finding.
-WANT = ["race-rest", "race-core", "race-sessions", "race-hot-manifest"]
+WANT = ["control-plane", "functional-shard", "race-modules", "race-rest", "race-core", "race-sessions", "race-hot-manifest"]
 
 text = open(sys.argv[1], encoding="utf-8").read()
 jobs = re.split(r"\n  (?=[A-Za-z0-9_-]+:)", text)
@@ -331,7 +332,36 @@ raise SystemExit(1)
 PY
 rc=$?
 set -e
-check "exactly race-rest, race-core, race-sessions and race-hot-manifest call the helper, each resolving and provisioning once" "job scoped" "$rc"
+check "all seven mainline fixture jobs resolve and provision through the helper once" "job scoped" "$rc"
+
+# No fixture password belongs in a workflow URI. The shared disposable loopback
+# fixture is classified in ci-postgres-service.sh, with unchanged role provisioning.
+set +e
+python3 - "$WF_MAIN" <<'PYTEST'
+import re, sys
+
+text = open(sys.argv[1], encoding="utf-8").read()
+# Runtime password variables (the cloud bootstrap) are not credential literals.
+literals = re.findall(r"postgres(?:ql)?://[^\s:/]+:([^\s@]+)@", text)
+count = sum(not re.fullmatch(r"\$\{[A-Za-z_][A-Za-z0-9_]*\}", value) for value in literals)
+if count:
+    print(f"mainline workflow contains {count} literal credential URIs", file=sys.stderr)
+    raise SystemExit(1)
+for block in re.split(r"\n  (?=[A-Za-z0-9_-]+:)", text):
+    job = block.split(":", 1)[0].strip()
+    if "ci-postgres-service.sh resolve" not in block:
+        continue
+    if block.index("actions/checkout@") > block.index("ci-postgres-service.sh resolve"):
+        raise SystemExit(f"{job}: fixture resolver runs before checkout")
+    if job in ("control-plane", "functional-shard"):
+        for flag in ("CLOUD_CP_INTEGRATION", "CLOUD_CP_REQUIRE_INTEGRATION"):
+            if f'echo "{flag}=1"' not in block and f'{flag}: "1"' not in block:
+                raise SystemExit(f"{job}: missing {flag}")
+print("workflow fixture policy and checkout order ok")
+PYTEST
+rc=$?
+set -e
+check "mainline consumes shared fixtures without literal credential URIs or missing cloud gates" "fixture policy" "$rc"
 
 DIGEST="pgvector/pgvector:pg16@sha256:a36250871de0833b8757561c72f2477ef1ddd1101afa4e617fb552e0de514c6b"
 python3 - <<'PY' "$WF_MAIN" "$WF_PROF" "$DIGEST"

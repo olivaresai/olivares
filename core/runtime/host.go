@@ -73,6 +73,9 @@ func snapshotFinding(payload any) (model.FindingReport, bool, error) {
 var ErrReservedSessionProjection = errors.New("runtime: reserved session projection refused")
 
 func (h *moduleHost) Publish(ctx context.Context, e event.Event) error {
+	if h.dormant {
+		return nil
+	}
 	if e.SessionProjection {
 		valid := false
 		switch e.Payload.(type) {

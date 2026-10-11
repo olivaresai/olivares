@@ -32,8 +32,9 @@ Der governte PEP ist eine getrennte Oberfläche: Er verwendet einen eigenen loka
 authentifiziert jede Anfrage und zeichnet jede Entscheidung auf.
 
 1. Öffnen Sie die **Control console** (`/console`) und wählen Sie den Tab **Connectors**. Das
-   Connector-Roster ist global: Ein Superadmin-Konto ist erforderlich; Speichern, Testen und
-   Neuladen erfordern AAL3-Elevation.
+   Connector-Roster ist global: Ein Superadmin-Konto ist erforderlich. Speichern, Testen und
+   Neuladen folgen der Richtlinie für zusätzliche administrative Authentifizierung
+   (`admin_step_up`, standardmäßig `none`).
 2. Fügen Sie eine Quelle vom Typ `claude` mit einem stabilen Betriebsnamen wie
    `claude-code-prod`, dem passenden Tenant, dem Modus `live`, dem Intervall `0` und aktiviertem
    Status hinzu. Ein Intervall von null ist korrekt: Dieser Connector hält Receiver offen, statt

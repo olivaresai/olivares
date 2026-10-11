@@ -12,6 +12,9 @@
 export interface PublicationTarget {
   id: string
   workspace_id: string
+  /** Read-only host kind resolved from the approved credential binding. Absent when
+   * the binding cannot be resolved, or an older engine supplies no host metadata. */
+  host?: 'github' | 'gitlab' | 'git'
   credential_binding_id?: string
   repository_binding_id?: string
   push_prefix: string
@@ -126,6 +129,9 @@ export interface PushInput {
   commit: string
   tree: string
   acknowledge_intent: string
+  /** A session run (its UUID, never a path) in the target's workspace whose folder holds
+   * `commit`: the engine fetches the commit from it into the managed repository first. */
+  session_run?: string
 }
 
 export interface PullRequestInput {

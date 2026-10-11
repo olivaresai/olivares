@@ -8,7 +8,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/crewjam/saml"
+	"github.com/russellhaering/gosaml2/types"
 )
 
 // TestClaimStrings covers the OIDC groups-claim coercion (U1): a JSON array of
@@ -41,15 +41,15 @@ func TestClaimStrings(t *testing.T) {
 // attribute (unlike single-valued email), matched by Name or FriendlyName, with
 // blanks dropped — and that an unconfigured groupsAttr reads nothing.
 func TestSAMLExtractGroups(t *testing.T) {
-	assertion := &saml.Assertion{
-		AttributeStatements: []saml.AttributeStatement{{
-			Attributes: []saml.Attribute{
-				{Name: "http://schemas.xmlsoap.org/claims/Group", FriendlyName: "memberOf", Values: []saml.AttributeValue{
+	assertion := &types.Assertion{
+		AttributeStatement: &types.AttributeStatement{
+			Attributes: []types.Attribute{
+				{Name: "http://schemas.xmlsoap.org/claims/Group", FriendlyName: "memberOf", Values: []types.AttributeValue{
 					{Value: "eng"}, {Value: "  "}, {Value: "admins"},
 				}},
-				{Name: "email", Values: []saml.AttributeValue{{Value: "u@x.io"}}},
+				{Name: "email", Values: []types.AttributeValue{{Value: "u@x.io"}}},
 			},
-		}},
+		},
 	}
 
 	// Matched by FriendlyName.

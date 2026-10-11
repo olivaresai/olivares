@@ -21,7 +21,7 @@ func TestResume_ANeverStartedSessionStartsAgain(t *testing.T) {
 
 	root := t.TempDir()
 	ws := mkWorkspace(t, m, tenant, CreateWorkspaceParams{RootPath: root})
-	dto, err := m.createRun(ctx, tenant, CreateRunParams{
+	dto, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative, PermissionMode: "acceptEdits",
 		WorkspaceRef: ws.WorkspaceRef, Actor: actorU, ActorKind: actorKindU,
 	})

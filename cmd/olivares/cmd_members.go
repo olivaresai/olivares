@@ -299,8 +299,10 @@ func invitesRevokeCmd(client bootstrapClient) *cobra.Command {
 				invitesPath+"/"+bootstrapPathID(args[0]), nil, http.StatusNoContent); err != nil {
 				return err
 			}
-			_, err := fmt.Fprintf(cmd.OutOrStdout(), "revoked invitation %s\n", safeCLIValue(args[0], ""))
-			return err
+			return renderOut(cmd, func(out io.Writer) error {
+				_, err := fmt.Fprintf(out, "revoked invitation %s\n", safeCLIValue(args[0], ""))
+				return err
+			}, map[string]any{"id": args[0], "revoked": true})
 		},
 	}
 	addYesFlag(cmd, &yes)

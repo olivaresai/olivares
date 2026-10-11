@@ -97,3 +97,13 @@ func ProbeSameLiveServer(
 func RestorePostgresUserAuthorityPrivileges(ctx context.Context, cfg store.Config) error {
 	return sqlstore.RestorePostgresUserAuthorityPrivileges(ctx, cfg)
 }
+
+// CheckPostgresInventoryRestoreAuthority validates the explicit restore-only DBA connection.
+func CheckPostgresInventoryRestoreAuthority(ctx context.Context, cfg store.Config, dsn string) error {
+	return sqlstore.CheckPostgresInventoryRestoreAuthority(ctx, cfg, dsn)
+}
+
+// RestorePostgresDirectoryInventory reinstates compiled inventory authority after logical import.
+func RestorePostgresDirectoryInventory(ctx context.Context, cfg store.Config, dsn string) error {
+	return sqlstore.RestorePostgresDirectoryInventory(ctx, cfg, dsn)
+}

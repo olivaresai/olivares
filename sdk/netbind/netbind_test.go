@@ -6,9 +6,14 @@ package netbind
 import (
 	"context"
 	"errors"
+	"io"
 	"net"
+	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
+	"time"
 )
 
 func isRefusal(err error) bool { return errors.Is(err, ErrPublicPlaintextBind) }
@@ -127,6 +132,61 @@ func TestListenRefusesBeforeItBinds(t *testing.T) {
 		t.Fatalf("Listen refused a loopback bind: %v", err)
 	}
 	_ = good.Close()
+}
+
+func TestListenAdmitsUnixStreamWithoutPublicOptIn(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix sockets require a Unix host")
+	}
+	// Avoid t.TempDir's test-name component in the Unix socket pathname.
+	dir, err := os.MkdirTemp("", "nb-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+	socket := filepath.Join(dir, "proxy.sock")
+	ln, err := Listen(t.Context(), "unix", socket, Policy{})
+	if err != nil {
+		t.Fatalf("local Unix stream refused: %v", err)
+	}
+	defer ln.Close()
+	if ln.Addr().Network() != "unix" || ln.Addr().String() != socket {
+		t.Fatalf("unexpected bound socket: %v", ln.Addr())
+	}
+	// Filesystem permissions remain the caller's boundary, not an IP policy.
+	if err := os.Chmod(socket, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(socket)
+	if err != nil || info.Mode().Perm() != 0o600 {
+		t.Fatalf("private socket permissions: %v %v", info, err)
+	}
+	client, err := net.DialTimeout("unix", socket, time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+	server, err := ln.Accept()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer server.Close()
+	if err := server.SetDeadline(time.Now().Add(time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	if err := client.SetDeadline(time.Now().Add(time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := server.Write([]byte("local")); err != nil {
+		t.Fatal(err)
+	}
+	body := make([]byte, len("local"))
+	if _, err := io.ReadFull(client, body); err != nil || string(body) != "local" {
+		t.Fatalf("Unix stream: %q %v", body, err)
+	}
+	if _, err := Listen(t.Context(), "tcp", socket, Policy{}); !isRefusal(err) {
+		t.Fatalf("Unix pathname admitted as an IP listener: %v", err)
+	}
 }
 
 func TestListenPacketRefusesAPublicBind(t *testing.T) {

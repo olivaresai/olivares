@@ -81,7 +81,7 @@ set -euo pipefail
 # installer-matrix, public PR #31, 2026-09-17: "'sha256sum' is not on this host"). Either one
 # hashes the bytes; the preflight names the pair and _sha256 picks the one present.
 if ! command -v sha256sum >/dev/null 2>&1 && ! command -v shasum >/dev/null 2>&1; then
-	echo "assert-cosign-binary: ⛔ NO HE PODIDO MIRAR: 'sha256sum' is not on this host (nor 'shasum', its macOS equivalent), so the binary was never hashed. This says NOTHING about whether it is approved — install one of them and re-run." >&2
+	echo "assert-cosign-binary: ⛔ COULD NOT LOOK: 'sha256sum' is not on this host (nor 'shasum', its macOS equivalent), so the binary was never hashed. This says NOTHING about whether it is approved — install one of them and re-run." >&2
 	exit 2
 fi
 _sha256() { # _sha256 <file> -> lowercase hex digest
@@ -89,7 +89,7 @@ _sha256() { # _sha256 <file> -> lowercase hex digest
 }
 for _tool in command readlink awk sed date printf; do
 	if ! command -v "$_tool" >/dev/null 2>&1; then
-		echo "assert-cosign-binary: ⛔ NO HE PODIDO MIRAR: '$_tool' is not on this host, so the binary was never hashed. This says NOTHING about whether it is approved — install $_tool and re-run." >&2
+		echo "assert-cosign-binary: ⛔ COULD NOT LOOK: '$_tool' is not on this host, so the binary was never hashed. This says NOTHING about whether it is approved — install $_tool and re-run." >&2
 		exit 2
 	fi
 done

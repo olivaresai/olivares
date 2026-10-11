@@ -29,7 +29,7 @@ func TestANestedInboundReplayCallsNoPortInsideTheOwningTransaction(t *testing.T)
 	t.Parallel()
 
 	fixture := newWorkflowCommunicationFixture(t, false)
-	fixture.m.UseWorkContentGuard(allowWorkContent{})
+	WithWorkContentGuard(allowWorkContent{})(fixture.m)
 	binding := protocolReplyBindingForTest(
 		t, fixture, BindingInbound, ProtocolBindingResultTask,
 		"task-nested-inbound", "context-nested-inbound", "", WorkflowWorkTaskResult{},
@@ -60,7 +60,7 @@ func TestANestedInboundReplayCallsNoPortInsideTheOwningTransaction(t *testing.T)
 		Publishes: []ProtocolReplayPublish{ProtocolReplyPublish(command.Route, command.Flow)},
 	}
 	calls := installJoinedPortChecks(fixture.m, fixture.tenant)
-	fixture.m.workIdentity = joinedCheckedParticipants{calls: calls}
+	fixture.m.WorkIdentity = joinedCheckedParticipants{calls: calls}
 	principal := WorkPrincipal{
 		ActorKind: model.ActorUser, ActorRef: model.NewID().String(),
 		Actor: "user:" + model.NewID().String(), Admin: true,
@@ -186,21 +186,21 @@ func TestAJoinedInterruptIsRefusedBeforeAMovingDirectoryEpoch(t *testing.T) {
 	fixture := newWorkflowCommunicationFixture(t, false)
 	makeProtocolInterruptRecipientWriter(t, fixture)
 	binding := protocolInterruptBindingForTest(t, fixture, BindingProtocolA2A)
-	resolver, _ := fixture.m.communicationDirectoryResolver.(*directNoticeReadDirectoryResolver)
-	closure, _ := fixture.m.communicationGrantClosure.(*directNoticeReadClosureResolver)
+	resolver, _ := fixture.m.CommunicationDirectoryResolver.(*directNoticeReadDirectoryResolver)
+	closure, _ := fixture.m.CommunicationGrantClosure.(*directNoticeReadClosureResolver)
 	if resolver == nil || closure == nil {
 		t.Fatal("the workflow fixture's read resolvers are not the doubles this test refreshes")
 	}
 	calls := installJoinedPortChecks(fixture.m, fixture.tenant)
-	moving := &movingStanding{next: fixture.m.standing}
-	fixture.m.standing = moving
+	moving := &movingStanding{next: fixture.m.Standing}
+	fixture.m.Standing = moving
 	epochBefore, _, err := readWorkflowAuthorityFacts(context.Background(), fixture)
 	if err != nil {
 		t.Fatalf("read the directory epoch: %v", err)
 	}
 	epochMoved := false
-	fixture.m.communicationAudienceAttestor = &afterWorkTaskAttestation{
-		next: fixture.m.communicationAudienceAttestor, tenant: fixture.tenant,
+	fixture.m.CommunicationAudienceAttestor = &afterWorkTaskAttestation{
+		next: fixture.m.CommunicationAudienceAttestor, tenant: fixture.tenant,
 		hook: func(ctx context.Context) {
 			if _, err := fixture.authr.OnboardMember(ctx, fixture.authUser, fixture.tenant, auth.OnboardInput{
 				Email: "epoch-mover@communication.test", DisplayName: "Epoch mover",
@@ -299,8 +299,8 @@ func TestAJoinedReplayAnswersItsSecondAttemptOnAMixedPair(t *testing.T) {
 			t.Parallel()
 
 			fixture := newWorkflowCommunicationFixture(t, false)
-			moving := &movingOnReadStanding{next: fixture.m.standing, moveOn: map[int]bool{tc.moveOn: true}}
-			fixture.m.standing = moving
+			moving := &movingOnReadStanding{next: fixture.m.Standing, moveOn: map[int]bool{tc.moveOn: true}}
+			fixture.m.Standing = moving
 			recipient := model.ID(fixture.target.Ref)
 			plan := ProtocolReplayPlan{Accounts: []model.ID{fixture.sender, recipient}}
 			claim := ProtocolReplayClaim{

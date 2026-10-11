@@ -50,9 +50,6 @@ export const observabilityApi = {
    *  unknown or evicted from the walk window (last 20000 ledger events). */
   trace: (id: string) =>
     http.get<TraceDetail>(`${BASE}/traces/${encodeURIComponent(id)}`),
-  /** OTLP-compatible JSON export of one trace for Jaeger/Tempo/Datadog import. */
-  exportTrace: (id: string) =>
-    http.get<unknown>(`${BASE}/traces/${encodeURIComponent(id)}/export`),
 }
 
 export const observabilityKeys = {

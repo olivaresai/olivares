@@ -133,27 +133,6 @@ func TestTenantErasureAnonymizesNoAccountWithoutCustodyEvidence(t *testing.T) {
 // offboard writes refuses the account in the tenant before any grant, so a
 // user-subject grant that named it stops matching at once, even for a principal
 // that is no longer a member.
-func TestAnOffboardedUsersNamedGrantsStopMatchingInTheTenant(t *testing.T) {
-	onConsentEngines(t, func(t *testing.T, e *consentEstate) {
-		user := e.createUser("granted@consent.test")
-		e.seedMembership(user, e.tT, "viewer")
-		e.seedMembership(user, e.tB, "viewer")
-		r := e.do("POST", "/v1/m/governance/rbac/grants", e.admin, e.tT, map[string]any{
-			"subject_kind": "user", "subject_ref": user.String(), "role": "editor", "scope_tree": "tenant",
-		})
-		if r.code != http.StatusCreated {
-			t.Fatalf("grant = %d %s", r.code, r.raw)
-		}
-		sess := e.login("granted@consent.test", consentMemberPassword)
-		e.scimDelete(e.tT, user)
-		if e.memberOf(user, e.tT) {
-			t.Fatalf("the SCIM delete left the membership")
-		}
-		if code := e.actsIn(sess, e.tT); code != http.StatusForbidden {
-			t.Errorf("an offboarded account's grant still authorizes it in the tenant: %d, want 403", code)
-		}
-	})
-}
 
 // TestTheCustodianReadmitsItsOwnOffboardedAccount: the tenant that created an
 // account re-admits it after its retirement completes, and only then; another

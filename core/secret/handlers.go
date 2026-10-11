@@ -9,6 +9,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sync"
 )
 
 // The dependency-free built-in handlers: `env:` (a process environment variable)
@@ -26,6 +27,20 @@ type EnvHandler struct {
 	Lookup func(string) (string, bool)
 }
 
+// referencedEnv holds every variable an `env:` reference has resolved in this
+// process: the engine reads its value as a secret reference. Only a variable that
+// is set is recorded, so the set never outgrows the process environment.
+var referencedEnv sync.Map
+
+// EnvReferenced reports whether an `env:` reference (a `--dsn env:<NAME>` at boot,
+// a connector's secret field) has resolved the variable in this process, so
+// whatever the engine launches can be kept from inheriting it.
+func EnvReferenced(name string) bool {
+	_, ok := referencedEnv.Load(name)
+	return ok
+}
+
+// Resolve returns the variable's value and records its name (EnvReferenced).
 func (h EnvHandler) Resolve(_ context.Context, locator string) ([]byte, error) {
 	lookup := h.Lookup
 	if lookup == nil {
@@ -38,6 +53,7 @@ func (h EnvHandler) Resolve(_ context.Context, locator string) ([]byte, error) {
 	if v == "" {
 		return nil, fmt.Errorf("environment variable %q is set but empty", locator)
 	}
+	referencedEnv.Store(locator, struct{}{})
 	return []byte(v), nil
 }
 

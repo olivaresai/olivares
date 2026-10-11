@@ -245,6 +245,7 @@ const (
 	colAction             = "action"
 	colRequestedBy        = "requested_by"      // audit-actor string (user:<id>/token:<id>) — provenance only
 	colRequestedByUser    = "requested_by_user" // stable user id — the separation-of-duty identity
+	colLaunchedBy         = "launched_by"       // who launched the session a launch approval is for — display only
 	colStatus             = "status"
 	colRequiredApproval   = "required_approvals"
 	colApproveCount       = "approve_count"
@@ -528,12 +529,15 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		Fields: []model.FieldSpec{
 			{Name: colApprovalSessionRef, Kind: model.KindText, Nullable: true, Indexed: true, Principal: model.None("an operated session reference, never a user or credential identity: approvals.go:94")},
 			{Name: colSubjectKind, Kind: model.KindText, Indexed: true, Principal: model.None("an approval subject category, matched against approval policies and compared with \"agent\" only: approvals.go:314, killswitch.go:410")},
-			{Name: colSubjectRef, Kind: model.KindText, Indexed: true, Principal: model.None("an opaque approval subject compared verbatim with a gated action's subject: cmd/olivares/approvalbridge.go:793, killswitch.go:413")},
+			{Name: colSubjectRef, Kind: model.KindText, Indexed: true, Principal: model.None("an opaque approval subject compared verbatim with a gated action's subject: cmd/olivares/internal/approvalbridge/approvalbridge.go:574, killswitch.go:413")},
 			{Name: colAction, Kind: model.KindText, Indexed: true, Principal: model.None("a governed action name, matched against approval policies and the stop's action set: approvals.go:314, killswitch.go:384")},
 			// The requester's audit actor feeds the same separation-of-duty
 			// comparison as requested_by_user, which can only refuse a decision.
 			{Name: colRequestedBy, Kind: model.KindText, Principal: model.Ref(model.EncodeUserRef, model.ClassRestrict)},
 			{Name: colRequestedByUser, Kind: model.KindText, Indexed: true, Principal: pdeclUserRestrict},
+			// The person who launched the session a launch approval is for. Display
+			// only: separation of duty, quorum and cancel never read it.
+			{Name: colLaunchedBy, Kind: model.KindText, Nullable: true, Principal: model.Ref(model.EncodeUserRef, model.ClassRestrict)},
 			{Name: colStatus, Kind: model.KindText, Indexed: true, Principal: model.None("a lifecycle status from a closed set: approvals.go:105")},
 			{Name: colRequiredApproval, Kind: model.KindInt},
 			{Name: colApproveCount, Kind: model.KindInt},
@@ -993,6 +997,12 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 			Unique:  true,
 		}},
 	}); err != nil {
+		return err
+	}
+
+	// The inheritance filter: a per-class stop on rights inherited from above a container
+	// node (inheritance_filter.go). Stored and authored only; the authorizer ignores it.
+	if err := registerInheritanceFilter(reg); err != nil {
 		return err
 	}
 

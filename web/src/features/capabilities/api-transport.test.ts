@@ -7,11 +7,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { capabilitiesApi, EVIDENCE_PAGE } from './api'
 
 /**
- * ⛔ ESTE TESTIGO MIRA LA URL, y compara el VALOR del parámetro, no una subcadena.
+ * This test checks the URL parameter value, not a substring.
  *
- * El contraste de lo señaló en mi propio testigo: `toContain('limit=1')` **también acepta
- * `limit=10`** — comprobado con node. Una aserción de subcadena sobre un número es un colador.
- * Aquí se lee con `URLSearchParams` y se compara el valor exacto.
+ * The review caught the flaw in the earlier assertion: `toContain('limit=1')` also
+ * accepts `limit=10`, verified with Node. Parse with `URLSearchParams` and compare the exact
+ * value.
  */
 
 let urls: string[] = []

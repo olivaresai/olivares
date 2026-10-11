@@ -14,12 +14,12 @@ export LC_ALL
 root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 tmp_root="${TMPDIR:-}"
 [[ "$tmp_root" == /* && -d "$tmp_root" ]] || {
-	echo 'test-package-publish: NO HE PODIDO MIRAR — TMPDIR must be an existing absolute directory' >&2
+	echo 'test-package-publish: COULD NOT CHECK — TMPDIR must be an existing absolute directory' >&2
 	exit 2
 }
 for tool in awk bash cat chmod cmp cp dirname find grep mkdir mktemp rm sed sort wc; do
 	command -v "$tool" >/dev/null 2>&1 || {
-		printf 'test-package-publish: NO HE PODIDO MIRAR — missing %s\n' "$tool" >&2
+		printf 'test-package-publish: COULD NOT CHECK — missing %s\n' "$tool" >&2
 		exit 2
 	}
 done

@@ -345,7 +345,7 @@ func TestBudgetDimensionScoping(t *testing.T) {
 	}
 }
 
-func TestBudgetStatusConsumptionAndProjection(t *testing.T) {
+func TestBudgetStatusConsumption(t *testing.T) {
 	m, st, tenant, _ := newFin(t)
 	id := createBudget(t, st, tenant, "cap", budgetSpec{
 		Dimension: "global", Period: "monthly", LimitMicroUSD: 1000,
@@ -369,10 +369,6 @@ func TestBudgetStatusConsumptionAndProjection(t *testing.T) {
 	}
 	if statusDTO.Over {
 		t.Error("budget should not be over at 30%")
-	}
-	// Run-rate projection extrapolates above the spend-so-far (more month remains).
-	if statusDTO.ProjectedMicroUSD <= statusDTO.SpendMicroUSD {
-		t.Errorf("projected %d should exceed spend %d at one-third of the month", statusDTO.ProjectedMicroUSD, statusDTO.SpendMicroUSD)
 	}
 }
 

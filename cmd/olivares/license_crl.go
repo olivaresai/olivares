@@ -403,7 +403,7 @@ func describeCRLForLicense(dataDir string, m release.Manifest, now time.Time) []
 	if lic.RevokedBy(rev) {
 		lines = append(lines,
 			"the INSTALLED license is REVOKED by this CRL: this is recorded and displayed, and it gates "+
-				"nothing — no edition caps users or disables anything on a revoked license (docs/07)")
+				"nothing — no edition caps users or disables anything on a revoked license (LICENSING.md)")
 	}
 	return lines
 }

@@ -31,7 +31,7 @@ Docker/Kubernetes ではコンテナログ) — ログファイルには決し�
 
 ```text
 generated a new audit signing key; back it up path=/var/lib/olivares/audit-signing.key
-generated a self-signed TLS certificate; clients must trust it, or pin it with --pin-sha256=<pin_sha256> (that value, verbatim) cert=/var/lib/olivares/tls.crt cert_fingerprint_sha256=d38567e8…378c4e7f pin_sha256=JsdrhrY77Me8miAmobJsqamE3NDWIOSBrDTwbHkyCD0
+generated a local TLS certificate; clients must trust it, or pin it with --pin-sha256=<pin_sha256> (that value, verbatim) cert=/var/lib/olivares/tls.crt cert_fingerprint_sha256=d38567e8…378c4e7f pin_sha256=JsdrhrY77Me8miAmobJsqamE3NDWIOSBrDTwbHkyCD0
 ```
 
 どちらも意図的なもので、最初のものが後で問題になります: **強制されたエスクローは
@@ -102,13 +102,11 @@ installation without printing secrets
 ingest: no observation sources configured (OLIVARES_SOURCES_CONFIG.sources is empty); no connector will ingest — the estate runs on no live traffic
 ```
 
-ソースファイルが存在しない、読み取れない、または無効な場合は **警告して続行します**
-(起動がそれでクラッシュすることは決してありません) — したがって、健全に見えるエンジンで
-map が空である場合、たいていは設定が読み込まれなかったことを意味します。ファイル/パスを
-修正して再起動してください。成功するとソースごとに `ingest: wired source … kind=…` と
-表示されます。構築に失敗したソースは、その理由とともに
-`ingest: failed to register in-process source; not wired` を出力します — 報告されるのであり、
-黙って破棄されることは決してありません。
+### ソース設定を指定するとエンジンが起動しない
+
+`OLIVARES_SOURCES_CONFIG` が、存在しないファイル、読み取れないファイル、または無効な JSON ファイルを指定している場合、`olivares serve` は終了コード `1` で終了します。`refusing to start instead of silently omitting operator configuration` を含む起動エラー `load sources operator config: OLIVARES_SOURCES_CONFIG` を探してください。サービスやコンテナから見たパスを確認し、実行ユーザーがファイルを読み取れることを確かめ、JSON を検証して再起動してください。このファイルエラーは起動を阻止するため、エンジンが空の map で動作し続けることはありません。
+
+起動が成功すると、ソースごとに `ingest: wired source … kind=…` と表示されます。構築に失敗したソースは、その理由とともに `ingest: failed to register in-process source; not wired` を出力します。
 
 ### pgAudit は結線されているが edge が届かない
 

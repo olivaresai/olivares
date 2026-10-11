@@ -1,0 +1,52 @@
+{
+  "title": "スキルカタログ",
+  "subtitle": "この組織にインストールされたスキルパック。パックを開くと、そのスキルと割り当て先の部門、グループ、エージェントが表示されます。",
+  "packs": {
+    "name": "パック",
+    "state": "状態",
+    "revision": "リビジョン",
+    "updated": "更新",
+    "enabled": "有効",
+    "retired": "廃止",
+    "search": "パックを検索",
+    "emptyTitle": "スキルパックがインストールされていません",
+    "emptyDescription": "olivares skills install でパックをインストールすると、ここに表示され割り当てられます。",
+    "truncated": "最初の {{n}} 件のパックを表示しています",
+    "truncatedHint": "残りは olivares skills ls --cursor で一覧表示します。"
+  },
+  "detail": {
+    "skills": "このパックのスキル",
+    "revisions": "リビジョン",
+    "revision": "リビジョン {{n}}",
+    "revisionLine": "リビジョン {{n}}（{{source}}）"
+  },
+  "kind": {
+    "workspace": "部門",
+    "agent_group": "エージェントグループ",
+    "agent": "エージェント",
+    "template": "テンプレート",
+    "session": "セッション"
+  },
+  "uses": {
+    "title": "割り当て先",
+    "none": "このパックは、あなたが閲覧できる部門、グループ、エージェントのいずれにも割り当てられていません。",
+    "unassign": "割り当て解除",
+    "unassigned": "スキルパックの割り当てを解除しました",
+    "confirmTitle": "このスキルパックの割り当てを解除しますか？",
+    "confirmDescription": "{{target}} の新しいセッションはこれらのスキルを受け取らなくなります。記録済みの会話はそのスナップショットを保持します。",
+    "truncated": "最初の {{n}} 件の割り当てを表示しています",
+    "truncatedHint": "残りは olivares skills assignments --pack と --cursor で一覧表示します。",
+    "unassignFrom": "{{target}} への割り当てを解除"
+  },
+  "assign": {
+    "title": "割り当て",
+    "kind": "割り当て先の種類",
+    "target": "対象",
+    "choose": "対象を選択",
+    "revision": "リビジョン",
+    "noTargets": "閲覧できるこの種類の対象はありません。",
+    "submit": "割り当て",
+    "done": "スキルパックを割り当てました",
+    "directoryFailed": "対象を読み込めませんでした。パックを閉じて開き直し、再試行してください。"
+  }
+}

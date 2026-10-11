@@ -23,7 +23,7 @@ posiblemente más útil antes de contratar — es un paquete de preparación
 verificable: correspondencias control por control con evidencia que tú mismo puedes
 extraer de un despliegue en ejecución, además de la lista explícita de decisiones
 (contratación de auditorías de certificación, contratación de pruebas de
-penetración, activación de soporte comercial) que siguen abiertas. FedRAMP/ATO
+penetración) que siguen abiertas. FedRAMP/ATO
 queda explícitamente fuera del alcance del producto autoalojado.
 :::
 
@@ -95,10 +95,12 @@ propio despliegue.
 
 ## Soporte y accesibilidad
 
-- El modelo de soporte (niveles, objetivos de respuesta según severidad, escalado)
-  está publicado en `SUPPORT.md` — incluida la divulgación honesta de que el soporte
-  comercial está definido pero todavía no es adquirible, y de que la cadena de
-  escalado tiene hoy una sola persona de profundidad.
+- Business incluye soporte por correo electrónico en horario laboral, con el mejor
+  esfuerzo posible y sin objetivo de respuesta. Enterprise añade objetivos no
+  vinculantes de primera respuesta acordados en el contrato. El modelo de soporte
+  y la vía de escalado se publican en `SUPPORT.md` y en la
+  [oferta actual](https://olivares.ai/pricing); la cadena de escalado tiene hoy
+  una sola persona de profundidad.
 - El informe de conformidad de accesibilidad es un ACR de edición **VPAT 2.5Rev INT**
   completado (WCAG 2.1/2.2 AA + Revised Section 508 + EN 301 549 V3.2.1) en
   `docs/accessibility/VPAT-olivares-admin.md`, con la verificación formal de

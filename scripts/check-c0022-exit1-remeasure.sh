@@ -27,9 +27,9 @@ ADJ="${OLIVARES_0022_ADJ:-design/ADJUDICACION-SLOTS-D1-LICENSE-WORKER-2026-08-17
 
 grep -q 'schema NOT TOUCHED' "$DOC" || fail "$DOC lost schema NOT TOUCHED"
 if grep -qiE 'salida 2 wins|CREATE TABLE IF NOT EXISTS dodo_cohort_fragments in 0022|FIRMA A claimed' "$DOC"; then
-	fail "$DOC claims a close or schema this lote does not have"
+	fail "$DOC claims a close or schema this batch does not have"
 fi
-grep -q 'Salida 1' "$DOC" || fail "$DOC lost Salida 1"
+grep -q 'Salida 1' "$DOC" || fail "$DOC lost the required exit-code heading"
 grep -q 'salida 1' "$ADJ" || grep -q 'Salida 1' "$ADJ" || fail "$ADJ lost the Exit 1 record"
 
 shopt -s nullglob
@@ -115,7 +115,7 @@ for forbidden in ("license_id", "paid_through"):
         raise SystemExit("line_grants INSERT grew the in-flight 0006 column %s" % forbidden)
 if len(lg_cols) != data["line_grants_columns"]:
     raise SystemExit(
-        "line_grants INSERT at db.ts:%d names %d columns, the lote pinned %d"
+        "line_grants INSERT at db.ts:%d names %d columns, the batch pinned %d"
         % (lg_i, len(lg_cols), data["line_grants_columns"])
     )
 
@@ -126,7 +126,7 @@ for forbidden in ("billing_period", "normalized_json"):
         raise SystemExit("fragments INSERT grew the in-flight 0006 column %s" % forbidden)
 if len(fr_cols) != data["fragments_columns"]:
     raise SystemExit(
-        "fragments INSERT at db.ts:%d names %d columns, the lote pinned %d"
+        "fragments INSERT at db.ts:%d names %d columns, the batch pinned %d"
         % (fr_i, len(fr_cols), data["fragments_columns"])
     )
 

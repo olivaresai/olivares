@@ -1001,6 +1001,19 @@ func bridgeGuardEditionPredecessor(
 			continue
 		}
 		predecessorHistory, perr := verifyGuardEditionHistory(ctx, mdb, dia, edge.From)
+		if perr != nil {
+			// More than two pending module edges leave even the immediate parent
+			// unreadable. Walk its module parents before asking it to converge;
+			// every recursive step keeps the same exact history and core-edge checks.
+			bridged, bridgeErr := bridgeGuardEditionPredecessor(ctx, mdb, dia, edge.From,
+				observerDSN, hardened, session)
+			if bridgeErr != nil {
+				return false, bridgeErr
+			}
+			if bridged {
+				predecessorHistory, perr = verifyGuardEditionHistory(ctx, mdb, dia, edge.From)
+			}
+		}
 		if perr != nil || !guardEditionPostModuleSourceReady(edge, predecessorHistory) {
 			continue
 		}

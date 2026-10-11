@@ -75,3 +75,7 @@ Cedar/OPA 策略即代码、WIF 对象图）增加了一条 **发布→不可变
 - [治理与审批](/zh/how-to/govern-and-approve/) —— 使用策略与审批面。
 - [架构概览](/zh/explanation/architecture/overview/) —— 本模块组合其上的引擎与各层。
 - [诚实与限制](/zh/start/honesty-and-limits/) —— 默认拒绝、默认侦测（detective-by-default）的态势。
+
+## 审批版本边界（0.1）
+
+Community 保留审批引擎、CRITICAL 操作至少由两名不同人员审批的要求、kill-switch 双人控制，以及要求审核或提高风险等级、审批人数的策略。降低风险等级的审批策略和 break-glass 紧急访问属于 Business 基础版。已保存的数据仍可读取和导出，但不能降低 Community 的默认要求或授权紧急访问。

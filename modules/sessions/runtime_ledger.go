@@ -15,6 +15,7 @@ import (
 
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
+	"github.com/olivaresai/olivares/modules/sessions/confine"
 )
 
 // The lifecycle ledger (pattern). Each transition is:
@@ -36,24 +37,25 @@ var errInvalidTerminalEvidence = errors.New("sessions: invalid terminal evidence
 
 // runEventInput is one lifecycle transition to record.
 type runEventInput struct {
-	runID     model.ID // the sessions.run row id (the audit target)
-	runRef    string
-	event     string // created|launched|stopping|stopped|failed|resumed|cleaned
-	fromState string
-	toState   string
-	detail    string // short, non-sensitive
-	actor     string
-	actorKind string
-	at        time.Time
+	confinement *confine.State
+	runID       model.ID // the sessions.run row id (the audit target)
+	runRef      string
+	event       string // created|launched|stopping|stopped|failed|resumed|cleaned
+	fromState   string
+	toState     string
+	detail      string // short, non-sensitive
+	actor       string
+	actorKind   string
+	at          time.Time
 	// workGeneration is present only for K2 fenced runtime-control outcomes.
 	workGeneration *runtimeWorkGeneration
 	// terminalEvidence is present only on a terminal transition that retires a
 	// runtime generation (P1). It is built inside the transaction, from the row as
 	// it stood before the mutation cleared the launch id.
 	terminalEvidence *runtimeTerminalEvidence
-	// ownerAccessEnded is stamped by exact-generation access-loss teardown. It
+	// accessStopCause is stamped by exact-generation access-loss teardown. It
 	// becomes only a fixed cause code in the existing audit, never owner identity.
-	ownerAccessEnded bool
+	accessStopCause runtimeAccessStopCause
 }
 
 // The three observations P1 may record. They are separate values because the
@@ -121,8 +123,8 @@ func (e *runtimeTerminalEvidence) validate() error {
 // transaction and returns the per-session sequence number assigned to it (the
 // run row stores it as last_event_seq, an O(1) anchor for per-session reads).
 func appendRunEvent(ctx context.Context, sc store.Scope, in runEventInput) (int64, error) {
-	if in.ownerAccessEnded && (!terminalLifecycle(in.event, in.toState) || in.terminalEvidence == nil) {
-		return 0, fmt.Errorf("%w: access-ended cause requires terminal runtime evidence", errInvalidTerminalEvidence)
+	if in.accessStopCause > accessStopCredentialExpired || (in.accessStopCause != accessStopNone && (!terminalLifecycle(in.event, in.toState) || in.terminalEvidence == nil)) {
+		return 0, fmt.Errorf("%w: access-stop cause requires terminal runtime evidence", errInvalidTerminalEvidence)
 	}
 	repo, err := sc.Ext(runEventKind)
 	if err != nil {
@@ -161,8 +163,14 @@ func appendRunEvent(ctx context.Context, sc store.Scope, in runEventInput) (int6
 
 	// 1) Seal in the global hash-chained audit ledger (anchored by PayloadHash).
 	meta := map[string]any{"run_ref": in.runRef, "event": in.event, "to_state": in.toState}
-	if in.ownerAccessEnded {
+	switch in.accessStopCause {
+	case accessStopOwnerEnded:
 		meta["stop_cause"] = "owner_access_ended"
+	case accessStopCredentialExpired:
+		meta["stop_cause"] = "session_credential_expired"
+	}
+	if c := in.confinement; c != nil {
+		meta["confinement"] = map[string]any{"mode": c.Mode, "abi": c.ABI, "reason": c.Reason}
 	}
 	if in.workGeneration != nil {
 		meta[colEvWorkItemID] = in.workGeneration.itemID.String()

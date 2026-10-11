@@ -15,6 +15,8 @@ only re-arrange verbs the estate already exposes, under gates that already
 exist. Running a workflow is admin-tier *and* human-approved, so it is never a
 way to reach something you could not reach directly.
 
+**Edition:** Business Identity & Scale. Community returns `501` for these routes, carries no orchestration console or execution engine, and retains stored records for export.
+
 ## The shape of a graph
 
 A workflow is a set of **steps**, each with a short `ref` unique in the
@@ -35,6 +37,13 @@ only a label, so a workflow author can never forge a first-party event such as
 `edge.observed` into another module's ingestion.
 
 ## 1. Declare the workflow
+
+On a fresh install, `orchestration` is off. As an administrator, turn it on in
+**Settings > Edition & modules**, keeping the other selected modules on.
+For the CLI, sign in to this engine as an administrator with `olivares login`,
+then run `olivares modules on orchestration`. Wait for each engine restart before continuing;
+running sessions stop and can be resumed. Otherwise these API calls return
+`404 module_not_enabled`.
 
 ```bash
 curl -sS -X POST "$OLIVARES/v1/m/orchestration/workflows" \

@@ -178,6 +178,7 @@ func runBindAnnounce(t *testing.T, opts serveOptions, out io.Writer, announce fu
 	defer cancel()
 	run := &bindAnnounceRun{cancel: cancel}
 	done := make(chan error, 1)
+	prepareCompositionTestBoot(t)
 	go func() { done <- runEngine(ctx, out, opts, announce(run)) }()
 
 	client, tr := bindAnnounceClient(bindAnnounceProbeWait)

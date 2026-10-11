@@ -25,7 +25,7 @@ import (
 func (m *Module) CallSessionWork(w http.ResponseWriter, r *http.Request, p auth.Principal, tenant model.TenantID) {
 	companion, err := m.RuntimeCompanion(r.Context(), tenant, p)
 	workspace, confined := p.ConfinedWorkspaceIn(tenant)
-	if err != nil || !confined || workspace.IsZero() || m.workAuthz == nil || m.data == nil {
+	if err != nil || !confined || workspace.IsZero() || m.WorkAuthorizer == nil || m.Data == nil {
 		writeWorkError(w, broken(http.StatusForbidden, "forbidden"))
 		return
 	}
@@ -34,8 +34,8 @@ func (m *Module) CallSessionWork(w http.ResponseWriter, r *http.Request, p auth.
 	defer cancel()
 	defer stop()
 	r = r.WithContext(ctx)
-	data := sessionWorkData{data: m.data, tenant: tenant, workspace: workspace}
-	mc := api.ModuleContext{Principal: p, Tenant: tenant, Data: data, Standing: m.standing}
+	data := sessionWorkData{data: m.Data, tenant: tenant, workspace: workspace}
+	mc := api.ModuleContext{Principal: p, Tenant: tenant, Data: data, Standing: m.Standing, Admission: m.workAdmission}
 	parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/v1/m/sessions/"), "/")
 	if len(parts) == 0 || (parts[0] != "work-items" && parts[0] != "decisions") {
 		writeWorkError(w, broken(http.StatusNotFound, "not_found"))
@@ -102,7 +102,7 @@ func (m *Module) CallSessionWork(w http.ResponseWriter, r *http.Request, p auth.
 	}
 	resource := auth.ResourceFor(permission)
 	resource.ID, resource.WorkspaceID = id.String(), workspace
-	decision := m.workAuthz.Authorize(ctx, auth.Request{Principal: p, Tenant: tenant, Permission: permission, Resource: resource})
+	decision := m.WorkAuthorizer.Authorize(ctx, auth.Request{Principal: p, Tenant: tenant, Permission: permission, Resource: resource})
 	if decision.Allow && cmd.OwnerKind == "session" && (cmd.Command == "item.create" || cmd.Command == "item.assign") {
 		// Serialize peer changes with the send, using the existing run exclusion.
 		// RuntimeCompanion released this same lock before returning above.
@@ -152,6 +152,19 @@ func (m *Module) CallSessionWork(w http.ResponseWriter, r *http.Request, p auth.
 	default:
 		m.handleWorkDecisionGet(w, r, mc)
 	}
+}
+
+// workAdmission is this port's admission door. It has no API server, so it asks the
+// composed authorizer the server itself asks, inside the principal's confining workspace as
+// Server.Admits does: the work handlers answer their admin question the same way here as
+// on the REST route. Server.Admits asks the same Authorize and adds only a step-up floor
+// (none for a request with no route) and workspace seeding for a dedicated orchestration
+// credential, which workAdmin never asks. A nil authorizer refuses.
+func (m *Module) workAdmission(ctx context.Context, req auth.Request) bool {
+	if m.WorkAuthorizer == nil {
+		return false
+	}
+	return m.WorkAuthorizer.Authorize(ctx, req.WithinConfinement()).Allow
 }
 
 func sessionWorkPermission(command string) (auth.Permission, error) {

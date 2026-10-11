@@ -108,6 +108,8 @@ func permissionsFor(e Effect) map[string]string {
 		return map[string]string{"pull_requests": "write", "contents": "read"}
 	case EffectMerge:
 		return map[string]string{"contents": "write", "pull_requests": "read"}
+	case EffectRead:
+		return map[string]string{"contents": "read"}
 	}
 	return map[string]string{"contents": "read", "pull_requests": "read"}
 }

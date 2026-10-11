@@ -1088,17 +1088,19 @@ func TestDetectRefusesWritableFilesDirectoriesAndNonExecutables(t *testing.T) {
 	if c := candidateByPath(cands, exe); !strings.Contains(c.ProbeSkipped, "group- or world-writable") || c.Probe != nil {
 		t.Fatalf("writable file %+v", c)
 	}
-	// World-writable containing directory.
+	// Group- and world-writable containing directories.
 	if err := os.Chmod(exe, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Chmod(dir, 0o777); err != nil {
-		t.Fatal(err)
-	}
-	cands, err = probe()
-	requireKind(t, err, KindProbeFailed)
-	if c := candidateByPath(cands, exe); !strings.Contains(c.ProbeSkipped, "containing directory") || c.Probe != nil {
-		t.Fatalf("writable dir %+v", c)
+	for _, mode := range []os.FileMode{0o775, 0o777} {
+		if err := os.Chmod(dir, mode); err != nil {
+			t.Fatal(err)
+		}
+		cands, err = probe()
+		requireKind(t, err, KindProbeFailed)
+		if c := candidateByPath(cands, exe); !strings.Contains(c.ProbeSkipped, "containing directory") || c.Probe != nil {
+			t.Fatalf("writable dir (%04o) %+v", mode, c)
+		}
 	}
 	if f.ran() != 0 {
 		t.Fatalf("refused candidates executed %d time(s)", f.ran())

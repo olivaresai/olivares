@@ -240,10 +240,10 @@ describe('Las versiones de un modelo', () => {
   })
 
   /**
-   * ⛔ UNA LECTURA FALLIDA NO ES «NO HAY VERSIONES». Sin rama de error, un 500 caía al estado
-   * vacío y el panel afirmaba una ausencia que nadie comprobó — y una versión invisible es una
-   * versión cuya evidencia de admisión no se alcanza desde esta pantalla. Es el mismo defecto
-   * que el contraste externo devolvió en el panel de documentos, en la misma feature.
+   * A failed read does not prove there are no versions. Without an error branch, a 500
+   * fell into the empty state and asserted an unverified absence. An invisible version
+   * also hides its admission evidence from this screen. The external review found the
+   * same defect in the documents panel, in this feature.
    */
   it('un fallo de lectura no se pinta como «no hay versiones»', async () => {
     api.modelVersions.mockRejectedValue(new Error('boom'))

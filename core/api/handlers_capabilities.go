@@ -122,15 +122,8 @@ const capabilityBatchBudget = 5 * time.Second
 // here. These bodies are authorization observations of one credential; a private cache
 // replaying one to the next caller is the failure the freshness contract exists to
 // prevent.
-func (s *Server) handleAuthCapabilities(w http.ResponseWriter, r *http.Request) {
-	for name, value := range NoStoreResponseHeaders() {
-		w.Header().Set(name, value)
-	}
-	p, ok := principalFrom(r.Context())
-	if !ok {
-		s.writeError(w, r, auth.ErrUnauthenticated)
-		return
-	}
+func (s *Server) handleAuthCapabilities(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	p := mc.Principal
 	tenant, err := s.resolveTenant(r, p)
 	if err != nil {
 		s.writeError(w, r, err)
@@ -169,7 +162,8 @@ func (s *Server) handleAuthCapabilities(w http.ResponseWriter, r *http.Request) 
 	if r, reconstructed = s.prepareGovernedPrincipal(w, r); !reconstructed {
 		return
 	}
-	if p, ok = principalFrom(r.Context()); !ok {
+	p, ok := principalFrom(r.Context())
+	if !ok {
 		s.writeError(w, r, auth.ErrUnauthenticated)
 		return
 	}

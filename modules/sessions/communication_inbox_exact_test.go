@@ -97,13 +97,13 @@ func TestDirectNoticeExactInboxClosesPageInOneMutation(t *testing.T) {
 	fixture.source.calls = 0
 	fixture.source.requests = nil
 
-	base := fixture.m.data
+	base := fixture.m.Data
 	trace := &directNoticeAuthorityTrace{}
 	authorityFirst := &directNoticeExactAuthorityFirstData{inner: base}
 	observer := &directNoticeMutateObserverData{inner: &directNoticeAuthorityTraceData{
 		inner: authorityFirst, trace: trace,
 	}}
-	fixture.m.data = observer
+	fixture.m.Data = observer
 	var opens int
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
 	defer cancel()
@@ -170,8 +170,8 @@ func TestDirectNoticeExactInboxFiltersDenyAndStopsOnUnknown(t *testing.T) {
 			},
 		}
 		fixture.m.useCommunicationRequestAuthoritySources(fixture.authr, source)
-		observer := &directNoticeMutateObserverData{inner: fixture.m.data}
-		fixture.m.data = observer
+		observer := &directNoticeMutateObserverData{inner: fixture.m.Data}
+		fixture.m.Data = observer
 		ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
 		defer cancel()
 		page, err := fixture.m.listDirectNoticeInboxWithAuthority(
@@ -200,8 +200,8 @@ func TestDirectNoticeExactInboxFiltersDenyAndStopsOnUnknown(t *testing.T) {
 			},
 		}
 		fixture.m.useCommunicationRequestAuthoritySources(fixture.authr, source)
-		observer := &directNoticeMutateObserverData{inner: fixture.m.data}
-		fixture.m.data = observer
+		observer := &directNoticeMutateObserverData{inner: fixture.m.Data}
+		fixture.m.Data = observer
 		ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
 		defer cancel()
 		page, err := fixture.m.listDirectNoticeInboxWithAuthority(
@@ -234,10 +234,10 @@ func TestDirectNoticeExactInboxPublicBoundaryBindsBeforeReadinessAndStaysOff(t *
 	readiness := &communicationReadinessStub{
 		storeReady: true, sealerReady: true, trace: &trace,
 	}
-	fixture.m.UseCommunicationStoreReadinessWitness(readiness)
-	fixture.m.UseCommunicationContentSealer(readiness)
-	observer := &directNoticeMutateObserverData{inner: fixture.m.data}
-	fixture.m.data = observer
+	fixture.m.CommunicationStoreReadiness = readiness
+	func() { fixture.m.CommunicationSealer = readiness; fixture.m.normalize() }()
+	observer := &directNoticeMutateObserverData{inner: fixture.m.Data}
+	fixture.m.Data = observer
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
 	defer cancel()
 	_, err := fixture.m.ListDirectNoticeInbox(
@@ -270,8 +270,8 @@ func TestDirectNoticeExactInboxRequiresDeadlineBeforeObservers(t *testing.T) {
 		base: fixture.source.evidence, outcomes: make(map[model.ID]auth.EvidenceOutcome),
 	}
 	fixture.m.useCommunicationRequestAuthoritySources(resolver, source)
-	observer := &directNoticeMutateObserverData{inner: fixture.m.data}
-	fixture.m.data = observer
+	observer := &directNoticeMutateObserverData{inner: fixture.m.Data}
+	fixture.m.Data = observer
 	_, err := fixture.m.listDirectNoticeInboxWithAuthority(
 		context.Background(), fixture.scope, fixture.readerRef,
 		DirectNoticeInboxQuery{Limit: 1},

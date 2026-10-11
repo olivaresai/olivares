@@ -14,7 +14,7 @@ narrower than their industry usage, and the narrowness is the point.
 Module III's graph of **origins** (agents, identities, sessions) and the
 **resources** they touch, every edge classified by [mode](#mode) and tagged
 with its [signal source](#signal-source), [attribution](#attribution-confidence)
-and [coverage tier](#coverage-tier). A key differentiated capability — one of the 31
+and [coverage tier](#coverage-tier). A key differentiated capability — one of the 32
 modules, not the whole product. See [What is Olivares AI?](/start/what-is-olivares-ai/).
 
 ### Actuation states: `v1` / `on-demand` / `seam`
@@ -161,8 +161,9 @@ and to [SIEM sinks](/how-to/cookbook/push-to-siem/).
 **Gartner's** term for AI that monitors or intervenes on *other* AI agents.
 Olivares AI delivers the **governance outcome** of the category — observe,
 diff permitted-vs-observed, gate deny-closed, record immutably — but as a
-**read-first control plane outside the data path**, not an inline LLM
-standing guard. See [Analyst vocabulary](/explanation/positioning/analyst-vocabulary/);
+**out-of-band observation and inline, deny-closed enforcement**, without an
+LLM standing guard. Managed Claude Code hooks depend on the engine's PEP; an
+unreachable PEP denies governed tool calls. See [Analyst vocabulary](/explanation/positioning/analyst-vocabulary/);
 contrast the in-product [guardian loop](#guardian-loop).
 
 ### Guardian loop
@@ -187,7 +188,7 @@ process to an agent. See [eBPF/Tetragon](/how-to/connectors/ebpf-tetragon/).
 
 ### live_ref
 
-The server-assigned identity of **one** live session row. 26.10.1 keys
+The server-assigned identity of **one** live session row. Olivares <!-- release -->0.1<!-- /release --> keys
 observation by `(observation scope, external id)` so two provider homes that
 announce the same session id stay two rows. Console and API reads that mean
 “this row” use `live_ref`, not the bare provider id. Bare external-id routes

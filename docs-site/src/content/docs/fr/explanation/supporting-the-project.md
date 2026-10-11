@@ -17,7 +17,7 @@ dire clairement ce qui la finance.
 
 ## Ce qui finance le travail aujourd'hui
 
-L'**abonnement commercial** de la ligne additive `enterprise/`. Si votre organisation
+L'**abonnement commercial** (Business et Enterprise) de la ligne additive `enterprise/`. Si votre organisation
 a besoin de ces modules, leur achat finance le cœur AGPL que tous les autres exécutent
 gratuitement — y compris les personnes qui ne paient jamais rien.
 

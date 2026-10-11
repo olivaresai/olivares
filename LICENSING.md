@@ -4,81 +4,55 @@ Olivares AI is **open core**. The complete product is available for free under
 the **GNU Affero General Public License, version 3 (`AGPL-3.0-only`)** — the AGPL
 build is the whole governance platform, never crippled from within to push you
 toward a paid edition. On top of it sits a small, **additive** commercial line in
-`enterprise/` (built only with `-tags enterprise`, never in the public binary):
-multi-IdP federation, content firewall/DLP, hook hardening, the threat-intel
-module (a base catalog compiled into the binary, plus optional signed, versioned
-feed artifacts the operator pins a key for and applies — Olivares operates no
-curated feed distribution and publishes no release cadence), server-tool egress
-control, the CyberArk Conjur connector, the incident close-loop, long-horizon WORM
-retention and legal-hold depth (named regulatory retention floors with a
-compliance-mode lock, examiner-grade evidence bundles, and the Azure/GCS WORM
-sinks alongside the open S3 Object Lock one), named-regulation depth (the DORA
-Register of Information and major-incident reporting, plus the OSCAL POA&M
-emitted beside the open export), the ISO/IEC 42001 AIMS certification-readiness
-pack, and a durable JetStream event-bus backend that lifts cross-node delivery of
-the enforcement-event class to at-least-once with dedup. It never caps your
-users: self-hosted user accounts are unlimited in every edition.
+`enterprise/` (built only with `-tags enterprise`, never in the public binary). It
+never caps your users: self-hosted user accounts are unlimited in every edition.
+
+**Which capability is in which edition is written in one place:
+[`docs/editions.md`](docs/editions.md).** This file does not repeat it, so the two
+cannot disagree. That page also states what no edition does: move a Community
+feature to a paid edition, count users, or make the Community binary read a
+license to turn a capability on or off.
 
 The self-hosted editions are **Community**, **Business** and **Enterprise**.
 Community is free under AGPL-3.0-only, with unlimited users and one active identity
 provider (IdP). Business costs **USD 129/month or USD 1,290/year**, with unlimited
-users, one legal entity, up to two production deployments with one staging deployment
-each, and up to five active IdPs in total. Enterprise covers negotiated scope:
-additional entities, deployments or IdPs, air-gap mirrors, custom LTS and other
-contract requirements. Contact **enterprise@olivares.ai** for Enterprise.
+users, one legal entity, and one active instance at a time: you release the license
+from one instance and activate it on another as often as you need. Enterprise covers
+terms agreed in a contract and the capabilities that depend on them: additional entities,
+deployments or IdPs, air-gap mirrors, custom LTS, and scoped upstream credentials
+minted by OAuth 2.0 token exchange (RFC 8693). Contact **enterprise@olivares.ai**
+for Enterprise.
 
-Business includes four capability families in one subscription. You can enable or
-disable each family; none is sold separately. The families retain separate code,
-repository and license-grant boundaries:
+Business includes four capability families in one subscription: **Regulated
+Operations**, **AI Runtime Security**, **Compliance Packs** and **Identity & Scale**.
+You can enable or disable each family; none is sold separately. The families retain
+separate code, repository and license-grant boundaries. What each family holds is
+in [`docs/editions.md`](docs/editions.md).
 
-| Included Business family | What it groups |
-|---|---|
-| **Regulated Operations** | Long-horizon WORM archive, named regulatory retention floors, legal-hold reconciliation, right-to-be-forgotten depth, and the incident close-loop. |
-| **AI Runtime Security** | The content firewall, hook firewall, computer-use gate, elicitation mediator, render inspector, retrieval scanning, server-tool egress control, the circuit breaker and CAEP transmit. |
-| **Compliance Packs** | The DORA Register of Information, OSCAL ingest, the ISO/IEC 42001 AIMS pack, and compliance depth. |
-| **Identity & Scale** | Multi-IdP federation, group mapping, login enforcement, the CyberArk Conjur connector, and the durable JetStream event-bus backend. |
-
-The four included families above describe Business packaging. The capability
-matrix below states what ships in the open product, what the commercial code adds,
-and what is planned.
-
-That is the catalog by NAME. The per-capability split — what the
-AGPL build does and what each family adds, side by side — is the edition matrix in
-[the edition matrix below](#what-is-open-what-is-commercial-what-is-planned-by-area), and the
-reasoning behind each cut is
+The reasoning behind each cut is
 [Open core & licensing](docs-site/src/content/docs/explanation/open-core-and-licensing.md)
-(*What is open vs enterprise* and *Why this model*). Read those before quoting this
-paragraph as a complete list: this file has been the short one before. In every
-case the open substrate stays open and the module is new code layered on top — the
-open build answers honestly instead of degrading (an absent subcommand, an unknown
-sink kind, or a `501` that names the module).
+(*Why this model*). In every case the open substrate stays open and the module is
+new code layered on top — the open build answers honestly instead of degrading (an
+absent subcommand, an unknown sink kind, or a `501` that names the module). The
+Business threat-intel catalog is compiled into the binary; optional signed, versioned feed
+artifacts are pinned and applied by the operator, and Olivares operates no curated
+feed distribution and publishes no release cadence.
 
 We offer a **commercial license** that provides a private *exception* to the
 AGPL's obligations (for organizations that cannot comply with them). The
-`enterprise/` capabilities are included in Business as the four families above,
-under commercial terms. Enterprise scope is negotiated. The open and
+`enterprise/` capabilities are included in Business (the base line and the four
+families above), under commercial terms, except the few that
+[`docs/editions.md`](docs/editions.md) places in Enterprise. Enterprise scope is
+negotiated. The open and
 commercial editions are **not** identical — the modules are new code that was
 never in the open build (the GitLab `ee/` model) — but nothing is taken away
 from what ships open: no published feature is moved behind the wall. The
 AGPL/Apache split itself is the classic dual-licensing frontier (MySQL, Qt,
 MinIO, Grafana).
 
-## What is open, what is commercial, what is planned — by area
+## What is open, what is commercial
 
-This table maps each capability area to where it ships — the open (AGPL) build, or one of the included Business capability families — and what is planned; maturity per capability is stated honestly in [Honesty & limits](docs-site/src/content/docs/start/honesty-and-limits.md). The full list of reserved seams is declared in the public tree itself ([`cmd/olivares/wire_noenterprise.go`](cmd/olivares/wire_noenterprise.go)): a capability the open binary reserves answers `501` or no-ops, and its comment says so — nothing is hidden and nothing open is removed.
-
-| Area | Open (AGPL) | Included Business capabilities | Planned |
-|---|---|---|---|
-| Work & orchestration | durable work items (brief, dependencies, acceptance, decisions, events), fenced leases with takeover and revoke, orchestrated launch of sessions against a work item, with work-fenced input and stop in the sessions API, A2A delegation to authorized peers with durable receipts, workflow-scoped messages/acks/handoffs, console Work and Orchestration views | — | shadow dual-report and the authority switch that makes this plane the system of record |
-| Visibility | inventory of agents/sessions/models/MCP servers/tools/identities, read/write access map with Permitted-vs-Observed drift, live sessions, orchestration graph, health/SLA | — | — |
-| Policy & enforcement | Cedar authorization engine (RBAC + deny-overlay + scoped grants), four deny-closed enforcement points (Claude Code hook, inline `/v1/messages` proxy, MCP `tools/call` gate, A2A delegation gate), two-person approvals, break-glass with dual control, estate kill-switch | hook hardening, server-tool egress control, computer-use governance gate, MCP tool-definition pins (deny-closed on a changed definition), automatic circuit breaker with kill-switch escalation | — |
-| Claude & the agent ecosystem | Claude Code governed in the hook, console launch/attach/govern/stop of Claude Code sessions, enterprise managed-settings delivery, per-subject/per-surface model access, MCP (OAuth-gated resource server, posture, registry, `.mcpb`), A2A v1, surfaces for gemini-cli/Cursor/Codex CLI/opencode/goose/cline/OpenHands/OpenClaw/Hermes (enforcement where the surface exposes it, posture observation where it doesn't), Teams notifications with approval deep-links | MCP App render content inspection, elicitation/sampling mediation | — |
-| Context & knowledge | ten live content sources (SharePoint, Confluence, Google Drive, Notion, Salesforce, Snowflake, S3, Azure AI Search, SAP OData, PostgreSQL) plus a root-confined filesystem source (local/NFS/SMB mounts), governed RAG (lexical retrieval by default, model-backed semantic with a provisioned embedder — fails closed under `embed_policy=model_backed`) with deny-closed clearance at retrieval time, per-source provenance, data-product catalog with versioned contracts and quality gates | — | — |
-| Identity & access | single-IdP SSO (OIDC + SAML 2.0), WebAuthn/FIDO2, PIV/CAC, AAL step-up, non-human identity lifecycle, agent-identity federation (Entra Agent ID, AWS AgentCore, Google, SPIFFE/SPIRE), roster reconciliation (AD/LDAP/Okta/Entra/Vault/Infisical) with SCIM, CAEP event receiver | multi-IdP federation, SSO-enforcement, managed SCIM, CyberArk Conjur NHI rotation, CAEP transmitter (signed SETs to SSF receivers) | — |
-| Data security | inline guardrails (PII, prompt-injection, jailbreak), DLP egress, BYOK/CMEK across three KMS backends (AWS KMS, Google Cloud KMS, Azure Key Vault), privileged-session recording, right-to-erasure with verified key-shred, retention and legal-hold, residency attestation, TLS 1.3 hybrid PQC key establishment (X25519MLKEM768) | content firewall/DLP | — |
-| Evidence & compliance | hash-chained Ed25519-signed audit ledger, sealed append-only evidence, 26 framework catalogs, dir/S3 archive with export/verify (dir is WORM only on an immutable substrate; S3 uses Object Lock), OSCAL export (three open models), open DORA ICT-risk view, SIEM/ITSM push (CEF/LEEF/syslog/OTLP/OCSF) | OSCAL profile/SSP ingestion + POA&M builder, regulatory retention floors + compliance-mode lock (SEC 17a-4/FINRA 4511/CFTC 1.31), DORA Register-of-Information + major-incident reports, long-horizon WORM legal holds + examiner-grade evidence bundles, Azure/GCS WORM sinks, ISO 42001 AIMS pack, compliance-depth + NIS2 classification packs, enterprise reporting | — |
-| Operations | FinOps budgets that deny or throttle spend, calibrated LLM-judge evals with blocking CI gate (on-demand: judge credential required, else `SKIPPED`), OS-isolated red-team sandboxes (gVisor/Firecracker; unprovisioned runs report `DEGRADED`), connector-health dashboard with public status page, console-managed backups and restore, open attack-path queries | compiled threat-intel catalog, incident close-loop | — |
-| Platform & deploy | single static binary with embedded console, SQLite or Postgres with row-level security, Docker/Kubernetes/Helm/air-gapped, Terraform provider, generated client SDKs (Go, Java, Python, TypeScript), open in-proc bus + Core-NATS bridge | durable JetStream bus (at-least-once + dedup) | Windows packages (today: Linux container or build from source), model fine-tuning post-v1, voice telemetry probe (declared deny-closed seam today) |
+Where each capability ships (the open AGPL build, a Business family or Enterprise) and why is the placement table in [`docs/editions.md`](docs/editions.md). That table is the only one. Maturity per capability is stated in [Honesty & limits](docs-site/src/content/docs/start/honesty-and-limits.md). The full list of reserved seams is declared in the public tree itself ([`cmd/olivares/wire_noenterprise.go`](cmd/olivares/wire_noenterprise.go)): a capability the open binary reserves answers `501` or no-ops, and its comment says so — nothing is hidden and nothing open is removed.
 
 The AGPL build is the whole platform and is never feature-capped from within. The commercial modules are additive new code, never features removed from the open product. A subscription is the credential you download signed module packs with — a distribution-style model of signed module packs — not a key that unlocks code already sitting on your disk. User accounts are unlimited in the self-hosted engine: no edition of it enforces a seat cap, and the binary's seat seam is an unconditional no-op. The hosted Cloud tier is the one exception — its control plane admits seats per tenant, which is a property of that service and not of this binary.
 
@@ -172,13 +146,14 @@ You need the commercial license if you cannot or do not want to meet
 the AGPL obligations — e.g. an internal policy that forbids AGPL, embedding in a
 closed-source product, or running a modified network service without publishing
 your changes. Using any of the `enterprise/` modules also requires the
-corresponding family entitlement included in Business, independently of AGPL compliance. Otherwise,
+Business entitlement that includes it (the base line or the family), or an Enterprise
+agreement for the capabilities placed there, independently of AGPL compliance. Otherwise,
 use the free AGPL build.
 
 - **Commercial license, modules, custom terms, support — dedicated contact:**
   **enterprise@olivares.ai**
 
-The support tiers and first-response model — best-effort response targets, not
+Support per edition and the Enterprise first-response targets — non-binding, not
 penalty-backed SLAs — are published in [`SUPPORT.md`](SUPPORT.md).
 The **Enterprise** relationship also covers commercial/legal terms — data-residency
 *architecture support*, dedicated deployment, and **indemnification** — which are

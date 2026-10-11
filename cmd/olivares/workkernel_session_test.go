@@ -90,7 +90,7 @@ func TestSessionAuthorityProjectionsUnderWorkspaceRequest(t *testing.T) {
 //
 // It is the same lesson as the M63-M91 matrix one level down: a subject that is
 // not the one that runs in production. The subject here IS the one boot wires
-// (boot.go, UseWorkIdentityResolver).
+// (boot.go, Dependencies.WorkIdentity).
 
 func newSessionResolverFixture(t *testing.T) (workIdentityResolver, *sessions.Module, store.Store, model.TenantID, model.ID) {
 	t.Helper()

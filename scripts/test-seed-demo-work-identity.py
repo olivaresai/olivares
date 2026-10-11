@@ -30,7 +30,7 @@ SEEDER = Path(__file__).resolve().with_name("seed-demo-work.py")
 def load_seeder():
     spec = importlib.util.spec_from_file_location("seed_demo_work_under_test", SEEDER)
     if spec is None or spec.loader is None:
-        print("NO HE PODIDO MIRAR: %s no se puede cargar" % SEEDER, file=sys.stderr)
+        print("COULD NOT CHECK: cannot load %s" % SEEDER, file=sys.stderr)
         sys.exit(2)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)

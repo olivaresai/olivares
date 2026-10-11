@@ -58,8 +58,12 @@ version: 2
 
 project_name: olivares
 
+snapshot:
+  version_template: '{{ trimprefix (trim (reverseFilter (mustReadFile "RELEASE-VERSION") "^[[:space:]]*(#|$)")) "v" }}-SNAPSHOT-{{ .ShortCommit }}'
+
 before:
   hooks:
+    - sh scripts/build-ldflags.sh --check-version {{ .Version }}
     # ⛔ THE RELEASE EVIDENCE IS WRITTEN HERE, AND THE POSITION IS THE POINT.
     # release-commit.txt records the commit this run built; phase 2 downloads it, checks its
     # digest against the cosign-verified checksums.txt and binds its whole ceremony to those
@@ -87,8 +91,10 @@ before:
     - sh scripts/check-release-pubkey.sh
     # The web UI must be built into the Go embed dir BEFORE the Go build, so the
     # single binary ships the cockpit. (core/internal/webui/dist is build.outDir.)
-    - bash -c "pnpm --dir web install --frozen-lockfile && pnpm --dir web run build"
+    - bash scripts/build-web.sh
     - go mod download
+    - go install github.com/google/go-licenses/v2@v2.0.1
+    - python3 scripts/license-gate.py --tags release --target linux/amd64 --target linux/arm64 --target darwin/amd64 --target darwin/arm64 --notice .license-notices/NOTICE-community
 
 builds:
   - id: olivares
@@ -98,12 +104,15 @@ builds:
     # plugins FOR THIS TARGET (GOOS/GOARCH from the env goreleaser sets) into the
     # go:embed dir cmd/olivares/firstparty/bins, under a lock (goreleaser builds
     # targets in parallel and that dir is shared state), then execs `go` with the
-    # unchanged args. Without it every released artifact embedded ZERO plugins —
+    # build policy plus the shared version stamps. Without it every released artifact embedded ZERO plugins —
     # the flagship claude source included — while dev builds (task build) worked
     # (E1). The Extract path is asserted on the artifact by
     # scripts/release-smoke.sh after a snapshot run.
     tool: scripts/goreleaser-build-wrapper.sh
     env:
+      - OLIVARES_BUILD_VERSION={{ .Version }}
+      - OLIVARES_BUILD_COMMIT={{ .ShortCommit }}
+      - OLIVARES_BUILD_DATE={{ .CommitDate }}
       - CGO_ENABLED=0 # modernc.org/sqlite is pure Go: fully static, memory-safe.
     flags:
       - -trimpath
@@ -118,9 +127,6 @@ builds:
       - release
     ldflags:
       - -s -w -buildid=
-      - -X main.version={{ .Version }}
-      - -X main.commit={{ .ShortCommit }}
-      - -X main.date={{ .CommitDate }}
       - -X github.com/olivaresai/olivares/core/license.releasePublicKeyB64={{ .Env.OLIVARES_LICENSE_PUBKEY }}
       # A DEDICATED OTA anchor authenticates update manifests. It must never be
       # the license key whose private half is online in the fulfilment Worker.
@@ -156,12 +162,15 @@ builds:
     # plugins FOR THIS TARGET (GOOS/GOARCH from the env goreleaser sets) into the
     # go:embed dir cmd/olivares/firstparty/bins, under a lock (goreleaser builds
     # targets in parallel and that dir is shared state), then execs `go` with the
-    # unchanged args. Without it every released artifact embedded ZERO plugins —
+    # build policy plus the shared version stamps. Without it every released artifact embedded ZERO plugins —
     # the flagship claude source included — while dev builds (task build) worked
     # (E1). The Extract path is asserted on the artifact by
     # scripts/release-smoke.sh after a snapshot run.
     tool: scripts/goreleaser-build-wrapper.sh
     env:
+      - OLIVARES_BUILD_VERSION={{ .Version }}
+      - OLIVARES_BUILD_COMMIT={{ .ShortCommit }}
+      - OLIVARES_BUILD_DATE={{ .CommitDate }}
       - CGO_ENABLED=0 # modernc.org/sqlite is pure Go: fully static, memory-safe.
     flags:
       - -trimpath
@@ -176,9 +185,6 @@ builds:
       - release
     ldflags:
       - -s -w -buildid=
-      - -X main.version={{ .Version }}
-      - -X main.commit={{ .ShortCommit }}
-      - -X main.date={{ .CommitDate }}
       - -X github.com/olivaresai/olivares/core/license.releasePublicKeyB64={{ .Env.OLIVARES_LICENSE_PUBKEY }}
       # A DEDICATED OTA anchor authenticates update manifests. It must never be
       # the license key whose private half is online in the fulfilment Worker.
@@ -196,48 +202,6 @@ builds:
       - goos: linux
         goarch: amd64
 
-  # ---- FIPS 140-3 build variant (SCP-09) — a SEPARATE, opt-in artifact -----------
-  # IDENTICAL to the `olivares` build above (same -trimpath / -ldflags /
-  # mod_timestamp → same reproducibility guarantees, still CGO_ENABLED=0 / pure-Go
-  # static) EXCEPT it sets GOFIPS140=v1.0.0, which selects Go's native FIPS 140-3
-  # mode at BUILD time (https://go.dev/doc/security/fips140). That links the in-tree
-  # crypto/internal/fips140 module v1.0.0 — the "FIPS 140-3 Go Cryptographic Module
-  # v1.0.0", CMVP Certificate #5247 (ACTIVE/validated, frozen from Go 1.24). Native
-  # mode needs NO CGO/BoringCrypto, so the binary is still fully static.
-  #
-  # HONESTY (docs/SCP-09-FIPS-STIG.md): GOFIPS140=v1.0.0 → CMVP-validated module
-  # #5247. GOFIPS140=v1.26.0/latest would also enable FIPS mode but that module is
-  # "Pending Review" on the CMVP Modules-In-Process List (2026-04-28, CAVP A8028) —
-  # NOT yet validated — so we pin v1.0.0 here. The binary still ships with FIPS
-  # enforcement OFF unless launched with GODEBUG=fips140=on (Dockerfile.fips sets it).
-  # This does NOT replace the base build above: that pure-Go reproducible binary is
-  # what release packaging ships by default and is byte-for-byte unchanged.
-  - id: olivares-fips
-    main: ./cmd/olivares
-    binary: olivares-fips
-    # Same connector-embed wrapper as the base build (the FIPS artifact must ship
-    # the same plugin set; GOFIPS140 in this build's env applies to the plugin
-    # builds too, so the whole FIPS artifact is FIPS-mode-built).
-    tool: scripts/goreleaser-build-wrapper.sh
-    env:
-      - CGO_ENABLED=0 # native FIPS 140-3 mode keeps the pure-Go static build.
-      - GOFIPS140=v1.0.0 # CMVP cert #5247 (validated). NOT v1.26.0 (pending review).
-    flags:
-      - -trimpath
-    # IDENTICAL two-anchor handling to the base build above (kept in lockstep so
-    # both artifacts report the same license and OTA fingerprints).
-    tags:
-      - release
-    ldflags:
-      - -s -w -buildid=
-      - -X main.version={{ .Version }}
-      - -X main.commit={{ .ShortCommit }}
-      - -X main.date={{ .CommitDate }}
-      - -X github.com/olivaresai/olivares/core/license.releasePublicKeyB64={{ .Env.OLIVARES_LICENSE_PUBKEY }}
-      - -X github.com/olivaresai/olivares/core/release.artifactVerifyKeyB64={{ .Env.OLIVARES_OTA_PUBKEY }}
-    mod_timestamp: "{{ .CommitTimestamp }}"
-    goos: [linux, darwin]
-    goarch: [amd64, arm64]
 
 archives:
   # Base archive: pinned to the base build by `ids` so the FIPS variant added below
@@ -251,7 +215,8 @@ archives:
     files:
       - LICENSE
       - LICENSING.md
-      - NOTICE
+      - src: .license-notices/NOTICE-community
+        dst: NOTICE
       # DISCLAIMER.md carries the warranty/liability terms that SUPPLEMENT the AGPL
       # under its section 7(a). NOTICE points at it by name as "distributed with this
       # software"; if it does not ride along, that pointer resolves to nothing in the
@@ -269,28 +234,6 @@ archives:
       # Apache-2.0 recipient holding a reference to a file that is not there.
       - LICENSES/
 
-  # Parallel FIPS archive: distinctly named (…_fips_…) and built ONLY from the
-  # olivares-fips binary, so the validated-crypto artifact is never confused
-  # with the default one. The FIPS gate doc rides along so the honesty ledger
-  # travels with the binary.
-  - id: olivares-fips
-    ids: [olivares-fips]
-    formats: [tar.gz]
-    name_template: "{{ .ProjectName }}_{{ .Version }}_fips_{{ .Os }}_{{ .Arch }}"
-    files:
-      - LICENSE
-      - LICENSING.md
-      - NOTICE
-      - DISCLAIMER.md
-      - SECURITY.md
-      - README.md
-      - scripts/install-service.sh
-      - packaging/service/
-      # The canonical texts of every licence used in the tree (REUSE). LICENSING.md and
-      # NOTICE both cite them BY PATH; shipping the pointers without the documents leaves an
-      # Apache-2.0 recipient holding a reference to a file that is not there.
-      - LICENSES/
-      - docs/SCP-09-FIPS-STIG.md
 
 checksum:
   name_template: "checksums.txt"
@@ -330,54 +273,9 @@ checksum:
     # checksums.txt covers it too.
     - glob: dist/olivares-install-*.sh
 
-# Per-archive SBOMs as SIDECAR files. SPDX-2.3 (the interchange baseline) AND
-# CycloneDX 1.6 (security-native) are generated through scripts/sbom-generate.sh:
-# the wrapper invokes syft, then records the CISA-2025-DRAFT "Generation Context"
-# truthfully as an SPDX creationInfo.comment and as CycloneDX metadata.lifecycles
-# [{phase: "build"}]. .syft.yaml allows only local Go module-cache/vendor license
-# lookup (populated by go mod download) and keeps remote license lookup disabled,
-# so air-gapped and reproduced builds stay honest (SCP-03). These sidecars are ALSO
-# attached as signed in-toto ATTESTATIONS in the release workflow (cosign
-# attest-blob over each archive) so a scanner discovers and trusts them via the
-# signature, not as a swappable loose file. The SBOM of the container IMAGE (not
-# just the archive) is generated with the same wrapper and attested in the
-# workflow too, where the pushed image digest is available (SCP-03).
-sboms:
-  - id: archive-sbom-spdx
-    artifacts: archive
-    documents:
-      - "{{ .ArtifactName }}.spdx.sbom.json"
-    cmd: bash
-    args:
-      # envOrDefault (never hard-fails on an absent var, unlike .Env.X): on GitHub
-      # Actions the runner guarantees GITHUB_WORKSPACE but NOT PWD (no shell in the
-      # process chain); locally the launching shell exports PWD = repo root.
-      - '{{ envOrDefault "GITHUB_WORKSPACE" (envOrDefault "PWD" ".") }}/scripts/sbom-generate.sh'
-      - "$artifact"
-      - spdx-json
-      - "$document"
-  - id: archive-sbom-cyclonedx
-    artifacts: archive
-    documents:
-      - "{{ .ArtifactName }}.cdx.sbom.json"
-    cmd: bash
-    args:
-      # Same envOrDefault rationale as the SPDX entry above.
-      - '{{ envOrDefault "GITHUB_WORKSPACE" (envOrDefault "PWD" ".") }}/scripts/sbom-generate.sh'
-      - "$artifact"
-      - cyclonedx-json@1.6
-      - "$document"
-
-# Cosign signing of the checksums file. Verifying the checksums file then
-# transitively trusts every artifact listed in it (each line is a SHA-256).
-# MODE-AWARE through the launcher: keyless/Sigstore in production, per-run key with NO
-# transparency-log upload in rehearsal (COSIGN_MODE, injected by cosign-verified.sh).
-# The `certificate:` field renders EMPTY in key mode — a key signature has no Fulcio
-# certificate, and goreleaser only registers/uploads the certificate artifact when the
-# templated value is non-empty (v2.16.0 internal/pipe/sign/sign.go:296-307). The
-# `--output-certificate` flag left in `args:` is harmless in key mode: measured with
-# cosign v2.6.4, it is accepted and simply writes nothing. `.Env.COSIGN_MODE` renders
-# with missingkey=error, so an unclassified caller fails loudly instead of guessing.
+# No per-archive SBOM: the signed checksums cover the archives. The release carries ONE
+# SPDX SBOM, generated in the release workflow from the shipped image and attested to it
+# by digest (olivares.spdx.sbom.json).
 signs:
   - id: checksums
     cmd: bash
@@ -385,6 +283,8 @@ signs:
     certificate: '{{ if eq .Env.COSIGN_MODE "keyless" }}${artifact}.pem{{ end }}'
     args:
       - scripts/cosign-verified.sh
+      - --scan-checksums
+      - "${artifact}"
       - sign-blob
       - "--output-signature=${signature}"
       - "--output-certificate=${certificate}"
@@ -393,9 +293,8 @@ signs:
     artifacts: checksum
     output: true
 
-# Native Linux packages (.deb / .rpm / .apk) from the BASE binary only — the FIPS
-# variant ships as the *_fips_* archive and the *-fips image, never as the default
-# package. .deb/.rpm carry the systemd unit; .apk carries an executable OpenRC
+# Native Linux packages (.deb / .rpm / .apk) from the Community binary. FIPS is a
+# Business build and ships in no Community archive or package. .deb/.rpm carry the systemd unit; .apk carries an executable OpenRC
 # unit. The postinstall creates a hardened service user + /var/lib/olivares and
 # never enables/starts the service (the operator opts in). Contents use the
 # packager field (goreleaser v2.17.0 NFPMContent) so APK does not receive the
@@ -436,8 +335,10 @@ homebrew_casks:
     homepage: https://olivares.ai
     description: Ground truth for enterprise AI — self-hosted AI governance control plane
     caveats: |
-      Loopback-only by default; the engine prints a first-boot setup token. Verify any
-      release with scripts/verify-release.sh in the source repository.
+      Listens on every interface by default: TLS on, no default credentials, and the
+      engine prints a one-time setup token on first boot. To keep it on this machine:
+        olivares quickstart --listen 127.0.0.1:8443 --grpc-listen 127.0.0.1:8444
+      Verify any release with scripts/verify-release.sh in the source repository.
 
 # PARAMETERIZED DESTINATIONS, VERSIONED OUTPUTS ONLY (design §A.2.4-6, §B rec. 3-4).
 # The image repository and source label render from the validated profile. No `latest*`
@@ -455,6 +356,7 @@ dockers:
     extra_files:
       - LICENSE
       - NOTICE
+      - .license-notices/NOTICE-community
       - LICENSING.md
       - DISCLAIMER.md
       - LICENSES
@@ -485,6 +387,7 @@ dockers:
     extra_files:
       - LICENSE
       - NOTICE
+      - .license-notices/NOTICE-community
       - LICENSING.md
       - DISCLAIMER.md
       - LICENSES
@@ -504,84 +407,6 @@ dockers:
       - "--label=org.opencontainers.image.licenses=AGPL-3.0-only"
       - "--label=org.opencontainers.image.source={{ .Env.SOURCE_REPOSITORY_URL }}"
 
-  # ---- FIPS image (SCP-09): the FIPS binary on the same Debian 13 agent runtime ----
-  # Same non-root Debian 13 agent runtime as the default image, but built FROM
-  # the olivares-fips binary and launched with GODEBUG=fips140=on (set in
-  # Dockerfile.fips) so the CMVP v1.0.0 module's self-tests run and only approved
-  # algorithms are permitted. Distinct `…-fips` tags — never overwrites :latest.
-  # FIPS covers the Go engine only. The *-stig variant retains the RHEL
-  # substrate for the matching SCAP datastream.
-  - id: olivares-fips-image
-    ids: [olivares-fips]
-    dockerfile: Dockerfile.fips
-    # The Dockerfile COPYs the licence texts, so they must be IN the build context;
-    # goreleaser's context is a temp dir holding the binary and nothing else.
-    extra_files:
-      - LICENSE
-      - NOTICE
-      - LICENSING.md
-      - DISCLAIMER.md
-      - LICENSES
-      - packaging/container/data-dir
-      - packaging/container/uv-LICENSE-MIT.txt
-    use: buildx
-    goos: linux
-    goarch: amd64
-    image_templates:
-      - "{{ .Env.OCI_IMAGE_REPO }}:{{ .Version }}-fips-amd64"
-    build_flag_templates:
-      - "--platform=linux/amd64"
-      - "--label=org.opencontainers.image.title={{ .ProjectName }}-fips"
-      - "--label=org.opencontainers.image.version={{ .Version }}"
-      - "--label=org.opencontainers.image.revision={{ .FullCommit }}"
-      - "--label=org.opencontainers.image.created={{ .CommitDate }}"
-      - "--label=org.opencontainers.image.licenses=AGPL-3.0-only"
-      - "--label=org.opencontainers.image.source={{ .Env.SOURCE_REPOSITORY_URL }}"
-      - "--label=ai.olivares.fips140.mode=v1.0.0"
-      - "--label=ai.olivares.fips140.cmvp-certificate=5247"
-      # Select the prebuilt-binary path of the Dockerfile. Without it the default is
-      # `source`, BuildKit walks the web/ and go.work stages, and they look for a
-      # repository that is NOT in this context -- which is exactly how the first
-      # release to ever reach the docker build died (2026-09-01, v26.8.0).
-      - "--build-arg=BIN_SOURCE=prebuilt"
-
-  # ---- STIG image (SCP-09): the FIPS binary on a SCANNABLE, STIG-profiled base ----
-  # This variant keeps Red Hat UBI minimal and its RPM database for the matching
-  # RHEL DISA STIG SCAP datastream,
-  # carries the FIPS binary, runs non-root, and is self-verifiable with the published
-  # OpenSCAP profile referenced in oscap/. It is the hardened *deployment* image —
-  # separate from the reproducible base image above.
-  - id: olivares-stig-image
-    ids: [olivares-fips]
-    dockerfile: Dockerfile.stig
-    # The Dockerfile COPYs the licence texts, so they must be IN the build context;
-    # goreleaser's context is a temp dir holding the binary and nothing else.
-    extra_files:
-      - LICENSE
-      - NOTICE
-      - LICENSING.md
-      - DISCLAIMER.md
-      - LICENSES
-      - packaging/container/data-dir
-      - packaging/container/uv-LICENSE-MIT.txt
-    use: buildx
-    goos: linux
-    goarch: amd64
-    image_templates:
-      - "{{ .Env.OCI_IMAGE_REPO }}:{{ .Version }}-stig-amd64"
-    build_flag_templates:
-      - "--platform=linux/amd64"
-      - "--label=org.opencontainers.image.title={{ .ProjectName }}-stig"
-      - "--label=org.opencontainers.image.version={{ .Version }}"
-      - "--label=org.opencontainers.image.revision={{ .FullCommit }}"
-      - "--label=org.opencontainers.image.created={{ .CommitDate }}"
-      - "--label=org.opencontainers.image.licenses=AGPL-3.0-only"
-      - "--label=org.opencontainers.image.source={{ .Env.SOURCE_REPOSITORY_URL }}"
-      - "--label=ai.olivares.fips140.mode=v1.0.0"
-      # Same as the fips entry: pick the prebuilt-binary path. Dockerfile.stig has the
-      # identical source-build stages, so without this it fails the identical way.
-      - "--build-arg=BIN_SOURCE=prebuilt"
-      - "--label=ai.olivares.stig.oscap-profile=xccdf_org.ssgproject.content_profile_stig"
 
 # Manifest lists so the BARE tags resolve to a multi-arch image. Without these the
 # per-arch `…-amd64` / `…-arm64` tags exist but `docker pull …:<version>` 404s. The base
@@ -593,12 +418,6 @@ docker_manifests:
     image_templates:
       - "{{ .Env.OCI_IMAGE_REPO }}:{{ .Version }}-amd64"
       - "{{ .Env.OCI_IMAGE_REPO }}:{{ .Version }}-arm64"
-  - name_template: "{{ .Env.OCI_IMAGE_REPO }}:{{ .Version }}-fips"
-    image_templates:
-      - "{{ .Env.OCI_IMAGE_REPO }}:{{ .Version }}-fips-amd64"
-  - name_template: "{{ .Env.OCI_IMAGE_REPO }}:{{ .Version }}-stig"
-    image_templates:
-      - "{{ .Env.OCI_IMAGE_REPO }}:{{ .Version }}-stig-amd64"
 
 # Cosign signing of the published container images AND the bare manifests (by digest).
 # Mode-aware exactly like `signs:` above — the launcher injects the per-run key and
@@ -689,13 +508,7 @@ release:
 
     Support period: see [SECURITY.md §Supported versions](https://github.com/olivaresai/olivares/blob/main/SECURITY.md#supported-versions) and [docs/CRA-READINESS.md §Support-period declarations](https://github.com/olivaresai/olivares/blob/main/docs/CRA-READINESS.md#support-period-declarations).
 
-    Verify artifacts before installing with `scripts/verify-release.sh`.
+    Verify artifacts before installing: [INSTALL.md, Verifying a release](https://github.com/olivaresai/olivares/blob/main/INSTALL.md#verifying-a-release).
 
-changelog:
-  use: github
-  sort: asc
-  filters:
-    exclude:
-      - "^docs:"
-      - "^test:"
-      - "^chore:"
+# Both release workflows pass the dated CHANGELOG section with --release-notes.
+# Do not set changelog.disable: it also discards an explicit --release-notes file.

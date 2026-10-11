@@ -18,6 +18,9 @@ import (
 // Name is the connector's globally unique identifier.
 const Name = "olivares.github-source"
 
+// DefaultAPIBase is shared by the observer and publication target kind.
+const DefaultAPIBase = "https://api.github.com"
+
 const (
 	// defaultWebhookAddr is LOOPBACK. It was the wildcard ":9800" until
 	// which meant an operator who set nothing got a plaintext receiver on every
@@ -75,7 +78,7 @@ func (s *Source) Descriptor() sdk.Descriptor {
 			{Key: "installation_id", Type: sdk.FieldString, Description: "GitHub App installation ID"},
 			{Key: "private_key", Type: sdk.FieldString, Secret: true, Description: "GitHub App private key PEM (secret-store ref)"},
 			{Key: "pat", Type: sdk.FieldString, Secret: true, Description: "personal access token fallback (secret-store ref)"},
-			{Key: "api_base", Type: sdk.FieldString, Default: "https://api.github.com", Description: "API base URL for GHE Server"},
+			{Key: "api_base", Type: sdk.FieldString, Default: DefaultAPIBase, Description: "API base URL for GHE Server"},
 			{Key: "poll_interval", Type: sdk.FieldDuration, Default: "5m", Description: "API polling interval"},
 			{Key: "acl_interval", Type: sdk.FieldDuration, Default: "15m", Description: "ACL sync interval"},
 			{Key: "agent_markers", Type: sdk.FieldString, Default: "Claude,Copilot,Cursor,Cline,Codex,Devin,Aider,Windsurf", Description: "Co-Authored-By names indicating AI agents"},
@@ -126,7 +129,7 @@ func (s *Source) Open(_ context.Context, cfg sdk.Config) error {
 
 	s.apiBase = strings.TrimRight(cfg.Get("api_base"), "/")
 	if s.apiBase == "" {
-		s.apiBase = "https://api.github.com"
+		s.apiBase = DefaultAPIBase
 	}
 
 	s.pollInterval = cfg.GetDuration("poll_interval", 5*time.Minute)

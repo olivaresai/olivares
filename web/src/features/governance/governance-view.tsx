@@ -37,7 +37,8 @@ import { RelTimeLabel } from '@/features/shared'
 import { governanceApi, governanceKeys } from './api'
 import { AgentRiskView } from './agent-risk-view'
 import { ApprovalDetailSheet } from './approval-detail'
-import { BreakGlassView } from './break-glass'
+import { PANEL_EXTENSIONS } from '@/features/extensions'
+import { useOfferedPanels, type TabExtension } from '@/features/panels'
 import { DecisionDialog } from './decision-dialog'
 import { ApprovalRequestCell, AskedBy } from './approval-preview'
 import { IdentitiesView } from './identities-view'
@@ -51,24 +52,26 @@ import {
   PageSecondaryActions,
 } from '@/components/ui/page-actions'
 
-type TabKey =
-  'approvals' | 'policies' | 'identities' | 'agent-risk' | 'break-glass'
+type TabKey = string
 
 const TAB_KEYS: readonly TabKey[] = [
   'approvals',
   'policies',
   'identities',
   'agent-risk',
-  'break-glass',
 ]
 
 /** The section a `?tab=` link names (the sidebar's Approvals entry and Now link to
  *  `?tab=approvals`), or the queue when the link names nothing this principal may open. */
-function initialTab(canReadApprovals: boolean): TabKey {
+function initialTab(
+  canReadApprovals: boolean,
+  panels: readonly TabExtension[],
+): TabKey {
   const fallback: TabKey = canReadApprovals ? 'approvals' : 'policies'
   if (typeof window === 'undefined') return fallback
   const want = new URLSearchParams(window.location.search).get('tab')
-  if (!want || !(TAB_KEYS as readonly string[]).includes(want)) return fallback
+  if (!want || (!TAB_KEYS.includes(want) && !panels.some((p) => p.id === want)))
+    return fallback
   if (want === 'approvals' && !canReadApprovals) return fallback
   return want as TabKey
 }
@@ -90,6 +93,7 @@ export default function GovernanceView() {
   const { t } = useTranslation(['governance', 'common'])
   const { can } = useAuth()
   const canReadApprovals = can('governance:approval:read')
+  const panels = useOfferedPanels(PANEL_EXTENSIONS.governanceTabs ?? [])
   //the AgentCore Cedar export is NOT a tab here. It has its own route
   // (registry.tsx, id `agentcoreExport`) because governance:agentcore-export:admin
   // is independently grantable (governance.go:397), and behind this identity-gated
@@ -101,7 +105,7 @@ export default function GovernanceView() {
   const router = useRouter({ warn: false }) as
     { navigate: (opts: unknown) => Promise<void> } | undefined
   const [tab, setTabState] = useState<TabKey>(() =>
-    initialTab(canReadApprovals),
+    initialTab(canReadApprovals, panels),
   )
   function setTab(value: TabKey) {
     setTabState(value)
@@ -132,7 +136,11 @@ export default function GovernanceView() {
           <TabsTrigger value="policies">{t('tabs.policies')}</TabsTrigger>
           <TabsTrigger value="identities">{t('tabs.identities')}</TabsTrigger>
           <TabsTrigger value="agent-risk">{t('tabs.agentRisk')}</TabsTrigger>
-          <TabsTrigger value="break-glass">{t('tabs.breakGlass')}</TabsTrigger>
+          {panels.map((p) => (
+            <TabsTrigger key={p.id} value={p.id}>
+              {p.label()}
+            </TabsTrigger>
+          ))}
         </TabsList>
 
         {canReadApprovals && (
@@ -153,9 +161,11 @@ export default function GovernanceView() {
           <AgentRiskView />
         </TabsContent>
 
-        <TabsContent value="break-glass">
-          <BreakGlassView active={tab === 'break-glass'} />
-        </TabsContent>
+        {panels.map((p) => (
+          <TabsContent key={p.id} value={p.id}>
+            <p.Component />
+          </TabsContent>
+        ))}
       </Tabs>
     </div>
   )

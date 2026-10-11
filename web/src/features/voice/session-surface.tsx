@@ -1,39 +1,37 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 //
-// La superficie viva de UNA sesión de voz — las tres rutas que el motor sirve y la
-// consola nunca pidió.
+// The live surface of one voice session: three engine routes the console never requested
+//.
 //
-// `modules/voice/api.go:25-31` sirve OCHO rutas y la consola llamaba TRES: `/sessions`,
-// `/sessions/{ref}` y `/policies`. Faltaban `GET /sessions/{ref}/stream`,
-// `GET /sessions/{ref}/decisions` y `POST /sessions/open`, que juntas son lo que hace
-// operable una sesión: verla en vivo, ver por qué se decidió lo que se decidió, y abrirla.
+// `modules/voice/api.go:25-31` serves eight routes; the console called three:
+// `/sessions`, `/sessions/{ref}`, and `/policies`. Missing were
+// `GET /sessions/{ref}/stream`, `GET /sessions/{ref}/decisions`, and `POST /sessions/open`:
+// the ability to watch a session live, inspect its decisions, and open it.
 //
-// CUATRO HECHOS DEL MOTOR MANDAN AQUÍ, Y NINGUNO ES UNA ELECCIÓN DE DISEÑO:
+// Four engine facts govern this surface:
 //
-//   `/stream` ES SSE, NO JSON (`stream.go:117`, `text/event-stream`). Envolverlo con el
-//   cliente HTTP compartido daría `undefined` en el ÉXITO — el cliente parsea JSON. Va por
-//   `useLiveStream`, que existe justamente porque `EventSource` no puede mandar el bearer
-//   ni la cabecera de tenant (`shared/sse.ts:11-12`).
+// `/stream` is SSE, not JSON (`stream.go:117`, `text/event-stream`). The shared HTTP client
+// parses JSON and would return `undefined` on success. Use `useLiveStream`, which exists
+// because `EventSource` cannot send the bearer or tenant header (`shared/sse.ts:11-12`).
 //
-//   EL ESTADO DE LA CONEXIÓN SE DIBUJA, NO SE FINGE. El hook devuelve
-//   connecting|open|closed|error y lo dice: «it never fakes live». Un punto verde fijo
-//   sobre una conexión caída es la clase de mentira que una consola de operación no puede
-//   permitirse.
+// Render the real connection state. The hook returns connecting|open|closed|error and
+// never fakes live status. A fixed green dot would conceal a disconnected session.
 //
-//   EL OPEN ES ADMIN Y TIENE CINCO DESENLACES, NO DOS (`policies.go:262-372`):
-//     · 403 con cuerpo (`policy_verdict: denied`) → una DECISIÓN de política default-deny
-//     · 202 (`op_status: requested` + `approval_ref`) → SEGUNDA FASE, hay que re-enviar
-//     · `gate_status: no_gate` → NO hay puerta de aprobación cableada: un hueco del
-//       patrimonio, que NO es lo mismo que «denegado»
-//     · 502 «approval gate unavailable» → NO SE PUDO MIRAR
-//     · `dispatch_ref` → abierta de verdad
-//   Un 403 dibujado como «la petición falló» enseña a desconfiar de una frontera
-//   deliberada; y colapsar `no_gate` en «denegado» esconde un hueco de despliegue.
+// Open requires admin and has five outcomes (`policies.go:262-372`):
+//   - 403 with `policy_verdict: denied`: a default-deny policy decision;
+//   - 202 with `op_status: requested` and `approval_ref`: a second phase requiring
+//   resubmission;
+//   - `gate_status: no_gate`: no approval gate is connected, a deployment gap rather than
+//   denial;
+//   - 502 with "approval gate unavailable": the check could not be completed;
+//   - `dispatch_ref`: the session actually opened.
+// A generic failure for 403 misrepresents a deliberate boundary; treating `no_gate` as
+// denied hides a deployment gap.
 //
-//   Y EL CUERPO DEL 403 LLEGA: el cliente conserva `ApiError.body` a propósito para
-//   «(status, approval_ref, detail) under 403/409/503» (`lib/api/errors.ts:23-30`). Sin
-//   él, los cinco desenlaces se verían como dos.
+// The 403 body is available: the client deliberately preserves `ApiError.body` for
+// status, approval_ref, and detail under 403/409/503 (`lib/api/errors.ts:23-30`). Without
+// it, the five outcomes would collapse to two.
 import { useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'

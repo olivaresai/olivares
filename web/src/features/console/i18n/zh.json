@@ -93,7 +93,7 @@
       "data-dir": "数据目录"
     },
     "communityNote": "Community 版本：应用已验证的许可证会在此显示其详情；这不会改变此构建。",
-    "expiredBanner": "此商业许可证已过期：企业版模块已停用，该部署将按社区版运行。你的数据和用户账户完好无损 —— 没有任何账户被限制、停用或删除。请安装续期后的许可证以恢复模块。",
+    "expiredBanner": "此商业许可证已过期：Business 模块已停用，该部署将按社区版运行。你的数据和用户账户完好无损 —— 没有任何账户被限制、停用或删除。请安装续期后的许可证以恢复模块。",
     "managedExternally": "许可证由带外方式管理（来源：{{source}}）。请编辑该来源以进行更改——从控制台安装已禁用，以避免产生被遮蔽的文件。",
     "installTitle": "安装或更新许可证",
     "installHint": "粘贴已签名的许可证数据块，或上传许可证文件。在存储之前，它会针对此构建的密钥进行验证，然后实时应用。",
@@ -192,6 +192,7 @@
     "mode": "他们的登录方式",
     "modePassword": "设置初始密码",
     "modeInvite": "发送电子邮件邀请",
+    "inviteUnavailable": "此服务器无法通过电子邮件发送邀请（参见配置参考中的 OLIVARES_INVITE_MAIL_DESTINATION），请设置初始密码。",
     "password": "初始密码",
     "passwordHint": "至少 8 个字符。用户之后可以更改。",
     "submit": "入驻",
@@ -206,9 +207,9 @@
   },
   "sso": {
     "title": "单点登录（SSO）",
-    "caption": "连接你的身份提供方（OIDC 或 SAML）。密钥在静态存储时加密，且不再显示。配置 SSO 是一项覆盖整个部署、仅限超级管理员、并受升级认证保护的操作。",
+    "caption": "连接你的身份提供方（OIDC 或 SAML）。密钥在静态存储时加密，且不再显示。配置 SSO 是一项覆盖整个部署、仅限超级管理员的操作。",
     "superadminOnly": "SSO 是覆盖整个部署的设置；只有超级管理员才能查看或更改。",
-    "builderUnavailable": "此构建可以存储 SSO 配置，但无法将其激活。请使用 enterprise 标签重新构建以启用 OIDC/SAML 登录。",
+    "builderUnavailable": "此构建可以存储 SSO 配置，但无法将其激活：此引擎没有可用的 OIDC/SAML 提供方。",
     "statusConfigured": "已配置",
     "statusNotConfigured": "未配置",
     "statusEnabled": "已启用",
@@ -243,64 +244,11 @@
     "deleteTitle": "移除 SSO 配置",
     "deleteBody": "SSO 登录将停止工作并回退到本地凭据。已存储的密钥将被删除。",
     "deleted": "SSO 配置已移除。",
-    "enforcement": {
-      "title": "登录强制",
-      "caption": "对用户登录方式的可选、默认拒绝的控制。在此配置；由 business 构建强制执行。",
-      "requireSso": "要求 SSO（禁用密码登录）",
-      "requireSsoHint": "当身份提供方处于激活状态时阻止密码登录，因此缺失或已禁用的 IdP 永远不会把所有人锁在外面。business 构建会强制执行；运营者的紧急开关即应急通道（break-glass）。",
-      "networkAllowlist": "网络允许列表（CIDR）",
-      "networkAllowlistHint": "每行一个 CIDR（例如 10.0.0.0/8 或 2001:db8::/32）。设置后，仅接受来自这些范围的登录；留空表示不限制 IP。它使用真实的连接 IP（而非转发的标头）来守护登录面（密码登录与 SSO 完成）——它不是网络防火墙。",
-      "enforcedEnterprise": "由此构建强制执行",
-      "enforcedUnavailable": "已存储，但此构建不强制执行",
-      "enforcedOutOfScope": "未对此提供商强制执行",
-      "notConfigured": "未配置强制",
-      "requireSsoOn": "密码登录已禁用（要求 SSO）",
-      "requireSsoOff": "允许密码登录",
-      "noNetworkRestriction": "不限制 IP",
-      "unavailableBanner": "此构建会存储强制配置，但不会强制执行它。请使用 enterprise 标签重新构建以强制执行要求 SSO 和网络允许列表——它绝不会静默强制执行或伪装该控制。",
-      "outOfScopeBanner": "此构建会强制执行登录策略，但仅针对整个部署的主身份提供商。此处保存的状态并非它所读取的那一份，因此不会生效。请在部署的主身份提供商上进行配置，使其生效。",
-      "noIdpWarning": "只有在上方启用身份提供方后，要求 SSO 才会生效（防锁定）。"
-    },
-    "groupsClaim": "组声明",
-    "groupsClaimHint": "可选。承载用户组的 ID 令牌/UserInfo 声明（例如「groups」）。商业版会在登录时将其映射为角色。",
-    "groupsAttr": "组属性",
-    "groupsAttrHint": "可选。承载用户组的多值 SAML 属性（例如「memberOf」）。商业版会在登录时将其映射为角色。",
     "groups": {
-      "title": "组映射与预配",
-      "caption": "IdP 的目录组如何变成角色，以及 SCIM 是否是账户的唯一权威。在此配置；由商业版进行映射。",
       "provisioningTitle": "预配",
       "provisioningCaption": "SCIM 是否是账户的唯一权威。",
       "scimAuthoritative": "以 SCIM 为权威",
-      "scimAuthoritativeHint": "启用时，SSO 登录永不创建账户或更改组成员关系——由 SCIM 管理目录。禁用时，首次登录会预配用户并添加（绝不移除）IdP 声明的组。",
-      "unavailableBanner": "此版本会从断言中提取组，但不会将其映射为角色。商业版会在登录时将声明的组转化为授权。"
-    },
-    "scope": {
-      "label": "范围",
-      "global": "全局（整个部署）",
-      "globalHint": "所有没有自己 IdP 的租户使用的默认 IdP。",
-      "tenantHint": "此租户自己的 IdP。仅在商业版（多 IdP 能力）中登录时生效；启用第二个 IdP 需要该能力。"
-    },
-    "idp": {
-      "label": "身份提供商",
-      "default": "主要（默认）",
-      "add": "+ 添加身份提供商…",
-      "hint": "一个租户可以使用多个活动的提供方；每个额外的提供方都必须声明自己的邮箱域名。部署范围只使用其主提供方。",
-      "addTitle": "添加身份提供商",
-      "addBody": "为新的 IdP 指定一个简短的别名。它在范围内标识此 IdP，并作为登录路由键。",
-      "aliasLabel": "别名",
-      "aliasHint": "小写字母、数字和连字符（例如“okta”“azure-ad”）。1–31 个字符。",
-      "addConfirm": "继续",
-      "on": "登录时启用",
-      "off": "已关闭",
-      "activeNow": "登录时启用：{{names}}。",
-      "noneActive": "登录时没有启用的身份提供方：用户使用密码登录。"
-    },
-    "domains": {
-      "title": "家域路由",
-      "caption": "根据用户的邮箱域名将登录路由到此 IdP。",
-      "label": "声明的邮箱域名",
-      "hint": "每行一个域名（例如 corp.com）。每个域名在所有 IdP 中全局唯一；该域名的邮箱优先登录将路由到此处。",
-      "unavailableBanner": "域名已保存，但此版本不按域名路由；家域路由需要商业版。"
+      "scimAuthoritativeHint": "启用时，SSO 登录永不创建账户或更改组成员关系——由 SCIM 管理目录。禁用时，首次登录会预配用户并添加（绝不移除）IdP 声明的组。"
     },
     "displayName": "登录按钮上的名称",
     "displayNameHint": "用户会看到“使用 <名称> 登录”。留空则显示“单点登录”。最多 80 个字符。",
@@ -333,12 +281,14 @@
     "sealerUnavailable": "此构建可以列出密钥，但未接入封装器，因此无法存储值。请配置封装器后端以启用该存储。",
     "create": "新建密钥",
     "colName": "名称",
-    "colHint": "指纹",
-    "colDescription": "描述",
     "rotate": "轮换",
     "delete": "删除",
     "none": "尚无密钥。",
-    "noneHint": "添加一个密钥，即可在连接器配置中以 store:<name> 引用它。",
+    "noneHint": {
+      "sources": "添加一个密钥，即可在连接器配置中以 store:<name> 引用它。",
+      "mcp": "添加一个密钥，即可在 MCP 服务器中以 store:<name> 引用它。",
+      "sessions": "添加一个密钥，即可将其作为环境变量提供给会话。"
+    },
     "createTitle": "新建密钥",
     "editTitle": "轮换密钥",
     "name": "名称",
@@ -352,12 +302,40 @@
     "rotated": "密钥已保存。",
     "deleted": "密钥已删除。",
     "deleteTitle": "删除密钥",
-    "deleteBody": "该密钥将从存储中移除。任何引用 store:<name> 的连接器配置在你重新创建之前都将无法解析。",
-    "sessionCaption": "会话可以作为环境变量接收的密钥。名称以 env/ 开头。值不会再次显示。"
+    "deleteBody": {
+      "sources": "该密钥将从存储中移除。任何引用 store:<name> 的连接器配置在你重新创建之前都将无法解析。",
+      "mcp": "该密钥将从存储中移除。任何引用 store:<name> 的 MCP 服务器在你重新创建之前都将无法解析它。",
+      "sessions": "该密钥将从存储中移除。接收它的会话会继续运行，但在你重新创建之前无法恢复，引用它的模板也无法启动。"
+    },
+    "sessionCaption": "会话可以作为环境变量接收的密钥。名称以 env/ 开头。值不会再次显示。",
+    "colValue": "值",
+    "colChanged": "上次更改",
+    "colReference": "引用",
+    "colUsedBy": "使用方",
+    "rootFolder": "顶层",
+    "valueMasked": "值已隐藏；值改变时指纹随之改变",
+    "usedByLoading": "正在检查…",
+    "usedByUnavailable": "无法检查",
+    "usedByNone": {
+      "sources": "源清单中没有连接器",
+      "mcp": "没有 MCP 服务器",
+      "sessions": "没有会话"
+    },
+    "useKind": {
+      "source": "连接器",
+      "mcp": "MCP 服务器",
+      "session": "会话"
+    },
+    "externalTitle": "外部引用",
+    "externalCaption": "连接器引用了另一个后端中的这些密钥。它们在那里保存和轮换；此列表仅显示它们的使用位置。",
+    "readOnly": "只读",
+    "usedByNoneRecent": "最近 {{limit}} 个会话中没有",
+    "usedByUnwired": "此版本中不可用",
+    "usedByMore": "另有 {{more}} 个"
   },
   "connectors": {
     "title": "连接器",
-    "caption": "添加并配置引擎从中摄取数据的连接器，其凭据在静态存储时密封。变更会在无需重启的情况下应用到运行中的引擎。这是一项覆盖整个部署、仅限超级管理员、并受升级认证保护的操作。",
+    "caption": "添加并配置引擎从中摄取数据的连接器，其凭据在静态存储时密封。变更会在无需重启的情况下应用到运行中的引擎。这是一项覆盖整个部署、仅限超级管理员的操作。",
     "superadminOnly": "连接器是覆盖整个部署的设置；只有超级管理员才能查看或更改。",
     "unavailable": "此构建未接入连接器入驻功能；连接器改为从启动文件配置。",
     "sourcesUnavailable": "此构建不提供来源清单；无法在此列出正在运行的连接器。",
@@ -477,7 +455,7 @@
       "restartBody": "以下配置域仅在启动时读取一次，本次重新加载不会应用它们。需要重启才能使其生效："
     },
     "catalog": {
-      "caption": "此版本可接入的全部连接器，均从引擎读取，共 {{count}} 个。浏览为只读；新增仍需进行增强认证。",
+      "caption": "此版本可接入的全部连接器，均从引擎读取，共 {{count}} 个。浏览为只读。",
       "noMatch": "没有与“{{query}}”匹配的连接器。",
       "noMatchHint": "目录列出此版本可安装的所有连接器。清空搜索即可查看全部。",
       "search": "按名称或类型筛选",
@@ -621,7 +599,8 @@
       "workspaceScope": "工作区：{{ref}}",
       "groupScope": "代理组：{{ref}}",
       "classLabel": "限于 {{class}}",
-      "loadError": "无法加载您的委派权限。请重试。"
+      "loadError": "无法加载您的委派权限。请重试。",
+      "folderScope": "文件夹：{{ref}}"
     },
     "grants": {
       "title": "范围授权",
@@ -664,6 +643,26 @@
       "note": "备注",
       "noteHint": "可选。随授权一同记录的上下文。",
       "submit": "创建授权"
+    },
+    "filters": {
+      "title": "继承过滤器",
+      "caption": "在工作区、代理组或文件夹上，阻止从节点上方到达某类资源的权限。在该节点或其下方的授权仍然有效；禁止规则仍在各处生效。",
+      "create": "新建过滤器",
+      "none": "暂无继承过滤器。",
+      "noneHint": "每个节点都会继承其上方授予的权限。",
+      "node": "节点",
+      "class": "资源类型",
+      "classHint": "来自节点上方的权限在该处不再适用于此类型。代理组只能过滤代理。",
+      "createdBy": "设置者",
+      "actions": "操作",
+      "folder": "文件夹",
+      "remove": "移除",
+      "removeTitle": "移除过滤器",
+      "removeBody": "来自该节点上方的权限会立即重新适用于它。只有该节点的管理员可以移除。",
+      "removed": "过滤器已移除。",
+      "created": "过滤器已设置。",
+      "formTitle": "新建继承过滤器",
+      "submit": "设置过滤器"
     },
     "defs": {
       "title": "自定义角色",
@@ -883,7 +882,23 @@
       "exportNotSealed": "未密封",
       "exportPopulation": "覆盖范围",
       "exportEntries": "访问条目",
-      "exportIntegrity": "完整性"
+      "exportIntegrity": "完整性",
+      "why": {
+        "tab": "原因",
+        "hint": "主体在某个代理、会话或资源上拥有八项受托权限中的哪些，以及该节点所在的容器路径。每项权限都是授权引擎自己的回答；此面板只显示它。",
+        "run": "解释",
+        "path": "路径",
+        "inWorkspace": "(位于工作区 {{workspace}})",
+        "right": "权限",
+        "state": "状态",
+        "states": {
+          "held": "已拥有",
+          "not_held": "未拥有",
+          "unknown": "未知",
+          "not_applicable": "不适用"
+        },
+        "unknownHint": "未知表示引擎无法判定该权限；原因见引擎日志。这不是拒绝。"
+      }
     }
   },
   "activation": {
@@ -1087,17 +1102,7 @@
     }
   },
   "entitlement": {
-    "title": "模块",
-    "description": "查看每个模块的版本、许可证覆盖范围和激活状态。",
-    "helpSummary": "了解模块状态",
-    "threeQuestions": "每一列使用各自的当前信息。「未知」表示没有足够的信息来确定该状态。使用状态和重试控件刷新不可用的信息。",
-    "noVerifiedLicense": "在获得已验证的许可证之前，模块覆盖范围未知。",
-    "colAddon": "模块",
-    "colBinary": "此版本中",
-    "colEntitled": "许可证覆盖范围",
-    "colActivated": "激活",
     "unknown": "未知",
-    "entitled": "已授权",
     "state": {
       "active": "开",
       "pending": "待重启",
@@ -1108,15 +1113,6 @@
       "needsReview": "需要审核",
       "needsInput": "需要输入"
     },
-    "binaryUnknownWhy": "此版本（{{edition}}）属于正在运行的二进制。引擎公布模块是否在此构建中时，此列显示该信息；否则保持未知。不会从打包方式推断。",
-    "catalogueSourceHelp": "可用的模块信息取决于已安装的构建。安装许可证会更新许可证详情；模块可用性另行报告。",
-    "noAddons": "此安装返回了空的模块目录。",
-    "loading": "正在加载模块目录…",
-    "unavailable": "此构建中模块信息不可用。",
-    "unavailableAction": "重试以再次请求模块信息。",
-    "failed": "无法加载模块目录。模块覆盖范围当前未知。",
-    "failedAction": "重试以再次请求模块信息。",
-    "staleNotCurrent": "先前加载的模块信息已不再是当前信息。",
     "knownFacts": "版本：{{edition}} · 许可证状态：{{status}}。",
     "knownFactsUnavailable": "未提供版本和许可证状态。",
     "licenseRefreshFailed": "无法刷新许可证状态。当前模块覆盖范围未知。",
@@ -1126,10 +1122,7 @@
     "licenseRefreshFailedAction": "重试以刷新许可证状态。",
     "licenseRetry": "重试许可证状态",
     "technicalSummary": "技术细节",
-    "technicalDetail": "{{method}} {{endpoint}} · HTTP {{status}}{{codePart}}{{requestPart}}",
-    "inBuild": "在此版本中",
-    "notInBuild": "不在此版本中",
-    "notCovered": "许可证未覆盖"
+    "technicalDetail": "{{method}} {{endpoint}} · HTTP {{status}}{{codePart}}{{requestPart}}"
   },
   "mcpGateway": {
     "title": "MCP 网关",
@@ -1229,7 +1222,8 @@
       "legacy_forwarder": "现有文件转发方式",
       "session_runner_engine_user_session_folder": "会话运行器，以引擎用户身份，在会话文件夹中",
       "reported_by_session_runner": "以会话运行器报告的为准",
-      "not_supplied_for_local_commands": "不为本地命令提供"
+      "not_supplied_for_local_commands": "不为本地命令提供",
+      "listed_egress_hosts_for_local_commands": "列出主机的本地命令只能访问所列主机"
     },
     "nameHint": "显示在服务器列表中。留空则使用服务器的主机名。",
     "advanced": "高级",
@@ -1288,6 +1282,41 @@
       "confirm": "开启"
     },
     "sessionOn": "已开启：关闭即可停止。",
-    "sessionOff": "已关闭：会话不能互相发送消息，也不能使用分配的工作。"
+    "sessionOff": "已关闭：会话不能互相发送消息，也不能使用分配的工作。",
+    "startersTitle": "入门服务器",
+    "startersHint": "精选的服务器，每个都带有隔离和网络限制。添加会填好表单；服务器保存后处于关闭状态，在你测试并启用之前不会运行任何内容。",
+    "starterAdd": "添加 {{name}}",
+    "starterLicence": "许可证：{{licence}}",
+    "starterSource": "源代码",
+    "egressHosts": "允许的主机",
+    "egressHostsHint": "该命令只能访问这些 HTTPS 主机，每行一个：host 或 host:port。留空则沿用会话的网络。",
+    "egressHostsInvalid": "请将每个主机写成 host 或 host:port，使用小写，不带 https://，最多 16 个。",
+    "starters": {
+      "filesystem": {
+        "summary": "读写会话文件夹中的文件。",
+        "profile": "在此服务器上通过 npx 运行。只写入会话文件夹，只访问 registry.npmjs.org 以获取其固定版本的包。",
+        "setup": "此服务器需要 Node.js (npx)。保存、测试，然后启用。"
+      },
+      "git": {
+        "summary": "读取会话仓库的历史并创建提交。",
+        "profile": "在此服务器上通过 uvx 运行。只写入会话文件夹，只访问 pypi.org 和 files.pythonhosted.org 以获取其固定版本的包。",
+        "setup": "此服务器需要 uv (uvx)。保存、测试，然后启用。"
+      },
+      "github": {
+        "summary": "通过 GitHub 自己的服务器处理 GitHub 上的议题、拉取请求和代码。",
+        "profile": "远程服务器：引擎只连接 api.githubcopilot.com，使用经过检查的地址且不跟随重定向。会话永远看不到你的令牌。",
+        "setup": "测试前，请在“管理凭据”中添加密钥 mcp/github，值为 Bearer 加上 GitHub 个人访问令牌，然后将其选为“登录”。"
+      },
+      "gitlab": {
+        "summary": "通过 GitLab 内置的服务器处理 GitLab 上的议题、合并请求和流水线。",
+        "profile": "远程服务器：引擎只连接 gitlab.com，使用经过检查的地址且不跟随重定向。若使用自己的 GitLab，请修改地址。",
+        "setup": "测试前，请在“管理凭据”中添加密钥 mcp/gitlab，值为 Bearer 加上具有 mcp 范围的 GitLab OAuth 令牌，然后将其选为“登录”。"
+      },
+      "playwright": {
+        "summary": "在无界面浏览器中打开并操作网页。",
+        "profile": "在此服务器上通过 npx 以全新的浏览器配置文件运行。只写入会话文件夹，只访问 registry.npmjs.org。",
+        "setup": "此服务器需要 Node.js 和 Google Chrome。在此网络配置下浏览尚未经过验证：浏览器可能不信任该配置的 HTTPS 代理。"
+      }
+    }
   }
 }

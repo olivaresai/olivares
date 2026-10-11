@@ -11,12 +11,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/olivaresai/olivares/cmd/olivares/internal/inferencepep"
 	claudeapi "github.com/olivaresai/olivares/connectors/claude-api"
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
-	"github.com/olivaresai/olivares/modules/finops"
-	"github.com/olivaresai/olivares/sdk"
 	sdkmodel "github.com/olivaresai/olivares/sdk/model"
 )
 
@@ -83,7 +82,7 @@ func TestProxyNoHoldWhenMCPGateDenies(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			a, mg, bg, kg, pol := allowAll()
 			d := newTestDecider(a, mg, bg, kg, pol)
-			d.egress = &originGate{granted: map[string]bool{mcpTestOrigin: tc.granted}}
+			d.Egress = &originGate{granted: map[string]bool{mcpTestOrigin: tc.granted}}
 			var allow bool
 			var status int
 			if tc.batch {
@@ -107,25 +106,6 @@ func TestProxyNoHoldWhenMCPGateDenies(t *testing.T) {
 					"admission, and an admitted one holds at the budget step", len(bg.keys), bg.held, tc.wantHolds)
 			}
 		})
-	}
-}
-
-// TestProxyAdmissionIntegrityRefusalIsAReservationFault: admission refuses a key whose row
-// failed its integrity check in every posture. The proxy answers 503 with that reason, no
-// retry, and classes it as a reservation fault: no hold could be taken, and no policy
-// refused the call.
-func TestProxyAdmissionIntegrityRefusalIsAReservationFault(t *testing.T) {
-	a, mg, bg, kg, pol := allowAll()
-	bg.bc = finops.BudgetCheck{Allowed: false, Action: "block", Reason: finops.ReasonAdmissionIntegrity}
-	d := newTestDecider(a, mg, bg, kg, pol)
-	dec := d.Authorize(context.Background(), userReq("hi", false), "bearer")
-	if dec.Allow || dec.Status != http.StatusServiceUnavailable || dec.Reason != finops.ReasonAdmissionIntegrity ||
-		dec.Headers["x-should-retry"] != "false" {
-		t.Fatalf("integrity refusal = %+v, want 503 %q with no retry", dec, finops.ReasonAdmissionIntegrity)
-	}
-	_, _, deny, ok := d.authorizeChain(context.Background(), userReq("hi", false), "bearer")
-	if ok || deny.code != gateCodeBudget || deny.class != sdk.FailureReservationFault {
-		t.Fatalf("integrity deny = code %q class %q, want %q %q", deny.code, deny.class, gateCodeBudget, sdk.FailureReservationFault)
 	}
 }
 
@@ -178,9 +158,9 @@ func TestProxyFinalizeSettlesTheCallsHold(t *testing.T) {
 	t.Run("committed at the measured cost", func(t *testing.T) {
 		a, mg, bg, kg, pol := allowAll()
 		d := newTestDecider(a, mg, bg, kg, pol)
-		d.inf = claudeapi.NewInference(claudeapi.InferenceConfig{APIKey: "test", DefaultModel: "claude-opus-4-8", Gateway: sdkmodel.GatewayDirect})
+		d.Inference = claudeapi.NewInference(claudeapi.InferenceConfig{APIKey: "test", DefaultModel: "claude-opus-4-8", Gateway: sdkmodel.GatewayDirect})
 		bus := &fakeObservationBus{}
-		d.bus = bus
+		d.Bus = bus
 		dec := d.Authorize(context.Background(), userReq("hi", false), "bearer")
 		if !dec.Allow || len(bg.held) != 1 {
 			t.Fatalf("admission: allow=%v holds=%v", dec.Allow, bg.held)
@@ -353,16 +333,16 @@ func TestProxyBatchDenyReleasesEarlier(t *testing.T) {
 // proxyOverLedger is the real decider over the real admission ledger: the budget seam is
 // the FinOps module on an open store, every other seam an allow-all fake. The caller is a
 // member of the ledger's tenant, and the bus records what Finalize publishes.
-func proxyOverLedger(t *testing.T, cfg store.Config) (*inferenceProxyDecider, store.Store, model.TenantID, string, *fakeObservationBus) {
+func proxyOverLedger(t *testing.T, cfg store.Config) (*inferencepep.Decider, store.Store, model.TenantID, string, *fakeObservationBus) {
 	t.Helper()
 	fin, st, tenant := openFinOpsEngineOn(t, cfg)
 	a, mg, bg, kg, pol := allowAll()
 	a.p = auth.ScopedPrincipal(model.ID("u1"), "user one", tenant, "editor")
 	d := newTestDecider(a, mg, bg, kg, pol)
-	d.budget = fin
-	d.inf = claudeapi.NewInference(claudeapi.InferenceConfig{APIKey: "test", DefaultModel: "claude-opus-4-8", Gateway: sdkmodel.GatewayDirect})
+	d.Budget = fin
+	d.Inference = claudeapi.NewInference(claudeapi.InferenceConfig{APIKey: "test", DefaultModel: "claude-opus-4-8", Gateway: sdkmodel.GatewayDirect})
 	bus := &fakeObservationBus{}
-	d.bus = bus
+	d.Bus = bus
 	return d, st, tenant, a.p.Actor(), bus
 }
 

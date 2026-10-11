@@ -27,10 +27,10 @@ import (
 type wsMutationInput struct {
 	workspaceID  model.ID
 	workspaceRef string
-	op           string // write|mkdir|move|delete|register|deregister
+	op           string // write|mkdir|move|delete|register|configure|deregister
 	path         string // primary relative path
 	path2        string // secondary (move destination); "" otherwise
-	contentHash  string // hex sha-256 of written content; "" for non-write ops
+	contentHash  string // hex sha-256 of written content or configured folder list
 	actor        string
 	actorKind    string
 	classes      []string // DLP classes (non-sensitive); "" for non-read
@@ -41,7 +41,7 @@ type wsMutationInput struct {
 // (no unaudited mutation). It is used for write/mkdir/move/delete, whose filesystem
 // effect is NOT in a store transaction, so the seal precedes the FS op (deny-closed).
 func (m *Module) sealWorkspaceMutation(ctx context.Context, tenant model.TenantID, in wsMutationInput) error {
-	return m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
+	return m.Data.Mutate(ctx, tenant, func(sc store.Scope) error {
 		return appendWorkspaceAudit(ctx, sc, in)
 	})
 }
@@ -78,7 +78,7 @@ func (m *Module) auditWorkspaceRead(ctx context.Context, tenant model.TenantID, 
 	if len(in.classes) > 0 {
 		meta["sensitivity"] = in.classes
 	}
-	err := m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
+	err := m.Data.Mutate(ctx, tenant, func(sc store.Scope) error {
 		_, e := sc.Audit().Append(ctx, model.AuditDraft{
 			Actor:      orSystem(in.actor),
 			ActorKind:  orSystemKind(in.actorKind),

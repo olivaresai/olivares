@@ -29,7 +29,7 @@ vi.mock('@/components/ui/toaster', () => ({ toast, Toaster: () => null }))
 const auth = vi.hoisted(() => ({
   activeTenant: 't1' as string | null,
   isSuperadmin: false,
-  can: () => true,
+  can: (_permission: string): boolean => true,
 }))
 vi.mock('@/lib/auth/context', () => ({ useAuth: () => auth }))
 
@@ -269,7 +269,7 @@ describe('AuditView — first work row', () => {
   it('keeps advanced filters in a popover, not a card above the ledger', async () => {
     api.list.mockResolvedValue({ items: [ev1], has_more: false })
     wrap(<AuditView />)
-    const row = await screen.findByText('agent.create')
+    const row = await screen.findByText('Agent create')
     expect(row.closest('[data-slot="data-table"]')).toBeTruthy()
     expect(screen.queryByRole('textbox', { name: 'Actor' })).toBeNull()
     const chrome = screen
@@ -278,7 +278,7 @@ describe('AuditView — first work row', () => {
     expect(chrome).toBeTruthy()
     await userEvent.click(screen.getByRole('button', { name: /^filters$/i }))
     expect(await screen.findByRole('textbox', { name: 'Actor' })).toBeVisible()
-    expect(screen.getByText('agent.create')).toBeInTheDocument()
+    expect(screen.getByText('Agent create')).toBeInTheDocument()
   })
 
   // ⛔ AND ON A PHONE EVERY ONE OF THOSE CONTROLS IS BEHIND THE DISCLOSURE, WHICH THE ROW
@@ -306,22 +306,119 @@ describe('AuditView — first work row', () => {
   })
 })
 
+// HU2-19 / HU-15: the page read as the ledger's own bookkeeping ("authorization_decision.record"
+// pairs, reads); a sign-in or a new person had no words of its own.
+describe('AuditView — what happened, in words', () => {
+  it('names what happened and folds the ledger records until asked', async () => {
+    const signIn: AuditEventDTO = {
+      ...ev1,
+      id: 'evt-signin',
+      seq: 14,
+      action: 'auth.login',
+      actor: 'user:alice',
+    }
+    const evidence: AuditEventDTO = {
+      ...ev2,
+      id: 'evt-evidence',
+      seq: 15,
+      action: 'authorization_decision.record',
+    }
+    api.list.mockResolvedValue({
+      items: [ev1, ev2, signIn, evidence],
+      has_more: false,
+    })
+    wrap(<AuditView />)
+    expect(await screen.findByText('Signed in')).toBeInTheDocument()
+    expect(screen.getByText('Agent create')).toBeInTheDocument()
+    expect(screen.queryByText('Authorization decision recorded')).toBeNull()
+    expect(screen.queryByText('Audit read')).toBeNull()
+    expect(screen.getByText('Internal records hidden: 2')).toBeInTheDocument()
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Show internal records' }),
+    )
+    expect(
+      screen.getByText('Authorization decision recorded'),
+    ).toBeInTheDocument()
+    expect(screen.getByText('Audit read')).toBeInTheDocument()
+  })
+})
+
+const EMPTY_TITLE = 'No evidence yet'
+
+// Review of the fold: a page of internal records only folded to nothing, and the table said the
+// ledger was empty.
+describe('AuditView — a page of internal records only', () => {
+  it('says the loaded events are internal, offers them and more, and does not claim an empty ledger', async () => {
+    // The newest window of a long ledger holds only internal records; older ones exist.
+    api.recent.mockResolvedValue({ items: [], head_seq: 500 })
+    api.list.mockResolvedValue({ items: [ev2], has_more: false })
+    wrap(<AuditView />)
+    expect(
+      await screen.findByText(
+        'Everything loaded so far is an internal record.',
+      ),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(EMPTY_TITLE)).toBeNull()
+    expect(
+      screen.getByRole('button', { name: 'Show internal records' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: /load more/i }),
+    ).toBeInTheDocument()
+  })
+
+  it('still says the ledger is empty when nothing was loaded', async () => {
+    api.list.mockResolvedValue({ items: [], has_more: false })
+    wrap(<AuditView />)
+    expect(await screen.findByText(EMPTY_TITLE)).toBeInTheDocument()
+  })
+})
+
 describe('AuditView — ledger list', () => {
   it('renders ledger events with action, actor (+kind) and a hash chip', async () => {
     api.list.mockResolvedValue({ items: [ev1, ev2], has_more: false })
     wrap(<AuditView />)
 
-    expect(await screen.findByText('agent.create')).toBeInTheDocument()
-    const row1 = screen.getByText('agent.create').closest('tr')!
-    expect(within(row1).getByText('user:alice')).toBeInTheDocument()
+    expect(await screen.findByText('Agent create')).toBeInTheDocument()
+    const row1 = screen.getByText('Agent create').closest('tr')!
+    expect(within(row1).getByText('A member')).toBeInTheDocument()
     expect(within(row1).getByText('User')).toBeInTheDocument()
     // The hash is shown as a truncated fingerprint chip (head…tail of the hex).
     expect(within(row1).getByText(/bbbbbbbb…bbbbbb/)).toBeInTheDocument()
 
-    // A system-actor event with no actor string falls back to the "system" label.
-    const row2 = screen.getByText('audit.read').closest('tr')!
-    expect(within(row2).getByText('system')).toBeInTheDocument()
-    expect(within(row2).getByText('System')).toBeInTheDocument()
+    // A system-actor event with no actor string falls back to the "system" label. A read is
+    // the ledger's own bookkeeping, folded away until asked for (HU2-19).
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Show internal records' }),
+    )
+    const row2 = screen.getByText('Audit read').closest('tr')!
+    expect(within(row2).getAllByText('System')[0]).toBeInTheDocument()
+    expect(within(row2).getAllByText('System')).toHaveLength(2)
+  })
+
+  it('leads with a readable policy action and keeps its exact event code in Details', async () => {
+    const user = userEvent.setup()
+    api.list.mockResolvedValue({
+      items: [
+        {
+          ...ev1,
+          action: 'governance.policy.create',
+          target_kind: 'core.policy',
+        },
+      ],
+      has_more: false,
+    })
+    wrap(<AuditView />)
+    const action = await screen.findByText('Policy created')
+    expect(action).toBeVisible()
+    expect(screen.queryByText('governance.policy.create')).toBeNull()
+    await user.click(action)
+    const sheet = await screen.findByRole('dialog')
+    const details = within(sheet).getByText('Details').closest('details')!
+    expect(details).not.toHaveAttribute('open')
+    expect(
+      within(details).getByText('governance.policy.create'),
+    ).toBeInTheDocument()
   })
 
   it('lists the newest events first and steps back one window for older ones (HU-15)', async () => {
@@ -329,15 +426,18 @@ describe('AuditView — ledger list', () => {
     api.list.mockResolvedValue({ items: [ev1, ev2], has_more: false })
     wrap(<AuditView />)
 
-    expect(await screen.findByText('agent.create')).toBeInTheDocument()
+    expect(await screen.findByText('Agent create')).toBeInTheDocument()
     // The last window of the ledger, read forward and shown newest first.
     expect(api.list).toHaveBeenCalledWith({ from: 1, limit: 100 })
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Show internal records' }),
+    )
     const rows = screen
       .getAllByRole('row')
       .map((r) => r.textContent ?? '')
-      .filter((text) => /agent\.create|audit\.read/.test(text))
-    expect(rows[0]).toMatch(/audit\.read/)
-    expect(rows[1]).toMatch(/agent\.create/)
+      .filter((text) => /Agent create|Audit read/.test(text))
+    expect(rows[0]).toMatch(/Audit read/)
+    expect(rows[1]).toMatch(/Agent create/)
   })
 
   it('sends validated server-side filters and RFC3339 UTC bounds', async () => {
@@ -621,7 +721,7 @@ describe('AuditView — system ledger scope (superadmin)', () => {
       await screen.findByRole('option', { name: /system ledger/i }),
     )
 
-    expect(await screen.findByText('user.create')).toBeInTheDocument()
+    expect(await screen.findByText('Person added')).toBeInTheDocument()
     await waitFor(() => expect(api.systemList).toHaveBeenCalled())
     // The system chain is read-only here: verify/export controls are gone…
     expect(screen.queryByRole('button', { name: /verify chain/i })).toBeNull()
@@ -633,7 +733,13 @@ describe('AuditView — system ledger scope (superadmin)', () => {
 describe('AuditEventSheet — evidence detail', () => {
   it('shows the event facts and the chain-link fingerprints', () => {
     wrap(<AuditEventSheet event={ev1} open onOpenChange={() => {}} />)
-    expect(screen.getByText('Event #12')).toBeInTheDocument()
+    expect(
+      screen.getByRole('heading', { name: 'Agent create' }),
+    ).toBeInTheDocument()
+    expect(screen.getByText('Details').closest('details')).not.toHaveAttribute(
+      'open',
+    )
+    expect(screen.getByText('12')).toBeInTheDocument()
     expect(screen.getByText('Chain integrity')).toBeInTheDocument()
     expect(screen.getByText('Previous hash')).toBeInTheDocument()
     expect(screen.getByText('Event hash')).toBeInTheDocument()
@@ -726,6 +832,8 @@ describe('AuditView — the reference a row names', () => {
   }
   const evOpaque: AuditEventDTO = {
     ...ev2,
+    // An action the view shows by default (a read is folded away, HU2-19).
+    action: 'evals.suite.update',
     actor: 'user:01a0b580-0000-0000-0000-000000000000',
     actor_kind: 'user',
     target_kind: 'evals.suite',
@@ -753,11 +861,11 @@ describe('AuditView — the reference a row names', () => {
       head_seq: 13,
     })
     wrap(<AuditView />)
-    const kind = await screen.findByText('evals.suite')
+    const kind = await screen.findByText('Evals suite')
     expect(kind.closest('[title]')?.getAttribute('title')).toBe(
       'evals.suite: 01a0b580-4d33-7e39-af6e-e35c160f03f3',
     )
-    expect(screen.getByText('01a0b580')).toBeInTheDocument()
+    expect(screen.queryByText('01a0b580')).toBeNull()
   })
 
   it('opens no cell with a raw identifier', async () => {
@@ -776,7 +884,7 @@ describe('AuditView — the reference a row names', () => {
     }
   })
 
-  it('shows the ledger’s own actor when the roster may not be read', async () => {
+  it('uses a member label and preserves the ledger actor in Details when the roster may not be read', async () => {
     auth.can = ((permission: string) =>
       permission !== 'user:read') as unknown as typeof auth.can
     api.list.mockResolvedValue({
@@ -785,9 +893,34 @@ describe('AuditView — the reference a row names', () => {
       head_seq: 12,
     })
     wrap(<AuditView />)
-    expect(
-      await screen.findByText('user:01a0b580-4f7e-79b5-a98c-32aa681a4502'),
-    ).toBeInTheDocument()
+    expect(await screen.findByText('A member')).toBeInTheDocument()
+    expect(screen.getByText('A member')).toHaveAttribute('title', evUser.actor)
+    expect(screen.queryByText(evUser.actor)).toBeNull()
     expect(directory.listMembers).not.toHaveBeenCalled()
   })
+})
+
+it('hides cached member names in both the Audit row and sheet when roster permission leaves', async () => {
+  const event = { ...ev1, actor: 'user:01a0b580-4f7e-79b5-a98c-32aa681a4502' }
+  api.list.mockResolvedValue({ items: [event], has_more: false })
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  })
+  const content = () => (
+    <QueryClientProvider client={client}>
+      <TooltipProvider>
+        <AuditView />
+      </TooltipProvider>
+    </QueryClientProvider>
+  )
+  const mounted = render(content())
+  await screen.findByText('Alice Ng')
+  auth.can = (permission) => permission !== 'user:read'
+  mounted.rerender(content())
+  expect(screen.queryByText('Alice Ng')).toBeNull()
+  expect(screen.getByText('A member')).toBeVisible()
+  await userEvent.click(screen.getByText('Agent create'))
+  expect(
+    within(await screen.findByRole('dialog')).queryByText('Alice Ng'),
+  ).toBeNull()
 })

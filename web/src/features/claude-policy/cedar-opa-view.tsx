@@ -54,6 +54,12 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { CodeDiff } from '@/components/ui/code-diff'
 import { CodeEditor } from '@/components/ui/code-editor'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
@@ -127,23 +133,30 @@ type DiffBase =
    *  than fall through to a silently empty diff. */
   | { kind: 'unavailable' }
 
+import { PANEL_EXTENSIONS } from '@/features/extensions'
+
 export function CedarOpaView({ active }: { active: boolean }) {
   const { t } = useTranslation(['claudePolicy', 'common'])
   const { can, activeTenant } = useAuth()
-  const canAuthor = can('governance:policy:admin')
+  const canAdmin = can('governance:policy:admin')
   // validate/explain/dry-run are READ-tier routes on the engine (governance.go),
   // so they follow the read permission, not the admin one.
   const canRead = can('governance:policy:read')
   const queryClient = useQueryClient()
 
   const [engine, setEngine] = useState<PdpEngine>('cedar')
+  const cedarAuthoring = PANEL_EXTENSIONS.cedarPolicyAuthoring
+  const canAuthor = canAdmin && (engine !== 'cedar' || !!cedarAuthoring)
   const [source, setSource] = useState(DEFAULT_SOURCE.cedar)
   const [note, setNote] = useState('')
   const [validateResult, setValidateResult] =
     useState<PdpValidateResult | null>(null)
   const [decision, setDecision] = useState<PdpDecision | null>(null)
+  const [confirmDisable, setConfirmDisable] = useState(false)
   const [confirmPublish, setConfirmPublish] = useState(false)
+  const [viewTarget, setViewTarget] = useState<PdpRevision | null>(null)
   const [rollbackTarget, setRollbackTarget] = useState<PdpRevision | null>(null)
+  const selectedRevision = rollbackTarget ?? viewTarget
   const [outcome, setOutcome] = useState<LifecycleOutcome | null>(null)
 
   // Example request (mirrors the engine's auth.Request / ResourceAttrs).
@@ -189,6 +202,12 @@ export function CedarOpaView({ active }: { active: boolean }) {
     enabled: active && canRead && activeRevision !== undefined,
   })
 
+  const policySource = canAuthor
+    ? source
+    : canRead
+      ? (activeQuery.data?.authored.content ?? '')
+      : ''
+
   const diffBase = resolveDiffBase(canRead, activeQuery)
   const surfaces = resolveSurfaces(canRead, activeQuery)
   // All three resolve from the SAME query, so the screen can never report the
@@ -204,16 +223,16 @@ export function CedarOpaView({ active }: { active: boolean }) {
   const rollbackPreviewQuery = useQuery({
     queryKey: claudePolicyKeys.pdpVersion(
       activeTenant,
-      rollbackTarget?.surface ?? engine,
+      selectedRevision?.surface ?? engine,
       // 0 is never a real revision; the query is disabled while there is no target.
-      rollbackTarget?.revision ?? 0,
+      selectedRevision?.revision ?? 0,
     ),
     queryFn: () =>
       claudePolicyApi.pdpGetVersion(
-        rollbackTarget!.surface,
-        rollbackTarget!.revision,
+        selectedRevision!.surface,
+        selectedRevision!.revision,
       ),
-    enabled: canRead && rollbackTarget !== null,
+    enabled: canRead && selectedRevision !== null,
   })
 
   // The baseline MUST come from the target's own engine, not from the dropdown. The
@@ -232,6 +251,10 @@ export function CedarOpaView({ active }: { active: boolean }) {
   })
 
   function switchEngine(e: PdpEngine) {
+    setConfirmPublish(false)
+    setConfirmDisable(false)
+    setRollbackTarget(null)
+    setViewTarget(null)
     setEngine(e)
     setSource(DEFAULT_SOURCE[e])
     setValidateResult(null)
@@ -256,19 +279,19 @@ export function CedarOpaView({ active }: { active: boolean }) {
     }
 
   const validate = useMutation({
-    mutationFn: () => claudePolicyApi.pdpValidate(engine, source),
+    mutationFn: () => claudePolicyApi.pdpValidate(engine, policySource),
     onSuccess: (r) => setValidateResult(r),
     onError: onError('validate'),
   })
   const explain = useMutation({
     mutationFn: () =>
-      claudePolicyApi.pdpExplain(engine, source, exampleRequest()),
+      claudePolicyApi.pdpExplain(engine, policySource, exampleRequest()),
     onSuccess: (r) => setDecision(r),
     onError: onError('explain'),
   })
   const dryRun = useMutation({
     mutationFn: () =>
-      claudePolicyApi.pdpDryRun(engine, source, exampleRequest()),
+      claudePolicyApi.pdpDryRun(engine, policySource, exampleRequest()),
     onSuccess: (r) => setDecision(r),
     onError: onError('dry-run'),
   })
@@ -334,7 +357,13 @@ export function CedarOpaView({ active }: { active: boolean }) {
 
   const publishMutation = useMutation({
     mutationFn: () =>
-      claudePolicyApi.pdpPublish(engine, source, note.trim() || undefined),
+      engine === 'cedar'
+        ? cedarAuthoring
+          ? cedarAuthoring.publish(source, note.trim() || undefined)
+          : Promise.reject(
+              new Error(t('common:edition.editingRequiresBusiness')),
+            )
+        : claudePolicyApi.pdpPublish(engine, source, note.trim() || undefined),
     onSuccess: async (result) => {
       setOutcome({ kind: 'publish', result })
       setConfirmPublish(false)
@@ -349,7 +378,13 @@ export function CedarOpaView({ active }: { active: boolean }) {
 
   const rollbackMutation = useMutation({
     mutationFn: (target: PdpRevision) =>
-      claudePolicyApi.pdpRollback(target.surface, target.revision),
+      target.surface === 'cedar'
+        ? cedarAuthoring
+          ? cedarAuthoring.rollback(target.revision)
+          : Promise.reject(
+              new Error(t('common:edition.editingRequiresBusiness')),
+            )
+        : claudePolicyApi.pdpRollback(target.surface, target.revision),
     onSuccess: async (result) => {
       setOutcome({ kind: 'rollback', result })
       setRollbackTarget(null)
@@ -358,6 +393,20 @@ export function CedarOpaView({ active }: { active: boolean }) {
     },
     onError: (e) => {
       setRollbackTarget(null)
+      onLifecycleError(e)
+    },
+  })
+
+  const disableMutation = useMutation({
+    mutationFn: () => claudePolicyApi.pdpDisable(),
+    onSuccess: async (result) => {
+      setConfirmDisable(false)
+      setOutcome({ kind: 'publish', result })
+      await invalidateLifecycle()
+      announce(result.live_activation)
+    },
+    onError: (e) => {
+      setConfirmDisable(false)
       onLifecycleError(e)
     },
   })
@@ -417,7 +466,7 @@ export function CedarOpaView({ active }: { active: boolean }) {
           </div>
 
           <CodeEditor
-            value={source}
+            value={policySource}
             onChange={setSource}
             language={engine === 'cedar' ? 'cedar' : 'rego'}
             ariaLabel={t('pdp.editorLabel', { engine })}
@@ -495,7 +544,7 @@ export function CedarOpaView({ active }: { active: boolean }) {
 
           {decision && <DecisionPanel decision={decision} />}
 
-          {canRead && (
+          {canRead && canAuthor && (
             <PrePublishDiff
               engine={engine}
               base={diffBase}
@@ -503,7 +552,22 @@ export function CedarOpaView({ active }: { active: boolean }) {
               surfaces={surfaces}
             />
           )}
+          {canRead && !canAuthor && (
+            <EnforcedSurfaces engine={engine} surfaces={surfaces} />
+          )}
 
+          {engine === 'cedar' && !cedarAuthoring && (
+            <p className="text-body text-muted-foreground">
+              {t('common:edition.editingRequiresBusiness')}
+            </p>
+          )}
+          {canAdmin &&
+            engine === 'cedar' &&
+            activeQuery.data?.authored.present && (
+              <Button variant="outline" onClick={() => setConfirmDisable(true)}>
+                {t('common:edition.disablePolicy')}
+              </Button>
+            )}
           {canAuthor && (
             <div className="flex flex-col gap-2">
               <Field label={t('pdp.publish.noteLabel')} htmlFor="pdp-note">
@@ -554,7 +618,9 @@ export function CedarOpaView({ active }: { active: boolean }) {
               {(data) => (
                 <VersionHistory
                   items={data.items ?? []}
-                  canAuthor={canAuthor}
+                  canAuthor={canAdmin}
+                  cedarAuthoringAvailable={!!cedarAuthoring}
+                  onView={setViewTarget}
                   onActivate={setRollbackTarget}
                 />
               )}
@@ -620,6 +686,55 @@ export function CedarOpaView({ active }: { active: boolean }) {
         </aside>
       </div>
 
+      <Dialog
+        open={canRead && viewTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setViewTarget(null)
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {t('pdp.rollback.previewLabel', { n: viewTarget?.revision ?? 0 })}
+            </DialogTitle>
+          </DialogHeader>
+          <DeclaredSection
+            query={rollbackPreviewQuery}
+            what={t('pdp.history.what')}
+            live
+          >
+            {(revision) =>
+              revision.content === undefined ? (
+                <p>
+                  {t('pdp.rollback.previewUnavailable', {
+                    n: revision.revision,
+                  })}
+                </p>
+              ) : (
+                <CodeEditor
+                  value={revision.content}
+                  onChange={() => {}}
+                  readOnly
+                  language={revision.surface === 'cedar' ? 'cedar' : 'rego'}
+                  ariaLabel={t('pdp.rollback.previewLabel', {
+                    n: revision.revision,
+                  })}
+                  height="16rem"
+                />
+              )
+            }
+          </DeclaredSection>
+        </DialogContent>
+      </Dialog>
+      <ConfirmDialog
+        open={confirmDisable}
+        onOpenChange={setConfirmDisable}
+        title={t('common:edition.disablePolicy')}
+        description={t('common:edition.disablePolicyDescription')}
+        confirmLabel={t('common:edition.disablePolicy')}
+        pending={disableMutation.isPending}
+        onConfirm={() => disableMutation.mutate()}
+      />
       <ConfirmDialog
         open={confirmPublish}
         onOpenChange={(o) => {
@@ -1277,13 +1392,17 @@ function GatePanel({
 function VersionHistory({
   items,
   canAuthor,
+  cedarAuthoringAvailable,
+  onView,
   onActivate,
 }: {
   items: PdpRevision[]
   canAuthor: boolean
+  cedarAuthoringAvailable: boolean
+  onView: (v: PdpRevision) => void
   onActivate: (v: PdpRevision) => void
 }) {
-  const { t } = useTranslation('claudePolicy')
+  const { t } = useTranslation(['claudePolicy', 'common'])
   return (
     <div className="flex flex-col gap-3">
       {ENGINES.map((eng) => {
@@ -1331,6 +1450,9 @@ function VersionHistory({
                         ? t('pdp.history.validated')
                         : t('pdp.history.notValidated')}
                     </Badge>
+                    <Button variant="ghost" size="sm" onClick={() => onView(v)}>
+                      {t('common:edition.viewPolicy')}
+                    </Button>
                     {/* `active` is omitempty on a bool: absent means false, and
                         `=== false` would never be true. */}
                     {v.active ? (
@@ -1347,7 +1469,8 @@ function VersionHistory({
                           : t('pdp.history.selectedOpa')}
                       </Badge>
                     ) : (
-                      canAuthor && (
+                      canAuthor &&
+                      (eng !== 'cedar' || cedarAuthoringAvailable) && (
                         <Button
                           variant="ghost"
                           size="sm"

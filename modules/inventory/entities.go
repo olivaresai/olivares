@@ -125,7 +125,7 @@ func foTool(ctx context.Context, sc store.Scope, name string, serverID model.ID,
 
 // foResource find-or-creates a resource by (kind, uri), or by (kind, name) when
 // the uri is empty (e.g. web.search, whose query is never stored).
-func foResource(ctx context.Context, sc store.Scope, kind, uri, name string) (model.ID, error) {
+func foResource(ctx context.Context, sc store.Scope, kind, uri, name string, discoveredAI bool) (model.ID, error) {
 	var key model.Filter
 	if uri != "" {
 		key = eq("uri", uri)
@@ -137,7 +137,13 @@ func foResource(ctx context.Context, sc store.Scope, kind, uri, name string) (mo
 	} else if ok {
 		return r.ID, nil
 	}
-	r, err := sc.Resources().Create(ctx, model.Resource{Name: name, Kind: kind, URI: uri})
+	resource := model.Resource{Name: name, Kind: kind, URI: uri}
+	if discoveredAI {
+		// Only creation establishes absence from inventory at discovery. An
+		// existing resource says nothing about its current governance status.
+		resource.Metadata = map[string]any{aiDiscoveryMetadata: aiUnregisteredAtDiscovery}
+	}
+	r, err := sc.Resources().Create(ctx, resource)
 	return r.ID, err
 }
 

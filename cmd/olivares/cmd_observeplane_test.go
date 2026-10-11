@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -122,7 +123,6 @@ var laneReadVerbs = []struct {
 	{"adoption", []string{"adoption", "summary"}, "/v1/m/adoption/summary"},
 	{"identity", []string{"identity", "sso"}, "/v1/m/identity/sso"},
 	{"inventory", []string{"inventory", "summary"}, "/v1/m/inventory/summary"},
-	{"posture", []string{"posture", "export"}, "/v1/m/posture/export"},
 	{"governance", []string{"governance", "killswitch", "ls"}, "/v1/m/governance/killswitch"},
 	{"capabilities", []string{"capabilities", "servers", "ls"}, "/v1/m/capabilities/servers"},
 }
@@ -268,21 +268,25 @@ func TestLaneMapsServerRefusalsToTheExitContract(t *testing.T) {
 // group classifies beyond httpErr. 501 from an unwired enterprise seam must not
 // read as "request failed", and it must carry the engine's own reason.
 func TestNotWiredIsReportedAsAProductBoundaryNotAFailure(t *testing.T) {
-	spy := newObserveSpy(t, http.StatusNotImplemented,
-		`{"error":{"message":"report scheduling is an enterprise capability and is not wired in this build"}}`)
-	_, _, err := execRoot(t, observeArgs(spy.srv.URL, "reporting", "schedules", "ls")...)
-	if err == nil {
-		t.Fatal("a 501 must not exit 0: the command did not do what was asked")
-	}
-	if got := exitcode.From(err); got != exitcode.Edition {
-		t.Errorf("exit = %d, want %d: a Business feature the engine does not have", got, exitcode.Edition)
-	}
-	msg := err.Error()
-	if msg != "Report scheduling is a Business feature: "+pricingURL {
-		t.Errorf("the answer must name the feature and where it is described, got: %s", msg)
-	}
-	if strings.Contains(msg, "request failed") {
-		t.Errorf("a 501 must NOT read as a generic failure, got: %s", msg)
+	for _, edition := range []string{"an enterprise", "a Business"} {
+		t.Run(edition, func(t *testing.T) {
+			spy := newObserveSpy(t, http.StatusNotImplemented,
+				`{"error":{"message":"report scheduling is `+edition+` capability and is not wired in this build"}}`)
+			_, _, err := execRoot(t, observeArgs(spy.srv.URL, "reporting", "schedules", "ls")...)
+			if err == nil {
+				t.Fatal("a 501 must not exit 0: the command did not do what was asked")
+			}
+			if got := exitcode.From(err); got != exitcode.Edition {
+				t.Errorf("exit = %d, want %d: a Business feature the engine does not have", got, exitcode.Edition)
+			}
+			msg := err.Error()
+			if msg != "Report scheduling is a Business feature: "+pricingURL {
+				t.Errorf("the answer must name the feature and where it is described, got: %s", msg)
+			}
+			if strings.Contains(msg, "request failed") {
+				t.Errorf("a 501 must NOT read as a generic failure, got: %s", msg)
+			}
+		})
 	}
 }
 
@@ -424,12 +428,12 @@ func TestPositionalIDsCannotRetargetTheRequest(t *testing.T) {
 		{"capabilities-servers-get", []string{"capabilities", "servers", "get", evil}, "/v1/m/capabilities/servers/"},
 		{"governance-approvals-get", []string{"governance", "approvals", "get", evil}, "/v1/m/governance/approvals/"},
 		{"governance-approvals-decisions", []string{"governance", "approvals", "decisions", evil}, "/v1/m/governance/approvals/"},
-		{"governance-breakglass-get", []string{"governance", "breakglass", "get", evil}, "/v1/m/governance/breakglass/"},
-		{"governance-breakglass-uses", []string{"governance", "breakglass", "uses", evil}, "/v1/m/governance/breakglass/"},
 		{"governance-pdp-get-version", []string{"governance", "pdp", "get-version", evil, "--engine", "cedar"}, "/v1/m/governance/pdp/versions/"},
 		{"governance-rbac-roles-get", []string{"governance", "rbac", "roles", "get", evil}, "/v1/m/governance/rbac/roles/"},
 		{"governance-rbac-permgroups-get", []string{"governance", "rbac", "permission-groups", "get", evil}, "/v1/m/governance/rbac/permission-groups/"},
 		{"governance-rbac-grants-get", []string{"governance", "rbac", "grants", "get", evil}, "/v1/m/governance/rbac/grants/"},
+		{"governance-rbac-filters-get", []string{"governance", "rbac", "filters", "get", evil}, "/v1/m/governance/rbac/inheritance-filters/"},
+		{"governance-rbac-filters-rm", []string{"governance", "rbac", "filters", "rm", evil, "--yes"}, "/v1/m/governance/rbac/inheritance-filters/"},
 		{"governance-nhi-get", []string{"governance", "nhi", "get", evil}, "/v1/m/governance/nhi/"},
 		{"governance-nhi-events", []string{"governance", "nhi", "events", evil}, "/v1/m/governance/nhi/"},
 		{"consoleviews-get", []string{"consoleviews", "get", evil}, "/v1/m/consoleviews/views/"},
@@ -438,6 +442,9 @@ func TestPositionalIDsCannotRetargetTheRequest(t *testing.T) {
 		{"reporting-schedules-rm", []string{"reporting", "schedules", "rm", evil, "--yes"}, "/v1/m/reporting/schedules/"},
 		{"reporting-schedule-runs", []string{"reporting", "schedules", "runs", evil}, "/v1/m/reporting/schedules/"},
 	} {
+		if thisEdition.name != "enterprise" && operationsExportCLIArgs(tc.args) {
+			continue
+		}
 		t.Run(tc.name, func(t *testing.T) {
 			spy := newObserveSpy(t, http.StatusOK, "{}")
 			// Whether the verb succeeds is beside the point; where the bytes
@@ -538,6 +545,9 @@ func TestLocalAllowListsRefuseWithoutSpendingARequest(t *testing.T) {
 		{"negative-limit", []string{"inventory", "entities", "ls", "--limit", "-5"},
 			"a negative page size the engine would ignore"},
 	} {
+		if thisEdition.name != "enterprise" && operationsExportCLIArgs(tc.args) {
+			continue
+		}
 		t.Run(tc.name, func(t *testing.T) {
 			spy := newObserveSpy(t, http.StatusOK, "{}")
 			_, _, err := execRoot(t, observeArgs(spy.srv.URL, tc.args...)...)
@@ -573,6 +583,9 @@ func TestTheAllowListsAcceptWhatTheEngineAccepts(t *testing.T) {
 		{"accessmap-direction-incoming", []string{"accessmap", "neighbors", "--id", "ag-7", "--direction", "incoming"}},
 		{"limit-positive", []string{"inventory", "entities", "ls", "--limit", "5"}},
 	} {
+		if thisEdition.name != "enterprise" && operationsExportCLIArgs(tc.args) {
+			continue
+		}
 		t.Run(tc.name, func(t *testing.T) {
 			spy := newObserveSpy(t, http.StatusOK, `{"id":"x","items":[],"has_data":true}`)
 			if _, _, err := execRoot(t, observeArgs(spy.srv.URL, tc.args...)...); err != nil {
@@ -717,12 +730,17 @@ func TestPagingFlagsExistOnlyWhereTheEngineReadsThem(t *testing.T) {
 		{"olivares governance pdp tests", false, false},
 		{"olivares governance rbac catalog", false, false},
 		{"olivares governance rbac delegation-authority", false, false},
+		{"olivares governance rbac rights", false, false},
 		{"olivares governance rbac roles ls", false, false},
 		{"olivares governance rbac roles get", false, false},
 		{"olivares governance rbac permission-groups ls", false, false},
 		{"olivares governance rbac permission-groups get", false, false},
 		{"olivares governance rbac grants ls", false, false},
 		{"olivares governance rbac grants get", false, false},
+		{"olivares governance rbac filters ls", false, false},
+		{"olivares governance rbac filters get", false, false},
+		{"olivares governance rbac filters set", false, false},
+		{"olivares governance rbac filters rm", false, false},
 		{"olivares governance nhi ls", true, true},
 		{"olivares governance nhi posture", false, false},
 		{"olivares governance nhi get", false, false},
@@ -751,10 +769,21 @@ func TestPagingFlagsExistOnlyWhereTheEngineReadsThem(t *testing.T) {
 	// observability/traces.go:324 traceListParams, inventory/api.go:211), and each
 	// is wired to the handlers named below. limit-without-cursor is adoption's
 	// top-N (dto.go:207) at its two call sites. Everything else reads neither.
-	// 109 since `governance approvals approve`/`reject` and `reporting signing
-	// status`/`enable`/`disable`; none of the five reads a cursor or a limit.
-	if len(cases) != 109 {
-		t.Fatalf("the table has %d rows, not the 109 leaves the lot exposes", len(cases))
+	// 114 including `governance rbac rights`, whose effective-rights handler
+	// reads neither a cursor nor a limit, and the four `governance rbac filters`
+	// verbs, whose list handler returns the whole set.
+	expected := 114
+	if thisEdition.name != "enterprise" {
+		cases = slices.DeleteFunc(cases, func(c struct {
+			path                  string
+			wantCursor, wantLimit bool
+		}) bool {
+			return operationsExportCLIArgs(strings.Fields(c.path)[1:])
+		})
+		expected = 112
+	}
+	if len(cases) != expected {
+		t.Fatalf("the table has %d rows, want %d for this edition", len(cases), expected)
 	}
 	cursorN, limitN := 0, 0
 	for _, tc := range cases {
@@ -1100,36 +1129,6 @@ func TestSLAWithNoObservationIsIndeterminateNotPerfect(t *testing.T) {
 			t.Errorf("the measured uptime must be printed, got:\n%s", out)
 		}
 	})
-}
-
-// TestPostureTruncationIsDegradedNotClean: a capped export understates findings,
-// entities and drift — all in the direction that reads as good news.
-func TestPostureTruncationIsDegradedNotClean(t *testing.T) {
-	for _, tc := range []struct {
-		name string
-		body string
-		want int
-	}{
-		{"complete", `{"tenant":"t","inventory":[],"findings":[],"posture_drift":{}}`, exitcode.OK},
-		{"findings truncated", `{"tenant":"t","findings_truncated":true,"posture_drift":{}}`, exitcode.Degraded},
-		{"inventory truncated", `{"tenant":"t","inventory_truncated":true,"posture_drift":{}}`, exitcode.Degraded},
-		{"drift truncated", `{"tenant":"t","posture_drift":{"truncated":true}}`, exitcode.Degraded},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			spy := newObserveSpy(t, http.StatusOK, tc.body)
-			out, _, err := execRoot(t, observeArgs(spy.srv.URL, "posture", "export")...)
-			got := exitcode.OK
-			if err != nil {
-				got = exitcode.From(err)
-			}
-			if got != tc.want {
-				t.Errorf("exit = %d, want %d", got, tc.want)
-			}
-			if tc.want == exitcode.Degraded && !strings.Contains(out, "TRUNCATED") {
-				t.Errorf("a capped export must say so on stdout, got:\n%s", out)
-			}
-		})
-	}
 }
 
 // ---- PERMIT 6: the byte-artifact routes -------------------------------------------------
@@ -1827,6 +1826,9 @@ func TestEveryFamilyInTheLotIsRegistered(t *testing.T) {
 		"reporting", "notify", "health", "accessmap", "observability",
 		"consoleviews", "adoption", "identity", "inventory", "posture",
 	} {
+		if name == "posture" && thisEdition.name != "enterprise" {
+			continue
+		}
 		if cmd := resolveCommandPath(t, root, "olivares "+name); cmd == nil {
 			t.Errorf("olivares %s is not registered on the root command", name)
 		}
@@ -1844,6 +1846,12 @@ func TestLaneVerbCountMatchesTheRouteCensus(t *testing.T) {
 		"observability": 5, "consoleviews": 5, "adoption": 5,
 		"identity": 4, "inventory": 3, "posture": 1,
 	}
+	expected := 76
+	if thisEdition.name != "enterprise" {
+		want["observability"] = 4
+		delete(want, "posture")
+		expected = 74
+	}
 	total := 0
 	for family, n := range want {
 		cmd := resolveCommandPath(t, root, "olivares "+family)
@@ -1857,8 +1865,8 @@ func TestLaneVerbCountMatchesTheRouteCensus(t *testing.T) {
 		}
 		total += n
 	}
-	if total != 76 {
-		t.Fatalf("the census table itself sums to %d, not the 76 routes it describes", total)
+	if total != expected {
+		t.Fatalf("the census table sums to %d, want %d for this edition", total, expected)
 	}
 }
 
@@ -1961,4 +1969,9 @@ func TestKillSwitchListSendsItsFiltersToTheEngine(t *testing.T) {
 	if q := spy2.last(t).query; q.Get("status") != "" || q.Get("limit") != "" {
 		t.Errorf("a bare `ls` sent status=%q limit=%q; it must send neither", q.Get("status"), q.Get("limit"))
 	}
+}
+
+// The Community command tree has no client that can export from a remote Business server.
+func operationsExportCLIArgs(args []string) bool {
+	return len(args) > 0 && args[0] == "posture" || len(args) >= 3 && args[0] == "observability" && args[1] == "traces" && args[2] == "export"
 }

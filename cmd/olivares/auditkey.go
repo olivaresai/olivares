@@ -5,7 +5,6 @@
 package main
 
 import (
-	"context"
 	"crypto/ed25519"
 	"crypto/sha256"
 	"encoding/base64"
@@ -19,6 +18,7 @@ import (
 
 	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
 	"github.com/olivaresai/olivares/core/api"
+	"github.com/olivaresai/olivares/core/envconfig"
 	"github.com/olivaresai/olivares/core/secure"
 )
 
@@ -72,24 +72,6 @@ type loadedSigningKey struct {
 	// createdAt is known for a newly minted local key and for a CMEK envelope.
 	// Existing plain BYOK/local files do not carry trustworthy creation metadata.
 	createdAt time.Time
-}
-
-// fromCMEKEnvelope retains every non-secret custody field authenticated by the
-// envelope. Only well-formed Ed25519 prior keys enter the verification-history
-// count, matching the audit verifier's existing behavior.
-func fromCMEKEnvelope(priv ed25519.PrivateKey, env *secure.SealedEnvelope) loadedSigningKey {
-	out := loadedSigningKey{
-		priv:      priv,
-		mode:      custodyModeCMEK,
-		kek:       env.Provider + " " + env.KeyID,
-		createdAt: env.CreatedAt.UTC(),
-	}
-	for _, prior := range env.PriorPublicKeys {
-		if len(prior) == ed25519.PublicKeySize {
-			out.priors = append(out.priors, ed25519.PublicKey(prior))
-		}
-	}
-	return out
 }
 
 func mintedSigningKey(priv ed25519.PrivateKey, created bool) loadedSigningKey {
@@ -231,21 +213,19 @@ func fileExistsAt(path string) bool {
 // intent is ambiguous, and custody is the one place a guess is unacceptable.
 
 func loadAuditSigningKey(dataDir string, log *slog.Logger, opts ...keyLoadOption) (loadedSigningKey, error) {
-	wrapped := strings.TrimSpace(os.Getenv(envAuditWrapped))
-	inline := strings.TrimSpace(os.Getenv(envAuditKey))
-	file := strings.TrimSpace(os.Getenv(envAuditKeyFile))
+	wrapped := strings.TrimSpace(envconfig.Get(envAuditWrapped))
+	inline := strings.TrimSpace(envconfig.Get(envAuditKey))
+	file := strings.TrimSpace(envconfig.Get(envAuditKeyFile))
 
 	if wrapped != "" && (inline != "" || file != "") {
 		return loadedSigningKey{}, fmt.Errorf("both %s and %s/%s are set — declare ONE custody source for the audit signing key", envAuditWrapped, envAuditKey, envAuditKeyFile)
 	}
 	if wrapped != "" {
-		k, env, err := loadSealedKey(wrapped, secure.PurposeAuditSigningKey)
+		out, err := loadWrappedSigningKey(wrapped, secure.PurposeAuditSigningKey)
 		if err != nil {
 			return loadedSigningKey{}, fmt.Errorf("audit signing key (CMEK): %w", err)
 		}
-		out := fromCMEKEnvelope(k, env)
-		log.Info("audit signing key unwrapped from a sealed envelope (CMEK custody); per-event signing stays on-box, the key at rest only exists KEK-wrapped",
-			"path", wrapped, "kek", out.kek, "prior_generations", len(out.priors))
+		log.Info("audit signing key unwrapped from a sealed envelope (CMEK custody); per-event signing stays on-box, the key at rest only exists KEK-wrapped", "path", wrapped, "kek", out.kek, "prior_generations", len(out.priors))
 		return out, nil
 	}
 	if inline != "" {
@@ -290,20 +270,20 @@ func loadAuditSigningKey(dataDir string, log *slog.Logger, opts ...keyLoadOption
 // un-unwrappable envelope is a custody error — silently minting a plaintext key
 // under a declared customer-custody posture would be a lie.
 func loadCatalogSigningKey(dataDir string, log *slog.Logger, opts ...keyLoadOption) (loadedSigningKey, error) {
-	wrapped := strings.TrimSpace(os.Getenv(envCatalogWrapped))
-	inline := strings.TrimSpace(os.Getenv(envCatalogKey))
-	file := strings.TrimSpace(os.Getenv(envCatalogKeyFile))
+	wrapped := strings.TrimSpace(envconfig.Get(envCatalogWrapped))
+	inline := strings.TrimSpace(envconfig.Get(envCatalogKey))
+	file := strings.TrimSpace(envconfig.Get(envCatalogKeyFile))
 
 	if wrapped != "" && (inline != "" || file != "") {
 		return loadedSigningKey{}, fmt.Errorf("both %s and %s/%s are set — declare ONE custody source for the catalog signing key", envCatalogWrapped, envCatalogKey, envCatalogKeyFile)
 	}
 	if wrapped != "" {
-		k, env, err := loadSealedKey(wrapped, secure.PurposeCatalogSigningKey)
+		out, err := loadWrappedSigningKey(wrapped, secure.PurposeCatalogSigningKey)
 		if err != nil {
 			return loadedSigningKey{}, fmt.Errorf("catalog signing key (CMEK): %w", err)
 		}
-		log.Info("catalog signing key unwrapped from a sealed envelope (CMEK custody)", "path", wrapped, "kek", env.Provider+" "+env.KeyID)
-		return fromCMEKEnvelope(k, env), nil
+		log.Info("catalog signing key unwrapped from a sealed envelope (CMEK custody)", "path", wrapped, "kek", out.kek)
+		return out, nil
 	}
 	if inline != "" {
 		k, derr := secure.DecodeSigningKey(inline)
@@ -359,20 +339,20 @@ func loadCatalogSigningKey(dataDir string, log *slog.Logger, opts ...keyLoadOpti
 // warning) while the CMEK envelope path is FAIL-CLOSED (a declared customer-
 // custody posture is never silently downgraded to a minted plaintext key).
 func loadPolicySigningKey(dataDir string, log *slog.Logger, opts ...keyLoadOption) (loadedSigningKey, error) {
-	wrapped := strings.TrimSpace(os.Getenv(envPolicyWrapped))
-	inline := strings.TrimSpace(os.Getenv(envPolicyKey))
-	file := strings.TrimSpace(os.Getenv(envPolicyKeyFile))
+	wrapped := strings.TrimSpace(envconfig.Get(envPolicyWrapped))
+	inline := strings.TrimSpace(envconfig.Get(envPolicyKey))
+	file := strings.TrimSpace(envconfig.Get(envPolicyKeyFile))
 
 	if wrapped != "" && (inline != "" || file != "") {
 		return loadedSigningKey{}, fmt.Errorf("both %s and %s/%s are set — declare ONE custody source for the policy signing key", envPolicyWrapped, envPolicyKey, envPolicyKeyFile)
 	}
 	if wrapped != "" {
-		k, env, err := loadSealedKey(wrapped, secure.PurposePolicySigningKey)
+		out, err := loadWrappedSigningKey(wrapped, secure.PurposePolicySigningKey)
 		if err != nil {
 			return loadedSigningKey{}, fmt.Errorf("policy signing key (CMEK): %w", err)
 		}
-		log.Info("policy signing key unwrapped from a sealed envelope (CMEK custody)", "path", wrapped, "kek", env.Provider+" "+env.KeyID)
-		return fromCMEKEnvelope(k, env), nil
+		log.Info("policy signing key unwrapped from a sealed envelope (CMEK custody)", "path", wrapped, "kek", out.kek)
+		return out, nil
 	}
 	if inline != "" {
 		k, derr := secure.DecodeSigningKey(inline)
@@ -433,32 +413,4 @@ func loadEnrolledLocalKey(purpose, path string) (loadedSigningKey, error) {
 	// call minted it: opgate's vocabulary gives a local file and a freshly created one
 	// the same custody source, and created stays false because nothing was created.
 	return loadedSigningKey{priv: k, mode: custodyModeMinted}, nil
-}
-
-// loadSealedKey opens a sealed signing-key envelope through the configured KEK.
-// Every failure is closed: no KEK configured, unreadable envelope, KMS unwrap
-// refused (revoked KEK), or an inconsistent custody record.
-func loadSealedKey(path, purpose string) (ed25519.PrivateKey, *secure.SealedEnvelope, error) {
-	cfg, err := loadKeyWrapConfig()
-	if err != nil {
-		return nil, nil, err
-	}
-	if cfg == nil {
-		return nil, nil, fmt.Errorf("a sealed envelope is configured at %s but no KEK is (%s) — the envelope cannot be opened without the customer-managed key", path, envKeyWrap)
-	}
-	e, err := secure.ReadSealedFile(path)
-	if err != nil {
-		return nil, nil, err
-	}
-	w, err := cfg.wrapperFor(e)
-	if err != nil {
-		return nil, nil, err
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), kmsCallTimeout)
-	defer cancel()
-	k, err := e.OpenSigningKey(ctx, w, purpose)
-	if err != nil {
-		return nil, nil, err
-	}
-	return k, e, nil
 }

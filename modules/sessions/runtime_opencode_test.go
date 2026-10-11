@@ -23,6 +23,9 @@ import (
 
 func openCodeRuntimeOptions(extra ...Option) []Option {
 	return append([]Option{
+		func(m *Module) {
+			m.ProfileLogin = func(context.Context, model.TenantID, string, string) (bool, bool, error) { return true, true, nil }
+		},
 		WithRunner(NewProcRunner()),
 		WithProviderDriver(NewOpenCodeDriver()),
 		WithDriverProgram(providerDriverOpenCode, os.Args[0]),
@@ -50,7 +53,7 @@ func newOpenCodeProfile(t *testing.T, m *Module, tenant model.TenantID, name, au
 
 func openCodeLaunch(t *testing.T, m *Module, tenant model.TenantID, prof ProviderProfile) (runDTO, error) {
 	t.Helper()
-	return m.createRun(context.Background(), tenant, CreateRunParams{
+	return createProfiledTestRun(t, m, context.Background(), tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative,
 		Actor: "user:u1", ActorKind: model.ActorUser,
 		ProviderProfileRef: prof.Ref,
@@ -84,7 +87,7 @@ func TestOpenCodeRuntimeRegistrationIsIndependentOfTheOtherDrivers(t *testing.T)
 	if _, err := openCodeLaunch(t, m, tenant, openCodeProf); err != nil {
 		t.Fatalf("registered OpenCode launch: %v", err)
 	}
-	if _, err := m.createRun(ctx, tenant, CreateRunParams{
+	if _, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative,
 		Actor: "user:u1", ActorKind: model.ActorUser, ProviderProfileRef: codexProf.Ref,
 	}); err == nil {
@@ -175,7 +178,7 @@ func TestOpenCodeRuntimeLaunchOwnsTheChildAndBindsItsConversation(t *testing.T) 
 	if !processRunning(int(*dto.PID)) {
 		t.Fatal("the owned child is not running")
 	}
-	want := []string{openCodeMethodInitialize, openCodeMethodSessionNew}
+	want := []string{acpMethodInitialize, acpMethodSessionNew}
 	if len(peer.Methods) < len(want) {
 		t.Fatalf("methods = %v", peer.Methods)
 	}
@@ -219,10 +222,10 @@ func TestOpenCodeRuntimeResumeUsesTheStoredConversationAndRefusesToFallBack(t *t
 	peer := readOpenCodeFixtureRecord(t, resumeRecord)
 	foundResume := false
 	for _, method := range peer.Methods {
-		if method == openCodeMethodSessionNew {
+		if method == acpMethodSessionNew {
 			t.Fatal("resume fell back to session/new")
 		}
-		if method == openCodeMethodSessionResume {
+		if method == acpMethodSessionResume {
 			foundResume = true
 		}
 	}
@@ -240,7 +243,7 @@ func TestOpenCodeRuntimeResumeUsesTheStoredConversationAndRefusesToFallBack(t *t
 	}
 	failPeer := readOpenCodeFixtureRecord(t, failRecord)
 	for _, method := range failPeer.Methods {
-		if method == openCodeMethodSessionNew || method == openCodeMethodSessionLoad {
+		if method == acpMethodSessionNew || method == acpMethodSessionLoad {
 			t.Fatalf("failed resume fell back to %s", method)
 		}
 	}
@@ -318,7 +321,7 @@ func TestOpenCodeRuntimeRefusesHomeOverridesFromEveryDirection(t *testing.T) {
 		envXDGConfigHome, envXDGDataHome, envXDGStateHome, envXDGCacheHome, envXDGRuntimeDir,
 	} {
 		m, _, tenant, prof := openCodeHarness(t, AuthSourceAccountHome)
-		_, err := m.createRun(context.Background(), tenant, CreateRunParams{
+		_, err := createProfiledTestRun(t, m, context.Background(), tenant, CreateRunParams{
 			Transport: TransportStreamJSON, Isolation: IsolationNative,
 			Actor: "user:u1", ActorKind: model.ActorUser,
 			ProviderProfileRef: prof.Ref, EnvAllow: []string{name},
@@ -356,7 +359,7 @@ func TestOpenCodeRuntimeResumeRefusesATemplateTightenedAfterCreate(t *testing.T)
 	)
 	id := seedTemplate(t, m, tenant, "Bounded", tplBody{Policies: &tplPolicies{MaxSessionDurationMinutes: 60}})
 	setOpenCodeFixture(t, prof, openCodeFixture{SessionID: "ses-tpl"})
-	first, err := m.createRun(ctx, tenant, CreateRunParams{
+	first, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative,
 		Actor: "user:u1", ActorKind: model.ActorUser,
 		ProviderProfileRef: prof.Ref, TemplateID: id,
@@ -371,7 +374,7 @@ func TestOpenCodeRuntimeResumeRefusesATemplateTightenedAfterCreate(t *testing.T)
 		Settings: &tplSettings{CustomInstructions: "never discard this"},
 		Policies: &tplPolicies{MaxSessionDurationMinutes: 60, AllowedTools: []string{"Read"}},
 	})
-	if _, err := m.createRun(ctx, tenant, CreateRunParams{
+	if _, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative,
 		Actor: "user:u1", ActorKind: model.ActorUser,
 		ProviderProfileRef: prof.Ref, TemplateID: id,
@@ -421,14 +424,14 @@ func TestOpenCodeRuntimeResumeRefusesATemplateTightenedAfterCreate(t *testing.T)
 func TestOpenCodeRuntimeRefusesUnsupportedTemplateControls(t *testing.T) {
 	m, _, tenant, prof := openCodeHarness(t, AuthSourceAccountHome)
 	setOpenCodeFixture(t, prof, openCodeFixture{SessionID: "ses-tpl"})
-	if _, err := m.createRun(context.Background(), tenant, CreateRunParams{
+	if _, err := createProfiledTestRun(t, m, context.Background(), tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative,
 		Actor: "user:u1", ActorKind: model.ActorUser,
 		ProviderProfileRef: prof.Ref, Instructions: "never discard this",
 	}); err == nil {
 		t.Fatal("template instructions must be refused")
 	}
-	if _, err := m.createRun(context.Background(), tenant, CreateRunParams{
+	if _, err := createProfiledTestRun(t, m, context.Background(), tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative,
 		Actor: "user:u1", ActorKind: model.ActorUser,
 		ProviderProfileRef: prof.Ref, AllowedTools: []string{"Bash"},
@@ -460,11 +463,11 @@ func TestOpenCodeRuntimeApprovalSelectsOnceAndNeverAlways(t *testing.T) {
 		return len(readOpenCodeFixtureRecord(t, record).Replies) > 0
 	})
 	peer := readOpenCodeFixtureRecord(t, record)
-	var reply openCodeRequestPermissionResponse
+	var reply acpRequestPermissionResponse
 	if err := json.Unmarshal(peer.Replies[0], &reply); err != nil {
 		t.Fatalf("the approval answer is not a permission response: %s", peer.Replies[0])
 	}
-	if reply.Outcome.Outcome != openCodeOutcomeSelected || reply.Outcome.OptionID != "once" {
+	if reply.Outcome.Outcome != acpOutcomeSelected || reply.Outcome.OptionID != "once" {
 		t.Fatalf("outcome = %+v, want once", reply.Outcome)
 	}
 	select {
@@ -506,7 +509,7 @@ func TestOpenCodeRuntimeInterruptResolvesAPendingApproval(t *testing.T) {
 		return len(readOpenCodeFixtureRecord(t, record).Replies) > 0
 	})
 	peer := readOpenCodeFixtureRecord(t, record)
-	var reply openCodeRequestPermissionResponse
+	var reply acpRequestPermissionResponse
 	if err := json.Unmarshal(peer.Replies[0], &reply); err != nil {
 		t.Fatalf("reply: %v", err)
 	}
@@ -542,11 +545,11 @@ func TestOpenCodeRuntimeApprovalRefusesWhenTheCurrentAuthorityIsGone(t *testing.
 	waitFor(t, "the child received the approval answer", func() bool {
 		return len(readOpenCodeFixtureRecord(t, record).Replies) > 0
 	})
-	var reply openCodeRequestPermissionResponse
+	var reply acpRequestPermissionResponse
 	if err := json.Unmarshal(readOpenCodeFixtureRecord(t, record).Replies[0], &reply); err != nil {
 		t.Fatalf("reply: %v", err)
 	}
-	if reply.Outcome.Outcome != openCodeOutcomeCancelled {
+	if reply.Outcome.Outcome != acpOutcomeCancelled {
 		t.Fatalf("outcome = %+v, want cancelled", reply.Outcome)
 	}
 	lr, _ := m.rt.getLive(tenant, dto.RunRef)
@@ -579,7 +582,7 @@ func TestOpenCodeRuntimeRefusesAnUnadvertisedCapabilityRequest(t *testing.T) {
 	if err := json.Unmarshal(readOpenCodeFixtureRecord(t, record).Replies[0], &refusal); err != nil {
 		t.Fatalf("the answer is not a protocol error: %v", err)
 	}
-	if refusal.Code != openCodeErrMethodNotSupported {
+	if refusal.Code != acpErrMethodNotSupported {
 		t.Fatalf("code = %d", refusal.Code)
 	}
 }
@@ -627,7 +630,7 @@ func TestOpenCodeRuntimeStopReapsTheOwnedProcessGroup(t *testing.T) {
 func TestOpenCodeRuntimeModelSettingReachesTheChild(t *testing.T) {
 	m, _, tenant, prof := openCodeHarness(t, AuthSourceAccountHome)
 	record := setOpenCodeFixture(t, prof, openCodeFixture{SessionID: "ses-model", OfferEffort: true})
-	dto, err := m.createRun(context.Background(), tenant, CreateRunParams{
+	dto, err := createProfiledTestRun(t, m, context.Background(), tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative,
 		Actor: "user:u1", ActorKind: model.ActorUser,
 		ProviderProfileRef: prof.Ref, Model: "anthropic/claude-sonnet-4", Effort: "high",
@@ -642,5 +645,103 @@ func TestOpenCodeRuntimeModelSettingReachesTheChild(t *testing.T) {
 	}
 	if strings.Join(peer.ConfigValues, ",") != "anthropic/claude-sonnet-4,high" {
 		t.Fatalf("config values = %v", peer.ConfigValues)
+	}
+}
+
+// HU-R34: a launch refused because it asked OpenCode for a model it does not offer stayed
+// in Sessions and on Now as "Failed". Nothing failed: the run ends stopped, with the
+// refusal (and the offered models) as its reason.
+func TestOpenCodeRuntimeLaunchRefusedForAnUnofferedModelIsNotFailed(t *testing.T) {
+	m, _, tenant, prof := openCodeHarness(t, AuthSourceAccountHome)
+	setOpenCodeFixture(t, prof, openCodeFixture{GroupedModel: true})
+	_, err := createProfiledTestRun(t, m, context.Background(), tenant, CreateRunParams{
+		Transport: TransportStreamJSON, Isolation: IsolationNative,
+		Actor: "user:u1", ActorKind: model.ActorUser,
+		ProviderProfileRef: prof.Ref, Model: "hu-fixture",
+		EnvAllow: []string{"FIXTURE_MARKER"},
+	})
+	var re *runErr
+	if !errors.As(err, &re) || re.status != http.StatusUnprocessableEntity || !strings.Contains(err.Error(), "it offers:") {
+		t.Fatalf("launch = %v, want the 422 that lists the offered models", err)
+	}
+	if rec := onlyRunRecord(t, m, tenant); rec.String(colState) != stateStopped || rec.String(colReason) != err.Error() {
+		t.Fatalf("refused launch = %s %q, want stopped with the refusal", rec.String(colState), rec.String(colReason))
+	}
+}
+
+// onlyRunRecord is the tenant's single run row.
+func onlyRunRecord(t *testing.T, m *Module, tenant model.TenantID) model.Record {
+	t.Helper()
+	var runs []model.Record
+	if err := m.Data.View(context.Background(), tenant, func(sc store.Scope) error {
+		repo, err := sc.Ext(runKind)
+		if err != nil {
+			return err
+		}
+		runs, _, err = repo.List(context.Background(), model.Query{Limit: 10})
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if len(runs) != 1 {
+		t.Fatalf("runs = %d, want 1", len(runs))
+	}
+	return runs[0]
+}
+
+// SR2C on aa1cc91f: a resume whose stored model OpenCode no longer offers is the same
+// refusal as on create, so it ends stopped as well.
+func TestOpenCodeRuntimeResumeRefusedForAnUnofferedModelIsNotFailed(t *testing.T) {
+	ctx := context.Background()
+	m, _, tenant, prof := openCodeHarness(t, AuthSourceAccountHome)
+	// The resumed conversation answers with the same selectors as the new one did.
+	setOpenCodeFixture(t, prof, openCodeFixture{GroupedModel: true, SessionID: "ses_resume", ResumeSessionID: "ses_resume"})
+	run, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{
+		Transport: TransportStreamJSON, Isolation: IsolationNative,
+		Actor: "user:u1", ActorKind: model.ActorUser,
+		ProviderProfileRef: prof.Ref, Model: "opencode/big-pickle",
+		EnvAllow: []string{"FIXTURE_MARKER"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.stopRun(ctx, tenant, run.RunRef, "user:u1", "user"); err != nil {
+		t.Fatal(err)
+	}
+	// The stored model is no longer offered (removed from the provider since).
+	if err := m.Data.Mutate(ctx, tenant, func(sc store.Scope) error {
+		repo, err := sc.Ext(runKind)
+		if err != nil {
+			return err
+		}
+		rec, err := findRunRec(ctx, repo, run.RunRef)
+		if err != nil {
+			return err
+		}
+		rec[colRunModelRef] = "removed/model"
+		_, err = repo.Update(ctx, rec)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	_, err = m.resumeRun(ctx, tenant, run.RunRef, "user:u1", "user", "")
+	var re *runErr
+	if !errors.As(err, &re) || re.status != http.StatusUnprocessableEntity || !strings.Contains(err.Error(), "it offers:") {
+		t.Fatalf("resume = %v, want the 422 that lists the offered models", err)
+	}
+	if rec := onlyRunRecord(t, m, tenant); rec.String(colState) != stateStopped || rec.String(colReason) != err.Error() {
+		t.Fatalf("refused resume = %s %q, want stopped with the refusal", rec.String(colState), rec.String(colReason))
+	}
+}
+
+// Every other handshake failure, auth-required included, still ends failed.
+func TestOpenCodeRuntimeAuthRequiredLaunchStaysFailed(t *testing.T) {
+	m, _, tenant, prof := openCodeHarness(t, AuthSourceAccountHome)
+	setOpenCodeFixture(t, prof, openCodeFixture{NewSessionAuthRequired: true})
+	if _, err := openCodeLaunch(t, m, tenant, prof); err == nil {
+		t.Fatal("auth-required session/new must fail the launch")
+	}
+	if rec := onlyRunRecord(t, m, tenant); rec.String(colState) != stateFailed || rec.String(colReason) != "driver_handshake_failed" {
+		t.Fatalf("auth-required launch = %s %q, want failed", rec.String(colState), rec.String(colReason))
 	}
 }

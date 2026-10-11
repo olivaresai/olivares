@@ -43,7 +43,16 @@ func recordedSelection(t *testing.T, p *productSettings) []string {
 // modules with no data, without depending on the data census or restarting.
 func TestReconcileModulesKeepsEveryModuleAnExistingInstallationUses(t *testing.T) {
 	_, p := bootForSettings(t)
-	booted := mustProfile(t, allModuleSelection())
+	// This installation ran 26.10.0, before skills joined the catalog.
+	want := []string{
+		"accessmap", "adoption", "capabilities", "catalog", "claude-agents",
+		"claude-policy", "compliance", "consoleviews", "deploy", "evals", "eventing",
+		"finops", "gitpublish", "governance", "health", "identity", "inferenceproxy",
+		"inventory", "knowledge", "liveingest", "models", "notify", "observability",
+		"orchestration", "posture", "recording", "redteam", "reporting", "sandbox",
+		"security", "sessions", "siemforward", "sourcescope", "voice",
+	}
+	booted := mustProfile(t, want)
 	booted.existingInstallation = true
 	mods := &moduleReconcile{booted: booted, used: func(context.Context) ([]string, error) {
 		t.Fatal("an existing installation's default must not depend on module rows")
@@ -52,7 +61,6 @@ func TestReconcileModulesKeepsEveryModuleAnExistingInstallationUses(t *testing.T
 	if err := reconcileSettings(context.Background(), p, mods, slog.Default()); err != nil {
 		t.Fatalf("first start of an existing installation = %v, want serve", err)
 	}
-	want := allModuleSelection()
 	if got := recordedSelection(t, p); !slices.Equal(got, want) {
 		t.Fatalf("recorded selection = %v, want %v", got, want)
 	}
@@ -95,7 +103,7 @@ func TestReconcileModulesRecordsANewInstallationWithoutRestart(t *testing.T) {
 	if err := reconcileSettings(context.Background(), p, mods, slog.Default()); err != nil {
 		t.Fatalf("new installation = %v, want serve", err)
 	}
-	if got := recordedSelection(t, p); !slices.Equal(got, []string{"capabilities", "claude-policy", "consoleviews", "identity"}) {
+	if got := recordedSelection(t, p); !slices.Equal(got, standardModuleSelection()) {
 		t.Fatalf("recorded selection = %v", got)
 	}
 }
@@ -162,10 +170,11 @@ func TestModuleSelectionRestartsOnlyWhenTheRunningModulesChange(t *testing.T) {
 	svc := moduleSelectionService{settings: p, running: mustProfile(t, standardModuleSelection()), log: slog.Default(),
 		restart: func(string) error { restarts++; return nil }}
 
-	dto, err := svc.SelectModules(ctx, operator(t), []string{"identity", "consoleviews", "claude-policy", "capabilities"})
+	dto, err := svc.SelectModules(ctx, operator(t), standardModuleSelection())
 	if err != nil || dto.Restarting || restarts != 0 {
 		t.Fatalf("unchanged selection: restarting=%v restarts=%d err=%v", dto.Restarting, restarts, err)
 	}
+	svc.running = mustProfile(t, []string{"identity", "consoleviews", "claude-policy", "capabilities", "liveingest"})
 	dto, err = svc.SelectModules(ctx, operator(t), []string{"eventing", "consoleviews"})
 	if err != nil || !dto.Restarting || restarts != 1 {
 		t.Fatalf("added module: restarting=%v restarts=%d err=%v", dto.Restarting, restarts, err)
@@ -186,8 +195,8 @@ func TestModuleSelectionRestartsOnlyWhenTheRunningModulesChange(t *testing.T) {
 	if g := states["governance"]; !g.AlwaysOn || !g.Running {
 		t.Fatalf("governance = %+v, want always on", g)
 	}
-	if l := states["liveingest"]; !slices.Equal(l.RequiredBy, []string{"sessions"}) {
-		t.Fatalf("liveingest required by %v, want [sessions]", l.RequiredBy)
+	if l := states["liveingest"]; len(l.RequiredBy) != 0 {
+		t.Fatalf("liveingest required by %v, want none", l.RequiredBy)
 	}
 
 	if _, err := svc.SelectModules(ctx, operator(t), []string{"teleport"}); !errors.Is(err, api.ErrUnknownModule) {
@@ -199,6 +208,32 @@ func TestModuleSelectionRestartsOnlyWhenTheRunningModulesChange(t *testing.T) {
 	svc.restart = func(string) error { return errors.New("not serving") }
 	if _, err := svc.SelectModules(ctx, operator(t), []string{"finops"}); !errors.Is(err, api.ErrModulesRestartUnavailable) {
 		t.Fatalf("restart failure = %v, want ErrModulesRestartUnavailable", err)
+	}
+}
+
+// The restart that applies a selection stops every running session, so the
+// selection says how many run now, before Apply and in the reply (#507).
+func TestModuleSelectionSaysHowManySessionsTheRestartStops(t *testing.T) {
+	_, p := bootForSettings(t)
+	ctx := context.Background()
+	svc := moduleSelectionService{settings: p, running: mustProfile(t, standardModuleSelection()), log: slog.Default(),
+		restart: func(string) error { return nil }, sessions: func() int { return 2 }}
+	dto, err := svc.ModuleSelection(ctx)
+	if err != nil || dto.RunningSessions != 2 {
+		t.Fatalf("before Apply: running_sessions = %d (%v), want 2", dto.RunningSessions, err)
+	}
+	dto, err = svc.SelectModules(ctx, operator(t), []string{"eventing"})
+	if err != nil || !dto.Restarting || dto.RunningSessions != 2 {
+		t.Fatalf("the restarting reply: restarting=%v running_sessions=%d (%v), want true 2", dto.Restarting, dto.RunningSessions, err)
+	}
+	// A change that keeps what runs restarts nothing, and its reply still counts them.
+	dto, err = svc.SelectModules(ctx, operator(t), standardModuleSelection())
+	if err != nil || dto.Restarting || dto.RunningSessions != 2 {
+		t.Fatalf("the reply without a restart: restarting=%v running_sessions=%d (%v), want false 2", dto.Restarting, dto.RunningSessions, err)
+	}
+	svc.sessions = nil
+	if dto, err := svc.ModuleSelection(ctx); err != nil || dto.RunningSessions != 0 {
+		t.Fatalf("no sessions module: running_sessions = %d (%v), want 0", dto.RunningSessions, err)
 	}
 }
 

@@ -6,7 +6,8 @@
 // install an agent tool, sign it in with its own login, start a session in a folder
 // (features/first-hour). The default workspace already exists and counts. Inviting
 // people, an identity provider, policies, MCP servers and budgets are optional next
-// suggestions that link to their own pages; none of them is pending or blocking.
+// suggestions that link to their own pages; none of them is pending or blocking, and
+// one whose module is off on this installation is not offered.
 // Dismiss hides the guide on this browser and is reversible.
 import './i18n'
 import { Link } from '@tanstack/react-router'
@@ -20,16 +21,29 @@ import { PageHeader } from '@/components/ui/page-header'
 import { FirstHourSteps } from '@/features/first-hour/first-hour'
 import '@/features/first-hour/i18n'
 import { useAuth } from '@/lib/auth/context'
+import { COST_VIEW } from '@/features/registry'
+import { useViewAccess } from '@/features/navigation/authorization'
+import { useModuleEnabled } from '@/stores/modules'
 
 const DISMISS_KEY = 'olivares.onboarding.dismissed'
 
-const NEXT = [
+// `view` names the registry view whose module must run for the suggestion to be offered:
+// a page of a module that is off has nothing to show (stores/modules.ts), and a fresh
+// install runs with most modules off.
+const NEXT: readonly { key: string; to: string; view?: string }[] = [
   { key: 'invite', to: '/console?tab=people' },
   { key: 'identity', to: '/console?tab=sso' },
-  { key: 'policies', to: '/claude-policy' },
+  // Managed settings, not the page's default Drift tab: drift reads the Security
+  // module's findings, and a fresh install runs without Security.
+  {
+    key: 'policies',
+    to: '/claude-policy?tab=managed-settings',
+    view: 'claudePolicy',
+  },
   { key: 'mcp', to: '/console?tab=mcpGateway' },
-  { key: 'budgets', to: '/finops' },
-] as const
+  // Stored budgets remain useful after an edition change; Community offers their read view.
+  { key: 'budgets', to: COST_VIEW.path, view: COST_VIEW.id },
+]
 
 /** A command with the one button that copies it. */
 function CopyCommand({ command }: { command: string }) {
@@ -58,6 +72,8 @@ function CopyCommand({ command }: { command: string }) {
 export function OnboardingView() {
   const { t } = useTranslation(['onboarding', 'firstHour'])
   const { can } = useAuth()
+  const access = useViewAccess()
+  const moduleEnabled = useModuleEnabled()
   const [dismissed, setDismissed] = useState<boolean>(() => {
     try {
       return localStorage.getItem(DISMISS_KEY) === 'true'
@@ -113,13 +129,19 @@ export function OnboardingView() {
           {t('firstHour:next.title')}
         </h2>
         <ul className="flex flex-wrap gap-x-5 gap-y-1.5">
-          {NEXT.map((n) => (
+          {NEXT.filter((n) =>
+            n.key === 'budgets'
+              ? access.navigable(COST_VIEW)
+              : moduleEnabled(undefined, n.view),
+          ).map((n) => (
             <li key={n.key}>
               <Link
                 to={n.to as '/'}
                 className="text-body text-accent-text underline underline-offset-2"
               >
-                {t(`firstHour:next.${n.key}`)}
+                {n.key === 'budgets' && COST_VIEW.id === 'storedBudgets'
+                  ? t('nav:items.storedBudgets')
+                  : t(`firstHour:next.${n.key}`)}
               </Link>
             </li>
           ))}

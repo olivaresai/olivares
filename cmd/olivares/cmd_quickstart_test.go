@@ -5,9 +5,13 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v3"
 
 	"github.com/olivaresai/olivares/core/webaddr"
 )
@@ -131,5 +135,131 @@ func TestServeFamilyBindDefaultsAreTheWildcard(t *testing.T) {
 	// is a decision somebody makes on purpose.
 	if rag.agentGatewayListen != "127.0.0.1:8446" {
 		t.Errorf("agent gateway bind = %q, want the unchanged loopback default", rag.agentGatewayListen)
+	}
+}
+
+// TestHomebrewCaveatStatesTheBindDefault holds the cask caveat to the bind
+// default. GoReleaser publishes that caveat to `brew install` and `brew info`,
+// and it said "Loopback-only by default" for 26.10.0 and 26.10.1 while serve and
+// quickstart bound every interface: a false statement about network exposure at
+// install time. The caveat must say what the default is and name the loopback
+// restriction as the remedy, spelled as the help text spells it.
+func TestHomebrewCaveatStatesTheBindDefault(t *testing.T) {
+	t.Parallel()
+	if hostIsLoopback(defaultHTTPListen) {
+		t.Fatalf("defaultHTTPListen %q is loopback; rewrite the cask caveat and this test", defaultHTTPListen)
+	}
+	data, err := os.ReadFile(filepath.Join("..", "..", ".goreleaser.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cfg struct {
+		HomebrewCasks []struct {
+			Name    string `yaml:"name"`
+			Caveats string `yaml:"caveats"`
+		} `yaml:"homebrew_casks"`
+	}
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
+		t.Fatalf(".goreleaser.yaml: %v", err)
+	}
+	if len(cfg.HomebrewCasks) == 0 {
+		t.Fatal(".goreleaser.yaml has no homebrew_casks entry")
+	}
+	for _, cask := range cfg.HomebrewCasks {
+		caveat := strings.Join(strings.Fields(cask.Caveats), " ")
+		lower := strings.ToLower(caveat)
+		for _, claim := range []string{"loopback-only", "loopback only", "localhost only"} {
+			if strings.Contains(lower, claim) {
+				t.Errorf("cask %s caveat claims %q, but --listen defaults to %s (every interface): %q",
+					cask.Name, claim, defaultHTTPListen, caveat)
+			}
+		}
+		for _, want := range []string{
+			"every interface",
+			"--listen " + loopbackHTTPListen,
+			"--grpc-listen " + loopbackGRPCListen,
+		} {
+			if !strings.Contains(lower, want) {
+				t.Errorf("cask %s caveat does not say %q: %q", cask.Name, want, caveat)
+			}
+		}
+	}
+}
+
+// TestBindDefaultDocsStateEveryInterface holds the hardening guide, the agentops
+// installer and the other documents that describe the engine's bind to the bind
+// default, as the cask caveat test above does for Homebrew. They were written for
+// the 26.8/26.9 loopback default and kept saying "localhost" after 26.10.0 made
+// --listen/--grpc-listen bind every interface: a false statement about network
+// exposure in the documents operators read before a pentest. Each must drop the
+// stale claim; the ones that tell an operator what to do must also state the
+// default and the loopback remedy as the help text spells it. The OTLP collector
+// lines in the guide stay loopback: that listener's default did not change.
+func TestBindDefaultDocsStateEveryInterface(t *testing.T) {
+	t.Parallel()
+	if hostIsLoopback(defaultHTTPListen) || hostIsLoopback(defaultGRPCListen) {
+		t.Fatalf("defaults %q/%q are loopback; rewrite these documents and this test", defaultHTTPListen, defaultGRPCListen)
+	}
+	for _, doc := range []struct {
+		path   string
+		stale  []string
+		remedy bool
+	}{
+		{"docs/SECURITY-HARDENING.md", []string{
+			"default binds `127.0.0.1`",
+			"binds to localhost by default",
+			"`127.0.0.1:8443/8444`",
+			"localhost binds",
+		}, true},
+		{"scripts/install-agentops.sh", []string{"loopback-only by default"}, true},
+		{"docs/trust/hecvat-readiness.md", []string{"binds localhost by default"}, true},
+		{"docs/trust/ipv6-parity.md", []string{"still binds loopback"}, true},
+		{"packaging/docker/dockerhub-overview.md", []string{"binds loopback by default", "TLS-on-by-default and bind loopback"}, false},
+		{"web/src/features/attestation/attestation.data.ts", []string{"binds loopback by default"}, false},
+		{"core/secure/tls.go", []string{"gRPC port binds localhost"}, false},
+		{"Dockerfile.agentops", []string{"binds 127.0.0.1 by DEFAULT"}, false},
+	} {
+		data, err := os.ReadFile(filepath.Join("..", "..", doc.path))
+		if err != nil {
+			t.Fatal(err)
+		}
+		text := string(data)
+		for _, claim := range doc.stale {
+			if strings.Contains(text, claim) {
+				t.Errorf("%s claims %q, but --listen/--grpc-listen default to %s/%s (every interface)",
+					doc.path, claim, defaultHTTPListen, defaultGRPCListen)
+			}
+		}
+		if !doc.remedy {
+			continue
+		}
+		for _, want := range []string{
+			"every interface",
+			"--listen " + loopbackHTTPListen,
+			"--grpc-listen " + loopbackGRPCListen,
+		} {
+			if !strings.Contains(text, want) {
+				t.Errorf("%s does not say %q", doc.path, want)
+			}
+		}
+	}
+	// The guide's port table is what a pentest reads: each engine row must state
+	// its own bind, so one correct sentence elsewhere cannot cover a stale row.
+	data, err := os.ReadFile(filepath.Join("..", "..", "docs", "SECURITY-HARDENING.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, port := range []string{"8443", "8444"} {
+		var row string
+		for _, line := range strings.Split(string(data), "\n") {
+			if strings.HasPrefix(line, "| "+port+" |") {
+				row = line
+			}
+		}
+		if row == "" {
+			t.Errorf("docs/SECURITY-HARDENING.md has no port-table row for %s", port)
+		} else if !strings.Contains(row, "every interface") || strings.Contains(row, "`127.0.0.1`") {
+			t.Errorf("docs/SECURITY-HARDENING.md port %s row does not state the every-interface bind: %q", port, row)
+		}
 	}
 }

@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"testing"
 	"time"
 
@@ -193,7 +194,7 @@ func TestHandoffOfferRecognitionRefusesBeforeAnyRead(t *testing.T) {
 	defer stopExpired()
 	// The Module has no store, resolver or sealer: a recognition that read
 	// anything before refusing would not return the unknown sentinel cleanly.
-	m := &Module{}
+	m := &Module{Dependencies: &Dependencies{}}
 	for _, tc := range []struct {
 		name  string
 		ctx   context.Context
@@ -257,7 +258,7 @@ func newHandoffOfferRecognitionFixture(t *testing.T, backend *communicationSchem
 	// its transaction. The composition binds that port at boot; the estate binds
 	// the store's own authenticator, as every module that fences its writers does.
 	f.m.UseStanding(auth.NewAuthenticator(f.st, nil))
-	f.m.data = &handoffRecognitionData{inner: f.m.data}
+	f.m.Data = &handoffRecognitionData{inner: f.m.Data}
 	return handoffOfferRecognitionFixture{
 		handoffRecognitionFixture: f, workID: workID,
 		// Whole seconds keep the stored deadline equal to the requested one on
@@ -316,10 +317,18 @@ func handoffOfferRecognitionGrantWrite(t *testing.T, ctx context.Context, f hand
 // fixture writes for its own USER-owned item.
 func handoffOfferRecognitionSessionWork(t *testing.T, ctx context.Context, f handoffRecognitionFixture) model.ID {
 	t.Helper()
+	return handoffOfferRecognitionWorkOwnedBy(t, ctx, f, f.sid)
+}
+
+// handoffOfferRecognitionWorkOwnedBy is that item with the Session sid as owner.
+func handoffOfferRecognitionWorkOwnedBy(
+	t *testing.T, ctx context.Context, f handoffRecognitionFixture, sid string,
+) model.ID {
+	t.Helper()
 	workID := model.NewID()
 	item := workSchemaItem(f.workspace, "K3 offer recognition")
 	item[colWorkOwnerKind] = string(RecipientSession)
-	item[colWorkOwnerRef] = f.sid
+	item[colWorkOwnerRef] = sid
 	item[colWorkLastEventSeq] = int64(1)
 	if _, err := communicationCreateWithID(ctx, f.m, f.tenant, workItemKind, workID, item); err != nil {
 		t.Fatalf("create the Session-owned WorkItem: %v", err)
@@ -360,16 +369,16 @@ func handoffOfferRecognitionReadiness(t *testing.T, ctx context.Context, f hando
 	for _, missing := range before.Missing {
 		switch missing {
 		case CommunicationReadinessStore:
-			f.m.UseCommunicationStoreReadinessWitness(witness)
+			f.m.CommunicationStoreReadiness = witness
 		case CommunicationReadinessPump:
-			f.m.UseCommunicationPumpReadinessWitness(witness)
+			f.m.CommunicationPumpReadiness = witness
 		case CommunicationReadinessIssuer:
-			f.m.UseCommunicationSessionCredentialSource(communicationSchemaCredentialSource{})
+			f.m.CommunicationSessionCreds = communicationSchemaCredentialSource{}
 		case CommunicationReadinessSealer:
-			if communicationPortBound(f.m.communicationSealer) {
+			if communicationPortBound(f.m.CommunicationSealer) {
 				t.Fatal("COULD_NOT_LOOK: the estate's sealer has no readiness witness, and replacing it would change what the offer seals")
 			}
-			f.m.UseCommunicationContentSealer(witness)
+			func() { f.m.CommunicationSealer = witness; f.m.normalize() }()
 		default:
 			t.Fatalf("COULD_NOT_LOOK: the estate lacks %s readiness, a port the offer itself reads", missing)
 		}
@@ -815,5 +824,37 @@ func TestHandoffOfferRecognitionRefusesChangedCurrentAuthority(t *testing.T) {
 			}
 			handoffOfferRecognitionChallenge(t, f, cmd, nil, func() { tc.change(t, f) }, tc.want, 1, 0)
 		})
+	}
+}
+
+// The public offer route creates the carrier and the offer in one transaction,
+// so a sender that does not own the item is refused only after the carrier rows
+// were written. The refusal is 403 not_owner, not the store conflict, and rolls
+// every one of them back (issue #504).
+func TestHandoffOfferByNonOwnerThroughTheAtomicRouteLeavesNothingBehind(t *testing.T) {
+	f := newHandoffOfferRecognitionFixture(t, nil)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+	foreign := handoffOfferRecognitionWorkOwnedBy(t, ctx, f.handoffRecognitionFixture,
+		"osn_"+model.NewID().String())
+	kinds := []model.Kind{messageKind, messageDeliveryKind, messageAudienceKind, handoffKind}
+	before := make([]int, len(kinds))
+	for i, kind := range kinds {
+		before[i] = len(communicationRowsForTest(t, f.directNoticeFixture, kind))
+	}
+	cmd := f.offerCommand(model.NewID().String())
+	cmd.WorkItemID = foreign
+	_, err := f.m.OfferWorkItemHandoff(ctx, f.scope, f.targetRef, cmd)
+	if err == nil || errors.Is(err, store.ErrConflict) {
+		t.Fatalf("offer of an item owned by another session = %v, want a refusal that is not a store conflict", err)
+	}
+	status, code, _, ok := communicationHTTPDisposition(err)
+	if !ok || status != http.StatusForbidden || code != "not_owner" {
+		t.Fatalf("offer disposition = %d %q (mapped %v) from %v, want 403 not_owner", status, code, ok, err)
+	}
+	for i, kind := range kinds {
+		if got := len(communicationRowsForTest(t, f.directNoticeFixture, kind)); got != before[i] {
+			t.Fatalf("refused offer left %d %s rows, want %d", got, kind, before[i])
+		}
 	}
 }

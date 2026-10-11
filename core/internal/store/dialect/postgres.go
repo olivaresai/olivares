@@ -147,6 +147,27 @@ func (d postgresDialect) AuditTableStmts() []string {
 	return stmts
 }
 
+// AuditTreeStmts: see the sqlite dialect for the row shape.
+func (d postgresDialect) AuditTreeStmts() []string {
+	t := AuditTreeTable
+	stmts := []string{
+		`CREATE TABLE ` + t + ` (
+  tenant_id TEXT NOT NULL,
+  idx BIGINT NOT NULL,
+  leaf BIGINT NOT NULL,
+  seq BIGINT NOT NULL,
+  hash BYTEA NOT NULL CHECK (octet_length(hash) = 32),
+  PRIMARY KEY (tenant_id, idx)
+)`,
+		"CREATE INDEX " + t + "_seq_idx ON " + t + "(tenant_id, seq)",
+	}
+	stmts = append(stmts, pgTenantGuard(t)...)
+	return append(stmts,
+		fmt.Sprintf("CREATE TRIGGER %s_immutable BEFORE UPDATE OR DELETE ON %s FOR EACH ROW EXECUTE FUNCTION %s()", t, t, blockMutationFn),
+		pgRevokeMutations(t, d.appRole),
+	)
+}
+
 func (postgresDialect) AuditSpoolStmts() []string {
 	// audit_spool_usage is global mutable bookkeeping, not tenant data and not
 	// evidence. It deliberately has neither RLS nor an immutability trigger; the

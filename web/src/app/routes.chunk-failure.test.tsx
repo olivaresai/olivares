@@ -6,12 +6,18 @@ import {
   createRouter,
   RouterProvider,
 } from '@tanstack/react-router'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
-import { expect, it, vi } from 'vitest'
+import { beforeEach, expect, it, vi } from 'vitest'
 
-const transport = vi.hoisted(() => ({ unavailable: true, attempts: 0 }))
+const transport = vi.hoisted(
+  (): { unavailable: boolean; attempts: number; error: unknown } => ({
+    unavailable: true,
+    attempts: 0,
+    error: new Error('Shell chunk transport fixture'),
+  }),
+)
 vi.mock('@tanstack/react-router', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@tanstack/react-router')>()
   return {
@@ -24,8 +30,7 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
     ) =>
       actual.lazyRouteComponent(async () => {
         transport.attempts++
-        if (transport.unavailable)
-          throw new Error('Shell chunk transport fixture')
+        if (transport.unavailable) throw transport.error
         return importer()
       }, name),
   }
@@ -45,31 +50,63 @@ vi.mock('./pages/settings', () => ({
   SettingsPage: () => <p>Settings screen</p>,
 }))
 
-import { routeTree } from './routes'
-
-it('offers translated recovery and retries the shell import before resetting the boundary', async () => {
-  const user = userEvent.setup()
+beforeEach(() => {
+  vi.resetModules()
+  transport.unavailable = true
+  transport.attempts = 0
+  transport.error = new Error('Shell chunk transport fixture')
   vi.spyOn(window, 'scrollTo').mockImplementation(() => {})
-  const router = createRouter({
-    routeTree,
-    history: createMemoryHistory({ initialEntries: ['/settings?tab=profile'] }),
-    defaultPendingMs: 0,
-    defaultPendingMinMs: 0,
-  })
-  await router.load()
-  render(<RouterProvider router={router} />)
-  expect(
-    await screen.findByRole('heading', { name: 'This view crashed' }),
-  ).toBeInTheDocument()
-  expect(screen.queryByText('Settings screen')).not.toBeInTheDocument()
-  await user.click(screen.getByRole('button', { name: 'Retry' }))
-  await waitFor(() => expect(transport.attempts).toBe(2))
-  expect(
-    screen.getByRole('heading', { name: 'This view crashed' }),
-  ).toBeInTheDocument()
-  transport.unavailable = false
-  await user.click(screen.getByRole('button', { name: 'Retry' }))
-  expect(await screen.findByText('Shell ready')).toBeInTheDocument()
-  expect(await screen.findByText('Settings screen')).toBeInTheDocument()
-  expect(router.state.location.href).toBe('/settings?tab=profile')
 })
+
+it.each([
+  ['Error', new Error('Shell chunk transport fixture')],
+  ['string', 'private transport detail'],
+  ['object', { message: 'private transport detail' }],
+])(
+  'offers translated recovery and reloads the document after a shell import throws an %s',
+  async (_, error) => {
+    transport.error = error
+    const { routeTree } = await import('./routes')
+    const user = userEvent.setup()
+    const reload = vi.fn()
+    const realLocation = window.location
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: { ...realLocation, reload },
+    })
+    try {
+      const router = createRouter({
+        routeTree,
+        history: createMemoryHistory({
+          initialEntries: ['/settings?tab=profile'],
+        }),
+        defaultPendingMs: 0,
+        defaultPendingMinMs: 0,
+      })
+      await router.load()
+      render(<RouterProvider router={router} />)
+      expect(
+        await screen.findByRole('heading', { name: 'This view crashed' }),
+      ).toBeInTheDocument()
+      expect(screen.queryByText('Settings screen')).not.toBeInTheDocument()
+      expect(screen.getByRole('alert')).toHaveTextContent('This view crashed')
+      expect(
+        screen.queryByText(
+          /private transport detail|Shell chunk transport fixture/,
+        ),
+      ).not.toBeInTheDocument()
+      await user.tab()
+      expect(screen.getByRole('button', { name: 'Retry' })).toHaveFocus()
+      await user.keyboard('{Enter}')
+      expect(reload).toHaveBeenCalledTimes(1)
+      expect(transport.attempts).toBe(1)
+      expect(router.state.location.href).toBe('/settings?tab=profile')
+    } finally {
+      Object.defineProperty(window, 'location', {
+        configurable: true,
+        value: realLocation,
+      })
+      vi.restoreAllMocks()
+    }
+  },
+)

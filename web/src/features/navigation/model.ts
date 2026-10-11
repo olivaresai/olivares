@@ -116,6 +116,17 @@ export function isAuthorized(view: FeatureView, gate: ViewGate): boolean {
   return gate(view)
 }
 
+/**
+ * A view navigation OFFERS: one the principal may open, except a second door into a
+ * screen whose own entry it can already open (`doorTo`). The 26.10.1 review found
+ * Sessions, Observe sessions and Operate sessions for one screen.
+ */
+export function isListed(view: FeatureView, gate: ViewGate): boolean {
+  if (!isAuthorized(view, gate)) return false
+  const room = view.doorTo ? viewById(view.doorTo) : undefined
+  return !room || !isAuthorized(room, gate)
+}
+
 export interface AreaSection {
   sectionId: string
   views: FeatureView[]
@@ -132,7 +143,7 @@ export function authorizedSections(
   return viewsByArea(areaId)
     .map((s) => ({
       sectionId: s.sectionId,
-      views: s.views.filter((v) => isAuthorized(v, gate)),
+      views: s.views.filter((v) => isListed(v, gate)),
     }))
     .filter((s) => s.views.length > 0)
 }
@@ -277,7 +288,7 @@ export interface Crumb {
  *
  *   /               → Overview
  *   /areas/ai       → Overview › AI                        (the area IS the location)
- *   /agentops       → AI › Operate sessions
+ *   /agentops       → AI › Sessions (the top bar reads this door as Sessions itself)
  *   /session-viewer/x → Observability & evidence › Recordings › Session viewer
  *   /settings       → System & settings › Settings
  *
@@ -383,8 +394,8 @@ function aliasesFor(t: TFunction, id: string): string[] {
 /**
  * The common projection the sidebar filter and the ⌘K palette search over: every area,
  * every non-hidden view and the Settings utility, with the current label, the English
- * fallback label, explicit former names, path, area/section, the thirteen nouns and the
- * five historical hub words. Authorization is NOT applied here — callers filter with `can`
+ * fallback label, explicit former names, path, area/section and the thirteen nouns.
+ * Authorization is NOT applied here — callers filter with `can`
  * — so one index serves every principal and the ranking never depends on who is asking.
  */
 export function buildNavSearchIndex(t: TFunction): NavSearchEntry[] {
@@ -441,7 +452,6 @@ export function buildNavSearchIndex(t: TFunction): NavSearchEntry[] {
         path: fold(v.path),
         context: [
           ...contextParts.map(fold),
-          fold(String(t(`nav:hubs.${v.hub}`))),
           ...nounsForView(v.id).map((n) => fold(String(t(`nav:nouns.${n}`)))),
         ],
         description: fold(description),
@@ -491,13 +501,13 @@ export function authorizedEntries(
     if (e.kind === 'area') return isAreaVisible(e.id as AreaId, gate)
     if (e.kind === 'view') {
       const view = viewById(e.id)
-      return !!view && isAuthorized(view, gate)
+      return !!view && isListed(view, gate)
     }
     return true
   })
 }
 
-/** Word starts: a query of "ses" matches "Observe sessions" at the second word. */
+/** Word starts: a query of "pol" matches "Routine policies" at the second word. */
 function wordPrefix(hay: string, needle: string): boolean {
   if (!hay) return false
   return hay.split(/[\s/&·›()-]+/).some((w) => w.startsWith(needle))

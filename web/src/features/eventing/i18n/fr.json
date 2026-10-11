@@ -95,7 +95,8 @@
     "errors": {
       "maxAttempts": "Le nombre maximal de tentatives doit être 0 ou compris entre 1 et 20.",
       "initialInterval": "L’intervalle initial doit être 0 ou compris entre 5 et 3600 secondes."
-    }
+    },
+    "businessRequired": "L’envoi SIEM et l’export externe de télémétrie nécessitent Business. Les paramètres sont conservés ; Community n’envoie pas les données."
   },
   "secret": {
     "title": "Secret de l'abonnement",

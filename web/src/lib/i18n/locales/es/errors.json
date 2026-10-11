@@ -14,7 +14,7 @@
   },
   "serverError": {
     "title": "Algo ha salido mal",
-    "description": "El control plane ha encontrado un error inesperado. Inténtalo de nuevo.",
+    "description": "Olivares ha encontrado un error inesperado. Inténtalo de nuevo.",
     "back": "Volver al resumen"
   },
   "evidenceUnavailable": {
@@ -31,6 +31,7 @@
     "reload": "Recargar"
   },
   "generic": "Algo ha salido mal.",
+  "sessionTemplateUnavailable": "La plantilla «Edits and commands» no está disponible, por lo que no se ha iniciado la sesión. Elige otro permiso o pide a un administrador que restaure la plantilla.",
   "requestId": "ID de petición",
   "codes": {
     "unauthenticated": "Tu sesión ya no es válida.",
@@ -42,6 +43,7 @@
     "locked_out": "Demasiados intentos. Inténtalo de nuevo en un momento.",
     "setup_required": "El control plane necesita la configuración inicial.",
     "setup_complete": "La configuración ya está completada.",
+    "setup_token_unreadable": "El motor no puede leer su archivo de token de configuración. Ejecuta `olivares first-boot --data-dir <data directory> --new-token` como root o como la cuenta del motor para reemplazarlo y usa el token nuevo; el registro del motor indica el archivo y el motivo.",
     "cross_tenant_admin_pool_not_configured": "Esta base de datos no puede listar todas las organizaciones. Ejecuta `olivares db init --superuser-dsn <superuser DSN> --data-dir <data directory> --install-directory-inventory` y reinicia el motor. O provisiona un rol NOSUPERUSER BYPASSRLS con `olivares db init --superuser-dsn <dsn> --admin-role olivares_admin --admin-password-file <file>` (ver deploy/postgres/README.md) y reinicia el servidor con --admin-dsn apuntando a ese rol.",
     "internal": "Se ha producido un error interno."
   },
@@ -50,7 +52,6 @@
     "description": "Inicia sesión con una identidad del directorio admitida en la organización. La autoridad global de bootstrap no permite operar comunicaciones del workspace."
   },
   "moduleNotEnabled": {
-    "title": "No activado en esta instalación",
     "description": "Esta parte de Olivares está apagada aquí, así que no hay nada que mostrar.",
     "named": "{{module}} no está activado en esta instalación.",
     "unnamed": "Este módulo no está activado en esta instalación."

@@ -18,58 +18,35 @@ import (
 )
 
 // runtime_workspace_dir.go gives a session with NO registered workspace a
-// directory of its OWN, under the engine's data directory, instead of the
-// engine's working directory.
+// directory of its OWN, under the engine's data directory. Without it the native
+// runner falls back to the engine's process cwd, so a session nobody configured
+// would read and write whatever directory the engine was started from.
 //
-// ⛔ WHY IT EXISTS, MEASURED 2026-09-18. A governed session was launched the way
-// the console's composer does — no workspace selected —
-// and the child's own init frame reported `cwd` equal to the directory the engine
-// process had been started from, byte for byte. That is the DEFAULT path, not a
-// corner: `launchWorkspaceTarget` returned an empty LaunchSpec.Dir for a run with
-// no workspace and the native runner fell back to the process cwd. So a session
-// nobody configured read and wrote whatever the operator happened to be sitting
-// in when they ran `olivares quickstart`.
-//
-// ⛔ AND WHAT IT IS NOT: CONFINEMENT. A native launch hands the child a working
-// directory, and the child can walk out of it — `..` is not a jail, and this
-// module says so in its own workspace contract (templateapply.go says it with all
-// the letters about DLP). What this changes is WHERE a session starts and what it
-// finds there: an empty, private, 0700 directory per run instead of the engine's
-// own tree. Confinement is the isolation posture (container/sandbox) plus the
-// tool surface the profile declares (runtime_session_policy.go), and neither is
-// claimed here.
+// It is not confinement. A native launch hands the child a working directory, and
+// the child can walk out of it: `..` is not a jail. What this changes is WHERE a
+// session starts and what it finds there: an empty, private, 0700 directory per
+// run instead of the engine's own tree. Filesystem confinement is enforced
+// separately by the native runner with the policy in runtime_confinement.go.
 //
 // The directory is created before the run row commits, recorded on the row so an
 // operator can see it by name, and REMOVED when the operator releases the session
 // (cleanupRun) — the one on-disk purge this plane can honestly perform, since it
 // owns the location.
 //
-// ⛔ AND "SINCE IT OWNS THE LOCATION" IS A FACT ON THE ROW, NOT AN INFERENCE FROM
-// THE PATH. The purge acts only where `workspace_dir_owned` says this module
-// created the directory for this run; an operator's registered workspace, which
-// may legitimately sit under this same root, is refused because the row never
-// says "mine" about it. When ownership cannot be proven the answer is to keep
-// the bytes.
+// Ownership is a fact on the row, not an inference from the path. The purge acts
+// only where `workspace_dir_owned` says this module created the directory for this
+// run; an operator's registered workspace, which may legitimately sit under this
+// same root, is refused because the row never says "mine" about it. When
+// ownership cannot be proven the bytes are kept.
 //
-// ⛔ AND CREATING IT IS NOT ENOUGH EITHER, MEASURED 2026-09-18. A run that named
-// no workspace got `<root>/<run_ref>`; the operator then REGISTERED that very
-// path as a workspace and worked in it — the console shows it as the run's
-// working directory — and releasing the run removed it, files and all, because
-// the row still (truthfully) said this module created it. So the rule has two
-// halves and the purge checks both: a release removes a directory this module
-// created for that run AND that nobody has registered since. The second half is
-// a lookup in the tenant's workspace registry, canonicalised the way workspace.go
-// canonicalises a root, and it is deny-closed: a registry that cannot be read
-// keeps the bytes.
-//
-// ⛔ AND THE LOOKUP IS ABOUT THE WHOLE TREE, NOT ONE PATH, MEASURED THE SAME DAY.
-// The removal is `os.RemoveAll`, so it reaches every descendant; asking only
-// whether a workspace is rooted AT the directory left the ordinary case out —
-// the operator made `project` inside the directory the run was given, registered
-// THAT, and the release took it as a child. The question is "is any workspace of
-// this tenant registered AT OR UNDER this directory", compared by path component
-// and never by string prefix, and when the registry is too large to read to the
-// end the answer is a refusal rather than an assumption.
+// Creating it is not enough either: an operator may REGISTER that very path, or a
+// project inside it, as a workspace and work there. So a release removes a
+// directory this module created for that run AND under which no workspace has been
+// registered since. The second half asks the tenant's workspace registry whether
+// any workspace is registered AT OR UNDER the directory, by path component on
+// paths canonicalised as workspace.go canonicalises a root, never by string
+// prefix. It is deny-closed: a registry that cannot be read, or is too large to
+// read to the end, keeps the bytes.
 
 // sessionWorkspaceDirMode is the permission of a per-session directory: private
 // to the service account, like the data directory that contains it.
@@ -93,9 +70,8 @@ var errNoSessionWorkspaceRoot = &runErr{
 // can put the OWNERSHIP condition out of the way and measure another condition on
 // its own. That is not a convenience: on an engine running as uid 0 the
 // ownership condition admits every root, and the filesystem-root refusal becomes
-// the only guard for "/" — the configuration in which it matters most was the
-// one nothing measured, because every control reached the ownership condition
-// first. A field and not a package variable, so one module's substitution cannot
+// the only guard for "/", which a control that always reached the ownership
+// condition first would never test. A field and not a package variable, so one module's substitution cannot
 // race another test's.
 type dirOwnerFunc func(os.FileInfo) (owned, known bool)
 
@@ -120,10 +96,9 @@ func (m *Module) sessionWorkspaceRootConfigured() bool {
 // an unusable root is a configuration mistake and every launch and every release
 // under it would otherwise inherit the problem one request at a time.
 //
-// ⛔ WHY "/" IS THE HEADLINE CASE, MEASURED 2026-09-18. The purge's predicate is
-// "the parent of this directory is the root". With the root set to "/", `/etc`
-// satisfies it, and `removeRunWorkspaceDir("/nonexistent-probe")` answered true.
-// Nothing in the shipped composition root produces that value — it always
+// "/" is the headline case: the purge's predicate is "the parent of this directory
+// is the root", and with the root set to "/" every top-level directory satisfies
+// it. Nothing in the shipped composition root produces that value — it always
 // appends `session-workspaces` to the data directory — but the option and its
 // late-binding setter are EXPORTED, so the guard belongs on the value and not on
 // the one caller that happens to be careful.
@@ -141,7 +116,7 @@ func (m *Module) sessionWorkspaceRootConfigured() bool {
 //     does not land in, so the comparison stops meaning what it is read to mean.
 //     That is the LAST component; the ones above it are RESOLVED instead of
 //     refused (`<base>/link-parent/sub` is an ordinary root), because a registered
-//     workspace has canonicalised its root since and the two must agree.
+//     workspace canonicalises its root and the two must agree.
 //   - NOT OWNED BY THE ENGINE'S USER: a directory this service account does not
 //     own is somebody else's, and a release is not entitled to empty it.
 //
@@ -247,7 +222,7 @@ func (m *Module) sessionWorkspaceRootErr() error {
 // isRunWorkspaceDirName reports whether a directory name is one this module
 // MINTS for a run: a canonical UUID, which is what model.NewID produces.
 //
-// ⛔ IT IS THE PURGE-TIME HALF OF THE RETENTION GUARD, and it exists because
+// It is the purge-time half of the retention guard, and it exists because
 // "its parent is my root" admits every directory an operator ever put there. A
 // name is not ownership — that is the row's job (colRunWorkspaceDirOwned) — but
 // it is an independent condition that a directory named `etc`, `src` or
@@ -271,6 +246,12 @@ func (m *Module) runWorkspaceDirPath(runRef string) (string, error) {
 	if root == "" {
 		return "", m.sessionWorkspaceRootErr()
 	}
+	return joinRunDir(root, runRef)
+}
+
+// joinRunDir is the validated <root>/<run_ref> join, shared by every directory this
+// module makes for one run (its own workspace directory, its worktree).
+func joinRunDir(root, runRef string) (string, error) {
 	root = filepath.Clean(root)
 	ref := strings.TrimSpace(runRef)
 	if ref == "" || ref != filepath.Base(ref) || ref == "." || ref == ".." ||
@@ -415,8 +396,8 @@ func (m *Module) workspaceRegistryScanBound() int {
 
 // pathRelation reports whether root IS dir, or sits strictly INSIDE it.
 //
-// ⛔ IT COMPARES PATH COMPONENTS, NEVER RAW STRINGS, and that is the whole
-// reason it is a function. `<root>/run-1` is not an ancestor of `<root>/run-10`,
+// It compares path components, never raw strings, and that is the whole reason
+// it is a function. `<root>/run-1` is not an ancestor of `<root>/run-10`,
 // but `strings.HasPrefix` says it is — and an operator makes `<run_ref>-backup`
 // in one keystroke of tab-completion. Both sides are cleaned first, so a
 // trailing separator or a `.` component cannot change the answer.
@@ -455,20 +436,18 @@ func canonicalSpellingsOf(dir string) []string {
 // retention rule, the half the row cannot answer: a row that truthfully says
 // "this module created it" says nothing about who has depended on it since.
 //
-// ⛔ "AT" IS NOT THE QUESTION, AND ASKING ONLY THAT COST AN OPERATOR THEIR WORK.
-// Measured 2026-09-18: a run with no workspace was given `<root>/<run_ref>`, the
-// operator made `project` inside it and registered THAT, and releasing the run
-// removed the registration with its parent — because the removal is
-// `os.RemoveAll` and reaches every descendant, while the question reached one
-// path. What a release must rule out is everything the removal would take.
+// "At" is not the whole question. An operator can make `project` inside the run's
+// directory and register THAT, and the removal is `os.RemoveAll`, which reaches
+// every descendant. What a release must rule out is everything the removal would
+// take.
 //
 // The comparison is on CANONICAL paths, the way workspace.go canonicalises a
 // root: registration stores `filepath.EvalSymlinks(root_path)` (workspace.go),
 // so the directory is resolved the same way before it is compared, and by
 // COMPONENT (pathRelation), never as a string prefix.
 //
-// ⛔ AND THE DESCENDANT HALF IS A BOUNDED WALK RATHER THAN A PREDICATE, ON
-// PURPOSE. This store's operators are equality, ordered comparison and LIKE
+// The descendant half is a bounded walk rather than a predicate, on purpose. This
+// store's operators are equality, ordered comparison and LIKE
 // (core/model/filter.go): an ordered range over a path column is only a prefix
 // under a byte-ordering collation, which is a property of the deployment and not
 // of this code, and LIKE reads `_` and `%` — both legal in a directory name — as
@@ -479,7 +458,7 @@ func canonicalSpellingsOf(dir string) []string {
 // Every registration counts, including a disabled one: a disabled workspace is
 // an operator's declared interest in those bytes, not permission to remove them.
 func (m *Module) registeredWorkspaceAtOrUnder(ctx context.Context, tenant model.TenantID, dir string) (workspaceRegistryClaim, error) {
-	if m == nil || m.data == nil {
+	if m == nil || m.Data == nil {
 		return workspaceRegistryClaim{}, errors.New("the workspace registry is not wired on this node")
 	}
 	dirs := canonicalSpellingsOf(dir)
@@ -488,7 +467,7 @@ func (m *Module) registeredWorkspaceAtOrUnder(ctx context.Context, tenant model.
 	}
 	bound := m.workspaceRegistryScanBound()
 	var claim workspaceRegistryClaim
-	err := m.data.View(ctx, tenant, func(sc store.Scope) error {
+	err := m.Data.View(ctx, tenant, func(sc store.Scope) error {
 		repo, err := sc.Ext(workspaceKind)
 		if err != nil {
 			return err
@@ -554,17 +533,15 @@ func (m *Module) registeredWorkspaceAtOrUnder(ctx context.Context, tenant model.
 // kept it — which workspace ref holds it, so the ledger can say so by name
 // instead of going silent.
 //
-// ⛔ THE PATH CANNOT ANSWER THE FIRST QUESTION, which is why the proof is a
-// column. `workspace_path` carries either a directory this plane created or the
+// The path cannot answer the first question, which is why the proof is a column. `workspace_path` carries either a directory this plane created or the
 // canonical root of a REGISTERED workspace — the operator's own project — and an
 // operator may register one that sits directly under this node's session root.
 // Every string predicate available to the purge then reports "its parent is my
-// root" about a directory this plane never created. Measured 2026-09-18: with a
-// workspace registered at `<root>/acme-project`, releasing a session that named
-// it removed the operator's project and the files in it.
+// root" about a directory this plane never created, such as a workspace
+// registered at `<root>/acme-project`.
 //
-// ⛔ AND THE COLUMN CANNOT ANSWER THE SECOND, which is why the registry is read
-// here: the row is true and the bytes are still somebody else's.
+// The column cannot answer the second, which is why the registry is read here:
+// the row can be true and the bytes still somebody else's.
 //
 // The positional predicate below is KEPT, as another independent condition
 // rather than as the answer: a row that says "mine" about a path outside the
@@ -617,13 +594,11 @@ func (m *Module) removeOwnRunWorkspaceDir(ctx context.Context, tenant model.Tena
 // the canonical parent must be that root, and the child's name must be one this
 // module mints.
 //
-// ⛔ AND WHAT IT FINDS THERE IS INSPECTED BEFORE IT IS REMOVED. A directory is
-// removed with its contents; anything else at that path — a link swapped in
-// between the check and the use, a file — is unlinked WITHOUT being followed
-// (os.Remove never follows the last component), and the answer is not "a
-// directory was removed", because none was. Measured 2026-09-18: a link planted
-// where a session's directory had been was unlinked, its target survived, and
-// the release reported the same "removed" as a real purge.
+// What it finds there is inspected before it is removed. A directory is removed
+// with its contents; anything else at that path — a link swapped in between the
+// check and the use, a file — is unlinked WITHOUT being followed (os.Remove never
+// follows the last component), and the answer is not "a directory was removed",
+// because none was.
 func (m *Module) removeRunWorkspaceDir(dir string) runWorkspaceDirPurge {
 	dir = strings.TrimSpace(dir)
 	if dir == "" {

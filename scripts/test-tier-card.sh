@@ -54,7 +54,7 @@ stage() {
 export GOWORK=off
 MCBIN="$(mktemp -u "${TMPDIR:-/workspace/.olivares-tmptest}/tc-bin.XXXXXX")"
 ( cd "$ROOT/commercial/commerce-lint" && go build -o "$MCBIN" . ) >/dev/null 2>&1 || {
-  echo "test-tier-card: NO PUDE MIRAR — el derivador no construye" >&2; exit 2; }
+  echo "test-tier-card: COULD NOT CHECK — the derivation tool does not build" >&2; exit 2; }
 export OLIVARES_MODULE_CATALOG_BIN="$MCBIN"
 run() { OLIVARES_ROOT="$TMP/tree" bash "$TMP/tree/scripts/check-tier-card.sh" >/dev/null 2>"$TMP/err"; }
 
@@ -87,7 +87,7 @@ p=sys.argv[1]
 d=json.load(open(p))
 before=len(d["entries"])
 d["entries"]=[e for e in d["entries"] if e["slug"]!="caeptransmit"]
-assert len(d["entries"])==before-1, "control de mutacion: caeptransmit no estaba en el mapa"
+assert len(d["entries"])==before-1, "mutation control: caeptransmit was absent from the map"
 json.dump(d, open(p,"w"))
 PY
 # ⛔ Y AHORA LO MATA LA DERIVACIÓN, NO LA LÓGICA DEL HOLD — y ése es el orden correcto, no una
@@ -109,7 +109,7 @@ python3 - "$TMP/tree/design/HOLD-AIRS-AR-CRITERIOS-2026-08-18.md" <<'PY'
 import sys
 p=sys.argv[1]
 text=open(p,encoding="utf-8").read()
-assert "\nhold-slug:" not in text, "control de mutacion: el doc ya traia un hold-slug"
+assert "\nhold-slug:" not in text, "mutation control: the doc already had a hold-slug"
 open(p,"w",encoding="utf-8").write(text+"\nhold-slug: content-firewall\n")
 PY
 if run; then bad "a cured HOLD stayed CLEAN"; else

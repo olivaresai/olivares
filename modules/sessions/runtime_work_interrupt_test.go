@@ -164,9 +164,8 @@ func newFakeTurnFixture(t *testing.T) *fakeTurnFixture {
 		DisplayName: "fake-turn", AuthSource: AuthSourceAccountHome,
 	})
 	itemID, _, agentRef := readyWorkLaunchItem(t, m, st, tenant)
-	m.UseWorkIdentityResolver(durableWorkLaunchIdentity{m: m, st: st})
-	spec := workLaunchSpec(itemID, agentRef)
-	spec.Runtime.ProviderProfileRef = prof.Ref
+	WithWorkIdentityResolver(durableWorkLaunchIdentity{m: m, st: st})(m)
+	spec := workLaunchSpec(t, m, tenant, itemID, agentRef, prof.Ref)
 
 	managed, err := m.LaunchForWork(ctx, tenant, spec)
 	if err != nil {
@@ -572,7 +571,7 @@ func TestRunControlLockIsTakenOnceAtTheOuterEntry(t *testing.T) {
 		m, _, tenant, _ := newRuntimeHarness(t,
 			WithRunner(runner), WithCredentialSource(staticCred()),
 		)
-		run, err := m.createRun(ctx, tenant, CreateRunParams{
+		run, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{
 			Transport: TransportStreamJSON, Isolation: IsolationNative,
 			Actor: "user:legacy-serialize", ActorKind: model.ActorUser,
 		})

@@ -26,8 +26,14 @@ func runProbe(ctx context.Context, spec probeSpec) (ProbeReport, error) {
 	out := &cappedBuffer{}
 	// The context passed to exec is never cancelled by us: escalation is done by
 	// hand below so the GROUP is signalled. Only the caller's ctx propagates.
-	cmd := newProbeCmd(context.WithoutCancel(ctx), spec, out)
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd, err := newProbeCmd(context.WithoutCancel(ctx), spec, out)
+	if err != nil {
+		return ProbeReport{}, refuse(KindProbeFailed, "confine the probe of %s: %w", spec.Exe, err)
+	}
+	if cmd.SysProcAttr == nil {
+		cmd.SysProcAttr = &syscall.SysProcAttr{}
+	}
+	cmd.SysProcAttr.Setpgid = true
 	// After the child exits, do not wait forever on pipes a grandchild kept open.
 	cmd.WaitDelay = spec.Grace
 	start := time.Now()

@@ -100,6 +100,92 @@ class ClientTest {
         ex.close();
     }
 
+    @Test
+    void cleanupPreservesPublishedCallsAndHandoffConstructor() throws IOException {
+        HttpServer s = start(ex -> { record(ex); json(ex, 200, "{}"); });
+        try {
+            Client c = client(s);
+            c.postV1MSessionsRunsByRefCleanup("run");
+            c.postV1MSessionsRunsByRefCleanup("run", RequestOptions.builder()
+                    .tenant("requested-tenant").header("X-Probe", "kept").query("probe", "kept").build());
+            assertEquals(2, seen.size());
+            assertEquals(0, seen.get(0).body().length);
+            assertEquals("t-default", seen.get(0).headers().getFirst("X-Olivares-Tenant"));
+            Seen r = seen.get(1);
+            assertEquals("/v1/m/sessions/runs/run/cleanup?probe=kept", r.url());
+            assertEquals("requested-tenant", r.headers().getFirst("X-Olivares-Tenant"));
+            assertEquals("kept", r.headers().getFirst("X-Probe"));
+            assertEquals(0, r.body().length);
+            var content = new Client.SessionsCommunicationHandoffContent(List.of(), "next", "risk", "summary");
+            assertEquals("next", content.next_action());
+            assertEquals("summary", content.summary());
+            assertEquals("risk", content.risk());
+            assertEquals(List.of(), content.artifact_refs());
+            assertThrows(NullPointerException.class, () -> new Client.SessionsCommunicationHandoffContent(List.of(), null, "risk", "summary"));
+        } finally { s.stop(0); }
+    }
+
+    @Test
+    void cleanupBodyAndExpandedHandoffRemainAvailable() throws IOException {
+        HttpServer s = start(ex -> { record(ex); json(ex, 200, "{}"); });
+        try {
+            Client c = client(s);
+            c.postV1MSessionsRunsByRefCleanupWithBody("run", Map.of("discard_worktree", true),
+                    RequestOptions.builder().tenant("requested-tenant").build());
+            c.postV1MSessionsRunsByRefCleanupWithBody("run", null);
+            assertEquals("requested-tenant", seen.get(0).headers().getFirst("X-Olivares-Tenant"));
+            assertEquals("{\"discard_worktree\":true}", new String(seen.get(0).body(), StandardCharsets.UTF_8));
+            assertEquals(0, seen.get(1).body().length);
+            var content = new Client.SessionsCommunicationHandoffContent(List.of(), "branch", "next", "risk", "sha", "summary");
+            assertEquals("branch", content.branch());
+            assertEquals("sha", content.sha());
+            var old = new Client.SessionsCommunicationHandoffContent(List.of(), "next", "risk", "summary");
+            assertNull(old.branch());
+            assertNull(old.sha());
+        } finally { s.stop(0); }
+    }
+
+    @Test
+    void cleanupKeepsBodylessCallsAndOptions() throws IOException {
+        HttpServer s = start(ex -> {
+            record(ex);
+            json(ex, 200, "{}");
+        });
+        try {
+            Client c = client(s);
+            c.postV1MSessionsRunsByRefCleanup("run");
+            RequestOptions options = RequestOptions.builder().tenant("override")
+                    .query("probe", "yes").header("X-Probe", "yes").build();
+            c.postV1MSessionsRunsByRefCleanup("run", options);
+            c.postV1MSessionsRunsByRefCleanupWithBody("run", Map.of("force", true), options);
+            assertEquals(3, seen.size());
+            assertEquals(0, seen.get(0).body().length);
+            assertEquals(0, seen.get(1).body().length);
+            assertEquals("{\"force\":true}", new String(seen.get(2).body(), StandardCharsets.UTF_8));
+            for (Seen request : seen.subList(1, 3)) {
+                assertEquals("POST", request.method());
+                assertEquals("/v1/m/sessions/runs/run/cleanup?probe=yes", request.url());
+                assertEquals("override", request.headers().getFirst("X-Olivares-Tenant"));
+                assertEquals("yes", request.headers().getFirst("X-Probe"));
+            }
+        } finally {
+            s.stop(0);
+        }
+    }
+
+    @Test
+    void handoffKeepsItsPublishedConstructor() {
+        var old = new Client.SessionsCommunicationHandoffContent(List.of(), "next", "risk", "summary");
+        assertEquals("next", old.next_action());
+        assertEquals("risk", old.risk());
+        assertEquals("summary", old.summary());
+        assertNull(old.branch());
+        assertNull(old.sha());
+        var current = new Client.SessionsCommunicationHandoffContent(List.of(), "branch", "next", "risk", "sha", "summary");
+        assertEquals("branch", current.branch());
+        assertEquals("sha", current.sha());
+    }
+
     // --- request shape -------------------------------------------------------
 
     /**

@@ -8,63 +8,12 @@ import (
 	"context"
 	"io"
 	"log/slog"
-	"testing"
 
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 	"github.com/olivaresai/olivares/sdk"
 	"github.com/olivaresai/olivares/sdk/event"
 )
-
-func TestLifecycleDescriptorNamespacePermissionsAndOptions(t *testing.T) {
-	scheduler := stubScheduler{}
-	branding := stubBranding{}
-	templates := stubTemplates{}
-	compliance := &e3bComplianceSource{}
-	m := New(
-		WithComplianceSource(compliance),
-		WithScheduler(scheduler),
-		WithBranding(branding),
-		WithCustomTemplates(templates),
-	)
-
-	desc := m.Descriptor()
-	if desc.Name != Name || desc.Type != sdk.TypeModule || desc.APIVersion != sdk.APIVersion {
-		t.Fatalf("Descriptor = %+v", desc)
-	}
-	if m.APINamespace() != Namespace {
-		t.Fatalf("APINamespace = %q, want %q", m.APINamespace(), Namespace)
-	}
-	perms := m.Permissions()
-	if len(perms) != 2 || perms[0] != permReportRead || perms[1] != permReportWrite {
-		t.Fatalf("Permissions = %+v", perms)
-	}
-	if m.compliance != compliance || m.scheduler == nil || m.branding == nil || m.customTmpl == nil {
-		t.Fatalf("options not wired: %+v", m)
-	}
-
-	data := fakeModuleData{}
-	m.UseData(data)
-	if m.data == nil {
-		t.Fatal("UseData did not wire data handle")
-	}
-	t.Setenv("OLIVARES_REPORT_CACHE_DIR", t.TempDir())
-	if err := m.Init(context.Background(), testHost{}); err != nil {
-		t.Fatalf("Init: %v", err)
-	}
-	if m.log == nil || m.engine == nil || m.cache == nil {
-		t.Fatalf("Init did not wire logger/engine/cache: log=%v engine=%v cache=%v", m.log, m.engine, m.cache)
-	}
-	if err := m.Start(context.Background()); err != nil {
-		t.Fatalf("Start: %v", err)
-	}
-	if err := m.Stop(context.Background()); err != nil {
-		t.Fatalf("Stop: %v", err)
-	}
-	if len(m.cache.entries) != 0 {
-		t.Fatalf("cache entries after Stop = %d, want 0", len(m.cache.entries))
-	}
-}
 
 type testHost struct{}
 

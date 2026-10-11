@@ -19,7 +19,7 @@ bad() { printf 'FAIL %s\n' "$1" >&2; fail=$((fail+1)); }
 export GOWORK=off
 MCBIN="$(mktemp -u "${TMPDIR:-/workspace/.olivares-tmptest}/mb-bin.XXXXXX")"
 ( cd "$ROOT/commercial/commerce-lint" && go build -o "$MCBIN" . ) >/dev/null 2>&1 || {
-	echo "test-module-bridge: NO PUDE MIRAR — el derivador no construye" >&2; exit 2; }
+	echo "test-module-bridge: COULD NOT CHECK — the derivation tool does not build" >&2; exit 2; }
 export OLIVARES_MODULE_CATALOG_BIN="$MCBIN"
 
 stage_derivation() {

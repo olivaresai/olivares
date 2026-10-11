@@ -1,6 +1,6 @@
 {
   "title": "部署与集成",
-  "subtitle": "期望状态与真实状态的部署对比、版本与回滚、受治理的计划 → 应用，以及承载这些部署的智能体→资源接线。",
+  "subtitle": "声明哪些智能体和 MCP 服务器在何处运行，然后规划、审批并应用每项变更，或将其回滚。",
   "tabs": {
     "definitions": "定义",
     "wirings": "接线",
@@ -111,6 +111,18 @@
     "subjectKind": "主体类型",
     "subjectRef": "主体",
     "subjectRefHint": "此部署所交付的智能体或 MCP 服务器。",
+    "subjectKinds": {
+      "agent": "智能体",
+      "mcp_server": "MCP 服务器"
+    },
+    "subjectChoose": {
+      "agent": "选择智能体",
+      "mcp_server": "选择 MCP 服务器"
+    },
+    "subjectNone": {
+      "agent": "尚无智能体。",
+      "mcp_server": "尚无 MCP 服务器。"
+    },
     "name": "名称",
     "nameHint": "此部署的名称。每个环境内唯一。",
     "environment": "环境",
@@ -322,17 +334,22 @@
   "empty": {
     "deploy": {
       "title": "尚未声明部署",
-      "description": "本屏列出部署定义，即此处记录的期望状态，而非已启动的会话。 声明部署以记录期望状态；协调还需由运维人员配置运行时执行器，否则计划与应用均返回 503。",
+      "description": "本屏列出部署定义：声明智能体或 MCP 服务器，再由计划与应用将其部署到目标。",
       "sessions": "运营会话"
     },
     "operations": {
       "title": "尚无部署操作记录",
-      "description": "计划、应用、验证与退役仅在运维人员配置运行时执行器后才写入账本条目；在此之前，各操作均返回 503 且不作任何记录。"
+      "description": "接入运行时执行器后，计划、应用、验证与退役都会记录于此。"
     },
     "wirings": {
       "title": "尚未实体化已许可接线",
       "description": "接线在部署定义中声明，并在应用成功时实体化，而应用成功需要运维人员已配置运行时执行器。"
     }
+  },
+  "noExecutor": {
+    "title": "部署需要运行时执行器",
+    "description": "管理员将 OLIVARES_DEPLOY_EXECUTOR_CONFIG 指向其配置文件并重启 Olivares，即可接入。",
+    "guide": "如何接入执行器"
   },
   "truncatedHint": "行数多于此处所示；本页按行 id（创建时分配）取数，因此更靠后的会缺失。某个定义、连接或操作未列在此处，并不能证明它不存在。"
 }

@@ -38,8 +38,8 @@ type Option func(*Module)
 // WithClock overrides the module clock (tests inject a deterministic clock).
 func WithClock(c model.Clock) Option { return func(m *Module) { m.clock = c } }
 
-// WithSandbox wires the execution environment. Without it the module ships the
-// full battery + scoring but a run is DEGRADED (every probe skipped) — never
+// WithSandbox wires the execution environment for Business execution.
+// Without it Business reports a DEGRADED run — never
 // silently scored as a pass.
 func WithSandbox(s Sandbox) Option { return func(m *Module) { m.sandbox = s } }
 
@@ -103,19 +103,6 @@ func (m *Module) Init(_ context.Context, host sdk.Host) error {
 // Start has no background work. It warns once per un-wired seam so a degraded
 // deployment is visible (docs/SECURITY-HARDENING.md): without a data handle nothing persists;
 // without an sandbox every run is degraded (skipped), never a false pass.
-func (m *Module) Start(context.Context) error {
-	if m.log == nil {
-		return nil
-	}
-	if m.data == nil {
-		m.log.Warn("redteam: started without a data handle; targets and runs will not persist")
-	}
-	if _, ok := m.sandbox.(offlineSandbox); ok {
-		// The run answers DEGRADED with every probe declared skipped; nothing refuses.
-		m.log.Info("redteam: no sandbox wired; runs will be DEGRADED — every probe is skipped, never scored as a pass")
-	}
-	return nil
-}
 
 // Stop is a no-op (no background work, no subscription); idempotent.
 func (m *Module) Stop(context.Context) error { return nil }
@@ -132,24 +119,6 @@ func (m *Module) Permissions() []auth.Permission {
 // APIRoutes mounts the module's routes. The engine wraps each with authentication,
 // tenant resolution and the declared permission check; the privileged actions
 // (register/authorize a target, launch a run) additionally self-audit (docs/SECURITY-HARDENING.md).
-func (m *Module) APIRoutes(reg api.RouteRegistrar) {
-	// The battery catalog (the test taxonomy — metadata, NOT weaponized payloads).
-	reg.Handle("GET", "/catalog", permRunRead, m.handleCatalog)
-
-	// Targets: the CONSENT surface. Registering and authorizing a target are
-	// admin-tier (granting permission to test) and audited (docs/SECURITY-HARDENING.md).
-	reg.Handle("GET", "/targets", permTargetRead, m.handleListTargets)
-	reg.Handle("POST", "/targets", permTargetAdmin, m.handleRegisterTarget)
-	reg.Handle("GET", "/targets/{id}", permTargetRead, m.handleGetTarget)
-	reg.Handle("POST", "/targets/{id}/authorize", permTargetAdmin, m.handleAuthorizeTarget)
-
-	// Runs: launching a run is the privileged adversarial action (admin-tier,
-	// audited), and only against an AUTHORIZED target (docs/SECURITY-HARDENING.md).
-	reg.Handle("GET", "/runs", permRunRead, m.handleListRuns)
-	reg.Handle("POST", "/runs", permScanAdmin, m.handleLaunchRun)
-	reg.Handle("GET", "/runs/{id}", permRunRead, m.handleGetRun)
-	reg.Handle("GET", "/runs/{id}/results", permRunRead, m.handleListResults)
-}
 
 func (m *Module) debugf(msg string, args ...any) {
 	if m.log != nil {

@@ -22,8 +22,8 @@ import (
 // intent with no consumer outside their own CRUD — an operator could author a
 // cadence floor, a concurrency cap, an approval requirement, a cron allowlist
 // and a blocked-environment list, and NOTHING in the plane read them
-// (§"Fuera de alcance": *"almacenan intención
-// que nada aplica"*).
+// (Out of scope: stored intent with no
+// enforcement).
 //
 // Governance owns the POLICY; it does not own routines. modules/orchestration
 // owns the schedules known as routines

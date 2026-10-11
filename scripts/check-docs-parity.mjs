@@ -71,7 +71,7 @@
 //   File: docs-site/i18n-parity-waivers.json
 //   {
 //     "waivers": [
-//       { "path": "explanation/adr/index.md",   // relative to content/docs, POSIX
+//       { "path": "explanation/sample/index.md",   // relative to content/docs, POSIX
 //         "locales": ["ja"],                    // explicit; "*" is REJECTED
 //         "reason": "at least 20 characters saying WHY",
 //         "date": "2026-07-29",                 // real calendar date, not in the future

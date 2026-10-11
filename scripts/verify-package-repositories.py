@@ -751,13 +751,13 @@ def main() -> int:
         print(f"verify-package-repositories: OK — {args.channel}, apt/rpm/apk signatures valid, {rpm_note}")
         return 0
     except ContractError as exc:
-        print(f"verify-package-repositories: HALLAZGO — {exc}", file=sys.stderr)
+        print(f"verify-package-repositories: FINDING — {exc}", file=sys.stderr)
         return 1
     except UnmeasurableError as exc:
-        print(f"verify-package-repositories: NO HE PODIDO MIRAR — {exc}", file=sys.stderr)
+        print(f"verify-package-repositories: COULD NOT LOOK — {exc}", file=sys.stderr)
         return 2
     except (OSError, ValueError) as exc:
-        print(f"verify-package-repositories: NO HE PODIDO MIRAR — local operation failed: {exc}", file=sys.stderr)
+        print(f"verify-package-repositories: COULD NOT LOOK — local operation failed: {exc}", file=sys.stderr)
         return 2
 
 

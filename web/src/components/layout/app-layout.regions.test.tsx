@@ -23,7 +23,7 @@
 // topbar.layout.test.tsx, command-menu.test.tsx, tenant-gate.test.tsx); mounting the
 // real ones here would make this file fail for their reasons and say nothing new about
 // the regions.
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { ComponentProps, ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -92,7 +92,26 @@ vi.mock('@/lib/hooks/use-server-info', () => ({
 }))
 
 vi.mock('./app-sidebar', () => ({
-  AppSidebar: () => <div data-testid="rail">rail</div>,
+  AppSidebar: ({
+    mode,
+    onToggle,
+    onNavigate,
+  }: {
+    mode: string
+    onToggle: () => void
+    onNavigate?: () => void
+  }) => (
+    <div data-testid="rail" data-mode={mode}>
+      <button type="button" onClick={onToggle}>
+        toggle {mode}
+      </button>
+      {onNavigate ? (
+        <button type="button" onClick={onNavigate}>
+          go somewhere
+        </button>
+      ) : null}
+    </div>
+  ),
 }))
 vi.mock('./sidebar', () => ({
   AreasSheet: () => <div data-testid="areas-sheet" />,
@@ -116,12 +135,15 @@ vi.mock('@/features/navigation/permitted-visit', () => ({
   SettingsVisit: () => null,
 }))
 vi.mock('@/features/navigation/personal-navigation', () => ({
+  usePersonalNavigation: () => null,
   PersonalNavigationProvider: ({ children }: { children: ReactNode }) => (
     <>{children}</>
   ),
 }))
 
+import { usePreferencesStore } from '@/stores/preferences'
 import { AppLayout } from './app-layout'
+import { useNavOverlay } from './sidebar-mode'
 
 const work = () => document.querySelector('main#main-content') as HTMLElement
 
@@ -277,4 +299,67 @@ it('never sends sign-in back to a sign-in page', () => {
     search: {},
     replace: true,
   })
+})
+
+// ONE SIDEBAR AT A TIME (console 1.0): a work page keeps the navigation on the rail because
+// its own list is the sidebar there; unfolding it there opens the navigation over the page
+// and never changes what the person stored.
+describe('the sidebar width follows the page and the person', () => {
+  beforeEach(() => {
+    usePreferencesStore.setState({ sidebarCollapsed: false })
+    useNavOverlay.setState({ openOn: null })
+  })
+
+  it('is full on a document page and the rail once the person folds it', () => {
+    router.live = router.committed = '/audit'
+    const { unmount } = render(<AppLayout />)
+    expect(screen.getByTestId('rail')).toHaveAttribute('data-mode', 'full')
+    fireEvent.click(screen.getByRole('button', { name: 'toggle full' }))
+    expect(usePreferencesStore.getState().sidebarCollapsed).toBe(true)
+    expect(screen.getByTestId('rail')).toHaveAttribute('data-mode', 'rail')
+    unmount()
+  })
+
+  it('is the rail on a work page, and unfolding it there opens the navigation over the page', () => {
+    router.live = router.committed = '/sessions'
+    render(<AppLayout />)
+    expect(screen.getByTestId('rail')).toHaveAttribute('data-mode', 'rail')
+    fireEvent.click(screen.getByRole('button', { name: 'toggle rail' }))
+    expect(usePreferencesStore.getState().sidebarCollapsed).toBe(false)
+    const overlay = document.querySelector('[data-slot="nav-overlay"]')
+    expect(overlay).not.toBeNull()
+    expect(overlay?.querySelector('[data-mode="full"]')).not.toBeNull()
+    fireEvent.keyDown(document.activeElement ?? document, { key: 'Escape' })
+    expect(document.querySelector('[data-slot="nav-overlay"]')).toBeNull()
+  })
+
+  it('closes the navigation over a work page when a destination in it is chosen', () => {
+    router.live = router.committed = '/sessions'
+    render(<AppLayout />)
+    fireEvent.click(screen.getByRole('button', { name: 'toggle rail' }))
+    fireEvent.click(screen.getByRole('button', { name: 'go somewhere' }))
+    expect(document.querySelector('[data-slot="nav-overlay"]')).toBeNull()
+    expect(useNavOverlay.getState().openOn).toBeNull()
+  })
+})
+
+it('does not reopen after a committed navigation and back, including search-only navigation', () => {
+  router.live = router.committed = '/sessions'
+  const view = render(<AppLayout />)
+  fireEvent.click(screen.getByRole('button', { name: 'toggle rail' }))
+  router.live = router.committed = '/sessions?tab=workspaces'
+  view.rerender(<AppLayout />)
+  expect(useNavOverlay.getState().openOn).toBeNull()
+  router.live = router.committed = '/sessions'
+  view.rerender(<AppLayout />)
+  expect(document.querySelector('[data-slot="nav-overlay"]')).toBeNull()
+})
+it('returns keyboard focus to the actual opener on Escape', async () => {
+  router.live = router.committed = '/sessions'
+  render(<AppLayout />)
+  const opener = screen.getByRole('button', { name: 'toggle rail' })
+  opener.focus()
+  fireEvent.click(opener)
+  fireEvent.keyDown(document.activeElement ?? document, { key: 'Escape' })
+  await waitFor(() => expect(opener).toHaveFocus())
 })

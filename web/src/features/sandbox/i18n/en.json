@@ -159,8 +159,8 @@
     }
   },
   "seam": {
-    "synthetic": "Synthetic data: not wired",
-    "syntheticData": "Synthetic-data generation is a documented post-v1 extension point — not implemented in this version."
+    "synthetic": "Local data generation",
+    "syntheticData": "Generate reproducible scenario inputs through the sandbox API using bounded local templates. No model or network request is made."
   },
   "empty": {
     "runs": {

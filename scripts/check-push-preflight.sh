@@ -60,32 +60,32 @@ cleanup_stale_tmp() { # poda sólo raíces conocidas, viejas, propias y sin refe
 	root="${OLIVARES_PREFLIGHT_TMP_ROOT:-/tmp}"
 	age_minutes="${OLIVARES_PREFLIGHT_TMP_MAX_AGE_MINUTES:-180}"
 	case "$age_minutes" in ''|*[!0-9]*)
-		echo "check-push-preflight: NO HE PODIDO MIRAR: edad TMP inválida ('$age_minutes')" >&2
+		echo "check-push-preflight: COULD NOT CHECK: invalid temporary-directory age ('$age_minutes')" >&2
 		return 2 ;;
 	esac
 	[ "${#age_minutes}" -le 7 ] || {
-		echo "check-push-preflight: NO HE PODIDO MIRAR: edad TMP fuera de rango" >&2
+		echo "check-push-preflight: COULD NOT CHECK: temporary-directory age is out of range" >&2
 		return 2
 	}
 	age_minutes=$((10#$age_minutes))
 	[ "$age_minutes" -gt 0 ] || {
-		echo "check-push-preflight: NO HE PODIDO MIRAR: la edad TMP debe ser mayor que cero" >&2
+		echo "check-push-preflight: COULD NOT CHECK: temporary-directory age must be greater than zero" >&2
 		return 2
 	}
 	[ -d "$root" ] || {
-		echo "check-push-preflight: NO HE PODIDO MIRAR: raíz TMP inexistente ('$root')" >&2
+		echo "check-push-preflight: COULD NOT CHECK: temporary root is missing ('$root')" >&2
 		return 2
 	}
 	root="$(cd -- "$root" 2>/dev/null && pwd -P)" || return 2
 	case "$root" in /|'')
-		echo "check-push-preflight: NO HE PODIDO MIRAR: rehúso una raíz TMP amplia ('$root')" >&2
+		echo "check-push-preflight: COULD NOT CHECK: refusing a broadly scoped temporary root ('$root')" >&2
 		return 2 ;;
 	esac
 	uid="$(id -u)" || return 2
 	now="$(date +%s)" || return 2
 	for tool in find grep readlink rm stat; do
 		command -v "$tool" >/dev/null 2>&1 || {
-			echo "check-push-preflight: NO HE PODIDO MIRAR: falta '$tool' para una poda segura" >&2
+			echo "check-push-preflight: COULD NOT CHECK: '$tool' is required for safe cleanup" >&2
 			return 2
 		}
 	done
@@ -113,13 +113,13 @@ cleanup_stale_tmp() { # poda sólo raíces conocidas, viejas, propias y sin refe
 	done
 	if [ "${#candidates[@]}" -eq 0 ]; then
 		[ "$restore_nullglob" -eq 0 ] || shopt -u nullglob
-		echo "check-push-preflight: TMP viejo: 0 raíces candidatas."
+		echo "check-push-preflight: old temporary directories: 0 candidate roots."
 		return 0
 	fi
 
 	readlink "/proc/$$/cwd" >/dev/null 2>&1 || {
 		[ "$restore_nullglob" -eq 0 ] || shopt -u nullglob
-		echo "check-push-preflight: NO HE PODIDO MIRAR: /proc no permite comprobar procesos vivos" >&2
+		echo "check-push-preflight: COULD NOT CHECK: /proc cannot be used to check live processes" >&2
 		return 2
 	}
 
@@ -148,7 +148,7 @@ cleanup_stale_tmp() { # poda sólo raíces conocidas, viejas, propias y sin refe
 	[ "$proc_links" -gt 0 ] || {
 		unset -f record_live_tmp_path
 		[ "$restore_nullglob" -eq 0 ] || shopt -u nullglob
-		echo "check-push-preflight: NO HE PODIDO MIRAR: la instantánea /proc quedó vacía" >&2
+		echo "check-push-preflight: COULD NOT CHECK: /proc snapshot was empty" >&2
 		return 2
 	}
 	# argv y entorno pueden ser grandes y sensibles. `grep -F` los lee en C, no los imprime:
@@ -175,9 +175,9 @@ cleanup_stale_tmp() { # poda sólo raíces conocidas, viejas, propias y sin refe
 		if rm -rf -- "$candidate"; then removed=$((removed + 1)); else errors=$((errors + 1)); fi
 	done
 	[ "$restore_nullglob" -eq 0 ] || shopt -u nullglob
-	echo "check-push-preflight: TMP viejo: $removed raíz(es) retirada(s); $live_count viva(s) preservada(s)."
+	echo "check-push-preflight: old temporary directories: $removed root(s) removed; $live_count live root(s) preserved."
 	[ "$errors" -eq 0 ] || {
-		echo "check-push-preflight: NO HE PODIDO LIMPIAR $errors raíz(es) TMP" >&2
+		echo "check-push-preflight: COULD NOT CLEAN $errors temporary root(s)" >&2
 		return 2
 	}
 	return 0
@@ -194,82 +194,68 @@ tmpdir_ejecuta() { # 0 si TMPDIR puede EJECUTAR un binario; 1 si no, con el reme
 	d="${TMPDIR:-/tmp}"
 	probe="$d/.olv-preflight-probe.$$"
 	printf '#!/bin/sh\nexit 0\n' > "$probe" 2>/dev/null || {
-		echo "check-push-preflight: ⛔ no puedo ni ESCRIBIR en TMPDIR ('$d')."; return 1; }
+		echo "check-push-preflight: ⛔ cannot write to TMPDIR ('$d')."; return 1; }
 	chmod +x "$probe" 2>/dev/null
 	if "$probe" >/dev/null 2>&1; then
 		rm -f "$probe"
-		echo "check-push-preflight: TMPDIR ('$d') EJECUTA — go test podrá correr sus binarios."
+		echo "check-push-preflight: TMPDIR ('$d') supports execution; go test can run its binaries."
 		return 0
 	fi
 	rm -f "$probe"
-	echo "check-push-preflight: ⛔ NO ARRANQUES: TMPDIR ('$d') NO ejecuta binarios."
-	echo "check-push-preflight:    go test compila ahí y luego EJECUTA: el gate moriría en"
-	echo "check-push-preflight:    lint:cli-registries con ~40 min ya pagados. Arranca así:"
+	echo "check-push-preflight: ⛔ DO NOT START: TMPDIR ('$d') cannot execute binaries."
+	echo "check-push-preflight:    go test compiles there, then executes its binaries. The check would fail at"
+	echo "check-push-preflight:    lint:cli-registries after about 40 minutes of work. Start with:"
 	echo "       T=/workspace/.olv-push-tmp-\$\$; mkdir -p \"\$T\""
 	echo "       TMPDIR=\"\$T\" GOTMPDIR=\"\$T\" git push origin <sha>:refs/heads/<rama>"
 	return 1
 }
 
 bundle_al_dia() { # <worktree> -> 0 al día | 1 obsoleto | 2 no puede mirar
-	# ⛔ LA TERCERA FORMA DE MORIR CON EL GATE CASI PAGADO, y la que más cara sale porque el
-	#    mensaje final culpa a «un gate» sin decir cuál. Cazada en vivo el 2026-08-26:
-	#
-	#      `lint:git-env` corre en el hook y NO llama a los guiones de su clase: los EJECUTA para
-	#      ver si se aíslan. Uno de ellos reconstruye la consola en su propio worktree
-	#      (`vite` con `emptyOutDir: true`), así que VACÍA `core/internal/webui/dist` y lo
-	#      reescribe. Si el bundle commiteado estaba AL DÍA el resultado es byte-idéntico y no
-	#      pasa nada; si estaba OBSOLETO el árbol se queda sucio y `check-tree-untouched` mata el
-	#      push — a 1 h 48 la vez que lo medimos.
-	#
-	#    ⇒ Un bundle obsoleto es lo único que convierte esa sonda en un push muerto, y se ve en
-	#      UN SEGUNDO (medido) con el lint que ya existe. Aquí, no a las dos horas.
+	# Source pushes carry no generated output; CI owns the fresh build.
 	local wt="$1" cmd rc
 	# Inyectable para poder probar las DOS ramas sin un shim en PATH: en estos contenedores
 	# TMPDIR está montado noexec, PATH se lo saltaría en silencio y el test mediría el `task` real.
 	cmd="${OLIVARES_PREFLIGHT_BUNDLE_CMD:-task lint:web-bundle-freshness}"
 	if [ "${OLIVARES_PREFLIGHT_BUNDLE_CMD:-}" = "" ] && ! command -v task >/dev/null 2>&1; then
-		echo "check-push-preflight: NO HE PODIDO MIRAR: no encuentro 'task'; el bundle no se comprobó." >&2
+		echo "check-push-preflight: COULD NOT CHECK: 'task' is not installed; the bundle was not checked." >&2
 		return 2
 	fi
 	( cd "$wt" 2>/dev/null && eval "$cmd" ) >/dev/null 2>&1; rc=$?
 	if [ "$rc" -eq 0 ]; then
-		echo "check-push-preflight: bundle empotrado AL DÍA — la sonda de lint:git-env lo reconstruirá idéntico."
+		echo "check-push-preflight: source push OK — CI builds and verifies the console."
 		return 0
 	fi
-	echo "check-push-preflight: ⛔ NO ARRANQUES: el bundle empotrado está OBSOLETO (rc=$rc)."
-	echo "check-push-preflight:    Un gate del hook lo reconstruirá durante la corrida y el árbol"
-	echo "check-push-preflight:    quedará sucio: el push muere al FINAL, con ~2 h ya pagadas."
-	echo "check-push-preflight:    Arréglalo aquí, en la rama, y NO en main:"
-	echo "       task build:web && git add core/internal/webui/dist core/internal/webui/bundle-source.stamp"
+    echo "check-push-preflight: generated console output check failed (rc=$rc)."
+    echo "Run task lint:web-bundle-freshness for details; commit sources only."
 	return 1
 }
 
 preflight() { # preflight <worktree> -> 0 limpio | 1 sucio o TMPDIR inservible | 2 no he podido mirar
 	local wt="$1" estado sucio dist bundle_rc
 	cleanup_stale_tmp || return $?
-	[ -n "$wt" ] || { echo "check-push-preflight: NO HE PODIDO MIRAR: sin worktree" >&2; return 2; }
-	[ -d "$wt" ] || { echo "check-push-preflight: NO HE PODIDO MIRAR: '$wt' no es un directorio" >&2; return 2; }
+	[ -n "$wt" ] || { echo "check-push-preflight: COULD NOT CHECK: no worktree" >&2; return 2; }
+	[ -d "$wt" ] || { echo "check-push-preflight: COULD NOT CHECK: '$wt' is not a directory" >&2; return 2; }
 	# --no-optional-locks: sondear el árbol de otro carril NO debe plantarle un index.lock.
 	estado=$(git --no-optional-locks -C "$wt" status --porcelain 2>/dev/null) || {
-		echo "check-push-preflight: NO HE PODIDO MIRAR: '$wt' no responde como repositorio git" >&2; return 2; }
+		echo "check-push-preflight: COULD NOT CHECK: '$wt' cannot be queried as a Git repository" >&2; return 2; }
 	if ! git --no-optional-locks -C "$wt" rev-parse --git-dir >/dev/null 2>&1; then
-		echo "check-push-preflight: NO HE PODIDO MIRAR: '$wt' no es un repositorio git" >&2; return 2
+		echo "check-push-preflight: COULD NOT CHECK: '$wt' is not a Git repository" >&2; return 2
 	fi
 	sucio=$(printf '%s' "$estado" | grep -c . || true)
 	if [ "${sucio:-0}" -eq 0 ]; then
-		echo "check-push-preflight: árbol LIMPIO — el gate no lo rechazará por residuo."
+		echo "check-push-preflight: CLEAN tree — the check will not reject it for residue."
 		tmpdir_ejecuta || return 1
 		bundle_al_dia "$wt"
 		bundle_rc=$?
 		[ "$bundle_rc" -eq 0 ] || return "$bundle_rc"
 		return 0
 	fi
-	echo "check-push-preflight: ⛔ NO ARRANQUES: $sucio entrada(s) sin commitear en '$wt'."
-	echo "check-push-preflight:    El gate lo descubriría al final del push, no ahora. Desglose:"
+	echo "check-push-preflight: ⛔ DO NOT START: $sucio uncommitted entry/entries in '$wt'."
+	echo "check-push-preflight:    The check would detect them at the end of the push. Breakdown:"
 	printf '%s\n' "$estado" | awk '{print substr($0,1,2)}' | sort | uniq -c | sed 's/^/       /'
 	dist=$(printf '%s\n' "$estado" | grep -c 'core/internal/webui/dist' || true)
 	if [ "${dist:-0}" -gt 0 ]; then
-		echo "check-push-preflight:    $dist son del bundle de consola (un gate lo reconstruyó). Se retira con:"
+		echo "check-push-preflight:    $dist belong to the console bundle (rebuilt by a check). Remove them with:"
 		echo "       git -C '$wt' restore --source=HEAD --worktree -- core/internal/webui/dist"
 		echo "       git -C '$wt' clean -fdq -- core/internal/webui/dist"
 	fi
@@ -281,7 +267,7 @@ selftest() {
 	# montado noexec en «todos los casos en rojo» — un gate ciego que afirma sobre el árbol sin
 	# haberlo mirado. Aquí ese modo de fallo no existe porque no hay re-invocación.
 	local base rc fails=0 out live_pid=""
-	base=$(mktemp -d "${TMPDIR:-/tmp}/push-preflight.XXXXXX") || { echo "selftest: NO HE PODIDO MIRAR: mktemp"; return 2; }
+	base=$(mktemp -d "${TMPDIR:-/tmp}/push-preflight.XXXXXX") || { echo "selftest: COULD NOT CHECK: mktemp"; return 2; }
 	trap '[ -n "$live_pid" ] && kill "$live_pid" 2>/dev/null; rm -rf "$base"' RETURN
 	mkdir -p "$base/preflight-tmp"
 	OLIVARES_PREFLIGHT_TMP_ROOT="$base/preflight-tmp"
@@ -307,75 +293,75 @@ selftest() {
 	printf '#!/bin/sh\nexit 0\n' > "$tmpok/.p" 2>/dev/null; chmod +x "$tmpok/.p" 2>/dev/null
 	if ! "$tmpok/.p" >/dev/null 2>&1; then
 		rm -rf "$tmpok"
-		echo "selftest: NO HE PODIDO MIRAR: no encuentro un TMPDIR que ejecute; no puedo separar los dos ejes"
+		echo "selftest: COULD NOT CHECK: no TMPDIR supports execution; cannot isolate the two checks"
 		return 2
 	fi
 	rm -f "$tmpok/.p"
 
 	# CASO 1 — limpio es 0. Control positivo: sin él, un guion que siempre diga «sucio» pasaría.
-	mk limpio || { echo "selftest: NO HE PODIDO MIRAR: no puedo crear el repo"; return 2; }
+	mk limpio || { echo "selftest: COULD NOT CHECK: cannot create the repository"; return 2; }
 	out=$(TMPDIR="$tmpok" OLIVARES_PREFLIGHT_BUNDLE_CMD=true preflight "$base/limpio" 2>&1); rc=$?
-	[ "$rc" = 0 ] || { echo "selftest CASO 1 (limpio) esperaba 0, dio $rc: $out"; fails=$((fails+1)); }
+	[ "$rc" = 0 ] || { echo "selftest CASE 1 (clean) expected 0, got $rc: $out"; fails=$((fails+1)); }
 
 	# CASO 2 — sucio FUERA del bundle es 1, y NO menciona el remedio del bundle.
 	mk otro && printf 'x\n' > "$base/otro/nuevo.md"
 	out=$(preflight "$base/otro" 2>&1); rc=$?
-	[ "$rc" = 1 ] || { echo "selftest CASO 2 (sucio) esperaba 1, dio $rc: $out"; fails=$((fails+1)); }
-	case "$out" in *"bundle de consola"*) echo "selftest CASO 2: ofrece el remedio del bundle sin haber bundle"; fails=$((fails+1)) ;; esac
+	[ "$rc" = 1 ] || { echo "selftest CASE 2 (dirty) expected 1, got $rc: $out"; fails=$((fails+1)); }
+	case "$out" in *"console bundle"*) echo "selftest CASE 2: offers the bundle fix when no bundle is present"; fails=$((fails+1)) ;; esac
 
 	# CASO 3 — el residuo del bundle sale nombrado CON su remedio.
 	mk bundle && printf 'var b=2\n' > "$base/bundle/core/internal/webui/dist/assets/y-BBBB.js"
 	out=$(preflight "$base/bundle" 2>&1); rc=$?
-	[ "$rc" = 1 ] || { echo "selftest CASO 3 (bundle) esperaba 1, dio $rc: $out"; fails=$((fails+1)); }
-	case "$out" in *"clean -fdq -- core/internal/webui/dist"*) ;; *) echo "selftest CASO 3: no da el comando que retira el residuo"; fails=$((fails+1)) ;; esac
+	[ "$rc" = 1 ] || { echo "selftest CASE 3 (bundle) expected 1, got $rc: $out"; fails=$((fails+1)); }
+	case "$out" in *"clean -fdq -- core/internal/webui/dist"*) ;; *) echo "selftest CASE 3: missing the command to remove residue"; fails=$((fails+1)) ;; esac
 
 	# CASO 4 — SIN SUJETO. Un directorio que no es repo es 2, nunca 0.
 	mkdir -p "$base/norepo"
 	out=$(preflight "$base/norepo" 2>&1); rc=$?
-	[ "$rc" = 2 ] || { echo "selftest CASO 4 (no es repo) esperaba 2, dio $rc: $out"; fails=$((fails+1)); }
+	[ "$rc" = 2 ] || { echo "selftest CASE 4 (not a repository) expected 2, got $rc: $out"; fails=$((fails+1)); }
 
 	# CASO 5 — una ruta inexistente también es 2.
 	out=$(preflight "$base/no-existe" 2>&1); rc=$?
-	[ "$rc" = 2 ] || { echo "selftest CASO 5 (ruta inexistente) esperaba 2, dio $rc: $out"; fails=$((fails+1)); }
+	[ "$rc" = 2 ] || { echo "selftest CASE 5 (missing path) expected 2, got $rc: $out"; fails=$((fails+1)); }
 
 	# CASO 6 — TMPDIR que EJECUTA es 0, y lo dice.
 	out=$(TMPDIR="$tmpok" tmpdir_ejecuta 2>&1); rc=$?
-	[ "$rc" = 0 ] || { echo "selftest CASO 6 (TMPDIR ejecuta) esperaba 0, dio $rc: $out"; fails=$((fails+1)); }
+	[ "$rc" = 0 ] || { echo "selftest CASE 6 (TMPDIR supports execution) expected 0, got $rc: $out"; fails=$((fails+1)); }
 
 	# CASO 7 — un TMPDIR en el que no se puede ni ESCRIBIR es 1, nunca 0.
 	mkdir -p "$base/sinpermiso" && chmod 000 "$base/sinpermiso" 2>/dev/null
 	out=$(TMPDIR="$base/sinpermiso" tmpdir_ejecuta 2>&1); rc=$?
 	chmod 755 "$base/sinpermiso" 2>/dev/null
-	[ "$rc" = 1 ] || { echo "selftest CASO 7 (TMPDIR sin escritura) esperaba 1, dio $rc: $out"; fails=$((fails+1)); }
+	[ "$rc" = 1 ] || { echo "selftest CASE 7 (TMPDIR not writable) expected 1, got $rc: $out"; fails=$((fails+1)); }
 
 	# CASO 8 — un TMPDIR montado `noexec` es 1 y NOMBRA el remedio. En estos contenedores /tmp lo
 	#          está; si en otro sí ejecutara, se DICE en vez de saltárselo en silencio.
 	if printf '#!/bin/sh\nexit 0\n' > /tmp/.olv-sp.$$ 2>/dev/null && chmod +x /tmp/.olv-sp.$$ 2>/dev/null && ! /tmp/.olv-sp.$$ >/dev/null 2>&1; then
 		out=$(TMPDIR=/tmp tmpdir_ejecuta 2>&1); rc=$?
-		[ "$rc" = 1 ] || { echo "selftest CASO 8 (/tmp noexec) esperaba 1, dio $rc"; fails=$((fails+1)); }
-		case "$out" in *GOTMPDIR*) ;; *) echo "selftest CASO 8: no nombra el remedio"; fails=$((fails+1)) ;; esac
+		[ "$rc" = 1 ] || { echo "selftest CASE 8 (/tmp noexec) expected 1, got $rc"; fails=$((fails+1)); }
+		case "$out" in *GOTMPDIR*) ;; *) echo "selftest CASE 8: does not name the fix"; fails=$((fails+1)) ;; esac
 	else
-		echo "selftest CASO 8: /tmp SÍ ejecuta en esta máquina — caso no ejercitado (no es un pase)"
+		echo "selftest CASE 8: /tmp supports execution on this host; case not exercised (not a pass)"
 	fi
 	rm -f /tmp/.olv-sp.$$
 	rm -rf "$tmpok"
 
 	# CASO 9 — bundle AL DIA: deja pasar y lo dice.
 	out=$(OLIVARES_PREFLIGHT_BUNDLE_CMD=true bundle_al_dia "$base/limpio" 2>&1); rc=$?
-	[ "$rc" = 0 ] || { echo "selftest CASO 9 (bundle al dia) esperaba 0, dio $rc: $out"; fails=$((fails+1)); }
+	[ "$rc" = 0 ] || { echo "selftest CASE 9 (current bundle) expected 0, got $rc: $out"; fails=$((fails+1)); }
 
 	# CASO 10 — bundle OBSOLETO: rehusa Y da el comando exacto que lo arregla. Sin la segunda
 	#           mitad, un rehuse mudo obliga a adivinar justo cuando ya vas con prisa.
 	out=$(OLIVARES_PREFLIGHT_BUNDLE_CMD=false bundle_al_dia "$base/limpio" 2>&1); rc=$?
-	[ "$rc" = 1 ] || { echo "selftest CASO 10 (bundle obsoleto) esperaba 1, dio $rc: $out"; fails=$((fails+1)); }
-	case "$out" in *"task build:web"*) ;; *) echo "selftest CASO 10: no da el comando que lo arregla"; fails=$((fails+1)) ;; esac
+	[ "$rc" = 1 ] || { echo "selftest CASE 10 (stale bundle) expected 1, got $rc: $out"; fails=$((fails+1)); }
+	case "$out" in *"task lint:web-bundle-freshness"*) ;; *) echo "selftest CASE 10: missing the command to fix it"; fails=$((fails+1)) ;; esac
 
 	# CASO 11 — una raíz conocida, propia, vieja y sin proceso vivo sí se retira.
 	mkdir -p "$OLIVARES_PREFLIGHT_TMP_ROOT/engine-citations-OLD001"
 	touch -d '4 hours ago' "$OLIVARES_PREFLIGHT_TMP_ROOT/engine-citations-OLD001"
 	out=$(OLIVARES_PREFLIGHT_TMP_MAX_AGE_MINUTES=60 cleanup_stale_tmp 2>&1); rc=$?
 	[ "$rc" = 0 ] && [ ! -e "$OLIVARES_PREFLIGHT_TMP_ROOT/engine-citations-OLD001" ] || {
-		echo "selftest CASO 11 (TMP viejo muerto) no fue retirado: rc=$rc: $out"; fails=$((fails+1)); }
+		echo "selftest CASE 11 (old unused temporary directory) was not removed: rc=$rc: $out"; fails=$((fails+1)); }
 
 	# CASO 12 — la misma edad no autoriza borrar una raíz que sea cwd de un proceso exacto.
 	mkdir -p "$OLIVARES_PREFLIGHT_TMP_ROOT/program-anchors.LIVE01"
@@ -388,27 +374,27 @@ selftest() {
 	done
 	out=$(OLIVARES_PREFLIGHT_TMP_MAX_AGE_MINUTES=60 cleanup_stale_tmp 2>&1); rc=$?
 	[ "$rc" = 0 ] && [ -d "$OLIVARES_PREFLIGHT_TMP_ROOT/program-anchors.LIVE01" ] || {
-		echo "selftest CASO 12 (TMP viejo vivo) no fue preservado: rc=$rc: $out"; fails=$((fails+1)); }
+		echo "selftest CASE 12 (old live temporary directory) was not preserved: rc=$rc: $out"; fails=$((fails+1)); }
 	kill "$live_pid" 2>/dev/null; wait "$live_pid" 2>/dev/null; live_pid=""
 
 	# CASO 13 — el nombre coincide, pero una raíz joven queda intacta.
 	mkdir -p "$OLIVARES_PREFLIGHT_TMP_ROOT/tmp.YOUNG00001"
 	out=$(OLIVARES_PREFLIGHT_TMP_MAX_AGE_MINUTES=60 cleanup_stale_tmp 2>&1); rc=$?
 	[ "$rc" = 0 ] && [ -d "$OLIVARES_PREFLIGHT_TMP_ROOT/tmp.YOUNG00001" ] || {
-		echo "selftest CASO 13 (TMP joven) no fue preservado: rc=$rc: $out"; fails=$((fails+1)); }
+		echo "selftest CASE 13 (young temporary directory) was not preserved: rc=$rc: $out"; fails=$((fails+1)); }
 
 	# CASO 14 — sin `task` no hay veredicto sobre el bundle: es 2, nunca el 0 que autoriza el push.
 	# PATH vacío es una sonda hermética: `command` y `echo` son builtins y esta rama no ejecuta nada.
 	mkdir -p "$base/no-tools"
 	out=$(PATH="$base/no-tools" OLIVARES_PREFLIGHT_BUNDLE_CMD= bundle_al_dia "$base/limpio" 2>&1); rc=$?
-	[ "$rc" = 2 ] || { echo "selftest CASO 14 (sin task) esperaba 2, dio $rc: $out"; fails=$((fails+1)); }
-	case "$out" in *"NO HE PODIDO MIRAR"*) ;; *) echo "selftest CASO 14: no distingue ausencia de herramienta"; fails=$((fails+1)) ;; esac
+	[ "$rc" = 2 ] || { echo "selftest CASE 14 (task missing) expected 2, got $rc: $out"; fails=$((fails+1)); }
+	case "$out" in *"COULD NOT CHECK"*) ;; *) echo "selftest CASE 14: does not distinguish a missing tool"; fails=$((fails+1)) ;; esac
 
 	if [ "$fails" -eq 0 ]; then
-		echo "check-push-preflight --selftest: 14/14 (incluye TMPDIR noexec, limpieza con guarda viva, bundle obsoleto y task ausente)"
+		echo "check-push-preflight --selftest: 14/14 (includes TMPDIR noexec, cleanup with live-use guard, stale bundle, and missing task)"
 		return 0
 	fi
-	echo "check-push-preflight --selftest: $fails caso(s) en rojo"
+	echo "check-push-preflight --selftest: $fails failing case(s)"
 	return 1
 }
 

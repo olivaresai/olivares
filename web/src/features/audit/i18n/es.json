@@ -100,10 +100,49 @@
     "this": "este",
     "sig": "Firma del evento",
     "checkpoint": "firma",
-    "chainHint": "El hash de cada evento se encadena con el anterior. No hay carga útil tras una huella: el hash es la evidencia (datos mínimos por diseño)."
+    "chainHint": "El hash de cada evento se encadena con el anterior. No hay carga útil tras una huella: el hash es la evidencia (datos mínimos por diseño).",
+    "details": "Detalles",
+    "actorMember": "Un miembro"
   },
   "empty": {
     "title": "Aún no hay evidencia",
     "description": "El registro está vacío para este ámbito. Las operaciones gobernadas añaden eventos cuya manipulación puede detectarse a medida que ocurren."
+  },
+  "actions": {
+    "governance_approval_create": "Aprobación solicitada",
+    "governance_approval_decision": "Decisión de aprobación registrada",
+    "governance_approval_cancel": "Aprobación cancelada",
+    "sessions_run_launched": "Sesión iniciada",
+    "sessions_run_stopping": "Parada de sesión solicitada",
+    "sessions_work_item_create": "Elemento de trabajo creado",
+    "sessions_work_item_ready": "Elemento de trabajo marcado como listo",
+    "sessions_work_item_complete": "Elemento de trabajo completado",
+    "authorization_decision_record": "Decisión de autorización registrada",
+    "policy_artifact_record": "Evidencia de política registrada",
+    "governance_policy_create": "Política creada",
+    "governance_policy_update": "Política actualizada",
+    "governance_policy_delete": "Política eliminada",
+    "auth_login": "Inicio de sesión",
+    "auth_logout": "Cierre de sesión",
+    "auth_login_failed": "Inicio de sesión fallido",
+    "auth_webauthn_register": "Llave de acceso añadida",
+    "auth_webauthn_unregister": "Llave de acceso quitada",
+    "user_set_password": "Contraseña cambiada",
+    "user_create": "Persona añadida",
+    "membership_grant": "Rol asignado",
+    "membership_update": "Rol cambiado",
+    "membership_offboard": "Persona quitada",
+    "token_issue": "Token de API creado",
+    "token_revoke": "Token de API revocado",
+    "secret_delete": "Secreto eliminado"
+  },
+  "targets": {
+    "core_policy": "Política"
+  },
+  "internal": {
+    "hidden": "Registros internos ocultos: {{count}}",
+    "show": "Mostrar registros internos",
+    "hide": "Ocultar registros internos",
+    "allHidden": "Todo lo cargado hasta ahora son registros internos."
   }
 }

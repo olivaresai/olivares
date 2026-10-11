@@ -29,11 +29,8 @@ import (
 //    underscore host above is a fine browser address and is NOT a valid RP domain.
 //
 // On top of (2) sits a third rule that is neither the URL Standard's nor
-// WebAuthn's: what THIS BUILD's verifier accepts. go-webauthn v0.17.4's
-// protocol.ValidateRPID accepts any net.ParseIP-able value (browsers do not) and
-// refuses a single-label name unless it is exactly "localhost". That is a
-// property of the installed library, not a property of the specification, and it
-// is quoted as such wherever this package speaks about it.
+// WebAuthn's: what THIS BUILD's verifier accepts. The installed
+// protocol.ValidateRPID refuses IPs and single-label names other than localhost.
 //
 // Two profiles, therefore, and never one. Option ORDER matters: MapForLookup sets
 // StrictDomainName(true) and ValidateLabels(true) internally, so the two relaxing
@@ -307,10 +304,10 @@ func parseIPv4(host string) (string, bool) {
 //   - the strict half refuses "my_host.example.com" (STD3) and "256.1.1.1" is
 //     never reached here because it is not a domain at all;
 //   - the library half refuses a single-label name other than exactly "localhost",
-//     and ACCEPTS an IP, which is why callers ask Kind first.
+//     and also refuses IPs; callers still require KindDomain explicitly.
 //
-// The trailing root dot is dropped before the strict check: the empty root label
-// is not a DNS label, and the verifier and browsers both accept the dotted form.
+// One trailing root dot is not a DNS label. Check the undotted ID that callers
+// pass to the verifier; the browser origin retains its root dot.
 func IsRelyingPartyDomain(host string) bool {
 	if host == "" {
 		return false
@@ -328,7 +325,7 @@ func IsRelyingPartyDomain(host string) bool {
 	if _, err := strictDomains.ToASCII(probe); err != nil {
 		return false
 	}
-	return protocol.ValidateRPID(host) == nil
+	return protocol.ValidateRPID(probe) == nil
 }
 
 // serializeIPv6 is the URL Standard's IPv6 serializer: eight lowercase hex

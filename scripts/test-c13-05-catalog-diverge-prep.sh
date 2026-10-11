@@ -19,7 +19,7 @@ bad() { printf 'FAIL %s\n' "$1" >&2; fail=$((fail + 1)); }
 export GOWORK=off
 MCBIN="$(mktemp -u "${TMPDIR:-/workspace/.olivares-tmptest}/mc-bin.XXXXXX")"
 ( cd "$ROOT/commercial/commerce-lint" && go build -o "$MCBIN" . ) >/dev/null 2>&1 || {
-	echo "no pude construir el derivador: la bateria mediria NOT APPLICABLE" >&2; exit 2; }
+	echo "could not build the deriver: the test would measure NOT APPLICABLE" >&2; exit 2; }
 export OLIVARES_MODULE_CATALOG_BIN="$MCBIN"
 stage_derivation() {
 	mkdir -p "$TMP/tree/commercial/license-worker/src/catalog"
@@ -69,7 +69,7 @@ python3 - "$TMP/tree/design/c13-05-catalog-diverge-prep-2026-08-20.json" <<'PY'
 import json, sys
 p = sys.argv[1]
 d = json.load(open(p, encoding="utf-8"))
-assert "overlay_matches_sold" not in d, "control de mutacion: el campo ya estaba"
+assert "overlay_matches_sold" not in d, "mutation control: the field was already present"
 d["overlay_matches_sold"] = True
 json.dump(d, open(p, "w", encoding="utf-8"))
 PY
@@ -82,7 +82,7 @@ stage
 printf '\nC13-05 cerrado\n' >> \
   "$TMP/tree/design/C13-05-CATALOG-DIVERGE-PREP-2026-08-20.md"
 run
-if [ "$(cat "$TMP/rc")" = 1 ]; then ok "mutant (doc claims the lote close) is killed"
+if [ "$(cat "$TMP/rc")" = 1 ]; then ok "mutant (doc claims the batch closure) is killed"
 else bad "doc close stayed rc=$(cat "$TMP/rc") ($(cat "$TMP/err"))"; fi
 
 stage
@@ -105,7 +105,7 @@ p = sys.argv[1]
 d = json.load(open(p, encoding="utf-8"))
 before = len(d["entries"])
 d["entries"] = [e for e in d["entries"] if e["slug"] != "credential-minter"]
-assert len(d["entries"]) == before - 1, "control de mutacion: credential-minter no estaba"
+assert len(d["entries"]) == before - 1, "mutation control: credential-minter was absent"
 json.dump(d, open(p, "w", encoding="utf-8"), indent=2)
 PY
 run

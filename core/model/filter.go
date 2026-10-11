@@ -25,6 +25,13 @@ const (
 	OpGte Op = "gte"
 	// OpLike is a case-sensitive pattern match (LIKE) for text columns.
 	OpLike Op = "like"
+	// OpIn is set membership (IN (...)). Value is a NON-EMPTY slice of scalars
+	// ([]string, []ID or []any of them); each element binds as its own
+	// placeholder, so the set never reaches SQL as interpolated text. An empty
+	// or scalar Value is an error, not a match-all or a match-none. It exists
+	// for the batched reads (the grant load, the group-member projection): one
+	// query for a whole id set, where one Get per id was N+1.
+	OpIn Op = "in"
 	// OpEqOrUnset matches rows whose column equals the value OR carries no value
 	// at all (NULL, and the empty string for a text column). It exists for the ONE
 	// predicate a plain OpEq cannot express: a workspace-lineage column whose unset
@@ -53,7 +60,7 @@ const (
 // Valid reports whether o is a supported operator.
 func (o Op) Valid() bool {
 	switch o {
-	case OpEq, OpNe, OpLt, OpLte, OpGt, OpGte, OpLike, OpEqOrUnset, OpUnsetOrGt, OpIsNull, OpNotNull:
+	case OpEq, OpNe, OpLt, OpLte, OpGt, OpGte, OpLike, OpIn, OpEqOrUnset, OpUnsetOrGt, OpIsNull, OpNotNull:
 		return true
 	default:
 		return false

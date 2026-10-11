@@ -106,17 +106,17 @@ func TestAJoinedInterruptIsRefusedBeforeAnEpochThatMovesTwice(t *testing.T) {
 	fixture := newWorkflowCommunicationFixture(t, false)
 	makeProtocolInterruptRecipientWriter(t, fixture)
 	binding := protocolInterruptBindingForTest(t, fixture, BindingProtocolA2A)
-	resolver, _ := fixture.m.communicationDirectoryResolver.(*directNoticeReadDirectoryResolver)
-	closure, _ := fixture.m.communicationGrantClosure.(*directNoticeReadClosureResolver)
+	resolver, _ := fixture.m.CommunicationDirectoryResolver.(*directNoticeReadDirectoryResolver)
+	closure, _ := fixture.m.CommunicationGrantClosure.(*directNoticeReadClosureResolver)
 	if resolver == nil || closure == nil {
 		t.Fatal("the workflow fixture's read resolvers are not the doubles this test refreshes")
 	}
 	calls := installJoinedPortChecks(fixture.m, fixture.tenant)
-	moving := &movingStanding{next: fixture.m.standing}
-	fixture.m.standing = moving
+	moving := &movingStanding{next: fixture.m.Standing}
+	fixture.m.Standing = moving
 	moved := 0
 	mover := &epochMovingAttestation{
-		next: fixture.m.communicationAudienceAttestor, tenant: fixture.tenant, limit: 2,
+		next: fixture.m.CommunicationAudienceAttestor, tenant: fixture.tenant, limit: 2,
 	}
 	mover.hook = func(ctx context.Context) {
 		if moveWorkflowDirectoryEpoch(t, ctx, fixture, resolver, closure,
@@ -124,7 +124,7 @@ func TestAJoinedInterruptIsRefusedBeforeAnEpochThatMovesTwice(t *testing.T) {
 			moved++
 		}
 	}
-	fixture.m.communicationAudienceAttestor = mover
+	fixture.m.CommunicationAudienceAttestor = mover
 	_, elapsed, err := applyJoinedInterrupt(fixture,
 		joinedInterruptClaim(fixture, binding, "stale-epoch-twice"),
 		joinedInterruptCommand(fixture, binding, "stale-epoch-twice-request"))

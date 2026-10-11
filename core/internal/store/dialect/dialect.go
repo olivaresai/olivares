@@ -51,6 +51,9 @@ type Execer interface {
 const (
 	AuditSpoolUsageTable = "audit_spool_usage"
 	AuditSpoolGapsTable  = "audit_spool_gaps"
+	// AuditTreeTable holds the stored hashes of each tenant's RFC 6962 Merkle
+	// tree over the audit ledger (core v24).
+	AuditTreeTable = "audit_tree"
 	// AuditBlindingStateTable records ONCE whether this ledger has been actuated
 	// onto the blinded metadata-commitment rule. Like AuditSpoolUsageTable it is
 	// global bookkeeping about the ledger rather than tenant data or evidence, so it
@@ -140,8 +143,13 @@ type Dialect interface {
 	// constraint that backstops the chain against duplicate sequence numbers.
 	AuditTableStmts() []string
 
+	// AuditTreeStmts renders the append-only audit_tree table: the RFC 6962
+	// Merkle hashes of each tenant's ledger, written in the same transaction as
+	// the audit row. Tenant-guarded and immutable like audit_events.
+	AuditTreeStmts() []string
+
 	// AuditSpoolStmts renders the global mutable usage counter and the
-	// tenant-guarded mutable pending-gaps table used by ADR-0024 Q2. Neither is
+	// tenant-guarded mutable pending-gaps table used by audit-spool policy. Neither is
 	// append-only: they are bookkeeping, not evidence rows.
 	AuditSpoolStmts() []string
 

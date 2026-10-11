@@ -5,7 +5,6 @@
 package main
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -28,17 +27,14 @@ import (
 // `olivares agent session {create|ls|get|events|attach|input|interrupt|stop|
 // resume|cleanup|delete}`. Every subcommand is a THIN HTTP client (Bearer token +
 // tenant header) against /v1/m/sessions/runs* — ALL lifecycle/runtime logic lives
-// server-side in module II; the CLI never spawns a process itself.
+// server-side in modules/sessions; the CLI never spawns a process itself.
 
 // agentClientConfig is the shared server/credential flag set.
 //
 // It resolves and connects through the SAME two functions as the rest of the CLI
-// — resolveCLIConfig and cliTransport (E4). Before that it did neither: it
-// read only flags and environment, so `olivares auth login` had no effect on any
-// agent command, and it built a bare http.Client, so --ca-cert and --pin-sha256
-// did not exist here and --insecure disabled verification WITHOUT printing the
-// warning clitransport.go emits. This is the largest of the four ad-hoc paths:
-// every session and every workspace verb went through it.
+// — resolveCLIConfig and cliTransport — so `olivares auth login` applies to every
+// agent command, --ca-cert and --pin-sha256 exist here, and --insecure prints the
+// warning clitransport.go emits. Every session and workspace verb goes through it.
 type agentClientConfig struct {
 	command         *cobra.Command
 	credentialFlags authClientFlags
@@ -76,6 +72,23 @@ func (c *agentClientConfig) changed(name string) bool {
 }
 
 func (c *agentClientConfig) resolve() error {
+	if err := c.load(); err != nil {
+		return err
+	}
+	switch {
+	case c.server == "":
+		return missingCLIValueError("server", "--server", "OLIVARES_SERVER_URL", c.resolved)
+	case c.token == "":
+		return missingCLIValueError("token", "--token", "OLIVARES_TOKEN", c.resolved)
+	case c.tenant == "":
+		return missingCLIValueError("tenant", "--tenant", "OLIVARES_TENANT", c.resolved)
+	}
+	return nil
+}
+
+// load resolves the flags, the environment and the active client context
+// without requiring any value; resolve is load plus that requirement.
+func (c *agentClientConfig) load() error {
 	token, tokenExplicit := c.token, c.changed("token") || c.token != ""
 	if c.command != nil {
 		c.credentialFlags.token = c.token
@@ -97,17 +110,8 @@ func (c *agentClientConfig) resolve() error {
 	if err != nil {
 		return err
 	}
-	c.resolved = resolved
-	switch {
-	case resolved.Server == "":
-		return missingCLIValueError("server", "--server", "OLIVARES_SERVER_URL", resolved)
-	case resolved.Token == "":
-		return missingCLIValueError("token", "--token", "OLIVARES_TOKEN", resolved)
-	case resolved.Tenant == "":
-		return missingCLIValueError("tenant", "--tenant", "OLIVARES_TENANT", resolved)
-	}
 	// Keep the plain fields in step for the code that reads them directly.
-	c.server, c.token, c.tenant = resolved.Server, resolved.Token, resolved.Tenant
+	c.resolved, c.server, c.token, c.tenant = resolved, resolved.Server, resolved.Token, resolved.Tenant
 	return nil
 }
 
@@ -271,9 +275,19 @@ func newAgentSessionCreateCmd() *cobra.Command {
 			if cmd.Flags().Changed("provider-profile") {
 				body["provider_profile_ref"] = providerProfile
 			}
-			status, b, err := cfg.do(cmd.Context(), "POST", "/v1/m/sessions/runs", body, http.StatusCreated)
+			status, b, err := cfg.do(cmd.Context(), "POST", "/v1/m/sessions/runs", body, http.StatusCreated, http.StatusAccepted)
 			if err != nil {
 				return err
+			}
+			if status == http.StatusAccepted {
+				var run map[string]any
+				if json.Unmarshal(b, &run) != nil || str(run, "state") != sessionWaitingApproval || str(run, "approval_ref") == "" {
+					return guardCLIRefusalError(httpErr(status, b), status, []string{cfg.token})
+				}
+				return renderOut(cmd, func(out io.Writer) error {
+					renderTo(out).Fields([]termrender.Field{{Key: "approval", Value: termSafe(str(run, "approval_ref"))}})
+					return printSessionWaitsForApproval(out, run, cfg.approvalsPage(), false)
+				}, json.RawMessage(b))
 			}
 			return printRun(cmd, status, b, http.StatusCreated)
 		},
@@ -287,16 +301,14 @@ func newAgentSessionCreateCmd() *cobra.Command {
 	cmd.Flags().StringVar(&workspace, "workspace", "", "workspace reference (the session's working directory)")
 	cmd.Flags().StringVar(&providerProfile, "provider-profile", "",
 		"provider profile reference to launch under (default: the profile the engine resolves for Claude Code, for a caller who may write profiles)")
-	// E6: the accepted values and the WIRED values are not the same set, and
-	// the help used to name all three as if they were. The only runner in this
-	// release is the native one, and it refuses container/sandbox deny-closed
-	// rather than run unisolated while the row claims otherwise
-	// (modules/sessions/procrunner.go:52) — so copying the old example produced a
-	// 502. The flag still accepts them, because the API and the row model do; the
-	// help now says which one actually launches.
+	// The accepted values and the WIRED values are not the same set. The only runner
+	// is the native one, and it refuses container/sandbox deny-closed rather than run
+	// unisolated while the row claims otherwise (modules/sessions/procrunner.go). The
+	// flag still accepts them, because the API and the row model do; the help says
+	// which one actually launches.
 	cmd.Flags().StringVar(&isolation, "isolation", "native",
 		"native (the only runner wired this release) | container | sandbox — "+
-			"container and sandbox are accepted by the API but refused by the launcher until their runner ships")
+			"container and sandbox are refused before launch with HTTP 422 until their runner ships")
 	cmd.Flags().StringSliceVar(&envAllow, "env-allow", nil, "host env var NAMES to forward to the session (allowlist; nothing else is inherited)")
 	addDeprecatedJSONFlag(cmd)
 	_ = cmd.RegisterFlagCompletionFunc("transport", func(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
@@ -345,12 +357,9 @@ func newAgentSessionListCmd() *cobra.Command {
 			if state != "" {
 				path += "?state=" + state
 			}
-			status, b, err := cfg.do(cmd.Context(), "GET", path, nil, http.StatusOK)
+			_, b, err := cfg.do(cmd.Context(), "GET", path, nil, http.StatusOK)
 			if err != nil {
 				return err
-			}
-			if status != http.StatusOK {
-				return httpErr(status, b)
 			}
 			var resp struct {
 				Items []map[string]any `json:"items"`
@@ -392,12 +401,9 @@ func newAgentSessionGetCmd() *cobra.Command {
 			if err := cfg.resolve(); err != nil {
 				return err
 			}
-			status, b, err := cfg.do(cmd.Context(), "GET", "/v1/m/sessions/runs/"+args[0], nil, http.StatusOK)
+			_, b, err := cfg.do(cmd.Context(), "GET", "/v1/m/sessions/runs/"+args[0], nil, http.StatusOK)
 			if err != nil {
 				return err
-			}
-			if status != http.StatusOK {
-				return httpErr(status, b)
 			}
 			return printRaw(cmd, b)
 		},
@@ -419,12 +425,9 @@ func newAgentSessionEventsCmd() *cobra.Command {
 			if err := cfg.resolve(); err != nil {
 				return err
 			}
-			status, b, err := cfg.do(cmd.Context(), "GET", "/v1/m/sessions/runs/"+args[0]+"/events", nil, http.StatusOK)
+			_, b, err := cfg.do(cmd.Context(), "GET", "/v1/m/sessions/runs/"+args[0]+"/events", nil, http.StatusOK)
 			if err != nil {
 				return err
-			}
-			if status != http.StatusOK {
-				return httpErr(status, b)
 			}
 			return printRaw(cmd, b)
 		},
@@ -457,57 +460,25 @@ func newAgentSessionAttachCmd() *cobra.Command {
 	return cmd
 }
 
-// streamAttach opens the SSE attach stream and prints each output line. It uses no
-// client timeout (a live attach is long-lived); Ctrl-C (context cancel) ends it.
+// streamAttach prints each output line of the attach stream. It uses no client
+// timeout (a live attach is long-lived); Ctrl-C (context cancel) ends it.
 func (c *agentClientConfig) streamAttach(cmd *cobra.Command, ref string, from int64) error {
-	path := fmt.Sprintf("/v1/m/sessions/runs/%s/attach?from=%d", ref, from)
-	req, err := c.newRequest(cmd.Context(), "GET", path, nil)
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Accept", "text/event-stream")
-	client, err := c.streamTransport()
-	if err != nil {
-		return err
-	}
-	resp, err := cliDo(client, req)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusOK {
-		b, readErr := readCLIResponse(resp, req, 1<<20, false)
-		return guardCLIRefusalError(httpErr(resp.StatusCode, b), resp.StatusCode, cliRequestSecrets(req), readErr)
-	}
-	out := cmd.OutOrStdout()
-	sc := bufio.NewScanner(resp.Body)
-	sc.Buffer(make([]byte, 0, 64*1024), 4<<20)
-	var event string
-	for sc.Scan() {
-		line := sc.Text()
-		switch {
-		case strings.HasPrefix(line, "event: "):
-			event = strings.TrimPrefix(line, "event: ")
-		case strings.HasPrefix(line, "data: "):
-			data := strings.TrimPrefix(line, "data: ")
-			switch event {
-			case "output":
-				var f struct {
-					Line string `json:"line"`
-				}
-				if json.Unmarshal([]byte(data), &f) == nil {
-					fmt.Fprintln(out, f.Line)
-				}
-			case "lag":
-				fmt.Fprintln(cmd.ErrOrStderr(), "[attach] lag: "+data)
-			case "notice":
-				fmt.Fprintln(cmd.ErrOrStderr(), "[attach] notice: "+data)
-			case "end":
-				return nil
+	return c.readAttach(cmd.Context(), ref, from, func(event, data string) bool {
+		switch event {
+		case "output":
+			var f struct {
+				Line string `json:"line"`
 			}
+			if json.Unmarshal([]byte(data), &f) == nil {
+				fmt.Fprintln(cmd.OutOrStdout(), f.Line)
+			}
+		case "lag", "notice":
+			fmt.Fprintln(cmd.ErrOrStderr(), "[attach] "+event+": "+data)
+		case "end":
+			return false
 		}
-	}
-	return sc.Err()
+		return true
+	})
 }
 
 func newAgentSessionInputCmd() *cobra.Command {
@@ -730,12 +701,9 @@ func newAgentSessionActionCmd(use, short, method, suffix string) *cobra.Command 
 			if err := cfg.resolve(); err != nil {
 				return err
 			}
-			status, b, err := cfg.do(cmd.Context(), method, "/v1/m/sessions/runs/"+args[0]+suffix, nil, http.StatusOK)
+			_, b, err := cfg.do(cmd.Context(), method, "/v1/m/sessions/runs/"+args[0]+suffix, nil, http.StatusOK)
 			if err != nil {
 				return err
-			}
-			if status != http.StatusOK {
-				return httpErr(status, b)
 			}
 			return printRaw(cmd, b)
 		},
@@ -760,12 +728,8 @@ func newAgentSessionDeleteCmd() *cobra.Command {
 			if err := cfg.resolve(); err != nil {
 				return err
 			}
-			status, b, err := cfg.do(cmd.Context(), "DELETE", "/v1/m/sessions/runs/"+args[0], nil, http.StatusOK)
-			if err != nil {
+			if _, _, err := cfg.do(cmd.Context(), "DELETE", "/v1/m/sessions/runs/"+args[0], nil, http.StatusOK); err != nil {
 				return err
-			}
-			if status != http.StatusOK {
-				return httpErr(status, b)
 			}
 			return nil
 		},
@@ -777,11 +741,8 @@ func newAgentSessionDeleteCmd() *cobra.Command {
 // printRun prints a run DTO response (human summary or raw JSON), mapping a
 // non-success status to an error.
 //
-// The summary names the DIRECTORY the session works in and what it has COST,
-// because those were the two questions this plane could not answer on 2026-09-18:
-// the child ran in the engine's own working directory and nothing here said so,
-// and a real turn's price was on the driver's wire and on no surface an operator
-// reads.
+// The summary names the DIRECTORY the session works in and what it has COST: the
+// two questions an operator asks first about a running session.
 func printRun(cmd *cobra.Command, status int, b []byte, want int) error {
 	if status != want {
 		return httpErr(status, b)
@@ -822,12 +783,18 @@ func runCostLine(run map[string]any) string {
 	if !hasIn && !hasOut && !hasCost {
 		return "cost unknown (this session's driver has reported no usage)"
 	}
-	line := fmt.Sprintf("cost %.4f USD (tokens in %d, out %d)",
-		float64(cost)/1_000_000, in, out)
-	if model := str(run, "usage_model_ref"); model != "" {
+	line := fmt.Sprintf("cost not reported (tokens in %d, out %d)", in, out)
+	if hasCost {
+		line = fmt.Sprintf("cost %.4f USD (tokens in %d, out %d)", float64(cost)/1_000_000, in, out)
+	}
+	if model := termSafe(str(run, "usage_model_ref")); model != "" {
 		line += " on " + model
 	}
-	return line + " — the provider's own figure, not an invoice"
+	if !hasCost {
+		return line
+	}
+	// The tool's own figure, or the list price of a turn it did not price (Codex).
+	return line + " — an estimate, not an invoice"
 }
 
 // intField reads a JSON number the engine may legitimately omit. The second
@@ -852,13 +819,10 @@ func intField(run map[string]any, key string) (int64, bool) {
 
 // printRaw writes an API response the command did not model as a DTO.
 //
-// It INDENTS a JSON body, which every caller of this function has. Measured
-// 2026-09-18 walking the first hour: `agent session events` printed its ledger as
-// one 900-character line, and that ledger is the record an operator reads to find
-// out why a session failed — two events, each with a state transition, a detail
-// and an audit sequence, none of them findable by eye. Every other report command
-// in this binary indents (renderOut marshals with the same two spaces), so the
-// odd one out was this path, not the choice.
+// It INDENTS a JSON body, which every caller of this function has: a ledger
+// printed as one long line is the record an operator reads to find out why a
+// session failed, and nothing in it would be findable by eye. Every other report
+// command in this binary indents (renderOut marshals with the same two spaces).
 //
 // A body that is not JSON is written through untouched rather than refused: this
 // function's job is to show the operator what the engine said, and an engine that
@@ -875,14 +839,11 @@ func printRaw(cmd *cobra.Command, b []byte) error {
 
 // httpErr turns an API refusal into the sentence an operator reads.
 //
-// MEASURED 2026-09-18 walking the first hour, verbatim:
+// The engine writes a usable sentence; printing its envelope would put "request
+// failed" first and the part that says what to do inside two levels of JSON:
 //
 //	request failed: HTTP 422: {"error":{"code":"invalid_argument","message":
 //	"set auth_source to provider_account_home or managed_injection"}}
-//
-// The engine had written a usable sentence and the CLI printed the envelope
-// around it. "request failed" is the least informative part of that line and it
-// came first; the part that says what to do was inside two levels of JSON.
 //
 // So the message leads with what happened, in the operator's terms, and carries
 // the status and the code as a parenthetical — nothing is dropped, because the
@@ -943,6 +904,7 @@ type apiErrorEnvelope struct {
 	Error struct {
 		Code    string `json:"code"`
 		Message string `json:"message"`
+		Module  string `json:"module"`
 	} `json:"error"`
 }
 
@@ -965,6 +927,27 @@ func isSentence(s string) bool {
 	return unicode.IsUpper(r) && len(strings.Fields(s)) >= 3
 }
 
+// moduleOffRemedy is the sentence that names the switch for a module this node
+// does not run, or "" when the engine did not name the module in a shape that
+// is one shell word (letters, digits, dot, underscore, dash). error.module is
+// engine-controlled input printed into a command the operator may paste, so a
+// name that is not that shape is never named at all — `modules ls` applies
+// termSafe to the same field for the same reason.
+func moduleOffRemedy(module string) string {
+	if module == "" {
+		return ""
+	}
+	for _, r := range module {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9',
+			r == '.', r == '_', r == '-':
+		default:
+			return ""
+		}
+	}
+	return " Enable it from the CLI with olivares modules on " + module + "."
+}
+
 // describeAPIRefusal builds the sentence. It is separate from httpErr so it can
 // be tested against real captured bodies without a server.
 func describeAPIRefusal(status int, b []byte) string {
@@ -984,8 +967,21 @@ func describeAPIRefusal(status int, b []byte) string {
 
 	raw := strings.TrimSpace(string(b))
 	var env apiErrorEnvelope
+	// A 401 "unauthenticated" means this sign-in or token is no longer
+	// accepted (a password change or a sign-out ends a sign-in); say what to do.
+	if status == http.StatusUnauthorized && json.Unmarshal(b, &env) == nil && env.Error.Code == "unauthenticated" {
+		return "this sign-in has ended (a password change or a sign-out ends it): sign in again with olivares login, or pass a valid --token-file"
+	}
 	if json.Unmarshal(b, &env) == nil && strings.TrimSpace(env.Error.Message) != "" {
 		detail := strings.TrimSpace(env.Error.Message)
+		// A module this node does not run has a command the operator can run:
+		// the engine names the module (error.module), the CLI names the switch.
+		// The engine's sentence stays as it is.
+		if strings.TrimSpace(env.Error.Code) == "module_not_enabled" {
+			if remedy := moduleOffRemedy(strings.TrimSpace(env.Error.Module)); remedy != "" {
+				return detail + remedy
+			}
+		}
 		// EU-08: a message the engine wrote for a person is printed as it is; the status
 		// and code stay on the error (-o json), not in the sentence.
 		if isSentence(detail) {

@@ -5,6 +5,7 @@
 package api
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -52,7 +53,8 @@ func DecodeRequestBody(w http.ResponseWriter, r *http.Request, v any, spec Reque
 		maxBytes = maxBodyBytes
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, maxBytes)
-	dec := json.NewDecoder(r.Body)
+	var body bytes.Buffer
+	dec := json.NewDecoder(io.TeeReader(r.Body, &body))
 	if !spec.AllowUnknownFields {
 		dec.DisallowUnknownFields()
 	}
@@ -60,7 +62,7 @@ func DecodeRequestBody(w http.ResponseWriter, r *http.Request, v any, spec Reque
 		if spec.Optional && errors.Is(err, io.EOF) {
 			return nil
 		}
-		return err
+		return classifyRequestBodyError(err, body.Bytes(), v)
 	}
 	var extra json.RawMessage
 	switch err := dec.Decode(&extra); {

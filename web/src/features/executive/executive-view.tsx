@@ -34,14 +34,11 @@ import {
   AsyncSection,
   CaveatNotice,
   IntelPage,
-  SectionCard,
   StatGrid,
 } from '@/features/_intel'
-import { finopsApi, finopsKeys } from '@/features/finops/api'
-import type { SpendDimension } from '@/features/finops/types'
+import { PANEL_EXTENSIONS } from '@/features/extensions'
 import { modelsApi, modelsKeys } from '@/features/models/api'
 import { securityApi, securityKeys } from '@/features/security/api'
-import { redteamApi, redteamKeys } from '@/features/redteam/api'
 import { accessMapApi, accessMapKeys } from '@/features/access-map/api'
 import { complianceApi, complianceKeys } from '@/features/compliance/api'
 import { healthApi, healthKeys } from '@/features/health/api'
@@ -50,7 +47,6 @@ import { sessionsApi, sessionsKeys } from '@/features/sessions/api'
 import {
   currentAnswer,
   deriveCompliance,
-  deriveCost,
   deriveHealth,
   deriveRisk,
   deriveUsage,
@@ -60,8 +56,6 @@ import {
   KpiTiles,
   ReliabilitySection,
   RiskSection,
-  SpendBreakdownChart,
-  SpendSection,
 } from './components'
 import { ReportFooter, ReportHeader } from './report'
 import './i18n'
@@ -149,6 +143,10 @@ function sinceFor(rangeId: string): string {
   return new Date(Date.now() - days * 86_400_000).toISOString()
 }
 
+const useDashboardRedteam = PANEL_EXTENSIONS.useDashboardRedteam ?? (() => null)
+
+const useDashboardCost = PANEL_EXTENSIONS.useDashboardCost ?? (() => null)
+
 export function ExecutiveView() {
   const { t } = useTranslation(['executive', 'nav', 'common'])
   const { activeTenant, can } = useAuth()
@@ -160,35 +158,22 @@ export function ExecutiveView() {
   // module only where it runs (ARCH C1, EU18): a module that is off is never asked.
   const on = useModuleEnabled()
   const may = (permission: string) => can(permission) && on(permission)
-  const canFinops = may('finops:spend:read')
   const canModels = may('models:catalog:read')
   const canInventory = may('inventory:catalog:read')
   const canSessions = can('sessions:live:read')
   const canSecurity = may('security:finding:read')
-  const canRedteam = may('redteam:run:read')
+  const redteamPanel = useDashboardRedteam()
+  const canRedteam = !!redteamPanel?.permitted
+  const runsQ = redteamPanel?.query
   const canAccessMap = may('accessmap:graph:read')
-  const canCompliance = may('compliance:framework:read')
+  const canCompliance =
+    Boolean(PANEL_EXTENSIONS.complianceView) && may('compliance:framework:read')
   const canHealth = may('health:status:read')
 
   const canUsage = canInventory || canSessions
   const canRisk = canSecurity || canRedteam || canAccessMap
 
   // --- queries (only the permitted ones run) ---------------------------------
-  const costSummaryQ = useQuery({
-    queryKey: finopsKeys.summary(activeTenant, params),
-    queryFn: () => finopsApi.summary(params),
-    enabled: canFinops,
-  })
-  const costTrendQ = useQuery({
-    queryKey: finopsKeys.trend(activeTenant, params),
-    queryFn: () => finopsApi.trend(params),
-    enabled: canFinops,
-  })
-  const forecastQ = useQuery({
-    queryKey: finopsKeys.forecast(activeTenant, 'monthly'),
-    queryFn: () => finopsApi.forecast('monthly'),
-    enabled: canFinops,
-  })
   const modelsQ = useQuery({
     queryKey: modelsKeys.models(activeTenant),
     queryFn: () => modelsApi.models({ tenant: activeTenant }),
@@ -226,11 +211,6 @@ export function ExecutiveView() {
     queryKey: securityKeys.findings(activeTenant),
     queryFn: () => securityApi.findings(),
     enabled: canSecurity,
-  })
-  const runsQ = useQuery({
-    queryKey: redteamKeys.runs(activeTenant),
-    queryFn: () => redteamApi.runs(),
-    enabled: canRedteam,
   })
   const driftQ = useQuery({
     queryKey: accessMapKeys.drift(activeTenant),
@@ -291,14 +271,7 @@ export function ExecutiveView() {
   }, [canInventory, activeTenant, queryClient])
 
   // --- rollups (aggregate only; modules own the math) ------------------------
-  const cost = canFinops
-    ? deriveCost(
-        costSummaryQ.data,
-        costTrendQ.data,
-        forecastQ.data,
-        modelsQ.data,
-      )
-    : null
+  const costPanels = useDashboardCost(params, modelsQ.data)
   // Each usage half is handed in only as its CURRENT, permitted, successful answer:
   // a denied, pending or failed half comes back `null` from the rollup — never as an
   // empty page counted to 0 — and data a role may no longer read is not reused. The
@@ -367,7 +340,9 @@ export function ExecutiveView() {
       ].join(' ')
     : ''
   const risk = canRisk
-    ? deriveRisk(findingsQ.data, runsQ.data, driftQ.data)
+    ? redteamPanel
+      ? redteamPanel.deriveRisk(findingsQ.data, driftQ.data)
+      : deriveRisk(findingsQ.data, undefined, driftQ.data)
     : null
   const compliance = canCompliance
     ? deriveCompliance(complianceSummaryQ.data, complianceRiskQ.data)
@@ -377,20 +352,26 @@ export function ExecutiveView() {
   // permitted first (its data type varies, but the section reads none of it — it
   // re-derives from all three .data), so widen the result type to unknown.
   const riskPrimary = (
-    canSecurity ? findingsQ : canRedteam ? runsQ : driftQ
+    canSecurity ? findingsQ : canRedteam ? runsQ! : driftQ
   ) as Pick<
     UseQueryResult<unknown>,
     'data' | 'isLoading' | 'isError' | 'error' | 'refetch'
   >
 
   const anyPermitted =
-    canFinops || canModels || canUsage || canRisk || canCompliance || canHealth
+    costPanels?.permitted ||
+    canModels ||
+    canUsage ||
+    canRisk ||
+    canCompliance ||
+    canHealth
 
   // Headline loads as one block so tiles don't pop in one by one.
   const headlineLoading =
-    (canFinops && costSummaryQ.isLoading) ||
+    costPanels?.loading ||
     (canUsage && (inventoryQ.isLoading || sessionsQ.isLoading)) ||
-    (canRisk && (findingsQ.isLoading || runsQ.isLoading || driftQ.isLoading)) ||
+    (canRisk &&
+      (findingsQ.isLoading || runsQ?.isLoading || driftQ.isLoading)) ||
     (canCompliance && complianceSummaryQ.isLoading)
 
   const tenantLabel = activeTenant ?? t('report.allOrgs')
@@ -469,7 +450,7 @@ export function ExecutiveView() {
       ) : (
         <div className="animate-enter">
           <KpiTiles
-            cost={cost}
+            cost={costPanels?.headline}
             usage={usage}
             // One line per usage half that has no figure, naming the half and the
             // reason — restricted, could not load, paused, not started — beside the
@@ -569,29 +550,7 @@ export function ExecutiveView() {
         </div>
       )}
 
-      {/* cost */}
-      {canFinops ? (
-        <div className="animate-enter" style={{ animationDelay: '40ms' }}>
-          <AsyncSection query={costSummaryQ} skeletonHeight={320}>
-            {(summary) => (
-              <SpendSection
-                cost={deriveCost(
-                  summary,
-                  costTrendQ.data,
-                  forecastQ.data,
-                  modelsQ.data,
-                )!}
-              />
-            )}
-          </AsyncSection>
-        </div>
-      ) : null}
-
-      {canFinops ? (
-        <div className="animate-enter" style={{ animationDelay: '80ms' }}>
-          <SpendBreakdown tenant={activeTenant} params={params} />
-        </div>
-      ) : null}
+      {costPanels?.sections}
 
       {/* risk */}
       {canRisk ? (
@@ -599,7 +558,9 @@ export function ExecutiveView() {
           <AsyncSection query={riskPrimary} skeletonHeight={220}>
             {() => (
               <RiskSection
-                risk={deriveRisk(findingsQ.data, runsQ.data, driftQ.data)!}
+                risk={risk!}
+                robustness={redteamPanel?.panel}
+                description={redteamPanel?.description}
               />
             )}
           </AsyncSection>
@@ -638,56 +599,3 @@ export function ExecutiveView() {
 }
 
 // --- spend breakdown (org/team/project summary) — its own state + query -------
-
-const DIMENSIONS: SpendDimension[] = [
-  'team',
-  'project',
-  'agent',
-  'model',
-  'provider',
-]
-
-function SpendBreakdown({
-  tenant,
-  params,
-}: {
-  tenant: string | null
-  params: { since: string }
-}) {
-  const { t } = useTranslation('executive')
-  const [dimension, setDimension] = useState<SpendDimension>('team')
-  const spendQ = useQuery({
-    queryKey: finopsKeys.spend(tenant, dimension, params),
-    queryFn: () => finopsApi.spend(dimension, params),
-  })
-  return (
-    <SectionCard
-      title={t('cost.breakdownTitle')}
-      description={t('cost.breakdownDescription')}
-      actions={
-        <Select
-          value={dimension}
-          onValueChange={(v) => setDimension(v as SpendDimension)}
-        >
-          <SelectTrigger
-            className="w-40 print:hidden"
-            aria-label={t('cost.breakdownTitle')}
-          >
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {DIMENSIONS.map((d) => (
-              <SelectItem key={d} value={d}>
-                {t(`dimensions.${d}`)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      }
-    >
-      <AsyncSection query={spendQ} skeletonHeight={240}>
-        {(spend) => <SpendBreakdownChart spend={spend} />}
-      </AsyncSection>
-    </SectionCard>
-  )
-}

@@ -39,7 +39,7 @@ const (
 
 // validScopeTrees are the tree kinds a binding may bind to: the containment nodes
 // (workspace, agent-group folder) plus the subject axes (session, agent, user,
-// user_group, role). See ADR-0022 §1.
+// user_group, role). See source-scope contract.
 var validScopeTrees = map[string]bool{
 	scopeWorkspace: true, scopeAgentGroup: true, scopeFolder: true,
 	scopeSession: true, scopeAgent: true, scopeUser: true, scopeUserGroup: true, scopeRole: true,
@@ -116,7 +116,7 @@ func (d *bindingDTO) validate() string {
 	}
 	// Subject trees require a non-empty scope_ref (unlike workspace, whose empty ref
 	// means the default workspace). SHAPE-ONLY: no store lookup — an unknown subject never
-	// matches the actor at resolve (deny-closed), the pattern (ADR-0022 §1).
+	// matches the actor at resolve (deny-closed), the pattern.
 	if subjectTrees[d.ScopeTree] && d.ScopeRef == "" {
 		return "scope_ref is required for a " + d.ScopeTree + " binding"
 	}
@@ -259,7 +259,7 @@ func resolveScope(ctx context.Context, sc store.Scope, tree string, ref *string)
 		// Subject trees: SHAPE-ONLY, no store lookup. The auth subjects (user,
 		// directory group, role) are not reachable from this tenant store.Scope, and an
 		// unknown session/agent ref simply never matches the acting actor at resolve
-		// (deny-closed) — the subject pattern (ADR-0022 §1). No workspace id / path:
+		// (deny-closed) — the subject pattern. No workspace id / path:
 		// these carry no declaredScope and are decided by containment + row effect.
 		return model.ID(""), "", nil
 	default:
@@ -507,7 +507,7 @@ func (m *Module) handleUpdateBinding(w http.ResponseWriter, r *http.Request, mc 
 			return validationError(msg)
 		}
 		// F2: a RELAXING change is never applied by one actor — record a pending
-		// dual-control request instead (ADR-0022 §5). Tightening/neutral changes apply now.
+		// dual-control request instead. Tightening/neutral changes apply now.
 		otherAllows, err := countOtherEnabledAllows(r.Context(), sc, old.SourceType, old.SourceRef, id.String())
 		if err != nil {
 			return err
@@ -610,7 +610,7 @@ func (m *Module) handleDeleteBinding(w http.ResponseWriter, r *http.Request, mc 
 		}
 		snap := toBindingDTO(rec)
 		// F2: deleting a forbid, or the last enabled allow, RELAXES enforcement —
-		// route it through dual-control instead of applying it (ADR-0022 §5).
+		// route it through dual-control instead of applying it.
 		otherAllows, err := countOtherEnabledAllows(r.Context(), sc, snap.SourceType, snap.SourceRef, id.String())
 		if err != nil {
 			return err

@@ -42,6 +42,7 @@ import (
 	"log/slog"
 	"math/rand/v2"
 	"regexp"
+	"strings"
 	"sync"
 	"time"
 
@@ -49,6 +50,7 @@ import (
 	"github.com/olivaresai/olivares/core/internal/pgpin"
 	"github.com/olivaresai/olivares/core/internal/store/dialect"
 	"github.com/olivaresai/olivares/core/metrics"
+	"github.com/olivaresai/olivares/core/migrate"
 	"github.com/olivaresai/olivares/core/store"
 )
 
@@ -114,6 +116,7 @@ SELECT pg_catalog.count(*),
              (` + canonicalTakeArgsPredicate + `)
          AND p.prokind = 'f' AND p.provariadic = 0 AND p.pronargdefaults = 0
          AND NOT p.prosecdef
+         AND p.prosrc = $2
          AND p.proretset
          AND p.prorettype = 'pg_catalog.record'::pg_catalog.regtype
          AND p.prolang = (SELECT l.oid FROM pg_catalog.pg_language l WHERE l.lanname = 'plpgsql')
@@ -323,12 +326,6 @@ func ensureSchemaOn(ctx context.Context, ddlDSN string) error {
 	defer func() {
 		_, _ = conn.ExecContext(context.WithoutCancel(ctx), advisoryUnlockSQL, migrateLockKey)
 	}()
-	// Cluster infrastructure, not tenant data: no tenant_id, no RLS — the
-	// leader_epoch precedent. Bucket keys are metering identities
-	// (tn:<uuid>|class), never user data.
-	if _, err := conn.ExecContext(ctx, createBucketsTableSQL); err != nil {
-		return err
-	}
 	// Overload inventory, fail-closed, under the same advisory lock. CREATE OR
 	// REPLACE only replaces the identity with the SAME input types; a shadow
 	// overload — measured: one extra DEFAULT argument — survives the replace and
@@ -340,7 +337,13 @@ func ensureSchemaOn(ctx context.Context, ddlDSN string) error {
 	if err := preflightTakeFunction(ctx, conn); err != nil {
 		return err
 	}
-	if _, err := conn.ExecContext(ctx, takeFunctionSQL); err != nil {
+	// Schema and its version commit together on the connection holding the
+	// engine's migration lock. Existing buckets are adopted without rewriting rows.
+	dia, _ := dialect.New(store.EnginePostgres)
+	if err := migrate.Apply(ctx, conn, dia, "schema_migrations_ratelimit", []migrate.Migration{{
+		Version: 1, Name: "shared_buckets",
+		Stmts: []string{createBucketsTableSQL, takeFunctionSQL},
+	}}); err != nil {
 		return err
 	}
 	// Explicit, because CREATE OR REPLACE preserves a pre-existing identity's
@@ -430,7 +433,7 @@ func preflightTakeFunction(ctx context.Context, conn *sql.Conn) error {
 	return rows.Err()
 }
 
-// verifyTakeFunction is the post-flight: after the CREATE OR REPLACE and the
+// verifyTakeFunction is the per-boot post-flight: after schema migration and the
 // explicit grant, exactly one identity must exist and every attribute the runtime
 // depends on must hold — by catalog OID and attribute, not by rendered text.
 func verifyTakeFunction(ctx context.Context, conn *sql.Conn) error {
@@ -440,7 +443,7 @@ func verifyTakeFunction(ctx context.Context, conn *sql.Conn) error {
 		okACL    bool
 		diagnose string
 	)
-	err := conn.QueryRowContext(ctx, verifyTakeSQL, engineSchema).Scan(&count, &okShape, &okACL, &diagnose)
+	err := conn.QueryRowContext(ctx, verifyTakeSQL, engineSchema, strings.Split(takeFunctionSQL, "$fn$")[1]).Scan(&count, &okShape, &okACL, &diagnose)
 	if err != nil {
 		return fmt.Errorf("verify %s.olivares_ratelimit_take: %w", engineSchema, err)
 	}

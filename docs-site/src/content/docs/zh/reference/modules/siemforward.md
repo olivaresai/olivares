@@ -5,6 +5,8 @@ description: >-
   系统的原生格式（OCSF 1.8、CEF、LEEF、syslog 或 OTLP）通过持久化的事件平台进行投递，
   采用领导者门控的游标遍历与至少一次（at-least-once）交付。它只负责渲染与转发，绝不重新推导完整性。
 ---
+SIEM and ITSM push, OTLP downloads, external trace and metric delivery, and posture export require Business. Community keeps local observability, trace-context propagation, saved settings and `olivares dr backup`. Generic chat, email and webhook notifications remain available in Community.
+
 
 SIEM/ITSM 转发器（`modules/siemforward`）把引擎已经封存的证据，送入你的 SOC
 正在运行的系统中。它处于 **LIVE** 状态。它不拥有任何新证据：它遍历
@@ -39,7 +41,9 @@ Datadog Logs、New Relic，或通用的 HTTPS 采集器。引擎打开已封存�
 
 ## 有界上下文，直说
 
-- 它 **转发**，不存储。没有 sink 订阅的租户即为空操作：什么都不会入队，游标仍会前进，什么都不会丢失。
+- 它存储每个租户的游标；eventing 存储捕获的事件和投递记录。
+  没有接收端订阅时不会入队，但已启用的泵仍会推进游标。
+  新接收端不会补发游标已经经过的记录；原始账本仍可通过拉取导出获取。
 - 转发从游标遍历中运行，**在账本封存事务之外**——网络写入绝不会处于封存路径中。
 - 这是一次 **推送到你的系统（push to your tower）**，区别于只读的
   [态势导出（posture export）](/zh/reference/modules/posture-export/) 拉取。系统侧的摄取超出范围；

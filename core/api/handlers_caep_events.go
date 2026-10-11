@@ -23,14 +23,11 @@ import (
 // SSF subject identifier formats (email, iss_sub, opaque) are resolved by
 // re-decoding the sub_id field as caep.SubjectIdentifier so the email and
 // iss_sub-specific fields are not lost via the scim.SubjectID mapping.
-func (s *Server) caepReceiveEvents(w http.ResponseWriter, r *http.Request) {
+func (s *Server) caepReceiveEvents(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
 	// CAEP events are access-affecting, so they take user:write —
 	// the same permission as SCIM DELETE / deprovisioning.
-	p, tenant, aerr := s.scimAuthz(r, "user:write")
-	if aerr != nil {
-		writeSCIMError(w, *aerr)
-		return
-	}
+	p := mc.Principal
+	tenant := mc.Tenant
 
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxBodyBytes))
 	if err != nil {

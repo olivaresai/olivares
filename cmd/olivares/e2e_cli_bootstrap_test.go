@@ -218,10 +218,12 @@ func TestE2ECLIBootstrapReachesOperationalWithoutABrowser(t *testing.T) {
 		t.Fatalf("the tenant just created is not in `tenants ls`:\n%s", list)
 	}
 
-	// ── STEP 4 · create a USER ───────────────────────────────────────────────
+	// ── STEP 4 · create a USER with its first MEMBERSHIP atomically ───────────
+	// A separately created global account cannot be joined by an admin grant:
+	// joining an existing non-member requires the account holder's consent.
 	userOut := cli.mustRun(t, "users create", "e2e-member-password",
 		"users", "create", "--email", "member@e2e.test", "--display-name", "Member",
-		"--password-file", "-", "-o", "json")
+		"--password-file", "-", "--member-of", tenant.TenantID, "--role", "viewer", "-o", "json")
 	var user struct {
 		ID string `json:"id"`
 	}
@@ -229,9 +231,14 @@ func TestE2ECLIBootstrapReachesOperationalWithoutABrowser(t *testing.T) {
 		t.Fatalf("users create did not return a user id: %v\n%s", err, userOut)
 	}
 
-	// ── STEP 5 · give it a MEMBERSHIP in the new tenant ──────────────────────
-	cli.mustRun(t, "members grant", "",
-		"members", "grant", "--tenant", tenant.TenantID, "--user", user.ID, "--role", "admin")
+	// ── STEP 5 · update the existing MEMBERSHIP in the new tenant ────────────
+	grantOut := cli.mustRun(t, "members grant", "",
+		"members", "grant", "--tenant", tenant.TenantID, "--user", user.ID, "--role", "admin", "-o", "json")
+	var granted cliGrantedMembership
+	if err := json.Unmarshal([]byte(grantOut), &granted); err != nil ||
+		granted.ID == "" || granted.UserID != user.ID || granted.Tenant != tenant.TenantID || granted.Role != "admin" {
+		t.Fatalf("members grant did not update the membership: %v\n%s", err, grantOut)
+	}
 	roster := cli.mustRun(t, "members ls", "", "members", "ls", "--tenant", tenant.TenantID)
 	if !strings.Contains(roster, "member@e2e.test") {
 		t.Fatalf("the account just granted is not on the tenant roster:\n%s", roster)
@@ -263,6 +270,28 @@ func TestE2ECLIBootstrapReachesOperationalWithoutABrowser(t *testing.T) {
 		"tokens", "ls", "--server", base, "--token", issued.Token, "--tenant", tenant.TenantID)
 	if !strings.Contains(listed, "e2e-ci") {
 		t.Fatalf("the minted token cannot list its own tenant's tokens:\n%s", listed)
+	}
+	// The engine recorded those uses, so the listing says when the token was last
+	// used instead of "-".
+	listedJSON := cli.mustRun(t, "tokens ls -o json with the minted token", "",
+		"tokens", "ls", "--server", base, "--token", issued.Token, "--tenant", tenant.TenantID, "-o", "json")
+	var tokens struct {
+		Items []struct {
+			ID         string `json:"id"`
+			LastUsedAt string `json:"last_used_at"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal([]byte(listedJSON), &tokens); err != nil {
+		t.Fatalf("tokens ls -o json is not JSON: %v\n%s", err, listedJSON)
+	}
+	lastUsed := ""
+	for _, item := range tokens.Items {
+		if item.ID == issued.ID {
+			lastUsed = item.LastUsedAt
+		}
+	}
+	if lastUsed == "" {
+		t.Fatalf("tokens ls does not say when the minted token was last used:\n%s", listedJSON)
 	}
 
 	// ── CLOSING CONTROL · revoking it shuts the door again ───────────────────

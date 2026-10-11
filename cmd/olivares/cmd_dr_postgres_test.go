@@ -308,7 +308,7 @@ INSERT INTO orgs VALUES ('org-live-9','LIVE');`)
 		t.Fatal(err)
 	}
 
-	out, err := runDR("restore", "--engine", "postgres", "--dsn", live.dsn,
+	out, err := runDR(t, "restore", "--engine", "postgres", "--dsn", live.dsn,
 		"--data-dir", emptyDataDir, "--in", bundle)
 	if err == nil {
 		t.Fatalf("a Postgres restore over a LIVE database was accepted with no declaration:\n%s", out)
@@ -340,7 +340,7 @@ func TestDRRestoreIntoAnEmptyPostgresNeedsNoDeclaration(t *testing.T) {
 
 	t.Run("superuser fixture DSN: past the declaration, refused on authority", func(t *testing.T) {
 		fresh := newPGFixture(t, "clean")
-		_, err := runDR("restore", "--engine", "postgres", "--dsn", fresh.dsn,
+		_, err := runDR(t, "restore", "--engine", "postgres", "--dsn", fresh.dsn,
 			"--data-dir", t.TempDir(), "--in", bundle)
 		if err == nil {
 			t.Fatal("an invalid bundle was accepted")
@@ -355,7 +355,7 @@ func TestDRRestoreIntoAnEmptyPostgresNeedsNoDeclaration(t *testing.T) {
 
 	t.Run("least-privilege app role: reaches the bundle with no declaration", func(t *testing.T) {
 		fresh := newPGSplitFixture(t, "cleanlp", false)
-		_, err := runDR("restore", "--engine", "postgres", "--dsn", fresh.appDSN,
+		_, err := runDR(t, "restore", "--engine", "postgres", "--dsn", fresh.appDSN,
 			"--data-dir", t.TempDir(), "--in", bundle)
 		if err == nil {
 			t.Fatal("an invalid bundle was accepted")
@@ -413,7 +413,7 @@ CREATE FOREIGN TABLE s630_ft (id int) SERVER s630_srv OPTIONS (table_name 'elsew
 			if !strings.Contains(tc.ddl, "postgres_fdw") {
 				target.exec(t, tc.ddl)
 			}
-			_, err := runDR("restore", "--engine", "postgres", "--dsn", target.dsn,
+			_, err := runDR(t, "restore", "--engine", "postgres", "--dsn", target.dsn,
 				"--data-dir", t.TempDir(), "--in", bundle)
 			if err == nil {
 				t.Fatal("an invalid bundle was accepted")
@@ -440,7 +440,7 @@ func TestDRRestoreOverAnUnREADABLEPostgresRefusesWithoutADeclaration(t *testing.
 	// A DSN that resolves to nothing: the port is closed on purpose.
 	dead := "postgres://olivares:olivares@127.0.0.1:1/olivares?sslmode=disable&connect_timeout=2"
 
-	_, err := runDR("restore", "--engine", "postgres", "--dsn", dead,
+	_, err := runDR(t, "restore", "--engine", "postgres", "--dsn", dead,
 		"--data-dir", t.TempDir(), "--in", bundle)
 	if err == nil {
 		t.Fatal("a restore against an unreachable Postgres target was accepted")

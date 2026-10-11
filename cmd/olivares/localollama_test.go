@@ -90,7 +90,7 @@ func TestLocalOllamaRegistrationReadsTheEndpointsModels(t *testing.T) {
 	defer srv.Close()
 	h := newHarness(t)
 	// The harness wires no provider probe; boot always wires this one (boot.go).
-	h.set.sessions.UseProviderProbe(newProviderProbe())
+	sessions.WithProviderProbe(newProviderProbe())(h.set.sessions)
 	ctx := context.Background()
 	p, err := h.authr.Authenticate(ctx, h.adminToken)
 	if err != nil {

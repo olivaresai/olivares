@@ -5,6 +5,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 # Runbook — audit signing-key rotation
 
+Audit SIEM export, directory archives and external archive verification require Business. Community retains the signed ledger and `olivares audit verify`; `olivares dr backup` remains available. See [edition placement](../../docs/editions.md).
+
+> **Editions from 0.1:** CMEK ceremonies and sealed configuration loading require the Business build. Operator-provided signing keys (BYOK), off-box checkpoint signing (HYOK) and `keys status` remain Community. A Community binary refuses a configured CMEK installation before opening its store or creating keys. Use the Business build with the customer's key service for `dr backup` and `keys unseal`; no active license is required for recovery.
+
 **Severity:** planned maintenance, or **SEV1** on suspected key compromise.
 
 > **Read this first — the honest state.** The on-box audit signing key **can** be rotated

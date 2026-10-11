@@ -7,9 +7,11 @@ package main
 import (
 	"context"
 	"crypto/sha256"
+	"errors"
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -57,26 +59,51 @@ func bootForComposition(t *testing.T, dataDir string) *engine {
 }
 
 func TestBootWithoutActivationBindsRealCompositionAndKeepsK3Off(t *testing.T) {
+	for _, activation := range []string{"off", ""} {
+		t.Run("activation="+activation, func(t *testing.T) {
+			t.Setenv(envKeyWrap, "")
+			t.Setenv(envCommunicationActivation, activation)
+			t.Setenv(envCommunicationContentKeyringFile, "")
+			t.Setenv(envCommunicationCursorKeyringFile, "")
+			dir := t.TempDir()
+			if activation == "" {
+				_ = directoryStatusOfFile(t, filepath.Join(dir, "olivares.db"))
+			}
+			eng := bootForComposition(t, dir)
+			defer eng.Close() //nolint:errcheck
+			readiness, err := eng.sessionsMod.EvaluateCommunicationReadiness(context.Background())
+			if err != nil {
+				t.Fatalf("readiness: %v", err)
+			}
+			if eng.sessionsMod.CommunicationSessionCredentialsEnabled() || readiness.Effective ||
+				readiness.Components.PumpReady || !readiness.Components.ResolverReady || !readiness.Components.PermissionsReady {
+				t.Fatalf("activation-off readiness = %+v enabled=%t", readiness,
+					eng.sessionsMod.CommunicationSessionCredentialsEnabled())
+			}
+			if eng.communicationPump == nil || eng.communicationPump.communication != nil {
+				t.Fatal("activation-off boot did not register the pump without a K3 witness")
+			}
+			if eng.sessionsMod.CommunicationCursorTokenKeyringBound() {
+				t.Fatal("no cursor keyring was configured, yet one is bound")
+			}
+		})
+	}
+}
+
+func TestBootFreshDirectorySupportsCommunicationWithoutWriterUpgrade(t *testing.T) {
+	contentPath, cursorPath := writeCommunicationCustodyForTest(t)
 	t.Setenv(envKeyWrap, "")
-	t.Setenv(envCommunicationActivation, "")
-	t.Setenv(envCommunicationContentKeyringFile, "")
-	t.Setenv(envCommunicationCursorKeyringFile, "")
-	eng := bootForComposition(t, t.TempDir())
-	defer eng.Close() //nolint:errcheck
-	readiness, err := eng.sessionsMod.EvaluateCommunicationReadiness(context.Background())
-	if err != nil {
-		t.Fatalf("readiness: %v", err)
-	}
-	if eng.sessionsMod.CommunicationSessionCredentialsEnabled() || readiness.Effective ||
-		readiness.Components.PumpReady || !readiness.Components.ResolverReady || !readiness.Components.PermissionsReady {
-		t.Fatalf("activation-off readiness = %+v enabled=%t", readiness,
-			eng.sessionsMod.CommunicationSessionCredentialsEnabled())
-	}
-	if eng.communicationPump == nil || eng.communicationPump.communication != nil {
-		t.Fatal("activation-off boot did not register the pump without a K3 witness")
-	}
-	if eng.sessionsMod.CommunicationCursorTokenKeyringBound() {
-		t.Fatal("no cursor keyring was configured, yet one is bound")
+	t.Setenv(envCommunicationActivation, "on")
+	t.Setenv(envCommunicationContentKeyringFile, contentPath)
+	t.Setenv(envCommunicationCursorKeyringFile, cursorPath)
+	dir := t.TempDir()
+	for attempt := 0; attempt < 2; attempt++ {
+		eng := bootForComposition(t, dir)
+		readiness := mustCompositionReadiness(t, eng)
+		_ = eng.Close()
+		if !readiness.Effective {
+			t.Fatalf("boot %d readiness = %+v", attempt, readiness)
+		}
 	}
 }
 
@@ -314,6 +341,7 @@ func TestK1ApplyAndPublicDrainHoldK3OnEveryProductionPath(t *testing.T) {
 	t.Setenv(envCommunicationCursorKeyringFile, cursorPath)
 	ctx := context.Background()
 	dir := t.TempDir()
+	_ = directoryStatusOfFile(t, filepath.Join(dir, "olivares.db"))
 
 	// Requested ON, effective OFF: the store is not activated yet.
 	eng := bootForComposition(t, dir)
@@ -437,6 +465,7 @@ func TestStoppedPumpHoldsSubsequentK3ClaimsWithinTheSameTick(t *testing.T) {
 	t.Setenv(envCommunicationCursorKeyringFile, cursorPath)
 	ctx := context.Background()
 	dir := t.TempDir()
+	_ = directoryStatusOfFile(t, filepath.Join(dir, "olivares.db"))
 
 	eng := bootForComposition(t, dir)
 	if err := eng.Close(); err != nil {
@@ -454,11 +483,11 @@ func TestStoppedPumpHoldsSubsequentK3ClaimsWithinTheSameTick(t *testing.T) {
 	item := applyCompositionCreate(t, eng, tenant, principal, workspace, owner, "stop mid-tick")
 	k1 := insertOutboxEvent(t, eng.store, tenant, workspace, item.ResultID, 2, "work.item.transitioned")
 	k3 := insertOutboxEvent(t, eng.store, tenant, workspace, item.ResultID, 3, "work.handoff.offered")
-	eng.sessionsMod.UseWorkEventSink(stoppingWorkSink{inner: eng.workSink, after: func(event sessions.WorkEventEnvelope) {
+	sessions.WithWorkEventSink(stoppingWorkSink{inner: eng.workSink, after: func(event sessions.WorkEventEnvelope) {
 		if event.EventID == k1 {
 			eng.communicationPump.stop()
 		}
-	}})
+	}})(eng.sessionsMod)
 	if err := eng.communicationPump.runOnce(ctx); err != nil {
 		t.Fatalf("pump tick: %v", err)
 	}
@@ -680,6 +709,7 @@ func TestBootActivationBecomesEffectiveOnlyAfterExplicitWriterActivation(t *test
 	t.Setenv(envCommunicationCursorKeyringFile, cursorPath)
 	ctx := context.Background()
 	dir := t.TempDir()
+	_ = directoryStatusOfFile(t, filepath.Join(dir, "olivares.db"))
 
 	eng := bootForComposition(t, dir)
 	readiness, err := eng.sessionsMod.EvaluateCommunicationReadiness(ctx)
@@ -702,7 +732,7 @@ func TestBootActivationBecomesEffectiveOnlyAfterExplicitWriterActivation(t *test
 		t.Fatal(err)
 	}
 
-	// Explicit operator ceremony, then reopen: the only path to StoreReady.
+	// Existing estates require the explicit operator ceremony and reopen.
 	if out, err := runDB(t, "activate-directory-writer", "--data-dir", dir, "--expected-generation", "1",
 		"--actor", "acceptance", "--reason", "serve stopped for activation", "--writers-upgraded", "--writers-drained"); err != nil {
 		t.Fatalf("activation ceremony: %v\n%s", err, out)
@@ -830,5 +860,71 @@ func TestBootActivationBecomesEffectiveOnlyAfterExplicitWriterActivation(t *test
 	}
 	if n := eventingCaptureCount(t, eng.store, tenant, k3Off); n != 0 {
 		t.Fatalf("captures for held K3 event = %d, want 0", n)
+	}
+}
+
+func TestBootFreshDirectoryPreservesModuleDefaultsBeforeGenesis(t *testing.T) {
+	t.Setenv(auditSpoolMaxBytesEnv, "1")
+	cfg := bootConfig{DataDir: t.TempDir(), Engine: "sqlite", Version: version, Logger: discardLogger(), ApplyModuleProfile: true}
+	eng, err := boot(t.Context(), cfg)
+	if eng != nil {
+		_ = eng.Close()
+	}
+	if !errors.Is(err, store.ErrAuditSpoolFull) {
+		t.Fatalf("genesis error = %v", err)
+	}
+	doc, found, err := loadNodeModuleDocument(cfg.DataDir)
+	if err != nil || !found || !doc.ImportPending || !slices.Equal(doc.Selected, standardModuleSelection()) {
+		t.Fatalf("module selection before failed genesis = %+v, found=%t, err=%v", doc, found, err)
+	}
+	t.Setenv(auditSpoolMaxBytesEnv, "")
+	eng = reconcileModuleUpgradeEngine(t, cfg, startModuleUpgradeEngine(t, cfg))
+	if got := recordedSelection(t, newProductSettings(eng.store, eng.dataDir)); !slices.Equal(got, standardModuleSelection()) {
+		t.Fatalf("retried fresh store selection = %v, want standard defaults", got)
+	}
+}
+
+func TestBootFreshCommunicationDefaultsPersistAcrossRestart(t *testing.T) {
+	t.Setenv(envKeyWrap, "")
+	t.Setenv(envCommunicationActivation, "")
+	t.Setenv(envCommunicationContentKeyringFile, "")
+	t.Setenv(envCommunicationCursorKeyringFile, "")
+	dir := t.TempDir()
+	var custody [2][32]byte
+	paths := []string{filepath.Join(dir, "communication-content-keyring.json"), filepath.Join(dir, "communication-cursor-keyring.json")}
+	for attempt := 0; attempt < 2; attempt++ {
+		eng := bootForComposition(t, dir)
+		readiness := mustCompositionReadiness(t, eng)
+		_ = eng.Close()
+		if !readiness.Effective {
+			t.Fatalf("default boot %d readiness = %+v", attempt, readiness)
+		}
+		for i, path := range paths {
+			raw, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			info, err := os.Stat(path)
+			if err != nil || info.Mode().Perm() != 0o600 {
+				t.Fatalf("custody file permissions: %v", err)
+			}
+			digest := sha256.Sum256(raw)
+			if attempt == 0 {
+				custody[i] = digest
+			} else if digest != custody[i] {
+				t.Fatal("restart replaced communication custody")
+			}
+		}
+	}
+	if err := os.Remove(paths[0]); err != nil {
+		t.Fatal(err)
+	}
+	eng := bootForComposition(t, dir)
+	defer eng.Close()
+	if mustCompositionReadiness(t, eng).Effective {
+		t.Fatal("lost custody remained effective")
+	}
+	if _, err := os.Stat(paths[0]); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("lost custody was reminted: %v", err)
 	}
 }

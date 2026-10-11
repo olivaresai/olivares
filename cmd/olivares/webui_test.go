@@ -75,6 +75,23 @@ func TestSPA_ManagedMCPRoutesReachProtocolAdmission(t *testing.T) {
 	}
 }
 
+// A session's browser preview is the engine's to authorize by its token, never
+// the SPA's to answer with the console shell; the console may frame only itself.
+func TestSPA_SessionPreviewReachesTheEngine(t *testing.T) {
+	h := newSPAHandler(sentinelAPI(), testWebFS())
+	for _, method := range []string{http.MethodGet, http.MethodPost, http.MethodOptions} {
+		for _, path := range []string{api.SessionPreviewPathPrefix + "tok/", api.SessionPreviewPathPrefix + "tok/assets/app.js"} {
+			if rr := do(h, method, path); rr.Header().Get("X-Handler") != "api" {
+				t.Errorf("%s %s reached the SPA with status %d", method, path, rr.Code)
+			}
+		}
+	}
+	csp := buildCSP("TESTNONCE")
+	if !strings.Contains(csp, "frame-src 'self'") || !strings.Contains(csp, "frame-ancestors 'none'") {
+		t.Errorf("console CSP must frame only its own origin and never be framed: %q", csp)
+	}
+}
+
 var nonceRe = regexp.MustCompile(`script-src 'nonce-([^']+)' 'strict-dynamic'`)
 
 func cspNonce(csp string) string {

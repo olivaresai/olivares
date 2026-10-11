@@ -16,6 +16,7 @@ import (
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 	"github.com/olivaresai/olivares/modules/sessions"
+	"github.com/olivaresai/olivares/modules/sessions/hookpep"
 	"github.com/olivaresai/olivares/sdk"
 	sdkmodel "github.com/olivaresai/olivares/sdk/model"
 )
@@ -92,7 +93,7 @@ func (d *grokHookDecider) Decide(ctx context.Context, req session.Request, beare
 
 	// Autorización en TODA petición, con pista o sin ella. La forma de saltarse la
 	// autorización no puede ser mandar NADA.
-	if tier != tierFirm {
+	if tier != hookpep.TierFirm {
 		return grokDeny("no authenticated principal on a governed hook call (deny-closed)", ""), nil
 	}
 	// staticcheck QF1001 propone De Morgan aquí. NO se aplica, y la razón es de seguridad, no de
@@ -158,14 +159,14 @@ func (d *grokHookDecider) resolveSID(ctx context.Context, req session.Request, n
 
 func (d *grokHookDecider) principalOf(ctx context.Context, bearer string) (auth.Principal, actorRef, string) {
 	if d.authr == nil || strings.TrimSpace(bearer) == "" {
-		return auth.Principal{}, actorRef{}, tierUnknown
+		return auth.Principal{}, actorRef{}, hookpep.TierUnknown
 	}
 	p, err := d.authr.Authenticate(ctx, bearer)
 	if err != nil || p.IsPurposeRestricted() {
-		return auth.Principal{}, actorRef{}, tierUnknown
+		return auth.Principal{}, actorRef{}, hookpep.TierUnknown
 	}
 	actor, kind := codexActorOf(p)
-	return p, actorRef{name: actor, kind: kind}, tierFirm
+	return p, actorRef{name: actor, kind: kind}, hookpep.TierFirm
 }
 
 // pdpForbidsGrok consulta el MISMO PDP compuesto que usa el resto del plano, bajo la capacidad de

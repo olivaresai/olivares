@@ -4,9 +4,20 @@
 import { describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { Button } from './button'
+import { Button, buttonVariants } from './button'
 
 describe('Button', () => {
+  it('offers the canonical danger and icon variants and md size without breaking aliases', () => {
+    expect(buttonVariants({ variant: 'danger' })).toBe(
+      buttonVariants({ variant: 'destructive' }),
+    )
+    expect(buttonVariants({ variant: 'icon', size: 'icon' })).toContain(
+      'bg-transparent',
+    )
+    expect(buttonVariants({ size: 'md' })).toBe(
+      buttonVariants({ size: 'base' }),
+    )
+  })
   it('renders its label as a button', () => {
     render(<Button>Save</Button>)
     expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument()

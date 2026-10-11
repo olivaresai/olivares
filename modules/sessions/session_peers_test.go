@@ -124,7 +124,7 @@ func newSessionPeersFixture(t *testing.T, templated bool) (*orchestrationFixture
 	}
 	// These module-level process doubles need no provider conversation frame;
 	// canonical session identity and liveness still come from the real runtime.
-	f.h.m.rt.runner.(*fakeRunner).initSID = ""
+	f.h.m.rt.Runner.(*fakeRunner).initSID = ""
 	templateID := ""
 	if templated {
 		tpl := f.h.doJSON("POST", "/v1/m/sessions/templates", f.admin, map[string]any{"name": "Peer cohort", "body": map[string]any{}}, tenantHdr(f.tenant))

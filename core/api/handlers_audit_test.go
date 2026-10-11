@@ -252,7 +252,7 @@ func TestAuditUnfilteredListKeepsLegacyEnvelope(t *testing.T) {
 	}
 }
 
-func TestAuditRejectsInvalidFilterAndExportBounds(t *testing.T) {
+func TestAuditRejectsInvalidFilterBounds(t *testing.T) {
 	h := newHarness(t)
 	admin := h.adminLogin()
 	tenant := h.createOrg(admin, "audit-validation")
@@ -267,9 +267,6 @@ func TestAuditRejectsInvalidFilterAndExportBounds(t *testing.T) {
 			path: "/v1/audit?since=2026-07-24T00%3A00%3A00Z" +
 				"&until=2026-07-23T23%3A59%3A59Z",
 		},
-		{name: "export to before from", path: "/v1/audit/export?from=10&to=9"},
-		{name: "export malformed to", path: "/v1/audit/export?to=not-a-sequence"},
-		{name: "export bad until", path: "/v1/audit/export?until=not-a-time"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -278,60 +275,6 @@ func TestAuditRejectsInvalidFilterAndExportBounds(t *testing.T) {
 				t.Fatalf("%s = %d %s, want 400", tt.path, r.code, r.raw)
 			}
 		})
-	}
-}
-
-func TestAuditExportHonorsRangeFiltersAndTerminator(t *testing.T) {
-	h := newHarness(t)
-	admin := h.adminLogin()
-	tenant := h.createOrg(admin, "audit-export")
-	events := appendAuditDrafts(t, h, tenant,
-		model.AuditDraft{Actor: "export-actor", Action: "export.keep.one"},
-		model.AuditDraft{Actor: "export-other", Action: "export.drop.two"},
-		model.AuditDraft{Actor: "export-actor", Action: "export.keep.three"},
-	)
-	query := url.Values{
-		"format": {"cef"},
-		"from":   {strconv.FormatInt(events[0].Seq, 10)},
-		"to":     {strconv.FormatInt(events[1].Seq, 10)},
-		"actor":  {"export-actor"},
-	}
-	r := h.do("GET", "/v1/audit/export?"+query.Encode(), admin, nil, tenantHdr(tenant))
-	if r.code != http.StatusOK {
-		t.Fatalf("export = %d %s", r.code, r.raw)
-	}
-	if !strings.Contains(r.raw, events[0].Action) {
-		t.Fatalf("export omitted matching in-range event: %s", r.raw)
-	}
-	if strings.Contains(r.raw, events[1].Action) {
-		t.Fatalf("export included non-matching actor: %s", r.raw)
-	}
-	if strings.Contains(r.raw, events[2].Action) {
-		t.Fatalf("export crossed inclusive to bound: %s", r.raw)
-	}
-	terminator := "# olivares-audit-export-complete count=1 last_seq=" +
-		strconv.FormatInt(events[0].Seq, 10) + "\n"
-	if !strings.HasSuffix(r.raw, terminator) {
-		t.Fatalf("export terminator = %q, want suffix %q", r.raw, terminator)
-	}
-
-	selfAudits := canonicalAuditEventsFrom(t, h, tenant, events[2].Seq+1)
-	if len(selfAudits) != 1 || selfAudits[0].event.Action != "audit.export" {
-		t.Fatalf("export self-audits = %#v, want one audit.export", selfAudits)
-	}
-	meta := selfAudits[0].meta
-	if meta["format"] != "cef" {
-		t.Fatalf("export audit format meta = %#v", meta["format"])
-	}
-	if got := jsonNumberInt64(t, meta["from"]); got != events[0].Seq {
-		t.Fatalf("export audit from meta = %d, want %d", got, events[0].Seq)
-	}
-	if got := jsonNumberInt64(t, meta["to"]); got != events[1].Seq {
-		t.Fatalf("export audit to meta = %d, want %d", got, events[1].Seq)
-	}
-	filters, ok := meta["filters"].(map[string]any)
-	if !ok || filters["actor"] != "export-actor" {
-		t.Fatalf("export audit filter meta = %#v", meta["filters"])
 	}
 }
 
@@ -378,7 +321,7 @@ func TestAuditFilteredRoutesKeepRBACGuards(t *testing.T) {
 	if r := h.do("GET", "/v1/audit?action=agent.", viewer, nil, nil); r.code != http.StatusOK {
 		t.Fatalf("viewer filtered tenant audit = %d %s", r.code, r.raw)
 	}
-	if r := h.do("GET", "/v1/audit/export?action=agent.", viewer, nil, nil); r.code != http.StatusOK {
+	if r := h.do("GET", "/v1/audit/export?action=agent.", viewer, nil, nil); r.code != auditExportStatus {
 		t.Fatalf("viewer filtered tenant export = %d %s", r.code, r.raw)
 	}
 	if r := h.do("GET", "/v1/audit?action=agent.", "", nil, tenantHdr(tenant)); r.code != http.StatusUnauthorized {

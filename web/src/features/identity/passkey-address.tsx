@@ -152,14 +152,8 @@ function isRelyingPartyDomain(hostname: string): boolean {
     // punycode prefix, and a label that is not punycode may not use it.
     if (label.slice(2, 4) === '--' && !label.startsWith('xn--')) return false
   }
-  // THE DOT TEST IS ON THE UNTRIMMED HOST, and that is not a detail: the
-  // installed verifier's rule for a non-IP is
-  // `value != "localhost" && !strings.Contains(rpid.Path, ".")`, so the ROOT DOT
-  // satisfies it and "olivares." is a relying party where "olivares" is not.
-  // Testing the trimmed form made this console disagree with its own engine on
-  // exactly that host — found by an independent review, which the golden table
-  // could not catch because it had no such row.
-  return host === 'localhost' || host.includes('.')
+  // The verifier sees the RP ID after one DNS root dot is removed.
+  return probe === 'localhost' || probe.includes('.')
 }
 
 /**

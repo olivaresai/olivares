@@ -35,15 +35,17 @@ import {
   type AuthZenEntityResult,
   type AuthZenSearchResponse,
 } from './api'
+import { EffectiveRightsPanel } from './effective-rights-panel'
 import { FormError } from './roles-shared'
 import { StaticTable } from '@/components/data/static-table'
 
 // --- main section ---------------------------------------------------------------
 
 /**
- * AccessReviewSection exposes subject-search, resource-search, and sealed
- * access-review export. The permission gate is authz:read for searches and
- * authz:admin for the export tab (which also requires a hardware-bound step-up).
+ * AccessReviewSection exposes subject-search, resource-search, the effective-rights
+ * "why" read and sealed access-review export. The permission gate is authz:read for
+ * searches and authz:admin for the why and export tabs (export also requires a
+ * hardware-bound step-up).
  */
 export function AccessReviewSection() {
   const { t } = useTranslation('console')
@@ -91,6 +93,11 @@ export function AccessReviewSection() {
             {t('granular.accessReview.searchResource')}
           </TabsTrigger>
           {canAdmin && (
+            <TabsTrigger value="why">
+              {t('granular.accessReview.why.tab')}
+            </TabsTrigger>
+          )}
+          {canAdmin && (
             <TabsTrigger value="export">
               {t('granular.accessReview.export')}
             </TabsTrigger>
@@ -104,6 +111,12 @@ export function AccessReviewSection() {
         <TabsContent value="resource" className="pt-4">
           <ResourceSearchPanel />
         </TabsContent>
+
+        {canAdmin && (
+          <TabsContent value="why" className="pt-4">
+            <EffectiveRightsPanel />
+          </TabsContent>
+        )}
 
         {canAdmin && (
           <TabsContent value="export" className="pt-4">

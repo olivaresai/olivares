@@ -8,7 +8,7 @@ set -euo pipefail
 root="${OLIVARES_ROOT:-$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)}"
 for tool in bash grep python3; do
 	command -v "$tool" >/dev/null 2>&1 || {
-		printf 'package publish contract: NO HE PODIDO MIRAR — missing %s\n' "$tool" >&2
+		printf 'package publish contract: COULD NOT CHECK — missing %s\n' "$tool" >&2
 		exit 2
 	}
 done
@@ -64,7 +64,6 @@ dnf_template = read("packaging/repositories/dnf-repo.template")
 s3_driver = read("scripts/test-rpm-repository.sh")
 fedora_44 = "registry.fedoraproject.org/fedora@sha256:539cadb5d8a43564d8abefd6eafdfcbcd4809070efbb900ec248229903db5911"
 taskfile = read("Taskfile.yml")
-hook = read(".githooks/pre-push")
 mainline = read(".github/workflows/mainline-ci.yml")
 
 descriptor = json.loads(read("packaging/repositories/production-key-descriptor.json"))
@@ -214,7 +213,6 @@ for token in ("require_s3_rpm", "unsigned rpm render, not S3's signed tree", "ol
 
 for target in ("lint:package-publish", "lint:package-publish:selftest"):
     assert f"  {target}:" in taskfile
-    assert f"task {target}" in hook
     assert f"run: task {target}" in mainline
 
 for document in (
@@ -222,7 +220,7 @@ for document in (
     read("docs/RELEASE-INSTALLER.md"),
     read("docs-site/src/content/docs/how-to/install-from-packages.md"),
 ):
-    assert "DIST-24-06 proposed repositories" in document
+    assert "Proposed package repositories" in document
     assert "No package-repository URL is live" in document
 PY
 

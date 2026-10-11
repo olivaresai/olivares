@@ -33,7 +33,7 @@ export LC_ALL=C
 _olivares_git_env="$(cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")" && pwd)/lib/git-env.sh"
 # shellcheck source=/dev/null
 . "$_olivares_git_env" || {
-	echo "$(basename "$0"): FATAL: no puedo cargar $_olivares_git_env (aislamiento git-env)" >&2
+	echo "$(basename "$0"): FATAL: cannot load $_olivares_git_env (git-env isolation)" >&2
 	exit 2
 }
 unset _olivares_git_env
@@ -55,7 +55,7 @@ check() {
 	ran=$((ran + 1))
 	out="$(bash "$GATE" "$file" 2>&1)"; rc=$?
 	if [ "$rc" != "$want" ]; then
-		echo "  ✗ $name: rc=$rc, esperado $want"; echo "$out" | sed 's/^/      /'
+		echo "  ✗ $name: rc=$rc, expected $want"; echo "$out" | sed 's/^/      /'
 		fail=$((fail + 1)); return
 	fi
 	# The message is checked too, so a case cannot pass by failing for another reason.
@@ -66,8 +66,8 @@ check() {
 	# forma intermitente y sólo con salidas grandes. Lo cobra `lint:sigpipe-booleans`, y me lo
 	# cobró: esta batería subía la deuda de 0 a 2. `case` sobre la variable no abre tubería.
 	if [ -n "$needle" ] && case "$out" in *"$needle"*) false ;; *) true ;; esac; then
-		echo "  ✗ $name: rc correcto ($rc) pero el mensaje no menciona «$needle» — la guarda que"
-		echo "     este caso ejerce puede no haberse ejecutado."
+		echo "  ✗ $name: correct rc ($rc) but the message does not mention «$needle» — the guard"
+		echo "     exercised by this case may not have run."
 		echo "$out" | sed 's/^/      /'
 		fail=$((fail + 1)); return
 	fi
@@ -86,43 +86,69 @@ clean="$WORK/clean.bin"
 	printf 'some/other/package/path\n'
 } > "$clean"
 
-echo "SINTÉTICOS"
-check "control positivo: los OCHO literales permitidos y nada más" 0 "OK" "$clean"
+echo "SYNTHETIC"
+check "positive control: all EIGHT allowed literals and nothing else" 0 "OK" "$clean"
+
+# These are present in the unmodified Community binary: the packed public-suffix
+# data/text from golang.org/x/net and the embedded core/modulespec/modules.json.
+suffix='from-callyfrom-cockpitrentin-suedtirol'
+package='"package": "sessioncockpit"'
+constructor='"constructor": "sessioncockpit.NewPlaceholder()"'
+outside_allowlist='OUTSIDE THE ALLOWLIST'
+for literal in "$suffix" "$package" "$constructor"; do
+	mut="$WORK/metadata.bin"; cp "$clean" "$mut"; printf '%s\n' "$literal" >> "$mut"
+	check "public dependency or placeholder metadata: $literal" 0 "OK" "$mut"
+done
+
+# A similar name is not a public-suffix table window or placeholder metadata.
+for literal in 'from-cockpit-provider' '"package": "sessioncockpit.Agent"' '"constructor": "sessioncockpit.NewEngine()"'; do
+	mut="$WORK/near-miss.bin"; cp "$clean" "$mut"; printf '%s\n' "$literal" >> "$mut"
+	check "non-placeholder near miss: $literal" 1 "$outside_allowlist" "$mut"
+done
+
+# Exempt text packed alongside a private literal must not hide the private marker.
+for literal in '/v1/m/session-cockpit/input-sessions' 'olivares.cockpit.agent.v1.InputFrame' \
+	'cockpit_agent.proto' 'SessionCockpitAgentClient' '@xterm/xterm' \
+	'enterprise/sessioncockpit.Placeholder' 'session-cockpit.js' 'cockpit-provider-mark'; do
+	mut="$WORK/metadata-private.bin"; cp "$clean" "$mut"
+	printf '%s%s%s%s\n' "$suffix" "$package" "$constructor" "$literal" >> "$mut"
+	check "public metadata cannot hide a private literal: $literal" 1 "$outside_allowlist" "$mut"
+done
 
 mut="$WORK/route.bin"; cp "$clean" "$mut"; printf '/v1/m/session-cockpit/input-sessions\n' >> "$mut"
-check "ruta privada completa → rojo" 1 "FUERA DE LA ALLOWLIST" "$mut"
+check "complete private route → red" 1 "OUTSIDE THE ALLOWLIST" "$mut"
 
 mut="$WORK/proto.bin"; cp "$clean" "$mut"; printf 'olivares.cockpit.agent.v1.InputFrame\n' >> "$mut"
-check "nombre del proto → rojo" 1 "FUERA DE LA ALLOWLIST" "$mut"
+check "proto name → red" 1 "OUTSIDE THE ALLOWLIST" "$mut"
 
 mut="$WORK/xterm.bin"; cp "$clean" "$mut"; printf '@xterm/xterm\n' >> "$mut"
-check "chunk de xterm → rojo" 1 "FUERA DE LA ALLOWLIST" "$mut"
+check "xterm chunk → red" 1 "OUTSIDE THE ALLOWLIST" "$mut"
 
 mut="$WORK/symbol.bin"; cp "$clean" "$mut"; printf 'enterprise/sessioncockpit/input.(*AuthorizedInputSink).Write\n' >> "$mut"
-check "símbolo del engine privado → rojo" 1 "FUERA DE LA ALLOWLIST" "$mut"
+check "private engine symbol → red" 1 "OUTSIDE THE ALLOWLIST" "$mut"
 
 mut="$WORK/rename.bin"; cp "$clean" "$mut"; printf 'SessionCockpitAgentClient\n' >> "$mut"
-check "renombrado del servicio → rojo (una denylist de nombres no lo vería)" 1 "FUERA DE LA ALLOWLIST" "$mut"
+check "service rename → red (a name denylist would miss it)" 1 "OUTSIDE THE ALLOWLIST" "$mut"
 
 # ⛔ LOS DOS SIGUIENTES LOS ENCONTRÓ EL CONTRASTE ADVERSARIAL (Codex sol, 2026-09-02), no yo,
 # y por eso viven aquí: un hallazgo que sólo se arregla vuelve; uno que además se fija en el
 # banco no. Los dos eran FALSOS VERDES — la clase silenciosa.
 mut="$WORK/chunk.bin"; cp "$clean" "$mut"; printf 'session-cockpit.js\n' >> "$mut"
-check "chunk privado 'session-cockpit.js' → rojo (el '.' no puede borrar el marcador)" 1 "FUERA DE LA ALLOWLIST" "$mut"
+check "private chunk 'session-cockpit.js' → red ('.' cannot erase the marker)" 1 "OUTSIDE THE ALLOWLIST" "$mut"
 
 mut="$WORK/exempt-cross.bin"; cp "$clean" "$mut"
 printf 'github.com/olivaresai/olivares/modules/sessioncockpit/github.com/olivaresai/olivares/enterprise/sessioncockpit/input.Write\n' >> "$mut"
-check "exención del placeholder que cruza a enterprise/ → rojo" 1 "FUERA DE LA ALLOWLIST" "$mut"
+check "placeholder exemption crossing into enterprise/ → red" 1 "OUTSIDE THE ALLOWLIST" "$mut"
 
 # ⛔ LOS TRES SIGUIENTES SON LOS FALSOS VERDES QUE EL CONTRASTE ADVERSARIAL PRODUJO
 # CONTRA LA VERSIÓN ANTERIOR, con sus cadenas exactas. Dos se curaron; el tercero es un
 # LÍMITE y se fija COMO límite, porque un gate que esconde su punto ciego es peor que uno
 # que no lo tiene.
 mut="$WORK/exempt-tail.bin"; cp "$clean" "$mut"; printf 'enterprise/sessioncockpit.Placeholder\n' >> "$mut"
-check "exención sin anclar tragaba enterprise/…Placeholder → rojo" 1 "FUERA DE LA ALLOWLIST" "$mut"
+check "unanchored exemption accepted enterprise/…Placeholder → red" 1 "OUTSIDE THE ALLOWLIST" "$mut"
 
 mut="$WORK/sep-unknown.bin"; cp "$clean" "$mut"; printf 'session-cockpit?input-sessions\n' >> "$mut"
-check "separador no enumerado ('?') → rojo por la pasada de formas prohibidas" 1 "FUERA DE LA ALLOWLIST" "$mut"
+check "unlisted separator ('?') → red from the forbidden-shapes pass" 1 "OUTSIDE THE ALLOWLIST" "$mut"
 
 # EL PUNTO CIEGO, declarado y ejercido. `session-cockpitInput` es lo que produce TANTO un
 # símbolo privado con ese nombre COMO el literal permitido pegado a un `Input…` ajeno en
@@ -131,7 +157,7 @@ check "separador no enumerado ('?') → rojo por la pasada de formas prohibidas"
 # salida del banco y no una creencia; si algún día se cierra, este caso se pone rojo y
 # quien lo cierre lo verá aquí.
 mut="$WORK/blind.bin"; cp "$clean" "$mut"; printf 'session-cockpitInput\n' >> "$mut"
-check "PUNTO CIEGO declarado: adyacencia empaquetada indistinguible → verde" 0 "OK" "$mut"
+check "declared BLIND SPOT: indistinguishable packed adjacency → green" 0 "OK" "$mut"
 
 # The positive control of the gate itself: a binary that never carried the placeholder
 # must NOT be reported clean.
@@ -141,9 +167,9 @@ check "PUNTO CIEGO declarado: adyacencia empaquetada indistinguible → verde" 0
 # the MISSING-REQUIRED finding it exists to exercise. It had the right rc for the wrong
 # reason — which is exactly why every red case here is checked by its message too.
 empty="$WORK/nothing.bin"; printf 'a binary with no such surface at all\navailability\n' > "$empty"
-check "binario sin placeholder → rojo, no verde" 1 "FALTA" "$empty"
+check "binary without placeholder → red, not green" 1 "MISSING" "$empty"
 
-check "binario ilegible → 2, nunca 0" 2 "COULD NOT LOOK" "$WORK/does-not-exist.bin"
+check "unreadable binary → 2, never 0" 2 "COULD NOT LOOK" "$WORK/does-not-exist.bin"
 
 # An empty allowlist must refuse rather than call everything clean.
 #
@@ -157,15 +183,15 @@ tmp_allow="$WORK/allow-empty"; printf '# only a comment\n' > "$tmp_allow"
 out="$(OLIVARES_COCKPIT_ALLOWLIST="$tmp_allow" bash "$GATE" "$clean" 2>&1)"; rc=$?
 # Misma razón que arriba: `case` en vez de tubería, para que un acierto no pueda salir 141.
 if [ "$rc" = 2 ] && case "$out" in *"ZERO literals"*) true ;; *) false ;; esac; then
-	echo "  ✓ allowlist vacía → 2 (no llama limpio a nadie)"; pass=$((pass + 1))
+	echo "  ✓ empty allowlist → 2 (does not report anything as clean)"; pass=$((pass + 1))
 else
-	echo "  ✗ allowlist vacía: rc=$rc"; echo "$out" | sed 's/^/      /'; fail=$((fail + 1))
+	echo "  ✗ empty allowlist: rc=$rc"; echo "$out" | sed 's/^/      /'; fail=$((fail + 1))
 fi
 
 if [ "${OLIVARES_COCKPIT_STRINGS_REAL:-1}" = "1" ]; then
-	echo "REAL (build de community + mutación del binario)"
+	echo "REAL (community build + binary mutation)"
 	if ! command -v go >/dev/null 2>&1; then
-		echo "  ! sin toolchain Go: los casos reales NO se ejecutaron (esto NO es un verde)"
+		echo "  ! no Go toolchain: real cases did NOT run (this is NOT a pass)"
 		fail=$((fail + 1))
 	else
 		bin="$WORK/olivares-community"
@@ -175,26 +201,26 @@ if [ "${OLIVARES_COCKPIT_STRINGS_REAL:-1}" = "1" ]; then
 		# nombre lleva un marcador: ~1950 hallazgos, todos rutas, y el caso «binario
 		# community real → verde» en rojo. build_olivares_bin es la definición única.
 		if ! ( . "$ROOT/scripts/lib/build-bin.sh" && build_olivares_bin "$bin" ) 2>"$WORK/build.err"; then
-			echo "  ! el binario community no construyó: los casos reales NO se ejecutaron"
+			echo "  ! community binary did not build: real cases did NOT run"
 			sed 's/^/      /' "$WORK/build.err"
 			fail=$((fail + 1))
 		else
-			check "binario community real → verde" 0 "OK" "$bin"
+			check "real community binary → green" 0 "OK" "$bin"
 			# MUTATION: append a private literal to a COPY of the real binary. Appending
 			# past the ELF image does not change what the program does, and it is exactly
 			# what the gate's discovery reads — the string table.
 			mutbin="$WORK/olivares-community-mutated"
 			cp "$bin" "$mutbin"
 			printf '\n/v1/m/session-cockpit/input-sessions\n' >> "$mutbin"
-			check "binario community + literal privado → rojo" 1 "FUERA DE LA ALLOWLIST" "$mutbin"
+			check "community binary + private literal → red" 1 "OUTSIDE THE ALLOWLIST" "$mutbin"
 		fi
 	fi
 else
-	echo "REAL: SALTADO por OLIVARES_COCKPIT_STRINGS_REAL=0 — la corrida NO cubre el binario"
+	echo "REAL: SKIPPED by OLIVARES_COCKPIT_STRINGS_REAL=0 — this run does NOT cover the binary"
 fi
 
 echo
-echo "casos ejecutados: $ran · verdes: $pass · rojos: $fail"
-[ "$ran" -gt 0 ] || { echo "battery: examinó CERO casos — eso no es un verde" >&2; exit 2; }
+echo "cases run: $ran · passed: $pass · failed: $fail"
+[ "$ran" -gt 0 ] || { echo "battery: examined ZERO cases — that is not a pass" >&2; exit 2; }
 [ "$fail" -eq 0 ] || exit 1
 exit 0

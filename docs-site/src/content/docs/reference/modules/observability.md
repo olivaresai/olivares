@@ -7,7 +7,7 @@ description: >-
   no entities and persists nothing.
 ---
 
-Observability (`modules/observability`) is one of the 31 modules — like
+Observability (`modules/observability`) is one of the 32 modules — like
 [live-ingest](/reference/modules/live-ingest/), it serves an architectural role
 rather than filling a capability slot. It is the engine's **read-model of
 itself**: three read-only surfaces under
@@ -44,6 +44,34 @@ exporters compile against, so when a pin moves, the surface moves with it.
 - It is **not** the metrics endpoint: operational time-series live on
   [`/metrics`](/how-to/monitor-with-prometheus/); this module serves
   structured answers, not series.
+
+## Reproducing the read-model journey
+
+On a **fresh, disposable SQLite Compose installation**, run
+`scripts/qualify-observability.py` with Python 3.11 or later. Supply the installed
+binary, HTTPS address, container name, full source commit and a new evidence directory:
+
+```sh
+python3 scripts/qualify-observability.py /path/to/olivares \
+  https://127.0.0.1:8443 olivares <source-sha> /path/to/new-evidence
+```
+
+The probe creates fixture accounts and agents through the API, enables the
+existing observability and security modules, and physically restarts the
+container. It compares the started executable's SHA-256 with the supplied
+binary, verifies ingestion from a first-party finding, checks tenant refusals,
+and checks ledger trace detail/export retention across restart and module off/on.
+It also verifies that ingestion counters reset and that attestation separates
+measured binary identity from declared pipeline and unpublished release state.
+CLI checks use JSON output. Credentials stay in memory or child environments;
+retained engine logs redact setup tokens.
+
+Use the installation steps in the README with an explicitly selected candidate
+image. Never run the probe against an existing installation. Python optimization
+is refused because it disables assertions. Remove the disposable Compose stack
+and its volumes after the run. The probe leaves that cleanup to the caller and
+writes its result and engine log to the evidence directory. It does not exercise
+console actions, PostgreSQL, vendor collectors, or release signature verification.
 
 ## Related
 

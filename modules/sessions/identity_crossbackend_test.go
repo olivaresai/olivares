@@ -97,12 +97,12 @@ func TestIdentity_CrossBackend_DuplicateTripleRejected(t *testing.T) {
 			ctx := context.Background()
 			b := SessionBinding{Provider: "claude", ExternalID: "dup", At: baseTime}
 
-			if err := m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
+			if err := m.Data.Mutate(ctx, tenant, func(sc store.Scope) error {
 				return bindAlias(ctx, sc, "osn_first", b)
 			}); err != nil {
 				t.Fatalf("[%s] first bind: %v", be.name, err)
 			}
-			err := m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
+			err := m.Data.Mutate(ctx, tenant, func(sc store.Scope) error {
 				return bindAlias(ctx, sc, "osn_second", b)
 			})
 			if err == nil {

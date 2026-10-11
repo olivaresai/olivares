@@ -29,6 +29,13 @@ const routerState = vi.hoisted(() => ({
   pathname: '/console',
   search: {} as Record<string, unknown>,
 }))
+const identity = vi.hoisted(() => ({ desktop: false, version: '1.0' }))
+vi.mock('@/lib/hooks/use-min-width', () => ({
+  useMinWidth: () => identity.desktop,
+}))
+vi.mock('@/lib/hooks/use-server-info', () => ({
+  useServerInfo: () => ({ data: { version: identity.version } }),
+}))
 vi.mock('@tanstack/react-router', () => ({
   useRouterState: ({
     select,
@@ -116,6 +123,8 @@ import { useWorkspaceStore } from '@/stores/workspace'
 import { Topbar } from './topbar'
 
 afterEach(() => {
+  identity.desktop = false
+  identity.version = '1.0'
   routerState.pathname = '/console'
   routerState.search = {}
   useWorkspaceStore.setState({
@@ -125,6 +134,35 @@ afterEach(() => {
 })
 
 describe('Topbar — responsive structure', () => {
+  it('paints the server version with the phone brand, with no duplicate on desktop or invented version', () => {
+    const { container, rerender } = renderIntel(<Topbar />)
+    expect(
+      within(within(container).getByTestId('deployment-identity')).getByText(
+        '1.0',
+        { exact: true },
+      ),
+    ).toBeVisible()
+    identity.version = '26.10.1'
+    rerender(<Topbar />)
+    expect(
+      within(within(container).getByTestId('deployment-identity')).getByText(
+        '26.10.1',
+        { exact: true },
+      ),
+    ).toBeVisible()
+    identity.desktop = true
+    rerender(<Topbar />)
+    expect(within(container).queryByTestId('deployment-identity')).toBeNull()
+    identity.desktop = false
+    identity.version = ''
+    rerender(<Topbar />)
+    expect(within(container).queryByTestId('deployment-identity')).toBeNull()
+    expect(
+      within(container).getByRole('link', { name: 'Olivares AI, home' })
+        .parentElement?.textContent,
+    ).toBe('')
+  })
+
   it('is one 52 px row with the trail, the reserved page slots and each action once', async () => {
     const { container } = renderIntel(<Topbar />)
     const header = container.querySelector('header') as HTMLElement
@@ -136,12 +174,12 @@ describe('Topbar — responsive structure', () => {
     expect(
       within(header).queryByRole('button', { name: /workspace/i }),
     ).toBeNull()
-    // The trail: the parent links, the page does not. Administration belongs to the
-    // footer's Settings, so its parent is Settings.
+    // The trail: the parent links, the page does not. Administration sits in System &
+    // settings, so its parent is that area's directory.
     const nav = within(header).getByRole('navigation', { name: 'Breadcrumb' })
     expect(
-      within(nav).getAllByRole('link', { name: /^Settings$/ })[0],
-    ).toHaveAttribute('href', '/settings')
+      within(nav).getAllByRole('link', { name: /^System & settings$/ })[0],
+    ).toHaveAttribute('href', '/areas/system')
     // The places a screen fills are reserved, and empty until it does.
     expect(header.querySelector('[data-slot="page-state"]')).not.toBeNull()
     expect(header.querySelector('[data-slot="page-actions"]')).not.toBeNull()
@@ -171,8 +209,8 @@ describe('Topbar — responsive structure', () => {
       await user.tab()
     }
     const at = (name: string) => order.findIndex((n) => n.includes(name))
-    expect(at('Settings')).toBeGreaterThanOrEqual(0)
-    expect(at('Settings')).toBeLessThan(at('Search and commands'))
+    expect(at('System & settings')).toBeGreaterThanOrEqual(0)
+    expect(at('System & settings')).toBeLessThan(at('Search and commands'))
     expect(at('Search and commands')).toBeLessThan(at('Notifications'))
     expect(at('Notifications')).toBeLessThan(at('Open documentation'))
   })
@@ -198,19 +236,23 @@ describe('Topbar — responsive structure', () => {
     )
   })
 
-  it('reads a member of Policies as "Policies / the page", the destination linking home', () => {
+  it('reads a page beside Policies as its area and the page, the area linking to its directory', () => {
     routerState.pathname = '/routine-policies'
     const { container } = renderIntel(<Topbar />)
     const nav = within(
       container.querySelector('header') as HTMLElement,
     ).getByRole('navigation', { name: 'Breadcrumb' })
     expect(nav.textContent?.replace(/\s+/g, ' ')).toMatch(
-      /Policies.*Routine policies/,
+      /Security & identity.*Routine policies/,
     )
-    // The parent crumb is drawn twice (text, and an icon link below sm); both go home.
-    const home = within(nav).getAllByRole('link', { name: 'Policies' })
-    expect(home.length).toBeGreaterThan(0)
-    for (const a of home) expect(a).toHaveAttribute('href', '/claude-policy')
+    // The parent crumb is drawn twice (text, and an icon link below sm); both open the
+    // area's directory, where All areas places the page too.
+    const area = within(nav).getAllByRole('link', {
+      name: 'Security & identity',
+    })
+    expect(area.length).toBeGreaterThan(0)
+    for (const a of area)
+      expect(a).toHaveAttribute('href', '/areas/security-identity')
     expect(nav.querySelector('[aria-current="page"]')?.textContent).toBe(
       'Routine policies',
     )

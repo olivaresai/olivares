@@ -1114,7 +1114,9 @@ func newKnowledgeMemoryPutCmd(client datalaneClient) *cobra.Command {
 			"is rejected by the engine: an undeclared scope and an empty one are\n" +
 			"different facts.",
 		Example: `  olivares knowledge memory put --agent-ref agent-1 --key preferences --content-file ./prefs.txt
-  olivares knowledge memory put --agent-ref agent-1 --key note --content "call back" --ttl-seconds 3600`,
+  olivares knowledge memory put --agent-ref agent-1 --key note --content "call back" --ttl-seconds 3600
+  # A fact the sessions of workspace "default" read with their memory tools
+  olivares knowledge memory put --agent-ref workspace:default --key build --content "task build:go"`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			text, set, err := datalaneTextArg(cmd, "content", content, contentFile)

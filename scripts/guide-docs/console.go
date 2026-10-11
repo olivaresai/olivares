@@ -20,7 +20,7 @@ const consoleRegionID = "olivares-console-routes"
 // verdict. See console-dump.mjs for why the split exists.
 type consoleDump struct {
 	Schema     string           `json:"schema"`
-	HubOrder   []string         `json:"hubOrder"`
+	AreaOrder  []string         `json:"areaOrder"`
 	Census     []string         `json:"census"`
 	Views      []consoleView    `json:"views"`
 	Standalone []consoleMounted `json:"standalone"`
@@ -29,7 +29,7 @@ type consoleDump struct {
 type consoleView struct {
 	ID         string `json:"id"`
 	Path       string `json:"path"`
-	Hub        string `json:"hub"`
+	Area       string `json:"area"` // "" for the root of the structure (`/`)
 	Permission string `json:"permission"`
 	HelpHref   string `json:"helpHref"`
 	HideInNav  bool   `json:"hideInNav"`
@@ -50,7 +50,9 @@ type consoleMounted struct {
 type navCatalog struct {
 	Items        map[string]string `json:"items"`
 	Descriptions map[string]string `json:"descriptions"`
-	Hubs         map[string]string `json:"hubs"`
+	Areas        map[string]struct {
+		Label string `json:"label"`
+	} `json:"areas"`
 }
 
 // consoleRoster is the enumerated surface: one row per census path, joined with whatever
@@ -69,7 +71,8 @@ type consoleRoster struct {
 type consoleRow struct {
 	Path        string
 	ID          string
-	Hub         string // "" for the routes mounted outside the registry
+	Area        string // "" for the root view and for the routes mounted outside the registry
+	Root        bool   // the root of the navigation structure (`/`)
 	Title       string
 	Summary     string
 	Permission  string
@@ -106,8 +109,8 @@ func loadConsole(root, dumpPath string) (*consoleRoster, error) {
 	if len(d.Census) < consoleFloor {
 		return nil, cannot("the console dump lists %d routes, below the floor of %d; the console cannot have shrunk that far, so the enumeration is broken and no page may be regenerated from it", len(d.Census), consoleFloor)
 	}
-	if len(d.HubOrder) == 0 {
-		return nil, cannot("the console dump carries no hub order, so the guide has no section order")
+	if len(d.AreaOrder) == 0 {
+		return nil, cannot("the console dump carries no area order, so the guide has no section order")
 	}
 
 	navRaw, err := os.ReadFile(filepath.Join(root, navEnRel))
@@ -118,8 +121,8 @@ func loadConsole(root, dumpPath string) (*consoleRoster, error) {
 	if err := json.Unmarshal(navRaw, &nav); err != nil {
 		return nil, cannot("%s is not readable JSON: %v", navEnRel, err)
 	}
-	if len(nav.Items) == 0 || len(nav.Hubs) == 0 {
-		return nil, cannot("%s declares no nav items or no hubs; without them the guide would publish a table of bare URLs", navEnRel)
+	if len(nav.Items) == 0 || len(nav.Areas) == 0 {
+		return nil, cannot("%s declares no nav items or no areas; without them the guide would publish a table of bare URLs", navEnRel)
 	}
 
 	catalog, err := loadCatalog(root, consoleCatalogRel, 3)
@@ -172,12 +175,12 @@ func (r *consoleRoster) join(root string) {
 		}
 	}
 
-	hubKnown := map[string]bool{}
-	for _, h := range r.dump.HubOrder {
-		hubKnown[h] = true
-		if _, ok := r.nav.Hubs[h]; !ok {
+	areaKnown := map[string]bool{}
+	for _, a := range r.dump.AreaOrder {
+		areaKnown[a] = true
+		if strings.TrimSpace(r.nav.Areas[a].Label) == "" {
 			r.preFindings = append(r.preFindings, fmt.Sprintf(
-				"hub %q has no label in %s, so its section would be published with a raw identifier as its heading", h, navEnRel))
+				"area %q has no label in %s, so its section would be published with a raw identifier as its heading", a, navEnRel))
 		}
 	}
 
@@ -186,13 +189,14 @@ func (r *consoleRoster) join(root string) {
 		row := consoleRow{Path: p}
 		if v, ok := byPath[p]; ok {
 			row.ID = v.ID
-			row.Hub = v.Hub
+			row.Area = v.Area
+			row.Root = v.Area == ""
 			row.Permission = v.Permission
 			row.HelpHref = v.HelpHref
 			row.DeepLink = v.HideInNav
-			if !hubKnown[v.Hub] {
+			if !row.Root && !areaKnown[v.Area] {
 				r.preFindings = append(r.preFindings, fmt.Sprintf(
-					"view %q (%s) declares hub %q, which is not in HUB_ORDER; it would be published under no heading at all", v.ID, p, v.Hub))
+					"view %q (%s) declares area %q, which is not in NAV_AREAS; it would be published under no heading at all", v.ID, p, v.Area))
 			}
 		} else if m, ok := mounted[p]; ok {
 			row.ID = standaloneID(p)
@@ -343,32 +347,40 @@ func (r *consoleRoster) print(w io.Writer) {
 	}
 }
 
-// region renders the console table. Deterministic: hub sections in the console's own
-// HUB_ORDER, rows by path inside each.
+// region renders the console table. Deterministic: the root of the navigation first, then
+// one section per area in the console's own NAV_AREAS order, rows by path inside each.
 func (r *consoleRoster) region() string {
 	var b strings.Builder
 
-	byHub := map[string][]consoleRow{}
-	var outside []consoleRow
+	byArea := map[string][]consoleRow{}
+	var root, outside []consoleRow
 	for _, row := range r.rows {
-		if row.Hub == "" {
+		switch {
+		case row.Root:
+			root = append(root, row)
+		case row.Area == "":
 			outside = append(outside, row)
-			continue
+		default:
+			byArea[row.Area] = append(byArea[row.Area], row)
 		}
-		byHub[row.Hub] = append(byHub[row.Hub], row)
 	}
 
 	fmt.Fprintf(&b, "The console publishes **%d routes**. Every one of them is in the tables below, with the\n", len(r.rows))
 	fmt.Fprintf(&b, "permission it requires and the reference page its in-product help link opens.\n")
 
-	for _, hub := range r.dump.HubOrder {
-		rows := byHub[hub]
+	if len(root) > 0 {
+		// The root of the structure is named as the console names it (Now).
+		fmt.Fprintf(&b, "\n### %s\n\n", mdCell(root[0].Title))
+		writeConsoleTable(&b, root)
+	}
+	for _, area := range r.dump.AreaOrder {
+		rows := byArea[area]
 		if len(rows) == 0 {
 			continue
 		}
-		label := r.nav.Hubs[hub]
+		label := r.nav.Areas[area].Label
 		if label == "" {
-			label = hub
+			label = area
 		}
 		fmt.Fprintf(&b, "\n### %s\n\n", mdCell(label))
 		writeConsoleTable(&b, rows)

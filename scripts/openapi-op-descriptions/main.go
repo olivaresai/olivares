@@ -41,7 +41,9 @@
 // AND IT FAILS CLOSED. If the module routes and the committed beta document disagree
 // about WHICH operations exist, this gate does not check descriptions against a stale
 // document and call it clean: it exits 2 (CANNOT LOOK) naming the difference. Same
-// for a missing input, an unparseable document, or an empty enumeration.
+// for a missing input, an unparseable document, an empty enumeration, or one
+// operation registered at two sites. Runtime branch exclusivity is not proof
+// that route registration cannot re-enter; every duplicate pair is refused.
 package main
 
 import (
@@ -420,13 +422,32 @@ func compose(root string) (*model, error) {
 	// builds, and checking descriptions against it would be checking yesterday's
 	// contract.
 	byKey := map[string]moduleRoute{}
+	sites := map[string][]moduleRoute{}
 	for _, r := range routes {
 		k := r.key()
-		if prev, dup := byKey[k]; dup {
+		sites[k] = append(sites[k], r)
+	}
+	// The keys are walked SORTED, because the refusal is evidence: with two
+	// duplicated operations it must name the same offender on every run, or a
+	// developer fixes the key this run printed and the next run prints the other.
+	// Map iteration order is not evidence.
+	siteKeys := make([]string, 0, len(sites))
+	for k := range sites {
+		siteKeys = append(siteKeys, k)
+	}
+	sort.Strings(siteKeys)
+	for _, k := range siteKeys {
+		rs := sites[k]
+		one, a, b, ok := oneOperation(rs)
+		if !ok {
+			if rs[a].handler == "" && rs[b].handler == "" {
+				return nil, blind("%s is registered at two sites (%s:%d and %s:%d) whose handlers this gate could not resolve, so it cannot prove they mount the same one",
+					k, rs[a].file, rs[a].line, rs[b].file, rs[b].line)
+			}
 			return nil, blind("%s is registered twice (%s:%d and %s:%d), so one operation would carry two descriptions",
-				k, prev.file, prev.line, r.file, r.line)
+				k, rs[a].file, rs[a].line, rs[b].file, rs[b].line)
 		}
-		byKey[k] = r
+		byKey[k] = one
 	}
 	if msg := setDifference(byKey, beta); msg != "" {
 		return nil, blind("the registered module routes and %s disagree about which operations exist:\n%s"+
@@ -507,6 +528,21 @@ func compose(root string) (*model, error) {
 	sort.Slice(m.redundant, func(i, j int) bool { return m.redundant[i].line < m.redundant[j].line })
 	sort.Slice(m.problems, func(i, j int) bool { return m.problems[i].key < m.problems[j].key })
 	return m, nil
+}
+
+// oneOperation returns one registration or refuses the first duplicate pair.
+// Sorting keeps the refusal deterministic; branch structure never waives it.
+func oneOperation(rs []moduleRoute) (rep moduleRoute, failA, failB int, ok bool) {
+	sort.Slice(rs, func(i, j int) bool {
+		if rs[i].file != rs[j].file {
+			return rs[i].file < rs[j].file
+		}
+		return rs[i].line < rs[j].line
+	})
+	if len(rs) > 1 {
+		return moduleRoute{}, 0, 1, false
+	}
+	return rs[0], -1, -1, true
 }
 
 // setDifference renders the disagreement between the registered routes and the

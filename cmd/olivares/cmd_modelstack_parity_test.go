@@ -39,7 +39,7 @@ import (
 // it does name still reaches the stub. A dropped route is invisible to both.
 // Only comparing the two sets against the engine's route tables sees it.
 const (
-	modelsRouteCount         = 67
+	modelsRouteCount         = 68
 	finopsRouteCount         = 47
 	inferenceProxyRouteCount = 7
 	modelstackRouteCount     = modelsRouteCount + finopsRouteCount + inferenceProxyRouteCount
@@ -87,6 +87,7 @@ func modelstackRoutes() []modelstackRoute {
 		get(m, mb+"/models", "models", "ls"),
 		get(m, mb+"/models/"+testID, "models", "get", testID),
 		get(m, mb+"/catalog", "models", "catalog"),
+		get(m, mb+"/availability", "models", "availability"),
 		get(m, mb+"/features", "models", "features"),
 		get(m, mb+"/data-governance", "models", "data-governance"),
 		get(m, mb+"/tool-types", "models", "tool-types"),
@@ -283,7 +284,7 @@ func newModelstackStub(t *testing.T, rec *modelstackStub) *httptest.Server {
 
 // TestEveryCensusedRouteHasACommandThatReachesIt is the PERMIT half of the
 // contrafactual, done on the wire rather than on the exit code: for each of the
-// 121 routes the census measured, one CLI invocation produces EXACTLY that
+// 122 routes the census measured, one CLI invocation produces EXACTLY that
 // method and path, exactly once.
 //
 // "Exactly once" is part of the claim. A command that made a second, unasked-for
@@ -350,7 +351,7 @@ func TestModelstackTableMatchesTheMeasuredCensus(t *testing.T) {
 		module string
 		counts
 	}{
-		{"models", counts{get: 32, post: 15, put: 11, del: 9}},
+		{"models", counts{get: 33, post: 15, put: 11, del: 9}},
 		{"finops", counts{get: 28, post: 12, put: 3, del: 4}},
 		{"inferenceproxy", counts{get: 3, post: 1, put: 2, del: 1}},
 	} {

@@ -2,7 +2,7 @@
 title: Open core & licensing
 description: >-
   Open core: the complete product is AGPL-3.0-only, the SDK and connectors are
-  Apache-2.0, and a small additive enterprise line is commercial. The AGPL build
+  Apache-2.0, and a small additive line, the Business and Enterprise editions, is commercial. The AGPL build
   is never crippled to upsell, but it is not identical to the commercial edition.
   What that means for self-hosters and connector authors.
 ---
@@ -23,13 +23,15 @@ boundary is enforced in CI (a connector may never import the engine):
 | Path | License | What it is |
 |---|---|---|
 | `core/` | **AGPL-3.0-only** | the engine: ingest, event bus, data model, module runtime, API, authz, audit |
-| `modules/` | **AGPL-3.0-only** | the 31 modules (inventory, the R/RW map, FinOps, evals, guardrails, …) |
+| `modules/` | **AGPL-3.0-only** | the 32 modules (inventory, the R/RW map, FinOps, evals, guardrails, …) |
 | `web/` | **AGPL-3.0-only** | the React UI |
 | `sdk/` | **Apache-2.0** | the connector/module interfaces, the gRPC contract and the shared types |
 | `connectors/` | **Apache-2.0** | the connectors (Claude, OpenAI, pgAudit, eBPF, cloud, Slack, SIEM, …) |
-| `enterprise/` | **commercial** | additive modules, build-tag gated, never in the public binary: multi-IdP federation, content firewall/DLP, hook hardening, compiled threat-intel catalog, server-tool egress, CyberArk Conjur, incident close-loop (`LicenseRef-Olivares-Commercial`) |
+| `enterprise/` | **commercial** | additive modules, build-tag gated, never in the public binary (`LicenseRef-Olivares-Commercial`) |
 
-The documentation site you are reading is part of the AGPL product.
+The documentation site you are reading is part of the AGPL product. Which capability is
+in which edition is written in one place, `docs/editions.md` in the repository; this page does
+not repeat it.
 
 ## What this means for you
 
@@ -54,8 +56,8 @@ The documentation site you are reading is part of the AGPL product.
 | Edition | Price | Scope |
 | --- | --- | --- |
 | Community | Free, AGPL-3.0-only | Unlimited users; one active identity provider (IdP). |
-| Business | USD 129/month or USD 1,290/year | Unlimited users; one legal entity; up to two production deployments, each with one staging deployment; up to five active IdPs in total. |
-| Enterprise | Contact us | Multi-entity scope, additional deployments or IdPs, air-gap mirrors, custom LTS and other negotiated requirements. |
+| Business | USD 129/month or USD 1,290/year | Unlimited users; one legal entity; one active instance at a time. |
+| Enterprise | Contact us | Terms agreed in a contract and the capabilities that depend on them: multi-entity scope, additional deployments or IdPs, air-gap mirrors, custom LTS, and scoped upstream credentials minted by OAuth 2.0 token exchange (RFC 8693). |
 
 Business includes **Regulated Operations**, **AI Runtime Security**,
 **Compliance Packs**, and **Identity & Scale**. Each family keeps its own code and
@@ -67,30 +69,31 @@ Private implementation is distributed as commercial binaries, outside the public
 No. The four named families are included in the Business subscription. Choose
 monthly or annual billing at [Pricing](https://olivares.ai/pricing).
 
-### What if I need more deployments or identity providers?
+### What if I need more than one active instance?
 
-Contact **enterprise@olivares.ai** for Enterprise scope. Business permits up to
-two production deployments and five active IdPs in total, not five per deployment.
+Contact **enterprise@olivares.ai** for Enterprise scope. A Business license is
+active on one instance at a time; you release it and activate it on another
+instance as often as you need. Enterprise covers several active instances.
 
 
-## What is open vs enterprise
+## What is open vs commercial
 
-The open binary is the whole governance platform; the `enterprise/` line is
+The open binary is the whole governance platform; the commercial (`enterprise/`) line is
 **additive**. Two boundaries are worth calling out because the open build answers
 for them honestly rather than faking them:
 
-- **SSO** — single-IdP login (OIDC + SAML 2.0) is **open** in the default binary:
-  real login, no `-tags enterprise`. Multiple active IdPs (per-tenant / by-domain),
-  SSO-enforcement and managed SCIM are the reserved enterprise line; activating a
-  second active IdP returns `multi_idp_requires_enterprise`.
+- **SSO** — single-IdP login (OIDC + SAML 2.0) and inbound SCIM are **open** in the
+  default binary: real login, no `-tags enterprise`. Several active IdPs (per-tenant /
+  by-domain), login-time group mapping and require-SSO are Business (Identity & Scale);
+  activating a second active IdP returns `multi_idp_requires_enterprise`.
 - **User accounts** — **unlimited in every edition**. The community build has no user
-  cap, and neither has the enterprise one: no license state (valid, expired, absent)
+  cap, and neither has the commercial one: no license state (valid, expired, absent)
   can limit how many accounts a deployment runs. The cap of three active accounts that
   shipped before 2026-07-27 was removed outright; the seat seam remains in the code as
   a compatibility no-op that refuses nothing, and a license lapse never caps, disables
   or deletes an account.
 
-See [Honesty & limits](/start/honesty-and-limits/) for the full open-vs-enterprise
+See [Honesty & limits](/start/honesty-and-limits/) for the full open-vs-commercial
 picture.
 
 ## The license key never gates the open product
@@ -100,11 +103,11 @@ This is important and deliberate: in the open (AGPL) binary, license validation 
 **never disables, degrades or blocks** any request, any module, or boot on a
 license check, and it runs **offline** (an Ed25519 signature, no license server),
 which is why the open product works air-gapped. The one place the license is
-*consumed* rather than displayed is the closed enterprise build, and only to entitle
+*consumed* rather than displayed is the closed commercial build, and only to entitle
 the modules the commercial agreement covers, evaluated per module — a local decision
 in the commercial edition, never a check in the open binary. It never caps users: accounts are unlimited in every edition. So the open
 build is genuinely whole and uncapped-by-license; what differs in the commercial
-edition is the additive `enterprise/` modules, not a license key flipping features
+edition is the additive commercial (`enterprise/`) modules, not a license key flipping features
 on inside the same binary.
 
 ## Why this model
@@ -129,7 +132,7 @@ ships both a DCO and a CLA, plus a trademark policy). See the repository's
 ## Related
 
 - [Install a license](/how-to/install-a-license/) — where a purchased license goes, and
-  the in-place community → enterprise swap. This page explains the model; that one is the
+  the in-place Community → Business swap. This page explains the model; that one is the
   steps.
 - [Security model](/explanation/security/security-model/) — why attestation-only
   licensing matters for an air-gapped security product.

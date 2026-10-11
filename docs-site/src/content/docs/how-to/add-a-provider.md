@@ -20,13 +20,23 @@ you name them apart.
 
 | Word | What it is |
 |---|---|
-| **Provider** | A credential: an API key, an optional endpoint, and the kind it belongs to (`anthropic`, `openai`, `xai`, `openai_compatible`). |
+| **Provider** | An API key or a local model endpoint, an optional `base_url`, and its kind (`anthropic`, `openai`, `xai`, `gemini`, `openai_compatible`, `ollama`). |
 | **Provider profile** | An identity on this machine: which official CLI runs, and under which configuration home and user home. |
 | **Session** | One launched child process, under one profile, using one provider's credential. |
 
-A provider on its own launches nothing. A profile with no provider launches only if
-the host's own variables happen to be set. The binding between them is what makes a
-session start.
+## First session from the console
+
+On a fresh installation, an administrator can add an Anthropic or OpenAI key, or
+an Ollama endpoint, in **Providers**. After the connection test succeeds, Olivares
+prepares Claude Code, Codex or OpenCode respectively: it installs the tool if
+needed and resolves its profile using homes inside the data volume. Choose
+**New session**, enter a prompt and start. No filesystem path is required.
+
+If preparation fails, the provider stays saved. **Retry setup** reuses the installed
+tool and matching profile; it does not ask for the key again. Tool installation
+still requires system administration permission, and profile resolution requires
+profile write permission. Existing-home registration remains available for
+advanced setups. Existing tool logins and profile-selection rules keep applying.
 
 ## 1. Add the provider
 
@@ -38,8 +48,7 @@ session start.
    key. Leave the endpoint empty unless you are pointing at your own gateway; an
    `openai_compatible` provider requires one, because there is no official endpoint
    to assume.
-4. Confirm. The write needs an AAL3 session, like every other credential in this
-   product; the console shows the ceremony rather than a refusal.
+4. Confirm.
 
 The engine seals the key at rest and returns a four-character hint. **The key is
 never returned again**, including immediately after you write it. If you lose it,
@@ -79,9 +88,9 @@ Registering a credential is an intention; a test is a fact.
 
 ## 3. Register a profile and bind the provider
 
-The profile's homes must already exist on the machine that runs the control plane.
-The server validates them there and never creates a missing one: an empty fallback
-home would give a session a provider identity nobody configured.
+Explicit home paths must already exist on the machine that runs the control plane.
+The server validates them there and does not create missing explicit homes: an empty
+fallback home would give a session a provider identity nobody configured.
 
 ```sh
 olivares agent profile create \
@@ -101,16 +110,17 @@ values are not a fallback chain:
 - `managed_injection` — a credential the engine supplies. With a provider bound, it
   is that provider's.
 
-There is a one-verb shortcut that does the detection, the registration and the
-binding together, defaulting the homes to this driver's own under your `$HOME`:
+The shortcut combines detection, registration and provider binding. If neither
+`--config-home` nor `--user-home` is supplied, the engine manages the homes. Without
+`--provider`, it selects the profile a new session of the driver would use; with
+`--provider`, it creates a profile with its own homes:
 
 ```sh
 olivares agent deploy claude --provider prv_01J8ABCDEF
 ```
 
-It reports four states and they are not the same problem: **not installed** (and it
-names the install command rather than running it), **installed**, **profile ready**,
-**launchable**. It never runs a vendor login and never creates a missing home.
+Install the tool under **AI tools** before using this shortcut. It does not sign in
+to your vendor account.
 
 To bind (or rebind) later:
 
@@ -122,12 +132,24 @@ The engine refuses a credential the profile's driver cannot read. An OpenAI key 
 Claude profile is a refusal that names both, at bind time and again at launch — not a
 session that fails halfway through a handshake.
 
-| Provider kind | Drivers that read it |
-|---|---|
-| `anthropic` | `claude`, `opencode` |
-| `openai` | `codex`, `opencode` |
-| `xai` | `grok`, `opencode` |
-| `openai_compatible` | all of them, with its endpoint |
+| Provider kind | Drivers that read it | With a custom `base_url` |
+|---|---|---|
+| `anthropic` | `claude`, `opencode` | `claude` |
+| `openai` | `codex`, `opencode` | `codex` |
+| `xai` | `grok`, `opencode` | `grok` |
+| `gemini` | `gemini-cli` |  |
+| `openai_compatible` | `codex` | `codex` |
+| `ollama` | `codex`, `opencode` | `codex`, `opencode` |
+
+For `anthropic`, `openai` and `xai`, OpenCode accepts only the vendor's own endpoint: leave `base_url` empty. Use `codex` for an `openai_compatible` provider; use `codex` or `opencode` for `ollama`.
+
+Gemini CLI uses a `gemini` provider key at Google's own API address; it accepts no
+custom endpoint. Install it under **AI tools** or with `olivares tool install gemini`.
+The official portable bundle needs Node.js 20 or newer on the engine host.
+For a Google account, create a Gemini profile and use
+`olivares tool login gemini --account <name>`; each profile has its own native
+`.gemini` authentication home. API-key profiles refuse conflicting native Google,
+Vertex or gateway settings rather than selecting another identity.
 
 ## 4. Launch the first session
 
@@ -140,8 +162,12 @@ olivares agent session create \
 olivares agent session attach run-123
 ```
 
-`--provider-profile` is **required**: the server does not select a profile, a home or
-an environment implicitly.
+`--provider-profile` selects a profile explicitly. When profiled launches are
+enabled, omitting it lets the engine resolve a profile for Claude Code, the default
+tool: it reuses or creates a profile for the tool's own login or, otherwise, a
+compatible provider record. This requires `sessions:profile:write`; without that
+permission, choose a profile explicitly. Profile resolution and launch refusals
+still apply.
 
 From the console, the same path is **Onboarding → Agents and the first session**, or
 **Sessions → New session**.
@@ -177,13 +203,12 @@ key at the provider; do that in their own console.
 
 ## The environment variables, and where they still apply
 
-`OLIVARES_SESSION_RUNTIME_WIF` and `OLIVARES_SESSION_RUNTIME_TOKEN_FILE` are
-unchanged and still supported. They are the host-wide credential and they apply to
-every profile that names **no** provider.
-
-A profile that names one uses that one. The most specific selection wins, and there
-is no fallback from it: a bound credential that cannot be produced denies the launch
-rather than quietly using the deployment's.
+For Claude profiles with `managed_injection` that name **no** provider,
+`OLIVARES_SESSION_RUNTIME_WIF` or `OLIVARES_SESSION_RUNTIME_TOKEN_FILE` supplies
+the host-wide inference credential. A profile bound to a Providers record uses
+that record instead; if its credential cannot be opened, launch is refused
+without falling back to the host credential. A `provider_account_home` profile
+uses its authorized tool login and needs neither variable.
 
 ## Related
 

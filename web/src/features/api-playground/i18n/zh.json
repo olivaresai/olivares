@@ -1,6 +1,6 @@
 {
   "title": "API 演练场",
-  "description": "交互式探索和测试控制平面 API",
+  "description": "探索和测试 Olivares AI API。",
   "filterPlaceholder": "筛选端点…",
   "selectEndpoint": "从左侧面板选择一个端点",
   "send": "发送",
@@ -32,7 +32,7 @@
     "networkError": "网络错误",
     "failedNetworkHint": "请求失败 — 请检查网络连接。",
     "blockedDestination": "目标地址已被阻止",
-    "blockedDestinationHint": "API Playground 只能向此控制平面发送请求。",
+    "blockedDestinationHint": "API Playground 只能向此 Olivares AI 服务器发送请求。",
     "enterPathParam": "输入 {{name}}",
     "headerNamePlaceholder": "请求头名称",
     "headerValuePlaceholder": "值",

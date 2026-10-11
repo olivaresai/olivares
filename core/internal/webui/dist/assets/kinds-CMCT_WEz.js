@@ -1,1 +1,0 @@
-var e=[`anthropic`,`openai`,`xai`,`openai_compatible`,`ollama`],t=[`anthropic`,`openai`,`xai`];function n(e,n,r){switch(r.trim().toLowerCase()){case`claude`:return e===`anthropic`;case`codex`:return e===`openai`||e===`openai_compatible`||e===`ollama`;case`grok`:return e===`xai`;case`opencode`:return e===`ollama`||t.includes(e)&&!n?.trim();default:return!1}}export{n,e as t};

@@ -291,6 +291,32 @@ func TestOnboardInviteModeMailsTheTokenOnly(t *testing.T) {
 	}
 }
 
+// TestServerInfoSaysWhenInvitationsCannotBeMailed: without an invitation mailer
+// invite mode answers 409 invite_delivery_unavailable, and server-info says so
+// up front, so the console offers only what the engine serves (#471). With a
+// mailer the field is absent.
+func TestServerInfoSaysWhenInvitationsCannotBeMailed(t *testing.T) {
+	h := newHarness(t)
+	if r := h.do("GET", "/v1/server-info", "", nil, nil); r.code != http.StatusOK || r.body["invite_delivery_unavailable"] != true {
+		t.Fatalf("server-info without a mailer = %d %v, want invite_delivery_unavailable true", r.code, r.body)
+	}
+	admin := h.adminLogin()
+	tenant := h.createOrg(admin, "acme")
+	h.elevate(admin)
+	r := h.do("POST", "/v1/onboard", admin,
+		map[string]any{"email": "invitee@acme.io", "role": auth.RoleViewer, "mode": "invite"}, tenantHdr(tenant))
+	if r.code != http.StatusConflict || errorCode(r) != "invite_delivery_unavailable" {
+		t.Fatalf("invite onboard without a mailer = %d %s, want 409 invite_delivery_unavailable", r.code, r.raw)
+	}
+
+	withMail := newHarnessOpts(t, func(o *api.Options) { o.InviteSender = &capturingInviteSender{} })
+	if r := withMail.do("GET", "/v1/server-info", "", nil, nil); r.code != http.StatusOK {
+		t.Fatalf("server-info with a mailer = %d %s", r.code, r.raw)
+	} else if _, ok := r.body["invite_delivery_unavailable"]; ok {
+		t.Fatalf("server-info with a mailer carries invite_delivery_unavailable: %v", r.body)
+	}
+}
+
 func TestOnboardCeilingAndAuthority(t *testing.T) {
 	h := newHarness(t)
 	admin := h.adminLogin()

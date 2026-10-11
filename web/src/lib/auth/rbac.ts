@@ -80,6 +80,22 @@ export function grantInTenant(
   return principal.grants.find((g: Grant) => g.tenant === tenant) ?? null
 }
 
+/**
+ * The one credential family the tenant self-capability questions are known not to
+ * support: an explicit `principal.superadmin === true` with NO grant in `tenant`. A
+ * superadmin that holds a grant there is a member of that tenant and is asked like one;
+ * the first-boot setup administrator is exactly that (superadmin and owner, #503).
+ * Read from the reflection the console already has, never inferred from a status code.
+ */
+export function isGlobalAccount(
+  principal: Whoami | null,
+  tenant: string | null,
+): boolean {
+  return (
+    principal?.superadmin === true && grantInTenant(principal, tenant) === null
+  )
+}
+
 /** The principal's role in a specific tenant, if any. */
 export function roleInTenant(
   principal: Whoami | null,

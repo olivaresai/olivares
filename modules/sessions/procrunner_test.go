@@ -13,6 +13,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/olivaresai/olivares/core/secret"
 )
 
 // fakeClaude is a minimal stream-json `claude` stand-in: it prints an init line
@@ -154,6 +156,41 @@ func TestProcRunner_EnvIsAllowlisted(t *testing.T) {
 	}
 }
 
+// TestProcRunner_EnvWithholdsEngineSecrets pins the spawn half: an env_allow that
+// names engine secrets (one an `env:` reference resolved after the launch was
+// validated) still gives the child none of them, while secret_env may set one.
+func TestProcRunner_EnvWithholdsEngineSecrets(t *testing.T) {
+	const dsnVar = "PROCRUNNER_TEST_ENGINE_DSN"
+	if _, err := (secret.EnvHandler{Lookup: func(string) (string, bool) { return "postgres://x", true }}).
+		Resolve(context.Background(), dsnVar); err != nil {
+		t.Fatal(err)
+	}
+	names := []string{
+		"AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN",
+		"VAULT_TOKEN", "PGPASSWORD", "PGSSLPASSWORD", "DATABASE_URL",
+		"OTEL_EXPORTER_OTLP_HEADERS", "OTEL_EXPORTER_OTLP_TRACES_HEADERS", "OTEL_EXPORTER_OTLP_METRICS_HEADERS",
+		dsnVar,
+	}
+	for _, name := range names {
+		t.Setenv(name, "engine-secret-"+name)
+	}
+	t.Setenv("MY_PROJECT_FLAG", "ok-to-forward")
+
+	env := sanitizedEnv(append([]string{"MY_PROJECT_FLAG"}, names...),
+		[]EnvVar{{Name: "AWS_SECRET_ACCESS_KEY", Value: "session-own"}})
+	for _, kv := range env {
+		if strings.Contains(kv, "engine-secret-") {
+			t.Errorf("engine secret reached the child: %s", kv)
+		}
+	}
+	if !contains(env, "MY_PROJECT_FLAG=ok-to-forward") {
+		t.Fatal("operator-allowlisted var was not forwarded")
+	}
+	if !contains(env, "AWS_SECRET_ACCESS_KEY=session-own") {
+		t.Fatal("the launch's own value of an engine-secret name did not reach the child")
+	}
+}
+
 func recvFrame(t *testing.T, proc Process, d time.Duration) OutputFrame {
 	t.Helper()
 	select {
@@ -189,7 +226,7 @@ func TestRuntime_E2E_RealProcess(t *testing.T) {
 		WithCredentialSource(staticCred()), WithStopWaitDelay(2*time.Second))
 	ctx := context.Background()
 
-	dto, err := m.createRun(ctx, tenant, CreateRunParams{
+	dto, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{
 		Transport: TransportStreamJSON, PermissionMode: "default", Isolation: IsolationNative,
 		WorkspaceRef: registerTestWorkspace(t, m, tenant, t.TempDir()), Actor: "user:u1", ActorKind: "user",
 	})

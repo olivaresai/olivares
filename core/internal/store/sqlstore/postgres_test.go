@@ -488,10 +488,10 @@ func TestPostgresBootConvergesLegacyFederationAliases(t *testing.T) {
 	mkConfig(pairScope, "okta")
 	mkConfig(loneScope, model.DefaultFederationAlias)
 
-	// Age this test's rows to the PRE-U4 shape (alias NULL) — what an upgraded
-	// database holds, and the only state the boot backfill exists to converge. The
-	// write binds SystemTenantID because the guard demands a bind; the BOOT path is
-	// the one that could not bind, which is the whole defect.
+	// Stage legacy rows with v22 pending. Aging only the aliases after a fresh
+	// Open leaves v22 recorded, so the versioned runner correctly skips its data
+	// backfill. Change the rows and their tracking state in the same transaction;
+	// keep the auth-partition bind the FORCE-RLS guard requires.
 	inBoundTx := func(db *sql.DB, fn func(tx *sql.Tx)) {
 		t.Helper()
 		tx, err := db.BeginTx(ctx, nil)
@@ -520,15 +520,14 @@ func TestPostgresBootConvergesLegacyFederationAliases(t *testing.T) {
 		if n, err := res.RowsAffected(); err != nil || n != 3 {
 			t.Fatalf("aged %d rows (err=%v), want 3", n, err)
 		}
+		untrackFederationDataMigration(t, ctx, tx)
 	})
 	if err := st.Close(); err != nil {
 		t.Fatalf("close: %v", err)
 	}
 
-	// Boot again. Before the fix this test never reached here — the FIRST Open above
-	// already failed, as it did for every Postgres deployment and every test in this
-	// file. After the fix, this second Open is the one that runs the backfill with
-	// legacy rows actually present, which is what the assertions below measure.
+	// Boot the pending v22 migration with legacy rows actually present. This must
+	// execute the real, auth-bound backfill rather than rely on codec defaults.
 	st2, err := Open(ctx, cfg, registerWidget)
 	if err != nil {
 		t.Fatalf("re-open with legacy (alias NULL) rows present — the regression: %v", err)
@@ -589,6 +588,22 @@ func TestPostgresBootConvergesLegacyFederationAliases(t *testing.T) {
 	if defaults != 1 || dups != 1 {
 		t.Errorf("two-row scope aliases = %v, want exactly one %q and one dup-<id> (defaults=%d dups=%d)",
 			got, model.DefaultFederationAlias, defaults, dups)
+	}
+	// The normalized storage must make the unique index reject another default
+	// in either scope; codec normalization alone cannot establish that guarantee.
+	for _, scope := range []model.TenantID{loneScope, pairScope} {
+		err := st2.AuthMutate(ctx, func(as store.AuthScope) error {
+			_, err := as.FederationConfigs().Create(ctx, model.FederationConfig{
+				TargetTenantID: scope,
+				Alias:          model.DefaultFederationAlias,
+				Protocol:       "oidc",
+				Status:         model.StatusActive,
+			})
+			return err
+		})
+		if !errors.Is(err, store.ErrConflict) {
+			t.Errorf("duplicate default in scope %s = %v, want ErrConflict", scope, err)
+		}
 	}
 }
 

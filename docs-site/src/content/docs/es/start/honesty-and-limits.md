@@ -5,12 +5,18 @@ description: >-
   el producto deliberadamente no hace. Sin capacidades inventadas.
 ---
 
+:::note[Business]
+La exportación de auditoría (`GET /v1/audit/export`, `olivares audit export`), los archivos en directorios y la verificación de archivos externos requieren Business. Community conserva el registro firmado, `olivares audit verify` y `olivares dr backup`; la exportación devuelve HTTP 501 o código de salida 9. El reenvío de auditoría y las transferencias DDIL con segmentos de auditoría también requieren Business.
+:::
+
 Un control plane para IA es un producto de seguridad. Si exagera lo que cubre,
 da una falsa sensación de seguridad — que es peor que no tener herramienta alguna. Por eso esta página es
 el contrato explícito sobre **qué corre hoy, qué está planificado y qué queda fuera de
 alcance a propósito.** El resto de la documentación se atiene a ello: los comandos de los tutoriales
 y de las guías how-to están pensados para ejecutarse tal como están escritos, y allí donde el producto todavía no
 cubre algo, la página lo dice en lugar de dar a entender que sí lo hace.
+
+**Entrega de eventos NATS:** El puente Core NATS y NATS JetStream requieren Business Identity & Scale. Community entrega los eventos dentro del proceso.
 
 ## Qué corre hoy
 
@@ -22,10 +28,12 @@ cubre algo, la página lo dice en lugar de dar a entender que sí lo hace.
   reproduce exactamente ese recorrido.
 - **La configuración del primer arranque no requiere credenciales.** Una instalación nueva no tiene **credenciales
   por defecto**; el motor imprime un token de configuración de un solo uso en el primer arranque.
-- **Las CLI oficiales de Codex y Grok son controladores de sesión cuando se fijan.**
-  Definir `OLIVARES_SESSION_RUNTIME_CODEX_BIN` o `OLIVARES_SESSION_RUNTIME_GROK_BIN`
-  registra ese controlador en el nodo. Sin definir, los perfiles de ese
-  controlador siguen observables y no se pueden lanzar. Los lanzamientos van
+- **Las CLI oficiales de Codex, Grok y OpenCode pueden ejecutarse como sesiones de proveedor.**
+  El motor registra estos controladores al arrancar. Al iniciar una sesión, usa
+  la instalación gestionada verificada más reciente y después la CLI en el `PATH`
+  del motor. `OLIVARES_SESSION_RUNTIME_CODEX_BIN`, `OLIVARES_SESSION_RUNTIME_GROK_BIN`
+  y `OLIVARES_SESSION_RUNTIME_OPENCODE_BIN` sustituyen esa resolución.
+  Si no encuentra un ejecutable, rechaza el lanzamiento. Los lanzamientos van
   por un [perfil de proveedor](/how-to/operate-provider-sessions/).
   `CHANGELOG.md` `[26.9.0]` **no** afirma compatibilidad con una cuenta oficial
   de Grok autenticada.
@@ -36,22 +44,22 @@ cubre algo, la página lo dice en lugar de dar a entender que sí lo hace.
 - **Las releases están firmadas y son verificables.** Firma, procedencia SLSA, SBOM y OpenVEX pueden todos
   [verificarse](/es/how-to/verify-a-release/). La verificación aún no funciona del todo sin red: las comprobaciones sin clave
   necesitan el material de raíz de confianza de Sigstore y el paso SLSA no tiene modo sin conexión. El producto incluye un
-  [bundle air-gap](/es/how-to/air-gap-install/). La última release etiquetada, **26.10.1**, está publicada con archivos firmados, paquetes nativos e imágenes de contenedor; las API, los esquemas y la superficie de módulos aún pueden cambiar antes de la 1.0.
+  [bundle air-gap](/es/how-to/air-gap-install/). La próxima release es **<!-- release -->0.1<!-- /release -->**, aún no publicada. Compila desde el código fuente hasta su publicación.
 
-## Open core — qué es abierto vs enterprise
+## Open core — qué es abierto vs comercial
 
 El producto es **open core**: el binario por defecto (AGPL) es toda la plataforma de
-gobierno, y una pequeña línea comercial **aditiva** (`enterprise/`, construida solo con
+gobierno, y una pequeña línea comercial **aditiva** (Business y Enterprise; `enterprise/`, construida solo con
 `-tags enterprise`, nunca en el binario público) contiene las funciones reservadas. Dos
 fronteras importan para el uso diario, y el build abierto responde por ellas con honestidad
 en lugar de fingirlas:
 
 - **El SSO es abierto para un único IdP.** El login con un solo IdP — **OIDC** (Authorization
   Code + PKCE) y **SAML 2.0** (respuestas firmadas, anti-replay) — corre en el binario por
-  defecto **sin** `-tags enterprise`. Correr **más de un IdP activo** (por tenant / por
-  dominio), la **aplicación de SSO** (exigir SSO / bloquear login con contraseña) y el
-  **SCIM gestionado** son la línea enterprise reservada; activar un segundo IdP activo
-  devuelve `multi_idp_requires_enterprise` — un límite de producto explícito, nunca un 501
+  defecto **sin** `-tags enterprise`, y también el **SCIM** entrante. Correr **más de un
+  IdP activo** (por tenant / por dominio) y la **aplicación de SSO** (exigir SSO /
+  bloquear login con contraseña) son de Business (Identity & Scale); activar un segundo
+  IdP activo devuelve `multi_idp_requires_enterprise` — un límite de producto explícito, nunca un 501
   falso.
 - **No hay tope de usuarios: las cuentas son ilimitadas en todas las ediciones.**
   Community, Business y Enterprise self-hosted admiten un número ilimitado
@@ -64,12 +72,12 @@ en lugar de fingirlas:
 - **El resto de la plataforma es abierto.** El bucle completo de gobierno — inventario, el
   mapa de acceso R/RW, la política RBAC/ABAC/Cedar, el audit ledger sellado, FinOps,
   compliance, egress SIEM, MCP, HA/distribuido — corre en el binario abierto sin comprobación
-  de licencia. Los módulos aditivos de `enterprise/` (federación multi-IdP, content
-  firewall/DLP, hook hardening, el catálogo compilado de threat-intel, el egress de server-tool, el conector
-  de CyberArk Conjur y el incident close-loop) son código nuevo
-  que nunca estuvo en el producto abierto, no funciones quitadas de él. La validación de
+  de licencia. Los módulos aditivos de `enterprise/` son código nuevo que nunca estuvo
+  en el producto abierto, no funciones quitadas de él; qué capacidad va en qué edición
+  se escribe una sola vez, en `docs/editions.md` en el repositorio. La validación de
   licencia en el binario abierto es **solo de atestación** — nunca habilita, deshabilita ni
-  bloquea nada (véase
+  bloquea nada, salvo que instalar un bundle de actualización que no indica la edición
+  community requiere una licencia vigente (véase
   [Open core y licenciamiento](/es/explanation/open-core-and-licensing/)).
 
 ## Qué está en fase de diseño o es anterior a 1.0
@@ -140,7 +148,7 @@ Trata la profundidad a nivel de módulo como **trabajo en curso** salvo que una 
   air-gapped; los modelos frontier brokered no.
 - **Las rutas de módulo son un contrato beta separado.** Los endpoints de módulo (por
   ejemplo, el grafo del access map y el drift) no forman parte del contrato estable de
-  70 rutas del núcleo; se publican como un documento **beta** separado: la
+  128 rutas del núcleo; se publican como un documento **beta** separado: la
   [referencia de rutas de módulo](/reference/api-beta/) (servida en
   `/openapi.beta.json`). Beta significa que las formas pueden cambiar con aviso, y el
   detalle de cada campo sigue viviendo en las interfaces tipadas del producto. La

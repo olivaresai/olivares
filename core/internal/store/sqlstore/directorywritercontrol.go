@@ -146,20 +146,14 @@ func reconcileDirectoryWriterGuards(
 		}
 	}
 
-	switch dia.Name() {
-	case store.EngineSQLite:
-		if err := reconcileSQLiteDirectoryWriterGuards(ctx, tx, dia, state); err != nil {
-			return err
-		}
-	case store.EnginePostgres:
-		if err := reconcilePostgresDirectoryWriterGuards(ctx, tx, state); err != nil {
-			return err
-		}
+	if err := reconcileVersionedDirectoryGuards(ctx, tx, dia, state); err != nil {
+		return err
+	}
+
+	if dia.Name() == store.EnginePostgres {
 		if err := reconcilePostgresDirectoryWriterControlACL(ctx, tx, hardened, roles); err != nil {
 			return err
 		}
-	default:
-		return fmt.Errorf("sqlstore: directory writer reconcile: unsupported engine %q", dia.Name())
 	}
 
 	if err := tx.Commit(); err != nil {

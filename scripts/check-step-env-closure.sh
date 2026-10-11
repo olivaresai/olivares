@@ -41,7 +41,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DIR="${OLIVARES_WORKFLOWS_DIR:-${ROOT}/.github/workflows}"
 
-[ -d "$DIR" ] || { echo "check-step-env-closure: NO HE PODIDO MIRAR: no existe $DIR" >&2; exit 2; }
+[ -d "$DIR" ] || { echo "check-step-env-closure: COULD NOT CHECK: missing $DIR" >&2; exit 2; }
 
 python3 - "$DIR" <<'PY'
 import os, re, sys
@@ -49,13 +49,79 @@ import os, re, sys
 d = sys.argv[1]
 ficheros = sorted(f for f in os.listdir(d) if f.endswith((".yml", ".yaml")))
 if not ficheros:
-    print("check-step-env-closure: NO HE PODIDO MIRAR: %s no tiene workflows" % d, file=sys.stderr)
+    print("%s has no workflows" % d, file=sys.stderr)
     raise SystemExit(2)
 
 roto = 0
 mirados = 0
 for nombre in ficheros:
     L = open(os.path.join(d, nombre), encoding="utf-8").read().split("\n")
+
+    # Remove YAML comments, preserving line numbers and scalar data.
+    # A hash inside a run scalar can be shell data (for example, a heredoc).
+    scalar_indent = None
+    scalar_until = -1
+    for i, line in enumerate(L):
+        if i <= scalar_until or not line.strip():
+            continue
+        indent = len(line) - len(line.lstrip())
+        if scalar_indent is not None and indent < scalar_indent:
+            scalar_indent = None
+        if scalar_indent is None and line.lstrip().startswith("#"):
+            L[i] = ""
+            continue
+        if scalar_indent is None:
+            value = re.match(r'''^\s*(?:[\w-]+|"[^"]+"|'[^']+')\s*:\s*(.*)$''', line)
+            if not value:
+                L[i] = re.split(r'[ \t]+#', line, maxsplit=1)[0]
+                continue
+            value_line, value_start, text = i, value.start(1), value.group(1)
+            # Tags and anchors can continue before the scalar on later lines.
+            while True:
+                properties = re.match(r'(?:[&!]\S+(?:\s+|$))*', text)
+                value_start += properties.end()
+                text = text[properties.end():]
+                if text and not text.startswith("#"):
+                    break
+                L[value_line] = L[value_line][:value_start]
+                next_line = next((j for j in range(value_line + 1, len(L))
+                                   if L[j].strip() and not L[j].lstrip().startswith("#")), len(L))
+                if next_line == len(L):
+                    break
+                next_start = len(L[next_line]) - len(L[next_line].lstrip())
+                if next_start <= indent:
+                    break
+                for comment_line in range(value_line + 1, next_line):
+                    L[comment_line] = ""
+                value_line, value_start = next_line, next_start
+                text = L[value_line][value_start:]
+            if text.startswith(("'", '"')):
+                quoted = re.match(r'''(?:"(?:[^"\\]|\\.)*"|'(?:[^']|'')*')''',
+                                  "\n".join(L[value_line:])[value_start:], re.S)
+                if quoted:
+                    scalar_until = value_line + quoted.group().count("\n")
+                    end = len(quoted.group().split("\n")[-1])
+                    if scalar_until == value_line:
+                        end += value_start
+                    if re.match(r'\s+#', L[scalar_until][end:]):
+                        L[scalar_until] = L[scalar_until][:end]
+                continue
+            header = re.match(r'^[|>]([1-9+-]*)\s*(#.*)?$', text)
+            if header:
+                if header.group(2):
+                    L[value_line] = L[value_line][:value_start + header.start(2)]
+                scalar_until = value_line
+                indicator = re.search(r'[1-9]', header.group(1))
+                if indicator:
+                    scalar_indent = indent + int(indicator.group())
+                else:
+                    first = next((L[j] for j in range(value_line + 1, len(L)) if L[j].strip()), "")
+                    content_indent = len(first) - len(first.lstrip())
+                    if content_indent > indent:
+                        scalar_indent = content_indent
+            else:
+                # Shell quotes within a plain YAML scalar do not quote YAML hashes.
+                L[value_line] = L[value_line][:value_start] + re.split(r'[ \t]+#', text, maxsplit=1)[0]
 
     # Toda clave `env:` que aparece EN CUALQUIER SITIO del fichero: workflow, job o paso.
     # Si un nombre esta aqui, alguien lo declaro alguna vez como variable de entorno.
@@ -105,7 +171,7 @@ for nombre in ficheros:
                     continue
                 linea = next((k for k in range(a, b) if "${" + var in L[k]), a) + 1
                 paso = next((L[k].strip()[8:60] for k in range(a, b) if L[k].lstrip().startswith("- name:")), "?")
-                print("check-step-env-closure: %s:%d: '%s' se consume aqui y su env: esta en OTRO paso — paso: %s"
+                print("check-step-env-closure: %s:%d: '%s' is consumed here, but its env: is in another step — step: %s"
                       % (nombre, linea, var, paso), file=sys.stderr)
                 roto += 1
             if "GITHUB_ENV" in cuerpo:
@@ -113,8 +179,8 @@ for nombre in ficheros:
                     exportadas.add(mm.group(1))
 
 if roto:
-    print("check-step-env-closure: ⛔ %d consumidor(es) cuya definicion vive en otro paso (%d mirados)"
+    print("check-step-env-closure: ⛔ %d consumer(s) defined in another step (%d checked)"
           % (roto, mirados), file=sys.stderr)
     raise SystemExit(1)
-print("check-step-env-closure: LIMPIO — %d paso(s) mirados, ninguna definicion extraviada" % mirados)
+print("check-step-env-closure: CLEAN — %d step(s) checked, no misplaced definitions" % mirados)
 PY

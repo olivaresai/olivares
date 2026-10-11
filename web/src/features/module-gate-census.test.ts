@@ -13,6 +13,8 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { type FeatureView } from '@/features/registry'
+import { moduleOfView } from '@/stores/modules'
 
 const SRC = resolve(__dirname, '..')
 
@@ -84,36 +86,26 @@ function apiMethods(): Map<string, Set<string>> {
   return out
 }
 
-/** The module a registry view's page gate checks (stores/modules.ts moduleOfView). */
+/** Each view entry's directory (features/<dir>/views.tsx) and the module its page gate
+ * checks (stores/modules.ts moduleOfView). */
+const VIEW_FILES = import.meta.glob<readonly FeatureView[]>(
+  ['./*/views.tsx', './*/view-entries.tsx'],
+  {
+    eager: true,
+    import: 'VIEWS',
+  },
+)
+
 function pageModules(): Map<string, Set<string>> {
-  const registry = SOURCES.get('features/registry.tsx')!
-  const viewModule = new Map(
-    [
-      ...SOURCES.get('stores/modules.ts')!.matchAll(
-        /^\s+([\w]+): '([a-z0-9-]+)',$/gm,
-      ),
-    ].map((m) => [m[1]!, m[2]!]),
-  )
-  const lazy = new Map(
-    [
-      ...registry.matchAll(
-        /const (\w+) = lazy\(\s*\(\)\s*=>\s*import\('\.\/([\w/-]+)'\)/g,
-      ),
-    ].map((m) => [m[1]!, m[2]!.split('/')[0]!]),
-  )
-  // One view per `id:`, read up to the next one: a view without a lazy element (Now is
-  // rendered directly) must not lend its id to the next view's element.
-  const ids = [...registry.matchAll(/\n\s*id: '([\w-]+)',/g)]
   const byDir = new Map<string, Set<string>>()
-  ids.forEach((v, i) => {
-    const body = registry.slice(v.index, ids[i + 1]?.index ?? registry.length)
-    const element = /element: lazyView\((\w+)\)/.exec(body)?.[1]
-    const permission = /permission: '([^']+)'/.exec(body)?.[1]
-    const dir = element ? lazy.get(element) : undefined
-    if (!dir || !permission) return
-    const mod = viewModule.get(v[1]!) ?? permission.split(':')[0]!
-    byDir.set(dir, (byDir.get(dir) ?? new Set()).add(mod))
-  })
+  for (const [file, views] of Object.entries(VIEW_FILES)) {
+    const dir = file.split('/')[1]!
+    for (const v of views) {
+      if (!v.permission) continue
+      const mod = moduleOfView(v.permission, v.id)!
+      byDir.set(dir, (byDir.get(dir) ?? new Set()).add(mod))
+    }
+  }
   return byDir
 }
 
@@ -158,8 +150,12 @@ const BARE_ERROR_STATE: Record<string, string> = {
     'a render crash caught by the router, not a read',
   'features/home/recent-work.tsx':
     'one state for two kernel reads (live sessions and runs), each mounted only with its permission',
-  'features/finops/model-rate-catalog.tsx':
-    'the catalog was read and its CONTENT is invalid: a data finding, not a read failure',
+  ...(SOURCES.has('features/finops/model-rate-catalog.tsx')
+    ? {
+        'features/finops/model-rate-catalog.tsx':
+          'the catalog was read and its CONTENT is invalid: a data finding, not a read failure',
+      }
+    : {}),
 }
 
 describe('module gate and error mapping census (EU18, EU20)', () => {

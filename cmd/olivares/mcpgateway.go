@@ -5,39 +5,31 @@
 package main
 
 import (
-	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"log/slog"
-	"net/http"
-	"os"
-	"strconv"
-	"strings"
-	"sync"
-	"time"
-
-	a2a "github.com/olivaresai/olivares/connectors/a2a"
+	"github.com/olivaresai/olivares/cmd/olivares/internal/mcpgateway"
 	mcpc "github.com/olivaresai/olivares/connectors/mcp"
 	"github.com/olivaresai/olivares/core/auth"
-	"github.com/olivaresai/olivares/core/license"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 	"github.com/olivaresai/olivares/modules/finops"
 	"github.com/olivaresai/olivares/modules/sessions"
-	"github.com/olivaresai/olivares/sdk"
+	"log/slog"
+	"net/http"
+	"strings"
+	"time"
 )
 
 // mcpgateway.go wires the agent-protocols GATEWAY in the composition root: the
 // inline MCP Resource-Server PEP (connectors/mcp) and the A2A push-notification
 // receiver (connectors/a2a), each mounted on a dedicated socket like the HITL receiver.
 // The connectors own the protocol + the deny-closed seams (token validation, the
-// tools/call gate, push JWT verification); this file binds those seams to the AGPL
-// plane the connectors may not import: the ApprovalGate (for destructive tools),
-// the ledger/log, and the upstream tool backend.
+// tools/call gate, push JWT verification); internal/mcpgateway binds those seams to
+// the AGPL plane the connectors may not import (operator config, evidence journal and
+// ledger, upstream tool backend, task kill-switch sweep). This file only wires it from
+// the engine and adapts the engine's ApprovalGate (for destructive tools) and
+// FinOps admission to the connector's gate seams.
 //
 // It is loaded from OLIVARES_AGENT_GATEWAY_CONFIG (operator-provisioned, secret-bearing,
 // out of the store). Absent/invalid ⇒ nothing mounted (the safe default; an un-wired
@@ -46,655 +38,27 @@ import (
 // loadAgentGatewayConfig reads the optional OLIVARES_AGENT_GATEWAY_CONFIG JSON. A
 // missing path yields an empty config (nothing mounted); a supplied path must be readable
 // and contain valid JSON or startup fails closed.
-func loadAgentGatewayConfig(_ *slog.Logger) (agentGatewayConfig, error) {
-	path := os.Getenv("OLIVARES_AGENT_GATEWAY_CONFIG")
+func loadAgentGatewayConfig(_ *slog.Logger) (mcpgateway.Config, error) {
+	path := osGetenv("OLIVARES_AGENT_GATEWAY_CONFIG")
 	if path == "" {
-		return agentGatewayConfig{}, nil
+		return mcpgateway.Config{}, nil
 	}
-	var cfg agentGatewayConfig
+	var cfg mcpgateway.Config
 	if err := loadOperatorJSONConfig("OLIVARES_AGENT_GATEWAY_CONFIG", path, &cfg); err != nil {
-		return agentGatewayConfig{}, err
+		return mcpgateway.Config{}, err
 	}
-	if err := validateAgentGatewaySource(cfg); err != nil {
-		return agentGatewayConfig{}, err
+	if err := mcpgateway.ValidateSource(cfg); err != nil {
+		return mcpgateway.Config{}, err
 	}
 	return cfg, nil
 }
-
-// agentGatewayConfig is the operator provisioning for the inbound agent surface.
-type agentGatewayConfig struct {
-	Listen string `json:"listen"`
-	// MCPSource selects exactly one owner. Existing files default to file; no file defaults to store.
-	MCPSource string `json:"mcp_source"`
-	// SessionTools enables the product's private session MCP tools. Default off.
-	SessionTools bool              `json:"session_tools"`
-	MCP          *mcpGatewayConfig `json:"mcp"`
-	A2APush      *a2aPushConfig    `json:"a2a_push"`
-	A2AInbound   *a2aInboundConfig `json:"a2a_inbound"`
-	// MCPRegistry provisions the embedded PRIVATE MCP sub-registry: the
-	// generic registry OpenAPI /v0.1 served per tenant under /mcp-registry/
-	// (tenant paths /mcp-registry/t/{tenant}/v0.1/..., default tenant on the bare
-	// /mcp-registry/v0.1/...). The entries are the operator-APPROVED set — the
-	// Internal registry elevated to a served registry (the official preview
-	// registry rejects private servers; GitHub's org/enterprise MCP registries
-	// require exactly this bring-your-own /v0.1 surface). Serving approved
-	// modules/catalog kindMCP entries from the store is the follow-up provider
-	// seam — provisioning is config-declared today, like the toolset.
-	MCPRegistry *mcpc.SubRegistryConfig `json:"mcp_registry"`
-}
-
-// Source ownership cannot be resolved by last-key-wins JSON semantics. Legacy
-// operator fields retain their decoding contract; an explicit source is strict.
-func (cfg *agentGatewayConfig) UnmarshalJSON(raw []byte) error {
-	type plain agentGatewayConfig
-	var decoded plain
-	if err := json.Unmarshal(raw, &decoded); err != nil {
-		return err
-	}
-	dec := json.NewDecoder(bytes.NewReader(raw))
-	tok, err := dec.Token()
-	if err != nil || tok != json.Delim('{') {
-		return errors.New("agent-gateway: expected configuration object")
-	}
-	seen := false
-	fileMCPDeclared, fileSessionEnabled := false, false
-	for dec.More() {
-		key, err := dec.Token()
-		if err != nil {
-			return err
-		}
-		var value json.RawMessage
-		if err := dec.Decode(&value); err != nil {
-			return err
-		}
-		if strings.EqualFold(key.(string), "mcp") && !bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
-			fileMCPDeclared = true
-		}
-		if strings.EqualFold(key.(string), "session_tools") {
-			var on bool
-			if json.Unmarshal(value, &on) == nil && on {
-				fileSessionEnabled = true
-			}
-		}
-		if strings.EqualFold(key.(string), "mcp_source") {
-			var source string
-			if seen || json.Unmarshal(value, &source) != nil || (source != "file" && source != "store") {
-				return errors.New("agent-gateway: mcp_source must be one explicit file or store declaration")
-			}
-			seen = true
-			decoded.MCPSource = source
-		}
-	}
-	if decoded.MCPSource == "store" && (fileMCPDeclared || fileSessionEnabled) {
-		return errors.New("agent-gateway: store source conflicts with file MCP declarations")
-	}
-	*cfg = agentGatewayConfig(decoded)
-	return validateAgentGatewaySource(*cfg)
-}
-
-func validateAgentGatewaySource(cfg agentGatewayConfig) error {
-	switch cfg.MCPSource {
-	case "", "file":
-		return nil
-	case "store":
-		if cfg.MCP != nil || cfg.SessionTools {
-			return errors.New("agent-gateway: mcp_source store conflicts with file-owned mcp or session_tools; remove those declarations explicitly")
-		}
-		return nil
-	default:
-		return errors.New("agent-gateway: mcp_source must be file or store")
-	}
-}
-
-// mcpGatewayConfig provisions the inline MCP Resource-Server PEP. Token trust is
-// ISSUER-KEYED: `issuers` is the multi-issuer form; the legacy single-issuer
-// fields remain accepted and are folded in by the connector. `issuer` is REQUIRED
-// when any legacy anchor field is set — an RS that cannot validate the iss claim of
-// every token (RFC 9068 §4) refuses to mount instead of skipping the check.
-type mcpGatewayConfig struct {
-	// Store-owned forwarding is injected by the governed composition, never JSON.
-	managedUpstream           mcpc.Upstream
-	managedUpstreamDescriptor string
-	Resource                  string            `json:"resource"`
-	AuthorizationServers      []string          `json:"authorization_servers"`
-	ScopesSupported           []string          `json:"scopes_supported"`
-	Issuers                   []mcpIssuerTrust  `json:"issuers"`
-	Issuer                    string            `json:"issuer"`
-	IssuerJWKS                json.RawMessage   `json:"issuer_jwks"`
-	JWKSURL                   string            `json:"jwks_url"`
-	IntrospectionURL          string            `json:"introspection_url"`
-	IntrospectionAuth         string            `json:"introspection_auth"` // secret: the RS's OWN introspection credential
-	Tenant                    string            `json:"tenant"`
-	Tools                     []mcpc.ToolPolicy `json:"tools"`
-	// RoleClaim is the token claim the per-role tool allowlist (E1) reads roles from
-	// (default "roles"); per-tool AllowedRoles ride inside each Tools entry.
-	RoleClaim      string   `json:"role_claim"`
-	AllowedOrigins []string `json:"allowed_origins"`
-	// RequireDPoP requires every authenticated request to present a DPoP-bound
-	// access token with a matching proof.
-	RequireDPoP bool `json:"require_dpop"`
-	// RequireDPoPNonce additionally requires the RS nonce in each DPoP proof; the
-	// client retries after the use_dpop_nonce challenge.
-	RequireDPoPNonce bool `json:"require_dpop_nonce"`
-	// AcceptMTLSBoundTokens verifies RFC 8705 x5t#S256-bound access tokens against
-	// the TLS peer certificate. It only works when this process terminates TLS with
-	// client-cert negotiation; behind a TLS-terminating proxy, the peer certificate
-	// is not visible and bound tokens fail closed.
-	AcceptMTLSBoundTokens bool   `json:"accept_mtls_bound_tokens"`
-	UpstreamURL           string `json:"upstream_url"`
-	UpstreamAuth          string `json:"upstream_auth"` // secret: a SEPARATE upstream credential (NEVER the inbound token)
-	// UpstreamRevision RECORDS the MCP protocol revision the upstream speaks, as
-	// CONFIGURATION (round-5 R5-05). Nothing here negotiates or discovers it.
-	//
-	// ROUND-7 R7-07: an empty value ASSUMES the connector baseline (2026-07-28).
-	// The round-6 wording "it is not a guess" was false — an unset field is exactly
-	// an assumption, and it is the OPERATOR's to get right; the connector-side
-	// comments were corrected for this and this one was missed. What IS true is the
-	// failure direction: the operator reconciliation read synthesizes a
-	// Tasks-extension request for the configured revision, and an upstream declared
-	// as a revision whose Tasks extension this connector does not implement has that
-	// read REFUSED rather than answered with a fabricated legacy shape — deny-closed,
-	// so a mismatch retains the record instead of draining it on an unreadable
-	// answer. Correcting a wrong value normally rebuilds the RS, which loses the
-	// process-local task inventory (see connectors/mcp/taskreconcile.go).
-	UpstreamRevision string `json:"upstream_revision"`
-	// NextRevisionHeaders controls the MCP 2026-07-28 L7 header gate
-	// (Mcp-Method/Mcp-Name deny-closed before body parse). Default OFF at the
-	// operator-config level for backward-compat; set to true to enable (maps to
-	// DisableNextRevisionHeaders:false on the RS).
-	//
-	// OMITTING IT KEEPS LEGACY IN THIS COMPOSITION. The previous sentence here
-	// said to omit it for deployments that speak 2026-07-28 "because the RS layer
-	// defaults ON", which is true of the connector in isolation and false of this
-	// gateway: the builder always passes DisableNextRevisionHeaders as the
-	// NEGATION of this field, so an omitted field arrives as
-	// DisableNextRevisionHeaders:true and the RS resolves LEGACY. true selects
-	// dual; the full pair is the RevisionMode table below.
-	NextRevisionHeaders bool `json:"next_revision_headers"`
-	// RevisionMode states this gateway's MCP revision posture EXPLICITLY,
-	// with exactly the values connectors/mcp already implements: "legacy", "dual"
-	// or "rc-strict". It is OPTIONAL and moves no default. The whole resolution
-	// table, because the PAIR is what an operator actually reads:
-	//
-	//	revision_mode absent  + next_revision_headers absent or false → legacy
-	//	revision_mode absent  + next_revision_headers true            → dual
-	//	revision_mode present + (bool absent)                         → that mode
-	//	revision_mode present + bool agreeing with its header posture → that mode
-	//	revision_mode present + bool contradicting it                 → REFUSED
-	//
-	// A present mode must be one of the three; unknown, empty, whitespace-only or
-	// null refuses to mount and names the accepted values. "legacy" means the
-	// 2026-07-28 header gate is OFF, "dual" and "rc-strict" mean it is ON, so an
-	// EXPLICITLY supplied next_revision_headers must agree — and an ABSENT boolean
-	// contradicts nothing, which is the whole reason the decode records presence.
-	//
-	// What this field is NOT: a compatibility, conformance or interoperability
-	// claim. It selects the posture the Resource Server enforces; nothing here has
-	// been exercised against any counterparty.
-	RevisionMode string `json:"revision_mode"`
-	// revisionModePresent and nextRevisionHeadersPresent record whether the
-	// operator document carried each key AT ALL. Absence is not "false": the
-	// contradiction rule above can only be honest if an omitted
-	// next_revision_headers is distinguishable from an explicit false, and a
-	// revision_mode that is present but empty must be refused rather than read as
-	// "not configured". UnmarshalJSON is their only writer; a Go composition
-	// literal supplies neither, which is exactly the state "not explicitly
-	// supplied" and leaves every existing fixture resolving as it always did.
-	revisionModePresent        bool
-	nextRevisionHeadersPresent bool
-	// ambiguousRevisionControls records a revision control the operator document
-	// supplied MORE THAN ONCE, in any mix of capitalizations, together with the
-	// spellings it used so the refusal can quote the document back. UnmarshalJSON
-	// is its only writer; a Go composition literal leaves it empty, which is the
-	// state "no document stated anything twice".
-	ambiguousRevisionControls []mcpRevisionControl
-	// Retrieval enables the in-process governed retrieval upstream: the
-	// knowledge module's RAG pipeline exposed as MCP tools (search_kb,
-	// fetch_document, list_kbs). When enabled the retrieval tools are merged into
-	// the toolset and an in-process upstream replaces (or supplements) the external
-	// forwarder. The retrieval scope defaults to "knowledge:retrieval:read".
-	Retrieval *mcpRetrievalConfig `json:"retrieval"`
-	// DurableTasks binds the optional MCP Tasks extension to the K5 WorkKernel and
-	// ProtocolBinding authorities. The route is entirely operator-owned: request
-	// metadata can never select a workspace, binding generation, or local owner.
-	// Omit this block to keep ordinary synchronous MCP forwarding available while
-	// the connector removes Tasks from its advertised capabilities.
-	DurableTasks *mcpDurableTasksConfig `json:"durable_tasks"`
-	// DurableSubscriptions binds subscriptions/listen to the sessions-backed
-	// cursor/event ledger. Omit it to leave the streaming method unavailable
-	// (503) while preserving ordinary synchronous MCP forwarding.
-	DurableSubscriptions *mcpDurableSubscriptionsConfig `json:"durable_subscriptions"`
-}
-
-// The two operator controls whose PRESENCE this composition must read as exactly
-// as their VALUE. They are the only member names scanned by name below; every
-// other field keeps the decoder's ordinary treatment.
-const (
-	mcpRevisionModeKey        = "revision_mode"
-	mcpNextRevisionHeadersKey = "next_revision_headers"
-)
-
-// jsonNullLiteral is the only value both controls treat specially, in opposite
-// directions (see UnmarshalJSON).
-const jsonNullLiteral = "null"
-
-// mcpRevisionControl collects every appearance of ONE revision control in a
-// single operator document, in the order the document wrote them: the spellings
-// exactly as typed (a refusal quotes them back, so an operator can find the
-// duplicate) and the raw value of each.
-type mcpRevisionControl struct {
-	name      string
-	spellings []string
-	values    []json.RawMessage
-}
-
-// scanMCPRevisionControls walks the document's top-level members ONCE and
-// attributes each to a revision control with strings.EqualFold — the same rule
-// encoding/json applies to field names, whose own fold is documented as
-// "foldName(x) == foldName(y) is identical to bytes.EqualFold(x, y)". Matching
-// the decoder's rule is the point: a control this scan attributes is exactly the
-// one the struct decode would have written, so presence can never describe a
-// different member than the value does.
-//
-// It reads values only for those two controls, rejects no member it does not
-// know, and imposes no strictness on the rest of the document.
-func scanMCPRevisionControls(data []byte) ([]mcpRevisionControl, error) {
-	controls := []mcpRevisionControl{{name: mcpRevisionModeKey}, {name: mcpNextRevisionHeadersKey}}
-	dec := json.NewDecoder(bytes.NewReader(data))
-	tok, err := dec.Token()
-	if err != nil {
-		return nil, err
-	}
-	if delim, ok := tok.(json.Delim); !ok || delim != '{' {
-		// Not an object (a bare null reaches the pointer, not this method): there
-		// are no member names to attribute, and the alias decode above has already
-		// accepted or rejected the document on its own terms.
-		return controls, nil
-	}
-	for dec.More() {
-		nameToken, err := dec.Token()
-		if err != nil {
-			return nil, err
-		}
-		name, ok := nameToken.(string)
-		if !ok {
-			return nil, fmt.Errorf("mcp gateway config: unexpected JSON member name %v", nameToken)
-		}
-		var value json.RawMessage
-		if err := dec.Decode(&value); err != nil {
-			return nil, err
-		}
-		for i := range controls {
-			if strings.EqualFold(name, controls[i].name) {
-				controls[i].spellings = append(controls[i].spellings, name)
-				controls[i].values = append(controls[i].values, value)
-			}
-		}
-	}
-	return controls, nil
-}
-
-// UnmarshalJSON decodes the operator document exactly as the standard decoder
-// always did — the alias type drops this method, so no field changes type,
-// validation or strictness — and additionally reads the two revision controls
-// from the document's OWN member names. That presence is the structural fact
-// the posture needs: without it, "next_revision_headers explicitly set to false" and
-// "the operator never mentioned it" are the same value, and the contradiction
-// rule cannot be stated, let alone tested.
-//
-// Independent review ( 2026-09-08) — PRESENCE AND VALUE COME FROM THE SAME
-// OCCURRENCE. This method used to read the value through the struct alias, where
-// encoding/json matches member names WITHOUT distinguishing case, and the
-// presence through a map lookup of two lowercase names. The two readings
-// disagreed on every noncanonical spelling, and the disagreement was not
-// cosmetic: "REVISION_MODE":null decoded to an empty mode whose presence was
-// invisible and therefore resolved LEGACY instead of being refused, and
-// "NEXT_REVISION_HEADERS":false contradicted an explicit rc-strict without the
-// contradiction rule ever seeing the boolean. The scan above applies the
-// decoder's own matching rule, and the two fields are RE-DERIVED from what it
-// found rather than inherited from the alias, which is what makes disagreement
-// impossible instead of merely unlikely.
-//
-// A control supplied MORE THAN ONCE is AMBIGUOUS and refuses to mount — including
-// two spellings that differ only in case, which are one member name to the
-// decoder. The refusal is recorded here and raised in
-// resolveMCPGatewayRevisionMode, so it lands where every other revision refusal
-// lands (the MCP composition, deny-closed) while the document itself still
-// decodes for the blocks this correction does not touch. An ambiguous control
-// leaves NO value behind: "last one wins" would publish one of two stated intents
-// as the operator's choice, and the two old readings did not even agree on which
-// one, since the struct kept the last NON-null value while the map kept the last
-// RAW one.
-//
-// A JSON null is treated differently for the two fields, on purpose:
-//
-//   - "next_revision_headers": null decodes to false and resolves legacy TODAY.
-//     Turning it into a startup refusal would change behaviour for an existing
-//     field, which this cut may not do, so a SINGLE null is recorded as NOT
-//     supplied — in any capitalization.
-//   - "revision_mode": null is a new field's explicit non-value, and root's rule
-//     rejects it with the empty and whitespace-only cases.
-//
-// Only these two controls are read this way. Unknown members remain accepted,
-// and no other field's decoding, type checking or strictness changes.
-func (c *mcpGatewayConfig) UnmarshalJSON(data []byte) error {
-	type alias mcpGatewayConfig
-	var decoded alias
-	if err := json.Unmarshal(data, &decoded); err != nil {
-		return err
-	}
-	*c = mcpGatewayConfig(decoded)
-	controls, err := scanMCPRevisionControls(data)
-	if err != nil {
-		return err
-	}
-	// Both controls start from nothing and are set ONLY from their own
-	// occurrence: one source for presence, null and value.
-	c.RevisionMode, c.revisionModePresent = "", false
-	c.NextRevisionHeaders, c.nextRevisionHeadersPresent = false, false
-	c.ambiguousRevisionControls = nil
-	for _, control := range controls {
-		switch {
-		case len(control.values) == 0:
-			continue
-		case len(control.values) > 1:
-			c.ambiguousRevisionControls = append(c.ambiguousRevisionControls, control)
-			continue
-		}
-		raw := bytes.TrimSpace(control.values[0])
-		isNull := string(raw) == jsonNullLiteral
-		switch control.name {
-		case mcpRevisionModeKey:
-			// Present even when null: an explicit non-value must be refused, not
-			// read back as "not configured".
-			c.revisionModePresent = true
-			if isNull {
-				continue
-			}
-			if err := json.Unmarshal(raw, &c.RevisionMode); err != nil {
-				return err
-			}
-		case mcpNextRevisionHeadersKey:
-			if isNull {
-				continue // one null keeps this existing field's absent semantics
-			}
-			if err := json.Unmarshal(raw, &c.NextRevisionHeaders); err != nil {
-				return err
-			}
-			c.nextRevisionHeadersPresent = true
-		}
-	}
-	return nil
-}
-
-// mcpRevisionControlAmbiguity refuses a document that supplied either revision
-// control more than once, naming the control, how many times, and the spellings
-// it used. It is a COMPOSITION refusal rather than a JSON parse error on purpose:
-// a duplicated MCP control takes the MCP surface down deny-closed and decides
-// nothing about the other blocks the same operator document provisions.
-func mcpRevisionControlAmbiguity(cfg *mcpGatewayConfig) error {
-	if len(cfg.ambiguousRevisionControls) == 0 {
-		return nil
-	}
-	stated := make([]string, 0, len(cfg.ambiguousRevisionControls))
-	for _, control := range cfg.ambiguousRevisionControls {
-		quoted := make([]string, 0, len(control.spellings))
-		for _, spelling := range control.spellings {
-			quoted = append(quoted, strconv.Quote(spelling))
-		}
-		stated = append(stated, fmt.Sprintf("%s is supplied %d times (as %s)",
-			control.name, len(control.spellings), strings.Join(quoted, ", ")))
-	}
-	return fmt.Errorf(
-		"mcp gateway config: %s; JSON member names are matched without distinguishing case, so which value the operator meant is ambiguous — supply each control exactly once",
-		strings.Join(stated, " and "))
-}
-
-// The explicit gateway revision modes. They MUST be the same three strings
-// connectors/mcp implements (rsconfig.go:402-404, unexported there); a divergence
-// fails closed rather than silently, because the value this file validates is
-// handed to the connector, whose own resolver rejects anything it does not know.
-const (
-	mcpGatewayRevisionModeLegacy   = "legacy"
-	mcpGatewayRevisionModeDual     = "dual"
-	mcpGatewayRevisionModeRCStrict = "rc-strict"
-)
-
-// mcpGatewayRevisionModes lists the accepted values in the order every refusal
-// names them.
-var mcpGatewayRevisionModes = []string{
-	mcpGatewayRevisionModeLegacy, mcpGatewayRevisionModeDual, mcpGatewayRevisionModeRCStrict,
-}
-
-// mcpRevisionModeHeaderPosture reports whether a mode runs the 2026-07-28 L7
-// header gate. It is the ONLY thing that makes the two operator fields
-// comparable: next_revision_headers has always meant "that gate is on".
-func mcpRevisionModeHeaderPosture(mode string) (headersOn, known bool) {
-	switch mode {
-	case mcpGatewayRevisionModeLegacy:
-		return false, true
-	case mcpGatewayRevisionModeDual, mcpGatewayRevisionModeRCStrict:
-		return true, true
-	default:
-		return false, false
-	}
-}
-
-// resolveMCPGatewayRevisionMode validates the operator's revision pair and returns
-// the EXPLICIT mode to hand to connectors/mcp, or "" when the operator stated
-// none.
-//
-// "" is not a default invented here: it is precisely the value that leaves
-// resolveResourceServerRevisionMode (connectors/mcp/rsconfig.go:438-452) resolving
-// from DisableNextRevisionHeaders exactly as it did before this field existed.
-// There is no second resolver in this file and no second protocol implementation —
-// only the validation the composition owes an operator BEFORE its surface serves,
-// which the connector cannot perform because the contradictory pair is a gateway
-// config shape the connector never sees.
-func resolveMCPGatewayRevisionMode(cfg *mcpGatewayConfig) (string, error) {
-	// R1: a control the document stated twice is refused BEFORE anything reads
-	// its value — there is no value to read that would not be a guess.
-	if err := mcpRevisionControlAmbiguity(cfg); err != nil {
-		return "", err
-	}
-	accepted := strings.Join(mcpGatewayRevisionModes, ", ")
-	if !cfg.revisionModePresent && cfg.RevisionMode == "" {
-		return "", nil // absent: the connector resolves from next_revision_headers, unchanged
-	}
-	mode := strings.TrimSpace(cfg.RevisionMode)
-	if mode == "" {
-		return "", fmt.Errorf(
-			"mcp gateway config: revision_mode is present but empty; omit the field to keep the next_revision_headers resolution, or set one of: %s",
-			accepted)
-	}
-	headersOn, known := mcpRevisionModeHeaderPosture(mode)
-	if !known {
-		return "", fmt.Errorf("mcp gateway config: unknown revision_mode %q (accepted: %s)", mode, accepted)
-	}
-	if cfg.nextRevisionHeadersPresent && cfg.NextRevisionHeaders != headersOn {
-		return "", fmt.Errorf(
-			"mcp gateway config: revision_mode %q and next_revision_headers %t contradict each other; %q requires next_revision_headers %t, so set it to %t or omit it",
-			mode, cfg.NextRevisionHeaders, mode, headersOn, headersOn)
-	}
-	return mode, nil
-}
-
-// mcpGatewayEffectiveConfig is the secret-free read-back of what this gateway was
-// CONFIGURED with, emitted once per mounted Resource Server. Every field is a fact
-// the composition can state about itself: the revision mode the Resource Server
-// resolved, which operator field selected it, and whether each durable seam was
-// WIRED.
-//
-// None of it is a readiness, conformance or interoperability claim. A wired seam
-// has not been exercised, an absent seam is a configuration fact and not a
-// failure, and no counterparty has been contacted to produce any of these values.
-type mcpGatewayEffectiveConfig struct {
-	revisionMode         string
-	revisionModeSource   string
-	upstream             string
-	subscriptionUpstream string
-	subscriptionLedger   string
-	durableTaskStore     string
-}
-
-// mcpRevisionModeSource names the operator field that selected the mode.
-func mcpRevisionModeSource(cfg *mcpGatewayConfig, explicit string) string {
-	switch {
-	case explicit != "":
-		return "revision_mode"
-	case cfg.nextRevisionHeadersPresent || cfg.NextRevisionHeaders:
-		return "next_revision_headers"
-	default:
-		return "default"
-	}
-}
-
-// mcpSeamState renders a seam as CONFIGURED or ABSENT — never as ready, healthy
-// or available, none of which this process has measured.
-func mcpSeamState(wired bool) string {
-	if wired {
-		return "configured"
-	}
-	return "absent"
-}
-
-// mcpUpstreamKind reduces the upstream descriptor to its KIND. The descriptor
-// carries the configured URL and a URL can carry userinfo credentials, so the
-// read-back names the kind and never the address.
-func mcpUpstreamKind(descriptor string) string {
-	switch {
-	case descriptor == "":
-		return "absent"
-	case strings.HasPrefix(descriptor, "in-process:"):
-		return descriptor // this form is a fixed label, with no address in it
-	case strings.HasPrefix(descriptor, "https-forward:"):
-		return "https-forward"
-	default:
-		return "configured"
-	}
-}
-
-// logMCPGatewayEffectiveConfig emits the read-back on the existing startup log
-// path, once, at Info. The message says what the record is and what it is not,
-// because a line listing wired seams is exactly the shape a reader mistakes for a
-// health check.
-func logMCPGatewayEffectiveConfig(log *slog.Logger, e mcpGatewayEffectiveConfig) {
-	if log == nil {
-		return
-	}
-	log.Info("mcp gateway: effective configuration read-back (CONFIGURED posture only — not a readiness, conformance or interoperability claim; no seam below has been exercised)",
-		"revision_mode", e.revisionMode,
-		"revision_mode_source", e.revisionModeSource,
-		"upstream", e.upstream,
-		"subscription_upstream", e.subscriptionUpstream,
-		"subscription_ledger", e.subscriptionLedger,
-		"durable_task_store", e.durableTaskStore,
-	)
-}
-
-// mcpRetrievalConfig enables the in-process governed retrieval MCP surface.
-type mcpRetrievalConfig struct {
-	Enabled bool   `json:"enabled"`
-	Scope   string `json:"scope"` // OAuth scope for retrieval tools (default "knowledge:retrieval:read")
-}
-
-// mcpDurableTasksConfig is the JSON-facing local route for MCP durable tasks.
-// Tenant comes from the enclosing MCP Resource Server configuration so the
-// authentication, evidence, work, and protocol-binding namespaces stay identical.
-type mcpDurableTasksConfig struct {
-	WorkspaceID                  string   `json:"workspace_id"`
-	BindingSpecID                string   `json:"binding_spec_id"`
-	BindingSpecGeneration        int64    `json:"binding_spec_generation"`
-	OwnerKind                    string   `json:"owner_kind"`
-	OwnerRef                     string   `json:"owner_ref"`
-	ProtocolRuleRefs             []string `json:"protocol_rule_refs"`
-	ProtocolPermissionProfileRef string   `json:"protocol_permission_profile_ref"`
-	InterruptChannelID           string   `json:"interrupt_channel_id"`
-	InterruptSenderUserID        string   `json:"interrupt_sender_user_id"`
-	InterruptRecipientUserID     string   `json:"interrupt_recipient_user_id"`
-}
-
-// mcpDurableSubscriptionsConfig fixes the local workspace of every relayed
-// stream. Tenant comes from the enclosing Resource Server and peer authority
-// comes from upstream_url; neither can be supplied by a listen request.
-type mcpDurableSubscriptionsConfig struct {
-	WorkspaceID string `json:"workspace_id"`
-}
-
-// mcpIssuerTrust is one trusted token issuer for the MCP PEP: the EXACT iss value
-// (the lookup key — compared byte-for-byte, no normalization) plus that issuer's own
-// trust anchors and the RS's own credential at that issuer's introspection endpoint.
-type mcpIssuerTrust struct {
-	Issuer            string          `json:"issuer"`
-	IssuerJWKS        json.RawMessage `json:"issuer_jwks"`
-	JWKSURL           string          `json:"jwks_url"`
-	IntrospectionURL  string          `json:"introspection_url"`
-	IntrospectionAuth string          `json:"introspection_auth"` // secret: per-issuer RS credential
-}
-
-// a2aPushConfig provisions the inbound A2A push-notification receiver.
-type a2aPushConfig struct {
-	Audience       string               `json:"audience"`
-	IssuerJWKS     json.RawMessage      `json:"issuer_jwks"`
-	JWKSURL        string               `json:"jwks_url"`
-	AllowedIssuers []string             `json:"allowed_issuers"`
-	Routes         []a2aPushRouteConfig `json:"routes"`
-}
-
-type a2aPushRouteConfig struct {
-	PeerAuthority            string `json:"peer_authority"`
-	Tenant                   string `json:"tenant"`
-	WorkspaceID              string `json:"workspace_id"`
-	InterruptChannelID       string `json:"interrupt_channel_id"`
-	InterruptSenderUserID    string `json:"interrupt_sender_user_id"`
-	InterruptRecipientUserID string `json:"interrupt_recipient_user_id"`
-}
-
-// a2aInboundConfig provisions the authenticated A2A SendMessage application
-// endpoint. Routes are operator-owned local authority: a peer-supplied tenant,
-// owner or WorkItem reference is never accepted as a routing decision.
-type a2aInboundConfig struct {
-	Audience                 string                  `json:"audience"`
-	IssuerJWKS               json.RawMessage         `json:"issuer_jwks"`
-	JWKSURL                  string                  `json:"jwks_url"`
-	AllowedIssuers           []string                `json:"allowed_issuers"`
-	InterfaceTenant          string                  `json:"interface_tenant"`
-	RequireClientAttestation bool                    `json:"require_client_attestation"`
-	AttesterJWKS             json.RawMessage         `json:"attester_jwks"`
-	Routes                   []a2aInboundRouteConfig `json:"routes"`
-}
-
-type a2aInboundRouteConfig struct {
-	PeerAuthority                string   `json:"peer_authority"`
-	Tenant                       string   `json:"tenant"`
-	WorkspaceID                  string   `json:"workspace_id"`
-	BindingSpecID                string   `json:"binding_spec_id"`
-	BindingSpecGeneration        int64    `json:"binding_spec_generation"`
-	ChannelID                    string   `json:"channel_id"`
-	SenderUserID                 string   `json:"sender_user_id"`
-	RecipientUserID              string   `json:"recipient_user_id"`
-	OwnerKind                    string   `json:"owner_kind"`
-	OwnerRef                     string   `json:"owner_ref"`
-	WorkKind                     string   `json:"work_kind"`
-	Priority                     string   `json:"priority"`
-	ProtocolRuleRefs             []string `json:"protocol_rule_refs"`
-	ProtocolPermissionProfileRef string   `json:"protocol_permission_profile_ref"`
-}
-
-// defaultAgentGatewayListen is the loopback-default bind (secure default): an
-// operator that must receive remote MCP/A2A traffic fronts it with their ingress.
-const defaultAgentGatewayListen = "127.0.0.1:8446"
-
-// envMCPTaskKillSwitchSweep controls the MCP durable-task cancellation sweep cadence.
-// Empty uses the session kill-switch sweep default; "0" disables active cancellation.
-const envMCPTaskKillSwitchSweep = "OLIVARES_MCP_TASK_KILLSWITCH_SWEEP"
 
 // buildAgentGatewayServer constructs the inbound agent-protocols server (MCP RS +
 // A2A push receiver) on its own socket, or nil when neither is configured. The MCP
 // tools/call HITL gate bridges to the SAME approval bridge the rest of Phase K
 // uses; the upstream forwarder uses a SEPARATE credential (no token passthrough).
 func buildAgentGatewayServer(eng *engine, log *slog.Logger) (*http.Server, error) {
-	var cfg agentGatewayConfig
+	var cfg mcpgateway.Config
 	if eng != nil && eng.gatewayConfig != nil {
 		cfg = *eng.gatewayConfig
 	} else {
@@ -718,7 +82,8 @@ func buildAgentGatewayServer(eng *engine, log *slog.Logger) (*http.Server, error
 		if issued {
 			authenticator = eng.sessionHooks.SessionCredentials
 		}
-		mux.Handle("/session/mcp", &sessionMCPHandler{authr: authenticator, issuedSessionOnly: issued, work: eng.sessionsMod.CallSessionWork,
+		mux.Handle("/session/mcp", &sessionMCPHandler{authr: authenticator, issuedSessionOnly: issued, admits: eng.admits(), work: eng.sessionsMod.CallSessionWork,
+			configurer: eng, publisher: eng.sessionPublisher(),
 			checkOrchestration: func(ctx context.Context, p auth.Principal, tenant model.TenantID) error {
 				return scope.WithScope(ctx, p, tenant, false, func(store.Scope) error { return nil })
 			}})
@@ -795,20 +160,20 @@ func buildAgentGatewayServer(eng *engine, log *slog.Logger) (*http.Server, error
 	}
 	addr := strings.TrimSpace(cfg.Listen)
 	if addr == "" {
-		addr = defaultAgentGatewayListen
+		addr = mcpgateway.DefaultListen
 	}
 	if !hostIsLoopback(addr) {
 		log.Warn("agent-gateway: bound to a NON-loopback address; front it with your ingress — its security is fail-closed token/JWT verification, not network isolation", "addr", addr)
 	}
 	srv := eng.api.NewHTTPServer(addr)
 	srv.Handler = mux
-	startMCPTaskKillSwitchSweep(srv, mcpRS, eng.killSwitch, mcpTenant, log)
+	mcpgateway.StartTaskKillSwitchSweep(srv, mcpRS, eng.killSwitch, mcpTenant, defaultStopSweepInterval, log)
 	return srv, nil
 }
 
 // buildMCPResourceServer builds the inline MCP PEP from config, binding the tools/call
 // HITL gate to the approval bridge and the upstream to a no-passthrough forwarder.
-func buildMCPResourceServer(eng *engine, cfg *mcpGatewayConfig, log *slog.Logger) (*mcpc.ResourceServer, model.TenantID, error) {
+func buildMCPResourceServer(eng *engine, cfg *mcpgateway.MCPConfig, log *slog.Logger) (*mcpc.ResourceServer, model.TenantID, error) {
 	return buildMCPResourceServerWithDurableTaskStore(eng, cfg, log, nil)
 }
 
@@ -818,7 +183,7 @@ func buildMCPResourceServer(eng *engine, cfg *mcpGatewayConfig, log *slog.Logger
 // focused tests may supply an explicit implementation.
 func buildMCPResourceServerWithDurableTaskStore(
 	eng *engine,
-	cfg *mcpGatewayConfig,
+	cfg *mcpgateway.MCPConfig,
 	log *slog.Logger,
 	durableTaskStore mcpc.DurableTaskStore,
 ) (*mcpc.ResourceServer, model.TenantID, error) {
@@ -826,7 +191,7 @@ func buildMCPResourceServerWithDurableTaskStore(
 	// constructed. An unknown, empty or self-contradictory pair refuses to mount,
 	// which is how this composition already refuses malformed provisioning: the
 	// caller logs PROVISIONED BUT NOT MOUNTED and never builds a listener for it.
-	revisionMode, err := resolveMCPGatewayRevisionMode(cfg)
+	revisionMode, err := mcpgateway.ResolveRevisionMode(cfg)
 	if err != nil {
 		return nil, "", err
 	}
@@ -866,7 +231,7 @@ func buildMCPResourceServerWithDurableTaskStore(
 	if eng.approvalBridge != nil && !rsTenant.IsZero() {
 		gate = mcpToolGate{bridge: eng.approvalBridge, tenant: rsTenant, guard: eng.killSwitch, rec: eng.stopDeny}
 	}
-	upstream := cfg.managedUpstream // nil ⇒ deny-closed (admitted/gated but not actuated)
+	upstream := cfg.ManagedUpstream // nil ⇒ deny-closed (admitted/gated but not actuated)
 	var subscriptionUpstream mcpc.SubscriptionUpstream
 	// upstreamDescriptor is the STABLE upstream/credential-profile identity bound
 	// into every tools/call EffectDigest (round-2): the identity fields the
@@ -874,7 +239,7 @@ func buildMCPResourceServerWithDurableTaskStore(
 	// Go type (build-dependent: static in community, token-exchange minter in
 	// enterprise) — NEVER the secret itself. A re-pointed backend therefore
 	// changes the effect identity: a keyed retry rebinds instead of replaying.
-	upstreamDescriptor := cfg.managedUpstreamDescriptor
+	upstreamDescriptor := cfg.ManagedUpstreamDescriptor
 
 	// wire the in-process governed retrieval upstream when enabled.
 	if cfg.Retrieval != nil && cfg.Retrieval.Enabled && eng.knowledgeMod != nil && !rsTenant.IsZero() {
@@ -896,14 +261,14 @@ func buildMCPResourceServerWithDurableTaskStore(
 	}
 
 	if upstream == nil && strings.TrimSpace(cfg.UpstreamURL) != "" {
-		credProv := newUpstreamCredentialProvider(cfg.UpstreamAuth)
-		forwarder := &mcpUpstreamForwarder{
-			url:      strings.TrimSpace(cfg.UpstreamURL),
-			credProv: credProv,
+		credProv := thisEdition.upstreamCredentialProvider(cfg.UpstreamAuth)
+		forwarder := &mcpgateway.UpstreamForwarder{
+			URL:      strings.TrimSpace(cfg.UpstreamURL),
+			CredProv: credProv,
 			// cli-transport-exempt: ENGINE→upstream MCP server, not a CLI path. The
 			// gateway forwards on behalf of a governed session; its credentials come
 			// from the upstream credential provider, never from a client context.
-			client: &http.Client{Timeout: 60 * time.Second},
+			Client: &http.Client{Timeout: 60 * time.Second},
 		}
 		upstream = forwarder
 		subscriptionUpstream = forwarder
@@ -952,8 +317,8 @@ func buildMCPResourceServerWithDurableTaskStore(
 			IntrospectionAuth: it.IntrospectionAuth,
 		})
 	}
-	ri := newMCPRenderInspector(os.Getenv, log)
-	em := newMCPElicitationMediator(os.Getenv, log)
+	ri := thisEdition.mcpRenderInspector.get(osGetenv, log)
+	em := thisEdition.mcpElicitationMediator.get(osGetenv, log)
 	mcpContentGateLog(log, ri, em)
 
 	var taskGate mcpc.TaskGate
@@ -992,7 +357,7 @@ func buildMCPResourceServerWithDurableTaskStore(
 		Upstream:              upstream,
 		SubscriptionUpstream:  subscriptionUpstream,
 		SubscriptionLedger:    subscriptionLedger,
-		Auditor:               mcpGateAuditor{log: log, store: eng.store, tenant: rsTenant},
+		Auditor:               mcpgateway.GateAuditor{Log: log, Store: eng.store, Tenant: rsTenant},
 		PinVerifier:           eng.pinVerifier,
 		RenderInspector:       ri,
 		ElicitationMediator:   em,
@@ -1025,15 +390,15 @@ func buildMCPResourceServerWithDurableTaskStore(
 	// ever describes a Resource Server this function is about to return. Emitting
 	// it earlier would publish an effective configuration for a composition that
 	// then failed to mount, which is the exact shape of a misleading startup line.
-	logMCPGatewayEffectiveConfig(log, mcpGatewayEffectiveConfig{
+	mcpgateway.LogEffectiveConfig(log, mcpgateway.EffectiveConfig{
 		// The RESOLVED mode is read back from the Resource Server that was built,
 		// not predicted here: it is the value that server enforces.
-		revisionMode:         rs.RevisionMode(),
-		revisionModeSource:   mcpRevisionModeSource(cfg, revisionMode),
-		upstream:             mcpUpstreamKind(upstreamDescriptor),
-		subscriptionUpstream: mcpSeamState(subscriptionUpstream != nil),
-		subscriptionLedger:   mcpSeamState(subscriptionLedger != nil),
-		durableTaskStore:     mcpSeamState(durableTasks != nil),
+		RevisionMode:         rs.RevisionMode(),
+		RevisionModeSource:   mcpgateway.RevisionModeSource(cfg, revisionMode),
+		Upstream:             mcpgateway.UpstreamKind(upstreamDescriptor),
+		SubscriptionUpstream: mcpgateway.SeamState(subscriptionUpstream != nil),
+		SubscriptionLedger:   mcpgateway.SeamState(subscriptionLedger != nil),
+		DurableTaskStore:     mcpgateway.SeamState(durableTasks != nil),
 	})
 	return rs, rsTenant, nil
 }
@@ -1045,7 +410,7 @@ func buildMCPResourceServerWithDurableTaskStore(
 func buildMCPSubscriptionLedger(
 	eng *engine,
 	tenant model.TenantID,
-	cfg *mcpDurableSubscriptionsConfig,
+	cfg *mcpgateway.DurableSubscriptionsConfig,
 	peerAuthority string,
 ) (mcpc.SubscriptionLedger, error) {
 	if cfg == nil {
@@ -1071,7 +436,7 @@ func buildMCPSubscriptionLedger(
 func buildMCPDurableTaskStore(
 	eng *engine,
 	tenant model.TenantID,
-	cfg *mcpDurableTasksConfig,
+	cfg *mcpgateway.DurableTasksConfig,
 ) (mcpc.DurableTaskStore, error) {
 	if cfg == nil {
 		return nil, nil
@@ -1122,137 +487,6 @@ func buildMCPDurableTaskStore(
 }
 
 // buildA2APushReceiver builds the inbound A2A push receiver from config.
-func buildA2APushReceiver(eng *engine, cfg *a2aPushConfig, log *slog.Logger) (*a2a.PushReceiver, error) {
-	var durableUpdate func(context.Context, a2a.TaskUpdate) error
-	var durableReply func(context.Context, a2a.ReplyEvent) error
-	if len(cfg.Routes) > 0 {
-		if eng == nil || eng.sessionsMod == nil {
-			return nil, fmt.Errorf("a2a push: durable routes require the sessions kernel")
-		}
-		settler, err := newA2APushSettlement(eng.sessionsMod, cfg.Routes, cfg.AllowedIssuers)
-		if err != nil {
-			return nil, err
-		}
-		durableUpdate = settler.Record
-		durableReply = settler.RecordReply
-	}
-	return a2a.NewPushReceiver(a2a.PushReceiverConfig{
-		Audience:        cfg.Audience,
-		IssuerJWKS:      []byte(cfg.IssuerJWKS),
-		JWKSURL:         cfg.JWKSURL,
-		AllowedIssuers:  cfg.AllowedIssuers,
-		OnUpdateDurable: durableUpdate,
-		OnReplyDurable:  durableReply,
-		OnUpdate: func(_ context.Context, u a2a.TaskUpdate) {
-			// Minimal-data operational record of a VERIFIED push (docs/SECURITY-HARDENING.md: the task
-			// reference + state only). Turning it into an observe-side edge is the
-			// producer seam; the receiver's job is verify + deliver.
-			log.Info("a2a-push: verified task update", "task", u.TaskID, "state", string(u.State), "sender", u.Sender, "interrupt", u.Interrupt, "terminal", u.Terminal)
-		},
-		OnReply: func(_ context.Context, reply a2a.ReplyEvent) {
-			// Reply bodies never enter operational logs. The connector has already
-			// reduced non-text values to references, but even bounded text remains K3 data.
-			log.Info("a2a-push: verified reply", "kind", string(reply.Kind),
-				"message", reply.MessageID, "task", reply.TaskID,
-				"artifact", reply.ArtifactID, "sender", reply.Sender)
-		},
-	})
-}
-
-func startMCPTaskKillSwitchSweep(srv *http.Server, rs *mcpc.ResourceServer, guard killSwitchGuard, tenant model.TenantID, log *slog.Logger) {
-	if srv == nil || rs == nil || guard == nil || tenant.IsZero() {
-		return
-	}
-	interval := loadMCPTaskKillSwitchSweepInterval(os.Getenv, log)
-	if interval == 0 {
-		if log != nil {
-			log.Info("mcp gateway: task kill-switch sweep disabled", "env", envMCPTaskKillSwitchSweep)
-		}
-		return
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	srv.RegisterOnShutdown(cancel)
-	go func() {
-		ticker := time.NewTicker(interval)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ticker.C:
-				sweepMCPTasksForKillSwitch(ctx, rs, guard, tenant, log)
-			case <-ctx.Done():
-				return
-			}
-		}
-	}()
-	if log != nil {
-		log.Info("mcp gateway: task kill-switch sweep wired", "tenant", tenant.String(), "interval", interval.String())
-	}
-}
-
-func loadMCPTaskKillSwitchSweepInterval(getenv func(string) string, log *slog.Logger) time.Duration {
-	raw := strings.TrimSpace(getenv(envMCPTaskKillSwitchSweep))
-	if raw == "" {
-		return defaultStopSweepInterval
-	}
-	d, err := time.ParseDuration(raw)
-	if err != nil || d < 0 {
-		if log != nil {
-			log.Warn("mcp gateway: invalid task kill-switch sweep interval; using the default",
-				"env", envMCPTaskKillSwitchSweep, "value", raw, "default", defaultStopSweepInterval.String())
-		}
-		return defaultStopSweepInterval
-	}
-	return d
-}
-
-func sweepMCPTasksForKillSwitch(ctx context.Context, rs *mcpc.ResourceServer, guard killSwitchGuard, tenant model.TenantID, log *slog.Logger) {
-	st, err := guard.KillSwitchState(ctx, tenant)
-	if err != nil {
-		if log != nil {
-			log.Error("mcp gateway: task kill-switch sweep could not read stop state", "tenant", tenant.String(), "err", err)
-		}
-		return
-	}
-	if !st.Any() {
-		return
-	}
-	tenantKey := tenant.String()
-	if st.EstateStopped {
-		reason := "kill-switch estate stop " + st.EstateStopID.String()
-		n, cerr := rs.CancelActiveTasks(ctx, func(rec mcpc.TaskRecord) bool {
-			return rec.Tenant == tenantKey
-		}, reason)
-		logMCPSweepResult(log, tenant, "estate", "", n, cerr)
-		return
-	}
-	for subject, stopID := range st.AgentRefs {
-		subject := strings.TrimSpace(subject)
-		if subject == "" {
-			continue
-		}
-		reason := "kill-switch agent stop " + stopID.String()
-		n, cerr := rs.CancelActiveTasks(ctx, func(rec mcpc.TaskRecord) bool {
-			return rec.Tenant == tenantKey && rec.Subject == subject
-		}, reason)
-		logMCPSweepResult(log, tenant, "agent", subject, n, cerr)
-	}
-}
-
-func logMCPSweepResult(log *slog.Logger, tenant model.TenantID, scope, subject string, canceled int, err error) {
-	if log == nil || (canceled == 0 && err == nil) {
-		return
-	}
-	attrs := []any{"tenant", tenant.String(), "scope", scope, "cancelled", canceled}
-	if subject != "" {
-		attrs = append(attrs, "subject", subject)
-	}
-	if err != nil {
-		attrs = append(attrs, "err", err)
-		log.Warn("mcp gateway: task kill-switch sweep completed with cancellation errors", attrs...)
-		return
-	}
-	log.Info("mcp gateway: task kill-switch sweep canceled active tasks", attrs...)
-}
 
 // mcpToolGate adapts the approval bridge to the MCP connector's ApprovalGate seam:
 // a destructive tools/call opens (or idempotently finds) a governed approval bound to
@@ -1266,7 +500,7 @@ type mcpToolGate struct {
 
 func (g mcpToolGate) Authorize(ctx context.Context, req mcpc.ToolApprovalRequest) (mcpc.GateDecision, error) {
 	// Estate kill switch, BEFORE the approval path: a stop outranks an
-	// approved grant AND the break-glass fallback gateOnce carries — an active
+	// approved grant AND the approval bridge's break-glass fallback — an active
 	// emergency grant must not re-authorize destructive tools during a stop.
 	// Fail-closed on a state read error (the connector maps a gate error to deny).
 	if g.guard != nil {
@@ -1280,19 +514,38 @@ func (g mcpToolGate) Authorize(ctx context.Context, req mcpc.ToolApprovalRequest
 		}
 	}
 	reason := "MCP destructive tools/call: " + req.Tool
-	// gateOnce, not request: tools/call is a ONE-SHOT gate re-issued on every retry
-	// of the same call, holding no ref between calls — like the hooks PEP, it
-	// must re-derive the decision from the plan hash each time and REUSE an
-	// already-approved grant within its time-box. request() (the two-phase open the
-	// deploy/orchestration gates pair with a later status()) never reuses an
-	// approved grant, so a human approval could never take effect here: the next
-	// identical call would open a fresh pending approval, deny-forever. gateOnce
-	// also brings the break-glass fallback (audited emergency authorization).
-	ref, status, boundHash, err := g.bridge.gateOnce(ctx, g.tenant, "mcp.tool.call", "tool", req.Tool, req.PlanHash, reason, req.RequestedBy)
+	if strings.Contains(req.Rule, "/condition:") {
+		// A Cedar condition asked, not the destructive flag: name it for the approver.
+		reason = "MCP tools/call held by " + req.Rule + ": " + req.Tool
+	}
+	// tools/call is re-issued on every retry of the same call and holds no approval
+	// between calls. The MCP 2026-07-28 approval round trip spends the approval for
+	// its one call; a call without a round trip keeps the published reuse of an
+	// approved grant inside its time box.
+	spend := reuseInWindow
+	if req.ConsumerID != "" {
+		spend = spendOnce
+	}
+	a, err := gateEffect(ctx, g.bridge, gatedEffect{
+		Tenant: g.tenant, Action: "mcp.tool.call", SubjectKind: "tool", SubjectRef: req.Tool, PlanHash: req.PlanHash,
+		Reason: reason, RequestedBy: req.RequestedBy, Consumer: req.ConsumerID, PolicyVersion: "mcp-toolcall-v1", Spend: spend,
+	})
+	if a.Failed == stepSpend {
+		if g.bridge.Log != nil {
+			g.bridge.Log.Warn("mcp gateway: approval could not be spent for a round trip; tools/call denied (deny-closed)",
+				"tenant", g.tenant.String(), "approval_ref", a.Ref, "err", err)
+		}
+		return mcpc.GateDecision{}, fmt.Errorf("mcp gateway: approval could not be spent; tools/call denied (deny-closed): %w", err)
+	}
 	if err != nil {
 		return mcpc.GateDecision{}, err
 	}
-	return mcpc.GateDecision{ApprovalRef: ref, Status: mapMCPGateStatus(status), PlanHash: boundHash}, nil
+	status := mapMCPGateStatus(a.Status)
+	if status == mcpc.StatusApproved && a.Outcome != effectAllowed {
+		// Approved, but not spendable for this round trip: another one spent it.
+		status = mcpc.StatusRejected
+	}
+	return mcpc.GateDecision{ApprovalRef: a.Ref, Status: status, PlanHash: a.BoundHash, Spent: a.Spent}, nil
 }
 
 // mapMCPGateStatus maps the bridge's neutral status onto the MCP gate vocabulary; every
@@ -1380,595 +633,4 @@ func mcpTaskBudgetUnavailable() mcpc.TaskGateDecision {
 		Allow: false, Reason: "task budget control unavailable (deny-closed)",
 		DeniedStatus: http.StatusServiceUnavailable,
 	}
-}
-
-// mcpGateAuditor is the evidence seam adapter of the MCP gateway: it backs the
-// connector's GateAuditor with the durable evidence operation journal
-// (store.ClaimEvidenceOperation / SettleEvidenceOperation) for the ENFORCED
-// surfaces, and keeps the historical best-effort ledger anchor for denials and the
-// not-yet-enforced legacy surfaces (zero binding — stages 4-6).
-type mcpGateAuditor struct {
-	log    *slog.Logger
-	store  store.Store    // journal + ledger; nil ⇒ enforced allows REFUSE (ledger_unwired)
-	tenant model.TenantID // the RS's single tenant (the enforcement anchor)
-}
-
-const (
-	mcpDecisionDomain = "olivares.mcp.tool.decision.v1"
-	// mcpGatewaySurface names this PEP surface in the evidence operation journal.
-	mcpGatewaySurface = "mcp.gateway"
-)
-
-// mcpToolCallAction is the journal action verb of one enforced tools/call,
-// labeled with the OperationID provenance (design §3: a request_instance entry
-// must never read as client-keyed idempotency). The paired ledger events are
-// "<action>.claim" / "<action>.settle".
-func mcpToolCallAction(idKind string) string {
-	switch idKind {
-	case "keyed", "request_instance":
-		return "mcp.tool.call." + idKind
-	default:
-		return "mcp.tool.call"
-	}
-}
-
-// mcpEffectAction resolves the journal action of one enforced claim: the
-// connector-supplied EffectAction when present (stage 4 — the task
-// surface: mcp.task.get.<kind> / mcp.task.cancel.<kind> / mcp.task.update.<kind>
-// / mcp.task.track / mcp.task.cancel.compensation / mcp.task.cancel.sweep),
-// else the historical tools/call action. ADDITIVE: an empty EffectAction keeps
-// the existing mcp.tool.call.* events byte-identical.
-func mcpEffectAction(d mcpc.ToolDecision) string {
-	if action := strings.TrimSpace(d.EffectAction); action != "" {
-		return action
-	}
-	return mcpToolCallAction(d.OperationIDKind)
-}
-
-// refusedMCPGateRecord builds the refused GateRecord for a fault.
-func refusedMCPGateRecord(binding sdk.EvidenceBinding, fault sdk.EvidenceFault, failure sdk.FailureClass) mcpc.GateRecord {
-	return mcpc.GateRecord{
-		Binding: binding,
-		Receipt: sdk.EvidenceReceipt{
-			OperationID: binding.OperationID, EffectDigest: binding.EffectDigest, Fault: fault,
-		},
-		State:        mcpc.GateRecordRefused,
-		FailureClass: failure,
-	}
-}
-
-// enforcedTenant resolves the tenant an ENFORCED operation is journaled under: the
-// configured RS tenant, with the decision tenant accepted only when EMPTY (fallback)
-// or exactly equal. A malformed or mismatched non-empty decision tenant refuses
-// (the design flagged the historical silent fallback as a defect: evidence
-// must never be silently attributed to a tenant the decision did not name).
-func (a mcpGateAuditor) enforcedTenant(decisionTenant string) (model.TenantID, bool) {
-	if a.tenant.IsZero() {
-		return "", false
-	}
-	tid, present, err := parseBusinessTenant("mcp decision tenant", decisionTenant)
-	if err != nil {
-		return "", false
-	}
-	if !present {
-		return a.tenant, true
-	}
-	if tid != a.tenant {
-		return "", false
-	}
-	return a.tenant, true
-}
-
-func (a mcpGateAuditor) Record(ctx context.Context, d mcpc.ToolDecision, binding sdk.EvidenceBinding) mcpc.GateRecord {
-	a.log.Info("mcp-gateway: tools/call decision",
-		"tool", d.Tool, "subject", d.Subject, "allowed", d.Allowed, "reason", d.Reason,
-		"required_scope", d.RequiredScope, "approval_ref", d.ApprovalRef, "task_id", d.TaskID, "mcp", d.MCPTag,
-		// SEP-414: the W3C trace id correlating this PEP decision with the
-		// gen_ai spans of the same trace (an identifier, never a payload).
-		"traceparent", d.TraceParent)
-
-	if !d.Allowed || !binding.Valid() {
-		// Denials (best-effort by doctrine — a policy deny NEVER depends on
-		// evidence success) and the zero-binding legacy surfaces (stages 4-6).
-		a.bestEffortAnchor(ctx, d)
-		return refusedMCPGateRecord(binding, sdk.EvidenceFaultLedgerUnwired, sdk.FailureEvidenceFault)
-	}
-
-	// ENFORCED allow: claim the operation single-use + anchor the evidence in one
-	// journal transaction. Every refusal below blocks the effect (deny-closed).
-	tenant, ok := a.enforcedTenant(d.Tenant)
-	if !ok {
-		a.log.Error("mcp-gateway: decision tenant unresolved for enforced tools/call; effect refused",
-			"tool", d.Tool, "subject", d.Subject, "decision_tenant", d.Tenant)
-		return refusedMCPGateRecord(binding, sdk.EvidenceFaultTenantUnresolved, sdk.FailureEvidenceFault)
-	}
-	actorKind := model.ActorSystem
-	if strings.TrimSpace(d.Subject) != "" {
-		actorKind = model.ActorAgent
-	}
-	outcome, err := store.ClaimEvidenceOperation(ctx, a.store, tenant, store.EvidenceClaim{
-		OperationID:  string(binding.OperationID),
-		EffectDigest: string(binding.EffectDigest),
-		Surface:      mcpGatewaySurface,
-		Action:       mcpEffectAction(d),
-		Actor:        firstNonEmpty(d.Subject, model.ActorSystem),
-		ActorKind:    actorKind,
-	})
-	switch {
-	case errors.Is(err, store.ErrEvidenceRebind):
-		// Same OperationID, different EffectDigest: the single-use claim is bound
-		// to another effect (sdk.FailureReplay — the 409/-31011 wire shape).
-		return refusedMCPGateRecord(binding, sdk.EvidenceFaultWriteError, sdk.FailureReplay)
-	case err != nil:
-		a.log.Error("mcp-gateway: evidence claim failed; effect refused", "tool", d.Tool, "err", err)
-		return refusedMCPGateRecord(binding, sdk.EvidenceFaultWriteError, sdk.FailureEvidenceFault)
-	case outcome.Receipt.MustRefuse(binding):
-		// Evidence fault (unwired/unavailable/spool/degrade/...): the specific
-		// fault stays server-side; the caller answers 503/-31010.
-		a.log.Error("mcp-gateway: evidence claim not anchored; effect refused",
-			"tool", d.Tool, "fault", string(outcome.Receipt.Fault))
-		return mcpc.GateRecord{
-			Binding: binding, Receipt: outcome.Receipt,
-			State: mcpc.GateRecordRefused, FailureClass: sdk.FailureEvidenceFault,
-		}
-	case outcome.Fresh:
-		return mcpc.GateRecord{
-			Binding: binding, Receipt: outcome.Receipt, State: mcpc.GateRecordFresh,
-			// The claim's durable leadership epoch is the fence token BeforeEffect
-			// re-verifies immediately before dispatch (opaque to the connector).
-			FenceToken: strconv.FormatUint(outcome.Op.LeaderEpoch, 10),
-		}
-	default:
-		// Exact replay (same operation, same digest): return the recorded state,
-		// never a second effect.
-		rec := mcpc.GateRecord{Binding: binding, Receipt: outcome.Receipt, State: mcpc.GateRecordReplayPending}
-		if outcome.Op.State.Terminal() {
-			rec.State = mcpc.GateRecordReplaySettled
-			rec.Recorded = &mcpc.RecordedOutcome{
-				State:        mcpc.DispatchState(outcome.Op.State),
-				ResultDigest: outcome.Op.ResultDigest,
-				OutcomeRef:   outcome.Op.OutcomeEvidenceRef,
-			}
-		}
-		return rec
-	}
-}
-
-// BeforeEffect re-verifies the claim's durable leadership fence IMMEDIATELY before
-// the upstream dispatch (store.EvidenceEpochFence: held lock session + persisted
-// epoch). Any failure refuses; the claim stays claimed and is never re-dispatched.
-func (a mcpGateAuditor) BeforeEffect(ctx context.Context, rec mcpc.GateRecord) sdk.EvidenceReceipt {
-	refuse := func(fault sdk.EvidenceFault) sdk.EvidenceReceipt {
-		return sdk.EvidenceReceipt{
-			OperationID: rec.Binding.OperationID, EffectDigest: rec.Binding.EffectDigest, Fault: fault,
-		}
-	}
-	if a.store == nil {
-		return refuse(sdk.EvidenceFaultLedgerUnwired)
-	}
-	epoch, err := strconv.ParseUint(strings.TrimSpace(rec.FenceToken), 10, 64)
-	if err != nil {
-		// A fresh record always carries the claim's epoch; a malformed token is a
-		// caller bug and fails closed, never open.
-		return refuse(sdk.EvidenceFaultWriteError)
-	}
-	if err := store.EvidenceEpochFence(ctx, a.store.Leader(), epoch); err != nil {
-		a.log.Error("mcp-gateway: pre-effect leadership fence refused the dispatch", "err", err)
-		return refuse(sdk.EvidenceFaultLedgerUnavailable)
-	}
-	return rec.Receipt
-}
-
-// Settle durably records the dispatch outcome against the claim. A refusing
-// settlement means the outcome did NOT commit — the caller withholds the response
-// and the operation remains claimed/ambiguous (status replay only).
-func (a mcpGateAuditor) Settle(ctx context.Context, out mcpc.GateOutcome) mcpc.GateSettlement {
-	refused := mcpc.GateSettlement{FailureClass: sdk.FailureEvidenceFault}
-	if a.store == nil || a.tenant.IsZero() {
-		return refused
-	}
-	outcome, err := store.SettleEvidenceOperation(ctx, a.store, a.tenant, store.EvidenceSettlement{
-		OperationID:  string(out.Record.Binding.OperationID),
-		EffectDigest: string(out.Record.Binding.EffectDigest),
-		State:        model.EvidenceOperationState(out.State),
-		ResultDigest: out.ResultDigest,
-		DispatchRef:  out.DispatchRef,
-		// The settlement is the GATEWAY's observation of the outcome, not a
-		// subject action: system attribution.
-		Actor:     model.ActorSystem,
-		ActorKind: model.ActorSystem,
-	})
-	if err != nil {
-		a.log.Error("mcp-gateway: evidence settlement failed; response withheld",
-			"operation_state", string(out.State), "err", err)
-		return refused
-	}
-	if outcome.Receipt.MustRefuse(out.Record.Binding) {
-		a.log.Error("mcp-gateway: evidence settlement not anchored; response withheld",
-			"operation_state", string(out.State), "fault", string(outcome.Receipt.Fault))
-		return refused
-	}
-	return mcpc.GateSettlement{
-		Outcome: mcpc.RecordedOutcome{
-			State:        out.State,
-			ResultDigest: outcome.Op.ResultDigest,
-			OutcomeRef:   outcome.Op.OutcomeEvidenceRef,
-		},
-		EvidenceRef: outcome.Receipt.EvidenceRef,
-	}
-}
-
-// bestEffortAnchor is the historical decision anchor, now serving denials and
-// the zero-binding legacy surfaces only (evidence-or-loud-gap; the enforced
-// tools/call path journals claim/settle events instead). Carries no raw arguments
-// or tokens (docs/SECURITY-HARDENING.md).
-func (a mcpGateAuditor) bestEffortAnchor(ctx context.Context, d mcpc.ToolDecision) {
-	decision := "deny"
-	if d.Allowed {
-		decision = "allow"
-	}
-	tenant := a.tenant
-	// Tenant-fallback fix: a MALFORMED non-empty decision tenant is never silently
-	// re-attributed to the configured tenant — loud gap. Routes it through the
-	// shared policy, which also rejects the reserved system tenant: this branch is
-	// reached WITHOUT going through enforcedTenant (see Record), so this is the only
-	// check on the path, and anchoring a business decision under the system tenant
-	// would file the evidence outside every business boundary.
-	tid, present, terr := parseBusinessTenant("mcp decision tenant", d.Tenant)
-	if terr != nil {
-		// The wording is the operator-facing contract (asserted by
-		// TestMCPEvidenceTenantResolution and greppable in logs); the precise reason —
-		// unparseable, unset, or the reserved system tenant — rides in `err`.
-		a.log.Error("mcp-gateway: malformed decision tenant; decision NOT anchored (evidence gap)",
-			"tool", d.Tool, "subject", d.Subject, "decision_tenant", d.Tenant, "err", terr)
-		return
-	}
-	if present {
-		tenant = tid
-	}
-	if a.store == nil || tenant.IsZero() {
-		a.log.Error("mcp-gateway: no ledger store/tenant; decision NOT anchored (evidence gap)", "tool", d.Tool, "subject", d.Subject)
-		return
-	}
-	actorKind := model.ActorSystem
-	if strings.TrimSpace(d.Subject) != "" {
-		actorKind = model.ActorAgent
-	}
-	ph := mcpDecisionHash(tenant.String(), d.Subject, d.Tool, d.RequiredScope, decision, d.ApprovalRef, d.TaskID, d.MCPTag, d.TokenBinding)
-	meta := map[string]any{
-		"tool": d.Tool, "subject": d.Subject, "allowed": d.Allowed, "reason": d.Reason,
-		"required_scope": d.RequiredScope, "approval_ref": d.ApprovalRef, "task_id": d.TaskID,
-		"mcp": d.MCPTag, "token_binding": d.TokenBinding, "decision": decision,
-	}
-	addAuditDelegationMeta(meta, auditDelegation{isDelegated: d.IsDelegated, actAs: d.ActAs})
-	if !d.Allowed {
-		// A refused call still needs its terminal evidence after disconnect,
-		// interrupt or stop. Detach only this bounded ledger write, never an
-		// authorization or effect; keep the caller's scope values.
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(context.WithoutCancel(ctx), reanchorTimeout)
-		defer cancel()
-	}
-	err := a.store.Mutate(ctx, tenant, func(sc store.Scope) error {
-		ev, aerr := sc.Audit().Append(ctx, model.AuditDraft{
-			Actor:       firstNonEmpty(d.Subject, model.ActorSystem),
-			ActorKind:   actorKind,
-			Action:      "mcp.tool." + decision,
-			TargetKind:  "mcp.tool",
-			TargetID:    model.ID(d.Tool),
-			PayloadHash: ph,
-			Meta:        meta,
-		})
-		if aerr == nil && ev.Seq == 0 {
-			a.log.Error("mcp-gateway: decision evidence dropped by degrade spool (evidence gap)", "tool", d.Tool)
-		}
-		return aerr
-	})
-	if err != nil {
-		a.log.Error("mcp-gateway: ledger anchor failed (evidence gap)", "tool", d.Tool, "subject", d.Subject, "err", err)
-	}
-}
-
-func mcpDecisionHash(tenant, subject, tool, requiredScope, decision, approvalRef, taskID, mcpTag, tokenBinding string) []byte {
-	h := sha256.New()
-	writeLenPrefixed(h, []byte(mcpDecisionDomain))
-	writeLenPrefixed(h, []byte(tenant))
-	writeLenPrefixed(h, []byte(subject))
-	writeLenPrefixed(h, []byte(tool))
-	writeLenPrefixed(h, []byte(requiredScope))
-	writeLenPrefixed(h, []byte(decision))
-	writeLenPrefixed(h, []byte(approvalRef))
-	writeLenPrefixed(h, []byte(taskID))
-	writeLenPrefixed(h, []byte(mcpTag))
-	writeLenPrefixed(h, []byte(tokenBinding))
-	return h.Sum(nil)
-}
-
-// mcpUpstreamForwarder forwards an admitted/gated MCP method to the upstream tool
-// backend over JSON-RPC. CRITICAL (no token passthrough): it authenticates with its OWN
-// credential (via credProv) and NEVER sees the inbound bearer — the
-// mcpc.UpstreamRequest it receives carries no token, so the inbound credential is
-// structurally unreachable from this request.
-type mcpUpstreamForwarder struct {
-	url      string
-	credProv UpstreamCredentialProvider // resolves the SEPARATE upstream credential; NEVER the inbound token
-	client   *http.Client
-	managed  bool
-	mu       sync.Mutex
-	sessions map[string]*managedMCPSession
-	// A session-owned forwarder uses this authenticated identity for both
-	// catalogue inspection and tool calls. Shared gateway forwarders leave it nil.
-	sessionIdentity *mcpc.SessionToolIdentity
-}
-
-var _ mcpc.SubscriptionUpstream = (*mcpUpstreamForwarder)(nil)
-
-// mcpForwardMaxResponse caps an upstream response body. The forwarder reads ONE
-// byte past it so an over-limit body is DETECTED (a truncated body can never be
-// validated, so it can never confirm an outcome).
-const mcpForwardMaxResponse = 8 << 20
-
-// Forward classifies every leg per the dispatch contract (mcpc.Upstream):
-// errors BEFORE http.Client.Do are proven not_sent; after invoking Do, the ONLY
-// path to `completed` is a 2xx response whose body is a STRICTLY VALID JSON-RPC
-// 2.0 response CORRELATED to the sent id and carrying exactly one of
-// result|error (mcpc.ParseStrictJSONRPCResponse — a valid JSON-RPC error object
-// IS a completed round-trip). EVERYTHING else after Do — timeout, reset,
-// cancellation, read failure, over-limit body, non-2xx status, malformed or
-// uncorrelated body — is `unknown`: the request may have been transmitted and
-// nothing observed can confirm the outcome.
-func (f *mcpUpstreamForwarder) Forward(ctx context.Context, req mcpc.UpstreamRequest) (mcpc.UpstreamResult, error) {
-	if f.managed {
-		if f.sessionIdentity != nil {
-			req.Subject = f.sessionIdentity.Subject
-			req.ClientID = f.sessionIdentity.ClientID
-			req.Scopes = f.sessionIdentity.Scopes
-		}
-		f.mu.Lock()
-		defer f.mu.Unlock()
-		key := managedMCPSessionKey(req)
-		session := f.sessions[key]
-		if req.Method == "initialize" {
-			if session == nil && len(f.sessions) >= 128 {
-				return mcpc.UpstreamResult{State: mcpc.DispatchNotSent}, errors.New("mcp gateway: session capacity reached")
-			}
-			session = &managedMCPSession{}
-			f.sessions[key] = session
-		} else if session == nil || session.version == "" {
-			return mcpc.UpstreamResult{State: mcpc.DispatchNotSent}, errors.New("mcp gateway: initialize required for this client")
-		}
-		return f.forward(ctx, req, session)
-	}
-	return f.forward(ctx, req, nil)
-}
-
-func (f *mcpUpstreamForwarder) forward(ctx context.Context, req mcpc.UpstreamRequest, session *managedMCPSession) (mcpc.UpstreamResult, error) {
-	notSent := mcpc.UpstreamResult{State: mcpc.DispatchNotSent}
-	unknown := mcpc.UpstreamResult{State: mcpc.DispatchUnknown}
-	// sentID correlates the response: the SAME constant is sent and validated.
-	sentID := int64(1)
-	env := map[string]any{"jsonrpc": "2.0", "id": sentID, "method": req.Method}
-	notification := session != nil && strings.HasPrefix(req.Method, "notifications/")
-	if notification {
-		delete(env, "id")
-	}
-	if len(req.Params) > 0 {
-		env["params"] = json.RawMessage(req.Params)
-	}
-	body, err := json.Marshal(env)
-	if err != nil {
-		return notSent, err
-	}
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, f.url, bytes.NewReader(body))
-	if err != nil {
-		return notSent, err
-	}
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Accept", "application/json, text/event-stream")
-	if session != nil {
-		if session.id != "" {
-			httpReq.Header.Set("Mcp-Session-Id", session.id)
-		}
-		if session.version != "" {
-			httpReq.Header.Set("MCP-Protocol-Version", session.version)
-		}
-	}
-	if f.credProv != nil {
-		authHdr, cerr := f.credProv.Credential(ctx, f.url)
-		if cerr != nil {
-			// An ENTITLEMENT refusal is not a transport fault, and collapsing the two is
-			// how "your license lapsed" reaches an operator dressed as "the upstream is
-			// down". The enterprise credential minter (credminter) raises
-			// license.ErrAddonRequiresLicense; give it a stable, self-describing wrapper
-			// so logs, tests and the client can tell the two apart.
-			//
-			// The dispatch state stays not_sent, which is PROVABLY true here: we refuse
-			// before http.Client.Do, so nothing was transmitted (mcpc.Upstream contract).
-			if addon, op, ok := license.AddonRefusal(cerr); ok {
-				return notSent, mcpAddonRefusal(addon, op, cerr)
-			}
-			return notSent, fmt.Errorf("mcp gateway: credential provider: %w", cerr)
-		}
-		if authHdr != "" {
-			httpReq.Header.Set("Authorization", authHdr) // separate credential — no passthrough
-		}
-	}
-	if req.TraceParent != "" {
-		httpReq.Header.Set("traceparent", req.TraceParent)
-	}
-	// propagate the operation identity + fence token for receiver-side
-	// idempotency/fencing (design §6 — identifiers only, never credentials). An
-	// upstream that understands them can reject a stale epoch; one that does not
-	// ignores unknown headers (the check-to-effect window residual remains).
-	if req.OperationID != "" {
-		httpReq.Header.Set("Olivares-Operation-Id", string(req.OperationID))
-	}
-	if req.EffectDigest != "" {
-		httpReq.Header.Set("Olivares-Effect-Digest", string(req.EffectDigest))
-	}
-	// Round-5 R5-05: the MCP ROUTING MIRRORS, derived by the connector from
-	// these exact params (mcpc.UpstreamRoutingHeaders) so a header can never
-	// contradict the body it mirrors. They are written LAST, after the operator and
-	// credential headers, for the same reason the connector's own client writes them
-	// last: a mirror that lied about the body is a -32020 HeaderMismatch, and a
-	// strict RC upstream refuses a tasks/* request that carries none — which would
-	// leave a retained task record permanently unreadable and therefore undrainable.
-	for k, v := range mcpc.UpstreamRoutingHeaders(req.Method, req.Params) {
-		httpReq.Header.Set(k, v)
-	}
-	if req.FenceToken != "" {
-		httpReq.Header.Set("Olivares-Fence-Token", req.FenceToken)
-	}
-	resp, err := doMCPForwardRequest(f.client, httpReq)
-	if err != nil {
-		if errors.Is(err, mcpc.ErrUpstreamCredentialTooShort) || errors.Is(err, mcpc.ErrUpstreamCredentialInvalid) {
-			return notSent, err
-		}
-		// After invoking Do the request may have reached the wire: unknown.
-		return unknown, fmt.Errorf("mcp gateway: upstream forward: %w", err)
-	}
-	defer resp.Body.Close()
-	if session != nil {
-		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-			return unknown, errors.New("mcp gateway: upstream HTTP refusal (outcome unknown)")
-		}
-		if notification {
-			if resp.StatusCode != http.StatusAccepted {
-				return unknown, errors.New("mcp gateway: invalid notification acknowledgment")
-			}
-			raw, err := io.ReadAll(io.LimitReader(resp.Body, mcpForwardMaxResponse+1))
-			if errors.Is(err, mcpc.ErrUpstreamCredentialDisclosure) {
-				return unknown, err
-			}
-			if err != nil || len(raw) != 0 {
-				return unknown, errors.New("mcp gateway: notification acknowledgment has a body")
-			}
-			return mcpc.UpstreamResult{State: mcpc.DispatchCompleted}, nil
-		}
-		raw, err := readManagedMCPResponse(resp, sentID)
-		if err != nil {
-			return unknown, err
-		}
-		result, rpcErr, err := mcpc.ParseStrictJSONRPCResponse(raw, sentID)
-		if err != nil {
-			return unknown, errors.New("mcp gateway: upstream response failed strict validation")
-		}
-		if rpcErr != nil {
-			return mcpc.UpstreamResult{State: mcpc.DispatchCompleted}, errors.New("mcp gateway: upstream RPC refusal")
-		}
-		if req.Method == "initialize" {
-			var init struct {
-				ProtocolVersion string `json:"protocolVersion"`
-			}
-			if json.Unmarshal(result, &init) != nil || init.ProtocolVersion != "2025-11-25" {
-				return mcpc.UpstreamResult{State: mcpc.DispatchCompleted}, errors.New("mcp gateway: unsupported negotiated protocol")
-			}
-			sid := resp.Header.Get("Mcp-Session-Id")
-			if !validManagedMCPSessionID(sid) {
-				return mcpc.UpstreamResult{State: mcpc.DispatchCompleted}, errors.New("mcp gateway: invalid upstream session identifier")
-			}
-			session.id = sid
-			session.version = init.ProtocolVersion
-		}
-		return mcpc.UpstreamResult{Result: result, State: mcpc.DispatchCompleted}, nil
-	}
-	// limit+1: an over-limit body is DETECTED, never silently truncated — a valid
-	// prefix followed by overflow data must not be validated as a response.
-	raw, rerr := io.ReadAll(io.LimitReader(resp.Body, mcpForwardMaxResponse+1))
-	if rerr != nil {
-		return unknown, fmt.Errorf("mcp gateway: read upstream response: %w", rerr)
-	}
-	if len(raw) > mcpForwardMaxResponse {
-		return unknown, fmt.Errorf("mcp gateway: upstream response exceeds %d bytes; cannot validate (outcome unknown)", mcpForwardMaxResponse)
-	}
-	// Review round-1 P1 + round-2 NEW-1: "completed" means an upstream response was
-	// OBSERVED and STRICTLY CONFIRMED. A non-2xx status is not a confirmed JSON-RPC
-	// outcome (an intermediary may have produced it after the origin possibly
-	// acted) → unknown. A 2xx body must pass the connector's strict validation
-	// (exact member casing, duplicate-key + trailing-data rejection, correlated
-	// integer id == sentID, exactly one of result|error, error carrying an integer
-	// code + string message) → anything else is unknown.
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return unknown, fmt.Errorf("mcp gateway: upstream http %d (outcome unknown)", resp.StatusCode)
-	}
-	result, rpcErr, verr := mcpc.ParseStrictJSONRPCResponse(raw, sentID)
-	if verr != nil {
-		return unknown, fmt.Errorf("mcp gateway: upstream response failed strict validation (outcome unknown): %w", verr)
-	}
-	if rpcErr != nil {
-		// A strictly valid JSON-RPC error IS a completed round-trip (design §1).
-		return mcpc.UpstreamResult{State: mcpc.DispatchCompleted},
-			fmt.Errorf("mcp gateway: upstream rpc %d %s", rpcErr.Code, rpcErr.Message)
-	}
-	return mcpc.UpstreamResult{Result: result, State: mcpc.DispatchCompleted}, nil
-}
-
-// Listen opens one long-lived upstream subscriptions/listen request. It uses
-// the forwarder's separate credential provider and a copy of its HTTP client
-// with no whole-request timeout: the downstream request context is the stream
-// lifetime and canceling it is MCP's unsubscribe signal.
-func (f *mcpUpstreamForwarder) Listen(
-	ctx context.Context,
-	req mcpc.SubscriptionListenRequest,
-	emit func(mcpc.SubscriptionEvent) error,
-) error {
-	const requestID int64 = 1
-	body, params, err := mcpc.MarshalSubscriptionUpstreamRequest(requestID, req)
-	if err != nil {
-		return err
-	}
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, f.url, bytes.NewReader(body))
-	if err != nil {
-		return err
-	}
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Accept", "text/event-stream")
-	if f.credProv != nil {
-		authHeader, credentialErr := f.credProv.Credential(ctx, f.url)
-		if credentialErr != nil {
-			if addon, operation, ok := license.AddonRefusal(credentialErr); ok {
-				return mcpAddonRefusal(addon, operation, credentialErr)
-			}
-			return fmt.Errorf("mcp gateway: subscription credential provider: %w", credentialErr)
-		}
-		if authHeader != "" {
-			httpReq.Header.Set("Authorization", authHeader)
-		}
-	}
-	if req.TraceParent != "" {
-		httpReq.Header.Set("traceparent", req.TraceParent)
-	}
-	for key, value := range mcpc.UpstreamRoutingHeaders(mcpc.SubscriptionListenMethod, params) {
-		httpReq.Header.Set(key, value)
-	}
-
-	client := http.DefaultClient
-	if f.client != nil {
-		streamClient := *f.client
-		streamClient.Timeout = 0
-		client = &streamClient
-	}
-	resp, err := doMCPForwardRequest(client, httpReq)
-	if err != nil {
-		if errors.Is(err, mcpc.ErrUpstreamCredentialTooShort) || errors.Is(err, mcpc.ErrUpstreamCredentialInvalid) {
-			return err
-		}
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		return fmt.Errorf("%w: upstream listen: %v", mcpc.ErrSubscriptionRelayTruncated, err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
-		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, mcpForwardMaxResponse))
-		return fmt.Errorf("mcp gateway: upstream listen http %d", resp.StatusCode)
-	}
-	if !strings.HasPrefix(resp.Header.Get("Content-Type"), "text/event-stream") {
-		return fmt.Errorf("mcp gateway: upstream listen is not an event stream")
-	}
-	err = mcpc.ConsumeSubscriptionUpstreamStream(resp.Body, requestID, emit)
-	if ctx.Err() != nil {
-		return ctx.Err()
-	}
-	return err
 }

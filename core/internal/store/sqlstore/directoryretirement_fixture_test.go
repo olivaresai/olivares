@@ -243,14 +243,19 @@ func verifyCurrentSchemaSeedImage(data []byte) error {
 // two-sided: every table listed here must be nonempty and every other table must be
 // empty, so an addition on either side is a loud failure and not a silent drift.
 var currentSchemaSeedNonemptyTables = map[string]string{
-	dialect.ScopeTenantTable:            "the reserved SYSTEM scope pin that restoreDirectorySystemBaseline persists after boot; an empty pin is the privileged migration presentation, not the post-Open baseline (directoryepoch.go, dialect/sqlite.go)",
-	dialect.DirectoryWriterControlTable: "the directory writer control singleton v7 creates and v10 rewrites: staged, generation 1, membership-union-v1 (userauthority_migration.go)",
-	coreTrackingTable:                   "core migration tracking, one row per applied core version (core/migrate)",
-	guardInventoryEventsTable:           "guard inventory activations appended by the v6 bootstrap and the later editions (guardledger.go appendInventoryEvent)",
-	guardReceiptsTable:                  "bootstrap receipts of the guard control plane and the v7/v9 completion seals (guardplane.go bootstrapReceiptFor)",
-	lineageControlTable:                 "the lineage control readiness singleton the v8 lineage migration inserts (lineage_migration.go)",
-	auditSpoolUsageTable:                "the single zero-byte spool usage row the audit DDL seeds (dialect/sqlite.go AuditTableStmts)",
-	dialect.AuditBlindingStateTable:     "the ledger's metadata-commitment default/actuation record ensured at boot (schema.go ensureAuditBlindingState)",
+	dialect.ScopeTenantTable:              "the reserved SYSTEM scope pin that restoreDirectorySystemBaseline persists after boot; an empty pin is the privileged migration presentation, not the post-Open baseline (directoryepoch.go, dialect/sqlite.go)",
+	dialect.DirectoryWriterControlTable:   "the directory writer control singleton v7 creates and v10 rewrites: staged, generation 1, membership-union-v1 (userauthority_migration.go)",
+	coreTrackingTable:                     "core migration tracking, one row per applied core version (core/migrate)",
+	"schema_migrations_directory_guards":  "directory writer guard reconciliation tracking (versioned_schema.go reconcileVersionedDirectoryGuards)",
+	"schema_migrations_lineage_guards":    "lineage guard installation tracking (lineage_migration.go reconcileLineageGuards)",
+	"schema_migrations_os_account_guards": "OS account reservation guard reconciliation tracking (versioned_schema.go reconcileVersionedOSAccountReservations)",
+	"schema_migrations_rollout":           "rollout schema installation tracking (rollout.go classifyRolloutControls)",
+	"schema_migrations_rollout_guards":    "rollout evidence guard reconciliation tracking (rollout.go reconcileRolloutEvidenceGuards)",
+	guardInventoryEventsTable:             "guard inventory activations appended by the v6 bootstrap and the later editions (guardledger.go appendInventoryEvent)",
+	guardReceiptsTable:                    "bootstrap receipts of the guard control plane and the v7/v9 completion seals (guardplane.go bootstrapReceiptFor)",
+	lineageControlTable:                   "the lineage control readiness singleton the v8 lineage migration inserts (lineage_migration.go)",
+	auditSpoolUsageTable:                  "the single zero-byte spool usage row the audit DDL seeds (dialect/sqlite.go AuditTableStmts)",
+	dialect.AuditBlindingStateTable:       "the ledger's metadata-commitment default/actuation record ensured at boot (schema.go ensureAuditBlindingState)",
 }
 
 // currentSchemaSeedMustBeEmpty names the durable session-state tables the contract
@@ -473,7 +478,7 @@ func verifyCurrentSchemaRetirementWitnesses(st *sqlStore) error {
 		return errors.New("elector absent")
 	}
 	ds := st.directoryStatus
-	if ds.Enabled || ds.ControlMode != store.DirectoryControlStaged || ds.ExpectedGeneration != 1 ||
+	if ds.Enabled || ds.ControlMode != store.DirectoryControlStaged || ds.ExpectedGeneration != 1 || //nolint:staticcheck // SA1019: pins the deprecated field's published false until removal
 		ds.CoverageProtocol != coverageProtocolLegacy || ds.InventoryUnavailableReason != "system_bootstrap_pending" ||
 		ds.InventoryOrgCount != 0 || ds.InventoryBusinessOrgCount != 0 || ds.InventoryEpochCount != 0 {
 		return fmt.Errorf("directory witness %+v is not the staged, bootstrap-pending first-boot witness", ds)
@@ -772,7 +777,12 @@ func currentSchemaLineDiff(want, got []string) string {
 // of that column permits it. Nothing else is normalized.
 var currentSchemaVariableColumns = map[string]map[string]bool{
 	// migrate stamps the wall clock when it applies a version.
-	coreTrackingTable: {"applied_at": true},
+	coreTrackingTable:                     {"applied_at": true},
+	"schema_migrations_directory_guards":  {"applied_at": true},
+	"schema_migrations_lineage_guards":    {"applied_at": true},
+	"schema_migrations_os_account_guards": {"applied_at": true},
+	"schema_migrations_rollout":           {"applied_at": true},
+	"schema_migrations_rollout_guards":    {"applied_at": true},
 	// guardReceipt.bodyDigest and chainDigest exclude applied_at by design: the same
 	// attribution must produce the same receipt id on a retry (guardledger.go).
 	guardReceiptsTable: {"applied_at": true},
@@ -953,6 +963,42 @@ func currentSchemaTestOpenCopy(t *testing.T, cache *currentSchemaRetirementSeedC
 func currentSchemaTestMustExec(t *testing.T, exec directoryWriterTestExecer, query string, args ...any) {
 	t.Helper()
 	directoryWriterTestMustExec(t, exec, query, args...)
+}
+
+func TestCurrentSchemaRetirementFixtureCensusRemainsTwoSided(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "fresh.db")
+	raw, err := Open(ctx, currentSchemaTestCopyConfig(path), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = raw.Close() })
+	db := raw.(*sqlStore).db
+	if err := verifyCurrentSchemaRetirementSeedState(ctx, db); err != nil {
+		t.Fatalf("fresh Open bookkeeping must be accepted: %v", err)
+	}
+
+	// A tracking-like name alone cannot exempt an unexpected nonempty table.
+	const unknown = "schema_migrations_unrecognized"
+	currentSchemaTestMustExec(t, db, "CREATE TABLE main."+unknown+" (value TEXT)")
+	currentSchemaTestMustExec(t, db, "INSERT INTO main."+unknown+" VALUES ('unexpected state')")
+	if err := verifyCurrentSchemaRetirementSeedState(ctx, db); err == nil ||
+		!strings.Contains(err.Error(), unknown+" has 1 rows but is not censused") {
+		t.Fatalf("uncensused row: %v", err)
+	}
+	currentSchemaTestMustExec(t, db, "DROP TABLE main."+unknown)
+
+	const tracking = "schema_migrations_rollout"
+	currentSchemaTestMustExec(t, db, "DELETE FROM main."+tracking)
+	if err := verifyCurrentSchemaRetirementSeedState(ctx, db); err == nil ||
+		!strings.Contains(err.Error(), tracking+" is empty but is censused") {
+		t.Fatalf("empty bookkeeping: %v", err)
+	}
+	currentSchemaTestMustExec(t, db, "DROP TABLE main."+tracking)
+	if err := verifyCurrentSchemaRetirementSeedState(ctx, db); err == nil ||
+		!strings.Contains(err.Error(), "censused table "+tracking+" does not exist") {
+		t.Fatalf("missing bookkeeping: %v", err)
+	}
 }
 
 func TestCurrentSchemaRetirementFixtureParityWithFreshOpen(t *testing.T) {

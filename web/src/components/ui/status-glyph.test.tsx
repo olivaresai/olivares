@@ -6,7 +6,7 @@
 // as the shape's accessible name, and it fails when it has no word to render.
 import { render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { StatusGlyph, type Status } from './status-glyph'
+import { RunningRing, StatusGlyph, type Status } from './status-glyph'
 
 const WORDS: Array<[Status, string]> = [
   ['working', 'Working'],
@@ -74,9 +74,31 @@ describe('StatusGlyph renders its word', () => {
     expect(screen.getByText('Handoff to you')).toBeInTheDocument()
   })
 
-  it('stops the running ring under reduced motion', () => {
+  it.each(WORDS)('%s uses the shared 6 px dot without a box', (status) => {
+    const { container } = render(<StatusGlyph status={status} />)
+    const dot = container.querySelector('[data-slot="status-dot"]')!
+    expect(dot).not.toBeNull()
+    expect(dot).toHaveClass('size-1.5', 'rounded-full')
+    expect(container.firstChild).not.toHaveClass('border', 'bg-surface')
+  })
+
+  it('pulses working green every 2 s and stops under reduced motion', () => {
     const { container } = render(<StatusGlyph status="working" />)
-    const ring = container.querySelector('[data-shape="ring"]')!
-    expect(ring.getAttribute('class')).toMatch(/motion-reduce:animate-none/)
+    const dot = container.querySelector('[data-slot="status-dot"]')!
+    expect(dot).toHaveClass('bg-ok', 'animate-pulse', '[animation-duration:2s]')
+    expect(dot).toHaveClass(
+      'motion-reduce:animate-none',
+      '[[data-motion=reduce]_&]:animate-none',
+    )
+  })
+
+  it('keeps the legacy working indicator on the shared green dot', () => {
+    const { container } = render(<RunningRing />)
+    expect(container.querySelector('[data-slot="status-dot"]')).toHaveClass(
+      'bg-ok',
+      'animate-pulse',
+      '[animation-duration:2s]',
+    )
+    expect(container.querySelector('svg')).toBeNull()
   })
 })

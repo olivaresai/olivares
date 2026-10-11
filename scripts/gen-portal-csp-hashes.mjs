@@ -61,7 +61,7 @@ async function main() {
   // and still checked, even though no hash is emitted for it: an extractor that silently returns
   // nothing for one of the two bodies is broken for both, and this is where that shows.
   if (style.length < 100 || script.length < 100) {
-    console.error("gen-portal-csp-hashes: NO HE PODIDO MIRAR: an inline body came back empty");
+    console.error("gen-portal-csp-hashes: COULD NOT LOOK: an inline body came back empty");
     process.exit(2);
   }
 

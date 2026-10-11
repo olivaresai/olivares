@@ -17,7 +17,7 @@ func TestRuntimeCompletionRetainsOriginalAttemptAcrossResume(t *testing.T) {
 	runner := &fakeRunner{initSID: "completion-provider-session"}
 	m, _, tenant, _ := newRuntimeHarness(t, WithRunner(runner), WithCredentialSource(staticCred()))
 	ctx := context.Background()
-	first, err := m.createRun(ctx, tenant, CreateRunParams{Transport: TransportStreamJSON, Isolation: IsolationNative, Actor: "user:operator", ActorKind: model.ActorUser})
+	first, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{Transport: TransportStreamJSON, Isolation: IsolationNative, Actor: "user:operator", ActorKind: model.ActorUser})
 	if err != nil {
 		t.Fatal(err)
 	}

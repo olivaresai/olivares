@@ -60,6 +60,7 @@ const CURSOR_NOTICES = 26
 
 test.describe.configure({ mode: 'serial' })
 
+let edition = ''
 let tokenAdmin = ''
 let tokenA = ''
 let tokenB = ''
@@ -305,6 +306,10 @@ test.beforeAll(async ({ request }) => {
   test.setTimeout(1_800_000)
   expect(BASE, 'K3_E2E_BASE is set by the global setup').not.toBe('')
   expect(TENANT, 'DEMO_TENANT is set by the global setup').not.toBe('')
+  const info = await request.get(`${BASE}/v1/server-info`)
+  expect(info.status()).toBe(200)
+  edition = ((await info.json()) as { edition: string }).edition
+  expect(['community', 'business', 'enterprise']).toContain(edition)
   tokenAdmin = (await login(request, DEMO_EMAIL, DEMO_PASSWORD)).token
   const ws = await api(request, tokenAdmin, 'GET', '/v1/workspaces?limit=100')
   expect(ws.status).toBe(200)
@@ -1507,11 +1512,46 @@ const CAP_SURFACE = 'GET /v1/m/sessions/channels/administration'
 const CAP_SHEET = 'GET /v1/m/sessions/channels/{id}/grants'
 const CAP_PATCH = 'PATCH /v1/m/sessions/channels'
 
+test('Community rejects custom Cedar authoring and preserves stored history', async ({
+  request,
+}) => {
+  test.skip(edition !== 'community', 'Community edition boundary')
+  const before = await api(
+    request,
+    tokenA,
+    'GET',
+    '/v1/m/governance/pdp/versions',
+  )
+  expect(before.status).toBe(200)
+  for (const [route, body] of [
+    [
+      '/v1/m/governance/pdp/publish',
+      { engine: 'cedar', source: 'forbid(principal, action, resource);' },
+    ],
+    ['/v1/m/governance/pdp/rollback', { engine: 'cedar', revision: 1 }],
+  ] as const) {
+    const result = await api(request, tokenA, 'POST', route, body)
+    expect(result.status).toBe(501)
+  }
+  const after = await api(
+    request,
+    tokenA,
+    'GET',
+    '/v1/m/governance/pdp/versions',
+  )
+  expect(after.status).toBe(200)
+  expect(after.json).toEqual(before.json)
+})
+
 // ─── G1-B/1 · workspace-scoped admission, end to end, with a false reflection ──────
 test('G1-B — a VIEWER with authored workspace policy and a local ADMIN bit administers from the console: whoami denies it, the engine admits it, and the real PATCH lands', async ({
   browser,
   request,
 }) => {
+  test.skip(
+    edition === 'community',
+    'Custom Cedar authoring is a Business journey; stored-policy enforcement is covered by the Community upgrade checks.',
+  )
   test.setTimeout(600_000)
 
   // ⛔ THE REFLECTION SAYS NO, AND IT IS ASSERTED RATHER THAN ASSUMED. G holds the viewer
@@ -1725,6 +1765,10 @@ test('G1-B — an ENTITY-ONLY permit opens the exact deep-linked sheet while the
   browser,
   request,
 }) => {
+  test.skip(
+    edition === 'community',
+    'Custom Cedar authoring is a Business journey; stored-policy enforcement is covered by the Community upgrade checks.',
+  )
   test.setTimeout(600_000)
 
   // The policy is REPLACED, not added to: this phase owns its source, so the previous

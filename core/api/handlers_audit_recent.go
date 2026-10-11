@@ -27,11 +27,8 @@ type auditRecentResponse struct {
 // minute must not fill the ledger with its own looking. Searching, exporting and
 // verifying the ledger stay recorded. ?limit is 1..50 (default 10); at most the last
 // 2000 positions are examined.
-func (s *Server) handleAuditRecent(w http.ResponseWriter, r *http.Request) {
-	_, tenant, ok := s.authzTenant(w, r, "audit:read")
-	if !ok {
-		return
-	}
+func (s *Server) handleAuditRecent(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	tenant := mc.Tenant
 	limit := int(queryInt64(r, "limit", 10))
 	if limit <= 0 || limit > 50 {
 		limit = 10

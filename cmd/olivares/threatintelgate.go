@@ -71,7 +71,7 @@ const threatIntelPublishBuffer = 1024
 // and publishes the resulting findings back on the bus (additive). A subscribe
 // error leaves the add-on inactive — never a boot failure.
 func subscribeThreatIntel(ctx context.Context, getenv func(string) string, bus eventbus.Bus, log *slog.Logger) {
-	src := newThreatIntelSource(getenv, log)
+	src := thisEdition.threatIntelSource.get(getenv, log)
 	if src == nil {
 		return
 	}

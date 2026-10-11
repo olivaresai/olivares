@@ -35,7 +35,7 @@ func TestLaunchWithoutWorkspaceGetsItsOwnDirectory(t *testing.T) {
 		WithRunner(fr), WithCredentialSource(staticCred()), WithSessionWorkspaceRoot(root))
 	ctx := context.Background()
 
-	dto, err := m.createRun(ctx, tenant, CreateRunParams{
+	dto, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative,
 		Actor: "user:u1", ActorKind: "user",
 	})
@@ -91,7 +91,7 @@ func TestLaunchWithARegisteredWorkspaceStillUsesIt(t *testing.T) {
 	if err != nil {
 		t.Fatalf("evalsymlinks: %v", err)
 	}
-	dto, err := m.createRun(ctx, tenant, CreateRunParams{
+	dto, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative,
 		WorkspaceRef: registerTestWorkspace(t, m, tenant, wsRoot),
 		Actor:        "user:u1", ActorKind: "user",
@@ -124,7 +124,7 @@ func TestLaunchWithoutASessionWorkspaceRootIsDenyClosed(t *testing.T) {
 	m.rt.sessionWorkspaceRoot = ""
 	ctx := context.Background()
 
-	_, err := m.createRun(ctx, tenant, CreateRunParams{
+	_, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative,
 		Actor: "user:u1", ActorKind: "user",
 	})
@@ -156,7 +156,7 @@ func TestReleaseRemovesTheSessionsOwnDirectory(t *testing.T) {
 		WithRunner(fr), WithCredentialSource(staticCred()), WithSessionWorkspaceRoot(root))
 	ctx := context.Background()
 
-	own, err := m.createRun(ctx, tenant, CreateRunParams{
+	own, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative,
 		Actor: "user:u1", ActorKind: "user",
 	})
@@ -188,7 +188,8 @@ func TestReleaseRemovesTheSessionsOwnDirectory(t *testing.T) {
 	if err := os.WriteFile(keep, []byte("operator's own file"), 0o600); err != nil {
 		t.Fatalf("write in the registered workspace: %v", err)
 	}
-	reg, err := m.createRun(ctx, tenant, CreateRunParams{
+	fr.initSID = "sess-release-workspace"
+	reg, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative,
 		WorkspaceRef: registerTestWorkspace(t, m, tenant, wsRoot),
 		Actor:        "user:u1", ActorKind: "user",
@@ -297,7 +298,7 @@ func TestReleaseNeverRemovesARegisteredWorkspaceUnderTheRoot(t *testing.T) {
 		t.Fatalf("write the operator's file: %v", err)
 	}
 
-	dto, err := m.createRun(ctx, tenant, CreateRunParams{
+	dto, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative,
 		WorkspaceRef: registerTestWorkspace(t, m, tenant, project),
 		Actor:        "user:u1", ActorKind: "user",
@@ -555,7 +556,7 @@ func TestReleaseKeepsADirectoryTheOperatorRegisteredAsAWorkspace(t *testing.T) {
 		WithRunner(fr), WithCredentialSource(staticCred()), WithSessionWorkspaceRoot(root))
 	ctx := context.Background()
 
-	dto, err := m.createRun(ctx, tenant, CreateRunParams{
+	dto, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative,
 		Actor: "user:u1", ActorKind: "user",
 	})
@@ -697,7 +698,8 @@ func TestTheReleaseDoesNotClaimItRemovedWhatWasNotThere(t *testing.T) {
 
 	launch := func(what string) string {
 		t.Helper()
-		dto, err := m.createRun(ctx, tenant, CreateRunParams{
+		fr.initSID = "sess-nothing-there-" + what
+		dto, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{
 			Transport: TransportStreamJSON, Isolation: IsolationNative,
 			Actor: "user:u1", ActorKind: "user",
 		})
@@ -748,7 +750,7 @@ func TestTheReleaseNeverFollowsALinkPlantedWhereItsDirectoryWas(t *testing.T) {
 		WithRunner(fr), WithCredentialSource(staticCred()), WithSessionWorkspaceRoot(root))
 	ctx := context.Background()
 
-	dto, err := m.createRun(ctx, tenant, CreateRunParams{
+	dto, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative,
 		Actor: "user:u1", ActorKind: "user",
 	})
@@ -852,7 +854,7 @@ func TestReleaseKeepsAWorkspaceRegisteredInsideTheSessionsOwnDirectory(t *testin
 		WithRunner(fr), WithCredentialSource(staticCred()), WithSessionWorkspaceRoot(root))
 	ctx := context.Background()
 
-	dto, err := m.createRun(ctx, tenant, CreateRunParams{
+	dto, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative,
 		Actor: "user:u1", ActorKind: "user",
 	})
@@ -919,7 +921,7 @@ func TestReleaseRemovesItsOwnDirectoryDespiteASiblingWhoseNameExtendsIt(t *testi
 		WithRunner(fr), WithCredentialSource(staticCred()), WithSessionWorkspaceRoot(root))
 	ctx := context.Background()
 
-	dto, err := m.createRun(ctx, tenant, CreateRunParams{
+	dto, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative,
 		Actor: "user:u1", ActorKind: "user",
 	})
@@ -988,7 +990,8 @@ func TestReleaseKeepsTheBytesWhenTheRegistryIsLargerThanARelease(t *testing.T) {
 
 	newRun := func(what string) (string, string) {
 		t.Helper()
-		dto, err := m.createRun(ctx, tenant, CreateRunParams{
+		fr.initSID = "sess-registry-bound-" + what
+		dto, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{
 			Transport: TransportStreamJSON, Isolation: IsolationNative,
 			Actor: "user:u1", ActorKind: "user",
 		})

@@ -82,12 +82,12 @@ func (r *accessEdgeRepo) Drift(ctx context.Context, q model.Query) ([]model.Priv
 	where := []string{"tenant_id = ?", "permitted <> observed"}
 	args := []any{r.g.tenant.String()}
 	for _, f := range q.Filters {
-		frag, val, err := r.g.filterFragment(f)
+		frag, vals, err := r.g.filterFragment(f)
 		if err != nil {
 			return nil, err
 		}
 		where = append(where, frag)
-		args = append(args, val)
+		args = append(args, vals...)
 	}
 	limit := q.Limit
 	if limit <= 0 || limit > maxLimit {

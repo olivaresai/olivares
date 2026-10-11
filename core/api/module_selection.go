@@ -27,6 +27,11 @@ type ModuleSelectionDTO struct {
 	// Restarting says the engine is restarting itself to apply the change; the
 	// console waits for it and reconnects.
 	Restarting bool `json:"restarting,omitempty"`
+	// RunningSessions is how many sessions this engine runs now. The restart that
+	// applies a change stops every one of them (each can be resumed), so the console
+	// and the CLI say so before and after Apply. Always sent: a reply without it is
+	// not a reply that says none run.
+	RunningSessions int `json:"running_sessions"`
 }
 
 // ModuleStateDTO is one module of the catalog.
@@ -71,10 +76,7 @@ func (s *Server) moduleSelectionSvc(w http.ResponseWriter, r *http.Request) (Mod
 	return s.moduleSelection, true
 }
 
-func (s *Server) handleModuleSelection(w http.ResponseWriter, r *http.Request) {
-	if _, ok := s.authzSystem(w, r, "system:admin"); !ok {
-		return
-	}
+func (s *Server) handleModuleSelection(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
 	svc, ok := s.moduleSelectionSvc(w, r)
 	if !ok {
 		return
@@ -87,11 +89,8 @@ func (s *Server) handleModuleSelection(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, dto)
 }
 
-func (s *Server) handleSelectModules(w http.ResponseWriter, r *http.Request) {
-	p, ok := s.authzSystem(w, r, "system:admin")
-	if !ok {
-		return
-	}
+func (s *Server) handleSelectModules(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	p := mc.Principal
 	if !s.requireStepUp(w, r, p) {
 		return
 	}
@@ -103,7 +102,7 @@ func (s *Server) handleSelectModules(w http.ResponseWriter, r *http.Request) {
 		Selected []string `json:"selected"`
 	}
 	if err := decodeJSON(w, r, &in); err != nil || in.Selected == nil {
-		s.badRequest(w, r, "selected is required: the modules to run, by name")
+		s.badRequest(w, r, RequestBodyErrorMessage(err, "selected is required: the modules to run, by name"))
 		return
 	}
 	dto, err := svc.SelectModules(r.Context(), p, in.Selected)

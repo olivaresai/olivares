@@ -1,8 +1,249 @@
 {
-  "_comment": "PASS floor per matrix package (pg-majors.yml evaluator, spec §2.6.3). Floors are EXACT counts measured 2026-07-31 on main against PostgreSQL 15.18 (hub instance, zero skips observed). A pass below its floor is red: comparing passes to each other cannot see an under-execution common to all four majors. Lowering a floor is a conscious, reviewed act — that is the point. The evaluator also requires this file's package set to equal ci/pg-majors-packages.txt exactly, every floor > 0.",
+  "_comment": "Minimum PASS floors retained from the original matrix: no floor is lowered. Packages must equal pg-majors-packages.txt and every floor must be positive. Exclusions name exact tests/subtests and the majors on which they are outside the declared qualification scope; Go selects them BEFORE execution. Every failure or skip in an executed matrix package remains red. Historical v9 upgrade qualification requires its separate source-native producer and is not claimed by this matrix.",
   "floors": {
     "core/internal/store/sqlstore": 438,
     "core/api/ratelimit/pgstore": 26,
     "core/internal/store/dialect": 16
-  }
+  },
+  "exclusions": [
+    {
+      "test": "TestSQLiteRestoreFenceHelperProcess",
+      "majors": [
+        15,
+        16,
+        17,
+        18
+      ],
+      "reason": "Subprocess entry point; its parent test executes it separately."
+    },
+    {
+      "test": "TestLoginCapabilitySQLiteReservationHelperProcess",
+      "majors": [
+        15,
+        16,
+        17,
+        18
+      ],
+      "reason": "Subprocess entry point; its parent test executes it separately."
+    },
+    {
+      "test": "TestLoginCapabilitySQLiteOldReaderFixture",
+      "majors": [
+        15,
+        16,
+        17,
+        18
+      ],
+      "reason": "Subprocess entry point; its parent test executes it separately."
+    },
+    {
+      "test": "TestCustodialClaimLosesToAnOutOfBandInsert/sqlite",
+      "majors": [
+        15,
+        16,
+        17,
+        18
+      ],
+      "reason": "SQLite has one writer; the PostgreSQL interleaving remains in scope."
+    },
+    {
+      "test": "TestPolicyStateMalformedScalarsAreContained_CrossBackend/postgres/enabled_as_text",
+      "majors": [
+        15,
+        16,
+        17,
+        18
+      ],
+      "reason": "PostgreSQL rejects this storage class at INSERT; the legal malformed rows remain in scope."
+    },
+    {
+      "test": "TestPolicyStateMalformedScalarsAreContained_CrossBackend/postgres/enabled_as_out-of-range_integer",
+      "majors": [
+        15,
+        16,
+        17,
+        18
+      ],
+      "reason": "PostgreSQL rejects this storage class at INSERT; the legal malformed rows remain in scope."
+    },
+    {
+      "test": "TestPolicyStateMalformedScalarsAreContained_CrossBackend/postgres/version_as_text",
+      "majors": [
+        15,
+        16,
+        17,
+        18
+      ],
+      "reason": "PostgreSQL rejects this storage class at INSERT; the legal malformed rows remain in scope."
+    },
+    {
+      "test": "TestUserAuthorityMaintenanceCASAndAcknowledgement",
+      "majors": [
+        15,
+        16,
+        17,
+        18
+      ],
+      "reason": "Separate historical v9 upgrade qualification requires the archived source-native producer (testdata/F2A-V9-FIXTURE.md). This matrix does not claim that upgrade coverage."
+    },
+    {
+      "test": "TestUserAuthorityAlreadyOpenV9WriterFenced",
+      "majors": [
+        15,
+        16,
+        17,
+        18
+      ],
+      "reason": "Separate historical v9 upgrade qualification requires the archived source-native producer (testdata/F2A-V9-FIXTURE.md). This matrix does not claim that upgrade coverage."
+    },
+    {
+      "test": "TestUserAuthorityAcknowledgementRequiresFullFreshWitness",
+      "majors": [
+        15,
+        16,
+        17,
+        18
+      ],
+      "reason": "Separate historical v9 upgrade qualification requires the archived source-native producer (testdata/F2A-V9-FIXTURE.md). This matrix does not claim that upgrade coverage."
+    },
+    {
+      "test": "TestUserAuthorityMaintenanceEpochOverflowRollsBackH",
+      "majors": [
+        15,
+        16,
+        17,
+        18
+      ],
+      "reason": "Separate historical v9 upgrade qualification requires the archived source-native producer (testdata/F2A-V9-FIXTURE.md). This matrix does not claim that upgrade coverage."
+    },
+    {
+      "test": "TestUserAuthorityV9MaintenancePredecessors",
+      "majors": [
+        15,
+        16,
+        17,
+        18
+      ],
+      "reason": "Separate historical v9 upgrade qualification requires the archived source-native producer (testdata/F2A-V9-FIXTURE.md). This matrix does not claim that upgrade coverage."
+    },
+    {
+      "test": "TestPostgresRestoreUserAuthorityLegacyPredecessor",
+      "majors": [
+        15,
+        16,
+        17,
+        18
+      ],
+      "reason": "Separate historical v9 upgrade qualification requires the archived source-native producer (testdata/F2A-V9-FIXTURE.md). This matrix does not claim that upgrade coverage."
+    },
+    {
+      "test": "TestUserAuthorityLegacyLateAbsencePoisonsTransaction",
+      "majors": [
+        15,
+        16,
+        17,
+        18
+      ],
+      "reason": "Separate historical v9 upgrade qualification requires the archived source-native producer (testdata/F2A-V9-FIXTURE.md). This matrix does not claim that upgrade coverage."
+    },
+    {
+      "test": "TestUserAuthoritySCIMCompound",
+      "majors": [
+        15,
+        16,
+        17,
+        18
+      ],
+      "reason": "Separate historical v9 upgrade qualification requires the archived source-native producer (testdata/F2A-V9-FIXTURE.md). This matrix does not claim that upgrade coverage."
+    },
+    {
+      "test": "TestPGLoginCapabilityRefusesEffectiveMaintain",
+      "majors": [
+        15,
+        16
+      ],
+      "reason": "pg_maintain and MAINTAIN were introduced in PostgreSQL 17; native privileges are covered by the other login/DR controls."
+    },
+    {
+      "test": "TestBoundedProjectionPostgres",
+      "majors": [
+        15,
+        17,
+        18
+      ],
+      "reason": "Optional bounded reads are qualified only on PostgreSQL 16 (docs/design/bounded-reader-br1.md); native refusal is tested on every major."
+    },
+    {
+      "test": "TestBoundedProjectionPostgresMutateLockWaitAndHold",
+      "majors": [
+        15,
+        17,
+        18
+      ],
+      "reason": "Optional bounded reads are qualified only on PostgreSQL 16 (docs/design/bounded-reader-br1.md); native refusal is tested on every major."
+    },
+    {
+      "test": "TestBoundedProjectionPostgresMutateOneDecidesBeforeLock",
+      "majors": [
+        15,
+        17,
+        18
+      ],
+      "reason": "Optional bounded reads are qualified only on PostgreSQL 16 (docs/design/bounded-reader-br1.md); native refusal is tested on every major."
+    },
+    {
+      "test": "TestBoundedReaderCorrectionPostgres",
+      "majors": [
+        15,
+        17,
+        18
+      ],
+      "reason": "Optional bounded reads are qualified only on PostgreSQL 16 (docs/design/bounded-reader-br1.md); native refusal is tested on every major."
+    },
+    {
+      "test": "TestBoundedReaderGroupsPostgres",
+      "majors": [
+        15,
+        17,
+        18
+      ],
+      "reason": "Optional bounded reads are qualified only on PostgreSQL 16 (docs/design/bounded-reader-br1.md); native refusal is tested on every major."
+    },
+    {
+      "test": "TestBoundedReaderGroupsPostgresRowLocks",
+      "majors": [
+        15,
+        17,
+        18
+      ],
+      "reason": "Optional bounded reads are qualified only on PostgreSQL 16 (docs/design/bounded-reader-br1.md); native refusal is tested on every major."
+    },
+    {
+      "test": "TestBoundedReaderPostgresMutateLocksBeforeMeasuring",
+      "majors": [
+        15,
+        17,
+        18
+      ],
+      "reason": "Optional bounded reads are qualified only on PostgreSQL 16 (docs/design/bounded-reader-br1.md); native refusal is tested on every major."
+    },
+    {
+      "test": "TestBoundedReaderPostgresQualifiedModes",
+      "majors": [
+        15,
+        17,
+        18
+      ],
+      "reason": "Optional bounded reads are qualified only on PostgreSQL 16 (docs/design/bounded-reader-br1.md); native refusal is tested on every major."
+    },
+    {
+      "test": "TestBoundedReaderWidePostgres",
+      "majors": [
+        15,
+        17,
+        18
+      ],
+      "reason": "Optional bounded reads are qualified only on PostgreSQL 16 (docs/design/bounded-reader-br1.md); native refusal is tested on every major."
+    }
+  ]
 }

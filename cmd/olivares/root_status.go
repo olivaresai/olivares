@@ -31,6 +31,9 @@ type rootStatusReport struct {
 	Context   string `json:"context,omitempty"`
 	SignedIn  string `json:"signed_in_as,omitempty"`
 	Next      string `json:"next"`
+	// Refusal is the readiness sentence of a key its provider refused, when no tool is
+	// ready: the cause the next step alone does not name.
+	Refusal string `json:"refusal,omitempty"`
 }
 
 func runRootStatus(cmd *cobra.Command) error {
@@ -57,6 +60,9 @@ func runRootStatus(cmd *cobra.Command) error {
 			{Key: "signed in", Value: signed},
 			{Key: "next", Value: report.Next},
 		})
+		if report.Refusal != "" {
+			r.Line(report.Refusal)
+		}
 		r.Blank()
 		r.Line("Start here:")
 		root := cmd.Root()
@@ -137,9 +143,11 @@ func rootStatus(ctx context.Context) rootStatusReport {
 	// A tool that can run a session now (its own login, a key or a local model) makes
 	// the session the next step, as `session start` would pick it; only with none ready
 	// do the tool rows say what to install or sign in.
-	if _, ok := cfg.firstReadyTool(ctx); ok {
+	ready, refused := cfg.firstReadyTool(ctx)
+	if ready != "" {
 		return report
 	}
+	report.Refusal = refused
 	if rows, err := cfg.toolRows(ctx); err == nil {
 		report.Next = rootNextFromTools(rows)
 	}
@@ -147,7 +155,7 @@ func rootStatus(ctx context.Context) rootStatusReport {
 }
 
 // rootNextFromTools picks the next step from the engine's tool rows, in the order
-// doctor uses: the first installed of Claude Code, Codex, Grok Build, OpenCode, then
+// the console uses: the first installed tool in sessionToolOrder, then
 // its sign-in. A signed-in Codex with no Claude Code is a working path, so the next
 // step is a Codex session, not "install Claude Code" (measured 2026-10-01: the two disagreed).
 func rootNextFromTools(rows []toolRow) string {
@@ -155,7 +163,7 @@ func rootNextFromTools(rows []toolRow) string {
 	for _, row := range rows {
 		byDriver[row.Driver] = row
 	}
-	for _, driver := range []string{"claude", "codex", "grok", "opencode"} {
+	for _, driver := range sessionToolOrder {
 		row, ok := byDriver[driver]
 		if !ok || !row.Installed {
 			continue

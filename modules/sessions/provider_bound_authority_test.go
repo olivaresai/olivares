@@ -7,6 +7,8 @@ package sessions
 import (
 	"context"
 	"testing"
+
+	"github.com/olivaresai/olivares/core/model"
 )
 
 // The record mint hands every record-bound launch its non-secret launch authority: the
@@ -73,6 +75,13 @@ func TestTheBoundProviderReachesTheDriver(t *testing.T) {
 		AuthSource: AuthSourceManagedInjection, ProviderRecordRef: rec.Ref})
 	own := mustCreateProfile(t, m, tenant, CreateProfileInput{Driver: providerDriverOpenCode, ConfigHome: t.TempDir(), UserHome: t.TempDir(),
 		AuthSource: AuthSourceAccountHome})
+	// The own-login branch requires a confirmed login in this exact profile.
+	m.ProfileLogin = func(_ context.Context, gotTenant model.TenantID, driver, ref string) (bool, bool, error) {
+		if gotTenant != tenant || driver != providerDriverOpenCode || ref != own.Ref {
+			t.Fatal("login status escaped the selected own-login profile")
+		}
+		return true, true, nil
+	}
 	for _, tc := range []struct {
 		profile ProviderProfile
 		want    BoundProvider
@@ -89,7 +98,7 @@ func TestTheBoundProviderReachesTheDriver(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		m.buildLaunchSpec(p, cred, WorkSessionCredential{}, CommunicationSessionCredential{}, "", nil, nil, env)
+		m.childSpec(p, childDecision{cred: cred, providerEnv: env})
 		if got.BoundProvider != tc.want {
 			t.Fatalf("the driver received %+v, want %+v", got.BoundProvider, tc.want)
 		}

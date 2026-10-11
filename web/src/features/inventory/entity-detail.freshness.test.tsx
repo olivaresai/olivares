@@ -117,6 +117,38 @@ beforeEach(() => {
 })
 
 describe('EntityDetailSheet C3 freshness', () => {
+  it.each([
+    [
+      'unregistered_at_discovery',
+      'Unregistered at discovery. This AI endpoint was new to inventory; its current governance is unknown. Coverage is limited to the configured proxy log and AI hosts.',
+    ],
+    [
+      'unknown',
+      'AI endpoint observed. Its governance is unknown. Coverage is limited to the configured proxy log and AI hosts.',
+    ],
+  ])('shows the honest AI discovery notice for %s', async (state, message) => {
+    vi.mocked(inventoryApi.detail).mockResolvedValue({
+      ...fresh,
+      entry: { ...fresh.entry, kind: 'resource' },
+      detail: { uri: 'api.anthropic.com', ai_discovery: state },
+    })
+    mount({ ...selected, kind: 'resource' })
+    const dialog = await screen.findByRole('dialog')
+    expect(await within(dialog).findByText(message)).toBeInTheDocument()
+    expect(within(dialog).queryByText(state)).toBeNull()
+  })
+
+  it('does not turn an unknown discovery enum into a governance claim', async () => {
+    vi.mocked(inventoryApi.detail).mockResolvedValue({
+      ...fresh,
+      entry: { ...fresh.entry, kind: 'resource' },
+      detail: { uri: 'api.anthropic.com', ai_discovery: 'governed' },
+    })
+    mount({ ...selected, kind: 'resource' })
+    const dialog = await screen.findByRole('dialog')
+    await within(dialog).findByText('api.anthropic.com')
+    expect(within(dialog).queryByText('governed')).toBeNull()
+  })
   it('does not treat the selected row as current freshness while the point read is pending', async () => {
     vi.mocked(inventoryApi.detail).mockReturnValue(new Promise(() => {}))
     mount()

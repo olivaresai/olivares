@@ -1,6 +1,6 @@
 {
   "title": "API Playground",
-  "description": "Interactively explore and test the control-plane API",
+  "description": "Explore and test the Olivares AI API.",
   "filterPlaceholder": "Filter endpoints…",
   "selectEndpoint": "Select an endpoint from the left panel",
   "send": "Send",
@@ -32,7 +32,7 @@
     "networkError": "Network Error",
     "failedNetworkHint": "Request failed — check your network connection.",
     "blockedDestination": "Blocked destination",
-    "blockedDestinationHint": "API Playground can only send requests to this control plane.",
+    "blockedDestinationHint": "API Playground can send requests only to this Olivares AI server.",
     "enterPathParam": "Enter {{name}}",
     "headerNamePlaceholder": "Header name",
     "headerValuePlaceholder": "Value",

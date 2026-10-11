@@ -9,30 +9,22 @@ import (
 	"crypto/ed25519"
 	"errors"
 	"fmt"
-	"log/slog"
-	"os"
-	"strings"
-	"time"
-
 	mcpc "github.com/olivaresai/olivares/connectors/mcp"
 	"github.com/olivaresai/olivares/connectors/modelprovider"
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/audit"
 	"github.com/olivaresai/olivares/core/model"
-
-	accessmap "github.com/olivaresai/olivares/modules/access-map"
+	obstrace "github.com/olivaresai/olivares/core/observability/trace"
+	"github.com/olivaresai/olivares/core/runtime/executor"
 	"github.com/olivaresai/olivares/modules/capabilities"
 	"github.com/olivaresai/olivares/modules/catalog"
-	"github.com/olivaresai/olivares/modules/claudeadoption"
 	"github.com/olivaresai/olivares/modules/compliance"
-	"github.com/olivaresai/olivares/modules/consoleviews"
 	"github.com/olivaresai/olivares/modules/deploy"
 	"github.com/olivaresai/olivares/modules/evals"
 	"github.com/olivaresai/olivares/modules/eventing"
 	"github.com/olivaresai/olivares/modules/finops"
 	"github.com/olivaresai/olivares/modules/gitpublish"
 	"github.com/olivaresai/olivares/modules/governance"
-	"github.com/olivaresai/olivares/modules/health"
 	"github.com/olivaresai/olivares/modules/inferenceproxy"
 	"github.com/olivaresai/olivares/modules/inventory"
 	"github.com/olivaresai/olivares/modules/knowledge"
@@ -41,22 +33,28 @@ import (
 	"github.com/olivaresai/olivares/modules/notify"
 	"github.com/olivaresai/olivares/modules/observability"
 	"github.com/olivaresai/olivares/modules/orchestration"
-	postureexport "github.com/olivaresai/olivares/modules/posture-export"
 	"github.com/olivaresai/olivares/modules/recording"
 	"github.com/olivaresai/olivares/modules/redteam"
+	"github.com/olivaresai/olivares/modules/registry"
 	"github.com/olivaresai/olivares/modules/reporting"
 	"github.com/olivaresai/olivares/modules/sandbox"
 	"github.com/olivaresai/olivares/modules/security"
 	"github.com/olivaresai/olivares/modules/sessions"
 	"github.com/olivaresai/olivares/modules/siemforward"
+	"github.com/olivaresai/olivares/modules/skills"
 	"github.com/olivaresai/olivares/modules/sourcescope"
 	"github.com/olivaresai/olivares/modules/voice"
+	"log/slog"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
 )
 
-// This file is the wiring half of the composition root: the ONLY place that imports
-// every product module. It constructs the Fase C module set and wires the
-// inter-module seam adapters that EXIST today; every other seam keeps its honest,
-// fail-closed default (each module warns once per un-wired seam in Start()).
+// This file configures the composition root's module adapters. The shared module
+// spec supplies default construction and registration order. It wires the
+// inter-module adapters that exist today; every other seam keeps its fail-closed
+// default (each module warns once per unwired seam in Start()).
 //
 // Wired today (real adapters):
 //   - governance ABAC -> the core authorizer (set.gov.Evaluator() in boot.go).
@@ -80,15 +78,11 @@ import (
 //     in-process exact cosineIndex (the air-gap default). A configured-but-down backend
 //     fails retrieval deny-closed (no silent fallback). See knowledgevector.go.
 //   - the approval gates (deploy/orchestration/voice/security) -> the governance
-//     engine, via the OUTBOUND ApprovalGate→HITL bridge (approvalbridge.go). The
-//     bridge resolves the original caveat — governance exposes no in-process Go
-//     approval API, only HTTP routes — by PROPOSING governed approvals over the
-//     engine's own handler in-process (the mirror of hitl.go's inbound apiDecider). It
-//     never decides: SoD / duplicate-decider / threshold / expiry stay enforced by
-//     on the inbound decision. Unwired (no OLIVARES_APPROVAL_BRIDGE_CONFIG) => each
-//     module keeps its deny-closed default (denyGate) and warns once; even wired, every
-//     edge is deny-closed (a new pending approval reports DENY/"ask"). See
-//     loadApprovalBridgeConfig.
+//     engine, via the OUTBOUND ApprovalGate→HITL bridge (internal/approvalbridge). The
+//     bridge proposes through the authenticated handler for operator-configured
+//     tenants, or through the local service by default. It never decides: SoD /
+//     duplicate-decider / threshold / expiry stay enforced by governance. Every edge
+//     is deny-closed (a new pending approval reports DENY/"ask"). See loadApprovalBridgeConfig.
 //   - the deploy executor and the orchestration/voice dispatchers -> the
 //     real, governed actuation engine (core/runtime/executor) and the A2A/voice
 //     connectors. The orchestration runtime fire route REUSES the same executor engine
@@ -143,11 +137,17 @@ import (
 // moduleSet is the constructed Fase C module set plus the handles the composition
 // root needs after construction. all is every module (each satisfies api.Module,
 // sdk.Module and api.DataConsumer); gov's evaluator backs the core authorizer;
-// approvalBridge (nil unless configured) is the OUTBOUND ApprovalGate adapter
-// whose engine handler boot() late-binds after api.New (it cannot exist yet here).
+// approvalBridge is the OUTBOUND ApprovalGate adapter whose service and handler
+// boot() late-binds.
 type moduleSet struct {
-	all []api.Module
-	gov *governance.Module
+	orchestrationExecutor *executor.Executor
+	deploySetup           *deployExecutorSetup
+
+	sessionDependencies *sessions.Dependencies
+
+	all           []api.Module
+	catalogDeploy *catalogDeploy
+	gov           *governance.Module
 	// the identity console, held so boot() can late-bind the SSO posture source
 	// once the federation service exists (it is built after the module set).
 	identityConsole *governance.IdentityConsole
@@ -216,6 +216,7 @@ type moduleSet struct {
 	// Recorder, the active-termination sweep) once the store / bridge are live — module
 	// II is constructed before those dependencies, so its governance gates late-bind.
 	sessions                  *sessions.Module
+	skills                    *skills.Module
 	protocolBindingReconciler *protocolBindingReconcileMux
 	finops                    *finops.Module
 	// module X (models) and the inference-proxy governance module, kept so boot()
@@ -241,7 +242,7 @@ type moduleSet struct {
 	workspaceSecrets    *workspaceConnectorSecrets
 	// the enterprise RTBF crypto-shred coordinator (nil / typed-nil in the
 	// default build). Kept as `any` — the AGPL root never imports enterprise/rtbf —
-	// so boot() can hand it to bindCryptoShredPorts once the compliance module and
+	// so boot() can hand it to the bindCryptoShredPorts port once the compliance module and
 	// the audit archive sink exist (its evidence ports: legal holds + WORM sinks).
 	rtbfCoordinator any
 	// the shared tool-pin verifier (nil in the community build). boot()
@@ -280,7 +281,7 @@ type moduleSet struct {
 // managed-tools root from the environment default while the engine ran on a
 // directory named by --data-dir, so an official CLI installed into the engine's
 // own tools root was never registered as a driver.
-func buildModules(signer *audit.Signer, catalogSigner, policySigner ed25519.PrivateKey, auditPriors []ed25519.PublicKey, inferenceDoer modelprovider.Doer, srcCfg sourcesConfig, edition EditionConfig, dataDir string, log *slog.Logger) (moduleSet, error) {
+func buildModules(sessionDependencies *sessions.Dependencies, signer *audit.Signer, catalogSigner, policySigner ed25519.PrivateKey, auditPriors []ed25519.PublicKey, inferenceDoer modelprovider.Doer, tracer *obstrace.Provider, srcCfg sourcesConfig, edition EditionConfig, dataDir string, log *slog.Logger, knowledgeOptions ...knowledge.Option) (moduleSet, error) {
 	modelGatewayProfiles, err := loadModelGatewayProfiles(osGetenv, log)
 	if err != nil {
 		return moduleSet{}, err
@@ -293,6 +294,10 @@ func buildModules(signer *audit.Signer, catalogSigner, policySigner ed25519.Priv
 		return moduleSet{}, err
 	}
 	sandboxCfg, err := loadSandboxRuntimeConfig(log)
+	if err != nil {
+		return moduleSet{}, err
+	}
+	approvalCfg, err := loadApprovalBridgeConfig(log)
 	if err != nil {
 		return moduleSet{}, err
 	}
@@ -309,10 +314,6 @@ func buildModules(signer *audit.Signer, catalogSigner, policySigner ed25519.Priv
 		return moduleSet{}, err
 	}
 	deployExecCfg, err := loadDeployExecutorConfig(log)
-	if err != nil {
-		return moduleSet{}, err
-	}
-	orchDispatchCfg, err := loadOrchDispatchConfig(log)
 	if err != nil {
 		return moduleSet{}, err
 	}
@@ -383,13 +384,28 @@ func buildModules(signer *audit.Signer, catalogSigner, policySigner ed25519.Priv
 	if err != nil {
 		return moduleSet{}, err
 	}
-	sm := sessions.New(append(buildSessionRuntimeOptions(osGetenv, wifBroker, dataDir, log),
-		sessions.WithManagedStopAdmissionTimeout(managedStopAdmission))...)
+	sessionOptions := append(buildSessionRuntimeOptions(osGetenv, wifBroker, dataDir, log),
+		sessions.WithManagedStopAdmissionTimeout(managedStopAdmission),
+		// #429: the run's invoke_agent span and the bearer link the inference
+		// proxy and the hook PEP parent their spans on.
+		sessions.WithTraceProvider(tracer))
+	var sm *sessions.Module
+	if sessionDependencies == nil {
+		// Module-only compositions keep the existing observe-only defaults.
+		// The full engine supplies its checked record explicitly.
+		sm = sessions.New(sessionOptions...)
+		sessionDependencies = sm.Dependencies
+	} else {
+		sm = sessions.NewWithDependencies(sessionDependencies, sessionOptions...)
+	}
 	// the place a session with NO registered workspace works in, bound
 	// through the door that reports a refusal. A refused root does not stop the
 	// engine — it deny-closes exactly those launches, and the ERROR line names the
 	// remedy — so the error is reported here and not returned.
 	_ = useSessionWorkspaceRoot(sm, dataDir, log)
+	// K4.A1: where a session launched with the opt-in new worktree works. A refusal
+	// refuses that option only.
+	_ = useSessionWorktrees(sm, dataDir, osGetenv, log)
 	logSessionLaunchInspection(sm, log)
 	// II→XII: the monitor samples REAL sessions from the module-II live read-model
 	// within a short configurable recency window (OLIVARES_EVALS_MONITOR_WINDOW).
@@ -416,7 +432,7 @@ func buildModules(signer *audit.Signer, catalogSigner, policySigner ed25519.Priv
 	// unconfigured (checkEmbeddingsRequirement).
 	knowledgeGuard := newGovernanceRetrievalGuard(log)
 	knowledgeGuard.useGuardPostureResolver(ssResolver)
-	knowledgeOpts := []knowledge.Option{}
+	knowledgeOpts := append([]knowledge.Option(nil), knowledgeOptions...)
 	knowledgeOpts = append(knowledgeOpts, knowledge.WithRetrievalGuard(knowledgeGuard))
 	// the source-scope gate (orthogonal to the guard's sensitivity/ACL) — is the
 	// requesting agent in the KB's workspace/agent-group scope? Deny-closed; an unbound
@@ -448,7 +464,7 @@ func buildModules(signer *audit.Signer, catalogSigner, policySigner ed25519.Priv
 	// = deny-closed block; LOW/MEDIUM = advisory finding, not blocked —).
 	// Enterprise depth (3 deterministic detectors) is nil in the community build.
 	knowledgeOpts = append(knowledgeOpts, knowledge.WithRetrievalContentScanner(
-		&coreRetrievalScanner{deepScanner: newRetrievalDeepScanner()},
+		&coreRetrievalScanner{deepScanner: thisEdition.retrievalDeepScanner.get()},
 	))
 	// the real isolated, egress-controlled execution runtime (core/runtime/
 	// sandboxrt) backing BOTH the sandbox.Runner (XVII) and the redteam.Sandbox
@@ -467,32 +483,23 @@ func buildModules(signer *audit.Signer, catalogSigner, policySigner ed25519.Priv
 		sandbox.WithScorer(evalsScorerAdapter{ev: ev}),
 		sandbox.WithHistorySource(sessionsHistoryAdapter{ss: sm}),
 	}
-	var redteamOpts []redteam.Option
+	redteamOpts := newRedteamOptions(sbrt)
 	if sbrt != nil {
 		// XVII: the OS-level isolated runner replaces the in-proc-mock default.
 		sbOpts = append(sbOpts, sandbox.WithRunner(sandboxRunnerAdapter{eng: sbrt}))
-		// XVIII: the same runtime, with egress scoped to the authorized target, is
-		// the red-team execution environment (docs/SECURITY-HARDENING.md RED LINE).
-		redteamOpts = append(redteamOpts, redteam.WithSandbox(redteamSandboxAdapter{eng: sbrt}))
 	}
 	sb := sandbox.New(sbOpts...)
 
-	// the OUTBOUND ApprovalGate bridge. Constructed from the operator config
-	// (nil = honest absence; the four modules keep their deny-closed defaults). When
-	// present it implements the deploy/orchestration/voice/security gates by proposing
-	// governed approvals over the engine's own handler (late-bound by boot() after
-	// api.New). It must never be a hard dependency: an un-configured deployment is
-	// fully functional and simply denies governed actuation, exactly as before.
-	// Approval windows/quorums live in governance policy; the engine calls the
-	// shared service without operator service tokens or a loopback HTTP handler.
-	bridge := newApprovalBridge(approvalBridgeConfig{}, log)
+	// Configured tenants propose through the authenticated handler; otherwise the
+	// bridge uses governance's local service. Boot binds both before requests start.
+	// Module gates deny every tenant an explicit configuration does not list.
+	bridge := newApprovalBridge(approvalCfg, log)
 	if bridge != nil {
-		sessions.WithProviderApprovalGate(providerApprovalAdapter{bridge: bridge, approvalWait: sm.BeginApprovalWait})(sm)
+		sessionDependencies.ApprovalGate = providerApprovalAdapter{bridge: bridge, approvalWait: sm.BeginApprovalWait}
 		sessions.WithDriverTimeouts(0, 15*time.Minute)(sm)
 	}
 	var (
 		deployOpts []deploy.Option
-		orchOpts   []orchestration.Option
 		voiceOpts  []voice.Option
 		// IX: the security module verifies audit checkpoints against the engine's key.
 		secOpts = []security.Option{
@@ -518,13 +525,12 @@ func buildModules(signer *audit.Signer, catalogSigner, policySigner ed25519.Priv
 		}))
 	}
 	if bridge != nil {
-		deployOpts = append(deployOpts, deploy.WithApprovalGate(bridge.deployGate()))
-		orchOpts = append(orchOpts, orchestration.WithApprovalGate(bridge.orchestrationGate()))
-		voiceOpts = append(voiceOpts, voice.WithApprovalGate(bridge.voiceGate()))
-		secOpts = append(secOpts, security.WithApprovalGate(bridge.securityGate()))
+		deployOpts = append(deployOpts, deploy.WithApprovalGate(bridge.DeployGate()))
+		voiceOpts = append(voiceOpts, voice.WithApprovalGate(bridge.VoiceGate()))
+		secOpts = append(secOpts, security.WithApprovalGate(bridge.SecurityGate()))
 		// NHI lifecycle rotation/offboarding inherit the SAME governed approval
 		// path (CRITICAL two-person floor + break-glass), via the module's gate seam.
-		gov.UseLifecycleGate(bridge.lifecycleGate())
+		gov.UseLifecycleGate(bridge.LifecycleGate())
 	}
 	// the write-capable NHI lifecycle actuators (Vault/Anthropic), opt-in per
 	// tenant. Absent ⇒ the module degrades honestly (manual rotation + coverage finding).
@@ -534,15 +540,15 @@ func buildModules(signer *audit.Signer, catalogSigner, policySigner ed25519.Priv
 	// forced-retention floor (always wired — models is in-process and read-only;
 	// §7's annotate-not-reject disclosure on model_io classes) and (b) the
 	// dual-control gate for its two dangerous verbs, compliance.retention.enable
-	// and compliance.hold.release — BOTH over gateOnceNoBreakGlass (no emergency
-	// path lifts a preservation or enables destruction; compliancegate.go). With
+	// and compliance.hold.release — BOTH over GateOnceNoBreakGlass (no emergency
+	// path lifts a preservation or enables destruction; internal/approvalbridge). With
 	// no bridge the module keeps its deny-closed denyApprovalGate. knowledge gets
 	// the hold-gate over the SAME compliance instance (CheckHold), so an active
 	// legal hold vetoes KB/memory destruction (423; gate error ⇒ 503, fail closed)
 	// — the composition root is the only place that can speak both modules' types.
 	compOpts := []compliance.Option{compliance.WithProviderRetention(modelsProviderRetention{})}
 	if bridge != nil {
-		compOpts = append(compOpts, compliance.WithApprovalGate(bridge.complianceGate()))
+		compOpts = append(compOpts, compliance.WithApprovalGate(bridge.ComplianceGate()))
 	}
 	// Right-to-erasure legs. The ACCOUNT eraser is always constructed (its store
 	// handle is late-bound by boot(), the knowledgeGuard pattern) — engine users live
@@ -569,75 +575,76 @@ func buildModules(signer *audit.Signer, catalogSigner, policySigner ed25519.Priv
 	// the coordinator is CONSTRUCTED here (compOpts must carry it into
 	// compliance.New below) but its evidence ports — the legal-hold checker over
 	// this same compliance module and the WORM archive sink — are late-bound by
-	// boot() via bindCryptoShredPorts, once both exist. Until the ports bind, the
+	// boot() via the bindCryptoShredPorts port, once both exist. Until the ports bind, the
 	// coordinator is deny-closed: readiness blocks and verification reports
 	// explicit unverified gaps, never fabricated success.
-	rtbfCoord := newCryptoShredCoordinator(osGetenv, log)
+	rtbfCoord := thisEdition.cryptoShredCoordinator.get(osGetenv, log)
 	if rtbfCoord != nil {
 		compOpts = append(compOpts, compliance.WithCryptoShredCoordinator(rtbfCoord))
 		log.Info("compliance: enterprise RTBF crypto-shred coordinator wired")
 	}
 	// OSCAL profile/SSP ingestion. The resolver is the commercial enterprise add-on,
-	// wired only under -tags enterprise (newOscalProfileResolver returns the real resolver
+	// wired only under -tags enterprise (the oscalProfileResolver port returns the real resolver
 	// there, nil in the default build). nil ⇒ the ingestion endpoint answers 501 and the
 	// OSCAL export keeps include-all — no feature removed from the free product.
-	if resolver := newOscalProfileResolver(); resolver != nil {
+	if resolver := thisEdition.oscalProfileResolver.get(); resolver != nil {
 		compOpts = append(compOpts, compliance.WithProfileResolver(resolver))
 		log.Info("compliance: OSCAL profile/SSP ingestion wired (governed, deny-closed; scopes the assessment-results export)")
 	}
 	// Records-vault: the regulatory retention-floor + compliance-mode governor is the
 	// commercial enterprise/wormretention add-on, wired only under -tags enterprise
-	// (newRetentionGovernor returns the real governor there, nil in the default build). nil
+	// (the retentionGovernor port returns the real governor there, nil in the default build). nil
 	// ⇒ no floor is enforced and schedules are freely relaxed/deleted — byte-identical to
 	// the free product (no feature removed; the floor only ADDS a deny when wired).
-	if governor := newRetentionGovernor(osGetenv, log); governor != nil {
+	if governor := thisEdition.retentionGovernor.get(osGetenv, log); governor != nil {
 		compOpts = append(compOpts, compliance.WithRetentionGovernor(governor))
 		log.Info("compliance: retention governor wired (named regulatory floors + compliance-mode lock; enterprise)")
 	}
 	// Named-regulation depth: the DORA Register-of-Information generator + major-incident
 	// classifier (enterprise/doraregister) and the FedRAMP-adjacent OSCAL POA&M builder
-	// (enterprise/oscalingest) are wired only under -tags enterprise (newRegulatoryPackager /
-	// newPOAMBuilder return the real ones there, nil in the default build). nil ⇒ the
+	// (enterprise/oscalingest) are wired only under -tags enterprise (the regulatoryPackager /
+	// poamBuilder ports return the real ones there, nil in the default build). nil ⇒ the
 	// /dora/register and /dora/incidents endpoints answer 501 and the evidence OSCAL export
 	// keeps its three models — no feature removed from the free product (no rug-pull).
-	if pkg := newRegulatoryPackager(); pkg != nil {
+	if pkg := thisEdition.regulatoryPackager.get(); pkg != nil {
 		compOpts = append(compOpts, compliance.WithRegulatoryPackager(pkg))
 		log.Info("compliance: regulatory packager wired (DORA Register of Information + major-incident classification; enterprise)")
 	}
-	if poam := newPOAMBuilder(); poam != nil {
+	if poam := thisEdition.poamBuilder.get(); poam != nil {
 		compOpts = append(compOpts, compliance.WithPOAMBuilder(poam))
 		log.Info("compliance: OSCAL POA&M builder wired (FedRAMP-adjacent plan-of-action-and-milestones; enterprise)")
 	}
 	// ISO/IEC 42001 AIMS certification-readiness: the pack (SoA, AI policy, risk
 	// register, impact assessments, lifecycle controls, supplier governance) is the
 	// commercial enterprise/iso42001 add-on, wired only under -tags enterprise
-	// (newAIMSPackager returns the real packager there, nil in the default build). nil ⇒
-	// the /aims/pack endpoints answer 501 and the open catalog/evidence/risk surfaces are
-	// unchanged — no feature removed from the free product (no rug-pull).
-	if aims := newAIMSPackager(); aims != nil {
+	// (the aimsPackager port returns the real packager there, nil in the default build). nil ⇒
+	// the /aims/pack endpoints answer 501. Catalogs and assessments belong to Business
+	// Compliance Packs; shared stored-evidence reads and operational risk remain available.
+	if aims := thisEdition.aimsPackager.get(); aims != nil {
 		compOpts = append(compOpts, compliance.WithAIMSPackager(aims))
 		log.Info("compliance: AIMS packager wired (ISO/IEC 42001 certification-readiness pack; enterprise)")
 	}
 	// Compliance-depth: the US state AI law packs, sector-overlay packs, CCM and FedRAMP
 	// 20x KSIs are the commercial enterprise/compliancedepth add-on, wired only under -tags
-	// enterprise (newComplianceDepthPackager returns the real packager there, nil in the default
-	// build). nil ⇒ the /depth/* endpoints answer 501 and the open catalog/calendar/evidence
-	// surfaces are unchanged — no feature removed from the free product (no rug-pull).
-	if depth := newComplianceDepthPackager(); depth != nil {
+	// enterprise (the complianceDepthPackager port returns the real packager there, nil in the default
+	// build). nil ⇒ the /depth/* endpoints answer 501. Catalogs and calendars belong to
+	// Business Compliance Packs; shared stored-evidence reads remain available.
+	if depth := thisEdition.complianceDepthPackager.get(); depth != nil {
 		compOpts = append(compOpts, compliance.WithComplianceDepth(depth))
 		log.Info("compliance: depth packager wired (US state AI laws + sector overlays + CCM + FedRAMP 20x; enterprise)")
 	}
 	// NIS 2 significant-incident classification: the Art 23 classifier is the
 	// commercial enterprise/nis2incident add-on, wired only under -tags enterprise
-	// (newNIS2IncidentPackager returns the real packager there when
+	// (the nis2IncidentPackager port returns the real packager there when
 	// OLIVARES_NIS2INCIDENT_CONFIG is set and valid, nil in the default build). nil ⇒
-	// the /nis2/incidents classification endpoints answer 501 and the open nis2
-	// catalog/calendar surfaces are unchanged — no feature removed from the free
-	// product (no rug-pull).
-	if nis2 := newNIS2IncidentPackager(osGetenv, log); nis2 != nil {
+	// the /nis2/incidents classification endpoints answer 501. NIS 2 catalogs and
+	// calendars belong to Business Compliance Packs; shared stored-evidence reads
+	// remain available.
+	if nis2 := thisEdition.nis2IncidentPackager.get(osGetenv, log); nis2 != nil {
 		compOpts = append(compOpts, compliance.WithNIS2IncidentPackager(nis2))
 		log.Info("compliance: NIS 2 incident packager wired (Art 23 significant-incident classification; enterprise)")
 	}
+	compOpts = append(compOpts, compliance.WithCompliancePacksAuthorizer(compliancePacksAuthorizerForBuild()))
 	comp := compliance.New(compOpts...)
 	knowledgeOpts = append(knowledgeOpts, knowledge.WithHoldGate(complianceHoldGate{m: comp}))
 
@@ -648,6 +655,8 @@ func buildModules(signer *audit.Signer, catalogSigner, policySigner ed25519.Priv
 	// no drift tenants => no loop. Operator secrets live in the config file, never the
 	// store. The binder/drift handlers are late-bound by boot() after api.New.
 	deployExec := newDeployExecutor(deployExecCfg, wifBroker, log)
+	deploySetup := &deployExecutorSetup{log: log}
+	deployOpts = append(deployOpts, deploy.WithExecutorSetup(deploySetup, osGetenv("OLIVARES_DEPLOY_EXECUTOR_CONFIG") != ""))
 	if deployExec != nil {
 		deployOpts = append(deployOpts, deploy.WithExecutor(deployExec))
 	}
@@ -665,10 +674,6 @@ func buildModules(signer *audit.Signer, catalogSigner, policySigner ed25519.Priv
 	// no executor is provisioned, so that route then fails closed per fire). The A2A
 	// fire route and the voice providers are minted from their own operator-secret config;
 	// master keys and BYO auth live in those files, never the store, never a returned ref.
-	orchDisp := newOrchestrationDispatcher(orchDispatchCfg, deployEngine(deployExec), log)
-	if orchDisp != nil {
-		orchOpts = append(orchOpts, orchestration.WithDispatcher(orchDisp))
-	}
 	if vd := newVoiceDispatcher(voiceDispatchCfg, log); vd != nil {
 		voiceOpts = append(voiceOpts, voice.WithDispatcher(vd))
 	}
@@ -694,7 +699,6 @@ func buildModules(signer *audit.Signer, catalogSigner, policySigner ed25519.Priv
 	// enforcing budget ⇒ never denies), holds nothing (these seams never learn a cost),
 	// and fails CLOSED on a ledger it cannot read. See budgetgate.go.
 	fin := finops.New(finops.WithLegacyWriterStop(admissionLegacyWriterStop(osGetenv, log)))
-	orchOpts = append(orchOpts, orchestration.WithBudgetGate(orchBudgetGate{fin: fin, log: log}))
 	voiceOpts = append(voiceOpts, voice.WithBudgetGate(voiceBudgetGate{fin: fin, log: log}))
 	// late-bind the evals regression-gate budget adapter (evals is built first).
 	evBudget.bind(fin)
@@ -714,7 +718,6 @@ func buildModules(signer *audit.Signer, catalogSigner, policySigner ed25519.Priv
 	// error posture: the module ports fail CLOSED on a gate error, because a
 	// stop is positive enforcement and an unreadable stop state must never mean
 	// "go" (killswitchgate.go).
-	orchOpts = append(orchOpts, orchestration.WithStopGate(orchStopGate{guard: gov}))
 	voiceOpts = append(voiceOpts, voice.WithStopGate(voiceStopGate{guard: gov}))
 	deployOpts = append(deployOpts, deploy.WithStopGate(deployStopGate{guard: gov}))
 
@@ -735,7 +738,6 @@ func buildModules(signer *audit.Signer, catalogSigner, policySigner ed25519.Priv
 	// in module IV's graph (an a2a edge) + the SOC feed (an a2a_delegation finding) via
 	// the same in-process producer. Late-bound (live's Host exists only at Init) and
 	// fail-open; a no-op when no dispatcher is provisioned.
-	orchDisp.bindObservationSink(live)
 
 	// (module X): the governed routing-EXECUTION seam and the read-only rate-limit
 	// inventory. The executor reuses the SAME inference credential as the judge and
@@ -915,82 +917,32 @@ func buildModules(signer *audit.Signer, catalogSigner, policySigner ed25519.Priv
 	// at tools/call) and the enterprise reporting tool-pin source, so the report
 	// reflects the SAME pins the gateway enforces — not a second, always-empty
 	// store. boot() threads it to the gateway via the engine.
-	pinVerifier := newToolPinVerifier(osGetenv, log)
+	pinVerifier := thisEdition.toolPinVerifier.get(osGetenv, log)
+	var enterpriseReports reporting.EnterpriseReportSource
+	if thisEdition.enterpriseReportSource != nil {
+		enterpriseReports = thisEdition.enterpriseReportSource(osGetenv, comp, gov, pinVerifier, log)
+	}
 
-	// the reporting module, held so boot() can register the schedule pump
-	// (RunDueSchedules per tenant) — the driver that makes the scheduler
-	// actually FIRE in the running binary, not just persist. Inert in the
-	// community build (SchedulerWired() is false, so newReportSchedulePump is nil).
+	// The private edition owns scheduled execution. Community keeps the reporting
+	// module's schema, API and nil provider seams.
 	rep := reporting.New(
+		reporting.WithCompliancePacksAuthorizer(compliancePacksAuthorizerForBuild()),
 		reporting.WithComplianceSource(reportingComplianceAdapter{comp: comp}),
-		reporting.WithScheduler(newReportScheduler()),
-		reporting.WithBranding(newReportBranding()),
-		reporting.WithCustomTemplates(newReportCustomTemplates()),
+		reporting.WithScheduler(thisEdition.reportScheduler.get()),
+		reporting.WithBranding(thisEdition.reportBranding.get()),
+		reporting.WithCustomTemplates(thisEdition.reportCustomTemplates.get()),
 		// the enterprise report engine (posture/risk/bundle) wired with
 		// REAL data sources — nil in the community build (the /enterprise/*
 		// routes then answer 501). This is the call-site the engine
 		// previously lacked (it was constructed nowhere, with empty Deps).
-		reporting.WithEnterpriseReports(newEnterpriseReportSource(osGetenv, comp, gov, pinVerifier, log)),
+		reporting.WithEnterpriseReports(enterpriseReports),
 	)
 
-	// notify-test workflow steps actuate through the notify module's own
-	// evidenced test path (claim-then-send, delivery ledger) — the composition
-	// root owns the bridge, modules never import each other. The per-tenant
-	// workflow/step caps are operator-tunable (defaults in-module).
-	orchOpts = append(orchOpts, orchestration.WithNotifyTester(orchNotifyTester{n: nm}))
-	orchOpts = append(orchOpts, orchestration.WithWorkflowLimits(loadWorkflowLimits(osGetenv, log)))
-	workflowKernel := newWorkflowKernelAdapter(sm)
-	workflowCommunication := newWorkflowCommunicationAdapter(sm)
-	orchOpts = append(orchOpts,
-		orchestration.WithWorkflowWorkControl(workflowKernel),
-		orchestration.WithWorkflowRuntimeControl(workflowKernel),
-		orchestration.WithWorkflowMessageControl(workflowCommunication),
-		orchestration.WithWorkflowHandoffControl(workflowCommunication),
-		orchestration.WithWorkflowAckReader(workflowCommunication),
-	)
-	var remoteApproval orchestration.ApprovalGate
-	if bridge != nil {
-		remoteApproval = bridge.orchestrationGate()
-	}
-	remoteWork, err := newOrchRemoteExecutor(orchDispatchCfg, sm, remoteApproval, log)
-	if err != nil {
-		return moduleSet{}, fmt.Errorf("wire K5 remote work executor: %w", err)
-	}
+	// Only the private edition hook binds execution and remote protocols.
 	protocolBindingReconciler := newProtocolBindingReconcileMux()
-	sm.UseProtocolBindingRemoteReconciler(protocolBindingReconciler)
-	if remoteWork != nil {
-		if err := protocolBindingReconciler.Use(sessions.BindingProtocolA2A, remoteWork); err != nil {
-			return moduleSet{}, fmt.Errorf("wire K5 A2A protocol reconcile adapter: %w", err)
-		}
-		sm.UseProtocolBindingSpecValidator(sessions.BindingProtocolA2A, remoteWork)
-		orchOpts = append(orchOpts, orchestration.WithRemoteWorkExecutor(remoteWork))
-	}
-
-	// D-06: the dedicated target-binding HMAC key + the effective-dispatcher-
-	// config generation. Together they freeze the FULL effect target a human
-	// approved (schedule/route AND the operator image/command/URL/skill) so a
-	// re-point or a config reload voids a pending approval. Without a key the
-	// module blocks every acting step (deny-closed); the generation folds the
-	// operator config in so re-pointing a subject to an attacker image is caught.
-	if key, ok := loadTargetBindingKey(osGetenv, log); ok {
-		orchOpts = append(orchOpts, orchestration.WithTargetBindingKey(key))
-	}
-	orchOpts = append(orchOpts, orchestration.WithDispatcherGeneration(newDispatcherGeneration(orchDispatchCfg)))
-
-	// the routine-governance policy gate + the AUTHORITATIVE
-	// actuation-environment resolver. ALWAYS wired, like the kill-switch and
-	// budget gates (governance is in-process, no operator config), and with the
-	// kill switch's FAIL-CLOSED posture — an unreadable routine policy denies.
-	// Without these two options the five controls decide nothing, which is
-	// exactly the state closed. Each has its OWN wireproof test through
-	// this composition root (a cadence floor never consults the environment
-	// resolver, so one test cannot guard both).
-	orchOpts = append(orchOpts, orchestration.WithRoutinePolicyGate(orchRoutinePolicyGate{gov: gov}))
-	orchOpts = append(orchOpts, orchestration.WithTargetEnvironmentResolver(newOrchTargetEnvironment(orchDispatchCfg)))
-
-	// constructed outside the slice so the composition root can hand the
-	// cadence pump its tenant-scoped scan seam (the eventing-module pattern).
-	orch := orchestration.New(orchOpts...)
+	sessionDependencies.ProtocolBindingReconciler = protocolBindingReconciler
+	orch := orchestration.New()
+	compliance.WithAutonomySource(orchestrationAutonomy{source: orch})(comp)
 	inv := inventory.New(inventory.WithCollectionCoverage())
 	// J10-S3: constructed outside the slice so boot() binds its ports and its
 	// sweep on this instance. A capability release that fails before any intent
@@ -998,89 +950,31 @@ func buildModules(signer *audit.Signer, catalogSigner, policySigner ed25519.Priv
 	gpub := gitpublish.New(gitpublish.Options{OnReleaseFailure: func(target model.ID, code string) {
 		log.Warn("gitpublish: a host capability could not be released", "target", target.String(), "code", code)
 	}})
-	all := []api.Module{
-		accessmap.New(),
-		// the pin verifier's operator surface (enterprise implements
-		// ToolPinAdmin; community nil ⇒ the /toolpins routes answer 501).
-		capabilities.New(capabilitiesOpts(pinVerifier)...),
-		// (gap #12): the Claude Code adoption / productivity read-model + dashboard.
-		// Subscribes to the MetricSample bus signal both Claude connectors now emit;
-		// open-core, never cost (the authoritative cost surface is FinOps).
-		claudeadoption.New(),
-		// the source-scoping plane (binding table + write API + the resolver
-		// already injected into the models/knowledge scope gates above).
-		ss,
-		// XIV: the catalog signs approved registry entries with its INDEPENDENT
-		// Ed25519 key (provisioned at boot, fail-closed 0600). On by default in the
-		// shipped binary; a nil key (e.g. the e2e harness) keeps the unsigned/unpinned
-		// honest default. Never the audit key — a separate artifact-signing key.
-		catalog.New(catalog.WithSigningKey(catalogSigner)),
-		comp,
-		// saved console views — named, shareable snapshots of a console
-		// view's URL-state (server-side, size-capped params only, audited).
-		consoleviews.New(),
-		deploy.New(deployOpts...),
-		ev,
-		evtm,
-		fin,
-		gpub,
-		gov,
-		// Authoring consoles (route-only; they reuse gov's policy_revision/approval
-		// tables via the shared store and mount the hyphenated REST namespaces the web
-		// already calls).
-		claudePolicyConsole,
-		agentsConsole,
-		identityConsole,
-		health.New(),
-		// Constructed outside the slice so the composition root can hand it
-		// the durable sweep scope (the eventing/orchestration-module pattern). There
-		// is exactly one inventory instance and `all` and moduleSet share it.
-		inv,
-		km,
-		// liveingest: the in-process producer of the detective bus events the
-		// out-of-process Claude connector cannot Host.Publish (guardrail.observed,
-		// the voice probe). Deny-closed: the observed-text half is OFF unless the
-		// operator opts in (OLIVARES_LIVEINGEST_INSPECT_OBSERVED_REFS=1); it then publishes
-		// already-redacted tool_args references for the security detector chain — never raw
-		// content, never widening the connector's capture (docs/SECURITY-HARDENING.md).
-		live,
-		mdl,
-		// inference-proxy governance config + DLP policy (route-only here; the
-		// listener is post-boot in cmd_serve.go).
-		ipx,
-		nm,
-		// the observability read-models — per-standard/source
-		// ingestion-health fed from the bus, the ledger-correlation trace read-model
-		// (trace_id/span_id audit meta), and the MEASURED supply-chain state
-		// of this running binary. The ldflags build identity is constructed HERE
-		// because main.{version,commit,date} never leave package main otherwise
-		// (main.go:28-32).
-		observability.New(observability.WithBuildInfo(observability.BuildInfo{
-			Version: version, Commit: commit, Date: date,
-		})),
-		orch,
-		// read-only posture/inventory export for control-tower enrichment
-		// (Agent 365 / ServiceNow AI Control Tower). Route-only; outbound posture,
-		// never identity.
-		postureexport.New(),
-		recmod,
-		redteam.New(redteamOpts...),
-		// on-demand PDF/HTML report generation from compliance, audit and FinOps
-		// data. The data-source adapters are wired at construction; the enterprise add-on
-		// (scheduler, branding, custom templates) is nil in the community build.
-		rep,
-		sb,
-		sec,
-		siemfwd,
-		sm,
-		voiceMod,
+	// Kept so boot() can late-bind the target authority, which needs the
+	// authorizer built after the module set.
+	skillsMod := skills.New(skills.Options{ArtifactRoot: filepath.Join(dataDir, "skills", "artifacts"), Workspace: skillsWorkspaceReader{owner: sm}, Git: &skills.GitImporter{ScratchRoot: filepath.Join(dataDir, "skills", "imports"), Policy: publicSkillsGitPolicy{}}, Tracer: tracer})
+	// Only instances with configured adapters belong here. The shared spec
+	// supplies the remaining defaults and the complete registration order.
+	catalogBridge := &catalogDeploy{}
+	managedSCIM, err := managedSCIMModules()
+	if err != nil {
+		return moduleSet{}, err
 	}
-	// V269 / COCKPIT-07 §4: the modules THIS EDITION carries under the
-	// /v1/m/session-cockpit namespace. Exactly one module ever owns it: a build without
-	// `addon_ids` gets the AGPL availability placeholder (501 session_cockpit_unavailable)
-	// and a build with it gets the commercial engine, chosen by the seam and never by a
-	// runtime `if edition ==` — the frontier is in the bytes.
-	all = append(all, editionModuleRegistrars(edition)...)
+	editionModules := append([]api.Module{}, thisEdition.moduleRegistrars(edition)...)
+	editionModules = append(editionModules, managedSCIM...)
+	all, err := registry.Build([]api.Module{
+		capabilities.New(capabilitiesOpts(pinVerifier)...), ss,
+		catalog.New(catalog.WithSigningKey(catalogSigner), catalog.WithActivation(catalogBridge.activate)),
+		skillsMod,
+		comp, deploy.New(deployOpts...), ev, evtm, fin, gpub, gov,
+		claudePolicyConsole, agentsConsole, identityConsole, inv, km, live, mdl, ipx, nm,
+		observability.New(observability.WithBuildInfo(observability.BuildInfo{Version: version, Commit: commit, Date: date})),
+		orch, recmod, redteam.New(redteamOpts...), rep, sb, sec, siemfwd, sm, voiceMod,
+	}, editionModules)
+	if err != nil {
+		return moduleSet{}, fmt.Errorf("compose modules: %w", err)
+	}
+
 	// hand the recorder the namespaces actually mounted so a tenant's
 	// recorded-namespace config is validated against reality (a typo would
 	// silently un-record a surface).
@@ -1089,7 +983,7 @@ func buildModules(signer *audit.Signer, catalogSigner, policySigner ed25519.Priv
 		known = append(known, m.APINamespace())
 	}
 	recmod.UseKnownNamespaces(known)
-	return moduleSet{all: all, gov: gov, approvalBridge: bridge, compliance: comp, deployBinder: deployBinder, deployDrift: deployDrift, knowledgeGuard: knowledgeGuard, vectorIndex: vecAdapter, live: live, wif: wifAdapter, wifBroker: wifBroker, recorder: recmod, accountEraser: accEraser, eventing: evtm, notify: nm, orchestration: orch, siemforward: siemfwd, policyDist: policyDistributor, policyObserved: policyObserved, sessions: sm, protocolBindingReconciler: protocolBindingReconciler, finops: fin, finopsBackstop: finBackstop, models: mdl, inferenceProxy: ipx, contentFirewall: contentFirewall,
+	return moduleSet{deploySetup: deploySetup, orchestrationExecutor: deployEngine(deployExec), all: all, catalogDeploy: catalogBridge, gov: gov, approvalBridge: bridge, compliance: comp, deployBinder: deployBinder, deployDrift: deployDrift, knowledgeGuard: knowledgeGuard, vectorIndex: vecAdapter, live: live, wif: wifAdapter, wifBroker: wifBroker, recorder: recmod, accountEraser: accEraser, eventing: evtm, notify: nm, orchestration: orch, siemforward: siemfwd, policyDist: policyDistributor, policyObserved: policyObserved, sessions: sm, sessionDependencies: sessionDependencies, skills: skillsMod, protocolBindingReconciler: protocolBindingReconciler, finops: fin, finopsBackstop: finBackstop, models: mdl, inferenceProxy: ipx, contentFirewall: contentFirewall,
 		knowledge:           km,
 		knowledgeStatus:     ci.knowledgeStatus,
 		knowledgeEmbedder:   governedEmbedder,
@@ -1118,8 +1012,8 @@ var (
 )
 
 // loadGovernanceOptions assembles every governance.Option from the environment: the
-// optional external PDP (Cedar/OPA deny-overlay) AND the offline-staleness bound
-// (ADR-0024 Q1), which are independent — the staleness bound governs the ALWAYS-present
+// optional external PDP (Cedar/OPA deny-overlay) AND the offline-staleness bound,
+// which are independent — the staleness bound governs the ALWAYS-present
 // scoped-grant engine, not the external PDP, so it must not be gated behind
 // OLIVARES_PDP_ENGINE. The PDP is validated FIRST, so a deployment that gets both
 // wrong is told about the policy engine first — a fixed precedence, not an accident of

@@ -12,8 +12,23 @@ export const PROVIDER_KINDS: ProviderKind[] = [
   'anthropic',
   'openai',
   'xai',
+  'gemini',
   'openai_compatible',
   'ollama',
+]
+
+/**
+ * The kinds whose endpoint the engine also takes as plain http at a loopback or
+ * private-network address, because a local model server is plain http: the kinds
+ * validProviderBaseURL in modules/sessions/provider_record.go sends to
+ * validLocalHTTPBaseURL. openai is https only. ollama has its own validator, and the
+ * form fills its local address in. kinds.test.ts reads the Go rule and fails when the
+ * two lists differ.
+ */
+export const LOCAL_HTTP_KINDS: readonly string[] = [
+  'anthropic',
+  'xai',
+  'openai_compatible',
 ]
 
 /** The keys OpenCode can be held to at the provider's own address (openCodeKeyProviders in
@@ -42,6 +57,8 @@ export function recordServesDriver(
       return (
         kind === 'openai' || kind === 'openai_compatible' || kind === 'ollama'
       )
+    case 'gemini-cli':
+      return kind === 'gemini' && !baseURL?.trim()
     case 'grok':
       return kind === 'xai'
     case 'opencode':

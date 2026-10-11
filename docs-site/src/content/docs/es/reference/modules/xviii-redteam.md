@@ -6,6 +6,9 @@ description: >-
   manipulación. Qué prueba, la línea roja del consentimiento y sus límites honestos.
 ---
 
+El catálogo, los objetivos y las ejecuciones de red team son funciones de **[Business](https://olivares.ai/pricing)**. Community responde con 501 en estas rutas API y omite el grupo de comandos y la página de la consola. Los objetivos, las ejecuciones y los resultados guardados se conservan en las exportaciones y las copias de recuperación. Las evaluaciones y los entornos de prueba siguen en Community.
+
+
 El módulo XVIII es un **harness de robustez defensiva**. Sondea los agentes gobernados **propios** del
 cliente con una batería de casos de prueba adversariales publicados — inyección de
 prompt, jailbreak, exfiltración, envenenamiento de herramientas — y puntúa su resistencia,

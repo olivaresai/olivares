@@ -49,6 +49,15 @@ type Workspace struct {
 	// Settings is free-form, non-sensitive workspace configuration (no secrets,
 	// docs/SECURITY-HARDENING.md).
 	Settings map[string]any
+	// ParentID is the parent workspace in the organization tree (a department
+	// under a department); zero is a root. It changes only through
+	// WorkspaceRepo.SetParent, never through Update.
+	ParentID ID
+	// Path is the store-maintained materialized path of workspace ids
+	// ("/<root>/…/<self>"), the resource-tree pattern. It is empty on a root
+	// the store has not placed yet (the default workspace, or a row written
+	// before core v25); it is set when that row gains a child or moves.
+	Path string
 }
 
 // DefaultWorkspaceSlug is the reserved Slug of every tenant's default workspace.

@@ -25,15 +25,16 @@ const workspaceTable = "sessions_workspace"
 // (minimal-data, docs/SECURITY-HARDENING.md): root_path is the operator-chosen non-secret host path;
 // file content never lands here (reads stream hot, writes are anchored by hash).
 const (
-	colWsRef           = "workspace_ref"
-	colWsName          = "name"
-	colWsRootPath      = "root_path"
-	colWsMountMode     = "mount_mode"       // rw | ro
-	colWsContainerTgt  = "container_target" // e.g. /workspace
-	colWsAllowSubpaths = "allow_subpaths"   // JSON array of relative subpaths (empty = whole root)
-	colWsMaxReadBytes  = "max_read_bytes"
-	colWsDLPMode       = "dlp_mode" // label | deny | off
-	colWsState         = "state"    // active | disabled
+	colWsRef             = "workspace_ref"
+	colWsName            = "name"
+	colWsRootPath        = "root_path"
+	colWsMountMode       = "mount_mode"        // rw | ro
+	colWsContainerTgt    = "container_target"  // e.g. /workspace
+	colWsAllowSubpaths   = "allow_subpaths"    // JSON array of relative subpaths (empty = whole root)
+	colWsReadOnlyFolders = "read_only_folders" // JSON array of additional host folders (empty = none)
+	colWsMaxReadBytes    = "max_read_bytes"
+	colWsDLPMode         = "dlp_mode" // label | deny | off
+	colWsState           = "state"    // active | disabled
 )
 
 // Mount modes (how the workspace root is bound / what the file API permits).
@@ -80,6 +81,8 @@ func (m *Module) registerWorkspaceSchema(reg store.ExtensionRegistry) error {
 			{Name: colWsMaxReadBytes, Kind: model.KindInt, Nullable: true},
 			{Name: colWsDLPMode, Kind: model.KindText, Principal: model.None("a DLP read posture, a closed set: workspace.go:551, workspace_schema.go:47-49")},
 			{Name: colWsState, Kind: model.KindText, Indexed: true, Principal: model.None("a workspace state, a closed set: workspace_schema.go:54-55, workspace.go:199")},
+			{Name: colWsReadOnlyFolders, Kind: model.KindJSON, Nullable: true, Principal: model.Nested([]string{}, model.ClassEvidence,
+				model.Leaf("[]", model.None("an administrator-selected canonical host folder: workspace_read_only_folders.go:24-43")))},
 		},
 		Indexes: []model.IndexSpec{{
 			Name:    "sessions_workspace_ref_uniq",

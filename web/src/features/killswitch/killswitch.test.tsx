@@ -33,7 +33,11 @@ vi.mock('@/components/ui/toaster', () => ({ toast, Toaster: () => null }))
 const authState = vi.hoisted(() => ({
   activeTenant: 't1' as string | null,
   can: (_p: string): boolean => true,
-  principal: null as { actor: string; kind: string } | null,
+  principal: null as {
+    actor: string
+    kind: string
+    admin_step_up?: 'none' | 'totp' | 'passkey'
+  } | null,
 }))
 vi.mock('@/lib/auth/context', () => ({ useAuth: () => authState }))
 
@@ -348,6 +352,40 @@ describe('KillswitchView — live state + stop rows', () => {
 })
 
 describe('KillswitchView — dual-control re-enable', () => {
+  // The recovery body said every approver needs AAL3. The engine asks for this server's
+  // extra check for administrative actions (off by default), and two accounts always.
+  it('says what each approver must pass, as this server is configured', () => {
+    const cases = [
+      ['none', /usual sign-in/],
+      // Single sign-on with MFA and a passkey satisfy it too (stepup_policy.go).
+      [
+        'totp',
+        /authenticator code or with single sign-on that used MFA, or confirm with a passkey,/,
+      ],
+      ['passkey', /passkey \(AAL3\)/],
+      [undefined, /extra check for administrative actions/],
+    ] as const
+    for (const [policy, words] of cases) {
+      authState.principal = {
+        actor: 'user:u-1',
+        kind: 'user',
+        admin_step_up: policy,
+      }
+      const view = wrap(
+        <ReenableDialog
+          stop={estateStopFixture}
+          open
+          onOpenChange={() => {}}
+        />,
+      )
+      const dialog = screen.getByRole('dialog')
+      expect(dialog).toHaveTextContent(words)
+      expect(dialog).toHaveTextContent(/two different user accounts/)
+      if (policy !== 'passkey') expect(dialog).not.toHaveTextContent(/AAL3/)
+      view.unmount()
+    }
+  })
+
   it('202 pending: shows the approval id, the 2-human progress and the /permissions link', async () => {
     api.list.mockResolvedValue({ items: [estateStopFixture], has_more: false })
     api.state.mockResolvedValue(estateStoppedStateFixture)

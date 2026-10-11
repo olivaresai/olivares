@@ -125,9 +125,11 @@ func TestE2E_Contract_UIDataShapes(t *testing.T) {
 	hasKeys(t, "InventorySummary", h.getJSON(h.adminToken, h.tenantA, "/v1/m/inventory/summary"),
 		"by_kind", "by_source", "total")
 
-	// finops: SummaryResponse (executive cost pillar source).
-	hasKeys(t, "finops.SummaryResponse", h.getJSON(h.adminToken, h.tenantA, "/v1/m/finops/spend/summary"),
-		"total_micro_usd", "input_tokens", "output_tokens", "samples", "by_provider")
+	// finops: SummaryResponse (executive cost pillar source). Business only.
+	if h.servesFinOpsReads("/v1/m/finops/spend/summary") {
+		hasKeys(t, "finops.SummaryResponse", h.getJSON(h.adminToken, h.tenantA, "/v1/m/finops/spend/summary"),
+			"total_micro_usd", "input_tokens", "output_tokens", "samples", "by_provider")
+	}
 
 	// sessions: LiveDTO.
 	live := h.getJSON(h.adminToken, h.tenantA, "/v1/m/sessions/live")

@@ -160,8 +160,8 @@
     }
   },
   "seam": {
-    "synthetic": "Données synthétiques : non câblé",
-    "syntheticData": "La génération de données synthétiques est un point d’extension documenté pour l’après-v1 — non implémenté dans cette version."
+    "synthetic": "Génération locale de données",
+    "syntheticData": "Générez des entrées reproductibles via l’API du sandbox avec des modèles de texte locaux bornés. Aucun appel à un modèle IA ou au réseau."
   },
   "empty": {
     "runs": {

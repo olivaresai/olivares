@@ -13,7 +13,7 @@ import (
 	"github.com/olivaresai/olivares/core/model"
 )
 
-// HU2-01 follow-up: an ACP agent does not echo the person's prompt, so the console and
+// An ACP agent does not echo the person's prompt, so the console and
 // `session follow` had the reply and never the question. Each accepted prompt is one
 // user_message_chunk frame in the run's stream, ahead of that turn's reply, through
 // the real OpenCode driver and fixture child; an agent that echoes it says it once.

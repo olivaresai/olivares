@@ -23,7 +23,7 @@ BACKLOG="${OLIVARES_C0328_BACKLOG:-design/BACKLOG-COMPLETITUD-2026-08-16.md}"
 
 grep -q 'NOT EXECUTED' "$DOC" || fail "$DOC lost NOT EXECUTED"
 if grep -qiE 'private bucket listed|public listing found|FIRMA A claimed' "$DOC"; then
-	fail "$DOC claims a close this lote does not have"
+	fail "$DOC claims a close this batch does not have"
 fi
 grep -q 'C03-28' "$BACKLOG" || fail "$BACKLOG lost the C03-28 row"
 grep -q 'NXDOMAIN' "$DOC" || fail "$DOC lost the registry NXDOMAIN"

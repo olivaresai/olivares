@@ -470,6 +470,57 @@ func (a *Authenticator) ConfigureGroupParent(ctx context.Context, actor Principa
 	return out, nil
 }
 
+// ConfigureGroupWorkspace sets (or, with workspaceID zero, clears) the workspace
+// a user group is placed in — the OPERATOR path (PUT /v1/groups/{id}/workspace),
+// never reachable through SCIM. The place is organization only: the workspace's
+// contents list the group, and membership, the role mapping, the hierarchy and
+// every authorization decision ignore it. So, like the role mapping, it is
+// locally managed on every origin (a provisioner owns a group's identity,
+// roster and hierarchy, not where the organization files it) and needs admin
+// authority, not owner. It is a tenant-wide directory fact, so a
+// workspace-confined actor is refused. The group is the one stored in tenant
+// and the workspace must exist in that same tenant; either miss is ErrNotFound,
+// with no cross-tenant oracle.
+//
+// ponytail: the workspace is read before the group is written, not in one
+// transaction (the workspace and the group live in different partitions, with no
+// foreign key); no core workspace-delete route exists today. Strengthen the
+// existence check when one is added.
+func (a *Authenticator) ConfigureGroupWorkspace(ctx context.Context, actor Principal, tenant model.TenantID, groupID, workspaceID model.ID) (model.UserGroup, error) {
+	if _, confined := actor.ConfinedWorkspaceIn(tenant); confined {
+		return model.UserGroup{}, ErrWorkspaceConfined
+	}
+	if err := checkRoleCeiling(actor, tenant, RoleAdmin); err != nil {
+		return model.UserGroup{}, err
+	}
+	if !workspaceID.IsZero() {
+		if err := a.st.View(ctx, tenant, func(sc store.Scope) error {
+			_, err := sc.Workspaces().Get(ctx, workspaceID)
+			return err
+		}); err != nil {
+			return model.UserGroup{}, err
+		}
+	}
+	var out model.UserGroup
+	err := a.st.AuthMutate(ctx, func(as store.AuthScope) error {
+		g, err := groupInTenant(ctx, as, tenant, groupID)
+		if err != nil {
+			return err
+		}
+		g.WorkspaceID = workspaceID
+		if g, err = as.Groups().Update(ctx, g); err != nil {
+			return err
+		}
+		out = g
+		return metaAudit(ctx, as, actor, "scim.group.place", "core.user_group", g.ID,
+			map[string]any{"workspace": workspaceID.String()})
+	})
+	if err != nil {
+		return model.UserGroup{}, err
+	}
+	return out, nil
+}
+
 // readOnlyGroupAncestors follows the same tenant, dangling-edge and cycle
 // boundaries as loadGroupClosure and collects origins this writer cannot change.
 // The operator can write NULL/operator ancestry; SCIM can write NULL ancestry.

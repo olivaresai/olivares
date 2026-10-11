@@ -220,7 +220,7 @@ func (p *openCodePeer) answerHandshakeWith(sessionID string, init, newResult any
 		done <- outcome{hs, err}
 	}()
 	id, method, _ := p.nextRequest()
-	if method != openCodeMethodInitialize {
+	if method != acpMethodInitialize {
 		p.t.Fatalf("first request = %q, want initialize", method)
 	}
 	p.reply(id, init)
@@ -229,7 +229,7 @@ func (p *openCodePeer) answerHandshakeWith(sessionID string, init, newResult any
 		switch method {
 		case "authenticate":
 			p.t.Fatal("OpenCode must not call authenticate")
-		case openCodeMethodSessionNew:
+		case acpMethodSessionNew:
 			p.reply(id, newResult)
 		case openCodeMethodSetConfigOption:
 			p.t.Fatalf("unexpected set_config_option during a default handshake")
@@ -315,7 +315,7 @@ func TestOpenCodeWireCarriesJSONRPCAndAdvertisesNoUnimplementedCapability(t *tes
 	if err := json.Unmarshal(lines[0], &init); err != nil {
 		t.Fatalf("initialize is not readable: %s", lines[0])
 	}
-	if init.Params.ProtocolVersion != openCodeProtocolVersion {
+	if init.Params.ProtocolVersion != acpProtocolVersion {
 		t.Fatalf("initialize declared protocolVersion %d", init.Params.ProtocolVersion)
 	}
 	caps := init.Params.ClientCapabilities
@@ -358,12 +358,12 @@ func TestOpenCodeMissingOrNullResultIsNotSuccess(t *testing.T) {
 				done <- err
 			}()
 			id, method, _ := peer.nextRequest()
-			if method != openCodeMethodInitialize {
+			if method != acpMethodInitialize {
 				t.Fatalf("first = %q", method)
 			}
 			peer.reply(id, openCodeInitializeResult())
 			id, method, _ = peer.nextRequest()
-			if method != openCodeMethodSessionNew {
+			if method != acpMethodSessionNew {
 				t.Fatalf("second = %q", method)
 			}
 			tc.send(peer, id)
@@ -412,7 +412,7 @@ func TestOpenCodeResumeEmptyObjectConfirmsTheRequestedID(t *testing.T) {
 	id, _, _ := peer.nextRequest()
 	peer.reply(id, openCodeInitializeResult())
 	id, method, params := peer.nextRequest()
-	if method != openCodeMethodSessionResume {
+	if method != acpMethodSessionResume {
 		t.Fatalf("resume method = %q", method)
 	}
 	if params["sessionId"] != "ses_stored" {
@@ -440,7 +440,7 @@ func TestOpenCodeFailedResumeNeverStartsANewConversation(t *testing.T) {
 	id, _, _ := peer.nextRequest()
 	peer.reply(id, openCodeInitializeResult())
 	id, method, _ := peer.nextRequest()
-	if method != openCodeMethodSessionResume {
+	if method != acpMethodSessionResume {
 		t.Fatalf("method = %q", method)
 	}
 	peer.replyError(id, -32001, "not found")
@@ -450,7 +450,7 @@ func TestOpenCodeFailedResumeNeverStartsANewConversation(t *testing.T) {
 	for _, line := range peer.sentLines() {
 		var frame map[string]any
 		_ = json.Unmarshal(line, &frame)
-		if frame["method"] == openCodeMethodSessionNew || frame["method"] == openCodeMethodSessionLoad {
+		if frame["method"] == acpMethodSessionNew || frame["method"] == acpMethodSessionLoad {
 			t.Fatalf("a failed resume fell back to %s", frame["method"])
 		}
 	}
@@ -489,7 +489,7 @@ func TestOpenCodeLoadIsUsedOnlyWhenResumeIsAbsent(t *testing.T) {
 	id, _, _ := peer.nextRequest()
 	peer.reply(id, init)
 	id, method, _ := peer.nextRequest()
-	if method != openCodeMethodSessionLoad {
+	if method != acpMethodSessionLoad {
 		t.Fatalf("method = %q, want session/load", method)
 	}
 	peer.reply(id, map[string]any{})
@@ -513,12 +513,12 @@ func TestOpenCodeWrongAndForeignRepliesDoNotNominate(t *testing.T) {
 	}()
 	id, _, _ := peer.nextRequest()
 	peer.reply(id+99, map[string]any{"sessionId": "ses_wrong"})
-	peer.notify(openCodeNotifySessionUpdate, map[string]any{
+	peer.notify(acpNotifySessionUpdate, map[string]any{
 		"sessionId": "ses_foreign", "update": map[string]any{"sessionUpdate": "agent_message_chunk"},
 	})
 	peer.reply(id, openCodeInitializeResult())
 	id, _, _ = peer.nextRequest()
-	peer.notify(openCodeNotifySessionUpdate, map[string]any{
+	peer.notify(acpNotifySessionUpdate, map[string]any{
 		"sessionId": "ses_live_not_yet", "update": map[string]any{"sessionUpdate": "agent_message_chunk"},
 	})
 	peer.reply(id, map[string]any{"sessionId": "ses_real", "configOptions": []any{}})
@@ -551,7 +551,7 @@ func TestOpenCodeGroupedModelAndEffortAreHonoredExactly(t *testing.T) {
 	id, _, _ := peer.nextRequest()
 	peer.reply(id, openCodeInitializeResult())
 	id, method, _ := peer.nextRequest()
-	if method != openCodeMethodSessionNew {
+	if method != acpMethodSessionNew {
 		t.Fatalf("method = %q", method)
 	}
 	peer.reply(id, map[string]any{
@@ -669,10 +669,10 @@ func TestOpenCodeAuthRequiredOnResumeLoadAndConfigPublishesRequired(t *testing.T
 		id, _, _ := peer.nextRequest()
 		peer.reply(id, openCodeInitializeResult())
 		id, method, _ := peer.nextRequest()
-		if method != openCodeMethodSessionResume {
+		if method != acpMethodSessionResume {
 			t.Fatalf("method = %q", method)
 		}
-		peer.replyError(id, openCodeErrAuthRequired, "provider authentication required")
+		peer.replyError(id, acpErrAuthRequired, "provider authentication required")
 		res := <-done
 		assertAuthRequired(t, res.err, states, peer.session)
 		if res.hs.ConversationID != "" || peer.session.ConversationID() != "" {
@@ -681,7 +681,7 @@ func TestOpenCodeAuthRequiredOnResumeLoadAndConfigPublishesRequired(t *testing.T
 		for _, line := range peer.sentLines() {
 			var frame map[string]any
 			_ = json.Unmarshal(line, &frame)
-			if frame["method"] == openCodeMethodSessionNew || frame["method"] == openCodeMethodSessionLoad {
+			if frame["method"] == acpMethodSessionNew || frame["method"] == acpMethodSessionLoad {
 				t.Fatalf("auth-required resume fell back to %s", frame["method"])
 			}
 		}
@@ -703,16 +703,16 @@ func TestOpenCodeAuthRequiredOnResumeLoadAndConfigPublishesRequired(t *testing.T
 		id, _, _ := peer.nextRequest()
 		peer.reply(id, init)
 		id, method, _ := peer.nextRequest()
-		if method != openCodeMethodSessionLoad {
+		if method != acpMethodSessionLoad {
 			t.Fatalf("method = %q, want session/load", method)
 		}
-		peer.replyError(id, openCodeErrAuthRequired, "provider authentication required")
+		peer.replyError(id, acpErrAuthRequired, "provider authentication required")
 		res := <-done
 		assertAuthRequired(t, res.err, states, peer.session)
 		for _, line := range peer.sentLines() {
 			var frame map[string]any
 			_ = json.Unmarshal(line, &frame)
-			if frame["method"] == openCodeMethodSessionNew || frame["method"] == openCodeMethodSessionResume {
+			if frame["method"] == acpMethodSessionNew || frame["method"] == acpMethodSessionResume {
 				t.Fatalf("auth-required load fell back to %s", frame["method"])
 			}
 		}
@@ -731,7 +731,7 @@ func TestOpenCodeAuthRequiredOnResumeLoadAndConfigPublishesRequired(t *testing.T
 		id, _, _ := peer.nextRequest()
 		peer.reply(id, openCodeInitializeResult())
 		id, method, _ := peer.nextRequest()
-		if method != openCodeMethodSessionNew {
+		if method != acpMethodSessionNew {
 			t.Fatalf("method = %q", method)
 		}
 		peer.reply(id, map[string]any{
@@ -741,7 +741,7 @@ func TestOpenCodeAuthRequiredOnResumeLoadAndConfigPublishesRequired(t *testing.T
 		if method != openCodeMethodSetConfigOption || params["configId"] != "model" {
 			t.Fatalf("config set = %s %v", method, params)
 		}
-		peer.replyError(id, openCodeErrAuthRequired, "provider authentication required")
+		peer.replyError(id, acpErrAuthRequired, "provider authentication required")
 		res := <-done
 		assertAuthRequired(t, res.err, states, peer.session)
 	})
@@ -760,10 +760,10 @@ func TestOpenCodePromptAuthRequiredPublishesRequired(t *testing.T) {
 	}
 	go func() { _, _ = peer.session.Input(context.Background(), "hello") }()
 	id, method, _ := peer.nextRequest()
-	if method != openCodeMethodSessionPrompt {
+	if method != acpMethodSessionPrompt {
 		t.Fatalf("method = %q", method)
 	}
-	peer.replyError(id, openCodeErrAuthRequired, "provider authentication required")
+	peer.replyError(id, acpErrAuthRequired, "provider authentication required")
 	waitFor(t, "auth-required ended the turn and published required", func() bool {
 		return peer.session.ActiveTurn() == "" && peer.session.AuthState() == AuthStateRequired
 	})
@@ -785,7 +785,7 @@ func TestOpenCodeAuthRequiredMovesUnknownToRequired(t *testing.T) {
 	id, _, _ := peer.nextRequest()
 	peer.reply(id, openCodeInitializeResult())
 	id, _, _ = peer.nextRequest()
-	peer.replyError(id, openCodeErrAuthRequired, "provider authentication required")
+	peer.replyError(id, acpErrAuthRequired, "provider authentication required")
 	err := <-done
 	if err == nil {
 		t.Fatal("auth-required session/new must fail")
@@ -819,7 +819,7 @@ func TestOpenCodeInputReturnsOnDispatchAndNotificationsDoNotEndTheTurn(t *testin
 		}{attempted, err}
 	}()
 	id, method, params := peer.nextRequest()
-	if method != openCodeMethodSessionPrompt {
+	if method != acpMethodSessionPrompt {
 		t.Fatalf("method = %q", method)
 	}
 	res := <-done
@@ -829,7 +829,7 @@ func TestOpenCodeInputReturnsOnDispatchAndNotificationsDoNotEndTheTurn(t *testin
 	if peer.session.ActiveTurn() == "" {
 		t.Fatal("the dispatched prompt is the active turn")
 	}
-	peer.notify(openCodeNotifySessionUpdate, map[string]any{
+	peer.notify(acpNotifySessionUpdate, map[string]any{
 		"sessionId": "ses_turn", "update": map[string]any{"sessionUpdate": "agent_message_chunk"},
 	})
 	if peer.session.ActiveTurn() == "" {
@@ -853,7 +853,7 @@ func TestOpenCodeCloseEndsTheDispatchedTurn(t *testing.T) {
 	}
 	go func() { _, _ = peer.session.Input(context.Background(), "hold") }()
 	_, method, _ := peer.nextRequest()
-	if method != openCodeMethodSessionPrompt {
+	if method != acpMethodSessionPrompt {
 		t.Fatalf("method = %q", method)
 	}
 	if peer.session.ActiveTurn() == "" {
@@ -866,18 +866,18 @@ func TestOpenCodeCloseEndsTheDispatchedTurn(t *testing.T) {
 func TestOpenCodePermissionGrantIsOnceOnlyAndNeverAlways(t *testing.T) {
 	t.Parallel()
 	options := []any{
-		map[string]any{"optionId": "once", "kind": openCodePermissionAllowOnce, "name": "Allow once"},
-		map[string]any{"optionId": "always", "kind": openCodePermissionAllowAlways, "name": "Always allow"},
-		map[string]any{"optionId": "reject", "kind": openCodePermissionRejectOnce, "name": "Reject"},
+		map[string]any{"optionId": "once", "kind": acpPermissionAllowOnce, "name": "Allow once"},
+		map[string]any{"optionId": "always", "kind": acpPermissionAllowAlways, "name": "Always allow"},
+		map[string]any{"optionId": "reject", "kind": acpPermissionRejectOnce, "name": "Reject"},
 	}
-	if id, ok := openCodeSelectGrant([]openCodePermissionOption{
-		{OptionID: "once", Kind: openCodePermissionAllowOnce},
-		{OptionID: "always", Kind: openCodePermissionAllowAlways},
+	if id, ok := acpSelectGrant([]acpPermissionOption{
+		{OptionID: "once", Kind: acpPermissionAllowOnce},
+		{OptionID: "always", Kind: acpPermissionAllowAlways},
 	}, ProviderApprovalDecision{Allow: true, Granted: []string{"once", "always"}, SessionScope: true}); !ok || id != "once" {
 		t.Fatalf("grant = %q %v, want once even with SessionScope", id, ok)
 	}
-	if _, ok := openCodeSelectGrant([]openCodePermissionOption{
-		{OptionID: "always", Kind: openCodePermissionAllowAlways},
+	if _, ok := acpSelectGrant([]acpPermissionOption{
+		{OptionID: "always", Kind: acpPermissionAllowAlways},
 	}, ProviderApprovalDecision{Allow: true, Granted: []string{"always"}, SessionScope: true}); ok {
 		t.Fatal("allow_always must never be selected")
 	}
@@ -894,7 +894,7 @@ func TestOpenCodePermissionGrantIsOnceOnlyAndNeverAlways(t *testing.T) {
 	}
 	go func() { _, _ = peer.session.Input(context.Background(), "tool") }()
 	id, _, _ := peer.nextRequest()
-	peer.requestFromServer("srv-1", openCodeReqRequestPermission, map[string]any{
+	peer.requestFromServer("srv-1", acpReqRequestPermission, map[string]any{
 		"sessionId": "ses_perm",
 		"toolCall":  map[string]any{"toolCallId": "c1", "kind": "edit"},
 		"options":   options,
@@ -911,7 +911,7 @@ func TestOpenCodePermissionGrantIsOnceOnlyAndNeverAlways(t *testing.T) {
 		}
 		return false
 	})
-	var reply openCodeRequestPermissionResponse
+	var reply acpRequestPermissionResponse
 	for _, line := range peer.sentLines() {
 		var frame map[string]any
 		if json.Unmarshal(line, &frame) != nil {
@@ -925,7 +925,7 @@ func TestOpenCodePermissionGrantIsOnceOnlyAndNeverAlways(t *testing.T) {
 			t.Fatalf("reply: %v %s", err, line)
 		}
 	}
-	if reply.Outcome.Outcome != openCodeOutcomeSelected || reply.Outcome.OptionID != "once" {
+	if reply.Outcome.Outcome != acpOutcomeSelected || reply.Outcome.OptionID != "once" {
 		t.Fatalf("outcome = %+v", reply.Outcome)
 	}
 	if seen.Driver != providerDriverOpenCode || strings.Join(seen.Requested, ",") != "once,always,reject" {
@@ -968,12 +968,12 @@ func TestOpenCodePermissionRacesRefuseWithoutASecondGrant(t *testing.T) {
 	}
 	go func() { _, _ = peer.session.Input(context.Background(), "tool") }()
 	_, _, _ = peer.nextRequest()
-	peer.requestFromServer("srv-race", openCodeReqRequestPermission, map[string]any{
+	peer.requestFromServer("srv-race", acpReqRequestPermission, map[string]any{
 		"sessionId": "ses_race",
 		"toolCall":  map[string]any{"toolCallId": "c1", "kind": "edit"},
 		"options": []any{
-			map[string]any{"optionId": "once", "kind": openCodePermissionAllowOnce, "name": "Allow once"},
-			map[string]any{"optionId": "reject", "kind": openCodePermissionRejectOnce, "name": "Reject"},
+			map[string]any{"optionId": "once", "kind": acpPermissionAllowOnce, "name": "Allow once"},
+			map[string]any{"optionId": "reject", "kind": acpPermissionRejectOnce, "name": "Reject"},
 		},
 	})
 	waitFor(t, "the authority was entered", func() bool { return gateCalls.Load() == 1 })
@@ -1084,5 +1084,29 @@ func TestOpenCodeLocalModelEndpointInjectsTheProvider(t *testing.T) {
 		if e.Name == "OPENCODE_CONFIG_CONTENT" {
 			t.Fatal("a launch with no local model must not carry the inline provider config")
 		}
+	}
+}
+
+// HU-R34: `session start --tool opencode --model hu-fixture` was refused with "not an
+// exact offered value" and nothing said which values OpenCode offers (the accepted form
+// was olivares_ollama/<model>). The refusal lists them.
+func TestOpenCodeModelRefusalListsTheOfferedModels(t *testing.T) {
+	peer := newOpenCodePeer(t, func(cfg *DriverSessionConfig) { cfg.Model = "hu-fixture" })
+	done := make(chan error, 1)
+	go func() {
+		_, err := peer.session.Handshake(context.Background())
+		done <- err
+	}()
+	id, _, _ := peer.nextRequest()
+	peer.reply(id, openCodeInitializeResult())
+	id, _, _ = peer.nextRequest()
+	peer.reply(id, map[string]any{"sessionId": "ses_x", "configOptions": openCodeGroupedConfigOptions("opencode/big-pickle", "")})
+	err := <-done
+	want := `OpenCode does not offer the model "hu-fixture"; it offers: opencode/big-pickle, anthropic/claude-sonnet-4 (the session did not start rather than use a default)`
+	if statusOf(err) != http.StatusUnprocessableEntity || err.Error() != want {
+		t.Fatalf("refusal = %v, want 422 %q", err, want)
+	}
+	if got := acpOfferedList([]string{"a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l"}); got != "a, b, c, d, e, f, g, h, i, j and 2 more" {
+		t.Fatalf("long list = %q", got)
 	}
 }

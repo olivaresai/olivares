@@ -11,10 +11,8 @@ set -eu
 REPO="olivaresai/olivares"
 GITHUB="${OLIVARES_GITHUB_URL:-https://github.com}"
 API="${OLIVARES_GITHUB_API_URL:-https://api.github.com}"
-# `v?` — releases before the 2026-09-29 tag-name correction carry the v prefix (v26.9.0);
-# current release tags are bare CalVer (26.10.0). The default's claim is 'this repository's
-# release workflow on a release tag', both shapes of it; pin one release with --source-tag.
-DEFAULT_CERT_IDENTITY='^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v?[0-9]+\.[0-9]+(\.[0-9]+)?$'
+# Release signatures name the exact bare MAJOR.MINOR tag.
+DEFAULT_CERT_IDENTITY='^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/[0-9]+\.[0-9]+$'
 CERT_IDENTITY_REGEXP="${OLIVARES_CERT_IDENTITY:-$DEFAULT_CERT_IDENTITY}"
 CERT_OIDC_ISSUER="${OLIVARES_CERT_OIDC_ISSUER:-https://token.actions.githubusercontent.com}"
 # cosign is the verifier and is never optional. Without cosign on PATH the bootstrap fetches
@@ -38,23 +36,15 @@ say() { printf '%s\n' "$*"; }
 err() { printf 'error: %s\n' "$*" >&2; exit 1; }
 have() { command -v "$1" >/dev/null 2>&1; }
 
-# Explicit versions use v<version> before 26.10 and bare tags from 26.10 on.
-# API tag_name is already the release's identity and is never normalized.
+# A release version is already its tag. Never normalize an invalid input.
 release_tag() {
-  release_version="${1#v}"
-  printf '%s\n' "$release_version" | grep -Eq '^[0-9]+\.[0-9]+(\.[0-9]+)?$' ||
-    err "invalid release version: $1"
-  release_major="${release_version%%.*}"
-  release_minor="${release_version#*.}"; release_minor="${release_minor%%.*}"
-  if [ "$release_major" -lt 26 ] || { [ "$release_major" -eq 26 ] && [ "$release_minor" -lt 10 ]; }; then
-    printf 'v%s' "$release_version"
-  else
-    printf '%s' "$release_version"
-  fi
+  case "$1" in ''|*[!0-9.]*) err "invalid release version: $1" ;; esac
+  printf '%s\n' "$1" | grep -Eq '^[0-9]+\.[0-9]+$' || err "invalid release version: $1"
+  printf '%s' "$1"
 }
 usage() {
   cat <<'EOF'
-Usage: install.sh --version YY.M[.N] [--bindir DIR]
+Usage: install.sh --version MAJOR.MINOR [--bindir DIR]
        [--user|--system] [--init auto|systemd|openrc|launchd]
        [--data-dir PATH] [--config PATH] [--start] [--install-cosign] [--dry-run]
        install.sh --uninstall (--plan|--preserve|--purge)
@@ -142,7 +132,7 @@ noninteractive=0
 case "${CI:-}" in 1|true|TRUE) noninteractive=1 ;; esac
 [ "${OLIVARES_NONINTERACTIVE:-0}" = 1 ] && noninteractive=1
 if [ -z "$tag" ] && [ "$noninteractive" -eq 1 ]; then
-  err "non-interactive installation must pin --version YY.M[.N]"
+  err "non-interactive installation must pin --version MAJOR.MINOR"
 fi
 
 dl() {
@@ -198,7 +188,8 @@ if [ -z "$tag" ]; then
 else
   tag="$(release_tag "$tag")"
 fi
-printf '%s\n' "$tag" | grep -Eq '^v?[0-9]+\.[0-9]+(\.[0-9]+)?$' ||
+case "$tag" in ''|*[!0-9.]*) err "invalid release version: $tag" ;; esac
+printf '%s\n' "$tag" | grep -Eq '^[0-9]+\.[0-9]+$' ||
   err "invalid or unresolved release version: $tag"
 
 os="${OLIVARES_OS:-$(uname -s | tr '[:upper:]' '[:lower:]')}"
@@ -214,7 +205,7 @@ case "$arch" in
   *) err "unsupported architecture: $arch (amd64 and arm64 only)" ;;
 esac
 
-version="${tag#v}"
+version="$tag"
 name="olivares-install-${version}.sh"
 base="$GITHUB/$REPO/releases/download/$tag"
 say "Olivares AI HTTPS bootstrap plan"

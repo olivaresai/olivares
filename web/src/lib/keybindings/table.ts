@@ -19,6 +19,7 @@
 //    in this one file. The documentation page shows both, from their own sources, and
 //    says which is which.
 import type { KeyRule } from './model'
+import { COST_VIEW } from '@/features/registry'
 
 /** The context keys this table uses. Anything else resolves false. */
 export const KEY_CONTEXTS = [
@@ -143,7 +144,7 @@ export const NAV_SEQUENCES: ReadonlyArray<{ key: string; featureId: string }> =
     { key: 'c', featureId: 'console' },
     { key: 'p', featureId: 'permissions' },
     { key: 'm', featureId: 'models' },
-    { key: 'f', featureId: 'finops' },
+    { key: 'f', featureId: COST_VIEW.id },
     { key: 'b', featureId: 'dashboards' },
     { key: 'u', featureId: 'audit' },
     { key: 'k', featureId: 'knowledge' },

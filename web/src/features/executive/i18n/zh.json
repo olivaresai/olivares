@@ -20,7 +20,7 @@
     "tenant": "组织",
     "allOrgs": "所有组织",
     "range": "成本范围",
-    "footer": "Olivares AI 控制平面——仅含聚合 KPI；不含载荷或密钥。"
+    "footer": "Olivares AI——仅含聚合 KPI；不含载荷或密钥。"
   },
   "empty": {
     "title": "暂无可用的高管 KPI",
@@ -95,7 +95,8 @@
     "driftUnused": "未使用的授权",
     "coverageNote": "部分访问以局部覆盖率被观测（近似或不透明捕获）；漂移数值为下限。",
     "noFindings": "无未处理发现项。",
-    "noRuns": "尚无红队运行。"
+    "noRuns": "尚无红队运行。",
+    "sharedDescription": "未解决的安全问题和访问偏移。"
   },
   "compliance": {
     "title": "合规",

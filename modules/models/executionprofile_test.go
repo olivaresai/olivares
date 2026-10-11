@@ -157,6 +157,21 @@ func TestExecutionProfileRejectsUnsupportedResolvedMetadata(t *testing.T) {
 	}
 }
 
+func TestExecutionProfileAcceptsTheDeepSeekTextAdapter(t *testing.T) {
+	resolver := &fakeExecutionProfileResolver{profiles: map[string]models.ExecutionProfile{}}
+	m := models.New(models.WithExecutionProfileResolver(resolver))
+	h := newHarness(t, m)
+	admin := h.adminLogin()
+	tenant := h.createOrg(admin, "deepseek-profile")
+	p := testExecutionProfile(tenant)
+	p.AdapterID = models.ExecutionAdapterDeepSeekText
+	resolver.profiles[profileKey(tenant, p.Ref, p.Revision)] = p
+	r := h.do("POST", "/v1/m/models/routing-policies", admin, profilePolicyBody(nil), tenantHdr(tenant))
+	if r.code != http.StatusCreated {
+		t.Fatalf("DeepSeek profile = %d %s", r.code, r.raw)
+	}
+}
+
 func TestExecutionProfileValidSelectionStopsBeforeLegacyExecutor(t *testing.T) {
 	executor := &stubExecutor{res: models.ExecuteResult{Text: "must not run"}}
 	resolver := &fakeExecutionProfileResolver{profiles: map[string]models.ExecutionProfile{}}

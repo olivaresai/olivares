@@ -95,7 +95,12 @@
         "hint": "该操作所依据的决定。没有它，引擎不会接受。",
         "placeholder": "决定的 ID"
       }
-    }
+    },
+    "details": "详情",
+    "readyTitle": "将“{{title}}”标记为就绪",
+    "actionTitle": "{{action}}：{{title}}",
+    "waitsFor": "“{{title}}”等待“{{dependency}}”完成。",
+    "dependencyWaiting": "此项目正在等待其依赖项完成。"
   },
   "checks": {
     "evidence": "证据 {{ref}}"
@@ -103,6 +108,19 @@
   "common": {
     "refresh": "刷新",
     "loadMore": "加载更多"
+  },
+  "create": {
+    "action": "新建工作项",
+    "title": "新建工作项",
+    "description": "记录一个由你负责的工作项。写入之前会先显示计划；创建后即可将其作为交接提出。",
+    "workspace": "工作区",
+    "workspaceNone": "这里没有可用的工作区。请在工作区切换器中选择一个，或联系管理员。",
+    "workspaceError": "无法读取工作区列表。请关闭后重试。",
+    "itemTitle": "标题",
+    "brief": "简介",
+    "briefHint": "需要做什么以及原因。",
+    "doneWhen": "完成条件",
+    "doneWhenHint": "说明该工作项已完成的验收标准。"
   },
   "decisions": {
     "title": "决定",

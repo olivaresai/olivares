@@ -41,6 +41,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -141,7 +142,7 @@ type verLeaf struct {
 
 func verLeaves(tmp string) []verLeaf {
 	tpl := filepath.Join(tmp, "tpl.html")
-	return []verLeaf{
+	leaves := []verLeaf{
 		// ---- reporting (15) ----
 		{[]string{"reporting", "branding", "get"}, "GET /v1/m/reporting/branding"},
 		{[]string{"reporting", "branding", "set", "--company-name", "Acme"}, "PUT /v1/m/reporting/branding"},
@@ -235,6 +236,10 @@ func verLeaves(tmp string) []verLeaf {
 		// ---- posture (1) ----
 		{[]string{"posture", "export"}, "GET /v1/m/posture/export"},
 	}
+	if thisEdition.name != "enterprise" {
+		return slices.DeleteFunc(leaves, func(l verLeaf) bool { return operationsExportCLIArgs(l.args) })
+	}
+	return leaves
 }
 
 type verSpy struct {
@@ -291,8 +296,12 @@ func TestEveryLaneVerbLandsOnARealEngineRouteExactlyOnce(t *testing.T) {
 		t.Fatal(err)
 	}
 	leaves := verLeaves(tmp)
-	if len(leaves) != 73 {
-		t.Fatalf("the driving table has %d leaves, not the 73 the census counted", len(leaves))
+	expected := 73
+	if thisEdition.name != "enterprise" {
+		expected = 71
+	}
+	if len(leaves) != expected {
+		t.Fatalf("the driving table has %d leaves, want %d for this edition", len(leaves), expected)
 	}
 	if len(verEngineRoutes) != 73 {
 		t.Fatalf("the engine table has %d routes, not 73", len(verEngineRoutes))
@@ -320,6 +329,9 @@ func TestEveryLaneVerbLandsOnARealEngineRouteExactlyOnce(t *testing.T) {
 		})
 	}
 	for _, r := range verEngineRoutes {
+		if thisEdition.name != "enterprise" && (r == "GET /v1/m/posture/export" || r == "GET /v1/m/observability/traces/{id}/export") {
+			continue
+		}
 		switch n := len(covered[r]); {
 		case n == 0:
 			t.Errorf("ENGINE ROUTE WITH NO COMMAND: %s", r)

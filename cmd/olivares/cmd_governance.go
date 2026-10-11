@@ -9,7 +9,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -23,8 +22,8 @@ import (
 // Measured 2026-08-21 against the OpenAPI and the built command tree: /v1/m/governance
 // serves 69 routes across 17 sub-families, and the binary exposed a verb for NONE of them.
 // That is not the same as "the CLI cannot reach governance" — four sub-families are already
-// consumed as INTERNAL PLUMBING by other commands (approvals from approvalbridge.go,
-// erasegate.go and hitl.go; breakglass from approvalbridge.go; pdp from cmd_hookpep.go;
+// consumed as INTERNAL PLUMBING by other commands (approvals from internal/approvalbridge,
+// internal/approvalbridge and hitl.go; breakglass from internal/approvalbridge; pdp from cmd_hookpep.go;
 // agents from deployidentity.go and cmd_quickstart_governed_rag.go), and those four files
 // declare ZERO cobra commands of their own. The code can get there. The operator cannot.
 //
@@ -37,7 +36,7 @@ import (
 //     places that call /killswitch are e2e tests (killswitch_e2e_test.go,
 //     e2e_claude_real_test.go), which drive the API directly. So there is no existing client
 //     to wrap and it has to set the pattern. `breakglass`, by contrast, already has one in
-//     approvalbridge.go: wrapping it is cheaper, and it goes second precisely for that.
+//     internal/approvalbridge: wrapping it is cheaper, and it goes second precisely for that.
 //
 // This first increment is READ-ONLY on purpose. `engage`, `reenable` and `review` change
 // enforcement state and one of them (reenable) can route through an approval, so they want
@@ -49,7 +48,7 @@ func newGovernanceCmd() *cobra.Command {
 	root := &cobra.Command{
 		Use:   "governance",
 		Short: "Inspect the governance plane: what is stopped, and why",
-		Long: "governance is the enforcement plane: kill switches, break-glass grants, approvals and\n" +
+		Long: "governance is the enforcement plane: kill switches, approvals and\n" +
 			"policy decisions. This command reads it. The namespace is the same word the API uses\n" +
 			"(/v1/m/governance), so a route and its verb are always one translation apart.",
 		Example: "  olivares governance killswitch state\n" +
@@ -239,203 +238,8 @@ func governanceStatusRole(status string) termrender.Role {
 	}
 }
 
-// `governance breakglass` — the SECOND slice, and it is cheaper than the first for a reason worth
-// writing down: unlike kill-switch, this sub-family ALREADY has a client in the tree
-// (approvalbridge.go drives /breakglass and /breakglass/consume). Nothing here is new transport;
-// it is operator surface over a route the binary was already speaking to.
-//
-// Read-only, same as kill-switch. `activate`, `consume`, `review` and `revoke` grant or withdraw
-// emergency access, which is the one thing in this plane that must never happen as a side effect
-// of exploring it.
-func governanceBreakGlassCmd(flags *authClientFlags) *cobra.Command {
-	cmd := &cobra.Command{
-		Use:     "breakglass",
-		Short:   "Emergency access grants: who has one, until when, and what they did with it",
-		Example: "  olivares governance breakglass ls",
-		Long: "A break-glass grant is deliberate, time-boxed permission to do something the policy\n" +
-			"otherwise denies. Reading it answers the two questions an audit asks: which grants are\n" +
-			"live right now, and which actions were actually taken under each one.",
-	}
-	cmd.AddCommand(governanceBreakGlassListCmd(flags), governanceBreakGlassGetCmd(flags),
-		governanceBreakGlassUsesCmd(flags))
-	return cmd
-}
-
-// cliBreakGlass mirrors modules/governance/breakglass.go breakGlassDTO.
-type cliBreakGlass struct {
-	ID          string `json:"id"`
-	MatchAction string `json:"match_action,omitempty"`
-	Reason      string `json:"reason,omitempty"`
-	ActivatedBy string `json:"activated_by,omitempty"`
-	Status      string `json:"status"`
-	ActivatedAt string `json:"activated_at,omitempty"`
-	ExpiresAt   string `json:"expires_at,omitempty"`
-	RevokedAt   string `json:"revoked_at,omitempty"`
-	UseCount    int64  `json:"use_count"`
-	Reviewed    bool   `json:"reviewed"`
-}
-
-type cliBreakGlassList struct {
-	Items   []cliBreakGlass `json:"items"`
-	Cursor  string          `json:"cursor,omitempty"`
-	HasMore bool            `json:"has_more,omitempty"`
-}
-
-// cliBreakGlassUse mirrors breakGlassUseDTO: one action taken under one grant.
-type cliBreakGlassUse struct {
-	GrantID     string `json:"grant_id"`
-	Action      string `json:"action"`
-	SubjectKind string `json:"subject_kind,omitempty"`
-	SubjectRef  string `json:"subject_ref,omitempty"`
-	UsedBy      string `json:"used_by,omitempty"`
-	UsedAt      string `json:"used_at,omitempty"`
-}
-
-type cliBreakGlassUseList struct {
-	Items []cliBreakGlassUse `json:"items"`
-}
-
-func governanceBreakGlassListCmd(flags *authClientFlags) *cobra.Command {
-	var status string
-	page := &observePageFlags{}
-	cmd := &cobra.Command{
-		Use:     "ls",
-		Aliases: []string{"list"},
-		Short:   "List break-glass grants, live and expired",
-		Long: "List this tenant's break-glass grants with paging. Without --status the set includes\n" +
-			"expired and revoked grants, which is what an audit wants; pass --status active for the\n" +
-			"ones that can be used right now.",
-		Example: "  olivares governance breakglass ls --status active\n" +
-			"  olivares governance breakglass ls --limit 20 -o json",
-		Args: cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			q := url.Values{}
-			if status != "" {
-				q.Set("status", status)
-			}
-			// Paging is declared HERE because handleListBreakGlass calls listQuery(r), which
-			// parses limit and cursor. `uses` below deliberately declares neither — see there.
-			if err := page.apply(q); err != nil {
-				return err
-			}
-			res, err := observeCall{
-				flags: flags, ns: governanceNS, method: http.MethodGet, path: "/breakglass", query: q,
-			}.do(cmd)
-			if err != nil {
-				return err
-			}
-			var list cliBreakGlassList
-			if err := res.decode(&list); err != nil {
-				return err
-			}
-			return renderOut(cmd, func(out io.Writer) error {
-				if len(list.Items) == 0 {
-					_, err := fmt.Fprintln(out, "no break-glass grants match")
-					return err
-				}
-				if err := writeBreakGlassTable(out, list.Items); err != nil {
-					return err
-				}
-				return observeTruncationNote(out, observePage{Cursor: list.Cursor, HasMore: list.HasMore}, cmd.CommandPath())
-			}, observeJSON(res.raw))
-		},
-	}
-	cmd.Flags().StringVar(&status, "status", "", "only grants in this status (e.g. active)")
-	addObservePageFlags(cmd, page)
-	return cmd
-}
-
-func governanceBreakGlassGetCmd(flags *authClientFlags) *cobra.Command {
-	return &cobra.Command{
-		Use:     "get <grant-id>",
-		Short:   "Show one break-glass grant",
-		Long:    "Show a single grant: what it permits, who activated it and why, and when it expires.",
-		Example: "  olivares governance breakglass get 01890000-0000-7000-8000-000000000001",
-		Args:    cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			// The id is escaped as ONE path segment. A value carrying `/` or `?` would
-			// otherwise re-target the request at a different route of the same plane.
-			res, err := observeCall{
-				flags: flags, ns: governanceNS, method: http.MethodGet,
-				path: "/breakglass/" + url.PathEscape(args[0]),
-			}.do(cmd)
-			if err != nil {
-				return err
-			}
-			var g cliBreakGlass
-			if err := res.decode(&g); err != nil {
-				return err
-			}
-			return renderOut(cmd, func(out io.Writer) error {
-				return writeBreakGlassTable(out, []cliBreakGlass{g})
-			}, observeJSON(res.raw))
-		},
-	}
-}
-
-// governanceBreakGlassUsesCmd declares NO paging flags, and that is measured rather than an
-// oversight: handleListBreakGlassUses calls listAll and reads no query parameter at all, so the
-// set comes back complete. A --cursor here would be accepted, dropped by the engine, and the
-// second page would be the first page forever.
-func governanceBreakGlassUsesCmd(flags *authClientFlags) *cobra.Command {
-	return &cobra.Command{
-		Use:   "uses <grant-id>",
-		Short: "Every action actually taken under one grant",
-		Long: "List what was done with a grant. A grant that exists and was never used is a very\n" +
-			"different fact from one used forty times, and only this route can tell them apart.\n" +
-			"The set is returned complete, without paging.",
-		Example: "  olivares governance breakglass uses 01890000-0000-7000-8000-000000000001",
-		Args:    cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			res, err := observeCall{
-				flags: flags, ns: governanceNS, method: http.MethodGet,
-				path: "/breakglass/" + url.PathEscape(args[0]) + "/uses",
-			}.do(cmd)
-			if err != nil {
-				return err
-			}
-			var list cliBreakGlassUseList
-			if err := res.decode(&list); err != nil {
-				return err
-			}
-			return renderOut(cmd, func(out io.Writer) error {
-				if len(list.Items) == 0 {
-					_, err := fmt.Fprintln(out, "this grant was never used")
-					return err
-				}
-				t := termrender.Table{Header: []string{"action", "subject", "ref", "used by", "used at"}}
-				for _, u := range list.Items {
-					t.Rows = append(t.Rows, []string{
-						observeCell(u.Action), observeCell(u.SubjectKind), observeCell(u.SubjectRef),
-						observeCell(u.UsedBy), observeCell(u.UsedAt),
-					})
-				}
-				renderTo(out).Table(t)
-				return nil
-			}, observeJSON(res.raw))
-		},
-	}
-}
-
-func writeBreakGlassTable(out io.Writer, rows []cliBreakGlass) error {
-	t := termrender.Table{
-		Header: []string{"id", "action", "status", "activated by", "activated at", "expires", "uses", "reviewed", "reason"},
-		Empty:  "no break-glass grant has been activated",
-	}
-	for _, g := range rows {
-		t.Rows = append(t.Rows, []string{
-			observeCell(g.ID), observeCell(g.MatchAction), observeCell(g.Status),
-			observeCell(g.ActivatedBy), observeCell(g.ActivatedAt), observeCell(g.ExpiresAt),
-			strconv.FormatInt(g.UseCount, 10), observeBool(g.Reviewed, "yes", "no"), observeCell(g.Reason),
-		})
-		t.Roles = append(t.Roles, []termrender.Role{0, 0, governanceStatusRole(g.Status)})
-	}
-	renderTo(out).Table(t)
-	return nil
-}
-
 // `governance approvals` — the third slice, and the one with the most consumers already inside
-// the binary: approvalbridge.go, erasegate.go and hitl.go all drive /approvals, and none of the
+// the binary: internal/approvalbridge and hitl.go both drive /approvals, and none of the
 // three declares a cobra command. The engine has been asking for approvals for a long time; the
 // operator could not read the queue.
 //

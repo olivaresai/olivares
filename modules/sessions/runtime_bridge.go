@@ -12,7 +12,6 @@ import (
 
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
-	"github.com/olivaresai/olivares/modules/sessions/cliruntime"
 )
 
 // activityWriteInterval throttles last_activity_at writes: a busy session
@@ -22,17 +21,17 @@ import (
 // per frame.
 const activityWriteInterval = 10 * time.Second
 
-// abreVentanaDeReserva marca que los efectos de fila deben ESPERAR. Se llama ANTES de
-// arrancar el bridge, nunca despues: si se llamara despues, los frames que llegaran en
-// medio se aplicarian directos y la ventana no serviria de nada.
+// abreVentanaDeReserva marks that the row's effects must WAIT. It is called BEFORE the
+// bridge starts, never after: called after, frames arriving in between would be
+// applied directly and the window would serve no purpose.
 func (lr *liveRun) abreVentanaDeReserva() {
 	lr.mu.Lock()
 	defer lr.mu.Unlock()
 	lr.reservaAbierta = true
 }
 
-// difiereSiLaReservaSigueAbierta encola fn y devuelve true si la ventana sigue abierta.
-// Devolver false significa «aplicalo tu», no «se ha perdido».
+// difiereSiLaReservaSigueAbierta queues fn and returns true while the window is open.
+// false means "apply it yourself", not "it was lost".
 func (lr *liveRun) difiereSiLaReservaSigueAbierta(fn func()) bool {
 	lr.mu.Lock()
 	defer lr.mu.Unlock()
@@ -43,12 +42,11 @@ func (lr *liveRun) difiereSiLaReservaSigueAbierta(fn func()) bool {
 	return true
 }
 
-// cierraVentanaYVuelca cierra la ventana y aplica lo diferido EN ORDEN.
+// cierraVentanaYVuelca closes the window and applies what was deferred, IN ORDER.
 //
-// Se llama SIEMPRE tras la transicion de reserva —commitee o falle—: si fallara y no se
-// vaciara, los efectos quedarian encolados para siempre y `last_activity_at` se congelaria
-// en el instante del lanzamiento. Un run vivo pareceria ocioso, que es peor que la carrera
-// que esto viene a arreglar.
+// It is ALWAYS called after the reservation transition, committed or failed: left
+// unflushed, the effects would stay queued for ever and `last_activity_at` would freeze
+// at launch, so a live run would look idle.
 func (lr *liveRun) cierraVentanaYVuelca() {
 	lr.aplicaMu.Lock()
 	defer lr.aplicaMu.Unlock()
@@ -79,17 +77,14 @@ func (m *Module) bridge(lr *liveRun) {
 			// The person's accepted ACP prompt, ahead of the child's next frame and
 			// redacted like it; it is not the child's, so it skips onStdout.
 			for _, prompt := range lr.acpEcho.before(frame.Data) {
-				prompt = lr.redact.apply(prompt)
-				if seq := lr.ring.append(streamStdout, prompt, at); seq != 0 && lr.recordIO {
-					_ = m.rt.recorder.Record(ctx, lr.tenant, lr.runRef, RecordedFrame{Seq: seq, Stream: streamStdout, Data: prompt, At: at})
-				}
+				m.publishRuntimeOutput(lr, streamStdout, lr.redact.apply(prompt), at)
 			}
 		}
 		// A session's vault secret values never leave it through its output: they
 		// are withheld before the ring (the attach stream), the recorder and the
 		// frame parser see the line (session_secret_env.go).
 		frame.Data = lr.redact.apply(frame.Data)
-		seq := lr.ring.append(frame.Stream, frame.Data, at)
+		seq := m.publishRuntimeOutput(lr, frame.Stream, frame.Data, at)
 		if seq == 0 {
 			if !sequenceExhausted {
 				sequenceExhausted = true
@@ -104,14 +99,6 @@ func (m *Module) bridge(lr *liveRun) {
 			}
 			continue
 		}
-		// Governed I/O recording (default no-op). Only runs when the
-		// LaunchGate flagged this run for recording (CRITICAL/privileged or opted-in 2026-06-16) — a non-recorded run never anchors I/O, keeping the ledger
-		// minimal. Best-effort: a recorder failure must not corrupt the live stream
-		// (the recorder emits its own loud gap evidence); the deny-closed posture for
-		// privileged sessions is enforced at the LaunchGate, not this fan-out.
-		if lr.recordIO {
-			_ = m.rt.recorder.Record(ctx, lr.tenant, lr.runRef, RecordedFrame{Seq: seq, Stream: frame.Stream, Data: frame.Data, At: at})
-		}
 		if frame.Stream == streamStdout {
 			m.onStdout(ctx, lr, frame.Data, at)
 		}
@@ -122,12 +109,18 @@ func (m *Module) bridge(lr *liveRun) {
 		m.warnf("session tool call cancellation incomplete", "run_ref", lr.runRef)
 	}
 	m.closeDriverSession(lr)
+	lr.outputMu.Lock()
+	lr.outputClosed = true
 	lr.ring.close()
-	// flush + seal this run's I/O evidence chain once its I/O has ended
-	// (only when the run was flagged for recording). Best-effort, like Record.
+	// Flush + seal this run's I/O evidence chain once its I/O has ended
+	// (only when the run was flagged for recording). A failed seal makes the
+	// terminal run failed even when the child exited cleanly or was stopped.
 	if lr.recordIO {
-		_ = m.rt.recorder.Finalize(ctx, lr.tenant, lr.runRef)
+		if err := m.rt.Recorder.Finalize(ctx, lr.tenant, lr.runRef); err != nil {
+			m.failIOEvidence(lr, "session I/O evidence sealing failed")
+		}
 	}
+	lr.outputMu.Unlock()
 	// P1: the Wait error is RETAINED, not discarded. It is used only to classify the
 	// observation; its text never reaches a stored field or the audit metadata.
 	exit, waitErr := lr.proc.Wait()
@@ -138,7 +131,7 @@ func (m *Module) bridge(lr *liveRun) {
 // resumable session id from the init message and tracks activity (throttled).
 func (m *Module) onStdout(ctx context.Context, lr *liveRun, data []byte, at time.Time) {
 	if lr.session != nil {
-		// ⛔ CORRELATION HAPPENS FIRST AND IS NEVER DEFERRED. An owned RPC child is
+		// Correlation happens first and is never deferred. An owned RPC child is
 		// blocked waiting for the answer to a request this process sent, and the
 		// handshake that sent it runs BEFORE the reservation transition — so
 		// queueing this behind the window would deadlock the launch against the very
@@ -152,7 +145,15 @@ func (m *Module) onStdout(ctx context.Context, lr *liveRun, data []byte, at time
 			m.finishSessionCalls(lr, turn)
 		}
 	} else if frame, ok := parseStreamJSON(data); ok && frame.isResult() {
+		// The read result ends the turn for a refusal before its calls are cancelled,
+		// which can wait on their owners: no refusal may act on it meanwhile.
+		lr.endCredentialRefusal()
 		m.finishSessionCalls(lr, "")
+	} else if ok && frame.refusedCredential() {
+		if turn, first := lr.beginCredentialRefusal(); first {
+			// Off the bridge: the interrupt's answer arrives through this very loop.
+			go m.stopTurnOnRefusedCredential(lr, frame.ErrorStatus, turn)
+		}
 	}
 	aplicar := func() {
 		if lr.session != nil {
@@ -168,6 +169,9 @@ func (m *Module) onStdout(ctx context.Context, lr *liveRun, data []byte, at time
 			return
 		}
 		if sj, ok := parseStreamJSON(data); ok {
+			// The tool's own mode, from the init frame and from the status frame it
+			// sends when the mode changes (runtime_tool_mode.go).
+			m.recordToolMode(ctx, lr, sj.toolMode())
 			if sj.isInit() {
 				m.captureSessionID(ctx, lr, sj.SessionID, at)
 				return
@@ -182,16 +186,15 @@ func (m *Module) onStdout(ctx context.Context, lr *liveRun, data []byte, at time
 		}
 		m.touchActivity(ctx, lr, at)
 	}
-	// ⛔ SOLO SE DIFIERE ESTO. El ring y el recorder ya han corrido arriba, en el mismo
-	// giro del bucle: la opcion 4 quita del camino EXACTAMENTE las escrituras que colisionan
-	// con el CAS de la reserva y nada mas. `mutateRunBest` tiene DOS llamantes y son
-	// justamente los dos a los que este despacho llega (medido, no muestreado), asi que
-	// diferir aqui cubre el 100 % y no «los que encontre».
+	// Only this is deferred. The ring and the recorder have already run above, in the
+	// same turn of the loop: the deferral takes out of the way EXACTLY the writes that
+	// collide with the reservation's CAS and nothing else. mutateRunBest's two callers
+	// are the two this dispatch reaches, so deferring here covers all of them.
 	if lr.difiereSiLaReservaSigueAbierta(aplicar) {
 		return
 	}
-	// La ventana ya esta cerrada: se aplica directo, pero bajo el MISMO mutex que el
-	// volcado, para que un frame que llega justo al cerrar no se adelante a lo encolado.
+	// The window is closed: apply directly, under the SAME mutex as the flush, so a
+	// frame arriving just as it closes cannot overtake what was queued.
 	lr.aplicaMu.Lock()
 	defer lr.aplicaMu.Unlock()
 	aplicar()
@@ -201,7 +204,7 @@ func (m *Module) onStdout(ctx context.Context, lr *liveRun, data []byte, at time
 // resumed, and advances activity. Best-effort with one conflict retry.
 func (m *Module) captureSessionID(ctx context.Context, lr *liveRun, sessionID string, at time.Time) {
 	if lr.profile != nil {
-		// B1: a PROFILED run binds its provider id under the profile scope, inside one
+		// A PROFILED run binds its provider id under the profile scope, inside one
 		// transaction with the run row, and is marked captured only after that commit.
 		m.captureProfiledSessionID(ctx, lr, sessionID, at)
 		return
@@ -226,9 +229,9 @@ func (m *Module) captureSessionID(ctx context.Context, lr *liveRun, sessionID st
 }
 
 // bindProviderSession attaches the PROVIDER's session id to the same canonical
-// identity the launch already minted for its own run reference (SG-00 §6: an
-// operated run promotes to canonical identity, and its claude_session_id resolves
-// to that same sid). Without this the plane would hold two identities for one
+// identity the launch already minted for its own run reference (an operated run
+// promotes to canonical identity, and its claude_session_id resolves to that same
+// sid). Without this the plane would hold two identities for one
 // session — one keyed on the reference Olivares issued, one on the id Claude
 // issued — and telemetry arriving under the provider's id would resolve to a
 // different session than the one admission governs.
@@ -260,7 +263,7 @@ func (m *Module) bindProviderSession(ctx context.Context, lr *liveRun, sessionID
 
 // renewLaunchClaim keeps the launch's lease alive while the process is alive.
 //
-// Without it the whole admission plane is theater after five minutes: the TTL
+// Without it the admission plane would lapse after five minutes: the TTL
 // (claim.go defaultLeaseTTL) would lapse mid-session with the child still running,
 // the fence stamped on the run row would stop matching, and the session would drift
 // into being freely takeable while it was still being driven. Liveness is asserted
@@ -272,14 +275,14 @@ func (m *Module) bindProviderSession(ctx context.Context, lr *liveRun, sessionID
 // and the next governed write refuses. That refusal is the control working, not an
 // error to escalate here.
 //
-// The output-driven call remains useful as a prompt legacy heartbeat. Under K3 it
-// converges on renewDualRuntimeCredentials, whose in-flight guard coalesces it with
+// The output-driven call remains useful as a prompt legacy heartbeat. With the
+// communication credentials it converges on renewDualRuntimeCredentials, whose in-flight guard coalesces it with
 // the timer rather than issuing a heartbeat per frame.
 func (m *Module) renewLaunchClaim(ctx context.Context, lr *liveRun) {
 	if lr.claim.SID == "" || lr.claim.Holder == "" {
 		return
 	}
-	if m.rt.communicationCredentialsEnabled {
+	if m.rt.CommunicationCredentialsEnabled {
 		m.renewDualRuntimeCredentials(ctx, lr)
 		return
 	}
@@ -289,7 +292,7 @@ func (m *Module) renewLaunchClaim(ctx context.Context, lr *liveRun) {
 	}
 	// Extend the SAME exact-SID bearer only after Claim liveness committed. A
 	// failed Claim heartbeat must never keep API authority alive independently.
-	if m.rt.workSessionCreds == nil {
+	if m.rt.WorkSessionCreds == nil {
 		return
 	}
 	lr.mu.Lock()
@@ -301,7 +304,7 @@ func (m *Module) renewLaunchClaim(ctx context.Context, lr *liveRun) {
 	lr.runtimeCredentialsRenewing = true
 	lr.mu.Unlock()
 
-	renewedUntil, err := m.rt.workSessionCreds.Renew(context.WithoutCancel(ctx), id, WorkSessionCredentialRequest{
+	renewedUntil, err := m.rt.WorkSessionCreds.Renew(context.WithoutCancel(ctx), id, WorkSessionCredentialRequest{
 		Tenant: lr.tenant, SessionRef: lr.claim.SID, RunRef: lr.runRef,
 		AgentRef: lr.agentRef, ClaimFence: lr.claim.Fence,
 	})
@@ -344,7 +347,7 @@ func (m *Module) touchActivity(ctx context.Context, lr *liveRun, at time.Time) {
 			rec[colLastActivityAt] = model.NewTimestamp(at).String()
 		})
 	}
-	// SG-02-b: the session is demonstrably alive, so its lease is renewed on the same
+	// The session is demonstrably alive, so its lease is renewed on the same
 	// throttle. The fence does NOT move on a renewal (claim.go Claim/Heartbeat), so a
 	// long session keeps one identity and one token from start to finish.
 	m.renewLaunchClaim(ctx, lr)
@@ -360,28 +363,34 @@ func (m *Module) finalize(lr *liveRun, exit int, waitErr error) {
 		return
 	}
 	lr.finalized = true
+	lr.processReaped = childWasReaped(waitErr)
+	processReaped := lr.processReaped
 	requested := lr.stopRequested
 	requestedReason := lr.stopReason
-	ownerAccessEnded := lr.ownerAccessEnded
+	ioEvidenceFailure := lr.ioEvidenceFailure
+	accessStopCause := lr.accessStopCause
 	lr.mu.Unlock()
-	// the process is gone, so the template's duration ceiling has nothing left to
+	// The process is gone, so the template's duration ceiling has nothing left to
 	// end. Released here rather than at the timer's own expiry so a session that exits
 	// early leaves no armed timer holding its handle.
 	lr.stopDeadline()
 	m.stopRuntimeCredentialHeartbeat(lr)
 
 	state, event := stateStopped, "stopped"
-	if lr.launchFailed || (!requested && exit != 0) {
+	if ioEvidenceFailure != "" || lr.launchFailed || (!requested && exit != 0) {
 		state, event = stateFailed, "failed"
 	}
+	if ioEvidenceFailure != "" {
+		requestedReason = ioEvidenceFailure
+	}
 	ctx := context.Background()
-	// SG-02-b: give the claim back BEFORE publishing the terminal state, not after.
+	// Give the claim back BEFORE publishing the terminal state, not after.
 	//
-	// The order is the fix for a race a contrast found in the other one. Publishing
-	// `stopped` first makes the run resumable IMMEDIATELY, and a resume by the same
-	// actor RENEWS the claim without moving the fence (a renewal is not a new
-	// identity). The late release then still matched holder and fence — because those
-	// name the actor, not this process — and revoked the successor's authority. There
+	// Publishing `stopped` first would make the run resumable IMMEDIATELY, and a
+	// resume by the same actor RENEWS the claim without moving the fence (a renewal is
+	// not a new identity). The late release would then still match holder and fence —
+	// because those name the actor, not this process — and revoke the successor's
+	// authority. There
 	// is no lock to close that window with: stopRun holds the per-run lock while it
 	// waits on this very finalize, so taking it here would deadlock.
 	//
@@ -401,7 +410,7 @@ func (m *Module) finalize(lr *liveRun, exit int, waitErr error) {
 		m.warnf("sessions: process-exit runtime credential revocation incomplete",
 			"run_ref", lr.runRef)
 	}
-	// K2: Wait has observed this exact supervised process die. Revoke only work
+	// Wait has observed this exact supervised process die. Revoke only work
 	// authority still tied to its canonical SID/run generation before making the
 	// runtime row terminal and therefore resumable. The callback is synchronous
 	// but best-effort: its WorkLease TTL/reaper is the durable recovery path when
@@ -423,20 +432,13 @@ func (m *Module) finalize(lr *liveRun, exit int, waitErr error) {
 		}
 	}
 	if currentIncarnation {
-		// ⛔ ESTE ERROR SE TIRABA ENTERO (`_, _ = m.transition(...)`), Y ERA EL UNICO SITIO.
-		//
-		// Censo de los llamantes no-test de `m.transition` en este modulo: runtime.go 580,
-		// 651, 687, 797, 811, 902, 931 y runtime_killswitch.go:129 lo manejan todos; esta
-		// linea era la unica que lo descartaba. Y el filo: TRES LINEAS ARRIBA, `:272-277`,
-		// este mismo bloque si maneja el error de `OwnerDied` con un `warnf`. El idioma
-		// estaba en el fichero y la llamada siguiente lo olvidaba. Lo midio r25 y me lo
-		// adjudico; el hueco que tapaba es que un rechazo de la guarda —o un fallo de
-		// verdad— dejaba la fila sin asentar y sin que nadie se enterase.
+		// The settle's error is handled like every other m.transition caller's: a guard
+		// refusal or a real failure would otherwise leave the row unsettled unnoticed.
 		// Wait may report incomplete output after collecting the child. Retain
 		// that failure without turning confirmed reaping into an unknown process.
 		// An unconfirmed collection remains the stronger classification.
 		observation := obsProcessExitObserved
-		if !childWasReaped(waitErr) {
+		if !processReaped {
 			observation = obsProcessWaitUnverified
 		}
 		detail := "exit " + strconv.Itoa(exit)
@@ -466,7 +468,7 @@ func (m *Module) finalize(lr *liveRun, exit int, waitErr error) {
 			event: event, toState: state,
 			detail: detail, guard: guardRuntimeLaunch(lr.launchID),
 			terminalObservation: observation,
-			ownerAccessEnded:    ownerAccessEnded,
+			accessStopCause:     accessStopCause,
 			mutate: func(rec model.Record) {
 				rec[colExitCode] = int64(exit)
 				rec[colStoppedAt] = model.NewTimestamp(m.now()).String()
@@ -478,11 +480,17 @@ func (m *Module) finalize(lr *liveRun, exit int, waitErr error) {
 				"run_ref", lr.runRef, "err", redactErr(err))
 		}
 	}
+	// The run's GenAI invoke_agent span covers the process lifetime; it ends
+	// here, with the run, and its bearer link goes with it so no later model
+	// call parents on an ended span (runtime_trace.go). Nil-safe for the
+	// launch-error liveRun, which never started one.
+	lr.agentSpan.End()
+	m.unlinkTrace(lr)
 	lr.cancel()
 	close(lr.finalizedCh)
 	// The handle stays in the registry with its CLOSED ring so a late attach can
-	// still replay the buffered tail; reapClosed reclaims it after closedRetention
-	// (bounding memory), and cleanup/delete/shutdown drop it sooner.
+	// replay the buffered tail. reapClosed expires that tail only after confirmed
+	// collection; an unverified wait retains custody for stop/shutdown to report.
 	go m.reapClosed(lr)
 }
 
@@ -511,30 +519,24 @@ func (m *Module) mutateRunBest(ctx context.Context, lr *liveRun, fn func(rec mod
 		_, err = repo.Update(ctx, rec)
 		return err
 	}
-	if err := m.data.Mutate(ctx, lr.tenant, attempt); errors.Is(err, store.ErrConflict) {
-		_ = m.data.Mutate(ctx, lr.tenant, attempt)
+	if err := m.Data.Mutate(ctx, lr.tenant, attempt); errors.Is(err, store.ErrConflict) {
+		_ = m.Data.Mutate(ctx, lr.tenant, attempt)
 	}
 }
 
-// conservaElSelloMasNuevo aplica semantica max(viejo, nuevo) a last_activity_at.
+// conservaElSelloMasNuevo applies max(old, new) to last_activity_at.
 //
-// ⛔ POR QUE EXISTE. El sello de un frame se toma AL RECIBIRLO (runtime_bridge.go:33,
-// `at := m.now()`), no al escribirlo. En cuanto un efecto se DIFIERE —que es lo que hace la
-// opcion 4 durante la ventana de reserva— entre esos dos instantes cabe otra escritura: la
-// transicion de reserva pone un sello mas nuevo (runtime.go:719, :960) y el volcado diferido
-// lo pisaria con el viejo. Resultado: `last_activity_at` RETROCEDE y la corrida parece ociosa
-// antes de tiempo. Lo encontro un contraste externo sobre la nota de diseno, ANTES de que
-// existiera el codigo.
+// A frame's stamp is taken when it is RECEIVED, not when it is written. Once an
+// effect is DEFERRED during the reservation window, another write fits between the
+// two instants: the reservation transition sets a newer stamp and the deferred flush
+// would overwrite it with the older one, so last_activity_at would go BACKWARDS and
+// the run would look idle too early.
 //
-// ⛔ Y POR QUE `max` Y NO UN VOLCADO ORDENADO. Ordenar exigiria coordinar dos gorrutinas —el
-// bridge y la reserva— y esa ordenacion HOY NO EXISTE. `max` es local, no coordina nada, y es
-// correcto bajo CUALQUIER orden de volcado, que es justo la propiedad que hace falta cuando
-// los efectos se difieren. Decidido por the planner antes de escribir codigo
-// (an internal design note (not shipped), decision 2).
+// max and not an ordered flush: ordering would need the bridge and the reservation
+// goroutines to coordinate, while max is local and correct under ANY flush order.
 //
-// Si alguno de los dos sellos no es legible NO SE ADIVINA: se deja lo que escribio el llamante,
-// que es el comportamiento anterior. Inventar un orden entre dos sellos que no se pueden
-// comparar seria peor que no ordenarlos.
+// When either stamp is unreadable nothing is guessed: what the caller wrote stays.
+// Inventing an order between two stamps that cannot be compared would be worse.
 func conservaElSelloMasNuevo(rec model.Record, antes string) {
 	if antes == "" {
 		return
@@ -554,299 +556,19 @@ func conservaElSelloMasNuevo(rec model.Record, antes string) {
 	}
 }
 
-// claudeBoundProviderEnv holds a Claude Code session on a key from Providers to that key's
-// endpoint and keeps it quiet (Root 2026-10-02 21:22Z and 21:33Z, HU2 019 and 023), with
-// Claude Code's own documented switches (code.claude.com/docs/en/env-vars):
-//   - CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST: the endpoint and key the launch sets win over any
-//     settings file, and managed model pins cannot re-route it;
-//   - CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: no telemetry (HU2 023 saw Claude Code's
-//     log intake), error reporting, release notes or feature-flag fetches;
-//   - CLAUDE_CODE_DISABLE_OFFICIAL_MARKETPLACE_AUTOINSTALL: the plugin marketplace install
-//     the previous switch does not cover.
-//
-// The endpoint itself is ANTHROPIC_BASE_URL from the record mint. Only a record-bound launch
-// gets these: a session on the person's own sign-in keeps its own settings, and Remote
-// Control (never record-bound) needs the feature flags.
-var claudeBoundProviderEnv = []EnvVar{
-	{Name: "CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST", Value: "1"},
-	{Name: "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC", Value: "1"},
-	{Name: "CLAUDE_CODE_DISABLE_OFFICIAL_MARKETPLACE_AUTOINSTALL", Value: "1"},
-}
-
-// claudeSettingsFlag is Claude Code's flag for settings that outrank the user's and the
-// project's (a file path or inline JSON).
-const claudeSettingsFlag = "--settings"
-
-// claudeBoundSettings repeats the two quiet switches as flag settings. Claude Code applies
-// a saved user or project settings env over the launch environment, so a saved
-// CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC="" would turn the traffic back on (SR2C, SR5C
-// on 3c130b50; measured on 2.1.288: 5 requests to api.anthropic.com came back). Flag
-// settings outrank both, and with them those requests stay at 0. The host pin needs no
-// repeat: Claude Code already ignores settings files for routing under it.
-var claudeBoundSettings = `{"env":{"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC":"1","CLAUDE_CODE_DISABLE_OFFICIAL_MARKETPLACE_AUTOINSTALL":"1"}}`
-
-// buildLaunchSpec constructs the neutral launch spec from a run's parameters: the
-// argv (a proper []string — never a shell-split string), the EXPLICIT env (the minted
-// inference token by value, used and discarded; optional gateway base URL; the
-// governance PEP env), and the RESOLVED workspace. ws is nil when the run has
-// no workspace_ref; injectEnv is the LaunchGate's governance env, empty when
-// no gate is wired; providerEnv is the governed managed credential of a non-Claude
-// driver (§5.3), empty for every other source.
-//
-// It has TWO shapes, chosen by the run's driver, and the split is deliberate:
-//
-//   - the historical Claude path, unchanged to the byte. Its argv, its
-//     ANTHROPIC_* bearer, its gateway base URL and its updater pin all belong to
-//     that CLI and travel with it;
-//   - a REGISTERED driver, whose argv comes from the driver itself and which
-//     receives NO Anthropic variable at all. Reusing the Claude bearer for another
-//     provider is precisely the confusion §5.1 forbids, and the cheapest way to
-//     make it impossible is for this function to never build it.
-func (m *Module) buildLaunchSpec(
-	p CreateRunParams,
-	cred Credential,
-	workCred WorkSessionCredential,
-	communicationCred CommunicationSessionCredential,
-	resumeID string,
-	ws *resolvedWorkspace,
-	injectEnv []EnvVar,
-	providerEnv []EnvVar,
-) LaunchSpec {
-	driverKey := launchDriverKey(p)
-	drv, driven := m.driverFor(driverKey)
-	dir, mount := launchWorkspaceTarget(p, ws)
-
-	var args []string
-	var driverLaunch DriverLaunch
-	program := m.claudeProgram()
-	if driven {
-		// The driver owns its own official argv. resumeID is deliberately NOT a flag
-		// here: an app-server/ACP child resumes through a METHOD on the owned
-		// protocol, and the correlated root response is the only thing allowed to
-		// nominate the conversation.
-		program = m.driverProgram(drv)
-		driverLaunch = DriverLaunch{WorkDir: dir, Model: p.Model, Effort: p.Effort, Preset: launchPreset(p), CodexSandboxFallback: p.codexSandboxFallback, LocalModelEndpoint: cred.localModelEndpoint, LocalModels: cred.localModels, BoundProvider: cred.bound}
-		if p.ProviderHome != nil {
-			driverLaunch.ConfigHome = p.ProviderHome.ConfigHome
-			driverLaunch.UserHome = p.ProviderHome.UserHome
-		}
-		args = drv.LaunchArgs(driverLaunch)
-	} else {
-		// ⛔ THE CLAUDE ARGV IS NOT BUILT HERE, AND THAT IS THE r3 CORRECTION.
-		// This branch used to hold a SECOND copy of the `--print` stream-json form
-		// that cliruntime already declared, and the transport declared beside that
-		// other copy (cliruntime.LaunchTransport) therefore governed a path
-		// production did not take: changing the declaration for a kind changed
-		// nothing the engine launched. One table, consulted by the launch path that
-		// runs in production, is what makes the declaration load-bearing.
-		//
-		// the template's terms travel as argv the operator never chose. They
-		// are built from the SERVER's merge (templateapply.go), so a caller who
-		// skips the console and posts straight to /runs gets the same confinement;
-		// cliruntime is where the flag shapes of those terms live.
-		claude := cliruntime.LaunchRequest{
-			WorkDir:        dir,
-			Model:          p.Model,
-			Effort:         p.Effort,
-			PermissionMode: p.PermissionMode,
-			ResumeID:       resumeID,
-			AllowedTools:   p.AllowedTools,
-			// The profile's declared tool surface (provider_profile_policy.go). A
-			// profiled launch always carries the decision; an unprofiled legacy launch
-			// carries none and its argv is unchanged to the byte.
-			ToolSurface:         p.ToolSurface,
-			ToolSurfaceDeclared: p.ToolSurfaceDeclared,
-			Instructions:        p.Instructions,
-			Name:                p.Name,
-		}
-		if p.Transport == TransportRemoteControl {
-			// Lifecycle-only: I/O is relayed to Anthropic's cloud, not bridged (§0).
-			args = cliruntime.ClaudeRemoteControlArgs(claude)
-		} else {
-			// The governed stream-json form, and the DEFAULT for anything else:
-			// validateCreate already normalizes an empty transport to it, and a
-			// transport this function does not recognize must not fall through to an
-			// argv with no form flag at all — that would launch the vendor CLI
-			// INTERACTIVELY under a row that claims a bridged session.
-			args = cliruntime.ClaudeArgs(claude)
-			if cred.bound.Kind != "" {
-				args = append(args, claudeSettingsFlag, claudeBoundSettings)
-			}
-		}
-	}
-
-	var env []EnvVar
-	if !driven {
-		if cred.Token != "" {
-			// Bearer precedence over a (now-stripped) ANTHROPIC_API_KEY; the WIF token is
-			// short-lived and never persisted (only its id reaches the row/ledger).
-			env = append(env, EnvVar{Name: "ANTHROPIC_AUTH_TOKEN", Value: cred.Token})
-		}
-		if m.rt.baseURL != "" {
-			// Route the operated session's inference through Olivares' own gateway so it
-			// is PEP/budget/model-governed (wires the gateway; here it is an env-ref).
-			env = append(env, EnvVar{Name: "ANTHROPIC_BASE_URL", Value: m.rt.baseURL})
-		}
-	}
-	// §5.3: the governed managed credential of THIS driver's own adapter, and
-	// nothing else. Empty under provider_account_home, where the authorized home is
-	// the credential and Olivares injects nothing at all.
-	env = append(env, providerEnv...)
-	// The vault secrets this launch was given, by the names validated against every
-	// reserved variable (session_secret_env.go); opened for this spawn only.
-	env = append(env, p.secretEnvValues...)
-	if workCred.Token != "" {
-		// Exact-session kernel authority. These are explicit launch values, not
-		// inherited host environment, and the token is never persisted/logged.
-		env = append(env,
-			EnvVar{Name: "OLIVARES_WORK_TOKEN", Value: workCred.Token},
-			EnvVar{Name: "OLIVARES_WORK_SESSION_ID", Value: workCred.SessionRef},
-			EnvVar{Name: "OLIVARES_WORK_RUN_REF", Value: workCred.RunRef},
-		)
-	}
-	if communicationCred.Token != "" {
-		// The K3 bearer is deliberately separate from work authority and injected
-		// exactly once. Its tuple is carried inside the authenticated principal; no
-		// caller-controlled binding env is needed or accepted.
-		env = append(env, EnvVar{
-			Name: "OLIVARES_COMMUNICATION_TOKEN", Value: communicationCred.Token,
-		})
-	}
-	// B1: a profiled launch runs under the profile's homes. Both are explicit launch
-	// values — they override whatever the host process inherited — and neither is a
-	// credential: the configuration home is where the provider keeps its own settings
-	// and transcripts, HOME is the child's user home. LaunchSpec.Dir (the workspace) is
-	// a third, unrelated path. Which VARIABLE carries the configuration home is the
-	// driver's own (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`, …): naming another provider's
-	// variable would point a child at a home nobody selected. A caller or a gate that
-	// names either variable for a profiled launch is refused before this point rather
-	// than resolved by order.
-	if p.ProviderHome != nil {
-		env = append(env,
-			EnvVar{Name: envUserHome, Value: p.ProviderHome.UserHome},
-			EnvVar{Name: m.configHomeEnvForDriver(p.ProviderHome.Driver), Value: p.ProviderHome.ConfigHome},
-		)
-		if p.ProviderHome.Driver == providerDriverOpenCode {
-			// Runtime-owned XDG mapping beside HOME/ConfigHome. Do not set
-			// XDG_RUNTIME_DIR: OC1 refuses an unqualified runtime directory.
-			env = append(env, openCodeXDGMapping(p.ProviderHome.UserHome)...)
-		}
-	}
-	if driven {
-		// A registered driver may need an explicit, non-secret variable of its OWN
-		// official CLI — today, the one that pins the child's version by disabling its
-		// background updater, which is the same guarantee the Claude branch below gets
-		// from Claude's own variable. It is optional: a driver that declares none
-		// builds exactly the environment it built before.
-		//
-		// A name the profile OWNS is dropped rather than ordered: the whole point of
-		// resolving homes server-side is that nothing downstream re-points them, and a
-		// driver is downstream of that decision like a caller or a gate.
-		if withEnv, ok := drv.(ProviderDriverLaunchEnv); ok {
-			for _, item := range withEnv.LaunchEnv(driverLaunch) {
-				if driverKey == providerDriverOpenCode && item.Name == envOpenCodeConfigContent {
-					// This is the driver's own non-secret native configuration, not a
-					// caller or launch gate overriding the resolved account homes.
-					env = append(env, item)
-					continue
-				}
-				if providerHomeEnvName(item.Name) ||
-					(driverKey == providerDriverOpenCode && openCodeReservedEnvName(item.Name)) {
-					m.warnf("sessions: a provider driver named a variable the profile owns; it was dropped",
-						"driver", driverKey, "name", item.Name)
-					continue
-				}
-				env = append(env, item)
-			}
-		}
-	} else {
-		// A conducted session MUST NOT self-mutate under governance: disable Claude Code's
-		// background auto-updater for the child so the binary stays pinned for the session's
-		// lifetime (reproducibility + the co-deployment's pinned-artifact guarantee).
-		// The deploy artifacts (image/compose/systemd) also set this on the engine, but the
-		// procRunner env is a strict ALLOWLIST that would otherwise strip it from the child —
-		// so inject it explicitly here, where it actually reaches `claude`. It is Claude's
-		// own variable and is not invented for another provider's CLI.
-		env = append(env, EnvVar{Name: "DISABLE_AUTOUPDATER", Value: "1"})
-		if cred.bound.Kind != "" {
-			env = append(env, claudeBoundProviderEnv...)
-		}
-	}
-
-	// the governance env the LaunchGate wants on the child — the OLIVARES_HOOK_PEP_*
-	// the managed PreToolUse hook reads to reach the governed PEP, so every tool-call the
-	// operated session makes is policy-checked in line. Appended last (authoritative over
-	// any host value); a per-session PEP bearer is held in memory and never persisted.
-	env = append(env, injectEnv...)
-
-	preset := launchPreset(p)
-	return LaunchSpec{
-		Program:       program,
-		Args:          args,
-		Dir:           dir,
-		Env:           env,
-		BoundProvider: cred.bound,
-		EnvAllow:      p.EnvAllow,
-		Isolation:     p.Isolation,
-		WaitDelay:     m.rt.waitDelay,
-		Workspace:     mount,
-		// The child may write its folder and its account homes, and nothing of
-		// the engine (runtime_confinement.go).
-		Confinement: m.sessionConfinement(dir, p.ProviderHome, preset),
-		// A read-only session's promise is the operating system's: it does not start
-		// where it cannot be confined, whatever the node's own setting.
-		ConfinementRequired: m.rt.confineRequired || preset == PresetReadOnly,
-	}
-}
-
-// launchWorkspaceTarget resolves the child's working directory and, for a
-// containerized launch, its bind mount.
-//
-// ref→path is GOVERNED. A resolved workspace sets the working directory;
-// for native that is the canonical host root, for a container it is the
-// in-container target plus the bind mount the runner consumes.
-//
-// ⛔ A RUN WITH NO WORKSPACE NO LONGER RETURNS AN EMPTY DIR, and that is the
-// correction of 2026-09-18. An empty Dir is not "no directory": the native runner
-// falls back to the ENGINE's process cwd, and the golden path measured a governed
-// child reporting the engine's own directory as its cwd, byte for byte, on the
-// default path the console composer takes. Such a run is now given a directory of
-// its own (runtime_workspace_dir.go) before it is persisted, so this function
-// returns it. An empty value here means the caller resolved neither, which
-// createRunInternal refuses before reaching this point.
-func launchWorkspaceTarget(p CreateRunParams, ws *resolvedWorkspace) (string, *WorkspaceMount) {
-	if ws == nil {
-		return p.WorkspaceDir, nil
-	}
-	switch p.Isolation {
-	case IsolationContainer, IsolationSandbox:
-		return ws.containerTgt, &WorkspaceMount{
-			HostPath:        ws.rootReal,
-			ContainerTarget: ws.containerTgt,
-			ReadOnly:        ws.mountMode == mountRO,
-		}
-	default: // native
-		return ws.rootReal, nil
-	}
-}
-
 // runtimeSettleWarrantsWarning decides whether a failed settle of the runtime row after
 // process death is worth a line in the log.
 //
-// ⛔ Y EL SILENCIO ES LA MITAD DIFICIL, no el ruido. `guardRuntimeLaunch` rechaza con
-// `conflictErr(...)` cuando una encarnacion mas nueva ya gano la fila, y eso es LEGITIMO
-// y ORDINARIO: `assertRuntimeIncarnation` filtra el caso comun FUERA de la transaccion,
-// pero entre ese chequeo y el commit hay una ventana y la guarda la cierra dentro. Un
-// `if err != nil { warn }` a secas convierte esa supersesion en ruido, y un aviso que
-// suena siempre se acaba silenciando entero — con el fallo de verdad dentro.
+// Staying quiet is the hard half. guardRuntimeLaunch refuses with conflictErr when a
+// newer incarnation already won the row, and that is legitimate and ordinary:
+// assertRuntimeIncarnation filters the common case outside the transaction, and the
+// guard closes the window between that check and the commit. A bare warning would
+// turn that supersession into noise, and a warning that always fires ends up
+// silenced, real failures included.
 //
-// ⛔ Y NO VALE `errors.Is(err, store.ErrConflict)`, que es lo primero que se piensa:
-// `conflictErr` devuelve un `*runErr` (runtime.go:214-223) que NO envuelve el centinela
-// del store ni implementa `Is`, asi que ese predicado da FALSE sobre el rechazo de la
-// guarda y el aviso saltaria justo en el caso que hay que callar. Medido antes de
-// escribir esta linea: `errors.Is(guarda, store.ErrConflict)=false`,
-// `isRunConflict(guarda)=true`. Se comprueban las DOS formas porque las dos significan
-// «otro escribio primero» y el modulo produce ambas.
+// errors.Is(err, store.ErrConflict) alone is not enough: conflictErr returns a
+// *runErr that neither wraps the store sentinel nor implements Is. Both forms are
+// checked, because both mean "another writer was first" and the module produces both.
 func runtimeSettleWarrantsWarning(err error) bool {
 	if err == nil {
 		return false

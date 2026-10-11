@@ -41,7 +41,7 @@ func (c *countingLegacyOperationAuthorizer) AuthorizeEntityOperation(
 // workflowBindingFixture is the production composition of a bound workflow
 // effect: the real Authenticator as resolver, the composed Authorizer
 // (governance request evaluator and scoped grants) as evidence source, bound
-// through the public UseCommunicationRequestAuthority call boot makes, and a
+// through the public NewCommunicationRequestAuthority call boot makes, and a
 // run bound to the sender's exact session by core/auth.
 type workflowBindingFixture struct {
 	workflowCommunicationFixture
@@ -85,9 +85,7 @@ func newWorkflowBindingFixture(
 	)
 	wf := newWorkflowCommunicationFixtureFromDirect(t, withLease, direct)
 	gov.UseData(api.NewModuleData(wf.st))
-	wf.m.UseCommunicationRequestAuthority(
-		wf.authr, auth.NewAuthorizer(gov.RequestEvaluator(), auth.WithScopedGrants(gov.ScopedGrants())),
-	)
+	wf.m.CommunicationAuthority = NewCommunicationRequestAuthority(wf.authr, auth.NewAuthorizer(gov.RequestEvaluator(), auth.WithScopedGrants(gov.ScopedGrants())))
 	// The composed Authorizer observes database time. Keep the fixture clock
 	// advancing, but floor SQLite samples to its transaction clock precision:
 	// the fake attestor copies RequestedAt into its snapshot, and nanoseconds
@@ -95,8 +93,8 @@ func newWorkflowBindingFixture(
 	// PostgreSQL keeps the original clock. Directory fakes observe one second
 	// earlier; authorization and mutation freshness checks remain unchanged.
 	wf.m.clock = workflowBindingTestClock{source: model.SystemClock{}, engine: backend.engineName}
-	legacy := &countingLegacyOperationAuthorizer{next: wf.m.communicationOperationAuthorizer}
-	wf.m.communicationOperationAuthorizer = legacy
+	legacy := &countingLegacyOperationAuthorizer{next: wf.m.CommunicationOperationAuthorizer}
+	wf.m.CommunicationOperationAuthorizer = legacy
 	f := &workflowBindingFixture{
 		workflowCommunicationFixture: wf, tt: t, legacy: legacy, runID: model.NewID(),
 	}
@@ -170,10 +168,10 @@ func (f *workflowBindingFixture) resync() {
 		f.t().Fatalf("read directory epoch: %v", err)
 	}
 	f.attestor.epoch = f.epoch
-	f.m.communicationAudienceAttestor = f.attestor
+	f.m.CommunicationAudienceAttestor = f.attestor
 	earlier := func() time.Time { return time.Now().UTC().Add(-time.Second) }
-	f.m.communicationDirectoryResolver = &directNoticeReadDirectoryResolver{nowFn: earlier, epoch: f.epoch}
-	f.m.communicationGrantClosure = &directNoticeReadClosureResolver{nowFn: earlier, epoch: f.epoch}
+	f.m.CommunicationDirectoryResolver = &directNoticeReadDirectoryResolver{nowFn: earlier, epoch: f.epoch}
+	f.m.CommunicationGrantClosure = &directNoticeReadClosureResolver{nowFn: earlier, epoch: f.epoch}
 }
 
 func (f *workflowBindingFixture) send(ctx context.Context, cmd WorkflowWorkTaskCommand) (WorkflowWorkTaskResult, error) {
@@ -682,7 +680,7 @@ func TestWorkflowBindingOutageIsNotReauthentication(t *testing.T) {
 	f := newWorkflowBindingFixture(t, workflowSQLiteBackend(t, "outage"), false)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
-	source := f.m.communicationAuthoritySources.source
+	source := f.m.CommunicationAuthority.source
 	outage := auth.NewAuthenticator(outageAuthStore{Store: f.st}, nil)
 	f.m.useCommunicationRequestAuthoritySources(outage, source)
 	before := f.effectCounts()
@@ -720,8 +718,8 @@ func TestSupersessionIsSerializedWithTheEffectCommit(t *testing.T) {
 				}
 			}
 			if tc.supersedeAfterPreflight {
-				f.m.communicationAudienceAttestor = &afterWorkTaskAttestation{
-					next: f.m.communicationAudienceAttestor, tenant: f.tenant,
+				f.m.CommunicationAudienceAttestor = &afterWorkTaskAttestation{
+					next: f.m.CommunicationAudienceAttestor, tenant: f.tenant,
 					hook: func(context.Context) { supersede() },
 				}
 			}

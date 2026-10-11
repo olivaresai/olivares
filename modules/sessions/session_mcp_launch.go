@@ -24,14 +24,14 @@ type SessionMCPLaunchSource interface {
 	ConfigureSessionMCP(context.Context, model.TenantID, string, string, *LaunchSpec) (func(), error)
 }
 
-func (m *Module) UseSessionMCPLaunchSource(source SessionMCPLaunchSource) { m.rt.sessionMCP = source }
-
 // ConfigureSessionMCP writes only public connection settings under run/runRef.
 // Claude reads its generated JSON; Codex receives the equivalent mcp_servers
 // config overrides without changing the account's config.toml. The generated
-// TOML records those same overrides. Credentials are sourced from child env.
-// Formats: code.claude.com/docs/en/mcp and
-// learn.chatgpt.com/docs/config-file/config-reference (bearer_token_env_var).
+// TOML records those same overrides. OpenCode receives the connection through
+// ACP session setup. Credentials are sourced from the launch environment.
+// Formats: code.claude.com/docs/en/mcp,
+// learn.chatgpt.com/docs/config-file/config-reference (bearer_token_env_var) and
+// agentclientprotocol.com/protocol/session-setup (HTTP MCP servers).
 func ConfigureSessionMCP(spec *LaunchSpec, driver, dataDir, runRef, endpoint, tokenEnv string) (func(), error) {
 	noop := func() {}
 	if spec == nil {
@@ -44,7 +44,7 @@ func ConfigureSessionMCP(spec *LaunchSpec, driver, dataDir, runRef, endpoint, to
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || u.Path != "/session/mcp" {
 		return noop, errors.New("session MCP endpoint is invalid")
 	}
-	if tokenEnv != "OLIVARES_HOOK_PEP_TOKEN" && tokenEnv != "OLIVARES_WORK_TOKEN" {
+	if tokenEnv != envHookPEPToken && tokenEnv != envWorkToken {
 		return noop, errors.New("session MCP credential source is invalid")
 	}
 	found := false
@@ -55,6 +55,13 @@ func ConfigureSessionMCP(spec *LaunchSpec, driver, dataDir, runRef, endpoint, to
 	}
 	if !found {
 		return noop, errors.New("session MCP credential is unavailable")
+	}
+	if spec.NetworkPolicy != nil {
+		spec.NetworkPolicy.Controls = append(spec.NetworkPolicy.Controls, endpoint)
+	}
+	if driver == providerDriverOpenCode {
+		spec.SessionMCPURL, spec.SessionMCPTokenEnv = endpoint, tokenEnv
+		return noop, nil
 	}
 	if driver != "claude" && driver != "codex" {
 		return noop, nil

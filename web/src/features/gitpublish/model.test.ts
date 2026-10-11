@@ -1,15 +1,19 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+import { readFileSync, readdirSync } from 'node:fs'
+import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { ApiError, NetworkError } from '@/lib/api/errors'
-import en from './i18n/en.json'
+import { LANGUAGE_CODES } from '@/lib/i18n'
 import {
   REFUSAL_CODES,
   actionAuthority,
   intentActions,
+  isKnownRefusal,
   newOperationId,
   outcomeOf,
+  refusalKey,
 } from './model'
 import type { PublicationIntent } from './types'
 
@@ -173,9 +177,38 @@ describe('newOperationId', () => {
 })
 
 describe('the refusal vocabulary', () => {
-  it('has English copy for every code the module can answer', () => {
-    const refusals = (en as { refusals: Record<string, string> }).refusals
-    for (const code of REFUSAL_CODES) expect(refusals[code]).toBeTruthy()
-    expect(refusals.unknown).toBeTruthy()
+  it.each(LANGUAGE_CODES)(
+    'has %s copy for every code the module can answer',
+    (language) => {
+      const { refusals } = JSON.parse(
+        readFileSync(resolve(__dirname, `i18n/${language}.json`), 'utf8'),
+      ) as { refusals: Record<string, string> }
+      for (const code of REFUSAL_CODES) expect(refusals[code]).toBeTruthy()
+      expect(refusals.unknown).toBeTruthy()
+      expect(refusals.separation_of_duty).toBeTruthy()
+    },
+  )
+
+  it('describes separation of duty while keeping unknown refusals generic', () => {
+    expect(refusalKey('separation_of_duty')).toBe('refusals.separation_of_duty')
+    expect(refusalKey('future_refusal')).toBe('refusals.unknown')
+  })
+
+  it('names every code the engine module refuses with', () => {
+    // A code added to the module without console copy reads as "a code this console does
+    // not describe" (the session_source_* codes of the session-run push did).
+    const dir = resolve(__dirname, '../../../../modules/gitpublish')
+    const engine = new Set(
+      readdirSync(dir)
+        .filter((n) => n.endsWith('.go') && !n.endsWith('_test.go'))
+        .flatMap((n) => [
+          ...readFileSync(join(dir, n), 'utf8').matchAll(
+            /refuse\("([a-z_]+)"/g,
+          ),
+        ])
+        .map((m) => m[1]!),
+    )
+    expect(engine.size).toBeGreaterThan(20)
+    expect([...engine].filter((c) => !isKnownRefusal(c))).toEqual([])
   })
 })

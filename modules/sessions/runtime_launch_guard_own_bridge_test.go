@@ -44,7 +44,7 @@ func TestTheLaunchGuardDoesNotFenceARunFromItsOwnBridge(t *testing.T) {
 	fr := &fakeRunner{}
 	m, _, tenant, _ := newRuntimeHarness(t, WithRunner(fr), WithCredentialSource(staticCred()))
 	ctx := context.Background()
-	dto, err := m.createRun(ctx, tenant, CreateRunParams{
+	dto, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative,
 		Actor: "user:u1", ActorKind: model.ActorUser,
 	})
@@ -73,9 +73,9 @@ func TestTheLaunchGuardDoesNotFenceARunFromItsOwnBridge(t *testing.T) {
 	})
 	afterOwn := version()
 	if afterOwn <= before {
-		t.Fatalf("el bridge del propio run NO subió la versión (%d -> %d). Si esto ha cambiado, "+
-			"la carrera que este testigo documenta puede estar cerrada — y entonces hay que "+
-			"actualizar el registro de carril de esta rama en sessions/status/, no borrar el test",
+		t.Fatalf("the run's own bridge did NOT raise the version (%d -> %d). If this changed, "+
+			"the race this witness documents may be closed: update the status record of "+
+			"this branch instead of deleting the test",
 			before, afterOwn)
 	}
 

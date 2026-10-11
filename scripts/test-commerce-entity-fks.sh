@@ -13,11 +13,11 @@ set -uo pipefail
 
 RAIZ="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 GUION="$RAIZ/scripts/check-commerce-entity-fks.sh"
-pasan=0; fallan=0
+pass_count=0; fail_count=0
 
 check() { # <nombre> <esperado> <obtenido>
-	if [ "$2" = "$3" ]; then printf '  ok    %-58s rc=%s\n' "$1" "$3"; pasan=$((pasan+1))
-	else printf '  FAIL  %-58s esperaba=%s obtuvo=%s\n' "$1" "$2" "$3"; fallan=$((fallan+1)); fi
+	if [ "$2" = "$3" ]; then printf '  ok    %-58s rc=%s\n' "$1" "$3"; pass_count=$((pass_count+1))
+	else printf '  FAIL  %-58s expected=%s got=%s\n' "$1" "$2" "$3"; fail_count=$((fail_count+1)); fi
 }
 
 arbol() { # -> imprime la ruta de un árbol de mentira completo y sano
@@ -30,7 +30,7 @@ arbol() { # -> imprime la ruta de un árbol de mentira completo y sano
 
 # 1 · CONTROL NEGATIVO — el árbol real, sin mutar
 rc=0; bash "$GUION" "$RAIZ" >/dev/null 2>&1 || rc=$?
-check "el arbol real esta LIMPIO (control negativo)" 0 "$rc"
+check "the real tree is CLEAN (negative control)" 0 "$rc"
 
 # 2 · una FK en las migraciones que la lista no declara
 d="$(arbol)"
@@ -40,10 +40,10 @@ CREATE TABLE commerce.mutante (
     entity_id TEXT NOT NULL REFERENCES commerce.legal_entities(entity_id)
 );
 SQL
-rc=0; salida="$(bash "$GUION" "$d" 2>&1)" || rc=$?
-check "una FK NUEVA sin declarar -> hallazgo" 1 "$rc"
-case "$salida" in *mutante_entity_id_fkey*) check "y NOMBRA la fila que hay que anadir" 0 0 ;;
-                  *) check "y NOMBRA la fila que hay que anadir" 0 1 ;; esac
+rc=0; output="$(bash "$GUION" "$d" 2>&1)" || rc=$?
+check "an undeclared NEW FK -> finding" 1 "$rc"
+case "$output" in *mutante_entity_id_fkey*) check "and NAMES the row to add" 0 0 ;;
+                  *) check "and NAMES the row to add" 0 1 ;; esac
 rm -rf "$d"
 
 # 3 · una entrada declarada que ninguna migración crea
@@ -55,22 +55,22 @@ m=re.search(r"([^\S\n]*)\('grant_commands_entity_id_fkey'[^\n]*\n",s)
 s=s.replace(m.group(0), m.group(0).rstrip('\n').rstrip()+",\n"+m.group(1)+"('fantasma_entity_id_fkey', 'fantasma', 'entity_id')\n")
 open(p,'w').write(s)
 PY
-rc=0; salida="$(bash "$GUION" "$d" 2>&1)" || rc=$?
-check "una entrada FANTASMA declarada -> hallazgo" 1 "$rc"
-case "$salida" in *fantasma*) check "y NOMBRA la fila que sobra" 0 0 ;;
-                  *) check "y NOMBRA la fila que sobra" 0 1 ;; esac
+rc=0; output="$(bash "$GUION" "$d" 2>&1)" || rc=$?
+check "a declared PHANTOM entry -> finding" 1 "$rc"
+case "$output" in *fantasma*) check "and NAMES the extra row" 0 0 ;;
+                  *) check "and NAMES the extra row" 0 1 ;; esac
 rm -rf "$d"
 
 # 4 · NO PUDE MIRAR: sin main.go
 d="$(arbol)"; rm -f "$d/commercial/commerce/cmd/commerce/main.go"
 rc=0; bash "$GUION" "$d" >/dev/null 2>&1 || rc=$?
-check "sin main.go -> NO PUDE MIRAR" 2 "$rc"
+check "missing main.go -> COULD NOT LOOK" 2 "$rc"
 rm -rf "$d"
 
 # 5 · NO PUDE MIRAR: sin migraciones
 d="$(arbol)"; rm -f "$d/commercial/commerce/migrations/"*.up.sql
 rc=0; bash "$GUION" "$d" >/dev/null 2>&1 || rc=$?
-check "sin migraciones -> NO PUDE MIRAR" 2 "$rc"
+check "missing migrations -> COULD NOT LOOK" 2 "$rc"
 rm -rf "$d"
 
 # 6 · NO PUDE MIRAR: una forma que el guion NO sabe leer
@@ -81,7 +81,7 @@ ALTER TABLE commerce.otra
     REFERENCES commerce.legal_entities(entity_id);
 SQL
 rc=0; bash "$GUION" "$d" >/dev/null 2>&1 || rc=$?
-check "un ALTER ... ADD CONSTRAINT -> NO PUDE MIRAR, no adivina" 2 "$rc"
+check "an ALTER ... ADD CONSTRAINT -> COULD NOT LOOK, does not guess" 2 "$rc"
 rm -rf "$d"
 
 # 7 · la lista ilegible tambien es 2, no 0
@@ -93,9 +93,9 @@ s=s.replace('expected_entity_foreign_keys(','expected_entity_foreign_keys_RENOMB
 open(p,'w').write(s)
 PY
 rc=0; bash "$GUION" "$d" >/dev/null 2>&1 || rc=$?
-check "la lista ilegible -> NO PUDE MIRAR (no 'limpio')" 2 "$rc"
+check "unreadable list -> COULD NOT LOOK (not 'clean')" 2 "$rc"
 rm -rf "$d"
 
 echo
-echo "commerce-entity-fks: $pasan passed, $fallan failed"
-[ "$fallan" = "0" ] || exit 1
+echo "commerce-entity-fks: $pass_count passed, $fail_count failed"
+[ "$fail_count" = "0" ] || exit 1

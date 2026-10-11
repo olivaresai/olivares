@@ -123,7 +123,10 @@ type Intent struct {
 	ClaimedAt         time.Time
 	DispatchDeadline  time.Time
 	ReleaseFailure    string
-	Version           int64
+	// Proposal is the approved session request this intent carries out; its
+	// workspace is the intent's.
+	Proposal Proposal
+	Version  int64
 }
 
 func ts(t time.Time) string {
@@ -163,6 +166,7 @@ func (in Intent) record() model.Record {
 		"ack":           in.Acknowledged.Acknowledged, "ack_status": int64(in.Acknowledged.Status), "ack_request_id": in.Acknowledged.RequestID, "ack_at": ts(in.Acknowledged.At),
 		"acknowledge_intent": nullable(in.AcknowledgeIntent),
 		"claimed_at":         ts(in.ClaimedAt), "dispatch_deadline": ts(in.DispatchDeadline), "release_failure": in.ReleaseFailure,
+		"proposal_session_run": nullable(in.Proposal.SessionRun), "proposal_approval": nullable(in.Proposal.Approval),
 	}
 	if in.ID != "" {
 		r[model.ColID] = in.ID.String()
@@ -172,6 +176,10 @@ func (in Intent) record() model.Record {
 }
 
 func intentFrom(r model.Record) Intent {
+	var p Proposal
+	if run := r.String("proposal_session_run"); run != "" {
+		p = Proposal{SessionRun: run, Workspace: model.ID(r.String("workspace_id")), Approval: r.String("proposal_approval")}
+	}
 	return Intent{
 		ID: model.ID(r.String(model.ColID)), Target: model.ID(r.String("target_id")), Workspace: model.ID(r.String("workspace_id")),
 		TargetVersion: r.Int("target_version"), CredentialBinding: r.String("credential_binding"), CredentialVersion: r.Int("credential_binding_version"),
@@ -193,7 +201,7 @@ func intentFrom(r model.Record) Intent {
 		Acknowledged:      Acknowledged{Acknowledged: r.Bool("ack"), Status: int(r.Int("ack_status")), RequestID: r.String("ack_request_id"), At: parseTS(r.String("ack_at"))},
 		AcknowledgeIntent: r.String("acknowledge_intent"),
 		ClaimedAt:         parseTS(r.String("claimed_at")), DispatchDeadline: parseTS(r.String("dispatch_deadline")),
-		ReleaseFailure: r.String("release_failure"), Version: r.Int(model.ColVersion),
+		ReleaseFailure: r.String("release_failure"), Version: r.Int(model.ColVersion), Proposal: p,
 	}
 }
 

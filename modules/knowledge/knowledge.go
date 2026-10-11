@@ -171,6 +171,7 @@ type Module struct {
 	holdGate       HoldGate
 	contentScanner RetrievalContentScanner
 	sources        map[string]contentsource.Source
+	sourceOpener   SourceOpener
 
 	// Governed-memory portability keys (anti-lock-in export/import). Both are
 	// a DEDICATED Ed25519 keypair, domain-separated from the license/OTA/DDIL keys

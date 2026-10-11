@@ -132,7 +132,7 @@ func newRuntimeWorkControlFixture(t *testing.T) *runtimeWorkControlFixture {
 		WithWorkIdentityResolver(allowWorkIdentity{}),
 		WithWorkContentGuard(allowWorkContent{}),
 	)
-	run, err := m.createRun(ctx, tenant, CreateRunParams{
+	run, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{
 		Transport: TransportStreamJSON,
 		Isolation: IsolationNative,
 		Actor:     "user:runtime-work-control",
@@ -336,7 +336,7 @@ func TestInputForWorkPreEffectFailuresDoNotRecordAmbiguity(t *testing.T) {
 			t.Fatal("fixture run has no live handle")
 		}
 		drop := &afterNthViewData{
-			inner: fx.m.data, after: 2,
+			inner: fx.m.Data, after: 2,
 			hook: func() { fx.m.rt.dropLive(fx.tenant, fx.runRef) },
 		}
 		fx.m.UseData(drop)
@@ -390,7 +390,7 @@ func TestLegacyInputWriteErrorKeepsBadRequestTaxonomy(t *testing.T) {
 	m, _, tenant, _ := newRuntimeHarness(t,
 		WithRunner(runner), WithCredentialSource(staticCred()),
 	)
-	run, err := m.createRun(ctx, tenant, CreateRunParams{
+	run, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative,
 		Actor: "user:legacy-input", ActorKind: model.ActorUser,
 	})
@@ -460,7 +460,7 @@ func TestStopForWorkTransitionFailureIsPreEffect(t *testing.T) {
 	fx := newRuntimeWorkControlFixture(t)
 	ctx := context.Background()
 	transitionErr := errors.New("test: stopping transition never opened")
-	fault := &failNthMutateData{inner: fx.m.data, failAt: 2, err: transitionErr}
+	fault := &failNthMutateData{inner: fx.m.Data, failAt: 2, err: transitionErr}
 	fx.m.UseData(fault)
 
 	err := fx.m.StopForWork(ctx, fx.tenant, fx.runRef, fx.lease.Fence, "pre-effect failure")
@@ -504,7 +504,7 @@ func TestStopForWorkFencesEffectAndSettlesOwnerDeath(t *testing.T) {
 		t.Fatalf("pre-effect stale stop recorded %d ambiguous event(s)", got)
 	}
 
-	order := &claimReleaseBeforeOwnerDeathData{inner: fx.m.data, sid: fx.claim.SID}
+	order := &claimReleaseBeforeOwnerDeathData{inner: fx.m.Data, sid: fx.claim.SID}
 	fx.m.UseData(order)
 	fx.proc.setBeforeStop(order.arm)
 	if err := fx.m.StopForWork(ctx, fx.tenant, fx.runRef, fx.lease.Fence, "operator requested"); err != nil {

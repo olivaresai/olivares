@@ -56,7 +56,11 @@
     "viewAccess": "Zugriffskarte",
     "viewSessions": "Sitzungen",
     "gone": "Dieser Eintrag ist nicht mehr im Katalog.",
-    "noProjection": "Für diesen Eintrag sind keine weiteren Details zur Anzeige verfügbar. Daraus lässt sich nicht ableiten, ob er Beziehungen hat."
+    "noProjection": "Für diesen Eintrag sind keine weiteren Details zur Anzeige verfügbar. Daraus lässt sich nicht ableiten, ob er Beziehungen hat.",
+    "aiDiscovery": {
+      "unregistered_at_discovery": "Bei der Erkennung nicht registriert. Dieser KI-Endpunkt war neu im Inventar; sein aktueller Governance-Status ist unbekannt. Die Abdeckung beschränkt sich auf das konfigurierte Proxy-Protokoll und die KI-Hosts.",
+      "unknown": "KI-Endpunkt beobachtet. Sein Governance-Status ist unbekannt. Die Abdeckung beschränkt sich auf das konfigurierte Proxy-Protokoll und die KI-Hosts."
+    }
   },
   "freshness": {
     "title": "Katalogfrische",

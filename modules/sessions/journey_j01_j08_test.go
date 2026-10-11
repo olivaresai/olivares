@@ -114,7 +114,8 @@ func TestJourneyJ03_WorkspaceIsCwdAndOutsideIsUntouched(t *testing.T) {
 		t.Fatalf("workspace = %d %s", wr.code, wr.raw)
 	}
 	body := map[string]any{
-		"transport": "stream-json", "isolation": "native", "permission_mode": "default",
+		"provider_profile_ref": ensureRuntimeTestProfileRef(t, m, tenant),
+		"transport":            "stream-json", "isolation": "native", "permission_mode": "default",
 		"workspace_ref": wr.body["workspace_ref"],
 	}
 	r := h.doJSON("POST", "/v1/m/sessions/runs", admin, body, tenantHdr(tenant))
@@ -230,7 +231,7 @@ func TestJourneyJ05_TerminalAndOutputBounds(t *testing.T) {
 func TestJourneyJ06_PermissionsOnExistingEnforcement(t *testing.T) {
 	_, h, admin, tenant := journeyOnProductionTransport(t)
 	viewer := h.viewerToken(admin, tenant, "viewer@j06.test")
-	denied := h.doJSON("POST", "/v1/m/sessions/runs", viewer, map[string]any{
+	denied := h.doJSON("POST", "/v1/m/sessions/runs", viewer, map[string]any{"provider_profile_ref": ensureRuntimeTestProfileRef(t, h.m, tenant),
 		"transport": "stream-json", "isolation": "native", "permission_mode": "default",
 	}, tenantHdr(tenant))
 	if denied.code != http.StatusForbidden {

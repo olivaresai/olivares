@@ -11,6 +11,7 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderIntel } from '@/test/intel'
 import type { RunDTO } from '@/features/agentops/types'
+import { gitpublishApi } from '@/features/gitpublish/api'
 import { mergeSessions } from './provenance'
 import type { LiveDTO, TimelineDTO } from './types'
 import { SessionContextPane } from './session-context-pane'
@@ -36,6 +37,7 @@ vi.mock('./api', async (importOriginal) => ({
 
 const ops = vi.hoisted(() => ({
   listWorkspaces: vi.fn(),
+  getWorkspace: vi.fn(),
   listProfiles: vi.fn(),
 }))
 vi.mock('@/features/agentops/api', async (importOriginal) => {
@@ -128,6 +130,7 @@ beforeEach(() => {
   api.timelineById.mockResolvedValue(page([]))
   api.timeline.mockResolvedValue(page([]))
   ops.listWorkspaces.mockResolvedValue({ items: [], has_more: false })
+  ops.getWorkspace.mockRejectedValue(new Error('folder lookup failed'))
   ops.listProfiles.mockResolvedValue({ items: [], has_more: false })
 })
 
@@ -150,6 +153,31 @@ function renderNarrative(over: Partial<SessionResolution> = {}, props = {}) {
 }
 
 describe('SessionNarrative — work told as work', () => {
+  it('does not show a cached failure reason after run-read permission is lost', () => {
+    renderNarrative({
+      runs: [
+        run({ state: 'failed', reason: 'Sensitive cached failure reason' }),
+      ],
+      grants: {
+        liveRead: true,
+        runRead: false,
+        runWrite: false,
+        runAdmin: false,
+      },
+    })
+    expect(
+      screen.queryByText('Sensitive cached failure reason'),
+    ).not.toBeInTheDocument()
+  })
+  it('puts a failed launch reason in the session view without a retry dead end', async () => {
+    const reason =
+      'the session was not started because its network boundary could not be set up: the host or container must allow unprivileged user and network namespaces and Landlock: operation not permitted'
+    renderNarrative({ runs: [run({ state: 'failed', reason })] })
+    expect(await screen.findByText(reason)).toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Start again' }),
+    ).not.toBeInTheDocument()
+  })
   it('tells the sentence and the figures the engine sent', async () => {
     renderNarrative({ live: live({ summary: 'Filed PR #7723' }) })
     expect(await screen.findByText('Filed PR #7723')).toBeInTheDocument()
@@ -176,7 +204,7 @@ describe('SessionNarrative — work told as work', () => {
 
   it('separates "no telemetry yet" from "the read failed"', async () => {
     renderNarrative({ live: undefined, observeUnknown: false })
-    expect(await screen.findByText(/Nothing observed/i)).toBeInTheDocument()
+    expect(await screen.findByText(/No session activity/i)).toBeInTheDocument()
 
     renderNarrative({ live: undefined, observeUnknown: true })
     expect(await screen.findByText(/could not be read/i)).toBeInTheDocument()
@@ -196,15 +224,12 @@ describe('SessionNarrative — work told as work', () => {
     expect(screen.queryByRole('alert')).toBeNull()
   })
 
-  it('offers the next action when nothing is open at all', async () => {
-    renderNarrative(
-      { target: null },
-      { emptyAction: <button type="button">Start a session</button> },
-    )
+  // New session belongs to the page header (sessions listed) or to the one empty state
+  // (none): a third copy here was one of the four the 26.10.1 review counted.
+  it('says to choose a session when none is open, without a New session of its own', async () => {
+    renderNarrative({ target: null })
     expect(await screen.findByText('Select a session')).toBeInTheDocument()
-    expect(
-      screen.getByRole('button', { name: 'Start a session' }),
-    ).toBeInTheDocument()
+    expect(screen.queryByRole('button')).toBeNull()
   })
 })
 
@@ -219,15 +244,18 @@ describe('SessionNarrative — the menu path for the pin', () => {
     expect(onTogglePin).toHaveBeenCalledWith('live:lr-a')
   })
 
-  it('offers no menu when this principal has nowhere to store a preference', async () => {
+  it('offers no Pin when this principal has nowhere to store a preference', async () => {
+    const user = userEvent.setup()
     renderNarrative({}, { onTogglePin: null })
-    await screen.findByTestId('session-narrative')
-    expect(screen.queryByTestId('narrative-menu')).toBeNull()
+    await user.click(await screen.findByTestId('narrative-menu'))
+    await screen.findByRole('menuitem', { name: 'Full controls' })
+    expect(screen.queryByRole('menuitem', { name: /Pin/ })).toBeNull()
   })
 
   it('keeps the full controls one explicit click away, never on selection', async () => {
     const user = userEvent.setup()
     const { onOpenDetail } = renderNarrative()
+    await user.click(await screen.findByTestId('narrative-menu'))
     await user.click(await screen.findByTestId('narrative-open-detail'))
     expect(onOpenDetail).toHaveBeenCalledTimes(1)
   })
@@ -345,19 +373,14 @@ describe('SessionEvidence — inside the narrative', () => {
 
 describe('SessionContextPane — the scope this session ran under', () => {
   it('puts names on the scope line and identifiers in the identifiers block', async () => {
-    ops.listWorkspaces.mockResolvedValue({
-      items: [
-        {
-          workspace_ref: 'ws-main',
-          name: 'main',
-          root_path: '/work',
-          mount_mode: 'ro',
-          max_read_bytes: 0,
-          dlp_mode: 'off',
-          state: 'active',
-        },
-      ],
-      has_more: false,
+    ops.getWorkspace.mockResolvedValue({
+      workspace_ref: 'ws-main',
+      name: 'main',
+      root_path: '/work',
+      mount_mode: 'ro',
+      max_read_bytes: 0,
+      dlp_mode: 'off',
+      state: 'active',
     })
     ops.listProfiles.mockResolvedValue({
       items: [
@@ -462,16 +485,22 @@ describe('SessionContextPane — the scope this session ran under', () => {
     },
   )
 
-  it('says No workspace on the scope line when the API does not name one', async () => {
+  it('keeps an unresolved folder reference without claiming the session has no workspace', async () => {
     renderIntel(
       <SessionContextPane resolution={resolution({ runs: [run()] })} />,
     )
     const pane = await screen.findByTestId('session-context')
     const scope = within(pane).getByTestId('context-scope')
     const identifiers = within(pane).getByTestId('context-identifiers')
-    expect(within(scope).getByText('No workspace')).toBeInTheDocument()
+    expect(
+      within(scope).getByText('Workspace').parentElement,
+    ).toHaveTextContent('Not declared')
+    expect(within(scope).getByText('Folder').parentElement).toHaveTextContent(
+      'ws-main',
+    )
+    expect(within(scope).queryByText('No workspace')).toBeNull()
     expect(within(scope).getByText('This node')).toBeInTheDocument()
-    expect(within(scope).queryByText('ws-main')).toBeNull()
+    expect(within(scope).getByTitle('ws-main')).toBeInTheDocument()
     expect(within(identifiers).getByText('ws-main')).toBeInTheDocument()
     expect(within(identifiers).getByText('env-prod')).toBeInTheDocument()
   })
@@ -508,8 +537,10 @@ describe('SessionContextPane — the scope this session ran under', () => {
     renderIntel(
       <SessionContextPane resolution={resolution({ runs: [run()] })} />,
     )
+    await user.click(screen.getByText('Details', { selector: 'summary' }))
+    const identifiers = screen.getByTestId('context-identifiers')
     await user.click(
-      await screen.findByRole('button', { name: /Copy ws-main/ }),
+      within(identifiers).getByRole('button', { name: 'Copy ws-main' }),
     )
     expect(writeText).toHaveBeenCalledWith('ws-main')
   })
@@ -580,6 +611,32 @@ describe('the session panes paint names, never raw identifiers', () => {
     expect(heading.getAttribute('title')).toContain('sess-coder-7a3f')
   })
 
+  it('offers to publish the session’s commit when its workspace has a target', async () => {
+    vi.spyOn(gitpublishApi, 'targets').mockResolvedValue({
+      items: [
+        {
+          id: 'tg-1',
+          workspace_id: 'ws-authz',
+          push_prefix: 'olivares/',
+          merge_bases: ['main'],
+          version: 1,
+        },
+      ],
+    })
+    renderIntel(
+      <SessionContextPane
+        panel="changes"
+        resolution={resolution({
+          runs: [run({ authz_workspace_id: 'ws-authz' })],
+        })}
+      />,
+    )
+    const publish = await screen.findByTestId('session-publish')
+    expect(
+      within(publish).getByRole('button', { name: 'Publish' }),
+    ).toBeInTheDocument()
+  })
+
   it('leaves no full reference painted in the identifiers block', async () => {
     renderIntel(
       <SessionContextPane resolution={resolution({ runs: [run()] })} />,
@@ -599,4 +656,38 @@ describe('the session panes paint names, never raw identifiers', () => {
       ).toBeGreaterThan(0)
     }
   })
+})
+
+describe('phone recovery before a narrative is ready', () => {
+  it.each(['loading', 'absent', 'denied'] as const)(
+    'keeps Back in the %s state',
+    async (state) => {
+      const r = resolution({ runs: [] })
+      if (state === 'loading') r.loading = true
+      if (state === 'absent') r.target = null
+      if (state === 'denied')
+        r.grants = {
+          liveRead: false,
+          runRead: false,
+          runWrite: false,
+          runAdmin: false,
+        }
+      const back = vi.fn()
+      renderIntel(
+        <SessionNarrative
+          resolution={r}
+          pinned={false}
+          onTogglePin={null}
+          onOpenDetail={() => {}}
+          evidence="checks"
+          onExpandEvidence={() => {}}
+          back={<button onClick={back}>Back to sessions</button>}
+        />,
+      )
+      await userEvent
+        .setup()
+        .click(screen.getByRole('button', { name: 'Back to sessions' }))
+      expect(back).toHaveBeenCalledOnce()
+    },
+  )
 })

@@ -53,8 +53,9 @@ type catalogInstantiateBody struct {
 }
 
 type catalogTransitionBody struct {
-	Status string `json:"status"`
-	Note   string `json:"note,omitempty"`
+	Status      string `json:"status"`
+	Note        string `json:"note,omitempty"`
+	ApprovalRef string `json:"approval_ref,omitempty"`
 }
 
 // ---------------------------------------------------------------------------
@@ -750,18 +751,20 @@ func newCatalogInstancesCmd(client datalaneClient) *cobra.Command {
 	}
 
 	var (
-		newStatus string
-		note      string
-		yes       bool
+		newStatus   string
+		note        string
+		yes         bool
+		approvalRef string
 	)
 	transition := &cobra.Command{
 		Use:   "transition <instance-id>",
-		Short: "Record a governance decision on an instance",
+		Short: "Decide an instance request or apply its deployment",
 		Long: "Record an admin-tier decision on an instantiation request: approved, rejected or\n" +
 			"active. Only the transitions the module allows are accepted — requested to\n" +
 			"approved or rejected, approved to active or rejected — and each is audited.\n\n" +
-			"Approving or activating provisions capability for whoever asked, so this asks for\n" +
-			"confirmation and refuses an unattended session without --yes.",
+			"Activation applies the referenced deployment through governance. This asks for\n" +
+			"confirmation and refuses an unattended session without --yes. An activation proposal\n" +
+			"returns its approval reference; retry with --approval-ref after it is approved.",
 		Example: `  olivares catalog instances transition ci_123 --status approved --yes
   olivares catalog instances transition ci_123 --status rejected --note "no budget" --yes`,
 		Args: cobra.ExactArgs(1),
@@ -779,18 +782,22 @@ func newCatalogInstancesCmd(client datalaneClient) *cobra.Command {
 				return err
 			}
 			raw, code, err := client.do(cmd, http.MethodPost, path, nil,
-				catalogTransitionBody{Status: newStatus, Note: note})
+				catalogTransitionBody{Status: newStatus, Note: note, ApprovalRef: approvalRef})
 			if err != nil {
 				return err
 			}
 			if !datalaneOK(code) {
 				return datalaneHTTPError(client.what, code, raw)
 			}
+			if code == http.StatusAccepted {
+				return reportAgentExecPending(cmd, agentExecResult{status: code, raw: raw}, "catalog activation")
+			}
 			return datalaneResult(cmd, raw, code, "")
 		},
 	}
 	transition.Flags().StringVar(&newStatus, "status", "", "approved, rejected or active")
 	transition.Flags().StringVar(&note, "note", "", "note recorded with the decision")
+	transition.Flags().StringVar(&approvalRef, "approval-ref", "", "governance approval returned by the activation proposal")
 	addYesFlag(transition, &yes)
 
 	cmd.AddCommand(list, get, transition)

@@ -28,7 +28,9 @@ inline.
 olivares secrets put \
   --data-dir /var/lib/olivares \
   --name s3/prod-runbooks-read \
-  --value-file /run/secrets/s3-prod-runbooks-read
+  --value-file /run/secrets/s3-prod-runbooks-read \
+  --actor platform-operator \
+  --reason governed-rag-source-credential
 ```
 
 Для Google Drive сохраните bearer/refresh-данные OAuth, которые развёртывание
@@ -74,8 +76,16 @@ OLIVARES_AGENT_GATEWAY_CONFIG=/var/lib/olivares/quickstart/governed-rag/agent-ga
 olivares quickstart --data-dir /var/lib/olivares
 ```
 
-Если это новая установка, завершите первоначальную настройку консоли. Затем
-запустите bootstrap-скрипт с токеном администратора:
+Если это новая установка, завершите первоначальную настройку консоли.
+
+В новой установке `knowledge` и `sourcescope` отключены. Как администратор включите
+`knowledge` и `sourcescope` в **Settings > Edition & modules**, сохранив остальные выбранные
+модули включёнными. Для CLI сначала войдите в этот движок как администратор
+через `olivares login`, затем выполните `olivares modules on knowledge` и `olivares modules on sourcescope`. Перед продолжением
+дождитесь каждого перезапуска движка; работающие сессии остановятся, и их
+можно возобновить. Иначе эти вызовы API вернут `404 module_not_enabled`.
+
+Затем запустите bootstrap-скрипт с токеном администратора:
 
 ```sh
 OLIVARES_TOKEN=<admin-token> \

@@ -4,4 +4,4 @@
 // enumerating.
 module github.com/olivaresai/olivares/scripts/config-env-docs
 
-go 1.26.8
+go 1.26.9

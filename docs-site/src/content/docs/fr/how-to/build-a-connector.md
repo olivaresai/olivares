@@ -223,8 +223,8 @@ certification ; ce n'est pas une racine de confiance.
   contenu** ; un connecteur de sortie se construit et se livre à l'identique,
   mais la composition de notification ne charge pas encore de plugins de sortie
   externes.
-- Les **modules** hors processus ne sont pas disponibles (le proto est gelé, la
-  colle hôte intentionnellement non câblée).
+- Les **modules** hors processus ne sont pas disponibles et le transport est
+  déprécié (le protocole reste gelé ; la colle hôte n’a jamais été câblée).
 - Le type somme d'observation est **scellé** : vous émettez des edges, des
   échantillons de coût et des findings — avec des vocabulaires de chaînes
   ouverts — mais vous ne pouvez pas définir de nouvelles sortes d'observations.

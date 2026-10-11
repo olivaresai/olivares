@@ -21,7 +21,9 @@ import {
   useCapability,
   useCapabilityPreflight,
 } from '@/lib/auth/capabilities'
+import { useNewSessionDialog } from '@/features/first-hour/new-session-store'
 import { useAuth } from '@/lib/auth/context'
+import { isGlobalAccount } from '@/lib/auth/rbac'
 import { useUrlState } from '@/lib/hooks/use-url-state'
 import { communicationsKeys } from './api'
 import { administrationSurfaceQuestion } from './capabilities'
@@ -95,7 +97,7 @@ function Inner({
   scope: CommunicationsScope
 }) {
   const { t } = useTranslation('communications')
-  const { can, principal } = useAuth()
+  const { can, principal, activeTenant } = useAuth()
   const queryClient = useQueryClient()
   const preflight = useCapabilityPreflight()
 
@@ -106,12 +108,14 @@ function Inner({
   const canMessageRead = can('sessions:message:read')
   const canSend = can('sessions:message-send:write')
   const canHandoffRespond = can('sessions:handoff-response:write')
+  // Opening the work a handoff names starts a session: the ordinary run-write permission.
+  const canRunWrite = can('sessions:run:write')
   const canUserRead = can('user:read')
   const canAgentRead = can('agent:read')
 
-  // Personal handoffs require a tenant member. Use the principal's explicit flag;
-  // an unresolved principal must not be classified as a global administrator.
-  const globalSuperadminAccount = principal?.superadmin === true
+  // Personal handoffs require a tenant member. A superadmin with a grant in this
+  // tenant is one; an unresolved principal is not classified as a global administrator.
+  const globalSuperadminAccount = isGlobalAccount(principal, activeTenant)
 
   const me: Me = {
     userId: principal?.kind === 'user' ? principal.user_id : null,
@@ -500,6 +504,18 @@ function Inner({
               registerFallbackFocus={(get) => {
                 sheetFallbackFocus.current = get
               }}
+              onOpenWorktree={
+                canRunWrite
+                  ? (from) => {
+                      // The sheet closes, so the protected context leaves the page; the
+                      // launch dialog keeps only the string that names the work.
+                      closeHandoff()
+                      useNewSessionDialog
+                        .getState()
+                        .openAdvanced({ worktreeFrom: from })
+                    }
+                  : undefined
+              }
               onRespond={(transition, target) => {
                 // Captured at the gesture: this control lives inside the sheet,
                 // where a focusin observer cannot see it.

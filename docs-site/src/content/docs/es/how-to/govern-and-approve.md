@@ -3,6 +3,10 @@ title: "Gobierna y aprueba (human-in-the-loop)"
 description: "Cómo un operador gobierna el estate: identidad y permisos, el modelo RBAC deny-by-default, el seam de política solo-restringe, y la postura human-in-the-loop donde las decisiones se registran en el audit ledger."
 ---
 
+:::note[Business]
+La exportación de auditoría (`GET /v1/audit/export`, `olivares audit export`), los archivos en directorios y la verificación de archivos externos requieren Business. Community conserva el registro firmado, `olivares audit verify` y `olivares dr backup`; la exportación devuelve HTTP 501 o código de salida 9. El reenvío de auditoría y las transferencias DDIL con segmentos de auditoría también requieren Business.
+:::
+
 Esta página es para el operador que ha conectado al menos una fuente y ahora necesita
 **gobernar** el estate: decidir quién y qué puede actuar, revisar lo que la plataforma
 muestra y actuar sobre ello. El gobierno vive en el **módulo VI (identidad, permisos,
@@ -205,3 +209,7 @@ todo lo demás, razón por la que leerlo es una acción de editor-en-adelante.
   (módulo IX).
 - [Conecta una fuente](/es/how-to/connect-a-source/) — cablea las señales sobre las que se construyen el drift y
   los hallazgos.
+
+## Ediciones de aprobación (0.1)
+
+Community conserva el motor de aprobaciones, el mínimo de dos personas distintas para acciones CRITICAL, el doble control del kill-switch y las políticas que exigen revisión o aumentan el nivel de riesgo o el cuórum. Las políticas que reducen el nivel de riesgo y el acceso de emergencia break-glass pertenecen a la base de Business. Los registros almacenados se conservan para lectura y exportación, pero no pueden reducir los valores predeterminados de Community ni autorizar acceso de emergencia.

@@ -12,6 +12,8 @@ export interface SentTurn {
   text: string
   /** Why the engine did not take it; absent when it did. */
   refused?: string
+  /** Held until its launch is approved and the session runs (#500); absent once sent. */
+  waiting?: boolean
 }
 
 /** A note as kept: the turn and the sign-in and organization it belongs to. */
@@ -37,7 +39,8 @@ export function sentTurnsPartition(): string {
 export const useSentTurns = create<{
   byRun: Record<string, readonly OwnedTurn[]>
   /** `partition` is sentTurnsPartition() taken when the start BEGAN: a start that
-   * completes after a sign-out or an organization change notes nothing. */
+   * completes after a sign-out or an organization change notes nothing. A note settles
+   * the run's held turn with the same words. */
   note: (partition: string, runRef: string, turn: SentTurn) => void
 }>((set) => ({
   byRun: {},
@@ -46,7 +49,12 @@ export const useSentTurns = create<{
     set((s) => ({
       byRun: {
         ...s.byRun,
-        [runRef]: [...(s.byRun[runRef] ?? []), { ...turn, partition }],
+        [runRef]: [
+          ...(s.byRun[runRef] ?? []).filter(
+            (t) => !(t.waiting && t.text === turn.text),
+          ),
+          { ...turn, partition },
+        ],
       },
     }))
   },
@@ -68,9 +76,11 @@ function owned(
 ): readonly SentTurn[] | undefined {
   const own = turns
     ?.filter((t) => t.partition === partition)
-    .map(({ text, refused }) =>
-      refused === undefined ? { text } : { text, refused },
-    )
+    .map(({ text, refused, waiting }) => ({
+      text,
+      ...(refused === undefined ? {} : { refused }),
+      ...(waiting ? { waiting } : {}),
+    }))
   return own?.length ? own : undefined
 }
 
@@ -97,7 +107,7 @@ const words = (value: string) => value.replace(/\s+/g, ' ').trim()
 
 /** The sent messages the tool has not shown yet: one the tool echoed (the same words as
  * one of its operator rows, each row counted once) is shown by that row instead. A
- * refused message never reached the tool, so it stays. */
+ * refused or held message never reached the tool, so it stays. */
 export function unechoedTurns(
   items: readonly ConversationItem[],
   sent: readonly SentTurn[],
@@ -106,7 +116,7 @@ export function unechoedTurns(
     .filter((i) => i.kind === 'operator')
     .map((i) => words(i.text ?? i.summary))
   return sent.filter((turn) => {
-    if (turn.refused) return true
+    if (turn.refused || turn.waiting) return true
     const at = echoed.indexOf(words(turn.text))
     if (at < 0) return true
     echoed.splice(at, 1)

@@ -6,13 +6,6 @@ package audit
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
-	"fmt"
-	"os"
-	"path"
-	"path/filepath"
-	"strings"
 	"time"
 )
 
@@ -70,85 +63,6 @@ type ArchiveReceipt struct {
 // content for an existing key is refused.
 type DirSink struct {
 	root string
-}
-
-// NewDirSink creates (if needed) the root directory and returns a sink over it.
-func NewDirSink(root string) (*DirSink, error) {
-	if root == "" {
-		return nil, fmt.Errorf("audit: dir sink: empty root")
-	}
-	abs, err := filepath.Abs(root)
-	if err != nil {
-		return nil, fmt.Errorf("audit: dir sink: %w", err)
-	}
-	if err := os.MkdirAll(abs, 0o755); err != nil {
-		return nil, fmt.Errorf("audit: dir sink: %w", err)
-	}
-	return &DirSink{root: abs}, nil
-}
-
-// Root returns the sink's absolute root directory.
-func (s *DirSink) Root() string { return s.root }
-
-// Put writes one object as a read-only file under the root. Keys are
-// slash-separated relative paths (SegmentKey et al.); anything absolute or
-// escaping the root is rejected.
-func (s *DirSink) Put(_ context.Context, key string, body []byte, opts ArchivePutOptions) (ArchiveReceipt, error) {
-	clean := path.Clean(key)
-	if key == "" || path.IsAbs(clean) || clean == ".." || strings.HasPrefix(clean, "../") {
-		return ArchiveReceipt{}, fmt.Errorf("audit: dir sink: invalid key %q", key)
-	}
-	sum := sha256.Sum256(body)
-	got := hex.EncodeToString(sum[:])
-	if opts.ContentSHA256 != "" && !strings.EqualFold(opts.ContentSHA256, got) {
-		return ArchiveReceipt{}, fmt.Errorf("audit: dir sink: content sha256 mismatch for %q", key)
-	}
-	target := filepath.Join(s.root, filepath.FromSlash(clean))
-	if existing, err := os.ReadFile(target); err == nil {
-		// Idempotent recovery: a retried Put of the same bytes is a success; a
-		// DIFFERENT body for an existing key is exactly what WORM must refuse.
-		esum := sha256.Sum256(existing)
-		if esum == sum {
-			return s.receipt(target, got, opts), nil
-		}
-		return ArchiveReceipt{}, fmt.Errorf("audit: dir sink: %q already exists with different content", key)
-	} else if !os.IsNotExist(err) {
-		return ArchiveReceipt{}, fmt.Errorf("audit: dir sink: %w", err)
-	}
-	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
-		return ArchiveReceipt{}, fmt.Errorf("audit: dir sink: %w", err)
-	}
-	// Write to a temp name then rename, so a reader never sees a partial
-	// object; chmod before the rename so the visible file is born read-only.
-	tmp, err := os.CreateTemp(filepath.Dir(target), ".put-*")
-	if err != nil {
-		return ArchiveReceipt{}, fmt.Errorf("audit: dir sink: %w", err)
-	}
-	tmpName := tmp.Name()
-	if _, err := tmp.Write(body); err != nil {
-		_ = tmp.Close()
-		_ = os.Remove(tmpName)
-		return ArchiveReceipt{}, fmt.Errorf("audit: dir sink: %w", err)
-	}
-	if err := tmp.Close(); err != nil {
-		_ = os.Remove(tmpName)
-		return ArchiveReceipt{}, fmt.Errorf("audit: dir sink: %w", err)
-	}
-	if err := os.Chmod(tmpName, 0o444); err != nil {
-		_ = os.Remove(tmpName)
-		return ArchiveReceipt{}, fmt.Errorf("audit: dir sink: %w", err)
-	}
-	if err := os.Rename(tmpName, target); err != nil {
-		_ = os.Remove(tmpName)
-		return ArchiveReceipt{}, fmt.Errorf("audit: dir sink: %w", err)
-	}
-	return s.receipt(target, got, opts), nil
-}
-
-// receipt builds the honest DirSink receipt: the file path and digest, with no
-// lock claim (the chmod is not an enforced lock) and no retention echo.
-func (s *DirSink) receipt(target, sha string, _ ArchivePutOptions) ArchiveReceipt {
-	return ArchiveReceipt{Location: target, ETag: sha, LockVerified: false}
 }
 
 // Compile-time proof DirSink satisfies the sink seam.

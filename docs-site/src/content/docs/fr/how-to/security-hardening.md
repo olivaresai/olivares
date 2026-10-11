@@ -38,6 +38,19 @@ privilégié). Si vous n'en avez défini aucun, il est désactivé. La posture c
 sécurisées et les garanties cryptographiques du ledger d'audit se trouvent dans le
 [modèle de sécurité](/fr/explanation/security/security-model/).
 
+### Paramètres de connexion et de sécurité
+
+Ouvrez **Paramètres → Connexion et sécurité** pour consulter les méthodes de
+connexion, la durée des sessions du moteur, la politique de vérification
+administrative supplémentaire et vos passkeys enregistrées. La durée est en
+lecture seule ; actualiser une session renouvelle son expiration. Enregistrez
+ou renommez vos passkeys et inscrivez une application d’authentification ici.
+Les administrateurs système peuvent modifier les politiques existantes ; les
+autres utilisateurs voient l’exigence de vérification supplémentaire sans contrôle
+d’édition. Exiger une passkey ou un code d’authentification demande d’abord une
+preuve que votre session peut l’utiliser. **Gérer les fournisseurs d’identité**
+permet de configurer l’authentification unique.
+
 ### TLS mutuel pour les collectors distants
 
 Dans la topologie distribuée, les collectors en périphérie poussent des observations vers le core via un

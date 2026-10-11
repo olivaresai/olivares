@@ -17,7 +17,7 @@ vi.mock('@/lib/api/client', () => ({
 import { useModulesStore, useSyncModulesNotEnabled } from './modules'
 
 beforeEach(() => get.mockReset())
-afterEach(() => useModulesStore.getState().setOff([]))
+afterEach(() => useModulesStore.setState({ off: new Set() }))
 
 describe('the communication plane readiness comes from server-info', () => {
   it('a staged plane hides its screens and the console asks no route about it', () => {

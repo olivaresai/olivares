@@ -7,7 +7,6 @@ package main
 import (
 	"encoding/json"
 	"log/slog"
-	"os"
 	"strings"
 	"time"
 
@@ -87,7 +86,7 @@ const defaultAnthropicVersion = "2023-06-01"
 // empty config (dispatcher not wired; opens stay declared-not-opened). A supplied path
 // must be readable and contain valid JSON or startup fails closed.
 func loadVoiceDispatchConfig(_ *slog.Logger) (voiceDispatchConfig, error) {
-	path := os.Getenv("OLIVARES_VOICE_DISPATCH_CONFIG")
+	path := osGetenv("OLIVARES_VOICE_DISPATCH_CONFIG")
 	if path == "" {
 		return voiceDispatchConfig{}, nil
 	}

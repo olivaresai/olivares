@@ -22,21 +22,21 @@ export LC_ALL
 RAIZ="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd -P)"
 GATE="$RAIZ/scripts/check-connector-inventory.sh"
 [ -r "$GATE" ] || {
-	echo "test-connector-inventory-gate: ⛔ NO HE PODIDO MIRAR: no existe $GATE" >&2
+	echo "test-connector-inventory-gate: ⛔ COULD NOT LOOK: $GATE does not exist" >&2
 	exit 2
 }
 BANCO="$(mktemp -d "$RAIZ/.inv-XXXXXX")" || exit 2
 trap 'rm -rf "$BANCO"' EXIT
 
-pasan=0
-fallan=0
+pass_count=0
+fail_count=0
 comprobar() {
 	if [ "$3" -eq "$2" ]; then
 		printf '  ok    %-56s rc=%s\n' "$1" "$3"
-		pasan=$((pasan + 1))
+		pass_count=$((pass_count + 1))
 	else
-		printf '  FALLA %-56s rc=%s (quiere %s)\n' "$1" "$3" "$2"
-		fallan=$((fallan + 1))
+		printf '  FAIL  %-56s rc=%s (expected %s)\n' "$1" "$3" "$2"
+		fail_count=$((fail_count + 1))
 	fi
 }
 
@@ -74,26 +74,26 @@ correr() {
 monta_dirs "$BANCO/c" alfa beta
 monta_doc "$BANCO/d.md" 2 alfa beta
 correr "$BANCO/d.md" "$BANCO/c"
-comprobar "tabla y árbol de acuerdo salen limpios" 0 "$?"
+comprobar "matching table and tree are clean" 0 "$?"
 
 # ── 2 · EL DEFECTO QUE TRAJO EL GATE: conector con Go y sin fila ──────────────────────────
 monta_dirs "$BANCO/c" alfa beta gamma
 monta_doc "$BANCO/d.md" 3 alfa beta
 correr "$BANCO/d.md" "$BANCO/c"
-comprobar "un conector con Go y SIN fila es un hallazgo" 1 "$?"
+comprobar "a connector with Go but NO row is a finding" 1 "$?"
 if grep -q '`gamma`' "$BANCO/out.log"; then
-	printf '  ok    %-56s\n' "y el mensaje NOMBRA cuál falta"
-	pasan=$((pasan + 1))
+	printf '  ok    %-56s\n' "message NAMES the missing connector"
+	pass_count=$((pass_count + 1))
 else
-	printf '  FALLA %-56s\n' "el hallazgo no dice qué conector falta"
-	fallan=$((fallan + 1))
+	printf '  FAIL  %-56s\n' "finding does not name the missing connector"
+	fail_count=$((fail_count + 1))
 fi
 
 # ── 3 · La dirección contraria: fila que nombra algo inexistente ─────────────────────────
 monta_dirs "$BANCO/c" alfa
 monta_doc "$BANCO/d.md" 1 alfa fantasma
 correr "$BANCO/d.md" "$BANCO/c"
-comprobar "una fila sin conector es un hallazgo" 1 "$?"
+comprobar "a row without a connector is a finding" 1 "$?"
 
 # ── 4 · Un directorio SIN Go no necesita fila (el caso `backstage`) ──────────────────────
 # Sin esto, el gate exigiría fila a los plugins TypeScript y pondría rojo un árbol correcto —
@@ -102,30 +102,30 @@ monta_dirs "$BANCO/c" alfa
 mkdir -p "$BANCO/c/soloweb" && printf '{}' >"$BANCO/c/soloweb/package.json"
 monta_doc "$BANCO/d.md" 2 alfa
 correr "$BANCO/d.md" "$BANCO/c"
-comprobar "un directorio sin Go no necesita fila" 0 "$?"
+comprobar "a directory without Go needs no row" 0 "$?"
 
 # ── 5 · La cifra del resumen se re-deriva, no se transcribe ──────────────────────────────
 monta_dirs "$BANCO/c" alfa beta
 monta_doc "$BANCO/d.md" 7 alfa beta
 correr "$BANCO/d.md" "$BANCO/c"
-comprobar "una cifra de resumen transcrita mal es un hallazgo" 1 "$?"
+comprobar "an incorrectly transcribed summary count is a finding" 1 "$?"
 
 # ── 6 · TERCERA RESPUESTA: lo que no se puede mirar no es verde ──────────────────────────
 correr "$BANCO/no-existe.md" "$BANCO/c"
-comprobar "documento ausente es NO HE PODIDO MIRAR" 2 "$?"
+comprobar "missing document is COULD NOT LOOK" 2 "$?"
 correr "$BANCO/d.md" "$BANCO/no-existe-dir"
-comprobar "árbol de conectores ausente es NO HE PODIDO MIRAR" 2 "$?"
+comprobar "missing connector tree is COULD NOT LOOK" 2 "$?"
 
 # Un documento SIN la sección: no se adivina la tabla, se dice que no se pudo mirar.
 printf '# sin tabla\n\ntexto\n' >"$BANCO/sin-tabla.md"
 correr "$BANCO/sin-tabla.md" "$BANCO/c"
-comprobar "documento sin «## Truth Table» es NO HE PODIDO MIRAR" 2 "$?"
+comprobar "document without «## Truth Table» is COULD NOT LOOK" 2 "$?"
 
 # Y una tabla presente pero VACÍA: cero filas contra todo daría un hallazgo por conector, que se
 # lee como catástrofe. Es una medición que no se ha podido hacer.
 monta_doc "$BANCO/vacia.md" 2
 correr "$BANCO/vacia.md" "$BANCO/c"
-comprobar "tabla sin filas reconocibles es NO HE PODIDO MIRAR" 2 "$?"
+comprobar "table without recognizable rows is COULD NOT LOOK" 2 "$?"
 
 # ── LA PODA DE DEPENDENCIAS, en las DOS direcciones ───────────────────────────────────────────
 # Medido el 2026-09-01, con un push muerto a los 22 minutos: un worktree con las dependencias
@@ -139,14 +139,14 @@ mkdir -p "$BANCO/c/solo-ts/node_modules/.pnpm/flatted@3.4.2/node_modules/flatted
 printf 'package flatted\n' >"$BANCO/c/solo-ts/node_modules/.pnpm/flatted@3.4.2/node_modules/flatted/golang/pkg/flatted/flatted.go"
 monta_doc "$BANCO/d.md" 3 alfa beta
 correr "$BANCO/d.md" "$BANCO/c"
-comprobar "un .go dentro de node_modules NO da Go al conector" 0 "$?"
+comprobar "a .go in node_modules does NOT make the connector a Go connector" 0 "$?"
 
 # Y el control que impide que la poda afloje el gate: el MISMO directorio, con un .go de verdad
 # fuera de node_modules, tiene que exigir su fila.
 printf 'package solots\n' >"$BANCO/c/solo-ts/real.go"
 correr "$BANCO/d.md" "$BANCO/c"
-comprobar "un .go REAL en ese mismo conector SÍ exige fila" 1 "$?"
+comprobar "a REAL .go in the same connector DOES require a row" 1 "$?"
 
-echo "test-connector-inventory-gate: $pasan pasan, $fallan fallan"
-[ "$fallan" -eq 0 ] || exit 1
+echo "test-connector-inventory-gate: $pass_count passed, $fail_count failed"
+[ "$fail_count" -eq 0 ] || exit 1
 exit 0

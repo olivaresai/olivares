@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repo root.
 //
-// ⛔ ESTA CELDA EXISTE PORQUE EL CONTRASTE ENCONTRÓ LO QUE YO NO PROBÉ. Esta hoja resume DOS
-// lecturas en un solo booleano; al añadir el gemelo de ceremonia creé una TERCERA composición
-// —ceremonia y avería roja a la vez, y los datos de eventos visibles bajo la ceremonia— y no
-// escribí ninguna celda que renderizara el componente. `codex the model max` lo cazó con
-// file:line; mis celdas focales pasaban sin ejercer esta composición.
+// Review found an untested composition in this sheet. It combines two reads in one
+// boolean; adding step-up handling introduced a third composition: step-up and a red
+// failure together, with event data visible underneath. No test rendered the component.
+// `codex the model max` identified the precise location; the focused tests passed
+// without exercising that composition.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'

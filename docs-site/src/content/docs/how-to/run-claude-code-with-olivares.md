@@ -68,16 +68,18 @@ root filesystem — the base compose posture, with no second image and no overri
 
 Pin the engine by digest and verify it first:
 
+<!-- release -->
 ```sh
 # verify the engine image you run (it is cosign-signed)
-cosign verify docker.io/olivaresai/olivares:26.10.1 \
-  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v?[0-9]+\.[0-9]+(\.[0-9]+)?$' \
+cosign verify docker.io/olivaresai/olivares:0.1 \
+  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/[0-9]+\.[0-9]+$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 
 export OLIVARES_IMAGE=docker.io/olivaresai/olivares@sha256:<digest>
 export OLIVARES_BIND=127.0.0.1
 docker compose -f deploy/compose/docker-compose.yml up -d
 ```
+<!-- /release -->
 
 ### Install and sign in Claude Code
 
@@ -91,6 +93,12 @@ olivares tool login claude
 The tool lives in the data volume and the sign-in belongs to your organization; sessions
 never use a sign-in stored in the server account's home.
 
+To see what the tool itself reports about a login (the email, masked, the plan, the usage
+windows with their reset time, and the models), run `olivares tool providers`. It also lists
+the login of the user that runs the engine, read through the tool's own commands and never from
+its credential files; it is shown for information, and sessions still use only the sign-in made
+through Olivares.
+
 ---
 
 ## Topology 2 — both native (no Docker)
@@ -98,11 +106,37 @@ never use a sign-in stored in the server account's home.
 Engine and `claude` on the host; systemd runs the engine, which conducts `claude`. The
 workspace lives at `/var/lib/olivares/workspaces`.
 
-### One command
+### Download, verify, then run
 
+Do not pipe the installer into a shell. Verify the release's signed checksum list, check out
+the exact commit it names, and run the installer from that checkout. It then reads
+`install.sh` and its packaging files from the checkout, never from a branch. The block runs
+in a subshell with `set -eu`, so it stops at the first failed step and never reaches the
+installer after a failed check.
+
+<!-- release -->
 ```sh
-curl -fsSL https://raw.githubusercontent.com/olivaresai/olivares/main/scripts/install-agentops.sh | sh
+(
+set -eu
+cd "$(mktemp -d)"
+ver=0.1
+base=https://github.com/olivaresai/olivares/releases/download/$ver
+curl -fsSLO $base/checksums.txt
+curl -fsSLO $base/checksums.txt.sig
+curl -fsSLO $base/checksums.txt.pem
+curl -fsSLO $base/release-commit.txt
+cosign verify-blob \
+  --certificate checksums.txt.pem --signature checksums.txt.sig \
+  --certificate-identity "https://github.com/olivaresai/olivares/.github/workflows/release.yml@refs/tags/$ver" \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  checksums.txt
+grep ' release-commit.txt$' checksums.txt | sha256sum --check
+git clone https://github.com/olivaresai/olivares.git
+cd olivares && git checkout --detach "$(cat ../release-commit.txt)"
+OLIVARES_TOPOLOGY=native OLIVARES_VERSION=$ver sh scripts/install-agentops.sh
+)
 ```
+<!-- /release -->
 
 It auto-detects the native topology, installs the **verified** engine binary (the
 cosign-gated `install.sh`), installs `claude` from the signed apt/dnf/apk repository (with
@@ -114,11 +148,14 @@ your explicit decision.
 ### What the installer wires (and why)
 
 - `packaging/systemd/olivares.service.d/agentops.conf` — a drop-in that gives the
-  conducted `claude` a writable `HOME` for `~/.claude` (kept under `/var/lib/olivares`,
-  so `ProtectHome=true` still shields real users), ensures the workspace dir exists, and
-  lifts exactly **one** sandbox property: `MemoryDenyWriteExecute` (the `claude` runtime
-  JIT-compiles and needs W→X memory). Every other hardening directive from the base unit
-  stays in force.
+  conducted `claude` a writable `HOME` for `~/.claude` (kept under `/var/lib/olivares`),
+  ensures the workspace dir exists, and restates the base unit's file-system policy:
+  `ProtectSystem=full`, `ProtectHome=false`, `PrivateTmp=false` and
+  `MemoryDenyWriteExecute=false` (the `claude` runtime JIT-compiles and needs W→X memory).
+  Homes and `/tmp` stay visible to the engine so the folders you choose stay reachable;
+  each session's `claude` and its stdio MCP servers run under the product's per-folder
+  Landlock confinement instead. Every other hardening directive from the base unit stays
+  in force.
 - `/etc/olivares/agentops.env` — the session-runtime config (token file, TTL, optional
   gateway base URL, optional BYO `claude` path).
 
@@ -173,8 +210,8 @@ session is governable end to end.
 `--isolation container` and `--isolation sandbox` are **forward-compatibility seam
 values, not wired yet** (the per-session container Runner is the documented follow-up in
 [Topology 4](#topology-4--olivares-native-claude-in-a-per-session-container)). The native
-runner **refuses** a container/sandbox launch (a clear error) rather than silently run
-`claude` without the isolation you asked for. Use `native` — under the standard image /
+runner **refuses** a container/sandbox launch with HTTP 422 (`isolation_unsupported`)
+before creating a run, workspace directory or credential. Use `native` — under the standard image /
 systemd co-deployment that is the engine's own hardened container/host boundary.
 :::
 
@@ -228,8 +265,9 @@ standard image. Choosing this topology is choosing stronger governor/governed is
   the host port mapping controls exposure. Native/systemd listeners also bind every
   interface by default; configure their listen addresses to restrict access.
 - **Non-root, least privilege.** uid/gid 65532, read-only root filesystem, `cap_drop:
-  ALL`, `no-new-privileges` (Docker) / the full `Protect*`/`Restrict*` set minus the one
-  documented W^X relaxation (systemd).
+  ALL`, `no-new-privileges` (Docker) / the kernel and namespace `Protect*`/`Restrict*`
+  directives, with homes and `/tmp` visible, W^X allowed and each session confined to its
+  folder by Landlock (systemd).
 - **Minimal-data, allowlisted env.** The child `claude` inherits only an explicit
   allowlist (PATH, HOME, locale…) plus the in-memory inference token — **no** `OLIVARES_*`
   signing keys, **no** ambient `ANTHROPIC_*`/`CLAUDE_CODE_*` that could shadow the minted

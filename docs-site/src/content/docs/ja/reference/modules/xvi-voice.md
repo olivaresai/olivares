@@ -69,20 +69,62 @@ FinOps（モジュール XI）が担う。
 
 ## Actuate ステータス
 
-ガバナンス下の open は**ライブで**ディスパッチする。オペレーターが voice
-ディスパッチャーをプロビジョニングすると、承認された open は**サーバーサイドの
-一時クレデンシャル**を発行し、そのクレデンシャルと接続座標のみを返す — モデル、voice、
-ツール、ターン検出はクライアントからではなく**ポリシーから**固定され、プロバイダーの
-マスターキーがサーバーを離れることは決してない。そのプロビジョニングがない場合、
-ディスパッチシームは **deny-closed** である。承認された open は偽装されるのではなく、
-正直に「declared, not opened（宣言済み、未 open）」として記録される。
+統制された open は **live** で dispatch されます。オペレーターが音声 dispatcher をプロビジョニングすると、承認済み open は**サーバー側の一時認証情報**を発行し、それと接続先情報を返します。音声とターン検出はオペレーターのセッション設定から供給され、設定されたモデルは要求モデルより優先されます。モデルの設定がなければ、dispatcher はテナントポリシーが許可する要求モデルを使います。プロバイダーのマスターキーはサーバーを離れません。プロビジョニングされていなければ dispatch seam は **deny-closed** であり、承認済み open も「宣言済み、未開始」と正直に記録され、偽装されません。
+
+## 統制された open を設定してテストする
+
+`olivares modules on voice` で既存のモジュールを有効にします。稼働するモジュール集合が変わる場合、エンジンは選択を保存して 1 回再起動します。`olivares modules ls` で稼働状況を確認できます。モジュール仕様により voice は FinOps と governance を必要とします。voice をオフにしても、ポリシー、セッションメタデータ、決定台帳は保持されます。
+
+dispatcher はエンジンホスト上の `OLIVARES_VOICE_DISPATCH_CONFIG` でプロビジョニングします。値はオペレーター所有の JSON ファイルの絶対パスです。ファイルを読めるのはエンジンアカウントのみにしてください。プロバイダーのマスターキーはこのファイルに置き、CLI 引数、ポリシー行、クライアント接続バンドルには置きません。OpenAI adapter の形式は次のとおりです：
+
+```json
+{
+  "providers": [
+    {"ref": "openai", "kind": "openai", "api_key": "<server-held provider key>"}
+  ],
+  "policies": [
+    {
+      "agent_ref": "contact-agent",
+      "provider_ref": "openai",
+      "model": "<your permitted realtime model>",
+      "voice": "marin",
+      "max_duration_seconds": 60
+    }
+  ]
+}
+```
+
+エンジンサービスに環境変数を設定し、再起動します。指定されたファイルが読み取り不能または不正な JSON なら起動は失敗します。dispatcher 設定がなければ「宣言済み、未開始」の動作を維持します。オペレーターファイルは provider adapter とセッション設定を選び、テナントの voice ポリシーは要求されたエージェント、モデル、プロバイダーを別途認可します。両方で同じモデルとプロバイダーの参照を使ってください。
+
+`olivares login` でサインインした後、ポリシーを宣言して承認を要求します：
+
+```sh
+olivares voice policies set --agent-ref contact-agent \
+  --allowed-model-ref '<your permitted realtime model>' --allowed-provider-ref openai \
+  --max-session-minutes 1 --max-latency-ms 300
+olivares voice sessions open --session-ref contact-1 --agent-ref contact-agent \
+  --model-ref '<your permitted realtime model>' --provider-ref openai -o json
+```
+
+最初の要求は `op_status: requested`、`approval_ref`、CLI 終了コード 7 を返します。メディア接続を開かず、プロバイダーの認証情報も発行しません。必要な独立した承認者に、governance の承認ページまたは `olivares governance approvals approve <approval-ref>` でその参照を承認してもらいます。デフォルトのローカル承認ブリッジを経由する新しい要求では、要求者は同じアカウントの別の認証情報を使っても自身の要求を承認できません。同じ open を `--approval-ref <approval-ref>` とともに繰り返します。ポリシー拒否または承認保留は 403 と CLI 終了コード 3、adapter 障害は 502 を返します。予算と estate-stop の検査も引き続き適用されます。
+
+設定済み要求が成功すると `op_status: dispatched` を返します。`dispatch_ref` は、有効期間の短い `credential`、`connect` 接続先、`transport`、モデル、有効期限を含む JSON 文字列です。このレスポンスは認証情報として扱い、レポートやログに貼り付けないでください。OpenAI ではクライアントが短期認証情報で返された `connect` URL に SDP offer を送って交換し、以後 WebRTC メディア接続を所有します。認証情報の発行だけではメディア接続の成立は証明できません。決定台帳は接続認証情報ではなく、認証情報を含むバンドルの SHA-256 フィンガープリントを保持します。古い保存済みバンドルも読み取り時にフィンガープリント化し、既存の追記専用行は書き換えません。通常の provider handle は値を保持します。
+
+保持されたメタデータと決定を確認します：
+
+```sh
+olivares voice sessions get contact-1 -o json
+olivares voice sessions decisions contact-1 -o json
+olivares voice policies ls -o json
+```
+
+エンジン再起動の前後で同じデータディレクトリを使ってください。ポリシーと追記専用の決定は、再起動後や voice をオフにして再度オンにした後も利用できます。プロバイダーの認証情報は引き続き別途プロビジョニングが必要です。上記の JSON コマンドは、API と同じテナントスコープの `/v1/m/voice` ルートを使います。
 
 :::caution[正直な限界]
-- **このビルドでは観測は休眠中である。** まだ voice コネクターもプローブも同梱されて
-  いないので、インプロセスのプローブがテレメトリを発行するまで、観測の半分は
-  **正直に空のまま**である。本モジュールは何も供給されていないとき、起動時に警告する。
-  アウトオブプロセスのプラグインはこれに供給**できない**（gRPC control-plane proto は
-  イベント RPC を持たない）— プローブはインプロセスでなければならない。
+- **承認の帰属にはスコープがある。** デフォルトのローカルブリッジは、新しい人間起点の open で認証済み要求者を保持します。既存の承認は保存済みの帰属を維持します。明示的に設定されたサービストークン承認ブリッジは要求をサービス認証情報に帰属させ、起点となった個人の分離について同じ保証は提供しません。
+- **観測には設定済みの生成元が必要。** 任意の OpenAI Realtime SIP call plane は `OLIVARES_VOICE_CALL_CONFIG` で webhook 検証、テナントとプロジェクトの帰属を設定し、dispatcher 設定内の provider 認証情報を併用します。この設定またはプロセス内のテレメトリ生成元がなければ、観測側は空のままです。WebRTC 認証情報の発行はターン数やレイテンシを入力しません。イベント RPC を公開しない gRPC コントロールプレーンを通して、プロセス外プラグインがモジュールのイベントを発行することはできません。
+- **発行済みセッションのメディアはクライアントが所有する。** このモジュールは WebRTC クライアントを実装せず、クライアントの音声接続も閉じません。任意の SIP call controller は別の経路です。合成音声によるローカルのプロトコルテストは、ベンダーの音声、課金、SIP 観測、メディア切断を検証したことにはなりません。
+- **コンソールのスコープは別。** voice ビューはポリシーを編集し、セッション、決定、メタデータストリームを表示します。dispatcher のプロビジョニングとクライアントのメディア接続はこのビューの外であり、API や CLI の確認はブラウザー操作の検証にはなりません。
 - **内容は一切、決して残さない。** これは設定ではなくワイヤーの確固たる性質である。
   スキーマには content カラムがなく、パーサーは未知のキーを拒否する。レイテンシは
   実サンプルからの正直な平均/最大として示される — 捏造された p50/p95 は決して用いない。

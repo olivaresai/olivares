@@ -228,8 +228,8 @@ type PrimaryLoginContinuation interface {
 // native session and audit writes — so a withdrawal or expiry that lands
 // between revalidation and issuance rolls the whole issuance back. The exact
 // account id and scope are passed so a swapped account or scope mid-flight is
-// itself a refusal. Continuations without it, and every local/OIDC/SAML path,
-// are unchanged.
+// itself a refusal. Continuations without it, and OIDC/SAML paths, are unchanged.
+// Local password proofs have their own transactional hash revalidation.
 type SessionTxRevalidator interface {
 	RevalidateSessionTx(ctx context.Context, as store.AuthScope, exactAccountID model.ID, exactScope model.TenantID) error
 }
@@ -248,18 +248,28 @@ func txVerifierFor(ctx context.Context, cont PrimaryLoginContinuation, accountID
 }
 
 // totpLoginPending is a primary-verified login waiting for its factor. Only
-// the SHA-256 of the pending secret is held; the account id, the transport
-// peer and the login's context carry forward what CompleteTOTPLogin needs to
+// hashes of the pending secret and local password proof are held; the account
+// id, the transport peer and login context carry what CompleteTOTPLogin needs to
 // finish it. scope is the session scope the login selected (the local password
 // path passes the account's custody scope); continuation is nil on that path
 // and the external verifier's context otherwise.
 type totpLoginPending struct {
 	secretHash   []byte
 	accountID    model.ID
+	passwordHash string // the verified local hash; empty for external continuations
 	ip           string
 	scope        model.TenantID
 	continuation PrimaryLoginContinuation
 	expires      time.Time
+}
+
+func txVerifierForTOTP(ctx context.Context, pending *totpLoginPending) func(store.AuthScope) error {
+	if pending.continuation != nil {
+		return txVerifierFor(ctx, pending.continuation, pending.accountID, pending.scope)
+	}
+	return func(as store.AuthScope) error {
+		return verifyPasswordLoginTx(ctx, as, pending.accountID, pending.passwordHash)
+	}
 }
 
 // totpEnrolPending is a seed generated for an enrolment that has not been
@@ -502,20 +512,24 @@ func (a *Authenticator) accountIsAdministrator(ctx context.Context, user model.U
 // login) its continuation. The pending entry NEVER outlives the original
 // proof's horizon: the TTL is capped at it, so a challenge cannot extend what
 // the primary verification bounded.
-func (a *Authenticator) mintTOTPPending(accountID model.ID, ip string, scope model.TenantID, cont PrimaryLoginContinuation) (string, error) {
+func (a *Authenticator) mintTOTPPending(user model.User, ip string, scope model.TenantID, cont PrimaryLoginContinuation) (string, error) {
 	cred, err := NewCredential(PrefixMFA)
 	if err != nil {
 		return "", err
 	}
 	expires := a.nowFunc()().Add(TOTPPendingTTL)
+	var passwordHash string
 	if cont != nil {
 		if horizon := cont.ProofHorizon(); !horizon.IsZero() && horizon.Before(expires) {
 			expires = horizon
 		}
+	} else {
+		passwordHash = user.PasswordHash
 	}
 	a.totpStores().putLogin(cred.Selector, &totpLoginPending{
 		secretHash:   cred.SecretHash,
-		accountID:    accountID,
+		accountID:    user.ID,
+		passwordHash: passwordHash,
 		ip:           ip,
 		scope:        scope,
 		continuation: cont,
@@ -609,7 +623,7 @@ func (a *Authenticator) CompleteTOTPLogin(ctx context.Context, pendingToken, cod
 	// before the mint: the verifying source must still be current, the grant
 	// must still hold, the account's authority must be intact. A refusal is
 	// deny-closed and consumes the challenge — a withdrawn source is not a
-	// typo. The local password path (continuation nil) skips this entirely.
+	// typo. The local password path rechecks its hash in the mint transaction.
 	if pending.continuation != nil {
 		if err := pending.continuation.RevalidateCurrent(ctx, a.st); err != nil {
 			outcome = loginFailed
@@ -626,7 +640,7 @@ func (a *Authenticator) CompleteTOTPLogin(ctx context.Context, pendingToken, cod
 		method = externalLogin
 	}
 	token, sess, err := a.mintSession(ctx, &loginAttempt{ip: pending.ip}, user, pending.scope,
-		"auth.login", method, []string{"totp"}, activate, txVerifierFor(ctx, pending.continuation, pending.accountID, pending.scope))
+		"auth.login", method, []string{"totp"}, activate, txVerifierForTOTP(ctx, pending))
 	if err != nil {
 		return "", model.AuthSession{}, err
 	}
@@ -915,7 +929,7 @@ func (a *Authenticator) FinishTOTPEnrolmentForLogin(ctx context.Context, pending
 		enrolMethod = externalLogin
 	}
 	token, sess, err := a.mintSession(ctx, &loginAttempt{ip: pendingLogin.ip}, user, pendingLogin.scope,
-		"auth.login", enrolMethod, []string{"totp"}, activate, txVerifierFor(ctx, pendingLogin.continuation, pendingLogin.accountID, pendingLogin.scope))
+		"auth.login", enrolMethod, []string{"totp"}, activate, txVerifierForTOTP(ctx, pendingLogin))
 	if err != nil {
 		return "", model.AuthSession{}, nil, err
 	}
@@ -1393,7 +1407,7 @@ func (a *Authenticator) CompleteExternalLogin(ctx context.Context, user model.Us
 		return LoginResult{}, err
 	}
 	if challenge {
-		pending, err := a.mintTOTPPending(user.ID, ip, cont.SessionScope(), cont)
+		pending, err := a.mintTOTPPending(user, ip, cont.SessionScope(), cont)
 		if err != nil {
 			return LoginResult{}, err
 		}

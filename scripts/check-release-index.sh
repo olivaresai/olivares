@@ -13,8 +13,8 @@ RENDER="$ROOT/scripts/render-release-index.sh"
 INDEX=""
 render_args=()
 
-fail() { printf 'check-release-index: HALLAZGO — %s\n' "$*" >&2; exit 1; }
-blind() { printf 'check-release-index: NO HE PODIDO MIRAR — %s\n' "$*" >&2; exit 2; }
+fail() { printf 'check-release-index: FINDING — %s\n' "$*" >&2; exit 1; }
+blind() { printf 'check-release-index: COULD NOT CHECK — %s\n' "$*" >&2; exit 2; }
 usage() {
 	cat >&2 <<'USAGE'
 usage: check-release-index.sh --index FILE <all render-release-index inputs except --out>
@@ -58,9 +58,8 @@ if ! jq -e '
   ] | sort)) and
   .schema == "olivares.ai/release-index/v1" and .schema_version == 1 and
   (.state == "candidate" or .state == "published") and
-  (.version | type == "string" and test("^[0-9]+\\.[0-9]+(\\.[0-9]+)?$")) and
-  (.version | split(".") | map(tonumber)) as $v |
-  .tag == (if $v[0] < 26 or ($v[0] == 26 and $v[1] < 10) then "v" + .version else .version end) and
+  (.version | type == "string" and test("^[0-9]+\\.[0-9]+$")) and
+  .tag == .version and
   (.commit | type == "string" and test("^[0-9a-f]{40}$")) and
   (.channel == "stable" or .channel == "security" or .channel == "lts") and
   (.repository | type == "string" and test("^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")) and

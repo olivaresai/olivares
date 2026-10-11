@@ -55,7 +55,7 @@ func TestWorkEventActorKindVocabularyAdmitsEveryKindWeProduce(t *testing.T) {
 	credentialOfAConductedSession := auth.Principal{
 		Kind: auth.KindToken, CredID: model.NewID(), SessionIdentity: sid,
 	}
-	sessionPrincipal, err := workPrincipalFromAuth(credentialOfAConductedSession, model.NewTenantID())
+	sessionPrincipal, err := workPrincipalFromAuth(credentialOfAConductedSession, false)
 	if err != nil {
 		t.Fatalf("NO HE PODIDO MIRAR: workPrincipalFromAuth: %v", err)
 	}

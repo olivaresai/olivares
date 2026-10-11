@@ -26,7 +26,9 @@ provenance，并且只通过 MCP 提供 retrieval tool：
 olivares secrets put \
   --data-dir /var/lib/olivares \
   --name s3/prod-runbooks-read \
-  --value-file /run/secrets/s3-prod-runbooks-read
+  --value-file /run/secrets/s3-prod-runbooks-read \
+  --actor platform-operator \
+  --reason governed-rag-source-credential
 ```
 
 对于 Google Drive，请把 deployment 用于只读访问 Drive 的 OAuth bearer/refresh
@@ -71,8 +73,16 @@ OLIVARES_AGENT_GATEWAY_CONFIG=/var/lib/olivares/quickstart/governed-rag/agent-ga
 olivares quickstart --data-dir /var/lib/olivares
 ```
 
-如果这是全新安装，请完成首次运行的控制台设置。然后使用 admin token 运行
-bootstrap script：
+如果这是全新安装，请完成首次运行的控制台设置。
+
+全新安装默认关闭 `knowledge` 和 `sourcescope`。请以管理员身份在
+**Settings > Edition & modules** 中启用 `knowledge` 和 `sourcescope`，并保留其他已选模块。
+使用 CLI 时，先通过 `olivares login` 以管理员身份登录此引擎，
+然后运行 `olivares modules on knowledge` 和 `olivares modules on sourcescope`。每次都要等待引擎重启完成后再继续；
+运行中的会话会停止，可以恢复。否则，这些 API 调用会返回
+`404 module_not_enabled`。
+
+然后使用 admin token 运行 bootstrap script：
 
 ```sh
 OLIVARES_TOKEN=<admin-token> \

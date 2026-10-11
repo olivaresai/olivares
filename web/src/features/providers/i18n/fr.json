@@ -1,11 +1,12 @@
 {
   "title": "Fournisseurs",
-  "subtitle": "Une clé de fournisseur cloud ou un point de terminaison de modèles locaux, choisi via un profil.",
+  "subtitle": "Une clé de fournisseur cloud ou un point de terminaison de modèles locaux utilisé par les outils de vos agents.",
   "nav": "Fournisseurs",
   "add": "Ajouter un fournisseur",
+  "rowMenu": "Actions de ligne pour {{name}}",
   "empty": {
     "title": "Aucun fournisseur enregistré pour l'instant",
-    "description": "Connectez Anthropic, OpenAI ou xAI avec une clé API, ou ajoutez Ollama local sans clé. Testez la connexion, puis associez le fournisseur à un profil.",
+    "description": "Connectez Anthropic, OpenAI ou xAI avec une clé API, ou ajoutez Ollama local sans clé, puis testez la connexion.",
     "action": "Ajoutez votre premier fournisseur"
   },
   "emptyFiltered": {
@@ -28,6 +29,7 @@
     "anthropic": "Anthropic",
     "openai": "OpenAI",
     "xai": "xAI",
+    "gemini": "Gemini",
     "openai_compatible": "Compatible OpenAI",
     "ollama": "Ollama"
   },
@@ -35,6 +37,7 @@
     "anthropic": "Claude Code. Injecte ANTHROPIC_API_KEY.",
     "openai": "Codex. Injecte OPENAI_API_KEY.",
     "xai": "Grok. Injecte XAI_API_KEY.",
+    "gemini": "Gemini CLI avec l’API officielle de Google. Utilise une clé API Gemini.",
     "openai_compatible": "Tout point de terminaison de forme OpenAI. Injecte OPENAI_API_KEY et OPENAI_BASE_URL ; le point de terminaison est obligatoire.",
     "ollama": "Modèles locaux pour OpenCode. Sans clé API. Utilisez le point de terminaison natif Ollama ; le test lit les métadonnées des modèles."
   },
@@ -78,6 +81,7 @@
     "namePlaceholder": "Anthropic (production)",
     "baseURL": "Point de terminaison",
     "baseURLHint": "Laissez vide pour le point de terminaison officiel du fournisseur. Doit être en https.",
+    "baseURLLocalHint": "Laissez vide pour le point de terminaison officiel du fournisseur. Sinon https, ou http simple sur une adresse de bouclage ou de réseau privé.",
     "baseURLPlaceholder": "https://llm.exemple.com",
     "apiKey": "Clé d'API",
     "apiKeyHint": "Envoyée une fois, scellée par le moteur, jamais renvoyée à ce navigateur.",
@@ -85,11 +89,13 @@
     "submit": "Ajouter le fournisseur",
     "submitting": "Scellement…",
     "cancel": "Annuler",
-    "success": "Fournisseur enregistré. Testez la connexion pour confirmer qu'il fonctionne.",
+    "success": "Fournisseur ajouté.",
     "testNext": "Tester la connexion maintenant",
     "registering": "Enregistrement…",
     "localNameHint": "Votre nom pour ce point de terminaison. Il apparaît dans le sélecteur.",
-    "advanced": "Advanced: custom endpoint"
+    "advanced": "Advanced: custom endpoint",
+    "missingFields": "Renseignez les champs manquants : {{fields}}.",
+    "requiredEndpointHint": "Saisissez le point de terminaison du service : https, ou http simple sur une adresse de bouclage ou de réseau privé."
   },
   "rotate": {
     "title": "Changer la clé de ce fournisseur",
@@ -137,5 +143,24 @@
     "unavailable": "Les autorisations ou un profil actif compatible sont indisponibles.",
     "loadError": "Impossible de charger les profils.",
     "success": "Fournisseur associé au profil."
+  },
+  "defaultModel": {
+    "title": "Modèle par défaut",
+    "model": "Modèle",
+    "hint": "Les nouvelles sessions utilisent ce modèle sauf si vous en choisissez un autre.",
+    "modelsHint": "Modèles listés lors du dernier test de connexion de ce fournisseur.",
+    "native": "Aucun modèle par défaut enregistré",
+    "save": "Enregistrer",
+    "success": "Modèle par défaut enregistré.",
+    "createHint": "Facultatif. Laissez vide pour choisir un modèle après le test de connexion."
+  },
+  "prepare": {
+    "pending": "Préparation de {{tool}} pour votre première session…",
+    "installing": "Installation de {{tool}} pour votre première session : {{progress}}",
+    "ready": "Prêt à démarrer une session.",
+    "start": "Nouvelle session",
+    "failed": "Fournisseur enregistré. La préparation de la session a échoué : {{error}}",
+    "retry": "Réessayer la préparation",
+    "incomplete": "État de l’installation : {{state}}. Vérifiez les outils IA et réessayez."
   }
 }

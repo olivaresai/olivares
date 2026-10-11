@@ -27,11 +27,8 @@ const supportBundleSkippedRedactor = "skipped: canonical support-bundle redactor
 
 // handleSupportBundle builds the console support archive from in-process data
 // only. It never invokes journalctl or loops back through HTTP.
-func (s *Server) handleSupportBundle(w http.ResponseWriter, r *http.Request) {
-	p, ok := s.authzSystem(w, r, "system:admin")
-	if !ok {
-		return
-	}
+func (s *Server) handleSupportBundle(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	p := mc.Principal
 	if !s.requireStepUp(w, r, p) {
 		return
 	}

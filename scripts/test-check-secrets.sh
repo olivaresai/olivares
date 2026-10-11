@@ -603,7 +603,7 @@ rc="$(OLIVARES_SECRETS_SCOPE=all run_gate "$d" "$out")"
 # otro PR — 834 de 6.284 commits escaneados no pertenecian al ref. El informe ya decia "NOT
 # reachable from HEAD" mientras el gate fallaba igual: sabia la respuesta y no la usaba.
 if [ "$rc" != "0" ]; then
-	fail "4 finding on another ref -> exit 0" "got exit $rc (no lo introduce este push: se informa, no se cobra)"
+	fail "4 finding on another ref -> exit 0" "got exit $rc (this push does not introduce it: report it without rejecting the push)"
 elif ! grep -q "NOT reachable from HEAD" "$out"; then
 	fail "4 names it as unreachable" "the gate found it but never says it is outside what you are merging"
 elif ! grep -q "abandoned" "$out"; then
@@ -1058,15 +1058,17 @@ done
 # along in every specimen and never in the capture. The near miss changes byte 40, the last
 # byte of the capture, and nothing else.
 fixture_tanda_rel='scripts/test-pre-verify-tanda.sh'
-senuelo_diag_literal() { printf '%s%s%s%s' 'ghp_' 'SENUELOdelDIA' 'GNOSTICOqueno' 'debeSALIR0009'; }
-senuelo_diag_line() { printf "SENUELO_DIAG='%s'\n" "$(senuelo_diag_literal)"; } # the 58-byte line history carries
-senuelo_diag_near_miss_line() { # the same line with the LAST byte of the capture changed
+fixture_diag_name="SENUELO_DIAG"  # language-data: historical secret fixture name
+fixture_other_name="OTRO_SENUELO"  # language-data: distinct secret fixture name
+decoy_diag_literal() { printf '%s%s%s%s' 'ghp_' 'SENUELOdelDIA' 'GNOSTICOqueno' 'debeSALIR0009'; }
+decoy_diag_line() { printf "$fixture_diag_name='%s'\n" "$(decoy_diag_literal)"; } # the 58-byte line history carries
+decoy_diag_near_miss_line() { # the same line with the LAST byte of the capture changed
 	local lit repl=9
-	lit="$(senuelo_diag_literal)"
+	lit="$(decoy_diag_literal)"
 	[ "${lit:39:1}" != 9 ] || repl=8
-	printf "SENUELO_DIAG='%s%s%s'\n" "${lit:0:39}" "$repl" "${lit:40}"
+	printf "$fixture_diag_name='%s%s%s'\n" "${lit:0:39}" "$repl" "${lit:40}"
 }
-other_pat_line() { printf "OTRO_SENUELO='%s%s%s'\n" 'ghp_' 'Zk93Qv7Lm2XpR8dTn4Wb' 'Hs8Nx4Rt6Yw1Bz5K'; } # a different ghp_ + 36
+other_pat_line() { printf "$fixture_other_name='%s%s%s'\n" 'ghp_' 'Zk93Qv7Lm2XpR8dTn4Wb' 'Hs8Nx4Rt6Yw1Bz5K'; } # a different ghp_ + 36
 plant_tanda() { # <repo> <relpath> <line-producer>... — a shebang followed by the produced lines
 	local d="$1" rel="$2" fn
 	shift 2
@@ -1083,7 +1085,7 @@ plant_tanda() { # <repo> <relpath> <line-producer>... — a shebang followed by 
 # DIRTY with exactly one github-pat on that path — so the specimen does fire, and the block is
 # what exempts it. Half a alone would pass just as well if the fragments had a typo.
 d="$(new_repo canary-exact)" || exit 2
-plant_tanda "$d" "$fixture_tanda_rel" senuelo_diag_line
+plant_tanda "$d" "$fixture_tanda_rel" decoy_diag_line
 git -C "$d" add -A
 git -C "$d" commit -qm "the pre-verify canary line on its exact path"
 out="$WORK/19a.out"
@@ -1096,7 +1098,7 @@ else
 	pass "19a the exact SENUELO_DIAG line on scripts/test-pre-verify-tanda.sh -> exit 0 (exempt)"
 fi
 d="$(new_repo canary-nofire)" || exit 2
-plant_tanda "$d" "$fixture_tanda_rel" senuelo_diag_line
+plant_tanda "$d" "$fixture_tanda_rel" decoy_diag_line
 cut_rc=0
 python3 - "$d/.gitleaks.toml" <<'PY' || cut_rc=$?
 import pathlib, sys
@@ -1142,7 +1144,7 @@ fi
 # Exact means exact to the last byte: this is the only control that sees a regex which lost
 # its `$` anchor (M20) — a different PAT (case 20) is still reported under that mutant.
 d="$(new_repo canary-near-miss)" || exit 2
-plant_tanda "$d" "$fixture_tanda_rel" senuelo_diag_near_miss_line
+plant_tanda "$d" "$fixture_tanda_rel" decoy_diag_near_miss_line
 git -C "$d" add -A
 git -C "$d" commit -qm "the capture with its last byte changed, on the exempted path"
 out="$WORK/21.out"
@@ -1159,7 +1161,7 @@ fi
 # The block names one file. Without `paths` (M16), or with `OR` (M18), these bytes would be
 # exempt everywhere — the A-04 global shape this block deliberately is not.
 d="$(new_repo canary-other-path)" || exit 2
-plant_tanda "$d" scripts/other-script.sh senuelo_diag_line
+plant_tanda "$d" scripts/other-script.sh decoy_diag_line
 git -C "$d" add -A
 git -C "$d" commit -qm "the exact canary line on a path the block does not name"
 out="$WORK/22.out"
@@ -1200,10 +1202,10 @@ fi
 # private-key; on the other path ONE github-pat. The exact capture on its path is the only
 # thing absent. A missing or unparseable report is COULD NOT SCAN, distinctly, never a pass.
 d="$(new_repo canary-dir-mode)" || exit 2
-plant_tanda "$d" "$fixture_tanda_rel" senuelo_diag_line senuelo_diag_near_miss_line other_pat_line
+plant_tanda "$d" "$fixture_tanda_rel" decoy_diag_line decoy_diag_near_miss_line other_pat_line
 plant_decoy "$WORK/canary-decoy"
 cat "$WORK/canary-decoy" >>"$d/$fixture_tanda_rel"
-plant_tanda "$d" scripts/other-script.sh senuelo_diag_line
+plant_tanda "$d" scripts/other-script.sh decoy_diag_line
 report="$WORK/24.json"
 out="$WORK/24.out"
 rc="$( (cd "$d" && gitleaks dir . --no-banner --redact --no-color -c "$d/.gitleaks.toml" \
@@ -1385,7 +1387,7 @@ elif [ "$got_n" != "12" ]; then
 	fail "25 all twelve findings survive the phase" "printed $got_n reachability lines, expected 12"
 elif [ "$named_n" != "12" ]; then
 	fail "25 every unreachable finding names a carrier" "only $named_n of 12 name a ref"
-elif ! grep -q "12 hallazgo(s), NINGUNO alcanzable desde HEAD" "$out"; then
+elif ! grep -q "12 finding(s), NONE reachable from HEAD" "$out"; then
 	fail "25 the count reaches the cut" "the summary does not say twelve unreachable"
 else
 	pass "25 twelve findings on twelve commits -> exit 0, all twelve named with their ref"
@@ -3126,9 +3128,17 @@ else
 	pass "77 HEAD vs all-refs: charged findings equivalent on HEAD-history/unrelated/merge/inspect; leftover refs named only by all-refs; CI caller is HEAD admission"
 fi
 
+# Exact exceptions must work on the exported tree and preserve detection on
+# changed values, other paths, and complete private keys in both scanner modes.
+if python3 "$ROOT/scripts/test-secret-fixture-exceptions.py"; then
+	pass "78 exact fixture exceptions preserve real-secret detection"
+else
+	fail "78 exact fixture exceptions preserve real-secret detection" "fixture scanner controls failed"
+fi
+
 echo ""
 if [ "$fails" -eq 0 ]; then
-	echo "test-check-secrets: OK — 77/77"
+	echo "test-check-secrets: OK — 78/78"
 	exit 0
 fi
 echo "test-check-secrets: $fails case(s) failed" >&2

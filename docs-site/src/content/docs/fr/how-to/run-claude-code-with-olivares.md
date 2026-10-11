@@ -70,16 +70,18 @@ override.
 
 Épinglez le moteur par digest et vérifiez-le d'abord :
 
+<!-- release -->
 ```sh
 # verify the engine image you run (it is cosign-signed)
-cosign verify docker.io/olivaresai/olivares:26.10.1 \
-  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v?[0-9]+\.[0-9]+(\.[0-9]+)?$' \
+cosign verify docker.io/olivaresai/olivares:0.1 \
+  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/[0-9]+\.[0-9]+$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 
 export OLIVARES_IMAGE=docker.io/olivaresai/olivares@sha256:<digest>
 export OLIVARES_BIND=127.0.0.1
 docker compose -f deploy/compose/docker-compose.yml up -d
 ```
+<!-- /release -->
 
 ### Installer et connecter Claude Code
 
@@ -100,11 +102,38 @@ sessions n'utilisent jamais une connexion stockée dans le home du compte serveu
 Le moteur et `claude` sur l'hôte ; systemd exécute le moteur, qui conduit `claude`. Le
 workspace réside dans `/var/lib/olivares/workspaces`.
 
-### Une seule commande
+### Télécharger, vérifier, puis exécuter
 
+Ne redirigez pas l'installateur vers un shell. Vérifiez la liste signée des sommes de
+contrôle de la version, extrayez exactement le commit qu'elle nomme et lancez l'installateur
+depuis cette copie. Il lit alors `install.sh` et ses fichiers d'empaquetage dans la copie,
+jamais dans une branche. Le bloc s'exécute dans un sous-shell avec `set -eu` : il s'arrête à
+la première étape en échec et n'atteint jamais l'installateur après une vérification
+échouée.
+
+<!-- release -->
 ```sh
-curl -fsSL https://raw.githubusercontent.com/olivaresai/olivares/main/scripts/install-agentops.sh | sh
+(
+set -eu
+cd "$(mktemp -d)"
+ver=0.1
+base=https://github.com/olivaresai/olivares/releases/download/$ver
+curl -fsSLO $base/checksums.txt
+curl -fsSLO $base/checksums.txt.sig
+curl -fsSLO $base/checksums.txt.pem
+curl -fsSLO $base/release-commit.txt
+cosign verify-blob \
+  --certificate checksums.txt.pem --signature checksums.txt.sig \
+  --certificate-identity "https://github.com/olivaresai/olivares/.github/workflows/release.yml@refs/tags/$ver" \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  checksums.txt
+grep ' release-commit.txt$' checksums.txt | sha256sum --check
+git clone https://github.com/olivaresai/olivares.git
+cd olivares && git checkout --detach "$(cat ../release-commit.txt)"
+OLIVARES_TOPOLOGY=native OLIVARES_VERSION=$ver sh scripts/install-agentops.sh
+)
 ```
+<!-- /release -->
 
 Il détecte automatiquement la topologie native, installe le binaire du moteur **vérifié** (le
 `install.sh` gardé par cosign), installe `claude` depuis le dépôt apt/dnf/apk signé (avec
@@ -116,11 +145,14 @@ gouvernance — en exécuter un est votre décision explicite.
 ### Ce que l'installateur câble (et pourquoi)
 
 - `packaging/systemd/olivares.service.d/agentops.conf` — un drop-in qui donne au
-  `claude` conduit un `HOME` inscriptible pour `~/.claude` (gardé sous `/var/lib/olivares`,
-  de sorte que `ProtectHome=true` protège toujours les véritables utilisateurs), s'assure que le répertoire
-  workspace existe, et lève exactement **une** propriété de sandbox : `MemoryDenyWriteExecute` (le runtime
-  `claude` compile en JIT et a besoin de mémoire W→X). Toutes les autres directives de durcissement de
-  l'unité de base restent en vigueur.
+  `claude` conduit un `HOME` inscriptible pour `~/.claude` (gardé sous `/var/lib/olivares`),
+  s'assure que le répertoire workspace existe, et reprend la politique de système de
+  fichiers de l'unité de base : `ProtectSystem=full`, `ProtectHome=false`,
+  `PrivateTmp=false` et `MemoryDenyWriteExecute=false` (le runtime `claude` compile en JIT
+  et a besoin de mémoire W→X). Les répertoires personnels et `/tmp` restent visibles pour
+  le moteur afin que les dossiers choisis restent accessibles ; le `claude` de chaque
+  session et ses serveurs MCP stdio sont confinés par dossier avec Landlock. Toutes les
+  autres directives de durcissement de l'unité de base restent en vigueur.
 - `/etc/olivares/agentops.env` — la configuration du session-runtime (fichier de jeton, TTL, URL de
   base de gateway optionnelle, chemin BYO `claude` optionnel).
 
@@ -231,8 +263,9 @@ D'ici là, le défaut sécurisé est la co-localisation.
   listeners natifs/systemd écoutent aussi sur toutes les interfaces par défaut ;
   configurez leurs adresses d’écoute pour limiter l’accès.
 - **Non-root, moindre privilège.** uid/gid 65532, système de fichiers racine en lecture seule, `cap_drop:
-  ALL`, `no-new-privileges` (Docker) / l'ensemble complet `Protect*`/`Restrict*` moins l'unique
-  relâchement W^X documenté (systemd).
+  ALL`, `no-new-privileges` (Docker) / les directives `Protect*`/`Restrict*` du noyau et
+  des espaces de noms, avec les répertoires personnels et `/tmp` visibles, W^X autorisé et
+  chaque session confinée à son dossier par Landlock (systemd).
 - **Environnement à données minimales, à allowlist.** Le `claude` enfant n'hérite que d'une allowlist
   explicite (PATH, HOME, locale…) plus le jeton d'inférence en mémoire — **aucune** clé de signature
   `OLIVARES_*`, **aucun** `ANTHROPIC_*`/`CLAUDE_CODE_*` ambiant qui pourrait masquer le

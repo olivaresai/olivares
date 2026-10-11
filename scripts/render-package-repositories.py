@@ -59,10 +59,10 @@ def require_tool(name: str) -> str:
 def secret_file_from_env(name: str) -> Path:
     raw = os.environ.get(name, "")
     if not raw:
-        blind(f"NO PUEDO FIRMAR: required key file variable is absent: {name}")
+        blind(f"CANNOT SIGN: required key file variable is absent: {name}")
     path = Path(raw)
     if not path.is_file() or path.is_symlink():
-        blind(f"NO PUEDO FIRMAR: key input from {name} is missing, not regular, or is a symlink")
+        blind(f"CANNOT SIGN: key input from {name} is missing, not regular, or is a symlink")
     mode = stat.S_IMODE(path.stat().st_mode)
     if mode & 0o077:
         fail(f"key input from {name} is mode {mode:04o}; require no group/other access")
@@ -72,10 +72,10 @@ def secret_file_from_env(name: str) -> Path:
 def read_descriptor() -> tuple[dict[str, object], Path, Path, Path | None, Path | None]:
     descriptor_raw = os.environ.get("OLIVARES_PACKAGE_REPO_KEY_DESCRIPTOR_FILE", "")
     if not descriptor_raw:
-        blind("NO PUEDO FIRMAR: OLIVARES_PACKAGE_REPO_KEY_DESCRIPTOR_FILE is absent")
+        blind("CANNOT SIGN: OLIVARES_PACKAGE_REPO_KEY_DESCRIPTOR_FILE is absent")
     descriptor_path = Path(descriptor_raw)
     if not descriptor_path.is_file() or descriptor_path.is_symlink():
-        blind("NO PUEDO FIRMAR: repository key descriptor file is missing, not regular, or is a symlink")
+        blind("CANNOT SIGN: repository key descriptor file is missing, not regular, or is a symlink")
     try:
         descriptor = json.loads(descriptor_path.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError) as exc:
@@ -149,7 +149,7 @@ class Signer:
             check=False,
         )
         if import_result.returncode != 0:
-            blind("NO PUEDO FIRMAR: OpenPGP secret key import failed")
+            blind("CANNOT SIGN: OpenPGP secret key import failed")
         listed = subprocess.run(
             [self.gpg, "--homedir", str(self.home), "--batch", "--with-colons", "--list-secret-keys"],
             stdin=subprocess.DEVNULL,
@@ -158,7 +158,7 @@ class Signer:
             check=False,
         )
         if listed.returncode != 0:
-            blind("NO PUEDO FIRMAR: imported OpenPGP secret key cannot be enumerated")
+            blind("CANNOT SIGN: imported OpenPGP secret key cannot be enumerated")
         fingerprints = {
             line.split(":")[9]
             for line in listed.stdout.decode("utf-8", "replace").splitlines()
@@ -189,7 +189,7 @@ class Signer:
             check=False,
         )
         if public_result.returncode != 0 or not public_result.stdout.startswith(b"-----BEGIN PUBLIC KEY-----"):
-            blind("NO PUEDO FIRMAR: APK RSA private key cannot yield a public key")
+            blind("CANNOT SIGN: APK RSA private key cannot yield a public key")
         self.apk_public = public_result.stdout
         if hashlib.sha256(self.apk_public).hexdigest() != descriptor["apk_public_key_sha256"]:
             fail("APK RSA private key does not match the descriptor fingerprint")
@@ -213,7 +213,7 @@ class Signer:
             check=False,
         )
         if result.returncode != 0 or b"BEGIN PGP PUBLIC KEY BLOCK" not in result.stdout:
-            blind("NO PUEDO FIRMAR: OpenPGP public key export failed")
+            blind("CANNOT SIGN: OpenPGP public key export failed")
         return result.stdout
 
     def _gpg_sign(self, subject: Path, output: Path, clear: bool) -> None:
@@ -245,7 +245,7 @@ class Signer:
             check=False,
         )
         if result.returncode != 0:
-            blind(f"NO PUEDO FIRMAR: OpenPGP signing failed for {subject.name}")
+            blind(f"CANNOT SIGN: OpenPGP signing failed for {subject.name}")
 
     def detach(self, subject: Path, output: Path) -> None:
         self._gpg_sign(subject, output, False)
@@ -273,7 +273,7 @@ class Signer:
             check=False,
         )
         if result.returncode != 0 or not output.is_file() or output.stat().st_size == 0:
-            blind("NO PUEDO FIRMAR: APK RSA256 signing failed")
+            blind("CANNOT SIGN: APK RSA256 signing failed")
 
 
 def gzip_bytes(payload: bytes) -> bytes:
@@ -690,13 +690,13 @@ def main() -> int:
         )
         return 0
     except ContractError as exc:
-        print(f"render-package-repositories: HALLAZGO — {exc}", file=sys.stderr)
+        print(f"render-package-repositories: FINDING — {exc}", file=sys.stderr)
         return 1
     except UnmeasurableError as exc:
-        print(f"render-package-repositories: NO HE PODIDO MIRAR — {exc}", file=sys.stderr)
+        print(f"render-package-repositories: COULD NOT LOOK — {exc}", file=sys.stderr)
         return 2
     except (OSError, ValueError) as exc:
-        print(f"render-package-repositories: NO HE PODIDO MIRAR — local operation failed: {exc}", file=sys.stderr)
+        print(f"render-package-repositories: COULD NOT LOOK — local operation failed: {exc}", file=sys.stderr)
         return 2
 
 

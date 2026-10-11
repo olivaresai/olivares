@@ -1,8 +1,8 @@
 ---
 title: Référence de la console — chaque écran et la permission requise
 description: >-
-  Toutes les routes publiées par la console Olivares AI, indexées par catégories
-  historiques de hub, avec la permission RBAC requise par chacune et la page de
+  Toutes les routes publiées par la console Olivares AI, regroupées par domaines
+  de la console, avec la permission RBAC requise par chacune et la page de
   référence ouverte par son lien d'aide dans le produit. Généré depuis le
   recensement des routes de la console.
 ---
@@ -11,24 +11,33 @@ Cette page est la carte de la console. Elle répertorie **toutes les routes mont
 l'application** — pas une sélection, ni celles que quelqu'un a pensé à documenter — avec la
 permission nécessaire à un principal pour y accéder et l'endroit où en savoir plus.
 
-La barre latérale actuelle compte **neuf domaines avec des sections**, et non cinq hubs.
-Après Vue d’ensemble, elle affiche les domaines que ce principal peut réellement ouvrir,
-chacun avec une page d’annuaire et des modules dépliables, puis le raccourci épinglé
-Paramètres. Un filtre de navigation remplace cet arbre groupé par une liste classée des
-correspondances autorisées ; la palette de commandes utilise le même index, le même
-classement et la même projection de permissions. Un annuaire de domaine est une page de
-liens — les entrées que vos permissions autorisent — et non une lecture en direct de
-capacité, de disponibilité ou d’état de préparation.
+La console a **une seule structure de navigation : neuf domaines avec des sections**.
+Chaque écran se trouve dans un domaine et dans l’une de ses sections, et tout ce qui indique
+où se trouve un écran nomme le même endroit : Tous les domaines (dans la barre latérale, et Plus sur
+un téléphone), les pages d’annuaire de domaine, le fil d’Ariane, la palette de commandes et
+la rangée de liens au-dessus d’un écran, qui liste les autres écrans de sa section. La barre
+latérale épingle une courte liste d’écrans, le premier travail d’abord (Accueil, Sessions, Outils d’IA, Approbations), puis Travail, et un écran
+épinglé reste marqué sur les autres écrans de sa section. Un filtre de navigation remplace
+l’arbre groupé par une liste classée des correspondances autorisées ; la palette de
+commandes utilise le même index, le même classement et la même projection de permissions.
+Un annuaire de domaine est une page de liens — les entrées que vos permissions autorisent —
+et non une lecture en direct de capacité, de disponibilité ou d’état de préparation.
+
+Une nouvelle installation n’affiche que le premier travail : Accueil, Sessions, Outils d’IA
+avec Fournisseurs, Approbations, l’assistant de configuration et Paramètres. Tout autre
+écran y est un aperçu : son adresse, son API et sa CLI continuent de fonctionner, et la
+navigation, la palette de commandes et les raccourcis ne l’affichent pas. Une installation
+qui existait avant la mise à niveau affiche tous les écrans qu’elle affichait, de même
+qu’une installation dont l’administrateur a choisi les modules (dès le démarrage suivant)
+ou qui utilise les données de démonstration.
 
 Elle est **générée**. La liste provient de `web/src/features/route-census.json`, le
 recensement append-only que `registry.route-conservation.test.ts` compare au routeur compilé ;
 un écran ne peut donc être ajouté, déplacé ou perdu sans que cette page change avec lui. Le
 nom et la description en une ligne de chaque écran sont **les propres chaînes de la console**,
 tirées du même catalogue de traduction que la barre latérale : ce que vous lisez ici est ce
-que vous voyez dans le produit. Les tableaux ci-dessous regroupent encore ces lignes selon
-les cinq catégories historiques de hub (Exploiter, Automatiser, Connecter, Gouverner,
-Prouver), plus connexion, configuration et compte. Ce regroupement est un index, pas l’ordre
-actuel de la barre latérale. Les neuf pages d’annuaire de domaine figurent pour l’instant
+que vous voyez dans le produit. Les tableaux ci-dessous regroupent ces lignes par domaine, après Accueil (la vue d’ensemble)
+et avant connexion, configuration et compte. Les neuf pages d’annuaire de domaine figurent
 parmi les routes montées hors du registre de fonctionnalités.
 
 :::note[Les permissions sont appliquées par le moteur, pas par ce tableau]
@@ -51,46 +60,72 @@ Consultez [Rôles et permissions](/fr/reference/modules/vi-governance/).
   avant même l'existence d'une session.
 - **Référence** — la page qu'ouvre le propre lien d'aide de la console pour cet écran.
 
-Les titres suivants sont ces catégories historiques de hub, dans l’ordre de l’index généré —
-pas l’ordre d’affichage de la barre latérale. La barre actuelle liste les domaines ainsi :
+Les titres suivants sont les domaines, dans l’ordre où Tous les domaines les liste :
 Infrastructure, IA, Données & contexte, Travail & communications, Automatisation,
 Sécurité & identité, Déploiement, Observabilité & preuves, puis Système & paramètres.
 
 <!-- BEGIN GENERATED olivares-console-routes — regenerate with `bash scripts/check-guide-docs.sh --write`; do not edit by hand -->
 
-La console publie **81 routes**. Elles figurent toutes dans les tableaux ci-dessous, avec la
+La console publie **83 routes**. Elles figurent toutes dans les tableaux ci-dessous, avec la
 permission requise et la page de référence ouverte par leur lien d'aide dans le produit.
 
-### Exploiter
+### Accueil
 
 | Écran | Chemin | Description | Requis | Référence |
 |---|---|---|---|---|
 | Accueil | `/` | Vue d'ensemble du parc et état de santé en un coup d'œil | tout utilisateur connecté | [accueil de la documentation](/fr/) |
+
+### Infrastructure
+
+| Écran | Chemin | Description | Requis | Référence |
+|---|---|---|---|---|
+| Environnement | `/estate` | Consultez les ressources configurées et leurs relations, y compris les dépendances des éléments de travail. | `sessions:run:read` | [reference/modules/ii-sessions](/fr/reference/modules/ii-sessions/) |
+| Inventaire | `/inventory` | Découvrez et cataloguez les agents, serveurs MCP et modèles que les connecteurs ont observés. | `inventory:catalog:read` | [reference/modules/i-inventory](/fr/reference/modules/i-inventory/) |
+| Espace de travail | `/workspace` | Agents, sessions, ressources et activité limités à un espace de travail | `tenant:read` | [reference/modules/xx-multi-tenancy](/fr/reference/modules/xx-multi-tenancy/) |
+
+### IA
+
+| Écran | Chemin | Description | Requis | Référence |
+|---|---|---|---|---|
 | Outils des agents | `/agent-tools` | Détectez, installez et mettez à jour les outils des agents sur cet hôte et suivez chaque installation ; réservé aux administrateurs du déploiement | `system:admin` | [how-to/add-a-provider](/fr/how-to/add-a-provider/) |
-| Opérer les sessions | `/agentops` | Créer, rejoindre et gouverner des sessions Claude Code — sans SSH ; partage son écran avec « Observer les sessions » | `sessions:run:read` | [how-to/run-claude-code-with-olivares](/fr/how-to/run-claude-code-with-olivares/) |
-| Sauvegardes | `/backups` | Déclenchez, planifiez, téléchargez et restaurez des sauvegardes, avec une seconde confirmation sur le chemin destructif. | `system:admin` | [how-to/backup-and-restore](/fr/how-to/backup-and-restore/) |
+| Sessions | `/agentops` | Lancer des sessions et suivre ce que fait chacune, y compris celles qu’Olivares trouve | `sessions:run:read` | [how-to/run-claude-code-with-olivares](/fr/how-to/run-claude-code-with-olivares/) |
+| Serveurs MCP | `/mcp-servers` | Connectez des serveurs MCP distants à cette organisation, testez-les et choisissez les outils que les sessions peuvent utiliser | `tenant:admin` | [how-to/connectors/mcp-governance](/fr/how-to/connectors/mcp-governance/) |
+| Opérations sur les modèles | `/model-operations` | Modèles détenus, admission et déploiements | `models:registry:read` | [reference/modules/xxiii-model-operations](/fr/reference/modules/xxiii-model-operations/) |
+| Modèles | `/models` | Modèles, routage et clés de fournisseur | `models:catalog:read` | [reference/modules/x-models](/fr/reference/modules/x-models/) |
+| Plateformes | `/platforms` | Surfaces de déploiement, matrice de conformité et cycle de vie des modèles par plateforme | `models:platforms:read` | [reference/modules/x-models](/fr/reference/modules/x-models/) |
+| Comptes de fournisseur | `/provider-accounts` | Lister les comptes de fournisseur nommés et adopter un profil de fournisseur existant comme compte | `sessions:account:read` | [reference/modules/ii-sessions](/fr/reference/modules/ii-sessions/) |
+| Liaisons de sources | `/provider-bindings` | Dédiez des sources configurées, à la révision appliquée par ce nœud, à des profils de fournisseur | `sessions:profile-binding:read` | [reference/modules/ii-sessions](/fr/reference/modules/ii-sessions/) |
+| Profils de fournisseur | `/provider-profiles` | Enregistrez et administrez les répertoires de fournisseur sous lesquels les sessions se lancent, et lisez leur configuration à la demande | `sessions:profile:read` | [reference/modules/ii-sessions](/fr/reference/modules/ii-sessions/) |
+| Fournisseurs | `/providers` | Enregistrez les clés d'API et les points de terminaison avec lesquels les sessions démarrent ; testez-les, changez-les et révoquez-les | `sessions:provider:read` | [how-to/add-a-provider](/fr/how-to/add-a-provider/) |
+| Limites de débit | `/rate-limits` | Inventaire des limites de débit Anthropic (lecture seule) | `models:ratelimits:read` | [reference/modules/x-models](/fr/reference/modules/x-models/) |
+| Bac à sable | `/sandbox` | Test isolé des agents et relecture | `sandbox:run:read` | [reference/modules/xvii-sandbox](/fr/reference/modules/xvii-sandbox/) |
+| Sessions | `/sessions` | Lancer des sessions et suivre ce que fait chacune, y compris celles qu’Olivares trouve | `sessions:live:read` | [reference/modules/ii-sessions](/fr/reference/modules/ii-sessions/) |
+| Voix | `/voice` | Sessions vocales et en temps réel | `voice:session:read` | [reference/modules/xvi-voice](/fr/reference/modules/xvi-voice/) |
+| Modèles de workspace | `/workspace-templates` | Instantanés réutilisables de configuration de session : hooks, settings, connectors et policies. | `sessions:template:read` | [reference/modules/ii-sessions](/fr/reference/modules/ii-sessions/) |
+
+### Données & contexte
+
+| Écran | Chemin | Description | Requis | Référence |
+|---|---|---|---|---|
+| Agent Artifacts | `/agent-artifacts` | Skills, extensions MCP et fichiers d'instructions : registre, posture et BOM de chaîne d'approvisionnement | `models:registry:read` | [reference/modules/xxiii-model-operations](/fr/reference/modules/xxiii-model-operations/) |
+| MCP et compétences | `/capabilities` | Gouvernez les serveurs MCP, les compétences et les outils | `capabilities:catalog:read` | [reference/modules/v-capabilities](/fr/reference/modules/v-capabilities/) |
+| Catalogue | `/catalog` | Agents et capacités curés et approuvés | `catalog:entry:read` | [reference/modules/xiv-catalog](/fr/reference/modules/xiv-catalog/) |
+| Connaissances | `/knowledge` | Bases de connaissances, RAG et lignage des données | `knowledge:kb:read` | [reference/modules/viii-knowledge](/fr/reference/modules/viii-knowledge/) |
+| Catalogue de skills | `/skills` | Parcourir les packs de skills et les assigner aux départements, groupes d’agents et agents | `skills:catalog:read` | [reference/console](/fr/reference/console/) |
+
+### Travail & communications
+
+| Écran | Chemin | Description | Requis | Référence |
+|---|---|---|---|---|
 | Communications | `/communications` | Canaux, avis directs et boîte de réception personnelle de l'espace de travail sélectionné | `sessions:channel:read` | [reference/modules/ii-sessions](/fr/reference/modules/ii-sessions/) |
 | Administration des canaux | `/communications/administration` | Administrer les canaux : configuration et historique des droits, chaque acte sous l'ETag actuel du canal | `sessions:channel:admin` | [reference/modules/ii-sessions](/fr/reference/modules/ii-sessions/) |
 | Transferts | `/communications/handoffs` | Offres de responsabilité de travail qui vous sont adressées : lisez le contexte, puis acceptez ou refusez | `sessions:delivery:read` | [reference/modules/ii-sessions](/fr/reference/modules/ii-sessions/) |
 | Boîte de réception des communications | `/communications/inbox` | Votre boîte exacte : les remises qui vous sont adressées, lues à neuf et accusées explicitement | `sessions:delivery:read` | [reference/modules/ii-sessions](/fr/reference/modules/ii-sessions/) |
 | Nouveau canal | `/communications/new` | Créez un canal avec des droits initiaux explicites | `sessions:channel:write` | [reference/modules/ii-sessions](/fr/reference/modules/ii-sessions/) |
-| Santé et SLA | `/health` | Disponibilité et SLA des agents et des MCP | `health:status:read` | [reference/modules/xxii-health](/fr/reference/modules/xxii-health/) |
-| Coupe-circuit | `/killswitch` | Arrêt d'urgence, reprise en double contrôle et confinement par gardien | `governance:killswitch:read` | [how-to/cookbook/kill-switch-drill](/fr/how-to/cookbook/kill-switch-drill/) |
-| Journaux | `/logs` | Flux en direct du journal du moteur, filtré par niveau et module, avec recherche et pause. | `system:admin` | [how-to/troubleshooting](/fr/how-to/troubleshooting/) |
-| Observabilité | `/observability` | Santé de l'ingestion par standard et exploration des traces | `health:status:read` | [reference/modules/observability](/fr/reference/modules/observability/) |
-| Comptes de fournisseur | `/provider-accounts` | Lister les comptes de fournisseur nommés et adopter un profil de fournisseur existant comme compte | `sessions:account:read` | [reference/modules/ii-sessions](/fr/reference/modules/ii-sessions/) |
-| Liaisons de sources | `/provider-bindings` | Dédiez des sources configurées, à la révision appliquée par ce nœud, à des profils de fournisseur | `sessions:profile-binding:read` | [reference/modules/ii-sessions](/fr/reference/modules/ii-sessions/) |
-| Profils de fournisseur | `/provider-profiles` | Enregistrez et administrez les répertoires de fournisseur sous lesquels les sessions se lancent, et lisez leur configuration à la demande | `sessions:profile:read` | [reference/modules/ii-sessions](/fr/reference/modules/ii-sessions/) |
-| Fournisseurs | `/providers` | Enregistrez les clés d'API et les points de terminaison avec lesquels les sessions démarrent ; testez-les, changez-les et révoquez-les | `sessions:provider:read` | [how-to/add-a-provider](/fr/how-to/add-a-provider/) |
-| Bac à sable | `/sandbox` | Test isolé des agents et relecture | `sandbox:run:read` | [reference/modules/xvii-sandbox](/fr/reference/modules/xvii-sandbox/) |
-| Observer les sessions | `/sessions` | Observer les sessions en direct et découvertes avec leurs chronologies ; partage son écran avec « Opérer les sessions » | `sessions:live:read` | [reference/modules/ii-sessions](/fr/reference/modules/ii-sessions/) |
-| Locataires | `/tenants` | Retirer ou rétablir le service d'un locataire | `system:admin` | [how-to/troubleshooting](/fr/how-to/troubleshooting/) |
-| Voix | `/voice` | Sessions vocales et en temps réel | `voice:session:read` | [reference/modules/xvi-voice](/fr/reference/modules/xvi-voice/) |
+| Liaisons de protocole | `/communications/protocol-bindings` | Composez et réconciliez les liaisons A2A et MCP gouvernées | `sessions:protocol-binding:read` | [reference/modules/ii-sessions](/fr/reference/modules/ii-sessions/) |
 | Travail | `/work` | Travail partagé : unités, dépendances, acceptation et décisions | `sessions:work:read` | [reference/modules/ii-sessions](/fr/reference/modules/ii-sessions/) |
-| Espace de travail | `/workspace` | Agents, sessions, ressources et activité limités à un espace de travail | `tenant:read` | [reference/modules/xx-multi-tenancy](/fr/reference/modules/xx-multi-tenancy/) |
-| Modèles de workspace | `/workspace-templates` | Instantanés réutilisables de configuration de session : hooks, settings, connectors et policies. | `sessions:template:read` | [reference/modules/ii-sessions](/fr/reference/modules/ii-sessions/) |
 
-### Automatiser
+### Automatisation
 
 | Écran | Chemin | Description | Requis | Référence |
 |---|---|---|---|---|
@@ -99,59 +134,59 @@ permission requise et la page de référence ouverte par leur lien d'aide dans l
 | Webhooks et événements | `/eventing` | Abonnements aux webhooks sortants, leur journal de livraison et la file des lettres mortes. | `eventing:subscription:read` | [reference/modules/eventing](/fr/reference/modules/eventing/) |
 | Orchestration | `/orchestration` | Coordination d'agent à agent et planifications | `orchestration:graph:read` | [reference/modules/iv-orchestration](/fr/reference/modules/iv-orchestration/) |
 
-### Connecter
-
-| Écran | Chemin | Description | Requis | Référence |
-|---|---|---|---|---|
-| API Playground | `/api-playground` | Explorez et testez interactivement l'API du control plane | `tenant:admin` | [reference/modules/xix-api-manage-as-code](/fr/reference/modules/xix-api-manage-as-code/) |
-| MCP et compétences | `/capabilities` | Gouvernez les serveurs MCP, les compétences et les outils | `capabilities:catalog:read` | [reference/modules/v-capabilities](/fr/reference/modules/v-capabilities/) |
-| Catalogue | `/catalog` | Agents et capacités curés et approuvés | `catalog:entry:read` | [reference/modules/xiv-catalog](/fr/reference/modules/xiv-catalog/) |
-| Liaisons de protocole | `/communications/protocol-bindings` | Composez et réconciliez les liaisons A2A et MCP gouvernées | `sessions:protocol-binding:read` | [reference/modules/ii-sessions](/fr/reference/modules/ii-sessions/) |
-| Déploiement | `/deploy` | Provisionnez et câblez les agents à l'infrastructure | `deploy:deployment:read` | [reference/modules/vii-deploy](/fr/reference/modules/vii-deploy/) |
-| Publication Git | `/git-publication` | Pousser des commits, ouvrir des pull requests et fusionner via des cibles Git approuvées | `gitpublish:target:read` | [reference/modules/gitpublish](/fr/reference/modules/gitpublish/) |
-| Inventaire | `/inventory` | Découvrez et cataloguez les agents, serveurs MCP et modèles que les connecteurs ont observés. | `inventory:catalog:read` | [reference/modules/i-inventory](/fr/reference/modules/i-inventory/) |
-| Connaissances | `/knowledge` | Bases de connaissances, RAG et lignage des données | `knowledge:kb:read` | [reference/modules/viii-knowledge](/fr/reference/modules/viii-knowledge/) |
-| Serveurs MCP | `/mcp-servers` | Connectez des serveurs MCP distants à cette organisation, testez-les et choisissez les outils que les sessions peuvent utiliser | `tenant:admin` | [how-to/connectors/mcp-governance](/fr/how-to/connectors/mcp-governance/) |
-| Opérations sur les modèles | `/model-operations` | Modèles détenus, admission et déploiements | `models:registry:read` | [reference/modules/xxiii-model-operations](/fr/reference/modules/xxiii-model-operations/) |
-| Modèles | `/models` | Modèles, routage et clés de fournisseur | `models:catalog:read` | [reference/modules/x-models](/fr/reference/modules/x-models/) |
-| Assistant de configuration | `/onboarding` | Configuration du déploiement étape par étape | `system:admin` | [start/quickstart](/fr/start/quickstart/) |
-| Plateformes | `/platforms` | Surfaces de déploiement, matrice de conformité et cycle de vie des modèles par plateforme | `models:platforms:read` | [reference/modules/x-models](/fr/reference/modules/x-models/) |
-
-### Gouverner
+### Sécurité & identité
 
 | Écran | Chemin | Description | Requis | Référence |
 |---|---|---|---|---|
 | Carte des accès | `/access-map` | Ce que chaque agent lit et écrit (R/RW) | `accessmap:graph:read` | [reference/modules/iii-access-map](/fr/reference/modules/iii-access-map/) |
 | Export AgentCore | `/agentcore-export` | Planifier, relire et appliquer la projection des règles de gouvernance de ce tenant sur AWS AgentCore sous forme de politiques Cedar ; la planification n’écrit rien | `governance:agentcore-export:admin` | [reference/modules/vi-governance](/fr/reference/modules/vi-governance/) |
 | Gouvernance de Claude Code | `/claude-policy` | Politique gérée, hooks, MCP, bac à sable et policy-as-code | `governance:claude-policy:read` | [how-to/connectors/claude-code-hooks-pep](/fr/how-to/connectors/claude-code-hooks-pep/) |
-| Administration | `/console` | Utilisateurs, SSO/IdP, espaces de travail, groupes d’agents, rôles, secrets, connecteurs, clés API et licence de cette installation | `tenant:admin` | [reference/modules/xx-multi-tenancy](/fr/reference/modules/xx-multi-tenancy/) |
-| Comparaison de source | `/console/sources/diff` | Comparez une révision de base et une révision head d'un dépôt Git connecté, fichier par fichier | `system:admin` | [reference/console](/fr/reference/console/) |
 | Identité et NHI | `/identity` | SSO, SCIM, le répertoire des NHI et le graphe WIF | `governance:identity:read` | [reference/modules/vi-governance](/fr/reference/modules/vi-governance/) |
 | Proxy d'inférence | `/inference-proxy` | Gates du proxy, règles DLP de sortie et approbations d'appareils | `inferenceproxy:config:read` | [reference/modules/inferenceproxy](/fr/reference/modules/inferenceproxy/) |
+| Coupe-circuit | `/killswitch` | Arrêt d'urgence, reprise en double contrôle et confinement par gardien | `governance:killswitch:read` | [how-to/cookbook/kill-switch-drill](/fr/how-to/cookbook/kill-switch-drill/) |
 | Permissions | `/permissions` | Identité, rôles et approbations | `governance:identity:read` | [reference/modules/vi-governance](/fr/reference/modules/vi-governance/) |
-| Limites de débit | `/rate-limits` | Inventaire des limites de débit Anthropic (lecture seule) | `models:ratelimits:read` | [reference/modules/x-models](/fr/reference/modules/x-models/) |
+| Équipe rouge | `/red-team` | Test adverse de vos agents | `redteam:target:read` | [reference/modules/xviii-redteam](/fr/reference/modules/xviii-redteam/) |
 | Résidence des données | `/residency` | Épinglez chaque organisation à une région, ou laissez-la non épinglée | `system:admin` | [reference/modules/xiii-compliance](/fr/reference/modules/xiii-compliance/) |
 | Politiques de routines | `/routine-policies` | Planchers de cadence, plafonds de concurrence, exigences d'approbation et listes d'autorisation cron pour les routines Claude Code. | `governance:routine:read` | [reference/modules/vi-governance](/fr/reference/modules/vi-governance/) |
+| Sécurité | `/security` | Garde-fous, investigation et anomalies | `security:finding:read` | [reference/modules/ix-security](/fr/reference/modules/ix-security/) |
 
-### Prouver
+### Déploiement
+
+| Écran | Chemin | Description | Requis | Référence |
+|---|---|---|---|---|
+| Déploiement | `/deploy` | Provisionnez et câblez les agents à l'infrastructure | `deploy:deployment:read` | [reference/modules/vii-deploy](/fr/reference/modules/vii-deploy/) |
+| Publication Git | `/git-publication` | Pousser des commits, ouvrir des pull requests et fusionner via des cibles Git approuvées | `gitpublish:target:read` | [reference/modules/gitpublish](/fr/reference/modules/gitpublish/) |
+
+### Observabilité & preuves
 
 | Écran | Chemin | Description | Requis | Référence |
 |---|---|---|---|---|
 | Adoption de Claude Code | `/adoption` | Productivité, acceptation et répartition des modèles | `adoption:metrics:read` | [reference/modules/claudeadoption](/fr/reference/modules/claudeadoption/) |
-| Agent Artifacts | `/agent-artifacts` | Skills, extensions MCP et fichiers d'instructions : registre, posture et BOM de chaîne d'approvisionnement | `models:registry:read` | [reference/modules/xxiii-model-operations](/fr/reference/modules/xxiii-model-operations/) |
 | Chaîne d'approvisionnement | `/attestation` | Attestation de version : SLSA, SBOM, VEX et Scorecard | `observability:attestation:read` | [how-to/verify-a-release](/fr/how-to/verify-a-release/) |
 | Registre d'audit | `/audit` | Registre de preuves à altération détectable | `audit:read` | [reference/modules/ix-security](/fr/reference/modules/ix-security/) |
 | Conformité | `/compliance` | Référentiels, contrôles et preuves | `compliance:framework:read` | [reference/modules/xiii-compliance](/fr/reference/modules/xiii-compliance/) |
 | Tableaux de bord | `/dashboards` | Indicateurs clés et reporting pour la direction | tout utilisateur connecté | [reference/modules/xxi-executive-dashboards](/fr/reference/modules/xxi-executive-dashboards/) |
 | Évaluations | `/evals` | Qualité, évaluations et régression | `evals:run:read` | [reference/modules/xii-evals](/fr/reference/modules/xii-evals/) |
 | Coût et FinOps | `/finops` | Coût des tokens, budgets et dépenses | `finops:spend:read` | [reference/modules/xi-finops](/fr/reference/modules/xi-finops/) |
+| Santé et SLA | `/health` | Disponibilité et SLA des agents et des MCP | `health:status:read` | [reference/modules/xxii-health](/fr/reference/modules/xxii-health/) |
+| Observabilité | `/observability` | Santé de l'ingestion par standard et exploration des traces | `health:status:read` | [reference/modules/observability](/fr/reference/modules/observability/) |
 | Export de posture | `/posture-export` | Exportez la posture réelle pour une tour de contrôle | `posture:export:read` | [reference/modules/posture-export](/fr/reference/modules/posture-export/) |
 | Enregistrements | `/recordings` | Enregistrement et relecture des sessions privilégiées | `recording:session:admin` | [reference/modules/recording](/fr/reference/modules/recording/) |
-| Équipe rouge | `/red-team` | Test adverse de vos agents | `redteam:target:read` | [reference/modules/xviii-redteam](/fr/reference/modules/xviii-redteam/) |
 | Rapports | `/reporting` | Générez et téléchargez des rapports de gouvernance | `reporting:report:read` | [reference/modules/reporting](/fr/reference/modules/reporting/) |
-| Sécurité | `/security` | Garde-fous, investigation et anomalies | `security:finding:read` | [reference/modules/ix-security](/fr/reference/modules/ix-security/) |
 | Visionneuse de sessions | `/session-viewer/$id` (lien profond uniquement) | Chronologie complète d'une session enregistrée, atteinte depuis une ligne des Enregistrements et non depuis la barre latérale. | `recording:session:admin` | [reference/modules/recording](/fr/reference/modules/recording/) |
 | Coûts par équipe | `/team-costs` | Dépenses attribuées par équipe, développables en ventilation par projet et par modèle. | `finops:spend:read` | [reference/modules/xi-finops](/fr/reference/modules/xi-finops/) |
+
+### Système & paramètres
+
+| Écran | Chemin | Description | Requis | Référence |
+|---|---|---|---|---|
+| API Playground | `/api-playground` | Explorez et testez interactivement l'API du control plane | `tenant:admin` | [reference/modules/xix-api-manage-as-code](/fr/reference/modules/xix-api-manage-as-code/) |
+| Sauvegardes | `/backups` | Déclenchez, planifiez, téléchargez et restaurez des sauvegardes, avec une seconde confirmation sur le chemin destructif. | `system:admin` | [how-to/backup-and-restore](/fr/how-to/backup-and-restore/) |
+| Administration | `/console` | Utilisateurs, SSO/IdP, espaces de travail, groupes d’agents, rôles, secrets, connecteurs, clés API et licence de cette installation | `tenant:admin` | [reference/modules/xx-multi-tenancy](/fr/reference/modules/xx-multi-tenancy/) |
+| Comparaison de source | `/console/sources/diff` | Comparez une révision de base et une révision head d'un dépôt Git connecté, fichier par fichier | `system:admin` | [reference/console](/fr/reference/console/) |
+| Journaux | `/logs` | Flux en direct du journal du moteur, filtré par niveau et module, avec recherche et pause. | `system:admin` | [how-to/troubleshooting](/fr/how-to/troubleshooting/) |
+| Assistant de configuration | `/onboarding` | Configuration du déploiement étape par étape | `system:admin` | [start/quickstart](/fr/start/quickstart/) |
+| Locataires | `/tenants` | Retirer ou rétablir le service d'un locataire | `system:admin` | [how-to/troubleshooting](/fr/how-to/troubleshooting/) |
 
 ### Connexion, configuration et compte
 
@@ -167,8 +202,8 @@ console dans ce cas.
 | Données & contexte | `/areas/data-context` | Répertoire du domaine Données & contexte : capacités, connaissances et artefacts. Liste les entrées autorisées par vos permissions. | tout utilisateur connecté | — |
 | Déploiement | `/areas/deployment` | Répertoire du domaine Déploiement : préparation et contrôle des déploiements. Liste les entrées autorisées par vos permissions. | tout utilisateur connecté | — |
 | Infrastructure | `/areas/infrastructure` | Répertoire du domaine Infrastructure : inventaire et espaces de travail de l’environnement. Liste les entrées autorisées par vos permissions. | tout utilisateur connecté | — |
-| Observabilité & preuves | `/areas/observation` | Répertoire du domaine Observabilité & preuves : état et activité, coûts et adoption, audit et enregistrements, évaluation et preuves. Liste les entrées autorisées par vos permissions. | tout utilisateur connecté | — |
-| Sécurité & identité | `/areas/security-identity` | Répertoire du domaine Sécurité & identité : identité et accès, politiques, protection et réponse, frontières de gouvernance. Liste les entrées autorisées par vos permissions. | tout utilisateur connecté | — |
+| Observabilité & preuves | `/areas/observation` | Répertoire du domaine Observabilité & preuves : état et activité, coûts et adoption, audit, évaluation et preuves. Liste les entrées autorisées par vos permissions. | tout utilisateur connecté | — |
+| Sécurité & identité | `/areas/security-identity` | Répertoire du domaine Sécurité & identité : identité et accès, politiques et frontières de gouvernance, protection et réponse. Liste les entrées autorisées par vos permissions. | tout utilisateur connecté | — |
 | Système & paramètres | `/areas/system` | Répertoire du domaine Système & paramètres : administration, installation et maintenance, outils de développement et préférences personnelles. Liste les entrées autorisées par vos permissions. | tout utilisateur connecté | — |
 | Travail & communications | `/areas/work-communications` | Répertoire du domaine Travail & communications : travail persistant entre sessions et communications gouvernées. Liste les entrées autorisées par vos permissions. | tout utilisateur connecté | — |
 | Se connecter | `/login` | Page de connexion par identifiants et token pour un compte déjà provisionné. | **sans connexion** | — |

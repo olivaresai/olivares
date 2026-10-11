@@ -16,73 +16,33 @@ fail=0
 ok() { printf 'ok   %s\n' "$1"; pass=$((pass + 1)); }
 bad() { printf 'FAIL %s\n' "$1" >&2; fail=$((fail + 1)); }
 
-good_json() {
-	cat >"$TMP/tree/commercial/pack-composition.json" <<'EOF'
-{
-  "base": {"code": "biz", "product_id": "self_hosted.business"},
-  "enterprise": {"code": "ent", "product_id": "self_hosted.enterprise"},
-  "addons": [
-    {"code": "airs", "addon": "ai-runtime-security", "product_id": "self_hosted.business.addons.ai-runtime-security"},
-    {"code": "cp", "addon": "compliance-packs", "product_id": "self_hosted.business.addons.compliance-packs"},
-    {"code": "ids", "addon": "identity-scale", "product_id": "self_hosted.business.addons.identity-scale"},
-    {"code": "reg", "addon": "regulated", "product_id": "self_hosted.business.addons.regulated"}
-  ]
-}
-EOF
-}
-
-good_sets() {
-	mkdir -p "$TMP/tree/commercial/license-worker/src/download"
-	cat >"$TMP/tree/commercial/license-worker/src/download/sets.ts" <<'EOF'
-export const ADDON_CODES = ["airs", "cp", "ids", "reg"] as const;
-export const ALLOWED_SET_SLUGS: ReadonlySet<string> = new Set([
-  "biz",
-  "biz+airs",
-  "biz+cp",
-  "biz+ids",
-  "biz+reg",
-  "biz+airs+cp",
-  "biz+airs+ids",
-  "biz+airs+reg",
-  "biz+cp+ids",
-  "biz+cp+reg",
-  "biz+ids+reg",
-  "biz+airs+cp+ids",
-  "biz+airs+cp+reg",
-  "biz+airs+ids+reg",
-  "biz+cp+ids+reg",
-  "biz+airs+cp+ids+reg",
-  "ent",
-]);
-  ["self_hosted.business.addons.regulated", "reg"],
-  ["self_hosted.business.addons.ai-runtime-security", "airs"],
-  ["self_hosted.business.addons.compliance-packs", "cp"],
-  ["self_hosted.business.addons.identity-scale", "ids"],
-EOF
-}
+# Use the actual deriver, not a success stub or a hand-copied test roster.
+DERIVER="${OLIVARES_MODULE_CATALOG_BIN:-$TMP/deriver}"
+if [ -z "${OLIVARES_MODULE_CATALOG_BIN:-}" ]; then
+  ( cd "$ROOT/commercial/commerce-lint" && GOWORK=off go build -p 2 -o "$DERIVER" . )
+fi
+export OLIVARES_MODULE_CATALOG_BIN="$DERIVER"
 
 stage() {
-	rm -rf "$TMP/tree"
-	mkdir -p "$TMP/tree/scripts" "$TMP/tree/design" "$TMP/tree/commercial"
-	cp "$CHECK" "$TMP/tree/scripts/check-c02-13-pack-source.sh"
-	chmod +x "$TMP/tree/scripts/check-c02-13-pack-source.sh"
-	good_json
-	good_sets
-	mkdir -p "$TMP/tree/scripts"
-	cat >"$TMP/tree/scripts/addon-sets.sh" <<'EOF'
-CODES = {
-    "regulated": "reg",
-    "ai-runtime-security": "airs",
-    "compliance-packs": "cp",
-    "identity-scale": "ids",
-}
-EOF
-	cat >"$TMP/tree/commercial/module-slug-package.json" <<'EOF'
-{"entries":[{"slug":"a","package":"enterprise/a"},{"slug":"b","package":"enterprise/b"},{"slug":"c","package":"enterprise/c"},{"slug":"d","package":"enterprise/d"},{"slug":"e","package":"enterprise/e"},{"slug":"f","package":"enterprise/f"},{"slug":"g","package":"enterprise/g"},{"slug":"h","package":"enterprise/h"},{"slug":"i","package":"enterprise/i"},{"slug":"j","package":"enterprise/j"},{"slug":"k","package":"enterprise/k"},{"slug":"l","package":"enterprise/l"},{"slug":"m","package":"enterprise/m"},{"slug":"n","package":"enterprise/n"},{"slug":"o","package":"enterprise/o"},{"slug":"p","package":"enterprise/p"},{"slug":"q","package":"enterprise/q"},{"slug":"r","package":"enterprise/r"},{"slug":"s","package":"enterprise/s"},{"slug":"t","package":"enterprise/t"}]}
-EOF
-	cat >"$TMP/tree/design/C02-13-PACK-SOURCE-2026-08-19.md" <<'EOF'
-C02-13 slice 1. One source.
-EOF
+  rm -rf "$TMP/tree"
+  mkdir -p "$TMP/tree/commercial/commerce-lint"
+  local rel
+  for rel in \
+    scripts/check-c02-13-pack-source.sh \
+    scripts/module-catalog-go.sh \
+    scripts/lib/build-bin.sh \
+    commercial/pack-composition.json \
+    commercial/commerce-lint/addonsets.go \
+    cmd/olivares/cmd_license.go \
+    commercial/license-worker/src/download/sets.ts \
+    scripts/addon-sets.sh \
+    commercial/dodo-sandbox/render-sandbox-config.py \
+    commercial/dodo-sandbox/render-production-config.py \
+    commercial/module-slug-package.json \
+    design/C02-13-PACK-SOURCE-2026-08-19.md; do
+    mkdir -p "$TMP/tree/$(dirname "$rel")"
+    cp "$ROOT/$rel" "$TMP/tree/$rel"
+  done
 }
 
 run() {
@@ -161,6 +121,38 @@ if [ "$(cat "$TMP/rc")" = 0 ]; then
 	ok "no-fire after a firing case still CLEAN"
 else
 	bad "second untouched tree should be CLEAN ($(cat "$TMP/rc") $(cat "$TMP/err"))"
+fi
+
+stage
+sed -i 's/"regulated"/"invented"/' "$TMP/tree/cmd/olivares/cmd_license.go"
+run
+if [ "$(cat "$TMP/rc")" = 1 ]; then
+	ok "firing: CLI pack-code drift is FAIL"
+else
+	bad "CLI pack-code drift should FAIL 1 ($(cat "$TMP/rc") $(cat "$TMP/err"))"
+fi
+
+rc=0
+( . "$TMP/tree/scripts/lib/build-bin.sh" && build_olivares_bin "$TMP/olivares" ) \
+  >"$TMP/build.out" 2>"$TMP/build.err" || rc=$?
+if [ "$rc" = 1 ] && [ ! -e "$TMP/olivares" ] && \
+  grep -q 'pack composition drift' "$TMP/build.err" && \
+  grep -q 'cmd/olivares/cmd_license.go' "$TMP/build.err"; then
+  ok "real build helper refuses planted CLI drift before compilation"
+else
+  bad "build helper did not refuse the named CLI drift ($rc $(cat "$TMP/build.err"))"
+fi
+
+mkdir -p "$TMP/public"
+rc=0
+( export OLIVARES_ROOT="$TMP/public"; . "$TMP/tree/scripts/lib/build-bin.sh"; build_olivares_bin "$TMP/olivares" ) \
+  >"$TMP/build.out" 2>"$TMP/build.err" || rc=$?
+if [ "$rc" = 1 ] && [ ! -e "$TMP/olivares" ] && \
+  grep -q 'pack composition drift' "$TMP/build.err" && \
+  grep -q 'cmd/olivares/cmd_license.go' "$TMP/build.err"; then
+  ok "build validates its own drifted tree despite an inherited alternate root"
+else
+  bad "alternate root redirected build validation ($rc $(cat "$TMP/build.err"))"
 fi
 
 echo

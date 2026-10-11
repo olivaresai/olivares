@@ -40,7 +40,7 @@ func (m *Module) MCPProbePolicy(ctx context.Context, tenant model.TenantID, scra
 	if len(paths) == 0 {
 		return policy, nil
 	}
-	err := m.data.View(ctx, tenant, func(sc store.Scope) error {
+	err := m.Data.View(ctx, tenant, func(sc store.Scope) error {
 		repo, err := sc.Ext(workspaceKind)
 		if err != nil {
 			return err

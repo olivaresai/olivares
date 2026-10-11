@@ -2,15 +2,16 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// THE SESSION RAIL'S TWO READS: the sessions list, when the Sessions journey is open to
-// this principal, and the handoffs offered to the operator, when the handoffs page is.
-// A principal who may read neither gets no rail.
+// Each rail source follows its own journey's read authority.
+import type { ListResponse } from '@/lib/api/types'
 import { useQuery } from '@tanstack/react-query'
 import { useRouterState } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
 import { useAuth } from '@/lib/auth/context'
+import { isGlobalAccount } from '@/lib/auth/rbac'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useAuthBoundary } from '@/features/agentops/auth-boundary'
+import { APPROVAL_READ } from '@/features/governance/use-pending-approvals'
 import {
   communicationsKeys,
   listHandoffInbox,
@@ -27,8 +28,27 @@ import {
   type RailGroup,
 } from './session-rail-model'
 
-/** How many sessions the rail asks for: at most thirty rows are drawn (§3.19). */
-const RAIL_LIVE_PARAMS = { limit: 30 } as const
+/** Counts use all pages. Row caps belong only to the display model. */
+const RAIL_LIVE_PARAMS = { limit: 200, pagination: 'cursor' } as const
+
+async function allSessionPages<T>(
+  load: (cursor?: string) => Promise<ListResponse<T>>,
+  signal: AbortSignal,
+): Promise<ListResponse<T>> {
+  const items: T[] = []
+  const seen = new Set<string>()
+  let cursor: string | undefined
+  for (;;) {
+    signal.throwIfAborted()
+    const page = await load(cursor)
+    items.push(...page.items)
+    if (!page.has_more) return { items, has_more: false }
+    if (!page.cursor || seen.has(page.cursor))
+      throw new Error('Session page cursor did not advance')
+    cursor = page.cursor
+    seen.add(cursor)
+  }
+}
 /** The rail follows the stream at the pace of a glance, not of a work surface. */
 const RAIL_REFRESH_MS = 20_000
 /** While a run works or waits, its row changes state soon: follow it closely. */
@@ -51,20 +71,29 @@ export function useMinuteClock(): number {
 }
 
 export interface SessionRailData {
-  /** False when this principal may read neither source: no rail is drawn. */
+  /** False when this principal may read no source: no rail is drawn. */
   visible: boolean
   groups: RailGroup[]
+  sessionCounts: { live: number; needsYou: number }
   status: RailStatus
+  allTo: '/sessions' | '/agentops' | '/communications/handoffs'
 }
 
-/** The rail's two reads: the sessions list and the handoffs offered to the operator. */
+/** Observed sessions, operated runs and handoffs offered to the operator. */
 export function useSessionRail(): SessionRailData {
   const { navigable } = useViewAccess()
+  const { can } = useAuth()
   const boundary = useAuthBoundary()
   const now = useMinuteClock()
 
   const sessionsView = viewById('sessions')
-  const readSessions = !!sessionsView && navigable(sessionsView)
+  const runsView = viewById('agentops')
+  const approvalsView = viewById('permissions')
+  const readSessions =
+    !!boundary.tenant && !!sessionsView && navigable(sessionsView)
+  const readRuns = !!boundary.tenant && !!runsView && navigable(runsView)
+  const canOpenApprovals =
+    !!approvalsView && navigable(approvalsView) && can(APPROVAL_READ)
 
   const live = useQuery({
     queryKey: sessionsKeys.liveScoped(
@@ -73,8 +102,15 @@ export function useSessionRail(): SessionRailData {
       RAIL_LIVE_PARAMS,
     ),
     queryFn: ({ signal }) =>
-      sessionsApi.live(RAIL_LIVE_PARAMS, { tenant: boundary.tenant, signal }),
-    enabled: readSessions && !!boundary.tenant,
+      allSessionPages(
+        (cursor) =>
+          sessionsApi.live(
+            { ...RAIL_LIVE_PARAMS, cursor },
+            { tenant: boundary.tenant, signal },
+          ),
+        signal,
+      ),
+    enabled: readSessions,
     refetchInterval: RAIL_REFRESH_MS,
     staleTime: RAIL_REFRESH_MS / 2,
   })
@@ -89,18 +125,22 @@ export function useSessionRail(): SessionRailData {
       'shell-rail',
     ],
     queryFn: ({ signal }) =>
-      agentOpsApi.listRuns(RAIL_LIVE_PARAMS, {
-        tenant: boundary.tenant,
+      allSessionPages(
+        (cursor) =>
+          agentOpsApi.listRuns(
+            { ...RAIL_LIVE_PARAMS, cursor },
+            { tenant: boundary.tenant, signal },
+          ),
         signal,
-      }),
-    enabled: readSessions && !!boundary.tenant,
+      ),
+    enabled: readRuns,
     refetchInterval: (query) =>
       query.state.data?.items.some((r) => ACTIVE_RUN_STATES.has(r.state))
         ? RAIL_ACTIVE_REFRESH_MS
         : RAIL_REFRESH_MS,
     staleTime: RAIL_ACTIVE_REFRESH_MS / 2,
   })
-  // A session just started opens at /sessions?session=run:<ref> before the next poll:
+  // A session just started carries session=run:<ref> before the next poll:
   // read the runs again so its row is in the rail at once.
   const opened = useRouterState({
     select: (s): string | null => {
@@ -111,36 +151,58 @@ export function useSessionRail(): SessionRailData {
   const { data: runsData, refetch: refetchRuns } = runs
   useEffect(() => {
     if (
+      readRuns &&
       opened?.startsWith('run:') &&
       runsData &&
       !runsData.items.some((r) => `run:${r.run_ref}` === opened)
     )
       void refetchRuns()
-  }, [opened, runsData, refetchRuns])
+  }, [readRuns, opened, runsData, refetchRuns])
   const { readHandoffs, handoffs } = useOfferedHandoffs()
 
-  const status: RailStatus =
-    live.isError && handoffs.isError
-      ? 'error'
-      : (readSessions && live.isPending && live.fetchStatus !== 'idle') ||
-          (readHandoffs &&
-            handoffs.isPending &&
-            handoffs.fetchStatus !== 'idle')
-        ? 'loading'
-        : 'ready'
+  const reads = [
+    readSessions ? live : null,
+    readRuns ? runs : null,
+    readHandoffs ? handoffs : null,
+  ].filter((read) => read !== null)
+  const status: RailStatus = {
+    loading: reads.some((read) => read.isPending),
+    error: reads.some((read) => read.isError),
+  }
   const groups = railGroups(
     {
-      live: live.data?.items ?? [],
-      handoffs: handoffs.data?.items ?? [],
-      runs: runs.data?.items ?? [],
+      live: readSessions && !live.isError ? (live.data?.items ?? []) : [],
+      handoffs:
+        readHandoffs && !handoffs.isError ? (handoffs.data?.items ?? []) : [],
+      runs: readRuns && !runs.isError ? (runs.data?.items ?? []) : [],
     },
     now,
+    {
+      sessionTo: readSessions ? '/sessions' : '/agentops',
+      canOpenApprovals,
+    },
   )
-  return { visible: readSessions || readHandoffs, groups, status }
+  const allTo = readSessions
+    ? '/sessions'
+    : readRuns
+      ? '/agentops'
+      : '/communications/handoffs'
+  return {
+    visible: readSessions || readRuns || readHandoffs,
+    groups,
+    sessionCounts: {
+      live: groups
+        .filter((g) => g.id !== 'earlier')
+        .reduce((n, g) => n + g.sessionTotal, 0),
+      needsYou: groups.find((g) => g.id === 'needsYou')?.sessionTotal ?? 0,
+    },
+    status,
+    allTo,
+  }
 }
 
 /**
- * The handoffs offered to this operator in the selected workspace: the rail's second read,
+ * The handoffs offered to this operator in the selected workspace: the rail's inbox read,
  * also used by Now's "Needs you" queue (features/home/now-queue.tsx), which takes its
  * sessions from the page Now already holds instead of reading them a second time.
  */
@@ -151,12 +213,14 @@ export function useOfferedHandoffs() {
   const workspace = useWorkspaceStore((s) => s.activeWorkspace)
   const handoffsView = viewById('communicationsHandoffs')
   // A global administrator is never the recipient of a personal handoff, so the inbox
-  // is not asked for that account (the handoffs page says the same).
+  // is not asked for that account (the handoffs page says the same). A superadmin with
+  // a grant in this tenant is a member and is asked (#503).
   const readHandoffs =
+    !!boundary.tenant &&
     !!handoffsView &&
     navigable(handoffsView) &&
     !!workspace &&
-    principal?.superadmin !== true
+    !isGlobalAccount(principal, boundary.tenant)
   const handoffs = useQuery({
     queryKey: [
       ...communicationsKeys.workspaceScope(
@@ -177,7 +241,7 @@ export function useOfferedHandoffs() {
         { tenant: boundary.tenant },
         signal,
       ),
-    enabled: readHandoffs && !!boundary.tenant,
+    enabled: readHandoffs,
     refetchInterval: RAIL_REFRESH_MS,
     staleTime: RAIL_REFRESH_MS / 2,
   })

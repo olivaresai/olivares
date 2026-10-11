@@ -219,6 +219,8 @@ type ResourceServer struct {
 	// process and is never persisted — a restart invalidates outstanding cursors
 	// because it builds a new cache snapshot, even when durable rows rehydrate.
 	cursorKey []byte
+	// asks seals and spends the per-process approval round-trip states (ask.go).
+	asks *askStates
 	// apps: the SEP-1865 ui:// template policy; nil ⇒ deny all ui:// reads.
 	apps *appSet
 	// consent: the consent-tracking seam for consent-gated renders (deny-closed).
@@ -297,6 +299,10 @@ func NewResourceServer(cfg ResourceServerConfig) (*ResourceServer, error) {
 	if _, err := rand.Read(cursorKey); err != nil {
 		return nil, fmt.Errorf("mcp: rs: initialize reconciliation cursor key: %w", err)
 	}
+	asks, err := newAskStates()
+	if err != nil {
+		return nil, err
+	}
 
 	doer := cfg.Doer
 	if doer == nil {
@@ -366,6 +372,7 @@ func NewResourceServer(cfg ResourceServerConfig) (*ResourceServer, error) {
 		upstreamRevision:     upstreamRevision,
 		instanceID:           instanceID,
 		cursorKey:            cursorKey,
+		asks:                 asks,
 		apps:                 apps,
 		consent:              cfg.Consent,
 		pinVerifier:          cfg.PinVerifier,         // nil OK: no verification (additive)

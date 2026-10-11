@@ -8,6 +8,7 @@ import (
 	"context"
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/auth"
+	"github.com/olivaresai/olivares/core/dr/opgate"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/secret"
 	"github.com/olivaresai/olivares/core/store"
@@ -15,16 +16,15 @@ import (
 	"github.com/olivaresai/olivares/modules/sessions"
 	"io"
 	"log/slog"
+	"path/filepath"
 )
 
 // Edition seams for the session cockpit (V269 / docs/contracts/COCKPIT-07-edition-cut.md §4).
 //
 // This file carries NO build tag on purpose: it holds the TYPES and the runner the
-// three build variants share, so the tagged files
-// (cmd/olivares/wire_noenterprise.go, and the overlay's
-// wire_enterprise_{addon_ids,noaddon_ids}.go) declare only the constructors. A type
-// declared inside a tagged file would have to be written three times and could drift
-// three ways.
+// three build variants share, so only the overlay's tagged files declare the
+// constructors its edition ports point at (edition_ports.go). A type declared inside a
+// tagged file would have to be written three times and could drift three ways.
 
 // editionAuxServer is one AUXILIARY network listener an edition serves alongside the
 // HTTP and gRPC servers.
@@ -52,7 +52,7 @@ type editionAuxServer interface {
 // a failure on errCh, exactly as serveHTTP does for the HTTP listeners.
 //
 // A build with no auxiliary listener passes an empty slice and this is a no-op — the
-// same shape as enterpriseRootCommands returning nil. In phase 0 that is EVERY build,
+// same shape as an absent rootCommands port. In phase 0 that is EVERY build,
 // including `addon_ids`: the agent listener is phase 1A work. The seam lands first so
 // the wiring, the twins and the shutdown path are already in their final shape when the
 // engine arrives.
@@ -114,6 +114,33 @@ type EditionConfig struct {
 	// DataDir is the resolved data directory: the value the flag chain produced, never a
 	// re-derivation of it.
 	DataDir string
+	// CoreDSN is the DSN the SQLite core store was opened with: the resolved --dsn, or the
+	// default file in DataDir when none was given. Empty on PostgreSQL, whose URL carries
+	// credentials and names no file a private store could sit beside.
+	CoreDSN string
+}
+
+// coreStoreFile is the SQLite core file the data directory holds when --dsn names none.
+const coreStoreFile = "olivares.db"
+
+// CoreStoreInDataDir reports whether the core SQLite file physically is the data directory's own
+// (DataDir/olivares.db), the pairing an edition's private store relies on when it proves a
+// subject absent. A core file named elsewhere by --dsn may be shared with another data directory,
+// a data-directory olivares.db that is a symlink to such a file is no different, an in-memory core
+// has no file, and a DSN the resolver refuses names no provable one: all false.
+func (c EditionConfig) CoreStoreInDataDir() bool {
+	if c.DataDir == "" || c.CoreDSN == "" {
+		return false
+	}
+	core, err := opgate.ResolveSQLiteTarget(c.CoreDSN)
+	if err != nil || core.Memory() {
+		return false
+	}
+	dir, err := filepath.Abs(c.DataDir)
+	if err == nil {
+		dir, err = filepath.EvalSymlinks(dir)
+	}
+	return err == nil && core.CanonicalPath() == filepath.Join(dir, coreStoreFile)
 }
 
 // editionConfigFrom is the mapping the composition root applies, split out so it can be tested.
@@ -122,8 +149,11 @@ type EditionConfig struct {
 // `EditionConfig` lo garantiza el compilador; que reciba EL CAMPO CORRECTO no lo garantiza nadie —
 // pasar aquí otro directorio compilaría igual y pondría la base del cockpit donde no toca. Por eso
 // el testigo del hub es sobre esta función y no sobre la firma.
-func editionConfigFrom(cfg bootConfig) EditionConfig {
-	return EditionConfig{DataDir: cfg.DataDir}
+func editionConfigFrom(cfg bootConfig, eng store.Engine, coreDSN string) EditionConfig {
+	if eng != store.EngineSQLite {
+		coreDSN = ""
+	}
+	return EditionConfig{DataDir: cfg.DataDir, CoreDSN: coreDSN}
 }
 
 // EditionMutationAuthorizer exposes the existing request authorizer's mutation
@@ -157,6 +187,9 @@ type EditionRuntimeLaunchObserverRegistration interface {
 // EditionDependencies contains existing engine capabilities, never a private engine
 // or a second configuration source. Boot binds these after store/auth composition.
 type EditionDependencies struct {
+	// The existing shared producers used by private module wiring.
+	modules *moduleSet
+
 	// RegisterJobNotRunning registers a job's bounded in-memory status reader
 	// with server-info. Empty reason means running; values follow the public API.
 	// Nil means the status collector is unavailable, not scheduling authority.

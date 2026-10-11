@@ -23,6 +23,7 @@ import {
   traceListFixture,
 } from './fixtures'
 import './i18n'
+import { PANEL_EXTENSIONS } from '@/features/extensions'
 
 describe('StandardMaturityBadge', () => {
   it('pins the version next to the upstream-declared maturity', () => {
@@ -341,7 +342,6 @@ const api = vi.hoisted(() => ({
   ingestionHealth: vi.fn(),
   traces: vi.fn(),
   trace: vi.fn(),
-  exportTrace: vi.fn(),
 }))
 vi.mock('./api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./api')>()
@@ -360,6 +360,58 @@ function resetLive() {
 }
 
 describe('ObservabilityView — live + honesty', () => {
+  it.each([
+    [
+      'provider_context_may_change',
+      /Compaction or context edits were requested/,
+    ],
+    ['provider_context_unknown', /Provider context editing is unknown/],
+    ['inference_metadata_only', /Only inference metadata is retained/],
+  ])(
+    'shows the retained inference coverage limit %s',
+    async (coverage, expected) => {
+      resetLive()
+      api.trace.mockResolvedValue({
+        ...traceDetailFixture,
+        spans: traceDetailFixture.spans.map((span, index) =>
+          index === 0
+            ? {
+                ...span,
+                attributes: {
+                  ...span.attributes,
+                  'inference.context_coverage': coverage,
+                },
+              }
+            : span,
+        ),
+      })
+      renderIntel(<ObservabilityView />)
+      await userEvent.click(
+        screen.getByRole('tab', { name: /Trace drill-down/i }),
+      )
+      const grid = await screen.findByRole('grid')
+      await userEvent.click(within(grid).getByText(/session\.start/))
+      const notice = await screen.findByText(expected)
+      expect(notice).toHaveTextContent(
+        /cannot reconstruct|cannot be reconstructed/,
+      )
+    },
+  )
+
+  it('keeps historical traces without a coverage label unclassified', async () => {
+    resetLive()
+    renderIntel(<ObservabilityView />)
+    await userEvent.click(
+      screen.getByRole('tab', { name: /Trace drill-down/i }),
+    )
+    const grid = await screen.findByRole('grid')
+    await userEvent.click(within(grid).getByText(/session\.start/))
+    await screen.findByText(/session\.start \(\+2 events\)/)
+    expect(
+      screen.queryByText(/provider.s working context/i),
+    ).not.toBeInTheDocument()
+  })
+
   it('renders the live ingestion read-model (standards + per-source counters), not a seam', async () => {
     resetLive()
     renderIntel(<ObservabilityView />)
@@ -564,9 +616,8 @@ describe('ObservabilityView — live + honesty', () => {
     )
   })
 
-  it('shows the export button when a trace is selected', async () => {
+  it('Community keeps trace detail without an export action', async () => {
     resetLive()
-    api.exportTrace.mockResolvedValue({ resourceSpans: [] })
     const { userEvent } = await import('@/test/intel')
     renderIntel(<ObservabilityView />)
     await userEvent.click(
@@ -575,7 +626,9 @@ describe('ObservabilityView — live + honesty', () => {
     const grid = await screen.findByRole('grid')
     await userEvent.click(within(grid).getByText(/session\.start/))
     await waitFor(() => expect(api.trace).toHaveBeenCalled())
-    expect(await screen.findByText(/Export OTLP/i)).toBeInTheDocument()
+    expect(screen.queryByText(/Export OTLP/i) !== null).toBe(
+      Boolean(PANEL_EXTENSIONS.traceExportAction),
+    )
   })
 
   it('RBAC: without observability:traces:read the trace rows are not selectable (no forbidden drill offered)', async () => {

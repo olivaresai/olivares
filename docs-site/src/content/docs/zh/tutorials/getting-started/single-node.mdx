@@ -20,19 +20,10 @@ import { Steps, Aside } from '@astrojs/starlight/components'
 区别在于姿态。如果你想先即时浏览一番，
 先做快速开始，然后回到这里进行真正的安装。
 
-本页的每条命令都已按原样针对当前二进制运行过
-（首次启动横幅、token 恢复路径、pgAudit 接入以及下文的
-图，都由 `scripts/quickstart-smoke.sh` 执行，并已为本指南
-重新验证）。
-
 ## 先决条件
 
 - 一台带有 systemd 和 `curl` 的 Linux 主机。
-- **Go 1.26+** 用于构建二进制（存储是纯 Go 的 SQLite，因此无需 C
-  工具链）。已发布的版本 **26.10.1** 随附签名归档和本机软件包：安装面证人将两者记为
-  **published**（`docs/releases/26.10.1-install-surfaces.json`）。本教程从 checkout 构建；
-  若要安装已发布的版本，请使用 `main` 上的已验证安装器（`scripts/install.sh`）。
-  [验证一次发布](/zh/how-to/verify-a-release/)是这些工件的信任链。
+- **Go 1.26+**. Build this tutorial from source; Olivares {/* release */}`0.1`{/* /release */} is the next release, not yet published.
 
 ## 1. 构建并安装二进制
 
@@ -245,6 +236,13 @@ ingest: wired source (in-process fast-path) name=salesdb-pgaudit kind=pgaudit
 [故障排查](/zh/how-to/troubleshooting/)。
 
 ## 6. 到达图
+
+全新安装默认关闭 `accessmap`。请以管理员身份在
+**Settings > Edition & modules** 中启用 `accessmap`，并保留其他已选模块。
+使用 CLI 时，先通过 `olivares login` 以管理员身份登录此引擎，
+然后运行 `olivares modules on accessmap`。每次都要等待引擎重启完成后再继续；
+运行中的会话会停止，可以恢复。否则，这些 API 调用会返回
+`404 module_not_enabled`。
 
 ```bash
 curl -ksf "https://127.0.0.1:8443/v1/m/accessmap/graph?limit=200" \

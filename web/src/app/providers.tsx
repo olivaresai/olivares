@@ -26,7 +26,7 @@ configureApiClient({
   getCSRFToken: () => useSessionStore.getState().csrfToken,
   getTenant: () => useTenantStore.getState().activeTenant,
   onUnauthorized: () => {
-    useSessionStore.getState().clear()
+    useSessionStore.getState().ended()
     useWorkspaceStore.getState().clear()
   },
   // ⛔ AN EXPIRED SESSION IS NOT A REVOKED ONE, AND UNTIL NOW THE CONSOLE TREATED THEM THE

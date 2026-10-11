@@ -126,6 +126,10 @@ export const claudePolicyApi = {
     http.get<PdpActivePolicy>(`${PDP}/active`, { query: { engine } }),
   /** Stores a new immutable revision and, for cedar, activates it on the live
    *  engine. Read `live_activation` — `active` alone does not prove enforcement. */
+  pdpDisable: () =>
+    http.delete<PdpPublishResult>(`${PDP}/active`, undefined, {
+      query: { engine: 'cedar' },
+    }),
   pdpPublish: (engine: PdpEngine, source: string, note?: string) =>
     http.post<PdpPublishResult>(`${PDP}/publish`, { engine, source, note }),
   /** Appends an activation record selecting an EXISTING revision. It creates no

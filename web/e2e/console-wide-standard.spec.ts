@@ -22,11 +22,27 @@
 //      and no source-level census could see that;
 //    · the keyboard of each screen family — list, form, dialog — including focus RETURN,
 //      which the DOM only has in a browser.
+import { readFileSync } from 'node:fs'
 import { expect, test, type Page } from '@playwright/test'
 
 const demoTenant = process.env.DEMO_TENANT ?? ''
 const EMAIL = 'demo@olivares.local'
 const PASSWORD = 'olivares-demo-estate'
+
+// The type ladder is read from the stylesheet the console is built from, as
+// `src/styles/tokens.test.ts` reads it (Playwright runs with cwd = web/), so a step's size
+// is stated once and this spec follows it instead of carrying a second copy that goes stale.
+const tokensCss = readFileSync('src/styles/tokens.css', 'utf8')
+
+/** The size a ladder step (`caption`, `title`, …) paints at, in px. */
+function ladderPx(step: string): string {
+  const declared = tokensCss.match(
+    new RegExp(`--text-${step}:\\s*([\\d.]+)rem;`),
+  )
+  if (!declared)
+    throw new Error(`no --text-${step} step in src/styles/tokens.css`)
+  return `${Number(declared[1]) * 16}px`
+}
 
 /** The seven the console ships; `lint:i18n` proves the resources exist for each. */
 const LANGUAGES = ['en', 'es', 'de', 'fr', 'ja', 'ru', 'zh'] as const
@@ -70,6 +86,10 @@ async function cutLabels(page: Page) {
       if (el.children.length > 0) continue
       const text = el.textContent?.trim()
       if (!text) continue
+      // Text for a screen reader only (`sr-only`) is a 1px clipped box ON PURPOSE and
+      // paints nothing, so it cuts no visible label whatever its scroll width says. Only
+      // that class is skipped: a visible label squeezed to nothing is the worst cut.
+      if (el.closest('.sr-only')) continue
       if (el.scrollWidth > el.clientWidth + 1)
         out.push(`${text.slice(0, 40)} (+${el.scrollWidth - el.clientWidth}px)`)
     }
@@ -186,13 +206,15 @@ test.describe('the console-wide standard', () => {
 
   test('the type ladder survives to the painted element', async ({ page }) => {
     // THE DEFECT `cn` HAD: tailwind-merge classified a ladder step as a text COLOUR and
-    // deleted it, so `DeploymentIdentity` asked for `text-caption` (12px) and painted
-    // 14px. No source census could see that; only the computed style can.
+    // deleted it, so `DeploymentIdentity` asked for `text-caption` and painted the body
+    // size instead. No source census could see that; only the computed style can.
     await page.goto('/login')
     const identity = page.getByTestId('deployment-identity')
     await expect(identity).toBeVisible()
     const size = await identity.evaluate((el) => getComputedStyle(el).fontSize)
-    expect(size, 'the caption step reaches the element').toBe('12px')
+    expect(size, 'the caption step reaches the element').toBe(
+      ladderPx('caption'),
+    )
     const cls = await identity.getAttribute('class')
     expect(cls, 'and the class is still on it').toContain('text-caption')
   })
@@ -223,21 +245,27 @@ test.describe('the console-wide standard', () => {
       )
       el?.focus()
     })
+    // The column of the cell under focus. The grid moves focus to its active cell on the
+    // next frame, so a read right after a key press can still see the table: it is awaited.
+    const activeColumn = () =>
+      page.evaluate(
+        () =>
+          document.activeElement
+            ?.closest('td[aria-colindex]')
+            ?.getAttribute('aria-colindex') ?? null,
+      )
     // Entering the region from the table itself puts the active cell under focus.
     await page.keyboard.press('ArrowDown')
-    const before = await page.evaluate(() =>
-      document.activeElement
-        ?.closest('td[aria-colindex]')
-        ?.getAttribute('aria-colindex'),
-    )
-    expect(before, 'the keyboard reaches a cell of the grid').toBeTruthy()
+    await expect
+      .poll(activeColumn, {
+        message: 'the keyboard reaches a cell of the grid',
+      })
+      .not.toBeNull()
+    const before = await activeColumn()
     await page.keyboard.press('ArrowRight')
-    const after = await page.evaluate(() =>
-      document.activeElement
-        ?.closest('td[aria-colindex]')
-        ?.getAttribute('aria-colindex'),
-    )
-    expect(after, 'ArrowRight moves the active cell').not.toBe(before)
+    await expect
+      .poll(activeColumn, { message: 'ArrowRight moves the active cell' })
+      .not.toBe(before)
   })
 
   test('a dialog: focus is trapped while open and RETURNED on close', async ({
@@ -245,11 +273,9 @@ test.describe('the console-wide standard', () => {
   }) => {
     await signIn(page)
     await page.goto('/')
-    // The favourites manager is a dialog every principal reaches, on every route.
-    const opener = page
-      .locator('aside button')
-      .filter({ hasText: /.+/ })
-      .first()
+    // The command palette is a dialog every principal reaches, from the sidebar's search
+    // button, on every route.
+    const opener = page.getByRole('button', { name: /search and commands/i })
     const openerText = await opener.textContent()
     await opener.click()
     const dialog = page.locator('[role="dialog"][data-state="open"]')
@@ -354,9 +380,13 @@ test.describe('the console-wide standard', () => {
     await signIn(page)
     await page.goto('/catalog')
     await page.waitForLoadState('networkidle').catch(() => {})
-    await expect(page.getByRole('button', { name: /new entry/i })).toHaveCount(
-      1,
-    )
+    // The header's slot holds the verb once. An empty list offers it a second time in its
+    // own empty state, which is part of the tab's content and leaves with the tab.
+    await expect(
+      page
+        .locator('[data-page-primary-action]')
+        .getByRole('button', { name: /new entry/i }),
+    ).toHaveCount(1)
     const policy = page.getByRole('tab', { name: /policy/i }).first()
     await policy.click()
     await expect(policy).toHaveAttribute('data-state', 'active')
@@ -369,8 +399,8 @@ test.describe('the console-wide standard', () => {
   test('/logs carries the same page heading as every other screen', async ({
     page,
   }) => {
-    // It was the ONE view of 61 that wrote its own `<h1>`, at `text-title` (18px) while
-    // every other screen's was `text-display` (24px).
+    // It was the ONE view of 61 that wrote its own `<h1>`, at a smaller step than every
+    // other screen's. The page title is the `title` step of the ladder, on every screen.
     await signIn(page)
     // ⚠ `domcontentloaded`, NOT the default. `/logs` holds a server-sent-events stream
     //   open, so the `load` event never fires and a plain `goto` times out at 30 s with
@@ -383,7 +413,9 @@ test.describe('the console-wide standard', () => {
       .locator('h1')
       .first()
       .evaluate((el) => getComputedStyle(el).fontSize)
-    expect(size, 'the display step, like every management screen').toBe('24px')
+    expect(size, 'the page title step, like every management screen').toBe(
+      ladderPx('title'),
+    )
   })
 
   test('a table that is not a grid reads at the grid’s own density', async ({
@@ -432,7 +464,9 @@ test.describe('the console-wide standard', () => {
         .locator('h1')
         .first()
         .evaluate((el) => getComputedStyle(el).fontSize)
-      expect(heading, `${theme}: the heading is the display step`).toBe('24px')
+      expect(heading, `${theme}: the heading is the page title step`).toBe(
+        ladderPx('title'),
+      )
       await context.close()
     }
   })

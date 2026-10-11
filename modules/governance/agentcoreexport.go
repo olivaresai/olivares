@@ -22,7 +22,7 @@ import (
 // modules (models/sourcescope), renders them through the Apache connector translator,
 // and exposes plan/apply endpoints. The write credential, allowlist, HITL gate and
 // auditor are built only in cmd/olivares, mirroring adminactionwiring.go /
-// adminactiongate.go. Missing wiring is honest 501 and the exporter stays inert.
+// cmd/olivares/internal/approvalbridge/adminaction.go. Missing wiring is honest 501 and the exporter stays inert.
 
 // AgentCoreExportProvider lets another module contribute structured rules to the
 // AgentCore Cedar export. Implemented by modules/models (model-access) and modules/sourcescope (assignments).

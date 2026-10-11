@@ -27,7 +27,7 @@ VOCAB="${OLIVARES_C1304_VOCAB:-design/VOCABULARIO-MODULOS-2026-08-08.md}"
 grep -q 'NOT MERGED' "$DOC" || fail "$DOC lost NOT MERGED"
 grep -q 'as-is refused' "$DOC" || fail "$DOC lost as-is refused"
 if grep -qiE 'landed overlay #55|catalog closed|FIRMA A claimed' "$DOC"; then
-  fail "$DOC claims a close this lote does not have"
+  fail "$DOC claims a close this batch does not have"
 fi
 grep -q 'C13-04' "$BACKLOG" || fail "$BACKLOG lost the C13-04 row"
 # El nombre de rama es un token de sesion y este fichero viaja al arbol publico:

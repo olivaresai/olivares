@@ -2,17 +2,15 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md
 //
-// cuál contrato RIGE no se deduce de una página: se pregunta.
+// ask which contract is active; do not infer it from one page.
 //
-// ⛔ EL DEFECTO QUE ESTO FIJA. La hoja derivaba el contrato activo con
-//    `contracts.find((c) => c.status === 'active')` sobre `listContracts`, que es UNA
-//    página. Un producto cuyo contrato activo quedara más allá de la página se mostraba
-//    como «ningún contrato activo» — una afirmación FALSA sobre lo que gobierna ahora, y
-//    en la dirección tranquilizadora: no ver el contrato se leía como no tenerlo.
+// The sheet used `contracts.find((c) => c.status === 'active')` on `listContracts`, a
+// single page. An active contract beyond that page was shown as absent: a false,
+// reassuring claim about current governance.
 //
-// ⚠ EL ESCENARIO ES EXACTAMENTE ÉSE, y por eso la lista NO trae el activo: si lo trajera,
-//   la prueba pasaría también con el código viejo y no probaría nada. El motor responde
-//   200 con el contrato o 404 cuando de verdad no hay (`dataproduct.go:897`).
+// The fixture deliberately omits the active contract from the list. Including it would
+// let the old code pass. The engine returns 200 with the contract or 404 when none exists
+// (`dataproduct.go:897`).
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'

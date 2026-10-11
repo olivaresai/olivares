@@ -23,6 +23,20 @@ minted and printed. This works *only* on an install with no users, so it is
 not a takeover path. The token goes to **stdout only** (the journal under
 systemd, the container log on Docker/Kubernetes) — never to log files.
 
+### Setup answers `setup_token_unreadable` (HTTP 503)
+
+The engine has a setup token file but cannot read a token from it: another
+account owns the file, its mode is wider than `0600`, or its content is
+damaged. A wrong token still answers `403 forbidden`; this answer means no
+token can work until the file is fixed. The engine log names the file and
+the reason on the `api: refused by design` line with
+`code=setup_token_unreadable`. Replace the token as root or as the engine's
+account, then finish setup with the token it prints (no restart needed):
+
+```sh
+sudo olivares first-boot --data-dir /var/lib/olivares --new-token
+```
+
 ### `=== FIRST-BOOT SETUP ===` never appeared
 
 Users already exist in that data directory — you are not on first boot.
@@ -33,7 +47,7 @@ start, use a fresh `--data-dir`.
 
 ```text
 generated a new audit signing key; back it up path=/var/lib/olivares/audit-signing.key
-generated a self-signed TLS certificate; clients must trust it, or pin it with --pin-sha256=<pin_sha256> (that value, verbatim) cert=/var/lib/olivares/tls.crt cert_fingerprint_sha256=d38567e8…378c4e7f pin_sha256=JsdrhrY77Me8miAmobJsqamE3NDWIOSBrDTwbHkyCD0
+generated a local TLS certificate; clients must trust it, or pin it with --pin-sha256=<pin_sha256> (that value, verbatim) cert=/var/lib/olivares/tls.crt cert_fingerprint_sha256=d38567e8…378c4e7f pin_sha256=JsdrhrY77Me8miAmobJsqamE3NDWIOSBrDTwbHkyCD0
 ```
 
 Both are deliberate, and the first is the one that bites later: there is
@@ -107,12 +121,11 @@ boot:
 ingest: no observation sources configured (OLIVARES_SOURCES_CONFIG.sources is empty); no connector will ingest — the estate runs on no live traffic
 ```
 
-A missing, unreadable or invalid sources file **warns and continues** (boot
-never crashes on it) — so a healthy-looking engine with an empty map usually
-means the config never loaded. Fix the file/path and restart; success looks
-like `ingest: wired source … kind=…` per source. A source that fails to
-construct logs `ingest: failed to register in-process source; not wired`
-with the reason — it is reported, never silently dropped.
+### The engine does not start with a sources configuration
+
+If `OLIVARES_SOURCES_CONFIG` names a missing, unreadable, or invalid-JSON file, `olivares serve` exits with code `1`. Look for the startup error `load sources operator config: OLIVARES_SOURCES_CONFIG`, including `refusing to start instead of silently omitting operator configuration`. Check the path as seen by the service or container, ensure its user can read the file, validate the JSON, then restart. This is a startup failure, so the engine will not be running with an empty map because of that file error.
+
+After startup succeeds, look for `ingest: wired source … kind=…` per source. A source that fails to construct logs `ingest: failed to register in-process source; not wired` with the reason.
 
 ### pgAudit is wired but no edges arrive
 

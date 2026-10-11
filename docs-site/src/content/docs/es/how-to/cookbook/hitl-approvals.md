@@ -97,3 +97,7 @@ tu SIEM. No puedes hacer un cambio gobernado que el ledger olvide en silencio.
 - Lo que aún está madurando es la **consola** de revisión más rica; las
   garantías del lado del motor de arriba están vivas
   ([alcance honesto](/es/how-to/govern-and-approve/)).
+
+## Ediciones de aprobación (0.1)
+
+Community conserva el motor de aprobaciones, el mínimo de dos personas distintas para acciones CRITICAL, el doble control del kill-switch y las políticas que exigen revisión o aumentan el nivel de riesgo o el cuórum. Las políticas que reducen el nivel de riesgo y el acceso de emergencia break-glass pertenecen a la base de Business. Los registros almacenados se conservan para lectura y exportación, pero no pueden reducir los valores predeterminados de Community ni autorizar acceso de emergencia.

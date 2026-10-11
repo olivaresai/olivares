@@ -237,7 +237,7 @@ func defaultMaxAge(crit ActionRiskTier) time.Duration {
 }
 
 // blockGraceWindow is the alert→block escalation window for a NON-critical stale
-// credential ("escalado automático a bloqueo a los 30 días"). A
+// credential (automatic escalation to a block after 30 days). A
 // CRITICAL credential skips this grace and blocks immediately on staleness.
 const blockGraceWindow = 30 * 24 * time.Hour
 

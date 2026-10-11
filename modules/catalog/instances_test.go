@@ -53,14 +53,17 @@ func TestInstantiateGoverned(t *testing.T) {
 	if r := h.do("POST", "/v1/m/catalog/instances/"+instID+"/transition", editor, map[string]any{"status": "approved"}, tenantHdr(tenant)); r.code != http.StatusForbidden {
 		t.Errorf("editor transition = %d, want 403", r.code)
 	}
-	// Admin approves, then activates.
+	// Admin approves. Without the deployment path, activation must fail closed.
 	if r := h.do("POST", "/v1/m/catalog/instances/"+instID+"/transition", adminRole, map[string]any{"status": "approved"}, tenantHdr(tenant)); r.code != http.StatusOK || r.body["status"] != "approved" {
 		t.Fatalf("approve instance = %d %s", r.code, r.raw)
 	}
-	if r := h.do("POST", "/v1/m/catalog/instances/"+instID+"/transition", adminRole, map[string]any{"status": "active"}, tenantHdr(tenant)); r.code != http.StatusOK || r.body["status"] != "active" {
-		t.Fatalf("activate instance = %d %s", r.code, r.raw)
+	if r := h.do("POST", "/v1/m/catalog/instances/"+instID+"/transition", adminRole, map[string]any{"status": "active"}, tenantHdr(tenant)); r.code != http.StatusServiceUnavailable {
+		t.Fatalf("unwired activation = %d %s, want 503", r.code, r.raw)
 	}
-	// An invalid flow (active → approved) is rejected by the state machine.
+	if r := h.do("GET", "/v1/m/catalog/instances/"+instID, editor, nil, tenantHdr(tenant)); r.body["status"] != "approved" {
+		t.Fatalf("failed activation changed instance: %v", r.body)
+	}
+	// An invalid flow (approved → approved) is rejected by the state machine.
 	if r := h.do("POST", "/v1/m/catalog/instances/"+instID+"/transition", adminRole, map[string]any{"status": "approved"}, tenantHdr(tenant)); r.code != http.StatusConflict {
 		t.Errorf("invalid transition = %d, want 409", r.code)
 	}

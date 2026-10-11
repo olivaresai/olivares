@@ -23,6 +23,18 @@ vi.mock('@/lib/auth/context', () => ({
   }),
 }))
 
+const recording = { enabled: false }
+vi.mock('@/lib/hooks/use-server-info', () => ({
+  useServerInfo: () => ({
+    isSuccess: true,
+    data: { modules_not_enabled: recording.enabled ? [] : ['recording'] },
+  }),
+}))
+vi.mock('@/features/recordings/api', async (orig) => ({
+  ...(await orig<typeof import('@/features/recordings/api')>()),
+  recordingApi: { notice: vi.fn(), acknowledge: vi.fn() },
+}))
+
 const navigate = vi.fn()
 vi.mock('@tanstack/react-router', () => ({
   useNavigate: () => navigate,
@@ -89,6 +101,7 @@ vi.mock('@/features/shared', async (orig) => {
   }
 })
 
+import { recordingApi } from '@/features/recordings/api'
 import { ApiError } from '@/lib/api/errors'
 import { accessMapApi } from './api'
 import { AccessMapView } from './access-map-view'
@@ -181,6 +194,8 @@ function renderView() {
 }
 
 beforeEach(() => {
+  recording.enabled = false
+  vi.mocked(recordingApi.notice).mockReset()
   perm.drift = true
   perm.admin = true
   perm.tenant = 't1'
@@ -208,6 +223,72 @@ async function openFinding(user: ReturnType<typeof userEvent.setup>) {
 }
 
 describe('AccessMapView', () => {
+  it('shows one privileged notice when access-map recording is enabled', async () => {
+    recording.enabled = true
+    vi.mocked(recordingApi.notice).mockResolvedValue({
+      recorded_namespaces: ['accessmap'],
+      breakglass_always: true,
+      consent_mode: 'notice',
+      consent_required: false,
+      acknowledged: false,
+      schema: 'olivares.recording/v1',
+      semconv: '',
+    })
+    renderView()
+    expect(
+      await screen.findByText(/recorded privileged surface/i),
+    ).toBeVisible()
+    expect(screen.queryByText(/privileged, audited action/i)).toBeNull()
+  })
+
+  it.each(['unrecorded', 'loading', 'failed'])(
+    'keeps one audit notice when the recording notice is %s',
+    async (state) => {
+      recording.enabled = true
+      if (state === 'loading') {
+        vi.mocked(recordingApi.notice).mockReturnValue(new Promise(() => {}))
+      } else if (state === 'failed') {
+        vi.mocked(recordingApi.notice).mockRejectedValue(
+          new Error('Unavailable'),
+        )
+      } else {
+        vi.mocked(recordingApi.notice).mockResolvedValue({
+          recorded_namespaces: [],
+          breakglass_always: true,
+          consent_mode: 'notice',
+          consent_required: false,
+          acknowledged: false,
+          schema: 'olivares.recording/v1',
+          semconv: '',
+        })
+      }
+      renderView()
+      await screen.findByTestId('graph-canvas')
+      expect(screen.getAllByText(/privileged, audited action/i)).toHaveLength(1)
+      expect(screen.queryByText(/recorded privileged surface/i)).toBeNull()
+    },
+  )
+
+  it('keeps recording consent in the single notice slot', async () => {
+    recording.enabled = true
+    vi.mocked(recordingApi.notice).mockResolvedValue({
+      recorded_namespaces: ['accessmap'],
+      breakglass_always: true,
+      consent_mode: 'required',
+      consent_required: true,
+      acknowledged: false,
+      schema: 'olivares.recording/v1',
+      semconv: '',
+    })
+    renderView()
+    expect(await screen.findByRole('dialog')).toBeVisible()
+    expect(screen.getAllByText(/recorded privileged surface/i)).toHaveLength(1)
+    expect(screen.queryByText(/privileged, audited action/i)).toBeNull()
+    expect(
+      screen.getByRole('button', { name: /acknowledge and continue/i }),
+    ).toBeVisible()
+  })
+
   it('offers the ceremony, not the accusation, when the graph is refused for ASSURANCE', async () => {
     // ⛔ Los dos 403 satisfacen `isForbidden` (errors.ts:59 es sólo el status).
     // Leyéndolo primero, esta pantalla borraba su cuerpo entero y dejaba como

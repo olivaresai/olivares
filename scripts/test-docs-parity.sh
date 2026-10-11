@@ -86,7 +86,7 @@ check() {
 make_tree() {
 	d="$1"
 	shift
-	mkdir -p "$d/docs-site/src/content/docs/explanation/adr" "$d/docs-site/src/content/docs/start"
+	mkdir -p "$d/docs-site/src/content/docs/explanation/sample" "$d/docs-site/src/content/docs/start"
 	{
 		printf 'export const LOCALES = {\n'
 		printf "  root: { label: 'English', lang: 'en' },\n"
@@ -97,7 +97,7 @@ make_tree() {
 		printf 'export const ARCHIVED_SLUGS = VERSIONS.map((v) => v.slug)\n'
 	} >"$d/docs-site/src/site-locales.mjs"
 	printf -- '---\ntitle: home\n---\n' >"$d/docs-site/src/content/docs/index.mdx"
-	printf -- '---\ntitle: adr25\n---\n' >"$d/docs-site/src/content/docs/explanation/adr/0025-x.md"
+	printf -- '---\ntitle: sample\n---\n' >"$d/docs-site/src/content/docs/explanation/sample/example.md"
 	printf -- '---\ntitle: install\n---\n' >"$d/docs-site/src/content/docs/start/install.md"
 }
 
@@ -107,7 +107,7 @@ fill_locale() {
 	l="$2"
 	shift 2
 	src="$d/docs-site/src/content/docs"
-	set -- "${@:-index.mdx explanation/adr/0025-x.md start/install.md}"
+	set -- "${@:-index.mdx explanation/sample/example.md start/install.md}"
 	for p in $*; do
 		mkdir -p "$src/$l/$(dirname "$p")"
 		printf -- '---\ntitle: x\n---\n' >"$src/$l/$p"
@@ -136,8 +136,8 @@ run "$T"
 check "1 report mode does not fail the gate" "exit 0" $?
 grep -q 'missing (1)' <<<"$out"
 check "1 the missing page is reported" "missing (1)" $?
-grep -q 'fr/explanation/adr/0025-x.md' <<<"$out"
-check "1 the finding names the exact path" "fr/.../0025-x.md" $?
+grep -q 'fr/explanation/sample/example.md' <<<"$out"
+check "1 the finding names the exact path" "fr/.../example.md" $?
 grep -q 'not failing the gate' <<<"$out"
 check "1 report mode says so out loud" "banner present" $?
 
@@ -154,7 +154,7 @@ fill_locale "$T" es
 fill_locale "$T" fr index.mdx start/install.md
 waivers "$T" <<JSON
 { "waivers": [
-  { "path": "explanation/adr/0025-x.md", "locales": ["fr"],
+  { "path": "explanation/sample/example.md", "locales": ["fr"],
     "reason": "French legal review pending on the reserve-ledger wording",
     "date": "$YESTERDAY", "expires": "$NEXTYEAR" }
 ] }
@@ -180,20 +180,20 @@ fill_locale "$T" es index.mdx start/install.md
 fill_locale "$T" fr index.mdx start/install.md
 waivers "$T" <<JSON
 { "waivers": [
-  { "path": "explanation/adr/0025-x.md", "locales": ["fr"],
+  { "path": "explanation/sample/example.md", "locales": ["fr"],
     "reason": "French legal review pending on the reserve-ledger wording", "date": "$YESTERDAY" }
 ] }
 JSON
 run "$T" --strict
 [ "$rc" -eq 1 ]
 check "3 a per-locale waiver does not leak" "es still fails" $?
-grep -q 'es/explanation/adr/0025-x.md' <<<"$out"
+grep -q 'es/explanation/sample/example.md' <<<"$out"
 check "3 the un-waived locale is the one named" "es reported" $?
 
 # The waiver matches by ROUTE, so it covers the page whatever extension it carries.
 T="$WORK/t3c"
 make_tree "$T" es
-fill_locale "$T" es explanation/adr/0025-x.md start/install.md
+fill_locale "$T" es explanation/sample/example.md start/install.md
 waivers "$T" <<JSON
 { "waivers": [
   { "path": "index.md", "locales": ["es"],
@@ -209,9 +209,9 @@ check "3 a waiver matches by route, not extension" "index.md waives index.mdx" $
 T="$WORK/t4"
 make_tree "$T" es
 fill_locale "$T" es
-mkdir -p "$T/docs-site/src/content/docs/$ARCHIVE/explanation/adr"
+mkdir -p "$T/docs-site/src/content/docs/$ARCHIVE/explanation/sample"
 printf -- '---\ntitle: snap\n---\n' >"$T/docs-site/src/content/docs/$ARCHIVE/index.mdx"
-printf -- '---\ntitle: snap\n---\n' >"$T/docs-site/src/content/docs/$ARCHIVE/explanation/adr/0025-x.md"
+printf -- '---\ntitle: snap\n---\n' >"$T/docs-site/src/content/docs/$ARCHIVE/explanation/sample/example.md"
 run "$T" --strict
 [ "$rc" -eq 0 ]
 check "4 root snapshot pages are not demanded" "exit 0" $?
@@ -222,9 +222,9 @@ grep -q '"english": 3' <<<"$out"
 check "4 snapshot pages are out of the English set" "english 3" $?
 # starlight-versions copies each LOCALE when it cuts a snapshot. Excluding only the
 # root copy turned the localized snapshot into a tree of phantom orphans.
-mkdir -p "$T/docs-site/src/content/docs/es/$ARCHIVE/explanation/adr"
+mkdir -p "$T/docs-site/src/content/docs/es/$ARCHIVE/explanation/sample"
 printf -- '---\ntitle: snap\n---\n' >"$T/docs-site/src/content/docs/es/$ARCHIVE/index.mdx"
-printf -- '---\ntitle: snap\n---\n' >"$T/docs-site/src/content/docs/es/$ARCHIVE/explanation/adr/0025-x.md"
+printf -- '---\ntitle: snap\n---\n' >"$T/docs-site/src/content/docs/es/$ARCHIVE/explanation/sample/example.md"
 run "$T" --strict
 [ "$rc" -eq 0 ]
 check "4 the LOCALIZED snapshot is ignored too" "exit 0" $?
@@ -285,7 +285,7 @@ make_tree "$T" es
 fill_locale "$T" es
 waivers "$T" <<JSON
 { "waivers": [
-  { "path": "explanation/adr/0025-x.md", "locales": ["es"],
+  { "path": "explanation/sample/example.md", "locales": ["es"],
     "reason": "Spanish review pending, tracked in the session log", "date": "$YESTERDAY" }
 ] }
 JSON
@@ -303,7 +303,7 @@ make_tree "$T" es
 fill_locale "$T" es
 waivers "$T" <<JSON
 { "waivers": [
-  { "path": "explanation/adr/9999-nonexistent.md", "locales": ["es"],
+  { "path": "explanation/sample/nonexistent.md", "locales": ["es"],
     "reason": "kept from an earlier layout that no longer exists here", "date": "$YESTERDAY" }
 ] }
 JSON
@@ -317,7 +317,7 @@ make_tree "$T" es
 fill_locale "$T" es index.mdx start/install.md
 waivers "$T" <<'JSON'
 { "waivers": [
-  { "path": "explanation/adr/0025-x.md", "locales": ["es"],
+  { "path": "explanation/sample/example.md", "locales": ["es"],
     "reason": "temporary hold while the reserve-ledger wording settles", "date": "2026-01-01",
     "expires": "2026-02-01" }
 ] }
@@ -332,7 +332,7 @@ check "9 AND the page is missing again" "missing (1)" $?
 
 waivers "$T" <<JSON
 { "waivers": [
-  { "path": "explanation/adr/0025-x.md", "locales": ["es"],
+  { "path": "explanation/sample/example.md", "locales": ["es"],
     "reason": "temporary hold while the reserve-ledger wording settles",
     "date": "$YESTERDAY", "expires": "$TOMORROW" }
 ] }
@@ -462,7 +462,7 @@ check "11 a missing manifest is FATAL" "exit 2" $?
 # route. Reporting it as missing+orphan was the checker's own false positive.
 T="$WORK/t12a"
 make_tree "$T" es
-fill_locale "$T" es explanation/adr/0025-x.md start/install.md
+fill_locale "$T" es explanation/sample/example.md start/install.md
 printf -- '---\ntitle: x\n---\n' >"$T/docs-site/src/content/docs/es/index.md" # .md vs .mdx
 run "$T" --strict
 # Starlight routes .md and .mdx identically and a locale may legitimately need no MDX
@@ -625,7 +625,7 @@ export const ARCHIVED_SLUGS = []" 'disagrees with the VERSIONS slugs'
 # quietly suppressed it while appearing to refer to something else.
 T="$WORK/t16"
 make_tree "$T" es
-fill_locale "$T" es index.mdx explanation/adr/0025-x.md
+fill_locale "$T" es index.mdx explanation/sample/example.md
 waivers "$T" <<JSON
 { "waivers": [
   { "path": "start/install.xyz", "locales": ["es"],
@@ -654,7 +654,7 @@ run "$T" --informed
 check "9 english-only page does NOT block in --informed" "exit 0" $?
 case "$out" in *"no translation in ANY locale"*) true ;; *) false ;; esac
 check "9 the backlog is reported out loud" "backlog stated" $?
-case "$out" in *"explanation/adr/0025-x"*) true ;; *) false ;; esac
+case "$out" in *"explanation/sample/example"*) true ;; *) false ;; esac
 check "9 the backlog names the page" "route named" $?
 # ...and the SAME tree is still fatal under --strict: the mode changed, not the facts.
 run "$T" --strict
@@ -707,7 +707,7 @@ check "9 a broken waiver file is UNVERIFIED (exit 2), never a pass" "exit 2" $?
 T="$WORK/t9e"
 make_tree "$T" es fr
 rm -f "$T/docs-site/src/content/docs/index.mdx" \
-	"$T/docs-site/src/content/docs/explanation/adr/0025-x.md" \
+	"$T/docs-site/src/content/docs/explanation/sample/example.md" \
 	"$T/docs-site/src/content/docs/start/install.md"
 run "$T" --informed
 [ "$rc" -eq 2 ]

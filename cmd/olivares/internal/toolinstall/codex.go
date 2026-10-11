@@ -422,7 +422,7 @@ func (c *Codex) Probe(ctx context.Context, exe, scratch, wantVersion string) (Pr
 		}
 	}
 	spec := probeSpec{
-		Exe: exe, Args: []string{"--version"}, Dir: home, Budget: c.probeBudget, Grace: c.probeGrace,
+		Exe: exe, Args: []string{"--version"}, Dir: home, Write: []string{scratch}, Budget: c.probeBudget, Grace: c.probeGrace,
 		Env: []string{
 			"HOME=" + home,
 			"CODEX_HOME=" + config,

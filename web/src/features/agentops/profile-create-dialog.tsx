@@ -38,6 +38,7 @@ const DRIVERS: [string, string][] = [
   ['codex', 'Codex'],
   ['grok', 'Grok'],
   ['opencode', 'OpenCode'],
+  ['gemini-cli', 'Gemini CLI'],
 ]
 const selectClass =
   'h-9 w-full min-w-0 rounded-md border border-border bg-background px-3 text-body focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'

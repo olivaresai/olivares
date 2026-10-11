@@ -30,6 +30,10 @@ type CredentialBinding struct {
 	// SubjectUserID is the account every binding of the subject must belong to.
 	// It is copied from the first binding and only ever refuses a successor.
 	SubjectUserID ID
+	// OSUID and OSAccount are populated only for the closed os_account kind.
+	// Generation zero permanently reserves this kernel account for this subject.
+	OSUID     *uint32
+	OSAccount string
 	// CredentialKind is "user" (a session) or "token" (an API token).
 	CredentialKind string
 	// CredentialID is the session or API-token row id.
@@ -39,7 +43,9 @@ type CredentialBinding struct {
 	// CeilingKind, CeilingRole, CeilingWorkspaceID and CeilingAgent are the
 	// subject's authority ceiling: the credential kind, tenant role, workspace
 	// confinement and agent identity of the credential its first binding
-	// pinned. Every successor copies them unchanged, and a successor's
+	// pinned. OS bindings additionally record the existing system:admin tier
+	// in CeilingRole only for an original account-wide superadmin credential.
+	// Every successor copies them unchanged, and a successor's
 	// credential may not exceed them.
 	CeilingKind        string
 	CeilingRole        string

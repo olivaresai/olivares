@@ -17,6 +17,7 @@ func runSecrets(t *testing.T, args ...string) (string, error) {
 	cmd.SetOut(&out)
 	cmd.SetErr(&errOut)
 	cmd.SetArgs(args)
+	prepareCompositionTestBoot(t)
 	err := cmd.Execute()
 	return out.String(), err
 }

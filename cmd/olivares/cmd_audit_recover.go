@@ -18,6 +18,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
 	"github.com/olivaresai/olivares/core/audit"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
@@ -115,6 +116,9 @@ func auditRecoverCmdWithDeps(deps auditRecoverDeps) *cobra.Command {
 		SilenceUsage: true,
 		Args:         cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			if archiveDir != "" && !audit.ExportLinked {
+				return exitcode.New(exitcode.Edition, audit.ErrBusinessAudit)
+			}
 			resolvedTenant, err := resolveTenant(tenant)
 			if err != nil {
 				return err
@@ -458,14 +462,14 @@ func gateAuditRecovery(ctx context.Context, eng *engine, tenant model.TenantID, 
 	if eng == nil || eng.approvalBridge == nil {
 		return noGateRefPrefix + planHash, nbNoGate, planHash, approverEvidence{}, nil
 	}
-	ref, status, boundHash, err = eng.approvalBridge.gateOnceNoBreakGlass(
+	ref, status, boundHash, err = eng.approvalBridge.GateOnceNoBreakGlass(
 		ctx, tenant, auditRecoveryAction, "audit_ledger", tenant.String(), planHash, reason, requestedBy,
 	)
 	if err != nil || status != nbApproved {
 		return ref, status, boundHash, approverEvidence{}, err
 	}
-	if cred, ok := eng.approvalBridge.cred(tenant); ok {
-		approvers = eng.approvalBridge.approvalApproverEvidence(ctx, cred, ref)
+	if cred, ok := eng.approvalBridge.Cred(tenant); ok {
+		approvers = eng.approvalBridge.ApprovalApproverEvidence(ctx, cred, ref)
 	}
 	return ref, status, boundHash, approvers, nil
 }

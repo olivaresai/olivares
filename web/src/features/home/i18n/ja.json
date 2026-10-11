@@ -37,7 +37,7 @@
     },
     "sessions": {
       "label": "ライブセッション",
-      "caption": "現在{{idle}}アイドル",
+      "caption": "現在{{idle}}待機中",
       "silent": "{{count}}が無応答（回避の可能性）"
     },
     "security": {

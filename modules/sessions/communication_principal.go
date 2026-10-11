@@ -20,12 +20,12 @@ func (m *Module) communicationPrincipalRecipient(
 	scope DirectoryScopeRef,
 	principal CommunicationPrincipal,
 ) (RecipientRef, PrincipalResolution, error) {
-	if !communicationPortBound(m.communicationDirectoryResolver) {
+	if !communicationPortBound(m.CommunicationDirectoryResolver) {
 		return RecipientRef{}, PrincipalResolution{}, communicationError(
 			ErrCommunicationEvidenceUnknown, "communication principal resolver is unavailable",
 		)
 	}
-	resolution, err := m.communicationDirectoryResolver.ResolvePrincipal(ctx, scope, principal)
+	resolution, err := m.CommunicationDirectoryResolver.ResolvePrincipal(ctx, scope, principal)
 	if err != nil || ValidatePrincipalResolution(resolution) != nil ||
 		resolution.Scope != scope || resolution.Principal != principal {
 		return RecipientRef{}, PrincipalResolution{}, communicationError(
@@ -200,7 +200,7 @@ func (m *Module) communicationClaimAuthoritySnapshot(
 	if len(claims) == 0 {
 		return CommunicationClaimAuthoritySnapshot{}, nil
 	}
-	if m == nil || m.data == nil {
+	if m == nil || m.Data == nil {
 		return CommunicationClaimAuthoritySnapshot{}, communicationError(
 			ErrCommunicationEvidenceUnknown, "Claim authority store is unavailable",
 		)
@@ -214,7 +214,7 @@ func (m *Module) communicationClaimAuthoritySnapshot(
 	}
 	claimCtx, cancelClaim := communicationCoreAuthorityContext(ctx, deadline)
 	defer cancelClaim()
-	err := m.data.View(claimCtx, tenant, func(sc store.Scope) error {
+	err := m.Data.View(claimCtx, tenant, func(sc store.Scope) error {
 		for _, claim := range claims {
 			record, found, err := findClaim(claimCtx, sc, claim.SessionSID)
 			if err != nil {

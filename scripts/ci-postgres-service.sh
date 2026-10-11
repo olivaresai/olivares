@@ -3,8 +3,15 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 #
-# ci-postgres-service.sh — shared resolve/provision for the race-rest Postgres
-# service and the manual three-package profile. Two operations only.
+# ci-postgres-service.sh — shared resolve/provision for job-owned Postgres
+# services and the manual three-package profile. Two operations only.
+#
+# Credential policy: these fixed passwords are disposable CI fixture values, not
+# operational credentials. They match the job-owned PostgreSQL service and roles
+# provisioned below. DSNs use only loopback and validated ephemeral service ports;
+# never use this helper or its fixture passwords for a deployed database. The app
+# remains NOSUPERUSER NOBYPASSRLS, the admin NOSUPERUSER BYPASSRLS, and maintenance
+# targets /postgres. Production secret scanning and credential policy are unchanged.
 #
 # resolve    PGPORT_HOST from job.services.postgres.ports['5432'] → GITHUB_ENV
 #            and, when the job owns a second cluster, PGPORT_OTHER from

@@ -3,16 +3,18 @@ title: "Reporting — informes profesionales HTML/PDF"
 description: >-
   Genera informes HTML y PDF descargables a partir de los datos de compliance,
   auditoría y FinOps de la plataforma. Hay cinco tipos integrados bajo demanda;
-  los informes programados son un add-on enterprise.
+  los informes programados forman parte de Business.
 ---
 
 Reporting (`modules/reporting`) está **LIVE**. Convierte los datos de compliance,
 auditoría y FinOps de la plataforma en un único documento profesional, para que
 un auditor descargue la evidencia en lugar de copiar y pegar JSON de varias API.
 
+**Edición:** Business Compliance Packs ofrece catálogos de marcos, evaluaciones, el calendario regulatorio, vistas DORA/HIPAA, sellado de evidencias, exportaciones OSCAL e informes HTML/PDF bajo demanda. Community devuelve `501` para esas capacidades y conserva riesgo, residencia, gestión de registros y exportaciones JSON/CSV de evidencias guardadas. Las actualizaciones conservan los registros existentes.
+
 ## Informes integrados
 
-El módulo open-core ofrece cinco tipos de informe bajo demanda:
+Business Compliance Packs ofrece cinco tipos de informe bajo demanda:
 
 - `compliance-evidence` — postura de compliance por framework, con estado de
   controles y evidencia.
@@ -24,13 +26,6 @@ El módulo open-core ofrece cinco tipos de informe bajo demanda:
 `GET /v1/m/reporting/reports` enumera los tipos y formatos. Genera uno con
 `GET /v1/m/reporting/reports/{type}`; HTML es el formato predeterminado y
 `?format=pdf` descarga un PDF. Las rutas requieren `reporting:report:read`.
-
-## Open core y enterprise
-
-El HTML bajo demanda está incluido en el binario open-core. El PDF bajo demanda
-está incluido cuando hay un ejecutable compatible con Chromium. **Add-on
-enterprise:** la generación programada de informes está gobernada por build tag
-y no forma parte del runtime community.
 
 ## Límites, expresados con claridad
 
@@ -50,5 +45,5 @@ y no forma parte del runtime community.
   postura y evidencia de compliance.
 - [Costes y AI FinOps](/es/reference/modules/xi-finops/) — superficie
   autoritativa de gasto.
-- [Catálogo de módulos](/es/reference/modules/overview/) — los 31 módulos
+- [Catálogo de módulos](/es/reference/modules/overview/) — los 32 módulos
   conectados y su madurez honesta.

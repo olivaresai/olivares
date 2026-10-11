@@ -38,14 +38,14 @@ export function StepUpRequiredState({
   onElevated?: () => void
   className?: string
 }) {
-  // ⛔ Y SE ANUNCIA SOLO, como sus dos hermanas. El contrato de los estados es que cada uno
-  // se autoanuncia —ForbiddenState y EmptyState con role="status", ErrorState con
-  // role="alert" (components/ui/error-state.tsx:41 y :99)—, y quien los monta calla: la
-  // región live de DataTable, por ejemplo, se vacía en cuanto hay `error`
-  // (components/data/data-table.tsx:429-434). Esta era la ÚNICA que no cumplía el contrato,
-  // así que un lector de pantalla pasaba de «cargando» a silencio y no llegaba a saber que
-  // hay una ceremonia que hacer. Lo cazó el contraste `sol max` sobre. Va aquí y no en
-  // la tabla porque el defecto es del estado, y aquí lo arregla para TODOS sus consumidores.
+  // This state announces itself, just like its siblings. Each state owns its announcement:
+  // ForbiddenState and EmptyState use role="status", while ErrorState uses role="alert"
+  // (`components/ui/error-state.tsx:41,99`). Their containers stay silent: DataTable clears its
+  // live region when `error` is set (`components/data/data-table.tsx:429-434`). This was the
+  // only
+  // state that broke that contract, leaving a screen reader silent after loading without
+  // announcing the required step-up. The `sol max` review of caught it. Fixing the state
+  // here covers every consumer.
   return (
     // `aria-atomic="false"`: `role="status"` es atómico por defecto, así que CADA cambio de
     // estado del panel —el botón pasando a «verificando», los tres role="alert" que puede

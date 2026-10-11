@@ -10,6 +10,7 @@ import {
   startsAgain,
   mergeSessions,
   primaryRun,
+  runAwaitedApproval,
   runMatchesObserved,
   sessionLabel,
   sessionNaming,
@@ -212,6 +213,29 @@ describe('controlLevel — what the PLANE can do, never what the caller can', ()
 })
 
 describe('isResumableRun', () => {
+  it.each([
+    'the session was not started because its network boundary could not be set up: connection temporarily unavailable',
+    'The tool mentioned unprivileged user and network namespaces and Landlock.',
+  ])('keeps other failures retryable: %s', (reason) => {
+    expect(isResumableRun(run('r', { state: 'failed', reason }))).toBe(true)
+  })
+  it.each([
+    'the host or container must allow unprivileged user and network namespaces and Landlock: operation not permitted',
+    'session network boundary could not be established ("Landlock setup failed"); enable unprivileged user/network namespaces and Landlock on the engine host',
+  ])(
+    'withholds retry for a host isolation refusal but keeps cleanup and deletion: %s',
+    (detail) => {
+      const refused = run('r', {
+        state: 'failed',
+        reason: `the session was not started because its network boundary could not be set up: ${detail}`,
+      })
+      expect(isResumableRun(refused)).toBe(false)
+      const caps = capabilities({ runs: [refused] }, ALL_GRANTS)
+      expect(caps.find((c) => c.id === 'resume')?.available).toBe(false)
+      expect(caps.find((c) => c.id === 'cleanup')?.available).toBe(true)
+      expect(caps.find((c) => c.id === 'delete')?.available).toBe(true)
+    },
+  )
   it('continues a stream-json run with or without a captured id', () => {
     expect(isResumableRun(run('r', { state: 'failed' }))).toBe(true)
     expect(startsAgain(run('r', { state: 'failed' }))).toBe(true)
@@ -885,5 +909,61 @@ describe('sharedNames — one list, distinct names (HU 029)', () => {
     expect(twins.every((n) => !!n.shortId)).toBe(true)
     expect(twins[0]!.shortId).not.toBe(twins[1]!.shortId)
     expect(named.find((n) => n.name === 'Other')!.shortId).toBeNull()
+  })
+})
+
+describe('runAwaitedApproval — the approval a run waits on now (#502)', () => {
+  const run = (patch: Partial<RunDTO>) =>
+    ({ run_ref: 'r', state: 'running', ...patch }) as RunDTO
+  it.each<[string, Partial<RunDTO>, string | undefined]>([
+    [
+      'a held launch: its launch approval',
+      { state: 'waiting_approval', approval_ref: 'apr_launch' },
+      'apr_launch',
+    ],
+    [
+      'a held launch with both: the launch approval',
+      {
+        state: 'waiting_approval',
+        approval_ref: 'apr_launch',
+        pending_approval_ref: 'apr_tool',
+      },
+      'apr_launch',
+    ],
+    [
+      'a held launch with no reference: none',
+      { state: 'waiting_approval', approval_ref: '' },
+      undefined,
+    ],
+    [
+      'a running run: the tool call approval',
+      { state: 'running', pending_approval_ref: 'apr_tool' },
+      'apr_tool',
+    ],
+    [
+      'a running run with an approved launch: the tool call, never the launch',
+      {
+        state: 'running',
+        approval_ref: 'apr_launch',
+        pending_approval_ref: 'apr_tool',
+      },
+      'apr_tool',
+    ],
+    [
+      'a running run with only an approved launch: none',
+      { state: 'running', approval_ref: 'apr_launch' },
+      undefined,
+    ],
+    [
+      'a stopped run: none',
+      {
+        state: 'stopped',
+        approval_ref: 'apr_launch',
+        pending_approval_ref: 'apr_tool',
+      },
+      undefined,
+    ],
+  ])('%s', (_name, patch, want) => {
+    expect(runAwaitedApproval(run(patch))).toBe(want)
   })
 })

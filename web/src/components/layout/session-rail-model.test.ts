@@ -76,6 +76,78 @@ describe('operated runs in the rail', () => {
     })
   })
 
+  it('a launch held for its approval needs you, and opens that approval', () => {
+    const [needs] = railGroups(
+      {
+        live: [],
+        handoffs: [],
+        runs: [
+          {
+            run_ref: 'r6',
+            name: 'Writes a classified folder',
+            state: 'waiting_approval',
+            provider_driver: 'codex',
+            approval_ref: 'apr_launch',
+          } as never,
+        ],
+      },
+      Date.parse('2026-10-01T11:00:00Z'),
+    )
+    expect(needs.rows[0]).toMatchObject({
+      title: 'Writes a classified folder',
+      state: 'need',
+      to: '/permissions',
+      href: '/permissions?tab=approvals&approval=apr_launch',
+    })
+  })
+
+  it('a running run whose launch was approved opens the session, not the old approval', () => {
+    const [, working] = railGroups(
+      {
+        live: [],
+        handoffs: [],
+        runs: [
+          {
+            run_ref: 'r5',
+            name: 'Approved',
+            state: 'running',
+            approval_ref: 'apr_launch',
+          } as never,
+        ],
+      },
+      Date.parse('2026-10-01T11:00:00Z'),
+    )
+    expect(working.rows[0]).toMatchObject({
+      title: 'Approved',
+      to: '/sessions',
+      href: '/sessions?session=run%3Ar5',
+    })
+  })
+
+  it('a run whose provider needs a login needs you, as Sessions files it', () => {
+    const [needs, working] = railGroups(
+      {
+        live: [],
+        handoffs: [],
+        runs: [
+          {
+            run_ref: 'r7',
+            name: 'Needs a login',
+            state: 'running',
+            provider_driver: 'claude',
+            provider_auth_state: 'required',
+          } as never,
+        ],
+      },
+      Date.parse('2026-10-01T11:00:00Z'),
+    )
+    expect(working.rows).toHaveLength(0)
+    expect(needs.rows[0]).toMatchObject({
+      title: 'Needs a login',
+      state: 'need',
+    })
+  })
+
   it('a stopped run with a stale approval reference is not waiting', () => {
     const [needs, , earlier] = railGroups(
       {

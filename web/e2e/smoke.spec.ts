@@ -66,7 +66,9 @@ test('first-boot setup → login → shell, in light and dark', async ({
   // screen are the areas and the overview above them, not a leaf like Inventory. The
   // name is exact because neighbouring entries contain it.
   await expect(
-    page.getByRole('link', { name: 'Now', exact: true }),
+    page
+      .getByRole('navigation', { name: 'Journeys', exact: true })
+      .getByRole('link', { name: 'Now', exact: true }),
   ).toBeVisible()
   await page.screenshot({ path: 'playwright-report/shell-light.png' })
 

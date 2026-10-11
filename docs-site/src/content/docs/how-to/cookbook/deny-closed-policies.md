@@ -8,6 +8,8 @@ sidebar:
   order: 1
 ---
 
+**Edition:** authoring custom Cedar policies, including permits and forbids, requires Business. Community retains enforcement of stored policies, custom roles and scoped grants; they remain readable and revocable. `DELETE /v1/m/governance/pdp/active?engine=cedar` disables only the authored Cedar surface and preserves revision history, managed grants and adopted policies. Fresh Community installations retain built-in roles, native deny-overlay rules and the kill switch. This recipe’s external restrict-only PDP is distinct from authored Cedar permits, which can grant access within their scope.
+
 **Goal:** add attribute-based restrictions on top of deny-by-default RBAC —
 for example, "no one touches resources tagged `secret`, whatever their role
 says."
@@ -60,7 +62,7 @@ default allow := true
 
 allow := false if {
   input.resource.sensitivity == "secret"
-  input.action == "read"
+  endswith(input.permission, ":read")
 }
 ```
 
@@ -74,15 +76,17 @@ The governance module exposes a policy lifecycle so a bad policy never lands
 blind:
 
 ```bash
+# policy.cedar is the Cedar policy above; jq 1.6 or newer builds the JSON bodies.
 # Compile-check the source:
 curl -ks -X POST "$BASE/v1/m/governance/pdp/validate" \
   -H "Authorization: Bearer $TOKEN" -H "X-Olivares-Tenant: $TENANT" \
-  -d @policy.json
+  -d "$(jq -n --rawfile source policy.cedar '{engine:"cedar",$source}')"
 
 # Pre-flight a decision WITHOUT audit side effects:
 curl -ks -X POST "$BASE/v1/m/governance/pdp/dry-run" \
   -H "Authorization: Bearer $TOKEN" -H "X-Olivares-Tenant: $TENANT" \
-  -d '{"principal":"…","action":"…","resource":{"kind":"credential","sensitivity":"secret"}}'
+  -d "$(jq -n --rawfile source policy.cedar --argjson request '{"principal":{"kind":"user","id":"u1"},"permission":"models:keys:read","resource":{"kind":"credential","sensitivity":"secret"}}' \
+        '{engine:"cedar",$source,$request}')"
 
 # Then publish (policy-admin permission):
 curl -ks -X POST "$BASE/v1/m/governance/pdp/publish" …

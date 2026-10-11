@@ -49,8 +49,10 @@ correlated with the session's ledger window. The surface roots at
 - On an **active** session, frames past the last periodic anchor are bound only
   by the chain tip until the next anchor or seal; `verify` reports
   `anchored_through` so the boundary is explicit, never implied.
-- It implements **no purge and no legal hold** — retention/legal-hold owns
-  deletion; ledger anchors survive any purge.
+- Compliance supports retain schedules and class-scoped legal holds for
+  `privileged-session-recording`. **Purge is unavailable** because frames are
+  append-only evidence. Recording `retention_days` is advisory;
+  `retention_enforced` stays false, and no automatic deletion is promised.
 - This is the recording subsystem the **agentops governance panel** uses for
   per-session I/O recording: each bridged Claude Code frame is folded into the
   same hash-chained, ledger-anchored pattern.

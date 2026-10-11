@@ -13,19 +13,27 @@
 #    ejecutable lo invoca), porque las dos pueden mentir por separado.
 set -u
 
+_olivares_git_env="$(cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")" && pwd)/lib/git-env.sh"
+# shellcheck source=/dev/null
+. "$_olivares_git_env" || {
+	echo "FATAL: cannot source $_olivares_git_env (git-env isolation)" >&2
+	exit 2
+}
+unset _olivares_git_env
+
 AQUI="$(cd "$(dirname "$0")" && pwd)"
 GUION="$AQUI/r8-preflight.sh"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
-pasan=0
-fallan=0
-ok() { pasan=$((pasan + 1)); printf 'ok   %-52s %s\n' "$1" "${2:-}"; }
+pass_count=0
+fail_count=0
+ok() { pass_count=$((pass_count + 1)); printf 'ok   %-52s %s\n' "$1" "${2:-}"; }
 malo() {
-	fallan=$((fallan + 1))
-	printf 'FALLO %-51s %s\n' "$1" "${2:-}"
+	fail_count=$((fail_count + 1))
+	printf 'FAIL %-51s %s\n' "$1" "${2:-}"
 }
-comprueba() { if [ "$2" = "$3" ]; then ok "$1" "rc=$3"; else malo "$1" "esperaba $2, dio $3"; fi; }
+comprueba() { if [ "$2" = "$3" ]; then ok "$1" "rc=$3"; else malo "$1" "expected $2, got $3"; fi; }
 
 corre() { # <args...> -> rc, salida en $WORK/out.txt
 	R8_DIR="$WORK/r8" bash "$GUION" "$@" >"$WORK/out.txt" 2>&1
@@ -35,30 +43,30 @@ corre() { # <args...> -> rc, salida en $WORK/out.txt
 echo "== r8-preflight =="
 
 # 1 · sin argumento no adivina: pide el SHA
-comprueba "sin <sha> => 2 y dice el uso" 2 "$(corre)"
-grep -q 'uso:' "$WORK/out.txt" && ok "y nombra el uso" || malo "no nombra el uso"
+comprueba "without <sha> => 2 and reports usage" 2 "$(corre)"
+grep -q 'usage:' "$WORK/out.txt" && ok "and reports usage" || malo "does not report usage"
 
 # 2 · ⛔ UN REF QUE NO EXISTE ES «NO HE PODIDO MIRAR» (2), NO «falta algo» (1).
 #    La diferencia manda: un 1 dice «prepara esto» y un 2 dice «tu entrada está mal». Confundirlos
 #    haría que alguien preparase un árbol para un corte inexistente.
-comprueba "ref inexistente => 2, no 1" 2 "$(corre 'no-existe-este-ref-jamas')"
+comprueba "missing ref => 2, not 1" 2 "$(corre 'no-existe-este-ref-jamas')"
 
 # 3 · con un ref real pero sin worktree preparado: falta algo (1), y NOMBRA qué
 rc="$(corre HEAD)"
-comprueba "ref real sin preparar => 1" 1 "$rc"
-grep -q 'worktree' "$WORK/out.txt" && ok "y nombra el worktree que falta" || malo "no nombra el worktree"
-grep -q 'bin/olivares' "$WORK/out.txt" && ok "y nombra el binario que falta" || malo "no nombra el binario"
+comprueba "unprepared real ref => 1" 1 "$rc"
+grep -q 'worktree' "$WORK/out.txt" && ok "and names the missing worktree" || malo "does not name the worktree"
+grep -q 'bin/olivares' "$WORK/out.txt" && ok "and names the missing binary" || malo "does not name the binary"
 
 # 4 · ⛔ NO CAPTURA — POR CONDUCTA. Ni crea el directorio de salida ni deja un solo PNG.
 if [ -e "$WORK/r8" ]; then
-	malo "no toca el worktree que no existe" "creó $WORK/r8"
+	malo "does not touch the nonexistent worktree" "created $WORK/r8"
 else
-	ok "no crea el worktree por su cuenta" "lo NOMBRA, no lo hace"
+	ok "does not create the worktree itself" "NAMES it without creating it"
 fi
 if find "$WORK" -name '*.png' -o -name 'manifest.json' 2>/dev/null | grep -q .; then
-	malo "NO CAPTURA (conducta)" "aparecieron artefactos de captura"
+	malo "DOES NOT CAPTURE (behavior)" "capture artifacts appeared"
 else
-	ok "NO CAPTURA (conducta)" "cero PNG, cero manifest"
+	ok "DOES NOT CAPTURE (behavior)" "zero PNGs, zero manifests"
 fi
 
 # 5 · ⛔ NO CAPTURA — POR FUENTE. Ninguna línea EJECUTABLE invoca docs-captures.sh: sólo aparece
@@ -67,9 +75,9 @@ fi
 #    todas cumplidas la conducta ya no distinguiría.
 inv="$(grep -nE 'docs-captures\.sh' "$GUION" | grep -vE '^\s*[0-9]+:\s*#' | grep -vE 'echo' | grep -vcE '^\s*[0-9]+:#' || true)"
 if [ "${inv:-0}" -eq 0 ]; then
-	ok "NO CAPTURA (fuente)" "ninguna línea ejecutable lo invoca"
+	ok "DOES NOT CAPTURE (source)" "no executable line invokes it"
 else
-	malo "NO CAPTURA (fuente)" "$inv línea(s) lo invocan"
+	malo "DOES NOT CAPTURE (source)" "$inv line(s) invoke it"
 fi
 
 # 5 bis · ⛔ EL WORKTREE, DESPRENDIDO — y se comprueba en las DOS direcciones, porque un control
@@ -83,17 +91,17 @@ _sha="$(git -C "$_raiz" rev-parse HEAD)"
 
 git -C "$_raiz" worktree add -q --detach --no-checkout "$WORK/wt-desprendido" "$_sha" 2>/dev/null
 R8_DIR="$WORK/wt-desprendido" bash "$GUION" "$_sha" >"$WORK/o6.txt" 2>&1
-grep -qE 'OK.*worktree en el corte.*desprendido' "$WORK/o6.txt" &&
-	ok "worktree desprendido => verde" || malo "el desprendido no salió verde"
+grep -qE 'OK.*worktree at revision.*detached' "$WORK/o6.txt" &&
+	ok "detached worktree => green" || malo "detached worktree did not pass"
 
 git -C "$_raiz" worktree add -q --no-checkout -b tmp-bateria-desprendido "$WORK/wt-conrama" "$_sha" 2>/dev/null
 R8_DIR="$WORK/wt-conrama" bash "$GUION" "$_sha" >"$WORK/o7.txt" 2>&1
-grep -qE 'FALTA.*worktree desprendido' "$WORK/o7.txt" &&
-	ok "worktree CON RAMA => rojo" || malo "el que tiene rama NO salió rojo"
+grep -qE 'FAIL.*detached worktree' "$WORK/o7.txt" &&
+	ok "worktree WITH BRANCH => red" || malo "worktree with a branch did NOT fail"
 grep -q 'tmp-bateria-desprendido' "$WORK/o7.txt" &&
-	ok "y nombra la rama culpable" || malo "no nombra la rama"
+	ok "and names the offending branch" || malo "does not name the branch"
 grep -q 'checkout --detach' "$WORK/o7.txt" &&
-	ok "y da el remedio literal" || malo "no da el remedio"
+	ok "and gives the exact remedy" || malo "does not give the remedy"
 
 git -C "$_raiz" worktree remove --force "$WORK/wt-desprendido" 2>/dev/null || true
 git -C "$_raiz" worktree remove --force "$WORK/wt-conrama" 2>/dev/null || true
@@ -110,39 +118,38 @@ git -C "$_raiz" branch -qD tmp-bateria-desprendido 2>/dev/null || true
 _exec_padre="$(cd "$AQUI/../.." && pwd)"
 _tmpok="$(mktemp -d "$_exec_padre/.bateria-tmpok-XXXXXX" 2>/dev/null || true)"
 if [ -z "$_tmpok" ]; then
-	malo "TMPDIR normal" "NO PUEDO MIRAR: no pude crear un directorio en $_exec_padre"
+	malo "TMPDIR normal" "CANNOT INSPECT: could not create a directory in $_exec_padre"
 elif ! printf '#!/bin/sh\nexit 0\n' >"$_tmpok/p" || ! chmod +x "$_tmpok/p" || ! "$_tmpok/p"; then
 	# La premisa del caso es falsa aquí: decirlo, no dictaminar.
-	ok "TMPDIR normal" "OMITIDO: $_exec_padre tampoco permite ejecutar"
+	ok "TMPDIR normal" "SKIPPED: $_exec_padre also forbids execution"
 else
 	TMPDIR="$_tmpok" R8_DIR="$WORK/r8" bash "$GUION" HEAD >"$WORK/o1.txt" 2>&1
-	grep -qE 'OK.*TMPDIR ejecutable' "$WORK/o1.txt" && ok "TMPDIR normal => verde" || malo "TMPDIR normal salió rojo"
+	grep -qE 'OK.*executable TMPDIR' "$WORK/o1.txt" && ok "normal TMPDIR => green" || malo "normal TMPDIR failed"
 fi
 rm -rf "$_tmpok"
-# ⛔ NO ESCRIBIBLE ES «NO HE PODIDO MIRAR» (rc 2), NO «falta algo» (rc 1). Son acciones
-#    distintas: un `FALTA` manda a preparar el árbol —que puede estar perfecto— y un «no sé»
-#    manda a arreglar el ENTORNO. Confundirlos hace perder el tiempo en el sitio equivocado, y
-#    es la regla que este mismo guion aplica al `<sha>` inexistente desde el primer día: aquí
-#    faltaba. Lo midió the reviewer.
+# An unwritable tree returns could-not-check rc 2, not missing-content rc 1.
+# The latter directs callers to prepare potentially correct files; the former asks
+# them to fix the environment. This matches the existing nonexistent-SHA rule;
+# the reviewer measured the missing unwritable case.
 TMPDIR="/proc/no-escribible" R8_DIR="$WORK/r8" bash "$GUION" HEAD >"$WORK/o2.txt" 2>&1
 rc_tmp="$?"
-grep -qE 'NO SE.*TMPDIR ejecutable' "$WORK/o2.txt" && ok "TMPDIR no escribible => «NO SE»" || malo "no lo marcó como no-mirado"
-[ "$rc_tmp" = "2" ] && ok "y el guion sale 2, no 1" "rc=2" || malo "salió rc=$rc_tmp, no 2"
-grep -q 'NO HE PODIDO HACER' "$WORK/o2.txt" && ok "y lo dice en el resumen" || malo "el resumen no lo distingue"
+grep -qE 'UNKNOWN.*executable TMPDIR' "$WORK/o2.txt" && ok "unwritable TMPDIR => «UNKNOWN»" || malo "did not mark it as uninspected"
+[ "$rc_tmp" = "2" ] && ok "and the script exits 2, not 1" "rc=2" || malo "returned rc=$rc_tmp, not 2"
+grep -q 'COULD NOT RUN' "$WORK/o2.txt" && ok "and reports it in the summary" || malo "the summary does not distinguish it"
 
-# 6 bis · LOS RESIDUOS DE `task build`, en las dos direcciones. `task build` compila trece
-#    conectores ignorados en `cmd/olivares/firstparty/bins/`. a repository gate hizo que el censo lea el
-#    indice y que el test de dominios limpie al salir; este pre-vuelo conserva la guarda como
-#    higiene para no retener ~249 MB en el arbol de capturas una vez construido el binario.
+# 6-bis · Task build residue in both directions: thirteen ignored connectors in
+# cmd/olivares/firstparty/bins. a repository gate moved the census to the index and cleaned
+# domain-test residue. Keep this preflight hygiene guard to avoid retaining
+# ~249 MB in the capture tree after building the binary.
 mkdir -p "$WORK/r8/cmd/olivares/firstparty/bins"
 : >"$WORK/r8/cmd/olivares/firstparty/bins/PLACEHOLDER"
 R8_DIR="$WORK/r8" bash "$GUION" HEAD >"$WORK/o4.txt" 2>&1
-grep -qE 'OK.*sin residuos de build' "$WORK/o4.txt" && ok "bins/ solo con PLACEHOLDER => verde" || malo "bins/ limpio salio rojo"
+grep -qE 'OK.*no build residue' "$WORK/o4.txt" && ok "bins/ with only PLACEHOLDER => green" || malo "clean bins/ failed"
 
 : >"$WORK/r8/cmd/olivares/firstparty/bins/kafka-source"
 R8_DIR="$WORK/r8" bash "$GUION" HEAD >"$WORK/o5.txt" 2>&1
-grep -qE 'FALTA.*residuos de build' "$WORK/o5.txt" && ok "un residuo => rojo" || malo "el residuo no salio rojo"
-grep -q 'PLACEHOLDER -delete' "$WORK/o5.txt" && ok "y da el remedio literal" || malo "no da el remedio"
+grep -qE 'FAIL.*build residue' "$WORK/o5.txt" && ok "one leftover => red" || malo "the leftover did not fail"
+grep -q 'PLACEHOLDER -delete' "$WORK/o5.txt" && ok "and gives the exact remedy" || malo "does not give the remedy"
 rm -rf "$WORK/r8"
 
 # 6 ter · ⛔ LAS SEIS TOMAS DE ESTADO INTERNO — precondición 0 del candidato 2 (r4, 2026-08-29).
@@ -159,21 +166,21 @@ mkdir -p "$_specdir"
 	echo "  ]"
 } >"$_specdir/docs-captures.spec.ts"
 R8_DIR="$WORK/spec" bash "$GUION" HEAD >"$WORK/o8.txt" 2>&1
-grep -qE 'OK.*tomas de estado interno' "$WORK/o8.txt" && ok "las 6 tomas presentes => verde" || malo "con las 6 salió rojo"
+grep -qE 'OK.*internal-state captures' "$WORK/o8.txt" && ok "all 6 shots present => green" || malo "with all 6 shots, failed"
 
 # y ahora quitando UNA sola: el control tiene que cortar y NOMBRARLA.
 grep -v "list-truncated" "$_specdir/docs-captures.spec.ts" >"$_specdir/x" && mv "$_specdir/x" "$_specdir/docs-captures.spec.ts"
 R8_DIR="$WORK/spec" bash "$GUION" HEAD >"$WORK/o9.txt" 2>&1
-grep -qE 'FALTA.*tomas de estado interno' "$WORK/o9.txt" && ok "falta UNA => rojo" || malo "faltando una no cortó"
-grep -q 'faltan: list-truncated' "$WORK/o9.txt" && ok "y nombra cuál falta" || malo "no nombra la que falta"
-grep -q '2134' "$WORK/o9.txt" && ok "y dice qué PR la trae" || malo "no dice de dónde sale"
+grep -qE 'FAIL.*internal-state captures' "$WORK/o9.txt" && ok "ONE missing => red" || malo "one missing did not block"
+grep -q 'missing: list-truncated' "$WORK/o9.txt" && ok "and names the missing shot" || malo "does not name the missing shot"
+grep -q '2134' "$WORK/o9.txt" && ok "and reports which PR provides it" || malo "does not report its source"
 
 # ⛔ Y LA CIFRA VA CON SU SONDA, que ya ha estado mal DOS veces sobre el mismo fichero:
 #    `^    id:` (4 espacios) daba 45, `^\s+id:` daba 51 y los ids DISTINTOS son 71 — las dos
 #    primeras sólo ven las entradas escritas como objeto multilínea y se dejan fuera las de una
 #    sola línea (`{ id: 'killswitch', path: '/killswitch', … },`). Veinte entradas invisibles.
 #    Que la cifra viaje con el nombre de su sonda es lo que permitió verlo.
-grep -q "sonda: id:'" "$WORK/o8.txt" && ok "la cifra nombra su sonda" || malo "la cifra va sin sonda"
+grep -q "probe: id:'" "$WORK/o8.txt" && ok "the figure names its probe" || malo "the figure lacks a probe"
 
 # 6 quater · ⛔ LA PUERTA DE LA CAJA (#112-bis), en sus CUATRO ramas. La que de verdad importa es
 #    la tercera: una sonda RANCIA no puede leerse como «abierta». Una sonda vieja no es una
@@ -184,35 +191,35 @@ _pf="$WORK/puerta.estado"
 
 echo "PUERTA=ABIERTA HORA=00:00:00Z margen=9000M load1=1.20 umbral=8 cuota=4" >"$_pf"
 R8_PUERTA="$_pf" R8_DIR="$WORK/r8" bash "$GUION" HEAD >"$WORK/p1.txt" 2>&1
-grep -qE 'OK.*puerta de la caja.*ABIERTA' "$WORK/p1.txt" && ok "puerta ABIERTA => verde" || malo "abierta no salió verde"
+grep -qE 'OK.*host gate.*OPEN' "$WORK/p1.txt" && ok "OPEN gate => green" || malo "open gate did not pass"
 
 echo "PUERTA=CERRADA HORA=00:00:00Z margen=800M load1=43.9 umbral=8 cuota=4" >"$_pf"
 R8_PUERTA="$_pf" R8_DIR="$WORK/r8" bash "$GUION" HEAD >"$WORK/p2.txt" 2>&1
-grep -qE 'FALTA.*puerta de la caja.*CERRADA' "$WORK/p2.txt" && ok "puerta CERRADA => rojo" || malo "cerrada no cortó"
-grep -q 'load1=43.9' "$WORK/p2.txt" && ok "y cita la medida que la cerró" || malo "no cita la medida"
+grep -qE 'FAIL.*host gate.*CLOSED' "$WORK/p2.txt" && ok "CLOSED gate => red" || malo "closed gate did not block"
+grep -q 'load1=43.9' "$WORK/p2.txt" && ok "and cites the measurement that closed it" || malo "does not cite the measurement"
 
 # ⛔ RANCIA: se toca la fecha a dos minutos atrás. NO puede salir «ABIERTA» aunque el fichero lo diga.
 echo "PUERTA=ABIERTA HORA=00:00:00Z margen=9000M load1=1.20" >"$_pf"
 touch -d '2 minutes ago' "$_pf"
 R8_PUERTA="$_pf" R8_DIR="$WORK/r8" bash "$GUION" HEAD >"$WORK/p3.txt" 2>&1
-grep -qE 'puerta de la caja.*ABIERTA \(sonda' "$WORK/p3.txt" && malo "⛔ creyó una sonda de 2 minutos" || ok "sonda rancia => NO se cree" "cae a medir aquí"
-grep -qE 'puerta de la caja.*(load1|cuota)' "$WORK/p3.txt" && ok "y mide la carga por su cuenta" || malo "no midió nada al caer"
-grep -q 'PARCIAL' "$WORK/p3.txt" && ok "y declara que la lectura es PARCIAL" || malo "no dice que le faltan swap y throttle"
+grep -qE 'host gate.*OPEN \(probe' "$WORK/p3.txt" && malo "⛔ trusted a 2-minute-old probe" || ok "stale probe => NOT trusted" "falls back to local measurement"
+grep -qE 'host gate.*(load1|quota)' "$WORK/p3.txt" && ok "and measures load itself" || malo "measured nothing on fallback"
+grep -q 'PARTIAL' "$WORK/p3.txt" && ok "and states that the reading is PARTIAL" || malo "does not report missing swap and throttle"
 
 # ilegible: ni verde ni silencio
 echo "basura sin PUERTA" >"$_pf"
 R8_PUERTA="$_pf" R8_DIR="$WORK/r8" bash "$GUION" HEAD >"$WORK/p4.txt" 2>&1
-grep -qE 'FALTA.*puerta.*no puedo mirar' "$WORK/p4.txt" && ok "sonda ilegible => 'no puedo mirar'" || malo "la basura no cortó"
+grep -qE 'FAIL.*gate.*could not look' "$WORK/p4.txt" && ok "unreadable probe => 'cannot inspect'" || malo "garbage did not block"
 
 # ⛔ Y LA CUOTA SE LEE, NO SE SUPONE: el umbral es 2x la cuota del cgroup (4 aquí => 8), no 2x los
 #    nucleos visibles (16 => 32), que dejaría pasar una caja el doble de saturada.
-grep -q 'cuota \* 2\|_cuota \* 2\|_umbral=\$((_cuota \* 2))' "$GUION" && ok "el umbral es 2x la CUOTA" || malo "el umbral no sale de la cuota"
-grep -q 'cgroup/cpu.max' "$GUION" && ok "y la cuota se lee del cgroup" || malo "no lee cpu.max"
+grep -q 'cuota \* 2\|_cuota \* 2\|_umbral=\$((_cuota \* 2))' "$GUION" && ok "the threshold is 2x the QUOTA" || malo "the threshold is not derived from the quota"
+grep -q 'cgroup/cpu.max' "$GUION" && ok "and the quota is read from the cgroup" || malo "does not read cpu.max"
 
 # 7 · el umbral de disco es un umbral, no un adorno: con uno imposible, rojo.
 R8_MIN_DISCO_G=999999 R8_DIR="$WORK/r8" bash "$GUION" HEAD >"$WORK/o3.txt" 2>&1
-grep -qE 'FALTA.*disco' "$WORK/o3.txt" && ok "umbral de disco corta" || malo "el umbral de disco no corta"
+grep -qE 'FAIL.*disk' "$WORK/o3.txt" && ok "disk threshold blocks" || malo "disk threshold does not block"
 
 echo
-echo "test-r8-preflight: $pasan pasan, $fallan fallan"
-[ "$fallan" -eq 0 ]
+echo "test-r8-preflight: $pass_count passed, $fail_count failed"
+[ "$fail_count" -eq 0 ]

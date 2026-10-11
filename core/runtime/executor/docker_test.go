@@ -12,6 +12,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -42,6 +44,9 @@ type dockerFakeDaemon struct {
 type dockerFakeRec struct {
 	id      string
 	image   string
+	cmd     []string
+	env     []string
+	labels  map[string]string
 	running bool
 }
 
@@ -56,13 +61,8 @@ func newDockerFakeDaemon(t *testing.T) *dockerFakeDaemon {
 // seed adds a container as if it already existed on the daemon.
 func (d *dockerFakeDaemon) seed(name, image string, running bool) {
 	d.nextID++
-	id := strings.Repeat("a", 8) + dockerItoa(d.nextID)
+	id := strings.Repeat("a", 8) + strconv.Itoa(d.nextID)
 	d.containers["/"+name] = dockerFakeRec{id: id, image: image, running: running}
-}
-
-func dockerItoa(n int) string {
-	b, _ := json.Marshal(n)
-	return string(b)
 }
 
 func (d *dockerFakeDaemon) handle(w http.ResponseWriter, r *http.Request) {
@@ -100,10 +100,11 @@ func (d *dockerFakeDaemon) handle(w http.ResponseWriter, r *http.Request) {
 
 func (d *dockerFakeDaemon) handleList(w http.ResponseWriter, _ *http.Request) {
 	type item struct {
-		ID    string   `json:"Id"`
-		Names []string `json:"Names"`
-		Image string   `json:"Image"`
-		State string   `json:"State"`
+		ID     string            `json:"Id"`
+		Names  []string          `json:"Names"`
+		Image  string            `json:"Image"`
+		State  string            `json:"State"`
+		Labels map[string]string `json:"Labels"`
 	}
 	out := []item{}
 	for name, rec := range d.containers {
@@ -111,7 +112,7 @@ func (d *dockerFakeDaemon) handleList(w http.ResponseWriter, _ *http.Request) {
 		if rec.running {
 			state = "running"
 		}
-		out = append(out, item{ID: rec.id, Names: []string{name}, Image: rec.image, State: state})
+		out = append(out, item{ID: rec.id, Names: []string{name}, Image: rec.image, State: state, Labels: rec.labels})
 	}
 	dockerWriteJSON(w, http.StatusOK, out)
 }
@@ -130,7 +131,7 @@ func (d *dockerFakeDaemon) handleInspect(w http.ResponseWriter, r *http.Request)
 	}
 	resp := map[string]any{
 		"Id":     rec.id,
-		"Config": map[string]any{"Image": rec.image},
+		"Config": map[string]any{"Image": rec.image, "Cmd": rec.cmd, "Env": rec.env, "Labels": rec.labels},
 		"State":  map[string]any{"Status": status},
 	}
 	dockerWriteJSON(w, http.StatusOK, resp)
@@ -138,13 +139,11 @@ func (d *dockerFakeDaemon) handleInspect(w http.ResponseWriter, r *http.Request)
 
 func (d *dockerFakeDaemon) handleCreate(w http.ResponseWriter, r *http.Request) {
 	name := r.URL.Query().Get("name")
-	var body struct {
-		Image string `json:"Image"`
-	}
+	var body dockerCreateBody
 	_ = json.NewDecoder(r.Body).Decode(&body)
 	d.nextID++
-	id := "newid" + dockerItoa(d.nextID)
-	d.containers["/"+name] = dockerFakeRec{id: id, image: body.Image, running: false}
+	id := "newid" + strconv.Itoa(d.nextID)
+	d.containers["/"+name] = dockerFakeRec{id: id, image: body.Image, cmd: body.Cmd, env: body.Env, labels: body.Labels, running: false}
 	dockerWriteJSON(w, http.StatusCreated, map[string]any{"Id": id})
 }
 
@@ -387,6 +386,119 @@ func TestDockerApplyReplaceStopsRemovesRecreates(t *testing.T) {
 	}
 	if !dockerSawSeq(d.reqs, "POST /containers/"+oldID+"/stop", "DELETE /containers/"+oldID, "POST /containers/create") {
 		t.Fatalf("replace must stop+remove old then create, got %v", d.reqs)
+	}
+}
+
+func TestDockerApplySameImageSpecDrift(t *testing.T) {
+	for _, field := range []string{"command", "env-reference"} {
+		t.Run(field, func(t *testing.T) {
+			d := newDockerFakeDaemon(t)
+			b := dockerTestBackend(d)
+			e := New(WithBackend(b), WithCredentialSource(mockCredSource(time.Hour)))
+			want := dockerDesired("acme-bot", "nginx:1.27")
+			want.Command = "/bin/echo before"
+			want.EnvRefs = []SecretBinding{{Name: "DB_PASSWORD", SecretRef: "vault:db/old#password"}}
+			if _, err := e.Apply(context.Background(), want); err != nil {
+				t.Fatal(err)
+			}
+			old := d.containers["/acme-bot"]
+			wantCmd := []string{"/bin/echo", "before"}
+			wantEnv := []string{"DB_PASSWORD=vault:db/old#password"}
+			if field == "command" {
+				want.Command = "/bin/echo after"
+				wantCmd = []string{"/bin/echo", "after"}
+			} else {
+				want.EnvRefs = []SecretBinding{{Name: "DB_PASSWORD", SecretRef: "vault:db/new#password"}}
+				wantEnv = []string{"DB_PASSWORD=vault:db/new#password"}
+			}
+			p, err := b.Plan(context.Background(), want, mockCred())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(p.Diff.Updates) != 1 || p.Diff.Updates[0].Action != "replace" || p.Diff.BlastRadius != BlastDestructive {
+				t.Fatalf("same-image spec drift must plan a destructive replace, got %+v", p.Diff)
+			}
+			before := len(d.reqs)
+			if _, err := e.Apply(context.Background(), want); !errors.Is(err, ErrBlastRadius) {
+				t.Fatalf("default gate must block spec replacement, got %v", err)
+			}
+			for _, req := range d.reqs[before:] {
+				if !strings.HasPrefix(req, "GET ") {
+					t.Fatalf("blocked replacement mutated daemon: %s", req)
+				}
+			}
+			e = New(WithBackend(b), WithCredentialSource(mockCredSource(time.Hour)),
+				WithBlastRadiusPolicy(BlastRadiusPolicy{MaxApplyDestructive: 1, AllowDestroy: true}))
+			before = len(d.reqs)
+			if _, err := e.Apply(context.Background(), want); err != nil {
+				t.Fatal(err)
+			}
+			rec := d.containers["/acme-bot"]
+			if rec.id == old.id || !rec.running || rec.image != old.image ||
+				!slices.Equal(rec.cmd, wantCmd) || !slices.Equal(rec.env, wantEnv) ||
+				rec.labels[dockerSpecHashLabel] == "" || rec.labels[dockerSpecHashLabel] == old.labels[dockerSpecHashLabel] {
+				t.Fatalf("replacement must run the new spec with a new id/hash, got %+v; old %+v", rec, old)
+			}
+			if !dockerSawSeq(d.reqs[before:], "POST /containers/"+old.id+"/stop", "DELETE /containers/"+old.id,
+				"POST /containers/create", "POST /containers/acme-bot/start") {
+				t.Fatalf("replacement must stop/remove/create/start, got %v", d.reqs[before:])
+			}
+			rs, err := b.Observe(context.Background(), want, mockCred())
+			if err != nil || !rs.Observable || !rs.Exists || !rs.InSync || len(rs.Drift) != 0 {
+				t.Fatalf("replacement must converge, got %+v, err %v", rs, err)
+			}
+			// Replaying the saved replace must leave the converged container alone.
+			before = len(d.reqs)
+			if _, err := b.Apply(context.Background(), p, mockCred()); err != nil {
+				t.Fatal(err)
+			}
+			for _, req := range d.reqs[before:] {
+				if !strings.HasPrefix(req, "GET ") {
+					t.Fatalf("converged replace mutated daemon: %s", req)
+				}
+			}
+		})
+	}
+}
+
+func TestDockerCreateConflictSameImageSpecDrift(t *testing.T) {
+	for _, field := range []string{"command", "env-reference"} {
+		t.Run(field, func(t *testing.T) {
+			d := newDockerFakeDaemon(t)
+			b := dockerTestBackend(d)
+			want := dockerDesired("acme-bot", "nginx:1.27")
+			want.Command = "/bin/echo desired"
+			want.EnvRefs = []SecretBinding{{Name: "DB_PASSWORD", SecretRef: "vault:db/desired#password"}}
+			p, err := b.Plan(context.Background(), want, mockCred())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if p.Diff.BlastRadius != BlastAdditive {
+				t.Fatalf("absent container must plan additive create, got %+v", p.Diff)
+			}
+			arrival := want
+			if field == "command" {
+				arrival.Command = "/bin/echo other"
+			} else {
+				arrival.EnvRefs = []SecretBinding{{Name: "DB_PASSWORD", SecretRef: "vault:db/other#password"}}
+			}
+			e := New(WithBackend(b), WithCredentialSource(mockCredSource(time.Hour)))
+			if _, err := e.Apply(context.Background(), arrival); err != nil {
+				t.Fatal(err)
+			}
+			before := len(d.reqs)
+			if _, err := b.Apply(context.Background(), p, mockCred()); err == nil || !strings.Contains(err.Error(), "re-plan") {
+				t.Fatalf("same-image create conflict must refuse and require re-plan, got %v", err)
+			}
+			for _, req := range d.reqs[before:] {
+				if !strings.HasPrefix(req, "GET ") {
+					t.Fatalf("additive create conflict mutated daemon: %s", req)
+				}
+			}
+			if _, err := e.Apply(context.Background(), want); !errors.Is(err, ErrBlastRadius) {
+				t.Fatalf("fresh plan must require destructive authorization, got %v", err)
+			}
+		})
 	}
 }
 
@@ -822,7 +934,7 @@ func TestDockerApplyWorkspaceMountAndHardening(t *testing.T) {
 		t.Fatal("a workspace launch must emit a HostConfig")
 	}
 	wantBinds := []string{"/srv/ws/acme:/workspace", "/srv/ref/lib:/refs:ro"}
-	if !sameStrings(cb.HostConfig.Binds, wantBinds) {
+	if !slices.Equal(cb.HostConfig.Binds, wantBinds) {
 		t.Fatalf("binds = %v, want %v", cb.HostConfig.Binds, wantBinds)
 	}
 	if !cb.HostConfig.ReadonlyRootfs {
@@ -871,16 +983,4 @@ func TestDockerSpecHashIgnoresMounts(t *testing.T) {
 	if dockerSpecHash(bare) != dockerSpecHash(withMounts) {
 		t.Fatal("mounts must not change the drift spec-hash in v1")
 	}
-}
-
-func sameStrings(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
 }

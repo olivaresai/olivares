@@ -6,6 +6,12 @@ description: >-
   sobre el que se escriben las reglas, los límites de receptor que aplican a cada
   transporte y los dos sitios donde una proyección no es un sobre completo.
 ---
+SIEM and ITSM push, OTLP downloads, external trace and metric delivery, and posture export require Business. Community keeps local observability, trace-context propagation, saved settings and `olivares dr backup`. Generic chat, email and webhook notifications remain available in Community.
+
+
+:::note[Business]
+La exportación de auditoría (`GET /v1/audit/export`, `olivares audit export`), los archivos en directorios y la verificación de archivos externos requieren Business. Community conserva el registro firmado, `olivares audit verify` y `olivares dr backup`; la exportación devuelve HTTP 501 o código de salida 9. El reenvío de auditoría y las transferencias DDIL con segmentos de auditoría también requieren Business.
+:::
 
 Esta página es el **contrato de salida**: qué sale del plano de control, en qué
 dialecto, sobre qué transporte y qué hace un receptor con ello. Está escrita para
@@ -54,7 +60,7 @@ derivado de un único catálogo para que las listas no puedan volver a divergir:
 |---|---|---|
 | Export del ledger (`GET /v1/audit/export?format=…`) | `cef\|leef\|syslog\|otlp\|otlp_envelope\|otlp_log_record\|ocsf` | `cef` |
 | Sink de eventing (`sink_format` de una suscripción push) | `ocsf\|cef\|leef\|syslog\|otlp\|otlp_envelope\|json` | `ocsf` |
-| Conectores de notificación (`filelog`, `splunkhec`, `s3archive`, `siem`) | `json\|cef\|leef\|syslog\|otlp\|otlp_envelope\|ocsf\|asim` | `json` |
+| Conectores de notificación (`filelog`, `splunkhec`, `s3archive` (Business: Regulated Operations), `siem`) | `json\|cef\|leef\|syslog\|otlp\|otlp_envelope\|ocsf\|asim` | `json` |
 | Conector syslog | `syslog\|cef\|leef` | `syslog` |
 
 El export del ledger no tiene passthrough de JSON crudo —sus formas JSON son las de
@@ -63,7 +69,7 @@ publica el sobre crudo del evento capturado (el passthrough estructurado, sin
 transformación de dialecto), mientras que los conectores de notificación
 renderizan solo una proyección mínima de notificación —los campos mostrables, no
 la carga original—. Los cuatro conectores de notificación aceptan `asim`,
-`s3archive` incluido. Un formato fuera de la lista de su superficie se rechaza:
+`s3archive` (Business: Regulated Operations) incluido. Un formato fuera de la lista de su superficie se rechaza:
 una errata al redactar o configurar recibe un error que nombra los tokens
 aceptados de esa superficie, y un valor almacenado corrupto se rechaza al
 codificarlo (nombrando la grafía corrupta, no la lista); nada cae en silencio a

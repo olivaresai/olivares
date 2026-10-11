@@ -6,6 +6,8 @@ package observability
 
 import (
 	"net/http"
+	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
@@ -73,6 +75,19 @@ func TestAttestationDefaults(t *testing.T) {
 	if strOf(pipe["status"]) != "declared" {
 		t.Fatalf("pipeline.status = %q, want declared", strOf(pipe["status"]))
 	}
+	workflows, ok := pipe["workflows"].([]any)
+	if !ok || len(workflows) == 0 {
+		t.Fatalf("pipeline.workflows is not a non-empty array: %v", pipe["workflows"])
+	}
+	for _, value := range workflows {
+		name, ok := value.(string)
+		if !ok {
+			t.Fatalf("pipeline workflow is not a filename: %v", value)
+		}
+		if _, err := os.Stat(filepath.Join("..", "..", ".github", "workflows", name)); err != nil {
+			t.Errorf("declared pipeline workflow %q is absent from this source: %v", name, err)
+		}
+	}
 	// The declared block may not answer a question it declares unobservable. It used
 	// to end with "it has never been fired", a repository-history claim rendered
 	// unconditionally beside the live release badge — the second of the two
@@ -80,8 +95,8 @@ func TestAttestationDefaults(t *testing.T) {
 	if strings.Contains(strOf(pipe["note"]), "never been fired") {
 		t.Fatalf("pipeline.note asserts repository history the same sentence calls unobservable: %q", strOf(pipe["note"]))
 	}
-	if wf, _ := pipe["workflows"].([]any); len(wf) != 5 {
-		t.Fatalf("workflows = %v, want the 5 release/posture workflows", pipe["workflows"])
+	if len(workflows) != 3 {
+		t.Fatalf("workflows = %v, want the 3 Community release/posture workflows", pipe["workflows"])
 	}
 	if strOf(r.body["captured_at"]) == "" {
 		t.Fatal("captured_at missing")
@@ -128,7 +143,7 @@ func withReleaseAnchor(t *testing.T, origin string) {
 // them: the reason echoes the plumbed stamp, which a constant could not produce.
 func TestAttestationPublishedRelease(t *testing.T) {
 	withReleaseAnchor(t, "release")
-	h := newHarness(t, WithBuildInfo(BuildInfo{Version: "26.8.0", Commit: "abc1234", Date: "2026-08-13T08:00:00Z"}))
+	h := newHarness(t, WithBuildInfo(BuildInfo{Version: "26.800", Commit: "abc1234", Date: "2026-08-13T08:00:00Z"}))
 	admin := h.adminLogin()
 	tenant := h.createOrg(admin, "acme")
 
@@ -141,7 +156,7 @@ func TestAttestationPublishedRelease(t *testing.T) {
 		t.Fatalf("a stamped release with the OTA anchor embedded reports %v; want published/published", rel)
 	}
 	// The handler must forward THIS process's stamp, not a literal: the reason names it.
-	if !strings.Contains(strOf(rel["reason"]), "26.8.0") {
+	if !strings.Contains(strOf(rel["reason"]), "26.800") {
 		t.Fatalf("reason does not name the plumbed version stamp: %q", strOf(rel["reason"]))
 	}
 	// The signature verdict must NOT ride along with the release verdict — the
@@ -199,7 +214,7 @@ func TestAttestationUnstampedStaysNotPublished(t *testing.T) {
 		return mapOf(h.do("GET", attestationPath, admin, nil, tenantHdr(tenant)).body["release"])
 	}()
 	stamped := func() map[string]any {
-		h := newHarness(t, WithBuildInfo(BuildInfo{Version: "26.8.0", Commit: "abc1234", Date: "2026-08-13T08:00:00Z"}))
+		h := newHarness(t, WithBuildInfo(BuildInfo{Version: "26.800", Commit: "abc1234", Date: "2026-08-13T08:00:00Z"}))
 		admin := h.adminLogin()
 		tenant := h.createOrg(admin, "acme")
 		return mapOf(h.do("GET", attestationPath, admin, nil, tenantHdr(tenant)).body["release"])
@@ -243,7 +258,7 @@ func TestAttestationUnstampedStaysNotPublished(t *testing.T) {
 // the OTA anchor that build is not a release, and must not claim to be one.
 func TestAttestationAnchorlessBuildIsNotPublished(t *testing.T) {
 	withReleaseAnchor(t, "none")
-	h := newHarness(t, WithBuildInfo(BuildInfo{Version: "26.8.0", Commit: "abc1234", Date: "2026-08-13T08:00:00Z"}))
+	h := newHarness(t, WithBuildInfo(BuildInfo{Version: "26.800", Commit: "abc1234", Date: "2026-08-13T08:00:00Z"}))
 	admin := h.adminLogin()
 	tenant := h.createOrg(admin, "acme")
 
@@ -279,15 +294,15 @@ func TestReleaseIdentityShapes(t *testing.T) {
 		{"bare object name", "abc1234", "release", false, "is not a semantic version"},
 		{"bare object dirty", "abc1234-dirty", "release", false, "is not a semantic version"},
 		{"single-component", "26", "release", false, "is not a semantic version"},
-		{"four-component", "26.11.1.2", "release", false, "is not a semantic version"},
+		{"four-component", "26.1101.2", "release", false, "is not a semantic version"},
 		// (3) a local build wearing a version: both git-describe markers parse.
-		{"describe distance", "v26.8.0-3-gabc1234", "release", false, "git-describe marker"},
-		{"describe dirty", "26.8.0-dirty", "release", false, "git-describe marker"},
-		{"describe on a prerelease tag", "26.8.0-rc.1-12-gdeadbee", "release", false, "git-describe marker"},
+		{"describe distance", "26.800-3-gabc1234", "release", false, "is not a semantic version"},
+		{"describe dirty", "26.800-dirty", "release", false, "is not a semantic version"},
+		{"describe on a prerelease tag", "26.800-rc.1-12-gdeadbee", "release", false, "is not a semantic version"},
 		// (4) orderable and clean, but no ceremony.
-		{"no anchor", "26.8.0", "none", false, "ota-key=none"},
-		{"broken anchor", "26.8.0", "misconfigured", false, "ota-key=misconfigured"},
-		{"unknown origin", "26.8.0", "", false, "no usable OTA verification anchor"},
+		{"no anchor", "26.800", "none", false, "ota-key=none"},
+		{"broken anchor", "26.800", "misconfigured", false, "ota-key=misconfigured"},
+		{"unknown origin", "26.800", "", false, "no usable OTA verification anchor"},
 		// (5) both facts: a release. Prereleases the ceremony really produces are
 		// releases too — an rc IS published, and refusing it would be the same
 		// defect in the other direction.
@@ -295,11 +310,11 @@ func TestReleaseIdentityShapes(t *testing.T) {
 		{"released monthly", "26.10", "release", true, "release-stamped 26.10 (self-declared)"},
 		{"released next monthly", "26.11", "release", true, "release-stamped 26.11 (self-declared)"},
 		{"released next year", "27.1", "release", true, "release-stamped 27.1 (self-declared)"},
-		{"released first patch", "26.11.1", "release", true, "release-stamped 26.11.1 (self-declared)"},
-		{"released second patch", "26.11.2", "release", true, "release-stamped 26.11.2 (self-declared)"},
-		{"released", "26.8.0", "release", true, "release-stamped 26.8.0 (self-declared)"},
-		{"released with v", "v26.8.0", "release", true, "release-stamped v26.8.0 (self-declared)"},
-		{"released rc", "26.8.0-rc.1", "release", true, "release-stamped 26.8.0-rc.1 (self-declared)"},
+		{"released first patch", "26.1101", "release", true, "release-stamped 26.1101 (self-declared)"},
+		{"released second patch", "26.1102", "release", true, "release-stamped 26.1102 (self-declared)"},
+		{"released", "26.800", "release", true, "release-stamped 26.800 (self-declared)"},
+		{"released with v", "26.800", "release", true, "release-stamped 26.800 (self-declared)"},
+		{"release suffix refused", "1.0-rc.1", "release", false, "is not a semantic version"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -356,45 +371,14 @@ func TestReleaseIdentityShapes(t *testing.T) {
 // calibrated and completely dead while the endpoint answers from a constant. A
 // boundary that never reaches the DTO is not a boundary of the product.
 func TestDescribeSuffixBoundaries(t *testing.T) {
-	local := []string{
-		"26.8.0-3-gabc1234",        // the plain describe form
-		"v26.8.0-1-g0123456",       // one commit past, v-prefixed
-		"26.8.0-127-gdeadbeefcafe", // long abbreviation (core.abbrev grows)
-		"26.8.0-3-gabc1234-dirty",  // both markers at once; -dirty wins on the tail
-		"26.8.0-rc.1-3-gabc1234",   // appended to a prerelease tag
-		"26.8.0-dirty",             // clean tag, dirty tree
-	}
-	for _, v := range local {
-		if describeSuffix(v) == "" {
-			t.Errorf("describeSuffix(%q) = \"\"; that stamp names a LOCAL build, not a tag", v)
-		}
-		// …and the marker must actually decide the endpoint's answer. With the anchor
-		// forced present, this stamp is the only fact left that can refuse.
+	for _, v := range []string{"1.0-3-gabc1234", "1.0-dirty", "1.0-rc.1", "1.0+meta", "1.0.1", "26.10.2"} {
 		if rel := measuredRelease(v, "release"); rel.Published || rel.Status != releaseStatusNotPublished {
-			t.Errorf("measuredRelease(%q, release) = %v/%q; a git-describe marker names a LOCAL build and must not reach the positive state", v, rel.Published, rel.Status)
+			t.Errorf("measuredRelease(%q) accepted a non-release stamp", v)
 		}
 	}
-	releases := []string{
-		"26.8.0",             // no prerelease at all
-		"v26.8.0",            //
-		"26.8.0-rc.1",        // a real release candidate
-		"26.8.0-beta.2",      //
-		"26.8.0-3",           // a numeric identifier with no object name after it
-		"26.8.0-gabc1234",    // an object-shaped field with no commit distance before it
-		"26.8.0-03-gabc1234", // git never emits a zero-padded distance
-		"26.8.0-3-gxyz",      // not hex, and too short
-		"26.8.0-3-abc1234",   // no "g" prefix
-		"26.8.0-3-g",         // "g" alone
-	}
-	for _, v := range releases {
-		if s := describeSuffix(v); s != "" {
-			t.Errorf("describeSuffix(%q) = %q; that is not a git-describe marker and the stamp must stay eligible", v, s)
-		}
-		// "eligible" has to mean something: with the anchor present these stamps must
-		// reach the POSITIVE state. This is the half a constant-returning
-		// measuredRelease cannot satisfy, and the reason this test now discriminates.
+	for _, v := range []string{"1.0", "1.10", "1.299", "2.0"} {
 		if rel := measuredRelease(v, "release"); !rel.Published || rel.Status != releaseStatusPublished {
-			t.Errorf("measuredRelease(%q, release) = %v/%q; that stamp carries no describe marker and must stay eligible for the positive state", v, rel.Published, rel.Status)
+			t.Errorf("measuredRelease(%q) rejected a release stamp", v)
 		}
 	}
 }

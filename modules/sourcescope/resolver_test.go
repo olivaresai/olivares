@@ -92,6 +92,61 @@ func TestAgentGroupContainment(t *testing.T) {
 	}
 }
 
+// TestSessionAgentGroupStaysInSessionWorkspace: a session inherits its agent's groups
+// only in the session's own workspace (COCKPIT-02 §6, the rule grants.go applies). The
+// membership API lets an agent in A join a group in B; a model bound to that group must
+// not open to the session in A. Positive control: the same shape with the group in A.
+func TestSessionAgentGroupStaysInSessionWorkspace(t *testing.T) {
+	h := newHarness(t)
+	admin := h.adminLogin()
+	tenant := h.createOrg(admin, "acme")
+	wsA := h.createWorkspace(tenant, "ws-a")
+	wsB := h.createWorkspace(tenant, "ws-b")
+	confined := h.principalFor(admin, tenant, "nobody@acme.io", "")
+
+	bot := h.createAgent(tenant, "bot", wsA)
+	h.addAgentToGroup(tenant, bot.ID, "dept-b", wsB)
+	h.addAgentToGroup(tenant, bot.ID, "dept-a", wsA)
+	h.createSession(tenant, "sess-a", bot.ID, wsA)
+
+	for _, g := range []string{"dept-b", "dept-a"} {
+		if r := h.createBinding(admin, tenant, map[string]any{
+			"source_type": "model", "source_ref": "m-" + g, "scope_tree": "agent_group", "scope_ref": g, "enabled": true,
+		}); r.code != 201 {
+			t.Fatalf("create binding %s = %d %s", g, r.code, r.raw)
+		}
+	}
+
+	ctx := context.Background()
+	if d, err := h.resolver.ResolveForSession(ctx, tenant, confined, "sess-a", sourcescope.SourceModel, "m-dept-b"); err != nil || d.Allowed {
+		t.Errorf("session in ws-a must NOT reach a model bound to a ws-b group, got %+v err=%v", d, err)
+	}
+	if d, err := h.resolver.ResolveForSession(ctx, tenant, confined, "sess-a", sourcescope.SourceModel, "m-dept-a"); err != nil || !d.Allowed {
+		t.Errorf("session in ws-a must reach a model bound to its own ws-a group, got %+v err=%v", d, err)
+	}
+	_, groups, err := h.resolver.ResolveActorScope(ctx, tenant, "sess-a")
+	if err != nil {
+		t.Fatalf("ResolveActorScope: %v", err)
+	}
+	if len(groups) != 1 || groups[0] != "dept-a" {
+		t.Errorf("session groups = %v, want [dept-a]", groups)
+	}
+
+	// The narrowing is allow-only: a forbid on the agent's ws-b group still reaches the
+	// session (a forbid is absolute), even when an allow on the session's workspace matches.
+	for _, b := range []map[string]any{
+		{"source_type": "model", "source_ref": "m-x", "scope_tree": "workspace", "scope_ref": "ws-a", "enabled": true},
+		{"source_type": "model", "source_ref": "m-x", "scope_tree": "agent_group", "scope_ref": "dept-b", "effect": "forbid", "enabled": true},
+	} {
+		if r := h.createBinding(admin, tenant, b); r.code != 201 {
+			t.Fatalf("create binding %v = %d %s", b, r.code, r.raw)
+		}
+	}
+	if d, err := h.resolver.ResolveForSession(ctx, tenant, confined, "sess-a", sourcescope.SourceModel, "m-x"); err != nil || d.Allowed {
+		t.Errorf("a forbid on the agent's ws-b group must still deny its ws-a session, got %+v err=%v", d, err)
+	}
+}
+
 func TestResolveActorScopeForPrincipalUsesAgentIdentity(t *testing.T) {
 	h := newHarness(t)
 	admin := h.adminLogin()

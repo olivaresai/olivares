@@ -35,6 +35,26 @@ func TestEnvHandler(t *testing.T) {
 	}
 }
 
+// TestEnvHandlerRecordsResolvedNames pins that a variable an `env:` reference
+// resolves is known as the engine's from then on, and that a reference to an unset
+// variable records nothing: the set stays bounded by the real environment.
+func TestEnvHandlerRecordsResolvedNames(t *testing.T) {
+	const set, unset = "SECRET_TEST_RESOLVED_DSN", "SECRET_TEST_UNSET_DSN"
+	h := secret.EnvHandler{Lookup: func(k string) (string, bool) { return "postgres://x", k == set }}
+	if _, err := h.Resolve(context.Background(), set); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.Resolve(context.Background(), unset); err == nil {
+		t.Fatal("missing env var should fail closed")
+	}
+	if !secret.EnvReferenced(set) {
+		t.Fatalf("%s is not recorded after an env: reference resolved it", set)
+	}
+	if secret.EnvReferenced(unset) {
+		t.Fatalf("%s is recorded though it is not set", unset)
+	}
+}
+
 func TestFileHandler(t *testing.T) {
 	dir := t.TempDir()
 	withNL := filepath.Join(dir, "tok")

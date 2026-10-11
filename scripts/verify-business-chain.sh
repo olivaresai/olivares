@@ -83,7 +83,7 @@ vbc_cleanup() {
 trap vbc_cleanup EXIT
 
 say() { printf 'verify-business-chain: %s\n' "$*"; }
-die_blind() { say "NO HE PODIDO MIRAR — $*"; exit "$RC_BLIND"; }
+die_blind() { say "COULD NOT LOOK — $*"; exit "$RC_BLIND"; }
 
 BINARY=""
 LIVE=0
@@ -137,11 +137,11 @@ BINARY="$(cd "$(dirname "$BINARY")" && pwd)/$(basename "$BINARY")"
 # desarrollo y recibía una versión inventada. No poder identificar el binario es «no he podido
 # mirar», no «es dev».
 BINARY_STAMPED=1
-_ver_line="$("$BINARY" version 2>/dev/null)" || die_blind "\`$BINARY version\` salió con error: no puedo identificar el binario que uso como instrumento."
+_ver_line="$("$BINARY" version 2>/dev/null)" || die_blind "\`$BINARY version\` failed: cannot identify the binary used for verification."
 if grep -q ' dev ' <<<"$_ver_line"; then
 	BINARY_STAMPED=0
 	if [ -z "$CURRENT_VERSION" ]; then
-		CURRENT_VERSION="26.0.0"
+		CURRENT_VERSION="0.0"
 		say "note: the binary is an unstamped dev build, so --current-version defaults to ${CURRENT_VERSION} (both upgrade guards stay armed)."
 	fi
 fi
@@ -200,12 +200,10 @@ leg_channel_hermetic() {
 
 	mkdir -p "$B/dist" "$B/mirror/stable" || die_blind "cannot write under $B."
 	printf 'not a real binary\n' > "$B/dist/olivares"
-	# ⛔ LA VERSIÓN DEL BANCO ES DELIBERADAMENTE ALTA. Con 26.8.0 y un binario ENTREGADO que también
-	# es 26.8.0, el cliente contesta «already on 26.8.0 — nothing to do»: el manifiesto verifica y la
-	# aserción, que exigía «manifest verifies and an upgrade is available», salía roja por la versión
-	# del binario y no por el canal. Una versión superior hace el caso determinista sin aflojar el
-	# texto exigido. Respeta el CalVer del proyecto ((2[6-9]|[3-9][0-9]).(1-12).N).
-	tar -czf "$B/dist/olivares_29.12.0_linux_amd64.tar.gz" -C "$B/dist" olivares 2>/dev/null ||
+	# Keep the fixture above current shipped versions so the valid control proves
+	# an upgrade is available, rather than taking the "already installed" branch.
+	# The archive and manifest share the same bare MAJOR.MINOR identity.
+	tar -czf "$B/dist/olivares_29.12_linux_amd64.tar.gz" -C "$B/dist" olivares 2>/dev/null ||
 		die_blind "tar could not build the throwaway artefact."
 
 	# Key material is FRESH per run, on purpose: a committed key would make the green
@@ -222,7 +220,7 @@ process.stdout.write(Buffer.concat([seed,pub]).toString("base64")+"\n"+pub.toStr
 	local pub; pub="$(sed -n '2p' "$B/keys.txt")"
 	[ -n "$pub" ] || die_blind "the minted key has no public half."
 
-	"$BINARY" release manifest --version 29.12.0 --dir "$B/dist" --channel stable \
+	"$BINARY" release manifest --version 29.12 --dir "$B/dist" --channel stable \
 		--out "$B/mirror/stable/manifest.json" --sign-key "@$B/priv.key" >"$B/mk.log" 2>&1 ||
 		die_blind "the client could not build its own signed manifest: $(tail -1 "$B/mk.log")"
 	[ -s "$B/mirror/stable/manifest.json.sig" ] || die_blind "no signature was written beside the manifest."
@@ -258,7 +256,7 @@ PY
 	cp "$B/mirror/stable/manifest.json" "$B/manifest.orig"
 	python3 - "$B/mirror/stable/manifest.json" <<'PY'
 import json,sys
-p=sys.argv[1]; d=json.load(open(p)); d["version"]="26.9.9"; open(p,"w").write(json.dumps(d))
+p=sys.argv[1]; d=json.load(open(p)); d["version"]="29.13"; open(p,"w").write(json.dumps(d))
 PY
 	out="$(client --endpoint "$base")"; rc=$?
 	if [ "$rc" -ne 0 ] && grep -q 'signature does not verify' <<<"$out"; then

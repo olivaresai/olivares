@@ -9,7 +9,6 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/olivaresai/olivares/core/eventbus/natsbus"
 	"github.com/olivaresai/olivares/sdk"
 	"github.com/olivaresai/olivares/sdk/event"
 	"github.com/olivaresai/olivares/sdk/model"
@@ -53,19 +52,12 @@ func TestCollectorIngestCannotCarryManagedSessionProjection(t *testing.T) {
 	if err := r.Start(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	// Even a transported engine envelope cannot propose its marker through
-	// the collector's Observation boundary. Only the internal bus preserves it.
+	// An engine envelope cannot propose its marker through the collector's
+	// Observation boundary. Only the internal bus preserves it; transport
+	// codec coverage belongs with the Business bridge.
 	e := event.FromObservation("tenant-a", "olivares.sessions", model.EdgeObservation{OriginKind: "session", OriginRef: "canonical", ResourceKind: "file", ResourceRef: "source.txt", Labels: map[string]string{"SessionProjection": "true", "session_projection": "true"}})
 	e.SessionProjection = true
-	encoded, err := natsbus.EncodeEvent(e)
-	if err != nil {
-		t.Fatal(err)
-	}
-	decoded, err := natsbus.DecodeEvent(encoded, natsbus.DefaultDecoders())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := r.Ingest(context.Background(), decoded.Tenant, decoded.Source, decoded.Payload.(model.Observation)); err != nil {
+	if err := r.Ingest(context.Background(), e.Tenant, e.Source, e.Payload.(model.Observation)); err != nil {
 		t.Fatal(err)
 	}
 	got := b.snapshot()
@@ -75,7 +67,7 @@ func TestCollectorIngestCannotCarryManagedSessionProjection(t *testing.T) {
 	// The ordinary registered-source Sink also builds a fresh envelope; labels
 	// and an owner-looking source name never stamp managed authority.
 	sink := busSink{bus: b, tenant: "tenant-a", source: "olivares.sessions", registration: &event.SourceRegistration{SourceID: "collector", SourceRevision: 1, EnvironmentRef: "host"}}
-	if err := sink.Emit(t.Context(), decoded.Payload.(model.Observation)); err != nil {
+	if err := sink.Emit(t.Context(), e.Payload.(model.Observation)); err != nil {
 		t.Fatal(err)
 	}
 	got = b.snapshot()

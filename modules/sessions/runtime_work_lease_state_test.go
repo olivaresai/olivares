@@ -103,7 +103,7 @@ func TestRuntimeRunProjectsLeaseStateWithoutLeaseReadPermission(t *testing.T) {
 		t.Fatal(err)
 	}
 	authorizer := auth.NewAuthorizer(runLeaseReadDeniedPolicy{})
-	f.m.UseWorkAuthorizer(authorizer)
+	WithWorkAuthorizer(authorizer)(f.m)
 	f.h.srv, err = api.New(api.Options{
 		Store: f.h.st, Authenticator: auth.NewAuthenticator(f.h.st, nil), Authorizer: authorizer,
 		Signer: signer, SetupToken: secure.NewSetupToken(filepath.Join(t.TempDir(), "setup.token")),
@@ -191,7 +191,7 @@ func TestRuntimeWorkControlLeaseStateRemainsUnknown(t *testing.T) {
 					policy = runLeaseReadDeniedPolicy{}
 				}
 				authorizer := auth.NewAuthorizer(policy)
-				f.m.UseWorkAuthorizer(authorizer)
+				WithWorkAuthorizer(authorizer)(f.m)
 				f.h.srv, err = api.New(api.Options{
 					Store: f.h.st, Authenticator: auth.NewAuthenticator(f.h.st, nil), Authorizer: authorizer,
 					Signer: signer, SetupToken: secure.NewSetupToken(filepath.Join(t.TempDir(), "setup.token")),

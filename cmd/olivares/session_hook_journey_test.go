@@ -28,6 +28,7 @@ import (
 	"github.com/olivaresai/olivares/connectors/claude"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/modules/sessions"
+	"github.com/olivaresai/olivares/modules/sessions/hookpep"
 )
 
 // The provider is a local Messages API protocol fixture. There is no provider
@@ -56,8 +57,8 @@ func TestSessionHookPEPRealClaudeJourney(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			dec := &claudeHookDecider{defaultPolicy: &hookPolicyDoc{Default: "allow"}, authr: c, eval: h.set.gov.Evaluator(), scoped: h.set.gov.ScopedGrants(), store: h.st, stops: h.set.gov, stopRec: newStopDenyRecorder(h.st, discardLog()), clock: time.Now, log: discardLog()}
-			pep := httptest.NewServer(claude.NewHookPEP(dec, claudeHookAuditor{log: discardLog()}, time.Now))
+			dec := newClaudeHookDecider(&hookpep.Decider{DefaultPolicy: &hookpep.PolicyDoc{Default: "allow"}, Authr: c, Eval: h.set.gov.Evaluator(), Authz: harnessAuthz(h), Scoped: h.set.gov.ScopedGrants(), Store: h.st, Stops: h.set.gov, StopDeny: newStopDenyRecorder(h.st, discardLog()).record, Clock: time.Now, Log: discardLog()})
+			pep := httptest.NewServer(claude.NewHookPEP(dec, discardHookAuditor{}, time.Now))
 			defer pep.Close()
 			if scenario == "deny" {
 				code, raw := h.req("POST", "/v1/m/governance/policies", h.adminToken, h.tenantA, map[string]any{"name": "deny-command", "kind": "abac", "enabled": true, "spec": map[string]any{"rules": []any{map[string]any{"deny": true, "permission": "claude.tool.use:use"}}}})
@@ -241,8 +242,8 @@ func TestSessionHookPEPStubCLIJourney(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			dec := &claudeHookDecider{defaultPolicy: &hookPolicyDoc{Default: "allow"}, authr: c, eval: h.set.gov.Evaluator(), scoped: h.set.gov.ScopedGrants(), store: h.st, stops: h.set.gov, stopRec: newStopDenyRecorder(h.st, discardLog()), clock: time.Now, log: discardLog()}
-			server := httptest.NewServer(claude.NewHookPEP(dec, claudeHookAuditor{log: discardLog()}, time.Now))
+			dec := newClaudeHookDecider(&hookpep.Decider{DefaultPolicy: &hookpep.PolicyDoc{Default: "allow"}, Authr: c, Eval: h.set.gov.Evaluator(), Authz: harnessAuthz(h), Scoped: h.set.gov.ScopedGrants(), Store: h.st, Stops: h.set.gov, StopDeny: newStopDenyRecorder(h.st, discardLog()).record, Clock: time.Now, Log: discardLog()})
+			server := httptest.NewServer(claude.NewHookPEP(dec, discardHookAuditor{}, time.Now))
 			defer server.Close()
 			if scenario == "deny" {
 				code, raw := h.req("POST", "/v1/m/governance/policies", h.adminToken, h.tenantA, map[string]any{"name": "deny-stub-write", "kind": "abac", "enabled": true, "spec": map[string]any{"rules": []any{map[string]any{"deny": true, "permission": "claude.tool.use:write"}}}})

@@ -1,0 +1,5 @@
+[
+  {"id": "aaaaaaa1-0000-4000-8000-000000000001", "companyId": "11111111-1111-4111-8111-111111111111", "name": "Ada", "role": "ceo", "title": "Chief Executive Officer", "status": "idle", "reportsTo": null, "adapterType": "claude_local", "adapterConfig": {"env": {"ANTHROPIC_API_KEY": "SECRET-IN-ADAPTER-CONFIG-DO-NOT-LEAK"}}, "runtimeConfig": {}, "capabilities": "Sets direction", "budgetMonthlyCents": 20000, "spentMonthlyCents": 900},
+  {"id": "aaaaaaa2-0000-4000-8000-000000000002", "companyId": "11111111-1111-4111-8111-111111111111", "name": "Linus", "role": "engineer", "title": "Staff Engineer", "status": "running", "reportsTo": "aaaaaaa1-0000-4000-8000-000000000001", "adapterType": "codex_local", "adapterConfig": {}, "runtimeConfig": {}, "budgetMonthlyCents": 20000, "spentMonthlyCents": 300},
+  {"id": "aaaaaaa3-0000-4000-8000-000000000003", "companyId": "11111111-1111-4111-8111-111111111111", "name": "Retired Ops", "role": "general", "title": null, "status": "terminated", "reportsTo": "aaaaaaa1-0000-4000-8000-000000000001", "adapterType": "process", "adapterConfig": {}, "runtimeConfig": {}, "budgetMonthlyCents": 0, "spentMonthlyCents": 0}
+]

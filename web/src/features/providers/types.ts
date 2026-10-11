@@ -11,11 +11,11 @@
  * vault for the value, and a browser has no reason to hold it.
  */
 
-/** The four credential kinds the engine accepts. Closed on the engine, and closed
+/** The credential kinds the engine accepts. Closed on the engine, and closed
  * here: a kind decides which environment variables a child process receives, so an
  * open set would be an open injection set. */
 export type ProviderKind =
-  'anthropic' | 'openai' | 'xai' | 'openai_compatible' | 'ollama'
+  'anthropic' | 'openai' | 'xai' | 'gemini' | 'openai_compatible' | 'ollama'
 
 /** Two states. Revoking is final for that reference: the record is kept so the
  * sessions it authorised still read truthfully, not so it can come back. */
@@ -45,6 +45,8 @@ export interface ProviderRecordDTO {
   /** What the last SUCCESSFUL probe listed. An observation with a timestamp beside
    * it, not a catalogue: a provider can add or retire a model without this moving. */
   models?: string[]
+  /** The administrator's choice for fresh sessions; absent on older engines. */
+  default_model?: string | null
   probe_state?: ProbeState
   probe_detail?: string
   probe_latency_ms?: number
@@ -60,6 +62,7 @@ export interface CreateProviderRequest {
   display_name: string
   base_url?: string
   api_key?: string
+  default_model?: string
 }
 
 /** Rename, re-endpoint and/or rotate. `kind` is absent because changing it would
@@ -68,4 +71,5 @@ export interface PatchProviderRequest {
   display_name?: string
   base_url?: string
   api_key?: string
+  default_model?: string
 }

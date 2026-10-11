@@ -264,7 +264,7 @@ func TestAFailedAlertWriteAbortsTheWholeIngestion(t *testing.T) {
 	boom := errors.New("finops-test: alert write failed")
 	m.UseData(failingAlertData{api: m.data, err: boom})
 
-	err := m.onCost(context.Background(), tenant, mkCost("openai", "gpt-x", "s-1", 1, 1, 5*oneUSD, baseTime), nil)
+	err := m.onCost(context.Background(), tenant, mkCost("openai", "gpt-x", "s-1", 1, 1, 5*oneUSD, baseTime), nil, nil)
 	if !errors.Is(err, boom) {
 		t.Fatalf("err = %v, want the storage failure to abort the ingestion", err)
 	}
@@ -1089,7 +1089,7 @@ func TestTheAlertWriterSerializesOrRefuses(t *testing.T) {
 			spy := &lockSpy{lockErr: tc.err}
 			m.UseData(lockSpyData{ModuleData: m.data, spy: spy, hide: tc.hide})
 
-			err := m.onCost(context.Background(), tenant, mkCost("openai", "gpt-x", "s-1", 1, 1, 12*oneUSD, baseTime), nil)
+			err := m.onCost(context.Background(), tenant, mkCost("openai", "gpt-x", "s-1", 1, 1, 12*oneUSD, baseTime), nil, nil)
 			t.Logf("err=%v", err)
 			if err == nil {
 				t.Fatalf("the ingestion proceeded without a usable writer lock")
@@ -1146,7 +1146,7 @@ func runTwoDistinctIngestionsDedup(t *testing.T, cfg store.Config) {
 	// A DIFFERENT sample — another session, so another natural key — in the same
 	// period. It crosses the same threshold, which is already recorded.
 	if err := m.onCost(context.Background(), tenant,
-		mkCost("openai", "gpt-x", "s2", 1, 1, oneUSD, baseTime.Add(time.Minute)), nil); err != nil {
+		mkCost("openai", "gpt-x", "s2", 1, 1, oneUSD, baseTime.Add(time.Minute)), nil, nil); err != nil {
 		t.Fatalf("the second ingestion was lost to the deduplicated alert: %v", err)
 	}
 
@@ -1312,7 +1312,7 @@ func TestAnIngestionThatFailsRollsBackItsAuditToo(t *testing.T) {
 			tc.break_(m, boom)
 
 			err := m.onCost(context.Background(), tenant,
-				mkCost("openai", "gpt-x", "s-1", 1, 1, 5*oneUSD, baseTime), auditingIngest(t))
+				mkCost("openai", "gpt-x", "s-1", 1, 1, 5*oneUSD, baseTime), auditingIngest(t), nil)
 			t.Logf("err=%v", err)
 			if !errors.Is(err, boom) {
 				t.Fatalf("err = %v, want the storage failure to abort the ingestion", err)
@@ -1347,7 +1347,7 @@ func TestAnIngestionThatFailsRollsBackItsAuditToo(t *testing.T) {
 			Action: "block", Thresholds: []float64{1},
 		})
 		if err := m.onCost(context.Background(), tenant,
-			mkCost("openai", "gpt-x", "s-1", 1, 1, 5*oneUSD, baseTime), auditingIngest(t)); err != nil {
+			mkCost("openai", "gpt-x", "s-1", 1, 1, 5*oneUSD, baseTime), auditingIngest(t), nil); err != nil {
 			t.Fatalf("onCost: %v", err)
 		}
 		if n := countAuditAction(t, st, tenant, "finops.cost.ingest"); n != 1 {
@@ -1373,7 +1373,7 @@ func TestAPublishFailureDoesNotTouchWhatIsAlreadyCommitted(t *testing.T) {
 	host.failPublishing(errors.New("finops-test: bus unavailable"))
 
 	if err := m.onCost(context.Background(), tenant,
-		mkCost("openai", "gpt-x", "s-1", 1, 1, 12*oneUSD, baseTime), nil); err != nil {
+		mkCost("openai", "gpt-x", "s-1", 1, 1, 12*oneUSD, baseTime), nil, nil); err != nil {
 		t.Fatalf("a post-commit publish failure failed the ingestion: %v", err)
 	}
 	rows := alertRows(t, st, tenant)

@@ -31,14 +31,19 @@ verifiziert; diese Seite veröffentlicht die *Posture*, nicht die Evidenz auf Co
 
 ## Leitende Prinzipien
 
-- **Read-first = niedriges asymmetrisches Risiko.** Die Engine beobachtet über Logs,
-  OpenTelemetry und eBPF. Sie sitzt **nicht** im Datenpfad des Agenten, sodass ein
-  Collector-Ausfall den Produktionsverkehr nicht brechen kann.
+- **Beobachtung außerhalb des Datenpfads.** Die Access Map beobachtet Logs,
+  OpenTelemetry und eBPF. Ein Collector-Ausfall erzeugt eine Sichtbarkeitslücke,
+  ohne Agentenverkehr zu sperren.
+- **Inline-Durchsetzung mit deny-closed.** Verwaltete Claude-Code-Tool-Aufruf-Hooks
+  rufen den standardmäßig bereitgestellten Engine-PEP auf. Ein Ausfall oder Neustart,
+  der ihn unerreichbar macht, verweigert jeden geregelten Tool-Aufruf. Der Inline-
+  Inferenz-Proxy, das MCP-tools/call-Gate und das A2A-Delegations-Gate gelten für
+  durchgeleiteten Verkehr; Modellaufrufe nutzen den Inferenz-Proxy nicht standardmäßig.
 - **Minimale Daten.** Der Graph speichert **Relationen** — Ursprung → Ressource, read/write,
   Quelle, Confidence, Zeitstempel — **nie** Payloads, SQL-Bodies, Geheimnisse oder PII.
   *Was nicht gespeichert wird, kann nicht leaken.*
 - **Self-hosted = kein Anbieter im Datenpfad.** Es gibt keine verpflichtende Telemetrie,
-  standardmäßig keinen Egress der Control Plane, und Olivares AI liegt nie im Datenpfad.
+  standardmäßig keinen Egress der Control Plane, und der Anbieter liegt außerhalb der Beobachtungs- und Durchsetzungspfade.
   Der Anbieter wird nur erreicht, wenn Sie etwas von ihm anfordern — `olivares upgrade` oder
   ein Abo-Download kommerzieller Module und ihrer Updates — nie als Nebeneffekt des Betriebs. Und `olivares upgrade --endpoint` richtet selbst das auf Ihren eigenen Mirror.
   Den Kundenperimeter überschreitet nur, was der Kunde dafür konfiguriert — Aufrufe an seine

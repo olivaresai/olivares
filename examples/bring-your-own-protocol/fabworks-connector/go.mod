@@ -3,7 +3,7 @@
 // scripts/check-boundary.sh enforces that on the real build graph — keep it in CI.
 module example.com/fabworks/olivares-connector-fabworks-erp
 
-go 1.26.8
+go 1.26.9
 
 require (
 	example.com/fabworks/erp-fixture v0.0.0

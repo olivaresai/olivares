@@ -58,6 +58,11 @@ Each SDK is two layers:
   media types for raw request bytes, and language-native deprecation markers
   generated from the spec.
 
+Run cleanup keeps its published bodyless calls in Go, TypeScript and Java.
+Use the method ending in `CleanupWithBody` to send its optional JSON body;
+Python keeps the optional `body` argument. Java handoff content also retains
+its four-argument constructor when the optional `branch` and `sha` are omitted.
+
 ## Versioning
 
 Each SDK embeds `API_VERSION` (the contract major it was generated from) and

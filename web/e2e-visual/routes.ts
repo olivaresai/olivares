@@ -3,100 +3,20 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
 // Side-effect-free route inventories shared by the standalone AT gate, the
-// Playwright axe checks, and the FEATURE_VIEWS coverage guard.
+// Playwright axe checks, and the accessibility coverage guard.
+//
+// AUTH_ROUTES is derived from route-census.json, not written out: the census is the
+// one full route list Node can read without the app's bundler, and
+// registry.route-conservation.test.ts pins it to the built router in both directions.
+// A path retired through ROUTE_ALIASES stays in the census, so the gate scans it through
+// its redirect (ponytail: ROUTE_ALIASES is empty; exclude aliases here when the first lands).
+import census from '../src/features/route-census.json' with { type: 'json' }
 import {
   ANONYMOUS_EXTENSION_ROUTES,
   EXTENSION_ROUTES,
 } from '../src/features/extensions.ts'
 
 export const SESSION_VIEWER_ROUTE = '/session-viewer/sess-a11y'
-
-export const AUTH_ROUTES = [
-  ...EXTENSION_ROUTES.map(({ path }) => path),
-  '/',
-  '/onboarding',
-  '/workspace',
-  '/inventory',
-  '/sessions',
-  '/access-map',
-  '/audit',
-  '/health',
-  '/console',
-  '/console/sources/diff',
-  '/capabilities',
-  '/communications/protocol-bindings',
-  // K3 I1/I2/I3 — the five doors of the communications room (registry ids
-  // communications, communicationsInbox, communicationsHandoffs,
-  // communicationsNew, communicationsAdministration).
-  '/communications',
-  '/communications/inbox',
-  '/communications/handoffs',
-  '/communications/new',
-  '/communications/administration',
-  '/permissions',
-  '/identity',
-  '/claude-policy',
-  '/routine-policies',
-  //the AgentCore Cedar export route (registry id agentcoreExport).
-  '/agentcore-export',
-  '/deploy',
-  // Governed Git publication (registry id gitPublication).
-  '/git-publication',
-  '/knowledge',
-  '/catalog',
-  '/killswitch',
-  '/work',
-  '/agentops',
-  '/mcp-servers',
-  '/providers',
-  '/agent-tools',
-  '/provider-profiles',
-  '/provider-bindings',
-  '/provider-accounts',
-  '/agent-artifacts',
-  '/workspace-templates',
-  '/eventing',
-  '/automations',
-  '/inference-proxy',
-  '/alerting',
-  '/models',
-  '/model-operations',
-  '/finops',
-  '/adoption',
-  '/evals',
-  '/security',
-  '/recordings',
-  SESSION_VIEWER_ROUTE,
-  '/compliance',
-  '/posture-export',
-  '/orchestration',
-  '/voice',
-  '/sandbox',
-  '/red-team',
-  '/dashboards',
-  '/team-costs',
-  '/reporting',
-  '/observability',
-  '/platforms',
-  '/rate-limits',
-  '/attestation',
-  '/api-playground',
-  '/backups',
-  '/logs',
-  '/residency',
-  '/tenants',
-  '/settings',
-  // N1 — the nine area directory pages (features/navigation/area-directory.tsx).
-  '/areas/infrastructure',
-  '/areas/ai',
-  '/areas/data-context',
-  '/areas/work-communications',
-  '/areas/automation',
-  '/areas/security-identity',
-  '/areas/deployment',
-  '/areas/observation',
-  '/areas/system',
-]
 
 // ⛔ `/accept-invite` FALTABA — añadida el 2026-08-18. El motor manda ese enlace por correo
 //    (`core/api/handlers_onboarding.go`) y es literalmente la primera pantalla de producto que ve
@@ -110,22 +30,38 @@ export const PUBLIC_ROUTES = [
   '/status-page',
 ]
 
+/** A path the browser can open: the one parametric route gets its seeded fixture id. */
+function concretePath(path: string): string {
+  return path === '/session-viewer/$id' ? SESSION_VIEWER_ROUTE : path
+}
+
+export const AUTH_ROUTES = [
+  ...new Set([
+    ...EXTENSION_ROUTES.map(({ path }) => path),
+    ...census.paths.filter(
+      (path) =>
+        !PUBLIC_ROUTES.includes(path) && !census.business_paths.includes(path),
+    ),
+  ]),
+].map(concretePath)
+
 export const ROUTES = [
-  '/dashboards',
-  '/access-map',
-  '/inventory',
-  '/security',
-  '/compliance',
-  '/health',
-  //the onboarding wizard and the two new GRC surfaces.
-  '/onboarding',
-  '/reporting',
-  '/posture-export',
-  //the mutation-dense admin surfaces (tab panels, forms, dialogs):
-  // the control console, identity/NHI, and the Claude policy editors. These
-  // carry the most interactive controls per page, so the quick axe pass must
-  // cover them, not only the read-mostly dashboards above.
-  '/console',
-  '/identity',
-  '/claude-policy',
+  ...new Set([
+    ...EXTENSION_ROUTES.map(({ path }) => concretePath(path)),
+    '/dashboards',
+    '/access-map',
+    '/inventory',
+    '/security',
+    '/compliance',
+    '/health',
+    // The onboarding wizard.
+    '/onboarding',
+    //the mutation-dense admin surfaces (tab panels, forms, dialogs):
+    // the control console, identity/NHI, and the Claude policy editors. These
+    // carry the most interactive controls per page, so the quick axe pass must
+    // cover them, not only the read-mostly dashboards above.
+    '/console',
+    '/identity',
+    '/claude-policy',
+  ]),
 ]

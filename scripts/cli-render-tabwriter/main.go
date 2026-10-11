@@ -74,7 +74,7 @@ func main() {
 	flag.Parse()
 
 	if err := run(os.Stdout, *root, *pkg, *skip); err != nil {
-		fmt.Fprintf(os.Stderr, "cli-render-tabwriter: NO HE PODIDO MIRAR: %v\n", err)
+		fmt.Fprintf(os.Stderr, "cli-render-tabwriter: COULD NOT LOOK: %v\n", err)
 		os.Exit(2)
 	}
 }

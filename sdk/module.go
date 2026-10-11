@@ -41,8 +41,9 @@ type Host interface {
 // consumes events and implements one of the product's capabilities (inventory,
 // the R/RW access map, FinOps, guardrails…; ARCHITECTURE.md, README.md). Modules are
 // AGPL components in /modules; they may import the engine. This SDK defines only
-// their lifecycle so the runtime can drive any module uniformly and so the
-// (rare) out-of-process module has a stable contract.
+// their lifecycle so the runtime can drive any module uniformly. Modules run
+// in-process; the out-of-process module transport is deprecated and was never
+// wired (see VERSIONING.md, honest limits).
 //
 // Lifecycle: Init (wire to host services, subscribe) → Start (begin background
 // work) → Stop (drain and release). Init and Stop must not block; long-running
@@ -51,9 +52,8 @@ type Host interface {
 // Declaring data-model entities (a module's own tables) is a SEPARATE phase from
 // this runtime lifecycle: it happens earlier, at store-construction time,
 // against the engine's ExtensionRegistry — an AGPL type that cannot appear in
-// this Apache interface. An in-process module that owns entities implements the
-// engine-side SchemaProvider seam (see core/runtime); an out-of-process module
-// cannot register core schema and is a bus consumer only.
+// this Apache interface. A module that owns entities implements the engine-side
+// SchemaProvider seam (see core/runtime).
 type Module interface {
 	// Descriptor returns the module's stable self-description.
 	Descriptor() Descriptor

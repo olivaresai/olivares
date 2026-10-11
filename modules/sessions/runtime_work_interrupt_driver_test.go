@@ -34,10 +34,9 @@ func TestCodexRuntimeWorkBoundRunHasFencedTurnInterrupt(t *testing.T) {
 	)
 	ctx := context.Background()
 	itemID, _, agentRef := readyWorkLaunchItem(t, m, st, tenant)
-	m.UseWorkIdentityResolver(durableWorkLaunchIdentity{m: m, st: st})
+	WithWorkIdentityResolver(durableWorkLaunchIdentity{m: m, st: st})(m)
 	record := setCodexFixture(t, prof, codexFixture{ThreadID: "thread-work-interrupt", Account: "apikey"})
-	spec := workLaunchSpec(itemID, agentRef)
-	spec.Runtime.ProviderProfileRef = prof.Ref
+	spec := workLaunchSpec(t, m, tenant, itemID, agentRef, prof.Ref)
 
 	managed, err := m.LaunchForWork(ctx, tenant, spec)
 	if err != nil {
@@ -228,7 +227,6 @@ func codexHTTPHarness(
 		WithWorkContentGuard(allowWorkContent{}),
 	}, opts...)...)
 	m.UseExecutionEnvironmentRef(testEnvRef)
-	m.EnableProfiledLaunches()
 	h := newHarness(t, m)
 	admin := h.adminLogin()
 	tenant := h.createOrg(admin, org)

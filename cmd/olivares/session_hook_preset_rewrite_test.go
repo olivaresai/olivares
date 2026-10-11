@@ -17,6 +17,7 @@ import (
 	"github.com/olivaresai/olivares/connectors/claude"
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
+	"github.com/olivaresai/olivares/modules/sessions/hookpep"
 )
 
 // A tenant rewrite must retain the launching person's bound custom tool surface.
@@ -55,10 +56,10 @@ func TestSessionClaudeCustomPresetChecksEffectiveRewrite(t *testing.T) {
 					if tc.rewrite != "" {
 						rewrite = map[string]any{surface.field: tc.rewrite}
 					}
-					d := &claudeHookDecider{
-						defaultPolicy: &hookPolicyDoc{Default: "allow", Rules: []hookPolicyRule{{Tool: surface.tool, Decision: "allow", Rewrite: rewrite}}},
-						authr:         credentials, eval: h.set.gov.Evaluator(), scoped: h.set.gov.ScopedGrants(), store: h.st, clock: time.Now, log: discardLog(),
-					}
+					d := newClaudeHookDecider(&hookpep.Decider{
+						DefaultPolicy: &hookpep.PolicyDoc{Default: "allow", Rules: []hookpep.PolicyRule{{Tool: surface.tool, Decision: "allow", Rewrite: rewrite}}},
+						Authr:         credentials, Eval: h.set.gov.Evaluator(), Authz: harnessAuthz(h), Scoped: h.set.gov.ScopedGrants(), Store: h.st, Clock: time.Now, Log: discardLog(),
+					})
 					raw, err := json.Marshal(map[string]any{"hook_event_name": "PreToolUse", "session_id": "spoofed", "permission_mode": "bypassPermissions", "tool_name": surface.tool, "tool_input": map[string]any{surface.field: tc.input}})
 					if err != nil {
 						t.Fatal(err)
@@ -118,7 +119,7 @@ func TestSessionClaudeCustomRewriteRefusesBeforeReview(t *testing.T) {
 	service := h.set.gov.EngineApprovals()
 	h.set.gov.UseApprovalCapacity(h.authr.ApprovalCapacity)
 	h.set.gov.UseApprovalAuthority(h.authr, auth.NewAuthorizer(h.set.gov.RequestEvaluator(), auth.WithScopedGrants(h.set.gov.ScopedGrants())))
-	d := &claudeHookDecider{defaultPolicy: &hookPolicyDoc{Default: "allow", Rules: []hookPolicyRule{{Tool: "Bash", Decision: "ask", Rewrite: map[string]any{"command": "touch forbidden"}}}}, authr: credentials, eval: h.set.gov.Evaluator(), scoped: h.set.gov.ScopedGrants(), approvals: service, store: h.st, clock: time.Now, log: discardLog()}
+	d := newClaudeHookDecider(&hookpep.Decider{DefaultPolicy: &hookpep.PolicyDoc{Default: "allow", Rules: []hookpep.PolicyRule{{Tool: "Bash", Decision: "ask", Rewrite: map[string]any{"command": "touch forbidden"}}}}, Authr: credentials, Eval: h.set.gov.Evaluator(), Authz: harnessAuthz(h), Scoped: h.set.gov.ScopedGrants(), Approvals: service, Store: h.st, Clock: time.Now, Log: discardLog()})
 	raw, _ := json.Marshal(map[string]any{"hook_event_name": "PreToolUse", "tool_name": "Bash", "tool_input": map[string]any{"command": "printf original", "description": "preserve this field"}})
 	ctx, cancel := context.WithTimeout(t.Context(), 350*time.Millisecond)
 	defer cancel()
@@ -134,7 +135,7 @@ func TestSessionClaudeCustomRewriteRefusesBeforeReview(t *testing.T) {
 	if rec.Code != http.StatusOK || json.Unmarshal(rec.Body.Bytes(), &out) != nil || out.HookSpecificOutput.Permission != "deny" {
 		t.Fatalf("unsafe rewrite did not refuse: %d %s", rec.Code, rec.Body.String())
 	}
-	pending, _, err := service.List(t.Context(), tenant, hookActionCapability, "pending", "")
+	pending, _, err := service.List(t.Context(), tenant, hookpep.ActionCapability, "pending", "")
 	if err != nil || len(pending) != 0 {
 		t.Fatalf("unsafe rewrite entered the human queue: %d %v", len(pending), err)
 	}

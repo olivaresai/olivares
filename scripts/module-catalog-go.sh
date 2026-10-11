@@ -8,6 +8,7 @@
 #
 #   module-catalog-go.sh check [--overlay DIR]
 #   module-catalog-go.sh write [--overlay DIR]
+#   module-catalog-go.sh pack-check|pack-write
 #
 # ⛔ THREE ANSWERS, AND THE EXIT CODE CARRIES THEM (canon rule 5):
 #   0  CLEAN            every projection matches the derivation
@@ -36,8 +37,18 @@ while [ $# -gt 0 ]; do
 done
 
 case "$MODE" in
-  check|write) ;;
-  *) echo "module-catalog: mode must be check or write, not $MODE" >&2; exit 2 ;;
+  check|write|pack-check|pack-write) ;;
+  *) echo "module-catalog: mode must be check, write, pack-check or pack-write, not $MODE" >&2; exit 2 ;;
+esac
+
+FLAG="-module-catalog=$MODE"
+SOURCE="design/PRICING-CANON.md"
+case "$MODE" in
+  pack-*)
+    [ -z "$OVERLAY" ] || { echo "module-catalog: pack modes do not accept --overlay" >&2; exit 2; }
+    FLAG="-pack-composition=${MODE#pack-}"
+    SOURCE="commercial/pack-composition.json"
+    ;;
 esac
 
 # ⛔ EL TOKEN VA A STDOUT Y ES LEGIBLE POR MÁQUINA, no sólo prosa a stderr. Un llamador que reciba
@@ -50,8 +61,8 @@ if [ ! -d "$ROOT/commercial/commerce-lint" ]; then
   echo "module-catalog: NOT APPLICABLE — commercial/commerce-lint is not present in this tree" >&2
   exit 0
 fi
-if [ ! -r "$ROOT/design/PRICING-CANON.md" ]; then
-  echo "module-catalog: COULD NOT LOOK — cannot read the canon at $ROOT/design/PRICING-CANON.md" >&2
+if [ ! -r "$ROOT/$SOURCE" ]; then
+  echo "module-catalog: COULD NOT LOOK — cannot read the canon at $ROOT/$SOURCE" >&2
   exit 2
 fi
 
@@ -127,37 +138,37 @@ if [ -n "${OLIVARES_MODULE_CATALOG_BIN:-}" ]; then
     exit 2
   }
   _identifica "$OLIVARES_MODULE_CATALOG_BIN" || {
-    echo "module-catalog: COULD NOT LOOK — el binario inyectado en OLIVARES_MODULE_CATALOG_BIN no se" >&2
-    echo "  identifica como el derivador (no contesta a -module-catalog=identify). Un binario que no" >&2
-    echo "  se identifica NO se ejecuta: su silencio se leeria como que las vistas coinciden." >&2
+    echo "module-catalog: COULD NOT LOOK — the binary supplied through OLIVARES_MODULE_CATALOG_BIN does not" >&2
+    echo "  identify itself as the deriver (no response to -module-catalog=identify). A binary that does not" >&2
+    echo "  identify itself will NOT run: its silence could be mistaken for matching views." >&2
     exit 2
   }
-  set -- -root "$ROOT" -module-catalog="$MODE"
+  set -- -root "$ROOT" "$FLAG"
   [ -n "$OVERLAY" ] && set -- "$@" -overlay-root "$OVERLAY"
   exec "$OLIVARES_MODULE_CATALOG_BIN" "$@"
 fi
 
 _d="$(_digest)"
-[ -n "$_d" ] || { echo "module-catalog: COULD NOT LOOK — no puedo calcular el digest de las fuentes" >&2; exit 2; }
+[ -n "$_d" ] || { echo "module-catalog: COULD NOT LOOK — cannot calculate the source digest" >&2; exit 2; }
 BIN="${TMPDIR:-/tmp}/olivares-module-catalog.$_d"
 if [ ! -x "$BIN" ] || ! _identifica "$BIN"; then
   # Publicacion atomica: se construye a un temporal del MISMO directorio y se renombra, para que dos
   # carriles que compartan TMPDIR no se encuentren un binario a medio escribir.
   _tmpbin="$(mktemp "${TMPDIR:-/tmp}/olivares-module-catalog.XXXXXX")" || {
-    echo "module-catalog: COULD NOT LOOK — no puedo crear el temporal del binario" >&2; exit 2; }
-  ( cd "$ROOT/commercial/commerce-lint" && env GOWORK=off go build -o "$_tmpbin" . ) >&2 || {
+    echo "module-catalog: COULD NOT LOOK — cannot create the temporary binary file" >&2; exit 2; }
+  ( cd "$ROOT/commercial/commerce-lint" && env GOWORK=off go build -p 2 -o "$_tmpbin" . ) >&2 || {
     rm -f "$_tmpbin"
     echo "module-catalog: COULD NOT LOOK — the deriver did not build" >&2
     exit 2
   }
   chmod +x "$_tmpbin" && mv -f "$_tmpbin" "$BIN" || {
     rm -f "$_tmpbin"
-    echo "module-catalog: COULD NOT LOOK — no pude publicar el binario construido" >&2; exit 2; }
+    echo "module-catalog: COULD NOT LOOK — could not install the built binary" >&2; exit 2; }
   _identifica "$BIN" || {
-    echo "module-catalog: COULD NOT LOOK — el binario recien construido no se identifica" >&2; exit 2; }
+    echo "module-catalog: COULD NOT LOOK — the newly built binary does not identify itself" >&2; exit 2; }
 fi
 
-set -- -root "$ROOT" -module-catalog="$MODE"
+set -- -root "$ROOT" "$FLAG"
 if [ -n "$OVERLAY" ]; then
   set -- "$@" -overlay-root "$OVERLAY"
 fi

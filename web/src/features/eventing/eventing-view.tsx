@@ -6,6 +6,7 @@
 // subscriptions / events / deliveries / dead-letters. The subscription editor
 // (react-hook-form + zod) configures the webhook endpoint; creation returns a
 // one-time HMAC secret shown in a reveal modal (never persisted client-side).
+import { PANEL_EXTENSIONS } from '@/features/extensions'
 import { useMemo, useState } from 'react'
 import { zodResolver } from '@hookform/resolvers/zod'
 import {
@@ -1465,6 +1466,11 @@ function SubscriptionDialog({
             </>
           ) : null}
 
+          {!PANEL_EXTENSIONS.operationsExportAvailable ? (
+            <p role="status" className="text-body-sm text-text-2">
+              {t('dialog.businessRequired')}
+            </p>
+          ) : null}
           {/* SIEM sink profile: shown for every subscription so an
               existing profile is VISIBLE and PRESERVED on edit — before this
               section existed, edit silently omitted sink_* and the backend

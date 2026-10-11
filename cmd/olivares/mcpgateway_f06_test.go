@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/olivaresai/olivares/cmd/olivares/internal/mcpgateway"
 	mcpc "github.com/olivaresai/olivares/connectors/mcp"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/modules/governance"
@@ -27,8 +28,8 @@ func (noStopGuard) KillSwitchState(context.Context, model.TenantID) (governance.
 // estate stop. It must be REFUSED at build time (deny-closed), not merely warned.
 func TestF06MCPMountRefusesKillSwitchWithoutTenant(t *testing.T) {
 	eng := &engine{killSwitch: noStopGuard{}}
-	base := func() *mcpGatewayConfig {
-		return &mcpGatewayConfig{
+	base := func() *mcpgateway.MCPConfig {
+		return &mcpgateway.MCPConfig{
 			Resource:    "https://mcp.example.com/mcp",
 			UpstreamURL: "https://upstream.example.com/mcp", // upstream != nil ⇒ actuating surface
 			Tools:       []mcpc.ToolPolicy{{Name: "search", RequiredScope: "tools:read"}},

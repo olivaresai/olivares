@@ -99,13 +99,7 @@ export const binaryAttestationFixture: RunningBinaryAttestation = {
     },
   },
   pipeline: {
-    workflows: [
-      'release.yml',
-      'release-chart.yml',
-      'release-provider.yml',
-      'scorecard.yml',
-      'patch-velocity.yml',
-    ],
+    workflows: ['release.yml', 'scorecard.yml', 'patch-velocity.yml'],
     status: 'declared',
     note: 'release pipeline exists in the source tree and runs only on a pushed v* tag. The running process cannot observe repository or CI state, so it cannot say whether that has ever happened.',
   },

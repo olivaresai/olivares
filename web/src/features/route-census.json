@@ -1,13 +1,14 @@
 {
   "_": [
-    "ROUTE CENSUS — every path the application MOUNTS. APPEND-ONLY.",
+    "ROUTE CENSUS \u2014 every path the application MOUNTS. APPEND-ONLY.",
     "Not just the feature registry: the public legs (/login, /setup, /accept-invite,",
     "/status-page) and /settings are routes too, and deleting one is the same loss.",
     "Adding a route? Append its path. Retiring one? Do NOT delete the line: declare a",
     "ROUTE_ALIASES entry in registry.tsx so the old URL still resolves. Deleting a line",
     "here is how an operator's bookmark dies, and registry.route-conservation.test.ts",
     "exists to make that impossible to do by accident.",
-    "Paths are the router's own ids with the pathless /app shell prefix removed."
+    "Paths are the router's own ids with the pathless /app shell prefix removed.",
+    "business_paths remain published in Business Identity & Scale (edition placement #979)."
   ],
   "paths": [
     "/",
@@ -47,6 +48,7 @@
     "/console/sources/diff",
     "/dashboards",
     "/deploy",
+    "/estate",
     "/evals",
     "/eventing",
     "/finops",
@@ -67,7 +69,6 @@
     "/orchestration",
     "/permissions",
     "/platforms",
-    "/posture-export",
     "/provider-accounts",
     "/provider-bindings",
     "/provider-profiles",
@@ -75,7 +76,6 @@
     "/rate-limits",
     "/recordings",
     "/red-team",
-    "/reporting",
     "/residency",
     "/routine-policies",
     "/sandbox",
@@ -84,12 +84,15 @@
     "/sessions",
     "/settings",
     "/setup",
+    "/skills",
     "/status-page",
+    "/stored-budgets",
     "/team-costs",
     "/tenants",
     "/voice",
     "/work",
     "/workspace",
     "/workspace-templates"
-  ]
+  ],
+  "business_paths": ["/automations", "/orchestration"]
 }

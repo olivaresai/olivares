@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/olivaresai/olivares/core/auth"
+	"github.com/olivaresai/olivares/core/driverfacts"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 )
@@ -66,11 +67,12 @@ const (
 	colPRSecretRef = "secret_ref"
 	// colPRKeyHint is the last four characters of the registered value, and exactly
 	// those: enough for an operator to tell two keys apart, never enough to use one.
-	colPRKeyHint    = "key_hint"
-	colPRState      = "state"
-	colPRNameSlot   = "name_slot"
-	colPRModels     = "models"
-	colPRProbeState = "probe_state"
+	colPRKeyHint      = "key_hint"
+	colPRState        = "state"
+	colPRNameSlot     = "name_slot"
+	colPRModels       = "models"
+	colPRDefaultModel = "default_model"
+	colPRProbeState   = "probe_state"
 	// colPRProbeDetail is ONE bounded sentence about the last probe. It never
 	// carries the value, a header, or a URL with a credential in it.
 	colPRProbeDetail  = "probe_detail"
@@ -91,7 +93,7 @@ const (
 	ProviderRecordRevoked = "revoked"
 )
 
-// The four provider kinds. The set is CLOSED, unlike the driver key set, and the
+// The provider kinds. The set is CLOSED, unlike the driver key set, and the
 // difference is deliberate: a driver key only has to be a valid scope component,
 // while a kind decides which environment variables the engine will inject into a
 // child process. An open kind set would be an open injection set.
@@ -99,6 +101,7 @@ const (
 	ProviderKindAnthropic        = "anthropic"
 	ProviderKindOpenAI           = "openai"
 	ProviderKindXAI              = "xai"
+	ProviderKindGemini           = "gemini"
 	ProviderKindOllama           = "ollama"
 	ProviderKindOpenAICompatible = "openai_compatible"
 )
@@ -173,28 +176,33 @@ type ProviderRecord struct {
 	Kind        string
 	DisplayName string
 	BaseURL     string
+	Service     string
 	SecretRef   string
 	KeyHint     string
 	State       string
 	Models      []string
-	ProbeState  string
-	ProbeDetail string
-	ProbeMillis int64
-	ProbedAt    string
-	Version     int64
-	CreatedAt   string
-	UpdatedAt   string
-	RevokedAt   string
+	// nil preserves native behavior; empty awaits a new record's first usable test.
+	DefaultModel *string
+	ProbeState   string
+	ProbeDetail  string
+	ProbeMillis  int64
+	ProbedAt     string
+	Version      int64
+	CreatedAt    string
+	UpdatedAt    string
+	RevokedAt    string
 }
 
 // CreateProviderRecordInput is the validated create request. APIKey is the ONLY
 // field that carries a credential, it lives for the duration of the call, and it is
 // handed to the vault and then dropped.
 type CreateProviderRecordInput struct {
-	Kind        string
-	DisplayName string
-	BaseURL     string
-	APIKey      string
+	Kind         string
+	DisplayName  string
+	BaseURL      string
+	Service      string
+	APIKey       string
+	DefaultModel *string
 	// Actor is the authenticated caller. It reaches the vault so the sealed write
 	// is attributable; the engine's secret store refuses an unattributable one.
 	Actor auth.Principal
@@ -209,7 +217,8 @@ type ProviderRecordPatch struct {
 	BaseURL     *string
 	// APIKey rotates the private locator. The provider reference stays stable, so
 	// every binding keeps working and the next launch uses the new value.
-	APIKey *string
+	APIKey       *string
+	DefaultModel *string
 	// Actor is the authenticated caller, for the same reason it is on the create
 	// input: a rotation is a sealed write and a sealed write is attributed.
 	Actor auth.Principal
@@ -223,6 +232,7 @@ func (m *Module) registerProviderRecordSchema(reg store.ExtensionRegistry) error
 		Kind:  providerRecordKind,
 		Table: providerRecordTable,
 		Fields: []model.FieldSpec{
+			{Name: "service", Kind: model.KindText, Nullable: true, Principal: model.None("optional provider service identifier validated by providerServiceBaseURL: provider_service.go:23-35")},
 			{Name: colPRRef, Kind: model.KindText, Principal: pdeclNoneProviderRecordRef},
 			{Name: colPRKind, Kind: model.KindText, Indexed: true, Principal: model.None("a provider credential kind, a closed set: provider_record.go:247-260, provider_record.go:444")},
 			{Name: colPRDisplayName, Kind: model.KindText, Principal: model.None("an operator-chosen provider name, bounded and shown only: provider_record.go:266-279, provider_record.go:445")},
@@ -232,6 +242,7 @@ func (m *Module) registerProviderRecordSchema(reg store.ExtensionRegistry) error
 			{Name: colPRState, Kind: model.KindText, Indexed: true, Principal: model.None("a record lifecycle state, a closed set: provider_record.go:84-88, provider_record.go:449")},
 			{Name: colPRNameSlot, Kind: model.KindText, Principal: model.None("the uniqueness key of a live record built from its kind and folded name, or a revoked marker: provider_record.go:355-359")},
 			{Name: colPRModels, Kind: model.KindJSON, Nullable: true, Principal: pdeclProviderRecordModels},
+			{Name: colPRDefaultModel, Kind: model.KindText, Nullable: true, Principal: model.None("an operator-chosen provider model identifier, not a principal: provider_default_model.go:15-24")},
 			{Name: colPRProbeState, Kind: model.KindText, Nullable: true, Principal: model.None("a probe outcome, a closed set: provider_record.go:111-117, provider_record.go:847")},
 			{Name: colPRProbeDetail, Kind: model.KindText, Nullable: true, Principal: model.None("one bounded sentence about the last probe, shown only: provider_record.go:71-73, provider_record.go:848")},
 			{Name: colPRProbeLatency, Kind: model.KindInt, Nullable: true},
@@ -260,12 +271,14 @@ func normalizeProviderKind(s string) (string, error) {
 		return ProviderKindOpenAI, nil
 	case ProviderKindXAI:
 		return ProviderKindXAI, nil
+	case ProviderKindGemini:
+		return ProviderKindGemini, nil
 	case ProviderKindOpenAICompatible:
 		return ProviderKindOpenAICompatible, nil
 	case "":
-		return "", badRequest("kind is required (anthropic, openai, xai, openai_compatible or ollama)")
+		return "", badRequest("kind is required (anthropic, openai, xai, gemini, openai_compatible or ollama)")
 	}
-	return "", badRequest("kind must be anthropic, openai, xai, openai_compatible or ollama")
+	return "", badRequest("kind must be anthropic, openai, xai, gemini, openai_compatible or ollama")
 }
 
 // validProviderName bounds the operator's own label. It is required, unlike a
@@ -288,11 +301,15 @@ func validProviderName(s string) (string, error) {
 }
 
 // validProviderBaseURL bounds and checks the optional endpoint override. It refuses
-// anything that is not an absolute https URL, and it refuses a URL that carries
+// anything that is not an absolute https URL (plain http only at a local address,
+// for the kinds that front a local server), and it refuses a URL that carries
 // userinfo: `https://user:key@host` is a credential in a field that is published in
 // every read, and accepting it would leak one through a door marked "endpoint".
 func validProviderBaseURL(kind, s string) (string, error) {
 	s = strings.TrimSpace(s)
+	if kind == ProviderKindGemini && s != "" {
+		return "", badRequest("Gemini CLI uses Google’s own API address; a Gemini provider cannot override base_url")
+	}
 	if kind == ProviderKindOllama {
 		return validOllamaBaseURL(s)
 	}
@@ -306,11 +323,13 @@ func validProviderBaseURL(kind, s string) (string, error) {
 		return "", badRequest("base_url is too long")
 	}
 	lower := strings.ToLower(s)
-	if kind == ProviderKindOpenAICompatible && strings.HasPrefix(lower, "http://") {
+	if (kind == ProviderKindOpenAICompatible || kind == ProviderKindXAI || kind == ProviderKindAnthropic) && strings.HasPrefix(lower, "http://") {
 		// HU-R14: a local model server is plain http. It is accepted only for
 		// loopback and private-network addresses — never for a public host, and
 		// refused rather than warned about for the same reason as before: a
-		// warning an operator can click past is not a control.
+		// warning an operator can click past is not a control. xAI and Anthropic
+		// are the kinds Grok Build and Claude Code bind, so their local servers
+		// need the same rule.
 		return validLocalHTTPBaseURL(s)
 	}
 	if !strings.HasPrefix(lower, "https://") {
@@ -347,7 +366,7 @@ func providerLocalHTTPHostAllowed(host string) bool {
 	return err == nil && (ip.IsLoopback() || ip.IsPrivate())
 }
 
-// validLocalHTTPBaseURL is the openai_compatible plain-http branch of
+// validLocalHTTPBaseURL is the openai_compatible, xai and anthropic plain-http branch of
 // validProviderBaseURL: the same shape rule validOllamaBaseURL applies, with
 // this kind's own messages.
 func validLocalHTTPBaseURL(s string) (string, error) {
@@ -439,8 +458,8 @@ func validProviderRecordRef(ref string) bool {
 
 // recordServesDriver reports whether this driver's official CLI can run on a record of
 // this kind AND be held to that record's endpoint: a session bound to a provider record
-// reaches only that record's endpoint, or it does not start (Root 2026-10-02 21:16Z,
-// HU2 019). It is the one rule the binding, the resolve rule and the launch read.
+// reaches only that record's endpoint, or it does not start.
+// It is the one rule the binding, the resolve rule and the launch read.
 //
 // It is an explicit table and not a derivation, and that is the decision. A
 // derivation ("the kind whose name looks like the driver") would silently accept
@@ -450,37 +469,17 @@ func validProviderRecordRef(ref string) bool {
 // serves only Codex, whose own provider configuration takes the endpoint. An unknown
 // driver serves nothing.
 func recordServesDriver(kind, baseURL, driver string) bool {
-	switch driver {
-	case providerDriverClaude:
-		return kind == ProviderKindAnthropic
-	case providerDriverCodex:
-		// HU-R14: the local OpenAI-compatible endpoint (<base_url>/v1, no key) too.
-		return kind == ProviderKindOpenAI || kind == ProviderKindOpenAICompatible || kind == ProviderKindOllama
-	case providerDriverGrok:
-		return kind == ProviderKindXAI
-	case providerDriverOpenCode:
-		return kind == ProviderKindOllama || openCodeCanConfine(kind, baseURL)
-	}
-	// An unknown driver has no established way to be held to a record's endpoint.
-	return false
-}
-
-// recordDriverSupport is, per driver, the records it can be held to, in the person's
-// words: the sentence a refusal names (recordServesDriver is the rule).
-var recordDriverSupport = map[string]string{
-	providerDriverClaude:   "Claude Code runs only on an Anthropic key",
-	providerDriverCodex:    "Codex runs only on an OpenAI key, an OpenAI-compatible endpoint or a local model (Ollama)",
-	providerDriverGrok:     "Grok Build runs only on an xAI key",
-	providerDriverOpenCode: "OpenCode runs only on an Anthropic, OpenAI or xAI key at the provider's own address, or on a local model (Ollama)",
+	facts, _ := driverfacts.Lookup(driver)
+	return facts.CanBind(kind, baseURL)
 }
 
 // recordDriverRefusal is the one sentence for a record a driver cannot be held to.
 func recordDriverRefusal(driver, recordName, kind string) string {
-	support, ok := recordDriverSupport[driver]
-	if !ok {
+	facts, ok := driverfacts.Lookup(driver)
+	if !ok || facts.BindingDescription == "" {
 		return "driver " + driver + " cannot be held to a provider from Providers; use its own sign-in"
 	}
-	return support + "; " + strconv.Quote(recordName) + " (kind " + kind + ") is not one of these, so the session does not start"
+	return facts.BindingDescription + "; " + strconv.Quote(recordName) + " (kind " + kind + ") is not one of these, so the session does not start"
 }
 
 // providerVendorEndpoints is each vendor kind's own API: the endpoint a key record with
@@ -490,6 +489,7 @@ var providerVendorEndpoints = map[string]string{
 	ProviderKindAnthropic: "https://api.anthropic.com",
 	ProviderKindOpenAI:    "https://api.openai.com/v1",
 	ProviderKindXAI:       "https://api.x.ai/v1",
+	ProviderKindGemini:    "https://generativelanguage.googleapis.com",
 }
 
 // recordEndpoint is the one endpoint a session bound to rec may reach: its base_url,
@@ -513,6 +513,8 @@ func recordEndpoint(rec ProviderRecord) (string, bool) {
 // two cannot drift apart without somebody noticing.
 func providerRecordEnv(kind, baseURL, key string) []EnvVar {
 	switch kind {
+	case ProviderKindGemini:
+		return []EnvVar{{Name: "GEMINI_API_KEY", Value: key}}
 	case ProviderKindOllama:
 		return nil // Local transport uses typed endpoint authority, never credential env.
 	case ProviderKindAnthropic:
@@ -558,6 +560,7 @@ func providerRecordFromRecord(rec model.Record) ProviderRecord {
 		Kind:        rec.String(colPRKind),
 		DisplayName: rec.String(colPRDisplayName),
 		BaseURL:     rec.String(colPRBaseURL),
+		Service:     rec.String("service"),
 		SecretRef:   rec.String(colPRSecretRef),
 		KeyHint:     rec.String(colPRKeyHint),
 		State:       rec.String(colPRState),
@@ -569,6 +572,10 @@ func providerRecordFromRecord(rec model.Record) ProviderRecord {
 		CreatedAt:   rec.String(model.ColCreatedAt),
 		UpdatedAt:   rec.String(model.ColUpdatedAt),
 		RevokedAt:   rec.String(colPRRevokedAt),
+	}
+	if !rec.IsNull(colPRDefaultModel) {
+		value := rec.String(colPRDefaultModel)
+		out.DefaultModel = &value
 	}
 	if raw := strings.TrimSpace(rec.String(colPRModels)); raw != "" {
 		var models []string
@@ -599,7 +606,7 @@ func findProviderRecordRec(ctx context.Context, sc store.Scope, ref string) (mod
 // through the vault BEFORE the row is written, so a failure to seal leaves nothing
 // behind; and the row that is written carries the locator, never the value.
 func (m *Module) CreateProviderRecord(ctx context.Context, tenant model.TenantID, in CreateProviderRecordInput) (ProviderRecord, error) {
-	if m.data == nil {
+	if m.Data == nil {
 		return ProviderRecord{}, errNoData
 	}
 	kind, err := normalizeProviderKind(in.Kind)
@@ -610,9 +617,26 @@ func (m *Module) CreateProviderRecord(ctx context.Context, tenant model.TenantID
 	if err != nil {
 		return ProviderRecord{}, err
 	}
-	baseURL, err := validProviderBaseURL(kind, in.BaseURL)
+	service := strings.TrimSpace(in.Service)
+	serviceBase, err := providerServiceBaseURL(kind, service, in.BaseURL)
 	if err != nil {
 		return ProviderRecord{}, err
+	}
+	baseURL, err := validProviderBaseURL(kind, serviceBase)
+	if err != nil {
+		return ProviderRecord{}, err
+	}
+	defaultModel, err := validProviderDefaultModel(in.DefaultModel)
+	if err != nil {
+		return ProviderRecord{}, err
+	}
+	// Only an omitted choice on a new record is eligible for first-test selection.
+	var initialDefault any = ""
+	if in.DefaultModel != nil {
+		initialDefault = defaultModel
+		if defaultModel == "" {
+			initialDefault = nil
+		}
 	}
 	var key, secretRef string
 	ref := newProviderRecordRef()
@@ -621,39 +645,44 @@ func (m *Module) CreateProviderRecord(ctx context.Context, tenant model.TenantID
 			return ProviderRecord{}, badRequest("Ollama endpoints do not accept a stored API key")
 		}
 	} else {
-		if m.rt.providerVault == nil {
+		if m.rt.ProviderVault == nil {
 			return ProviderRecord{}, ErrNoProviderVault
 		}
 		key, err = validProviderKey(in.APIKey)
 		if err != nil {
 			return ProviderRecord{}, err
 		}
-		secretRef, err = m.rt.providerVault.Seal(ctx, in.Actor, tenant, providerVaultName(ref), []byte(key))
+		secretRef, err = m.rt.ProviderVault.Seal(ctx, in.Actor, tenant, providerVaultName(ref), []byte(key))
 		if err != nil {
 			return ProviderRecord{}, sealFailure(err)
 		}
 	}
 	var out ProviderRecord
-	err = m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
+	err = m.Data.Mutate(ctx, tenant, func(sc store.Scope) error {
 		repo, rerr := sc.Ext(providerRecordKind)
 		if rerr != nil {
 			return rerr
 		}
 		created, rerr := repo.Create(ctx, model.Record{
-			colPRRef:         ref,
-			colPRKind:        kind,
-			colPRDisplayName: name,
-			colPRBaseURL:     baseURL,
-			colPRSecretRef:   secretRef,
-			colPRKeyHint:     providerKeyHint(key),
-			colPRState:       ProviderRecordActive,
-			colPRNameSlot:    activeProviderNameSlot(kind, name),
-			colPRProbeState:  ProbeNever,
+			colPRRef:          ref,
+			colPRKind:         kind,
+			colPRDisplayName:  name,
+			colPRBaseURL:      baseURL,
+			"service":         service,
+			colPRSecretRef:    secretRef,
+			colPRKeyHint:      providerKeyHint(key),
+			colPRState:        ProviderRecordActive,
+			colPRNameSlot:     activeProviderNameSlot(kind, name),
+			colPRProbeState:   ProbeNever,
+			colPRDefaultModel: initialDefault,
 		})
 		if rerr != nil {
 			return rerr
 		}
 		out = providerRecordFromRecord(created)
+		if secretRef != "" {
+			return appendProviderRecordAudit(ctx, sc, in.Actor, "create", out)
+		}
 		return nil
 	})
 	if err != nil {
@@ -661,7 +690,7 @@ func (m *Module) CreateProviderRecord(ctx context.Context, tenant model.TenantID
 		// compensation, not cleanup: a sealed blob nobody can reach is exactly the
 		// kind of residue a rotation policy later cannot see.
 		if secretRef != "" {
-			if rerr := m.rt.providerVault.Revoke(ctx, in.Actor, tenant, secretRef); rerr != nil && m.log != nil {
+			if rerr := m.rt.ProviderVault.Revoke(ctx, in.Actor, tenant, secretRef); rerr != nil && m.log != nil {
 				m.log.Warn("sessions: could not withdraw the sealed provider credential of a record that failed to persist",
 					"provider_ref", ref)
 			}
@@ -678,14 +707,14 @@ func (m *Module) CreateProviderRecord(ctx context.Context, tenant model.TenantID
 // returns the value: the vault is reached from the LAUNCH path and from nowhere a
 // reader can address.
 func (m *Module) GetProviderRecord(ctx context.Context, tenant model.TenantID, ref string) (ProviderRecord, error) {
-	if m.data == nil {
+	if m.Data == nil {
 		return ProviderRecord{}, errNoData
 	}
 	if !validProviderRecordRef(ref) {
 		return ProviderRecord{}, ErrProviderRecordNotFound
 	}
 	var out ProviderRecord
-	err := m.data.View(ctx, tenant, func(sc store.Scope) error {
+	err := m.Data.View(ctx, tenant, func(sc store.Scope) error {
 		rec, err := findProviderRecordRec(ctx, sc, ref)
 		if err != nil {
 			return err
@@ -699,7 +728,7 @@ func (m *Module) GetProviderRecord(ctx context.Context, tenant model.TenantID, r
 // ListProviderRecords returns the tenant's records, newest first, optionally
 // narrowed to one state or one kind.
 func (m *Module) ListProviderRecords(ctx context.Context, tenant model.TenantID, state, kind string, q model.Query) ([]ProviderRecord, model.Page, error) {
-	if m.data == nil {
+	if m.Data == nil {
 		return nil, model.Page{}, errNoData
 	}
 	if state != "" {
@@ -710,7 +739,7 @@ func (m *Module) ListProviderRecords(ctx context.Context, tenant model.TenantID,
 	}
 	var out []ProviderRecord
 	var page model.Page
-	err := m.data.View(ctx, tenant, func(sc store.Scope) error {
+	err := m.Data.View(ctx, tenant, func(sc store.Scope) error {
 		repo, err := sc.Ext(providerRecordKind)
 		if err != nil {
 			return err
@@ -733,11 +762,15 @@ func (m *Module) ListProviderRecords(ctx context.Context, tenant model.TenantID,
 // publishes a new private locator under the same provider reference, so every
 // binding keeps working and the next launch uses the new value.
 func (m *Module) PatchProviderRecord(ctx context.Context, tenant model.TenantID, ref string, p ProviderRecordPatch) (ProviderRecord, error) {
-	if m.data == nil {
+	if m.Data == nil {
 		return ProviderRecord{}, errNoData
 	}
 	if !validProviderRecordRef(ref) {
 		return ProviderRecord{}, ErrProviderRecordNotFound
+	}
+	defaultModel, err := validProviderDefaultModel(p.DefaultModel)
+	if err != nil {
+		return ProviderRecord{}, err
 	}
 	if p.APIKey != nil {
 		rec, err := m.GetProviderRecord(ctx, tenant, ref)
@@ -748,7 +781,7 @@ func (m *Module) PatchProviderRecord(ctx context.Context, tenant model.TenantID,
 			return ProviderRecord{}, badRequest("Ollama endpoints do not accept a stored API key")
 		}
 	}
-	if p.APIKey != nil && m.rt.providerVault == nil {
+	if p.APIKey != nil && m.rt.ProviderVault == nil {
 		return ProviderRecord{}, ErrNoProviderVault
 	}
 	var key string
@@ -782,12 +815,16 @@ func (m *Module) PatchProviderRecord(ctx context.Context, tenant model.TenantID,
 			return ProviderRecord{}, ErrProviderRecordRevoked
 		}
 		if p.BaseURL != nil {
-			if _, err := validProviderBaseURL(current.Kind, *p.BaseURL); err != nil {
+			base, err := providerServiceBaseURL(current.Kind, current.Service, *p.BaseURL)
+			if err != nil {
+				return ProviderRecord{}, err
+			}
+			if _, err := validProviderBaseURL(current.Kind, base); err != nil {
 				return ProviderRecord{}, err
 			}
 		}
 		rotation = current
-		locator, err := m.rt.providerVault.Seal(ctx, p.Actor, tenant,
+		locator, err := m.rt.ProviderVault.Seal(ctx, p.Actor, tenant,
 			providerVaultName(ref)+"/"+model.NewID().String(), []byte(key))
 		if err != nil {
 			return ProviderRecord{}, sealFailure(err)
@@ -795,7 +832,7 @@ func (m *Module) PatchProviderRecord(ctx context.Context, tenant model.TenantID,
 		nextLocator = locator
 	}
 	var out ProviderRecord
-	err := m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
+	err = m.Data.Mutate(ctx, tenant, func(sc store.Scope) error {
 		repo, rerr := sc.Ext(providerRecordKind)
 		if rerr != nil {
 			return rerr
@@ -812,7 +849,11 @@ func (m *Module) PatchProviderRecord(ctx context.Context, tenant model.TenantID,
 		}
 		resetProbe := p.APIKey != nil
 		if p.BaseURL != nil {
-			b, verr := validProviderBaseURL(rec.String(colPRKind), *p.BaseURL)
+			base, err := providerServiceBaseURL(rec.String(colPRKind), rec.String("service"), *p.BaseURL)
+			if err != nil {
+				return err
+			}
+			b, verr := validProviderBaseURL(rec.String(colPRKind), base)
 			if verr != nil {
 				return verr
 			}
@@ -822,6 +863,12 @@ func (m *Module) PatchProviderRecord(ctx context.Context, tenant model.TenantID,
 		if p.DisplayName != nil {
 			rec[colPRDisplayName] = name
 			rec[colPRNameSlot] = activeProviderNameSlot(rec.String(colPRKind), name)
+		}
+		if p.DefaultModel != nil {
+			rec[colPRDefaultModel] = nil
+			if defaultModel != "" {
+				rec[colPRDefaultModel] = defaultModel
+			}
 		}
 		if p.APIKey != nil {
 			rec[colPRSecretRef] = nextLocator
@@ -840,6 +887,9 @@ func (m *Module) PatchProviderRecord(ctx context.Context, tenant model.TenantID,
 			return rerr
 		}
 		out = providerRecordFromRecord(updated)
+		if p.APIKey != nil {
+			return appendProviderRecordAudit(ctx, sc, p.Actor, "rotate", out)
+		}
 		return nil
 	})
 	if nextLocator != "" {
@@ -866,7 +916,7 @@ func (m *Module) PatchProviderRecord(ctx context.Context, tenant model.TenantID,
 // on; a binding that silently vanished would present as "no credential configured"
 // on a profile the operator configured deliberately.
 func (m *Module) RevokeProviderRecord(ctx context.Context, actor auth.Principal, tenant model.TenantID, ref string) (ProviderRecord, error) {
-	if m.data == nil {
+	if m.Data == nil {
 		return ProviderRecord{}, errNoData
 	}
 	if !validProviderRecordRef(ref) {
@@ -874,7 +924,7 @@ func (m *Module) RevokeProviderRecord(ctx context.Context, actor auth.Principal,
 	}
 	var secretRef string
 	var out ProviderRecord
-	err := m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
+	err := m.Data.Mutate(ctx, tenant, func(sc store.Scope) error {
 		repo, rerr := sc.Ext(providerRecordKind)
 		if rerr != nil {
 			return rerr
@@ -898,6 +948,9 @@ func (m *Module) RevokeProviderRecord(ctx context.Context, actor auth.Principal,
 			return rerr
 		}
 		out = providerRecordFromRecord(updated)
+		if secretRef != "" {
+			return appendProviderRecordAudit(ctx, sc, actor, "revoke", out)
+		}
 		return nil
 	})
 	if err != nil {
@@ -906,8 +959,8 @@ func (m *Module) RevokeProviderRecord(ctx context.Context, actor auth.Principal,
 	// The state change is what refuses the launch; destroying the value is what makes
 	// the refusal true even for a reader that goes around the state. It runs AFTER the
 	// row is committed so a failed transaction never destroys a live credential.
-	if m.rt.providerVault != nil && secretRef != "" {
-		if verr := m.rt.providerVault.Revoke(ctx, actor, tenant, secretRef); verr != nil && m.log != nil {
+	if m.rt.ProviderVault != nil && secretRef != "" {
+		if verr := m.rt.ProviderVault.Revoke(ctx, actor, tenant, secretRef); verr != nil && m.log != nil {
 			m.log.Warn("sessions: the provider record is revoked but its sealed value could not be destroyed",
 				"provider_ref", ref,
 				"effect", "launches are already refused by the record state; the sealed blob remains until the vault is repaired")
@@ -923,10 +976,10 @@ func (m *Module) RevokeProviderRecord(ctx context.Context, actor auth.Principal,
 // operator's money, on a model nobody chose, to answer a question a model LIST
 // already answers: is the endpoint reachable and does it accept this credential.
 func (m *Module) TestProviderRecord(ctx context.Context, tenant model.TenantID, ref string) (ProviderRecord, error) {
-	if m.data == nil {
+	if m.Data == nil {
 		return ProviderRecord{}, errNoData
 	}
-	if m.rt.providerProbe == nil {
+	if m.rt.ProviderProbe == nil {
 		return ProviderRecord{}, ErrNoProviderProbe
 	}
 	rec, err := m.GetProviderRecord(ctx, tenant, ref)
@@ -936,26 +989,34 @@ func (m *Module) TestProviderRecord(ctx context.Context, tenant model.TenantID, 
 	if rec.State != ProviderRecordActive {
 		return ProviderRecord{}, ErrProviderRecordRevoked
 	}
-	var key []byte
-	if rec.Kind != ProviderKindOllama {
-		if m.rt.providerVault == nil {
-			return ProviderRecord{}, ErrNoProviderVault
-		}
-		key, err = m.rt.providerVault.Open(ctx, tenant, rec.SecretRef)
-		if err != nil {
-			return ProviderRecord{}, openFailure(err)
-		}
-	}
 	started := m.now()
-	res, probeErr := m.rt.providerProbe.Probe(ctx, ProviderProbeRequest{
-		Kind: rec.Kind, BaseURL: rec.BaseURL, APIKey: string(key),
-	})
+	res, probeErr := m.probeProviderRecord(ctx, tenant, rec)
+	var refused *runErr
+	if errors.As(probeErr, &refused) {
+		return ProviderRecord{}, probeErr
+	}
 	elapsed := m.now().Sub(started)
 	if elapsed < 0 {
 		elapsed = 0
 	}
 	state, detail, models := classifyProbe(res, probeErr)
 	return m.recordProbeOutcome(ctx, tenant, rec, state, detail, models, elapsed)
+}
+
+func (m *Module) probeProviderRecord(ctx context.Context, tenant model.TenantID, rec ProviderRecord) (ProviderProbeResult, error) {
+	var key []byte
+	var err error
+	if rec.Kind != ProviderKindOllama {
+		if m.rt.ProviderVault == nil {
+			return ProviderProbeResult{}, ErrNoProviderVault
+		}
+		key, err = m.rt.ProviderVault.Open(ctx, tenant, rec.SecretRef)
+		if err != nil {
+			return ProviderProbeResult{}, openFailure(err)
+		}
+	}
+	defer clear(key)
+	return m.probeProviderService(ctx, rec, string(key))
 }
 
 // classifyProbe turns a probe answer into the three-valued outcome. The split is
@@ -1006,7 +1067,7 @@ func (m *Module) recordProbeOutcome(
 		}
 	}
 	var out ProviderRecord
-	err := m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
+	err := m.Data.Mutate(ctx, tenant, func(sc store.Scope) error {
 		repo, rerr := sc.Ext(providerRecordKind)
 		if rerr != nil {
 			return rerr
@@ -1027,6 +1088,11 @@ func (m *Module) recordProbeOutcome(
 		rec[colPRProbeLatency] = elapsed.Milliseconds()
 		rec[colPRProbedAt] = model.NewTimestamp(m.now()).String()
 		rec[colPRModels] = encoded
+		if state == ProbeOK && !rec.IsNull(colPRDefaultModel) && rec.String(colPRDefaultModel) == "" {
+			if selected := initialProviderModel(rec.String(colPRKind), models); selected != "" {
+				rec[colPRDefaultModel] = selected
+			}
+		}
 		updated, rerr := repo.Update(ctx, rec)
 		if rerr != nil {
 			return rerr
@@ -1050,3 +1116,17 @@ var (
 		model.Leaf("[]", model.None("a model id the provider listed on the last probe: provider_record.go:831-836, provider_record.go:459-464")),
 	)
 )
+
+// Commit the key change and its evidence together. Only the public reference and
+// provider kind reach this event: never the key, hint, locator or endpoint.
+func appendProviderRecordAudit(ctx context.Context, sc store.Scope, actor auth.Principal, verb string, record ProviderRecord) error {
+	event, err := sc.Audit().Append(ctx, model.AuditDraft{
+		Actor: orSystem(actor.Actor()), ActorKind: orSystemKind(actor.ActorKind()),
+		Action: "sessions.provider_record." + verb, TargetKind: providerRecordKind, TargetID: record.ID,
+		Meta: map[string]any{"provider_ref": record.Ref, "kind": record.Kind},
+	})
+	if err == nil && event.Seq == 0 {
+		return errors.New("provider key change audit was not persisted")
+	}
+	return err
+}

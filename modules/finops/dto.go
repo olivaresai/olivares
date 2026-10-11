@@ -5,7 +5,6 @@
 package finops
 
 import (
-	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
@@ -444,23 +443,15 @@ func timeWindow(r *http.Request) (since time.Time, hasSince bool, until time.Tim
 
 func decodeJSON(w http.ResponseWriter, r *http.Request, v any) bool {
 	if err := api.DecodeRequestBody(w, r, v, api.RequestBodySpec{MaxBytes: 1 << 20}); err != nil {
-		writeJSON(w, http.StatusBadRequest, errorBody("invalid request body"))
+		writeJSON(w, http.StatusBadRequest, errorBody(api.RequestBodyErrorMessage(err, "invalid request body")))
 		return false
 	}
 	return true
 }
 
-func errorBody(msg string) map[string]any {
-	return map[string]any{"error": map[string]string{"message": msg}}
-}
+var errorBody = api.ModuleErrorBody
 
-func writeJSON(w http.ResponseWriter, status int, v any) {
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.WriteHeader(status)
-	if v != nil {
-		_ = json.NewEncoder(w).Encode(v)
-	}
-}
+var writeJSON = api.WriteJSON
 
 // writeStoreError maps a store error to an HTTP status. Everything except this
 // module's own conflict wording is api.StoreErrorStatus (core/api/moduleerrors.go),

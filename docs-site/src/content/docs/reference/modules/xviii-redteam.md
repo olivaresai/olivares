@@ -6,6 +6,9 @@ description: >-
   scorecard. What it tests, the consent red line, and its honest limits.
 ---
 
+The red-team catalog, targets and runs are **[Business](https://olivares.ai/pricing)** features. Community answers these API routes with 501 and omits the command group and console page. Stored targets, runs and results remain in data exports and disaster-recovery backups. Evaluations and sandboxes remain Community features.
+
+
 Module XVIII is a **defensive robustness harness**. It probes the client's **own**
 governed agents with a battery of published adversarial test cases — prompt
 injection, jailbreak, exfiltration, tool poisoning — and scores their resistance,

@@ -31,9 +31,20 @@ const (
 	defaultDRScheduleInterval = time.Minute
 )
 
+// drScheduleProbe is the pump's view of the API server (C2 item 3): the cheap
+// configured gate plus the due evaluation. *api.Server satisfies it; a test
+// supplies its own.
+type drScheduleProbe interface {
+	ScheduledBackupConfigured(context.Context) (bool, error)
+	RunDueScheduledBackup(context.Context, time.Time) (bool, error)
+}
+
 type drSchedulePump struct {
+	// lastEval is when the due evaluation last ran (C2 item 3 throttle). The
+	// scheduler calls runOnce serially, so a plain timestamp suffices.
+	lastEval time.Time
 	st       store.Store
-	api      *api.Server
+	api      drScheduleProbe
 	interval time.Duration
 	clock    func() time.Time
 	log      *slog.Logger
@@ -73,6 +84,11 @@ func drScheduleInterval(raw string, log *slog.Logger) (time.Duration, bool) {
 }
 
 // register schedules the pump on the runtime's own scheduler (before Start).
+// drScheduleSafetyInterval is the unconfigured cadence (C2 item 3): with no
+// enabled schedule anywhere, the pump evaluates at most this often (and picks
+// up a schedule written meanwhile at the same safety tick).
+const drScheduleSafetyInterval = time.Hour
+
 func (p *drSchedulePump) register(rt *runtime.Runtime) error {
 	return rt.SchedulePeriodic(drScheduleJobName, p.interval, false, p.runOnce)
 }
@@ -84,6 +100,15 @@ func (p *drSchedulePump) runOnce(ctx context.Context) error {
 	if !p.st.Leader().Active() {
 		return nil
 	}
+	// C2 item 3: with no enabled schedule configured, evaluate only on the
+	// hourly safety cadence. A probe error throttles nothing: the due path owns
+	// its own failure reporting (a throttle that hid a store fault would hide
+	// the fault).
+	configured, err := p.api.ScheduledBackupConfigured(ctx)
+	if err == nil && !configured && !p.lastEval.IsZero() && time.Since(p.lastEval) < drScheduleSafetyInterval {
+		return nil
+	}
+	p.lastEval = time.Now()
 	ran, err := p.api.RunDueScheduledBackup(ctx, p.clock().UTC())
 	if err != nil {
 		p.log.Warn("dr-schedule: scheduled backup attempt failed; will retry on the next due instant", "err", err)

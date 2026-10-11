@@ -24,7 +24,7 @@ GO="${OLIVARES_C0305_GO:-modules/governance/roster.go}"
 grep -q 'HOLD on gating Snapshot' "$DOC" || fail "$DOC lost HOLD on gating Snapshot"
 grep -q 'accumulates' "$DOC" || fail "$DOC lost accumulates"
 if grep -qiE 'Snapshot gated|FIRMA A claimed' "$DOC"; then
-	fail "$DOC claims a close this lote does not have"
+	fail "$DOC claims a close this batch does not have"
 fi
 
 python3 - "$JSON" <<'PY' || fail "JSON flags drifted"

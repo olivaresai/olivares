@@ -10,7 +10,6 @@ import (
 	"errors"
 	"fmt"
 	"runtime/debug"
-	"sort"
 	"strings"
 	"time"
 
@@ -2088,14 +2087,3 @@ func guardOnly(dia dialect.Dialect) string {
 // receiptLookupKey is how guardRolloutReceipts keys its map: unit and kind, separated by
 // the one byte neither can contain.
 func receiptLookupKey(unitID, kind string) string { return unitID + "\x00" + kind }
-
-// sortedUnitIDs returns the map's keys in a deterministic order, for messages and for the
-// ordered arrays the bulk query binds.
-func sortedUnitIDs(m map[string]unitGateFold) []string {
-	out := make([]string, 0, len(m))
-	for k := range m {
-		out = append(out, k)
-	}
-	sort.Strings(out)
-	return out
-}

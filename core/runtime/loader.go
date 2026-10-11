@@ -5,8 +5,6 @@
 package runtime
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"os"
@@ -16,6 +14,7 @@ import (
 
 	goplugin "github.com/hashicorp/go-plugin"
 
+	"github.com/olivaresai/olivares/core/runtime/confine"
 	"github.com/olivaresai/olivares/core/runtime/plugjail"
 	"github.com/olivaresai/olivares/sdk"
 	"github.com/olivaresai/olivares/sdk/event"
@@ -24,15 +23,15 @@ import (
 
 // LoadSourcePlugin launches the plugin executable at path, dispenses its source
 // connector over gRPC and registers it exactly like an in-process source. The
-// plugin process is tracked and killed on Stop. If the plugin crashes later,
-// go-plugin tears the connection down; the source's Gather returns an error and
-// it is marked failed (failure isolation).
+// plugin process is tracked and killed on Stop. If the plugin process dies later,
+// the source's Gather returns an error, the engine stays up (failure isolation) and
+// the gather loop starts the same binary again (restartDeadPlugin).
 func (r *Runtime) LoadSourcePlugin(path string, cfg sdk.Config, tenant string) error {
 	// secure=nil: first-party plugin binaries are extracted from the host's own
 	// go:embed set (cmd/olivares/firstparty) — their provenance IS the release
 	// build the engine itself shipped in, so there is no separate artifact to pin.
 	// External (third-party) binaries go through LoadSourcePluginVerified instead.
-	return r.loadSourcePlugin("", path, cfg, tenant, nil)
+	return r.loadSourcePlugin("", pluginLaunch{path: path}, cfg, tenant)
 }
 
 // LoadSourcePluginNamed is LoadSourcePlugin with the registration name supplied by
@@ -45,7 +44,7 @@ func (r *Runtime) LoadSourcePluginNamed(name, path string, cfg sdk.Config, tenan
 	if err := validRegistrationName(name); err != nil {
 		return err
 	}
-	return r.loadSourcePlugin(name, path, cfg, tenant, nil) // secure=nil: first-party, as above
+	return r.loadSourcePlugin(name, pluginLaunch{path: path}, cfg, tenant) // no pin: first-party, as above
 }
 
 // LoadSourcePluginVerified launches an EXTERNAL (third-party) source-connector
@@ -53,8 +52,8 @@ func (r *Runtime) LoadSourcePluginNamed(name, path string, cfg sdk.Config, tenan
 // sha256Hex is the operator-pinned artifact digest (lowercase hex, normalized by
 // the admission gate); it is decoded into a go-plugin SecureConfig, which makes
 // go-plugin RE-HASH the binary on disk immediately before exec and refuse to
-// launch on any mismatch — so the verified bytes are the executed bytes (the
-// TOCTOU pin: a binary swapped between verification and launch never runs).
+// launch on a checksum mismatch. The path hash-then-exec window is unchanged;
+// execution is not sealed against a path replacement after that check.
 // A malformed digest is refused outright without touching the file: a
 // supplied-but-unusable pin refuses, it never degrades to an unpinned launch.
 //
@@ -64,11 +63,11 @@ func (r *Runtime) LoadSourcePluginNamed(name, path string, cfg sdk.Config, tenan
 // enforces the integrity pin, not the trust decision. After the pin, the flow is
 // identical to LoadSourcePlugin: dispense over gRPC (AutoMTLS), register, track.
 func (r *Runtime) LoadSourcePluginVerified(path string, cfg sdk.Config, tenant string, sha256Hex string) error {
-	secure, err := secureConfigFor(path, sha256Hex)
+	launch, err := pinnedLaunch(path, sha256Hex)
 	if err != nil {
 		return err
 	}
-	return r.loadSourcePlugin("", path, cfg, tenant, secure)
+	return r.loadSourcePlugin("", launch, cfg, tenant)
 }
 
 // LoadSourcePluginVerifiedNamed is LoadSourcePluginVerified with an explicit
@@ -80,11 +79,11 @@ func (r *Runtime) LoadSourcePluginVerifiedNamed(name, path string, cfg sdk.Confi
 	if err := validRegistrationName(name); err != nil {
 		return err
 	}
-	secure, err := secureConfigFor(path, sha256Hex)
+	launch, err := pinnedLaunch(path, sha256Hex)
 	if err != nil {
 		return err
 	}
-	return r.loadSourcePlugin(name, path, cfg, tenant, secure)
+	return r.loadSourcePlugin(name, launch, cfg, tenant)
 }
 
 // loadSourcePlugin is the shared launch+register path. An empty regName is the
@@ -92,16 +91,10 @@ func (r *Runtime) LoadSourcePluginVerifiedNamed(name, path string, cfg sdk.Confi
 // connector's Descriptor name is the registration identity, exactly as before. The
 // exported Named variants reject an empty name before reaching here, so a
 // configured source can never fall back to its descriptor by accident.
-func (r *Runtime) loadSourcePlugin(regName, path string, cfg sdk.Config, tenant string, secure *goplugin.SecureConfig) error {
-	raw, client, err := r.dispense(path, sdkplugin.SourcePluginMap(), sdkplugin.SourcePluginName, secure)
+func (r *Runtime) loadSourcePlugin(regName string, launch pluginLaunch, cfg sdk.Config, tenant string) error {
+	conn, client, err := r.launchSource(launch)
 	if err != nil {
 		return err
-	}
-	conn, ok := raw.(sdk.SourceConnector)
-	if !ok {
-		client.Kill()
-		r.RunPluginCleanup(client)
-		return fmt.Errorf("runtime: plugin %q did not dispense a SourceConnector (%T)", path, raw)
 	}
 	name := regName
 	if name == "" {
@@ -118,7 +111,7 @@ func (r *Runtime) loadSourcePlugin(regName, path string, cfg sdk.Config, tenant 
 		return err
 	}
 	r.trackClient(client)
-	r.linkSourceClient(name, client)
+	r.linkSourceClient(name, client, launch)
 	return nil
 }
 
@@ -142,20 +135,14 @@ func (r *Runtime) LoadOutputPlugin(path string, cfg sdk.Config, types []event.Ty
 // (the notify-destination path calls the connector's Notify directly). The
 // returned client is NOT yet tracked: the caller must either TrackOutputPlugin it
 // (so Stop closes the connector and kills the subprocess) or Kill it on a failed
-// Open.
+// Open. The connector is supervised: when a Notify fails because the plugin process
+// died, the runtime starts the same binary again (supervisedOutput), so the client
+// the caller holds is only the first process.
+//
+// secure=nil: like LoadSourcePlugin, output plugins are first-party embedded
+// binaries (the notify composition has no external-plugin wiring).
 func (r *Runtime) DispenseOutputPlugin(path string) (sdk.OutputConnector, *goplugin.Client, error) {
-	// secure=nil: like LoadSourcePlugin, output plugins are first-party embedded
-	// binaries (the notify composition has no external-plugin wiring).
-	raw, client, err := r.dispense(path, sdkplugin.OutputPluginMap(), sdkplugin.OutputPluginName, nil)
-	if err != nil {
-		return nil, nil, err
-	}
-	conn, ok := raw.(sdk.OutputConnector)
-	if !ok {
-		client.Kill()
-		return nil, nil, fmt.Errorf("runtime: plugin %q did not dispense an OutputConnector (%T)", path, raw)
-	}
-	return conn, client, nil
+	return r.dispenseOutput(pluginLaunch{path: path})
 }
 
 // DispenseOutputPluginVerified is the EXTERNAL (third-party) twin of
@@ -167,28 +154,30 @@ func (r *Runtime) DispenseOutputPlugin(path string) (sdk.OutputConnector, *goplu
 // attestation (cmd/olivares/externalplugins.go, admitExternalPlugin); here it is
 // decoded into a go-plugin SecureConfig so go-plugin RE-HASHES the binary on disk
 // immediately before exec and refuses to launch on any mismatch — the verified
-// bytes are the executed bytes (the TOCTOU pin). A malformed digest is refused
+// digest is checked at the original path before launch; execution is not sealed.
+// A malformed digest is refused
 // outright without touching the file: a supplied-but-unusable pin refuses, it never
 // degrades to an unpinned launch (the LoadSourcePluginVerified posture). Signature
 // verification happens BEFORE this call; this method enforces the integrity pin.
 // The returned client is NOT yet tracked: the caller must TrackOutputPlugin it on a
-// successful Open or Kill it on failure.
+// successful Open or Kill it on failure. A restart of a dead plugin checks the pin
+// again (see DispenseOutputPlugin).
 func (r *Runtime) DispenseOutputPluginVerified(path string, sha256Hex string) (sdk.OutputConnector, *goplugin.Client, error) {
-	sum, err := hex.DecodeString(sha256Hex)
-	if err != nil || len(sum) != sha256.Size {
-		return nil, nil, fmt.Errorf("runtime: external output plugin %q: pinned digest is not a sha256 hex digest (a supplied-but-unusable pin refuses, never degrades to an unpinned launch)", path)
-	}
-	secure := &goplugin.SecureConfig{Checksum: sum, Hash: sha256.New()}
-	raw, client, err := r.dispense(path, sdkplugin.OutputPluginMap(), sdkplugin.OutputPluginName, secure)
+	launch, err := pinnedLaunch(path, sha256Hex)
 	if err != nil {
 		return nil, nil, err
 	}
-	conn, ok := raw.(sdk.OutputConnector)
-	if !ok {
-		client.Kill()
-		return nil, nil, fmt.Errorf("runtime: plugin %q did not dispense an OutputConnector (%T)", path, raw)
+	return r.dispenseOutput(launch)
+}
+
+// dispenseOutput launches an output plugin and wraps its connector so a dead
+// process is started again.
+func (r *Runtime) dispenseOutput(launch pluginLaunch) (sdk.OutputConnector, *goplugin.Client, error) {
+	conn, client, err := r.launchOutput(launch)
+	if err != nil {
+		return nil, nil, err
 	}
-	return conn, client, nil
+	return &supervisedOutput{rt: r, launch: launch, first: client, conn: conn, client: client}, client, nil
 }
 
 // TrackOutputPlugin registers a successfully opened, standalone output plugin for
@@ -248,7 +237,7 @@ func (r *Runtime) UntrackOutputPlugin(conn sdk.OutputConnector, client *goplugin
 // dispense starts a plugin process and returns the dispensed implementation plus
 // its client (so the caller can Kill it on failure or track it for Stop). secure,
 // when non-nil, is the S142 exec-time integrity pin for EXTERNAL binaries:
-// go-plugin re-hashes the file right before launching it and refuses to start on
+// go-plugin's checksum check hashes the original path before launching it and refuses to start on
 // a checksum mismatch (goplugin.ErrChecksumsDoNotMatch). First-party callers pass
 // nil (embedded binaries — see LoadSourcePlugin).
 func (r *Runtime) dispense(path string, plugins goplugin.PluginSet, name string, secure *goplugin.SecureConfig) (any, *goplugin.Client, error) {
@@ -258,14 +247,25 @@ func (r *Runtime) dispense(path string, plugins goplugin.PluginSet, name string,
 	// the per-launch attestation records the real level. SkipHostEnv stops go-plugin from
 	// re-adding os.Environ() on top of plugjail's scoped env.
 	cmd := exec.Command(path) // #nosec G204 -- operator-admitted, digest-pinned plugin binary (externalplugins.go); confined below
+	pluginPath := cmd.Path    // exec.Command's original PATH resolution, before helper wrapping
 	att, cleanup, jerr := plugjail.Apply(cmd, plugjail.Default(filepath.Base(path)))
 	if jerr != nil {
 		return nil, nil, fmt.Errorf("runtime: confine plugin %q: %w", path, jerr)
 	}
-	r.log.Info("plugin launched under confinement",
-		"plugin", att.Plugin, "level", att.Level, "env_scoped", att.EnvScoped,
-		"dedicated_uid", att.DedicatedUID, "cgroup", att.Cgroup,
-		"platform", att.Platform, "degraded", att.Degraded)
+	// The hash still covers the original plugin path, not the re-exec helper.
+	// ponytail: path hash-then-exec window as in go-plugin, sealed execution if a threat model needs it
+	if secure != nil && confine.IsWrapped(cmd) {
+		ok, err := secure.Check(pluginPath)
+		if err != nil || !ok {
+			plugjail.CloseSpawnFD(cmd)
+			cleanup()
+			if err != nil {
+				return nil, nil, fmt.Errorf("runtime: connect plugin %q: error verifying checksum: %s", path, err)
+			}
+			return nil, nil, fmt.Errorf("runtime: connect plugin %q: %w", path, goplugin.ErrChecksumsDoNotMatch)
+		}
+		secure = nil // go-plugin must not hash the engine/helper in place of the plugin
+	}
 
 	client := goplugin.NewClient(&goplugin.ClientConfig{
 		HandshakeConfig:  sdkplugin.Handshake,
@@ -296,6 +296,12 @@ func (r *Runtime) dispense(path string, plugins goplugin.PluginSet, name string,
 		cleanup()
 		return nil, nil, fmt.Errorf("runtime: connect plugin %q: %w%s", path, err, noexecHint(path, err))
 	}
+	att = plugjail.ConfirmLaunch(cmd, att)
+	r.log.Info("plugin launched under confinement",
+		"plugin", att.Plugin, "level", att.Level, "env_scoped", att.EnvScoped,
+		"dedicated_uid", att.DedicatedUID, "cgroup", att.Cgroup,
+		"landlock", att.Landlock, "no_new_privs", att.NoNewPrivs,
+		"platform", att.Platform, "degraded", att.Degraded)
 	raw, err := rpc.Dispense(name)
 	if err != nil {
 		client.Kill() // as above: kill (blocks until exit) BEFORE cleanup releases the uid (F8)
@@ -351,17 +357,18 @@ func (r *Runtime) trackClient(c *goplugin.Client) {
 }
 
 // linkSourceClient records that the source REGISTERED UNDER name is backed by the
-// out-of-process plugin client c, so a live remove Kills exactly that
+// out-of-process plugin client c, started as launch (so the supervisor can restart
+// it the same way), and so a live remove Kills exactly that
 // subprocess — and, when two rows run the same binary, exactly the right one of the
 // two. The client is
 // ALSO tracked in r.clients for Stop's blanket teardown (trackClient); a live
 // remove untracks it there first so it is never Killed twice. Pre-Start plugin
 // sources are linked here too, so a source added at boot can still be removed
 // live (its name resolves through srcIndex).
-func (r *Runtime) linkSourceClient(name string, c *goplugin.Client) {
+func (r *Runtime) linkSourceClient(name string, c *goplugin.Client, launch pluginLaunch) {
 	r.mu.Lock()
 	if reg, ok := r.srcIndex[name]; ok {
-		reg.client = c
+		reg.client, reg.plugin = c, launch
 	}
 	r.mu.Unlock()
 }
@@ -385,12 +392,9 @@ func (r *Runtime) untrackClient(c *goplugin.Client) {
 // executable format. The diagnostic names the extraction mount and both supported
 // relocation controls (TMPDIR and data-dir) when the mount remains a candidate.
 //
-// ⛔ NO ES COSMETICO. Medido el 2026-08-18 en CI: `examples` murio en un runner con
-// «fork/exec …: permission denied» sobre un fichero que el extractor deja en 0700 a proposito
-// (cmd/olivares/firstparty/embed.go:90, «force 0700 so the subprocess is launchable»). Con el bit
-// puesto, el mensaje senala al sitio equivocado y manda a revisar permisos que ya son correctos;
-// la causa era el montaje. Reproducido con control positivo y negativo: el MISMO fichero 0700
-// falla en un tmpfs `noexec` y corre en uno normal.
+// A 0700 executable can still fail on a noexec mount. When its permission
+// bits are correct, pointing only at chmod sends the operator to the wrong cause.
+// The same executable succeeds on an executable mount and fails on noexec.
 //
 // It stays deliberately cheap and quiet when uncertain: if EACCES arrives but
 // the mode cannot be read, it says nothing. ENOEXEC gets a separate format/mount
@@ -399,11 +403,8 @@ func noexecHint(path string, err error) string {
 	return noexecHintFor(path, err, os.Geteuid())
 }
 
-// noexecHintFor recibe el euid como ARGUMENTO en vez de leerlo del proceso, y no es ceremonia:
-// las tres causas que distingue dependen de si el motor es root, y una bateria no corre como
-// root. Con `os.Geteuid()` leido dentro, los casos que importan quedaban INCOMPROBABLES en la
-// maquina donde se escriben — la misma vacuidad que se midio el 2026-08-19 en
-// cmd/olivares/firstparty, donde borrar entero un `os.Chmod` dejaba su test en verde.
+// noexecHintFor takes an explicit euid so tests can exercise both the root
+// engine's jailed child and the unprivileged engine without requiring root.
 func noexecHintFor(path string, err error, euid int) string {
 	if errors.Is(err, syscall.ENOEXEC) {
 		return fmt.Sprintf(" (exec returned ENOEXEC for %s: verify the executable format and the mount containing %s; if that mount forbids execution, set TMPDIR to an executable mount or place --data-dir / OLIVARES_DATA_DIR on an executable, writable mount)",
@@ -413,34 +414,22 @@ func noexecHintFor(path string, err error, euid int) string {
 		return ""
 	}
 
-	// ⛔ Y EL BIT QUE SE MIRA DEPENDE DE QUIEN VA A ATRAVESAR. Lo encontro otro carril
-	// contrastando este mismo instrumento: el bucle preguntaba por `0o100`, el bit del DUENO,
-	// mientras el fallo que explica es de OTRO uid — con el motor como root, plugjail baja el
-	// hijo a un uid dedicado no-root ANTES del execve. Un directorio 0700 tiene el bit del
-	// dueno puesto, asi que el bucle NO disparaba.
-	//
-	// No mordia mientras la extraccion dejaba TODO en 0700, porque la comprobacion del binario
-	// disparaba primero. Mordia justo al aplicar el arreglo A MEDIAS —binario 0711, directorios
-	// aun 0700—, y entonces este mensaje llegaba a afirmar «todos sus directorios son
-	// atravesables»: falso para el uid enjaulado, y apuntando lejos de la causa precisamente
-	// cuando el diagnostico es lo unico que queda.
-	bitBusqueda, deQuien := os.FileMode(0o100), "su dueno"
+	// Check the search bit for the uid that will traverse the directory.
+	// With a root engine, plugjail switches to a dedicated non-root uid
+	// before execve. Owner-search on a 0700 directory does not help that uid,
+	// even when the binary itself has already been changed to 0711.
+	bitBusqueda, deQuien := os.FileMode(0o100), "its owner"
 	if euid == 0 {
-		bitBusqueda, deQuien = 0o001, "el uid dedicado no-root bajo el que plugjail lanza el plugin"
+		bitBusqueda, deQuien = 0o001, "the dedicated non-root uid plugjail launches the plugin under"
 	}
 
-	// ⛔ LOS ANCESTROS VAN PRIMERO, y el orden es el arreglo. Un directorio sin bit de BUSQUEDA no
-	// solo impide ejecutar lo que hay dentro: impide hasta hacerle `stat`. La primera version
-	// miraba el modo del binario antes que nada y salia por «no he podido mirar» justo en el caso
-	// que venia a explicar. Lo destapo su propio test, no una corrida.
-	//
-	// Y la distincion importa porque las DOS causas dan el mismo EACCES —reproducido el 2026-08-19
-	// con un intermedio en `drw-------`: rc=126, texto identico al de un montaje noexec— pero solo
-	// una se arregla desde el codigo que creo el directorio.
+	// Check ancestors first: missing directory-search permission can block
+	// stat on the binary itself. Both this and noexec produce EACCES, but
+	// only the former is fixed by the code that creates the directory.
 	for dir := filepath.Dir(path); ; {
 		d, statErr := os.Stat(dir)
 		if statErr == nil && d.IsDir() && d.Mode().Perm()&bitBusqueda == 0 {
-			return fmt.Sprintf(" (el directorio %s es %v: no concede bit de BUSQUEDA a %s, y sin atravesarlo execve responde EACCES igual que un montaje noexec)",
+			return fmt.Sprintf(" (directory %s is %v: it grants no search bit to %s, and without traversing it execve answers EACCES just like a noexec mount)",
 				dir, d.Mode().Perm(), deQuien)
 		}
 		padre := filepath.Dir(dir)
@@ -452,17 +441,12 @@ func noexecHintFor(path string, err error, euid int) string {
 
 	fi, statErr := os.Stat(path)
 	if statErr != nil || fi.Mode().Perm()&0o111 == 0 {
-		return "" // sin bit de ejecucion: el mensaje de siempre ya apunta bien
+		return "" // without an execute bit, the original error already points at the cause
 	}
-	// ⛔ Y LA TERCERA CAUSA, que es la que de verdad muerde y la que estas dos primeras versiones
-	// atribuyeron mal al montaje: si el motor corre como ROOT, plugjail baja el hijo a un uid
-	// DEDICADO NO-ROOT (plugjail_linux.go:37) antes del execve. Un binario 0700 y unos directorios
-	// 0700 pertenecen al motor, no a ese uid — asi que el hijo no puede ni atravesar ni ejecutar, y
-	// el kernel responde EACCES: el mismo «permission denied» que un noexec.
-	//
-	// Se distingue sin adivinar: si somos root y el modo no da permiso al OTRO, esa es la causa.
+	// A root engine's dedicated non-root child cannot execute a 0700
+	// binary owned by the engine. The resulting EACCES is not mount evidence.
 	if euid == 0 && fi.Mode().Perm()&0o001 == 0 {
-		return fmt.Sprintf(" (el motor corre como ROOT, asi que el plugin se lanza bajo un uid DEDICADO no-root; %s es %v y no concede permiso a ese uid — de ahi el EACCES. No es el montaje: es que la extraccion escribe 0700 y el jail cambia de identidad antes de ejecutar)",
+		return fmt.Sprintf(" (the engine runs as ROOT, so the plugin is launched under a DEDICATED non-root uid; %s is %v and grants no permission to that uid — hence the EACCES. It is not the mount: the extraction writes 0700 and the jail switches identity before executing)",
 			path, fi.Mode().Perm())
 	}
 

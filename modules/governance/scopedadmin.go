@@ -48,8 +48,8 @@ const (
 	scopeAgentGroup = "agent_group" // resource in AgentGroup::"<slug>"
 	// scopeFolder bounds a delegated-admin grant to a subtree of the Resource tree:
 	// resource in Resource::"<folder-id>". The engine resolves the acted-on resource's
-	// folder ancestors from its materialized Path (grants.go resourceTreeParents), so a grant
-	// on a folder OR an ancestor authorizes the whole subtree below it (downward inheritance)
+	// folder ancestors from its materialized Path (store.Ancestors, grants.go
+	// resourceTreeParents), so a grant on a folder OR an ancestor authorizes the whole subtree below it (downward inheritance)
 	// — the SAME mechanism the source-scope folder binding uses. The ref is a Resource
 	// id (a folder is a Resource of Kind "folder", but any Resource node is a valid subtree
 	// root), never a slug.
@@ -420,51 +420,21 @@ func permSubset(a, b map[string]bool) bool {
 
 // scopeContains reports whether outer contains inner along the axis: the class
 // filter must be equal-or-broader, and the tree node must enclose the inner node
-// (tenant ⊇ everything; a workspace ⊇ itself, the agent-groups whose workspace it is, and
-// the folders that live in it; an agent-group ⊇ only itself; a folder ⊇ itself and its
-// descendant folders). It never lets a narrower scope enclose a broader one (no upward
-// escalation).
+// (tenant ⊇ everything; the rest is the lineage module's question, store.Contains: a
+// workspace ⊇ itself and the agent-groups whose workspace it is, an agent-group ⊇ only
+// itself, a folder ⊇ itself and its descendant folders). It never lets a narrower scope
+// enclose a broader one (no upward escalation). The scope trees name their nodes as the
+// module does ("workspace", "agent_group", "folder"); scopeTenant is no node of it.
 func scopeContains(ctx context.Context, sc store.Scope, outer, inner scopeSpec) (bool, error) {
 	if outer.Class != "" && outer.Class != inner.Class {
 		return false, nil
 	}
-	switch outer.Tree {
-	case scopeTenant:
+	if outer.Tree == scopeTenant {
 		return true, nil
-	case scopeWorkspace:
-		switch inner.Tree {
-		case scopeWorkspace:
-			return outer.Ref == inner.Ref, nil
-		case scopeAgentGroup:
-			ws, err := agentGroupWorkspaceSlug(ctx, sc, inner.Ref)
-			if err != nil {
-				return false, err
-			}
-			return ws != "" && ws == outer.Ref, nil
-		default:
-			// A workspace admin deliberately CANNOT sub-delegate a folder grant (review):
-			// a Resource's workspace_id is decoupled from its tree position (the store lets a
-			// child carry a different workspace than its parent), so a folder anchored in
-			// workspace W can enclose descendants in OTHER workspaces — and the folder permit
-			// (`resource in Resource::"<id>"`) carries no workspace predicate. Allowing a
-			// W-scoped admin to delegate such a grant would let it reach resources outside W
-			// (a cross-workspace confinement escape). Only a tenant admin (tenant ⊇ folder) or a
-			// folder admin (folder ⊇ descendant, tree-based authority) may delegate folders.
-			return false, nil
-		}
-	case scopeAgentGroup:
-		return inner.Tree == scopeAgentGroup && outer.Ref == inner.Ref, nil
-	case scopeFolder:
-		// A folder admin may sub-delegate only WITHIN its subtree: the inner grant must also
-		// be a folder equal to or a descendant of the outer folder. It can never reach up to a
-		// workspace/agent-group/tenant scope (no upward escalation).
-		if inner.Tree != scopeFolder {
-			return false, nil
-		}
-		return folderContains(ctx, sc, outer.Ref, inner.Ref)
-	default:
-		return false, nil
 	}
+	return store.Contains(ctx, sc,
+		store.ScopeNode{Kind: outer.Tree, Ref: outer.Ref},
+		store.ScopeNode{Kind: inner.Tree, Ref: inner.Ref})
 }
 
 // findResourceByID returns the tenant's Resource (a folder-scope anchor) by id, and whether
@@ -482,35 +452,6 @@ func findResourceByID(ctx context.Context, sc store.Scope, id string) (model.Res
 		return model.Resource{}, false, err
 	}
 	return res, true, nil
-}
-
-// folderContains reports whether folder outerID contains folder innerID along the resource
-// tree: inner is outer itself, or a descendant of it by the materialized Path
-// ("/<root>/…/<self>"). It compares the anchors' LIVE Paths (outer's Path a proper,
-// segment-boundary prefix of inner's), so a move is reflected immediately. A missing folder
-// on either side, or an empty Path, is not-contained (deny-closed — no delegation across a
-// dangling anchor).
-func folderContains(ctx context.Context, sc store.Scope, outerID, innerID string) (bool, error) {
-	if outerID == "" || innerID == "" {
-		return false, nil
-	}
-	if outerID == innerID {
-		return true, nil // the same folder is trivially within its own subtree
-	}
-	outer, ok, err := findResourceByID(ctx, sc, outerID)
-	if err != nil || !ok {
-		return false, err
-	}
-	inner, ok, err := findResourceByID(ctx, sc, innerID)
-	if err != nil || !ok {
-		return false, err
-	}
-	if outer.Path == "" || inner.Path == "" {
-		return false, nil
-	}
-	// The trailing "/" makes the prefix test respect segment boundaries, so folder "/a/b"
-	// contains "/a/b/c" but never a sibling "/a/bc".
-	return strings.HasPrefix(inner.Path, outer.Path+"/"), nil
 }
 
 // --- scope reference resolution (validation + containment) --------------------------
@@ -541,27 +482,6 @@ func findAgentGroupBySlug(ctx context.Context, sc store.Scope, slug string) (mod
 		return model.AgentGroup{}, false, nil
 	}
 	return gs[0], true, nil
-}
-
-// agentGroupWorkspaceSlug resolves an agent-group slug to its workspace slug (the
-// reserved default slug when the group is workspace-unscoped). An unknown group yields
-// "" (matches no workspace — deny-closed for containment).
-func agentGroupWorkspaceSlug(ctx context.Context, sc store.Scope, groupSlug string) (string, error) {
-	g, ok, err := findAgentGroupBySlug(ctx, sc, groupSlug)
-	if err != nil || !ok {
-		return "", err
-	}
-	if g.WorkspaceID.IsZero() {
-		return model.DefaultWorkspaceSlug, nil
-	}
-	ws, err := sc.Workspaces().Get(ctx, g.WorkspaceID)
-	if errors.Is(err, store.ErrNotFound) {
-		return "", nil
-	}
-	if err != nil {
-		return "", err
-	}
-	return ws.Slug, nil
 }
 
 // --- projection to Cedar ------------------------------------------------------------
@@ -724,8 +644,8 @@ func cedarSubjectExpr(g scopedGrant) string {
 // cedarScopeWhen renders a grant scope's tree as a Cedar `when {…}` clause (empty for a
 // tenant-wide scope; the resource-class is already encoded by the action list). A folder
 // scope rides `resource in Resource::"<id>"`: the engine resolves the acted-on resource's
-// folder ancestors from its materialized Path (grants.go resourceTreeParents), so the permit
-// covers the whole subtree below the anchor (downward inheritance).
+// folder ancestors from its materialized Path (store.Ancestors, grants.go
+// resourceTreeParents), so the permit covers the whole subtree below the anchor (downward inheritance).
 func cedarScopeWhen(s scopeSpec) string {
 	return policytext.ScopeWhen(s.Tree, s.Ref)
 }

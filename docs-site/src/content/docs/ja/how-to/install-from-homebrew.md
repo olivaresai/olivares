@@ -2,9 +2,11 @@
 title: Homebrew でインストール
 description: >-
   Olivares AI の macOS Homebrew cask 座標、cask が Gatekeeper に対して行うこと、および
-  26.10.1 の tap bump の公開状態。
+  tap bump の公開状態。
 draft: false
 ---
+
+次のリリースは <!-- release -->`0.1`<!-- /release --> で、GitHub ではまだ公開されていません。以下のコマンドは予定されている成果物を示します。公開まではソースからビルドし、公開後も使用前に各成果物を検証してください。観測した公開状況は <!-- release -->`docs/releases/0.1-install-surfaces.json`<!-- /release --> に記録されています。
 
 これは `INSTALL.md` が推奨として名付ける macOS 経路です。Homebrew cask 経由で
 署名済み `olivares` バイナリをインストールし、Gatekeeper 隔離を解除します。
@@ -13,7 +15,7 @@ Linux パッケージ経路
 （[Docker でデプロイ](/how-to/docker-deployment/)）でもありません。
 
 :::note[ベータ — 26.10 の cask は公開済み]
-tap の `Casks/olivares.rb` は 2026-10-01 に 26.10 向けに更新されました。バージョン 26.10.1 と、
+tap の `Casks/olivares.rb` は 2026-10-01 に 26.10 向けに更新されました。バージョン 26.10.1<!-- release-fixed --> と、
 SHA-256 がリリースの署名済み `checksums.txt` と一致する 4 つのプラットフォーム向けアーカイブを示しています。プロデューサーは
 `.goreleaser.yaml` `homebrew_casks:` で、tap の cask はリリースジョブが上げます。下のコマンドは
 `INSTALL.md` が名付ける座標です（`brew install olivaresai/tap/olivares`）。
@@ -40,14 +42,15 @@ Darwin バイナリは cosign で署名され（サプライチェーン信頼�
 olivares quickstart
 ```
 
-安全な既定: TLS オン、loopback、既定資格情報なし。エンジンはコンソール URL と
+安全な既定: TLS オン、すべてのインターフェースで待ち受け、既定資格情報なし。エンジンはコンソール URL と
 ワンタイムセットアップトークンを印刷します。続けて
 [最初の1時間](/how-to/first-hour/)。
 
 一時的な合成 estate（loopback、平文）は見るためだけです:
 
 ```sh
-olivares serve --seed-demo --insecure --data-dir "$(mktemp -d)"
+olivares serve --seed-demo --insecure --listen 127.0.0.1:8443 --grpc-listen 127.0.0.1:8444 \
+  --data-dir "$(mktemp -d)"
 ```
 
 `--seed-demo` は製品ツアーではありません。

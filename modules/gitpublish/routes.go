@@ -14,6 +14,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	gp "github.com/olivaresai/olivares/connectors/gitpublish"
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
@@ -55,11 +56,35 @@ func (m *Module) APIRoutes(reg api.RouteRegistrar) {
 	door.HandleSealed("POST", "/targets", permTargetAdmin, sealed(actionTarget, auth.AAL3), m.handleCreateTarget)
 	door.HandleSealed("PUT", "/targets/{id}", permTargetAdmin, sealed(actionTarget, auth.AAL3), m.handleUpdateTarget)
 	door.HandleSealed("DELETE", "/targets/{id}", permTargetAdmin, sealed(actionTarget, auth.AAL3), m.handleDeleteTarget)
-	door.HandleSealed("POST", "/targets/{id}/pushes", permPush, sealed(actionPush, 0), m.handlePush)
-	door.HandleSealed("POST", "/targets/{id}/pull-requests", permPullRequest, sealed(actionPullRequest, 0), m.handlePullRequest)
-	door.HandleSealed("POST", "/targets/{id}/merges", permMerge, sealed(actionMerge, auth.AAL3), m.handleMerge)
+	door.HandleSealed("POST", "/targets/{id}/pushes", permPush, sealed(actionPush, 0), m.publicationReply(m.handlePush))
+	door.HandleSealed("POST", "/targets/{id}/pull-requests", permPullRequest, sealed(actionPullRequest, 0), m.publicationReply(m.handlePullRequest))
+	door.HandleSealed("POST", "/targets/{id}/merges", permMerge, sealed(actionMerge, auth.AAL3), m.publicationReply(m.handleMerge))
 	door.HandleSealed("POST", "/intents/{id}/reconcile", permTargetRead, sealed(actionReconcile, 0), m.handleReconcile)
 	door.HandleSealed("POST", "/intents/{id}/abandon", permTargetAdmin, sealed(actionAbandon, auth.AAL3), m.handleAbandon)
+}
+
+// publicationReply runs after the sealed door's authorization. Only an effect
+// reply needs more than the server's ordinary write budget; admission and
+// dispatch keep their existing deadlines, and streaming routes are untouched.
+func (m *Module) publicationReply(h api.ModuleHandler) api.ModuleHandler {
+	return func(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
+		if err := http.NewResponseController(w).SetWriteDeadline(time.Now().Add(m.PublicationBudget())); err != nil && !errors.Is(err, http.ErrNotSupported) {
+			// Refuse before any effect when the transport cannot set its deadline.
+			writeErr(w, errUnavailable)
+			return
+		}
+		// ErrNotSupported also covers in-process adapters such as ResponseRecorder,
+		// which have no socket write timeout. Production writers support this
+		// through the API's existing ResponseController unwrap chain.
+		h(w, r, mc)
+	}
+}
+
+// PublicationBudget is how long one publication may take until its reply is
+// written: admission, the host write, settling, release and the reply itself.
+// Every caller that answers a publication holds its writer open this long.
+func (m *Module) PublicationBudget() time.Duration {
+	return m.opts.AdmissionTimeout + m.opts.DispatchTimeout + 2*settleTimeout + releaseTimeout + replyTimeout
 }
 
 func callerOf(mc api.ModuleContext) Caller { return Caller{Principal: mc.Principal, Tenant: mc.Tenant} }
@@ -73,17 +98,19 @@ func decode(w http.ResponseWriter, r *http.Request, v any) bool {
 		if strings.Contains(err.Error(), "unknown field") {
 			code = "field_not_accepted"
 		}
-		writeJSON(w, http.StatusBadRequest, map[string]any{"error": code})
+		writeResponse(w, http.StatusBadRequest, api.ErrorBody(code, api.RequestBodyErrorMessage(err, code)))
 		return false
 	}
 	return true
 }
 
-func writeJSON(w http.ResponseWriter, status int, v any) {
-	w.Header().Set("Content-Type", "application/json")
+// writeResponse retains this route family's media type, nil and cache policy.
+func writeResponse(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Cache-Control", "no-store")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(v)
+	if v == nil {
+		v = json.RawMessage("null")
+	}
+	api.WriteJSON(w, status, v, "application/json")
 }
 
 func writeErr(w http.ResponseWriter, err error) {
@@ -91,17 +118,18 @@ func writeErr(w http.ResponseWriter, err error) {
 	if !errors.As(err, &e) {
 		e = errUnavailable
 	}
-	body := map[string]any{"error": e.Code}
+	body := api.ErrorBody(e.Code, e.Code)
 	if e.Intent != "" {
 		body["intent_id"] = e.Intent.String()
 	}
-	writeJSON(w, e.Status, body)
+	writeResponse(w, e.Status, body)
 }
 
 // Target DTO (CONTRACT-J10-S3 §3.3).
 type targetDTO struct {
 	ID                  string   `json:"id"`
 	WorkspaceID         string   `json:"workspace_id"`
+	Host                string   `json:"host,omitempty"`
 	CredentialBindingID string   `json:"credential_binding_id,omitempty"`
 	RepositoryBindingID string   `json:"repository_binding_id,omitempty"`
 	PushPrefix          string   `json:"push_prefix"`
@@ -118,6 +146,30 @@ func toTargetDTO(t Target, admin bool) targetDTO {
 		d.CredentialBindingID, d.RepositoryBindingID = t.CredentialBinding, t.RepositoryBinding
 	}
 	return d
+}
+
+// targetReadDTO resolves only approved credential metadata, after the target
+// read transaction closes. It never opens a host or a repository. Revoked
+// bindings leave the target readable without promising a host capability;
+// lookup failures retain the route family's unavailable answer.
+func (m *Module) targetReadDTO(ctx context.Context, tenant model.TenantID, t Target, admin bool) (targetDTO, error) {
+	d := toTargetDTO(t, admin)
+	if m.opts.Custody == nil {
+		return d, nil
+	}
+	ctx, cancel := m.admissionContext(ctx)
+	defer cancel()
+	binding, err := m.opts.Custody.CredentialBinding(ctx, tenant, t.Workspace, t.CredentialBinding)
+	if errors.Is(err, ErrBindingNotApproved) {
+		return d, nil
+	}
+	if err != nil {
+		return targetDTO{}, errUnavailable
+	}
+	if kind, ok := gp.LookupTargetKind(binding.Host); ok {
+		d.Host = kind.Name()
+	}
+	return d, nil
 }
 
 type requestedDTO struct {
@@ -170,6 +222,14 @@ type intentDTO struct {
 	AuthorizedBy     string          `json:"authorized_by,omitempty"`
 	DispatchDeadline string          `json:"dispatch_deadline,omitempty"`
 	ReleaseFailure   string          `json:"release_failure,omitempty"`
+	Proposal         *proposalDTO    `json:"proposal,omitempty"`
+}
+
+// proposalDTO names the session run whose approved request the intent
+// carries out and the approval that person gave.
+type proposalDTO struct {
+	SessionRun string `json:"session_run"`
+	ApprovalID string `json:"approval_id"`
 }
 
 func toIntentDTO(in Intent, answer string) intentDTO {
@@ -188,6 +248,9 @@ func toIntentDTO(in Intent, answer string) intentDTO {
 	if answer != in.State {
 		d.Answer = answer
 	}
+	if in.Proposal.SessionRun != "" {
+		d.Proposal = &proposalDTO{SessionRun: in.Proposal.SessionRun, ApprovalID: in.Proposal.Approval}
+	}
 	if in.Effect == effectPullRequest && in.State == StateApplied {
 		cm := in.ContentMatch
 		d.ContentMatch = &cm
@@ -195,8 +258,9 @@ func toIntentDTO(in Intent, answer string) intentDTO {
 	return d
 }
 
-// writeReceipt maps a receipt to its HTTP answer.
-func writeReceipt(w http.ResponseWriter, r Receipt, err error) {
+// WriteReceipt maps a receipt, or its refusal, to its HTTP answer. The
+// session publish tool answers with it, as the routes do.
+func WriteReceipt(w http.ResponseWriter, r Receipt, err error) {
 	if err != nil {
 		writeErr(w, err)
 		return
@@ -208,7 +272,7 @@ func writeReceipt(w http.ResponseWriter, r Receipt, err error) {
 	case StateRejected:
 		status = http.StatusConflict
 	}
-	writeJSON(w, status, toIntentDTO(r.Intent, r.Answer))
+	writeResponse(w, status, toIntentDTO(r.Intent, r.Answer))
 }
 
 func idParam(r *http.Request) model.ID { return model.ID(chi.URLParam(r, "id")) }
@@ -236,7 +300,7 @@ func (m *Module) handleCreateTarget(w http.ResponseWriter, r *http.Request, mc a
 		writeErr(w, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, toTargetDTO(t, true))
+	writeResponse(w, http.StatusCreated, toTargetDTO(t, true))
 }
 
 // handleUpdateTarget replaces a publication target's bindings, push prefix and
@@ -247,7 +311,7 @@ func (m *Module) handleUpdateTarget(w http.ResponseWriter, r *http.Request, mc a
 		return
 	}
 	if b.WorkspaceID != "" {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "field_not_accepted"})
+		writeResponse(w, http.StatusBadRequest, api.ErrorBody("field_not_accepted", "field_not_accepted"))
 		return
 	}
 	t, err := m.UpdateTarget(r.Context(), callerOf(mc), idParam(r), TargetUpdate{ExpectedVersion: b.ExpectedVersion, CredentialBinding: b.CredentialBindingID, RepositoryBinding: b.RepositoryBindingID, PushPrefix: b.PushPrefix, MergeBases: b.MergeBases})
@@ -255,7 +319,7 @@ func (m *Module) handleUpdateTarget(w http.ResponseWriter, r *http.Request, mc a
 		writeErr(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, toTargetDTO(t, true))
+	writeResponse(w, http.StatusOK, toTargetDTO(t, true))
 }
 
 // handleDeleteTarget deletes a publication target that no dispatching, uncertain
@@ -274,6 +338,8 @@ func (m *Module) canAdmin(ctx context.Context, c Caller, t Target) bool {
 	if m.opts.Authority == nil {
 		return false
 	}
+	ctx, cancel := m.admissionContext(ctx)
+	defer cancel()
 	_, err := m.opts.Authority.Admit(ctx, c.Principal, c.Tenant, Question{Permission: permTargetAdmin, Target: t.ID, Workspace: t.Workspace})
 	return err == nil
 }
@@ -281,11 +347,11 @@ func (m *Module) canAdmin(ctx context.Context, c Caller, t Target) bool {
 // handleListTargets lists the publication targets the caller can read, without
 // their credential and repository binding ids.
 func (m *Module) handleListTargets(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
-	var out []targetDTO
+	var targets []Target
 	err := mc.Data.View(r.Context(), func(sc store.Scope) error {
 		recs, err := listAll(r.Context(), sc, kindTarget)
 		for _, rec := range recs {
-			out = append(out, toTargetDTO(targetFrom(rec), false))
+			targets = append(targets, targetFrom(rec))
 		}
 		return err
 	})
@@ -293,10 +359,16 @@ func (m *Module) handleListTargets(w http.ResponseWriter, r *http.Request, mc ap
 		writeErr(w, storeError(err))
 		return
 	}
-	if out == nil {
-		out = []targetDTO{}
+	out := make([]targetDTO, 0, len(targets))
+	for _, t := range targets {
+		d, err := m.targetReadDTO(r.Context(), mc.Tenant, t, false)
+		if err != nil {
+			writeErr(w, err)
+			return
+		}
+		out = append(out, d)
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"items": out})
+	writeResponse(w, http.StatusOK, map[string]any{"items": out})
 }
 
 // handleGetTarget returns one publication target. Its credential and repository
@@ -313,7 +385,12 @@ func (m *Module) handleGetTarget(w http.ResponseWriter, r *http.Request, mc api.
 		writeErr(w, storeError(err))
 		return
 	}
-	writeJSON(w, http.StatusOK, toTargetDTO(t, m.canAdmin(r.Context(), callerOf(mc), t)))
+	d, err := m.targetReadDTO(r.Context(), mc.Tenant, t, m.canAdmin(r.Context(), callerOf(mc), t))
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	writeResponse(w, http.StatusOK, d)
 }
 
 type pushBody struct {
@@ -323,18 +400,20 @@ type pushBody struct {
 	Commit            string `json:"commit"`
 	Tree              string `json:"tree"`
 	AcknowledgeIntent string `json:"acknowledge_intent"`
+	SessionRun        string `json:"session_run"`
 }
 
 // handlePush pushes one exact commit to a branch under the target's push
 // prefix, leased on the branch's expected current value, and returns the
-// publication intent with its receipt.
+// publication intent with its receipt. A named session run's folder first
+// feeds the commit into the server repository.
 func (m *Module) handlePush(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
 	var b pushBody
 	if !decode(w, r, &b) {
 		return
 	}
-	rc, err := m.Push(r.Context(), callerOf(mc), PushInput{Target: idParam(r), OperationID: b.OperationID, Ref: b.Ref, ExpectedOld: b.ExpectedOld, Commit: b.Commit, Tree: b.Tree, AcknowledgeIntent: model.ID(b.AcknowledgeIntent)})
-	writeReceipt(w, rc, err)
+	rc, err := m.Push(r.Context(), callerOf(mc), PushInput{Target: idParam(r), OperationID: b.OperationID, Ref: b.Ref, ExpectedOld: b.ExpectedOld, Commit: b.Commit, Tree: b.Tree, AcknowledgeIntent: model.ID(b.AcknowledgeIntent), SessionRun: b.SessionRun})
+	WriteReceipt(w, rc, err)
 }
 
 type prBody struct {
@@ -357,7 +436,7 @@ func (m *Module) handlePullRequest(w http.ResponseWriter, r *http.Request, mc ap
 		return
 	}
 	rc, err := m.OpenPullRequest(r.Context(), callerOf(mc), PullRequestInput{Target: idParam(r), OperationID: b.OperationID, HeadRef: b.HeadRef, Base: b.Base, Commit: b.Commit, Title: b.Title, Body: b.Body, Draft: b.Draft, AcknowledgeIntent: model.ID(b.AcknowledgeIntent)})
-	writeReceipt(w, rc, err)
+	WriteReceipt(w, rc, err)
 }
 
 type mergeBody struct {
@@ -379,7 +458,7 @@ func (m *Module) handleMerge(w http.ResponseWriter, r *http.Request, mc api.Modu
 		return
 	}
 	rc, err := m.Merge(r.Context(), callerOf(mc), MergeInput{Target: idParam(r), OperationID: b.OperationID, Number: b.Number, ExpectedHead: b.ExpectedHead, Method: b.Method, ExpectedResultTree: b.ExpectedResultTree, ExpectedBase: b.ExpectedBase, AcknowledgeIntent: model.ID(b.AcknowledgeIntent)})
-	writeReceipt(w, rc, err)
+	WriteReceipt(w, rc, err)
 }
 
 // handleReconcile reads the host again for one publication intent and records
@@ -387,7 +466,7 @@ func (m *Module) handleMerge(w http.ResponseWriter, r *http.Request, mc api.Modu
 // observed, ends an uncertain intent.
 func (m *Module) handleReconcile(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
 	rc, err := m.Reconcile(r.Context(), callerOf(mc), idParam(r))
-	writeReceipt(w, rc, err)
+	WriteReceipt(w, rc, err)
 }
 
 // handleAbandon records that an administrator takes responsibility for an
@@ -401,7 +480,7 @@ func (m *Module) handleAbandon(w http.ResponseWriter, r *http.Request, mc api.Mo
 		return
 	}
 	rc, err := m.Abandon(r.Context(), callerOf(mc), idParam(r), b.Reason)
-	writeReceipt(w, rc, err)
+	WriteReceipt(w, rc, err)
 }
 
 // handleListIntents lists the publication intents of one target, named by
@@ -422,7 +501,7 @@ func (m *Module) handleListIntents(w http.ResponseWriter, r *http.Request, mc ap
 	for _, in := range list {
 		out = append(out, toIntentDTO(in, in.State))
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"items": out})
+	writeResponse(w, http.StatusOK, map[string]any{"items": out})
 }
 
 // handleGetIntent returns one publication intent: what it requested, what the
@@ -434,7 +513,7 @@ func (m *Module) handleGetIntent(w http.ResponseWriter, r *http.Request, mc api.
 		writeErr(w, e)
 		return
 	}
-	writeJSON(w, http.StatusOK, toIntentDTO(in, in.State))
+	writeResponse(w, http.StatusOK, toIntentDTO(in, in.State))
 }
 
 // handleObservations lists every observation recorded for one publication
@@ -459,7 +538,7 @@ func (m *Module) handleObservations(w http.ResponseWriter, r *http.Request, mc a
 	for _, o := range list {
 		out = append(out, obsDTO{Attempt: o.Attempt, Source: o.Source, Result: o.Result, HostObject: o.HostObject, Status: o.Status, RequestID: o.RequestID, At: o.At.UTC().Format(time.RFC3339Nano)})
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"items": out})
+	writeResponse(w, http.StatusOK, map[string]any{"items": out})
 }
 
 // DeleteTarget removes a target (target:admin, AAL3) that no unresolved

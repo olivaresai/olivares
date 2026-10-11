@@ -23,11 +23,12 @@
 //    · `WorkPane` — the workbench. `flex min-h-0 flex-1`, no padding of its own, and
 //      the route's panes divide the viewport and scroll inside themselves.
 //
-// ⛔ AND THE CHOICE IS RESOLVED FROM THE PATH IN THE SHELL, not declared in the feature
-//    registry. It is a SHELL decision — how the viewport is divided — and the registry
-//    is owned by the views. A route that wants the workbench says so here, in four
-//    lines that a test can read, instead of in a field 77 entries have to carry.
+// ⛔ AND THE CHOICE IS THE SHELL'S, with one door for a view that is not in this tree. The
+//    public pane routes are named here, in a list a test can read, instead of in a field
+//    77 entries have to carry. A view added by an edition cannot put its path in this
+//    file, so its registry entry may say `frame: 'work'`: that is read here, nowhere else.
 import type { ReactNode } from 'react'
+import { resolveLocation } from '@/features/navigation/model'
 import { cn } from '@/lib/utils'
 
 /**
@@ -63,9 +64,15 @@ export const WORK_MODE_PATHS: readonly string[] = ['/agentops', '/sessions']
  *    a redesign of that screen, not a line in this file.
  */
 
-/** Which frame a pathname gets. Exported for the test and for the shell. */
+/**
+ * Which frame a pathname gets. Exported for the test and for the shell. A registry view
+ * that declares its `frame` decides for its own path; every other path follows the list.
+ */
 export function frameFor(pathname: string): 'document' | 'work' {
   const path = pathname.replace(/\/+$/, '') || '/'
+  const located = resolveLocation(path)
+  const declared = located.kind === 'view' ? located.view.frame : undefined
+  if (declared) return declared
   return WORK_MODE_PATHS.some(
     (candidate) => path === candidate || path.startsWith(`${candidate}/`),
   )

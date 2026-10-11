@@ -30,9 +30,16 @@ import (
 //
 // A local server is a command (`mcp add files -- npx -y @modelcontextprotocol/server-
 // filesystem .`), a remote one an HTTPS URL. Secrets never go in the command line:
-// --secret-env NAME=store:mcp/<name> names a secret already in the store.
+// --secret-env NAME=store:mcp/<name> names a secret `mcp secret` stored in this
+// organization's secrets.
 
-const mcpGatewayPath = "/v1/console/mcp-gateway"
+const (
+	mcpGatewayPath = "/v1/console/mcp-gateway"
+	// mcpSecretsPath is the organization's own secrets, the only store an MCP
+	// server's store:mcp/<name> resolves from (the deployment-wide store that
+	// `olivares secrets` writes is never read for it).
+	mcpSecretsPath = "/v1/console/secrets?scope=tenant"
+)
 
 type mcpSnapshot struct {
 	Version      int64            `json:"version"`
@@ -43,7 +50,7 @@ type mcpSnapshot struct {
 
 func newMCPServerCmds(flags *authClientFlags) []*cobra.Command {
 	return []*cobra.Command{
-		newMCPListCmd(flags), newMCPAddCmd(flags), newMCPTestCmd(flags),
+		newMCPListCmd(flags), newMCPAddCmd(flags), newMCPSecretCmd(flags), newMCPTestCmd(flags),
 		newMCPEnableCmd(flags, "enable", true), newMCPEnableCmd(flags, "disable", false),
 		newMCPRemoveCmd(flags), newMCPSessionsCmd(flags),
 	}
@@ -127,10 +134,11 @@ func newMCPAddCmd(flags *authClientFlags) *cobra.Command {
 		Long: "add registers a local MCP server (a command the engine runs next to each session) or a\n" +
 			"remote one (an HTTPS URL). It is added off; add then tests it, which lists its tools\n" +
 			"without calling any. Turn it on with `olivares mcp enable <name>`.\n\n" +
-			"Secrets never go in the command line: put them in the secret store and pass\n" +
-			"--secret-env NAME=store:mcp/<secret>.",
+			"Secrets never go in the command line: store each one with\n" +
+			"`olivares mcp secret <name> --value-file <file>` and pass --secret-env NAME=store:mcp/<name>.",
 		Example: "  olivares mcp add files -- npx -y @modelcontextprotocol/server-filesystem .\n" +
-			"  olivares mcp add github -- github-mcp-server stdio --secret-env GITHUB_TOKEN=store:mcp/github\n" +
+			"  olivares mcp secret github --value-file ./github-token\n" +
+			"  olivares mcp add github --secret-env GITHUB_TOKEN=store:mcp/github -- github-mcp-server stdio\n" +
 			"  olivares mcp add docs https://mcp.example.com/mcp",
 		Args: cobra.MinimumNArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -141,6 +149,7 @@ func newMCPAddCmd(flags *authClientFlags) *cobra.Command {
 			switch dash := cmd.ArgsLenAtDash(); {
 			case dash == 1:
 				server["command"], server["args"] = args[1], append([]string{}, args[2:]...)
+				warnEnvFlagsAfterTerminator(cmd, args[1:])
 			case dash < 0 && len(args) == 2 && strings.HasPrefix(args[1], "https://"):
 				server["url"] = args[1]
 			default:
@@ -173,6 +182,11 @@ func newMCPAddCmd(flags *authClientFlags) *cobra.Command {
 				return sentence(exitcode.Conflict, "An MCP server named %q exists. See it: olivares mcp ls", args[0])
 			}
 			snap, err = cfg.mcpWrite(ctx, http.MethodPost, mcpGatewayPath+"/servers", map[string]any{"version": snap.Version, "server": server})
+			if err != nil && len(secrets) > 0 && exitcode.From(err) == exitcode.NotFound {
+				// The engine names the reference it could not find in this organization's
+				// secrets; the CLI names the command that stores it there.
+				return sentence(exitcode.NotFound, "%w Store it: olivares mcp secret <name> --value-file <file>", err)
+			}
 			if err != nil {
 				return err
 			}
@@ -190,6 +204,85 @@ func newMCPAddCmd(flags *authClientFlags) *cobra.Command {
 	cmd.Flags().StringArrayVar(&envs, "env", nil, "NAME=value for a local server's environment (public values only; repeatable)")
 	cmd.Flags().StringArrayVar(&secrets, "secret-env", nil, "NAME=store:mcp/<secret> for a local server's secret environment (repeatable)")
 	cmd.Flags().BoolVar(&noTest, "no-test", false, "add without testing it")
+	return cmd
+}
+
+// warnEnvFlagsAfterTerminator names the trap #572 reported: an --env or
+// --secret-env token written after the -- terminator is the wrapped command or
+// one of its arguments, so the environment (and the secret) is never wired and
+// the engine sees the reference where it expects public values. The wrapped
+// command may own such a flag itself, so this stays a warning; the server is
+// added as given.
+func warnEnvFlagsAfterTerminator(cmd *cobra.Command, serverArgs []string) {
+	for _, a := range serverArgs {
+		name, ok := strings.CutPrefix(a, "--")
+		if !ok || name == "" {
+			continue
+		}
+		name = strings.SplitN(name, "=", 2)[0]
+		if name != "env" && name != "secret-env" {
+			continue
+		}
+		_, _ = fmt.Fprintf(cmd.ErrOrStderr(),
+			"WARNING: --%s after -- is an argument of the server command, not an olivares flag; move it before the -- so it takes effect\n", name)
+	}
+}
+
+// newMCPSecretCmd stores a credential where `mcp add --secret-env` finds it: this
+// organization's secrets, through the same authorized route the console's MCP page
+// uses (an organization admin, with step-up when the deployment asks for it).
+func newMCPSecretCmd(flags *authClientFlags) *cobra.Command {
+	var valueFile, description string
+	cmd := &cobra.Command{
+		Use:   "secret <name> --value-file <file>",
+		Short: "Store a credential for MCP servers, referenced as store:mcp/<name>",
+		Long: "secret seals a credential in this organization's secrets, where a local MCP server's\n" +
+			"--secret-env NAME=store:mcp/<name> finds it. Storing a name again replaces its value and\n" +
+			"description.\n" +
+			"The value comes from a file, or - for stdin; never from the command line. It needs an\n" +
+			"organization admin. `olivares secrets put` stores deployment-wide secrets, which MCP\n" +
+			"servers do not read.",
+		Example: "  olivares mcp secret github --value-file ./github-token\n" +
+			"  olivares mcp add github --secret-env GITHUB_TOKEN=store:mcp/github -- github-mcp-server stdio",
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			short := strings.TrimPrefix(args[0], "mcp/")
+			if short == "" {
+				return sentence(exitcode.Usage, "Name the secret: olivares mcp secret <name> --value-file <file>")
+			}
+			name := "mcp/" + short
+			value, err := readSecretValue(cmd, "", valueFile)
+			if err != nil {
+				return err
+			}
+			if value == "" {
+				return sentence(exitcode.Usage, "The value is empty. Give it in a file: olivares mcp secret %s --value-file <file>",
+					shellWord(short))
+			}
+			cfg, err := mcpClient(cmd, flags)
+			if err != nil {
+				return err
+			}
+			_, b, err := cfg.do(cmd.Context(), http.MethodPut, mcpSecretsPath,
+				map[string]string{"name": name, "value": value, "description": description})
+			if err != nil {
+				// A proxy in front of the engine may echo the request body in its error.
+				return redactCoded(err, value)
+			}
+			var stored secretMutationResult
+			if err := json.Unmarshal(b, &stored); err != nil {
+				return exitcode.New(exitcode.Server, fmt.Errorf("decode the stored secret: %w", err))
+			}
+			return renderOut(cmd, func(w io.Writer) error {
+				_, err := fmt.Fprintf(w, "Stored %s (hint %s). Use it: --secret-env NAME=store:%s\n",
+					termSafe(stored.Name), termSafe(stored.Hint), termSafe(stored.Name))
+				return err
+			}, stored)
+		},
+	}
+	cmd.Flags().StringVar(&valueFile, "value-file", "", "read the value from a file, or - for stdin")
+	cmd.Flags().StringVar(&description, "description", "", "optional non-secret note")
+	_ = cmd.MarkFlagRequired("value-file")
 	return cmd
 }
 

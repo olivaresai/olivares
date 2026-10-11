@@ -149,6 +149,11 @@ const (
 	// as a secret_store NHI plus item-usage secret-access attribution
 	// (onepassword).
 	SourceOnePassword SourceKind = "onepassword"
+	// SourcePaperclip is a Paperclip orchestrator (paperclip): its companies as
+	// group collections and its agents as NHIs, read observe-only over the REST
+	// API. It is deliberately outside the ownership federation set: a Paperclip
+	// reporting line is an org-chart fact, not a lifecycle owner.
+	SourcePaperclip SourceKind = "paperclip"
 )
 
 // KindSecretStore is the Identity.Kind a secrets connector stamps on a

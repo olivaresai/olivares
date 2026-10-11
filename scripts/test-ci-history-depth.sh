@@ -20,14 +20,22 @@
 #    `scripts/` nombrado y ausente es exactamente lo que vigila—, asi que la respuesta correcta es
 #    quitarle el falso parecido al senuelo, no declarar una excepcion.
 set -uo pipefail
+
+_olivares_git_env="$(cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")" && pwd)/lib/git-env.sh"
+# shellcheck source=/dev/null
+. "$_olivares_git_env" || {
+	echo "FATAL: cannot source $_olivares_git_env (git-env isolation)" >&2
+	exit 2
+}
+unset _olivares_git_env
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)" || exit 2
 GATE="$ROOT/scripts/check-ci-history-depth.sh"
-[ -x "$GATE" ] || { echo "test-ci-history-depth: ⛔ NO HE PODIDO MIRAR: no encuentro $GATE" >&2; exit 2; }
+[ -x "$GATE" ] || { echo "test-ci-history-depth: ⛔ COULD NOT LOOK: cannot find $GATE" >&2; exit 2; }
 
 PASS=0; FAIL=0
 check() { # <nombre> <rc esperado> <rc real>
 	if [ "$2" = "$3" ]; then PASS=$((PASS+1)); printf 'ok   %-56s rc=%s\n' "$1" "$3"
-	else FAIL=$((FAIL+1)); printf 'FAIL %-56s esperaba rc=%s, dio rc=%s\n' "$1" "$2" "$3"; fi
+	else FAIL=$((FAIL+1)); printf 'FAIL %-56s expected rc=%s, got rc=%s\n' "$1" "$2" "$3"; fi
 }
 
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/cihd.XXXXXX")" || exit 2
@@ -64,33 +72,33 @@ corre() { # <dir> -> rc
 }
 
 # 1 · EL DEFECTO QUE YA OCURRIO: historia profunda + checkout sin fetch-depth
-d="$(fixture caso1 "" si)";   check "(1) guion con historia en job SIN fetch-depth" 1 "$(corre "$d")"
+d="$(fixture caso1 "" si)";   check "(1) script requiring history in a job WITHOUT fetch-depth" 1 "$(corre "$d")"
 # 2 · el mismo, pero con una profundidad que NO es 0 — «tiene fetch-depth» no basta
-d="$(fixture caso2 "1" si)";  check "(2) fetch-depth: 1 no vale, solo 0 trae la historia" 1 "$(corre "$d")"
+d="$(fixture caso2 "1" si)";  check "(2) fetch-depth: 1 is insufficient; only 0 fetches history" 1 "$(corre "$d")"
 # 3 · LA DIRECCION QUE NO DISPARA: con fetch-depth: 0 sale limpio
-d="$(fixture caso3 "0" si)";  check "(3) con fetch-depth: 0 el gate NO acusa" 0 "$(corre "$d")"
+d="$(fixture caso3 "0" si)";  check "(3) with fetch-depth: 0 the gate does NOT flag" 0 "$(corre "$d")"
 # 4 · sin guiones de historia: NO HE PODIDO MIRAR, no «limpio» por vacuidad
-d="$(fixture caso4 "" no)";   check "(4) cero guiones con historia -> no he podido mirar" 2 "$(corre "$d")"
+d="$(fixture caso4 "" no)";   check "(4) zero scripts requiring history -> could not look" 2 "$(corre "$d")"
 # 5 · Taskfile ilegible -> no he podido mirar
 d="$(fixture caso5 "0" si)"; rm -f "$d/Taskfile.yml"
-                              check "(5) sin Taskfile -> no he podido mirar" 2 "$(corre "$d")"
+                              check "(5) missing Taskfile -> could not look" 2 "$(corre "$d")"
 # 6 · workflows ausentes -> no he podido mirar
 d="$(fixture caso6 "0" si)"; rm -rf "$d/wf"
-                              check "(6) sin directorio de workflows -> no he podido mirar" 2 "$(corre "$d")"
+                              check "(6) missing workflow directory -> could not look" 2 "$(corre "$d")"
 # 7 · YAML roto -> no he podido mirar, NUNCA limpio
 d="$(fixture caso7 "0" si)"; printf 'jobs:\n  j1:\n   steps:\n  - - :\n' > "$d/wf/ci.yml"
-                              check "(7) workflow que no parsea -> no he podido mirar" 2 "$(corre "$d")"
+                              check "(7) unparseable workflow -> could not look" 2 "$(corre "$d")"
 # 8 · ningun job corre la tarea: el cruce no midio nada -> no he podido mirar
 d="$(fixture caso8 "" si)"; printf 'name: t\non: [push]\njobs:\n  j1:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo nada\n' > "$d/wf/ci.yml"
-                              check "(8) ningun job corre la tarea -> no he podido mirar" 2 "$(corre "$d")"
+                              check "(8) no job runs the task -> could not look" 2 "$(corre "$d")"
 # 10 · LA FORMA QUE SOBREVIVIO AL PATRON VIEJO (a repository gate, 2026-08-29): un RANGO `A..B` de rev-list
 #      en un job sin fetch-depth. Antes de ensanchar el patron este caso daba 2 —«cero guiones con
 #      derivacion historica»— y no 1: es decir, el gate ni siquiera veia el guion.
-d="$(fixture caso10 "" rango)"; check "(10) rev-list A..B en job SIN fetch-depth" 1 "$(corre "$d")"
+d="$(fixture caso10 "" rango)"; check "(10) rev-list A..B in a job WITHOUT fetch-depth" 1 "$(corre "$d")"
 # 11 · y su direccion de NO DISPARO, sin la cual un patron que acusara a todo pasaria el (10)
-d="$(fixture caso11 "0" rango)"; check "(11) rev-list A..B con fetch-depth: 0 NO acusa" 0 "$(corre "$d")"
+d="$(fixture caso11 "0" rango)"; check "(11) rev-list A..B with fetch-depth: 0 is NOT flagged" 0 "$(corre "$d")"
 # 9 · el arbol REAL de este repositorio tiene que estar limpio
-( cd "$ROOT" && bash "$GATE" >/dev/null 2>&1 ); check "(9) el repositorio real sale limpio" 0 "$?"
+( cd "$ROOT" && bash "$GATE" >/dev/null 2>&1 ); check "(9) the real repository is clean" 0 "$?"
 
 
 # Exercise the actual workflow guard, including history that static task discovery

@@ -19,6 +19,8 @@ import { useTranslation } from 'react-i18next'
 import { governanceApi } from '@/features/governance/api'
 import { killswitchApi, killswitchKeys } from '@/features/killswitch/api'
 import { useAuth } from '@/lib/auth/context'
+import { COST_VIEW } from '@/features/registry'
+import { useViewAccess } from '@/features/navigation/authorization'
 import { cn } from '@/lib/utils'
 import type { RunDTO } from './types'
 import './i18n'
@@ -42,6 +44,7 @@ export function GovernancePanel({
 }) {
   const { t } = useTranslation('agentops')
   const { activeTenant, can } = useAuth()
+  const access = useViewAccess()
   const isRemote = run.transport === 'remote-control'
 
   const canKill = can('governance:killswitch:read')
@@ -177,15 +180,11 @@ export function GovernancePanel({
              gateway/FinOps — so this is muted, never a health check we cannot prove. */
           tone="muted"
           action={
-            /* Gated on the DESTINATION's own route gate, not on the noun in the label:
-               this offers navigation to /finops, and the registry gates that route on
-               finops:spend:read. Naming finops:budget:read here — which the budget
-               wording invites — would show the link to a principal the destination then
-               answers with the Forbidden state. The /finops view loads spend AND budget
-               data, so no single permission covers it; that is the wider gate-vs-routes
-               gap recorded in sessions-consola-motor-INFORME.md §4.ter. */
-            can('finops:spend:read') ? (
-              <DeepLink to="/finops" label={t('gov.viewBudget')} />
+            access.navigable(COST_VIEW) ? (
+              <DeepLink
+                to={COST_VIEW.path}
+                label={t(`nav:items.${COST_VIEW.id}`)}
+              />
             ) : undefined
           }
         >

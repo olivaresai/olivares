@@ -72,9 +72,9 @@ func TestAPreparedReplayRetriesAMovedAccountFenceOnceAndCommits(t *testing.T) {
 			f := newWorkFixture(t, filepath.Join(t.TempDir(), "prepared-fence.db"), nil)
 			defer f.st.Close()
 			calls := &joinedPortCalls{tenant: f.tenant}
-			f.m.workIdentity = joinedCheckedParticipants{calls: calls}
-			moving := &movingStanding{next: &joinedCheckedStanding{next: f.m.standing, calls: calls}, moves: tc.moves}
-			f.m.standing = moving
+			f.m.WorkIdentity = joinedCheckedParticipants{calls: calls}
+			moving := &movingStanding{next: &joinedCheckedStanding{next: f.m.Standing, calls: calls}, moves: tc.moves}
+			f.m.Standing = moving
 			owner := workAccountOwner(t, &f)
 			claim := ProtocolReplayClaim{
 				WorkspaceID: f.workspace, Protocol: BindingProtocolA2A,

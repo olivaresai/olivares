@@ -17,6 +17,14 @@ import (
 
 const retainedAuthorizationEngine = "olivares-authorization-v1"
 
+// The retained scoped-Cedar engine tags. v2 is written only when an inheritance filter marked
+// the request, so a reader that predates the filter finds an engine it does not know and
+// answers UNKNOWN, where it would otherwise ignore the marks and replay the request unfiltered.
+const (
+	retainedCedarScopeV1 = "cedar-scope-v1"
+	retainedCedarScopeV2 = "cedar-scope-v2"
+)
+
 var (
 	errRetainedQuestion          = errors.New("governance: retained authorization belongs to another question")
 	errRetainedInputsUnavailable = errors.New("governance: retained authorization inputs unavailable")
@@ -42,29 +50,38 @@ type retainedABAC struct {
 	Versions []retainedABACVersion `json:"versions,omitempty"`
 }
 
-// These are Cedar's exact immutable policy AST, entity graph and question,
-// including the clock value. Selection records the authored/managed/adopted
-// revision bridge; replay never reloads those revisions from the live store.
+// Cedar inputs retain the immutable policy, entities, request and selected revisions.
 type retainedCedar struct {
 	Policies    *cedar.PolicySet `json:"policies"`
 	Entities    cedar.EntityMap  `json:"entities"`
 	Request     cedar.Request    `json:"request"`
 	GrantUsable bool             `json:"grant_usable"`
-	Authored    int64            `json:"authored_revision,omitempty"`
-	Managed     int64            `json:"managed_revision,omitempty"`
-	Adopted     int64            `json:"adopted_revision,omitempty"`
+	// Filtered are the nodes an inheritance filter marked on the target's lineage; the
+	// replay classifies the matching permits against them exactly as the live decision did.
+	Filtered []cedar.EntityUID `json:"filtered,omitempty"`
+	Authored int64             `json:"authored_revision,omitempty"`
+	Managed  int64             `json:"managed_revision,omitempty"`
+	Adopted  int64             `json:"adopted_revision,omitempty"`
 }
 
-func captureScopedCedar(ctx context.Context, state scopedTenantState, em cedar.EntityMap, req cedar.Request, usable bool) {
-	auth.CaptureAuthorizationInputs(ctx, true, "cedar-scope-v1", retainedCedar{
-		Policies: state.set.policies, Entities: em, Request: req, GrantUsable: usable,
+// captureScopedCedar retains the inputs of one scoped decision. A tenant with no grant policy
+// still has to retain a request an inheritance filter decided, so it retains an empty set.
+func captureScopedCedar(ctx context.Context, state scopedTenantState, em cedar.EntityMap, req cedar.Request, usable bool, marks []cedar.EntityUID) {
+	policies := cedar.NewPolicySet()
+	if state.set != nil {
+		policies = state.set.policies
+	}
+	engine := retainedCedarScopeV1
+	if len(marks) > 0 {
+		engine = retainedCedarScopeV2
+	}
+	auth.CaptureAuthorizationInputs(ctx, true, engine, retainedCedar{
+		Policies: policies, Entities: em, Request: req, GrantUsable: usable, Filtered: marks,
 		Authored: state.selection.authored, Managed: state.selection.managed, Adopted: state.selection.adopted,
 	})
 }
 
-// evaluateRetainedAuthorization invokes only retained evaluators and the frozen
-// authorization algebra. Unsupported or incomplete inputs are never replaced
-// by today's policies or principal membership.
+// evaluateRetainedAuthorization uses retained inputs, never live policy or membership.
 func evaluateRetainedAuthorization(content string, tenant model.TenantID, question sdk.AccessQuestion) (auth.EvidenceOutcome, error) {
 	var snapshot auth.RetainedAuthorization
 	if err := json.Unmarshal([]byte(content), &snapshot); err != nil {
@@ -97,7 +114,7 @@ func evaluateRetainedAuthorization(content string, tenant model.TenantID, questi
 	for _, in := range snapshot.Scoped {
 		switch in.Engine {
 		case "none-v1":
-		case "cedar-scope-v1":
+		case retainedCedarScopeV1, retainedCedarScopeV2:
 			var c retainedCedar
 			if err := json.Unmarshal(in.Inputs, &c); err != nil || c.Policies == nil {
 				return auth.EvidenceUnknown, errors.New("governance: retained Cedar inputs invalid")
@@ -112,9 +129,10 @@ func evaluateRetainedAuthorization(content string, tenant model.TenantID, questi
 				scoped = auth.ScopedDecision{Effect: auth.EffectForbid}
 			case snapshot.Typed != nil && len(diag.Errors) > 0:
 				return auth.EvidenceUnknown, errors.New("governance: retained typed Cedar unknown")
-			case dec == cedar.Allow && c.GrantUsable:
+			case dec == cedar.Allow && c.GrantUsable && grantAtOrBelow(c.Policies, c.Entities, c.Request, c.Filtered):
 				scoped = auth.ScopedDecision{Effect: auth.EffectGrant}
 			}
+			scoped.InheritanceFiltered = len(c.Filtered) > 0 && scoped.Effect != auth.EffectForbid
 		default:
 			return auth.EvidenceUnknown, errors.New("governance: retained scoped evaluator unsupported")
 		}

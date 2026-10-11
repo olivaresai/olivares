@@ -138,8 +138,11 @@ func TestProviderPropagationDeclaredControl(t *testing.T) {
 				if len(parts) != 4 || parts[1] != "4bf92f3577b34da6a3ce929d0e0e4736" {
 					t.Fatalf("trace correlation lost: %q", r.Header.Get("traceparent"))
 				}
-				if enabled && parts[2] == serverSpan {
+				if p.Enabled() && parts[2] == serverSpan {
 					t.Error("Messages hop did not carry its client span")
+				}
+				if !p.Enabled() && parts[2] != serverSpan {
+					t.Error("non-recording propagation changed the upstream span")
 				}
 				bag := baggage.FromContext(r.Context())
 				if bag.Len() != 1 || bag.Member("deployment.environment").Value() != "canary" {

@@ -212,7 +212,7 @@ func mkCost(provider, modelRef, session string, in, out, cost int64, at time.Tim
 // ingest pushes a sample through the ingestion path.
 func (m *Module) ingest(t *testing.T, tenant model.TenantID, c sdkmodel.CostSample) {
 	t.Helper()
-	if err := m.onCost(context.Background(), tenant, c, nil); err != nil {
+	if err := m.onCost(context.Background(), tenant, c, nil, nil); err != nil {
 		t.Fatalf("onCost: %v", err)
 	}
 }
@@ -340,12 +340,6 @@ func createSession(t *testing.T, st store.Store, tenant model.TenantID, external
 }
 
 // ingestOutcomeT pushes a graded outcome through the ingestion path.
-func (m *Module) ingestOutcomeT(t *testing.T, tenant model.TenantID, in outcomeIngestRequest) {
-	t.Helper()
-	if err := m.ingestOutcome(context.Background(), tenant, in, nil); err != nil {
-		t.Fatalf("ingestOutcome: %v", err)
-	}
-}
 
 // costSampleRows returns the finops cost_sample read-model rows in a tenant.
 func costSampleRows(t *testing.T, st store.Store, tenant model.TenantID) []model.Record {
@@ -394,4 +388,40 @@ func uniqueSlugSuffix(t testing.TB) string {
 		t.Fatalf("read entropy: %v", err)
 	}
 	return hex.EncodeToString(b[:])
+}
+
+func seedStoredSpendLimit(m *Module, ctx context.Context, tenant model.TenantID, in SpendLimitSpec, _ string) (SpendLimit, bool, error) {
+	spec, err := normalizeSpendLimitSpec(in)
+	if err != nil {
+		return SpendLimit{}, false, err
+	}
+	var out SpendLimit
+	err = m.fencedMutate(ctx, tenant, spendLimitSubjects(spec), func(sc store.Scope) error {
+		p, e := sc.Policies().Create(ctx, model.Policy{Name: spendLimitPolicyName(spec), Kind: policyKindSpendLimit, Enabled: true, Spec: spec.mapValue()})
+		if e == nil {
+			out = spendLimitFromPolicy(p)
+		}
+		return e
+	})
+	return out, true, err
+}
+
+type tsScopedData struct {
+	st     store.Store
+	tenant model.TenantID
+}
+
+func (d tsScopedData) View(ctx context.Context, fn func(store.Scope) error) error {
+	return d.st.View(ctx, d.tenant, fn)
+}
+
+// Export mirrors View: these doubles model a tenant that IS in service, and the
+// portability door reaches the same data. Written out rather than panicking so a
+// route that legitimately exports keeps working under the double.
+func (d tsScopedData) Export(ctx context.Context, fn func(store.ExportScope) error) error {
+	return d.st.Export(ctx, d.tenant, fn)
+}
+
+func (d tsScopedData) Mutate(ctx context.Context, fn func(store.Scope) error) error {
+	return d.st.Mutate(ctx, d.tenant, fn)
 }

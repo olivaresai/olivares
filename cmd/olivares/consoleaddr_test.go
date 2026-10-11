@@ -183,6 +183,9 @@ func renderFirstBootBanner(t *testing.T, eng *engine, addr consoleAddress) strin
 	if err := announceSetup(context.Background(), &out, eng, addr, false); err != nil {
 		t.Fatalf("announceSetup: %v", err)
 	}
+	// The banner is all the caller reads. Stop the engine so the next render boots as
+	// the first engine of its own process, as `serve` does.
+	_ = eng.Close()
 	return out.String()
 }
 

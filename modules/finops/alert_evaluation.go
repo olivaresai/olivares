@@ -135,6 +135,9 @@ func (e budgetEvaluation) proven() []thresholdEvaluation {
 // incomplete enumeration, a malformed row, an unusable policy field — is carried in
 // the result with its closed cause, because those are classifications, not outages.
 func evaluateBudgetAmount(ctx context.Context, sc store.Scope, p model.Policy, spec budgetSpec, at, now time.Time) (budgetEvaluation, error) {
+	if err := spec.resolveWorkspace(ctx, sc); err != nil {
+		return budgetEvaluation{}, err
+	}
 	pStart, hasLower := periodStart(spec.Period, at)
 	eval := budgetEvaluation{
 		PolicyID: p.ID, PolicyName: p.Name, PolicyVersion: p.Version, Spec: spec,

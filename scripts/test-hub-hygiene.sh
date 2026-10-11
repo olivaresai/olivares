@@ -33,21 +33,21 @@ while [ "$#" -gt 0 ]; do
 	case "$1" in
 	--case)
 		[ "$#" -ge 2 ] || {
-			echo "test-hub-hygiene: --case necesita un nombre" >&2
+			echo "test-hub-hygiene: --case needs a name" >&2
 			exit 2
 		}
 		CASE_FILTER="$2"
 		shift 2
 		;;
 	*)
-		printf 'test-hub-hygiene: argumento desconocido: %s\n' "$1" >&2
+		printf 'test-hub-hygiene: unknown argument: %s\n' "$1" >&2
 		exit 2
 		;;
 	esac
 done
 
 [ -r "$SCRIPT_UNDER_TEST" ] || {
-	printf 'test-hub-hygiene: SUT no legible: %q\n' "$SCRIPT_UNDER_TEST" >&2
+	printf 'test-hub-hygiene: unreadable SUT: %q\n' "$SCRIPT_UNDER_TEST" >&2
 	exit 1
 }
 
@@ -80,42 +80,42 @@ RUN_DU_MODE=""
 fail() {
 	printf 'not ok - %s: %s\n' "$CURRENT_TEST" "$*" >&2
 	if [ -n "${RUN_OUTPUT:-}" ] && [ -f "$RUN_OUTPUT" ]; then
-		echo "--- salida del SUT ---" >&2
+		echo "--- SUT output ---" >&2
 		sed -n '1,240p' "$RUN_OUTPUT" >&2
-		echo "--- fin ---" >&2
+		echo "--- end ---" >&2
 	fi
 	exit 1
 }
 
 assert_rc() {
 	local expected="$1"
-	[ "$RUN_RC" = "$expected" ] || fail "exit esperado=$expected, observado=$RUN_RC"
+	[ "$RUN_RC" = "$expected" ] || fail "exit expected=$expected, observed=$RUN_RC"
 }
 
 assert_contains() {
 	local needle="$1"
-	grep -F -- "$needle" "$RUN_OUTPUT" >/dev/null || fail "falta texto: $needle"
+	grep -F -- "$needle" "$RUN_OUTPUT" >/dev/null || fail "missing text: $needle"
 }
 
 assert_not_contains() {
 	local needle="$1"
 	if grep -F -- "$needle" "$RUN_OUTPUT" >/dev/null; then
-		fail "aparece texto prohibido: $needle"
+		fail "forbidden text appears: $needle"
 	fi
 }
 
 assert_path_exists() {
-	[ -e "$1" ] || [ -L "$1" ] || fail "debería existir: $(printf '%q' "$1")"
+	[ -e "$1" ] || [ -L "$1" ] || fail "should exist: $(printf '%q' "$1")"
 }
 
 assert_path_absent() {
 	if [ -e "$1" ] || [ -L "$1" ]; then
-		fail "debería haberse conservado fuera o retirado por completo: $(printf '%q' "$1")"
+		fail "should have stayed outside or been removed completely: $(printf '%q' "$1")"
 	fi
 }
 
 assert_equal() {
-	[ "$1" = "$2" ] || fail "valores distintos: esperado=$(printf '%q' "$1") observado=$(printf '%q' "$2")"
+	[ "$1" = "$2" ] || fail "different values: expected=$(printf '%q' "$1") observed=$(printf '%q' "$2")"
 }
 
 git_test() {
@@ -212,7 +212,7 @@ ref_snapshot() {
 
 test_source_surface() {
 	local bad
-	bash -n "$SCRIPT_UNDER_TEST" || fail "bash -n ha fallado"
+	bash -n "$SCRIPT_UNDER_TEST" || fail "bash -n failed"
 	bad="$(awk '
 		/^[[:space:]]*#/ { next }
 		/^[[:space:]]*(eval|find|rm|rmdir|unlink|truncate|go[[:space:]]+clean|pnpm[[:space:]]+store[[:space:]]+prune)([[:space:]]|$)/ { print NR ":" $0 }
@@ -220,9 +220,9 @@ test_source_surface() {
 		/worktree[[:space:]]+(remove|prune)[[:space:]]/ { print NR ":" $0 }
 		/git[[:space:]].*(update-ref|fetch|reset|clean|gc|config[[:space:]].*--(add|replace-all|unset|remove-section))/ { print NR ":" $0 }
 	' "$SCRIPT_UNDER_TEST")"
-	[ -z "$bad" ] || fail "superficie destructiva no permitida: $bad"
+	[ -z "$bad" ] || fail "forbidden destructive operations: $bad"
 	grep -F 'worktree list --porcelain -z' "$SCRIPT_UNDER_TEST" >/dev/null ||
-		fail "falta el protocolo NUL de worktree list"
+		fail "missing the worktree list NUL protocol"
 }
 
 fixture_tree_digest() {
@@ -266,7 +266,7 @@ test_all_arguments_no_mutation() {
 	before="$after"
 	run_sut --apply
 	assert_rc 2
-	assert_contains "--apply se ha retirado"
+	assert_contains "--apply was removed"
 	assert_contains "2026-08-04-codex-hub-hygiene-recontrast.md"
 	after="$(fixture_tree_digest "$CASE_DIR")"
 	assert_equal "$before" "$after"
@@ -296,7 +296,7 @@ test_dry_run_no_mutation() {
 	new_remote_oid="$(git_test -C "$updater" rev-parse HEAD)"
 	git_test -C "$updater" push -q origin main
 	if git_test -C "$HUB" cat-file -e "${new_remote_oid}^{commit}" 2>/dev/null; then
-		fail "el fixture ya tenía el objeto remoto nuevo antes del dry-run"
+		fail "the fixture already had the new remote object before the dry run"
 	fi
 	expected_kib="$(du -sk -- "$wt" | awk '{print $1}')"
 	before="$(ref_snapshot "$HUB")"
@@ -306,16 +306,16 @@ test_dry_run_no_mutation() {
 	assert_equal "$before" "$after"
 	assert_equal "$old_main" "$(git_test -C "$HUB" rev-parse refs/remotes/origin/main)"
 	if git_test -C "$HUB" cat-file -e "${new_remote_oid}^{commit}" 2>/dev/null; then
-		fail "el dry-run ha descargado objetos al almacén local"
+		fail "the dry run downloaded objects into the local store"
 	fi
 	if find "$CASE_TMP" -mindepth 1 -print -quit | grep -q .; then
-		fail "el dry-run ha dejado su almacén remoto temporal sin retirar"
+		fail "the dry run left its temporary remote store behind"
 	fi
 	git_test -C "$HUB" show-ref --verify --quiet refs/remotes/origin/stale ||
-		fail "el dry-run ha podado una tracking ref"
+		fail "the dry run pruned a tracking ref"
 	assert_path_exists "$wt"
-	assert_contains "tamaño=$expected_kib KiB"
-	assert_contains "INFORME solamente; no se ha cambiado ninguna ref"
+	assert_contains "size=$expected_kib KiB"
+	assert_contains "REPORT only; no ref"
 }
 
 test_reproducible_ignored_artifacts() {
@@ -335,16 +335,16 @@ test_reproducible_ignored_artifacts() {
 	run_sut --dry-run
 	assert_rc 0
 	assert_path_exists "$wt"
-	assert_contains "CANDIDATO[1]"
-	assert_contains "comprobación manual obligatoria"
-	assert_contains "comando manual (no ejecutado): git -C"
-	assert_contains "EVIDENCIA=git status NUL: 4 registro(s), 0 cambios y 4 artefacto(s)"
+	assert_contains "CANDIDATE[1]"
+	assert_contains "required manual check"
+	assert_contains "manual command (not run): git -C"
+	assert_contains "EVIDENCE=git status NUL: 4 record(s), 0 changes, and 4 artifact(s)"
 	assert_contains ".export-tmp/"
 	assert_contains "clients/generator/generator"
 	assert_contains "node_modules/"
 	assert_contains "web/test-results/"
-	assert_contains "git status NUL: 4 registro(s), 0 cambios y 4 artefacto(s)"
-	assert_contains "1 candidato(s)"
+	assert_contains "git status NUL: 4 record(s), 0 changes, and 4 artifact(s)"
+	assert_contains "1 candidate(s)"
 }
 
 test_ignored_env() {
@@ -358,9 +358,9 @@ test_ignored_env() {
 	run_sut --dry-run
 	assert_rc 0
 	assert_path_exists "$wt"
-	assert_contains "ignorado posible trabajo único fichero=.env"
-	assert_contains "detalle de git status=1 registro(s) NUL"
-	assert_not_contains "CANDIDATO[1]"
+	assert_contains "ignored file may contain unique work=.env"
+	assert_contains "git status detail=1 NUL-delimited record(s)"
+	assert_not_contains "CANDIDATE[1]"
 }
 
 test_reproducible_artifacts_with_env() {
@@ -377,9 +377,9 @@ test_reproducible_artifacts_with_env() {
 	run_sut --dry-run
 	assert_rc 0
 	assert_path_exists "$wt"
-	assert_contains "ignorado posible trabajo único fichero=.env"
-	assert_contains "detalle de git status=3 registro(s) NUL"
-	assert_not_contains "CANDIDATO[1]"
+	assert_contains "ignored file may contain unique work=.env"
+	assert_contains "git status detail=3 NUL-delimited record(s)"
+	assert_not_contains "CANDIDATE[1]"
 }
 
 test_unknown_ignored_file() {
@@ -395,8 +395,8 @@ test_unknown_ignored_file() {
 	assert_rc 0
 	assert_path_exists "$wt"
 	assert_path_exists "$wt/.local/operator.yaml"
-	assert_contains "ignorado posible trabajo único fichero=.local/operator.yaml"
-	assert_not_contains "CANDIDATO[1]"
+	assert_contains "ignored file may contain unique work=.local/operator.yaml"
+	assert_not_contains "CANDIDATE[1]"
 }
 
 test_selftest_evidence_head() {
@@ -412,9 +412,9 @@ test_selftest_evidence_head() {
 	run_sut --dry-run
 	assert_rc 0
 	assert_path_exists "$wt"
-	assert_contains "HEAD es evidencia creada por un selftest"
-	assert_contains "EVIDENCIA"
-	assert_not_contains "CANDIDATO[1]"
+	assert_contains "HEAD is evidence created by a self-test"
+	assert_contains "EVIDENCE"
+	assert_not_contains "CANDIDATE[1]"
 }
 
 test_hidden_untracked_config() {
@@ -426,7 +426,7 @@ test_hidden_untracked_config() {
 	run_sut --dry-run
 	assert_rc 0
 	assert_path_exists "$wt"
-	assert_contains "status.showUntrackedFiles=no oculta estado"
+	assert_contains "status.showUntrackedFiles=no hides state"
 }
 
 test_submodule_unique_ref() {
@@ -461,14 +461,14 @@ test_submodule_unique_ref() {
 	unique_oid="$(git_test -C "$sub_path" rev-parse HEAD)"
 	git_test -C "$sub_path" checkout -q --detach "$pinned"
 	git_test -C "$sub_path" show-ref --verify --quiet refs/heads/only-in-this-submodule-worktree ||
-		fail "el fixture no contiene la ref única del submódulo"
+		fail "the fixture does not contain the unique submodule ref"
 	advertised="$(git_test ls-remote --heads "$sub_remote" refs/heads/only-in-this-submodule-worktree)"
-	[ -z "$advertised" ] || fail "la ref única apareció en el remoto del fixture"
-	git_test -C "$sub_path" cat-file -e "${unique_oid}^{commit}" || fail "falta el objeto único"
+	[ -z "$advertised" ] || fail "the unique ref appeared in the fixture remote"
+	git_test -C "$sub_path" cat-file -e "${unique_oid}^{commit}" || fail "missing the unique object"
 	run_sut --dry-run
 	assert_rc 0
 	assert_path_exists "$wt"
-	assert_contains "contiene al menos un submódulo"
+	assert_contains "contains at least one submodule"
 }
 
 test_reflog_detached() {
@@ -483,13 +483,13 @@ test_reflog_detached() {
 	unique_oid="$(git_test -C "$wt" rev-parse HEAD)"
 	git_test -C "$wt" checkout -q feature/reflog
 	containing="$(git_test -C "$HUB" for-each-ref --contains "$unique_oid" --format='%(refname)')"
-	[ -z "$containing" ] || fail "el commit del fixture todavía tiene una ref"
+	[ -z "$containing" ] || fail "the fixture commit still has a ref"
 	git_test -C "$wt" reflog show --format=%H HEAD | grep -Fx "$unique_oid" >/dev/null ||
-		fail "el commit único no está en el reflog del worktree"
+		fail "the unique commit is not in the worktree reflog"
 	run_sut --dry-run
 	assert_rc 0
 	assert_path_exists "$wt"
-	assert_contains "el reflog de HEAD conserva $unique_oid"
+	assert_contains "the HEAD reflog retains $unique_oid"
 }
 
 test_ls_remote_failure() {
@@ -501,7 +501,7 @@ test_ls_remote_failure() {
 	run_sut --dry-run
 	assert_rc 0
 	assert_path_exists "$wt"
-	assert_contains "NO HE PODIDO MIRAR origin — ls-remote no ha podido consultar origin sin escribir"
+	assert_contains "COULD NOT LOOK origin — ls-remote could not query origin without writing"
 }
 
 test_deleted_remote_ref() {
@@ -519,7 +519,7 @@ test_deleted_remote_ref() {
 	run_sut --dry-run
 	assert_rc 0
 	assert_path_exists "$wt"
-	assert_contains "no alcanzable desde una rama viva de origin"
+	assert_contains "unreachable from a live origin branch"
 	stale_after="$(git_test -C "$HUB" rev-parse refs/remotes/origin/feature/deleted-ref)"
 	assert_equal "$head_oid" "$stale_after"
 }
@@ -546,7 +546,7 @@ test_special_paths() {
 	done
 	assert_path_absent "$CASE_DIR/MUTANT_SEMI"
 	assert_path_absent "$CASE_DIR/MUTANT_INJECTED"
-	candidate_lines="$(grep -c 'CANDIDATO\[' "$RUN_OUTPUT" || true)"
+	candidate_lines="$(grep -c 'CANDIDATE\[' "$RUN_OUTPUT" || true)"
 	assert_equal "6" "$candidate_lines"
 }
 
@@ -557,11 +557,11 @@ test_stash_guard() {
 	add_clean_worktree "$wt" "feature/stash"
 	printf 'stashed-change\n' >>"$HUB/base.txt"
 	git_test -C "$HUB" stash push -qm "unique stash"
-	git_test -C "$HUB" show-ref --verify --quiet refs/stash || fail "no se creó el stash"
+	git_test -C "$HUB" show-ref --verify --quiet refs/stash || fail "the stash was not created"
 	run_sut --dry-run
 	assert_rc 0
 	assert_path_exists "$wt"
-	assert_contains "el repositorio tiene refs/stash"
+	assert_contains "the repository has refs/stash"
 }
 
 test_local_process_cwd() {
@@ -581,11 +581,11 @@ test_local_process_cwd() {
 		[ -f "$ready" ] && break
 		sleep 0.01
 	done
-	[ -f "$ready" ] || fail "el proceso con cwd no llegó a arrancar"
+	[ -f "$ready" ] || fail "the process with cwd did not start"
 	run_sut --dry-run
 	assert_rc 0
 	assert_path_exists "$wt"
-	assert_contains "PID $pid tiene su cwd dentro del worktree"
+	assert_contains "PID $pid has its working directory inside the worktree"
 	kill "$pid" >/dev/null 2>&1 || true
 	wait "$pid" >/dev/null 2>&1 || true
 }
@@ -599,7 +599,7 @@ test_invalid_size_output() {
 	run_sut --dry-run
 	assert_rc 0
 	assert_path_exists "$wt"
-	assert_contains "no se puede medir su tamaño completo"
+	assert_contains "cannot measure its total size"
 }
 
 # FASE 4 — el clon compartido y la rama por defecto. Cuatro casos porque la clase tiene cuatro
@@ -609,9 +609,9 @@ test_default_branch_held_by_clone() {
 	init_fixture "rama-en-el-clon"
 	run_sut --dry-run
 	assert_rc 0
-	assert_contains "CONSERVAR — el clon compartido tiene"
-	assert_contains "falla con un fatal VISIBLE"
-	assert_not_contains "EVIDENCIA — el clon compartido"
+	assert_contains "KEEP — the shared clone has"
+	assert_contains "fails with a VISIBLE fatal error"
+	assert_not_contains "EVIDENCE — the shared clone"
 }
 
 test_default_branch_held_by_worktree() {
@@ -624,10 +624,10 @@ test_default_branch_held_by_worktree() {
 	git_test -C "$HUB" worktree add -q "$wt" main
 	run_sut --dry-run
 	assert_rc 0
-	assert_contains "EVIDENCIA — el clon compartido NO puede estar en"
+	assert_contains "EVIDENCE — the shared clone CANNOT be on"
 	assert_contains "$wt"
-	assert_contains "no sostiene nada propio"
-	assert_not_contains "CONSERVAR — el clon compartido tiene"
+	assert_contains "retains no unique work"
+	assert_not_contains "KEEP — the shared clone has"
 }
 
 test_detached_clone_nobody_holds_default() {
@@ -635,8 +635,8 @@ test_detached_clone_nobody_holds_default() {
 	git_test -C "$HUB" checkout -q --detach HEAD
 	run_sut --dry-run
 	assert_rc 0
-	assert_contains "está en HEAD SEPARADO y nadie tiene"
-	assert_contains "alguien lo separó a mano"
+	assert_contains "has a DETACHED HEAD and nobody has"
+	assert_contains "HEAD was detached manually"
 }
 
 test_detached_clone_holds_unpublished_work() {
@@ -647,11 +647,11 @@ test_detached_clone_holds_unpublished_work() {
 	git_test -C "$HUB" commit -qm "trabajo que no esta en origin"
 	run_sut --dry-run
 	assert_rc 0
-	assert_contains "SOSTIENE trabajo que no está publicado"
-	assert_contains "No lo muevas"
+	assert_contains "RETAINS unpublished work"
+	assert_contains "Leave it in place"
 	# La otra mitad del hallazgo: `git status` limpio NO habría enseñado esto.
 	assert_equal "" "$(git_test -C "$HUB" status --porcelain)"
-	assert_not_contains "no sostiene nada propio"
+	assert_not_contains "retains no unique work"
 }
 
 declare -a TEST_CASES=(
@@ -695,7 +695,7 @@ if [ -n "$CASE_FILTER" ]; then
 			break
 		fi
 	done
-	[ "$known" = "1" ] || fail "caso desconocido: $CASE_FILTER"
+	[ "$known" = "1" ] || fail "unknown case: $CASE_FILTER"
 	exit 0
 fi
 
@@ -703,4 +703,4 @@ for test_name in "${TEST_CASES[@]}"; do
 	run_case "$test_name"
 done
 
-echo "hub-hygiene: ${#TEST_CASES[@]} regresiones superadas."
+echo "hub-hygiene: ${#TEST_CASES[@]} regression checks passed."

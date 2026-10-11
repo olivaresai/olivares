@@ -33,15 +33,19 @@ publie la *posture*, non les preuves au niveau du code.
 
 ## Principes directeurs
 
-- **Lecture d'abord = faible risque asymétrique.** Le moteur observe via les logs,
-  OpenTelemetry et eBPF. Il ne **se place pas** dans le chemin de données de l'agent, de
-  sorte qu'une défaillance de collecteur ne peut pas casser le trafic de production.
+- **Observation hors du chemin des données.** La carte d’accès observe les logs,
+  OpenTelemetry et eBPF. Une défaillance de collecteur crée une lacune de visibilité
+  sans bloquer le trafic des agents.
+- **Application inline avec refus en cas d’échec.** Les hooks d’appel d’outil Claude
+  Code gérés contactent le PEP du moteur, exposé par défaut. Une panne ou un redémarrage
+  qui le rend inaccessible refuse tout appel d’outil gouverné. Le proxy d’inférence
+  inline, le gate MCP tools/call et le gate de délégation A2A s’appliquent au trafic
+  qui les traverse ; les appels aux modèles ne passent pas par ce proxy par défaut.
 - **Données minimales.** Le graphe stocke des **relations** — origine → ressource,
   lecture/écriture, source, confiance, horodatage — **jamais** de charges utiles, corps
   SQL, secrets ou données personnelles. *Ce qui n'est pas stocké ne peut pas fuiter.*
 - **Auto-hébergé = aucun fournisseur dans le chemin des données.** Il n'y a pas de
-  télémétrie obligatoire, aucune sortie du plan de contrôle par défaut, et Olivares AI n'est
-  jamais dans le chemin des données. L'éditeur n'est contacté que lorsque vous lui demandez
+  télémétrie obligatoire, aucune sortie du plan de contrôle par défaut, et l’éditeur est hors des chemins d’observation et d’application des règles. L'éditeur n'est contacté que lorsque vous lui demandez
   quelque chose — `olivares upgrade`, ou un téléchargement par abonnement des modules
   commerciaux et de leurs mises à jour — jamais comme effet de bord de l'exécution. Et `olivares upgrade --endpoint` dirige même cela vers votre propre miroir.
   Ne franchit le périmètre du client que ce que celui-ci configure à cette fin :

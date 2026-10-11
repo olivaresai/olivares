@@ -38,7 +38,6 @@ workflow = (root / ".github/workflows/installer-matrix.yml").read_text(encoding=
 ci = (root / "scripts/installer-matrix-ci.sh").read_text(encoding="utf-8")
 test = (root / "scripts/test-installer-matrix.sh").read_text(encoding="utf-8")
 taskfile = (root / "Taskfile.yml").read_text(encoding="utf-8")
-hook = (root / ".githooks/pre-push").read_text(encoding="utf-8")
 mainline = (root / ".github/workflows/mainline-ci.yml").read_text(encoding="utf-8")
 docs = "\n".join((root / p).read_text(encoding="utf-8") for p in (
     "INSTALL.md", "docs/RELEASE-INSTALLER.md",
@@ -76,17 +75,17 @@ assert workflow.count("bash scripts/installer-matrix-ci.sh") == 2
 assert "cosign-release: 'v2.6.4'" in workflow
 
 for token in (
-    # The version is passed by era (v before 26.10, bare from 26.10): the helper and the call.
+    # The version is passed as its exact bare release tag.
     'release_tag()',
     'scripts/install.sh" --version "$(release_tag "$release_version")"',
     '"$installed" version', ' doctor ', ' -o json', '--start',
     'bash "$lib" binary', 'bash "$lib" doctor', 'bash "$lib" redacted',
-    'bash "$lib" no-sudo', 'NO HE PODIDO MIRAR',
+    'bash "$lib" no-sudo', 'COULD NOT LOOK',
     'scripts/session-journey-smoke.sh" --binary "$installed"',
 ):
     assert token in ci
-# The era rule itself: v before 26.10, bare from 26.10 on.
-assert '"$minor" -lt 10' in ci and 'release_tag "$release_version"' in ci
+# No era-dependent tag normalization is allowed.
+assert 'printf \'%s\' "${1:?}"' in ci and 'release_tag "$release_version"' in ci
 for mutant in range(1, 7):
     roman = ("i", "ii", "iii", "iv", "v", "vi")[mutant - 1]
     assert f"mutant {roman}:" in test
@@ -94,9 +93,8 @@ assert "CI-ONLY:" in test
 
 for target in ("lint:installer-matrix", "lint:installer-matrix:selftest"):
     assert f"  {target}:" in taskfile
-    assert f"task {target}" in hook
     assert f"run: task {target}" in mainline
-assert docs.count("DIST-24-05 qualification") == 3
+assert docs.count("Installer qualification") == 3
 assert "does not certify native package-manager installation" in docs
 PY
 

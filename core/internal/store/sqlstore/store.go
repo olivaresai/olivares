@@ -57,7 +57,7 @@ type sqlStore struct {
 	// signEvent, when non-nil, signs every appended audit event after its chain
 	// hash is computed (store.AuditEventSigner). Injected via Config.SignEvent.
 	signEvent store.AuditEventSigner
-	// spoolMaxBytes and spoolOnFull carry ADR-0024 Q2's logical audit budget and
+	// spoolMaxBytes and spoolOnFull carry the audit spool's logical audit budget and
 	// exhaustion policy into each tenant audit writer. A zero budget is inert.
 	spoolMaxBytes int64
 	spoolOnFull   store.AuditSpoolMode
@@ -211,6 +211,14 @@ func ApplyMigrations(ctx context.Context, cfg store.Config, register func(store.
 // The private maintenance callback is reached before runtime capabilities or
 // an elector are constructed and never returns a Store to its caller.
 func openPrepared(ctx context.Context, cfg store.Config, register func(store.ExtensionRegistry) error, purpose preparePurpose, maintenance func(*sqlStore) error, in publicationInputs) (store.Store, error) {
+	b := &storePreparation{cfg: cfg, register: register, purpose: purpose, maintenance: maintenance, in: in}
+	return b.runBootPlan(ctx, b.bootPlan())
+}
+
+// openPrepared retains the migration constructors and their lexical inputs here:
+// the migration immutability gate fingerprints these bindings. Resource ownership
+// belongs to the plan runner, which closes every unpublished handle on any exit.
+func (b *storePreparation) openPrepared(ctx context.Context, cfg store.Config, register func(store.ExtensionRegistry) error, purpose preparePurpose, maintenance func(*sqlStore) error, in publicationInputs) error {
 	admission := in.admission
 	// DERIVED ONCE, HERE, and carried to both custody checks. The early refusal and the
 	// final decision must agree about which caller this is, and the only way to
@@ -222,16 +230,16 @@ func openPrepared(ctx context.Context, cfg store.Config, register func(store.Ext
 	// Refusing here rather than ignoring it keeps the two purposes from quietly
 	// overlapping.
 	if purpose == prepareSchemaOnly && maintenance != nil {
-		return nil, fmt.Errorf("sqlstore: the schema-only preparation returns before any maintenance callback could run, so combining them is never what the caller means")
+		return fmt.Errorf("sqlstore: the schema-only preparation returns before any maintenance callback could run, so combining them is never what the caller means")
 	}
 	switch cfg.AuditSpoolOnFull {
 	case "", store.AuditSpoolBlock, store.AuditSpoolDegrade:
 	default:
-		return nil, fmt.Errorf("sqlstore: invalid audit spool on_full mode %q", cfg.AuditSpoolOnFull)
+		return fmt.Errorf("sqlstore: invalid audit spool on_full mode %q", cfg.AuditSpoolOnFull)
 	}
 	dia, ok := dialect.New(cfg.Engine)
 	if !ok {
-		return nil, fmt.Errorf("sqlstore: unsupported engine %q", cfg.Engine)
+		return fmt.Errorf("sqlstore: unsupported engine %q", cfg.Engine)
 	}
 	clock := cfg.Clock
 	if clock == nil {
@@ -273,7 +281,7 @@ func openPrepared(ctx context.Context, cfg store.Config, register func(store.Ext
 	// refusal with no failure behind it.
 	if purpose == prepareThroughReadiness && cfg.Engine == store.EnginePostgres && cfg.MaxConns == 1 &&
 		cfg.AuditSpoolMaxBytes > 0 && strings.TrimSpace(cfg.AdminDSN) == "" {
-		return nil, fmt.Errorf(
+		return fmt.Errorf(
 			"sqlstore: refusing MaxConns=1 on postgres with an audit-spool budget and no AdminDSN: the spool recompute opens a transaction on the application pool, holds a FOR UPDATE row lock on the counter, and only then reads the cross-tenant sum — which without AdminDSN comes from that same pool, so a single-connection pool HANGS at boot instead of failing. Any of three fixes works: set MaxConns to at least 2 (or 0 for the default), configure AdminDSN so the sum is read on its own pool, or set AuditSpoolMaxBytes to 0 to disable the budget. Migration work is NOT the reason — it now runs on the connection that holds the migration advisory lock")
 	}
 
@@ -298,12 +306,12 @@ func openPrepared(ctx context.Context, cfg store.Config, register func(store.Ext
 	if cfg.Engine == store.EngineSQLite {
 		resolved, rerr := resolveSQLiteTargetFor(cfg, admission)
 		if rerr != nil {
-			return nil, rerr
+			return rerr
 		}
 		sqliteTarget = resolved
 		localFence, localReq, lerr := acquireLocalPublicationFence(sqliteTarget, admission)
 		if lerr != nil {
-			return nil, lerr
+			return lerr
 		}
 		// A DIRECT Open of a completed SQLite target is bound by the record its own
 		// lease just read. When a boot admission handed one down, in.req is already the
@@ -318,7 +326,7 @@ func openPrepared(ctx context.Context, cfg store.Config, register func(store.Ext
 		// It is NOT retained by the store that may be returned — these locks coordinate
 		// construction, and a lock held by a serving process would advertise a
 		// revocation protocol the product does not have.
-		defer localFence.release()
+		b.localFence = localFence
 	}
 
 	// THE CUSTODY COMPARISON, SPENT EARLY WHERE IT CAN BE — BEFORE ANYTHING CONNECTS.
@@ -342,14 +350,15 @@ func openPrepared(ctx context.Context, cfg store.Config, register func(store.Ext
 	// final successful-completion decision are untouched.
 	if in.serving {
 		if cerr := judgeObservedCustody(in.req, in.observed); cerr != nil {
-			return nil, cerr
+			return cerr
 		}
 	}
 
 	db, err := openDBWithTarget(cfg, sqliteTarget)
 	if err != nil {
-		return nil, err
+		return err
 	}
+	b.db = db
 
 	// RLS-bypass boot guard (docs/SECURITY-HARDENING.md): on Postgres, refuse to start when the
 	// connecting role is a superuser or BYPASSRLS — such a role silently bypasses
@@ -372,8 +381,8 @@ func openPrepared(ctx context.Context, cfg store.Config, register func(store.Ext
 		// touched it before. Under that flag, degrade; without it, the RLS guard needed
 		// this read anyway, so refuse.
 		if !cfg.AllowPrivilegedRole {
-			return closeOnErr(db, fmt.Errorf(
-				"sqlstore: role posture check: %w — the RLS guard needs this role's attributes and the append-only ACL needs its identity, both read from pg_roles; grant SELECT on pg_roles or set AllowPrivilegedRole to proceed without either", perr))
+			return fmt.Errorf(
+				"sqlstore: role posture check: %w — the RLS guard needs this role's attributes and the append-only ACL needs its identity, both read from pg_roles; grant SELECT on pg_roles or set AllowPrivilegedRole to proceed without either", perr)
 		}
 		// THE DEGRADE ASKS THE SEPARABLE HALF BEFORE GIVING UP, and this is where an
 		// unreadable CATALOG used to become an unknown IDENTITY — which the code then
@@ -395,10 +404,10 @@ func openPrepared(ctx context.Context, cfg store.Config, register func(store.Ext
 			// particular ConnRoleIdentity rejects session_user != current_user,
 			// which is an authority disguise rather than an unreadable catalog and
 			// must never proceed under AllowPrivilegedRole.
-			return closeOnErr(db, fmt.Errorf(
+			return fmt.Errorf(
 				"sqlstore: connecting role posture: %v; identity fallback refused: %w",
 				perr, iderr,
-			))
+			)
 		}
 	}
 	// AND session_replication_role, which the branch adds and main did not carry.
@@ -417,15 +426,15 @@ func openPrepared(ctx context.Context, cfg store.Config, register func(store.Ext
 	// Gated on perr == nil for the same reason main gates the RLS refusal: a posture that
 	// could not be read is not a posture that says 'replica'.
 	if perr == nil && posture.TriggersDisabled() {
-		return closeOnErr(db, fmt.Errorf(
+		return fmt.Errorf(
 			"sqlstore: refusing to start: the connecting %s role %q has session_replication_role=%q, which makes PostgreSQL SKIP every ordinary trigger — the append-only immutability guards and the module cutover guards would all be inert while still present in the catalog. Reset it (ALTER ROLE %s RESET session_replication_role, and check the database-level setting) so the connection runs in 'origin' mode",
-			dia.Name(), posture.Role, posture.ReplicationRole, posture.Role))
+			dia.Name(), posture.Role, posture.ReplicationRole, posture.Role)
 	}
 
 	if perr == nil && !cfg.AllowPrivilegedRole && posture.RLSUnsafe() {
-		return closeOnErr(db, fmt.Errorf(
+		return fmt.Errorf(
 			"sqlstore: refusing to start: the connecting %s role %q is %s and SILENTLY BYPASSES row-level security, so multi-tenant isolation is unenforced (docs/08 §4). Provision a NOSUPERUSER NOBYPASSRLS application role (see deploy/postgres/01-app-role.sql) and point the DSN at it; or set AllowPrivilegedRole / pass --allow-privileged-db-role to accept an inert RLS backstop on a single-tenant or throwaway deployment",
-			dia.Name(), posture.Role, posture.Why()))
+			dia.Name(), posture.Role, posture.Why())
 	}
 
 	// Aim the append-only ACL at the role this pool ACTUALLY authenticates as. It
@@ -451,8 +460,8 @@ func openPrepared(ctx context.Context, cfg store.Config, register func(store.Ext
 			// Fail closed. Falling through would silently leave the dialect bound to
 			// the default role name — precisely the defect this binding removes, and
 			// the silence is what made that defect survive so long.
-			return closeOnErr(db, fmt.Errorf(
-				"sqlstore: cannot bind the append-only ACL to the connecting role on engine %q: this boot could not resolve which role the application pool authenticates as, and the revoke this dialect renders is gated on its target existing — so a guessed name would be a statement that succeeds and protects nobody. Grant SELECT on pg_roles, or fix whatever makes `SELECT current_user` fail on this connection", cfg.Engine))
+			return fmt.Errorf(
+				"sqlstore: cannot bind the append-only ACL to the connecting role on engine %q: this boot could not resolve which role the application pool authenticates as, and the revoke this dialect renders is gated on its target existing — so a guessed name would be a statement that succeeds and protects nobody. Grant SELECT on pg_roles, or fix whatever makes `SELECT current_user` fail on this connection", cfg.Engine)
 		}
 		dia = bound
 	}
@@ -512,14 +521,14 @@ func openPrepared(ctx context.Context, cfg store.Config, register func(store.Ext
 		}
 		adm, _, ferr := beginPostgresPublicationAdmission(ctx, gateCfg, in.witness, opgate.Keyset{})
 		if ferr != nil {
-			return closeOnErr(db, ferr)
+			return ferr
 		}
 		// The fence is NOT retained by the store this call may return. These locks
 		// coordinate construction; they are not a protocol for revoking stores that were
 		// already published, and keeping the session alive inside a serving store would
 		// advertise a guarantee the product does not have (the ratified contract states
 		// that limit and puts client drain on the operator).
-		defer func() { _ = adm.close() }()
+		b.ownedPublication = adm
 		pub = adm
 	}
 
@@ -538,13 +547,13 @@ func openPrepared(ctx context.Context, cfg store.Config, register func(store.Ext
 	if cfg.Engine == store.EnginePostgres {
 		major, merr := postgresServerMajor(ctx, db)
 		if merr != nil {
-			return closeOnErr(db, merr)
+			return merr
 		}
 		if !postgresMajorSupported(major) {
-			return closeOnErr(db, fmt.Errorf(
+			return fmt.Errorf(
 				"%w: the server is PostgreSQL %d and the supported range is %d..%d (the guard manifest's catalog projection has been executed against %d)",
 				ErrGuardUnsupportedPostgresMajor, major,
-				supportedPostgresMajorMin, supportedPostgresMajorMax, verifiedPostgresMajor))
+				supportedPostgresMajorMin, supportedPostgresMajorMax, verifiedPostgresMajor)
 		}
 		pgMajor = major
 	}
@@ -565,6 +574,7 @@ func openPrepared(ctx context.Context, cfg store.Config, register func(store.Ext
 	// It is a DDL-only pool: the runtime never touches it, so it is closed once Open
 	// returns (success or failure).
 	ownerDB := db
+	b.ownerDB = ownerDB
 	// guardRoles carries what this boot LEARNED about the two roles — not two strings.
 	// OwnerConfigured false means the single-role topology BY CONFIGURATION, which is an
 	// answer; the Known flags separate "read it" from "asked and got nothing", which the
@@ -573,9 +583,9 @@ func openPrepared(ctx context.Context, cfg store.Config, register func(store.Ext
 	if ownerDSN := strings.TrimSpace(cfg.OwnerDSN); cfg.Engine == store.EnginePostgres && ownerDSN != "" && ownerDSN != strings.TrimSpace(cfg.DSN) {
 		ownerDB, err = openOwnerPool(ctx, dia, cfg, ownerDSN)
 		if err != nil {
-			return closeOnErr(db, err)
+			return err
 		}
-		defer ownerDB.Close() //nolint:errcheck // DDL-only pool; runtime uses the app pool
+		b.ownerDB = ownerDB
 		// The owner's ROLE, not merely the fact that a DSN was configured.
 		//
 		// The guard control plane's hardened ACL posture depends on the two pools
@@ -624,25 +634,18 @@ func openPrepared(ctx context.Context, cfg store.Config, register func(store.Ext
 	if purpose == prepareThroughReadiness && cfg.Engine == store.EnginePostgres && strings.TrimSpace(cfg.AdminDSN) != "" {
 		adminDB, err = openAdminPool(ctx, dia, cfg)
 		if err != nil {
-			return closeOnErr(db, err)
+			return err
 		}
 	}
-	// closeOnErr below closes only the app pool; close the admin pool too if a
-	// later boot step fails. Disarmed once the store is successfully constructed.
 	adminOpened := adminDB != db
-	bootOK := false
-	defer func() {
-		if !bootOK && adminOpened {
-			_ = adminDB.Close()
-		}
-	}()
+	b.adminDB, b.adminOpened = adminDB, adminOpened
 	adminRoleForBoot := guardRoleFact{}
 	if adminOpened {
 		adminPosture, postureErr := dia.ConnRolePosture(ctx, adminDB)
 		if postureErr != nil {
-			return closeOnErr(db, fmt.Errorf(
+			return fmt.Errorf(
 				"sqlstore: resolve boot AdminDSN identity: %w", postureErr,
-			))
+			)
 		}
 		adminRoleForBoot = guardRoleFact{Role: adminPosture.Role, Known: true}
 	}
@@ -650,35 +653,35 @@ func openPrepared(ctx context.Context, cfg store.Config, register func(store.Ext
 	reg := newRegistry()
 	for _, d := range coreDescriptors() {
 		if err := reg.registerCore(d); err != nil {
-			return closeOnErr(db, fmt.Errorf("sqlstore: core registry: %w", err))
+			return fmt.Errorf("sqlstore: core registry: %w", err)
 		}
 	}
 	if err := reg.registerCoreUserAuthorityInvariants(); err != nil {
-		return closeOnErr(db, fmt.Errorf("sqlstore: User authority retention: %w", err))
+		return fmt.Errorf("sqlstore: User authority retention: %w", err)
 	}
 	// The auth partition's counted columns are read by the offboard itself; the
 	// store declares that reader from the partition's own declarations.
 	if err := reg.declareAuthPartitionReaders(); err != nil {
-		return closeOnErr(db, fmt.Errorf("sqlstore: auth partition readers: %w", err))
+		return fmt.Errorf("sqlstore: auth partition readers: %w", err)
 	}
 	if register != nil {
 		if err := register(reg); err != nil {
-			return closeOnErr(db, fmt.Errorf("sqlstore: module registration: %w", err))
+			return fmt.Errorf("sqlstore: module registration: %w", err)
 		}
 	}
 	reg.closed = true
 	// Checked at close rather than at declaration, so a module may declare a staged
 	// control before it registers the table that witnesses it.
 	if err := reg.validateRolloutControls(); err != nil {
-		return closeOnErr(db, fmt.Errorf("sqlstore: rollout controls: %w", err))
+		return fmt.Errorf("sqlstore: rollout controls: %w", err)
 	}
 	if err := reg.validateWorkspaceInitializers(); err != nil {
-		return closeOnErr(db, fmt.Errorf("sqlstore: workspace initializers: %w", err))
+		return fmt.Errorf("sqlstore: workspace initializers: %w", err)
 	}
 	// Retention depends on declarations that modules may register after their
 	// descriptors, so it is validated at the same closed-registry boundary.
 	if err := reg.validateRetainedDescriptors(); err != nil {
-		return closeOnErr(db, fmt.Errorf("sqlstore: retained entities: %w", err))
+		return fmt.Errorf("sqlstore: retained entities: %w", err)
 	}
 	// The custodial relation is resolved on the CLOSED registry so its verdict
 	// cannot change while the store serves. An invalid relation is NOT a boot
@@ -695,7 +698,7 @@ func openPrepared(ctx context.Context, cfg store.Config, register func(store.Ext
 	// must not be discovered after an earlier module has already committed DDL.
 	moduleMigrationsForBoot, err := prepareModuleFileMigrations(dia, cfg.Engine, reg)
 	if err != nil {
-		return closeOnErr(db, fmt.Errorf("sqlstore: prepare module file migrations: %w", err))
+		return fmt.Errorf("sqlstore: prepare module file migrations: %w", err)
 	}
 
 	// Apply all schema under a cluster-wide migration advisory lock (Postgres): with
@@ -714,17 +717,17 @@ func openPrepared(ctx context.Context, cfg store.Config, register func(store.Ext
 	// compute the same rollout identity from it at two different points in boot.
 	guardManifestForBoot, err := buildGuardManifest(reg.appendOnlyTables())
 	if err != nil {
-		return closeOnErr(db, err)
+		return err
 	}
 	if err := requireCompleteGuardCurrentEdition(guardManifestForBoot); err != nil {
-		return closeOnErr(db, fmt.Errorf("sqlstore: guard manifest: %w", err))
+		return fmt.Errorf("sqlstore: guard manifest: %w", err)
 	}
 	// ONE graph, built from the census that has just closed, before the lock. Every
 	// compiled edition and every authorized edge is derived here and nowhere else: a graph
 	// rebuilt from a partly migrated database could name an edge the binary does not carry.
 	guardGraphForBoot, err := guardEditionGraphFor(guardManifestForBoot)
 	if err != nil {
-		return closeOnErr(db, fmt.Errorf("sqlstore: guard edition graph: %w", err))
+		return fmt.Errorf("sqlstore: guard edition graph: %w", err)
 	}
 
 	// The reconcile-session provider, taken from the OWNER pool rather than from the
@@ -746,7 +749,7 @@ func openPrepared(ctx context.Context, cfg store.Config, register func(store.Ext
 	directoryWriterHardened := false
 	evidenceRefusedSupported := false
 	if err := pub.requireMutating(ctx); err != nil {
-		return closeOnErr(db, err)
+		return err
 	}
 	if err := withMigrationLock(ctx, ownerDB, dia, func(mdb dialect.Execer) error {
 		// FIRST, before anything creates anything: an older binary must not mutate a
@@ -754,6 +757,27 @@ func openPrepared(ctx context.Context, cfg store.Config, register func(store.Ext
 		// migrate.Apply cannot own this check because ensureTracking performs DDL first.
 		if err := preflightCoreMigrationVersion(ctx, mdb, dia, coreSupportedMigrationVersion); err != nil {
 			return err
+		}
+		// Tracked custody is verified before any boot reconciler can repair it.
+		trackerExists, cerr := coreTrackingRelationExists(ctx, mdb, dia)
+		if cerr != nil {
+			return cerr
+		}
+		finOpsCustodyTrackedAtEntry := false
+		if trackerExists {
+			finOpsCustodyTrackedAtEntry, cerr = coreVersionIsTracked(ctx, mdb, dia, coreFinOpsCustodyControlMigrationVersion)
+			if cerr != nil {
+				return cerr
+			}
+		}
+		if finOpsCustodyTrackedAtEntry {
+			if err := verifyFinOpsCustodyControlPerBoot(ctx, mdb, dia, guardRolesForBoot); err != nil {
+				return err
+			}
+			if err := verifyFinOpsCustodyControlAppPool(ctx, db, dia, guardMetadataTopologyOf(guardRolesForBoot) == guardTopologySplit); err != nil {
+				return err
+			}
+			warnFinOpsCustodySingleRole(dia, guardRolesForBoot)
 		}
 		// AND IMMEDIATELY AFTER IT, still on a catalog read: the one incompatibility this
 		// boot can PROVE it will not survive. Core v10 creates the User authority lock and
@@ -813,6 +837,20 @@ func openPrepared(ctx context.Context, cfg store.Config, register func(store.Ext
 		// "this boot made it look that way". So the class is fixed before anything is
 		// created, and v9 reclassifies transaction-locally and refuses if the two
 		// disagree. It writes nothing and every refusal it produces precedes target DDL.
+		if err := preflightVersionedBootSchema(ctx, mdb, dia, reg); err != nil {
+			return err
+		}
+		if trackerExists {
+			treeGuardTracked, terr := coreVersionIsTracked(ctx, mdb, dia, coreAuditTreeGuardMigrationVersion)
+			if terr != nil {
+				return terr
+			}
+			if treeGuardTracked {
+				if err := verifyAuditTreeGuard(ctx, mdb, dia, false); err != nil {
+					return err
+				}
+			}
+		}
 		accessEvidencePlan, aerr := classifyAccessEvidenceBoot(
 			ctx, mdb, dia, guardGraphForBoot, coreDescriptors(), reg, moduleMigrationsForBoot,
 			guardEventFenceFactsForBoot)
@@ -898,7 +936,7 @@ func openPrepared(ctx context.Context, cfg store.Config, register func(store.Ext
 			return cerr
 		}
 		if err := migrate.Apply(ctx, mdb, dia, coreTrackingTable,
-			buildCoreMigrationPlan(
+			historicalCoreMigrations(buildCoreMigrationPlan(
 				dia,
 				coreDescriptors(),
 				guardBootstrapExec(dia, guardManifestForBoot),
@@ -907,8 +945,21 @@ func openPrepared(ctx context.Context, cfg store.Config, register func(store.Ext
 				accessEvidencePlan,
 				evidenceStates,
 				guardRolesForBoot,
-			)); err != nil {
+			))); err != nil {
 			return fmt.Errorf("sqlstore: core migrations: %w", err)
+		}
+		if !finOpsCustodyTrackedAtEntry {
+			tracked, err := coreVersionIsTracked(ctx, mdb, dia, coreFinOpsCustodyControlMigrationVersion)
+			if err != nil {
+				return err
+			}
+			if !tracked {
+				return fmt.Errorf("sqlstore: custody v19 is not tracked after the compiled plan")
+			}
+			if err := verifyFinOpsCustodyControlAppPool(ctx, db, dia, barrierHardened); err != nil {
+				return err
+			}
+			warnFinOpsCustodySingleRole(dia, guardRolesForBoot)
 		}
 		// V9 IS VERIFIED BEFORE THE GENERIC RECONCILER CAN SEE ITS RELATIONS.
 		//
@@ -936,11 +987,13 @@ func openPrepared(ctx context.Context, cfg store.Config, register func(store.Ext
 		if err := verifyLoginCapabilityPerBoot(ctx, mdb, dia, guardRolesForBoot); err != nil {
 			return err
 		}
-		// Additively reconcile any core column/index/table the descriptors gained
-		// since their v2 CREATE TABLE — the forward path for an already-migrated
-		// database, a no-op on a fresh one (see reconcileColumns).
-		if err := reconcileColumns(ctx, mdb, dia, coreDescriptors()); err != nil {
-			return fmt.Errorf("sqlstore: reconcile core columns: %w", err)
+		// The historical reconcilers now commit with a version record. Keep them
+		// after the exact, non-healing checks for already-tracked core relations.
+		if err := migrate.Apply(ctx, mdb, dia, coreTrackingTable, []migrate.Migration{coreDescriptorSchemaMigration(dia)}); err != nil {
+			return fmt.Errorf("sqlstore: core schema migration: %w", err)
+		}
+		if err := reconcileVersionedOSAccountReservations(ctx, mdb, dia); err != nil {
+			return fmt.Errorf("sqlstore: OS account reservation guards: %w", err)
 		}
 		// v7 is version-tracked and therefore skipped on every later boot. Repeat
 		// its exact, non-healing directory relation verification after additive
@@ -962,35 +1015,40 @@ func openPrepared(ctx context.Context, cfg store.Config, register func(store.Ext
 		if err := reconcileDirectoryWriterGuards(ctx, mdb, db, dia, writerHardened, guardRolesForBoot); err != nil {
 			return err
 		}
-		if err := reconcileLineageGuards(ctx, mdb, dia, writerHardened, guardRolesForBoot); err != nil {
+		if err := reconcileLineageGuardsForWorkspaceTree(ctx, mdb, dia, writerHardened, guardRolesForBoot); err != nil {
 			return fmt.Errorf("sqlstore: lineage guards: %w", err)
 		}
-		// Idempotent DATA normalization for core tables whose column semantics changed
-		// (U4 federation alias backfill), AFTER the columns exist. See reconcileCoreData.
-		if err := reconcileCoreData(ctx, mdb, dia); err != nil {
-			return fmt.Errorf("sqlstore: reconcile core data: %w", err)
+		if err := migrate.Apply(ctx, mdb, dia, coreTrackingTable, []migrate.Migration{
+			coreFederationDataMigration(dia), coreAuditSchemaMigration(dia), coreAuditTreeMigration(dia),
+			coreWorkspaceTreeMigration(dia), coreAuditTreeGuardMigration(dia), coreUserGroupWorkspaceMigration(dia),
+		}); err != nil {
+			return fmt.Errorf("sqlstore: core reconciliation migrations: %w", err)
 		}
-		// The evidence ledger is raw DDL, so the descriptor reconciler above cannot
-		// see it; it needs the same additive forward path (see reconcileAuditLedger).
-		if err := reconcileAuditLedger(ctx, mdb, dia); err != nil {
-			return fmt.Errorf("sqlstore: reconcile audit ledger: %w", err)
+		// The workspace lineage guard projects the v25 columns, so it moves to its
+		// current edition only once they exist.
+		if err := reconcileLineageWorkspaceTreeGuards(ctx, mdb, dia, writerHardened, guardRolesForBoot); err != nil {
+			return fmt.Errorf("sqlstore: lineage workspace guards: %w", err)
 		}
-		// The evidence-operation lifecycle CHECK is frozen in each table's CREATE
-		// TABLE; widen it to the current settlement vocabulary on databases created
-		// before a word existed (see reconcileEvidenceOpStateCheck).
-		if err := reconcileEvidenceOpStateCheck(ctx, mdb, dia); err != nil {
-			return fmt.Errorf("sqlstore: reconcile evidence operation states: %w", err)
+		if err := verifyAuditTreeGuard(ctx, mdb, dia, false); err != nil {
+			return err
 		}
+		if err := reconcileVersionedAuditBlindGuards(ctx, mdb, dia); err != nil {
+			return fmt.Errorf("sqlstore: audit blind guards: %w", err)
+		}
+		// The v11 verifier above already proves the exact evidence vocabulary.
 		if err := applyModuleTables(ctx, mdb, dia, reg.moduleDescriptors()); err != nil {
 			return fmt.Errorf("sqlstore: module tables: %w", err)
 		}
 		// Additively reconcile any column/index a MODULE descriptor gained since its
-		// table's CREATE TABLE. applyModuleTables only CREATES missing module
-		// tables — it never ALTERs an existing (already-tracked) one — so without this a
-		// nullable column appended to a module descriptor would exist on a fresh DB but
-		// never on an in-place upgrade, bricking every read/write of that table. This
-		// runs AFTER applyModuleTables (the tables now exist) and is a no-op on a fresh
-		// DB (just created from the current descriptor). Same additive rules as core.
+		// table's adoption. applyModuleTables adopts each descriptor as v1
+		// ONCE — it never ALTERs an already-tracked table — and module descriptors
+		// have no later-migration mechanism (unlike core's v21+, where every new
+		// column ships with its own numbered migration), so without this per-boot
+		// reconcile a nullable column appended to a module descriptor would exist on
+		// a fresh DB but never on an in-place upgrade, bricking every read/write of
+		// that table. Runs AFTER applyModuleTables (the tables exist) and BEFORE the
+		// module file migrations (an authored migration may reference a reconciled
+		// column, e.g. a unique index on it); a no-op on a fresh DB.
 		if err := reconcileColumns(ctx, mdb, dia, reg.moduleDescriptors()); err != nil {
 			return fmt.Errorf("sqlstore: reconcile module columns: %w", err)
 		}
@@ -1095,297 +1153,24 @@ func openPrepared(ctx context.Context, cfg store.Config, register func(store.Ext
 				return fmt.Errorf("sqlstore: materialize the leader election fencing epoch: %w", err)
 			}
 		}
+		if cfg.InitializeDirectoryWriter != nil && purpose != prepareSchemaOnly && maintenance == nil && accessEvidencePlan.FreshBootstrap != nil {
+			if err := initializeFreshDirectoryWriter(ctx, mdb, dia, cfg, clock, guardRolesForBoot); err != nil {
+				return fmt.Errorf("sqlstore: initialize fresh directory: %w", err)
+			}
+		}
 		return nil
 	}); err != nil {
-		return closeOnErr(db, err)
-	}
-	// THE SCHEMA-ONLY BOUNDARY. Everything past this point is the runtime stretch:
-	// readiness schema access, the SQLite SYSTEM baseline, epoch/authorization/lineage
-	// reconciliation, the spool recompute, the self-tests, the pre-serve verifications,
-	// the maintenance callback, the elector and the blinding-mode resolution.
-	//
-	// `migrate apply` returns HERE and returns NOTHING. The deferred owner close has
-	// already been armed above, closeOnErr closes the application pool, and no admin
-	// pool was ever opened — so this call leaves no connection behind and cannot hand
-	// back something a caller could mistake for a ready store.
-	if purpose == prepareSchemaOnly {
-		if err := decidePublication(ctx, in, pub); err != nil {
-			// A REFUSAL HERE IS NOT A ROLLBACK, and the diagnostic says so.
-			//
-			// The migrations above this line have already committed. The final
-			// decision withholds the publication of this preparation; it does not, and
-			// cannot, undo schema that is on the destination. The ratified contract
-			// states that limit, and an operator reading "refused" about a destination
-			// that has in fact been migrated needs the same sentence. Nothing about the
-			// decision itself changes: the error, its sentinels and the closing of
-			// every unpublished resource are exactly as before.
-			return closeOnErr(db, fmt.Errorf("%w; the schema this call already applied remains on the destination — the refusal withholds publication and does not roll it back", err))
-		}
-		return closeOnErr(db, nil)
-	}
-	// Directory reconciliation is the first boot step that reads engine tables
-	// through the long-lived runtime pools. Verify their schema prerequisite before
-	// those reads so a missing USAGE grant keeps its typed, actionable attribution.
-	// The readiness checks below repeat this at the serving boundary to catch drift
-	// that occurs after reconciliation.
-	if cfg.Engine == store.EnginePostgres {
-		if err := checkSchemaAccess(ctx, db); err != nil {
-			return closeOnErr(db, err)
-		}
-		if adminOpened {
-			if err := checkSchemaAccess(ctx, adminDB); err != nil {
-				return closeOnErr(db, fmt.Errorf("admin pool: %w", err))
-			}
-		}
-	}
-	// Authored module migrations above require SQLite's privileged empty pin.
-	// Once every migration/guard reconciliation has finished, publish the normal
-	// inter-transaction SYSTEM baseline separately. A failed epoch backfill then
-	// rolls back to SYSTEM without constraining cross-tenant migration work.
-	if err := restoreDirectorySystemBaseline(ctx, db, dia); err != nil {
-		return closeOnErr(db, err)
+		return err
 	}
 
-	// Epoch data is reconciled outside the owner/migration transaction on
-	// purpose. The writer transaction must belong to the application role; only
-	// PostgreSQL enumeration crosses to the read-only BYPASSRLS admin pool.
-	directoryBoot, err := reconcileDirectoryEpochs(
-		ctx, db, adminDB, dia, adminRoleForBoot,
-		directoryReconcileOptions{roles: guardRolesForBoot, maintenance: maintenance != nil},
-	)
-	if err != nil {
-		return closeOnErr(db, err)
-	}
-	// Authorization generation has its own fact and backfill. It intentionally
-	// contributes no readiness bit in this cut: without PostgreSQL admin
-	// enumeration the returned coverage is incomplete, and no global generation
-	// claim is surfaced. Per-tenant absence remains UNKNOWN at the reader.
-	if _, err := reconcileAuthorizationEpochs(
-		ctx, db, adminDB, dia, adminRoleForBoot,
-	); err != nil {
-		return closeOnErr(db, err)
-	}
-	if err := reconcileLineageEpochs(ctx, db, adminDB, dia, adminRoleForBoot); err != nil {
-		return closeOnErr(db, err)
-	}
-	directoryStatus := directoryStatusFromBoot(
-		cfg.Engine, directoryWriterHardened, directoryBoot,
-	)
-
-	if cfg.AuditSpoolMaxBytes > 0 {
-		// Recompute on every budgeted boot rather than backfilling in the migration:
-		// config toggles, in-place upgrades and DR restores can all carry a zero or
-		// stale bookkeeping row. The ledger remains the source of truth, so this
-		// exact logical-byte sum makes the incremental counter drift-proof.
-		//
-		// The sum is a genuinely cross-tenant READ, so on Postgres it runs on the
-		// BYPASSRLS admin pool: FORCE RLS binds audit_events to a per-transaction
-		// tenant and an unbound session RAISES (pgTenantGuard uses current_setting
-		// without missing_ok — never a silent zero). The WRITE stays on the app
-		// pool: the admin role is deliberately read-only (01-app-role.sql grants
-		// SELECT only), and audit_spool_usage carries no RLS. On SQLite both pools
-		// are the same connection and the whole recompute is one statement.
-		if err := recomputeAuditSpoolUsage(ctx, db, adminDB, dia); err != nil {
-			if cfg.Engine == store.EnginePostgres && !adminOpened {
-				err = fmt.Errorf("%w (the audit spool budget needs a cross-tenant read of audit_events, which FORCE RLS blocks on the app role: configure AdminDSN — see deploy/postgres/01-app-role.sql)", err)
-			}
-			return closeOnErr(db, fmt.Errorf("sqlstore: recompute audit spool usage: %w", err))
-		}
-	}
-
-	if err := runSelfTest(ctx, db, dia, reg.tenantTables()); err != nil {
-		return closeOnErr(db, err)
-	}
-	if err := runSchemaInvariantSelfTest(
-		ctx,
-		db,
-		dia,
-		posture,
-		reg.schemaInvariants(cfg.Engine),
-		reg.invariantBoundaryTables(cfg.Engine),
-		ownerDB != db,
-	); err != nil {
-		return closeOnErr(db, err)
-	}
-
-	// Read the append-only ACL back from the APPLICATION pool and refuse to serve if
-	// that role can still mutate or wipe evidence — or cannot append it. The reconcile
-	// above just executed the revoke, so a privilege that is still present came from
-	// somewhere else — a direct grant, a group role, or PUBLIC — and only
-	// has_table_privilege sees those.
-	//
-	// Unlike the two existing privilege checks this one is NOT gated on the owner/app
-	// split: single-role is the default topology, it is where the application role
-	// owns the tables, and it is therefore exactly where an open TRUNCATE matters.
-	//
-	// The skip is keyed on the APP role being a SUPERUSER, not on AllowPrivilegedRole.
-	// The two are different questions and conflating them would silence an enforceable
-	// guard: that flag is often set to permit a privileged OWNER or ADMIN pool while
-	// the application role stays least-privilege, and BYPASSRLS — despite the name —
-	// confers no table privilege at all. A BYPASSRLS role's self-revoke takes effect
-	// exactly like anyone else's (measured). Only a superuser is exempt from ACLs
-	// altogether, which makes the question unanswerable rather than merely awkward.
-	if cfg.Engine == store.EnginePostgres {
-		// USAGE on the engine's schema is the prerequisite every table privilege
-		// silently assumes; without it the checks below would attest a boundary the
-		// role cannot even reach.
-		if err := checkSchemaAccess(ctx, db); err != nil {
-			return closeOnErr(db, err)
-		}
-		// The admin pool is a long-lived runtime connection that runs UNQUALIFIED
-		// cross-tenant reads, so it needs the same prerequisite. Without this, boot
-		// returned the "ready store" its contract promises and the first org listing
-		// failed with `relation "orgs" does not exist`.
-		if adminOpened {
-			if err := checkSchemaAccess(ctx, adminDB); err != nil {
-				return closeOnErr(db, fmt.Errorf("admin pool: %w", err))
-			}
-		}
-		if posture.Superuser {
-			slog.Warn("append-only ACL enforcement is INEFFECTIVE for this connection: the application role is a PostgreSQL superuser, which bypasses table ACLs entirely, so the engine can neither revoke nor verify the append-only boundary. Point --dsn at a NOSUPERUSER role to get it back",
-				"role", posture.Role)
-		} else if err := verifyAppendOnlyACL(ctx, db, dia, reg.appendOnlyTables()); err != nil {
-			return closeOnErr(db, err)
-		}
-		// And the guard control plane's own posture, which is STRICTER and therefore cannot be
-		// folded into the check above: those three relations must deny the application role
-		// INSERT as well, because the history of which schema changes were authorized is not
-		// something runtime traffic appends to. The check above demands INSERT of every
-		// REGISTERED append-only table, so registering these would require exactly what this
-		// forbids.
-		if !posture.Superuser {
-			// The posture is RE-DERIVED here rather than carried over from the reconcile inside
-			// the migration lock, and the extra catalog read is the point: this is the call that
-			// STATES the boundary holds, so the membership closure it states it over must be the
-			// one that exists at the moment of the claim. A membership granted between the two
-			// would otherwise be verified away by a value computed before it existed.
-			hardened, herr := resolveGuardMetadataPosture(ctx, db, dia, guardRolesForBoot)
-			if herr != nil {
-				return closeOnErr(db, herr)
-			}
-			if err := verifyGuardMetadataACL(ctx, db, dia, hardened); err != nil {
-				return closeOnErr(db, err)
-			}
-		}
-	}
-
-	// AND THE CONTROL PLANE'S OWN OBJECTS, RE-ASSERTED FROM THE APPLICATION POOL BEFORE THE
-	// STORE IS HANDED OUT.
-	//
-	// The ACL check above states WHO may write those three relations. It states nothing about
-	// whether their immutability guards still exist, whether their shape still holds the
-	// uniquenesses the ledger's ordering depends on, or whether bootstrap receipts, inventory
-	// and gate still form one edition state this binary can have written — and every reading of
-	// this history assumes all three.
-	// Verified inside the migration lock and never again, they were true at that instant and
-	// merely assumed at the one that matters: the rollout releases the lock, and a DROP TRIGGER,
-	// an ALTER TABLE ... DISABLE TRIGGER or a DROP INDEX committed between the release and this
-	// return would be carried into service by a boot that reported success.
-	//
-	// The claim this makes is the narrow one it can support, and no wider: nothing outside a
-	// held lock can PREVENT that drift, so this does not. What it does is refuse to serve a
-	// store whose control plane had ALREADY drifted by the time boot finished — which is the
-	// difference between a window and an unbounded one.
-	//
-	// It runs on the APPLICATION pool, which is the connection this process will actually use,
-	// and on BOTH engines, because the manifest, the receipts and the shape exist on both.
-	//
-	// THE HOOK IS THE ONLY WAY TO TEST THE WINDOW, and it is nil in production. What this check
-	// exists for is drift committed AFTER the rollout released the migration lock and BEFORE
-	// this return — and a regression that plants the drift before boot proves nothing, because
-	// the verification INSIDE the rollout would refuse it first and the test would stay green
-	// with this call deleted. Reproducing the window without a seam means racing the lock
-	// release, which is not a regression but a coin toss.
-	if guardPreServeTestHook != nil {
-		guardPreServeTestHook()
-	}
-	if _, err := verifyGuardEditionHistory(ctx, db, dia, guardManifestForBoot); err != nil {
-		return closeOnErr(db, fmt.Errorf("sqlstore: the guard control plane no longer matches its own attribution at the end of boot; its receipts, inventory and gate do not form one supported edition history: %w", err))
-	}
-
-	// AND THE DENY-CLOSED FENCE, WHICH IS THE ONLY PIECE THAT ACTS BETWEEN TWO BOOTS.
-	//
-	// Everything above answers "is this right NOW". The fence is what makes the DDL that
-	// would break it fail inside the session that attempts it, at 03:00, with nobody
-	// watching. This engine cannot install it — CREATE EVENT TRIGGER is superuser-only and
-	// every role here is NOSUPERUSER — so what boot can do, and does, is say which of four
-	// things is true about it and refuse when it was installed and then changed.
-	//
-	// It runs on the APPLICATION pool for the same reason the checks above do: the
-	// rewritability question is about THAT role, and asking it as anyone else would answer
-	// about the wrong subject.
-	if err := runGuardEventFenceCheck(ctx, db, dia, cfg.GuardEventFence, posture.Role); err != nil {
-		return closeOnErr(db, err)
-	}
-
-	// In the owner/app split the application pool is a NON-owner role that relies on
-	// DML granted by the owner (ALTER DEFAULT PRIVILEGES, set by `olivares db init`).
-	// runSelfTest only reads catalog metadata, so it would not notice a missing grant
-	// — the failure would surface at the first tenant query instead. Probe the app
-	// role's privileges now and refuse to start with a precise message (docs/SECURITY-HARDENING.md:
-	// never a silent gap). No-op in the single-role path (ownerDB == db).
-	if ownerDB != db {
-		if err := checkAppTablePrivileges(ctx, db, reg.mutableTenantTables()); err != nil {
-			return closeOnErr(db, err)
-		}
-	}
-
-	if maintenance != nil {
-		if err := pub.requireMutating(ctx); err != nil {
-			return closeOnErr(db, err)
-		}
-		err := maintenance(&sqlStore{engine: cfg.Engine, db: db, adminDB: adminDB, dia: dia, clock: clock, reg: reg,
-			directoryStatus: directoryStatus, directoryGuardRoles: guardRolesForBoot, directoryAdminRole: adminRoleForBoot})
-		if err != nil {
-			return closeOnErr(db, err)
-		}
-		if err := decidePublication(ctx, in, pub); err != nil {
-			// Same limit as the schema-only path above: the callback's cutover has
-			// already committed, and this refusal withholds the result rather than
-			// reversing it.
-			return closeOnErr(db, fmt.Errorf("%w; the maintenance this call already completed remains on the destination — the refusal withholds its result and does not roll it back", err))
-		}
-		return closeOnErr(db, nil)
-	}
-
-	// The leadership elector: alwaysLeader for SQLite/single-node (nothing to elect),
-	// the Postgres session-advisory-lock elector otherwise. Constructing it opens the
-	// dedicated lock pool; close it on any later boot error.
-	el, err := newElector(cfg, nil)
-	if err != nil {
-		return closeOnErr(db, err)
-	}
-
-	// Resolve the metadata-commitment WRITE rule before the store is handed out, so
-	// every writer in this process agrees and the decision is stated once.
-	blindMeta, err := resolveBlindingMode(ctx, db, dia, cfg.AuditMetaBlinding)
-	if err != nil {
-		_ = el.Resign(context.Background())
-		return closeOnErr(db, err)
-	}
-
-	if err := decidePublication(ctx, in, pub); err != nil {
-		_ = el.Resign(context.Background())
-		return closeOnErr(db, err)
-	}
-
-	bootOK = true
-	return &sqlStore{
-		engine: cfg.Engine, db: db, adminDB: adminDB, dia: dia, clock: clock,
-		debug: cfg.Debug, reg: reg, signEvent: cfg.SignEvent,
-		spoolMaxBytes: cfg.AuditSpoolMaxBytes, spoolOnFull: cfg.AuditSpoolOnFull,
-		blindMeta:           blindMeta,
-		directoryStatus:     directoryStatus,
-		directoryGuardRoles: guardRolesForBoot,
-		directoryAdminRole:  adminRoleForBoot,
-		elector:             el,
-		pgExecMode:          observePGExecMode(cfg),
-
-		custodyRelation:          custodyRelation,
-		custodyRelationErr:       custodyRelationErr,
-		evidenceRefusedSupported: evidenceRefusedSupported,
-		readiness:                readiness,
-	}, nil
+	b.in, b.dia, b.clock = in, dia, clock
+	b.posture, b.pub = posture, pub
+	b.roles, b.adminRole = guardRolesForBoot, adminRoleForBoot
+	b.reg, b.guardManifest = reg, guardManifestForBoot
+	b.custodyRelation, b.custodyRelationErr = custodyRelation, custodyRelationErr
+	b.readiness = readiness
+	b.directoryHardened, b.evidenceRefusedSupported = directoryWriterHardened, evidenceRefusedSupported
+	return nil
 }
 
 // recomputeAuditSpoolUsage replaces the mutable counter with the exact logical
@@ -1545,7 +1330,7 @@ var _ store.AuditSpoolStatuser = (*sqlStore)(nil)
 //
 // The decision is per process and needs no consensus: rows carry their own rule,
 // so nodes that disagree during a rollout still produce one verifiable chain.
-func resolveBlindingMode(ctx context.Context, db *sql.DB, dia dialect.Dialect, mode store.AuditBlindingMode) (bool, error) {
+func resolveBlindingMode(ctx context.Context, db execQuerier, dia dialect.Dialect, mode store.AuditBlindingMode) (bool, error) {
 	switch mode {
 	case store.AuditBlindingOff:
 		// Refuse rather than quietly weaken. Once a ledger has been actuated, "off"
@@ -1597,7 +1382,7 @@ func resolveBlindingMode(ctx context.Context, db *sql.DB, dia dialect.Dialect, m
 // blindingState reads the ledger's two durable facts: which rule is this ledger's
 // default, and whether any process has actually resolved to writing blinded rows.
 // It reads global bookkeeping, never the RLS-guarded ledger.
-func blindingState(ctx context.Context, db *sql.DB, dia dialect.Dialect) (defaultBlinded, actuated bool, err error) {
+func blindingState(ctx context.Context, db execQuerier, dia dialect.Dialect) (defaultBlinded, actuated bool, err error) {
 	var d, a int64
 	q := dia.Rebind("SELECT default_blinded, actuated FROM " + dialect.AuditBlindingStateTable + " WHERE id = 1")
 	if err := db.QueryRowContext(ctx, q).Scan(&d, &a); err != nil {
@@ -1613,7 +1398,7 @@ func blindingState(ctx context.Context, db *sql.DB, dia dialect.Dialect) (defaul
 // rows already sealed with a blind cannot be unsealed. An operator who sets "off"
 // after actuating still writes legacy rows, and reading keeps working, but the
 // ledger does not forget that the door was opened.
-func recordBlindingActuation(ctx context.Context, db *sql.DB, dia dialect.Dialect) error {
+func recordBlindingActuation(ctx context.Context, db execQuerier, dia dialect.Dialect) error {
 	// Both facts move together: actuating a ledger IS declaring that its rule is
 	// the blinded one, which is what the default mode must follow from here on. If
 	// only the actuation bit moved, a later boot on the default would read the old
@@ -2064,11 +1849,6 @@ func openAdminPool(ctx context.Context, dia dialect.Dialect, cfg store.Config) (
 	return adb, nil
 }
 
-func closeOnErr(db *sql.DB, err error) (store.Store, error) {
-	_ = db.Close()
-	return nil, err
-}
-
 func (s *sqlStore) Engine() store.Engine { return s.engine }
 
 func (s *sqlStore) Ping(ctx context.Context) error { return s.db.PingContext(ctx) }
@@ -2113,6 +1893,10 @@ func viewTxOptions(engine store.Engine) *sql.TxOptions {
 }
 
 func (s *sqlStore) View(ctx context.Context, tenant model.TenantID, fn func(store.Scope) error) error {
+	return s.view(ctx, tenant, fn, true)
+}
+
+func (s *sqlStore) view(ctx context.Context, tenant model.TenantID, fn func(store.Scope) error, bindSQLite bool) error {
 	if tenant.IsZero() {
 		return store.ErrNoTenant
 	}
@@ -2121,8 +1905,11 @@ func (s *sqlStore) View(ctx context.Context, tenant model.TenantID, fn func(stor
 		return err
 	}
 	defer tx.Rollback() //nolint:errcheck // View intentionally never commits
-	if err := s.dia.BindTenant(ctx, tx, tenant); err != nil {
-		return err
+	// Offline SQLite reads use tenant predicates without writing the scope table.
+	if bindSQLite || s.engine == store.EnginePostgres {
+		if err := s.dia.BindTenant(ctx, tx, tenant); err != nil {
+			return err
+		}
 	}
 	scope := &tenantScope{s: s, tx: tx, tenant: tenant, readOnly: true}
 	err = fn(scope)
@@ -2319,6 +2106,19 @@ func (s *sqlStore) System(ctx context.Context, fn func(store.SystemScope) error)
 	if err := verifyDirectoryWriterPresentationBaseline(ctx, tx, s.dia); err != nil {
 		return err
 	}
+	canonicalSystemBaseline := false
+	if s.dia.Name() == store.EngineSQLite {
+		var rows, systemRows int
+		// #nosec G202 -- closed scope-pin relation; SYSTEM is a bound value.
+		if err := tx.QueryRowContext(ctx,
+			"SELECT COUNT(*), COALESCE(SUM(CASE WHEN typeof(tenant_id) = 'text' AND tenant_id = ? THEN 1 ELSE 0 END), 0) FROM "+
+				directoryWriterRelation(s.dia, dialect.ScopeTenantTable),
+			model.SystemTenantID.String(),
+		).Scan(&rows, &systemRows); err != nil {
+			return fmt.Errorf("read original SQLite SYSTEM baseline: %w", err)
+		}
+		canonicalSystemBaseline = rows == 1 && systemRows == 1
+	}
 	needsRestore = true
 	if err := clearDirectoryTenant(ctx, tx, s.dia); err != nil {
 		return err
@@ -2330,6 +2130,20 @@ func (s *sqlStore) System(ctx context.Context, fn func(store.SystemScope) error)
 	if scope.poisoned != nil {
 		return fmt.Errorf("system transaction poisoned by discarded lifecycle error: %w",
 			scope.poisoned)
+	}
+	if canonicalSystemBaseline && !scope.lineageWriter.started {
+		// Only presentation changed. Rollback restores the exact original SYSTEM
+		// singleton without committing bookkeeping; every mutator enrolls first.
+		rollbackErr := tx.Rollback()
+		cancelErr := ctx.Err()
+		if cancelErr != nil && errors.Is(rollbackErr, sql.ErrTxDone) {
+			// database/sql may have already rolled back the canceled transaction.
+			rollbackErr = nil
+		}
+		if rollbackErr == nil {
+			needsRestore = false
+		}
+		return errors.Join(cancelErr, rollbackErr)
 	}
 	// System callbacks may bind any number of real tenants. The transaction
 	// envelope, not each operation, owns the final restoration: persist the

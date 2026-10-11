@@ -1369,7 +1369,11 @@ func applyLockedHandoffOffer(
 	if err != nil {
 		return HandoffOfferResult{}, err
 	}
-	if from.Validate() != nil || from != actorRecipient || carrier.delivery.Recipient == from ||
+	fromErr := from.Validate()
+	if fromErr == nil && from != actorRecipient {
+		return HandoffOfferResult{}, errHandoffSenderNotOwner
+	}
+	if fromErr != nil || carrier.delivery.Recipient == from ||
 		carrier.message.Sender != normalized.actor || carrier.message.ChannelID != carrier.channel.ID ||
 		carrier.message.WorkItemID != normalized.command.WorkItemID ||
 		carrier.message.Kind != MessageHandoffOffer || carrier.message.State != MessagePublished ||

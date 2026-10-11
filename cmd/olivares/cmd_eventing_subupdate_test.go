@@ -25,6 +25,7 @@ import (
 func readSubscriptionRow(t *testing.T, dir, tenant, id string) model.Record {
 	t.Helper()
 	ctx := context.Background()
+	prepareCompositionTestBoot(t)
 	eng, err := boot(ctx, bootConfig{DataDir: dir, Version: "test", Logger: discardLog()})
 	if err != nil {
 		t.Fatalf("boot to read subscription: %v", err)

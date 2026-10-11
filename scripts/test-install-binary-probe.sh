@@ -46,13 +46,13 @@ for name, candidate, existing in (
     ("failed_candidate_preserves_installed_binary", b"#!/bin/sh\nexit 1\n", True),
     ("failed_candidate_leaves_fresh_install_empty", b"#!/bin/sh\nexit 1\n", False),
     ("successful_candidate_replaces_installed_binary",
-     b"#!/bin/sh\nprintf 'Olivares AI 26.10.0\\n'\n", True),
+     b"#!/bin/sh\nprintf 'Olivares AI 1.1\\n'\n", True),
 ):
     case = scratch / name
     bindir = case / "bin"
     bindir.mkdir(parents=True)
     installed = bindir / "olivares"
-    previous = b"#!/bin/sh\nprintf 'Olivares AI 26.9.0\\n'\n"
+    previous = b"#!/bin/sh\nprintf 'Olivares AI 1.0\\n'\n"
     if existing:
         installed.write_bytes(previous)
         installed.chmod(0o755)
@@ -64,7 +64,7 @@ for name, candidate, existing in (
     binary = fixture / "olivares"
     binary.write_bytes(candidate)
     binary.chmod(0o755)
-    archive = fixture / "olivares_26.10.0_linux_amd64.tar.gz"
+    archive = fixture / "olivares_1.1_linux_amd64.tar.gz"
     with tarfile.open(archive, "w:gz") as handle:
         handle.add(binary, arcname="olivares")
     digest = hashlib.sha256(archive.read_bytes()).hexdigest()
@@ -72,13 +72,13 @@ for name, candidate, existing in (
     (fixture / "checksums.txt.sig").write_text("fixture signature\n")
     (fixture / "checksums.txt.pem").write_text("fixture certificate\n")
     result = subprocess.run(["/bin/sh", str(root / "scripts/install.sh"),
-                             "--version", "26.10.0", "--bindir", str(bindir)],
+                             "--version", "1.1", "--bindir", str(bindir)],
                             env=env, capture_output=True, text=True, timeout=20)
     if "successful" in name:
         assert result.returncode == 0, result.stderr
         assert installed.read_bytes() == candidate
         assert "installed verified binary" in result.stdout
-        assert "Olivares AI 26.10.0" in result.stdout
+        assert "Olivares AI 1.1" in result.stdout
     else:
         assert result.returncode == 1, result.stderr
         assert "did not report its version" in result.stderr, result.stderr

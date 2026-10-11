@@ -16,28 +16,31 @@ cd "$ROOT" || cannot "cannot enter $ROOT"
 JSON="${OLIVARES_C0212_JSON:-design/c02-12-boot-seams.json}"
 DOC="${OLIVARES_C0212_DOC:-design/C02-12-BOOT-SEAMS-2026-08-19.md}"
 WIRE="${OLIVARES_C0212_WIRE:-cmd/olivares/wire_noenterprise.go}"
+PORTS="${OLIVARES_C0212_PORTS:-cmd/olivares/edition_ports.go}"
 ART="${OLIVARES_C0212_ART:-design/ARTEFACTOS-POR-PACK-2026-08-08.md}"
 BACKLOG="${OLIVARES_C0212_BACKLOG:-design/BACKLOG-COMPLETITUD-2026-08-16.md}"
 
 [ -f "$JSON" ] || cannot "missing $JSON"
 [ -f "$DOC" ] || cannot "missing $DOC"
 [ -f "$WIRE" ] || cannot "missing $WIRE"
+[ -f "$PORTS" ] || cannot "missing $PORTS"
 [ -f "$ART" ] || cannot "missing $ART"
 [ -f "$BACKLOG" ] || cannot "missing $BACKLOG"
 
 grep -q 'NOT CLOSED' "$DOC" || fail "$DOC lost NOT CLOSED"
 if grep -qiE 'invariant closed|boot abort gone|44 seams all inert' "$DOC"; then
-	fail "$DOC claims a close this lote does not have"
+	fail "$DOC claims a close this batch does not have"
 fi
 grep -q 'C02-12' "$BACKLOG" || fail "$BACKLOG lost the C02-12 row"
 grep -q 'preserved_on_every_lapse\|ningún seam retirado por tag' "$ART" \
 	|| fail "$ART lost the boot-contract invariant"
 
-python3 - "$JSON" "$WIRE" <<'PY' || fail "JSON/wire failed the C02-12 contract"
+python3 - "$JSON" "$WIRE" "$PORTS" <<'PY' || fail "JSON/wire failed the C02-12 contract"
 import json, re, sys
 
 data = json.load(open(sys.argv[1], encoding="utf-8"))
 wire = open(sys.argv[2], encoding="utf-8").read()
+ports_src = open(sys.argv[3], encoding="utf-8").read()
 
 if data.get("schema") != "c02-12-boot-seams/v1":
     raise SystemExit("unknown schema %r" % data.get("schema"))
@@ -71,8 +74,8 @@ if data["audited_constructors"] + len(post) != data["constructors"]:
                      % (data["constructors"], data["audited_constructors"], len(post)))
 if data.get("backlog_claimed") != 44:
     raise SystemExit("backlog_claimed must stay 44 (the stale figure)")
-if data.get("boot_aborting") != ["newDurableBus"]:
-    raise SystemExit("boot_aborting must stay [newDurableBus]")
+if data.get("boot_aborting") != ["durableBus"]:
+    raise SystemExit("boot_aborting must stay [durableBus]")
 if set(post) & set(data["boot_aborting"]):
     raise SystemExit("a post-audit seam cannot be listed as boot-aborting")
 if data.get("boot_aborting_count") != 1:
@@ -87,13 +90,27 @@ for k in ("u_f", "u_d"):
     if data.get(k) != "UNKNOWN":
         raise SystemExit("%s must stay UNKNOWN" % k)
 
-funcs = re.findall(r"^func (\w+)", wire, flags=re.M)
-if len(funcs) != data["constructors"]:
-    raise SystemExit("live constructor count %d != pinned %d" % (len(funcs), data["constructors"]))
-if "newDurableBus" not in funcs:
-    raise SystemExit("wire lost newDurableBus")
-if "newCAEPTransmitter" not in funcs:
-    raise SystemExit("wire lost newCAEPTransmitter")
+# Since #149 the seams are the fields of ONE editionPorts value (edition_ports.go), and
+# the Community wire fills only what Community really does. The audit numbers above stay
+# what they were: a record of the tagged constructors, not a live count. The live pin is
+# the port count, so a new port is two deliberate edits, as a new constructor was.
+start = ports_src.find("type editionPorts struct {")
+if start < 0:
+    raise SystemExit("edition ports lost the editionPorts struct")
+struct = ports_src[start: ports_src.index("\n}\n", start)]
+ports = re.findall(r"^\t([A-Za-z0-9]+) ", struct, flags=re.M)
+if len(ports) != data.get("ports"):
+    raise SystemExit("live port count %d != pinned %s" % (len(ports), data.get("ports")))
+for name in ("durableBus", "caepTransmitter"):
+    if name not in ports:
+        raise SystemExit("edition ports lost %s" % name)
+caep = re.search(r"^\tcaepTransmitter func\(.*$", struct, flags=re.M)
+if not caep or not caep.group(0).endswith("(caepTransmitter, error)"):
+    raise SystemExit("the caepTransmitter port lost its error tuple")
+# Community leaves the CAEP port nil, which boot reads as (nil, nil): it never aborts.
+if "caepTransmitter" in wire:
+    raise SystemExit("Community fills caepTransmitter: its boot path could abort")
+
 n_err = len(re.findall(r"fmt\.Errorf", wire))
 if n_err != data["fmt_errorf_count"]:
     raise SystemExit("live fmt.Errorf count %d != pinned %d" % (n_err, data["fmt_errorf_count"]))
@@ -108,24 +125,21 @@ def body(src, name):
     nxt = re.search(r"^func ", rest[5:], flags=re.M)
     return rest if not nxt else rest[: nxt.start() + 5]
 
-caep = body(wire, "newCAEPTransmitter")
-if "(caepTransmitter, error)" not in caep:
-    raise SystemExit("newCAEPTransmitter lost its error tuple")
-if "return nil, nil" not in caep:
-    raise SystemExit("newCAEPTransmitter lost the nil, nil return")
-# Each post-audit seam is pinned by NAME, not only by the count: a constructor that
-# replaced one of them would keep the count and still be an unaccounted seam. And it is
-# read BEFORE the newDurableBus body so that the one pinned abort migrating into a
-# post-audit seam (file-level fmt.Errorf count unchanged) is named as what it is.
+# Each post-audit seam is pinned by NAME, not only by the count: a port that replaced
+# one of them would keep the count and still be an unaccounted seam. Read BEFORE the
+# durable body so the one pinned abort migrating into a post-audit seam is named.
+fill = body(wire, "editionPortsForBuild")
 for name in post:
-    if name not in funcs:
-        raise SystemExit("wire lost %s" % name)
-    if "fmt.Errorf" in body(wire, name):
+    if name not in ports:
+        raise SystemExit("edition ports lost %s" % name)
+    m = re.search(r"^\t\t%s:\s+(\w+),$" % re.escape(name), fill, flags=re.M)
+    if m and "fmt.Errorf" in body(wire, m.group(1)):
         raise SystemExit("%s must not abort boot (fmt.Errorf in a post-audit seam)" % name)
-durable = body(wire, "newDurableBus")
-if "return nil, fmt.Errorf" not in durable:
-    raise SystemExit("newDurableBus lost the boot-aborting error return")
+if not re.search(r"^\t\tdurableBus:\s+communityDurableBus,$", fill, flags=re.M):
+    raise SystemExit("Community lost its durableBus refusal")
+if "return nil, fmt.Errorf" not in body(wire, "communityDurableBus"):
+    raise SystemExit("communityDurableBus lost the boot-aborting error return")
 PY
 
-say "check-c02-12-boot-seams: CLEAN — 51 constructors (46 audited + 5 named post-audit seams); newDurableBus still aborts boot; invariant open."
+say "check-c02-12-boot-seams: CLEAN — audit record 51 (46 + 5 named); live: one editionPorts value; Community durableBus still aborts boot; invariant open."
 exit 0

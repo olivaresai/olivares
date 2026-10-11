@@ -8,6 +8,9 @@ description: >-
   und seine Grenzen.
 ---
 
+FinOps-Budgets und Ausgabenanalysen gehören zu **[Business](https://olivares.ai/pricing)**. Community behält die Kostenverfolgung pro Sitzung und den Datenexport. Vor 0.1 gespeicherte Budgets bleiben lesbar und löschbar und werden bei aktivem FinOps-Modul durchgesetzt; Community kann sie nicht erstellen oder ändern. Auswertungen und Testumgebungen bleiben in Community.
+
+
 Modul XI ist die **Kosten- / FinOps**-Schicht für KI: Es verbucht, was die Modell- und
 Provider-Konnektoren melden, lässt Sie Ausgaben nach jeder Attributionsdimension
 aufschlüsseln, prognostiziert die aktuelle Periode und macht aus einem Budget echte
@@ -84,9 +87,9 @@ Ledger geschrieben und auditiert. Siehe [Steuern und freigeben](/de/how-to/gover
   verweigert: Ein Orchestrierungs-fire, ein Voice-open, eine Modell-Route, ein Lauf des
   Evals-Gates und ein dauerhafter MCP-Task werden abgelehnt, und der Inferenz-Proxy antwortet
   mit **HTTP 503**. Der Session-Start wendet seine eigene Verfügbarkeitshaltung an
-  (`OLIVARES_SESSION_BUDGET_AVAILABILITY`): Ist sie nicht gesetzt, startet die Session in der
-  Community-Edition und wird in der Enterprise-Edition mit **HTTP 503** abgelehnt; der Fehler
-  wird in beiden Fällen protokolliert. Das beim Ingest emittierte Budget-Cap-Finding hält
+  (`OLIVARES_SESSION_BUDGET_AVAILABILITY`): Ist sie nicht gesetzt, wird die Session in jeder
+  Edition mit **HTTP 503** abgelehnt; mit `fail-open` startet sie. Der Fehler wird in beiden
+  Fällen protokolliert. Das beim Ingest emittierte Budget-Cap-Finding hält
   weiterhin Ausgaben fest, die eine Obergrenze erreicht haben.
 - **Der Router setzt nur die Scopes durch, die er vor der Ausführung kennt** (global / Provider
   / Modell); feinere Scopes (Agent, Session, Team, Projekt) werden an den fire/open-Nähten und

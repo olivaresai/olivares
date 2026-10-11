@@ -12,7 +12,7 @@ import {
   Upload,
   XCircle,
 } from 'lucide-react'
-import { type ReactNode, useState } from 'react'
+import { type ReactNode, useId, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -44,6 +44,7 @@ import { RelTimeLabel } from '@/features/shared'
 import { deployApi, deployKeys } from './api'
 import { ChangeList, GateBadge } from './diff'
 import { DefinitionEditorDialog } from './definition-editor'
+import { NoExecutorNotice } from './executor-notice'
 import { RevisionsSheet } from './revisions'
 import './i18n'
 import type {
@@ -82,12 +83,16 @@ export interface DefinitionDetailSheetProps {
   definitionId: string | null
   open: boolean
   onOpenChange: (open: boolean) => void
+  /** The engine said no runtime executor is configured: Plan, Verify, Apply and Retire
+   * cannot reach infrastructure, so they are disabled with that reason. */
+  noExecutor?: boolean
 }
 
 export function DefinitionDetailSheet({
   definitionId,
   open,
   onOpenChange,
+  noExecutor = false,
 }: DefinitionDetailSheetProps) {
   const { t } = useTranslation(['deploy', 'common'])
   const { activeTenant, can } = useAuth()
@@ -257,6 +262,7 @@ export function DefinitionDetailSheet({
   })
 
   const retired = detail?.desired_status === 'retired'
+  const noExecutorId = useId()
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -266,7 +272,11 @@ export function DefinitionDetailSheet({
           {detail && (
             <SheetDescription className="flex flex-wrap items-center gap-1.5">
               <Badge variant="neutral">{detail.environment}</Badge>
-              <Badge variant="outline">{detail.subject_kind}</Badge>
+              <Badge variant="outline">
+                {t(`editor.subjectKinds.${detail.subject_kind}`, {
+                  defaultValue: detail.subject_kind,
+                })}
+              </Badge>
               <StatusBadge status={detail.desired_status} />
               <SyncBadge definition={detail} />
             </SheetDescription>
@@ -304,11 +314,13 @@ export function DefinitionDetailSheet({
             />
           ) : (
             <div className="flex flex-col gap-5">
+              {noExecutor && <NoExecutorNotice id={noExecutorId} />}
               <LifecycleActions
                 canWrite={canWrite}
                 canAdmin={canAdmin}
                 retired={retired}
                 pendingApproval={pendingApproval}
+                noExecutorId={noExecutor ? noExecutorId : undefined}
                 onPlan={() => setConfirmPlan(true)}
                 onVerify={() => setConfirmVerify(true)}
                 onApply={() => {
@@ -517,6 +529,7 @@ function LifecycleActions({
   canAdmin,
   retired,
   pendingApproval,
+  noExecutorId,
   onPlan,
   onVerify,
   onApply,
@@ -531,6 +544,9 @@ function LifecycleActions({
   /** A governed apply/retire is awaiting approval — lock spec-mutating actions so
    * the operator can't change the spec and invalidate the pending plan_hash. */
   pendingApproval: boolean
+  /** Set when no runtime executor is configured: the id of the notice that says so.
+   * Plan, Verify, Apply and Retire cannot act and point at it as their reason. */
+  noExecutorId?: string
   onPlan: () => void
   onVerify: () => void
   onApply: () => void
@@ -541,16 +557,36 @@ function LifecycleActions({
 }) {
   const { t } = useTranslation('deploy')
   const lockTitle = pendingApproval ? t('apply.pendingTitle') : undefined
+  // Without an executor these four cannot reach infrastructure: they keep their place,
+  // read as unable to act and point at the notice that says why.
+  const unwired = !!noExecutorId
+  const reconcile = unwired
+    ? ({
+        'aria-disabled': true,
+        'aria-describedby': noExecutorId,
+      } as const)
+    : {}
+  const act = (fn: () => void) => (unwired ? undefined : fn)
   return (
     <div className="flex flex-wrap gap-2">
       {canWrite && (
-        <Button variant="secondary" size="sm" onClick={onPlan}>
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={act(onPlan)}
+          {...reconcile}
+        >
           <ScanSearch />
           {t('detail.actions.plan')}
         </Button>
       )}
       {canWrite && (
-        <Button variant="secondary" size="sm" onClick={onVerify}>
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={act(onVerify)}
+          {...reconcile}
+        >
           <PlayCircle />
           {t('detail.actions.verify')}
         </Button>
@@ -560,9 +596,10 @@ function LifecycleActions({
       <Button
         variant="primary"
         size="sm"
-        onClick={onApply}
+        onClick={act(onApply)}
         disabled={!canAdmin || retired}
         title={!canAdmin ? t('common:privileged.notAuthorized') : undefined}
+        {...reconcile}
       >
         <Upload />
         {t('detail.actions.apply')}
@@ -570,9 +607,10 @@ function LifecycleActions({
       <Button
         variant="destructive"
         size="sm"
-        onClick={onRetire}
+        onClick={act(onRetire)}
         disabled={!canAdmin || retired}
         title={!canAdmin ? t('common:privileged.notAuthorized') : undefined}
+        {...reconcile}
       >
         <XCircle />
         {t('detail.actions.retire')}
@@ -716,7 +754,11 @@ function DetailBody({
       {/* Overview. */}
       <Section title={t('detail.overview')}>
         <KvList>
-          <KvRow label={t('detail.subjectKind')}>{detail.subject_kind}</KvRow>
+          <KvRow label={t('detail.subjectKind')}>
+            {t(`editor.subjectKinds.${detail.subject_kind}`, {
+              defaultValue: detail.subject_kind,
+            })}
+          </KvRow>
           <KvRow label={t('detail.subjectRef')} mono>
             {detail.subject_ref}
           </KvRow>

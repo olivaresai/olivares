@@ -86,8 +86,7 @@ func (r *mcpProtocolBindingReconciler) reconcile(
 		return sessions.ProtocolBindingReconcileResult{}, err
 	}
 	if current.Terminal {
-		return protocolReconcileResult(
-			nil, current, current.ObservationVerdict, current.ObservationCode,
+		return protocolReconcileResult(current, current.ObservationVerdict, current.ObservationCode,
 			mcpProtocolBindingObservedAt(current, r.clock()), false,
 			[]sessions.ProtocolBindingRemoteCheck{{
 				Name: "durable_binding", Verdict: current.ObservationVerdict,
@@ -179,8 +178,7 @@ func (r *mcpProtocolBindingReconciler) finishObservation(
 	}
 	const code = "mcp_get"
 	if !apply {
-		return protocolReconcileResult(
-			nil, before, verdict, code, observation.ObservedAt, false,
+		return protocolReconcileResult(before, verdict, code, observation.ObservedAt, false,
 			[]sessions.ProtocolBindingRemoteCheck{{
 				Name: "peer_lifecycle", Verdict: verdict, EvidenceRef: evidenceRef,
 			}},
@@ -200,8 +198,7 @@ func (r *mcpProtocolBindingReconciler) finishObservation(
 			"mcp protocol binding reconcile: committed observation is inconsistent",
 		)
 	}
-	return protocolReconcileResult(
-		nil, updated, updated.ObservationVerdict, updated.ObservationCode,
+	return protocolReconcileResult(updated, updated.ObservationVerdict, updated.ObservationCode,
 		updated.LastObservedAt.UTC(), updated.Replayed,
 		[]sessions.ProtocolBindingRemoteCheck{{
 			Name: "peer_lifecycle", Verdict: updated.ObservationVerdict,

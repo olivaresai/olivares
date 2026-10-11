@@ -177,7 +177,7 @@ func TestUpgradeNonSuccessNamesTheConditionOnly(t *testing.T) {
 	t.Run("command stdout and stderr", func(t *testing.T) {
 		stdout, stderr, err := runUpgradeSeparated(t,
 			"--endpoint", endpoint, "--pubkey", dummyPubkey(t),
-			"--check", "--current-version", "26.7.0",
+			"--check", "--current-version", "26.700",
 			"--os", "linux", "--arch", "amd64")
 		if err == nil {
 			t.Fatalf("upgrade --check against a 404 must fail")
@@ -209,10 +209,10 @@ func TestUpgradePublic200KeepsAuthAndRedactsSource(t *testing.T) {
 	m := release.Manifest{
 		SchemaVersion: release.ManifestSchemaVersion,
 		Channel:       release.ChannelStable,
-		Version:       "26.8.0",
+		Version:       "26.800",
 		ReleasedAt:    time.Date(2026, 7, 9, 12, 0, 0, 0, time.UTC),
 		Artifacts: []release.Artifact{{
-			OS: "linux", Arch: "amd64", Filename: "olivares_26.8.0_linux_amd64.tar.gz",
+			OS: "linux", Arch: "amd64", Filename: "olivares_26.800_linux_amd64.tar.gz",
 			SHA256: strings.Repeat("ab", 32), Size: 16,
 		}},
 	}
@@ -241,7 +241,7 @@ func TestUpgradePublic200KeepsAuthAndRedactsSource(t *testing.T) {
 	endpoint := withUserinfo(srv.URL, diagUser, diagPassword)
 	stdout, stderr, runErr := runUpgradeSeparated(t,
 		"--endpoint", endpoint, "--pubkey", base64.StdEncoding.EncodeToString(pub),
-		"--check", "--current-version", "26.7.0",
+		"--check", "--current-version", "26.700",
 		"--os", "linux", "--arch", "amd64")
 	if runErr != nil {
 		t.Fatalf("positive 200 --check failed: %v\nstdout=%s\nstderr=%s", runErr, stdout, stderr)
@@ -466,7 +466,7 @@ func TestUpgradeCommunitySourceQueryRefusalIsDisplaySafe(t *testing.T) {
 	t.Run("command", func(t *testing.T) {
 		stdout, stderr, err := runUpgradeSeparated(t,
 			"--endpoint", raw, "--pubkey", dummyPubkey(t),
-			"--check", "--current-version", "26.7.0",
+			"--check", "--current-version", "26.700",
 			"--os", "linux", "--arch", "amd64")
 		if err == nil {
 			t.Fatal("upgrade --check with a query endpoint succeeded")
@@ -620,7 +620,7 @@ func TestUpgradeGatedCommandStdoutStderr(t *testing.T) {
 		"--enterprise", "--download-protocol", "legacy",
 		"--token", "tkn", "--endpoint", endpoint,
 		"--pubkey", dummyPubkey(t), "--data-dir", dataDir,
-		"--check", "--current-version", "26.7.0",
+		"--check", "--current-version", "26.700",
 		"--os", "linux", "--arch", "amd64")
 	if err == nil {
 		t.Fatal("gated 404 --check succeeded")
@@ -680,15 +680,15 @@ func TestUpgradeReleaseTagDisplayIsBounded(t *testing.T) {
 		t.Fatalf("json source field leaked the raw tag: %s", payload)
 	}
 
-	okSrc, err := buildCommunitySource("https://github.com/owner/repo/releases/tag/v26.8.0", release.ChannelStable, &http.Client{})
+	okSrc, err := buildCommunitySource("https://github.com/owner/repo/releases/tag/26.800", release.ChannelStable, &http.Client{})
 	if err != nil {
 		t.Fatalf("legitimate tag refused: %v", err)
 	}
-	if got := okSrc.describe(); !strings.Contains(got, "release v26.8.0") {
+	if got := okSrc.describe(); !strings.Contains(got, "release 26.800") {
 		t.Fatalf("legitimate tag missing from describe(): %q", got)
 	}
-	if displayReleaseTag("v26.8.0") != "v26.8.0" {
-		t.Fatalf("displayReleaseTag changed a safe tag: %q", displayReleaseTag("v26.8.0"))
+	if displayReleaseTag("26.800") != "26.800" {
+		t.Fatalf("displayReleaseTag changed a safe tag: %q", displayReleaseTag("26.800"))
 	}
 }
 
@@ -702,7 +702,7 @@ func TestUpgradeCLISourceLineSanitizesTag(t *testing.T) {
 
 	stdout, stderr, err := runUpgradeSeparated(t,
 		"--endpoint", endpoint, "--pubkey", dummyPubkey(t),
-		"--check", "--current-version", "26.7.0",
+		"--check", "--current-version", "26.700",
 		"--os", "linux", "--arch", "amd64")
 	if err == nil {
 		t.Fatal("404 upgrade --check succeeded")
@@ -718,7 +718,7 @@ func TestUpgradeCLISourceLineSanitizesTag(t *testing.T) {
 
 	stdout, stderr, err = runUpgradeSeparated(t,
 		"--endpoint", endpoint, "--channel", "security", "--pubkey", dummyPubkey(t),
-		"--check", "--current-version", "26.7.0",
+		"--check", "--current-version", "26.700",
 		"--os", "linux", "--arch", "amd64")
 	if err == nil {
 		t.Fatal("security 404 succeeded")
@@ -737,7 +737,7 @@ func TestUpgradeReleaseV1RemoteHeadersAreNotEchoed(t *testing.T) {
 		set:             "ent",
 		manifestSHA256:  strings.Repeat("a", 64),
 		signatureSHA256: strings.Repeat("b", 64),
-		version:         "26.8.0",
+		version:         "26.800",
 	}
 	valid := func() http.Header {
 		h := make(http.Header)
@@ -760,9 +760,9 @@ func TestUpgradeReleaseV1RemoteHeadersAreNotEchoed(t *testing.T) {
 		}{
 			{
 				name:   "whitespace version",
-				mutate: func(h http.Header) { h[hdrReleaseVersion] = []string{" 26.8.0"} },
+				mutate: func(h http.Header) { h[hdrReleaseVersion] = []string{" 26.800"} },
 				want:   "whitespace",
-				forbid: []string{" 26.8.0", "26.8.0"},
+				forbid: []string{" 26.800", "26.800"},
 			},
 			{
 				name:   "unparseable version",
@@ -806,13 +806,13 @@ func TestUpgradeReleaseV1RemoteHeadersAreNotEchoed(t *testing.T) {
 
 	t.Run("corroborateV1Headers names the condition only", func(t *testing.T) {
 		other := valid()
-		other.Set(hdrReleaseVersion, "26.9.0")
+		other.Set(hdrReleaseVersion, "26.900")
 		err := corroborateV1Headers(other, tuple, "signature")
 		if err == nil || !strings.Contains(err.Error(), "names another tuple") {
 			t.Fatalf("want a corroboration refusal, got %v", err)
 		}
 		msg := err.Error()
-		for _, leak := range []string{"26.9.0", "26.8.0", tuple.set, tuple.manifestSHA256, tuple.signatureSHA256} {
+		for _, leak := range []string{"26.900", "26.800", tuple.set, tuple.manifestSHA256, tuple.signatureSHA256} {
 			if strings.Contains(msg, leak) {
 				t.Fatalf("corroboration echoed tuple value %q: %q", leak, msg)
 			}
@@ -933,7 +933,7 @@ func TestUpgradeNonHTTPSEndpointIsOwnedRefusal(t *testing.T) {
 	} {
 		stdout, stderr, err := runUpgradeSeparated(t,
 			"--endpoint", ep, "--pubkey", dummyPubkey(t),
-			"--check", "--current-version", "26.7.0",
+			"--check", "--current-version", "26.700",
 			"--os", "linux", "--arch", "amd64")
 		if err == nil {
 			t.Fatalf("CLI accepted %s", ep)
@@ -982,14 +982,14 @@ func TestUpgradeJSONSourceFieldRedactsCredentialsAndBoundsTag(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	tag := "v26.8.0-" + strings.Repeat("J", 120)
+	tag := "26.800-" + strings.Repeat("J", 120)
 	m := release.Manifest{
 		SchemaVersion: release.ManifestSchemaVersion,
 		Channel:       release.ChannelStable,
-		Version:       "26.8.0",
+		Version:       "26.800",
 		ReleasedAt:    time.Date(2026, 7, 9, 12, 0, 0, 0, time.UTC),
 		Artifacts: []release.Artifact{{OS: "linux", Arch: "amd64",
-			Filename: "olivares_26.8.0_linux_amd64.tar.gz", SHA256: strings.Repeat("ab", 32), Size: 16}},
+			Filename: "olivares_26.800_linux_amd64.tar.gz", SHA256: strings.Repeat("ab", 32), Size: 16}},
 	}
 	manifest, err := json.Marshal(m)
 	if err != nil {
@@ -1023,7 +1023,7 @@ func TestUpgradeJSONSourceFieldRedactsCredentialsAndBoundsTag(t *testing.T) {
 	cmd.SetArgs([]string{"upgrade", "--output", "json",
 		"--target", filepath.Join(t.TempDir(), "not-installed"),
 		"--endpoint", endpoint, "--pubkey", base64.StdEncoding.EncodeToString(pub),
-		"--check", "--current-version", "26.7.0", "--os", "linux", "--arch", "amd64"})
+		"--check", "--current-version", "26.700", "--os", "linux", "--arch", "amd64"})
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("signed channel check failed: %v", err)
 	}

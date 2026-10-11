@@ -115,7 +115,8 @@
       "deleted": "Budget supprimé"
     },
     "truncated": "{{n}} budgets chargés ; il y en a d’autres",
-    "truncatedHint": "Il existe plus de budgets que ceux affichés ; cette page prend les lignes par identifiant. L’absence d’un plafond ici ne démontre pas que la dépense est sans limite : il peut simplement se trouver au-delà de cette page."
+    "truncatedHint": "Il existe plus de budgets que ceux affichés ; cette page prend les lignes par identifiant. L’absence d’un plafond ici ne démontre pas que la dépense est sans limite : il peut simplement se trouver au-delà de cette page.",
+    "storedEmptyHint": "Les budgets créés dans Business restent consultables et supprimables ici."
   },
   "cache": {
     "title": "Efficacité du cache d’invite",

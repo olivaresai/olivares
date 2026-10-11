@@ -94,7 +94,7 @@ done
 # skip at once evaporates into green. Every pr-ci job carries the same repository guard, and
 # that guard is what check-pr-ci-regime.sh pins — a rename would otherwise disable the whole
 # regime in silence. Measured 2026-08-01 and fixed the same day.
-DEFAULT_PUBLIC_CONTEXTS="pr-lint,pr-build,pr-test,pr-web"
+DEFAULT_PUBLIC_CONTEXTS="pr-lint,pr-build,pr-test,pr-web,userspace-compat"
 case "$PROFILE" in
   public)
     REPO="${REPO:-olivaresai/olivares}"
@@ -248,7 +248,7 @@ echo "    - enable 'Require signed commits' ONLY if you adopt GPG/SSH signing or
 # Una medida parcial leida como total es peor que no medir, porque autoriza a actuar.
 echo "    - VALIDATE against a real PR once CI has run. ⛔ NOT with 'gh pr checks': under a token"
 echo "      without checks:read it prints 'no checks reported' and exits 0 while the API says 403."
-echo "      Use the runs API, which distinguishes 'no puedo mirar' from 'no hay' — but scope it"
+echo "      Use the runs API, which distinguishes 'could not look' from 'nothing found' — but scope it"
 echo "      to the PR head and enumerate EVERY run and EVERY page, or the list is partial:"
 echo "        SHA=\$(gh api \"repos/${REPO}/pulls/<PR>\" --jq .head.sha)"
 echo "        gh api --paginate \"repos/${REPO}/actions/runs?event=pull_request&head_sha=\$SHA\" \\"

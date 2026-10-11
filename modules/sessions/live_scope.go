@@ -169,6 +169,7 @@ func (m *Module) upsertManagedLive(ctx context.Context, sc store.Scope, in manag
 		return nil, err
 	} else if ok {
 		rec[colSessionRef] = in.externalID
+		rec[colLiveEndedAt] = nil // a resumed session is live again
 		advanceLast(rec, at)
 		return repo.Update(ctx, rec)
 	}
@@ -196,11 +197,29 @@ func (m *Module) upsertManagedLive(ctx context.Context, sc store.Scope, in manag
 		}
 		if ok {
 			again[colSessionRef] = in.externalID
+			again[colLiveEndedAt] = nil
 			advanceLast(again, at)
 			return repo.Update(ctx, again)
 		}
 	}
 	return nil, err
+}
+
+// endManagedLive marks the plane's own live row of runRef ended, inside the
+// transaction that makes the run stopped or failed. A run with no managed row has
+// nothing to mark.
+func endManagedLive(ctx context.Context, sc store.Scope, runRef string, at time.Time) error {
+	repo, err := sc.Ext(liveKind)
+	if err != nil {
+		return err
+	}
+	recs, _, err := repo.List(ctx, model.Query{Filters: []model.Filter{eq(colLiveRunRef, runRef)}, Limit: 1})
+	if err != nil || len(recs) == 0 || recs[0].String(colLiveEndedAt) != "" {
+		return err
+	}
+	recs[0][colLiveEndedAt] = model.NewTimestamp(at).String()
+	_, err = repo.Update(ctx, recs[0])
+	return err
 }
 
 // touchManagedLive advances the managed row's last_event_at for a live profiled

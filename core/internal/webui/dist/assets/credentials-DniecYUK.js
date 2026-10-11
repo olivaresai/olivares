@@ -1,1 +1,0 @@
-var e=/(:\/\/[^/@\s:]+:[^/@\s]+@)|\b(token|secret|password|passwd|api_key|apikey|access_key|client_secret)\s*=/i;function t(t){return!!t&&e.test(t)}export{t};

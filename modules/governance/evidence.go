@@ -320,6 +320,9 @@ func (e *scopedEngine) ScopedEvidence(
 		diag          cedar.Diagnostic
 		facts         []store.AuthorizationFactRef
 		resourceGuard auth.CheckEvidence
+		scopedEM      cedar.EntityMap
+		scopedReq     cedar.Request
+		marks         []cedar.EntityUID
 	)
 	viewErr := e.resolver.data.View(ctx, req.Tenant, func(sc store.Scope) error {
 		var readErr error
@@ -346,10 +349,31 @@ func (e *scopedEngine) ScopedEvidence(
 		}
 
 		if before.set == nil {
+			// No grant policy: nothing to evaluate, but an inheritance filter is a row of
+			// its own and still removes the inherited terms. It is read inside this View,
+			// whose epoch witness a filter write advances (inheritance_filter.go).
+			if requestHasScope(req) {
+				rows, filterErr := inheritanceFiltersOf(ctx, lineage, req.Resource.Kind)
+				if filterErr != nil {
+					return filterErr
+				}
+				if len(rows) > 0 {
+					em, resource, principal, _, found, scopeErr := governanceEvidenceScope(ctx, lineage, e.resolver, req)
+					if scopeErr != nil {
+						return scopeErr
+					}
+					if len(found) > 0 {
+						creq := cedar.Request{Principal: principal, Action: actionUID(req), Resource: resource, Context: scopedContext(req, observedAt)}
+						captureScopedCedar(ctx, before, em, creq, false, found)
+						marks = found
+						return nil
+					}
+				}
+			}
 			auth.CaptureAuthorizationInputs(ctx, true, "none-v1", struct{}{})
 			return nil
 		}
-		em, resource, principal, _, scopeErr := governanceEvidenceScope(ctx, lineage, e.resolver, req)
+		em, resource, principal, _, found, scopeErr := governanceEvidenceScope(ctx, lineage, e.resolver, req)
 		if scopeErr != nil {
 			return scopeErr
 		}
@@ -359,7 +383,8 @@ func (e *scopedEngine) ScopedEvidence(
 			Resource:  resource,
 			Context:   scopedContext(req, observedAt),
 		}
-		captureScopedCedar(ctx, before, em, creq, scopedGrantAboveFloor(req.Principal, req.Tenant, before.generation) && !e.grantExpiredState(before, ready, observedAt))
+		captureScopedCedar(ctx, before, em, creq, scopedGrantAboveFloor(req.Principal, req.Tenant, before.generation) && !e.grantExpiredState(before, ready, observedAt), found)
+		scopedEM, scopedReq, marks = em, creq, found
 		cedarDecision, diag = cedar.Authorize(before.set.policies, em, creq)
 		return nil
 	})
@@ -390,17 +415,20 @@ func (e *scopedEngine) ScopedEvidence(
 	}
 	if before.set != nil && cedarDecision == cedar.Allow && resourceGuard.Verdict == auth.CheckClean &&
 		scopedGrantAboveFloor(req.Principal, req.Tenant, before.generation) {
-		if !e.grantExpiredState(before, ready, observedAt) {
+		// Under an inheritance filter only a permit anchored at or below the filtered node
+		// is a grant; the same classification the live decision makes (Scoped).
+		if !e.grantExpiredState(before, ready, observedAt) && grantAtOrBelow(before.set.policies, scopedEM, scopedReq, marks) {
 			effect = auth.EffectGrant
 		}
 	}
 	return auth.ScopedEvidenceDecision{
-		Effect:        effect,
-		ResourceGuard: resourceGuard,
-		ForbidAbsence: forbid,
-		Facts:         facts,
-		ObservedAt:    observedAt,
-		FreshUntil:    freshUntil,
+		Effect:              effect,
+		ResourceGuard:       resourceGuard,
+		ForbidAbsence:       forbid,
+		Facts:               facts,
+		ObservedAt:          observedAt,
+		FreshUntil:          freshUntil,
+		InheritanceFiltered: len(marks) > 0,
 	}, nil
 }
 
@@ -655,9 +683,9 @@ func governanceEvidenceScope(
 	sc store.Scope,
 	resolver *scopeResolver,
 	req auth.Request,
-) (cedar.EntityMap, cedar.EntityUID, cedar.EntityUID, bool, error) {
+) (cedar.EntityMap, cedar.EntityUID, cedar.EntityUID, bool, []cedar.EntityUID, error) {
 	if resolver == nil {
-		return nil, cedar.EntityUID{}, cedar.EntityUID{}, false, errEvidenceUnavailable
+		return nil, cedar.EntityUID{}, cedar.EntityUID{}, false, nil, errEvidenceUnavailable
 	}
 	em := cedar.EntityMap{}
 	principal := buildPrincipalEntity(req, em)
@@ -665,7 +693,7 @@ func governanceEvidenceScope(
 	attrs := baseResourceAttrs(req)
 	parents, extra, err := resolver.readScope(ctx, sc, req, em)
 	if err != nil {
-		return nil, cedar.EntityUID{}, cedar.EntityUID{}, false, err
+		return nil, cedar.EntityUID{}, cedar.EntityUID{}, false, nil, err
 	}
 	for key, value := range extra {
 		attrs[key] = value
@@ -675,7 +703,11 @@ func governanceEvidenceScope(
 		Parents:    cedar.NewEntityUIDSet(parents...),
 		Attributes: cedar.NewRecord(attrs),
 	}
-	return em, resource, principal, governanceEvidenceScopeReadsLineage(req), nil
+	marks, err := markFilteredNodes(ctx, sc, req, em, resource)
+	if err != nil {
+		return nil, cedar.EntityUID{}, cedar.EntityUID{}, false, nil, err
+	}
+	return em, resource, principal, governanceEvidenceScopeReadsLineage(req), marks, nil
 }
 
 func governanceEvidenceScopeReadsLineage(req auth.Request) bool {

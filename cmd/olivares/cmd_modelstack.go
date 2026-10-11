@@ -140,6 +140,9 @@ func (c modelstackClient) do(cmd *cobra.Command, method, path, query string, bod
 	}
 	defer func() { _ = resp.Body.Close() }()
 	raw, err := readCLIHTTPResponse(resp, req, maxModelstackResponseSize+1, cliStatusAccepted(resp.StatusCode, accepted...), func(status int, body []byte) error {
+		if c.family == "finops" && status == http.StatusNotImplemented {
+			return notInEdition()
+		}
 		return modelstackHTTPError(modelstackResult{Status: status, Raw: body})
 	})
 	if err != nil {

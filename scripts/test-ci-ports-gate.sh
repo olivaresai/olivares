@@ -334,7 +334,7 @@ echo
 begin
 _out="$(CI_PORTS_ROOT="$CASE_DIR" bash "$GATE" 2>&1)"; _rc=$?
 [ "$_rc" -eq 2 ]
-check "un sujeto VACÍO es 2 (no he podido mirar), no 1" "rc=$_rc" $?
+check "an EMPTY subject returns 2 (could not check), not 1" "rc=$_rc" $?
 
 # ⛔ CONTROL NEGATIVO: sin él, la casilla de arriba se cumpliría haciendo que el gate devolviera
 #    2 SIEMPRE. Un fixture válido tiene que seguir dando 0 exacto.
@@ -351,7 +351,7 @@ jobs:
 YAML
 _out="$(CI_PORTS_ROOT="$CASE_DIR" bash "$GATE" 2>&1)"; _rc=$?
 [ "$_rc" -eq 0 ]
-check "y un fixture válido sigue dando 0 exacto" "rc=$_rc" $?
+check "and a valid fixture still returns exactly 0" "rc=$_rc" $?
 
 # --- ⛔ LA GUARDA QUE NO SE ALCANZABA. Esta casilla es TRANSVERSAL a los tres envoltorios Go
 # porque comparten forma. `checkciports` ya sabía negarse bien —«no workflow files under … —
@@ -367,7 +367,7 @@ for _g in check-ci-ports check-cosign-pins check-cosign-wiring; do
 	cp "$_repo/scripts/$_g.sh" "$_d/scripts/"
 	( cd "$_d" && bash "scripts/$_g.sh" >/dev/null 2>&1 ); _rc=$?
 	[ "$_rc" -eq 2 ]
-	check "$_g sin su layout es 2, no el error crudo del shell" "rc=$_rc" $?
+	check "$_g without its layout returns 2, not the raw shell error" "rc=$_rc" $?
 done
 
 # ⛔ CONTROL NEGATIVO de la casilla anterior: sin él se cumpliría haciendo que los envoltorios
@@ -375,42 +375,8 @@ done
 for _g in check-ci-ports check-cosign-pins check-cosign-wiring; do
 	bash "$_repo/scripts/$_g.sh" >/dev/null 2>&1; _rc=$?
 	[ "$_rc" -eq 0 ]
-	check "$_g sobre el arbol real sigue dando 0" "rc=$_rc" $?
+	check "$_g on the real tree still returns 0" "rc=$_rc" $?
 done
-
-# --- ⛔ PROPAGACIÓN CON DOS COLAPSOS APILADOS (`check-install-manifest`). Esta matriz es la dueña
-# de la propiedad «el envoltorio entrega el veredicto de su herramienta», así que el tercer caso
-# vive aquí aunque el gate sea de otra familia. Localizado por el carril de integración con `file:line`:
-#
-#   ( cd … && go run ./cmd/checkinstallmanifest "$MANIFEST" ) || exit 1
-#        ↑ `go run` convierte el 2 en 1        ↑ `|| exit 1` aplasta CUALQUIER código
-#
-# Se prueba con un señuelo COMPLETO cuya herramienta sale **3** — un código que ninguno de los dos
-# colapsos puede producir por casualidad, así que el resultado no admite otra lectura.
-_d="$(mktemp -d "$WORK/im.XXXXXX")"
-mkdir -p "$_d/scripts" "$_d/deploy/manifests" "$_d/operator/cmd/checkinstallmanifest"
-cp "$_repo/scripts/check-install-manifest.sh" "$_d/scripts/"
-# Y su libreria: el senuelo prueba la PROPAGACION del codigo de la herramienta, asi que tiene
-# que estar completo. El caso CIEGO de mas arriba es el que se queda sin ella a proposito.
-mkdir -p "$_d/scripts/lib"
-cp "$_repo/scripts/lib/exec-workdir.sh" "$_d/scripts/lib/"
-printf 'apiVersion: v1\nkind: Service\n' > "$_d/deploy/manifests/install.yaml"
-printf 'module operator\n\ngo 1.24\n' > "$_d/operator/go.mod"
-printf 'package main\n\nimport "os"\n\nfunc main() { os.Exit(3) }\n' \
-	> "$_d/operator/cmd/checkinstallmanifest/main.go"
-# ⛔ GOWORK=off, y no es adorno: `/tmp` es noexec en los contenedores, asi que todo carril pone
-# TMPDIR DENTRO del repo — y entonces este senuelo nace bajo el `go.work` del arbol, `go run` se
-# niega («not one of the workspace modules») y el envoltorio contesta 2 en vez del 3 de su
-# herramienta. El caso suspendia por el ENTORNO y se leia como una regresion de main.
-( cd "$_d" && GOWORK=off sh scripts/check-install-manifest.sh >/dev/null 2>&1 ); _rc=$?
-[ "$_rc" -eq 3 ]
-check "check-install-manifest entrega el codigo de su herramienta (3)" "rc=$_rc" $?
-
-# ⛔ CONTROL NEGATIVO: sobre el árbol real sigue dando 0 exacto — sin esto, la casilla de arriba
-#    se cumpliría con un envoltorio que devolviera siempre lo que le apeteciera.
-bash "$_repo/scripts/check-install-manifest.sh" >/dev/null 2>&1; _rc=$?
-[ "$_rc" -eq 0 ]
-check "check-install-manifest sobre el arbol real sigue dando 0" "rc=$_rc" $?
 
 echo "ci-ports gate: ${pass} passed, ${fail} failed"
 [ "$fail" -eq 0 ] || exit 1

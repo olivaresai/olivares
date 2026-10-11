@@ -11,11 +11,8 @@ import (
 	"github.com/olivaresai/olivares/sdk/model"
 )
 
-// The provider natural references. They are the values a connector puts in
-// model.CostSample.ProviderRef (and in Provider.Ref / Model.ProviderRef), so the
-// engine resolves one Provider entity per value. For the cost stream this ref is
-// the provenance discriminator (the per-provider "signal source"); the event-level
-// provenance is additionally carried by event.Event.Source = the connector name.
+// Provider references identify the provider in catalogs and CostSample observations.
+// Event.Source separately identifies the connector that emitted an observation.
 const (
 	// ProviderAnthropic is the Claude API / Console (claude-api connector).
 	ProviderAnthropic = "anthropic"
@@ -23,54 +20,26 @@ const (
 	ProviderOpenAI = "openai"
 	// ProviderAzureOpenAI is OpenAI served through Azure (openai connector, azure mode).
 	ProviderAzureOpenAI = "azure-openai"
-	// ProviderOpenAICodex is OpenAI's Codex coding-agent surface (codex connector). It is
-	// billed by OpenAI but tracked under its own ref so FinOps can attribute Codex
-	// adoption/spend distinctly from raw OpenAI API usage (the openai connector), and so
-	// module X's catalog/governance views do not collide the two OpenAI surfaces.
+	// ProviderOpenAICodex identifies Codex separately from OpenAI API usage.
 	ProviderOpenAICodex = "openai-codex"
-	// ProviderFal is the fal.ai media-inference platform (fal connector). It bills
-	// pay-per-output (per image/second/megapixel), NOT per token, so its catalog models
-	// carry no token-based ModelPricing — cost is metered around the queue API.
+	// ProviderFal identifies fal.ai; its output-based costs have no token pricing.
 	ProviderFal = "fal"
-	// ProviderGLM is the Zhipu AI / Z.ai GLM platform (glm connector). A PRC-nexus frontier
-	// provider (parent Entity-Listed); the connector is catalog-only + Meter (no usage API)
-	// with a sovereignty caveat on BOTH the z.ai (Singapore-wrapped) and bigmodel.cn surfaces.
+	// ProviderGLM identifies the Zhipu AI / Z.ai GLM platform.
 	ProviderGLM = "glm"
 	// ProviderGoogle is Gemini / Gemini Enterprise Agent Platform (formerly Vertex AI)
 	// (gemini connector).
 	ProviderGoogle = "google"
-	// ProviderCursor is the Cursor AI code-editor agent surface (cursor connector). It
-	// bills usage-based spend (model cost + Cursor token rate) per event via the team
-	// Admin API; tracked under its own ref so FinOps attributes Cursor agent spend
-	// distinctly from the underlying model providers it routes to.
+	// ProviderCursor identifies Cursor separately from its upstream model providers.
 	ProviderCursor = "cursor"
-	// ProviderMistral is the Mistral AI platform / la Plateforme (mistral connector). A
-	// European frontier provider with its own Organization → Workspace structure; tracked
-	// under its own ref so the catalog/governance views and FinOps attribute Mistral usage
-	// and spend distinctly.
+	// ProviderMistral identifies the Mistral AI platform / la Plateforme.
 	ProviderMistral = "mistral"
-	// ProviderXAI is the xAI / Grok platform (xai connector). A frontier provider whose
-	// Management API exposes key + ACL inventory and whose usage/billing feeds cost;
-	// tracked under its own ref so the catalog/governance views and FinOps attribute Grok
-	// usage and spend distinctly.
+	// ProviderXAI identifies the xAI / Grok platform.
 	ProviderXAI = "xai"
-	// ProviderDeepSeek is the DeepSeek platform (deepseek connector). A frontier
-	// provider whose hosted API runs on PRC servers under Chinese law; the connector
-	// is catalog-only with an explicit sovereignty caveat. Self-hosted open-weight
-	// inference (V3/R1/V4) uses the local-inference providers (Ollama/vLLM), not this
-	// ref — this ref is the HOSTED API surface only.
+	// ProviderDeepSeek identifies the hosted API; self-hosted models use local providers.
 	ProviderDeepSeek = "deepseek"
-	// ProviderCohere is the Cohere platform / North (cohere connector). An enterprise
-	// provider with on-prem/VPC sovereign deployment via Model Vault; catalog-only
-	// connector with cost via Meter (no usage API). Tracked under its own ref so the
-	// catalog/governance views attribute Cohere usage distinctly.
+	// ProviderCohere identifies the Cohere platform / North.
 	ProviderCohere = "cohere"
-	// ProviderOpenRouter is the OpenRouter aggregation gateway (openrouter connector). A
-	// unified API in FRONT of 400+ models across many upstream providers; the connector
-	// reads the live model catalog (GET /api/v1/models, with per-token list pricing) and
-	// the account usage/limit posture (GET /api/v1/auth/key), governs an approved-model
-	// allow/deny policy, and meters spend distinctly under this ref so FinOps separates
-	// OpenRouter-routed cost from the underlying upstream providers it fans out to.
+	// ProviderOpenRouter identifies OpenRouter separately from its upstream providers.
 	ProviderOpenRouter = "openrouter"
 	// ProviderOllama is local inference via Ollama (local connector).
 	ProviderOllama = "ollama"
@@ -95,15 +64,9 @@ const (
 	KindGateway ProviderKind = "gateway"
 )
 
-// Capability is a single model/provider capability flag. The set covers the full
-// Claude stack (README.md, module X) plus the cross-vendor analogs, so module X
-// can render one capability matrix across providers and the router can require a
-// capability (e.g. "must support vision").
+// Capability is a declared model/provider capability flag used by the router.
 type Capability string
 
-// The capability flags. The Claude-stack set is explicit because surfacing the
-// whole stack (caching, batch, files, thinking, computer use, memory, context
-// management, vision/PDF, structured outputs, citations) is a module-X requirement.
 const (
 	// CapStreaming is incremental token streaming.
 	CapStreaming Capability = "streaming"
@@ -189,40 +152,23 @@ type Model struct {
 	// leave it 0 unless the operator supplies a measurement.
 	ObservedLatencyMillis int64
 
-	// --- Additive: live Models-API source-of-truth (ANT2-16). These are
-	// populated when a connector reads the provider's models API capabilities instead
-	// of relying on a hardcoded catalog; they are zero/nil when the surface does not
-	// expose them (e.g. Bedrock/Vertex/Foundry have no Models API) and the connector
-	// degraded to the offline catalog. They never replace Capabilities (the coarse
-	// cross-vendor flags) — they refine it with the per-model knobs only the live API
-	// reports.
-
 	// MaxInputTokens is the model's maximum input context the provider's Models API
 	// reports (0 if unknown). It is distinct from ContextWindow only where the API
 	// reports input and total windows separately; otherwise they coincide.
 	MaxInputTokens int64
-	// APICapabilities is the per-model knob set the provider's Models API reports
-	// (effort levels, thinking modes, context-management strategies, batch/structured
-	// outputs). Nil when not read from the live API. It is the source-of-truth a
-	// hardcoded catalog cannot keep current (ANT2-16).
+	// APICapabilities refines Capabilities with the provider's live model settings.
+	// Nil means these settings were not read from the live API.
 	APICapabilities *ModelCapabilities
 	// CapabilitySource records whether Capabilities/APICapabilities came from the live
 	// provider API ("live") or the connector's declared offline catalog ("declared").
 	// Empty is treated as "declared" by consumers, so an estimate is never shown as
 	// authoritative (ARCHITECTURE.md).
 	CapabilitySource string
-	// Retirements is the per-deployment-surface retirement schedule (ANT2-03). Model
-	// lifecycle is PER-PLATFORM: the first-party/Claude-Platform-on-AWS/Foundry
-	// retirement date differs from Bedrock and Vertex (e.g. Sonnet 4 first-party
-	// 2026-06-15 vs Vertex 2026-09-14), so a single Deprecated flag would give false
-	// migration deadlines. Empty/nil means no scheduled retirement is known.
+	// Retirements is the per-deployment-surface retirement schedule.
+	// Empty/nil means no scheduled retirement is known.
 	Retirements []ModelRetirement
-	// SurfaceContextWindows is the per-deployment-surface context window (ANT2-01).
-	// Like retirement, the maximum input context DIVERGES per surface: Claude Opus 4.8
-	// is 1M on the Claude API / Bedrock / Vertex but only 200K on Microsoft Foundry, so
-	// the single ContextWindow above (the STANDARD window) is silently wrong on Foundry.
-	// Empty/nil means no per-surface divergence is modeled (ContextWindow applies on
-	// every surface). See SurfaceContextWindow.
+	// SurfaceContextWindows overrides ContextWindow for specific deployment surfaces.
+	// Empty/nil means ContextWindow applies on every surface.
 	SurfaceContextWindows []SurfaceContextWindow
 
 	// DefaultEffort is the model's default effort level when no explicit effort is
@@ -255,13 +201,9 @@ type SurfaceMaxOutput struct {
 	AsOf string
 }
 
-// ModelCapabilities is the per-model knob set a provider's Models API reports
-// (ANT2-16). It is the live source-of-truth that supersedes a hardcoded catalog: a
-// new model version's effort levels, thinking modes and context-management
-// strategies are read from the API rather than guessed. Every field is optional;
-// an empty slice/false means "the API did not report it", never "unsupported"
-// (ARCHITECTURE.md). Carried as provider vocabulary (string slices), not sealed enums, so
-// a new effort tier or context-management strategy needs no SDK release.
+// ModelCapabilities holds settings reported by the provider's live Models API.
+// Every field is optional: empty/false means unreported, not unsupported.
+// Strings retain the provider's vocabulary rather than a closed enum.
 type ModelCapabilities struct {
 	// Batch reports whether the model supports the asynchronous Batches API.
 	Batch bool
@@ -281,9 +223,8 @@ type ModelCapabilities struct {
 	AsOf string
 }
 
-// ModelRetirement is one deployment surface's retirement schedule for a model
-// (ANT2-03). The same model retires on different dates per surface, so the schedule
-// is a SET keyed by surface, AsOf-stamped, never a single global date.
+// ModelRetirement is a model's retirement schedule for one deployment surface.
+// Entries are keyed by surface and stamped with AsOf.
 type ModelRetirement struct {
 	// Surface is the deployment surface this date applies to (direct, bedrock-mantle,
 	// vertex, foundry, claude-platform-aws).
@@ -303,16 +244,8 @@ type ModelRetirement struct {
 	AsOf string
 }
 
-// SurfaceContextWindow is one deployment surface's maximum input context for a model
-// (ANT2-01). Model context windows DIVERGE per surface, so a single ContextWindow is
-// silently wrong on the surfaces where it does not hold: e.g. Claude Opus 4.8 has a
-// 1M-token window on the Claude API / Amazon Bedrock / Gemini Enterprise Agent Platform
-// (formerly Vertex AI) but only 200K on
-// Microsoft Foundry (verified jun-2026). Model.ContextWindow carries the model's
-// STANDARD window; Model.SurfaceContextWindows enumerates the per-surface reality so a
-// router/governance check knows a 1M request to Foundry will be truncated or rejected
-// (stop_reason model_context_window_exceeded) instead of assuming the standard window
-// applies everywhere. Empty/nil means no per-surface divergence is modeled.
+// SurfaceContextWindow overrides Model.ContextWindow for one deployment surface.
+// Empty/nil Model.SurfaceContextWindows means the standard window applies everywhere.
 type SurfaceContextWindow struct {
 	// Surface is the deployment surface this window applies to (direct, bedrock-mantle,
 	// bedrock-legacy, vertex, foundry, claude-platform-aws).
@@ -345,19 +278,16 @@ type KeyRef struct {
 	// CreatedAt is when the key was created (zero if unknown).
 	CreatedAt time.Time
 	// ExpiresAt is when the key is scheduled to expire (zero = no expiry / unknown).
-	// It is the key-lifecycle/rotation governance signal: a key with no expiry, or one
-	// long past its creation with no rotation, is a hygiene posture finding.
 	ExpiresAt time.Time
 	// CreatedBy is the reference of the principal that created the key (empty if
 	// unknown). Attribution metadata for key-lifecycle governance, never a credential.
 	CreatedBy string
-	// PrincipalType is what the key authenticates AS — "service_account" | "user" |
-	// "" (unbound/unknown). A governance attribution signal: a long-lived
-	// service-account key carries a different rotation expectation than a user key.
+	// PrincipalType is "service_account", "user", or "" (unbound/unknown).
 	PrincipalType string
 }
 
 // WorkspaceRef is workspace/project inventory metadata for governance views.
+// Empty/nil governance metadata is unreported, never proof of absence.
 type WorkspaceRef struct {
 	// ID is the provider's workspace/project identifier.
 	ID string
@@ -368,35 +298,25 @@ type WorkspaceRef struct {
 	// CreatedAt is when the workspace was created (zero if unknown).
 	CreatedAt time.Time
 
-	// --- Additive: the governance Workspace object (ANT2-06). These model the
-	// data-residency, customer-managed-encryption (CMEK), compartment and tag
-	// metadata the workspace carries; they are inventory/refs only (NEVER the key
-	// material — ExternalKeyID is the ekey_ reference, not the KMS key). Empty/nil
-	// means "not reported by this surface" (Foundry has no Admin API), never "absent".
-
 	// Residency is the workspace's data-residency policy (allowed + default inference
-	// geos). Nil when the surface does not expose it.
+	// geos). Nil when unreported.
 	Residency *DataResidency
 	// ExternalKeyID is the customer-managed-key (CMEK) reference bound to the workspace
-	// (an ekey_ id; write-once at the provider). Empty means provider-managed encryption
-	// — a posture finding worth surfacing for regulated estates. It is a REFERENCE, never
-	// the key value (docs/SECURITY-HARDENING.md).
+	// (an ekey_ id; write-once at the provider, never key material).
+	// Empty does not prove provider-managed encryption.
 	ExternalKeyID string
 	// CompartmentID is the cloud-KMS compartment/partition the CMEK key-policy is scoped
-	// to (used by the key policy in the customer's KMS). Empty if not set.
+	// to. Empty does not distinguish unset from unreported.
 	CompartmentID string
 	// Geo is the workspace's immutable home region (e.g. "us"). Distinct from the
 	// inference-geo: it is where workspace metadata lives, fixed at creation.
 	Geo string
 	// Tags are operator-assigned workspace tags (cost-center / environment labels).
-	// Nil if none. Values are non-secret governance metadata, never credentials.
+	// Nil does not prove no tags. Values are non-secret metadata, never credentials.
 	Tags map[string]string
 }
 
-// DataResidency is a workspace's data-residency policy (ANT2-06/17): which inference
-// geos are permitted and which is the default. It is the structural basis of the
-// residency/compliance matrix (module XIII): an observed per-request inference_geo
-// (CostSample.InferenceGeo) outside AllowedInferenceGeos is a residency violation.
+// DataResidency records the workspace's allowed and default inference geographies.
 type DataResidency struct {
 	// AllowedInferenceGeos are the geos the workspace permits inference in (e.g.
 	// "us","global"). Empty means "unrestricted/unreported" — never inferred as denied.
@@ -406,12 +326,8 @@ type DataResidency struct {
 	DefaultInferenceGeo string
 }
 
-// ExternalKeyRef is customer-managed-encryption-key (CMEK / External Keys) inventory
-// METADATA — never the key material (ANT2-04). The Admin API returns the ekey_
-// reference, the cloud-KMS provider it wraps, and the last validation state; this
-// type mirrors that and has deliberately NO field that could hold key bytes or a
-// usable KMS credential (docs/SECURITY-HARDENING.md). It populates the governance/posture view
-// renders; the connector also emits posture findings for workspaces without a CMEK.
+// ExternalKeyRef is customer-managed-encryption-key inventory metadata.
+// It holds references and validation state, never key bytes or usable KMS credentials.
 type ExternalKeyRef struct {
 	// ID is the provider's external-key reference (an ekey_ id), never the key value.
 	ID string
@@ -443,9 +359,7 @@ type RateLimitValue struct {
 	OrgLimit int64
 }
 
-// RateLimitRef is one organization- or workspace-scoped rate-limit GROUP the
-// read-only Rate Limits API reports (ANT2-05, verified 2026-07-04). It is inventory a
-// gateway/proxy operator must keep in sync; it is NOT a control the connector mutates.
+// RateLimitRef is read-only organization- or workspace-scoped rate-limit inventory.
 // group_type partitions the group (model_group/batch/token_count/files/skills/
 // web_search, open vocabulary). models carries every model id and alias for
 // model_group rows and is nil otherwise. Workspace rows are OVERRIDES ONLY: absence of
@@ -465,10 +379,8 @@ type RateLimitRef struct {
 	Limits []RateLimitValue
 }
 
-// Catalog is the point-in-time snapshot a model/provider connector exposes to
-// module X / through CatalogProvider. It is reference data, distinct from the
-// CostSample observation stream: the models/capabilities/pricing populate the
-// model-management view; the key/workspace inventory populates the governance view.
+// Catalog is a connector's point-in-time reference data, exposed through CatalogProvider
+// separately from the CostSample observation stream. Key inventory contains no secrets.
 type Catalog struct {
 	// Provider describes the provider this snapshot is for.
 	Provider Provider
@@ -481,9 +393,7 @@ type Catalog struct {
 	// CapturedAt is when the snapshot was taken (the connector's clock, UTC).
 	CapturedAt time.Time
 
-	// --- Additive: governance inventory for the posture/admin views.
-
-	// ExternalKeys is the customer-managed-encryption-key inventory (ANT2-04). Metadata
+	// ExternalKeys is the customer-managed-encryption-key inventory. Metadata
 	// only — never key material. Nil when the surface has no Admin API / no CMEK.
 	ExternalKeys []ExternalKeyRef
 	// RateLimits is the read-only rate-limit inventory a gateway must mirror (ANT2-05).
@@ -505,12 +415,8 @@ func (c Catalog) FindModel(ref string) (Model, bool) {
 	return Model{}, false
 }
 
-// CatalogProvider is implemented by a model/provider connector in ADDITION to
-// sdk.SourceConnector. The SourceConnector half streams usage/cost as CostSample
-// observations; this half exposes the live catalog (models, capabilities,
-// pricing, key/workspace inventory) to module X. The host or module type-asserts
-// a connector to CatalogProvider to read it. Snapshot is read-only and must not
-// emit observations.
+// CatalogProvider exposes reference data alongside sdk.SourceConnector's observations.
+// Snapshot is read-only and must not emit observations.
 type CatalogProvider interface {
 	// Snapshot returns the current catalog. It performs read-only provider API
 	// calls (or returns the connector's declared/offline catalog when no

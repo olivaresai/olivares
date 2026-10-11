@@ -1623,7 +1623,7 @@ func (m *Module) openIncomingHandoffContent(
 	authorized incomingHandoffAuthorizedRead,
 	opener directNoticePayloadOpener,
 ) (HandoffContent, *CommunicationReasonContent, error) {
-	raw, err := opener(ctx, m.communicationSealer, authorized.openPlan)
+	raw, err := opener(ctx, m.CommunicationSealer, authorized.openPlan)
 	if err != nil {
 		return HandoffContent{}, nil, err
 	}
@@ -1634,7 +1634,7 @@ func (m *Module) openIncomingHandoffContent(
 	if authorized.reasonPlan == nil {
 		return content, nil, nil
 	}
-	rawReason, err := opener(ctx, m.communicationSealer, *authorized.reasonPlan)
+	rawReason, err := opener(ctx, m.CommunicationSealer, *authorized.reasonPlan)
 	if err != nil {
 		return HandoffContent{}, nil, err
 	}

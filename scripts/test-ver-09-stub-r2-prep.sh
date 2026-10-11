@@ -2,6 +2,8 @@
 # SPDX-FileCopyrightText: 2026 Olivares.AI
 # SPDX-License-Identifier: AGPL-3.0-only
 # Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+# export-closure: hub-only scripts/testdata/commerce-preflight-unreadable.txt — commerce preflight fixtures stay with the unexported check-commerce-preflight.sh
+# export-closure: hub-only scripts/testdata/commerce-preflight-missing-prefix.txt — commerce preflight fixtures stay with the unexported check-commerce-preflight.sh
 
 set -euo pipefail
 ROOT="$(
@@ -14,7 +16,7 @@ mkdir -p "$_tmp_base"
 TMP="$(mktemp -d "$_tmp_base/ver09prep.XXXXXX")"
 trap 'rm -rf "$TMP"' EXIT
 if [ ! -r "$ROOT/scripts/check-commerce-preflight.sh" ]; then
-  printf 'SKIP %s: check-commerce-preflight.sh es hub-only y no esta en este arbol\n' \
+  printf 'SKIP %s: check-commerce-preflight.sh is hub-only and is absent from this tree\n' \
     "$(basename "${BASH_SOURCE[0]}")"
   exit 0
 fi
@@ -39,6 +41,13 @@ stage() {
   # falso devuelve 1 y `set -e` mata el guion.
   if [ -f "$ROOT/scripts/check-commerce-preflight.sh" ]; then
     cp "$ROOT/scripts/check-commerce-preflight.sh" "$TMP/tree/scripts/"
+    mkdir -p "$TMP/tree/scripts/testdata"
+    if [ -f "$ROOT/scripts/testdata/commerce-preflight-unreadable.txt" ]; then
+      cp "$ROOT/scripts/testdata/commerce-preflight-unreadable.txt" "$TMP/tree/scripts/testdata/"
+    fi
+    if [ -f "$ROOT/scripts/testdata/commerce-preflight-missing-prefix.txt" ]; then
+      cp "$ROOT/scripts/testdata/commerce-preflight-missing-prefix.txt" "$TMP/tree/scripts/testdata/"
+    fi
   fi
   # ⛔ LOS LIBS SE DERIVAN DE LO QUE LOS SUJETOS SOURCEAN, no se escriben a mano. Aqui habia UNA
   #    linea, `lib/git-env.sh`, y el 2026-09-02 `check-commerce-preflight.sh` gano
@@ -52,7 +61,7 @@ stage() {
     while IFS= read -r _dep; do
       [ -n "$_dep" ] || continue
       if [ ! -r "$ROOT/scripts/lib/$_dep" ]; then
-        echo "test-ver-09-stub-r2-prep: NO HE PODIDO MIRAR: $(basename "$_sujeto") sourcea scripts/lib/$_dep y no existe" >&2
+        echo "test-ver-09-stub-r2-prep: COULD NOT CHECK: $(basename "$_sujeto") sources scripts/lib/$_dep but it does not exist" >&2
         exit 2
       fi
       cp "$ROOT/scripts/lib/$_dep" "$TMP/tree/scripts/lib/"
@@ -178,17 +187,17 @@ import sys
 
 p = Path(sys.argv[1])
 s = p.read_text(encoding="utf-8")
-old = 'if [ "$ver_ok" = "True" ] && [ "$n_obj" = "ILEGIBLE" ]; then'
-new = 'if false && [ "$ver_ok" = "True" ] && [ "$n_obj" = "ILEGIBLE" ]; then'
+old = 'if [ "$ver_ok" = "True" ] && [ "$n_obj" = "$PREFLIGHT_UNREADABLE" ]; then'
+new = 'if false && [ "$ver_ok" = "True" ] && [ "$n_obj" = "$PREFLIGHT_UNREADABLE" ]; then'
 if s.count(old) != 1:
     raise SystemExit("R2 COULD NOT LOOK wiring mutant did not match exactly once")
 p.write_text(s.replace(old, new), encoding="utf-8")
 PY
 run
 if [ "$(cat "$TMP/rc")" = 1 ] && grep -Fq 'malformed R2 listings' "$TMP/err"; then
-  ok "mutant (R2 ILEGIBLE disconnected from rc2) is killed"
+  ok "mutant (R2 unreadable status disconnected from rc2) is killed"
 else
-  bad "R2 ILEGIBLE wiring mutant survived rc=$(cat "$TMP/rc") ($(cat "$TMP/err"))"
+  bad "R2 unreadable-status wiring mutant survived rc=$(cat "$TMP/rc") ($(cat "$TMP/err"))"
 fi
 
 stage

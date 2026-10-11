@@ -5,11 +5,17 @@ description: >-
   没有虚构的能力。
 ---
 
+:::note[Business]
+审计导出（`GET /v1/audit/export`、`olivares audit export`）、目录归档和外部归档验证需要 Business。Community 保留签名账本、`olivares audit verify` 和 `olivares dr backup`；导出返回 HTTP 501 或退出码 9。审计转发和携带审计段的 DDIL 传输也需要 Business。
+:::
+
 面向 AI 的控制平面（control plane）是一款安全产品。如果它夸大其所覆盖的范围，
 就会带来虚假的安全感 —— 这比完全没有工具更糟糕。因此本页是关于
 **今天有哪些功能在运行、哪些在计划中、以及哪些是有意排除在范围之外**的明确约定。
 文档的其余部分都遵守这一约定：教程和操作指南中的命令都应按所写内容原样运行；
 凡是产品尚未覆盖之处，页面会直接说明，而不是暗示它已经覆盖。
+
+**NATS 事件传递：** Core NATS 桥接和 NATS JetStream 需要 Business Identity & Scale。Community 在进程内传递事件。
 
 ## 今天有哪些功能在运行
 
@@ -21,9 +27,11 @@ description: >-
   正是复现这条路径。
 - **首次运行的初始化无需凭据。** 全新安装**没有默认凭据**；
   引擎在首次启动时打印一个一次性、单次使用的初始化令牌。
-- **固定后，官方 Codex 和 Grok CLI 即会话驱动程序。**
-  设置 `OLIVARES_SESSION_RUNTIME_CODEX_BIN` 或 `OLIVARES_SESSION_RUNTIME_GROK_BIN`
-  会在该节点注册该驱动程序。未设置时，该驱动程序的配置文件仍可观察但不能启动。
+- **官方 Codex、Grok 和 OpenCode CLI 可以运行提供商会话。**
+  引擎在启动时注册这些驱动程序。启动会话时，先使用最新的已验证托管安装，
+  再查找引擎 `PATH` 中的 CLI。`OLIVARES_SESSION_RUNTIME_CODEX_BIN`、
+  `OLIVARES_SESSION_RUNTIME_GROK_BIN` 和 `OLIVARES_SESSION_RUNTIME_OPENCODE_BIN`
+  会覆盖此查找过程。找不到可执行文件时，引擎会拒绝启动。
   启动走 [提供商配置文件](/how-to/operate-provider-sessions/)。
   `CHANGELOG.md` `[26.9.0]` **不断言**与已认证官方 Grok 账户的兼容性。
 - **REST API 和审计账本（audit ledger）是真实存在的。** [API 参考](/reference/api/)
@@ -31,19 +39,19 @@ description: >-
   append-only（仅追加）且哈希链式（hash-chained）的，并带有 Ed25519 签名的检查点，
   可导出为多种 SIEM 格式。
 - **发布版本经过签名且可验证。** 签名、SLSA 来源、SBOM 和 OpenVEX 都可[验证](/zh/how-to/verify-a-release/)。
-  验证目前还不能完全离线：无密钥验证需要 Sigstore 信任根材料，SLSA 步骤没有离线模式。产品提供[气隙（air-gap）包](/zh/how-to/air-gap-install/)。最新的带标签发布版本 **26.10.1** 已发布，附有签名归档、原生软件包和容器镜像；API、schema 和模块表面在 1.0 之前仍可能变化。
+  验证目前还不能完全离线：无密钥验证需要 Sigstore 信任根材料，SLSA 步骤没有离线模式。产品提供[气隙（air-gap）包](/zh/how-to/air-gap-install/)。下一个版本是 **<!-- release -->0.1<!-- /release -->**，尚未发布。发布前请从源码构建。
 
-## 开放内核 —— 哪些开放、哪些属于企业版
+## 开放内核 —— 哪些开放、哪些属于商业版
 
 本产品采用**开放内核（open core）**：默认的（AGPL）二进制就是整个治理
-平台，而一条小而**增量式（additive）**的商业线（`enterprise/`，仅以
+平台，而一条小而**增量式（additive）**的商业线（Business 与 Enterprise；`enterprise/`，仅以
 `-tags enterprise` 构建，永不进入公开二进制）持有那些保留功能。对日常使用
 而言有两条边界值得关注，开放版对它们如实回应，而非伪装它们：
 
 - **单 IdP 的 SSO 是开放的。** 单 IdP 登录 —— **OIDC**（授权码 + PKCE）
   和 **SAML 2.0**（已签名的响应、防重放）—— 在默认二进制中运行，**无需**
-  `-tags enterprise`。运行**多于一个活动 IdP**（按租户 / 按域名）、
-  **SSO 强制**（要求 SSO / 阻止密码登录）以及**受管 SCIM**是保留的企业线；
+  `-tags enterprise`，入站 **SCIM** 同样如此。运行**多于一个活动 IdP**（按租户 / 按域名）
+  以及 **SSO 强制**（要求 SSO / 阻止密码登录）属于 Business（Identity & Scale）；
   激活第二个活动 IdP 会返回 `multi_idp_requires_enterprise` —— 这是一条明确的
   产品边界，绝非伪造的 501。
 - **不存在用户数量上限 —— 所有版本的账户都不受限制。** 社区版、Business
@@ -54,10 +62,10 @@ description: >-
 - **平台的其余部分都是开放的。** 完整的治理闭环 —— 清单、R/RW 访问图谱、
   RBAC/ABAC/Cedar 策略、已封存的审计账本、FinOps、合规、SIEM 出口、MCP、
   HA/分布式 —— 都在开放二进制中运行，没有任何授权检查。那条增量式的
-  `enterprise/` 增量功能（多 IdP 联邦、内容防火墙/DLP、hook 加固、编译的威胁情报
-  目录、服务器工具出口、CyberArk Conjur 连接器以及事件闭环）是
-  从未存在于开放产品中的新代码，而非从中移除的功能。开放二进制中的授权验证
-  **仅作为存证** —— 它从不启用、禁用或阻止任何东西（参见
+  `enterprise/` 模块是从未存在于开放产品中的新代码，而非从中移除的功能；
+  哪项能力属于哪个版本，只在仓库的 `docs/editions.md` 中写一次。开放二进制中的授权验证
+  **仅作为存证** —— 它从不启用、禁用或阻止任何东西，唯一的例外是安装未声明社区版的更新
+  发布包需要有效许可证（参见
   [开放内核与授权许可](/zh/explanation/open-core-and-licensing/)）。
 
 ## 哪些处于设计阶段或 1.0 之前
@@ -124,7 +132,7 @@ Olivares AI 处于 **1.0 之前**阶段。产品设计文档明确指出，
   你确实自托管的模型（例如在模块 XXIII 下通过 vLLM/Ollama）可以
   气隙化运行；经中介的前沿模型则不能。
 - **模块路由采用独立的 beta 契约。** 模块端点（例如访问图谱和漂移）
-  不属于包含 70 条路径的稳定核心契约；它们以独立的 **beta** 文档发布——
+  不属于包含 128 条路径的稳定核心契约；它们以独立的 **beta** 文档发布——
   见[模块路由参考](/reference/api-beta/)（由 `/openapi.beta.json` 提供）。
   beta 表示结构可能在事先通知后发生变化，字段级细节仍在产品的类型化接口中。
   [核心 API 参考](/reference/api/)记录稳定表面；它并非整个产品表面。

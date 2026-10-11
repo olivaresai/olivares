@@ -8,15 +8,17 @@ description: >-
 draft: false
 ---
 
+La próxima release es <!-- release -->`0.1`<!-- /release -->; todavía no está publicada en GitHub. Los comandos siguientes describen los artefactos previstos. Compila desde el código fuente hasta su publicación y verifica cada artefacto antes de usarlo. El estado observado está en <!-- release -->`docs/releases/0.1-install-surfaces.json`<!-- /release -->.
+
 :::note[Nombres de paquete publicados]
-La release 26.10.1 de GitHub publica artefactos `.deb`, `.rpm` y `.apk` para `amd64` y
+La release <!-- release -->0.1<!-- /release --> de GitHub publica artefactos `.deb`, `.rpm` y `.apk` para `amd64` y
 `arm64`, con `checksums.txt`, `checksums.txt.sig` y `checksums.txt.pem`. Los comandos
 de abajo usan los nombres literales `amd64` de esa release; sustituye `amd64` por
 `arm64` en un host ARM de 64 bits. Instala desde esos artefactos de release verificados.
 Los productores de metadatos de repositorio en un árbol de fuentes no son instrucciones
 de instalación para esta guía.
 
-**Cualificación DIST-24-05.** Lo que CI cualifica es el **instalador de shell** verificado
+**Cualificación del instalador.** Lo que CI cualifica es el **instalador de shell** verificado
 y su contrato de servicio/doctor, no `dpkg`, `rpm` ni `apk`: una matriz de dispatch/pull
 request lo ejecuta contra la release publicada en userlands de contenedor de
 Debian stable, Ubuntu 24.04 LTS, Fedora, openSUSE Leap y Alpine y en un runner alojado de
@@ -27,7 +29,7 @@ instalación, arranque, reinicio, actualización de un servicio OpenRC en marcha
 se ha ejercido localmente en un invitado Alpine desechable; eso es evidencia para este
 árbol, no una cualificación firmada, alojada ni de preproducción, que sigue pendiente.
 
-**Repositorios propuestos DIST-24-06 (no es una superficie de instalación viva).** El
+**Repositorios de paquetes propuestos (no es una superficie de instalación viva).** El
 árbol fuente contiene productores deterministas de repositorios apt, rpm-md y APK, un
 verificador de índices firmados, una cualificación de cliente limpio y un flujo de
 publicación por etapas cuyo dispatch permanece inerte hasta que un revisor lo aprueba.
@@ -52,8 +54,10 @@ confianza, así que nada aquí te pide que te fíes de la descarga. Pon el paque
 directorio**:
 
 ```bash
+# The verifier is in a source checkout of the release tag, not a release asset; running it
+# trusts the checkout. Without one, INSTALL.md shows the cosign + sha256sum commands.
 # keyless / Sigstore (default; reaches Rekor over the network)
-./verify-release.sh
+/path/to/olivares/scripts/verify-release.sh
 ```
 
 Las releases se firman sin clave y no publican ninguna clave pública de cosign, así que usa el
@@ -78,16 +82,18 @@ Los tres formatos llevan el binario en `/usr/bin/olivares`, un fichero de entorn
 adivinen por la presencia de `systemctl` en el host. Los archivos Linux llevan los mismos
 adaptadores de servicio: `scripts/install-service.sh` y `packaging/service/`.
 
+<!-- release -->
 ```bash
 # Debian / Ubuntu
-sudo dpkg -i olivares_26.10.1_linux_amd64.deb
+sudo dpkg -i olivares_0.1_linux_amd64.deb
 
 # RHEL / Fedora / SUSE
-sudo rpm -Uvh olivares_26.10.1_linux_amd64.rpm
+sudo rpm -Uvh olivares_0.1_linux_amd64.rpm
 
 # Alpine
-sudo apk add --allow-untrusted olivares_26.10.1_linux_amd64.apk
+sudo apk add --allow-untrusted olivares_0.1_linux_amd64.apk
 ```
+<!-- /release -->
 
 La instalación **crea el usuario y el grupo de sistema `olivares`** (con
 `/usr/sbin/nologin` como shell y `/var/lib/olivares` como directorio de inicio), crea
@@ -131,12 +137,33 @@ sudo -u olivares olivares serve --data-dir=/var/lib/olivares \
 La unidad systemd empaquetada ejecuta el motor como el usuario no privilegiado
 `olivares` con un conjunto de capacidades vacío — no retiene ninguna, ni ambiente ni de
 acotación — y `NoNewPrivileges=true`, de modo que nada de lo que lance puede ganar
-ninguna. Encima lleva `ProtectSystem=strict` (el sistema de ficheros es de solo lectura
-salvo `ReadWritePaths=/var/lib/olivares`), `ProtectHome`, `PrivateTmp`,
-`PrivateDevices`, las cuatro directivas `ProtectKernel*`/`ProtectClock`,
-`RestrictNamespaces`, `RestrictSUIDSGID`, `RestrictRealtime`, `LockPersonality`,
-`MemoryDenyWriteExecute`, `SystemCallArchitectures=native`, un filtro de syscalls
+ninguna. Encima lleva `ProtectSystem=full` (`/usr`, `/boot`, `/efi` y `/etc` son de solo
+lectura), `PrivateDevices=true`, `ProtectClock=true`, `ProtectKernelTunables=true`,
+`ProtectKernelModules=true`, `ProtectKernelLogs=true`, `ProtectControlGroups=true`,
+`RestrictNamespaces=user net` (una sesión obtiene su propio namespace de usuario y de red;
+se deniega cualquier otro tipo), `RestrictSUIDSGID=true`, `RestrictRealtime=true`,
+`LockPersonality=true`, `SystemCallArchitectures=native`, un filtro de syscalls
 `@system-service` que además descarta `@privileged` y `@resources`, y `UMask=0027`.
+
+La unidad **no** oculta los directorios personales ni los temporales, y permite memoria
+ejecutable: fija `ProtectHome=false`, `PrivateTmp=false` y `MemoryDenyWriteExecute=false`.
+El motor llega a todo lo que los permisos normales de ficheros permiten a la cuenta
+`olivares`, incluidos `/home`, `/tmp` y `/var/tmp`, para que las carpetas que elijas para
+las sesiones sigan accesibles. El confinamiento es por sesión: antes de que arranque cada
+herramienta de agente o servidor MCP stdio, el motor aplica una política Landlock que le
+deja escribir en su carpeta de sesión, su home de herramienta y su directorio temporal, y
+nunca alcanzar el directorio de datos del motor, `/etc/olivares` ni las credenciales
+propias de la cuenta del motor. Los runtimes de agentes y MCP sobre Node/V8 necesitan
+memoria JIT ejecutable; por eso `MemoryDenyWriteExecute=false`. En un kernel sin Landlock,
+el motor se niega a iniciar sesiones; `olivares doctor` indica la causa.
+
+26.10.0<!-- release-fixed --> publicó una unidad más estricta: todo el sistema de ficheros de solo lectura salvo
+el directorio de datos, los directorios personales ocultos, un `/tmp` privado y sin memoria
+ejecutable escribible. 26.10.1<!-- release-fixed --> la relajó a los valores de arriba. Puedes volver a añadir
+cualquiera de esos ajustes en un drop-in (`systemctl edit olivares`). Entonces las carpetas
+de sesión bajo directorios personales o `/tmp` y las herramientas basadas en JIT dejan de
+funcionar, y con el sistema de ficheros de solo lectura cada carpeta de sesión fuera del
+directorio de datos necesita su propia línea `ReadWritePaths=`.
 
 En Alpine por defecto esas directivas systemd no aplican a un `.apk` **publicado
 anteriormente**, porque la unidad systemd de ese payload no está en ejecución. Los paquetes
@@ -185,8 +212,8 @@ check_scratch_mount() {
 check_scratch_mount /var/lib/olivares
 ```
 
-Si dice `noexec`, apunta `TMPDIR` a un directorio escribible bajo
-`ProtectSystem=strict` **y** que esté en un montaje capaz de ejecutar:
+Si dice `noexec`, apunta `TMPDIR` a un directorio que el usuario `olivares` pueda
+escribir **y** que esté en un montaje capaz de ejecutar:
 
 ```bash
 sudo install -d -o olivares -g olivares -m 0750 /run/olivares-exec-tmp
@@ -300,9 +327,7 @@ Tres flags importan de forma específica en una instalación empaquetada:
 
 - **`--endpoint`** — toma actualizaciones de un repositorio de GitHub que controlas en
   vez del predeterminado. Es la vía de escape para un espejo o una bifurcación.
-- **`--bundle`** — instala desde un directorio de bundle local o un `.tar.gz` **sin
-  red en absoluto**. Construir ese bundle y moverlo está en
-  [Instala en un entorno aislado de red](/es/how-to/air-gap-install/).
+- **`--bundle`** — La instalación sin conexión requiere Enterprise. Community verifica un bundle con `--bundle --check`, sin leer una licencia ni instalarlo.
 - **`--install-timer`** — emite un temporizador y un servicio **systemd opcionales**
   que comprueban actualizaciones según una programación. Nada lo instala por ti; véase
   [lo que el paquete no hace](#8-lo-que-el-paquete-no-hace). Es un generador systemd.

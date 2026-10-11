@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -35,6 +36,9 @@ import (
 // read as a missing role — the operator's grants are not the problem.
 
 const deployModule = "deploy"
+
+// Approved retirement can include Docker's stop grace plus removal and ledger writes.
+const defaultDeployRetireTimeout = time.Minute
 
 func newDeployCmd() *cobra.Command {
 	var flags authClientFlags
@@ -367,6 +371,13 @@ func deployMutation(cmd *cobra.Command, flags *authClientFlags, id, verb, approv
 		flags: flags, module: deployModule,
 		method: http.MethodPost, path: "/definitions/" + agentExecPathID(id) + "/" + verb,
 	}
+	if verb == "retire" && approvalRef != "" && !cmd.Flags().Changed("timeout") {
+		// Scope the longer default to this request; preserve explicit --timeout
+		// (including zero's existing transport semantics) and every other verb.
+		requestFlags := *flags
+		requestFlags.timeout = defaultDeployRetireTimeout
+		call.flags = &requestFlags
+	}
 	if len(body) > 0 {
 		call.body = body
 	}
@@ -418,7 +429,10 @@ func newDeployRetireCmd(flags *authClientFlags) *cobra.Command {
 			"would have found this family's only DELETE on `definitions rm` and left the\n" +
 			"verb that actually stops production ungated.\n\n" +
 			"Like apply it is two-phase: without --approval-ref an approval is opened and\n" +
-			"nothing is torn down (exit 7).",
+			"nothing is torn down (exit 7).\n\n" +
+			"Approved retirement has a one-minute request deadline by default. --timeout\n" +
+			"overrides it. After a deadline, inspect deploy operations and retry retirement\n" +
+			"to reconcile the target; a timeout does not prove the target is absent.",
 		Example: "  olivares deploy retire dep-1 --yes\n  olivares deploy retire dep-1 --approval-ref ap-9 --yes",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {

@@ -15,7 +15,7 @@ import (
 // admin operations (legs 2 + 3): the fleet "deployed-verified" attestation and the
 // conformance certificate against the real claude binary. The verb LOGIC lives in the closed
 // enterprise/hookhardening module, reached through this build-neutral seam (the inspector half of
-// the add-on is wired separately in claudehookfirewall.go). The `olivares hooks` command is always
+// the add-on is wired separately in modules/sessions/hookpep/claudehookfirewall.go). The `olivares hooks` command is always
 // registered (main.go); in the default AGPL build the seam is nil, so each verb fails HONESTLY
 // rather than pretending to work.
 //
@@ -24,8 +24,8 @@ import (
 // it — the engine returns rendered JSON + a signed blob.
 
 // hookHardeningEngine is the narrow seam the CLI depends on. The enterprise build supplies a real
-// implementation (hookhardening_enterprise.go); the default build supplies nil
-// (hookhardening_noenterprise.go).
+// implementation (hookhardening_enterprise.go); the default build has no hookHardening
+// edition port.
 type hookHardeningEngine interface {
 	// FleetAttest renders the canonical managed-settings bundle for the authored policy, attests
 	// the node reports (a JSON array of node {node_id, present, sha256, claude_version}) against
@@ -45,7 +45,7 @@ var errHookHardeningNotActive = notInEdition()
 
 // resolveHookHardening returns the engine, or an honest error when the add-on is not in this build.
 func resolveHookHardening() (hookHardeningEngine, error) {
-	eng := newHookHardening()
+	eng := thisEdition.hookHardening.get()
 	if eng == nil {
 		return nil, errHookHardeningNotActive
 	}

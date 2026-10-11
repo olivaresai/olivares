@@ -21,6 +21,7 @@ export function ConsumptionBar({
   over = false,
   height = 8,
   showLabels = true,
+  label,
   className,
 }: {
   consumedPct: number
@@ -28,6 +29,8 @@ export function ConsumptionBar({
   over?: boolean
   height?: number
   showLabels?: boolean
+  /** The bar's accessible name, where no visible label is tied to it. */
+  label?: string
   className?: string
 }) {
   const { t } = useTranslation('intel')
@@ -58,6 +61,7 @@ export function ConsumptionBar({
         className="relative w-full overflow-visible rounded-full bg-muted"
         style={{ height }}
         role="progressbar"
+        aria-label={label}
         aria-valuenow={Math.round(consumed)}
         aria-valuemin={0}
         aria-valuemax={100}

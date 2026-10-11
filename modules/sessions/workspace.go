@@ -21,6 +21,7 @@ import (
 
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
+	"github.com/olivaresai/olivares/modules/sessions/confine"
 )
 
 // workspace.go is the governed workspace plane: the registry CRUD, the
@@ -40,14 +41,16 @@ const (
 // resolvedWorkspace is a workspace row resolved for use: its canonical root and the
 // governed policy. rootReal is EvalSymlinks-resolved so the jail compares real paths.
 type resolvedWorkspace struct {
-	id            model.ID
-	ref           string
-	rootReal      string
-	mountMode     string
-	containerTgt  string
-	dlpMode       string
-	maxReadBytes  int64
-	allowSubpaths []string
+	id              model.ID
+	ref             string
+	rootReal        string
+	mountMode       string
+	containerTgt    string
+	dlpMode         string
+	maxReadBytes    int64
+	allowSubpaths   []string
+	readOnlyFolders []string
+	readOnlyHandles []*os.File
 }
 
 // CreateWorkspaceParams is the validated input to register a workspace.
@@ -57,6 +60,7 @@ type CreateWorkspaceParams struct {
 	MountMode       string
 	ContainerTarget string
 	AllowSubpaths   []string
+	ReadOnlyFolders []string
 	MaxReadBytes    int64
 	DLPMode         string
 	Actor           string
@@ -69,17 +73,39 @@ func (m *Module) createWorkspace(ctx context.Context, tenant model.TenantID, p C
 	if err := validateWorkspace(&p); err != nil {
 		return workspaceDTO{}, err
 	}
+	folders, err := m.normalizeWorkspaceReadOnlyFolders(p.ReadOnlyFolders)
+	if err != nil {
+		return workspaceDTO{}, err
+	}
+	foldersJSON, _ := json.Marshal(folders)
 	// The root must be an absolute, existing directory; we store its CANONICAL real
 	// path so a later symlink swap cannot redirect the jail.
 	// The refusals name the folder as the person typed it (SC 09b item 7): the field
 	// name root_path means nothing on the New session form.
 	rootReal, err := filepath.EvalSymlinks(p.RootPath)
 	if err != nil {
-		return workspaceDTO{}, badRequest(fmt.Sprintf("The folder %s does not exist or cannot be opened on this server.", p.RootPath))
+		return workspaceDTO{}, badRequest(fmt.Sprintf("The folder %s does not exist or cannot be opened on this server. Choose an existing folder.", p.RootPath))
 	}
 	info, err := os.Stat(rootReal)
 	if err != nil || !info.IsDir() {
 		return workspaceDTO{}, badRequest(fmt.Sprintf("%s is a file, not a folder.", p.RootPath))
+	}
+	if p.MountMode == mountRW {
+		// Probe as the engine user: mode bits alone miss ACLs and read-only mounts.
+		probe, err := os.MkdirTemp(rootReal, ".olivares-write-check-")
+		if err != nil {
+			status := http.StatusForbidden
+			message := fmt.Sprintf("The folder %s is not writable by the engine user (UID %d). Grant this user write and search access to the folder, or choose another folder.", p.RootPath, os.Geteuid())
+			if !errors.Is(err, fs.ErrPermission) {
+				status = http.StatusBadRequest
+				message = fmt.Sprintf("The folder %s cannot be written by the engine user (UID %d). Check that the filesystem is writable and has free space, or choose another folder.", p.RootPath, os.Geteuid())
+			}
+			// Keep the OS cause for diagnosis; the HTTP mapper sends only the message.
+			return workspaceDTO{}, errors.Join(&runErr{status, message}, err)
+		}
+		if err := os.Remove(probe); err != nil {
+			return workspaceDTO{}, fmt.Errorf("remove workspace write check: %w", err)
+		}
 	}
 
 	ref := string(model.NewID())
@@ -89,18 +115,19 @@ func (m *Module) createWorkspace(ctx context.Context, tenant model.TenantID, p C
 	}
 
 	var out workspaceDTO
-	err = m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
+	err = m.Data.Mutate(ctx, tenant, func(sc store.Scope) error {
 		repo, err := sc.Ext(workspaceKind)
 		if err != nil {
 			return err
 		}
 		row := model.Record{
-			colWsRef:          ref,
-			colWsRootPath:     rootReal,
-			colWsMountMode:    p.MountMode,
-			colWsContainerTgt: p.ContainerTarget,
-			colWsDLPMode:      p.DLPMode,
-			colWsState:        wsActive,
+			colWsRef:             ref,
+			colWsRootPath:        rootReal,
+			colWsMountMode:       p.MountMode,
+			colWsContainerTgt:    p.ContainerTarget,
+			colWsDLPMode:         p.DLPMode,
+			colWsState:           wsActive,
+			colWsReadOnlyFolders: string(foldersJSON),
 		}
 		setIf(row, colWsName, p.Name)
 		if subpathsJSON != "" {
@@ -117,9 +144,13 @@ func (m *Module) createWorkspace(ctx context.Context, tenant model.TenantID, p C
 		// Seal the registration ATOMICALLY with the insert (deny-closed: if the audit
 		// cannot be appended, the whole registration rolls back — no row granting
 		// filesystem reach without evidence).
+		grantHash := ""
+		if len(folders) > 0 {
+			grantHash = sha256Hex(foldersJSON)
+		}
 		if aerr := appendWorkspaceAudit(ctx, sc, wsMutationInput{
 			workspaceID: wsID, workspaceRef: ref, op: "register", path: rootReal,
-			actor: p.Actor, actorKind: p.ActorKind,
+			actor: p.Actor, actorKind: p.ActorKind, contentHash: grantHash,
 		}); aerr != nil {
 			return aerr
 		}
@@ -137,7 +168,7 @@ func (m *Module) listWorkspaces(ctx context.Context, tenant model.TenantID, q mo
 	q.Cursor = ""
 	q.Sort = []model.Sort{{Column: model.ColCreatedAt, Desc: true}}
 	out := listResponse[workspaceDTO]{Items: []workspaceDTO{}}
-	err := m.data.View(ctx, tenant, func(sc store.Scope) error {
+	err := m.Data.View(ctx, tenant, func(sc store.Scope) error {
 		repo, err := sc.Ext(workspaceKind)
 		if err != nil {
 			return err
@@ -175,7 +206,7 @@ func (m *Module) getWorkspace(ctx context.Context, tenant model.TenantID, ref st
 // the registration); the deregister audit and the row delete are ATOMIC (deny-closed:
 // no deregistration without recorded evidence).
 func (m *Module) deleteWorkspace(ctx context.Context, tenant model.TenantID, ref, actor, actorKind string) error {
-	return m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
+	return m.Data.Mutate(ctx, tenant, func(sc store.Scope) error {
 		repo, err := sc.Ext(workspaceKind)
 		if err != nil {
 			return err
@@ -213,6 +244,10 @@ func (m *Module) resolveWorkspace(ctx context.Context, tenant model.TenantID, re
 	if err != nil {
 		return nil, err
 	}
+	folders, err := decodeWorkspaceReadOnlyFolders(rec)
+	if err != nil {
+		return nil, err
+	}
 	root := rec.String(colWsRootPath)
 	rootReal, err := filepath.EvalSymlinks(root)
 	if err != nil {
@@ -227,14 +262,15 @@ func (m *Module) resolveWorkspace(ctx context.Context, tenant model.TenantID, re
 		tgt = defaultContainerTarget
 	}
 	return &resolvedWorkspace{
-		id:            model.ID(rec.String(model.ColID)),
-		ref:           ref,
-		rootReal:      rootReal,
-		mountMode:     rec.String(colWsMountMode),
-		containerTgt:  tgt,
-		dlpMode:       rec.String(colWsDLPMode),
-		maxReadBytes:  workspaceMaxRead(rec),
-		allowSubpaths: subpaths,
+		id:              model.ID(rec.String(model.ColID)),
+		ref:             ref,
+		rootReal:        rootReal,
+		mountMode:       rec.String(colWsMountMode),
+		containerTgt:    tgt,
+		dlpMode:         rec.String(colWsDLPMode),
+		maxReadBytes:    workspaceMaxRead(rec),
+		allowSubpaths:   subpaths,
+		readOnlyFolders: folders,
 	}, nil
 }
 
@@ -255,7 +291,29 @@ func (m *Module) resolveLaunchWorkspace(ctx context.Context, tenant model.Tenant
 		}
 		return nil, err
 	}
+	for _, path := range ws.readOnlyFolders {
+		file, err := confine.OpenDirectory(path)
+		if err != nil {
+			ws.closeReadOnlyHandles()
+			return nil, &runErr{http.StatusFailedDependency, "The read-only folder " + path + " is unavailable or has changed on this server."}
+		}
+		ws.readOnlyHandles = append(ws.readOnlyHandles, file)
+		for _, protected := range m.rt.confineProtect {
+			if pathsOverlap(path, protected) {
+				ws.closeReadOnlyHandles()
+				return nil, &runErr{http.StatusFailedDependency, "read_only_folders cannot overlap protected engine folders"}
+			}
+		}
+	}
 	return ws, nil
+}
+
+func (ws *resolvedWorkspace) closeReadOnlyHandles() {
+	if ws != nil {
+		for _, file := range ws.readOnlyHandles {
+			_ = file.Close()
+		}
+	}
 }
 
 // jail resolves rel within the workspace and enforces the allow-subpath policy.
@@ -358,20 +416,68 @@ func (m *Module) readFile(ctx context.Context, tenant model.TenantID, ref, rel, 
 		data = data[:cap]
 		truncated = true
 	}
+	return m.answerRead(ctx, tenant, ws, rel, "read", data, info.Size(), truncated, actor, actorKind)
+}
 
+// readFileAtHead is readFile for the content git HEAD holds for the file, so a client can
+// show what differs before anything is published. It is the same governed read: the
+// workspace's path policy, its size limit and its DLP posture apply to the committed
+// text, and the read is audited. The file need not exist in the working tree any more.
+// Nothing is executed in the folder (git_head.go). A workspace with no readable history,
+// or a file HEAD does not have, is a 404.
+func (m *Module) readFileAtHead(ctx context.Context, tenant model.TenantID, ref, rel, actor, actorKind string) (fileReadResponse, error) {
+	ws, err := m.resolveWorkspace(ctx, tenant, ref)
+	if err != nil {
+		return fileReadResponse{}, err
+	}
+	if _, err := ws.jail(rel, false); err != nil {
+		return fileReadResponse{}, mapFSErr(err)
+	}
+	// The jail judged the path as the working tree resolves it; HEAD is looked up by the
+	// path as written, and a link the agent made could map one onto the other.
+	if !underAllowedSubpath(ws.rootReal, ws.allowSubpaths, filepath.Join(ws.rootReal, filepath.FromSlash(normRel(rel)))) {
+		return fileReadResponse{}, mapFSErr(errTraversal)
+	}
+	root, err := os.OpenRoot(ws.rootReal)
+	if err != nil {
+		return fileReadResponse{}, mapFSErr(err)
+	}
+	defer func() { _ = root.Close() }()
+	data, err := headBlob(root, normRel(rel))
+	switch {
+	case errors.Is(err, fs.ErrInvalid):
+		return fileReadResponse{}, badRequest("path must name a file")
+	case errors.Is(err, errNoRepository), errors.Is(err, errNotInHead):
+		return fileReadResponse{}, &runErr{http.StatusNotFound, err.Error()}
+	case errors.Is(err, errHeadTooLarge):
+		return fileReadResponse{}, &runErr{http.StatusRequestEntityTooLarge, err.Error()}
+	case err != nil:
+		return fileReadResponse{}, mapFSErr(err)
+	}
+	size, truncated := int64(len(data)), false
+	if size > ws.maxReadBytes {
+		data, truncated = data[:ws.maxReadBytes], true
+	}
+	return m.answerRead(ctx, tenant, ws, rel, "read-head", data, size, truncated, actor, actorKind)
+}
+
+// answerRead ends every governed read of a workspace file: the DLP posture over the bytes,
+// the audit of the read with the classes found (never the content), and the response.
+// op is the audited operation; a denial is op+"-denied".
+func (m *Module) answerRead(ctx context.Context, tenant model.TenantID, ws *resolvedWorkspace, rel, op string, data []byte, size int64, truncated bool, actor, actorKind string) (fileReadResponse, error) {
 	hits, deny := m.classifyContent(ctx, ws.dlpMode, data)
 	classes := dlpClasses(hits)
 	if deny {
-		m.auditWorkspaceRead(ctx, tenant, wsMutationInput{op: "read-denied", workspaceID: ws.id, workspaceRef: ref, path: normRel(rel), actor: actor, actorKind: actorKind, classes: classes})
+		m.auditWorkspaceRead(ctx, tenant, wsMutationInput{op: op + "-denied", workspaceID: ws.id, workspaceRef: ws.ref, path: normRel(rel), actor: actor, actorKind: actorKind, classes: classes})
 		return fileReadResponse{}, forbiddenErr("read denied by workspace DLP policy" + classSuffix(classes))
 	}
-	resp := fileReadResponse{Path: normRel(rel), Size: info.Size(), Truncated: truncated, Sensitivity: hits, SHA256: sha256Hex(data)}
+	resp := fileReadResponse{Path: normRel(rel), Size: size, Truncated: truncated, Sensitivity: hits, SHA256: sha256Hex(data)}
 	if utf8.Valid(data) {
 		resp.Encoding, resp.Content = "utf-8", string(data)
 	} else {
 		resp.Encoding, resp.Content = "base64", base64.StdEncoding.EncodeToString(data)
 	}
-	m.auditWorkspaceRead(ctx, tenant, wsMutationInput{op: "read", workspaceID: ws.id, workspaceRef: ref, path: normRel(rel), actor: actor, actorKind: actorKind, classes: classes})
+	m.auditWorkspaceRead(ctx, tenant, wsMutationInput{op: op, workspaceID: ws.id, workspaceRef: ws.ref, path: normRel(rel), actor: actor, actorKind: actorKind, classes: classes})
 	return resp, nil
 }
 
@@ -517,7 +623,7 @@ func (m *Module) loadWorkspaceRec(ctx context.Context, tenant model.TenantID, re
 		return nil, badRequest("workspace ref required")
 	}
 	var rec model.Record
-	err := m.data.View(ctx, tenant, func(sc store.Scope) error {
+	err := m.Data.View(ctx, tenant, func(sc store.Scope) error {
 		repo, err := sc.Ext(workspaceKind)
 		if err != nil {
 			return err

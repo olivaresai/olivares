@@ -8,7 +8,6 @@ import (
 	"context"
 	"net/http"
 	"strings"
-	"time"
 	"unicode/utf8"
 
 	gp "github.com/olivaresai/olivares/connectors/gitpublish"
@@ -98,6 +97,8 @@ func (m *Module) Intents(ctx context.Context, c Caller, target model.ID) ([]Inte
 	if !m.wired() {
 		return nil, errUnavailable
 	}
+	ctx, cancel := m.admissionContext(ctx)
+	defer cancel()
 	var tg Target
 	if err := m.data.View(ctx, c.Tenant, func(sc store.Scope) error {
 		var err error
@@ -127,6 +128,8 @@ func (m *Module) admitIntent(ctx context.Context, c Caller, id model.ID, action 
 	if !m.wired() {
 		return Intent{}, errUnavailable
 	}
+	ctx, cancel := m.admissionContext(ctx)
+	defer cancel()
 	var in Intent
 	if err := m.data.View(ctx, c.Tenant, func(sc store.Scope) error {
 		var err error
@@ -213,7 +216,7 @@ func (m *Module) recordUnknown(ctx context.Context, c Caller, in Intent, source,
 // it was); a 404, an incomplete lookup, an old ref or an open unmerged pull
 // request keeps it.
 func (m *Module) observeWith(ctx context.Context, c Caller, host gp.Host, tok gp.Token, in Intent, source, actor string) (Receipt, error) {
-	rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+	rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), settleTimeout)
 	defer cancel()
 	now := m.now()
 	obs := Observation{Attempt: in.Attempt, Source: source, Result: "unknown", At: now}

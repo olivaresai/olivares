@@ -198,12 +198,12 @@ type ScopedAlias struct {
 // observation that copies a managed run's id resolves to nothing here unless the
 // bridge of that run wrote the row.
 func (m *Module) LookupScopedAlias(ctx context.Context, tenant model.TenantID, profileRef, provider, externalID string) (ScopedAlias, bool, error) {
-	if m.data == nil {
+	if m.Data == nil {
 		return ScopedAlias{}, false, errNoData
 	}
 	var out ScopedAlias
 	found := false
-	err := m.data.View(ctx, tenant, func(sc store.Scope) error {
+	err := m.Data.View(ctx, tenant, func(sc store.Scope) error {
 		rec, ok, err := findScopedAlias(ctx, sc, profileRef, provider, externalID)
 		if err != nil || !ok {
 			return err

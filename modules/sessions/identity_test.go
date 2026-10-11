@@ -25,7 +25,7 @@ import (
 func countRows(t *testing.T, m *Module, tenant model.TenantID, kind model.Kind, filters ...model.Filter) int {
 	t.Helper()
 	n := 0
-	if err := m.data.View(context.Background(), tenant, func(sc store.Scope) error {
+	if err := m.Data.View(context.Background(), tenant, func(sc store.Scope) error {
 		repo, err := sc.Ext(kind)
 		if err != nil {
 			return err
@@ -188,7 +188,7 @@ func TestIdentity_ObservedBeforeDeclared_DeclareAdopts(t *testing.T) {
 	}
 	// The adopted identity keeps its observed provenance and records that the
 	// declaration arrived: origin is provenance, not authority.
-	if err := m.data.View(ctx, tenant, func(sc store.Scope) error {
+	if err := m.Data.View(ctx, tenant, func(sc store.Scope) error {
 		rec, ok, err := findIdentity(ctx, sc, observed)
 		if err != nil || !ok {
 			t.Fatalf("identity missing: %v", err)
@@ -248,7 +248,7 @@ func TestIdentity_DuplicateTriple_RejectedByTheEngine(t *testing.T) {
 	ctx := context.Background()
 	b := SessionBinding{Provider: "claude", ExternalID: "sess-dup", At: baseTime}
 
-	err := m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
+	err := m.Data.Mutate(ctx, tenant, func(sc store.Scope) error {
 		return bindAlias(ctx, sc, "osn_first", b)
 	})
 	if err != nil {
@@ -256,7 +256,7 @@ func TestIdentity_DuplicateTriple_RejectedByTheEngine(t *testing.T) {
 	}
 	// Second insert of the SAME (tenant, provider, external_id), deliberately
 	// bypassing every read the writer would do, pointed at a DIFFERENT session.
-	err = m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
+	err = m.Data.Mutate(ctx, tenant, func(sc store.Scope) error {
 		return bindAlias(ctx, sc, "osn_second", b)
 	})
 	if !errors.Is(err, store.ErrConflict) {

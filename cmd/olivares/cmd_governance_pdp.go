@@ -34,7 +34,7 @@ import (
 //   - live_activation — applied | deferred | not_applicable | no_policy. Whether the selected
 //     revision is the one this process is deciding with.
 //   - grants_expired — this process is past the offline-staleness bound, so POSITIVE grants have
-//     degraded to abstain while forbid rules stay enforced (ADR-0024 Q1).
+//     degraded to abstain while forbid rules stay enforced.
 //
 // «applied» with grants_expired=true is a real and dangerous state: the engine holds exactly the
 // policy you published, and half of what it says is not in force.

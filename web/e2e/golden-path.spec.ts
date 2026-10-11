@@ -30,12 +30,16 @@
 import { expect, test, type Locator, type Page } from '@playwright/test'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { JOURNEYS, stepHref } from '../src/features/navigation/journeys'
 import { signInFixture } from './fixture-sign-in'
+import { openAdvancedSession } from './session-launch-form'
+
+const [SESSIONS] = JOURNEYS.sessions
+const [, PROFILES] = JOURNEYS.providerKeys
 
 const EMAIL = process.env.E2E_EMAIL ?? ''
 const PASSWORD = process.env.E2E_PASSWORD ?? ''
 const PROFILE_REF = process.env.E2E_PROFILE_REF ?? ''
-const PROFILE_NAME = process.env.E2E_PROFILE_NAME ?? ''
 const PROMPT = process.env.E2E_PROMPT ?? 'Reply with the single word OK'
 const CLI_RUN = process.env.E2E_CLI_RUN ?? ''
 const CLI_RUN_NAME = process.env.E2E_CLI_RUN_NAME ?? ''
@@ -105,29 +109,13 @@ async function signIn(page: Page) {
   await signInFixture(page, { email: EMAIL, password: PASSWORD }, 30_000)
 }
 
-/** Home owns the draft; /sessions may already be attached to the CLI's run. */
-async function draftComposer(page: Page) {
-  await page.goto('/')
-  const composer = page.getByTestId('work-composer')
-  await expect(composer).toBeVisible({ timeout: 30_000 })
-  await expect(composer).not.toHaveAttribute('data-attached', 'true')
-  await composer
-    .locator(
-      '[data-testid="launcher-input"], [data-testid="launcher-add-provider"], [data-testid="launcher-blocked"]',
-    )
-    .waitFor({ timeout: 30_000 })
-  await expect(composer.getByTestId('launcher-input')).toBeVisible()
-  return composer
-}
-
-async function chooseProfile(page: Page, composer: Locator) {
-  await composer.getByTestId('launcher-profile').click()
-  // Radix paints the display name; its internal value is not a DOM contract. A
-  // missing or ambiguous name fails here. The launch POST corroborates the full ref.
-  const wanted = page.getByRole('option', {
-    name: PROFILE_NAME || PROFILE_REF,
-    exact: true,
-  })
+async function chooseProfile(page: Page, form: Locator) {
+  await form
+    .getByRole('combobox', { name: 'Provider profile', exact: true })
+    .click()
+  const wanted = page
+    .getByRole('option')
+    .and(page.getByTitle(PROFILE_REF, { exact: true }))
   await expect(
     wanted,
     'exactly one option must name the CLI profile',
@@ -151,6 +139,18 @@ async function runIsVisible(page: Page, runRef: string, name: string) {
   const heading = page
     .getByTestId('session-narrative')
     .getByRole('heading', { level: 2, name, exact: true })
+  if (await heading.isVisible()) {
+    const context = page.locator('#work-pane-context')
+    if (!(await context.isVisible()))
+      await page.getByTestId('context-toggle').click()
+    const details = page.getByTestId('context-details')
+    if (
+      (await details.isVisible()) &&
+      (await details.getAttribute('open')) === null
+    ) {
+      await details.locator('summary').click()
+    }
+  }
   return (
     (await run.count()) === 1 &&
     (await run.isVisible()) &&
@@ -228,7 +228,7 @@ test.describe('the golden path, in the console', () => {
     )
   })
 
-  test('log in, start a real session from the composer, watch it answer', async ({
+  test('log in, start a real session from New session, watch it answer', async ({
     page,
   }) => {
     await page.setViewportSize({ width: 1440, height: 900 })
@@ -244,18 +244,25 @@ test.describe('the golden path, in the console', () => {
 
     // THE WORK SURFACE. This is the screen the product's own design calls the place work
     // happens, so the walk opens it directly rather than through a menu it might reach.
-    await page.goto('/sessions')
+    await page.goto(stepHref(SESSIONS))
     await expect(page.getByTestId('work-surface')).toBeVisible({
       timeout: 30_000,
     })
     await shot(page, '02-work-surface-1440')
 
-    // The supported Home draft must launch with the SAME profile the CLI deployed.
-    const draft = await draftComposer(page)
+    // New session must launch with the SAME profile the CLI deployed.
+    const draft = await openAdvancedSession(page)
     const consoleName = 'e2e-console'
-    await draft.getByTestId('launcher-input').fill(consoleName)
     await chooseProfile(page, draft)
-    await expect(draft.getByTestId('launcher-start')).toBeEnabled()
+    await draft
+      .getByRole('button', { name: 'Advanced options', exact: true })
+      .click()
+    await draft
+      .getByRole('textbox', { name: 'Name', exact: true })
+      .fill(consoleName)
+    await expect(
+      draft.getByRole('button', { name: 'Start', exact: true }),
+    ).toBeEnabled()
     await shot(page, '03-composer-ready-1440')
 
     const launchStart = Date.now()
@@ -275,7 +282,7 @@ test.describe('the golden path, in the console', () => {
         },
         { timeout: 60_000 },
       ),
-      draft.getByTestId('launcher-start').click(),
+      draft.getByRole('button', { name: 'Start', exact: true }).click(),
     ])
     expect(created.ok(), 'the real session creation must be accepted').toBe(
       true,
@@ -314,7 +321,7 @@ test.describe('the golden path, in the console', () => {
     result.console_run_ref = runRef
     save()
     leg({
-      leg: 'console: start a governed session from the composer',
+      leg: 'console: start a governed session from New session',
       result: `run ${runRef}, profile ${PROFILE_REF}, named ${consoleName}`,
       ms: Date.now() - launchStart,
       evidence: '04-launched-1440.png',
@@ -398,7 +405,20 @@ test.describe('the golden path, in the console', () => {
                 // A marker locates a candidate; the inspector's actual source
                 // must prove assistant text or a successful result.
                 observation.stage = 'candidate-selection'
-                await candidates.last().click({ timeout: 1000 })
+                const candidate = candidates.last()
+                if ((await candidate.getAttribute('data-kind')) === 'result') {
+                  if ((await candidate.getAttribute('open')) === null) {
+                    await candidate.locator('summary').click({ timeout: 1000 })
+                  }
+                  await candidate
+                    .getByRole('button', {
+                      name: 'Show in inspector',
+                      exact: true,
+                    })
+                    .click({ timeout: 1000 })
+                } else {
+                  await candidate.click({ timeout: 1000 })
+                }
                 const wire = page.getByTestId('context-wire')
                 observation.stage = 'wire-visibility'
                 if (!(await wire.isVisible())) return false
@@ -488,12 +508,26 @@ test.describe('the golden path, in the console', () => {
 
     // THE INSPECTOR'S SCOPE. What a session runs as is the console's answer to "under
     // whose authority did this happen", and it must be on the screen, not in a log.
+    expect(
+      typeof run.workspace_path,
+      'the run records its actual working folder',
+    ).toBe('string')
+    if (run.workspace_ref) {
+      await expect(page.getByTestId('narrative-folder')).toHaveAttribute(
+        'title',
+        run.workspace_path as string,
+      )
+    } else {
+      await expect(page.getByTestId('context-scope')).toContainText(
+        'Temporary folder for this session',
+      )
+      await expect(page.getByTestId('narrative-folder')).toHaveCount(0)
+    }
     await attached.getByTestId('composer-advanced').click()
     const scope = attached.getByTestId('work-scope-line')
     if (await scope.isVisible()) {
       const line = (await scope.innerText()).replace(/\s+/g, ' ')
       await expect(scope).toContainText('Organization')
-      await expect(scope).toContainText('Workspace')
       await expect(scope).toContainText('Environment')
       observe(`scope line: ${line}`)
       // WHOSE AUTHORITY THIS RAN UNDER is the one question this line exists to answer,
@@ -517,9 +551,7 @@ test.describe('the golden path, in the console', () => {
         '06-inspector-1440.png',
       )
     }
-    await page.goto(
-      `/sessions?session=${encodeURIComponent(address)}&pane=context`,
-    )
+    await page.goto(stepHref(SESSIONS, { session: address, pane: 'context' }))
     await expect(page.getByTestId('session-context')).toBeVisible({
       timeout: 60_000,
     })
@@ -538,7 +570,7 @@ test.describe('the golden path, in the console', () => {
   }) => {
     await page.setViewportSize({ width: 1600, height: 1000 })
     await signIn(page)
-    await page.goto('/sessions')
+    await page.goto(stepHref(SESSIONS))
     await expect(page.getByTestId('rail-row').first()).toBeVisible({
       timeout: 60_000,
     })
@@ -561,9 +593,7 @@ test.describe('the golden path, in the console', () => {
     //    operator is owed is that the run they hold a reference to OPENS — so that is
     //    what is measured, using the third address shape the console documents.
     if (CLI_RUN) {
-      await page.goto(
-        `/sessions?session=${encodeURIComponent(`run:${CLI_RUN}`)}`,
-      )
+      await page.goto(stepHref(SESSIONS, { session: `run:${CLI_RUN}` }))
       await expect(page.getByTestId('work-surface')).toBeVisible({
         timeout: 60_000,
       })
@@ -610,7 +640,7 @@ test.describe('the golden path, in the console', () => {
     await signIn(page)
 
     const t0 = Date.now()
-    await page.goto('/provider-profiles')
+    await page.goto(stepHref(PROFILES))
     // The actual profile row keeps the complete identity on its cell title;
     // the painted display name and shortened reference are not identity oracles.
     const profileCell = page
@@ -676,7 +706,7 @@ test.describe('the golden path, in the console', () => {
     await page.setViewportSize({ width: 1440, height: 900 })
     await signIn(page)
     await expect(page.locator('html')).not.toHaveClass(/dark/)
-    await page.goto('/sessions')
+    await page.goto(stepHref(SESSIONS))
     await expect(page.getByTestId('work-surface')).toBeVisible({
       timeout: 30_000,
     })
@@ -684,41 +714,49 @@ test.describe('the golden path, in the console', () => {
 
     const t0 = Date.now()
     await page.setViewportSize({ width: 390, height: 844 })
-    await page.goto('/sessions')
+    await page.goto(stepHref(SESSIONS))
     await expect(page.getByTestId('work-surface')).toBeVisible({
       timeout: 30_000,
     })
-    // BELOW `xl` exactly one pane is in front, chosen by the switcher. A surface that
-    // kept three panes at 390 px would be three columns of about 130 px each.
-    await expect(page.getByTestId('pane-button-rail')).toBeVisible()
+    // On a phone the list opens a thread; the thread's Back arrow returns to the list.
+    await expect(page.locator('#work-pane-rail')).toBeVisible()
+    await expect(page.getByTestId('pane-button-rail')).toBeHidden()
     const railBox = await page.locator('#work-pane-rail').boundingBox()
     await shot(page, '11-work-surface-390-light')
-    // Below xl the attached composer belongs to Narrative, not the rail pane.
-    await page.getByTestId('pane-button-narrative').click()
-    await expect(page.getByTestId('pane-button-narrative')).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    )
+    await page
+      .getByTestId('rail-row')
+      .filter({ hasText: 'e2e-console' })
+      .click()
+    await expect(page.locator('#work-pane-narrative')).toBeVisible()
+    await expect(page.getByTestId('pane-button-rail')).toBeVisible()
+    expect(new URL(page.url()).searchParams.get('pane')).toBe('narrative')
     const narrowAttached = page.getByTestId('work-composer')
     await expect(narrowAttached).toBeVisible()
     await expect(narrowAttached).toHaveAttribute('data-attached', 'true')
     await expect(narrowAttached.getByTestId('launcher-input')).toBeVisible()
 
-    // Home's phone draft exposes both pickers under Advanced. Prepare it without
-    // launching another session: the harness still compares the CLI and console pair.
-    const narrowDraft = await draftComposer(page)
-    await narrowDraft.getByTestId('launcher-input').fill('e2e-mobile-draft')
-    await narrowDraft.getByTestId('composer-advanced').click()
-    await expect(narrowDraft.getByTestId('launcher-workspace')).toBeVisible()
+    // The same New session form exposes the profile and folder on a phone.
+    await page.getByTestId('pane-button-rail').click()
+    const narrowDraft = await openAdvancedSession(page)
     await chooseProfile(page, narrowDraft)
-    await expect(narrowDraft.getByTestId('launcher-start')).toBeEnabled()
-    await expect(narrowDraft.getByTestId('work-scope-line')).toBeVisible()
-    await shot(page, '12-composer-390-light')
+    await narrowDraft
+      .getByRole('button', { name: 'Advanced options', exact: true })
+      .click()
+    await expect(
+      narrowDraft.getByRole('combobox', { name: 'Folder', exact: true }),
+    ).toBeVisible()
+    await narrowDraft
+      .getByRole('textbox', { name: 'Name', exact: true })
+      .fill('e2e-mobile-draft')
+    await expect(
+      narrowDraft.getByRole('button', { name: 'Start', exact: true }),
+    ).toBeEnabled()
+    await shot(page, '12-new-session-390-light')
     leg({
       leg: 'console: light theme at 1440 and the work surface at 390 px',
-      result: `one pane in front (rail ${Math.round(railBox?.width ?? 0)} px wide); attached input visible; Home draft profile/workspace controls visible and launch enabled`,
+      result: `one pane in front (rail ${Math.round(railBox?.width ?? 0)} px wide); attached input visible; New session profile/folder controls visible and launch enabled`,
       ms: Date.now() - t0,
-      evidence: '12-composer-390-light.png',
+      evidence: '12-new-session-390-light.png',
     })
   })
 

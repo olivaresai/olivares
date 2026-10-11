@@ -26,14 +26,11 @@ import (
 // scimReceiveEvents accepts a SET (application/secevent+jwt), verifies it, and
 // applies its access effect. Success is 202 Accepted (RFC 8935 §2.3); a problem
 // with the SET returns 400 with the {err, description} body (RFC 8935 §2.4).
-func (s *Server) scimReceiveEvents(w http.ResponseWriter, r *http.Request) {
+func (s *Server) scimReceiveEvents(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
 	// Deprovisioning is a destructive lifecycle action, so it takes user:write —
 	// the same permission as SCIM DELETE.
-	p, tenant, aerr := s.scimAuthz(r, "user:write")
-	if aerr != nil {
-		writeSCIMError(w, *aerr)
-		return
-	}
+	p := mc.Principal
+	tenant := mc.Tenant
 
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxBodyBytes))
 	if err != nil {

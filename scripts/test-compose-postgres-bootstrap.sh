@@ -21,17 +21,17 @@ export LC_ALL
 root="${OLIVARES_ROOT:-$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)}"
 scratch_parent="${TMPDIR:-}"
 case "$scratch_parent" in /*) ;; *)
-	printf '%s\n' 'test-compose-postgres-bootstrap: NO HE PODIDO MIRAR — TMPDIR must be absolute' >&2
+	printf '%s\n' 'test-compose-postgres-bootstrap: COULD NOT CHECK — TMPDIR must be absolute' >&2
 	exit 2
 	;;
 esac
 [[ -d "$scratch_parent" ]] || {
-	printf 'test-compose-postgres-bootstrap: NO HE PODIDO MIRAR — TMPDIR is absent: %s\n' "$scratch_parent" >&2
+	printf 'test-compose-postgres-bootstrap: COULD NOT CHECK — TMPDIR is absent: %s\n' "$scratch_parent" >&2
 	exit 2
 }
 for tool in bash cp mkdir mktemp python3 rm; do
 	command -v "$tool" >/dev/null 2>&1 || {
-		printf 'test-compose-postgres-bootstrap: NO HE PODIDO MIRAR — missing %s\n' "$tool" >&2
+		printf 'test-compose-postgres-bootstrap: COULD NOT CHECK — missing %s\n' "$tool" >&2
 		exit 2
 	}
 done
@@ -52,7 +52,6 @@ FILES=(
 	deploy/postgres/02-admin-role.sql
 	core/internal/store/sqlstore/dbsetup.go
 	Taskfile.yml
-	.githooks/pre-push
 	.github/workflows/mainline-ci.yml
 	scripts/check-compose-postgres-bootstrap.sh
 	scripts/test-compose-postgres-bootstrap.sh
@@ -72,7 +71,7 @@ run_leg() { # run_leg <dir> -> exit code of the leg, output on stdout
 
 seed "$scratch/control"
 if ! control_out="$(run_leg "$scratch/control")"; then
-	printf 'test-compose-postgres-bootstrap: NO HE PODIDO MIRAR — the UNMUTATED control is already red:\n%s\n' \
+	printf 'test-compose-postgres-bootstrap: COULD NOT CHECK — the UNMUTATED control is already red:\n%s\n' \
 		"$control_out" >&2
 	exit 2
 fi
@@ -169,10 +168,6 @@ kill_mutant "the APPLICATION role is quietly given BYPASSRLS" \
 kill_mutant "the retained-volume lifecycle stops being documented" \
 	deploy/compose/README.md \
 	's.replace("`docker-entrypoint-initdb.d` runs **only when the data directory is empty**", "The initdb hook runs")'
-
-kill_mutant "the leg is unwired from the push hook" \
-	.githooks/pre-push \
-	's.replace("task lint:compose-postgres-bootstrap\n", "")'
 
 # ── correction-01 (2026-09-11): the read-only claim, which the file used to make without
 # checking. Each of these four is a shape MEASURED to produce a false read-only success on

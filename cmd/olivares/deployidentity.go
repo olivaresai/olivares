@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/olivaresai/olivares/cmd/olivares/internal/loopback"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/modules/deploy"
 )
@@ -21,8 +22,8 @@ import (
 // deploy.IdentityBinder (modules/deploy/ports.go) by binding an agent to its
 // per-agent NHI identity through governed endpoint
 // (POST /v1/m/governance/agents/{agentID}/identity, modules/governance/identity.go),
-// IN-PROCESS over the engine's own handler — the same captureWriter mechanism the
-// Approval bridge uses (hitl.go), so the full authenticate→tenant→authorize→
+// IN-PROCESS over the engine's own handler — the same loopback.Recorder mechanism the
+// Approval bridge uses (internal/loopback), so the full authenticate→tenant→authorize→
 // handler→audit chain runs with zero new code path. The module never sets
 // Agent.IdentityID directly (that would re-implement bridge); it asks here.
 //
@@ -199,7 +200,7 @@ func (b *deployIdentityBinder) resolveAgentID(ctx context.Context, tenant model.
 }
 
 // do performs one in-process governed API call as the tenant's service principal,
-// over the engine's own handler (the same mechanism as hitl.go / approvalbridge.go).
+// over the engine's own handler (the same mechanism as hitl.go / internal/approvalbridge).
 // A nil handler returns 0 (deny/degraded).
 func (b *deployIdentityBinder) do(ctx context.Context, tenant model.TenantID, token, method, path string, body any) (int, []byte) {
 	h := b.currentHandler()
@@ -214,7 +215,7 @@ func (b *deployIdentityBinder) do(ctx context.Context, tenant model.TenantID, to
 		}
 		rdr = strings.NewReader(string(bs))
 	}
-	req, err := http.NewRequestWithContext(loopbackContext(ctx), method, path, rdr)
+	req, err := http.NewRequestWithContext(loopback.Context(ctx), method, path, rdr)
 	if err != nil {
 		return 0, nil
 	}
@@ -223,9 +224,9 @@ func (b *deployIdentityBinder) do(ctx context.Context, tenant model.TenantID, to
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	rec := &captureWriter{header: http.Header{}, status: http.StatusOK}
+	rec := loopback.NewRecorder()
 	h.ServeHTTP(rec, req)
-	return rec.status, rec.body.Bytes()
+	return rec.Status, rec.Body.Bytes()
 }
 
 // warnUnconfigured emits the "no binding credential" warning once per tenant.

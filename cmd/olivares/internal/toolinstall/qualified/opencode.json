@@ -1,0 +1,43 @@
+{
+  "assets": [
+    {
+      "browser_download_url": "https://github.com/anomalyco/opencode/releases/download/v1.18.34/opencode-linux-arm64-musl.tar.gz",
+      "digest": "sha256:eaf0692e4b60dca382a126ca607d617be7b6eaf82d318a828f2b6eb1eacea99a",
+      "name": "opencode-linux-arm64-musl.tar.gz",
+      "size": 62603177
+    },
+    {
+      "browser_download_url": "https://github.com/anomalyco/opencode/releases/download/v1.18.34/opencode-linux-arm64.tar.gz",
+      "digest": "sha256:bbdb3f00c2c51e42e315525233151309724226a8776da8e9145e3b0fa3d5310f",
+      "name": "opencode-linux-arm64.tar.gz",
+      "size": 60479105
+    },
+    {
+      "browser_download_url": "https://github.com/anomalyco/opencode/releases/download/v1.18.34/opencode-linux-x64-baseline-musl.tar.gz",
+      "digest": "sha256:4c3717c081d06b842172af1b0dd9f4dc54335865e141db9c7059ccd1d8c1b451",
+      "name": "opencode-linux-x64-baseline-musl.tar.gz",
+      "size": 63031633
+    },
+    {
+      "browser_download_url": "https://github.com/anomalyco/opencode/releases/download/v1.18.34/opencode-linux-x64-baseline.tar.gz",
+      "digest": "sha256:24b0d458d21ef548b2752166303defcf7f4945b049fb4876ab78dfaf86d81b27",
+      "name": "opencode-linux-x64-baseline.tar.gz",
+      "size": 60665421
+    },
+    {
+      "browser_download_url": "https://github.com/anomalyco/opencode/releases/download/v1.18.34/opencode-linux-x64-musl.tar.gz",
+      "digest": "sha256:9dd4470885d07205e31b702465564aaee97be26ee3dc192ec6702a15e7a21272",
+      "name": "opencode-linux-x64-musl.tar.gz",
+      "size": 63031634
+    },
+    {
+      "browser_download_url": "https://github.com/anomalyco/opencode/releases/download/v1.18.34/opencode-linux-x64.tar.gz",
+      "digest": "sha256:0f22479647226d1d2dd99595d20082ee7bda3870b62dc6a90b41efc1a71d7e9a",
+      "name": "opencode-linux-x64.tar.gz",
+      "size": 60665582
+    }
+  ],
+  "draft": false,
+  "prerelease": false,
+  "tag_name": "v1.18.34"
+}

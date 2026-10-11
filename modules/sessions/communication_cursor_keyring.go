@@ -126,31 +126,29 @@ func (k *CommunicationCursorTokenKeyring) SelfTest(observedAt time.Time) error {
 	return nil
 }
 
-// UseCommunicationCursorTokenKeyring late-binds the durable cursor key source.
-// Nil or a ring that fails its self-test removes the binding and leaves the C2
-// surface unavailable; binding never activates K3 by itself.
-func (m *Module) UseCommunicationCursorTokenKeyring(keyring *CommunicationCursorTokenKeyring) {
-	if keyring == nil || keyring.inner == nil || keyring.inner.validate() != nil {
-		m.communicationCursorKeyring = nil
-		return
+// Snapshot returns the already validated, opaque cursor-key snapshot. Nil or an
+// invalid ring leaves cursor navigation unavailable and never activates K3.
+func (k *CommunicationCursorTokenKeyring) Snapshot() *CursorTokenKeys {
+	if k == nil || k.inner == nil || k.inner.validate() != nil {
+		return nil
 	}
-	m.communicationCursorKeyring = keyring.inner
+	return k.inner
 }
 
 // CommunicationCursorTokenKeyringBound reports whether a valid cursor key
 // snapshot is bound. It is the readiness fact the composition root logs; it
 // exposes no identifier and no material.
 func (m *Module) CommunicationCursorTokenKeyringBound() bool {
-	return m != nil && m.communicationCursorKeyring != nil && m.communicationCursorKeyring.validate() == nil
+	return m != nil && m.CursorKeyring != nil && m.CursorKeyring.validate() == nil
 }
 
 // communicationCursorTokenKeyring is the private accessor the C2 service uses
 // to construct newDirectNoticeCursorService with the bound snapshot.
 func (m *Module) communicationCursorTokenKeyring() *communicationCursorTokenKeyring {
-	if m == nil || m.communicationCursorKeyring == nil {
+	if m == nil || m.CursorKeyring == nil {
 		return nil
 	}
-	return m.communicationCursorKeyring
+	return m.CursorKeyring
 }
 
 // CommunicationCursorTokenKeyringReady is the narrow readiness probe for the
@@ -162,3 +160,7 @@ func (m *Module) CommunicationCursorTokenKeyringReady(ctx context.Context) (bool
 	}
 	return m.CommunicationCursorTokenKeyringBound(), nil
 }
+
+// CursorTokenKeys is an opaque, validated cursor-key snapshot. Obtain it through
+// CommunicationCursorTokenKeyring.Snapshot; key material stays private.
+type CursorTokenKeys = communicationCursorTokenKeyring

@@ -99,3 +99,7 @@ Ledger stillschweigend vergisst.
 - Was noch reift, ist die reichhaltigere Review-**Konsole**; die oben genannten
   engine-seitigen Garantien sind live
   ([ehrlicher Umfang](/de/how-to/govern-and-approve/)).
+
+## Editionen und Genehmigungen (0.1)
+
+Community behält die Genehmigungsengine, mindestens zwei verschiedene Personen für CRITICAL-Aktionen, die doppelte Kontrolle des Kill-Switch und Richtlinien, die eine Prüfung verlangen oder Risikostufe beziehungsweise Quorum erhöhen. Richtlinien zur Senkung der Risikostufe und der Notfallzugriff per Break-glass gehören zur Business-Basis. Gespeicherte Daten bleiben lesbar und exportierbar, dürfen aber weder Community-Standardwerte senken noch Notfallzugriffe erlauben.

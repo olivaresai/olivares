@@ -46,6 +46,7 @@ import { usePrivilegedMutation } from '@/lib/hooks/use-privileged-mutation'
 import { consoleApi } from './api'
 import { SecretsTab } from './secrets-tab'
 import {
+  mcpEgressHost,
   mcpGatewayApi,
   mcpGatewayKeys,
   mcpHTTPSURL,
@@ -56,6 +57,7 @@ import {
   type MCPToolPolicy,
 } from './mcp-gateway-api'
 import { MCPEnableDialog, toolTrust } from './mcp-enable-dialog'
+import { mcpStarters, type MCPStarter } from './mcp-starters'
 import './i18n'
 
 /** `titled` is false where the page already names the surface (the MCP servers page). */
@@ -113,6 +115,8 @@ function GatewayInner({ titled }: { titled: boolean }) {
   const [editing, setEditing] = useState<MCPServer | null | undefined>(
     undefined,
   )
+  // The curated server whose Add filled the form; nothing is saved until Save.
+  const [starter, setStarter] = useState<MCPStarter | undefined>(undefined)
   const [remove, setRemove] = useState<MCPServer | null>(null)
   const [enabling, setEnabling] = useState<MCPServer | null>(null)
   const [credentials, setCredentials] = useState(false)
@@ -234,7 +238,13 @@ function GatewayInner({ titled }: { titled: boolean }) {
             <KeyRound />
             {t('console:mcpGateway.credentials')}
           </Button>
-          <Button disabled={data.read_only} onClick={() => setEditing(null)}>
+          <Button
+            disabled={data.read_only}
+            onClick={() => {
+              setStarter(undefined)
+              setEditing(null)
+            }}
+          >
             <Plus />
             {t('console:mcpGateway.add')}
           </Button>
@@ -466,6 +476,16 @@ function GatewayInner({ titled }: { titled: boolean }) {
           ))}
         </div>
       )}
+      {!data.read_only && (
+        <StarterList
+          Section={Section}
+          added={data.servers.map((s) => s.name)}
+          onAdd={(s) => {
+            setStarter(s)
+            setEditing(null)
+          }}
+        />
+      )}
       <section
         className="rounded-lg border border-border p-3"
         aria-label={t('console:mcpGateway.governance')}
@@ -508,8 +528,9 @@ function GatewayInner({ titled }: { titled: boolean }) {
           {editing !== undefined && (
             <RequireAssurance minAal={AAL.HARDWARE} action="console">
               <GatewayForm
-                key={editing?.id ?? 'new'}
+                key={editing?.id ?? starter?.key ?? 'new'}
                 row={editing ?? undefined}
+                starter={editing ? undefined : starter}
                 version={data.version}
                 tenant={activeTenant!}
                 queryKey={key}
@@ -551,6 +572,66 @@ function readable(id: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1)
 }
 
+/** The curated servers not added yet (K6.A11). Add only fills the form; the server is
+ * saved off and runs nothing until it is tested and enabled. */
+function StarterList({
+  Section,
+  added,
+  onAdd,
+}: {
+  Section: 'h2' | 'h3'
+  added: string[]
+  onAdd: (starter: MCPStarter) => void
+}) {
+  const { t } = useTranslation(['console'])
+  const open = mcpStarters.filter((s) => !added.includes(s.input.name))
+  if (open.length === 0) return null
+  return (
+    <section
+      className="rounded-lg border border-border p-3"
+      aria-label={t('console:mcpGateway.startersTitle')}
+    >
+      <Section className="text-body font-medium">
+        {t('console:mcpGateway.startersTitle')}
+      </Section>
+      <p className="text-body text-muted-foreground">
+        {t('console:mcpGateway.startersHint')}
+      </p>
+      <ul className="mt-3 grid min-w-0 gap-3 xl:grid-cols-2">
+        {open.map((s) => (
+          <li key={s.key} className="min-w-0 rounded border border-border p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-body font-semibold">{s.input.name}</span>
+              <Button size="sm" variant="outline" onClick={() => onAdd(s)}>
+                <Plus />
+                {t('console:mcpGateway.starterAdd', { name: s.input.name })}
+              </Button>
+            </div>
+            <p className="mt-1 text-body">
+              {t(`console:mcpGateway.starters.${s.key}.summary`)}
+            </p>
+            <p className="mt-1 text-caption text-muted-foreground">
+              {t(`console:mcpGateway.starters.${s.key}.profile`)}
+            </p>
+            <p className="mt-1 text-caption text-muted-foreground">
+              {t('console:mcpGateway.starterLicence', { licence: s.licence })}
+              {' · '}
+              <a
+                className="underline"
+                href={s.source}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {t('console:mcpGateway.starterSource')}
+              </a>
+            </p>
+          </li>
+        ))}
+      </ul>
+    </section>
+  )
+}
+
 /** A Save keeps an enabled server on unless it changes where the server is: the engine
  * withdraws the test result when the transport, address, command, arguments, environment,
  * secrets, credential or egress change (core/auth/mcp_gateway.go), and then it must be
@@ -570,7 +651,8 @@ function keepsEnabled(
     same(row.env ?? {}, next.env ?? {}) &&
     same(row.env_secret_refs ?? {}, next.env_secret_refs ?? {}) &&
     (row.credential_ref ?? '') === (next.credential_ref ?? '') &&
-    same(row.egress_cidrs ?? [], next.egress_cidrs ?? [])
+    same(row.egress_cidrs ?? [], next.egress_cidrs ?? []) &&
+    same(row.egress_hosts ?? [], next.egress_hosts ?? [])
   )
 }
 
@@ -616,12 +698,15 @@ export function unkeptPolicies(
 
 function GatewayForm({
   row,
+  starter,
   version,
   tenant,
   queryKey,
   onClose,
 }: {
   row?: MCPServer
+  /** A curated server's settings, as the starting point of a new one. */
+  starter?: MCPStarter
   version: number
   tenant: string
   queryKey: readonly unknown[]
@@ -629,22 +714,23 @@ function GatewayForm({
 }) {
   const { t } = useTranslation(['console', 'common'])
   const qc = useQueryClient()
-  const [name, setName] = useState(row?.name ?? '')
+  const from = row ?? starter?.input
+  const [name, setName] = useState(from?.name ?? '')
   // How Olivares reaches the server: an HTTPS address, or a command it starts on this
   // server (stdio), which runs with the session in its folder.
   const [kind, setKind] = useState<'url' | 'command'>(
-    row?.transport === 'stdio' ? 'command' : 'url',
+    from?.transport === 'stdio' ? 'command' : 'url',
   )
-  const [url, setURL] = useState(row?.url ?? '')
-  const [command, setCommand] = useState(row?.command ?? '')
-  const [args, setArgs] = useState((row?.args ?? []).join('\n'))
+  const [url, setURL] = useState(from?.url ?? '')
+  const [command, setCommand] = useState(from?.command ?? '')
+  const [args, setArgs] = useState((from?.args ?? []).join('\n'))
   const [env, setEnv] = useState(
-    Object.entries(row?.env ?? {})
+    Object.entries(from?.env ?? {})
       .map(([k, v]) => `${k}=${v}`)
       .join('\n'),
   )
   const [envSecrets, setEnvSecrets] = useState(
-    Object.entries(row?.env_secret_refs ?? {})
+    Object.entries(from?.env_secret_refs ?? {})
       .map(([k, v]) => `${k}=${v.replace(/^store:/, '')}`)
       .join('\n'),
   )
@@ -654,8 +740,18 @@ function GatewayForm({
     .filter(Boolean)
   const envMap = parsePairs(env)
   const secretMap = parsePairs(envSecrets)
-  const [credential, setCredential] = useState(row?.credential_ref ?? 'none')
-  const [cidrs, setCIDRs] = useState(row?.egress_cidrs?.join('\n') ?? '')
+  // The hosts a command may reach; empty keeps the network of its launch.
+  const [hosts, setHosts] = useState((from?.egress_hosts ?? []).join('\n'))
+  const hostList = hosts
+    .split('\n')
+    .map((h) => h.trim())
+    .filter(Boolean)
+  const hostsValid =
+    hostList.length <= 16 &&
+    new Set(hostList).size === hostList.length &&
+    hostList.every(mcpEgressHost)
+  const [credential, setCredential] = useState(from?.credential_ref ?? 'none')
+  const [cidrs, setCIDRs] = useState(from?.egress_cidrs?.join('\n') ?? '')
   // The address callers' tokens must name: this console's origin plus the server's
   // gateway path, until someone sets another public origin.
   // Not pre-filled: a Save of an untouched form wrote this address with no issuer, which
@@ -713,7 +809,10 @@ function GatewayForm({
     finalName.length <= 128 &&
     (kind === 'url'
       ? mcpHTTPSURL(url)
-      : command.trim() !== '' && envMap !== null && secretMap !== null) &&
+      : command.trim() !== '' &&
+        envMap !== null &&
+        secretMap !== null &&
+        hostsValid) &&
     trustValid &&
     policies.every((p) => !!p.required_scope.trim()) &&
     !refs.isError
@@ -795,6 +894,7 @@ function GatewayForm({
           ]),
         ),
         egress_cidrs: [],
+        ...(hostList.length ? { egress_hosts: hostList } : {}),
         trust,
         ...(sendsPolicies ? { allowed_tools: policies } : {}),
         enabled: false,
@@ -829,6 +929,22 @@ function GatewayForm({
         </DialogDescription>
       </DialogHeader>
       <div className="grid gap-4 py-2">
+        {starter && (
+          <div
+            className="rounded-lg border border-border bg-surface p-3 text-body"
+            data-slot="mcp-starter"
+          >
+            <p>{t(`console:mcpGateway.starters.${starter.key}.profile`)}</p>
+            <p className="mt-1 text-muted-foreground">
+              {t(`console:mcpGateway.starters.${starter.key}.setup`)}
+            </p>
+            <p className="mt-1 text-caption text-muted-foreground">
+              {t('console:mcpGateway.starterLicence', {
+                licence: starter.licence,
+              })}
+            </p>
+          </div>
+        )}
         <Field
           label={t('console:mcpGateway.name')}
           htmlFor="mcp-name"
@@ -925,6 +1041,23 @@ function GatewayForm({
                 id="mcp-env-secrets"
                 value={envSecrets}
                 onChange={(e) => setEnvSecrets(e.target.value)}
+                rows={2}
+              />
+            </Field>
+            <Field
+              label={t('console:mcpGateway.egressHosts')}
+              htmlFor="mcp-egress-hosts"
+              description={t('console:mcpGateway.egressHostsHint')}
+              error={
+                hostsValid
+                  ? undefined
+                  : t('console:mcpGateway.egressHostsInvalid')
+              }
+            >
+              <Textarea
+                id="mcp-egress-hosts"
+                value={hosts}
+                onChange={(e) => setHosts(e.target.value)}
                 rows={2}
               />
             </Field>

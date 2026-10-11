@@ -22,13 +22,14 @@
     "edition": "エディションとモジュール",
     "about": "情報",
     "sections": "設定のセクション",
-    "signing": "レポート署名"
+    "signing": "レポート署名",
+    "tracing": "トレース"
   },
   "general": {
     "title": "一般",
     "scope": "あなた自身の設定です。このインストールのすべてのワークスペースに付いていきます。",
     "theme": "テーマ",
-    "themeHint": "ライトを選ぶかシステムに従うまで、ダークです。",
+    "themeHint": "ライトかダークを選ぶまで、システムに従います。",
     "density": "密度",
     "densityHint": "コンパクトは行を多く表示し、ゆったりは読みやすくなります。",
     "language": "言語",
@@ -46,8 +47,7 @@
   },
   "unavailable": {
     "notifications": "通知の設定は、このインストールにはまだ保存されません。",
-    "sessionDefaults": "セッションの既定は、このインストールにはまだ保存されません。",
-    "signIn": "サインインの方針は、この画面ではまだ編集できません。"
+    "sessionDefaults": "セッションの既定は、このインストールにはまだ保存されません。"
   },
   "keyboard": {
     "title": "キーボード",
@@ -55,37 +55,38 @@
   },
   "edition": {
     "title": "エディションとモジュール",
-    "scope": "このビルドのエディション、動かすモジュール、Business ビルドで追加される機能。",
+    "scope": "このビルドのエディション、動かすモジュール、Business で追加される機能。",
     "label": "エディション",
     "unknown": "このエンジンは報告していません",
     "editions": {
       "community": "コミュニティ",
       "enterprise": "ビジネス"
     },
-    "businessAdds": "Business ビルドで追加されるもの",
+    "businessAdds": "Business で追加されるもの",
     "adds": {
       "loginEnforcement": "ログインの強制：SSO の必須化とネットワーク許可リスト",
       "identityProviders": "組織ごとの複数の ID プロバイダーと、メールドメインによるルーティング",
       "groupMapping": "サインイン時にディレクトリグループをロールに対応付け",
       "regulatory": "規制対応業務：DORA 登録簿、NIS 2 インシデント分類、OSCAL プロファイル、米国および業種別パック、継続的なコントロール監視",
-      "reports": "エンタープライズレポートと定期レポート",
+      "reports": "Business レポートと定期レポート",
       "toolPins": "ツールのピン留め"
     }
   },
   "about": {
     "title": "情報",
-    "scope": "このインストールと、サインイン中のプリンシパルです。",
+    "scope": "このインストールとサインイン中のユーザー。",
     "version": "バージョン",
     "engine": "ストアエンジン",
     "edition": "エディション",
-    "community": "Community エディション（無料）",
+    "community": "Community エディション — ライセンス不要",
     "license": "ライセンスの状態",
     "licensee": "ライセンス先",
     "none": "なし",
     "displayName": "表示名",
-    "actor": "プリンシパル",
+    "actor": "プリンシパル ID",
     "role": "この組織でのロール",
-    "memberships": "組織"
+    "memberships": "組織",
+    "email": "メールアドレス"
   },
   "stopConfirm": {
     "title": "このセッションを停止しますか？",
@@ -94,10 +95,16 @@
   },
   "modules": {
     "title": "モジュール",
-    "description": "このインストールで動かす Olivares の機能をオン・オフします。適用するとエンジンが 1 回再起動して変更を反映します。",
+    "description": "このインストールで動かす Olivares の機能をオン・オフします。適用するとエンジンが 1 回再起動して変更を反映し、実行中のセッションは停止します。",
     "apply_other": "{{count}} 件の変更を適用",
     "applied": "モジュールの選択を保存しました。",
     "restarting": "エンジンを再起動しています…",
+    "restartWarning": {
+      "title": "エンジンを再起動しますか？",
+      "stop_other": "実行中のセッション {{count}} 件が停止します。再起動後にそれぞれ再開できます。",
+      "unknown": "実行中のセッションはすべて停止します。再起動後にそれぞれ再開できます。",
+      "confirm": "再起動して適用"
+    },
     "pending_other": "{{count}} 件の変更が適用待ちです。",
     "unavailable": "このエンジンではモジュールを選べません。",
     "loadFailed": "モジュール一覧を読み込めませんでした。もう一度お試しください。",
@@ -184,6 +191,8 @@
       "sourcescope": "エージェントが読めるソース。",
       "voice": "音声エージェントと通話。"
     },
+    "noChanges": "適用する変更はありません。まずモジュールをオンまたはオフにしてください。",
+    "saving": "モジュールの選択を保存中…",
     "applyNone": "適用",
     "whenOffDefault": "データは保持されますが、モジュールがオフの間は使われません。",
     "whenOff": {
@@ -203,7 +212,13 @@
       "claude-policy": "管理対象の Claude Code 設定が確認されなくなります。"
     },
     "turnOn": "{{name}} をオンにする",
-    "activatedBy": "{{addons}} によって有効化されています。そのアドオンが有効な間はオンのままです。"
+    "activatedBy": "{{addons}} によって有効化されています。そのアドオンが有効な間はオンのままです。",
+    "turnOnPlain": "オンにする",
+    "alsoTurnsOn": "オンにすると {{names}} も一緒にオンになり、エンジンが再起動します。",
+    "openEdition": "「エディションとモジュール」を開く",
+    "askAdmin": "管理者にオンにするよう依頼してください。",
+    "notSetUp": "この環境ではまだ設定されていません。",
+    "stillRestarting": "まだ再起動中です。ページを再読み込みしてください。"
   },
   "signing": {
     "title": "レポート署名",
@@ -232,5 +247,36 @@
     "turnOn": "署名をオンにする",
     "turnOff": "署名をオフにする",
     "offKeepsKey": "オフにしても鍵は保持されるため、以前に署名したバンドルは引き続き検証できます。"
+  },
+  "tracing": {
+    "description": "トレースとメトリクスを指定したコレクターへ送信します。変更は再起動せずに適用されます。",
+    "enabled": "トレースを有効にする",
+    "endpoint": "コレクターのアドレス",
+    "protocol": "プロトコル",
+    "insecure": "信頼できるネットワークで平文を許可する",
+    "sampleRatio": "サンプリング率（0–1）",
+    "serviceName": "サービス名",
+    "compat": "旧GenAI属性を含める",
+    "overrides": "優先される環境変数：{{names}}",
+    "active": "トレースは有効です。",
+    "inactive": "トレースは無効です。",
+    "apply": "適用",
+    "saved": "トレース設定を保存しました。",
+    "businessRequired": "SIEM 配信と外部テレメトリエクスポートには Business が必要です。設定は保持されますが、Community はデータを送信しません。"
+  },
+  "signIn": {
+    "methods": "サインイン方法",
+    "password": "パスワード",
+    "sso": "シングルサインオン: {{providers}}",
+    "noSso": "サインインページで利用できるシングルサインオンプロバイダーはありません。",
+    "manageSso": "ID プロバイダーを管理",
+    "session": "セッションの有効期間",
+    "sessionHint": "エンジンはサインイン時にこの有効期間を設定し、セッションの更新時に延長します。変更はできません。",
+    "passwordAvailable": "ローカルパスワードでのサインインを利用できます。",
+    "passwordBlocked": "シングルサインオンが必須です。ローカルパスワードでのサインインはブロックされています。",
+    "ssoNotEnforced": "シングルサインオンが要求されていますが、このビルドではポリシーが適用されません。サインアウトする前に ID プロバイダーの設定を確認してください。",
+    "passwordManaged": "組織の管理者がパスワードでのサインインを管理します。",
+    "hours_other": "{{count}} 時間",
+    "ssoInactive": "シングルサインオンが要求されていますが、ID プロバイダーは無効です。この要件はパスワードでのサインインをブロックしません。"
   }
 }

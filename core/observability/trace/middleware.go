@@ -31,6 +31,7 @@ import (
 // inbound trace even though the engine exports nothing of its own.
 func (p *Provider) HTTPMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		p := p.active()
 		ctx := p.propagator.Extract(r.Context(), propagation.HeaderCarrier(r.Header))
 		if !p.enabled {
 			next.ServeHTTP(w, r.WithContext(ctx))

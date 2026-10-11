@@ -19,6 +19,8 @@ export function scopeLabel(
       return t('roles.authority.workspaceScope', { ref: ref ?? '' })
     case 'agent_group':
       return t('roles.authority.groupScope', { ref: ref ?? '' })
+    case 'folder':
+      return t('roles.authority.folderScope', { ref: ref ?? '' })
     default:
       return t('roles.authority.tenantWide')
   }

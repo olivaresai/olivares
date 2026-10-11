@@ -52,7 +52,7 @@ import (
 const providerDriverCodex = "codex"
 
 // A SESSION BOUND TO A PROVIDER RECORD REACHES ONLY THAT RECORD'S ENDPOINT, OR IT DOES
-// NOT START (Root 2026-10-02 21:16Z, HU2 019: an OpenCode session on an Anthropic key
+// NOT START (an OpenCode session on an Anthropic key
 // answered on OpenCode's own hosted model, because nothing told the tool which provider
 // it was bound to).
 //
@@ -123,6 +123,9 @@ type DriverHandshake struct {
 	// AuthState is the authentication readiness the provider itself reported
 	// (unknown | required | ready). It is NOT derived from a home path.
 	AuthState string
+	// ToolMode is the session's mode as the provider's answer names it
+	// (runtime_tool_mode.go); "" when it names none.
+	ToolMode string
 }
 
 // DriverSessionConfig is everything a driver session needs from the runtime. The
@@ -160,10 +163,12 @@ type DriverSessionConfig struct {
 	// operator actually authorized, and picking it from the advertisement alone
 	// would let the provider choose the source. Empty authorizes none.
 	//
-	// No credential value ever reaches this struct. The material — when there is
-	// any at all — travels in the child's environment, which the runtime builds and
-	// the driver never sees.
+	// Provider credentials travel only in the child's environment. The private
+	// session MCP connection below carries its own credential on ACP stdin.
 	AuthSource string
+
+	// Runtime-only MCP configuration, never serialized or recorded.
+	sessionMCP []json.RawMessage
 
 	// CallTimeout bounds one client→server request. ApprovalDeadline bounds one
 	// server→client approval before its method-specific timeout refusal is sent.
@@ -179,6 +184,12 @@ type DriverSessionConfig struct {
 	// handshake, so a later authentication failure invalidates what the row says
 	// instead of leaving a launch-time answer standing for ever.
 	OnAuthState func(state string)
+
+	// OnUsage is called with the provider's own running usage total for the
+	// conversation (runtime_usage.go). ownTurn says it is spending of this launch;
+	// any other total (a resumed thread's earlier one) is a baseline, not usage of
+	// this launch.
+	OnUsage func(usage resultUsage, ownTurn bool)
 
 	// AuthorityCheck re-proves the launch's exact durable authority immediately
 	// before an answer crosses to the child. It is the driver's only way to ask
@@ -312,6 +323,9 @@ type DriverLaunchTerms struct {
 	// ModelDiscovery names where the models offered for this driver come from:
 	// ModelDiscoveryNone or ModelDiscoveryBoundCredentialProbe.
 	ModelDiscovery string
+	// BoundModelRequired means a fresh record-bound thread needs an explicit or
+	// configured model; the tool cannot discover a safe default on that endpoint.
+	BoundModelRequired bool
 }
 
 // TermSupport is whether a driver's launch hands one choice to its child.
@@ -325,7 +339,7 @@ const (
 	// and it is not a promise that a launch asking for the choice starts. Before
 	// the spawn the drivers differ: a Codex or Grok run records the choice and
 	// starts without it, while an OpenCode launch that asks for any permission
-	// mode but the default is refused (refuseOpenCodeUnsupportedControls).
+	// mode but the default is refused (refuseACPUnsupportedControls).
 	TermNotCarried TermSupport = "not_carried"
 )
 
@@ -420,10 +434,11 @@ func normalizeLaunchTerms(t DriverLaunchTerms) DriverLaunchTerms {
 		discovery = ModelDiscoveryBoundCredentialProbe
 	}
 	return DriverLaunchTerms{
-		Model:          termSupportOf(t.Model == TermCarried),
-		Effort:         termSupportOf(t.Effort == TermCarried),
-		PermissionMode: termSupportOf(t.PermissionMode == TermCarried),
-		ModelDiscovery: discovery,
+		Model:              termSupportOf(t.Model == TermCarried),
+		Effort:             termSupportOf(t.Effort == TermCarried),
+		PermissionMode:     termSupportOf(t.PermissionMode == TermCarried),
+		ModelDiscovery:     discovery,
+		BoundModelRequired: t.BoundModelRequired,
 	}
 }
 
@@ -455,8 +470,8 @@ func (m *Module) driverProgram(d ProviderDriver) string {
 	if p := m.rt.driverPrograms[d.Key()]; p != "" {
 		return p
 	}
-	if m.rt.programResolver != nil {
-		if p := m.rt.programResolver(d.Key()); p != "" {
+	if m.rt.ProgramResolver != nil {
+		if p := m.rt.ProgramResolver(d.Key()); p != "" {
 			return p
 		}
 	}
@@ -467,21 +482,18 @@ func (m *Module) driverProgram(d ProviderDriver) string {
 // the pinned program, otherwise the installed one the resolver finds, otherwise
 // the official name.
 func (m *Module) claudeProgram() string {
-	if !m.rt.programPinned && m.rt.programResolver != nil {
-		if p := m.rt.programResolver(providerDriverClaude); p != "" {
+	if !m.rt.programPinned && m.rt.ProgramResolver != nil {
+		if p := m.rt.ProgramResolver(providerDriverClaude); p != "" {
 			return p
 		}
 	}
 	return m.rt.program
 }
 
-// launchDriverKey is the driver a set of launch params runs under. An unprofiled
-// launch is the historical Claude path.
+// launchDriverKey is the driver in the server-resolved profile. Create and resume
+// refuse a missing profile before reaching any child-launch helper.
 func launchDriverKey(p CreateRunParams) string {
-	if p.ProviderHome != nil && p.ProviderHome.Driver != "" {
-		return p.ProviderHome.Driver
-	}
-	return providerDriverClaude
+	return p.ProviderHome.Driver
 }
 
 // ---------------------------------------------------------------------------
@@ -874,16 +886,16 @@ const defaultDriverApprovalDeadline = 30 * time.Second
 //
 // It is called BEFORE the bridge starts pumping, so no frame can arrive with no
 // session to receive it.
-func (m *Module) attachDriverSession(lr *liveRun, p CreateRunParams, workDir, resumeID string) {
+func (m *Module) attachDriverSession(lr *liveRun, p CreateRunParams, spec LaunchSpec, resumeID string) {
 	d, ok := m.driverFor(launchDriverKey(p))
 	if !ok {
 		return
 	}
-	m.openDriverSession(lr, d, p, workDir, resumeID)
+	m.openDriverSession(lr, d, p, spec, resumeID)
 }
 
 // openDriverSession builds the driver's protocol session for one owned child.
-func (m *Module) openDriverSession(lr *liveRun, d ProviderDriver, p CreateRunParams, workDir, resumeID string) {
+func (m *Module) openDriverSession(lr *liveRun, d ProviderDriver, p CreateRunParams, spec LaunchSpec, resumeID string) {
 	tenant := lr.tenant
 	profileRef, authSource := "", ""
 	if lr.profile != nil {
@@ -899,7 +911,8 @@ func (m *Module) openDriverSession(lr *liveRun, d ProviderDriver, p CreateRunPar
 		Warn:                 m.warnf,
 		ClientName:           driverClientName,
 		ClientVersion:        m.productVersion(),
-		WorkDir:              workDir,
+		WorkDir:              spec.Dir,
+		sessionMCP:           openCodeSessionMCP(spec),
 		Model:                p.Model,
 		Effort:               p.Effort,
 		Preset:               launchPreset(p),
@@ -913,7 +926,11 @@ func (m *Module) openDriverSession(lr *liveRun, d ProviderDriver, p CreateRunPar
 		ProfileRef:           profileRef,
 		Approve: func(ctx context.Context, req ProviderApprovalRequest) (ProviderApprovalDecision, error) {
 			req.SessionRef = lr.claim.SID
-			return m.authorizeProviderApproval(ctx, tenant, req)
+			decision, err := m.authorizeProviderApproval(ctx, tenant, req)
+			if err != nil {
+				m.publishApprovalFailure(lr, err)
+			}
+			return decision, err
 		},
 		AuthorityCheck: func(ctx context.Context) error { return m.assertRunAuthority(ctx, lr) },
 		OnAuthState: func(state string) {
@@ -922,6 +939,12 @@ func (m *Module) openDriverSession(lr *liveRun, d ProviderDriver, p CreateRunPar
 			// including before the launch transition commits.
 			m.deferDurable(lr, func() {
 				m.recordProviderAuthState(context.Background(), lr, state)
+			})
+		},
+		OnUsage: func(usage resultUsage, ownTurn bool) {
+			at := m.now()
+			m.deferDurable(lr, func() {
+				m.recordDriverUsage(context.Background(), lr, usage, ownTurn, at)
 			})
 		},
 	})
@@ -973,6 +996,7 @@ func (m *Module) runDriverHandshake(ctx context.Context, lr *liveRun) error {
 	dctx := context.WithoutCancel(ctx)
 	m.deferDurable(lr, func() {
 		m.captureSessionID(dctx, lr, hs.ConversationID, m.now())
+		m.recordToolMode(dctx, lr, hs.ToolMode)
 	})
 	return nil
 }

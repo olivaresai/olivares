@@ -278,12 +278,16 @@ func StubbornExecutable(pidfile string) []byte {
 	return []byte(fmt.Sprintf("#!/bin/sh\ntrap '' TERM\necho $$ > '%s'\nsleep 300 &\necho $! >> '%s'\nwait\n", pidfile, pidfile))
 }
 
-// ExecCapableDir returns a fresh directory whose files can be executed; TMPDIR
-// may be mounted noexec on hardened hosts. It fails when none is found rather
+// ExecCapableDir returns a fresh, owner-only directory whose files can be executed;
+// TMPDIR may be mounted noexec on hardened hosts. It fails when none is found rather
 // than skipping, because every install assertion needs to run the fixture.
 func ExecCapableDir(t testing.TB) string {
 	t.Helper()
 	try := func(dir string) bool {
+		// TempDir's numbered directories inherit the host's umask.
+		if err := os.Chmod(dir, 0o700); err != nil {
+			t.Fatalf("secure executable fixture directory: %v", err)
+		}
 		p := filepath.Join(dir, "execprobe")
 		if err := os.WriteFile(p, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
 			return false

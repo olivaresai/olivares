@@ -203,22 +203,3 @@ func (w *canonWriter) bytes() ([]byte, error) {
 // hexDigest renders a digest the way every ledger column and every diagnostic carries
 // it: lower-case hex, fixed width.
 func hexDigest(d [32]byte) string { return hex.EncodeToString(d[:]) }
-
-// digestFromHex parses a hex digest back, refusing anything that is not exactly 32
-// bytes.
-//
-// The width check is not decoration. Every hash column is CHECKed at 32 octets in the
-// database, and a Go side that accepted a short value would let a truncated digest pass
-// comparison against another truncated digest — two wrong answers agreeing.
-func digestFromHex(s string) ([32]byte, error) {
-	var out [32]byte
-	raw, err := hex.DecodeString(s)
-	if err != nil {
-		return out, fmt.Errorf("sqlstore: %q is not a hex digest: %w", s, err)
-	}
-	if len(raw) != len(out) {
-		return out, fmt.Errorf("sqlstore: digest %q is %d bytes, want %d", s, len(raw), len(out))
-	}
-	copy(out[:], raw)
-	return out, nil
-}

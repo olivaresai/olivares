@@ -20,7 +20,7 @@ stage() {
   cp "$ROOT/design/c13-06-canon-proposals-prep-2026-08-20.json" "$TMP/tree/design/"
   cp "$ROOT/design/C13-06-CANON-PROPOSALS-PREP-2026-08-20.md" "$TMP/tree/design/"
   cp "$ROOT/design/PRICING-CANON.md" "$TMP/tree/design/"
-  cp "$ROOT/cmd/olivares/wire_noenterprise.go" "$TMP/tree/cmd/olivares/"
+  cp "$ROOT/cmd/olivares/edition_ports.go" "$TMP/tree/cmd/olivares/"
   cp "$CHECK" "$TMP/tree/scripts/"
   chmod +x "$TMP/tree/scripts/check-c13-06-canon-proposals-prep.sh"
 }
@@ -82,6 +82,12 @@ PY
 run
 if [ "$(cat "$TMP/rc")" = 1 ]; then ok "mutant (overlay remasure leaked) is killed"
 else bad "overlay remasure stayed rc=$(cat "$TMP/rc") ($(cat "$TMP/err"))"; fi
+
+stage
+sed -i 's#enterprise/computeruse#computerusegate#' "$TMP/tree/cmd/olivares/edition_ports.go"
+run
+if [ "$(cat "$TMP/rc")" = 1 ] && grep -q 'enterprise/computeruse' "$TMP/err"; then ok "mutant (proposal 3 applied in edition_ports.go) is killed"
+else bad "lost enterprise/computeruse stayed rc=$(cat "$TMP/rc") ($(cat "$TMP/err"))"; fi
 
 stage
 rm -f "$TMP/tree/design/c13-06-canon-proposals-prep-2026-08-20.json"

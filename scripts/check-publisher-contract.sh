@@ -38,7 +38,7 @@ W="$ROOT/commercial/license-worker"
 CONTRATO="$W/contracts/publisher.gen.json"
 GEN="$W/scripts/gen-publisher-contract.ts"
 
-cannot() { echo "check-publisher-contract: ⛔ NO HE PODIDO MIRAR: $*" >&2; exit 2; }
+cannot() { echo "check-publisher-contract: ⛔ COULD NOT CHECK: $*" >&2; exit 2; }
 
 # ⛔ LAS TRES RUTAS QUE ESTA PATA INVOCA SON HUB-ONLY, Y VAN DECLARADAS. Este guion SI viaja al
 # arbol publico —tiene que poder decir alli «SKIP, sin commercial/»— pero lo que llama no viaja, y
@@ -64,29 +64,29 @@ cannot() { echo "check-publisher-contract: ⛔ NO HE PODIDO MIRAR: $*" >&2; exit
 # «arbol publico» aqui seria la copia que este contrato entero vino a cerrar.
 if [ ! -d "$W" ]; then
 	CLASIFICADOR="$ROOT/scripts/hub-leg.sh"
-	[ -x "$CLASIFICADOR" ] || cannot "sin commercial/license-worker y sin $CLASIFICADOR: no se que arbol es esto"
+	[ -x "$CLASIFICADOR" ] || cannot "neither commercial/license-worker nor $CLASIFICADOR is available; cannot classify this tree"
 	CLASE="$("$CLASIFICADOR" --classify 2>/dev/null)" || CLASE=""
 	case "$CLASE" in
 	public)
-		echo "check-publisher-contract: SKIP — arbol publico clasificado (sin commercial/, correcto)"
+		echo "check-publisher-contract: SKIP — classified public tree (commercial/ is correctly absent)"
 		exit 0
 		;;
 	hub)
-		echo "check-publisher-contract: FAIL — arbol clasificado como HUB y sin commercial/license-worker." >&2
-		echo "  En un hub el sujeto TIENE que estar: o el checkout esta incompleto, o alguien lo borro." >&2
-		echo "  Antes esto salia SKIP 0 y la pata callaba justo cuando hacia falta (F-04 del contraste)." >&2
+		echo "check-publisher-contract: FAIL — classified development tree is missing commercial/license-worker." >&2
+		echo "  This input is required in the development repository; the checkout is incomplete or it was deleted." >&2
+		echo "  The previous SKIP 0 hid this defect exactly when the check was needed (F-04)." >&2
 		exit 1
 		;;
 	*)
-		cannot "sin commercial/license-worker y el clasificador no sabe que arbol es esto (dijo '${CLASE:-nada}')"
+		cannot "commercial/license-worker is absent and the classifier cannot identify this tree (returned '${CLASE:-nothing}')"
 		;;
 	esac
 fi
-[ -r "$CONTRATO" ] || cannot "no encuentro $CONTRATO; generalo con 'npm run contract:publisher'"
-[ -r "$GEN" ] || cannot "no encuentro el generador $GEN"
-command -v node >/dev/null 2>&1 || cannot "no hay node en el PATH"
+[ -r "$CONTRATO" ] || cannot "cannot find $CONTRATO; generate it with 'npm run contract:publisher'"
+[ -r "$GEN" ] || cannot "cannot find generator $GEN"
+command -v node >/dev/null 2>&1 || cannot "node is not in PATH"
 
-TMP="$(mktemp -d "${TMPDIR:-/tmp}/pubcontract.XXXXXX")" || cannot "no puedo crear un temporal"
+TMP="$(mktemp -d "${TMPDIR:-/tmp}/pubcontract.XXXXXX")" || cannot "cannot create a temporary directory"
 trap 'rm -rf "$TMP"' EXIT INT TERM
 
 # ────────────────────────────────────────────────────────────────────────────────────────────────
@@ -104,11 +104,11 @@ medir() {
 	local pub="$raiz/scripts/publish-enterprise-artifacts.sh"
 
 	if [ ! -d "$w" ]; then
-		echo "check-publisher-contract: [$etiqueta] SKIP — sin commercial/license-worker"
+		echo "check-publisher-contract: [$etiqueta] SKIP — commercial/license-worker is absent"
 		return 0
 	fi
-	[ -r "$contrato" ] || { echo "check-publisher-contract: [$etiqueta] FAIL — hay commercial/license-worker y NO hay contrato ($contrato)." >&2; return 1; }
-	[ -r "$gen" ] || { echo "check-publisher-contract: [$etiqueta] ⛔ NO HE PODIDO MIRAR: no encuentro el generador $gen" >&2; return 2; }
+	[ -r "$contrato" ] || { echo "check-publisher-contract: [$etiqueta] FAIL — commercial/license-worker exists but the contract is missing ($contrato)." >&2; return 1; }
+	[ -r "$gen" ] || { echo "check-publisher-contract: [$etiqueta] ⛔ COULD NOT CHECK: cannot find generator $gen" >&2; return 2; }
 
 	# ⛔ EL GENERADOR ESCRIBE EN EL TEMPORAL, NO EN EL ARBOL. Hasta el 2026-09-02 esta pata borraba
 	# el contrato del worktree, regeneraba EN SU SITIO y lo restauraba despues: durante esos
@@ -123,7 +123,7 @@ medir() {
 	# las dos cosas. Se puede desde que el generador saca su raiz de `import.meta.url` (F-08): ya
 	# no depende del directorio desde el que se le llame.
 	if ! node "$gen" "$nuevo" >"$TMP/gen.out" 2>"$TMP/gen.err"; then
-		echo "check-publisher-contract: [$etiqueta] ⛔ NO HE PODIDO MIRAR: el generador fallo: $(head -1 "$TMP/gen.err" 2>/dev/null)" >&2
+		echo "check-publisher-contract: [$etiqueta] ⛔ COULD NOT CHECK: generator failed: $(head -1 "$TMP/gen.err" 2>/dev/null)" >&2
 		return 2
 	fi
 	# La guarda del verde ciego, sin tocar el arbol: un generador que sale 0 y no escribe dejaria la
@@ -131,7 +131,7 @@ medir() {
 	# sobre esta misma pata: con el fichero comparandose consigo mismo, salia CLEAN con el generador
 	# roto.
 	if [ ! -s "$nuevo" ]; then
-		echo "check-publisher-contract: [$etiqueta] ⛔ NO HE PODIDO MIRAR: el generador salio 0 pero no dejo contrato: no hay nada que comparar" >&2
+		echo "check-publisher-contract: [$etiqueta] ⛔ COULD NOT CHECK: generator exited 0 but wrote no contract; nothing to compare" >&2
 		return 2
 	fi
 
@@ -146,13 +146,13 @@ medir() {
 	# la copia que este contrato entero vino a cerrar: si alguien anade una lectura nueva al
 	# publicador, esta comprobacion la exige sin que nadie la anote.
 	if [ -r "$pub" ]; then
-		local claves faltan k
+		local claves missing_inputs k
 		claves="$(grep -oE 'leer_contrato [A-Za-z_][A-Za-z_.]*' "$pub" | awk '{print $2}' | sort -u)"
 		if [ -z "$claves" ]; then
-			echo "check-publisher-contract: [$etiqueta] ⛔ NO HE PODIDO MIRAR: no he sabido leer del publicador que claves consume" >&2
+			echo "check-publisher-contract: [$etiqueta] ⛔ COULD NOT CHECK: cannot determine which keys the publisher consumes" >&2
 			return 2
 		fi
-		faltan=""
+		missing_inputs=""
 		while IFS= read -r k; do
 			[ -n "$k" ] || continue
 			python3 -c 'import json,sys
@@ -161,30 +161,30 @@ v = d
 for parte in sys.argv[2].split("."):
     if not isinstance(v, dict) or parte not in v:
         sys.exit(3)
-    v = v[parte]' "$contrato" "$k" || faltan="$faltan $k"
+    v = v[parte]' "$contrato" "$k" || missing_inputs="$missing_inputs $k"
 		done <<-EOF
 		$claves
 		EOF
-		if [ -n "$faltan" ]; then
-			echo "check-publisher-contract: [$etiqueta] FAIL — el publicador lee claves que el contrato NO trae:$faltan" >&2
-			echo "  El contrato y su consumidor han derivado. Claves que el publicador pide:" >&2
+		if [ -n "$missing_inputs" ]; then
+			echo "check-publisher-contract: [$etiqueta] FAIL — publisher reads keys missing from the contract:$missing_inputs" >&2
+			echo "  The contract and its consumer differ. Keys requested by the publisher:" >&2
 			printf '    %s\n' $claves >&2
-			echo "  Cura: alinea el esquema en scripts/publish-enterprise-artifacts.sh o regenera el" >&2
-			echo "  contrato. Un contrato que su consumidor no sabe leer no es un contrato." >&2
+			echo "  Fix: align the schema in scripts/publish-enterprise-artifacts.sh or regenerate" >&2
+			echo "  the contract. A contract its consumer cannot read is unusable." >&2
 			return 1
 		fi
-		echo "check-publisher-contract: [$etiqueta] el publicador lee $(printf '%s\n' $claves | wc -l | tr -d ' ') clave(s) y el contrato las trae todas."
+		echo "check-publisher-contract: [$etiqueta] publisher reads $(printf '%s\n' $claves | wc -l | tr -d ' ') key(s); the contract includes them all."
 	fi
 
 	if cmp -s "$contrato" "$nuevo"; then
-		echo "check-publisher-contract: [$etiqueta] CLEAN — el contrato es lo que su generador produce."
+		echo "check-publisher-contract: [$etiqueta] CLEAN — contract matches its generator's output."
 		return 0
 	fi
-	echo "check-publisher-contract: [$etiqueta] FAIL — el contrato commiteado NO es lo que el generador produce." >&2
-	echo "  Alguien cambio una de las tres autoridades y no regenero. Diferencia:" >&2
+	echo "check-publisher-contract: [$etiqueta] FAIL — committed contract differs from the generator's output." >&2
+	echo "  An authoritative source changed without regeneration. Difference:" >&2
 	diff "$contrato" "$nuevo" | head -20 >&2
 	cmp "$contrato" "$nuevo" 2>&1 | head -2 | sed 's/^/  /' >&2
-	echo "  Cura: cd commercial/license-worker && npm run contract:publisher, y commitea el JSON." >&2
+	echo "  Fix: cd commercial/license-worker && npm run contract:publisher, then commit the JSON." >&2
 	return 1
 }
 
@@ -222,16 +222,16 @@ if [ -n "${OLIVARES_PUSH_REFS_FILE:-}" ] && [ -r "${OLIVARES_PUSH_REFS_FILE}" ] 
 		tips=$((tips + 1))
 		d="$TMP/tip-$tips"
 		if ! extraer_tip "$loid" "$d"; then
-			echo "check-publisher-contract: [${loid:0:12}] SKIP — ese commit no trae ni el worker ni el publicador"
+			echo "check-publisher-contract: [${loid:0:12}] SKIP — this commit contains neither the worker nor the publisher"
 			continue
 		fi
 		medir "${loid:0:12}" "$d"; anota $?
 	done <"$OLIVARES_PUSH_REFS_FILE"
 	if [ "$tips" -eq 0 ]; then
-		echo "check-publisher-contract: SKIP — el push no lleva ningun tip con arbol (solo borrados)"
+		echo "check-publisher-contract: SKIP — push carries no tips with trees (deletions only)"
 		exit 0
 	fi
-	echo "check-publisher-contract: medidos $tips tip(s) del push, no el worktree."
+	echo "check-publisher-contract: measured $tips pushed tip(s), not the worktree."
 	exit "$peor"
 fi
 

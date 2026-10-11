@@ -7,7 +7,7 @@ short version, and the deployment tutorials (Compose, Kubernetes/Helm, air-gappe
 [`docs-site/`](docs-site/).
 
 > **Beta.** Releases are cut from this repository. The binaries,
-> images and packages below **are published from the latest tagged release (`26.10.1`)**;
+> images and packages below describe the **next release (Olivares <!-- release -->`0.1`<!-- /release -->), not yet published**;
 > [building from source](#from-source) remains supported. Everything is self-hosted: the engine
 > makes no mandatory outbound calls at boot and verifying a licence never calls us. The one
 > command that reaches us is `olivares upgrade`, which fetches from the update channel unless
@@ -22,13 +22,41 @@ SHA-256; Homebrew checks each cask download against its recorded SHA-256. For ma
 use [`scripts/verify-release.sh`](scripts/verify-release.sh) (see
 [Verifying a release](#verifying-a-release)).
 
+## Installation qualification
+
+Only the SQLite Docker Compose path is exercised by the first-hour gate. The
+[`qualify-compose-ready` job](.github/workflows/compose-ready.yml) also checks Compose
+readiness. A job or a published artifact alone does not establish a passing first-hour
+result for a release; the release's own journey must pass on its exact image.
+
+The other methods remain available below, but are **not qualified** by the first-hour
+gate. Here, "not qualified" means that this gate does not run that installation method;
+installer checks, package tests and build checks do not establish the first console
+session on that path.
+
+| Installation method | First-hour qualification |
+| --- | --- |
+| [Docker Compose, SQLite](#docker-compose) | Gate path; requires a passing result on the release image |
+| [HTTPS installer](#https-convenience-path), including its service adapters | **not qualified** |
+| [Standalone Docker](#docker) | **not qualified** |
+| [Kubernetes: Helm or flat manifest](#kubernetes) | **Business**, not qualified |
+| [Native packages: deb, rpm and apk](#native-packages-deb--rpm--apk) | **not qualified** |
+| [Homebrew](#homebrew-recommended) | **not qualified** |
+| [Manual binary](#manual-binary-tarball), [macOS binary](#manual-binary) and local demo | **not qualified** |
+| [Source build](#from-source) | **not qualified** |
+| [Air-gapped installation](#air-gapped) | **Enterprise**, not qualified |
+| Compose with Postgres or backup overrides | **not qualified** |
+| [Native Claude Code co-deployment](#operate-claude-code-co-deployment) | **not qualified** |
+| [Windows via Docker Desktop or WSL2](#windows) | **not qualified**; no native Windows build |
+
 ## Versioning
 
-Releases use **CalVer**: a monthly release is `YY.M` (two-digit year and month, such as
-26.10), and a patch release adds a third number, `YY.M.N`. Tags have no `v` prefix; the 26.10
-release is tagged `26.10.1`. Container tags follow the release tag: `:26.10.1`, `:latest`, plus the `-fips` /
-`-stig` variants. The maturity label (**beta**) is separate from the version; a release that
-should be flagged *pre-release* on GitHub is tagged with a suffix, such as `-beta.1`.
+Releases use **MAJOR.MINOR** only: `1.0`, `1.1`, `1.10`, `1.299`.
+A compatible release increments MINOR; a breaking release increments MAJOR (for example, `2.0`).
+Tags have no `v` prefix and no patch number. Community and Enterprise share the release version.
+Releases before `0.1` used CalVer. `0.1`<!-- release-fixed --> is a fresh start, with no upgrade path from those releases.
+Community container tags follow the release tag and `:latest`. FIPS and STIG images are distributed with Business.
+
 
 ---
 
@@ -95,6 +123,8 @@ failing every ceremony later. Correct the pair, or clear **both** keys, and rest
 
 ### HTTPS convenience path
 
+**not qualified** by the first-hour gate (see [qualification](#installation-qualification)).
+
 The script body itself arrives over HTTPS; the pipe does not pre-verify those bytes.
 Once running, it detects your OS/architecture, verifies the signed checksum manifest and
 archive SHA-256 with `cosign`, and installs to a writable directory without invoking
@@ -108,7 +138,7 @@ removes it afterwards; pass `--install-cosign` to keep that verified copy next t
 curl -fsSL https://olivares.ai/olivares/install.sh | sh
 ```
 
-To pin a release: `curl -fsSL https://olivares.ai/olivares/install.sh | sh -s -- --version 26.10.1`.
+To pin a release: <!-- release -->`curl -fsSL https://olivares.ai/olivares/install.sh | sh -s -- --version 0.1`<!-- /release -->.
 
 Use `--bindir "$HOME/.local/bin"` to select an absolute install directory. Verification
 cannot be bypassed and privilege escalation is always an explicit operator step. The
@@ -117,9 +147,10 @@ run the already verified script from an explicitly privileged shell with `--syst
 Neither path invokes `sudo`, and neither starts the service unless `--start` is also
 present:
 
+<!-- release -->
 ```sh
 # systemd user service on Linux, LaunchAgent on macOS; review before starting
-ver=26.10.1   # the release tag
+ver=0.1   # the release tag
 sh "olivares-install-$ver.sh" --version "$ver" --user
 olivares doctor --mode user
 
@@ -127,6 +158,10 @@ olivares doctor --mode user
 sudo sh "olivares-install-$ver.sh" --version "$ver" --system --start
 sudo olivares doctor --mode system --data-dir /var/lib/olivares
 ```
+<!-- /release -->
+
+After a binary-only install, run `olivares quickstart` to print the console address
+and one-time administrator setup token.
 
 The adapter preserves an existing config, refuses unsafe data/config modes, validates
 key names before any init mutation, and checks both `/livez` and `/readyz` after an
@@ -136,7 +171,7 @@ without config values; rc 0 is healthy, rc 1 a measured defect and rc 2 a requir
 check that could not be measured. For the full download-verify-execute and service
 contracts, read [`docs/RELEASE-INSTALLER.md`](docs/RELEASE-INSTALLER.md).
 
-**DIST-24-05 qualification.** Pull requests that touch the installer or engine run the
+**Installer qualification.** Pull requests that touch the installer or engine run the
 verified shell installer against the published release on Debian stable,
 Ubuntu 24.04 LTS, Fedora, openSUSE Leap and Alpine userlands, plus a hosted macOS 14
 runner. Each live leg checks the installed path/mode/owner and version, then exercises
@@ -148,12 +183,17 @@ as live coverage. This matrix does not certify native package-manager installati
 
 ### Native packages (`.deb` / `.rpm` / `.apk`)
 
-**DIST-24-06 proposed repositories (not a live install surface).** The source tree now
+**not qualified** by the first-hour gate (see [qualification](#installation-qualification)).
+
+**Proposed package repositories (not a live install surface).** The source tree now
 contains deterministic apt, rpm-md and APK repository producers plus signed-index and
 byte-identity qualification. **No package-repository URL is live**, no DNS name is
 delegated, and no production repository key is provisioned. Until those separate operator
 acts happen, use the signed GitHub Release assets and the direct commands below; do not add
 a package-manager source based on this proposal.
+
+On ARM servers, download the `arm64` asset instead of `amd64`. All assets are on the <!-- release -->
+[release page](https://github.com/olivaresai/olivares/releases/tag/0.1)<!-- /release -->.
 
 Each package installs the binary to `/usr/bin/olivares`, an example env file, and a
 no-login `olivares` service user plus the data dir `/var/lib/olivares`. `.deb` and
@@ -162,14 +202,21 @@ an executable **OpenRC** unit at `/etc/init.d/olivares`. The previously publishe
 assets still shipped the systemd unit and no OpenRC unit. The package does **not**
 auto-start or enable the service — starting it is your explicit decision.
 
+<!-- release -->
 ```sh
 # Debian / Ubuntu
+curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.1/olivares_0.1_linux_amd64.deb
+# Verify the downloaded package before installing (see Verifying a release).
 sudo dpkg -i olivares_*_linux_amd64.deb
 
 # RHEL / Fedora / SUSE
+curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.1/olivares_0.1_linux_amd64.rpm
+# Verify the downloaded package before installing (see Verifying a release).
 sudo rpm -i olivares_*_linux_amd64.rpm
 
 # Alpine
+curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.1/olivares_0.1_linux_amd64.apk
+# Verify the downloaded package before installing (see Verifying a release).
 sudo apk add --allow-untrusted olivares_*_linux_amd64.apk
 
 # systemd hosts (the console answers on every interface; see the env file to restrict it)
@@ -178,8 +225,9 @@ journalctl -u olivares | sed -n '/FIRST-BOOT SETUP/,/========================/p'
 
 # OpenRC hosts (apk from this source; the package does not rc-update add)
 sudo rc-service olivares start
-sed -n '/FIRST-BOOT SETUP/,/========================/p' /var/lib/olivares/olivares.log
+sudo sed -n '/FIRST-BOOT SETUP/,/========================/p' /var/log/olivares.log
 ```
+<!-- /release -->
 
 **Configure it the guided way (recommended).** Rather than hand-editing the env file,
 run the expert installer: it picks a profile, asks only what that profile needs,
@@ -220,31 +268,42 @@ it by hand if you really mean to.
 
 ### Manual binary (tarball)
 
+**not qualified** by the first-hour gate (see [qualification](#installation-qualification)).
+
+<!-- release -->
 ```sh
-ver=26.10.1; os=linux; arch=amd64
+ver=0.1; os=linux; arch=amd64
 base=https://github.com/olivaresai/olivares/releases/download/$ver
-curl -fsSLO $base/olivares_${ver#v}_${os}_${arch}.tar.gz
+curl -fsSLO $base/olivares_${ver}_${os}_${arch}.tar.gz
 curl -fsSLO $base/checksums.txt
 curl -fsSLO $base/checksums.txt.sig
 curl -fsSLO $base/checksums.txt.pem
-scripts/verify-release.sh                       # cosign + SHA-256 (+ SBOM/VEX/SLSA if present)
-tar -xzf olivares_${ver#v}_${os}_${arch}.tar.gz
+cosign verify-blob --certificate checksums.txt.pem --signature checksums.txt.sig \
+  --certificate-identity "https://github.com/olivaresai/olivares/.github/workflows/release.yml@refs/tags/$ver" \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com checksums.txt
+sha256sum --ignore-missing -c checksums.txt
+tar -xzf olivares_${ver}_${os}_${arch}.tar.gz
 sudo install -m0755 olivares /usr/local/bin/olivares
 ```
+<!-- /release -->
 
 ### Docker
+
+**not qualified** by the first-hour gate (see [qualification](#installation-qualification)).
 
 Multi-arch (amd64/arm64), non-root (uid 65532), on a digest-pinned Debian 13 (trixie) slim base
 with Node.js 24, Python 3 and uv for the agent tools that Olivares installs into the data volume.
 Run it — secure by default (TLS on, no default credentials, a one-time setup token) with a
 persistent data volume:
 
+<!-- release -->
 ```sh
 docker run -d --name olivares -p 8443:8443 -p 8444:8444 \
   -v olivares-data:/var/lib/olivares \
-  docker.io/olivaresai/olivares:latest \
+  docker.io/olivaresai/olivares:0.1 \
   serve --listen :8443 --grpc-listen :8444 --data-dir /var/lib/olivares
 ```
+<!-- /release -->
 
 Then ask the container where it is, and finish setup:
 
@@ -271,11 +330,13 @@ a superadmin whose password is in the public source tree, so the engine refuses 
 any non-loopback bind, and refuses `--insecure` there too. In Docker that means sharing the
 host's network namespace (Linux):
 
+<!-- release -->
 ```sh
 docker run --rm --network host --tmpfs /data:uid=65532,gid=65532 \
-  docker.io/olivaresai/olivares:latest \
+  docker.io/olivaresai/olivares:0.1 \
   serve --seed-demo --insecure --listen 127.0.0.1:8443 --grpc-listen 127.0.0.1:8444 --data-dir /data
 ```
+<!-- /release -->
 
 Without `--network host` — on macOS or Windows, or if you would rather not share the namespace —
 run the demo from the binary instead.
@@ -291,57 +352,62 @@ is the **fallback**: the release pipeline builds and signs on ghcr.io and then c
 content to Docker Hub **by digest** (`cosign copy`), so both coordinates resolve to identical
 layers, signatures and attestations. Docker Hub applies a rate limit to **anonymous** pulls;
 ghcr.io does not rate-limit anonymous pulls of public images — `docker login` on Docker Hub, or
-switch the host to `ghcr.io`, if a CI node or a large fleet hits the ceiling. Tags: `:26.10.1`
-(pin a release), `:latest`, `:26.10.1-fips` (FIPS 140-3 mode, CMVP #5247) and `:26.10.1-stig`
+switch the host to `ghcr.io`, if a CI node or a large fleet hits the ceiling. Tags: <!-- release -->`:0.1`<!-- /release -->
+(pin a release), `:latest`, the Business FIPS and STIG variants
 (STIG-profiled UBI base) — see [SCP-09](docs/SCP-09-FIPS-STIG.md). The base and `:latest` tags
-are multi-arch (amd64/arm64); `-fips`/`-stig` are amd64-only. **For production, pin by digest**
+are multi-arch (amd64/arm64); Business FIPS/STIG images are amd64-only. **For production, pin by digest**
 (`docker.io/olivaresai/olivares@sha256:…`); the mutable tags above are for evaluation only. Verify
-the image: `cosign verify docker.io/olivaresai/olivares:26.10.1 --certificate-identity-regexp
-'^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v?[0-9]+\.[0-9]+(\.[0-9]+)?$'
+the image: <!-- release -->`cosign verify docker.io/olivaresai/olivares:0.1 --certificate-identity-regexp
+'^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/[0-9]+\.[0-9]+$'
 --certificate-oidc-issuer
-https://token.actions.githubusercontent.com` (the same verification works identically against the
-`ghcr.io/olivaresai/olivares:26.10.1` fallback — same digest, signatures and attestations).
+https://token.actions.githubusercontent.com`<!-- /release --> (the same verification works identically against the <!-- release -->
+`ghcr.io/olivaresai/olivares:0.1`<!-- /release --> fallback — same digest, signatures and attestations).
 
 ### Docker Compose
 
 A hardened, ready-to-edit stack (SQLite single-node, optional Postgres + backup):
 
 ```sh
+set -e
+export OLIVARES_PROJECT_DIR=/path/to/your/project   # the host folder sessions work on, not this clone
+if [ -r /sys/kernel/security/apparmor/features/namespaces/mask ] &&
+   grep -qw userns_create /sys/kernel/security/apparmor/features/namespaces/mask; then
+  sudo install -m 0644 deploy/apparmor/olivares-sessions.conf /etc/apparmor.d/olivares-sessions
+  sudo apparmor_parser -r /etc/apparmor.d/olivares-sessions
+  export OLIVARES_APPARMOR_PROFILE=olivares-sessions
+fi
 docker compose -f deploy/compose/docker-compose.yml up --wait --wait-timeout 120
 ```
 
-**DIST-24-12 current tree contract.** The image's own `olivares readyz` command is
+**Compose readiness contract.** The image's own `olivares readyz` command is
 the reference healthcheck; it needs no shell, curl, or wget. Local HTTP/TLS fixtures
 prove 200 → rc 0, a received non-200 → rc 1, and an unmeasurable probe → rc 2.
 **Docker qualification remains unmeasured until the dispatch workflow succeeds** for
 this commit; the checked-in workflow is a qualification path, not evidence of a run.
+
+The stack mounts one host folder at `/project` for sessions: the absolute path in
+`OLIVARES_PROJECT_DIR`, or an empty volume when it is unset. See
+[work on a host project folder](deploy/compose/README.md#work-on-a-host-project-folder).
+
+The AppArmor step needs an AppArmor 4 parser on the Docker daemon host; see
+[session confinement on AppArmor hosts](deploy/compose/README.md#session-confinement-on-apparmor-hosts).
 
 See [`deploy/compose/`](deploy/compose/) and the
 [Docker Compose tutorial](docs-site/src/content/docs/tutorials/getting-started/docker-compose.mdx).
 
 ### Kubernetes
 
-The Helm chart ships as source in [`deploy/helm/olivares`](deploy/helm/olivares). Its OCI
-publication — `oci://ghcr.io/olivaresai/charts/olivares`, cosign-signed — is **unverified**: no
-`chart-v*` tag or chart publisher run exists, and the registry refuses an anonymous read of it, so
-neither publication nor absence is established (on 2026-09-01 it answered `NAME_UNKNOWN`). Install
-the chart from the tree, or use the flat Helm-free manifest for a `kubectl`-only / air-gapped host:
-
-```sh
-# Helm, from the tree (the OCI coordinate above is unverified)
-helm install olivares deploy/helm/olivares -n olivares-system --create-namespace
-
-# or Helm-free
-kubectl create namespace olivares-system
-kubectl apply -n olivares-system -f deploy/manifests/install.yaml
-```
-
-See [`deploy/helm/`](deploy/helm/) and the
-[Kubernetes tutorial](docs-site/src/content/docs/tutorials/getting-started/kubernetes.mdx).
+The Helm chart, Kubernetes operator and fleet deployment manifests are distributed with
+Business. They are outside the Community source and release channel. See the
+[Kubernetes tutorial](docs-site/src/content/docs/tutorials/getting-started/kubernetes.mdx)
+and [editions](docs/editions.md).
 
 ### Air-gapped
 
-Bundle the signed image + chart + verification material and move it across the gap; see the
+**not qualified** by the first-hour gate (see [qualification](#installation-qualification)).
+
+Air-gapped installation and offline updates require Enterprise. Community supports
+`olivares upgrade --bundle <bundle> --check` for verification without a license or installation. See the
 [air-gap how-to](docs-site/src/content/docs/how-to/air-gap-install.md) and
 [`docs/RELEASE-VERIFICATION.md`](docs/RELEASE-VERIFICATION.md).
 
@@ -367,12 +433,35 @@ docker compose -f deploy/compose/docker-compose.yml up -d
 Then install and sign in to Claude Code from **AI tools** in the console, or with
 `olivares tool install claude` and `olivares tool login claude`.
 
-**Both native** — one command (verifies the engine signature, installs `claude` from the
-signed repo, wires the hardened systemd drop-in; does not auto-start):
+**Both native** — download, verify, then run (the installer verifies the engine signature,
+installs `claude` from the signed repo, wires the hardened systemd drop-in; does not
+auto-start). Do not pipe it into a shell: verify the release's signed checksum list, check
+out the exact commit it names, and run the installer from that checkout, so `install.sh`
+and its packaging files come from the checkout, never from a branch:
 
+<!-- release -->
 ```sh
-curl -fsSL https://raw.githubusercontent.com/olivaresai/olivares/main/scripts/install-agentops.sh | sh
+(
+set -eu
+cd "$(mktemp -d)"
+ver=0.1
+base=https://github.com/olivaresai/olivares/releases/download/$ver
+curl -fsSLO $base/checksums.txt
+curl -fsSLO $base/checksums.txt.sig
+curl -fsSLO $base/checksums.txt.pem
+curl -fsSLO $base/release-commit.txt
+cosign verify-blob \
+  --certificate checksums.txt.pem --signature checksums.txt.sig \
+  --certificate-identity "https://github.com/olivaresai/olivares/.github/workflows/release.yml@refs/tags/$ver" \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  checksums.txt
+grep ' release-commit.txt$' checksums.txt | sha256sum --check
+git clone https://github.com/olivaresai/olivares.git
+cd olivares && git checkout --detach "$(cat ../release-commit.txt)"
+OLIVARES_TOPOLOGY=native OLIVARES_VERSION=$ver sh scripts/install-agentops.sh
+)
 ```
+<!-- /release -->
 
 The native layout is configurable and recorded. `OLIVARES_DATA_DIR` selects the data
 directory (default `/var/lib/olivares`) and `OLIVARES_WORKSPACE_DIR` the workspace root
@@ -422,19 +511,13 @@ AgentOps files across its manifest rewrite. Only the managed drop-in (marked
 env and an existing external workspace are left untouched, and a knob that contradicts
 the installed unit's data directory is refused rather than re-rendered around it.
 
-The hardened unit hides some locations from the service unless the drop-in binds exactly
-one directory back in, which is what it renders: a workspace under `/home`, `/root` or
-`/run/user` gets `ProtectHome=tmpfs` plus `BindPaths=` for that directory (other homes
-stay hidden), and a workspace under `/tmp` or `/var/tmp` keeps `PrivateTmp=true` and gets
-`BindPaths=` for that directory alone (the rest of the host's temporary tree stays
-hidden), which needs systemd 235 or later — the installer reads `systemctl --version` and
-refuses an older host, naming the version. `/tmp` and `/var/tmp` are shared and are
-cleared periodically on many distributions, and the installer warns before using one. A
-workspace under `/dev`, `/proc` or `/sys` is refused: those hold kernel and device
-interfaces rather than durable state. (Until 2026-09-05 this paragraph claimed that no
-directive could reach a workspace under `/tmp`; that was false — see
-[`docs/RELEASE-INSTALLER.md`](docs/RELEASE-INSTALLER.md) for the upstream commit and what
-has and has not been verified on a live manager.)
+The managed drop-in renders the workspace as `ReadWritePaths=` and, like the base unit,
+sets `ProtectHome=false` and `PrivateTmp=false`, so a workspace under `/home`, `/root`,
+`/run/user`, `/tmp` or `/var/tmp` needs no extra mount; each session is confined to its
+folder by Landlock instead. `/tmp` and `/var/tmp` are shared and are cleared periodically
+on many distributions, and the installer warns before using one. A workspace under `/dev`,
+`/proc` or `/sys` is refused: those hold kernel and device interfaces rather than durable
+state.
 
 Secure by default in every case: TLS on with no default credentials, non-root (65532),
 read-only root, the deny-closed inference credential, and an anchored audit ledger over the session lifecycle.
@@ -457,6 +540,8 @@ gated against the real command tree by a test.
 
 ### Homebrew (recommended)
 
+**not qualified** by the first-hour gate (see [qualification](#installation-qualification)).
+
 The cask installs the signed binary and **clears the Gatekeeper quarantine** for you:
 
 ```sh
@@ -470,15 +555,19 @@ olivares serve --seed-demo --insecure --listen 127.0.0.1:8443 --grpc-listen 127.
 
 ### Manual binary
 
+**not qualified** by the first-hour gate (see [qualification](#installation-qualification)).
+
+<!-- release -->
 ```sh
-ver=26.10.1; arch=arm64   # or amd64 on Intel
+ver=0.1; arch=arm64   # or amd64 on Intel
 base=https://github.com/olivaresai/olivares/releases/download/$ver
-curl -fsSLO $base/olivares_${ver#v}_darwin_${arch}.tar.gz
+curl -fsSLO $base/olivares_${ver}_darwin_${arch}.tar.gz
 # ...verify (see Verifying a release), then:
-tar -xzf olivares_${ver#v}_darwin_${arch}.tar.gz
+tar -xzf olivares_${ver}_darwin_${arch}.tar.gz
 xattr -d com.apple.quarantine olivares   # the binary is not yet Apple-notarized
 sudo install -m0755 olivares /usr/local/bin/olivares
 ```
+<!-- /release -->
 
 > **Notarization status:** the darwin binaries are signed by cosign (supply-chain trust) but
 > are **not yet Apple-notarized**, so Gatekeeper quarantines a direct download — the Homebrew
@@ -515,10 +604,13 @@ needs an SCM wrapper) and is out of scope for the first Windows pass.
 
 ## From source
 
+**not qualified** by the first-hour gate (see [qualification](#installation-qualification)).
+
 For development, air-gapped builds, or before the first release. Needs Go 1.26+,
 [Task](https://taskfile.dev) and pnpm (the web UI is built into the binary):
 
 ```sh
+git clone --depth 1 https://github.com/olivaresai/olivares.git && cd olivares
 task build            # → ./bin/olivares, web console embedded
 ./bin/olivares version
 ./bin/olivares quickstart   # secure by default; prints the console URL + one-time setup token
@@ -534,12 +626,19 @@ See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the full development setup.
 
 ## Verifying a release
 
-Run from the directory holding the downloaded artifacts:
+The two required links need only cosign and `sha256sum`, run in the directory holding the
+downloaded artifacts, as in the [manual binary](#manual-binary-tarball) block: `cosign
+verify-blob` checks that this repository's release workflow signed `checksums.txt` on the tag
+you name, then `sha256sum --ignore-missing -c checksums.txt` checks each download against it.
+
+For the full chain, run [`scripts/verify-release.sh`](scripts/verify-release.sh) from a source
+checkout of the release tag, in that same directory. It is not a release asset: running it
+trusts the checkout, so read it first.
 
 ```sh
-scripts/verify-release.sh                  # keyless / Sigstore (default)
-scripts/verify-release.sh --key cosign.pub # key-based (air-gap)
-scripts/verify-release.sh --offline --key cosign.pub
+/path/to/olivares/scripts/verify-release.sh                  # keyless / Sigstore (default)
+/path/to/olivares/scripts/verify-release.sh --key cosign.pub # key-based (air-gap)
+/path/to/olivares/scripts/verify-release.sh --offline --key cosign.pub
 ```
 
 It checks, in order: the cosign signature over `checksums.txt`, the SHA-256 of each
@@ -582,13 +681,19 @@ explicitly selected external workspace is listed as kept and never removed. Pres
 keeps configuration, data, logs and keys. Purge requires a TTY confirmation or `--yes`
 and removes only indexed paths:
 
+<!-- release -->
 ```sh
 olivares uninstall --plan --data-dir /var/lib/olivares
 olivares uninstall --preserve --data-dir /var/lib/olivares
 olivares uninstall --purge --data-dir /var/lib/olivares --yes
 # Same contract through the verified installer:
-sh olivares-install-26.10.1.sh --uninstall --plan --data-dir /var/lib/olivares
+sh olivares-install-0.1.sh --uninstall --plan --data-dir /var/lib/olivares
 ```
+<!-- /release -->
+
+A quickstart, `serve` or source-build installation writes no ownership manifest: `olivares
+uninstall` names that and refuses. Remove such an installation by stopping the engine,
+removing the `olivares` binary and deleting its data directory.
 
 To move an estate, create a DR bundle before purge, install the destination, then use
 `olivares dr restore`. The bundle authenticates its manifest and every payload with
@@ -596,10 +701,13 @@ To move an estate, create a DR bundle before purge, install the destination, the
 separately authenticated pre-v26.9 bundle needs the explicit migration exception
 `--allow-legacy-unsigned`. See the DR runbook for custody and continuity verification.
 
-**Community → enterprise (in place).** With a valid license installed,
-`olivares upgrade --enterprise --token <TOKEN>` downloads the signed enterprise binary,
+**Community → commercial build (in place).** With a valid license installed,
+`olivares upgrade --enterprise --token <TOKEN>` downloads the signed commercial binary
+(the flag names the commercial artifact channel, not the edition),
 verifies its signature **offline** (a tamper aborts, the running binary untouched) and swaps
 it in atomically with a kept backup. Then restart and turn on the add-ons with
 `olivares enterprise enable <preset>` (`starter` / `regulated` / `full`) — a governed,
 audited activation that shows a diff first and stages any add-on needing a secret or a review.
-See the [Upgrade & rollback runbook §7](docs/UPGRADE-AND-ROLLBACK.md#7-editions-and-the-in-place-upgrade-community--enterprise).
+The preset names are command arguments; they are not editions and do not map one to one to
+the four Business capability families.
+See the [Upgrade & rollback runbook §7](docs/UPGRADE-AND-ROLLBACK.md#7-editions-and-the-in-place-upgrade-community--commercial-build).

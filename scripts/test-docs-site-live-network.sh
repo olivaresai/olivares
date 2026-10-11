@@ -67,7 +67,7 @@ if [ "$rc" -ne 2 ]; then
 	echo "test-docs-site-live-network: WAF 403 without header expected rc=2, got $rc: $out" >&2
 	fails=$((fails + 1))
 fi
-case "$out" in *"NO HE PODIDO MIRAR"*"403"*) ;; *) echo "test-docs-site-live-network: 403 was not named as unobservable" >&2; fails=$((fails + 1)) ;; esac
+case "$out" in *"COULD NOT CHECK"*"403"*) ;; *) echo "test-docs-site-live-network: 403 was not named as unobservable" >&2; fails=$((fails + 1)) ;; esac
 
 # Once the bypass works, a non-WAF HTTP failure is an observed broken deployment and stays red.
 out=$(PATH="$work/bin:$PATH" OLIVARES_CLONE="$work/tree" DOCS_LIVE_PROBE=fixture-secret \

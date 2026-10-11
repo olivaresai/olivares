@@ -5,9 +5,9 @@
 package audit_test
 
 import (
+	"bytes"
 	"context"
 	"crypto/ed25519"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"path/filepath"
@@ -286,52 +286,29 @@ func fixedWidth(n int, prefix ...byte) []byte {
 	return out
 }
 
-func TestExportDeterministicAndCarriesIntegrity(t *testing.T) {
-	ev := fixtureEvent()
-	for _, f := range []audit.Format{audit.FormatCEF, audit.FormatSyslog, audit.FormatOTLP, audit.FormatOTLPLogRecord} {
-		a, err := audit.FormatEvent(ev, f)
-		if err != nil {
-			t.Fatalf("format %s: %v", f, err)
-		}
-		b, _ := audit.FormatEvent(ev, f)
-		if a != b {
-			t.Fatalf("format %s not deterministic", f)
-		}
-		// Every format must carry the chain hash (hex) and the sequence.
-		if !strings.Contains(a, "0a0b0c") || !strings.Contains(a, "7") {
-			t.Fatalf("format %s missing integrity fields: %s", f, a)
-		}
-	}
-
-	cef, _ := audit.FormatEvent(ev, audit.FormatCEF)
-	if !strings.HasPrefix(cef, "CEF:0|Olivares|ControlPlane|") || !strings.Contains(cef, "olvHash=0a0b0c") {
-		t.Fatalf("CEF = %s", cef)
-	}
-	sl, _ := audit.FormatEvent(ev, audit.FormatSyslog)
-	// The hash is the full 32-byte digest in hex, so the assertion anchors on the
-	// SD-PARAM key and the digest's leading bytes rather than on a whole short value.
-	if !strings.HasPrefix(sl, "<134>1 ") || !strings.Contains(sl, ` hash="0a0b0c`) {
-		t.Fatalf("syslog = %s", sl)
-	}
-	// otlp is the request envelope since the catalog remap; the bare LogRecord
-	// projection lives under otlp_log_record with its bytes unchanged.
-	otlp, _ := audit.FormatEvent(ev, audit.FormatOTLP)
-	var env map[string]any
-	if err := json.Unmarshal([]byte(otlp), &env); err != nil {
-		t.Fatalf("OTLP not valid JSON: %v (%s)", err, otlp)
-	}
-	if _, ok := env["resourceLogs"]; !ok {
-		t.Fatalf("OTLP must be a request envelope since the catalog remap: %s", otlp)
-	}
-	bare, _ := audit.FormatEvent(ev, audit.FormatOTLPLogRecord)
-	var rec map[string]any
-	if err := json.Unmarshal([]byte(bare), &rec); err != nil {
-		t.Fatalf("OTLP log record not valid JSON: %v (%s)", err, bare)
-	}
-	if rec["severityText"] != "INFO" {
-		t.Fatalf("OTLP log record = %s", bare)
-	}
-	if !audit.ValidFormat(audit.FormatCEF) || audit.ValidFormat("bogus") {
-		t.Fatal("ValidFormat wrong")
+// signedEvent is a fixture audit event with a non-empty Ed25519 checkpoint
+// signature, so the LEEF export must carry olvSig too.
+func signedEvent() model.AuditEvent {
+	return model.AuditEvent{
+		ID:         "11111111-1111-7111-8111-111111111111",
+		TenantID:   "22222222-2222-7222-8222-222222222222",
+		Seq:        42,
+		OccurredAt: model.NewTimestamp(time.Unix(1700000000, 0).UTC()),
+		Actor:      "user:abc",
+		ActorKind:  "user",
+		Action:     "access_edge.upsert",
+		TargetKind: "core.access_edge",
+		TargetID:   "33333333-3333-7333-8333-333333333333",
+		// See fixtureEvent: real widths, and a full 64-byte signature whose base64
+		// carries "==" padding.
+		// A BLINDED record: the shared fixture stands for a row sealed under the
+		// current rule, so the projections carry its commitment. The blind is fixed
+		// (not random) because these are byte-exact goldens; a legacy row is covered
+		// separately by the tests that assert the key is absent.
+		MetaCommitment: canon.MetaCommitment(bytes.Repeat([]byte{0x5A}, canon.BlindLen), "{}"),
+		MetaBlinded:    true,
+		PrevHash:       fixedWidth(32, 0x01, 0x02, 0x03),
+		Hash:           fixedWidth(32, 0x0a, 0x0b, 0x0c, 0x0d),
+		Sig:            fixedWidth(64, 0xff, 0xee, 0xdd),
 	}
 }

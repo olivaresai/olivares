@@ -8,6 +8,9 @@ sidebar:
   order: 2
 ---
 
+FinOps budgets and spend analysis are **[Business](https://olivares.ai/pricing)** features. Community keeps per-session cost tracking and data export. Budgets stored before 0.1 remain readable and removable, and enforce while the FinOps module is on; Community cannot create or change them. Evaluations and sandboxes remain Community features.
+
+
 **Goal:** "this team's agents stop spending at $500/month" — declared once,
 enforced live, with alert thresholds on the way up.
 

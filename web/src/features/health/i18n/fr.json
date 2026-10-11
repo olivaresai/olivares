@@ -272,7 +272,7 @@
     }
   },
   "statusPage": {
-    "title": "Olivares Control Plane — Statut",
+    "title": "Olivares AI — Statut",
     "subtitle": "Statut opérationnel actuel de tous les composants.",
     "unavailable": "Les informations de statut sont actuellement indisponibles.",
     "lastUpdated": "Dernière mise à jour : {{time}}",
@@ -308,7 +308,11 @@
     "checked": "Vérification des mises à jour terminée",
     "advisories": "Avis de sécurité corrigés",
     "checkNow": "Vérifier maintenant",
-    "unconfigured": "La vérification des mises à jour n’est pas configurée. C’est attendu pour les déploiements air-gap."
+    "unconfigured": "La vérification des mises à jour n’est pas configurée. Aucune mise à jour n’a été vérifiée ; les vérifications réseau restent désactivées.",
+    "unavailable": "Vérification indisponible",
+    "instructions": "Instructions de mise à jour",
+    "configure": "Pour activer les vérifications, utilisez une version officielle avec sa clé de vérification intégrée. Définissez OLIVARES_UPDATE_ENDPOINT sur votre canal signé approuvé dans la configuration du service, puis redémarrez Olivares. Laissez ce paramètre non défini pour garder les vérifications réseau désactivées.",
+    "manual": "Pour une mise à jour manuelle, sauvegardez vos données, vérifiez le nouveau paquet ou l’image et mettez à jour avec votre méthode d’installation. Conservez le même répertoire de données. Une version de développement sans clé de vérification ne peut pas vérifier un canal signé."
   },
   "system": {
     "title": "Santé du système",
@@ -471,10 +475,9 @@
     "download": "Télécharger le lot de support",
     "generate": "Générer et télécharger",
     "confirmTitle": "Générer un lot de support ?",
-    "confirmDescription": "Cette action privilégiée AAL3 est consignée dans le registre d’audit.",
+    "confirmDescription": "Cette action privilégiée est consignée dans le registre d’audit.",
     "contents": "Le lot contient la configuration effective expurgée, l’état opérationnel et les journaux. Examinez-le avant de le partager.",
     "downloaded": "Lot de support téléchargé",
-    "needsAal3": "Une élévation AAL3 matérielle est requise pour générer un lot de support.",
     "failed": "La génération du lot de support a échoué."
   }
 }

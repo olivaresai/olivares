@@ -14,6 +14,7 @@ import (
 	"github.com/olivaresai/olivares/connectors/claude"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
+	"github.com/olivaresai/olivares/modules/sessions/hookpep"
 )
 
 // E3d — the observe PROMOTION report. It reads a tenant's tamper-evident ledger and
@@ -62,8 +63,8 @@ type observeReport struct {
 // validShadowSources / validShadowedDecisions gate the enum axes; an unrecognized value is
 // surfaced (counted malformed / bucketed "unknown"), never silently folded into a known bucket.
 var validShadowSources = map[string]bool{
-	shadowSourcePDP: true, shadowSourceScoped: true, shadowSourceLocalRule: true,
-	shadowSourceLocalDefault: true, shadowSourceBashPath: true,
+	hookpep.ShadowSourcePDP: true, hookpep.ShadowSourceScoped: true, hookpep.ShadowSourceLocalRule: true,
+	hookpep.ShadowSourceLocalDefault: true, hookpep.ShadowSourceBashPath: true,
 }
 var validShadowedDecisions = map[string]bool{claude.DecisionDeny: true, claude.DecisionAsk: true}
 
@@ -86,10 +87,10 @@ func buildObserveReport(events []observeReportEvent) observeReport {
 	byAttempt := map[string]*logical{}
 	order := []string{}
 	for _, e := range events {
-		if observeMetaStr(e.meta[metaEnforcementMode]) != enforcementModeObserve {
+		if observeMetaStr(e.meta[hookpep.MetaEnforcementMode]) != hookpep.EnforcementModeObserve {
 			continue // not an observe shadow
 		}
-		key := observeMetaStr(e.meta[metaDecisionAttemptID])
+		key := observeMetaStr(e.meta[hookpep.MetaDecisionAttemptID])
 		if key == "" {
 			key = fmt.Sprintf("__seq_%d", e.seq) // no correlation id ⇒ standalone decision
 		}
@@ -99,16 +100,16 @@ func buildObserveReport(events []observeReportEvent) observeReport {
 			byAttempt[key] = lg
 			order = append(order, key)
 		}
-		shDec := observeMetaStr(e.meta[metaShadowedDecision])
+		shDec := observeMetaStr(e.meta[hookpep.MetaShadowedDecision])
 		if !validShadowedDecisions[shDec] {
 			lg.malformed = true // an observe event with no valid would-be decision cannot be classified
 			continue
 		}
 		// The effective terminal wins across a double-write: a downgraded DENY supersedes an ALLOW.
-		effDowngrade := e.meta[metaEffectiveDowngrade] == true
+		effDowngrade := e.meta[hookpep.MetaEffectiveDowngrade] == true
 		if lg.decision == "" || effDowngrade {
-			lg.grantID = observeMetaStr(e.meta[metaObserveGrantID])
-			lg.source = observeMetaStr(e.meta[metaShadowSource])
+			lg.grantID = observeMetaStr(e.meta[hookpep.MetaObserveGrantID])
+			lg.source = observeMetaStr(e.meta[hookpep.MetaShadowSource])
 			lg.decision = shDec
 		}
 		if effDowngrade {

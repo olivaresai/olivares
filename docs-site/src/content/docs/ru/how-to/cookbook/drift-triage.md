@@ -15,6 +15,13 @@ sidebar:
 
 ## 1. Вытяните drift
 
+В новой установке `accessmap` отключён. Как администратор включите
+`accessmap` в **Settings > Edition & modules**, сохранив остальные выбранные
+модули включёнными. Для CLI сначала войдите в этот движок как администратор
+через `olivares login`, затем выполните `olivares modules on accessmap`. Перед продолжением
+дождитесь каждого перезапуска движка; работающие сессии остановятся, и их
+можно возобновить. Иначе эти вызовы API вернут `404 module_not_enabled`.
+
 ```bash
 curl -ks "$BASE/v1/m/accessmap/drift" \
   -H "Authorization: Bearer $TOKEN" -H "X-Olivares-Tenant: $TENANT" | python3 -m json.tool

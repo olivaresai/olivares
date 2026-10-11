@@ -100,3 +100,14 @@ func TestNativeOpenPGPRefusesMultipleSignatures(t *testing.T) {
 		})
 	}
 }
+
+// A signature subpacket must contain its value as well as its type. This
+// malformed exportable-certification subpacket used to panic in the parser.
+func TestNativeOpenPGPRefusesEmptyExportableCertification(t *testing.T) {
+	body := []byte{4, 0, 1, 8, 0, 2, 1, 4, 0, 0, 0, 0, 0, 1, 1}
+	signature := append([]byte{0xc2, byte(len(body))}, body...)
+	_, err := (NativeOpenPGPVerifier{}).Verify(context.Background(), []byte(claudeReleaseKey), ClaudeReleaseKeyFingerprint, signature, []byte("manifest"))
+	if KindOf(err) != KindSignatureInvalid {
+		t.Fatalf("empty exportable-certification subpacket = %v, want signature invalid", err)
+	}
+}

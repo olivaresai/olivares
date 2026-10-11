@@ -48,7 +48,8 @@ func newRuntimeWorkAPIFixtureWithData(t *testing.T, decorate func(api.ModuleData
 	admin := h.adminLogin()
 	tenant := h.createOrg(admin, "runtime-work-api")
 	createdRun := h.doJSON(http.MethodPost, "/v1/m/sessions/runs", admin, map[string]any{
-		"transport": "stream-json", "permission_mode": "default", "isolation": "native",
+		"provider_profile_ref": ensureRuntimeTestProfileRef(t, m, tenant),
+		"transport":            "stream-json", "permission_mode": "default", "isolation": "native",
 		"name": "fenced-runtime-api",
 	}, tenantHdr(tenant))
 	runRef, _ := createdRun.body["run_ref"].(string)
@@ -166,7 +167,8 @@ func TestRuntimeWorkAPIStopIsFencedAndEmptyBodyStaysLegacy(t *testing.T) {
 		admin := h.adminLogin()
 		tenant := h.createOrg(admin, "runtime-stop-legacy")
 		created := h.doJSON(http.MethodPost, "/v1/m/sessions/runs", admin, map[string]any{
-			"transport": "stream-json", "permission_mode": "default", "isolation": "native",
+			"provider_profile_ref": ensureRuntimeTestProfileRef(t, m, tenant),
+			"transport":            "stream-json", "permission_mode": "default", "isolation": "native",
 		}, tenantHdr(tenant))
 		ref, _ := created.body["run_ref"].(string)
 		stopped := h.do(http.MethodPost, "/v1/m/sessions/runs/"+ref+"/stop", admin, tenantHdr(tenant))

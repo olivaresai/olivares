@@ -3,17 +3,18 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
 // THE PHONE BAR (redesign §3.2), below 761 px: Home · Sessions · New · AI tools · More.
-// The three links are registry destinations (`PHONE_BAR_IDS`); New is the same action as
-// the sidebar's button and the `N` key; More opens the area directory, where every other
-// destination is. Targets are 44 × 44 px.
-import { Link } from '@tanstack/react-router'
+// The three links are the sidebar's first three destinations, current by the same rule; New
+// is the same action as the sidebar's button and the `N` key; More opens the area
+// directory, where every other destination is. Targets are 44 × 44 px.
+import { Link, useRouterState } from '@tanstack/react-router'
 import { LayoutGrid, Plus } from 'lucide-react'
 import { Fragment } from 'react'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
 import { useViewAccess } from '@/features/navigation/authorization'
+import { resolveLocation } from '@/features/navigation/model'
 import { useNewSession } from './new-session'
-import { phoneBarDestinations } from './shell-destinations'
+import { currentDestination, phoneBarDestinations } from './shell-destinations'
 
 const ITEM_CLASS = cn(
   'flex min-h-11 min-w-11 flex-col items-center justify-center gap-0.5 rounded-ctl px-1 text-[11px] leading-[14px] font-medium text-text-2 outline-none',
@@ -24,9 +25,14 @@ const ITEM_CLASS = cn(
 
 export function PhoneBar({ onMore }: { onMore?: () => void }) {
   const { t } = useTranslation('nav')
-  const { navigable } = useViewAccess()
+  const { listed } = useViewAccess()
   const newSession = useNewSession()
-  const links = phoneBarDestinations(navigable)
+  const links = phoneBarDestinations(listed)
+  const pathname = useRouterState({ select: (s) => s.location.pathname })
+  const search = useRouterState({
+    select: (s) => (s.location.search ?? {}) as Record<string, unknown>,
+  })
+  const current = currentDestination(resolveLocation(pathname), search, listed)
   return (
     <nav
       aria-label={t('shell.phoneBarLabel')}
@@ -37,24 +43,25 @@ export function PhoneBar({ onMore }: { onMore?: () => void }) {
         const link = (
           <Link
             to={d.path as never}
-            activeOptions={{ exact: d.exact }}
-            activeProps={{ 'aria-current': 'page' }}
+            search={d.search as never}
+            activeOptions={{ exact: true }}
+            aria-current={current === d.key ? 'page' : undefined}
             className={ITEM_CLASS}
           >
             <Icon aria-hidden />
             <span className="max-w-full truncate">
-              {t(`shell.journeys.${d.id}`)}
+              {t(`shell.journeys.${d.key}`)}
             </span>
           </Link>
         )
         // New sits in the middle of the bar, after the second link.
         return i === 2 ? (
-          <Fragment key={d.id}>
+          <Fragment key={d.key}>
             <NewButton onClick={newSession} label={t('shell.newSession')} />
             {link}
           </Fragment>
         ) : (
-          <Fragment key={d.id}>{link}</Fragment>
+          <Fragment key={d.key}>{link}</Fragment>
         )
       })}
       {links.length <= 2 ? (

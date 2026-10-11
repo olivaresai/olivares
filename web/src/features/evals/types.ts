@@ -57,11 +57,10 @@ export interface Scorecard {
    */
   pass_rate: number
   /**
-   * La tasa de verdad: aprobados/puntuados sumados sobre TODAS las corridas, con
-   * su denominador y su intervalo de Wilson (`scorecards.go:48-49,157-161`). El
-   * motor la manda desde y la consola no la declaraba, así que la tarjeta
-   * rotulaba «Pass-rate» sobre `pass_rate`. AUSENTE significa «no se puntuó nada»
-   * (`a.pooledN > 0`), jamás «tasa 0».
+   * The pooled rate: passed/scored across all runs, with its denominator and Wilson interval
+   * (`scorecards.go:48-49,157-161`). The engine has sent it since but the console did
+   * not declare it and labeled `pass_rate` as Pass-rate. Absence means nothing was scored
+   * (`a.pooledN > 0`), never a zero rate.
    */
   pooled_pass_rate?: { rate: number; n: number; ci: { lo: number; hi: number } }
   mean_score: number

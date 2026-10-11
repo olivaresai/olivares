@@ -16,7 +16,7 @@ trap 'rm -rf "$TMP"' EXIT
 # reporta un rojo que no es suyo. Se nombra la razon y se sale 0, que es lo que pide
 # check-export-closure.sh:1245 para este caso.
 if [ ! -r "$ROOT/scripts/publish-enterprise-artifacts.sh" ]; then
-  printf 'SKIP %s: scripts/publish-enterprise-artifacts.sh es hub-only y no esta en este arbol\n' \
+  printf 'SKIP %s: scripts/publish-enterprise-artifacts.sh is hub-only and is absent from this tree\n' \
     "$(basename "${BASH_SOURCE[0]}")"
   exit 0
 fi

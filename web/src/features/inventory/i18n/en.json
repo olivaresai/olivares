@@ -56,7 +56,11 @@
     "viewAccess": "Access map",
     "viewSessions": "Sessions",
     "gone": "This entry is no longer in the catalog.",
-    "noProjection": "No additional details are available to display for this entry. This does not establish whether it has relations."
+    "noProjection": "No additional details are available to display for this entry. This does not establish whether it has relations.",
+    "aiDiscovery": {
+      "unregistered_at_discovery": "Unregistered at discovery. This AI endpoint was new to inventory; its current governance is unknown. Coverage is limited to the configured proxy log and AI hosts.",
+      "unknown": "AI endpoint observed. Its governance is unknown. Coverage is limited to the configured proxy log and AI hosts."
+    }
   },
   "freshness": {
     "title": "Catalog freshness",

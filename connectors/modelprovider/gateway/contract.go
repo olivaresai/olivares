@@ -119,6 +119,9 @@ type Stream interface {
 
 // Driver is the invocation seam. CreateMessage never streams. StreamMessage
 // always streams. A request with no model or no messages is a bad_request.
+//
+// Deprecated: Olivares does not use this API. It keeps working in this release series;
+// its removal will be announced in the release notes beforehand.
 type Driver interface {
 	Descriptor() Descriptor
 	CreateMessage(ctx context.Context, req MessageRequest) (MessageResponse, error)

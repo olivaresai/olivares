@@ -7,6 +7,9 @@ description: >-
   honest limits of each.
 ---
 
+> The REST API remains available in Community. The Terraform provider is a Business deployment artifact; its source and release packages are supplied through the Business channel.
+
+
 Module XIX is not a feature bolted onto the engine — it **is** the engine's surface.
 Every other module reaches the outside world through the same first-party API, and the
 web UI is a presentation layer over that exact contract, not a parallel one. This page

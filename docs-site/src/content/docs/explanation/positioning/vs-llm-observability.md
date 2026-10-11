@@ -40,7 +40,7 @@ do not need a control plane to do that, and we will not pretend otherwise.
 | Dimension | LLM gateway + observability | Olivares AI |
 |---|---|---|
 | **Unit of concern** | A model call (prompt → completion) | An agent and every resource it reads/writes — DBs, object stores, MCP, tools, files |
-| **Vantage point** | **In the request path** (proxy/SDK); sees what the app sends | **Out of band, read-first**; observes telemetry, native audit and a kernel backstop — never in the data path |
+| **Vantage point** | **In the request path** (proxy/SDK); sees what the app sends | **Out-of-band observation** of telemetry, native audit and a kernel backstop; **inline enforcement** for governed actions |
 | **Source of truth** | What the app/proxy **reports** | Self-reported telemetry **corroborated against the system's own ledger** — pgAudit (read vs write), CloudTrail (object access), eBPF backstop |
 | **The key question** | "What did this prompt do, and what did it cost?" | "Is this agent using access **nobody granted**?" — [Permitted-vs-Observed drift](/explanation/#the-access-map-read-first-minimal-data-permitted-vs-observed) |
 | **Enforcement** | Gateway can gate **model calls** (keys, budgets) | Deny-closed gates on **actions and resource access**: approvals, the [Claude Code hooks PEP](/how-to/connectors/claude-code-hooks-pep/), MCP tool gating, kill switches |
@@ -56,11 +56,18 @@ for why that is the first of our three lanes.
 
 ## It's "and", not "or" — we ingest your telemetry
 
-Olivares AI is **not** a replacement for your gateway or your tracing tool, and it
-does not want to be in the request path they occupy. It **consumes the same
-signal**: the control plane ingests **OpenTelemetry GenAI** semantic-convention
-spans, the same gen-ai telemetry these tools emit and consume. So a healthy
-arrangement is:
+The access map consumes OpenTelemetry GenAI semantic-convention spans from your
+gateway or tracing tool. Model calls do not use Olivares AI's inline inference
+proxy by default; it enforces calls routed through it, alongside the MCP tools/call
+and A2A delegation gates on their respective paths.
+
+Managed Claude Code sessions install tool-call hooks that call the engine's PEP,
+mounted by default. These hooks are inline and deny closed: if the PEP is
+unreachable during an engine outage or restart, every governed tool call is
+denied. Engine availability therefore matters even when model calls go directly
+to a provider.
+
+To use the observation path alongside your existing stack:
 
 - Keep **LiteLLM** as your model gateway and **Langfuse** for developer-facing
   tracing and prompt work.

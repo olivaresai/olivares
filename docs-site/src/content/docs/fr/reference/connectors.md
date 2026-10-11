@@ -51,6 +51,53 @@ n'est pas une affirmation d'attribution per-agent ferme, qui reste la dépendanc
 compte partagé fait retomber même un store de niveau clean à `approximate`).
 :::
 
+## Mode de processus par type
+
+Chaque type utilise exactement un mode de processus fixé par le moteur :
+
+- **Plugin hors processus.** Le moteur embarque le connecteur comme programme
+  séparé, le lance en sous-processus confiné (environnement limité ; utilisateur
+  et cgroup dédiés lorsque l’hôte le permet) et communique via gRPC avec AutoMTLS.
+  Ses dépendances ne sont jamais liées au moteur. Types de sources : `claude`,
+  `cowork`, `kafka`, `amqp`, `nats`, `mqtt`, `cloudqueue`, `debezium`, `envoy`,
+  `hubble`. Types de destinations : `kafka`, `amqp`, `cloudqueue`. Un build sans
+  `task build:connectors` ne les embarque pas et le démarrage avertit pour chaque
+  connecteur configuré.
+- **In-process.** Tous les autres types de cette page. Le connecteur est lié au
+  binaire du moteur et s’exécute dans son processus ; une panic est contenue et la
+  source est marquée `failed`.
+- **Plugin externe.** Une source ou destination configurée avec `plugin` (chemin
+  du binaire, digest épinglé et signature vérifiée contre `connector_trust`) tourne
+  toujours hors processus, avec le même confinement. Les programmes
+  `connectors/<kind>/cmd/` du dépôt pour les types in-process ne font pas partie
+  de la release ; construisez-en un et admettez-le ainsi
+  ([exploiter un plugin](/fr/how-to/build-a-connector/#5-exploitation-ce-que-font-vos-utilisateurs))
+  pour exécuter ce connecteur dans son propre processus.
+
+Quand le processus d’un plugin **source** meurt, le moteur relance le même binaire,
+revérifie le digest épinglé d’un plugin externe, le rouvre avec les paramètres de
+la source et reprend la collecte. Le premier redémarrage attend environ une seconde ;
+l’attente double à chaque redémarrage, jusqu’à cinq minutes, puis revient à une
+seconde après cinq minutes de fonctionnement. De la détection de la mort du processus
+au démarrage du nouveau, la source indique `failed`, avec l’erreur de redémarrage
+tant qu’une tentative échoue.
+
+Un plugin **destination** est relancé de la même façon lorsqu’une livraison échoue
+et que son processus est mort : le moteur relance le binaire (avec nouvelle
+vérification du digest d’un plugin externe) et l’ouvre avec les paramètres de la
+destination. La livraison qui a détecté sa mort reste signalée comme échouée, avec
+l’erreur de redémarrage si celui-ci a été refusé, et la progression des retries de
+notification la réessaie contre le nouveau processus. Le premier redémarrage est
+immédiat ; les suivants attendent une seconde, doublent jusqu’à cinq minutes et
+repartent de zéro si la dernière tentative date de plus de cinq minutes. Une
+destination sans livraison ne redémarre qu’à l’arrivée d’une livraison.
+
+Le plugin relancé utilise les paramètres avec lesquels son connecteur a été ouvert.
+Un secret modifié ou renouvelé lui parvient donc lors du rechargement de la
+configuration ou du redémarrage du moteur, comme pour un plugin jamais arrêté.
+Un plugin dont le processus vit mais dont la collecte ou la livraison échoue
+n’est pas relancé : cette défaillance est celle du connecteur.
+
 ## Cooperative — télémétrie Claude et éditeurs
 
 Les sources de plus haute fidélité lorsqu'elles sont présentes. La source runtime de
@@ -202,9 +249,10 @@ l'ingest `gen_ai.*` ci-dessus.
 | `openhands` | `config.toml` + environnement OpenHands → posture de sandbox/épinglage de modèle/credential/télémétrie et arêtes permises de MCP/actions | Configuration déclarée uniquement ; usage live via OTEL `gen_ai.*` natif |
 | `goose` | `profiles.yaml` + environnement Goose (Block) → posture des réglages admin/de l'épinglage de modèle/des extensions/de l'approbation des outils et arêtes permises d'extensions | Configuration déclarée uniquement |
 | `cline` | Namespaces Cline / Kilo Code dans le `settings.json` VSCode → posture d'approbation automatique/allowlist MCP/credential/épinglage de modèle | Configuration déclarée uniquement ; pas d'OTEL natif en amont |
-| `grok` | Grok Build (xAI) — l'agent de codage en terminal, lu depuis sa configuration LOCALE : câblage des hooks, événements avec veto documenté et posture de gouvernance déclarable | **Ce n'est PAS le connecteur de l'API xAI** (`xai` lit le catalogue et le coût, avec `grok-build-0.1` parmi ses MODÈLES). Celui-ci lit l'AGENT, et leurs périmètres ne se chevauchent pas. La moitié OBSERVATION passe par l'ingest OTLP que Grok Build émet déjà. Seul `PreToolUse`, l'unique événement au veto documenté, revendique `PostureEnforced` ; le reste est `observed` |
+| `grok` | Grok Build (xAI), l’agent de code en terminal : configuration locale, câblage des hooks, événements avec veto documenté et posture de gouvernance déclarée | Posture d’agent déclarée par configuration. Le connecteur API `xai` lit catalogue et coûts des modèles, dont `grok-build-0.1` comme modèle ; ce connecteur lit l’agent. L’observation live utilise l’ingest OTLP émis par Grok Build. `PostureEnforced` s’applique uniquement à `PreToolUse`, seul événement avec veto documenté ; les autres sont `observed` |
 | `openclaw` | `openclaw.json` OpenClaw (découverte JSON5, `$include` confiné) → posture gateway/canal/outil/sandbox/skill/modèle par agent et arêtes déclarées de canal/skill/modèle | Configuration déclarée uniquement ; aucun hook PEP inline vérifié en amont |
 | `hermes` | `config.yaml` + arbres de profils + scope managed Hermes Agent → posture terminal/canal/skill/sécurité/modèle/MCP et arêtes déclarées | Configuration déclarée uniquement ; aucun hook PEP inline ni OTEL natif vérifié en amont |
+| `paperclip` | API REST Paperclip (clé API du board, GET uniquement) → entreprises comme collections de groupes et agents comme lignes de roster NHI (`paperclip/<adapterType>`, rôle, titre, `reports_to`), nombres de runs par jour terminé, échantillons de coût indicatifs (`cost_type=paperclip`) | Observation seule : ne démarre ni ne confine les agents Paperclip. Le coût est agrégé par jour car Paperclip ne fournit pas de liste brute d’événements de coût ; une partie refusée est signalée comme finding de couverture |
 | `google-adk` | JSON de session Google ADK 2.0 exporté → inventaire agent/app, sous-agents, appels de fonctions d'outils, transferts, drift des outils approuvés et corrélation Vertex reasoningEngine | Export en lecture seule ; jamais le contenu des messages. Distinct de la surface de plateforme `google-agent` |
 | `agents-md` | Parcours du dépôt des fichiers d'instructions d'agents (AGENTS.md et fichiers de mémoire/instructions par agent) → drift de baseline SHA-256 + scan d'injection d'instructions / Unicode masqué / secrets | Données minimales : chemins assainis + détails hachés, jamais le contenu |
 | `mcpb` | Extensions desktop `.mcpb` installées / distribuées → scan de posture du manifeste, drift de l'allowlist enterprise et vérification de signature PKCS#7 | PERMIS-vs-OBSERVÉ sur la surface d'extensions |
@@ -240,9 +288,10 @@ vivant, **en lecture seule**, du control plane org/tenant d'un cloud : il décou
 **flux d'audit** natif du cloud pour l'**activité** du control plane (arêtes
 `identity→…api`, classées lecture/écriture). Ils complètent la matrice qu'AWS ancre déjà
 avec `s3cloudtrail` (plane de données) plus le connecteur `aws` IAM/CloudTrail au niveau du
-compte. Les deux s'exécutent **in-process** et sont **offline-safe** (pas de credential ⇒
-Gather est un no-op) ; les deux n'observent que le control plane — jamais un payload, un
-secret, une clé ou une propriété de ressource.
+compte. Les deux tournent **in-process**, comme chaque type non listé comme plugin dans
+[Mode de processus par type](#mode-de-processus-par-type). Pour en exécuter un
+dans son propre processus, construisez son programme `connectors/<kind>/cmd/`
+et admettez-le comme plugin externe.
 
 | Kind | Observe | Couverture honnête |
 |---|---|---|
@@ -329,6 +378,7 @@ rôle / processus / credential partagée plutôt qu'à un agent résolu.
 | `egress-proxy` | Journal de verdicts du proxy d'egress → arêtes d'egress L7 | approximate |
 | `kong-audit` | Journaux d'audit Kong → findings de changement de configuration | approximate |
 | `ai-gateway` | Enregistrements d'usage Envoy AI Gateway → échantillons de **coût** (FinOps) | flux de coût |
+| `git` | Liaison de publication Git simple : ligne du roster autorisant un remote Git SSH ou HTTPS pour les push gitpublish | N’observe rien ; push uniquement (un remote simple n’a pas d’API pull request ou merge) |
 | `github` | Dépôts GitHub comme sources de données d'agents → arêtes d'accès R/RW observées (webhook d'abord, réconciliation par polling API) + arêtes ACL permises | observé + permis ; streaming (`poll_seconds: 0`) |
 | `gitlab` | Dépôts GitLab → arêtes d'accès R/RW observées + arêtes ACL permises | observé + permis ; streaming (`poll_seconds: 0`) |
 
@@ -488,7 +538,7 @@ n'ont pas de niveau de couverture. Ils sont câblés séparément des sources.
 
 Kinds de destination in-process : `slack`, `teams`, `pagerduty`, `opsgenie`, `webhook`,
 `siem`, `splunkhec`, `syslog`, `servicenow`, `jira`, `email`, `twilio`, `chronicle`,
-`datadog`, `elastic`, `snmp`, `filelog`, `otlplog` (logs OTLP/HTTP) et `s3archive`
+`datadog`, `elastic`, `snmp`, `filelog`, `otlplog` (logs OTLP/HTTP) et `s3archive` (Business: Regulated Operations)
 (le sink WORM S3 Object Lock — un objet immuable dont le verrou est vérifié par
 notification).
 

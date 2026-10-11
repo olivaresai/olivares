@@ -81,8 +81,7 @@ The generated `README.md` covers the full lifecycle: sign your release artifact
 (Sigstore bundle), distribute it (GitHub release or OCI), and get it listed in the
 curated **verified connectors** index. The host only ever executes a connector whose
 signature it has verified against a pinned identity — see
-[`how-to/build-a-connector`](../../docs-site/src/content/docs/how-to/build-a-connector.md)
-and ADR-0016.
+[`how-to/build-a-connector`](../../docs-site/src/content/docs/how-to/build-a-connector.md).
 
 ## References
 

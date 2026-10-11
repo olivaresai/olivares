@@ -15,12 +15,12 @@ export LC_ALL
 
 repo_root="$(git rev-parse --show-toplevel)"
 if [[ "${TMPDIR:-}" != /* || ! -d "$TMPDIR" ]]; then
-	printf '%s\n' 'test-package-repositories: NO HE PODIDO MIRAR — TMPDIR must be an existing absolute directory' >&2
+	printf '%s\n' 'test-package-repositories: COULD NOT CHECK — TMPDIR must be an existing absolute directory' >&2
 	exit 2
 fi
 for tool in python3 gpg openssl jq sha256sum diff cp mv; do
 	command -v "$tool" >/dev/null 2>&1 || {
-		printf 'test-package-repositories: NO HE PODIDO MIRAR — missing %s\n' "$tool" >&2
+		printf 'test-package-repositories: COULD NOT CHECK — missing %s\n' "$tool" >&2
 		exit 2
 	}
 done
@@ -31,7 +31,7 @@ unicode_tmp=""
 # The renderer and the verifier place a gpg home in TMPDIR, and gpg-agent's socket path must
 # fit sun_path (108 bytes). A caller's TMPDIR may be long, so both run with a short one.
 short_tmp="$(mktemp -d /tmp/g.XXXXXX)" || {
-	printf '%s\n' 'test-package-repositories: NO HE PODIDO MIRAR — cannot create a short TMPDIR under /tmp' >&2
+	printf '%s\n' 'test-package-repositories: COULD NOT CHECK — cannot create a short TMPDIR under /tmp' >&2
 	exit 2
 }
 cleanup() {
@@ -54,7 +54,7 @@ cleanup() {
 trap cleanup EXIT INT TERM
 epoch=1704067200
 valid_until=1735689600
-version=26.9.0
+version=26.900
 checks=0
 
 expect_rc() {
@@ -70,7 +70,7 @@ expect_rc() {
 		# A step that could not look (rc=2) keeps the battery at rc=2; it is never
 		# reported as a finding.
 		if [[ "$actual" -eq 2 ]]; then
-			printf 'test-package-repositories: NO HE PODIDO MIRAR — %s could not look (rc=2, expected rc=%s)\n' \
+			printf 'test-package-repositories: COULD NOT CHECK — %s could not look (rc=2, expected rc=%s)\n' \
 				"$label" "$expected" >&2
 			sed -n '1,20p' "$scratch/$label.stderr" >&2
 			exit 2
@@ -145,7 +145,7 @@ expect_rc verify-stable 0 verify "$scratch/key-one" "$scratch/assets-stable" sta
 # /dev/shm so this control is independent of the caller's path. With the old verifier prefix the
 # gpg-agent socket exceeded sun_path; the shorter prefix plus --no-autostart must verify normally.
 [[ -d /dev/shm ]] || {
-	printf '%s\n' 'test-package-repositories: NO HE PODIDO MIRAR — /dev/shm is required for the runner-path control' >&2
+	printf '%s\n' 'test-package-repositories: COULD NOT CHECK — /dev/shm is required for the runner-path control' >&2
 	exit 2
 }
 runner_prefix='/dev/shm/package-repo-runner.'
@@ -190,7 +190,8 @@ grep -q 'too long for gpg-agent' "$scratch/verify-too-long-tmpdir.stderr" || {
 }
 # sun_path counts bytes, not Unicode code points. This homedir is short by character count but too
 # long in UTF-8; a len(str(home)) guard would accept it and let gpg emit the opaque rc 2 again.
-unicode_tmp="$(mktemp -d "/dev/shm/$(printf 'é%.0s' $(seq 1 20)).XXXXXX")"
+unicode_prefix='éééééééééééééééééééé'  # language-data: UTF-8 path-length fixture
+unicode_tmp="$(mktemp -d "/dev/shm/$unicode_prefix.XXXXXX")"
 expect_rc verify-nonascii-long-tmpdir 2 env TMPDIR="$unicode_tmp" \
 	python3 "$repo_root/scripts/verify-package-repositories.py" \
 		--repo-root "$scratch/repo-stable" \
@@ -221,7 +222,7 @@ expect_rc verify-security 0 verify \
 # name an exec-capable OLIVARES_EXEC_TMPDIR for that step alone.
 s3_tmpdir="${OLIVARES_EXEC_TMPDIR:-$TMPDIR}"
 [[ "$s3_tmpdir" == /* && -d "$s3_tmpdir" ]] || {
-	printf '%s\n' 'test-package-repositories: NO HE PODIDO MIRAR — OLIVARES_EXEC_TMPDIR must be an existing absolute directory' >&2
+	printf '%s\n' 'test-package-repositories: COULD NOT CHECK — OLIVARES_EXEC_TMPDIR must be an existing absolute directory' >&2
 	exit 2
 }
 for channel in stable security; do

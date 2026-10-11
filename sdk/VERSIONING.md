@@ -25,8 +25,8 @@ module author programs against are **stable v1**:
 
 - `SourceConnector` (`Descriptor/Open/Gather/Close`), `OutputConnector`
   (`Descriptor/Open/Notify/Close`), `Sink`, `Notification`;
-- `Module`/`Host` (lifecycle; out-of-process modules are **not** wired — see
-  honest limits);
+- `Module`/`Host` (lifecycle; the out-of-process module transport is
+  **deprecated** — see honest limits);
 - `Descriptor`, `Config`, `ConfigField`, `ComponentType`, `APIVersion`;
 - `sdk/model`: the observation DTOs (`EdgeObservation`, `CostSample`,
   `FindingReport`), the sealed `Observation` sum type and the shared enums;
@@ -87,12 +87,23 @@ the release notes and `CHANGELOG.md` with a migration note, marked in godoc
 announcement before removal in the next major. Wire-level deprecation uses the
 protobuf `deprecated` option; the wire itself never breaks inside a major.
 
+**Announced deprecations:**
+
+- **2026-10-06 — the out-of-process module transport**: `ModulePluginName`
+  (godoc `// Deprecated:`) and `ModuleService`/`HostService` plus their
+  `InitRequest`/`SubscribeRequest`/`LogRecord` messages (protobuf `deprecated`
+  option). It was never wired — no host glue, no `ServeModule` — so no plugin
+  can exist that depends on it; the 24-month window is trivially safe. Removal,
+  if it ever happens, is a future-major decision. Wiring it instead remains
+  additive: a later release may un-deprecate and ship the glue.
+
 ## Honest limits (what v1 does NOT promise)
 
-- **Out-of-process modules are not wired.** `ModuleService`/`HostService` are
-  frozen in the proto but the host glue does not exist; external code today
-  means **source, content-source and output connectors**. Don't build on
-  `ServeModule` — it doesn't exist.
+- **Out-of-process modules are not wired — and the transport is deprecated.**
+  `ModuleService`/`HostService` are frozen in the proto, marked deprecated, and
+  the host glue does not exist; external code today means **source,
+  content-source and output connectors**. Don't build on `ServeModule` — it
+  doesn't exist.
 - **Host-side external wiring covers observation sources, content sources and
   output connectors.** An external output connector is admitted identically to an
   external source: the operator declares it as a notify destination

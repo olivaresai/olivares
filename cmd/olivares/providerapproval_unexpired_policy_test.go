@@ -26,14 +26,13 @@ func TestSessionProviderApprovalWithoutPolicyExpiryHasBoundedLiveWait(t *testing
 			tenant := model.TenantID(h.tenantA)
 			m := h.set.sessions
 			sessions.WithRunner(approvalProjectionRunner{})(m)
-			m.EnableProfiledLaunches()
 			m.UseExecutionEnvironmentRef("unexpired-policy-test")
 			credentials := newSessionHookCredentials(h.authr, h.st, m, h.set.gov)
-			m.UseLaunchGate(approvalProjectionLaunchGate(func(ctx context.Context, tenant model.TenantID, intent sessions.LaunchIntent) (sessions.LaunchDecision, error) {
+			sessions.WithLaunchGate(approvalProjectionLaunchGate(func(ctx context.Context, tenant model.TenantID, intent sessions.LaunchIntent) (sessions.LaunchDecision, error) {
 				var err error
 				_, err = credentials.mint(ctx, tenant, intent)
 				return sessions.LaunchDecision{Allowed: err == nil}, err
-			}))
+			}))(m)
 			var profile struct {
 				Ref string `json:"profile_ref"`
 			}
@@ -55,7 +54,7 @@ func TestSessionProviderApprovalWithoutPolicyExpiryHasBoundedLiveWait(t *testing
 			}
 			registered := make(chan time.Time, 1)
 			bridge := newApprovalBridge(approvalBridgeConfig{}, discardLog())
-			bridge.localProposer = service
+			bridge.LocalProposer = service
 			adapter := providerApprovalAdapter{bridge: bridge}
 			adapter.approvalWait = func(ctx context.Context, p auth.Principal, ref string, expires time.Time) (func(), error) {
 				end, err := m.BeginApprovalWait(ctx, p, ref, expires)

@@ -79,7 +79,13 @@
   },
   "reenable": {
     "title": "Reactivar esta parada",
-    "body": "Volver a arrancar nunca es decisión de una sola persona: deben aprobarlo dos cuentas de usuario distintas, y nadie puede aprobar su propia solicitud. Cada aprobador debe usar un inicio de sesión reforzado (AAL3), salvo que una regla de aprobación baje el nivel de riesgo de esta acción; la regla de las dos cuentas se mantiene incluso entonces. No hay ninguna vía de emergencia para evitarlo, porque seguir parado es el estado seguro. El motor comprueba que las cuentas son distintas; no puede comprobar que las usen dos personas distintas.",
+    "body": "Volver a arrancar nunca es decisión de una sola persona: deben aprobarlo dos cuentas de usuario distintas, y nadie puede aprobar su propia solicitud. {{stepUp}} No hay ninguna vía de emergencia para evitarlo, porque seguir parado es el estado seguro. El motor comprueba que las cuentas son distintas; no puede comprobar que las usen dos personas distintas.",
+    "stepUp": {
+      "none": "La verificación adicional para acciones administrativas está desactivada en este servidor, así que cada aprobador aprueba con su inicio de sesión habitual.",
+      "totp": "Cada aprobador debe haber iniciado sesión con un código del autenticador o con inicio de sesión único con MFA, o confirmar con una passkey, salvo que una regla de aprobación baje el nivel de riesgo de esta acción; la regla de las dos cuentas se mantiene incluso entonces.",
+      "passkey": "Cada aprobador debe confirmar con una passkey (AAL3), salvo que una regla de aprobación baje el nivel de riesgo de esta acción; la regla de las dos cuentas se mantiene incluso entonces.",
+      "unknown": "Cada aprobador debe superar la verificación adicional para acciones administrativas de este servidor, salvo que una regla de aprobación baje el nivel de riesgo de esta acción; la regla de las dos cuentas se mantiene incluso entonces."
+    },
     "reason": "Nota",
     "reasonHint": "Opcional — se adjunta a la solicitud de doble control para quienes aprueban.",
     "existingApproval": "Ya hay una aprobación con doble control ({{id}}) abierta para esta parada. Comprobar informa de su progreso y completa la reactivación cuando ambas cuentas hayan aprobado.",

@@ -318,6 +318,7 @@ func TestBootReopensEstateWithTenant(t *testing.T) {
 
 	// Boot once and persist a tenant — the state every install reaches the moment an
 	// operator creates their first org — then close so the file store is reused.
+	prepareCompositionTestBoot(t)
 	eng, err := boot(ctx, bootConfig{DataDir: dir, Engine: "sqlite", Version: "test", ServeMode: true})
 	if err != nil {
 		t.Fatalf("first boot: %v", err)
@@ -337,6 +338,7 @@ func TestBootReopensEstateWithTenant(t *testing.T) {
 	// with a timeout instead of hanging the whole suite.
 	done := make(chan error, 1)
 	var eng2 *engine
+	prepareCompositionTestBoot(t)
 	go func() {
 		var e error
 		eng2, e = boot(ctx, bootConfig{DataDir: dir, Engine: "sqlite", Version: "test", ServeMode: true})

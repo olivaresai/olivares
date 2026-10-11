@@ -17,6 +17,7 @@ import (
 // fixture bootPendingSetup deliberately mints first and lands on the OTHER branch.
 func newAnnounceTestEngine(t *testing.T) *engine {
 	t.Helper()
+	prepareCompositionTestBoot(t)
 	eng, err := boot(context.Background(), bootConfig{
 		DataDir: t.TempDir(), Engine: "sqlite", Version: "test", Logger: slog.Default(),
 	})

@@ -354,7 +354,7 @@ func TestZeroMetadataLeavesEveryRBACTermInPlace(t *testing.T) {
 			"action entity instead of its permission")
 	}
 	// ⚠ Y MinimumAAL NO SE COMPRUEBA AQUI AUNQUE SEA CERO: no es un termino RBAC. El step-up es
-	// una precondicion de autenticacion y vive fuera del algebra (middleware.go lo dice donde lo
+	// una precondicion de autenticacion y vive fuera del algebra (admission.go lo dice donde lo
 	// aplica); meterlo en un caso que se llama «every RBAC term» seria volver a que el nombre
 	// prometa un eje que el cuerpo no mide, por el otro lado.
 }

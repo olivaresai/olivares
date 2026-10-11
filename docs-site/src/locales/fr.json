@@ -1,0 +1,308 @@
+{
+  "API & manage-as-code (platform)": {
+    "fr": "API et gestion-as-code (plateforme)"
+  },
+  "API stability & deprecation policy": {
+    "fr": "Stabilité de l'API et politique de dépréciation"
+  },
+  "Access & resource map (R/RW)": {
+    "fr": "Carte des accès et ressources (R/RW)"
+  },
+  "Agent simulation/testing sandbox": {
+    "fr": "Bac à sable de simulation/test d'agents"
+  },
+  "Architecture": {
+    "fr": "Architecture"
+  },
+  "Architecture decisions (ADR)": {
+    "fr": "Décisions d'architecture (ADR)"
+  },
+  "Back up and restore": {
+    "fr": "Sauvegarder et restaurer"
+  },
+  "Build and ship a connector": {
+    "fr": "Créer et publier un connecteur"
+  },
+  "CLI": {
+    "fr": "CLI"
+  },
+  "Claude Code adoption": {
+    "fr": "Adoption de Claude Code"
+  },
+  "Compliance & regulatory": {
+    "fr": "Conformité et réglementation"
+  },
+  "Console screens & permissions": {
+    "fr": "Écrans de la console et permissions"
+  },
+  "Configuration": {
+    "fr": "Configuration"
+  },
+  "Connect & observe": {
+    "fr": "Connecter et observer"
+  },
+  "Connect Claude Code": {
+    "fr": "Connecter Claude Code"
+  },
+  "Connect a source": {
+    "fr": "Connecter une source"
+  },
+  "Connector guides": {
+    "fr": "Guides des connecteurs"
+  },
+  "Connectors & coverage tiers": {
+    "fr": "Connecteurs et niveaux de couverture"
+  },
+  "Cookbook": {
+    "fr": "Livre de recettes"
+  },
+  "Cost & AI FinOps": {
+    "fr": "Coûts et FinOps de l'IA"
+  },
+  "Data, knowledge & context": {
+    "fr": "Données, connaissances et contexte"
+  },
+  "Deploy with Docker": {
+    "fr": "Déployer avec Docker"
+  },
+  "Deployment & integration": {
+    "fr": "Déploiement et intégration"
+  },
+  "EU AI Act evidence from runtime data": {
+    "fr": "Preuves EU AI Act à partir des données d'exécution"
+  },
+  "Enterprise OTel for Claude Code": {
+    "fr": "OTel d'entreprise pour Claude Code"
+  },
+  "Event bus (AsyncAPI 3.0)": {
+    "fr": "Bus d'événements (AsyncAPI 3.0)"
+  },
+  "Eventing & webhooks": {
+    "fr": "Événements et webhooks"
+  },
+  "Executive dashboards & reporting (console)": {
+    "fr": "Tableaux de bord exécutifs et rapports (console)"
+  },
+  "Explanation": {
+    "fr": "Explication"
+  },
+  "Forward to Splunk": {
+    "fr": "Transférer vers Splunk"
+  },
+  "From zero to a read/write access graph": {
+    "fr": "De zéro à un graphe d'accès lecture/écriture"
+  },
+  "Getting started by scenario": {
+    "fr": "Premiers pas par scénario"
+  },
+  "gRPC services & methods": {
+    "fr": "Services et méthodes gRPC"
+  },
+  "Glossary": {
+    "fr": "Glossaire"
+  },
+  "Govern & build": {
+    "fr": "Gouverner et construire"
+  },
+  "Govern and approve": {
+    "fr": "Gouverner et approuver"
+  },
+  "Govern Postgres content": {
+    "fr": "Gouverner le contenu Postgres"
+  },
+  "Govern your file server": {
+    "fr": "Gouverner votre serveur de fichiers"
+  },
+  "Governed data for Claude": {
+    "fr": "Données gouvernées pour Claude"
+  },
+  "Harden a deployment": {
+    "fr": "Renforcer un déploiement"
+  },
+  "Health, SLA & uptime": {
+    "fr": "Santé, SLA et disponibilité"
+  },
+  "Honesty & limits": {
+    "fr": "Honnêteté et limites"
+  },
+  "How this documentation is organized": {
+    "fr": "Comment cette documentation est organisée"
+  },
+  "How-to guides": {
+    "fr": "Guides pratiques"
+  },
+  "Identity, permissions & governance": {
+    "fr": "Identité, permissions et gouvernance"
+  },
+  "Inline inference proxy (PEP)": {
+    "fr": "Proxy d'inférence en ligne (PEP)"
+  },
+  "Install & operate": {
+    "fr": "Installer et exploiter"
+  },
+  "Install air-gapped": {
+    "fr": "Installer en environnement isolé"
+  },
+  "Install from a package": {
+    "fr": "Installer depuis un paquet"
+  },
+  "Install with Homebrew": {
+    "fr": "Installer avec Homebrew"
+  },
+  "Internal catalog & marketplace": {
+    "fr": "Catalogue interne et place de marché"
+  },
+  "Inventory & discovery": {
+    "fr": "Inventaire et découverte"
+  },
+  "Live operation & sessions": {
+    "fr": "Exploitation en direct et sessions"
+  },
+  "Live-ingest": {
+    "fr": "Ingestion en direct"
+  },
+  "MCP, skills & capabilities": {
+    "fr": "MCP, compétences et capacités"
+  },
+  "Manage as code (Terraform)": {
+    "fr": "Gestion as code (Terraform)"
+  },
+  "Model & provider management": {
+    "fr": "Gestion des modèles et fournisseurs"
+  },
+  "Model operations (own models)": {
+    "fr": "Opérations des modèles (modèles propres)"
+  },
+  "Modules catalog": {
+    "fr": "Catalogue des modules"
+  },
+  "Monitor with Prometheus": {
+    "fr": "Surveiller avec Prometheus"
+  },
+  "Multi-tenancy & org management (platform)": {
+    "fr": "Multi-locataire et gestion des organisations (plateforme)"
+  },
+  "Observability": {
+    "fr": "Observabilité"
+  },
+  "Olivares AI control plane API": {
+    "fr": "API du control plane Olivares AI"
+  },
+  "Open core & licensing": {
+    "fr": "Open core et licences"
+  },
+  "Supporting the project": {
+    "fr": "Soutenir le projet"
+  },
+  "Orchestration & A2A": {
+    "fr": "Orchestration et A2A"
+  },
+  "Output integrations & notifications": {
+    "fr": "Intégrations de sortie et notifications"
+  },
+  "Overview": {
+    "fr": "Vue d'ensemble"
+  },
+  "Overview — the 35 selectable modules": {
+    "fr": "Vue d'ensemble — les 35 modules sélectionnables"
+  },
+  "Skills catalog & assignments": {
+    "fr": "Catalogue et affectations de skills"
+  },
+  "Fine-tuning & inference execution (planned)": {
+    "fr": "Exécution du fine-tuning et de l'inférence (prévu)"
+  },
+  "Paths by role": {
+    "fr": "Parcours par rôle"
+  },
+  "Positioning & fit": {
+    "fr": "Positionnement et adéquation"
+  },
+  "Posture export to control towers": {
+    "fr": "Export de la posture vers les tours de contrôle"
+  },
+  "Privileged-session recording": {
+    "fr": "Enregistrement des sessions privilégiées"
+  },
+  "Quality, evals & testing": {
+    "fr": "Qualité, évaluations et tests"
+  },
+  "Quickstart": {
+    "fr": "Démarrage rapide"
+  },
+  "REST API": {
+    "fr": "API REST"
+  },
+  "Red-teaming & adversarial testing": {
+    "fr": "Red teaming et tests adversariaux"
+  },
+  "Reference": {
+    "fr": "Référence"
+  },
+  "Reporting (HTML/PDF)": {
+    "fr": "Rapports (HTML/PDF)"
+  },
+  "Run Claude Code with Olivares": {
+    "fr": "Exécuter Claude Code avec Olivares"
+  },
+  "Add a provider and launch an agent": {
+    "fr": "Ajouter un fournisseur et lancer un agent"
+  },
+  "Operate a provider session": {
+    "fr": "Exploiter une session fournisseur"
+  },
+  "SIEM/ITSM forwarder": {
+    "fr": "Relais SIEM/ITSM"
+  },
+  "Session cockpit (availability)": {
+    "fr": "Cockpit de sessions (disponibilité)"
+  },
+  "Saved console views": {
+    "fr": "Vues enregistrées de la console"
+  },
+  "Security & threat model": {
+    "fr": "Sécurité et modèle de menaces"
+  },
+  "Security, guardrails & audit": {
+    "fr": "Sécurité, garde-fous et audit"
+  },
+  "Self-host the control plane": {
+    "fr": "Auto-héberger le control plane"
+  },
+  "Source & credential scoping": {
+    "fr": "Cadrage des sources et identifiants"
+  },
+  "Start here": {
+    "fr": "Commencer ici"
+  },
+  "Troubleshooting": {
+    "fr": "Dépannage"
+  },
+  "Tutorials": {
+    "fr": "Tutoriels"
+  },
+  "Upgrade and roll back": {
+    "fr": "Mettre à niveau et revenir en arrière"
+  },
+  "Use the client SDKs": {
+    "fr": "Utiliser les SDK clients"
+  },
+  "SIEM & telemetry egress": {
+    "fr": "Export SIEM et télémétrie"
+  },
+  "Verified connectors (third-party)": {
+    "fr": "Connecteurs vérifiés (tiers)"
+  },
+  "Verify a release": {
+    "fr": "Vérifier une version"
+  },
+  "Voice & realtime agents": {
+    "fr": "Agents vocaux et temps réel"
+  },
+  "What is Olivares AI?": {
+    "fr": "Qu'est-ce qu'Olivares AI ?"
+  },
+  "Your first hour (local, team, hybrid)": {
+    "fr": "Votre première heure (local, équipe, hybride)"
+  }
+}

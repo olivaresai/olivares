@@ -59,6 +59,7 @@ var _ spendLimitAdmin = (*finops.Module)(nil)
 
 type appsGatewayHandler struct {
 	publicURL           string
+	consoleURL          string
 	managedSettingsPath string
 	tenantHint          model.TenantID
 	authr               principalAuthenticator
@@ -68,6 +69,9 @@ type appsGatewayHandler struct {
 	clock               func() time.Time
 	version             string
 	descriptor          appsGatewayDescriptor
+	// admits is the admission seam's door, a required constructor argument; nil refuses
+	// every spend-limit write.
+	admits func(context.Context, auth.Request) bool
 }
 
 type appsGatewayDescriptor struct {
@@ -78,7 +82,7 @@ type appsGatewayDescriptor struct {
 	Divergences []string `json:"divergences"`
 }
 
-func newAppsGatewayHandler(cfg inferenceProxyConfig, tenantHint model.TenantID, authr principalAuthenticator, grants deviceGrantStore, spendLimits spendLimitAdmin, creds sessions.CredentialSource, clock func() time.Time, buildVersion string) *appsGatewayHandler {
+func newAppsGatewayHandler(cfg inferenceProxyConfig, tenantHint model.TenantID, authr principalAuthenticator, grants deviceGrantStore, spendLimits spendLimitAdmin, creds sessions.CredentialSource, clock func() time.Time, buildVersion string, admits func(context.Context, auth.Request) bool) *appsGatewayHandler {
 	if clock == nil {
 		clock = time.Now
 	}
@@ -96,6 +100,7 @@ func newAppsGatewayHandler(cfg inferenceProxyConfig, tenantHint model.TenantID, 
 		creds:               creds,
 		clock:               clock,
 		version:             buildVersion,
+		admits:              admits,
 	}
 	h.descriptor = appsGatewayDescriptor{
 		Protocol:  "llm-gateway",
@@ -106,7 +111,7 @@ func newAppsGatewayHandler(cfg inferenceProxyConfig, tenantHint model.TenantID, 
 			"spend-limit deny: 402 billing_error (hard) / 429 rate_limit_error (throttle), both with x-should-retry: false",
 			"managed settings: single-document mode",
 			"version header: x-olivares-version",
-			"device verification page: /device is reserved for phase 2; approval uses /v1/m/inferenceproxy/device/approve",
+			"device verification: /device opens the console; approval uses /v1/m/inferenceproxy/device/approve",
 			"admin authentication: Olivares bearer principals replace static admin keys",
 			"spend-limit user_id: Olivares audit actor ref (user:<id> or token:<id>), not an OIDC subject",
 			"spend-limit group_limit_mode: fixed to min",
@@ -120,6 +125,7 @@ func mountAppsGatewayHandlers(mux *http.ServeMux, h *appsGatewayHandler) {
 	mux.HandleFunc("/.well-known/oauth-authorization-server", h.handleOAuthDiscovery)
 	mux.HandleFunc("/oauth/device_authorization", h.handleDeviceAuthorization)
 	mux.HandleFunc("/oauth/token", h.handleOAuthToken)
+	mux.HandleFunc("/device", h.handleDeviceVerification)
 	mux.HandleFunc("/managed/settings", h.handleManagedSettings)
 	mux.HandleFunc(appsGatewaySpendLimitPath, h.handleSpendLimits)
 	mux.HandleFunc(appsGatewaySpendLimitPath+"/", h.handleSpendLimits)
@@ -151,6 +157,7 @@ func (h *appsGatewayHandler) enabledEndpoints() []string {
 			"/.well-known/oauth-authorization-server",
 			"/oauth/device_authorization",
 			"/oauth/token",
+			"/device",
 		)
 	}
 	if h.managedSettingsPath != "" {
@@ -229,6 +236,30 @@ func (h *appsGatewayHandler) handleDeviceAuthorization(w http.ResponseWriter, r 
 		"expires_in":                int(deviceGrantTTL.Seconds()),
 		"interval":                  int(deviceGrantPollInterval.Seconds()),
 	})
+}
+
+// The console owns authentication, tenant selection and the existing approval.
+// Visiting a verification URL is not consent and never changes the grant.
+func (h *appsGatewayHandler) handleDeviceVerification(w http.ResponseWriter, r *http.Request) {
+	if h.publicURL == "" || r.URL.Path != "/device" {
+		http.NotFound(w, r)
+		return
+	}
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Referrer-Policy", "no-referrer")
+	if h.consoleURL == "" {
+		http.Error(w, "Console address unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	target := h.consoleURL + "/inference-proxy"
+	if code := r.URL.Query().Get("user_code"); code != "" {
+		target += "?user_code=" + url.QueryEscape(code)
+	}
+	http.Redirect(w, r, target+"#device", http.StatusSeeOther)
 }
 
 func (h *appsGatewayHandler) handleOAuthToken(w http.ResponseWriter, r *http.Request) {
@@ -365,7 +396,7 @@ func (h *appsGatewayHandler) handleSpendLimits(w http.ResponseWriter, r *http.Re
 		writeSpendError(w, http.StatusForbidden, "permission_error", "tenant not resolvable from the inbound credential", requestID)
 		return
 	}
-	if (r.Method == http.MethodPost || r.Method == http.MethodDelete) && !spendLimitAdminAllowed(principal, tenant) {
+	if (r.Method == http.MethodPost || r.Method == http.MethodDelete) && !h.spendLimitAdminAllowed(r.Context(), principal, tenant) {
 		writeSpendError(w, http.StatusForbidden, "permission_error", "tenant administrator role required", requestID)
 		return
 	}
@@ -392,12 +423,25 @@ func (h *appsGatewayHandler) handleSpendLimits(w http.ResponseWriter, r *http.Re
 	}
 }
 
-func spendLimitAdminAllowed(p auth.Principal, tenant model.TenantID) bool {
-	if p.Superadmin {
-		return true
+// admits is the engine's door to the admission seam for handlers outside the module
+// router (the apps gateway, the session MCP tools). A composition without the API server
+// has no door, and a handler with no door refuses.
+func (e *engine) admits() func(context.Context, auth.Request) bool {
+	if e == nil || e.api == nil {
+		return nil
 	}
-	role, ok := p.RoleIn(tenant)
-	return ok && auth.RoleRank(role) >= auth.RoleRank(auth.RoleAdmin)
+	return e.api.Admits
+}
+
+// spendLimitAdminAllowed asks the admission seam whether the caller administers spend
+// limits in the tenant, instead of comparing the rank of its role: a scoped grant counts,
+// and a deny or credential ceiling narrows.
+func (h *appsGatewayHandler) spendLimitAdminAllowed(ctx context.Context, p auth.Principal, tenant model.TenantID) bool {
+	if h.admits == nil {
+		return false
+	}
+	return h.admits(ctx, auth.Request{Principal: p, Tenant: tenant, Permission: finops.PermBudgetAdmin,
+		Resource: auth.ResourceFor(finops.PermBudgetAdmin)})
 }
 
 func spendLimitQueryLimit(r *http.Request) (int, error) {
@@ -460,7 +504,7 @@ func (h *appsGatewayHandler) handleSpendLimitUpsert(w http.ResponseWriter, r *ht
 		Period   string                 `json:"period"`
 	}
 	if err := api.DecodeRequestBody(w, r, &wire, api.RequestBodySpec{}); err != nil || len(wire.Amount) == 0 {
-		writeSpendError(w, http.StatusBadRequest, "invalid_request_error", "invalid spend-limit body", requestID)
+		writeSpendError(w, http.StatusBadRequest, "invalid_request_error", api.RequestBodyErrorMessage(err, "invalid spend-limit body"), requestID)
 		return
 	}
 	in := finops.SpendLimitSpec{Scope: wire.Scope, Currency: wire.Currency, Period: wire.Period}
@@ -556,6 +600,8 @@ func (h *appsGatewayHandler) writeSpendStoreError(w http.ResponseWriter, err err
 		return
 	}
 	switch {
+	case errors.Is(err, finops.ErrNotInEdition):
+		writeSpendError(w, http.StatusNotImplemented, "not_in_edition", err.Error(), requestID)
 	case errors.Is(err, finops.ErrInvalidSpendLimit):
 		writeSpendError(w, http.StatusBadRequest, "invalid_request_error", strings.TrimPrefix(err.Error(), finops.ErrInvalidSpendLimit.Error()+": "), requestID)
 	case errors.Is(err, store.ErrNotFound):

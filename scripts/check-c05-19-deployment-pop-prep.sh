@@ -36,14 +36,14 @@ grep -F -q 'OTA refresh PoP not landed' "$DOC" \
 grep -F -q 'Does not add 0030' "$DOC" \
   || fail "prepare doc lost 0030 HOLD"
 if grep -qiE 'FIRMA A claimed|remainder applied on origin/main|PoP landed' "$DOC"; then
-  fail "prepare doc claims an application this lote does not have"
+  fail "prepare doc claims an application this batch does not have"
 fi
 
 if [ -e "$POP" ]; then
-  fail "connect/pop.ts landed — this HOLD lote does not apply C05-19"
+  fail "connect/pop.ts landed — this HOLD batch does not apply C05-19"
 fi
 if [ -e "$MIG" ]; then
-  fail "0030_deployment_pop.sql landed — this HOLD lote does not apply C05-19"
+  fail "0030_deployment_pop.sql landed — this HOLD batch does not apply C05-19"
 fi
 
 python3 - "$JSON" <<'PY' || exit $?

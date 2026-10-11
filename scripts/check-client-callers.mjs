@@ -2,35 +2,21 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// check-client-callers.mjs — ¿tiene LLAMANTE cada método del cliente de la consola?
+// check-client-callers.mjs — does every console client method have a caller?
 //
-// ⛔ POR QUÉ EXISTE, y lo escribo habiéndome pillado a mí mismo. El 2026-08-17 cerré cinco
-//    namespaces de C07-04 añadiendo 97 métodos de cliente con su prueba de contrato — la ruta
-//    afirmada, los mutantes muertos, todo verde. Y **ninguno de los 97 tenía una pantalla que lo
-//    pulsara**. Mis mensajes de commit decían «get a client», que es cierto; la fila pedía que la
-//    operación fuese OPERABLE DESDE LA CONSOLA, y sin llamante no lo es.
+// On 2026-08-17, five C07-04 namespaces gained 97 client methods with passing contract
+// tests and killed mutants, but none had a screen caller. Client coverage alone did
+// not make the operations usable from the console. The the model regops review (F4)
+// and `web/src/features/evals/ab-contract.test.ts:5-9` documented the same failure:
+// twelve correct client functions, zero callers, all checks green.
 //
-//    No es una hipótesis: es el mismo defecto que el contraste the model encontró en la pestaña
-//    de regops (F4) y que `web/src/features/evals/ab-contract.test.ts:5-9` ya tenía escrito —
-//    doce funciones de cliente perfectas, cero llamantes, todas las celdas verdes.
-//
-// ⚠ Y UNA PRUEBA DE CONTRATO NO CUENTA COMO LLAMANTE. Es deliberado: si contara, el instrumento
-//    diría que está resuelto justo cuando lo que hay es cliente y prueba, que es el estado que
-//    esto viene a hacer visible. Los ficheros `*.test.*` se excluyen a propósito.
-//
-// ⚠ LIMITACIÓN DECLARADA, y la sufrí yo mismo el 2026-08-17: esto mide una REFERENCIA en el
-//    fuente, no un render ALCANZABLE. Escribí un panel que llamaba tres métodos, olvidé colgarlo
-//    de su pestaña, y el contador bajó de 118 a 116 igual — con la pantalla invisible para
-//    cualquiera. El `tsc` me salvó («declared but never read»), pero eso sólo funciona porque el
-//    componente quedó sin usar: un panel referenciado desde código muerto no daría ni ese aviso.
-//
-//    No se arregla aquí. Saber si un componente se renderiza de verdad exige alcanzabilidad desde
-//    las rutas, que es otro instrumento — y un trinquete que finge medir eso sería peor que uno
-//    que declara lo que mide. Lo que este número dice, exactamente: **cuántos métodos de cliente
-//    no aparecen en ningún fichero de pantalla**. Es una cota inferior de la deuda, nunca la
-//    superior.
-//
-// Salida: 0 al día · 1 la deuda SUBE · 2 NO HE PODIDO MIRAR (nunca es un verde).
+// Exclude `*.test.*`: counting contract tests would certify the exact incomplete state
+// this census must expose. Count source references, not reachable renders. A panel
+// calling three methods reduced the count from 118 to 116 despite never being mounted
+// on its tab. tsc caught that unused component, but references from dead code may pass.
+// Route reachability needs another instrument. This count reports methods absent from
+// all screen files and is a lower bound on debt.
+// Exit: 0 current · 1 debt increases · 2 could not check.
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -57,7 +43,7 @@ const FEATURES = join(RAIZ, 'features')
 //    sola.
 const BASE = 97
 
-function ficheros(dir, out = []) {
+function source_files(dir, out = []) {
   let entradas
   try {
     entradas = readdirSync(dir)
@@ -72,7 +58,7 @@ function ficheros(dir, out = []) {
     } catch {
       continue
     }
-    if (st.isDirectory()) ficheros(p, out)
+    if (st.isDirectory()) source_files(p, out)
     else if (p.endsWith('.ts') || p.endsWith('.tsx')) out.push(p)
   }
   return out
@@ -80,7 +66,7 @@ function ficheros(dir, out = []) {
 
 function metodosDeCliente() {
   const defs = []
-  for (const p of ficheros(FEATURES)) {
+  for (const p of source_files(FEATURES)) {
     if (!p.endsWith('/api.ts')) continue
     const s = readFileSync(p, 'utf8')
     for (const m of s.matchAll(/export const (\w*[Aa]pi)\s*=\s*\{/g)) {
@@ -104,14 +90,14 @@ function metodosDeCliente() {
 const defs = metodosDeCliente()
 if (defs.length === 0) {
   console.error(
-    'check-client-callers: ⛔ NO HE PODIDO MIRAR: cero métodos de cliente encontrados. ' +
-      'El parser dejó de reconocer la forma `export const xApi = { … }` y un barrido que no ' +
-      'encuentra nada NO es un árbol limpio.',
+    'check-client-callers: ⛔ COULD NOT LOOK: no client methods found. ' +
+      'The parser no longer recognizes `export const xApi = { … }`; a scan that ' +
+      'finds nothing does NOT demonstrate a clean tree.',
   )
   process.exit(2)
 }
 
-const fuentes = ficheros(RAIZ)
+const fuentes = source_files(RAIZ)
   .filter((p) => !/\.test\./.test(p))
   .map((p) => [p, readFileSync(p, 'utf8')])
 
@@ -130,7 +116,7 @@ for (const { obj, met, def } of defs) {
 
 const n = huerfanos.length
 console.log(
-  `check-client-callers: ${defs.length} método(s) de cliente · ${n} sin ninguna pantalla que los llame (línea base ${BASE})`,
+  `check-client-callers: ${defs.length} client method(s) · ${n} with no screen calling them (baseline ${BASE})`,
 )
 
 // ⛔ `--list` NO es comodidad. Hasta ahora la lista sólo se imprimía cuando la deuda SUBÍA, es
@@ -178,8 +164,8 @@ try {
   )
 } catch (e) {
   console.error(
-    'check-client-callers: ⛔ NO HE PODIDO MIRAR: no puedo leer scripts/client-callers-baseline.txt. ' +
-      'Sin la lista, «no hay nombres nuevos» seria cierto por vacuidad. ' + String(e.message ?? e),
+    'check-client-callers: ⛔ COULD NOT LOOK: cannot read scripts/client-callers-baseline.txt. ' +
+      'Without the list, claiming there are no new names would be vacuously true. ' + String(e.message ?? e),
   )
   process.exit(2)
 }
@@ -190,46 +176,46 @@ const resueltos = [...baseline].filter((x) => !nombres.includes(x)).sort()
 
 if (nuevos.length > 0) {
   console.error('')
-  for (const x of nuevos) console.error(`  ⛔ NUEVO sin llamante: ${x}`)
+  for (const x of nuevos) console.error(`  ⛔ NEW with no caller: ${x}`)
   console.error('')
   console.error(
-    `check-client-callers: ⛔ ${nuevos.length} cliente(s) NUEVOS sin pantalla que los pulse ` +
-      `(la lista base tiene ${baseline.size}). Un cliente sin llamante pasa todas sus pruebas de ` +
-      'contrato y NO hace la operacion posible desde la consola, que es lo que se pedia. Cablea la ' +
-      'pantalla, o anade el nombre a scripts/client-callers-baseline.txt DICIENDO en el commit que ' +
-      'queda sin superficie y por que. Se nombran uno a uno a proposito: un numero no dice cual.',
+    `check-client-callers: ⛔ ${nuevos.length} NEW client method(s) without a screen calling them ` +
+      `(the baseline has ${baseline.size}). A client without a caller passes all its ` +
+      'contract tests but does NOT make the operation available from the console as required. Wire up the ' +
+      'screen, or add the name to scripts/client-callers-baseline.txt and STATE in the commit what ' +
+      'remains unavailable and why. Names are listed individually because a count cannot identify them.',
   )
   process.exit(1)
 }
 
 if (resueltos.length > 0) {
   console.log('')
-  for (const x of resueltos) console.log(`  ✔ ya tiene llamante: ${x}`)
+  for (const x of resueltos) console.log(`  ✔ now has a caller: ${x}`)
   console.log(
-    `check-client-callers: ✔ ${resueltos.length} resuelto(s) — quitalos de ` +
-      'scripts/client-callers-baseline.txt EN ESTE MISMO COMMIT: un trinquete que no se aprieta no ' +
-      'es un trinquete.',
+    `check-client-callers: ✔ ${resueltos.length} resolved — remove them from ` +
+      'scripts/client-callers-baseline.txt IN THIS COMMIT: a ratchet that is not tightened is not ' +
+      'a ratchet.',
   )
 }
 
 if (n > BASE) {
   console.error('')
-  for (const h of huerfanos.slice(0, 40)) console.error(`  sin llamante: ${h}`)
-  if (n > 40) console.error(`  … y ${n - 40} más`)
+  for (const h of huerfanos.slice(0, 40)) console.error(`  no caller: ${h}`)
+  if (n > 40) console.error(`  … and ${n - 40} more`)
   console.error('')
   console.error(
-    `check-client-callers: ⛔ la deuda SUBE (${n} > ${BASE}) — se ha añadido cliente sin ` +
-      'pantalla que lo pulse. Un cliente sin llamante pasa todas sus pruebas de contrato y NO ' +
-      'hace la operación posible desde la consola, que es lo que se pedía. Cablea la pantalla, ' +
-      'o sube la línea base DICIENDO en el commit qué queda sin superficie y por qué.',
+    `check-client-callers: ⛔ debt INCREASED (${n} > ${BASE}) — a client method was added without a ` +
+      'screen calling it. A client without a caller passes all its contract tests but does NOT ' +
+      'make the operation available from the console as required. Wire up the screen, ' +
+      'or increase the baseline and STATE in the commit what remains unavailable and why.',
   )
   process.exit(1)
 }
 
 if (n < BASE) {
   console.log(
-    `check-client-callers: ✔ la deuda BAJA — la línea base puede bajar a ${n}. ` +
-      'Bájala en este mismo commit: un trinquete que no se aprieta no es un trinquete.',
+    `check-client-callers: ✔ debt DECREASED — the baseline can be reduced to ${n}. ` +
+      'Lower it in this commit so the ratchet keeps enforcing the measured baseline.',
   )
 }
 process.exit(0)

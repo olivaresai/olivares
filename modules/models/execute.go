@@ -6,9 +6,12 @@ package models
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
@@ -16,6 +19,7 @@ import (
 	"github.com/olivaresai/olivares/connectors/modelprovider/gateway"
 	"github.com/olivaresai/olivares/connectors/modelrouter"
 	"github.com/olivaresai/olivares/core/api"
+	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 
@@ -230,13 +234,49 @@ func (m *Module) handleExecuteRouting(w http.ResponseWriter, r *http.Request, mc
 		writeJSON(w, http.StatusBadRequest, errorBody("invalid id"))
 		return
 	}
-	var in executeRequestDTO
+	var in TextExecutionInput
 	if !decodeJSON(w, r, &in) {
 		return
 	}
+	result, _ := m.ExecuteText(r.Context(), mc, id, in)
+	if result.retryAfter != nil {
+		w.Header().Set("Retry-After", strconv.FormatInt(*result.retryAfter, 10))
+	}
+	writeJSON(w, result.StatusCode, result.body)
+}
+
+// ExecuteText is the supported governed operation for HTTP and in-process module
+// consumers. Pass an engine-issued ModuleContext; selection, session attribution,
+// and another route's resource or witness never authorize model execution.
+func (m *Module) ExecuteText(ctx context.Context, mc api.ModuleContext, id model.ID, in TextExecutionInput) (result TextExecutionResult, operationErr error) {
+	ctx, mc, err := mc.ForModule(ctx, m)
+	if err != nil {
+		return textAdmissionError(err)
+	}
+	var complete func(api.RecordedResult)
+	mc, complete, err = mc.AdmitOperation(ctx, api.RecordedCall{
+		Namespace: Namespace, Method: http.MethodPost, Pattern: "/routing-policies/{id}/execute",
+		Permission: permRoutingExecute, Params: map[string]string{"id": id.String()},
+	})
+	if err != nil {
+		return textAdmissionError(err)
+	}
+	defer func() {
+		// In-process input has no HTTP wire bytes. Only the canonical typed
+		// turn's digest and size enter the existing recording seam.
+		encoded, _ := json.Marshal(in)
+		digest := sha256.Sum256(encoded)
+		status := result.StatusCode
+		if status == 0 {
+			status = http.StatusInternalServerError
+		}
+		complete(api.RecordedResult{Status: status, BodySHA256: digest[:], BodyBytes: int64(len(encoded))})
+	}()
+	if id.IsZero() {
+		return textResponse(http.StatusBadRequest, errorBody("invalid id"))
+	}
 	if strings.TrimSpace(in.Input) == "" {
-		writeJSON(w, http.StatusBadRequest, errorBody("input is required"))
-		return
+		return textResponse(http.StatusBadRequest, errorBody("input is required"))
 	}
 	maxTokens := in.MaxTokens
 	if maxTokens <= 0 {
@@ -245,10 +285,13 @@ func (m *Module) handleExecuteRouting(w http.ResponseWriter, r *http.Request, mc
 
 	// 1) Resolve the decision (pure selection), exactly as /resolve does.
 	var (
+		resource       auth.ResourceAttrs
 		dec            decisionDTO
 		spec           routingSpec
 		suspendedTiers []string
 		notRouting     bool
+		profile        ExecutionProfile
+		profileErr     *executionProfileHTTPError
 		// C2B: the policy's identity, retained from THIS read. The version is the row's
 		// optimistic-concurrency counter and specDigest is a canonical digest of the
 		// EFFECTIVE routing spec these gates are about to decide over — not the route
@@ -257,11 +300,16 @@ func (m *Module) handleExecuteRouting(w http.ResponseWriter, r *http.Request, mc
 		policyVersion int64
 		specDigest    [32]byte
 	)
-	err := mc.Data.View(r.Context(), func(sc store.Scope) error {
-		p, err := sc.Policies().Get(r.Context(), id)
+	err = mc.Data.View(ctx, func(sc store.Scope) error {
+		p, err := sc.Policies().Get(ctx, id)
 		if err != nil {
 			return err
 		}
+		if sc.Tenant() != mc.Tenant || p.TenantID != mc.Tenant || p.ID != id {
+			return store.ErrNotFound
+		}
+		resource = auth.ResourceFor(permRoutingExecute)
+		resource.ID = p.ID.String()
 		if p.Kind != policyKindRouting {
 			notRouting = true
 			return nil
@@ -272,11 +320,19 @@ func (m *Module) handleExecuteRouting(w http.ResponseWriter, r *http.Request, mc
 		if specDigest, derr = routingSpecDigest(spec); derr != nil {
 			return derr
 		}
-		cat, err := buildCatalog(r.Context(), sc)
+		profile, profileErr = m.resolveExecutionProfile(ctx, mc.Tenant, spec)
+		if profileErr != nil {
+			return nil
+		}
+		if profile.AdapterID == ExecutionAdapterDeepSeekText {
+			suspendedTiers, err = suspendedEntitlementTiers(ctx, sc)
+			return err
+		}
+		cat, err := buildCatalog(ctx, sc)
 		if err != nil {
 			return err
 		}
-		d, derr := spec.resolve(r.Context(), cat)
+		d, derr := spec.resolve(ctx, cat)
 		if errors.Is(derr, modelrouter.ErrNoCandidate) {
 			dec = unresolvedDecisionDTO(spec.Strategy)
 			return nil
@@ -285,83 +341,82 @@ func (m *Module) handleExecuteRouting(w http.ResponseWriter, r *http.Request, mc
 			return derr
 		}
 		dec = toDecisionDTO(d)
-		suspendedTiers, err = suspendedEntitlementTiers(r.Context(), sc)
+		suspendedTiers, err = suspendedEntitlementTiers(ctx, sc)
 		if err != nil {
 			return err
 		}
 		return nil
 	})
 	if err != nil {
-		writeStoreError(w, err)
-		return
+		return textStoreError(err)
 	}
 	if notRouting {
-		writeJSON(w, http.StatusNotFound, errorBody("not found"))
-		return
+		return textResponse(http.StatusNotFound, errorBody("not found"))
 	}
+
+	if !mc.Admits(ctx, permRoutingExecute, resource) {
+		return textAdmissionError(api.ErrModuleOperationAdmission)
+	}
+	mc.Resource = resource
 
 	// A profile pin selects one exact operation/protocol/target authority. Resolve it
 	// before any spend gate. This lookup is immutable and I/O-free; C2A never touches
 	// a credential, inspector, executor or network client.
-	profile, profileErr := m.resolveExecutionProfile(r.Context(), mc.Tenant, spec)
 	if profileErr != nil {
-		writeExecutionProfileError(w, profileErr)
-		return
+		return textProfileError(profileErr)
+	}
+	if profile.AdapterID == ExecutionAdapterDeepSeekText {
+		dec, err = m.resolveAvailableProfile(ctx, mc.Tenant, spec, profile)
+		if err != nil {
+			return textStoreError(err)
+		}
 	}
 	operation := in.Operation
 	if !spec.hasExecutionProfile() && operation != "" {
-		writeExecutionProfileError(w, executionProfileRequired())
-		return
+		return textProfileError(executionProfileRequired())
 	}
 	if spec.hasExecutionProfile() {
 		if operation == "" {
 			operation = profile.Action
 		}
 		if operation != profile.Action || operation != ExecutionActionTextGenerate {
-			writeExecutionProfileError(w, unsupportedExecutionOperation())
-			return
+			return textProfileError(unsupportedExecutionOperation())
 		}
 		// A Chat profile pinned on the gateway endpoint cannot invoke a
 		// non-streaming flag. Refuse here, before Chat, with the capability
 		// named. This is not a target-binding mismatch.
 		if spec.GatewayEndpoint != "" && textExecutionRefuses(spec.RequiredCapabilities) {
-			writeJSON(w, http.StatusUnprocessableEntity, executeResponseDTO{Decision: decisionDTO{
+			return textResponse(http.StatusUnprocessableEntity, executeResponseDTO{Decision: decisionDTO{
 				Resolved: false, Policy: dec.Policy,
 				Reason:    notInvocableNote(spec.RequiredCapabilities),
 				Fallbacks: []targetDTO{}, Chain: []targetDTO{},
 			}})
-			return
 		}
 		if !dec.Resolved || !executionProfileMatchesTarget(profile, dec.Primary) {
-			writeExecutionProfileError(w, profileBindingMismatch())
-			return
+			return textProfileError(profileBindingMismatch())
 		}
 		if in.Surface == "" {
 			in.Surface = profile.Surface
 		} else if in.Surface != profile.Surface {
-			writeExecutionProfileError(w, profileBindingMismatch())
-			return
+			return textProfileError(profileBindingMismatch())
 		}
 	}
 	if !dec.Resolved || dec.Primary == nil {
 		// Nothing to execute — return the unresolved decision honestly (422), not a 500.
-		writeJSON(w, http.StatusUnprocessableEntity, executeResponseDTO{Decision: dec, Served: targetDTO{}})
-		return
+		return textResponse(http.StatusUnprocessableEntity, executeResponseDTO{Decision: dec, Served: targetDTO{}})
 	}
 
 	// 2) estate kill switch (deny-closed, FIRST among the spend gates): an
 	// active estate-wide stop freezes routed execution entirely — resolve stays
 	// readable, spend does not. A gate ERROR also denies: an unreadable stop
 	// state never means "go" (the inverse of the budget gate's posture).
-	if stop, serr := m.stopGate.Check(r.Context(), mc.Tenant); serr != nil {
+	if stop, serr := m.stopGate.Check(ctx, mc.Tenant); serr != nil {
 		if m.log != nil {
-			m.log.Error("models: kill-switch gate error; failing CLOSED (execute denied)", "err", serr)
+			m.log.Error("models: kill-switch gate error; failing CLOSED (execute denied)")
 		}
-		writeJSON(w, http.StatusServiceUnavailable, errorBody("kill-switch state unreadable; execution denied (deny-closed)"))
-		return
+		return textResponse(http.StatusServiceUnavailable, errorBody("kill-switch state unreadable; execution denied (deny-closed)"))
 	} else if stop.Stopped {
-		writeJSON(w, http.StatusLocked, errorBody("denied: emergency stop active (estate kill switch "+stop.StopRef+"); re-enable requires dual-control"))
-		return
+		return textResponse(http.StatusLocked, errorBody("denied: emergency stop active (estate kill switch "+stop.StopRef+"); re-enable requires dual-control"))
 	}
 
 	// 3) model-governance gate (deny-closed): a retired/deprecated/non-ZDR/
@@ -369,12 +424,10 @@ func (m *Module) handleExecuteRouting(w http.ResponseWriter, r *http.Request, mc
 	// impermissible candidates are dropped from the chain (a permissible fallback
 	// still serves) and only an all-denied chain blocks with 403.
 	if status, denied := m.governanceDeniesRoute(spec, &dec, suspendedTiers); denied {
-		writeJSON(w, status, executeResponseDTO{Decision: dec})
-		return
+		return textResponse(status, executeResponseDTO{Decision: dec})
 	}
 	if spec.hasExecutionProfile() && !executionProfileMatchesTarget(profile, dec.Primary) {
-		writeExecutionProfileError(w, profileBindingMismatch())
-		return
+		return textProfileError(profileBindingMismatch())
 	}
 
 	// F-01: for the SECURITY gates below (source-scope + model-access), the acting actor is
@@ -400,13 +453,11 @@ func (m *Module) handleExecuteRouting(w http.ResponseWriter, r *http.Request, mc
 	// never served nor tried as a fallback. Only when EVERY candidate is out of scope
 	// does it block (403). The actor scope VALUES are read from the stored agent named by
 	// the AUTHENTICATED actorRef (never the body).
-	if status, denied := m.scopeDeniesRoute(r, mc, &dec, actorRef); denied {
-		writeJSON(w, status, executeResponseDTO{Decision: dec})
-		return
+	if status, denied := m.scopeDeniesRoute(ctx, mc, &dec, actorRef); denied {
+		return textResponse(status, executeResponseDTO{Decision: dec})
 	}
 	if spec.hasExecutionProfile() && !executionProfileMatchesTarget(profile, dec.Primary) {
-		writeExecutionProfileError(w, profileBindingMismatch())
-		return
+		return textProfileError(profileBindingMismatch())
 	}
 
 	// 3.7) model-access governance gate (DENY-CLOSED). ORTHOGONAL to the
@@ -416,13 +467,11 @@ func (m *Module) handleExecuteRouting(w http.ResponseWriter, r *http.Request, mc
 	// is not granted is dropped from the chain (never served nor tried as a fallback);
 	// only an all-denied chain blocks (403). Runs before the (fail-open) budget gate so a
 	// security deny can never be bypassed by a FinOps outage.
-	if status, denied := m.modelAccessDeniesRoute(r, mc, &dec, actorRef, in.Surface); denied {
-		writeJSON(w, status, executeResponseDTO{Decision: dec})
-		return
+	if status, denied := m.modelAccessDeniesRoute(ctx, mc, &dec, actorRef, in.Surface); denied {
+		return textResponse(status, executeResponseDTO{Decision: dec})
 	}
 	if spec.hasExecutionProfile() && !executionProfileMatchesTarget(profile, dec.Primary) {
-		writeExecutionProfileError(w, profileBindingMismatch())
-		return
+		return textProfileError(profileBindingMismatch())
 	}
 
 	// C2B: a fully valid Chat profile leaves the legacy path HERE, immediately before the
@@ -437,15 +486,13 @@ func (m *Module) handleExecuteRouting(w http.ResponseWriter, r *http.Request, mc
 		// The text transport cannot carry a required capability. Refuse
 		// before ExecuteChat. Requests with no required flag still enter.
 		if chatTextRefuses(spec.RequiredCapabilities) {
-			writeJSON(w, http.StatusUnprocessableEntity, executeResponseDTO{Decision: decisionDTO{
+			return textResponse(http.StatusUnprocessableEntity, executeResponseDTO{Decision: decisionDTO{
 				Resolved: false, Policy: dec.Policy,
 				Reason:    chatTextNote(spec.RequiredCapabilities),
 				Fallbacks: []targetDTO{}, Chain: []targetDTO{},
 			}})
-			return
 		}
-		m.executeChatProfile(w, r, mc, in, dec, profile, id, policyVersion, specDigest)
-		return
+		return m.executeChatProfile(ctx, mc, in, dec, profile, id, policyVersion, specDigest)
 	}
 
 	// 4) FinOps budget gate (Denial-of-Wallet): deny the SPEND before any provider
@@ -453,9 +500,8 @@ func (m *Module) handleExecuteRouting(w http.ResponseWriter, r *http.Request, mc
 	// identity-budget tie-in uses the body session_ref for cost attribution (fail-open FinOps
 	// plumbing, NOT the security boundary — a security deny already ran above on the
 	// authenticated actor, so this can never widen access).
-	if status, denied := m.budgetDeniesRoute(r, mc, &dec, in.SessionRef); denied {
-		writeJSON(w, status, executeResponseDTO{Decision: dec})
-		return
+	if status, denied := m.budgetDeniesRoute(ctx, mc, &dec, in.SessionRef); denied {
+		return textResponse(status, executeResponseDTO{Decision: dec})
 	}
 
 	// Refuse a capability this text send cannot carry. The Chat branch has
@@ -468,8 +514,7 @@ func (m *Module) handleExecuteRouting(w http.ResponseWriter, r *http.Request, mc
 		} else {
 			dec.Reason += "; " + note
 		}
-		writeJSON(w, http.StatusNotImplemented, executeResponseDTO{Decision: dec})
-		return
+		return textResponse(http.StatusNotImplemented, executeResponseDTO{Decision: dec})
 	}
 
 	// The executable chain comes from the (possibly governance-filtered) decision,
@@ -481,27 +526,24 @@ func (m *Module) handleExecuteRouting(w http.ResponseWriter, r *http.Request, mc
 
 	// 5) Execute through the deny-closed governed Executor. SessionRef is the body ref used
 	// only for cost attribution in the emitted CostSample (not an entitlement input).
-	res, eerr := m.executor.Execute(r.Context(), ExecuteRequest{
+	res, eerr := m.executor.Execute(ctx, ExecuteRequest{
 		Tenant: mc.Tenant, Chain: chain, Input: in.Input, MaxTokens: maxTokens, SessionRef: in.SessionRef,
 	})
 	if errors.Is(eerr, ErrExecutionTargetUnsupported) {
-		writeJSON(w, http.StatusUnprocessableEntity, errorBody(ErrExecutionTargetUnsupported.Error()))
-		return
+		return textResponse(http.StatusUnprocessableEntity, errorBody(ErrExecutionTargetUnsupported.Error()))
 	}
 	if errors.Is(eerr, errNoExecutor) {
-		writeJSON(w, http.StatusServiceUnavailable, errorBody("routing execution is not configured (deny-closed): no execution backend is wired — the control plane can resolve a routing decision but will not spend against a provider until an executor is provisioned"))
-		return
+		return textResponse(http.StatusServiceUnavailable, errorBody("routing execution is not configured (deny-closed): no execution backend is wired — the control plane can resolve a routing decision but will not spend against a provider until an executor is provisioned"))
 	}
 	if eerr != nil {
 		// A provider/transport failure: surface it as a bad gateway, never leak the
 		// endpoint/credential the error may embed.
 		if m.log != nil {
-			m.log.Warn("models: routing execution failed", "err", eerr)
+			m.log.Warn("models: routing execution failed")
 		}
-		writeJSON(w, http.StatusBadGateway, errorBody("routing execution failed against the resolved target"))
-		return
+		return textResponse(http.StatusBadGateway, errorBody("routing execution failed against the resolved target"))
 	}
-	writeJSON(w, http.StatusOK, executeResponseDTO{
+	return textResponse(http.StatusOK, executeResponseDTO{
 		Decision: dec, Served: toTargetDTO(res.Served), FallbackUsed: res.FallbackUsed,
 		Output: res.Text, InputTokens: res.InputTokens, OutputTokens: res.OutputTokens, Refusal: res.Refusal,
 	})
@@ -517,15 +559,15 @@ func (m *Module) handleExecuteRouting(w http.ResponseWriter, r *http.Request, mc
 // return 403. sessionRef names the actor session whose stored workspace gives the actor
 // scope (a caller-declared, route-gated assertion); empty ⇒ a bound model is denied
 // unless the principal has a grant or tenant-wide RBAC.
-func (m *Module) scopeDeniesRoute(r *http.Request, mc api.ModuleContext, dec *decisionDTO, sessionRef string) (int, bool) {
+func (m *Module) scopeDeniesRoute(ctx context.Context, mc api.ModuleContext, dec *decisionDTO, sessionRef string) (int, bool) {
 	kept := make([]targetDTO, 0, len(dec.Chain))
 	for _, t := range dec.Chain {
-		v, err := m.scopeGate.Allowed(r.Context(), mc.Tenant, ScopeQuery{
+		v, err := m.scopeGate.Allowed(ctx, mc.Tenant, ScopeQuery{
 			Principal: mc.Principal, SessionRef: sessionRef, ProviderRef: t.ProviderRef, ModelRef: t.ModelRef,
 		})
 		if err != nil {
 			if m.log != nil {
-				m.log.Warn("models: scope gate error; dropping candidate (deny-closed)", "model_ref", t.ModelRef, "err", err)
+				m.log.Warn("models: scope gate error; dropping candidate (deny-closed)", "model_ref", t.ModelRef)
 			}
 			continue // deny-closed: an unreadable scope state never authorizes the model
 		}
@@ -567,11 +609,11 @@ func (m *Module) scopeDeniesRoute(r *http.Request, mc api.ModuleContext, dec *de
 // is pure once the context is resolved, so the only error is the shared resolve). A tenant
 // with no model-access grants (or a superadmin) is not governed: the context is nil and
 // the gate is a no-op. surface is the request's declared surface ("" ⇒ enforced in-band).
-func (m *Module) modelAccessDeniesRoute(r *http.Request, mc api.ModuleContext, dec *decisionDTO, sessionRef, surface string) (int, bool) {
-	c, err := m.modelAccessContext(r.Context(), mc.Tenant, mc.Principal, sessionRef)
+func (m *Module) modelAccessDeniesRoute(ctx context.Context, mc api.ModuleContext, dec *decisionDTO, sessionRef, surface string) (int, bool) {
+	c, err := m.modelAccessContext(ctx, mc.Tenant, mc.Principal, sessionRef)
 	if err != nil {
 		if m.log != nil {
-			m.log.Warn("models: model-access context error; denying chain (deny-closed)", "err", err)
+			m.log.Warn("models: model-access context error; denying chain (deny-closed)")
 		}
 		*dec = decisionDTO{
 			Resolved: false, Policy: dec.Policy,
@@ -627,7 +669,7 @@ func (m *Module) modelAccessPreviewDeniesRoute(r *http.Request, mc api.ModuleCon
 	c, err := m.modelAccessContext(r.Context(), mc.Tenant, mc.Principal, "")
 	if err != nil {
 		if m.log != nil {
-			m.log.Warn("models: model-access preview context error; denying chain (deny-closed)", "err", err)
+			m.log.Warn("models: model-access preview context error; denying chain (deny-closed)")
 		}
 		*dec = decisionDTO{
 			Resolved: false, Policy: dec.Policy,

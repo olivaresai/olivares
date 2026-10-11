@@ -297,9 +297,9 @@ bash "$HERE/hub-leg.sh" --marker-signature > "$PUB/PUBLIC-EXPORT.md"
 
 out=$( cd "$PUB" && bash scripts/check-d1-migrations.sh 2>&1 ); rc=$?
 if [ "$rc" -eq 0 ] && grep -q 'SCOPED' <<<"$out"; then
-	PASS=$((PASS + 1)); printf 'ok   %-60s rc=%d\n' "export publico: SCOPED rc 0, no un 2" "$rc"
+	PASS=$((PASS + 1)); printf 'ok   %-60s rc=%d\n' "public export: SCOPED rc 0, not 2" "$rc"
 else
-	FAIL=$((FAIL + 1)); printf 'FAIL %-60s got rc=%d\n' "export publico: SCOPED rc 0, no un 2" "$rc"
+	FAIL=$((FAIL + 1)); printf 'FAIL %-60s got rc=%d\n' "public export: SCOPED rc 0, not 2" "$rc"
 	printf '     %s\n' "$out"
 fi
 
@@ -308,9 +308,9 @@ fi
 mkdir -p "$PUB/design"
 out=$( cd "$PUB" && bash scripts/check-d1-migrations.sh 2>&1 ); rc=$?
 if [ "$rc" -eq 2 ]; then
-	PASS=$((PASS + 1)); printf 'ok   %-60s rc=%d\n' "mutante clasificador->hub: vuelve el 2" "$rc"
+	PASS=$((PASS + 1)); printf 'ok   %-60s rc=%d\n' "classifier->hub mutant: returns 2 again" "$rc"
 else
-	FAIL=$((FAIL + 1)); printf 'FAIL %-60s got rc=%d want rc=2\n' "mutante clasificador->hub: vuelve el 2" "$rc"
+	FAIL=$((FAIL + 1)); printf 'FAIL %-60s got rc=%d want rc=2\n' "classifier->hub mutant: returns 2 again" "$rc"
 	printf '     %s\n' "$out"
 fi
 rmdir "$PUB/design"
@@ -318,9 +318,9 @@ rmdir "$PUB/design"
 # Y la excepcion es SOLO para el sujeto POR DEFECTO, tambien dentro del export.
 out=$( cd "$PUB" && bash scripts/check-d1-migrations.sh --dir no-existe 2>&1 ); rc=$?
 if [ "$rc" -eq 2 ]; then
-	PASS=$((PASS + 1)); printf 'ok   %-60s rc=%d\n' "en el export, un --dir ajeno sigue dando 2" "$rc"
+	PASS=$((PASS + 1)); printf 'ok   %-60s rc=%d\n' "in the export, an unrelated --dir still returns 2" "$rc"
 else
-	FAIL=$((FAIL + 1)); printf 'FAIL %-60s got rc=%d want rc=2\n' "en el export, un --dir ajeno sigue dando 2" "$rc"
+	FAIL=$((FAIL + 1)); printf 'FAIL %-60s got rc=%d want rc=2\n' "in the export, an unrelated --dir still returns 2" "$rc"
 	printf '     %s\n' "$out"
 fi
 

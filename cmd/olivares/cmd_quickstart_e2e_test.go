@@ -72,6 +72,7 @@ func runEngineCommand(t *testing.T, cmd *cobra.Command, want *regexp.Regexp, arg
 
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
+	prepareCompositionTestBoot(t)
 	go func() { done <- cmd.ExecuteContext(ctx) }()
 
 	// ⛔ THE BUDGET IS FOR A FIRST BOOT ON A LOADED BOX, AND IT IS NOT DECORATIVE. The first

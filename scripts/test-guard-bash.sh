@@ -17,6 +17,11 @@
 #   · el escape `# guard:ok` funciona          — o el override documentado seria mentira
 #   · FALLA ABIERTO sin `jq`                   — es su postura declarada: un guardian roto que
 #                                                bloquea todo convierte un despiste en sesion muerta
+#
+# It ALSO qualifies, by the same standard, the `heavy-job` rule of guard-bash.sh (a build, test
+# or browser outside the wrapper) and `.claude/hooks/guard-edit.sh` (an applied migration and
+# generated output). One witness for the `.claude/hooks` guards: a second script would be a second
+# mechanism for the same question.
 set -uo pipefail
 
 # Aislamiento de git: este guion empareja `mktemp -d` con `git` —aunque aqui `git` solo aparece
@@ -52,41 +57,44 @@ else
 		echo "  subject here and never will. In the full source tree it still grades the hook."
 		exit 0
 	fi
-	echo "test-guard-bash: no existe .claude/hooks/guard-bash.sh (hub-only); no puedo probarlo" >&2
+	echo "test-guard-bash: .claude/hooks/guard-bash.sh does not exist (hub-only); cannot test it" >&2
 	exit 2
 fi
-command -v jq >/dev/null 2>&1 || { echo "test-guard-bash: sin jq no puedo construir la entrada" >&2; exit 2; }
+command -v jq >/dev/null 2>&1 || { echo "test-guard-bash: without jq cannot construct input" >&2; exit 2; }
 
 pass=0; fail=0
-caso() { # caso <nombre> <rc-esperado> <comando>
-	local nombre="$1" want="$2" cmd="$3" rc=0
+_err="$(mktemp)"
+# A case that expects rc 2 can carry a MARK: a fragment of the message of the rule that must stop it.
+# Without one, a case would also pass if ANOTHER rule stopped it.
+caso() { # caso <nombre> <rc-esperado> <comando> [marca-en-stderr]
+	local nombre="$1" want="$2" cmd="$3" marca="${4:-}" rc=0
 	# export-closure: hub-only .claude/hooks/guard-bash.sh — el hook es del entorno de trabajo y el
 	# export lo quita; la llamada va GUARDADA aqui mismo porque una declaracion excusa una llamada
 	# guardada, no un fichero: sin la guarda, en el arbol publicado esta linea moriria con exit 127.
 	if [ ! -f "$H" ]; then
-		printf 'FAIL  %-58s (el hook desaparecio a mitad)\n' "$nombre"; fail=$((fail + 1)); return
+		printf 'FAIL  %-58s (hook disappeared during the run)\n' "$nombre"; fail=$((fail + 1)); return
 	fi
-	printf '%s' "$(jq -nc --arg c "$cmd" '{tool_input:{command:$c}}')" | bash "$H" >/dev/null 2>&1 || rc=$?
-	if [ "$rc" -eq "$want" ]; then
+	printf '%s' "$(jq -nc --arg c "$cmd" '{tool_input:{command:$c}}')" | bash "$H" >/dev/null 2>"$_err" || rc=$?
+	if [ "$rc" -eq "$want" ] && { [ -z "$marca" ] || grep -qF -- "$marca" "$_err"; }; then
 		printf 'ok    %-58s rc=%s\n' "$nombre" "$rc"; pass=$((pass + 1))
 	else
-		printf 'FAIL  %-58s rc=%s, esperado %s\n' "$nombre" "$rc" "$want"; fail=$((fail + 1))
+		printf 'FAIL  %-58s rc=%s, expected %s%s\n' "$nombre" "$rc" "$want" "${marca:+ with \"$marca\" on stderr}"; fail=$((fail + 1))
 	fi
 }
 
 # --- CORTA (rc 2) · cada uno con la medida que lo puso en el hook ---
-caso "for sobre variable sin comillas (zsh no divide en palabras)" 2 'for x in $VAR; do echo $x; done'
-caso "sonda /dev/tcp (zsh no la implementa: dice cerrado siempre)"  2 '(echo > /dev/tcp/localhost/5432) 2>/dev/null'
-caso "matar por patron en un host compartido"                        2 'pkill -f algo'
-caso "git add sin ruta en un clon compartido"                        2 'git add -A'
-caso "comm sobre listas ordenadas con sort -n"                       2 'comm -23 <(sort -n a) <(sort -n b)'
+caso "for over an unquoted variable (zsh does not split words)" 2 'for x in $VAR; do echo $x; done'
+caso "/dev/tcp probe (zsh does not implement it: always reports closed)"  2 '(echo > /dev/tcp/localhost/5432) 2>/dev/null'
+caso "kill by pattern on a shared host"                        2 'pkill -f algo'
+caso "git add without a path in a shared clone"                        2 'git add -A'
+caso "comm over lists sorted with sort -n"                       2 'comm -23 <(sort -n a) <(sort -n b)'
 
 # --- DEJA PASAR (rc 0): un falso positivo cuesta trabajo real ---
-caso "for sobre una variable ENTRECOMILLADA"                         0 'for x in "$VAR"; do echo "$x"; done'
-caso "while read, la forma correcta en zsh"                          0 'while IFS= read -r x; do echo "$x"; done < f'
-caso "git add CON ruta explicita"                                    0 'git add core/algo.go'
-caso "comm sobre listas en orden lexicografico"                      0 'comm -23 a.lex b.lex'
-caso "sort -n suelto, sin comm"                                      0 'sort -n fichero.txt'
+caso "for over a QUOTED variable"                         0 'for x in "$VAR"; do echo "$x"; done'
+caso "while read, the correct form in zsh"                          0 'while IFS= read -r x; do echo "$x"; done < f'
+caso "git add WITH an explicit path"                                    0 'git add core/algo.go'
+caso "comm over lexicographically sorted lists"                      0 'comm -23 a.lex b.lex'
+caso "standalone sort -n, without comm"                                      0 'sort -n input.txt'
 # ⛔ LIMITACION CONOCIDA, FIJADA A PROPOSITO CON rc=2. El hook casa la PALABRA, no el sujeto:
 #    la palabra prohibida DENTRO de una cadena dispara igual. Medido dos veces el 2026-08-31, las
 #    dos con la palabra en un `echo` de prosa explicativa.
@@ -95,11 +103,11 @@ caso "sort -n suelto, sin comm"                                      0 'sort -n 
 #    vea que el cambio es deliberado: si algun dia deja de cortar, esta fila enrojece y obliga a
 #    decidirlo, en vez de que el control se afloje sin que nadie lo note.
 #    El escape documentado (`# guard:ok`) es la salida para el caso legitimo.
-caso "LIMITACION: la palabra en prosa TAMBIEN dispara"               2 'echo "no uses pkill aqui"' 
-caso "kill por PID, que es la forma sancionada"                      0 'kill -TERM 1234'
+caso "LIMITATION: the word in prose ALSO triggers"               2 'echo "no uses pkill aqui"'
+caso "kill by PID, the approved form"                      0 'kill -TERM 1234'
 
 # --- el escape documentado ---
-caso "escape guard:ok sobre un comando que si se corta"              0 'git add -A # guard:ok'
+caso "guard:ok escape on a blocked command"              0 'git add -A # guard:ok'
 
 # --- FALLA ABIERTO: es su postura, y se fija para que no se invierta sin querer ---
 sin_jq=0
@@ -118,23 +126,200 @@ if [ -f "$H" ]; then
 		| PATH="$_sinjq" bash "$H" >/dev/null 2>&1 || sin_jq=$?
 fi
 if [ "$sin_jq" -eq 0 ]; then
-	printf 'ok    %-58s rc=0\n' "sin jq FALLA ABIERTO (postura declarada)"; pass=$((pass + 1))
+	printf 'ok    %-58s rc=0\n' "without jq FAILS OPEN (declared behavior)"; pass=$((pass + 1))
 else
-	printf 'FAIL  %-58s rc=%s, esperado 0\n' "sin jq FALLA ABIERTO (postura declarada)" "$sin_jq"; fail=$((fail + 1))
+	printf 'FAIL  %-58s rc=%s, expected 0\n' "without jq FAILS OPEN (declared behavior)" "$sin_jq"; fail=$((fail + 1))
 fi
 
 # --- GUARDA 6: `pgrep -f` cuyo resultado se MATA en el mismo comando -----------------------------
 # El patron viaja en la linea de comandos que `pgrep` inspecciona, asi que se casa a SI MISMO. No es
 # un descuido: es estructural, y `-f` lo garantiza. El caso que la puso aqui es del 2026-09-01 y es
 # propio — un `pgrep -f` mio caso mi shell y el `kill` de al lado le mando SIGTERM (rc 144).
-caso "pgrep -f cuyo resultado se mata en el mismo comando"  2 'pgrep -f foo | xargs kill'
-caso "y la forma de bucle, que es la que me mordio"         2 'for p in $(pgrep -f foo); do kill $p; done'
-caso "y --full, que es lo mismo escrito largo"              2 'pgrep --full foo && kill 123'
+caso "pgrep -f result killed in the same command"  2 'pgrep -f foo | xargs kill'
+caso "and the loop form that caused the failure"         2 'for p in $(pgrep -f foo); do kill $p; done'
+caso "and --full, the equivalent long option"              2 'pgrep --full foo && kill 123'
 # ⚠ LOS TRES NEGATIVOS IMPORTAN TANTO COMO LOS POSITIVOS: sin ellos la guarda podria estar
 #    bloqueando TODO y estas filas no lo verian.
-caso "mirar no mata: pgrep -f solo, sin kill, PASA"         0 'pgrep -f foo'
-caso "matar por PID sin pgrep PASA"                         0 'kill -TERM 1234'
-caso "y sin -f no aplica: pgrep -l no inspecciona cmdline"  0 'pgrep -l foo | wc -l'
+caso "inspection does not kill: pgrep -f alone, without kill, PASSES"         0 'pgrep -f foo'
+caso "kill by PID without pgrep PASSES"                         0 'kill -TERM 1234'
+caso "without -f it does not apply: pgrep -l does not inspect cmdline"  0 'pgrep -l foo | wc -l'
+
+# --- REGLA heavy-job: compilacion, test o navegador FUERA del envoltorio ------------------------
+# Why the hook has it: on 2026-10-08 five local Go suites drove the server to load 98.
+# Calibrada en bash (el hook corre en bash; el shell interactivo usa otro `grep`). Las filas que cortan
+# llevan la MARCA `heavy-job`: sin ella pasarian igual si las cortara otra regla.
+HJ='bash /workspace/.claude/skills/olivares-heavy-job/scripts/heavy-job.sh'
+# CORTA (rc 2): cada forma en que un trabajo pesado llega a la linea de comandos sin envoltorio.
+caso "heavy: go test of a package"                          2 'go test ./core/api' heavy-job
+caso "heavy: go test with flags and -run"                   2 'go test -p 2 ./core/api -run TestX -count=1' heavy-job
+caso "heavy: go build"                                      2 'go build ./cmd/olivares' heavy-job
+caso "heavy: after cd && (command position after &&)"       2 'cd core && go build ./...' heavy-job
+caso "heavy: after a semicolon"                             2 'echo hi; go test ./x' heavy-job
+caso "heavy: inside a subshell, opening paren"              2 '(go test ./x)' heavy-job
+caso "heavy: inside a subshell, after cd &&"                2 '(cd web && pnpm test)' heavy-job
+caso "heavy: inside a brace group"                          2 '{ go test ./x; }' heavy-job
+caso "heavy: behind a pipe"                                 2 'echo x | go test ./y' heavy-job
+caso "heavy: behind then (if ...; then go test)"            2 'if true; then go test ./x; fi' heavy-job
+caso "heavy: env assignment prefix"                         2 'GOFLAGS=-p=8 go test ./core/api' heavy-job
+caso "heavy: quoted env assignment prefix"                  2 'GOFLAGS="-p 8" go test ./core/api' heavy-job
+caso "heavy: time wrapper"                                  2 'time go test ./core/api' heavy-job
+caso "heavy: nice wrapper with its option"                  2 'nice -n 10 go test ./core/api' heavy-job
+caso "heavy: env wrapper"                                   2 'env FOO=1 go test ./core/api' heavy-job
+caso "heavy: sudo wrapper"                                  2 'sudo go test ./core/api' heavy-job
+caso "heavy: nohup wrapper"                                 2 'nohup go test ./core/api &' heavy-job
+caso "heavy: xargs wrapper"                                 2 'echo ./x | xargs go test' heavy-job
+caso "heavy: timeout wrapper"                               2 'timeout 600 go test ./core/api' heavy-job
+caso "heavy: timeout wrapper with -k"                       2 'timeout -k 5 600 go test ./core/api' heavy-job
+caso "heavy: go -C <dir> test"                              2 'go -C core test ./api' heavy-job
+caso "heavy: task build:bin"                                2 'task build:bin' heavy-job
+caso "heavy: task test"                                     2 'task test' heavy-job
+caso "heavy: task e2e"                                      2 'task e2e' heavy-job
+caso "heavy: pnpm --dir web build"                          2 'pnpm --dir web build' heavy-job
+caso "heavy: pnpm -C web test"                              2 'pnpm -C web test' heavy-job
+caso "heavy: pnpm --filter web test"                        2 'pnpm --filter web test' heavy-job
+caso "heavy: pnpm run build"                                2 'pnpm run build' heavy-job
+caso "heavy: pnpm test"                                     2 'pnpm test' heavy-job
+caso "heavy: pnpm e2e"                                      2 'pnpm e2e' heavy-job
+caso "heavy: bare pnpm vitest"                              2 'pnpm vitest run' heavy-job
+caso "heavy: pnpm exec vitest"                              2 'pnpm --dir web exec vitest run' heavy-job
+caso "heavy: pnpm exec playwright"                          2 'pnpm exec playwright test' heavy-job
+caso "heavy: pnpm dlx playwright"                           2 'pnpm dlx playwright test' heavy-job
+caso "heavy: npx vitest"                                    2 'npx vitest run' heavy-job
+caso "heavy: npx playwright"                                2 'npx playwright test' heavy-job
+caso "heavy: bare playwright test"                          2 'playwright test --workers=1' heavy-job
+caso "heavy: hidden in bash -c after &&"                    2 "bash -c 'cd web && pnpm test'" heavy-job
+caso "heavy: bash -c, single quotes, first word"            2 "bash -c 'go test ./x'" heavy-job
+caso "heavy: sh -c, double quotes, first word"              2 'sh -c "go test ./x"' heavy-job
+# DEJA PASAR (rc 0): el envoltorio, lo que no pesa, y la palabra que no es una orden.
+# Los envueltos que de verdad PRUEBAN la exencion son los que llevan la orden pesada en posicion de
+# comando tras `-c '`: quitar la exencion los pondria en rc 2.
+caso "heavy: wrapped sh -c go test passes"                  0 "$HJ W1-x test -- sh -c 'go test ./x'"
+caso "heavy: wrapped bash -c pnpm vitest passes"            0 "$HJ --remote W1-x test -- bash -c 'cd web && pnpm install --frozen-lockfile && pnpm vitest run'"
+caso "heavy: wrapped go test passes"                        0 "$HJ W1-x test -- go test ./core/api"
+caso "heavy: wrapped --remote multi-package passes"         0 "$HJ --remote W1-x test -- go test -p 2 ./..."
+caso "heavy: wrapped git push passes"                       0 "$HJ W1-push build -- git push origin task/1-x"
+caso "heavy: wrapper status passes"                         0 "$HJ --status"
+caso "heavy: go vet passes"                                 0 'go vet ./core/api'
+caso "heavy: gofmt passes"                                  0 'gofmt -l core/api'
+caso "heavy: go list and mod tidy pass"                     0 'go list ./... && go mod tidy'
+caso "heavy: git status passes"                             0 'git status --short'
+caso "heavy: git diff passes"                               0 'git diff origin/main...HEAD -- go.mod'
+caso "heavy: git commit passes"                             0 'git commit -m "fix(api): tidy the handler"'
+caso "heavy: pnpm install passes"                           0 'pnpm install --frozen-lockfile'
+caso "heavy: task lint passes"                              0 'task lint:guard-bash'
+caso "heavy: task --list passes"                            0 'task --list'
+caso "heavy: task testdata is not task test"                0 'task testdata'
+caso "heavy: word quoted in echo passes"                    0 'echo "run go test later"'
+caso "heavy: word quoted in grep passes"                    0 'grep -rn "go test" docs'
+# El escape documentado tambien vale para esta regla.
+caso "heavy: guard:ok escape on go test"                    0 'go test ./core/api # guard:ok'
+# ⛔ LIMITACIONES CONOCIDAS, FIJADAS A PROPOSITO (misma razon que la fila de `pkill` en prosa): la regla
+#    casa la palabra, no el sujeto. Si alguien la afina, estas filas enrojecen y obligan a decidirlo.
+caso "LIMITATION: go test after ; inside a commit message ALSO triggers" 2 'git commit -m "x; go test ./y"' heavy-job
+caso "LIMITATION: a heredoc LINE starting with go test ALSO triggers"    2 $'cat > notes.md <<EOF\nRun:\ngo test ./core/api\nEOF' heavy-job
+caso "LIMITATION: npm test is not covered"                  0 'npm test'
+caso "LIMITATION: task -d <dir> test is not covered"        0 'task -d core test'
+
+# --- guard-edit.sh: applied migrations and generated output ------------------------------------
+# export-closure: hub-only .claude/hooks/guard-edit.sh — hermano de guard-bash.sh: hook del
+# ENTORNO DE TRABAJO que el export quita con `.claude/`; las llamadas van guardadas por -f.
+if [ -f ".claude/hooks/guard-edit.sh" ]; then
+	E=".claude/hooks/guard-edit.sh"
+else
+	E="" # ausente: cada fila de guard-edit enrojece ("hook missing") en vez de pasar en silencio
+fi
+_fx="$(mktemp -d)"; _fxnogit="$(mktemp -d)"; _fxnoref="$(mktemp -d)"
+trap 'rm -rf "$_sinjq" "$_fx" "$_fx.lnk" "$_fxnogit" "$_fxnoref"; rm -f "$_err"' EXIT
+# Fixture: a repo whose origin/main ALREADY has applied migrations (with .down, at the root and nested in a
+# subdirectory), a .sql and a README that are NOT migrations, and a HEAD AHEAD of origin/main with a
+# migration that exists only on the branch.
+mkdir -p "$_fx/modules/x/migrations/sqlite" "$_fx/migrations" "$_fx/docs" \
+	"$_fxnogit/modules/x/migrations" "$_fxnoref/modules/x/migrations"
+: > "$_fx/modules/x/migrations/001_a.up.sql"; : > "$_fx/modules/x/migrations/001_a.down.sql"
+: > "$_fx/modules/x/migrations/sqlite/003_s.up.sql"
+: > "$_fx/migrations/002_top.sql"; : > "$_fx/migrations/README.md"; : > "$_fx/docs/query.sql"
+: > "$_fxnogit/modules/x/migrations/001_a.up.sql"; : > "$_fxnoref/modules/x/migrations/001_a.up.sql"
+{ git -C "$_fx" init -q \
+	&& git -C "$_fx" add modules migrations docs \
+	&& git -C "$_fx" -c user.name=t -c user.email=t@t -c commit.gpgsign=false commit -qm fixture \
+	&& git -C "$_fx" update-ref refs/remotes/origin/main HEAD \
+	&& : > "$_fx/modules/x/migrations/004_ahead.up.sql" \
+	&& git -C "$_fx" add modules \
+	&& git -C "$_fx" -c user.name=t -c user.email=t@t -c commit.gpgsign=false commit -qm ahead \
+	&& git -C "$_fxnoref" init -q \
+	&& ln -sfn "$_fx" "$_fx.lnk" \
+	&& ln -sfn core/api/x.gen.go "$_fx/link.go"; } || { echo "test-guard-bash: cannot build the guard-edit fixture" >&2; exit 2; }
+
+caso_edit() { # caso_edit <name> <expected-rc> <project> <file-path> [stderr-mark]
+	local nombre="$1" want="$2" proj="$3" ruta="$4" marca="${5:-}" rc=0
+	if [ ! -f "$E" ]; then
+		printf 'FAIL  %-58s (hook missing)\n' "$nombre"; fail=$((fail + 1)); return
+	fi
+	printf '%s' "$(jq -nc --arg p "$ruta" '{tool_input:{file_path:$p}}')" \
+		| CLAUDE_PROJECT_DIR="$proj" bash "$E" >/dev/null 2>"$_err" || rc=$?
+	if [ "$rc" -eq "$want" ] && { [ -z "$marca" ] || grep -qF -- "$marca" "$_err"; }; then
+		printf 'ok    %-58s rc=%s\n' "$nombre" "$rc"; pass=$((pass + 1))
+	else
+		printf 'FAIL  %-58s rc=%s, expected %s%s\n' "$nombre" "$rc" "$want" "${marca:+ with \"$marca\" on stderr}"; fail=$((fail + 1))
+	fi
+}
+
+# settings.json runs the hooks DIRECTLY, not through `bash`: without the execute bit Claude Code gets
+# "permission denied", treats it as a non-blocking error, and the guard goes inert without anyone
+# noticing. The rest of the witness calls them with `bash "$H"`, so THIS is the only place that sees it.
+# Two explicit blocks and not a `for`: `lint:export-closure` only recognizes a presence test if it sees
+# the path declared in the test itself, and a loop variable hides it.
+if [ -x "$H" ]; then
+	printf 'ok    %-58s\n' "guard-bash.sh is executable"; pass=$((pass + 1))
+else
+	printf 'FAIL  %-58s\n' "guard-bash.sh is NOT executable (settings.json runs it directly)"; fail=$((fail + 1))
+fi
+if [ -x "$E" ]; then
+	printf 'ok    %-58s\n' "guard-edit.sh is executable"; pass=$((pass + 1))
+else
+	printf 'FAIL  %-58s\n' "guard-edit.sh is NOT executable (settings.json runs it directly)"; fail=$((fail + 1))
+fi
+
+# CORTA (rc 2)
+caso_edit "edit: generated Go (*.gen.go)"                    2 "$_fx" "$_fx/core/api/openapi_op_descriptions.gen.go" "generated output"
+caso_edit "edit: generated TypeScript (*.gen.ts)"            2 "$_fx" "$_fx/web/src/lib/api/openapi.gen.ts" "generated output"
+caso_edit "edit: embedded console output (webui/dist)"       2 "$_fx" "$_fx/core/internal/webui/dist/index.html" "generated output"
+caso_edit "edit: applied migration (.up.sql on origin/main)" 2 "$_fx" "$_fx/modules/x/migrations/001_a.up.sql" "already applied"
+caso_edit "edit: applied migration (.down.sql)"              2 "$_fx" "$_fx/modules/x/migrations/001_a.down.sql" "already applied"
+caso_edit "edit: applied migration in a nested subdirectory" 2 "$_fx" "$_fx/modules/x/migrations/sqlite/003_s.up.sql" "already applied"
+caso_edit "edit: applied migration in a top-level migrations/" 2 "$_fx" "$_fx/migrations/002_top.sql" "already applied"
+caso_edit "edit: .. segments cannot dodge the dist rule"     2 "$_fx" "$_fx/core/../core/internal/webui/dist/a.js" "generated output"
+caso_edit "edit: a symlinked project dir cannot dodge it"    2 "$_fx.lnk" "$_fx/core/api/x.gen.go" "generated output"
+caso_edit "edit: a symlink INSIDE the path cannot dodge it"  2 "$_fx" "$_fx/link.go" "generated output"
+# DEJA PASAR (rc 0)
+caso_edit "edit: a NEW migration (not on origin/main) passes" 0 "$_fx" "$_fx/modules/x/migrations/002_b.up.sql"
+caso_edit "edit: a migration only on the branch (HEAD ahead of origin/main) passes" 0 "$_fx" "$_fx/modules/x/migrations/004_ahead.up.sql"
+caso_edit "edit: ordinary Go source passes"                  0 "$_fx" "$_fx/core/api/server.go"
+caso_edit "edit: a tracked .sql outside migrations/ passes"  0 "$_fx" "$_fx/docs/query.sql"
+caso_edit "edit: a tracked non-.sql inside migrations/ passes" 0 "$_fx" "$_fx/migrations/README.md"
+caso_edit "edit: a path outside the project passes"          0 "$_fx" "/tmp/elsewhere/x.gen.go"
+caso_edit "edit: a sibling dir sharing the project prefix passes" 0 "$_fx" "$_fx-other/x.gen.go"
+caso_edit "edit: gen-like names that are not generated pass" 0 "$_fx" "$_fx/core/api/generator.go"
+caso_edit "edit: *.generated.go is not *.gen.go"             0 "$_fx" "$_fx/core/api/x.generated.go"
+caso_edit "edit: a docs file under dist-like name passes"    0 "$_fx" "$_fx/docs/dist/notes.md"
+# ⛔ LIMITACION CONOCIDA: las migraciones en Go crecen en sitio y una regla por ruta no las guarda.
+caso_edit "LIMITATION: Go-coded migrations (schema.go) pass"  0 "$_fx" "$_fx/core/internal/store/sqlstore/schema.go"
+# FALLA ABIERTO: sin origin/main, fuera de un repo, sin ruta y sin jq la edicion se deja pasar.
+caso_edit "edit: no origin/main ref FAILS OPEN"              0 "$_fxnoref" "$_fxnoref/modules/x/migrations/001_a.up.sql"
+caso_edit "edit: not a git repo FAILS OPEN"                  0 "$_fxnogit" "$_fxnogit/modules/x/migrations/001_a.up.sql"
+caso_edit "edit: empty file_path FAILS OPEN"                 0 "$_fx" ""
+# If the hook is missing, the initial value 1 turns the row red instead of passing silently.
+sin_jq_edit=1
+if [ -f "$E" ]; then
+	sin_jq_edit=0
+	printf '%s' "{\"tool_input\":{\"file_path\":\"$_fx/core/api/x.gen.go\"}}" \
+		| CLAUDE_PROJECT_DIR="$_fx" PATH="$_sinjq" bash "$E" >/dev/null 2>&1 || sin_jq_edit=$?
+fi
+if [ "$sin_jq_edit" -eq 0 ]; then
+	printf 'ok    %-58s rc=0\n' "edit: without jq FAILS OPEN (declared behavior)"; pass=$((pass + 1))
+else
+	printf 'FAIL  %-58s rc=%s, expected 0\n' "edit: without jq FAILS OPEN (declared behavior)" "$sin_jq_edit"; fail=$((fail + 1))
+fi
 
 # Public export: the hook is curated out with `.claude/`. Exit 2 there is a CI red
 # by construction. The witness must answer SCOPED when hub-leg classifies `public`.

@@ -91,7 +91,7 @@ main() {
 		echo "OK check-worktree-identity: git operates on this tree ($detail)"
 		return 0 ;;
 	unmeasurable)
-		echo "UNVERIFIED check-worktree-identity: NO HE PODIDO MIRAR — $detail" >&2
+		echo "UNVERIFIED check-worktree-identity: COULD NOT CHECK — $detail" >&2
 		return 2 ;;
 	*)
 		cat >&2 <<EOF
@@ -127,7 +127,7 @@ self_test() {
 		if [ "$got" = "$want" ]; then
 			ok=$((ok + 1)); printf '  ok    %-48s %s\n' "$name" "$got"
 		else
-			ko=$((ko + 1)); printf '  FALLO %-48s esperaba %s, dijo %s\n' "$name" "$want" "${got:-<vacío>}"
+			ko=$((ko + 1)); printf '  FAIL %-48s expected %s, got %s\n' "$name" "$want" "${got:-<empty>}"
 		fi
 	}
 
@@ -135,41 +135,41 @@ self_test() {
 	( cd "$t/real" && git init -q -b main . && git commit -q --allow-empty -m x ) >/dev/null 2>&1
 	: > "$t/otro/fichero"
 
-	espera "un repositorio sano se aprueba"              ok           "$t/real"
-	espera "fuera de todo repositorio no se puede ver"   unmeasurable "$t/otro"
+	espera "a healthy repository passes"              ok           "$t/real"
+	espera "a path outside any repository cannot be measured"   unmeasurable "$t/otro"
 
 	# (1) the 2026-08-16 mechanism: state that PERSISTS in the repository config.
 	git -C "$t/real" config --local core.worktree "$t/otro"
-	espera "core.worktree en el config lo caza"          mismatch     "$t/real"
+	espera "core.worktree in repository config is detected"          mismatch     "$t/real"
 	git -C "$t/real" config --local --unset core.worktree
-	espera "y al quitarlo vuelve a aprobar"              ok           "$t/real"
+	espera "removing it restores a pass"              ok           "$t/real"
 
 	# (2) a mechanism sharing NOT ONE CHARACTER with the first — and the one a
 	#     `config --get core.worktree` guard cannot see at all, because it reports nothing.
-	espera "GIT_WORK_TREE lo caza igual"                 mismatch     "$t/real" \
+	espera "GIT_WORK_TREE is also detected"                 mismatch     "$t/real" \
 		"GIT_WORK_TREE=$t/otro" "GIT_DIR=$t/real/.git"
 
 	# (3) THE DECLARED LIMIT, pinned as a fixture so nobody re-adds a false alarm for it:
 	#     git IGNORES core.worktree from the environment/-c scope, so this must stay GREEN.
 	#     A guard reading the config key would fail here — wrongly.
-	espera "core.worktree por entorno es INERTE (verde)" ok           "$t/real" \
+	espera "core.worktree from the environment is INERT (passes)" ok           "$t/real" \
 		"GIT_CONFIG_PARAMETERS='core.worktree=$t/otro'"
 
 	# (4) a LINKED worktree is legitimate and must NOT be flagged: it stands in its own tree
 	#     even though its .git is a file pointing into the parent's directory.
 	git -C "$t/real" worktree add -q -b rama "$t/enlazado" >/dev/null 2>&1
 	if [ -d "$t/enlazado" ]; then
-		espera "un worktree ENLAZADO es legítimo"        ok           "$t/enlazado"
+		espera "a LINKED worktree is valid"        ok           "$t/enlazado"
 	else
-		ko=$((ko + 1)); printf '  FALLO %-48s no se pudo crear el worktree enlazado\n' "worktree enlazado"
+		ko=$((ko + 1)); printf '  FAIL %-48s could not create the linked worktree\n' "linked worktree"
 	fi
 
-	printf 'check-worktree-identity self-test: %d pasan, %d fallan\n' "$ok" "$ko"
+	printf 'check-worktree-identity self-test: %d passed, %d failed\n' "$ok" "$ko"
 	[ "$ko" -eq 0 ]
 }
 
 case "${1:-}" in
 --selftest) self_test ;;
 '') main ;;
-*) echo "uso: $0 [--selftest]" >&2; exit 2 ;;
+*) echo "usage: $0 [--selftest]" >&2; exit 2 ;;
 esac

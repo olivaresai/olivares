@@ -107,7 +107,7 @@ function caso(nombre, real, esperado) {
     console.log(`  ok    ${nombre}`)
   } else {
     fallos += 1
-    console.error(`  FALLO ${nombre}\n        obtuvo: [${a}]\n        esperaba: [${b}]`)
+    console.error(`  FAIL  ${nombre}\n        got: [${a}]\n        expected: [${b}]`)
   }
 }
 
@@ -118,13 +118,13 @@ const ESPERADO = new Set(['demoApi.huerfano', 'demoApi.soloEnTest'])
 {
   const raiz = señuelo()
   caso(
-    'un llamante partido en dos líneas CUENTA como llamante',
+    'a caller split across two lines COUNTS as a caller',
     huerfanos(raiz, raiz),
     ESPERADO,
   )
   // 2) El anclaje: la respuesta NO puede depender del cwd desde el que se invoque.
   caso(
-    'la respuesta no cambia con el cwd del llamante',
+    'the result does not change with the caller working directory',
     huerfanos(raiz, os.tmpdir()),
     ESPERADO,
   )
@@ -144,7 +144,7 @@ const ESPERADO = new Set(['demoApi.huerfano', 'demoApi.soloEnTest'])
   })
   const real = huerfanos(raiz, raiz)
   caso(
-    'MUTANTE «punto pegado» vuelve a perder el llamante partido',
+    'the adjacent-dot MUTANT misses the split caller again',
     real,
     new Set([...ESPERADO, 'demoApi.partido']),
   )
@@ -169,16 +169,16 @@ const ESPERADO = new Set(['demoApi.huerfano', 'demoApi.soloEnTest'])
   } catch (e) {
     code = e.status
   }
-  if (code === 2) console.log('  ok    cero métodos reconocidos sale 2, no 0')
+  if (code === 2) console.log('  ok    zero recognized methods exits 2, not 0')
   else {
     fallos += 1
-    console.error(`  FALLO cero métodos reconocidos salió ${code}, esperaba 2`)
+    console.error(`  FAIL  zero recognized methods exited ${code}; expected 2`)
   }
   fs.rmSync(raiz, { recursive: true, force: true })
 }
 
 if (fallos > 0) {
-  console.error(`check-client-callers --self-test: ${fallos} caso(s) rojo(s)`)
+  console.error(`check-client-callers --self-test: ${fallos} failing case(s)`)
   process.exit(1)
 }
-console.log('check-client-callers --self-test: OK — 4 casos')
+console.log('check-client-callers --self-test: OK — 4 cases')

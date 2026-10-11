@@ -1,6 +1,6 @@
 {
   "title": "Deployment & integration",
-  "subtitle": "Desired-vs-real deployments, versions & rollback, governed plan → apply, and the agent→resource wirings that carry them.",
+  "subtitle": "Declare which agents and MCP servers run where, then plan, approve and apply each change, or roll it back.",
   "tabs": {
     "definitions": "Definitions",
     "wirings": "Wirings",
@@ -111,6 +111,18 @@
     "subjectKind": "Subject kind",
     "subjectRef": "Subject",
     "subjectRefHint": "The agent or MCP server this deployment delivers.",
+    "subjectKinds": {
+      "agent": "Agent",
+      "mcp_server": "MCP server"
+    },
+    "subjectChoose": {
+      "agent": "Choose an agent",
+      "mcp_server": "Choose an MCP server"
+    },
+    "subjectNone": {
+      "agent": "No agents yet.",
+      "mcp_server": "No MCP servers yet."
+    },
     "name": "Name",
     "nameHint": "A name for this deployment. Unique per environment.",
     "environment": "Environment",
@@ -322,17 +334,22 @@
   "empty": {
     "deploy": {
       "title": "No deployments declared yet",
-      "description": "This screen lists deployment definitions — desired state recorded here, not a launched session. Declare a deployment to record desired state. Reconciling it also needs a runtime executor configured by the operator; without one, Plan and Apply answer 503.",
+      "description": "This screen lists deployment definitions: declare an agent or MCP server, then Plan and Apply deploy it to its target.",
       "sessions": "Operate sessions"
     },
     "operations": {
       "title": "No deployment operations recorded yet",
-      "description": "Plan, Apply, Verify and Retire write a ledger entry only once an operator has configured a runtime executor; until then each answers 503 and records nothing."
+      "description": "Plan, Apply, Verify and Retire are recorded here once a runtime executor is connected."
     },
     "wirings": {
       "title": "No permitted wirings materialized yet",
       "description": "Wirings are declared on a deployment definition and materialize when Apply succeeds, which needs a runtime executor an operator has configured."
     }
+  },
+  "noExecutor": {
+    "title": "Deploying needs a runtime executor",
+    "description": "An administrator connects one by pointing OLIVARES_DEPLOY_EXECUTOR_CONFIG at its configuration file and restarting Olivares.",
+    "guide": "How to connect an executor"
   },
   "truncatedHint": "There are more rows than shown; this page takes them by row id (assigned at creation), so the later ones are missing. A definition, wiring or operation NOT listed here is not proof that it does not exist."
 }

@@ -40,6 +40,8 @@ const auth = vi.hoisted(() => ({
   /** `true` | `false` | `undefined` — the third is an UNDETERMINED flag, not a global
    *  account, and `null` below is a principal that has not resolved at all. */
   superadmin: undefined as boolean | undefined,
+  /** The setup administrator's shape: superadmin AND a grant in the active tenant. */
+  owner: false,
   resolved: true,
 }))
 vi.mock('@/lib/auth/context', () => ({
@@ -56,7 +58,9 @@ vi.mock('@/lib/auth/context', () => ({
           ...(auth.superadmin === undefined
             ? {}
             : { superadmin: auth.superadmin }),
-          grants: [],
+          grants: auth.owner
+            ? [{ tenant: 't1', role: 'owner', permissions: [] }]
+            : [],
         }
       : null,
   }),
@@ -102,7 +106,10 @@ import { useSessionStore } from '@/stores/session'
 import { useTenantStore } from '@/stores/tenant'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { CHANNEL_ADMINISTRATION_SURFACE } from './capabilities'
-import { CommunicationsView } from './communications-view'
+import {
+  CommunicationsView,
+  type CommunicationsEntrance,
+} from './communications-view'
 import { adminItemOf, WS } from './test-harness'
 import './i18n'
 
@@ -192,7 +199,7 @@ const clients: QueryClient[] = []
 /** The room, mounted on a real client. `whoami` is seeded to the SAME principal the
  *  mocked context reports: the hook's live re-read comes from the cache, and a test whose
  *  two halves disagree would measure a context mismatch instead of this rule. */
-function room(entrance: 'catalog' | 'administration' = 'catalog') {
+function room(entrance: CommunicationsEntrance = 'catalog') {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   })
@@ -253,6 +260,7 @@ beforeEach(() => {
   auth.perms = new Set([CR])
   auth.tenant = 't1'
   auth.superadmin = false
+  auth.owner = false
   auth.resolved = true
   for (const fn of Object.values(api)) fn.mockReset()
   api.listChannels.mockResolvedValue({ items: [], has_more: false })
@@ -433,5 +441,55 @@ describe('what is NOT this family', () => {
     await drain()
 
     expect(wire.asked()).toBeGreaterThanOrEqual(1)
+  })
+})
+
+describe('the setup administrator is a member of its own organization', () => {
+  // #503: superadmin AND owner of the active tenant. The engine answers this account's
+  // question, so the room asks it like any member: the Administration tab opens and the
+  // handoff inbox reads instead of telling the owner to sign in as someone else.
+  it('submits the question, opens the Administration tab and loads the collection', async () => {
+    auth.perms = new Set<string>()
+    auth.superadmin = true
+    auth.owner = true
+    const wire = transport(reachable)
+    room('administration')
+    await drain()
+
+    expect(wire.asked()).toBeGreaterThanOrEqual(1)
+    expect(administrationTab()).not.toBeNull()
+    expect(api.listAdministrableChannels).toHaveBeenCalledTimes(1)
+  })
+
+  it('the handoff inbox reads instead of showing the global-account guidance', async () => {
+    auth.perms = new Set(['sessions:delivery:read'])
+    auth.superadmin = true
+    auth.owner = true
+    api.listHandoffInbox.mockResolvedValue({ items: [], has_more: false })
+    transport(reachable)
+    room('handoffs')
+    await drain()
+
+    expect(api.listHandoffInbox).toHaveBeenCalled()
+    expect(
+      document.querySelector('[data-slot="handoff-account-guidance"]'),
+    ).toBeNull()
+  })
+
+  it('CONTROL: a superadmin with no grant in the active tenant stays the global family', async () => {
+    auth.perms = new Set(['sessions:delivery:read'])
+    auth.superadmin = true
+    auth.owner = true
+    auth.tenant = 't2'
+    const wire = transport(reachable)
+    room('handoffs')
+    await drain()
+    await twelveSeconds()
+
+    expect(wire.asked()).toBe(0)
+    expect(api.listHandoffInbox).not.toHaveBeenCalled()
+    expect(
+      document.querySelector('[data-slot="handoff-account-guidance"]'),
+    ).not.toBeNull()
   })
 })

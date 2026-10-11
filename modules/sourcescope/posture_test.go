@@ -18,7 +18,7 @@ import (
 
 // posture_test.go proves the F2/F5 enforcement-posture dual-control: a RELAXING
 // change is not applied by one actor — it becomes a pending request that a SECOND, distinct
-// principal must approve (ADR-0022 §5).
+// principal must approve.
 
 // tokenFor creates a user with a tenant role and returns its session token (for a distinct
 // approver in the dual-control flow).
@@ -361,7 +361,7 @@ func TestS590ConfinementSignalCountsOnlyEnabledAllows(t *testing.T) {
 		t.Errorf("a disabled allow does not confine, so this is the FIRST allow: want 201, got %d %s", c.code, c.raw)
 	}
 
-	// A FORBID-only source is not confined either (ADR-0022 §2: global minus the forbidden).
+	// A FORBID-only source is not confined either (source-scope contract: global minus the forbidden).
 	if f := h.createBinding(admin, tenant, map[string]any{
 		"source_type": "model", "source_ref": "m-fbonly", "scope_tree": "user", "scope_ref": "u-x",
 		"effect": "forbid", "enabled": true,

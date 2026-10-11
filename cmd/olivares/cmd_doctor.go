@@ -26,6 +26,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/olivaresai/olivares/core/envconfig"
 	"github.com/spf13/cobra"
 
 	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
@@ -35,6 +36,7 @@ import (
 	"github.com/olivaresai/olivares/core/license"
 	"github.com/olivaresai/olivares/core/release"
 	"github.com/olivaresai/olivares/modules/sessions"
+	"github.com/olivaresai/olivares/modules/sessions/confine"
 )
 
 const doctorSchema = "olivares.ai/doctor/v1"
@@ -93,17 +95,18 @@ type doctorReport struct {
 }
 
 type doctorDeps struct {
-	stat      func(string) (fs.FileInfo, error)
-	readFile  func(string) ([]byte, error)
-	lookPath  func(string) (string, error)
-	run       func(context.Context, string, ...string) (int, error)
-	runOutput func(context.Context, string, ...string) (int, []byte, error)
-	httpGet   func(context.Context, string, string, time.Duration) (int, []byte, error)
-	getenv    func(string) string
-	euid      func() int
-	lookupUID func(string) (int, error)
-	homeDir   func() (string, error)
-	goos      string
+	confinement func() confine.State
+	stat        func(string) (fs.FileInfo, error)
+	readFile    func(string) ([]byte, error)
+	lookPath    func(string) (string, error)
+	run         func(context.Context, string, ...string) (int, error)
+	runOutput   func(context.Context, string, ...string) (int, []byte, error)
+	httpGet     func(context.Context, string, string, time.Duration) (int, []byte, error)
+	getenv      func(string) string
+	euid        func() int
+	lookupUID   func(string) (int, error)
+	homeDir     func() (string, error)
+	goos        string
 	// toolSignIn asks the engine of the saved sign-in whether a tool is signed in,
 	// the answer `olivares tool ls` shows. nil means doctor does not ask.
 	toolSignIn func(driver string) doctorToolState
@@ -140,7 +143,8 @@ func doctorExecutable(name string) error {
 
 func defaultDoctorDeps() doctorDeps {
 	return doctorDeps{
-		toolSignIn: doctorToolSignIn,
+		toolSignIn:  doctorToolSignIn,
+		confinement: confine.Probe,
 
 		stat: os.Stat, readFile: os.ReadFile, lookPath: exec.LookPath,
 		run: func(ctx context.Context, name string, args ...string) (int, error) {
@@ -182,7 +186,7 @@ func defaultDoctorDeps() doctorDeps {
 			return 0, body, nil
 		},
 		httpGet: doctorHTTPGet,
-		getenv:  os.Getenv,
+		getenv:  envconfig.Get,
 		euid:    os.Geteuid,
 		lookupUID: func(name string) (int, error) {
 			u, err := user.Lookup(name)
@@ -426,6 +430,7 @@ func runDoctor(ctx context.Context, raw *doctorOptions, deps doctorDeps) (doctor
 	add(doctorStoreCheck(ctx, deps, o, ca, initActive))
 	add(doctorLicenseCheck(o.dataDir))
 	add(doctorActivationSourceCheck(o.dataDir))
+	add(doctorTracingOverridesCheck())
 	add(doctorBackgroundJobsCheck(ctx, deps, o, ca))
 	add(doctorAuditCheck(ctx, deps, o))
 	add(doctorChannelCheck(ctx, deps, o))
@@ -434,6 +439,8 @@ func runDoctor(ctx context.Context, raw *doctorOptions, deps doctorDeps) (doctor
 	add(agentHour)
 	add(pepHour)
 	add(doctorInferenceRouting(deps))
+	add(doctorSessionLaunchGate(deps))
+	add(doctorSessionConfinement(deps))
 	add(doctorFirstHourNextStep(deps, agentHour, pepHour))
 
 	// The required set depends on HOW this installation was made, and the relaxation
@@ -460,6 +467,23 @@ func runDoctor(ctx context.Context, raw *doctorOptions, deps doctorDeps) (doctor
 	return report, code, nil
 }
 
+// This probes the CLI host, which may differ from a remote engine host.
+func doctorSessionConfinement(deps doctorDeps) doctorCheck {
+	c := doctorCheck{Name: "session-confinement", Status: "unknown", Required: false,
+		Detail: "session filesystem confinement on this local host was not checked"}
+	if deps.confinement == nil {
+		return c
+	}
+	state := deps.confinement()
+	c.Status, c.Detail = "pass", "this local host: "+state.String()
+	if state.Mode != confine.ModeLandlock {
+		c.Status = "fail"
+		c.Detail += "; managed sessions and local MCP children cannot start here"
+		c.Remediation = "use a Linux engine host with Landlock enabled; run olivares doctor on the engine host to verify availability"
+	}
+	return c
+}
+
 func doctorUsage(message string) error {
 	return exitcode.New(exitcode.Usage, errors.New(message))
 }
@@ -477,6 +501,29 @@ func detectDoctorInit(deps doctorDeps) string {
 		return "openrc"
 	}
 	return "unknown"
+}
+
+// The two places an installer puts the systemd system unit: install-service.sh
+// writes the first, the deb and rpm packages ship the second. Both are what
+// internal/localinstall accepts in the install manifest.
+const (
+	doctorSystemdAdminUnit   = "/etc/systemd/system/olivares.service"
+	doctorSystemdPackageUnit = "/usr/lib/systemd/system/olivares.service"
+)
+
+// doctorSystemdSystemUnit names the unit a system doctor measures when --unit is
+// not given: the first of the two that exists, in systemd's own precedence (an
+// /etc unit overrides a packaged one). A stat that fails for any reason but
+// absence keeps the /etc path, so the checks that read it report the failure
+// instead of it being hidden by measuring the other file. With neither present
+// the shell installer's path stays, and the checks name it as missing.
+func doctorSystemdSystemUnit(deps doctorDeps) string {
+	for _, path := range []string{doctorSystemdAdminUnit, doctorSystemdPackageUnit} {
+		if _, err := deps.stat(path); !errors.Is(err, fs.ErrNotExist) {
+			return path
+		}
+	}
+	return doctorSystemdAdminUnit
 }
 
 func resolveDoctorPaths(o *doctorOptions, deps doctorDeps) error {
@@ -549,7 +596,7 @@ func resolveDoctorPaths(o *doctorOptions, deps doctorDeps) error {
 	if o.unit == "" && o.init != "unknown" {
 		switch o.init + ":" + o.mode {
 		case "systemd:system":
-			o.unit = "/etc/systemd/system/olivares.service"
+			o.unit = doctorSystemdSystemUnit(deps)
 		case "systemd:user":
 			root := deps.getenv("XDG_CONFIG_HOME")
 			if !filepath.IsAbs(root) {
@@ -908,8 +955,8 @@ func doctorServiceOverridesCheck(deps doctorDeps, o doctorOptions) doctorCheck {
 		return c
 	}
 	path := o.unit + ".d/agentops.conf"
-	if o.mode == "system" && (o.unit == "/usr/lib/systemd/system/olivares.service" || o.unit == "/lib/systemd/system/olivares.service") {
-		path = "/etc/systemd/system/olivares.service.d/agentops.conf"
+	if o.mode == "system" && (o.unit == doctorSystemdPackageUnit || o.unit == "/lib/systemd/system/olivares.service") {
+		path = doctorSystemdAdminUnit + ".d/agentops.conf"
 	}
 	_, err := deps.stat(path)
 	if errors.Is(err, fs.ErrNotExist) {
@@ -1438,6 +1485,32 @@ func doctorInferenceRouting(deps doctorDeps) doctorCheck {
 		return c
 	}
 	c.Detail = "Model calls go through " + doctorSafeAddress(deps.getenv(envSessionBaseURL))
+	return c
+}
+
+// doctorSessionLaunchGate states what the session launch gate does with a session whose
+// budget or context policy it cannot read: refuse it, the default in every build, or launch
+// it where the operator set fail-open. It resolves the setting as the gate does
+// (resolveAvailabilityPosture) but from doctor's own environment, which can differ from the
+// service's, so it says so; the engine states its own at boot. It never fails the install:
+// fail-open is a supported choice.
+func doctorSessionLaunchGate(deps doctorDeps) doctorCheck {
+	c := doctorCheck{Name: "session-launch-gate", Required: false, Status: "pass",
+		Detail: "With this environment, a session whose budget or context policy cannot be read does not start"}
+	var open, envs []string
+	for _, ctl := range []struct{ name, env string }{
+		{"budget", envSessionBudgetAvailability},
+		{"context policy", envSessionContextAvailability},
+	} {
+		if resolveAvailabilityPosture(deps.getenv(ctl.env), nil) == availabilityFailOpen {
+			open, envs = append(open, ctl.name), append(envs, ctl.env)
+		}
+	}
+	if len(open) > 0 {
+		c.Status = "warn"
+		c.Detail = "With this environment, a session starts even when its " + strings.Join(open, " or ") + " cannot be read"
+		c.Remediation = "unset " + strings.Join(envs, " and ") + " (or set fail-closed) to refuse such a session"
+	}
 	return c
 }
 

@@ -35,12 +35,15 @@ function WorkspaceCardFace({ name, detail }: { name: string; detail: string }) {
       </span>
       <span className="flex min-w-0 flex-1 flex-col text-left">
         <span
-          className="truncate text-body font-semibold text-text"
+          className="line-clamp-2 break-words text-body font-semibold text-text"
           title={name}
         >
           {name}
         </span>
-        <span className="truncate text-caption text-text-3" title={detail}>
+        <span
+          className="line-clamp-2 break-words text-caption text-text-3"
+          title={detail}
+        >
           {detail}
         </span>
       </span>

@@ -1,8 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Fingerprint, IdCard, ShieldAlert } from 'lucide-react'
+import { useQueryClient } from '@tanstack/react-query'
+import { Fingerprint, ShieldAlert } from 'lucide-react'
 import { useState, type ReactNode, useId, useRef, useLayoutEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
@@ -12,7 +12,6 @@ import { queryKeys } from '@/lib/api'
 import { authApi } from '@/lib/api/endpoints'
 import { ApiError } from '@/lib/api/errors'
 import { useAuth } from '@/lib/auth/context'
-import { useSessionStore } from '@/stores/session'
 import { cn } from '@/lib/utils'
 import {
   stepUpPrincipal,
@@ -27,7 +26,11 @@ import {
   isNoWebAuthnCredential,
   isRelyingPartyUnusable,
 } from './api'
-import { isPivKnownUnconfigured, pivStatusQueryKey } from './piv-configuration'
+import { PANEL_EXTENSIONS } from '@/features/extensions'
+import {
+  useOfferedPanels,
+  type AdditionalStepUpCeremony,
+} from '@/features/panels'
 import { ContractPendingNotice } from './components'
 import {
   addressCannotBeRelyingParty,
@@ -212,8 +215,6 @@ function CeremonyPanel({
   isCurrentRequest,
 }: PanelProps) {
   const { t } = useTranslation(['identity', 'common'])
-  const { principal } = useAuth()
-  const credentialGeneration = useSessionStore((s) => s.credentialGeneration)
   const queryClient = useQueryClient()
   const captureOwner = useStepUpOwner()
   const [status, setStatus] = useState<Status>('idle')
@@ -248,14 +249,9 @@ function CeremonyPanel({
     status === 'registering' ||
     status === 'checking'
   const terminal = status === 'sessionExpired'
-  const knownUnconfigured = isPivKnownUnconfigured(principal)
-  const piv = useQuery({
-    queryKey: pivStatusQueryKey(null, principal, credentialGeneration),
-    queryFn: ({ signal }) =>
-      identityApi.pivStatus({ signal, sessionEffects: 'none' }),
-    retry: false,
-    enabled: !knownUnconfigured,
-  })
+  const additionalMethods = useOfferedPanels(
+    PANEL_EXTENSIONS.identityStepUpMethods ?? [],
+  )
 
   async function verify(owner: StepUpOwner, attempt: StepUpAttempt) {
     // Cancel earlier readers; never join a cached/prior in-flight query as evidence.
@@ -297,7 +293,7 @@ function CeremonyPanel({
       // "did not complete" and "check the session" are both the wrong advice.
       setStatus('relyingPartyUnusable')
     } else if (isNoWebAuthnCredential(err)) {
-      // This is permanent for the owned demand, including any later PIV success.
+      // This is permanent for the owned demand, including any later additional-method success.
       onUnenrolled?.()
       setEnrollmentAvailable(true)
       setStatus('unenrolled')
@@ -320,14 +316,16 @@ function CeremonyPanel({
     else setStatus('failed')
   }
 
-  async function run(method: 'webauthn' | 'piv' | 'register' | 'check') {
+  async function run(
+    method: 'webauthn' | 'register' | 'check' | AdditionalStepUpCeremony,
+  ) {
     if (busy || terminal) return
     // The withdrawn action, guarded at the callback and not only at the control:
     // an activation that arrives anyway — programmatically, from a control an
     // assistive technology can still reach, or from a handler captured before
     // the address was read — must not open a ceremony the browser will refuse.
     // Re-read rather than close over the render's value, so this answers for the
-    // address the console is on NOW. It withdraws nothing else: PIV, the session
+    // address the console is on NOW. It withdraws nothing else: additional methods, the session
     // check and every gate below are untouched, and the engine still verifies
     // the origin, the relying party and the step-up on whatever does reach it.
     if (
@@ -384,9 +382,9 @@ function CeremonyPanel({
         attempt.dispatchGuard()
         if (result?.ok !== true)
           throw new Error('Unknown authentication result')
-      } else if (method === 'piv') {
+      } else if (typeof method === 'function') {
         finalPost = true
-        const result = await identityApi.pivElevate(attempt)
+        const result = await method(attempt)
         attempt.dispatchGuard()
         if (result?.ok !== true)
           throw new Error('Unknown authentication result')
@@ -453,19 +451,9 @@ function CeremonyPanel({
               : t('assurance.authenticate')}
           </Button>
         </div>
-        {!knownUnconfigured && piv.data?.presented === true && (
-          <div>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => void run('piv')}
-              disabled={busy || terminal}
-            >
-              <IdCard className="size-4" aria-hidden />
-              {t('assurance.authenticatePiv')}
-            </Button>
-          </div>
-        )}
+        {additionalMethods.map(({ id, Component }) => (
+          <Component key={id} disabled={busy || terminal} run={run} />
+        ))}
         {allowEnrollment && enrollmentAvailable && (
           <div className="flex flex-col gap-3 rounded-md border p-3">
             <p className="text-body text-muted-foreground">

@@ -11,7 +11,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -24,6 +23,7 @@ import (
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 	"github.com/olivaresai/olivares/modules/gitpublish"
+	"github.com/olivaresai/olivares/modules/sessions"
 )
 
 // J10-S3 custody: the approved host credentials and server repositories the
@@ -31,26 +31,31 @@ import (
 // Only a superadmin at AAL3 writes either store; no tenant route reaches them.
 //
 //   - A credential binding is a source-roster row (auth.SourceStore, the
-//     deployment scope) of kind github or gitlab. It is enabled and has no
-//     plugin, its tenant is the caller's tenant, and its config names a
+//     deployment scope) of kind github, gitlab or git. It is enabled and has
+//     no plugin, its tenant is the caller's tenant, and its config names a
 //     publication credential. The binding id is the row's persistent id, so a
 //     source deleted and recreated under the same name is a different binding.
-//   - A repository binding is one entry of that row's publish_repositories,
-//     named "<binding id>:<owner>/<name>". Its version is the row's version, so
-//     any edit of the row changes both pins and A4 refuses a pinned intent.
+//   - A repository binding of a github or gitlab row is one entry of that
+//     row's publish_repositories, named "<binding id>:<owner>/<name>". A git
+//     row names its one remote in config key "remote" (ssh:// or https://);
+//     its repository binding is that remote's path. Either way the version is
+//     the row's version, so any edit of the row changes both pins and A4
+//     refuses a pinned intent.
 //   - publish_workspaces, when set, narrows the row to those workspaces.
 //   - The credential is read only as `store:git-host/<name>` from the sealed
 //     secret store's deployment scope, never through the scheme resolver: no
 //     env:, file:, vault or cloud reference and no other store name resolves.
-//   - The API host is the row's api_base (the observer's default when unset).
-//     Only the public GitHub and GitLab API hosts pass the adapter's endpoint
-//     rules, because no operator host allowlist is configured.
+//     A git row's credential is the SSH private key (ssh remote) or
+//     "<user>:<token-or-password>" (https remote).
+//   - The API host of a github or gitlab row is the row's api_base (the
+//     observer's default when unset); the row is the superadmin's approval of
+//     that host, so its host is the adapter's whole write allowlist (GitHub
+//     Enterprise Server and self-managed GitLab publish) and every other
+//     endpoint rule still applies. A git row has no API host: its remote is
+//     the approved destination.
 const (
-	gitpublishCredentialKey   = "publish_credential"
-	gitpublishRepositoriesKey = "publish_repositories"
-	gitpublishWorkspacesKey   = "publish_workspaces"
-	gitpublishSecretPrefix    = "git-host/"
-	gitpublishHTTPTimeout     = 60 * time.Second
+	gitpublishSecretPrefix = "git-host/"
+	gitpublishHTTPTimeout  = 60 * time.Second
 )
 
 var errGitpublishBindingChanged = errors.New("gitpublish custody: the binding changed after admission")
@@ -78,7 +83,8 @@ type gitpublishCustody struct {
 	sources gitpublishSourceReader
 	secrets gitpublishSecretReader
 	repos   gitpublishRepositoryInit
-	root    string // <data dir>/gitpublish/repositories
+	exec    *gp.Executor // the closed executor a plain-git adapter reads through
+	root    string       // <data dir>/gitpublish/repositories
 	doer    gp.Doer
 	mu      sync.Mutex // serializes server repository creation
 }
@@ -87,53 +93,69 @@ var _ gitpublish.Custody = (*gitpublishCustody)(nil)
 
 // approvedSource returns the roster row a binding id names when it is an
 // approved publication credential of tenant.
-func (c *gitpublishCustody) approvedSource(ctx context.Context, tenant model.TenantID, id string) (model.SourceDef, error) {
+type gitpublishSource struct {
+	model.SourceDef
+	kind gp.TargetKind
+	row  gp.TargetRow
+}
+
+func (c *gitpublishCustody) approvedSource(ctx context.Context, tenant model.TenantID, id string) (gitpublishSource, error) {
 	if id == "" || strings.ContainsAny(id, ": \t\r\n") {
-		return model.SourceDef{}, gitpublish.ErrBindingNotApproved
+		return gitpublishSource{}, gitpublish.ErrBindingNotApproved
 	}
 	def, ok, err := c.sources.GetByID(ctx, model.ID(id))
 	if err != nil {
-		return model.SourceDef{}, err
+		return gitpublishSource{}, err
 	}
 	if !ok || def.Scope != auth.GlobalSourceScope || !def.Enabled || def.Plugin != nil ||
-		(def.Kind != "github" && def.Kind != "gitlab") ||
 		tenant.IsZero() || strings.TrimSpace(def.Tenant) != tenant.String() {
-		return model.SourceDef{}, gitpublish.ErrBindingNotApproved
+		return gitpublishSource{}, gitpublish.ErrBindingNotApproved
 	}
-	if _, ok := gitpublishSecretName(def.Config[gitpublishCredentialKey]); !ok {
-		return model.SourceDef{}, gitpublish.ErrBindingNotApproved
+	kind, ok := gp.LookupTargetKind(def.Kind)
+	if !ok {
+		return gitpublishSource{}, gitpublish.ErrBindingNotApproved
 	}
-	return def, nil
+	if _, ok := gitpublishSecretName(def.Config[gp.PublicationCredentialKey]); !ok {
+		return gitpublishSource{}, gitpublish.ErrBindingNotApproved
+	}
+	row, err := kind.Bind(def.Config)
+	if err != nil {
+		return gitpublishSource{}, gitpublish.ErrBindingNotApproved
+	}
+	return gitpublishSource{SourceDef: def, kind: kind, row: row}, nil
 }
 
 // approvedIn also requires workspace to be one the row allows.
-func (c *gitpublishCustody) approvedIn(ctx context.Context, tenant model.TenantID, workspace model.ID, id string) (model.SourceDef, error) {
+func (c *gitpublishCustody) approvedIn(ctx context.Context, tenant model.TenantID, workspace model.ID, id string) (gitpublishSource, error) {
 	def, err := c.approvedSource(ctx, tenant, id)
 	if err != nil {
 		return def, err
 	}
-	if ws := gitpublishList(def.Config[gitpublishWorkspacesKey]); len(ws) > 0 && !gitpublishContains(ws, workspace.String()) {
-		return model.SourceDef{}, gitpublish.ErrBindingNotApproved
+	if !def.row.AllowsWorkspace(workspace.String()) {
+		return gitpublishSource{}, gitpublish.ErrBindingNotApproved
 	}
 	return def, nil
 }
 
 // CredentialBinding implements gitpublish.Custody. The allowed owner is the
-// row's org (GitHub) or group (GitLab); a row without one allows none.
+// row's org (GitHub) or group (GitLab); a row without one allows none. A git
+// row has exactly one remote, so its owner is the remote path without the
+// repository name, and the containment check stays meaningful.
 func (c *gitpublishCustody) CredentialBinding(ctx context.Context, tenant model.TenantID, workspace model.ID, id string) (gitpublish.CredentialBinding, error) {
 	def, err := c.approvedIn(ctx, tenant, workspace, id)
 	if err != nil {
 		return gitpublish.CredentialBinding{}, err
 	}
-	owner := def.Config["org"]
-	if def.Kind == "gitlab" {
-		owner = def.Config["group"]
-	}
+	return def.credentialBinding(), nil
+}
+
+// credentialBinding is an approved row as a credential binding.
+func (def gitpublishSource) credentialBinding() gitpublish.CredentialBinding {
 	var owners []string
-	if o := strings.TrimSpace(owner); o != "" {
+	if o := def.row.Owner(); o != "" {
 		owners = []string{o}
 	}
-	return gitpublish.CredentialBinding{ID: def.ID.String(), Version: def.Version, Host: def.Kind, AllowedOwners: owners}, nil
+	return gitpublish.CredentialBinding{ID: def.ID.String(), Version: def.Version, Host: def.Kind, AllowedOwners: owners}
 }
 
 // RepositoryBinding implements gitpublish.Custody. The server repository is
@@ -157,23 +179,24 @@ func (c *gitpublishCustody) RepositoryBinding(ctx context.Context, tenant model.
 	return rb, nil
 }
 
-// repository resolves one approved repository of def.
-func (c *gitpublishCustody) repository(tenant model.TenantID, def model.SourceDef, path string) (gitpublish.RepositoryBinding, error) {
-	if !gitpublishValidPath(path) || !gitpublishContains(gitpublishList(def.Config[gitpublishRepositoriesKey]), path) {
+// repository resolves one approved repository of def. A github or gitlab row
+// lists it in publish_repositories; a git row has the one remote, so only
+// that remote's path resolves.
+func (c *gitpublishCustody) repository(tenant model.TenantID, def gitpublishSource, path string) (gitpublish.RepositoryBinding, error) {
+	repo, err := def.row.Repository(path)
+	if errors.Is(err, gp.ErrTargetRepository) {
 		return gitpublish.RepositoryBinding{}, gitpublish.ErrBindingNotApproved
 	}
-	host, err := gitpublishAPIHost(def)
 	if err != nil {
-		return gitpublish.RepositoryBinding{}, gitpublish.ErrBindingNotApproved
+		return gitpublish.RepositoryBinding{}, fmt.Errorf("%w: %w", gitpublish.ErrBindingNotApproved, err)
 	}
-	cut := strings.LastIndex(path, "/")
 	sum := sha256.Sum256([]byte(tenant.String() + "\x00" + def.ID.String() + "\x00" + strings.ToLower(path)))
 	return gitpublish.RepositoryBinding{
 		ID:        def.ID.String() + ":" + path,
 		Version:   def.Version,
-		RepoID:    host + "/" + strings.ToLower(path),
-		Owner:     path[:cut],
-		Name:      path[cut+1:],
+		RepoID:    repo.ID,
+		Owner:     repo.Owner,
+		Name:      repo.Name,
 		LocalPath: filepath.Join(c.root, hex.EncodeToString(sum[:16])+".git"),
 	}, nil
 }
@@ -218,24 +241,52 @@ func (c *gitpublishCustody) OpenHost(ctx context.Context, tenant model.TenantID,
 	if current != rb {
 		return nil, errGitpublishBindingChanged
 	}
-	name, _ := gitpublishSecretName(def.Config[gitpublishCredentialKey])
+	name, _ := gitpublishSecretName(def.row.CredentialRef())
 	value, err := c.secrets.Resolve(ctx, auth.GlobalSecretScope, name)
 	if err != nil {
 		return nil, errors.New("gitpublish custody: the publication credential is unavailable")
 	}
 	credential := gp.NewSecret(string(value))
 	clear(value)
-	base := gitpublishAPIBase(def)
-	switch def.Kind {
-	case "github":
-		return gp.NewGitHub(gp.GitHubConfig{
-			APIBase: base, AppID: strings.TrimSpace(def.Config["app_id"]), InstallationID: strings.TrimSpace(def.Config["installation_id"]),
-			Key: credential, Owner: rb.Owner, Repo: rb.Name,
-		}, c.doer)
-	case "gitlab":
-		return gp.NewGitLab(gp.GitLabConfig{APIBase: base, ProjectPath: path, Token: credential}, c.doer)
+	return def.row.Open(path, credential, gp.HostDependencies{HTTP: c.doer, Git: c.exec})
+}
+
+// MintSessionGitRead implements sessions.SessionGitReadSource: a contents:read
+// installation token for one approved GitHub repository binding in workspace,
+// through the adapter's own Mint and Release. A kind without a narrow read
+// capability is refused before any secret read or call. The App key never leaves.
+func (c *gitpublishCustody) MintSessionGitRead(ctx context.Context, tenant model.TenantID, workspace model.ID, id string) (sessions.GitReadCredential, error) {
+	source, path, ok := strings.Cut(id, ":")
+	if !ok {
+		return sessions.GitReadCredential{}, sessions.ErrGitReadNotApproved
 	}
-	return nil, gitpublish.ErrBindingNotApproved
+	def, err := c.approvedIn(ctx, tenant, workspace, source)
+	if errors.Is(err, gitpublish.ErrBindingNotApproved) {
+		return sessions.GitReadCredential{}, sessions.ErrGitReadNotApproved
+	} else if err != nil {
+		return sessions.GitReadCredential{}, err
+	}
+	if !def.kind.Capabilities().NarrowRead {
+		return sessions.GitReadCredential{}, sessions.ErrGitReadUnsupported
+	}
+	cb := def.credentialBinding()
+	rb, err := c.repository(tenant, def, path)
+	if err != nil || !gitpublishContainsFold(cb.AllowedOwners, rb.Owner) {
+		return sessions.GitReadCredential{}, sessions.ErrGitReadNotApproved
+	}
+	host, err := c.OpenHost(ctx, tenant, cb, rb)
+	if err != nil {
+		return sessions.GitReadCredential{}, err
+	}
+	tok, err := host.Mint(ctx, gp.EffectRead)
+	if err != nil {
+		return sessions.GitReadCredential{}, err
+	}
+	repoURL, _, _ := host.PushTarget(tok)
+	return sessions.GitReadCredential{
+		RepoURL: repoURL, Token: tok.Value().Reveal(), ExpiresAt: tok.ExpiresAt,
+		Release: func(ctx context.Context) error { return host.Release(ctx, tok) },
+	}, nil
 }
 
 // gitpublishSecretName accepts only `store:git-host/<name>`.
@@ -250,66 +301,10 @@ func gitpublishSecretName(ref string) (string, bool) {
 	return name, true
 }
 
-// gitpublishAPIBase is the row's api_base, or the observer's default.
-func gitpublishAPIBase(def model.SourceDef) string {
-	base := strings.TrimRight(strings.TrimSpace(def.Config["api_base"]), "/")
-	if base != "" {
-		return base
-	}
-	if def.Kind == "gitlab" {
-		return "https://gitlab.com"
-	}
-	return "https://api.github.com"
-}
-
-// gitpublishAPIHost is the API host, after the adapter's endpoint rules.
-func gitpublishAPIHost(def model.SourceDef) (string, error) {
-	base := gitpublishAPIBase(def)
-	if err := gp.ValidateEndpoint(base, nil); err != nil {
-		return "", err
-	}
-	u, err := url.Parse(base)
-	if err != nil {
-		return "", err
-	}
-	return strings.ToLower(u.Hostname()), nil
-}
-
-// gitpublishValidPath accepts owner/name paths (GitLab: group/…/project) of
-// plain segments.
-func gitpublishValidPath(path string) bool {
-	segments := strings.Split(path, "/")
-	if len(path) > 512 || len(segments) < 2 {
-		return false
-	}
-	for _, s := range segments {
-		if s == "" || s == "." || s == ".." {
-			return false
-		}
-		for _, r := range s {
-			switch {
-			case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '.', r == '_', r == '-':
-			default:
-				return false
-			}
-		}
-	}
-	return true
-}
-
-func gitpublishList(raw string) []string {
-	var out []string
-	for _, v := range strings.Split(raw, ",") {
-		if v = strings.TrimSpace(v); v != "" {
-			out = append(out, v)
-		}
-	}
-	return out
-}
-
-func gitpublishContains(list []string, v string) bool {
+// gitpublishContainsFold is the module's owner check (targets.go bindings).
+func gitpublishContainsFold(list []string, v string) bool {
 	for _, x := range list {
-		if x == v {
+		if strings.EqualFold(x, v) {
 			return true
 		}
 	}
@@ -346,7 +341,7 @@ func newGitPublication(dataDir string, sources gitpublishSourceReader, secrets g
 	if err != nil {
 		return nil, nil, err
 	}
-	return &gitpublishCustody{sources: sources, secrets: secrets, repos: x, root: root, doer: gp.NewHTTPClient(gitpublishHTTPTimeout)}, x, nil
+	return &gitpublishCustody{sources: sources, secrets: secrets, repos: x, exec: x, root: root, doer: gp.NewHTTPClient(gitpublishHTTPTimeout)}, x, nil
 }
 
 // The publication sweep, on the runtime's periodic scheduler: it settles

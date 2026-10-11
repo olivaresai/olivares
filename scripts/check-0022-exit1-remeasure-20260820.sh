@@ -25,13 +25,13 @@ MIGDIR="${OLIVARES_C0022R_MIGDIR:-commercial/license-worker/migrations}"
 [ -f "$M18" ] || cannot "missing 0018"
 [ -d "$MIGDIR" ] || cannot "missing migrations dir"
 
-grep -q 'SALIDA 1' "$DOC" || fail "$DOC lost SALIDA 1"
+grep -q 'SALIDA 1' "$DOC" || fail "$DOC lost the required exit-code heading"
 grep -q 'dodo_cohort_fragments' "$DOC" || fail "$DOC lost colliding fragments table"
 grep -q 'dodo_line_grants' "$DOC" || fail "$DOC lost colliding grants table"
 grep -q '0016_dodo_cohort_barrier.sql' "$DOC" || fail "$DOC lost published 0016"
 grep -q '0018_dodo_atomic_issuance.sql' "$DOC" || fail "$DOC lost published 0018"
 if grep -qiE '0022 creates the tables|FIRMA A claimed' "$DOC"; then
-	fail "$DOC claims a CREATE this lote forbids"
+	fail "$DOC claims a CREATE this batch forbids"
 fi
 if ls "$MIGDIR"/0022* >/dev/null 2>&1; then
 	fail "a 0022_*.sql exists — exit 1 forbids creating the colliding tables"

@@ -141,7 +141,7 @@ func runRecord(t *testing.T, st store.Store, tenant model.TenantID, runRef strin
 // bindDedicated dedicates src@rev to prof through a fake composition port.
 func bindDedicated(t *testing.T, m *Module, tenant model.TenantID, resolver *fakeSourceResolver, src model.ID, rev int64, prof ProviderProfile) ProviderSourceBinding {
 	t.Helper()
-	m.UseProviderSourceResolver(resolver)
+	m.ProviderSources = resolver
 	b, err := m.CreateBinding(context.Background(), tenant, auth.Principal{}, CreateBindingInput{SourceID: src, SourceRevision: rev, ProfileRef: prof.Ref})
 	if err != nil {
 		t.Fatalf("bind %s@%d → %s: %v", src, rev, prof.DisplayName, err)
@@ -389,13 +389,12 @@ func TestManagedLive_ProvenByBridgeOnly(t *testing.T) {
 	}
 }
 
-// profiledHTTP is the HTTP harness with profiled launches enabled, two profiles
+// profiledHTTP is the HTTP harness with two profiles
 // and a fake runner announcing dupID on every launch.
 func profiledHTTP(t *testing.T, fr *fakeRunner, clk *testClock) (*harness, string, model.TenantID, string, string) {
 	t.Helper()
 	m := New(WithSessionWorkspaceRoot(t.TempDir()), WithRunner(fr), WithCredentialSource(staticCred()), WithClock(clk))
 	m.UseExecutionEnvironmentRef(testEnvRef)
-	m.EnableProfiledLaunches()
 	h := newHarness(t, m)
 	admin := h.adminLogin()
 	tenant := h.createOrg(admin, "acme")
@@ -772,7 +771,7 @@ func TestExport_ScopedTimelinesNeverCross(t *testing.T) {
 }
 
 // B2 row 5: the Community composition create → persist → bridge → API, with a REAL
-// OS child through the productive endpoint once profiled launches are enabled.
+// OS child through the productive endpoint without an enable call.
 func TestProfiledLaunch_HTTPCompositionWithRealChild(t *testing.T) {
 	script := filepath.Join(t.TempDir(), "fixture-claude.sh")
 	body := "#!/bin/sh\n" +
@@ -786,7 +785,6 @@ func TestProfiledLaunch_HTTPCompositionWithRealChild(t *testing.T) {
 	}
 	m := New(WithSessionWorkspaceRoot(t.TempDir()), WithRunner(NewProcRunner()), WithProgram(script), WithCredentialSource(staticCred()), WithStopWaitDelay(2*time.Second))
 	m.UseExecutionEnvironmentRef(testEnvRef)
-	m.EnableProfiledLaunches()
 	h := newHarness(t, m)
 	admin := h.adminLogin()
 	tenant := h.createOrg(admin, "acme")

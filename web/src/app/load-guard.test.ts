@@ -82,6 +82,24 @@ describe('the console load guard (index.html)', () => {
     expect(event.defaultPrevented).toBe(true)
   })
 
+  it('offline, a lazy chunk that fails is left to its caller: no reload, its throw not held', () => {
+    const onLine = vi
+      .spyOn(window.navigator, 'onLine', 'get')
+      .mockReturnValue(false)
+    try {
+      const event = new Event('vite:preloadError', { cancelable: true })
+      window.dispatchEvent(event)
+      expect(reload).not.toHaveBeenCalled()
+      expect(event.defaultPrevented).toBe(false)
+      expect(document.querySelector('[data-load-guard-line]')).toBeNull()
+    } finally {
+      onLine.mockRestore()
+    }
+    // Back online, the one reload is still there for the failure it exists for.
+    failedScript()
+    expect(reload).toHaveBeenCalledTimes(1)
+  })
+
   it('a failed image or a classic script is not a reason to reload', () => {
     const img = document.createElement('img')
     document.body.appendChild(img)

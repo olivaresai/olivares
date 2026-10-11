@@ -72,7 +72,6 @@ vi.mock('@/features/shared', async (importOriginal) => ({
 }))
 
 // Import AFTER mocks are declared.
-import { pivStatusQueryKey } from './piv-configuration'
 import { FederationTab } from './federation'
 import { NhiRosterTab } from './nhi-roster'
 import { PostureTab } from './posture'
@@ -596,98 +595,6 @@ describe('AAL gate (fail-closed)', () => {
       screen.queryByText(/step-up did not complete/i),
     ).not.toBeInTheDocument()
     vi.unstubAllGlobals()
-  })
-
-  it('renders the explicit PIV-not-configured state (501 piv_not_configured is real, not a pending seam)', async () => {
-    authState.principal = { aal: 3, amr: ['webauthn'] }
-    api.pivStatus.mockRejectedValue(
-      new ApiError(501, 'piv_not_configured', 'piv not configured'),
-    )
-    wrap(<PrivilegedLoginTab />)
-    expect(
-      await screen.findByText(/not configured on this deployment/i),
-    ).toBeInTheDocument()
-    expect(screen.queryByText(/backend pending/i)).not.toBeInTheDocument()
-  })
-
-  it('exact false skips the PIV status request and shows the not-configured card', async () => {
-    authState.principal = {
-      aal: 3,
-      amr: ['webauthn'],
-      kind: 'user',
-      user_id: 'u1',
-      actor: 'u1',
-      authentication_configuration: { piv_configured: false },
-    }
-    wrap(<PrivilegedLoginTab />)
-    expect(
-      await screen.findByText(/not configured on this deployment/i),
-    ).toBeInTheDocument()
-    expect(api.pivStatus).not.toHaveBeenCalled()
-    expect(screen.queryByText(/backend pending/i)).not.toBeInTheDocument()
-  })
-
-  it('true queries status and shows presented state, not the not-configured card', async () => {
-    authState.principal = {
-      aal: 3,
-      amr: ['webauthn'],
-      kind: 'user',
-      user_id: 'u1',
-      actor: 'u1',
-      authentication_configuration: { piv_configured: true },
-    }
-    api.pivStatus.mockResolvedValue({
-      presented: true,
-      subject: 'CN=Ada',
-      ocsp: 'good',
-    })
-    wrap(<PrivilegedLoginTab />)
-    expect(await screen.findByText('CN=Ada')).toBeInTheDocument()
-    await waitFor(() => expect(api.pivStatus).toHaveBeenCalled())
-    expect(
-      screen.queryByText(/not configured on this deployment/i),
-    ).not.toBeInTheDocument()
-  })
-
-  it('does not label a failed whoami or unexpected status error as unconfigured', async () => {
-    authState.principal = null
-    api.pivStatus.mockRejectedValue(
-      new ApiError(500, 'internal', 'status unavailable'),
-    )
-    wrap(<PrivilegedLoginTab />)
-    expect(await screen.findByText('Something went wrong')).toBeInTheDocument()
-    await waitFor(() => expect(api.pivStatus).toHaveBeenCalled())
-    expect(
-      screen.queryByText(/not configured on this deployment/i),
-    ).not.toBeInTheDocument()
-  })
-
-  it('configured-to-unconfigured does not keep cached presented status', async () => {
-    const qc = new QueryClient({
-      defaultOptions: { queries: { retry: false } },
-    })
-    const previous = {
-      aal: 3,
-      amr: ['webauthn'],
-      kind: 'user' as const,
-      user_id: 'u1',
-      actor: 'u1',
-      authentication_configuration: { piv_configured: true },
-    }
-    qc.setQueryData(pivStatusQueryKey('t1', previous, 0), {
-      presented: true,
-      subject: 'CN=Ada',
-    })
-    authState.principal = {
-      ...previous,
-      authentication_configuration: { piv_configured: false },
-    }
-    wrap(<PrivilegedLoginTab />, qc)
-    expect(
-      await screen.findByText(/not configured on this deployment/i),
-    ).toBeInTheDocument()
-    expect(screen.queryByText('CN=Ada')).not.toBeInTheDocument()
-    expect(api.pivStatus).not.toHaveBeenCalled()
   })
 
   it('keeps passkey actions closed when the credential inventory read fails', async () => {

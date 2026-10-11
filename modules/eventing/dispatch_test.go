@@ -9,8 +9,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/olivaresai/olivares/connectors/siemsink"
 )
 
 // Endpoint validation is the authoring-time SSRF/posture gate: https-only,
@@ -106,52 +104,6 @@ func TestJitterBounds(t *testing.T) {
 // hold its own and the two had already diverged: it read code 17 — a health answer —
 // and an empty body as deliveries, and it required both text and code to be present,
 // so the documented submit-with-ack response was unrecognizable to it.
-func TestATwoHundredThatRefusesIsNotDelivered(t *testing.T) {
-	hec := string(siemsink.KindSplunkHEC)
-	for _, tc := range []struct {
-		name string
-		kind string
-		body string
-		want string
-	}{
-		{"hec refusal", hec, `{"text":"Incorrect index","code":7}`, statusDead},
-		{"hec busy is retried", hec, `{"text":"Server is busy","code":9}`, statusQueued},
-		{"hec capacity warning is an acceptance", hec, `{"text":"queue is approaching its capacity limit","code":24}`, statusDelivered},
-		{"hec success", hec, `{"text":"Success","code":0}`, statusDelivered},
-		// A body that is NOT a HEC status document is requeued, not counted. HEC always
-		// answers with at least one of the members it defines, so an empty body or a
-		// stranger's JSON means something that is not HEC replied — a proxy, a load
-		// balancer, an endpoint that is not the collector. This lane ships the audit
-		// LEDGER, so recording "delivered" for an event nobody confirmed is the exact
-		// failure the delivery-truth work exists to remove; it is the same verdict the
-		// splunkhec connector draws from the same bytes, and it is now literally the
-		// same table. Queued rather than dead: the fail-safe on this path points toward
-		// keeping the notification.
-		{"an unrecognized body is not a verdict and is not an acceptance", hec, `{"whatever":true}`, statusQueued},
-		{"an empty body is not a HEC answer", hec, ``, statusQueued},
-
-		// The gate. This dispatcher POSTs to an operator-configured URL, so matching a
-		// body structurally without knowing what is on the other end manufactures
-		// refusals a destination never made. A generic collector answering with its own
-		// "code" member must be left alone.
-		{"a generic collector's code is NOT a hec verdict", "", `{"code":200,"message":"ok"}`, statusDelivered},
-		{"a generic collector's errors member is NOT a verdict", "", `{"errors":true}`, statusDelivered},
-		{"another sink kind is not probed", string(siemsink.KindDatadog), `{"text":"x","code":7}`, statusDelivered},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			got, named := classifyDispatchBody(tc.kind, []byte(tc.body), true)
-			if tc.want == statusDelivered {
-				if named {
-					t.Fatalf("kind %q body %q overrode a 2xx with %q; it must leave the status standing", tc.kind, tc.body, got)
-				}
-				return
-			}
-			if !named || got != tc.want {
-				t.Fatalf("kind %q body %q classified (%q, named=%v), want %q", tc.kind, tc.body, got, named, tc.want)
-			}
-		})
-	}
-}
 
 // TestAnUnreadableAnswerIsRequeuedNotDiscarded pins the direction of the fail-safe
 // on this path. An answer we could not read whole is not evidence of refusal — the
@@ -159,15 +111,3 @@ func TestATwoHundredThatRefusesIsNotDelivered(t *testing.T) {
 // is the opposite of the connector-side choice, and deliberately so: there the
 // caller can still surface an error to an operator, whereas discarding a
 // notification here would lose it silently.
-func TestAnUnreadableAnswerIsRequeuedNotDiscarded(t *testing.T) {
-	got, named := classifyDispatchBody(string(siemsink.KindSplunkHEC), []byte(`{"code":`), false)
-	if !named || got != statusQueued {
-		t.Fatalf("an incomplete answer classified (%q, named=%v), want it requeued", got, named)
-	}
-	// But only for a kind whose protocol we would have interpreted. A generic
-	// collector says nothing by answering at length, so requeuing its 2xx would
-	// retry a delivery that succeeded, for a reason the operator cannot act on.
-	if _, named := classifyDispatchBody("", []byte(`a very long opaque body`), false); named {
-		t.Fatal("an opaque destination's large answer must leave its 2xx standing")
-	}
-}

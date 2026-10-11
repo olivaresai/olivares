@@ -24,7 +24,7 @@ func TestRuntimeLaunchObserverReceivesOriginalCreateAndResume(t *testing.T) {
 			return nil
 		}))
 	ctx := context.Background()
-	first, err := m.createRun(ctx, tenant, CreateRunParams{Transport: TransportStreamJSON, Isolation: IsolationNative, Actor: "user:operator", ActorKind: model.ActorUser})
+	first, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{Transport: TransportStreamJSON, Isolation: IsolationNative, Actor: "user:operator", ActorKind: model.ActorUser})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,7 +68,7 @@ func TestRuntimeLaunchObserverWorkReplayEmitsNothing(t *testing.T) {
 			return nil
 		}))
 	item, _, agent := readyWorkLaunchItem(t, m, st, tenant)
-	spec := workLaunchSpec(item, agent)
+	spec := workLaunchSpec(t, m, tenant, item, agent)
 	first, err := m.LaunchForWork(context.Background(), tenant, spec)
 	if err != nil {
 		t.Fatal(err)
@@ -101,7 +101,7 @@ func TestRuntimeLaunchObserverFailurePreservesCommittedResult(t *testing.T) {
 				}))
 			logs := &runtimeObserverLogs{}
 			m.log = slog.New(logs)
-			result, err := m.createRun(context.Background(), tenant, CreateRunParams{Transport: TransportStreamJSON, Isolation: IsolationNative, Actor: "user:operator", ActorKind: model.ActorUser})
+			result, err := createProfiledTestRun(t, m, context.Background(), tenant, CreateRunParams{Transport: TransportStreamJSON, Isolation: IsolationNative, Actor: "user:operator", ActorKind: model.ActorUser})
 			if err != nil || result.State != stateRunning || calls != 1 {
 				t.Fatalf("observer changed launch: state=%q calls=%d error=%v", result.State, calls, err)
 			}
@@ -133,7 +133,7 @@ func TestRuntimeLaunchObserverRefusedLaunchEmitsNothing(t *testing.T) {
 	calls := 0
 	m, _, tenant, _ := newRuntimeHarness(t, WithRunner(&fakeRunner{launchErr: errors.New("runner refused")}), WithCredentialSource(staticCred()),
 		WithRuntimeLaunchObserver(func(context.Context, RuntimeLaunchCompletion) error { calls++; return nil }))
-	if _, err := m.createRun(context.Background(), tenant, CreateRunParams{Transport: TransportStreamJSON, Isolation: IsolationNative, Actor: "user:operator", ActorKind: model.ActorUser}); err == nil || calls != 0 {
+	if _, err := createProfiledTestRun(t, m, context.Background(), tenant, CreateRunParams{Transport: TransportStreamJSON, Isolation: IsolationNative, Actor: "user:operator", ActorKind: model.ActorUser}); err == nil || calls != 0 {
 		t.Fatalf("refused launch observations = %d, error = %v", calls, err)
 	}
 }
@@ -182,7 +182,7 @@ func TestRuntimeLaunchObserverCanUnregisterInsideItsCallback(t *testing.T) {
 		t.Fatal(err)
 	}
 	for i := 0; i < 2; i++ {
-		if _, err := m.createRun(context.Background(), tenant, CreateRunParams{Transport: TransportStreamJSON, Isolation: IsolationNative, Actor: "user:operator", ActorKind: model.ActorUser}); err != nil {
+		if _, err := createProfiledTestRun(t, m, context.Background(), tenant, CreateRunParams{Transport: TransportStreamJSON, Isolation: IsolationNative, Actor: "user:operator", ActorKind: model.ActorUser}); err != nil {
 			t.Fatal(err)
 		}
 	}

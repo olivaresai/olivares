@@ -23,6 +23,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/olivaresai/olivares/cmd/olivares/internal/approvalbridge"
 	claudeapi "github.com/olivaresai/olivares/connectors/claude-api"
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
@@ -124,7 +125,7 @@ func TestProxyMCPEgressDeniedBeforeUpstream(t *testing.T) {
 		t.Run(r.name, func(t *testing.T) {
 			d, inf, up := mcpProxyDecider(true)
 			gate := &originGate{granted: map[string]bool{r.granted: true}}
-			d.egress = gate
+			d.Egress = gate
 			rec := serveProxy(t, claudeapi.NewMessagesProxy(inf, d, nil, nil), r.path, r.body)
 			requireProxyRefusal(t, rec, http.StatusForbidden, "permission_error", r.message)
 			if len(gate.inputs()) == 0 {
@@ -155,7 +156,7 @@ func TestProxyMCPEgressAllowedWire(t *testing.T) {
 		t.Run(rt.name, func(t *testing.T) {
 			d, inf, up := mcpProxyDecider(true)
 			gate := grantMCPTestOrigin()
-			d.egress = gate
+			d.Egress = gate
 			rec := serveProxy(t, claudeapi.NewMessagesProxy(inf, d, nil, nil), rt.path, rt.body)
 			if rec.Code != http.StatusOK {
 				t.Fatalf("granted origin refused: status=%d body=%s", rec.Code, rec.Body.String())
@@ -252,7 +253,7 @@ func TestProxyMCPEgressCoverageRequiresExactAcknowledgment(t *testing.T) {
 	{
 		d, inf, _ := mcpProxyDecider(false)
 		gate := grantMCPTestOrigin()
-		d.egress = gate
+		d.Egress = gate
 		if rec := serveProxy(t, claudeapi.NewMessagesProxy(inf, d, nil, nil), "/v1/messages", mcpParams(false)); rec.Code != http.StatusOK {
 			t.Fatalf("positive control refused: %d %s", rec.Code, rec.Body.String())
 		}
@@ -268,7 +269,7 @@ func TestProxyMCPEgressCoverageRequiresExactAcknowledgment(t *testing.T) {
 			d, inf, up := mcpProxyDecider(true)
 			gate := grantMCPTestOrigin()
 			gate.tamper = r.tamper
-			d.egress = gate
+			d.Egress = gate
 			rec := serveProxy(t, claudeapi.NewMessagesProxy(inf, d, nil, nil), "/v1/messages", mcpParams(false))
 			requireProxyRefusal(t, rec, r.status, r.errType, r.message)
 			up.requireNone(t)
@@ -285,7 +286,7 @@ func TestProxyMCPEgressCoverageRequiresExactAcknowledgment(t *testing.T) {
 			}
 			dec.MCPAck = first
 		}
-		d.egress = gate
+		d.Egress = gate
 		rec := serveProxy(t, claudeapi.NewMessagesProxy(inf, d, nil, nil), "/v1/messages/batches", batchBody(mcpParams(false), mcpParams(false)))
 		requireProxyRefusal(t, rec, http.StatusServiceUnavailable, "api_error", "batch entry c1 denied: mcp_coverage_unavailable")
 		up.requireNone(t)
@@ -319,7 +320,7 @@ func TestProxyMCPEgressBindingRefusesIllegalRewrites(t *testing.T) {
 			gate.tamper = func(_ int, _ claudeapi.ServerToolEgressInput, dec *claudeapi.ServerToolEgressDecision) {
 				dec.Rewritten, dec.GovernedTools = true, governed
 			}
-			d.egress = gate
+			d.Egress = gate
 			rec := serveProxy(t, claudeapi.NewMessagesProxy(inf, d, nil, nil), "/v1/messages", r.body)
 			requireProxyRefusal(t, rec, http.StatusInternalServerError, "api_error", "mcp_binding_changed")
 			up.requireNone(t)
@@ -338,9 +339,9 @@ func TestProxyMCPEgressBindingRefusesIllegalRewrites(t *testing.T) {
 				in.MCP.Destinations[0].Origin = "https://evil.example:443"
 			}
 		}
-		d.egress = gate
+		d.Egress = gate
 		cu := &mutatingComputerUseGate{}
-		d.computerUse = cu
+		d.ComputerUse = cu
 		body := mcpParams(false)
 		body["tools"] = []any{computerTool(), mcpToolsetMap(mcpCanaryName)}
 		rec := serveProxy(t, claudeapi.NewMessagesProxy(inf, d, nil, nil), "/v1/messages", body)
@@ -384,7 +385,7 @@ func (f flipMarshaler) MarshalJSON() ([]byte, error) {
 // branch (the request is then allowed), not a baseline run.
 func TestProxyMCPEgressBindingRefusesSizingFailOpen(t *testing.T) {
 	d, _, up := mcpProxyDecider(true)
-	d.egress = &fakeEgressGate{dec: claudeapi.ServerToolEgressDecision{Forward: true}}
+	d.Egress = &fakeEgressGate{dec: claudeapi.ServerToolEgressDecision{Forward: true}}
 	calls := 0
 	req := userReq("hi", false)
 	req.Tools = []any{flipMarshaler{calls: &calls, flipAt: 5}}
@@ -426,7 +427,7 @@ func TestProxyMCPEgressCompatibilityMixedRewrite(t *testing.T) {
 	gate.tamper = func(_ int, _ claudeapi.ServerToolEgressInput, dec *claudeapi.ServerToolEgressDecision) {
 		dec.Rewritten, dec.GovernedTools = true, []any{clamped, mcpMarker()}
 	}
-	d.egress = gate
+	d.Egress = gate
 	body := mcpParams(false)
 	body["tools"] = []any{webSearch, mcpToolsetMap(mcpCanaryName)}
 	rec := serveProxy(t, claudeapi.NewMessagesProxy(inf, d, nil, nil), "/v1/messages", body)
@@ -451,7 +452,7 @@ func TestProxyMCPEgressCompatibilityMixedRewrite(t *testing.T) {
 	}
 	// A request without MCP keeps the legacy rewrite freedom under a Forward-only gate.
 	d2, inf2, _ := mcpProxyDecider(false)
-	d2.egress = &fakeEgressGate{dec: claudeapi.ServerToolEgressDecision{Forward: true, Rewritten: true, GovernedTools: []any{clamped}}}
+	d2.Egress = &fakeEgressGate{dec: claudeapi.ServerToolEgressDecision{Forward: true, Rewritten: true, GovernedTools: []any{clamped}}}
 	plain := plainParams(false)
 	plain["tools"] = []any{webSearch}
 	if rec := serveProxy(t, claudeapi.NewMessagesProxy(inf2, d2, nil, nil), "/v1/messages", plain); rec.Code != http.StatusOK {
@@ -571,10 +572,10 @@ func fakeBridge(g *fakeGovernance, tenant model.TenantID, window int64, now time
 func fakeBridgeFor(g *fakeGovernance, window int64, now time.Time, tenants ...model.TenantID) *approvalBridge {
 	creds := map[model.TenantID]serviceCred{}
 	for _, tenant := range tenants {
-		creds[tenant] = serviceCred{tenant: tenant, tenantStr: tenant.String(), token: "svc-" + tenant.String(), expiresIn: window}
+		creds[tenant] = serviceCred{Tenant: tenant, TenantStr: tenant.String(), Token: "svc-" + tenant.String(), ExpiresIn: window}
 	}
-	b := &approvalBridge{creds: creds, log: discardLog(), clock: func() time.Time { return now }, memo: map[string]string{}}
-	b.useHandler(g)
+	b := approvalbridge.NewWithCreds(creds, func() time.Time { return now }, discardLog())
+	b.UseHandler(g)
 	return b
 }
 
@@ -585,7 +586,7 @@ var notifyNow = time.Date(2026, 9, 21, 12, 0, 0, 0, time.UTC)
 // text), the plan binds tenant, actual actor, ActorRef and origin, a pending retry does not
 // duplicate, a prior human approval or an active break-glass grant never allows the call,
 // and no path/query/token/name canary reaches the approval, findings, logs or HTTP body.
-// Mutant: gateOnce, or a subject/plan taken from the adapter or the raw URL.
+// Mutant: GateOnce, or a subject/plan taken from the adapter or the raw URL.
 func TestProxyMCPEgressApprovalPrivacy(t *testing.T) {
 	const adapterCanary = "ADAPTER-APPROVAL-CANARY"
 	canaries := append(mcpWireCanaries(), adapterCanary)
@@ -605,9 +606,9 @@ func TestProxyMCPEgressApprovalPrivacy(t *testing.T) {
 	run := func(t *testing.T, p auth.Principal, params map[string]any) {
 		t.Helper()
 		d, inf, up := mcpProxyDecider(true)
-		d.authr = fakeProxyAuthr{p: p}
-		d.approvals, d.egress, d.bus = bridge, gate, bus
-		d.log = slog.New(slog.NewTextHandler(&logs, &slog.HandlerOptions{Level: slog.LevelDebug}))
+		d.Auth = fakeProxyAuthr{p: p}
+		d.Approvals, d.Egress, d.Bus = proxyApprovalsFor(bridge), gate, bus
+		d.Log = slog.New(slog.NewTextHandler(&logs, &slog.HandlerOptions{Level: slog.LevelDebug}))
 		rec := serveProxy(t, claudeapi.NewMessagesProxy(inf, d, aud, nil), "/v1/messages", params)
 		requireProxyRefusal(t, rec, http.StatusForbidden, "permission_error", "mcp_origin_not_granted")
 		requireNoCanary(t, "HTTP refusal", rec.Body.Bytes(), canaries)
@@ -682,8 +683,8 @@ func TestProxyMCPEgressApprovalOnlyForGrantableTarget(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			gov := &fakeGovernance{}
 			d, inf, _ := mcpProxyDecider(false)
-			d.approvals = fakeBridge(gov, proxyTestTenant, 3600, notifyNow)
-			d.egress = &originGate{granted: map[string]bool{}, tamper: tamper}
+			d.Approvals = proxyApprovalsFor(fakeBridge(gov, proxyTestTenant, 3600, notifyNow))
+			d.Egress = &originGate{granted: map[string]bool{}, tamper: tamper}
 			rec := serveProxy(t, claudeapi.NewMessagesProxy(inf, d, nil, nil), "/v1/messages", mcpParams(false))
 			if rec.Code != http.StatusForbidden {
 				t.Fatalf("status = %d", rec.Code)
@@ -699,7 +700,7 @@ func TestProxyMCPEgressApprovalOnlyForGrantableTarget(t *testing.T) {
 
 func notifyOnce(t *testing.T, b *approvalBridge) error {
 	t.Helper()
-	return b.notify(context.Background(), proxyTestTenant, "inference.servertool.egress", "anthropic.server_tool",
+	return b.Notify(context.Background(), proxyTestTenant, "inference.servertool.egress", "anthropic.server_tool",
 		mcpApprovalSubject, mcpPlanU1, "MCP destination origin is not granted: "+mcpTestOrigin, "token:u1")
 }
 

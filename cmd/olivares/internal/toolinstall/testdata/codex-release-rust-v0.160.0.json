@@ -1,0 +1,31 @@
+{
+ "tag_name": "rust-v0.160.0",
+ "draft": false,
+ "prerelease": false,
+ "assets": [
+  {
+   "name": "codex-aarch64-unknown-linux-musl.tar.gz",
+   "size": 101627917,
+   "digest": "sha256:883620139925f677e5a12c95ba87a1d7f421388ebb797b1c10aba42a04ede9d7",
+   "browser_download_url": "https://github.com/openai/codex/releases/download/rust-v0.160.0/codex-aarch64-unknown-linux-musl.tar.gz"
+  },
+  {
+   "name": "codex-package-aarch64-unknown-linux-musl.tar.gz",
+   "size": 150934664,
+   "digest": "sha256:7f0fe42ff22ecfa3a47bc4a34f5b22c4218b431a4ec0aba51c7d98299f07900c",
+   "browser_download_url": "https://github.com/openai/codex/releases/download/rust-v0.160.0/codex-package-aarch64-unknown-linux-musl.tar.gz"
+  },
+  {
+   "name": "codex-package-x86_64-unknown-linux-musl.tar.gz",
+   "size": 160727443,
+   "digest": "sha256:4fcc47ab57f52ff75363951a8761146cd10c8288bd86fed45487dbb204a16b71",
+   "browser_download_url": "https://github.com/openai/codex/releases/download/rust-v0.160.0/codex-package-x86_64-unknown-linux-musl.tar.gz"
+  },
+  {
+   "name": "codex-x86_64-unknown-linux-musl.tar.gz",
+   "size": 109304578,
+   "digest": "sha256:306865417d4ee7a927785852910a527f41e1e159add390ac5ae3accb67d44a13",
+   "browser_download_url": "https://github.com/openai/codex/releases/download/rust-v0.160.0/codex-x86_64-unknown-linux-musl.tar.gz"
+  }
+ ]
+}

@@ -8,6 +8,12 @@ description: >-
 sidebar:
   order: 6
 ---
+SIEM and ITSM push, OTLP downloads, external trace and metric delivery, and posture export require Business. Community keeps local observability, trace-context propagation, saved settings and `olivares dr backup`. Generic chat, email and webhook notifications remain available in Community.
+
+
+:::note[Business]
+L’export d’audit (`GET /v1/audit/export`, `olivares audit export`), les archives en répertoire et la vérification d’archives externes nécessitent Business. Community conserve le registre signé, `olivares audit verify` et `olivares dr backup` ; l’export renvoie HTTP 501 ou le code de sortie 9. Le transfert d’audit et les transferts DDIL contenant des segments d’audit nécessitent aussi Business.
+:::
 
 **Objectif :** votre SIEM reçoit les constats du control plane *et* son
 ledger d'audit à altération détectable en push, sans qu'un forwarder ne suive des fichiers
@@ -20,6 +26,15 @@ et la re-vérification hors ligne ; le push est la bonne forme pour l'ingestion 
 en direct.
 
 ## 1. Créer l'abonnement du sink
+
+Activez d’abord le forwarder sélectionnable du ledger ; cela active aussi sa dépendance eventing :
+
+```bash
+olivares modules on siemforward
+```
+
+Attendez la fin du redémarrage du moteur, puis exécutez `olivares modules ls`
+et vérifiez que `siemforward` et `eventing` fonctionnent avant de créer l’abonnement.
 
 ```bash
 curl -ks -X POST "$BASE/v1/m/eventing/subscriptions" \
@@ -76,10 +91,11 @@ curl -ks -X POST "$BASE/v1/m/eventing/subscriptions/$ID/test" \
 
 ## 2. Le push du ledger, décrit honnêtement
 
-S'abonner à **`audit.recorded`** active la pompe du ledger : le forwarder parcourt
-le ledger d'audit scellé de chaque locataire depuis un curseur par locataire et place
-chaque enregistrement dans la file du moteur de livraison durable — **au moins une
-fois**, dans l'ordre, reprenable. Chaque enregistrement porte ses champs d'intégrité
+Lorsque **`siemforward` est activé**, la pompe parcourt le ledger scellé depuis
+le curseur de chaque locataire. Un abonnement **`audit.recorded`** reçoit les
+enregistrements mis en file après sa création dans le moteur de livraison durable —
+**au moins une fois**,
+reprenable. Chaque enregistrement porte ses champs d'intégrité
 de chaîne tels quels, de sorte que la copie côté SIEM permet exactement ce que permet
 l'export pull : le CHAÎNAGE (`prev_hash` de n+1 égal au `hash` de n)
 et une signature de checkpoint sur `hash` sont vérifiables hors ligne, et le `hash`
@@ -104,8 +120,10 @@ peut donc aussi répondre QUELLES métadonnées un engagement recouvre.
 
 Trois propriétés à connaître :
 
-- **Pas d'abonnement, pas de travail.** Sans abonné à `audit.recorded`, la pompe
-  n'écrit rien — le chemin ne coûte rien tant que vous ne le demandez pas.
+- **Le curseur avance même sans abonnement.** Sans abonné à `audit.recorded`,
+  aucune livraison n’est mise en file, mais la pompe activée sauvegarde son curseur.
+  Une nouvelle destination ne retransmet pas les enregistrements déjà passés ;
+  utilisez l’export pull pour les enregistrements historiques.
 - **« Au moins une fois » signifie que des doublons sont possibles** lors d'une
   redélivraison ; dédupliquez sur le numéro de séquence de l'enregistrement par
   locataire.

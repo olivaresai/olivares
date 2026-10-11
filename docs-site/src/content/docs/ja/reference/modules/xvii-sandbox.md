@@ -76,10 +76,36 @@ runner が `isolated` であったか、一時状態が `destroyed` であった
 - **リプレイはギャップについて正直である。** history ソースが順序付きのタイムラインを
   再構築できない場合、リプレイはステップゼロで degraded として報告され、捏造されること
   はない。
-- **合成データ生成は存在しない。** これは文書化された post-v1 の拡張ポイントにすぎない。
-  本モジュールはジェネレーターを同梱せず、そのためのルートを公開せず、サンプルをゼロしか
-  生成しない。
+- **ローカルデータ生成.** サイズを制限したローカルテンプレートから、Sandbox API で再現可能なシナリオ入力を生成します。モデルやネットワークへのリクエストは行いません。
 :::
+
+## 生成されたシナリオを実行する
+
+`olivares modules on sandbox` で選択可能なモジュールを有効にします。生成、シナリオ作成、実行には編集者または管理者が必要です。閲覧者は保存されたシナリオ、実行、出力を確認できます。
+
+末尾に改行のないテンプレートを作成します：
+
+```sh
+printf '%s' '{{subject_kind}}:user{{index}}@example.test' > seed.txt
+```
+
+この合成レスポンスを `mocks.json` に保存します：
+
+```json
+[{"resource":"agent:user1@example.test","response":"first synthetic account"}]
+```
+
+```sh
+olivares sandbox generate --count 2 --seed-file seed.txt -o json > steps.json
+olivares sandbox scenarios create --name generated --steps-file steps.json --mocks-file mocks.json -o json
+olivares sandbox scenarios run <scenario-id> --variant candidate -o json
+olivares sandbox runs get <run-id> -o json
+olivares sandbox runs outputs <run-id> -o json
+```
+
+作成で返されたシナリオ ID、次に実行で返された実行 ID を使います。デフォルトの `inproc-mock` runner では、最初の入力は上記のレスポンスに解決され、2 番目は `[[mock-miss:agent:user2@example.test]]` を返します。mock miss は `steps_error` を増加させますが、想定された合成結果です。実行には引き続き `status: completed`、`steps_total: 2`、`steps_ok: 1`、`steps_error: 1`、`isolated: true`、`destroyed: true` が記録されます。実リソースへのリクエストはありません。この例ではスコアリングを要求せず、OS レベルのランタイムの適格性も証明しません。照合には、テンプレートファイル内の改行も含め、入力の正確なテキストを使います。
+
+シナリオ、実行、出力はエンジン再起動後も利用できます。モジュールをオフにすると、保存データを削除せずルートへのアクセスを無効にし、再度オンにするとアクセスを復元します。これらのレコードはテナントスコープで、別の組織は読めません。
 
 ## 関連
 

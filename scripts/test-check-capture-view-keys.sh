@@ -13,7 +13,7 @@
 set -u -o pipefail
 
 if ! command -v python3 >/dev/null 2>&1; then
-	printf 'test-check-capture-view-keys: NO HE PODIDO MIRAR: no hay python3\n' >&2
+	printf 'test-check-capture-view-keys: COULD NOT CHECK: python3 is not installed\n' >&2
 	exit 2
 fi
 
@@ -26,10 +26,10 @@ ok=0
 fail=0
 paso() { printf 'ok   %s\n' "$1"; ok=$((ok + 1)); }
 malo() { printf 'FAIL %s\n' "$1"; fail=$((fail + 1)); }
-SALIDA="$T/salida.txt"
-rc_de() { python3 "$GATE" "$@" >"$SALIDA" 2>&1; printf '%s' "$?"; }
-rc_de_con() { local g="$1"; shift; python3 "$g" "$@" >"$SALIDA" 2>&1; printf '%s' "$?"; }
-casa() { command grep -qE "$1" "$SALIDA"; }
+OUTPUT="$T/output.txt"
+rc_de() { python3 "$GATE" "$@" >"$OUTPUT" 2>&1; printf '%s' "$?"; }
+rc_de_con() { local g="$1"; shift; python3 "$g" "$@" >"$OUTPUT" 2>&1; printf '%s' "$?"; }
+casa() { command grep -qE "$1" "$OUTPUT"; }
 
 # La cabecera de los fixtures. ⛔ Los cierres de abajo añaden SIEMPRE un arnes minimo que ligue una
 # variable a una entrada: sin `for (const view of VIEWS)` el gate no puede leer las invocaciones y
@@ -65,9 +65,9 @@ TS
 #    Una convencion que tiene guarda en un banco y no en su hermano es una costumbre, no una regla.
 if command grep -q '[^\\]`' <(command grep -nE "^[[:space:]]*(paso|malo) \"" "$0"); then
 	command grep -nE "^[[:space:]]*(paso|malo) \"" "$0" | command grep '[^\\]`' >&2
-	malo "hay mensajes con backticks SIN escapar dentro de comillas dobles: la shell los ejecuta"
+	malo "messages contain UNESCAPED backticks inside double quotes: the shell executes them"
 else
-	paso "ningun mensaje del banco lleva un backtick sin escapar dentro de comillas dobles"
+	paso "no test message contains an unescaped backtick inside double quotes"
 fi
 
 # muerte_valida — rc 0 si la ULTIMA salida capturada es una muerte LEGIBLE del sujeto y no un
@@ -79,10 +79,10 @@ fi
 #    que buscan es que el mutante DEJE de decir algo, y un mutante muerto antes de nacer tampoco
 #    lo dice. Es la clase que un lector encontro en el banco hermano hace una hora.
 muerte_valida() {
-	if [ ! -s "$SALIDA" ]; then
+	if [ ! -s "$OUTPUT" ]; then
 		return 1
 	fi
-	if command grep -qE 'Traceback \(most recent call last\)' "$SALIDA"; then
+	if command grep -qE 'Traceback \(most recent call last\)' "$OUTPUT"; then
 		return 1
 	fi
 	return 0
@@ -99,11 +99,11 @@ muerte_valida() {
 #    Y ademas se exige DIFERIR: un mutante identico al sujeto se construye sin error y no muta nada.
 exige_construido() {
 	if [ ! -s "$1" ]; then
-		malo "NO HE PODIDO MIRAR: $2 no se construyo (fichero ausente o vacio): sin artefacto no hay juicio"
+		malo "COULD NOT CHECK: $2 was not built (missing or empty file): there is no artifact to judge"
 		return 1
 	fi
 	if cmp -s "$GATE" "$1"; then
-		malo "NO HE PODIDO MIRAR: $2 es IDENTICO al sujeto: no muta nada y su verde no acredita nada"
+		malo "COULD NOT CHECK: $2 is IDENTICAL to the subject: no mutation occurred and a pass proves nothing"
 		return 1
 	fi
 	return 0
@@ -111,12 +111,12 @@ exige_construido() {
 
 # ── 1 · el fichero REAL del repositorio esta al dia ───────────────────────────────────────────
 r="$(rc_de "$RAIZ/web/e2e/docs-captures.spec.ts")"
-if [ "$r" = "0" ] && casa 'sin hallazgos: tipo, entradas e invocaciones concuerdan'; then
-	paso "la spec real del repositorio no usa ninguna clave sin declarar, y lo DICE"
+if [ "$r" = "0" ] && casa 'no findings: type, entries, and property accesses agree'; then
+	paso "the repository spec uses no undeclared keys and reports that result"
 elif [ "$r" = "0" ]; then
-	malo "salio 0 sin la linea de limpio: un cero mudo no distingue «mire y esta bien» de «no mire»"
+	malo "returned 0 without the clean-result line: silence does not prove the subject was checked"
 else
-	malo "la spec real sale $r: hay una clave de entrada fuera del tipo (corre el gate y lee cual)"
+	malo "repository spec returned $r: an entry key is missing from the type (run the check for details)"
 fi
 
 # ── 2 · un TYPO en la clave del gancho tiene que salir 1 ──────────────────────────────────────
@@ -132,12 +132,12 @@ TS
 	arnes
 } >"$T/typo.ts"
 r="$(rc_de "$T/typo.ts")"
-if [ "$r" = "1" ] && casa 'despuess. en typo\.ts' && casa 'una ENTRADA la usa y el tipo no la declara'; then
-	paso "un typo en el nombre del gancho (despuess) sale 1, con su clave, su fichero y su razon"
+if [ "$r" = "1" ] && casa 'despuess. in typo\.ts' && casa 'an entry uses it, but the type does not declare it'; then
+	paso "a hook-name typo (despuess) returns 1 with the key, filename and reason"
 elif [ "$r" = "1" ]; then
-	malo "salio 1 sin nombrar clave+fichero+razon: la direccion entrada->tipo no esta acreditada"
+	malo "returned 1 without key+filename+reason: entry-to-type validation is unverified"
 else
-	malo "el typo deberia salir 1 y salio $r: el gate no protege de lo unico que existe para cazar"
+	malo "the typo should return 1 but returned $r: the check missed its intended defect"
 fi
 
 # ── 3 · NO-DISPARO · claves ANIDADAS dentro de un closure ─────────────────────────────────────
@@ -161,12 +161,12 @@ TS
 	arnes
 } >"$T/anidadas.ts"
 r="$(rc_de "$T/anidadas.ts")"
-if [ "$r" = "0" ] && casa 'sin hallazgos'; then
-	paso "claves anidadas en un closure NO se señalan (sin allowlist, por profundidad)"
+if [ "$r" = "0" ] && casa 'no findings'; then
+	paso "nested closure keys are NOT reported (depth-based, without an allowlist)"
 elif [ "$r" = "0" ]; then
-	malo "salio 0 sin la linea de limpio: no se distingue de un gate que no midio"
+	malo "returned 0 without a clean-result line: the check may not have measured anything"
 else
-	malo "el gate señalo claves anidadas (rc $r): vuelve a dar falsos positivos y se ignorara"
+	malo "the check reported nested keys (rc $r): false positives have returned"
 fi
 
 # ── 4 · NO-DISPARO · la prosa de los comentarios no es codigo ─────────────────────────────────
@@ -191,12 +191,12 @@ TS
 	arnes
 } >"$T/prosa.ts"
 r="$(rc_de "$T/prosa.ts")"
-if [ "$r" = "0" ] && casa 'sin hallazgos'; then
-	paso "las claves citadas en COMENTARIOS no se cuentan como uso"
+if [ "$r" = "0" ] && casa 'no findings'; then
+	paso "keys mentioned in COMMENTS do not count as usage"
 elif [ "$r" = "0" ]; then
-	malo "salio 0 sin la linea de limpio: no se distingue de un gate que no midio"
+	malo "returned 0 without a clean-result line: the check may not have measured anything"
 else
-	malo "el gate conto la prosa (rc $r)"
+	malo "the check counted prose (rc $r)"
 fi
 
 # ── 4-bis · EL TYPO DE INVOCACION, que es el unico que hace daño de verdad ────────────────────
@@ -219,12 +219,12 @@ async function capturar(view: (typeof VIEWS)[number], page: any) {
 TS
 } >"$T/typo-invocacion.ts"
 r="$(rc_de "$T/typo-invocacion.ts")"
-if [ "$r" = "1" ] && casa 'despuess.*typo-invocacion\.ts' && casa 'typo de invocacion'; then
-	paso "un typo en la INVOCACION sale 1, nombrando la clave Y el fichero"
+if [ "$r" = "1" ] && casa 'despuess.*typo-invocacion\.ts' && casa 'property-access typo'; then
+	paso "a property-access typo returns 1 with the key AND filename"
 elif [ "$r" = "1" ]; then
-	malo "salio 1 pero sin nombrar clave+fichero: el rojo no dice donde mirar"
+	malo "returned 1 without key+filename: the failure does not identify where to look"
 else
-	malo "el typo de INVOCACION deberia salir 1 y salio $r: es el caso que el gate existe para cazar"
+	malo "the property-access typo should return 1 but returned $r: the intended defect was missed"
 fi
 
 # ── 4-ter · MUTANTE: se retira el cruce con las INVOCACIONES ──────────────────────────────────
@@ -245,10 +245,10 @@ viejo = (
 )
 nuevo = "    pass  # MUTANTE: no se leen las invocaciones (la version que salia rc 0 ante el typo)"
 mut = src.replace(viejo, nuevo)
-assert mut != src, "el mutante de invocaciones NO se aplico"
+assert mut != src, "the property-access mutant was not applied"
 open(sys.argv[2], "w").write(mut)
 PY
-if exige_construido "$mI" "el mutante sin invocaciones"; then
+if exige_construido "$mI" "mutant without property accesses"; then
 	r="$(rc_de_con "$mI" "$T/typo-invocacion.ts")"
 	# ⛔ EL JUICIO VA DENTRO DEL EXITO, y esto lo caza un lector sobre la version que introdujo la
 	#    guarda. Antes la rama de fallo hacia `r=99` y el bloque de juicio corria IGUAL — contra la
@@ -262,11 +262,11 @@ if exige_construido "$mI" "el mutante sin invocaciones"; then
 	#    saliendo 1 — pero por la pata de «gancho muerto», que es OTRO hallazgo. Un mutante que muere en
 	#    la pata anterior no acredita la que nombra: se le exige que NO diga lo del typo.
 	if ! muerte_valida; then
-		malo "NO HE PODIDO MIRAR: el mutante sin invocaciones REVENTO (Traceback) en vez de morir: un mutante que revienta no acredita nada"
-	elif ! casa 'typo de invocacion'; then
-		paso "el mutante que deja de leer las INVOCACIONES ya no reporta el typo: el caso 4-bis lo cubre"
+		malo "COULD NOT CHECK: the mutant without property accesses CRASHED (Traceback): a crash proves nothing"
+	elif ! casa 'property-access typo'; then
+		paso "the mutant that ignores PROPERTY ACCESSES no longer reports the typo: case 4-bis covers it"
 	else
-		malo "el mutante sin invocaciones sigue reportando el typo (rc $r): imposible, revisa el mutante"
+		malo "the mutant without property accesses still reports the typo (rc $r): inspect the mutant"
 	fi
 fi
 
@@ -278,27 +278,27 @@ mF="$T/mF.py"
 python3 - "$GATE" "$mF" <<'PY'
 import sys
 src = open(sys.argv[1]).read()
-viejo = 'print(f"  ⛔ `{k}` en {nombre_fichero}: {porque}")'
+viejo = 'print(f"  ⛔ `{k}` in {file_name}: {porque}")'
 nuevo = 'print(f"  ⛔ {porque}")'
 mut = src.replace(viejo, nuevo)
-assert mut != src, "el mutante del diagnostico NO se aplico"
+assert mut != src, "the diagnostic mutant was not applied"
 open(sys.argv[2], "w").write(mut)
 PY
 r="$(rc_de_con "$mF" "$T/typo-invocacion.ts")"
 if [ "$r" = "1" ] && ! casa 'despuess.*typo-invocacion\.ts'; then
-	paso "el mutante que quita el FICHERO del diagnostico es DETECTABLE: el rojo deja de decir donde"
+	paso "removing the FILENAME from the diagnostic is DETECTABLE: the failure no longer identifies the location"
 else
-	malo "el mutante del diagnostico no se distingue: el mensaje sigue sin estar protegido"
+	malo "the diagnostic mutant is indistinguishable: the message remains unprotected"
 fi
 
 # ── 5 · fichero ausente => 2, no 0 ────────────────────────────────────────────────────────────
 r="$(rc_de "$T/no-existe.ts")"
-if [ "$r" = "2" ] && casa 'NO HE PODIDO MIRAR' && casa 'No such file'; then
-	paso "fichero ausente => rc 2 (no he podido mirar), no 0, y el rojo dice por que"
+if [ "$r" = "2" ] && casa 'COULD NOT CHECK' && casa 'No such file'; then
+	paso "a missing file returns rc 2 (could not check), with the reason"
 elif [ "$r" = "2" ]; then
-	malo "salio 2 sin decir que no pudo mirar ni por que: el 2 mudo se lee como un fallo cualquiera"
+	malo "returned 2 without explaining why the subject could not be checked"
 else
-	malo "fichero ausente deberia salir 2 y salio $r"
+	malo "a missing file should return 2 but returned $r"
 fi
 
 # ── 6 · una spec que el gate NO entiende => 2, no 0 ───────────────────────────────────────────
@@ -306,12 +306,12 @@ fi
 #    decir «limpia»: no ha podido mirar. Sin este caso, un refactor apagaria el gate en verde.
 printf 'const OTRA_COSA = []\n' >"$T/rara.ts"
 r="$(rc_de "$T/rara.ts")"
-if [ "$r" = "2" ] && casa 'NO HE PODIDO MIRAR' && casa 'no encuentro la declaracion'; then
-	paso "una spec con otra forma => rc 2 nombrando la declaracion que no encuentra"
+if [ "$r" = "2" ] && casa 'COULD NOT CHECK' && casa 'cannot find the declaration'; then
+	paso "an unsupported spec format returns rc 2 and names the missing declaration"
 elif [ "$r" = "2" ]; then
-	malo "salio 2 sin nombrar lo que no encuentra: quien lo lea no sabe que refactor lo rompio"
+	malo "returned 2 without naming the missing item: the failed refactor cannot be located"
 else
-	malo "una spec irreconocible deberia salir 2 y salio $r"
+	malo "an unrecognized spec should return 2 but returned $r"
 fi
 
 # ── 7 · MUTANTE: se quita el borrado de comentarios de BLOQUE ─────────────────────────────────
@@ -328,16 +328,16 @@ src = open(sys.argv[1]).read()
 viejo = '    limpio = re.sub(r"/\\*.*?\\*/", blanquea, cuerpo, flags=re.S)'
 nuevo = '    limpio = cuerpo  # MUTANTE: los comentarios de BLOQUE ya no se borran'
 mut = src.replace(viejo, nuevo)
-assert mut != src, "el mutante 1 NO se aplico"
+assert mut != src, "mutant 1 was not applied"
 open(sys.argv[2], "w").write(mut)
 PY
 r="$(rc_de_con "$m1" "$T/prosa.ts")"
 if [ "$r" = "1" ] && casa 'fantasma'; then
-	paso "el mutante que deja de borrar comentarios de BLOQUE MUERE en el caso 4, y por la clave que se inventa"
+	paso "the mutant that keeps BLOCK comments FAILS in case 4 for the invented key"
 elif [ "$r" = "1" ]; then
-	malo "el mutante murio con rc 1 pero por OTRA cosa: no acredita el borrado de bloque (mira la salida)"
+	malo "the mutant returned 1 for ANOTHER reason: block-comment removal is unverified (inspect output)"
 else
-	malo "el mutante de los comentarios de bloque SOBREVIVIO (rc $r): el caso 4 no cubre nada"
+	malo "the block-comment mutant SURVIVED (rc $r): case 4 proves nothing"
 fi
 
 # ── 2-bis · LA PRIMERA CLAVE DE UNA ENTRADA ESCRITA EN LINEA ──────────────────────────────────
@@ -355,12 +355,12 @@ TS
 	arnes
 } >"$T/primera-clave.ts"
 r="$(rc_de "$T/primera-clave.ts")"
-if [ "$r" = "1" ] && casa 'idd. en primera-clave\.ts' && casa 'el tipo no la declara'; then
-	paso "un typo en la PRIMERA clave de una entrada escrita en linea sale 1 y la nombra"
+if [ "$r" = "1" ] && casa 'idd. in primera-clave\.ts' && casa 'the type does not declare it'; then
+	paso "a typo in the FIRST key of an inline entry returns 1 and names it"
 elif [ "$r" = "1" ]; then
-	malo "salio 1 sin nombrar la clave: el rojo no dice cual"
+	malo "returned 1 without naming the key: the failure cannot be located"
 else
-	malo "un typo en la primera clave de una entrada en linea salio $r: el escaner no la ve"
+	malo "a typo in the first inline-entry key returned $r: the scanner missed it"
 fi
 
 # ── 2-ter · MUTANTE: se vuelve a la alternancia que consumia la llave ──────────────────────────
@@ -374,7 +374,7 @@ viejo = '(?<=[\\{,])\\s*(\\w+)\\s*:|^\\s*(\\w+)\\s*:'
 # acredita que el guion se rompe y no que la guarda funcione. `(?!)` nunca casa y conserva el grupo.
 nuevo = '(?:^|[\\{,])\\s*(\\w+)\\s*:|(?!)(\\w+)'
 mut = src.replace(viejo, nuevo, 1)
-assert mut != src, "el mutante de la mirada atras NO se aplico"
+assert mut != src, "the lookbehind mutant was not applied"
 compile(mut, "mP", "exec")
 open(sys.argv[2], "w").write(mut)
 PY2
@@ -382,12 +382,12 @@ r="$(rc_de_con "$mP" "$T/primera-clave.ts")"
 # ⛔ Se exige el DEFECTO, no un rc cualquiera: el mutante tiene que salir 0 diciendo «sin
 #    hallazgos» —que es la ceguera— y NO morir con una excepcion. Un mutante que revienta acredita
 #    que el guion se rompe, no que la guarda funcione.
-if [ "$r" = "0" ] && casa 'sin hallazgos'; then
-	paso "el mutante que vuelve a consumir la llave DEJA PASAR el typo y dice «sin hallazgos»: el caso 2-bis lo caza"
+if [ "$r" = "0" ] && casa 'no findings'; then
+	paso "the mutant consuming the brace ALLOWS the typo and reports no findings: case 2-bis catches it"
 elif casa 'Traceback'; then
-	malo "el mutante murio con una EXCEPCION, no con la ceguera: eso no acredita la mirada atras"
+	malo "the mutant crashed with an EXCEPTION instead of reproducing the blind spot: lookbehind is unverified"
 else
-	malo "el mutante no reprodujo la ceguera (rc $r): el caso 2-bis no acredita nada"
+	malo "the mutant did not reproduce the blind spot (rc $r): case 2-bis proves nothing"
 fi
 
 # ── 8 · EL GANCHO MUERTO, tercera direccion del cruce ─────────────────────────────────────────
@@ -406,12 +406,12 @@ TS
 	arnes
 } >"$T/gancho-muerto.ts"
 r="$(rc_de "$T/gancho-muerto.ts")"
-if [ "$r" = "1" ] && casa 'settle. en gancho-muerto\.ts' && casa 'gancho muerto'; then
-	paso "una clave que las ENTRADAS traen y el arnes no invoca nunca sale 1 como gancho muerto"
+if [ "$r" = "1" ] && casa 'settle. in gancho-muerto\.ts' && casa 'unused hook'; then
+	paso "a key supplied by ENTRIES but never accessed by the harness returns 1 as an unused hook"
 elif [ "$r" = "1" ]; then
-	malo "salio 1 sin nombrar clave+fichero+'gancho muerto': la tercera direccion no esta acreditada"
+	malo "returned 1 without key+filename+unused hook: the third direction is unverified"
 else
-	malo "el gancho muerto deberia salir 1 y salio $r: las entradas piden algo que nadie lee"
+	malo "the unused hook should return 1 but returned $r: entries request a key nobody reads"
 fi
 
 # ── 8-bis · MUTANTE: se retira el bucle del gancho muerto ─────────────────────────────────────
@@ -423,17 +423,17 @@ python3 - "$GATE" "$mG" <<'PY2'
 import sys
 src = open(sys.argv[1]).read()
 viejo = ('    for k in sorted((usadas & declaradas) - invocadas):\n'
-         '        anota(k, "las ENTRADAS la traen y el arnes NO la invoca nunca: gancho muerto")')
-nuevo = "    pass  # MUTANTE: el cruce del gancho muerto ya no se hace"
+         '        anota(k, "entries provide it, but the harness never accesses it: unused hook")')
+nuevo = "    pass  # MUTANTE: el cruce del unused hook ya no se hace"
 mut = src.replace(viejo, nuevo)
-assert mut != src, "el mutante del gancho muerto NO se aplico"
+assert mut != src, "the unused-hook mutant was not applied"
 open(sys.argv[2], "w").write(mut)
 PY2
 r="$(rc_de_con "$mG" "$T/gancho-muerto.ts")"
-if [ "$r" = "0" ] && ! casa 'gancho muerto'; then
-	paso "el mutante que retira el cruce del gancho muerto MUERE en el caso 8, y por su nombre"
+if [ "$r" = "0" ] && ! casa 'unused hook'; then
+	paso "the mutant removing unused-hook validation FAILS in case 8 for that hook"
 else
-	malo "el mutante del gancho muerto sobrevivio (rc $r): el caso 8 no acredita esa direccion"
+	malo "the unused-hook mutant survived (rc $r): case 8 does not verify that direction"
 fi
 
 # ── 2-quater · UNA CLAVE «DECLARADA» DENTRO DE UN COMENTARIO DEL TIPO ─────────────────────────
@@ -461,12 +461,12 @@ TS
 	printf '  void view.despues\n}\n'
 } >"$T/tipo-en-prosa.ts"
 r="$(rc_de "$T/tipo-en-prosa.ts")"
-if [ "$r" = "1" ] && casa 'despues. en tipo-en-prosa\.ts'; then
-	paso "una clave mencionada SOLO en un comentario del tipo no cuenta como declarada: sale 1 y la nombra"
+if [ "$r" = "1" ] && casa 'despues. in tipo-en-prosa\.ts'; then
+	paso "a key mentioned ONLY in a type comment is undeclared: returns 1 and names it"
 elif [ "$r" = "1" ]; then
-	malo "salio 1 sin nombrar la clave: el rojo no dice cual"
+	malo "returned 1 without naming the key: the failure cannot be located"
 else
-	malo "una clave solo mencionada en prosa del tipo salio $r: el tipo se sigue leyendo en crudo"
+	malo "a key mentioned only in type prose returned $r: the type is still read without stripping comments"
 fi
 
 # ── 2-quinquies · MUTANTE: el tipo vuelve a leerse del fuente en crudo ─────────────────────────
@@ -477,18 +477,18 @@ src = open(sys.argv[1]).read()
 viejo = 'm = re.search(r"const VIEWS:\\s*\\{(.*?)\\}\\[\\]\\s*=", src_sin_prosa, re.S)'
 nuevo = 'm = re.search(r"const VIEWS:\\s*\\{(.*?)\\}\\[\\]\\s*=", src, re.S)  # MUTANTE: tipo en crudo'
 mut = src.replace(viejo, nuevo, 1)
-assert mut != src, "el mutante del tipo en crudo NO se aplico"
+assert mut != src, "the raw-type mutant was not applied"
 compile(mut, "mQ", "exec")  # un mutante que no compila no acredita nada
 open(sys.argv[2], "w").write(mut)
 PY2
 r="$(rc_de_con "$mQ" "$T/tipo-en-prosa.ts")"
 # Se exige el DEFECTO —rc 0 diciendo «sin hallazgos»— y NO una excepcion cualquiera.
-if [ "$r" = "0" ] && casa 'sin hallazgos'; then
-	paso "leyendo el tipo en crudo, la clave en prosa se cuenta como declarada y sale «sin hallazgos»: el caso 2-quater lo caza"
+if [ "$r" = "0" ] && casa 'no findings'; then
+	paso "reading the raw type counts a prose key as declared and reports no findings: case 2-quater catches it"
 elif casa 'Traceback'; then
-	malo "el mutante del tipo en crudo murio con una EXCEPCION, no con la ceguera"
+	malo "the raw-type mutant crashed with an EXCEPTION instead of reproducing the blind spot"
 else
-	malo "el mutante del tipo en crudo no reprodujo la ceguera (rc $r): el caso 2-quater no acredita nada"
+	malo "the raw-type mutant did not reproduce the blind spot (rc $r): case 2-quater proves nothing"
 fi
 
 # ── 2-sexies · LA PREMISA DEL GATE SE MIDE, NO SE RECITA ──────────────────────────────────────
@@ -511,14 +511,14 @@ printf '{"include":["src","e2e"]}\n' >"$T/ts-con/web/tsconfig.app.json"
 r_sin="$(razon_con "$T/ts-sin")"
 r_con="$(razon_con "$T/ts-con")"
 r_vacio="$(razon_con "$T/ts-vacio")"
-if ! command grep -q 'medido ahora' <<<"$r_sin"; then
-	malo "con un tsconfig que NO nombra e2e, el gate no dice que lo midio: $r_sin"
-elif ! command grep -q 'ALGUN tsconfig NOMBRA' <<<"$r_con"; then
-	malo "con un tsconfig que SI nombra e2e, el gate sigue afirmando que ninguno lo hace: $r_con"
-elif ! command grep -q 'no he podido comprobar' <<<"$r_vacio"; then
-	malo "sin ningun tsconfig, el gate AFIRMA en vez de decir que no pudo mirar: $r_vacio"
+if ! command grep -q 'checked now' <<<"$r_sin"; then
+	malo "with a tsconfig excluding e2e, the check does not report measuring it: $r_sin"
+elif ! command grep -q 'A tsconfig NAMES' <<<"$r_con"; then
+	malo "with a tsconfig including e2e, the check still claims none includes it: $r_con"
+elif ! command grep -q 'could not check' <<<"$r_vacio"; then
+	malo "without any tsconfig, the check makes an unverified assertion: $r_vacio"
 else
-	paso "la premisa del gate se mide: la afirma, la retira si algun tsconfig nombra e2e, y calla si no puede mirar"
+	paso "the check measures its premise: asserts it, retracts it if a tsconfig includes e2e, and makes no claim if unreadable"
 fi
 
 # ── 2-septies · EL UNIVERSO SE DERIVA, NO SE ESCRIBE A MANO ───────────────────────────────────
@@ -541,24 +541,24 @@ const VIEWS: {
 }[] = [{ id: 'y', path: '/y', despues: 1 }]
 for (const view of VIEWS) { await page.goto(view.path); use(view.id) }
 TS
-salida="$( cd "$T/uni" && python3 "$GATE" 2>&1 )"; rc=$?
+output="$( cd "$T/uni" && python3 "$GATE" 2>&1 )"; rc=$?
 if [ "$rc" != 1 ]; then
-	malo "con DOS tablas VIEWS y la segunda sucia, el gate da rc=$rc en vez de 1 (universo de un solo fichero)"
-elif ! command grep -q 'z-sucia' <<<"$salida"; then
-	malo "el gate no nombra el fichero del hallazgo: $salida"
-elif ! command grep -q 'a-limpia' <<<"$salida"; then
-	malo "el gate no dice que reviso TAMBIEN la limpia — sin eso no se sabe que abarco"
+	malo "with TWO VIEWS tables and a defect in the second, the check returns rc=$rc instead of 1"
+elif ! command grep -q 'z-sucia' <<<"$output"; then
+	malo "the check does not name the finding’s filename: $output"
+elif ! command grep -q 'a-limpia' <<<"$output"; then
+	malo "the check does not report inspecting the clean file TOO: its coverage is unknown"
 else
-	paso "el universo se deriva: dos tablas VIEWS, revisa las dos y caza la del segundo fichero"
+	paso "the scope is derived: both VIEWS tables are inspected and the second file’s defect is caught"
 fi
 
 # Y la otra direccion: sin ninguna tabla NO dice «limpio», dice que no pudo mirar.
 mkdir -p "$T/uni-vacio/web/e2e"
-salida="$( cd "$T/uni-vacio" && python3 "$GATE" 2>&1 )"; rc=$?
+output="$( cd "$T/uni-vacio" && python3 "$GATE" 2>&1 )"; rc=$?
 if [ "$rc" != 2 ]; then
-	malo "sin ninguna tabla VIEWS el gate da rc=$rc; un universo vacio no es un arbol limpio"
+	malo "without any VIEWS tables the check returns rc=$rc: an empty scope is not a clean tree"
 else
-	paso "un universo vacio sale rc 2 (no pude mirar), no rc 0"
+	paso "an empty scope returns rc 2 (could not check)"
 fi
 
 # ── 4-quinquies · UNA INVOCACION DENTRO DE UNA PLANTILLA SE VE ────────────────────────────────
@@ -581,12 +581,12 @@ TS
 	printf '  use(view.id)\n}\n'
 } >"$T/typo-en-plantilla.ts"
 r="$(rc_de "$T/typo-en-plantilla.ts")"
-if [ "$r" = "1" ] && casa 'typo de invocacion' && casa 'despuess'; then
-	paso "un typo de invocacion escrito DENTRO de una plantilla sale 1 y lo nombra"
+if [ "$r" = "1" ] && casa 'property-access typo' && casa 'despuess'; then
+	paso "a property-access typo INSIDE a template returns 1 and names it"
 elif [ "$r" = "0" ]; then
-	malo "el typo dentro de la plantilla sale rc 0: la sonda vuelve a ser ciega al codigo de \${}"
+	malo "the template typo returns rc 0: the probe again ignores code inside \${}"
 else
-	malo "el typo dentro de la plantilla da rc $r sin nombrarlo: $(cat "$T/salida" 2>/dev/null | head -3)"
+	malo "the template typo returns rc $r without naming it: $(cat "$T/output" 2>/dev/null | head -3)"
 fi
 
 # ── 4-sexies · MUTANTE: la plantilla vuelve a blanquearse entera ──────────────────────────────
@@ -608,10 +608,10 @@ nuevo = ('    import re as _re\n'
          '    _bl = lambda m: "".join(c if c == "\\n" else " " for c in m.group(0))\n'
          '    return _sin_cadenas(_re.sub(r"`(?:\\\\.|[^`\\\\])*`", _bl, src, flags=_re.S))  # MUTANTE')
 mut = src.replace(viejo, nuevo, 1)
-assert mut != src, "el mutante de la plantilla NO se aplico"
+assert mut != src, "the template mutant was not applied"
 open(sys.argv[2], "w").write(mut)
 PY2
-if exige_construido "$mPlantilla" "el mutante que ciega la plantilla"; then
+if exige_construido "$mPlantilla" "mutant ignoring template code"; then
 	r="$(rc_de_con "$mPlantilla" "$T/typo-en-plantilla.ts")"
 	# ⛔ EL JUICIO VA DENTRO DEL EXITO, y esto lo caza un lector sobre la version que introdujo la
 	#    guarda. Antes la rama de fallo hacia `r=99` y el bloque de juicio corria IGUAL — contra la
@@ -622,11 +622,11 @@ if exige_construido "$mPlantilla" "el mutante que ciega la plantilla"; then
 	#    anterior»), mordiendo por el camino que la propia guarda abre al fallar. Un control nuevo
 	#    trae su propia rama de fallo, y esa rama tambien hay que escribirla.
 	if ! muerte_valida; then
-		malo "NO HE PODIDO MIRAR: el mutante que ciega la plantilla REVENTO (Traceback) en vez de morir: un mutante que revienta no acredita nada"
-	elif ! casa 'typo de invocacion'; then
-		paso "el mutante que blanquea la plantilla entera MUERE en el caso 4-quinquies, y por su nombre"
+		malo "COULD NOT CHECK: the mutant ignoring template code CRASHED (Traceback): a crash proves nothing"
+	elif ! casa 'property-access typo'; then
+		paso "the mutant blanking the entire template FAILS in case 4-quinquies for the intended defect"
 	else
-		malo "el mutante que ciega la plantilla sigue reportando el typo (rc $r): revisa el mutante"
+		malo "the mutant ignoring template code still reports the typo (rc $r): inspect the mutant"
 	fi
 fi
 
@@ -648,12 +648,12 @@ VIEWS.reduce((acc, v) => { use(v.despuess); return acc }, 0)
 TS
 } >"$T/forma-mixta.ts"
 r="$(rc_de "$T/forma-mixta.ts")"
-if [ "$r" = "2" ] && casa 'NO HE PODIDO MIRAR' && casa 'forma que no se leer'; then
-	paso "una forma de uso de VIEWS que el gate no modela sale rc 2 nombrando la linea, no rc 0"
+if [ "$r" = "2" ] && casa 'COULD NOT CHECK' && casa 'unsupported form'; then
+	paso "an unsupported VIEWS usage returns rc 2 and names its line"
 elif [ "$r" = "0" ]; then
-	malo "la forma no modelada sale rc 0: el gate llama limpio a lo que no ha podido leer"
+	malo "the unsupported form returns rc 0: the check reports unreadable input as clean"
 else
-	malo "la forma no modelada da rc $r sin decir que no pudo mirar"
+	malo "the unsupported form returns rc $r without explaining that it could not be checked"
 fi
 
 # ── 5-ter · MUTANTE: se retira la deteccion de usos no modelados ──────────────────────────────
@@ -664,14 +664,14 @@ src = open(sys.argv[1]).read()
 viejo = "    sueltos = usos_no_modelados(limpio_todo)"
 nuevo = "    sueltos = []  # MUTANTE: la lista de formas vuelve a ser una promesa"
 mut = src.replace(viejo, nuevo, 1)
-assert mut != src, "el mutante de usos no modelados NO se aplico"
+assert mut != src, "the unsupported-usage mutant was not applied"
 open(sys.argv[2], "w").write(mut)
 PY2
 r="$(rc_de_con "$mN" "$T/forma-mixta.ts")"
 if [ "$r" = "0" ]; then
-	paso "el mutante que se fia de la lista de formas MUERE en el caso 5-bis: sale rc 0 con el typo delante"
+	paso "the mutant trusting the list of forms FAILS in case 5-bis: returns rc 0 with the typo present"
 else
-	malo "el mutante sin deteccion de usos no modelados da rc $r; se esperaba el falso verde"
+	malo "the mutant ignoring unsupported usage returns rc $r; a false pass was expected"
 fi
 
 # ── 6-bis · EL DIAGNOSTICO NOMBRA A QUIEN INVOCA, NO AL PRIMERO POR ORDEN ──────────────────────
@@ -691,13 +691,13 @@ TS
 } >"$T/dos-ligaduras.ts"
 r="$(rc_de "$T/dos-ligaduras.ts")"
 if [ "$r" = "1" ] && casa 'zeta\.despuess' && ! casa 'alfa\.despuess'; then
-	paso "con dos ligaduras el diagnostico nombra la que de verdad invoca (zeta), no la primera del alfabeto"
+	paso "with two bindings the diagnostic names the actual accessor (zeta) instead of the first alphabetic name"
 elif casa 'alfa\.despuess'; then
-	malo "el diagnostico nombra \`alfa.despuess\`: manda al lector al bucle limpio"
+	malo "the diagnostic names \`alfa.despuess\`: directs the reader to the clean loop"
 else
-	malo "el caso de dos ligaduras da rc $r sin nombrar la invocacion"
+	malo "the two-binding case returns rc $r without naming the property access"
 fi
 
-printf '\ntest-check-capture-view-keys: %d pasan, %d fallan\n' "$ok" "$fail"
+printf '\ntest-check-capture-view-keys: %d passed, %d failed\n' "$ok" "$fail"
 [ "$fail" -eq 0 ] || exit 1
 exit 0

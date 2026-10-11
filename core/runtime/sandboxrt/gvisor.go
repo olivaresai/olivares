@@ -43,6 +43,10 @@ type GVisorConfig struct {
 	// red-team, so without an operator-configured egress path a probe honestly fails
 	// to reach the target (OutcomeError), never a silent open network.
 	Network string
+	// ProxySocket opts into a bind-mounted Unix transport to the same per-job
+	// egress proxy. The guest harness must understand proxy_socket. It needs no NIC
+	// and takes precedence over Network; existing TCP harnesses remain unchanged.
+	ProxySocket bool
 	// Timeout bounds a single runsc invocation (default 60s).
 	Timeout time.Duration
 }
@@ -130,12 +134,34 @@ func (b *gvisorBackend) Execute(ctx context.Context, job Job, profile Profile, p
 	defer func() { _ = os.RemoveAll(bundleDir) }()
 
 	// 1) Write the guest-harness job spec (bind-mounted read-only into the guest).
-	jobBytes, err := encodeHarnessJob(job, proxyAddr)
+	var socketMounts []ociMount
+	guestSocket := ""
+	useSocket := b.cfg.ProxySocket && !job.Egress.denyAll()
+	if useSocket {
+		if proxyAddr == "" {
+			return BackendResult{InstanceID: id}, fmt.Errorf("sandboxrt: Unix proxy transport requires an egress proxy")
+		}
+		socketPath := filepath.Join(bundleDir, "proxy.sock")
+		closeRelay, err := startProxyRelay(ctx, socketPath, proxyAddr)
+		if err != nil {
+			return BackendResult{InstanceID: id}, err
+		}
+		defer closeRelay()
+		guestSocket = "/sandbox/proxy.sock"
+		socketMounts = append(socketMounts, ociMount{Destination: guestSocket, Type: "bind", Source: socketPath,
+			Options: []string{"ro", "bind", "nosuid", "nodev", "noexec"}})
+	}
+	jobBytes, err := encodeHarnessJob(job, proxyAddr, guestSocket)
 	if err != nil {
 		return BackendResult{InstanceID: id}, err
 	}
 	jobPath := filepath.Join(bundleDir, "job.json")
-	if err := os.WriteFile(jobPath, jobBytes, 0o600); err != nil {
+	jobMode := os.FileMode(0o600)
+	if b.cfg.ProxySocket {
+		// Readable by the non-root guest; bundle stays 0700.
+		jobMode = 0o444
+	}
+	if err := os.WriteFile(jobPath, jobBytes, jobMode); err != nil {
 		return BackendResult{InstanceID: id}, fmt.Errorf("sandboxrt: cannot write job spec: %w", err)
 	}
 
@@ -146,8 +172,9 @@ func (b *gvisorBackend) Execute(ctx context.Context, job Job, profile Profile, p
 		Destination: guestJobPath, Type: "bind", Source: jobPath,
 		Options: []string{"ro", "bind", "nosuid", "nodev", "noexec"},
 	}
+	mounts := append([]ociMount{jobMount}, socketMounts...)
 	specBytes, err := buildOCISpec(profile, b.cfg.RootfsDir,
-		[]string{b.cfg.HarnessPath, guestJobPath}, proxyEnv(proxyAddr), jobMount)
+		[]string{b.cfg.HarnessPath, guestJobPath}, proxyEnv(proxyAddr), mounts...)
 	if err != nil {
 		return BackendResult{InstanceID: id}, err
 	}
@@ -160,9 +187,16 @@ func (b *gvisorBackend) Execute(ctx context.Context, job Job, profile Profile, p
 	// operator-provisioned mode (route restricted to the proxy), defaulting to
 	// "none" when unconfigured so it fails to reach the target rather than opening.
 	network, hadNIC := b.networkMode(job)
-	stdout, code, err := b.runner.run(ctx, bundleDir, os.Environ(),
-		b.cfg.Binary, "--root", b.cfg.StateRoot, "--network="+network, "--platform", b.cfg.Platform,
-		"run", "--bundle", bundleDir, id)
+	args := []string{"--root", b.cfg.StateRoot, "--network=" + network, "--platform", b.cfg.Platform}
+	if b.cfg.ProxySocket {
+		// runsc otherwise ignores the OCI guest seccomp profile by default.
+		args = append(args, "--oci-seccomp")
+	}
+	if useSocket {
+		args = append(args, "--host-uds=open")
+	}
+	args = append(args, "run", "--bundle", bundleDir, id)
+	stdout, code, err := b.runner.run(ctx, bundleDir, os.Environ(), b.cfg.Binary, args...)
 	// Always attempt destruction + verification, even on a run fault.
 	destroyed, verified := b.destroy(id)
 	if err != nil {
@@ -188,7 +222,7 @@ func (b *gvisorBackend) Execute(ctx context.Context, job Job, profile Profile, p
 // the target rather than opening an un-routed network). hadNIC reports whether a
 // NIC was attached (for the attestation).
 func (b *gvisorBackend) networkMode(job Job) (mode string, hadNIC bool) {
-	if job.Egress.denyAll() {
+	if job.Egress.denyAll() || b.cfg.ProxySocket {
 		return "none", false
 	}
 	mode = strings.TrimSpace(b.cfg.Network)

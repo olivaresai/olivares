@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/olivaresai/olivares/core/internal/store/dialect"
+	"github.com/olivaresai/olivares/core/migrate"
 	"github.com/olivaresai/olivares/core/store"
 )
 
@@ -70,10 +71,9 @@ func ensureAppendOnlyScopeTable(ctx context.Context, ownerDB dialect.Execer, dia
 	if dia.Name() != store.EnginePostgres {
 		return nil
 	}
-	if _, err := ownerDB.ExecContext(ctx, appendOnlyScopeDDL); err != nil {
-		return fmt.Errorf("sqlstore: append-only scope inventory: %w", err)
-	}
-	return nil
+	return migrate.Apply(ctx, ownerDB, dia, "schema_migrations_appendonly_scope", []migrate.Migration{{
+		Version: 1, Name: "appendonly_scope", Stmts: []string{appendOnlyScopeDDL},
+	}})
 }
 
 // readAppendOnlyScopeInventory returns every table the inventory records.

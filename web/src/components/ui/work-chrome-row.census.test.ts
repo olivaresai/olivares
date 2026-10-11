@@ -32,7 +32,6 @@ describe('the row a header shares with a tab strip', () => {
     expect(users.map((path) => relative(SRC, path)).sort()).toEqual([
       'features/agentops/provider-admin-view.tsx',
       'features/console/console-view.tsx',
-      'features/sessions/sessions-workspace-view.tsx',
     ])
   })
 

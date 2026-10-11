@@ -349,8 +349,9 @@ function TOTPPolicySection() {
   )
 }
 
-/** The honest failure line: a 403 names the AAL3 ceremony, a 503 names the
- *  unwired sealer; anything else is the engine's own message, never invented. */
+/** The honest failure line: a 403 names the deployment's extra check for
+ *  administrative actions, a 503 names the unwired sealer; anything else is the
+ *  engine's own message, never invented. */
 function errorMessage(err: unknown, t: (k: string) => string): string {
   if (err instanceof ApiError && err.status === 403)
     return t('identity:totp.stepUpRequired')

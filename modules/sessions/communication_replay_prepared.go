@@ -266,7 +266,7 @@ func (m *Module) prepareProtocolReplayEvidence(
 	record *preparedEvidence,
 ) error {
 	recordCtx := context.WithValue(ctx, preparingEvidenceKey{}, record)
-	if m.workIdentity != nil {
+	if m.WorkIdentity != nil {
 		for _, participant := range plan.Participants {
 			// The answer, a refusal included, is what checkParticipant reads
 			// inside the transaction and maps as it does today.
@@ -448,8 +448,8 @@ func (m *Module) communicationEvidencePorts(
 	failUnprepared bool,
 ) communicationEvidencePorts {
 	direct := communicationEvidencePorts{
-		closure: m.communicationGrantClosure, attestor: m.communicationAudienceAttestor,
-		directory: m.communicationDirectoryResolver, operation: m.communicationOperationAuthorizer,
+		closure: m.CommunicationGrantClosure, attestor: m.CommunicationAudienceAttestor,
+		directory: m.CommunicationDirectoryResolver, operation: m.CommunicationOperationAuthorizer,
 	}
 	if record := preparingEvidence(ctx); record != nil {
 		return communicationEvidencePorts{
@@ -500,7 +500,7 @@ type participantResolver interface {
 // so its joined resolution refuses instead of waiting.
 func (m *Module) participantResolverFor(ctx context.Context, tenant model.TenantID) participantResolver {
 	if record := preparingEvidence(ctx); record != nil {
-		return recordingParticipants{next: m.workIdentity, record: record}
+		return recordingParticipants{next: m.WorkIdentity, record: record}
 	}
 	if prepared, joined := joinedPreparedReplay(ctx, tenant); joined && prepared != nil {
 		if prepared.evidence == nil {
@@ -508,7 +508,7 @@ func (m *Module) participantResolverFor(ctx context.Context, tenant model.Tenant
 		}
 		return replayingEvidence{record: prepared.evidence}
 	}
-	return m.workIdentity
+	return m.WorkIdentity
 }
 
 type recordingClosure struct {

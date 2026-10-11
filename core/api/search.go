@@ -103,12 +103,8 @@ type searchResponseDTO struct {
 // caller could already list feature by feature. No self-audit: each result is
 // a name from a list surface the caller is entitled to read, and the audited
 // read remains the feature's own list/get route.
-func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
-	p, ok := principalFrom(r.Context())
-	if !ok {
-		s.writeError(w, r, auth.ErrUnauthenticated)
-		return
-	}
+func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	p := mc.Principal
 	tenant, err := s.resolveTenant(r, p)
 	if err != nil {
 		s.writeError(w, r, err)

@@ -5,6 +5,8 @@ description: >-
   权限漂移（least-privilege drift）与安全发现项 —— 由控制塔拉取以丰富其自身视图。
   这是一个中立 JSON 投影，而非已校验的原生推送。
 ---
+SIEM and ITSM push, OTLP downloads, external trace and metric delivery, and posture export require Business. Community keeps local observability, trace-context propagation, saved settings and `olivares dr backup`. Generic chat, email and webhook notifications remain available in Community.
+
 
 态势导出（`modules/posture-export`）是引擎的**出站态势表面**：一个由控制塔轮询的单一
 只读端点，用引擎的真实[访问图谱](/zh/reference/modules/iii-access-map/)、最小权限漂移、
@@ -23,6 +25,7 @@ description: >-
   与清点授权的计数。
 - **`findings`** —— 安全发现项，仅以 refs 和一个 `detail_hash` 投影，可由 `?severity=`
   下限与 `?category=` 过滤。
+- **`projection_readiness`** —— `inventory`、`posture_drift` 和 `findings` 的布尔值，报告相应的 inventory、access-map 和 security 数据生产者是否运行。这不证明数据新鲜度或完整覆盖。停止或不可用的生产者会在 `note` 中增加部分证据警告；保留数据仍可导出。CLI 摘要和下载文档携带同样的说明。
 
 每一次导出都是**最小数据** —— 只有 refs、哈希和关系，绝不包含原始负载或机密 —— 并且一道
 防御性的脱敏处理会清洗每一个自由格式字段。导出本身会将数据移出本机，因此它会在与读取相同的

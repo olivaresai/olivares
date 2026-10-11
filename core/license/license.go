@@ -76,7 +76,7 @@ type Claims struct {
 	// Plan is a free-form plan label (e.g. "commercial").
 	Plan string `json:"plan,omitempty"`
 	// SupportTier is the attested commercial support relationship the licensee
-	// purchased (e.g. "standard", "enterprise"; empty = none/community). It is a
+	// purchased (e.g. "business", "enterprise"; empty = none/community). It is a
 	// free-form DISPLAY/RECORD label like Plan — informational only, NEVER gates,
 	// degrades or blocks anything, and is consumed by no part of the binary. The
 	// support relationship is legal/commercial, not a feature flag; this claim only
@@ -105,10 +105,8 @@ type Claims struct {
 	MaxUsers int `json:"max_users,omitempty"`
 	// IssuedAt is when the license was signed.
 	IssuedAt time.Time `json:"issued_at"`
-	// ExpiresAt is when the term ends. Every v8 offer is TERM-ONLY, so the zero
-	// time is NOT a perpetual grant: it is a blob that attests no term, and Status
-	// reports it as expired. (It used to mean perpetual; the v8 package removed the
-	// perpetual right entirely and LICENSING.md §ADR-0010 signs "no perpetual fallback".)
+	// ExpiresAt ends the attested term. Zero attests no term and reports expired;
+	// it never grants a perpetual right.
 	ExpiresAt time.Time `json:"expires_at,omitempty"`
 	// GraceUntil is the instant the ISSUER attests the entitlement survives to after
 	// ExpiresAt. It is SIGNED, never inferred: whether a lapse was involuntary, and
@@ -175,13 +173,9 @@ func (c Claims) NormalizedProfile() string {
 	}
 }
 
-// MaxGracePeriod is the widest post-expiry window the canon allows an issuance to
-// attest: G = T+168h (an internal design note (not shipped), LICENSING.md §ADR-0010). The verifier
-// enforces it as a STRUCTURAL upper bound even though the issuer owns the decision
-// to grant, because a signed-but-wrong grace_until in the distant future would
-// otherwise recreate the perpetual right the v8 package removed. The issuer still
-// owns "was the lapse involuntary" and "has this holder already spent its one
-// allowance in 365 rolling days" — neither is reconstructible here.
+// MaxGracePeriod bounds signed post-expiry grace to 168 hours: G = T+168h.
+// The issuer decides involuntary-lapse eligibility and one allowance per rolling
+// 365 days. The verifier enforces the bound without reconstructing those decisions.
 const MaxGracePeriod = 168 * time.Hour
 
 // GracePeriod returns the ATTESTED grace window: GraceUntil − ExpiresAt, clamped to
@@ -225,7 +219,7 @@ func (c Claims) GracePeriod() time.Duration {
 //	otherwise                        -> expired
 //
 // None of this blocks anything in the open binary: Status is a DISPLAY fact there
-// (LICENSING.md §ADR-0010), and Verify still never rejects a blob for any of these reasons.
+// and Verify still never rejects a blob for any of these reasons.
 // What it does change is what the CLOSED build is entitled to consume, which is the
 // only place a commercial term was ever meant to bite.
 func (c Claims) Status(now time.Time) Status {

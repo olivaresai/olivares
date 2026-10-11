@@ -57,9 +57,10 @@ corrélée avec la fenêtre de journal de la session. La surface s'enracine à
   périodique ne sont liées que par l'extrémité de la chaîne jusqu'au prochain
   ancrage ou scellement ; `verify` rapporte `anchored_through` de sorte que la
   limite soit explicite, jamais implicite.
-- Il n'implémente **ni purge ni conservation légale (legal hold)** — la
-  rétention/conservation légale possède la suppression ; les ancrages de journal
-  survivent à toute purge.
+- Compliance prend en charge les calendriers de conservation et les legal holds
+  par classe pour `privileged-session-recording`. **La purge est indisponible**, car
+  les frames sont des preuves append-only. `retention_days` est indicatif ;
+  `retention_enforced` reste false et aucune suppression automatique n’est promise.
 - C'est le sous-système d'enregistrement que le **panneau de gouvernance
   agentops** utilise pour l'enregistrement des E/S par session : chaque trame
   Claude Code pontée est repliée dans le même motif chaîné par hachage et ancré

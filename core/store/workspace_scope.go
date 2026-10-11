@@ -935,7 +935,7 @@ var agentLineage = model.WorkspaceLineageSpec{
 // workspace does not carry a workspace_id, it IS the node. A confined caller
 // sees exactly its own, so a federated search or a picker cannot enumerate the
 // names and ids of the tenant's other workspaces.
-func (s *workspaceConfinedScope) Workspaces() Repository[model.Workspace] {
+func (s *workspaceConfinedScope) Workspaces() WorkspaceRepo {
 	return confinedSelfRepo{raw: s.raw.Workspaces(), b: s.b}
 }
 

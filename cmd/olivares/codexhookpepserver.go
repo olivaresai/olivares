@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
@@ -54,7 +53,7 @@ type codexHookPEPConfig struct {
 // path yields an empty config (nothing mounted); a supplied path must be readable and valid
 // or startup fails closed.
 func loadCodexHookPEPConfig() (codexHookPEPConfig, error) {
-	path := os.Getenv("OLIVARES_CODEX_HOOK_PEP_CONFIG")
+	path := osGetenv("OLIVARES_CODEX_HOOK_PEP_CONFIG")
 	if path == "" {
 		return codexHookPEPConfig{}, nil
 	}

@@ -62,7 +62,7 @@ const (
 	// dumpSchema is the contract with stage 1. A dump that declares anything else is
 	// CANNOT LOOK rather than a best-effort read: a field whose meaning changed must
 	// not be consumed by a gate that still assumes the old one.
-	dumpSchema = "olivares.console.routes/1"
+	dumpSchema = "olivares.console.routes/2"
 
 	consolePageRel = "docs-site/src/content/docs/reference/console.md"
 	grpcPageRel    = "docs-site/src/content/docs/reference/grpc.md"

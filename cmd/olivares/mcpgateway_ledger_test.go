@@ -14,6 +14,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/olivaresai/olivares/cmd/olivares/internal/mcpgateway"
 	mcpc "github.com/olivaresai/olivares/connectors/mcp"
 	"github.com/olivaresai/olivares/core/audit"
 	coreengine "github.com/olivaresai/olivares/core/engine"
@@ -125,8 +126,8 @@ func verifyMCPLedger(t *testing.T, f *mcpLedgerFixture) {
 func assertSingleMCPDecision(t *testing.T, f *mcpLedgerFixture, d mcpc.ToolDecision, wantDecision string) {
 	t.Helper()
 	before := mcpLedgerHead(t, f.store, f.tenant)
-	auditor := mcpGateAuditor{
-		log: slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)), store: f.store, tenant: f.tenant,
+	auditor := mcpgateway.GateAuditor{
+		Log: slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)), Store: f.store, Tenant: f.tenant,
 	}
 	auditor.Record(context.Background(), d, sdk.EvidenceBinding{}) // legacy zero-binding surface
 
@@ -147,7 +148,7 @@ func assertSingleMCPDecision(t *testing.T, f *mcpLedgerFixture, d mcpc.ToolDecis
 	if ev.Seq != before.Seq+1 || !bytes.Equal(ev.PrevHash, before.Hash) {
 		t.Fatalf("MCP ledger event is not the next chained entry: seq=%d want=%d", ev.Seq, before.Seq+1)
 	}
-	wantHash := mcpDecisionHash(
+	wantHash := mcpgateway.DecisionHash(
 		f.tenant.String(), d.Subject, d.Tool, d.RequiredScope, wantDecision,
 		d.ApprovalRef, d.TaskID, d.MCPTag, d.TokenBinding,
 	)
@@ -192,8 +193,8 @@ func TestMCPGateAuditorUsesConfiguredTenantFallback(t *testing.T) {
 func TestMCPGateAuditorSealsDelegationInLedgerMeta(t *testing.T) {
 	f := newMCPLedgerFixture(t)
 	before := mcpLedgerHead(t, f.store, f.tenant)
-	auditor := mcpGateAuditor{
-		log: slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)), store: f.store, tenant: f.tenant,
+	auditor := mcpgateway.GateAuditor{
+		Log: slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)), Store: f.store, Tenant: f.tenant,
 	}
 	auditor.Record(context.Background(), mcpc.ToolDecision{
 		Tenant: f.tenant.String(), Subject: "agent:delegated", IsDelegated: true,
@@ -211,7 +212,7 @@ func TestMCPGateAuditorSealsDelegationInLedgerMeta(t *testing.T) {
 	if got := events[0].meta["act_as"]; got != "user:on-behalf-of" {
 		t.Fatalf("MCP ledger act_as = %#v, want %q", got, "user:on-behalf-of")
 	}
-	wantHash := mcpDecisionHash(
+	wantHash := mcpgateway.DecisionHash(
 		f.tenant.String(), "agent:delegated", "deploy", "tools:deploy", "allow",
 		"", "", "", "dpop",
 	)
@@ -224,8 +225,8 @@ func TestMCPGateAuditorSealsDelegationInLedgerMeta(t *testing.T) {
 func TestMCPGateAuditorLogsEvidenceGapWithoutPanic(t *testing.T) {
 	t.Run("nil store", func(t *testing.T) {
 		var logs bytes.Buffer
-		auditor := mcpGateAuditor{
-			log: slog.New(slog.NewTextHandler(&logs, nil)), tenant: model.NewTenantID(),
+		auditor := mcpgateway.GateAuditor{
+			Log: slog.New(slog.NewTextHandler(&logs, nil)), Tenant: model.NewTenantID(),
 		}
 		auditor.Record(context.Background(), mcpc.ToolDecision{Subject: "agent:nil-store", Tool: "read"}, sdk.EvidenceBinding{})
 		if !strings.Contains(logs.String(), "evidence gap") {
@@ -237,8 +238,8 @@ func TestMCPGateAuditorLogsEvidenceGapWithoutPanic(t *testing.T) {
 		f := newMCPLedgerFixture(t)
 		before := mcpLedgerHead(t, f.store, f.tenant)
 		var logs bytes.Buffer
-		auditor := mcpGateAuditor{
-			log: slog.New(slog.NewTextHandler(&logs, nil)), store: f.store,
+		auditor := mcpgateway.GateAuditor{
+			Log: slog.New(slog.NewTextHandler(&logs, nil)), Store: f.store,
 		}
 		auditor.Record(context.Background(), mcpc.ToolDecision{Subject: "agent:zero-tenant", Tool: "read"}, sdk.EvidenceBinding{})
 		if !strings.Contains(logs.String(), "evidence gap") {

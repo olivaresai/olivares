@@ -6,6 +6,8 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -73,6 +75,65 @@ func TestMessageCLIPrivateCredentialPrecedenceAndDenial(t *testing.T) {
 				if strings.Contains(out.String(), token) || err != nil && strings.Contains(err.Error(), token) {
 					t.Fatal("CLI disclosed credential")
 				}
+			}
+		})
+	}
+}
+
+// A handoff offered from the command line carries the optional branch and sha it was
+// given, and a context file that adds anything else is still refused before any request.
+func TestMessageCLIHandoffOfferCarriesTheGitPosition(t *testing.T) {
+	t.Setenv("OLIVARES_COMMUNICATION_TOKEN", "session-communication")
+	t.Setenv("OLIVARES_TOKEN", "operator-fixture")
+	t.Setenv(cliConfigOverrideEnv, filepath.Join(t.TempDir(), "absent.yaml"))
+	const sha = "0123456789abcdef0123456789abcdef01234567"
+	id, channel, key := model.NewID().String(), model.NewID().String(), model.NewID().String()
+	for _, tc := range []struct {
+		name, content string
+		sent          bool
+	}{
+		{"branch and sha", `{"summary":"s","next_action":"n","branch":"work/handoff","sha":"` + sha + `"}`, true},
+		{"neither", `{"summary":"s","next_action":"n"}`, true},
+		{"an unknown key", `{"summary":"s","next_action":"n","sha":"` + sha + `","tag":"v1"}`, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var sent map[string]any
+			calls := 0
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				calls++
+				body, _ := io.ReadAll(r.Body)
+				if err := json.Unmarshal(body, &sent); err != nil {
+					t.Errorf("the offer body is not JSON: %v", err)
+				}
+				_, _ = w.Write([]byte(`{}`))
+			}))
+			defer srv.Close()
+			cmd := newMessageCmd()
+			var out bytes.Buffer
+			cmd.SetOut(&out)
+			cmd.SetErr(&out)
+			cmd.SetIn(strings.NewReader(tc.content))
+			cmd.SetArgs([]string{"handoff", "offer", "--channel-id", channel, "--work-item-id", id,
+				"--to-sid", "osn_" + model.NewID().String(), "--owner-epoch", "2", "--version", "3",
+				"--ack-deadline", "2026-10-01T12:00:00Z", "--context-file", "-", "--idempotency-key", key,
+				"--server", srv.URL, "--tenant", "tenant-a"})
+			err := cmd.Execute()
+			if !tc.sent {
+				if err == nil || calls != 0 {
+					t.Fatalf("a context file with an unknown key reached the engine: calls=%d err=%v", calls, err)
+				}
+				return
+			}
+			if err != nil || calls != 1 {
+				t.Fatalf("offer calls=%d err=%v\n%s", calls, err, out.String())
+			}
+			handoff, _ := sent["handoff"].(map[string]any)
+			wantBranch := strings.Contains(tc.content, "branch")
+			if (handoff["branch"] == "work/handoff") != wantBranch || (handoff["sha"] == sha) != wantBranch {
+				t.Fatalf("the offer carried handoff = %v", handoff)
+			}
+			if _, has := handoff["branch"]; has != wantBranch {
+				t.Fatalf("branch key present = %v, want %v: %v", has, wantBranch, handoff)
 			}
 		})
 	}

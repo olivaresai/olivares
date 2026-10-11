@@ -19,14 +19,17 @@ sitúa en la ruta de datos del agente.
 El módulo abarca tres responsabilidades acotadas:
 
 - **Guardrails** — una cadena de detectores deterministas y explicables
-  inspecciona el texto del agente en las superficies `input`, `output` y
-  `tool_args` en busca de secretos/PII, prompt-injection, jailbreak, contenido no
+  inspecciona el texto del agente en las superficies `input`, `output`,
+  `tool_args` y `tool_result` en busca de secretos/PII, prompt-injection, jailbreak, contenido no
   permitido, violaciones del esquema de salida y el OWASP Agentic Top 10. Las
   detecciones portan referencias de framework (OWASP LLM Top 10 2025, OWASP
   Agentic Top 10 2026, MITRE ATLAS) literales de fuentes primarias, nunca
-  inventadas. Un clasificador opcional y conectable (un guardrail-LLM hospedado)
-  se ejecuta *detrás* de los detectores deterministas: solo puede **añadir**
-  detecciones, nunca suprimir una, y su fallo se registra y se ignora.
+  inventadas.
+  El binario estándar no configura un clasificador de modelo; la selección de
+  proveedor/cuenta no está conectada a ese puerto. La interfaz Go opcional sigue
+  soportada: los clasificadores
+  inyectados pueden añadir detecciones, nunca suprimir hallazgos deterministas, y sus
+  fallos se registran y se ignoran.
 - **Detección de anomalías** — correlaciona el drift de Permitido-frente-a-Observado
   que computa [el módulo III](/es/reference/modules/iii-access-map/) con findings de
   severidad alta, y une las señales anti-evasión del lado del kernel y del lado

@@ -50,6 +50,18 @@ func emitGo(doc *Document) ([]byte, error) {
 			continue
 		}
 		name := op.goName()
+		if op.hasLegacyBodylessSignature() {
+			fmt.Fprintf(&b, "// %s calls %s %s without a request body.\n", name, op.Method, op.Path)
+			if op.Stability != "" {
+				fmt.Fprintf(&b, "//\n// Stability: %s.\n", op.Stability)
+			}
+			if op.Deprecated {
+				fmt.Fprintf(&b, "//\n// Deprecated: %s\n", op.docDeprecation())
+			}
+			fmt.Fprintf(&b, "func (c *Client) %s(ctx context.Context, ref string, opts ...RequestOption) (map[string]any, error) {\n", name)
+			fmt.Fprintf(&b, "\treturn c.%sWithBody(ctx, ref, nil, opts...)\n}\n\n", name)
+			name += "WithBody"
+		}
 		fmt.Fprintf(&b, "// %s calls %s %s: %s\n", name, op.Method, op.Path, sentence(op.Summary))
 		if op.Stability != "" {
 			fmt.Fprintf(&b, "//\n// Stability: %s.\n", op.Stability)

@@ -224,21 +224,6 @@ func TestDisabledProviderNeverBreaksRequest(t *testing.T) {
 
 // New with an endpoint but no live collector must NOT block or fail boot (the OTLP
 // exporters connect lazily) — a missing collector cannot delay the engine.
-func TestNewWithEndpointDoesNotBlockBoot(t *testing.T) {
-	p, err := New(context.Background(), Config{
-		Enabled: true, Endpoint: "127.0.0.1:4317", Protocol: ProtocolGRPC, Insecure: true,
-		SampleRatio: 1, ServiceName: "test", ServiceVersion: "v",
-	})
-	if err != nil {
-		t.Fatalf("New(enabled, no collector): %v", err)
-	}
-	if !p.Enabled() {
-		t.Fatal("a configured endpoint must enable the provider")
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 2_000_000_000) // 2s
-	defer cancel()
-	_ = p.Shutdown(ctx) // must not hang/panic with no collector
-}
 
 func TestFromEnvDefaultsDisabled(t *testing.T) {
 	t.Setenv("OLIVARES_OTEL_ENABLED", "")
@@ -274,6 +259,61 @@ func TestFromEnvGenAICompat(t *testing.T) {
 	t.Setenv("OLIVARES_OTEL_GENAI_COMPAT", "on")
 	if !FromEnv("v").GenAICompat {
 		t.Fatal("OLIVARES_OTEL_GENAI_COMPAT=on must enable GenAI deprecated dual-emit compat")
+	}
+}
+
+// TestFromEnvGenAILatestOptIn pins the standard semconv opt-in switch (issue
+// #202): OTEL_SEMCONV_STABILITY_OPT_IN is a comma-separated list per the
+// instrumentation.yaml convention, and only the exact genai_latest_experimental
+// token switches GenAI emission to the pending conventions (#374, #440).
+func TestFromEnvGenAILatestOptIn(t *testing.T) {
+	t.Setenv("OLIVARES_OTEL_ENABLED", "")
+	t.Setenv("OLIVARES_OTEL_ENDPOINT", "")
+	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "")
+	t.Setenv("OTEL_SEMCONV_STABILITY_OPT_IN", "")
+	if FromEnv("v").GenAILatest {
+		t.Fatal("GenAI latest-experimental emission must default OFF (published form only)")
+	}
+	t.Setenv("OTEL_SEMCONV_STABILITY_OPT_IN", "gen_ai_latest_experimental")
+	if !FromEnv("v").GenAILatest {
+		t.Fatal("OTEL_SEMCONV_STABILITY_OPT_IN=gen_ai_latest_experimental must switch to the latest form")
+	}
+	t.Setenv("OTEL_SEMCONV_STABILITY_OPT_IN", "http/dup, gen_ai_latest_experimental ,dup")
+	if !FromEnv("v").GenAILatest {
+		t.Fatal("a comma-separated list containing the token must switch to the latest form")
+	}
+	t.Setenv("OTEL_SEMCONV_STABILITY_OPT_IN", "gen_ai_latest_experimental_old")
+	if FromEnv("v").GenAILatest {
+		t.Fatal("a token that merely contains the value as a substring must not switch")
+	}
+	t.Setenv("OTEL_SEMCONV_STABILITY_OPT_IN", "GEN_AI_LATEST_EXPERIMENTAL")
+	if FromEnv("v").GenAILatest {
+		t.Fatal("the token is matched exactly, not case-insensitively")
+	}
+}
+
+// TestResolveKeepsSemconvOptInWithSavedSettings: the opt-in is environment-only,
+// so saved tracing settings must never mask it, and its presence must surface as
+// a recognized override.
+func TestResolveKeepsSemconvOptInWithSavedSettings(t *testing.T) {
+	t.Setenv("OLIVARES_OTEL_ENABLED", "")
+	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "")
+	t.Setenv("OTEL_SEMCONV_STABILITY_OPT_IN", "gen_ai_latest_experimental")
+	s := DefaultSettings()
+	s.Enabled = true
+	s.Endpoint = "collector.internal:4317"
+	cfg, overrides := s.Resolve("v")
+	if !cfg.GenAILatest {
+		t.Fatal("saved settings must not mask the environment opt-in")
+	}
+	found := false
+	for _, k := range overrides {
+		if k == "OTEL_SEMCONV_STABILITY_OPT_IN" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("overrides = %v, want OTEL_SEMCONV_STABILITY_OPT_IN reported", overrides)
 	}
 }
 

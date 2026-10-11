@@ -5,6 +5,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 # Security hardening & threat-model verification
 
+Audit SIEM export, directory archives and external archive verification require Business. Community retains the signed ledger and `olivares audit verify`; `olivares dr backup` remains available. See [edition placement](editions.md).
+
 **Date:** 2026-06-04 · **Status:** pentest-ready (beta)
 
 > **Completion pass (2026-06-04).** After the initial pass an adversarial
@@ -48,7 +50,7 @@ Legend: ✅ verified · 🛡️ fixed/hardened · ⚠️ partial → tracked fin
 
 | Mitigation claimed | Status | Evidence |
 |---|---|---|
-| TLS on by default, **no plaintext fallback** (fail closed) | ✅ | `cmd/olivares/cmd_serve.go` — gRPC server refuses to construct without TLS unless `--insecure`; default binds `127.0.0.1` |
+| TLS on by default, **no plaintext fallback** (fail closed) | ✅ | `cmd/olivares/cmd_serve.go` — gRPC server refuses to construct without TLS unless `--insecure`; the default bind is every interface (`:8443`/`:8444`, `cmd/olivares/binddefaults.go`), so TLS, not the bind, is what protects it |
 | In-host connector↔engine channel authenticated & encrypted | 🛡️ | enabled go-plugin **AutoMTLS** (`core/runtime/loader.go` `AutoMTLS:true`) — per-launch cert pair pinned both ends on the localhost subprocess gRPC channel |
 | **mTLS for remote collector→core** (verified client cert) | 🛡️ | `core/secure/tls.go` `ServerTLSConfig` sets `ClientAuth: RequireAndVerifyClientCert` + `ClientCAs` when `--grpc-client-ca` is configured (`cmd_serve.go`); `MinVersion` TLS1.2; adversarial handshake test `core/secure/mtls_test.go`. Default single-node keeps server-TLS + bearer-token auth (`core/api/grpc.go` interceptor) |
 | Cooperative OTLP/hook ingest is not an unauthenticated open port | 🛡️ | `connectors/claude/claude.go` `Open` refuses a **non-loopback bind** unless `allow_public_bind=true`; the eBPF backstop is the supported off-host capture path |
@@ -89,7 +91,7 @@ Legend: ✅ verified · 🛡️ fixed/hardened · ⚠️ partial → tracked fin
 | **No default credentials**; single-use setup token on first boot | ✅ | `cmd/olivares/cmd_serve.go` `announceSetup`; `core/secure/setup.go`; no seeded admin/password anywhere |
 | RBAC on the access graph; every panel action self-audited | ✅ / 🛡️ | `core/auth/authorizer.go`, `permission.go`; `handlers_core.go` self-audits graph reads. Viewing the graph is now an **editor+** privileged read (never `viewer`), core + module surfaces, via `permission.go` `accessGraphReadPerms` (§8) |
 | Passwords hashed; brute-force throttled | ✅ | `core/auth/credential.go` `HashPassword`; `throttle.go` |
-| TLS on, telemetry-home off, binds to localhost by default | ✅ | `cmd_serve.go` defaults `127.0.0.1:8443/8444`, `--insecure` default false; no outbound analytics call in the tree |
+| TLS on, telemetry-home off; binds every interface by default, loopback on request | ✅ | `cmd/olivares/binddefaults.go` defaults `:8443`/`:8444` (every interface); `--listen 127.0.0.1:8443 --grpc-listen 127.0.0.1:8444` restricts the engine to its host; `--insecure` default false; no outbound analytics call in the tree |
 | `--seed-demo` cannot expose a public-password superadmin off-host | 🛡️ | (was a gap) `cmd_serve.go` refuses `--seed-demo` on a non-loopback bind; tests `serve_guard_test.go` |
 
 ### License key (`§1` STRIDE, `§4`)
@@ -140,8 +142,10 @@ Legend: ✅ verified · 🛡️ fixed/hardened · ⚠️ partial → tracked fin
 
 | Port | Proto | Bind (default) | Auth | Notes |
 |---|---|---|---|---|
-| 8443 | HTTPS (REST + web UI) | `127.0.0.1` | bearer token (session `olvs_…` / API key `olvk_…`); setup token first-boot only | TLS on; `--insecure` (dev only) disables it, and is **refused on a non-loopback bind** unless `--insecure-allow-public-bind` is also given |
-| 8444 | gRPC (ControlPlane API) | `127.0.0.1` | bearer token; **opt-in mTLS** via `--grpc-client-ca` | fail-closed (no plaintext unless `--insecure`) |
+| 8443 | HTTPS (REST + web UI) | every interface (`:8443`) | bearer token (session `olvs_…` / API key `olvk_…`); setup token first-boot only | TLS on; `--insecure` (dev only) disables it, and is **refused on a non-loopback bind** unless `--insecure-allow-public-bind` is also given |
+| 8444 | gRPC (ControlPlane API) | every interface (`:8444`) | bearer token; **opt-in mTLS** via `--grpc-client-ca` | fail-closed (no plaintext unless `--insecure`) |
+
+Both listeners bind every interface by default (`:8443` is the dual-stack wildcard). To keep them on the host, run `olivares serve --listen 127.0.0.1:8443 --grpc-listen 127.0.0.1:8444` (a service install takes the same flags through `OLIVARES_EXTRA_ARGS` in its environment file).
 
 **Cooperative collector (Claude connector, optional):** OTLP/gRPC `127.0.0.1:4317`, OTLP/HTTP + hooks `127.0.0.1:4318` — loopback-only by default; a non-loopback bind is refused unless `allow_public_bind=true` (ingest is unauthenticated by design — same-host agent).
 
@@ -227,7 +231,7 @@ what that delegates to the deployment edge:
   worse than delegating that edge (`core/api/middleware_ratelimit.go:23-31`). The limiter meters the
   AUTHENTICATED surface; the bad-bearer flood is 401'd before metering and is likewise an edge concern.
 - **What YOUR ingress/WAF must therefore own** (the chart ships no Ingress on purpose — BYO edge,
-  `deploy/helm/olivares/values.yaml`): per-client-IP rate limits on `POST
+  Business chart values): per-client-IP rate limits on `POST
   /v1/auth/login` and `POST /v1/setup` at the layer that still SEES real client IPs. Reference
   knobs: NGINX ingress `nginx.ingress.kubernetes.io/limit-rps` (or `limit_req` with a dedicated
   zone keyed on `$binary_remote_addr` scoped to those two paths), HAProxy `stick-table type ip` +
@@ -240,7 +244,7 @@ what that delegates to the deployment edge:
 
 ## 3. Secure-defaults audit (factory posture)
 
-Boot the product with no flags and you get: **no credentials** (setup token printed once to stdout), **TLS on**, **no telemetry-home**, **localhost binds**, **append-only audit + per-event signatures + scheduled signed checkpoints**, **Docker discovery OFF** (root-equivalent socket), and — on Postgres — a **hard refusal to start against an RLS-bypassing role**. Each dangerous departure is an explicit, named opt-in: `--insecure` (loopback-gated — a non-loopback bind is refused unless the operator ALSO passes `--insecure-allow-public-bind`, because plaintext off-host puts the console, every bearer token and the first-boot setup token on the wire in clear), `--allow-privileged-db-role`, `allow_public_bind`, `--seed-demo` (loopback-gated), `enable_docker`. Tests blind these defaults (`serve_guard_test.go`, `serve_insecure_bind_test.go`, `roleposture_test.go`, `claude_test.go`, `mtls_test.go`, `docker_test.go`).
+Boot the product with no flags and you get: **no credentials** (setup token printed once to stdout), **TLS on**, **no telemetry-home**, **binds on every interface** (`--listen 127.0.0.1:8443 --grpc-listen 127.0.0.1:8444` keeps the engine on its host), **append-only audit + per-event signatures + scheduled signed checkpoints**, **Docker discovery OFF** (root-equivalent socket), and — on Postgres — a **hard refusal to start against an RLS-bypassing role**. Each dangerous departure is an explicit, named opt-in: `--insecure` (loopback-gated — a non-loopback bind is refused unless the operator ALSO passes `--insecure-allow-public-bind`, because plaintext off-host puts the console, every bearer token and the first-boot setup token on the wire in clear), `--allow-privileged-db-role`, `allow_public_bind`, `--seed-demo` (loopback-gated), `enable_docker`. Tests blind these defaults (`serve_guard_test.go`, `serve_insecure_bind_test.go`, `roleposture_test.go`, `claude_test.go`, `mtls_test.go`, `docker_test.go`).
 
 ---
 
@@ -267,9 +271,10 @@ Boot the product with no flags and you get: **no credentials** (setup token prin
 ### Verifying a release (end user)
 
 ```sh
-# in the directory with the downloaded artifacts + checksums.txt(.sig/.pem)
-scripts/verify-release.sh                  # keyless (Sigstore) — default
-scripts/verify-release.sh --key cosign.pub # key-based (air-gap)
+# in the directory with the downloaded artifacts + checksums.txt(.sig/.pem), using the script
+# from a source checkout of the release tag (not a release asset; see INSTALL.md)
+/path/to/olivares/scripts/verify-release.sh                  # keyless (Sigstore) — default
+/path/to/olivares/scripts/verify-release.sh --key cosign.pub # key-based (air-gap)
 ```
 
 The script verifies the cosign signature over `checksums.txt`, then verifies each

@@ -6,10 +6,18 @@
 // rather than in the view: the request it builds, the server's own artifact name,
 // and the truncation flag that tells an analyst the run is partial.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { configureApiClient } from '@/lib/api/client'
 import { ApiError } from '@/lib/api/errors'
 import { useSessionStore } from '@/stores/session'
 import { useTenantStore } from '@/stores/tenant'
 import { securityApi } from './api'
+
+// The client reads the session and tenant through the getters the app wires at boot
+// (app/providers.tsx); downloads go through that client.
+configureApiClient({
+  getCSRFToken: () => useSessionStore.getState().csrfToken,
+  getTenant: () => useTenantStore.getState().activeTenant,
+})
 
 function sarifResponse(headers: Record<string, string> = {}) {
   return new Response('{"$schema":"sarif","runs":[]}', {

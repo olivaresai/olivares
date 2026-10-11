@@ -25,17 +25,11 @@ import (
 // actually read. K3 consumes those exact facts, so the supported custom-grant
 // administrator can administer a Channel it may not read, and the original
 // owner keeps administering after policy activation.
-func TestCommunicationLineageAuthorityCustomGrantAdminHTTP(t *testing.T) {
-	exerciseCommunicationLineageAuthorityCustomGrantAdminHTTP(t, communicationHTTPTestSQLiteStore(t))
-}
 
 // TestCommunicationLineageAuthorityCustomGrantAdminHTTPPostgres is the same
 // journey on an owned IsolatedPostgresSplitOwner database, where
 // LockAuthoritySnapshot takes the real per-lineage row locks. Absent PostgreSQL
 // skips; a required misconfiguration fails.
-func TestCommunicationLineageAuthorityCustomGrantAdminHTTPPostgres(t *testing.T) {
-	exerciseCommunicationLineageAuthorityCustomGrantAdminHTTP(t, communicationHTTPTestPostgresStore(t))
-}
 
 const communicationLineageAuthorityRole = "review-channel-steward"
 

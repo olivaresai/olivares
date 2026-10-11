@@ -23,7 +23,7 @@ DOC="${OLIVARES_C0338_DOC:-design/C03-38-PACKS-V1-2026-08-20.md}"
 
 grep -q 'NOT MERGED' "$DOC" || fail "$DOC lost NOT MERGED"
 if grep -qiE 'invented set:\*|FIRMA A claimed|five packs on missing marker' "$DOC"; then
-	fail "$DOC claims a close this lote does not have"
+	fail "$DOC claims a close this batch does not have"
 fi
 
 grep -q 'PACKS_VOCAB_V1 = "packs:v1"' "$CLAIMS" \

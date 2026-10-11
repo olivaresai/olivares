@@ -110,6 +110,9 @@ func TestRegistryValidationRejects(t *testing.T) {
 		{"read-only confined without lineage", model.EntityDescriptor{Kind: "rrw.h", Table: "rrw_h",
 			Fields:                    []model.FieldSpec{{Name: "workspace_id", Kind: model.KindUUID, Nullable: true}},
 			WorkspaceConfinedReadOnly: true}},
+		{"internal without lineage", model.EntityDescriptor{Kind: "rrw.i", Table: "rrw_i",
+			Fields:   []model.FieldSpec{{Name: "workspace_id", Kind: model.KindUUID, Nullable: true}},
+			Internal: true}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

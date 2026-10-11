@@ -78,11 +78,11 @@ func (s retirementStep) Module() string { return retirementModule }
 // RetireUser implements auth.RetirementStep.
 func (s retirementStep) RetireUser(ctx context.Context, req auth.RetirementRequest) (auth.RetirementOutcome, error) {
 	m := s.m
-	if m == nil || m.data == nil {
+	if m == nil || m.Data == nil {
 		return auth.RetirementOutcome{}, errors.New("sessions: the retirement step has no data handle")
 	}
 	var out auth.RetirementOutcome
-	err := m.data.Mutate(ctx, req.Tenant, func(sc store.Scope) error {
+	err := m.Data.Mutate(ctx, req.Tenant, func(sc store.Scope) error {
 		out = auth.RetirementOutcome{}
 		fact, err := auth.PinRetirement(ctx, sc, req)
 		if err != nil {

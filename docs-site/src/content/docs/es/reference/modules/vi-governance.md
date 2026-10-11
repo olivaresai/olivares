@@ -112,3 +112,7 @@ nunca un email.
 - [Gobernar y aprobar](/es/how-to/govern-and-approve/) — usar las superficies de política y aprobación.
 - [Visión general de la arquitectura](/es/explanation/architecture/overview/) — el motor y las capas sobre las que se compone este módulo.
 - [Honestidad y límites](/es/start/honesty-and-limits/) — la postura deny-closed y detective-by-default.
+
+## Ediciones de aprobación (0.1)
+
+Community conserva el motor de aprobaciones, el mínimo de dos personas distintas para acciones CRITICAL, el doble control del kill-switch y las políticas que exigen revisión o aumentan el nivel de riesgo o el cuórum. Las políticas que reducen el nivel de riesgo y el acceso de emergencia break-glass pertenecen a la base de Business. Los registros almacenados se conservan para lectura y exportación, pero no pueden reducir los valores predeterminados de Community ni autorizar acceso de emergencia.

@@ -762,18 +762,30 @@ func TestAgentToolDefaultRootFollowsDataDir(t *testing.T) {
 }
 
 // TestAgentToolProductionWiringTrustsOnlyTheEmbeddedKey pins the seam: the
-// fixture constructor is reachable from tests only, never from the command file
-// or any flag, so no production path can relax the pinned release key.
+// fixture constructor is reachable from tests only, never from the command file,
+// its official catalog or any flag, so production cannot relax the release key.
 func TestAgentToolProductionWiringTrustsOnlyTheEmbeddedKey(t *testing.T) {
 	src, err := os.ReadFile("cmd_agent_tool.go")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if bytes.Contains(src, []byte("NewClaudeWithTrust")) {
-		t.Fatal("cmd_agent_tool.go must construct the Claude adapter with NewClaude only")
+	catalog, err := os.ReadFile(filepath.Join("internal", "toolinstall", "official_catalog.go"))
+	if err != nil {
+		t.Fatal(err)
 	}
-	if !bytes.Contains(src, []byte("toolinstall.NewClaude(")) {
-		t.Fatal("cmd_agent_tool.go no longer wires the production adapter")
+	if !bytes.Contains(catalog, []byte("NewClaude(ClaudeOptions{Client: client, Verifier: verifier})")) {
+		t.Fatal("official_catalog.go must construct the pinned Claude adapter with the supplied verifier")
+	}
+	for name, source := range map[string][]byte{"cmd_agent_tool.go": src, "official_catalog.go": catalog} {
+		if bytes.Contains(source, []byte("NewClaudeWithTrust")) {
+			t.Fatalf("%s must construct the Claude adapter with NewClaude only", name)
+		}
+		if bytes.Contains(source, []byte("HashMatchingVerifier")) {
+			t.Fatalf("%s must not wire the test-only HashMatchingVerifier", name)
+		}
+	}
+	if !bytes.Contains(src, []byte("toolinstall.NewOfficialCatalog(nil, verifier)")) {
+		t.Fatal("cmd_agent_tool.go no longer wires the production catalog with its verifier")
 	}
 	for _, flag := range []string{`"key"`, `"fingerprint"`, `"trust"`, `"insecure"`} {
 		if bytes.Contains(src, []byte("Flags().StringVar(&"+flag)) || bytes.Contains(src, []byte(", "+flag+", ")) {
@@ -786,11 +798,8 @@ func TestAgentToolProductionWiringTrustsOnlyTheEmbeddedKey(t *testing.T) {
 		t.Fatalf("v1 catalog %v", keys)
 	}
 	got := strings.Join(eng.DriverKeys(), ",")
-	if got != "claude,codex,grok,ollama,opencode" {
+	if got != "claude,codex,gemini-cli,grok,ollama,opencode" {
 		t.Fatalf("driver keys %q", got)
-	}
-	if bytes.Contains(src, []byte("HashMatchingVerifier")) {
-		t.Fatal("cmd_agent_tool.go must not wire the test-only HashMatchingVerifier")
 	}
 }
 

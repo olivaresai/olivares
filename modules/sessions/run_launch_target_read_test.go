@@ -264,7 +264,7 @@ func launchTargetWorkspaces(t *testing.T, m *Module, tenant model.TenantID) (mod
 	t.Helper()
 	ctx := context.Background()
 	var alpha, bravo model.ID
-	if err := m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
+	if err := m.Data.Mutate(ctx, tenant, func(sc store.Scope) error {
 		a, err := sc.Workspaces().Create(ctx, model.Workspace{Name: "Alpha", Slug: "lt-alpha", Status: model.StatusActive})
 		if err != nil {
 			return err
@@ -287,7 +287,7 @@ func launchTargetWorkspaces(t *testing.T, m *Module, tenant model.TenantID) (mod
 func seedLaunchTargetRun(t *testing.T, m *Module, tenant model.TenantID, workspace model.ID, runRef string, snap *ProviderHomeSnapshot, tweak func(model.Record)) {
 	t.Helper()
 	ctx := context.Background()
-	if err := m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
+	if err := m.Data.Mutate(ctx, tenant, func(sc store.Scope) error {
 		repo, err := sc.Ext(runKind)
 		if err != nil {
 			return err
@@ -313,7 +313,7 @@ func seedLaunchTargetRun(t *testing.T, m *Module, tenant model.TenantID, workspa
 func clearLaunchTargetLineage(t *testing.T, m *Module, tenant model.TenantID, runRef string) {
 	t.Helper()
 	ctx := context.Background()
-	if err := m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
+	if err := m.Data.Mutate(ctx, tenant, func(sc store.Scope) error {
 		repo, err := sc.Ext(runKind)
 		if err != nil {
 			return err
@@ -336,7 +336,7 @@ func launchTargetRunRows(t *testing.T, m *Module, tenant model.TenantID) map[str
 	t.Helper()
 	ctx := context.Background()
 	out := map[string]model.Record{}
-	if err := m.data.View(ctx, tenant, func(sc store.Scope) error {
+	if err := m.Data.View(ctx, tenant, func(sc store.Scope) error {
 		repo, err := sc.Ext(runKind)
 		if err != nil {
 			return err
@@ -443,17 +443,10 @@ func TestRunLaunchTargetReaderNamesProviderAndEnvironmentWithoutTheRuntime(t *te
 	})
 
 	t.Run("a run launched under no profile is presented empty, not refused", func(t *testing.T) {
-		// A legacy run is a REAL state, not a fault, and the WRITER settles it: the
-		// sole writer of the five profile columns clears them TOGETHER for a launch
-		// that carries no profile (runtime_profile.go:237-243), and the schema
-		// declares all five nullable, so an all-empty stamp is a persisted state
-		// under EVERY posture. The two readers that tolerate it —
-		// resolveLaunchProfileInto:178-183 admitting an unprofiled launch, and
-		// revalidateStoredProfile:881-885 continuing one — do so only where profiled
-		// launches are OFF; with them on, both refuse, and rows written before that
-		// posture keep their empty stamp regardless. So the decision rests on the
-		// writer, not on either reader. Refusing here would report a row that is
-		// perfectly available as unavailable.
+		// Rows persisted before profiled launches can have an empty home stamp.
+		// They remain readable even though new launches require a profile and an
+		// unproven legacy home cannot resume. Reporting such a readable row as
+		// unavailable would hide historical session data.
 		snap, err := readLaunchTarget(t, m, tenant, alpha, legacy)
 		if err != nil {
 			t.Fatalf("run with no profile: %v", err)

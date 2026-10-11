@@ -51,7 +51,7 @@ func lifecycleHarness(t *testing.T, sid string) (*Module, *fakeRunner, *harness,
 	admin := h.adminLogin()
 	tenant := h.createOrg(admin, "clt1-lifecycle")
 	created := h.doJSON("POST", "/v1/m/sessions/runs", admin,
-		map[string]any{"transport": "stream-json", "isolation": "native"}, tenantHdr(tenant))
+		map[string]any{"provider_profile_ref": ensureRuntimeTestProfileRef(t, h.m, tenant), "transport": "stream-json", "isolation": "native"}, tenantHdr(tenant))
 	if created.code != http.StatusCreated {
 		t.Fatalf("fixture create = %d", created.code)
 	}

@@ -69,6 +69,9 @@ func TestManagedSessionMCPApprovalCancellationAnchorsOneRefusal(t *testing.T) {
 				if row.event.TargetKind != "mcp.tool" || row.event.TargetID.String() != "write_echo" || row.meta["approval_ref"] != ref || row.meta["allowed"] != false || row.meta["reason"] != "destructive tool not approved (rejected)" {
 					t.Errorf("ledger refusal lost its tool, approval or cause: %+v, %+v", row.event, row.meta)
 				}
+				if row.meta["policy_decision"] != "ask" || row.meta["policy_id"] != "tool:write_echo" || row.meta["server_name"] == nil || row.meta["client_id"] == nil {
+					t.Errorf("ledger refusal lost its decision-table row: %+v", row.meta)
+				}
 			}
 			if strings.Contains(logs.String(), "evidence gap") {
 				t.Errorf("cancellation lost audit evidence: %s", logs.String())

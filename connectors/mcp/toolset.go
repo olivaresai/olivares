@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	cedar "github.com/cedar-policy/cedar-go"
 )
 
 // toolset.go is the SERVER-OWNED tool→scope policy the inline MCP PEP enforces on
@@ -44,13 +46,18 @@ type ToolPolicy struct {
 	AllowedRoles  []string         `json:"allowed_roles,omitempty"`
 	AppOnly       bool             `json:"app_only,omitempty"`
 	Annotations   *ToolAnnotations `json:"annotations,omitempty"`
+	// Conditions are Cedar forbid rules over this tool's call arguments
+	// (decision.go). A matched rule blocks the call, or asks a human when it
+	// carries @decision("ask"). Empty means the entry alone decides.
+	Conditions string `json:"conditions,omitempty"`
 }
 
 // Toolset is the server-owned allow/deny policy map for tools/call. It is deny-by-
 // default: a tool with no entry is refused. Build it with NewToolset (which validates
 // every name against SEP-986).
 type Toolset struct {
-	byName map[string]ToolPolicy
+	byName     map[string]ToolPolicy
+	conditions map[string]*cedar.PolicySet
 }
 
 // NewToolset builds a validated toolset. Every policy name MUST satisfy the MCP
@@ -58,13 +65,20 @@ type Toolset struct {
 // a configuration error, never a silently-ignored entry). A duplicate name is an
 // error (ambiguous policy must never resolve nondeterministically).
 func NewToolset(policies []ToolPolicy) (*Toolset, error) {
-	ts := &Toolset{byName: make(map[string]ToolPolicy, len(policies))}
+	ts := &Toolset{byName: make(map[string]ToolPolicy, len(policies)), conditions: map[string]*cedar.PolicySet{}}
 	for _, p := range policies {
 		if err := validateToolName(p.Name); err != nil {
 			return nil, fmt.Errorf("mcp: toolset: %w", err)
 		}
 		if _, dup := ts.byName[p.Name]; dup {
 			return nil, fmt.Errorf("mcp: toolset: duplicate policy for tool %q", p.Name)
+		}
+		if strings.TrimSpace(p.Conditions) != "" {
+			ps, err := compileToolConditions(p.Name, p.Conditions)
+			if err != nil {
+				return nil, fmt.Errorf("mcp: toolset: %w", err)
+			}
+			ts.conditions[p.Name] = ps
 		}
 		ts.byName[p.Name] = p
 	}
@@ -88,6 +102,17 @@ func (t *Toolset) resolve(name string) (ToolPolicy, bool) {
 		return ToolPolicy{}, false
 	}
 	return p, true
+}
+
+// blockRule names the decision-table row that refuses an unresolved tool: its own
+// entry when the entry denies, else the default deny.
+func (t *Toolset) blockRule(name string) string {
+	if t != nil {
+		if p, ok := t.byName[name]; ok && p.Deny {
+			return "tool:" + name
+		}
+	}
+	return "default-deny"
 }
 
 // allowedNamesForRoles is the ROLE-AWARE discovery filter (E1): the set of non-denied

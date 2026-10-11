@@ -38,11 +38,22 @@ const (
 )
 
 // guardianPump drives the periodic tenant-scoped guardian sweep.
+// guardianSweeper is the pump's view of the governance module (C2 item 4):
+// the cheap rule probe plus the sweep. *governance.Module satisfies it; a test
+// supplies its own.
+type guardianSweeper interface {
+	HasGuardianRules(context.Context, model.TenantID) (bool, error)
+	GuardianSweep(context.Context, model.TenantID) (governance.GuardianSweepResult, error)
+}
+
 type guardianPump struct {
 	st       store.Store
-	gov      *governance.Module
+	gov      guardianSweeper
 	interval time.Duration
 	log      *slog.Logger
+	// tenants is the org enumeration (servedWorkTenants in production; a test
+	// pins its own list). Set by newGuardianPump; a nil value means none.
+	tenants func(context.Context) ([]model.TenantID, error)
 }
 
 // newGuardianPump builds the pump from the environment. nil only when the
@@ -62,7 +73,8 @@ func newGuardianPump(getenv func(string) string, st store.Store, gov *governance
 			interval = d
 		}
 	}
-	return &guardianPump{st: st, gov: gov, interval: interval, log: log}
+	return &guardianPump{st: st, gov: gov, interval: interval, log: log,
+		tenants: func(ctx context.Context) ([]model.TenantID, error) { return servedWorkTenants(ctx, st) }}
 }
 
 // register schedules the pump on the runtime's own scheduler (before Start).
@@ -73,19 +85,41 @@ func (p *guardianPump) register(rt *runtime.Runtime) error {
 // runOnce sweeps every business tenant. A per-tenant failure is logged and the
 // remaining tenants still sweep (the pass is idempotent — every transition is
 // state-change-guarded in the module). Logged fields are COUNTS ONLY.
+//
+// C2 item 4 (SR2C P1): the pump probes EVERY tenant on every tick and sweeps
+// only where rules exist — the empty probe is one bounded read, so a rule
+// created a second ago still meets the 30-second operator cadence. There is no
+// cached "no rules" decision: the probe IS the recheck.
 func (p *guardianPump) runOnce(ctx context.Context) error {
 	if !p.st.Leader().Active() {
 		p.log.Debug("guardian-sweep skipped: this node is a standby, not the active writer")
 		return nil
 	}
-	tenants, err := p.businessTenants(ctx)
+	return p.runSweep(ctx)
+}
+
+// runSweep performs one full pass (the probe + the per-tenant sweeps).
+func (p *guardianPump) runSweep(ctx context.Context) error {
+	if !p.st.Leader().Active() {
+		p.log.Debug("guardian-sweep skipped: this node is a standby, not the active writer")
+		return nil
+	}
+	tenants, err := p.tenants(ctx)
 	if err != nil {
 		p.log.Warn("guardian-sweep: cannot enumerate orgs; skipping this tick", "err", err)
 		return nil
 	}
+	// C2 item 4: skip tenants with no guardian rule (one bounded probe each).
 	for _, t := range tenants {
 		if err := ctx.Err(); err != nil {
 			return err
+		}
+		has, herr := p.gov.HasGuardianRules(ctx, t)
+		if herr != nil {
+			p.log.Warn("guardian-sweep: cannot probe tenant rules; sweeping it anyway", "tenant", t.String(), "err", herr)
+		}
+		if !has && herr == nil {
+			continue
 		}
 		res, serr := p.gov.GuardianSweep(ctx, t)
 		if serr != nil {
@@ -98,10 +132,4 @@ func (p *guardianPump) runOnce(ctx context.Context) error {
 		}
 	}
 	return nil
-}
-
-// businessTenants enumerates the orgs to sweep (the eventing pump's rule: the
-// reserved SYSTEM tenant is skipped — guardian state is tenant-scoped fact).
-func (p *guardianPump) businessTenants(ctx context.Context) ([]model.TenantID, error) {
-	return servedWorkTenants(ctx, p.st)
 }

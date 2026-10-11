@@ -64,6 +64,25 @@ describe('NextStep', () => {
     }
   })
 
+  it('"Add a provider" opens the providers view, not provider profiles', () => {
+    // The card is offered to who cannot start a session (home-view.tsx), e.g. a
+    // custom role that manages keys: the key is the first-hour concept, a provider
+    // profile is a later one (dev #336, CS-8).
+    authState.can = (p) =>
+      p === 'sessions:provider:read' || p === 'sessions:provider:write'
+    renderIntel(<NextStep />)
+    expect(screen.getByTestId('home-next-step-provider')).toHaveAttribute(
+      'href',
+      '/providers',
+    )
+  })
+
+  it('offers "Add a provider" only to a principal who may add a provider key', () => {
+    authState.can = (p) => p !== 'sessions:provider:write'
+    renderIntel(<NextStep />)
+    expect(screen.queryByTestId('home-next-step-provider')).toBeNull()
+  })
+
   it('offers nothing at all to a principal who may write nothing', () => {
     // The honest answer for a read-only role: there is no next step FOR THEM, and a
     // row of cards that all end in 403 is worse than no row.
@@ -73,16 +92,23 @@ describe('NextStep', () => {
   })
 
   it('decides on the WRITE permission, not the route read permission', () => {
-    // `sessions:profile:read` opens /provider-profiles. It does not authorize adding
-    // one, and specification04 §1 says so in as many words: "read permission for its
-    // page does not authorize it".
-    authState.can = (p) => p === 'sessions:profile:read'
+    // `sessions:provider:read` opens /providers. It does not authorize adding a key,
+    // and specification04 §1 says so in as many words: "read permission for its page
+    // does not authorize it".
+    authState.can = (p) => p === 'sessions:provider:read'
+    const { container } = renderIntel(<NextStep />)
+    expect(container).toBeEmptyDOMElement()
+  })
+
+  it('offers a verb only where its page opens: a write without the read lands on a 403', () => {
+    authState.can = (p) => p === 'sessions:provider:write'
     const { container } = renderIntel(<NextStep />)
     expect(container).toBeEmptyDOMElement()
   })
 
   it('offers only the verbs this principal holds', () => {
-    authState.can = (p) => p === 'sessions:run:write'
+    authState.can = (p) =>
+      p === 'sessions:run:write' || p === 'sessions:run:read'
     renderIntel(<NextStep />)
     expect(screen.getByTestId('home-next-step-session')).toBeInTheDocument()
     expect(screen.queryByTestId('home-next-step-provider')).toBeNull()

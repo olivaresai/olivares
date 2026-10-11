@@ -28,7 +28,7 @@ func TestLaunchIntent_CarriesTheResolvedFolder(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	dto, err := m.createRun(ctx, tenant, CreateRunParams{
+	dto, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative, WorkspaceRef: ws.WorkspaceRef,
 		Actor: actorU, ActorKind: actorKindU,
 	})
@@ -57,7 +57,8 @@ func TestLaunchIntent_CarriesTheResolvedFolder(t *testing.T) {
 	}
 
 	// No folder named: the run gets a directory of its own, and that is the folder.
-	if _, err := m.createRun(ctx, tenant, CreateRunParams{
+	fr.initSID = "sess-no-folder"
+	if _, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative, Actor: actorU, ActorKind: actorKindU,
 	}); err != nil {
 		t.Fatalf("createRun without a folder: %v", err)

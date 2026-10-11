@@ -4,12 +4,12 @@
 # Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 #
 # check-community-cockpit-strings.sh — a community (or any non-`ids`) artifact carries
-# the session-cockpit literals of scripts/community-session-cockpit-strings.allow (eight
-# today) and no trace of the commercial engine.
+# the session-cockpit literals of scripts/community-session-cockpit-strings.allow
+# and no trace of the commercial engine.
 #
-# THE PROPERTY. Such an artifact registers an AGPL placeholder that mounts one route and
-# answers 501 session_cockpit_unavailable, so it MUST contain cockpit strings: "no
-# cockpit string may appear" is false by construction, which is why this is an
+# THE PROPERTY. Such an artifact registers an AGPL placeholder with a descriptor and
+# permissions, but no cockpit routes. Its public seam literals MUST be present, so
+# "no cockpit string may appear" is false by construction, which is why this is an
 # ALLOWLIST. Contract: docs/contracts/COCKPIT-07-edition-cut.md §7.
 #
 # The count lives in ONE place, the .allow file, and this header deliberately does not
@@ -63,7 +63,7 @@ export LC_ALL=C
 _olivares_git_env="$(cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")" && pwd)/lib/git-env.sh"
 # shellcheck source=/dev/null
 . "$_olivares_git_env" || {
-	echo "$(basename "$0"): FATAL: no puedo cargar $_olivares_git_env (aislamiento git-env)" >&2
+	echo "$(basename "$0"): FATAL: cannot load $_olivares_git_env (Git environment isolation)" >&2
 	exit 2
 }
 unset _olivares_git_env
@@ -132,12 +132,21 @@ mode, allow_path, binpath = sys.argv[1], sys.argv[2], sys.argv[3]
 # names — all lowercase, all preceded by a separator.
 MARKERS = re.compile(r'cockpit|(?<![A-Za-z])xterm', re.IGNORECASE)
 
-# STRUCTURAL EXEMPTIONS. These are NOT literals a product surface shows; they are the
-# compiler's own naming of the PUBLIC AGPL package that is SUPPOSED to be in this
-# binary (modules/sessioncockpit — the placeholder). Each is deliberately anchored to
-# `modules/`: anything naming `enterprise/sessioncockpit*` is a finding, which is the
-# whole distinction this gate exists to make.
+# STRUCTURAL EXEMPTIONS. These cover compiler names and embedded metadata for the
+# public placeholder, plus one exact window of the public-suffix dependency table.
+# They never exempt a bare cockpit marker or private engine name.
 EXEMPT = [
+    # golang.org/x/net/publicsuffix/data/text packs domain labels together. Keep
+    # both neighbors: a bare "cockpit" or "from-cockpit" exemption could hide a
+    # provider mark. A dependency update that changes this window fails closed.
+    (r'from-callyfrom-cockpitrentin-suedtirol',
+     'the packed public-suffix table window'),
+    # core/modulespec embeds modules.json. These exact fields identify the public
+    # placeholder; other package names and constructors remain findings.
+    (r'"package": "sessioncockpit"',
+     'the embedded public placeholder package field'),
+    (r'"constructor": "sessioncockpit\.NewPlaceholder\(\)"',
+     'the embedded public placeholder constructor field'),
     # the AGPL package path and any symbol qualified by it
     # ⛔ NO `/` IN THE TRAILING CLASS, AND THE CONTRAST IS WHY. With `/` in it the pattern
     # ran straight past the end of the public package path and swallowed an
@@ -296,18 +305,18 @@ for run in runs:
         # Report a WINDOW, not the run. Go glues its whole embedded console bundle into
         # single runs of tens of kilobytes; printing one drowns the finding it contains.
         lo, hi = max(0, m.start() - 60), min(len(residue), m.end() + 60)
-        findings.append((residue[lo:hi], 'marcador %s sin cubrir' % m.group()))
+        findings.append((residue[lo:hi], 'unhandled marker %s' % m.group()))
 
 req = required_literals(allowed)
 present = {r: any(r in run for run in runs) for r in req}
 missing = [r for r, ok in present.items() if not ok]
 
 if findings:
-    print('check-community-cockpit-strings: TRAZA(S) FUERA DE LA ALLOWLIST en %s:' % binpath, file=sys.stderr)
+    print('check-community-cockpit-strings: TRACE(S) OUTSIDE THE ALLOWLIST in %s:' % binpath, file=sys.stderr)
     for window, why in findings[:40]:
         print('  %-46s …%s…' % (why, window), file=sys.stderr)
     if len(findings) > 40:
-        print('  … y %d más' % (len(findings) - 40), file=sys.stderr)
+        print('  … and %d more' % (len(findings) - 40), file=sys.stderr)
     print('', file=sys.stderr)
     print('  A community artifact carries only the placeholder. A private route, a proto name,', file=sys.stderr)
     print('  an xterm chunk, an enterprise/sessioncockpit symbol or a provider mark here means', file=sys.stderr)
@@ -318,7 +327,7 @@ if findings:
     sys.exit(1)
 
 if missing:
-    print('check-community-cockpit-strings: FALTA(N) EL/LOS LITERAL(ES) OBLIGATORIO(S) en %s:' % binpath, file=sys.stderr)
+    print('check-community-cockpit-strings: MISSING REQUIRED LITERAL(S) in %s:' % binpath, file=sys.stderr)
     for m in missing:
         print('  %s' % m, file=sys.stderr)
     print('', file=sys.stderr)
@@ -327,7 +336,7 @@ if missing:
     sys.exit(1)
 
 judged = sum(1 for run in runs if MARKERS.search(run))
-print('check-community-cockpit-strings: OK — %d run(s) con marcador en %s, todas cubiertas por los '
-      '%d literales permitidos y las exenciones del placeholder AGPL; los %d obligatorios, presentes.'
+print('check-community-cockpit-strings: OK — %d run(s) with markers in %s, all covered by the '
+      '%d allowed literals and AGPL placeholder exemptions; all %d required literals present.'
       % (judged, binpath, len(allowed), len(req)))
 PY

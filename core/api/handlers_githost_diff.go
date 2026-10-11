@@ -69,10 +69,7 @@ type ContentDiffReader interface {
 	ReadContentDiff(ctx context.Context, q GitHostDiffQuery) (GitHostDiff, error)
 }
 
-func (s *Server) handleGitHostDiff(w http.ResponseWriter, r *http.Request) {
-	if _, ok := s.authzSystem(w, r, "system:admin"); !ok {
-		return
-	}
+func (s *Server) handleGitHostDiff(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
 	if s.contentDiff == nil {
 		s.writeGitHostDiffError(w, r, http.StatusNotImplemented, "git_host_diff_unavailable", "git host diff is not wired on this deployment")
 		return

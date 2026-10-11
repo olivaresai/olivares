@@ -15,7 +15,7 @@ import (
 	"github.com/olivaresai/olivares/core/store"
 )
 
-// SG-00 — the canonical session identity.
+// The canonical session identity.
 //
 // Every other notion of "session" in the tree is keyed by a string that belongs
 // to somebody else: the observe overlay keys sessions_live on the provider's own
@@ -56,11 +56,10 @@ const (
 	// the rest of the model uses (model.Session.WorkspaceID, model.Agent.WorkspaceID).
 	//
 	// It exists because the plane must OWN this fact rather than borrow it. The
-	// K2 work kernel asks "is this session eligible in workspace W", and the
+	// work kernel asks "is this session eligible in workspace W", and the
 	// composition root answered it by reading a core model.Session — a different
 	// notion of "session" whose primary key a canonical sid never equals (see the
-	// SG-00 preamble above). Deriving it instead from the driving agent was
-	// considered and REFUSED on 2026-08-11: it repeats the same
+	// preamble above). Deriving it instead from the driving agent would repeat the same
 	// pattern of asking the neighboring entity for a fact, and it couples two
 	// lifecycles the design separates on purpose — an agent that changes
 	// workspace would retroactively move every live session it drives, in a plane
@@ -95,13 +94,13 @@ const (
 
 // Alias confidence. An approximate binding is one the resolver was not able to
 // attribute precisely; it is recorded and displayed as such, never silently
-// promoted (keeps the same distinction for edges).
+// promoted.
 const (
 	confAttributed  = "attributed"
 	confApproximate = "approximate"
 )
 
-// sidPrefix marks an Olivares session id at a glance. SG-00 exists because
+// sidPrefix marks an Olivares session id at a glance. The canonical identity exists because
 // provider ids and ours were indistinguishable strings; a prefix makes a
 // mistaken cross-assignment visible in a log line and greppable in a database.
 const sidPrefix = "osn_"
@@ -134,18 +133,14 @@ type SessionBinding struct {
 	// "claude" are the same provider, and treating them as two would mint two
 	// identities for one session.
 	//
-	// ⛔ NO SE ENUMERAN AQUÍ, y es deliberado. Esta línea decía «("claude", "codex")» y se
-	//    leía como un conjunto CERRADO cuando no lo es: el campo es una cadena libre y no hay
-	//    validación contra ninguna lista. La enumeración envejeció sola — Grok Build entró como
-	//    TIER 1 el 2026-08-17 y este comentario seguía diciendo dos—, y añadir un tercer nombre
-	//    sólo habría movido la fecha de caducidad.
-	//
-	//    Las claves canónicas las declara `sdk/model` (`EngineClaude`, `EngineCodex`,
-	//    `EngineGrok`), que es la única lista que manda. Que el conjunto sea abierto es una
-	//    PROPIEDAD, no un descuido: un motor nuevo no tiene que tocar este módulo. Lo que sí
-	//    tiene que seguir siendo cierto es que el mismo id externo bajo dos proveedores dé DOS
-	//    sesiones —si colisionaran, una sesión de un motor resolvería a la identidad de otro—, y
-	//    eso lo fija `identity_grok_test.go`.
+	// The providers are not enumerated here on purpose: the field is a free string
+	// with no validation against a list, and a list in a comment reads as a closed set
+	// and ages on its own. The canonical keys are declared in `sdk/model`
+	// (`EngineClaude`, `EngineCodex`, `EngineGrok`), the one list that governs; the set
+	// being open is a property, so a new engine does not have to touch this module.
+	// What must stay true is that one external id under two providers gives TWO
+	// sessions (if they collided, one engine's session would resolve to another's
+	// identity), which identity_grok_test.go pins.
 	Provider string
 	// ExternalID is the provider's own session id, used verbatim (case is
 	// significant in provider ids; only surrounding whitespace is trimmed).
@@ -249,7 +244,7 @@ func (m *Module) registerIdentitySchema(reg store.ExtensionRegistry) error {
 			{Name: colAliasConf, Kind: model.KindText, Principal: model.None("an alias confidence, a closed set: identity.go:100-101, identity.go:376-378")},
 		},
 		Indexes: []model.IndexSpec{{
-			// THE guarantee of SG-00. One provider-issued id resolves to exactly
+			// THE guarantee of the canonical identity. One provider-issued id resolves to exactly
 			// one canonical session, and the DATABASE says so — not the writer's
 			// discipline. Measured before this index existed: sixteen goroutines
 			// re-delivering ONE observation minted FIVE identities and five
@@ -285,7 +280,7 @@ func (m *Module) ResolveSession(ctx context.Context, tenant model.TenantID, b Se
 	if err != nil {
 		return "", err
 	}
-	if m.data == nil {
+	if m.Data == nil {
 		return "", errors.New("sessions: no data handle")
 	}
 	// 1. Committed read: an already-bound alias resolves without writing.
@@ -318,7 +313,7 @@ func (m *Module) ResolveSession(ctx context.Context, tenant model.TenantID, b Se
 func (m *Module) lookupAlias(ctx context.Context, tenant model.TenantID, b SessionBinding) (string, bool, error) {
 	var sid string
 	found := false
-	err := m.data.View(ctx, tenant, func(sc store.Scope) error {
+	err := m.Data.View(ctx, tenant, func(sc store.Scope) error {
 		rec, ok, err := findAlias(ctx, sc, b.Provider, b.ExternalID)
 		if err != nil || !ok {
 			return err
@@ -339,7 +334,7 @@ func (m *Module) lookupAlias(ctx context.Context, tenant model.TenantID, b Sessi
 func (m *Module) mintIdentity(ctx context.Context, tenant model.TenantID, b SessionBinding) (string, error) {
 	sid := newSID()
 	at := model.NewTimestamp(b.At).String()
-	err := m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
+	err := m.Data.Mutate(ctx, tenant, func(sc store.Scope) error {
 		idRepo, err := sc.Ext(identityKind)
 		if err != nil {
 			return err
@@ -484,7 +479,7 @@ func (m *Module) touch(ctx context.Context, tenant model.TenantID, sid string, a
 
 // touchOnce is one optimistic attempt, in its own transaction.
 func (m *Module) touchOnce(ctx context.Context, tenant model.TenantID, sid string, at time.Time) error {
-	return m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
+	return m.Data.Mutate(ctx, tenant, func(sc store.Scope) error {
 		repo, err := sc.Ext(identityKind)
 		if err != nil {
 			return err
@@ -515,7 +510,7 @@ func (m *Module) DeclareSession(ctx context.Context, tenant model.TenantID, b Se
 		return "", err
 	}
 	at := model.NewTimestamp(nonZeroTime(b.At, m.clock)).String()
-	err = m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
+	err = m.Data.Mutate(ctx, tenant, func(sc store.Scope) error {
 		repo, err := sc.Ext(identityKind)
 		if err != nil {
 			return err
@@ -551,7 +546,7 @@ func (m *Module) BindAlias(ctx context.Context, tenant model.TenantID, sid strin
 		}
 		return fmt.Errorf("%w: %s:%s -> %s", ErrAliasBound, nb.Provider, nb.ExternalID, existing)
 	}
-	err = m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
+	err = m.Data.Mutate(ctx, tenant, func(sc store.Scope) error {
 		if _, ok, ferr := findIdentity(ctx, sc, sid); ferr != nil {
 			return ferr
 		} else if !ok {

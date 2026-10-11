@@ -302,13 +302,6 @@ func tenantOf(ref string) (model.TenantID, bool) {
 	return t, true
 }
 
-// debugf logs at debug level if a logger is set.
-func (m *Module) debugf(msg string, args ...any) {
-	if m.log != nil {
-		m.log.Debug(msg, args...)
-	}
-}
-
 // warnf logs at warn level if a logger is set. The sweep failing is a WARN and
 // not a debug line: the estate's freshness has stopped advancing, and an
 // operator reading default-level logs has to be able to see that.

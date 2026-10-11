@@ -96,7 +96,7 @@ func supportBundleCmd() *cobra.Command {
 		Long: "bundle collects an allowlisted set of diagnostics into a 0600 tar.gz. Free-text\n" +
 			"configuration, status, logs and verification reports are always redacted; file:, env:\n" +
 			"and store: references remain literal and are never resolved. Private keys, TLS material\n" +
-			"and arbitrary data-dir blobs can never enter the archive.",
+			"and arbitrary data-dir blobs can never enter the archive.\n\n" + textOnlyOutputHelp,
 		Example: `  # Online status plus the configured env file and recent systemd logs
   olivares support bundle --server https://127.0.0.1:8443 --insecure --journal --since "24 hours ago"
 
@@ -104,6 +104,9 @@ func supportBundleCmd() *cobra.Command {
   olivares support bundle --offline --logs /var/log/olivares/engine.log --verify-report audit-verify.json`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			if err := requireTextOutput(cmd); err != nil {
+				return err
+			}
 			return o.run(cmd, cmd.Flags().Changed("config"))
 		},
 	}

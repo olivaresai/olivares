@@ -39,7 +39,7 @@ set -eu
 # Preflight: the tools this guard reads the world through. Missing → 2, never 1.
 for _tool in base64 awk wc; do
 	if ! command -v "$_tool" >/dev/null 2>&1; then
-		echo "check-release-pubkeys: ⛔ NO HE PODIDO MIRAR: '$_tool' is not on this host, so the keys were never decoded. This says NOTHING about them — install $_tool and re-run." >&2
+		echo "check-release-pubkeys: ⛔ COULD NOT CHECK: '$_tool' is not on this host, so the keys were never decoded. This says NOTHING about them — install $_tool and re-run." >&2
 		exit 2
 	fi
 done

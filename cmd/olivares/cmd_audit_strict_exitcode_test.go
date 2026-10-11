@@ -123,6 +123,7 @@ func seedAuditLedger(t *testing.T, checkpoint bool) (dir, tenant string) {
 	t.Helper()
 	ctx := context.Background()
 	dir = t.TempDir()
+	prepareCompositionTestBoot(t)
 	eng, err := boot(ctx, bootConfig{DataDir: dir, Engine: "sqlite", Logger: slog.Default(), DemoSeed: true})
 	if err != nil {
 		t.Fatalf("boot: %v", err)

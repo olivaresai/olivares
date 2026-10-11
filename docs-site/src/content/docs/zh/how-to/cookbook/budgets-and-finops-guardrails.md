@@ -7,6 +7,9 @@ sidebar:
   order: 2
 ---
 
+FinOps 预算和支出分析属于 **[Business](https://olivares.ai/pricing)** 功能。Community 保留每个会话的成本跟踪和数据导出。0.1 之前保存的预算仍可读取和删除，并在 FinOps 模块启用时继续执行；Community 无法创建或修改预算。评估和沙箱仍属于 Community。
+
+
 **目标：** “这个团队的 agent 在每月 $500 处停止花钱” —— 声明一次、实时强制执行，并在
 逼近过程中带有告警阈值。
 

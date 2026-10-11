@@ -88,13 +88,13 @@ if [ "${1:-}" = "--selftest" ]; then
 		( cd "$d" && "./scripts/$(basename "$0")" >/dev/null 2>&1 ) || rc=$?
 		rm -rf "$d"
 		if [ "$rc" -eq "$want" ]; then _ok=$((_ok+1)); printf '  ok    %-52s rc=%s\n' "$label" "$rc"
-		else _ko=$((_ko+1)); printf '  FALLO %-52s esperaba=%s obtuvo=%s\n' "$label" "$want" "$rc"; fi
+		else _ko=$((_ko+1)); printf '  FAIL  %-52s expected=%s got=%s\n' "$label" "$want" "$rc"; fi
 	}
 	echo "check-format-docs self-test"
-	_caso 2 'un barrido SIN sujeto es NO HE PODIDO MIRAR' ''
+	_caso 2 'a scan with no subject returns COULD NOT CHECK' ''
 	# ⛔ CONTROL NEGATIVO: sin él, la casilla de arriba se cumpliría rechazando SIEMPRE.
-	_caso 0 'con sujeto y sin vocabulario obsoleto, pasa' 'El campo `otlp` lleva el sobre completo.'
-	printf 'check-format-docs self-test: %d pasan, %d fallan\n' "$_ok" "$_ko"
+	_caso 0 'a subject without obsolete vocabulary passes' 'El campo `otlp` lleva el sobre completo.'
+	printf 'check-format-docs self-test: %d passed, %d failed\n' "$_ok" "$_ko"
 	[ "$_ko" -eq 0 ]
 	exit $?
 fi
@@ -354,9 +354,9 @@ echo "info: live-doc OTLP-token occurrences (all verdicts): ${total}"
 # sujeto, no cuánto sujeto. Este repositorio tiene 839 ocurrencias hoy; cualquier cifra concreta
 # envejecería y volvería a fallar por una razón que no es la que mide.
 if [ "${total:-0}" -eq 0 ]; then
-  echo "check-format-docs: NO HE PODIDO MIRAR: el barrido no encontró NI UNA ocurrencia de" >&2
-  echo "  \`otlp\` en documentación viva. Eso no es un árbol limpio: es un censo sin sujeto —" >&2
-  echo "  el árbol equivocado, un --include que dejó de casar, o la documentación movida." >&2
+  echo "check-format-docs: COULD NOT CHECK: the scan found no occurrence of" >&2
+  echo "  \`otlp\` in live documentation. An empty scan cannot verify the tree:" >&2
+  echo "  it may be the wrong tree, an --include pattern may no longer match, or the documentation moved." >&2
   exit 2
 fi
 

@@ -789,8 +789,8 @@ func TestDeliveryDispatchNonUserRecipientNeverClaimsOrNotifies(t *testing.T) {
 
 	fixture := newDeliveryDispatchServiceFixture(t)
 	agentRef := model.NewID().String()
-	originalData := fixture.m.data
-	fixture.m.data = deliveryDispatchLockedRecordDriftData{
+	originalData := fixture.m.Data
+	fixture.m.Data = deliveryDispatchLockedRecordDriftData{
 		inner: originalData,
 		drifts: map[model.Kind]func(model.Record){
 			messageDeliveryKind: func(record model.Record) {
@@ -808,7 +808,7 @@ func TestDeliveryDispatchNonUserRecipientNeverClaimsOrNotifies(t *testing.T) {
 		context.Background(), fixture.scope,
 		deliveryDispatchPumpClaim{NodeID: "node-non-user", Epoch: 13},
 	)
-	fixture.m.data = originalData
+	fixture.m.Data = originalData
 	if !errors.Is(err, ErrCommunicationEvidenceUnknown) || result.Claimed || result.Notified {
 		t.Fatalf("non-User recipient pump = %+v, %v", result, err)
 	}
@@ -840,8 +840,8 @@ func TestDeliveryDispatchLockedEndpointExactBindingDriftRefusesClaim(t *testing.
 	for name, mutate := range mutants {
 		t.Run(name, func(t *testing.T) {
 			fixture := newDeliveryDispatchServiceFixture(t)
-			originalData := fixture.m.data
-			fixture.m.data = deliveryDispatchLockedRecordDriftData{
+			originalData := fixture.m.Data
+			fixture.m.Data = deliveryDispatchLockedRecordDriftData{
 				inner: originalData,
 				drifts: map[model.Kind]func(model.Record){
 					communicationEndpointKind: mutate,
@@ -852,7 +852,7 @@ func TestDeliveryDispatchLockedEndpointExactBindingDriftRefusesClaim(t *testing.
 				context.Background(), fixture.scope,
 				deliveryDispatchPumpClaim{NodeID: "node-exact-drift", Epoch: 23},
 			)
-			fixture.m.data = originalData
+			fixture.m.Data = originalData
 			if !errors.Is(err, ErrCommunicationEvidenceUnknown) || result.Claimed || result.Notified {
 				t.Fatalf("%s drift pump = %+v, %v", name, result, err)
 			}
@@ -1081,13 +1081,13 @@ func TestDeliveryDispatchClaimAuditAnchorAndFailureRollback(t *testing.T) {
 			t.Fatalf("rollback claim owner: %v", err)
 		}
 		beforeHead := directNoticeAuditHead(t, fixture.directNoticeFixture)
-		originalData := fixture.m.data
+		originalData := fixture.m.Data
 		failure := errors.New("exact forced claim audit failure")
-		fixture.m.data = directNoticeCursorAuditFailureData{inner: originalData, failure: failure}
+		fixture.m.Data = directNoticeCursorAuditFailureData{inner: originalData, failure: failure}
 		claimed, won, claimErr := fixture.service.claimCandidate(
 			context.Background(), fixture.scope, candidate, witness, owner,
 		)
-		fixture.m.data = originalData
+		fixture.m.Data = originalData
 		if !errors.Is(claimErr, failure) || won || claimed.auditSeq != 0 {
 			t.Fatalf("claim audit failure = won:%v claimed:%+v err:%v", won, claimed, claimErr)
 		}
@@ -1114,9 +1114,9 @@ func TestDeliveryDispatchSettlementAuditFailureRollsBackAtomically(t *testing.T)
 		t.Fatalf("accepted result: %v", err)
 	}
 	fixture.notifier.notifyResult = accepted
-	originalData := fixture.m.data
+	originalData := fixture.m.Data
 	fixture.notifier.notifyHook = func(sdk.DeliveryDispatch) {
-		fixture.m.data = directNoticeCursorAuditFailureData{
+		fixture.m.Data = directNoticeCursorAuditFailureData{
 			inner: originalData, failure: errors.New("forced delivery audit failure"),
 		}
 	}
@@ -1128,7 +1128,7 @@ func TestDeliveryDispatchSettlementAuditFailureRollsBackAtomically(t *testing.T)
 	if err == nil || result.State != DispatchInFlight {
 		t.Fatalf("audit failure pump = %+v, %v", result, err)
 	}
-	fixture.m.data = originalData
+	fixture.m.Data = originalData
 	dispatch := deliveryDispatchRecordForTest(t, fixture)
 	attempt := deliveryAttemptRecordForTest(t, fixture)
 	delivery := deliveryRecordForDispatchTest(t, fixture)

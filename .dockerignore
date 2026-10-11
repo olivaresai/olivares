@@ -19,8 +19,10 @@ coverage*
 web/test-results
 web/playwright-report
 # Built web assets are regenerated in the image's web stage; do not copy a stale
-# local dist (except the committed placeholder index.html the Go embed needs).
-core/internal/webui/dist/assets
+# local dist. Keep only the compile-time placeholder in the source context.
+core/internal/webui/dist/*
+!core/internal/webui/dist/PLACEHOLDER
+core/internal/webui/bundle-source.stamp
 # Local data dirs / certs / keys must never enter an image.
 olivares-data/
 *.crt

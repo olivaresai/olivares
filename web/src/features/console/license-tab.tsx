@@ -4,7 +4,6 @@
 import { QueryErrorState } from '@/components/layout/query-error-state'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
-import { useCommunityBuild } from '@/lib/hooks/use-edition'
 import { currentLanguage } from '@/lib/i18n'
 import {
   BadgeCheck,
@@ -36,11 +35,9 @@ import { queryKeys } from '@/lib/api/query'
 import { useFailedActionReporter } from '@/lib/hooks/use-privileged-mutation'
 import { useResumeGuard } from '@/lib/hooks/use-resume-guard'
 import { useAuth } from '@/lib/auth/context'
-import {
-  EntitlementMatrixCard,
-  LicenseReadStatus,
-  classifyLicenseRead,
-} from './entitlement-matrix'
+import { LicenseReadStatus, classifyLicenseRead } from './license-read'
+import { PANEL_EXTENSIONS } from '@/features/extensions'
+import { useOfferedPanels } from '@/features/panels'
 import {
   type ActivationAddonDTO,
   type ActivationStatusDTO,
@@ -209,7 +206,7 @@ function LicenseFacts({
 export function LicenseTab() {
   const { t } = useTranslation(['console', 'common'])
   const { isSuperadmin } = useAuth()
-  const communityBuild = useCommunityBuild()
+  const extensionCards = useOfferedPanels(PANEL_EXTENSIONS.licenseCards)
   const [installOpen, setInstallOpen] = useState(false)
   const [removeOpen, setRemoveOpen] = useState(false)
   const installBtnRef = useRef<HTMLButtonElement>(null)
@@ -402,11 +399,9 @@ export function LicenseTab() {
           )}
         </DialogContent>
       </Dialog>
-      {/* Matrix stays below activation: activation is the operational state; the
-          matrix composes independent edition / entitlement / activation facts. A
-          Community build serves no module activation (the read answers 501 there), so
-          it shows no matrix; Settings › Edition & modules states the edition. */}
-      {!communityBuild && <EntitlementMatrixCard />}
+      {extensionCards.map((p) => (
+        <p.Component key={p.id} />
+      ))}
     </div>
   )
 }

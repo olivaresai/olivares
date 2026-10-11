@@ -37,7 +37,7 @@ grep -q 'Operator insert' "$DOC" && grep -q 'Dodo as evidence' "$DOC" \
   && grep -q 'Dedicated verifier' "$DOC" \
   || fail "prepare doc no longer names the three options"
 if grep -qiE 'elegido:|aplicamos la opción|the webhook writes verified|FIRMA A claimed' "$DOC"; then
-  fail "prepare doc claims a decision or a writer this lote does not have"
+  fail "prepare doc claims a decision or a writer this batch does not have"
 fi
 
 grep -q "verification_state IN ('unverified', 'pending', 'verified', 'rejected')" "$MIG" \

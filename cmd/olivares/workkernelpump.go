@@ -13,7 +13,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/olivaresai/olivares/core/runtime"
 	"github.com/olivaresai/olivares/core/store"
 	"github.com/olivaresai/olivares/modules/sessions"
 )
@@ -21,7 +20,10 @@ import (
 const (
 	workOutboxPumpJobName     = "sessions-work-outbox"
 	workOutboxPumpIntervalEnv = "OLIVARES_WORK_OUTBOX_INTERVAL"
-	defaultWorkOutboxInterval = 15 * time.Second
+	// defaultWorkOutboxInterval is the SAFETY cadence (C2 item 5): with the
+	// outbox nudge live, fresh rows drain on insert and this tick only proves
+	// the durable fallback (a stopped nudge, a crash between insert and nudge).
+	defaultWorkOutboxInterval = 5 * time.Minute
 )
 
 // workOutboxPump is the local durable pump for the sessions outbox. It is one
@@ -44,6 +46,22 @@ const (
 // the real Eventing durable intake bound at boot. There is no stub notifier
 // and no constant witness anywhere on this path.
 type workOutboxPump struct {
+	// nudgeCh carries outbox-insert wake-ups to the drain goroutine (C2 item 5).
+	// Its custody is immutable (SR2C P2): created once in register, never
+	// reassigned and never closed (a late nudge just lands in the buffer). stop
+	// OWNS cancellation (nudgeCancel) and JOINS the goroutine (nudgeExited)
+	// before returning, so no drain can race the store close.
+	nudgeCh     chan struct{}
+	nudgeCancel context.CancelFunc
+	nudgeExited chan struct{}
+	nudgeStop   sync.Once
+	// run is what the nudge goroutine drains with (p.runOnce in production; a
+	// test spies it) — the same seam shape as guardianPump.tenants.
+	run func(context.Context) error
+	// nudge is an optional test wrapper installed before registration, like run.
+	// Production uses the coalescing channel send below.
+	nudge func()
+
 	st       store.Store
 	sessions *sessions.Module
 	interval time.Duration
@@ -63,13 +81,22 @@ func newWorkOutboxPump(getenv func(string) string, st store.Store, sm *sessions.
 	interval := defaultWorkOutboxInterval
 	if raw := strings.TrimSpace(getenv(workOutboxPumpIntervalEnv)); raw != "" {
 		parsed, err := time.ParseDuration(raw)
-		if err != nil || parsed <= 0 {
+		switch {
+		case err != nil || parsed < 0:
 			log.Warn("sessions-work-outbox: invalid interval; using default", "value", raw, "default", interval.String())
-		} else {
+		case parsed == 0:
+			// The documented disable (#566): stop the periodic safety drain
+			// only — the insert nudge keeps draining fresh rows (the
+			// eventing-dispatch disable posture).
+			log.Warn("sessions-work-outbox: pump DISABLED (" + workOutboxPumpIntervalEnv + "=0): the periodic safety drain will NOT run — work rows still drain on the insert nudge; communication events, crash-window rows and expired leases stay pending")
+			interval = 0
+		default:
 			interval = parsed
 		}
 	}
-	return &workOutboxPump{st: st, sessions: sm, interval: interval, log: log}
+	p := &workOutboxPump{st: st, sessions: sm, interval: interval, log: log}
+	p.run = p.runOnce
+	return p
 }
 
 // useCommunication attaches the K3 lane the composition decided on: the
@@ -89,13 +116,47 @@ func (p *workOutboxPump) useCommunication(witness *communicationPumpWitness, aut
 	witness.attach(p.interval)
 }
 
-func (p *workOutboxPump) register(rt *runtime.Runtime) error {
-	if err := rt.SchedulePeriodic(workOutboxPumpJobName, p.interval, false, p.runOnce); err != nil {
-		return err
+func (p *workOutboxPump) register(rt periodicScheduler) error {
+	// interval 0 (#566): the periodic drain is disabled; register still owns
+	// the insert nudge below, so fresh rows keep draining.
+	if p.interval > 0 {
+		if err := rt.SchedulePeriodic(workOutboxPumpJobName, p.interval, false, p.runOnce); err != nil {
+			return err
+		}
+		if p.communication != nil {
+			p.communication.markRegistered()
+		}
 	}
-	if p.communication != nil {
-		p.communication.markRegistered()
+	// C2 item 5: drain promptly on every outbox insert (the safety tick stays
+	// as the durable fallback). The goroutine's context is the pump's OWN: stop
+	// cancels it, so a drain never outlives the pump (SR2C P2).
+	p.nudgeCh = make(chan struct{}, 1)
+	ctx, cancel := context.WithCancel(context.Background())
+	p.nudgeCancel = cancel
+	p.nudgeExited = make(chan struct{})
+	nudge := p.nudge
+	if nudge == nil {
+		nudge = func() {
+			select {
+			case p.nudgeCh <- struct{}{}:
+			default: // a drain is already queued
+			}
+		}
 	}
+	sessions.SetWorkOutboxNudge(nudge)
+	go func() {
+		defer close(p.nudgeExited)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-p.nudgeCh:
+				if err := p.run(ctx); err != nil {
+					p.log.Warn("sessions-work-outbox: nudged drain failed", "err", err)
+				}
+			}
+		}
+	}()
 	return nil
 }
 
@@ -104,9 +165,22 @@ func (p *workOutboxPump) register(rt *runtime.Runtime) error {
 // pump that will not tick again, and so a K3 candidate later in a tick that is
 // still running is refused at its own claim boundary.
 func (p *workOutboxPump) stop() {
-	if p != nil && p.communication != nil {
+	if p == nil {
+		return
+	}
+	if p.communication != nil {
 		p.communication.markStopped()
 	}
+	sessions.SetWorkOutboxNudge(nil)
+	// Owned cancellation + join (SR2C P2): cancel the drain's context and wait
+	// for the goroutine to exit, so a nudged drain never runs against a closing
+	// store. Idempotent — a double stop neither panics nor wedges.
+	p.nudgeStop.Do(func() {
+		if p.nudgeCancel != nil {
+			p.nudgeCancel()
+			<-p.nudgeExited
+		}
+	})
 }
 
 func (p *workOutboxPump) runOnce(ctx context.Context) error {
@@ -205,7 +279,7 @@ type communicationAuthorityReport struct {
 
 // communicationOutboxAuthority is the module-bound MANDATORY authority for the
 // outbox families that are not K1/K2 work facts. The composition binds it on
-// the sessions module on every boot (sessions.UseWorkOutboxClaimAuthority), so
+// the sessions module on every boot (sessions.Dependencies.WorkOutboxAuthority), so
 // the Apply post-commit nudge, the public DrainWorkOutbox and the periodic pump
 // all consult it; none of them can bypass it with a nil policy.
 //

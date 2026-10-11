@@ -419,7 +419,8 @@ func TestKillSwitchGenerationGuardianAndTierWriterOrder(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				row[colStatus] = statusApproved // Explicit approval fixture; sweep itself is real.
+				// Explicit approval fixture with the one human a decision records; sweep itself is real.
+				row[colStatus], row[colApproveCount] = statusApproved, int64(1)
 				_, err = repo.Update(ctx, row)
 				return err
 			}); err != nil {

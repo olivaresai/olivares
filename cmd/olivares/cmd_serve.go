@@ -6,7 +6,6 @@ package main
 
 import (
 	"context"
-	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
@@ -265,8 +264,11 @@ func runEngine(ctx context.Context, out io.Writer, opts serveOptions, announce f
 		}
 	}
 	var postgres *string
+	var upgradeSnapshotRequest string
 	if opts.quickstart {
 		postgres = &opts.postgres
+	} else {
+		upgradeSnapshotRequest = installedPackageSnapshotRequest()
 	}
 	// The engine may ask to restart itself (a license activation): that cancels
 	// this context, the servers drain exactly as on a signal, and runEngine
@@ -275,8 +277,9 @@ func runEngine(ctx context.Context, out io.Writer, opts serveOptions, announce f
 	defer cancelServe()
 	restart := &selfRestart{cancel: cancelServe, log: log}
 	eng, err := boot(ctx, bootConfig{
-		Restart: restart,
-		DataDir: opts.dataDir, Engine: opts.engine, DSN: opts.dsn, AdminDSN: opts.adminDSN, OwnerDSN: opts.ownerDSN, LicenseFile: opts.lic,
+		Restart:                restart,
+		upgradeSnapshotRequest: upgradeSnapshotRequest,
+		DataDir:                opts.dataDir, Engine: opts.engine, DSN: opts.dsn, AdminDSN: opts.adminDSN, OwnerDSN: opts.ownerDSN, LicenseFile: opts.lic,
 		Version: version, Logger: log, DemoSeed: opts.seedDemo,
 		AllowPrivilegedDBRole: opts.allowPrivilegedDBRole,
 		Region:                opts.region, KnownRegions: opts.knownRegions,
@@ -297,10 +300,7 @@ func runEngine(ctx context.Context, out io.Writer, opts serveOptions, announce f
 	// Before any listener starts: this node's activation and module profile must
 	// match the deployment settings record, or the engine restarts once to build
 	// its modules from the record (productsettings.go, moduleprofile_settings.go).
-	mods := &moduleReconcile{booted: eng.moduleProfile, used: func(ctx context.Context) ([]string, error) { return usedModules(ctx, eng.store, eng.census) }}
-	settings := newProductSettings(eng.store, eng.dataDir)
-	settings.used = mods.used
-	if err := reconcileSettings(ctx, settings, mods, log); err != nil {
+	if err := reconcileBeforeServing(ctx, eng, log); err != nil {
 		return err
 	}
 
@@ -333,7 +333,15 @@ func runEngine(ctx context.Context, out io.Writer, opts serveOptions, announce f
 		} else {
 			log.Info("serving HTTPS; "+pinAdvice, tlsTrustAttrs(tlsCert, fp)...)
 		}
-		tlsLoader, terr = secure.NewCertificateLoader(tlsCert, tlsKey)
+		publicCert := filepath.Join(eng.dataDir, "public", "tls.crt")
+		if absOrSame(publicCert) == absOrSame(tlsCert) || absOrSame(publicCert) == absOrSame(tlsKey) {
+			// An existing operator pair may occupy the publication path. Keep
+			// serving it without replacing or changing access to its material.
+			tlsLoader, terr = secure.NewCertificateLoader(tlsCert, tlsKey)
+			log.Warn("public TLS certificate not published: destination is operator TLS material")
+		} else {
+			tlsLoader, terr = secure.NewCertificateLoaderWithPublicCertificate(tlsCert, tlsKey, publicCert)
+		}
 		if terr != nil {
 			return terr
 		}
@@ -350,25 +358,14 @@ func runEngine(ctx context.Context, out io.Writer, opts serveOptions, announce f
 	httpSrv := eng.api.NewHTTPServer(opts.listen)
 	// Serve the embedded web UI on the SAME origin as the API, with SPA
 	// fallback to index.html for client-side routes. The static surface is
-	// wrapped OUTSIDE the API's auth/setup middleware (see webui.go).: the
-	// enterprise build further wraps it with the unauthenticated SP-metadata
-	// endpoint (public by design); the default build leaves it unchanged.
-	// editionWebFS lets the commercial build serve its own console bundle (the cockpit's
-	// terminal) without the public dist moving: the default build returns base unchanged
-	// (COCKPIT-07 §4).
-	httpSrv.Handler = withEnterpriseHTTP(newSPAHandler(eng.api.Handler(), editionWebFS(webui.FS())), eng, log)
-	// PIV/CAC: when configured, the HTTP listener REQUESTS (never
-	// requires) a client certificate and verifies a presented one against
-	// the PIV CA — VerifyClientCertIfGiven keeps every certless browser and
-	// SDK client untouched while /v1/auth/piv/* reads the verified peer
-	// certificate. The route needs direct TLS at this listener (no XFCC).
-	if !opts.insecure && eng.pivConfig != nil && eng.pivConfig.Roots != nil {
-		httpSrv.TLSConfig = &tls.Config{
-			ClientAuth: tls.VerifyClientCertIfGiven,
-			ClientCAs:  eng.pivConfig.Roots,
-		}
-		log.Info("piv: HTTP listener requests optional client certificates (PIV/CAC route armed)")
-	}
+	// wrapped OUTSIDE the API's auth/setup middleware (see webui.go). The
+	// enterprise build further wraps it with its own routes; the default build
+	// leaves it unchanged.
+	// The consoleFS edition port lets the commercial build serve its own console bundle
+	// (the cockpit's terminal) without the public dist moving: the default build serves
+	// base unchanged (COCKPIT-07 §4).
+	httpSrv.Handler = thisEdition.routes(newSPAHandler(eng.api.Handler(), thisEdition.console(webui.FS())), eng, log)
+	configurePIVTLS(httpSrv, eng.pivConfig, opts.insecure, log)
 	grpcSrv, gerr := newGRPCServer(eng, tlsLoader, opts.grpcClientCA, opts.insecure)
 	if gerr != nil {
 		return gerr // fail closed: never serve gRPC plaintext unless --insecure
@@ -441,86 +438,42 @@ func runEngine(ctx context.Context, out io.Writer, opts serveOptions, announce f
 	// managed-settings cannot reach for non-Claude-Code (raw SDK/curl) callers. It
 	// DELIBERATELY interposes in the data-path (the inverse of read-first), so it is
 	// opt-in and per-tenant fail-closed by default. nil when unset.
-	proxySrv, err := buildClaudeMessagesProxyServer(eng, log)
+	proxySrv, err := buildClaudeMessagesProxyServer(eng, log, consoleAddr.URL())
 	if err != nil {
 		return err
 	}
 
-	// Stage-2: in the HA leader-routing layout EVERY replica is Ready, so every
-	// one of these auxiliary sockets is dialable — and each of them is application
-	// surface with real side effects (a governed hook decision, an A2A push, an
-	// inference call). They are separate http.Servers with their own handlers, so
-	// core/api's leader gate is not in their chain; wrap each one here. The API
-	// listener is already gated inside core/api. Operational paths stay open (see
-	// leaderOnlyHandler).
-	if eng.haGate {
-		for _, srv := range []*http.Server{hitlSrv, voiceWebhookSrv, gatewaySrv, hookPEPSrv, codexPEPSrv, grokPEPSrv, proxySrv} {
-			if srv == nil || srv.Handler == nil {
-				continue
-			}
-			srv.Handler = leaderOnlyHandler(srv.Handler, eng.store)
+	// One registry supplies the active listener order, security setup and collision check.
+	specs := serveListenerRegistry(opts, httpSrv, hitlSrv, voiceWebhookSrv, gatewaySrv,
+		codexPEPSrv, grokPEPSrv, hookPEPSrv, proxySrv)
+	nServers := len(specs)
+	var auxHTTP []*http.Server
+	for _, spec := range specs {
+		srv := spec.server
+		if srv == nil { // gRPC keeps its own TLS and authorization interceptors.
+			continue
 		}
-		log.Info("ha: auxiliary listeners refuse application traffic on a standby (leader-routing layout)")
-	}
-
-	if !opts.insecure {
-		for _, srv := range []*http.Server{httpSrv, hitlSrv, voiceWebhookSrv, gatewaySrv, hookPEPSrv, codexPEPSrv, grokPEPSrv, proxySrv} {
-			if srv == nil {
-				continue
+		if srv != httpSrv {
+			auxHTTP = append(auxHTTP, srv)
+			// The API already gates standby traffic in its own middleware chain.
+			if eng.haGate && srv.Handler != nil {
+				srv.Handler = leaderOnlyHandler(srv.Handler, eng.store)
 			}
+		}
+		if !opts.insecure {
 			if err := configureHTTPServerTLS(srv, tlsLoader); err != nil {
 				return fmt.Errorf("configure TLS for HTTP listener %q: %w", srv.Addr, err)
 			}
 		}
-	}
-
-	nServers := 2
-	if hitlSrv != nil {
-		nServers++
-	}
-	if voiceWebhookSrv != nil {
-		nServers++
-	}
-	if gatewaySrv != nil {
-		nServers++
-	}
-	if hookPEPSrv != nil {
-		nServers++
-	}
-	if codexPEPSrv != nil {
-		nServers++
-	}
-	if grokPEPSrv != nil {
-		nServers++
-	}
-	if proxySrv != nil {
-		nServers++
-	}
-	// The HTTP servers in launch order: the primary, then each present auxiliary. The
-	// gRPC listener is acquired second, between the primary and the auxiliaries.
-	var auxHTTP []*http.Server
-	for _, srv := range []*http.Server{hitlSrv, voiceWebhookSrv, gatewaySrv, codexPEPSrv, grokPEPSrv, hookPEPSrv, proxySrv} {
-		if srv != nil {
-			auxHTTP = append(auxHTTP, srv)
-		}
-	}
-
-	// Plaintext off-host refusal for every HTTP listener, before any socket exists.
-	for _, srv := range append([]*http.Server{httpSrv}, auxHTTP...) {
 		if err := plaintextBindRefusal(srv.Addr, opts.insecure, opts.insecureAllowPublic); err != nil {
 			return fmt.Errorf("listener failed: %w", err)
 		}
 	}
-
-	// Acquire every serve listener synchronously; no Serve runs here.
-	specs := make([]serveListenerSpec, 0, nServers)
-	specs = append(specs,
-		serveListenerSpec{addr: httpBindAddr(httpSrv.Addr, opts.insecure, opts.reusePort), http: true},
-		serveListenerSpec{addr: opts.grpcListen},
-	)
-	for _, srv := range auxHTTP {
-		specs = append(specs, serveListenerSpec{addr: httpBindAddr(srv.Addr, opts.insecure || (srv == hookPEPSrv && hostIsLoopback(srv.Addr)), opts.reusePort), http: true})
+	if eng.haGate {
+		log.Info("ha: auxiliary listeners refuse application traffic on a standby (leader-routing layout)")
 	}
+
+	// Validate and acquire every serve listener synchronously; no Serve runs here.
 	bind := opts.bindListener
 	if bind == nil {
 		bind = bindServeListener
@@ -588,9 +541,12 @@ func runEngine(ctx context.Context, out io.Writer, opts serveOptions, announce f
 	// V269 / COCKPIT-03 §3: auxiliary listeners this edition serves. Empty in every
 	// build today; the seam and its shutdown path land before the engine so the wiring
 	// is already final when it arrives.
-	auxServers := editionAgentServers()
+	auxServers := thisEdition.agentServers.get()
 	serveEditionAuxServers(ctx, auxServers, log, errCh)
 	defer shutdownEditionAuxServers(context.Background(), auxServers, log)
+
+	stopAuthority := startApplianceAuthority(ctx, eng)
+	defer stopAuthority()
 
 	// Owner fallback after the unchanged DS1 drain: a Serve goroutine that never
 	// entered still holds its listener. It runs before the checkpointer and store

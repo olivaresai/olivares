@@ -17,7 +17,7 @@ import (
 // The native cursor is retained after the last matching row. Filling the page
 // and looking ahead keep Limit/HasMore truthful even across skipped lazy expiry.
 // Both callers use the repository's default id ordering, within one View.
-func listEffectiveApprovals(ctx context.Context, repo store.GenericRepo, q model.Query, status string, now model.Timestamp) ([]model.Record, model.Page, error) {
+func listEffectiveApprovals(ctx context.Context, repo store.GenericRepo, q model.Query, status string, now model.Timestamp, policies []model.Policy) ([]model.Record, model.Page, error) {
 	if status != "" && status != statusExpired {
 		q.Filters = append(q.Filters, eq(colStatus, status))
 	}
@@ -25,7 +25,7 @@ func listEffectiveApprovals(ctx context.Context, repo store.GenericRepo, q model
 		q.Filters = append(q.Filters, model.Filter{Column: colExpiresAt, Op: model.OpUnsetOrGt, Value: now.String()})
 	}
 	rows, page, err := repo.List(ctx, q)
-	if err != nil || status != statusExpired {
+	if err != nil || (status != statusExpired && status != statusApproved) {
 		return rows, page, err
 	}
 	limit := len(rows) // The repository has normalized the requested/default/max limit.
@@ -33,7 +33,7 @@ func listEffectiveApprovals(ctx context.Context, repo store.GenericRepo, q model
 	cursor := ""
 	for {
 		for i, rec := range rows {
-			if effectiveStatus(rec, now) != status {
+			if approvalGrantStatus(rec, now, liveRiskTier(policies, rec)) != status {
 				continue
 			}
 			if len(out) == limit {

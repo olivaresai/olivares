@@ -7,12 +7,14 @@
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 import shutil
 import subprocess
 import sys
 import tarfile
 import tempfile
+import textwrap
 import unittest
 
 
@@ -91,7 +93,7 @@ if mode == 'empty':
             exe.chmod(0o755)
         self.env = dict(os.environ, PATH=str(self.bin) + os.pathsep + os.environ["PATH"],
                         RUNNER_TEMP=str(self.runner), GITHUB_SHA=self.head,
-                        PR_HEAD="b" * 40, GITHUB_REPOSITORY="olivaresai/olivares",
+                        PR_HEAD=self.head, GITHUB_REPOSITORY="olivaresai/olivares",
                         GITHUB_RUN_ID="123", GITHUB_RUN_ATTEMPT="2")
         # Ignore the invoking shell's git overrides; only this fixture is in scope.
         for name in list(self.env):
@@ -161,7 +163,7 @@ else:
         artifact = self.runner / "web-generation-artifact"
         manifest = json.loads((artifact / "manifest.json").read_text())
         self.assertEqual(manifest["checkout_sha"], self.head)
-        self.assertEqual(manifest["pr_head_sha"], "b" * 40)
+        self.assertEqual(manifest["pr_head_sha"], self.head)
         self.assertEqual(manifest["build_command"], ["task", "build:web"])
         self.assertEqual(manifest["build_exit"], 0)
         inputs = {p["path"]: p["sha256"] for p in manifest["inputs"]}
@@ -180,6 +182,99 @@ else:
         for line in (artifact / "SHA256SUMS").read_text().splitlines():
             digest, name = line.split("  ", 1)
             self.assertEqual(digest, hashlib.sha256((artifact / name).read_bytes()).hexdigest())
+
+    def test_head_console_is_captured_when_merge_console_differs(self):
+        self.write("web/src/main.tsx", "merge console input\n")
+        self.git("add", "web/src/main.tsx")
+        self.git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid",
+                 "-c", "commit.gpgsign=false", "commit", "-qm", "merge fixture")
+        self.env["GITHUB_SHA"] = self.git("rev-parse", "HEAD").strip()
+        # The producer must reject the merge checkout even though GITHUB_SHA matches.
+        self.refuse(self.capture())
+        self.git("checkout", "--detach", self.head)
+        result = self.capture()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        artifact = self.runner / "web-generation-artifact"
+        manifest = json.loads((artifact / "manifest.json").read_text())
+        self.assertEqual(manifest["checkout_sha"], self.head)
+        self.assertEqual(manifest["pr_head_sha"], self.head)
+        inputs = {p["path"]: p["sha256"] for p in manifest["inputs"]}
+        self.assertEqual(inputs["web/src/main.tsx"], hashlib.sha256(b"fixture input\n").hexdigest())
+
+    def test_workflow_producer_and_consumers_checkout_the_head(self):
+        workflow = SOURCE.parent.parent / '.github/workflows/pr-ci.yml'
+        for job in ['pr-web', 'pr-build', 'pr-test-shard', 'userspace-compat']:
+            body = workflow.read_text().split(f'  {job}:\n', 1)[1]
+            body = re.split(r'\n  [a-z][a-z0-9-]*:', body, maxsplit=1)[0]
+            checkout = body.split('- uses: actions/checkout@', 1)[1].split('      - ', 1)[0]
+            self.assertIn('ref: ${{ github.event.pull_request.head.sha }}', checkout, job)
+
+    def consumer_script(self, job):
+        workflow = SOURCE.parent.parent / '.github/workflows/pr-ci.yml'
+        body = workflow.read_text().split(f'  {job}:\n', 1)[1]
+        body = re.split(r'\n  [a-z][a-z0-9-]*:', body, maxsplit=1)[0]
+        step = body.split('      - name: embed the verified console output\n', 1)[1]
+        step = step.split('      - ', 1)[0]
+        self.assertIn('PR_HEAD: ${{ github.event.pull_request.head.sha }}', step, job)
+        return textwrap.dedent(step.split('        run: |\n', 1)[1])
+
+    def consume(self, script):
+        return subprocess.run(['bash', '-e', '-o', 'pipefail', '-c', script],
+                              cwd=self.repo,
+                              env=dict(self.env, GITHUB_WORKSPACE=str(self.repo)),
+                              capture_output=True, text=True, timeout=10)
+
+    def test_consumers_reject_console_from_another_candidate_or_run(self):
+        result = self.capture()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        artifact = self.runner / 'web-generation-artifact'
+        manifest_path = artifact / 'manifest.json'
+        original = json.loads(manifest_path.read_text())
+        destination = self.repo / DIST / 'index.html'
+        for job in ['pr-build', 'pr-test-shard']:
+            script = self.consumer_script(job)
+            for field in [None, 'schema', 'checkout_sha', 'pr_head_sha', 'repository',
+                          'run_id', 'run_attempt', 'digest']:
+                with self.subTest(job=job, field=field):
+                    manifest = dict(original)
+                    if field:
+                        manifest[field] = 'different'
+                    manifest_path.write_text(json.dumps(manifest))
+                    (artifact / 'SHA256SUMS').write_text(''.join(
+                        hashlib.sha256((artifact / name).read_bytes()).hexdigest() + '  ' + name + '\n'
+                        for name in ['dist.tar.gz', 'manifest.json']))
+                    if field == 'digest':
+                        manifest_path.write_text('{}')
+                    destination.write_text('consumer sentinel')
+                    result = self.consume(script)
+                    if field:
+                        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+                        self.assertEqual(destination.read_text(), 'consumer sentinel')
+                    else:
+                        self.assertEqual(result.returncode, 0, result.stderr)
+                        self.assertIn('/assets/new.js', destination.read_text())
+
+    def test_consumers_reject_head_console_in_merge_checkout(self):
+        result = self.capture()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.write('web/src/main.tsx', 'merge console input\n')
+        self.git('add', 'web/src/main.tsx')
+        self.git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid',
+                 '-c', 'commit.gpgsign=false', 'commit', '-qm', 'merge fixture')
+        self.env['GITHUB_SHA'] = self.git('rev-parse', 'HEAD').strip()
+        destination = self.repo / DIST / 'index.html'
+        for job in ['pr-build', 'pr-test-shard']:
+            with self.subTest(job=job):
+                script = self.consumer_script(job)
+                destination.write_text('consumer sentinel')
+                result = self.consume(script)
+                self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertEqual(destination.read_text(), 'consumer sentinel')
+                self.git('checkout', '--detach', self.head)
+                result = self.consume(script)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn('/assets/new.js', destination.read_text())
+                self.git('checkout', '--detach', self.env['GITHUB_SHA'])
 
     def test_failed_and_partial_generation_never_publish(self):
         for mode in ["failed", "partial", "empty", "missing"]:
@@ -227,7 +322,7 @@ else:
         self.refuse(self.capture())
         self.assertTrue((self.repo / DIST / "assets/old.js").exists())
         self.git("checkout", "--", "web/src/main.tsx")
-        self.env["GITHUB_SHA"] = "c" * 40
+        self.env["PR_HEAD"] = "c" * 40
         self.refuse(self.capture())
 
     def test_symlinked_ancestor_cannot_clear_external_directory(self):
@@ -246,7 +341,7 @@ else:
         self.git("add", "web/src/main.tsx")
         self.git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid",
                  "-c", "commit.gpgsign=false", "commit", "-qm", "symlink fixture")
-        self.env["GITHUB_SHA"] = self.git("rev-parse", "HEAD").strip()
+        self.env["PR_HEAD"] = self.git("rev-parse", "HEAD").strip()
         self.refuse(self.capture())
         self.assertTrue((self.repo / DIST / "assets/old.js").exists())
 

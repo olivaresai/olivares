@@ -32,10 +32,10 @@ type runtimeCredentialRecoveryContextKey struct{}
 
 func (m *Module) runtimeData(ctx context.Context) api.ModuleData {
 	if _, recovering := ctx.Value(runtimeCredentialRecoveryContextKey{}).(struct{}); recovering &&
-		m.recoveryData != nil {
-		return m.recoveryData
+		m.RecoveryData != nil {
+		return m.RecoveryData
 	}
-	return m.data
+	return m.Data
 }
 
 func runtimeCredentialRecovery(ctx context.Context) bool {
@@ -46,10 +46,10 @@ func runtimeCredentialRecovery(ctx context.Context) bool {
 func (m *Module) communicationCredentialRevoker(
 	ctx context.Context,
 ) CommunicationSessionCredentialSource {
-	if runtimeCredentialRecovery(ctx) && m.recoveryData != nil {
-		return m.rt.recoveryCommunicationSessionCreds
+	if runtimeCredentialRecovery(ctx) && m.RecoveryData != nil {
+		return m.rt.RecoveryCommunicationSessionCreds
 	}
-	return m.rt.communicationSessionCreds
+	return m.rt.CommunicationSessionCreds
 }
 
 func (c runtimeCredentials) complete(now time.Time) bool {
@@ -83,10 +83,10 @@ func secretSafeCredentialError(operation string, err error) error {
 // reservation. K3 is opt-in for standalone module users, but once enabled it is
 // indivisible: both purpose issuers must exist or the launch returns 503.
 func (m *Module) ensureRuntimeCredentialWiring() error {
-	if !m.rt.communicationCredentialsEnabled {
+	if !m.rt.CommunicationCredentialsEnabled {
 		return nil
 	}
-	if m.rt.communicationSessionCreds == nil || m.rt.workSessionCreds == nil {
+	if m.rt.CommunicationSessionCreds == nil || m.rt.WorkSessionCreds == nil {
 		return &runErr{
 			status: http.StatusServiceUnavailable,
 			msg:    "session communication credentials are not available; launch denied",
@@ -104,7 +104,7 @@ func (m *Module) ensureRuntimeCredentialWiring() error {
 // without a readiness composition keep the historical behavior only when no
 // readiness witness at all was bound; a bound witness that answers OFF denies.
 func (m *Module) ensureRuntimeCredentialReadiness(ctx context.Context) error {
-	if !m.rt.communicationCredentialsEnabled || !m.communicationReadinessComposed() {
+	if !m.rt.CommunicationCredentialsEnabled || !m.communicationReadinessComposed() {
 		return nil
 	}
 	readiness, err := m.EvaluateCommunicationReadiness(ctx)
@@ -121,8 +121,8 @@ func (m *Module) ensureRuntimeCredentialReadiness(ctx context.Context) error {
 // least one dynamic readiness witness. Standalone tests that construct the
 // module with the issuers alone are not a composed deployment.
 func (m *Module) communicationReadinessComposed() bool {
-	return communicationPortBound(m.communicationStoreReadiness) ||
-		communicationPortBound(m.communicationPumpReadiness)
+	return communicationPortBound(m.CommunicationStoreReadiness) ||
+		communicationPortBound(m.CommunicationPumpReadiness)
 }
 
 // mintRuntimeCredentials emits communication BEFORE work. The communication
@@ -139,7 +139,7 @@ func (m *Module) mintRuntimeCredentials(
 	if snapshot, ok := ctx.Value(orchestrationLaunchProfileKey{}).(orchestrationLaunchProfile); ok {
 		grant = snapshot.SessionWorkGrant
 	}
-	if !m.rt.communicationCredentialsEnabled {
+	if !m.rt.CommunicationCredentialsEnabled {
 		work, err := m.maybeMintWorkSession(ctx, tenant, runRef, agentRef, lease)
 		return runtimeCredentials{work: work, orchestrationGrant: grant}, err
 	}
@@ -216,11 +216,11 @@ func (m *Module) communicationWorkspace(
 	tenant model.TenantID,
 	runRef, sid string,
 ) (model.ID, error) {
-	if m.data == nil {
+	if m.Data == nil {
 		return "", &runErr{http.StatusServiceUnavailable, "session identity is not available"}
 	}
 	var workspaceID model.ID
-	err := m.data.View(ctx, tenant, func(sc store.Scope) error {
+	err := m.Data.View(ctx, tenant, func(sc store.Scope) error {
 		var err error
 		workspaceID, err = communicationWorkspaceWithin(ctx, sc, runRef, sid)
 		return err
@@ -344,10 +344,10 @@ func (m *Module) assertRuntimeLaunchID(
 	runRef string,
 	launchID model.ID,
 ) error {
-	if m.data == nil {
+	if m.Data == nil {
 		return &runErr{http.StatusServiceUnavailable, "session runtime store is not available"}
 	}
-	return m.data.View(ctx, tenant, func(sc store.Scope) error {
+	return m.Data.View(ctx, tenant, func(sc store.Scope) error {
 		repo, err := sc.Ext(runKind)
 		if err != nil {
 			return err
@@ -369,10 +369,10 @@ func (m *Module) assertRuntimeIncarnation(
 	runRef string,
 	launchID model.ID,
 ) error {
-	if m.data == nil {
+	if m.Data == nil {
 		return &runErr{http.StatusServiceUnavailable, "session runtime store is not available"}
 	}
-	return m.data.View(ctx, tenant, func(sc store.Scope) error {
+	return m.Data.View(ctx, tenant, func(sc store.Scope) error {
 		repo, err := sc.Ext(runKind)
 		if err != nil {
 			return err
@@ -391,12 +391,12 @@ func (m *Module) maybeMintCommunicationSession(
 	ctx context.Context,
 	req CommunicationSessionCredentialRequest,
 ) (CommunicationSessionCredential, error) {
-	if m.rt.communicationSessionCreds == nil {
+	if m.rt.CommunicationSessionCreds == nil {
 		return CommunicationSessionCredential{}, &runErr{
 			http.StatusServiceUnavailable, "communication credential issuer is not available",
 		}
 	}
-	credential, err := m.rt.communicationSessionCreds.Mint(ctx, req)
+	credential, err := m.rt.CommunicationSessionCreds.Mint(ctx, req)
 	if err != nil {
 		revokeErr := m.revokeCommunicationSessionCredential(ctx, credential.ID, req)
 		return CommunicationSessionCredential{}, errors.Join(denyClosedErr(
@@ -794,7 +794,7 @@ func (m *Module) persistResumeRuntimeCredentials(
 	lease Lease,
 	credentials runtimeCredentials,
 ) error {
-	if m.rt.communicationCredentialsEnabled && !credentials.complete(m.now()) {
+	if m.rt.CommunicationCredentialsEnabled && !credentials.complete(m.now()) {
 		return &runErr{http.StatusServiceUnavailable, "complete dual runtime credentials are required before launch"}
 	}
 	return m.authorizedMutate(ctx, tenant, lease, func(sc store.Scope) error {
@@ -827,6 +827,10 @@ func (m *Module) persistResumeRuntimeCredentials(
 		if err := setRunWorkScope(record, credentials); err != nil {
 			return err
 		}
+		// A work-bound run never resumes (refuseLegacyControlUnderWork): no holder here.
+		if err := openCoreSession(ctx, sc, record, "", m.now()); err != nil {
+			return err
+		}
 		_, err = repo.Update(ctx, record)
 		return err
 	})
@@ -854,7 +858,7 @@ func (m *Module) stampResumeClaimReservation(
 		if err := guardRuntimeLaunch(launchID)(record); err != nil {
 			return err
 		}
-		if m.rt.communicationCredentialsEnabled {
+		if m.rt.CommunicationCredentialsEnabled {
 			workspaceID, err := communicationWorkspaceWithin(ctx, sc, runRef, lease.SID)
 			if err != nil {
 				return err
@@ -953,7 +957,7 @@ func (m *Module) startRuntimeCredentialHeartbeat(lr *liveRun) {
 				// Work-only launches also wait silently for input. Their Claim
 				// must remain live without stdout; a lost generation cannot be
 				// renewed or left as an apparently usable supervised child.
-				if !m.rt.communicationCredentialsEnabled {
+				if !m.rt.CommunicationCredentialsEnabled {
 					if err := m.assertRunAuthority(ctx, lr); err != nil {
 						m.terminateForRuntimeCredentialFailure(lr, "runtime Claim heartbeat failed")
 						return
@@ -1007,8 +1011,8 @@ func (m *Module) renewDualRuntimeCredentials(ctx context.Context, lr *liveRun) {
 	snapshot := snapshotLiveRuntimeCredentials(lr)
 	now := m.now()
 	if snapshot.workID.IsZero() || snapshot.communicationID.IsZero() ||
-		snapshot.workspaceID.IsZero() || m.rt.workSessionCreds == nil ||
-		m.rt.communicationSessionCreds == nil {
+		snapshot.workspaceID.IsZero() || m.rt.WorkSessionCreds == nil ||
+		m.rt.CommunicationSessionCreds == nil {
 		m.terminateForRuntimeCredentialFailure(lr, "runtime credential pair is incomplete")
 		return
 	}
@@ -1017,14 +1021,14 @@ func (m *Module) renewDualRuntimeCredentials(ctx context.Context, lr *liveRun) {
 		return
 	}
 
-	workUntil, workErr := m.rt.workSessionCreds.Renew(
+	workUntil, workErr := m.rt.WorkSessionCreds.Renew(
 		context.WithoutCancel(ctx), snapshot.workID, WorkSessionCredentialRequest{
 			Tenant: snapshot.tenant, SessionRef: snapshot.claim.SID,
 			RunRef: snapshot.runRef, AgentRef: snapshot.agentRef,
 			ClaimFence: snapshot.claim.Fence,
 		},
 	)
-	communicationUntil, communicationErr := m.rt.communicationSessionCreds.Renew(
+	communicationUntil, communicationErr := m.rt.CommunicationSessionCreds.Renew(
 		context.WithoutCancel(ctx), snapshot.communicationID,
 		CommunicationSessionCredentialRequest{
 			Tenant: snapshot.tenant, WorkspaceID: snapshot.workspaceID,
@@ -1071,12 +1075,12 @@ func (m *Module) renewDualRuntimeCredentials(ctx context.Context, lr *liveRun) {
 // Process.Stop may wait for output pumps to drain; keeping the bridge available
 // avoids the Stop<->pump deadlock while preserving stop-before-revoke ordering.
 func (m *Module) terminateForRuntimeCredentialFailure(lr *liveRun, reason string) {
-	m.terminateForRuntimeAccessFailure(lr, reason, false)
+	m.terminateForRuntimeAccessFailure(lr, reason, accessStopNone)
 }
 
 // A proven owner withdrawal keeps its typed cause even when scoped graceful-stop
 // admission is unavailable. Both paths stop only the captured live generation.
-func (m *Module) terminateForRuntimeAccessFailure(lr *liveRun, reason string, ownerAccessEnded bool) {
+func (m *Module) terminateForRuntimeAccessFailure(lr *liveRun, reason string, accessStopCause runtimeAccessStopCause) {
 	lr.mu.Lock()
 	if lr.finalized || lr.stopRequested {
 		lr.mu.Unlock()
@@ -1084,7 +1088,7 @@ func (m *Module) terminateForRuntimeAccessFailure(lr *liveRun, reason string, ow
 	}
 	lr.stopRequested = true
 	lr.stopReason = reason
-	lr.ownerAccessEnded = ownerAccessEnded
+	lr.accessStopCause = accessStopCause
 	lr.mu.Unlock()
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*m.rt.waitDelay+30*time.Second)
@@ -1133,12 +1137,12 @@ func (m *Module) recoverLocalRuntimeProcess(ctx context.Context, lr *liveRun) er
 // failed handle remains stored and the row remains non-terminal for the next
 // promotion/recovery attempt.
 func (m *Module) RecoverRuntimeCredentials(ctx context.Context, tenant model.TenantID) error {
-	if !m.rt.communicationCredentialsEnabled {
+	if !m.rt.CommunicationCredentialsEnabled {
 		return nil
 	}
-	data := m.recoveryData
+	data := m.RecoveryData
 	if data == nil {
-		data = m.data
+		data = m.Data
 	}
 	if data == nil {
 		return &runErr{http.StatusServiceUnavailable, "session runtime store is not available"}

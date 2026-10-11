@@ -41,7 +41,7 @@ type AgentRegistration struct {
 func (m *Module) handleRegisterAgent(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
 	var in AgentRegistration
 	if err := api.DecodeRequestBody(w, r, &in, api.RequestBodySpec{AllowUnknownFields: true}); err != nil {
-		writeJSON(w, http.StatusBadRequest, errorBody("invalid JSON body"))
+		writeJSON(w, http.StatusBadRequest, errorBody(api.RequestBodyErrorMessage(err, "invalid JSON body")))
 		return
 	}
 	in.IdentityRef = strings.TrimSpace(in.IdentityRef)

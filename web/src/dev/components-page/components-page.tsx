@@ -18,6 +18,8 @@ import {
   Rows3,
 } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
+import { StatusChip } from '@/components/ui/status-chip'
+import { CountBadge } from '@/components/ui/count-badge'
 import { Button } from '@/components/ui/button'
 import { CodeLine } from '@/components/ui/code-line'
 import { DisabledReason } from '@/components/ui/disabled-reason'
@@ -262,10 +264,41 @@ function PrimitivesBoard({ d }: { d: DemoText }) {
           <Button variant="ghost" onClick={noop}>
             {d.buttons.quiet}
           </Button>
-          <Button variant="destructive" onClick={noop}>
+          <Button variant="danger" onClick={noop}>
             {d.buttons.danger}
           </Button>
         </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" onClick={noop}>
+            {d.buttons.secondary}
+          </Button>
+          <Button variant="destructive-solid" onClick={noop}>
+            {d.buttons.danger}
+          </Button>
+          <Button variant="link" onClick={noop}>
+            {d.buttons.secondary}
+          </Button>
+        </div>
+        {(['icon', 'icon-sm'] as const).map((size) => (
+          <div key={size} data-icon-actions={size} className="flex gap-1">
+            <Button
+              size={size}
+              variant="icon"
+              aria-label={d.buttons.secondary}
+              onClick={noop}
+            >
+              <Rows3 aria-hidden="true" />
+            </Button>
+            <Button
+              size={size}
+              variant="icon"
+              aria-label={d.buttons.danger}
+              onClick={noop}
+            >
+              <CircleX aria-hidden="true" />
+            </Button>
+          </div>
+        ))}
         <div className="flex flex-wrap items-center gap-2">
           <Button size="sm" onClick={noop}>
             {d.buttons.small}
@@ -337,11 +370,7 @@ function PrimitivesBoard({ d }: { d: DemoText }) {
             {d.tabs.map((tab, i) => (
               <TabsTrigger key={tab.label} value={String(i)}>
                 {tab.label}
-                {tab.count ? (
-                  <span className="text-overline text-text-3 tabular-nums">
-                    {tab.count}
-                  </span>
-                ) : null}
+                <CountBadge count={tab.count ?? 0} />
               </TabsTrigger>
             ))}
           </TabsList>
@@ -359,12 +388,12 @@ function PrimitivesBoard({ d }: { d: DemoText }) {
 
       <Section id="p5" title={d.sections.tags}>
         <div className="flex flex-wrap items-center gap-2">
-          <Tag tone="ok">{d.tags.ready}</Tag>
-          <Tag tone="warn">{d.tags.signedOut}</Tag>
-          <Tag tone="info">{d.tags.update}</Tag>
-          <Tag tone="bad">{d.tags.cannotCheck}</Tag>
-          <Tag>{d.tags.notInstalled}</Tag>
-          <Tag tone="accent">{d.tags.scope}</Tag>
+          <StatusChip tone="ok">{d.tags.ready}</StatusChip>
+          <StatusChip tone="warn">{d.tags.signedOut}</StatusChip>
+          <StatusChip tone="info">{d.tags.update}</StatusChip>
+          <StatusChip tone="bad">{d.tags.cannotCheck}</StatusChip>
+          <StatusChip>{d.tags.notInstalled}</StatusChip>
+          <Tag>{d.tags.scope}</Tag>
           <Tag mono>v2.1.4</Tag>
         </div>
       </Section>

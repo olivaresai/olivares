@@ -19,14 +19,15 @@ jeder Agent getan hat. Es ist **detektivisch per Default**: es beobachtet und
 Das Modul umspannt drei abgegrenzte Verantwortlichkeiten:
 
 - **Guardrails** — eine Kette deterministischer, erklärbarer Detektoren
-  inspiziert Agententext auf den Oberflächen `input`, `output` und `tool_args`
+  inspiziert Agententext auf den Oberflächen `input`, `output`, `tool_args` und `tool_result`
   auf Secrets/PII, Prompt-Injection, Jailbreak, unzulässige Inhalte,
   Output-Schema-Verletzungen und die OWASP Agentic Top 10. Detektionen tragen
   Framework-Referenzen (OWASP LLM Top 10 2025, OWASP Agentic Top 10 2026, MITRE
-  ATLAS) wortgetreu aus Primärquellen, niemals erfunden. Ein optionaler,
-  einsteckbarer Klassifikator (ein gehostetes Guardrail-LLM) läuft *hinter* den
-  deterministischen Detektoren: er kann Detektionen nur **hinzufügen**, niemals
-  eine unterdrücken, und sein Ausfall wird protokolliert und ignoriert.
+  ATLAS) wortgetreu aus Primärquellen, niemals erfunden.
+  Das Standard-Binary konfiguriert keinen modellgestützten Klassifikator; die
+  Provider-/Kontoauswahl ist nicht mit dieser Schnittstelle verbunden. Die optionale
+  Go-Schnittstelle bleibt unterstützt: injizierte Klassifikatoren dürfen Detektionen hinzufügen, keine deterministischen
+  Findings unterdrücken; ihre Fehler werden protokolliert und ignoriert.
 - **Anomalie-Erkennung** — es korreliert den Permitted-vs-Observed-Drift, den
   [Modul III](/de/reference/modules/iii-access-map/) berechnet, mit Findings hoher
   Schwere und verknüpft Anti-Evasion-Signale auf Kernel-Seite und auf

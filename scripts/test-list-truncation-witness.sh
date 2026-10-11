@@ -7,5 +7,5 @@
 # este fichero existe para que la tarea de Taskfile tenga el mismo nombre que sus hermanas
 # (test-<cosa>.sh) y para que el fallo salga con el nombre del gate delante.
 set -uo pipefail
-ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)" || { echo "test-list-truncation-witness: 2 NO PUDE MIRAR — no resuelvo la raiz" >&2; exit 2; }
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)" || { echo "test-list-truncation-witness: 2 COULD NOT CHECK — cannot resolve the root" >&2; exit 2; }
 exec bash "$ROOT/scripts/check-list-truncation-witness.sh" --selftest

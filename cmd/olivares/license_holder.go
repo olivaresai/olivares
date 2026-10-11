@@ -106,46 +106,30 @@ func (h *licenseHolder) verify(blob string, kr license.Keyring, trustErr error) 
 // configured, which verifies nothing and has no error to report.
 func noTrust(kr license.Keyring, trustErr error) bool { return kr.Len() == 0 && trustErr == nil }
 
-// claims is the licenseClaimsFunc handed to newSeatPolicy. It returns the VERIFIED,
-// UNEXPIRED claims (ok=false otherwise), evaluated PER CALL so an expiry or a hot-
-// applied renewal is reflected with no restart. The open binary's community seat
-// policy never calls through to a license; and since B10 no policy in ANY build may
-// turn Claims.MaxUsers into a runtime refusal — it is an attested, display-only
-// figure (0 = unlimited, which is what every self-hosted tier now gets).
-//
-// ⛔ THIS SEAM IS NOT A DISPLAY HOOK, AND THAT WAS MEASURED THE HARD WAY. An earlier cut of this
-// change returned false for every v3 credential and called it free, reasoning that since B10 no
-// build turns MaxUsers into a refusal and this build's policy ignores the seam entirely
-// (wire_noenterprise.go). That checked ONE consumer and generalised. The enterprise overlay
-// publishes this SAME provider as the process-wide add-on license source
-// (cmd-overlay/olivares/wire_enterprise.go: newSeatPolicy → installAddonLicenseSources →
-// addonClaims → addonGate), where ok=false is StateUnentitled and Authorize refuses the
-// operation. A paying customer holding a v3 credential would have lost EVERY add-on, silently,
-// while this same holder's display path reported the license valid. Found by the 2026-08-11 Codex
-// contrast (F-1).
-//
-// So a credential is projected onto the flat claim set instead — see license.LegacySeamClaims for
-// exactly what it keeps (holder, serial, term) and what it deliberately drops (everything that
-// says what was bought). The seam cannot carry a grant list, so a consumer reading through it
-// cannot honor which lines were purchased; making that possible needs a container-aware source,
-// which is the overlay's own change and is reported as such.
-func (h *licenseHolder) claims() (license.Claims, bool) {
+// live is the shared verification and term check for both license projections.
+// It keeps the source and trust from one snapshot and re-evaluates on every call.
+func (h *licenseHolder) live() (license.Verified, license.Claims, bool) {
 	src, kr, trustErr := h.snapshot()
 	if src.Blob == "" || noTrust(kr, trustErr) {
-		return license.Claims{}, false
+		return license.Verified{}, license.Claims{}, false
 	}
 	v, err := h.verify(src.Blob, kr, trustErr)
 	if err != nil {
-		return license.Claims{}, false
+		return license.Verified{}, license.Claims{}, false
 	}
 	c, ok := v.LegacySeamClaims()
-	if !ok {
-		return license.Claims{}, false
+	if !ok || c.Status(h.clock()) == license.StatusExpired {
+		return license.Verified{}, license.Claims{}, false
 	}
-	if c.Status(h.clock()) == license.StatusExpired {
-		return license.Claims{}, false
-	}
-	return c, true
+	return v, c, true
+}
+
+// claims projects the live license onto the legacy term/identity view. A v3 keeps
+// its holder, serial and base term here; purchased lines remain in grants().
+// MaxUsers is attested for display only and never caps self-hosted accounts.
+func (h *licenseHolder) claims() (license.Claims, bool) {
+	_, c, ok := h.live()
+	return c, ok
 }
 
 // grants is the container-aware entitlement source for addongate.
@@ -155,19 +139,8 @@ func (h *licenseHolder) claims() (license.Claims, bool) {
 // own Active(now) is false. Filtering here would hide a purchased add-on
 // from the overlay and collapse every line onto the base term.
 func (h *licenseHolder) grants() ([]license.Grant, bool) {
-	src, kr, trustErr := h.snapshot()
-	if src.Blob == "" || noTrust(kr, trustErr) {
-		return nil, false
-	}
-	v, err := h.verify(src.Blob, kr, trustErr)
-	if err != nil {
-		return nil, false
-	}
-	c, ok := v.LegacySeamClaims()
+	v, _, ok := h.live()
 	if !ok {
-		return nil, false
-	}
-	if c.Status(h.clock()) == license.StatusExpired {
 		return nil, false
 	}
 	if !v.IsCredentialV3() {
@@ -285,7 +258,7 @@ func (h *licenseHolder) logTransition(prev string, d licenseDisplay) {
 			args = append(args, "profile", p)
 		}
 		args = append(args, "grace_ends", d.lic.RightEnds().UTC().Format(time.RFC3339), "source", d.source.Kind)
-		h.log.Warn("license: the installed commercial license is past its expiry and inside its profile's GRACE window — enterprise entitlements are MAINTAINED for now (in an enterprise build); renew before the grace ends or they drop to the community edition (user accounts are never capped)",
+		h.log.Warn("license: the installed commercial license is past its expiry and inside its profile's GRACE window — enterprise entitlements are MAINTAINED for now; renew before the grace ends or they drop to the community edition (user accounts are never capped)",
 			args...)
 	case "expired":
 		h.log.Warn("license: the installed commercial license has EXPIRED — enterprise entitlements drop to the community edition (data intact, no restart, no crash); install a renewed license to restore them",

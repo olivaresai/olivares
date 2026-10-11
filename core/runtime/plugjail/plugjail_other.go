@@ -10,7 +10,7 @@ import "os/exec"
 
 // applyOS on a non-Linux host applies NO OS-level isolation: dedicated uid, cgroup,
 // seccomp and landlock are Linux primitives. Env scoping (C1, done in Apply) and the
-// bounded lifecycle remain in force. It records the honest degrade — the attestation
+// loader launch timeout remain in force. No active health monitor is installed. It records the honest degrade — the attestation
 // reports LevelMinimal, never a control it did not apply. It also records that env
 // scoping without a uid drop is bypassable (a same-uid plugin can read the engine's
 // /proc/<pid>/environ), so the reader is never misled that C1 alone protects secrets.

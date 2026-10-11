@@ -12,11 +12,14 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"sort"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/olivaresai/olivares/connectors/local"
+	"github.com/olivaresai/olivares/connectors/modelprovider"
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/modules/sessions"
@@ -131,7 +134,7 @@ const anthropicVersionHeader = "2023-06-01"
 
 // providerProbe asks a provider which models it serves.
 //
-// ⛔ IT NEVER SENDS A COMPLETION. The whole surface is one GET of a model list.
+// ⛔ IT NEVER SENDS A COMPLETION. The whole surface is bounded GETs of a model list.
 // Ollama uses the local connector's model list and read-only show metadata.
 // A test that generated a token would spend the operator's money, on a model
 // nobody chose, to answer a question the list already answers: can this endpoint
@@ -139,6 +142,10 @@ const anthropicVersionHeader = "2023-06-01"
 // method other than GET reachable from here, which is the mechanical form of that
 // promise.
 type providerProbe struct{ client *http.Client }
+
+type providerProbeModel struct {
+	ID string `json:"id"`
+}
 
 func newProviderProbe() providerProbe {
 	// cli-transport-exempt: this is not the CLI talking to a control plane. `cliTransport`
@@ -162,16 +169,24 @@ func newProviderProbe() providerProbe {
 			if len(via) > 0 && req.URL.Host != via[0].URL.Host {
 				return fmt.Errorf("refusing a redirect to another host")
 			}
+			if len(via) > 0 && via[0].URL.Scheme == "https" && req.URL.Scheme != "https" {
+				return errors.New("refusing a redirect that downgrades HTTPS")
+			}
 			return nil
 		},
 	}}
 }
 
-// modelsURL builds the model-list URL of one kind. Every one of the four is the
+// modelsURL builds the model-list URL of one kind. Each uses the
 // provider's own documented listing path.
 func modelsURL(kind, baseURL string) (string, error) {
 	base := strings.TrimRight(strings.TrimSpace(baseURL), "/")
 	switch kind {
+	case sessions.ProviderKindGemini:
+		if base != "" {
+			return "", errors.New("Gemini providers cannot override Google's API address")
+		}
+		return "https://generativelanguage.googleapis.com/v1beta/models", nil
 	case sessions.ProviderKindAnthropic:
 		if base == "" {
 			base = anthropicDefaultBase
@@ -184,14 +199,16 @@ func modelsURL(kind, baseURL string) (string, error) {
 		return base + "/v1/models", nil
 	case sessions.ProviderKindXAI:
 		if base == "" {
-			base = xaiDefaultBase
+			return xaiDefaultBase + "/v1/models", nil
 		}
-		return base + "/v1/models", nil
+		// Grok Build is launched on base_url as registered, with its /v1 like the
+		// vendor default (providerVendorEndpoints), so the probe asks that address.
+		return base + "/models", nil
 	case sessions.ProviderKindOpenAICompatible:
 		if base == "" {
 			return "", errors.New("an openai_compatible provider has no endpoint to test")
 		}
-		return base + "/v1/models", nil
+		return base + "/models", nil
 	}
 	return "", fmt.Errorf("unknown provider kind")
 }
@@ -200,6 +217,8 @@ func modelsURL(kind, baseURL string) (string, error) {
 // x-api-key plus a version; the other three are bearer.
 func authHeaders(req *http.Request, kind, key string) {
 	switch kind {
+	case sessions.ProviderKindGemini:
+		req.Header.Set("x-goog-api-key", key)
 	case sessions.ProviderKindAnthropic:
 		req.Header.Set("x-api-key", key)
 		req.Header.Set("anthropic-version", anthropicVersionHeader)
@@ -216,9 +235,16 @@ func authHeaders(req *http.Request, kind, key string) {
 // the provider documents — is reported as unreachable, because none of them is
 // evidence about the key.
 func (p providerProbe) Probe(ctx context.Context, req sessions.ProviderProbeRequest) (sessions.ProviderProbeResult, error) {
+	return p.ProbeService(ctx, req, "")
+}
+
+func (p providerProbe) ProbeService(ctx context.Context, req sessions.ProviderProbeRequest, service string) (sessions.ProviderProbeResult, error) {
+	if service != "" && (service != modelprovider.ServiceDeepSeek || req.Kind != sessions.ProviderKindOpenAICompatible || req.BaseURL != modelprovider.DeepSeekBaseURL) {
+		return sessions.ProviderProbeResult{}, errors.New("unsupported provider service or endpoint")
+	}
+	ctx, cancel := context.WithTimeout(ctx, providerProbeTimeout)
+	defer cancel()
 	if req.Kind == sessions.ProviderKindOllama {
-		ctx, cancel := context.WithTimeout(ctx, providerProbeTimeout)
-		defer cancel()
 		source := local.NewWithClient(providerMetadataClient{p.client})
 		if err := source.Open(ctx, sdk.Config{Settings: map[string]string{"ollama_url": req.BaseURL, "vllm_url": ""}}); err != nil {
 			return sessions.ProviderProbeResult{}, err
@@ -235,73 +261,139 @@ func (p providerProbe) Probe(ctx context.Context, req sessions.ProviderProbeRequ
 		sort.Strings(models)
 		return sessions.ProviderProbeResult{Models: models, Detail: fmt.Sprintf("%d local models listed", len(models))}, nil
 	}
-	url, err := modelsURL(req.Kind, req.BaseURL)
+	endpoint, err := modelsURL(req.Kind, req.BaseURL)
+	if service == modelprovider.ServiceDeepSeek {
+		endpoint, err = modelprovider.DeepSeekModelsURL, nil
+	}
 	if err != nil {
 		return sessions.ProviderProbeResult{}, err
 	}
-	hreq, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return sessions.ProviderProbeResult{}, err
+	client := *p.client
+	if service != "" {
+		client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 	}
-	authHeaders(hreq, req.Kind, req.APIKey)
-	hreq.Header.Set("Accept", "application/json")
-	hreq.Header.Set("User-Agent", providerProbeUserData+"/"+version)
-	resp, err := p.client.Do(hreq)
-	if err != nil {
-		// The transport error can embed the URL. It cannot embed the key — the key
-		// is a header, never a query parameter, which is why modelsURL builds a path
-		// and nothing else.
-		return sessions.ProviderProbeResult{}, fmt.Errorf("the provider endpoint could not be reached")
+	var models []string
+	for page := 0; page < 10; page++ {
+		hreq, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+		if err != nil {
+			return sessions.ProviderProbeResult{}, err
+		}
+		authHeaders(hreq, req.Kind, req.APIKey)
+		hreq.Header.Set("Accept", "application/json")
+		hreq.Header.Set("User-Agent", providerProbeUserData+"/"+version)
+		resp, err := client.Do(hreq)
+		if err != nil {
+			// The transport error can embed the URL. It cannot embed the key — the key
+			// is a header, never a query parameter, which is why modelsURL builds a path
+			// and nothing else.
+			return sessions.ProviderProbeResult{}, fmt.Errorf("the provider endpoint could not be reached")
+		}
+		switch {
+		case service != "" && resp.StatusCode >= 300 && resp.StatusCode < 400:
+			_ = resp.Body.Close()
+			return sessions.ProviderProbeResult{}, errors.New("provider service redirects are refused")
+		case resp.StatusCode == http.StatusUnauthorized, resp.StatusCode == http.StatusForbidden:
+			_ = resp.Body.Close()
+			return sessions.ProviderProbeResult{}, fmt.Errorf(
+				"%w: the provider answered %d for this credential", sessions.ErrProviderRefused, resp.StatusCode)
+		case resp.StatusCode == http.StatusNotFound:
+			_ = resp.Body.Close()
+			// A 404 on a model list is an ENDPOINT answer, not a credential one. An
+			// openai_compatible deployment that serves no /v1/models is the common case,
+			// and calling it a bad key would send the operator to regenerate one.
+			return sessions.ProviderProbeResult{}, fmt.Errorf(
+				"the endpoint answered 404 for the model list; the credential was not tested")
+		case resp.StatusCode < 200 || resp.StatusCode >= 300:
+			_ = resp.Body.Close()
+			return sessions.ProviderProbeResult{}, fmt.Errorf("the provider answered %d", resp.StatusCode)
+		}
+		body, err := io.ReadAll(io.LimitReader(resp.Body, providerProbeBodyCap+1))
+		_ = resp.Body.Close()
+		if err != nil {
+			return sessions.ProviderProbeResult{}, fmt.Errorf("the provider's answer could not be read")
+		}
+		if len(body) > providerProbeBodyCap {
+			return sessions.ProviderProbeResult{}, errors.New("the provider model list exceeded its response bound")
+		}
+		var payload struct {
+			Data   []providerProbeModel `json:"data"`
+			Models []struct {
+				Name    string   `json:"name"`
+				Methods []string `json:"supportedGenerationMethods"`
+			} `json:"models"`
+			NextPageToken string `json:"nextPageToken"`
+			HasMore       bool   `json:"has_more"`
+			LastID        string `json:"last_id"`
+		}
+		if json.Unmarshal(body, &payload) != nil || req.Kind == sessions.ProviderKindGemini && payload.Models == nil || req.Kind != sessions.ProviderKindGemini && payload.Data == nil {
+			return sessions.ProviderProbeResult{}, errors.New("the provider returned an invalid model list")
+		}
+		if req.Kind == sessions.ProviderKindGemini {
+			for _, md := range payload.Models {
+				if !strings.HasPrefix(md.Name, "models/") {
+					return sessions.ProviderProbeResult{}, errors.New("the provider returned an invalid model name")
+				}
+				for _, method := range md.Methods {
+					if method == "generateContent" {
+						payload.Data = append(payload.Data, providerProbeModel{ID: strings.TrimPrefix(md.Name, "models/")})
+						break
+					}
+				}
+			}
+			payload.HasMore, payload.LastID = payload.NextPageToken != "", payload.NextPageToken
+		}
+		for _, md := range payload.Data {
+			if !validProviderModelID(md.ID) {
+				return sessions.ProviderProbeResult{}, errors.New("the provider returned an invalid model list")
+			}
+			if req.APIKey != "" && strings.Contains(md.ID, req.APIKey) {
+				return sessions.ProviderProbeResult{}, errors.New("the provider returned unsafe model metadata")
+			}
+			models = append(models, md.ID)
+		}
+		if len(models) > 1000 {
+			return sessions.ProviderProbeResult{}, errors.New("the provider model catalog exceeded its model bound")
+		}
+		if !payload.HasMore {
+			sort.Strings(models)
+			detail := fmt.Sprintf("%d models listed", len(models))
+			if len(models) == 0 {
+				detail = "the provider accepted the credential and listed no models"
+			}
+			return sessions.ProviderProbeResult{Models: models, Detail: detail}, nil
+		}
+		if (req.Kind != sessions.ProviderKindAnthropic && req.Kind != sessions.ProviderKindGemini) || payload.LastID == "" || len(payload.LastID) > 4096 {
+			return sessions.ProviderProbeResult{}, errors.New("the provider model list cannot be paged")
+		}
+		if req.APIKey != "" && strings.Contains(payload.LastID, req.APIKey) {
+			return sessions.ProviderProbeResult{}, errors.New("the provider returned unsafe model metadata")
+		}
+		next, parseErr := url.Parse(endpoint)
+		if parseErr != nil {
+			return sessions.ProviderProbeResult{}, parseErr
+		}
+		query := next.Query()
+		cursor := "after_id"
+		if req.Kind == sessions.ProviderKindGemini {
+			cursor = "pageToken"
+		}
+		if query.Get(cursor) == payload.LastID {
+			return sessions.ProviderProbeResult{}, errors.New("the provider model cursor did not advance")
+		}
+		query.Set(cursor, payload.LastID)
+		if req.Kind == sessions.ProviderKindGemini {
+			query.Set("pageSize", "100")
+		} else {
+			query.Set("limit", "100")
+		}
+		next.RawQuery = query.Encode()
+		endpoint = next.String()
 	}
-	defer func() { _ = resp.Body.Close() }()
-	switch {
-	case resp.StatusCode == http.StatusUnauthorized, resp.StatusCode == http.StatusForbidden:
-		return sessions.ProviderProbeResult{}, fmt.Errorf(
-			"%w: the provider answered %d for this credential", sessions.ErrProviderRefused, resp.StatusCode)
-	case resp.StatusCode == http.StatusNotFound:
-		// A 404 on a model list is an ENDPOINT answer, not a credential one. An
-		// openai_compatible deployment that serves no /v1/models is the common case,
-		// and calling it a bad key would send the operator to regenerate one.
-		return sessions.ProviderProbeResult{}, fmt.Errorf(
-			"the endpoint answered 404 for the model list; the credential was not tested")
-	case resp.StatusCode >= 400:
-		return sessions.ProviderProbeResult{}, fmt.Errorf("the provider answered %d", resp.StatusCode)
-	}
-	body, err := io.ReadAll(io.LimitReader(resp.Body, providerProbeBodyCap))
-	if err != nil {
-		return sessions.ProviderProbeResult{}, fmt.Errorf("the provider's answer could not be read")
-	}
-	models := parseModelList(body)
-	detail := fmt.Sprintf("%d models listed", len(models))
-	if len(models) == 0 {
-		detail = "the provider accepted the credential and listed no models"
-	}
-	return sessions.ProviderProbeResult{Models: models, Detail: detail}, nil
+	return sessions.ProviderProbeResult{}, errors.New("the provider model catalog exceeded its page bound")
 }
 
-// parseModelList reads the one shape all four kinds share: `{"data":[{"id":...}]}`.
-//
-// It returns what it could read rather than failing on an unexpected extra field,
-// because the operator's question was "does this work", and a provider that adds a
-// field to its catalogue has not broken their credential.
-func parseModelList(body []byte) []string {
-	var payload struct {
-		Data []struct {
-			ID string `json:"id"`
-		} `json:"data"`
-	}
-	if err := json.Unmarshal(body, &payload); err != nil {
-		return nil
-	}
-	out := make([]string, 0, len(payload.Data))
-	for _, item := range payload.Data {
-		id := strings.TrimSpace(item.ID)
-		if id != "" {
-			out = append(out, id)
-		}
-	}
-	sort.Strings(out)
-	return out
+func validProviderModelID(id string) bool {
+	return id != "" && len(id) <= 200 && strings.IndexFunc(id, func(r rune) bool { return unicode.IsSpace(r) || unicode.IsControl(r) }) < 0
 }
 
 // providerMetadataClient bounds a native metadata response before the connector
@@ -320,6 +412,23 @@ func (c providerMetadataClient) Do(req *http.Request) (*http.Response, error) {
 	}
 	if len(body) > providerProbeBodyCap {
 		return nil, errors.New("native metadata response exceeds its bound")
+	}
+	// Validate the native list before the connector fans out metadata reads.
+	// Missing/null lists are malformed; an explicit empty list is successful.
+	if req.Method == http.MethodGet && strings.HasSuffix(req.URL.Path, "/api/tags") && response.StatusCode >= 200 && response.StatusCode < 300 {
+		var catalog struct {
+			Models []struct {
+				Name string `json:"name"`
+			} `json:"models"`
+		}
+		if json.Unmarshal(body, &catalog) != nil || catalog.Models == nil || len(catalog.Models) > 1000 {
+			return nil, errors.New("the provider returned an invalid model list")
+		}
+		for _, entry := range catalog.Models {
+			if !validProviderModelID(entry.Name) {
+				return nil, errors.New("the provider returned an invalid model list")
+			}
+		}
 	}
 	response.Body = io.NopCloser(bytes.NewReader(body))
 	return response, nil

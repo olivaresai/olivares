@@ -88,8 +88,8 @@ const (
 	sealReasonConsent = "consent_change"
 )
 
-// retentionClass tags every session for the future retention/legal-hold
-// engine (this module implements no purge and no hold).
+// retentionClass identifies the compliance registry's preservation-only class.
+// Retain schedules and class holds are supported; append-only frames are not purgeable.
 const retentionClass = "privileged-session-recording"
 
 // Defaults for the per-tenant config (no row = these).

@@ -6,10 +6,17 @@ package gateway
 import "encoding/json"
 
 // OllamaDriver speaks POST /api/chat. Streaming is HTTP chunked NDJSON, not SSE.
+//
+// Deprecated: Olivares does not use this API. It keeps working in this release series;
+// its removal will be announced in the release notes beforehand.
 type OllamaDriver struct{ *httpDriver }
 
 var _ Driver = (*OllamaDriver)(nil)
 
+// NewOllama creates an Ollama driver.
+//
+// Deprecated: Olivares does not use this API. It keeps working in this release series;
+// its removal will be announced in the release notes beforehand.
 func NewOllama(cfg Config) (*OllamaDriver, error) {
 	d, err := newHTTPDriver(cfg, DriverOllama, ProtocolOllama, "/api/chat", copyHeaders(cfg.Headers))
 	if err != nil {

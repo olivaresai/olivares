@@ -8,7 +8,6 @@ import (
 	"context"
 	"errors"
 	"log/slog"
-	"strings"
 	"sync"
 	"time"
 
@@ -102,7 +101,10 @@ type dataView interface {
 // resolve builds the Cedar request entities for req: the principal entity (with its
 // role/user parents) and the resource entity (with its resolved scope parents).
 // All store reads happen inside a single View; a store error fails the caller closed.
-func (r *scopeResolver) resolve(ctx context.Context, req auth.Request) (cedar.EntityMap, cedar.EntityUID, cedar.EntityUID, error) {
+//
+// The fourth result is the inheritance filter's mark (inheritance_filter_walk.go): the
+// container nodes on the target's lineage that a filter row names for the target's class.
+func (r *scopeResolver) resolve(ctx context.Context, req auth.Request) (cedar.EntityMap, cedar.EntityUID, cedar.EntityUID, []cedar.EntityUID, error) {
 	em := cedar.EntityMap{}
 	pUID := buildPrincipalEntity(req, em)
 
@@ -113,11 +115,12 @@ func (r *scopeResolver) resolve(ctx context.Context, req auth.Request) (cedar.En
 	// resolve, so it never opens a store transaction (the eventing path's ScopedPrincipal
 	// deliveries and any non-entity, non-workspace request land here). A scope-tree grant
 	// simply will not match; an attribute grant still can off the request attributes.
-	if req.Resource.ID == "" && req.Resource.WorkspaceID.IsZero() {
+	if !requestHasScope(req) {
 		em[resUID] = cedar.Entity{UID: resUID, Attributes: cedar.NewRecord(attrs)}
-		return em, resUID, pUID, nil
+		return em, resUID, pUID, nil, nil
 	}
 
+	var marks []cedar.EntityUID
 	err := r.data.View(ctx, req.Tenant, func(sc store.Scope) error {
 		parents, extra, e := r.readScope(ctx, sc, req, em)
 		if e != nil {
@@ -127,12 +130,13 @@ func (r *scopeResolver) resolve(ctx context.Context, req auth.Request) (cedar.En
 			attrs[k] = v
 		}
 		em[resUID] = cedar.Entity{UID: resUID, Parents: cedar.NewEntityUIDSet(parents...), Attributes: cedar.NewRecord(attrs)}
-		return nil
+		marks, e = markFilteredNodes(ctx, sc, req, em, resUID)
+		return e
 	})
 	if err != nil {
-		return nil, cedar.EntityUID{}, cedar.EntityUID{}, err
+		return nil, cedar.EntityUID{}, cedar.EntityUID{}, nil, err
 	}
-	return em, resUID, pUID, nil
+	return em, resUID, pUID, marks, nil
 }
 
 // buildPrincipalEntity materializes the principal as a Cedar entity with its
@@ -181,142 +185,90 @@ func buildPrincipalEntity(req auth.Request, em cedar.EntityMap) cedar.EntityUID 
 
 // readScope resolves the resource's scope parents (and any store-authoritative
 // extra attributes) for the request, adding container entities to em. For an entity-
-// level action it reads the stored row (uncheatable workspace/path/group); for a
-// collection-level action it uses only the caller-declared workspace.
+// level action it reads the stored row's lineage (store.Ancestors: uncheatable
+// workspace/path/group); for a collection-level action it uses only the caller-declared
+// workspace.
 func (r *scopeResolver) readScope(ctx context.Context, sc store.Scope, req auth.Request, em cedar.EntityMap) ([]cedar.EntityUID, cedar.RecordMap, error) {
-	id := model.ID(req.Resource.ID)
-	if id.IsZero() {
+	// A Session inherits its owning agent's groups — but ONLY when the route asks
+	// for it, and ONLY for groups in the session's own workspace.
+	//
+	// ⛔ THE FIRST VERSION OF THIS DID IT UNCONDITIONALLY AND THAT WAS A REAL,
+	// GLOBAL WIDENING. The adversarial contrast refuted the comment that used to
+	// stand here ("a correction and not a widening") with a differential test, and
+	// it was right on both counts:
+	//
+	//  1. this resolver is wired ONCE for the whole engine (cmd/olivares/boot.go),
+	//     and is consumed by AuthZEN per row and by access-review as well as by
+	//     request authorization. A parent added here is added for every caller,
+	//     not for the cockpit;
+	//  2. an AgentGroup hangs off its OWN workspace, and the membership API only
+	//     checks that both ids exist — so an agent in workspace A can belong to a
+	//     group in workspace B. Unconditionally, a permit scoped to workspace B
+	//     then reached a Session that lives in A. Measured: Scoped=EffectGrant and
+	//     Authorizer Allow=true for exactly that shape.
+	//
+	// Both halves are closed rather than documented:
+	//
+	//  · OPT-IN. Without Route.SessionInheritsAgentGroups the parents are exactly
+	//    what they were before this change, so every existing route decides
+	//    bit-for-bit as before and no deployment's authorization moves;
+	//  · SAME WORKSPACE. Even opted in, a group outside the session's workspace is
+	//    not a parent (store.AncestryOptions.SessionAgentGroups). A department that
+	//    genuinely spans workspaces is a decision to raise, not one to inherit by
+	//    accident from a membership row.
+	//
+	// What it still buys is what it was for: the department forbid-unless of
+	// docs/contracts/COCKPIT-02-authz.md §6 reaches a session run by an agent in
+	// that department. Without SOME form of this, that rule matches no session at
+	// all and denies every principal, confined or not.
+	//
+	// The lineage still comes from the STORED row (s.AgentID), never from the
+	// caller, so it cannot be forged — the property is untouched.
+	anc, found, err := store.Ancestors(ctx, sc, req.Resource.Kind, model.ID(req.Resource.ID),
+		store.AncestryOptions{SessionAgentGroups: req.Route.SessionInheritsAgentGroups})
+	if err != nil {
+		return nil, nil, err
+	}
+	if !found {
+		// A collection-level action, a row that is gone, or not an entity
+		// (model/provider/…): there is no workspace tree to walk, but the caller-declared
+		// workspace (if any) still applies for an attribute grant, and the request's own
+		// kind/sensitivity attributes do.
 		return r.declaredScope(ctx, sc, req, em)
 	}
+	wsUID := workspaceUID(anc.Workspace, anc.WorkspaceAncestors, em)
+	parents := []cedar.EntityUID{wsUID}
+	var extra cedar.RecordMap
 	switch req.Resource.Kind {
-	case "agent":
-		a, err := sc.Agents().Get(ctx, id)
-		if errors.Is(err, store.ErrNotFound) {
-			return r.declaredScope(ctx, sc, req, em)
-		}
-		if err != nil {
-			return nil, nil, err
-		}
-		wsUID, err := r.workspaceUID(ctx, sc, a.WorkspaceID, em)
-		if err != nil {
-			return nil, nil, err
-		}
-		groups, err := r.agentGroupParents(ctx, sc, id, em)
-		if err != nil {
-			return nil, nil, err
-		}
-		return append([]cedar.EntityUID{wsUID}, groups...), nil, nil
 	case "session":
-		s, err := sc.Sessions().Get(ctx, id)
-		if errors.Is(err, store.ErrNotFound) {
-			return r.declaredScope(ctx, sc, req, em)
-		}
-		if err != nil {
-			return nil, nil, err
-		}
-		wsUID, err := r.workspaceUID(ctx, sc, s.WorkspaceID, em)
-		if err != nil {
-			return nil, nil, err
-		}
 		// A Session has no stored Sensitivity field (model.Session), so — unlike the
 		// resource case below — there is no store-authoritative sensitivity to override;
 		// the base request sensitivity stands. If Session ever gains one, add it here.
-		extra := cedar.RecordMap{}
-		if !s.ModelID.IsZero() {
-			extra["model"] = cedar.String(s.ModelID.String())
+		extra = cedar.RecordMap{}
+		if !anc.Session.ModelID.IsZero() {
+			extra["model"] = cedar.String(anc.Session.ModelID.String())
 		}
-		if !s.AgentID.IsZero() {
-			extra["agent"] = cedar.String(s.AgentID.String())
+		if !anc.Session.AgentID.IsZero() {
+			extra["agent"] = cedar.String(anc.Session.AgentID.String())
 		}
-		// A Session inherits its owning agent's groups — but ONLY when the route asks
-		// for it, and ONLY for groups in the session's own workspace.
-		//
-		// ⛔ THE FIRST VERSION OF THIS DID IT UNCONDITIONALLY AND THAT WAS A REAL,
-		// GLOBAL WIDENING. The adversarial contrast refuted the comment that used to
-		// stand here ("a correction and not a widening") with a differential test, and
-		// it was right on both counts:
-		//
-		//  1. this resolver is wired ONCE for the whole engine (cmd/olivares/boot.go),
-		//     and is consumed by AuthZEN per row and by access-review as well as by
-		//     request authorization. A parent added here is added for every caller,
-		//     not for the cockpit;
-		//  2. an AgentGroup hangs off its OWN workspace, and the membership API only
-		//     checks that both ids exist — so an agent in workspace A can belong to a
-		//     group in workspace B. Unconditionally, a permit scoped to workspace B
-		//     then reached a Session that lives in A. Measured: Scoped=EffectGrant and
-		//     Authorizer Allow=true for exactly that shape.
-		//
-		// Both halves are closed here rather than documented:
-		//
-		//  · OPT-IN. Without Route.SessionInheritsAgentGroups the parents are exactly
-		//    what they were before this change, so every existing route decides
-		//    bit-for-bit as before and no deployment's authorization moves;
-		//  · SAME WORKSPACE. Even opted in, a group outside the session's workspace is
-		//    not a parent. A department that genuinely spans workspaces is a decision
-		//    to raise, not one to inherit by accident from a membership row.
-		//
-		// What it still buys is what it was for: the department forbid-unless of
-		// docs/contracts/COCKPIT-02-authz.md §6 reaches a session run by an agent in
-		// that department. Without SOME form of this, that rule matches no session at
-		// all and denies every principal, confined or not.
-		//
-		// The lineage still comes from the STORED row (s.AgentID), never from the
-		// caller, so it cannot be forged — the property is untouched.
-		parents := []cedar.EntityUID{wsUID}
-		if req.Route.SessionInheritsAgentGroups && !s.AgentID.IsZero() {
-			groups, err := r.agentGroupParentsInWorkspace(ctx, sc, s.AgentID, s.WorkspaceID, em)
-			if err != nil {
-				return nil, nil, err
-			}
-			parents = append(parents, groups...)
-		}
-		return parents, extra, nil
 	case "resource":
-		res, err := sc.Resources().Get(ctx, id)
-		if errors.Is(err, store.ErrNotFound) {
-			return r.declaredScope(ctx, sc, req, em)
-		}
-		if err != nil {
-			return nil, nil, err
-		}
-		wsUID, err := r.workspaceUID(ctx, sc, res.WorkspaceID, em)
-		if err != nil {
-			return nil, nil, err
-		}
-		parents := resourceTreeParents(res.Path, id, wsUID, em)
-		extra := cedar.RecordMap{"resource_kind": cedar.String(res.Kind)}
+		parents = resourceTreeParents(anc.Folders, wsUID, em)
+		extra = cedar.RecordMap{"resource_kind": cedar.String(anc.Resource.Kind)}
 		// The stored sensitivity is authoritative over a caller-supplied one (the
 		// caller may not know it); it is always present so a forbid never silently
 		// errors-and-skips on an absent attribute.
-		extra["sensitivity"] = cedar.String(res.Sensitivity)
-		return parents, extra, nil
-	case "agent_group":
-		// F3: an entity action on a GROUP (e.g. list its members) must resolve the
-		// group's TRUE workspace so a workspace-confined operator cannot read a cross-workspace
-		// group. Without this case the caller's "agent"-kinded group id fell through to
-		// declaredScope (no workspace tree), so the confinement never bound.
-		g, err := sc.AgentGroups().Get(ctx, id)
-		if errors.Is(err, store.ErrNotFound) {
-			return r.declaredScope(ctx, sc, req, em)
-		}
-		if err != nil {
-			return nil, nil, err
-		}
-		wsUID, err := r.workspaceUID(ctx, sc, g.WorkspaceID, em)
-		if err != nil {
-			return nil, nil, err
-		}
-		gUID := cedar.NewEntityUID(cedarTypeAgentGroup, cedar.String(g.Slug))
-		if _, seen := em[gUID]; !seen {
-			em[gUID] = cedar.Entity{UID: gUID, Parents: cedar.NewEntityUIDSet(wsUID)}
-		}
-		return []cedar.EntityUID{wsUID, gUID}, nil, nil
-	default:
-		// Not an entity (model/provider/…): there is no workspace tree to
-		// walk, but the caller-declared workspace (if any) still applies for an
-		// attribute grant, and the request's own kind/sensitivity attributes do.
-		return r.declaredScope(ctx, sc, req, em)
+		extra["sensitivity"] = cedar.String(anc.Resource.Sensitivity)
 	}
+	// An agent's groups (the "fold by agent_id" that expands a per-group grant to
+	// its agents), an opted-in session's same-workspace groups, or an agent_group's own
+	// entity. F3: an entity action on a GROUP (e.g. list its members) must resolve the
+	// group's TRUE workspace so a workspace-confined operator cannot read a cross-workspace
+	// group. Without that case the caller's "agent"-kinded group id fell through to
+	// declaredScope (no workspace tree), so the confinement never bound.
+	for _, g := range anc.Groups {
+		parents = append(parents, agentGroupUID(g, em))
+	}
+	return parents, extra, nil
 }
 
 // declaredScope is the scope for a collection-level action or an absent/non-tree
@@ -328,36 +280,36 @@ func (r *scopeResolver) declaredScope(ctx context.Context, sc store.Scope, req a
 	if req.Resource.WorkspaceID.IsZero() {
 		return nil, nil, nil
 	}
-	wsUID, err := r.workspaceUID(ctx, sc, req.Resource.WorkspaceID, em)
+	slug, above, err := store.WorkspaceLineage(ctx, sc, req.Resource.WorkspaceID)
 	if err != nil {
 		return nil, nil, err
 	}
-	return []cedar.EntityUID{wsUID}, nil, nil
+	return []cedar.EntityUID{workspaceUID(slug, above, em)}, nil, nil
 }
 
-// workspaceUID materializes the Workspace entity for a workspace id and returns its
-// UID, keyed by the workspace SLUG (zero id ⇒ the reserved "default" slug, with no
-// store read — the NULL→default resolution). A dangling id (no such workspace)
-// falls back to the raw id as a synthetic slug so it can never accidentally match a
-// human-authored `Workspace::"<slug>"`. A real store error fails the caller closed.
-func (r *scopeResolver) workspaceUID(ctx context.Context, sc store.Scope, wsID model.ID, em cedar.EntityMap) (cedar.EntityUID, error) {
-	slug := model.DefaultWorkspaceSlug
-	if !wsID.IsZero() {
-		ws, err := sc.Workspaces().Get(ctx, wsID)
-		switch {
-		case errors.Is(err, store.ErrNotFound):
-			slug = wsID.String() // synthetic: matches no authored slug (deny-closed)
-		case err != nil:
-			return cedar.EntityUID{}, err
-		default:
-			slug = ws.Slug
+// workspaceUID materializes the Workspace entity for a workspace slug and returns its
+// UID. Workspaces are keyed by the SLUG store.WorkspaceLineage resolves (zero id ⇒ the
+// reserved "default" slug; a dangling id ⇒ the raw id, which can never accidentally
+// match a human-authored `Workspace::"<slug>"`).
+//
+// above are the slugs of the workspaces above it in the organization tree, root first
+// (store.Ancestry.WorkspaceAncestors). Each Workspace entity is nested under its parent,
+// so `resource in Workspace::"<department>"` reaches a node of every sub-department. With
+// no ancestors the entity has no parents, exactly as before departments.
+func workspaceUID(slug string, above []string, em cedar.EntityMap) cedar.EntityUID {
+	var parent *cedar.EntityUID
+	for _, s := range append(append([]string(nil), above...), slug) {
+		uid := cedar.NewEntityUID(cedarTypeWorkspace, cedar.String(s))
+		if _, ok := em[uid]; !ok || parent != nil {
+			entity := cedar.Entity{UID: uid}
+			if parent != nil {
+				entity.Parents = cedar.NewEntityUIDSet(*parent)
+			}
+			em[uid] = entity
 		}
+		parent = &uid
 	}
-	uid := cedar.NewEntityUID(cedarTypeWorkspace, cedar.String(slug))
-	if _, ok := em[uid]; !ok {
-		em[uid] = cedar.Entity{UID: uid}
-	}
-	return uid, nil
+	return *parent
 }
 
 // targetWorkspace resolves the workspace an action targets, for the membership-
@@ -437,111 +389,26 @@ func (r *scopeResolver) targetWorkspace(ctx context.Context, req auth.Request) (
 	return ws, known, nil
 }
 
-// agentGroupParents resolves the agent-group memberships of an agent into Cedar
-// AgentGroup parents (the "fold by agent_id" that expands a per-group grant to
-// its agents). Each group entity is nested under ITS workspace so a `resource in
-// Workspace::X` grant also catches an agent whose group lives in X. Groups are listed
-// once and indexed by id; an orphan membership (group row gone) is skipped.
-func (r *scopeResolver) agentGroupParents(ctx context.Context, sc store.Scope, agentID model.ID, em cedar.EntityMap) ([]cedar.EntityUID, error) {
-	members, err := drainList[model.AgentGroupMember](ctx, sc.AgentGroupMembers(), model.Query{
-		Filters: []model.Filter{eq("agent_id", agentID.String())}, Limit: listCap,
-	})
-	if err != nil {
-		return nil, err
+// agentGroupUID materializes an AgentGroup parent (store.Ancestry.Groups) and returns
+// its UID. Each group entity is nested under ITS workspace so a `resource in
+// Workspace::X` grant also catches an agent whose group lives in X.
+func agentGroupUID(g store.AncestorGroup, em cedar.EntityMap) cedar.EntityUID {
+	gUID := cedar.NewEntityUID(cedarTypeAgentGroup, cedar.String(g.Slug))
+	if _, seen := em[gUID]; !seen {
+		em[gUID] = cedar.Entity{UID: gUID, Parents: cedar.NewEntityUIDSet(workspaceUID(g.Workspace, g.WorkspaceAncestors, em))}
 	}
-	if len(members) == 0 {
-		return nil, nil
-	}
-	groups, err := drainList[model.AgentGroup](ctx, sc.AgentGroups(), model.Query{Limit: listCap})
-	if err != nil {
-		return nil, err
-	}
-	byID := make(map[model.ID]model.AgentGroup, len(groups))
-	for _, g := range groups {
-		byID[g.ID] = g
-	}
-	var parents []cedar.EntityUID
-	for _, m := range members {
-		g, ok := byID[m.GroupID]
-		if !ok {
-			continue
-		}
-		gUID := cedar.NewEntityUID(cedarTypeAgentGroup, cedar.String(g.Slug))
-		if _, seen := em[gUID]; !seen {
-			wsUID, err := r.workspaceUID(ctx, sc, g.WorkspaceID, em)
-			if err != nil {
-				return nil, err
-			}
-			em[gUID] = cedar.Entity{UID: gUID, Parents: cedar.NewEntityUIDSet(wsUID)}
-		}
-		parents = append(parents, gUID)
-	}
-	return parents, nil
+	return gUID
 }
 
-// agentGroupParentsInWorkspace is agentGroupParents narrowed to the groups that live in
-// `ws`, the workspace of the row being authorized.
-//
-// It exists because a group's workspace and its members' workspaces are INDEPENDENT: the
-// membership API checks only that both ids exist, so an agent in one workspace can be a
-// member of a group in another. For an AGENT that asymmetry is pre-existing and outside
-// this change; for a SESSION it would have been introduced by it, and it was measured
-// producing a cross-workspace allow. A zero `ws` means the tenant's default workspace and
-// matches groups with a zero workspace, which is the same resolution workspaceUID uses.
-func (r *scopeResolver) agentGroupParentsInWorkspace(
-	ctx context.Context, sc store.Scope, agentID, ws model.ID, em cedar.EntityMap,
-) ([]cedar.EntityUID, error) {
-	members, err := drainList[model.AgentGroupMember](ctx, sc.AgentGroupMembers(), model.Query{
-		Filters: []model.Filter{eq("agent_id", agentID.String())}, Limit: listCap,
-	})
-	if err != nil {
-		return nil, err
-	}
-	if len(members) == 0 {
-		return nil, nil
-	}
-	groups, err := drainList[model.AgentGroup](ctx, sc.AgentGroups(), model.Query{Limit: listCap})
-	if err != nil {
-		return nil, err
-	}
-	byID := make(map[model.ID]model.AgentGroup, len(groups))
-	for _, g := range groups {
-		byID[g.ID] = g
-	}
-	var parents []cedar.EntityUID
-	for _, m := range members {
-		g, ok := byID[m.GroupID]
-		if !ok {
-			continue // a dangling membership is skipped, as elsewhere in this file
-		}
-		if g.WorkspaceID != ws {
-			continue // the confinement this function exists for
-		}
-		gUID := cedar.NewEntityUID(cedarTypeAgentGroup, cedar.String(g.Slug))
-		if _, seen := em[gUID]; !seen {
-			wsUID, err := r.workspaceUID(ctx, sc, g.WorkspaceID, em)
-			if err != nil {
-				return nil, err
-			}
-			em[gUID] = cedar.Entity{UID: gUID, Parents: cedar.NewEntityUIDSet(wsUID)}
-		}
-		parents = append(parents, gUID)
-	}
-	return parents, nil
-}
-
-// resourceTreeParents builds the folder-ancestor chain for a resource from its
-// materialized path ("/<root>/…/<self>") and returns the resource's direct parents:
-// its immediate parent folder and its own workspace (the workspace is also reachable
-// transitively through the chain root, but naming it directly keeps `resource in
-// Workspace::X` robust against a malformed path). Each proper ancestor is added to em
-// as a Resource entity linked to the next, with the root nested under the workspace.
-// A legacy resource with an empty path is a root: its only container is the workspace.
-func resourceTreeParents(path string, self model.ID, wsUID cedar.EntityUID, em cedar.EntityMap) []cedar.EntityUID {
-	ids := splitPath(path)
-	if n := len(ids); n > 0 && ids[n-1] == self {
-		ids = ids[:n-1] // drop self: it is not its own ancestor
-	}
+// resourceTreeParents builds the folder-ancestor chain for a resource from its proper
+// folder ancestors (store.Ancestry.Folders, root first, read from its materialized path)
+// and returns the resource's direct parents: its immediate parent folder and its own
+// workspace (the workspace is also reachable transitively through the chain root, but
+// naming it directly keeps `resource in Workspace::X` robust against a malformed path).
+// Each proper ancestor is added to em as a Resource entity linked to the next, with the
+// root nested under the workspace. A legacy resource with an empty path is a root: its
+// only container is the workspace.
+func resourceTreeParents(ids []model.ID, wsUID cedar.EntityUID, em cedar.EntityMap) []cedar.EntityUID {
 	if len(ids) == 0 {
 		return []cedar.EntityUID{wsUID}
 	}
@@ -560,18 +427,6 @@ func resourceTreeParents(path string, self model.ID, wsUID cedar.EntityUID, em c
 		prev = uid
 	}
 	return []cedar.EntityUID{prev, wsUID}
-}
-
-// splitPath parses a materialized path "/<a>/<b>/<c>" into [a, b, c] (empty for a
-// NULL/empty legacy path).
-func splitPath(path string) []model.ID {
-	var ids []model.ID
-	for _, p := range strings.Split(path, "/") {
-		if p != "" {
-			ids = append(ids, model.ID(p))
-		}
-	}
-	return ids
 }
 
 // resourceUID is the Cedar resource entity UID for a request: the entity id, or "*"
@@ -673,7 +528,7 @@ type scopedEngine struct {
 	// a process-clock stamp, or any other cross-snapshot mixture. Every replacement
 	// is one mutex-protected assignment after a coherent durable View.
 	tenants map[model.TenantID]scopedTenantState
-	// maxStaleness is the deployment-wide offline-trust bound (ADR-0024 Q1), wired ONCE at
+	// maxStaleness is the deployment-wide offline-trust bound, wired ONCE at
 	// boot from OLIVARES_POLICY_MAX_STALENESS. Zero ⇒ no bound: the connected-node default,
 	// so a deployment that never opts into offline-trust behaves EXACTLY as before (a grant
 	// never expires). It is set before the server serves — the same happens-before edge as
@@ -1182,7 +1037,7 @@ func (e *scopedEngine) markUnavailableForDurableReloadFailure(
 }
 
 // grantExpired reports whether the tenant's POSITIVE scoped grants have expired under
-// the offline-staleness bound (ADR-0024 Q1): the deployment set a maxStaleness AND the
+// the offline-staleness bound: the deployment set a maxStaleness AND the
 // active policy has not been re-established within it. It is the ONLY thing that turns a
 // Cedar permit into a deny-closed abstain — forbid rules are NEVER expired (a stale
 // restriction can only restrict, never escalate). With no bound (the connected-node
@@ -1233,10 +1088,11 @@ func (e *scopedEngine) clock() time.Time {
 
 // Scoped resolves the request's scope and evaluates the tenant's authored grant
 // policy, returning the three-valued effect. A tenant with no authored grants ABSTAINS
-// IMMEDIATELY — before any store read — so the authorization hot path pays nothing
-// until an operator opts into scoped grants. Resolution or evaluation that cannot
-// complete fails CLOSED (a scope policy we cannot evaluate must not silently drop a
-// forbid).
+// without reading any lineage; the one store read it pays, for a request that names an
+// entity or a workspace, is the inheritance-filter table (scopedWithoutGrants), because a
+// filter is a row of its own and bites without a grant policy. Resolution or evaluation
+// that cannot complete fails CLOSED (a scope policy we cannot evaluate must not silently
+// drop a forbid).
 func (e *scopedEngine) Scoped(ctx context.Context, req auth.Request) (auth.ScopedDecision, error) {
 	// WORKSPACE CONFINEMENT. A principal whose membership is confined to a workspace
 	// (Membership.WorkspaceID) may act ONLY within it — any action targeting a DIFFERENT
@@ -1286,19 +1142,22 @@ func (e *scopedEngine) Scoped(ctx context.Context, req auth.Request) (auth.Scope
 	}
 	set := state.set
 	if set == nil {
-		auth.CaptureAuthorizationInputs(ctx, true, "none-v1", struct{}{})
-		return auth.ScopedDecision{Effect: auth.EffectAbstain, Reason: "no scoped grants for tenant"}, nil
+		return e.scopedWithoutGrants(ctx, req, state)
 	}
 	if e.resolver == nil {
 		return auth.ScopedDecision{}, errors.New("governance: scope resolver unavailable")
 	}
-	em, resUID, pUID, err := e.resolver.resolve(ctx, req)
+	em, resUID, pUID, marks, err := e.resolver.resolve(ctx, req)
 	if err != nil {
 		return auth.ScopedDecision{}, err
 	}
+	// An inheritance filter on the target's lineage (inheritance_filter_walk.go): the
+	// Authorizer drops the RBAC term, and a permit counts only when it is anchored at or
+	// below the filtered node. A forbid below is decided on the full graph, untouched.
+	filtered := len(marks) > 0
 	now := e.clock()
 	creq := cedar.Request{Principal: pUID, Action: actionUID(req), Resource: resUID, Context: scopedContext(req, now)}
-	captureScopedCedar(ctx, state, em, creq, scopedGrantAboveFloor(req.Principal, req.Tenant, state.generation) && !e.grantExpiredState(state, loaded, now))
+	captureScopedCedar(ctx, state, em, creq, scopedGrantAboveFloor(req.Principal, req.Tenant, state.generation) && !e.grantExpiredState(state, loaded, now), marks)
 	decision, diag := cedar.Authorize(set.policies, em, creq)
 	e.logDiagErrors(diag)
 	// F-06: a forbid rule that errored is a restriction Cedar dropped — fail
@@ -1309,6 +1168,11 @@ func (e *scopedEngine) Scoped(ctx context.Context, req auth.Request) (auth.Scope
 		e.logEffect(req, "forbid-error")
 		return auth.ScopedDecision{Effect: auth.EffectForbid, Reason: "cedar: forbid rule evaluation error (fail-closed)"}, nil
 	}
+	// Every non-forbid answer carries the filter mark, so the Authorizer drops the inherited
+	// terms even when nothing here granted.
+	abstain := func(reason string) (auth.ScopedDecision, error) {
+		return auth.ScopedDecision{Effect: auth.EffectAbstain, Reason: reason, InheritanceFiltered: filtered}, nil
+	}
 	switch {
 	case decision == cedar.Allow:
 		if !scopedGrantAboveFloor(req.Principal, req.Tenant, state.generation) {
@@ -1316,27 +1180,60 @@ func (e *scopedEngine) Scoped(ctx context.Context, req auth.Request) (auth.Scope
 			// grant it still names may be one the retirement removed. Abstain; RBAC
 			// and the current membership decide.
 			e.logEffect(req, "grant-below-retirement-floor")
-			return auth.ScopedDecision{Effect: auth.EffectAbstain, Reason: "cedar: scoped grant snapshot predates the account's re-admission"}, nil
+			return abstain("cedar: scoped grant snapshot predates the account's re-admission")
 		}
 		if e.grantExpiredState(state, loaded, now) {
-			// ADR-0024 Q1: offline, past policy_max_staleness, a positive grant expires
+			// offline-policy staleness: offline, past policy_max_staleness, a positive grant expires
 			// deny-closed. Return ABSTAIN (not a hard deny) so the request falls back to
 			// RBAC and the deny-overlay — the expired GRANT stops authorizing, it does not
 			// halt the node (that would be the rejected Q1-B mission-kill). The forbid/deny
 			// cases below are unaffected: a stale restriction stays enforced.
 			e.logEffect(req, "grant-expired")
-			return auth.ScopedDecision{Effect: auth.EffectAbstain, Reason: "cedar: scoped grant expired (policy staleness exceeded)"}, nil
+			return abstain("cedar: scoped grant expired (policy staleness exceeded)")
+		}
+		if filtered && !grantAtOrBelow(set.policies, em, creq, marks) {
+			// Every permit that matched is a right from above the filtered node.
+			e.logEffect(req, "grant-above-inheritance-filter")
+			return abstain("cedar: the matching grant is anchored above an inheritance filter")
 		}
 		e.logEffect(req, "grant")
-		return auth.ScopedDecision{Effect: auth.EffectGrant, Reason: "cedar: scoped grant"}, nil
+		return auth.ScopedDecision{Effect: auth.EffectGrant, Reason: "cedar: scoped grant", InheritanceFiltered: filtered}, nil
 	case len(diag.Reasons) > 0:
 		e.logEffect(req, "forbid")
 		// A cleanly-evaluated authored scoped forbid: business policy (shadowable).
 		// Confinement (above) and errored/fail-closed forbids stay ClassInvariant.
 		return auth.ScopedDecision{Effect: auth.EffectForbid, Reason: "cedar: forbidden by policy", Class: auth.ClassPolicy}, nil
 	default:
-		return auth.ScopedDecision{Effect: auth.EffectAbstain, Reason: "cedar: no grant matched"}, nil
+		return abstain("cedar: no grant matched")
 	}
+}
+
+// scopedWithoutGrants is Scoped for a tenant whose Cedar union is empty. It abstains before
+// any lineage read, as it always did, unless an inheritance filter names the request's
+// class: a filter is a row of its own and bites without any grant policy, so then the
+// lineage is read to see whether the target sits under it.
+func (e *scopedEngine) scopedWithoutGrants(ctx context.Context, req auth.Request, state scopedTenantState) (auth.ScopedDecision, error) {
+	if e.resolver == nil || e.resolver.data == nil {
+		// The filters cannot be read, and an unreadable restriction must not read as none.
+		return auth.ScopedDecision{}, errors.New("governance: scope resolver unavailable")
+	}
+	filtersExist, err := e.resolver.hasInheritanceFilter(ctx, req)
+	if err != nil {
+		return auth.ScopedDecision{}, err
+	}
+	if filtersExist {
+		em, resUID, pUID, marks, err := e.resolver.resolve(ctx, req)
+		if err != nil {
+			return auth.ScopedDecision{}, err
+		}
+		if len(marks) > 0 {
+			creq := cedar.Request{Principal: pUID, Action: actionUID(req), Resource: resUID, Context: scopedContext(req, e.clock())}
+			captureScopedCedar(ctx, state, em, creq, false, marks)
+			return auth.ScopedDecision{Effect: auth.EffectAbstain, Reason: "no scoped grants for tenant", InheritanceFiltered: true}, nil
+		}
+	}
+	auth.CaptureAuthorizationInputs(ctx, true, "none-v1", struct{}{})
+	return auth.ScopedDecision{Effect: auth.EffectAbstain, Reason: "no scoped grants for tenant"}, nil
 }
 
 // scopedGrantAboveFloor reports whether a positive grant from a snapshot at

@@ -12,10 +12,13 @@ import type {
   SavedView,
   SavedViewInput,
   SavedViewsResponse,
+  UiState,
+  UiStateResponse,
 } from './types'
 
 const VIEWS = '/v1/m/consoleviews/views'
 const FAVORITES = '/v1/m/consoleviews/favorites'
+const UI_STATE = '/v1/m/consoleviews/ui-state'
 type CallOptions = Pick<
   RequestOptions,
   'tenant' | 'signal' | 'dispatchGuard' | 'sessionEffects'
@@ -35,6 +38,10 @@ export const savedViewsApi = {
     http.get<FavoritesResponse>(FAVORITES, opts),
   saveFavorites: (favorites: readonly FavoriteLink[], opts: CallOptions) =>
     http.put<FavoritesResponse>(FAVORITES, { favorites }, opts),
+  /** The caller's own interface state (one row per user and organization). */
+  uiState: (opts: CallOptions) => http.get<UiStateResponse>(UI_STATE, opts),
+  saveUiState: (state: UiState, opts: CallOptions) =>
+    http.put<UiStateResponse>(UI_STATE, state, opts),
 }
 
 export const savedViewsKeys = {

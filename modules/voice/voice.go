@@ -161,8 +161,11 @@ func (m *Module) Init(_ context.Context, host sdk.Host) error {
 	return nil
 }
 
-// Start has no background work. It warns once per un-wired seam so a plane that can
-// declare but never govern-and-open — or that observes nothing — is VISIBLE.
+// Start has no background work. An unconfigured optional seam is the DEFAULT,
+// not an anomaly, so it is not a warning: the one INFO line below carries the
+// posture. The gate and data-handle WARNs stay — a denied-by-default gate or a
+// lost persistence plane breaks governance, a different class than "the SIP
+// call plane is not configured".
 func (m *Module) Start(context.Context) error {
 	if m.log == nil {
 		return nil
@@ -172,12 +175,6 @@ func (m *Module) Start(context.Context) error {
 	}
 	if _, ok := m.gate.(denyGate); ok {
 		m.log.Warn("voice: no approval gate wired; every voice-session open will be DENIED by default")
-	}
-	if _, ok := m.dispatch.(unwiredDispatcher); ok {
-		m.log.Warn("voice: no dispatcher wired (runtime); an approved open is declared, not actuated")
-	}
-	if _, ok := m.callController.(unwiredCallController); ok {
-		m.log.Warn("voice: no realtime call controller wired; OpenAI SIP webhooks, if mounted, will refuse fail-closed")
 	}
 	m.startCallSweep()
 	m.log.Info("voice: govern half (policy + open ledger) usable; the observe half is live when the OpenAI Realtime SIP call plane is configured, and otherwise stays honestly empty, never fabricated")

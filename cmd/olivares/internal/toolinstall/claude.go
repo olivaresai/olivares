@@ -311,7 +311,7 @@ func (c *Claude) Probe(ctx context.Context, exe, scratch, wantVersion string) (P
 		}
 	}
 	spec := probeSpec{
-		Exe: exe, Args: []string{"--version"}, Dir: home, Budget: c.probeBudget, Grace: c.probeGrace,
+		Exe: exe, Args: []string{"--version"}, Dir: home, Write: []string{scratch}, Budget: c.probeBudget, Grace: c.probeGrace,
 		Env: []string{
 			"HOME=" + home,
 			"CLAUDE_CONFIG_DIR=" + config,

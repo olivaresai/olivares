@@ -7,6 +7,9 @@ description: >-
   refusant quand le registre ne peut pas être lu. Ce qu'il fait, et ses limites.
 ---
 
+Les budgets et l’analyse des dépenses FinOps sont des fonctions **[Business](https://olivares.ai/pricing)**. Community conserve le suivi des coûts par session et l’exportation des données. Les budgets enregistrés avant 0.1 restent consultables et supprimables, et sont appliqués tant que le module FinOps est actif ; Community ne peut pas les créer ni les modifier. Les évaluations et les environnements de test restent dans Community.
+
+
 Le module XI est la couche **coûts / FinOps** pour l'IA : il comptabilise ce que les
 connecteurs de modèles et de fournisseurs rapportent, vous laisse découper les dépenses selon
 n'importe quelle dimension d'attribution, prévoit la période courante, et transforme un budget
@@ -81,9 +84,9 @@ la route en lecture seule). Un `block` dur refuse avec un **HTTP 402**, un `thro
   un fire d'orchestration, un open vocal, une route de modèle, une exécution de la barrière
   d'évals et une tâche MCP durable sont refusés, et le proxy d'inférence répond **HTTP 503**.
   Le lancement de session applique sa propre posture de disponibilité
-  (`OLIVARES_SESSION_BUDGET_AVAILABILITY`) : non définie, la session démarre en édition
-  Community et est refusée avec **HTTP 503** en édition Enterprise ; l'échec est journalisé
-  dans les deux cas. Le finding de budget-cap émis à l'ingest enregistre toujours la dépense
+  (`OLIVARES_SESSION_BUDGET_AVAILABILITY`) : non définie, la session est refusée avec
+  **HTTP 503** dans toutes les éditions ; avec `fail-open`, elle démarre. L'échec est
+  journalisé dans les deux cas. Le finding de budget-cap émis à l'ingest enregistre toujours la dépense
   qui a atteint un plafond.
 - **Le routeur n'applique que les portées qu'il connaît avant exécution** (global / provider /
   model) ; les portées plus fines (agent, session, team, project) sont appliquées aux jonctions

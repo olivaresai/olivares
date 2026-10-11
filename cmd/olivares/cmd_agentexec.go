@@ -127,10 +127,11 @@ func (c agentExecCall) do(cmd *cobra.Command) (agentExecResult, error) {
 		return agentExecResult{}, missingCLIValueError("tenant", "--tenant", "OLIVARES_TENANT", resolved)
 	}
 	client, headers, err := cliTransport(cliTransportOptions{
-		Resolved: resolved,
-		Insecure: c.flags.insecure,
-		Timeout:  c.flags.timeout,
-		Stderr:   cmd.ErrOrStderr(),
+		Resolved:       resolved,
+		Insecure:       c.flags.insecure,
+		AllowCleartext: c.flags.allowCleartext,
+		Timeout:        c.flags.timeout,
+		Stderr:         cmd.ErrOrStderr(),
 	})
 	if err != nil {
 		return agentExecResult{}, exitcode.Or(exitcode.Server, redactCoded(err, resolved.Token))
@@ -166,7 +167,12 @@ func (c agentExecCall) do(cmd *cobra.Command) (agentExecResult, error) {
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	raw, rerr := readCLIHTTPResponse(resp, req, maxAgentExecBodySize+1, resp.StatusCode < 300, agentExecHTTPError)
+	raw, rerr := readCLIHTTPResponse(resp, req, maxAgentExecBodySize+1, resp.StatusCode < 300, func(status int, body []byte) error {
+		if c.module == redteamModule && status == http.StatusNotImplemented {
+			return notInEdition()
+		}
+		return agentExecHTTPError(status, body)
+	})
 	if rerr != nil {
 		return agentExecResult{status: resp.StatusCode, raw: raw}, wrapCLIResponseReadError(rerr, "read response")
 	}
@@ -709,10 +715,11 @@ func streamAgentExecEvents(cmd *cobra.Command, flags *authClientFlags, module, p
 		return missingCLIValueError("tenant", "--tenant", "OLIVARES_TENANT", resolved)
 	}
 	client, headers, err := cliTransport(cliTransportOptions{
-		Resolved:  resolved,
-		Insecure:  flags.insecure,
-		Unbounded: true,
-		Stderr:    cmd.ErrOrStderr(),
+		Resolved:       resolved,
+		Insecure:       flags.insecure,
+		AllowCleartext: flags.allowCleartext,
+		Unbounded:      true,
+		Stderr:         cmd.ErrOrStderr(),
 	})
 	if err != nil {
 		return exitcode.Or(exitcode.Server, redactCoded(err, resolved.Token))

@@ -84,6 +84,40 @@ beforeEach(() => {
 })
 
 describe('ChecksTab CRUD', () => {
+  it('returns keyboard focus to Create check after Escape', async () => {
+    const user = userEvent.setup()
+    wrap(<ChecksTab tenant="tenant-1" />)
+    const opener = await screen.findByRole('button', { name: 'Create check' })
+    await user.click(opener)
+    await user.keyboard('{Escape}')
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
+    )
+    await waitFor(() => expect(opener).toHaveFocus())
+  })
+
+  it('returns keyboard focus to the edited row after Cancel', async () => {
+    const user = userEvent.setup()
+    wrap(<ChecksTab tenant="tenant-1" />)
+    const opener = await screen.findByRole('button', {
+      name: 'Edit health check for Agent one',
+    })
+    await user.click(opener)
+    await user.click(
+      within(screen.getByRole('dialog')).getByRole('button', {
+        name: 'Cancel',
+      }),
+    )
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
+    )
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'Edit health check for Agent one' }),
+      ).toHaveFocus(),
+    )
+  })
+
   it('creates a check with the exact displayed payload', async () => {
     api.checks.mockResolvedValue({ items: [], has_more: false })
     const user = userEvent.setup()

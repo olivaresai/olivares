@@ -54,6 +54,7 @@ func (m *Module) providerProfileRoutes(reg api.RouteRegistrar) {
 	// ONE rule for which profile a new session uses (provider_profile_resolve.go):
 	// the console and the CLI both ask it instead of each keeping its own.
 	reg.Handle("GET", "/provider-profiles/resolve", permProfileRead, m.handlePreviewProfile)
+	reg.Handle("GET", "/provider-profiles/readiness", permProfileRead, m.handleToolsReadiness)
 	reg.Handle("POST", "/provider-profiles/resolve", permProfileWrite, m.handleResolveProfile)
 	reg.Handle("GET", "/provider-profiles/{ref}", permProfileRead, m.handleGetProfile)
 	reg.Handle("PATCH", "/provider-profiles/{ref}", permProfileWrite, m.handlePatchProfile)
@@ -84,7 +85,10 @@ type providerProfileDTO struct {
 	EnvironmentRef string `json:"environment_ref"`
 	DisplayName    string `json:"display_name,omitempty"`
 	Accent         string `json:"accent,omitempty"`
-	State          string `json:"state"`
+	// AccountName is the account name the profile carries (`claude`, `claude-b`),
+	// so a picker can offer profiles by name. A profile nobody has named omits it.
+	AccountName string `json:"account_name,omitempty"`
+	State       string `json:"state"`
 	// LocalEnvironment reports whether the profile belongs to THIS node's
 	// execution environment; a foreign profile is shown as such and never
 	// launched here.
@@ -119,8 +123,8 @@ type providerProfileDTO struct {
 	// authorization, never a credential and never a path.
 	AuthSource string `json:"auth_source,omitempty"`
 	// ProviderRecordRef names the registered provider this profile's managed
-	// launches use ("" = none, and the host-wide credential decides, exactly as it
-	// did before v26.10). It is a reference: no key, no hint, no endpoint.
+	// launches use ("" = none; AuthSource still governs launch authentication).
+	// It is a reference: no key, no hint, no endpoint.
 	ProviderRecordRef string `json:"provider_record_ref,omitempty"`
 	// SessionTools is the DECLARED tool surface every session under this profile
 	// gets, and SessionToolsDeclared is whether the operator declared one at all.
@@ -162,8 +166,8 @@ type createProfileRequest struct {
 	// in the same authorized call, so deploying an agent is one step.
 	ProviderRecordRef string `json:"provider_record_ref"`
 	// SessionTools declares the tool surface sessions under this profile get. A
-	// null field declares NOTHING, which is deny-closed at launch; `[]` declares no
-	// tools out loud. The pointer is what keeps those two apart over JSON.
+	// missing or null field selects the tool's default surface; `[]` disables all
+	// built-in tools. The pointer keeps those choices distinct over JSON.
 	SessionTools *[]string `json:"session_tools"`
 	// SessionPermissionMode declares the permission mode those sessions run under.
 	SessionPermissionMode string          `json:"session_permission_mode"`
@@ -184,8 +188,8 @@ type patchProfileRequest struct {
 	// profile's managed launches use. A LIVE child keeps the one its own launch
 	// resolved.
 	ProviderRecordRef *string `json:"provider_record_ref"`
-	// SessionTools re-declares the tool surface; `null` inside the pointer
-	// withdraws the declaration and returns the profile to deny-closed.
+	// SessionTools re-declares the tool surface; an empty list disables all
+	// built-in tools. A missing or null JSON field leaves the declaration unchanged.
 	SessionTools *[]string `json:"session_tools"`
 	// SessionPermissionMode re-declares the permission mode; "" withdraws it.
 	SessionPermissionMode *string         `json:"session_permission_mode"`
@@ -217,7 +221,7 @@ func (m *Module) toProfileDTO(p ProviderProfile) providerProfileDTO {
 	grant, _ := decodeProfileWorkGrant(p.SessionWorkGrant)
 	return providerProfileDTO{
 		ProfileRef: p.Ref, Driver: p.Driver, EnvironmentRef: p.EnvironmentRef,
-		DisplayName: p.DisplayName, Accent: p.Accent, State: p.State, AuthSource: p.AuthSource,
+		DisplayName: p.DisplayName, Accent: p.Accent, AccountName: p.AccountName, State: p.State, AuthSource: p.AuthSource,
 		ProviderRecordRef:     p.ProviderRecordRef,
 		SessionTools:          p.SessionTools,
 		SessionToolsDeclared:  p.SessionToolsDeclared,
@@ -288,23 +292,27 @@ type resolveProfileResponse struct {
 }
 
 type resolveProviderSource struct {
-	ProviderRef string `json:"provider_ref"`
-	Kind        string `json:"kind"`
-	DisplayName string `json:"display_name,omitempty"`
+	ProviderRef  string  `json:"provider_ref"`
+	Kind         string  `json:"kind"`
+	DisplayName  string  `json:"display_name,omitempty"`
+	DefaultModel *string `json:"default_model,omitempty"`
+	// The models the record's last connection test listed: what a session may pick.
+	Models []string `json:"models,omitempty"`
 }
 
 func resolveSourceOf(rec *ProviderRecord) *resolveProviderSource {
 	if rec == nil {
 		return nil
 	}
-	return &resolveProviderSource{ProviderRef: rec.Ref, Kind: rec.Kind, DisplayName: rec.DisplayName}
+	return &resolveProviderSource{ProviderRef: rec.Ref, Kind: rec.Kind, DisplayName: rec.DisplayName, DefaultModel: rec.DefaultModel, Models: rec.Models}
 }
 
 // resolvePreviewResponse is the same answer before a session starts: why, and
 // for a key which record. No profile is read or made.
 type resolvePreviewResponse struct {
-	Reason   string                 `json:"reason"`
-	Provider *resolveProviderSource `json:"provider,omitempty"`
+	Reason        string                 `json:"reason"`
+	Provider      *resolveProviderSource `json:"provider,omitempty"`
+	ModelRequired bool                   `json:"model_required,omitempty"`
 }
 
 // handlePreviewProfile answers what a new session of a driver would run on, without creating anything: the tool's own login when it is signed in, otherwise the key or local model from Providers that the resolve rule picks, or the sentence that says what to add.
@@ -314,18 +322,54 @@ func (m *Module) handlePreviewProfile(w http.ResponseWriter, r *http.Request, mc
 		writeRunErr(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, resolvePreviewResponse{Reason: got.Reason, Provider: resolveSourceOf(got.Provider)})
+	terms, _ := m.LaunchTermsFor(strings.ToLower(strings.TrimSpace(r.URL.Query().Get("driver"))))
+	writeJSON(w, http.StatusOK, resolvePreviewResponse{Reason: got.Reason, Provider: resolveSourceOf(got.Provider),
+		ModelRequired: got.Provider != nil && terms.BoundModelRequired})
 }
 
-// handleResolveProfile answers which provider profile a new session of a driver uses on this node: the tool's own login when it is signed in, otherwise a key or local model from Providers; it reuses a matching profile or creates one.
+// toolReadinessDTO is one tool in the readiness answer: ready with what it runs on, or
+// the stable code and the one sentence that say why a session cannot start on it.
+type toolReadinessDTO struct {
+	Driver        string                 `json:"driver"`
+	Ready         bool                   `json:"ready"`
+	Reason        string                 `json:"reason,omitempty"`
+	Provider      *resolveProviderSource `json:"provider,omitempty"`
+	ModelRequired bool                   `json:"model_required,omitempty"`
+	Code          string                 `json:"code,omitempty"`
+	Message       string                 `json:"message,omitempty"`
+}
+
+// handleToolsReadiness answers whether a new session can start on each tool now: what it would run on (its own login, or a key or local model from Providers), or a stable code and the one sentence that says why not (not installed, nothing to run on, a refused key, an unreadable sign-in); it creates nothing.
+func (m *Module) handleToolsReadiness(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
+	tools, err := m.ToolsReadiness(r.Context(), mc.Tenant)
+	if err != nil {
+		writeRunErr(w, err)
+		return
+	}
+	out := make([]toolReadinessDTO, 0, len(tools))
+	for _, t := range tools {
+		out = append(out, toolReadinessDTO{Driver: t.Driver, Ready: t.Ready, Reason: t.Reason,
+			Provider: resolveSourceOf(t.Provider), ModelRequired: t.ModelRequired, Code: t.Code, Message: t.Message})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"tools": out})
+}
+
+// handleResolveProfile answers which provider profile a new session of a driver uses on this node: the tool's own login when it is signed in, otherwise a key or local model from Providers; it reuses a matching profile or creates one. With account (an account name or profile reference) it answers that account's profile instead and creates nothing.
 func (m *Module) handleResolveProfile(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
 	var body struct {
-		Driver string `json:"driver"`
+		Driver  string `json:"driver"`
+		Account string `json:"account"`
 	}
 	if !decodeJSONBody(w, r, &body) {
 		return
 	}
-	got, err := m.ResolveProfile(r.Context(), mc.Tenant, body.Driver)
+	var got ResolvedProfile
+	var err error
+	if body.Account != "" {
+		got, err = m.ResolveAccountProfile(r.Context(), mc.Tenant, body.Driver, body.Account)
+	} else {
+		got, err = m.ResolveProfile(r.Context(), mc.Tenant, body.Driver)
+	}
 	if err != nil {
 		writeRunErr(w, err)
 		return

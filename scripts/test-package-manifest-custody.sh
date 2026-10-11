@@ -26,7 +26,7 @@ export LC_ALL
 me=test-package-manifest-custody
 
 could_not_look() {
-	printf '%s: NO HE PODIDO MIRAR — %s\n' "$me" "$*" >&2
+	printf '%s: COULD NOT CHECK — %s\n' "$me" "$*" >&2
 	exit 2
 }
 root="${OLIVARES_ROOT:-$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)}"
@@ -76,6 +76,7 @@ new_box() {
 	box="$scratch/$1"
 	mkdir -p "$box/bin" "$box/state" "$box/run" "$box/hooks" "$box/usr/lib/olivares" "$box/usr/bin" \
 		"$box/var/lib/olivares" "$box/etc/olivares" "$box/var/log" "$box/usr/share/olivares"
+	cp "$root/packaging/service/migrate-agentops-dropin.sh" "$box/usr/share/olivares/migrate-agentops-dropin.sh"
 	chmod 0755 "$box" "$box/var" "$box/var/lib"
 	: >"$box/calls"
 	ln -s /proc "$box/proc"

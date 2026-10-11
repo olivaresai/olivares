@@ -44,7 +44,7 @@ events Codex can veto. An endpoint failure is deny-closed.
 |---|---|
 | `olivares agent tool install --driver codex` | mixed-assurance when a subject verifier is configured; otherwise `verification_unavailable` |
 | Probe `--version` | identity of the binary, **not** authentication |
-| Session launch | requires `OLIVARES_SESSION_RUNTIME_CODEX_BIN` **or** a managed install receipt |
+| Session launch | uses the explicit `OLIVARES_SESSION_RUNTIME_CODEX_BIN` override; otherwise the newest verified managed install, then `codex` on the engine's `PATH` |
 
 See [Install the Codex CLI](/how-to/install-codex-cli/) and
 [Integrate Codex](/how-to/integrations/codex/).

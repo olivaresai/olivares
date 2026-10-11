@@ -504,6 +504,40 @@ else
   FAIL=$((FAIL + 1))
 fi
 
+# The costly b/c families must leave their original jobs without losing coverage.
+echo "test-check-pr-suite-shards: the b/c rebalance"
+if python3 - "$ROOT/scripts/pr-suite-shards.sh" <<'PYREBALANCE'
+import re, subprocess, sys
+
+reader = sys.argv[1]
+pkg = "github.com/olivaresai/olivares/cmd/olivares"
+def expression(group):
+    return re.compile(subprocess.check_output(
+        ["bash", reader, "run-expr", pkg, group], text=True).strip())
+
+expressions = {group: expression(group) for group in ("b", "c", "e", "f", "h")}
+destinations = set()
+for original, families in (("b", ("E", "F", "G", "H", "I", "CommunicationIncoming")),
+                           ("c", ("O", "P", "R", "CommunicationChannel"))):
+    for family in families:
+        name = "Test" + family
+        if expressions[original].search(name):
+            sys.exit("group %s still carries family %s" % (original, family))
+        owners = [group for group, expr in expressions.items() if expr.search(name)]
+        if len(owners) != 1 or owners[0] not in ("e", "f", "h"):
+            sys.exit("moved family %s must run once in a lighter job: %s" % (family, owners))
+        destinations.add(owners[0])
+if destinations != {"e", "f", "h"}:
+    sys.exit("moved families must use all three lighter jobs: " + str(destinations))
+PYREBALANCE
+then
+  printf '  ✓ case 47 — b/c prefixes move to lighter jobs without losing coverage\n'
+  PASS=$((PASS + 1))
+else
+  printf '  ✗ case 47 — b/c prefixes are not rebalanced\n' >&2
+  FAIL=$((FAIL + 1))
+fi
+
 echo "test-check-pr-suite-shards: the fixture"
 
 reset_fixture
@@ -793,8 +827,8 @@ printf 'test-check-pr-suite-shards: %d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ] || exit 1
 # A battery that ran nothing exits 0 for free. It has to say how many it ran, and refuse
 # if the number is not the one it was written with.
-[ "$PASS" -eq 46 ] || {
-  echo "test-check-pr-suite-shards: only $PASS of 46 cases ran — the battery was edited without its count" >&2
+[ "$PASS" -eq 47 ] || {
+  echo "test-check-pr-suite-shards: only $PASS of 47 cases ran — the battery was edited without its count" >&2
   exit 1
 }
 exit 0

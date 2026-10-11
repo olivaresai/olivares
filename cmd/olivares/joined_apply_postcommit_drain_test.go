@@ -412,7 +412,7 @@ func installJoinedApplyPostcommitProbe(
 	if forward {
 		probe.inner = e.eng.workSink
 	}
-	e.eng.sessionsMod.UseWorkEventSink(probe)
+	sessions.WithWorkEventSink(probe)(e.eng.sessionsMod)
 	t.Logf("sink identity=%s production_type=%T", probe.identity(), e.eng.workSink)
 	return probe
 }
@@ -442,7 +442,7 @@ func TestJoinedApplyPostcommitProductionSink(t *testing.T) {
 			resolver := &countingJoinedApplyPostcommitResolver{workIdentityResolver: workIdentityResolver{
 				st: e.eng.store, sessions: e.eng.sessionsMod, agentLifecycle: lifecycle,
 			}}
-			e.eng.sessionsMod.UseWorkIdentityResolver(resolver)
+			sessions.WithWorkIdentityResolver(resolver)(e.eng.sessionsMod)
 			sm := e.eng.sessionsMod
 			operator := joinedApplyPostcommitOperator()
 

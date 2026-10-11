@@ -50,6 +50,7 @@ const fixtureModule = `package demo
 const Namespace = "demo"
 
 type Module struct{}
+type AssignmentAuthority interface { Ref() int; Scoped() bool }
 
 func (m *Module) APINamespace() string { return Namespace }
 
@@ -178,6 +179,22 @@ func stampSpec(path string, m *model) error {
 
 // --- helpers the mutations use --------------------------------------------------
 
+// swap is edit plus the promise that the anchor was there: a mutation that replaces
+// nothing did not happen, and a check that did not happen is not a check that
+// passed. A fixture that drifts under an anchor must fail setup, never pass green.
+func swap(root, rel, old, new string) error {
+	p := filepath.Join(root, rel)
+	b, err := os.ReadFile(p)
+	if err != nil {
+		return err
+	}
+	s := string(b)
+	if !strings.Contains(s, old) {
+		return fmt.Errorf("fixture anchor missing in %s: %q", rel, clip(old))
+	}
+	return os.WriteFile(p, []byte(strings.Replace(s, old, new, 1)), 0o644)
+}
+
 func edit(root, rel string, f func(string) string) error {
 	p := filepath.Join(root, rel)
 	b, err := os.ReadFile(p)
@@ -245,7 +262,7 @@ type selfCase struct {
 }
 
 func selfCases() []selfCase {
-	return []selfCase{
+	cases := []selfCase{
 		// ---- GREEN: the gate must not fire on a tree that is in order ----------
 		{name: "consistent-tree", want: exitClean},
 		{name: "terse-but-real-handler-sentence", want: exitClean, mutate: func(root string) error {
@@ -462,7 +479,413 @@ func selfCases() []selfCase {
 						`reg.Handle("GET", "/things", "demo:thing:read", m.handleGetThing)`, 1)
 			})
 		}},
-		// ---- the governed doors a module reaches by type assertion -------------
+		// Registration sites remain duplicates even in conditional branches.
+		{name: "same-route-in-mutually-exclusive-branches", want: exitCannotSee, wantErr: "registered twice", mutate: func(root string) error {
+			if err := swap(root, "modules/demo/demo.go",
+				`	reg.Handle("GET", "/things/{id}", "demo:thing:read", m.handleGetThing)`,
+				`	reg.Handle("GET", "/things/{id}", "demo:thing:read", m.handleGetThing)
+	if authority, ok := authorityValue.(AssignmentAuthority); ok {
+		reg.HandleEntity("POST", "/scoped", "demo:thing:write", 1, m.handleGetThing)
+	} else {
+		reg.Handle("POST", "/scoped", "demo:thing:write", m.handleGetThing)
+	}`); err != nil {
+				return err
+			}
+			return nil
+		}},
+		{name: "same-route-in-an-else-if-chain", want: exitCannotSee, wantErr: "registered twice", mutate: func(root string) error {
+			if err := swap(root, "modules/demo/demo.go",
+				`	reg.Handle("GET", "/things/{id}", "demo:thing:read", m.handleGetThing)`,
+				`	reg.Handle("GET", "/things/{id}", "demo:thing:read", m.handleGetThing)
+	if authority, ok := authorityValue.(AssignmentAuthority); ok {
+		reg.HandleEntity("POST", "/chained", "demo:thing:write", 1, m.handleGetThing)
+	} else if governed() {
+		reg.Handle("POST", "/chained", "demo:thing:write", m.handleGetThing)
+	} else {
+		reg.Handle("POST", "/chained", "demo:thing:write", m.handleGetThing)
+	}`); err != nil {
+				return err
+			}
+			return nil
+		}},
+		{name: "same-route-in-nested-exclusive-branches", want: exitCannotSee, wantErr: "registered twice", mutate: func(root string) error {
+			if err := swap(root, "modules/demo/demo.go",
+				`	reg.Handle("GET", "/things/{id}", "demo:thing:read", m.handleGetThing)`,
+				`	reg.Handle("GET", "/things/{id}", "demo:thing:read", m.handleGetThing)
+	if authority, ok := authorityValue.(AssignmentAuthority); ok {
+		if enabled {
+			reg.HandleEntity("POST", "/nested", "demo:thing:write", 1, m.handleGetThing)
+		} else {
+			reg.Handle("POST", "/nested", "demo:thing:write", m.handleGetThing)
+		}
+	} else {
+		reg.Handle("POST", "/nested", "demo:thing:write", m.handleGetThing)
+	}`); err != nil {
+				return err
+			}
+			return nil
+		}},
+		{name: "same-route-in-nested-branches-with-a-later-handler-mismatch", want: exitCannotSee, wantErr: "registered twice", mutate: func(root string) error {
+			return swap(root, "modules/demo/demo.go",
+				`	reg.Handle("GET", "/things/{id}", "demo:thing:read", m.handleGetThing)`,
+				`	reg.Handle("GET", "/things/{id}", "demo:thing:read", m.handleGetThing)
+	if authority, ok := authorityValue.(AssignmentAuthority); ok {
+		if enabled {
+			reg.HandleEntity("POST", "/nestedmismatch", "demo:thing:write", 1, m.handleGetThing)
+		} else {
+			reg.Handle("POST", "/nestedmismatch", "demo:thing:write", m.handleGetThing)
+		}
+	} else {
+		reg.Handle("POST", "/nestedmismatch", "demo:thing:write", m.handleListThings)
+	}`)
+		}},
+		{name: "same-route-in-exclusive-branches-in-a-helper", want: exitCannotSee, wantErr: "registered twice", mutate: func(root string) error {
+			if err := swap(root, "modules/demo/demo.go",
+				`	reg.Handle("GET", "/things/{id}", "demo:thing:read", m.handleGetThing)
+}`,
+				`	reg.Handle("GET", "/things/{id}", "demo:thing:read", m.handleGetThing)
+	m.scoped(reg)
+}
+
+func (m *Module) scoped(reg RouteRegistrar) {
+	if authority, ok := authorityValue.(AssignmentAuthority); ok {
+		reg.HandleEntity("POST", "/helped", "demo:thing:write", 1, m.handleGetThing)
+	} else {
+		reg.Handle("POST", "/helped", "demo:thing:write", m.handleGetThing)
+	}
+}`); err != nil {
+				return err
+			}
+			return nil
+		}},
+		{name: "same-route-in-exclusive-branches-with-direct-reentry", want: exitCannotSee, wantErr: "registered twice", mutate: func(root string) error {
+			return edit(root, "modules/demo/demo.go", func(s string) string {
+				s = strings.Replace(s, "type Module struct{}", "type Module struct{ enabled bool; reg RouteRegistrar }", 1)
+				s = strings.Replace(s, `	reg.Handle("GET", "/things/{id}", "demo:thing:read", m.handleGetThing)`, `	if m.enabled {
+		reg.Handle("GET", "/things/{id}", "demo:thing:read", m.handleGetThing)
+		m.enabled = false
+		m.APIRoutes(reg)
+	} else {
+		reg.Handle("GET", "/things/{id}", "demo:thing:read", m.handleGetThing)
+	}`, 1)
+				return s
+			})
+		}},
+		{name: "same-route-in-exclusive-branches-with-helper-reentry", want: exitCannotSee, wantErr: "registered twice", mutate: func(root string) error {
+			return edit(root, "modules/demo/demo.go", func(s string) string {
+				s = strings.Replace(s, "type Module struct{}", "type Module struct{ enabled bool; reg RouteRegistrar }", 1)
+				s = strings.Replace(s, `	reg.Handle("GET", "/things/{id}", "demo:thing:read", m.handleGetThing)`, `	if m.enabled {
+		reg.Handle("GET", "/things/{id}", "demo:thing:read", m.handleGetThing)
+		m.enabled = false
+		m.again(reg)
+	} else {
+		reg.Handle("GET", "/things/{id}", "demo:thing:read", m.handleGetThing)
+	}`, 1)
+				return s + `
+
+func (m *Module) again(reg RouteRegistrar) { m.APIRoutes(reg) }
+`
+			})
+		}},
+		{name: "same-route-in-exclusive-branches-with-package-function-reentry", want: exitCannotSee, wantErr: "registered twice", mutate: func(root string) error {
+			return edit(root, "modules/demo/demo.go", func(s string) string {
+				s = strings.Replace(s, "type Module struct{}", "type Module struct{ enabled bool; reg RouteRegistrar }", 1)
+				s = strings.Replace(s, `	reg.Handle("GET", "/things/{id}", "demo:thing:read", m.handleGetThing)`, `	if m.enabled {
+		reg.Handle("GET", "/things/{id}", "demo:thing:read", m.handleGetThing)
+		m.enabled = false
+		again(m, reg)
+	} else {
+		reg.Handle("GET", "/things/{id}", "demo:thing:read", m.handleGetThing)
+	}`, 1)
+				return s + `
+
+func again(m *Module, reg RouteRegistrar) { m.APIRoutes(reg) }
+`
+			})
+		}},
+		{name: "same-route-in-exclusive-branches-with-method-value-reentry", want: exitCannotSee, wantErr: "registered twice", mutate: func(root string) error {
+			return edit(root, "modules/demo/demo.go", func(s string) string {
+				s = strings.Replace(s, "type Module struct{}", "type Module struct{ enabled bool; reg RouteRegistrar }", 1)
+				s = strings.Replace(s, `	reg.Handle("GET", "/things/{id}", "demo:thing:read", m.handleGetThing)`, `	if m.enabled {
+		reg.Handle("GET", "/things/{id}", "demo:thing:read", m.handleGetThing)
+		m.enabled = false
+		again := m.APIRoutes
+		again(reg)
+	} else {
+		reg.Handle("GET", "/things/{id}", "demo:thing:read", m.handleGetThing)
+	}`, 1)
+				return s
+			})
+		}},
+		{name: "same-route-in-exclusive-branches-with-method-expression-reentry", want: exitCannotSee, wantErr: "registered twice", mutate: func(root string) error {
+			return edit(root, "modules/demo/demo.go", func(s string) string {
+				s = strings.Replace(s, "type Module struct{}", "type Module struct{ enabled bool; reg RouteRegistrar }", 1)
+				s = strings.Replace(s, `	reg.Handle("GET", "/things/{id}", "demo:thing:read", m.handleGetThing)`, `	if m.enabled {
+		reg.Handle("GET", "/things/{id}", "demo:thing:read", m.handleGetThing)
+		m.enabled = false
+		(*Module).APIRoutes(m, reg)
+	} else {
+		reg.Handle("GET", "/things/{id}", "demo:thing:read", m.handleGetThing)
+	}`, 1)
+				return s
+			})
+		}},
+		{name: "same-route-in-exclusive-branches-with-closure-reentry", want: exitCannotSee, wantErr: "registered twice", mutate: func(root string) error {
+			return edit(root, "modules/demo/demo.go", func(s string) string {
+				s = strings.Replace(s, "type Module struct{}", "type Module struct{ enabled bool; reg RouteRegistrar }", 1)
+				s = strings.Replace(s, `	reg.Handle("GET", "/things/{id}", "demo:thing:read", m.handleGetThing)`, `	if m.enabled {
+		reg.Handle("GET", "/things/{id}", "demo:thing:read", m.handleGetThing)
+		m.enabled = false
+		func() { m.APIRoutes(reg) }()
+	} else {
+		reg.Handle("GET", "/things/{id}", "demo:thing:read", m.handleGetThing)
+	}`, 1)
+				return s
+			})
+		}},
+		{name: "same-route-in-exclusive-branches-with-helper-with-stored-registrar-reentry", want: exitCannotSee, wantErr: "registered twice", mutate: func(root string) error {
+			return edit(root, "modules/demo/demo.go", func(s string) string {
+				s = strings.Replace(s, "type Module struct{}", "type Module struct{ enabled bool; reg RouteRegistrar }", 1)
+				s = strings.Replace(s, `	reg.Handle("GET", "/things/{id}", "demo:thing:read", m.handleGetThing)`, `	if m.enabled {
+		reg.Handle("GET", "/things/{id}", "demo:thing:read", m.handleGetThing)
+		m.enabled = false
+		m.reg = reg
+		m.again()
+	} else {
+		reg.Handle("GET", "/things/{id}", "demo:thing:read", m.handleGetThing)
+	}`, 1)
+				return s + `
+
+func (m *Module) again() { m.APIRoutes(m.reg) }
+`
+			})
+		}},
+		{name: "same-route-in-exclusive-branches-with-a-for-repeated-registration", want: exitCannotSee, wantErr: "registered twice", mutate: func(root string) error {
+			return swap(root, "modules/demo/demo.go", `	reg.Handle("GET", "/things/{id}", "demo:thing:read", m.handleGetThing)`, `	if enabled {
+		for i := 0; i < 2; i++ {
+			reg.Handle("GET", "/things/{id}", "demo:thing:read", m.handleGetThing)
+		}
+	} else {
+		reg.Handle("GET", "/things/{id}", "demo:thing:read", m.handleGetThing)
+	}`)
+		}},
+		{name: "same-route-in-exclusive-branches-with-a-range-repeated-registration", want: exitCannotSee, wantErr: "registered twice", mutate: func(root string) error {
+			return swap(root, "modules/demo/demo.go", `	reg.Handle("GET", "/things/{id}", "demo:thing:read", m.handleGetThing)`, `	if enabled {
+		for range []int{0, 1} {
+			reg.Handle("GET", "/things/{id}", "demo:thing:read", m.handleGetThing)
+		}
+	} else {
+		reg.Handle("GET", "/things/{id}", "demo:thing:read", m.handleGetThing)
+	}`)
+		}},
+		{name: "same-route-in-exclusive-branches-with-a-for-post-repeated-registration", want: exitCannotSee, wantErr: "registered twice", mutate: func(root string) error {
+			return swap(root, "modules/demo/demo.go", `	reg.Handle("GET", "/things/{id}", "demo:thing:read", m.handleGetThing)`, `	if enabled {
+		for i := 0; i < 2; reg.Handle("GET", "/things/{id}", "demo:thing:read", m.handleGetThing) { i++ }
+	} else {
+		reg.Handle("GET", "/things/{id}", "demo:thing:read", m.handleGetThing)
+	}`)
+		}},
+		{name: "same-route-in-exclusive-branches-with-a-once-only-for-initializer", want: exitCannotSee, wantErr: "registered twice", mutate: func(root string) error {
+			return swap(root, "modules/demo/demo.go", `	reg.Handle("GET", "/things/{id}", "demo:thing:read", m.handleGetThing)`, `	if enabled {
+		for reg.Handle("GET", "/things/{id}", "demo:thing:read", m.handleGetThing); false; {}
+	} else {
+		reg.Handle("GET", "/things/{id}", "demo:thing:read", m.handleGetThing)
+	}`)
+		}},
+		{name: "same-route-in-exclusive-branches-in-closures", want: exitCannotSee, wantErr: "registered twice", mutate: func(root string) error {
+			return swap(root, "modules/demo/demo.go",
+				`	reg.Handle("GET", "/things/{id}", "demo:thing:read", m.handleGetThing)`,
+				`	reg.Handle("GET", "/things/{id}", "demo:thing:read", m.handleGetThing)
+	if authority, ok := authorityValue.(AssignmentAuthority); ok {
+		func() { reg.HandleEntity("POST", "/lit", "demo:thing:write", 1, m.handleGetThing) }()
+	} else {
+		func() { reg.Handle("POST", "/lit", "demo:thing:write", m.handleGetThing) }()
+	}`)
+		}},
+		{name: "same-route-in-exclusive-branches-with-a-goto", want: exitCannotSee, wantErr: "registered twice", mutate: func(root string) error {
+			return swap(root, "modules/demo/demo.go",
+				`	reg.Handle("GET", "/things/{id}", "demo:thing:read", m.handleGetThing)`,
+				`	reg.Handle("GET", "/things/{id}", "demo:thing:read", m.handleGetThing)
+retry:
+	if authority, ok := authorityValue.(AssignmentAuthority); ok {
+		reg.HandleEntity("POST", "/jumped", "demo:thing:write", 1, m.handleGetThing)
+	} else {
+		if governed() {
+			goto retry
+		}
+		reg.Handle("POST", "/jumped", "demo:thing:write", m.handleGetThing)
+	}`)
+		}},
+		{name: "single-registration-alongside-an-unrelated-loop", want: exitClean, mutate: func(root string) error {
+			if err := swap(root, "modules/demo/demo.go",
+				`	reg.Handle("GET", "/things/{id}", "demo:thing:read", m.handleGetThing)`,
+				`	reg.Handle("GET", "/things/{id}", "demo:thing:read", m.handleGetThing)
+	seen := 0
+	for i := 0; i < 3; i++ {
+		seen += i
+	}
+	_ = seen
+	reg.Handle("POST", "/loopnear", "demo:thing:write", m.handleGetThing)`); err != nil {
+				return err
+			}
+			return seal(root)
+		}},
+		{name: "single-route-with-an-unresolved-handler", want: exitClean, mutate: func(root string) error {
+			if err := swap(root, "modules/demo/demo.go",
+				`	reg.Handle("GET", "/things/{id}", "demo:thing:read", m.handleGetThing)`,
+				`	reg.Handle("GET", "/things/{id}", "demo:thing:read", m.handleGetThing)
+	reg.Handle("POST", "/computed", "demo:thing:write", makeHandler())`); err != nil {
+				return err
+			}
+			if err := swap(root, catalogRel,
+				"POST\t/v1/m/demo/things\tCreates one demo thing from the posted document.\n",
+				"POST\t/v1/m/demo/things\tCreates one demo thing from the posted document.\n"+
+					"POST\t/v1/m/demo/computed\tComputes one demo thing from the posted document.\n"); err != nil {
+				return err
+			}
+			return seal(root)
+		}},
+		{name: "same-route-in-exclusive-branches-with-two-handlers", want: exitCannotSee, wantErr: "registered twice", mutate: func(root string) error {
+			return swap(root, "modules/demo/demo.go",
+				`	reg.Handle("GET", "/things/{id}", "demo:thing:read", m.handleGetThing)`,
+				`	reg.Handle("GET", "/things/{id}", "demo:thing:read", m.handleGetThing)
+	if authority, ok := authorityValue.(AssignmentAuthority); ok {
+		reg.HandleEntity("POST", "/scoped", "demo:thing:write", 1, m.handleGetThing)
+	} else {
+		reg.Handle("POST", "/scoped", "demo:thing:write", m.handleListThings)
+	}`)
+		}},
+		{name: "two-duplicated-keys-name-the-sorted-first", want: exitCannotSee, wantErr: "GET /v1/m/demo/things/{id} is registered twice", mutate: func(root string) error {
+			return swap(root, "modules/demo/demo.go",
+				`	reg.Handle("GET", "/things/{id}", "demo:thing:read", m.handleGetThing)`,
+				`	reg.Handle("GET", "/things/{id}", "demo:thing:read", m.handleGetThing)
+	reg.Handle("GET", "/things/{id}", "demo:thing:read", m.handleGetThing)
+	reg.Handle("POST", "/things", "demo:thing:write", m.handleCreateThing)
+	reg.Handle("POST", "/things", "demo:thing:write", m.handleCreateThing)`)
+		}},
+		{name: "same-route-in-a-branch-and-unconditionally", want: exitCannotSee, wantErr: "registered twice", mutate: func(root string) error {
+			return swap(root, "modules/demo/demo.go",
+				`	reg.Handle("GET", "/things/{id}", "demo:thing:read", m.handleGetThing)`,
+				`	reg.Handle("GET", "/things/{id}", "demo:thing:read", m.handleGetThing)
+	if governed() {
+		reg.Handle("POST", "/scoped", "demo:thing:write", m.handleGetThing)
+	}
+	reg.Handle("POST", "/scoped", "demo:thing:write", m.handleGetThing)`)
+		}},
+		{name: "same-route-twice-in-one-branch", want: exitCannotSee, wantErr: "registered twice", mutate: func(root string) error {
+			return swap(root, "modules/demo/demo.go",
+				`	reg.Handle("GET", "/things/{id}", "demo:thing:read", m.handleGetThing)`,
+				`	reg.Handle("GET", "/things/{id}", "demo:thing:read", m.handleGetThing)
+	if governed() {
+		reg.Handle("POST", "/branched", "demo:thing:write", m.handleGetThing)
+		reg.Handle("POST", "/branched", "demo:thing:write", m.handleGetThing)
+	}`)
+		}},
+		{name: "same-route-collapsed-pair-plus-dup-in-one-branch", want: exitCannotSee, wantErr: "registered twice", mutate: func(root string) error {
+			return swap(root, "modules/demo/demo.go",
+				`	reg.Handle("GET", "/things/{id}", "demo:thing:read", m.handleGetThing)`,
+				`	reg.Handle("GET", "/things/{id}", "demo:thing:read", m.handleGetThing)
+	if authority, ok := authorityValue.(AssignmentAuthority); ok {
+		reg.HandleEntity("POST", "/paired", "demo:thing:write", 1, m.handleGetThing)
+	} else {
+		reg.Handle("POST", "/paired", "demo:thing:write", m.handleGetThing)
+		reg.Handle("POST", "/paired", "demo:thing:write", m.handleGetThing)
+	}`)
+		}},
+		{name: "same-route-under-two-separate-ifs", want: exitCannotSee, wantErr: "registered twice", mutate: func(root string) error {
+			return swap(root, "modules/demo/demo.go",
+				`	reg.Handle("GET", "/things/{id}", "demo:thing:read", m.handleGetThing)`,
+				`	reg.Handle("GET", "/things/{id}", "demo:thing:read", m.handleGetThing)
+	if governed() {
+		reg.Handle("POST", "/forked", "demo:thing:write", m.handleGetThing)
+	}
+	if featured() {
+		reg.Handle("POST", "/forked", "demo:thing:write", m.handleGetThing)
+	}`)
+		}},
+		{name: "same-route-in-two-switch-cases", want: exitCannotSee, wantErr: "registered twice", mutate: func(root string) error {
+			return swap(root, "modules/demo/demo.go",
+				`	reg.Handle("GET", "/things/{id}", "demo:thing:read", m.handleGetThing)`,
+				`	reg.Handle("GET", "/things/{id}", "demo:thing:read", m.handleGetThing)
+	switch mode(m) {
+	case 1:
+		reg.HandleEntity("POST", "/switched", "demo:thing:write", demoRef, m.handleGetThing)
+	case 2:
+		reg.Handle("POST", "/switched", "demo:thing:write", m.handleGetThing)
+	}`)
+		}},
+		{name: "same-key-in-two-packages", want: exitCannotSee, wantErr: "registered twice", mutate: func(root string) error {
+			if err := swap(root, "modules/demo/demo.go",
+				`	reg.Handle("GET", "/things/{id}", "demo:thing:read", m.handleGetThing)`,
+				`	reg.Handle("GET", "/things/{id}", "demo:thing:read", m.handleGetThing)
+	if governed() {
+		reg.Handle("POST", "/shared", "demo:thing:write", m.handleGetThing)
+	}`); err != nil {
+				return err
+			}
+			p := filepath.Join(root, "modules/demo2/demo.go")
+			if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+				return err
+			}
+			return os.WriteFile(p, []byte(`package demo2
+
+const Namespace = "demo"
+
+type Module struct{}
+
+func (m *Module) APINamespace() string { return Namespace }
+
+func (m *Module) APIRoutes(reg RouteRegistrar) {
+	if governed() {
+	} else {
+		reg.Handle("POST", "/shared", "demo:thing:write", m.handleGetThing)
+	}
+}
+
+// handleGetThing returns one shared demo thing.
+func (m *Module) handleGetThing(w, r, mc int) {}
+`), 0o644)
+		}},
+		{name: "same-route-in-a-loop-enclosed-branch-pair", want: exitCannotSee, wantErr: "registered twice", mutate: func(root string) error {
+			return swap(root, "modules/demo/demo.go",
+				`	reg.Handle("GET", "/things/{id}", "demo:thing:read", m.handleGetThing)`,
+				`	reg.Handle("GET", "/things/{id}", "demo:thing:read", m.handleGetThing)
+	for _, mode := range modes() {
+		if mode {
+			reg.HandleEntity("POST", "/looped", "demo:thing:write", demoRef, m.handleGetThing)
+		} else {
+			reg.Handle("POST", "/looped", "demo:thing:write", m.handleGetThing)
+		}
+	}`)
+		}},
+		{name: "same-route-in-exclusive-branches-with-unresolved-handlers", want: exitCannotSee, wantErr: "could not resolve", mutate: func(root string) error {
+			return swap(root, "modules/demo/demo.go",
+				`	reg.Handle("GET", "/things/{id}", "demo:thing:read", m.handleGetThing)`,
+				`	reg.Handle("GET", "/things/{id}", "demo:thing:read", m.handleGetThing)
+	if authority, ok := authorityValue.(AssignmentAuthority); ok {
+		reg.HandleEntity("POST", "/opaque", "demo:thing:write", 1, m.entityHandler())
+	} else {
+		reg.Handle("POST", "/opaque", "demo:thing:write", m.collectionHandler())
+	}`)
+		}},
+		{name: "same-route-split-between-apiroutes-and-a-helper", want: exitCannotSee, wantErr: "registered twice", mutate: func(root string) error {
+			return swap(root, "modules/demo/demo.go",
+				`	reg.Handle("GET", "/things/{id}", "demo:thing:read", m.handleGetThing)
+}`,
+				`	reg.Handle("GET", "/things/{id}", "demo:thing:read", m.handleGetThing)
+	if governed() {
+		reg.Handle("POST", "/split", "demo:thing:write", m.handleGetThing)
+	}
+	m.more(reg)
+}
+
+func (m *Module) more(reg RouteRegistrar) {
+	if featured() {
+	} else {
+		reg.Handle("POST", "/split", "demo:thing:write", m.handleGetThing)
+	}
+}`)
+		}},
 		{name: "system-route-door", want: exitClean, mutate: func(root string) error {
 			return edit(root, "modules/demo/demo.go", func(s string) string {
 				return strings.Replace(s, `reg.Handle("GET", "/things", "demo:thing:read", m.handleListThings)`, `door, ok := reg.(SystemRouteRegistrar)
@@ -484,10 +907,6 @@ door.HandleSystem("GET", "/things", m.handleListThings)`, 1)
 			return os.WriteFile(filepath.Join(root, "modules/demo/demo.go"), []byte("package demo\n"), 0644)
 		}},
 
-		// core/api's recording registrar answers HandleSealed and HandlePolicy, so the
-		// beta document publishes a route mounted through either. A gate that reads
-		// only Handle and HandleEntity would never see it, and would stop at the
-		// document-and-routes-disagree guard instead of naming the handler.
 		{name: "sealed-route-documented-and-regenerated", want: exitClean, mutate: func(root string) error {
 			if err := addGovernedRoute(root, "HandleSealed", "handleDeleteThing deletes one demo thing and every record that names it."); err != nil {
 				return err
@@ -518,6 +937,340 @@ door.HandleSystem("GET", "/things", m.handleListThings)`, 1)
 			})
 		}},
 	}
+	for _, variant := range []string{
+		"direct", "alias", "composite",
+		"local-method", "method-value", "callback-field",
+		"callback-alias", "callback-registrar-alias", "value-method-alias",
+		"promoted-method-alias", "defer", "closure",
+		"handler-factory", "callback-zero-alias", "callback-zero-parens",
+		"callback-zero-var", "callback-zero-chain", "callback-zero-index",
+		"callback-zero-assertion", "callback-zero-aggregate", "callback-zero-container-alias",
+		"callback-zero-global", "callback-zero-global-index", "callback-zero-external-alias",
+		"callback-zero-external", "callback-zero-nested", "callback-zero-nested-alias",
+		"callback-zero-global-file", "callback-zero-external-container", "callback-zero-global-container",
+		"callback-zero-global-container-alias", "callback-zero-asserted-container", "callback-zero-local-wrapper",
+		"callback-zero-dot", "callback-zero-metadata-alias", "callback-zero-metadata-composite",
+		"callback-zero-metadata-asserted-struct", "callback-zero-metadata-shadow-value",
+		"callback-zero-metadata-shadow-type", "callback-zero-declared-getter",
+		"callback-zero-metadata-declared-getter",
+	} {
+		for _, write := range []bool{false, true} {
+			cases = append(cases, selfCase{
+				name: fmt.Sprintf("cross-package-reentry-%s-write-%t", variant, write),
+				want: exitCannotSee, wantErr: "registered twice", write: write,
+				mutate: func(root string) error { return writeCrossPackageFixture(root, variant) },
+			})
+		}
+	}
+	cases = append(cases, selfCase{
+		name: "exclusive-branches-with-receiver-field-condition", want: exitCannotSee, wantErr: "registered twice",
+		mutate: func(root string) error {
+			if err := writeCrossPackageFixture(root, "field-condition"); err != nil {
+				return err
+			}
+			return nil
+		},
+	})
+	for _, variant := range channelVariants {
+		for _, write := range []bool{false, true} {
+			cases = append(cases, selfCase{
+				name: fmt.Sprintf("channel-reentry-%s-write-%t", variant, write),
+				want: exitCannotSee, wantErr: "registered twice", write: write,
+				mutate: func(root string) error { return writeChannelFixture(root, variant) },
+			})
+		}
+	}
+	cases = append(cases, selfCase{
+		name: "single-registration-with-channel-effects", want: exitClean,
+		mutate: func(root string) error {
+			if err := writeChannelFixture(root, "send-receive"); err != nil {
+				return err
+			}
+			if err := swap(root, "modules/demo/demo.go", `} else {
+		reg.Handle("GET", "/things/{id}", "demo:thing:read", m.handleGetThing)
+	}`, "}"); err != nil {
+				return err
+			}
+			return seal(root)
+		},
+	})
+	return cases
+}
+
+var channelVariants = []string{"send-receive", "send", "receive", "select-send", "select-receive", "range", "close", "unnamed-receiver", "panic-recovery", "bounds-panic-recovery"}
+
+// The module never calls a helper or exposes its receiver. Channel effects and
+// panic recovery let external code re-enter through the same interface as the seam.
+func writeChannelFixture(root, variant string) error {
+	if err := writeCrossPackageFixture(root, "field-condition"); err != nil {
+		return err
+	}
+	var action, coordinate string
+	switch variant {
+	case "send-receive", "unnamed-receiver":
+		action = "Wake <- struct{}{}; <-Done"
+		coordinate = "<-wake; m.APIRoutes(reg); close(done)"
+	case "send":
+		action = "Wake <- struct{}{}; Done <- struct{}{}"
+		coordinate = "<-wake; m.APIRoutes(reg); <-done"
+	case "receive":
+		action = "<-Wake; <-Done"
+		coordinate = "wake <- struct{}{}; m.APIRoutes(reg); close(done)"
+	case "select-send":
+		action = "select { case Wake <- struct{}{}: }; select { case Done <- struct{}{}: }"
+		coordinate = "<-wake; m.APIRoutes(reg); <-done"
+	case "select-receive":
+		action = "select { case <-Wake: }; select { case <-Done: }"
+		coordinate = "wake <- struct{}{}; m.APIRoutes(reg); close(done)"
+	case "range":
+		action = "for range Wake {}"
+		coordinate = "wake <- struct{}{}; m.APIRoutes(reg); close(wake)"
+	case "close":
+		action = "close(Wake)"
+		coordinate = "<-wake; m.APIRoutes(reg)"
+	case "panic-recovery":
+		action = `panic("re-enter on recovery")`
+	case "bounds-panic-recovery":
+		action = `_ = ([]int{})[0]`
+	default:
+		return fmt.Errorf("unknown channel fixture %q", variant)
+	}
+	if err := swap(root, "modules/demo/demo.go", `if m.Enabled {
+		reg.Handle("GET", "/things/{id}", "demo:thing:read", m.handleGetThing)
+		m.Enabled = false`, `if m.Enabled {
+		m.Enabled = false
+		`+action+`
+		reg.Handle("GET", "/things/{id}", "demo:thing:read", m.handleGetThing)`); err != nil {
+		return err
+	}
+	if err := edit(root, "modules/demo/demo.go", func(s string) string {
+		if strings.HasSuffix(variant, "panic-recovery") {
+			s = strings.Replace(s, `m.Enabled = false
+		`+action+`
+		reg.Handle("GET", "/things/{id}", "demo:thing:read", m.handleGetThing)`, `reg.Handle("GET", "/things/{id}", "demo:thing:read", m.handleGetThing)
+		m.Enabled = false
+		`+action, 1)
+		}
+		if variant == "unnamed-receiver" {
+			s = strings.ReplaceAll(s, "m.Enabled", "Enabled")
+			s = strings.Replace(s, "func (m *Module) APIRoutes", "func (*Module) APIRoutes", 1)
+			s = strings.ReplaceAll(s, "m.handle", "handle")
+			s = strings.ReplaceAll(s, "func (m *Module) handle", "func handle")
+		}
+		return s + "\nvar Wake, Done chan struct{}\nvar Enabled bool\n"
+	}); err != nil {
+		return err
+	}
+	// Count only the affected route, atomically: the close witness can register
+	// both sites concurrently. Channel handshakes publish Enabled before re-entry.
+	return edit(root, "helper/helper.go", func(s string) string {
+		s = strings.Replace(s, "package helper", "package helper\n\nimport \"sync/atomic\"", 1)
+		s = strings.Replace(s, "Count int", "Count atomic.Int64", 1)
+		s = strings.Replace(s, "r.Count++", "r.Count.Add(1)", 1)
+		if strings.HasSuffix(variant, "panic-recovery") {
+			s += "\nfunc RecoverRoute(m Router, reg RouteRegistrar) { defer func() { if recover() != nil { m.APIRoutes(reg) } }(); m.APIRoutes(reg) }\n"
+		}
+		return s + "\nfunc Coordinate(m Router, reg RouteRegistrar, wake, done chan struct{}) { " + coordinate + " }\n"
+	})
+}
+
+// writeCrossPackageFixture is compilable: the helper has no APIRoutes method and
+// the module has no APIRoutes selector. The interface call crosses the package
+// boundary the package-local re-entry fence cannot see. Runtime probes can use
+// the same source as the refusal checks, rather than a similar synthetic sketch.
+func writeCrossPackageFixture(root, variant string) error {
+	action, extra := "", ""
+	switch variant {
+	case "direct":
+		action = "helper.Again(m, reg)"
+	case "alias":
+		action = "alias := m; helper.Again(alias, reg)"
+	case "composite":
+		action = "wrapped := struct{ module helper.Router }{m}; helper.Again(wrapped.module, reg)"
+	case "local-method":
+		action = "m.again(reg)"
+		extra = "func (m *Module) again(reg RouteRegistrar) { helper.Again(m, reg) }\n"
+	case "method-value":
+		action = "helper.Invoke(m.again, reg)"
+		extra = "func (m *Module) again(reg RouteRegistrar) { helper.Again(m, reg) }\n"
+	case "callback-field":
+		action = "m.Callback(reg)"
+	case "callback-alias":
+		action = "callback := m.Callback; callback(reg)"
+	case "callback-zero-alias":
+		action = "callback := m.Callback; callback()"
+	case "callback-zero-parens":
+		action = "callback := m.Callback; (callback)()"
+	case "callback-zero-var":
+		action = "var callback = m.Callback; callback()"
+	case "callback-zero-chain":
+		action = "first := m.Callback; callback := first; callback()"
+	case "callback-zero-index":
+		action = "callbacks := []func(){m.Callback}; callbacks[0]()"
+	case "callback-zero-assertion":
+		action = "var callback any = m.Callback; callback.(func())()"
+	case "callback-zero-aggregate":
+		action = "callbacks := struct{ invoke func() }{m.Callback}; callbacks.invoke()"
+	case "callback-zero-container-alias":
+		action = "callbacks := m.Callbacks; callbacks.Invoke()"
+	case "callback-zero-global":
+		action = "Callback()"
+		extra = "var Callback func()\n"
+	case "callback-zero-global-index":
+		action = "Callbacks[0]()"
+		extra = "var Callbacks []func()\n"
+	case "callback-zero-external-alias":
+		action = "callback := helper.Callback; callback()"
+	case "callback-zero-external":
+		action = "helper.Callback()"
+	case "callback-zero-nested":
+		action = `reg.Handle("GET", "/things", "demo:thing:read", helper.HandlerCallback())`
+	case "callback-zero-nested-alias":
+		action = `factory := m.Factory; reg.Handle("GET", "/things", "demo:thing:read", factory())`
+	case "callback-zero-global-file":
+		action = "Callback()"
+	case "callback-zero-external-container":
+		action = "helper.CallbackContainer.Invoke()"
+	case "callback-zero-global-container":
+		action = "Container.Invoke()"
+		extra = "var Container struct { Invoke func() }\n"
+	case "callback-zero-global-container-alias":
+		action = "callbacks := Container; callbacks.Invoke()"
+		extra = "var Container struct { Invoke func() }\n"
+	case "callback-zero-asserted-container":
+		action = "callbacks := m.Object.(interface{ Invoke() }); callbacks.Invoke()"
+	case "callback-zero-local-wrapper":
+		action = "invokeBound()"
+		extra = "func invokeBound() { helper.Callback() }\n"
+	case "callback-zero-dot":
+		action = "Callback()"
+	case "callback-zero-declared-getter":
+		action = "authority, _ := m.Object.(AssignmentAuthority); authority.Ref()"
+	case "callback-zero-metadata-declared-getter":
+		action = `authority, _ := m.Object.(AssignmentAuthority); reg.HandleEntity("GET", "/things", "demo:thing:read", authority.Ref(), m.handleListThings)`
+	case "callback-zero-metadata-alias":
+		action = `callbacks := helper.MetadataContainer; reg.HandleEntity("GET", "/things", "demo:thing:read", callbacks.Ref(), m.handleListThings)`
+	case "callback-zero-metadata-composite":
+		action = `callbacks := struct{ Ref func() int }{helper.MetadataContainer.Ref}; reg.HandleEntity("GET", "/things", "demo:thing:read", callbacks.Ref(), m.handleListThings)`
+	case "callback-zero-metadata-asserted-struct":
+		action = `callbacks := m.Object.(MetadataHolder); reg.HandleEntity("GET", "/things", "demo:thing:read", callbacks.Ref(), m.handleListThings)`
+		extra = "type MetadataHolder struct { Ref func() int }\n"
+	case "callback-zero-metadata-shadow-value":
+		action = `callbacks := m.Object.(AssignmentAuthority); _ = callbacks; { callbacks := helper.MetadataContainer; reg.HandleEntity("GET", "/things", "demo:thing:read", callbacks.Ref(), m.handleListThings) }`
+	case "callback-zero-metadata-shadow-type":
+		action = `type AssignmentAuthority struct { Ref func() int }; callbacks := any(AssignmentAuthority{helper.MetadataContainer.Ref}).(AssignmentAuthority); reg.HandleEntity("GET", "/things", "demo:thing:read", callbacks.Ref(), m.handleListThings)`
+	case "callback-registrar-alias":
+		action = "callback := m.Callback; alias := reg; callback(alias)"
+	case "value-method-alias":
+		action = "callback := m.again; callback(reg)"
+		extra = "func (m Module) again(reg RouteRegistrar) { helper.Again(&m, reg) }\n"
+	case "promoted-method-alias":
+		action = "callback := m.again; callback(reg)"
+		extra = "type Embedded struct { module *Module }; func (e Embedded) again(reg RouteRegistrar) { helper.Again(e.module, reg) }; func (m *Module) Bind() { m.Embedded.module = m }\n"
+	case "defer":
+		action = "defer helper.Again(m, reg)"
+	case "closure":
+		action = "func() { helper.Again(m, reg) }()"
+	case "handler-factory":
+		action = `reg.Handle("GET", "/things", "demo:thing:read", helper.Reenter(m, reg))`
+	case "field-condition":
+	default:
+		return fmt.Errorf("unknown cross-package fixture %q", variant)
+	}
+	path := filepath.Join(root, "modules/demo/demo.go")
+	if err := os.WriteFile(path, []byte(fixtureModule), 0o644); err != nil {
+		return err
+	}
+	if err := swap(root, "modules/demo/demo.go", "package demo", "package demo\n\nimport \"fixture/helper\"\n\ntype RouteRegistrar = helper.RouteRegistrar"); err != nil {
+		return err
+	}
+	if variant == "callback-zero-dot" {
+		if err := swap(root, "modules/demo/demo.go", `import "fixture/helper"`, `import . "fixture/helper"`); err != nil {
+			return err
+		}
+		if err := swap(root, "modules/demo/demo.go", "type RouteRegistrar = helper.RouteRegistrar", ""); err != nil {
+			return err
+		}
+	}
+	fields := "Enabled bool; Callback func(RouteRegistrar)"
+	if strings.HasPrefix(variant, "callback-zero-") {
+		fields = "Enabled bool; Callback func(); Callbacks struct { Invoke func() }; Factory func() func(int, int, int); Object any"
+	}
+	if variant == "promoted-method-alias" {
+		fields += "; Embedded"
+	}
+	if err := swap(root, "modules/demo/demo.go", "type Module struct{}", "type Module struct { "+fields+" }"); err != nil {
+		return err
+	}
+	if strings.Contains(variant, "-metadata-") {
+		if err := swap(root, "modules/demo/demo.go", "\treg.Handle(\"GET\", \"/things\", \"demo:thing:read\", m.handleListThings)\n", ""); err != nil {
+			return err
+		}
+	}
+	if variant == "handler-factory" || variant == "callback-zero-nested" || variant == "callback-zero-nested-alias" {
+		if err := swap(root, "modules/demo/demo.go", "\treg.Handle(\"GET\", \"/things\", \"demo:thing:read\", m.handleListThings)\n", ""); err != nil {
+			return err
+		}
+		if err := edit(root, catalogRel, func(s string) string {
+			return s + "GET\t/v1/m/demo/things\tLists the demo things recorded in the tenant scope, optionally filtered by the kind query parameter.\n"
+		}); err != nil {
+			return err
+		}
+	}
+	if err := swap(root, "modules/demo/demo.go", `	reg.Handle("GET", "/things/{id}", "demo:thing:read", m.handleGetThing)`, `	if m.Enabled {
+		reg.Handle("GET", "/things/{id}", "demo:thing:read", m.handleGetThing)
+		m.Enabled = false
+		`+action+`
+	} else {
+		reg.Handle("GET", "/things/{id}", "demo:thing:read", m.handleGetThing)
+	}`); err != nil {
+		return err
+	}
+	if err := edit(root, "modules/demo/demo.go", func(s string) string { return s + "\n" + extra }); err != nil {
+		return err
+	}
+	files := map[string]string{
+		"go.mod": "module fixture\n\ngo 1.26.8\n",
+		"helper/helper.go": `package helper
+
+type RouteRegistrar interface { Handle(string, string, string, func(int, int, int)); HandleEntity(string, string, string, int, func(int, int, int)) }
+type Router interface { APIRoutes(RouteRegistrar) }
+var Callback func()
+var HandlerCallback func() func(int, int, int)
+var CallbackContainer struct { Invoke func() }
+type MetadataHolder struct { Ref func() int }
+var MetadataContainer MetadataHolder
+type GetterCallback struct { Callback func() }
+func (g *GetterCallback) Ref() int { if g.Callback != nil { g.Callback() }; return 1 }
+func (*GetterCallback) Scoped() bool { return true }
+type Callable struct { Callback func() }
+func (c *Callable) Invoke() { c.Callback() }
+func Again(m Router, reg RouteRegistrar) { m.APIRoutes(reg) }
+func Invoke(f func(RouteRegistrar), reg RouteRegistrar) { f(reg) }
+func Reenter(m Router, reg RouteRegistrar) func(int, int, int) {
+	m.APIRoutes(reg)
+	return func(int, int, int) {}
+}
+type Recorder struct { Count int }
+func (r *Recorder) HandleEntity(method, path, perm string, ref int, handler func(int, int, int)) { r.Handle(method, path, perm, handler) }
+func (r *Recorder) Handle(method, path, perm string, handler func(int, int, int)) {
+	if method == "GET" && path == "/things/{id}" { r.Count++ }
+}
+`,
+	}
+	if variant == "callback-zero-global-file" {
+		files["modules/demo/callback.go"] = "package demo\n\nvar Callback func()\n"
+	}
+	for rel, body := range files {
+		path := filepath.Join(root, rel)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			return err
+		}
+		if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // addRoute registers a fourth route with a publishable doc comment, WITHOUT touching

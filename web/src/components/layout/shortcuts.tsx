@@ -29,14 +29,17 @@ import {
   NAV_SEQUENCE_TIMEOUT_MS,
 } from '@/lib/keybindings/table'
 import { useCommandStore } from '@/stores/command'
-import { usePreferencesStore } from '@/stores/preferences'
+import { foldOrOverlay } from './sidebar-mode'
 import { useNewSession } from './new-session'
 import { COMPOSER_INPUT_ID } from './work-composer-id'
 
 /** The g+letter navigation map, declared in the keybindings table: letter →
  * registry id. A binding only fires (and only shows in the help overlay) when the
- * operator may open that view — the same visibility rule as the sidebar. */
-export const NAV_SHORTCUTS = NAV_SEQUENCES
+ * operator may open that view — the same visibility rule as the sidebar. The table
+ * keeps every edition's bindings; this edition exposes only registered views. */
+export const NAV_SHORTCUTS = NAV_SEQUENCES.filter(({ featureId }) =>
+  FEATURE_VIEWS.some((view) => view.id === featureId),
+)
 
 /** Commands whose names the shell's own strings carry (nav.json), not common.json. */
 const SHELL_COMMANDS: ReadonlySet<string> = new Set(['session.new'])
@@ -76,10 +79,8 @@ function chordTokens(keys: string): string[] {
 export function GlobalShortcuts() {
   const { t } = useTranslation(['common', 'nav'])
   const navigate = useNavigate()
-  // The SAME projection the sidebar, palette and directories use. G1-B adds no
-  // administration shortcut: NAV_SHORTCUTS is unchanged, and this only stops the existing
-  // entries from resolving through a predicate the others no longer share.
-  const { navigable } = useViewAccess()
+  // The same permission projection the sidebar, palette and directories use.
+  const { listed } = useViewAccess()
   const [helpOpen, setHelpOpen] = useState(false)
   const armedUntil = useRef(0)
   const { valid, problems } = auditKeybindings(KEYBINDINGS)
@@ -95,7 +96,7 @@ export function GlobalShortcuts() {
 
   const visible = NAV_SHORTCUTS.filter(({ featureId }) => {
     const view = FEATURE_VIEWS.find((v) => v.id === featureId)
-    return !!view && !view.hideInNav && navigable(view)
+    return !!view && !view.hideInNav && listed(view)
   })
 
   useEffect(() => {
@@ -123,7 +124,7 @@ export function GlobalShortcuts() {
       // typed by accident into a session name.
       if (chordCommand === 'nav.toggleRail') {
         e.preventDefault()
-        usePreferencesStore.getState().toggleSidebar()
+        foldOrOverlay(window.location.pathname)
         return
       }
       if (typing) return

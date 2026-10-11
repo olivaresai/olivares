@@ -8,15 +8,17 @@ description: >-
 draft: false
 ---
 
+Следующий выпуск — <!-- release -->`0.1`<!-- /release -->; его релиз на GitHub ещё не опубликован. Команды ниже описывают планируемые артефакты. До публикации собирайте из исходников, а после публикации проверяйте каждый артефакт перед использованием. Наблюдаемый статус записан в <!-- release -->`docs/releases/0.1-install-surfaces.json`<!-- /release -->.
+
 :::note[Опубликованные имена пакетов]
-Выпуск 26.10.1 на GitHub публикует артефакты `.deb`, `.rpm` и `.apk` для `amd64` и
+Выпуск Olivares <!-- release -->0.1<!-- /release --> на GitHub публикует артефакты `.deb`, `.rpm` и `.apk` для `amd64` и
 `arm64`, вместе с `checksums.txt`, `checksums.txt.sig` и `checksums.txt.pem`. Команды
 ниже используют буквальные имена `amd64` этого выпуска; на 64-битном ARM-узле замените
 `amd64` на `arm64`. Устанавливайте из этих проверенных артефактов выпуска.
 Производители метаданных репозитория в дереве исходников не являются инструкциями по
 установке для этого руководства.
 
-**Квалификация DIST-24-05.** CI квалифицирует проверенный **shell-установщик** и его
+**Квалификация установщика.** CI квалифицирует проверенный **shell-установщик** и его
 контракт службы/doctor, а не `dpkg`, `rpm` или `apk`: матрица dispatch/pull request
 запускает его против опубликованного выпуска в контейнерных userland Debian
 stable, Ubuntu 24.04 LTS, Fedora, openSUSE Leap и Alpine и на размещённом раннере macOS
@@ -27,7 +29,7 @@ stable, Ubuntu 24.04 LTS, Fedora, openSUSE Leap и Alpine и на размещё
 выполнен локально в одноразовом госте Alpine; это свидетельство для этого дерева, а не
 подписанная, размещённая или preproduction-квалификация, которая остаётся невыполненной.
 
-**Предлагаемые репозитории DIST-24-06 (не действующая поверхность установки).**
+**Предлагаемые репозитории пакетов (не действующая поверхность установки).**
 Исходное дерево содержит детерминированные производители репозиториев apt, rpm-md и APK,
 проверяльщик подписанных индексов, квалификацию чистого клиента и поэтапный рабочий
 процесс публикации, чей dispatch остаётся инертным, пока его не одобрит рецензент.
@@ -52,8 +54,10 @@ Init Alpine по умолчанию — **OpenRC**, не systemd. Для кон�
 каталог и запустите проверяющий **из этого каталога**:
 
 ```bash
+# The verifier is in a source checkout of the release tag, not a release asset; running it
+# trusts the checkout. Without one, INSTALL.md shows the cosign + sha256sum commands.
 # keyless / Sigstore (default; reaches Rekor over the network)
-./verify-release.sh
+/path/to/olivares/scripts/verify-release.sh
 ```
 
 Релизы подписываются без ключа и не публикуют публичный ключ cosign, поэтому для пакетов,
@@ -77,16 +81,18 @@ Init Alpine по умолчанию — **OpenRC**, не systemd. Для кон�
 угадывали по наличию `systemctl` на узле. Linux-архивы несут те же адаптеры службы:
 `scripts/install-service.sh` и `packaging/service/`.
 
+<!-- release -->
 ```bash
 # Debian / Ubuntu
-sudo dpkg -i olivares_26.10.1_linux_amd64.deb
+sudo dpkg -i olivares_0.1_linux_amd64.deb
 
 # RHEL / Fedora / SUSE
-sudo rpm -Uvh olivares_26.10.1_linux_amd64.rpm
+sudo rpm -Uvh olivares_0.1_linux_amd64.rpm
 
 # Alpine
-sudo apk add --allow-untrusted olivares_26.10.1_linux_amd64.apk
+sudo apk add --allow-untrusted olivares_0.1_linux_amd64.apk
 ```
+<!-- /release -->
 
 Установка **создаёт системного пользователя и группу `olivares`** (оболочка
 `/usr/sbin/nologin`, домашний каталог `/var/lib/olivares`), создаёт `/var/lib/olivares`
@@ -130,13 +136,33 @@ sudo -u olivares olivares serve --data-dir=/var/lib/olivares \
 Упакованный systemd-юнит запускает движок от непривилегированного пользователя
 `olivares` с пустым bounding-набором capabilities — он не держит ни ambient, ни
 bounding capabilities — и `NoNewPrivileges=true`, так что ничто из запущенного им не
-может их получить. Сверху он несёт `ProtectSystem=strict` (файловая система только для
-чтения, кроме `ReadWritePaths=/var/lib/olivares`), `ProtectHome`, `PrivateTmp`,
-`PrivateDevices`, четыре директивы `ProtectKernel*`/`ProtectClock`,
-`RestrictNamespaces`, `RestrictSUIDSGID`, `RestrictRealtime`, `LockPersonality`,
-`MemoryDenyWriteExecute`, `SystemCallArchitectures=native`, фильтр системных вызовов
+может их получить. Сверху он несёт `ProtectSystem=full` (`/usr`, `/boot`, `/efi` и `/etc`
+только для чтения), `PrivateDevices=true`, `ProtectClock=true`, `ProtectKernelTunables=true`,
+`ProtectKernelModules=true`, `ProtectKernelLogs=true`, `ProtectControlGroups=true`,
+`RestrictNamespaces=user net` (сессия получает собственные пространства имён пользователя и
+сети; все прочие типы запрещены), `RestrictSUIDSGID=true`, `RestrictRealtime=true`,
+`LockPersonality=true`, `SystemCallArchitectures=native`, фильтр системных вызовов
 `@system-service`, дополнительно отбрасывающий `@privileged` и `@resources`, и
 `UMask=0027`.
+
+Юнит **не** скрывает домашние и временные каталоги и разрешает исполняемую память: он
+задаёт `ProtectHome=false`, `PrivateTmp=false` и `MemoryDenyWriteExecute=false`. Движок
+достаёт всё, что обычные права на файлы разрешают учётной записи `olivares`, включая
+`/home`, `/tmp` и `/var/tmp`, чтобы выбранные для сессий папки оставались доступны.
+Изоляция вместо этого действует на уровне сессии: перед запуском каждого агентного
+инструмента или stdio-сервера MCP движок применяет политику Landlock, которая разрешает
+ему писать в папку сессии, домашний каталог инструмента и свой временный каталог и никогда
+не даёт добраться до каталога данных движка, `/etc/olivares` и собственных учётных данных
+учётной записи движка. Средам выполнения агентов и MCP на Node/V8 нужна исполняемая
+JIT-память, поэтому `MemoryDenyWriteExecute=false`. На ядре без Landlock движок отказывается
+запускать сессии; `olivares doctor` называет причину.
+
+26.10.0<!-- release-fixed --> поставлялась с более строгим юнитом: вся файловая система только для чтения, кроме
+каталога данных, домашние каталоги скрыты, приватный `/tmp` и никакой записываемой
+исполняемой памяти. 26.10.1<!-- release-fixed --> ослабила его до значений выше. Любую из этих настроек можно
+вернуть в drop-in (`systemctl edit olivares`). Тогда папки сессий в домашних каталогах или
+в `/tmp` и инструменты на основе JIT перестанут работать, а при файловой системе только для
+чтения каждой папке сессии вне каталога данных нужна своя строка `ReadWritePaths=`.
 
 На Alpine по умолчанию эти директивы systemd не применяются к **ранее опубликованному**
 `.apk`, потому что systemd-юнит этой полезной нагрузки не запущен. Пакеты
@@ -186,8 +212,8 @@ check_scratch_mount() {
 check_scratch_mount /var/lib/olivares
 ```
 
-Если там `noexec`, направьте `TMPDIR` на каталог, записываемый при
-`ProtectSystem=strict` **и** лежащий на разделе, допускающем исполнение:
+Если там `noexec`, направьте `TMPDIR` на каталог, доступный на запись пользователю
+`olivares` **и** лежащий на разделе, допускающем исполнение:
 
 ```bash
 sudo install -d -o olivares -g olivares -m 0750 /run/olivares-exec-tmp
@@ -302,9 +328,7 @@ sudo olivares upgrade --yes      # do it
 
 - **`--endpoint`** — брать обновления из репозитория GitHub, которым вы управляете,
   а не из значения по умолчанию. Это выход для зеркала или форка.
-- **`--bundle`** — установить из локального каталога бандла или `.tar.gz` **без сети
-  вообще**. Собрать этот бандл и перенести его описано в
-  [Установка в изолированной среде](/ru/how-to/air-gap-install/).
+- **`--bundle`** — Для установки без сети требуется Enterprise. Community проверяет комплект с `--bundle --check`, не читая лицензию и не устанавливая его.
 - **`--install-timer`** — выдать **необязательный systemd**-таймер и службу, которые
   проверяют обновления по расписанию. Ничто не ставит это за вас; см.
   [чего пакет не делает](#8-чего-пакет-не-делает). Это генератор systemd.

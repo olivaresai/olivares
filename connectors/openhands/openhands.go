@@ -7,12 +7,14 @@ import (
 	"context"
 	"errors"
 	"io"
+	"net/url"
 	"os"
 	"strings"
 	"time"
 
 	"github.com/BurntSushi/toml"
 
+	"github.com/olivaresai/olivares/connectors/internal/redact"
 	"github.com/olivaresai/olivares/sdk"
 	"github.com/olivaresai/olivares/sdk/model"
 )
@@ -87,7 +89,17 @@ func (s *Source) Gather(ctx context.Context, sink sdk.Sink) error {
 			return err
 		}
 	}
+	mcpServers, _ := cfg.getSubMap("mcp")["servers"].(map[string]any)
 	for _, e := range s.permittedEdges(cfg) {
+		server, _ := mcpServers[e.ToolRef].(map[string]any)
+		if rawURL, _ := server["url"].(string); e.ResourceKind == resourceMCPServer && rawURL != "" {
+			if u, err := url.Parse(rawURL); err != nil || u.Host == "" {
+				// Keep the server identity without publishing an invalid credential URL.
+				e.ResourceRef = e.ToolRef
+			} else {
+				e.ResourceRef = redact.SanitizeURL(rawURL)
+			}
+		}
 		if err := sink.Emit(ctx, e); err != nil {
 			return err
 		}

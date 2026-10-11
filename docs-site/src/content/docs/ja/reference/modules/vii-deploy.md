@@ -40,6 +40,49 @@ description: >-
 Crossplane）に加え、短命・操作ごと・attested な認証情報ソースが配線されるのは**オペレーター
 の構成時のみ**である。それが無ければ、本モジュールが暗黙のうちに作用することは決してない。
 
+## エグゼキューターを接続する
+
+管理者がエグゼキューターを接続するまで、Deploy はデプロイ定義を保存するだけで、インフラストラクチャは
+変更しません。接続する手順は次のとおりです。
+
+1. デプロイ先の各ランタイム（`docker`、`k8s`、`nomad`、`tofu`、`terraform`、`gitops`、
+   `crossplane`）のブロックと `credential` ブロックを含む JSON ファイルを作成します。接続される
+   のはファイルに書いたランタイムだけです。同じホスト上の Docker の例:
+
+   ```json
+   {
+     "docker": { "socket_path": "/var/run/docker.sock" },
+     "credential": {
+       "kind": "file",
+       "path_template": "/run/olivares/deploy/{env}-{mode}.token",
+       "ttl_seconds": 900
+     }
+   }
+   ```
+
+   Olivares は操作ごとに `path_template` から短期トークンを読み取ります。`{env}` は定義の環境、
+   `{mode}` は `read`（プラン、検証）または `write`（適用、廃止）です。これらのファイルは、
+   Vault Agent や SPIFFE ヘルパーなど、すでに運用しているツールが、ディレクトリを作成したうえで書き込み、
+   ローテーションします。
+   トークンがなければ、すべての操作が拒否されます。Docker の場合は、サービスユーザー `olivares` が
+   ソケットを開ける必要もあります。`docker` グループに加えると、そのホストへの root 相当の
+   アクセス権を与えることになります。
+2. Olivares にファイルの場所を指定します。deb または rpm パッケージでは、
+   `/etc/olivares/olivares.env` に次の行を追加します。
+
+   ```sh
+   OLIVARES_DEPLOY_EXECUTOR_CONFIG=/etc/olivares/deploy-executor.json
+   ```
+
+   JSON ファイルはユーザー `olivares` が読める必要があります（例: 所有者 `root:olivares`、
+   モード `0640`）。
+
+3. `sudo systemctl restart olivares` で Olivares を再起動します。ファイルを読めない、または
+   内容が無効な場合、Olivares は起動せず、ログに理由が出力されます。
+
+接続後、Deploy ページは **デプロイを宣言** を主なアクションとして表示し、プランと適用が
+ランタイムに届きます。適用と廃止はいずれも、引き続き承認を待ちます。
+
 ## エンティティと宣言される契約
 
 本モジュールは 4 つの名前空間付きエンティティと、適用済みスナップショットとしてのコア

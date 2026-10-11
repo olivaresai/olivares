@@ -19,76 +19,12 @@ import (
 	"github.com/olivaresai/olivares/sdk"
 )
 
-// connectoronboard.go is the composition-root half of the console connector
-// ONBOARDING (the api.ConnectorOnboarding implementation). It lets an operator add,
-// configure, test and remove a connector AND its credentials from the embedded
-// console — sealed and persisted in the database — instead of editing the boot
-// config file by hand. It REUSES the two surfaces the reconciler already owns rather
-// than introducing a third secret path:
-//
-//   - the secret store (sr.secrets): an inline credential the operator types is
-//     SEALED at rest and the source row keeps only a `store:<name>` REFERENCE — never
-//     the literal. This preserves invariant that the durable roster is
-//     non-secret-bearing (checkInlineSecrets enforces it on the write).
-//   - the live roster (sr.PutSource / sr.DeleteSource): the reference-only source
-//     is persisted and applied to the running engine WITHOUT a restart.
-//
-// Only OBSERVATION-source kinds are onboardable here — exactly what the live roster
-// can wire (buildInProcSource + pluginBinaryForKind). Identity / roster providers and
-// knowledge document sources are read once at boot (a restart domain — see
-// requiresRestartDomains), so they are NOT in the catalog: an honest absence, never a
-// pretend-live-reconfigurable connector. Enterprise-only kinds (e.g. CyberArk Conjur)
-// are not enumerated in the console catalog yet either — under -tags enterprise they
-// are still wired by file/CLI; surfacing them here is a follow-on.
+// Connector onboarding uses the reconciler's live roster and sealed secret store.
+// Stored definitions contain credential references, never inline secret values.
+// The catalog offers observation sources; roster providers and document sources
+// have separate boot lifecycles. Edition-specific kinds retain their file/CLI seam.
 
 var _ api.ConnectorOnboarding = (*sourceReconciler)(nil)
-
-// inProcConnectorKinds is the maintained list of first-party IN-PROCESS
-// observation-source kinds the console offers, in the same grouping as the
-// buildInProcSource switch (the source of truth). Each kind here MUST construct via
-// buildInProcSource — TestConnectorCatalogKinds asserts it, so a renamed/removed kind
-// fails the build's test rather than silently 404ing in the console. Adding a new
-// in-process source kind to buildInProcSource without adding it here only means it is
-// not yet offered in the console (a graceful omission, never a wrong form). Aliases
-// (okta/entra→idp, pg-audit→pgaudit, …) are represented by their canonical kind.
-var inProcConnectorKinds = []string{
-	// model-provider & agent governance
-	"vault", "claude-api", "claude-config", "claude-managed-agents", "claude-projects", "codex", "cursor",
-	"gemini-cli", "openclaw", "hermes", "fal", "vertex", "azure-openai", "mistral", "xai", "claude-compliance",
-	"claude-apps-gateway", "managed-settings", "codex-managed-config", "agents-md", "mcpb", "cowork-analytics",
-	"deepseek", "glm", "openrouter", "cohere", "claude-batch", "claude-routines",
-	// first-party base providers — built long ago, never composed, so the console
-	// could not offer them: OpenAI platform, Gemini API, and local/self-hosted inference.
-	"openai", "gemini", "local",
-	// local agent-surface config observers
-	// grok = Grok Build (xAI) leido por su configuracion LOCAL. Va AQUI y no con los
-	// proveedores: `xai` lee la API de modelos, este lee el AGENTE (connectors/grok/grok.go:12-21).
-	"openhands", "goose", "cline", "opencode", "grok",
-	// identity/auth telemetry observers
-	"kerberos", "aaa", "ssf", "edugain", "openidfed",
-	// data-platform R/RW observers
-	"snowflake-audit", "databricks-uc", "bigquery-audit", "mssql-audit", "oracle-audit",
-	"mongo-audit", "redshift-audit", "gcs-audit", "azure-blob-audit", "iceberg-catalog",
-	"openlineage", "delta-sharing",
-	// cloud management-plane + edge-estate observers (S165)
-	"gcp-audit", "azure-activity", "cloudflare", "bedrock-kb",
-	// secrets/PKI/KMS observers
-	"aws-kms", "gcp-kms", "azure-key-vault", "external-secrets", "sops", "kmip",
-	// network/mesh/gateway L7 observers + AI-gateway config posture
-	"istio-telemetry", "inference-gateway", "egress-proxy", "ai-gateway", "kong-audit",
-	"envoy-ai-gateway", "kong-agent-gateway", "litellm",
-	// IaC/GitOps observers
-	"argocd", "flux", "crossplane",
-	// access-map differential connectors + federation edge/finding scans
-	"vault-audit", "onepassword", "entra-agent", "agentcore", "oasf",
-	"ldap", "idp", "infisical", "pgaudit", "s3cloudtrail", "ebpf", "runtime", "mcp",
-	// agent-platform governance + code-repo sources
-	"agent365", "google-agent", "google-adk", "foundry-agents", "github", "gitlab",
-	// agent-interop protocol observers (A2A Agent Cards + task-lifecycle edges)
-	"a2a",
-	// tactical/DDIL
-	"tak",
-}
 
 // ListConnectors returns the connector kinds this build can wire as live observation
 // sources, each annotated for descriptor-driven form rendering. In-process kinds
@@ -96,16 +32,9 @@ var inProcConnectorKinds = []string{
 // out-of-process plugin kinds carry no host-known fields (the host cannot introspect
 // a subprocess without launching it) — honest, never fabricated.
 func (sr *sourceReconciler) ListConnectors(_ context.Context) ([]api.ConnectorInfo, error) {
-	out := make([]api.ConnectorInfo, 0, len(inProcConnectorKinds)+len(pluginBinaryForKind))
-	for _, kind := range inProcConnectorKinds {
-		conn, ok := buildInProcSource(kind)
-		if !ok {
-			// Defensive: a kind that no longer builds is omitted rather than crashing
-			// the catalog. The drift test keeps this from happening silently.
-			sr.log.Warn("connector onboarding: catalog kind no longer builds; omitted", "kind", kind)
-			continue
-		}
-		d := conn.Descriptor()
+	out := make([]api.ConnectorInfo, 0, len(inProcSourceFactories)+len(pluginBinaryForKind))
+	for kind, constructor := range inProcSourceFactories {
+		d := constructor().Descriptor()
 		out = append(out, api.ConnectorInfo{
 			Kind: kind, Title: d.Title, Description: d.Description,
 			Transport: "in_process", FieldsKnown: true,
@@ -125,41 +54,13 @@ func (sr *sourceReconciler) ListConnectors(_ context.Context) ([]api.ConnectorIn
 	return out, nil
 }
 
-// hostingFromFields derives api.ConnectorInfo.Hosting from the connector's OWN
-// declared endpoint defaults. It is deliberately NOT a hand-maintained list of which
-// kinds are self-hosted: such a list is an opinion that drifts silently the moment a
-// connector changes, and there are 100+ kinds to be wrong about.
+// hostingFromFields reads absolute HTTP(S) URLs from declared field defaults.
+// An operator-run endpoint wins regardless of field order; a routable endpoint is
+// vendor-hosted. Missing or non-URL defaults leave hosting unknown.
 //
-// The signal used is the one the connector already publishes: the Default of a URL
-// setting is the author's statement of where the thing normally lives. A default on
-// the LOOPBACK host says "you run this"; a routable vendor URL says "they run it".
-//
-// CALIBRATED against the live catalog (2026-08-09, all 104 kinds served by this
-// build), which is what makes it a measurement and not a guess:
-//   - operator-run ⇒ 3 kinds: local (http://localhost:11434), vault and vault-audit
-//     (https://127.0.0.1:8200). All three are software the operator runs.
-//   - routable ⇒ 32 kinds, all but one a vendor cloud API (api.openai.com,
-//     generativelanguage.googleapis.com, api.anthropic.com, graph.microsoft.com…).
-//   - neither ⇒ 69 kinds that declare no endpoint at all (gemini-cli, litellm,
-//     openhands… — local CONFIG observers). They get unknown, which is honest: no
-//     endpoint was declared, so nothing was measured.
-//
-// ⚠ KNOWN COUNTEREXAMPLE, and it is recorded rather than papered over: `mcp` lands in
-// vendor_hosted and its observed subject need not be a vendor at all. Its declared
-// defaults are three AUXILIARY public feeds (the MCP registry, a deprecation feed and
-// the Docker catalog), each opt-in; the servers it actually introspects come from
-// config and can be local stdio commands. So this answers "where do this connector's
-// DECLARED default endpoints point", which for 103 of 104 kinds is the same question
-// as "where does the observed system run" — and for `mcp` is not. Distinguishing an
-// auxiliary feed from the primary subject needs semantic descriptor metadata the SDK
-// does not carry today; inventing a field-name heuristic here would trade a known,
-// bounded wrong answer for an unbounded one. TestHostingKnownCounterexample pins it so
-// the limitation cannot quietly become a claim of correctness.
-//
-// A field is only consulted when its Default PARSES as an absolute http(s) URL, so a
-// free-text description can never move a kind between answers. A PLACEHOLDER that does
-// parse (https://vault.example.com) still counts as routable — the rule reads syntax,
-// not ownership, and cannot tell an example host from a real one.
+// KNOWN COUNTEREXAMPLE: MCP's defaults name optional public feeds, while the observed
+// servers can be local stdio commands. This describes its declared endpoints, not
+// the observed subject. Placeholder URLs also count by syntax, not ownership.
 func hostingFromFields(fields []sdk.ConfigField) string {
 	answer := api.HostingUnknown
 	for _, f := range fields {
@@ -182,17 +83,7 @@ func hostingFromFields(fields []sdk.ConfigField) string {
 	return answer
 }
 
-// isOperatorRunHost reports whether a URL hostname names a machine the OPERATOR runs:
-// this host, or one on their own network. No vendor's cloud API lives at any of these
-// addresses, so a connector defaulting to one is shipping the expectation that you run
-// the thing it observes.
-//
-// It is deliberately wider than loopback, and the name says so. An earlier version was
-// called isLoopbackHost and answered only for 127.0.0.0/8, ::1 and the literal name,
-// which had two consequences the contrast caught: a default of http://10.0.0.5 was
-// classified as a VENDOR cloud — nobody's vendor is at an RFC1918 address — and
-// 0.0.0.0 was being called "loopback", which it is not (it is the unspecified address;
-// it belongs here for the same reason, not for that one).
+// isOperatorRunHost recognizes this machine and non-public operator networks.
 func isOperatorRunHost(host string) bool {
 	if strings.EqualFold(host, "localhost") {
 		return true
@@ -351,10 +242,8 @@ func (sr *sourceReconciler) resolveTestConfig(ctx context.Context, desc sdk.Desc
 	return sdk.Config{Settings: out}, nil
 }
 
-// PutConnector seals each inline secret into the store (storing only a
-// reference), then persists the reference-only source and applies it live (the
-// PutSource path, which also auto-triggers the reconcile of THIS source). The
-// returned SourceApplyResult reports persisted-vs-applied honestly.
+// PutConnector seals inline secrets, persists only references and applies the source
+// live. SourceApplyResult distinguishes persistence from successful application.
 func (sr *sourceReconciler) PutConnector(ctx context.Context, actor auth.Principal, in api.ConnectorOnboardInput) (api.SourceApplyResult, error) {
 	if err := requireKnownOnboardKind(in.Kind); err != nil {
 		return api.SourceApplyResult{}, err
@@ -371,10 +260,17 @@ func (sr *sourceReconciler) PutConnector(ctx context.Context, actor auth.Princip
 	if err != nil {
 		return api.SourceApplyResult{}, err
 	}
-	return sr.PutSource(ctx, actor, api.SourceRosterInput{
+	credentialsChanged := false
+	for _, value := range in.Secrets {
+		if value != "" && !secret.IsReference(value) {
+			credentialsChanged = true
+			break
+		}
+	}
+	return sr.putSource(ctx, actor, api.SourceRosterInput{
 		Name: in.Name, Kind: in.Kind, Tenant: in.Tenant,
 		PollSeconds: in.PollSeconds, Enabled: in.Enabled, Config: cfg,
-	})
+	}, credentialsChanged)
 }
 
 // sealOnboardSecrets resolves the inline secret fields into the reference-only Config
@@ -443,13 +339,32 @@ func (sr *sourceReconciler) DeleteConnector(ctx context.Context, actor auth.Prin
 		return res, err
 	}
 	if found && sr.secrets != nil {
+		remaining, lerr := sr.store.List(ctx, sr.scope)
+		if lerr != nil {
+			sr.log.Warn("connector onboarding: could not verify credential ownership after source removal", "source", name, "err", lerr)
+			return res, nil
+		}
 		prefix := ownedSecretRefPrefix(name)
+	credentials:
 		for _, ref := range def.Config {
-			if !strings.HasPrefix(ref, prefix) {
+			target, ok := secret.ParseReference(ref)
+			if !ok || !strings.HasPrefix(target.Scheme+":"+target.Locator, prefix) {
 				continue
 			}
-			locator := strings.TrimPrefix(ref, secret.SchemeStore+":")
-			if derr := sr.secrets.Delete(ctx, actor, auth.GlobalSecretScope, locator); derr != nil && !errors.Is(derr, auth.ErrSecretNotFound) {
+			// Source names and setting keys may contain slashes. Preserve ambiguous
+			// namespace ownership and references still used by another stored source.
+			for _, other := range remaining {
+				if strings.HasPrefix(target.Scheme+":"+target.Locator, ownedSecretRefPrefix(other.Name)) {
+					continue credentials
+				}
+				for _, otherRef := range other.Config {
+					otherTarget, ok := secret.ParseReference(otherRef)
+					if ok && otherTarget == target {
+						continue credentials
+					}
+				}
+			}
+			if derr := sr.secrets.Delete(ctx, actor, auth.GlobalSecretScope, target.Locator); derr != nil && !errors.Is(derr, auth.ErrSecretNotFound) {
 				sr.log.Warn("connector onboarding: could not delete owned credential after source removal", "source", name, "err", derr)
 			}
 		}

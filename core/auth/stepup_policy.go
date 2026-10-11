@@ -147,10 +147,16 @@ func StepUpSatisfied(ctx context.Context, p Principal) bool {
 // gets the stored one, never a silently strict or lenient default. Call it
 // outside a store transaction: the policy read is its own view.
 func (a *Authenticator) stepUpSatisfied(ctx context.Context, actor Principal) bool {
+	return StepUpSatisfied(a.withStepUpPolicy(ctx), actor)
+}
+
+// withStepUpPolicy attaches the stored policy to a ctx that carries none, so a
+// second read in the same call (StepUpPolicyFrom) sees the same memoised value.
+func (a *Authenticator) withStepUpPolicy(ctx context.Context) context.Context {
 	if _, ok := ctx.Value(stepUpSourceKey{}).(StepUpSource); !ok {
 		ctx = WithStepUpSource(ctx, a.CurrentStepUp)
 	}
-	return StepUpSatisfied(ctx, actor)
+	return ctx
 }
 
 // stepUpCacheTTL bounds how stale another node's view of a policy change can be:
@@ -231,7 +237,9 @@ func (a *Authenticator) AdminStepUp(ctx context.Context) (string, error) {
 }
 
 // SetAdminStepUp changes the deployment's policy and ledgers the change. Turning
-// it off, or lowering it, always works at the caller's current strength.
+// it off, or lowering it, needs a session that meets the current level
+// (StepUpSatisfied), so a session below the policy cannot remove it and then act
+// unprotected; a lost passkey recovers on the host (olivares admin recover).
 // Raising it refuses unless the calling session already meets the new level, so
 // an administrator cannot lock themselves out: TOTP needs this session to have
 // been signed in with a TOTP code, and a passkey needs an enrolled passkey and a
@@ -261,6 +269,10 @@ func (a *Authenticator) SetAdminStepUp(ctx context.Context, actor Principal, pol
 		previous := StepUpNone
 		if len(rows) > 0 && ValidStepUpPolicy(rows[0].AdminStepUp) {
 			previous = rows[0].AdminStepUp
+		}
+		if stepUpRank(policy) < stepUpRank(previous) &&
+			!StepUpSatisfied(WithStepUpSource(ctx, func(context.Context) (string, error) { return previous, nil }), actor) {
+			return StepUpRequiredFor(previous)
 		}
 		if stepUpRank(policy) > stepUpRank(previous) {
 			if policy == StepUpTOTP {
@@ -303,10 +315,13 @@ func (a *Authenticator) SetAdminStepUp(ctx context.Context, actor Principal, pol
 		})
 		return err
 	})
-	if err == nil {
+	switch {
+	case err == nil:
 		a.stepUp.mu.Lock()
 		a.stepUp.policy, a.stepUp.at = policy, time.Now()
 		a.stepUp.mu.Unlock()
+	case errors.Is(err, ErrStepUpRequired):
+		a.auditStepUpFailure(ctx, actor, "step_up_policy", "lower_step_up")
 	}
 	return err
 }

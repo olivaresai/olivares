@@ -60,7 +60,7 @@ func (m *Module) SessionWorkParticipant(
 	sid string,
 ) (Participant, error) {
 	out := Participant{Kind: "session"}
-	if m.data == nil {
+	if m.Data == nil {
 		// Contradicting the contract three lines up would be worse than the bug:
 		// an unwired plane is "I could not look", which checkParticipant turns into
 		// evidence_unavailable, never into owner_ineligible.
@@ -77,7 +77,7 @@ func (m *Module) SessionWorkParticipant(
 		resolved  string
 		defaultWS model.ID
 	)
-	if err := m.data.View(ctx, tenant, func(sc store.Scope) error {
+	if err := m.Data.View(ctx, tenant, func(sc store.Scope) error {
 		// Follow any merge first: a session that was merged away must answer as
 		// the surviving identity, or work scoped to it would be orphaned by a
 		// bookkeeping operation.
@@ -144,11 +144,11 @@ func (m *Module) SessionActsForAgent(
 	sid string,
 	agentRef string,
 ) (bool, error) {
-	if agentRef == "" || !validCanonicalSID(sid) || m.data == nil {
+	if agentRef == "" || !validCanonicalSID(sid) || m.Data == nil {
 		return false, nil
 	}
 	acts := false
-	err := m.data.View(ctx, tenant, func(sc store.Scope) error {
+	err := m.Data.View(ctx, tenant, func(sc store.Scope) error {
 		target, err := resolveMerge(ctx, sc, sid)
 		if err != nil {
 			return err

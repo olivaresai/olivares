@@ -101,6 +101,7 @@
     "valueText": "{{consumed}} verbraucht, {{projected}} prognostiziert"
   },
   "disclaimers": {
+    "aimsPack": "Entwurf eines Pakets zur Vorbereitung auf die Zertifizierung nach ISO/IEC 42001:2023, basierend auf der aktuellen Bewertung von Olivares AI und dem vom Betreiber bereitgestellten Kontext. Alle Unterlagen sind Entwürfe; eine fachkundige Person muss sie vor der Vorlage bei einer Zertifizierungsstelle, einem Auditor oder einem Käufer prüfen. Dieses Paket bietet weder eine Zertifizierung noch eine Konformitätszusicherung noch Rechtsberatung. Die Zertifizierung erfordert eine akkreditierte Stelle (ISO/IEC 42006:2025). Der Kontrollstatus spiegelt die aktuellen Nachweise des Mandanten wider; Lücken bleiben unerfüllt.",
     "report": "Technische Zuordnung des Kontrollstatus, abgeleitet aus beobachteten Plattformnachweisen. KEINE Zertifizierung und KEINE Rechtsberatung."
   },
   "gate": {

@@ -48,10 +48,11 @@ var (
 	// learns that verification failed.
 	ErrWebAuthnVerification = errors.New("auth: webauthn verification failed")
 	// ErrLastWebAuthnCredential means the user attempted to delete their only
-	// registered authenticator. The operation is denied to prevent credential
-	// lockout: without any registered credential the user cannot step up to
-	// AAL3, and recovery requires an operator intervention.
-	ErrLastWebAuthnCredential = errors.New("auth: cannot delete the last registered webauthn credential")
+	// registered authenticator while the deployment's step-up policy asks for a
+	// passkey: without one they could not step up any more. Under any other
+	// policy they still step up with their sign-in or their code, so it is allowed.
+	ErrLastWebAuthnCredential = errors.New("auth: this is your only passkey and this deployment asks for one before " +
+		"administrative changes: add another passkey first, or ask an administrator to lower the step-up policy")
 	// ErrWebAuthnRelyingParty means no usable relying party could be built for
 	// this ceremony: the address the console was reached on cannot be one, or the
 	// verifier refused the configured value. It is a CONFIGURATION state, not a
@@ -117,8 +118,9 @@ func (u waUser) WebAuthnCredentials() []webauthn.Credential { return u.creds }
 type ceremonyKind string
 
 const (
-	ceremonyRegister ceremonyKind = "register"
-	ceremonyLogin    ceremonyKind = "login"
+	ceremonyRegister  ceremonyKind = "register"
+	ceremonyLogin     ceremonyKind = "login"
+	ceremonyOSAccount ceremonyKind = "os_account"
 )
 
 // ceremonyStore holds pending WebAuthn challenges server-side between begin and
@@ -133,8 +135,9 @@ type ceremonyStore struct {
 }
 
 type ceremonyEntry struct {
-	session webauthn.SessionData
-	expires time.Time
+	osAccount *osAccountCeremony
+	session   webauthn.SessionData
+	expires   time.Time
 }
 
 func newCeremonyStore(now func() time.Time) *ceremonyStore {
@@ -360,6 +363,19 @@ func (a *Authenticator) FinishWebAuthnRegistration(ctx context.Context, actor Pr
 		if err := lockAuthTransaction(ctx, as, webAuthnUserLockKey(actor.UserID)); err != nil {
 			return err
 		}
+		// Under the same lock, the registering session must still be
+		// live. RecoverPasskeys takes this lock too, so an enrollment that was already in
+		// flight when its owner's passkeys were recovered ends here, unauthenticated.
+		sess, err := as.Sessions().Get(ctx, actor.CredID)
+		if errors.Is(err, store.ErrNotFound) || (err == nil && sess.UserID != actor.UserID) {
+			return ErrUnauthenticated
+		}
+		if err != nil {
+			return err
+		}
+		if _, err := a.principalFromSession(ctx, as, sess); err != nil {
+			return err
+		}
 		existing, _, err := as.WebAuthnCredentials().List(ctx, byEq("user_id", actor.UserID.String(), 1))
 		if err != nil {
 			return err
@@ -525,15 +541,17 @@ func (a *Authenticator) ListWebAuthnCredentials(ctx context.Context, actor Princ
 // removing a credential is itself a credential-lifecycle act — an AAL1 thief
 // who could delete the victim's keys would reopen the first-credential
 // bootstrap and bind their own. A user whose only key is lost recovers through
-// an operator, not through the password session.
+// the host (`olivares admin recover`, RecoverPasskeys), not through the password session.
 func (a *Authenticator) DeleteWebAuthnCredential(ctx context.Context, actor Principal, id model.ID) error {
 	if actor.Kind != KindUser || actor.CredID.IsZero() {
 		return ErrUnauthenticated
 	}
-	if !a.stepUpSatisfied(ctx, actor) {
+	ctx = a.withStepUpPolicy(ctx)
+	if !StepUpSatisfied(ctx, actor) {
 		a.auditStepUpFailure(ctx, actor, "webauthn", "unregister_step_up")
 		return ErrStepUpRequired
 	}
+	passkeyRequired := StepUpPolicyFrom(ctx) == StepUpPasskey
 	return a.st.AuthMutate(ctx, func(as store.AuthScope) error {
 		row, err := as.WebAuthnCredentials().Get(ctx, id)
 		if err != nil {
@@ -549,14 +567,16 @@ func (a *Authenticator) DeleteWebAuthnCredential(ctx context.Context, actor Prin
 		if err := mayChangeAuthenticators(actor, owner); err != nil {
 			return err
 		}
-		// Last-credential guard: refuse to delete if it would leave zero
-		// authenticators — the user would lose the ability to step up.
-		all, _, err := as.WebAuthnCredentials().List(ctx, byEq("user_id", actor.UserID.String(), 2))
-		if err != nil {
-			return err
-		}
-		if len(all) <= 1 {
-			return ErrLastWebAuthnCredential
+		// Last-credential guard: under the passkey policy, refuse to delete if it
+		// would leave zero authenticators — the user would lose the ability to step up.
+		if passkeyRequired {
+			all, _, err := as.WebAuthnCredentials().List(ctx, byEq("user_id", actor.UserID.String(), 2))
+			if err != nil {
+				return err
+			}
+			if len(all) <= 1 {
+				return ErrLastWebAuthnCredential
+			}
 		}
 		if err := as.WebAuthnCredentials().Delete(ctx, id); err != nil {
 			return err
@@ -567,6 +587,79 @@ func (a *Authenticator) DeleteWebAuthnCredential(ctx context.Context, actor Prin
 		})
 		return err
 	})
+}
+
+// PasskeyRecovery is what RecoverPasskeys did, and the API tokens it left alone.
+type PasskeyRecovery struct {
+	Passkeys int        // passkeys removed
+	Sessions int        // sessions ended
+	Tokens   []model.ID // the person's active API tokens, unchanged
+}
+
+// RecoverPasskeys is the host's way back for someone who lost their only passkey
+// (`olivares admin recover`). In one audited transaction it removes that
+// person's passkeys and ends their sessions, because a lost key may be in someone
+// else's hands. Nothing else changes: not the step-up policy, other people, the
+// password or the API tokens, whose active IDs it reports. The person then signs in
+// with their password and registers a first passkey through the AAL1 bootstrap.
+func (a *Authenticator) RecoverPasskeys(ctx context.Context, actor Principal, id model.ID) (PasskeyRecovery, error) {
+	var out PasskeyRecovery
+	err := a.st.AuthMutate(ctx, func(as store.AuthScope) error {
+		out = PasskeyRecovery{}
+		// The registration writer's per-user lock: an enrollment in flight either
+		// commits first (and its passkey is removed below) or sees its session ended.
+		// Taken BEFORE the directory writer lock that
+		// prepareUserAuthorityWrite and the credential writes take, the order
+		// registration uses, so the two never wait on each other on PostgreSQL.
+		if err := lockAuthTransaction(ctx, as, webAuthnUserLockKey(id)); err != nil {
+			return err
+		}
+		if err := prepareUserAuthorityWrite(ctx, as, id); err != nil {
+			return err
+		}
+		if _, err := as.Users().Get(ctx, id); err != nil {
+			return err
+		}
+		creds, err := drainList(ctx, as.WebAuthnCredentials().List, byEq("user_id", id.String(), 0))
+		if err != nil {
+			return err
+		}
+		for _, c := range creds {
+			if err := as.WebAuthnCredentials().Delete(ctx, c.ID); err != nil {
+				return err
+			}
+			out.Passkeys++
+		}
+		sessions, err := drainList(ctx, as.Sessions().List, byEq("user_id", id.String(), 0))
+		if err != nil {
+			return err
+		}
+		for _, s := range sessions {
+			if !s.Revoked {
+				s.Revoked = true
+				if _, err := as.Sessions().Update(ctx, s); err != nil {
+					return err
+				}
+				out.Sessions++
+			}
+		}
+		toks, err := drainList(ctx, as.Tokens().List, byEq("user_id", id.String(), 0))
+		if err != nil {
+			return err
+		}
+		now := a.clock.Now()
+		for _, t := range toks {
+			if !t.Revoked && (t.ExpiresAt == nil || !t.ExpiresAt.Before(now)) {
+				out.Tokens = append(out.Tokens, t.ID)
+			}
+		}
+		return metaAudit(ctx, as, actor, "auth.webauthn.recover", "core.user", id,
+			map[string]any{"passkeys": out.Passkeys, "sessions": out.Sessions})
+	})
+	if err != nil {
+		return PasskeyRecovery{}, err
+	}
+	return out, nil
 }
 
 // RenameWebAuthnCredential updates the display name of one of the acting

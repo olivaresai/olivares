@@ -38,6 +38,12 @@ type drJob struct {
 	Error      string `json:"error,omitempty"`
 	StartedAt  string `json:"started_at"`
 	DoneAt     string `json:"done_at,omitempty"`
+	// A short-lived, read-only receipt for the administrator who applied this
+	// restore. Raw credentials are never retained or serialized.
+	receiptHash  [32]byte
+	receiptUntil time.Time
+	receiptActor string
+	restartSafe  bool
 }
 
 // drJobTracker manages in-memory DR job state with an SSE broker for

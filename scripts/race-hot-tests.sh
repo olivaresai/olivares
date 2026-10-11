@@ -28,8 +28,8 @@ cd "${ROOT}/cmd/olivares"
 # justified; classify new concurrency test files here (or as an explicit
 # exemption in the weekly sweep) when they land.
 HOT_GLOBS=(
-	"inferenceproxy*_test.go"     # inline inference PEP / authorize chain
-	"natsbus_integration_test.go" # cross-node bus bridge (embedded NATS)
+	"inferenceproxy*_test.go"     # inference composition; internal/inferencepep races in test:race-hot:root
+	"natsbus*_test.go"           # edition bus selection; private bridge races in Business
 	"*pump_test.go"               # leader pumps: eventing/orch cadence+workflow/DR
 	"retentionsweep_test.go"      # retention sweep loop
 	"killswitch_e2e_test.go"      # kill-switch PEP/MCP seams (StoryE2E -> weekly)

@@ -230,8 +230,9 @@ type Scope interface {
 	// Workspaces returns the workspace repository (FASE X /): the first-class
 	// containers an enterprise scopes agents, sessions and resources to. Every
 	// tenant has one default workspace (DefaultWorkspace); a workspace is SOFT
-	// isolation, not a tenancy boundary.
-	Workspaces() Repository[model.Workspace]
+	// isolation, not a tenancy boundary. SetParent places a workspace under
+	// another in the organization tree.
+	Workspaces() WorkspaceRepo
 	// AgentGroups returns the agent-group repository (FASE X /): named
 	// collections of agents the access engine targets with one grant.
 	AgentGroups() Repository[model.AgentGroup]

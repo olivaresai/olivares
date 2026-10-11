@@ -61,14 +61,16 @@ func TestArgumentRefusalsAreUsageErrors(t *testing.T) {
 		argv    []string
 		wantMsg string
 	}{
-		// The shared helper, through four of its nineteen call sites in three
-		// different files and two different command groups: classifying one call
-		// site instead of resolveTenant itself leaves the others red.
+		// The shared helper, through four of its call sites in four different files
+		// and two different command groups: classifying one call site instead of
+		// resolveTenant itself leaves the others red. `audit export` is not one of
+		// them in this build: it is a Business command that refuses with the edition
+		// code before it reads a tenant (TestCommunityAuditExportCommandsUnavailable).
 		{"audit verify without a tenant", newAuditCmd,
 			[]string{"verify", "--data-dir", dir, "--strict"},
 			"tenant required: pass --tenant or set $OLIVARES_TENANT"},
-		{"audit export without a tenant", newAuditCmd,
-			[]string{"export", "--data-dir", dir},
+		{"audit tree checkpoint without a tenant", newAuditCmd,
+			[]string{"tree", "checkpoint", "--data-dir", dir},
 			"tenant required: pass --tenant or set $OLIVARES_TENANT"},
 		{"eventing subscriptions ls without a tenant", newEventingCmd,
 			[]string{"subscriptions", "ls", "--data-dir", dir},
@@ -125,7 +127,7 @@ func TestNonArgumentFailuresStayGeneric(t *testing.T) {
 	})
 
 	t.Run("a tenant that is present but malformed is not the missing-tenant refusal", func(t *testing.T) {
-		code, msg := runArgvForCode(t, newAuditCmd, "export", "--data-dir", dir, "--tenant", "not-a-uuid")
+		code, msg := runArgvForCode(t, newAuditCmd, "tree", "checkpoint", "--data-dir", dir, "--tenant", "not-a-uuid")
 		if code != exitcode.Err {
 			t.Errorf("exit = %d, want %d (Err): %s", code, exitcode.Err, msg)
 		}

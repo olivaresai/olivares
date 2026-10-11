@@ -50,8 +50,8 @@
 set -uo pipefail
 export LC_ALL=C
 
-no_puedo() { printf 'check-tenant-bound-writes: 2 NO HE PODIDO MIRAR — %s\n' "$*" >&2; exit 2; }
-ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)" || no_puedo "no resuelvo la raiz"
+cannot_check() { printf 'check-tenant-bound-writes: 2 COULD NOT CHECK — %s\n' "$*" >&2; exit 2; }
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)" || cannot_check "cannot resolve the root"
 
 MECANISMO='TenantRequestOptions'
 ESCRITURA='http\.(post|put|patch|delete|putRaw|postWithMeta|putWithMeta|patchWithMeta|deleteWithMeta)'
@@ -70,7 +70,7 @@ exenta() {
 # dentro de un fichero que YA usa el mecanismo.
 censar() {
 	local raiz="$1"
-	[ -d "$raiz" ] || { printf 'no existe %s\n' "$raiz" >&2; return 2; }
+	[ -d "$raiz" ] || { printf 'missing %s\n' "$raiz" >&2; return 2; }
 	local f rel n linea nombre hallazgos=0 vistos=0 ficheros_con_mecanismo=0
 	while IFS= read -r f; do
 		[ -n "$f" ] || continue
@@ -121,7 +121,7 @@ censar() {
 		return 3
 	fi
 	if [ "$vistos" -eq 0 ]; then
-		printf 'no vi ni una escritura en %s\n' "$raiz" >&2
+		printf 'no writes found in %s\n' "$raiz" >&2
 		return 2
 	fi
 	[ "$hallazgos" -eq 0 ] && return 0 || return 1
@@ -153,7 +153,7 @@ IRREVERSIBLE='/release|/execute|/erase'
 
 irreversibles() {
 	local raiz="$1"
-	[ -d "$raiz/features" ] || { printf 'no existe %s/features\n' "$raiz" >&2; return 2; }
+	[ -d "$raiz/features" ] || { printf 'missing %s/features\n' "$raiz" >&2; return 2; }
 	local f rel n linea nombre
 	while IFS= read -r f; do
 		[ -n "$f" ] || continue
@@ -207,7 +207,7 @@ if [ "${1:-}" = "--selftest" ]; then
 	fail=0
 	corridas=0
 	saltadas=0
-	T="$(mktemp -d "${TMPDIR:-/tmp}/tbw.XXXXXX")" || no_puedo "mktemp fallo"
+	T="$(mktemp -d "${TMPDIR:-/tmp}/tbw.XXXXXX")" || cannot_check "mktemp failed"
 	trap 'rm -rf "$T"' EXIT
 	mkdir -p "$T/src/f"
 
@@ -221,14 +221,14 @@ export const api = {
     http.post<Y>(`${BASE}/suelta`, body),
 }
 TS
-	salida="$(censar "$T/src" || true)"
-	case $'\n'"$salida"$'\n' in
-	*:suelta$'\n'*) corridas=$((corridas+1)); echo "  ok    CONTROL NEGATIVO: la escritura sin atar se caza" ;;
-	*) corridas=$((corridas+1)); echo "  FAIL  CONTROL NEGATIVO: no ve la escritura sin atar — es ciego"; fail=1 ;;
+	output="$(censar "$T/src" || true)"
+	case $'\n'"$output"$'\n' in
+	*:suelta$'\n'*) corridas=$((corridas+1)); echo "  ok    NEGATIVE CONTROL: a write without tenant binding is detected" ;;
+	*) corridas=$((corridas+1)); echo "  FAIL  NEGATIVE CONTROL: misses a write without tenant binding"; fail=1 ;;
 	esac
-	case $'\n'"$salida"$'\n' in
-	*:atada$'\n'*) corridas=$((corridas+1)); echo "  FAIL  CONTROL POSITIVO: caza una escritura que SI esta atada"; fail=1 ;;
-	*) corridas=$((corridas+1)); echo "  ok    CONTROL POSITIVO: la escritura atada no es hallazgo" ;;
+	case $'\n'"$output"$'\n' in
+	*:atada$'\n'*) corridas=$((corridas+1)); echo "  FAIL  POSITIVE CONTROL: reports a write that binds the tenant"; fail=1 ;;
+	*) corridas=$((corridas+1)); echo "  ok    POSITIVE CONTROL: a write with tenant binding is not a finding" ;;
 	esac
 
 	# Un fichero que NO usa el mecanismo queda FUERA del alcance, tenga escrituras sueltas o no.
@@ -237,10 +237,10 @@ TS
 import { http } from '@/lib/api/client'
 export const api = { suelta: (b: X) => http.post<Y>(`${BASE}/x`, b) }
 TS
-	salida="$(censar "$T/src" || true)"
-	case $'\n'"$salida"$'\n' in
-	*g/api.ts*) corridas=$((corridas+1)); echo "  FAIL  un fichero que aun no ata nada NO deberia entrar en el alcance"; fail=1 ;;
-	*) corridas=$((corridas+1)); echo "  ok    un fichero que aun no ata nada queda fuera del alcance" ;;
+	output="$(censar "$T/src" || true)"
+	case $'\n'"$output"$'\n' in
+	*g/api.ts*) corridas=$((corridas+1)); echo "  FAIL  a file that has not adopted tenant binding should be outside the scope"; fail=1 ;;
+	*) corridas=$((corridas+1)); echo "  ok    a file that has not adopted tenant binding remains outside the scope" ;;
 	esac
 
 	# Un arbol que SI usa el mecanismo pero donde no se ve ni una escritura es 2, no 0:
@@ -251,17 +251,17 @@ TS
 	# salia rc=0 «sin hallazgos». Un gate ciego no falla: certifica.
 	mkdir -p "$T/irr/features/x"
 	printf 'export const xApi = {\n  releaseHold: (id: string, body: unknown) =>\n    http.postWithMeta<unknown>(\n      `${BASE}/holds/${id}/release`,\n      body,\n    ),\n}\n' > "$T/irr/features/x/api.ts"
-	salida="$(irreversibles "$T/irr" || true)"
-	case $'\n'"$salida"$'\n' in
-	*releaseHold*) corridas=$((corridas+1)); echo "  ok    IRREVERSIBLE: una release sin atar se caza aunque el fichero no adopte" ;;
-	*) corridas=$((corridas+1)); echo "  FAIL  IRREVERSIBLE: no ve una release sin atar — la seccion es ciega"; fail=1 ;;
+	output="$(irreversibles "$T/irr" || true)"
+	case $'\n'"$output"$'\n' in
+	*releaseHold*) corridas=$((corridas+1)); echo "  ok    IRREVERSIBLE: a release without tenant binding is detected even before the file adopts binding" ;;
+	*) corridas=$((corridas+1)); echo "  FAIL  IRREVERSIBLE: misses a release without tenant binding"; fail=1 ;;
 	esac
 
 	printf 'export const xApi = {\n  releaseHold: (id: string, body: unknown, opts?: TenantRequestOptions) =>\n    http.postWithMeta<unknown>(\n      `${BASE}/holds/${id}/release`,\n      body,\n      opts,\n    ),\n}\n' > "$T/irr/features/x/api.ts"
-	salida="$(irreversibles "$T/irr" || true)"
-	case $'\n'"$salida"$'\n' in
-	*releaseHold*) corridas=$((corridas+1)); echo "  FAIL  IRREVERSIBLE: caza una release que SI ata el inquilino"; fail=1 ;;
-	*) corridas=$((corridas+1)); echo "  ok    IRREVERSIBLE: una release atada no es hallazgo" ;;
+	output="$(irreversibles "$T/irr" || true)"
+	case $'\n'"$output"$'\n' in
+	*releaseHold*) corridas=$((corridas+1)); echo "  FAIL  IRREVERSIBLE: reports a release that binds the tenant"; fail=1 ;;
+	*) corridas=$((corridas+1)); echo "  ok    IRREVERSIBLE: a release with tenant binding is not a finding" ;;
 	esac
 
 	# ── LA CAPA COMPARTIDA: hoy devuelve CERO, y esta celda prueba que no es por ciega ──
@@ -270,32 +270,32 @@ TS
 	# demostrado que sepa devolver uno, asi que aqui se planta una y se exige que salga.
 	mkdir -p "$T/irr/lib/api"
 	printf 'export const sharedApi = {\n  executeErasure: (id: string, body: unknown) =>\n    http.postWithMeta<unknown>(\n      `${BASE}/erasure/${id}/execute`,\n      body,\n    ),\n}\n' > "$T/irr/lib/api/endpoints.ts"
-	salida="$(irreversibles "$T/irr" || true)"
-	case $'\n'"$salida"$'\n' in
-	*executeErasure*) corridas=$((corridas+1)); echo "  ok    CAPA COMPARTIDA: una irreversible en lib/api se caza (el punto ciego de las DOS sondas)" ;;
-	*) corridas=$((corridas+1)); echo "  FAIL  CAPA COMPARTIDA: no ve una irreversible en lib/api — sigue ciega ahi"; fail=1 ;;
+	output="$(irreversibles "$T/irr" || true)"
+	case $'\n'"$output"$'\n' in
+	*executeErasure*) corridas=$((corridas+1)); echo "  ok    SHARED LAYER: an irreversible write in lib/api is detected (the blind spot of both probes)" ;;
+	*) corridas=$((corridas+1)); echo "  FAIL  SHARED LAYER: misses an irreversible write in lib/api"; fail=1 ;;
 	esac
 
 	printf 'export const sharedApi = {\n  executeErasure: (id: string, body: unknown, opts?: TenantRequestOptions) =>\n    http.postWithMeta<unknown>(\n      `${BASE}/erasure/${id}/execute`,\n      body,\n      opts,\n    ),\n}\n' > "$T/irr/lib/api/endpoints.ts"
-	salida="$(irreversibles "$T/irr" || true)"
-	case $'\n'"$salida"$'\n' in
-	*executeErasure*) corridas=$((corridas+1)); echo "  FAIL  CAPA COMPARTIDA: caza una irreversible que SI ata el inquilino"; fail=1 ;;
-	*) corridas=$((corridas+1)); echo "  ok    CAPA COMPARTIDA: atada, no es hallazgo (discrimina, no lista todo)" ;;
+	output="$(irreversibles "$T/irr" || true)"
+	case $'\n'"$output"$'\n' in
+	*executeErasure*) corridas=$((corridas+1)); echo "  FAIL  SHARED LAYER: reports an irreversible write that binds the tenant"; fail=1 ;;
+	*) corridas=$((corridas+1)); echo "  ok    SHARED LAYER: a tenant-bound write is not a finding; the check distinguishes cases" ;;
 	esac
 	rm -f "$T/irr/lib/api/endpoints.ts"
 
 	mkdir -p "$T/mudo"
 	printf 'import { type TenantRequestOptions } from "@/lib/api/client"\nexport type Z = TenantRequestOptions\n' > "$T/mudo/api.ts"
 	censar "$T/mudo" >/dev/null 2>&1; rc=$?
-	if [ "$rc" = "2" ]; then corridas=$((corridas+1)); echo "  ok    con el mecanismo presente y cero escrituras: 2 (NO HE PODIDO MIRAR), no 0"
-	else corridas=$((corridas+1)); echo "  FAIL  con el mecanismo y sin escrituras devolvio $rc, esperaba 2"; fail=1; fi
+	if [ "$rc" = "2" ]; then corridas=$((corridas+1)); echo "  ok    mechanism present with no writes: 2 (COULD NOT CHECK), not 0"
+	else corridas=$((corridas+1)); echo "  FAIL  mechanism present with no writes returned $rc; expected 2"; fail=1; fi
 
 	# Y un arbol donde el mecanismo NO existe es 3 (NO APLICA TODAVIA), que tampoco es 0 a secas.
 	mkdir -p "$T/sinmecanismo"
 	printf 'export const a = { x: (b) => http.post("/v1/x", b) }\n' > "$T/sinmecanismo/api.ts"
 	censar "$T/sinmecanismo" >/dev/null 2>&1; rc=$?
-	if [ "$rc" = "3" ]; then corridas=$((corridas+1)); echo "  ok    sin el mecanismo en el arbol: 3 (NO APLICA TODAVIA), distinguible de limpio"
-	else corridas=$((corridas+1)); echo "  FAIL  sin el mecanismo devolvio $rc, esperaba 3"; fail=1; fi
+	if [ "$rc" = "3" ]; then corridas=$((corridas+1)); echo "  ok    mechanism absent from tree: 3 (NOT YET APPLICABLE), distinct from clean"
+	else corridas=$((corridas+1)); echo "  FAIL  mechanism absent returned $rc; expected 3"; fail=1; fi
 
 	# CALIBRACION CONTRA UN ARBOL REAL QUE TENGA EL MECANISMO.
 	# ⛔ Y SI NO SE PUEDE, SE DICE A GRITOS. `TenantRequestOptions` no existe en `main` (nace en
@@ -304,21 +304,21 @@ TS
 	# que es justo como esta version llego a imprimir CLEAN sobre un arbol lleno de supervivientes.
 	REALS="${OLIVARES_SELFTEST_SRC:-$ROOT/web/src}"
 	if [ -d "$REALS" ] && grep -rqs "$MECANISMO" "$REALS" --include='*.ts' 2>/dev/null; then
-		salida="$(censar "$REALS" || true)"
-		case "$salida" in
-		*createBudget*) corridas=$((corridas+1)); echo "  ok    arbol real: finops createBudget sale como superviviente" ;;
-		*) corridas=$((corridas+1)); echo "  FAIL  arbol real: finops createBudget deberia salir y no sale"; fail=1 ;;
+		output="$(censar "$REALS" || true)"
+		case "$output" in
+		*createBudget*) corridas=$((corridas+1)); echo "  ok    actual tree: finops createBudget is reported as an unresolved case" ;;
+		*) corridas=$((corridas+1)); echo "  FAIL  actual tree: finops createBudget should be reported but is absent"; fail=1 ;;
 		esac
-		case "$salida" in
-		*ingestOutcome*) corridas=$((corridas+1)); echo "  FAIL  arbol real: ingestOutcome esta ATADA y no deberia salir"; fail=1 ;;
-		*) corridas=$((corridas+1)); echo "  ok    arbol real: ingestOutcome (atada) no sale" ;;
+		case "$output" in
+		*ingestOutcome*) corridas=$((corridas+1)); echo "  FAIL  real tree: ingestOutcome is tenant-bound and should not be reported"; fail=1 ;;
+		*) corridas=$((corridas+1)); echo "  ok    actual tree: ingestOutcome (tenant-bound) is not reported" ;;
 		esac
 	else
-		echo "  ⚠ SIN CALIBRAR contra arbol real: '$REALS' no contiene '$MECANISMO'."
-		echo "    En \`main\` esto es NORMAL — el mecanismo nace en #1613 — pero significa que estas"
-		echo "    DOS casillas no se han comprobado. Para calibrarlas, apunta a un arbol que lo tenga:"
+		echo "  ⚠ NOT CALIBRATED against the actual tree: '$REALS' does not contain '$MECANISMO'."
+		echo "    This is expected in \`main\` before #1613 introduces the mechanism, but these"
+		echo "    two cases have not been checked. To calibrate, point to a tree containing it:"
 		echo "      OLIVARES_SELFTEST_SRC=<worktree-de-1613>/web/src bash \$0 --selftest"
-		echo "    (No cuenta como fallo: cuenta como NO MEDIDO, y por eso se dice.)"
+		echo "    (This is unmeasured, not a failure; reported explicitly.)"
 		saltadas=$((saltadas + 2))
 	fi
 
@@ -332,13 +332,13 @@ TS
 	#    en la casa de al lado, y por eso se arregla igual: contando las saltadas DONDE se saltan.
 	if [ "$fail" = "0" ]; then
 		if [ "$saltadas" -gt 0 ]; then
-			echo "check-tenant-bound-writes selftest: ${corridas}/$((corridas + saltadas)) passed, 0 failed — ${saltadas} SIN CORRER (ver el aviso de calibracion)"
+			echo "check-tenant-bound-writes selftest: ${corridas}/$((corridas + saltadas)) passed, 0 failed; ${saltadas} NOT RUN (see calibration warning)"
 		else
 			echo "check-tenant-bound-writes selftest: ${corridas} passed, 0 failed"
 		fi
 		exit 0
 	fi
-	echo "check-tenant-bound-writes selftest: FAILED (${corridas} corridas)"; exit 1
+	echo "check-tenant-bound-writes selftest: FAILED (${corridas} runs)"; exit 1
 fi
 
 
@@ -346,30 +346,30 @@ FUENTES="${OLIVARES_WEB_SRC:-$ROOT/web/src}"
 irrev="$(irreversibles "$FUENTES" || true)"
 n_irrev="$(printf '%s\n' "$irrev" | grep -c . || true)"
 if [ "${n_irrev:-0}" -gt 0 ]; then
-	echo "check-tenant-bound-writes: ⛔ ${n_irrev} escritura(s) IRREVERSIBLE(S) sin atar el inquilino:" >&2
+	echo "check-tenant-bound-writes: ⛔ ${n_irrev} irreversible write(s) without tenant binding:" >&2
 	printf '%s\n' "$irrev" | sed 's/^/    /' >&2
-	echo "  Estas se miran FUERA del alcance de adopcion, por consecuencia: una reanudacion en otro" >&2
-	echo "  inquilino levanta una retencion legal o ejecuta un borrado donde no tocaba." >&2
+	echo "  These are checked outside the adoption scope because resuming under another tenant" >&2
+	echo "  could release a legal hold or erase data in the wrong tenant." >&2
 	echo >&2
 fi
 
-salida="$(censar "$FUENTES")"; rc=$?
-[ "$rc" = "2" ] && no_puedo "el censo no pudo recorrer $FUENTES"
+output="$(censar "$FUENTES")"; rc=$?
+[ "$rc" = "2" ] && cannot_check "the scan could not traverse $FUENTES"
 if [ "$rc" = "3" ]; then
-	echo "check-tenant-bound-writes: NO APLICA TODAVIA — ningun fichero de $FUENTES usa"
-	echo "  \`$MECANISMO\`. El mecanismo nace en #1613; hasta que aterrice no hay nada que gatear."
-	echo "  NO es CLEAN: es que la clase que este gate protege aun no existe en este arbol."
+	echo "check-tenant-bound-writes: NOT YET APPLICABLE — no file in $FUENTES uses"
+	echo "  \`$MECANISMO\`. The mechanism is introduced in #1613; there is nothing to check before it lands."
+	echo "  This is not CLEAN: the protected behavior is not yet present in this tree."
 	[ "${n_irrev:-0}" -gt 0 ] && exit 1
 	exit 0
 fi
-n="$(printf '%s\n' "$salida" | grep -c . || true)"
+n="$(printf '%s\n' "$output" | grep -c . || true)"
 if [ "${n:-0}" -eq 0 ]; then
-	echo "check-tenant-bound-writes: CLEAN — en los ficheros que ya atan, toda escritura ata."
+	echo "check-tenant-bound-writes: CLEAN — every write binds the tenant in files that have adopted binding."
 	[ "${n_irrev:-0}" -gt 0 ] && exit 1
 	exit 0
 fi
-echo "check-tenant-bound-writes: ${n} escritura(s) SIN atar en ficheros que YA atan el inquilino:" >&2
-printf '%s\n' "$salida" | sed 's/^/    /' >&2
+echo "check-tenant-bound-writes: ${n} write(s) without tenant binding in files that have already adopted it:" >&2
+printf '%s\n' "$output" | sed 's/^/    /' >&2
 echo >&2
-echo "  Cada una: o acepta TenantRequestOptions, o entra en exenta() con su razon escrita." >&2
+echo "  Each must accept TenantRequestOptions or be listed in exenta() with a written reason." >&2
 exit 1

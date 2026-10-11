@@ -77,7 +77,13 @@
   },
   "reenable": {
     "title": "Re-enable this stop",
-    "body": "Starting again is never one person's decision: two different user accounts must approve, and no one can approve their own request. Each approver must use a stronger sign-in (AAL3) unless an approval rule lowers this action's risk level; the two-account rule holds even then. There is no emergency way around it, because staying stopped is the safe state. The engine checks that the accounts are different; it cannot check that two different people use them.",
+    "body": "Starting again is never one person's decision: two different user accounts must approve, and no one can approve their own request. {{stepUp}} There is no emergency way around it, because staying stopped is the safe state. The engine checks that the accounts are different; it cannot check that two different people use them.",
+    "stepUp": {
+      "none": "The extra check for administrative actions is off on this server, so each approver approves with their usual sign-in.",
+      "totp": "Each approver must have signed in with an authenticator code or with single sign-on that used MFA, or confirm with a passkey, unless an approval rule lowers this action's risk level; the two-account rule holds even then.",
+      "passkey": "Each approver must confirm with a passkey (AAL3), unless an approval rule lowers this action's risk level; the two-account rule holds even then.",
+      "unknown": "Each approver must pass this server's extra check for administrative actions, unless an approval rule lowers this action's risk level; the two-account rule holds even then."
+    },
     "reason": "Note",
     "reasonHint": "Optional — carried on the dual-control request for the approvers.",
     "existingApproval": "A dual-control approval ({{id}}) is already open for this stop. Checking reports its progress and completes the re-enable once both accounts approved.",

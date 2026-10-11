@@ -33,8 +33,8 @@ awk '
   cuerpo && /^      - name:/              { exit }
   cuerpo                                  { sub(/^          /, ""); print }
 ' "$WF" > "$TMP/bloque.sh"
-[ -s "$TMP/bloque.sh" ] || { echo "test-release-disk-floor: COULD NOT LOOK — no extraje el bloque de $WF" >&2; exit 2; }
-grep -q '20480' "$TMP/bloque.sh" || { echo "test-release-disk-floor: COULD NOT LOOK — el bloque extraido no contiene el suelo" >&2; exit 2; }
+[ -s "$TMP/bloque.sh" ] || { echo "test-release-disk-floor: COULD NOT LOOK — could not extract the block from $WF" >&2; exit 2; }
+grep -q '20480' "$TMP/bloque.sh" || { echo "test-release-disk-floor: COULD NOT LOOK — extracted block does not contain the floor" >&2; exit 2; }
 
 # `sudo rm -rf` fuera: la batería mide el SUELO, no el borrado. Se sustituye por un no-op
 # declarado en vez de correrlo, que en una caja de desarrollo sería destructivo.
@@ -46,21 +46,21 @@ corre() { # $1 = cuerpo de la funcion df señuelo
 }
 
 rc=$(corre "printf 'Avail\n40000M\n'")
-[ "$rc" = "0" ] && ok "por encima del suelo pasa (rc 0)" || bad "por encima del suelo pasa" "rc=$rc"
+[ "$rc" = "0" ] && ok "above the floor passes (rc 0)" || bad "above the floor passes" "rc=$rc"
 
 rc=$(corre "printf 'Avail\n15000M\n'")
 if [ "$rc" != "0" ] && grep -q 'not enough disk to build' "$TMP/out"; then
-	ok "por debajo del suelo rehusa, y dice cuanto queda"
-else bad "por debajo del suelo rehusa" "rc=$rc; salida: $(head -1 "$TMP/out")"; fi
+	ok "below the floor refuses, and reports remaining space"
+else bad "below the floor refuses" "rc=$rc; output: $(head -1 "$TMP/out")"; fi
 
 # EL CASO DE REL-56.
 rc=$(corre "printf 'Avail\n-\n'")
 if [ "$rc" != "0" ] && grep -q 'could not read free disk' "$TMP/out"; then
-	ok "un df que SALE 0 sin digitos rehusa, y lo llama por su nombre"
-else bad "un df que SALE 0 sin digitos rehusa" "rc=$rc; salida: $(head -1 "$TMP/out")"; fi
+	ok "df that EXITS 0 without digits refuses and reports the reason"
+else bad "df that EXITS 0 without digits refuses" "rc=$rc; output: $(head -1 "$TMP/out")"; fi
 
 rc=$(corre "return 1")
-[ "$rc" != "0" ] && ok "un df que FALLA rehusa (pipefail + set -e)" || bad "un df que FALLA rehusa" "rc=$rc"
+[ "$rc" != "0" ] && ok "FAILED df refuses (pipefail + set -e)" || bad "FAILED df refuses" "rc=$rc"
 
 # MUTANTE: sin la guarda de forma, el caso de REL-56 vuelve a pasar. Si no vuelve a pasar,
 # el caso de arriba no estaba midiendo la guarda y su verde no valia nada.
@@ -71,11 +71,11 @@ rc=$(corre "return 1")
 # texto no distinguen una de otra. Perl casa exactamente lo mismo.
 perl -0pi -e 's/if ! printf .%s. "\$after" \x7c grep -qE .\^\[0-9\]\+\$.; then\n.*?\n.*?\n *fi\n//s' "$TMP/bloque.sh"
 if grep -q 'could not read free disk' "$TMP/bloque.sh"; then
-	bad "MUTANTE: la guarda se retira" "sigue presente; el mutante no se aplico"
+	bad "MUTANT: guard is removed" "still present; mutant was not applied"
 else
 	rc=$(corre "printf 'Avail\n-\n'")
-	[ "$rc" = "0" ] && ok "MUTANTE sin la guarda: el df vacio PASA (el caso mide la guarda)" \
-	                || bad "MUTANTE sin la guarda: el df vacio PASA" "rc=$rc — el caso no mide la guarda"
+	[ "$rc" = "0" ] && ok "MUTANT without guard: empty df PASSES (case measures the guard)" \
+	                || bad "MUTANT without guard: empty df PASSES" "rc=$rc — case does not measure the guard"
 fi
 
 printf '\ntest-release-disk-floor: %d passed, %d failed\n' "$pass" "$fail"

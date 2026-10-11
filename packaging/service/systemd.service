@@ -37,7 +37,9 @@ ProtectKernelTunables=true
 ProtectKernelModules=true
 ProtectKernelLogs=true
 ProtectControlGroups=true
-RestrictNamespaces=true
+# Record-bound sessions run in their own user and network namespace (loopback
+# only, egress through the per-session proxy); every other namespace type is denied.
+RestrictNamespaces=user net
 RestrictSUIDSGID=true
 RestrictRealtime=true
 LockPersonality=true
@@ -47,6 +49,11 @@ SystemCallArchitectures=native
 # The session/MCP launcher applies Landlock before executing each child.
 SystemCallFilter=@system-service landlock_create_ruleset landlock_add_rule landlock_restrict_self
 SystemCallFilter=~@privileged @resources
+# The session network helper uses capset for its namespace-local capabilities
+# (loopback setup), then drops them all before the tool runs. The engine itself
+# keeps no host capability (CapabilityBoundingSet= below).
+SystemCallFilter=capset
+@STATE_DIRECTORY_LINE@
 ReadWritePaths=@DATA_DIR@
 CapabilityBoundingSet=
 AmbientCapabilities=

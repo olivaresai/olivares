@@ -7,6 +7,8 @@ package sessions
 import (
 	"context"
 	"errors"
+	"net/http"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -14,6 +16,7 @@ import (
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/engine"
 	"github.com/olivaresai/olivares/core/model"
+	"github.com/olivaresai/olivares/core/secret"
 	"github.com/olivaresai/olivares/core/store"
 )
 
@@ -165,6 +168,39 @@ func newRuntimeHarness(t *testing.T, opts ...Option) (*Module, store.Store, mode
 	return m, st, tenant, clk
 }
 
+// ensureRuntimeTestProfileRef configures execution identity and creates a reusable
+// real provider home for lifecycle fixtures. Tests of
+// missing profiles and execution environments call the module directly instead.
+func ensureRuntimeTestProfileRef(t *testing.T, m *Module, tenant model.TenantID) string {
+	t.Helper()
+	const name = "Runtime test profile"
+	if m.rt.environmentRef == "" {
+		m.UseExecutionEnvironmentRef(testEnvRef)
+	}
+	profiles, _, err := m.ListProfiles(context.Background(), tenant, ProfileActive, model.Query{
+		Filters: []model.Filter{eq(colPPDisplayName, name)}, Limit: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(profiles) != 0 {
+		return profiles[0].Ref
+	}
+	return mustCreateProfile(t, m, tenant, CreateProfileInput{
+		Driver: "claude", ConfigHome: t.TempDir(), UserHome: t.TempDir(), DisplayName: name,
+	}).Ref
+}
+
+// createProfiledTestRun supplies the profile required by a configured runtime;
+// the launch and all of its gates still execute through the module's real path.
+func createProfiledTestRun(t *testing.T, m *Module, ctx context.Context, tenant model.TenantID, p CreateRunParams) (runDTO, error) {
+	t.Helper()
+	if p.ProviderProfileRef == "" {
+		p.ProviderProfileRef = ensureRuntimeTestProfileRef(t, m, tenant)
+	}
+	return m.createRun(ctx, tenant, p)
+}
+
 // registerTestWorkspace registers a workspace rooted at root and returns its ref, so
 // a lifecycle test can launch against a GOVERNED workspace (formalized ref→path:
 // a launch's workspace_ref must be a registered workspace, no longer a literal dir).
@@ -255,6 +291,49 @@ func TestValidateCreateRejectsSecretBearingEnvAllowNames(t *testing.T) {
 	}
 }
 
+// TestValidateCreateRefusesEngineSecretEnvAllowNames pins that a run creator may
+// not forward a variable the engine itself reads as a credential, whatever its
+// prefix, and that the 400 names it. The engine's non-secret settings stay
+// forwardable.
+func TestValidateCreateRefusesEngineSecretEnvAllowNames(t *testing.T) {
+	t.Parallel()
+
+	// As `--dsn env:<NAME>` does at boot: from then on the variable is the engine's.
+	const dsnVar = "SESSIONS_TEST_ENGINE_DSN"
+	if _, err := (secret.EnvHandler{Lookup: func(string) (string, bool) { return "postgres://x", true }}).
+		Resolve(context.Background(), dsnVar); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{
+		"AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN",
+		"VAULT_TOKEN", "PGPASSWORD", "PGSSLPASSWORD", "DATABASE_URL",
+		"OTEL_EXPORTER_OTLP_HEADERS", "OTEL_EXPORTER_OTLP_TRACES_HEADERS", "OTEL_EXPORTER_OTLP_METRICS_HEADERS",
+		dsnVar,
+	} {
+		t.Run(name, func(t *testing.T) {
+			p := CreateRunParams{Transport: TransportStreamJSON, Isolation: IsolationNative, EnvAllow: []string{" " + name}}
+			err := validateCreate(&p)
+			var re *runErr
+			if !errors.As(err, &re) || re.status != http.StatusBadRequest || !strings.Contains(re.msg, name) {
+				t.Fatalf("env_allow %q: got %v, want a 400 naming it", name, err)
+			}
+		})
+	}
+	// A base name is inherited whatever env_allow says, so a reference to it does
+	// not make naming it a refusal.
+	if _, err := (secret.EnvHandler{Lookup: func(string) (string, bool) { return "/usr/bin", true }}).
+		Resolve(context.Background(), "PATH"); err != nil {
+		t.Fatal(err)
+	}
+	p := CreateRunParams{
+		Transport: TransportStreamJSON, Isolation: IsolationNative,
+		EnvAllow: []string{"PATH", "AWS_REGION", "VAULT_ADDR", "PGHOST", "OTEL_EXPORTER_OTLP_ENDPOINT", "MY_PROJECT_FLAG"},
+	}
+	if err := validateCreate(&p); err != nil {
+		t.Fatalf("non-secret env_allow rejected: %v", err)
+	}
+}
+
 // --- the headline lifecycle test (deterministic, fake runner) ----------------
 
 func TestRuntime_FullLifecycle(t *testing.T) {
@@ -264,7 +343,7 @@ func TestRuntime_FullLifecycle(t *testing.T) {
 	m, st, tenant, _ := newRuntimeHarness(t, WithRunner(fr), WithCredentialSource(staticCred()))
 	ctx := context.Background()
 
-	dto, err := m.createRun(ctx, tenant, CreateRunParams{
+	dto, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{
 		Transport: TransportStreamJSON, PermissionMode: "default", Effort: "high",
 		Model: "claude-opus-4-8", Isolation: IsolationNative, WorkspaceRef: registerTestWorkspace(t, m, tenant, t.TempDir()),
 		Actor: "user:u1", ActorKind: "user",
@@ -372,7 +451,7 @@ func TestRuntime_LaunchGateDenies(t *testing.T) {
 	fr := &fakeRunner{}
 	m, st, tenant, _ := newRuntimeHarness(t, WithRunner(fr), WithCredentialSource(staticCred()),
 		WithLaunchGate(denyGate{reason: "over budget"}))
-	_, err := m.createRun(context.Background(), tenant, CreateRunParams{
+	_, err := createProfiledTestRun(t, m, context.Background(), tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative, Actor: "user:u1", ActorKind: "user",
 	})
 	if err == nil {
@@ -393,7 +472,7 @@ func TestRuntime_CredentialDenyClosed(t *testing.T) {
 	fr := &fakeRunner{}
 	// No credential source wired → stream-json launch is deny-closed.
 	m, _, tenant, _ := newRuntimeHarness(t, WithRunner(fr))
-	_, err := m.createRun(context.Background(), tenant, CreateRunParams{
+	_, err := createProfiledTestRun(t, m, context.Background(), tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative, Actor: "user:u1", ActorKind: "user",
 	})
 	if err == nil {
@@ -411,7 +490,7 @@ func TestRuntime_ALaunchThatCannotSpawnStillLeavesOneRow(t *testing.T) {
 
 	fr := &fakeRunner{launchErr: errors.New("exec: \"claude\": not found")}
 	m, st, tenant, _ := newRuntimeHarness(t, WithRunner(fr), WithCredentialSource(staticCred()))
-	_, err := m.createRun(context.Background(), tenant, CreateRunParams{
+	_, err := createProfiledTestRun(t, m, context.Background(), tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative, WorkspaceRef: registerTestWorkspace(t, m, tenant, t.TempDir()),
 		Actor: "user:u1", ActorKind: "user",
 	})
@@ -436,7 +515,7 @@ func TestRuntime_ACreateThatCannotSpawnGivesTheClaimBack(t *testing.T) {
 	m, _, tenant, _ := newRuntimeHarness(t, WithRunner(fr), WithCredentialSource(staticCred()),
 		WithLaunchGate(gate))
 
-	if _, err := m.createRun(ctx, tenant, CreateRunParams{
+	if _, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative,
 		Actor: "user:u1", ActorKind: "user",
 	}); err == nil {
@@ -466,7 +545,7 @@ func TestRuntime_AResumeThatCannotSpawnGivesTheClaimBack(t *testing.T) {
 	m, _, tenant, _ := newRuntimeHarness(t, WithRunner(fr), WithCredentialSource(staticCred()),
 		WithLaunchGate(gate))
 
-	dto, err := m.createRun(ctx, tenant, CreateRunParams{
+	dto, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative,
 		Actor: "user:u1", ActorKind: "user",
 	})
@@ -502,7 +581,7 @@ func TestRuntime_OrphanReconciledOnStop(t *testing.T) {
 	fr := &fakeRunner{initSID: "sess-x"}
 	m, _, tenant, _ := newRuntimeHarness(t, WithRunner(fr), WithCredentialSource(staticCred()))
 	ctx := context.Background()
-	dto, err := m.createRun(ctx, tenant, CreateRunParams{
+	dto, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative, WorkspaceRef: registerTestWorkspace(t, m, tenant, t.TempDir()),
 		Actor: "user:u1", ActorKind: "user",
 	})
@@ -540,7 +619,7 @@ func TestRuntime_IdleDerivedAtReadTime(t *testing.T) {
 	m, _, tenant, clk := newRuntimeHarness(t, WithRunner(fr), WithCredentialSource(staticCred()),
 		WithRuntimeIdleWindow(time.Minute))
 	ctx := context.Background()
-	dto, err := m.createRun(ctx, tenant, CreateRunParams{
+	dto, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative, WorkspaceRef: registerTestWorkspace(t, m, tenant, t.TempDir()),
 		Actor: "user:u1", ActorKind: "user",
 	})
@@ -567,7 +646,7 @@ func TestRuntime_RemoteControlRejectsInput(t *testing.T) {
 	m, _, tenant, _ := newRuntimeHarness(t, WithRunner(fr))
 	ctx := context.Background()
 	// remote-control needs no minted credential (operator OAuth); launch succeeds.
-	dto, err := m.createRun(ctx, tenant, CreateRunParams{
+	dto, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{
 		Transport: TransportRemoteControl, Isolation: IsolationNative, Name: "mobile",
 		Actor: "user:u1", ActorKind: "user",
 	})

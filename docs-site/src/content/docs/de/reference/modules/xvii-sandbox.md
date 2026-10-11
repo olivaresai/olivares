@@ -83,10 +83,83 @@ Ausführen; der Deploy-Vergleich ist eine Admin-Entscheidung).
 - **Replay ist ehrlich über Lücken.** Wenn die History-Quelle keine geordnete
   Zeitleiste rekonstruieren kann, wird der Replay als degradiert mit null Schritten
   gemeldet, nie fabriziert.
-- **Keine synthetische Datengenerierung.** Dies ist nur ein dokumentierter
-  Post-v1-Erweiterungspunkt; das Modul liefert keinen Generator aus, exponiert keine
-  Route dafür und produziert null Samples.
+- **Lokale Datengenerierung.** Reproduzierbare Szenario-Eingaben über die Sandbox-API aus begrenzten lokalen Vorlagen erzeugen. Keine Modell- oder Netzwerkanfragen.
 :::
+
+## Szenarioeingaben erzeugen
+
+Die CLI kann erzeugte Eingaben direkt im Schrittformat für die Szenarioerstellung
+schreiben:
+
+```sh
+olivares sandbox generate --count 2 --seed-file seed.txt -o json > steps.json
+olivares sandbox scenarios create --name generated --steps-file steps.json
+```
+
+`--seed-file -` liest die Vorlage von stdin. Ohne Flag wird die Standardvorlage
+verwendet. Zeilenumbrüche der Datei bleiben erhalten; verwenden Sie nur synthetischen
+Text. `POST /v1/m/sandbox/synthetic-data` benötigt dieselbe Berechtigung wie die
+Szenarioerstellung. Es liefert `samples`, jeweils mit `key` und `input`, bereit als
+`steps` eines Szenarios. Die Erzeugung speichert die Eingaben nicht; das Audit-Event
+enthält nur die Sample-Zahl. Verwenden Sie synthetischen Text, keine Secrets oder
+Produktionsdaten.
+
+```json
+{"subject_kind":"agent","count":2,"seed":"{{subject_kind}}:user{{index}}@example.test"}
+```
+
+Die beiden Eingaben sind `agent:user1@example.test` und `agent:user2@example.test`.
+Die einzigen Ersetzungen sind `{{index}}` (ab 1) und `{{subject_kind}}`; anderer
+Text bleibt wörtlich. Dies ist lokale Fixture-Erzeugung, keine modellgenerierte
+Sprache oder statistische Simulation. Standardwerte sind Subjekt `agent`, Anzahl
+`10` und Vorlage `{{subject_kind}}-sample-{{index}}`. Die Anzahl ist auf 100, das
+Subjekt auf 200 Bytes und Vorlage sowie jede erzeugte Eingabe auf 8192 Bytes
+begrenzt. Zu große Anfragen scheitern ohne unvollständige Sample-Menge. Das kodierte
+Batch muss auch in das 1-MiB-Anfragelimit der Szenario-API passen, einschließlich
+JSON-Escaping und Platz für begrenzten Namen, Beschreibung und Subjekt. Zusätzliche
+Mocks und Formatierung zählen ebenfalls zu diesem Limit.
+
+## Ein erzeugtes Szenario ausführen
+
+Aktivieren Sie das auswählbare Modul mit `olivares modules on sandbox`. Erzeugung,
+Szenarioerstellung und Ausführung benötigen Editor- oder Administratorrechte;
+Viewer können gespeicherte Szenarien, Läufe und Ausgaben ansehen.
+
+Erstellen Sie eine Vorlage ohne abschließenden Zeilenumbruch:
+
+```sh
+printf '%s' '{{subject_kind}}:user{{index}}@example.test' > seed.txt
+```
+
+Speichern Sie diese synthetische Antwort in `mocks.json`:
+
+```json
+[{"resource":"agent:user1@example.test","response":"first synthetic account"}]
+```
+
+```sh
+olivares sandbox generate --count 2 --seed-file seed.txt -o json > steps.json
+olivares sandbox scenarios create --name generated --steps-file steps.json --mocks-file mocks.json -o json
+olivares sandbox scenarios run <scenario-id> --variant candidate -o json
+olivares sandbox runs get <run-id> -o json
+olivares sandbox runs outputs <run-id> -o json
+```
+
+Verwenden Sie die bei Erstellung zurückgegebene Szenario-ID und anschließend die
+Lauf-ID der Ausführung. Beim standardmäßigen `inproc-mock`-Runner wird die erste
+Eingabe zur obigen Antwort aufgelöst; die zweite liefert
+`[[mock-miss:agent:user2@example.test]]`. Ein Mock-Miss erhöht `steps_error`, ist
+aber ein erwartetes synthetisches Ergebnis: Der Lauf meldet trotzdem
+`status: completed`, `steps_total: 2`, `steps_ok: 1`, `steps_error: 1`,
+`isolated: true`, `destroyed: true`. Er fragt keine reale Ressource an. Dieses
+Beispiel fordert keine Bewertung an und qualifiziert keine OS-Level-Runtime.
+Das Matching verwendet den exakten Eingabetext einschließlich Zeilenumbrüchen
+in einer Vorlagendatei.
+
+Szenarien, Läufe und Ausgaben bleiben nach einem Engine-Neustart verfügbar.
+Ausschalten entfernt den Zugriff auf die Modulrouten, ohne gespeicherte Daten zu
+löschen; Einschalten stellt ihn wieder her. Diese Datensätze sind mandantenbezogen:
+Eine andere Organisation kann sie nicht lesen.
 
 ## Verwandt
 

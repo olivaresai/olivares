@@ -36,13 +36,7 @@ const (
 // while it serializes as `{"items":[]}` next door (core/api/listresponse.go).
 type listResponse[T any] = api.ListResponse[T]
 
-func writeJSON(w http.ResponseWriter, status int, v any) {
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.WriteHeader(status)
-	if v != nil {
-		_ = json.NewEncoder(w).Encode(v)
-	}
-}
+var writeJSON = api.WriteJSON
 
 func writeCSV(w http.ResponseWriter, body string) {
 	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
@@ -50,9 +44,7 @@ func writeCSV(w http.ResponseWriter, body string) {
 	_, _ = w.Write([]byte(body))
 }
 
-func errorBody(msg string) map[string]any {
-	return map[string]any{"error": map[string]string{"message": msg}}
-}
+var errorBody = api.ModuleErrorBody
 
 // writeStoreError maps a store error to an HTTP status. THE MAPPING ITSELF IS NOT
 // HERE: it is api.StoreErrorStatus (core/api/moduleerrors.go), which derives the
@@ -65,8 +57,8 @@ func errorBody(msg string) map[string]any {
 // tenant_suspended, tenant_not_in_service, not_leader and residency_violation —
 // were absent from all but two of the thirty-six copies, so the same refusal was
 // answered 423/503/403 by a core route and 500 "internal error" by every module
-// route. The per-arm reasoning (ADR-0024 Q2 for the audit spool/B-03 for
-// workspace confinement for the standby) now lives beside statusFor, once.
+// route. The per-arm reasoning (audit-spool policy for audit spool capacity and
+// standby workspace confinement) now lives beside statusFor, once.
 func writeStoreError(w http.ResponseWriter, err error) {
 	if err == nil {
 		writeJSON(w, http.StatusOK, nil)
@@ -103,7 +95,7 @@ func decodeOptionalJSON(w http.ResponseWriter, r *http.Request, v any) bool {
 	// Optional: an empty body keeps v at its zero value, which is what "the
 	// operator did not narrow anything" means on these routes.
 	if err := api.DecodeRequestBody(w, r, v, api.RequestBodySpec{MaxBytes: maxReqBytes, Optional: true}); err != nil {
-		writeJSON(w, http.StatusBadRequest, errorBody("invalid JSON body"))
+		writeJSON(w, http.StatusBadRequest, errorBody(api.RequestBodyErrorMessage(err, "invalid JSON body")))
 		return false
 	}
 	return true
@@ -111,7 +103,7 @@ func decodeOptionalJSON(w http.ResponseWriter, r *http.Request, v any) bool {
 
 func decodeJSON(w http.ResponseWriter, r *http.Request, v any) bool {
 	if err := api.DecodeRequestBody(w, r, v, api.RequestBodySpec{MaxBytes: maxReqBytes}); err != nil {
-		writeJSON(w, http.StatusBadRequest, errorBody("invalid JSON body"))
+		writeJSON(w, http.StatusBadRequest, errorBody(api.RequestBodyErrorMessage(err, "invalid JSON body")))
 		return false
 	}
 	return true
@@ -272,4 +264,11 @@ func csvField(s string) string {
 		return "\"" + strings.ReplaceAll(s, "\"", "\"\"") + "\""
 	}
 	return s
+}
+
+func nonEmpty(a, b string) string {
+	if a != "" {
+		return a
+	}
+	return b
 }

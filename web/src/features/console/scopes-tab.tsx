@@ -39,12 +39,15 @@ import {
 } from '@/components/ui/select'
 import { Spinner } from '@/components/ui/spinner'
 import { Textarea } from '@/components/ui/textarea'
+import { PANEL_EXTENSIONS } from '@/features/extensions'
 import { AAL, RequireAssurance } from '@/features/identity/assurance'
+import { useOfferedPanels } from '@/features/panels'
 import { ListTruncationBadge } from '@/features/_intel'
 import type { AgentDTO } from '@/lib/api/types'
 import { useAuth } from '@/lib/auth/context'
 import { usePrivilegedMutation } from '@/lib/hooks/use-privileged-mutation'
 import { useWorkspaceFilter } from '@/lib/hooks/use-workspace-filter'
+import { slugify } from '@/lib/utils'
 import {
   consoleApi,
   consoleKeys,
@@ -76,6 +79,9 @@ export function ScopesTab() {
   )
   const [archive, setArchive] = useState<WorkspaceDTO | null>(null)
   const [deleteGroup, setDeleteGroup] = useState<AgentGroupDTO | null>(null)
+  // The organization tree (departments) is Business: its card comes from the
+  // build's extensions.
+  const extensionCards = useOfferedPanels(PANEL_EXTENSIONS.scopesCards)
 
   const workspaces = useQuery({
     queryKey: consoleKeys.workspaces(activeTenant),
@@ -221,6 +227,10 @@ export function ScopesTab() {
           </div>
         )}
       </section>
+
+      {extensionCards.map((p) => (
+        <p.Component key={p.id} />
+      ))}
 
       <section className="flex flex-col gap-3">
         <div className="flex items-start justify-between gap-3">
@@ -503,14 +513,20 @@ function WorkspaceForm({ onClose }: { onClose: () => void }) {
   const { activeTenant } = useAuth()
   const [name, setName] = useState('')
   const [slug, setSlug] = useState('')
+  const [slugEdited, setSlugEdited] = useState(false)
+  const effectiveSlug = slugEdited ? slug : slugify(name)
   const mutation = usePrivilegedMutation<void, WorkspaceDTO>({
     mutationFn: () =>
-      consoleApi.createWorkspace({ name: name.trim(), slug: slug.trim() }),
+      consoleApi.createWorkspace({
+        name: name.trim(),
+        slug: effectiveSlug.trim(),
+      }),
     invalidateKeys: () => [consoleKeys.workspaces(activeTenant)],
     successMessage: t('console:workspaces.created'),
     onDone: onClose,
   })
-  const valid = name.trim() !== '' && /^[a-z0-9][a-z0-9-]*$/.test(slug.trim())
+  const valid =
+    name.trim() !== '' && /^[a-z0-9][a-z0-9-]*$/.test(effectiveSlug.trim())
   return (
     <>
       <DialogHeader>
@@ -533,8 +549,11 @@ function WorkspaceForm({ onClose }: { onClose: () => void }) {
         >
           <Input
             id="ws-slug"
-            value={slug}
-            onChange={(e) => setSlug(e.target.value)}
+            value={effectiveSlug}
+            onChange={(e) => {
+              setSlug(e.target.value)
+              setSlugEdited(true)
+            }}
             mono
           />
         </Field>

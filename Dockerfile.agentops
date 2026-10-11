@@ -117,14 +117,16 @@ RUN groupadd -g 65532 olivares \
       /var/lib/olivares /var/lib/olivares/workspaces \
  && install -d -o 65532 -g 65532 -m 0700 /run/olivares
 ENV HOME=/home/olivares
+# The directory the CMD serves, so a bare `olivares first-boot` (or any data-dir default) finds it.
+ENV OLIVARES_DATA_DIR=/var/lib/olivares
 
 # The VERIFIED engine binary, copied from the (cosign-signed, distroless) engine
 # image — we do not recompile it here, so the bytes are exactly what release shipped.
 COPY --from=engine /usr/local/bin/olivares /usr/local/bin/olivares
 
 USER 65532:65532
-# Documented surface only — the engine binds 127.0.0.1 by DEFAULT (docs/SECURITY-HARDENING.md); a
-# container operator opts into 0.0.0.0 explicitly. The host controls real exposure.
+# Documented surface only — the engine binds every interface by default; the CMD
+# writes it out, and the host port mapping controls real exposure.
 EXPOSE 8443 8444
 # tini is PID 1 so the claude grandchildren the procRunner's process group leaves on
 # stop are reaped (a distroless engine has no init; here the engine spawns children).

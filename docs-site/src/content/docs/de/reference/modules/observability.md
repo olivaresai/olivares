@@ -8,7 +8,7 @@ description: >-
   persistiert nichts.
 ---
 
-Observability (`modules/observability`) ist eines der 31 Module — wie
+Observability (`modules/observability`) ist eines der 32 Module — wie
 [live-ingest](/de/reference/modules/live-ingest/) erfüllt es eine
 architektonische Rolle, statt einen Capability-Slot zu besetzen. Es ist das
 **Read-Model der Engine über sich selbst**: drei schreibgeschützte Oberflächen

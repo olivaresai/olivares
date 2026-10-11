@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-// HU2-01 follow-up (Root, 2026-10-02): an ACP agent (OpenCode, Grok Build) does not
+// An ACP agent (OpenCode, Grok Build) does not
 // echo the person's prompt, so the console and `session follow` showed the reply and
 // never what the person typed. A prompt the driver accepted becomes one session/update
 // user_message_chunk frame in the run's output stream.
@@ -49,7 +49,7 @@ const acpDecisionWait = 250 * time.Millisecond
 
 // acpEchoDriver reports whether a driver speaks ACP, whose agents do not echo a prompt.
 func acpEchoDriver(d ProviderDriver) bool {
-	return d != nil && (d.Key() == providerDriverOpenCode || d.Key() == providerDriverGrok)
+	return d != nil && (d.Key() == providerDriverOpenCode || d.Key() == providerDriverGrok || d.Key() == providerDriverGemini)
 }
 
 // queue holds a prompt the driver is about to write; nil when nothing is to be added.

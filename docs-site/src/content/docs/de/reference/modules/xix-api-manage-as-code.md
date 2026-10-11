@@ -7,6 +7,9 @@ description: >-
   verwaltet und die ehrlichen Grenzen jedes Teils.
 ---
 
+> Die REST-API bleibt in Community verfügbar. Der Terraform-Provider gehört zu Business; Quellcode und Release-Pakete werden über den Business-Kanal geliefert.
+
+
 Modul XIX ist kein Feature, das an die Engine geschraubt ist — es **ist** die Fläche der Engine.
 Jedes andere Modul erreicht die Außenwelt über dieselbe First-Party-API, und die Web-UI ist eine
 Präsentationsschicht über genau diesem Vertrag, keine parallele. Diese Seite ist die Referenz dafür,

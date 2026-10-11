@@ -8,6 +8,8 @@ import (
 	"bytes"
 	"io"
 	"os"
+	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -37,6 +39,28 @@ var destructiveVerbs = []struct {
 		"--tenant", "00000000-0000-0000-0000-000000000000", "--id", "sub-123"}},
 }
 
+// isolateFromDefaultInstallation makes every default data directory an empty
+// temporary one and returns it. A working directory alone is not enough: the
+// default is $OLIVARES_DATA_DIR, then ./olivares-data, then $XDG_DATA_HOME, then
+// $HOME/.local/share/olivares (readonly_boot_test.go has the measurement). On a
+// host with an installation there, `secrets rm --yes` boots an engine against it
+// and `sources rm --yes` boots a second one in the same process, which the
+// Business add-on entitlement guard refuses; in Community the verbs still open
+// the real installation of whoever runs the suite (they stop at "actor is
+// required" before deleting). Left empty, the three verbs that need a data
+// directory refuse with "no installation" before any boot.
+func isolateFromDefaultInstallation(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	t.Chdir(dir)
+	t.Setenv("HOME", dir)
+	t.Setenv("XDG_DATA_HOME", filepath.Join(dir, "xdg"))
+	t.Setenv("OLIVARES_DATA_DIR", "")
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(dir, "config"))
+	t.Setenv("OLIVARES_CLI_CONFIG", filepath.Join(dir, "cli", "config.yaml"))
+	return dir
+}
+
 // TestDestructiveVerbsRefuseWithoutConsent is the deny-closed half: with no
 // terminal to ask, the command must not proceed. `agent workspace rm
 // --recursive` reached os.RemoveAll on the server with no confirmation at all
@@ -44,7 +68,7 @@ var destructiveVerbs = []struct {
 func TestDestructiveVerbsRefuseWithoutConsent(t *testing.T) {
 	for _, tc := range destructiveVerbs {
 		t.Run(tc.name, func(t *testing.T) {
-			t.Chdir(t.TempDir())
+			isolateFromDefaultInstallation(t)
 			root := newRootCmd()
 			var out, errb bytes.Buffer
 			root.SetOut(&out)
@@ -72,7 +96,7 @@ func TestDestructiveVerbsRefuseWithoutConsent(t *testing.T) {
 func TestDestructiveVerbsAcceptExplicitYes(t *testing.T) {
 	for _, tc := range destructiveVerbs {
 		t.Run(tc.name, func(t *testing.T) {
-			t.Chdir(t.TempDir())
+			dir := isolateFromDefaultInstallation(t)
 			root := newRootCmd()
 			var out, errb bytes.Buffer
 			root.SetOut(&out)
@@ -81,6 +105,23 @@ func TestDestructiveVerbsAcceptExplicitYes(t *testing.T) {
 			_, err := root.ExecuteC()
 			if err != nil && strings.Contains(err.Error(), "confirm") {
 				t.Fatalf("--yes did not satisfy the confirmation: %v", err)
+			}
+			// With nothing to act on, every verb stops at its own refusal and boots
+			// no engine: the three that need a data directory say there is no
+			// installation, the one that needs a server cannot reach it.
+			if err == nil {
+				t.Fatalf("`olivares %s --yes` succeeded with no installation and no server",
+					strings.Join(tc.argv, " "))
+			}
+			if !slices.Contains(tc.argv, "--server") {
+				if got := exitcode.From(err); got != exitcode.NotFound || !strings.Contains(err.Error(), "no installation") {
+					t.Fatalf("`olivares %s --yes` must refuse for want of an installation (exit %d), got exit %d: %v",
+						strings.Join(tc.argv, " "), exitcode.NotFound, got, err)
+				}
+			}
+			if left := filesUnder(t, dir); len(left) > 0 {
+				t.Fatalf("`olivares %s --yes` left %d file(s) behind: %v",
+					strings.Join(tc.argv, " "), len(left), left)
 			}
 		})
 	}

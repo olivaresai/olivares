@@ -8,6 +8,7 @@ import {
   type Page,
   type Response,
 } from '@playwright/test'
+import { sessionToken } from './live-session'
 
 // CONSOLE-FUNC-01 lot 5 runs only against a disposable --seed-demo engine. No
 // response is fulfilled or rewritten by Playwright: every HTTP assertion below
@@ -80,17 +81,18 @@ async function loginDemo(
   await page.getByRole('button', { name: /^sign in$/i }).click()
   const response = await loginRead
   expect(response.status(), 'the disposable demo login must be real').toBe(200)
-  const body = (await response.json()) as { token: string }
   // WHAT A FRESH SIGN-IN PAINTS. The console lands on the root, which belongs to no
   // navigation area, and the sidebar hides a closed area's panel — so the entries on
   // screen are the areas and the overview above them, not a leaf like Inventory. The
   // name is exact because neighbouring entries contain it.
   await expect(
-    page.getByRole('link', { name: 'Now', exact: true }),
+    page
+      .getByRole('navigation', { name: 'Journeys', exact: true })
+      .getByRole('link', { name: 'Now', exact: true }),
   ).toBeVisible({
     timeout: 20_000,
   })
-  return body.token
+  return sessionToken(page)
 }
 
 function observe(
@@ -950,7 +952,7 @@ test('tenant lifecycle and API playground destructive send change disposable sta
   await page.goto('/status-page')
   await publicRead
   await expect(
-    page.getByRole('heading', { name: 'Olivares Control Plane — Status' }),
+    page.getByRole('heading', { name: 'Olivares AI — Status' }),
   ).toBeVisible()
   const publicRefresh = observe(page, 'GET', '/status', 200)
   await page.getByRole('button', { name: 'Refresh' }).click()

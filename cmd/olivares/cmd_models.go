@@ -109,6 +109,17 @@ func newModelsEstateGetCmd(c modelstackClient) *cobra.Command {
 func newModelsReferenceCmds(c modelstackClient) []*cobra.Command {
 	return []*cobra.Command{
 		newModelstackGetCmd(c, modelstackGetSpec{
+			Use: "availability", Short: "Show available models by provider and account",
+			Long:    "Show models available to this tenant, filtered by provider, account or tool; use olivares provider ls to inspect providers.",
+			Example: "  olivares models availability -o json",
+			Target:  modelstackTarget{Collection: "/availability"},
+			Filters: []modelstackFilterSpec{
+				{Flag: "provider-ref", Query: "provider_ref", Usage: "only this provider record"},
+				{Flag: "account-ref", Query: "account_ref", Usage: "only this account-home profile"},
+				{Flag: "driver", Query: "driver", Usage: "only this coding tool"},
+			},
+		}),
+		newModelstackGetCmd(c, modelstackGetSpec{
 			Use:   "catalog",
 			Short: "Show the declared reference catalog (capabilities and list pricing)",
 			Long: "Show the declared capability/feature matrix and list pricing per model family, with\n" +

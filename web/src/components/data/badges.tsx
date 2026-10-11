@@ -4,6 +4,7 @@
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
 import { Badge, type BadgeVariant } from '@/components/ui/badge'
+import { StatusChip, type StatusTone } from '@/components/ui/status-chip'
 import type { AccessConfidence, AccessMode } from '@/lib/api/types'
 
 /**
@@ -14,26 +15,28 @@ import type { AccessConfidence, AccessMode } from '@/lib/api/types'
  * firm (solid teal, filled dot) and `approximate` as quieter and cooler (dashed
  * slate, hollow dot), never alarming (UI-CONTRACT-ACCESS-MAP).
  */
-const STATUS_VARIANT: Record<string, BadgeVariant> = {
-  active: 'success',
-  healthy: 'success',
-  running: 'success',
-  ok: 'success',
-  enabled: 'success',
-  approved: 'success',
+const STATUS_TONE: Record<string, StatusTone> = {
+  active: 'ok',
+  healthy: 'ok',
+  running: 'ok',
+  working: 'ok',
+  'needs-you': 'warn',
+  ok: 'ok',
+  enabled: 'ok',
+  approved: 'ok',
   pending: 'info',
   queued: 'info',
   provisioning: 'info',
   draft: 'info',
-  degraded: 'warning',
-  warning: 'warning',
-  deprecated: 'warning',
-  unused: 'warning',
-  error: 'danger',
-  failed: 'danger',
-  revoked: 'danger',
-  down: 'danger',
-  unexpected: 'danger',
+  degraded: 'warn',
+  warning: 'warn',
+  deprecated: 'warn',
+  unused: 'warn',
+  error: 'bad',
+  failed: 'bad',
+  revoked: 'bad',
+  down: 'bad',
+  unexpected: 'bad',
   inactive: 'neutral',
   idle: 'neutral',
   unknown: 'neutral',
@@ -54,11 +57,15 @@ export function StatusBadge({
 }) {
   const { t } = useTranslation('common')
   const key = (status ?? '').toLowerCase()
-  const variant = STATUS_VARIANT[key] ?? 'neutral'
+  const tone = STATUS_TONE[key] ?? 'neutral'
   return (
-    <Badge variant={variant} className={className}>
+    <StatusChip
+      tone={tone}
+      working={key === 'running' || key === 'working'}
+      className={className}
+    >
       {t(`status.${key}`, { defaultValue: humanize(status) })}
-    </Badge>
+    </StatusChip>
   )
 }
 

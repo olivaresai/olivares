@@ -35,6 +35,7 @@ import {
   START_PAGE_IDS,
   useClientSettings,
 } from '@/features/settings/preferences'
+import { useSessionStore } from '@/stores/session'
 import { useTenantStore } from '@/stores/tenant'
 
 /**
@@ -87,6 +88,7 @@ type LoginValues = z.infer<typeof schema>
 
 export function LoginPage() {
   const { t } = useTranslation(['auth', 'common', 'errors'])
+  const endReason = useSessionStore((s) => s.endReason)
   const { status, login, adoptSession, can } = useAuth()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -159,6 +161,15 @@ export function LoginPage() {
           <p className="text-body text-muted-foreground">
             {t('login.subtitle')}
           </p>
+          {endReason ? (
+            <p className="text-body text-text" role="status">
+              {t(
+                endReason === 'expired'
+                  ? 'login.sessionExpired'
+                  : 'login.sessionEnded',
+              )}
+            </p>
+          ) : null}
         </div>
         {challenge ? (
           <SecondFactorPanel

@@ -54,7 +54,7 @@ def anchor(output, control, release, directory, command):
             os.chdir(directory)
             os.execvp(command[0], command)
         except OSError:
-            os.write(2, b"sonda: no puedo ejecutar la orden en el directorio\n")
+            os.write(2, b"probe: cannot run the command in the directory\n")
             os._exit(126)
     os.close(output)
     idle = False

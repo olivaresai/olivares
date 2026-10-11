@@ -29,7 +29,7 @@ func sessionMCPAvailable(snapshot auth.MCPGatewaySnapshot) bool {
 
 func (m *mcpManagement) ConfigureSessionMCP(ctx context.Context, tenant model.TenantID, runRef, driver string, spec *sessions.LaunchSpec) (func(), error) {
 	noop := func() {}
-	if m.source != "store" || (driver != "claude" && driver != "codex") {
+	if m.source != "store" || (driver != "claude" && driver != "codex" && driver != "opencode") {
 		return noop, nil
 	}
 	snapshot, err := m.store.Get(ctx, tenant)

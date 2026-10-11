@@ -113,6 +113,9 @@ func migrateApplyCmd() *cobra.Command {
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			if err := checkCMEKInstall(""); err != nil {
+				return err
+			}
 			if strings.TrimSpace(dsn) == "" {
 				return fmt.Errorf("--dsn is required (accepts a file:/env: reference)")
 			}
@@ -191,6 +194,9 @@ func migrateStatusCmd() *cobra.Command {
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			if err := checkCMEKInstall(dataDir); err != nil {
+				return err
+			}
 			var eng store.Engine
 			switch engine {
 			case string(store.EngineSQLite):
@@ -220,8 +226,16 @@ func migrateStatusCmd() *cobra.Command {
 				// effect of a status query — report a missing store plainly instead. A
 				// directory at the path is treated the same (the driver would otherwise
 				// fail with a cryptic "unable to open database file").
+				if err := checkCMEKSQLiteStore(resolved); err != nil {
+					return err
+				}
 				if info, serr := os.Stat(resolved); serr != nil || !info.Mode().IsRegular() {
 					return fmt.Errorf("no sqlite database at %q — run the engine once to create and migrate it, or pass --dsn/--data-dir", resolved)
+				}
+				if realPath, err := filepath.EvalSymlinks(resolved); err == nil {
+					if err := checkCMEKInstall(filepath.Dir(realPath)); err != nil {
+						return err
+					}
 				}
 				cfg.DSN = resolved
 			case store.EnginePostgres:

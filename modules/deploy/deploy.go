@@ -7,6 +7,7 @@ package deploy
 import (
 	"context"
 	"log/slog"
+	"net/http"
 
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/auth"
@@ -59,14 +60,16 @@ func WithStopGate(g StopGate) Option { return func(m *Module) { m.stopGate = g }
 // Module is module VII — deployment & integration. See doc.go for the bounded
 // context and the deny-closed defaults of its three composition-root seams.
 type Module struct {
-	log      *slog.Logger
-	data     api.ModuleData
-	host     sdk.Host
-	clock    model.Clock
-	gate     ApprovalGate
-	exec     Executor
-	binder   IdentityBinder
-	stopGate StopGate
+	log              *slog.Logger
+	data             api.ModuleData
+	host             sdk.Host
+	clock            model.Clock
+	gate             ApprovalGate
+	exec             Executor
+	binder           IdentityBinder
+	stopGate         StopGate
+	executorSetup    ExecutorSetup
+	executorOverride bool
 }
 
 // Compile-time proof the module satisfies the SDK lifecycle, the API route/
@@ -133,7 +136,7 @@ func (m *Module) Start(context.Context) error {
 	if _, ok := m.gate.(denyGate); ok {
 		m.log.Warn("deploy: no approval gate wired; every governed infrastructure mutation will be DENIED by default")
 	}
-	if _, ok := m.exec.(unwiredExecutor); ok {
+	if !m.executorWired() {
 		m.log.Warn("deploy: no runtime executor wired (IaC); desired state can be declared but not reconciled to infrastructure")
 	}
 	if _, ok := m.binder.(unwiredBinder); ok {
@@ -180,6 +183,38 @@ func (m *Module) APIRoutes(reg api.RouteRegistrar) {
 	// ledger.
 	reg.Handle("GET", "/wirings", permWiringRead, m.handleListWirings)
 	reg.Handle("GET", "/operations", permDeploymentRead, m.handleListOperations)
+
+	// Whether this installation can reconcile at all: the console says what Deploy
+	// needs before it offers a declaration form.
+	reg.Handle("GET", "/executor", permDeploymentRead, m.handleExecutor)
+	reg.Handle("GET", "/executor/config", permDeploymentAdmin, m.handleGetExecutorConfig)
+	reg.Handle("PUT", "/executor/config", permDeploymentAdmin, m.handlePutExecutorConfig)
+	reg.Handle("POST", "/executor/test", permDeploymentAdmin, m.handleTestExecutor)
+}
+
+// executorWired reports whether the composition root wired a runtime executor. It is
+// the one test of the seam: Start's warning and GET /executor both read it, and
+// plan/verify/apply/retire fail closed (503) exactly when it is false.
+func (m *Module) executorWired() bool {
+	_, unwired := m.exec.(unwiredExecutor)
+	return !unwired
+}
+
+// executorDTO is the GET /executor answer.
+type executorDTO struct {
+	Configured bool `json:"configured"`
+}
+
+// handleExecutor reports whether a runtime executor is configured, which plan, verify,
+// apply and retire need to reach infrastructure.
+func (m *Module) handleExecutor(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
+	exec, _, err := m.executorFor(r.Context(), mc)
+	if err != nil {
+		execUnavailable(w, err)
+		return
+	}
+	_, unwired := exec.(unwiredExecutor)
+	writeJSON(w, http.StatusOK, executorDTO{Configured: exec != nil && !unwired})
 }
 
 // debugf logs at debug level if a logger is set.

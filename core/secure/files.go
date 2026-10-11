@@ -171,7 +171,13 @@ func DataDirVCSWarning(dir string) string {
 // os.CreateTemp names the staging file randomly (nothing can pre-empt it) and creates it
 // 0600. The Chmod is still explicit and the mode is VERIFIED before the rename carries the
 // secret into place, because a promise nobody checks is a promise nobody keeps.
-func writeSecret(path string, b []byte) error {
+func writeSecret(path string, b []byte) error { return writeSecretAs(path, b, -1, -1) }
+
+// writeSecretAs is writeSecret that gives the file to uid:gid (uid < 0 keeps the
+// writer's) through the staging file's descriptor, BEFORE the rename publishes it. A
+// root process writing into a directory a less privileged account owns must not change
+// an owner by name afterwards: that account can put a link to a root file at the name.
+func writeSecretAs(path string, b []byte, uid, gid int) error {
 	dir := filepath.Dir(path)
 	if err := EnsureDir(dir); err != nil {
 		return err
@@ -188,6 +194,11 @@ func writeSecret(path string, b []byte) error {
 	}
 	if err := tmp.Chmod(keyFilePerm); err != nil {
 		return fail("secure: set mode %04o while staging %s: %w", keyFilePerm, path, err)
+	}
+	if uid >= 0 {
+		if err := tmp.Chown(uid, gid); err != nil {
+			return fail("secure: give %s to %d:%d while staging it: %w", path, uid, gid, err)
+		}
 	}
 	if _, err := tmp.Write(b); err != nil {
 		return fail("secure: write %s: %w", path, err)

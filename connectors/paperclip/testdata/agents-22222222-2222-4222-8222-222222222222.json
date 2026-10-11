@@ -1,0 +1,3 @@
+[
+  {"id": "bbbbbbb1-0000-4000-8000-000000000001", "companyId": "22222222-2222-4222-8222-222222222222", "name": "Solo", "role": "general", "title": null, "status": "paused", "reportsTo": null, "adapterType": "gemini_local", "adapterConfig": {}, "runtimeConfig": {}, "budgetMonthlyCents": 0, "spentMonthlyCents": 0}
+]

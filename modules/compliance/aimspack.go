@@ -26,11 +26,10 @@ import (
 // add-on enterprise/iso42001, wired ONLY under -tags enterprise (the RegulatoryPackager
 // / ProfileResolver pattern). The open binary never links it.
 //
-// No rug-pull (LICENSING.md): the open catálogo iso_42001 (frameworks.go), the evidence
-// engine (evidence.go/assess.go), the risk classifier (risk.go), and the crosswalk
-// frameworks (nist_ai_600_1, csa_maestro, owasp_agentic_tm, owasp_agentic_top10) are ALL
-// unchanged and stay open. Without a wired packager the new AIMS endpoints answer 501;
-// the default binary is byte-identical.
+// Framework catalogs and live assessments are Business Compliance Packs.
+// Stored-evidence reads, JSON/CSV export and operational risk remain shared.
+// Without a wired AIMS packager its endpoints answer 501; the interface and
+// persisted records remain available in the shared module.
 //
 // Honesty (docs/SECURITY-HARDENING.md): the add-on automates evidence gathering and report structuring;
 // it does NOT make the organization ISO/IEC 42001 conformant and is NOT a certification
@@ -42,8 +41,8 @@ import (
 
 // AIMSPackager is the closed seam for ISO/IEC 42001 AIMS certification-readiness depth on
 // top of the open compliance substrate. The default is nil — without a wired packager the
-// AIMS endpoints answer 501 and the open catalog/evidence/risk surfaces keep their
-// behavior. The real implementation is enterprise/iso42001, wired only under -tags
+// AIMS endpoints answer 501. Stored evidence and risk remain shared; framework
+// assessments belong to Business Compliance Packs. The implementation is enterprise/iso42001, wired under -tags
 // enterprise.
 type AIMSPackager interface {
 	// BuildAIMSPack structures operator-supplied organizational context + the live ISO
@@ -79,37 +78,25 @@ type AIMSInput struct {
 type AIMSDocument struct {
 	// OrganizationName identifies the entity this pack is prepared for.
 	//
-	// ⛔ EL NOMBRE GO Y EL DEL CABLE DIVERGEN A PROPÓSITO, y esto existe para que nadie
-	//    «arregle» el segundo. El identificador era `OrganisationName` —ortografía británica
-	//    contra el `locale: US` que `.golangci.yml` fija, y contra los seis «organization» que
-	//    este mismo fichero escribe en sus comentarios—, así que renombrarlo es interno y gratis.
+	// The Go name follows locale: US in .golangci.yml; the published JSON key
+	// organisation_name stays unchanged. The 2026-08-19 measurement found no occurrence
+	// in web/openapi/openapi.json, but the Business console's regulatory operations
+	// panel read the key and the published
+	// docs/superpowers/specs/…nis2-mapping-iso42001-wizard-design.md:101 specified it.
+	// Changing the wire key requires coordinated producer and consumer changes.
 	//
-	//    **La etiqueta JSON `organisation_name` NO se toca.** Medido el 2026-08-19: no está en
-	//    `web/openapi/openapi.json` (0 apariciones), pero **la consola SÍ la lee**
-	//    (`web/src/features/compliance/regops-view.tsx:1222` y su celda) y aparece en una spec
-	//    publicada (`docs/superpowers/specs/…nis2-mapping-iso42001-wizard-design.md:101`).
-	//    Cambiarla es un cambio COORDINADO de dos mitades, no un barrido de ortografía: pertenece
-	//    al trabajo de la superficie de cumplimiento, con las dos partes en el mismo commit.
+	// The exported Go field also has an external consumer. Measured the
+	// enterprise overlay's CI failure on 2026-08-27:
 	//
-	// ⛔⛔ Y «RENOMBRARLO ES INTERNO Y GRATIS» ERA FALSO. Medido el 2026-08-27 en la CI
-	//    del overlay enterprise, que es el consumidor que este bloque no miró:
+	//     enterprise/iso42001/packager.go:112:3:
+	//       unknown field OrganisationName in struct literal of type compliance.AIMSDocument
 	//
-	//        enterprise/iso42001/packager.go:112:3:
-	//          unknown field OrganisationName in struct literal of type compliance.AIMSDocument
-	//
-	//    Este campo lo escribe OTRO REPOSITORIO (el overlay enterprise, en un repositorio PRIVADO aparte),
-	//    que consume este árbol por un submódulo PINEADO. En el pin de hoy (`25d9478e9`) el
-	//    campo todavía se llama `OrganisationName`, y en `main` se llama `OrganizationName`
-	//    desde `e41c46d68`. ⇒ el overlay **no puede compilar contra los dos a la vez**: arreglar
-	//    su lado lo rompe contra su propio pin, y dejarlo lo rompe contra `main`. Sale rojo en
-	//    `hub-sha-verify`, que es un job que nadie lee porque no está entre los requeridos.
-	//
-	//    Lo que estaba mal NO es el renombrado —el `locale: US` es la regla del proyecto y la
-	//    etiqueta JSON se congeló bien—: es el ALCANCE. «Interno» se midió dentro de este
-	//    repositorio, y un identificador EXPORTADO no termina en el borde del repositorio.
-	//    ⇒ un barrido de ortografía congela las cadenas que salen del proceso Y los
-	//    identificadores exportados que consume otro árbol; y si hay que romperlos, se rompen
-	//    con el consumidor en el mismo movimiento (aquí: junto al re-pin, C02-01).
+	// That separate private repository consumed this tree through a pinned submodule.
+	// Its pin 25d9478e9 still used OrganisationName; main used OrganizationName since
+	// e41c46d68. One consumer spelling could not compile against both. hub-sha-verify
+	// reported the failure outside the required jobs.
+	// A spelling cleanup must preserve wire strings AND exported names consumed by
+	// other trees, or coordinate the change with the consumer's re-pin (C02-01).
 	OrganizationName string
 
 	// Standard is the standard identifier (always "ISO/IEC 42001:2023").
@@ -158,8 +145,16 @@ type AIMSIssue struct {
 	Message  string `json:"message"`
 }
 
-// aimsPackDisclaimer is the honesty banner every AIMS pack carries (docs/SECURITY-HARDENING.md).
-const aimsPackDisclaimer = "ISO/IEC 42001:2023 certification-readiness pack structured from " +
+// aimsPackDisclaimer is snapshotted when a pack is generated (docs/SECURITY-HARDENING.md).
+const aimsPackDisclaimer = "Draft ISO/IEC 42001:2023 certification-readiness pack based on " +
+	"Olivares AI's current assessment and operator-supplied context. All artifacts are drafts; " +
+	"a competent person must review them before submission to a certification body, auditor " +
+	"or buyer. This pack provides neither certification nor conformity assurance nor legal " +
+	"advice. Certification requires an accredited body (ISO/IEC 42006:2025). Control status " +
+	"reflects current tenant evidence; gaps remain unsatisfied."
+
+// Packs generated before snapshots were stored retain these exact historical bytes.
+const legacyAIMSPackDisclaimer = "ISO/IEC 42001:2023 certification-readiness pack structured from " +
 	"the control plane's live assessment and operator-supplied organizational context. " +
 	"The control plane automates evidence gathering and report structuring; it does NOT " +
 	"make the organization conformant to ISO/IEC 42001 and this is NOT a certification, " +
@@ -202,6 +197,10 @@ func recordToAIMSPackDTO(rec model.Record, includeBody bool) aimsPackDTO {
 	_ = jsonUnmarshal(rec.String(colAPLifecycle), &lifecycle)
 	_ = jsonUnmarshal(rec.String(colAPSupplier), &supplier)
 	_ = jsonUnmarshal(rec.String(colAPValidation), &validation)
+	disclaimer := rec.String(colAPDisclaimer)
+	if rec.IsNull(colAPDisclaimer) {
+		disclaimer = legacyAIMSPackDisclaimer
+	}
 	dto := aimsPackDTO{
 		ID:               rec.String(model.ColID),
 		Standard:         rec.String(colAPStandard),
@@ -212,7 +211,7 @@ func recordToAIMSPackDTO(rec model.Record, includeBody bool) aimsPackDTO {
 		DocSHA256:        rec.String(colAPDocSHA),
 		GeneratedBy:      rec.String(colAPGeneratedBy),
 		GeneratedAt:      rec.String(colAPGeneratedAt),
-		Disclaimer:       aimsPackDisclaimer,
+		Disclaimer:       disclaimer,
 	}
 	if includeBody {
 		dto.SoA = soa
@@ -245,7 +244,7 @@ func (m *Module) handleGenerateAIMSPack(w http.ResponseWriter, r *http.Request, 
 	if m.aimsPackager == nil {
 		writeJSON(w, http.StatusNotImplemented, errorBody(
 			"ISO/IEC 42001 AIMS certification-readiness pack generation requires "+
-				"the Olivares enterprise add-on (iso42001); not linked in this build"))
+				"the Olivares Business edition (iso42001); not linked in this build"))
 		return
 	}
 	doc, ok := readBoundedBody(w, r, "AIMS organizational context")
@@ -305,6 +304,7 @@ func (m *Module) handleGenerateAIMSPack(w http.ResponseWriter, r *http.Request, 
 			colAPDocSHA:      docSHA,
 			colAPGeneratedBy: mc.Principal.Actor(),
 			colAPGeneratedAt: now.String(),
+			colAPDisclaimer:  aimsPackDisclaimer,
 			colLedgerSeq:     head.Seq,
 			colLedgerHash:    nullableText(ledgerHashHex(head, headOK)),
 		}
@@ -440,7 +440,7 @@ func (m *Module) handleExportAIMSPack(w http.ResponseWriter, r *http.Request, mc
 		"scope_note":          dto.ScopeNote,
 		"doc_sha256":          dto.DocSHA256,
 		"ledger_anchor":       anchor,
-		"disclaimer":          aimsPackDisclaimer,
+		"disclaimer":          dto.Disclaimer,
 	})
 }
 

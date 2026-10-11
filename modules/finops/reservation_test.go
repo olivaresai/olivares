@@ -174,7 +174,7 @@ func TestSpendLimitReserveLedger_ConcurrentExactlyMminus1(t *testing.T) {
 	const M = 16
 	const actor = "user:alice"
 	capCents := strconv.FormatInt(int64(M-1)*100, 10) // (M-1) USD, in integer cents
-	if _, _, err := m.SpendLimitUpsert(context.Background(), tenant, SpendLimitSpec{
+	if _, _, err := seedStoredSpendLimit(m, context.Background(), tenant, SpendLimitSpec{
 		Scope:  SpendLimitScope{Type: "user", UserID: actor},
 		Amount: &capCents,
 		Period: "daily",

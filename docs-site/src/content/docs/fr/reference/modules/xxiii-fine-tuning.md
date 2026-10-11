@@ -86,6 +86,6 @@ politique de la pile fournisseurs restant dans la
 ## Connexe
 
 - [Module XXIII — opérations des modèles](/fr/reference/modules/xxiii-model-operations/) — la surface de gouvernance des modèles propres déjà livrée : registre, admission, lignage, déploiements, AIBOM.
-- [Catalogue des modules](/fr/reference/modules/overview/) — les 31 modules livrés et où se situe le travail sur les modèles propres.
+- [Catalogue des modules](/fr/reference/modules/overview/) — les 32 modules livrés et où se situe le travail sur les modèles propres.
 - [Module X — gestion des modèles et fournisseurs](/fr/reference/modules/x-models/) — le voisin livré qui gouverne la pile de modèles fournisseurs.
 - [Honnêteté et limites](/fr/start/honesty-and-limits/) — le contrat observer-largement / agir-sur-un-sous-ensemble et ce que « planifié » signifie.

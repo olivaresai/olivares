@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/olivaresai/olivares/core/internal/store/dialect"
+	"github.com/olivaresai/olivares/core/migrate"
 	"github.com/olivaresai/olivares/core/store"
 )
 
@@ -198,11 +199,12 @@ func upgradePreflightNeeds(reg *registry, cfg upgradePreflightConfig, blindingWi
 	add("mutable descriptor (registry.mutableTenantTables)", false,
 		reg.mutableTenantTables(), sel, ins, upd, del)
 
-	// Append-only descriptors and audit_events. The engine REMOVES UPDATE/DELETE/
+	// Append-only descriptors, audit_events and audit_tree. The engine REMOVES UPDATE/DELETE/
 	// TRUNCATE here and that negative stays exactly where it is (reconcileAppendOnlyACL
 	// and verifyAppendOnlyACL); what this adds is the positive half, which is what an
 	// upgrade can leave missing.
 	appendOnlyTables := reg.appendOnlyTables()
+	appendOnlyTables = append(appendOnlyTables, dialect.AuditTreeTable)
 	add("append-only descriptor (registry.appendOnlyTables)", false,
 		appendOnlyTables, sel, ins)
 	for _, table := range appendOnlyTables {
@@ -237,6 +239,8 @@ func upgradePreflightNeeds(reg *registry, cfg upgradePreflightConfig, blindingWi
 	// SELECT-only by reconcileDirectoryWriterGuards.
 	add("directory writer control (its reconciler grants SELECT)", true,
 		[]string{dialect.DirectoryWriterControlTable}, sel)
+	add("finops custody control (v19 grants SELECT)", true,
+		dialect.FinOpsCustodyControlTables(), sel)
 
 	// The rollout control plane's RUNTIME pair, and this is the easy one to get wrong.
 	// classifyRolloutControls creates all three relations as the owner and grants
@@ -673,7 +677,7 @@ func upgradePreflightOwnerAuthority(
 	modulePlans []moduleFileMigrationPlan,
 	ownerRole string,
 ) error {
-	set, err := buildManagedObjectSet(dia, coreDescriptors(), reg, modulePlans)
+	set, err := buildCurrentManagedObjectSet(dia, coreDescriptors(), reg, modulePlans)
 	if err != nil {
 		return upgradePreflightCause(err, "build this build's managed object inventory")
 	}
@@ -847,8 +851,9 @@ WHERE n.nspname = $1 AND c.relname = $2`, dialect.EngineSchema, name).Scan(&pres
 // without future-object defaults. Materializing it in the schema phase closes that, and
 // sharing the statement is what keeps the two paths from drifting into two shapes.
 func ensureLeaderEpochRelation(ctx context.Context, ex dialect.Execer) error {
-	_, err := ex.ExecContext(ctx, fmt.Sprintf(
-		`CREATE TABLE IF NOT EXISTS %s (id INTEGER PRIMARY KEY, epoch BIGINT NOT NULL, holder TEXT NOT NULL, acquired_at TEXT NOT NULL)`,
-		leaderEpochTable))
-	return err
+	dia, _ := dialect.New(store.EnginePostgres)
+	return migrate.Apply(ctx, ex, dia, "schema_migrations_leader", []migrate.Migration{{
+		Version: 1, Name: "leader_epoch", Stmts: []string{fmt.Sprintf(
+			`CREATE TABLE IF NOT EXISTS %s (id INTEGER PRIMARY KEY, epoch BIGINT NOT NULL, holder TEXT NOT NULL, acquired_at TEXT NOT NULL)`, leaderEpochTable)},
+	}})
 }

@@ -3,6 +3,10 @@ title: "Gouverner et approuver (human-in-the-loop)"
 description: "Comment un opérateur gouverne l'estate : identité et permissions, le modèle RBAC deny-by-default, la couture de politique restrict-only, et la posture human-in-the-loop où les décisions sont consignées dans le ledger d'audit."
 ---
 
+:::note[Business]
+L’export d’audit (`GET /v1/audit/export`, `olivares audit export`), les archives en répertoire et la vérification d’archives externes nécessitent Business. Community conserve le registre signé, `olivares audit verify` et `olivares dr backup` ; l’export renvoie HTTP 501 ou le code de sortie 9. Le transfert d’audit et les transferts DDIL contenant des segments d’audit nécessitent aussi Business.
+:::
+
 Cette page s'adresse à l'opérateur qui a connecté au moins une source et doit
 maintenant **gouverner** l'estate : décider qui et quoi peut agir, examiner ce que la
 plateforme fait remonter, et agir en conséquence. La gouvernance vit dans le **module VI
@@ -219,3 +223,7 @@ tout le reste, ce qui explique pourquoi la lire est une action editor-et-au-dess
   (module IX).
 - [Connecter une source](/fr/how-to/connect-a-source/) — câblez les signaux à partir
   desquels le drift et les constats sont construits.
+
+## Éditions et approbations (0.1)
+
+Community conserve le moteur d’approbation, le minimum de deux personnes distinctes pour les actions CRITICAL, le double contrôle du kill-switch et les politiques qui imposent une revue ou augmentent le niveau de risque ou le quorum. Les politiques qui abaissent le risque et l’accès d’urgence break-glass font partie de la base Business. Les données stockées restent lisibles et exportables, mais ne peuvent ni abaisser les valeurs par défaut de Community ni autoriser un accès d’urgence.

@@ -491,8 +491,10 @@ func buildManagedObjectSet(
 		{"core v1 tenancy", dia.TenancyStmts()},
 		{"core v3 audit_chain", dia.AuditTableStmts()},
 		{"core v5 audit_spool", dia.AuditSpoolStmts()},
+		{"core v24 audit_tree", dia.AuditTreeStmts()},
 		{"core v6 guard control plane", dia.GuardControlPlaneStmts()},
 		{"core v7 directory writer control", dia.DirectoryWriterControlStmts()},
+		{"core v19 finops custody control", dia.FinOpsCustodyControlStmts()},
 		{"guard metadata ACL", dia.GuardMetadataACLStmts()},
 		{"append-only ACL", dia.AppendOnlyACLStmts(reg.appendOnlyTables())},
 	} {

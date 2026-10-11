@@ -55,10 +55,29 @@ func isParseTenantIDCall(call *ast.CallExpr) bool {
 	return ok && pkg.Name == "model"
 }
 
-// isHelperCall reports whether the call is parseBusinessTenant(...).
+// isHelperCall reports whether the call is parseBusinessTenant(...) or, in a PEP
+// package that left package main, pepkit.ParseBusinessTenant(...).
 func isHelperCall(call *ast.CallExpr) bool {
+	if sel, ok := call.Fun.(*ast.SelectorExpr); ok {
+		pkg, isIdent := sel.X.(*ast.Ident)
+		return isIdent && pkg.Name == "pepkit" && sel.Sel != nil && sel.Sel.Name == "Parse"+"BusinessTenant"
+	}
 	id, ok := call.Fun.(*ast.Ident)
 	return ok && id.Name == helperName
+}
+
+// tenantReaderSources are the package sources plus the PEP packages that left
+// package main with their tenant readers (the MCP gateway's decision tenants).
+func tenantReaderSources() ([]string, error) {
+	var files []string
+	for _, pattern := range []string{"*.go", "internal/mcpgateway/*.go"} {
+		matched, err := filepath.Glob(pattern)
+		if err != nil {
+			return nil, err
+		}
+		files = append(files, matched...)
+	}
+	return files, nil
 }
 
 // helperName is assembled from pieces so a literal-rewriting sweep over this package
@@ -66,7 +85,7 @@ func isHelperCall(call *ast.CallExpr) bool {
 const helperName = "parse" + "BusinessTenant"
 
 func TestTenantFieldReadersGoThroughTheSharedHelper(t *testing.T) {
-	files, err := filepath.Glob("*.go")
+	files, err := tenantReaderSources()
 	if err != nil || len(files) == 0 {
 		t.Fatalf("glob package sources: files=%d err=%v", len(files), err)
 	}

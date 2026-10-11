@@ -6,6 +6,8 @@ description: >-
   OTLP — over the durable eventing platform, with a leader-gated cursor walk and
   at-least-once delivery. It renders and forwards; it never re-derives integrity.
 ---
+SIEM and ITSM push, OTLP downloads, external trace and metric delivery, and posture export require Business. Community keeps local observability, trace-context propagation, saved settings and `olivares dr backup`. Generic chat, email and webhook notifications remain available in Community.
+
 
 The SIEM/ITSM forwarder (`modules/siemforward`) takes the evidence the
 engine already seals and gets it into the tower your SOC already runs. It is
@@ -49,8 +51,10 @@ credentials, so one instance serves every tenant and sink.
 
 ## Bounded context, stated plainly
 
-- It **forwards**, it does not store. A tenant with no sink subscription is a
-  no-op: nothing is enqueued, the cursor still advances, nothing is lost.
+- It stores the per-tenant cursor; eventing stores captured events and deliveries.
+  With no sink subscription, nothing is enqueued, but the enabled pump still
+  advances its cursor. A new sink does not backfill records already passed by
+  that cursor; the original ledger remains available through pull export.
 - Forwarding runs from the cursor walk, **outside the ledger seal transaction** —
   a network write never sits in the seal path.
 - This is a **push to your tower**, distinct from the read-only

@@ -6,7 +6,6 @@ package main
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -34,83 +33,38 @@ import (
 // Both are thin HTTP clients (Bearer token + tenant header) — all semantics live
 // server-side in modules/evals.
 
-// evalsClientConfig is the shared server/credential flag set.
-type evalsClientConfig struct {
-	server   string
-	token    string
-	tenant   string
-	caCert   string
-	pins     []string
-	insecure bool
-	timeout  time.Duration
-}
+// evalsClientConfig is the agent client configuration (flags, environment, the
+// saved sign-in, the shared transport) with a judged gate's longer timeout and
+// the evals messages for a missing value, which exit 1.
+type evalsClientConfig struct{ agentClientConfig }
 
 func (c *evalsClientConfig) addFlags(cmd *cobra.Command) {
-	cmd.Flags().StringVar(&c.server, "server", "", "the engine's address, https://<host>:8443 (default $OLIVARES_SERVER_URL)")
-	cmd.Flags().StringVar(&c.token, "token", "", "API bearer token (default $OLIVARES_TOKEN)")
-	cmd.Flags().StringVar(&c.tenant, "tenant", "", "tenant id (default $OLIVARES_TENANT)")
-	// ⛔ EL MISMO DEFECTO QUE cmd_hookpep.go, con el MISMO comentario copiado abajo: la llamada al
-	// transporte compartido se duplicó y las banderas no se ataron en ninguno de los dos. Medido el
-	// 2026-08-19 recorriendo el CLI contra un plano vivo: contra un certificado autofirmado —el que
-	// genera nuestro propio quickstart, que imprime su pin— la única salida era `--insecure`.
-	cmd.Flags().StringVar(&c.caCert, "ca-cert", "", "PEM CA bundle used to verify the engine")
-	cmd.Flags().StringArrayVar(&c.pins, "pin-sha256", nil, "pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate")
-	cmd.Flags().BoolVar(&c.insecure, "insecure", false, "skip TLS certificate verification (self-signed development engines only)")
-	cmd.Flags().DurationVar(&c.timeout, "timeout", 10*time.Minute, "request timeout (a judged gate can take a while)")
-	hideConnectionFlags(cmd.Flags())
+	c.agentClientConfig.addFlags(cmd)
+	timeout := cmd.Flags().Lookup("timeout")
+	timeout.Usage, timeout.DefValue, c.timeout = "request timeout (a judged gate can take a while)", "10m0s", 10*time.Minute
 }
 
 func (c *evalsClientConfig) resolve() error {
-	c.server = strings.TrimRight(firstNonEmptyEnv(c.server, "OLIVARES_SERVER_URL"), "/")
-	c.token = firstNonEmptyEnv(c.token, "OLIVARES_TOKEN")
-	c.tenant = firstNonEmptyEnv(c.tenant, "OLIVARES_TENANT")
-	if c.server == "" {
+	// A connection the flags and the environment give in full is used as given,
+	// without reading the saved client file: evals never read it before.
+	server, token, tenant := firstNonEmptyEnv(c.server, "OLIVARES_SERVER_URL"), firstNonEmptyEnv(c.token, "OLIVARES_TOKEN"), firstNonEmptyEnv(c.tenant, "OLIVARES_TENANT")
+	if server != "" && token != "" && tenant != "" && c.credentialFlags.tokenFile == "" {
+		c.server, c.token, c.tenant = strings.TrimRight(server, "/"), token, tenant
+		c.resolved = cliResolvedConfig{Server: c.server, Token: token, Tenant: tenant, CACert: c.caCert, PinSHA256: c.pins}
+		return nil
+	}
+	if err := c.load(); err != nil {
+		return err
+	}
+	switch {
+	case c.server == "":
 		return fmt.Errorf("no server: set --server or OLIVARES_SERVER_URL")
-	}
-	if c.token == "" {
-		return fmt.Errorf("no token: set --token or OLIVARES_TOKEN")
-	}
-	if c.tenant == "" {
+	case c.token == "":
+		return fmt.Errorf("no token: set --token-file or OLIVARES_TOKEN")
+	case c.tenant == "":
 		return fmt.Errorf("no tenant: set --tenant or OLIVARES_TENANT")
 	}
 	return nil
-}
-
-// do performs one JSON request against the plane.
-func (c *evalsClientConfig) do(ctx context.Context, method, path string, body any, accepted ...int) (int, []byte, error) {
-	var rdr io.Reader
-	if body != nil {
-		b, err := json.Marshal(body)
-		if err != nil {
-			return 0, nil, err
-		}
-		rdr = bytes.NewReader(b)
-	}
-	req, err := http.NewRequestWithContext(ctx, method, c.server+path, rdr)
-	if err != nil {
-		return 0, nil, err
-	}
-	req.Header.Set("Authorization", "Bearer "+c.token)
-	req.Header.Set("X-Olivares-Tenant", c.tenant)
-	if body != nil {
-		req.Header.Set("Content-Type", "application/json")
-	}
-	// E4: the shared transport, so --ca-cert, --pin-sha256 and the
-	// --insecure warning exist here too, and a dead plane exits 6 not 1.
-	client, _, err := cliTransport(cliTransportOptions{
-		Resolved: cliResolvedConfig{Server: c.server, Token: c.token, Tenant: c.tenant, CACert: c.caCert, PinSHA256: c.pins},
-		Insecure: c.insecure, Timeout: c.timeout,
-	})
-	if err != nil {
-		return 0, nil, err
-	}
-	resp, err := cliDo(client, req)
-	if err != nil {
-		return 0, nil, err
-	}
-	defer func() { _ = resp.Body.Close() }()
-	b, err := readCLIHTTPResponse(resp, req, 8<<20, cliStatusAccepted(resp.StatusCode, accepted...), httpErr)
-	return resp.StatusCode, b, err
 }
 
 func newEvalsCmd() *cobra.Command {

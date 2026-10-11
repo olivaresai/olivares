@@ -191,7 +191,7 @@ esac
 [ "${#event}" -le 64 ] || ctx_fail "GITHUB_EVENT_NAME is longer than any GitHub event name: ${event}"
 
 # THE REF IS RECORDED WHOLE AND VALIDATED BY SHAPE, NOT BY RELEASE POLICY. The strict
-# vMAJOR.MINOR.PATCH rule belongs to the preflight and to the finalizer, which know which
+# MAJOR.MINOR rule belongs to the preflight and to the finalizer, which know which
 # profile they are in; enforcing it here would refuse the rehearsal's own tags for a
 # property this file does not own.
 case "${ref}" in

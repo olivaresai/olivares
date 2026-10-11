@@ -37,17 +37,17 @@ grep -F -q 'Access cut not landed' "$DOC" \
 grep -F -q 'Term untouched' "$DOC" \
   || fail "prepare doc lost term HOLD"
 if grep -qiE 'FIRMA A claimed|remainder applied on origin/main|access cut landed' "$DOC"; then
-  fail "prepare doc claims an application this lote does not have"
+  fail "prepare doc claims an application this batch does not have"
 fi
 
 if grep -q 'holderHasDeploymentAccess' "$STORE"; then
-  fail "store access-cut landed — this HOLD lote does not apply C03-25"
+  fail "store access-cut landed — this HOLD batch does not apply C03-25"
 fi
 if grep -q 'holderHasDeploymentAccess' "$GATE"; then
-  fail "gate access-cut landed — this HOLD lote does not apply C03-25"
+  fail "gate access-cut landed — this HOLD batch does not apply C03-25"
 fi
 if grep -q 'deactivateDeployment' "$DB"; then
-  fail "deactivateDeployment landed — this HOLD lote does not apply C03-25"
+  fail "deactivateDeployment landed — this HOLD batch does not apply C03-25"
 fi
 
 python3 - "$JSON" <<'PY' || exit $?

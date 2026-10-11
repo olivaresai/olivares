@@ -34,7 +34,7 @@ Le moteur (le cœur, la « couche 0 ») est l'ensemble des sous-systèmes partag
 |---|---|---|
 | **Ingestion + bus d'événements** | Reçoit l'entrée OTLP et celle des connecteurs, la normalise et distribue les événements aux modules | Les modules réagissent aux événements sans se coupler les uns aux autres |
 | **SDK de connecteurs** | Une interface d'entrée/sortie de connecteur stable — l'épine dorsale de l'étendue | Les tiers étendent la plateforme sans forker le cœur |
-| **Runtime de modules** | Charge et exécute les modules : compilés en-process plus plugins out-of-process | Ajoute un module sans ré-architecturer ni recompiler le cœur |
+| **Runtime de modules** | Charge et exécute les modules compilés en-process ; héberge les plugins de connecteurs out-of-process | Ajoute un module sans ré-architecturer le cœur |
 | **Modèle de données général** | Entités et relations multi-tenant servant tout le catalogue | Un schéma unique que tous les modules partagent et étendent |
 | **API (REST/gRPC) + manage-as-code** | Toutes les fonctionnalités via une API, plus un provider Terraform | La CLI et le web parlent la même API ; le panneau est GitOps-able |
 | **AuthN/Z + multi-tenancy** | RBAC/ABAC, orgs et tenants, isolation | Rétrofiter les permissions et la tenancy coûte ruineusement cher — donc, dès le premier jour |
@@ -43,7 +43,7 @@ Le moteur (le cœur, la « couche 0 ») est l'ensemble des sous-systèmes partag
 
 Quelques points précis méritent d'être soulignés :
 
-- **Runtime de modules.** Les modules du cœur sont compilés dans le binaire ; les modules et connecteurs out-of-process s'exécutent comme des plugins via gRPC en utilisant `hashicorp/go-plugin`. Cela apporte une isolation des pannes et permet d'ajouter un module sans recompiler le cœur.
+- **Runtime de modules.** Les modules du cœur sont compilés dans le binaire ; les connecteurs out-of-process s'exécutent comme des plugins via gRPC en utilisant `hashicorp/go-plugin`. Cela apporte une isolation des pannes et permet d'ajouter un connecteur sans recompiler le cœur. Les modules tournent en-process uniquement — le transport de module out-of-process est déprécié et n'a jamais été câblé.
 - **Bus d'événements.** En-process par défaut (canaux Go). Le binding distribué via **NATS est optionnel**, pas requis — les déploiements mono-nœud n'y touchent jamais.
 - **Manage-as-code.** L'API est le contrat de référence ; la surface manage-as-code ajoute un provider Terraform afin que le control plane lui-même puisse être déclaré et versionné.
 - **Audit + intégrité.** L'audit ledger est **append-only et hash-chained**, avec des **checkpoints signés Ed25519**. Les entrées portent un numéro de séquence, le hash précédent, le hash courant et une signature — et ne portent jamais de PII. L'audit ledger sort de la machine par deux voies : un endpoint d'export **pull** émet du CEF, LEEF, syslog, OTLP (une requête d'export complète et postable ; `otlp_envelope` en est un alias exact, et la projection simple de LogRecord est le token séparé `otlp_log_record`) ou OCSF, et un **push** — réel dès qu'un abonnement d'eventing `audit.recorded` est configuré — livre chaque enregistrement scellé au moins une fois via le transport durable. Voir [comment transférer l'audit vers Splunk](/fr/how-to/forward-audit-to-splunk/).
@@ -90,7 +90,7 @@ L'audit natif attribue l'activité à une credential ou à un rôle, pas à un a
 
 ### Atteindre la map
 
-Visualiser l'access graph est une **action privilégiée** : limitée au tenant, disponible pour le rôle editor et au-dessus (jamais le rôle viewer le plus bas), et **chaque lecture est auditée**. Les routes de la map — le graphe et le résultat du drift — ne font pas partie du contrat stable du cœur ; elles sont publiées dans la [référence des routes de module](/reference/api-beta/) **bêta** distincte (servie à `/openapi.beta.json`), et leurs formes au niveau des champs vivent dans des interfaces Go et TypeScript typées. Le résultat permitted-versus-observed est exposé à la route `drift` du moteur (`/v1/m/accessmap/drift`) ; il n'y a pas d'endpoint `diff` séparé. La surface REST stable du cœur — 54 chemins rendus depuis le propre contrat OpenAPI 3.1 du produit — est documentée dans la [référence de l'API](/reference/api/). Pour la liste complète des modules, voir le [catalogue des modules](/fr/reference/modules/overview/).
+Visualiser l'access graph est une **action privilégiée** : limitée au tenant, disponible pour le rôle editor et au-dessus (jamais le rôle viewer le plus bas), et **chaque lecture est auditée**. Les routes de la map — le graphe et le résultat du drift — ne font pas partie du contrat stable du cœur ; elles sont publiées dans la [référence des routes de module](/reference/api-beta/) **bêta** distincte (servie à `/openapi.beta.json`), et leurs formes au niveau des champs vivent dans des interfaces Go et TypeScript typées. Le résultat permitted-versus-observed est exposé à la route `drift` du moteur (`/v1/m/accessmap/drift`) ; il n'y a pas d'endpoint `diff` séparé. La surface REST stable du cœur — 128 chemins de cœur rendus depuis le propre contrat OpenAPI 3.1 du produit — est documentée dans la [référence de l'API](/reference/api/). Pour la liste complète des modules, voir le [catalogue des modules](/fr/reference/modules/overview/).
 
 ## Topologie de déploiement
 
@@ -121,7 +121,7 @@ Le control plane (le moteur) peut être auto-hébergé comme un binaire unique o
 Deux frontières façonnent l'architecture au-delà de la topologie d'exécution :
 
 - **La frontière des connecteurs.** Un connecteur **n'importe jamais depuis le cœur** — il ne dépend que du SDK. Cela empêche les connecteurs tiers de contaminer le cœur et garde la frontière de licence propre.
-- **La frontière de licence.** Le cœur, les modules et le web sont **AGPL-3.0-only** ; le SDK et les connecteurs sont **Apache-2.0** ; le tier enterprise est commercial. La frontière des connecteurs ci-dessus est ce qui rend le découpage Apache/AGPL applicable dans le code. Voir [open core et licences](/fr/explanation/open-core-and-licensing/).
+- **La frontière de licence.** Le cœur, les modules et le web sont **AGPL-3.0-only** ; le SDK et les connecteurs sont **Apache-2.0** ; les éditions Business et Enterprise sont commerciales. La frontière des connecteurs ci-dessus est ce qui rend le découpage Apache/AGPL applicable dans le code. Voir [open core et licences](/fr/explanation/open-core-and-licensing/).
 
 ## Posture de sécurité, en bref
 

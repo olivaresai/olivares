@@ -9,13 +9,11 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"os"
 	"os/exec"
 	"runtime"
 	"strings"
-	"sync"
-	"time"
 
+	"github.com/olivaresai/olivares/core/driverfacts"
 	"github.com/olivaresai/olivares/modules/sessions/cliruntime"
 )
 
@@ -71,25 +69,9 @@ const (
 	envGrokModelsBaseURL = "GROK_MODELS_BASE_URL"
 )
 
-// ACP methods, exactly as the pinned 1.0.13 binary names them.
-const (
-	grokMethodInitialize    = "initialize"
-	grokMethodAuthenticate  = "authenticate"
-	grokMethodSessionNew    = "session/new"
-	grokMethodSessionResume = "session/resume"
-	grokMethodSessionLoad   = "session/load"
-	grokMethodSessionPrompt = "session/prompt"
-	grokMethodSessionCancel = "session/cancel"
-	grokMethodSessionClose  = "session/close"
-
-	grokNotifySessionUpdate = "session/update"
-)
-
-// grokProtocolVersion is the ONE ACP major version this client implements. The
-// agent answers `initialize` with the version it will speak; anything else is a
-// peer this driver cannot correctly talk to, and pretending otherwise would put
-// an unknown dialect in front of an approval gate.
-const grokProtocolVersion = 1
+// grokMethodAuthenticate is the one ACP method only Grok's handshake sends, as the
+// pinned 1.0.13 binary names it; the shared methods are in acp_session.go.
+const grokMethodAuthenticate = "authenticate"
 
 // The advertised authentication method ids this driver can use NONINTERACTIVELY,
 // and the one it never selects.
@@ -113,17 +95,6 @@ const (
 	grokAuthMethodBrowser     = "grok.com"
 )
 
-// grokErrAuthRequired is the JSON-RPC error code an unauthenticated Grok agent
-// answers `session/new` with (observed: -32000 "Authentication required"). It is
-// read as the PROVIDER's own statement about readiness, which is the only thing
-// allowed to move that plane.
-const grokErrAuthRequired = -32000
-
-// grokErrMethodNotSupported is the JSON-RPC code for a method this client does
-// not implement. An agent request that gets one is answered, not ignored: an
-// unanswered request stalls the agent's turn for ever.
-const grokErrMethodNotSupported = -32601
-
 // --- driver -------------------------------------------------------------------
 
 // grokDriver is the stateless driver; all per-launch state lives in a session.
@@ -132,9 +103,15 @@ type grokDriver struct{}
 // NewGrokDriver returns the official Grok agent driver.
 func NewGrokDriver() ProviderDriver { return grokDriver{} }
 
-func (grokDriver) Key() string            { return providerDriverGrok }
-func (grokDriver) ConfigHomeEnv() string  { return envGrokHome }
-func (grokDriver) DefaultProgram() string { return "grok" }
+func (grokDriver) Key() string { return providerDriverGrok }
+func (grokDriver) ConfigHomeEnv() string {
+	facts, _ := driverfacts.Lookup(providerDriverGrok)
+	return facts.ConfigHomeEnv
+}
+func (grokDriver) DefaultProgram() string {
+	facts, _ := driverfacts.Lookup(providerDriverGrok)
+	return facts.Program
+}
 
 // LaunchArgs is the ONLY operate form: an owned, non-leader stdio agent.
 //
@@ -177,7 +154,7 @@ func (grokDriver) LaunchTerms() DriverLaunchTerms {
 // LaunchEnv pins the child's version and native sandbox. Authentication is resolved by
 // the runtime and a driver never sees a credential value.
 //
-// A session on a key from Providers is held to that key's endpoint (Root 2026-10-02 21:22Z)
+// A session on a key from Providers is held to that key's endpoint
 // by Grok Build's documented variables (docs.x.ai/build/settings/reference): the API it
 // authenticates against with the key, and the base its other models are listed and called
 // from (session summaries, image description, web search, subagents). Both are the
@@ -206,7 +183,7 @@ func grokSandboxFor(preset string) string {
 	return ""
 }
 
-// GROK BUILD'S SANDBOX NEEDS BUBBLEWRAP ON LINUX (HU2-34). Without bwrap Grok exits during
+// GROK BUILD'S SANDBOX NEEDS BUBBLEWRAP ON LINUX. Without bwrap Grok exits during
 // initialize ("bwrap exec failed ... Install bubblewrap"), and all a person saw was "the owned
 // provider process ended during initialize". So a launch whose preset turns the sandbox on is
 // refused first with the reason, and the resolve rule does not offer Grok for its default
@@ -227,8 +204,7 @@ func grokSandboxUnavailable(preset string) bool {
 }
 
 func (grokDriver) OpenSession(cfg DriverSessionConfig) DriverSession {
-	s := &grokSession{cfg: cfg, pending: map[string]*grokServerRequest{}}
-	s.conn = newRPCConn(cfg.Send, true)
+	s := &grokSession{acpSession: newACPSession(cfg, providerDriverGrok)}
 	s.conn.onRequest = s.onServerRequest
 	s.conn.onNotify = s.onNotification
 	return s
@@ -236,98 +212,31 @@ func (grokDriver) OpenSession(cfg DriverSessionConfig) DriverSession {
 
 // --- session ------------------------------------------------------------------
 
-// grokSession is one owned ACP conversation over one owned agent child.
+// grokSession is one owned ACP conversation over one owned Grok Build child.
 type grokSession struct {
-	cfg  DriverSessionConfig
-	conn *rpcConn
-
-	mu        sync.Mutex
-	sessionID string
-	// promptID is the correlation key of the in-flight session/prompt, and it IS
-	// the turn: ACP has no turn id on the wire, and the request that opened the turn
-	// is the only thing that can be shown to have ended it.
-	promptID string
-	// cancelledTurn is the promptID a session/cancel has been sent for, and it is
-	// non-empty only while THAT turn is still winding down. It is the state between
-	// the cancel and the correlated result: the turn is still occupied — correctly,
-	// because only its own result may end it — and is no longer a turn anything may
-	// be authorized for.
-	//
-	// It NAMES the turn instead of being a session-wide flag on purpose. A
-	// cancellation is a fact about one generation, and a mark that outlived its turn
-	// would refuse approvals for a successor the operator never stopped.
-	cancelledTurn string
-	authState     string
-	// replayFor is the conversation a resume/load is REPLAYING, non-empty only
-	// while that request is in flight. The session/update frames that arrive during
-	// it are HISTORY, not new live output, and telling them apart is the difference
-	// between showing an operator a conversation and showing them a conversation
-	// happening again.
-	//
-	// It is a separate field from sessionID on purpose: the id is not BOUND until
-	// the correlated response confirms it, and the replay arrives BEFORE that
-	// response. Classifying against sessionID would file a session's own history as
-	// somebody else's, which is what it did until this was measured.
-	replayFor string
-	caps      grokAgentCapabilities
+	acpSession
+	caps grokAgentCapabilities
 	// authMethods is what the agent ADVERTISED. It is kept so a refusal can say
 	// what was offered instead of what was expected.
 	authMethods []grokAuthMethod
-	updates     grokUpdateCounts
-	pending     map[string]*grokServerRequest
-	closed      bool
-}
-
-// grokUpdateCounts separates the three things a session/update can be. It is
-// package-internal evidence, not a product surface: the distinction is asserted
-// by the tests that exist to prove a notification cannot nominate or finish
-// anything.
-type grokUpdateCounts struct {
-	live    int
-	history int
-	foreign int
 }
 
 // --- wire types (ACP v1, as the pinned binary declares them) -------------------
 
-type grokClientInfo struct {
-	Name    string `json:"name"`
-	Version string `json:"version"`
-}
-
-// grokFSCapabilities is advertised FALSE on both members, and grokClientCapabilities
-// advertises no terminal, because this client implements neither handler. An
-// agent that is told the client can read files will ask it to, and a client that
-// then answers a protocol error has advertised a capability it does not have.
-type grokFSCapabilities struct {
-	ReadTextFile  bool `json:"readTextFile"`
-	WriteTextFile bool `json:"writeTextFile"`
-}
-
 type grokClientCapabilities struct {
-	FS       grokFSCapabilities `json:"fs"`
-	Terminal bool               `json:"terminal"`
+	FS       acpFSCapabilities `json:"fs"`
+	Terminal bool              `json:"terminal"`
 }
 
 type grokInitializeParams struct {
 	ProtocolVersion    int                    `json:"protocolVersion"`
-	ClientInfo         grokClientInfo         `json:"clientInfo"`
+	ClientInfo         acpClientInfo          `json:"clientInfo"`
 	ClientCapabilities grokClientCapabilities `json:"clientCapabilities"`
 }
 
-// grokSessionCapabilities is an OBJECT whose MEMBERS are the advertisement: the
-// observed initialize answered `{"list":{},"resume":{},"close":{}}`, so presence
-// is the fact and the value carries the capability's own options. A pointer is
-// how "absent" stays distinguishable from "present and empty".
-type grokSessionCapabilities struct {
-	List   json.RawMessage `json:"list"`
-	Resume json.RawMessage `json:"resume"`
-	Close  json.RawMessage `json:"close"`
-}
-
 type grokAgentCapabilities struct {
-	LoadSession         bool                    `json:"loadSession"`
-	SessionCapabilities grokSessionCapabilities `json:"sessionCapabilities"`
+	LoadSession         bool                   `json:"loadSession"`
+	SessionCapabilities acpSessionCapabilities `json:"sessionCapabilities"`
 }
 
 type grokAuthMethod struct {
@@ -365,12 +274,6 @@ type grokNewSessionParams struct {
 	MCPServers []json.RawMessage `json:"mcpServers"`
 }
 
-type grokResumeSessionParams struct {
-	SessionID  string            `json:"sessionId"`
-	Cwd        string            `json:"cwd"`
-	MCPServers []json.RawMessage `json:"mcpServers"`
-}
-
 // grokSessionIDResponse reads the ONE field a nomination may carry. It is
 // deliberately a pointer-free optional: `session/new` MUST answer one, while
 // `session/load` and `session/resume` need not — their success is the correlated
@@ -385,61 +288,32 @@ type grokSessionIDResponse struct {
 	} `json:"modes"`
 }
 
-type grokContentBlock struct {
-	Type string `json:"type"`
-	Text string `json:"text"`
-}
-
 type grokPromptParams struct {
-	SessionID string             `json:"sessionId"`
-	Prompt    []grokContentBlock `json:"prompt"`
-}
-
-type grokPromptResponse struct {
-	StopReason string `json:"stopReason"`
-}
-
-type grokSessionParams struct {
-	SessionID string `json:"sessionId"`
-}
-
-// grokSessionNotification is the envelope of `session/update`. Only the
-// conversation is read for authority; the update itself is provider content and
-// reaches no row, log or API answer from here — the runtime's own bridge already
-// captured the line as output.
-type grokSessionNotification struct {
-	SessionID string          `json:"sessionId"`
-	Update    json.RawMessage `json:"update"`
+	SessionID string            `json:"sessionId"`
+	Prompt    []acpContentBlock `json:"prompt"`
 }
 
 // --- lifecycle ----------------------------------------------------------------
-
-func (s *grokSession) Deliver(frame OutputFrame) {
-	if frame.Stream != streamStdout {
-		return
-	}
-	s.conn.deliver(frame.Data)
-}
 
 // Handshake runs the owned ACP sequence and returns the ONE nomination this
 // launch is entitled to: the correlated root response to its own session/new, or
 // the EXACT stored id its own session/resume (or session/load) confirmed.
 func (s *grokSession) Handshake(ctx context.Context) (DriverHandshake, error) {
-	raw, err := s.conn.call(ctx, grokMethodInitialize, grokInitializeParams{
-		ProtocolVersion: grokProtocolVersion,
-		ClientInfo:      grokClientInfo{Name: s.cfg.ClientName, Version: s.cfg.ClientVersion},
+	raw, err := s.conn.call(ctx, acpMethodInitialize, grokInitializeParams{
+		ProtocolVersion: acpProtocolVersion,
+		ClientInfo:      acpClientInfo{Name: s.cfg.ClientName, Version: s.cfg.ClientVersion},
 		ClientCapabilities: grokClientCapabilities{
-			FS: grokFSCapabilities{ReadTextFile: false, WriteTextFile: false}, Terminal: false,
+			FS: acpFSCapabilities{ReadTextFile: false, WriteTextFile: false}, Terminal: false,
 		},
 	}, s.cfg.CallTimeout)
 	if err != nil {
-		return DriverHandshake{}, grokHandshakeErr("initialize", err)
+		return DriverHandshake{}, acpHandshakeErr("initialize", err)
 	}
 	var init grokInitializeResponse
 	if err := json.Unmarshal(raw, &init); err != nil {
 		return DriverHandshake{}, &runErr{http.StatusBadGateway, "the provider's initialize response could not be read"}
 	}
-	if !grokProtocolVersionMatches(init.ProtocolVersion) {
+	if !acpProtocolVersionMatches(init.ProtocolVersion) {
 		// A peer speaking another major version is not a peer this client can hold to
 		// the contract it is about to enforce.
 		return DriverHandshake{}, &runErr{
@@ -550,7 +424,7 @@ func grokOnlyInteractiveOffered(advertised []grokAuthMethod) bool {
 // newConversation opens a fresh conversation. Only this correlated root response
 // may nominate it.
 func (s *grokSession) newConversation(ctx context.Context, state string) (DriverHandshake, error) {
-	raw, err := s.conn.call(ctx, grokMethodSessionNew, grokNewSessionParams{
+	raw, err := s.conn.call(ctx, acpMethodSessionNew, grokNewSessionParams{
 		Cwd: s.workDir(), MCPServers: []json.RawMessage{},
 	}, s.cfg.CallTimeout)
 	if err != nil {
@@ -601,9 +475,9 @@ func (s *grokSession) resumeConversation(ctx context.Context, resume, state stri
 	method := ""
 	switch {
 	case len(caps.SessionCapabilities.Resume) > 0 && string(caps.SessionCapabilities.Resume) != "null":
-		method = grokMethodSessionResume
+		method = acpMethodSessionResume
 	case caps.LoadSession:
-		method = grokMethodSessionLoad
+		method = acpMethodSessionLoad
 	default:
 		s.endReplay()
 		return DriverHandshake{}, &runErr{
@@ -611,7 +485,7 @@ func (s *grokSession) resumeConversation(ctx context.Context, resume, state stri
 			"the provider advertises neither session resume nor session load; refusing to start a different conversation",
 		}
 	}
-	raw, err := s.conn.callInOrder(ctx, method, grokResumeSessionParams{
+	raw, err := s.conn.callInOrder(ctx, method, acpResumeSessionParams{
 		SessionID: resume, Cwd: s.workDir(), MCPServers: []json.RawMessage{},
 	}, s.cfg.CallTimeout, func(json.RawMessage) {
 		// On the pump, in stream order: everything before this response was replay,
@@ -675,12 +549,6 @@ func (s *grokSession) selectPresetMode(ctx context.Context, id string, response 
 	return nil // A legacy response may have no native mode; never invent one.
 }
 
-func (s *grokSession) endReplay() {
-	s.mu.Lock()
-	s.replayFor = ""
-	s.mu.Unlock()
-}
-
 // Input opens the conversation's ONE turn and returns as soon as the frame is on
 // the wire.
 //
@@ -706,8 +574,8 @@ func (s *grokSession) Input(ctx context.Context, text string) (bool, error) {
 	// is a failure of this call, and a model that thinks for an hour is not.
 	dctx, cancel := context.WithTimeout(ctx, s.callTimeout())
 	defer cancel()
-	key, err := s.conn.dispatch(dctx, grokMethodSessionPrompt, grokPromptParams{
-		SessionID: session, Prompt: []grokContentBlock{{Type: "text", Text: text}},
+	key, err := s.conn.dispatch(dctx, acpMethodSessionPrompt, grokPromptParams{
+		SessionID: session, Prompt: []acpContentBlock{{Type: "text", Text: text}},
 	}, func(id string) func(json.RawMessage, error) {
 		// Recorded UNDER THE PUMP'S MUTEX, so an agent that answers — or asks for an
 		// approval — on the very next line is judged against a turn that is already
@@ -726,39 +594,13 @@ func (s *grokSession) Input(ctx context.Context, text string) (bool, error) {
 			// read from the key rather than from the error because the error is whatever
 			// ENDED the channel — a process exit, a teardown — and matching on its text
 			// or its wrapping would make this depend on who closed it.
-			return false, grokTurnErr("start", err)
+			return false, acpTurnErr("start", err)
 		}
 		// A write that FAILED may still have put bytes on the child's stdin.
 		// Over-reporting the attempt is the safe direction: it records an ambiguity for
 		// something that may have been clean, where the opposite would durably record a
 		// clean refusal for something that may have landed.
-		return true, grokTurnErr("start", err)
-	}
-	return true, nil
-}
-
-// Interrupt cancels the ACTIVE turn and leaves the owned process alive.
-//
-// ⛔ IT DOES NOT END THE TURN. `session/cancel` is a NOTIFICATION: it has no id,
-// no answer, and no acknowledgement. What ends the turn is the original prompt's
-// own correlated response coming back with stopReason `cancelled` — the same
-// response that would have ended it normally. Clearing the turn here would let
-// the next input open a second concurrent turn while the agent is still winding
-// the first one down, which is precisely the state this seam refuses.
-//
-// Pending approvals ARE resolved first, with the protocol's own cancellation, so
-// the agent is never left waiting on a request whose turn is being torn down.
-func (s *grokSession) Interrupt(ctx context.Context) (bool, error) {
-	session, prompt := s.markTurnCancelled()
-	if session == "" {
-		return false, conflictErr("the provider conversation is not bound yet")
-	}
-	if prompt == "" {
-		return false, conflictErr("there is no active provider turn to interrupt")
-	}
-	s.cancelPendingApprovals(ctx)
-	if err := s.conn.notify(ctx, grokMethodSessionCancel, grokSessionParams{SessionID: session}); err != nil {
-		return true, grokTurnErr("interrupt", err)
+		return true, acpTurnErr("start", err)
 	}
 	return true, nil
 }
@@ -780,245 +622,21 @@ func (s *grokSession) Shutdown(ctx context.Context) {
 	s.mu.Unlock()
 	s.cancelPendingApprovals(ctx)
 	if prompt != "" {
-		_ = s.conn.notify(ctx, grokMethodSessionCancel, grokSessionParams{SessionID: session})
+		_ = s.conn.notify(ctx, acpMethodSessionCancel, acpSessionParams{SessionID: session})
 	}
 	if len(caps.SessionCapabilities.Close) > 0 && string(caps.SessionCapabilities.Close) != "null" {
 		// Advertised, so it is asked for; bounded, so a peer that will not answer
 		// cannot postpone the stop. session/close releases the conversation and is NOT
 		// a stop: the teardown below it is what ends the process.
-		_, _ = s.conn.call(ctx, grokMethodSessionClose, grokSessionParams{SessionID: session}, s.callTimeout())
+		_, _ = s.conn.call(ctx, acpMethodSessionClose, acpSessionParams{SessionID: session}, s.callTimeout())
 	}
-}
-
-func (s *grokSession) AuthState() string {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.authState == "" {
-		return AuthStateUnknown
-	}
-	return s.authState
-}
-
-// ActiveTurn is the in-flight prompt's correlation key. ACP puts no turn id on
-// the wire, so the request that opened the turn IS its identity — and it is an
-// identity nothing outside this session can forge.
-func (s *grokSession) ActiveTurn() string {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.promptID
-}
-
-func (s *grokSession) ConversationID() string {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.sessionID
-}
-
-// Close fails every in-flight waiter once the owned child is gone. The dispatched
-// prompt has no waiter, so its terminal callback is what ends the turn — closing
-// the pump is what fires it.
-func (s *grokSession) Close(err error) {
-	s.mu.Lock()
-	s.closed = true
-	s.pending = map[string]*grokServerRequest{}
-	s.mu.Unlock()
-	s.conn.close(err)
 }
 
 // --- turn bookkeeping ---------------------------------------------------------
 
-func (s *grokSession) beginTurn(id string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.closed || id == "" {
-		return
-	}
-	s.promptID = id
-}
-
-// clearTurn ends the turn with THIS id and never any other. The guard is what
-// keeps a late callback from ending a successor: ids are unique per request, so a
-// callback for a turn that already ended finds another one active and leaves it
-// alone.
-func (s *grokSession) clearTurn(id string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if id == "" {
-		return
-	}
-	if s.promptID == id {
-		s.promptID = ""
-	}
-	// A cancellation is a fact about ONE turn and it is released with it, whatever
-	// order the two arrive in. Ids are unique per request, so a stale mark could not
-	// match a successor anyway; clearing it keeps the field meaning what it says.
-	if s.cancelledTurn == id {
-		s.cancelledTurn = ""
-	}
-}
-
-// markTurnCancelled records that this conversation's ACTIVE turn is being
-// cancelled, and returns the conversation and that turn.
-//
-// Reading the turn and naming it cancelled in ONE critical section is what keeps
-// the mark on the turn it was taken for. A conversation with nothing in flight is
-// not marked at all, and a turn opened after the correlated result of a cancelled
-// one carries nothing from it.
-func (s *grokSession) markTurnCancelled() (string, string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.sessionID != "" && s.promptID != "" {
-		s.cancelledTurn = s.promptID
-	}
-	return s.sessionID, s.promptID
-}
-
-// turnCancelled reports whether session/cancel has been sent for THIS turn and
-// its own correlated result has not come back yet.
-func (s *grokSession) turnCancelled(id string) bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return id != "" && s.cancelledTurn == id
-}
-
-// completeTurn is the prompt's terminal callback. It runs on the pump goroutine
-// the moment the correlated response is decoded, which is the only frame entitled
-// to end this turn.
-func (s *grokSession) completeTurn(id string, result json.RawMessage, err error) {
-	s.clearTurn(id)
-	if err != nil {
-		var re *rpcError
-		if errors.As(err, &re) && re.Code == grokErrAuthRequired {
-			// The provider's OWN statement that this profile is not authenticated. A
-			// launch-time readiness that could never be revoked would be the "a home path
-			// is proof of an account" mistake with a timestamp on it.
-			s.setAuthState(AuthStateRequired)
-		}
-		return
-	}
-	var resp grokPromptResponse
-	if json.Unmarshal(result, &resp) != nil {
-		return
-	}
-	// The stop reason is the provider's, and it is not reinterpreted here: end_turn,
-	// max_tokens, max_turn_requests, refusal and cancelled all END THE TURN and none
-	// of them ends the run, the conversation or the process.
-	s.warnStopReason(resp.StopReason)
-}
-
-func (s *grokSession) warnStopReason(reason string) {
-	if reason == "" {
-		s.warn("sessions: the provider's turn response carried no stop reason", "run_ref", s.cfg.RunRef)
-	}
-}
-
 // --- notifications ------------------------------------------------------------
 
-// onNotification handles the agent's push frames. NOTHING here may nominate a
-// conversation or end a turn: a notification is addressed to nobody in
-// particular, and a subagent, a fork or a replayed history produces the same
-// shape as live output.
-func (s *grokSession) onNotification(method string, params json.RawMessage) {
-	if method != grokNotifySessionUpdate {
-		// The x.ai/* extension notifications (including the `_x.ai/mcp/servers_updated`
-		// the observed initialize was followed by) are not part of this client's
-		// surface. Ignoring a NOTIFICATION is correct: it expects no answer.
-		return
-	}
-	var n grokSessionNotification
-	if json.Unmarshal(params, &n) != nil {
-		return
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	switch {
-	case s.replayFor != "" && n.SessionID == s.replayFor:
-		// The conversation this launch ASKED to continue, replaying itself before its
-		// own correlated response. It is history, and it is checked against the
-		// requested id rather than the bound one because the binding is exactly what
-		// has not happened yet.
-		s.updates.history++
-	case s.sessionID == "" || n.SessionID != s.sessionID:
-		// Another conversation's update. It binds nothing, ends nothing and is not
-		// this session's output.
-		s.updates.foreign++
-	default:
-		s.updates.live++
-	}
-}
-
-// updateCounts is the package-internal split of what session/update frames were.
-func (s *grokSession) updateCounts() grokUpdateCounts {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.updates
-}
-
 // --- helpers ------------------------------------------------------------------
-
-// workDir is the cwd this conversation is opened against. ACP requires one on
-// session/new, and an unworkspaced launch runs the child in the engine's own
-// working directory: naming it describes what the child already has rather than
-// choosing one for it.
-func (s *grokSession) workDir() string {
-	if dir := strings.TrimSpace(s.cfg.WorkDir); dir != "" {
-		return dir
-	}
-	if wd, err := os.Getwd(); err == nil {
-		return wd
-	}
-	return "/"
-}
-
-func (s *grokSession) callTimeout() time.Duration {
-	if s.cfg.CallTimeout > 0 {
-		return s.cfg.CallTimeout
-	}
-	return defaultDriverCallTimeout
-}
-
-// setAuthState records readiness and publishes the CHANGE to the runtime. Only a
-// change is published: a re-read that confirms what the row already says is not
-// news.
-func (s *grokSession) setAuthState(state string) {
-	s.mu.Lock()
-	changed := s.authState != state
-	s.authState = state
-	s.mu.Unlock()
-	if changed && s.cfg.OnAuthState != nil {
-		s.cfg.OnAuthState(state)
-	}
-}
-
-func (s *grokSession) warn(msg string, args ...any) {
-	if s.cfg.Warn != nil {
-		s.cfg.Warn(msg, args...)
-	}
-}
-
-// grokProtocolVersionMatches reports whether the agent answered the ONE major
-// version this client implements. Anything that is not that exact number —
-// another version, a string, null, a missing field — is a mismatch.
-func grokProtocolVersionMatches(raw json.RawMessage) bool {
-	var version int
-	if err := json.Unmarshal(raw, &version); err != nil {
-		return false
-	}
-	return version == grokProtocolVersion
-}
-
-// grokHandshakeErr keeps provider text out of the API answer: an agent's error
-// message can echo a path or an argument, and this one crosses to a client.
-func grokHandshakeErr(step string, err error) error {
-	var re *runErr
-	if errors.As(err, &re) {
-		return re
-	}
-	if errors.Is(err, errRPCClosed) {
-		return &runErr{http.StatusBadGateway, "the owned provider process ended during " + step}
-	}
-	return &runErr{http.StatusBadGateway, "the provider refused " + step + " for this launch"}
-}
 
 // grokConversationErr distinguishes the two ways opening a conversation fails,
 // because they are different facts about different planes: an agent that says
@@ -1027,7 +645,7 @@ func grokHandshakeErr(step string, err error) error {
 // the wrong thing.
 func grokConversationErr(err error, state string) error {
 	var re *rpcError
-	if errors.As(err, &re) && re.Code == grokErrAuthRequired {
+	if errors.As(err, &re) && re.Code == acpErrAuthRequired {
 		return &runErr{
 			http.StatusUnprocessableEntity,
 			"the provider refused to open a conversation because this profile is not authenticated (auth_required)",
@@ -1039,16 +657,5 @@ func grokConversationErr(err error, state string) error {
 			"the provider refused to open a conversation and reports that this profile is not authenticated (auth_required)",
 		}
 	}
-	return grokHandshakeErr(grokMethodSessionNew, err)
-}
-
-func grokTurnErr(step string, err error) error {
-	var re *runErr
-	if errors.As(err, &re) {
-		return re
-	}
-	if errors.Is(err, errRPCClosed) {
-		return &runErr{http.StatusConflict, "the owned provider process is no longer accepting input"}
-	}
-	return conflictErr("the provider refused to " + step + " a turn on this conversation")
+	return acpHandshakeErr(acpMethodSessionNew, err)
 }

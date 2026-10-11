@@ -6,8 +6,6 @@ package compliance
 
 import (
 	"context"
-	"encoding/hex"
-	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -45,117 +43,10 @@ type evidencePackageDTO struct {
 	Disclaimer       string            `json:"disclaimer"`
 }
 
-// sealRequest is the body for sealing a package (everything optional).
-type sealRequest struct {
-	ScopeNote string `json:"scope_note"`
-}
-
-// handleSealEvidence seals an immutable evidence package for a framework: it assesses
-// the framework against the tenant's live evidence, records the ledger head + the live
-// hash-chain verify result (the integrity proof), persists the package and its
-// per-control results (append-only), and self-audits the seal — all in one transaction.
-func (m *Module) handleSealEvidence(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
-	fw, ok := frameworkByID[strings.TrimSpace(chi.URLParam(r, "id"))]
-	if !ok {
-		writeJSON(w, http.StatusNotFound, errorBody("unknown framework"))
-		return
-	}
-	var req sealRequest
-	if r.ContentLength != 0 {
-		if !decodeJSON(w, r, &req) {
-			return
-		}
-	}
-	scopeNote := clamp(strings.TrimSpace(req.ScopeNote), maxNoteLen)
-
-	var dto evidencePackageDTO
-	err := mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
-		s, err := gatherEvidence(r.Context(), sc)
-		if err != nil {
-			return err
-		}
-		fa := assessFramework(fw, evaluateCapabilities(s))
-		manifest := manifestHash(fa)
-		now := m.clock.Now()
-		ledgerHash := ""
-		if s.auditHeadOK {
-			ledgerHash = hex.EncodeToString(s.auditHead.Hash)
-		}
-
-		repo, err := sc.Ext(packageKind)
-		if err != nil {
-			return err
-		}
-		rec := model.Record{
-			colFramework:    fw.ID,
-			colFrameworkVer: fw.Version,
-			colGeneratedAt:  now.String(),
-			colGeneratedBy:  mc.Principal.Actor(),
-			colLedgerSeq:    s.auditHead.Seq,
-			colLedgerHash:   nullableText(ledgerHash),
-			colIntegrityOK:  s.auditHeadOK && s.auditVerify.OK,
-			colIntegrityN:   s.auditVerify.Checked,
-			colIntegrityWhy: nullableText(s.auditVerify.Reason),
-			colCtrlTotal:    int64(fa.Summary.Total),
-			colSatisfied:    int64(fa.Summary.Satisfied),
-			colPartial:      int64(fa.Summary.Partial),
-			colGap:          int64(fa.Summary.Gap),
-			colUnmapped:     int64(fa.Summary.Unmapped),
-			colManifestHash: manifest,
-			colScopeNote:    nullableText(scopeNote),
-		}
-		out, err := repo.Create(r.Context(), rec)
-		if err != nil {
-			return err
-		}
-		pkgID := model.ID(out.String(model.ColID))
-
-		resRepo, err := sc.Ext(resultKind)
-		if err != nil {
-			return err
-		}
-		for _, ca := range fa.Controls {
-			if _, err := resRepo.Create(r.Context(), model.Record{
-				colPackageRef: pkgID.String(),
-				colFramework:  fw.ID,
-				colControlID:  ca.ControlID,
-				colTitle:      clamp(ca.Title, maxNameLen),
-				colStatus:     string(ca.Status),
-				colEvSummary:  nullableText(controlSummaryLine(ca)),
-				colCaps:       encodeJSON(ca.Capabilities),
-				colOccurredAt: now.String(),
-			}); err != nil {
-				return err
-			}
-		}
-
-		// Self-audit the seal itself (docs/SECURITY-HARDENING.md) — the NEXT chain event after the head
-		// this package attests.
-		if err := auditEvent(r.Context(), sc, mc, "compliance.evidence.seal", packageKind, pkgID, map[string]any{
-			"framework":    fw.ID,
-			"controls":     fa.Summary.Total,
-			"satisfied":    fa.Summary.Satisfied,
-			"by_design":    fa.Summary.ByDesign,
-			"gap":          fa.Summary.Gap,
-			"integrity_ok": s.auditHeadOK && s.auditVerify.OK,
-			"ledger_seq":   s.auditHead.Seq,
-		}); err != nil {
-			return err
-		}
-
-		out, err = repo.Get(r.Context(), pkgID)
-		if err != nil {
-			return err
-		}
-		dto = recordToPackageDTO(out)
-		return nil
-	})
-	if err != nil {
-		writeStoreError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusCreated, dto)
-}
+// Stored evidence packages preserve the recorded framework, ledger anchor and
+// per-control results across edition changes. Reads and JSON/CSV exports operate
+// on those existing rows; new assessments and sealing belong to Business
+// Compliance Packs.
 
 func (m *Module) handleListEvidence(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
 	var filters []model.Filter
@@ -218,6 +109,11 @@ func (m *Module) handleGetEvidence(w http.ResponseWriter, r *http.Request, mc ap
 // manifest. ?format=csv flattens the control results; json (default) is the full
 // package + manifest + integrity proof. It self-audits the export (docs/SECURITY-HARDENING.md).
 func (m *Module) handleExportEvidence(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
+	if exportFormat(r) == "oscal" {
+		m.handleExportOSCAL(w, r, mc)
+		return
+	}
+
 	id, ok := idParam(chi.URLParam(r, "id"))
 	if !ok {
 		writeJSON(w, http.StatusBadRequest, errorBody("invalid id"))
@@ -225,8 +121,7 @@ func (m *Module) handleExportEvidence(w http.ResponseWriter, r *http.Request, mc
 	}
 	var dto evidencePackageDTO
 	var results []controlResultDTO
-	var profile *ProfileRef
-	var oscalDoc map[string]any // pre-rendered for the oscal format, so the self-audit reflects it
+
 	err := mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
 		pkgRepo, err := sc.Ext(packageKind)
 		if err != nil {
@@ -241,45 +136,7 @@ func (m *Module) handleExportEvidence(w http.ResponseWriter, r *http.Request, mc
 		if err != nil {
 			return err
 		}
-		// if an operator registered an OSCAL profile/SSP for this framework, scope
-		// the OSCAL export to its selection. A read failure degrades to include-all (the
-		// SAFE direction — never silently hide a control) and must not fail the export.
-		if pr, perr := activeProfileRef(r.Context(), sc, dto.Framework); perr == nil {
-			profile = pr
-		} else {
-			m.debugf("compliance: oscal export profile read failed; exporting include-all", "err", perr)
-		}
 		meta := map[string]any{"framework": dto.Framework, "format": exportFormat(r)}
-		// Only the OSCAL view is actually scoped to the profile; CSV/JSON return the full
-		// sealed set. Stamp the scoping back-reference ONLY when the bytes are scoped, so
-		// the self-audit row never claims a scope the returned artifact does not have.
-		if profile != nil && exportFormat(r) == "oscal" {
-			meta["oscal_profile_sha256"] = profile.DocSHA256
-			meta["oscal_selected"] = len(profile.SelectedIDs)
-		}
-		// render the OSCAL bundle HERE (it is pure over the rows just read) so the
-		// self-audit reflects what is actually emitted. A POA&M is attached only when the
-		// enterprise builder is wired AND there are open (not-satisfied) controls to plan, so
-		// meta["oscal_poam"] is stamped from the REAL attach outcome — never a "wired" guess
-		// (the invariant: the audit row never claims more than the artifact carries).
-		if exportFormat(r) == "oscal" {
-			fwName := dto.Framework
-			if fw, ok := frameworkByID[dto.Framework]; ok {
-				fwName = fw.Name
-			}
-			rendered := results
-			if profile != nil {
-				rendered = filterResultsBySelection(results, profile.SelectedIDs)
-			}
-			oscalDoc = oscalDocument(dto, rendered, fwName, profile)
-			outcome := m.attachPOAM(oscalDoc, dto, rendered, fwName, profile)
-			if outcome.attached {
-				meta["oscal_poam"] = true
-			} else if outcome.omissionReason != "" {
-				meta["oscal_poam"] = false
-				meta["oscal_poam_omission_reason"] = outcome.omissionReason
-			}
-		}
 		return auditEvent(r.Context(), sc, mc, "compliance.evidence.export", packageKind, id, meta)
 	})
 	if err != nil {
@@ -290,13 +147,7 @@ func (m *Module) handleExportEvidence(w http.ResponseWriter, r *http.Request, mc
 	case "csv":
 		writeCSV(w, evidenceCSV(dto, results))
 		return
-	case "oscal":
-		// OSCAL component-definition + assessment-results + control-mapping (+ a FedRAMP-adjacent
-		// POA&M when the enterprise builder is wired and there are open controls), anchored to the
-		// ledger (FIN-10). The bundle was rendered INSIDE the tx above (so the self-audit reflects
-		// it); profile == nil + no builder keeps the three-model export byte-identical.
-		writeJSON(w, http.StatusOK, oscalDoc)
-		return
+
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"package":    dto,
@@ -365,28 +216,9 @@ func recordToPackageDTO(rec model.Record) evidencePackageDTO {
 	}
 }
 
-// manifestHash is the canonical, order-stable hash of an assessment body so the
-// package is tamper-evident independently of the ledger: a change to any control's
-// status or any capability's evidence state changes the hash.
-func manifestHash(fa FrameworkAssessment) string {
-	var b strings.Builder
-	b.WriteString(fa.Framework)
-	b.WriteByte('|')
-	b.WriteString(fa.Version)
-	for _, ca := range fa.Controls {
-		b.WriteByte('\n')
-		b.WriteString(ca.ControlID)
-		b.WriteByte('=')
-		b.WriteString(string(ca.Status))
-		for _, ev := range ca.Capabilities {
-			b.WriteByte(';')
-			b.WriteString(string(ev.Key))
-			b.WriteByte(':')
-			b.WriteString(string(ev.State))
-		}
-	}
-	return hashHex(b.String())
-}
+// The stored manifest hash anchors the package body independently of the ledger.
+// Reads and portable exports retain that recorded hash rather than recomputing
+// an assessment against a newer catalog or edition.
 
 // evidenceManifest is the verification manifest an auditor uses to re-check the
 // package offline: the ledger anchor + integrity result + the body hash.
@@ -422,23 +254,6 @@ func evidenceCSV(dto evidencePackageDTO, results []controlResultDTO) string {
 }
 
 // controlSummaryLine is the short evidence summary stored on a control result.
-func controlSummaryLine(ca ControlAssessment) string {
-	present := 0
-	for _, ev := range ca.Capabilities {
-		if ev.State == EvidencePresent {
-			present++
-		}
-	}
-	line := fmt.Sprintf("%s: %d/%d capabilities present", ca.Status, present, len(ca.Capabilities))
-	if miss := missingCapabilities(ca); len(miss) > 0 {
-		parts := make([]string, len(miss))
-		for i, k := range miss {
-			parts[i] = string(k)
-		}
-		line += "; missing: " + strings.Join(parts, ",")
-	}
-	return clamp(line, maxNoteLen)
-}
 
 func exportFormat(r *http.Request) string {
 	switch strings.ToLower(strings.TrimSpace(r.URL.Query().Get("format"))) {

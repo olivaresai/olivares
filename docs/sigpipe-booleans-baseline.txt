@@ -31,9 +31,7 @@
 # --- ya visibles con la sonda original (deuda previa, sin cambio) ---
 1	scripts/ai-state.sh
 1	scripts/alias-image-digest.sh
-5	scripts/aws-iam-phase2.sh
 4	scripts/census-blind-verdict.sh
-1	scripts/check-gate-parity.sh
 # ⚠ 2026-08-30: BAJADA de 4 a 3. La cura de LEG C retiro una tuberia de este fichero y dejo el
 # suelo donde estaba, que es la MITAD que una cura de esta clase se deja siempre: con el suelo en
 # 4 y el fichero en 3, restaurar la tuberia vieja habria dado 4 — igual al suelo, ninguna subida —
@@ -43,10 +41,8 @@
 1	scripts/check-migration-contiguity.sh
 7	scripts/check-migrations.sh
 1	scripts/check-ocsf-claims.sh
-1	scripts/check-taskfile-graph.sh
 1	scripts/check-taskfile-shape.sh
 1	scripts/deploy-status-channel.sh
-1	scripts/hub-battery.sh
 1	scripts/release-preflight.sh
 1	scripts/report-orphan-branches.sh
 2	scripts/resolve-bare-manifest-digest.sh
@@ -59,6 +55,7 @@
 1	scripts/test-hub-hygiene.sh
 1	scripts/test-npm-vuln-gate.sh
 3	scripts/test-release-security-producer.sh
+22	scripts/test-release-security-sig-guard.sh
 2	scripts/test-status-ref.sh
 11	scripts/test-unreachable-build-guards.sh
 1	scripts/test-web-e2e-boot.sh

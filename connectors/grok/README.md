@@ -44,7 +44,7 @@ origin plus a bounded probe. That is not a publisher signature.
 |---|---|
 | `olivares agent tool install --driver grok` | `none-origin-only` |
 | Probe `--version` | identity of the binary, **not** authentication |
-| Session launch | requires `OLIVARES_SESSION_RUNTIME_GROK_BIN` **or** a managed install receipt |
+| Session launch | uses the explicit `OLIVARES_SESSION_RUNTIME_GROK_BIN` override; otherwise the newest verified managed install, then `grok` on the engine's `PATH` |
 | Official Grok account compatibility | **not claimed** by the operate path |
 
 See [Install the Grok CLI](/how-to/install-grok-cli/) and

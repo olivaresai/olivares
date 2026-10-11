@@ -37,10 +37,8 @@ import (
 //                       a static mirror base (the fallback the same signature keeps).
 //   - gatedSource     : the licensed download worker (gate.ts contract) — a
 //                       token authorizes the enterprise artifact; reuses downloadGated.
-//   - bundleSource    : a local air-gapped bundle directory — no network at all. The
-//                       ROUTE is license-gated in buildUpdateSource (C02-20); this
-//                       transport itself only reads files, which is why the gate lives
-//                       there and not here.
+//   - bundleSource    : a verified local bundle directory, with no network access.
+//                       Community allows verification only; install policy is edition wiring.
 //
 // Every source yields the SAME two things: the signed manifest (+ its detached
 // signature) and, later, one artifact's bytes. The trust boundary is identical for

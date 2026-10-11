@@ -45,7 +45,7 @@ grep -q 'EvaluateOverride is NO-GATE' "$DOC" || fail "$DOC lost NO-GATE"
 grep -q 'HOLD on narrowing' "$DOC" || fail "$DOC lost HOLD on narrowing"
 grep -q 'not to' "$DOC" || fail "$DOC lost the wrong-pack refusal"
 if grep -qiE 'durableLicensed now scoped|EvaluateOverride gated|FIRMA A claimed' "$DOC"; then
-	fail "$DOC claims a motor this lote does not have"
+	fail "$DOC claims a motor this batch does not have"
 fi
 
 # La adjudicacion tiene que seguir NOMBRANDO este lote y el commit que cambio el hecho: sin
@@ -66,7 +66,7 @@ OVERLAY = "bada7f7f9339a98131f7f9a0f536a3e9c474626c"
 
 data = json.load(open(sys.argv[1], encoding="utf-8"))
 if data.get("lote") != "C03-06":
-    raise SystemExit("the acta no longer says which lote it belongs to")
+    raise SystemExit("the record no longer identifies its batch")
 if data.get("evaluate_override_gated") is not False:
     raise SystemExit("evaluate_override_gated must stay false")
 if data.get("durable_addon_scoped") is not False:

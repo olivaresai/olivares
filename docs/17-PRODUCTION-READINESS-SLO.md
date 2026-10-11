@@ -3,7 +3,9 @@ SPDX-FileCopyrightText: 2026 Olivares.AI
 SPDX-License-Identifier: AGPL-3.0-only
 -->
 
-# Production readiness: SLIs, SLOs & the error-budget policy of the control plane
+<a id="production-readiness-slis-slos--the-error-budget-policy-of-the-control-plane"></a>
+
+# Production readiness: metrics, operating targets and error budgets
 
 **Date:** 2026-06-09 (original targets) · **Support classification updated:** 2026-09-27.
 **Status:** operating targets and metric definitions, not a release support commitment.
@@ -11,32 +13,39 @@ The [v26.10 deployment support matrix](../deploy/support-matrix.md) is the canon
 qualification record and supersedes this guide's former support classification.
 The 99.5% single-node and 99.9% HA figures remain targets; neither is a customer SLA.
 
-> The control plane instruments the *agents* it governs in fine detail. This document is the other half a serious buyer asks for: **how we measure and operate the plane itself as a service.** It defines the Service Level Indicators (what we measure), the Service Level Objectives (operating targets), and the error-budget policy (what happens when we miss). Companion docs: capacity & sizing (`docs/SIZING-AND-CAPACITY.md`), status page & incident comms (`docs/STATUS-AND-INCIDENT-COMMS.md`), on-call runbooks (`deploy/runbooks/`), and the alert rules that make these SLOs fire (`deploy/monitoring/olivares-slo.rules.yaml`).
->
-> Method follows the Google SRE Workbook (*Implementing SLOs*, *Error Budget Policy*, *Alerting on SLOs*). Every SLI below maps to a metric that **exists on `/metrics` today** — a target needs a measurable signal, while a support commitment additionally needs its qualified deployment record.
+Service level indicators (SLIs) measure the engine; service level objectives
+(SLOs) set operating targets. Error budgets determine the response to a missed
+target. The method follows the Google SRE Workbook (*Implementing SLOs*,
+*Error Budget Policy*, *Alerting on SLOs*). Each SLI below uses a `/metrics` series;
+a deployment support commitment also requires its measured support record.
+Companion guides and alert rules are listed in [References](#6-references).
 
 ---
 
-## 0. TL;DR for the buyer
+<a id="0-tldr-for-the-buyer"></a>
 
-| Question | Answer |
+## 0. Operating targets and limits
+
+| Measure or operation | Target or reference |
 |---|---|
-| What's your availability SLO? | Targets: **99.5%** for single-node and **99.9%** for HA over the **28-day** window (§2). A complete v26.10 deployment qualification is not recorded here; configuration and leader election alone do not establish one (§2.1). |
-| p99 of ingest? | Target **< 250 ms**. The historical SQLite write-path sample was **~1.2 ms** p99 on reference hardware with tmpfs; it is not an end-to-end ingest qualification (`docs/SIZING-AND-CAPACITY.md`). |
-| p99 of the API? | Target **< 300 ms**, aggregated per HTTP method; this does not establish each route's p99. |
-| events/sec per node? | Historical reference workload: **~1,500 SQLite writes/sec** on tmpfs and **~3.8M bus events/sec** in a separate store-free benchmark. These are workload observations, not v26.10 per-node capacity promises (§ sizing). |
-| When SQLite → Postgres? | Measure the single-writer knee on your storage and workload. The historical reference was ~1–1.5k/s. PostgreSQL supports concurrent database writers; a multi-instance HA deployment requires separate fencing and recovery qualification (sizing guide). |
-| Status page? | Yes — self-hostable, driven by the real SLIs (`docs/STATUS-AND-INCIDENT-COMMS.md`). |
-| Runbooks / on-call? | Yes — `deploy/runbooks/` (ledger-verify, collector backpressure, failover, key-rotation). |
-| Error-budget policy? | Yes — §3. Budget exhausted ⇒ releases freeze (except P0/security) until the SLO recovers. |
+| Availability | Targets: **99.5%** for single-node and **99.9%** for HA over the **28-day** window (§2). A complete v26.10 deployment qualification is not recorded here; configuration and leader election alone do not establish one (§2.1). |
+| Ingest p99 | Target **< 250 ms**. The historical SQLite write-path sample was **~1.2 ms** p99 on reference hardware with tmpfs; it is not an end-to-end ingest qualification (`docs/SIZING-AND-CAPACITY.md`). |
+| API p99 | Target **< 300 ms**, aggregated per HTTP method; this does not establish each route's p99. |
+| Events per second per node | Historical reference workload: **~1,500 SQLite writes/sec** on tmpfs and **~3.8M bus events/sec** in a separate store-free benchmark. These are workload observations, not v26.10 per-node capacity promises (§ sizing). |
+| SQLite to PostgreSQL | Measure the single-writer knee on your storage and workload. The historical reference was ~1–1.5k/s. PostgreSQL supports concurrent database writers; a multi-instance HA deployment requires separate fencing and recovery qualification (sizing guide). |
+| Status page | Yes — self-hostable, driven by the real SLIs (`docs/STATUS-AND-INCIDENT-COMMS.md`). |
+| On-call runbooks | Yes — `deploy/runbooks/` (ledger-verify, collector backpressure, failover, key-rotation). |
+| Error-budget policy | Yes — §3. Budget exhausted ⇒ releases freeze (except P0/security) until the SLO recovers. |
 
 ---
 
 ## 1. Service Level Indicators (SLIs) — what we actually measure
 
-Every SLI is `good events / valid events` (SRE). The control plane exposes a single, pure-Go Prometheus surface at **`GET /metrics`** (OpenMetrics-/Prometheus-text 0.0.4, unauthenticated, setup-exempt; bind it to a trusted scrape network — `core/api/metrics.go`, `core/metrics/metrics.go`). The following sections name the series used by these targets; their presence does not establish a deployment support commitment.
+Every SLI is `good events / valid events` (SRE). Olivares AI exposes a single, pure-Go Prometheus surface at **`GET /metrics`** (OpenMetrics-/Prometheus-text 0.0.4, unauthenticated, setup-exempt; bind it to a trusted scrape network — `core/api/metrics.go`, `core/metrics/metrics.go`). The following sections name the series used by these targets; their presence does not establish a deployment support commitment.
 
-### 1.1 Availability / reachability — *is the control plane up?*
+<a id="11-availability--reachability--is-the-control-plane-up"></a>
+
+### 1.1 Availability and reachability
 
 The honest primary signal is an **external blackbox probe of `/readyz`** (HTTP 200 vs 503/timeout), because a down engine cannot report its own downtime and a sub-scrape-interval outage is invisible to a self-scrape. `/readyz` returns **503** when the store ping fails, when this node is a standby, when setup state cannot be observed, when first-boot enumeration is not authoritative, or when the setup capability probe fails (`handleReadyz` in `core/api/metrics.go`). The load balancer drains the pod on that 503. A 503 is not success.
 
@@ -47,7 +56,9 @@ The honest primary signal is an **external blackbox probe of `/readyz`** (HTTP 2
 olivares_store_up            # 1 = store answered a 1s ping at scrape time, else 0
 ```
 
-### 1.2 Request success rate — *of the requests we served, how many succeeded?*
+<a id="12-request-success-rate--of-the-requests-we-served-how-many-succeeded"></a>
+
+### 1.2 Request success rate
 
 ```
 sum(rate(olivares_http_requests_total{code!~"5.."}[28d]))
@@ -55,14 +66,18 @@ sum(rate(olivares_http_requests_total{code!~"5.."}[28d]))
 ```
 `olivares_http_requests_total{method,code}` (`core/api/metrics.go:42-43`, incremented at `:91`). 4xx are client errors and count as served (not budget burn); 5xx burn the budget.
 
-### 1.3 API latency — *were requests fast enough?*
+<a id="13-api-latency--were-requests-fast-enough"></a>
+
+### 1.3 API latency
 
 ```
 histogram_quantile(0.99, sum by (le) (rate(olivares_http_request_duration_seconds_bucket[5m])))
 ```
-`olivares_http_request_duration_seconds` is a histogram **labelled by HTTP method only** — no route, no status (`core/api/metrics.go:44-45,:20`). **Caveat to internalize:** a method-level p99 mixes fast reads, slow module calls, and error latencies; it cannot isolate one endpoint. Buckets cap at **10 s**, so any p99 target must be < 10 s. Per-route/success-only p99 needs a route/status label, which would multiply cardinality — a deliberate trade-off recorded here, not an oversight (instrumentation roadmap, §5).
+`olivares_http_request_duration_seconds` is a histogram **labelled by HTTP method only** — no route, no status (`core/api/metrics.go:44-45,:20`). **Scope:** a method-level p99 mixes fast reads, slow module calls, and error latencies; it cannot isolate one endpoint. Buckets cap at **10 s**, so any p99 target must be < 10 s. Per-route/success-only p99 needs a route/status label, which would multiply cardinality — a deliberate cardinality trade-off (instrumentation roadmap, §5).
 
-### 1.4 Ingest latency — *how fast does the collector→core path accept an observation?*
+<a id="14-ingest-latency--how-fast-does-the-collectorcore-path-accept-an-observation"></a>
+
+### 1.4 Ingest latency
 
 ```
 histogram_quantile(0.99, sum by (le) (rate(olivares_ingest_duration_seconds_bucket[5m])))
@@ -84,9 +99,9 @@ sum(rate(olivares_ingest_observations_total[5m]))
 ### 1.7 Honesty guardrails — what is NOT a scrapeable engine SLI today
 
 - **gRPC RPCs** emit `olivares_grpc_requests_total{method,code}` + `olivares_grpc_request_duration_seconds{method}` (`core/api/grpc_metrics.go`). The duration histogram covers UNARY RPCs only — `IngestService.Push` is a long-lived collector stream whose "duration" is its lifetime (it would land every sample in +Inf); streams count at completion and their per-observation latency SLI remains `olivares_ingest_duration_seconds`. **No gRPC SLO target is committed** — the error-ratio recording rule exists (`olivares:grpc_error_ratio:ratio_rate5m`) but objective-setting needs traffic data first.
-- **OTEL GenAI metrics** (`gen_ai.client.operation.duration`, …) measure the *outbound Claude hop* and export via OTLP, **not `/metrics`** (`core/observability/trace/genai.go`, `provider.go`). They are not a control-plane serving SLI — do not cite them as one.
+- **OTEL GenAI metrics** (`gen_ai.client.operation.duration`, …) measure the *outbound Claude hop* and export via OTLP, **not `/metrics`** (`core/observability/trace/genai.go`, `provider.go`). They are not an engine-serving SLI — do not cite them as one.
 - **Inbound rate-limit metrics** are `olivares_http_ratelimit_decisions_total{class,decision}` + `olivares_http_ratelimit_active_buckets`. The SLI is the limited ratio over DECISIONS — `olivares:ratelimit_limited:ratio_rate5m` — deliberately NOT the `429` ratio of `olivares_http_requests_total`, which conflates the login lockout and FinOps denials with the rate limiter. With the shared store, `olivares_http_ratelimit_store_up`/`olivares_http_ratelimit_store_fallback_total` make degraded (per-node) enforcement alertable.
-- **Backpressure SLI scope under the NATS bridge:** `olivares_ingest_duration_seconds` remains the backpressure SLI for the LOCAL path — the bridge does not change local fan-out (publishers still block on a saturated subscriber; ADR-0017). What the histogram can NOT see is cross-node loss: bridged events drop (counted) instead of backpressuring the remote publisher. The first-class saturation SLIs are now direct: `olivares_eventbus_queue_depth/{capacity}{subscriber}`, `olivares_eventbus_publish_blocked_total`, and on the bridge `olivares_eventbus_bridge_pending_messages` + `olivares_eventbus_bridge_dropped_total` (the real pre-loss queue is the bridge subscription's pending buffer, not the 256-deep local channels).
+- **Backpressure SLI scope under the NATS bridge:** `olivares_ingest_duration_seconds` remains the backpressure SLI for the LOCAL path — the bridge does not change local fan-out (publishers still block on a saturated subscriber; event-bus contract). What the histogram can NOT see is cross-node loss: bridged events drop (counted) instead of backpressuring the remote publisher. The first-class saturation SLIs are now direct: `olivares_eventbus_queue_depth/{capacity}{subscriber}`, `olivares_eventbus_publish_blocked_total`, and on the bridge `olivares_eventbus_bridge_pending_messages` + `olivares_eventbus_bridge_dropped_total` (the real pre-loss queue is the bridge subscription's pending buffer, not the 256-deep local channels).
 
 ---
 
@@ -150,7 +165,7 @@ record any interruption. The support matrix controls the release status.
 
 *Structure per the SRE Workbook error-budget-policy template. Owner: the production-readiness function. Disputes escalate to the maintainer (the CTO role) for a final call on budget math and required action.*
 
-**Service & scope.** The Olivares control-plane engine (`cmd/olivares`): its HTTP/gRPC API, the collector→core ingest path, and the evidence ledger. Out of scope: the agents and external systems it governs, and customer-owned infrastructure.
+**Service & scope.** The Olivares AI engine (`cmd/olivares`): its HTTP/gRPC API, the collector→core ingest path, and the evidence ledger. Out of scope: the agents and external systems it governs, and customer-owned infrastructure.
 
 **Goals.** For a deployment adopting these operating targets, keep reliability at or above its selected SLOs (§2) over the rolling 28-day window; make every miss visible and actioned; spend the budget deliberately on change velocity.
 **Non-goals.** 100% reliability (the wrong target — SRE). Gating *all* engineering on a green budget; the policy gates **risky change**, not bug-fixes or security.
@@ -190,9 +205,12 @@ For the **99.5%** tier the budget is 5× larger, so the same *fraction-of-budget
 
 ---
 
-## 5. Instrumentation: what was added, and the honest roadmap
+<a id="5-instrumentation-what-was-added-and-the-honest-roadmap"></a>
 
-**Added, because an SLO must be measurable:**
+## 5. Instrumentation and remaining work
+
+**Available signals and checks:**
+- `olivares_retirement_failures_total{cause}` — retirement pump failures, with three fixed causes: `no_declared_modules`, `read_due_failed`, and `record_pass_failed`. Each failed record pass increments the last cause, even when the batch continues and returns no error. All three series start at zero; idle passes, successful passes and shutdown cancellation do not increment them. Scrape `/metrics` and check `increase(olivares_retirement_failures_total[5m]) > 0`; inspect the retirement WARN logs for the specific composition or module error, repair it, and confirm the counter stops increasing on retries. Counts are per process and reset on restart; no account, tenant or raw error is exposed as a label.
 - `olivares_ingest_duration_seconds` — the ingest-latency histogram (§1.4); the ingest-p99 SLO was unmeasurable before.
 - `olivares_ingest_rejected_total` — the ingest success-rate denominator (§1.5).
 - `olivares audit verify --strict` — non-zero exit on a failed integrity check, so the on-call ledger-verify check (`deploy/runbooks/ledger-verify-failure.md`) can gate on `$?` instead of silently passing on a tampered chain.
@@ -205,7 +223,7 @@ For the **99.5%** tier the budget is 5× larger, so the same *fraction-of-budget
 - **Login/abuse** — `olivares_auth_login_attempts_total{outcome}` (`success|failed|locked_out|abandoned`, four series pre-created at zero; password-login surface — SSO mints sessions elsewhere). `locked_out` is any refusal by the throttle, `abandoned` an attempt whose caller went away before the credential was read — most visibly while a tripped client address was holding it, so an abuse query never loses the attempts the throttle is slowing. Credential outcomes only: a store outage during login is a 5xx, not an abuse signal (`core/api/handlers_auth.go`).
 - **Inbound rate-limit SLI** — wired into the rules file as `olivares:ratelimit_limited:ratio_rate5m` over the decisions counter (§1.7), plus the shared-store degradation signals (`store_up`, `store_fallback_total`, `store_buckets`).
 
-**Still roadmap (named honestly, not delivered):**
+**Remaining work:**
 - **Last-verify-status signal** — `audit verify --strict` remains a CLI/cron concern; an in-engine gauge for the last off-box verification result is future work (the checkpoint age + failure counter cover the anchor-freshness half of the original bullet).
 - **gRPC SLO target** — the series and the error-ratio recording rule exist; committing an objective needs production traffic data first (§1.7).
 

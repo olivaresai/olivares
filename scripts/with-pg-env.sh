@@ -80,7 +80,7 @@ case " $* " in
 					_wpe_cpus="$(bash "$(dirname "${BASH_SOURCE[0]:-$0}")/cpu-quota.sh" 2>/dev/null || nproc 2>/dev/null || echo 1)"
 					[ "$_wpe_p" -gt "$_wpe_cpus" ] && _wpe_p="$_wpe_cpus"
 					export GOFLAGS="-p=$_wpe_p"
-					echo "with-pg-env: -race bajo un cgroup de $(( _wpe_cap / 1073741824 )) GiB → GOFLAGS=$GOFLAGS" >&2
+					echo "with-pg-env: -race under a cgroup limited to $(( _wpe_cap / 1073741824 )) GiB → GOFLAGS=$GOFLAGS" >&2
 					;;
 			esac
 		fi
@@ -151,7 +151,7 @@ case " $* " in
 				_wpe_limit=$(( _wpe_bytes / 4 ))
 				[ "${_wpe_limit}" -lt 2684354560 ] && _wpe_limit=2684354560
 				export GOMEMLIMIT="${_wpe_limit}"
-				echo "with-pg-env: sin -race sobre una maquina de $(( _wpe_bytes / 1073741824 )) GiB → GOMEMLIMIT=${_wpe_limit} ($(( _wpe_limit / 1073741824 )) GiB)" >&2
+				echo "with-pg-env: without -race on a machine with $(( _wpe_bytes / 1073741824 )) GiB → GOMEMLIMIT=${_wpe_limit} ($(( _wpe_limit / 1073741824 )) GiB)" >&2
 			fi
 		fi
 		;;

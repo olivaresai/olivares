@@ -79,7 +79,7 @@ func TestTheFlushCollapsesQueuedActivityIntoOneRowWrite(t *testing.T) {
 	fr := &fakeRunner{}
 	m, _, tenant, _ := newRuntimeHarness(t, WithRunner(fr), WithCredentialSource(staticCred()))
 	ctx := context.Background()
-	dto, err := m.createRun(ctx, tenant, CreateRunParams{
+	dto, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative,
 		Actor: "user:u1", ActorKind: model.ActorUser,
 	})
@@ -93,7 +93,7 @@ func TestTheFlushCollapsesQueuedActivityIntoOneRowWrite(t *testing.T) {
 
 	version := func() int64 {
 		var v int64
-		if err := m.data.View(ctx, lr.tenant, func(sc store.Scope) error {
+		if err := m.Data.View(ctx, lr.tenant, func(sc store.Scope) error {
 			repo, err := sc.Ext(runKind)
 			if err != nil {
 				return err

@@ -17,7 +17,7 @@
     "activationStateUnknown": "Die Aktivierung ist nicht verfügbar, bis die Konsole den aktuellen Freigabe- und Prüfstatus verifizieren kann.",
     "activationBlockedUnreviewed": "Eine frühere Freigabe ist noch ungeprüft. Schließen Sie sie, falls sie aktiv ist, und lassen Sie die Nachprüfung durch ein anderes Benutzerkonto abschließen, bevor Sie ein neues Notfallfenster öffnen.",
     "activationHumanRequired": "Ein System-Token kann keinen Notfallzugriff aktivieren. Melden Sie sich als menschliche Administration mit stabiler Identität an.",
-    "activationHardwareRequired": "Die Break-Glass-Aktivierung erfordert eine hardwareverifizierte (AAL3) Sitzung. Führe das WebAuthn- oder PIV-Step-up unter Identität → Privilegierte Anmeldung durch und komm dann hierher zurück.",
+    "activationHardwareRequired": "Die Break-Glass-Aktivierung erfordert eine hardwareverifizierte (AAL3) Sitzung. Führe das WebAuthn-Step-up unter Identität → Privilegierte Anmeldung durch und komm dann hierher zurück.",
     "currentTitle": "Aktueller Notfallzugriff",
     "currentCaption": "Wer das Vier-Augen-Prinzip jetzt umgehen kann, für welche Aktionen und bis wann.",
     "noActive": "Kein aktiver Notfallzugriff",
@@ -224,7 +224,8 @@
     "decisionApprove": "Genehmigt",
     "decisionReject": "Abgelehnt",
     "reenableNeedsAdmins": "Zwei andere Administratorkonten müssen dies genehmigen. Legen Sie sie unter Identität & NHI an oder mit `olivares users create`.",
-    "openIdentity": "Identität & NHI öffnen"
+    "openIdentity": "Identität & NHI öffnen",
+    "cannotDecideOwn": "Sie können Ihre eigene Anfrage nicht genehmigen. Ein anderer Administrator muss entscheiden."
   },
   "policies": {
     "title": "Richtlinien",
@@ -389,8 +390,7 @@
     "denied": "Computer-Use durch Richtlinie verweigert",
     "sensitiveInput": "Computer-Use-Eingabetext enthält sensible Inhalte (DLP-Klassen erkannt)",
     "responseBlocked": "Antwort zurückgehalten: Computer-Use-Eingabetext enthält sensible Inhalte",
-    "honesty": "Durchsetzung ist nur am Proxy verified-deployed. Eine benutzerdefinierte ANTHROPIC_BASE_URL umgeht dies. Computer-Use-Tools sind clientseitig: das Modell schlägt vor, der Client führt aus.",
-    "enterpriseRequired": "Tiefe Screenshot-Analyse (OCR + DLP) und Timeline-Aufzeichnung erfordern das Enterprise-Modul."
+    "honesty": "Durchsetzung ist nur am Proxy verified-deployed. Eine benutzerdefinierte ANTHROPIC_BASE_URL umgeht dies. Computer-Use-Tools sind clientseitig: das Modell schlägt vor, der Client führt aus."
   },
   "projects": {
     "title": "Claude-Projekte-Governance",
@@ -711,6 +711,7 @@
     "folder": "Ordner",
     "askedBy": "Angefragt von",
     "askedBySession": "Die Sitzung selbst",
+    "askedByForSession": "{{name}} für eine neue Sitzung",
     "tool": "Werkzeug",
     "willRun": "Was ausgeführt wird",
     "noReview": "Diese Anfrage enthält nicht, was ausgeführt wird.",
@@ -720,6 +721,10 @@
     "details": "Details",
     "id": "Anfrage-ID",
     "untitled": "Sitzung ohne Titel",
-    "openToDecide": "Öffnen zum Genehmigen oder Ablehnen"
+    "openToDecide": "Öffnen zum Genehmigen oder Ablehnen",
+    "you": "Sie",
+    "member": "Ein Mitglied",
+    "apiToken": "Ein API-Token",
+    "requestSummary": "Anfrage"
   }
 }

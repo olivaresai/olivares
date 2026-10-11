@@ -32,19 +32,18 @@ func testSessionMCPPeerDelivery(t *testing.T, key string) {
 	t.Helper()
 	h := newHarness(t)
 	m := h.set.sessions
-	m.UseWorkAuthorizer(auth.NewAuthorizer(h.set.gov.RequestEvaluator(), auth.WithScopedGrants(h.set.gov.ScopedGrants())))
-	m.UseWorkIdentityResolver(workIdentityResolver{st: h.st, sessions: m, agentLifecycle: h.set.gov})
-	m.UseWorkContentGuard(workContentGuard{})
+	sessions.WithWorkAuthorizer(auth.NewAuthorizer(h.set.gov.RequestEvaluator(), auth.WithScopedGrants(h.set.gov.ScopedGrants())))(m)
+	sessions.WithWorkIdentityResolver(workIdentityResolver{st: h.st, sessions: m, agentLifecycle: h.set.gov})(m)
+	sessions.WithWorkContentGuard(workContentGuard{})(m)
 	sessions.WithRunner(approvalProjectionRunner{})(m)
-	m.EnableProfiledLaunches()
 	m.UseExecutionEnvironmentRef("peer-delivery-test")
 	credentials := newSessionHookCredentials(h.authr, h.st, m, h.set.gov)
 	tokens, identities := map[string]string{}, map[string]string{}
-	m.UseLaunchGate(approvalProjectionLaunchGate(func(ctx context.Context, tenant model.TenantID, intent sessions.LaunchIntent) (sessions.LaunchDecision, error) {
+	sessions.WithLaunchGate(approvalProjectionLaunchGate(func(ctx context.Context, tenant model.TenantID, intent sessions.LaunchIntent) (sessions.LaunchDecision, error) {
 		token, err := credentials.mint(ctx, tenant, intent)
 		tokens[intent.RunRef], identities[intent.RunRef] = token, intent.ClaimSID
 		return sessions.LaunchDecision{Allowed: err == nil}, err
-	}))
+	}))(m)
 	launch := func() string {
 		t.Helper()
 		var profile struct {
@@ -87,7 +86,7 @@ func testSessionMCPPeerDelivery(t *testing.T, key string) {
 		}
 	}
 	selectPeers([]string{identities[recipient]})
-	handler := &sessionMCPHandler{authr: credentials, issuedSessionOnly: true, work: m.CallSessionWork}
+	handler := &sessionMCPHandler{authr: credentials, issuedSessionOnly: true, admits: admitsThrough(auth.NewAuthorizer(nil)), work: m.CallSessionWork}
 	call := func(run, name string, arguments any) map[string]any {
 		t.Helper()
 		raw, _ := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": map[string]any{"name": name, "arguments": arguments}})

@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -38,7 +37,7 @@ type voiceCallConfig struct {
 }
 
 func loadVoiceCallConfig(_ *slog.Logger) (voiceCallConfig, error) {
-	path := os.Getenv(envVoiceCallConfig)
+	path := osGetenv(envVoiceCallConfig)
 	if path == "" {
 		return voiceCallConfig{}, nil
 	}

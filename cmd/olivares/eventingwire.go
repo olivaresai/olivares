@@ -17,6 +17,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/olivaresai/olivares/core/dr"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/secure"
 	"github.com/olivaresai/olivares/core/store"
@@ -38,10 +39,10 @@ const (
 	// eventingSecretKeyEnv supplies the 32-byte base64 sealer key directly (the
 	// HA path: every node must seal/open with the SAME key, like the shared
 	// audit signing key). Unset => a per-node key file in the data dir.
-	eventingSecretKeyEnv = "OLIVARES_EVENTING_SECRET_KEY"
+	eventingSecretKeyEnv = dr.EventingSecretKeyEnv
 	// eventingSecretKeyFile is the on-disk key minted on first boot (0600,
 	// fail-closed on wider permissions — the secure package's posture).
-	eventingSecretKeyFile = "eventing-secret.key"
+	eventingSecretKeyFile = dr.EventingSecretKeyFile
 )
 
 // loadEventingOptions builds the eventing module's construction options from
@@ -138,11 +139,7 @@ func loadOrCreateAEADKey(path string) ([]byte, error) {
 		if err != nil {
 			return nil, fmt.Errorf("eventing: read key file: %w", err)
 		}
-		k, err := base64.StdEncoding.DecodeString(strings.TrimSpace(string(b)))
-		if err != nil || len(k) != 32 {
-			return nil, fmt.Errorf("eventing: %q is not a valid sealer key file", path)
-		}
-		return k, nil
+		return decodeAEADKeyFile(path, b)
 	}
 	k := make([]byte, 32)
 	if _, err := rand.Read(k); err != nil {
@@ -159,6 +156,16 @@ func loadOrCreateAEADKey(path string) ([]byte, error) {
 	enc := base64.StdEncoding.EncodeToString(k) + "\n"
 	if err := os.WriteFile(path, []byte(enc), 0o600); err != nil {
 		return nil, fmt.Errorf("eventing: persist sealer key: %w", err)
+	}
+	return k, nil
+}
+
+// decodeAEADKeyFile decodes the contents b of the sealer key file at path. DR
+// backup checks a key with it before it seals the file into a bundle.
+func decodeAEADKeyFile(path string, b []byte) ([]byte, error) {
+	k, err := base64.StdEncoding.DecodeString(strings.TrimSpace(string(b)))
+	if err != nil || len(k) != 32 {
+		return nil, fmt.Errorf("eventing: %q is not a valid sealer key file", path)
 	}
 	return k, nil
 }

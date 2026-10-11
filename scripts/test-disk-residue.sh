@@ -2,27 +2,17 @@
 # SPDX-FileCopyrightText: 2026 Olivares.AI
 # SPDX-License-Identifier: AGPL-3.0-only
 #
-# test-disk-residue.sh - bateria de check-disk-residue.sh.
-#
-# Los casos 9-16 NO estaban en la primera version y existen porque el contraste `the model` max
-# del 2026-09-02 los reprodujo como defectos: cada uno fija una direccion de error que el vigia
-# cometia. Los dos mutantes que sobrevivieron a la bateria original -anular el peso de un
-# directorio, y devolver una atribucion ficticia- mueren ahora con los casos 12 y 14.
-#
-# El 12-bis lo anadio la corrida 33965105298 del 2026-09-05: no fallaba el vigia, fallaba la
-# PREMISA del caso 12, que daba por ilegible un `chmod 000` sin medir si el lector estaba negado.
-# Ningun caso de aqui abajo SUPONE ya que su condicion se monto; la mide antes de afirmar nada.
-#
-# Los BLOQUES 17-27 -doce casos, porque el 23 lleva ademas su control- son de otro defecto, y este
-# SI era del vigia y de produccion: el censo de PRIMER NIVEL se llevaba con un solo booleano, asi
-# que una raiz sana borraba el fallo de otra, y el listado parcial de un `find` fallido se
-# analizaba como si fuera completo. Lo reprodujo la revision independiente `the model` del
-# 2026-09-05 sobre `0525eed8e1` (review/first-level-enumeration-followup.md) y cubren la tabla de
-# aceptacion de ese brief, fila por fila. CINCO de ellos fallan sobre el vigia anterior y los
-# demas son filas de NO-CAMBIO: 0/1 se conservan exactamente.
-#
-# La mitad que decide sigue siendo la que NO dispara: un vigia que acusa a un gate en curso hace
-# que el carril deje de correrlo, y eso es peor que no tenerlo.
+# test-disk-residue.sh — tests for check-disk-residue.sh.
+# Cases 9-16 lock down defects reproduced by the model max on 2026-09-02. Cases
+# 12 and 14 kill the surviving mutants that ignore directory weight or invent attribution.
+# Run 33965105298 on 2026-09-05 added 12-bis: chmod 000 did not establish unreadability
+# for the actual reader. Measure every fixture precondition before asserting results.
+# Blocks 17-27 (twelve cases, including 23's control) cover the production first-level
+# enumeration defect: one successful root erased another's failure, and partial find
+# output was treated as complete. the model reproduced it on 0525eed8e1, 2026-09-05
+# (review/first-level-enumeration-followup.md). Cover its acceptance table row by row:
+# five cases fail on the old watcher; the others preserve exact 0/1 behavior.
+# Acceptance controls matter: false accusations against running gates discourage use.
 set -u
 GATE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/check-disk-residue.sh"
 casos=0
@@ -151,7 +141,7 @@ siembra_shim() { # -> 0 y deja el shim en $SHIM_DIR; 1 si no hay donde ejecutarl
 # silencioso ni rojo sobre algo que no es el sujeto. El resumen final lo dice.
 salta() { # <nombre> <motivo>
 	saltados=$((saltados + 1))
-	printf 'salta %s: %s\n' "$1" "$2"
+	printf 'skip %s: %s\n' "$1" "$2"
 }
 # Como `espera`, pero ademas exige que un texto NO salga. Hace falta para el caso que prueba que
 # una salida PARCIAL no se analiza: lo que demuestra que no se analizo es que su familia no se
@@ -169,7 +159,7 @@ espera_y_nunca() { # <nombre> <dir> <rc> <texto-que-SI> <texto-que-NO> [VAR=val 
 	out="$(env OLIVARES_RESIDUE_DIRS="$dir" "$@" bash "$GATE" 2>&1)"
 	rc=$?
 	if [ "$rc" != "$want" ]; then
-		printf 'FALLO %s: esperaba rc %s, salio %s\n' "$nombre" "$want" "$rc"
+		printf 'FAIL %s: expected rc %s, got %s\n' "$nombre" "$want" "$rc"
 		printf '%s\n' "$out" | sed 's/^/        /' | head -4
 		fallos=$((fallos + 1))
 		return
@@ -177,7 +167,7 @@ espera_y_nunca() { # <nombre> <dir> <rc> <texto-que-SI> <texto-que-NO> [VAR=val 
 	case "$out" in
 	*"$si"*) ;;
 	*)
-		printf 'FALLO %s: rc %s, pero nunca dijo: %s\n' "$nombre" "$rc" "$si"
+		printf 'FAIL %s: rc %s, but never said: %s\n' "$nombre" "$rc" "$si"
 		printf '%s\n' "$out" | sed 's/^/        /' | head -4
 		fallos=$((fallos + 1))
 		return
@@ -185,7 +175,7 @@ espera_y_nunca() { # <nombre> <dir> <rc> <texto-que-SI> <texto-que-NO> [VAR=val 
 	esac
 	case "$out" in
 	*"$no"*)
-		printf 'FALLO %s: rc %s, pero dijo lo que NO debia: %s\n' "$nombre" "$rc" "$no"
+		printf 'FAIL %s: rc %s, but said what it should NOT: %s\n' "$nombre" "$rc" "$no"
 		printf '%s\n' "$out" | sed 's/^/        /' | head -4
 		fallos=$((fallos + 1))
 		;;
@@ -201,7 +191,7 @@ espera() { # <nombre> <dir> <rc> <texto> [VAR=val ...]
 	out="$(env OLIVARES_RESIDUE_DIRS="$dir" "$@" bash "$GATE" 2>&1)"
 	rc=$?
 	if [ "$rc" != "$want" ]; then
-		printf 'FALLO %s: esperaba rc %s, salio %s\n' "$nombre" "$want" "$rc"
+		printf 'FAIL %s: expected rc %s, got %s\n' "$nombre" "$want" "$rc"
 		printf '%s\n' "$out" | sed 's/^/        /' | head -4
 		fallos=$((fallos + 1))
 		return
@@ -209,7 +199,7 @@ espera() { # <nombre> <dir> <rc> <texto> [VAR=val ...]
 	case "$out" in
 	*"$txt"*) printf 'ok    %s\n' "$nombre" ;;
 	*)
-		printf 'FALLO %s: rc %s correcto, pero el veredicto nunca dijo: %s\n' "$nombre" "$rc" "$txt"
+		printf 'FAIL %s: correct rc %s, but the verdict never said: %s\n' "$nombre" "$rc" "$txt"
 		printf '%s\n' "$out" | sed 's/^/        /' | head -5
 		fallos=$((fallos + 1))
 		;;
@@ -229,10 +219,10 @@ espera_defecto() { # <name> <fixture> <rc> <text>
 		RESIDUE_TEST_MAP_LOG="$fixture/mapped.log" bash "$GATE" 2>&1)"
 	rc=$?
 	if [ "$(cat "$fixture/mapped.log")" != "$traiz" ]; then
-		printf 'FALLO %s: default /tmp was not enumerated exactly once through the fixture\n' "$name"
+		printf 'FAIL %s: default /tmp was not enumerated exactly once through the fixture\n' "$name"
 		fallos=$((fallos + 1))
 	elif [ "$rc" != "$want" ] || [ "${out#*"$text"}" = "$out" ]; then
-		printf 'FALLO %s: expected rc %s and %s, got rc %s\n' "$name" "$want" "$text" "$rc"
+		printf 'FAIL %s: expected rc %s and %s, got rc %s\n' "$name" "$want" "$text" "$rc"
 		printf '%s\n' "$out" | sed 's/^/        /' | head -4
 		fallos=$((fallos + 1))
 	else
@@ -243,26 +233,26 @@ espera_defecto() { # <name> <fixture> <rc> <text>
 # --- 1. Sospecha por los dos ejes.
 d="$(nuevo)"
 for i in $(seq 100 124); do head -c 3000000 /dev/zero >"$d/fuga.a${i}bcd"; done
-espera "sospecha por recuento Y tamano" "$d" 1 "fuga.XXXXXX"
+espera "suspicion based on count AND size" "$d" 1 "fuga.XXXXXX"
 rm -rf "$d"
 
 # --- 2. NO DISPARA: misma familia sin peso.
 d="$(nuevo)"
 for i in $(seq 100 124); do printf 'x' >"$d/pequena.a${i}bcd"; done
-espera "misma familia sin peso: CLEAN" "$d" 0 "CLEAN"
+espera "same family without size: CLEAN" "$d" 0 "CLEAN"
 rm -rf "$d"
 
 # --- 3. Sospecha por RECUENTO solo. Es el caso `hubgate` medido: 425 ficheros y 3,9 MiB.
 d="$(nuevo)"
 for i in $(seq 100 219); do printf 'x' >"$d/contadas.a${i}bcd"; done
-espera "sospecha por recuento aunque no pese" "$d" 1 "contadas.XXXXXX"
+espera "suspicion based on count even without size" "$d" 1 "contadas.XXXXXX"
 rm -rf "$d"
 
 # --- 4. NO DISPARA: un cache grande de UNA entrada.
 d="$(nuevo)"
 mkdir -p "$d/un-cache-grande"
 head -c 80000000 /dev/zero >"$d/un-cache-grande/blob"
-espera "un cache grande de una entrada: CLEAN" "$d" 0 "CLEAN"
+espera "a large cache with one entry: CLEAN" "$d" 0 "CLEAN"
 rm -rf "$d"
 
 # --- 5. NO DISPARA: entrada con descriptor abierto.
@@ -271,13 +261,13 @@ for i in $(seq 100 229); do printf 'x' >"$d/enuso.a${i}bcd"; done
 sleep 25 <"$d/enuso.a100bcd" &
 vivo=$!
 sleep 1
-espera "descriptor abierto: esa entrada no es residuo" "$d" 0 "CLEAN" \
+espera "open descriptor: that entry is not residue" "$d" 0 "CLEAN" \
 	OLIVARES_RESIDUE_COUNT_ONLY=200
 kill "$vivo" 2>/dev/null; wait "$vivo" 2>/dev/null
 rm -rf "$d"
 
 # --- 6. Tercera respuesta: sin TMPDIR legible.
-espera "TMPDIR inexistente: NO PUDE MIRAR" "/no-existe-para-la-bateria" 2 "NO PUDE MIRAR"
+espera "nonexistent TMPDIR: COULD NOT CHECK" "/no-existe-para-la-bateria" 2 "COULD NOT CHECK"
 
 # --- 7. Atribucion con fichero:linea.
 # ⛔ EL PRODUCTOR DEL FIXTURE TIENE QUE VIAJAR CON EL ARBOL. Hasta el 2026-09-16 la familia era
@@ -288,13 +278,13 @@ espera "TMPDIR inexistente: NO PUDE MIRAR" "/no-existe-para-la-bateria" 2 "NO PU
 #    propio gate bajo prueba (`check-disk-residue.sh`), presente en el hub y en el export.
 d="$(nuevo)"
 for i in $(seq 100 219); do printf 'x' >"$d/residue-list.a${i}bcd"; done
-espera "atribuye al productor con fichero:linea" "$d" 1 "check-disk-residue.sh:"
+espera "attributes to the producer with file:line" "$d" 1 "check-disk-residue.sh:"
 rm -rf "$d"
 
 # --- 8. Y cuando no puede atribuir, lo dice.
 d="$(nuevo)"
 for i in $(seq 100 219); do printf 'x' >"$d/inventadoxyz.a${i}bcd"; done
-espera "sin productor en el arbol: lo dice" "$d" 1 "esta FUERA del arbol"
+espera "no producer in the tree: reports it" "$d" 1 "producer is outside the tree"
 rm -rf "$d"
 
 # --- 9. F-02: UNA hermana viva NO absuelve a las huerfanas. El contraste creo 120, sostuvo una y
@@ -304,7 +294,7 @@ for i in $(seq 100 219); do printf 'x' >"$d/f02.a${i}bcd"; done
 sleep 25 <"$d/f02.a100bcd" &
 vivo=$!
 sleep 1
-espera "una hermana viva no absuelve a las 119 huerfanas" "$d" 1 "f02.XXXXXX" \
+espera "one live sibling does not clear the 119 orphans" "$d" 1 "f02.XXXXXX" \
 	OLIVARES_RESIDUE_COUNT_ONLY=100
 kill "$vivo" 2>/dev/null; wait "$vivo" 2>/dev/null
 rm -rf "$d"
@@ -316,14 +306,14 @@ mkdir -p "$d/f01.a100bcd/sub"
 (cd "$d/f01.a100bcd/sub" && sleep 25) &
 vivo=$!
 sleep 1
-espera "un cwd en un descendiente sostiene su entrada" "$d" 1 "119" OLIVARES_RESIDUE_COUNT_ONLY=100
+espera "a cwd in a descendant keeps its entry alive" "$d" 1 "119" OLIVARES_RESIDUE_COUNT_ONLY=100
 kill "$vivo" 2>/dev/null; wait "$vivo" 2>/dev/null
 rm -rf "$d"
 
 # --- 11. F-03: la raiz duplicada NO se cuenta dos veces.
 d="$(nuevo)"
 for i in $(seq 100 159); do head -c 1000000 /dev/zero >"$d/f03.a${i}bcd"; done
-espera "raiz repetida: no duplica el censo (CLEAN)" "$d $d" 0 "CLEAN" \
+espera "repeated root: does not duplicate the census (CLEAN)" "$d $d" 0 "CLEAN" \
 	OLIVARES_RESIDUE_MIN_COUNT=100 OLIVARES_RESIDUE_COUNT_ONLY=100
 rm -rf "$d"
 
@@ -355,9 +345,9 @@ if [ "$montadas" -ne 25 ]; then
 	# Un caso que no puede montar su condicion NO se cuenta como aprobado: lo dice y suma fallo.
 	casos=$((casos + 1))
 	fallos=$((fallos + 1))
-	printf 'FALLO descendientes ilegibles: no pude montar la condicion (%d de 25)\n' "$montadas"
+	printf 'FAIL unreadable descendants: could not establish the condition (%d of 25)\n' "$montadas"
 else
-	espera "descendientes ilegibles: NO PUDE MIRAR, no CLEAN" "$d" 2 "NO PUDE MIRAR"
+	espera "unreadable descendants: COULD NOT CHECK, not CLEAN" "$d" 2 "COULD NOT CHECK"
 fi
 rm -rf "$d"
 
@@ -378,13 +368,13 @@ done
 lector_atascado "$d/f05b.a100bcd"
 visto=$?
 case "$visto" in
-0) espera "chmod 000 que SI niega al lector: NO PUDE MIRAR" "$d" 2 "NO PUDE MIRAR" ;;
-1) espera "chmod 000 que NO niega al lector: no se inventa ilegibilidad" "$d" 0 "CLEAN" ;;
+0) espera "chmod 000 that DOES deny the reader: COULD NOT CHECK" "$d" 2 "COULD NOT CHECK" ;;
+1) espera "chmod 000 that does NOT deny the reader: no invented unreadability" "$d" 0 "CLEAN" ;;
 *)
 	casos=$((casos + 1))
 	fallos=$((fallos + 1))
 	# Suponer la respuesta es EL defecto que este caso corrige: si no se puede medir, es fallo.
-	printf 'FALLO chmod 000: no pude MEDIR si el lector queda fuera (rc %s)\n' "$visto"
+	printf 'FAIL chmod 000: could not MEASURE whether the reader is denied (rc %s)\n' "$visto"
 	;;
 esac
 chmod -R u+rwX "$d" 2>/dev/null
@@ -394,7 +384,7 @@ rm -rf "$d"
 d="$(nuevo)"
 head -c 3000000 /dev/zero >"$d/base.dat"
 for i in $(seq 100 124); do ln "$d/base.dat" "$d/f13.a${i}bcd"; done
-espera "hard links al mismo inodo: no inflan el peso (CLEAN)" "$d" 0 "CLEAN" \
+espera "hard links to the same inode: do not inflate size (CLEAN)" "$d" 0 "CLEAN" \
 	OLIVARES_RESIDUE_COUNT_ONLY=100
 rm -rf "$d"
 
@@ -404,12 +394,12 @@ for i in $(seq 100 219); do printf 'x' >"$d/residue-list.a${i}bcd"; done
 out14="$(env OLIVARES_RESIDUE_DIRS="$d" bash "$GATE" 2>&1)"
 casos=$((casos + 1))
 if printf '%s' "$out14" | grep -q ':999999'; then
-	printf 'FALLO CASO 14: la atribucion devolvio una linea ficticia\n'
+	printf 'FAIL CASE 14: attribution returned a fictitious line\n'
 	fallos=$((fallos + 1))
 elif printf '%s' "$out14" | grep -qE 'check-disk-residue\.sh:[0-9]{1,4}\b'; then
-	printf 'ok    la atribucion cita una linea real del arbol\n'
+	printf 'ok    attribution cites a real line in the tree\n'
 else
-	printf 'FALLO CASO 14: no cito ninguna linea plausible\n'
+	printf 'FAIL CASE 14: did not cite any plausible line\n'
 	printf '%s\n' "$out14" | sed 's/^/        /' | head -4
 	fallos=$((fallos + 1))
 fi
@@ -418,35 +408,29 @@ rm -rf "$d"
 # --- 15. Un umbral que no es numero es NO PUDE MIRAR, no un valor por defecto silencioso.
 d="$(nuevo)"
 printf 'x' >"$d/x.a100bcd"
-espera "umbral no numerico: NO PUDE MIRAR" "$d" 2 "no es un entero" \
+espera "nonnumeric threshold: COULD NOT CHECK" "$d" 2 "is not an integer" \
 	OLIVARES_RESIDUE_MIN_COUNT=not-a-number
 rm -rf "$d"
 
-# =====================================================================================
-# CONTRATO DEL CENSO DE PRIMER NIVEL (casos 17-27). Tabla de aceptacion del brief
-# review/first-level-enumeration-followup.md, fila por fila.
-#
-# El defecto que regresionan, medido por `the model` sobre `0525eed8e1`: el censo llevaba UN
-# BOOLEANO, asi que cualquier raiz que terminara 0 borraba el fallo de las demas — y el listado
-# parcial que un `find` fallido ya habia escrito se analizaba como si fuera completo. Resultado:
-# rc 0 CLEAN despues de omitir una raiz que se pidio.
-#
-# ⛔ LOS CASOS QUE DECIDEN SON 21-23, Y NO USAN PERMISOS. El mecanismo es un `find` de laboratorio
-# que emite y falla: eso vale igual como root que sin privilegios. Los casos 19-20 conservan el
-# camino DAC con su premisa MEDIDA y afirman en las dos ramas, como el 12-bis — bajo un lector no
-# negado la respuesta correcta NO es 2, y exigirla seria inventarse un fallo.
-# =====================================================================================
+# First-level enumeration contract (cases 17-27), matching every acceptance-table row
+# in review/first-level-enumeration-followup.md.
+# the model measured the defect on 0525eed8e1: a single boolean let one successful
+# root erase failed roots, and partial find output looked complete, returning CLEAN
+# rc 0 despite omitting a requested root.
+# Cases 21-23 use a fixture find that emits output then fails, independent of privilege.
+# Cases 19-20 retain DAC tests with measured preconditions and assert both branches,
+# like 12-bis. A reader not denied access must not be required to return rc 2.
 
 # --- 17. Fila 1: una raiz accesible y vacia es CLEAN. Un censo completo sobre cero entradas es
 #         un veredicto, no una laguna.
 d="$(nuevo)"
-espera "raiz accesible y vacia: CLEAN" "$d" 0 "CLEAN"
+espera "accessible empty root: CLEAN" "$d" 0 "CLEAN"
 rm -rf "$d"
 
 # --- 18. Fila 2: una familia que cruza el umbral con censo COMPLETO sigue siendo 1.
 d="$(nuevo)"
 for i in $(seq 100 219); do printf 'x' >"$d/f18.a${i}bcd"; done
-espera "familia sobre el umbral con censo completo: SOSPECHA" "$d" 1 "f18.XXXXXX"
+espera "family above the threshold with a complete census: SUSPICION" "$d" 1 "f18.XXXXXX"
 rm -rf "$d"
 
 # --- 19. Fila 3: una unica raiz que el lector no puede enumerar es 2. Premisa MEDIDA: `chmod 000`
@@ -456,9 +440,9 @@ mkdir -p "$d/f19"
 printf 'x' >"$d/f19/dentro.a100bcd"
 chmod 000 "$d/f19"
 if raiz_enumerable "$d/f19"; then
-	espera "raiz unica que el lector SI enumera: no se inventa fallo" "$d/f19" 0 "CLEAN"
+	espera "single root that the reader DOES enumerate: no invented failure" "$d/f19" 0 "CLEAN"
 else
-	espera "raiz unica que el lector no enumera: NO PUDE MIRAR" "$d/f19" 2 "NO PUDE MIRAR"
+	espera "single root that the reader cannot enumerate: COULD NOT CHECK" "$d/f19" 2 "COULD NOT CHECK"
 fi
 chmod -R u+rwX "$d" 2>/dev/null
 rm -rf "$d"
@@ -470,10 +454,10 @@ mkdir -p "$d/f20mala" "$d/f20buena"
 printf 'x' >"$d/f20mala/dentro.a100bcd"
 chmod 000 "$d/f20mala"
 if raiz_enumerable "$d/f20mala"; then
-	espera "denegada+accesible con lector no negado: CLEAN" "$d/f20mala $d/f20buena" 0 "CLEAN"
+	espera "denied+accessible with an unrestricted reader: CLEAN" "$d/f20mala $d/f20buena" 0 "CLEAN"
 else
-	espera "denegada+accesible: 2, la sana NO tapa a la otra" "$d/f20mala $d/f20buena" 2 \
-		"NO PUDE MIRAR"
+	espera "denied+accessible: 2, the healthy root does NOT hide the other" "$d/f20mala $d/f20buena" 2 \
+		"COULD NOT CHECK"
 fi
 chmod -R u+rwX "$d" 2>/dev/null
 rm -rf "$d"
@@ -484,12 +468,12 @@ d="$(nuevo)"
 for i in $(seq 100 219); do printf 'x' >"$d/parcial21.a${i}bcd"; done
 if siembra_shim; then
 	praiz="$(cd "$d" && pwd -P)"
-	espera_y_nunca "find que emite y falla, raiz sola: NO PUDE MIRAR" "$praiz" 2 \
-		"NO PUDE MIRAR" "parcial21.XXXXXX" \
+	espera_y_nunca "find that emits then fails, single root: COULD NOT CHECK" "$praiz" 2 \
+		"COULD NOT CHECK" "parcial21.XXXXXX" \
 		PATH="$SHIM_DIR:$PATH" FAULT_ROOT="$praiz"
 	rm -rf "$SHIM_DIR"
 else
-	salta "find que emite y falla, raiz sola" "no hay base ejecutable donde poner el shim"
+	salta "find that emits then fails, single root" "no executable base for the shim"
 fi
 rm -rf "$d"
 
@@ -502,12 +486,12 @@ for i in $(seq 100 219); do printf 'x' >"$d/mala/parcial22.a${i}bcd"; done
 if siembra_shim; then
 	praiz="$(cd "$d/mala" && pwd -P)"
 	braiz="$(cd "$d/buena" && pwd -P)"
-	espera_y_nunca "find que falla + raiz sana: 2, y la parcial NO se analiza" \
-		"$praiz $braiz" 2 "NO PUDE MIRAR" "parcial22.XXXXXX" \
+	espera_y_nunca "failing find + healthy root: 2, the partial output is NOT analyzed" \
+		"$praiz $braiz" 2 "COULD NOT CHECK" "parcial22.XXXXXX" \
 		PATH="$SHIM_DIR:$PATH" FAULT_ROOT="$praiz"
 	rm -rf "$SHIM_DIR"
 else
-	salta "find que falla + raiz sana" "no hay base ejecutable donde poner el shim"
+	salta "failing find + healthy root" "no executable base for the shim"
 fi
 rm -rf "$d"
 
@@ -520,15 +504,15 @@ for i in $(seq 100 219); do printf 'x' >"$d/buena/sospechosa23.a${i}bcd"; done
 braiz="$(cd "$d/buena" && pwd -P)"
 if siembra_shim; then
 	praiz="$(cd "$d/mala" && pwd -P)"
-	espera_y_nunca "fallo + sospecha: manda el fallo, no hay veredicto" \
-		"$praiz $braiz" 2 "NO PUDE MIRAR" "sospechosa23.XXXXXX" \
+	espera_y_nunca "failure + suspicion: failure takes precedence, no verdict" \
+		"$praiz $braiz" 2 "COULD NOT CHECK" "sospechosa23.XXXXXX" \
 		PATH="$SHIM_DIR:$PATH" FAULT_ROOT="$praiz"
 	rm -rf "$SHIM_DIR"
 else
-	salta "fallo + sospecha" "no hay base ejecutable donde poner el shim"
+	salta "failure + suspicion" "no executable base for the shim"
 fi
 # El control que le da sentido, y corre SIEMPRE: esa MISMA raiz sana, sola y sin shim, SI dispara.
-espera "control: la raiz sana sola SI dice SOSPECHA" "$braiz" 1 "sospechosa23.XXXXXX"
+espera "control: the healthy root alone DOES report SUSPICION" "$braiz" 1 "sospechosa23.XXXXXX"
 rm -rf "$d"
 
 # --- 24. Fila 7: dos GRAFIAS distintas de la misma raiz son UNA raiz. Con 60 entradas y el umbral
@@ -536,7 +520,7 @@ rm -rf "$d"
 d="$(nuevo)"
 for i in $(seq 100 159); do printf 'x' >"$d/f24.a${i}bcd"; done
 ln -s "$d" "$d.alias"
-espera "dos alias de la misma raiz: una sola obligacion, sin duplicar" "$d/. $d.alias" 0 "CLEAN" \
+espera "two aliases of the same root: one obligation, no duplication" "$d/. $d.alias" 0 "CLEAN" \
 	OLIVARES_RESIDUE_MIN_COUNT=100 OLIVARES_RESIDUE_COUNT_ONLY=100
 rm -f "$d.alias"
 rm -rf "$d"
@@ -552,15 +536,15 @@ if siembra_shim; then
 		FAULT_ROOT="$traiz" bash "$GATE" 2>&1)"
 	rc25=$?
 	rm -rf "$SHIM_DIR"
-	if [ "$rc25" = 2 ] && [ "${out25#*NO PUDE MIRAR}" != "$out25" ]; then
-		printf 'ok    modo por defecto: un candidato que no enumera NO desaparece\n'
+	if [ "$rc25" = 2 ] && [ "${out25#*COULD NOT CHECK}" != "$out25" ]; then
+		printf 'ok    default mode: an unenumerable candidate does NOT disappear\n'
 	else
-		printf 'FALLO por defecto: esperaba 2 y NO PUDE MIRAR, salio %s\n' "$rc25"
+		printf 'FAIL default mode: expected 2 and COULD NOT CHECK, got %s\n' "$rc25"
 		printf '%s\n' "$out25" | sed 's/^/        /' | head -4
 		fallos=$((fallos + 1))
 	fi
 else
-	salta "por defecto: candidato que no enumera" "sin base ejecutable para el shim"
+	salta "default mode: unenumerable candidate" "no executable base for the shim"
 fi
 rm -rf "$d"
 
@@ -576,17 +560,17 @@ if siembra_shim; then
 	traiz="$(cd /tmp && pwd -P)"
 	espera_defecto "default owned roots: CLEAN" "$d" 0 "CLEAN"
 	for i in $(seq 100 219); do printf 'x' >"$d/mapped/default26.a${i}bcd"; done
-	espera_defecto "default /tmp owned family: SOSPECHA" "$d" 1 "default26.XXXXXX"
+	espera_defecto "default /tmp owned family: SUSPICION" "$d" 1 "default26.XXXXXX"
 	rm -f "$d/mapped"/default26.*
 	for location in mapped scratch; do
 		mkdir -p "$d/$location/unreadable"
 		if cava_ilegible "$d/$location/unreadable"; then
-			espera_defecto "default $location unreadable descendant: NO PUDE MIRAR" \
-				"$d" 2 "entrada(s) ilegible(s)"
+			espera_defecto "default $location unreadable descendant: COULD NOT CHECK" \
+				"$d" 2 "unreadable entry/entries"
 		else
 			casos=$((casos + 1))
 			fallos=$((fallos + 1))
-			printf 'FALLO default %s: could not establish an unreadable descendant\n' "$location"
+			printf 'FAIL default %s: could not establish an unreadable descendant\n' "$location"
 		fi
 		rm -rf "$d/$location/unreadable"
 	done
@@ -601,8 +585,8 @@ rm -rf "$d"
 #         esa rama NO se puede montar aqui y no se finge: el vigia crea sus propios temporales en
 #         `${TMPDIR:-/tmp}`, asi que un TMPDIR inexistente lo mata antes de censar, y `/tmp`
 #         existe. Se deja escrito en el informe en vez de fabricar la condicion.
-espera "raiz SOLICITADA inexistente: 2, y se dice que se pidio" \
-	"/no-existe-para-la-bateria" 2 "SOLICITADA y no existe"
+espera "nonexistent REQUESTED root: 2, and reports it was requested" \
+	"/no-existe-para-la-bateria" 2 "REQUESTED but does not exist"
 
 # A completed find is insufficient if reading or appending its census fails.
 # Isolate all checker temporaries: the append fixture changes only its own list.
@@ -632,33 +616,33 @@ for fault in reader append; do
 			SH
 			chmod +x "$SHIM_DIR/find"
 		fi
-		espera_y_nunca "censo completo pero $fault falla: no hay veredicto" \
-			"$d/root" 2 "no pude incorporar completo" "appendfail.XXXXXX" \
+		espera_y_nunca "complete census but $fault fails: no verdict" \
+			"$d/root" 2 "could not incorporate the complete" "appendfail.XXXXXX" \
 			TMPDIR="$d/scratch" PATH="$SHIM_DIR:$PATH" FAULT_ROOT="$d/root" \
 			RESIDUE_TEST_CAT="$(type -P cat)" RESIDUE_TEST_FIND="$FIND_REAL"
 		rm -rf "$SHIM_DIR"
 	else
-		salta "incorporacion del censo ($fault)" "sin base ejecutable para el shim"
+		salta "census incorporation ($fault)" "no executable base for the shim"
 	fi
 	rm -rf "$d"
 done
 
 echo
 if [ "$casos" -eq 0 ]; then
-	echo "test-disk-residue: NINGUN CASO CORRIO - eso no es un aprobado." >&2
+	echo "test-disk-residue: NO CASE RAN - that is not a pass." >&2
 	exit 2
 fi
 resumen=""
 if [ "$saltados" -ne 0 ]; then
 	# Una bateria incompleta debe fallar tambien para quien solo observa su codigo de salida.
-	resumen=" y $saltados saltado(s), que no son aprobados"
+	resumen=" and $saltados skipped, which are not passes"
 fi
 if [ "$fallos" -ne 0 ]; then
-	echo "test-disk-residue: FALLO ($fallos de $casos caso(s)$resumen)" >&2
+	echo "test-disk-residue: FAIL ($fallos of $casos case(s)$resumen)" >&2
 	exit 1
 fi
 if [ "$saltados" -ne 0 ]; then
-	echo "test-disk-residue: INCOMPLETA ($casos caso(s)$resumen)" >&2
+	echo "test-disk-residue: INCOMPLETE ($casos case(s)$resumen)" >&2
 	exit 2
 fi
-echo "test-disk-residue: $casos caso(s), todos se comportaron"
+echo "test-disk-residue: $casos case(s), all behaved as expected"

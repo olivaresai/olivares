@@ -372,11 +372,11 @@ func (m *Module) registerWorkSchema(reg store.ExtensionRegistry) error {
 		{
 			Kind: workEventKind, Table: workEventTable, AppendOnly: true, WorkspaceLineage: hiddenWorkspaceLineage,
 			Fields: workFields(
-				model.FieldSpec{Name: colEventID, Kind: model.KindUUID, Principal: model.None("the id of a work event: work_mutation.go:749, work_outbox_policy.go:236")},
-				model.FieldSpec{Name: colEventAggregateKind, Kind: model.KindText, Principal: model.None("the entity kind of the event's aggregate, a work item or a communication entity: work_mutation.go:750, work_outbox_policy.go:236")},
-				model.FieldSpec{Name: colEventAggregateID, Kind: model.KindUUID, Principal: model.None("the id of the event's aggregate row: work_mutation.go:750, work_outbox_policy.go:237")},
+				model.FieldSpec{Name: colEventID, Kind: model.KindUUID, Principal: model.None("the id of a work event: work_mutation.go:749, work_outbox_policy.go:222")},
+				model.FieldSpec{Name: colEventAggregateKind, Kind: model.KindText, Principal: model.None("the entity kind of the event's aggregate, a work item or a communication entity: work_mutation.go:750, work_outbox_policy.go:222")},
+				model.FieldSpec{Name: colEventAggregateID, Kind: model.KindUUID, Principal: model.None("the id of the event's aggregate row: work_mutation.go:750, work_outbox_policy.go:223")},
 				model.FieldSpec{Name: colEventSeq, Kind: model.KindInt},
-				model.FieldSpec{Name: colEventType, Kind: model.KindText, Principal: model.None("an event type name, classified only into an event family: work_state.go:661, work_outbox_policy.go:233-239")},
+				model.FieldSpec{Name: colEventType, Kind: model.KindText, Principal: model.None("an event type name, classified only into an event family: work_state.go:661, work_outbox_policy.go:219-224")},
 				model.FieldSpec{Name: colEventActorKind, Kind: model.KindText, Principal: pdeclNoneWorkActorKind},
 				model.FieldSpec{Name: colEventActorRef, Kind: model.KindText, Principal: model.KindRef(colEventActorKind, model.ClassEvidence)},
 				model.FieldSpec{Name: colEventOccurredAt, Kind: model.KindTimestamp},
@@ -396,7 +396,7 @@ func (m *Module) registerWorkSchema(reg store.ExtensionRegistry) error {
 		{
 			Kind: workOutboxKind, Table: workOutboxTable, RetainOnTenantDrop: true, WorkspaceLineage: hiddenWorkspaceLineage,
 			Fields: workFields(
-				model.FieldSpec{Name: colOutboxEventID, Kind: model.KindUUID, Principal: model.None("the id of the work event the outbox row publishes: work_mutation.go:764, work_outbox_policy.go:236")},
+				model.FieldSpec{Name: colOutboxEventID, Kind: model.KindUUID, Principal: model.None("the id of the work event the outbox row publishes: work_mutation.go:764, work_outbox_policy.go:222")},
 				model.FieldSpec{Name: colOutboxState, Kind: model.KindText, Principal: model.None("an outbox state, a closed set written from this module's constants: work_outbox.go:362, work_outbox.go:683, work_outbox.go:1003-1009")},
 				model.FieldSpec{Name: colOutboxAttempts, Kind: model.KindInt},
 				model.FieldSpec{Name: colOutboxNextAttemptAt, Kind: model.KindTimestamp},
@@ -412,6 +412,7 @@ func (m *Module) registerWorkSchema(reg store.ExtensionRegistry) error {
 		},
 		{
 			Kind: workGuardKind, Table: workGuardTable, RetainOnTenantDrop: true, WorkspaceLineage: hiddenWorkspaceLineage,
+			Internal: true,
 			Fields: workFields(
 				model.FieldSpec{Name: colGuardKind, Kind: model.KindText, Principal: model.None("a work guard kind, a closed set of two: work_mutation.go:350, work_lease.go:262")},
 				model.FieldSpec{Name: colGuardEpoch, Kind: model.KindInt},

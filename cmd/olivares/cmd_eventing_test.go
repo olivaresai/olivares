@@ -22,6 +22,7 @@ func runEventing(t *testing.T, args ...string) (string, error) {
 	cmd.SetOut(&out)
 	cmd.SetErr(&errOut)
 	cmd.SetArgs(args)
+	prepareCompositionTestBoot(t)
 	err := cmd.Execute()
 	return out.String(), err
 }
@@ -96,6 +97,7 @@ func TestEventingTenantResolution(t *testing.T) {
 func seededTenantDataDir(t *testing.T) (string, string) {
 	t.Helper()
 	dir := t.TempDir()
+	prepareCompositionTestBoot(t)
 	eng, err := boot(context.Background(), bootConfig{DataDir: dir, Version: "test", Logger: discardLog()})
 	if err != nil {
 		t.Fatalf("seed data dir %s: %v", dir, err)

@@ -1312,10 +1312,10 @@ func TestPrincipalAuthoritySealCoversStandingValues(t *testing.T) {
 
 func TestPrincipalAuthoritySealProtocolInventoryAndSemanticCanonicalization(t *testing.T) {
 	wantPrincipalFields := []string{
-		"Kind", "UserID", "CredID", "Superadmin", "DisplayName", "AAL", "AMR",
+		"Kind", "UserID", "CredID", "Superadmin", "DisplayName", "Email", "AAL", "AMR",
 		"AgentIdentity", "SessionIdentity", "SessionWorkspaceID", "SessionRunRef", "SessionFence",
 		"grants", "groups", "audiences", "actAs", "confined", "restricted",
-		"localVia", "localSubject", "localMeta", "localSystem", "credentialRef", "evidence",
+		"localVia", "localSubject", "localMeta", "localSystem", "credentialRef", "sessionOrigin", "evidence",
 		"excluded", "sessionScope", "floors",
 	}
 	principalType := reflect.TypeOf(Principal{})
@@ -1342,6 +1342,11 @@ func TestPrincipalAuthoritySealProtocolInventoryAndSemanticCanonicalization(t *t
 	}
 
 	baseline := deterministicPrincipalAuthoritySealFixture(t)
+	withSessionOrigin := cloneEvidencePrincipal(baseline)
+	withSessionOrigin.sessionOrigin = &sessionPrincipalOrigin{}
+	if validPrincipalAuthoritySeal(withSessionOrigin) {
+		t.Fatal("native seal admitted a session issuer origin")
+	}
 	zone := time.FixedZone("semantic-offset", 5*60*60+30*60)
 	sameInstants := cloneEvidencePrincipal(baseline)
 	sameInstants.evidence.observedAt = baseline.evidence.observedAt.In(zone)
@@ -1391,5 +1396,16 @@ func TestPrincipalAuthoritySealProtocolInventoryAndSemanticCanonicalization(t *t
 	}
 	if validPrincipalAuthoritySeal(presentEmptyRestriction) {
 		t.Fatal("restricted=nil collapsed into a present-empty credential ceiling")
+	}
+}
+
+func TestPrincipalAuthoritySealRejectsUnsealedEmail(t *testing.T) {
+	principal := deterministicPrincipalAuthoritySealFixture(t)
+	principal.Email = "unsealed@example.test"
+	if validPrincipalAuthorityShape(principal) {
+		t.Fatal("the closed evidence shape accepted an email absent from its v4 preimage")
+	}
+	if validPrincipalAuthoritySeal(principal) {
+		t.Fatal("an unsealed email retained a valid authority seal")
 	}
 }

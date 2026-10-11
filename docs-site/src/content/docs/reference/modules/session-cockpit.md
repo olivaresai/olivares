@@ -10,7 +10,7 @@ description: >-
 The Community binary registers an availability descriptor for the
 `session-cockpit` API namespace. That namespace currently has **zero handlers**
 and **no interactive cockpit**. Requests under `/v1/m/session-cockpit` receive
-**404 by absence**. The descriptor is not one of the 31 product modules in the
+**404 by absence**. The descriptor is not one of the 32 product modules in the
 catalog.
 
 ## Current availability
@@ -33,7 +33,7 @@ Confirm that shipped session surfaces still work:
 
 1. Live session module routes under the `sessions` namespace —
    [Live operation & sessions](/reference/modules/ii-sessions/).
-2. Console **Sessions** (`/sessions`), **Claude Code** (`/agentops`) and
+2. Console **Sessions** (`/sessions`, also `/agentops`) and
    **Work** (`/work`) — [console reference](/reference/console/).
 3. Official CLI lifecycle in the next section.
 

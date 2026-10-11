@@ -8,7 +8,6 @@ import { describe, expect, it, vi } from 'vitest'
 import { renderIntel, screen } from '@/test/intel'
 import { expectNoRawI18nKeys } from '@/test/i18n-keys'
 import type { LiveDTO } from '@/features/sessions/types'
-import { useNewSessionDialog } from '@/features/first-hour/new-session-store'
 import { RecentWork } from './recent-work'
 import { RECENT_WORK_ROWS, sessionNameLadder, workLine } from './work-line'
 import { mergeSessions } from '@/features/sessions/provenance'
@@ -154,11 +153,7 @@ describe('sessionNameLadder — one ladder for every surface', () => {
 describe('RecentWork', () => {
   it('tells duration, tool calls, events and cost from the fields the engine sent', () => {
     const { container } = renderIntel(
-      <RecentWork
-        sessions={asSessions([row()])}
-        state="ready"
-        canStartSession
-      />,
+      <RecentWork sessions={asSessions([row()])} state="ready" />,
     )
     expect(screen.getByText(/worked for 15\.0s/)).toBeInTheDocument()
     expect(screen.getByText(/2 tool calls/)).toBeInTheDocument()
@@ -173,7 +168,6 @@ describe('RecentWork', () => {
           row({ tool_call_count: 0, event_count: 0, cost_micro_usd: 0 }),
         ])}
         state="ready"
-        canStartSession
       />,
     )
     expect(screen.queryByText(/0 tool calls/)).toBeNull()
@@ -187,7 +181,6 @@ describe('RecentWork', () => {
       <RecentWork
         sessions={asSessions([row({ tool_call_count: 1, event_count: 1 })])}
         state="ready"
-        canStartSession
       />,
     )
     expect(screen.getByText(/1 tool call\b/)).toBeInTheDocument()
@@ -198,9 +191,7 @@ describe('RecentWork', () => {
     const many = Array.from({ length: 9 }, (_, i) =>
       row({ session_ref: `s-${i}`, live_ref: `ref-${i}` }),
     )
-    renderIntel(
-      <RecentWork sessions={asSessions(many)} state="ready" canStartSession />,
-    )
+    renderIntel(<RecentWork sessions={asSessions(many)} state="ready" />)
     expect(
       screen.getByTestId('home-recent-rows').querySelectorAll('li'),
     ).toHaveLength(RECENT_WORK_ROWS)
@@ -210,40 +201,20 @@ describe('RecentWork', () => {
     )
   })
 
-  it('an empty estate offers the verb that fills it', () => {
-    renderIntel(
-      <RecentWork sessions={asSessions([])} state="ready" canStartSession />,
-    )
+  it('an empty estate says what will appear, and leaves the start to Now', () => {
+    renderIntel(<RecentWork sessions={asSessions([])} state="ready" />)
     expect(screen.getByText('No sessions yet')).toBeInTheDocument()
-    // The verb opens the one New session dialog (tool, folder, first message), the same
-    // one the sidebar, the phone bar and the N key open; it used to link to /agentops.
-    useNewSessionDialog.setState({ open: false })
-    screen.getByTestId('home-recent-start').click()
-    expect(useNewSessionDialog.getState().open).toBe(true)
-  })
-
-  it('offers nothing to a principal who cannot start a run', () => {
-    renderIntel(
-      <RecentWork
-        sessions={asSessions([])}
-        state="ready"
-        canStartSession={false}
-      />,
-    )
-    expect(screen.getByText('No sessions yet')).toBeInTheDocument()
-    // Still says what the surface will show — the description is not conditional.
     expect(
       screen.getByText(/Every run a connected engine performs appears here/),
     ).toBeInTheDocument()
-    expect(screen.queryByTestId('home-recent-start')).toBeNull()
+    // Now's start line is the one next step; the empty list offers no second one.
+    expect(screen.queryByRole('button', { name: 'Start a session' })).toBeNull()
   })
 
   it('a failed read is an alert, not an empty estate', () => {
     // The distinction this asserts is the product's own rule: a source
     // that errored must never render as "there is nothing".
-    renderIntel(
-      <RecentWork sessions={undefined} state="unavailable" canStartSession />,
-    )
+    renderIntel(<RecentWork sessions={undefined} state="unavailable" />)
     expect(screen.getByRole('alert')).toHaveTextContent(
       'Couldn’t load recent work',
     )
@@ -251,9 +222,7 @@ describe('RecentWork', () => {
   })
 
   it('loading shows skeletons, not an empty estate', () => {
-    renderIntel(
-      <RecentWork sessions={undefined} state="loading" canStartSession />,
-    )
+    renderIntel(<RecentWork sessions={undefined} state="loading" />)
     expect(screen.getByTestId('home-recent-loading')).toBeInTheDocument()
     expect(screen.queryByText('No sessions yet')).toBeNull()
   })
@@ -271,7 +240,6 @@ describe('the row opens the SESSION, not the room', () => {
           row({ session_ref: 'sess-legacy', attribution: 'legacy' }),
         ])}
         state="ready"
-        canStartSession
       />,
     )
     const links = screen.getAllByTestId('home-recent-row')
@@ -287,7 +255,6 @@ describe('the row opens the SESSION, not the room', () => {
       <RecentWork
         sessions={asSessions([row({ summary: 'Filed PR #7723' })])}
         state="ready"
-        canStartSession
       />,
     )
     expect(
@@ -307,7 +274,6 @@ describe('RecentWork — names, not ids', () => {
       <RecentWork
         sessions={asSessions([row({ summary: 'Filed PR #7723' })])}
         state="ready"
-        canStartSession
       />,
     )
     const rowEl = screen.getByTestId('home-recent-row')
@@ -317,13 +283,7 @@ describe('RecentWork — names, not ids', () => {
   })
 
   it('paints Untitled session, never sess-* as the row name', () => {
-    renderIntel(
-      <RecentWork
-        sessions={asSessions([row()])}
-        state="ready"
-        canStartSession
-      />,
-    )
+    renderIntel(<RecentWork sessions={asSessions([row()])} state="ready" />)
     const rowEl = screen.getByTestId('home-recent-row')
     expect(rowEl).toHaveTextContent('Untitled session')
     expect(rowEl.textContent ?? '').not.toMatch(/\bsess-/)
@@ -334,12 +294,7 @@ describe('RecentWork — names, not ids', () => {
 describe('RecentWork — the list starts the work', () => {
   it('on Now, where it follows "Needs you", it shows its title', () => {
     renderIntel(
-      <RecentWork
-        titled
-        sessions={asSessions([row()])}
-        state="ready"
-        canStartSession
-      />,
+      <RecentWork titled sessions={asSessions([row()])} state="ready" />,
     )
     const heading = screen.getByRole('heading', { name: 'Recent work' })
     expect(heading).not.toHaveClass('sr-only')
@@ -359,7 +314,6 @@ describe('RecentWork — the list starts the work', () => {
       <RecentWork
         sessions={asSessions([row({ summary: 'Filed PR #7723' })])}
         state="ready"
-        canStartSession
       />,
     )
     const list = screen.getByTestId('home-recent-rows')

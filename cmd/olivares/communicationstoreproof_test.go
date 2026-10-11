@@ -50,7 +50,7 @@ func openStoreProofEstate(t *testing.T, cfg store.Config, provision bool) storeP
 	}
 	data := api.NewModuleData(st)
 	sm.UseData(data)
-	sm.UseCommunicationGuardReconciliationData(sessions.NewCommunicationGuardReconciliationData(data))
+	sm.CommunicationGuardData = sessions.NewCommunicationGuardReconciliationData(data)
 	estate.listOrgs = func(ctx context.Context) ([]model.Org, error) {
 		var orgs []model.Org
 		err := st.System(ctx, func(sys store.SystemScope) error {

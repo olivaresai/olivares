@@ -60,6 +60,7 @@ func runLeafCLI(t *testing.T, args ...string) (string, string, error) {
 	root.SetErr(&errOut)
 	root.SetArgs(args)
 	root.SetContext(context.Background())
+	prepareCompositionTestBoot(t)
 	_, err := root.ExecuteC()
 	return out.String(), errOut.String(), err
 }
@@ -662,6 +663,7 @@ func TestEventingFenceArmTextAndJSON(t *testing.T) {
 func makeFenceDormant(t *testing.T, dir string) {
 	t.Helper()
 	ctx := context.Background()
+	prepareCompositionTestBoot(t)
 	eng, err := boot(ctx, bootConfig{DataDir: dir, Version: "test", Logger: discardLog()})
 	if err != nil {
 		t.Fatalf("boot to make the fence dormant: %v", err)
@@ -688,6 +690,7 @@ func seededSuperadminDataDir(t *testing.T) (dir, idA, idB string) {
 	t.Helper()
 	ctx := context.Background()
 	dir = t.TempDir()
+	prepareCompositionTestBoot(t)
 	eng, err := boot(ctx, bootConfig{DataDir: dir, Engine: "sqlite", Version: "test", Logger: slog.Default()})
 	if err != nil {
 		t.Fatalf("boot: %v", err)
@@ -1049,6 +1052,7 @@ func sealedTestSecret(t *testing.T, dir, tenant string) string {
 func seedSubscriptionRow(t *testing.T, dir, tenant, endpoint, sealed string) string {
 	t.Helper()
 	ctx := context.Background()
+	prepareCompositionTestBoot(t)
 	eng, err := boot(ctx, bootConfig{DataDir: dir, Version: "test", Logger: discardLog()})
 	if err != nil {
 		t.Fatalf("boot to seed subscription: %v", err)
@@ -1101,6 +1105,7 @@ func seedSubscriptionRow(t *testing.T, dir, tenant, endpoint, sealed string) str
 func seedDeadDelivery(t *testing.T, dir, tenant, subRef string) string {
 	t.Helper()
 	ctx := context.Background()
+	prepareCompositionTestBoot(t)
 	eng, err := boot(ctx, bootConfig{DataDir: dir, Version: "test", Logger: discardLog()})
 	if err != nil {
 		t.Fatalf("boot to seed delivery: %v", err)

@@ -60,19 +60,17 @@ verwendbares Setup-Token). Dessen voreingestellte Listen-Adresse ist `:8443` —
 sie auf diese Maschine. Gemessen auf dieser Box am 2026-09-17 druckte
 `quickstart --quiet` das Token in **3 s**.
 
-Das Willkommenspanel druckt:
+Die native Schnellstartansicht zeigt je nach Setup-Status eine der folgenden
+Anweisungen. Ein Token erscheint nur, wenn es neu ausgestellt wird:
 
 ```text
-     (HTTPS with a self-signed certificate on first boot — your browser will
-      warn once; that is expected for a local install.)
-  2. Complete setup with this one-time token (shown once, single-use):
-
-         olst_…
+Next: Open the console; it guides setup, sign-in and your first session.
+Next: Open the console and sign in to continue your work.
+Next: Open the console to finish setup with the one-time token issued earlier.
 ```
 
 Für den voreingestellten Wildcard-Bind gibt das Banner
-`https://localhost:8443` aus und listet unter dem Token jede weitere Adresse
-auf, unter der dieser Host antwortet — diese sind für den Zugriff von einer
+`https://localhost:8443` aus und listet jede weitere Adresse auf, unter der dieser Host antwortet — diese sind für den Zugriff von einer
 anderen Maschine. Ist das Banner weggescrollt, gibt `olivares first-boot` die
 Konsolenadresse(n) und den Stand des ersten Setups erneut aus. Öffnen Sie
 `https://localhost:PORT`, bevor Sie einen Passkey registrieren: der Browser
@@ -185,6 +183,10 @@ curl -sf "$BASE/v1/audit?action=hook.tool.deny&limit=100" \
 task smoke:first-hour
 ```
 
+Jede geregelte Entscheidung fügt `hook.tool.allow` oder `hook.tool.deny` dem
+Mandanten-Ledger hinzu (`modules/sessions/hookpep/claudehookpep.go`). Der Smoke-Test
+prüft, dass beide Zeilen vorhanden sind.
+
 ## Form 2 — Team (Postgres und Docker)
 
 Dieser Container hat **kein Docker**. PostgreSQL **läuft hier nicht**.
@@ -216,7 +218,7 @@ weiterhin; API-Tokens erfüllen diese Prüfung nicht.
 
 Um für diese Aktionen frisches AAL3 zu verlangen, registrieren Sie unter
 `https://localhost:PORT` einen Passkey und führen Sie an dieser Konsolenadresse
-einen frischen Passkey/PIV-Step-up durch. Wählen Sie unter **Settings → Sign-in
+einen frischen Passkey-Step-up durch. Wählen Sie unter **Settings → Sign-in
 → Extra check for administrative actions** die Option **Passkey**. Über die
 API entspricht das `PUT /v1/auth/step-up-policy` mit
 `{"admin_step_up":"passkey"}`. Die Engine lässt die strengere Policy erst zu,
@@ -232,12 +234,23 @@ Ohne Inferenz-Credential-Quelle sind stream-json-Starts deny-closed:
 session runtime: no inference credential source configured; stream-json launches are deny-closed
 ```
 
-(`cmd/olivares/sessionruntime.go`). Setzen Sie **eine** von
-`OLIVARES_SESSION_RUNTIME_WIF` oder `OLIVARES_SESSION_RUNTIME_TOKEN_FILE`.
-Ab 26.10 ist das nicht mehr der einzige Weg: Registrieren Sie die
-Zugangsdaten in der Konsole und binden Sie sie an ein Profil. Siehe
-[Anbieter hinzufügen und Agenten starten](/de/how-to/add-a-provider/) und
-[Eine Anbietersitzung betreiben](/how-to/operate-provider-sessions/).
+Für Claude-Profile mit `managed_injection`, die keinen Anbieter nennen, liefert
+`OLIVARES_SESSION_RUNTIME_WIF` oder `OLIVARES_SESSION_RUNTIME_TOKEN_FILE` die
+Inferenz-Zugangsdaten des Hosts. Ein Profil mit einem gebundenen Anbieter nutzt
+dessen Zugangsdaten; bei einem Fehler wird der Start ohne Fallback verweigert.
+Ein Profil mit `provider_account_home` nutzt die autorisierte Anmeldung des Tools
+und benötigt keine der beiden Variablen. Siehe
+[Anbieter hinzufügen](/de/how-to/add-a-provider/).
+
+## OpenCode-Statusprüfungen
+
+Wenn die Prüfung des OpenCode-Anmeldestatus bei der Einrichtung scheitert oder
+das Zeitlimit erreicht, meldet die Engine, dass der Status nicht gelesen werden
+konnte. Wiederholen Sie die Prüfung; ein Fehlschlag bedeutet nicht, dass das Tool
+abgemeldet ist. Gleichzeitige Prüfungen für dieselbe Organisation und dasselbe Konto
+teilen einen nativen Befehl. Erfolgreiche Ergebnisse werden bis zu 30 Sekunden
+wiederverwendet und bei Änderungen der Anmeldedatei oder des installierten Programms
+aktualisiert.
 
 ## Verwandte Themen
 

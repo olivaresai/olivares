@@ -576,19 +576,6 @@ func restoreDirectoryActivationPresentation(
 	return nil
 }
 
-func directoryActivationStatus(
-	s *sqlStore,
-	state directoryWriterControlState,
-) store.DirectoryStatus {
-	return store.DirectoryStatus{
-		Enabled:               false,
-		EpochCoverageComplete: true,
-		ControlMode:           store.DirectoryControlMode(state.Mode),
-		WriterPosture:         s.directoryStatus.WriterPosture,
-		ExpectedGeneration:    state.ExpectedGeneration,
-	}
-}
-
 func directoryActivationAuthorityTables() []string {
 	tables := append([]string{
 		dialect.DirectoryWriterControlTable,
@@ -867,4 +854,77 @@ ORDER BY r.rolname, c.relname`
 		return fmt.Errorf("sqlstore: directory activation admin MAINTAIN authority: %w", err)
 	}
 	return nil
+}
+
+// initializeFreshDirectoryWriter runs only with the pre-migration FreshBootstrap
+// admission, before releasing the migration lock. Genesis and enforcement commit
+// together; an existing estate must use explicit directory writer activation.
+func initializeFreshDirectoryWriter(ctx context.Context, db dialect.Execer, dia dialect.Dialect, cfg store.Config, clock model.Clock, roles guardRoles) error {
+	tx, err := db.BeginTx(ctx, directoryWriterTxOptions(dia))
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if err := reserveSQLiteDirectoryWriter(ctx, tx, dia); err != nil {
+		return err
+	}
+	lineage := newLineageWriteTracker(tx, dia, true)
+	if err := lineage.start(ctx, ""); err != nil {
+		return err
+	}
+	state, err := acquireDirectoryWriter(ctx, tx, dia)
+	if err != nil {
+		return err
+	}
+	if state != (directoryWriterControlState{Mode: directoryWriterStaged, ExpectedGeneration: 1, CoverageProtocol: coverageProtocolLegacy}) {
+		return directoryUnavailable("fresh directory initialization requires the initial writer control", nil)
+	}
+	if err := lockDirectoryActivationSources(ctx, tx, dia); err != nil {
+		return err
+	}
+	// The fresh admission excludes prior product objects. Recheck the protected
+	// sources under the writer lock before introducing SYSTEM or changing control.
+	for _, table := range directoryWriterSourceTables {
+		var count int
+		if err := tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM "+directoryWriterRelation(dia, table)).Scan(&count); err != nil {
+			return err
+		}
+		if count != 0 {
+			return directoryUnavailable("fresh directory source is not empty", nil)
+		}
+	}
+	// Enforcement needs an inventory authority on every subsequent boot.
+	// Unprovisioned PostgreSQL installs retain their staged serving posture.
+	if dia.Name() == store.EnginePostgres && strings.TrimSpace(cfg.AdminDSN) == "" {
+		present, err := verifyPostgresDirectoryInventory(ctx, tx, roles)
+		if err != nil {
+			return err
+		}
+		if !present {
+			return nil
+		}
+	}
+	if err := cfg.InitializeDirectoryWriter(); err != nil {
+		return err
+	}
+	blindMeta, err := resolveBlindingMode(ctx, tx, dia, cfg.AuditMetaBlinding)
+	if err != nil {
+		return err
+	}
+	s := &sqlStore{engine: cfg.Engine, dia: dia, clock: clock, signEvent: cfg.SignEvent,
+		spoolMaxBytes: cfg.AuditSpoolMaxBytes, spoolOnFull: cfg.AuditSpoolOnFull, blindMeta: blindMeta}
+	scope := &systemScope{s: s, tx: tx, lineageWriter: lineage}
+	if _, err := scope.EnsureSystemTenant(ctx); err != nil {
+		return err
+	}
+	if err := lineage.finish(ctx); err != nil {
+		return err
+	}
+	if err := advanceDirectoryWriter(ctx, tx, dia, state); err != nil {
+		return err
+	}
+	if err := restoreSystemDirectoryBaseline(ctx, tx, dia); err != nil {
+		return err
+	}
+	return tx.Commit()
 }

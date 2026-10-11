@@ -211,19 +211,26 @@ func (s scopePausingScope) TransactionNow(ctx context.Context) (model.Timestamp,
 }
 
 // newScopeHarnessOn is newHarness on another engine, with fresh org slugs so it can
-// share a PostgreSQL database with earlier runs.
-func newScopeHarnessOn(t *testing.T, cfg store.Config) *harness {
+// share a PostgreSQL database with earlier runs. wrap, when given, edits the
+// schema on its way to the registry, to create an earlier schema state.
+func newScopeHarnessOn(t *testing.T, cfg store.Config, wrap ...func(store.ExtensionRegistry) store.ExtensionRegistry) *harness {
 	t.Helper()
 	ctx := context.Background()
 	h := &harness{t: t, host: newFakeHost(), authz: &fakeAuthority{deny: map[model.ID]error{}}}
 	h.git = &fakeGit{host: h.host, treeFor: map[string]string{shaCommit: shaTree, shaBase: shaTree, shaOther: shaTree}}
 	h.custody = &fakeCustody{host: h.host, cbVer: 1, rbVer: 1, owners: []string{"acme"}, approved: map[string]bool{"cb1": true, "rb1": true, "rb2": true}}
 	h.m = New(Options{Custody: h.custody, Git: h.git, Authority: h.authz, DispatchTimeout: 2 * time.Second})
-	st, err := engine.Open(ctx, cfg, h.m.RegisterSchema)
+	st, err := engine.Open(ctx, cfg, func(reg store.ExtensionRegistry) error {
+		for _, w := range wrap {
+			reg = w(reg)
+		}
+		return h.m.RegisterSchema(reg)
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = st.Close() })
+	h.st = st
 	n := time.Now().UnixNano()
 	if err := st.System(ctx, func(sys store.SystemScope) error {
 		if _, e := sys.EnsureSystemTenant(ctx); e != nil {

@@ -23,6 +23,10 @@ import (
 // detect a command/env change — not only an image change — and stay truly idempotent.
 const dockerSpecHashLabel = "olivares.io/spec-hash"
 
+const dockerTenantLabel = "olivares.io/tenant"
+
+var errDockerOwnership = errors.New("executor: Docker workload is outside the configured tenant")
+
 // dockerSpecHash is a short, non-sensitive fingerprint of the apply spec. It hashes
 // the image, command, and the SORTED env-reference locators (never a secret value).
 func dockerSpecHash(s dockerApply) string {
@@ -71,6 +75,11 @@ type DockerBackend struct {
 
 // DockerConfig configures the Docker backend (operator-provisioned, no secrets).
 type DockerConfig struct {
+	// Tenant scopes product-managed workloads by name and ownership label. Empty
+	// preserves the existing explicitly provisioned operator backend's naming.
+	Tenant string
+	// DisableKeepAlives prevents temporary request-owned clients retaining sockets.
+	DisableKeepAlives bool
 	// SocketPath is the Docker daemon unix socket (default "/var/run/docker.sock").
 	// Ignored when RemoteBaseURL is set.
 	SocketPath string
@@ -115,6 +124,7 @@ func NewDockerBackend(cfg DockerConfig) *DockerBackend {
 		// the wire. The cred is still required/validated by the Executor.
 		b.bearerFn = func(Credential) string { return "" }
 		b.client = unixHTTPClient(cfg.SocketPath, cfg.Timeout)
+		b.client.Transport.(*http.Transport).DisableKeepAlives = cfg.DisableKeepAlives
 	}
 	return b
 }
@@ -137,13 +147,41 @@ var errDockerName = errors.New("executor: docker backend requires a container na
 // Kind returns the runtime selector.
 func (b *DockerBackend) Kind() string { return dockerKind }
 
+// TestConnection checks the existing daemon transport without reading workloads
+// or mutating infrastructure. Daemon response bodies never become diagnostics.
+func (b *DockerBackend) TestConnection(ctx context.Context) error {
+	if b.client == nil {
+		return errDockerNoClient
+	}
+	code, body, err := doAPI(ctx, b.client, apiRequest{method: http.MethodGet, baseURL: b.baseURL, path: "/_ping"}, 16)
+	if err != nil {
+		return err
+	}
+	if code != http.StatusOK || strings.TrimSpace(string(body)) != "OK" {
+		return fmt.Errorf("executor: Docker connection test failed (HTTP %d)", code)
+	}
+	return nil
+}
+
 // dockerName derives the managed container name from Desired.SubjectRef.
 func (b *DockerBackend) dockerName(d Desired) (string, error) {
 	name := strings.TrimSpace(d.SubjectRef)
 	if name == "" {
 		return "", errDockerName
 	}
+	if b.cfg.Tenant != "" {
+		if d.Tenant != b.cfg.Tenant {
+			return "", errDockerOwnership
+		}
+		digest := sha256.Sum256([]byte(name))
+		return b.tenantNamePrefix() + hex.EncodeToString(digest[:16]), nil
+	}
 	return name, nil
+}
+
+func (b *DockerBackend) tenantNamePrefix() string {
+	digest := sha256.Sum256([]byte(b.cfg.Tenant))
+	return "olivares-" + hex.EncodeToString(digest[:16]) + "-"
 }
 
 // dockerContainer is the minimal subset of the daemon's container record this
@@ -176,8 +214,7 @@ func (b *DockerBackend) Plan(ctx context.Context, d Desired, cred Credential) (P
 	// In sync iff the image matches AND (the recorded spec-hash matches, or the
 	// container predates the label — then fall back to image-only). A command/env
 	// change moves the spec-hash and is correctly detected as drift.
-	desiredHash := dockerSpecHash(dockerApplyFor(d))
-	inSync := dockerImageMatches(cur.image, d.Image) && (cur.specHash == "" || cur.specHash == desiredHash)
+	inSync := dockerSpecMatches(cur.image, cur.specHash, dockerApplyFor(d))
 	switch {
 	case !cur.found:
 		item.Action = "create"
@@ -262,8 +299,8 @@ func (b *DockerBackend) applyForward(ctx context.Context, p Plan, cred Credentia
 	case "create":
 		if cur.found {
 			// Raced: a container appeared at this name AFTER Plan classified an additive
-			// "create". If it matches the desired image this is an idempotent noop.
-			if dockerImageMatches(cur.image, spec.image) {
+			// "create". If it matches the desired spec this is an idempotent noop.
+			if dockerSpecMatches(cur.image, cur.specHash, spec) {
 				return Result{Applied: p.Diff.Items(), Detail: "container already present at desired image"}, nil
 			}
 			// Otherwise a stop+remove here would be a DESTRUCTIVE change the blast-radius
@@ -280,7 +317,7 @@ func (b *DockerBackend) applyForward(ctx context.Context, p Plan, cred Credentia
 		// A "replace" was already classified Destructive and passed the blast-radius
 		// gate, so the stop+remove below is authorized.
 		if cur.found {
-			if dockerImageMatches(cur.image, spec.image) {
+			if dockerSpecMatches(cur.image, cur.specHash, spec) {
 				// Drift resolved itself before apply — idempotent noop.
 				return Result{Applied: p.Diff.Items(), Detail: "container already at desired image"}, nil
 			}
@@ -387,9 +424,10 @@ func (b *DockerBackend) Observe(ctx context.Context, d Desired, cred Credential)
 	if jerr := json.Unmarshal(body, &insp); jerr != nil {
 		return RealState{Observable: false, Detail: "docker inspect response malformed"}, nil
 	}
-	desiredHash := dockerSpecHash(dockerApplyFor(d))
-	liveHash := insp.Config.Labels[dockerSpecHashLabel]
-	if dockerImageMatches(insp.Config.Image, d.Image) && (liveHash == "" || liveHash == desiredHash) {
+	if b.cfg.Tenant != "" && insp.Config.Labels[dockerTenantLabel] != b.cfg.Tenant {
+		return RealState{}, errDockerOwnership
+	}
+	if dockerSpecMatches(insp.Config.Image, insp.Config.Labels[dockerSpecHashLabel], dockerApplyFor(d)) {
 		return RealState{Exists: true, Observable: true, InSync: true,
 			Detail: fmt.Sprintf("container %q matches desired spec", name)}, nil
 	}
@@ -426,6 +464,9 @@ func (b *DockerBackend) dockerCall(ctx context.Context, method, path string, cre
 // dockerFind lists the daemon's containers and returns the named one (if any). It
 // uses GET /containers/json?all=1 with a name filter so stopped containers are seen.
 func (b *DockerBackend) dockerFind(ctx context.Context, name string, cred Credential) (dockerContainer, error) {
+	if b.cfg.Tenant != "" && !strings.HasPrefix(name, b.tenantNamePrefix()) {
+		return dockerContainer{}, errDockerOwnership
+	}
 	// The filter is a JSON object: {"name":["<name>"]}. The daemon matches the name
 	// as a substring/regex, so we still verify an exact "/<name>" below.
 	filter := `{"name":["` + name + `"]}`
@@ -451,6 +492,9 @@ func (b *DockerBackend) dockerFind(ctx context.Context, name string, cred Creden
 	for _, c := range list {
 		for _, n := range c.Names {
 			if n == want {
+				if b.cfg.Tenant != "" && c.Labels[dockerTenantLabel] != b.cfg.Tenant {
+					return dockerContainer{}, errDockerOwnership
+				}
 				return dockerContainer{id: c.ID, image: c.Image, state: c.State, specHash: c.Labels[dockerSpecHashLabel], found: true}, nil
 			}
 		}
@@ -502,6 +546,9 @@ func dockerSpecFrom(p Plan, item ChangeItem) dockerApply {
 // placed in the body, logged, or returned.
 func (b *DockerBackend) dockerCreateStart(ctx context.Context, name string, spec dockerApply, cred Credential) error {
 	cb := dockerCreateBody{Image: spec.image, Labels: map[string]string{dockerSpecHashLabel: dockerSpecHash(spec)}}
+	if b.cfg.Tenant != "" {
+		cb.Labels[dockerTenantLabel] = b.cfg.Tenant
+	}
 	if c := strings.TrimSpace(spec.command); c != "" {
 		cb.Cmd = strings.Fields(c) // v1: whitespace-split argv (non-sensitive override)
 	}
@@ -636,6 +683,12 @@ func dockerSoleItem(d Diff) (ChangeItem, bool) {
 		return ChangeItem{}, false
 	}
 	return items[0], true
+}
+
+// dockerSpecMatches preserves image-only matching for containers created before
+// the spec-hash label; labeled containers must match command/env references too.
+func dockerSpecMatches(image, specHash string, spec dockerApply) bool {
+	return dockerImageMatches(image, spec.image) && (specHash == "" || specHash == dockerSpecHash(spec))
 }
 
 // dockerImageMatches compares a desired image ref against the daemon's reported

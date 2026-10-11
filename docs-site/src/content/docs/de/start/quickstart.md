@@ -7,6 +7,9 @@ description: >-
   beweisen, dass es keine Demo ist.
 ---
 
+> Deployment-Pakete werden über den Business-Kanal bereitgestellt; ihre Veröffentlichung ist hier nicht bestätigt. Prüfen Sie das Chart-Paket und den Herausgeber anhand der Kanalanleitung, bevor Sie das lokale Chart verwenden. Das Manifest-Beispiel nutzt eine von Business bereitgestellte Datei namens `business-install.yaml`. Die Installation ohne Netz erfordert Enterprise.
+
+
 Dies ist der schnelle Weg, um zu sehen, *wofür* Olivares AI gedacht ist: eine
 **Read/Write-Zugriffskarte** Ihres Estate und der **Permitted-vs-Observed-Drift**
 darüber — die Lücke zwischen dem Zugriff, der einem Agenten *gewährt* wird, und
@@ -54,7 +57,7 @@ task build                      # compiles ./bin/olivares with the web UI embedd
 — die Engine, die eingebettete Web-UI und die First-Party-Connector-Plugins. Die
 **Container- und Kubernetes-Installationen umhüllen genau dieses Binary**: ein
 veröffentlichtes Image plus eine Compose-Datei ([Self-Hosting](/de/how-to/self-hosting/)),
-oder ein flaches Manifest, das Sie mit `kubectl apply -f deploy/manifests/install.yaml`
+oder ein flaches Manifest, das Sie mit `kubectl apply -f ./business-install.yaml`
 anwenden (kein Helm erforderlich). Der Hero, den Sie unten sehen, ist auf allen
 dreien identisch — nur der Demo-Seed unterscheidet sich (nur Loopback, niemals in
 einer echten Installation).
@@ -249,7 +252,7 @@ siehe [Eine Quelle anbinden](/de/how-to/connect-a-source/). Die Demo-Estate zeig
 :::note[Die Form des Endpunkts]
 Das Permitted-vs-Observed-Ergebnis wird unter `/v1/m/accessmap/drift` ausgeliefert
 (es gibt kein `/diff`). Die `/v1/m/accessmap/*`-Routen gehören nicht zum stabilen
-Kernvertrag mit 70 Pfaden; sie werden als separates **Beta**-Dokument in der
+Kernvertrag mit 128 Pfaden; sie werden als separates **Beta**-Dokument in der
 [Modulrouten-Referenz](/reference/api-beta/) veröffentlicht. Die
 [API-Referenz](/reference/api/) dokumentiert die stabile Kernfläche.
 :::

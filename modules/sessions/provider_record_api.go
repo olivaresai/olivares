@@ -58,6 +58,8 @@ type providerRecordDTO struct {
 	Kind        string `json:"kind"`
 	DisplayName string `json:"display_name"`
 	BaseURL     string `json:"base_url,omitempty"`
+	Service     string `json:"service,omitempty"`
+	Version     int64  `json:"version,omitempty"`
 	// KeyHint is four characters. It exists to tell two credentials apart in a
 	// picker and it is useless for anything else.
 	KeyHint string `json:"key_hint,omitempty"`
@@ -65,7 +67,8 @@ type providerRecordDTO struct {
 	// Models are what the LAST SUCCESSFUL probe reported. They are an observation
 	// with a timestamp, not a catalog: a provider can add or retire a model without
 	// this list moving, which is why probed_at travels beside it.
-	Models []string `json:"models,omitempty"`
+	Models       []string `json:"models,omitempty"`
+	DefaultModel *string  `json:"default_model"`
 	// ProbeState is "" (never tested), ok, refused or unreachable. It is three
 	// values and not a boolean because "the provider rejected this credential" and
 	// "I could not reach the provider" send an operator to different places.
@@ -81,26 +84,35 @@ type providerRecordDTO struct {
 // createProviderRecordRequest registers one provider. APIKey is the only field that
 // carries a credential; it appears in no response and in no log.
 type createProviderRecordRequest struct {
-	Kind        string `json:"kind"`
-	DisplayName string `json:"display_name"`
-	BaseURL     string `json:"base_url"`
-	APIKey      string `json:"api_key"`
+	Kind         string  `json:"kind"`
+	DisplayName  string  `json:"display_name"`
+	BaseURL      string  `json:"base_url"`
+	Service      string  `json:"service,omitempty"`
+	APIKey       string  `json:"api_key"`
+	DefaultModel *string `json:"default_model"`
 }
 
 // patchProviderRecordRequest renames, re-endpoints and/or rotates. Kind is absent
 // because a record's kind decides what is injected into a child, so changing it
 // under an existing binding would redefine every launch that binding authorizes.
 type patchProviderRecordRequest struct {
-	DisplayName *string `json:"display_name"`
-	BaseURL     *string `json:"base_url"`
-	APIKey      *string `json:"api_key"`
+	DisplayName  *string `json:"display_name"`
+	BaseURL      *string `json:"base_url"`
+	APIKey       *string `json:"api_key"`
+	DefaultModel *string `json:"default_model"`
 }
 
 func toProviderRecordDTO(r ProviderRecord) providerRecordDTO {
+	var version int64
+	if r.Service != "" {
+		version = r.Version
+	}
 	return providerRecordDTO{
 		ProviderRef: r.Ref, Kind: r.Kind, DisplayName: r.DisplayName, BaseURL: r.BaseURL,
+		Service: r.Service, Version: version,
 		KeyHint: r.KeyHint, State: r.State, Models: r.Models,
-		ProbeState: r.ProbeState, ProbeDetail: r.ProbeDetail, ProbeLatencyMS: r.ProbeMillis,
+		DefaultModel: r.DefaultModel,
+		ProbeState:   r.ProbeState, ProbeDetail: r.ProbeDetail, ProbeLatencyMS: r.ProbeMillis,
 		ProbedAt: r.ProbedAt, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt, RevokedAt: r.RevokedAt,
 	}
 }
@@ -133,8 +145,9 @@ func (m *Module) handleCreateProviderRecord(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	rec, err := m.CreateProviderRecord(r.Context(), mc.Tenant, CreateProviderRecordInput{
-		Kind: body.Kind, DisplayName: body.DisplayName, BaseURL: body.BaseURL, APIKey: body.APIKey,
-		Actor: mc.Principal,
+		Kind: body.Kind, Service: body.Service, DisplayName: body.DisplayName, BaseURL: body.BaseURL, APIKey: body.APIKey,
+		DefaultModel: body.DefaultModel,
+		Actor:        mc.Principal,
 	})
 	if err != nil {
 		writeRunErr(w, err)
@@ -159,8 +172,8 @@ func (m *Module) handlePatchProviderRecord(w http.ResponseWriter, r *http.Reques
 	if !decodeJSONBody(w, r, &body) {
 		return
 	}
-	if body.DisplayName == nil && body.BaseURL == nil && body.APIKey == nil {
-		writeJSON(w, http.StatusBadRequest, errorBody("nothing to change: provide display_name, base_url and/or api_key"))
+	if body.DisplayName == nil && body.BaseURL == nil && body.APIKey == nil && body.DefaultModel == nil {
+		writeJSON(w, http.StatusBadRequest, errorBody("nothing to change: provide display_name, base_url, api_key and/or default_model"))
 		return
 	}
 	if body.BaseURL != nil || body.APIKey != nil {
@@ -173,7 +186,8 @@ func (m *Module) handlePatchProviderRecord(w http.ResponseWriter, r *http.Reques
 	}
 	rec, err := m.PatchProviderRecord(r.Context(), mc.Tenant, chi.URLParam(r, "ref"), ProviderRecordPatch{
 		DisplayName: body.DisplayName, BaseURL: body.BaseURL, APIKey: body.APIKey,
-		Actor: mc.Principal,
+		DefaultModel: body.DefaultModel,
+		Actor:        mc.Principal,
 	})
 	if err != nil {
 		writeRunErr(w, err)

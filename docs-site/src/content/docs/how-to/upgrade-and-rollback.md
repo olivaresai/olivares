@@ -12,10 +12,12 @@ applies any new schema migrations itself at boot. This page is the operator's pa
 that, from "should I take this release?" to "I need the previous one back".
 
 :::caution[Back up first]
-Take a backup before every upgrade, including the ones that look routine. The console's
-**Backups** screen (`/backups`) and [Back up and restore](/how-to/backup-and-restore/)
-both do it. Nothing on this page depends on your having a backup — and you will want one
-anyway the one time something surprises you.
+Take a DR backup before every upgrade, including routine upgrades, using the installed
+release's `dr backup`. The console's **Backups** screen (`/backups`) and
+[Back up and restore](/how-to/backup-and-restore/) describe the same recovery path.
+**A pre-upgrade backup and its private passphrase or KEK are required to return to the
+previous release after a schema advance.** `olivares upgrade` keeps a copy of the
+executable; it does not take a database backup.
 :::
 
 ## Which upgrade path is yours
@@ -46,9 +48,11 @@ the anti-rollback guard and the minimum-version gate are claims *about* the inst
 version, so neither can be evaluated. The command refuses rather than guessing. Declare the
 version you know is there and the guards stay armed:
 
+<!-- release -->
 ```sh
-olivares upgrade --check --current-version 26.10.1
+olivares upgrade --check --current-version 0.1
 ```
+<!-- /release -->
 
 ## Release channels
 
@@ -114,6 +118,9 @@ What the command does, in order, and why each step is there:
 Add `--yes` when you are driving it from a script and there is nobody to answer the
 confirmation prompt.
 
+The automatic rollback in step 4 tests `version`, not service startup or database
+compatibility. It does not recover a store migrated at the next restart.
+
 :::note[There is no hot patching]
 A Go binary is not patched in place. "Zero downtime" here means a graceful drain and
 handover, or a rolling restart — never an in-process patch. What does apply live, without a
@@ -126,26 +133,12 @@ An air-gapped deployment never reaches an update host. Move the bundle in by wha
 you already trust, then install from the local file — the verification is identical, because
 it was never the network that was being trusted.
 
-**Installing from a bundle needs a live license on the box.** It is checked offline, against
-the license key embedded in your binary: no call is made, so this works behind the air gap.
-If you have not put your license on the box yet,
-[Install a license](/how-to/install-a-license/) is the page that does it.
-`--check` is not gated, so you can verify a bundle before staging anything:
+Offline installation requires Enterprise. Community verifies a bundle with `--bundle --check` without reading a license or installing it.
 
 ```sh
-olivares upgrade --bundle ./olivares-release.tar.gz --check   # verify only; no license read
-olivares upgrade --bundle ./olivares-release.tar.gz --yes     # install; needs a live license
+olivares upgrade --bundle ./olivares-release.tar.gz --check
 ```
 
-If your build carries no embedded release key, or you mirror releases under your own
-signing key, point the command at the key you verify against:
-
-```sh
-olivares upgrade --bundle ./olivares-release.tar.gz --pubkey @/etc/olivares/release.pub
-```
-
-See [Install air-gapped](/how-to/air-gap-install/) for how the bundle is produced and
-carried across.
 
 ## Staged rollout and unattended checks
 
@@ -185,24 +178,67 @@ console's **Health** screen (`/health`), or the engine's readiness endpoint from
 
 ## Rolling back
 
-The previous binary is kept next to the one that replaced it, and the command prints the
-path when it swaps. Rolling back is restoring that file and restarting the service.
+The previous executable is kept next to its replacement, and the command prints its
+path. That file is an executable backup, not a recovery point for your data.
 
-Rollback is safe by design rather than by luck: every schema change ships as an additive
-expand first, and its destructive contract only in a later release, so the previous
-release's binary keeps working against the upgraded schema. That is what makes a rollback
-"put the old binary back", not "reverse the database".
+**An older binary refuses a core schema version newer than it supports**, including
+additive migrations. Reinstalling the old binary or image cannot reverse a schema advance.
+Do not edit migration history or bypass the refusal.
 
-If you need to install an older release rather than restore the kept backup, the
-anti-rollback guard blocks it until you say so explicitly:
+1. Stop every engine using the store and preserve the upgraded data, service configuration,
+   TLS material and external sealer keys.
+2. Use the **previous release's binary** to restore the DR bundle taken **before** the upgrade,
+   following [Back up and restore](/how-to/backup-and-restore/). For SQLite, restore into a
+   fresh data directory, or use `dr restore --in-place` with `--operator` and `--reason`
+   when replacing the original directory; keep its preserved pre-restore files until recovery
+   is confirmed. For PostgreSQL, provision an empty target with `olivares db init` and supply
+   the target's `--dsn`, `--owner-dsn` and `--admin-dsn`, plus a fresh signing-key directory.
+3. Require successful ledger and audit-key verification. Point the service's data directory,
+   volumes and PostgreSQL DSN references at the restored store and matching signing custody
+   before starting the previous release.
+4. Sign in and check the recovered data and service health.
+
+**Recovery returns to the saved point.** Writes after the pre-upgrade backup are absent
+from the restored store; retain the upgraded store for reconciliation. Without that bundle
+and its passphrase or KEK, replacing the executable cannot provide this recovery.
+
+`--force-rollback` allows an older executable to be installed and records the override in
+the audit log. It does **not** override the core schema check, restore data, or override a
+manifest's minimum-version gate. If the installed version is below that floor, use an
+intermediate release.
+
+### Test the recovery path before upgrading production
+
+Use a disposable SQLite data directory and the verified previous and candidate binaries.
+Start the previous release, complete setup, sign in, and stop it. Set `PREVIOUS` and
+`CANDIDATE` to those executable paths; set `DATA`, `RESTORED`, `BUNDLE` and `PASSPHRASE`
+to scratch paths, with `RESTORED` initially absent and the private passphrase file outside
+both data directories. Take and verify the backup **with the previous release**:
 
 ```sh
-olivares upgrade --force-rollback --yes
+"$PREVIOUS" dr backup --engine sqlite --data-dir "$DATA" --out "$BUNDLE" --passphrase-file "$PASSPHRASE"
+"$PREVIOUS" dr verify --in "$BUNDLE" --passphrase-file "$PASSPHRASE"
 ```
 
-The override is recorded in the audit log. The minimum-version gate is **not** overridable
-by it: if a manifest declares a floor your installed version is below, step through an
-intermediate release rather than trying to jump.
+Start the candidate on `DATA`, sign in, then stop it. Start the previous release on that
+same directory: if the core schema advanced beyond its ceiling, it must exit non-zero with
+`core schema version newer than this binary supports: database=… binary=…`.
+Then restore the saved bundle with the previous release:
+
+```sh
+"$PREVIOUS" dr restore --engine sqlite --data-dir "$RESTORED" --in "$BUNDLE" --passphrase-file "$PASSPHRASE"
+```
+
+Require exit zero and successful ledger verification; start the previous release on
+`RESTORED`, sign in with the original account, and check the original audit public key and
+saved data. A failed restore or sign-in is a failed recovery test. This tests recovery
+from a pre-upgrade bundle, rather than only proving that a binary can execute `version`.
+
+Measured SQLite recovery check (2026-10-08): official 26.10.1<!-- release-fixed --> created core schema 18;
+a newer candidate advanced it to 27. The 26.10.1<!-- release-fixed --> binary refused the upgraded store with
+exit 1 (`database=27 binary=18`). Its `dr backup`, `dr verify` and `dr restore` all exited
+zero; after restoring the pre-upgrade bundle into a fresh directory, 26.10.1<!-- release-fixed --> accepted the
+original account and returned the original audit public key.
 
 ## When it goes wrong
 
@@ -210,7 +246,8 @@ intermediate release rather than trying to jump.
 |---|---|---|
 | `--check` prints `UNKNOWN` | The installed version could not be measured, so no ordering claim is possible | Pass `--current-version` with the version you know is installed |
 | `min_ver` says you are too old | The release refuses to install directly over yours | Upgrade to the named intermediate release first |
-| The new binary does not start | The post-swap probe failed | It has already reverted to the backup; check the logs and report the release |
+| The installed executable fails its post-swap `version` probe | The executable check failed | The command restores the saved executable; check the logs |
+| Service startup fails after the restart, or the old binary reports a newer core schema | A service or store failure is outside the executable probe | Stop the service and follow Rolling back to restore the pre-upgrade DR bundle |
 | `--install-timer` fires but nothing happens | The node is not in the staged-rollout cohort | Expected with `--if-eligible`; the cohort widens as the rollout proceeds |
 | "another olivares upgrade is already installing", exit **5** | One upgrade at a time per binary. The lock is held for the whole download-and-swap sequence | Wait for the running one and re-run. If nothing is running the kernel has already released the lock, so re-run now |
 | "it CHANGED while this upgrade was downloading" | Something else replaced the binary after the plan was made — a package manager, an image rollout, a config-management run | Re-run: the guards are re-evaluated against what is actually installed. If it keeps happening, two things are managing the same binary |

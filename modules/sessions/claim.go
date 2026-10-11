@@ -14,13 +14,9 @@ import (
 	"github.com/olivaresai/olivares/core/store"
 )
 
-// SG-02 (core) — claim, lease and fencing over the canonical identity.
-//
-// Before this file the module had no notion of a session CLAIMING the right to
-// work. The overlay's four routes are all GET (api.go), and what the module
-// calls a "heartbeat" is an SSE keepalive on the operate stream
-// (stream.go:19-21), not a lease on anything. Coordination therefore happened
-// outside the product, in markdown.
+// Claim, lease and fencing over the canonical identity: a session CLAIMS the right
+// to work. (What the operate stream calls a "heartbeat" is an SSE keepalive, not a
+// lease on anything.)
 //
 // A claim is an ADMISSION decision, not an identity one: resolving a sid tells
 // you which session this is, never that it may act. The two are deliberately
@@ -37,7 +33,7 @@ const (
 // run_ref is not a Claude session id, and resolving both through one namespace
 // would let two unrelated references collide into one canonical identity.
 //
-// SG-00 §6 is what this satisfies: an operated run promotes to canonical identity
+// An operated run promotes to canonical identity
 // (origin = operated) because the plane launched it and knows its identity before
 // anybody else, and the provider's own session id — captured later, off the stream
 // — is bound as a SECOND alias onto the SAME sid.
@@ -91,8 +87,7 @@ var (
 	// ErrFenceExhausted reports that a takeover would have to wrap the fence, which
 	// F9 refuses because a token that can go BACKWARDS is not a fencing token. It is a
 	// sentinel rather than a bare message so callers can tell this business verdict
-	// from a store that is merely unavailable — flattening the two together is what
-	// P1-N1 was.
+	// from a store that is merely unavailable.
 	ErrFenceExhausted = errors.New("sessions: fence exhausted")
 )
 
@@ -173,10 +168,10 @@ func (m *Module) Claim(ctx context.Context, tenant model.TenantID, sid, holder s
 	if holder == "" {
 		return out, ErrNoHolder
 	}
-	if m.data == nil {
+	if m.Data == nil {
 		return out, errors.New("sessions: no data handle")
 	}
-	err := m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
+	err := m.Data.Mutate(ctx, tenant, func(sc store.Scope) error {
 		refusal = nil // a re-entered callback must not inherit the last verdict
 		// F6: the clock is read INSIDE the transaction. Reading it before the
 		// Mutate meant a wait for the write lock could exceed the TTL, and the
@@ -231,9 +226,9 @@ func (m *Module) Claim(ctx context.Context, tenant model.TenantID, sid, holder s
 		// F9 meets F5, and neither reordering nor a follow-up transaction is the
 		// answer. A takeover from an exhausted fence must refuse; a refusal RETURNED
 		// FROM HERE rolls the transaction back and takes any retirement with it, and
-		// the first cut's fix — flag the lapse and retire in a SECOND transaction —
-		// left process state between the two, which a crash or a clock that moves
-		// backwards in the gap turns straight back into F5 (R3-01, third contrast).
+		// retiring in a SECOND transaction would leave process state between the two,
+		// which a crash or a clock that moves backwards in the gap turns straight back
+		// into F5.
 		//
 		// So the transaction is not doomed at all: nothing of the caller's has been
 		// written yet, the retirement is the ONLY thing in it, and it COMMITS. The
@@ -294,15 +289,14 @@ func (m *Module) Claim(ctx context.Context, tenant model.TenantID, sid, holder s
 	})
 	if errors.Is(err, store.ErrConflict) {
 		// Two first claims raced; the loser's whole transaction rolled back
-		// (SG-00 §4 explains why recovery cannot happen inside it). Re-read and
+		// (recovery cannot happen inside it). Re-read and
 		// report the truth: either we are the holder, or somebody else is.
 		return m.leaseOf(ctx, tenant, sid, holder)
 	}
 	if err != nil {
 		// The TRANSACTION's verdict outranks the callback's. A refusal here would be
 		// a business answer presented as backed by a retirement that never committed
-		// — the callback returning nil is not the same as the commit succeeding
-		// (R4-03, fourth contrast).
+		// — the callback returning nil is not the same as the commit succeeding.
 		return Lease{}, err
 	}
 	if refusal != nil {
@@ -316,14 +310,14 @@ func (m *Module) Claim(ctx context.Context, tenant model.TenantID, sid, holder s
 // leaseOf re-reads a claim after a lost race.
 //
 // It is a READ, so it records what it observes the way every other read does: in a
-// transaction of its own, before it answers (see recordAndAnswer). Not doing so made
-// it a silent observer of F5 — it refused with ErrLeaseLost and left the row `active`
-// for a rolled-back clock to revive, which the fourth contrast reproduced (R4-02).
+// transaction of its own, before it answers (see recordAndAnswer). Otherwise it would
+// be a silent observer of F5: it would refuse with ErrLeaseLost and leave the row
+// `active` for a rolled-back clock to revive.
 func (m *Module) leaseOf(ctx context.Context, tenant model.TenantID, sid, holder string) (Lease, error) {
 	var out Lease
 	var obs lapseObservation
 	var answer error
-	err := m.data.View(ctx, tenant, func(sc store.Scope) error {
+	err := m.Data.View(ctx, tenant, func(sc store.Scope) error {
 		now := m.clock.Now().Time() // F6
 		rec, found, ferr := findClaim(ctx, sc, sid)
 		if ferr != nil || !found {
@@ -397,7 +391,7 @@ func (m *Module) recordAndAnswer(ctx context.Context, tenant model.TenantID, sid
 func (m *Module) Heartbeat(ctx context.Context, tenant model.TenantID, sid, holder string, fence int64, ttl time.Duration) (Lease, error) {
 	var out Lease
 	var refusal error
-	err := m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
+	err := m.Data.Mutate(ctx, tenant, func(sc store.Scope) error {
 		refusal = nil
 		now := m.clock.Now().Time() // F6: inside the transaction, never before it
 		repo, err := sc.Ext(claimKind)
@@ -415,9 +409,9 @@ func (m *Module) Heartbeat(ctx context.Context, tenant model.TenantID, sid, hold
 		// death, and it must not renew its way out of it after a clock rollback (F5).
 		// The retirement is written HERE and this transaction commits it; only the
 		// refusal waits for the commit. Returning the error from inside would roll the
-		// retirement back, and recording it in a follow-up transaction — the first
-		// cut — leaves a gap in process state that a crash or a rolled-back clock
-		// reopens F5 through (R3-01). A heartbeat that finds itself dead writes
+		// retirement back, and recording it in a follow-up transaction would leave a
+		// gap in process state that a crash or a rolled-back clock reopens F5 through.
+		// A heartbeat that finds itself dead writes
 		// nothing else, so the retirement is the whole transaction.
 		if !claimIsLive(rec, now) {
 			if _, _, rerr := retireIfLapsed(ctx, sc, rec, now); rerr != nil {
@@ -442,7 +436,7 @@ func (m *Module) Heartbeat(ctx context.Context, tenant model.TenantID, sid, hold
 		return nil
 	})
 	if err != nil {
-		return Lease{}, err // the transaction's verdict outranks the callback's (R4-03)
+		return Lease{}, err // the transaction's verdict outranks the callback's
 	}
 	if refusal != nil {
 		return Lease{}, refusal
@@ -500,7 +494,7 @@ func (m *Module) Authority(ctx context.Context, tenant model.TenantID, sid, hold
 	// Fast path: a read. The clock is taken inside it (F6).
 	var obs lapseObservation
 	var answer error
-	err := m.data.View(ctx, tenant, func(sc store.Scope) error {
+	err := m.Data.View(ctx, tenant, func(sc store.Scope) error {
 		now := m.clock.Now().Time()
 		rec, found, ferr := findClaim(ctx, sc, sid)
 		if ferr != nil {
@@ -517,10 +511,10 @@ func (m *Module) Authority(ctx context.Context, tenant model.TenantID, sid, hold
 		return err
 	}
 	// The verdict is the one THIS read computed, and the follow-up only RECORDS it.
-	// Re-deciding in the follow-up was worse than not recording at all: with a clock
-	// that moved backwards in the gap, the second decision saw an `active` row as live
-	// and returned nil — granting the very fence the read had just watched die
-	// (R4-01, fourth contrast).
+	// Re-deciding in the follow-up would be worse than not recording at all: with a
+	// clock that moved backwards in the gap, the second decision would see an `active`
+	// row as live and return nil — granting the very fence the read had just watched
+	// die.
 	if rerr := m.recordAndAnswer(ctx, tenant, sid, obs); rerr != nil {
 		return rerr
 	}
@@ -570,17 +564,16 @@ func authorityOf(rec model.Record, found bool, sid, holder string, fence int64, 
 //     transaction, so that transaction must roll back and the record comes here.
 //     Structural, and stillLive says what it costs.
 //
-// It does NOT consult the clock, and that is the entire point of the shape. The
-// version it replaced re-read `now` and re-decided whether the row had lapsed, so a
-// clock that moved backwards between the observation and this call made it a silent
-// no-op and left `active` a lease already seen dead — F5 reopened without a crash
-// (R3-01, third contrast). What is recorded here is the observation, not a fresh
+// It does NOT consult the clock, and that is the entire point of the shape. Re-reading
+// `now` to re-decide whether the row lapsed would let a clock that moved backwards
+// between the observation and this call make it a silent no-op and leave `active` a
+// lease already seen dead — F5 reopened without a crash. What is recorded here is the observation, not a fresh
 // judgement of it.
 func (m *Module) retireObserved(ctx context.Context, tenant model.TenantID, sid string, obs lapseObservation) error {
 	if !obs.seen || sid == "" {
 		return nil
 	}
-	return m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
+	return m.Data.Mutate(ctx, tenant, func(sc store.Scope) error {
 		rec, found, err := findClaim(ctx, sc, sid)
 		if err != nil || !found {
 			return err
@@ -609,14 +602,13 @@ func (m *Module) retireObserved(ctx context.Context, tenant model.TenantID, sid 
 // admission gate uses when the caller presents no fence of its own (a launch
 // asks "is this session claimed at all?", not "is my token current?").
 // It is the third READ, and it owes the same record as the other two: answering
-// live=false on a row still marked `active` IS an observation of a lapse, and one it
-// used to drop on the floor — the fourth contrast rolled the clock back afterwards
-// and got authority granted again through it (R4-02).
+// live=false on a row still marked `active` IS an observation of a lapse; dropped,
+// a clock rolled back afterwards would grant authority again through it.
 func (m *Module) ActiveClaim(ctx context.Context, tenant model.TenantID, sid string) (Lease, bool, error) {
 	var out Lease
 	var obs lapseObservation
 	live := false
-	err := m.data.View(ctx, tenant, func(sc store.Scope) error {
+	err := m.Data.View(ctx, tenant, func(sc store.Scope) error {
 		now := m.clock.Now().Time() // F6
 		rec, found, ferr := findClaim(ctx, sc, sid)
 		if ferr != nil || !found {
@@ -655,12 +647,12 @@ func (m *Module) ActiveClaim(ctx context.Context, tenant model.TenantID, sid str
 // ref is the OVERLAY reference (the provider's session id), because that is what
 // the live row is keyed on; the canonical sid is reached through the alias.
 func (m *Module) SignalUnclaimedActivity(ctx context.Context, tenant model.TenantID, ref string, at time.Time) error {
-	if m.data == nil {
+	if m.Data == nil {
 		return errors.New("sessions: no data handle")
 	}
 	at = nonZeroTime(at, m.clock)
 	var snap *liveSnapshot
-	err := m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
+	err := m.Data.Mutate(ctx, tenant, func(sc store.Scope) error {
 		rec, err := m.upsertLive(ctx, sc, ref, at, func(rec model.Record, _ bool) {
 			// Sticky and FIRST-WINS: the interesting instant is when the session
 			// first acted unclaimed, not the most recent time it did.
@@ -722,7 +714,6 @@ type lapseObservation struct {
 //   - liveness: the SQLite store runs every transaction on ONE connection
 //     (sqlstore/store.go:760-761). Opening a nested View/Mutate from inside a
 //     Mutate waits for a connection the caller already holds — an unbounded hang.
-//     Measured exactly that.
 //
 // holder and fence are what the RUN ROW says this run is operating under, written
 // at launch under that claim's own authority. They are never a value looked up
@@ -740,11 +731,10 @@ type lapseObservation struct {
 // wrapping errLeaseLapsed, which tells the caller to COMMIT and refuse afterwards.
 // That is safe here, and only here, because this check runs BEFORE the governed
 // effect: nothing of the caller's is in the transaction yet, so committing commits
-// the retirement and nothing else. Retiring and RETURNING an error is the shape that
-// reopened F5 once (a write followed by an error return is a write rolled back), and
-// recording it in a follow-up transaction is the shape that reopened it again — the
-// gap between the two is process state, and a crash or a rolled-back clock inside it
-// leaves `active` a lease already seen dead (R3-01, third contrast).
+// the retirement and nothing else. Retiring and RETURNING an error would reopen F5 (a
+// write followed by an error return is a write rolled back), and so would recording
+// it in a follow-up transaction: the gap between the two is process state, and a
+// crash or a rolled-back clock inside it leaves `active` a lease already seen dead.
 func fenceWithin(ctx context.Context, sc store.Scope, sid, holder string, fence int64, now time.Time) error {
 	if sid == "" || holder == "" {
 		// Nothing was claimed for this write. The runtime's gates are additive by
@@ -804,12 +794,11 @@ func fenceWithin(ctx context.Context, sc store.Scope, sid, holder string, fence 
 // by opening a second transaction; this one cannot keep its own.
 // So the transaction rolls back and the observation travels out in the returned
 // lapseObservation, which the caller writes in a transaction of its own BEFORE it
-// answers anybody (authorizedMutate, transition). Reporting nothing at all was a
-// REOPENING of F5 caught by the second contrast; re-deciding the lapse against a
-// fresh clock in the follow-up was a second one caught by the third (R3-01), which
-// is why the observation now carries the fence it was made on.
+// answers anybody (authorizedMutate, transition). Reporting nothing would reopen F5,
+// and so would re-deciding the lapse against a fresh clock in the follow-up, which is
+// why the observation carries the fence it was made on.
 //
-// LIMITATION, measured and not smoothed over: a crash strictly between that rollback
+// LIMITATION, stated plainly: a crash strictly between that rollback
 // and that follow-up commit loses the marker. Nothing was granted when it happens —
 // the effect rolled back and no answer was delivered — and the row is still `active`
 // with an expiry in the past, so any observer whose clock has not moved backwards
@@ -963,12 +952,10 @@ func leaseFrom(rec model.Record) Lease {
 // ClaimAdmission wraps any LaunchGate so a launch is refused unless the LAUNCHER
 // ITSELF holds the live claim on the session it is about to drive.
 //
-// It shipped UNWIRABLE and said so: a create consulted the gate with an EMPTY run
-// reference, because launchIntentFor was called with "" and the reference was
-// minted five lines later. SG-02-b closed that (F1) by minting the reference and
-// ACQUIRING the claim before the gate is consulted, and by widening LaunchIntent to
-// carry Holder, Fence and ClaimSID. This decorator is now composed for real, at the
-// single composition point (cmd/olivares/sessiongov.go).
+// The reference is minted and the claim ACQUIRED before the gate is consulted (F1),
+// and LaunchIntent carries Holder, Fence and ClaimSID, so the gate is asked about a
+// launch with an identity and a holder. This decorator is composed at the single
+// composition point (cmd/olivares/sessiongov.go).
 //
 // What it can and cannot assert, stated plainly because the difference matters:
 //
@@ -980,7 +967,7 @@ func leaseFrom(rec model.Record) Lease {
 //     another holder with a live lease refuses it (ErrClaimHeld) before this gate is
 //     ever reached, and this gate then confirms the launch carries the claim the
 //     runtime actually holds.
-//   - F2, the refuted first cut: a live claim EXISTING is not the question. Holder
+//   - F2: a live claim EXISTING is not the question. Holder
 //     and fence are both compared, so a launcher cannot ride somebody else's claim.
 //
 // Ordering note: admission runs BEFORE the inner gate, so an unclaimed launch never

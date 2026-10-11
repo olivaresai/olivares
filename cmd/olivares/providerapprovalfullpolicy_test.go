@@ -31,7 +31,7 @@ func TestSR2ProviderFullRequiresCurrentRunAdministratorAuthorization(t *testing.
 			if err != nil || scope.Preset != sessions.PresetFull {
 				t.Fatalf("full launch binding absent: %+v %v", scope, err)
 			}
-			policy := sessionProviderPolicy{credentials: credentials.SessionCredentials, eval: h.set.gov.Evaluator(), scoped: h.set.gov.ScopedGrants(), approvals: h.set.gov.EngineApprovals(), store: h.st}
+			policy := sessionProviderPolicy{credentials: credentials.SessionCredentials, eval: h.set.gov.Evaluator(), authz: harnessAuthz(h), scoped: h.set.gov.ScopedGrants(), approvals: h.set.gov.EngineApprovals(), store: h.st}
 			req := sessions.ProviderApprovalRequest{Driver: driver, RunRef: intent.RunRef, SessionRef: scope.SessionRef, Principal: principal, TurnID: "full-turn", Kind: "tool_call_permission", Method: "session/request_permission", Requested: []string{"allow-once"}}
 			if driver == "codex" {
 				req.Kind, req.Method = "command_execution", "item/commandExecution/requestApproval"
@@ -45,7 +45,7 @@ func TestSR2ProviderFullRequiresCurrentRunAdministratorAuthorization(t *testing.
 			if code != 201 {
 				t.Fatalf("publish current administration forbid: %d %s", code, raw)
 			}
-			current, err := h.set.gov.Evaluator().Evaluate(t.Context(), auth.Request{Principal: human, Tenant: tenant, Permission: "sessions:run:admin", Resource: auth.ResourceAttrs{Kind: "session_run", ID: intent.RunRef, WorkspaceID: scope.WorkspaceID}})
+			current, err := h.set.gov.Evaluator().Evaluate(t.Context(), auth.Request{Principal: human, Tenant: tenant, Permission: "sessions:run:admin", Resource: auth.ResourceAttrs{Kind: "run", ID: hookTestRunID(t, h.st, tenant, intent.RunRef).String(), WorkspaceID: scope.WorkspaceID}})
 			if err != nil || current.Allow {
 				t.Fatalf("control: current administration was not forbidden: %+v %v", current, err)
 			}

@@ -14,7 +14,7 @@ Estate materialisiert, hält Modul II ein **Live-Betriebs-Overlay** pro Session
 über demselben Beobachtungsstrom — und zeigt nur, was dieser Strom ehrlich
 trägt.
 
-26.10.1 **startet** auch offizielle Anbieter-CLIs als eigene Kinder unter einem
+Olivares <!-- release -->0.1<!-- /release --> **startet** auch offizielle Anbieter-CLIs als eigene Kinder unter einem
 [Anbieterprofil](/how-to/operate-provider-sessions/). Dieser verwaltete Pfad
 ist dasselbe Modul. Er ersetzt das Overlay nicht und führt zwei Homes, die
 dieselbe Anbieter-Session-ID bekanntgeben, nicht zusammen
@@ -86,10 +86,13 @@ Lesen Sie eine Zeile mit `GET /v1/m/sessions/live/by-id/{live_ref}` (und ihrer
 Timeline- / Stream- / Runs-Abfrage). Nackte External-ID-Routen bleiben und sind
 **Legacy**: sie antworten nur für die Legacy-Zeile.
 
-Treiber werden **pro Knoten** durch Pinning einer offiziellen Binärdatei
-registriert (`OLIVARES_SESSION_RUNTIME_CLAUDE_BIN`, `_CODEX_BIN`, `_GROK_BIN` —
-siehe [Konfiguration](/reference/configuration/)). Ungesetzt bleiben die
-Profile dieses Treibers beobachtbar und sind nicht startbar. Operator-Schritte:
+Treiber werden beim Start auf jedem Knoten registriert. Beim Sitzungsstart
+verwendet die Engine die neueste verifizierte verwaltete Installation, danach
+die CLI im `PATH` der Engine. `OLIVARES_SESSION_RUNTIME_CLAUDE_BIN`, `_CODEX_BIN`,
+`_GROK_BIN` und `_OPENCODE_BIN` überschreiben diese Auflösung ausdrücklich
+(siehe [Konfiguration](/reference/configuration/)). Wird keine Programmdatei
+gefunden, wird der Start verweigert. Weitere Bereitschaftsprüfungen, einschließlich
+Profil-Authentifizierung und Startrichtlinie, gelten weiterhin. Operator-Schritte:
 [Eine Provider-Session betreiben](/how-to/operate-provider-sessions/).
 
 ## Was es konsumiert (und was es ableitet)

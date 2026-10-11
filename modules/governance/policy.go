@@ -6,6 +6,7 @@ package governance
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 
@@ -73,9 +74,9 @@ type approvalMatch struct {
 // approvalSpec is the spec of an "approval" policy: how many approvals an
 // in-scope request needs, its timeout/escalation windows, and the
 // action's explicit risk tier. An empty RiskTier defers to the built-in default
-// classification (risktier.go); a set one is authoritative for the matched
-// actions — the operator's audited way to grow or shrink the CRITICAL set
-//. A "critical" tier floors the threshold at two distinct human
+// classification (risktier.go); Community accepts review and raising policies,
+// while Business also permits lowering the default tier. A "critical" tier
+// floors the threshold at two distinct human
 // approvers regardless of RequiredApprovals.
 type approvalSpec struct {
 	RequiredApprovals int           `json:"required_approvals,omitempty"`
@@ -183,10 +184,16 @@ func canonicalizeApproval(raw json.RawMessage) (map[string]any, string) {
 		return nil, "invalid approval spec: " + err.Error()
 	}
 	if spec.RequiredApprovals < 0 || spec.RequiredApprovals > maxApprovalCount {
-		return nil, "required_approvals out of range"
+		sentence, _ := numericFieldSentence("required_approvals")
+		return nil, sentence
 	}
-	if spec.ExpiresInSeconds < 0 || spec.ExpiresInSeconds > maxSeconds || spec.EscalateInSeconds < 0 || spec.EscalateInSeconds > maxSeconds {
-		return nil, "expiry/escalation window out of range"
+	if spec.ExpiresInSeconds < 0 || spec.ExpiresInSeconds > maxSeconds {
+		sentence, _ := numericFieldSentence("expires_in_seconds")
+		return nil, sentence
+	}
+	if spec.EscalateInSeconds < 0 || spec.EscalateInSeconds > maxSeconds {
+		sentence, _ := numericFieldSentence("escalate_in_seconds")
+		return nil, sentence
 	}
 	spec.Match.Action = strings.TrimSpace(spec.Match.Action)
 	spec.Match.SubjectKind = strings.TrimSpace(spec.Match.SubjectKind)
@@ -222,6 +229,22 @@ func strictUnmarshalABAC(raw json.RawMessage) (abacSpec, error) {
 	return s, err
 }
 
+// numericFieldSentence is the one plain-English refusal for a numeric spec
+// field (AR 09b hold07): the field and its allowed range as a sentence, never
+// a Go type, struct or unmarshal detail. It covers both a value of the wrong
+// shape (1.5) and one out of range (-1, 65).
+func numericFieldSentence(field string) (string, bool) {
+	switch field {
+	case "required_approvals":
+		return "required_approvals must be a whole number from 0 to 64.", true
+	case "expires_in_seconds":
+		return "expires_in_seconds must be a whole number from 0 to 31536000 (one year).", true
+	case "escalate_in_seconds":
+		return "escalate_in_seconds must be a whole number from 0 to 31536000 (one year).", true
+	}
+	return "", false
+}
+
 func strictUnmarshalApproval(raw json.RawMessage) (approvalSpec, error) {
 	var s approvalSpec
 	if len(raw) == 0 || string(raw) == "null" {
@@ -229,8 +252,16 @@ func strictUnmarshalApproval(raw json.RawMessage) (approvalSpec, error) {
 	}
 	dec := json.NewDecoder(strings.NewReader(string(raw)))
 	dec.DisallowUnknownFields()
-	err := dec.Decode(&s)
-	return s, err
+	if err := dec.Decode(&s); err != nil {
+		var typeErr *json.UnmarshalTypeError
+		if errors.As(err, &typeErr) {
+			if sentence, ok := numericFieldSentence(typeErr.Field); ok {
+				return approvalSpec{}, errors.New(sentence)
+			}
+		}
+		return approvalSpec{}, err
+	}
+	return s, nil
 }
 
 // parseApprovalSpec re-parses a stored approval Policy.Spec map into the typed
@@ -341,6 +372,9 @@ func (m *Module) handleCreatePolicy(w http.ResponseWriter, r *http.Request, mc a
 		writeJSON(w, http.StatusBadRequest, errorBody(msg))
 		return
 	}
+	if !in.availableInEdition(w, canon) {
+		return
+	}
 	var out policyDTO
 	err := mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
 		candidate := model.Policy{Name: in.Name, Kind: in.Kind, Spec: canon, Enabled: in.Enabled}
@@ -386,6 +420,9 @@ func (m *Module) handleUpdatePolicy(w http.ResponseWriter, r *http.Request, mc a
 	canon, msg := in.validateAndCanonicalize()
 	if msg != "" {
 		writeJSON(w, http.StatusBadRequest, errorBody(msg))
+		return
+	}
+	if !in.availableInEdition(w, canon) {
 		return
 	}
 	var (
@@ -488,4 +525,22 @@ func (m *Module) handleDeletePolicy(w http.ResponseWriter, r *http.Request, mc a
 	m.eval.invalidate(mc.Tenant)
 	m.emitPolicyChanged(r.Context(), mc.Tenant, id, deletedKind, event.PolicyOpDeleted, false)
 	writeJSON(w, http.StatusNoContent, nil)
+}
+
+// Validate before selecting an edition, so malformed specs keep their 400 contract.
+// A disabled policy is never applied, so switching one off needs no edition.
+func (in *policyRequest) availableInEdition(w http.ResponseWriter, canon map[string]any) bool {
+	if in.Kind != policyKindApproval || !in.Enabled {
+		return true
+	}
+	spec, err := parseApprovalSpec(canon)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, errorBody(err.Error()))
+		return false
+	}
+	if !approvalPolicyAvailable(spec) {
+		writeJSON(w, http.StatusNotImplemented, errorBodyCode("business_required", "Tier-lowering approval policies require Olivares Business."))
+		return false
+	}
+	return true
 }

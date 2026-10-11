@@ -6,6 +6,7 @@ package catalog
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"strings"
 
@@ -19,17 +20,19 @@ import (
 // instanceDTO is a self-service instantiation of a catalog entry: which approved
 // entry version it came from, its target and its governance status.
 type instanceDTO struct {
-	ID           string `json:"id,omitempty"`
-	EntryID      string `json:"entry_id"`
-	EntryKind    string `json:"entry_kind,omitempty"`
-	EntrySlug    string `json:"entry_slug,omitempty"`
-	EntryVersion string `json:"entry_version,omitempty"`
-	Name         string `json:"name"`
-	TargetRef    string `json:"target_ref,omitempty"`
-	Status       string `json:"status,omitempty"`
-	RequestedBy  string `json:"requested_by,omitempty"`
-	DecidedBy    string `json:"decided_by,omitempty"`
-	Note         string `json:"note,omitempty"`
+	ID               string `json:"id,omitempty"`
+	EntryID          string `json:"entry_id"`
+	EntryKind        string `json:"entry_kind,omitempty"`
+	EntrySlug        string `json:"entry_slug,omitempty"`
+	EntryVersion     string `json:"entry_version,omitempty"`
+	Name             string `json:"name"`
+	TargetRef        string `json:"target_ref,omitempty"`
+	Status           string `json:"status,omitempty"`
+	RequestedBy      string `json:"requested_by,omitempty"`
+	DecidedBy        string `json:"decided_by,omitempty"`
+	Note             string `json:"note,omitempty"`
+	ApprovalRef      string `json:"approval_ref,omitempty"`
+	RequiresApproval bool   `json:"requires_approval,omitempty"`
 }
 
 func toInstanceDTO(rec model.Record) instanceDTO {
@@ -199,8 +202,9 @@ func (m *Module) handleGetInstance(w http.ResponseWriter, r *http.Request, mc ap
 // transitionDTO is the request body to move an instance through its governance
 // flow.
 type transitionDTO struct {
-	Status string `json:"status"`
-	Note   string `json:"note,omitempty"`
+	Status      string `json:"status"`
+	Note        string `json:"note,omitempty"`
+	ApprovalRef string `json:"approval_ref,omitempty"`
 }
 
 // instanceTransitions encodes the allowed governance flow. The module enforces a
@@ -228,11 +232,23 @@ func (m *Module) handleTransitionInstance(w http.ResponseWriter, r *http.Request
 		writeJSON(w, http.StatusBadRequest, errorBody("status must be one of approved, rejected, active"))
 		return
 	}
+	// An instance cannot be rejected while this engine is provisioning it. The
+	// external dispatch stays outside a store transaction so deploy can persist
+	// its own governed operation without re-entering a locked transaction.
+	unlock, err := m.lockInstance(r.Context(), mc.Tenant.String()+"/"+id.String())
+	if err != nil {
+		writeJSON(w, http.StatusRequestTimeout, errorBody("instance transition canceled"))
+		return
+	}
+	defer unlock()
+	if in.Status == instActive && !m.activateInstance(w, r, mc, id, in.ApprovalRef) {
+		return
+	}
 	var (
 		out     instanceDTO
 		badFlow bool
 	)
-	err := mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
+	err = mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
 		repo, err := sc.Ext(instanceKind)
 		if err != nil {
 			return err
@@ -267,6 +283,115 @@ func (m *Module) handleTransitionInstance(w http.ResponseWriter, r *http.Request
 		return
 	}
 	writeJSON(w, http.StatusOK, out)
+}
+
+// lockInstance serializes one engine's decisions without blocking other
+// instances. Closing the channel wakes waiters; completed keys are reclaimed.
+func (m *Module) lockInstance(ctx context.Context, key string) (func(), error) {
+	for {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		m.mu.Lock()
+		done, busy := m.transitions[key]
+		if !busy {
+			if m.transitions == nil {
+				m.transitions = make(map[string]chan struct{})
+			}
+			done = make(chan struct{})
+			m.transitions[key] = done
+			m.mu.Unlock()
+			return func() {
+				m.mu.Lock()
+				delete(m.transitions, key)
+				close(done)
+				m.mu.Unlock()
+			}, nil
+		}
+		m.mu.Unlock()
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-done:
+		}
+	}
+}
+
+// activateInstance verifies the immutable source and dispatches outside the store
+// transaction. The deploy API owns authorization, approval and infrastructure.
+func (m *Module) activateInstance(w http.ResponseWriter, r *http.Request, mc api.ModuleContext, id model.ID, approvalRef string) bool {
+	var instance, entry model.Record
+	err := mc.Data.View(r.Context(), func(sc store.Scope) error {
+		repo, err := sc.Ext(instanceKind)
+		if err != nil {
+			return err
+		}
+		instance, err = repo.Get(r.Context(), id)
+		if err != nil {
+			return err
+		}
+		repo, err = sc.Ext(entryKind)
+		if err != nil {
+			return err
+		}
+		entry, err = repo.Get(r.Context(), model.ID(instance.String(colEntryID)))
+		return err
+	})
+	if err != nil {
+		writeStoreError(w, err)
+		return false
+	}
+	if instance.String(colInstStatus) != instApproved {
+		writeJSON(w, http.StatusConflict, errorBody("invalid status transition for this instance"))
+		return false
+	}
+	verified := verify(entry.String(colContentHash), entry.String(colSignature), entry.String(colSignedBy), m.expectedFingerprint(),
+		entry.String(colName), entry.String(colEntryKind), entry.String(colSlug), entry.String(colVersion),
+		entry.String(colSummary), entry.String(colOwnerRef), parseSpec(entry.String(colSpec)))
+	if !verified.Verified || (entry.String(colStatus) != statusApproved && entry.String(colStatus) != statusDeprecated) {
+		writeJSON(w, http.StatusConflict, errorBody("catalog source no longer verifies"))
+		return false
+	}
+	if m.activate == nil {
+		writeJSON(w, http.StatusServiceUnavailable, errorBody("catalog deployment path is not configured"))
+		return false
+	}
+	status, body := m.activate(r, mc, ActivationRequest{
+		EntryID: instance.String(colEntryID), EntryKind: entry.String(colEntryKind),
+		TargetRef: instance.String(colTargetRef), Spec: json.RawMessage(entry.String(colSpec)),
+		ApprovalRef: strings.TrimSpace(approvalRef),
+	})
+	if status == http.StatusAccepted {
+		var pending struct {
+			ApprovalRef      string `json:"approval_ref"`
+			RequiresApproval bool   `json:"requires_approval"`
+		}
+		if err := json.Unmarshal(body, &pending); err != nil || !pending.RequiresApproval || pending.ApprovalRef == "" {
+			writeJSON(w, http.StatusBadGateway, errorBody("invalid deployment approval response"))
+			return false
+		}
+		out := toInstanceDTO(instance)
+		out.ApprovalRef, out.RequiresApproval = pending.ApprovalRef, true
+		writeJSON(w, http.StatusAccepted, out)
+		return false
+	}
+	if status != http.StatusOK {
+		if status < 200 || status > 599 || !json.Valid(body) {
+			writeJSON(w, http.StatusBadGateway, errorBody("invalid deployment response"))
+		} else {
+			writeJSON(w, status, body)
+		}
+		return false
+	}
+	var result struct {
+		Status           string `json:"status"`
+		RequiresApproval bool   `json:"requires_approval"`
+	}
+	if err := json.Unmarshal(body, &result); err != nil || result.RequiresApproval || (result.Status != "applied" && result.Status != "noop") {
+		writeJSON(w, http.StatusBadGateway, errorBody("deployment did not complete"))
+		return false
+	}
+	return true
 }
 
 // auditInstance appends an instance-governance audit event attributed to the real

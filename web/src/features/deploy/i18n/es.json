@@ -1,6 +1,6 @@
 {
   "title": "Despliegue e integración",
-  "subtitle": "Despliegues deseado-vs-real, versiones y rollback, plan → aplicación gobernada, y las conexiones agente→recurso que los sostienen.",
+  "subtitle": "Declara qué agentes y servidores MCP se ejecutan y dónde; después planifica, aprueba y aplica cada cambio, o deshazlo.",
   "tabs": {
     "definitions": "Definiciones",
     "wirings": "Conexiones",
@@ -111,6 +111,18 @@
     "subjectKind": "Tipo de sujeto",
     "subjectRef": "Sujeto",
     "subjectRefHint": "El agente o servidor MCP que este despliegue entrega.",
+    "subjectKinds": {
+      "agent": "Agente",
+      "mcp_server": "Servidor MCP"
+    },
+    "subjectChoose": {
+      "agent": "Elige un agente",
+      "mcp_server": "Elige un servidor MCP"
+    },
+    "subjectNone": {
+      "agent": "Aún no hay agentes.",
+      "mcp_server": "Aún no hay servidores MCP."
+    },
     "name": "Nombre",
     "nameHint": "Un nombre para este despliegue. Único por entorno.",
     "environment": "Entorno",
@@ -322,17 +334,22 @@
   "empty": {
     "deploy": {
       "title": "Aún no se han declarado despliegues",
-      "description": "Esta pantalla lista definiciones de despliegue: el estado deseado registrado aquí, no una sesión lanzada. Declara un despliegue para registrar el estado deseado; reconciliarlo exige un ejecutor de runtime configurado por el operador y, sin él, Plan y Aplicar devuelven 503.",
+      "description": "Esta pantalla lista definiciones de despliegue: declara un agente o servidor MCP y Plan y Aplicar lo despliegan en su destino.",
       "sessions": "Operar sesiones"
     },
     "operations": {
       "title": "Aún no se han registrado operaciones de despliegue",
-      "description": "Plan, Aplicar, Verificar y Retirar solo añaden una entrada al registro si un operador ha configurado el ejecutor de runtime; hasta entonces devuelven 503 y no registran nada."
+      "description": "Plan, Aplicar, Verificar y Retirar se registran aquí en cuanto haya un ejecutor de runtime conectado."
     },
     "wirings": {
       "title": "Aún no se han materializado conexiones permitidas",
       "description": "Las conexiones se declaran en la definición del despliegue y se materializan si Aplicar tiene éxito, para lo que el operador debe haber configurado un ejecutor de runtime."
     }
+  },
+  "noExecutor": {
+    "title": "Para desplegar hace falta un ejecutor de runtime",
+    "description": "Un administrador lo conecta apuntando OLIVARES_DEPLOY_EXECUTOR_CONFIG a su archivo de configuración y reiniciando Olivares.",
+    "guide": "Cómo conectar un ejecutor"
   },
   "truncatedHint": "Hay más filas de las que se ven; esta página las coge por id de fila (asignado al crear), así que faltan las posteriores. Que una definición, un enlace o una operación NO salga aquí no prueba que no exista."
 }

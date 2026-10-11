@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/olivaresai/olivares/connectors/internal/pricing"
 	"github.com/olivaresai/olivares/connectors/modelprovider"
 	"github.com/olivaresai/olivares/sdk"
 	"github.com/olivaresai/olivares/sdk/model"
@@ -379,19 +380,20 @@ func TestPricingFor_FamilyPrefix(t *testing.T) {
 		id        string
 		wantIn    float64
 		wantMatch bool
+		wantDate  string
 	}{
-		{"claude-opus-4-8", 5, true},  // current Opus = $5 (not the deprecated $15)
-		{"claude-opus-4-1", 15, true}, // deprecated Opus 4.1 keeps $15
-		{"claude-opus-4-0", 15, true}, // deprecated Opus 4.0 keeps $15
-		{"claude-sonnet-5", 2, true},  // Sonnet 5 standard list price is $2/$10
-		{"claude-sonnet-4-6", 3, true},
-		{"claude-haiku-4-5", 1, true},             // current Haiku 4.5 = $1 (not retired $0.80)
-		{"claude-3-5-haiku-20241022", 0.80, true}, // retired Haiku 3.5 keeps $0.80
-		{"claude-3-opus-20240229", 15, true},
-		{"claude-fable-5", 10, true},        // Fable 5 = $10/$50 (launch 2026-06-09)
-		{"claude-mythos-5", 10, true},       // Mythos 5 shares the published Fable 5 pricing
-		{"claude-mythos-preview", 0, false}, // preview has NO published list price — never guessed
-		{"gpt-4o", 0, false},
+		{"claude-opus-4-8", 5, true, "2026-09-25"},  // current Opus = $5 (not the deprecated $15)
+		{"claude-opus-4-1", 15, true, "2026-09-25"}, // deprecated Opus 4.1 keeps $15
+		{"claude-opus-4-0", 15, true, "2026-09-25"}, // deprecated Opus 4.0 keeps $15
+		{"claude-sonnet-5", 2, true, "2026-09-25"},  // Sonnet 5 standard list price is $2/$10
+		{"claude-sonnet-4-6", 3, true, "2026-09-25"},
+		{"claude-haiku-4-5", 1, true, "2026-09-25"},             // current Haiku 4.5 = $1 (not retired $0.80)
+		{"claude-3-5-haiku-20241022", 0.80, true, "2026-09-25"}, // retired Haiku 3.5 keeps $0.80
+		{"claude-3-opus-20240229", 15, true, "2026-09-25"},
+		{"claude-fable-5", 10, true, "2026-09-25"},  // Fable 5 = $10/$50 (launch 2026-06-09)
+		{"claude-mythos-5", 10, true, "2026-06-09"}, // Mythos 5: curated fallback (not in the dataset)
+		{"claude-mythos-preview", 0, false, ""},     // preview has NO published list price — never guessed
+		{"gpt-4o", 0, false, ""},
 	}
 	for _, c := range cases {
 		p, _, _, ok := pricingFor(c.id)
@@ -400,6 +402,90 @@ func TestPricingFor_FamilyPrefix(t *testing.T) {
 		}
 		if ok && p.InputPerMTokUSD != c.wantIn {
 			t.Fatalf("%s: input price = %v, want %v", c.id, p.InputPerMTokUSD, c.wantIn)
+		}
+		if ok && p.AsOf != c.wantDate {
+			t.Fatalf("%s: price date = %q, want %q", c.id, p.AsOf, c.wantDate)
+		}
+	}
+}
+
+func TestPricingFor_DatedSharedCost(t *testing.T) {
+	for _, tc := range []struct {
+		id     string
+		cost   int64
+		maxOut int64
+	}{
+		{"claude-sonnet-4-20250514", 35400, 64000},
+		{"claude-opus-4-20250514", 177000, 32000},
+		{"claude-haiku-3-5-20241022", 9440, 64000},
+	} {
+		t.Run(tc.id, func(t *testing.T) {
+			m := buildModel(tc.id, tc.id)
+			shared, ok := pricing.ClaudePricingFor(tc.id)
+			if !ok || m.Pricing == nil || *m.Pricing != shared {
+				t.Fatalf("catalog pricing = %+v; shared = %+v, ok %v", m.Pricing, shared, ok)
+			}
+			if m.ContextWindow != 200000 || m.MaxOutputTokens != tc.maxOut {
+				t.Fatalf("window/output = %d/%d, want 200000/%d", m.ContextWindow, m.MaxOutputTokens, tc.maxOut)
+			}
+			cost := m.Pricing.DeriveCostMicroUSD(modelprovider.Usage{
+				InputTokens: 1000, OutputTokens: 2000,
+				CacheCreation5mTokens: 400, CacheCreation1hTokens: 100, CacheReadTokens: 1000,
+			})
+			if cost != tc.cost {
+				t.Fatalf("derived cost = %d micro-USD, want %d", cost, tc.cost)
+			}
+		})
+	}
+}
+
+func TestPricingFor_CurrentSharedCost(t *testing.T) {
+	for _, tc := range []struct {
+		id              string
+		context, maxOut int64
+	}{
+		{"claude-opus-5-5", 1000000, 128000},
+		{"claude-sonnet-5-5", 1000000, 128000},
+		{"claude-haiku-4-5-20251001", 200000, 64000},
+		{"claude-fable-5-1", 1000000, 128000},
+	} {
+		t.Run(tc.id, func(t *testing.T) {
+			m := buildModel(tc.id, tc.id)
+			shared, ok := pricing.ClaudePricingFor(tc.id)
+			if !ok || m.Pricing == nil || *m.Pricing != shared {
+				t.Fatalf("catalog pricing = %+v; shared = %+v, ok %v", m.Pricing, shared, ok)
+			}
+			if m.ContextWindow != tc.context || m.MaxOutputTokens != tc.maxOut {
+				t.Fatalf("window/output = %d/%d, want %d/%d", m.ContextWindow, m.MaxOutputTokens, tc.context, tc.maxOut)
+			}
+		})
+	}
+}
+
+// TestPricingFor_Haiku35APISpellingUsesDatasetRow: the Anthropic API spelling
+// (claude-haiku-3-5-…) resolves through the dataset alias to the retired model's
+// own 0.80 tariff instead of inheriting the current generic claude-haiku $1 row.
+func TestPricingFor_Haiku35APISpellingUsesDatasetRow(t *testing.T) {
+	p, ctxWin, maxOut, ok := pricingFor("claude-haiku-3-5-20241022")
+	if !ok {
+		t.Fatal("claude-haiku-3-5-20241022 has no pricing family")
+	}
+	if p.InputPerMTokUSD != 0.80 || p.OutputPerMTokUSD != 4 || p.CacheReadPerMTokUSD != 0.08 {
+		t.Fatalf("api-spelling pricing = %+v, want the dataset's 0.80/4 haiku-3.5 tariff", p)
+	}
+	if ctxWin != 200000 || maxOut != 64000 {
+		t.Fatalf("window/output = %d/%d, want the claude-haiku family 200000/64000", ctxWin, maxOut)
+	}
+}
+
+// TestCatalogFamilyRowsNeverZeroPriced: every declared family row carries a real
+// price. legacyFamilyPricing drops the ok bit, so a dataset bump that drops a
+// reference id would silently zero-price a whole family — this invariant catches
+// it at test time instead of under-metering cost in production.
+func TestCatalogFamilyRowsNeverZeroPriced(t *testing.T) {
+	for _, f := range claudeFamilies {
+		if f.pricing.InputPerMTokUSD <= 0 || f.pricing.OutputPerMTokUSD <= 0 || f.pricing.AsOf == "" {
+			t.Errorf("family %q priced %+v: a reference id stopped resolving; fix the row before shipping", f.prefix, f.pricing)
 		}
 	}
 }
@@ -414,8 +500,8 @@ func TestPricingFor_Sonnet5(t *testing.T) {
 	}
 	if p.InputPerMTokUSD != 2 || p.OutputPerMTokUSD != 10 ||
 		p.CacheWritePerMTokUSD != 2.50 || p.CacheWrite1hPerMTokUSD != 4 ||
-		p.CacheReadPerMTokUSD != 0.20 || p.AsOf != "2026-09-27" {
-		t.Fatalf("sonnet-5 pricing = %+v, want 2/10 + cache 2.50/4/0.20 as of 2026-09-27", p)
+		p.CacheReadPerMTokUSD != 0.20 || p.AsOf != "2026-09-25" {
+		t.Fatalf("sonnet-5 pricing = %+v, want 2/10 + cache 2.50/4/0.20 as of 2026-09-25", p)
 	}
 }
 

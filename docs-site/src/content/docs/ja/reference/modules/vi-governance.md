@@ -100,3 +100,7 @@ Cedar の場合、公開されたポリシーは稼働中のテナントごと�
 - [統治と承認](/ja/how-to/govern-and-approve/) — ポリシーと承認の面を使う。
 - [アーキテクチャ概要](/ja/explanation/architecture/overview/) — このモジュールが上に構成されるエンジンとレイヤー。
 - [Honesty & limits](/ja/start/honesty-and-limits/) — deny-closed・detective-by-default の姿勢。
+
+## 承認のエディション境界（0.1）
+
+Community は承認エンジン、CRITICAL 操作に対する異なる2人の承認、kill-switch の二重管理、およびレビューを要求するかリスク階層・承認人数を引き上げるポリシーを維持します。リスク階層を引き下げる承認ポリシーと break-glass 緊急アクセスは Business 基本版に含まれます。保存済みデータは読み取り・エクスポートできますが、Community の既定の要件を下げたり緊急アクセスを許可したりすることはできません。

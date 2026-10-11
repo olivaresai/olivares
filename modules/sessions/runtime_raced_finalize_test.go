@@ -19,7 +19,7 @@ import (
 // working.
 func racedFinalizeFixture(t *testing.T, m *Module, tenant model.TenantID) (string, *liveRun) {
 	t.Helper()
-	created, err := m.createRun(context.Background(), tenant, CreateRunParams{
+	created, err := createProfiledTestRun(t, m, context.Background(), tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative,
 		Actor: "agent:raced", ActorKind: model.ActorAgent, AgentRef: "agent:raced",
 	})

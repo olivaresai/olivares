@@ -35,7 +35,7 @@ grep -F -q 'Does not write core/release' "$DOC" \
 grep -F -q 'HOLD. NOT APPLIED.' "$DOC" \
   || fail "prepare doc lost HOLD"
 if grep -qiE 'FIRMA A claimed|remainder applied on origin/main|variant landed in the worker filename' "$DOC"; then
-  fail "prepare doc claims an application this lote does not have"
+  fail "prepare doc claims an application this batch does not have"
 fi
 
 grep -q 'export function artifactKey(version: string, os: string, arch: string, set: string)' "$ART" \
@@ -47,10 +47,10 @@ grep -q 'enterprise/${version}/${set}/' "$ART" \
 grep -q 'export function artifactFilename(version: string, os: string, arch: string): string' "$ART" \
   || fail "artifactFilename 3-arg basename drifted"
 if grep -q 'variant = ""' "$ART"; then
-  fail "variant default landed — this HOLD lote does not apply #1108"
+  fail "variant default landed — this HOLD batch does not apply #1108"
 fi
 if grep -q 'export function artifactFilename(version: string, os: string, arch: string, variant' "$ART"; then
-  fail "variant in worker filename — this HOLD lote does not apply #1108"
+  fail "variant in worker filename — this HOLD batch does not apply #1108"
 fi
 if grep -q 'from "core/release"' "$ART" || grep -q 'ExpectedArtifactName' "$ART"; then
   fail "worker artifacts.ts reached into core/release — C02-02 filename stays N's"

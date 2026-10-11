@@ -137,6 +137,23 @@ describe('decodeSessionAddress — a bad value falls back AND says which', () =>
     })
   })
 
+  it('reads the side pane tab, a short lowercase word, and refuses anything else', () => {
+    expect(
+      decodeSessionAddress({ session: 'live:lr-1', panel: 'changes' }).value
+        .panel,
+    ).toBe('changes')
+    for (const bad of ['Changes', 'a b', '', '../x', 'x'.repeat(40)]) {
+      const { value, issues } = decodeSessionAddress({
+        session: 'live:lr-1',
+        panel: bad,
+      })
+      expect(issues, bad).toEqual(['panel'])
+      expect(value.panel, bad).toBeUndefined()
+    }
+    // Absent is the default (Context), not an issue.
+    expect(decodeSessionAddress({ session: 'live:lr-1' }).issues).toEqual([])
+  })
+
   it('an absent key is not an issue — it is the default', () => {
     expect(decodeSessionAddress({})).toEqual({
       value: { address: null, pane: DEFAULT_PANE, evidence: DEFAULT_EVIDENCE },

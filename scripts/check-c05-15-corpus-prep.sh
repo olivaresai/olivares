@@ -39,7 +39,7 @@ grep -q 'Does not honour cloud add-ons' "$DOC" \
 grep -q 'Does not restack `#948`' "$DOC" \
   || fail "prepare doc lost #948 HOLD"
 if grep -qiE 'honours cloud add-ons|FIRMA A claimed|corpus closed' "$DOC"; then
-  fail "prepare doc claims a close this lote does not have"
+  fail "prepare doc claims a close this batch does not have"
 fi
 
 grep -q '"raw_body"' "$EVIDENCE" || fail "evidence lost raw_body"

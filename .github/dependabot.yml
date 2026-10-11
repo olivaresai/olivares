@@ -26,16 +26,6 @@ updates:
       go-minor-patch:
         update-types: ["minor", "patch"]
 
-  # The Terraform/OpenTofu provider is a SEPARATE Go module (its own go.mod), so it
-  # needs its own gomod entry. Same weekly/grouped policy as the root.
-  - package-ecosystem: "gomod"
-    directory: "/terraform-provider-olivares"
-    schedule:
-      interval: "weekly"
-    groups:
-      provider-go-minor-patch:
-        update-types: ["minor", "patch"]
-
   - package-ecosystem: "npm"
     directory: "/web"
     schedule:

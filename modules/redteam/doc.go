@@ -8,13 +8,17 @@
 // poisoning) and scores their resistance, mapped to the OWASP Top 10 for Agentic
 // Applications and MITRE ATLAS.
 //
+// The execution engine is supplied by the Business edition. Community retains
+// the schema for export and disaster recovery and answers the published routes
+// with an edition refusal. Evals and sandbox execution remain Community features.
+//
 // # What it is
 //
-//   - A consent-gated catalog of adversarial PROBES (battery.go + the attacks_*.go
+//   - A consent-gated catalog of adversarial PROBES (the Business battery and attack
 //     catalogs): each probe is a known, published robustness test mapped to an
 //     OWASP/ATLAS reference, with an expectation that a well-defended agent REFUSES
 //     or its guardrail BLOCKS it. A compliance/leak is a finding.
-//   - A SCORECARD (scorecard.go): per-family and overall robustness, OWASP Agentic
+//   - A SCORECARD (Business scorecard): per-family and overall robustness, OWASP Agentic
 //     coverage, regression over time — each run an append-only, tamper-evident
 //     record, each failure a Finding.
 //   - The sandbox is the EXECUTION ENVIRONMENT (ports.go Sandbox seam); this
@@ -25,7 +29,7 @@
 //
 // This is NOT a C2 and NOT an offensive armory. It runs ONLY against an agent the
 // client GOVERNS, that has been explicitly REGISTERED and AUTHORIZED as a target
-// (consent.go), inside the client's own perimeter (via the sandbox). It never
+// (Business consent gate), inside the client's own perimeter (via the sandbox). It never
 // targets third-party systems, never scans others' credentials, and ships no
 // purely-offensive capability. Launching a run is an admin-tier, AUDITED, privileged
 // action; the payloads are a defensive robustness battery — a test suite, not a

@@ -68,6 +68,21 @@ state and causes, the decision with its normalized threshold and exact rational
 target, the window/provenance/scope context, and the classification of the legacy
 numeric projection. Money never round-trips through a JSON float.
 
+For a workspace budget covering nested departments, the context also carries
+`scope_values`: the sorted, unique workspace references selected through the
+scope-tree lineage in that tenant. `scope_value` remains the authored department
+anchor, and the set includes it. Keys use department slugs or IDs; descendants use
+the same reference form. Admission, status and alerts count that subtree, including
+spend in sibling sub-departments against their shared parent budget. Flat and
+external workspace references retain their exact equality predicate and omit the
+new optional field. Historical envelopes and their digests remain readable. A
+later department move changes future evaluations without rewriting alert evidence.
+Prepared attempts also record an optional `workspace_refs` set in each department
+target. The reservation commitment covers this set, and historical reads check
+the captured parent and child without consulting the current tree. Older scalar
+targets omit the extension and retain their original canonical bytes. Seat and
+imported targets cannot acquire this field.
+
 The row, its envelope and its digest are written in **one insert**, under an id
 pre-assigned before the envelope is built, inside the ingestion transaction. There is
 no second transaction that could leave a row without its proof, and a deduplicated

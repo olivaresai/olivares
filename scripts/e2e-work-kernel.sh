@@ -18,16 +18,16 @@ set -u -o pipefail
 # confusion exacta que las tres respuestas existen para impedir, en la PRIMERA linea del
 # fichero. Falta de configuracion es NO HE PODIDO MIRAR, y se dicen TODAS las que faltan
 # de una vez en vez de una por corrida.
-faltan=
+missing_inputs=
 for v in OLIVARES_E2E_BASE OLIVARES_E2E_TOKEN OLIVARES_E2E_TENANT OLIVARES_E2E_WORKSPACE OLIVARES_E2E_USER; do
   eval "val=\${$v-}"
-  [ -z "$val" ] && faltan="$faltan $v"
+  [ -z "$val" ] && missing_inputs="$missing_inputs $v"
 done
-if [ -n "$faltan" ]; then
-  printf '⚠ NO HE PODIDO MIRAR: sin configuracion no se ha ejercitado nada.\n' >&2
-  printf '  falta(n):%s\n' "$faltan" >&2
-  printf '  este arnes habla con un motor VIVO; tambien `--selftest`, cuyos casos A y C\n' >&2
-  printf '  mandan de verdad. Arranca uno y exporta las cinco.\n' >&2
+if [ -n "$missing_inputs" ]; then
+  printf '⚠ COULD NOT LOOK: nothing was exercised without configuration.\n' >&2
+  printf '  missing:%s\n' "$missing_inputs" >&2
+  printf '  this harness talks to a LIVE engine; so does `--selftest`, whose cases A and C\n' >&2
+  printf '  send real requests. Start one and export all five variables.\n' >&2
   exit 2
 fi
 B=$OLIVARES_E2E_BASE
@@ -48,8 +48,8 @@ fi
 fallos=0; ciegos=0
 paso()  { printf '\n\033[1m### %s\033[0m\n' "$*"; }
 ok()    { printf '  ok    %s\n' "$*"; }
-mal()   { printf '  ⛔ FALLO %s\n' "$*"; fallos=$((fallos+1)); }
-ciego() { printf '  ⚠ NO HE PODIDO MIRAR %s\n' "$*"; ciegos=$((ciegos+1)); }
+mal()   { printf '  ⛔ FAIL  %s\n' "$*"; fallos=$((fallos+1)); }
+ciego() { printf '  ⚠ COULD NOT LOOK %s\n' "$*"; ciegos=$((ciegos+1)); }
 
 api() { # api <metodo> <ruta> <fichero-cuerpo|-> [cabeceras extra...]
   api_as "$TOK" "$@"
@@ -103,7 +103,7 @@ mando() { # mando <ruta> <fichero> <etiqueta> [cabeceras...]   (MANDO_TOK: crede
     # unica confusion que un gate de tres respuestas existe para impedir**, y la tenia el
     # guion que la predica en su cabecera. La cazo una revision de codigo sobre mi diff.
     if es_ilegible "$vv" || es_ilegible "$cc"; then
-      ciego "$etq: respuesta ILEGIBLE del motor (vacia o no-JSON) — no es un hallazgo, es que no he podido mirar"
+      ciego "$etq: UNREADABLE engine response (empty or non-JSON) — unverified, not a finding"
       return 2
     fi
     if [ "$vv" = "NO_HE_PODIDO_MIRAR" ]; then ciego "$etq validate: $cc"; return 2; fi
@@ -112,7 +112,7 @@ mando() { # mando <ruta> <fichero> <etiqueta> [cabeceras...]   (MANDO_TOK: crede
     # el titular salia bien y el cuerpo del informe decia lo contrario, que es la forma de
     # error que mas caro sale cuando alguien lee por encima.
     case " ${MANDO_TOLERA:-} " in
-      *" $cc "*) printf '  ·     %s: %s (esperado con esta credencial, no es hallazgo)\n' "$etq" "$cc"; return 3 ;;
+      *" $cc "*) printf '  ·     %s: %s (expected with this credential, not a finding)\n' "$etq" "$cc"; return 3 ;;
     esac
     mal "$etq validate = $vv ($cc)"; return 1
   fi
@@ -120,14 +120,14 @@ mando() { # mando <ruta> <fichero> <etiqueta> [cabeceras...]   (MANDO_TOK: crede
   printf '%s\n' "$p" > "$OUT/$etq.plan.json"
   local ph; ph=$(printf '%s' "$p" | jq_ plan_hash)
   if [ -z "$ph" ] || es_ilegible "$ph"; then
-    ciego "$etq plan: sin plan_hash legible"; return 2
+    ciego "$etq plan: no readable plan_hash"; return 2
   fi
   a=$(api_as "$tok" POST "$ruta?mode=apply" "$cuerpo" -H "Idempotency-Key: $idem" -H "If-Plan-Hash: $ph" "$@")
   printf '%s\n' "$a" > "$OUT/$etq.apply.json"
   local av; av=$(printf '%s' "$a" | jq_ verdict)
   if [ "$av" != "LIMPIO" ]; then
     if es_ilegible "$av"; then
-      ciego "$etq apply: respuesta ILEGIBLE del motor — no he podido mirar"; return 2
+      ciego "$etq apply: UNREADABLE engine response — could not look"; return 2
     fi
     if [ "$av" = "NO_HE_PODIDO_MIRAR" ]; then ciego "$etq apply: $(printf '%s' "$a" | jq_ code)"; return 2; fi
     mal "$etq apply = $av ($(printf '%s' "$a" | jq_ code))"; return 1
@@ -144,7 +144,7 @@ if [ "${1:-}" = "--selftest" ]; then
   st_fallos=0
   st() { # st <esperado> <etiqueta> <rc-observado>
     if [ "$1" = "$3" ]; then printf '  ok    %s -> rc=%s\n' "$2" "$3"
-    else printf '  ⛔ %s -> rc=%s, esperaba %s\n' "$2" "$3" "$1"; st_fallos=$((st_fallos+1)); fi
+    else printf '  ⛔ %s -> rc=%s, expected %s\n' "$2" "$3" "$1"; st_fallos=$((st_fallos+1)); fi
   }
   OUT="$OUT/selftest"; mkdir -p "$OUT" || exit 2
 
@@ -152,7 +152,7 @@ if [ "${1:-}" = "--selftest" ]; then
   printf '{"work_kind":"implementation","workspace_id":"00000000-0000-7000-8000-000000000000",\n "title":"selftest","brief_md":"selftest","context_refs":[],"priority":"p1",\n "owner_kind":"user","owner_ref":"%s","provenance_kind":"human","provenance_ref":"selftest"}\n' \
     "$USERID" > "$OUT/a.json"
   mando /v1/m/sessions/work-items "$OUT/a.json" st_a >/dev/null 2>&1
-  st 1 "A · workspace inexistente = HALLAZGO" "$?"
+  st 1 "A · nonexistent workspace = FINDING" "$?"
 
   # B · NO HE PODIDO MIRAR: un puerto donde no escucha nadie.
   # ⛔ ESTE CASO ACEPTABA «1 o 2» Y POR ESO NO VALIA PARA NADA.
@@ -163,8 +163,8 @@ if [ "${1:-}" = "--selftest" ]; then
   # tolerancia, y el 2 no lo probaba nadie. Aqui se exige 2 EXACTO.
   ( B="http://127.0.0.1:1"; mando /v1/m/sessions/work-items "$OUT/a.json" st_b >/dev/null 2>&1 )
   rc=$?
-  if [ "$rc" = 2 ]; then printf '  ok    B · motor inalcanzable -> rc=2 (NO HE PODIDO MIRAR)\n'
-  else printf '  ⛔ B · motor inalcanzable -> rc=%s, esperaba 2: un motor caido no es un hallazgo\n' "$rc"; st_fallos=$((st_fallos+1)); fi
+  if [ "$rc" = 2 ]; then printf '  ok    B · unreachable engine -> rc=2 (COULD NOT LOOK)\n'
+  else printf '  ⛔ B · unreachable engine -> rc=%s, expected 2: an unavailable engine is not a finding\n' "$rc"; st_fallos=$((st_fallos+1)); fi
 
   # C · TOLERANCIA: el MISMO mando que en A, pero declarando esperado el codigo que A
   # devolvio de verdad. Se lee del fichero, no se teclea: un codigo tecleado a mano es la
@@ -176,13 +176,13 @@ if [ "${1:-}" = "--selftest" ]; then
   MANDO_TOLERA="$code_a" mando /v1/m/sessions/work-items "$OUT/a.json" st_c >/dev/null 2>&1
   rc=$?
   if [ "$fallos" = "$antes" ] && [ "$rc" = 3 ]; then
-    printf '  ok    C · el codigo tolerado «%s» sale rc=3 y no incrementa fallos\n' "$code_a"
+    printf '  ok    C · tolerated code %s exits rc=3 without increasing failures\n' "$code_a"
   else
-    printf '  ⛔ C · tolerando «%s»: rc=%s, fallos %s -> %s (esperaba rc=3 y sin incremento)\n' \
+    printf '  ⛔ C · tolerating %s: rc=%s, failures %s -> %s (expected rc=3 without an increase)\n' \
       "$code_a" "$rc" "$antes" "$fallos"; st_fallos=$((st_fallos+1))
   fi
 
-  printf '\ne2e-work-kernel selftest: %s\n' "$([ "$st_fallos" = 0 ] && echo 'las tres respuestas se pueden dar' || echo "$st_fallos FALLO(S)")"
+  printf '\ne2e-work-kernel selftest: %s\n' "$([ "$st_fallos" = 0 ] && echo 'all three responses are possible' || echo "$st_fallos FAILURE(S)")"
   exit $([ "$st_fallos" = 0 ] && echo 0 || echo 1)
 fi
 
@@ -197,13 +197,13 @@ SID_B=${OLIVARES_E2E_SID_B:-}; TOKEN_B=${OLIVARES_E2E_TOKEN_B:-}
 MODO_SESION=0
 if [ -n "$SID_A" ] && [ -n "$TOKEN_A" ] && [ -n "$SID_B" ] && [ -n "$TOKEN_B" ]; then
   MODO_SESION=1
-  printf '\033[1mmodo:\033[0m dos sesiones gestionadas — el relevo se MIDE\n'
+  printf '\033[1mmode:\033[0m two managed sessions — handoff is MEASURED\n'
 else
-  printf '\033[1mmodo:\033[0m sin credenciales de sesion — el relevo quedara SIN MEDIR\n'
-  printf '        (define OLIVARES_E2E_SID_A/TOKEN_A y _B para medirlo)\n'
+  printf '\033[1mmode:\033[0m no session credentials — handoff remains UNMEASURED\n'
+  printf '        (set OLIVARES_E2E_SID_A/TOKEN_A and _B to measure it)\n'
 fi
 
-paso "1 · CREAR el objetivo de trabajo"
+paso "1 · CREATE the work objective"
 # ⛔ EL DUENO DECIDE SI EL RELEVO SE PUEDE MEDIR, y no es un detalle de forma.
 # Un lease lo sostiene LA SESION QUE POSEE EL ITEM: con `owner_kind:"user"` ninguna sesion
 # puede tomarlo (`owner_ineligible`, y el motor tiene razon). Asi que cuando hay credenciales
@@ -231,11 +231,11 @@ mando /v1/m/sessions/work-items "$OUT/crear.json" crear || true
 ITEM=""
 [ -r "$OUT/crear.result.json" ] && ITEM=$(jq_ result_id < "$OUT/crear.result.json")
 if [ -z "$ITEM" ] || es_ilegible "$ITEM"; then
-  ciego "sin item de ESTA corrida: el resto del recorrido no tiene sujeto"; exit 2
+  ciego "no item from THIS run: the remaining walkthrough has no subject"; exit 2
 fi
 ok "item = $ITEM"
 
-paso "2 · TRANSICION draft -> ready"
+paso "2 · TRANSITION draft -> ready"
 printf '{"command":"item.ready"}\n' > "$OUT/ready.json"
 V=$(api GET "/v1/m/sessions/work-items/$ITEM" - | jq_ item.version)
 # El ETag de este plano es "v<version>", no "<version>": con el formato desnudo el motor
@@ -243,16 +243,16 @@ V=$(api GET "/v1/m/sessions/work-items/$ITEM" - | jq_ item.version)
 # Lo dice el propio check: evidence_ref = "\"v1\"".
 mando "/v1/m/sessions/work-items/$ITEM/transitions" "$OUT/ready.json" ready -H "If-Match: \"v$V\"" || true
 EST=$(api GET "/v1/m/sessions/work-items/$ITEM" - | jq_ item.status)
-[ "$EST" = "ready" ] && ok "estado = ready" || mal "estado = $EST, esperaba ready"
+[ "$EST" = "ready" ] && ok "state = ready" || mal "state = $EST, expected ready"
 
-paso "3 · LEASE: la sesion A toma el SUYO, con SU credencial"
+paso "3 · LEASE: session A acquires its OWN lease with its OWN credential"
 # `holder_sid` es autoridad de EJECUCION, no metadato de enrutado: `leasePrincipalMatches`
 # exige que el SessionID AUTENTICADO sea exactamente el holder, para que ninguna credencial
 # pueda tomar el trabajo de una sesion ajena. Por eso este paso va con el token de A, no con
 # el del operador — y por eso sin credenciales de sesion no se puede medir.
 if [ "$MODO_SESION" != 1 ]; then
-  ciego "lease: hacen falta DOS sesiones gestionadas; con un token de operador el motor rehusa (owner_ineligible, y es la garantia funcionando)"
-  ciego "relevo: sin medir (no hubo lease que mover)"
+  ciego "lease: TWO managed sessions are required; the engine refuses an operator token (owner_ineligible, as guaranteed)"
+  ciego "handoff: unmeasured (no lease to transfer)"
   SIN_LEASE=1
 else
   V=$(api GET "/v1/m/sessions/work-items/$ITEM" - | jq_ item.version)
@@ -265,11 +265,11 @@ EOF
   printf '%s\n' "$L" > "$OUT/lease-A.json"
   H1=$(printf '%s' "$L" | jq_ holder_sid); F1=$(printf '%s' "$L" | jq_ fence)
   E1=$(printf '%s' "$L" | jq_ state)
-  if [ "$H1" = "$SID_A" ]; then ok "titular A = ${H1:0:20}… (fence $F1, $E1)"
-  else mal "titular = $H1, esperaba $SID_A"; SIN_LEASE=1; fi
+  if [ "$H1" = "$SID_A" ]; then ok "holder A = ${H1:0:20}… (fence $F1, $E1)"
+  else mal "holder = $H1, expected $SID_A"; SIN_LEASE=1; fi
 fi
 
-paso "4 · RELEVO: se mueve la PROPIEDAD a B, y B toma el lease"
+paso "4 · HANDOFF: transfer OWNERSHIP to B, then B acquires the lease"
 # ⛔ EL RELEVO ES PRIMERO DE PROPIEDAD, NO DE LEASE, y esta version del guion existe porque
 # la anterior lo tenia al reves. Un `lease.takeover` directo de A a B se RECHAZA
 # `owner_ineligible`: una sesion no puede sostener el lease de un item que no es suyo.
@@ -278,7 +278,7 @@ paso "4 · RELEVO: se mueve la PROPIEDAD a B, y B toma el lease"
 # `principal.Admin` y el fence vigente — un operador retirando un lease de quien SIGUE
 # siendo el dueno. La regla vive tambien en modules/sessions/work_lease.go.
 if [ "${SIN_LEASE:-0}" = 1 ]; then
-  ciego "relevo: sin medir"
+  ciego "handoff: unmeasured"
 else
   V=$(api GET "/v1/m/sessions/work-items/$ITEM" - | jq_ item.version)
   printf '{"owner_kind":"session","owner_ref":"%s"}\n' "$SID_B" > "$OUT/assign.json"
@@ -287,8 +287,8 @@ else
   printf '%s\n' "$LR" > "$OUT/lease-revocado.json"
   ER=$(printf '%s' "$LR" | jq_ state); FR=$(printf '%s' "$LR" | jq_ fence)
   # LA GARANTIA: mover el dueno tiene que CORTAR al titular viejo, no solo re-etiquetar.
-  if [ "$ER" = "revoked" ]; then ok "al mover el dueno, el lease de A queda REVOCADO (fence $F1 -> $FR)"
-  else mal "tras mover el dueno el lease quedo en '$ER', esperaba 'revoked': el titular viejo NO queda cortado"; fi
+  if [ "$ER" = "revoked" ]; then ok "transferring ownership REVOKES the lease held by A (fence $F1 -> $FR)"
+  else mal "after transferring ownership, the lease state is '$ER', expected 'revoked': the old holder is NOT fenced out"; fi
 
   V=$(api GET "/v1/m/sessions/work-items/$ITEM" - | jq_ item.version)
   printf '{"holder_sid":"%s","ttl_seconds":600}\n' "$SID_B" > "$OUT/acquire-b.json"
@@ -297,22 +297,22 @@ else
   L2=$(api GET "/v1/m/sessions/work-items/$ITEM/lease" -)
   printf '%s\n' "$L2" > "$OUT/lease-B.json"
   H2=$(printf '%s' "$L2" | jq_ holder_sid); F2=$(printf '%s' "$L2" | jq_ fence)
-  if [ "$H2" = "$SID_B" ]; then ok "titular B = ${H2:0:20}… (fence $F2)"
-  else mal "titular = $H2, esperaba $SID_B"; fi
+  if [ "$H2" = "$SID_B" ]; then ok "holder B = ${H2:0:20}… (fence $F2)"
+  else mal "holder = $H2, expected $SID_B"; fi
   # EL FENCE MONOTONO ES LA PROPIEDAD ENTERA: sin el, el titular viejo podria seguir
   # escribiendo con su credencial, que es lo que un lease con fence existe para cortar.
   if es_ilegible "$F1" || es_ilegible "$F2"; then
     # Sin esto, un cuerpo ILEGIBLE caia al `else` y publicaba «el titular viejo no queda
     # cortado» — un hallazgo de SEGURIDAD fabricado a partir de un fallo de lectura.
-    ciego "no leo el fence en los dos lados del relevo (respuesta ilegible)"
+    ciego "cannot read the fence on both sides of the handoff (unreadable response)"
   elif [ "$F2" -gt "$F1" ] 2>/dev/null; then
-    ok "el fence AVANZA en el relevo: $F1 -> $F2"
+    ok "the fence ADVANCES during handoff: $F1 -> $F2"
   else
-    mal "el fence NO avanza en el relevo: $F1 -> $F2 (el titular viejo no queda cortado)"
+    mal "the fence does NOT advance during handoff: $F1 -> $F2 (the old holder is not fenced out)"
   fi
 fi
 
-paso "5 · La cadena de eventos, que es lo que hace auditable la orquestacion"
+paso "5 · The event chain makes orchestration auditable"
 EV=$(api GET "/v1/m/sessions/work-items/$ITEM/events" -)
 printf '%s\n' "$EV" > "$OUT/eventos.json"
 # ⛔ ESTE PASO PASABA POR NO ENCONTRAR NADA. Con la lista vacia, `sorted([]) == []`, el
@@ -326,36 +326,36 @@ import json,sys
 try:
     d=json.load(open(sys.argv[1]))
 except Exception as e:
-    print(f"  respuesta ilegible: {e}"); sys.exit(2)
+    print(f"  unreadable response: {e}"); sys.exit(2)
 minimo=int(sys.argv[2]); sin_lease=sys.argv[3]=='1'
 it=d.get('items')
 if it is None:
-    print("  la respuesta no trae 'items'"); sys.exit(2)
-print(f"  eventos: {len(it)} (minimo esperado {minimo})")
+    print("  the response contains no 'items'"); sys.exit(2)
+print(f"  events: {len(it)} (expected minimum {minimo})")
 for e in it:
     print(f"    seq={str(e.get('seq')):<3} {str(e.get('event_type')):<28} actor={e.get('actor_kind')}")
 if len(it) < minimo:
-    print(f"  la cadena trae {len(it)} eventos y el recorrido produjo al menos {minimo}"); sys.exit(1)
+    print(f"  the chain contains {len(it)} events, but the walkthrough produced at least {minimo}"); sys.exit(1)
 seqs=[e.get('seq') for e in it]
 if seqs != sorted(seqs) or len(set(seqs))!=len(seqs):
-    print("  la secuencia no es monotona y sin huecos"); sys.exit(1)
+    print("  the sequence is not monotonic and gap-free"); sys.exit(1)
 exigidos={'work.item.created','work.item.transitioned'}
 if not sin_lease:
     exigidos |= {'work.lease.acquired','work.owner.changed'}
-falta=exigidos - {e.get('event_type') for e in it}
-if falta:
-    print(f"  la cadena no registra {sorted(falta)}: el recorrido los produjo"); sys.exit(1)
+missing_items=exigidos - {e.get('event_type') for e in it}
+if missing_items:
+    print(f"  the chain does not record {sorted(missing_items)}: the walkthrough produced them"); sys.exit(1)
 PY
 rc_ev=$?
 case $rc_ev in
-  0) ok "cadena de eventos: monotona, con suelo y con los tipos del recorrido" ;;
-  2) ciego "cadena de eventos ilegible" ;;
-  *) mal "cadena de eventos" ;;
+  0) ok "event chain: monotonic, meeting the minimum and containing the walkthrough event types" ;;
+  2) ciego "unreadable event chain" ;;
+  *) mal "event chain" ;;
 esac
 
-printf '\n\033[1m=== VEREDICTO ===\033[0m\n'
-printf '  fallos: %d   ciegos: %d\n' "$fallos" "$ciegos"
-printf '  evidencia en: %s\n' "$OUT"
+printf '\n\033[1m=== VERDICT ===\033[0m\n'
+printf '  failures: %d   unverified: %d\n' "$fallos" "$ciegos"
+printf '  evidence at: %s\n' "$OUT"
 [ "$fallos" -gt 0 ] && exit 1
 [ "$ciegos" -gt 0 ] && exit 2
 exit 0

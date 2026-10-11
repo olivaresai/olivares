@@ -14,7 +14,7 @@ en direct, un état Claude Code dérivé, et une chronologie reconstructible. L�
 opérationnelle en direct** par session au-dessus du même flux d'observations — et ne montre
 que ce que ce flux porte honnêtement.
 
-26.10.1 **lance** aussi les CLI officielles de fournisseur comme enfants
+Olivares <!-- release -->0.1<!-- /release --> **lance** aussi les CLI officielles de fournisseur comme enfants
 détenus sous un [profil fournisseur](/how-to/operate-provider-sessions/). Ce
 chemin géré est le même module. Il ne remplace pas la surcouche et ne fusionne
 pas deux homes qui annoncent le même id de session fournisseur
@@ -82,10 +82,13 @@ chronologies. Lisez une ligne avec `GET /v1/m/sessions/live/by-id/{live_ref}`
 (et sa requête timeline / stream / runs). Les routes d’id externe nues restent
 et sont **legacy** : elles répondent seulement pour la ligne legacy.
 
-Les pilotes sont enregistrés **par nœud** en épinglant un binaire officiel
-(`OLIVARES_SESSION_RUNTIME_CLAUDE_BIN`, `_CODEX_BIN`, `_GROK_BIN` — voir
-[Configuration](/reference/configuration/)). Non défini, les profils de ce
-pilote restent observables et ne sont pas lançables. Étapes opérateur :
+Les pilotes sont enregistrés sur chaque nœud au démarrage. Au lancement d’une
+session, le moteur utilise l’installation gérée vérifiée la plus récente, puis
+la CLI dans son `PATH`. `OLIVARES_SESSION_RUNTIME_CLAUDE_BIN`, `_CODEX_BIN`,
+`_GROK_BIN` et `_OPENCODE_BIN` remplacent explicitement cette résolution
+(voir [Configuration](/reference/configuration/)). Si aucun exécutable n’est trouvé,
+le lancement est refusé. Les autres vérifications, dont l’authentification du profil
+et la politique de lancement, s’appliquent toujours. Étapes opérateur :
 [Exploiter une session de fournisseur](/how-to/operate-provider-sessions/).
 
 ## Ce qu'il consomme (et ce qu'il dérive)

@@ -22,9 +22,9 @@ version tag or a digest in production; never rely on `latest` for a reproducible
 
 | Tag | Contents | Architectures |
 |-----|----------|---------------|
-| `26.10.1`, `latest` | Base engine + embedded web console | amd64, arm64 |
-| `26.10.1-fips` | FIPS 140-3 build (`GOFIPS140`, CMVP-validated module) | amd64 |
-| `26.10.1-stig` | STIG-hardened (UBI-micro, OpenSCAP-profiled) base image | amd64 |
+| <!-- release -->`0.1`<!-- /release -->, `latest` | Base engine + embedded web console | amd64, arm64 |
+
+FIPS and STIG images are available through the Business deployment channel.
 
 **This is the official registry for Olivares AI.** Releases are built and signed on GitHub
 Container Registry and published here **by digest** with `cosign copy`, so the layers, cosign
@@ -34,20 +34,22 @@ anonymous-pull limit affects a CI node or a large fleet (or just `docker login` 
 
 ## Run it — secure by default
 
-Production listeners are TLS-on-by-default and bind loopback; first boot prints a one-time
+Production listeners are TLS-on-by-default; the host mapping below publishes them on loopback only. First boot prints a one-time
 setup token and there are no default credentials. Mount a persistent data volume:
 
+<!-- release -->
 ```sh
 docker run -d --name olivares -p 127.0.0.1:8443:8443 -p 127.0.0.1:8444:8444 \
   -v olivares-data:/var/lib/olivares \
   --user 65532:65532 --read-only --tmpfs /tmp --cap-drop ALL \
   --security-opt no-new-privileges \
-  olivaresai/olivares:26.10.1 \
+  olivaresai/olivares:0.1 \
   serve --listen 0.0.0.0:8443 --grpc-listen 0.0.0.0:8444 --data-dir /var/lib/olivares
 ```
+<!-- /release -->
 
-(`--listen 0.0.0.0` is required inside the container — the engine binds loopback by default;
-the `-p 127.0.0.1:…` host mapping keeps it loopback-only on the host.)
+(Inside the container the engine must listen on every interface, which is its default,
+written out here; the `-p 127.0.0.1:…` host mapping keeps it loopback-only on the host.)
 
 Open `https://127.0.0.1:8443` and read the one-time first-boot setup token from the logs
 (`docker logs olivares | sed -n '/FIRST-BOOT SETUP/,/========================/p'`). The data directory holds the SQLite
@@ -75,11 +77,13 @@ documentation site.
 Every image is signed keylessly (Sigstore/cosign) and carries SBOM and SLSA Build L3
 provenance attestations — all preserved on this registry by digest:
 
+<!-- release -->
 ```sh
-cosign verify olivaresai/olivares:26.10.1 \
-  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$' \
+cosign verify olivaresai/olivares:0.1 \
+  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/[0-9]+\.[0-9]+$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
+<!-- /release -->
 
 Full verification (SBOM, OpenVEX, SLSA) is documented at
 https://github.com/olivaresai/olivares/blob/main/docs/RELEASE-VERIFICATION.md

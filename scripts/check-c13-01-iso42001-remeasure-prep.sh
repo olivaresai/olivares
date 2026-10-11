@@ -31,7 +31,7 @@ grep -q 'HOLD' "$DOC" || fail "prepare doc lost HOLD"
 grep -q 'Catalog not on overlay main' "$DOC" \
   || fail "prepare doc lost catalog-absent"
 if grep -qiE 'iso42001 catalog landed|FIRMA A claimed' "$DOC"; then
-  fail "prepare doc claims a close this lote does not have"
+  fail "prepare doc claims a close this batch does not have"
 fi
 
 python3 - "$JSON" "$SOLD" <<'PY' || exit $?

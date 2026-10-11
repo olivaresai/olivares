@@ -150,8 +150,7 @@ func TestLicenseHolderTrialExpiresWithoutGrace(t *testing.T) {
 // lifts (verify-but-never-gate).
 //
 // CHANGED BY. This used to assert that a blob with no expiry lifts FOREVER, which
-// was correct while perpetual licenses existed. The v8 package is term-only and LICENSING.md
-// §ADR-0010 signs "no perpetual fallback", so a blob attesting no term now attests no
+// was correct while perpetual licenses existed. A license is term-only, so a blob attesting no term attests no
 // right. Note what did NOT change: the blob still VERIFIES and is still displayed — the
 // holder reports a status, it does not refuse anything.
 func TestLicenseHolderTermlessAndInvalid(t *testing.T) {

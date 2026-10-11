@@ -7,14 +7,21 @@
 package plugjail
 
 import (
+	"bufio"
+	"debug/elf"
+	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
+
+	"github.com/olivaresai/olivares/core/runtime/confine"
 )
 
 // applyOS applies the Linux confinement controls to cmd and records ONLY what
@@ -26,10 +33,44 @@ import (
 //     confirm they took — a ceiling that silently no-ops (controller not delegated) is
 //     recorded as degraded, never asserted.
 //
-// no-new-privs, bounding-cap drop, seccomp and landlock (child-only syscalls) are the
-// re-exec launcher follow-up; until wired they are recorded as degraded, never asserted.
-// The attestation reflects controls that actually took effect, per the honesty contract.
+// The shared helper applies Landlock and no_new_privs before original-path exec.
+// Successful handshake confirms that it reached exec. Bounding capabilities,
+// seccomp and active health monitoring are not enforced in this release.
 func applyOS(cmd *exec.Cmd, c Confinement, att *Attestation) (Cleanup, error) {
+	var scratch string
+	removeScratch := noopCleanup
+	if c.Landlock {
+		state := confine.Probe()
+		if state.Mode != confine.ModeLandlock {
+			att.Degraded = append(att.Degraded, "landlock: "+state.Reason+"; no_new_privs was not applied")
+		} else {
+			scratch = c.WritableScratch
+			if scratch == "" {
+				var err error
+				// /tmp is only the parent of this owned directory, never a grant.
+				// Unlike an engine-private TMPDIR, it is traversable after UID drop.
+				scratch, err = os.MkdirTemp("/tmp", "olivares-plugin-")
+				if err != nil {
+					return nil, fmt.Errorf("plugin scratch: %w", err)
+				}
+				var once sync.Once
+				removeScratch = func() { once.Do(func() { _ = os.RemoveAll(scratch) }) }
+			}
+			program := cmd.Path
+			if !filepath.IsAbs(program) && cmd.Dir != "" {
+				program = filepath.Join(cmd.Dir, program)
+			}
+			policy, err := pluginPolicy(program, c.ReadableRoots, scratch)
+			if err == nil {
+				_, err = confine.Wrap(cmd, policy)
+			}
+			if err != nil {
+				removeScratch()
+				return nil, err
+			}
+			cmd.Env = append(cmd.Env, "TMPDIR="+scratch)
+		}
+	}
 	sysAttr := &syscall.SysProcAttr{Setpgid: true} // own process group ⇒ group-kill on teardown
 
 	// C3: run as a dedicated, per-launch non-root uid/gid with NO supplementary groups.
@@ -58,9 +99,18 @@ func applyOS(cmd *exec.Cmd, c Confinement, att *Attestation) (Cleanup, error) {
 			Groups:      []uint32{},
 		}
 		att.UID = uid
+		if scratch != "" {
+			if err := os.Chown(scratch, uid, c.GID); err != nil {
+				if releaseUID > 0 {
+					uidAlloc.release(releaseUID)
+				}
+				removeScratch()
+				return nil, fmt.Errorf("plugin scratch owner: %w", err)
+			}
+		}
 	} else {
 		att.Degraded = append(att.Degraded,
-			"uid: engine is not privileged enough to drop to a dedicated non-root uid; plugin runs at the ENGINE's uid — env scoping (C1) is then BYPASSABLE: a same-uid plugin can read /proc/<engine>/{environ,mem}")
+			"uid: engine is not privileged enough to drop to a dedicated non-root uid; plugin runs at the ENGINE's uid — same-uid process-memory isolation is not guaranteed; unsupported Landlock or an explicit /proc grant can expose /proc/<engine>/{environ,mem}")
 	}
 	// CapsDropped is a STRONG claim (bounding set cleared + no-new-privs so a setuid/
 	// setcap binary cannot regain privilege). That is the re-exec launcher's job and is
@@ -68,7 +118,7 @@ func applyOS(cmd *exec.Cmd, c Confinement, att *Attestation) (Cleanup, error) {
 	// not satisfy it. DedicatedUID carries the honest "runs unprivileged" fact.
 	if os.Geteuid() == 0 {
 		att.Degraded = append(att.Degraded,
-			"caps: bounding-set drop + no-new-privs are a declared strong-Linux follow-up (re-exec launcher); the plugin runs non-root but the bounding set is not cleared")
+			"caps: the plugin runs non-root but the bounding capability set is not cleared; no_new_privs alone does not clear it")
 	}
 
 	// C2: per-plugin cgroup v2, spawned into via CgroupFD, with EACH ceiling read back to
@@ -104,9 +154,6 @@ func applyOS(cmd *exec.Cmd, c Confinement, att *Attestation) (Cleanup, error) {
 	if c.Seccomp {
 		att.Degraded = append(att.Degraded, "seccomp: deny-by-default syscall filter is a declared strong-Linux follow-up (re-exec launcher)")
 	}
-	if c.Landlock {
-		att.Degraded = append(att.Degraded, "landlock: read-only host-fs restriction is a declared strong-Linux follow-up (re-exec launcher)")
-	}
 	// C6: an ACTIVE post-handshake health/kill budget is not enforced this release; the
 	// cgroup OOM/pids guards (when effective) are the real resource kills.
 	att.Degraded = append(att.Degraded, "health-budget: active post-handshake health-timeout kill is a declared follow-up; resource kills rely on the cgroup guards above")
@@ -129,8 +176,105 @@ func applyOS(cmd *exec.Cmd, c Confinement, att *Attestation) (Cleanup, error) {
 		}
 	}
 
+	inner := cleanup
+	cleanup = func() { inner(); removeScratch() }
 	cmd.SysProcAttr = sysAttr
 	return cleanup, nil
+}
+
+// pluginPolicy supplies SDK grants explicitly; it never borrows session defaults.
+// Runtime inspection happens in the parent, before credentials change. A 0711
+// executable need not be readable by the plugin UID or by the Landlock helper.
+func pluginPolicy(program string, readable []string, scratch string) (confine.Policy, error) {
+	program, err := filepath.Abs(program)
+	if err != nil {
+		return confine.Policy{}, err
+	}
+	p := confine.Policy{ReadWrite: []string{scratch}, ReadOnly: append([]string{}, readable...),
+		Devices: []confine.Device{{Path: "/dev/null", Write: true}, {Path: "/dev/urandom"}}}
+	p.ReadOnly = append(p.ReadOnly, filepath.Dir(program), filepath.Dir(canonicalPath(program)))
+	p.ReadOnly = append(p.ReadOnly, "/etc/resolv.conf", "/etc/hosts", "/etc/nsswitch.conf")
+	for _, bundle := range []string{"/etc/ssl/certs/ca-certificates.crt", "/etc/pki/tls/certs/ca-bundle.crt", "/etc/ssl/ca-bundle.pem", "/etc/pki/tls/cacert.pem", "/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem", "/etc/ssl/cert.pem"} {
+		if info, err := os.Stat(bundle); err == nil && info.Mode().IsRegular() {
+			p.ReadOnly = append(p.ReadOnly, bundle)
+			break
+		}
+	}
+	interp, dynamic, err := executableRuntime(program)
+	if err != nil {
+		return p, err
+	}
+	if interp != "" {
+		p.ReadOnly = append(p.ReadOnly, interp, canonicalPath(interp))
+	}
+	if dynamic {
+		p.ReadOnly = append(p.ReadOnly, "/etc/ld.so.cache")
+		switch runtime.GOARCH {
+		case "amd64":
+			p.ReadOnly = append(p.ReadOnly, "/lib/x86_64-linux-gnu", "/usr/lib/x86_64-linux-gnu", "/lib64", "/usr/lib64")
+		case "arm64":
+			p.ReadOnly = append(p.ReadOnly, "/lib/aarch64-linux-gnu", "/usr/lib/aarch64-linux-gnu", "/lib64", "/usr/lib64")
+		}
+	}
+	return p, nil
+}
+
+func canonicalPath(path string) string {
+	if real, err := filepath.EvalSymlinks(path); err == nil {
+		return real
+	}
+	return filepath.Clean(path)
+}
+
+// executableRuntime names a shebang interpreter or ELF PT_INTERP, without
+// changing execution to that interpreter or changing the plugin's original path.
+func executableRuntime(program string) (interpreter string, dynamic bool, err error) {
+	f, err := os.Open(program)
+	if err != nil {
+		return "", false, nil
+	} // preserve ordinary exec/checksum refusal
+	defer f.Close()
+	var header [4]byte
+	_, _ = f.ReadAt(header[:], 0)
+	if string(header[:]) == "\x7fELF" {
+		image, err := elf.NewFile(f)
+		if err != nil {
+			return "", false, nil // leave malformed files to the original checksum/exec gates
+		}
+		for _, prog := range image.Progs {
+			if prog.Type == elf.PT_INTERP {
+				data, err := io.ReadAll(io.LimitReader(prog.Open(), 4096))
+				if err != nil {
+					return "", false, nil
+				}
+				return strings.TrimRight(string(data), "\x00"), true, nil
+			}
+		}
+		return "", false, nil
+	}
+	if string(header[:2]) == "#!" {
+		line, _, err := bufio.NewReader(io.LimitReader(f, 256)).ReadLine()
+		if err != nil {
+			return "", false, nil
+		}
+		fields := strings.Fields(strings.TrimPrefix(string(line), "#!"))
+		if len(fields) > 0 {
+			interp := fields[0]
+			image, openErr := elf.Open(interp)
+			dynamic := false
+			if openErr == nil {
+				for _, prog := range image.Progs {
+					if prog.Type == elf.PT_INTERP {
+						dynamic = true
+						break
+					}
+				}
+				_ = image.Close()
+			}
+			return interp, dynamic, nil
+		}
+	}
+	return "", false, nil
 }
 
 // uidAlloc hands out a per-launch uid DISTINCT among currently-live plugins so co-resident

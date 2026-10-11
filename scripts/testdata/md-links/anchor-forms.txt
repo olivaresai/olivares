@@ -1,0 +1,34 @@
+---
+label: frontmatter
+---
+# Repeat
+# Repeat-1
+# Repeat
+## **Hello** [world](README.md), `a_b_c` &amp; café! ##
+Setext heading
+===
+<A NAME="legacy"></A> <span ID = "custom"></span>
+<span data-id="fake"></span> <input name="field">
+<!--
+```
+## Commented
+[ignored](#missing)
+-->
+````md
+```
+## Fenced
+[ignored](#missing)
+````
+~~~
+## Tilde fenced
+<!--
+~~~
+`<!--` [inline comment example](#repeat)
+[duplicate](#repeat-2) [unicode](#hello-world-a_b_c--caf%C3%A9)
+[setext](#setext-heading) [explicit](#custom) [legacy](#legacy)
+[encoded path](%52EADME.md#install) [query](README.md?v=1#install)
+[fragmentless](README.md#) [code example](#repeat) `[#](#missing)`
+[definition]: README.md#install
+<a href="README.md#install">HTML link</a>
+[bad](#commented) [bad](#fenced) [bad](#tilde-fenced)
+[bad](#fake) [bad](#field)

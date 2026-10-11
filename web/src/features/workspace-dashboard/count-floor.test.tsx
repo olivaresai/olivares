@@ -8,6 +8,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ReactNode } from 'react'
+import { useWorkspaceStore } from '@/stores/workspace'
 import { cuentaConSuelo } from './count-floor'
 
 vi.mock('@tanstack/react-router', () => ({
@@ -17,15 +18,8 @@ vi.mock('@tanstack/react-router', () => ({
   useNavigate: () => () => {},
   useRouterState: () => '/',
 }))
-const workspaceState = {
-  activeWorkspace: 'w1' as string | null,
-  activeWorkspaceName: 'Engineering' as string | null,
-}
-vi.mock('@/stores/workspace', () => ({
-  useWorkspaceStore: () => workspaceState,
-}))
 vi.mock('@/lib/auth/context', () => ({
-  useAuth: () => ({ activeTenant: 't1' }),
+  useAuth: () => ({ activeTenant: 't1', can: () => false }),
 }))
 
 const summaryMock = vi.fn()
@@ -66,8 +60,7 @@ function resumen(extra: Record<string, unknown>) {
   })
 }
 beforeEach(() => {
-  workspaceState.activeWorkspace = 'w1'
-  workspaceState.activeWorkspaceName = 'Engineering'
+  useWorkspaceStore.getState().setActiveWorkspace('w1', 'Engineering')
   resumen({})
   agentsMock.mockReset().mockResolvedValue({ items: [], has_more: false })
   groupsMock.mockReset().mockResolvedValue({ items: [], has_more: false })

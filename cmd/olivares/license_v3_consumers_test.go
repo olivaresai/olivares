@@ -426,7 +426,7 @@ func TestBootWiresTheGrantListSeam(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(src), "bindEnterpriseEntitlement(licHolder.grants, licHolder)") {
-		t.Fatal("boot.go must bind licHolder.grants and that same live licHolder")
+	if !strings.Contains(string(src), "thisEdition.seatPolicy(licHolder, crlViewFromDataDir(b.cfg.DataDir))") {
+		t.Fatal("boot.go must pass the live holder and its CRL through the license port")
 	}
 }

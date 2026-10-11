@@ -181,7 +181,7 @@ func newReadinessFixture(t *testing.T, be readinessEngine, m *Module) *readiness
 		t.Fatal(err)
 	}
 	authorizer := auth.NewAuthorizer(nil)
-	m.UseWorkAuthorizer(authorizer)
+	WithWorkAuthorizer(authorizer)(m)
 	srv, err := api.New(api.Options{
 		Store: st, Authenticator: auth.NewAuthenticator(st, nil), Authorizer: authorizer,
 		Signer: signer, SetupToken: tok, Version: "test", Modules: []api.Module{m},

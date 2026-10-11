@@ -448,7 +448,7 @@ func workSchemaForgetMigration(t *testing.T, driver, dsn string, version int) {
 func workSchemaLeaseRows(t *testing.T, m *Module, tenant model.TenantID) []model.Record {
 	t.Helper()
 	var leases []model.Record
-	if err := m.data.View(context.Background(), tenant, func(sc store.Scope) error {
+	if err := m.Data.View(context.Background(), tenant, func(sc store.Scope) error {
 		repo, err := sc.Ext(workLeaseKind)
 		if err != nil {
 			return err
@@ -656,7 +656,7 @@ func workSchemaUpdateLease(
 ) (model.Record, error) {
 	t.Helper()
 	var updated model.Record
-	err := m.data.Mutate(context.Background(), tenant, func(sc store.Scope) error {
+	err := m.Data.Mutate(context.Background(), tenant, func(sc store.Scope) error {
 		repo, err := sc.Ext(workLeaseKind)
 		if err != nil {
 			return err
@@ -675,7 +675,7 @@ func workSchemaGetLease(
 ) model.Record {
 	t.Helper()
 	var lease model.Record
-	if err := m.data.View(context.Background(), tenant, func(sc store.Scope) error {
+	if err := m.Data.View(context.Background(), tenant, func(sc store.Scope) error {
 		repo, err := sc.Ext(workLeaseKind)
 		if err != nil {
 			return err

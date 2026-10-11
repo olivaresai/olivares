@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/olivaresai/olivares/cmd/olivares/internal/loopback"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/runtime"
 )
@@ -207,7 +208,7 @@ func (d *deployDriftLoop) heal(ctx context.Context, t driftTenant, id string) {
 }
 
 // call performs one in-process governed API call as the tenant's drift service
-// principal over the engine handler (the captureWriter mechanism).
+// principal over the engine handler (the loopback.Recorder mechanism).
 func (d *deployDriftLoop) call(ctx context.Context, t driftTenant, method, path string, body any) (int, []byte) {
 	h := d.currentHandler()
 	if h == nil {
@@ -221,7 +222,7 @@ func (d *deployDriftLoop) call(ctx context.Context, t driftTenant, method, path 
 		}
 		rdr = strings.NewReader(string(bs))
 	}
-	req, err := http.NewRequestWithContext(loopbackContext(ctx), method, path, rdr)
+	req, err := http.NewRequestWithContext(loopback.Context(ctx), method, path, rdr)
 	if err != nil {
 		return 0, nil
 	}
@@ -230,7 +231,7 @@ func (d *deployDriftLoop) call(ctx context.Context, t driftTenant, method, path 
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	rec := &captureWriter{header: http.Header{}, status: http.StatusOK}
+	rec := loopback.NewRecorder()
 	h.ServeHTTP(rec, req)
-	return rec.status, rec.body.Bytes()
+	return rec.Status, rec.Body.Bytes()
 }

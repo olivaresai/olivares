@@ -75,7 +75,7 @@ export function EngineStatus({ className }: { className?: string }) {
         className={cn('inline-block size-2 shrink-0 rounded-full', DOT[state])}
       />
       <span
-        className="min-w-0 truncate"
+        className="min-w-0 break-words"
         title={version ? `${word} · ${version}` : word}
       >
         {word}

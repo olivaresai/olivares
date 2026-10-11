@@ -206,14 +206,14 @@ run_verify "$WORK/missing-platform.txt"
 check "ordinary consumer mode still accepts the same partial download" "behaviour preserved" $?
 cp "$WORK/with-archive.txt" checksums.txt || exit 1
 
-# (4) EVERY ARCHIVE NEEDS BOTH ATTESTATIONS, each refused on its own.
+# (4) FROM 0.1 A RELEASE CARRIES ONE SBOM AND ONE VEX, attested to the image: strict
+# publication demands no per-archive bundle (the signed checksums cover the archives).
 run_strict
-[ "$rc" -ne 0 ] && grep 'no SBOM attestation for' "$WORK/err.$n" >/dev/null
-check "strict refuses an archive with no SBOM attestation" "unattested is unpublishable" $?
+! grep -E 'no (SBOM|OpenVEX) attestation for' "$WORK/err.$n" >/dev/null
+check "strict demands no per-archive SBOM or VEX bundle" "one SBOM and one VEX per release" $?
+# Releases up to 26.10.1 carry both bundles, and the verifier still checks them when present:
+# the identity rows below need one of each.
 echo "{}" >olivares_1.2.3_linux_amd64.tar.gz.sbom.sigstore.json
-run_strict
-[ "$rc" -ne 0 ] && grep 'no OpenVEX attestation for' "$WORK/err.$n" >/dev/null
-check "strict refuses an archive with no VEX attestation" "both bundles, separately" $?
 echo "{}" >olivares_1.2.3_linux_amd64.tar.gz.vex.sigstore.json
 
 # (5) PROVENANCE IS REQUIRED, and its absence is not a skip.

@@ -71,6 +71,9 @@ var ErrCredentialBindingConflict = errors.New("auth: credential binding successi
 // workflow run, referenced by its pre-assigned run id.
 const CredentialBindingWorkflowRun = "orchestration.workflow_run"
 
+// CredentialBindingOSAccount binds a core subject to one immutable native account.
+const CredentialBindingOSAccount = "os_account"
+
 const (
 	credentialBindingSealDomain = "olivares.core.credential_binding.v1"
 	// credentialBindingTimeout bounds a bind or succession whose caller set no
@@ -83,15 +86,26 @@ const (
 // resolved tenant, the run id and its initiating account from the run row —
 // never from request input.
 type CredentialBindingSubject struct {
-	Tenant model.TenantID
-	Kind   string
-	Ref    model.ID
-	User   model.ID
+	Tenant    model.TenantID
+	Kind      string
+	Ref       model.ID
+	User      model.ID
+	OSUID     uint32
+	OSAccount string
 }
 
 func (s CredentialBindingSubject) valid() bool {
-	return validPrincipalEvidenceTenant(s.Tenant) && s.Kind == CredentialBindingWorkflowRun &&
-		validPrincipalEvidenceID(s.Ref) && validPrincipalEvidenceID(s.User)
+	if !validPrincipalEvidenceTenant(s.Tenant) || !validPrincipalEvidenceID(s.Ref) || !validPrincipalEvidenceID(s.User) {
+		return false
+	}
+	switch s.Kind {
+	case CredentialBindingWorkflowRun:
+		return s.OSUID == 0 && s.OSAccount == ""
+	case CredentialBindingOSAccount:
+		return s.Ref == s.User && s.OSUID != 0 && validOSAccountName(s.OSAccount)
+	default:
+		return false
+	}
 }
 
 // CredentialBinding is the opaque handle of one binding row. It confers
@@ -161,28 +175,28 @@ func verifyCredentialBindingProof(
 	as store.AuthScope,
 	ref PrincipalRef,
 	tenant model.TenantID,
-) error {
+) (model.CredentialBinding, error) {
 	proof := ref.binding
 	if proof.subject.Tenant != tenant || !proof.subject.valid() {
-		return ErrUnauthenticated
+		return model.CredentialBinding{}, ErrUnauthenticated
 	}
 	bindings, err := credentialBindingStore(as)
 	if err != nil {
-		return principalEvidenceUnavailable("credential binding custody", err)
+		return model.CredentialBinding{}, principalEvidenceUnavailable("credential binding custody", err)
 	}
 	row, err := bindings.Get(ctx, proof.id)
 	if errors.Is(err, store.ErrNotFound) {
-		return ErrUnauthenticated
+		return model.CredentialBinding{}, ErrUnauthenticated
 	}
 	if err != nil {
-		return principalEvidenceUnavailable("read the credential binding", err)
+		return model.CredentialBinding{}, principalEvidenceUnavailable("read the credential binding", err)
 	}
 	if !credentialBindingNames(row, proof.subject) || !row.SupersededBy.IsZero() || row.SupersededAt != nil ||
 		PrincipalKind(row.CredentialKind) != ref.kind || row.CredentialID != ref.credentialID ||
 		row.CredentialVersion != ref.version {
-		return ErrUnauthenticated
+		return model.CredentialBinding{}, ErrUnauthenticated
 	}
-	return nil
+	return row, nil
 }
 
 // credentialPin is the exact credential revision a binding row records,
@@ -246,6 +260,9 @@ func (a *Authenticator) BindCredential(
 	p Principal,
 	s CredentialBindingSubject,
 ) (CredentialBinding, error) {
+	if s.Kind != CredentialBindingWorkflowRun {
+		return CredentialBinding{}, ErrCredentialBindingInvalid
+	}
 	ctx, cancel := credentialBindingContext(ctx)
 	defer cancel()
 	pin, err := a.credentialBindingPin(ctx, p, s)
@@ -364,6 +381,9 @@ func (a *Authenticator) RebindCredential(
 	s CredentialBindingSubject,
 	authorizedBy Principal,
 ) (CredentialBinding, error) {
+	if s.Kind != CredentialBindingWorkflowRun {
+		return CredentialBinding{}, ErrCredentialBindingInvalid
+	}
 	ctx, cancel := credentialBindingContext(ctx)
 	defer cancel()
 	if generation < 1 {
@@ -613,6 +633,9 @@ func (a *Authenticator) admittedCredential(ctx context.Context, ref PrincipalRef
 // or the account is excluded from the tenant. Each is ErrCredentialBindingInvalid.
 // A failure to read them is ErrCredentialBindingUnavailable.
 func (a *Authenticator) credentialBindingAdmission(ctx context.Context, ref PrincipalRef, tenant model.TenantID) error {
+	return a.credentialBindingAdmissionFor(ctx, ref, tenant, false)
+}
+func (a *Authenticator) credentialBindingAdmissionFor(ctx context.Context, ref PrincipalRef, tenant model.TenantID, osAccount bool) error {
 	if !validPrincipalRef(ref) || !validPrincipalEvidenceTenant(tenant) {
 		return ErrCredentialBindingInvalid
 	}
@@ -665,10 +688,10 @@ func (a *Authenticator) credentialBindingAdmission(ctx context.Context, ref Prin
 		if err != nil {
 			return credentialBindingUnavailable("read the account", err)
 		}
-		if account.DeletedAt != nil || account.Status != model.StatusActive || account.IsSuperadmin {
+		if account.DeletedAt != nil || account.Status != model.StatusActive || (account.IsSuperadmin && !osAccount) {
 			return ErrCredentialBindingInvalid
 		}
-		if ref.kind == KindUser {
+		if ref.kind == KindUser && !account.IsSuperadmin {
 			members, _, err := as.Memberships().List(ctx, model.Query{Filters: []model.Filter{
 				{Column: "user_id", Op: model.OpEq, Value: user.String()},
 				{Column: "target_tenant_id", Op: model.OpEq, Value: tenant.String()},
@@ -750,6 +773,13 @@ func credentialBindingNames(row model.CredentialBinding, s CredentialBindingSubj
 		row.SubjectUserID != s.User || row.SubjectGeneration < 0 {
 		return false
 	}
+	if s.Kind == CredentialBindingOSAccount {
+		if row.OSUID == nil || *row.OSUID != s.OSUID || row.OSAccount != s.OSAccount {
+			return false
+		}
+	} else if row.OSUID != nil || row.OSAccount != "" {
+		return false
+	}
 	seal := credentialBindingSeal(row)
 	return bytes.Equal(row.Seal, seal[:])
 }
@@ -771,6 +801,11 @@ func sealedCredentialBinding(
 		CeilingKind: string(ceiling.kind), CeilingRole: ceiling.role,
 		CeilingWorkspaceID: ceiling.workspace, CeilingAgent: ceiling.agent,
 		AuthorizedByActor: authorizedBy,
+	}
+	if s.Kind == CredentialBindingOSAccount {
+		uid := s.OSUID
+		row.OSUID = &uid
+		row.OSAccount = s.OSAccount
 	}
 	seal := credentialBindingSeal(row)
 	row.Seal = seal[:]
@@ -809,6 +844,14 @@ func credentialBindingSeal(row model.CredentialBinding) [sha256.Size]byte {
 	write(row.CeilingWorkspaceID.String())
 	write(row.CeilingAgent)
 	write(row.AuthorizedByActor)
+	if row.SubjectKind == CredentialBindingOSAccount {
+		if row.OSUID == nil {
+			number(-1)
+		} else {
+			number(int64(*row.OSUID))
+		}
+		write(row.OSAccount)
+	}
 	return sha256.Sum256(buf.Bytes())
 }
 

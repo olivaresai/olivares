@@ -69,8 +69,8 @@ func TestEveryRouteRequiresSystemAdministrator(t *testing.T) {
 	defer m.Close()
 	r := &registrar{}
 	m.APIRoutes(r)
-	// 5 sign-in routes + 5 tool routes, and the 5 routes of the local Ollama (HU-R17).
-	if len(r.routes) != 15 {
+	// 5 sign-in routes + 5 tool routes, the providers read, and the 5 routes of the local Ollama (HU-R17).
+	if len(r.routes) != 16 {
 		t.Fatalf("routes = %d", len(r.routes))
 	}
 	for _, rt := range r.routes {

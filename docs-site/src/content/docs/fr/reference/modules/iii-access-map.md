@@ -10,7 +10,7 @@ description: >-
 Le module III est la **carte d'accès en lecture/écriture** : quelle origine (agent, identité,
 session) touche quelle ressource, classifiée en lecture ou lecture-écriture, et le **diff
 Permis-vs-Observé** qui fait apparaître la dérive de moindre privilège. C'est l'une des
-capacités les plus utiles et les plus différenciées du produit — l'un des 31 modules, pas le
+capacités les plus utiles et les plus différenciées du produit — l'un des 32 modules, pas le
 produit entier. Cette page est la référence de ce qu'est la carte et de la façon de la lire
 honnêtement.
 

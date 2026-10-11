@@ -17,7 +17,7 @@
     "activationStateUnknown": "在控制台验证当前授权和审查状态之前，无法进行激活。",
     "activationBlockedUnreviewed": "先前的授权尚未审查。如仍处于活动状态，请先将其关闭，再由另一个用户账户完成事后审查，然后才能开启新的紧急窗口。",
     "activationHumanRequired": "系统令牌不能激活紧急访问。请使用具有稳定身份的人工管理员账户登录。",
-    "activationHardwareRequired": "启用破窗需要经硬件验证的（AAL3）会话。请在“身份 → 特权登录”中完成 WebAuthn 或 PIV 升级验证，然后返回此处。",
+    "activationHardwareRequired": "启用破窗需要经硬件验证的（AAL3）会话。请在“身份 → 特权登录”中完成 WebAuthn 升级验证，然后返回此处。",
     "currentTitle": "当前紧急访问",
     "currentCaption": "此刻谁可以绕过双人控制、适用于哪些操作以及持续到何时。",
     "noActive": "没有活动的紧急访问",
@@ -223,7 +223,8 @@
     "decisionApprove": "已批准",
     "decisionReject": "已拒绝",
     "reenableNeedsAdmins": "需要另外两个管理员账户批准。请在“身份与 NHI”中创建，或使用 `olivares users create`。",
-    "openIdentity": "打开“身份与 NHI”"
+    "openIdentity": "打开“身份与 NHI”",
+    "cannotDecideOwn": "您不能审批自己的请求。必须由另一位管理员决定。"
   },
   "policies": {
     "title": "策略",
@@ -386,8 +387,7 @@
     "denied": "计算机使用被策略拒绝",
     "sensitiveInput": "计算机使用输入的文本包含敏感内容（检测到DLP类别）",
     "responseBlocked": "响应被保留：计算机使用输入的文本包含敏感内容",
-    "honesty": "执行仅在代理处经过验证部署。自定义ANTHROPIC_BASE_URL会绕过它。计算机使用工具是客户端的：模型提议，客户端执行。",
-    "enterpriseRequired": "深度截图分析（OCR + DLP）和时间线记录需要企业版模块。"
+    "honesty": "执行仅在代理处经过验证部署。自定义ANTHROPIC_BASE_URL会绕过它。计算机使用工具是客户端的：模型提议，客户端执行。"
   },
   "projects": {
     "title": "Claude项目治理",
@@ -708,6 +708,7 @@
     "folder": "文件夹",
     "askedBy": "请求方",
     "askedBySession": "会话本身",
+    "askedByForSession": "{{name}}（新会话）",
     "tool": "工具",
     "willRun": "将要运行的内容",
     "noReview": "此请求未包含将要运行的内容。",
@@ -717,6 +718,10 @@
     "details": "详情",
     "id": "请求 ID",
     "untitled": "未命名会话",
-    "openToDecide": "打开以批准或拒绝"
+    "openToDecide": "打开以批准或拒绝",
+    "you": "您",
+    "member": "成员",
+    "apiToken": "API 令牌",
+    "requestSummary": "请求"
   }
 }

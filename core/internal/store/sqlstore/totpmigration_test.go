@@ -6,6 +6,7 @@ package sqlstore
 import (
 	"context"
 	"database/sql"
+	"github.com/olivaresai/olivares/core/internal/store/dialect"
 	"github.com/olivaresai/olivares/core/store"
 	"reflect"
 	"testing"
@@ -39,6 +40,18 @@ func TestTOTPMigrationFromSeventeen(t *testing.T) {
 			}
 			for _, table := range []string{"totp_recovery_codes", "totp_credentials", "auth_policy"} {
 				if _, err = db.ExecContext(ctx, "DROP TABLE "+table); err != nil {
+					t.Fatal(err)
+				}
+			}
+			// v19 creates this relation with its version record. Remove both
+			// halves when reconstructing the predecessor, not just the record.
+			for _, table := range dialect.FinOpsCustodyControlTables() {
+				if _, err := db.ExecContext(ctx, "DROP TABLE "+table); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if engine == store.EnginePostgres {
+				if _, err := db.ExecContext(ctx, "DROP FUNCTION public."+dialect.PostgresCustodyGuardFunction+"()"); err != nil {
 					t.Fatal(err)
 				}
 			}

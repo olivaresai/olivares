@@ -53,7 +53,7 @@ func newRedteamCmd() *cobra.Command {
 		Short: "Run the consent-gated adversarial battery against your own agents",
 		Long: "redteam scores YOUR OWN agents against an adversarial probe battery — prompt\n" +
 			"injection, jailbreak, exfiltration, tool poisoning — mapped to OWASP and MITRE\n" +
-			"ATLAS.\n\n" +
+			"ATLAS. Red-team execution requires Business.\n\n" +
 			"It is consent-gated in two steps on purpose. Registering a target records it;\n" +
 			"authorizing it is a separate, confirmed decision, and until it is made the\n" +
 			"engine refuses to run a single probe. A target whose agent is not in your own\n" +

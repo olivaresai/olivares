@@ -84,20 +84,15 @@ type accessReviewPack struct {
 var accessReviewKinds = map[string]bool{"resource": true, "agent": true, "session": true}
 
 // handleAccessReviewExport produces and seals a who-can-access-R access review.
-func (s *Server) handleAccessReviewExport(w http.ResponseWriter, r *http.Request) {
-	if !s.allowSurface(w, r, azKindExport) {
-		return
-	}
-	p, tenant, ok := s.authzTenant(w, r, auth.PermAuthzAdmin)
-	if !ok {
-		return
-	}
+func (s *Server) handleAccessReviewExport(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	p := mc.Principal
+	tenant := mc.Tenant
 	if !s.requireStepUp(w, r, p) {
 		return
 	}
 	var in accessReviewRequest
 	if err := decodeJSON(w, r, &in); err != nil {
-		s.badRequest(w, r, "invalid JSON body")
+		s.badRequest(w, r, RequestBodyErrorMessage(err, "invalid JSON body"))
 		return
 	}
 	kind := strings.TrimSpace(in.Resource.Type)

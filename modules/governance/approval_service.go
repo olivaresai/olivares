@@ -27,6 +27,7 @@ func (m *Module) EngineApprovals() *EngineApprovals { return &EngineApprovals{mo
 
 type ApprovalRequest = createApprovalRequest
 type Approval = approvalDTO
+type ApprovalDecision = decisionDTO
 
 type approvalData interface {
 	View(context.Context, func(store.Scope) error) error
@@ -54,6 +55,7 @@ func (a *EngineApprovals) scope(tenant model.TenantID) (approvalTenantData, api.
 }
 
 func (a *EngineApprovals) Request(ctx context.Context, tenant model.TenantID, principal auth.Principal, in ApprovalRequest) (Approval, error) {
+	requester, authenticated := api.RequestPrincipal(ctx)
 	ctx = api.DetachRequestContext(ctx)
 	d, mc, err := a.scope(tenant)
 	if err != nil {
@@ -66,6 +68,7 @@ func (a *EngineApprovals) Request(ctx context.Context, tenant model.TenantID, pr
 		return Approval{}, errors.New("approval session principal is required")
 	}
 	actor, actorKind := mc.Principal.Actor(), mc.Principal.ActorKind()
+	requesterUser := ""
 	if principal.SessionIdentity != "" {
 		if principal.SessionIdentity != in.SessionRef || (!principal.SessionScope().IsZero() && principal.SessionScope() != tenant) {
 			return Approval{}, errors.New("approval session scope mismatch")
@@ -75,6 +78,11 @@ func (a *EngineApprovals) Request(ctx context.Context, tenant model.TenantID, pr
 		actor, actorKind = "session:"+principal.SessionIdentity, model.ActorAgent
 	} else if !principal.UserID.IsZero() {
 		return Approval{}, errors.New("an engine approval must be proposed by the session or automation")
+	} else if authenticated && !requester.UserID.IsZero() {
+		// Keep the initiating person for separation of duty. This is attribution,
+		// not inherited authority: the transaction still uses the detached engine
+		// context, and session proposals above remain attributed to the session.
+		actor, actorKind, requesterUser = requester.Actor(), requester.ActorKind(), requester.UserID.String()
 	}
 	capacity, err := a.module.sessionApprovalQuorum(ctx, tenant, maxApprovalCount)
 	if err != nil {
@@ -83,7 +91,7 @@ func (a *EngineApprovals) Request(ctx context.Context, tenant model.TenantID, pr
 	var out Approval
 	err = d.Mutate(ctx, func(sc store.Scope) error {
 		var err error
-		out, err = a.module.openApprovalRecord(ctx, sc, actor, actorKind, "", in, 0, a.module.clock.Now(), capacity)
+		out, err = a.module.openApprovalRecord(ctx, sc, actor, actorKind, requesterUser, in, 0, a.module.clock.Now(), capacity)
 		return err
 	})
 	if err == nil {
@@ -118,6 +126,18 @@ func (a *EngineApprovals) Read(ctx context.Context, tenant model.TenantID, ref s
 	return out, err
 }
 
+// Decisions returns the immutable decision trail of one approval, the same rows
+// GET /approvals/{id}/decisions answers, for a caller inside the engine that has
+// no API credential (the local approval bridge's dual-control evidence read).
+func (a *EngineApprovals) Decisions(ctx context.Context, tenant model.TenantID, ref string) ([]ApprovalDecision, error) {
+	ctx = api.DetachRequestContext(ctx)
+	d, _, err := a.scope(tenant)
+	if err != nil {
+		return nil, err
+	}
+	return listApprovalDecisions(ctx, d, model.ID(ref))
+}
+
 func (a *EngineApprovals) List(ctx context.Context, tenant model.TenantID, action, status, cursor string) ([]Approval, model.Page, error) {
 	ctx = api.DetachRequestContext(ctx)
 	d, _, err := a.scope(tenant)
@@ -133,11 +153,11 @@ func (a *EngineApprovals) List(ctx context.Context, tenant model.TenantID, actio
 		}
 		q := model.Query{Limit: 200, Cursor: cursor, Filters: []model.Filter{eq(colAction, action)}}
 		now := a.module.clock.Now()
-		rows, p, err := listEffectiveApprovals(ctx, repo, q, status, now)
+		pols, err := loadApprovalPolicies(ctx, sc)
 		if err != nil {
 			return err
 		}
-		pols, err := loadApprovalPolicies(ctx, sc)
+		rows, p, err := listEffectiveApprovals(ctx, repo, q, status, now, pols)
 		if err != nil {
 			return err
 		}

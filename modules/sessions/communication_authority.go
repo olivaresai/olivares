@@ -21,7 +21,8 @@ const communicationCoreAuthorizationEvidenceRef = "core.authorization_evidence.v
 // These two private ports retain the exact core resolver/authorizer pair without
 // widening either interface. The existing core Authenticator and Authorizer
 // satisfy both ports directly, and the bundle is indivisible: binding it with
-// either half missing stores nil, so one pointer check proves both.
+// either half missing stores nil. Startup, readiness and operation admission
+// validate both ports so an empty exported value cannot count as bound.
 //
 // This comment used to end "does not make them a readiness term or route traffic
 // through them". BOTH HALVES OF THAT ARE NOW FALSE, and they stopped being true
@@ -52,6 +53,10 @@ type communicationRequestAuthoritySources struct {
 	source   communicationAuthorizationEvidenceSource
 }
 
+func (s *communicationRequestAuthoritySources) bound() bool {
+	return s != nil && communicationPortBound(s.resolver) && communicationPortBound(s.source)
+}
+
 // communicationCredentialBindingResolver is the credential-binding half of the
 // same resolver. It is asserted on the bound resolver rather than added to
 // communicationPrincipalAuthorityResolver, so the one boot call that binds the
@@ -74,18 +79,19 @@ var (
 // refreshed, revised, rotated, revoked, deleted or expired.
 var errCommunicationCredentialNotCurrent = errors.New("authenticated credential is no longer current")
 
-func (m *Module) useCommunicationRequestAuthoritySources(
-	resolver communicationPrincipalAuthorityResolver,
-	source communicationAuthorizationEvidenceSource,
-) {
+// NewCommunicationRequestAuthority retains the resolver/authorizer as an
+// indivisible value. Either half absent (including typed nil) returns nil.
+func NewCommunicationRequestAuthority(resolver communicationPrincipalAuthorityResolver,
+	source communicationAuthorizationEvidenceSource) *CommunicationRequestAuthority {
 	if !communicationPortBound(resolver) || !communicationPortBound(source) {
-		m.communicationAuthoritySources = nil
-		return
+		return nil
 	}
-	m.communicationAuthoritySources = &communicationRequestAuthoritySources{
-		resolver: resolver,
-		source:   source,
-	}
+	return &communicationRequestAuthoritySources{resolver: resolver, source: source}
+}
+
+func (m *Module) useCommunicationRequestAuthoritySources(resolver communicationPrincipalAuthorityResolver,
+	source communicationAuthorizationEvidenceSource) {
+	m.CommunicationAuthority = NewCommunicationRequestAuthority(resolver, source)
 }
 
 func (m *Module) bindCurrentCommunicationRequestAuthority(
@@ -93,9 +99,8 @@ func (m *Module) bindCurrentCommunicationRequestAuthority(
 	ref auth.PrincipalRef,
 	question communicationAuthorityQuestion,
 ) (communicationRequestAuthority, error) {
-	sources := m.communicationAuthoritySources
-	if sources == nil || !communicationPortBound(sources.resolver) ||
-		!communicationPortBound(sources.source) {
+	sources := m.CommunicationAuthority
+	if !sources.bound() {
 		return communicationRequestAuthority{}, communicationError(
 			ErrCommunicationEvidenceUnknown,
 			"communication request authority sources are unavailable",
@@ -123,9 +128,8 @@ func (m *Module) bindWorkflowCredentialAuthority(
 			ErrCommunicationEvidenceUnknown, "workflow credential authority question is malformed",
 		)
 	}
-	sources := m.communicationAuthoritySources
-	if sources == nil || !communicationPortBound(sources.resolver) ||
-		!communicationPortBound(sources.source) {
+	sources := m.CommunicationAuthority
+	if !sources.bound() {
 		return communicationRequestAuthority{}, communicationError(
 			ErrCommunicationEvidenceUnknown, "communication request authority sources are unavailable",
 		)
@@ -936,3 +940,7 @@ func (s communicationRequestAuthoritySnapshot) validate() error {
 	}
 	return nil
 }
+
+// CommunicationRequestAuthority is the indivisible resolver/authorizer value.
+// Build it with NewCommunicationRequestAuthority; its ports stay private.
+type CommunicationRequestAuthority = communicationRequestAuthoritySources

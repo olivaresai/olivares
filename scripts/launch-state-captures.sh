@@ -45,16 +45,16 @@ BIN="${OLIVARES_BIN:-$ROOT/bin/olivares}"
 #    recarga, en silencio y deny-closed, que es exactamente el fallo que este guion existe para
 #    cerrar. Un control que avisa y sigue no es un control: es un comentario con `echo`.
 EXEC_TMP="$(olivares_exec_tmpdir)" || {
-  echo "$(basename "$0"): ⛔ NO ARRANCO: ningun directorio temporal EJECUTA." >&2
-  echo "   El motor extrae sus plugins de conector a \$TMPDIR y los LANZA" >&2
-  echo "   (cmd/olivares/boot.go), y aqui ninguno de los candidatos permite execve —" >&2
-  echo "   tipicamente porque /tmp esta montado noexec. Arrancar igual dejaria el plano de" >&2
-  echo "   conectores muerto SIN decirlo." >&2
-  echo "   Remedio: exporta OLIVARES_EXEC_TMPDIR a un directorio que ejecute." >&2
+  echo "$(basename "$0"): ⛔ CANNOT START: no temporary directory allows EXECUTION." >&2
+  echo "   The engine extracts its connector plugins to \$TMPDIR and LAUNCHES them" >&2
+  echo "   (cmd/olivares/boot.go), but none of the candidate directories here allows execve —" >&2
+  echo "   typically because /tmp is mounted noexec. Starting anyway would silently leave the" >&2
+  echo "   connector plane unavailable." >&2
+  echo "   Remedy: export OLIVARES_EXEC_TMPDIR pointing to a directory that permits execution." >&2
   exit 2
 }
 
-[ -x "$BIN" ] || { echo "launch-state-captures: ⛔ NO HE PODIDO MIRAR: no hay binario en $BIN" >&2; exit 2; }
+[ -x "$BIN" ] || { echo "launch-state-captures: ⛔ COULD NOT LOOK: no binary at $BIN" >&2; exit 2; }
 
 # ⛔ EL BINARIO EMPOTRA EL BUNDLE, así que uno viejo fotografía una consola vieja — y el manifiesto
 #    de la tanda apuntaría al commit de HOY. Una captura que miente sobre su procedencia es peor que
@@ -71,12 +71,12 @@ EXEC_TMP="$(olivares_exec_tmpdir)" || {
 if [ -d "$ROOT/core/internal/webui/dist" ]; then
 	dist_ts="$(find "$ROOT/core/internal/webui/dist" -type f -newer "$BIN" -print -quit 2>/dev/null || true)"
 	if [ -n "$dist_ts" ]; then
-		echo "launch-state-captures: ⛔ NO HE PODIDO MIRAR: el binario es MÁS VIEJO que el bundle empotrado." >&2
-		echo "  $BIN se compiló antes que $dist_ts, así que serviría una consola anterior al arreglo" >&2
-		echo "  que se quiere fotografiar — y el manifiesto diría que es de hoy." >&2
+		echo "launch-state-captures: ⛔ COULD NOT LOOK: the binary is OLDER than the embedded bundle." >&2
+		echo "  $BIN was built before $dist_ts, so it would serve a console predating the fix" >&2
+		echo "  being captured — while the manifest would claim it is current." >&2
 		# ⚠ `task build:go` NO escribe `bin/olivares` — sale rc=0 y deja el binario intacto, medido.
 		#    La que lo produce es `build:bin`, que compila a través de `scripts/lib/build-bin.sh`.
-		echo "  Reconstruye:  task build:web && task build:bin" >&2
+		echo "  Rebuild:  task build:web && task build:bin" >&2
 		exit 2
 	fi
 fi
@@ -88,11 +88,11 @@ fi
 #    de validar directorio ejecutable, binario y bundle, y antes de arrancar nada. Rehúsa con 2
 #    como los demás controles: sin un spec que compile no hay captura que mirar.
 pnpm --dir "$ROOT/web" run typecheck:e2e || {
-	echo "launch-state-captures: ⛔ NO HE PODIDO MIRAR: el arnés de navegador no compila (el error de tsc va arriba)." >&2
+	echo "launch-state-captures: ⛔ COULD NOT LOOK: the browser harness does not compile (tsc error shown above)." >&2
 	exit 2
 }
 
-echo "==> Motor sembrado en 127.0.0.1:$PORT"
+echo "==> Seeded engine at 127.0.0.1:$PORT"
 TMPDIR="${EXEC_TMP:-${TMPDIR:-/tmp}}" \
 "$BIN" serve --insecure --seed-demo --listen "127.0.0.1:$PORT" \
   --grpc-listen "127.0.0.1:$GRPC_PORT" --data-dir "$DATA" >"$DATA/engine.log" 2>&1 &
@@ -108,8 +108,8 @@ TOKEN="$(curl -sf -X POST "http://127.0.0.1:$PORT/v1/auth/login" \
   | python3 -c 'import sys,json;print(json.load(sys.stdin)["token"])')"
 TENANT="$(printf 'Authorization: Bearer %s\n' "$TOKEN" | curl -sf "http://127.0.0.1:$PORT/v1/system/orgs" -H @- \
   | python3 -c 'import sys,json;[print(o["tenant_id"]) for o in json.load(sys.stdin)["items"] if o["slug"]=="demo"]')"
-[ -n "$TENANT" ] || { echo "launch-state-captures: ⛔ NO HE PODIDO MIRAR: sin tenant demo" >&2; cat "$DATA/engine.log" >&2; exit 2; }
-echo "==> Tenant demo: $TENANT"
+[ -n "$TENANT" ] || { echo "launch-state-captures: ⛔ COULD NOT LOOK: no demo tenant" >&2; cat "$DATA/engine.log" >&2; exit 2; }
+echo "==> Demo tenant: $TENANT"
 
 cd "$ROOT/web"
 # ⛔ LA RAÍZ DEL WORKSPACE SE PASA, NO SE ADIVINA. El spec la lee de `WS_ROOT` y cae a

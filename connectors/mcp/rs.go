@@ -73,6 +73,9 @@ type rsRequest struct {
 	ID      json.RawMessage `json:"id"`
 	Method  string          `json:"method"`
 	Params  json.RawMessage `json:"params"`
+	// rc is the revision decision of enforceRevisionPreBody: the request was
+	// served as MCP 2026-07-28. Never decoded from the body.
+	rc bool
 }
 
 // isNotification reports whether the request is a JSON-RPC notification (no id, or a
@@ -214,6 +217,7 @@ func (rs *ResourceServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	req.rc = rcRequest
 	rs.dispatch(r.Context(), w, r, req, tok)
 }
 
@@ -422,275 +426,27 @@ func (rs *ResourceServer) dispatch(ctx context.Context, w http.ResponseWriter, r
 	_ = rs.writeResult(w, req.Method, req.ID, result)
 }
 
-// handleToolsCall is the live tools/call gate: server-owned toolset deny-by-default →
-// scope enforcement (step-up SEP-835) → HITL for destructive tools (ApprovalGate) →
-// upstream forward (no token passthrough). Every exit is audited (minimal data).
+// handleToolsCall is the live tools/call gate: the verdict (verdict.go) refuses
+// the call or grants it, and a grant is claimed as evidence, forwarded upstream
+// (no token passthrough), settled and answered. Every decision is audited
+// (minimal data).
 func (rs *ResourceServer) handleToolsCall(ctx context.Context, w http.ResponseWriter, r *http.Request, req rsRequest, tok validatedToken) {
 	// SEP-414: the trace context every decision below is audited with —
 	// the request `_meta` traceparent when present (the RC standard location),
 	// else the HTTP header — so PEP decisions correlate with gen_ai spans.
 	trace := requestTraceParent(r, req.Params)
-
-	// (review round-1 P0): STRICT canonicalization is the FIRST thing that
-	// touches the params — before the tool name is even resolved. It rejects
-	// duplicate object keys at every depth AND case-variant aliases of the reserved
-	// keys (name/arguments/_meta/op-key), extracts the operation key and STRIPS it,
-	// and produces one deterministic canonical encoding used for the plan hash, the
-	// EffectDigest AND the forwarded bytes (the bytes governed are the bytes sent).
-	// The gate then reads the tool name from THIS strict tree with exact casing — a
-	// case-insensitive struct unmarshal is exactly the smuggling vector (authorize
-	// "search", forward "delete_db"). A structural failure is a protocol refusal
-	// (400/-32602) BEFORE the claim and before any forward.
-	canon, cerr := canonicalizeToolCallParams(req.Params)
-	if cerr != nil {
-		rs.auditTraced(ctx, tok, "", "", false,
-			"tools/call params refused by strict canonicalization (dup/case-alias/malformed keys)", "", "MCP02", trace)
-		rs.writeRPCError(w, http.StatusBadRequest, req.ID, rpcInvalidParams,
-			"malformed tools/call params (strict decoding refused)")
+	grant, refused := rs.decideToolCall(ctx, req, tok, trace)
+	if refused != nil {
+		rs.refuse(ctx, w, req.ID, refused)
 		return
 	}
-	if strings.TrimSpace(canon.Name) == "" {
-		// A well-formed request missing a string name is a SEP-1303 input failure →
-		// HTTP 200 with isError:true, so the model can self-correct (not a protocol
-		// error). Structural malformations took the 400 path above.
-		rs.writeToolError(w, req.ID, "tools/call requires a string 'name'")
-		return
-	}
-	toolName := canon.Name
-	// K5: Tasks is an optional extension backed by a durable authority. A
-	// request that declares it may cause the upstream to create an asynchronous
-	// task, so the persistence precondition is checked before any forward. The
-	// ordinary standalone gateway remains compatible for non-Tasks calls.
-	if canon.DeclaresTasks && rs.durableTasks == nil {
-		rs.auditTraced(ctx, tok, toolName, "", false,
-			"MCP Tasks requested without a durable task store; request refused before upstream dispatch",
-			"", "MCP07", trace)
-		rs.writeRPCError(w, http.StatusServiceUnavailable, req.ID, rpcEvidenceUnavailable,
-			"MCP Tasks is unavailable because durable task persistence is not configured")
-		return
-	}
-
-	policy, ok := rs.toolset.resolve(toolName)
-	if !ok {
-		// Deny-by-default: a tool with no server-owned policy entry (or an explicit
-		// deny, or a SEP-986-invalid name) is refused. This closes MCP01/MCP03 (tool
-		// poisoning: the gate reads the server toolset, never the tool's annotation).
-		rs.auditTraced(ctx, tok, toolName, "", false, "deny-by-default (tool not in server toolset)", "", "MCP01", trace)
-		rs.writeRPCError(w, http.StatusForbidden, req.ID, rpcAccessDenied, "tool not permitted by server policy")
-		return
-	}
-
-	// Scope enforcement (MCP02 scope creep) + step-up (SEP-835): an insufficient scope
-	// is a 403 carrying a WWW-Authenticate scope challenge so the client can step up.
-	if !tok.hasScope(policy.RequiredScope) {
-		rs.auditTraced(ctx, tok, toolName, policy.RequiredScope, false, "insufficient scope", "", "MCP02", trace)
-		rs.challengeScope(w, req.ID, policy.RequiredScope)
-		return
-	}
-
-	// Per-role allowlist (E1): a role-restricted tool requires the caller's token to
-	// carry one of the tool's AllowedRoles. Deny-closed — an empty or non-matching role set
-	// is refused (least-privilege, MCP02). It is NOT a scope step-up (a role is an identity
-	// attribute, not a scope the client can request), so it returns a plain 403, not a
-	// scope challenge. The Claude MCP API has no native roles; this is the PEP-side layer.
-	if !roleAllowed(policy, tok.Roles) {
-		rs.auditTraced(ctx, tok, toolName, policy.RequiredScope, false, "caller role not permitted for tool", "", "MCP02", trace)
-		rs.writeRPCError(w, http.StatusForbidden, req.ID, rpcAccessDenied, "tool not permitted for caller role")
-		return
-	}
-
-	// ROUND-4 R4-05: the RETAINED task-inventory bound, checked BEFORE the forward.
-	//
-	// Any tools/call may answer with a durable task handle, and once the upstream
-	// has created one the gateway has only two choices left: retain it (quarantine
-	// deliberately BYPASSES the active caps — forgetting a live external task is the
-	// failure being prevented) or forget it (a permanent invisible orphan). Round-3
-	// therefore had no bound at all: a caller sitting at its active cap produced one
-	// fresh, non-expiring quarantine per call and `byID` grew without limit, making
-	// every lookup and every sweep scan an ever-growing map.
-	//
-	// The bound is enforced at the only point where a NEW task can still be
-	// PREVENTED. It is deny-closed and it is not a license to drop anything: the
-	// retained records leave only through a proven terminal confirmation or an
-	// explicit operator retirement (the tasks/reconcile/* surface).
-	//
-	// ROUND-5 R5-02: the check RESERVES the slot atomically instead of reading a
-	// snapshot. Round-4 read the counts and released the ledger mutex immediately,
-	// so N concurrent callers all observed the same pre-forward count and all
-	// passed — the reviewer's barrier probe reached 12 retained records under a
-	// per-owner cap of 2. The ticket counts against the bound for the WHOLE window
-	// in which this call's task may be created, and ends only after that task is
-	// stored (consume) or provably absent (release). The deferred release covers
-	// every path below, including the panic/early-return ones; it is idempotent, so
-	// the explicit consume/release calls that mark the honest reason still stand.
-	admissionOwner := taskOwnerFromToken(rs.tenant, tok)
-	ticket, sat, admitted := rs.taskLedger.reserveAdmission(admissionOwner)
-	if !admitted {
-		rs.auditTraced(ctx, tok, toolName, policy.RequiredScope, false,
-			fmt.Sprintf("retained task inventory saturated (owner %d/%d, gateway %d/%d); task-producing forwards refused until reconciled",
-				sat.OwnerRetained, sat.OwnerCap, sat.TotalRetained, sat.TotalCap), "", "MCP07", trace)
-		rs.writeRPCError(w, http.StatusTooManyRequests, req.ID, rpcAccessDenied,
-			"the retained task inventory is full; reconcile the retained tasks before issuing more calls")
-		return
-	}
+	// The grant holds the retained-task reservation (verdict.go); this deferred
+	// release covers every path below, panics included. The explicit
+	// consume/release calls mark the honest reason; ending twice is a no-op.
+	ticket := grant.ticket
 	defer ticket.release()
-
-	// pin verification — a tool whose definition changed since the operator
-	// approved it is a rug-pull signal (MCP04). Deny-closed on mismatch or error.
-	// The gate is additive: when PinVerifier is nil (community build) this block
-	// is skipped and tools/call proceeds exactly as before.
-	pin := pinBinding{State: "unwired"}
-	if rs.pinVerifier != nil {
-		// The call-time fingerprint binds the tool name and the CANONICAL governed
-		// params (the same bytes the digest binds and the upstream receives).
-		// The enterprise verifier stores the full definition fingerprint at
-		// introspection time (ToolFingerprint) and can compare against it; the
-		// call-time hash tells the verifier WHICH call triggered the check. The
-		// call-time hash is NOT bound into the EffectDigest (it is a hash of params
-		// the digest already binds); the APPROVED pin identity is (below).
-		fp := toolCallFingerprint(toolName, canon.Forward)
-		if attestor, ok := rs.pinVerifier.(ToolPinVerifyAttestor); ok && attestor != nil {
-			// Round-3: the ATOMIC decision+attestation — both produced under
-			// ONE pin-store snapshot, so the identity bound into the evidence is
-			// exactly the identity that authorized (the removed two-step
-			// ApprovedPin/Pins() bridge was a TOCTOU: a re-pin between Verify and a
-			// separate attestation read bound an identity that never authorized).
-			va, verr := attestor.VerifyAndAttest(ctx, rs.tenant, toolName, fp)
-			if verr != nil {
-				rs.auditTraced(ctx, tok, toolName, policy.RequiredScope, false,
-					"pin verification error (fail-closed)", "", "MCP04", trace)
-				rs.writeRPCError(w, http.StatusForbidden, req.ID, rpcAccessDenied,
-					"tool pin verification unavailable")
-				return
-			}
-			if !va.Allowed {
-				rs.auditTraced(ctx, tok, toolName, policy.RequiredScope, false,
-					"pin mismatch: "+va.Reason, "", "MCP04", trace)
-				rs.writeRPCError(w, http.StatusForbidden, req.ID, rpcAccessDenied,
-					"tool definition changed since approval (rug-pull detected)")
-				return
-			}
-			if va.Attested {
-				// Attested implies a COMPLETE identity: an attestation with empty
-				// fields would misstate the evidence — deny-closed.
-				if strings.TrimSpace(va.Pin.Fingerprint) == "" || strings.TrimSpace(va.Pin.Version) == "" {
-					rs.auditTraced(ctx, tok, toolName, policy.RequiredScope, false,
-						"pin attestation incomplete (fail-closed)", "", "MCP04", trace)
-					rs.writeRPCError(w, http.StatusForbidden, req.ID, rpcAccessDenied,
-						"tool pin attestation unavailable")
-					return
-				}
-				pin = pinBinding{State: "attested", Fingerprint: va.Pin.Fingerprint, Version: va.Pin.Version}
-			} else {
-				pin = pinBinding{State: "verified"} // no pin at decision time (first-use TOFU)
-			}
-		} else {
-			allowed, pinReason, perr := rs.pinVerifier.Verify(ctx, rs.tenant, toolName, fp)
-			if perr != nil {
-				rs.auditTraced(ctx, tok, toolName, policy.RequiredScope, false,
-					"pin verification error (fail-closed)", "", "MCP04", trace)
-				rs.writeRPCError(w, http.StatusForbidden, req.ID, rpcAccessDenied,
-					"tool pin verification unavailable")
-				return
-			}
-			if !allowed {
-				rs.auditTraced(ctx, tok, toolName, policy.RequiredScope, false,
-					"pin mismatch: "+pinReason, "", "MCP04", trace)
-				rs.writeRPCError(w, http.StatusForbidden, req.ID, rpcAccessDenied,
-					"tool definition changed since approval (rug-pull detected)")
-				return
-			}
-			// No atomic attestation capability: bind posture with EXPLICIT-ABSENT
-			// identity markers. Honest absence — never a separate re-read that could
-			// bind an identity Verify did not authorize (the round-3 TOCTOU).
-			pin = pinBinding{State: "verified"}
-		}
-	}
-
-	// COAZ evaluation — call the AuthZEN PDP with the COAZ-mapped request
-	// for centralized, policy-driven MCP tool authorization. This gate is ADDITIVE:
-	// a nil evaluator (community build) skips it; the toolset/scope/role/pin gates
-	// all ran first. Deny-closed on error.
-	coaz := coazBinding{State: "unwired"}
-	if rs.coazEvaluator != nil {
-		coazScopes := make(map[string]struct{}, len(tok.Scopes))
-		for k, v := range tok.Scopes {
-			coazScopes[k] = v
-		}
-		dec, cerr := rs.coazEvaluator.EvaluateToolCall(ctx, COAZRequest{
-			Subject:     tok.Subject,
-			Issuer:      tok.Issuer,
-			Tool:        toolName,
-			ServerURI:   rs.resource,
-			Scopes:      coazScopes,
-			Annotations: policy.Annotations,
-			Tenant:      rs.tenant,
-		})
-		if cerr != nil {
-			rs.auditTraced(ctx, tok, toolName, policy.RequiredScope, false,
-				"COAZ evaluation error (fail-closed)", "", "MCP02", trace)
-			rs.writeRPCError(w, http.StatusForbidden, req.ID, rpcAccessDenied,
-				"tool authorization evaluation unavailable")
-			return
-		}
-		if !dec.Allow {
-			rs.auditTraced(ctx, tok, toolName, policy.RequiredScope, false,
-				"COAZ deny: "+dec.Reason, "", "MCP02", trace)
-			rs.writeRPCError(w, http.StatusForbidden, req.ID, rpcAccessDenied,
-				"tool not permitted by authorization policy")
-			return
-		}
-		// Bind the consulted-allow posture + the evaluator's STABLE references
-		// (round-2: DecisionRef/PolicyVersion — empty = explicit absence). The
-		// human-readable Reason text is deliberately NEVER bound (cosmetic edits
-		// must not cause false rebinds).
-		coaz = coazBinding{State: "allow", DecisionRef: dec.DecisionRef, PolicyVersion: dec.PolicyVersion}
-	}
-
-	// HITL for a non-readOnly/destructive tool (server-owned classification, NOT the
-	// tool's UNTRUSTED annotation): require an ApprovalGate authorization bound to the
-	// (tool, subject, args-shape) plan. Deny-closed on any gate error or non-approval.
-	// the plan binds the CANONICAL argument digest — the same argument identity
-	// the EffectDigest binds, so approval and evidence can never disagree about which
-	// arguments were authorized.
-	approvalRef, approvedPlan := "", ""
-	if policy.Destructive {
-		plan := toolCallPlanHash(toolName, tok.Subject, hashArgs(canon.Args))
-		dec, gerr := rs.gate.Authorize(ctx, ToolApprovalRequest{
-			Tenant: rs.tenant, Subject: tok.Subject, Tool: toolName,
-			Scope: policy.RequiredScope, PlanHash: plan, RequestedBy: tok.Subject,
-			Arguments: append(json.RawMessage(nil), canon.Args...),
-		})
-		if gerr != nil {
-			if errors.Is(gerr, ErrArgumentsNotReviewable) {
-				rs.auditTraced(ctx, tok, toolName, policy.RequiredScope, false, "argument not reviewable", "", "MCP07", trace)
-				rs.writeRPCError(w, http.StatusForbidden, req.ID, rpcAccessDenied, "argument not reviewable")
-				return
-			}
-			rs.auditTraced(ctx, tok, toolName, policy.RequiredScope, false, "gate error (fail-closed)", "", "MCP07", trace)
-			rs.writeRPCError(w, http.StatusForbidden, req.ID, rpcAccessDenied, "approval gate error")
-			return
-		}
-		// Review round 2 (blocker 4, same class as S5-05): the equality is
-		// STRICT. `plan` is always non-empty (a canonical argument digest), so an
-		// approval carrying an EMPTY PlanHash — bound to no plan — is not an approval
-		// for THIS plan. The prior `PlanHash != "" &&` guard let an unbound approval
-		// authorize a destructive tools/call.
-		if !dec.Allowed() || dec.PlanHash != plan {
-			rs.auditTraced(ctx, tok, toolName, policy.RequiredScope, false, "destructive tool not approved ("+string(dec.Status)+")", dec.ApprovalRef, "MCP02", trace)
-			rs.writeRPCError(w, http.StatusForbidden, req.ID, rpcAccessDenied, "destructive tool requires human approval ("+string(dec.Status)+")")
-			return
-		}
-		approvalRef, approvedPlan = dec.ApprovalRef, plan
-	}
-
-	// Round-1 F-07: the mediator inspects the EXACT-CASED inputResponses
-	// member extracted from the strict tree — never a case-insensitive re-parse
-	// of the forwarded bytes (a case-folding upstream would consume the other
-	// alias). A case-variant alias was already refused by canonicalization.
-	if rs.mediateMRTRInputResponses(ctx, w, req, tok, canon.InputResponses, trace) {
-		return
-	}
+	canon, toolName, policy, verdict := grant.canon, grant.canon.Name, grant.policy, grant.verdict
+	approvalRef, approvedPlan, grantMode := grant.approval.ref, grant.approval.plan, grant.approval.grantMode
 
 	// --- evidence enforcement: claim → fence → forward → settle → respond ---
 	//
@@ -707,12 +463,12 @@ func (rs *ResourceServer) handleToolsCall(ctx context.Context, w http.ResponseWr
 	if derr != nil {
 		// Cannot mint an operation identity (randomness failure): evidence refusal
 		// with NO operation id (design §5: omit operation_id when derivation failed).
-		rs.auditTraced(ctx, tok, toolName, policy.RequiredScope, false,
+		rs.auditVerdict(ctx, tok, toolName, policy.RequiredScope, verdict, false,
 			"operation-id derivation failed (fail-closed)", "", "MCP07", trace)
 		rs.writeEvidenceUnavailable(w, req.ID, "")
 		return
 	}
-	policyDigest := toolCallPolicyDigest(policy, pin, coaz)
+	policyDigest := toolCallPolicyDigest(policy, grant.pin, grant.coaz)
 	binding := sdk.EvidenceBinding{
 		OperationID: sdk.OperationID(opID),
 		EffectDigest: sdk.EffectDigest(deriveToolCallEffectDigest(
@@ -720,13 +476,9 @@ func (rs *ResourceServer) handleToolsCall(ctx context.Context, w http.ResponseWr
 			rs.upstreamDescriptor, sortedScopeSet(tok.Scopes), canon,
 			policyDigest, approvalRef, approvedPlan)),
 	}
-	allowDec := ToolDecision{
-		Tenant: rs.tenant, Subject: tok.Subject, IsDelegated: tok.IsDelegated, ActAs: tok.ActAs,
-		Tool: toolName, RequiredScope: policy.RequiredScope,
-		Allowed: true, Reason: authorizedReason, ApprovalRef: approvalRef,
-		MCPTag: "MCP07", TokenBinding: tok.Binding, TraceParent: trace,
-		OperationIDKind: idKind, At: rs.clock(),
-	}
+	allowDec := rs.verdictRecord(gatedCall{tok: tok, trace: trace, tool: toolName, scope: policy.RequiredScope, row: verdict},
+		true, authorizedReason, approvalRef, "MCP07")
+	allowDec.OperationIDKind, allowDec.GrantMode = idKind, grantMode
 	rec := rs.auditor.Record(ctx, allowDec, binding)
 	if !rec.MayEmit(binding) {
 		rs.refuseToolCallEvidence(w, req.ID, rec, opID)
@@ -816,7 +568,7 @@ func (rs *ResourceServer) handleToolsCall(ctx context.Context, w http.ResponseWr
 		// offending PROPERTY NAME, which is upstream-controlled — a secret encoded as
 		// a JSON key would otherwise bypass every response projection straight into
 		// the durable audit trail.
-		rs.auditTraced(ctx, tok, toolName, policy.RequiredScope, false,
+		rs.auditVerdict(ctx, tok, toolName, policy.RequiredScope, verdict, false,
 			"upstream durable task handle failed strict validation (ambiguous — refused); validation class: "+taskDefectClass(terr),
 			"", "MCP07", trace)
 		rs.writeRPCError(w, http.StatusBadGateway, req.ID, rpcUpstreamError,
@@ -830,14 +582,14 @@ func (rs *ResourceServer) handleToolsCall(ctx context.Context, w http.ResponseWr
 		// the parent above recorded only the dispatch fact, so the retention of
 		// the observed response gets its own durable record — the release child
 		// settles `withheld` (derived here: the bug path planned nothing).
-		rs.auditTraced(ctx, tok, toolName, policy.RequiredScope, false,
+		rs.auditVerdict(ctx, tok, toolName, policy.RequiredScope, verdict, false,
 			"MRTR release planning ran without an authority profile (internal defect, fail-safe); the result was withheld",
 			"", "MCP07", trace)
 		rs.settleWithheldRelease(ctx,
 			rs.withheldReleaseDecision(tok, toolName, policy.RequiredScope, plan.class, "MCP07", trace),
 			deriveResponseReleaseBinding(rs.tenant, binding, plan.class, resultDigest(res.Result)),
 			resultDigest(res.Result), func(reason string) {
-				rs.auditTraced(ctx, tok, toolName, policy.RequiredScope, false, reason, "", "MCP07", trace)
+				rs.auditVerdict(ctx, tok, toolName, policy.RequiredScope, verdict, false, reason, "", "MCP07", trace)
 			})
 		rs.writeEvidenceUnavailable(w, req.ID, opID)
 		return
@@ -855,7 +607,7 @@ func (rs *ResourceServer) handleToolsCall(ctx context.Context, w http.ResponseWr
 		// after its registration: refusing here would leave a live upstream task
 		// unregistered and unsweepable (the F-03 orphan class) for a defect that is
 		// the response's, not the handle's.
-		rs.auditTraced(ctx, tok, toolName, policy.RequiredScope, false,
+		rs.auditVerdict(ctx, tok, toolName, policy.RequiredScope, verdict, false,
 			"upstream result selects the governed input-required contract — or a duplicated discriminator "+
 				"makes that reading impossible to exclude — and its governed payload cannot be projected: "+
 				"unreadable, refused; the mediated payloads were never released", "", "MCP07", trace)
@@ -864,7 +616,7 @@ func (rs *ResourceServer) handleToolsCall(ctx context.Context, w http.ResponseWr
 		rs.settleWithheldRelease(ctx,
 			rs.withheldReleaseDecision(tok, toolName, policy.RequiredScope, plan.class, "MCP07", trace),
 			plan.release, resultDigest(res.Result), func(reason string) {
-				rs.auditTraced(ctx, tok, toolName, policy.RequiredScope, false, reason, "", "MCP07", trace)
+				rs.auditVerdict(ctx, tok, toolName, policy.RequiredScope, verdict, false, reason, "", "MCP07", trace)
 			})
 		rs.writeRPCError(w, http.StatusBadGateway, req.ID, rpcUpstreamError,
 			"upstream returned an ambiguous mediated result")
@@ -882,8 +634,9 @@ func (rs *ResourceServer) handleToolsCall(ctx context.Context, w http.ResponseWr
 		// a held reservation. The bound is therefore CONSERVATIVE, not exact: it can
 		// transiently refuse unrelated work and it can report a cap saturated while one
 		// slot is double-counted, but it can never admit MORE rows than the bound, and
-		// no ticket leak was found (the immediate `defer ticket.release()` covers every
-		// error and panic path, and ending twice is a no-op). Making the reported
+		// no ticket leak was found (the deferred releases — decideToolCall's for a
+		// refusal, this function's for a grant — cover every error and panic path, and
+		// ending twice is a no-op). Making the reported
 		// count EXACT would require handling to return an explicit retention outcome
 		// and ending the ticket at the precise row handoff; that is not done here, and
 		// the reported `retained`/`saturated` must be read as an upper bound.
@@ -914,7 +667,7 @@ func (rs *ResourceServer) handleToolsCall(ctx context.Context, w http.ResponseWr
 		rs.settleWithheldRelease(ctx,
 			rs.withheldReleaseDecision(tok, toolName, policy.RequiredScope, plan.class, "MCP07", trace),
 			plan.release, resultDigest(res.Result), func(reason string) {
-				rs.auditTraced(ctx, tok, toolName, policy.RequiredScope, false, reason, "", "MCP07", trace)
+				rs.auditVerdict(ctx, tok, toolName, policy.RequiredScope, verdict, false, reason, "", "MCP07", trace)
 			})
 	}) {
 		return
@@ -923,7 +676,7 @@ func (rs *ResourceServer) handleToolsCall(ctx context.Context, w http.ResponseWr
 		rel, rok := rs.anchorResponseRelease(ctx, w, req.ID,
 			rs.releaseDecision(tok, toolName, policy.RequiredScope, plan.class, "MCP07", trace),
 			plan.release, opID, func(reason string) {
-				rs.auditTraced(ctx, tok, toolName, policy.RequiredScope, false, reason, "", "MCP07", trace)
+				rs.auditVerdict(ctx, tok, toolName, policy.RequiredScope, verdict, false, reason, "", "MCP07", trace)
 			})
 		if !rok {
 			return
@@ -2587,7 +2340,7 @@ func (rs *ResourceServer) handleTaskUpdate(ctx context.Context, w http.ResponseW
 
 	// Review: tasks/update is an actuation on the original tool, so the COAZ
 	// centralized-policy gate re-runs here exactly as it does for tools/call
-	// (rs.go handleToolsCall) — additive when nil, deny-closed on error. The
+	// (verdict.go evaluateCOAZ) — additive when nil, deny-closed on error. The
 	// consulted-allow posture + stable references bind into the effect identity
 	// (same round-2 rule as tools/call: never the Reason text).
 	coaz := coazBinding{State: "unwired"}
@@ -3431,8 +3184,8 @@ func (p mrtrReleasePlan) coreRefusal() (observed, reason, wire string, refused b
 //
 // What did NOT change, and why: a nil mediator is still a clean pass for
 // CONTENT. That is the documented open-core boundary, not an oversight —
-// cmd/olivares/wire_noenterprise.go:362-375 returns nil for both the render
-// inspector and the elicitation mediator, handleElicitation and handleSampling
+// the Community edition (cmd/olivares/edition_ports.go) leaves both the render
+// inspector and the elicitation mediator nil, handleElicitation and handleSampling
 // skip their mediation blocks the same way (rs.go:3764), and the comment
 // names the intent: "the surface.go detective still inventories the capability
 // advertisement (no rug-pull)". Making MRTR the ONE surface that refuses on the
@@ -4357,17 +4110,32 @@ func (rs *ResourceServer) writeOperationIndeterminate(w http.ResponseWriter, id 
 		"operation outcome is indeterminate; it will not be forwarded again", data)
 }
 
-// auditTraced records a tools/call gate decision to the (seam) auditor with minimal
+// auditTraced records a gate decision of a surface the tools/call decision table
+// does not decide (methods, subscriptions) to the (seam) auditor with minimal
 // data, carrying the request's W3C traceparent (SEP-414) so the decision can
 // be correlated with the gen_ai spans of the same trace — an identifier, never a
 // payload.
 func (rs *ResourceServer) auditTraced(ctx context.Context, tok validatedToken, tool, scope string, allowed bool, reason, approvalRef, mcpTag, trace string) {
-	rs.auditor.Record(ctx, ToolDecision{
+	rs.auditor.Record(ctx, rs.decisionRecord(tok, tool, scope, allowed, reason, approvalRef, mcpTag, trace),
+		sdk.EvidenceBinding{}) // legacy best-effort surface (evidence enforcement: stages 4-6)
+}
+
+// decisionRecord is the minimal-data ToolDecision every audited decision shares.
+func (rs *ResourceServer) decisionRecord(tok validatedToken, tool, scope string, allowed bool, reason, approvalRef, mcpTag, trace string) ToolDecision {
+	return ToolDecision{
 		Tenant: rs.tenant, Subject: tok.Subject, IsDelegated: tok.IsDelegated, ActAs: tok.ActAs,
 		Tool: tool, RequiredScope: scope,
 		Allowed: allowed, Reason: reason, ApprovalRef: approvalRef, MCPTag: mcpTag,
 		TokenBinding: tok.Binding, TraceParent: trace, At: rs.clock(),
-	}, sdk.EvidenceBinding{}) // legacy best-effort surface (evidence enforcement: stages 4-6)
+	}
+}
+
+// auditVerdict records a tools/call decision with its row (decision and rule),
+// the server and the OAuth client, as the contract requires of every decision.
+// A refusal before the table decides carries the row that blocks it.
+func (rs *ResourceServer) auditVerdict(ctx context.Context, tok validatedToken, tool, scope string, verdict toolVerdict, allowed bool, reason, approvalRef, mcpTag, trace string) {
+	rs.auditor.Record(ctx, rs.verdictRecord(gatedCall{tok: tok, trace: trace, tool: tool, scope: scope, row: verdict}, allowed, reason, approvalRef, mcpTag),
+		sdk.EvidenceBinding{}) // denials stay best-effort evidence
 }
 
 func (rs *ResourceServer) clock() time.Time {
@@ -4935,21 +4703,22 @@ func (rs *ResourceServer) evaluateElicitationVerdict(ctx context.Context, tok va
 	return mediationPass
 }
 
-// writeMediationDeny audits and writes one mediation deny (the wire shapes and
-// audit phrases are the historical handleElicitationVerdict ones, unchanged).
+// writeMediationDeny audits and writes one mediation deny; callers pass a deny
+// verdict, never mediationPass.
 func (rs *ResourceServer) writeMediationDeny(ctx context.Context, w http.ResponseWriter, req rsRequest, tok validatedToken, verdict mediationVerdict, reason, channel, trace string) {
-	switch verdict {
-	case mediationDenyHITL:
-		rs.auditElicitationTraced(ctx, tok, channel, false,
-			channel+" denied by HITL gate ("+reason+")", trace)
-		rs.writeRPCError(w, http.StatusForbidden, req.ID, rpcAccessDenied,
-			channel+" requires human approval")
-	case mediationDenyContent:
-		rs.auditElicitationTraced(ctx, tok, channel, false,
-			channel+" denied by content mediator: "+reason, trace)
-		rs.writeRPCError(w, http.StatusForbidden, req.ID, rpcAccessDenied,
-			channel+" denied by content mediator")
+	rs.refuse(ctx, w, req.ID, rs.mediationRefusal(tok, verdict, reason, channel, trace))
+}
+
+// mediationRefusal is the refusal of a mediation deny verdict (the wire shapes
+// and audit phrases are the historical handleElicitationVerdict ones,
+// unchanged). Any deny other than HITL refuses as content.
+func (rs *ResourceServer) mediationRefusal(tok validatedToken, verdict mediationVerdict, reason, channel, trace string) *refusal {
+	if verdict == mediationDenyHITL {
+		return &refusal{record: rs.elicitationRecord(tok, channel, false, channel+" denied by HITL gate ("+reason+")", trace),
+			status: http.StatusForbidden, code: rpcAccessDenied, message: channel + " requires human approval"}
 	}
+	return &refusal{record: rs.elicitationRecord(tok, channel, false, channel+" denied by content mediator: "+reason, trace),
+		status: http.StatusForbidden, code: rpcAccessDenied, message: channel + " denied by content mediator"}
 }
 
 // handleElicitationVerdict evaluates the mediator's decision: deny, HITL, or
@@ -4967,11 +4736,17 @@ func (rs *ResourceServer) handleElicitationVerdict(ctx context.Context, w http.R
 // the elicitation/sampling ALLOWS are evidence-enforced claims now; this helper
 // carries the best-effort DENIAL/alert evidence only.
 func (rs *ResourceServer) auditElicitationTraced(ctx context.Context, tok validatedToken, channel string, allowed bool, reason, trace string) {
-	rs.auditor.Record(ctx, ToolDecision{
+	rs.auditor.Record(ctx, rs.elicitationRecord(tok, channel, allowed, reason, trace),
+		sdk.EvidenceBinding{}) // best-effort denial/alert evidence (mediated allows are claims)
+}
+
+// elicitationRecord is the record of one elicitation/sampling PEP decision.
+func (rs *ResourceServer) elicitationRecord(tok validatedToken, channel string, allowed bool, reason, trace string) ToolDecision {
+	return ToolDecision{
 		Tenant: rs.tenant, Subject: tok.Subject, IsDelegated: tok.IsDelegated, ActAs: tok.ActAs, Tool: channel,
 		Allowed: allowed, Reason: reason, TraceParent: trace,
 		MCPTag: "MCP10", TokenBinding: tok.Binding, At: rs.clock(),
-	}, sdk.EvidenceBinding{}) // best-effort denial/alert evidence (mediated allows are claims)
+	}
 }
 
 // publishRenderFindings publishes the inspector's render findings through the

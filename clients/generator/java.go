@@ -171,6 +171,12 @@ func emitJavaSessionsCommunicationOp(b *strings.Builder, op Operation) {
 // emitJavaOp writes the two overloads for one operation.
 func emitJavaOp(b *strings.Builder, op Operation) {
 	name := op.javaName()
+	if op.hasLegacyBodylessSignature() {
+		legacy := op
+		legacy.HasBody = false
+		emitJavaOp(b, legacy)
+		name += "WithBody"
+	}
 	ret := "Map<String, Object>"
 	if op.RawBody {
 		ret = "String"

@@ -477,12 +477,22 @@ func planAttemptTargets(ctx context.Context, sc store.Scope, b AttemptBinding, n
 		if budget.Action == budgetActionAlert {
 			continue
 		}
+		if err := budget.resolveWorkspace(ctx, sc); err != nil {
+			return nil, storeErr(err)
+		}
 		if budget.Dimension != "global" {
 			fact := b.Attribution[budget.Dimension]
 			if fact.State == factMissing {
 				return nil, attemptErr(errCodeDimensionRequired, nil)
 			}
-			if fact.State == factNotApplicable || !contains(fact.Values, budget.Key) {
+			if fact.State == factNotApplicable {
+				continue
+			}
+			matches := contains(fact.Values, budget.Key)
+			if budget.Dimension == "workspace" && len(fact.Values) == 1 {
+				matches = budget.matches(attribution{WorkspaceRef: fact.Values[0]})
+			}
+			if !matches {
 				continue
 			}
 		}
@@ -491,11 +501,15 @@ func planAttemptTargets(ctx context.Context, sc store.Scope, b AttemptBinding, n
 		}
 		start, bounded := periodStart(budget.Period, now.Time())
 		limit, static, version := budget.LimitMicroUSD, budget.ReservedMicroUSD, p.Version
+		var workspaceRefs []string
+		if len(budget.workspaceRefs) > 1 {
+			workspaceRefs = append([]string(nil), budget.workspaceRefs...)
+		}
 		out = append(out, attemptTarget{policy: normalized, budget: budget, snapshot: TargetSnapshot{
 			PolicyID: p.ID, PolicyKind: p.Kind, PolicyVersion: &version, PolicySpecDigest: &digest,
 			Dimension: budget.Dimension, ScopeKey: budget.Key, Period: budget.Period,
 			PeriodStart: model.NewTimestamp(start), PeriodEnd: model.NewTimestamp(periodEnd(budget.Period, start)), HasPeriodBounds: bounded,
-			LimitMicroUSD: &limit, StaticReservedMicroUSD: &static, Action: budget.Action,
+			LimitMicroUSD: &limit, StaticReservedMicroUSD: &static, Action: budget.Action, WorkspaceRefs: workspaceRefs,
 		}})
 	}
 	policies, err := listAttemptPolicies(ctx, sc, policyKindSpendLimit)

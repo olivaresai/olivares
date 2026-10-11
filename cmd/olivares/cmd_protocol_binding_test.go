@@ -188,3 +188,39 @@ func TestProtocolBindingCLIRejectsIncompleteApplyBeforeHTTP(t *testing.T) {
 		t.Fatalf("invalid commands fired %d HTTP requests", hits.Load())
 	}
 }
+
+// The engine refuses a list without workspace_id and names the field; the CLI sends
+// no workspace_id of its own (it cannot know whether the principal is confined) and
+// shows the engine's field.
+func TestProtocolBindingCLIListShowsRefusedField(t *testing.T) {
+	var queries []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		queries = append(queries, r.URL.RawQuery)
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"verdict":"ROTO","code":"invalid_command","evidence_ref":"workspace_id",` +
+			`"error":{"code":"invalid_command","message":"invalid_command"}}`))
+	}))
+	defer srv.Close()
+
+	for _, args := range [][]string{
+		{"protocol-binding", "binding", "list"},
+		{"protocol-binding", "spec", "list"},
+	} {
+		cmd := newWorkCmd()
+		cmd.SetOut(&bytes.Buffer{})
+		cmd.SetErr(&bytes.Buffer{})
+		cmd.SetArgs(append(args, "--server", srv.URL, "--token", "tok", "--tenant", "tenant-a"))
+		err := cmd.Execute()
+		if err == nil || !strings.HasSuffix(err.Error(), "; check workspace_id") {
+			t.Errorf("%v error = %v, want a message ending \"; check workspace_id\"", args, err)
+		}
+	}
+	for _, query := range queries {
+		if strings.Contains(query, "workspace_id") {
+			t.Errorf("CLI sent %q, want no workspace_id of its own", query)
+		}
+	}
+	if len(queries) != 2 {
+		t.Errorf("requests = %d, want 2", len(queries))
+	}
+}

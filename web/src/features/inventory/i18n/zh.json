@@ -56,7 +56,11 @@
     "viewAccess": "访问映射",
     "viewSessions": "会话",
     "gone": "此条目已不在目录中。",
-    "noProjection": "此条目没有可显示的其他详细信息。这并不能确定它是否存在关系。"
+    "noProjection": "此条目没有可显示的其他详细信息。这并不能确定它是否存在关系。",
+    "aiDiscovery": {
+      "unregistered_at_discovery": "发现时未注册。此 AI 端点是清单中的新项目；其当前治理状态未知。覆盖范围仅限于已配置的代理日志和 AI 主机。",
+      "unknown": "已观测到 AI 端点。其治理状态未知。覆盖范围仅限于已配置的代理日志和 AI 主机。"
+    }
   },
   "freshness": {
     "title": "目录新鲜度",

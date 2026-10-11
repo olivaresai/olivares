@@ -9,18 +9,11 @@ package sessions
 import (
 	"bytes"
 	"context"
-	"crypto/ecdsa"
-	"crypto/elliptic"
-	"crypto/rand"
-	cryptotls "crypto/tls"
-	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
 	"errors"
 	"fmt"
 	"log/slog"
-	"math/big"
-	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -57,6 +50,12 @@ func TestCodexBoundNativeModelChoiceRefusesClearlyThenStarts(t *testing.T) {
 func TestCodexBoundNativeStartCarriesTheProfileDefaultModel(t *testing.T) {
 	for _, kind := range []string{ProviderKindOpenAI, ProviderKindOpenAICompatible, ProviderKindOllama} {
 		t.Run(kind, func(t *testing.T) { codexNativeBoundEndpointFixture(t, kind, "profile") })
+	}
+}
+
+func TestCodexBoundNativeUsesSavedRecordModelAndKeepsItOnResume(t *testing.T) {
+	for _, kind := range []string{ProviderKindOpenAI, ProviderKindOpenAICompatible, ProviderKindOllama} {
+		t.Run(kind, func(t *testing.T) { codexNativeBoundEndpointFixture(t, kind, "record") })
 	}
 }
 
@@ -176,7 +175,7 @@ request_max_retries = 0
 				nativeConfig = strings.ReplaceAll(nativeConfig, "env_key = \"OPENAI_API_KEY\"\n", "")
 			}
 			cleanConfig := nativeConfig
-			if modelChoice == "choose" {
+			if modelChoice == "choose" || modelChoice == "record" {
 				nativeConfig = strings.Replace(nativeConfig, "model = \"fixture-model\"\n", "", 1)
 				cleanConfig = nativeConfig
 			}
@@ -199,6 +198,15 @@ request_max_retries = 0
 			record := mustCreateRecord(t, m, tenant, CreateProviderRecordInput{
 				Kind: kind, DisplayName: "Bound loopback provider", BaseURL: baseURL, APIKey: key,
 			})
+			if modelChoice == "record" {
+				if _, err := m.recordProbeOutcome(t.Context(), tenant, record, ProbeOK, "accepted", []string{"fixture-model"}, time.Millisecond); err != nil {
+					t.Fatal(err)
+				}
+				chosen := "fixture-model"
+				if _, err := m.PatchProviderRecord(t.Context(), tenant, record.Ref, ProviderRecordPatch{DefaultModel: &chosen}); err != nil {
+					t.Fatal(err)
+				}
+			}
 			profile := mustCreateProfile(t, m, tenant, CreateProfileInput{
 				Driver: providerDriverCodex, ConfigHome: configHome, UserHome: userHome,
 				DisplayName: "Native privacy proof", AuthSource: AuthSourceManagedInjection, ProviderRecordRef: record.Ref,
@@ -213,7 +221,7 @@ request_max_retries = 0
 			if modelChoice != "session" {
 				params.Model = ""
 			}
-			run, err := m.createRun(ctx, tenant, params)
+			run, err := createProfiledTestRun(t, m, ctx, tenant, params)
 			if kind == ProviderKindOllama {
 				if err == nil {
 					t.Error("saved command auth was accepted at native start")
@@ -222,7 +230,7 @@ request_max_retries = 0
 					if err := os.WriteFile(filepath.Join(configHome, "config.toml"), []byte(cleanConfig), 0o600); err != nil {
 						t.Fatal(err)
 					}
-					run, err = m.createRun(ctx, tenant, params)
+					run, err = createProfiledTestRun(t, m, ctx, tenant, params)
 				}
 			}
 			if modelChoice == "choose" {
@@ -235,12 +243,22 @@ request_max_retries = 0
 				}
 				t.Log("missing model refused before thread/start; choosing the session model now")
 				params.Model = "fixture-model"
-				run, err = m.createRun(ctx, tenant, params)
+				run, err = createProfiledTestRun(t, m, ctx, tenant, params)
 			}
 			if err != nil {
 				t.Fatalf("native create: %v", err)
 			}
 			conversation, runRef := run.ProviderConversationID, run.RunRef
+			if modelChoice == "record" {
+				stored, err := m.loadRun(ctx, tenant, runRef)
+				if err != nil || stored.String(colRunModelRef) != "fixture-model" {
+					t.Fatalf("record default did not become the session model: %v", err)
+				}
+				changed := "later-model"
+				if _, err := m.PatchProviderRecord(ctx, tenant, record.Ref, ProviderRecordPatch{DefaultModel: &changed}); err != nil {
+					t.Fatal(err)
+				}
+			}
 			totalAttempts := 0
 			for generation := 0; generation < 2; generation++ {
 				requestsBefore := boundRequests.Load()
@@ -250,7 +268,7 @@ request_max_retries = 0
 							t.Fatal(err)
 						}
 					}
-					run, err = m.resumeRunAsCaller(ctx, tenant, runRef, "user:u1", model.ActorUser, "", true, true)
+					run, err = m.resumeRunAsCaller(ctx, tenant, runRef, "user:u1", model.ActorUser, "", answeredYes)
 					if kind == ProviderKindOllama {
 						if err == nil {
 							t.Error("saved command auth was accepted at native resume")
@@ -259,7 +277,7 @@ request_max_retries = 0
 							if err := os.WriteFile(filepath.Join(configHome, "config.toml"), []byte(cleanConfig), 0o600); err != nil {
 								t.Fatal(err)
 							}
-							run, err = m.resumeRunAsCaller(ctx, tenant, runRef, "user:u1", model.ActorUser, "", true, true)
+							run, err = m.resumeRunAsCaller(ctx, tenant, runRef, "user:u1", model.ActorUser, "", answeredYes)
 						}
 					}
 					if err != nil {
@@ -398,6 +416,12 @@ func codexPrivacyEndpoint(t *testing.T, requests, exposedKeys *atomic.Int64, tls
 			_, _ = w.Write([]byte(`{"data":[]}`))
 			return
 		}
+		var body struct {
+			Model string `json:"model"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Model != "fixture-model" {
+			t.Errorf("native request changed the selected model: %q, %v", body.Model, err)
+		}
 		w.Header().Set("Content-Type", "text/event-stream")
 		message := map[string]any{"id": "msg_fixture", "type": "message", "status": "completed", "role": "assistant", "content": []any{map[string]any{"type": "output_text", "text": "fixture answer", "annotations": []any{}}}}
 		for _, event := range []map[string]any{
@@ -411,25 +435,8 @@ func codexPrivacyEndpoint(t *testing.T, requests, exposedKeys *atomic.Int64, tls
 	}))
 	if len(tls) != 0 && tls[0] {
 		// Go's default httptest certificate is a CA. Native rustls requires a
-		// distinct server leaf, so trust only this task-owned CA and leaf chain.
-		key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-		if err != nil {
-			t.Fatal(err)
-		}
-		ca := &x509.Certificate{SerialNumber: big.NewInt(1), IsCA: true, BasicConstraintsValid: true,
-			NotBefore: time.Now().Add(-time.Hour), NotAfter: time.Now().Add(time.Hour), KeyUsage: x509.KeyUsageCertSign}
-		root, err := x509.CreateCertificate(rand.Reader, ca, ca, &key.PublicKey, key)
-		if err != nil {
-			t.Fatal(err)
-		}
-		leaf := &x509.Certificate{SerialNumber: big.NewInt(2), BasicConstraintsValid: true,
-			NotBefore: ca.NotBefore, NotAfter: ca.NotAfter, KeyUsage: x509.KeyUsageDigitalSignature,
-			ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}, IPAddresses: []net.IP{net.ParseIP("127.0.0.1")}}
-		cert, err := x509.CreateCertificate(rand.Reader, leaf, ca, &key.PublicKey, key)
-		if err != nil {
-			t.Fatal(err)
-		}
-		server.TLS = &cryptotls.Config{Certificates: []cryptotls.Certificate{{Certificate: [][]byte{cert, root}, PrivateKey: key}}}
+		// distinct server leaf, so trust only this test CA and leaf chain.
+		server.TLS = toolEgressTLS(t, writeToolEgressPKI(t))
 		server.StartTLS()
 	} else {
 		server.Start()

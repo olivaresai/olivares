@@ -42,7 +42,7 @@ treated as Critical and **ships out of band**. This runbook is how we meet those
 
 ## 2. Out-of-band security release
 
-Cut a patch release `vYY.M.PATCH+1` from the backport branch, then build and sign the
+Cut the next compatible `MAJOR.MINOR` release (increment MINOR) from the backport branch, then build and sign the
 OTA manifest **exactly as the `stable` channel does** — the `security` channel is the
 HIGHEST-risk OTA route, not a shortcut. It ships the fix for an exploited CVE, and it
 is the channel the opt-in unattended timer targets (`olivares upgrade --install-timer
@@ -60,14 +60,14 @@ channel installs an attacker's binary on the fleet with no human in the loop.
 # 1. Generate the manifest. --expires-in is carried by default (2160h); state it
 #    explicitly here so the value is on the record for the incident.
 olivares release manifest --channel security --version <fix-version> --dir ./dist \
-  --security --advisory GHSA-xxxx-yyyy-zzzz --min-version 26.5.0 \
+  --security --advisory GHSA-xxxx-yyyy-zzzz --min-version 0.1 \
   --expires-in 2160h --out ./dist/security-manifest.json
 #    (no --sign-key: the OTA private key stays off-box; the ceremony below signs it)
 
 # 2. Authenticate checksums.txt — the CI-signed link an attacker cannot forge.
 cosign verify-blob \
   --certificate checksums.txt.pem --signature checksums.txt.sig \
-  --certificate-identity-regexp '^https://github\.com/<public-owner>/<public-repository>/\.github/workflows/release\.yml@refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$' \
+  --certificate-identity-regexp '^https://github\.com/<public-owner>/<public-repository>/\.github/workflows/release\.yml@refs/tags/[0-9]+\.[0-9]+$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
   checksums.txt
 
@@ -121,7 +121,7 @@ safe — `core/secadvisory`):
   "id": "GHSA-xxxx-yyyy-zzzz",
   "summary": "…", "severity": "HIGH",
   "affected": [ { "package": "olivares",
-                  "ranges": [ { "introduced": "26.5.0", "fixed": "<fix-version>" } ] } ],
+                  "ranges": [ { "introduced": "0.1", "fixed": "<fix-version>" } ] } ],
   "references": [ { "type": "ADVISORY", "url": "https://github.com/…/security/advisories/GHSA-…" } ]
 } ] }
 ```
@@ -132,7 +132,7 @@ olivares security advisories --in draft-advisories.json --out advisories.json \
 ```
 
 Publish `advisories.json{,.sig}` on the release channel (and the embargoed enterprise
-copy). Also fold it into the **air-gap bundle** (`scripts/export-update-bundle.sh`)
+copy). Also fold it into the **air-gap bundle** (`the offline bundle producer`)
 so offline sites get it over the same transport.
 
 ### Packaging the backport feed (task / CI)
@@ -159,12 +159,14 @@ The deployment checks itself against the signed feed. The check reads the feed a
 detached signature **from disk**, so it is fully offline — in an air-gap, point
 `--feed` at the `advisories.json` carried inside the update/DDIL bundle:
 
+<!-- release -->
 ```sh
 olivares security check --feed advisories.json          # --sig defaults to advisories.json.sig
 olivares security check --feed /media/olivares-update/advisories.json   # air-gap: file from a bundle
 olivares security check --feed advisories.json --quiet  # print nothing when unaffected (probes)
-olivares security check --feed advisories.json --product-version 26.10.1  # what-if / fleet check
+olivares security check --feed advisories.json --product-version 0.1  # what-if / fleet check
 ```
+<!-- /release -->
 
 - Verifies the feed against the **embedded OTA key** (`--pubkey` to override) BEFORE
   parsing; a tampered or wrong-key feed is **refused** (fail-closed — never "clean").

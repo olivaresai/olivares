@@ -70,7 +70,7 @@ func TestDRHarnessAcquisitionControlAndEstateIsolation(t *testing.T) {
 		o.Store = st
 		configuredAuth = auth.NewAuthenticator(st, nil)
 		o.Authenticator = configuredAuth
-		o.Version = "26.9.0"
+		o.Version = "26.900"
 		o.DR = &api.DRConfig{DataDir: dir, EngineKind: "sqlite"}
 	})
 	if openCalls != 1 {

@@ -13,6 +13,14 @@ sidebar:
 
 ## 1. drift を取得する
 
+新規インストールでは、`accessmap` は無効です。管理者として
+**Settings > Edition & modules** で `accessmap` を有効にし、ほかの選択済み
+モジュールも有効のままにしてください。CLI を使う場合は、まず `olivares login`
+でこのエンジンに管理者としてログインし、次に `olivares modules on accessmap` を実行します。
+続行する前に、毎回のエンジン再起動が完了するのを待ってください。実行中の
+セッションは停止し、再開できます。有効にしないと、これらの API 呼び出しは
+`404 module_not_enabled` を返します。
+
 ```bash
 curl -ks "$BASE/v1/m/accessmap/drift" \
   -H "Authorization: Bearer $TOKEN" -H "X-Olivares-Tenant: $TENANT" | python3 -m json.tool

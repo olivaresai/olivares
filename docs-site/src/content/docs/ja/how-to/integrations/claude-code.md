@@ -31,8 +31,8 @@ OTLP receiver または協調 endpoint を loopback の外部に公開しない�
 独自のローカル socket を使用し、すべてのリクエストを認証して各決定を記録します。
 
 1. **Control console**（`/console`）を開き、**Connectors** タブを選択します。コネクターの
-   roster はグローバルです。superadmin account が必要で、保存、テスト、再読み込みには AAL3
-   elevation が必要です。
+   roster はグローバルです。superadmin account が必要です。保存、テスト、再読み込みは管理操作の
+   追加認証ポリシー（`admin_step_up`、デフォルトは `none`）に従います。
 2. 種別 `claude`、`claude-code-prod` のような安定した運用名、該当する tenant、`live` mode、
    interval `0`、有効状態で source を追加します。interval が 0 で正しい設定です。このコネクター
    は batch polling ではなく receiver を維持します。

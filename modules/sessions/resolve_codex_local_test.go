@@ -11,7 +11,7 @@ import (
 	"testing"
 )
 
-// HU2-04: with no account and only the product's own Ollama in Providers, Now said
+// With no account and only the product's own Ollama in Providers, Now said
 // "Codex is ready" and every Codex turn failed (Ollama 0.35 rejects the
 // additional_tools Codex 0.160 sends). The rule does not offer Codex on a local model
 // alone: OpenCode runs on it, and Codex says it needs a sign-in or an OpenAI key.

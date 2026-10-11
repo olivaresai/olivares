@@ -21,10 +21,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/olivaresai/olivares/connectors/siemsink"
-	"github.com/olivaresai/olivares/connectors/splunkhec"
-
 	"github.com/olivaresai/olivares/connectors/webhook"
+	"github.com/olivaresai/olivares/core/audit"
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/egress"
 	"github.com/olivaresai/olivares/core/model"
@@ -429,6 +427,16 @@ func (m *Module) claim(ctx context.Context, tenant model.TenantID, id model.ID, 
 			return err
 		}
 		if err != nil {
+			return err
+		}
+
+		// Retain historical queued audit deliveries across an edition change, without
+		// sending evidence or consuming retries. Business resumes the same queue.
+		if rec.String(colDelEventType) == string(typeAuditRecorded) && !audit.ExportLinked {
+			rec[colDelStatus] = statusQueued
+			rec[colDelNextAt] = model.NewTimestamp(now.Time().Add(disabledRecheck)).String()
+			rec[colDelLastStatus] = "audit_export_unavailable"
+			_, err = repo.Update(ctx, rec)
 			return err
 		}
 
@@ -984,61 +992,6 @@ func validateEndpointURL(raw string, allowLoopback bool) string {
 // logical rejection. It matches the connector-side budget so the two paths agree
 // about what "too large to judge" means.
 const maxDispatchBodyExcerpt = 2 << 10 // 2 KiB
-
-// classifyDispatchBody looks for a logical refusal inside a 2xx response, for the
-// ONE sink kind on this path whose protocol defines one.
-//
-// It is gated on the kind deliberately. This dispatcher POSTs to an
-// operator-configured URL, and matching a body structurally without knowing what is
-// on the other end manufactures false refusals: a generic collector that answers
-// {"code":200,"message":"ok"} or an API that happens to carry an "errors" member
-// would be dead-lettered as a rejection it never made. The other kinds here
-// (https, sentinel_dcr, datadog, newrelic) either carry an opaque body or signal
-// through status alone, so their 2xx stands exactly as before. Elasticsearch and
-// OTLP are not sinks on this path at all — they are OutputConnectors, and their
-// verdicts are drawn in their own connectors where the protocol is known.
-//
-// named=false means "this body says nothing I am entitled to interpret", which
-// preserves the previous behavior: the 2xx stands.
-func classifyDispatchBody(sinkKind string, body []byte, complete bool) (string, bool) {
-	// Check the KIND first. A destination whose protocol defines no logical
-	// rejection says nothing by answering at length, so requeuing its 2xx because
-	// the body was large would retry a delivery that succeeded — for a reason the
-	// operator could not act on. Only a kind we would have interpreted can be
-	// harmed by not having read the answer.
-	if sinkKind != string(siemsink.KindSplunkHEC) {
-		return "", false
-	}
-	if !complete {
-		// Queued, not dead: an unreadable answer is not evidence of refusal, and the
-		// delivery may well have landed. Retrying is the safe direction here, because
-		// discarding a notification over a body-size accident would be silent.
-		return statusQueued, true
-	}
-	// The verdict comes from the CONNECTOR's table, not from a copy of it. This path
-	// used to hold its own, and the two had already diverged on the cases that decide
-	// whether evidence is recorded as delivered: it accepted a body only when text AND
-	// code were both present (so the documented submit-with-ack response, which
-	// carries an ackID, was unrecognizable), it read code 17 — a HEALTH answer, not an
-	// acceptance of this event — as a delivery, and it read an EMPTY body as one too.
-	// This is the lane that ships the audit ledger to a SIEM, so each of those was a
-	// record claiming a delivery nobody confirmed.
-	outcome, _, ok := splunkhec.HECVerdict(body)
-	if !ok {
-		// Not a HEC status document at all. Requeue rather than dead-letter: this
-		// lane's fail-safe points toward keeping the notification, because losing one
-		// here is silent while a duplicate is reconcilable.
-		return statusQueued, true
-	}
-	switch {
-	case outcome.Accepted():
-		return "", false
-	case outcome.Retryable():
-		return statusQueued, true
-	default:
-		return statusDead, true
-	}
-}
 
 // dialerFor picks the guarded dialer for ONE address: the lifted one when the
 // operator authorized that exact address by CIDR, the floor-enforcing one otherwise.

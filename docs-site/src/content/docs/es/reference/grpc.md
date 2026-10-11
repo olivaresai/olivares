@@ -12,8 +12,10 @@ Olivares AI habla gRPC en dos lugares que apuntan en direcciones opuestas:
   reflejo de la superficie REST para callers que prefieran un stub tipado. El contrato REST
   de la [referencia de la API](/reference/api/) sigue siendo el más amplio de los dos.
 - **El contrato de cable de plugins** (`olivares.sdk.v1.*`): el contrato versionado que
-  habla cada connector y módulo out-of-process. Es el que implementas cuando
+  habla cada connector out-of-process. Es el que implementas cuando
   [construyes un connector](/es/how-to/build-a-connector/) en un lenguaje distinto de Go.
+  (Existe un par de servicios de módulos en el cable congelado, pero está deprecado y
+  nunca se sirvió; los módulos corren in-process.)
 
 Esta página se **genera a partir de las tablas de registro que los servidores entregan a
 gRPC**, no desde los archivos `.proto`. Esa distinción es intencional: un `.proto` editado
@@ -80,9 +82,9 @@ Definido en `olivaresv1/v1.proto`; 3 rpc.
 
 | Método | Método completo | Tipo | Petición | Respuesta | Qué hace |
 |---|---|---|---|---|---|
-| `Log` | `/olivares.sdk.v1.HostService/Log` | unary | `LogRecord` | `Empty` | Escribe un registro de log estructurado mediante el motor, de forma que un módulo out-of-process escribe donde lo hace uno in-process. |
-| `Publish` | `/olivares.sdk.v1.HostService/Publish` | unary | `Event` | `Empty` | Publica un evento en el bus del motor en nombre de un módulo out-of-process. |
-| `Subscribe` | `/olivares.sdk.v1.HostService/Subscribe` | server-streaming | `SubscribeRequest` | `Event` (stream) | Transmite eventos del bus al módulo, filtrados por los tipos de evento que solicita. Un filtro vacío incluye todos los tipos. |
+| `Log` | `/olivares.sdk.v1.HostService/Log` | unary | `LogRecord` | `Empty` | Deprecado con el transporte de módulos out-of-process, nunca cableado: nada sirve HostService. Habría escrito un registro de log estructurado mediante el motor, de forma que un módulo out-of-process escribiera donde lo hace uno in-process. |
+| `Publish` | `/olivares.sdk.v1.HostService/Publish` | unary | `Event` | `Empty` | Deprecado con el transporte de módulos out-of-process, nunca cableado: nada sirve HostService. Habría publicado un evento en el bus del motor en nombre de un módulo out-of-process. |
+| `Subscribe` | `/olivares.sdk.v1.HostService/Subscribe` | server-streaming | `SubscribeRequest` | `Event` (stream) | Deprecado con el transporte de módulos out-of-process, nunca cableado: nada sirve HostService. Habría transmitido eventos del bus al módulo, filtrados por los tipos solicitados; un filtro vacío incluía todos los tipos. |
 
 ### `olivares.sdk.v1.IngestService`
 
@@ -98,10 +100,10 @@ Definido en `olivaresv1/v1.proto`; 4 rpc.
 
 | Método | Método completo | Tipo | Petición | Respuesta | Qué hace |
 |---|---|---|---|---|---|
-| `Describe` | `/olivares.sdk.v1.ModuleService/Describe` | unary | `Empty` | `DescribeResponse` | Devuelve el descriptor del módulo: su identidad y la configuración que acepta. |
-| `Init` | `/olivares.sdk.v1.ModuleService/Init` | unary | `InitRequest` | `Empty` | Entrega al módulo su configuración y le permite prepararse antes de arrancar nada. |
-| `Start` | `/olivares.sdk.v1.ModuleService/Start` | unary | `Empty` | `Empty` | Inicia el trabajo del módulo después de un Init correcto. |
-| `Stop` | `/olivares.sdk.v1.ModuleService/Stop` | unary | `Empty` | `Empty` | Detiene el módulo y le permite liberar lo que retiene. |
+| `Describe` | `/olivares.sdk.v1.ModuleService/Describe` | unary | `Empty` | `DescribeResponse` | Deprecado con el transporte de módulos out-of-process, nunca cableado: ningún host dispensa ModuleService. Habría devuelto el descriptor del módulo: su identidad y la configuración que acepta. |
+| `Init` | `/olivares.sdk.v1.ModuleService/Init` | unary | `InitRequest` | `Empty` | Deprecado con el transporte de módulos out-of-process, nunca cableado: ningún host dispensa ModuleService. Habría entregado al módulo su configuración y le habría permitido prepararse antes de arrancar nada. |
+| `Start` | `/olivares.sdk.v1.ModuleService/Start` | unary | `Empty` | `Empty` | Deprecado con el transporte de módulos out-of-process, nunca cableado: ningún host dispensa ModuleService. Habría iniciado el trabajo del módulo después de un Init correcto. |
+| `Stop` | `/olivares.sdk.v1.ModuleService/Stop` | unary | `Empty` | `Empty` | Deprecado con el transporte de módulos out-of-process, nunca cableado: ningún host dispensa ModuleService. Habría detenido el módulo y le habría permitido liberar lo que retiene. |
 
 ### `olivares.sdk.v1.OutputService`
 

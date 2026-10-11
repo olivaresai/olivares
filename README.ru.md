@@ -6,15 +6,16 @@
 
 **Запускайте AI, которым уже пользуется ваша команда, с тем же контролем, что и над остальной инфраструктурой.**
 
-[Что оно делает](#что-оно-делает) · [Установка](#установка) · [Консоль](#взгляд-внутрь-консоли) · [Редакции](#редакции-и-цены) · [Документация](#документация) · [Сообщество](#сообщество) · [olivares.ai](https://olivares.ai)
+[Что оно делает](#что-оно-делает) · [Установка](#установка) · [Редакции](#редакции-и-цены) · [Документация](#документация) · [Сообщество](#сообщество) · [olivares.ai](https://olivares.ai)
 
 [![License: AGPL-3.0-only](https://img.shields.io/badge/license-AGPL--3.0--only-blue)](LICENSING.md)
-[![SDK & connectors: Apache-2.0](https://img.shields.io/badge/SDK%20%26%20connectors-Apache--2.0-blue)](LICENSING.md)
-[![Release: 26.10](https://img.shields.io/badge/release-26.10-28282B)](https://github.com/olivaresai/olivares/releases/tag/26.10.1)
+[![SDK & connectors: Apache-2.0](https://img.shields.io/badge/SDK%20%26%20connectors-Apache--2.0-blue)](LICENSING.md) <!-- release -->
+[![Next release: 0.1](https://img.shields.io/badge/release-0.1-28282B)](https://github.com/olivaresai/olivares/releases/tag/0.1)<!-- /release -->
 [![Status: beta](https://img.shields.io/badge/status-beta-F08000)](CHANGELOG.md)
 [![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa)](CODE_OF_CONDUCT.md)
 
 </div>
+
 
 Ваши разработчики работают с Claude Code и Codex. Агенты обращаются к MCP-серверам, моделям и внутренним API, а задания по расписанию выполняются сами. У каждого компонента свои журналы и разрешения, поэтому даже на простые вопросы нет быстрого ответа: какой агент изменил этот файл, кто это одобрил, сколько нам стоил AI в этом месяце?
 
@@ -32,9 +33,11 @@ Olivares AI собирает ответы в одном месте. Он под�
 - **Контролировать расходы на AI.** Бюджеты для команды, агента или модели предупреждают, замедляют или останавливают расходы до того, как придёт счёт.
 - **Безопасно открывать агентам знания компании.** Подключите SharePoint, Confluence, Google Drive, Notion, Salesforce, Snowflake, S3 и PostgreSQL. Каждый агент видит только то, к чему имеет доступ человек, который им пользуется.
 - **Продолжать работу между сессиями.** Задачи, ответственные и решения сохраняются после завершения сессии. Запускайте, подключайтесь и останавливайте сессии Claude Code, Codex и Grok из браузера, без SSH.
-- **Предоставлять доказательства по запросу.** Каждое решение попадает в подписанный журнал, в котором любое изменение задним числом можно обнаружить. Команда безопасности и аудиторы получают отчёты из этих записей, а доказательства сопоставлены с 26 каталогами фреймворков.
+- **Предоставлять доказательства по запросу.** Каждое решение попадает в подписанный журнал, в котором любое изменение задним числом можно обнаружить. Business Compliance Packs сопоставляет доказательства с 26 каталогами фреймворков и создаёт отчёты для команды безопасности и аудиторов. Community сохраняет доступ к сохранённым доказательствам и их экспорту в JSON/CSV.
 
-Работает с вашими инструментами: Claude Code, Codex, Grok, Cursor, gemini-cli, opencode, OpenHands и локальными моделями через Ollama. **31 модуль** и **159 интеграций**, всё в бесплатной редакции: [все модули](docs-site/src/content/docs/reference/modules/overview.md) · [все коннекторы](connectors/README.md).
+Работает с вашими инструментами: Claude Code, Codex, Grok, Cursor, gemini-cli, opencode, OpenHands и локальными моделями через Ollama. **32 модуля** и **136 интеграций**: [все модули](docs-site/src/content/docs/reference/modules/overview.md) · [все коннекторы](connectors/README.md).
+
+Community сохраняет локальную наблюдаемость, настройки и экспорт резервных копий. Отправка в SIEM/ITSM, внешняя телеметрия и экспорт состояния безопасности входят в базовую редакцию Business.
 
 ## Установка
 
@@ -49,12 +52,14 @@ olivares quickstart
 
 **Docker.** Мультиархитектурный. Образы контейнеров основаны на Debian 13 slim (с Node.js 24 для инструментов агентов) и запускаются от имени пользователя без прав root. Слушает на всех интерфейсах хоста; добавьте `127.0.0.1:` перед каждым `-p`, чтобы ограничить доступ локальной машиной.
 
+<!-- release -->
 ```sh
 docker run -d --name olivares -p 8443:8443 -p 8444:8444 \
   -v olivares-data:/var/lib/olivares \
-  docker.io/olivaresai/olivares \
+  docker.io/olivaresai/olivares:0.1 \
   serve --listen :8443 --grpc-listen :8444 --data-dir /var/lib/olivares
 ```
+<!-- /release -->
 
 **Docker Compose.** SQLite на одном узле, с необязательными Postgres и резервным копированием.
 
@@ -63,42 +68,30 @@ git clone --depth 1 https://github.com/olivaresai/olivares.git && cd olivares
 docker compose -f deploy/compose/docker-compose.yml up --wait --wait-timeout 120
 ```
 
-**Kubernetes.** Helm chart из этого репозитория (chart пока не опубликован как OCI-релиз: `publication-unverified`).
-
-```sh
-git clone --depth 1 https://github.com/olivaresai/olivares.git && cd olivares
-helm install olivares deploy/helm/olivares -n olivares-system --create-namespace
-```
-
-Без Helm:
-
-```sh
-git clone --depth 1 https://github.com/olivaresai/olivares.git && cd olivares
-kubectl create namespace olivares-system && kubectl apply -n olivares-system -f deploy/manifests/install.yaml
-```
+Сессии работают в одной папке хоста: задайте `OLIVARES_PROJECT_DIR` с её абсолютным путём до `up`, и Compose смонтирует её в `/project`. На хостах, где политика AppArmor ограничивает пользовательские пространства имён (Ubuntu 24.04 и новее), сначала загрузите профиль сессий: см. [Docker Compose](INSTALL.md#docker-compose).
 
 **Debian и Ubuntu.** Пакет добавляет пользователя `olivares` без возможности входа и службу с усиленной защитой; вы запускаете её сами.
 
 ```sh
-curl -fsSLO https://github.com/olivaresai/olivares/releases/download/26.10.1/olivares_26.10.1_linux_amd64.deb
-sudo dpkg -i olivares_26.10.1_linux_amd64.deb && sudo systemctl enable --now olivares
+curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.1/olivares_0.1_linux_amd64.deb
+sudo dpkg -i olivares_0.1_linux_amd64.deb && sudo systemctl enable --now olivares
 ```
 
 **RHEL, Fedora и SUSE.**
 
 ```sh
-curl -fsSLO https://github.com/olivaresai/olivares/releases/download/26.10.1/olivares_26.10.1_linux_amd64.rpm
-sudo rpm -i olivares_26.10.1_linux_amd64.rpm && sudo systemctl enable --now olivares
+curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.1/olivares_0.1_linux_amd64.rpm
+sudo rpm -i olivares_0.1_linux_amd64.rpm && sudo systemctl enable --now olivares
 ```
 
 **Alpine.**
 
 ```sh
-curl -fsSLO https://github.com/olivaresai/olivares/releases/download/26.10.1/olivares_26.10.1_linux_amd64.apk
-sudo apk add --allow-untrusted olivares_26.10.1_linux_amd64.apk && sudo rc-service olivares start
+curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.1/olivares_0.1_linux_amd64.apk
+sudo apk add --allow-untrusted olivares_0.1_linux_amd64.apk && sudo rc-service olivares start
 ```
 
-На ARM-серверах используйте `arm64` вместо `amd64`. Все файлы релиза: [страница релиза](https://github.com/olivaresai/olivares/releases/tag/26.10.1).
+На ARM-серверах используйте `arm64` вместо `amd64`. Все файлы релиза: [страница релиза](https://github.com/olivaresai/olivares/releases/tag/0.1).
 
 **Homebrew.** macOS и Linux.
 
@@ -123,15 +116,7 @@ olivares serve --seed-demo --insecure --listen 127.0.0.1:8901 --grpc-listen 127.
 
 Затем откройте http://127.0.0.1:8901.
 
-## Взгляд внутрь консоли
-
-| | |
-|---|---|
-| <picture><source media="(prefers-color-scheme: dark)" srcset="docs-site/public/console/access-map-dark.png"><img src="docs-site/public/console/access-map-light.png" alt="Access map: what each agent reads and writes across your estate, origins on the left, resources on the right."></picture><br><sub><b>Карта доступа</b> — кто что читает и записывает.</sub> | <picture><source media="(prefers-color-scheme: dark)" srcset="docs-site/public/console/access-map-drift-dark.png"><img src="docs-site/public/console/access-map-drift-light.png" alt="Least-privilege drift: unexpected accesses and unused grants overlaid on the access map."></picture><br><sub><b>Drift</b> — доступ, который никто не разрешал, и разрешения, которыми никто не пользуется.</sub> |
-| <picture><source media="(prefers-color-scheme: dark)" srcset="docs-site/public/console/agentops-dark.png"><img src="docs-site/public/console/agentops-light.png" alt="Claude Code sessions created, attached to and governed from the console."></picture><br><sub><b>Сессии</b> — запуск, подключение и остановка сессий агентов из браузера.</sub> | <picture><source media="(prefers-color-scheme: dark)" srcset="docs-site/public/console/work-dark.png"><img src="docs-site/public/console/work-light.png" alt="Work: the durable cross-session backlog of work items and decisions."></picture><br><sub><b>Работа</b> — задачи, ответственные и решения, которые сохраняются после сессии.</sub> |
-| <picture><source media="(prefers-color-scheme: dark)" srcset="docs-site/public/console/security-dark.png"><img src="docs-site/public/console/security-light.png" alt="Security and forensics: guardrail findings, the anomaly queue and tamper-evident forensics."></picture><br><sub><b>Безопасность</b> — заблокированные действия, аномалии и записи, в которых любое изменение можно обнаружить.</sub> | <picture><source media="(prefers-color-scheme: dark)" srcset="docs-site/public/console/finops-dark.png"><img src="docs-site/public/console/finops-light.png" alt="FinOps: model spend, token usage, budgets and a run-rate projection."></picture><br><sub><b>Расходы</b> — стоимость по моделям и агентам, бюджеты и прогноз.</sub> |
-
-Все экраны: [справочник консоли](docs-site/src/content/docs/reference/console.md).
+Helm, оператор Kubernetes, Terraform, appliance и артефакты развёртывания FIPS/STIG поставляются с Business; установка без сети требует Enterprise. См. [редакции](docs/editions.md).
 
 ## Редакции и цены
 
@@ -141,11 +126,11 @@ Community — полный продукт, бесплатный и с откры
 |---|---|---|---|
 | **Цена** | Бесплатно, AGPL-3.0 | 129 USD в месяц или 1 290 USD в год | Годовой договор |
 | **Что входит** | Полный продукт: неограниченное число пользователей и все четыре deny-closed точки принуждения | Всё из Community, а также Regulated Operations, AI Runtime Security, Compliance Packs и Identity & Scale, коммерческая лицензия, подписанные обновления и поддержка по электронной почте | Всё из Business, а также больше компаний, развёртываний и провайдеров идентификации, автономные зеркала и согласованные с вами условия поддержки |
-| **Область использования** | Один активный провайдер идентификации | Одна компания, два производственных развёртывания с одной staging-средой у каждого, пять провайдеров идентификации | Согласована в договоре |
+| **Область использования** | Один активный провайдер идентификации | Одна компания, один активный экземпляр одновременно | Согласована в договоре |
 
-**Regulated Operations** хранит записи столько, сколько требует закон, с запретом удаления для юридических разбирательств и неизменяемыми архивами. **AI Runtime Security** фильтрует то, что агенты отправляют, получают и выполняют. **Compliance Packs** предоставляет готовые доказательства для ISO 42001, DORA и NIS 2. **Identity & Scale** подключает несколько провайдеров идентификации одновременно и поддерживает более крупные развёртывания.
+**Regulated Operations** добавляет нормативные минимальные сроки хранения, сверку запретов на удаление в архивах и WORM-архивы в Azure и GCS. **AI Runtime Security** добавляет более глубокую проверку того, что агенты отправляют, получают и выполняют. **Compliance Packs** готовит черновики реестра информации DORA и пакета ISO/IEC 42001 для вашего аудитора. **Identity & Scale** подключает несколько провайдеров идентификации одновременно и поддерживает более крупные развёртывания.
 
-[olivares.ai/pricing](https://olivares.ai/pricing) · [Что открытое, а что коммерческое](LICENSING.md)
+[olivares.ai/pricing](https://olivares.ai/pricing) · [Что входит в каждую редакцию](docs/editions.md) · [Что открытое, а что коммерческое](LICENSING.md)
 
 ## Архитектура
 

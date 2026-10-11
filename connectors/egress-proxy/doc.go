@@ -95,6 +95,18 @@
 // honors ctx cancellation in the loop and holds no handles between runs (Close is a
 // no-op).
 //
+// Optional ai_hosts is a comma-separated list of exact ASCII host names (case
+// insensitive, with an optional terminal dot). URLs, ports and wildcards are
+// refused. Only allowed accesses to those hosts carry the egress_proxy_ai signal;
+// denied accesses remain findings. Missing log timestamps on these AI observations
+// remain unknown; native inventory reception records when they were collected.
+// Without ai_hosts, the legacy signal and timestamp fallback are unchanged.
+//
+// AI classification also emits the native collection result: unknown/scope_unproven
+// after parsing, unavailable/gather_error for inaccessible configured files.
+// A parsed or empty log never proves complete discovery or absence of ungoverned AI.
+// Existing observations survive an outage; the result describes current collection.
+//
 // It imports only the SDK, the Apache connectors/internal helpers (meshobs, redact,
 // tracecontext) and the standard library — never the engine (/core), per LICENSING.md.
 //

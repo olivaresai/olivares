@@ -59,9 +59,11 @@ func clasificar(fichero string, puntos []sitio) map[sitio]string {
 		//       `..` no existe. Mi primera version comprobaba eso y no disparo ni una vez. Lo
 		//       que distingue el caso es que resuelve FUERA de la raiz analizada.
 		clase := "ILEGIBLE"
+		classLabels[clase] = "UNREADABLE"
 		if raiz, rerr := os.Getwd(); rerr == nil {
 			if rel, relerr := filepath.Rel(raiz, fichero); relerr == nil && strings.HasPrefix(rel, "..") {
 				clase = "RUTA-DE-OTRO-ARBOL"
+				classLabels[clase] = "PATH-FROM-ANOTHER-TREE"
 			}
 		}
 		for _, p := range puntos {
@@ -89,14 +91,18 @@ func clasificar(fichero string, puntos []sitio) map[sitio]string {
 		switch tok {
 		case token.COMMENT:
 			clase = "comentario"
+			classLabels[clase] = "comment"
 		case token.STRING, token.CHAR:
 			if prueba {
 				clase = "cadena de test"
+				classLabels[clase] = "test string"
 			} else {
 				clase = "cadena de produccion"
+				classLabels[clase] = "production string"
 			}
 		case token.IDENT:
 			clase = "identificador"
+			classLabels[clase] = "identifier"
 		default:
 			continue
 		}
@@ -127,10 +133,12 @@ func clasificar(fichero string, puntos []sitio) map[sitio]string {
 		// comprobacion final trata como «no he podido mirar».
 		if p.l < 1 || p.l > f.LineCount() || p.c < 1 {
 			out[p] = "FUERA-DE-RANGO"
+			classLabels[out[p]] = "OUT-OF-RANGE"
 			continue
 		}
 		off := f.Offset(f.LineStart(p.l)) + p.c - 1
 		clase := "otro"
+		classLabels[clase] = "other"
 		for _, t := range tramos {
 			if off >= t.ini && off < t.fin {
 				clase = t.clase
@@ -145,24 +153,33 @@ func clasificar(fichero string, puntos []sitio) map[sitio]string {
 // clase pide el DETALLE de una clase concreta. El censo sabía cuántos y no cuáles, así que la
 // campaña no era ejecutable: «95 identificadores» no dice sobre qué fichero abrir el editor. La
 // clasificación ya se calcula — lo único que faltaba era no tirar la clave al contarla.
-var clase = flag.String("clase", "", "imprime fichero:linea:columna de los hallazgos de esta clase")
+var clase = flag.String("clase", "", "print file:line:column for findings in this class")
 
 // ⛔ Y UN NIVEL POR DEBAJO, EL MISMO DEFECTO QUE ESTE FICHERO VINO A ARREGLAR. Su cabecera
 // reprocha «tirar la clave al contarla»; el bucle de abajo hacia exactamente eso con la
 // CORRECCION: `palabra` captura el par —`X` is a misspelling of `Y`— y solo se guardaba la X.
 //
-// No es cosmetico, y lo midio otro carril sobre `cmd/olivares`: de 107 hallazgos de misspell,
-// SESENTA son palabras ESPAÑOLAS en comentarios españoles, y su «correccion» no arregla una
-// errata sino que dice otra cosa — `comando`→`commando` (un soldado), `producto`→`production`,
-// `decisiones`→`decisions`. Sin la Y en la salida, esas sesenta son indistinguibles de las
-// britanicas de verdad (`cancelled`, `licence`, `behaviour`), y un barrido mecanico sobre el
-// total del arbol no seria «de spec cerrada»: seria editar prosa española a ingles roto.
+// The correction matters: a CLI census found 107 misspell findings, 60 of them
+// Spanish words in Spanish comments. Their suggested corrections change meaning
+// rather than fix spelling: `comando`→`commando` (a soldier), `producto`→`production`,
+// `decisiones`→`decisions`. Without the corrected form in the output, those 60 cannot
+// be distinguished from British spellings such as `cancelled`, `licence` and `behaviour`.
+// A mechanical sweep would turn Spanish prose into broken English.
 //
 // ⇒ `--formas` imprime el par COMPLETO y SIN TRUNCAR, ordenado por frecuencia. Es la entrada de
 // una adjudicacion humana de ~120 filas, no un veredicto mio: yo no decido que es español —lo
 // haria con un vocabulario inventado, que es como se fabrican los censos falsos—, emito la
 // evidencia para que la lista de ignorados de misspell se alimente DESDE aqui.
-var formas = flag.Bool("formas", false, "imprime TODAS las formas como `original → correccion` con su recuento")
+var formas = flag.Bool("formas", false, "print ALL forms as `original → correction` with their counts")
+
+var classLabels = map[string]string{}
+
+func displayClass(class string) string {
+	if label, ok := classLabels[class]; ok {
+		return label
+	}
+	return "selected class"
+}
 
 func main() {
 	flag.Parse()
@@ -222,24 +239,26 @@ func main() {
 	// `sc.Err()` no se consultaba nunca: una linea de mas de 1 MiB rompe el Scanner y el bucle
 	// termina como si la entrada se hubiera acabado. Medido: `TOTAL 0`, rc 0.
 	if err := sc.Err(); err != nil {
-		fmt.Fprintf(os.Stderr, "misspell-census: NO HE PODIDO MIRAR - la entrada no se pudo leer entera: %v\n", err)
+		fmt.Fprintf(os.Stderr, "misspell-census: COULD NOT LOOK - could not read the complete input: %v\n", err)
 		os.Exit(2)
 	}
 	if descartadas > 0 {
-		fmt.Fprintf(os.Stderr, "misspell-census: NO HE PODIDO MIRAR - %d fila(s) de misspell que no supe leer.\n", descartadas)
+		fmt.Fprintf(os.Stderr, "misspell-census: COULD NOT LOOK - %d misspell row(s) could not be read.\n", descartadas)
 		os.Exit(2)
 	}
 	if sinPalabra > 0 {
-		fmt.Fprintf(os.Stderr, "misspell-census: NO HE PODIDO MIRAR - %d fila(s) sin la forma corregida; el vocabulario estaria incompleto.\n", sinPalabra)
+		fmt.Fprintf(os.Stderr, "misspell-census: COULD NOT LOOK - %d row(s) lack the corrected form; the vocabulary would be incomplete.\n", sinPalabra)
 		os.Exit(2)
 	}
 
 	cuenta := map[string]int{}
 	var detalle []string
+	selectedClass := ""
 	for fich, puntos := range porFichero {
 		for s, c := range clasificar(fich, puntos) {
 			cuenta[c]++
-			if *clase != "" && c == *clase {
+			if *clase != "" && (c == *clase || displayClass(c) == *clase) {
+				selectedClass = c
 				detalle = append(detalle, fmt.Sprintf("%s:%d:%d", s.fichero, s.l, s.c))
 			}
 		}
@@ -252,7 +271,7 @@ func main() {
 	sort.Slice(claves, func(i, j int) bool { return cuenta[claves[i]] > cuenta[claves[j]] })
 	suma := 0
 	for _, k := range claves {
-		fmt.Printf("%-24s %d\n", k, cuenta[k])
+		fmt.Printf("%-24s %d\n", displayClass(k), cuenta[k])
 		suma += cuenta[k]
 	}
 	fmt.Printf("%-24s %d\n", "TOTAL", suma)
@@ -267,7 +286,7 @@ func main() {
 		}
 		return tipos[i] < tipos[j]
 	})
-	fmt.Printf("\nvocabulario distinto: %d\n", len(tipos))
+	fmt.Printf("\ndistinct vocabulary: %d\n", len(tipos))
 	if *formas {
 		// SIN TRUNCAR y con el par completo: esto es lo que se adjudica. El resumen de abajo
 		// corta a 15 y lo dice, que esta bien para un log; una lista de ignorados alimentada
@@ -278,14 +297,18 @@ func main() {
 	} else {
 		for i, t := range tipos {
 			if i >= 15 {
-				fmt.Printf("  ... y %d formas mas (usa --formas para verlas TODAS con su correccion)\n", len(tipos)-15)
+				fmt.Printf("  ... and %d more forms (use --formas to see ALL forms with their corrections)\n", len(tipos)-15)
 				break
 			}
 			fmt.Printf("  %-22s %d\n", t, vocab[t])
 		}
 	}
 	if *clase != "" {
-		fmt.Printf("\ndetalle de la clase %q: %d sitio(s)\n", *clase, len(detalle))
+		if len(detalle) == 0 {
+			fmt.Println("\nselected class: 0 locations")
+		} else {
+			fmt.Printf("\ndetails for class %q: %d location(s)\n", displayClass(selectedClass), len(detalle))
+		}
 		for _, d := range detalle {
 			fmt.Printf("  %s\n", d)
 		}
@@ -295,12 +318,12 @@ func main() {
 	// inexistente clasificaba sus filas como ILEGIBLE y salia 0 (VERIFICADO por el contraste).
 	for _, mala := range []string{"ILEGIBLE", "FUERA-DE-RANGO"} {
 		if cuenta[mala] > 0 {
-			fmt.Fprintf(os.Stderr, "misspell-census: NO HE PODIDO MIRAR - %d fila(s) en la clase %s.\n", cuenta[mala], mala)
+			fmt.Fprintf(os.Stderr, "misspell-census: COULD NOT LOOK - %d row(s) in class %s.\n", cuenta[mala], displayClass(mala))
 			os.Exit(2)
 		}
 	}
 	if suma != total {
-		fmt.Fprintf(os.Stderr, "misspell-census: las filas suman %d y la entrada trae %d — el desglose NO particiona su total\n", suma, total)
+		fmt.Fprintf(os.Stderr, "misspell-census: rows total %d but the input contains %d — the breakdown does NOT partition the total\n", suma, total)
 		os.Exit(1)
 	}
 }

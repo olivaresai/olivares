@@ -40,8 +40,8 @@ import (
 // launch resolves a PROVIDER-COMPATIBLE credential through that driver's own
 // governed adapter, or it is refused with the adapter named.
 
-// The two authorized authentication sources. Empty is the LEGACY unprofiled /
-// pre-source state and is only honored on the historical Claude path, whose
+// The two authorized authentication sources. Empty is the stored pre-source
+// state and is only honored on the historical Claude path, whose
 // behavior it preserves exactly.
 const (
 	// AuthSourceAccountHome uses the saved account login inside the profile's own
@@ -78,6 +78,10 @@ func normalizeAuthSource(s string) (string, error) {
 }
 
 // ProviderCredentialRequest scopes a managed mint to one launch. References only.
+//
+// Deprecated: no engine composition wires a managed-injection adapter; a managed launch
+// takes its credential from a provider record. It still works and is kept until a later
+// release removes it.
 type ProviderCredentialRequest struct {
 	Driver     string
 	Tenant     model.TenantID
@@ -89,6 +93,10 @@ type ProviderCredentialRequest struct {
 // a governed adapter. Env is the exact environment the provider's own CLI reads;
 // it is held in memory for the launch and never persisted. ID and Scheme are the
 // only non-sensitive parts and the only ones that reach a row.
+//
+// Deprecated: no engine composition wires a managed-injection adapter; a managed launch
+// takes its credential from a provider record. It still works and is kept until a later
+// release removes it.
 type ProviderCredential struct {
 	ID       string
 	Scheme   string
@@ -104,11 +112,19 @@ func (c ProviderCredential) Expired(now time.Time) bool {
 // ProviderCredentialSource is the governed managed-injection adapter for ONE
 // driver. There is no default: an unconfigured driver refuses its managed
 // launches by name rather than borrowing another provider's issuer.
+//
+// Deprecated: no engine composition wires a managed-injection adapter; a managed launch
+// takes its credential from a provider record. It still works and is kept until a later
+// release removes it.
 type ProviderCredentialSource interface {
 	Mint(context.Context, ProviderCredentialRequest) (ProviderCredential, error)
 }
 
 // ProviderCredentialSourceFunc adapts a function to a ProviderCredentialSource.
+//
+// Deprecated: no engine composition wires a managed-injection adapter; a managed launch
+// takes its credential from a provider record. It still works and is kept until a later
+// release removes it.
 type ProviderCredentialSourceFunc func(context.Context, ProviderCredentialRequest) (ProviderCredential, error)
 
 // Mint calls the wrapped function.
@@ -119,6 +135,9 @@ func (f ProviderCredentialSourceFunc) Mint(ctx context.Context, req ProviderCred
 // errNoProviderAdapter is the truthful refusal for a managed launch of a driver
 // whose governed adapter nobody configured.
 var errNoProviderAdapter = errors.New("sessions: no managed provider credential adapter is configured for this driver")
+
+var errServiceProviderNative = &runErr{http.StatusUnprocessableEntity,
+	"This provider is for API use; native sessions cannot use it yet."}
 
 // ---------------------------------------------------------------------------
 // Provider approval authority.
@@ -182,21 +201,15 @@ func (denyProviderApprovalGate) Approve(context.Context, model.TenantID, Provide
 // Launch-time resolution.
 // ---------------------------------------------------------------------------
 
-// launchAuthSource is the authorization this launch runs under ("" for a legacy
-// unprofiled Claude launch).
+// launchAuthSource is the authorization this launch runs under. A legacy Claude
+// profile that predates authentication sources still names none.
 func launchAuthSource(p CreateRunParams) string {
-	if p.ProviderHome == nil {
-		return ""
-	}
 	return p.ProviderHome.AuthSource
 }
 
 // launchProviderRecordRef is the PROVIDER RECORD this launch was resolved against
 // ("" when the profile names none, which is every profile that predates v26.10).
 func launchProviderRecordRef(p CreateRunParams) string {
-	if p.ProviderHome == nil {
-		return ""
-	}
 	return p.ProviderHome.ProviderRecordRef
 }
 
@@ -244,7 +257,32 @@ func (m *Module) mintLaunchAuthority(
 	if err := requireAuthSourceForDriver(driver, source); err != nil {
 		return Credential{}, nil, err
 	}
+	// Gemini CLI can approve a tool from its own settings, which the session's
+	// live policy never sees. Recheck the home on every create and resume.
+	if driver == providerDriverGemini {
+		if err := geminiHomeRefusal(p.ProviderHome); err != nil {
+			return Credential{}, nil, err
+		}
+	}
 	if source == AuthSourceAccountHome {
+		// OpenCode otherwise selects its hosted provider even from an empty home.
+		// Recheck the exact profile on create and resume, outside store transactions.
+		if driver == providerDriverOpenCode {
+			if m.ProfileLogin == nil || p.ProviderHome == nil || p.ProviderHome.ProfileID == "" {
+				return Credential{}, nil, &runErr{http.StatusServiceUnavailable, "the sign-in status of this OpenCode profile cannot be checked on this node"}
+			}
+			installed, signedIn, err := m.ProfileLogin(ctx, tenant, driver, p.ProviderHome.ProfileID)
+			if err != nil {
+				return Credential{}, nil, &runErr{http.StatusServiceUnavailable, "the sign-in status of this OpenCode profile could not be read on this node"}
+			}
+			if !installed {
+				return Credential{}, nil, &codedRunErr{conflictErr("Install OpenCode first, under AI tools."), resolveCodeToolNotInstalled}
+			}
+			if !signedIn {
+				tool, _ := resolveToolFor(driver)
+				return Credential{}, nil, tool.nothingToRunOn()
+			}
+		}
 		// The authorized account home is the credential. Requiring an injected key
 		// on top of it is exactly the conflation §5.1 forbids.
 		return Credential{}, nil, nil
@@ -311,36 +349,11 @@ func (m *Module) mintLaunchAuthority(
 			"the governed credential adapter for driver " + driver + " returned an expired credential",
 		}
 	}
-	if err := validateProviderCredentialEnv(pc.Env); err != nil {
-		return Credential{}, nil, err
-	}
-	if err := validateOpenCodeReservedInjection(driver, pc.Env); err != nil {
+	if err := validateProviderCredentialEnv(driver, pc.Env); err != nil {
 		return Credential{}, nil, err
 	}
 	// Only the non-sensitive stamp lands on the row; Env stays in LaunchSpec.
 	return Credential{ID: pc.ID, Scheme: pc.Scheme, NotAfter: pc.NotAfter}, pc.Env, nil
-}
-
-// validateProviderCredentialEnv refuses an adapter that tries to name a variable
-// it does not own. The adapter's licence is to supply CREDENTIAL variables; a
-// home or a routing override from it would be the same accident §6 refuses from a
-// caller and from a gate, arriving through a third door.
-func validateProviderCredentialEnv(env []EnvVar) error {
-	for _, item := range env {
-		if providerHomeEnvName(item.Name) {
-			return forbiddenErr("launch denied: the provider credential adapter named " + item.Name + ", which the provider profile owns")
-		}
-		// Nor may it name the control plane's own variables or another provider's:
-		// the adapter's licence is its OWN driver's credential, and OLIVARES_* is
-		// where this runtime's work and communication bearers live.
-		if strings.HasPrefix(item.Name, "OLIVARES_") ||
-			strings.HasPrefix(item.Name, "ANTHROPIC_") ||
-			strings.HasPrefix(item.Name, "CLAUDE_") ||
-			strings.HasPrefix(item.Name, "OPENCODE_") {
-			return forbiddenErr("launch denied: the provider credential adapter named " + item.Name + ", which it does not own")
-		}
-	}
-	return validateExplicitEnv(env)
 }
 
 // mintFromProviderRecord resolves the credential of a NAMED provider record and
@@ -356,7 +369,7 @@ func validateProviderCredentialEnv(env []EnvVar) error {
 const localModelProbeTimeout = 3 * time.Second
 
 // localModelAnswers refuses a launch on a local model provider whose endpoint does not
-// answer (HU2-23): with the product's Ollama stopped, an OpenCode turn failed with the
+// answer: with the product's Ollama stopped, an OpenCode turn failed with the
 // tool's raw connection errors and nothing said Ollama was stopped. One look at the
 // endpoint, the one a provider test makes; a node with no probe wired launches as before.
 //
@@ -364,12 +377,12 @@ const localModelProbeTimeout = 3 * time.Second
 // stopped server. A failed look refuses the launch only when the endpoint is clearly
 // down (localEndpointDown); slowness, a timeout or any other failure launches as before.
 func (m *Module) localModelAnswers(ctx context.Context, rec ProviderRecord) error {
-	if m.rt.providerProbe == nil {
+	if m.rt.ProviderProbe == nil {
 		return nil
 	}
 	pctx, cancel := context.WithTimeout(ctx, localModelProbeTimeout)
 	defer cancel()
-	_, err := m.rt.providerProbe.Probe(pctx, ProviderProbeRequest{Kind: rec.Kind, BaseURL: rec.BaseURL})
+	_, err := m.rt.ProviderProbe.Probe(pctx, ProviderProbeRequest{Kind: rec.Kind, BaseURL: rec.BaseURL})
 	if err == nil || errors.Is(err, ErrProviderRefused) || !localEndpointDown(ctx, rec.BaseURL) {
 		return nil
 	}
@@ -420,6 +433,9 @@ func (m *Module) mintFromProviderRecord(
 			"the provider this profile is bound to is revoked; bind an active provider before launching",
 		}
 	}
+	if rec.Service != "" {
+		return Credential{}, nil, errServiceProviderNative
+	}
 	if !recordServesDriver(rec.Kind, rec.BaseURL, driver) {
 		// Re-checked HERE and not only when the binding was written: a driver's
 		// operability and a record's kind are read at different times, and a check
@@ -431,7 +447,7 @@ func (m *Module) mintFromProviderRecord(
 		return Credential{}, nil, &runErr{http.StatusUnprocessableEntity, recordDriverRefusal(driver, name, rec.Kind)}
 	}
 	if rec.ProbeState == ProbeRefused {
-		// HU2-27: Codex launched on an OpenAI key the provider test had refused never
+		// Codex launched on an OpenAI key the provider test had refused never
 		// started its first turn (80 s and more, the process alive). The last test is
 		// the provider's own answer about this key; a launch on it is refused with the
 		// words the console's readiness uses. Unreachable or never tested is no verdict.
@@ -445,7 +461,7 @@ func (m *Module) mintFromProviderRecord(
 		// Two endpoints were configured for one launch: the deployment's inference
 		// gateway and this record's own. Neither is wrong and this layer cannot rank
 		// them, so the conflict is REFUSED rather than ordered — the same answer
-		// validateProfiledInjectedEnv gives when a gate and a profile both claim a
+		// validateGateEnv gives when a gate and a profile both claim a
 		// variable. Ordering it silently would route a session through a gateway the
 		// operator thought they had bypassed, or the reverse.
 		//
@@ -457,7 +473,7 @@ func (m *Module) mintFromProviderRecord(
 		// over-blocking rule costs an operator a launch for a conflict that does not
 		// exist just as surely as an under-blocking one costs them a wrong identity.
 		//
-		// A record with NO base_url is the same conflict (Root 21:21Z, SR5C): the key is
+		// A record with NO base_url is the same conflict: the key is
 		// held to its vendor's own API, and the launch would send it through the gateway
 		// by inheritance. Routing a key through the gateway is a choice made on the
 		// record, never one a launch inherits.
@@ -479,8 +495,8 @@ func (m *Module) mintFromProviderRecord(
 	if driver == providerDriverOpenCode {
 		if path, present := openCodeManagedConfigPresent(); present {
 			// OpenCode merges the host's managed configuration after the launch's own, so
-			// that file, not this record, would decide where the key and the prompt go
-			// (SR5C on 06a18e46). It is the administrator's to keep; the session does not
+			// that file, not this record, would decide where the key and the prompt go.
+			// It is the administrator's to keep; the session does not
 			// start on top of it.
 			return Credential{}, nil, &runErr{http.StatusConflict,
 				"OpenCode has a managed configuration on this host (" + path + ") that a session on a provider from Providers cannot be held against; remove the file, or use OpenCode's own sign-in"}
@@ -503,11 +519,11 @@ func (m *Module) mintFromProviderRecord(
 		return Credential{localModelEndpoint: endpoint, localModels: models, bound: bound}, nil, nil
 	}
 
-	if m.rt.providerVault == nil {
+	if m.rt.ProviderVault == nil {
 		return Credential{}, nil, &runErr{http.StatusServiceUnavailable,
 			"this provider profile names a registered provider, and no sealed credential vault is wired on this node to open it (the launch is denied; it does not fall back to a host credential)"}
 	}
-	key, err := m.rt.providerVault.Open(ctx, tenant, rec.SecretRef)
+	key, err := m.rt.ProviderVault.Open(ctx, tenant, rec.SecretRef)
 	if err != nil {
 		return Credential{}, nil, openFailure(err)
 	}
@@ -538,29 +554,6 @@ func (m *Module) mintFromProviderRecord(
 	return Credential{bound: bound}, env, nil
 }
 
-// validateRecordCredentialEnv checks a record-backed injection against the CLOSED
-// set its own KIND declares.
-//
-// It is a second validator and not a relaxation of validateProviderCredentialEnv,
-// and the difference is the point. That one governs a THIRD-PARTY adapter wired
-// through WithProviderCredentialSource, and it bans ANTHROPIC_*, CLAUDE_*,
-// OPENCODE_* and OLIVARES_* precisely so one provider's adapter can never name
-// another's variables. A first-party anthropic record has to set ANTHROPIC_API_KEY,
-// so it cannot pass that rule — and weakening that rule to let it through would
-// weaken it for every adapter it was written to constrain.
-//
-// Two closed sets, each proving its own property, cost twelve lines and prove more
-// than one rule with an exception carved into it.
-func validateRecordCredentialEnv(kind string, env []EnvVar) error {
-	allowed := providerRecordEnvNames(kind)
-	for _, item := range env {
-		if _, ok := allowed[item.Name]; !ok {
-			return forbiddenErr("launch denied: a " + kind + " provider may not set " + item.Name)
-		}
-	}
-	return validateExplicitEnv(env)
-}
-
 // ProviderApprovalDisposition is the live policy verdict before human review.
 // Only Ask may enter the approval queue; unknown verdicts deny closed.
 type ProviderApprovalDisposition string
@@ -582,22 +575,22 @@ type ProviderApprovalPolicy func(context.Context, model.TenantID, ProviderApprov
 // owns recording its verdict; the existing driver rechecks turn and launch authority
 // after this decision, including after a queued human decision.
 func WithProviderApprovalPolicy(policy ProviderApprovalPolicy) Option {
-	return func(m *Module) { m.rt.providerApprovalPolicy = policy }
+	return func(m *Module) { m.rt.ProviderApprovalPolicy = policy }
 }
 
 // WithProviderApprovalPrincipalResolver connects the one engine session credential
 // service to approval requests. Composition adapts SessionCredentials.ResolveRun;
 // this consumer does not mint credentials or retain bearer material.
 func WithProviderApprovalPrincipalResolver(resolve func(context.Context, model.TenantID, string) (auth.Principal, string, error)) Option {
-	return func(m *Module) { m.rt.providerApprovalPrincipal = resolve }
+	return func(m *Module) { m.rt.ProviderApprovalPrincipal = resolve }
 }
 
 func (m *Module) authorizeProviderApproval(ctx context.Context, tenant model.TenantID, req ProviderApprovalRequest) (ProviderApprovalDecision, error) {
 	resolvePrincipal := func() error {
-		if m.rt.providerApprovalPrincipal == nil {
+		if m.rt.ProviderApprovalPrincipal == nil {
 			return nil
 		}
-		principal, sessionRef, err := m.rt.providerApprovalPrincipal(ctx, tenant, req.RunRef)
+		principal, sessionRef, err := m.rt.ProviderApprovalPrincipal(ctx, tenant, req.RunRef)
 		if err != nil {
 			return err
 		}
@@ -611,8 +604,8 @@ func (m *Module) authorizeProviderApproval(ctx context.Context, tenant model.Ten
 		return ProviderApprovalDecision{}, err
 	}
 
-	if m.rt.providerApprovalPolicy != nil {
-		verdict, err := m.rt.providerApprovalPolicy(ctx, tenant, req)
+	if m.rt.ProviderApprovalPolicy != nil {
+		verdict, err := m.rt.ProviderApprovalPolicy(ctx, tenant, req)
 		if err != nil {
 			return ProviderApprovalDecision{}, err
 		}
@@ -624,7 +617,7 @@ func (m *Module) authorizeProviderApproval(ctx context.Context, tenant model.Ten
 			return ProviderApprovalDecision{Reason: verdict.Reason}, nil
 		}
 	}
-	decision, err := m.rt.approvalGate.Approve(ctx, tenant, req)
+	decision, err := m.rt.ApprovalGate.Approve(ctx, tenant, req)
 	if err != nil || !decision.Allow {
 		return decision, err
 	}
@@ -633,8 +626,8 @@ func (m *Module) authorizeProviderApproval(ctx context.Context, tenant model.Ten
 	if err := resolvePrincipal(); err != nil {
 		return ProviderApprovalDecision{}, err
 	}
-	if m.rt.providerApprovalPolicy != nil {
-		verdict, err := m.rt.providerApprovalPolicy(ctx, tenant, req)
+	if m.rt.ProviderApprovalPolicy != nil {
+		verdict, err := m.rt.ProviderApprovalPolicy(ctx, tenant, req)
 		if err != nil {
 			return ProviderApprovalDecision{}, err
 		}

@@ -19,6 +19,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
+	"github.com/olivaresai/olivares/modules/sessions/confine"
 )
 
 func doctorFixture(t *testing.T) (*doctorOptions, doctorDeps) {
@@ -64,6 +65,7 @@ func doctorFixture(t *testing.T) (*doctorOptions, doctorDeps) {
 		binary: binary, server: "https://127.0.0.1:8443", timeout: time.Second,
 	}
 	deps := defaultDoctorDeps()
+	deps.confinement = func() confine.State { return confine.State{Mode: confine.ModeLandlock, ABI: 3} }
 	deps.euid = os.Geteuid
 	deps.lookupUID = func(string) (int, error) { return os.Geteuid(), nil }
 	deps.homeDir = func() (string, error) { return root, nil }
@@ -220,7 +222,7 @@ func TestDoctorSignedChannelReportsVersionDifference(t *testing.T) {
 	o, deps := doctorFixture(t)
 	o.checkUpdates = true
 	deps.runOutput = func(context.Context, string, ...string) (int, []byte, error) {
-		return 0, []byte(`{"status":"upgrade-available","current":"26.8.0","available":"26.9.0"}`), nil
+		return 0, []byte(`{"status":"upgrade-available","current":"26.800","available":"26.900"}`), nil
 	}
 	report, code, err := runDoctor(context.Background(), o, deps)
 	if err != nil {
@@ -231,7 +233,7 @@ func TestDoctorSignedChannelReportsVersionDifference(t *testing.T) {
 	}
 	for _, check := range report.Checks {
 		if check.Name == "update-channel" {
-			if check.Status != "pass" || check.Detail != "current=26.8.0 available=26.9.0 status=upgrade-available" {
+			if check.Status != "pass" || check.Detail != "current=26.800 available=26.900 status=upgrade-available" {
 				t.Fatalf("channel check = %+v", check)
 			}
 			return
@@ -244,7 +246,7 @@ func TestDoctorMalformedChannelResultIsRed(t *testing.T) {
 	o, deps := doctorFixture(t)
 	o.checkUpdates = true
 	deps.runOutput = func(context.Context, string, ...string) (int, []byte, error) {
-		return 0, []byte(`{"status":"up-to-date","current":"26.8.0"}`), nil
+		return 0, []byte(`{"status":"up-to-date","current":"26.800"}`), nil
 	}
 	report, code, err := runDoctor(context.Background(), o, deps)
 	if err != nil {

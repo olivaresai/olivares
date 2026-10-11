@@ -113,7 +113,7 @@ func TestABusinessFeatureIsOneSentenceWithItsOwnExitCode(t *testing.T) {
 	}
 	root := newRootCmd()
 	pins, _, _ := root.Find([]string{"mcp", "pins"})
-	if pins == nil || pins.Name() != "pins" || pins.Hidden == enterpriseAddOnsLinked {
+	if pins == nil || pins.Name() != "pins" || pins.Hidden == thisEdition.addOnsLinked {
 		t.Fatalf("mcp pins must stay invocable and be hidden exactly when this build lacks the add-ons")
 	}
 }
@@ -243,6 +243,7 @@ func TestRootNextFollowsTheFirstInstalledTool(t *testing.T) {
 		{"only codex, signed out", []toolRow{{Driver: "codex", Installed: true, SignedIn: &no}}, "olivares tool login codex"},
 		{"claude first", []toolRow{{Driver: "codex", Installed: true, SignedIn: &yes}, {Driver: "claude", Installed: true, SignedIn: &no}},
 			"olivares tool login claude"},
+		{"Gemini is signed in", []toolRow{{Driver: "gemini-cli", Installed: true, SignedIn: &yes}}, "olivares session start <folder> --tool gemini-cli"},
 		{"grok has no sign-in here", []toolRow{{Driver: "grok", Installed: true}}, "olivares session start <folder> --tool grok"},
 	} {
 		if got := rootNextFromTools(tc.rows); got != tc.want {

@@ -14,7 +14,7 @@
   },
   "serverError": {
     "title": "問題が発生しました",
-    "description": "コントロールプレーンで想定外のエラーが発生しました。もう一度お試しください。",
+    "description": "Olivares で想定外のエラーが発生しました。もう一度お試しください。",
     "back": "概要に戻る"
   },
   "evidenceUnavailable": {
@@ -31,6 +31,7 @@
     "reload": "再読み込み"
   },
   "generic": "問題が発生しました。",
+  "sessionTemplateUnavailable": "「Edits and commands」テンプレートが利用できないため、セッションは開始されませんでした。別の権限を選択するか、管理者にテンプレートの復元を依頼してください。",
   "requestId": "リクエスト ID",
   "codes": {
     "unauthenticated": "セッションは無効になりました。",
@@ -42,6 +43,7 @@
     "locked_out": "試行回数が多すぎます。しばらくしてからもう一度お試しください。",
     "setup_required": "コントロールプレーンには初回起動時のセットアップが必要です。",
     "setup_complete": "セットアップはすでに完了しています。",
+    "setup_token_unreadable": "エンジンがセットアップトークンファイルを読み取れません。root またはエンジンのアカウントで `olivares first-boot --data-dir <data directory> --new-token` を実行して置き換え、新しいトークンを使用してください。エンジンのログにファイルと理由が記録されています。",
     "cross_tenant_admin_pool_not_configured": "このデータベースではすべての組織を一覧表示できません。`olivares db init --superuser-dsn <superuser DSN> --data-dir <data directory> --install-directory-inventory` を実行し、エンジンを再起動してください。または、`olivares db init --superuser-dsn <dsn> --admin-role olivares_admin --admin-password-file <file>` で NOSUPERUSER BYPASSRLS ロールをプロビジョニングし (deploy/postgres/README.md を参照)、そのロールを指す --admin-dsn を指定してサーバーを再起動してください。",
     "internal": "内部エラーが発生しました。"
   },
@@ -50,7 +52,6 @@
     "description": "組織に承認されたディレクトリ ID でサインインしてください。グローバルな bootstrap 権限ではワークスペースの通信を操作できません。"
   },
   "moduleNotEnabled": {
-    "title": "このインストールでは有効になっていません",
     "description": "Olivares のこの部分はここでは無効なため、表示するものはありません。",
     "named": "{{module}} はこのインストールで有効になっていません。",
     "unnamed": "このモジュールはこのインストールで有効になっていません。"

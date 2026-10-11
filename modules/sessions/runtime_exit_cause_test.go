@@ -75,3 +75,52 @@ func TestProductCause_NamesTheProductsStepForAToolThatIsNotSignedIn(t *testing.T
 		}
 	}
 }
+
+// A Node launcher that dies prints its error with the stack and the error's
+// properties after it, or Node's version line: its last line ("}") says nothing.
+// The cause is the error line that heads the stack (#499: the run said "exit 1: }"
+// for Codex's "spawn ... EACCES"). The runner records stderr one line per frame
+// without its newline (pumpDiagnostics); a frame that holds several lines reads
+// the same.
+func TestExitCause_NamesTheErrorAboveAStackTrace(t *testing.T) {
+	t.Parallel()
+	at := time.Unix(0, 0)
+	ring := func(text string, perLine bool) *outputRing {
+		r := newOutputRing(0, 0)
+		if !perLine {
+			r.append(streamStderr, []byte(text), at)
+			return r
+		}
+		for _, line := range strings.Split(text, "\n") {
+			if line != "" {
+				r.append(streamStderr, []byte(line), at)
+			}
+		}
+		return r
+	}
+	spawn := "Error: spawn /home/u/tools/node_modules/@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/bin/codex EACCES"
+	for name, tc := range map[string]struct{ text, want string }{
+		"error properties": {spawn + `
+    at ChildProcess._handle.onexit (node:internal/child_process:285:19)
+    at onErrorNT (node:internal/child_process:483:16)
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21) {
+  errno: -13,
+  code: 'EACCES',
+  syscall: 'spawn /home/u/tools/node_modules/@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/bin/codex',
+  path: '/home/u/tools/node_modules/@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/bin/codex',
+  spawnargs: [ 'app-server' ]
+}`, clipCause(spawn)},
+		"uncaught with version line": {"/x/cli.js:3\n    throw new Error('boom');\n    ^\n\nError: boom\n    at Object.<anonymous> (/x/cli.js:3:11)\n    at node:internal/main/run_main_module:36:49\n\nNode.js v22.11.0", "Error: boom"},
+		"java frames last":           {"Exception in thread \"main\" java.lang.IllegalStateException: no config\n\tat com.example.Main.main(Main.java:12)", `Exception in thread "main" java.lang.IllegalStateException: no config`},
+		"sentence after a trace":     {"Error: retrying\n    at retry (/x/a.js:1:1)\nfatal: no provider reachable", "fatal: no provider reachable"},
+		"last of several lines":      {"warning: slow start\nerror: cannot open the session folder", "error: cannot open the session folder"},
+		"prose that starts with at":  {"at least one provider is required", "at least one provider is required"},
+		"prose shaped like a frame":  {"at startup (see the docs)", "at startup (see the docs)"},
+	} {
+		for _, perLine := range []bool{true, false} {
+			if got := exitCause(ring(tc.text, perLine)); got != tc.want {
+				t.Errorf("%s (one frame per line: %v): cause = %q, want %q", name, perLine, got, tc.want)
+			}
+		}
+	}
+}

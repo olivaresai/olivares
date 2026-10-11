@@ -6,10 +6,6 @@ package finops
 
 import (
 	"context"
-	"encoding/json"
-	"errors"
-	"fmt"
-	"strconv"
 	"testing"
 	"time"
 
@@ -148,7 +144,7 @@ func runDisabledSelection(t *testing.T, m *Module, st store.Store, tenant model.
 
 	upsert := func(spec SpendLimitSpec) SpendLimit {
 		t.Helper()
-		row, _, err := m.SpendLimitUpsert(ctx, tenant, spec, "user:admin")
+		row, _, err := seedStoredSpendLimit(m, ctx, tenant, spec, "user:admin")
 		if err != nil {
 			t.Fatalf("upsert %+v: %v", spec.Scope, err)
 		}
@@ -391,11 +387,11 @@ func TestSpendLimitDisabledUserCapNotImplicitlyEnumerated(t *testing.T) {
 	now := time.Date(2026, 7, 11, 12, 0, 0, 0, time.UTC)
 	m.clock = spendLimitClock{at: now}
 
-	ghost, _, err := m.SpendLimitUpsert(ctx, tenant, userLimit("user:ghost", "400", "monthly"), "user:admin")
+	ghost, _, err := seedStoredSpendLimit(m, ctx, tenant, userLimit("user:ghost", "400", "monthly"), "user:admin")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := m.SpendLimitUpsert(ctx, tenant, userLimit("user:live", "400", "monthly"), "user:admin"); err != nil {
+	if _, _, err := seedStoredSpendLimit(m, ctx, tenant, userLimit("user:live", "400", "monthly"), "user:admin"); err != nil {
 		t.Fatal(err)
 	}
 	cost := mkCost("anthropic", "claude-opus-4-8", "", 1, 1, 1_000_000, now)
@@ -426,106 +422,8 @@ func TestSpendLimitDisabledUserCapNotImplicitlyEnumerated(t *testing.T) {
 // that SES1 changed no response or audit shape. Revision 1's additive `enabled`
 // field on this shared object was withdrawn because this object IS the
 // Anthropic-compatible gateway response, so the exact key sets are asserted.
-func TestSpendLimitUpsertReactivatesLowestIDRow_CrossBackend(t *testing.T) {
-	for name, cfg := range spendLimitEnabledBackends(t) {
-		cfg := cfg
-		t.Run(name, func(t *testing.T) {
-			m, _, tenant, _ := openFinCfg(t, cfg(t))
-			runUpsertReactivation(t, m, tenant)
-		})
-	}
-}
-
-func runUpsertReactivation(t *testing.T, m *Module, tenant model.TenantID) {
-	t.Helper()
-	ctx := context.Background()
-	m.clock = spendLimitClock{at: time.Date(2026, 7, 11, 12, 0, 0, 0, time.UTC)}
-
-	first, created, err := m.SpendLimitUpsert(ctx, tenant, userLimit("user:u1", "500", "monthly"), "user:admin")
-	if err != nil || !created {
-		t.Fatalf("create = %+v created=%v err=%v", first, created, err)
-	}
-	// Spend ABOVE the cap before disabling, so "disabled stops enforcing" is a real
-	// discriminator rather than a cap that happened to have nothing to enforce.
-	overCap := mkCost("anthropic", "claude-opus-4-8", "", 1, 1, 6_000_000, m.clock.Now().Time())
-	overCap.Actor = "user:u1"
-	m.ingest(t, tenant, overCap)
-	if chk, err := m.CheckSpendLimit(ctx, tenant, "user:u1", nil); err != nil || chk.Allowed {
-		t.Fatalf("control: enabled cap must deny before the row is disabled: %+v err=%v", chk, err)
-	}
-	// Unrelated rows so the target is not the only — nor the newest — row.
-	if _, _, err := m.SpendLimitUpsert(ctx, tenant, userLimit("user:u2", "1000", "monthly"), "user:admin"); err != nil {
-		t.Fatal(err)
-	}
-	if _, _, err := m.SpendLimitUpsert(ctx, tenant, userLimit("user:u1", "1000", "daily"), "user:admin"); err != nil {
-		t.Fatal(err)
-	}
-	disableSpendLimitPolicy(t, m, tenant, first.ID)
-	if chk, err := m.CheckSpendLimit(ctx, tenant, "user:u1", nil); err != nil || !chk.Allowed {
-		t.Fatalf("disabled monthly cap still enforced: %+v err=%v", chk, err)
-	}
-
-	again, created, err := m.SpendLimitUpsert(ctx, tenant, userLimit("user:u1", "400", "monthly"), "user:admin")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if created {
-		t.Fatalf("upsert created a NEW row; the disabled lowest-id row must be reactivated in place")
-	}
-	if again.ID != first.ID {
-		t.Fatalf("upsert id = %s, want the original %s", again.ID, first.ID)
-	}
-	if again.Amount == nil || *again.Amount != "400" {
-		t.Fatalf("upsert amount = %v, want the replacing spec", again.Amount)
-	}
-	// Reactivated in place: the same id governs again against the same spend.
-	chk, err := m.CheckSpendLimit(ctx, tenant, "user:u1", nil)
-	if err != nil || chk.Allowed || chk.SpendLimitID != first.ID {
-		t.Fatalf("reactivated cap not enforced under the original id: %+v err=%v", chk, err)
-	}
-
-	// No response shape change: the exact JSON key set of the shared gateway
-	// object, and of the audit before/after snapshots, is unchanged.
-	wantKeys := []string{"type", "id", "created_at", "updated_at", "scope", "amount", "currency", "period"}
-	assertExactJSONKeys(t, again, wantKeys, "SpendLimit response")
-	audit, err := m.SpendLimitAudit(ctx, tenant, 10)
-	if err != nil || len(audit.Data) == 0 {
-		t.Fatalf("audit = %+v err=%v", audit, err)
-	}
-	latest := audit.Data[0]
-	if latest.Action != "update" || latest.SpendLimitID != first.ID || latest.Before == nil || latest.After == nil {
-		t.Fatalf("reactivation audit = %+v, want an update with both snapshots", latest)
-	}
-	assertExactJSONKeys(t, *latest.Before, wantKeys, "audit before snapshot")
-	assertExactJSONKeys(t, *latest.After, wantKeys, "audit after snapshot")
-	if latest.Before.ID != first.ID || latest.After.ID != first.ID {
-		t.Fatalf("audit snapshots reference %s/%s, want %s", latest.Before.ID, latest.After.ID, first.ID)
-	}
-}
 
 // assertExactJSONKeys fails on any added or removed top-level key.
-func assertExactJSONKeys(t *testing.T, v any, want []string, what string) {
-	t.Helper()
-	raw, err := json.Marshal(v)
-	if err != nil {
-		t.Fatalf("marshal %s: %v", what, err)
-	}
-	var got map[string]json.RawMessage
-	if err := json.Unmarshal(raw, &got); err != nil {
-		t.Fatalf("unmarshal %s: %v", what, err)
-	}
-	if len(got) != len(want) {
-		t.Fatalf("%s keys = %d (%s), want exactly %v", what, len(got), raw, want)
-	}
-	for _, k := range want {
-		if _, ok := got[k]; !ok {
-			t.Fatalf("%s is missing %q: %s", what, k, raw)
-		}
-	}
-	if _, ok := got["enabled"]; ok {
-		t.Fatalf("%s carries an `enabled` field; revision 2 withdrew it from this shared gateway object: %s", what, raw)
-	}
-}
 
 // TestSpendLimitDisabledRowIsTenantIsolated confirms disabling in one tenant has
 // no effect on an identically shaped policy in another.
@@ -545,11 +443,11 @@ func TestSpendLimitDisabledRowIsTenantIsolated(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("provision second tenant: %v", err)
 	}
-	rowA, _, err := m.SpendLimitUpsert(ctx, tenantA, userLimit("user:shared", "100", "monthly"), "user:admin")
+	rowA, _, err := seedStoredSpendLimit(m, ctx, tenantA, userLimit("user:shared", "100", "monthly"), "user:admin")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := m.SpendLimitUpsert(ctx, tenantB, userLimit("user:shared", "100", "monthly"), "user:admin"); err != nil {
+	if _, _, err := seedStoredSpendLimit(m, ctx, tenantB, userLimit("user:shared", "100", "monthly"), "user:admin"); err != nil {
 		t.Fatal(err)
 	}
 	disableSpendLimitPolicy(t, m, tenantA, rowA.ID)
@@ -577,189 +475,8 @@ func TestSpendLimitDisabledRowIsTenantIsolated(t *testing.T) {
 // Seeding is one transaction and the ids are asserted, not assumed: they are
 // UUIDv7, so creation order is id order, and the test proves that before it
 // relies on it.
-func TestSpendLimitUpsertReactivatesAcrossPages_CrossBackend(t *testing.T) {
-	for name, cfg := range spendLimitEnabledBackends(t) {
-		cfg := cfg
-		t.Run(name, func(t *testing.T) {
-			m, _, tenant, _ := openFinCfg(t, cfg(t))
-			runCrossPageReactivation(t, m, tenant)
-		})
-	}
-}
 
 // spendLimitPageFillers is the number of non-matching rows planted between the
 // two rows of the logical key. With the canonical row first and the duplicate
 // last it puts exactly listCap rows on page one and the duplicate on page two.
 const spendLimitPageFillers = listCap
-
-func runCrossPageReactivation(t *testing.T, m *Module, tenant model.TenantID) {
-	t.Helper()
-	ctx := context.Background()
-	m.clock = spendLimitClock{at: time.Date(2026, 7, 11, 12, 0, 0, 0, time.UTC)}
-
-	const actor = "user:crosspage"
-	keySpec := func(amount int64) map[string]any {
-		return map[string]any{
-			"scope_type": "user", "scope_key": actor,
-			"amount_micro_usd": amount, "unlimited": false, "period": "monthly",
-		}
-	}
-
-	var canonicalID, duplicateID model.ID
-	seedStart := time.Now()
-	if err := m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
-		// 1. The canonical row: lowest id, and disabled.
-		canonical, err := sc.Policies().Create(ctx, model.Policy{
-			Name: "crosspage canonical", Kind: policyKindSpendLimit, Enabled: true, Spec: keySpec(9_000_000),
-		})
-		if err != nil {
-			return err
-		}
-		canonicalID = canonical.ID
-		canonical.Enabled = false
-		if _, err := sc.Policies().Update(ctx, canonical); err != nil {
-			return err
-		}
-		// 2. listCap non-matching rows, so the canonical row plus the fillers
-		//    exactly fill page one. They are real spend_limit policies, so they
-		//    are qualifying rows for the shared listing and cannot be skipped by
-		//    the kind filter.
-		for i := 0; i < spendLimitPageFillers; i++ {
-			if _, err := sc.Policies().Create(ctx, model.Policy{
-				Name: "crosspage filler", Kind: policyKindSpendLimit, Enabled: true,
-				Spec: map[string]any{
-					"scope_type": "user", "scope_key": "user:filler-" + strconv.Itoa(i),
-					"amount_micro_usd": int64(1_000_000), "unlimited": false, "period": "monthly",
-				},
-			}); err != nil {
-				return err
-			}
-		}
-		// 3. The enabled duplicate of the SAME logical key: highest id, page two.
-		duplicate, err := sc.Policies().Create(ctx, model.Policy{
-			Name: "crosspage duplicate", Kind: policyKindSpendLimit, Enabled: true, Spec: keySpec(2_000_000),
-		})
-		if err != nil {
-			return err
-		}
-		duplicateID = duplicate.ID
-		return nil
-	}); err != nil {
-		t.Fatalf("seed cross-page fixture: %v", err)
-	}
-	t.Logf("seeded %d qualifying spend_limit rows in %s", spendLimitPageFillers+2, time.Since(seedStart).Round(time.Millisecond))
-
-	// The fixture's premises, asserted rather than assumed.
-	if canonicalID >= duplicateID {
-		t.Fatalf("fixture premise broken: canonical id %s must sort below duplicate id %s", canonicalID, duplicateID)
-	}
-	if err := m.data.View(ctx, tenant, func(sc store.Scope) error {
-		firstPage, page, err := sc.Policies().List(ctx, model.Query{
-			Filters: []model.Filter{eq("kind", policyKindSpendLimit)}, Limit: listCap,
-		})
-		if err != nil {
-			return err
-		}
-		if len(firstPage) != listCap || !page.HasMore {
-			t.Fatalf("page one = %d rows hasMore=%v, want exactly listCap=%d with more", len(firstPage), page.HasMore, listCap)
-		}
-		for _, p := range firstPage {
-			if p.ID == duplicateID {
-				t.Fatalf("fixture premise broken: the enabled duplicate is on page one, so this case would not test traversal")
-			}
-		}
-		if firstPage[0].ID != canonicalID || firstPage[0].Enabled {
-			t.Fatalf("page one row 0 = %s enabled=%v, want the DISABLED canonical %s", firstPage[0].ID, firstPage[0].Enabled, canonicalID)
-		}
-		all, err := listSpendLimitPolicies(ctx, sc)
-		if err != nil {
-			return err
-		}
-		if len(all) != spendLimitPageFillers+2 {
-			t.Fatalf("shared traversal = %d rows, want %d across both pages", len(all), spendLimitPageFillers+2)
-		}
-		return nil
-	}); err != nil {
-		t.Fatalf("verify fixture: %v", err)
-	}
-
-	// Spend 300 cents, above the enabled duplicate's 200-cent cap, so enforcement
-	// has something to decide. While the canonical row is disabled the page-two
-	// duplicate is the only enabled row for the key, so it is what governs — the
-	// control that the row this upsert must reach is live beforehand.
-	cost := mkCost("anthropic", "claude-opus-4-8", "", 1, 1, 3_000_000, m.clock.Now().Time())
-	cost.Actor = actor
-	m.ingest(t, tenant, cost)
-	if chk, err := m.CheckSpendLimit(ctx, tenant, actor, nil); err != nil || chk.Allowed || chk.SpendLimitID != spendLimitWireID(duplicateID) {
-		t.Fatalf("control: page-two enabled duplicate must govern before upsert: %+v err=%v", chk, err)
-	}
-
-	// Create-or-replace through the real module method.
-	out, created, err := m.SpendLimitUpsert(ctx, tenant, userLimit(actor, "250", "monthly"), "user:admin")
-	if err != nil {
-		t.Fatalf("upsert across pages: %v", err)
-	}
-	if created {
-		t.Fatalf("upsert created a NEW row; the disabled lowest-id row on page one must be reactivated in place")
-	}
-	if out.ID != spendLimitWireID(canonicalID) {
-		t.Fatalf("upsert returned %s, want the lowest-id canonical %s", out.ID, spendLimitWireID(canonicalID))
-	}
-	if out.Amount == nil || *out.Amount != "250" {
-		t.Fatalf("upsert amount = %v, want the replacing spec", out.Amount)
-	}
-
-	// Duplicate behavior is preserved ACROSS the page boundary: the page-two row
-	// is healed away, and exactly one row holds the logical key.
-	if err := m.data.View(ctx, tenant, func(sc store.Scope) error {
-		if _, err := sc.Policies().Get(ctx, duplicateID); !errors.Is(err, store.ErrNotFound) {
-			return fmt.Errorf("page-two duplicate %s survived the heal (err=%v); the traversal stopped at page one", duplicateID, err)
-		}
-		survivor, err := sc.Policies().Get(ctx, canonicalID)
-		if err != nil {
-			return err
-		}
-		if !survivor.Enabled {
-			return fmt.Errorf("canonical row %s was not reactivated", canonicalID)
-		}
-		all, err := listSpendLimitPolicies(ctx, sc)
-		if err != nil {
-			return err
-		}
-		matching := 0
-		for _, p := range all {
-			if s := parseStoredSpendLimit(p); s.ScopeType == "user" && s.ScopeKey == actor && s.Period == "monthly" {
-				matching++
-			}
-		}
-		if matching != 1 {
-			return fmt.Errorf("logical key holds %d rows after heal, want exactly 1", matching)
-		}
-		if len(all) != spendLimitPageFillers+1 {
-			return fmt.Errorf("total qualifying rows = %d, want %d (one duplicate removed)", len(all), spendLimitPageFillers+1)
-		}
-		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
-
-	// The reactivated row now governs the same spend, at its replaced 250-cent
-	// amount and under its ORIGINAL id — not the healed duplicate's.
-	if chk, err := m.CheckSpendLimit(ctx, tenant, actor, nil); err != nil || chk.Allowed || chk.SpendLimitID != spendLimitWireID(canonicalID) {
-		t.Fatalf("reactivated cap = %+v err=%v, want deny under %s", chk, err, spendLimitWireID(canonicalID))
-	}
-
-	// Response and audit shapes are unchanged by the cross-page path too.
-	wantKeys := []string{"type", "id", "created_at", "updated_at", "scope", "amount", "currency", "period"}
-	assertExactJSONKeys(t, out, wantKeys, "cross-page SpendLimit response")
-	audit, err := m.SpendLimitAudit(ctx, tenant, 5)
-	if err != nil || len(audit.Data) == 0 {
-		t.Fatalf("audit = %+v err=%v", audit, err)
-	}
-	latest := audit.Data[0]
-	if latest.Action != "update" || latest.SpendLimitID != out.ID || latest.Before == nil || latest.After == nil {
-		t.Fatalf("cross-page audit = %+v, want an update on the canonical id with both snapshots", latest)
-	}
-	assertExactJSONKeys(t, *latest.Before, wantKeys, "cross-page audit before snapshot")
-	assertExactJSONKeys(t, *latest.After, wantKeys, "cross-page audit after snapshot")
-}

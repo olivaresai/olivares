@@ -262,7 +262,7 @@ func (g *Grok) Probe(ctx context.Context, exe, scratch, wantVersion string) (Pro
 		}
 	}
 	spec := probeSpec{
-		Exe: exe, Args: []string{"--version"}, Dir: home, Budget: g.probeBudget, Grace: g.probeGrace,
+		Exe: exe, Args: []string{"--version"}, Dir: home, Write: []string{scratch}, Budget: g.probeBudget, Grace: g.probeGrace,
 		Env: []string{
 			"HOME=" + home,
 			"TMPDIR=" + tmp,

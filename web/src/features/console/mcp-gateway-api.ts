@@ -20,6 +20,9 @@ export interface MCPServerInput {
   env_secret_refs?: Record<string, string>
   credential_ref?: string
   egress_cidrs: string[]
+  /** A command server's network: only these HTTPS hosts (host or host:port). Omitted,
+   * the command keeps the network of the launch it runs next to. */
+  egress_hosts?: string[]
   /** External OAuth trust: none at all (`{}`) or complete; never generated. */
   trust: {
     resource?: string
@@ -124,6 +127,26 @@ export function mcpHTTPSURL(value: string): boolean {
       !url.hash &&
       value.trim() === value &&
       value.length <= 2048
+    )
+  } catch {
+    return false
+  }
+}
+/** The engine's egress host form (core/auth mcpEgressHost): a lowercase public host,
+ * with a port only when it is not 443. The engine also refuses reserved IP literals. */
+export function mcpEgressHost(value: string): boolean {
+  try {
+    const url = new URL(`https://${value}`)
+    return (
+      url.host === value &&
+      url.pathname === '/' &&
+      !url.username &&
+      !url.password &&
+      !value.includes('*') &&
+      !value.includes('%') &&
+      !url.hostname.endsWith('.') &&
+      url.hostname !== 'localhost' &&
+      !url.hostname.endsWith('.localhost')
     )
   } catch {
     return false

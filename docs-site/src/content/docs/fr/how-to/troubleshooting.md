@@ -35,7 +35,7 @@ réellement neuf, utilisez un `--data-dir` frais.
 
 ```text
 generated a new audit signing key; back it up path=/var/lib/olivares/audit-signing.key
-generated a self-signed TLS certificate; clients must trust it, or pin it with --pin-sha256=<pin_sha256> (that value, verbatim) cert=/var/lib/olivares/tls.crt cert_fingerprint_sha256=d38567e8…378c4e7f pin_sha256=JsdrhrY77Me8miAmobJsqamE3NDWIOSBrDTwbHkyCD0
+generated a local TLS certificate; clients must trust it, or pin it with --pin-sha256=<pin_sha256> (that value, verbatim) cert=/var/lib/olivares/tls.crt cert_fingerprint_sha256=d38567e8…378c4e7f pin_sha256=JsdrhrY77Me8miAmobJsqamE3NDWIOSBrDTwbHkyCD0
 ```
 
 Les deux sont délibérés, et le premier est celui qui se retourne contre vous plus tard : il n'y
@@ -109,12 +109,11 @@ Vérifiez d'abord si quelque chose est câblé. Le moteur le dit explicitement a
 ingest: no observation sources configured (OLIVARES_SOURCES_CONFIG.sources is empty); no connector will ingest — the estate runs on no live traffic
 ```
 
-Un fichier de sources manquant, illisible ou invalide **avertit et continue** (le démarrage ne
-plante jamais à cause de cela) — donc un moteur d'apparence saine avec une carte vide signifie
-généralement que la config n'a jamais été chargée. Corrigez le fichier/chemin et redémarrez ; le
-succès ressemble à `ingest: wired source … kind=…` par source. Une source qui échoue à se
-construire journalise `ingest: failed to register in-process source; not wired` avec la raison —
-c'est rapporté, jamais abandonné silencieusement.
+### Le moteur ne démarre pas avec une configuration de sources
+
+Si `OLIVARES_SOURCES_CONFIG` désigne un fichier absent, illisible ou contenant du JSON invalide, `olivares serve` se termine avec le code `1`. Recherchez l’erreur de démarrage `load sources operator config: OLIVARES_SOURCES_CONFIG`, qui contient `refusing to start instead of silently omitting operator configuration`. Vérifiez le chemin tel que le service ou le conteneur le voit, assurez-vous que son utilisateur peut lire le fichier, validez le JSON, puis redémarrez. Cette erreur de fichier empêche le démarrage ; elle ne laisse pas le moteur fonctionner avec une carte vide.
+
+Après un démarrage réussi, recherchez `ingest: wired source … kind=…` par source. Une source qui ne peut pas être construite journalise `ingest: failed to register in-process source; not wired` avec la raison.
 
 ### pgAudit est câblé mais aucune arête n'arrive
 

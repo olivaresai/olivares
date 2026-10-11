@@ -1,35 +1,8 @@
 # SPDX-FileCopyrightText: 2026 Olivares.AI
 # SPDX-License-Identifier: AGPL-3.0-only
 # Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
-#
-# gate-bin-cache.sh — construir un helper Go de gate UNA vez por contenido, no una vez por
-# invocación. Se sourcea; no se ejecuta.
-#
-# ⛔ POR QUÉ EXISTE, CON LA MEDIDA QUE LO OBLIGA. `check-aws-estate.sh` construye dos
-# helpers Go (`hcl-module-guard` y `aws-apply-guard`) en CADA invocación, y su batería lo
-# invoca **cincuenta veces**. Medido el 2026-08-27 en esta caja: **50,37 s de usuario +
-# 269,54 s de sistema** — unos 5 min 20 s de CPU real — y **1 h 02 min 41 s de reloj** con
-# `load average` entre 159 y 318 sobre 16 cpu (ocho pushes de otros carriles compitiendo).
-# La cifra de reloj NO se extrapola a una caja tranquila; la de CPU sí es el coste propio.
-#
-# Y no es coste de una sesión: `scripts/test-aws-estate.sh` lo invoca `lint:addon-sets-gate`
-# y `scripts/check-aws-estate.sh` lo invoca `lint:addon-sets`, y **las dos tareas están en
-# `.githooks/pre-push`** (líneas 709-710). Es decir, este coste lo paga TODO push de TODO
-# carril, y el nombre de la tarea no lo dice. La clase está medida y escrita:
-# «una pata del pre-push cuesta 8-12 min a CADA carril».
-#
-# CÓMO NO SE CONVIERTE EN UN FALSO VERDE, que es la única pregunta que importa de una caché:
-#
-#   · La clave es el CONTENIDO de las fuentes (SHA-256 de `go.mod`, `go.sum` y los `.go`),
-#     no su fecha ni su ruta. Fuentes distintas ⇒ binario distinto ⇒ ruta distinta. Los dos
-#     casos de la batería que mutan el guard siguen construyendo de verdad.
-#   · Se construye a un nombre TEMPORAL ÚNICO y se renombra con `mv` dentro del mismo
-#     sistema de ficheros. Un renombrado es atómico: nadie ve nunca un binario a medias,
-#     ni siquiera con varios carriles construyendo a la vez.
-#   · Si falta `sha256sum` o no se puede escribir la caché, **se construye igual** y se
-#     sigue. Una caché que no se puede usar es un ahorro que no ocurre, nunca un veredicto.
-#   · La caché NO decide nada. Si el `go build` falla, quien llama contesta lo de siempre:
-#     `2 · no he podido mirar`.
+# Cache compiled helpers by source content. Publish completed binaries by atomic rename.
+# Build failures remain failures; an unavailable cache falls back to building.
 
 # olivares_cached_gate_bin <directorio-del-módulo> <nombre>
 #

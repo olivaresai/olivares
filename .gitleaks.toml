@@ -435,35 +435,20 @@ regexes = [
   regexTarget = "secret"
   regexes = ['''^A2A-Delegation$''']
 
-# ── Dos hechos históricos MÍOS, exactos, y por qué no llevan regex ──────────────────────────
-#
-# Los dos son de y los dos son autoinfligidos. Van con la MISMA forma que este fichero ya
-# estableció: `targetRules` + `commits` + ruta anclada. Limpian historia inmutable y **nada más**:
-# en el árbol de trabajo, en el export y en el público no aplican y no hacen falta, porque ahí lo
-# limpia el contenido.
-#
-# ⛔ POR QUÉ NO LLEVAN `regexes`, que sería más estrecho: los valores a eximir SON los señuelos con
-# forma de credencial que estamos retirando del informe. Escribirlos aquí los volvería a meter en la
-# historia — el mismo error, en otro fichero. Commit + ruta ya acota a **un commit y un fichero**,
-# que es tan exacto como se puede ser sin reproducir el valor.
+# Exact historical false positives use targetRules, a commit and an anchored path.
+# They exempt immutable history only; the working and exported trees were cleaned.
+# Do not repeat credential-shaped decoy values in regexes: that would commit the
+# same values again. Commit plus path identifies one historical file without them.
 [[allowlists]]
   description = "gitleaks contrast report: synthetic decoys committed in b7dbbc943e87, scrubbed from the tree"
   targetRules = ["generic-api-key"]
   condition = "AND"
   commits = ["b7dbbc943e877173b83306a608e112d415b45320"]
-  # ⛔ LA RUTA VUELVE, PERO SIN EL TOKEN DE SESIÓN — no había que elegir entre las dos cosas.
-  #
-  # Historia corta, porque las dos correcciones eran ciertas y la primera no vio el coste de la
-  # segunda. La ruta original era `^design-CONTRASTE-…$`: el nombre del fichero LLEVA el
-  # número de sesión, dentro de un VALOR, y `.gitleaks.toml` **sí viaja al export** mientras que
-  # `design/` no — el escrubador sólo limpia COMENTARIOS, así que ahí era una fuga medida. Quitar
-  # `paths` cerró la fuga y abrió otra cosa: la excepción pasó a ser `(regla) AND (commit)`, y ese
-  # commit toca **NUEVE** ficheros, entre ellos `scripts/export-public.sh`, `scripts/check-spdx.sh`,
-  # `scripts/test-check-secrets.sh` y `README.de.md`, que **viajan**. Un `generic-api-key` en
-  # cualquiera de los otros ocho habría quedado exento sin que nadie lo viera.
-  #
-  # El comodín `[^/]*` casa el prefijo de sesión sin nombrarlo: conserva la ruta anclada a UN
-  # fichero y no contiene ningún `S<dígitos>`. Verificado contra los nueve ficheros del commit.
+  # Keep the anchored path without publishing its internal session identifier.
+  # This configuration is exported, while design/ is removed and only comments
+  # are scrubbed. Removing paths would exempt every matching secret in all nine
+  # files touched by this commit, including shipped scripts and README.de.md.
+  # The [^/]* prefix preserves the single-file scope without naming the session.
   paths = ['''^design/[^/]*CONTRASTE-GITLEAKS-2026-08-29\.md$''']
 
 # El séptimo, y es una recursión con nombre: el fichero `.gitleaksignore` que #2104 añadió para
@@ -929,3 +914,116 @@ regexes = [
   paths = ['''^cmd/olivares/providerapproval_secret_test\.go$''']
   regexTarget = "secret"
   regexes = ['''^user:" \+ secret \+ "$''']
+
+# The account-password test creates an in-process user, changes its password to
+# this synthetic value, then verifies that login accepts it. It authenticates
+# nothing outside the test. Keep other values, paths and detector rules in scope.
+[[allowlists]]
+  description = "account password test: exact synthetic replacement password, not a credential"
+  targetRules = ["generic-api-key"]
+  condition = "AND"
+  paths = ['''^core/api/account_password_test\.go$''']
+  regexTarget = "secret"
+  regexes = ['''^other-replacement1$''']
+
+# 2026-10-05 · generic-api-key · three synthetic fixtures, removed from the tree by a content fix.
+# The tree now builds or shows them as non-keys (a '0' * 8 drifted license key, the core/api shared
+# test password, a token:<token-id> placeholder), so they survive only in the commits that added
+# them. Same form as the historical README and contrast-report blocks above: rule AND one commit AND
+# one anchored path, without regexes, so the values are not written again. One block per commit, so
+# no commit is exempted on another commit's path. They clear immutable history only; any new finding
+# on these paths, in any later commit, is still a finding.
+[[allowlists]]
+  description = "release first-hour stub: synthetic drifted license key added in 1b6d5200b55f, removed from the tree"
+  targetRules = ["generic-api-key"]
+  condition = "AND"
+  commits = ["1b6d5200b55f408da73cbcc13f6a1aa9c3c6cce7"]
+  paths = ['''^scripts/test-release-first-hour\.py$''']
+
+[[allowlists]]
+  description = "default-workspace scoping test: synthetic user password added in 47aee3ea5d96, removed from the tree"
+  targetRules = ["generic-api-key"]
+  condition = "AND"
+  commits = ["47aee3ea5d9659c254bc6915b738e8da569a0bad"]
+  paths = ['''^core/api/handlers_scoping_default_workspace_test\.go$''']
+
+[[allowlists]]
+  description = "Paperclip guide: example proxy token id in ledger output added in f24cf0d8b984, removed from the tree"
+  targetRules = ["generic-api-key"]
+  condition = "AND"
+  commits = ["f24cf0d8b984adc9cededb9b2d56d5c5dba310af"]
+  paths = ['''^docs/integrations/paperclip-guide\.md$''']
+
+# Exact fixtures: setup, sign-in redaction, DR sealers, and plain-git transport.
+# Each block requires the rule AND anchored path AND complete captured bytes.
+# Other values, other paths, and other rules remain findings. The unchanged
+# admission wrapper consumes these rules; no commit or file is exempted.
+
+# c7286878a07a · generic-api-key · cmd/olivares/cmd_setup_existing_env_test.go
+# The capture is a database connection-count assignment, not a key. The map
+# appends it to the shipped env file in t.TempDir and asserts setup refuses to
+# overwrite that operator configuration. SHA256 prefix 49cbf2d2d7c45df7.
+[[allowlists]]
+  description = "Exact synthetic fixture: cmd/olivares/cmd_setup_existing_env_test.go"
+  targetRules = ["generic-api-key"]
+  condition = "AND"
+  paths = ['''^cmd/olivares/cmd_setup_existing_env_test\.go$''']
+  regexTarget = "secret"
+  regexes = [
+    '''^OLIVARES_DB_MAX_CONNS=40$''',
+  ]
+
+# b81b7602ee53 · jwt · cmd/olivares/internal/agenttoolsapi/signin_failure_test.go
+# The JWT is a signInReason redaction witness with a sequential numeric subject.
+# Its header, payload, and signature prefix match the older sign-in decoy in
+# this configuration. The test only asks that token fragments be absent from
+# the returned reason; it never signs in with this token. SHA256 prefix
+# 7c5b0229189828de.
+[[allowlists]]
+  description = "Exact synthetic fixture: cmd/olivares/internal/agenttoolsapi/signin_failure_test.go"
+  targetRules = ["jwt"]
+  condition = "AND"
+  paths = ['''^cmd/olivares/internal/agenttoolsapi/signin_failure_test\.go$''']
+  regexTarget = "secret"
+  regexes = [
+    '''^eyJhbGciOiJIUzI1NiJ9\.eyJzdWIiOiIxMjM0NTY3ODkwIn0\.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U$''',
+  ]
+
+# 67b73e2fec9a / 83affa363a9c · generic-api-key · cmd/olivares/cmd_dr_sealer_test.go
+# drValidSealerKey and drOtherSealerKey decode to 32 ASCII bytes: a repeated
+# digit/hex-letter sequence and its reversal. Only the local DR test uses them
+# to distinguish matching from wrong sealer keys. Gitleaks also scans their
+# decoded forms, so all four exact captures are needed. Encoded SHA256 prefixes
+# 2cf5e6ec387461b4 and 79a2bd52a19efc80; decoded prefixes 3eb1bd439947eb76
+# and 4ba68aa8767bde72. The older commit repeats only the first fixture.
+[[allowlists]]
+  description = "Exact synthetic fixture: cmd/olivares/cmd_dr_sealer_test.go"
+  targetRules = ["generic-api-key"]
+  condition = "AND"
+  paths = ['''^cmd/olivares/cmd_dr_sealer_test\.go$''']
+  regexTarget = "secret"
+  regexes = [
+    '''^MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=$''',
+    '''^ZmVkY2JhOTg3NjU0MzIxMGZlZGNiYTk4NzY1NDMyMTA=$''',
+    '''^0123456789abcdef0123456789abcdef$''',
+    '''^fedcba9876543210fedcba9876543210$''',
+  ]
+
+# 78f0810ee66b · private-key · connectors/gitpublish/plaingit_test.go
+# The capture spans two bare fake SSH key opening markers and the Go code
+# between them (PushTarget assertions and the next test declaration). There is
+# no encoded key body. The test checks the transport/header shape, not SSH
+# authentication. Match the entire captured source fragment, never a PEM
+# opening marker alone. SHA256 prefix 13e96149ef60f93f. Since fcbd2917 the current
+# file builds that header at run time and has no capture; the block covers the history.
+[[allowlists]]
+  description = "Exact synthetic fixture: connectors/gitpublish/plaingit_test.go"
+  targetRules = ["private-key"]
+  condition = "AND"
+  paths = ['''^connectors/gitpublish/plaingit_test\.go$''']
+  regexTarget = "secret"
+  regexes = [
+    '''^-----BEGIN OPENSSH PRIVATE KEY-----"\)\}, f\.x\)\n\tif err != nil \{\n\t\tt\.Fatal\(err\)\n\t\}\n\tu, scheme, hdr = ssh\.PushTarget\(tok\)\n\tif u != "ssh://git@lan\.example:2222/srv/git/tools\.git" \|\| scheme != "ssh" \|\| !hdr\.IsZero\(\) \{\n\t\tt\.Fatalf\("ssh target = %q %q %v", u, scheme, hdr\)\n\t\}\n\}\n\nfunc TestNewPlainGitRefusesBadBindings\(t \*testing\.T\) \{\n\tf := newGitFixture\(t\)\n\tkey := NewSecret\("-----BEGIN OPENSSH PRIVATE KEY-----$''',
+  ]
+
+# End exact fixtures.

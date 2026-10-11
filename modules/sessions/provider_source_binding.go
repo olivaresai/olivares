@@ -102,13 +102,6 @@ type ProviderSourceResolver interface {
 	ResolveAppliedSource(ctx context.Context, p auth.Principal, tenant model.TenantID, sourceID model.ID) (SourceRevision, error)
 }
 
-// UseProviderSourceResolver late-binds the source port during boot.
-func (m *Module) UseProviderSourceResolver(r ProviderSourceResolver) {
-	if r != nil {
-		m.providerSources = r
-	}
-}
-
 // ProviderSourceBinding is the module's own view of one binding row.
 type ProviderSourceBinding struct {
 	ID             model.ID
@@ -190,10 +183,10 @@ func validBindingRef(ref string) bool {
 // whether the profile can take a binding; the database decides that the (source,
 // revision, environment) key is free.
 func (m *Module) CreateBinding(ctx context.Context, tenant model.TenantID, p auth.Principal, in CreateBindingInput) (ProviderSourceBinding, error) {
-	if m.data == nil {
+	if m.Data == nil {
 		return ProviderSourceBinding{}, errNoData
 	}
-	if m.providerSources == nil {
+	if m.ProviderSources == nil {
 		return ProviderSourceBinding{}, ErrNoSourceResolver
 	}
 	env, err := m.localEnvironment()
@@ -220,7 +213,7 @@ func (m *Module) CreateBinding(ctx context.Context, tenant model.TenantID, p aut
 	if prof.EnvironmentRef != env {
 		return ProviderSourceBinding{}, ErrProfileForeignEnvironment
 	}
-	src, err := m.providerSources.ResolveAppliedSource(ctx, p, tenant, in.SourceID)
+	src, err := m.ProviderSources.ResolveAppliedSource(ctx, p, tenant, in.SourceID)
 	if err != nil {
 		return ProviderSourceBinding{}, err
 	}
@@ -238,7 +231,7 @@ func (m *Module) CreateBinding(ctx context.Context, tenant model.TenantID, p aut
 	}
 	ref := bindingRefPrefix + string(model.NewID())
 	var out ProviderSourceBinding
-	err = m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
+	err = m.Data.Mutate(ctx, tenant, func(sc store.Scope) error {
 		repo, err := sc.Ext(providerBindingKind)
 		if err != nil {
 			return err
@@ -274,14 +267,14 @@ func (m *Module) CreateBinding(ctx context.Context, tenant model.TenantID, p aut
 // keep their provenance, and later observations through that source are simply
 // no longer attributed to the profile.
 func (m *Module) RevokeBinding(ctx context.Context, tenant model.TenantID, ref string) (ProviderSourceBinding, error) {
-	if m.data == nil {
+	if m.Data == nil {
 		return ProviderSourceBinding{}, errNoData
 	}
 	if !validBindingRef(ref) {
 		return ProviderSourceBinding{}, ErrBindingNotFound
 	}
 	var out ProviderSourceBinding
-	err := m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
+	err := m.Data.Mutate(ctx, tenant, func(sc store.Scope) error {
 		repo, err := sc.Ext(providerBindingKind)
 		if err != nil {
 			return err
@@ -312,14 +305,14 @@ func (m *Module) RevokeBinding(ctx context.Context, tenant model.TenantID, ref s
 
 // GetBinding reads one binding by ref.
 func (m *Module) GetBinding(ctx context.Context, tenant model.TenantID, ref string) (ProviderSourceBinding, error) {
-	if m.data == nil {
+	if m.Data == nil {
 		return ProviderSourceBinding{}, errNoData
 	}
 	if !validBindingRef(ref) {
 		return ProviderSourceBinding{}, ErrBindingNotFound
 	}
 	var out ProviderSourceBinding
-	err := m.data.View(ctx, tenant, func(sc store.Scope) error {
+	err := m.Data.View(ctx, tenant, func(sc store.Scope) error {
 		repo, err := sc.Ext(providerBindingKind)
 		if err != nil {
 			return err
@@ -339,7 +332,7 @@ func (m *Module) GetBinding(ctx context.Context, tenant model.TenantID, ref stri
 
 // ListBindings lists the tenant's bindings, optionally narrowed to a profile.
 func (m *Module) ListBindings(ctx context.Context, tenant model.TenantID, profileRef string, q model.Query) ([]ProviderSourceBinding, model.Page, error) {
-	if m.data == nil {
+	if m.Data == nil {
 		return nil, model.Page{}, errNoData
 	}
 	if profileRef != "" {
@@ -347,7 +340,7 @@ func (m *Module) ListBindings(ctx context.Context, tenant model.TenantID, profil
 	}
 	var out []ProviderSourceBinding
 	var page model.Page
-	err := m.data.View(ctx, tenant, func(sc store.Scope) error {
+	err := m.Data.View(ctx, tenant, func(sc store.Scope) error {
 		repo, err := sc.Ext(providerBindingKind)
 		if err != nil {
 			return err

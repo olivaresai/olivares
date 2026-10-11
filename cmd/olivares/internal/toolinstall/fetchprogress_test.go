@@ -167,3 +167,26 @@ func TestInstallV2ReportsTheDownloadToTheCallersTerminal(t *testing.T) {
 		t.Fatalf("the count was reported before the download was announced:\n%s", out)
 	}
 }
+
+// TestInstallReportsTheDownloadToTheCallersTerminal is the same proof for the
+// signed-manifest install (Claude Code): its artifact is the largest download of
+// all, and without the count the console's preparation and the terminal showed
+// nothing for its whole length (#1086).
+func TestInstallReportsTheDownloadToTheCallersTerminal(t *testing.T) {
+	f := newFixture(t)
+	f.publish(fxVersion)
+	var terminal bytes.Buffer
+	_, plan, err := f.engine.Install(context.Background(), f.req("latest"), nil, &terminal)
+	if err != nil {
+		t.Fatalf("install: %v\n%s", err, terminal.String())
+	}
+	out := terminal.String()
+	size := humanBytes(plan.Artifact.Size)
+	want := "  downloaded " + size + " of " + size + " (100%)"
+	if !strings.Contains(out, want) {
+		t.Fatalf("the terminal never saw the byte count %q; the download reported nothing:\n%s", want, out)
+	}
+	if strings.Index(out, "downloading ") > strings.Index(out, want) {
+		t.Fatalf("the count was reported before the download was announced:\n%s", out)
+	}
+}

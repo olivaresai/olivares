@@ -15,7 +15,7 @@
 #   modules/inferenceproxy/api.go   is the module's ADMIN CRUD surface. Its own package
 #                                   doc says so: "This module DECIDES NOTHING about a
 #                                   live request" (modules/inferenceproxy/doc.go:13).
-#                                   The governed decider is cmd/olivares/inferenceproxy.go.
+#                                   The governed decider is cmd/olivares/internal/inferencepep/inferenceproxy.go.
 #   connectors/a2a/a2a.go           is the read-only Agent-Card SourceConnector. It holds
 #                                   no gate at all; the delegation PEP is connectors/a2a/pep.go.
 #
@@ -27,6 +27,7 @@
 # enforcement. A duplicated seam, proof or label is refused outright — one enforcement
 # point is one row, or three real seams could publish "four" by listing one of them twice.
 # Both counters read THIS file and agree on what a valid row is, so the two cannot drift.
+# A missing seam or proof file refuses measurement; it must not silently lower the count.
 #
 # WHAT THIS CENSUS DOES NOT PROVE, said plainly so nobody has to discover it. It checks
 # that the proof is THERE, not that it PASSES: neither counter compiles or runs Go, because
@@ -53,7 +54,10 @@
 # Adding a row raises the published count and every public surface must be updated with
 # it; the gate will say so. Removing a proof lowers it and turns lint:public-counts RED —
 # verified by mutation in both directions on 2026-08-05, not merely observed green.
-cmd/olivares/claudehookpep.go	cmd/olivares/claudehookpep_test.go	^func TestHookPEP_DenyClosedWithoutPolicyForTenant\(	empty default must deny-closed	Claude Code PreToolUse/PostToolUse hook
-cmd/olivares/inferenceproxy.go	cmd/olivares/inferenceproxy_test.go	^func TestProxyAuthorizePolicyErrorFailsClosed\(	must FAIL CLOSED	inline /v1/messages inference proxy
+modules/sessions/hookpep/claudehookpep.go	cmd/olivares/claudehookpep_test.go	^func TestHookPEP_DenyClosedWithoutPolicyForTenant\(	empty default must deny-closed	Claude Code PreToolUse/PostToolUse hook
+cmd/olivares/internal/inferencepep/inferenceproxy.go	cmd/olivares/internal/inferencepep/inferenceproxy_test.go	^func TestProxyAuthorizePolicyErrorFailsClosed\(	must FAIL CLOSED	inline /v1/messages inference proxy
 connectors/mcp/gate.go	connectors/mcp/rs_test.go	^func TestRSDestructiveDenyClosedDefaultGate\(	deny-closed gate must not reach the upstream	MCP tools/call gate
-connectors/a2a/pep.go	connectors/a2a/delegate_test.go	^func TestDelegateDenyClosedDefaultGate\(	a Delegator with no gate must deny-closed	A2A delegation gate
+# A2A delegation runs in Business. Community retains the refusal boundary described
+# in docs/editions.md: a Delegator with no gate refuses without contacting the peer.
+# Its proof exercises that Community fallback; it does not certify Business delegation.
+connectors/a2a/delegation_community.go	connectors/a2a/community_test.go	^func TestCommunityA2ADelegationDenyClosedDefaultGate\(	Community delegation must deny-closed with no gate	A2A delegation gate

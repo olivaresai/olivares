@@ -1,11 +1,12 @@
 {
   "title": "Providers",
-  "subtitle": "A cloud provider credential or a local model endpoint, selected through a provider profile.",
+  "subtitle": "A cloud provider credential or a local model endpoint that your agent tools run on.",
   "nav": "Providers",
   "add": "Add provider",
+  "rowMenu": "Row actions for {{name}}",
   "empty": {
     "title": "No provider registered yet",
-    "description": "Connect Anthropic, OpenAI or xAI with an API key, or add a local Ollama endpoint without a key. Test the connection, then bind it to a profile.",
+    "description": "Connect Anthropic, OpenAI or xAI with an API key, or add a local Ollama endpoint without a key, then test the connection.",
     "action": "Add your first provider"
   },
   "emptyFiltered": {
@@ -28,6 +29,7 @@
     "anthropic": "Anthropic",
     "openai": "OpenAI",
     "xai": "xAI",
+    "gemini": "Gemini",
     "openai_compatible": "OpenAI-compatible",
     "ollama": "Ollama"
   },
@@ -35,6 +37,7 @@
     "anthropic": "Claude Code. Injects ANTHROPIC_API_KEY.",
     "openai": "Codex. Injects OPENAI_API_KEY.",
     "xai": "Grok. Injects XAI_API_KEY.",
+    "gemini": "Gemini CLI at Google's own API address. Uses a Gemini API key.",
     "openai_compatible": "Any OpenAI-shaped endpoint. Injects OPENAI_API_KEY and OPENAI_BASE_URL; the endpoint is required.",
     "ollama": "Local models for OpenCode. No API key. Use the native Ollama endpoint; the test reads model metadata."
   },
@@ -78,6 +81,7 @@
     "namePlaceholder": "Anthropic (production)",
     "baseURL": "Endpoint",
     "baseURLHint": "Leave empty for the provider's official endpoint. Must be https.",
+    "baseURLLocalHint": "Leave empty for the provider's official endpoint. Otherwise https, or plain http at a loopback or private-network address.",
     "baseURLPlaceholder": "https://llm.example.com",
     "apiKey": "API key",
     "apiKeyHint": "Sent once, sealed by the engine, never returned to this browser.",
@@ -85,11 +89,13 @@
     "submit": "Add provider",
     "submitting": "Sealing…",
     "cancel": "Cancel",
-    "success": "Provider registered. Test the connection to confirm it works.",
+    "success": "Provider added.",
     "testNext": "Test connection now",
     "registering": "Registering…",
     "localNameHint": "Optional. Leave it empty to use the provider's name.",
-    "advanced": "Advanced: custom endpoint"
+    "advanced": "Advanced: custom endpoint",
+    "missingFields": "Enter the missing fields: {{fields}}.",
+    "requiredEndpointHint": "Enter the service endpoint: https, or plain http at a loopback or private-network address."
   },
   "rotate": {
     "title": "Rotate this provider's key",
@@ -137,5 +143,24 @@
     "unavailable": "Profile permissions or a compatible active profile are unavailable.",
     "loadError": "Profiles could not be loaded.",
     "success": "Provider bound to the profile."
+  },
+  "defaultModel": {
+    "title": "Default model",
+    "model": "Model",
+    "hint": "New sessions use this model unless another is chosen.",
+    "modelsHint": "Models listed by this provider’s last connection test.",
+    "native": "No saved default",
+    "save": "Save",
+    "success": "Default model saved.",
+    "createHint": "Optional. Leave empty to choose a default after the connection test."
+  },
+  "prepare": {
+    "pending": "Preparing {{tool}} for your first session…",
+    "installing": "Installing {{tool}} for your first session: {{progress}}",
+    "ready": "Ready to start a session.",
+    "start": "New session",
+    "failed": "Provider saved. Session setup failed: {{error}}",
+    "retry": "Retry setup",
+    "incomplete": "Tool installation is {{state}}. Check AI tools and retry."
   }
 }

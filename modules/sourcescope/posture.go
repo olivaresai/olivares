@@ -18,7 +18,7 @@ import (
 	"github.com/olivaresai/olivares/core/store"
 )
 
-// posture.go implements the F2/F5 enforcement-POSTURE controls (ADR-0022 §5): a
+// posture.go implements the F2/F5 enforcement-POSTURE controls: a
 // mutation that RELAXES enforcement — widens who may reach a source, or weakens a
 // restriction — is never applied by a single actor. It is recorded as a PENDING
 // posture-change request and applied only when a SECOND, distinct principal approves it
@@ -145,7 +145,7 @@ func scopeOf(d bindingDTO) postureScope {
 func (s postureScope) String() string { return s.tree + ":" + s.ref }
 
 // classifyUpdate reports whether updating a binding from old→updated RELAXES enforcement
-// (ADR-0022 §5), and a human reason for the audit/UI. otherEnabledAllows is the number of
+// and a human reason for the audit/UI. otherEnabledAllows is the number of
 // OTHER enabled allow bindings on the same source, to detect an unconfine when the last
 // allow is disabled.
 //
@@ -179,7 +179,7 @@ func (s postureScope) String() string { return s.tree + ":" + s.ref }
 // relaxation, because a false positive costs one extra approval and a false negative is the
 // bypass of a two-person gate.
 //
-// The POLARITY of a scope change depends on the EFFECT — the trap ADR-0022 §5 fell into. For
+// Scope changes have opposite effects on allow and forbid rules. For
 // an allow a smaller scope reaches fewer actors; for a forbid it PROTECTS fewer. Both are
 // relaxations here, for opposite reasons.
 //
@@ -277,7 +277,7 @@ func classifyUpdate(old, updated bindingDTO, otherEnabledAllows int) (bool, stri
 	return true, "unclassified posture change (conservative default)"
 }
 
-// classifyCreate reports whether CREATING a binding RELAXES enforcement (ADR-0022 §5), and
+// classifyCreate reports whether CREATING a binding RELAXES enforcement, and
 // a human reason for the audit/UI. otherEnabledAllows is the number of enabled ALLOW
 // bindings the source ALREADY carries — the confinement signal, and the whole decision.
 //
@@ -774,14 +774,12 @@ func (m *Module) decidePostureRequest(w http.ResponseWriter, r *http.Request, mc
 		if rec.String(colPRStatus) != postureStatusPending {
 			return validationError("posture request is not pending")
 		}
-		// Anclajes que traía la versión de este mismo arreglo (colisión de dos carriles,
-		// resuelta a favor de la primitiva compartida): Actor() es "user:<UserID>" para una
-		// sesión y "token:<CredID>" para un token (core/auth/principal.go:126-131), y un
-		// principal de token se construye con el UserID de su emisor
-		// (core/auth/principal_lookup.go:235) — por eso la persona es la identidad correcta.
-		// El mismo patrón ya estaba en governance/killswitch.go:816-818 y :843-849,
-		// governance/breakglass.go:177 y :501-540, y recording/handlers.go:180: sourcescope
-		// era el rezagado, no el inventor.
+		// References retained when the overlapping fixes converged on the shared
+		// primitive: Actor() is user:<UserID> for a session and token:<CredID> for a
+		// token (core/auth/principal.go:126-131). A token principal carries its issuer's
+		// UserID (core/auth/principal_lookup.go:235), so the human is the correct identity.
+		// Existing examples were governance/killswitch.go:816-818 and :843-849,
+		// governance/breakglass.go:177 and :501-540, and recording/handlers.go:180.
 		// DUAL-CONTROL: the APPROVER must be a DIFFERENT PERSON than the proposer, which
 		// is not the same question as a different actor string. Comparing actors let one
 		// human propose from a session and approve with a token they minted for

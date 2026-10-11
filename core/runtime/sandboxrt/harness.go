@@ -29,12 +29,13 @@ import (
 
 // harnessJob is the serialized job handed to the guest harness.
 type harnessJob struct {
-	Steps     []harnessStep `json:"steps,omitempty"`
-	Mocks     []harnessMock `json:"mocks,omitempty"`
-	Probe     *harnessProbe `json:"probe,omitempty"`
-	Target    string        `json:"target,omitempty"`
-	ProxyURL  string        `json:"proxy_url,omitempty"`
-	TimeoutMS int64         `json:"timeout_ms,omitempty"`
+	Steps       []harnessStep `json:"steps,omitempty"`
+	Mocks       []harnessMock `json:"mocks,omitempty"`
+	Probe       *harnessProbe `json:"probe,omitempty"`
+	Target      string        `json:"target,omitempty"`
+	ProxyURL    string        `json:"proxy_url,omitempty"`
+	ProxySocket string        `json:"proxy_socket,omitempty"`
+	TimeoutMS   int64         `json:"timeout_ms,omitempty"`
 }
 
 type harnessStep struct {
@@ -70,8 +71,8 @@ type harnessStepOutput struct {
 // encodeHarnessJob serializes a Job (+ the proxy address the instance must use)
 // into the guest-harness input. proxyAddr "" leaves no proxy (deny-all egress;
 // the harness makes no network calls).
-func encodeHarnessJob(job Job, proxyAddr string) ([]byte, error) {
-	hj := harnessJob{Target: job.Target}
+func encodeHarnessJob(job Job, proxyAddr, proxySocket string) ([]byte, error) {
+	hj := harnessJob{Target: job.Target, ProxySocket: proxySocket}
 	if proxyAddr != "" {
 		hj.ProxyURL = "http://" + proxyAddr
 	}

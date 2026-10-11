@@ -1,6 +1,6 @@
 {
   "title": "Bereitstellung & Integration",
-  "subtitle": "Soll-Ist-Bereitstellungen, Versionen & Rollback, gesteuerter Plan → Anwenden sowie die Agent→Ressource-Verkabelungen, die sie tragen.",
+  "subtitle": "Legen Sie fest, welche Agenten und MCP-Server wo laufen, und planen, genehmigen und wenden Sie dann jede Änderung an oder setzen Sie sie zurück.",
   "tabs": {
     "definitions": "Definitionen",
     "wirings": "Verkabelungen",
@@ -111,6 +111,18 @@
     "subjectKind": "Subjektart",
     "subjectRef": "Subjekt",
     "subjectRefHint": "Der Agent oder MCP-Server, den diese Bereitstellung ausliefert.",
+    "subjectKinds": {
+      "agent": "Agent",
+      "mcp_server": "MCP-Server"
+    },
+    "subjectChoose": {
+      "agent": "Agent auswählen",
+      "mcp_server": "MCP-Server auswählen"
+    },
+    "subjectNone": {
+      "agent": "Noch keine Agenten.",
+      "mcp_server": "Noch keine MCP-Server."
+    },
     "name": "Name",
     "nameHint": "Ein Name für diese Bereitstellung. Eindeutig je Umgebung.",
     "environment": "Umgebung",
@@ -322,17 +334,22 @@
   "empty": {
     "deploy": {
       "title": "Noch keine Bereitstellungen deklariert",
-      "description": "Diese Ansicht listet Bereitstellungsdefinitionen — den hier erfassten Soll-Zustand, keine gestartete Sitzung. Deklarieren Sie eine Bereitstellung, um den Soll-Zustand zu erfassen; der Abgleich erfordert zusätzlich einen vom Betreiber konfigurierten Laufzeit-Executor, ohne den Plan und Anwenden 503 zurückgeben.",
+      "description": "Diese Ansicht listet Bereitstellungsdefinitionen: Deklarieren Sie einen Agenten oder MCP-Server, dann stellen Plan und Anwenden ihn auf seinem Ziel bereit.",
       "sessions": "Sitzungen betreiben"
     },
     "operations": {
       "title": "Noch keine Bereitstellungsoperationen",
-      "description": "Plan, Anwenden, Verifizieren und Außerbetriebnahme schreiben erst nach der Betreiberkonfiguration eines Laufzeit-Executors einen Hauptbucheintrag; bis dahin geben alle 503 zurück und erfassen nichts."
+      "description": "Plan, Anwenden, Verifizieren und Außerbetriebnahme werden hier erfasst, sobald ein Laufzeit-Executor verbunden ist."
     },
     "wirings": {
       "title": "Noch keine zulässigen Verkabelungen",
       "description": "Verkabelungen werden in der Bereitstellungsdefinition deklariert und bei erfolgreichem Anwenden materialisiert, wofür ein vom Betreiber konfigurierter Laufzeit-Executor nötig ist."
     }
+  },
+  "noExecutor": {
+    "title": "Für Bereitstellungen ist ein Laufzeit-Executor nötig",
+    "description": "Ein Administrator verbindet ihn, indem er OLIVARES_DEPLOY_EXECUTOR_CONFIG auf dessen Konfigurationsdatei setzt und Olivares neu startet.",
+    "guide": "So verbinden Sie einen Executor"
   },
   "truncatedHint": "Es gibt mehr Zeilen als angezeigt; diese Seite nimmt sie nach Zeilen-ID (bei der Erstellung vergeben), daher fehlen die späteren. Eine hier NICHT aufgeführte Definition, Verknüpfung oder ein Vorgang ist kein Beweis dafür, dass es sie nicht gibt."
 }

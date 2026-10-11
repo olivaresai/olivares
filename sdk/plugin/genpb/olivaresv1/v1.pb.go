@@ -2881,6 +2881,7 @@ func (x *IngestSummary) GetAccepted() uint64 {
 	return 0
 }
 
+// Deprecated: Marked as deprecated in olivaresv1/v1.proto.
 type InitRequest struct {
 	state  protoimpl.MessageState `protogen:"open.v1"`
 	Config *Config                `protobuf:"bytes,1,opt,name=config,proto3" json:"config,omitempty"`
@@ -2935,6 +2936,7 @@ func (x *InitRequest) GetHostBrokerId() uint32 {
 	return 0
 }
 
+// Deprecated: Marked as deprecated in olivaresv1/v1.proto.
 type SubscribeRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Types         []string               `protobuf:"bytes,1,rep,name=types,proto3" json:"types,omitempty"` // event.Type strings; empty = all
@@ -2979,6 +2981,7 @@ func (x *SubscribeRequest) GetTypes() []string {
 	return nil
 }
 
+// Deprecated: Marked as deprecated in olivaresv1/v1.proto.
 type LogRecord struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Level         string                 `protobuf:"bytes,1,opt,name=level,proto3" json:"level,omitempty"`
@@ -3304,19 +3307,19 @@ const file_olivaresv1_v1_proto_rawDesc = "" +
 	"\x06source\x18\x02 \x01(\tR\x06source\x12>\n" +
 	"\vobservation\x18\x03 \x01(\v2\x1c.olivares.sdk.v1.ObservationR\vobservation\"+\n" +
 	"\rIngestSummary\x12\x1a\n" +
-	"\baccepted\x18\x01 \x01(\x04R\baccepted\"d\n" +
+	"\baccepted\x18\x01 \x01(\x04R\baccepted\"h\n" +
 	"\vInitRequest\x12/\n" +
 	"\x06config\x18\x01 \x01(\v2\x17.olivares.sdk.v1.ConfigR\x06config\x12$\n" +
-	"\x0ehost_broker_id\x18\x02 \x01(\rR\fhostBrokerId\"(\n" +
+	"\x0ehost_broker_id\x18\x02 \x01(\rR\fhostBrokerId:\x02\x18\x01\",\n" +
 	"\x10SubscribeRequest\x12\x14\n" +
-	"\x05types\x18\x01 \x03(\tR\x05types\"\xb6\x01\n" +
+	"\x05types\x18\x01 \x03(\tR\x05types:\x02\x18\x01\"\xba\x01\n" +
 	"\tLogRecord\x12\x14\n" +
 	"\x05level\x18\x01 \x01(\tR\x05level\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\x12>\n" +
 	"\x06fields\x18\x03 \x03(\v2&.olivares.sdk.v1.LogRecord.FieldsEntryR\x06fields\x1a9\n" +
 	"\vFieldsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01*\xa3\x01\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01:\x02\x18\x01*\xa3\x01\n" +
 	"\rComponentType\x12\x1e\n" +
 	"\x1aCOMPONENT_TYPE_UNSPECIFIED\x10\x00\x12\x19\n" +
 	"\x15COMPONENT_TYPE_SOURCE\x10\x01\x12\x19\n" +
@@ -3343,16 +3346,16 @@ const file_olivaresv1_v1_proto_rawDesc = "" +
 	"\tDeltaList\x12$.olivares.sdk.v1.ContentDeltaRequest\x1a\x1e.olivares.sdk.v1.ContentChange0\x01\x127\n" +
 	"\x05Close\x12\x16.olivares.sdk.v1.Empty\x1a\x16.olivares.sdk.v1.Empty2Z\n" +
 	"\rIngestService\x12I\n" +
-	"\x04Push\x12\x1f.olivares.sdk.v1.IngestEnvelope\x1a\x1e.olivares.sdk.v1.IngestSummary(\x012\x85\x02\n" +
+	"\x04Push\x12\x1f.olivares.sdk.v1.IngestEnvelope\x1a\x1e.olivares.sdk.v1.IngestSummary(\x012\x8a\x02\n" +
 	"\rModuleService\x12E\n" +
 	"\bDescribe\x12\x16.olivares.sdk.v1.Empty\x1a!.olivares.sdk.v1.DescribeResponse\x12<\n" +
 	"\x04Init\x12\x1c.olivares.sdk.v1.InitRequest\x1a\x16.olivares.sdk.v1.Empty\x127\n" +
 	"\x05Start\x12\x16.olivares.sdk.v1.Empty\x1a\x16.olivares.sdk.v1.Empty\x126\n" +
-	"\x04Stop\x12\x16.olivares.sdk.v1.Empty\x1a\x16.olivares.sdk.v1.Empty2\xcd\x01\n" +
+	"\x04Stop\x12\x16.olivares.sdk.v1.Empty\x1a\x16.olivares.sdk.v1.Empty\x1a\x03\x88\x02\x012\xd2\x01\n" +
 	"\vHostService\x129\n" +
 	"\aPublish\x12\x16.olivares.sdk.v1.Event\x1a\x16.olivares.sdk.v1.Empty\x12H\n" +
 	"\tSubscribe\x12!.olivares.sdk.v1.SubscribeRequest\x1a\x16.olivares.sdk.v1.Event0\x01\x129\n" +
-	"\x03Log\x12\x1a.olivares.sdk.v1.LogRecord\x1a\x16.olivares.sdk.v1.EmptyBGZEgithub.com/olivaresai/olivares/sdk/plugin/genpb/olivaresv1;olivaresv1b\x06proto3"
+	"\x03Log\x12\x1a.olivares.sdk.v1.LogRecord\x1a\x16.olivares.sdk.v1.Empty\x1a\x03\x88\x02\x01BGZEgithub.com/olivaresai/olivares/sdk/plugin/genpb/olivaresv1;olivaresv1b\x06proto3"
 
 var (
 	file_olivaresv1_v1_proto_rawDescOnce sync.Once

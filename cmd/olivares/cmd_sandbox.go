@@ -44,6 +44,7 @@ func newSandboxCmd() *cobra.Command {
 	}
 	flags.addPersistent(root)
 	root.AddCommand(
+		newSandboxGenerateCmd(&flags),
 		newSandboxScenariosCmd(&flags),
 		newSandboxRunsCmd(&flags),
 		newSandboxReplayCmd(&flags),
