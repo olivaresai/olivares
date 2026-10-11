@@ -23,5 +23,5 @@ func requireBundleLicense(o *upgradeOptions, _ release.Manifest) error {
 }
 
 func offlineInstallUnavailable() error {
-	return sentence(exitcode.Edition, "Offline bundle installation is an Enterprise feature: %s. Use --bundle --check to verify without installing.", pricingURL)
+	return sentence(exitcode.Edition, "Offline bundle installation requires Enterprise: %s. Use --bundle --check to verify without installing.", pricingURL)
 }

@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
 )
 
 func TestCommunityBundleInstallRefusesBeforeReadingLicenseOrBundle(t *testing.T) {
@@ -29,6 +31,9 @@ func TestCommunityBundleInstallRefusesBeforeReadingLicenseOrBundle(t *testing.T)
 			_, err := runUpgradeCmd(t, args...)
 			if err == nil || !strings.Contains(err.Error(), "Enterprise") || !strings.Contains(err.Error(), "--bundle --check") {
 				t.Fatalf("Community must name the edition and verification carve-out before reading the license or bundle: %v", err)
+			}
+			if code := exitcode.From(err); code != exitcode.Edition {
+				t.Fatalf("exit = %d, want %d (Edition): %v", code, exitcode.Edition, err)
 			}
 			got, err := os.ReadFile(target)
 			if err != nil || string(got) != string(original) {
@@ -103,8 +108,8 @@ func TestCommunityOfflineMirrorHasEditionRefusal(t *testing.T) {
 	c := newReleaseExportMirrorCmd()
 	out := filepath.Join(t.TempDir(), "mirror")
 	c.SetArgs([]string{"--endpoint", "http://127.0.0.1:1", "--token", "fixture-not-a-secret", "--set", "biz", "--out", out})
-	if err := c.Execute(); err == nil || !strings.Contains(err.Error(), "Enterprise") {
-		t.Fatalf("mirror did not refuse edition: %v", err)
+	if err := c.Execute(); err == nil || !strings.Contains(err.Error(), "Enterprise") || exitcode.From(err) != exitcode.Edition {
+		t.Fatalf("mirror did not refuse edition with exit %d: %v", exitcode.Edition, err)
 	}
 	if !c.Hidden {
 		t.Fatal("Community help exposes offline mirror")

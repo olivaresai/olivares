@@ -933,7 +933,7 @@ All 928 commands, in alphabetical order.
 | [`olivares redteam targets register`](#command-olivares-redteam-targets-register) | Register an agent from your inventory as a red-team target |
 | [`olivares redteam targets revoke`](#command-olivares-redteam-targets-revoke) | Withdraw consent to red-team this target |
 | [`olivares release`](#command-olivares-release) | Release/OTA tooling (manifest generation) — ops use _(hidden)_ |
-| [`olivares release export-mirror`](#command-olivares-release-export-mirror) | Export an offline mirror (Enterprise) _(hidden)_ |
+| [`olivares release export-mirror`](#command-olivares-release-export-mirror) | Export an offline mirror (requires Enterprise) _(hidden)_ |
 | [`olivares release manifest`](#command-olivares-release-manifest) | Build (and optionally sign) a per-channel OTA update manifest from a release directory |
 | [`olivares release sign-manifest`](#command-olivares-release-sign-manifest) | Sign an existing OTA manifest during the off-box release ceremony |
 | [`olivares release verify-channel-advance`](#command-olivares-release-verify-channel-advance) | Refuse a channel publication that would not move the LIVE channel forward |
@@ -11526,7 +11526,7 @@ Declares no flags of its own; it takes those of [`olivares`](#command-olivares) 
 
 Hidden diagnostic: it does not appear in `--help` output and is not part of the supported surface.
 
-Export an offline mirror (Enterprise)
+Export an offline mirror (requires Enterprise)
 
 ```
 olivares release export-mirror

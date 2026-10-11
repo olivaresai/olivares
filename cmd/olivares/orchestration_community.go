@@ -22,7 +22,14 @@ func newOrchestrationCmd() *cobra.Command {
 		Example:            "  olivares help orchestration",
 		Hidden:             true,
 		DisableFlagParsing: true,
-		RunE:               func(*cobra.Command, []string) error { return notInEdition() },
+		// DisableFlagParsing hands --help to RunE as an argument, so cobra never
+		// answers it; help is answered here, and every other argument is refused.
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if completionWantsHelp(args) {
+				return cmd.Help()
+			}
+			return notInEdition()
+		},
 	}
 }
 
