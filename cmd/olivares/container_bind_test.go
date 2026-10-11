@@ -6,16 +6,45 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
 
+// businessDockerfiles are the images the Business overlay adds at the repository root
+// (deployment-overlay/Dockerfile.fips, .stig). The Community tree does not carry them
+// since the fleet move; the assembled Business tree does, and holds them to the same
+// contract as the Community images.
+var businessDockerfiles = []string{"Dockerfile.fips", "Dockerfile.stig"}
+
+// containerDockerfiles returns the Dockerfiles this tree ships: the Community ones, which
+// must exist (a missing one fails its subtest on the read), and the Business ones. A
+// Community tree does not carry the Business ones; any other edition must, or the
+// contract would go unchecked without a failure.
+func containerDockerfiles(t *testing.T, community ...string) []string {
+	t.Helper()
+	names := append([]string(nil), community...)
+	for _, name := range businessDockerfiles {
+		_, err := os.Stat(filepath.Join("..", "..", name))
+		switch {
+		case err == nil:
+			names = append(names, name)
+		case !errors.Is(err, fs.ErrNotExist):
+			t.Fatal(err)
+		case thisEdition.name != "community":
+			t.Errorf("the %s build must carry %s from the Business overlay", thisEdition.name, name)
+		}
+	}
+	return names
+}
+
 // Container entrypoints must leave listener policy to serve's shared defaults.
 // The artifact qualification probes both address families on the running image.
 func TestContainerUsesDefaultListeners(t *testing.T) {
-	for _, name := range []string{"Dockerfile", "Dockerfile.release", "Dockerfile.fips", "Dockerfile.stig"} {
+	for _, name := range containerDockerfiles(t, "Dockerfile", "Dockerfile.release") {
 		t.Run(name, func(t *testing.T) {
 			data, err := os.ReadFile(filepath.Join("..", "..", name))
 			if err != nil {

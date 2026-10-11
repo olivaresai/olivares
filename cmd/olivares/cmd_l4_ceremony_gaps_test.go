@@ -48,7 +48,10 @@ var l4gBackup = regexp.MustCompile(`\.bak-\d+-\d+`)
 var l4gSHA = regexp.MustCompile(`sha256 [0-9a-f]{12}`)
 
 // TestL4UpgradeInstalledTextPaneIsPinned compares the whole stdout of the one
-// desenlace that MUTATES the box to a constant, in both its arms.
+// desenlace that MUTATES the box to a constant. This is the Community arm, through
+// the static mirror; the air-gap bundle and `--enterprise` arms are Business
+// behavior (cmd_l4_ceremony_installed_enterprise_test.go), and the `--enterprise`
+// line has its own untagged witness, TestL4UpgradeEnterpriseFlagAddsItsLine.
 //
 // WHY A CONSTANT AND NOT `Contains`: the lot's own witness asserts three
 // substrings, and two mutants walked straight through it — one deleting the
@@ -63,66 +66,91 @@ var l4gSHA = regexp.MustCompile(`sha256 [0-9a-f]{12}`)
 // three lines moved from a flat sequence of Fprintln into a closure with an
 // error-returning branch, so a wrong early return there deletes them silently.
 func TestL4UpgradeInstalledTextPaneIsPinned(t *testing.T) {
-	run := func(t *testing.T, enterprise bool) (string, string, string, error) {
-		t.Helper()
-		target := writeTarget(t, l4Script("26.0"))
-		dataDir := t.TempDir()
-		installDevLicense(t, dataDir)
-		b := l4Bundle(t, "26.800", nil, l4Script("26.800"))
-		args := []string{"upgrade", "--bundle", b.dir, "--pubkey", b.pubB64, "--target", target,
-			"--data-dir", dataDir, "--os", "linux", "--arch", "amd64", "--yes"}
-		if enterprise {
-			args = append(args, "--enterprise")
-		}
-		out, errOut, err := runLeafCLI(t, args...)
-		// The premise, asserted rather than assumed: the swap really happened, or the
-		// desenlace whose text is pinned below was never reached.
-		if got := runsVersion(t, target); !strings.Contains(got, "26.800") {
-			t.Fatalf("the target was not swapped: %s still reports %q", target, got)
-		}
-		// Order matters: the backup path CONTAINS the target path, so the target is
-		// substituted first and the suffix regexp runs on what is left.
-		norm := l4Norm(out, [2]string{target, "<TARGET>"}, [2]string{b.dir, "<BUNDLE>"})
-		norm = l4gBackup.ReplaceAllString(norm, ".bak-<EPOCH>-<RAND>")
-		norm = l4gSHA.ReplaceAllString(norm, "sha256 <SHA12>")
-		return norm, errOut, b.artifact, err
-	}
-
-	const head = "OTA key: --pubkey (fingerprint <FP>)\n" +
-		"source: air-gap bundle <BUNDLE>\n" +
-		"channel:   stable\n" +
-		"current:   26.0\n" +
-		"available: 26.800 (released <DATE>)\n" +
-		"status:    upgrade available\n" +
-		"downloading 26.800 linux/amd64 ...\n"
-	const tail = "\ninstalled: <TARGET> is now olivares 26.800 (commit t, built t, L4 witness)\n" +
-		"rollback: the previous binary is backed up at <TARGET>.bak-<EPOCH>-<RAND> (restore it to revert)\n" +
-		"next: restart the service to run the new binary — for zero downtime use a drain +\n" +
-		"      handover (single node) or a rolling restart (HA); see docs/UPGRADE-AND-ROLLBACK.md.\n"
-
 	t.Run("community", func(t *testing.T) {
-		got, errOut, artifact, err := run(t, false)
+		got, errOut, artifact, err := l4InstalledPane(t, false, false)
 		wantRC(t, "upgrade (installed, text)", err, 0)
 		if errOut != "" {
 			t.Fatalf("upgrade wrote to stderr on the text pane: %q", errOut)
 		}
 		wantText(t, "upgrade (installed)", got,
-			head+"artifact: "+artifact+" verified (sha256 <SHA12>…)\n"+tail)
+			l4InstalledHead("public channel stable (<MIRROR>)")+"artifact: "+artifact+" verified (sha256 <SHA12>…)\n"+l4InstalledTail)
 	})
+}
 
-	t.Run("--enterprise adds its line and changes nothing else", func(t *testing.T) {
-		// The contrafactual for the arm above: same leaf, same swap, one flag. Without
-		// it the community constant could pass because the branch never runs, and
-		// without the community constant this one could pass with the branch always on.
-		got, errOut, artifact, err := run(t, true)
-		wantRC(t, "upgrade (installed, --enterprise, text)", err, 0)
-		if errOut != "" {
-			t.Fatalf("upgrade --enterprise wrote to stderr on the text pane: %q", errOut)
-		}
-		wantText(t, "upgrade (installed, --enterprise)", got,
-			head+"artifact: "+artifact+" verified (sha256 <SHA12>…)\n"+tail+
-				"      then `olivares enterprise enable <preset>` to activate the add-ons.\n")
-	})
+// TestL4UpgradeEnterpriseFlagAddsItsLine pins, on the licensed route a Community build
+// keeps, the last line of an --enterprise install: the add-ons are still off. The
+// contrafactual is the constant above, which ends without it on the same swap.
+func TestL4UpgradeEnterpriseFlagAddsItsLine(t *testing.T) {
+	dataDir := t.TempDir()
+	installDevLicense(t, dataDir)
+	f := newUpdFixture(t, "26.800", "26.600", buildStub(t, "26.800"))
+	target := writeTarget(t, buildStub(t, "26.700"))
+	out, err := runUpgradeCmd(t, "--enterprise", "--download-protocol", "legacy", "--token", "tkn",
+		"--endpoint", f.server.URL, "--pubkey", f.pubB64, "--data-dir", dataDir, "--target", target,
+		"--os", "linux", "--arch", "amd64", "--yes")
+	wantRC(t, "upgrade (installed, --enterprise, licensed route)", err, 0)
+	if got := runsVersion(t, target); !strings.Contains(got, "26.800") {
+		t.Fatalf("the target was not swapped: %s still reports %q", target, got)
+	}
+	const want = "      handover (single node) or a rolling restart (HA); see docs/UPGRADE-AND-ROLLBACK.md.\n" +
+		"      then `olivares enterprise enable <preset>` to activate the add-ons.\n"
+	if !strings.HasSuffix(out, want) {
+		t.Fatalf("the --enterprise install no longer ends with the add-on instruction:\n%s", out)
+	}
+}
+
+// l4InstalledHead is the narration before the download, for the source line the route prints.
+func l4InstalledHead(source string) string {
+	return "OTA key: --pubkey (fingerprint <FP>)\n" +
+		"source: " + source + "\n" +
+		"channel:   stable\n" +
+		"current:   26.0\n" +
+		"available: 26.800 (released <DATE>)\n" +
+		"status:    upgrade available\n" +
+		"downloading 26.800 linux/amd64 ...\n"
+}
+
+// l4InstalledTail is the operator instruction after the swap, which is what a deletion
+// of the `next:` pair would silently remove.
+const l4InstalledTail = "\ninstalled: <TARGET> is now olivares 26.800 (commit t, built t, L4 witness)\n" +
+	"rollback: the previous binary is backed up at <TARGET>.bak-<EPOCH>-<RAND> (restore it to revert)\n" +
+	"next: restart the service to run the new binary — for zero downtime use a drain +\n" +
+	"      handover (single node) or a rolling restart (HA); see docs/UPGRADE-AND-ROLLBACK.md.\n"
+
+// l4InstalledPane runs the one desenlace that MUTATES the box and returns its text pane,
+// normalised. The static mirror is the install route Community keeps; viaBundle is the
+// offline air-gap install, a Business capability that only the Business build runs.
+func l4InstalledPane(t *testing.T, viaBundle, enterprise bool) (pane, errOut, artifact string, err error) {
+	t.Helper()
+	target := writeTarget(t, l4Script("26.0"))
+	dataDir := t.TempDir()
+	b := l4Bundle(t, "26.800", nil, l4Script("26.800"))
+	args := []string{"upgrade", "--pubkey", b.pubB64, "--target", target,
+		"--data-dir", dataDir, "--os", "linux", "--arch", "amd64", "--yes"}
+	subs := [][2]string{{target, "<TARGET>"}, {b.dir, "<BUNDLE>"}}
+	if viaBundle {
+		installDevLicense(t, dataDir)
+		args = append(args, "--bundle", b.dir)
+	} else {
+		mirror := b.mirror(t)
+		args = append(args, "--endpoint", mirror)
+		subs = append(subs, [2]string{mirror, "<MIRROR>"})
+	}
+	if enterprise {
+		args = append(args, "--enterprise")
+	}
+	out, errOut, err := runLeafCLI(t, args...)
+	// The premise, asserted rather than assumed: the swap really happened, or the
+	// desenlace whose text is pinned was never reached.
+	if got := runsVersion(t, target); !strings.Contains(got, "26.800") {
+		t.Fatalf("the target was not swapped: %s still reports %q (err %v, stderr %q)", target, got, err, errOut)
+	}
+	// Order matters: the backup path CONTAINS the target path, so the target is
+	// substituted first and the suffix regexp runs on what is left.
+	norm := l4Norm(out, subs...)
+	norm = l4gBackup.ReplaceAllString(norm, ".bak-<EPOCH>-<RAND>")
+	norm = l4gSHA.ReplaceAllString(norm, "sha256 <SHA12>")
+	return norm, errOut, b.artifact, err
 }
 
 // TestL4SecurityCheckQuietDoesNotSilenceTheFeedArm is the missing HALF of the
@@ -247,7 +275,6 @@ func TestL4UpgradeForcedRollbackAuditFailureReachesBothPanes(t *testing.T) {
 		t.Helper()
 		target := writeTarget(t, l4Script("26.900"))
 		dataDir := t.TempDir()
-		installDevLicense(t, dataDir)
 		if breakAudit {
 			// A DIRECTORY where the append-only log belongs: os.OpenFile refuses it with
 			// EISDIR, which is a real filesystem answer and not a stubbed error.
@@ -256,7 +283,7 @@ func TestL4UpgradeForcedRollbackAuditFailureReachesBothPanes(t *testing.T) {
 			}
 		}
 		b := l4Bundle(t, "25.100", nil, l4Script("25.100"))
-		out, errOut, err := runLeafCLI(t, "-o", "json", "upgrade", "--bundle", b.dir,
+		out, errOut, err := runLeafCLI(t, "-o", "json", "upgrade", "--endpoint", b.mirror(t),
 			"--pubkey", b.pubB64, "--target", target, "--data-dir", dataDir,
 			"--os", "linux", "--arch", "amd64", "--yes", "--force-rollback")
 		// The premise, asserted rather than assumed: the DOWNGRADE really happened, or

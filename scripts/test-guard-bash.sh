@@ -18,10 +18,10 @@
 #   · FALLA ABIERTO sin `jq`                   — es su postura declarada: un guardian roto que
 #                                                bloquea todo convierte un despiste en sesion muerta
 #
-# TAMBIEN CALIFICA, con el mismo criterio, la regla `heavy-job` de guard-bash.sh (compilacion, test
-# o navegador fuera del envoltorio) y `.claude/hooks/guard-edit.sh` (migracion aplicada y salida
-# generada). Un solo testigo para los guardianes de `.claude/hooks`: otro guion seria un segundo
-# mecanismo para la misma pregunta.
+# It ALSO qualifies, by the same standard, the `heavy-job` rule of guard-bash.sh (a build, test
+# or browser outside the wrapper) and `.claude/hooks/guard-edit.sh` (an applied migration and
+# generated output). One witness for the `.claude/hooks` guards: a second script would be a second
+# mechanism for the same question.
 set -uo pipefail
 
 # Aislamiento de git: este guion empareja `mktemp -d` con `git` —aunque aqui `git` solo aparece
@@ -64,8 +64,8 @@ command -v jq >/dev/null 2>&1 || { echo "test-guard-bash: without jq cannot cons
 
 pass=0; fail=0
 _err="$(mktemp)"
-# Un caso que espera rc 2 puede llevar una MARCA: un trozo del mensaje de la regla que debe cortar.
-# Sin ella, un caso pasaria igual si lo cortara OTRA regla.
+# A case that expects rc 2 can carry a MARK: a fragment of the message of the rule that must stop it.
+# Without one, a case would also pass if ANOTHER rule stopped it.
 caso() { # caso <nombre> <rc-esperado> <comando> [marca-en-stderr]
 	local nombre="$1" want="$2" cmd="$3" marca="${4:-}" rc=0
 	# export-closure: hub-only .claude/hooks/guard-bash.sh — el hook es del entorno de trabajo y el
@@ -145,7 +145,7 @@ caso "kill by PID without pgrep PASSES"                         0 'kill -TERM 12
 caso "without -f it does not apply: pgrep -l does not inspect cmdline"  0 'pgrep -l foo | wc -l'
 
 # --- REGLA heavy-job: compilacion, test o navegador FUERA del envoltorio ------------------------
-# Medida que la puso en el hook: el 2026-10-08 cinco suites Go locales llevaron el servidor a carga 98.
+# Why the hook has it: on 2026-10-08 five local Go suites drove the server to load 98.
 # Calibrada en bash (el hook corre en bash; el shell interactivo usa otro `grep`). Las filas que cortan
 # llevan la MARCA `heavy-job`: sin ella pasarian igual si las cortara otra regla.
 HJ='bash /workspace/.claude/skills/olivares-heavy-job/scripts/heavy-job.sh'
@@ -220,7 +220,7 @@ caso "LIMITATION: a heredoc LINE starting with go test ALSO triggers"    2 $'cat
 caso "LIMITATION: npm test is not covered"                  0 'npm test'
 caso "LIMITATION: task -d <dir> test is not covered"        0 'task -d core test'
 
-# --- guard-edit.sh: migracion aplicada y salida generada -----------------------------------------
+# --- guard-edit.sh: applied migrations and generated output ------------------------------------
 # export-closure: hub-only .claude/hooks/guard-edit.sh — hermano de guard-bash.sh: hook del
 # ENTORNO DE TRABAJO que el export quita con `.claude/`; las llamadas van guardadas por -f.
 if [ -f ".claude/hooks/guard-edit.sh" ]; then
@@ -230,9 +230,9 @@ else
 fi
 _fx="$(mktemp -d)"; _fxnogit="$(mktemp -d)"; _fxnoref="$(mktemp -d)"
 trap 'rm -rf "$_sinjq" "$_fx" "$_fx.lnk" "$_fxnogit" "$_fxnoref"; rm -f "$_err"' EXIT
-# Fixture: un repo cuyo origin/main YA tiene migraciones aplicadas (con .down, en raiz y anidada en un
-# subdirectorio), un .sql y un README que NO son migraciones, y un HEAD ADELANTADO de origin/main con una
-# migracion que solo existe en la rama.
+# Fixture: a repo whose origin/main ALREADY has applied migrations (with .down, at the root and nested in a
+# subdirectory), a .sql and a README that are NOT migrations, and a HEAD AHEAD of origin/main with a
+# migration that exists only on the branch.
 mkdir -p "$_fx/modules/x/migrations/sqlite" "$_fx/migrations" "$_fx/docs" \
 	"$_fxnogit/modules/x/migrations" "$_fxnoref/modules/x/migrations"
 : > "$_fx/modules/x/migrations/001_a.up.sql"; : > "$_fx/modules/x/migrations/001_a.down.sql"
@@ -250,7 +250,7 @@ mkdir -p "$_fx/modules/x/migrations/sqlite" "$_fx/migrations" "$_fx/docs" \
 	&& ln -sfn "$_fx" "$_fx.lnk" \
 	&& ln -sfn core/api/x.gen.go "$_fx/link.go"; } || { echo "test-guard-bash: cannot build the guard-edit fixture" >&2; exit 2; }
 
-caso_edit() { # caso_edit <nombre> <rc-esperado> <proyecto> <ruta-del-fichero> [marca-en-stderr]
+caso_edit() { # caso_edit <name> <expected-rc> <project> <file-path> [stderr-mark]
 	local nombre="$1" want="$2" proj="$3" ruta="$4" marca="${5:-}" rc=0
 	if [ ! -f "$E" ]; then
 		printf 'FAIL  %-58s (hook missing)\n' "$nombre"; fail=$((fail + 1)); return
@@ -264,11 +264,11 @@ caso_edit() { # caso_edit <nombre> <rc-esperado> <proyecto> <ruta-del-fichero> [
 	fi
 }
 
-# settings.json ejecuta los hooks DIRECTAMENTE, no con `bash`: sin el bit de ejecucion Claude Code recibe
-# «permission denied», lo trata como un error que no bloquea, y el guardian queda inerte sin que nada se
-# note. El resto del testigo los llama con `bash "$H"`, asi que ESTO es lo unico que lo ve.
-# Dos bloques explicitos y no un `for`: `lint:export-closure` solo reconoce una prueba de presencia si ve
-# la ruta declarada en la propia prueba, y una variable de bucle la esconde.
+# settings.json runs the hooks DIRECTLY, not through `bash`: without the execute bit Claude Code gets
+# "permission denied", treats it as a non-blocking error, and the guard goes inert without anyone
+# noticing. The rest of the witness calls them with `bash "$H"`, so THIS is the only place that sees it.
+# Two explicit blocks and not a `for`: `lint:export-closure` only recognizes a presence test if it sees
+# the path declared in the test itself, and a loop variable hides it.
 if [ -x "$H" ]; then
 	printf 'ok    %-58s\n' "guard-bash.sh is executable"; pass=$((pass + 1))
 else
@@ -281,16 +281,16 @@ else
 fi
 
 # CORTA (rc 2)
-caso_edit "edit: generated Go (*.gen.go)"                    2 "$_fx" "$_fx/core/api/openapi_op_descriptions.gen.go" "salida generada"
-caso_edit "edit: generated TypeScript (*.gen.ts)"            2 "$_fx" "$_fx/web/src/lib/api/openapi.gen.ts" "salida generada"
-caso_edit "edit: embedded console output (webui/dist)"       2 "$_fx" "$_fx/core/internal/webui/dist/index.html" "salida generada"
-caso_edit "edit: applied migration (.up.sql on origin/main)" 2 "$_fx" "$_fx/modules/x/migrations/001_a.up.sql" "aplicada"
-caso_edit "edit: applied migration (.down.sql)"              2 "$_fx" "$_fx/modules/x/migrations/001_a.down.sql" "aplicada"
-caso_edit "edit: applied migration in a nested subdirectory" 2 "$_fx" "$_fx/modules/x/migrations/sqlite/003_s.up.sql" "aplicada"
-caso_edit "edit: applied migration in a top-level migrations/" 2 "$_fx" "$_fx/migrations/002_top.sql" "aplicada"
-caso_edit "edit: .. segments cannot dodge the dist rule"     2 "$_fx" "$_fx/core/../core/internal/webui/dist/a.js" "salida generada"
-caso_edit "edit: a symlinked project dir cannot dodge it"    2 "$_fx.lnk" "$_fx/core/api/x.gen.go" "salida generada"
-caso_edit "edit: a symlink INSIDE the path cannot dodge it"  2 "$_fx" "$_fx/link.go" "salida generada"
+caso_edit "edit: generated Go (*.gen.go)"                    2 "$_fx" "$_fx/core/api/openapi_op_descriptions.gen.go" "generated output"
+caso_edit "edit: generated TypeScript (*.gen.ts)"            2 "$_fx" "$_fx/web/src/lib/api/openapi.gen.ts" "generated output"
+caso_edit "edit: embedded console output (webui/dist)"       2 "$_fx" "$_fx/core/internal/webui/dist/index.html" "generated output"
+caso_edit "edit: applied migration (.up.sql on origin/main)" 2 "$_fx" "$_fx/modules/x/migrations/001_a.up.sql" "already applied"
+caso_edit "edit: applied migration (.down.sql)"              2 "$_fx" "$_fx/modules/x/migrations/001_a.down.sql" "already applied"
+caso_edit "edit: applied migration in a nested subdirectory" 2 "$_fx" "$_fx/modules/x/migrations/sqlite/003_s.up.sql" "already applied"
+caso_edit "edit: applied migration in a top-level migrations/" 2 "$_fx" "$_fx/migrations/002_top.sql" "already applied"
+caso_edit "edit: .. segments cannot dodge the dist rule"     2 "$_fx" "$_fx/core/../core/internal/webui/dist/a.js" "generated output"
+caso_edit "edit: a symlinked project dir cannot dodge it"    2 "$_fx.lnk" "$_fx/core/api/x.gen.go" "generated output"
+caso_edit "edit: a symlink INSIDE the path cannot dodge it"  2 "$_fx" "$_fx/link.go" "generated output"
 # DEJA PASAR (rc 0)
 caso_edit "edit: a NEW migration (not on origin/main) passes" 0 "$_fx" "$_fx/modules/x/migrations/002_b.up.sql"
 caso_edit "edit: a migration only on the branch (HEAD ahead of origin/main) passes" 0 "$_fx" "$_fx/modules/x/migrations/004_ahead.up.sql"
@@ -308,7 +308,7 @@ caso_edit "LIMITATION: Go-coded migrations (schema.go) pass"  0 "$_fx" "$_fx/cor
 caso_edit "edit: no origin/main ref FAILS OPEN"              0 "$_fxnoref" "$_fxnoref/modules/x/migrations/001_a.up.sql"
 caso_edit "edit: not a git repo FAILS OPEN"                  0 "$_fxnogit" "$_fxnogit/modules/x/migrations/001_a.up.sql"
 caso_edit "edit: empty file_path FAILS OPEN"                 0 "$_fx" ""
-# Si falta el hook, el valor inicial 1 hace que la fila enrojezca en vez de pasar en silencio.
+# If the hook is missing, the initial value 1 turns the row red instead of passing silently.
 sin_jq_edit=1
 if [ -f "$E" ]; then
 	sin_jq_edit=0

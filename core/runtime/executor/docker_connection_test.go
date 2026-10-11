@@ -8,15 +8,31 @@ import (
 	"context"
 	"net"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
 
+// shortSocketDir returns a fresh directory with a short path. A unix socket path holds
+// at most 108 bytes and t.TempDir() embeds the test and subtest names under TMPDIR, so a
+// long runner TMPDIR fails bind with "invalid argument" before the code under test runs.
+func shortSocketDir(t *testing.T) string {
+	t.Helper()
+	for _, base := range []string{"/tmp", ""} {
+		if dir, err := os.MkdirTemp(base, "dk"); err == nil {
+			t.Cleanup(func() { _ = os.RemoveAll(dir) })
+			return dir
+		}
+	}
+	t.Fatal("no temporary directory for the daemon socket")
+	return ""
+}
+
 func TestDockerConnectionTestIsReadOnly(t *testing.T) {
 	for _, status := range []int{http.StatusOK, http.StatusUnauthorized, http.StatusInternalServerError} {
 		t.Run(http.StatusText(status), func(t *testing.T) {
-			socket := filepath.Join(t.TempDir(), "docker.sock")
+			socket := filepath.Join(shortSocketDir(t), "d.sock")
 			listener, err := net.Listen("unix", socket)
 			if err != nil {
 				t.Fatal(err)

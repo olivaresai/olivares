@@ -16,7 +16,6 @@ import (
 	"time"
 
 	"github.com/olivaresai/olivares/core/ddil"
-	"github.com/olivaresai/olivares/core/model"
 )
 
 func runDDILCommand(ctx context.Context, args ...string) (stdout, stderr string, err error) {
@@ -44,44 +43,42 @@ func importDDILBundle(t *testing.T, path string, pub ed25519.PublicKey) ddil.Imp
 	return imported
 }
 
-func TestDDILEvidenceNameValidation(t *testing.T) {
-	ctx := context.Background()
-	_, priv, err := ed25519.GenerateKey(nil)
-	if err != nil {
+// loadDDILEvidence is the evidence-name contract of `ddil export`. The Community build
+// refuses the export before it runs, so the function is witnessed directly here and
+// through the command in the Business build (cmd_ddil_evidence_enterprise_test.go).
+func TestLoadDDILEvidenceNameValidation(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "evidence.txt")
+	if err := os.WriteFile(path, []byte("evidence"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	signKey := base64.StdEncoding.EncodeToString(priv.Seed())
-	tenant := model.NewTenantID().String()
-	evidencePath := filepath.Join(t.TempDir(), "evidence.txt")
-	if err := os.WriteFile(evidencePath, []byte("evidence"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-
-	tests := []struct {
+	for _, tc := range []struct {
 		name  string
 		specs []string
+		want  string
 	}{
-		{name: "empty", specs: []string{"=" + evidencePath}},
-		{name: "slash", specs: []string{"dir/proof=" + evidencePath}},
-		{name: "backslash", specs: []string{`dir\proof=` + evidencePath}},
-		{name: "dotdot", specs: []string{"proof..txt=" + evidencePath}},
-		{name: "duplicate", specs: []string{"proof=" + evidencePath, "proof=" + evidencePath}},
-	}
-	for _, tc := range tests {
+		{"no separator", []string{"proof"}, "must use name=path"},
+		{"empty", []string{"=" + path}, "has an empty name"},
+		{"slash", []string{"dir/proof=" + path}, "must not contain"},
+		{"backslash", []string{`dir\proof=` + path}, "must not contain"},
+		{"dotdot", []string{"proof..txt=" + path}, "must not contain"},
+		{"duplicate", []string{"proof=" + path, "proof=" + path}, "is duplicated"},
+	} {
 		t.Run(tc.name, func(t *testing.T) {
-			args := []string{
-				"export", "--data-dir", t.TempDir(), "--tenant", tenant,
-				"--out", filepath.Join(t.TempDir(), "invalid.ddil"), "--sign-key", signKey,
-			}
-			for _, spec := range tc.specs {
-				args = append(args, "--evidence", spec)
-			}
-			_, _, err := runDDILCommand(ctx, args...)
-			if err == nil || !strings.Contains(err.Error(), "--evidence") {
-				t.Fatalf("invalid evidence names %q returned %v, want --evidence refusal", tc.specs, err)
+			_, _, err := loadDDILEvidence(tc.specs)
+			if err == nil || !strings.Contains(err.Error(), "--evidence") || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("loadDDILEvidence(%q) = %v, want an --evidence refusal containing %q", tc.specs, err, tc.want)
 			}
 		})
 	}
+	t.Run("valid names come back sorted", func(t *testing.T) {
+		evidence, names, err := loadDDILEvidence([]string{"b=" + path, "a=" + path})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(names) != 2 || names[0] != "a" || names[1] != "b" || string(evidence["a"]) != "evidence" {
+			t.Fatalf("names = %q, evidence = %q", names, evidence)
+		}
+	})
 }
 
 func TestDDILKeygen(t *testing.T) {

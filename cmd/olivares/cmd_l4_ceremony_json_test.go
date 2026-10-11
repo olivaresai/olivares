@@ -12,6 +12,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -1020,6 +1022,17 @@ func l4Bundle(t *testing.T, version string, rollout *int, bin []byte) *l4BundleF
 	return &l4BundleFixture{dir: dir, pubB64: base64.StdEncoding.EncodeToString(pub), artifact: name}
 }
 
+// mirror serves the bundle as a static mirror (<base>/stable/manifest.json, its .sig and
+// the archive) and returns the base URL. Installing from the air-gap bundle itself is a
+// Business capability; the mirror is the install route a Community build keeps, and it
+// reaches the same swap, rollback and audit code the panes below pin.
+func (b *l4BundleFixture) mirror(t *testing.T) string {
+	t.Helper()
+	srv := httptest.NewServer(http.StripPrefix("/stable/", http.FileServer(http.Dir(b.dir))))
+	t.Cleanup(srv.Close)
+	return srv.URL
+}
+
 // l4UpgradeKeys is the key set every upgrade-plan desenlace shares. The point of
 // pinning it once is that `action` distinguishes the desenlaces and the SHAPE
 // does not: a consumer never branches before it can read.
@@ -1034,6 +1047,14 @@ func TestL4UpgradeReadOnlyBothPanes(t *testing.T) {
 	target := writeTarget(t, l4Script("26.0"))
 	dataDir := t.TempDir()
 
+	// A build that verifies an air-gap bundle but cannot install it closes --check on that
+	// fact instead of on an install command it would refuse (cmd_upgrade.go). The edition's
+	// own answer to "may this bundle install?" picks which of the two exact sentences is pinned.
+	checkGuidance := "Re-run without --check to install."
+	if requireBundleInstallEdition(&upgradeOptions{bundle: "x"}) != nil {
+		checkGuidance = "Offline bundle installation requires Enterprise."
+	}
+
 	cases := []struct {
 		name       string
 		version    string
@@ -1047,7 +1068,7 @@ func TestL4UpgradeReadOnlyBothPanes(t *testing.T) {
 		{
 			name: "check", version: "26.800", wantAction: upgradeActionChecked,
 			wantStatus: upgradeStatusAvailable, eligible: true,
-			wantFinal: "\n--check OK: manifest verifies and an upgrade is available. Re-run without --check to install.\n",
+			wantFinal: "\n--check OK: manifest verifies and an upgrade is available. " + checkGuidance + "\n",
 		},
 		{
 			name: "up to date", version: "26.0", wantAction: upgradeActionUpToDate,
@@ -1132,16 +1153,14 @@ func TestL4UpgradeDeclaredCurrentIsMarkedAsAClaim(t *testing.T) {
 }
 
 func TestL4UpgradeInstalledBothPanes(t *testing.T) {
-	// The one desenlace that MUTATES the box. It runs through the air-gap route, so
-	// it is license-gated: the dev license is installed first, which is what the
-	// gate C02-20 added checks.
+	// The one desenlace that MUTATES the box. It runs through the static mirror, the
+	// install route a Community build keeps (the air-gap bundle install is Business).
 	run := func(t *testing.T, jsonPane bool) (string, string, error) {
 		t.Helper()
 		target := writeTarget(t, l4Script("26.0"))
 		dataDir := t.TempDir()
-		installDevLicense(t, dataDir)
 		b := l4Bundle(t, "26.800", nil, l4Script("26.800"))
-		args := []string{"upgrade", "--bundle", b.dir, "--pubkey", b.pubB64, "--target", target,
+		args := []string{"upgrade", "--endpoint", b.mirror(t), "--pubkey", b.pubB64, "--target", target,
 			"--data-dir", dataDir, "--os", "linux", "--arch", "amd64", "--yes"}
 		if jsonPane {
 			args = append([]string{"-o", "json"}, args...)

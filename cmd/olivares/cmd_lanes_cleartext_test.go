@@ -20,7 +20,7 @@ func TestCLILanesCleartextOptIn(t *testing.T) {
 		args               []string
 	}{
 		{"observe", http.MethodGet, "/v1/m/health/status", []string{"health", "status"}},
-		{"agent-exec", http.MethodGet, "/v1/m/orchestration/schedules", []string{"orchestration", "schedules", "ls"}},
+		{"agent-exec", http.MethodGet, "/v1/m/voice/sessions", []string{"voice", "sessions", "ls"}},
 		{"agent-exec-stream", http.MethodGet, "/v1/m/voice/sessions/session-1/stream", []string{"voice", "sessions", "stream", "session-1"}},
 		{"datalane", http.MethodGet, "/v1/m/knowledge/kbs", []string{"knowledge", "kbs", "ls"}},
 		{"datalane-raw", http.MethodPost, "/v1/m/knowledge/memory/import", []string{"knowledge", "memory", "import", "--bundle-file", "-"}},

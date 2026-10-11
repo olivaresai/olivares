@@ -52,7 +52,7 @@ func resolveDefaultDataDir(t *testing.T, home, dataDirEnv string) string {
 }
 
 func TestContainerImageDefaultDataDirIsTheServedOne(t *testing.T) {
-	for _, name := range []string{"Dockerfile", "Dockerfile.release", "Dockerfile.fips", "Dockerfile.stig", "Dockerfile.agentops"} {
+	for _, name := range containerDockerfiles(t, "Dockerfile", "Dockerfile.release", "Dockerfile.agentops") {
 		t.Run(name, func(t *testing.T) {
 			data, err := os.ReadFile(filepath.Join("..", "..", name))
 			if err != nil {

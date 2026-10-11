@@ -26,6 +26,7 @@ func (e *consentEstate) createRetirementWorkflow(tenant model.TenantID, name str
 			"owner_actor": "system:retained", "owner_actor_kind": "system",
 		}, users...)
 	}
+	editionOrchestrationTestLicense(e.t)
 	return e.created(e.do("POST", "/v1/m/orchestration/workflows", e.admin, tenant, map[string]any{
 		"name": name, "steps": steps,
 	}), "the workflow")
