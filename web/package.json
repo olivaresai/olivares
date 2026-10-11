@@ -68,7 +68,7 @@
     "i18next": "^26.4.2",
     "i18next-browser-languagedetector": "^8.2.1",
     "lucide-react": "^1.52.0",
-    "onnxruntime-web": "1.31.0-dev.20260914-8d85527a0",
+    "onnxruntime-web": "1.31.0-dev.20260918-bc8e7ed75",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "react-hook-form": "^7.89.0",
