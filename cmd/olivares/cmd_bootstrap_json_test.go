@@ -801,7 +801,7 @@ func TestDRBackupJSONFlagsABundleThatEscrowsNoKeyMaterial(t *testing.T) {
 	pf := l3Passphrase(t)
 
 	bundle := filepath.Join(t.TempDir(), "byok.drbundle")
-	out, errOut, err := execRoot(t, "dr", "backup", "--data-dir", src, "--out", bundle, "--passphrase-file", pf)
+	out, errOut, err := execRootOwnProcess(t, "dr", "backup", "--data-dir", src, "--out", bundle, "--passphrase-file", pf)
 	if err != nil {
 		t.Fatalf("dr backup under external custody: %v\n%s", err, errOut)
 	}
@@ -812,7 +812,7 @@ func TestDRBackupJSONFlagsABundleThatEscrowsNoKeyMaterial(t *testing.T) {
 		bundle, m.CreatedAt, m.EngineKind, len(m.Tenants), len(m.Keys)))
 
 	jsonBundle := filepath.Join(t.TempDir(), "byok-json.drbundle")
-	out, errOut, err = execRoot(t, "dr", "backup", "--data-dir", src, "--out", jsonBundle,
+	out, errOut, err = execRootOwnProcess(t, "dr", "backup", "--data-dir", src, "--out", jsonBundle,
 		"--passphrase-file", pf, "-o", "json")
 	if err != nil {
 		t.Fatalf("dr backup under external custody -o json: %v\n%s", err, errOut)
@@ -847,7 +847,7 @@ func TestDRBackupTextUnchangedAndJSONCarriesTheRPOBasis(t *testing.T) {
 	pf := l3Passphrase(t)
 
 	bundle := filepath.Join(t.TempDir(), "text.drbundle")
-	out, errOut, err := execRoot(t, "dr", "backup", "--data-dir", src, "--out", bundle, "--passphrase-file", pf)
+	out, errOut, err := execRootOwnProcess(t, "dr", "backup", "--data-dir", src, "--out", bundle, "--passphrase-file", pf)
 	if err != nil {
 		t.Fatalf("dr backup: %v\n%s", err, errOut)
 	}
@@ -857,7 +857,7 @@ func TestDRBackupTextUnchangedAndJSONCarriesTheRPOBasis(t *testing.T) {
 		bundle, m.CreatedAt, m.EngineKind, len(m.Tenants), len(m.Keys)))
 
 	jsonBundle := filepath.Join(t.TempDir(), "json.drbundle")
-	out, errOut, err = execRoot(t, "dr", "backup", "--data-dir", src, "--out", jsonBundle, "--passphrase-file", pf, "-o", "json")
+	out, errOut, err = execRootOwnProcess(t, "dr", "backup", "--data-dir", src, "--out", jsonBundle, "--passphrase-file", pf, "-o", "json")
 	if err != nil {
 		t.Fatalf("dr backup -o json: %v\n%s", err, errOut)
 	}
@@ -946,7 +946,7 @@ func TestDRBackupJSONStaysADocumentWhileOffsiteAndRetentionStillReport(t *testin
 
 	args := append([]string{"dr", "backup", "--data-dir", src, "--out", bundle,
 		"--passphrase-file", pf, "--retain-days", "7", "-o", "json"}, flags...)
-	out, errOut, err := execRoot(t, args...)
+	out, errOut, err := execRootOwnProcess(t, args...)
 	if err != nil {
 		t.Fatalf("dr backup offsite+retention -o json: %v\n%s", err, errOut)
 	}
@@ -1063,7 +1063,7 @@ func TestDRBackupRetentionIsOneShapePerTierWhicheverFlagAsksForIt(t *testing.T) 
 	textMock.objects["aa-old.drbundle"] = []byte("old")
 	textMock.mu.Unlock()
 
-	out, errOut, err := execRoot(t, append([]string{"dr", "backup", "--data-dir", src,
+	out, errOut, err := execRootOwnProcess(t, append([]string{"dr", "backup", "--data-dir", src,
 		"--out", textBundle, "--passphrase-file", pf, "--gfs-keep-last", "1"}, textFlags...)...)
 	if err != nil {
 		t.Fatalf("dr backup --gfs-keep-last: %v\n%s", err, errOut)
@@ -1087,7 +1087,7 @@ func TestDRBackupRetentionIsOneShapePerTierWhicheverFlagAsksForIt(t *testing.T) 
 	jsonMock.objects["aa-old.drbundle"] = []byte("old")
 	jsonMock.mu.Unlock()
 
-	out, errOut, err = execRoot(t, append([]string{"dr", "backup", "--data-dir", src,
+	out, errOut, err = execRootOwnProcess(t, append([]string{"dr", "backup", "--data-dir", src,
 		"--out", jsonBundle, "--passphrase-file", pf, "--gfs-keep-last", "1", "-o", "json"}, jsonFlags...)...)
 	if err != nil {
 		t.Fatalf("dr backup --gfs-keep-last -o json: %v\n%s", err, errOut)
@@ -1140,7 +1140,7 @@ func TestDRBackupSaysWhenARetentionTierNeverRan(t *testing.T) {
 	bundle := filepath.Join(t.TempDir(), "kept.drbundle")
 	mock, flags := l3OffsiteThatCannotList(t)
 
-	out, errOut, err := execRoot(t, append([]string{"dr", "backup", "--data-dir", src,
+	out, errOut, err := execRootOwnProcess(t, append([]string{"dr", "backup", "--data-dir", src,
 		"--out", bundle, "--passphrase-file", pf, "--gfs-keep-last", "1", "-o", "json"}, flags...)...)
 	if err != nil {
 		t.Fatalf("a prune that cannot run must not fail the backup: %v\n%s", err, errOut)
@@ -1245,7 +1245,7 @@ func TestDRPushAndPullTextUnchangedAndJSONNamesTheOffsiteLocation(t *testing.T) 
 	seedDataDir(t, src)
 	pf := l3Passphrase(t)
 	bundle := filepath.Join(t.TempDir(), "estate.drbundle")
-	if _, errOut, err := execRoot(t, "dr", "backup", "--data-dir", src, "--out", bundle, "--passphrase-file", pf); err != nil {
+	if _, errOut, err := execRootOwnProcess(t, "dr", "backup", "--data-dir", src, "--out", bundle, "--passphrase-file", pf); err != nil {
 		t.Fatalf("seed backup: %v\n%s", err, errOut)
 	}
 	_, _, flags := newMockOffsite(t)

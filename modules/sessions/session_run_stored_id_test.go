@@ -6,6 +6,7 @@ package sessions
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"testing"
 	"time"
@@ -90,8 +91,8 @@ func TestStoredRunIDReadsTheRunByItsReference(t *testing.T) {
 	if id, err := StoredRunID(context.Background(), f.st, f.tenant, dto.RunRef); err != nil || id.String() != storedRunIDForTest(t, f.st, f.tenant, dto.RunRef) {
 		t.Errorf("stored run ID = %q %v", id, err)
 	}
-	if id, err := StoredRunID(context.Background(), f.st, f.tenant, "no-such-run"); err == nil || !id.IsZero() {
-		t.Errorf("unknown run = %q %v, want an error", id, err)
+	if id, err := StoredRunID(context.Background(), f.st, f.tenant, "no-such-run"); !errors.Is(err, store.ErrNotFound) || !id.IsZero() {
+		t.Errorf("unknown run = %q %v, want %v", id, err, store.ErrNotFound)
 	}
 	if id, err := StoredRunID(context.Background(), nil, f.tenant, dto.RunRef); err == nil || !id.IsZero() {
 		t.Errorf("no store = %q %v, want an error", id, err)

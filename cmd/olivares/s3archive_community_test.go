@@ -63,7 +63,7 @@ func communityS3ArchiveDataExportBoot(t *testing.T) {
 		t.Fatal(err)
 	}
 	bundle := filepath.Join(t.TempDir(), "existing.drbundle")
-	if _, err := runDR("backup", "--data-dir", data, "--out", bundle, "--kek-key-file", key); err != nil {
+	if _, err := runDR(t, "backup", "--data-dir", data, "--out", bundle, "--kek-key-file", key); err != nil {
 		t.Fatalf("Community backup of existing S3-configured data: %v", err)
 	}
 	archive := filepath.Join(t.TempDir(), "export")

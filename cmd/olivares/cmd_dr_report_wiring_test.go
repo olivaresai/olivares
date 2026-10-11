@@ -52,7 +52,10 @@ func (s *alwaysFailingSink) Write(p []byte) (int, error) {
 // runDROut is runDR with the caller's stdout, so a witness can hand the command a stream
 // that fails. Stderr stays a buffer: the human notes go there and must not be the thing
 // that fails, or the witness would measure the wrong write.
-func runDROut(out io.Writer, args ...string) (string, error) {
+func runDROut(t *testing.T, out io.Writer, args ...string) (string, error) {
+	t.Helper()
+	prepareCompositionTestBoot(t)
+	defer prepareCompositionTestBoot(t)
 	cmd := newDRCmd()
 	var errBuf bytes.Buffer
 	cmd.SetOut(out)
@@ -69,7 +72,7 @@ func TestDRDrillDoesNotAnnounceADrillWhoseReportCouldNotBeRendered(t *testing.T)
 	// NOT FIRING FIRST. Without this, a drill that failed for any reason at all would
 	// satisfy the firing case below, and the witness would prove nothing about the report.
 	var ok bytes.Buffer
-	if _, err := runDROut(&ok, "drill", "--events", "1"); err != nil {
+	if _, err := runDROut(t, &ok, "drill", "--events", "1"); err != nil {
 		t.Fatalf("an undisturbed drill must pass, or the firing case below proves nothing: %v\n%s", err, ok.String())
 	}
 	if !strings.Contains(ok.String(), "\"ok\"") && !strings.Contains(ok.String(), "ok") {
@@ -78,7 +81,7 @@ func TestDRDrillDoesNotAnnounceADrillWhoseReportCouldNotBeRendered(t *testing.T)
 
 	// FIRING: the report cannot be written.
 	sink := &alwaysFailingSink{}
-	stderr, err := runDROut(sink, "drill", "--events", "1")
+	stderr, err := runDROut(t, sink, "drill", "--events", "1")
 	if err == nil {
 		t.Fatal("the drill reported success although its report — the only artifact it produces — could not be rendered")
 	}
@@ -122,7 +125,7 @@ func TestDRInPlaceRestoreDoesNotPromoteWhenItsReportCannotBeRendered(t *testing.
 
 	// FIRING: stdout is gone, so the staged restore's only account cannot be rendered.
 	sink := &alwaysFailingSink{}
-	stderr, err := runDROut(sink, args...)
+	stderr, err := runDROut(t, sink, args...)
 	if err == nil {
 		t.Fatal("the in-place restore promoted over the live estate although the verdict it promoted on could not be rendered")
 	}
@@ -143,7 +146,7 @@ func TestDRInPlaceRestoreDoesNotPromoteWhenItsReportCannotBeRendered(t *testing.
 	// NOT FIRING: the identical restore with a working stdout must still promote. Without
 	// this the guard could be a constant refusal and everything above would stay green.
 	var okOut bytes.Buffer
-	if _, err := runDROut(&okOut, args...); err != nil {
+	if _, err := runDROut(t, &okOut, args...); err != nil {
 		t.Fatalf("an in-place restore with a working stdout must promote: %v\n%s", err, okOut.String())
 	}
 	pre, _ := filepath.Glob(live + ".pre-restore-*")

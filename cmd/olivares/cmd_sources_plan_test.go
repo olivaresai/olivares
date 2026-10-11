@@ -30,6 +30,7 @@ const planTenantB = "00000000-0000-0000-0000-0000000000bb"
 // runCLI executes the real root command and returns stdout+stderr and the error.
 func runCLI(t *testing.T, args ...string) (string, error) {
 	t.Helper()
+	resetBootProcessScope(t)
 	root := newRootCmd()
 	var out bytes.Buffer
 	root.SetOut(&out)
@@ -58,6 +59,7 @@ func planJSON(t *testing.T, args ...string) (sourcePlanReport, error) {
 // seedRoster opens an initialized data dir and writes the given rows.
 func seedRoster(t *testing.T, dir string, defs ...model.SourceDef) {
 	t.Helper()
+	resetBootProcessScope(t)
 	eng, err := boot(context.Background(), bootConfig{DataDir: dir, Version: "test", Logger: discardLog()})
 	if err != nil {
 		t.Fatalf("boot to seed %s: %v", dir, err)
@@ -77,6 +79,7 @@ func seedRoster(t *testing.T, dir string, defs ...model.SourceDef) {
 // UpdatedAt even when every field it writes is identical.
 func readRoster(t *testing.T, dir string) []model.SourceDef {
 	t.Helper()
+	resetBootProcessScope(t)
 	eng, err := boot(context.Background(), bootConfig{DataDir: dir, Version: "test", Logger: discardLog(), ReadOnly: true})
 	if err != nil {
 		t.Fatalf("boot to read %s: %v", dir, err)
@@ -108,6 +111,7 @@ func TestSourcesPlanDoesNotWireTheRoster(t *testing.T) {
 		slog.SetDefault(slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})))
 		t.Cleanup(func() { slog.SetDefault(prev) })
 		if len(argv) == 0 {
+			resetBootProcessScope(t)
 			eng, err := boot(t.Context(), bootConfig{DataDir: dir, Version: "test", Logger: slog.Default()})
 			if err != nil {
 				t.Fatal(err)

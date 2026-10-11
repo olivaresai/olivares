@@ -38,7 +38,7 @@ func TestDRBackupRefusesSQLiteCoordinationRelation(t *testing.T) {
 		t.Fatalf("fixture: %v, close: %v", err, closeErr)
 	}
 	out := filepath.Join(t.TempDir(), "refused.drbundle")
-	_, err = runDR("backup", "--data-dir", src, "--out", out, "--kek-key-file", drPayloadTestKEK(t))
+	_, err = runDR(t, "backup", "--data-dir", src, "--out", out, "--kek-key-file", drPayloadTestKEK(t))
 	if err == nil || !strings.Contains(err.Error(), "operational restore coordination") {
 		t.Fatalf("backup must classify and refuse coordination in the payload, got %v", err)
 	}
@@ -56,7 +56,7 @@ func TestDRRestoreClassifiesAuthenticatedAndLegacyPayloadBeforeEffects(t *testin
 	seedDataDir(t, dst)
 	keyFile := drPayloadTestKEK(t)
 	clean := filepath.Join(t.TempDir(), "clean.drbundle")
-	if out, err := runDR("backup", "--data-dir", src, "--out", clean, "--kek-key-file", keyFile); err != nil {
+	if out, err := runDR(t, "backup", "--data-dir", src, "--out", clean, "--kek-key-file", keyFile); err != nil {
 		t.Fatalf("backup: %v\n%s", err, out)
 	}
 	work := t.TempDir()
@@ -145,7 +145,7 @@ func TestDRRestoreClassifiesAuthenticatedAndLegacyPayloadBeforeEffects(t *testin
 			if legacy {
 				args = append(args, "--allow-legacy-unsigned")
 			}
-			if _, err := runDR(args...); err == nil || !strings.Contains(err.Error(), "operational restore coordination") {
+			if _, err := runDR(t, args...); err == nil || !strings.Contains(err.Error(), "operational restore coordination") {
 				t.Fatalf("restore must classify before effects: %v", err)
 			}
 			for name, want := range before {
@@ -169,7 +169,7 @@ func TestDRBackupClassifiesSuppliedSnapshotBeforeDialing(t *testing.T) {
 		t.Fatal(err)
 	}
 	out := filepath.Join(t.TempDir(), "refused.drbundle")
-	_, err := runDR("backup", "--engine", "postgres", "--dsn", "host=127.0.0.1 port=1 dbname=fixture connect_timeout=1", "--data-dir", src, "--snapshot-file", snapshot, "--out", out, "--kek-key-file", drPayloadTestKEK(t))
+	_, err := runDR(t, "backup", "--engine", "postgres", "--dsn", "host=127.0.0.1 port=1 dbname=fixture connect_timeout=1", "--data-dir", src, "--snapshot-file", snapshot, "--out", out, "--kek-key-file", drPayloadTestKEK(t))
 	if err == nil || !strings.Contains(err.Error(), "unsupported PostgreSQL archive") {
 		t.Fatalf("supplied payload must be classified before a database dial, got %v", err)
 	}
@@ -195,7 +195,7 @@ func TestDRSQLitePayloadKeepsDeclarationAndExcludesSidecars(t *testing.T) {
 	anchor := installDataDirControl(t, src, opgate.StatePending)
 	bundle := filepath.Join(t.TempDir(), "estate.drbundle")
 	keyFile := drPayloadTestKEK(t)
-	if out, err := runDR("backup", "--data-dir", src, "--out", bundle, "--kek-key-file", keyFile); err != nil {
+	if out, err := runDR(t, "backup", "--data-dir", src, "--out", bundle, "--kek-key-file", keyFile); err != nil {
 		t.Fatalf("backup: %v\n%s", err, out)
 	}
 	work := t.TempDir()
@@ -217,7 +217,7 @@ func TestDRSQLitePayloadKeepsDeclarationAndExcludesSidecars(t *testing.T) {
 	if err := db.QueryRowContext(t.Context(), "SELECT count(*) FROM audit_events WHERE action='dr.restore.cli'").Scan(&count); err != nil || count != 1 {
 		t.Fatalf("declaration history lost: count=%d, err=%v", count, err)
 	}
-	if out, err := runDR("verify", "--in", bundle, "--kek-key-file", keyFile); err != nil {
+	if out, err := runDR(t, "verify", "--in", bundle, "--kek-key-file", keyFile); err != nil {
 		t.Fatalf("verify retained declaration chain: %v\n%s", err, out)
 	}
 }
@@ -412,7 +412,7 @@ func TestDRInPlaceRestoreRefusesChangedClassifiedPayload(t *testing.T) {
 	seedDataDir(t, src)
 	seedDataDir(t, dst)
 	bundle := filepath.Join(t.TempDir(), "clean.drbundle")
-	if out, err := runDR("backup", "--data-dir", src, "--out", bundle, "--kek-key-file", drPayloadTestKEK(t)); err != nil {
+	if out, err := runDR(t, "backup", "--data-dir", src, "--out", bundle, "--kek-key-file", drPayloadTestKEK(t)); err != nil {
 		t.Fatalf("backup: %v\n%s", err, out)
 	}
 	work := t.TempDir()

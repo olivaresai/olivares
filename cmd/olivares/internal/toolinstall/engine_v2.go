@@ -180,7 +180,7 @@ func (e *Engine) InstallV2(ctx context.Context, req RequestV2, approved *PlanV2,
 	}
 	exeAbs := filepath.Join(req.DestRoot, staging, filepath.FromSlash(plan.Selection.Layout.EntryPoint))
 	fmt.Fprintf(progress, "probing the staged executable: %s --version\n", exeAbs)
-	probe, err := p.Probe(ctx, exeAbs, filepath.Join(req.DestRoot, scratch), plan.Selection.Version)
+	probe, err := p.Probe(e.probeContext(ctx), exeAbs, filepath.Join(req.DestRoot, scratch), plan.Selection.Version)
 	if err != nil {
 		return nil, plan, err
 	}

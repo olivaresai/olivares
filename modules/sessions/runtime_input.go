@@ -36,11 +36,13 @@ type RuntimeInputWork struct {
 }
 
 // RuntimeInputTarget names one original launch, not whichever process currently
-// occupies RunRef. Nil Work asserts an unbound run.
+// occupies RunRef. RunID is the stored row ID RunRef reads (StoredRunID), the
+// resource the native run routes authorize. Nil Work asserts an unbound run.
 type RuntimeInputTarget struct {
 	Tenant         model.TenantID
 	WorkspaceID    model.ID
 	RunRef         string
+	RunID          model.ID
 	ExpectedLaunch model.ID
 	ExpectedSID    string
 	Work           *RuntimeInputWork
@@ -57,12 +59,11 @@ type RuntimeInputAuthority struct {
 }
 
 // RuntimeInputRunQuestion is the existing run-input permission on the target's
-// stored workspace. An owner asks the composed authorizer this exact question.
-// Its ID is still the run reference, not the stored ID the native run routes
-// authorize; the target cannot carry that ID without its Business caller (#1417).
+// stored workspace, about the same resource the native run routes authorize:
+// the run's stored ID. An owner asks the composed authorizer this exact question.
 func RuntimeInputRunQuestion(principal auth.Principal, target RuntimeInputTarget) auth.Request {
 	return auth.Request{Principal: principal, Tenant: target.Tenant, Permission: permRunWrite,
-		Resource: auth.ResourceAttrs{Kind: permRunWrite.Resource(), ID: target.RunRef, WorkspaceID: target.WorkspaceID}}
+		Resource: auth.ResourceAttrs{Kind: permRunWrite.Resource(), ID: target.RunID.String(), WorkspaceID: target.WorkspaceID}}
 }
 
 // AuthorityFor merges, without weakening, the two retained mutation decisions.
@@ -145,9 +146,11 @@ func validateRuntimeInputTarget(target RuntimeInputTarget) error {
 		!validRuntimeUUIDv7(target.ExpectedLaunch.String()) || !validCanonicalSID(target.ExpectedSID) || target.RunRef == "" {
 		return ErrRuntimeInputTarget
 	}
-	workspace, err := model.ParseID(target.WorkspaceID.String())
-	if err != nil || workspace.IsZero() || workspace != target.WorkspaceID {
-		return ErrRuntimeInputTarget
+	for _, id := range []model.ID{target.WorkspaceID, target.RunID} {
+		parsed, err := model.ParseID(id.String())
+		if err != nil || parsed.IsZero() || parsed != id {
+			return ErrRuntimeInputTarget
+		}
 	}
 	if w := target.Work; w != nil {
 		id, err := model.ParseID(w.WorkItemID.String())
@@ -214,7 +217,7 @@ func (m *Module) runtimeInputTargetInScope(ctx context.Context, raw store.Scope,
 	if err != nil {
 		return nil, err
 	}
-	if rec.String(colRunAuthzWorkspaceID) != target.WorkspaceID.String() ||
+	if rec.String(model.ColID) != target.RunID.String() || rec.String(colRunAuthzWorkspaceID) != target.WorkspaceID.String() ||
 		rec.String(colRuntimeLaunchID) != target.ExpectedLaunch.String() || rec.String(colState) != stateRunning ||
 		rec.String(colRunClaimSID) != target.ExpectedSID {
 		return nil, ErrRuntimeInputTarget

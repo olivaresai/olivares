@@ -22,6 +22,8 @@ import (
 // audit-signing.key + catalog-signing.key) a real DR backup operates on.
 func seedDataDir(t *testing.T, dir string) {
 	t.Helper()
+	prepareCompositionTestBoot(t)
+	defer prepareCompositionTestBoot(t)
 	ctx := context.Background()
 	eng, err := boot(ctx, bootConfig{DataDir: dir, Engine: "sqlite", Version: "test"})
 	if err != nil {
@@ -58,7 +60,12 @@ func seedDataDir(t *testing.T, dir string) {
 	}
 }
 
-func runDR(args ...string) (string, error) {
+func runDR(t *testing.T, args ...string) (string, error) {
+	t.Helper()
+	// Every CLI invocation is a fresh process in production. The command closes
+	// its engine before returning; reset only the test composition at that boundary.
+	prepareCompositionTestBoot(t)
+	defer prepareCompositionTestBoot(t)
 	cmd := newDRCmd()
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
@@ -94,7 +101,7 @@ func TestDRBackupVerifyRestoreCLI(t *testing.T) {
 	}
 	bundle := filepath.Join(t.TempDir(), "estate.drbundle")
 
-	out, err := runDR("backup", "--data-dir", src, "--engine", "sqlite", "--out", bundle, "--passphrase-file", pf)
+	out, err := runDR(t, "backup", "--data-dir", src, "--engine", "sqlite", "--out", bundle, "--passphrase-file", pf)
 	if err != nil {
 		t.Fatalf("backup: %v\n%s", err, out)
 	}
@@ -102,7 +109,7 @@ func TestDRBackupVerifyRestoreCLI(t *testing.T) {
 		t.Fatalf("bundle not written: %v", err)
 	}
 
-	out, err = runDR("verify", "--in", bundle, "--passphrase-file", pf)
+	out, err = runDR(t, "verify", "--in", bundle, "--passphrase-file", pf)
 	if err != nil {
 		t.Fatalf("verify: %v\n%s", err, out)
 	}
@@ -110,7 +117,7 @@ func TestDRBackupVerifyRestoreCLI(t *testing.T) {
 		t.Fatalf("verify output unexpected:\n%s", out)
 	}
 
-	out, err = runDR("inspect", "--in", bundle)
+	out, err = runDR(t, "inspect", "--in", bundle)
 	if err != nil {
 		t.Fatalf("inspect: %v\n%s", err, out)
 	}
@@ -119,7 +126,7 @@ func TestDRBackupVerifyRestoreCLI(t *testing.T) {
 	}
 
 	dst := t.TempDir()
-	out, err = runDR("restore", "--in", bundle, "--data-dir", dst, "--engine", "sqlite", "--passphrase-file", pf, "--force")
+	out, err = runDR(t, "restore", "--in", bundle, "--data-dir", dst, "--engine", "sqlite", "--passphrase-file", pf, "--force")
 	if err != nil {
 		t.Fatalf("restore: %v\n%s", err, out)
 	}
@@ -155,10 +162,10 @@ func TestDRWrongPassphraseFails(t *testing.T) {
 	_ = os.WriteFile(wrong, []byte("nope"), 0o600)
 	bundle := filepath.Join(t.TempDir(), "b.drbundle")
 
-	if out, err := runDR("backup", "--data-dir", src, "--out", bundle, "--passphrase-file", pf); err != nil {
+	if out, err := runDR(t, "backup", "--data-dir", src, "--out", bundle, "--passphrase-file", pf); err != nil {
 		t.Fatalf("backup: %v\n%s", err, out)
 	}
-	if _, err := runDR("verify", "--in", bundle, "--passphrase-file", wrong); err == nil {
+	if _, err := runDR(t, "verify", "--in", bundle, "--passphrase-file", wrong); err == nil {
 		t.Fatal("verify with the wrong passphrase should fail")
 	}
 }
@@ -167,7 +174,7 @@ func TestDRBackupRequiresKEK(t *testing.T) {
 	src := t.TempDir()
 	seedDataDir(t, src)
 	bundle := filepath.Join(t.TempDir(), "b.drbundle")
-	_, err := runDR("backup", "--data-dir", src, "--out", bundle)
+	_, err := runDR(t, "backup", "--data-dir", src, "--out", bundle)
 	if err == nil {
 		t.Fatal("backup without a KEK should fail (keys must never be stored in the clear)")
 	}
@@ -188,7 +195,7 @@ func TestDRBackupPostgresRequiresAdminDSNForDirectDump(t *testing.T) {
 		t.Fatal(err)
 	}
 	bundle := filepath.Join(t.TempDir(), "b.drbundle")
-	_, err := runDR("backup", "--data-dir", src, "--engine", "postgres",
+	_, err := runDR(t, "backup", "--data-dir", src, "--engine", "postgres",
 		"--dsn", "postgres://app:x@127.0.0.1:1/never-dialled", "--out", bundle,
 		"--passphrase-file", pf)
 	if err == nil || !strings.Contains(err.Error(), "--admin-dsn") {
@@ -207,7 +214,7 @@ func TestDRBackupPostgresRequiresAdminDSNForDirectDump(t *testing.T) {
 	}
 	t.Cleanup(func() { pgDumpRunner = orig })
 
-	_, _ = runDR("backup", "--data-dir", src, "--engine", "postgres",
+	_, _ = runDR(t, "backup", "--data-dir", src, "--engine", "postgres",
 		"--dsn", appDSN, "--admin-dsn", adminDSN, "--out", bundle, "--passphrase-file", pf)
 	if seen != adminDSN {
 		t.Errorf("pg_dump received %q, want the ADMIN DSN %q (the application DSN cannot dump under FORCE RLS)", seen, adminDSN)
@@ -271,7 +278,7 @@ func TestDRBackupRetainDaysWiring(t *testing.T) {
 		t.Fatal(err)
 	}
 	bundle := filepath.Join(outDir, "olivares-dr-new.drbundle")
-	out, err := runDR("backup", "--data-dir", src, "--engine", "sqlite", "--out", bundle, "--passphrase-file", pf, "--retain-days", "14")
+	out, err := runDR(t, "backup", "--data-dir", src, "--engine", "sqlite", "--out", bundle, "--passphrase-file", pf, "--retain-days", "14")
 	if err != nil {
 		t.Fatalf("backup: %v\n%s", err, out)
 	}

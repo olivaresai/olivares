@@ -27,6 +27,7 @@ func TestDRBackupVerifyWithProviderAndModelsUnselected(t *testing.T) {
 	src := t.TempDir()
 	ctx := context.Background()
 	// The way serve boots: the default module profile, models dormant.
+	prepareCompositionTestBoot(t)
 	eng, err := boot(ctx, bootConfig{DataDir: src, Engine: "sqlite", Version: "test", ApplyModuleProfile: true})
 	if err != nil {
 		t.Fatalf("seed boot: %v", err)
@@ -63,15 +64,15 @@ func TestDRBackupVerifyWithProviderAndModelsUnselected(t *testing.T) {
 		t.Fatal(err)
 	}
 	bundle := filepath.Join(t.TempDir(), "estate.drbundle")
-	if out, err := runDR("backup", "--data-dir", src, "--engine", "sqlite", "--out", bundle, "--passphrase-file", pf); err != nil {
+	if out, err := runDR(t, "backup", "--data-dir", src, "--engine", "sqlite", "--out", bundle, "--passphrase-file", pf); err != nil {
 		t.Fatalf("backup: %v\n%s", err, out)
 	}
-	out, err := runDR("verify", "--in", bundle, "--passphrase-file", pf)
+	out, err := runDR(t, "verify", "--in", bundle, "--passphrase-file", pf)
 	if err != nil || !strings.Contains(out, "DR drill PASSED") {
 		t.Fatalf("verify: %v\n%s", err, out)
 	}
 	dst := t.TempDir()
-	out, err = runDR("restore", "--in", bundle, "--data-dir", dst, "--engine", "sqlite", "--passphrase-file", pf, "--force")
+	out, err = runDR(t, "restore", "--in", bundle, "--data-dir", dst, "--engine", "sqlite", "--passphrase-file", pf, "--force")
 	if err != nil || !strings.Contains(out, "restore verified") {
 		t.Fatalf("restore: %v\n%s", err, out)
 	}

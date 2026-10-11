@@ -14,8 +14,8 @@ func governanceBreakGlassCmd(_ *authClientFlags) *cobra.Command {
 	requiresBusiness := func(*cobra.Command, []string) error { return notInEdition() }
 	root := &cobra.Command{
 		Use: "breakglass", Short: "Break-glass grants (requires Business edition)",
-		Long: availability, Example: "  olivares governance breakglass --help",
-		Hidden: true, RunE: requiresBusiness,
+		Long: availability, Example: "  olivares governance breakglass ls",
+		Hidden: true, Args: cobra.NoArgs, RunE: requiresBusiness,
 	}
 	list := &cobra.Command{
 		Use: "ls", Short: "List break-glass grants (requires Business edition)",

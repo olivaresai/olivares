@@ -40,7 +40,7 @@ func TestDRBackupExcludesExactCoordinationInventory(t *testing.T) {
 	keyFile := drPayloadTestKEK(t)
 	clean := filepath.Join(t.TempDir(), "clean.drbundle")
 	args := append([]string{"backup", "--data-dir", dir, "--out", clean, "--kek-key-file", keyFile, "--pg-dump", src.bin("pg_dump")}, src.drArgs()...)
-	if out, err := runDR(args...); err != nil {
+	if out, err := runDR(t, args...); err != nil {
 		t.Fatalf("real split-role backup: %v\n%s", err, out)
 	}
 	if _, err := coreengine.InstallPendingRestoreControl(t.Context(), store.Config{Engine: store.EnginePostgres, DSN: src.appDSN, OwnerDSN: src.ownerDSN, AdminDSN: src.adminDSN},
@@ -83,7 +83,7 @@ func TestDRBackupExcludesExactCoordinationInventory(t *testing.T) {
 	}
 	refused := filepath.Join(t.TempDir(), "refused.drbundle")
 	args = append([]string{"backup", "--data-dir", dir, "--out", refused, "--kek-key-file", keyFile, "--pg-dump", src.bin("pg_dump"), "--snapshot-file", contaminated}, src.drArgs()...)
-	if _, err := runDR(args...); err == nil || !strings.Contains(err.Error(), "operational restore coordination") {
+	if _, err := runDR(t, args...); err == nil || !strings.Contains(err.Error(), "operational restore coordination") {
 		t.Fatalf("supplied contaminated archive accepted: %v", err)
 	}
 	if _, err := os.Stat(refused); !os.IsNotExist(err) {
@@ -125,7 +125,7 @@ func TestDRBackupExcludesExactCoordinationInventory(t *testing.T) {
 	}
 	events := dst.superScalar(t, "SELECT count(*) FROM public.audit_events")
 	args = append([]string{"restore", "--data-dir", restoreDir, "--in", bundle, "--kek-key-file", keyFile, "--force", "--operator", "fixture", "--reason", "reject contamination", "--pg-restore", dst.bin("pg_restore")}, dst.drArgs()...)
-	if _, err := runDR(args...); err == nil || !strings.Contains(err.Error(), "operational restore coordination") {
+	if _, err := runDR(t, args...); err == nil || !strings.Contains(err.Error(), "operational restore coordination") {
 		t.Fatalf("authenticated contaminated archive accepted: %v", err)
 	}
 	if got := dst.superScalar(t, "SELECT count(*) FROM public.audit_events"); got != events {

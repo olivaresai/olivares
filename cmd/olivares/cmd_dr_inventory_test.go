@@ -43,7 +43,7 @@ func TestDRBackupInventory(t *testing.T) {
 		t.Fatal(err)
 	}
 	bundle := filepath.Join(t.TempDir(), "inv.drbundle")
-	if out, err := runDR("backup", "--data-dir", src, "--out", bundle, "--passphrase-file", pf); err != nil {
+	if out, err := runDR(t, "backup", "--data-dir", src, "--out", bundle, "--passphrase-file", pf); err != nil {
 		t.Fatalf("backup: %v\n%s", err, out)
 	}
 

@@ -1077,7 +1077,7 @@ func (b *bootState) configure(ctx context.Context) (err error) {
 	}
 	b.dsn = b.cfg.DSN
 	if b.eng == store.EngineSQLite && b.dsn == "" {
-		b.dsn = filepath.Join(b.cfg.DataDir, "olivares.db")
+		b.dsn = filepath.Join(b.cfg.DataDir, coreStoreFile)
 		// The SQLite driver creates the file it is pointed at, so under ReadOnly
 		// the absence has to be caught HERE — opening the store would otherwise
 		// materialize an empty 6 MB database that the command then reports as
@@ -1487,7 +1487,7 @@ func (b *bootState) buildRuntime(ctx context.Context) (err error) {
 	if b.memoryKeyErr == nil {
 		memoryKnowledgeOpts = append(memoryKnowledgeOpts, knowledge.WithMemoryPortabilityKeys(b.memoryKey.priv, b.memoryKey.priv.Public().(ed25519.PublicKey)))
 	}
-	b.set, err = buildModules(&sessions.Dependencies{}, b.signer, b.catalogKey.priv, b.policyKey.priv, b.auditKey.priors, b.tracer.AnthropicHTTPClient(nil), b.tracer, b.srcCfg, editionConfigFrom(b.cfg), b.cfg.DataDir, b.log, memoryKnowledgeOpts...)
+	b.set, err = buildModules(&sessions.Dependencies{}, b.signer, b.catalogKey.priv, b.policyKey.priv, b.auditKey.priors, b.tracer.AnthropicHTTPClient(nil), b.tracer, b.srcCfg, editionConfigFrom(b.cfg, b.eng, b.dsn), b.cfg.DataDir, b.log, memoryKnowledgeOpts...)
 	if err != nil {
 		return fmt.Errorf("load module operator config: %w", err)
 	}
@@ -2323,7 +2323,7 @@ func (b *bootState) bindServices(ctx context.Context) (err error) {
 	// Live edition ports are bound only after the real Store, sessions data and
 	// request authorizer and secret resolver exist, before api.New mounts routes.
 	if thisEdition.bindModuleDependencies != nil {
-		b.editionResources, err = thisEdition.bindModuleDependencies(ctx, editionConfigFrom(b.cfg), b.set.all,
+		b.editionResources, err = thisEdition.bindModuleDependencies(ctx, editionConfigFrom(b.cfg, b.eng, b.dsn), b.set.all,
 			EditionDependencies{
 				modules: &b.set,
 				Store:   b.st, Sessions: b.set.sessions, RuntimeLaunches: b.set.sessions,
@@ -2678,10 +2678,10 @@ func (b *bootState) buildAPI(ctx context.Context) (err error) {
 	if err != nil {
 		return fmt.Errorf("agent tools API: %w", err)
 	}
-	// The tools' logins, status reads, probes and Ollama run confined like a session child (#1114).
+	// The tools' logins, status reads, probes, install probes and Ollama run confined like a session child (#1114, #1430).
 	b.agentTools.SetChildCommand(confinedToolCommand(b.cfg.DataDir))
 	if state := confine.Probe(); state.Mode != confine.ModeLandlock {
-		b.log.Warn("agent tools: the tools' logins, status reads and probes run UNCONFINED on this node and can read what the engine user can; enable Landlock and run olivares doctor", "reason", state.Reason)
+		b.log.Warn("agent tools: the tools' logins, status reads and probes, including the version probe of a tool install, run UNCONFINED on this node with the engine user's rights; enable Landlock and run olivares doctor", "reason", state.Reason)
 	}
 	// Sign-in runs the same executable a session launch runs (sessionruntime.go).
 	toolObserver := newHostToolObserverForDataDir(b.cfg.DataDir, osGetenv)

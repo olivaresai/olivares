@@ -17,6 +17,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
@@ -47,6 +48,22 @@ type Engine struct {
 	// verified, when set, keeps the releases List found installed until what
 	// they are made of changes (verified_cache.go).
 	verified *VerifiedCache
+	// childCommand builds the version probe of a staged or detected tool
+	// (SetChildCommand); nil runs it unconfined, as the engine user.
+	childCommand atomic.Pointer[ChildCommand]
+}
+
+// SetChildCommand wires how the engine builds the version probe of a staged or
+// detected tool. The composition sets the agent tools module's confined builder,
+// so an install job's probe runs like the module's other children.
+func (e *Engine) SetChildCommand(f ChildCommand) { e.childCommand.Store(&f) }
+
+// probeContext carries the engine's ChildCommand to the probes of one call.
+func (e *Engine) probeContext(ctx context.Context) context.Context {
+	if f := e.childCommand.Load(); f != nil {
+		return withChildCommand(ctx, *f)
+	}
+	return ctx
 }
 
 type EngineOptions struct {
@@ -361,7 +378,7 @@ func (e *Engine) Install(ctx context.Context, req Request, approved *Plan, progr
 	}
 	exeAbs := filepath.Join(req.DestRoot, final)
 	fmt.Fprintf(progress, "probing the staged executable: %s --version\n", exeAbs)
-	probe, err := p.Probe(ctx, exeAbs, filepath.Join(req.DestRoot, scratch), plan.Version)
+	probe, err := p.Probe(e.probeContext(ctx), exeAbs, filepath.Join(req.DestRoot, scratch), plan.Version)
 	if err != nil {
 		return nil, plan, err
 	}

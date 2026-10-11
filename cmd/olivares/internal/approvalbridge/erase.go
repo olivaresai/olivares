@@ -13,6 +13,7 @@ import (
 
 	claudecompliance "github.com/olivaresai/olivares/connectors/claude-compliance"
 	"github.com/olivaresai/olivares/core/model"
+	"github.com/olivaresai/olivares/modules/governance"
 )
 
 // erase.go wires the RTBF eraser's dual-control seam
@@ -153,18 +154,8 @@ type ApproverEvidence struct {
 // handler guards that refuse a decision from a principal with no stable user. Counting
 // people here is what makes those a defense in depth rather than the only defense.
 func (b *Bridge) ApprovalApproverEvidence(ctx context.Context, cred ServiceCred, ref string) ApproverEvidence {
-	code, raw := b.do(ctx, cred, http.MethodGet, "/v1/m/governance/approvals/"+url.PathEscape(ref)+"/decisions", nil)
-	if code != http.StatusOK {
-		return ApproverEvidence{}
-	}
-	var resp struct {
-		Items []struct {
-			Decision    string `json:"decision"`
-			Decider     string `json:"decider"`
-			DeciderUser string `json:"decider_user"`
-		} `json:"items"`
-	}
-	if jerr := json.Unmarshal(raw, &resp); jerr != nil {
+	items, ok := b.approvalDecisions(ctx, cred, ref)
+	if !ok {
 		return ApproverEvidence{}
 	}
 	var (
@@ -173,7 +164,7 @@ func (b *Bridge) ApprovalApproverEvidence(ctx context.Context, cred ServiceCred,
 		seenPerson  = map[string]struct{}{}
 		emptyPerson = 0
 	)
-	for _, d := range resp.Items {
+	for _, d := range items {
 		if d.Decision != "approve" {
 			continue
 		}
@@ -200,6 +191,34 @@ func (b *Bridge) ApprovalApproverEvidence(ctx context.Context, cred ServiceCred,
 	}
 	ev.Unattributed = emptyPerson
 	return ev
+}
+
+// approvalDecisions reads an approval's decision trail. A default install holds no
+// service token to authenticate a loopback request with, so it reads the trail
+// from the same local approval service it proposes through, as ReadApproval does;
+// a configured tenant reads it as its service principal over the governed API.
+func (b *Bridge) approvalDecisions(ctx context.Context, cred ServiceCred, ref string) ([]governance.ApprovalDecision, bool) {
+	if b.localDefault && b.LocalProposer != nil {
+		items, err := b.LocalProposer.Decisions(ctx, cred.Tenant, ref)
+		if err != nil {
+			b.Log.Warn("approval-bridge: decision trail unreadable; no approver evidence, the gate denies", "tenant", cred.TenantStr, "approval", ref, "err", err)
+			return nil, false
+		}
+		return items, true
+	}
+	code, raw := b.do(ctx, cred, http.MethodGet, "/v1/m/governance/approvals/"+url.PathEscape(ref)+"/decisions", nil)
+	if code != http.StatusOK {
+		b.Log.Warn("approval-bridge: decision trail unreadable; no approver evidence, the gate denies", "tenant", cred.TenantStr, "approval", ref, "status", code)
+		return nil, false
+	}
+	var resp struct {
+		Items []governance.ApprovalDecision `json:"items"`
+	}
+	if err := json.Unmarshal(raw, &resp); err != nil {
+		b.Log.Warn("approval-bridge: decision trail malformed; no approver evidence, the gate denies", "tenant", cred.TenantStr, "approval", ref, "err", err)
+		return nil, false
+	}
+	return resp.Items, true
 }
 
 // eraseStatusOf maps the bridge's neutral status onto the erase-gate vocabulary;

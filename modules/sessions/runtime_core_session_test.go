@@ -136,16 +136,23 @@ func TestRuntimeCoreSessionInScopeIsTheTargetsOwnSession(t *testing.T) {
 	if err != nil || d.CoreSessionID == "" {
 		t.Fatalf("run core_session_id = %q (%v)", d.CoreSessionID, err)
 	}
-	target := RuntimeInputTarget{Tenant: original.Tenant, WorkspaceID: original.WorkspaceID, RunRef: original.RunRef, ExpectedLaunch: original.RuntimeLaunchID, ExpectedSID: original.SessionSID}
-	stale := target
-	stale.ExpectedLaunch = model.NewID()
+	target := RuntimeInputTarget{Tenant: original.Tenant, WorkspaceID: original.WorkspaceID, RunRef: original.RunRef, RunID: model.ID(storedRunIDForTest(t, f.st, f.tenant, original.RunRef)), ExpectedLaunch: original.RuntimeLaunchID, ExpectedSID: original.SessionSID}
 	inRuntimeTargetScope(t, f, target, func(sc store.Scope) {
 		got, err := f.m.RuntimeCoreSessionInScope(ctx, sc, target)
 		if err != nil || got.String() != d.CoreSessionID {
 			t.Errorf("core session in scope = %q (%v), want %s", got, err, d.CoreSessionID)
 		}
-		if got, err := f.m.RuntimeCoreSessionInScope(ctx, sc, stale); !errors.Is(err, ErrRuntimeInputTarget) || got != "" {
-			t.Errorf("stale target = %q (%v), want the validator's refusal", got, err)
+		// A target naming another stored run, or none, is refused like a stale launch.
+		for name, mutate := range map[string]func(*RuntimeInputTarget){
+			"stale launch": func(r *RuntimeInputTarget) { r.ExpectedLaunch = model.NewID() },
+			"other run ID": func(r *RuntimeInputTarget) { r.RunID = model.NewID() },
+			"no run ID":    func(r *RuntimeInputTarget) { r.RunID = "" },
+		} {
+			stale := target
+			mutate(&stale)
+			if got, err := f.m.RuntimeCoreSessionInScope(ctx, sc, stale); !errors.Is(err, ErrRuntimeInputTarget) || got != "" {
+				t.Errorf("%s = %q (%v), want the validator's refusal", name, got, err)
+			}
 		}
 	})
 }
@@ -405,10 +412,10 @@ func TestReadCoreSessionRunInScopeLinksAnEngineOpenedSession(t *testing.T) {
 				t.Fatal(err)
 			}
 			stored := runtimeInputTargetForTest(t, f, managed.RunRef)
-			if got.Work == nil || stored.Work == nil || *got.Work != *stored.Work || got.RuntimeLaunchID != stored.ExpectedLaunch || got.SessionSID != stored.ExpectedSID {
+			if got.Work == nil || stored.Work == nil || *got.Work != *stored.Work || got.RuntimeLaunchID != stored.ExpectedLaunch || got.SessionSID != stored.ExpectedSID || got.RunID != stored.RunID {
 				t.Fatalf("work read = %+v work %+v, want the stored observation %+v", got.RuntimeLaunchIdentity, got.Work, stored.Work)
 			}
-			target := RuntimeInputTarget{Tenant: got.Tenant, WorkspaceID: got.WorkspaceID, RunRef: got.RunRef,
+			target := RuntimeInputTarget{Tenant: got.Tenant, WorkspaceID: got.WorkspaceID, RunRef: got.RunRef, RunID: got.RunID,
 				ExpectedLaunch: got.RuntimeLaunchID, ExpectedSID: got.SessionSID, Work: got.Work}
 			inRuntimeTargetScope(t, f, target, func(sc store.Scope) {
 				if id, err := f.m.RuntimeCoreSessionInScope(ctx, sc, target); err != nil || id.String() != d.CoreSessionID {

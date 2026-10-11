@@ -355,6 +355,11 @@ jobs:
           # CREATE EXTENSION IF NOT EXISTS then no-ops harmlessly.
           psql "postgres://postgres@${PGHOSTPORT:?PGHOSTPORT unset - the resolver step must run first}/olivares" -v ON_ERROR_STOP=1 -c \
             "CREATE EXTENSION IF NOT EXISTS vector;"
+      - name: the runner allows the session boundary's user and network namespaces
+        # The sessions group races the boundary reproducers, which fail closed where the
+        # host refuses the namespaces (SECURITY.md, Requirements). Same step as pr-ci.yml.
+        if: contains(matrix.group, 'sessions')
+        run: bash scripts/ci-session-boundary.sh
       - name: race this group
         # ⛔ 80 de techo con `-timeout 70m` de Go DENTRO (re-medido el 2026-09-16 en runners hospedados de 4 vCPU: 10 de 20 turnos agotaron el reloj de 35; ver measured_run_2026_09_16 en race-groups.json). Los dos números viven en
         # scripts/race-groups.json y el banco comprueba que el de Go es el menor: el

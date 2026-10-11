@@ -27,6 +27,7 @@ func (m *Module) EngineApprovals() *EngineApprovals { return &EngineApprovals{mo
 
 type ApprovalRequest = createApprovalRequest
 type Approval = approvalDTO
+type ApprovalDecision = decisionDTO
 
 type approvalData interface {
 	View(context.Context, func(store.Scope) error) error
@@ -123,6 +124,18 @@ func (a *EngineApprovals) Read(ctx context.Context, tenant model.TenantID, ref s
 		return nil
 	})
 	return out, err
+}
+
+// Decisions returns the immutable decision trail of one approval, the same rows
+// GET /approvals/{id}/decisions answers, for a caller inside the engine that has
+// no API credential (the local approval bridge's dual-control evidence read).
+func (a *EngineApprovals) Decisions(ctx context.Context, tenant model.TenantID, ref string) ([]ApprovalDecision, error) {
+	ctx = api.DetachRequestContext(ctx)
+	d, _, err := a.scope(tenant)
+	if err != nil {
+		return nil, err
+	}
+	return listApprovalDecisions(ctx, d, model.ID(ref))
 }
 
 func (a *EngineApprovals) List(ctx context.Context, tenant model.TenantID, action, status, cursor string) ([]Approval, model.Page, error) {

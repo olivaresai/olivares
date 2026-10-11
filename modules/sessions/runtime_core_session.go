@@ -85,11 +85,13 @@ func (m *Module) RuntimeCoreSessionInScope(ctx context.Context, sc store.Scope, 
 // identity and stored display facts: the work role, who launched the attempt
 // (the claim holder's actor ref) and the model name it was launched with (empty when
 // the launch named none). Labels only: neither authorizes anything. The identity is
-// embedded unchanged, so its equality as an attempt key is not widened. Work is the
+// embedded unchanged, so its equality as an attempt key is not widened. RunID is the
+// run's stored ID, the resource a RuntimeInputTarget names. Work is the
 // work-bound run's stored work observation, the one the runtime target validator
 // compares (runtime_input.go); nil for a run with no work binding.
 type CoreSessionRun struct {
 	RuntimeLaunchIdentity
+	RunID    model.ID
 	Actor    string
 	ModelRef string
 	// Role is the validated stored launch scope, not current authority.
@@ -130,6 +132,7 @@ func (m *Module) ReadCoreSessionRunInScope(ctx context.Context, sc store.Scope, 
 	}
 	out := CoreSessionRun{
 		RuntimeLaunchIdentity: RuntimeLaunchIdentity{Tenant: sc.Tenant(), WorkspaceID: workspace, RunRef: rec.String(colRunRef), RuntimeLaunchID: launch},
+		RunID:                 model.ID(rec.String(model.ColID)),
 		Actor:                 rec.String(colClaimHolder), ModelRef: rec.String(colRunModelRef),
 	}
 	if scope := runWorkScope(rec); scope != nil {

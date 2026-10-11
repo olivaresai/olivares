@@ -2637,11 +2637,14 @@ tasks:
       whole string), a /dev/tcp probe (zsh does not implement it, so the probe always says
       "closed"), pkill (this project kills by PID after identifying the process in /proc), a
       pathless `git add -A`/`git add .` in a SHARED clone, and a `comm` over lists sorted with
-      `sort -n` (comm needs LEXICOGRAPHIC order; with numbers the two orders differ). Fourteen
-      cases including the declared fail-open posture without jq and the visible `# guard:ok`
-      escape. The guard runs in bash, so the battery calibrates in bash: the first version was
-      calibrated in the interactive shell — another grep — and produced a defect that did not
-      exist.
+      `sort -n` (comm needs LEXICOGRAPHIC order; with numbers the two orders differ), and a
+      build, test or browser job outside the heavy-job wrapper (five local Go suites took the
+      server to load 98 on 2026-10-08). The same battery grades guard-edit.sh, which refuses an
+      edit to an applied migration (present on origin/main) and to generated output. Each rule has
+      refused and allowed cases, and the battery pins the declared fail-open posture without jq
+      and the visible `# guard:ok` escape. The guards run in bash, so the battery calibrates in bash: the
+      first version was calibrated in the interactive shell — another grep — and produced a
+      defect that did not exist.
     cmds:
       - bash scripts/test-guard-bash.sh
 

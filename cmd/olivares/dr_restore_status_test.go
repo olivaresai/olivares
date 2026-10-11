@@ -23,7 +23,7 @@ import (
 func TestDRStatusReadsPendingSQLiteFenceWithoutOpeningTheStore(t *testing.T) {
 	dir := t.TempDir()
 	installDataDirControl(t, dir, opgate.StatePending)
-	out, err := runDR("restore-status", "--data-dir", dir, "--engine", "sqlite")
+	out, err := runDR(t, "restore-status", "--data-dir", dir, "--engine", "sqlite")
 	if err == nil || exitcode.From(err) != 1 {
 		t.Fatalf("read pending restore status: %v\n%s", err, out)
 	}

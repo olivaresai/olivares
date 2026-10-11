@@ -58,7 +58,9 @@ var proofRefusal = map[int]bool{
 // refusedBeforeAuth answers another refusal before any credential check. The
 // OS-account routes accept only a direct TLS handshake (over TLS they answer
 // 401); an unknown MCP gateway server is refused before its own bearer check;
-// /session/mcp serves POST (401 here) and refuses every other method.
+// /session/mcp serves POST (401 here) and refuses every other method; the session
+// preview takes its credential from the token in its path, so a token without a
+// live grant is a 404 and never reaches the previewed app.
 // An unknown gateway server is all a route walk can name; the bearer check of an
 // enabled one is pinned by TestMCPManagementRuntimeTestEnableAudienceAndDisable.
 func refusedBeforeAuth(method, route string, overTLS bool, code int) bool {
@@ -69,6 +71,8 @@ func refusedBeforeAuth(method, route string, overTLS bool, code int) bool {
 		return code == http.StatusNotFound
 	case "/session/mcp":
 		return method != http.MethodPost && code == http.StatusMethodNotAllowed
+	case "/session/preview":
+		return code == http.StatusNotFound
 	}
 	return false
 }
@@ -121,6 +125,10 @@ func TestNoAnonymousWriteOrAdminFromLoopback(t *testing.T) {
 			return nil
 		}
 		path := routeParam.ReplaceAllString(route, model.NewID().String())
+		if route == "/session/preview" {
+			// The walk trims the wildcard; ask for a path under a made-up token.
+			path += "/" + model.NewID().String() + "/index.html"
+		}
 		for _, via := range []struct {
 			remote string
 			tls    bool

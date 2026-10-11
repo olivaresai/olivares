@@ -104,6 +104,9 @@ func TestUninstallMigrationRoundTrip(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	// Seed, export, import and verify are four processes in production; each one
+	// opens and closes its own engine, so the test composition is reset between them.
+	prepareCompositionTestBoot(t)
 	eng, err := boot(context.Background(), bootConfig{
 		DataDir: dataOnDisk, Version: version, DemoSeed: true, Logger: discardLog(),
 	})
@@ -123,6 +126,7 @@ func TestUninstallMigrationRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 	bundle := filepath.Join(t.TempDir(), "demo.drbundle")
+	prepareCompositionTestBoot(t)
 	if out, err := runCLI(t, "dr", "backup", "--out", bundle, "--data-dir", dataOnDisk,
 		"--kek-key-file", kekPath); err != nil {
 		t.Fatalf("export seeded estate: %v\n%s", err, out)
@@ -156,10 +160,12 @@ func TestUninstallMigrationRoundTrip(t *testing.T) {
 			t.Fatalf("prepare clean reinstall: %v", err)
 		}
 	}
+	prepareCompositionTestBoot(t)
 	if out, err := runCLI(t, "dr", "restore", "--in", bundle, "--data-dir", dataOnDisk,
 		"--kek-key-file", kekPath); err != nil {
 		t.Fatalf("import seeded estate: %v\n%s", err, out)
 	}
+	prepareCompositionTestBoot(t)
 	restored, err := boot(context.Background(), bootConfig{DataDir: dataOnDisk, Version: version, Logger: discardLog()})
 	if err != nil {
 		t.Fatalf("open imported estate: %v", err)

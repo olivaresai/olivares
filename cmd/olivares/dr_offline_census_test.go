@@ -79,10 +79,10 @@ func TestDROfflineBackupAndVerifyDifferentModuleCensus(t *testing.T) {
 		t.Fatal(err)
 	}
 	bundle := filepath.Join(t.TempDir(), "estate.drbundle")
-	if out, err := runDR("backup", "--data-dir", dir, "--out", bundle, "--kek-key-file", key); err != nil {
+	if out, err := runDR(t, "backup", "--data-dir", dir, "--out", bundle, "--kek-key-file", key); err != nil {
 		t.Fatalf("offline backup of fuller census: %v\n%s", err, out)
 	}
-	if out, err := runDR("verify", "--in", bundle, "--kek-key-file", key); err != nil {
+	if out, err := runDR(t, "verify", "--in", bundle, "--kek-key-file", key); err != nil {
 		t.Fatalf("offline verify of fuller census: %v\n%s", err, out)
 	}
 	after, err := os.ReadFile(filepath.Join(dir, "olivares.db"))

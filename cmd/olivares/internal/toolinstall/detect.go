@@ -545,6 +545,7 @@ func (e *Engine) Detect(ctx context.Context, opts DetectOptions) ([]Candidate, e
 		add(c)
 	}
 	failures := 0
+	probeCtx := e.probeContext(ctx)
 	for i := range out {
 		c := &out[i]
 		if c.Match == MatchUnregisteredObserved && vm != nil {
@@ -592,7 +593,7 @@ func (e *Engine) Detect(ctx context.Context, opts DetectOptions) ([]Candidate, e
 			failures++
 			continue
 		}
-		rep, perr := probeFn(ctx, c.Resolved, scratch, "")
+		rep, perr := probeFn(probeCtx, c.Resolved, scratch, "")
 		_ = os.RemoveAll(scratch)
 		c.Probe = &rep
 		if perr != nil {

@@ -7,12 +7,14 @@ package main
 import (
 	"context"
 	"encoding/hex"
+	"encoding/json"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/olivaresai/olivares/core/dr"
 	"github.com/olivaresai/olivares/core/model"
@@ -35,6 +37,9 @@ import (
 // election. Both postures run, because the split posture adds an owner pool to the
 // path the fix touches.
 func TestDRBackupPostgresWhileAnEngineHoldsTheLeaderLock(t *testing.T) {
+	if runOnlineBackupChild(t) {
+		return
+	}
 	for _, split := range []bool{false, true} {
 		t.Run(postureName(split), func(t *testing.T) {
 			stampVersion(t)
@@ -42,6 +47,7 @@ func TestDRBackupPostgresWhileAnEngineHoldsTheLeaderLock(t *testing.T) {
 			dataDir := t.TempDir()
 			src.seed(t, dataDir)
 
+			prepareCompositionTestBoot(t)
 			serving, err := boot(t.Context(), bootConfig{
 				DataDir: dataDir, Engine: "postgres",
 				DSN: src.appDSN, OwnerDSN: src.ownerDSN, AdminDSN: src.adminDSN,
@@ -59,7 +65,22 @@ func TestDRBackupPostgresWhileAnEngineHoldsTheLeaderLock(t *testing.T) {
 			args := append([]string{"backup", "--data-dir", dataDir}, src.drArgs()...)
 			args = append(args, "--pg-dump", src.bin("pg_dump"), "--out", bundle, "--passphrase-file", passphraseFile(t))
 			errs := captureErrorLogs(t)
-			if out, err := runDR(args...); err != nil {
+			// The serving engine must keep its process-wide entitlement sources.
+			// Give the CLI its own process; carry fixture DSNs in the environment,
+			// never in the child's argv.
+			fixture, err := json.Marshal(drBackupProcessFixture{Version: version, Args: args})
+			if err != nil {
+				t.Fatal(err)
+			}
+			deadline, hasDeadline := t.Deadline()
+			budget, err := bootCallerChildBudget(time.Now(), deadline, hasDeadline)
+			if err != nil {
+				t.Fatal(err)
+			}
+			const child = "TestDRBackupPostgresWhileAnEngineHoldsTheLeaderLock"
+			out, err := runBootCallerChild(child, budget, budget+bootCallerChildGrace,
+				drBackupProcessEnv+"="+string(fixture))
+			if err != nil || !bootCallerChildPassed(out, child) {
 				t.Fatalf("dr backup while another engine holds the leader lock failed: %v\n%s", err, out)
 			}
 			// A standby refusing a leader-only write is the expected outcome of this
@@ -112,6 +133,38 @@ func TestDRBackupPostgresWhileAnEngineHoldsTheLeaderLock(t *testing.T) {
 			}
 		})
 	}
+}
+
+const drBackupProcessEnv = "OLIVARES_TEST_DR_BACKUP_PROCESS"
+
+type drBackupProcessFixture struct {
+	Version string
+	Args    []string
+}
+
+// runOnlineBackupChild handles only the delegated CLI process.
+func runOnlineBackupChild(t *testing.T) bool {
+	t.Helper()
+	raw := os.Getenv(drBackupProcessEnv)
+	if raw == "" {
+		return false
+	}
+	if !bootCallerIsolated(t.Name()) {
+		t.Fatal("online backup must run in its delegated process")
+	}
+	var fixture drBackupProcessFixture
+	if err := json.Unmarshal([]byte(raw), &fixture); err != nil {
+		t.Fatal(err)
+	}
+	version = fixture.Version
+	errs := captureErrorLogs(t)
+	if out, err := runDR(t, fixture.Args...); err != nil {
+		t.Fatalf("online backup: %v\n%s", err, out)
+	}
+	if got := errs(); len(got) > 0 {
+		t.Fatalf("a successful online backup logged errors: %s", strings.Join(got, " | "))
+	}
+	return true
 }
 
 // captureErrorLogs routes slog's default logger into a recorder for the rest of the

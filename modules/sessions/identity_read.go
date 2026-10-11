@@ -351,16 +351,26 @@ func StoredRunID(ctx context.Context, st store.Store, tenant model.TenantID, run
 	}
 	var id model.ID
 	err := st.View(ctx, tenant, func(sc store.Scope) error {
-		runs, err := sc.Ext(runKind)
-		if err != nil {
-			return err
-		}
-		rec, err := findRunRec(ctx, runs, runRef)
-		if err != nil {
-			return err
-		}
-		id = model.ID(rec.String(model.ColID))
-		return nil
+		var err error
+		id, err = StoredRunIDInScope(ctx, sc, runRef)
+		return err
 	})
 	return id, err
+}
+
+// StoredRunIDInScope is StoredRunID in a Scope the caller already holds. A run
+// that does not exist, or no longer does, is store.ErrNotFound.
+func StoredRunIDInScope(ctx context.Context, sc store.Scope, runRef string) (model.ID, error) {
+	runs, err := sc.Ext(runKind)
+	if err != nil {
+		return "", err
+	}
+	rows, _, err := runs.List(ctx, model.Query{Filters: []model.Filter{eq(colRunRef, runRef)}, Limit: 1})
+	if err != nil {
+		return "", err
+	}
+	if len(rows) == 0 {
+		return "", store.ErrNotFound
+	}
+	return model.ID(rows[0].String(model.ColID)), nil
 }

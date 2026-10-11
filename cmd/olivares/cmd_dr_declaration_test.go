@@ -54,7 +54,7 @@ func drDeclarationFixture(t *testing.T) (string, string, string) {
 		t.Fatal(err)
 	}
 	bundle := filepath.Join(t.TempDir(), "estate.drbundle")
-	if out, err := runDR("backup", "--data-dir", src, "--engine", "sqlite",
+	if out, err := runDR(t, "backup", "--data-dir", src, "--engine", "sqlite",
 		"--out", bundle, "--passphrase-file", pf); err != nil {
 		t.Fatalf("backup: %v\n%s", err, out)
 	}
@@ -65,6 +65,8 @@ func drDeclarationFixture(t *testing.T) (string, string, string) {
 // data dir's ledger, across every tenant.
 func restoreDeclarations(t *testing.T, dataDir string) []model.AuditEvent {
 	t.Helper()
+	prepareCompositionTestBoot(t)
+	defer prepareCompositionTestBoot(t)
 	ctx := context.Background()
 	eng, err := boot(ctx, bootConfig{DataDir: dataDir, Engine: "sqlite", Version: "test"})
 	if err != nil {
@@ -186,7 +188,7 @@ func TestDRRestoreOverALiveEstateRefusesWithoutADeclaration(t *testing.T) {
 	src, bundle, pf := drDeclarationFixture(t)
 
 	// --force over the SAME data dir: this is a live estate being replaced.
-	out, err := runDR("restore", "--in", bundle, "--data-dir", src, "--engine", "sqlite",
+	out, err := runDR(t, "restore", "--in", bundle, "--data-dir", src, "--engine", "sqlite",
 		"--passphrase-file", pf, "--force")
 	if err == nil {
 		t.Fatalf("BYPASS: a restore replaced a live estate with no declaration at all:\n%s", out)
@@ -199,16 +201,16 @@ func TestDRRestoreOverALiveEstateRefusesWithoutADeclaration(t *testing.T) {
 	}
 
 	// Half a declaration is not a declaration.
-	if _, err := runDR("restore", "--in", bundle, "--data-dir", src, "--engine", "sqlite",
+	if _, err := runDR(t, "restore", "--in", bundle, "--data-dir", src, "--engine", "sqlite",
 		"--passphrase-file", pf, "--force", "--operator", "alice@x.io"); err == nil {
 		t.Fatal("a restore with --operator but no --reason was accepted")
 	}
-	if _, err := runDR("restore", "--in", bundle, "--data-dir", src, "--engine", "sqlite",
+	if _, err := runDR(t, "restore", "--in", bundle, "--data-dir", src, "--engine", "sqlite",
 		"--passphrase-file", pf, "--force", "--reason", "INC-42"); err == nil {
 		t.Fatal("a restore with --reason but no --operator was accepted")
 	}
 	// Whitespace is not an identity.
-	if _, err := runDR("restore", "--in", bundle, "--data-dir", src, "--engine", "sqlite",
+	if _, err := runDR(t, "restore", "--in", bundle, "--data-dir", src, "--engine", "sqlite",
 		"--passphrase-file", pf, "--force", "--operator", "   ", "--reason", "INC-42"); err == nil {
 		t.Fatal("a blank --operator was accepted as a declaration")
 	}
@@ -256,7 +258,7 @@ func TestDRRestoreWithoutInPlacePreservesWhatItOverwrites(t *testing.T) {
 		t.Fatal("the fixture did not change the live store, so this test cannot tell the copies apart")
 	}
 
-	out, err := runDR("restore", "--in", bundle, "--data-dir", src, "--engine", "sqlite",
+	out, err := runDR(t, "restore", "--in", bundle, "--data-dir", src, "--engine", "sqlite",
 		"--passphrase-file", pf, "--force",
 		"--operator", "alice@x.io", "--reason", "INC-42")
 	if err != nil {
@@ -312,7 +314,7 @@ func TestDRRestoreOverALiveEstateRecordsTheDeclaration(t *testing.T) {
 	t.Cleanup(func() { version = prevVersion })
 	src, bundle, pf := drDeclarationFixture(t)
 
-	out, err := runDR("restore", "--in", bundle, "--data-dir", src, "--engine", "sqlite",
+	out, err := runDR(t, "restore", "--in", bundle, "--data-dir", src, "--engine", "sqlite",
 		"--passphrase-file", pf, "--force",
 		"--operator", "alice@x.io", "--reason", "INC-42 ransomware recovery")
 	if err != nil {
@@ -370,7 +372,7 @@ func TestDRRestoreDeclarationReasonReachesTheStoredRow(t *testing.T) {
 	t.Cleanup(func() { version = prevVersion })
 	src, bundle, pf := drDeclarationFixture(t)
 	const reason = "INC-42 ransomware recovery"
-	if out, err := runDR("restore", "--in", bundle, "--data-dir", src, "--engine", "sqlite",
+	if out, err := runDR(t, "restore", "--in", bundle, "--data-dir", src, "--engine", "sqlite",
 		"--passphrase-file", pf, "--force", "--operator", "alice@x.io", "--reason", reason); err != nil {
 		t.Fatalf("restore: %v\n%s", err, out)
 	}
@@ -432,7 +434,7 @@ func TestDRRestoreIntoAnEmptyTargetNeedsNoDeclaration(t *testing.T) {
 	_, bundle, pf := drDeclarationFixture(t)
 	dst := t.TempDir()
 
-	out, err := runDR("restore", "--in", bundle, "--data-dir", dst, "--engine", "sqlite",
+	out, err := runDR(t, "restore", "--in", bundle, "--data-dir", dst, "--engine", "sqlite",
 		"--passphrase-file", pf)
 	if err != nil {
 		t.Fatalf("clean-target restore must stay unencumbered: %v\n%s", err, out)
@@ -455,13 +457,13 @@ func TestDRRestoreInPlaceRequiresAndRecordsTheDeclaration(t *testing.T) {
 	t.Cleanup(func() { version = prevVersion })
 	src, bundle, pf := drDeclarationFixture(t)
 
-	out, err := runDR("restore", "--in", bundle, "--data-dir", src, "--engine", "sqlite",
+	out, err := runDR(t, "restore", "--in", bundle, "--data-dir", src, "--engine", "sqlite",
 		"--passphrase-file", pf, "--in-place")
 	if err == nil {
 		t.Fatalf("BYPASS: --in-place replaced a live estate with no declaration:\n%s", out)
 	}
 
-	out, err = runDR("restore", "--in", bundle, "--data-dir", src, "--engine", "sqlite",
+	out, err = runDR(t, "restore", "--in", bundle, "--data-dir", src, "--engine", "sqlite",
 		"--passphrase-file", pf, "--in-place",
 		"--operator", "bob@x.io", "--reason", "INC-43 verified rollback")
 	if err != nil {

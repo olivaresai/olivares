@@ -465,26 +465,33 @@ func (m *Module) handleListDecisions(w http.ResponseWriter, r *http.Request, mc 
 		writeJSON(w, http.StatusBadRequest, errorBody("invalid id"))
 		return
 	}
-	out := listResponse[decisionDTO]{Items: []decisionDTO{}}
-	err := mc.Data.View(r.Context(), func(sc store.Scope) error {
-		repo, err := sc.Ext(decisionKind)
-		if err != nil {
-			return err
-		}
-		recs, err := listAll(r.Context(), repo, eq(colApprovalID, id.String()))
-		if err != nil {
-			return err
-		}
-		for _, rec := range recs {
-			out.Items = append(out.Items, toDecisionDTO(rec))
-		}
-		return nil
-	})
+	items, err := listApprovalDecisions(r.Context(), mc.Data, id)
 	if err != nil {
 		writeStoreError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, out)
+	writeJSON(w, http.StatusOK, listResponse[decisionDTO]{Items: items})
+}
+
+// listApprovalDecisions reads one approval's decision trail inside the tenant
+// the data handle is pinned to. REST and the in-process service share it.
+func listApprovalDecisions(ctx context.Context, data approvalData, id model.ID) ([]decisionDTO, error) {
+	items := []decisionDTO{}
+	err := data.View(ctx, func(sc store.Scope) error {
+		repo, err := sc.Ext(decisionKind)
+		if err != nil {
+			return err
+		}
+		recs, err := listAll(ctx, repo, eq(colApprovalID, id.String()))
+		if err != nil {
+			return err
+		}
+		for _, rec := range recs {
+			items = append(items, toDecisionDTO(rec))
+		}
+		return nil
+	})
+	return items, err
 }
 
 // handleDecide records one human decision. Admin-tier and self-audited. It is

@@ -89,8 +89,8 @@ func TestE2E_RBACVerbTiers(t *testing.T) {
 	editor := h.newUser("editor-rbac@e2e.test", "editor-pass-2", h.tenantA, "editor")
 
 	// A viewer reads module data (verb-tier read auto-granted) ...
-	if code, _ := h.req("GET", "/v1/m/finops/spend/summary", viewer, h.tenantA, nil); code != http.StatusOK {
-		t.Errorf("viewer GET finops = %d, want 200", code)
+	if code, _ := h.req("GET", "/v1/m/inventory/summary", viewer, h.tenantA, nil); code != http.StatusOK {
+		t.Errorf("viewer GET inventory = %d, want 200", code)
 	}
 	// ... but cannot write a core entity (lacks agent:write).
 	if code, _ := h.req("POST", "/v1/agents", viewer, h.tenantA, map[string]any{

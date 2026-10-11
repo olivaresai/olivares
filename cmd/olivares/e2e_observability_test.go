@@ -93,10 +93,15 @@ func TestE2E_Observability_FullStack(t *testing.T) {
 		}
 
 		// TRUE operational states (never "all green"): OCSF only emits when an
-		// operator provisions a destination → available; the Prometheus endpoint
+		// operator provisions a destination → available, and the export is a
+		// Business feature → unavailable in Community; the Prometheus endpoint
 		// is always served → active; the ledger-push Forwarder seam has zero call
 		// sites until → blocked.
-		assertEq(t, "ocsf.status", strField(byID["ocsf"], "status"), "available")
+		wantOCSF := "available"
+		if thisEdition.name == "community" {
+			wantOCSF = "unavailable"
+		}
+		assertEq(t, "ocsf.status", strField(byID["ocsf"], "status"), wantOCSF)
 		assertEq(t, "prometheus_text.status", strField(byID["prometheus_text"], "status"), "active")
 		assertEq(t, "ledger_push.status", strField(byID["ledger_push"], "status"), "blocked")
 

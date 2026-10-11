@@ -20,6 +20,7 @@ import (
 // the first administrator in and returns the handler, token and tenant.
 func bootWithModuleProfile(t *testing.T, selected []string) (*engine, http.Handler, string, string) {
 	t.Helper()
+	prepareCompositionTestBoot(t)
 	dir := t.TempDir()
 	if err := saveNodeModuleSelection(dir, selected, time.Now()); err != nil {
 		t.Fatal(err)
@@ -68,39 +69,43 @@ func moduleStatus(eng *engine, name string) runtime.Status {
 // routes answer module_not_enabled, server-info names it for the console, and
 // the runtime holds it dormant. Selecting it serves it again.
 func TestModuleProfileServesOnlyTheModulesItRuns(t *testing.T) {
-	eng, h, admin, tenant := bootWithModuleProfile(t, []string{"consoleviews"})
+	// Each subtest closes its engine before the next process fixture boots.
+	t.Run("unselected", func(t *testing.T) {
+		eng, h, admin, tenant := bootWithModuleProfile(t, []string{"consoleviews"})
 
-	code, body, raw := doDemoViewJSON(t, h, http.MethodGet, "/v1/m/eventing/subscriptions", admin, tenant, nil)
-	errBody, _ := body["error"].(map[string]any)
-	if code != http.StatusNotFound || errBody["code"] != "module_not_enabled" {
-		t.Fatalf("eventing route = %d %s, want 404 module_not_enabled", code, raw)
-	}
-	if code, _, raw := doDemoViewJSON(t, h, http.MethodGet, "/v1/m/sessions/runs", admin, tenant, nil); code != http.StatusOK {
-		t.Fatalf("sessions route = %d %s, want 200", code, raw)
-	}
-	_, info, raw := doDemoViewJSON(t, h, http.MethodGet, "/v1/server-info", "", "", nil)
-	var notEnabled []string
-	for _, v := range info["modules_not_enabled"].([]any) {
-		notEnabled = append(notEnabled, v.(string))
-	}
-	if !slices.Contains(notEnabled, "eventing") || slices.Contains(notEnabled, "sessions") || slices.Contains(notEnabled, "consoleviews") {
-		t.Fatalf("server-info modules_not_enabled = %v (%s)", notEnabled, raw)
-	}
-	if got := moduleStatus(eng, "olivares.eventing"); got != runtime.StatusDormant {
-		t.Fatalf("eventing runtime status = %q, want dormant", got)
-	}
-	if got := moduleStatus(eng, "olivares.sessions"); got != runtime.StatusRunning {
-		t.Fatalf("sessions runtime status = %q, want running", got)
-	}
-
-	_, h2, admin2, tenant2 := bootWithModuleProfile(t, []string{"eventing"})
-	if code, _, raw := doDemoViewJSON(t, h2, http.MethodGet, "/v1/m/eventing/subscriptions", admin2, tenant2, nil); code != http.StatusOK {
-		t.Fatalf("selected eventing route = %d %s, want 200", code, raw)
-	}
-	_, info2, _ := doDemoViewJSON(t, h2, http.MethodGet, "/v1/server-info", "", "", nil)
-	if list, _ := info2["modules_not_enabled"].([]any); slices.ContainsFunc(list, func(v any) bool { return v == "eventing" }) {
-		t.Fatalf("selected eventing is listed as not enabled: %v", list)
-	}
+		code, body, raw := doDemoViewJSON(t, h, http.MethodGet, "/v1/m/eventing/subscriptions", admin, tenant, nil)
+		errBody, _ := body["error"].(map[string]any)
+		if code != http.StatusNotFound || errBody["code"] != "module_not_enabled" {
+			t.Fatalf("eventing route = %d %s, want 404 module_not_enabled", code, raw)
+		}
+		if code, _, raw := doDemoViewJSON(t, h, http.MethodGet, "/v1/m/sessions/runs", admin, tenant, nil); code != http.StatusOK {
+			t.Fatalf("sessions route = %d %s, want 200", code, raw)
+		}
+		_, info, raw := doDemoViewJSON(t, h, http.MethodGet, "/v1/server-info", "", "", nil)
+		var notEnabled []string
+		for _, v := range info["modules_not_enabled"].([]any) {
+			notEnabled = append(notEnabled, v.(string))
+		}
+		if !slices.Contains(notEnabled, "eventing") || slices.Contains(notEnabled, "sessions") || slices.Contains(notEnabled, "consoleviews") {
+			t.Fatalf("server-info modules_not_enabled = %v (%s)", notEnabled, raw)
+		}
+		if got := moduleStatus(eng, "olivares.eventing"); got != runtime.StatusDormant {
+			t.Fatalf("eventing runtime status = %q, want dormant", got)
+		}
+		if got := moduleStatus(eng, "olivares.sessions"); got != runtime.StatusRunning {
+			t.Fatalf("sessions runtime status = %q, want running", got)
+		}
+	})
+	t.Run("selected", func(t *testing.T) {
+		_, h2, admin2, tenant2 := bootWithModuleProfile(t, []string{"eventing"})
+		if code, _, raw := doDemoViewJSON(t, h2, http.MethodGet, "/v1/m/eventing/subscriptions", admin2, tenant2, nil); code != http.StatusOK {
+			t.Fatalf("selected eventing route = %d %s, want 200", code, raw)
+		}
+		_, info2, _ := doDemoViewJSON(t, h2, http.MethodGet, "/v1/server-info", "", "", nil)
+		if list, _ := info2["modules_not_enabled"].([]any); slices.ContainsFunc(list, func(v any) bool { return v == "eventing" }) {
+			t.Fatalf("selected eventing is listed as not enabled: %v", list)
+		}
+	})
 }
 
 // A first serving start of a new installation builds the standard selection.

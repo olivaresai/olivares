@@ -30,6 +30,7 @@ func TestDRPostgresInventoryRestore(t *testing.T) {
 		t.Fatal(err)
 	}
 	// The estate the console journey backs up has a first administrator.
+	prepareCompositionTestBoot(t)
 	eng, err := boot(t.Context(), bootConfig{DataDir: dataDir, Engine: "postgres", DSN: src.appDSN, OwnerDSN: src.ownerDSN, AdminDSN: src.adminDSN, Version: "test"})
 	if err != nil {
 		t.Fatalf("source boot with the inventory installed: %v", err)
@@ -52,7 +53,7 @@ func TestDRPostgresInventoryRestore(t *testing.T) {
 	pf := passphraseFile(t)
 	args := append([]string{"backup", "--data-dir", dataDir}, src.drArgs()...)
 	args = append(args, "--pg-dump", src.bin("pg_dump"), "--out", bundle, "--passphrase-file", pf)
-	if out, err := runDR(args...); err != nil {
+	if out, err := runDR(t, args...); err != nil {
 		t.Fatalf("backup: %v %s", err, out)
 	}
 	for _, name := range []string{"missing", "inline", "wrong_database", "non_dba", "valid"} {
@@ -74,7 +75,7 @@ func TestDRPostgresInventoryRestore(t *testing.T) {
 				t.Setenv("DR_TEST_DBA", roleDSNKeepUser(t, super, dst.db))
 				args = append(args, "--superuser-dsn", "env:DR_TEST_DBA")
 			}
-			out, err := runDR(args...)
+			out, err := runDR(t, args...)
 			if name == "valid" {
 				if err != nil {
 					t.Fatalf("native restore: %v %s", err, out)
@@ -83,6 +84,7 @@ func TestDRPostgresInventoryRestore(t *testing.T) {
 					t.Fatal("inventory authority not restored")
 				}
 				// No admin DSN: a db init --data-dir estate reads every tenant through the inventory.
+				prepareCompositionTestBoot(t)
 				restored, err := boot(t.Context(), bootConfig{DataDir: dir, Engine: "postgres", DSN: dst.appDSN, OwnerDSN: dst.ownerDSN, Version: "test"})
 				if err != nil {
 					t.Fatalf("boot the restored estate: %v", err)

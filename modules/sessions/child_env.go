@@ -258,16 +258,123 @@ func openCodeXDGMapping(userHome string) []EnvVar {
 
 // reservedSecretEnvName is every variable the runtime, a provider or the host base
 // owns. A secret may never replace one: it would re-point a home, impersonate a
-// provider credential or a control-plane token, or change how the child loads code.
+// provider credential or a control-plane token, or change how the child loads code,
+// whom it trusts or where it connects (childExecEnvName).
 func reservedSecretEnvName(name string) bool {
 	return slices.Contains(baseEnvAllow, name) ||
 		forbiddenInheritedEnvName(name) ||
 		providerHomeEnvName(name) ||
 		openCodeReservedEnvName(name) ||
+		childExecEnvName(name) ||
 		strings.HasPrefix(name, "CLAUDE_") ||
 		strings.HasPrefix(name, "XDG_") ||
 		strings.HasPrefix(name, "LD_") ||
 		strings.HasPrefix(name, "DYLD_")
+}
+
+// childExecEnv names what makes the child run other code, trust another CA or
+// reach another host, beyond the proxy and CA-bundle families: interpreter and
+// shell start-up hooks, glibc's loader and resolver outside LD_*, git's commands,
+// repository and TLS overrides, the editors and pagers tools start, the TLS key
+// log, OpenSSL's configuration and modules, other stacks' CA bundles, and the
+// build toolchains' compilers, wrappers, flags, caches and module routing. An
+// operator may forward the engine's own value through env_allow; a vault secret
+// or a credential adapter never sets one. Bash's exported functions
+// (BASH_FUNC_name%%) are no valid name anywhere (validEnvName). GIT_CONFIG_* is
+// git's configuration, which a secret may carry (validateGitReadEnv).
+var childExecEnv = []string{
+	"NODE_OPTIONS", "NODE_PATH", "NODE_REPL_EXTERNAL_MODULE", "NODE_TLS_REJECT_UNAUTHORIZED",
+	"PYTHONPATH", "PYTHONHOME", "PYTHONSTARTUP", "PYTHONUSERBASE", "PYTHONBREAKPOINT",
+	"PERL5OPT", "PERL5LIB", "PERLLIB", "RUBYOPT", "RUBYLIB", "RUBYGEMS_GEMDEPS",
+	"JAVA_TOOL_OPTIONS", "_JAVA_OPTIONS", "JDK_JAVA_OPTIONS", "CLASSPATH",
+	"BASH_ENV", "ENV", "PROMPT_COMMAND", "SHELLOPTS", "BASHOPTS", "PS4",
+	"GLIBC_TUNABLES", "GCONV_PATH", "LOCPATH", "NLSPATH", "HOSTALIASES", "RES_OPTIONS", "LOCALDOMAIN",
+	"GIT_SSH_COMMAND", "GIT_SSH", "GIT_SSH_VARIANT", "GIT_ASKPASS", "SSH_ASKPASS", "SSH_ASKPASS_REQUIRE",
+	"GIT_EXEC_PATH", "GIT_PROXY_COMMAND", "GIT_EXTERNAL_DIFF", "GIT_PAGER", "GIT_EDITOR",
+	"GIT_SEQUENCE_EDITOR", "GIT_TEMPLATE_DIR", "GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR",
+	"GIT_INDEX_FILE", "GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+	"GIT_SSL_CAINFO", "GIT_SSL_CAPATH", "GIT_SSL_NO_VERIFY",
+	"EDITOR", "VISUAL", "PAGER", "LESSOPEN", "LESSCLOSE", "BROWSER",
+	"SSL_CERT_DIR", "SSLKEYLOGFILE", "OPENSSL_CONF", "OPENSSL_MODULES", "OPENSSL_ENGINES",
+	"AWS_CA_BUNDLE", "DENO_CERT", "DENO_TLS_CA_STORE", "PYTHONHTTPSVERIFY",
+	"FC", "LD", "GCCGO", "CPPFLAGS", "LDFLAGS",
+	"GOFLAGS", "GOTOOLCHAIN", "GOROOT", "GOENV", "GOWORK", "GOCACHEPROG", "GOAUTH", "GOPACKAGESDRIVER",
+	"GOPATH", "GOMODCACHE", "GOCACHE", "GOBIN",
+	"GOPROXY", "GONOPROXY", "GOPRIVATE", "GOSUMDB", "GONOSUMDB", "GONOSUMCHECK", "GOINSECURE", "GOVCS",
+	"RUSTC", "RUSTC_WRAPPER", "RUSTC_WORKSPACE_WRAPPER", "RUSTDOC", "RUSTFMT", "RUSTFLAGS", "RUSTDOCFLAGS",
+	"PNPM_HOME",
+}
+
+// childExecEnvName adds the proxy and CA-bundle families in either case, whose
+// one source is the engine's own environment (driverfacts.NetworkEnv), the
+// build tools (buildToolEnvName) and the package managers' settings
+// (packageManagerEnvName).
+func childExecEnvName(name string) bool {
+	proxy, trust := driverfacts.NetworkEnv(name)
+	return proxy || trust || slices.Contains(childExecEnv, name) || buildToolEnvName(name) ||
+		packageManagerEnvName(name)
+}
+
+// buildToolEnv are the compilers, archivers, flags and pkg-config search paths
+// make, cgo, node-gyp and the cc and pkg-config crates of a Cargo build read.
+var buildToolEnv = []string{"CC", "CXX", "AR", "ARFLAGS", "RANLIB", "CFLAGS", "CXXFLAGS",
+	"PKG_CONFIG", "PKG_CONFIG_PATH", "PKG_CONFIG_LIBDIR", "PKG_CONFIG_SYSROOT_DIR"}
+
+// buildToolEnvName reports a build tool's name as the crates read it: bare, as
+// TARGET_ or HOST_, or per target with the target as written, which is lowercase
+// (CC_x86_64_unknown_linux_gnu). CC_API_KEY names no target and stays a secret's.
+func buildToolEnvName(name string) bool {
+	if scoped, ok := strings.CutPrefix(name, "TARGET_"); ok {
+		name = scoped
+	} else {
+		name = strings.TrimPrefix(name, "HOST_")
+	}
+	return slices.ContainsFunc(buildToolEnv, func(tool string) bool {
+		target, ok := strings.CutPrefix(name, tool)
+		return ok && (target == "" || target[0] == '_' && target == strings.ToLower(target))
+	})
+}
+
+// npmCredentialKeys are the npm settings that are a registry credential, as npm
+// names them after it reads npm_config_<key>. The rest of npm's settings run code
+// (script-shell, node-options, git, shell), change trust (ca, cafile, strict-ssl)
+// or route traffic (registry, proxy, userconfig).
+var npmCredentialKeys = []string{"_auth", "_authtoken", "username", "_password", "email", "otp",
+	"cert", "key", "certfile", "keyfile"}
+
+// packageManagerCredentialEnv are the registry credentials among the families of
+// toolchainEnvPrefixes: Cargo's for crates.io and corepack's.
+var packageManagerCredentialEnv = []string{"CARGO_REGISTRY_TOKEN",
+	"COREPACK_NPM_TOKEN", "COREPACK_NPM_USERNAME", "COREPACK_NPM_PASSWORD"}
+
+// toolchainEnvPrefixes are families each tool reads as written: Cargo's
+// settings, corepack's (which package manager it downloads, from where, checked
+// against which keys), rustup's and cgo's flags.
+var toolchainEnvPrefixes = []string{"CARGO_", "COREPACK_", "RUSTUP_", "CGO_"}
+
+// packageManagerEnvName names a setting a package manager or toolchain reads
+// under its own prefix, other than its registry credential: npm and pnpm read
+// npm_config_ (pnpm 11 pnpm_config_) in either case and lower the key, pip reads
+// PIP_ and lowers the key, and the rest read theirs as written. A registry token
+// a project's .npmrc or CI names (NPM_TOKEN, NODE_AUTH_TOKEN) is no setting and
+// stays a secret.
+func packageManagerEnvName(name string) bool {
+	lower := strings.ToLower(name)
+	for _, prefix := range []string{"npm_config_", "pnpm_config_"} {
+		if key, ok := strings.CutPrefix(lower, prefix); ok {
+			return !slices.Contains(npmCredentialKeys, key)
+		}
+	}
+	if key, ok := strings.CutPrefix(name, "PIP_"); ok {
+		return strings.ToLower(key) != "client_cert"
+	}
+	if slices.Contains(packageManagerCredentialEnv, name) ||
+		strings.HasPrefix(name, "CARGO_REGISTRIES_") && strings.HasSuffix(name, "_TOKEN") {
+		return false
+	}
+	return slices.ContainsFunc(toolchainEnvPrefixes, func(prefix string) bool {
+		return strings.HasPrefix(name, prefix)
+	})
 }
 
 // validateEnvAllow checks a launch's env_allow names and trims them in place. A
@@ -400,7 +507,8 @@ func validateProviderCredentialEnv(driver string, env []EnvVar) error {
 		// Nor may it name the control plane's own variables or Claude's (the historical
 		// path mints Claude's credential itself, never an adapter). Beyond its OWN
 		// driver's credential, it is held to what a vault secret may not set (a
-		// provider family, the host base, the loader), the variables the engine reads
+		// provider family, the host base, the loader, the exec, trust and proxy
+		// names of childExecEnvName), the variables the engine reads
 		// as secrets and git's configuration: each would hand the child an identity
 		// or code nobody selected.
 		if strings.HasPrefix(item.Name, "OLIVARES_") ||

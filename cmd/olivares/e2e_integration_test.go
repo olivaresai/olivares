@@ -60,22 +60,25 @@ func TestE2E_FinOps_CostStreamAndModelCatalog(t *testing.T) {
 	h := newHarness(t)
 
 	// Cost samples → FinOps spend read-model (money is always integer micro-USD).
-	sum := h.getJSON(h.adminToken, h.tenantA, "/v1/m/finops/spend/summary")
-	if tot, _ := sum["total_micro_usd"].(float64); tot <= 0 {
-		t.Errorf("finops total_micro_usd = %v, want >0", sum["total_micro_usd"])
-	}
+	// The read model is a Business feature; the model catalog below is not.
+	if h.servesFinOpsReads("/v1/m/finops/spend/summary", "/v1/m/finops/spend?dimension=provider") {
+		sum := h.getJSON(h.adminToken, h.tenantA, "/v1/m/finops/spend/summary")
+		if tot, _ := sum["total_micro_usd"].(float64); tot <= 0 {
+			t.Errorf("finops total_micro_usd = %v, want >0", sum["total_micro_usd"])
+		}
 
-	spend := h.getJSON(h.adminToken, h.tenantA, "/v1/m/finops/spend?dimension=provider")
-	anthropic := false
-	for _, b := range items2(spend, "buckets") {
-		if b["key"] == "anthropic" {
-			if c, _ := b["cost_micro_usd"].(float64); c > 0 {
-				anthropic = true
+		spend := h.getJSON(h.adminToken, h.tenantA, "/v1/m/finops/spend?dimension=provider")
+		anthropic := false
+		for _, b := range items2(spend, "buckets") {
+			if b["key"] == "anthropic" {
+				if c, _ := b["cost_micro_usd"].(float64); c > 0 {
+					anthropic = true
+				}
 			}
 		}
-	}
-	if !anthropic {
-		t.Error("finops: no anthropic provider spend bucket")
+		if !anthropic {
+			t.Error("finops: no anthropic provider spend bucket")
+		}
 	}
 
 	// The model catalog is populated as a side-effect of cost ingestion (foModel).

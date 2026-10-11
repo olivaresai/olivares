@@ -18,20 +18,22 @@ import (
 	"github.com/olivaresai/olivares/modules/sessions"
 )
 
-// Session launch works both with the default budget gate (required by voice via
-// liveingest) and with a dormant budget gate. The latter must not leave a typed
-// nil interface that panics on launch. Real boot, API and a protocol stub for the CLI.
+// Session launch works both with the budget gate of a selected finops and with a
+// dormant budget gate. The standard profile does not select finops (liveingest no
+// longer requires voice), so the first case selects it. The latter must not leave
+// a typed nil interface that panics on launch. Real boot, API and a protocol stub
+// for the CLI.
 func TestDefaultProfileSessionLaunchStartsWithFinops(t *testing.T) {
-	testProfileSessionLaunch(t, false)
+	testProfileSessionLaunch(t, false, "finops")
 }
 
 func TestDormantProfileSessionLaunchStartsWithoutFinops(t *testing.T) {
 	testProfileSessionLaunch(t, true)
 }
 
-func testProfileSessionLaunch(t *testing.T, dormant bool) {
+func testProfileSessionLaunch(t *testing.T, dormant bool, selectModules ...string) {
 	t.Helper()
-	s := bootStubSessionEngine(t, dormant)
+	s := bootStubSessionEngine(t, dormant, selectModules...)
 	if s.eng.moduleProfile.Active("finops") == dormant || s.eng.moduleProfile.Active("knowledge") {
 		t.Fatalf("precondition: dormant=%v active=%v", dormant, s.eng.moduleProfile.ActiveNames())
 	}
@@ -52,7 +54,9 @@ type stubSessionEngine struct {
 	tenant, folder, home string
 }
 
-func bootStubSessionEngine(t *testing.T, dormant bool) stubSessionEngine {
+// selectModules are selected on top of the standard profile; the dormant case
+// takes none.
+func bootStubSessionEngine(t *testing.T, dormant bool, selectModules ...string) stubSessionEngine {
 	t.Helper()
 	python, err := exec.LookPath("python3")
 	if err != nil {
@@ -74,10 +78,14 @@ func bootStubSessionEngine(t *testing.T, dormant bool) stubSessionEngine {
 	}
 	t.Setenv(envSessionClaudeBin, agent)
 
-	// Liveingest requires voice, which requires finops. Keep those consumers off
-	// to exercise the session launch with a dormant budget gate.
+	// The standard profile leaves finops dormant. A case that needs a live budget
+	// gate selects it; the dormant case drops liveingest as well, as it did when
+	// liveingest pulled voice and finops in.
+	selected := append(standardModuleSelection(), selectModules...)
 	if dormant {
-		selected := slices.DeleteFunc(standardModuleSelection(), func(name string) bool { return name == "liveingest" })
+		selected = slices.DeleteFunc(standardModuleSelection(), func(name string) bool { return name == "liveingest" })
+	}
+	if dormant || len(selectModules) > 0 {
 		if err := saveNodeModuleSelection(dir, selected, time.Now()); err != nil {
 			t.Fatal(err)
 		}

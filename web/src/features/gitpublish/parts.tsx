@@ -46,6 +46,29 @@ export function AuthorityNote({
   )
 }
 
+/** The look at an intent, named by its whole id. The label may wrap at any character and
+ * the button grows in height: a button that never wraps is as wide as its 36-character id
+ * and widens its dialog's grid column past a 390 px screen. */
+function OpenIntentButton({
+  id,
+  onOpenIntent,
+}: {
+  id: string
+  onOpenIntent: (id: string) => void
+}) {
+  const { t } = useTranslation('gitpublish')
+  return (
+    <Button
+      size="sm"
+      variant="outline"
+      className="h-auto min-h-7 max-w-full whitespace-normal break-all py-1"
+      onClick={() => onOpenIntent(id)}
+    >
+      {t('intents.open', { id })}
+    </Button>
+  )
+}
+
 /**
  * What an answer means, in the operator's terms. Every branch that follows a dispatch
  * offers only reconcile or a look at the intent — never a resend.
@@ -80,13 +103,10 @@ export function OutcomePanel({
           <p className="text-foreground">
             {t(`receipts.${outcome.intent.receipt}`)}
           </p>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => onOpenIntent(outcome.intent.id)}
-          >
-            {t('intents.open', { id: outcome.intent.id })}
-          </Button>
+          <OpenIntentButton
+            id={outcome.intent.id}
+            onOpenIntent={onOpenIntent}
+          />
         </section>
       )
     case 'uncertain':
@@ -113,13 +133,10 @@ export function OutcomePanel({
                 {t('actions.reconcile')}
               </Button>
             ) : null}
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => onOpenIntent(outcome.intent.id)}
-            >
-              {t('intents.open', { id: outcome.intent.id })}
-            </Button>
+            <OpenIntentButton
+              id={outcome.intent.id}
+              onOpenIntent={onOpenIntent}
+            />
           </div>
         </section>
       )
@@ -143,13 +160,10 @@ export function OutcomePanel({
             </code>
           ) : null}
           <div>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => onOpenIntent(outcome.intent.id)}
-            >
-              {t('intents.open', { id: outcome.intent.id })}
-            </Button>
+            <OpenIntentButton
+              id={outcome.intent.id}
+              onOpenIntent={onOpenIntent}
+            />
           </div>
         </section>
       )
@@ -168,13 +182,10 @@ export function OutcomePanel({
             <code className="font-mono">{outcome.code}</code>
           </p>
           {outcome.intentId ? (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => onOpenIntent(outcome.intentId!)}
-            >
-              {t('intents.open', { id: outcome.intentId })}
-            </Button>
+            <OpenIntentButton
+              id={outcome.intentId}
+              onOpenIntent={onOpenIntent}
+            />
           ) : null}
         </section>
       )

@@ -89,7 +89,7 @@ func runtimeInputTargetForTest(t *testing.T, f *managedStopFixture, runRef strin
 		if err != nil {
 			return err
 		}
-		target = RuntimeInputTarget{Tenant: f.tenant, WorkspaceID: model.ID(rec.String(colRunAuthzWorkspaceID)), RunRef: runRef, ExpectedLaunch: live.launchID, ExpectedSID: live.claim.SID}
+		target = RuntimeInputTarget{Tenant: f.tenant, WorkspaceID: model.ID(rec.String(colRunAuthzWorkspaceID)), RunRef: runRef, RunID: model.ID(rec.String(model.ColID)), ExpectedLaunch: live.launchID, ExpectedSID: live.claim.SID}
 		if !runHasWorkBinding(rec) {
 			return nil
 		}
@@ -144,6 +144,27 @@ func TestRuntimeInputOriginalTargetAndUnknownAfterWrite(t *testing.T) {
 	result, err = f.m.DeliverRuntimeInput(context.Background(), request)
 	if err == nil || result.Outcome != RuntimeInputUnknown || !result.Attempted || proc.sentCount() != 2 {
 		t.Fatalf("unknown input: %#v %v", result, err)
+	}
+}
+
+// A Cedar forbid on one session's stored run ID refuses that session's runtime
+// input question, as it does on the native run routes; a sibling stays allowed.
+func TestRuntimeInputRunQuestionAuthorizesTheStoredRunID(t *testing.T) {
+	f, _, request := runtimeInputRawFixture(t)
+	dto, err := createProfiledTestRun(t, f.m, context.Background(), f.tenant, CreateRunParams{Transport: TransportStreamJSON, Isolation: IsolationNative, Actor: "user:launch", ActorKind: model.ActorUser})
+	if err != nil {
+		t.Fatal(err)
+	}
+	denied, sibling := request.Target, runtimeInputTargetForTest(t, f, dto.RunRef)
+	az := auth.NewAuthorizer(runForbid(t, f.st, f.tenant, storedRunIDForTest(t, f.st, f.tenant, denied.RunRef), permRunWrite))
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	p := request.Authority.Entry.Principal
+	if _, err := az.AuthorizeRouteMutation(ctx, RuntimeInputRunQuestion(p, denied)); !errors.Is(err, auth.ErrRouteDenied) {
+		t.Errorf("runtime input question on the forbidden session = %v, want %v", err, auth.ErrRouteDenied)
+	}
+	if _, err := az.AuthorizeRouteMutation(ctx, RuntimeInputRunQuestion(p, sibling)); err != nil {
+		t.Errorf("runtime input question on the sibling session = %v, want a permit", err)
 	}
 }
 
@@ -258,7 +279,7 @@ func TestRuntimeInputOriginalAdmissionDoesNotFollowAResume(t *testing.T) {
 	if !ok {
 		t.Fatal("launch omitted original completion")
 	}
-	target := RuntimeInputTarget{Tenant: original.Tenant, WorkspaceID: original.WorkspaceID, RunRef: original.RunRef, ExpectedLaunch: original.RuntimeLaunchID, ExpectedSID: original.SessionSID}
+	target := RuntimeInputTarget{Tenant: original.Tenant, WorkspaceID: original.WorkspaceID, RunRef: original.RunRef, RunID: model.ID(storedRunIDForTest(t, f.st, f.tenant, original.RunRef)), ExpectedLaunch: original.RuntimeLaunchID, ExpectedSID: original.SessionSID}
 	authority := runtimeInputAuthorityForTest(t, f, target)
 	if err := f.st.Mutate(ctx, f.tenant, func(sc store.Scope) error {
 		now, err := sc.(store.TransactionClock).TransactionNow(ctx)

@@ -211,6 +211,10 @@ func TestSecretEnv_RefusesReservedAndMalformedNames(t *testing.T) {
 		{{Env: "CLAUDE_CONFIG_DIR", Secret: "env/github"}},
 		{{Env: "CODEX_HOME", Secret: "env/github"}},
 		{{Env: "LD_PRELOAD", Secret: "env/github"}},
+		{{Env: "NODE_OPTIONS", Secret: "env/github"}},
+		{{Env: "HTTPS_PROXY", Secret: "env/github"}},
+		{{Env: "npm_config_registry", Secret: "env/github"}},
+		{{Env: "GOPROXY", Secret: "env/github"}},
 		{{Env: "bad-name", Secret: "env/github"}},
 		{{Env: "", Secret: "env/github"}},
 		{{Env: "GITHUB_TOKEN", Secret: "mcp/github"}},
@@ -232,6 +236,28 @@ func TestSecretEnv_RefusesReservedAndMalformedNames(t *testing.T) {
 	defer fr.mu.Unlock()
 	if len(fr.specs) != 0 {
 		t.Fatal("a refused secret launch reached the runner")
+	}
+}
+
+// TestSecretEnv_ARegistryTokenStillLaunches is the registry credential a session
+// is given the way npm, a CI's setup-node and Cargo document it (#1442): the
+// package-manager rule refuses their code, trust and routing settings, never these.
+func TestSecretEnv_ARegistryTokenStillLaunches(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	m, tenant, fr, _, _ := secretEnvHarness(t)
+	refs := []SecretEnvRef{
+		{Env: "NPM_TOKEN", Secret: "env/github"}, {Env: "NODE_AUTH_TOKEN", Secret: "env/github"},
+		{Env: "npm_config__authToken", Secret: "env/github"}, {Env: "CARGO_REGISTRY_TOKEN", Secret: "env/github"},
+	}
+	if _, err := createProfiledTestRun(t, m, ctx, tenant, secretEnvParams(refs, true)); err != nil {
+		t.Fatalf("a launch with registry tokens: %v", err)
+	}
+	spec := fr.lastSpec()
+	for _, ref := range refs {
+		if got, _ := specEnvValue(spec, ref.Env); got != secretCanary {
+			t.Errorf("%s in the child env = %q, want the vault value", ref.Env, got)
+		}
 	}
 }
 

@@ -78,7 +78,7 @@ func TestCommunityTracingRetainsSettingsWithoutDelivery(t *testing.T) {
 		{"verify", "--in", bundle, "--passphrase-file", passFile},
 		{"restore", "--in", bundle, "--data-dir", restoredDir, "--engine", "sqlite", "--passphrase-file", passFile, "--force"},
 	} {
-		if out, err := runDR(args...); err != nil {
+		if out, err := runDR(t, args...); err != nil {
 			t.Fatalf("dr %s: %v\n%s", args[0], err, out)
 		}
 	}

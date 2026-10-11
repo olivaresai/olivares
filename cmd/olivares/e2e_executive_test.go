@@ -19,10 +19,12 @@ func TestE2E_ExecutiveDashboard_PillarSources(t *testing.T) {
 	prepareCompliancePacksTestEntitlement(t)
 	h := newHarness(t)
 
-	// Cost pillar — FinOps spend.
-	cost := h.getJSON(h.adminToken, h.tenantA, "/v1/m/finops/spend/summary")
-	if tot, _ := cost["total_micro_usd"].(float64); tot <= 0 {
-		t.Errorf("cost pillar: total_micro_usd=%v", cost["total_micro_usd"])
+	// Cost pillar — FinOps spend, supplied by Business.
+	if h.servesFinOpsReads("/v1/m/finops/spend/summary") {
+		cost := h.getJSON(h.adminToken, h.tenantA, "/v1/m/finops/spend/summary")
+		if tot, _ := cost["total_micro_usd"].(float64); tot <= 0 {
+			t.Errorf("cost pillar: total_micro_usd=%v", cost["total_micro_usd"])
+		}
 	}
 
 	// Usage pillar — active agents + live sessions.

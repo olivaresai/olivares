@@ -91,9 +91,112 @@ var childEnvRuleRows = []struct{ want, name string }{
 	{"x x e . . . . . . . . . n n n n x", "VAULT_TOKEN"},
 	{"x . . . . g . g . . . . n n n n x", "GIT_CONFIG_COUNT"},
 	{"x . . . . g . g . . . . n n n n x", "GIT_CONFIG_KEY_0"},
+	// What makes the child run other code, trust another CA or reach another host:
+	// the operator may forward the engine's own value, a secret or an adapter never sets it.
+	{"x . . . . . x . . . . . n n n n x", "NODE_OPTIONS"},
+	{"x . . . . . x . . . . . n n n n x", "PYTHONPATH"},
+	{"x . . . . . x . . . . . n n n n x", "JAVA_TOOL_OPTIONS"},
+	{"x . . . . . x . . . . . n n n n x", "BASH_ENV"},
+	{"x . . . . . x . . . . . n n n n x", "PERL5LIB"},
+	{"x . . . . . x . . . . . n n n n x", "RUBYOPT"},
+	{"x . . . . . x . . . . . n n n n x", "GLIBC_TUNABLES"},
+	{"x . . . . . x . . . . . n n n n x", "GIT_SSH_COMMAND"},
+	{"x . . . . . x . . . . . n n n n x", "GIT_DIR"},
+	{"x . . . . . x . . . . . n n n n x", "GIT_SSL_NO_VERIFY"},
+	{"x . . . . . x . . . . . n n n n x", "EDITOR"},
+	{"x . . . . . x . . . . . n n n n x", "SSL_CERT_FILE"},
+	{"x . . . . . x . . . . . n n n n x", "SSL_CERT_DIR"},
+	{"x . . . . . x . . . . . n n n n x", "SSLKEYLOGFILE"},
+	{"x . . . . . x . . . . . n n n n x", "HTTPS_PROXY"},
+	{"x . . . . . x . . . . . n n n n x", "https_proxy"},
+	{"x . . . . . x . . . . . n n n n x", "no_proxy"},
+	{"x . . . . . x . . . . . n n n n x", "npm_config_registry"},
+	{"x . . . . . x . . . . . n n n n x", "PIP_INDEX_URL"},
+	{"x . . . . . x . . . . . n n n n x", "GOPROXY"},
+	{"x . . . . . x . . . . . n n n n x", "CARGO_BUILD_RUSTC_WRAPPER"},
+	{"x . . . . . . . . . . . . . . . x", "GITHUB_TOKEN"},
+	{"x . . . . . . . . . . . . . . . x", "NPM_TOKEN"},
+	{"x . . . . . . . . . . . . . . . x", "CARGO_REGISTRY_TOKEN"},
 	{"x . . . . . . . . . . . . . . . x", "MY_PROJECT_FLAG"},
 	{"x . . . . . . . . . . . . . . . x", "OLLAMA_HOST"},
 	{"x x x . . . x . x x . . x x x x x", "1BAD"},
+}
+
+// TestChildExecEnvIsNoSecretsOrAdapters pins, name by name, what a vault secret
+// and a credential adapter may not set because it makes the child run other code,
+// trust another CA or reach another host (#1375). The table above carries one row
+// per family; this list fails when any one name leaves the rule.
+func TestChildExecEnvIsNoSecretsOrAdapters(t *testing.T) {
+	for _, name := range []string{
+		"NODE_OPTIONS", "NODE_PATH", "NODE_REPL_EXTERNAL_MODULE", "NODE_TLS_REJECT_UNAUTHORIZED",
+		"PYTHONPATH", "PYTHONHOME", "PYTHONSTARTUP", "PYTHONUSERBASE", "PYTHONBREAKPOINT",
+		"PERL5OPT", "PERL5LIB", "PERLLIB", "RUBYOPT", "RUBYLIB", "RUBYGEMS_GEMDEPS",
+		"JAVA_TOOL_OPTIONS", "_JAVA_OPTIONS", "JDK_JAVA_OPTIONS", "CLASSPATH",
+		"BASH_ENV", "ENV", "PROMPT_COMMAND", "SHELLOPTS", "BASHOPTS", "PS4",
+		"GLIBC_TUNABLES", "GCONV_PATH", "LOCPATH", "NLSPATH", "HOSTALIASES", "RES_OPTIONS", "LOCALDOMAIN",
+		"GIT_SSH_COMMAND", "GIT_SSH", "GIT_SSH_VARIANT", "GIT_ASKPASS", "SSH_ASKPASS", "SSH_ASKPASS_REQUIRE",
+		"GIT_EXEC_PATH", "GIT_PROXY_COMMAND", "GIT_EXTERNAL_DIFF", "GIT_PAGER", "GIT_EDITOR",
+		"GIT_SEQUENCE_EDITOR", "GIT_TEMPLATE_DIR", "GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR",
+		"GIT_INDEX_FILE", "GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+		"GIT_SSL_CAINFO", "GIT_SSL_CAPATH", "GIT_SSL_NO_VERIFY",
+		"EDITOR", "VISUAL", "PAGER", "LESSOPEN", "LESSCLOSE", "BROWSER",
+		"SSL_CERT_FILE", "SSL_CERT_DIR", "SSLKEYLOGFILE", "NODE_EXTRA_CA_CERTS", "CURL_CA_BUNDLE", "REQUESTS_CA_BUNDLE",
+		"HTTPS_PROXY", "HTTP_PROXY", "ALL_PROXY", "NO_PROXY", "https_proxy", "http_proxy", "all_proxy", "no_proxy",
+		// Package managers and toolchains (#1442): npm and pnpm read npm_config_ in
+		// either case, pip and Cargo their own prefix, Go and rustup their names.
+		"npm_config_script_shell", "npm_config_node_options", "npm_config_cafile", "npm_config_ca",
+		"npm_config_registry", "npm_config_proxy", "npm_config_https_proxy", "npm_config_noproxy",
+		"npm_config_strict_ssl", "npm_config_userconfig", "npm_config_globalconfig", "npm_config_git",
+		"npm_config_shell", "npm_config_offline", "NPM_CONFIG_REGISTRY", "NPM_CONFIG_SCRIPT_SHELL", "Npm_Config_CaFile",
+		"PIP_INDEX_URL", "PIP_EXTRA_INDEX_URL", "PIP_FIND_LINKS", "PIP_CERT", "PIP_TRUSTED_HOST", "PIP_PROXY",
+		"PIP_CONFIG_FILE", "PIP_index_url",
+		"GOFLAGS", "GOPROXY", "GONOPROXY", "GOPRIVATE", "GOSUMDB", "GONOSUMDB", "GONOSUMCHECK", "GOINSECURE",
+		"GOVCS", "GOAUTH", "GOTOOLCHAIN", "GOROOT", "GOENV", "GOWORK", "GOCACHEPROG", "GCCGO",
+		"CC", "CXX", "CGO_CFLAGS", "CGO_LDFLAGS",
+		"RUSTC", "RUSTC_WRAPPER", "RUSTC_WORKSPACE_WRAPPER", "RUSTDOC", "RUSTFLAGS", "RUSTDOCFLAGS",
+		"RUSTUP_HOME", "RUSTUP_TOOLCHAIN", "RUSTUP_DIST_SERVER", "RUSTUP_UPDATE_ROOT",
+		"CARGO_HOME", "CARGO_BUILD_RUSTC", "CARGO_BUILD_RUSTC_WRAPPER", "CARGO_BUILD_RUSTFLAGS",
+		"CARGO_ENCODED_RUSTFLAGS", "CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER",
+		"CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUNNER", "CARGO_REGISTRY_CREDENTIAL_PROVIDER",
+		"CARGO_REGISTRIES_MY_INDEX", "CARGO_REGISTRIES_MY_CREDENTIAL_PROVIDER", "CARGO_HTTP_CAINFO", "CARGO_HTTP_PROXY",
+		"CARGO_NET_GIT_TOKEN", "pnpm_config_registry", "PNPM_CONFIG_SCRIPT_SHELL", "PNPM_HOME",
+		"COREPACK_NPM_REGISTRY", "COREPACK_INTEGRITY_KEYS", "COREPACK_HOME",
+		"FC", "AR", "LD", "CFLAGS", "CXXFLAGS", "CPPFLAGS", "LDFLAGS", "TARGET_CC", "HOST_CC", "TARGET_CXX",
+		"HOST_CXX", "TARGET_AR", "HOST_AR", "TARGET_CFLAGS", "HOST_CFLAGS", "TARGET_CXXFLAGS", "HOST_CXXFLAGS",
+		"CC_x86_64_unknown_linux_gnu", "CXX_x86_64_unknown_linux_gnu", "AR_x86_64_unknown_linux_gnu",
+		"CFLAGS_x86_64_unknown_linux_gnu", "CXXFLAGS_x86_64_unknown_linux_gnu", "ARFLAGS", "RANLIB", "HOST_RANLIB",
+		"PKG_CONFIG", "PKG_CONFIG_PATH", "PKG_CONFIG_LIBDIR", "PKG_CONFIG_SYSROOT_DIR", "TARGET_PKG_CONFIG",
+		"HOST_PKG_CONFIG_PATH", "PKG_CONFIG_x86_64_unknown_linux_gnu", "PKG_CONFIG_PATH_aarch64_unknown_linux_gnu",
+		"GOPACKAGESDRIVER", "GOPATH", "GOMODCACHE", "GOCACHE", "GOBIN", "RUSTFMT",
+		"AWS_CA_BUNDLE", "DENO_CERT", "DENO_TLS_CA_STORE", "PYTHONHTTPSVERIFY",
+		"OPENSSL_CONF", "OPENSSL_MODULES", "OPENSSL_ENGINES",
+	} {
+		if got := childEnvFromSecret(name) + childEnvFromAdapter(t, providerDriverCodex, name); got != "xn" {
+			t.Errorf("%s: secret and Codex adapter gave %q, want refused by both (xn)", name, got)
+		}
+	}
+}
+
+// TestRegistryCredentialsStayASecret pins what the rule above keeps (#1442): the
+// registry credentials a package manager reads, by its own key or by the variable
+// a project's .npmrc or CI names, are still a secret and an adapter's to set.
+func TestRegistryCredentialsStayASecret(t *testing.T) {
+	for _, name := range []string{
+		"NPM_TOKEN", "NODE_AUTH_TOKEN", "npm_config__auth", "npm_config__authToken", "NPM_CONFIG__AUTHTOKEN",
+		"npm_config_username", "npm_config__password", "npm_config_email", "npm_config_otp",
+		"npm_config_certfile", "npm_config_keyfile", "npm_config_cert", "npm_config_key",
+		"pnpm_config__authToken", "PIP_CLIENT_CERT", "CARGO_REGISTRY_TOKEN", "CARGO_REGISTRIES_MY_REGISTRY_TOKEN",
+		"COREPACK_NPM_TOKEN", "COREPACK_NPM_USERNAME", "COREPACK_NPM_PASSWORD",
+		"PIP_client_cert", "GITHUB_TOKEN", "GOOGLE_API_KEY", "CCACHE_DIR", "GOPHER_TOKEN", "RUST_LOG",
+		// Names outside each tool's own prefix, as the tool reads it.
+		"NPM_CONFIGURE", "PIPX_HOME", "pip_index_url", "cargo_home", "CARGOX_TOKEN", "corepack_home",
+		"HOSTNAME_ALIAS", "TARGET_ENV", "LDAP_PASSWORD", "ARTIFACTORY_TOKEN",
+		"CC_API_KEY", "AR_TOKEN", "CXX_SECRET", "CFLAGS_TOKEN", "PKG_CONFIG_TOKEN", "TARGET_CCACHE", "HOST_TOKEN",
+	} {
+		if got := childEnvFromSecret(name) + childEnvFromAdapter(t, providerDriverCodex, name); got != ".." {
+			t.Errorf("%s: secret and Codex adapter gave %q, want accepted by both (..)", name, got)
+		}
+	}
 }
 
 func TestChildEnvNameRules(t *testing.T) {

@@ -127,7 +127,7 @@ func testDRCommunicationRecovery(t *testing.T, console bool) {
 		t.Fatal(err)
 	}
 	if !console {
-		if out, err := runDR("backup", "--data-dir", estate.dataDir, "--engine", "sqlite", "--out", bundle, "--passphrase-file", pass); err != nil {
+		if out, err := runDR(t, "backup", "--data-dir", estate.dataDir, "--engine", "sqlite", "--out", bundle, "--passphrase-file", pass); err != nil {
 			t.Fatalf("backup: %v\n%s", err, out)
 		}
 	}
@@ -136,7 +136,7 @@ func testDRCommunicationRecovery(t *testing.T, console bool) {
 		t.Fatal(err)
 	}
 	estate.dataDir = t.TempDir()
-	if out, err := runDR("restore", "--in", bundle, "--data-dir", estate.dataDir, "--engine", "sqlite", "--passphrase-file", pass); err != nil {
+	if out, err := runDR(t, "restore", "--in", bundle, "--data-dir", estate.dataDir, "--engine", "sqlite", "--passphrase-file", pass); err != nil {
 		t.Fatalf("restore: %v\n%s", err, out)
 	} else if !strings.Contains(out, "key custody intact") {
 		// The console and CLI bundles both record the sealer probes this line checks.

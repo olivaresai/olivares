@@ -380,6 +380,22 @@ func (h *harness) getJSON(token, tenant, path string) map[string]any {
 	return m
 }
 
+// servesFinOpsReads reports whether this edition serves FinOps reads. FinOps is
+// a Business feature: Community mounts its routes and answers them 501, which is
+// asserted here on each path, so a Community build that serves them again fails.
+func (h *harness) servesFinOpsReads(paths ...string) bool {
+	h.t.Helper()
+	if thisEdition.name != "community" {
+		return true
+	}
+	for _, path := range paths {
+		if code, raw := h.req("GET", path, h.adminToken, h.tenantA, nil); code != http.StatusNotImplemented {
+			h.t.Errorf("Community GET %s = %d, want 501: %s", path, code, raw)
+		}
+	}
+	return false
+}
+
 // items returns the "items" array of a list response as []map[string]any.
 func items(m map[string]any) []map[string]any {
 	raw, _ := m["items"].([]any)

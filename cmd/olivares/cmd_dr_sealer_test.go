@@ -91,11 +91,11 @@ func TestDRRestoreOpensWhatTheSourceSealed(t *testing.T) {
 
 	pf := l3Passphrase(t)
 	bundle := filepath.Join(t.TempDir(), "estate.drbundle")
-	if out, err := runDR("backup", "--data-dir", src, "--out", bundle, "--passphrase-file", pf); err != nil {
+	if out, err := runDR(t, "backup", "--data-dir", src, "--out", bundle, "--passphrase-file", pf); err != nil {
 		t.Fatalf("backup: %v\n%s", err, out)
 	}
 	dst := filepath.Join(t.TempDir(), "restored")
-	out, err := runDR("restore", "--in", bundle, "--data-dir", dst, "--engine", "sqlite", "--passphrase-file", pf)
+	out, err := runDR(t, "restore", "--in", bundle, "--data-dir", dst, "--engine", "sqlite", "--passphrase-file", pf)
 	if err != nil {
 		t.Fatalf("restore: %v\n%s", err, out)
 	}
@@ -124,7 +124,7 @@ func TestDRRestoreNamesSealerKeysTheBundleDoesNotCarry(t *testing.T) {
 	seedDataDir(t, src)
 	pf := l3Passphrase(t)
 	bundle := filepath.Join(t.TempDir(), "estate.drbundle")
-	if out, err := runDR("backup", "--data-dir", src, "--out", bundle, "--passphrase-file", pf); err != nil {
+	if out, err := runDR(t, "backup", "--data-dir", src, "--out", bundle, "--passphrase-file", pf); err != nil {
 		t.Fatalf("backup: %v\n%s", err, out)
 	}
 	bundle = drLegacyBundle(t, bundle, pf)
@@ -144,7 +144,7 @@ func TestDRRestoreNamesSealerKeysTheBundleDoesNotCarry(t *testing.T) {
 				t.Setenv(k, v)
 			}
 			dst := filepath.Join(t.TempDir(), "restored")
-			out, err := runDR("restore", "--in", bundle, "--data-dir", dst, "--engine", "sqlite", "--passphrase-file", pf)
+			out, err := runDR(t, "restore", "--in", bundle, "--data-dir", dst, "--engine", "sqlite", "--passphrase-file", pf)
 			if err != nil {
 				t.Fatalf("an older bundle must still restore: %v\n%s", err, out)
 			}
@@ -226,7 +226,7 @@ func TestDRRestoreNamesASealerVariableThatIsNotTheSourceKey(t *testing.T) {
 	seedDataDir(t, src)
 	pf := l3Passphrase(t)
 	bundle := filepath.Join(t.TempDir(), "estate.drbundle")
-	if out, err := runDR("backup", "--data-dir", src, "--out", bundle, "--passphrase-file", pf); err != nil {
+	if out, err := runDR(t, "backup", "--data-dir", src, "--out", bundle, "--passphrase-file", pf); err != nil {
 		t.Fatalf("backup: %v\n%s", err, out)
 	}
 	srcSecret, err := newSecretSealer(src, func(string) string { return "" })
@@ -241,7 +241,7 @@ func TestDRRestoreNamesASealerVariableThatIsNotTheSourceKey(t *testing.T) {
 	restore := func(t *testing.T) string {
 		t.Helper()
 		dst := filepath.Join(t.TempDir(), "restored")
-		out, err := runDR("restore", "--in", bundle, "--data-dir", dst, "--engine", "sqlite", "--passphrase-file", pf)
+		out, err := runDR(t, "restore", "--in", bundle, "--data-dir", dst, "--engine", "sqlite", "--passphrase-file", pf)
 		if err != nil {
 			t.Fatalf("restore must keep its exit code: %v\n%s", err, out)
 		}
@@ -295,7 +295,7 @@ func TestDRRestoreNamesASealerVariableThatIsNotTheSourceKey(t *testing.T) {
 	})
 	t.Run("in place over the source", func(t *testing.T) {
 		t.Setenv(secretStoreKeyEnv, drOtherSealerKey)
-		out, err := runDR("restore", "--in", bundle, "--data-dir", src, "--engine", "sqlite", "--passphrase-file", pf,
+		out, err := runDR(t, "restore", "--in", bundle, "--data-dir", src, "--engine", "sqlite", "--passphrase-file", pf,
 			"--in-place", "--operator", "ops@example.com", "--reason", "INC-550")
 		if err != nil {
 			t.Fatalf("in-place restore must keep its exit code: %v\n%s", err, out)
@@ -340,7 +340,7 @@ func TestDRRestoreNamesASealerTheBackupHadNoKeyFor(t *testing.T) {
 	t.Setenv(federationSecretKeyEnv, "not-a-key")
 	pf := l3Passphrase(t)
 	bundle := filepath.Join(t.TempDir(), "estate.drbundle")
-	out, err := runDR("backup", "--data-dir", src, "--out", bundle, "--passphrase-file", pf)
+	out, err := runDR(t, "backup", "--data-dir", src, "--out", bundle, "--passphrase-file", pf)
 	if err != nil {
 		t.Fatalf("backup: %v\n%s", err, out)
 	}
@@ -353,7 +353,7 @@ func TestDRRestoreNamesASealerTheBackupHadNoKeyFor(t *testing.T) {
 		t.Fatalf("manifest has %d sealer probes, want one per sealer so it is never taken for an older bundle", n)
 	}
 	// Under -o json the note is commentary on stderr; stdout stays one document.
-	jsonOut, errOut, err := execRoot(t, "dr", "backup", "--data-dir", src, "--out", filepath.Join(t.TempDir(), "json.drbundle"),
+	jsonOut, errOut, err := execRootOwnProcess(t, "dr", "backup", "--data-dir", src, "--out", filepath.Join(t.TempDir(), "json.drbundle"),
 		"--passphrase-file", pf, "-o", "json")
 	if err != nil {
 		t.Fatalf("backup -o json: %v\n%s", err, errOut)
@@ -378,7 +378,7 @@ func TestDRRestoreNamesASealerTheBackupHadNoKeyFor(t *testing.T) {
 			if tc.args != nil {
 				dst = src
 			}
-			out, err := runDR(append([]string{"restore", "--in", bundle, "--data-dir", dst, "--engine", "sqlite",
+			out, err := runDR(t, append([]string{"restore", "--in", bundle, "--data-dir", dst, "--engine", "sqlite",
 				"--passphrase-file", pf}, tc.args...)...)
 			if err != nil {
 				t.Fatalf("restore must keep its exit code: %v\n%s", err, out)
@@ -498,14 +498,14 @@ func TestDRSameHostRestoreOfAnOlderBundleKeepsCustody(t *testing.T) {
 				sealed[name] = v
 			}
 			bundle := filepath.Join(t.TempDir(), "estate.drbundle")
-			if out, err := runDR("backup", "--data-dir", dir, "--out", bundle, "--passphrase-file", pf); err != nil {
+			if out, err := runDR(t, "backup", "--data-dir", dir, "--out", bundle, "--passphrase-file", pf); err != nil {
 				t.Fatalf("backup: %v\n%s", err, out)
 			}
 			bundle = drLegacyBundle(t, bundle, pf)
 			args := append([]string{"restore", "--in", bundle, "--engine", "sqlite", "--passphrase-file", pf,
 				"--operator", "ops@example.com", "--reason", "INC-550"}, tc.args...)
 
-			out, err := runDR(append(args, "--data-dir", dir)...)
+			out, err := runDR(t, append(args, "--data-dir", dir)...)
 			if err != nil {
 				t.Fatalf("same-host restore: %v\n%s", err, out)
 			}
@@ -520,7 +520,7 @@ func TestDRSameHostRestoreOfAnOlderBundleKeepsCustody(t *testing.T) {
 
 			other := t.TempDir()
 			seedDataDir(t, other)
-			out, err = runDR(append(args, "--data-dir", other)...)
+			out, err = runDR(t, append(args, "--data-dir", other)...)
 			if err != nil {
 				t.Fatalf("restore over another installation: %v\n%s", err, out)
 			}
@@ -546,7 +546,7 @@ func TestDRBackupLeavesOutASealerFileItsVariableSupplies(t *testing.T) {
 	t.Setenv(secretStoreKeyEnv, drValidSealerKey)
 	pf := l3Passphrase(t)
 	bundle := filepath.Join(t.TempDir(), "env.drbundle")
-	if out, err := runDR("backup", "--data-dir", src, "--out", bundle, "--passphrase-file", pf); err != nil {
+	if out, err := runDR(t, "backup", "--data-dir", src, "--out", bundle, "--passphrase-file", pf); err != nil {
 		t.Fatalf("backup: %v\n%s", err, out)
 	}
 	carried := map[string]bool{}
@@ -589,7 +589,7 @@ func TestDRInPlaceRestoreBringsBackTheSourceSealerKeys(t *testing.T) {
 	}
 	pf := l3Passphrase(t)
 	bundle := filepath.Join(t.TempDir(), "estate.drbundle")
-	if out, err := runDR("backup", "--data-dir", dir, "--out", bundle, "--passphrase-file", pf); err != nil {
+	if out, err := runDR(t, "backup", "--data-dir", dir, "--out", bundle, "--passphrase-file", pf); err != nil {
 		t.Fatalf("backup: %v\n%s", err, out)
 	}
 	// The node loses its sealer keys; the next boot mints different ones.
@@ -600,7 +600,7 @@ func TestDRInPlaceRestoreBringsBackTheSourceSealerKeys(t *testing.T) {
 	}
 	drSealers(t, dir)
 
-	out, err := runDR("restore", "--in", bundle, "--data-dir", dir, "--engine", "sqlite", "--passphrase-file", pf,
+	out, err := runDR(t, "restore", "--in", bundle, "--data-dir", dir, "--engine", "sqlite", "--passphrase-file", pf,
 		"--in-place", "--operator", "ops@example.com", "--reason", "INC-493")
 	if err != nil {
 		t.Fatalf("in-place restore: %v\n%s", err, out)
@@ -631,7 +631,7 @@ func TestDRBackupRefusesADataDirWithoutSigningKeys(t *testing.T) {
 		writeSealerKey(t, filepath.Join(src, k.name))
 	}
 	pf := l3Passphrase(t)
-	out, err := runDR("backup", "--data-dir", src, "--out", filepath.Join(t.TempDir(), "x.drbundle"), "--passphrase-file", pf)
+	out, err := runDR(t, "backup", "--data-dir", src, "--out", filepath.Join(t.TempDir(), "x.drbundle"), "--passphrase-file", pf)
 	if err == nil || !strings.Contains(err.Error(), "no installation signing keys found") {
 		t.Fatalf("backup must refuse a data dir without signing keys or external custody; err=%v\n%s", err, out)
 	}

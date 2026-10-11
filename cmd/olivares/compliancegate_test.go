@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 
@@ -105,6 +106,99 @@ func TestComplianceGateDualControlEvidence(t *testing.T) {
 	}
 	if len(seen) < 2 {
 		t.Fatalf("approved decision must carry ≥2 distinct approver principals, got %v", d4.Approvers)
+	}
+}
+
+// A default install has no OLIVARES_APPROVAL_BRIDGE_CONFIG, so the bridge holds no
+// service token and the decision trail is read from the engine's local approval
+// service. The compliance gate is the adapter the erasure and hold routes read
+// their quorum from; it shares ApprovalApproverEvidence with the audit-recovery
+// and agent-core export gates, so this one test covers that function for all three.
+func TestComplianceGateDefaultInstallCarriesTwoPersonEvidence(t *testing.T) {
+	h := newHarness(t)
+	userB, approverB := h.createApprover(t, "dflt-hold-b@bridge.test")
+	userC, approverC := h.createApprover(t, "dflt-hold-c@bridge.test")
+	handler, loopbackReads := decisionReads(h)
+	gate := localDefaultBridge(t, h, handler).ComplianceGate()
+	tid := tenantAID(t, h)
+	ctx := t.Context()
+
+	req := compliance.GateRequest{
+		Action: "compliance.hold.release", SubjectKind: "legal_hold", SubjectRef: "lh-default",
+		PlanHash: "plan-hold-default", Reason: "release legal hold (matter M-9)", RequestedBy: "user:legal",
+	}
+	d, err := gate.Authorize(ctx, tid, req)
+	if err != nil || d.Status != compliance.GateStatusPending || d.ApprovalRef == "" {
+		t.Fatalf("first authorize = %+v err=%v, want a pending, referenced deny", d, err)
+	}
+	if code, body := h.decide(t, approverB, d.ApprovalRef, "approve"); code != http.StatusOK {
+		t.Fatalf("first approve = %d: %s", code, body)
+	}
+	if d1, err := gate.Authorize(ctx, tid, req); err != nil || d1.Status != compliance.GateStatusPending || d1.Quorum() != 0 {
+		t.Fatalf("one approver on a default install = %+v err=%v, want pending with no quorum", d1, err)
+	}
+	if code, body := h.decide(t, approverC, d.ApprovalRef, "approve"); code != http.StatusOK {
+		t.Fatalf("second approve = %d: %s", code, body)
+	}
+	d2, err := gate.Authorize(ctx, tid, req)
+	if err != nil || d2.Status != compliance.GateStatusApproved {
+		t.Fatalf("final authorize = %+v err=%v, want approved", d2, err)
+	}
+	if d2.Quorum() != 2 {
+		t.Fatalf("a default install reported quorum %d (%+v), want the two approving accounts", d2.Quorum(), d2)
+	}
+	if got := slices.Sorted(slices.Values(d2.ApproverPersons)); !slices.Equal(got, slices.Sorted(slices.Values([]string{userB, userC}))) {
+		t.Fatalf("approver persons = %v, want the accounts %q and %q", got, userB, userC)
+	}
+	if n := loopbackReads.Load(); n != 0 {
+		t.Fatalf("a default install made %d loopback decision reads, want the local service only", n)
+	}
+}
+
+// The failing path of a default install, end to end: the data-subject erase route
+// answers 403 "lacks dual-control quorum evidence" when the gate hands back no
+// evidence. Two distinct humans approving must let the same request execute.
+func TestDataSubjectEraseDefaultInstallRunsAfterTwoApprovals(t *testing.T) {
+	h := newHarness(t)
+	_, approverB := h.createApprover(t, "dflt-erase-b@bridge.test")
+	_, approverC := h.createApprover(t, "dflt-erase-c@bridge.test")
+	// Bind the engine's own bridge as boot.go does on a default install: the local
+	// approval service and the engine handler, no service token.
+	h.set.approvalBridge.UseLocalProposer(h.set.gov.EngineApprovals())
+	h.set.approvalBridge.UseHandler(h.h)
+
+	const path = "/v1/m/compliance/data-subjects/ds-default/erase"
+	body := map[string]any{"subject_kind": "agent", "case_ref": "rtbf-default", "reason": "gdpr art 17"}
+	var pending struct {
+		Status      string `json:"status"`
+		ApprovalRef string `json:"approval_ref"`
+	}
+	if code := h.reqInto("POST", path, h.adminToken, h.tenantA, body, &pending); code != http.StatusAccepted ||
+		pending.Status != "pending_approval" || pending.ApprovalRef == "" {
+		t.Fatalf("first erase = %d %+v, want 202 pending_approval with an approval ref", code, pending)
+	}
+
+	if code, out := h.decide(t, approverB, pending.ApprovalRef, "approve"); code != http.StatusOK {
+		t.Fatalf("first approve = %d: %s", code, out)
+	}
+	// One human is not a quorum: the erasure stays pending and nothing is destroyed.
+	if code, raw := h.req("POST", path, h.adminToken, h.tenantA, body); code != http.StatusAccepted {
+		t.Fatalf("erase with one approver = %d, want 202 still pending: %s", code, raw)
+	}
+
+	if code, out := h.decide(t, approverC, pending.ApprovalRef, "approve"); code != http.StatusOK {
+		t.Fatalf("second approve = %d: %s", code, out)
+	}
+	code, raw := h.req("POST", path, h.adminToken, h.tenantA, body)
+	if code == http.StatusForbidden {
+		t.Fatalf("erase after two distinct approvals = 403, the gate gave no quorum evidence on a default install: %s", raw)
+	}
+	var done map[string]any
+	if err := json.Unmarshal(raw, &done); err != nil {
+		t.Fatalf("erase response decode: %v (%s)", err, raw)
+	}
+	if code != http.StatusOK || done["key_shredded"] != true {
+		t.Fatalf("erase after two approvals = %d %s, want 200 with a shredded-key receipt", code, raw)
 	}
 }
 

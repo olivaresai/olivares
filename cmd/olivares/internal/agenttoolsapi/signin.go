@@ -24,6 +24,7 @@ import (
 	"unicode"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/olivaresai/olivares/cmd/olivares/internal/toolinstall"
 	"github.com/olivaresai/olivares/connectors/redact"
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/driverfacts"
@@ -547,15 +548,17 @@ func validSignInDriver(driver string) bool {
 // ChildCommand builds a child with the paths it may write (rw) and read (ro);
 // the composition confines it there like a session child, which also clears a
 // root engine's capabilities. The program itself is readable.
-type ChildCommand func(ctx context.Context, rw, ro []string, program string, args ...string) (*exec.Cmd, error)
+type ChildCommand = toolinstall.ChildCommand
 
 // SetChildCommand wires how every child this module starts is built: the tool's
-// login, its status read, the provider probes and Ollama. Without it they run
+// login, its status read, the provider probes, Ollama and the version probe of
+// an install or a detection, which its engine runs. Without it they run
 // unconfined, as the engine user.
 func (m *Module) SetChildCommand(f ChildCommand) {
 	m.mu.Lock()
 	m.childCommand = f
 	m.mu.Unlock()
+	m.engine.SetChildCommand(f)
 }
 
 // toolCommand builds an unconfined child when the composition wired no

@@ -6,6 +6,7 @@ package main
 
 import (
 	"fmt"
+	"path"
 	"strings"
 	"testing"
 
@@ -37,6 +38,13 @@ func localNoneCitationResolves(lineCounts map[string][]int, kind model.Kind, cit
 		{"costcenter.go", 116, 116}:                {"modules/finops/costcenter.go", 45, 45},
 		{"costcenter.go", 450, 450}:                {"modules/finops/costcenter.go", 45, 45},
 		{"cmd/olivares/sandboxrt.go", 75, 89}:      {"cmd/olivares/sandboxrt.go", 56, 69},
+		// Business: the red-team severity mapping and sandbox adapter sit where
+		// their readers are now (helpers.go resolves as helpers_enterprise.go).
+		{"helpers.go", 173, 183}:                {"modules/redteam/helpers.go", 151, 162},
+		{"cmd/olivares/sandboxrt.go", 118, 122}: {"cmd/olivares/redteamsandbox_enterprise.go", 85, 124},
+		{"cmd/olivares/sandboxrt.go", 115, 133}: {"cmd/olivares/redteamsandbox_enterprise.go", 35, 75},
+		// The step-kind refusal stands 398 lines earlier than the literal says.
+		{"workflow_graph.go", 878, 878}: {"modules/orchestration/workflow_graph.go", 480, 480},
 	}
 	namespace, _, _ := strings.Cut(string(kind), ".")
 	// Bare citations can relocate only within their owning module. Explicit
@@ -50,9 +58,17 @@ func localNoneCitationResolves(lineCounts map[string][]int, kind model.Kind, cit
 		if !strings.Contains(cited, "/") {
 			cited = "modules/" + namespace + "/" + cited
 		}
-		for _, n := range lineCounts[cited] {
-			if n >= last {
-				return true
+		files := []string{cited}
+		// Business keeps its own module's reader under the Community file name
+		// plus _enterprise, in the same directory.
+		if strings.HasPrefix(cited, "modules/"+namespace+"/") {
+			files = append(files, strings.TrimSuffix(cited, ".go")+"_enterprise.go")
+		}
+		for _, file := range files {
+			for _, n := range lineCounts[file] {
+				if n >= last {
+					return true
+				}
 			}
 		}
 		return false
@@ -217,6 +233,8 @@ func TestEditionNoneCitationRelocationsRespectOwnership(t *testing.T) {
 		{"finops.cost_center_mapping", "costcenter.go", 488, 488, 83},
 		{"finops.cost_center_mapping", "costcenter.go", 116, 116, 45},
 		{"finops.cost_center_mapping", "costcenter.go", 450, 450, 45},
+		{"redteam.result", "helpers.go", 173, 183, 162},
+		{"orchestration.workflow", "workflow_graph.go", 878, 878, 480},
 	} {
 		t.Run(fmt.Sprintf("%s:%d-%d", tc.file, tc.first, tc.last), func(t *testing.T) {
 			namespace, _, _ := strings.Cut(string(tc.kind), ".")
@@ -246,6 +264,49 @@ func TestEditionNoneCitationRelocationsRespectOwnership(t *testing.T) {
 			counts[shared] = []int{tc.currentLast - 1}
 			if localNoneCitationResolves(counts, tc.kind, tc.file, tc.first, tc.last) {
 				t.Error("admitted an out-of-range relocated reader")
+			}
+		})
+	}
+}
+
+// Business keeps an immutable declaration's citation while the file that holds
+// its reader differs: the module's own <name>_enterprise.go, or the file the
+// Business wiring moved to. Like the census, the check is a presence check: the
+// citation resolves at that file once the file has the cited last line, and
+// never at another module's file of the same name.
+func TestBusinessNoneCitationsResolveWhereTheirReadersMoved(t *testing.T) {
+	for _, tc := range []struct {
+		kind        model.Kind
+		cited       string
+		first, last int
+		file        string // the file of the assembled Business tree the citation resolves to
+		lines       int    // the line count that file must reach
+	}{
+		{"finops.cost_sample", "value.go", 209, 216, "modules/finops/value_enterprise.go", 216},
+		{"finops.cost_sample", "statements.go", 184, 184, "modules/finops/statements_enterprise.go", 184},
+		{"redteam.target", "consent.go", 75, 78, "modules/redteam/consent_enterprise.go", 78},
+		{"redteam.result", "helpers.go", 173, 183, "modules/redteam/helpers_enterprise.go", 162},
+		{"redteam.target", "cmd/olivares/sandboxrt.go", 118, 122, "cmd/olivares/redteamsandbox_enterprise.go", 124},
+		{"redteam.target", "cmd/olivares/sandboxrt.go", 115, 133, "cmd/olivares/redteamsandbox_enterprise.go", 75},
+		{"governance.breakglass", "breakglass.go", 130, 130, "modules/governance/breakglass_enterprise.go", 130},
+		{"orchestration.workflow", "workflow_graph.go", 878, 878, "modules/orchestration/workflow_graph.go", 480},
+	} {
+		t.Run(fmt.Sprintf("%s/%s:%d-%d", tc.kind, tc.cited, tc.first, tc.last), func(t *testing.T) {
+			if !localNoneCitationResolves(map[string][]int{tc.file: {tc.lines}}, tc.kind, tc.cited, tc.first, tc.last) {
+				t.Errorf("%s with %d lines does not resolve the citation", tc.file, tc.lines)
+			}
+			if localNoneCitationResolves(map[string][]int{tc.file: {tc.lines - 1}}, tc.kind, tc.cited, tc.first, tc.last) {
+				t.Errorf("admitted %s with %d lines, short of the cited line", tc.file, tc.lines-1)
+			}
+			if !strings.HasPrefix(tc.file, "modules/") {
+				return
+			}
+			namespace, _, _ := strings.Cut(string(tc.kind), ".")
+			for _, other := range []string{"finops", "redteam", "governance", "sandbox", "notify"} {
+				foreign := "modules/" + other + "/" + path.Base(tc.file)
+				if other != namespace && localNoneCitationResolves(map[string][]int{foreign: {1 << 20}}, tc.kind, tc.cited, tc.first, tc.last) {
+					t.Errorf("another module's %s supplied the citation", foreign)
+				}
 			}
 		})
 	}
