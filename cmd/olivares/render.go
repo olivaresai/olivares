@@ -333,6 +333,21 @@ func selectedOutput(cmd *cobra.Command) (string, error) {
 	return "text", nil
 }
 
+const textOnlyOutputHelp = "This command prints text only; -o json is refused with exit 2."
+
+// requireTextOutput refuses an unsupported format before a command performs any
+// work, especially token rotation or archive creation.
+func requireTextOutput(cmd *cobra.Command) error {
+	format, err := selectedOutput(cmd)
+	if err != nil {
+		return err
+	}
+	if format == "json" {
+		return exitcode.New(exitcode.Usage, fmt.Errorf("%s has no JSON form; use -o text", cmd.CommandPath()))
+	}
+	return nil
+}
+
 // renderTo is the ONE place the command layer builds a renderer. Every command
 // writes its human form through a writer — renderOut hands its text branch one,
 // and the `print…` helpers take one so a test can drive them without a root

@@ -7,6 +7,8 @@
 // + page.route interception that answers every /v1 call with the views' own fixtures.
 // No backend, no real data — so each view renders deterministically in light AND
 // dark, and we screenshot all nine. Run: pnpm exec playwright test --config playwright.intel.config.ts
+import { existsSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { expect, test } from '@playwright/test'
 // Relative imports (Playwright's loader does not resolve the Vite `@` alias). The
 // fixtures are plain data modules (they import only their own ./types, erased at
@@ -156,7 +158,13 @@ const ROUTES = [
   'security',
   'red-team',
   'compliance',
-  'orchestration',
+  ...(existsSync(
+    fileURLToPath(
+      new URL('../src/features/orchestration/views.tsx', import.meta.url),
+    ),
+  )
+    ? ['orchestration']
+    : []),
   'voice',
 ]
 

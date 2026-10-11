@@ -1051,13 +1051,13 @@ func (s *directNoticeCursorService) resolveReaderAuthority(
 	needCarrierAuthority bool,
 ) (PrincipalResolution, ChannelGrantSubjectClosure, error) {
 	m := s.module
-	if !communicationPortBound(m.communicationDirectoryResolver) ||
-		(needCarrierAuthority && !communicationPortBound(m.communicationGrantClosure)) {
+	if !communicationPortBound(m.CommunicationDirectoryResolver) ||
+		(needCarrierAuthority && !communicationPortBound(m.CommunicationGrantClosure)) {
 		return PrincipalResolution{}, ChannelGrantSubjectClosure{}, communicationError(
 			ErrCommunicationEvidenceUnknown, "cursor reader authority ports are unavailable",
 		)
 	}
-	resolution, err := m.communicationDirectoryResolver.ResolvePrincipal(
+	resolution, err := m.CommunicationDirectoryResolver.ResolvePrincipal(
 		ctx, normalized.scope, normalized.principal,
 	)
 	if err != nil || ValidatePrincipalResolution(resolution) != nil ||
@@ -1081,7 +1081,7 @@ func (s *directNoticeCursorService) resolveReaderAuthority(
 	if !needCarrierAuthority {
 		return resolution, ChannelGrantSubjectClosure{}, nil
 	}
-	closure, err := m.communicationGrantClosure.ResolveChannelGrantSubjects(
+	closure, err := m.CommunicationGrantClosure.ResolveChannelGrantSubjects(
 		ctx, normalized.scope, normalized.principal,
 	)
 	if err != nil || closure.Scope != normalized.scope || closure.Principal != normalized.principal ||

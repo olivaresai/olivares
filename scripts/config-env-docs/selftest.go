@@ -71,6 +71,17 @@ func extra(getenv func(string) string) string { return getenv("OLIVARES_NEWLY_AD
 			},
 		},
 		{
+			name: "help-edited-by-hand", want: exitDrift,
+			wantNames: []string{helpPath, "is not what the current tree produces"},
+			mutate:    func(t *tree) { t.write(helpPath, "package main\nconst configEnvironmentHelp = \"stale\"\n") },
+		},
+		{
+			name: "help-missing", want: exitCannotLook,
+			wantNames: []string{"CANNOT LOOK", helpPath},
+			mutate:    func(t *tree) { t.remove(helpPath) },
+		},
+
+		{
 			name: "summary-left-as-todo", want: exitDrift,
 			wantNames: []string{"OLIVARES_DEMO_LISTEN", "write the sentence"},
 			mutate: func(t *tree) {

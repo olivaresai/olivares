@@ -71,14 +71,13 @@ function ModelGovernanceReads() {
   const canReadAccess = can('models:model-access:read')
   const canAdminAccess = can('models:model-access:admin')
 
-  // ⛔ ESTA SECCIÓN DUPLICA DOS LISTAS DEL MÓDULO `models`, y las duplicaba también sin techo:
-  //    el contraste de las midió como dos de los tres consumidores que se quedaban fuera
-  //    cuando cerré aquel módulo. Las reglas de acceso deciden QUIÉN PUEDE USAR QUÉ MODELO.
-  //    ⛔ AQUI VIVIA `const listParams = { limit: 1000 }`. Se retira al integrar el 2026-08-28:
-  //    `main` sirve estas dos listas por `tenantRequest` (TenantRequestOptions), que ademas de
-  //    poner el techo las ata al inquilino activo. El techo literal 1000 era la forma anterior y
-  //    quedaria por DEBAJO del gobernado sin decirlo. La preocupacion de arriba sigue valiendo:
-  //    lo que cambia es quien pone el techo, no que haga falta.
+  // This section duplicates two `models` lists. The review found they were two of
+  // three consumers missed by the module's earlier truncation fix. Access rules decide who
+  // can use each model, so their limits matter.
+  // The former `const listParams = { limit: 1000 }` was removed during integration on
+  // 2026-08-28. Main serves both lists through `tenantRequest` (TenantRequestOptions), which
+  // sets the ceiling and binds them to the active tenant. The literal 1000 could silently
+  // fall below the governed ceiling. The ceiling remains required; its owner changed.
   const modelGroupsQuery = useQuery({
     queryKey: consoleKeys.modelGroups(activeTenant),
     queryFn: () => consoleApi.listModelGroups(tenantRequest),

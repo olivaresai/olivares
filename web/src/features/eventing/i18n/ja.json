@@ -95,7 +95,8 @@
     "errors": {
       "maxAttempts": "最大試行回数は 0 または 1〜20 にしてください。",
       "initialInterval": "初期間隔は 0 または 5〜3600 秒にしてください。"
-    }
+    },
+    "businessRequired": "SIEM 配信と外部テレメトリエクスポートには Business が必要です。設定は保持されますが、Community はデータを送信しません。"
   },
   "secret": {
     "title": "サブスクリプションシークレット",

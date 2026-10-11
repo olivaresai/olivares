@@ -14,7 +14,9 @@ services:
       - --data-dir=/var/lib/olivares
       - --checkpoint-interval=0
       - --engine=postgres
-      - --dsn=postgres://olivares_app:${OLIVARES_DB_PASSWORD:?set OLIVARES_DB_PASSWORD}@postgres:5432/olivares?sslmode=disable
+      - --dsn=env:OLIVARES_DSN
+    environment:
+      OLIVARES_DSN: postgres://olivares_app:${OLIVARES_DB_PASSWORD:?set OLIVARES_DB_PASSWORD}@postgres:5432/olivares?sslmode=disable
     depends_on:
       postgres:
         condition: service_healthy

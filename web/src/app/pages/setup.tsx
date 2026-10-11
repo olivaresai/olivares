@@ -30,7 +30,7 @@ const schema = z.object({
 type SetupValues = z.infer<typeof schema>
 
 export function SetupPage() {
-  const { t } = useTranslation(['auth', 'common', 'errors'])
+  const { t, i18n } = useTranslation(['auth', 'common', 'errors'])
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const serverInfo = useServerInfo()
@@ -42,7 +42,20 @@ export function SetupPage() {
 
   const { login } = useAuth()
   const mutation = useMutation({
-    mutationFn: (values: SetupValues) => authApi.setup(values),
+    // The engine stores its own English default when no name is sent
+    // (core/api/handlers_auth.go firstOrgNaming), and the console shows the stored
+    // name as is. English keeps that published default; any other language names
+    // the first organization in the person's own. `fallbackLng: false` makes a
+    // catalog that did not load send nothing (the engine default) rather than
+    // the English text under a different handle.
+    mutationFn: (values: SetupValues) => {
+      const lng = i18n.resolvedLanguage
+      const organization =
+        lng && lng !== 'en'
+          ? t('setup.organization', { fallbackLng: false, defaultValue: '' })
+          : ''
+      return authApi.setup(organization ? { ...values, organization } : values)
+    },
     onSuccess: async (created, values) => {
       // Setup creates the first organization together with the superadmin that
       // owns it (core/api/handlers_auth.go handleSetup). SELECT it here: the
@@ -90,15 +103,24 @@ export function SetupPage() {
       </AuthShell>
     )
   }
-  // Setup is a one-time door: once an admin exists, it is closed.
-  if (serverInfo.data && !serverInfo.data.setup_required)
+  // Setup is a one-time door: once an admin exists, it is closed. Not for the person
+  // who just submitted it: their own navigation decides, even while the next page is
+  // still loading and the refreshed server info already says setup is done.
+  if (
+    serverInfo.data &&
+    !serverInfo.data.setup_required &&
+    !mutation.isPending &&
+    !mutation.isSuccess
+  )
     return <Navigate to="/login" />
 
   const submitError =
     mutation.error instanceof ApiError
       ? mutation.error.code === 'weak_password'
         ? t('setup.weakPassword')
-        : mutation.error.isForbidden
+        : // The engine's plain refusal of the token (handleSetup); a 403 with its
+          // own code, such as residency_violation, says what it is instead.
+          mutation.error.code === 'forbidden'
           ? t('setup.invalidToken')
           : t(`errors:codes.${mutation.error.code}`, {
               defaultValue: t('errors:generic'),

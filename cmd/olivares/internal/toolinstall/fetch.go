@@ -15,6 +15,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -44,19 +45,98 @@ func NewHTTPClient() *http.Client {
 
 type fetcher struct {
 	client *http.Client
+	// pause, when set, replaces transientRetryPause (tests).
+	pause time.Duration
 }
 
 func (f fetcher) get(ctx context.Context, u string) (*http.Response, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	return f.request(ctx, http.MethodGet, u)
+}
+
+// transientRetryPause is how long a request waits before its one second attempt.
+const transientRetryPause = time.Second
+
+// request makes one request, and asks once more after a short pause when the first
+// answer is one GitHub gives now and then (see transientFailure), so that one blip
+// does not fail an install. Any other answer, and a second failure, is returned as
+// it came; a second transport error also names the first attempt.
+func (f fetcher) request(ctx context.Context, method, u string) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(ctx, method, u, nil)
 	if err != nil {
 		return nil, refuse(KindTransport, "build request for %s: %v", u, err)
 	}
 	req.Header.Set("User-Agent", userAgent)
 	resp, err := f.client.Do(req)
+	if first, again := transientFailure(resp, err); again && ctx.Err() == nil {
+		if err == nil {
+			_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
+			_ = resp.Body.Close()
+		}
+		pause := time.NewTimer(f.retryPause())
+		select {
+		case <-ctx.Done():
+			pause.Stop()
+			resp, err = nil, fmt.Errorf("%w after %s", ctx.Err(), first)
+		case <-pause.C:
+			if resp, err = f.client.Do(req.Clone(ctx)); err != nil {
+				err = fmt.Errorf("%w (first attempt: %s)", err, first)
+			}
+		}
+	}
 	if err != nil {
-		return nil, refuse(KindTransport, "GET %s: %v", u, err)
+		return nil, refuse(KindTransport, "%s %s: %v", method, u, err)
 	}
 	return resp, nil
+}
+
+func (f fetcher) retryPause() time.Duration {
+	if f.pause > 0 {
+		return f.pause
+	}
+	return transientRetryPause
+}
+
+// transientFailure names an answer and says whether it is one GitHub gives now and
+// then: a gateway error (502, 503, 504) or a dropped connection. A refused redirect,
+// a certificate, a name that does not resolve or a timeout answers the same way
+// again, so it is not asked again.
+func transientFailure(resp *http.Response, err error) (string, bool) {
+	if err == nil {
+		return "HTTP " + strconv.Itoa(resp.StatusCode), gatewayError(resp.StatusCode)
+	}
+	dropped := errors.Is(err, syscall.ECONNRESET) || errors.Is(err, syscall.ECONNREFUSED) ||
+		errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF)
+	return err.Error(), dropped
+}
+
+func gatewayError(status int) bool {
+	return status == http.StatusBadGateway || status == http.StatusServiceUnavailable || status == http.StatusGatewayTimeout
+}
+
+// redirect returns where u redirects, without following it, and u's status.
+func (f fetcher) redirect(ctx context.Context, u string) (string, int, error) {
+	client := *f.client
+	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	resp, err := fetcher{client: &client, pause: f.pause}.get(ctx, u)
+	if err != nil {
+		return "", 0, err
+	}
+	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
+	_ = resp.Body.Close()
+	return resp.Header.Get("Location"), resp.StatusCode, nil
+}
+
+// size is the exact length u states for its body, read without the body.
+func (f fetcher) size(ctx context.Context, u string) (int64, error) {
+	resp, err := f.request(ctx, http.MethodHead, u)
+	if err != nil {
+		return 0, err
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusOK || resp.ContentLength <= 0 {
+		return 0, refuse(KindManifestInvalid, "HEAD %s: HTTP %d did not state a size", u, resp.StatusCode)
+	}
+	return resp.ContentLength, nil
 }
 
 // small fetches a metadata document of at most limit bytes. A body that exceeds
@@ -69,7 +149,7 @@ func (f fetcher) small(ctx context.Context, u string, limit int64) ([]byte, int,
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
-		return nil, resp.StatusCode, nil
+		return nil, resp.StatusCode, githubLimitUsedUp(resp)
 	}
 	if resp.ContentLength > limit {
 		return nil, resp.StatusCode, refuse(KindResponseTooLarge, "%s announces %d bytes; this document is capped at %d", u, resp.ContentLength, limit)
@@ -83,6 +163,27 @@ func (f fetcher) small(ctx context.Context, u string, limit int64) ([]byte, int,
 	}
 	return body, resp.StatusCode, nil
 }
+
+// githubLimitUsedUp: GitHub's API answers a network without a token 60
+// times an hour, and an install past that failed as "unsupported_source". When
+// api.github.com says its limit is used up, the refusal says so and when to retry.
+func githubLimitUsedUp(resp *http.Response) error {
+	if resp.Request == nil || resp.Request.URL.Host != "api.github.com" || resp.Header.Get("X-RateLimit-Remaining") != "0" ||
+		(resp.StatusCode != http.StatusForbidden && resp.StatusCode != http.StatusTooManyRequests) {
+		return nil
+	}
+	when := "within the hour"
+	if reset, err := strconv.ParseInt(resp.Header.Get("X-RateLimit-Reset"), 10, 64); err == nil && reset > 0 {
+		when = "after " + time.Unix(reset, 0).UTC().Format("15:04") + " UTC"
+	}
+	return &Refusal{Kind: KindTransport, Err: fmt.Errorf("%w; try again %s", errGitHubLimitUsedUp, when)}
+}
+
+// errGitHubLimitUsedUp marks the refusal githubLimitUsedUp returns, so a resolver can
+// plan from another official document instead: the release's own checksum file, or
+// the recorded metadata of the release this build was qualified with
+// (release_archive_qualified.go).
+var errGitHubLimitUsedUp = errors.New("GitHub's limit for this network is used up")
 
 // exact streams u into w and requires the body to be exactly want.Size bytes with
 // SHA-256 want.SHA256. The size is enforced while reading, so an oversized body

@@ -55,6 +55,8 @@
       "maxDuration": "Maximale Sitzungsdauer (Minuten)",
       "allowedTools": "Erlaubte Werkzeuge",
       "allowedToolsPlaceholder": "z. B. Bash,Read,Edit",
+      "requireTruncateProtection": "Schutz vor Kürzung für schreibgeschützte Sitzungen verlangen",
+      "truncateProtectionHint": "Schreibgeschützte Sitzungen dieser Vorlage starten nicht auf älteren Kerneln, die diesen Schutz nicht durchsetzen können.",
       "recordIo": "Ein-/Ausgabe aufzeichnen",
       "peersSameTemplate": "Sitzungen aus dieser Vorlage dürfen einander schreiben"
     }

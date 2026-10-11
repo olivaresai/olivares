@@ -33,14 +33,14 @@ expect_rc() {
 
 expect_rc 0 "canonical installer contract" bash "$root/scripts/check-release-installer.sh"
 
-rendered="$scratch/olivares-install-26.9.0.sh"
+rendered="$scratch/olivares-install-0.9.sh"
 expect_rc 0 "renderer produces a pinned asset" \
-  bash "$root/scripts/render-release-installer.sh" 26.9.0 "$rendered"
+  bash "$root/scripts/render-release-installer.sh" 0.9 "$rendered"
 [[ "$(stat -c '%a' "$rendered")" = 755 ]] || {
   printf 'rendered asset mode is not 0755\n' >&2
   exit 1
 }
-grep -Fq "EMBEDDED_VERSION='26.9.0'" "$rendered"
+grep -Fq "EMBEDDED_VERSION='0.9'" "$rendered"
 if grep -Fq '@OLIVARES_INSTALLER_VERSION@' "$rendered"; then
   printf 'rendered asset retains the source marker\n' >&2
   exit 1
@@ -66,7 +66,7 @@ fixture = era / "release"
 fakebin = era / "bin"
 fixture.mkdir(parents=True)
 fakebin.mkdir()
-for version in ("26.9.0", "26.10.0", "26.11", "26.11.1"):
+for version in ("0.9", "1.0", "1.1", "1.10"):
     payload = era / version
     payload.mkdir()
     binary = payload / "olivares"
@@ -105,34 +105,21 @@ for tool in fakebin.iterdir():
 
 install = root / "scripts/install.sh"
 bootstrap = root / "scripts/install-bootstrap.sh"
-rendered = fixture / "olivares-install-26.10.0.sh"
+rendered = fixture / "olivares-install-1.0.sh"
 # These expectations are literal; neither the fixture nor the oracle derives tags.
-monthly = fixture / "olivares-install-26.11.sh"
+monthly = fixture / "olivares-install-1.1.sh"
 cases = [
-    ("latest monthly", install, "", "26.11", "26.11"),
-    ("install monthly bare", install, "26.11", "", "26.11"),
-    ("install monthly prefixed", install, "v26.11", "", "26.11"),
-    ("bootstrap monthly", bootstrap, "26.11", "", "26.11"),
-    ("bootstrap monthly prefixed", bootstrap, "v26.11", "", "26.11"),
-    ("rendered monthly pin", monthly, "", "", "26.11"),
-    ("patch monthly", install, "26.11.1", "", "26.11.1"),
-    ("latest bare 26.10.0", install, "", "26.10.0", "26.10.0"),
-    ("latest historical v26.9.0", install, "", "v26.9.0", "v26.9.0"),
-    ("latest tag is verbatim even when noncanonical", install, "", "v26.10.0", "v26.10.0"),
-    ("interactive bootstrap latest bare 26.10.0", bootstrap, "", "26.10.0", "26.10.0"),
-    ("piped bootstrap without --version installs latest", bootstrap, "", "26.11", "26.11"),
-    ("install --version 26.10.0", install, "26.10.0", "", "26.10.0"),
-    ("install --version v26.10.0", install, "v26.10.0", "", "26.10.0"),
-    ("install --version 26.9.0", install, "26.9.0", "", "v26.9.0"),
-    ("install --version v26.9.0", install, "v26.9.0", "", "v26.9.0"),
-    ("bootstrap --version 26.10.0", bootstrap, "26.10.0", "", "26.10.0"),
-    ("bootstrap --version v26.10.0", bootstrap, "v26.10.0", "", "26.10.0"),
-    ("bootstrap --version 26.9.0", bootstrap, "26.9.0", "", "v26.9.0"),
-    ("bootstrap --version v26.9.0", bootstrap, "v26.9.0", "", "v26.9.0"),
-    ("rendered 26.10.0 default pin", rendered, "", "", "26.10.0"),
-    ("rendered 26.10.0 bare input", rendered, "26.10.0", "", "26.10.0"),
-    ("rendered 26.10.0 prefixed input", rendered, "v26.10.0", "", "26.10.0"),
+    ("latest release", install, "", "1.1", "1.1"),
+    ("explicit release", install, "1.1", "", "1.1"),
+    ("bootstrap release", bootstrap, "1.1", "", "1.1"),
+    ("rendered release pin", monthly, "", "", "1.1"),
+    ("next release", install, "1.10", "", "1.10"),
+    ("interactive bootstrap latest release", bootstrap, "", "1.0", "1.0"),
+    ("piped bootstrap without --version installs latest", bootstrap, "", "1.1", "1.1"),
+    ("rendered default pin", rendered, "", "", "1.0"),
+    ("rendered exact input", rendered, "1.0", "", "1.0"),
 ]
+
 failures = []
 for index, (label, script, requested, latest, tag) in enumerate(cases):
     url_log = era / f"urls-{index}"
@@ -195,8 +182,8 @@ assert not failures, failures
 # Copying the printed export and next command must work for an off-PATH prefix,
 # including shell metacharacters in its literal directory name.
 destination = era / "person's install $literal `text`"
-env = dict(env, PATH=f'{fakebin}:/usr/bin:/bin', ERA_EXPECT_TAG='26.10.0')
-result = subprocess.run(['/bin/sh', str(install), '--version', '26.10.0',
+env = dict(env, PATH=f'{fakebin}:/usr/bin:/bin', ERA_EXPECT_TAG='1.0')
+result = subprocess.run(['/bin/sh', str(install), '--version', '1.0',
                          '--bindir', str(destination)],
                         env=env, capture_output=True, text=True, timeout=20)
 assert result.returncode == 0, result.stderr
@@ -224,8 +211,8 @@ printf '%s\\n' "$dir"
 ''')
     (faultbin / 'mktemp').chmod(0o755)
     env = dict(env, PATH=f'{faultbin}:{fakebin}:/usr/bin:/bin',
-               TMPDIR=str(era), ERA_EXPECT_TAG='26.10.0')
-    result = subprocess.run(['/bin/sh', str(install), '--version', '26.10.0',
+               TMPDIR=str(era), ERA_EXPECT_TAG='1.0')
+    result = subprocess.run(['/bin/sh', str(install), '--version', '1.0',
                              '--bindir', str(era / 'write-failure-prefix')],
                             env=env, capture_output=True, text=True, timeout=20)
     assert result.returncode == 1, result.stderr
@@ -255,7 +242,7 @@ env = dict(os.environ, TMPDIR=str(unusable))
 def render(_):
     return subprocess.run(
         ["bash", str(root / "scripts/render-release-installer.sh"),
-         "26.9.0", str(destination)],
+         "0.9", str(destination)],
         env=env, capture_output=True, text=True, timeout=30,
     )
 
@@ -271,12 +258,12 @@ PY
 
 expect_rc 1 "mutant: versioned installer refuses a different requested version" \
   env OLIVARES_OS=linux OLIVARES_ARCH=amd64 /bin/sh "$rendered" \
-    --version v26.9.1 --dry-run
-grep -Fq 'pinned to v26.9.0' "$scratch/err"
+    --version 26.901 --dry-run
+grep -Fq 'pinned to 0.9' "$scratch/err"
 
-snapshot="$scratch/olivares-install-0.0.0-SNAPSHOT-none.sh"
+snapshot="$scratch/olivares-install-1.0-SNAPSHOT-none.sh"
 expect_rc 0 "snapshot hook still produces the checksum input" \
-  bash "$root/scripts/render-release-installer.sh" 0.0.0-SNAPSHOT-none "$snapshot" true
+  bash "$root/scripts/render-release-installer.sh" 1.0-SNAPSHOT-none "$snapshot" true
 grep -Fq "EMBEDDED_VERSION='SNAPSHOT'" "$snapshot"
 expect_rc 1 "snapshot installer is explicitly non-installable" \
   /bin/sh "$snapshot" --dry-run
@@ -284,14 +271,14 @@ grep -Fq 'snapshot installers are not installable' "$scratch/err"
 
 expect_rc 0 "bootstrap dry-run is network- and mutation-free" \
   env CI=1 OLIVARES_GITHUB_URL=http://must-not-be-read.invalid \
-    /bin/sh "$root/scripts/install-bootstrap.sh" --version v26.9.0 --dry-run
+    /bin/sh "$root/scripts/install-bootstrap.sh" --version 0.9 --dry-run
 grep -Fq 'bootstrap trust: this response is trusted through HTTPS' "$scratch/out"
 expect_rc 1 "mutant: non-interactive bootstrap without a pin is refused" \
   env CI=1 /bin/sh "$root/scripts/install-bootstrap.sh" --dry-run
 grep -Fq 'must pin --version' "$scratch/err"
 expect_rc 0 "without cosign on PATH the plan discloses the pinned temporary copy" \
   env CI=1 PATH=/usr/bin:/bin OLIVARES_OS=linux OLIVARES_ARCH=amd64 \
-    /bin/sh "$root/scripts/install-bootstrap.sh" --version v26.9.0 --dry-run
+    /bin/sh "$root/scripts/install-bootstrap.sh" --version 0.9 --dry-run
 grep -Fq 'cosign: not on PATH; a temporary copy of cosign v2.6.4' "$scratch/out"
 grep -Fq 'pass --install-cosign to keep it' "$scratch/out"
 expect_rc 0 "second stage without cosign on PATH discloses the same, and --install-cosign" \
@@ -305,13 +292,13 @@ expect_rc 1 "mutant: --install-cosign is not an uninstall option" \
 fixture="$scratch/fixture"
 fakebin="$scratch/fakebin"
 mkdir -p "$fixture" "$fakebin"
-cat >"$fixture/olivares-install-26.9.0.sh" <<'STAGE'
+cat >"$fixture/olivares-install-0.9.sh" <<'STAGE'
 #!/bin/sh
 printf 'executed:%s\n' "$*" >"$EXEC_MARKER"
 STAGE
-chmod 0755 "$fixture/olivares-install-26.9.0.sh"
-digest="$(sha256sum "$fixture/olivares-install-26.9.0.sh" | awk '{print $1}')"
-printf '%s  %s\n' "$digest" olivares-install-26.9.0.sh >"$fixture/checksums.txt"
+chmod 0755 "$fixture/olivares-install-0.9.sh"
+digest="$(sha256sum "$fixture/olivares-install-0.9.sh" | awk '{print $1}')"
+printf '%s  %s\n' "$digest" olivares-install-0.9.sh >"$fixture/checksums.txt"
 printf 'test-signature\n' >"$fixture/checksums.txt.sig"
 printf 'test-certificate\n' >"$fixture/checksums.txt.pem"
 cat >"$fakebin/curl" <<'FAKECURL'
@@ -344,21 +331,21 @@ common_env=(
   PATH="$fakebin:/usr/bin:/bin"
 )
 expect_rc 1 "mutant: a bad cosign result prevents second-stage execution" \
-  env "${common_env[@]}" COSIGN_RC=1 /bin/sh "$root/scripts/install-bootstrap.sh" --version v26.9.0
+  env "${common_env[@]}" COSIGN_RC=1 /bin/sh "$root/scripts/install-bootstrap.sh" --version 0.9
 [[ ! -e "$marker" ]] || { printf 'second stage ran after cosign failure\n' >&2; exit 1; }
 
-cp "$fixture/olivares-install-26.9.0.sh" "$scratch/good-stage"
-printf '# checksum mutant\n' >>"$fixture/olivares-install-26.9.0.sh"
+cp "$fixture/olivares-install-0.9.sh" "$scratch/good-stage"
+printf '# checksum mutant\n' >>"$fixture/olivares-install-0.9.sh"
 expect_rc 1 "mutant: installer bytes outside signed checksum are refused" \
-  env "${common_env[@]}" COSIGN_RC=0 /bin/sh "$root/scripts/install-bootstrap.sh" --version v26.9.0
+  env "${common_env[@]}" COSIGN_RC=0 /bin/sh "$root/scripts/install-bootstrap.sh" --version 0.9
 grep -Fq 'checksum mismatch' "$scratch/err"
 [[ ! -e "$marker" ]] || { printf 'second stage ran after checksum mismatch\n' >&2; exit 1; }
-mv "$scratch/good-stage" "$fixture/olivares-install-26.9.0.sh"
+mv "$scratch/good-stage" "$fixture/olivares-install-0.9.sh"
 
 expect_rc 0 "verified second stage executes only after both checks" \
   env "${common_env[@]}" COSIGN_RC=0 /bin/sh "$root/scripts/install-bootstrap.sh" \
-    --version v26.9.0 --bindir /opt/olivares/bin
-grep -Fq 'executed:--version v26.9.0 --bindir /opt/olivares/bin' "$marker"
+    --version 0.9 --bindir /opt/olivares/bin
+grep -Fq 'executed:--version 0.9 --bindir /opt/olivares/bin' "$marker"
 
 rm -f "$marker"
 # The same fake curl without a cosign on PATH: the scripts must then fetch the
@@ -383,7 +370,7 @@ nocosign_env=(
   PATH="$nocosign:/usr/bin:/bin"
 )
 expect_rc 1 "mutant: without cosign, a fetched cosign off its pinned SHA-256 is refused unexecuted (bootstrap)" \
-  env "${nocosign_env[@]}" /bin/sh "$root/scripts/install-bootstrap.sh" --version v26.9.0
+  env "${nocosign_env[@]}" /bin/sh "$root/scripts/install-bootstrap.sh" --version 0.9
 grep -Fq 'does not match its pinned SHA-256' "$scratch/err"
 [[ ! -e "$marker.cosign" ]] || { printf 'rogue cosign was executed by the bootstrap\n' >&2; exit 1; }
 [[ ! -e "$marker" ]] || { printf 'second stage ran after a rogue cosign\n' >&2; exit 1; }
@@ -400,7 +387,7 @@ if [[ -n "$real_cosign" && -f "$real_cosign" ]] &&
   [[ "$(sha256sum "$real_cosign" | awk '{print $1}')" = 309779b0c4e409186b0a80daba99041fe2cf65a920ce645013901df6211895a9 ]]; then
   cp "$real_cosign" "$fixture/cosign-linux-amd64"
   expect_rc 1 "pinned temporary cosign is the verifier: a fake signature is refused by cosign itself" \
-    env "${nocosign_env[@]}" /bin/sh "$root/scripts/install-bootstrap.sh" --version v26.9.0
+    env "${nocosign_env[@]}" /bin/sh "$root/scripts/install-bootstrap.sh" --version 0.9
   grep -Fq 'cosign is not on PATH: fetching the pinned cosign v2.6.4 for linux/amd64' "$scratch/out"
   if grep -Fq 'does not match its pinned SHA-256' "$scratch/err"; then
     printf 'the real pinned cosign was reported as a digest mismatch\n' >&2
@@ -426,7 +413,7 @@ make_mutant() {
 }
 
 mutant="$(make_mutant marker-mutant)"
-sed -i 's/@OLIVARES_INSTALLER_VERSION@/26.9.0/' "$mutant/scripts/install.sh"
+sed -i 's/@OLIVARES_INSTALLER_VERSION@/0.9/' "$mutant/scripts/install.sh"
 expect_rc 1 "mutant: source without the release marker is red" \
   env OLIVARES_ROOT="$mutant" bash "$root/scripts/check-release-installer.sh"
 

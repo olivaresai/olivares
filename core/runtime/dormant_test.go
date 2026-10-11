@@ -87,3 +87,55 @@ func TestDormantModuleKeepsItsSchemaAndRunsNoWork(t *testing.T) {
 		}
 	}
 }
+
+type publishingModule struct {
+	fakeModule
+	host sdk.Host
+}
+
+func (m *publishingModule) Init(_ context.Context, host sdk.Host) error {
+	m.host = host
+	return nil
+}
+
+func TestDormantModulePublishDoesNotDeliver(t *testing.T) {
+	rt := runtime.New(runtime.Options{Logger: quiet()})
+	active := &publishingModule{fakeModule: fakeModule{name: "active"}}
+	dormant := &publishingModule{fakeModule: fakeModule{name: "dormant"}}
+	consumer := &fakeModule{name: "consumer", got: make(chan event.Event, 2)}
+	for _, mod := range []sdk.Module{active, consumer} {
+		if err := rt.AddModule(mod, sdk.Config{}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := rt.AddDormantModule(dormant, sdk.Config{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := rt.Start(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := rt.Stop(ctx); err != nil {
+			t.Error(err)
+		}
+	})
+	if err := dormant.host.Publish(t.Context(), event.Event{ID: "dormant", Type: event.TypeEdgeObserved}); err != nil {
+		t.Fatalf("dormant Publish = %v, want nil", err)
+	}
+	if err := active.host.Publish(t.Context(), event.Event{ID: "active", Type: event.TypeEdgeObserved}); err != nil {
+		t.Fatal(err)
+	}
+	// Both publications use the same FIFO subscription. Receiving the active
+	// event proves the earlier dormant publication delivered nothing, without
+	// waiting for an arbitrary silence interval.
+	select {
+	case e := <-consumer.got:
+		if e.ID != "active" || e.Source != "active" {
+			t.Fatalf("subscriber received ID=%q source=%q, want active publication", e.ID, e.Source)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("active publication did not reach subscriber")
+	}
+}

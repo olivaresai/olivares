@@ -37,6 +37,36 @@ func hostToolCanaryRuns(marker string) int {
 	return strings.Count(string(b), "ran\n")
 }
 
+// Every tool offered by the installer must also be observable without executing
+// it. In particular, OpenCode must not become "unsupported" after installation.
+func TestHostToolObserverRecognizesEveryInstallableDriver(t *testing.T) {
+	dir := t.TempDir()
+	home, pathDir := filepath.Join(dir, "home"), filepath.Join(dir, "bin")
+	marker := filepath.Join(dir, "executed")
+	installer := toolInstallEngine(context.Background())
+	for _, driver := range installer.DriverKeys() {
+		t.Run(driver, func(t *testing.T) {
+			program := filepath.Join(pathDir, driver)
+			writeHostToolCanary(t, program, marker)
+			observer := newHostToolObserverAt(filepath.Join(dir, "tools"), nil, home, pathDir)
+			got, err := observer.ObserveHostTools(context.Background(), driver, program)
+			if err != nil || got.UnsupportedDriver {
+				t.Fatalf("installable driver %s is not observable: %+v, %v", driver, got, err)
+			}
+			want := hostToolTuple{"path", "unregistered-observed", true, "same"}
+			if tallyHostTools(got)[want] != 1 {
+				t.Fatalf("installed PATH tool not observed: %+v", got)
+			}
+			if n := observer.network.attempts.Load(); n != 0 {
+				t.Fatalf("observation attempted %d network requests", n)
+			}
+		})
+	}
+	if n := hostToolCanaryRuns(marker); n != 0 {
+		t.Fatalf("observation executed a tool %d times", n)
+	}
+}
+
 type hostToolTuple struct {
 	origin, match string
 	executable    bool

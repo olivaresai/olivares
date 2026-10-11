@@ -97,3 +97,9 @@ email.
 - [Govern and approve](/how-to/govern-and-approve/) — using the policy and approval surfaces.
 - [Architecture overview](/explanation/architecture/overview/) — the engine and layers this module composes onto.
 - [Honesty & limits](/start/honesty-and-limits/) — the deny-closed, detective-by-default posture.
+
+## Approval edition boundary (0.1)
+
+Community retains the approval engine, the two-distinct-human CRITICAL floor and kill-switch dual control. Policies that require review or raise risk tier or quorum remain authorable and enforced. Tier-lowering policies and break-glass belong to the Business base line. Their published Community API routes return `501` with `business_required`; the console does not offer emergency controls.
+
+Stored policy and emergency-grant schemas are preserved for export and edition changes. Community keeps stored policies' review and quorum restrictions while ignoring their lower tier; stored emergency grants cannot authorize actions. A historical approved grant below the current Community floor is shown as unavailable (`expired`) without rewriting its terminal decision; open a fresh request for the required distinct-human approval. Business reads the same records and retains the recorded, audited emergency lifecycle.

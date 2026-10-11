@@ -6,16 +6,60 @@ package interop
 import (
 	"bufio"
 	"go/ast"
+	"go/build"
 	"go/build/constraint"
 	"go/parser"
 	"go/token"
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 )
+
+// The shared discovery qualification must yield to the Business qualification
+// under its full tag set, while remaining runnable in every Community tag set.
+func TestA2AConformanceEditionSelection(t *testing.T) {
+	files, err := filepath.Glob(filepath.Join("..", "a2a", "*_test.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var shared []string
+	for _, file := range files {
+		if fileIsIntegrationOnly(t, file) && slices.Contains(testFuncNames(t, file), "TestConformanceA2ADiscovery") {
+			shared = append(shared, file)
+		}
+	}
+	if len(shared) != 1 {
+		t.Fatalf("want one shared A2A discovery qualification, got %v", shared)
+	}
+	for _, tt := range []struct {
+		name string
+		tags []string
+		want bool
+	}{
+		{"default", nil, false},
+		{"community", []string{"integration"}, true},
+		{"enterprise_without_ids", []string{"integration", "enterprise"}, true},
+		{"ids_without_enterprise", []string{"integration", "addon_ids"}, true},
+		{"business_ids", []string{"integration", "enterprise", "addon_ids"}, false},
+		{"business_without_integration", []string{"enterprise", "addon_ids"}, false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := build.Default
+			ctx.BuildTags = tt.tags
+			got, err := ctx.MatchFile(filepath.Dir(shared[0]), filepath.Base(shared[0]))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got != tt.want {
+				t.Errorf("shared discovery qualification selected=%t under %v, want %t", got, tt.tags, tt.want)
+			}
+		})
+	}
+}
 
 // TestMatrixWellFormed validates the declared matrix's structure and its policy.
 func TestMatrixWellFormed(t *testing.T) {

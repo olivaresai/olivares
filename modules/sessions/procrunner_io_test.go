@@ -855,7 +855,7 @@ func TestProcProcessActualBridgeWithABlockedRecorderStillReapsTheChild(t *testin
 		WithStopWaitDelay(100*time.Millisecond),
 		WithLaunchGate(&spyGate{inner: LaunchDecision{Allowed: true, RecordIO: true}}),
 		WithRecorder(rec))
-	dto, err := m.createRun(context.Background(), tenant, CreateRunParams{
+	dto, err := createProfiledTestRun(t, m, context.Background(), tenant, CreateRunParams{
 		Transport: TransportStreamJSON, PermissionMode: "default", Isolation: IsolationNative,
 		WorkspaceRef: registerTestWorkspace(t, m, tenant, t.TempDir()), Actor: "user:u1", ActorKind: "user",
 	})

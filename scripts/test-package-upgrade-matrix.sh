@@ -44,7 +44,7 @@ me=test-package-upgrade-matrix
 CONTAINER_PREFIX=olivares-pkg-matrix
 
 could_not_look() {
-	printf '%s: NO HE PODIDO MIRAR — %s\n' "$me" "$*" >&2
+	printf '%s: COULD NOT CHECK — %s\n' "$me" "$*" >&2
 	exit 2
 }
 fail() {
@@ -211,7 +211,8 @@ if scen == "new-new":
         if any(l.startswith("systemctl") for l in calls): reasons.append("an APK script called systemctl")
     else:
         if state != f"{en}/{ac}": reasons.append(f"state {state}, want {en}/{ac}")
-        if muts: reasons.append(f"the package changed the service: {muts}")
+        want = ["systemctl try-restart olivares"] if ac == "active" and en != "masked" else []
+        if muts != want: reasons.append(f"service calls {muts}, want {want}")
         if pend: reasons.append(f"pending condition left: {pend}")
     if read(out, "record").strip() != "consumed": reasons.append("an upgrade left a removal record")
 elif scen == "old-new":
@@ -403,7 +404,7 @@ selftest_static() {
 	if grep -E '^[[:space:]]*docker run' "$0" | grep -E -- '--privileged|docker.sock' >/dev/null; then
 		fail "a docker run invocation is privileged or names docker.sock"
 	fi
-	synthetic "$t/nn-holds" enabled/active 'systemctl daemon-reload' 'systemctl is-enabled olivares'
+	synthetic "$t/nn-holds" enabled/active 'systemctl daemon-reload' 'systemctl is-enabled olivares' 'systemctl try-restart olivares'
 	expect 0 PASS "$t/nn-holds" deb new-new enabled active
 	synthetic "$t/nn-disables" disabled/inactive 'olivares uninstall --preserve --data-dir /var/lib/olivares' 'systemctl disable --now olivares'
 	expect 1 FAIL "$t/nn-disables" deb new-new enabled active

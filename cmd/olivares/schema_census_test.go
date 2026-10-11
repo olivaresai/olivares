@@ -44,9 +44,9 @@ func productBootCallbackCensus(t *testing.T) (appendOnly, mutable []string) {
 	if err != nil {
 		t.Fatalf("signer: %v", err)
 	}
-	set, err := buildModules(signer,
+	set, err := buildModules(nil, signer,
 		ed25519.NewKeyFromSeed(fixedSeed(1)), ed25519.NewKeyFromSeed(fixedSeed(2)),
-		nil, nil, sourcesConfig{}, EditionConfig{}, t.TempDir(), log)
+		nil, nil, nil, sourcesConfig{}, EditionConfig{}, t.TempDir(), log)
 	if err != nil {
 		t.Fatalf("build the module set: %v", err)
 	}

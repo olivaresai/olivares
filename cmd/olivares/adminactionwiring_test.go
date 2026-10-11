@@ -18,6 +18,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/olivaresai/olivares/cmd/olivares/internal/approvalbridge"
 	claudeapi "github.com/olivaresai/olivares/connectors/claude-api"
 	"github.com/olivaresai/olivares/core/eventbus"
 	"github.com/olivaresai/olivares/core/model"
@@ -112,7 +113,7 @@ func TestFinopsBackstopDefaultOff(t *testing.T) {
 		Tenants: []claudeAdminActuatorTenant{{Tenant: mustTenant(t).String(), AdminKey: "sk-ant-admin-test"}},
 		// Backstop.Enabled defaults false.
 	}
-	if bs := newFinopsBackstop(cfg, stubCapResolver{}, &approvalBridge{log: discardLog()}, discardLog()); bs != nil {
+	if bs := newFinopsBackstop(cfg, stubCapResolver{}, newApprovalBridge(approvalBridgeConfig{}, discardLog()), discardLog()); bs != nil {
 		t.Fatal("default-off backstop must be nil (inert)")
 	}
 }
@@ -127,7 +128,7 @@ func TestFinopsBackstopFailClosedWithoutProvisioning(t *testing.T) {
 	}
 	// Enabled, bridge present, but tenant has no admin_key → no usable actuator → nil.
 	cfg := claudeAdminActuatorConfig{Backstop: enabled, Tenants: []claudeAdminActuatorTenant{{Tenant: mustTenant(t).String(), AdminKey: ""}}}
-	if bs := newFinopsBackstop(cfg, stubCapResolver{}, &approvalBridge{log: discardLog()}, discardLog()); bs != nil {
+	if bs := newFinopsBackstop(cfg, stubCapResolver{}, newApprovalBridge(approvalBridgeConfig{}, discardLog()), discardLog()); bs != nil {
 		t.Fatal("enabled backstop with no admin_key must be nil (fail-closed)")
 	}
 }
@@ -140,7 +141,7 @@ func TestFinopsBackstopEnabledConstructsActuator(t *testing.T) {
 		Backstop: finopsBackstopConfig{Enabled: true},
 		Tenants:  []claudeAdminActuatorTenant{{Tenant: tid.String(), AdminKey: "sk-ant-admin-test"}},
 	}
-	bs := newFinopsBackstop(cfg, stubCapResolver{}, &approvalBridge{log: discardLog()}, discardLog())
+	bs := newFinopsBackstop(cfg, stubCapResolver{}, newApprovalBridge(approvalBridgeConfig{}, discardLog()), discardLog())
 	if bs == nil || bs.actuators[tid] == nil {
 		t.Fatal("enabled+provisioned backstop must construct the tenant actuator")
 	}
@@ -336,22 +337,18 @@ func adminParamHash(label string) string {
 
 func encodedAdminSubject(action claudeapi.AdminAction, subjectKind, subjectRef, paramLabel string) string {
 	plan := claudeapi.AdminPlanHash(action, subjectKind, subjectRef, adminParamHash(paramLabel))
-	return encodeSubjectRef(subjectRef, plan)
+	return approvalbridge.EncodeSubjectRef(subjectRef, plan)
 }
 
 func bridgeForResolvedApproval(t *testing.T, tid model.TenantID, approvalID, action, subjectKind, encodedSubject, status string) *approvalBridge {
 	t.Helper()
 	now := time.Date(2026, 7, 5, 12, 0, 0, 0, time.UTC)
 	decidedAt := model.NewTimestamp(now.Add(-time.Minute)).String()
-	br := &approvalBridge{
-		creds: map[model.TenantID]serviceCred{tid: {
-			tenant: tid, tenantStr: tid.String(), token: "svc-token", expiresIn: 3600,
-		}},
-		log:   discardLog(),
-		clock: func() time.Time { return now },
-		memo:  map[string]string{},
-	}
-	br.useHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	br := newApprovalBridge(approvalBridgeConfig{
+		Tenants: []approvalBridgeTenant{{Tenant: tid.String(), Token: "svc-token", ExpiresInSeconds: 3600}},
+	}, discardLog())
+	br.Clock = func() time.Time { return now }
+	br.UseHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch {
 		case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/v1/m/governance/approvals/"):
@@ -379,7 +376,7 @@ func reDriverBackstop(tid model.TenantID, br *approvalBridge, allow []claudeapi.
 	doer := &capDoer{status: status}
 	act := claudeapi.NewActuator(claudeapi.ActuatorConfig{
 		AdminKey: "sk-ant-admin-test", Doer: doer,
-		Allowlist: claudeapi.NewAdminActionAllowlist(allow), Gate: br.adminGate(tid),
+		Allowlist: claudeapi.NewAdminActionAllowlist(allow), Gate: br.AdminGate(tid),
 	})
 	return &finopsBackstop{
 		actuators:       map[model.TenantID]*claudeapi.Actuator{tid: act},
@@ -401,12 +398,12 @@ func TestFinopsBackstopApprovalResolvedRedrivesKeyDeactivate(t *testing.T) {
 	tid := mustTenant(t)
 	const approvalID = "appr_key_1"
 	encoded := encodedAdminSubject(claudeapi.ActionDeactivateKey, "api_key", "apikey_off", "status=inactive")
-	br := bridgeForResolvedApproval(t, tid, approvalID, adminCapKeyDeactivate, "claude_admin.api_key", encoded, nbApproved)
+	br := bridgeForResolvedApproval(t, tid, approvalID, approvalbridge.AdminCapKeyDeactivate, "claude_admin.api_key", encoded, nbApproved)
 	bs, doer := reDriverBackstop(tid, br,
 		[]claudeapi.AdminAllowRule{{Action: claudeapi.ActionDeactivateKey, Subjects: []string{"apikey_off"}}},
 		false, 0)
 
-	if err := bs.onApprovalResolved(context.Background(), resolvedAdminEvent(tid, approvalID, adminCapKeyDeactivate, "approved")); err != nil {
+	if err := bs.onApprovalResolved(context.Background(), resolvedAdminEvent(tid, approvalID, approvalbridge.AdminCapKeyDeactivate, "approved")); err != nil {
 		t.Fatalf("onApprovalResolved returned error: %v", err)
 	}
 	reqs := doer.snapshot()
@@ -426,11 +423,11 @@ func TestFinopsBackstopApprovalResolvedNoOps(t *testing.T) {
 	tid := mustTenant(t)
 	const approvalID = "appr_noop"
 	encoded := encodedAdminSubject(claudeapi.ActionDeactivateKey, "api_key", "apikey_off", "status=inactive")
-	br := bridgeForResolvedApproval(t, tid, approvalID, adminCapKeyDeactivate, "claude_admin.api_key", encoded, nbApproved)
+	br := bridgeForResolvedApproval(t, tid, approvalID, approvalbridge.AdminCapKeyDeactivate, "claude_admin.api_key", encoded, nbApproved)
 	allow := []claudeapi.AdminAllowRule{{Action: claudeapi.ActionDeactivateKey, Subjects: []string{"apikey_off"}}}
 
 	bs, doer := reDriverBackstop(tid, br, allow, false, 0)
-	if err := bs.onApprovalResolved(context.Background(), resolvedAdminEvent(tid, approvalID, adminCapKeyDeactivate, "rejected")); err != nil {
+	if err := bs.onApprovalResolved(context.Background(), resolvedAdminEvent(tid, approvalID, approvalbridge.AdminCapKeyDeactivate, "rejected")); err != nil {
 		t.Fatalf("rejected outcome returned error: %v", err)
 	}
 	if got := len(doer.snapshot()); got != 0 {
@@ -450,7 +447,7 @@ func TestFinopsBackstopApprovalResolvedNoOps(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := bs.onApprovalResolved(context.Background(), resolvedAdminEvent(other, approvalID, adminCapKeyDeactivate, "approved")); err != nil {
+	if err := bs.onApprovalResolved(context.Background(), resolvedAdminEvent(other, approvalID, approvalbridge.AdminCapKeyDeactivate, "approved")); err != nil {
 		t.Fatalf("unknown tenant returned error: %v", err)
 	}
 	if got := len(doer.snapshot()); got != 0 {
@@ -462,12 +459,12 @@ func TestFinopsBackstopApprovalResolvedSubjectKindMismatchNoOp(t *testing.T) {
 	tid := mustTenant(t)
 	const approvalID = "appr_mismatch"
 	encoded := encodedAdminSubject(claudeapi.ActionDeactivateKey, "api_key", "apikey_off", "status=inactive")
-	br := bridgeForResolvedApproval(t, tid, approvalID, adminCapKeyDeactivate, "claude_admin.workspace", encoded, nbApproved)
+	br := bridgeForResolvedApproval(t, tid, approvalID, approvalbridge.AdminCapKeyDeactivate, "claude_admin.workspace", encoded, nbApproved)
 	bs, doer := reDriverBackstop(tid, br,
 		[]claudeapi.AdminAllowRule{{Action: claudeapi.ActionDeactivateKey, Subjects: []string{"apikey_off"}}},
 		false, 0)
 
-	if err := bs.onApprovalResolved(context.Background(), resolvedAdminEvent(tid, approvalID, adminCapKeyDeactivate, "approved")); err != nil {
+	if err := bs.onApprovalResolved(context.Background(), resolvedAdminEvent(tid, approvalID, approvalbridge.AdminCapKeyDeactivate, "approved")); err != nil {
 		t.Fatalf("subject mismatch returned error: %v", err)
 	}
 	if got := len(doer.snapshot()); got != 0 {
@@ -479,12 +476,12 @@ func TestFinopsBackstopApprovalResolvedWorkspaceArchiveDisabledNoOp(t *testing.T
 	tid := mustTenant(t)
 	const approvalID = "appr_workspace"
 	encoded := encodedAdminSubject(claudeapi.ActionArchiveWorkspace, "workspace", "wrkspc_z", "archive_workspace")
-	br := bridgeForResolvedApproval(t, tid, approvalID, adminCapWorkspaceArchive, "claude_admin.workspace", encoded, nbApproved)
+	br := bridgeForResolvedApproval(t, tid, approvalID, approvalbridge.AdminCapWorkspaceArchive, "claude_admin.workspace", encoded, nbApproved)
 	bs, doer := reDriverBackstop(tid, br,
 		[]claudeapi.AdminAllowRule{{Action: claudeapi.ActionArchiveWorkspace, Subjects: []string{"wrkspc_z"}}},
 		false, 0)
 
-	if err := bs.onApprovalResolved(context.Background(), resolvedAdminEvent(tid, approvalID, adminCapWorkspaceArchive, "approved")); err != nil {
+	if err := bs.onApprovalResolved(context.Background(), resolvedAdminEvent(tid, approvalID, approvalbridge.AdminCapWorkspaceArchive, "approved")); err != nil {
 		t.Fatalf("archive disabled returned error: %v", err)
 	}
 	if got := len(doer.snapshot()); got != 0 {
@@ -496,12 +493,12 @@ func TestFinopsBackstopApprovalResolvedActuationErrorReturnsNil(t *testing.T) {
 	tid := mustTenant(t)
 	const approvalID = "appr_key_error"
 	encoded := encodedAdminSubject(claudeapi.ActionDeactivateKey, "api_key", "apikey_off", "status=inactive")
-	br := bridgeForResolvedApproval(t, tid, approvalID, adminCapKeyDeactivate, "claude_admin.api_key", encoded, nbApproved)
+	br := bridgeForResolvedApproval(t, tid, approvalID, approvalbridge.AdminCapKeyDeactivate, "claude_admin.api_key", encoded, nbApproved)
 	bs, doer := reDriverBackstop(tid, br,
 		[]claudeapi.AdminAllowRule{{Action: claudeapi.ActionDeactivateKey, Subjects: []string{"apikey_off"}}},
 		false, http.StatusBadGateway)
 
-	if err := bs.onApprovalResolved(context.Background(), resolvedAdminEvent(tid, approvalID, adminCapKeyDeactivate, "approved")); err != nil {
+	if err := bs.onApprovalResolved(context.Background(), resolvedAdminEvent(tid, approvalID, approvalbridge.AdminCapKeyDeactivate, "approved")); err != nil {
 		t.Fatalf("actuation error must not break bus delivery, got %v", err)
 	}
 	if got := len(doer.snapshot()); got != 1 {

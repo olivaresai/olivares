@@ -9,12 +9,15 @@ import (
 	"context"
 	"crypto/ed25519"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
+	mp "github.com/olivaresai/olivares/connectors/modelprovider"
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/audit"
 	"github.com/olivaresai/olivares/core/auth"
@@ -52,6 +55,7 @@ type harness struct {
 	srv      *api.Server
 	st       store.Store
 	setupTok string
+	options  api.Options
 }
 
 func newHarness(t *testing.T, m *models.Module) *harness {
@@ -75,14 +79,15 @@ func newHarness(t *testing.T, m *models.Module) *harness {
 	if err != nil {
 		t.Fatal(err)
 	}
-	srv, err := api.New(api.Options{
+	options := api.Options{
 		Store: st, Authenticator: auth.NewAuthenticator(st, nil), Authorizer: auth.NewAuthorizer(nil),
 		Signer: signer, SetupToken: tok, Version: "test", Modules: []api.Module{m},
-	})
+	}
+	srv, err := api.New(options)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return &harness{t: t, srv: srv, st: st, setupTok: plaintext}
+	return &harness{t: t, srv: srv, st: st, setupTok: plaintext, options: options}
 }
 
 type resp struct {
@@ -483,5 +488,54 @@ func TestCatalogAndFeaturesEmitEachFamilyOnce(t *testing.T) {
 				t.Errorf("/features lists family %q %d times under capability %q", fam, n, name)
 			}
 		}
+	}
+}
+
+func TestConfiguredConnectorCatalogConsumption(t *testing.T) {
+	m := models.New()
+	h := newHarness(t, m)
+	admin := h.adminLogin()
+	tenant := h.createOrg(admin, "catalog-owner")
+	other := h.createOrg(admin, "catalog-other")
+	viewer := h.roleToken(admin, tenant, "catalog@owner.com", auth.RoleViewer)
+	otherViewer := h.roleToken(admin, other, "catalog@other.com", auth.RoleViewer)
+	failed := false
+	m.UseConnectorCatalogs(func(_ context.Context, got model.TenantID) ([]models.ConnectorCatalog, error) {
+		if got != tenant {
+			return nil, nil
+		}
+		if failed {
+			return nil, errors.New("fixture-secret-value")
+		}
+		return []models.ConnectorCatalog{{SourceRef: "configured-deepseek", Kind: "deepseek", Catalog: mp.Catalog{
+			Provider: mp.Provider{Ref: "deepseek", BaseURL: "https://fixture-secret-value@example.invalid"},
+			Keys:     []mp.KeyRef{{ID: "fixture-secret-value"}},
+			Models:   []mp.Model{{Ref: "deepseek-test", ProviderRef: "deepseek", Capabilities: []mp.Capability{mp.CapToolUse}, CapabilitySource: "declared", ContextWindow: 12345}},
+		}}}, nil
+	})
+	for _, route := range []string{"catalog", "features"} {
+		t.Run(route, func(t *testing.T) {
+			r := h.do("GET", "/v1/m/models/"+route, viewer, nil, tenantHdr(tenant))
+			if r.code != http.StatusOK || !strings.Contains(r.raw, "configured-deepseek") || !strings.Contains(r.raw, "deepseek-test") || !strings.Contains(r.raw, "declared") {
+				t.Fatalf("configured metadata missing: %d %s", r.code, r.raw)
+			}
+			if strings.Contains(r.raw, "fixture-secret-value") || strings.Contains(r.raw, `"available":true`) {
+				t.Fatal("metadata leaked secrets or claimed availability")
+			}
+			r = h.do("GET", "/v1/m/models/"+route, otherViewer, nil, tenantHdr(other))
+			if r.code != http.StatusOK || strings.Contains(r.raw, "configured-deepseek") {
+				t.Fatal("catalog crossed tenant boundary")
+			}
+			failed = true
+			r = h.do("GET", "/v1/m/models/"+route, viewer, nil, tenantHdr(tenant))
+			failed = false
+			if r.code != http.StatusOK || strings.Contains(r.raw, "fixture-secret-value") || !strings.Contains(r.raw, "unavailable") {
+				t.Fatal("failed catalog lost reference fallback or exposed error")
+			}
+		})
+	}
+	items, err := m.AvailableModels(context.Background(), tenant)
+	if err != nil || len(items) != 0 {
+		t.Fatalf("reference metadata established availability: %v %v", items, err)
 	}
 }

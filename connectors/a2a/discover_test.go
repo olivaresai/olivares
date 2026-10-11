@@ -4,11 +4,10 @@
 package a2a
 
 import (
+	"github.com/olivaresai/olivares/sdk"
 	"net/http"
 	"net/http/httptest"
 	"testing"
-
-	"github.com/olivaresai/olivares/sdk"
 )
 
 func TestCardURL(t *testing.T) {

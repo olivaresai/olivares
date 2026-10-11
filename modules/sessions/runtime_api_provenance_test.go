@@ -30,7 +30,11 @@ func TestListRuns_ByClaudeSessionID(t *testing.T) {
 	launch := func(name, sid string) string {
 		t.Helper()
 		fr.initSID = sid
-		r := h.doJSON("POST", "/v1/m/sessions/runs", admin, map[string]any{
+		m.UseExecutionEnvironmentRef(testEnvRef)
+		profile := mustCreateProfile(t, m, tenantA, CreateProfileInput{
+			Driver: "claude", ConfigHome: t.TempDir(), UserHome: t.TempDir(), DisplayName: name,
+		})
+		r := h.doJSON("POST", "/v1/m/sessions/runs", admin, map[string]any{"provider_profile_ref": profile.Ref,
 			"transport": "stream-json", "permission_mode": "default",
 			"isolation": "native", "name": name,
 		}, tenantHdr(tenantA))
@@ -48,6 +52,7 @@ func TestListRuns_ByClaudeSessionID(t *testing.T) {
 				return g.body["claude_session_id"] == sid
 			})
 		}
+		persistLegacyRunWithoutProfile(t, m, tenantA, ref)
 		return ref
 	}
 
@@ -83,10 +88,8 @@ func TestListRuns_ByClaudeSessionID(t *testing.T) {
 		return true
 	}
 
-	// TWO runs on ONE session is a real state, not a contrived one: measured on a live
-	// engine on 2026-08-10, a resume and a second launch against the same Claude
-	// session both carry the same claude_session_id. A lookup that answered with one
-	// run would be picking a winner the plane never picked.
+	// Historical unprofiled rows can share one provider id. Only these persisted
+	// legacy rows belong in the bare-id filter; new profile-scoped runs use live_ref.
 	launch("alpha-1", "sess-alpha")
 	launch("alpha-2", "sess-alpha")
 	launch("beta-1", "sess-beta")

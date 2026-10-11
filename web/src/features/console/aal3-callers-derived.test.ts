@@ -115,11 +115,27 @@ function rutasGateadas(gated: Set<string>): RutaGateada[] {
       pila.push([ind, ruta[1]])
       continue
     }
+    // Two registration forms: `r.Post(path, s.h)` and
+    // `coreRoute(r, "POST", path, <admission>, s.h)` (core_routes.go). Groups 1-4 are router,
+    // verb, literal path and path const in both; coreRoute adds the admission as group 5; the
+    // handler is the last group.
+    // A coreRoute admission can carry the gate itself: `s.mcpManagementRoute(true)` reaches
+    // `requireStepUp` through `mcpGatewayAdmission`, so the route counts when the handler OR an
+    // `s.X(` call in its admission is gated.
     const verbo =
       /(\w+)\.(Get|Put|Post|Delete|Patch)\((?:"([^"]*)"|(\w+)),\s*s\.(\w+)\)/.exec(
         linea,
+      ) ??
+      /coreRoute\((\w+),\s*"(GET|PUT|POST|DELETE|PATCH)",\s*(?:"([^"]*)"|(\w+)),\s*(.*),\s*s\.(\w+)\)/.exec(
+        linea,
       )
-    if (!verbo || !gated.has(verbo[5])) continue
+    if (!verbo) continue
+    const handler = verbo[verbo.length - 1]
+    const admision = verbo.length > 6 ? verbo[5] : ''
+    const porAdmision = [...admision.matchAll(/\bs\.(\w+)\(/g)].some((m) =>
+      gated.has(m[1]),
+    )
+    if (!gated.has(handler) && !porAdmision) continue
     const p = verbo[3] ?? consts.get(verbo[4] ?? '') ?? `<${verbo[4]}>`
     const prefijo = pila.map(([, x]) => x).join('')
     // ⛔ EL `/v1` NO ES UNIVERSAL. `authzenExportPath` se registra sobre el router RAÍZ
@@ -131,7 +147,7 @@ function rutasGateadas(gated: Set<string>): RutaGateada[] {
     out.push({
       verbo: verbo[2].toUpperCase(),
       ruta: base.replace(/\/\//g, '/').replace(/\/$/, ''),
-      handler: verbo[5],
+      handler,
     })
   }
   return out

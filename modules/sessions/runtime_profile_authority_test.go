@@ -23,21 +23,22 @@ func TestProfileAuthority_RequiresProfileForNewAndUnprovenResume(t *testing.T) {
 	admin := h.adminLogin()
 	tenant := h.createOrg(admin, "profile-required")
 	body := map[string]any{"transport": "stream-json", "isolation": "native"}
-	legacy := h.doJSON("POST", "/v1/m/sessions/runs", admin, body, tenantHdr(tenant))
+	profiled := map[string]any{"transport": "stream-json", "isolation": "native", "provider_profile_ref": ensureRuntimeTestProfileRef(t, m, tenant)}
+	legacy := h.doJSON("POST", "/v1/m/sessions/runs", admin, profiled, tenantHdr(tenant))
 	if legacy.code != http.StatusCreated {
-		t.Fatalf("B1 fixture create=%d", legacy.code)
+		t.Fatalf("fixture create=%d %s", legacy.code, legacy.raw)
 	}
 	ref := legacy.body["run_ref"].(string)
 	waitFor(t, "legacy init", func() bool {
 		d, _ := m.getRun(context.Background(), model.TenantID(tenant), ref)
 		return d.ClaudeSessionID != ""
 	})
-	m.EnableProfiledLaunches()
+	persistLegacyRunWithoutProfile(t, m, tenant, ref)
 	before := countRows(t, m, model.TenantID(tenant), runKind)
 	// Automatic profile selection (b756268f) lets profile writers omit the profile.
 	// Claude is installed, but has no own login or usable provider to resolve.
 	login := &loginStub{installed: map[string]bool{"claude": true}}
-	m.UseToolLoginStatus(login.status)
+	m.ToolLogin = login.status
 	refused := h.doJSON("POST", "/v1/m/sessions/runs", admin, body, tenantHdr(tenant))
 	if refused.code != http.StatusConflict || launchCount(fr) != 1 || countRows(t, m, model.TenantID(tenant), runKind) != before {
 		t.Fatalf("unprofiled B2 launch status=%d effects=%d", refused.code, launchCount(fr))

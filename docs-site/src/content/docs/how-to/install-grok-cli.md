@@ -54,8 +54,9 @@ Pin the official binary, or use a managed install receipt:
 export OLIVARES_SESSION_RUNTIME_GROK_BIN=/var/lib/olivares/tools/grok/<version>-<platform>/bin/grok
 ```
 
-If that variable is unset and a **registered** managed release exists, the
-session runtime uses that executable. It does not search `PATH`.
+If that variable is unset, the session runtime uses the newest verified
+managed install, then `grok` on the engine's `PATH`. It resolves the program
+at launch.
 
 ```sh
 olivares agent session create --name "grok-work" --workspace ws-123 --provider-profile prof-123
@@ -65,5 +66,17 @@ olivares agent session stop run-123
 Create and stop go through the sessions API and leave a managed run record.
 Compatibility with an authenticated official Grok account is **not claimed**
 here.
+
+## 4. Requirements and limits
+
+Each step of a Grok Build session, measured on the engine with the official CLI
+(the container image contents are read from its Dockerfile):
+
+| Step | What to know |
+| --- | --- |
+| Install | `olivares tool install grok` takes the `stable` channel from the official origin. The check is origin-only, as above. |
+| Bind | Grok Build runs only on an xAI key. Leave the endpoint empty for `https://api.x.ai/v1`. A custom `base_url` is used as given, so it ends in `/v1`. Plain HTTP is accepted only at a loopback or private-network address, for a local xAI-compatible server. |
+| Start | On Linux, the ask, read-only, edits-only and edits-and-commands presets run Grok's own sandbox, which needs bubblewrap (`bwrap`). Without it the start is refused before anything runs, and the message names the package. The official container image does not ship bubblewrap, so install bubblewrap on the engine's host to start Grok Build sessions. |
+| Answer, stop, resume | A resumed session continues the same conversation. |
 
 Further operate rules: [Operate a provider session](/how-to/operate-provider-sessions/).

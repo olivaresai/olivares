@@ -91,6 +91,9 @@ export function CanMessage({
   const candidates = peerCandidates(session, sessions)
   const count =
     run.peers_rule === 'same-template' ? null : (run.peers?.length ?? 0)
+  // Keep existing choices reachable, but omit the empty default when there is
+  // nobody to choose. This is a session-to-session control, not a status badge.
+  if (count === 0 && candidates.length === 0) return null
   return (
     <Popover
       open={open}

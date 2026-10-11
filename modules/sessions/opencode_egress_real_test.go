@@ -27,7 +27,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-// THE REAL OPENCODE, WHOLE SESSION, ZERO REQUESTS TO ANY HOST BUT THE BOUND ONE (HU2 019).
+// THE REAL OPENCODE, WHOLE SESSION, ZERO REQUESTS TO ANY HOST BUT THE BOUND ONE.
 //
 // It runs the installed OpenCode (OLIVARES_TEST_OPENCODE_BIN; 1.18.34 is the version the
 // product installs) with the environment the driver builds for a record-bound launch, drives
@@ -70,7 +70,7 @@ func TestRealOpenCodeBoundSessionReachesNoOtherHost(t *testing.T) {
 			t.Logf("the local endpoint answered %d requests (the turn and its background work)", n)
 		}
 	})
-	// SR5C on a8ac380a: a baseURL saved for the bound provider in the profile's own
+	// A baseURL saved for the bound provider in the profile's own
 	// configuration or in the project must not carry the key and the prompt elsewhere.
 	t.Run("anthropic key, a foreign baseURL saved in the profile and the project", func(t *testing.T) {
 		foreign := newFakeChatEndpoint(t)
@@ -90,7 +90,7 @@ func TestRealOpenCodeBoundSessionReachesNoOtherHost(t *testing.T) {
 			t.Fatalf("the saved foreign endpoint received %d requests", n)
 		}
 	})
-	// SR5C on 06a18e46: OpenCode merges a host-managed configuration AFTER the launch's own
+	// OpenCode merges a host-managed configuration AFTER the launch's own
 	// (OPENCODE_TEST_MANAGED_CONFIG_DIR is OpenCode's own way to move that directory). This
 	// case shows the tool doing it, which is why the record mint refuses such a host
 	// (openCodeManagedProviderOverride); if it ever stops, the refusal can go.
@@ -109,7 +109,7 @@ func TestRealOpenCodeBoundSessionReachesNoOtherHost(t *testing.T) {
 			t.Logf("the managed baseURL received %d requests despite the launch pin", n)
 		}
 	})
-	// SR5C on a8ac380a: a session that was shared before keeps syncing to the share service
+	// A session that was shared before keeps syncing to the share service
 	// on resume unless sharing is switched off natively.
 	t.Run("anthropic key, resume of a session shared before", func(t *testing.T) {
 		home := t.TempDir()

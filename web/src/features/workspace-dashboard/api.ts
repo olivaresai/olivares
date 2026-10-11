@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { http } from '@/lib/api'
+import type { TenantRequestOptions } from '@/lib/api/client'
 import type { ListResponse } from '@/lib/api/types'
 import type { WorkspaceDTO, AgentGroupDTO } from '@/features/console/api'
 
@@ -27,6 +28,20 @@ export interface WorkspaceSummaryDTO {
   session_count_capped?: boolean
   resource_count_capped?: boolean
   group_count_capped?: boolean
+}
+
+/** One kind a workspace holds, from GET /v1/workspaces/{id}/contents. */
+export interface WorkspaceKindCountDTO {
+  kind: string
+  count: number
+  /** True: `count` is a floor ("at least"), never a total. */
+  capped: boolean
+}
+
+/** Every kind that declares workspace lineage, counted by the engine's one contents read. */
+export interface WorkspaceContentsDTO {
+  workspace_id: string
+  kinds: WorkspaceKindCountDTO[]
 }
 
 export interface AgentBriefDTO {
@@ -55,6 +70,15 @@ export const workspaceDashboardApi = {
 
   workspace: (workspaceId: string) =>
     http.get<WorkspaceDTO>(`/v1/workspaces/${workspaceId}`),
+
+  contents: (
+    workspaceId: string,
+    scope: TenantRequestOptions & { signal?: AbortSignal },
+  ) =>
+    http.get<WorkspaceContentsDTO>(
+      `/v1/workspaces/${encodeURIComponent(workspaceId)}/contents`,
+      scope,
+    ),
 }
 
 export const workspaceDashboardKeys = {
@@ -66,4 +90,6 @@ export const workspaceDashboardKeys = {
     ['workspace-dashboard', 'groups', tenant, wsId] as const,
   workspace: (tenant: string | null, wsId: string) =>
     ['workspace-dashboard', 'workspace', tenant, wsId] as const,
+  contents: (tenant: string, wsId: string) =>
+    ['workspace-dashboard', 'contents', tenant, wsId] as const,
 }

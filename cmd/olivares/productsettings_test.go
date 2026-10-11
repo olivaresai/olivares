@@ -31,6 +31,7 @@ var (
 // bootForSettings starts a real engine on SQLite in a fresh data directory.
 func bootForSettings(t *testing.T) (*engine, *productSettings) {
 	t.Helper()
+	prepareCompositionTestBoot(t)
 	eng, err := boot(context.Background(), bootConfig{DataDir: t.TempDir(), Engine: "sqlite", Version: version, Logger: slog.Default()})
 	if err != nil {
 		t.Fatalf("boot: %v", err)

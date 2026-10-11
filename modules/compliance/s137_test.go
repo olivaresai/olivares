@@ -635,6 +635,12 @@ func TestErasureExecuteEndToEndChainIntact(t *testing.T) {
 
 	// The art_17 control flips to satisfied on REAL operational evidence.
 	r = h.do("GET", "/v1/m/compliance/frameworks/gdpr/status", owner, nil, hdr)
+	if !complianceViewsAvailable() {
+		if r.code != http.StatusNotImplemented {
+			t.Fatalf("Community assessment = %d, want 501", r.code)
+		}
+		return
+	}
 	if r.code != http.StatusOK {
 		t.Fatalf("gdpr status = %d %s", r.code, r.raw)
 	}

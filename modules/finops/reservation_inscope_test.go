@@ -53,7 +53,7 @@ func seedBudgetAndSeatLimit(t *testing.T, st store.Store, tenant model.TenantID)
 func admissionPhases(t *testing.T, m *Module, tenant model.TenantID, actor string, now time.Time) (budgets, seats []reservationTarget) {
 	t.Helper()
 	ctx := context.Background()
-	budgets, truncated, err := m.budgetTargets(ctx, tenant, SpendDims{}, now)
+	budgets, truncated, err := m.budgetTargets(ctx, tenant, SpendDims{}, "", now)
 	if err != nil || truncated {
 		t.Fatalf("budget targets: truncated=%v err=%v", truncated, err)
 	}
@@ -198,7 +198,7 @@ func runZeroReserveInsertsNoRow(t *testing.T, cfg store.Config) {
 	})
 	evaluate := func(t *testing.T, estimate int64) (reserveOutcome, holdID, error) {
 		t.Helper()
-		targets, truncated, err := m.budgetTargets(ctx, tenant, SpendDims{}, now)
+		targets, truncated, err := m.budgetTargets(ctx, tenant, SpendDims{}, "", now)
 		if err != nil || truncated || len(targets) != 1 {
 			t.Fatalf("targets: %d truncated=%v err=%v", len(targets), truncated, err)
 		}

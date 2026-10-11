@@ -24,7 +24,7 @@ BACKLOG="${OLIVARES_VER02_BACKLOG:-design/BACKLOG-COMPLETITUD-2026-08-16.md}"
 
 grep -q '16/16 NOT_RUN' "$DOC" || fail "$DOC lost 16/16 NOT_RUN"
 if grep -qiE '16/16 passed|cut battery passed|VER-02 closed' "$DOC"; then
-  fail "$DOC claims a close this lote does not have"
+  fail "$DOC claims a close this batch does not have"
 fi
 grep -q 'VER-02' "$BACKLOG" || fail "$BACKLOG lost the VER-02 row"
 

@@ -63,7 +63,7 @@ command -v python3 >/dev/null || cannot "no python3"
 ERR="$(mktemp "${TMPDIR:-/tmp}/c13cur.XXXXXX")" || cannot "cannot create a scratch file"
 trap 'rm -f "$ERR" "$ERR.out"' EXIT
 set +e
-[ -r "$ROOT/scripts/module-catalog-go.sh" ] || cannot "falta scripts/module-catalog-go.sh: sin el envoltorio del derivador no hay con qué comparar (un 127 no es un veredicto)"
+[ -r "$ROOT/scripts/module-catalog-go.sh" ] || cannot "missing scripts/module-catalog-go.sh: the derivation wrapper is required for comparison (exit 127 is not a result)"
 bash "$ROOT/scripts/module-catalog-go.sh" check >"$ERR.out" 2>"$ERR"
 rc=$?
 set -e
@@ -74,7 +74,7 @@ set -e
 case "$rc" in
 0 | 1 | 2) ;;
 *)
-	say "check-c13-cur-map-prep: COULD NOT LOOK — la derivación salió con un código que su contrato no define ($rc):" >&2
+	say "check-c13-cur-map-prep: COULD NOT LOOK — derivation returned an exit code its contract does not define ($rc):" >&2
 	cat "$ERR" >&2 || true
 	exit 2
 	;;
@@ -105,7 +105,7 @@ grep -F -q 'Does not copy `#960`' "$DOC" \
 grep -F -q 'Map already on origin/main' "$DOC" \
   || fail "prepare doc lost map remasure"
 if grep -qiE 'FIRMA A claimed|remainder applied on origin/main|copied #960' "$DOC"; then
-  fail "prepare doc claims an application this lote does not have"
+  fail "prepare doc claims an application this batch does not have"
 fi
 
 python3 - "$MAP" "$JSON" <<'PY' || exit $?
@@ -156,7 +156,7 @@ if data.get("overlay_remeasured_in_this_gate") is not False:
     fail("overlay remasure leaked into this hub-safe gate")
 ev = data.get("evidence")
 if not isinstance(ev, dict):
-    fail("the evidence block is missing; the lote's hand-measured object id lives there")
+    fail("the evidence block is missing; the batch's hand-measured object id lives there")
 hub = ev.get("hub") or ""
 if not re.fullmatch(r"[0-9a-f]{40}", hub):
     fail("evidence.hub is not 40-hex")

@@ -41,7 +41,7 @@ mkdir -p "$lot5_scratch/snapshot" || exit 2
 lot5_index=0
 for lot5_file in "${lot5_files[@]}"; do
 	[ -r "$lot5_root/$lot5_file" ] || {
-		echo "console-func-l5-mutants: NO PUDE MIRAR — falta $lot5_file" >&2
+		echo "console-func-l5-mutants: CANNOT INSPECT — missing $lot5_file" >&2
 		exit 2
 	}
 	cp -p -- "$lot5_root/$lot5_file" "$lot5_scratch/snapshot/$lot5_index" || exit 2
@@ -54,11 +54,11 @@ done
 
 lot5_oracle="$lot5_root/scripts/check-console-func-l5.sh"
 TMPDIR="$lot5_scratch" bash "$lot5_oracle" >"$lot5_scratch/control.log" 2>&1 || {
-	echo "console-func-l5-mutants: control ROTO" >&2
+	echo "console-func-l5-mutants: control BROKEN" >&2
 	sed -n '1,160p' "$lot5_scratch/control.log" >&2
 	exit 1
 }
-echo "console-func-l5-mutants: control FUNCIONA"
+echo "console-func-l5-mutants: control PASS"
 
 lot5_mutant() {
 	local lot5_name="$1"
@@ -74,19 +74,19 @@ lot5_mutant() {
 		"$lot5_root/$lot5_file" || exit 2
 	TMPDIR="$lot5_scratch" bash "$lot5_oracle" >"$lot5_scratch/$lot5_name.log" 2>&1
 	lot5_rc=$?
-	lot5_hits="$(rg -F -c -- "console-func-l5: ROTO — $lot5_expected" "$lot5_scratch/$lot5_name.log" 2>/dev/null)"
+	lot5_hits="$(rg -F -c -- "console-func-l5: FAIL — $lot5_expected" "$lot5_scratch/$lot5_name.log" 2>/dev/null)"
 	if [ "$lot5_rc" -ne 1 ] || [ "${lot5_hits:-0}" -lt 1 ]; then
-		echo "console-func-l5-mutants: mutante $lot5_name no discrimino (rc=$lot5_rc)" >&2
+		echo "console-func-l5-mutants: mutant $lot5_name did not distinguish behavior (rc=$lot5_rc)" >&2
 		sed -n '1,120p' "$lot5_scratch/$lot5_name.log" >&2
 		exit 1
 	fi
-	echo "console-func-l5-mutants: mutante $lot5_name ROTO — $lot5_expected"
+	echo "console-func-l5-mutants: mutant $lot5_name BROKEN — $lot5_expected"
 	lot5_restore
 	(
 		cd "$lot5_root" || exit 2
 		sha256sum -c "$lot5_scratch/original.sha256"
 	) >"$lot5_scratch/$lot5_name.restore.log" 2>&1 || {
-		echo "console-func-l5-mutants: restauracion no byte-exacta tras $lot5_name" >&2
+		echo "console-func-l5-mutants: restoration was not byte-for-byte after $lot5_name" >&2
 		exit 1
 	}
 }
@@ -108,15 +108,15 @@ lot5_restore
 CONSOLE_FUNC_L5_FORCE_UNAVAILABLE=1 TMPDIR="$lot5_scratch" \
 	bash "$lot5_oracle" >"$lot5_scratch/unavailable.log" 2>&1
 lot5_rc=$?
-lot5_hits="$(rg -F -c -- 'console-func-l5: NO PUDE MIRAR' "$lot5_scratch/unavailable.log" 2>/dev/null)"
+lot5_hits="$(rg -F -c -- 'console-func-l5: COULD NOT CHECK' "$lot5_scratch/unavailable.log" 2>/dev/null)"
 if [ "$lot5_rc" -ne 2 ] || [ "${lot5_hits:-0}" -lt 1 ]; then
-	echo "console-func-l5-mutants: la tercera respuesta no discrimino (rc=$lot5_rc)" >&2
+	echo "console-func-l5-mutants: the third response did not distinguish behavior (rc=$lot5_rc)" >&2
 	exit 1
 fi
-echo "console-func-l5-mutants: control NO PUDE MIRAR = rc 2"
+echo "console-func-l5-mutants: control CANNOT INSPECT = rc 2"
 
 TMPDIR="$lot5_scratch" bash "$lot5_oracle" >"$lot5_scratch/final.log" 2>&1 || {
-	echo "console-func-l5-mutants: final ROTO" >&2
+	echo "console-func-l5-mutants: final BROKEN" >&2
 	exit 1
 }
 (
@@ -127,4 +127,4 @@ cmp -s "$lot5_scratch/original.sha256" "$lot5_scratch/final.sha256" || {
 	echo "console-func-l5-mutants: manifest original != final" >&2
 	exit 1
 }
-echo "console-func-l5-mutants: manifest original=snapshot=final; 6/6 mutantes discriminados"
+echo "console-func-l5-mutants: manifest original=snapshot=final; 6/6 mutants distinguished"

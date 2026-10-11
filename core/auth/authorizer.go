@@ -112,6 +112,21 @@ func ResourceFor(perm Permission) ResourceAttrs {
 	return ResourceAttrs{Kind: perm.Resource()}
 }
 
+// WithinConfinement returns the request asked inside the workspace its principal is
+// confined to, when the request names no workspace of its own. A confined principal acts
+// only in that workspace, so "is it an admin" is a question about that workspace: asked
+// with none, the scoped engine cannot tell the target is the principal's own and refuses a
+// non-read verb. An unconfined principal, or a request that already names a workspace, is
+// returned unchanged.
+func (r Request) WithinConfinement() Request {
+	if r.Resource.WorkspaceID.IsZero() {
+		if workspace, confined := r.Principal.ConfinedWorkspaceIn(r.Tenant); confined {
+			r.Resource.WorkspaceID = workspace
+		}
+	}
+	return r
+}
+
 // PolicyEvaluator is the ABAC seam. Ordinary Authorize runs it AFTER RBAC; the
 // disclosure check also runs it when the base denies, to equalize policy work.
 // It may only further restrict a base grant — it can never widen one (the
@@ -169,6 +184,13 @@ type ScopedDecision struct {
 	// fail-closed error. Ignored for grant/abstain. Zero value ClassInvariant keeps a
 	// forbid non-shadowable unless a producer explicitly marks it business policy.
 	Class DecisionClass
+	// InheritanceFiltered says an inheritance filter sits on a container of the target for
+	// the target's class (governance.inheritance_filter): the rights that reach the target
+	// from ABOVE that node do not apply. The producer has already reduced Effect to what is
+	// anchored at or below the node, and the Authorizer removes the RBAC term and the owner's
+	// implicit grant, the way RouteMetadata.RequireScopedGrant removes the RBAC term. Like
+	// that flag it only REMOVES a path to allow; a forbid is never narrowed by it.
+	InheritanceFiltered bool
 }
 
 // ScopedAuthorizer is the positive-grant seam: a hierarchy-aware engine
@@ -271,8 +293,7 @@ func (az *Authorizer) authorize(ctx context.Context, req Request) Decision {
 	if restricted && !restrictionAllows {
 		return Decision{Allow: false, Reason: "credential ceiling: not permitted"}
 	}
-	ownerGrant := ownerImplicitScopedGrant(req) && !restricted
-	granted := ownerGrant
+	scopedGrant, filtered := false, false
 	if az.scoped != nil {
 		sd, err := az.scopedSafe(ctx, req)
 		if err != nil {
@@ -290,11 +311,15 @@ func (az *Authorizer) authorize(ctx context.Context, req Request) Decision {
 			// A positive scoped grant must never widen a purpose-specific
 			// credential. The exact ceiling is the base authorization for that
 			// principal; scoped forbids above still narrow it normally.
-			if !restricted {
-				granted = true
-			}
+			scopedGrant = !restricted
 		}
+		filtered = sd.InheritanceFiltered
 	}
+	// An inheritance filter removes what reaches the target from above: the RBAC term and
+	// the owner's implicit grant. The scoped grant that survives is the one at or below the
+	// filtered node (the engine already dropped the rest), and a forbid returned above.
+	ownerGrant := ownerImplicitScopedGrant(req) && !restricted && !filtered
+	granted := ownerGrant || scopedGrant
 	ownerGrantUsed := ownerGrant && !req.Route.rbacPermitted(req, az.rbacAllows(req))
 	baseAllowed := restrictionAllows
 	if !restricted {
@@ -302,9 +327,13 @@ func (az *Authorizer) authorize(ctx context.Context, req Request) Decision {
 		// say "breadth of role is not enough here", never "this role now suffices". The
 		// scoped grant is untouched by it, so a principal authorized by policy keeps its
 		// path — which is what makes a governed terminal delegable at all.
-		baseAllowed = req.Route.rbacPermitted(req, az.rbacAllows(req)) || granted
+		baseAllowed = (!filtered && req.Route.rbacPermitted(req, az.rbacAllows(req))) || granted
 	}
 	if !baseAllowed {
+		if filtered {
+			// The cause belongs in the audit trail: the role may well have allowed it.
+			return Decision{Allow: false, Reason: "rbac: not permitted (inheritance filter: no right at or below the filtered node)"}
+		}
 		return Decision{Allow: false, Reason: "rbac: not permitted"}
 	}
 	if az.eval == nil {

@@ -53,7 +53,7 @@ stage() {
   while IFS= read -r _dep; do
     [ -n "$_dep" ] || continue
     if [ ! -r "$ROOT/scripts/lib/$_dep" ]; then
-      echo "test-int-12-no-land: NO HE PODIDO MIRAR: el sujeto sourcea scripts/lib/$_dep y no existe" >&2
+      echo "test-int-12-no-land: COULD NOT CHECK: the subject sources scripts/lib/$_dep but it does not exist" >&2
       exit 2
     fi
     cp "$ROOT/scripts/lib/$_dep" "$TMP/tree/scripts/lib/"
@@ -72,7 +72,7 @@ import sys
 p, viejo, nuevo = sys.argv[1], sys.argv[2], sys.argv[3]
 t = open(p, encoding="utf-8").read()
 if viejo not in t:
-    print(f"test-int-12-no-land: NO HE PODIDO MIRAR: el acta no contiene {viejo!r}", file=sys.stderr)
+    print(f"test-int-12-no-land: COULD NOT CHECK: the record does not contain {viejo!r}", file=sys.stderr)
     sys.exit(2)
 open(p, "w", encoding="utf-8").write(t.replace(viejo, nuevo))
 PY
@@ -146,7 +146,7 @@ fake_overlay() {
 # el de agosto. Es el objeto que hizo rojo el gancho a las 17:20:31Z del 2026-09-16.
 PIN_MOVIDO=c6382f84362b6ef06feaf742708eb6598b088468
 
-printf '\n--- camino ABIERTO (acta con int-12-pr-state: open) — los veredictos de agosto, intactos\n'
+printf '\n--- OPEN path (record with int-12-pr-state: open) — August verdicts unchanged\n'
 
 stage_abierto
 run unset 1
@@ -238,7 +238,7 @@ run unset 1
 if [ "$(cat "$TMP/rc")" = "1" ]; then ok "mutant (Snapshot already gated on overlay main) is killed"
 else bad "Snapshot gated stayed CLEAN rc=$(cat "$TMP/rc") ($(cat "$TMP/err"))"; fi
 
-printf '\n--- acta SIN int-12-pr-state — toda acta anterior al cierre toma el camino de agosto\n'
+printf '\n--- record WITHOUT int-12-pr-state — every pre-closure record takes the August path\n'
 
 stage_sin_estado
 fake_overlay
@@ -254,7 +254,7 @@ if [ "$(cat "$TMP/rc")" = "1" ] && grep -q 'live overlay-main public pin' "$TMP/
   ok "absent state keeps the old verdict on a moved pin"
 else bad "absent state must keep the old verdict rc=$(cat "$TMP/rc") ($(cat "$TMP/err"))"; fi
 
-printf '\n--- camino CERRADO (acta viva: #58 cerrado el 2026-09-16T11:58:36Z, sin merge)\n'
+printf '\n--- CLOSED path (live record: #58 closed on 2026-09-16T11:58:36Z, without merging)\n'
 
 # ⛔ LA FILA QUE EXISTE POR LA AVERIA DEL 2026-09-16T17:20:31Z: pin vivo MOVIDO, clon SIN
 #    `refs/pull/58/head` (como todos los de esta caja). Antes: rc 1 y todo push local muerto.

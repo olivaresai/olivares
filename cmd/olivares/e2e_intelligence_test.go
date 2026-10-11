@@ -12,8 +12,6 @@ package main
 import (
 	"net/http"
 	"testing"
-
-	"github.com/olivaresai/olivares/cmd/olivares/seed"
 )
 
 func TestE2E_Evals_DeterministicScorerCompletes(t *testing.T) {
@@ -77,51 +75,16 @@ func TestE2E_Sandbox_IsolatedDeterministicRun(t *testing.T) {
 	}
 }
 
-func TestE2E_Redteam_DegradedHonestPath(t *testing.T) {
-	h := newHarness(t)
-
-	// A run against an UNauthorized target is refused.
-	var tgt struct {
-		ID string `json:"id"`
-	}
-	if code := h.reqInto("POST", "/v1/m/redteam/targets", h.adminToken, h.tenantA, map[string]any{
-		"agent_ref": seed.AgentCoder, "name": "coder-target",
-	}, &tgt); code != http.StatusCreated || tgt.ID == "" {
-		t.Fatalf("create target = %d", code)
-	}
-	if code, _ := h.req("POST", "/v1/m/redteam/runs", h.adminToken, h.tenantA, map[string]any{
-		"target_ref": tgt.ID, "suite": "injection",
-	}); code != http.StatusForbidden {
-		t.Errorf("run against unauthorized target = %d, want 403 (consent gate)", code)
-	}
-
-	// After explicit authorization, the run executes but is HONESTLY degraded —
-	// no OS-level sandbox is wired, so every probe is skipped, never a faked pass.
-	if code, raw := h.req("POST", "/v1/m/redteam/targets/"+tgt.ID+"/authorize", h.adminToken, h.tenantA, map[string]any{
-		"authorized": true,
-	}); code != http.StatusOK && code != http.StatusCreated {
-		t.Fatalf("authorize = %d: %s", code, raw)
-	}
-	var run struct {
-		Status  string  `json:"status"`
-		Total   float64 `json:"total"`
-		Skipped float64 `json:"skipped"`
-		Score   float64 `json:"score"`
-	}
-	if code := h.reqInto("POST", "/v1/m/redteam/runs", h.adminToken, h.tenantA, map[string]any{
-		"target_ref": tgt.ID, "suite": "injection",
-	}, &run); code != http.StatusCreated && code != http.StatusOK {
-		t.Fatalf("authorized run = %d", code)
-	}
-	assertEq(t, "redteam.status", run.Status, "degraded")
-	assertEq(t, "redteam.score", run.Score, float64(0))
-	if run.Total == 0 || run.Skipped != run.Total {
-		t.Errorf("redteam skipped=%v total=%v, want skipped==total (offline sandbox)", run.Skipped, run.Total)
-	}
-}
-
 func TestE2E_Compliance_EvidenceFromLedger(t *testing.T) {
+	prepareCompliancePacksTestEntitlement(t)
 	h := newHarness(t)
+	if thisEdition.name == "community" {
+		var body map[string]any
+		if code := h.reqInto("GET", "/v1/m/compliance/frameworks", h.adminToken, h.tenantA, nil, &body); code != http.StatusNotImplemented {
+			t.Fatalf("Community framework catalog = %d, want 501", code)
+		}
+		return
+	}
 
 	frameworks := h.getJSON(h.adminToken, h.tenantA, "/v1/m/compliance/frameworks")
 	fws := items(frameworks)

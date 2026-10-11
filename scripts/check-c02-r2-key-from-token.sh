@@ -28,7 +28,7 @@ TEST="${OLIVARES_C02KEY_TEST:-commercial/license-worker/test/download.test.ts}"
 
 grep -q 'delivery NOT CLOSED' "$DOC" || fail "$DOC lost delivery NOT CLOSED"
 if grep -qiE 'delivery_404_closed stays true|bytes are real|FIRMA A claimed' "$DOC"; then
-	fail "$DOC claims a close this lote does not have"
+	fail "$DOC claims a close this batch does not have"
 fi
 
 python3 - "$JSON" "$ART" "$GATE" "$TEST" <<'PY' || fail "JSON/worker failed the C02-04 remasure"

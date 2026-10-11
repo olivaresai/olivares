@@ -5,6 +5,10 @@ description: >-
   把 control plane 的治理发现项及其篡改可检测审计账本送入 Splunk。诚实地说明每条流各是什么。
 ---
 
+:::note[Business]
+审计导出（`GET /v1/audit/export`、`olivares audit export`）、目录归档和外部归档验证需要 Business。Community 保留签名账本、`olivares audit verify` 和 `olivares dr backup`；导出返回 HTTP 501 或退出码 9。审计转发和携带审计段的 DDIL 传输也需要 Business。
+:::
+
 你**今天**就可以把 Olivares AI 的数据送入 Splunk，无需等待原生 connector：
 将数据写入一个文件，并让一个 **Splunk Universal Forwarder（UF）**指向它。
 UF 负责到你 indexer 的 Splunk-to-Splunk（S2S）跳转。

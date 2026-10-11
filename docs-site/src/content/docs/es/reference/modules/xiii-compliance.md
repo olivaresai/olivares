@@ -12,6 +12,8 @@ derivada del audit ledger append-only y hash-chained. Es un módulo de la capa d
 inteligencia: no captura **nada nuevo** — agrega y transforma lo que el núcleo y los demás
 módulos ya registran, y **nunca reclama certificación**.
 
+**Edición:** Business Compliance Packs ofrece catálogos de marcos, evaluaciones, el calendario regulatorio, vistas DORA/HIPAA, sellado de evidencias, exportaciones OSCAL e informes HTML/PDF bajo demanda. Community devuelve `501` para esas capacidades y conserva riesgo, residencia, gestión de registros y exportaciones JSON/CSV de evidencias guardadas. Las actualizaciones conservan los registros existentes.
+
 ## Qué es
 
 El módulo XIII tiene cinco superficies, todas de lectura-y-derivación sobre datos

@@ -45,7 +45,7 @@ func TestDownloadGatedTransportIsAuthorizationAndVersionOnlyOnBinary(t *testing.
 	if _, err := downloadGated(ctx, server.Client(), o, "manifest.sig", ""); err != nil {
 		t.Fatalf("manifest.sig: %v", err)
 	}
-	if _, err := downloadGated(ctx, server.Client(), o, "", "26.8.0"); err != nil {
+	if _, err := downloadGated(ctx, server.Client(), o, "", "26.800"); err != nil {
 		t.Fatalf("binary: %v", err)
 	}
 	if len(got) != 3 {
@@ -64,7 +64,7 @@ func TestDownloadGatedTransportIsAuthorizationAndVersionOnlyOnBinary(t *testing.
 			t.Errorf("manifest request %d carried the binary version axis: %#v", i, got[i].query)
 		}
 	}
-	if got[2].query.Get("version") != "26.8.0" {
+	if got[2].query.Get("version") != "26.800" {
 		t.Fatalf("binary request did not carry the signed version: %#v", got[2].query)
 	}
 	if _, err := downloadGated(ctx, server.Client(), o, "", ""); err == nil {
@@ -187,8 +187,8 @@ func TestUpgradeReleaseV1E2E(t *testing.T) {
 	if _, err := exec.LookPath("go"); err != nil {
 		t.Skip("go toolchain not available to build stub binaries")
 	}
-	v1 := buildStub(t, "26.7.0")
-	v2 := buildStub(t, "26.8.0")
+	v1 := buildStub(t, "26.700")
+	v2 := buildStub(t, "26.800")
 
 	run := func(t *testing.T, f *v1Fixture, target string, extra ...string) (string, error) {
 		args := append([]string{
@@ -200,7 +200,7 @@ func TestUpgradeReleaseV1E2E(t *testing.T) {
 	}
 
 	t.Run("release-v1 happy path installs the resolved version", func(t *testing.T) {
-		f := newV1Fixture(t, "26.8.0", "biz+reg", v2)
+		f := newV1Fixture(t, "26.800", "biz+reg", v2)
 		target := writeTarget(t, v1)
 		dataDir := t.TempDir()
 		installDevLicense(t, dataDir)
@@ -209,59 +209,59 @@ func TestUpgradeReleaseV1E2E(t *testing.T) {
 		if err != nil {
 			t.Fatalf("release-v1 upgrade: %v", err)
 		}
-		if got := runsVersion(t, target); !strings.Contains(got, "26.8.0") {
+		if got := runsVersion(t, target); !strings.Contains(got, "26.800") {
 			t.Fatalf("target not upgraded: %q", got)
 		}
 	})
 
 	t.Run("a tampered signature leaves the target intact", func(t *testing.T) {
-		f := newV1Fixture(t, "26.8.0", "biz", v2)
+		f := newV1Fixture(t, "26.800", "biz", v2)
 		f.badSig = true
 		target := writeTarget(t, v1)
 		_, err := run(t, f, target)
 		if err == nil || !strings.Contains(strings.ToLower(err.Error()), "signature") {
 			t.Fatalf("a bad manifest signature must abort, got %v", err)
 		}
-		if got := runsVersion(t, target); !strings.Contains(got, "26.7.0") {
+		if got := runsVersion(t, target); !strings.Contains(got, "26.700") {
 			t.Fatalf("target changed despite bad signature: %q", got)
 		}
 	})
 
 	t.Run("a corrupt artifact leaves the target intact", func(t *testing.T) {
-		f := newV1Fixture(t, "26.8.0", "biz", v2)
+		f := newV1Fixture(t, "26.800", "biz", v2)
 		f.corruptArt = true
 		target := writeTarget(t, v1)
 		_, err := run(t, f, target)
 		if err == nil || !strings.Contains(err.Error(), "SHA-256") {
 			t.Fatalf("a corrupt artifact must abort with a checksum error, got %v", err)
 		}
-		if got := runsVersion(t, target); !strings.Contains(got, "26.7.0") {
+		if got := runsVersion(t, target); !strings.Contains(got, "26.700") {
 			t.Fatalf("target changed despite corrupt artifact: %q", got)
 		}
 	})
 
 	t.Run("a 409 version conflict on resolution leaves the target intact", func(t *testing.T) {
-		f := newV1Fixture(t, "26.8.0", "biz", v2)
+		f := newV1Fixture(t, "26.800", "biz", v2)
 		f.manifestStatus = http.StatusConflict
 		target := writeTarget(t, v1)
 		_, err := run(t, f, target)
 		if err == nil || !strings.Contains(err.Error(), "release_token_version_stale") {
 			t.Fatalf("a 409 conflict must abort, got %v", err)
 		}
-		if got := runsVersion(t, target); !strings.Contains(got, "26.7.0") {
+		if got := runsVersion(t, target); !strings.Contains(got, "26.700") {
 			t.Fatalf("target changed despite a resolution conflict: %q", got)
 		}
 	})
 
 	t.Run("a 200 without the protocol marker is refused, target intact", func(t *testing.T) {
-		f := newV1Fixture(t, "26.8.0", "biz", v2)
+		f := newV1Fixture(t, "26.800", "biz", v2)
 		f.dropMarker = true
 		target := writeTarget(t, v1)
 		_, err := run(t, f, target)
 		if err == nil || !strings.Contains(err.Error(), "marker") {
 			t.Fatalf("a markerless 200 must be refused as not-v1, got %v", err)
 		}
-		if got := runsVersion(t, target); !strings.Contains(got, "26.7.0") {
+		if got := runsVersion(t, target); !strings.Contains(got, "26.700") {
 			t.Fatalf("target changed despite a non-v1 gateway: %q", got)
 		}
 	})
@@ -269,13 +269,13 @@ func TestUpgradeReleaseV1E2E(t *testing.T) {
 	t.Run("legacy mode against a v1 route reports the compatibility diagnostic", func(t *testing.T) {
 		// The v1 fixture serves only /download/release-v1, so a legacy client (which requests
 		// /download) gets a 404 that names the way out rather than a silent auto-negotiation.
-		f := newV1Fixture(t, "26.8.0", "biz", v2)
+		f := newV1Fixture(t, "26.800", "biz", v2)
 		target := writeTarget(t, v1)
 		_, err := run(t, f, target, "--download-protocol", "legacy")
 		if err == nil {
 			t.Fatal("a legacy client against a v1-only route must not succeed silently")
 		}
-		if got := runsVersion(t, target); !strings.Contains(got, "26.7.0") {
+		if got := runsVersion(t, target); !strings.Contains(got, "26.700") {
 			t.Fatalf("target changed: %q", got)
 		}
 	})

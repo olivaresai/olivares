@@ -27,7 +27,9 @@ inline に記述せず、`store:<name>` として参照します。
 olivares secrets put \
   --data-dir /var/lib/olivares \
   --name s3/prod-runbooks-read \
-  --value-file /run/secrets/s3-prod-runbooks-read
+  --value-file /run/secrets/s3-prod-runbooks-read \
+  --actor platform-operator \
+  --reason governed-rag-source-credential
 ```
 
 Google Drive の場合は、読み取り専用の Drive アクセスにデプロイが使用する OAuth
@@ -73,8 +75,17 @@ OLIVARES_AGENT_GATEWAY_CONFIG=/var/lib/olivares/quickstart/governed-rag/agent-ga
 olivares quickstart --data-dir /var/lib/olivares
 ```
 
-新規インストールの場合は、初回のコンソール設定を完了します。その後、admin token
-を使って bootstrap script を実行します。
+新規インストールの場合は、初回のコンソール設定を完了します。
+
+新規インストールでは、`knowledge` と `sourcescope` は無効です。管理者として
+**Settings > Edition & modules** で `knowledge` と `sourcescope` を有効にし、ほかの選択済み
+モジュールも有効のままにしてください。CLI を使う場合は、まず `olivares login`
+でこのエンジンに管理者としてログインし、次に `olivares modules on knowledge` と `olivares modules on sourcescope` を実行します。
+続行する前に、毎回のエンジン再起動が完了するのを待ってください。実行中の
+セッションは停止し、再開できます。有効にしないと、これらの API 呼び出しは
+`404 module_not_enabled` を返します。
+
+その後、admin token を使って bootstrap script を実行します。
 
 ```sh
 OLIVARES_TOKEN=<admin-token> \

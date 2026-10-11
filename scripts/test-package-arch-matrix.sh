@@ -4,9 +4,9 @@
 # Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 #
 # Arch Linux container leg of the package matrix. HOSTED ONLY: it builds real Arch
-# packages with goreleaser from the nfpms block and runs the real pacman in disposable,
+# packages with the release's native producer and runs the real pacman in disposable,
 # network-none containers of the pinned archlinux:base image.
-#   v1, v2   the tree's Arch package at 1.0.0 and 2.0.0. No Arch package was ever
+#   v1, v2   the tree's Arch package at 1.0 and 2.0. No Arch package was ever
 #            published, so v1 is a synthetic N-1 built from this tree, not a release.
 #   repo     a signed pacman repository rendered from v2 by
 #            `publish-package-repositories.sh --mode pacman-render`; repo-add is the
@@ -17,6 +17,7 @@
 # olivares under SigLevel = Required), remove (pacman -R after an operator edit), three
 # refusals under SigLevel = Required (an altered database, an unsigned database and a
 # package signed by another key, each required to fail on the olivares signature), and
+# a wrong-key causal control that installs the same package only after trusting its key;
 # aur: packaging/aur/olivares-bin built for real by makepkg as a non-root user in the
 # pinned archlinux:base-devel image, from the release tarball the host fetched and bound
 # to the cosign-verified checksums.txt (SRCDEST, read-only), then installed with pacman -U.
@@ -36,6 +37,14 @@
 # The hosted run needs OLIVARES_COSIGN_BIN (scripts/assert-cosign-binary.sh) to verify the
 # release checksums the AUR cell builds from.
 set -euo pipefail
+
+_olivares_git_env="$(cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")" && pwd)/lib/git-env.sh"
+# shellcheck source=/dev/null
+. "$_olivares_git_env" || {
+	echo "FATAL: cannot source $_olivares_git_env (git-env isolation)" >&2
+	exit 2
+}
+unset _olivares_git_env
 LC_ALL=C
 export LC_ALL
 export GOMAXPROCS="${GOMAXPROCS:-2}"
@@ -43,7 +52,7 @@ me=test-package-arch-matrix
 CONTAINER_PREFIX=olivares-pkg-arch
 
 could_not_look() {
-	printf '%s: NO HE PODIDO MIRAR — %s\n' "$me" "$*" >&2
+	printf '%s: COULD NOT CHECK — %s\n' "$me" "$*" >&2
 	exit 2
 }
 root="${OLIVARES_ROOT:-$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)}"
@@ -107,6 +116,15 @@ run() { # NAME CMD...
 	rc=$?
 	obs "$name.rc" "$rc"
 }
+db_signature_error() { # LOG: only the tested repository's invalid/missing signature.
+	grep -Eq "^error: olivares: (signature from .* is invalid|missing required signature)$|^error: database 'olivares' is not valid \(invalid or corrupted database \(PGP signature\)\)$|^error: failed retrieving file 'olivares.db.sig' from disk : Could not open file /work/neg-db-unsigned/stable/pacman/x86_64/olivares.db.sig$" "$1"
+}
+pkg_signature_error() { # LOG WRONG_FINGERPRINT: the generated key, not a display name.
+	local fpr=$2
+	[[ "$fpr" =~ ^[0-9A-F]{40}$ ]] || return 1
+	grep -Fq "error: key \"${fpr: -16}\" could not be looked up remotely" "$1" &&
+		grep -qx 'error: required key missing from keyring' "$1"
+}
 case "$scen" in
 install)
 	run install pacman -U --noconfirm /work/v1.pkg.tar.zst
@@ -117,7 +135,7 @@ upgrade)
 	observe before
 	run upgrade pacman -U --noconfirm /work/v2.pkg.tar.zst
 	observe after
-	grep -q 'Olivares AI upgraded from 1.0.0-1 to 2.0.0-1.' /out/log && obs upgrade.notice present || obs upgrade.notice absent
+	grep -q 'Olivares AI upgraded from 1.0-1 to 2.0-1.' /out/log && obs upgrade.notice present || obs upgrade.notice absent
 	;;
 repo)
 	run sync pacman -Sy --noconfirm
@@ -133,13 +151,25 @@ remove)
 	;;
 neg-db-altered | neg-db-unsigned | neg-pkg-wrong-key)
 	write_conf "$scen"
-	run sync pacman -Sy --noconfirm
-	# The refusal must be the olivares signature, not any other failure of the sync.
-	if grep -Eq 'invalid or corrupted database \(PGP signature\)|olivares\.db\.sig' /out/log; then obs neg.sigerr yes; else obs neg.sigerr no; fi
+	run sync pacman -Sy --noconfirm >/out/sync.log 2>&1
+	cat /out/sync.log
+	if db_signature_error /out/sync.log; then obs neg.sigerr yes; else obs neg.sigerr no; fi
+	# A cached database is not proof that pacman accepted its signature.
 	if [ -e /var/lib/pacman/sync/olivares.db ]; then obs neg.synced present; else obs neg.synced absent; fi
-	run install pacman -S --noconfirm olivares
-	if grep -Eq 'invalid or corrupted package \(PGP signature\)|olivares.*signature' /out/log; then obs neg.pkgsigerr yes; else obs neg.pkgsigerr no; fi
+	run install pacman -S --noconfirm olivares >/out/install.log 2>&1
+	cat /out/install.log
+	if db_signature_error /out/install.log; then obs neg.dbsigerr yes; else obs neg.dbsigerr no; fi
 	observe neg
+	if [[ "$scen" == neg-pkg-wrong-key ]]; then
+		wrong_fpr="$(cat /work/wrong-key.fpr)"
+		if pkg_signature_error /out/install.log "$wrong_fpr"; then obs neg.pkgsigerr yes; else obs neg.pkgsigerr no; fi
+		# Causal control: change only key trust, then install the same package under
+		# the same Required policy. A network/tool failure cannot satisfy this pair.
+		run control.add pacman-key --add /work/wrong-key.gpg
+		run control.trust pacman-key --lsign-key "$wrong_fpr"
+		run control.install pacman -S --noconfirm olivares
+		observe control
+	fi
 	;;
 aur)
 	useradd -m builder
@@ -180,6 +210,13 @@ bad = []
 def want(key, value):
     if obs.get(key) != value:
         bad.append(f"{key}={obs.get(key)!r}, want {value!r}")
+def refused(key):
+    value = obs.get(key, "")
+    if not value.isascii() or not value.isdecimal() or not 0 < int(value) < 256:
+        bad.append(f"{key}={value!r}, want a nonzero command exit status")
+def absent():
+    for key in ("version", "binary", "unit"):
+        want(f"neg.{key}", "absent")
 def installed(p, version):
     want(f"{p}.version", version)
     for key, value in (("binary", "present"), ("unit", "present"), ("stamp", "systemd"),
@@ -192,15 +229,15 @@ for key in ("keyring",):
     if key in obs:
         bad.append(f"keyring step failed: {obs[key]}")
 if scen == "install":
-    want("install.rc", "0"); installed("install", "1.0.0-1")
+    want("install.rc", "0"); installed("install", "1.0-1")
 elif scen == "upgrade":
     want("install.rc", "0"); want("upgrade.rc", "0")
-    installed("before", "1.0.0-1"); installed("after", "2.0.0-1")
+    installed("before", "1.0-1"); installed("after", "2.0-1")
     want("upgrade.notice", "present")
     if obs.get("before.uid") != obs.get("after.uid"):
         bad.append("the service account changed across the upgrade")
 elif scen == "repo":
-    want("sync.rc", "0"); want("install.rc", "0"); installed("repo", "2.0.0-1")
+    want("sync.rc", "0"); want("install.rc", "0"); installed("repo", "2.0-1")
 elif scen == "remove":
     want("install.rc", "0"); want("remove.rc", "0")
     for key, value in (("version", "absent"), ("binary", "absent"), ("unit", "absent"),
@@ -208,17 +245,18 @@ elif scen == "remove":
                        ("datadir", "olivares:olivares:750"), ("pacsave", "present"), ("wants", "0")):
         want(f"removed.{key}", value)
 elif scen in ("neg-db-altered", "neg-db-unsigned"):
-    if obs.get("sync.rc") == "0":
-        bad.append("pacman -Sy accepted the database under SigLevel = Required")
+    refused("sync.rc"); refused("install.rc")
     want("neg.sigerr", "yes")
-    want("neg.synced", "absent")
-    want("neg.version", "absent")
+    want("neg.dbsigerr", "yes")
+    absent()
 elif scen == "neg-pkg-wrong-key":
     want("sync.rc", "0")
-    if obs.get("install.rc") == "0":
-        bad.append("pacman -S installed a package signed by another key")
+    refused("install.rc")
     want("neg.pkgsigerr", "yes")
-    want("neg.version", "absent")
+    absent()
+    for key in ("control.add.rc", "control.trust.rc", "control.install.rc"):
+        want(key, "0")
+    installed("control", "2.0-1")
 elif scen == "aur":
     for key, value in (("aurcheck.rc", "0"), ("makepkg.rc", "0"), ("install.rc", "0"),
                        ("aur.binary", "present"), ("aur.unit", "present"),
@@ -277,8 +315,36 @@ CONF
 	[[ "$(grep -c '^NoExtract' "$t/pacman.conf")" -eq 2 ]] || st_fail 'write_conf dropped the image NoExtract lines'
 	grep -qx 'SigLevel = Required' "$t/pacman.conf" || st_fail 'the olivares repository is not SigLevel = Required'
 	grep -qx 'Server = file:///work/repo/stable/pacman/$arch' "$t/pacman.conf" || st_fail 'the olivares Server line'
+	# Replay the pinned pacman's diagnostics through the emitted observers, including
+	# unrelated failures and a different key. Do not infer crypto refusal from an rc.
+	awk '/^(db|pkg)_signature_error\(\) \{/,/^\}/' "$t/cell.sh" >"$t/signature-errors.sh"
+	printf '%s\n' "error: olivares: signature from \"TEST ONLY\" is invalid" \
+		'error: failed to synchronize all databases (invalid or corrupted database (PGP signature))' >"$t/db-altered.log"
+	printf '%s\n' "error: failed retrieving file 'olivares.db.sig' from disk : Could not open file /work/neg-db-unsigned/stable/pacman/x86_64/olivares.db.sig" >"$t/db-unsigned.log"
+	printf '%s\n' 'error: olivares: missing required signature' \
+		"error: database 'olivares' is not valid (invalid or corrupted database (PGP signature))" >"$t/db-install.log"
+	printf '%s\n' 'error: olivares: failed to retrieve some files' >"$t/network.log"
+	printf '%s\n' "error: database 'other' is not valid (invalid or corrupted database (PGP signature))" >"$t/other-db.log"
+	for log in db-altered db-unsigned db-install; do
+		bash -c '. "$1"; db_signature_error "$2"' _ "$t/signature-errors.sh" "$t/$log.log" || st_fail "missing $log signature diagnostic"
+	done
+	for log in network other-db; do
+		if bash -c '. "$1"; db_signature_error "$2"' _ "$t/signature-errors.sh" "$t/$log.log"; then st_fail "unrelated $log counted as database signature refusal"; fi
+	done
+	printf '%s\n' ':: Import PGP key AAAABBBBCCCCDDDD, "Olivares.AI <enterprise@olivares.ai>"? [Y/n] error: key "AAAABBBBCCCCDDDD" could not be looked up remotely' \
+		'error: required key missing from keyring' >"$t/pkg.log"
+	bash -c '. "$1"; pkg_signature_error "$2" "$3"' _ "$t/signature-errors.sh" "$t/pkg.log" \
+		000000000000000000000000AAAABBBBCCCCDDDD || st_fail 'missing generated-key refusal diagnostic'
+	for fpr in 000000000000000000000000EEEEFFFF11112222 invalid ''; do
+		if bash -c '. "$1"; pkg_signature_error "$2" "$3"' _ "$t/signature-errors.sh" "$t/pkg.log" "$fpr"; then st_fail 'an unrelated or missing key counted as the generated-key refusal'; fi
+	done
+	for pattern in 'required key missing' 'could not be looked up remotely'; do
+		sed "/$pattern/d" "$t/pkg.log" >"$t/mutant.log"
+		if bash -c '. "$1"; pkg_signature_error "$2" "$3"' _ "$t/signature-errors.sh" "$t/mutant.log" \
+			000000000000000000000000AAAABBBBCCCCDDDD; then st_fail "missing $pattern counted as the generated-key refusal"; fi
+	done
 	good_install() {
-		printf '%s\n' pacman=pacman_7.1.0-2 install.rc=0 install.version=1.0.0-1 install.binary=present \
+		printf '%s\n' pacman=pacman_7.1.0-2 install.rc=0 install.version=1.0-1 install.binary=present \
 			install.unit=present install.stamp=systemd install.user=olivares:/var/lib/olivares:/usr/bin/nologin \
 			install.uid=970 install.datadir=olivares:olivares:750 'install.manifest="init": "systemd"' \
 			install.env=present install.pacsave=absent \
@@ -286,22 +352,54 @@ CONF
 	}
 	good_install >"$t/good"
 	judge_cell "$t/good" install >/dev/null || st_fail 'the judge refuses a good install'
+	# Use independent two-number observations so fixture/judge drift is visible.
+	{
+		printf '%s\n' install.rc=0 upgrade.rc=0 upgrade.notice=present
+		good_install | sed -e 's/^install\./before./' -e 's/^before.version=.*/before.version=1.0-1/'
+		good_install | sed -e 's/^install\./after./' -e 's/^after.version=.*/after.version=2.0-1/'
+	} >"$t/upgrade"
+	judge_cell "$t/upgrade" upgrade >/dev/null || st_fail 'the judge refuses a MAJOR.MINOR upgrade'
+	sed 's/^after.version=.*/after.version=2.0.0-1/' "$t/upgrade" >"$t/upgrade-patch"
+	if judge_cell "$t/upgrade-patch" upgrade >/dev/null; then st_fail 'the judge accepts a patch-version upgrade'; fi
+	sed 's/^after.uid=.*/after.uid=971/' "$t/upgrade" >"$t/upgrade-uid"
+	if judge_cell "$t/upgrade-uid" upgrade >/dev/null; then st_fail 'the judge accepts a changed service account'; fi
 	sed 's/^install.enabled=.*/install.enabled=enabled/' "$t/good" >"$t/enabled"
 	if judge_cell "$t/enabled" install >/dev/null; then st_fail 'the judge accepts an enabled unit'; fi
 	sed 's/^install.licenses=.*/install.licenses=LICENSE,/' "$t/good" >"$t/nolicence"
 	if judge_cell "$t/nolicence" install >/dev/null; then st_fail 'the judge accepts licence texts missing from /usr/share/licenses/olivares'; fi
-	printf '%s\n' sync.rc=0 install.rc=1 neg.version=absent neg.sigerr=yes neg.synced=absent >"$t/negdb"
-	if judge_cell "$t/negdb" neg-db-altered >/dev/null; then st_fail 'the judge accepts a synced altered database'; fi
-	printf '%s\n' sync.rc=1 install.rc=1 neg.version=absent neg.sigerr=no neg.synced=absent >"$t/negdb-vacuous"
-	if judge_cell "$t/negdb-vacuous" neg-db-altered >/dev/null; then st_fail 'the judge accepts a failed sync without the olivares signature error'; fi
-	printf '%s\n' sync.rc=1 install.rc=1 neg.version=absent neg.sigerr=yes neg.synced=present >"$t/negdb-synced"
-	if judge_cell "$t/negdb-synced" neg-db-unsigned >/dev/null; then st_fail 'the judge accepts a refused database left in the sync directory'; fi
-	printf '%s\n' sync.rc=1 install.rc=1 neg.version=absent neg.sigerr=yes neg.synced=absent >"$t/negdb-ok"
-	judge_cell "$t/negdb-ok" neg-db-unsigned >/dev/null || st_fail 'the judge refuses a refused database'
-	printf '%s\n' sync.rc=0 install.rc=0 neg.version=2.0.0-1 neg.pkgsigerr=no >"$t/negpkg"
-	if judge_cell "$t/negpkg" neg-pkg-wrong-key >/dev/null; then st_fail 'the judge accepts a wrongly signed package'; fi
+	# Pacman retains rejected databases in its cache. Refusal of both operations,
+	# with their own signature diagnostics and no installation, is the contract.
+	printf '%s\n' sync.rc=1 install.rc=1 neg.version=absent neg.binary=absent neg.unit=absent \
+		neg.sigerr=yes neg.dbsigerr=yes neg.synced=present >"$t/negdb"
+	for scen in neg-db-altered neg-db-unsigned; do
+		judge_cell "$t/negdb" "$scen" >"$t/verdict" || st_fail "the judge refuses the observed $scen: $(cat "$t/verdict")"
+		for field in sync.rc install.rc; do
+			for rc in 0 missing invalid 256 -1; do
+				sed "s/^$field=.*/$field=$rc/" "$t/negdb" >"$t/mutant"
+				if judge_cell "$t/mutant" "$scen" >/dev/null; then st_fail "the judge accepts $scen with $field=$rc"; fi
+			done
+		done
+		for field in neg.sigerr neg.dbsigerr; do
+			sed "s/^$field=.*/$field=no/" "$t/negdb" >"$t/mutant"
+			if judge_cell "$t/mutant" "$scen" >/dev/null; then st_fail "the judge accepts $scen without $field"; fi
+		done
+		for field in neg.version neg.binary neg.unit; do
+			sed "s/^$field=.*/$field=present/" "$t/negdb" >"$t/mutant"
+			if judge_cell "$t/mutant" "$scen" >/dev/null; then st_fail "the judge accepts $scen with $field"; fi
+		done
+	done
+	printf '%s\n' sync.rc=0 install.rc=1 neg.version=absent neg.binary=absent neg.unit=absent \
+		neg.pkgsigerr=yes control.add.rc=0 control.trust.rc=0 control.install.rc=0 >"$t/negpkg"
+	good_install | sed 's/^install\./control./; s/1.0-1/2.0-1/' >>"$t/negpkg"
+	judge_cell "$t/negpkg" neg-pkg-wrong-key >"$t/verdict" || st_fail "the judge refuses the wrong-key refusal/control: $(cat "$t/verdict")"
+	for mutation in sync.rc=1 install.rc=0 install.rc=missing install.rc=invalid neg.pkgsigerr=no \
+		neg.version=present neg.binary=present neg.unit=present control.add.rc=1 control.trust.rc=1 \
+		control.install.rc=1 control.version=absent; do
+		sed "s/^${mutation%%=*}=.*/$mutation/" "$t/negpkg" >"$t/mutant"
+		if judge_cell "$t/mutant" neg-pkg-wrong-key >/dev/null; then st_fail "the judge accepts wrong-key cell with $mutation"; fi
+	done
 	good_aur() {
-		printf '%s\n' pacman=pacman_7.1.0-2 aurcheck.rc=0 makepkg.rc=0 install.rc=0 aur.version=26.9.0-1 \
+		printf '%s\n' pacman=pacman_7.1.0-2 aurcheck.rc=0 makepkg.rc=0 install.rc=0 aur.version=1.0-1 \
 			aur.binary=present aur.unit=present aur.user=olivares:/var/lib/olivares:/usr/bin/nologin \
 			aur.datadir=olivares:olivares:750 aur.licenses=DISCLAIMER.md,LICENSE,LICENSES,LICENSING.md,NOTICE, \
 			aur.enabled=disabled aur.wants=0
@@ -349,20 +447,12 @@ docker image inspect "$arch_image" >/dev/null 2>&1 || docker pull "$arch_image" 
 	could_not_look "image unavailable: $arch_image"
 printf 'image %s = %s\n' "$arch_image" "$(docker image inspect --format '{{index .RepoDigests 0}}' "$arch_image" 2>/dev/null || echo unknown)"
 
-# Two package sets from the real nfpms block and a test-double binary.
-python3 - "$root/packaging/nfpm/packages.json" "$scratch/nfpms.yaml" <<'PY' || could_not_look 'could not extract the nfpms block'
-from pathlib import Path
-import sys, json
-recipe = json.loads(Path(sys.argv[1]).read_text())
-for entry in recipe["nfpms"]:
-    entry.pop("version_schema", None)
-out = "nfpms: " + json.dumps(recipe["nfpms"]) + "\n"
-Path(sys.argv[2]).write_text(out)
-PY
+# Two package sets from the release's exact-version native producer and a test-double binary.
 build_set() { # LABEL VERSION
 	local label=$1 version=$2 proj="$scratch/proj-$1" f a
-	mkdir -p "$proj/cmd/olivares" "$proj/packaging"
+	mkdir -p "$proj/cmd/olivares" "$proj/packaging" "$proj/scripts"
 	cp -a "$root/packaging/." "$proj/packaging/"
+	cp "$root/scripts/ensure-nfpm.sh" "$root/scripts/render-package-systemd.sh" "$proj/scripts/"
 	for f in LICENSE NOTICE LICENSING.md DISCLAIMER.md; do cp "$root/$f" "$proj/"; done
 	cp -a "$root/LICENSES" "$proj/LICENSES"
 	cat >"$proj/cmd/olivares/main.go" <<'GO'
@@ -390,20 +480,24 @@ GO
 	{
 		printf '%s\n' 'version: 2' 'project_name: olivares' 'builds:' \
 			'  - id: olivares' '    main: ./cmd/olivares' '    binary: olivares' \
-			'    goos: [linux]' '    goarch: [amd64]' '    env: [CGO_ENABLED=0]' \
+			'    goos: [linux]' '    goarch: [amd64, arm64]' '    env: [CGO_ENABLED=0]' \
+			'archives:' '  - formats: [tar.gz]' '    files: [NOTICE]' \
+			'checksum:' '  name_template: checksums.txt' \
 			'snapshot:' "  version_template: \"$version\""
-		cat "$scratch/nfpms.yaml"
 	} >"$proj/.goreleaser.yaml"
 	(
 		cd "$proj"
 		git init -q
 		git config user.name fixture
 		git config user.email fixture@example.invalid
-		git add -- .goreleaser.yaml go.mod cmd packaging LICENSE NOTICE LICENSING.md DISCLAIMER.md LICENSES
+		git add -- .goreleaser.yaml go.mod cmd scripts packaging LICENSE NOTICE LICENSING.md DISCLAIMER.md LICENSES
 		git -c core.hooksPath= -c commit.gpgsign=false commit -q --no-verify -s -m "test: Arch leg project"
 		git remote add origin https://example.invalid/olivares/olivares.git
 		"$goreleaser_bin" release --snapshot --clean --config .goreleaser.yaml \
-			--skip=before,publish,sign,sbom,docker,validate,archive,homebrew,ko,nix,scoop,snapcraft,winget,aur,announce,notarize,chocolatey,flatpak,makeself,mcp,srpm
+			--skip=before,publish,sign,sbom,docker,validate,homebrew,ko,nix,scoop,snapcraft,winget,aur,announce,notarize,chocolatey,flatpak,makeself,mcp,srpm
+		OLIVARES_NFPM_DIR="$scratch/nfpm" python3 "$root/scripts/build-native-release-packages.py" \
+			--root "$proj" --dist "$proj/dist" --version "$version" \
+			--source-date-epoch "$(git show -s --format=%ct HEAD)"
 	) >"$scratch/build-$label.out" 2>&1 || {
 		sed -n '1,120p' "$scratch/build-$label.out" >&2
 		could_not_look "goreleaser could not build the $label set"
@@ -414,8 +508,8 @@ GO
 	mkdir -p "$scratch/release-$label"
 	cp "$a" "$scratch/release-$label/"
 }
-build_set v1 1.0.0
-build_set v2 2.0.0
+build_set v1 1.0
+build_set v2 2.0
 
 # Throwaway keys, made here and nowhere else.
 for name in good wrong; do
@@ -430,6 +524,9 @@ for name in good wrong; do
 	chmod 0600 "$keys/$name.asc"
 done
 fpr="$(cat "$keys/good.fpr")"
+cp "$keys/wrong.fpr" "$scratch/work/wrong-key.fpr"
+gpg --homedir "$keys/wrong" --batch --export "$(cat "$keys/wrong.fpr")" >"$scratch/work/wrong-key.gpg" ||
+	could_not_look 'cannot export the wrong public key for the trust control'
 
 # repo-add from the pinned image, run as this user on the current directory.
 cat >"$scratch/repo-add" <<WRAP
@@ -442,12 +539,12 @@ mkdir -p "$scratch/work/repo"
 OLIVARES_REPO_ADD_BIN="$scratch/repo-add" OLIVARES_PACMAN_SIGNING_KEY_FILE="$keys/good.asc" \
 	OLIVARES_PACMAN_SIGNING_FINGERPRINT="$fpr" OLIVARES_PACMAN_EXPECTED_FINGERPRINT="$fpr" TMPDIR="$scratch" \
 	bash "$root/scripts/publish-package-repositories.sh" --mode pacman-render --tree "$scratch/work/repo" \
-	--pacman-packages "$scratch/release-v2" --version 2.0.0 --source-date-epoch "$(date -u +%s)" ||
+	--pacman-packages "$scratch/release-v2" --version 2.0 --source-date-epoch "$(date -u +%s)" ||
 	could_not_look 'the publisher could not render the test repository'
 cp "$scratch/work/repo/keys/olivares-pacman-repository.gpg" "$scratch/work/key.gpg"
 # The refusal repositories: an altered database, an unsigned database, a package signed
 # by the other throwaway key.
-pkg=olivares_2.0.0_linux_amd64.pkg.tar.zst
+pkg=olivares_2.0_linux_amd64.pkg.tar.zst
 for variant in neg-db-altered neg-db-unsigned neg-pkg-wrong-key; do
 	cp -a "$scratch/work/repo" "$scratch/work/$variant"
 done
@@ -467,11 +564,11 @@ aur_asset="olivares_${aur_ver}_linux_amd64.tar.gz"
 mkdir -p "$scratch/release-aur" "$scratch/srcdest"
 for f in checksums.txt checksums.txt.sig checksums.txt.pem "$aur_asset"; do
 	curl --fail --silent --show-error --location --proto '=https' --max-time 300 \
-		"https://github.com/olivaresai/olivares/releases/download/v${aur_ver}/$f" -o "$scratch/release-aur/$f" ||
-		could_not_look "cannot fetch $f of v$aur_ver"
+		"https://github.com/olivaresai/olivares/releases/download/${aur_ver}/$f" -o "$scratch/release-aur/$f" ||
+		could_not_look "cannot fetch $f of $aur_ver"
 done
 bash "$root/scripts/check-aur-olivares-bin.sh" --checksums "$scratch/release-aur/checksums.txt" ||
-	could_not_look "the AUR definition is not bound to the verified v$aur_ver checksums (exit $?)"
+	could_not_look "the AUR definition is not bound to the verified $aur_ver checksums (exit $?)"
 want_sha="$(awk -v n="$aur_asset" '$2 == n {print $1}' "$scratch/release-aur/checksums.txt")"
 [[ "$(sha256sum "$scratch/release-aur/$aur_asset" | cut -d' ' -f1)" == "$want_sha" ]] ||
 	could_not_look "the fetched $aur_asset does not match the verified checksums"

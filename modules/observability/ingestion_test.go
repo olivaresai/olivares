@@ -67,9 +67,9 @@ func TestIngestionHealthStandards(t *testing.T) {
 	}
 	wants := []want{
 		{"otel_genai", "OpenTelemetry GenAI semconv", "in", "development", "1.41.1", "opt_in_off"},
-		{"ocsf", "OCSF (ai_operation profile)", "out", "ga", "1.8.0", "available"},
-		{"asim_agentevent", "Microsoft Sentinel ASIM AgentEvent", "out", "pre_1_0", "0.1.0", "available"},
-		{"siem_unified", "SIEM unified (CEF / LEEF / syslog / OTLP)", "out", "stable", "—", "available"},
+		{"ocsf", "OCSF (ai_operation profile)", "out", "ga", "1.8.0", operationsExportStatus()},
+		{"asim_agentevent", "Microsoft Sentinel ASIM AgentEvent", "out", "pre_1_0", "0.1.0", operationsExportStatus()},
+		{"siem_unified", "SIEM unified (CEF / LEEF / syslog / OTLP)", "out", "stable", "—", operationsExportStatus()},
 		{"ledger_push", "Ledger push transport", "out", "development", "—", "blocked"},
 		{"prometheus_text", "Prometheus text exposition", "out", "stable", "0.0.4", "active"},
 		{"w3c_trace_context", "W3C Trace Context (ledger correlation)", "in", "stable", "—", "active"},

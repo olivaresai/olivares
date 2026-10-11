@@ -38,6 +38,7 @@ func wireBackends(t *testing.T) []store.Config {
 func wireBoot(t *testing.T, cfg store.Config, dir string) (*engine, string, model.TenantID) {
 	t.Helper()
 	auth.SetTestHashParams(auth.TestArgonMemKiB, auth.TestArgonTime, auth.TestArgonThreads)
+	prepareCompositionTestBoot(t)
 	eng, err := boot(context.Background(), bootConfig{DataDir: dir, Engine: string(cfg.Engine), DSN: cfg.DSN,
 		OwnerDSN: cfg.OwnerDSN, AdminDSN: cfg.AdminDSN, Version: "test", Logger: quietLog()})
 	if err != nil {

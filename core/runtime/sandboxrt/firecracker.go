@@ -169,7 +169,7 @@ func (b *firecrackerBackend) Execute(ctx context.Context, job Job, profile Profi
 	defer func() { _ = os.RemoveAll(instDir) }()
 
 	// 1) Write the guest-harness job spec (delivered via the scratch drive).
-	jobBytes, err := encodeHarnessJob(job, proxyAddr)
+	jobBytes, err := encodeHarnessJob(job, proxyAddr, "")
 	if err != nil {
 		return BackendResult{InstanceID: id}, err
 	}

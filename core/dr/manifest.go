@@ -36,6 +36,13 @@ type BuildOptions struct {
 	Now time.Time
 	// Notes is free-form operator context (no secrets).
 	Notes string
+	// Ledger, when set, serves every chain read from its read-only snapshot
+	// instead of Store.Custody. A backup taken beside a serving Postgres node needs
+	// it: that backup's own engine is a standby, and Custody is a read-write door
+	// that refuses a standby with ErrNotLeader, although the manifest only reads.
+	// Nil reads through Custody, as SQLite (a private copy) and the API handler
+	// (always the active node) do. The caller opens and closes it.
+	Ledger store.AuditReader
 }
 
 // BuildManifest reads every tenant chain tip (including the system tenant) from
@@ -46,10 +53,22 @@ type BuildOptions struct {
 // with VerifiedAtBackup=false and a reason, so the caller can refuse to capture a
 // corrupt ledger as if it were a good restore point.
 func BuildManifest(ctx context.Context, st store.Store, eventPub ed25519.PublicKey, cpVerifier *audit.CheckpointVerifier, opts BuildOptions) (*Manifest, error) {
+	return buildManifest(ctx, func() ([]model.TenantID, error) { return enumerateTenants(ctx, st) }, opts.auditView(st), eventPub, cpVerifier, opts)
+}
+
+// BuildManifestFromReader verifies and inventories an existing SQLite snapshot
+// without requiring a runtime Store or migrating the snapshot.
+func BuildManifestFromReader(ctx context.Context, reader store.DRReader, eventPub ed25519.PublicKey, cpVerifier *audit.CheckpointVerifier, opts BuildOptions) (*Manifest, error) {
+	return buildManifest(ctx, func() ([]model.TenantID, error) {
+		return enumerateTenantOrgs(ctx, reader.ListOrgs)
+	}, reader.ViewAudit, eventPub, cpVerifier, opts)
+}
+
+func buildManifest(ctx context.Context, enumerate func() ([]model.TenantID, error), view auditViewFunc, eventPub ed25519.PublicKey, cpVerifier *audit.CheckpointVerifier, opts BuildOptions) (*Manifest, error) {
 	if opts.TipMatch != TipExact && opts.TipMatch != TipAdvisory {
 		return nil, fmt.Errorf("dr: BuildManifest invalid TipMatch %q", opts.TipMatch)
 	}
-	tenants, err := enumerateTenants(ctx, st)
+	tenants, err := enumerate()
 	if err != nil {
 		return nil, err
 	}
@@ -61,7 +80,7 @@ func BuildManifest(ctx context.Context, st store.Store, eventPub ed25519.PublicK
 	// were never checked and `dr verify` could still report PASSED. The physical
 	// rows were in the copy; the certification of continuity needed to trust them
 	// was not, and the report said otherwise. Reading a chain tip is custodial, so
-	// it goes through store.Custody and is no longer denied.
+	// it goes through store.Custody (or opts.Ledger) and is no longer denied.
 	notes := opts.Notes
 
 	m := &Manifest{
@@ -75,7 +94,7 @@ func BuildManifest(ctx context.Context, st store.Store, eventPub ed25519.PublicK
 		Notes:      notes,
 	}
 	for _, t := range tenants {
-		tip, err := tenantTip(ctx, st, t, eventPub, cpVerifier)
+		tip, err := tenantTip(ctx, view, t, eventPub, cpVerifier)
 		if err != nil {
 			return nil, fmt.Errorf("dr: tip for tenant %s: %w", t, err)
 		}
@@ -98,18 +117,23 @@ func BuildManifest(ctx context.Context, st store.Store, eventPub ed25519.PublicK
 // read itself for exactly that reason — a duty spread across callers is inherited
 // by whoever is written next — so there is no count for a caller to check any more.
 func enumerateTenants(ctx context.Context, st store.Store) ([]model.TenantID, error) {
-	var ids []model.TenantID
-	if err := st.System(ctx, func(sys store.SystemScope) error {
-		orgs, err := sys.ListOrgs(ctx)
-		if err != nil {
+	return enumerateTenantOrgs(ctx, func(ctx context.Context) (orgs []model.Org, err error) {
+		err = st.System(ctx, func(sys store.SystemScope) error {
+			orgs, err = sys.ListOrgs(ctx)
 			return err
-		}
-		for _, o := range orgs {
-			ids = append(ids, o.TenantID)
-		}
-		return nil
-	}); err != nil {
+		})
+		return orgs, err
+	})
+}
+
+func enumerateTenantOrgs(ctx context.Context, list func(context.Context) ([]model.Org, error)) ([]model.TenantID, error) {
+	orgs, err := list(ctx)
+	if err != nil {
 		return nil, err
+	}
+	var ids []model.TenantID
+	for _, o := range orgs {
+		ids = append(ids, o.TenantID)
 	}
 	// The system tenant holds auth + cross-tenant events; it has its own chain and
 	// must be captured even though it is not a business org.
@@ -126,14 +150,29 @@ func enumerateTenants(ctx context.Context, st store.Store) ([]model.TenantID, er
 	return out, nil
 }
 
+// auditViewFunc runs fn over one tenant's evidence ledger.
+type auditViewFunc func(ctx context.Context, tenant model.TenantID, fn func(store.AuditLog) error) error
+
+// auditView is where the manifest reads every chain from: the caller's read-only
+// Ledger when it gave one, otherwise Store.Custody.
+func (o BuildOptions) auditView(st store.Store) auditViewFunc {
+	if o.Ledger != nil {
+		return o.Ledger.ViewAudit
+	}
+	return func(ctx context.Context, tenant model.TenantID, fn func(store.AuditLog) error) error {
+		return st.Custody(ctx, tenant, func(sc store.CustodyScope) error { return fn(sc.Audit()) })
+	}
+}
+
 // tenantTip reads one tenant's chain tip and verifies the chain, per-event
 // signatures and checkpoints at backup time.
-func tenantTip(ctx context.Context, st store.Store, t model.TenantID, eventPub ed25519.PublicKey, cpVerifier *audit.CheckpointVerifier) (TenantTip, error) {
+func tenantTip(ctx context.Context, view auditViewFunc, t model.TenantID, eventPub ed25519.PublicKey, cpVerifier *audit.CheckpointVerifier) (TenantTip, error) {
 	tip := TenantTip{Tenant: t.String(), System: t.IsSystem()}
-	// Custody, not View: reading a chain tip is a custodial act, so a tenant whose
-	// service is withdrawn still gets a real, verified tip in the manifest.
-	err := st.Custody(ctx, t, func(sc store.CustodyScope) error {
-		head, has, err := sc.Audit().Head(ctx)
+	// A custodial read, not the service door: reading a chain tip must work for a
+	// tenant whose service is withdrawn, so it still gets a real, verified tip in
+	// the manifest. Both views are custodial; neither is the suspension-gated View.
+	err := view(ctx, t, func(log store.AuditLog) error {
+		head, has, err := log.Head(ctx)
 		if err != nil {
 			return err
 		}
@@ -145,17 +184,17 @@ func tenantTip(ctx context.Context, st store.Store, t model.TenantID, eventPub e
 		tip.HeadSeq = head.Seq
 		tip.HeadHash = hex.EncodeToString(head.Hash)
 
-		chain, err := sc.Audit().Verify(ctx, 1)
+		chain, err := log.Verify(ctx, 1)
 		if err != nil {
 			return err
 		}
-		events, err := audit.VerifyEvents(ctx, sc.Audit(), eventPub)
+		events, err := audit.VerifyEvents(ctx, log, eventPub)
 		if err != nil {
 			return err
 		}
 		var cp audit.CheckpointReport
 		if cpVerifier != nil && !cpVerifier.Empty() {
-			cp, err = audit.VerifyCheckpointsWith(ctx, sc.Audit(), cpVerifier)
+			cp, err = audit.VerifyCheckpointsWith(ctx, log, cpVerifier)
 			if err != nil {
 				return err
 			}

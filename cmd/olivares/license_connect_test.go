@@ -235,7 +235,7 @@ func (s *connectStub) credentialAnswer(d *stubDep) map[string]any {
 	return map[string]any{"deployment_id": d.id, "slot": 1, "purpose": "production", "parent": nil, "pop_kid": d.kid,
 		"binding_epoch": d.epoch, "credential": blob, "credential_serial": fmt.Sprintf("conn_production_%s_%d", d.id, d.seq),
 		"credential_issue_seq": d.seq, "phase": "term", "credential_effective_until": effective,
-		"ota": ota, "exp": time.Now().Add(24 * time.Hour).Unix(), "version": "26.9.0"}
+		"ota": ota, "exp": time.Now().Add(24 * time.Hour).Unix(), "version": "26.900"}
 }
 
 // replay answers a repeated operation from its stored result; ok is false when there is none.
@@ -1234,12 +1234,12 @@ func TestUpgradeConnectRefreshesThenDownloadsWithTheFreshBearer(t *testing.T) {
 	if _, err := exec.LookPath("go"); err != nil {
 		t.Skip("go toolchain not available to build stub binaries")
 	}
-	v1 := buildStub(t, "26.7.0")
-	v2 := buildStub(t, "26.8.0")
+	v1 := buildStub(t, "26.700")
+	v2 := buildStub(t, "26.800")
 	stub := newConnectStub(t)
 	c := newConnectCLI(t, stub)
 	dep := c.bind()
-	f := newV1Fixture(t, "26.8.0", "biz", v2)
+	f := newV1Fixture(t, "26.800", "biz", v2)
 	gateway, err := url.Parse(f.server.URL)
 	if err != nil {
 		t.Fatal(err)
@@ -1268,7 +1268,7 @@ func TestUpgradeConnectRefreshesThenDownloadsWithTheFreshBearer(t *testing.T) {
 		if code := upgrade(target); code != exitcode.Auth {
 			t.Fatalf("exit %d, want Auth", code)
 		}
-		if got := runsVersion(t, target); !strings.Contains(got, "26.7.0") {
+		if got := runsVersion(t, target); !strings.Contains(got, "26.700") {
 			t.Fatalf("the binary changed: %q", got)
 		}
 		if !bytes.Equal(c.license(), lic) {
@@ -1287,7 +1287,7 @@ func TestUpgradeConnectRefreshesThenDownloadsWithTheFreshBearer(t *testing.T) {
 		if code := upgrade(target); code != exitcode.OK {
 			t.Fatalf("connected upgrade exit %d", code)
 		}
-		if got := runsVersion(t, target); !strings.Contains(got, "26.8.0") {
+		if got := runsVersion(t, target); !strings.Contains(got, "26.800") {
 			t.Fatalf("target not upgraded: %q", got)
 		}
 		kr, _ := licenseKeyringForDataDir(c.dir)

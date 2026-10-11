@@ -30,7 +30,10 @@ Two properties do the load-bearing work, in this order:
    **environment scoping always applies**: the child inherits none of the engine's
    environment — no connector secrets, no KMS or signing keys. A dedicated non-root
    uid and cgroup memory/pid ceilings apply when the engine runs privileged, and the
-   whole extraction is bounded by a wall-clock timeout.
+   whole extraction is bounded by a wall-clock timeout. On supported Linux, the
+   shared core helper applies explicit SDK Landlock grants and no_new_privs before
+   exec. Failed restriction refuses execution. The parser keeps its stdin/stdout
+   streaming; no filesystem-wide or session-default grants are added.
 
 The parser (property 1) is the primary safety boundary; the sandbox (property 2) is
 defense in depth, meaningful precisely because a future parser change or an
@@ -38,18 +41,19 @@ undiscovered stdlib bug should still be contained.
 
 ## What is NOT contained — read this
 
-- **Non-privileged engine → the sandbox is weaker.** When the engine itself runs as a
-  non-root user (a common deployment), the confinement cannot drop the child to a
-  dedicated uid — the helper runs at the **engine's own uid**. Environment scoping
-  still applies (the child's own environment carries no secrets), but a process at the
-  engine's uid could read `/proc/<engine>/environ`. In that configuration the
-  isolation reduces to "the parser is memory-safe stdlib code that does not read the
-  engine's memory" — which it is, but the OS boundary is not the strong one. This is
-  the same honest degradation the plugin confinement model records; see
-  `PLUGIN-CONFINEMENT-THREAT-MODEL.md`.
-- **No network isolation, seccomp, or landlock** on the helper this release (declared
-  follow-ups of the confinement launcher). The extraction path performs no network I/O
-  by construction, but that is a property of the code, not an enforced boundary.
+- **Non-privileged engine → shared UID remains a limitation.** The helper cannot
+  drop to a dedicated UID. Scoped environment and supported-Linux Landlock still
+  apply: default SDK policy grants no `/proc` and permits writes only in owned
+  scratch. Same-UID process-memory access is not a generally enforced boundary;
+  unsupported Landlock also leaves host filesystem access at that UID. See
+  `PLUGIN-CONFINEMENT-THREAT-MODEL.md` for the exact grants and degradations.
+- **No network isolation, seccomp filter, bounding-capability clearance or active
+  health-timeout monitor.** Landlock and no_new_privs do not implement these.
+  The extraction path performs no network I/O by construction, but that is a code
+  property, not an enforced network boundary. Its wall-clock extraction timeout
+  and confirmed cgroup ceilings are distinct from active plugin health monitoring.
+  The extractor's preparation log does not attest that a child has already entered
+  its domain; the successful extraction is the observation of child execution.
 - **The engine spawns one subprocess per document.** Ingest is sequential and each
   extraction is time-bounded, so this is not an amplification vector, but a very large
   corpus of Office files makes a sync proportionally slower — an honest cost, not a

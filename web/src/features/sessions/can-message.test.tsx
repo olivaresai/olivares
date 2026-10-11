@@ -85,11 +85,37 @@ describe('Can message (COMMS-PATH #5)', () => {
     expect(peerCandidates(own, sessions)).toEqual([])
   })
 
+  it('hides the default when no other live session can be chosen', () => {
+    renderIntel(
+      <CanMessage
+        session={self}
+        sessions={[
+          self,
+          sessions.find((s) => s.runs[0]?.run_ref === 'D')!,
+          sessions.find((s) => s.runs[0]?.run_ref === 'E')!,
+        ]}
+      />,
+    )
+    expect(screen.queryByTestId('can-message')).toBeNull()
+  })
+
+  it.each([
+    { peers: ['osn_missing'] },
+    { peers: [], peers_rule: 'same-template' as const },
+  ])(
+    'keeps configured permissions reachable without live candidates: %j',
+    (over) => {
+      const one = mergeSessions([a.live], [{ ...a.run, ...over }])[0]!
+      renderIntel(<CanMessage session={one} sessions={[one]} />)
+      expect(screen.getByTestId('can-message')).toBeVisible()
+    },
+  )
+
   it('sends the chosen sessions as peers', async () => {
     const user = userEvent.setup()
     renderIntel(<CanMessage session={self} sessions={sessions} />)
     await user.click(
-      screen.getByRole('button', { name: 'Can message no other session' }),
+      screen.getByRole('button', { name: 'Choose sessions to message' }),
     )
     await user.click(screen.getByRole('checkbox', { name: 'B' }))
     await user.click(screen.getByRole('button', { name: 'Save' }))
@@ -102,7 +128,7 @@ describe('Can message (COMMS-PATH #5)', () => {
     const user = userEvent.setup()
     renderIntel(<CanMessage session={self} sessions={sessions} />)
     await user.click(
-      screen.getByRole('button', { name: 'Can message no other session' }),
+      screen.getByRole('button', { name: 'Choose sessions to message' }),
     )
     await user.click(
       screen.getByRole('checkbox', { name: 'Sessions from this template' }),
@@ -123,7 +149,7 @@ describe('Can message (COMMS-PATH #5)', () => {
       view.unmount()
       return text
     }
-    expect(labelFor({ peers: [] })).toBe('Can message no other session')
+    expect(labelFor({ peers: [] })).toBe('Choose sessions to message')
     expect(labelFor({ peers: ['osn_b'] })).toBe('Can message 1 other session')
     expect(labelFor({ peers: ['osn_b', 'osn_c'] })).toBe(
       'Can message 2 other sessions',
@@ -144,7 +170,7 @@ describe('Can message (COMMS-PATH #5)', () => {
     const user = userEvent.setup()
     renderIntel(<CanMessage session={self} sessions={sessions} />)
     await user.click(
-      screen.getByRole('button', { name: 'Can message no other session' }),
+      screen.getByRole('button', { name: 'Choose sessions to message' }),
     )
     await user.click(screen.getByRole('checkbox', { name: 'C' }))
     await user.click(screen.getByRole('button', { name: 'Save' }))

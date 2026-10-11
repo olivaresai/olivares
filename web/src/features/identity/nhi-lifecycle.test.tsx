@@ -9,7 +9,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '@/lib/api/errors'
 import './i18n'
 
-const { api, authState } = vi.hoisted(() => ({
+const { api, authState, panels, toast } = vi.hoisted(() => ({
+  toast: { success: vi.fn(), warning: vi.fn(), error: vi.fn() },
+  panels: { governanceTabs: [] as { id: string }[] },
   api: {
     nhiLifecycle: vi.fn(),
     nhiPosture: vi.fn(),
@@ -33,6 +35,9 @@ const { api, authState } = vi.hoisted(() => ({
   },
 }))
 
+vi.mock('@/components/ui/toaster', () => ({ toast, Toaster: () => null }))
+
+vi.mock('@/features/extensions', () => ({ PANEL_EXTENSIONS: panels }))
 vi.mock('@/lib/auth/context', () => ({ useAuth: () => authState }))
 vi.mock('./api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./api')>()
@@ -70,6 +75,7 @@ function wrap(ui: ReactElement) {
 }
 
 beforeEach(() => {
+  panels.governanceTabs = []
   authState.principal = { aal: 3, amr: ['webauthn'] }
   api.nhiPosture.mockResolvedValue({
     total: 12,
@@ -176,7 +182,83 @@ describe('NHI lifecycle posture and filtering', () => {
 })
 
 describe('NHI lifecycle action honesty', () => {
+  it('Community rotation does not promise an emergency grant', async () => {
+    const user = userEvent.setup()
+    wrap(<NhiActions identity={baseIdentity} />)
+    await user.click(screen.getByRole('button', { name: 'Rotate' }))
+    const dialog = screen.getByRole('dialog')
+    expect(
+      within(dialog).queryByText(/break-glass grant can authorize it/i),
+    ).not.toBeInTheDocument()
+    expect(
+      within(dialog).getByText(/break-glass cannot authorize/i),
+    ).toBeInTheDocument()
+  })
+
+  it.each(
+    (['rotate', 'offboard', 'finalize', 'restore'] as const).flatMap((action) =>
+      (
+        [
+          'done',
+          'pending',
+          'break_glass',
+          'rejected',
+          'expired',
+          'no_gate',
+          'unavailable',
+        ] as const
+      ).map((status) => ({ action, status })),
+    ),
+  )(
+    'reports $action status=$status with the matching toast intent',
+    async ({ action, status }) => {
+      const actions = {
+        rotate: [api.rotateNhi, 'Rotate', 'Request rotation'],
+        offboard: [api.offboardNhi, 'Offboard', 'Request soft-delete'],
+        finalize: [api.finalizeNhi, 'Finalize', 'Finalize permanently'],
+        restore: [api.restoreNhi, 'Restore', 'Restore NHI'],
+      } as const
+      const [request, button, confirm] = actions[action]
+      request.mockResolvedValue({ status })
+      const user = userEvent.setup()
+      wrap(
+        <NhiActions
+          identity={{
+            ...baseIdentity,
+            offboard_state:
+              action === 'finalize' || action === 'restore'
+                ? 'soft_deleted'
+                : 'none',
+          }}
+        />,
+      )
+      await user.click(screen.getByRole('button', { name: button }))
+      const dialog = screen.getByRole('dialog')
+      if (action === 'finalize') {
+        await user.type(
+          within(dialog).getByLabelText('Confirmation phrase'),
+          baseIdentity.identity_ref,
+        )
+      }
+      await user.click(within(dialog).getByRole('button', { name: confirm }))
+      const warning = [
+        'rejected',
+        'expired',
+        'no_gate',
+        'unavailable',
+      ].includes(status)
+      await waitFor(() =>
+        expect(warning ? toast.warning : toast.success).toHaveBeenCalledTimes(
+          1,
+        ),
+      )
+      expect(warning ? toast.success : toast.warning).not.toHaveBeenCalled()
+      expect(request).toHaveBeenCalledTimes(1)
+    },
+  )
+
   it('declares dual control and AAL3 before rotate, then shows the credential only once', async () => {
+    panels.governanceTabs = [{ id: 'break-glass' }]
     const user = userEvent.setup()
     api.rotateNhi.mockResolvedValue({
       status: 'done',

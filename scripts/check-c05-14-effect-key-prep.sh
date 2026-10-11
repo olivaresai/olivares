@@ -38,14 +38,14 @@ grep -F -q 'Does not modify 004' "$DOC" \
 grep -F -q '013 is already plan_enforcement' "$DOC" \
   || fail "prepare doc lost 013 collision remasure"
 if grep -qiE 'FIRMA A claimed|remainder applied on origin/main|effect_key landed in 004' "$DOC"; then
-  fail "prepare doc claims an application this lote does not have"
+  fail "prepare doc claims an application this batch does not have"
 fi
 
 if grep -q 'effect_key' "$M004"; then
-  fail "004 gained effect_key — this lote does not modify existing migrations"
+  fail "004 gained effect_key — this batch does not modify existing migrations"
 fi
 if [ -e "$COLLIDE" ]; then
-  fail "013_suspension_log_effect_key landed — this HOLD lote does not apply #1023 as-is"
+  fail "013_suspension_log_effect_key landed — this HOLD batch does not apply #1023 as-is"
 fi
 grep -q 'max_seats' "$M013" \
   || fail "013 is no longer plan_enforcement (GRANT max_seats gone)"
@@ -53,7 +53,7 @@ if grep -q 'effect_key' "$M013"; then
   fail "013 plan_enforcement was overwritten with effect_key"
 fi
 if grep -q 'polar_event_id, effect_key' "$STMT"; then
-  fail "LogSuspension INSERT gained effect_key — this HOLD lote does not apply C05-14"
+  fail "LogSuspension INSERT gained effect_key — this HOLD batch does not apply C05-14"
 fi
 grep -q '(tenant_id, action, reason, polar_event_id)' "$STMT" \
   || fail "LogSuspension INSERT drifted"

@@ -7,6 +7,9 @@ description: >-
   ce n'est pas une démo.
 ---
 
+> Les paquets de déploiement sont fournis par le canal Business ; leur publication n’est pas vérifiée ici. Vérifiez le paquet du chart et son éditeur selon les instructions du canal avant d’utiliser le chart local. L’exemple de manifeste utilise un fichier Business nommé `business-install.yaml`. L’installation isolée nécessite Enterprise.
+
+
 C'est le chemin rapide pour comprendre à quoi sert Olivares AI : une **carte
 d'accès lecture/écriture** de votre estate et la **dérive Permis-vs-Observé** par-dessus
 — l'écart entre l'accès qu'un agent s'est vu *accorder* et l'accès qu'il est
@@ -53,7 +56,7 @@ task build                      # compiles ./bin/olivares with the web UI embedd
 moteur, l'interface web embarquée et les plugins de connecteurs de première partie. Les
 **installations conteneur et Kubernetes enveloppent ce même binaire** : une image publiée
 plus un fichier Compose ([auto-hébergement](/fr/how-to/self-hosting/)), ou un manifeste plat
-que vous appliquez avec `kubectl apply -f deploy/manifests/install.yaml` (pas de Helm
+que vous appliquez avec `kubectl apply -f ./business-install.yaml` (pas de Helm
 requis). La fonctionnalité phare que vous voyez ci-dessous est identique sur les trois —
 seul le seed de démo diffère (loopback uniquement, jamais dans une véritable installation).
 
@@ -244,7 +247,7 @@ voir [connecter une source](/fr/how-to/connect-a-source/). L'estate de démo mon
 :::note[La forme de l'endpoint]
 Le résultat Permis-vs-Observé est servi à `/v1/m/accessmap/drift` (il n'y a pas de
 `/diff`). Les routes `/v1/m/accessmap/*` ne figurent pas dans le contrat stable du cœur à
-70 routes ; elles sont publiées dans un document **bêta** distinct — la
+128 routes ; elles sont publiées dans un document **bêta** distinct — la
 [référence des routes de module](/reference/api-beta/). La
 [référence API](/reference/api/) documente la surface stable du cœur.
 :::

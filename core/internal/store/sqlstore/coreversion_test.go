@@ -588,12 +588,9 @@ VALUES (?, ?, ?, ?, NULL)`, coreDirectoryMigrationVersion, coreDirectoryMigratio
 }
 
 // TestOpenRunsCoreVersionPreflightFirstUnderTheMigrationLock pins the production
-// wiring, not merely the helper. Open is a one-line wrapper of openPrepared; the
-// first statement in that function's withMigrationLock callback must still be the
-// future-version preflight. Inspecting openPrepared without proving Open delegates
-// to it would miss a wrapper that never reaches the lock. Moving the preflight
-// below classification lets the three rollout-control tables commit before the
-// old binary refuses the database.
+// wiring, not merely the helper. The schema step must start with the version
+// preflight under the migration lock. TestOpenStoreRefusesFutureSchemaWithoutWrites
+// also exercises Open itself, so a disconnected plan cannot satisfy this check.
 func TestOpenRunsCoreVersionPreflightFirstUnderTheMigrationLock(t *testing.T) {
 	t.Parallel()
 	fset := token.NewFileSet()
@@ -611,7 +608,16 @@ func TestOpenRunsCoreVersionPreflightFirstUnderTheMigrationLock(t *testing.T) {
 	if preparedFn == nil || preparedFn.Body == nil {
 		t.Fatalf("Open delegates to %s, which is not declared in store.go", preparedName)
 	}
-	callback := firstWithMigrationLockCallback(preparedFn.Body)
+	var schemaFn *ast.FuncDecl
+	for _, decl := range file.Decls {
+		if fn, ok := decl.(*ast.FuncDecl); ok && fn.Recv != nil && fn.Name.Name == "openPrepared" {
+			schemaFn = fn
+		}
+	}
+	if schemaFn == nil {
+		t.Fatal("store preparation has no schema step")
+	}
+	callback := firstWithMigrationLockCallback(schemaFn.Body)
 	if callback == nil || callback.Body == nil || len(callback.Body.List) == 0 {
 		t.Fatalf("%s has no inspectable withMigrationLock callback on the Open path", preparedName)
 	}

@@ -20,6 +20,13 @@ response headers → one `DeprecationWarning` per endpoint, or your
 `on_deprecation` callback). The operation layer (`_operations.py`) is generated
 from the published OpenAPI snapshot by `task sdk:generate` — do not edit it.
 
+Route arguments that collide with method or transport names gain a `_path`
+suffix. For example, `c.get_v1_console_sso_tenants_by_tenant("target", tenant="caller")`
+uses `target` in the URL and `caller` in the tenant header. The route argument
+can also be passed as `tenant_path="target"`. Other working argument names and
+positional call forms stay unchanged; an existing route argument with the alias
+name causes another `_path` suffix to be added.
+
 Versioning: `olivares_client.API_VERSION` is the API contract major this
 client was generated from; the package MAJOR tracks it from GA on. Governing
 policy: <https://olivares.ai/docs>.

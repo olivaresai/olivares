@@ -12,8 +12,10 @@
 // Landlock allow-list and then execs the program: the child may write its
 // ReadWrite paths, read its ReadOnly paths and the system directories a program
 // needs, and nothing else. Protected paths are carved out of every grant.
-// Landlock needs no root, no namespaces and no extra binary. Network access is
-// not restricted. Other systems report ModeNone with the reason.
+// Landlock needs no root, no namespaces and no extra binary. The native session
+// runner adds its separate network namespace/proxy before entering this helper.
+// This filesystem policy alone does not restrict networking. Other systems
+// report ModeNone with the reason.
 package confine
 
 import (
@@ -24,12 +26,14 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	coreconfine "github.com/olivaresai/olivares/core/runtime/confine"
 )
 
 // HelperArg is argv[1] of the engine binary re-executed as the confinement
 // helper. The engine's main hands such an invocation to RunHelper before
 // anything else runs.
-const HelperArg = "__olivares_confine"
+const HelperArg = coreconfine.HelperArg
 
 // The session limits the helper sets on Linux (limits_linux.go).
 const (
@@ -60,7 +64,8 @@ type Policy struct {
 	// read-only session). Landlock grants add up, so no writable path may be the
 	// same as one, lie inside one or contain one: not ReadWrite, not the runner's
 	// temporary directory, not a directory the helper grants by default. A policy
-	// that would reopen a sealed path is refused before anything starts.
+	// that would reopen a sealed path is refused before anything starts. On ABI 1/2,
+	// truncation is unhandled; the default continues and reports that kernel limit.
 	Sealed []string
 }
 
@@ -69,9 +74,9 @@ type Mode string
 
 const (
 	// ModeLandlock is the Linux Landlock allow-list.
-	ModeLandlock Mode = "landlock"
+	ModeLandlock Mode = Mode(coreconfine.ModeLandlock)
 	// ModeNone means the child runs unconfined; State.Reason says why.
-	ModeNone Mode = "none"
+	ModeNone Mode = Mode(coreconfine.ModeNone)
 )
 
 // State is what this host can enforce.
@@ -79,14 +84,18 @@ type State struct {
 	Mode Mode
 	// ABI is the Landlock ABI version (0 when unavailable).
 	ABI int
-	// Reason says why Mode is ModeNone.
+	// Reason says why Mode is ModeNone, or which protection a confined run lacks.
 	Reason string
 }
 
 // String is the one-line form recorded with a session.
 func (s State) String() string {
 	if s.Mode == ModeLandlock {
-		return fmt.Sprintf("landlock (ABI %d)", s.ABI)
+		text := fmt.Sprintf("landlock (ABI %d)", s.ABI)
+		if s.Reason != "" {
+			text += ": " + s.Reason
+		}
+		return text
 	}
 	return "none: " + s.Reason
 }
@@ -102,9 +111,19 @@ var helperExecutable = os.Executable
 // cannot confine, the returned command runs the program unconfined and State
 // says why: the caller decides whether to start it.
 func Command(ctx context.Context, p Policy, program string, args ...string) (*exec.Cmd, State, error) {
+	return CommandWithTruncateProtection(ctx, p, false, program, args...)
+}
+
+// CommandWithTruncateProtection applies an optional strict kernel requirement
+// without changing the published four-field Policy or Command signature.
+func CommandWithTruncateProtection(ctx context.Context, p Policy, required bool, program string, args ...string) (*exec.Cmd, State, error) {
 	state := Probe()
 	if state.Mode != ModeLandlock {
 		return exec.CommandContext(ctx, program, args...), state, nil // #nosec G204 -- the caller's own program and argv; no shell
+	}
+	state, err := p.validateSealedABI(state, required)
+	if err != nil {
+		return nil, state, err
 	}
 	if err := p.validate(); err != nil {
 		return nil, state, err
@@ -123,10 +142,24 @@ func Command(ctx context.Context, p Policy, program string, args ...string) (*ex
 	if err != nil {
 		return nil, state, fmt.Errorf("confine: locate the engine binary: %w", err)
 	}
-	helperArgs := append(p.encode(), "--", resolved)
+	policyArgs := p.encode()
+	if required {
+		policyArgs = append([]string{"--require-truncate-protection"}, policyArgs...)
+	}
+	helperArgs := append(policyArgs, "--", resolved)
 	helperArgs = append(helperArgs, args...)
 	cmd := exec.CommandContext(ctx, self, append([]string{HelperArg}, helperArgs...)...) // #nosec G204 -- the engine re-executes itself with a fixed helper argument
 	return cmd, state, nil
+}
+
+func (p Policy) validateSealedABI(state State, required bool) (State, error) {
+	if len(p.Sealed) != 0 && state.ABI < 3 {
+		state.Reason = "this kernel cannot block truncation of existing files"
+		if required {
+			return state, fmt.Errorf("confine: read-only paths require Landlock ABI 3 to prevent truncation; this host has ABI %d; the session was not started", state.ABI)
+		}
+	}
+	return state, nil
 }
 
 func (p Policy) validate() error {
@@ -204,7 +237,7 @@ func decode(args []string) (Policy, []string, error) {
 			}
 			i++
 		default:
-			return p, nil, fmt.Errorf("unexpected argument %q", args[i])
+			return p, nil, errors.New("unexpected confinement argument")
 		}
 	}
 	return p, nil, errors.New("no program after --")
@@ -213,12 +246,37 @@ func decode(args []string) (Policy, []string, error) {
 // RunHelper applies the policy encoded in args and execs the program. It
 // returns only when it cannot: the exit code then says the program never ran.
 func RunHelper(args []string) int {
+	return RunHelperWithReady(args, nil)
+}
+
+// RunHelperWithReady reports readiness to the network supervisor after Landlock.
+func RunHelperWithReady(args []string, ready *os.File) int {
+	if coreconfine.IsExplicitPolicy(args) {
+		return coreconfine.RunHelperWithReady(args, ready)
+	}
+	required := len(args) != 0 && args[0] == "--require-truncate-protection"
+	if required {
+		args = args[1:]
+	}
 	p, argv, err := decode(args)
 	if err == nil {
 		err = p.validate()
 	}
 	if err == nil {
-		err = restrictAndExec(p, argv)
+		if state := Probe(); state.Mode != ModeLandlock {
+			err = errors.New(state.Reason)
+		} else if _, err = p.validateSealedABI(state, required); err != nil {
+			// The helper repeats the same strict check before the native installer.
+		} else if !filepath.IsAbs(argv[0]) {
+			err = fmt.Errorf("program %q is not an absolute path", argv[0])
+		} else {
+			policy := sessionPolicy(p, argv[0])
+			policy.Ready = ready
+			err = coreconfine.Exec(policy, argv[0], argv)
+		}
+	}
+	if ready != nil {
+		_, _ = fmt.Fprintln(ready, "filesystem confinement failed:", err)
 	}
 	fmt.Fprintln(os.Stderr, "olivares: the session program was not started because it could not be confined:", err)
 	return 126

@@ -118,7 +118,7 @@ var (
 	// store (SQLite, or a Postgres node whose elector was never armed).
 	ErrNotLeader = errors.New("not the leader")
 	// ErrAuditSpoolFull is returned in block mode when a governed write would
-	// exceed the declared logical audit spool budget (ADR-0024 Q2). The write is
+	// exceed the declared logical audit spool budget. The write is
 	// refused deny-closed before evidence is lost; the API maps it to HTTP 503 so
 	// reads remain available while the operator restores audit capacity.
 	ErrAuditSpoolFull = errors.New("audit spool full")
@@ -160,6 +160,9 @@ var (
 	// would corrupt the materialized path (FASE X). The move is rejected
 	// whole rather than left to build an unreachable cycle.
 	ErrResourceCycle = errors.New("resource move would create a cycle")
+	// ErrWorkspaceCycle is returned when WorkspaceRepo.SetParent would make a
+	// workspace its own ancestor. The change is rejected whole.
+	ErrWorkspaceCycle = errors.New("workspace parent would create a cycle")
 	// ErrInvalidVerdict is returned by AuthScope.FinalizeDecisionClaim when the
 	// verdict material is not self-consistent: an empty or non-JSON verdict
 	// document, or a verdict_hash that is not the SHA-256 of the verdict bytes. The

@@ -557,17 +557,15 @@ describe('CatalogView — la lista de entradas declara su recorte', () => {
   })
 })
 
-// --- (i) instancias: el MISMO par, y sin él el aviso no tiene testigo ----------------------
+// Instances: the same truncation pair needs its own test.
 //
-// ⛔ POR QUÉ ESTE BLOQUE EXISTE. El contraste Codex sol max (A-09) retiró el
-//    `<ListTruncationBadge>` de instancias y la batería siguió en **60/60 verde**. Lo reproduje:
-//    mutante puesto, `rc=0`. Un mutante que sobrevive deja el cambio SIN VERIFICAR, y la PR
-//    afirmaba tres listas declarando su recorte con testigo para UNA.
+// The Codex sol max review (A-09) removed the instances `<ListTruncationBadge>` and
+// all 60 tests still passed. Reproduced with the mutant installed, rc=0: the change was
+// unverified, despite claiming coverage of three lists while testing only one.
 //
-// ⛔ Y HAY QUE CAMBIAR DE PESTAÑA, no basta con montar la vista: la consulta está condicionada
-//    (`catalog-view.tsx:92` → `enabled: tab === 'instances' && canReadInstances`). Sin el clic,
-//    `listInstances` no se llama, el aviso no se pinta ni con `has_more`, y el test pasaría
-//    **sin observar nada** — verde por no haber mirado, que es la peor clase de verde.
+// The test must switch tabs: `catalog-view.tsx:92` enables the query only when
+// `tab === 'instances' && canReadInstances`. Without the click, `listInstances` is never
+// called and the badge never renders, even with `has_more`; an assertion would observe nothing.
 describe('CatalogView — la lista de instancias declara su recorte', () => {
   const dosInstancias = [
     { id: 'i-1', entry_id: 'e-1', name: 'alpha' },

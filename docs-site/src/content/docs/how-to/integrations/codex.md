@@ -15,15 +15,15 @@ This page is the **connector and PEP-hook** path. To install or verify the offic
 CLI, record a probe receipt, and launch or stop a governed session, use
 [Install the Codex CLI](/how-to/install-codex-cli/). The operate path is
 [Operate a provider session](/how-to/operate-provider-sessions/)
-(`OLIVARES_SESSION_RUNTIME_CODEX_BIN` or a managed install receipt, plus a
-provider profile).
+(`OLIVARES_SESSION_RUNTIME_CODEX_BIN` as an explicit override; otherwise the newest verified managed
+install, then `codex` on the engine's `PATH`, plus a provider profile).
 
 ## Add Codex
 
 ### Prerequisites
 
-- An Olivares AI enterprise tenant and a superadmin account with AAL3 elevation for roster
-  operations.
+- An Olivares AI enterprise tenant and a superadmin account. Roster operations follow
+  the administrative step-up policy (`admin_step_up`, default `none`).
 - For enterprise ingestion, a platform API key or workspace access token with the required read
   scopes, plus the `workspace_id`. Signing in to the Codex CLI through ChatGPT does not provide a
   connector credential.

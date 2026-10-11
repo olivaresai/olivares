@@ -34,7 +34,6 @@ const holdsApi = {
   executeErasure: vi.fn(),
   createErasure: vi.fn(),
   dataSubjectErasureStatus: vi.fn(),
-  calendar: vi.fn(),
 }
 
 vi.mock('@/lib/auth/context', () => ({
@@ -62,7 +61,6 @@ vi.mock('./api', async () => {
 
 const { HoldsTab } = await import('./holds-view')
 const { ErasureTab } = await import('./erasure-view')
-const { CalendarTab } = await import('./calendar-view')
 const { incompleteReason } = await import('./api')
 await import('./i18n')
 
@@ -120,11 +118,6 @@ function resetMocks() {
   holdsApi.dataClasses.mockResolvedValue({ items: [] })
   holdsApi.holdEvents.mockResolvedValue({ items: [] })
   holdsApi.checkHold.mockResolvedValue({ held: false })
-  holdsApi.calendar.mockResolvedValue({
-    milestones: [],
-    watchlist: [],
-    disclaimer: '',
-  })
 }
 
 describe('incompleteReason — the line between "done" and "not done"', () => {
@@ -769,76 +762,5 @@ describe('the two counterweights the final round found missing', () => {
 
     await waitFor(() => expect(toastSpy.warning).toHaveBeenCalled())
     expect(toastSpy.success).not.toHaveBeenCalled()
-  })
-})
-
-describe('CalendarTab — a provisional agreement is not law', () => {
-  it('marks a not-in-force milestone distinctly from one in force', async () => {
-    resetMocks()
-    holdsApi.calendar.mockResolvedValue({
-      milestones: [
-        {
-          id: 'm1',
-          regime: 'eu_ai_act',
-          date: '2026-08-02',
-          title: 'GPAI obligations apply',
-          effect: 'applies',
-          status: 'in_force',
-          source: { url: 'https://x', title: 'OJ', publisher: 'EU' },
-          verified_on: '2026-06-01',
-        },
-        {
-          id: 'm2',
-          regime: 'eu_ai_act',
-          date: '2026-09-01',
-          title: 'Provisional text',
-          effect: 'none yet',
-          status: 'provisional_agreement',
-          source: { url: 'https://y', title: 'Council', publisher: 'EU' },
-          verified_on: '2026-06-01',
-        },
-      ],
-      watchlist: [],
-      disclaimer: 'provisional_agreement entries are NOT in-force law',
-    })
-    renderIntel(<CalendarTab framework={null} />)
-
-    const inForce = await screen.findByText('In force')
-    const provisional = screen.getByText(/Provisional agreement — not law/i)
-    // Different semantic colour, not just different words: success vs warning.
-    expect(inForce.className).toMatch(/text-success/)
-    expect(provisional.className).toMatch(/text-warning/)
-    expect(inForce.className).not.toEqual(provisional.className)
-  })
-
-  it('never renders a date without its primary source and verification date', async () => {
-    resetMocks()
-    holdsApi.calendar.mockResolvedValue({
-      milestones: [
-        {
-          id: 'm1',
-          regime: 'eu_ai_act',
-          date: '2026-08-02',
-          title: 'GPAI obligations apply',
-          effect: 'applies',
-          status: 'in_force',
-          source: {
-            url: 'https://eur-lex.europa.eu/x',
-            title: 'Regulation (EU) 2024/1689',
-            publisher: 'Official Journal',
-          },
-          verified_on: '2026-06-01',
-        },
-      ],
-      watchlist: [],
-      disclaimer: 'd',
-    })
-    renderIntel(<CalendarTab framework={null} />)
-
-    const link = await screen.findByRole('link', {
-      name: /Regulation \(EU\) 2024\/1689/,
-    })
-    expect(link).toHaveAttribute('href', 'https://eur-lex.europa.eu/x')
-    expect(screen.getByText(/verified 2026-06-01/i)).toBeInTheDocument()
   })
 })

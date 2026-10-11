@@ -6,6 +6,10 @@ description: >-
   cooperative, and approximate-by-attribution — plus the output destinations.
 ---
 
+:::note[Business]
+Audit export (`GET /v1/audit/export`, `olivares audit export`), directory archives and external archive verification require Business. Community keeps the signed ledger, `olivares audit verify` and `olivares dr backup`; export routes and commands return HTTP 501 or exit 9. Audit forwarding and DDIL transfers carrying audit segments also require Business.
+:::
+
 This page is the **catalog** of first-party connectors and, for each, the **honest
 coverage tier** it can support. It is the companion to
 [connect a source](/how-to/connect-a-source/), which explains the connector *model*
@@ -41,6 +45,51 @@ below. Coverage is **tiered honestly**: a connector's presence here is not a cla
 firm per-agent attribution, which remains the hard dependency (a shared account collapses
 even a clean-tier store to `approximate`).
 :::
+
+## Process mode per kind
+
+Every kind runs in exactly one process mode, fixed by the engine:
+
+- **Out-of-process plugin.** The engine embeds the connector as a separate program,
+  starts it as a confined subprocess (scoped environment; dedicated user and cgroup
+  where the host allows them) and talks to it over gRPC with AutoMTLS. These connectors
+  carry dependency trees that never link into the engine. Source kinds: `claude`,
+  `cowork`, `kafka`, `amqp`, `nats`, `mqtt`, `cloudqueue`, `debezium`, `envoy` and
+  `hubble`. Destination kinds: `kafka`, `amqp` and `cloudqueue`. A build without
+  `task build:connectors` does not embed them, and the boot warns for each one that is
+  configured.
+- **In-process.** Every other kind on this page. The connector is linked into the
+  engine binary and runs inside the engine process; a panic in it is contained and
+  the source is marked `failed`.
+- **External plugin.** A source or destination you configure with `plugin` (binary
+  path, pinned digest and a signature verified against `connector_trust`) always runs
+  out of process, confined the same way. The repository's `connectors/<kind>/cmd/`
+  programs for in-process kinds are not part of the release; build one and admit it
+  this way ([operate a plugin](/how-to/build-a-connector/#5-operate-what-your-users-do))
+  to run that connector in its own process.
+
+When the process of a **source** plugin dies, the engine starts the same binary again,
+checks an external plugin's pinned digest again, re-opens it with the source's settings
+and resumes collection. The first restart waits about a second; the wait doubles with
+every further restart, up to five minutes, and drops back to a second once the plugin
+has run for five minutes. From the moment the process is found dead until the new one
+is up, the source reports `failed`, with the restart error while an attempt fails.
+
+A **destination** plugin is restarted the same way, when a delivery fails and its
+process is found dead: the engine starts the binary again (checking the pinned digest
+again for an external plugin) and opens it with the destination's settings. The
+delivery that found the plugin dead is still reported as failed, with the restart error
+when the restart was refused, and is retried by the notification retry ladder, which now
+reaches the new process. The first restart is immediate; later attempts wait one second,
+doubling up to five minutes, and start over once the last attempt is older than five
+minutes. A destination that receives no delivery is not restarted until one arrives.
+
+A restarted plugin is opened with the settings its connector was opened with, so a
+changed or rotated secret reaches it when the configuration is reloaded or the engine
+restarts, as for a plugin that never died.
+
+A plugin whose process is alive but whose collection or delivery fails is not
+restarted: that failure is the connector's own.
 
 ## Cooperative — Claude & vendor telemetry
 
@@ -188,9 +237,10 @@ usage still arrives through the `gen_ai.*` ingest above.
 | `openhands` | OpenHands `config.toml` + env → sandbox/model-pinning/credential/telemetry posture, permitted MCP/action edges | Config-declared only; live usage via native OTEL `gen_ai.*` |
 | `goose` | Goose (Block) `profiles.yaml` + env → admin-settings/model-pinning/extension/tool-approval posture, permitted extension edges | Config-declared only |
 | `cline` | Cline / Kilo Code VSCode `settings.json` namespaces → auto-approve/MCP-allowlist/credential/model-pinning posture | Config-declared only; no native OTEL upstream |
-| `grok` | Grok Build (xAI) — el agente de codificación de terminal, leído por su configuración LOCAL: wire de hooks, eventos con veto documentado y postura de gobierno declarable | **NO es el conector de la API de xAI** (`xai` lee catálogo y coste, con `grok-build-0.1` entre sus MODELOS). Éste lee el AGENTE, y no se solapan. La mitad de OBSERVACIÓN va por el ingest OTLP que Grok Build ya emite. `PostureEnforced` sólo lo reclama `PreToolUse`, el único evento con veto documentado; el resto es `observed` |
+| `grok` | Grok Build (xAI), the terminal coding agent: local configuration, hook wiring, events with documented veto support, and declared governance posture | Config-declared agent posture. The `xai` API connector reads the model catalog and costs, including `grok-build-0.1` as a model; this connector reads the agent. Live observation uses the OTLP ingest that Grok Build emits. `PostureEnforced` applies only to `PreToolUse`, the only event with documented veto support; other events are `observed` |
 | `openclaw` | OpenClaw `openclaw.json` (JSON5 discovery, confined `$include`) → gateway/channel/tool/sandbox/skill/model posture per agent, declared channel/skill/model edges | Config-declared only; no inline PEP hook verified upstream |
 | `hermes` | Hermes Agent `config.yaml` + profile trees + managed scope → terminal/channel/skill/security/model/MCP posture, declared edges | Config-declared only; no inline PEP hook or native OTEL verified upstream |
+| `paperclip` | Paperclip REST API (board API key, GET only) → companies as group collections and agents as NHI roster rows (`paperclip/<adapterType>`, role, title, `reports_to`), completed-day run counts, advisory cost samples (`cost_type=paperclip`) | Observe-only: it does not start or confine Paperclip's agents. Cost is a daily aggregate because Paperclip has no raw cost-event list; a refused leg is reported as a coverage finding |
 | `google-adk` | Exported Google ADK 2.0 Session JSON → agent/app inventory, sub-agents, tool function-calls, transfers, approved-tool drift, Vertex reasoningEngine correlation | Read-only export; never message content. Distinct from the `google-agent` platform surface |
 | `agents-md` | Repo walk of agent-instruction files (AGENTS.md and per-agent memory/instruction files) → SHA-256 baseline drift + instruction-injection / hidden-Unicode / secret scan | Minimal-data: sanitized paths + hashed details, never content |
 | `mcpb` | Installed / distributed `.mcpb` desktop extensions → manifest posture scan, enterprise-allowlist drift, PKCS#7 signature verification | PERMITTED-vs-OBSERVED on the extension surface |
@@ -216,6 +266,13 @@ hyphenated `pg-audit` / `s3-cloudtrail` aliases resolve too).
 | `gcs-audit` | Google Cloud Storage data-access audit |
 | `azure-blob-audit` | Azure Blob Storage audit |
 
+## Opt-in log and inventory sources
+
+| Kind | Observes | Notes |
+|---|---|---|
+| `mysql-audit` | Reads the MariaDB audit log or the MySQL general log. | Opt-in. Query text is not stored. Not yet tested on ordinary MySQL deployments. |
+| `servicenow-cmdb` | Reads configuration items from a ServiceNow CMDB. | Opt-in. Not yet tested against a production ServiceNow instance. |
+
 ## Cloud management plane — org/tenant inventory + control-plane activity
 
 The tri-cloud parity for the **management** plane — distinct from the per-resource
@@ -230,9 +287,12 @@ account-level IAM/CloudTrail `aws` connector. Both run **in-process** and are
 
 | Kind | Observes | Honest coverage |
 |---|---|---|
+| `aws` | IAM roles/users/policies and attachments, CloudTrail management events, and opt-in Bedrock Guardrails/logging posture | Built-in observation source; the signed standalone source remains available. Enabled AWS reads require credentials. Metadata only; no resource payloads or key material. Local service stand-ins cover activation; live AWS qualification is not claimed |
 | `gcp-audit` | GCP **Resource Manager / IAM** (org→folder→project→service-account topology) + **Cloud Audit Logs** (Admin Activity + Data Access) → `identity→gcp.api` | **Clean** where logged: Admin Activity is a write by the log type's definition, Data Access is read/write from the standard method verb. **Lossy** where Data Access logging is disabled (off by default in GCP) or a method verb is non-standard (`unknown`, never guessed). `approximate` for declared shared principals; the `principalEmail` converges with the SPIFFE/SA roster |
 | `azure-activity` | Azure **Resource Graph** (tenant→subscription→resource topology) + **Azure Monitor Activity Log** (control-plane operations) → `identity→azure.api` | **Clean** for control-plane writes/deletes (verbatim from the RBAC action). The generic `action` suffix is **lossy** (`unknown` — it can read or write). Data-plane **reads are not in** the Activity Log (the `azure-blob-audit` / `azurekeyvault` data plane covers those). `approximate` for shared callers; the caller `objectId`/`appId` converges with the Entra roster |
 | `cloudflare` | Cloudflare edge estate — **Workers, R2 buckets, Logpush jobs** via the REST API v4 → topology edges | Inventory only (no audit feed in this connector); scoped read-only token. Distinct from the `cloudflare-ai-gateway` / MCP-portals AI surfaces |
+| `cloudflare-ai-gateway` | Per-request gateway usage and cost by model/provider, with allowed metadata attribution | Built-in read-only source; signed standalone source retained. Requires an account and scoped token; can poll one gateway or all. Emits structural usage metadata, not prompts or completions. Activation uses a local service stand-in; live Cloudflare qualification is not claimed |
+| `cloudflare-mcp-portals` | Cloudflare One MCP server and portal inventory; `shadow_mcp` findings for servers outside a configured `approved_servers` list | Read-only inventory, not tool activity or message content. Requires `account_id` and a scoped `api_token`; available through connector onboarding or source provisioning. |
 
 The GCP **Data Access** opt-in and the Azure **read-not-logged** gaps are the honest
 **opaque** edges of this plane: an absent activity edge is not proof of no access where
@@ -253,6 +313,7 @@ Meter around the inference path instead of pulled from an aggregate billing feed
 | `mistral` | Mistral catalog and governance posture | No public usage/billing/spending-cap API; cost is metered around inference from list pricing |
 | `xai` | xAI/Grok live catalog, billing endpoints, key/ACL inventory, credit and spending-limit posture | Uses the read-only management billing endpoints for cost; management and inference credentials are distinct |
 | `glm` | Zhipu GLM / Z.ai declared catalog, USD list-pricing Meter, entitlement probe, and sovereignty posture | Catalog-only + Meter: GLM exposes no verified usage, billing, balance, admin, key, or organization API. The PRC-nexus / Entity-List caveat applies to both `z.ai` and `bigmodel.cn` surfaces |
+| `bedrock` | Model token usage from delivered log files or CloudWatch, opt-in Cost Explorer billing and Guardrails/logging posture | Built-in observation source; signed standalone source retained. Local log files need no AWS credentials; signed reads do. Billed cost and token usage remain distinct. Activation is checked with local service stand-ins; live AWS qualification is not claimed |
 | `vertex` | Google Vertex AI catalog, per-model token usage (Cloud Monitoring), opt-in billed cost (billing export) and opt-in Model Armor safety posture | The enterprise Google surface the AI-Studio path does not cover; GCP has no real-time cost API |
 | `azure-openai` | Azure OpenAI / AI Foundry deployments + models (ARM), Azure Monitor token usage and cost surfaces | Read-only management-plane client; no data-plane payloads |
 | `openrouter` | OpenRouter live catalog (USD/MTok pricing), account usage/limit posture, approved-model policy drift | Billed cost via the exported `MeterCall`; a no-op offline |
@@ -309,6 +370,7 @@ role / process / shared credential rather than a resolved agent.
 | `egress-proxy` | Egress-proxy verdict log → L7 egress edges | approximate |
 | `kong-audit` | Kong audit logs → config-change findings | approximate |
 | `ai-gateway` | Envoy AI Gateway usage records → **cost** samples (FinOps) | cost stream |
+| `git` | Plain-git publication binding: the roster row that approves one SSH or HTTPS git remote for gitpublish pushes | Observes nothing; push-only (a plain remote has no pull-request or merge API) |
 | `github` | GitHub repositories as agent data sources → observed R/RW access edges (webhook-first, API-poll reconciliation) + permitted ACL edges | observed + permitted; streaming (`poll_seconds: 0`) |
 | `gitlab` | GitLab repositories → observed R/RW access edges + permitted ACL edges | observed + permitted; streaming (`poll_seconds: 0`) |
 
@@ -463,7 +525,7 @@ no coverage tier. They are wired separately from sources.
 
 In-process destination kinds: `slack`, `teams`, `pagerduty`, `opsgenie`, `webhook`,
 `siem`, `splunkhec`, `syslog`, `servicenow`, `jira`, `email`, `twilio`, `chronicle`,
-`datadog`, `elastic`, `snmp`, `filelog`, `otlplog` (OTLP/HTTP logs) and `s3archive`
+`datadog`, `elastic`, `snmp`, `filelog`, `otlplog` (OTLP/HTTP logs) and `s3archive` (Business: Regulated Operations)
 (the S3 Object Lock WORM sink — one immutable, lock-verified object per notification).
 
 Three broker egress kinds run **out-of-process** as embedded plugins (their wire-protocol
@@ -508,9 +570,9 @@ The R/RW differential connectors are wired into the default binary, but two carr
   (or per subscription) — that single role covers Resource Graph, subscription listing and
   the Activity Log. Subscriptions are auto-listed when `subscriptions` is unset.
 
-Both still run **in-process** (transport A); the
-`cmd/{pg-audit,s3-cloudtrail,ebpf-source}` go-plugin binaries exist for an out-of-process
-**collector** deployment near the host if you prefer to isolate them there.
+Both run **in-process**, like every kind not listed as a plugin under
+[Process mode per kind](#process-mode-per-kind). To run one in its own process, build
+its `connectors/<kind>/cmd/` program and admit it as an external plugin.
 
 Every source is **opt-in, deny-closed**: a missing `log_path`/`path`/`events_path` is a
 configuration error at startup (the source is not wired), never a silent no-op. The demo

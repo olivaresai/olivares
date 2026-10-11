@@ -27,7 +27,8 @@ PEP。这两个平面彼此独立：接收遥测并不代表 policy 正在被强
 认证每个请求，并记录每次决策。
 
 1. 打开 **Control console**（`/console`），选择 **Connectors** 标签页。连接器 roster 是全局的：
-   需要 superadmin 账户，保存、测试和重新加载需要 AAL3 elevation。
+   需要 superadmin 账户。保存、测试和重新加载遵循管理操作的追加认证策略
+   （`admin_step_up`，默认为 `none`）。
 2. 添加一个类型为 `claude` 的 source，指定稳定的运维名称（如 `claude-code-prod`）、对应的
    tenant、`live` mode、interval `0` 和启用状态。interval 为 0 是正确配置：该连接器维护接收端，
    而不是按批次轮询。

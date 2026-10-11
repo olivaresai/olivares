@@ -10,6 +10,7 @@ import (
 	"reflect"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
@@ -86,6 +87,64 @@ func TestSessionCredentialsNeverExpandLauncherAuthority(t *testing.T) {
 	}
 	if role, _ := principal.RoleIn(tenant); role != auth.RoleEditor {
 		t.Fatalf("launch role widened to %s", role)
+	}
+	bounded, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	// Source reconstruction ignores caller-editable identity and privilege fields.
+	configure, err := service.AuthenticateLauncher(bounded, token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	configure.Superadmin = true
+	configure.SessionRunRef = "forged-run"
+	resolved, bundle, expiry, err := a.ResolveSessionLauncherScope(bounded, configure, tenant)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if role, _ := resolved.RoleIn(tenant); role != auth.RoleEditor || resolved.Superadmin || resolved.SessionRunRef != scope.RunRef {
+		t.Fatalf("caller fields widened the launch ceiling: role=%s superadmin=%t run=%s", role, resolved.Superadmin, resolved.SessionRunRef)
+	}
+	if _, confined := resolved.ConfinedWorkspaceIn(tenant); confined {
+		t.Fatal("unconfined launcher acquired the session's workspace confinement")
+	}
+	if len(bundle.Facts) == 0 || len(bundle.UserAuthorities) != 1 || !time.Now().Before(expiry) {
+		t.Fatalf("missing finite complete human source evidence: %+v expiry=%v", bundle, expiry)
+	}
+	if _, ok := resolved.Ref(); ok {
+		t.Fatal("session launcher became a native credential")
+	}
+	az := auth.NewAuthorizer(nil)
+	question := auth.Request{Principal: configure, Tenant: tenant, Permission: "tenant:read"}
+	decision, retained, err := a.AuthorizeSessionLauncher(bounded, az, question)
+	if err != nil || decision.Outcome != auth.EvidenceAllow || len(retained.UserAuthorities) != 1 || len(retained.Facts) == 0 || decision.FreshUntil.After(expiry) {
+		t.Fatalf("issuer-backed typed launcher decision: %+v %+v %v", decision, retained, err)
+	}
+	question.Permission = "tenant:admin"
+	if _, _, err := a.AuthorizeSessionLauncher(bounded, az, question); !errors.Is(err, auth.ErrRouteDenied) {
+		t.Fatalf("typed decision widened a promoted or caller-edited launcher: %v", err)
+	}
+	question.Principal = resolved
+	question.Permission = "tenant:read"
+	if _, err := az.AuthorizeRouteMutation(bounded, question); !errors.Is(err, auth.ErrRouteUndecided) {
+		t.Fatalf("typed launcher gained native mutation authority: %v", err)
+	}
+	fake := auth.Principal{SessionIdentity: scope.SessionRef, SessionRunRef: scope.RunRef}
+	if fake.IsSessionCredential() {
+		t.Fatal("public run identity forged issuer provenance")
+	}
+	if _, _, _, err := a.ResolveSessionLauncherScope(bounded, fake, tenant); !errors.Is(err, auth.ErrUnauthenticated) {
+		t.Fatalf("synthetic launcher = %v, want unauthenticated", err)
+	}
+	if _, _, _, err := auth.NewAuthenticator(st, nil).ResolveSessionLauncherScope(bounded, configure, tenant); !errors.Is(err, auth.ErrUnauthenticated) {
+		t.Fatalf("foreign authenticator = %v, want unauthenticated", err)
+	}
+	question.Principal = fake
+	if _, _, err := a.AuthorizeSessionLauncher(bounded, az, question); !errors.Is(err, auth.ErrUnauthenticated) {
+		t.Fatalf("synthetic typed launcher = %v, want unauthenticated", err)
+	}
+	question.Principal = configure
+	if _, _, err := auth.NewAuthenticator(st, nil).AuthorizeSessionLauncher(bounded, az, question); !errors.Is(err, auth.ErrUnauthenticated) {
+		t.Fatalf("foreign typed launcher = %v, want unauthenticated", err)
 	}
 	stopped.Store(true)
 	if _, _, err := service.Resolve(ctx, token); err == nil {

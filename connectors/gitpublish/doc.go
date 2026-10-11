@@ -9,8 +9,8 @@
 // module; this package only performs one bounded host call at a time and
 // classifies its result.
 //
-// The read-only observers (connectors/github, connectors/gitlab) are not
-// touched and stay read-only.
+// Target kinds interpret approved publication rows and expose the existing
+// read-only observers (connectors/github, connectors/gitlab) for content diffs.
 //
 // Custody rules this package enforces by construction:
 //   - a credential is a Secret, which never renders through fmt, slog, JSON or
@@ -24,6 +24,6 @@
 //     same origin, uses no proxy from the environment and refuses loopback and
 //     link-local peers.
 //
-// It imports only the standard library, keeping the Apache-2.0 boundary clean
-// (connectors import ./sdk at most, never the engine).
+// It imports the standard library, SDK and first-party Apache-2.0 observers,
+// never the engine.
 package gitpublish

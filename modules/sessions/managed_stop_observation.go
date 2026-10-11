@@ -154,7 +154,7 @@ func (m *Module) observeManagedStopExit(
 	octx, cancel := managedStopStageContext(actx, ports)
 	defer cancel()
 	var observation string
-	err := m.data.View(octx, tenant, func(raw store.Scope) error {
+	err := m.Data.View(octx, tenant, func(raw store.Scope) error {
 		var rerr error
 		observation, rerr = readExactLaunchObservation(octx, raw, req.RunRef, req.ExpectedLaunch)
 		return rerr

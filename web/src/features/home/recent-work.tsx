@@ -25,7 +25,6 @@ import { Link } from '@tanstack/react-router'
 import { ArrowRight } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
-import { useNewSession } from '@/components/layout/new-session'
 import { EmptyState } from '@/components/ui/empty-state'
 import { ErrorState } from '@/components/ui/error-state'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -168,7 +167,6 @@ function WorkRow({
 export function RecentWork({
   sessions,
   state,
-  canStartSession,
   titled = false,
 }: {
   /** Show the section title (Now, where the list follows "Needs you"); otherwise it is
@@ -177,11 +175,8 @@ export function RecentWork({
   /** The sessions `home-view` holds (runs and live rows merged), most recent first. */
   sessions: UnifiedSession[] | undefined
   state: TileState
-  /** May this principal actually start a run? Decides whether the empty state offers. */
-  canStartSession: boolean
 }) {
   const { t } = useTranslation('home')
-  const newSession = useNewSession()
   const rows = (sessions ?? []).slice(0, RECENT_WORK_ROWS)
   const shared = sharedNames(rows, t('recent.untitled'))
 
@@ -208,21 +203,12 @@ export function RecentWork({
           description={t('recent.unavailableDescription')}
         />
       ) : rows.length === 0 ? (
+        // Now's start line above is the one next step (it knows what each tool can run on);
+        // a second "Start a session" here offered it twice, and while no tool was ready it
+        // contradicted the line's Install or Sign in.
         <EmptyState
           title={t('recent.emptyTitle')}
           description={t('recent.emptyDescription')}
-          action={
-            canStartSession ? (
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={newSession}
-                data-testid="home-recent-start"
-              >
-                {t('next.session.title')}
-              </Button>
-            ) : undefined
-          }
         />
       ) : (
         <>

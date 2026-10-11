@@ -94,6 +94,10 @@ export function IdentitiesView() {
         providers: failed.map((f) => f.provider).join(', '),
       })}`
     },
+    successIntent: (report) =>
+      report.providers_configured === 0 || report.providers_failed?.length
+        ? 'warning'
+        : 'success',
     onDone: () => setConfirmResync(false),
   })
 

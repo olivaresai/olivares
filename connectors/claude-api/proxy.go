@@ -23,7 +23,7 @@
 // Credential separation (no passthrough): the upstream call uses the operator's
 // Inference credential (cfg.APIKey), NEVER the inbound bearer. The bearer reaches only
 // the decider (for identity resolution) and is otherwise structurally unreachable from
-// the forward path — the same guarantee as mcpUpstreamForwarder.
+// the forward path — the same guarantee as the MCP gateway's UpstreamForwarder.
 
 package claudeapi
 

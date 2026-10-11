@@ -323,7 +323,7 @@ const KEY = [
 //   collectors, three modes    core/runtime/loader.go (in-process and supervised plugin over
 //                              AutoMTLS), core/secure/tls.go (verified-client-cert remote)
 //   the engine                 cmd/olivares, console embedded by core/internal/webui/embed.go
-//   modules                    cmd/olivares/wire.go
+//   modules                    core/modulespec/modules.json
 //   policy and enforcement     scripts/enforcement-seams.tsv (the four proven seams)
 //   evidence                   core/audit
 //   store                      core/store, Postgres FORCE row-level security
@@ -404,7 +404,7 @@ function architecture(t, counts) {
 //                              forbids wiring the public plane:
 //                              cmd/olivares/communicationauthorityboot_test.go
 //   remote delegation          cmd/olivares/orchremote.go, gated by connectors/a2a/pep.go
-//   the hook                   cmd/olivares/claudehookpep.go
+//   the hook                   modules/sessions/hookpep/claudehookpep.go
 //   orchestration graph        modules/orchestration
 //   bus                        modules/eventing
 //   shadow / final authority   design only. Drawn dashed, because a reader is owed the absence.
@@ -530,7 +530,7 @@ function environments(t, counts) {
 // picture that publishes prices would contradict the page it sits on. The offers, their names
 // and what each one adds come from an internal design note (not shipped); the shape of the promise — additive
 // add-ons, a core that is never capped from within, a subscription that is a download
-// credential rather than a key — comes from docs/adr/0020.
+// credential rather than a key. See LICENSING.md for the license boundary.
 
 function editions(t) {
   const c = new Canvas(t, 'd5' + t.name, 1160, 660)
@@ -614,11 +614,12 @@ function selftest() {
   const scratch = () => {
     const dir = fs.mkdtempSync(path.join(process.env.TMPDIR || os.tmpdir(), 'gendiag-'))
     // Heavy, never-mutated inputs are symlinked; anything a case rewrites is a real copy.
-    fs.mkdirSync(path.join(dir, 'cmd', 'olivares'), { recursive: true })
+    fs.mkdirSync(path.join(dir, 'core', 'modulespec'), { recursive: true })
     fs.mkdirSync(path.join(dir, 'web', 'tokens'), { recursive: true })
-    fs.mkdirSync(path.join(dir, 'scripts'), { recursive: true })
+    fs.mkdirSync(path.join(dir, 'scripts', 'lib'), { recursive: true })
+    fs.copyFileSync(path.join(ROOT, 'scripts/lib/connector_census.py'), path.join(dir, 'scripts/lib/connector_census.py'))
     fs.symlinkSync(path.join(ROOT, 'connectors'), path.join(dir, 'connectors'))
-    fs.copyFileSync(path.join(ROOT, 'cmd/olivares/wire.go'), path.join(dir, 'cmd/olivares/wire.go'))
+    fs.copyFileSync(path.join(ROOT, 'core/modulespec/modules.json'), path.join(dir, 'core/modulespec/modules.json'))
     for (const t of ['light', 'dark']) {
       fs.copyFileSync(path.join(ROOT, `web/tokens/theme.${t}.tokens.json`), path.join(dir, `web/tokens/theme.${t}.tokens.json`))
     }
@@ -659,6 +660,47 @@ function selftest() {
   // The positive control. Everything below asserts a refusal; this asserts that the same tree,
   // unmutated, is accepted — otherwise a refusal proves nothing about the mutation.
   check('an untouched tree is CLEAN', 0, null)
+
+  check('diagrams show unique selectable packages from the module spec', 0, (d) => {
+    const specs = JSON.parse(fs.readFileSync(path.join(d, 'core/modulespec/modules.json'), 'utf8'))
+    const packages = new Set()
+    for (const spec of specs) {
+      if (spec.selectable) packages.add(spec.package)
+    }
+    for (const dir of ['.github/assets', 'docs-site/public/diagrams']) {
+      for (const diagram of ['02-architecture', '04-environments']) {
+        for (const theme of ['light', 'dark']) {
+          const svg = fs.readFileSync(path.join(d, dir, `${diagram}-${theme}.svg`), 'utf8')
+          if (!svg.includes(`>${packages.size} modules`)) {
+            throw new Error(`${dir}/${diagram}-${theme}.svg must show ${packages.size} modules`)
+          }
+        }
+      }
+    }
+  })
+
+  check('duplicate packages and unselectable modules do not change the count', 0, (d) => {
+    const f = path.join(d, 'core/modulespec/modules.json')
+    const specs = JSON.parse(fs.readFileSync(f, 'utf8'))
+    specs.push({ ...specs.find((s) => s.selectable), namespace: 'test-duplicate' })
+    specs.push({ namespace: 'test-hidden', package: 'test-hidden', selectable: false })
+    fs.writeFileSync(f, JSON.stringify(specs))
+  })
+
+  check('a new selectable package changes the rendered count', 1, (d) => {
+    const f = path.join(d, 'core/modulespec/modules.json')
+    const specs = JSON.parse(fs.readFileSync(f, 'utf8'))
+    specs.push({ namespace: 'test-new', package: 'test-new', selectable: true })
+    fs.writeFileSync(f, JSON.stringify(specs))
+  })
+
+  check('a missing module spec CANNOT BE LOOKED AT', 2, (d) => {
+    fs.rmSync(path.join(d, 'core/modulespec/modules.json'))
+  })
+
+  check('invalid module spec JSON CANNOT BE LOOKED AT', 2, (d) => {
+    fs.writeFileSync(path.join(d, 'core/modulespec/modules.json'), '{')
+  })
 
   check('an output edited by hand is a FINDING', 1, (d) => {
     const f = path.join(d, '.github/assets/02-architecture-light.svg')
@@ -717,23 +759,22 @@ function derivedCounts() {
       cannotLook(`${p} is unreadable (${e.message}) — the counts have no source.`)
     }
   }
-  const modules = new Set(read('cmd/olivares/wire.go').match(/"github\.com\/olivaresai\/olivares\/modules\/[a-z-]+"/g) || []).size
-
-  let dirs
+  let modules
   try {
-    dirs = fs.readdirSync(path.join(ROOT, 'connectors'), { withFileTypes: true })
-      .filter((d) => d.isDirectory() && d.name !== 'node_modules')
+    const specs = JSON.parse(read('core/modulespec/modules.json'))
+    modules = new Set(specs.filter((s) => s.selectable).map((s) => s.package)).size
   } catch (e) {
-    cannotLook(`connectors/ is unreadable (${e.message}).`)
+    cannotLook(`core/modulespec/modules.json is invalid (${e.message}).`)
   }
-  const hasGo = (d) => {
-    const walk = (p) => fs.readdirSync(p, { withFileTypes: true }).some((e) => {
-      if (e.isDirectory()) return e.name !== 'node_modules' && e.name !== 'testdata' && walk(path.join(p, e.name))
-      return e.name.endsWith('.go')
-    })
-    return walk(path.join(ROOT, 'connectors', d.name))
+
+  let integrations
+  try {
+    integrations = JSON.parse(execFileSync('python3', ['scripts/lib/connector_census.py'], {
+      cwd: ROOT, encoding: 'utf8',
+    })).integrations
+  } catch (e) {
+    cannotLook(`connector census failed (${e.message}).`)
   }
-  const integrations = dirs.filter(hasGo).length
 
   // ⛔ THE SEAM COUNT IS THE PROVEN COUNT, NOT THE ROW COUNT, and the difference is the whole
   // reason that census exists. Counting rows would publish "four deny-closed points" from a file

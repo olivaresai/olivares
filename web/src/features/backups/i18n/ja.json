@@ -1,6 +1,6 @@
 {
   "title": "バックアップと復元",
-  "description": "コントロールプレーンの災害復旧スナップショットを管理します。",
+  "description": "Olivares AI の災害復旧スナップショットを管理します。",
   "tabs": {
     "backups": "バックアップ",
     "schedule": "スケジュール"
@@ -75,7 +75,7 @@
   "trigger": {
     "started": "バックアップを開始しました",
     "title": "バックアップを作成",
-    "description": "コントロールプレーン全体の暗号化スナップショットを作成します。",
+    "description": "Olivares AI の暗号化スナップショットを作成します。",
     "notes": "メモ",
     "notesPlaceholder": "このバックアップの任意の説明",
     "passphrase": "パスフレーズ",
@@ -110,7 +110,7 @@
     "uploadFailed": "アップロードに失敗しました",
     "started": "復元を開始しました",
     "title": "バックアップから復元",
-    "description": "コントロールプレーンの状態を復元する .drbundle ファイルをアップロードします。",
+    "description": "Olivares AI の状態を復元する .drbundle ファイルをアップロードします。",
     "apply": "復元を適用",
     "confirmTitle": "復元を確認",
     "confirmDescription": "現在のすべてのデータがバックアップ内容で上書きされます。この操作は元に戻せません。",
@@ -149,7 +149,7 @@
   "empty": {
     "backup": {
       "title": "バックアップスナップショットはまだ作成されていません",
-      "description": "SQLite ではこのコンソールから暗号化バックアップを作成し、PostgreSQL では設定済みのバックアップディレクトリに DR CLI でバンドルを作成してください。"
+      "description": "このコンソールから暗号化バックアップを作成してください。"
     }
   }
 }

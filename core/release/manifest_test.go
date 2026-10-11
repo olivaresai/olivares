@@ -24,16 +24,16 @@ func goodManifest() Manifest {
 	return Manifest{
 		SchemaVersion: ManifestSchemaVersion,
 		Channel:       ChannelStable,
-		Version:       "26.8.0",
-		MinVersion:    "26.6.0",
+		Version:       "26.800",
+		MinVersion:    "26.600",
 		ReleasedAt:    time.Date(2026, 7, 9, 12, 0, 0, 0, time.UTC),
 		Security:      true,
 		Advisories:    []string{"OSV-2026-1234"},
 		Notes:         "routine GA",
 		Rollout:       Rollout{Percentage: intp(100)},
 		Artifacts: []Artifact{
-			{OS: "linux", Arch: "amd64", Filename: "olivares_26.8.0_linux_amd64.tar.gz", SHA256: strings.Repeat("a", 64), Size: 1000},
-			{OS: "darwin", Arch: "arm64", Filename: "olivares_26.8.0_darwin_arm64.tar.gz", SHA256: strings.Repeat("b", 64), Size: 1000},
+			{OS: "linux", Arch: "amd64", Filename: "olivares_26.800_linux_amd64.tar.gz", SHA256: strings.Repeat("a", 64), Size: 1000},
+			{OS: "darwin", Arch: "arm64", Filename: "olivares_26.800_darwin_arm64.tar.gz", SHA256: strings.Repeat("b", 64), Size: 1000},
 		},
 	}
 }
@@ -55,7 +55,7 @@ func TestVerifyManifestHappyPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("VerifyManifest: %v", err)
 	}
-	if m.Version != "26.8.0" || m.Channel != ChannelStable || !m.Security {
+	if m.Version != "26.800" || m.Channel != ChannelStable || !m.Security {
 		t.Fatalf("decoded manifest wrong: %+v", m)
 	}
 	if a, ok := m.ArtifactFor("linux", "amd64"); !ok || a.Filename == "" {
@@ -70,7 +70,7 @@ func TestVerifyManifestTamperedBodyAborts(t *testing.T) {
 	pub, priv, _ := ed25519.GenerateKey(rand.Reader)
 	mb, sig := signManifestBytes(t, goodManifest(), priv)
 	// Flip the version AFTER signing: the sig no longer covers these bytes.
-	tampered := []byte(strings.Replace(string(mb), "26.8.0", "99.9.9", 1))
+	tampered := []byte(strings.Replace(string(mb), "26.800", "99.909", 1))
 	if _, err := VerifyManifest(tampered, sig, pub); err == nil {
 		t.Fatal("a tampered manifest body MUST fail verification")
 	}
@@ -164,8 +164,8 @@ func checksumsFor(m Manifest) []byte {
 	for _, a := range m.Artifacts {
 		fmt.Fprintf(&b, "%s  %s\n", strings.ToLower(a.SHA256), a.Filename)
 	}
-	fmt.Fprintf(&b, "%s  olivares_26.8.0_fips_linux_amd64.tar.gz\n", strings.Repeat("c", 64))
-	fmt.Fprintf(&b, "%s  olivares_26.8.0_linux_amd64.tar.gz.spdx.sbom.json\n", strings.Repeat("d", 64))
+	fmt.Fprintf(&b, "%s  olivares_26.800_fips_linux_amd64.tar.gz\n", strings.Repeat("c", 64))
+	fmt.Fprintf(&b, "%s  olivares_26.800_linux_amd64.tar.gz.spdx.sbom.json\n", strings.Repeat("d", 64))
 	return []byte(b.String())
 }
 
@@ -195,7 +195,7 @@ func TestCrossCheckChecksumsBindsManifestToSignedChecksums(t *testing.T) {
 	// A manifest that invents a whole artifact the signed checksums never covered.
 	invented := goodManifest()
 	invented.Artifacts = append(invented.Artifacts, Artifact{
-		OS: "linux", Arch: "arm64", Filename: "olivares_26.8.0_linux_arm64.tar.gz",
+		OS: "linux", Arch: "arm64", Filename: "olivares_26.800_linux_arm64.tar.gz",
 		SHA256: strings.Repeat("f", 64), Size: 10,
 	})
 	if err := invented.CrossCheckChecksums(checksumsFor(m)); !errors.Is(err, ErrNotInManifest) {
@@ -265,7 +265,7 @@ func TestParseManifestRejectsBadShapes(t *testing.T) {
 		}
 	}
 	// A minimal valid manifest (omitted rollout => full) parses.
-	min := []byte(`{"schema_version":1,"channel":"lts","version":"26.7.1","released_at":"2026-07-09T00:00:00Z","rollout":{},"artifacts":[{"os":"linux","arch":"amd64","filename":"x.tgz","sha256":"` + strings.Repeat("c", 64) + `"}]}`)
+	min := []byte(`{"schema_version":1,"channel":"lts","version":"26.701","released_at":"2026-07-09T00:00:00Z","rollout":{},"artifacts":[{"os":"linux","arch":"amd64","filename":"x.tgz","sha256":"` + strings.Repeat("c", 64) + `"}]}`)
 	if _, err := ParseManifest(min); err != nil {
 		t.Fatalf("minimal valid manifest should parse: %v", err)
 	}
@@ -311,10 +311,10 @@ func TestRolloutEligibility(t *testing.T) {
 
 func TestPlanUpgradeDirectionsAndGates(t *testing.T) {
 	now := time.Date(2026, 7, 9, 12, 0, 0, 0, time.UTC)
-	m := goodManifest() // version 26.8.0, min_version 26.6.0
+	m := goodManifest() // version 26.800, min_version 26.600
 
-	// Forward from 26.7.0 -> 26.8.0, min satisfied, eligible, security.
-	p, err := m.PlanUpgrade("26.7.0", "linux", "amd64", "node-1", now)
+	// Forward from 26.700 -> 26.800, min satisfied, eligible, security.
+	p, err := m.PlanUpgrade("26.700", "linux", "amd64", "node-1", now)
 	if err != nil {
 		t.Fatalf("PlanUpgrade: %v", err)
 	}
@@ -322,7 +322,7 @@ func TestPlanUpgradeDirectionsAndGates(t *testing.T) {
 		t.Errorf("forward plan wrong: dir=%d", p.Direction)
 	}
 	if p.MinTooOld {
-		t.Error("26.7.0 >= min 26.6.0, MinTooOld must be false")
+		t.Error("26.700 >= min 26.600, MinTooOld must be false")
 	}
 	if !p.HasArtifact || p.Artifact.OS != "linux" {
 		t.Error("expected a linux/amd64 artifact")
@@ -332,31 +332,31 @@ func TestPlanUpgradeDirectionsAndGates(t *testing.T) {
 	}
 
 	// Same version -> up to date.
-	p, _ = m.PlanUpgrade("26.8.0", "linux", "amd64", "node-1", now)
+	p, _ = m.PlanUpgrade("26.800", "linux", "amd64", "node-1", now)
 	if !p.IsUpToDate() || p.Direction != 0 {
 		t.Errorf("same-version plan should be up-to-date, dir=%d", p.Direction)
 	}
 
 	// Older target than current -> would be a rollback.
-	p, _ = m.PlanUpgrade("27.0.0", "linux", "amd64", "node-1", now)
+	p, _ = m.PlanUpgrade("27.0", "linux", "amd64", "node-1", now)
 	if !p.IsRollback() || p.Direction != -1 {
 		t.Errorf("downgrade plan should be a rollback, dir=%d", p.Direction)
 	}
 
 	// current below min_version -> MinTooOld (direct jump not allowed).
-	p, _ = m.PlanUpgrade("26.5.0", "linux", "amd64", "node-1", now)
+	p, _ = m.PlanUpgrade("26.500", "linux", "amd64", "node-1", now)
 	if !p.MinTooOld {
-		t.Error("26.5.0 < min 26.6.0 must set MinTooOld")
+		t.Error("26.500 < min 26.600 must set MinTooOld")
 	}
 
 	// Platform absent from the manifest -> no artifact.
-	p, _ = m.PlanUpgrade("26.7.0", "windows", "amd64", "node-1", now)
+	p, _ = m.PlanUpgrade("26.700", "windows", "amd64", "node-1", now)
 	if p.HasArtifact {
 		t.Error("windows/amd64 is not in the manifest; HasArtifact must be false")
 	}
 
 	// Every plan above was built from a real version, so all of them are orderable.
-	for _, cur := range []string{"26.7.0", "26.8.0", "27.0.0", "26.5.0"} {
+	for _, cur := range []string{"26.700", "26.800", "27.0", "26.500"} {
 		p, _ = m.PlanUpgrade(cur, "linux", "amd64", "node-1", now)
 		if !p.CurrentKnown {
 			t.Errorf("%s is a real version; CurrentKnown must be true", cur)
@@ -394,16 +394,16 @@ func TestIsUnstamped(t *testing.T) {
 			t.Errorf("%q carries no version stamp; IsUnstamped must be true", s)
 		}
 	}
-	for _, s := range []string{"26.7.0", "v26.7.1", "26.8.0-rc.1", "0.0.0"} {
+	for _, s := range []string{"26.700", "26.701", "26.800-rc.1", "0.0"} {
 		if IsUnstamped(s) {
 			t.Errorf("%q is a real version; IsUnstamped must be false", s)
 		}
 	}
-	// 0.0.0 is the boundary that matters: it PARSES to the same zero Version as "dev",
+	// 0.0 is the boundary that matters: it PARSES to the same zero Version as "dev",
 	// but an operator who declares it has stated a position, and the guards must treat
 	// it as one rather than fold it back into "unknown".
-	if v, err := ParseVersion("0.0.0"); err != nil || Compare(v, Version{}) != 0 {
-		t.Fatalf("0.0.0 must parse to the zero Version: %v %v", v, err)
+	if v, err := ParseVersion("0.0"); err != nil || Compare(v, Version{}) != 0 {
+		t.Fatalf("0.0 must parse to the zero Version: %v %v", v, err)
 	}
 }
 
@@ -431,7 +431,7 @@ func TestCheckPolicyBoundsTheFieldsChecksumsCannotBind(t *testing.T) {
 		wantIn string
 	}{{
 		name:   "min_version above the release blocks the whole fleet forever",
-		mutate: func(m *Manifest) { m.MinVersion = "99.0.0" },
+		mutate: func(m *Manifest) { m.MinVersion = "99.0" },
 		wantIn: "permanently blocks the whole fleet",
 	}, {
 		// The EQUAL case is the same kill switch one version lower, and it reads as
@@ -568,7 +568,7 @@ func TestCheckPolicyBoundsTheFieldsChecksumsCannotBind(t *testing.T) {
 	// A refusal reports EVERY lever that moved, not just the first.
 	t.Run("all violations are reported at once", func(t *testing.T) {
 		m := base()
-		m.MinVersion = "99.0.0"
+		m.MinVersion = "99.0"
 		m.Rollout.Percentage = intp(0)
 		m.Advisories = nil
 		_, err := m.CheckPolicy(now, DefaultPolicyBounds())
@@ -612,7 +612,7 @@ func TestPolicySummaryPrintsEveryFieldTheSignatureCovers(t *testing.T) {
 			t.Errorf("%q is set and must be flagged for the custodian's attention", want)
 		}
 	}
-	if !strings.Contains(got["min_version"].Value, "26.6.0") {
+	if !strings.Contains(got["min_version"].Value, "26.600") {
 		t.Errorf("min_version must show its value, got %q", got["min_version"].Value)
 	}
 	// A missing freshness bound must read as the alarm it is.
@@ -626,6 +626,69 @@ func TestPolicySummaryPrintsEveryFieldTheSignatureCovers(t *testing.T) {
 	}
 }
 
+// TestManifestEditionIsSignedShapedAndReviewed covers the REL.4b field: a lowercase slug
+// parses, a padded or foreign value is refused, the field is inside the signed bytes, and
+// the custodian sees it flagged only when it is set (unset leaves the review block as it was).
+func TestManifestEditionIsSignedShapedAndReviewed(t *testing.T) {
+	const nonASCIISlug = "comünity" // language-data: invalid manifest edition slug
+	const nonASCIILetter = "é"      // language-data: invalid manifest edition slug
+	for _, ok := range []string{"", EditionCommunity, "enterprise", "biz+reg", "e2", strings.Repeat("a", 32)} {
+		m := goodManifest()
+		m.Edition = ok
+		b, _ := json.Marshal(m)
+		got, err := ParseManifest(b)
+		if err != nil || got.Edition != ok {
+			t.Errorf("edition %q must parse and round-trip, got %q, %v", ok, got.Edition, err)
+		}
+	}
+	for _, bad := range []string{"Community", " community", "community ", "2biz", "+biz", "-biz", "a/b", "com\nmunity", nonASCIISlug, nonASCIILetter, strings.Repeat("a", 33)} {
+		m := goodManifest()
+		m.Edition = bad
+		b, _ := json.Marshal(m)
+		if _, err := ParseManifest(b); err == nil {
+			t.Errorf("edition %q must be refused", bad)
+		}
+	}
+
+	pub, priv, _ := ed25519.GenerateKey(nil)
+	m := goodManifest()
+	mb, sig := signManifestBytes(t, m, priv)
+	claimed := strings.Replace(string(mb), `"schema_version":1`, `"schema_version":1,"edition":"community"`, 1)
+	if claimed == string(mb) {
+		t.Fatal("fixture did not change: the edition claim was not added")
+	}
+	if _, err := VerifyManifest([]byte(claimed), sig, pub); err == nil {
+		t.Fatal("an edition added after signing must fail the signature check")
+	}
+
+	now := time.Date(2026, 7, 9, 12, 0, 0, 0, time.UTC)
+	for _, f := range m.PolicySummary(now) {
+		if f.Name == "edition" {
+			t.Fatalf("an unset edition must not add a review row: %+v", f)
+		}
+	}
+	m.Edition = EditionCommunity
+	var row *PolicyField
+	for _, f := range m.PolicySummary(now) {
+		if f.Name == "edition" {
+			row = &f
+		}
+	}
+	if row == nil || !row.Alert || !strings.Contains(row.Value, "WITHOUT a license") {
+		t.Fatalf("a community edition must be a flagged review row, got %+v", row)
+	}
+	m.Edition = "enterprise"
+	row = nil
+	for _, f := range m.PolicySummary(now) {
+		if f.Name == "edition" {
+			row = &f
+		}
+	}
+	if row == nil || !row.Alert || !strings.Contains(row.Value, "still needs a license") {
+		t.Fatalf("any other edition must be a flagged row that keeps the gate, got %+v", row)
+	}
+}
+
 // TestCheckArtifactNamingRefusesVariantAndPlatformRemap: checksums.txt covers the
 // FIPS variant and every other platform, so a digest that "matches" proves nothing
 // about WHICH archive a platform was pointed at.
@@ -634,9 +697,9 @@ func TestCheckArtifactNamingRefusesVariantAndPlatformRemap(t *testing.T) {
 		t.Fatalf("the honest manifest must pass: %v", err)
 	}
 	for _, tc := range []struct{ name, filename, wantIn string }{
-		{"the FIPS variant is not an OTA target", "olivares_26.8.0_fips_linux_amd64.tar.gz", "olivares_26.8.0_linux_amd64.tar.gz"},
-		{"another platform's archive", "olivares_26.8.0_darwin_arm64.tar.gz", "olivares_26.8.0_linux_amd64.tar.gz"},
-		{"another version's archive", "olivares_26.7.0_linux_amd64.tar.gz", "olivares_26.8.0_linux_amd64.tar.gz"},
+		{"the FIPS variant is not an OTA target", "olivares_26.800_fips_linux_amd64.tar.gz", "olivares_26.800_linux_amd64.tar.gz"},
+		{"another platform's archive", "olivares_26.800_darwin_arm64.tar.gz", "olivares_26.800_linux_amd64.tar.gz"},
+		{"another version's archive", "olivares_26.700_linux_amd64.tar.gz", "olivares_26.800_linux_amd64.tar.gz"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			m := goodManifest()
@@ -664,7 +727,7 @@ func TestCheckArtifactNamingRefusesVariantAndPlatformRemap(t *testing.T) {
 	// a GENUINE, cosign-attested digest, so the digest comparison alone waves it
 	// through and only the naming check catches the swap.
 	remap := goodManifest()
-	remap.Artifacts[0].Filename = "olivares_26.8.0_fips_linux_amd64.tar.gz"
+	remap.Artifacts[0].Filename = "olivares_26.800_fips_linux_amd64.tar.gz"
 	remap.Artifacts[0].SHA256 = strings.Repeat("c", 64)
 	err := remap.CrossCheckChecksums(checksumsFor(goodManifest()))
 	if err == nil {
@@ -713,8 +776,8 @@ func TestCheckArtifactNamingRejectsImplausiblePlatform(t *testing.T) {
 // nothing to do with the subset axis.
 func TestManifestSubstitutionAcrossTheSubsetAxis(t *testing.T) {
 	const (
-		baseArchive  = "olivares_26.8.0_base_linux_amd64.tar.gz"
-		superArchive = "olivares_26.8.0_full_linux_amd64.tar.gz"
+		baseArchive  = "olivares_26.800_base_linux_amd64.tar.gz"
+		superArchive = "olivares_26.800_full_linux_amd64.tar.gz"
 	)
 	superDigest := strings.Repeat("e", 64)
 
@@ -727,7 +790,7 @@ func TestManifestSubstitutionAcrossTheSubsetAxis(t *testing.T) {
 		var b strings.Builder
 		fmt.Fprintf(&b, "%s  %s\n", superDigest, superArchive)
 		fmt.Fprintf(&b, "%s  %s\n", baseDigest, baseArchive)
-		fmt.Fprintf(&b, "%s  olivares_26.8.0_darwin_arm64.tar.gz\n", strings.Repeat("b", 64))
+		fmt.Fprintf(&b, "%s  olivares_26.800_darwin_arm64.tar.gz\n", strings.Repeat("b", 64))
 		return []byte(b.String())
 	}
 
@@ -799,7 +862,7 @@ func TestManifestSubstitutionAcrossTheSubsetAxis(t *testing.T) {
 		if err := m.CheckArtifactNaming(); err != nil {
 			t.Fatalf("a variant-less manifest is every manifest published today: %v", err)
 		}
-		if got := ExpectedArtifactName("26.8.0", "linux", "amd64", ""); got != "olivares_26.8.0_linux_amd64.tar.gz" {
+		if got := ExpectedArtifactName("26.800", "linux", "amd64", ""); got != "olivares_26.800_linux_amd64.tar.gz" {
 			t.Fatalf("the empty variant must compose the byte-identical old name, got %q", got)
 		}
 	})

@@ -1,0 +1,52 @@
+{
+  "title": "Catálogo de skills",
+  "subtitle": "Paquetes de skills instalados para esta organización. Abre un paquete para ver sus skills y los departamentos, grupos y agentes a los que está asignado.",
+  "packs": {
+    "name": "Paquete",
+    "state": "Estado",
+    "revision": "Revisión",
+    "updated": "Actualizado",
+    "enabled": "Activo",
+    "retired": "Retirado",
+    "search": "Buscar paquetes",
+    "emptyTitle": "No hay paquetes de skills instalados",
+    "emptyDescription": "Instala un paquete con olivares skills install; después aparece aquí para asignarlo.",
+    "truncated": "Se muestran los primeros {{n}} paquetes",
+    "truncatedHint": "Usa olivares skills ls --cursor para listar el resto."
+  },
+  "detail": {
+    "skills": "Skills de este paquete",
+    "revisions": "Revisiones",
+    "revision": "revisión {{n}}",
+    "revisionLine": "Revisión {{n}} desde {{source}}"
+  },
+  "kind": {
+    "workspace": "Departamento",
+    "agent_group": "Grupo de agentes",
+    "agent": "Agente",
+    "template": "Plantilla",
+    "session": "Sesión"
+  },
+  "uses": {
+    "title": "Asignado a",
+    "none": "Este paquete no está asignado a ningún departamento, grupo ni agente que puedas ver.",
+    "unassign": "Desasignar",
+    "unassigned": "Paquete de skills desasignado",
+    "confirmTitle": "¿Desasignar este paquete de skills?",
+    "confirmDescription": "Las sesiones nuevas de {{target}} dejan de recibir estas skills. Las conversaciones registradas conservan su instantánea.",
+    "truncated": "Se muestran las primeras {{n}} asignaciones",
+    "truncatedHint": "Usa olivares skills assignments --pack con --cursor para listar el resto.",
+    "unassignFrom": "Desasignar de {{target}}"
+  },
+  "assign": {
+    "title": "Asignar",
+    "kind": "Asignar a",
+    "target": "Destino",
+    "choose": "Elige un destino",
+    "revision": "Revisión",
+    "noTargets": "No hay destinos de este tipo que puedas leer.",
+    "submit": "Asignar",
+    "done": "Paquete de skills asignado",
+    "directoryFailed": "No se pudieron cargar los destinos. Cierra y vuelve a abrir el paquete para reintentarlo."
+  }
+}

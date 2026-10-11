@@ -31,7 +31,7 @@ set -euo pipefail
 root="${OLIVARES_ROOT:-$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)}"
 for tool in grep python3; do
 	command -v "$tool" >/dev/null 2>&1 || {
-		printf 'compose-postgres-bootstrap: NO HE PODIDO MIRAR — missing %s\n' "$tool" >&2
+		printf 'compose-postgres-bootstrap: COULD NOT CHECK — missing %s\n' "$tool" >&2
 		exit 2
 	}
 done
@@ -43,10 +43,10 @@ for path in \
 	deploy/postgres/01-app-role.sql \
 	deploy/postgres/02-admin-role.sql \
 	core/internal/store/sqlstore/dbsetup.go \
-	Taskfile.yml .githooks/pre-push .github/workflows/mainline-ci.yml \
+	Taskfile.yml .github/workflows/mainline-ci.yml \
 	scripts/check-compose-postgres-bootstrap.sh scripts/test-compose-postgres-bootstrap.sh; do
 	[[ -f "$root/$path" ]] || {
-		printf 'compose-postgres-bootstrap: NO HE PODIDO MIRAR — missing %s\n' "$path" >&2
+		printf 'compose-postgres-bootstrap: COULD NOT CHECK — missing %s\n' "$path" >&2
 		exit 2
 	}
 done
@@ -68,7 +68,6 @@ app_sql = read("deploy/postgres/01-app-role.sql")
 admin_sql = read("deploy/postgres/02-admin-role.sql")
 dbsetup = read("core/internal/store/sqlstore/dbsetup.go")
 taskfile = read("Taskfile.yml")
-prepush = read(".githooks/pre-push")
 mainline = read(".github/workflows/mainline-ci.yml")
 
 fail = []
@@ -271,19 +270,14 @@ need("--allow-privileged-db-role" in readme,
      "deploy/compose/README.md no longer names --allow-privileged-db-role as the thing NOT "
      "to reach for when the refusal appears")
 
-# ---------------------------------------------------------------- 6 · the leg is wired on
-# BOTH sides of gate parity, so it can neither poison main nor be discovered after landing.
-# ⛔ ANCHORED TO THE WHOLE LINE, and the mutation battery is why. `lint:compose-postgres-
-# bootstrap` is a PREFIX of `lint:compose-postgres-bootstrap:selftest`, so a plain
-# substring search finds the base leg inside the selftest line: deleting the base leg
-# from the hook left this check green, and the mutant survived. A parity assertion that
-# cannot see a leg being removed asserts nothing.
+# ---------------------------------------------------------------- 6 · the leg is wired in
+# the Taskfile and in mainline-ci. ANCHORED TO THE WHOLE LINE: `lint:compose-postgres-bootstrap`
+# is a PREFIX of `lint:compose-postgres-bootstrap:selftest`, so a substring search would find
+# the base leg inside the selftest line and miss its removal.
 for target in ("lint:compose-postgres-bootstrap", "lint:compose-postgres-bootstrap:selftest"):
     t = re.escape(target)
     need(re.search(rf"(?m)^  {t}:$", taskfile),
          f"Taskfile.yml has no {target} target")
-    need(re.search(rf"(?m)^[ \t]*(?:[A-Za-z_][A-Za-z0-9_]*=\S+[ \t]+)*task {t}[ \t]*$", prepush),
-         f".githooks/pre-push does not run {target}")
     need(re.search(rf"(?m)^[ \t]*run: task {t}[ \t]*$", mainline),
          f"mainline-ci.yml does not run {target}")
 

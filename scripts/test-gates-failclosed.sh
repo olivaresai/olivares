@@ -228,30 +228,7 @@ if want fast; then
 		"UNVERIFIED" -- \
 		env PATH="$STUBS:$PATH" bash "$ROOT/scripts/check-format-docs.sh"
 
-	# The provider export has NO scrubber and no second pass behind its one leak scan,
-	# so a tool failure there publishes an unexamined tree.
-	#
-	# export-closure: hub-only scripts/export-provider.sh — the provider export generator
-	# cannot ship AS IT IS. Its own leak gate IS a literal denylist of the private identity
-	# and dev-process tokens the export forbids, and its prose names the maintainer the same
-	# way; measured 2026-08-02, the export's check #6 matches that script on four lines, and
-	# running the real comment scrubber on a copy left two of them: an executable denylist
-	# and an executable message. Rewriting the first would mutate a security tool's own
-	# pattern — a scrubbed leak regex is a broken leak gate. (This very comment was measured
-	# tripping the same check when it quoted one of those tokens: the class is real, not
-	# theoretical.) What is NOT claimed here, because it was refuted on 2026-08-02: that the
-	# generator would be meaningless outside the full source tree. The public manifest ships the provider
-	# subtree and its inputs, so its `git ls-files` mechanism has the same material there; a
-	# deliberately public-safe variant is possible. Curating THIS file out is the scoped fix
-	# — "not safely publishable unchanged" is measured, "impossible elsewhere" is not.
-	if [ -f "$ROOT/scripts/export-provider.sh" ]; then
-		row "the provider-export leak gate refuses when grep cannot run" \
-			"UNVERIFIED" -- \
-			env PATH="$STUBS:$PATH" TMPDIR="$STUBS" \
-			bash "$ROOT/scripts/export-provider.sh" --check
-	else
-		skip_hub_only scripts/export-provider.sh "the provider-export leak gate"
-	fi
+
 fi
 
 # --- the fuzz inventory, with one of its source trees gone. Not a broken tool: a broken
@@ -337,7 +314,8 @@ fi
 if want fast; then
 	MIGCASE="$STUBS/migcase"
 	mkdir -p "$MIGCASE/scripts" "$MIGCASE/modules/x"
-	cp "$ROOT/scripts/check-migrations.sh" "$MIGCASE/scripts/"
+	cp "$ROOT/scripts/check-migrations.sh" "$ROOT/scripts/check-migration-hashes.py" "$MIGCASE/scripts/"
+	cp -R "$ROOT/scripts/migrationhash" "$MIGCASE/scripts/"
 	mkdir -p "$MIGCASE/modules/x/migrations"
 	printf 'ALTER TABLE users DROP COLUMN email;\n' >"$MIGCASE/modules/x/migrations/0001_expand_thing.sql"
 	# ⛔ THE SANDBOX IS A GIT REPO NOW, BECAUSE THE LINTER'S SUBJECT IS THE INDEX.
@@ -347,9 +325,9 @@ if want fast; then
 	# double that plants an UNTRACKED file therefore stopped modelling the thing it tests: the
 	# linter cannot see it, and the case would pass or fail for the wrong reason. Planted AND
 	# added, so the sandbox is the shape the gate actually reads.
-	( cd "$MIGCASE" && git init -q . && git add modules/x/migrations/0001_expand_thing.sql ) >/dev/null 2>&1
+	( cd "$MIGCASE" && git init -q . && git add modules/x/migrations/0001_expand_thing.sql && git -c user.name=Test -c user.email=test@example.invalid commit -qm fixture ) >/dev/null 2>&1
 	# Control: readable, the destructive statement is caught and named.
-	control_out="$(cd "$MIGCASE" && bash scripts/check-migrations.sh 2>&1)" || true
+	control_out="$(cd "$MIGCASE" && OLIVARES_MIGRATION_BASE=HEAD bash scripts/check-migrations.sh 2>&1)" || true
 	case "$control_out" in
 	*"DESTRUCTIVE statement"*)
 		printf 'ok    migration linter catches a destructive expand migration (control)\n'
@@ -376,16 +354,16 @@ if want fast; then
 	# variable»; al arreglar aquello, esto quedo al descubierto. Subir un limite o quitar un
 	# aborto no oculta el siguiente problema: lo ENSEÑA.
 	if [ "$(id -u)" = "0" ]; then
-		printf 'skip  %s: corriendo como root, y root ignora chmod 000 —\n' \
+		printf 'skip  %s: running as root, which ignores chmod 000 —\n' \
 			"migration linter refuses when a migration cannot be read"
-		printf '        la premisa de esta casilla no se cumple aqui, asi que no mide nada.\n'
-		printf '        Ejecutala sin privilegios para ejercitar el camino UNVERIFIED.\n'
+		printf '        this case does not meet its precondition here, so it measures nothing.\n'
+		printf '        Run it without privileges to exercise the UNVERIFIED path.\n'
 		skip=$((skip + 1))
 	else
 		chmod 000 "$MIGCASE/modules/x/migrations/0001_expand_thing.sql"
 		row "migration linter refuses when a migration cannot be read" \
 			"UNVERIFIED" -- \
-			env HOME="${HOME:-$MIGCASE}" sh -c "cd '$MIGCASE' && bash scripts/check-migrations.sh"
+			env HOME="${HOME:-$MIGCASE}" sh -c "cd '$MIGCASE' && OLIVARES_MIGRATION_BASE=HEAD bash scripts/check-migrations.sh"
 		chmod 644 "$MIGCASE/modules/x/migrations/0001_expand_thing.sql"
 	fi
 fi

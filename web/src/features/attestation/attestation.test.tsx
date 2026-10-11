@@ -52,8 +52,9 @@ describe('ArtifactTable', () => {
     const grid = screen.getByRole('grid')
     expect(within(grid).getByText('checksums.txt')).toBeInTheDocument()
     expect(
-      within(grid).getByText(/ghcr\.io\/olivaresai\/charts/),
+      within(grid).getByText(/Business channel: signed chart package/),
     ).toBeInTheDocument()
+    expect(within(grid).queryByText(/ghcr\.io\/olivaresai\/charts/)).toBeNull()
     // No credential / signing key value is ever rendered.
     expect(screen.queryByText(/sk-ant/)).not.toBeInTheDocument()
     expect(screen.queryByText(/-----BEGIN/)).not.toBeInTheDocument()
@@ -139,7 +140,7 @@ describe('SlaPanel', () => {
 })
 
 describe('AirgapPanel', () => {
-  it('renders zero-phone-home + dual-signing chart facts', () => {
+  it('renders offline bundles and the private Business chart contract', () => {
     renderIntel(<AirgapPanel airgap={release.airgap} helm={release.helm} />)
     // ⛔ ESTA CELDA FIJABA UNA PROMESA QUE EL PRODUCTO NO SOSTIENE. Afirmaba que la pantalla dice
     //    «nothing phones home», y el contacto con el fabricante está APROBADO por decisión firmada:
@@ -155,9 +156,16 @@ describe('AirgapPanel', () => {
     ).toBeInTheDocument()
     expect(screen.queryByText(/nothing phones home/i)).toBeNull()
     expect(
-      screen.getByText(/oci:\/\/ghcr\.io\/olivaresai\/charts/),
+      screen.getByRole('heading', { name: 'Offline bundle' }),
     ).toBeInTheDocument()
-    // Dual-signing: cosign manifest + the Helm-native GPG .prov (maintainer path).
+    expect(
+      screen.getByText(/Business channel: signed chart package/),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByText(/oci:\/\/ghcr\.io\/olivaresai\/charts/),
+    ).toBeNull()
+    expect(screen.queryByText(/olivares-enterprise\/\.github/)).toBeNull()
+    // Enterprise local GPG provenance remains distinct from the Business package signature.
     expect(screen.getByText(/Helm-native GPG \.prov/)).toBeInTheDocument()
   })
 })
@@ -206,7 +214,7 @@ describe('ReleaseStatePanel — honest not-published state', () => {
     expect(
       screen.getByText(/never claims Rekor inclusion/i),
     ).toBeInTheDocument()
-    // The 5 pipeline workflows render verbatim, status declared.
+    // The Community pipeline workflows render verbatim, status declared.
     expect(screen.getByText(/release\.yml/)).toBeInTheDocument()
     // The declared block must NOT answer the question it declares unobservable.
     // It used to end "it has never been fired (beta)" — a repository-history claim

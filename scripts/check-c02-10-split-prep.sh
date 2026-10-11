@@ -36,16 +36,16 @@ grep -F -q 'Community embed stays' "$DOC" \
 grep -F -q 'Does not write core/release' "$DOC" \
   || fail "prepare doc lost core/release HOLD"
 if grep -qiE 'sidecar landed|FIRMA A claimed|community embed was removed' "$DOC"; then
-  fail "prepare doc claims an application this lote does not have"
+  fail "prepare doc claims an application this batch does not have"
 fi
 
 grep -q 'func Extract' "$EMB" \
   || fail "community Extract is gone — C02-10 must not delete the embed"
 if grep -q 'OLIVARES_CONNECTOR_BUNDLE' "$EMB"; then
-  fail "sidecar env landed — this HOLD lote does not apply C02-10"
+  fail "sidecar env landed — this HOLD batch does not apply C02-10"
 fi
 if grep -q 'extractFromThenBundle' "$EMB"; then
-  fail "sidecar extract landed — this HOLD lote does not apply C02-10"
+  fail "sidecar extract landed — this HOLD batch does not apply C02-10"
 fi
 if grep -qiE 'core/release' "$EMB"; then
   fail "C02-10 wrote core/release — that axis is N's"

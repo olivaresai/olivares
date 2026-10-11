@@ -90,11 +90,11 @@ func newChannelCatalogFixtureOn(t *testing.T, backend communicationSchemaBackend
 	source := &directNoticeInboxEvidenceSource{
 		base: base.source.evidence, outcomes: map[model.ID]auth.EvidenceOutcome{},
 	}
-	base.m.communicationDirectoryResolver = resolver
-	base.m.communicationGrantClosure = closure
+	base.m.CommunicationDirectoryResolver = resolver
+	base.m.CommunicationGrantClosure = closure
 	base.m.useCommunicationRequestAuthoritySources(base.authr, source)
 	ring := newChannelCatalogNavigationKeyring(t, "k3cat-fixture")
-	base.m.communicationCursorKeyring = ring
+	base.m.CursorKeyring = ring
 	return channelCatalogFixture{
 		directNoticeFixture: base, readerID: onboarded.User.ID, readerRef: readerRef,
 		resolver: resolver, closure: closure, source: source, ring: ring,
@@ -241,7 +241,7 @@ func (f channelCatalogFixture) revokeGrant(t *testing.T, grantID model.ID) {
 	t.Helper()
 	ctx := context.Background()
 	var current model.Record
-	if err := f.m.data.View(ctx, f.tenant, func(sc store.Scope) error {
+	if err := f.m.Data.View(ctx, f.tenant, func(sc store.Scope) error {
 		repo, err := sc.Ext(channelGrantKind)
 		if err != nil {
 			return err
@@ -516,8 +516,8 @@ func TestChannelCatalogRevocationBetweenDiscoveryAndClosureAbortsWholePage(t *te
 		hook: func() { fx.revokeGrant(t, grantSecond) },
 	}
 	fx.m.useCommunicationRequestAuthoritySources(fx.authr, hook)
-	observer := &directNoticeMutateObserverData{inner: fx.m.data}
-	fx.m.data = observer
+	observer := &directNoticeMutateObserverData{inner: fx.m.Data}
+	fx.m.Data = observer
 
 	page, err := fx.list(t, ChannelCatalogRequest{Limit: 10})
 	// Two mutations: the injected revocation itself and the page's single bound
@@ -623,8 +623,8 @@ func TestChannelCatalogExpiryWhileLocksWaitAndOrHorizons(t *testing.T) {
 		fx.grant(t, channel.ID, fx.readerSubject(), true, true, true, &soon)
 		fx.reconcile(t)
 		fx.renewRequestAuthorityEvidence(t)
-		shift := &channelCatalogClockShiftData{inner: fx.m.data, shift: 3 * time.Minute}
-		fx.m.data = shift
+		shift := &channelCatalogClockShiftData{inner: fx.m.Data, shift: 3 * time.Minute}
+		fx.m.Data = shift
 		page, err := fx.list(t, ChannelCatalogRequest{Limit: 10})
 		if !errors.Is(err, ErrCommunicationEvidenceUnknown) || len(page.Items) != 0 {
 			t.Fatalf("expired-at-refresh page = %+v, %v; want unavailable", page, err)
@@ -648,8 +648,8 @@ func TestChannelCatalogExpiryWhileLocksWaitAndOrHorizons(t *testing.T) {
 		fx.grant(t, channel.ID, group, true, false, false, &later)
 		fx.reconcile(t)
 		fx.renewRequestAuthorityEvidence(t)
-		shift := &channelCatalogClockShiftData{inner: fx.m.data, shift: 3 * time.Minute}
-		fx.m.data = shift
+		shift := &channelCatalogClockShiftData{inner: fx.m.Data, shift: 3 * time.Minute}
+		fx.m.Data = shift
 		page, err := fx.list(t, ChannelCatalogRequest{Limit: 10})
 		if err != nil || len(page.Items) != 1 || page.Items[0].MyAccess != (ChannelCatalogAccess{Read: true}) {
 			t.Fatalf("OR-horizon page = %+v, %v; the later grant must keep read current", page, err)
@@ -679,8 +679,8 @@ func TestChannelCatalogExpiryWhileLocksWaitAndOrHorizons(t *testing.T) {
 		if err != nil || len(page.Items) != 1 || page.Items[0].MyAccess != (ChannelCatalogAccess{Read: true, Write: true}) {
 			t.Fatalf("current write page = %+v, %v", page, err)
 		}
-		shift := &channelCatalogClockShiftData{inner: fx.m.data, shift: 3 * time.Minute}
-		fx.m.data = shift
+		shift := &channelCatalogClockShiftData{inner: fx.m.Data, shift: 3 * time.Minute}
+		fx.m.Data = shift
 		page, err = fx.list(t, ChannelCatalogRequest{Limit: 10})
 		if err != nil || len(page.Items) != 1 || page.Items[0].MyAccess != (ChannelCatalogAccess{Read: true}) {
 			t.Fatalf("write expired at refresh = %+v, %v; want read only from the durable grant", page, err)
@@ -695,13 +695,13 @@ func TestChannelCatalogClosureDenyIsEmptyAndUnknownAborts(t *testing.T) {
 	fx.grant(t, channel.ID, fx.readerSubject(), true, false, false, nil)
 	fx.reconcile(t)
 	deny := &directNoticeReadClosureResolver{now: fx.now, epoch: fx.epoch, outcome: ReadDeny}
-	fx.m.communicationGrantClosure = deny
+	fx.m.CommunicationGrantClosure = deny
 	page, err := fx.list(t, ChannelCatalogRequest{Limit: 10})
 	if err != nil || len(page.Items) != 0 || page.HasMore || page.Continuation != "" || fx.source.calls != 0 {
 		t.Fatalf("closure deny page = %+v, %v; calls=%d; want empty without any core question", page, err, fx.source.calls)
 	}
 	unknown := &directNoticeReadClosureResolver{now: fx.now, epoch: fx.epoch, outcome: ReadUnknown}
-	fx.m.communicationGrantClosure = unknown
+	fx.m.CommunicationGrantClosure = unknown
 	page, err = fx.list(t, ChannelCatalogRequest{Limit: 10})
 	if !errors.Is(err, ErrCommunicationEvidenceUnknown) || len(page.Items) != 0 || fx.source.calls != 0 {
 		t.Fatalf("closure unknown page = %+v, %v; want unavailable", page, err)
@@ -874,7 +874,7 @@ func seedChannelCatalogHiddenChannels(t *testing.T, fx channelCatalogFixture, pr
 	ctx := context.Background()
 	stranger := CommunicationSubjectRef{Kind: SubjectUser, Ref: model.NewID().String()}
 	ids := make([]model.ID, 0, n)
-	if err := fx.m.data.Mutate(ctx, fx.tenant, func(sc store.Scope) error {
+	if err := fx.m.Data.Mutate(ctx, fx.tenant, func(sc store.Scope) error {
 		channels, err := sc.Ext(channelKind)
 		if err != nil {
 			return err
@@ -949,8 +949,8 @@ func TestChannelCatalogSparseEstateProgressesWithoutPerHiddenChannelWork(t *test
 		observedAt.Format(time.RFC3339Nano), freshUntil.Format(time.RFC3339Nano),
 		freshUntil.Sub(observedAt))
 
-	observer := &channelCatalogWorkObserver{inner: fx.m.data, calls: map[string]int{}}
-	fx.m.data = observer
+	observer := &channelCatalogWorkObserver{inner: fx.m.Data, calls: map[string]int{}}
+	fx.m.Data = observer
 	started := time.Now()
 	page, err := fx.list(t, ChannelCatalogRequest{Limit: 10})
 	elapsed := time.Since(started)
@@ -1011,8 +1011,8 @@ func TestChannelCatalogSetupClockGapRefusesExpiredRequestAuthority(t *testing.T)
 	// constructor's seal is worth, and half a minute short of a five-minute window
 	// anchored after setup.
 	const setupClockGap = channelCatalogFixtureAuthorityWindow - 30*time.Second
-	gap := &channelCatalogClockShiftData{inner: fx.m.data, shift: setupClockGap}
-	fx.m.data = gap
+	gap := &channelCatalogClockShiftData{inner: fx.m.Data, shift: setupClockGap}
+	fx.m.Data = gap
 
 	page, err := fx.list(t, ChannelCatalogRequest{Limit: 10})
 	if !errors.Is(err, ErrCommunicationEvidenceUnknown) || len(page.Items) != 0 ||

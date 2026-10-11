@@ -45,7 +45,7 @@ CONTAINER_PREFIX='olivares-apk-pi'
 me=nfpm-apk-postinstall-runtime
 
 could_not_look() {
-	printf '%s: NO HE PODIDO MIRAR — %s\n' "$me" "$*" >&2
+	printf '%s: COULD NOT LOOK — %s\n' "$me" "$*" >&2
 	exit 2
 }
 fail() {

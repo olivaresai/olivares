@@ -30,7 +30,8 @@
       "active": "Activo",
       "available": "Disponible",
       "opt_in_off": "Opcional desactivado",
-      "blocked": "Bloqueado"
+      "blocked": "Bloqueado",
+      "unavailable": "Requiere Business"
     },
     "optInOff": "Convención en Desarrollo: desactivada por defecto; actívala mediante la puerta del conector.",
     "gate": "Puerta",
@@ -128,7 +129,8 @@
       "ok": "OK",
       "error": "Error",
       "unset": "Sin definir"
-    }
+    },
+    "exportFailed": "Falló la exportación de la traza"
   },
   "empty": {
     "ingestionHealth": {
@@ -147,5 +149,10 @@
       "title": "No se han registrado tiempos de tramos para esta traza",
       "description": "Los eventos del libro mayor deben llevar identificadores de tramo del motor para que esta vista muestre el desfase inicial, la duración, el actor y el estado de cada tramo."
     }
+  },
+  "inferenceCoverage": {
+    "inference_metadata_only": "Solo se conservan metadatos de inferencia. No se puede reconstruir el contexto de trabajo del proveedor.",
+    "provider_context_may_change": "Se solicitaron compactación o ediciones del contexto. Los metadatos conservados no permiten reconstruir el contexto de trabajo del proveedor.",
+    "provider_context_unknown": "Se desconoce la edición del contexto del proveedor para esta inferencia. Los metadatos conservados no permiten reconstruir su contexto de trabajo."
   }
 }

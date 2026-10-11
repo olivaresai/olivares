@@ -26,14 +26,14 @@ import (
 func newHooksCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "hooks",
-		Short: "Hooks-hardening add-on: fleet deployed-verified attestation + conformance cert (enterprise)",
+		Short: "Hooks-hardening add-on: fleet deployed-verified attestation + conformance cert (Business: AI Runtime Security)",
 		Example: "  olivares hooks conform --behavioral --signing-key-file attest.key --signature-out hooks.conformance\n" +
 			"  olivares hooks attest --version fleet-2026-07 --nodes node-reports.json \\\n" +
 			"    --signing-key-file attest.key --signature-out fleet.attestation",
-		Long: "hooks manages the hooks-hardening add-on (enterprise): attest that a fleet runs the exact,\n" +
+		Long: "hooks manages the hooks-hardening add-on (Business: AI Runtime Security): attest that a fleet runs the exact,\n" +
 			"PEP-hook-bearing managed-settings (deployed-verified), and certify conformance against the real\n" +
 			"claude binary. The DLP-in-hook firewall half is enabled separately via OLIVARES_HOOK_FIREWALL_CONFIG.\n" +
-			"Requires an enterprise build; the default AGPL build reports these verbs are unavailable.",
+			"Requires the Business edition; the Community build reports these verbs are unavailable.",
 	}
 	cmd.AddCommand(hooksAttestCmd(), hooksConformCmd())
 	return cmd

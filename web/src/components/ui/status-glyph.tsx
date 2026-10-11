@@ -1,21 +1,19 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
-import { Circle, CircleCheck, CircleX, Pause } from 'lucide-react'
-import type { HTMLAttributes, ReactNode } from 'react'
+import type { HTMLAttributes } from 'react'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
+import { StatusChip, StatusDot, type StatusTone } from './status-chip'
 
 /**
- * StatusGlyph — the shape and the word of a work state: a ring for running work (the one
- * status in orange, because it is the product alive, not a problem), a yellow diamond for
- * work that needs the operator, a green check, a red cross, a pause bar and an open circle.
+ * StatusGlyph — the localized work-state wrapper around the shared dot chip.
  *
  * ⛔ IT ALWAYS RENDERS ITS WORD. Beside the shape by default; with `showLabel={false}` the
  *    shape is an image whose accessible name is the word. Color never carries a status
  *    alone. A blank word, or a status the component has no word for, throws at render.
  *
- * The running ring turns once per 1.2 s and stops under reduced motion (the operating
+ * The green working dot pulses every 2 s and stops under reduced motion (the operating
  * system's preference or the console's Reduce motion setting); the word still says
  * "Working".
  */
@@ -31,59 +29,18 @@ const WORD_KEY: Record<Status, string> = {
   idle: 'ui.status.idle',
 }
 
-const SHAPE_CLASS = 'size-3.5 shrink-0'
-
-/**
- * The running ring: orange, one turn per 1.2 s, still under reduced motion. Decoration: the
- * word beside it (or the name of the glyph that holds it) says what it means.
- */
+/** Compatibility export for loading/checking callers; it uses the shared working dot. */
 export function RunningRing({ className }: { className?: string }) {
-  return (
-    <span
-      data-shape="ring"
-      aria-hidden="true"
-      className={cn(
-        SHAPE_CLASS,
-        'inline-block rounded-full border-2 border-accent-soft border-t-accent border-r-accent',
-        'animate-spin [animation-duration:1.2s] motion-reduce:animate-none [[data-motion=reduce]_&]:animate-none',
-        className,
-      )}
-    />
-  )
+  return <StatusDot tone="ok" working className={className} />
 }
 
-function Shape({ status }: { status: Status }): ReactNode {
-  switch (status) {
-    case 'working':
-      return <RunningRing />
-    case 'needs-you':
-      return (
-        <span
-          data-shape="diamond"
-          aria-hidden="true"
-          className="m-0.5 inline-block size-2.5 shrink-0 rotate-45 rounded-[2px] bg-warn"
-        />
-      )
-    case 'done':
-      return (
-        <CircleCheck
-          aria-hidden="true"
-          className={cn(SHAPE_CLASS, 'text-ok')}
-        />
-      )
-    case 'failed':
-      return (
-        <CircleX aria-hidden="true" className={cn(SHAPE_CLASS, 'text-bad')} />
-      )
-    case 'paused':
-      return (
-        <Pause aria-hidden="true" className={cn(SHAPE_CLASS, 'text-text-3')} />
-      )
-    case 'idle':
-      return (
-        <Circle aria-hidden="true" className={cn(SHAPE_CLASS, 'text-text-3')} />
-      )
-  }
+const TONE: Record<Status, StatusTone> = {
+  working: 'ok',
+  'needs-you': 'warn',
+  done: 'ok',
+  failed: 'bad',
+  paused: 'neutral',
+  idle: 'neutral',
 }
 
 export interface StatusGlyphProps extends Omit<
@@ -127,27 +84,25 @@ export function StatusGlyph({
         className={cn('inline-flex shrink-0 items-center', className)}
         {...props}
       >
-        <Shape status={status} />
+        <StatusDot tone={TONE[status]} working={status === 'working'} />
       </span>
     )
   }
 
   return (
-    <span
+    <StatusChip
+      tone={TONE[status]}
+      working={status === 'working'}
       data-slot="status-glyph"
       data-status={status}
-      className={cn(
-        'inline-flex min-w-0 items-center gap-1.5 text-caption font-medium whitespace-nowrap text-text',
-        className,
-      )}
+      className={className}
       {...props}
     >
-      <Shape status={status} />
       <span>{word}</span>
       {detail ? ' ' : null}
       {detail ? (
         <span className="text-text-3 tabular-nums">· {detail}</span>
       ) : null}
-    </span>
+    </StatusChip>
   )
 }

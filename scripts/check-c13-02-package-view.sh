@@ -43,7 +43,7 @@ command -v python3 >/dev/null || cannot "no python3"
 ERR="$(mktemp "${TMPDIR:-/tmp}/c1302-view.XXXXXX")" || cannot "cannot create a scratch file"
 trap 'rm -f "$ERR" "$ERR.out"' EXIT
 set +e
-[ -r "$ROOT/scripts/module-catalog-go.sh" ] || cannot "falta scripts/module-catalog-go.sh: sin el envoltorio del derivador no hay con qué comparar (un 127 no es un veredicto)"
+[ -r "$ROOT/scripts/module-catalog-go.sh" ] || cannot "missing scripts/module-catalog-go.sh: the derivation wrapper is required for comparison (exit 127 is not a result)"
 bash "$ROOT/scripts/module-catalog-go.sh" check >"$ERR.out" 2>"$ERR"
 rc=$?
 set -e
@@ -54,7 +54,7 @@ set -e
 case "$rc" in
 0 | 1 | 2) ;;
 *)
-	say "check-c13-02-package-view: COULD NOT LOOK — la derivación salió con un código que su contrato no define ($rc):" >&2
+	say "check-c13-02-package-view: COULD NOT LOOK — derivation returned an exit code its contract does not define ($rc):" >&2
 	cat "$ERR" >&2 || true
 	exit 2
 	;;
@@ -77,7 +77,7 @@ fi
 grep -q 'Not bijective' "$DOC" || fail "$DOC lost not-bijective"
 grep -q 'Pack slugs' "$DOC" || fail "$DOC lost pack-slugs-off"
 if grep -qiE 'FIRMA A claimed|view is bijective|pack slug landed' "$DOC"; then
-	fail "$DOC claims a close this lote does not have"
+	fail "$DOC claims a close this batch does not have"
 fi
 
 python3 - "$JSON" "$SRC" "$VIEW" <<'PY' || fail "view drifted from source"
@@ -156,7 +156,7 @@ if data.get("observed_packages") != len(want):
 # ── the evidence block is the lote's, not the generator's: it must EXIST and be well-formed ─────
 ev = data.get("evidence")
 if not isinstance(ev, dict):
-    raise SystemExit("the evidence block is missing; the lote's hand-measured object ids live there")
+    raise SystemExit("the evidence block is missing; the batch's hand-measured object ids live there")
 for k in ("u_f", "u_d"):
     if ev.get(k) != "UNKNOWN":
         raise SystemExit("%s must stay UNKNOWN until somebody measures it" % k)

@@ -8,13 +8,13 @@
 set -u -o pipefail
 
 [ "$#" -gt 0 ] || {
-	echo "with-clean-tmp: NO HE PODIDO MIRAR: falta el comando" >&2
+	echo "with-clean-tmp: COULD NOT LOOK: missing command" >&2
 	exit 2
 }
 
 base="${TMPDIR:-/tmp}"
 [ -d "$base" ] && [ -w "$base" ] || {
-	echo "with-clean-tmp: NO HE PODIDO MIRAR: la base temporal no es escribible" >&2
+	echo "with-clean-tmp: COULD NOT LOOK: the temporary base directory is not writable" >&2
 	exit 2
 }
 base="$(cd -- "$base" 2>/dev/null && pwd -P)" || exit 2
@@ -40,22 +40,22 @@ looked=1
 if residue="$(find "$work" -mindepth 1 -maxdepth 1 -printf x 2>/dev/null)"; then
 	left="${#residue}"
 else
-	echo "with-clean-tmp: NO HE PODIDO MIRAR el scratch después del comando" >&2
+	echo "with-clean-tmp: COULD NOT LOOK at the scratch directory after the command" >&2
 	left=0
 	looked=0
 	rc=2
 fi
 if [ "$left" -gt 0 ]; then
-	echo "with-clean-tmp: BROKEN: el comando dejó $left entrada(s) en su scratch" >&2
+	echo "with-clean-tmp: BROKEN: the command left $left entry/entries in its scratch directory" >&2
 	[ "$rc" -ne 0 ] || rc=1
 elif [ "$looked" -eq 1 ]; then
-	echo "with-clean-tmp: CLEAN: el comando dejó su scratch como lo encontró"
+	echo "with-clean-tmp: CLEAN: the command left its scratch directory as it found it"
 fi
 
 cleanup || rc=2
 trap - EXIT
 [ ! -e "$root" ] || {
-	echo "with-clean-tmp: NO HE PODIDO LIMPIAR su raíz privada" >&2
+	echo "with-clean-tmp: COULD NOT CLEAN its private root" >&2
 	rc=2
 }
 exit "$rc"

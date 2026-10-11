@@ -69,16 +69,18 @@ Docker API へのアクセスが必要です（エンジンが意図的にデフ
 
 エンジンを digest で固定し、先に検証します：
 
+<!-- release -->
 ```sh
 # verify the engine image you run (it is cosign-signed)
-cosign verify docker.io/olivaresai/olivares:26.10.1 \
-  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v?[0-9]+\.[0-9]+(\.[0-9]+)?$' \
+cosign verify docker.io/olivaresai/olivares:0.1 \
+  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/[0-9]+\.[0-9]+$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 
 export OLIVARES_IMAGE=docker.io/olivaresai/olivares@sha256:<digest>
 export OLIVARES_BIND=127.0.0.1
 docker compose -f deploy/compose/docker-compose.yml up -d
 ```
+<!-- /release -->
 
 ### Claude Code をインストールしてサインインする
 
@@ -99,11 +101,36 @@ olivares tool login claude
 エンジンと `claude` がホスト上にあり、systemd がエンジンを実行し、それが `claude` を指揮します。
 ワークスペースは `/var/lib/olivares/workspaces` に置かれます。
 
-### 1 つのコマンド
+### ダウンロードし、検証してから実行する
 
+インストーラーをシェルにパイプしないでください。リリースの署名付きチェックサム一覧を検証し、
+そこに記載されたコミットをそのままチェックアウトして、そのチェックアウトからインストーラーを
+実行します。`install.sh` とパッケージングファイルはブランチではなく、チェックアウトから読み込まれます。
+このブロックは `set -eu` 付きのサブシェルで実行されるため、最初に失敗した手順で停止し、検証に失敗した後にインストーラーが実行されることはありません。
+
+<!-- release -->
 ```sh
-curl -fsSL https://raw.githubusercontent.com/olivaresai/olivares/main/scripts/install-agentops.sh | sh
+(
+set -eu
+cd "$(mktemp -d)"
+ver=0.1
+base=https://github.com/olivaresai/olivares/releases/download/$ver
+curl -fsSLO $base/checksums.txt
+curl -fsSLO $base/checksums.txt.sig
+curl -fsSLO $base/checksums.txt.pem
+curl -fsSLO $base/release-commit.txt
+cosign verify-blob \
+  --certificate checksums.txt.pem --signature checksums.txt.sig \
+  --certificate-identity "https://github.com/olivaresai/olivares/.github/workflows/release.yml@refs/tags/$ver" \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  checksums.txt
+grep ' release-commit.txt$' checksums.txt | sha256sum --check
+git clone https://github.com/olivaresai/olivares.git
+cd olivares && git checkout --detach "$(cat ../release-commit.txt)"
+OLIVARES_TOPOLOGY=native OLIVARES_VERSION=$ver sh scripts/install-agentops.sh
+)
 ```
+<!-- /release -->
 
 これはネイティブトポロジーを自動検出し、**検証済み** のエンジンバイナリ（cosign ゲート付きの
 `install.sh`）をインストールし、署名済みの apt/dnf/apk リポジトリから `claude` をインストールし
@@ -115,11 +142,13 @@ curl -fsSL https://raw.githubusercontent.com/olivaresai/olivares/main/scripts/in
 ### インストーラーが配線するもの（とその理由）
 
 - `packaging/systemd/olivares.service.d/agentops.conf` — 指揮される `claude` に `~/.claude` 用の
-  書き込み可能な `HOME` を与えるドロップイン（`/var/lib/olivares` 配下に保持されるので、
-  `ProtectHome=true` は依然として実ユーザーを保護します）。ワークスペースディレクトリの存在を保証し、
-  サンドボックスのプロパティをちょうど **1 つ** だけ解除します。`MemoryDenyWriteExecute` です
-  （`claude` ランタイムは JIT コンパイルを行い、W→X メモリを必要とします）。ベースユニットの他の
-  ハードニングディレクティブはすべて有効なままです。
+  書き込み可能な `HOME` を与えるドロップイン（`/var/lib/olivares` 配下に保持されます）。
+  ワークスペースディレクトリの存在を保証し、ベースユニットのファイルシステムポリシーを明示します。
+  `ProtectSystem=full`、`ProtectHome=false`、`PrivateTmp=false`、`MemoryDenyWriteExecute=false`
+  です（`claude` ランタイムは JIT コンパイルを行い、W→X メモリを必要とします）。ホームと `/tmp` は
+  エンジンから見えたままなので、選んだフォルダーに到達できます。各セッションの `claude` と
+  その stdio MCP サーバーは、代わりに製品のフォルダー単位の Landlock 閉じ込めの下で動きます。
+  ベースユニットの他のハードニングディレクティブはすべて有効なままです。
 - `/etc/olivares/agentops.env` — セッションランタイムの設定（トークンファイル、TTL、任意の
   ゲートウェイベース URL、任意の BYO `claude` パス）。
 
@@ -227,8 +256,8 @@ cap-drop）を得て、エンジンが Docker API を通じて作成し破棄し
   リスナーもデフォルトですべてのインターフェースを使用します。アクセスを制限するには
   リッスンアドレスを設定してください。
 - **非 root、最小権限。** uid/gid 65532、読み取り専用ルートファイルシステム、`cap_drop: ALL`、
-  `no-new-privileges`（Docker）/ 文書化された 1 つの W^X 緩和を除く完全な `Protect*`/`Restrict*` セット
-  （systemd）。
+  `no-new-privileges`（Docker）/ カーネルと名前空間の `Protect*`/`Restrict*` ディレクティブ。ホームと
+  `/tmp` は見えたままで W^X は許可され、各セッションは Landlock でそのフォルダーに閉じ込められます（systemd）。
 - **最小データ、アローリストされた環境。** 子の `claude` は明示的なアローリスト（PATH、HOME、ロケール…）
   に加えてメモリ内の推論トークンのみを継承します — `OLIVARES_*` 署名鍵は **なし**、発行された
   クレデンシャルを覆い隠しうる周辺の `ANTHROPIC_*`/`CLAUDE_CODE_*` も **なし** です。

@@ -3,7 +3,7 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { FavoriteButton } from './personal-navigation'
 import { Link, useRouterState } from '@tanstack/react-router'
-import { ChevronLeft, CircleHelp, PanelLeftOpen, Search } from 'lucide-react'
+import { ChevronLeft, CircleHelp, Search } from 'lucide-react'
 import { Fragment } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
@@ -16,27 +16,19 @@ import {
 } from '@/components/ui/breadcrumb'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { useServerInfo } from '@/lib/hooks/use-server-info'
+import { useMinWidth } from '@/lib/hooks/use-min-width'
 import {
-  breadcrumbTrail,
   currentViewId as resolveViewId,
-  SETTINGS_UTILITY,
   resolveLocation,
-  viewById,
   type Crumb,
 } from '@/features/navigation/model'
 import { useCommandStore } from '@/stores/command'
-import { usePreferencesStore } from '@/stores/preferences'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { BrandMark } from './brand'
 import { KillSwitchStatus } from './killswitch-status'
 import { NotificationBell } from './notification-bell'
-import {
-  DESTINATION_DOORS,
-  DESTINATION_VIEW_IDS,
-  SETTINGS_DESTINATION,
-  destinationOf,
-  sectionAt,
-} from './shell-destinations'
+import { trailFor } from './shell-destinations'
 import { SidePanelToggle } from './side-panel'
 import { UserMenu } from './user-menu'
 
@@ -81,15 +73,6 @@ export function currentViewId(pathname: string): string | null {
   return resolveViewId(pathname)
 }
 
-const JOURNEYS: ReadonlySet<string> = new Set(DESTINATION_VIEW_IDS)
-
-/**
- * THE TRAIL. On a journey it reads as the design draws it — the workspace, then the
- * journey ("telescopes / Sessions") — because the journey IS the location and the
- * workspace is what it operates on. Everywhere else it is the registry trail resolved by
- * features/navigation/model.ts (`Area › Module`, `Area › Parent › Detail`): ancestors
- * link, the page does not, and sections never appear.
- */
 function useTrail(): Crumb[] {
   const { t } = useTranslation(['nav', 'common'])
   const pathname = useRouterState({ select: (s) => s.location.pathname })
@@ -97,54 +80,7 @@ function useTrail(): Crumb[] {
     select: (s) => (s.location.search ?? {}) as Record<string, unknown>,
   })
   const workspaceName = useWorkspaceStore((s) => s.activeWorkspaceName)
-  const location = resolveLocation(pathname)
-  // A section address reads as the destination the sidebar marks: "workspace / Approvals".
-  const section =
-    location.kind === 'view' ? sectionAt(location.view.id, search) : null
-  if (section) {
-    return [
-      { label: workspaceName ?? t('nav:workspace.all') },
-      { label: t(`nav:shell.journeys.${section.key}`) },
-    ]
-  }
-  // Another member of a destination that spans several views reads "Policies / Routine
-  // policies", the destination linking back to its own view (the footer's Settings for
-  // its members). The destination's own view keeps the journey trail below.
-  const destination =
-    location.kind === 'view' ? destinationOf(location.view.id) : null
-  if (location.kind === 'view' && destination === SETTINGS_DESTINATION) {
-    return [
-      { label: t('nav:items.settings'), to: SETTINGS_UTILITY.path },
-      { label: t(`nav:items.${location.view.id}`) },
-    ]
-  }
-  const home = destination ? viewById(destination) : undefined
-  if (
-    location.kind === 'view' &&
-    home &&
-    DESTINATION_DOORS.has(location.view.id)
-  ) {
-    return [
-      { label: workspaceName ?? t('nav:workspace.all') },
-      { label: t(`nav:shell.journeys.${home.id}`) },
-    ]
-  }
-  if (location.kind === 'view' && home && home.id !== location.view.id) {
-    return [
-      { label: t(`nav:shell.journeys.${home.id}`), to: home.path },
-      { label: t(`nav:items.${location.view.id}`) },
-    ]
-  }
-  if (
-    (location.kind === 'view' || location.kind === 'home') &&
-    JOURNEYS.has(location.view.id)
-  ) {
-    return [
-      { label: workspaceName ?? t('nav:workspace.all') },
-      { label: t(`nav:shell.journeys.${location.view.id}`) },
-    ]
-  }
-  return breadcrumbTrail(t, location)
+  return trailFor(t, resolveLocation(pathname), search, workspaceName)
 }
 
 /**
@@ -164,15 +100,15 @@ export function Topbar() {
   const { t } = useTranslation(['nav', 'common'])
   const pathname = useRouterState({ select: (s) => s.location.pathname })
   const setCommandOpen = useCommandStore((s) => s.setOpen)
-  const sidebarHidden = usePreferencesStore((s) => s.sidebarCollapsed)
-  const showSidebar = usePreferencesStore((s) => s.toggleSidebar)
+  const info = useServerInfo()
+  const version = useMinWidth(761) ? undefined : info.data?.version
 
   const location = resolveLocation(pathname)
   const trail = useTrail()
   const parents = trail.slice(0, -1)
   const page = trail[trail.length - 1]
-  // Contextual help: the current view's Diátaxis page on the docs site; a directory
-  // page opens the console reference, which lists every screen.
+  // Contextual help: the current view's documentation page; a directory page opens
+  // the console reference, which lists every screen.
   const helpHref =
     location.kind === 'view' || location.kind === 'home'
       ? location.view.helpHref
@@ -185,24 +121,23 @@ export function Topbar() {
       data-slot="topbar"
       className="flex h-13 min-h-13 shrink-0 flex-nowrap items-center gap-x-1 border-b border-line bg-canvas pr-3 pl-5 max-[760px]:pl-3 sm:gap-x-2 print:hidden"
     >
-      <Link
-        to={'/' as never}
-        aria-label={t('nav:shell.brandHome')}
-        className="grid size-8 shrink-0 place-items-center rounded-ctl text-text outline-none focus-visible:ring-2 focus-visible:ring-focus min-[761px]:hidden"
+      <div
+        data-testid={version ? 'deployment-identity' : undefined}
+        className="flex shrink-0 flex-col items-center min-[761px]:hidden"
       >
-        <BrandMark />
-      </Link>
-      {sidebarHidden ? (
-        <button
-          type="button"
-          onClick={showSidebar}
-          aria-label={t('common:actions.expandSidebar')}
-          aria-keyshortcuts="Control+B Meta+B"
-          className="hidden size-8 shrink-0 place-items-center rounded-ctl text-text-2 outline-none hover:bg-hover hover:text-text focus-visible:ring-2 focus-visible:ring-focus min-[761px]:grid"
+        <Link
+          to={'/' as never}
+          aria-label={t('nav:shell.brandHome')}
+          className="grid size-8 shrink-0 place-items-center rounded-ctl text-text outline-none focus-visible:ring-2 focus-visible:ring-focus"
         >
-          <PanelLeftOpen aria-hidden className="size-4" />
-        </button>
-      ) : null}
+          <BrandMark />
+        </Link>
+        {version ? (
+          <span className="block shrink-0 whitespace-nowrap font-mono text-mono-s text-text-2">
+            {version}
+          </span>
+        ) : null}
+      </div>
 
       <Breadcrumb className="flex h-full min-w-24 flex-1 items-center">
         <BreadcrumbList className="text-body font-medium">

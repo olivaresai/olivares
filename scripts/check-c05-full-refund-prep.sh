@@ -34,13 +34,13 @@ grep -F -q 'ClassifyDodoRefundBody not landed' "$DOC" \
 grep -F -q 'Does not copy stale `#891`' "$DOC" \
   || fail "prepare doc lost stale-branch HOLD"
 if grep -qiE 'FIRMA A claimed|remainder applied on origin/main|ClassifyDodoRefundBody landed' "$DOC"; then
-  fail "prepare doc claims an application this lote does not have"
+  fail "prepare doc claims an application this batch does not have"
 fi
 
 grep -F -q 'case "payment.succeeded", "refund.succeeded":' "$DODO" \
   || fail "refund is no longer lumped with payment.succeeded"
 if grep -q 'ClassifyDodoRefundBody' "$DODO"; then
-  fail "ClassifyDodoRefundBody landed — this HOLD lote does not apply #891"
+  fail "ClassifyDodoRefundBody landed — this HOLD batch does not apply #891"
 fi
 
 python3 - "$JSON" <<'PY' || exit $?

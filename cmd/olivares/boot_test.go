@@ -18,6 +18,7 @@ import (
 func TestBootWiresLogBrokerBuffer(t *testing.T) {
 	ctx := context.Background()
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	resetBootProcessScope(t)
 	eng, err := boot(ctx, bootConfig{
 		DataDir: t.TempDir(), Engine: "sqlite", DSN: ":memory:", Version: "test", Logger: log,
 	})
@@ -78,12 +79,19 @@ func TestBootWiresLogBrokerBuffer(t *testing.T) {
 //   - the XII↔XVII adapter wired in wire.go (sandbox.Scorer → evals.ScoreOutputs) scores
 //     a real sandbox run — the production form of the integration, not the test stub.
 func TestCompositionRootBootsAndWiresModules(t *testing.T) {
+	prepareCompliancePacksTestEntitlement(t)
 	ctx := context.Background()
+	resetBootProcessScope(t)
 	eng, err := boot(ctx, bootConfig{DataDir: t.TempDir(), Engine: "sqlite", DSN: ":memory:", Version: "test"})
 	if err != nil {
 		t.Fatalf("boot the composition root: %v", err)
 	}
 	t.Cleanup(func() { _ = eng.Close() })
+	// The compliance routes below are Business Compliance Packs in the Business
+	// composition; the fixture entitles the estate there with a synthetic licence
+	// (it replaces the one boot bound) and is a no-op here. The refusal itself is
+	// pinned by the Business authorizer tests, not by this route-reachability test.
+	prepareCompliancePacksTestEntitlement(t)
 	h := eng.api.Handler()
 
 	do := func(method, path, token string, body any, tenant string) (int, map[string]any, string) {
@@ -132,19 +140,29 @@ func TestCompositionRootBootsAndWiresModules(t *testing.T) {
 	// boot() succeeding already proves all 19 modules registered their schema and
 	// mounted their namespaces (engine.Open / api.New reject a bad descriptor or
 	// namespace). Here we additionally confirm the verified routes are reachable
-	// through the real auth+tenant chain (200, not 404) — the modules plus a
-	// neighbor (redteam), the compliance module and the health/notify
-	// modules to prove the chain end-to-end.
+	// through the real auth+tenant chain (200, not 404) — the modules plus the
+	// Health/notify modules to prove the chain end-to-end.
 	for _, p := range []string{
 		"/v1/m/evals/suites", "/v1/m/evals/runs", "/v1/m/evals/scorecards",
 		"/v1/m/sandbox/scenarios", "/v1/m/sandbox/runs", "/v1/m/sandbox/comparisons",
-		"/v1/m/redteam/catalog",
-		"/v1/m/compliance/frameworks", "/v1/m/compliance/capabilities",
 		"/v1/m/health/status", "/v1/m/health/dependencies", "/v1/m/health/incidents",
 		"/v1/m/notify/routes", "/v1/m/notify/destinations", "/v1/m/notify/deliveries",
 	} {
 		if code, _, raw := do("GET", p, admin, nil, tenant); code != http.StatusOK {
 			t.Errorf("GET %s = %d (%s): not mounted/reachable through the composition root", p, code, raw)
+		}
+	}
+	// The red-team and compliance views are Business features: mounted in every
+	// edition, and Community answers them 501 through the same chain.
+	for _, p := range []string{
+		"/v1/m/redteam/catalog", "/v1/m/compliance/frameworks", "/v1/m/compliance/capabilities",
+	} {
+		want := http.StatusOK
+		if thisEdition.name == "community" {
+			want = http.StatusNotImplemented
+		}
+		if code, _, raw := do("GET", p, admin, nil, tenant); code != want {
+			t.Errorf("GET %s = %d (%s), want %d in the %s edition", p, code, raw, want, thisEdition.name)
 		}
 	}
 
@@ -181,5 +199,18 @@ func TestCompositionRootBootsAndWiresModules(t *testing.T) {
 	}
 	if body["score"] != float64(1) || body["passed"] != true {
 		t.Fatalf("composition-wired evals scoring failed: score=%v passed=%v (%s)", body["score"], body["passed"], raw)
+	}
+}
+
+// TestInitialisedDataDirBootsTwiceInOneProcess pins the order independence the
+// shared seed helper gives the sources and read-only command tests: on the
+// Business composition a second boot in one process is refused unless the helper
+// returns the process-scoped state first, so this goes red there the moment
+// that reset is dropped. In Community it is a plain second seed.
+func TestInitialisedDataDirBootsTwiceInOneProcess(t *testing.T) {
+	first := initialisedDataDir(t)
+	second := initialisedDataDir(t)
+	if first == second {
+		t.Fatalf("two seeds returned the same data directory %s", first)
 	}
 }

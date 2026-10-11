@@ -9,13 +9,12 @@
 // each step looks like tidying. Canon §1.1 — "la solución a un problema NUNCA es
 // eliminar una función" — forbids the outcome; this module is how we can TELL.
 //
-// Why a committed census and not a cross-file guard. Two guards already compare the
-// registry against another file: registry.a11y-coverage.test.ts (FEATURE_VIEWS ↔
-// AUTH_ROUTES, both directions) and registry.nav-labels.test.ts (FEATURE_VIEWS ↔ the
-// seven nav.json). Both are RELATIVE — they prove two files agree. Delete a view from
-// both in one commit and both stay green, because the thing they measure each other
-// against moved too. #680 hit precisely this and had to verify "0 routes deleted" BY
-// HAND, counting its own diff; a hand-count does not survive the session that made it.
+// Why a committed census and not a cross-file guard. registry.nav-labels.test.ts
+// compares the registry against the seven nav.json. It is RELATIVE — it proves two
+// files agree. Delete a view from both in one commit and it stays green, because the
+// thing it measures against moved too. #680 hit precisely this and had to verify
+// "0 routes deleted" BY HAND, counting its own diff; a hand-count does not survive the
+// session that made it.
 //
 // The census is ABSOLUTE: a frozen list of every path this console has ever published,
 // checked against the registry of today. Deleting a route from every file in the tree

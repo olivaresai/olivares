@@ -18,8 +18,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/olivaresai/olivares/modules/governance"
 	"github.com/spf13/cobra"
 )
+
+// hookPEPRequestUsage names the request members once for both request flags.
+const hookPEPRequestUsage = "example-request JSON: principal{kind,id}, permission, resource{kind,id,sensitivity}, optional tenant"
 
 const hookPEPPDPPath = "/v1/m/governance/pdp/"
 
@@ -32,7 +36,7 @@ var (
 // evaluation and activation remain server-side in modules/governance.
 type hookPEPClientConfig struct {
 	baseURL string
-	// resolveServer applies the --server/--url precedence (E7). Nil when
+	// resolveServer applies the --server/--url precedence. Nil when
 	// the config was built without addFlags, as some constructor tests do.
 	resolveServer func() string
 	token         string
@@ -46,16 +50,12 @@ type hookPEPClientConfig struct {
 func (c *hookPEPClientConfig) addFlags(cmd *cobra.Command) {
 	flags := cmd.PersistentFlags()
 	flags.StringVar(&c.baseURL, "url", "", "engine address (default $OLIVARES_HOOK_PEP_URL); --server is the canonical spelling")
-	// E7: --server reaches this group too, without removing --url.
+	// --server reaches this group too, without removing --url.
 	c.resolveServer = addServerAliasFlag(cmd, &c.baseURL, "url", "OLIVARES_HOOK_PEP_URL", true)
 	flags.StringVar(&c.token, "token", "", "API bearer token (default $OLIVARES_HOOK_PEP_TOKEN)")
-	// ⛔ ESTAS DOS FALTABAN, y el comentario de `do` afirmaba que existían. Medido el 2026-08-19
-	// contra un plano vivo: `hookpep versions --server https://…` contra un certificado
-	// autofirmado —el que genera NUESTRO PROPIO `quickstart`, que además imprime su pin— fallaba
-	// con «x509: certificate signed by unknown authority» y la única salida que el mandato
-	// ofrecía era `--insecure`, es decir apagar la verificación entera. El transporte compartido
-	// SIEMPRE supo pinear; lo que no había era dónde escribir el pin. Una promesa en un
-	// comentario no es un control.
+	// --ca-cert and --pin-sha256 let a self-signed engine (the one `quickstart` makes,
+	// which prints its pin) be verified instead of disabling verification with
+	// --insecure; the shared transport pins, these flags are where the pin is written.
 	flags.StringVar(&c.caCert, "ca-cert", "", "PEM CA bundle used to verify the engine")
 	flags.StringArrayVar(&c.pins, "pin-sha256", nil, "pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate")
 	flags.BoolVar(&c.insecure, "insecure", false, "skip TLS certificate verification (self-signed development engines only)")
@@ -71,8 +71,8 @@ func (c *hookPEPClientConfig) resolve() error {
 	c.token = strings.TrimSpace(firstNonEmptyEnv(c.token, "OLIVARES_HOOK_PEP_TOKEN"))
 	// What the flags and the legacy variables leave unset comes from the shared
 	// resolution, like every other command: OLIVARES_SERVER_URL / OLIVARES_TOKEN /
-	// OLIVARES_TENANT, then the saved client context (N1 RU-01, measured 2026-10-01:
-	// `hookpep versions` said "no server" right after `auth login`).
+	// OLIVARES_TENANT, then the saved client context, so `hookpep` works right after
+	// `auth login`.
 	shared, err := resolveCLIConfig(cliResolutionOptions{
 		Server: c.baseURL, ServerExplicit: c.baseURL != "",
 		Token: c.token, TokenExplicit: c.token != "",
@@ -135,7 +135,7 @@ func (c *hookPEPClientConfig) newRequest(ctx context.Context, method, action str
 }
 
 func (c *hookPEPClientConfig) do(req *http.Request) (int, []byte, error) {
-	// E4: the shared transport, so --ca-cert, --pin-sha256 and the
+	// The shared transport, so --ca-cert, --pin-sha256 and the
 	// --insecure warning exist here too, and a dead plane exits 6 not 1.
 	client, _, err := cliTransport(cliTransportOptions{
 		Resolved: cliResolvedConfig{Server: c.baseURL, Token: c.token, Tenant: c.tenant, CACert: c.caCert, PinSHA256: c.pins},
@@ -166,7 +166,7 @@ func newHookPEPCmd() *cobra.Command {
 			"about against real requests before it can deny one.",
 		Example: "  olivares hookpep validate --engine cedar --file policy.cedar -o json\n" +
 			"  olivares hookpep dry-run --engine cedar --file policy.cedar --request-file request.json\n" +
-			"  olivares hookpep publish --engine cedar --file policy.cedar --note \"approved change\"",
+			"  olivares hookpep publish --engine opa --file policy.rego --note \"approved change\"",
 	}
 	cfg.addFlags(cmd)
 	addDeprecatedFormatFlag(cmd, true)
@@ -243,8 +243,8 @@ func newHookPEPSourceCmd(action string, cfg *hookPEPClientConfig) *cobra.Command
 	cmd.Flags().StringVar(&sourceFile, "file", "", "policy source file ('-' reads stdin)")
 	_ = cmd.RegisterFlagCompletionFunc("engine", completeHookPEPEngine)
 	if action != "validate" {
-		cmd.Flags().StringVar(&requestJSON, "request", "", "inline example-request JSON")
-		cmd.Flags().StringVar(&requestFile, "request-file", "", "example-request JSON file ('-' reads stdin)")
+		cmd.Flags().StringVar(&requestJSON, "request", "", "inline "+hookPEPRequestUsage)
+		cmd.Flags().StringVar(&requestFile, "request-file", "", "file with the "+hookPEPRequestUsage+" ('-' reads stdin)")
 	}
 	return cmd
 }
@@ -253,18 +253,30 @@ func hookPEPSourceExample(action string) string {
 	if action == "validate" {
 		return "  olivares hookpep validate --engine cedar --file policy.cedar -o json"
 	}
-	return fmt.Sprintf("  olivares hookpep %s --engine cedar --file policy.cedar --request-file request.json", action)
+	return fmt.Sprintf("  echo '%s' > request.json\n  olivares hookpep %s --engine cedar --file policy.cedar --request-file request.json",
+		governance.PDPExampleRequestJSON, action)
 }
 
-func newHookPEPPublishCmd(cfg *hookPEPClientConfig) *cobra.Command {
+func newHookPEPPublishForEngines(cfg *hookPEPClientConfig, engines []string) *cobra.Command {
 	var engine, source, sourceFile, note string
 	cmd := &cobra.Command{
 		Use:     "publish",
 		Short:   "Compile, publish, and activate an authored policy revision",
-		Long:    "Publish an authored policy through the engine. The server owns the deny-closed compile-and-activation workflow (Cedar activates on the live engine; OPA remains sidecar-owned); the client holds no policy logic.",
-		Example: "  olivares hookpep publish --engine cedar --file policy.cedar --note \"approved change\" -o json",
+		Long:    "Publish an authored policy through the engine. The server owns validation and version selection; OPA enforcement remains with the external sidecar. The client holds no policy logic.",
+		Example: "  olivares hookpep publish --engine opa --file policy.rego --note \"approved change\" -o json",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			engine = strings.ToLower(strings.TrimSpace(engine))
+			valid := false
+			for _, allowed := range engines {
+				if engine == allowed {
+					valid = true
+					break
+				}
+			}
+			if !valid {
+				return fmt.Errorf("--engine must be %s", strings.Join(engines, " or "))
+			}
 			if err := cfg.resolve(); err != nil {
 				return err
 			}
@@ -287,11 +299,13 @@ func newHookPEPPublishCmd(cfg *hookPEPClientConfig) *cobra.Command {
 			return printHookPEPPublishResponse(cmd, response)
 		},
 	}
-	cmd.Flags().StringVar(&engine, "engine", "cedar", "policy engine: cedar or opa")
+	cmd.Flags().StringVar(&engine, "engine", engines[0], "policy engine: "+strings.Join(engines, " or "))
 	cmd.Flags().StringVar(&source, "source", "", "inline policy source")
 	cmd.Flags().StringVar(&sourceFile, "file", "", "policy source file ('-' reads stdin)")
 	cmd.Flags().StringVar(&note, "note", "", "optional publication note")
-	_ = cmd.RegisterFlagCompletionFunc("engine", completeHookPEPEngine)
+	_ = cmd.RegisterFlagCompletionFunc("engine", func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
+		return engines, cobra.ShellCompDirectiveNoFileComp
+	})
 	return cmd
 }
 
@@ -359,16 +373,27 @@ func completeHookPEPEngine(_ *cobra.Command, _ []string, _ string) ([]string, co
 	return []string{"cedar", "opa"}, cobra.ShellCompDirectiveNoFileComp
 }
 
-func newHookPEPRollbackCmd(cfg *hookPEPClientConfig) *cobra.Command {
+func newHookPEPRollbackForEngines(cfg *hookPEPClientConfig, engines []string) *cobra.Command {
 	var engine string
 	var revision int64
 	cmd := &cobra.Command{
 		Use:     "rollback",
 		Short:   "Re-activate a prior immutable policy revision",
 		Long:    "Re-activate a prior immutable policy revision through the engine. The server re-runs the compile/validation gate and atomically audits the activation; the client contains no policy logic.",
-		Example: "  olivares hookpep rollback --engine cedar --revision 7 -o json",
+		Example: "  olivares hookpep rollback --engine opa --revision 7 -o json",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			engine = strings.ToLower(strings.TrimSpace(engine))
+			valid := false
+			for _, allowed := range engines {
+				if engine == allowed {
+					valid = true
+					break
+				}
+			}
+			if !valid {
+				return fmt.Errorf("--engine must be %s", strings.Join(engines, " or "))
+			}
 			if err := cfg.resolve(); err != nil {
 				return err
 			}
@@ -388,9 +413,11 @@ func newHookPEPRollbackCmd(cfg *hookPEPClientConfig) *cobra.Command {
 			return err
 		},
 	}
-	cmd.Flags().StringVar(&engine, "engine", "cedar", "policy engine: cedar or opa")
+	cmd.Flags().StringVar(&engine, "engine", engines[0], "policy engine: "+strings.Join(engines, " or "))
 	cmd.Flags().Int64Var(&revision, "revision", 0, "immutable policy revision to re-activate")
-	_ = cmd.RegisterFlagCompletionFunc("engine", completeHookPEPEngine)
+	_ = cmd.RegisterFlagCompletionFunc("engine", func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
+		return engines, cobra.ShellCompDirectiveNoFileComp
+	})
 	return cmd
 }
 

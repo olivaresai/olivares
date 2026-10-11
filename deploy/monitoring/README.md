@@ -5,7 +5,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 # Monitoring artifacts — SLO alerting, dashboards & status page
 
-Operational glue that turns the published SLOs (`docs/17-PRODUCTION-READINESS-SLO.md`) into something that pages on-call and shows the buyer real uptime. These are **portable, decoupled artifacts** (not chart templates), so they install on any Prometheus/Alertmanager and don't perturb `deploy/manifests/install.yaml` (the `manifests:check` drift guard).
+Operational glue that turns the published SLOs (`docs/17-PRODUCTION-READINESS-SLO.md`) into something that pages on-call and shows the buyer real uptime. These are **portable, decoupled artifacts** (not chart templates), so they install on any Prometheus/Alertmanager and don't perturb `./business-install.yaml` (the `manifests:check` drift guard).
 
 | File | What it is | How to use |
 |---|---|---|

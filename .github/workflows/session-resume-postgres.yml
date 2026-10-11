@@ -1,0 +1,83 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+name: session-resume-postgres
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/session-resume-postgres.yml'
+      - 'modules/**'
+      - 'core/**'
+      - 'sdk/**'
+      - 'connectors/**'
+      - '**/go.mod'
+      - '**/go.sum'
+      - 'go.work*'
+      - 'scripts/ci-postgres-service.sh'
+      - 'deploy/postgres/01-app-role.sql'
+
+permissions:
+  contents: read
+
+jobs:
+  postgres-resume:
+    if: github.repository == 'olivaresai/olivares' || vars.OLIVARES_RELEASE_PROFILE == 'preprod' || vars.OLIVARES_DEV_CI == 'true'
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16@sha256:a36250871de0833b8757561c72f2477ef1ddd1101afa4e617fb552e0de514c6b
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+          --memory=1g
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.work
+          cache: ${{ runner.environment == 'github-hosted' }}   # self-hosted runners keep the Go caches on local disk
+          cache-dependency-path: go.work.sum
+      - name: resolve the ephemeral PostgreSQL port and require its availability
+        env:
+          PGPORT_HOST: ${{ job.services.postgres.ports['5432'] }}
+        run: bash scripts/ci-postgres-service.sh resolve
+      - name: provision PostgreSQL roles
+        env:
+          PGPASSWORD: postgres
+        run: bash scripts/ci-postgres-service.sh provision
+      - name: verify concurrent resume on PostgreSQL without the race detector
+        run: |
+          set -euo pipefail
+          git rev-parse HEAD
+          go test -json -count=1 -timeout=5m ./modules/sessions \
+            -run '^TestRuntimeDualResumeReservationIsCrossModuleAtomic$/^postgres$' \
+            | tee "$RUNNER_TEMP/session-resume-postgres.jsonl"
+          # A filtered Go run can succeed without running its requested subtest.
+          # Require its PASS event in addition to the go test exit status.
+          python3 - "$RUNNER_TEMP/session-resume-postgres.jsonl" <<'PY'
+          import json
+          import sys
+
+          target = "TestRuntimeDualResumeReservationIsCrossModuleAtomic/postgres"
+          with open(sys.argv[1], encoding="utf-8") as stream:
+              events = (json.loads(line) for line in stream)
+              passed = any(event.get("Action") == "pass" and event.get("Test") == target
+                           for event in events)
+          if not passed:
+              sys.exit("PostgreSQL resume subtest did not PASS (missing or skipped)")
+          print(f"Verified PASS: {target}")
+          PY

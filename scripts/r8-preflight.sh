@@ -32,7 +32,7 @@ set -u -o pipefail
 _olivares_git_env="$(cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")" && pwd)/lib/git-env.sh"
 # shellcheck source=/dev/null
 . "$_olivares_git_env" || {
-	echo "r8-preflight: FATAL: no puedo cargar $_olivares_git_env (aislamiento git-env)" >&2
+	echo "r8-preflight: FATAL: cannot source $_olivares_git_env (git-env isolation)" >&2
 	exit 2
 }
 unset _olivares_git_env
@@ -50,7 +50,7 @@ fallos=0
 ok() { printf '  \033[32mOK  \033[0m %-34s %s\n' "$1" "${2:-}"; }
 malo() {
 	fallos=$((fallos + 1))
-	printf '  \033[31mFALTA\033[0m %-34s %s\n' "$1" "${2:-}"
+	printf '  \033[31mFAIL \033[0m %-34s %s\n' "$1" "${2:-}"
 }
 
 # ⛔ TRES ESTADOS, NO DOS. `malo` es un HALLAZGO —falta algo que se puede preparar— y `nopuedo` es
@@ -61,7 +61,7 @@ malo() {
 sin_mirar=0
 nopuedo() {
 	sin_mirar=$((sin_mirar + 1))
-	printf '  \033[33mNO SE\033[0m %-34s %s\n' "$1" "${2:-}"
+	printf '  \033[33mUNKNOWN\033[0m %-34s %s\n' "$1" "${2:-}"
 }
 mirar_no() {
 	printf '  \033[33m?   \033[0m %-34s %s\n' "$1" "${2:-}"
@@ -70,14 +70,14 @@ mirar_no() {
 
 REF="${1:-}"
 if [ -z "$REF" ]; then
-	echo "uso: bash scripts/r8-preflight.sh <sha-o-ref>   (R8_DIR=… para el worktree)" >&2
+	echo "usage: bash scripts/r8-preflight.sh <sha-or-ref>   (R8_DIR=… for the worktree)" >&2
 	exit 2
 fi
 
 SHA="$(git -C "$ROOT" rev-parse --verify "${REF}^{commit}" 2>/dev/null || true)"
-[ -n "$SHA" ] || mirar_no "el corte existe" "\`$REF\` no resuelve a un commit en este clon"
+[ -n "$SHA" ] || mirar_no "revision exists" "\`$REF\` does not resolve to a commit in this clone"
 
-echo "r8-preflight sobre ${SHA:0:9}  (worktree $DIR)"
+echo "r8-preflight against ${SHA:0:9}  (worktree $DIR)"
 
 # ── 1 · TMPDIR EJECUTABLE, y se comprueba EJECUTANDO ───────────────────────────────────────────
 # `/tmp` está montado `noexec` en esta caja. Go compila el binario de test bajo TMPDIR y no puede
@@ -87,18 +87,18 @@ _t="${TMPDIR:-/tmp}"
 _p="$_t/.r8-preflight-$$"
 if printf '#!/bin/sh\nexit 7\n' >"$_p" 2>/dev/null && chmod +x "$_p" 2>/dev/null; then
 	"$_p" >/dev/null 2>&1
-	[ "$?" = 7 ] && ok "TMPDIR ejecutable" "$_t" || malo "TMPDIR ejecutable" "$_t es noexec — \`export TMPDIR=/workspace/.tmp-capturas && mkdir -p \$TMPDIR\`"
+	[ "$?" = 7 ] && ok "executable TMPDIR" "$_t" || malo "executable TMPDIR" "$_t is noexec — \`export TMPDIR=/workspace/.tmp-capturas && mkdir -p \$TMPDIR\`"
 	rm -f "$_p"
 else
-	nopuedo "TMPDIR ejecutable" "no he podido escribir en $_t"
+	nopuedo "executable TMPDIR" "could not write to $_t"
 fi
 
 # ── 2 · DISCO ──────────────────────────────────────────────────────────────────────────────────
 libre_g="$(df -BG --output=avail /workspace 2>/dev/null | tail -1 | tr -dc '0-9')"
 if [ -n "$libre_g" ] && [ "$libre_g" -ge "$MIN_DISCO_G" ]; then
-	ok "disco" "${libre_g}G libres (mínimo $MIN_DISCO_G)"
+	ok "disk" "${libre_g}G free (minimum $MIN_DISCO_G)"
 else
-	malo "disco" "${libre_g:-?}G libres; un vite build pica ~16G"
+	malo "disk" "${libre_g:-?}G free; a vite build peaks at ~16G"
 fi
 
 # ── 3 · UN SOLO `vite build` POR CAJA ─────────────────────────────────────────────────────────
@@ -110,9 +110,9 @@ fi
 n_vite="$(pgrep -fc 'node.*vite.*build' 2>/dev/null | head -1)"
 n_vite="${n_vite:-0}"
 if [ "$n_vite" -eq 0 ]; then
-	ok "sin vite build compitiendo"
+	ok "no competing vite build"
 else
-	malo "vite build compitiendo" "$n_vite vivo(s) — espera"
+	malo "competing vite build" "$n_vite running — wait"
 fi
 
 # ── 3 bis · LA PUERTA DE LA CAJA (#112-bis, adjudicado por r4 el 2026-08-29) ──────────────────
@@ -136,9 +136,9 @@ if [ -f "$_puerta" ] && [ "$_edad" -le 90 ]; then
 	_estado="$(sed -n 's/.*PUERTA=\([A-Z]*\).*/\1/p' "$_puerta" | head -1)"
 	_detalle="$(tr -s ' ' <"$_puerta" | head -1 | cut -c1-120)"
 	case "$_estado" in
-	ABIERTA) ok "puerta de la caja" "ABIERTA (sonda de ${_edad}s)" ;;
-	CERRADA) malo "puerta de la caja" "CERRADA — $_detalle · espera a que abra y vuelve a correr esto" ;;
-	*) malo "puerta de la caja" "sonda ilegible: no puedo mirar" ;;
+	ABIERTA) ok "host gate" "OPEN (probe age ${_edad}s)" ;;
+	CERRADA) malo "host gate" "CLOSED — $_detalle · wait for it to open, then rerun" ;;
+	*) malo "host gate" "unreadable probe: could not look" ;;
 	esac
 else
 	# Sin sonda fresca NO se declara abierta: se mide aqui lo que se puede —la carga contra la
@@ -156,12 +156,12 @@ else
 	_l1="$(cut -d' ' -f1 /proc/loadavg 2>/dev/null || echo 0)"
 	_l1e="${_l1%%.*}"
 	if [ "${_l1e:-0}" -lt "$_umbral" ]; then
-		ok "puerta de la caja" "load1 $_l1 < $_umbral (cuota $_cuota) · PARCIAL: sin swap ni throttle"
+		ok "host gate" "load1 $_l1 < $_umbral (quota $_cuota) · PARTIAL: swap and throttling not checked"
 	else
 		# El «PARCIAL» va TAMBIEN aqui: sin la sonda no se ven swap ni throttle, y eso es cierto
 		# tanto si la carga pasa como si no. Decirlo solo en el verde haria que el rojo pareciera
 		# mas completo de lo que es — y quien lo lea creera que se han mirado las cuatro patas.
-		malo "puerta de la caja" "load1 $_l1 >= $_umbral (cuota $_cuota, $(nproc 2>/dev/null) visibles) · PARCIAL: sin swap ni throttle — espera"
+		malo "host gate" "load1 $_l1 >= $_umbral (quota $_cuota, $(nproc 2>/dev/null) visible) · PARTIAL: swap and throttling not checked — wait"
 	fi
 fi
 
@@ -184,29 +184,29 @@ if [ -d "$DIR/.git" ] || [ -f "$DIR/.git" ]; then
 		#    acuerde de resellar. El pre-vuelo ya prescribía `--detach` en su remedio; lo que le
 		#    faltaba era COMPROBARLO.
 		if rama="$(git -C "$DIR" symbolic-ref -q --short HEAD)"; then
-			malo "worktree desprendido" "está en la rama \`$rama\`; la captura ensucia el bundle y matará su push: \`git -C $DIR checkout --detach\`"
+			malo "detached worktree" "on branch \`$rama\`; captures modify the bundle and will block its push: \`git -C $DIR checkout --detach\`"
 		else
-			ok "worktree en el corte" "${SHA:0:9} · desprendido"
+			ok "worktree at revision" "${SHA:0:9} · detached"
 		fi
 	else
-		malo "worktree en el corte" "está en ${actual:0:9}; \`git -C $DIR checkout --detach $SHA\`"
+		malo "worktree at revision" "at ${actual:0:9}; \`git -C $DIR checkout --detach $SHA\`"
 	fi
 else
-	malo "worktree" "no existe; \`git -C $ROOT worktree add --detach $DIR $SHA\`"
+	malo "worktree" "does not exist; \`git -C $ROOT worktree add --detach $DIR $SHA\`"
 fi
 
 # ── 5 · EL BINARIO DEL MOTOR, que docs-captures.sh NO construye ───────────────────────────────
 if [ -x "$DIR/bin/olivares" ]; then
 	ok "bin/olivares" "$(du -h "$DIR/bin/olivares" 2>/dev/null | cut -f1)"
 else
-	malo "bin/olivares" "falta; \`cd $DIR && task build\` (minutos, hazlo la noche antes; deja los trece conectores en bins/ y la comprobacion 7 te dira como limpiarlos)"
+	malo "bin/olivares" "missing; \`cd $DIR && task build\` (takes minutes; build the night before; leaves thirteen connectors in bins/ and check 7 explains cleanup)"
 fi
 
 # ── 6 · PLAYWRIGHT ────────────────────────────────────────────────────────────────────────────
 if [ -d "$DIR/web/node_modules" ]; then
-	ok "node_modules de web" ""
+	ok "web node_modules" ""
 else
-	malo "node_modules de web" "\`pnpm --dir $DIR/web install\`"
+	malo "web node_modules" "\`pnpm --dir $DIR/web install\`"
 fi
 # ⚠ `$HOME` CON GUARDA, y no es formalismo: bajo `set -u` una variable sin definir MATA el guion
 #   en esa línea, y en los runners de CI `HOME` falta en seis de nueve (medido). El rojo saldría con
@@ -215,47 +215,35 @@ fi
 #   inventa un valor por defecto: si no hay `HOME` no se sabe dónde mirar, así que se DICE.
 _cache="${PLAYWRIGHT_BROWSERS_PATH:-${HOME:-}/.cache/ms-playwright}"
 if [ -z "${HOME:-}" ] && [ -z "${PLAYWRIGHT_BROWSERS_PATH:-}" ]; then
-	malo "chromium de Playwright" "NO PUEDO MIRAR: sin HOME ni PLAYWRIGHT_BROWSERS_PATH no sé dónde buscar; exporta uno de los dos y repite"
+	malo "Playwright chromium" "COULD NOT LOOK: neither HOME nor PLAYWRIGHT_BROWSERS_PATH is set; export either one and rerun"
 elif ls "$_cache"/chromium-* >/dev/null 2>&1; then
-	ok "chromium de Playwright" ""
+	ok "Playwright chromium" ""
 else
-	malo "chromium de Playwright" "\`pnpm --dir $DIR/web exec playwright install chromium\`"
+	malo "Playwright chromium" "\`pnpm --dir $DIR/web exec playwright install chromium\`"
 fi
 
-# ── 7 · LOS RESIDUOS GRANDES DE `task build` EN ESTE ÁRBOL ────────────────────────────────────
-#
-# Esta comprobación nació por una cadena que sólo se veía entera desde aquí:
-#   · `docs-captures.sh` NO construye `bin/olivares` (comprobación 5) ⇒ hay que correr `task build`.
-#   · `task build` compila los TRECE conectores de primera parte en `cmd/olivares/firstparty/bins/`.
-#   · Antes de a repository gate, el censo medía el DISCO y esos ficheros ignorados rompían el siguiente push.
-#   · a repository gate movió el censo al índice y añadió limpieza al test de dominios; aquí queda la guarda de
-#     higiene para no conservar ~249 MB de payloads ignorados en un árbol de capturas ya construido.
-#
-# Lo reportó otro carril el 2026-08-29 tras perder un push por esto, y me alcanzó con el mío ya
-# en vuelo: el mismo árbol donde construí el binario para verificar su documento los tenía.
-#
-# ⚠ La atribución va sin el nombre del carril A PROPÓSITO: `export-public.sh:820` cuenta
-#   los nombres de carril del hub como vocabulario interno, y su línea base es CERO.
-#
-#   ⚠ Y esta nota NO deletrea esos nombres, porque la primera versión SÍ los citaba «para
-#     documentar el patrón» y **seguía contando 1**: escribir el token prohibido dentro de
-#     la explicación de por qué está prohibido lo dispara igual. El gate lee bytes, no
-#     intenciones. El patrón vive en `export-public.sh:820`; aquí sólo el porqué.
-#   El hecho —que lo encontró otro y no yo— vale igual; el identificador no viaja al árbol
-#   público. Quién fue está en el registro de sesión, que no se exporta.
-#
-# ⚠ `git status` A SECAS PUEDE NO ENSEÑARLOS. Como el ignore los cubre, sólo los ves con
-#   `--ignored`; por eso esta guarda de higiene cuenta el directorio directamente.
+# 7 · Large task build residue in this tree.
+# docs-captures.sh does not build bin/olivares (check 5), so task build is needed.
+# It builds thirteen first-party connectors in cmd/olivares/firstparty/bins.
+# Before a repository gate the disk census rejected these ignored files on the next push.
+# a repository gate moved the census to the index and added domain-test cleanup; keep this
+# hygiene guard to avoid retaining ~249 MB of ignored payloads after capture builds.
+# Another worker reported the failure on 2026-08-29 while this same build residue
+# was present in the tree used for document verification.
+# Do not spell out internal worker names here: export-public.sh:820 treats them as
+# internal vocabulary with a zero baseline, even when quoted to explain the rule.
+# The finder remains recorded in the private session history; only the fact ships.
+# Plain git status hides ignored files, so count the directory directly (or use --ignored).
 _bins="$DIR/cmd/olivares/firstparty/bins"
 if [ ! -d "$_bins" ]; then
-	ok "residuos de build" "no hay bins/ todavía"
+	ok "build residue" "bins/ does not exist yet"
 else
 	_n="$(ls -A "$_bins" 2>/dev/null | grep -cvx 'PLACEHOLDER' || true)"
 	_n="${_n:-0}"
 	if [ "$_n" -eq 0 ]; then
-		ok "sin residuos de build" "bins/ sólo con PLACEHOLDER"
+		ok "no build residue" "bins/ contains only PLACEHOLDER"
 	else
-		malo "residuos de build" "$_n fichero(s) en bins/; \`find $_bins -mindepth 1 ! -name PLACEHOLDER -delete\` antes de empujar"
+		malo "build residue" "$_n file(s) in bins/; \`find $_bins -mindepth 1 ! -name PLACEHOLDER -delete\` before pushing"
 	fi
 fi
 
@@ -285,7 +273,7 @@ if [ -f "$DIR/web/e2e/docs-captures.spec.ts" ]; then
 	#    Se cuentan ids DISTINTOS y se excluyen las lineas de comentario, porque este fichero
 	#    documenta sus propias vistas en prosa y un `id: '...'` dentro de un comentario se contaria.
 	n_vistas="$(grep -vE '^[[:space:]]*(//|\*|/\*)' "$_spec" 2>/dev/null | grep -oE "id: '[^']+'" | sort -u | wc -l | tr -d ' ')"
-	ok "spec de capturas" "presente ($n_vistas ids distintos · sonda: id:'…' fuera de comentarios)"
+	ok "capture specification" "present ($n_vistas distinct IDs · probe: id:'…' outside comments)"
 
 	# ⛔ CONTAR NO ES EXIGIR, y aquí la diferencia se paga una sola vez al año.
 	#    La linea de arriba IMPRIME cuantas vistas hay y no pide ninguna, asi que un arbol al que
@@ -301,10 +289,10 @@ if [ -f "$DIR/web/e2e/docs-captures.spec.ts" ]; then
 	#    cualesquiera, y lo que importa no es cuantas hay sino QUE ESTEN ESTAS, que son las que
 	#    prueban estado que no se ve en una pantalla vacia (paginacion, rechazo de intent,
 	#    solo-lectura por scope, error de runs, lista truncada).
-	_faltan=""
+	_missing_inputs=""
 	while IFS= read -r _v; do
 		[ -n "$_v" ] || continue
-		grep -q "id: '$_v'" "$_spec" 2>/dev/null || _faltan="$_faltan $_v"
+		grep -q "id: '$_v'" "$_spec" 2>/dev/null || _missing_inputs="$_missing_inputs $_v"
 	done <<VISTAS_DE_ESTADO
 work-decisions
 work-decisions-paginated
@@ -313,30 +301,30 @@ templates-readonly
 workflow-runs-error
 list-truncated
 VISTAS_DE_ESTADO
-	if [ -z "$_faltan" ]; then
-		ok "tomas de estado interno" "las 6 en la spec"
+	if [ -z "$_missing_inputs" ]; then
+		ok "internal-state captures" "all 6 in the specification"
 	else
-		malo "tomas de estado interno" "faltan:$_faltan — el arbol NO lleva #2134; capturar asi pierde esas tomas EN SILENCIO. Desprende en un SHA que la incluya: \`git -C $DIR checkout --detach <sha-con-2134>\`"
+		malo "internal-state captures" "missing:$_missing_inputs — the tree does NOT include #2134; these captures would be SILENTLY lost. Detach at a SHA containing it: \`git -C $DIR checkout --detach <sha-con-2134>\`"
 	fi
 else
-	malo "spec de capturas" "no está en $DIR/web/e2e/; el worktree no es de este repo o esta a medio crear: \`git -C $ROOT worktree add --detach $DIR $SHA\`"
+	malo "capture specification" "absent from $DIR/web/e2e/; the worktree belongs to another repository or is incomplete: \`git -C $ROOT worktree add --detach $DIR $SHA\`"
 fi
 
 echo
 if [ "$fallos" -eq 0 ]; then
-	echo "r8-preflight: LISTO — el arnés apunta a ${SHA:0:9}."
-	echo "  para capturar (esto NO lo hace este guion):"
-	echo "    cd $DIR && TMPDIR=<uno ejecutable> bash scripts/docs-captures.sh"
+	echo "r8-preflight: READY — the harness targets ${SHA:0:9}."
+	echo "  to capture (this script does NOT do this):"
+	echo "    cd $DIR && TMPDIR=<executable-directory> bash scripts/docs-captures.sh"
 	if [ "$sin_mirar" -gt 0 ]; then
-		echo "r8-preflight: sin fallos, pero $sin_mirar comprobacion(es) NO HECHAS: rc 2." >&2
+		echo "r8-preflight: no failures, but $sin_mirar check(s) NOT RUN: rc 2." >&2
 		exit 2
 	fi
 	exit 0
 fi
 if [ "$sin_mirar" -gt 0 ]; then
-	echo "r8-preflight: $sin_mirar comprobacion(es) que NO HE PODIDO HACER (y $fallos sin cumplir)." >&2
-	echo "  «No he podido mirar» no es «esta limpio»: arregla el entorno y vuelve a correr esto." >&2
+	echo "r8-preflight: $sin_mirar check(s) COULD NOT RUN (and $fallos unmet)." >&2
+	echo "  An unverified result is not a pass: fix the environment and rerun." >&2
 	exit 2
 fi
-echo "r8-preflight: $fallos precondición(es) sin cumplir. NO lances la captura todavía." >&2
+echo "r8-preflight: $fallos unmet precondition(s). DO NOT start captures yet." >&2
 exit 1

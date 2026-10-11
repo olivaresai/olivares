@@ -113,7 +113,8 @@
       "deleted": "Budget deleted"
     },
     "truncated": "Loaded {{n}} budgets; there are more",
-    "truncatedHint": "There are more budgets than shown; this page takes rows by id. A ceiling that is not listed here does not demonstrate that spend is uncapped — it may simply be beyond this page."
+    "truncatedHint": "There are more budgets than shown; this page takes rows by id. A ceiling that is not listed here does not demonstrate that spend is uncapped — it may simply be beyond this page.",
+    "storedEmptyHint": "Budgets created in Business remain readable and removable here."
   },
   "cache": {
     "title": "Prompt-cache efficiency",

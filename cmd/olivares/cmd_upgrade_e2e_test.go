@@ -72,7 +72,7 @@ func buildFlakyStub(t *testing.T, sentinel string) []byte {
 	src := "package main\nimport (\"fmt\"; \"os\")\nfunc main(){\n" +
 		"if _, err := os.Stat(" + strconvQuote(sentinel) + "); err == nil { os.Exit(1) }\n" +
 		"_ = os.WriteFile(" + strconvQuote(sentinel) + ", []byte(\"x\"), 0o644)\n" +
-		"fmt.Println(\"olivares 26.8.0 (flaky test)\")\n}\n"
+		"fmt.Println(\"olivares 26.800 (flaky test)\")\n}\n"
 	srcPath := filepath.Join(dir, "main.go")
 	if err := os.WriteFile(srcPath, []byte(src), 0o644); err != nil {
 		t.Fatal(err)
@@ -507,21 +507,21 @@ func TestUpgradeE2E(t *testing.T) {
 	if _, err := exec.LookPath("go"); err != nil {
 		t.Skip("go toolchain not available to build stub binaries")
 	}
-	v1 := buildStub(t, "26.7.0")
-	v2 := buildStub(t, "26.8.0")
+	v1 := buildStub(t, "26.700")
+	v2 := buildStub(t, "26.800")
 
 	t.Run("community happy path (no license, no token)", func(t *testing.T) {
-		f := newUpdFixture(t, "26.8.0", "26.6.0", v2)
+		f := newUpdFixture(t, "26.800", "26.600", v2)
 		target := writeTarget(t, v1)
 		_, err := runUpgradeCmd(t, "--endpoint", f.server.URL, "--pubkey", f.pubB64,
 			"--target", target, "--os", "linux", "--arch", "amd64", "--yes", "--data-dir", t.TempDir())
 		if err != nil {
 			t.Fatalf("community upgrade: %v", err)
 		}
-		if got := runsVersion(t, target); !strings.Contains(got, "26.8.0") {
+		if got := runsVersion(t, target); !strings.Contains(got, "26.800") {
 			t.Fatalf("target not upgraded: %q", got)
 		}
-		if b, _ := filepath.Glob(target + ".bak-*"); len(b) != 1 || !strings.Contains(runsVersion(t, b[0]), "26.7.0") {
+		if b, _ := filepath.Glob(target + ".bak-*"); len(b) != 1 || !strings.Contains(runsVersion(t, b[0]), "26.700") {
 			t.Fatalf("backup missing or wrong: %v", b)
 		}
 	})
@@ -529,14 +529,14 @@ func TestUpgradeE2E(t *testing.T) {
 	t.Run("enterprise happy path (license + token via gate)", func(t *testing.T) {
 		dataDir := t.TempDir()
 		installDevLicense(t, dataDir)
-		f := newUpdFixture(t, "26.8.0", "26.6.0", v2)
+		f := newUpdFixture(t, "26.800", "26.600", v2)
 		target := writeTarget(t, v1)
 		_, err := runUpgradeCmd(t, "--enterprise", "--download-protocol", "legacy", "--token", "tkn", "--endpoint", f.server.URL,
 			"--pubkey", f.pubB64, "--data-dir", dataDir, "--target", target, "--os", "linux", "--arch", "amd64", "--yes")
 		if err != nil {
 			t.Fatalf("enterprise upgrade: %v", err)
 		}
-		if got := runsVersion(t, target); !strings.Contains(got, "26.8.0") {
+		if got := runsVersion(t, target); !strings.Contains(got, "26.800") {
 			t.Fatalf("target not upgraded: %q", got)
 		}
 		trace := f.enterpriseRequests()
@@ -554,7 +554,7 @@ func TestUpgradeE2E(t *testing.T) {
 	t.Run("enterprise manifest without live grants is refused", func(t *testing.T) {
 		dataDir := t.TempDir()
 		installDevLicense(t, dataDir)
-		f := newUpdFixture(t, "26.8.0", "26.6.0", v2)
+		f := newUpdFixture(t, "26.800", "26.600", v2)
 		f.enterpriseGrants["tkn"] = nil
 		target := writeTarget(t, v1)
 		_, err := runUpgradeCmd(t, "--enterprise", "--download-protocol", "legacy", "--token", "tkn", "--endpoint", f.server.URL,
@@ -562,37 +562,13 @@ func TestUpgradeE2E(t *testing.T) {
 		if err == nil || !isHTTPStatus(err, http.StatusForbidden) {
 			t.Fatalf("the gate double must 403 a set-less manifest without live grants, got %v", err)
 		}
-		if got := runsVersion(t, target); !strings.Contains(got, "26.7.0") {
+		if got := runsVersion(t, target); !strings.Contains(got, "26.700") {
 			t.Fatalf("a refused manifest must leave the target untouched: %q", got)
 		}
 	})
 
-	// CHANGED BY C02-20: the bundle route is license-gated, so this arm installs the
-	// fixture license first. Its old name — "air-gap bundle (100% offline)" — is retired
-	// with the behavior it described: this subtest USED to prove that a bundle installs
-	// with an empty data dir, which is exactly the vector `buildUpdateSource` now closes,
-	// so leaving the name would have left a green test asserting the hole. The gate itself
-	// is witnessed in both directions in cmd_upgrade_bundle_gate_test.go; this stays the
-	// route's place in the end-to-end sweep.
-	t.Run("air-gap bundle (no network, gated on a live license)", func(t *testing.T) {
-		dataDir := t.TempDir()
-		installDevLicense(t, dataDir)
-		f := newUpdFixture(t, "26.8.0", "26.6.0", v2)
-		bundle := f.writeBundle(t)
-		target := writeTarget(t, v1)
-		// No --endpoint: the bundle path must not touch the network.
-		_, err := runUpgradeCmd(t, "--bundle", bundle, "--pubkey", f.pubB64,
-			"--target", target, "--os", "linux", "--arch", "amd64", "--yes", "--data-dir", dataDir)
-		if err != nil {
-			t.Fatalf("bundle upgrade: %v", err)
-		}
-		if got := runsVersion(t, target); !strings.Contains(got, "26.8.0") {
-			t.Fatalf("bundle target not upgraded: %q", got)
-		}
-	})
-
 	t.Run("tampered artifact aborts, binary untouched", func(t *testing.T) {
-		f := newUpdFixture(t, "26.8.0", "26.6.0", v2)
+		f := newUpdFixture(t, "26.800", "26.600", v2)
 		f.corrupt = true
 		target := writeTarget(t, v1)
 		_, err := runUpgradeCmd(t, "--endpoint", f.server.URL, "--pubkey", f.pubB64,
@@ -600,7 +576,7 @@ func TestUpgradeE2E(t *testing.T) {
 		if err == nil || !strings.Contains(err.Error(), "SHA-256") {
 			t.Fatalf("tampered artifact must abort with a checksum error, got %v", err)
 		}
-		if got := runsVersion(t, target); !strings.Contains(got, "26.7.0") {
+		if got := runsVersion(t, target); !strings.Contains(got, "26.700") {
 			t.Fatalf("target changed despite tamper: %q", got)
 		}
 		if b, _ := filepath.Glob(target + ".bak-*"); len(b) != 0 {
@@ -609,7 +585,7 @@ func TestUpgradeE2E(t *testing.T) {
 	})
 
 	t.Run("tampered manifest signature aborts", func(t *testing.T) {
-		f := newUpdFixture(t, "26.8.0", "26.6.0", v2)
+		f := newUpdFixture(t, "26.800", "26.600", v2)
 		f.badSig = true
 		target := writeTarget(t, v1)
 		_, err := runUpgradeCmd(t, "--endpoint", f.server.URL, "--pubkey", f.pubB64,
@@ -617,13 +593,13 @@ func TestUpgradeE2E(t *testing.T) {
 		if err == nil || !strings.Contains(strings.ToLower(err.Error()), "signature") {
 			t.Fatalf("bad manifest signature must abort, got %v", err)
 		}
-		if got := runsVersion(t, target); !strings.Contains(got, "26.7.0") {
+		if got := runsVersion(t, target); !strings.Contains(got, "26.700") {
 			t.Fatalf("target changed despite bad signature: %q", got)
 		}
 	})
 
 	t.Run("no license refuses enterprise with guidance", func(t *testing.T) {
-		f := newUpdFixture(t, "26.8.0", "26.6.0", v2)
+		f := newUpdFixture(t, "26.800", "26.600", v2)
 		target := writeTarget(t, v1)
 		_, err := runUpgradeCmd(t, "--enterprise", "--download-protocol", "legacy", "--token", "tkn", "--endpoint", f.server.URL,
 			"--pubkey", f.pubB64, "--data-dir", t.TempDir(), "--target", target, "--os", "linux", "--arch", "amd64", "--yes")
@@ -633,7 +609,7 @@ func TestUpgradeE2E(t *testing.T) {
 	})
 
 	t.Run("--check verifies without swapping", func(t *testing.T) {
-		f := newUpdFixture(t, "26.8.0", "26.6.0", v2)
+		f := newUpdFixture(t, "26.800", "26.600", v2)
 		target := writeTarget(t, v1)
 		out, err := runUpgradeCmd(t, "--endpoint", f.server.URL, "--pubkey", f.pubB64,
 			"--target", target, "--os", "linux", "--arch", "amd64", "--check", "--data-dir", t.TempDir())
@@ -643,13 +619,13 @@ func TestUpgradeE2E(t *testing.T) {
 		if !strings.Contains(out, "upgrade available") || !strings.Contains(out, "OSV-2026-9999") {
 			t.Fatalf("--check should show the plan + advisory, got:\n%s", out)
 		}
-		if got := runsVersion(t, target); !strings.Contains(got, "26.7.0") {
+		if got := runsVersion(t, target); !strings.Contains(got, "26.700") {
 			t.Fatalf("--check must not swap: %q", got)
 		}
 	})
 
 	t.Run("up-to-date is a no-op", func(t *testing.T) {
-		f := newUpdFixture(t, "26.7.0", "26.6.0", v1) // manifest version == installed
+		f := newUpdFixture(t, "26.700", "26.600", v1) // manifest version == installed
 		target := writeTarget(t, v1)
 		out, err := runUpgradeCmd(t, "--endpoint", f.server.URL, "--pubkey", f.pubB64,
 			"--target", target, "--os", "linux", "--arch", "amd64", "--yes", "--data-dir", t.TempDir())
@@ -664,24 +640,24 @@ func TestUpgradeE2E(t *testing.T) {
 	t.Run("anti-rollback: blocked, then audited force", func(t *testing.T) {
 		dataDir := t.TempDir()
 		// NO min_version: this subtest is about anti-rollback, so the min-version gate
-		// must be incapable of firing here. It used to declare 26.6.0, which meant a
+		// must be incapable of firing here. It used to declare 26.600, which meant a
 		// mutant that broke min_version could kill this test too — a test that dies for
 		// two different guards discriminates neither (targeted mutation).
-		f := newUpdFixture(t, "26.7.0", "", v1) // manifest points at OLDER 26.7.0
-		target := writeTarget(t, v2)            // installed is NEWER 26.8.0
+		f := newUpdFixture(t, "26.700", "", v1) // manifest points at OLDER 26.700
+		target := writeTarget(t, v2)            // installed is NEWER 26.800
 		// Blocked without --force-rollback.
 		out, err := runUpgradeCmd(t, "--endpoint", f.server.URL, "--pubkey", f.pubB64,
 			"--target", target, "--os", "linux", "--arch", "amd64", "--yes", "--data-dir", dataDir)
 		// The premise this subtest rests on: the plan read the version ACTUALLY installed
 		// at the target. Nothing asserted this before, which is how `current: dev` — this
 		// process's own version, for a binary it never asked — went unnoticed.
-		if !strings.Contains(out, "current:   26.8.0") {
-			t.Fatalf("the plan must report the version installed AT THE TARGET (26.8.0), got:\n%s", out)
+		if !strings.Contains(out, "current:   26.800") {
+			t.Fatalf("the plan must report the version installed AT THE TARGET (26.800), got:\n%s", out)
 		}
 		if err == nil || !strings.Contains(strings.ToLower(err.Error()), "anti-rollback") {
 			t.Fatalf("downgrade must be blocked by anti-rollback, got %v", err)
 		}
-		if got := runsVersion(t, target); !strings.Contains(got, "26.8.0") {
+		if got := runsVersion(t, target); !strings.Contains(got, "26.800") {
 			t.Fatalf("blocked rollback must not swap: %q", got)
 		}
 		// Allowed with --force-rollback, and audited.
@@ -690,11 +666,11 @@ func TestUpgradeE2E(t *testing.T) {
 		if err != nil {
 			t.Fatalf("forced rollback: %v", err)
 		}
-		if got := runsVersion(t, target); !strings.Contains(got, "26.7.0") {
+		if got := runsVersion(t, target); !strings.Contains(got, "26.700") {
 			t.Fatalf("forced rollback should install the older version: %q", got)
 		}
 		audit, _ := os.ReadFile(filepath.Join(dataDir, "upgrade-audit.log"))
-		if !strings.Contains(string(audit), "force-rollback") || !strings.Contains(string(audit), "from=26.8.0") {
+		if !strings.Contains(string(audit), "force-rollback") || !strings.Contains(string(audit), "from=26.800") {
 			t.Fatalf("forced rollback must be audited, log:\n%s", audit)
 		}
 	})
@@ -705,7 +681,7 @@ func TestUpgradeE2E(t *testing.T) {
 		sentinel := filepath.Join(t.TempDir(), "probe-once")
 		broken := buildFlakyStub(t, sentinel)
 		// NO min_version, for the same isolation reason as the anti-rollback subtest.
-		f := newUpdFixture(t, "26.8.0", "", broken)
+		f := newUpdFixture(t, "26.800", "", broken)
 		target := writeTarget(t, v1)
 		_, err := runUpgradeCmd(t, "--endpoint", f.server.URL, "--pubkey", f.pubB64,
 			"--target", target, "--os", "linux", "--arch", "amd64", "--yes", "--data-dir", t.TempDir())
@@ -717,23 +693,23 @@ func TestUpgradeE2E(t *testing.T) {
 			t.Fatalf("a broken new binary must auto-roll-back with a clear error, got %v", err)
 		}
 		// The target still runs the PREVIOUS (working) binary — never left broken.
-		if got := runsVersion(t, target); !strings.Contains(got, "26.7.0") {
+		if got := runsVersion(t, target); !strings.Contains(got, "26.700") {
 			t.Fatalf("after auto-rollback the target must run the previous binary, got %q", got)
 		}
 	})
 
 	t.Run("min_version gate refuses too-old a jump", func(t *testing.T) {
-		f := newUpdFixture(t, "26.9.0", "26.8.0", v2) // requires >= 26.8.0
-		target := writeTarget(t, v1)                  // installed 26.7.0 < 26.8.0
+		f := newUpdFixture(t, "26.900", "26.800", v2) // requires >= 26.800
+		target := writeTarget(t, v1)                  // installed 26.700 < 26.800
 		out, err := runUpgradeCmd(t, "--endpoint", f.server.URL, "--pubkey", f.pubB64,
 			"--target", target, "--os", "linux", "--arch", "amd64", "--yes", "--data-dir", t.TempDir())
 		// This subtest was GREEN before for the wrong reason: the gate fired against
-		// "dev" (the zero version, below every minimum), not against the 26.7.0 the
+		// "dev" (the zero version, below every minimum), not against the 26.700 the
 		// comment above claims is installed. Pin the premise so it can only pass for the
-		// stated reason. The move is also strictly FORWARD (26.7.0 -> 26.9.0), so
+		// stated reason. The move is also strictly FORWARD (26.700 -> 26.900), so
 		// anti-rollback cannot fire here and this test discriminates by guard.
-		if !strings.Contains(out, "current:   26.7.0") {
-			t.Fatalf("the min_version gate must fire against the INSTALLED 26.7.0, got:\n%s", out)
+		if !strings.Contains(out, "current:   26.700") {
+			t.Fatalf("the min_version gate must fire against the INSTALLED 26.700, got:\n%s", out)
 		}
 		if err == nil || !strings.Contains(err.Error(), "minimum current version") {
 			t.Fatalf("too-old jump must be refused by min_version, got %v", err)
@@ -744,7 +720,7 @@ func TestUpgradeE2E(t *testing.T) {
 	})
 
 	t.Run("no key fails closed", func(t *testing.T) {
-		f := newUpdFixture(t, "26.8.0", "26.6.0", v2)
+		f := newUpdFixture(t, "26.800", "26.600", v2)
 		target := writeTarget(t, v1)
 		// No --pubkey and a community/test build embeds no release key.
 		_, err := runUpgradeCmd(t, "--endpoint", f.server.URL,
@@ -761,7 +737,7 @@ func TestUpgradeE2E(t *testing.T) {
 //
 // The measured behavior before the fix, with a manifest carrying NO min_version:
 // the probe failed, "dev" became the current version, "dev" parses to the ZERO
-// version, so Compare(26.7.0, 0) = +1 and a 26.8.0 -> 26.7.0 DOWNGRADE was not a
+// version, so Compare(26.700, 0) = +1 and a 26.800 -> 26.700 DOWNGRADE was not a
 // rollback at all. It installed with exit 0, printed "status: upgrade available",
 // and wrote NOTHING to the audit log — anti-rollback, a security control, failed
 // OPEN exactly when it could not see. A signed-but-old release from a stale or
@@ -772,8 +748,8 @@ func TestUpgradeRefusesAnUnknownInstalledVersion(t *testing.T) {
 	if _, err := exec.LookPath("go"); err != nil {
 		t.Skip("go toolchain not available to build stub binaries")
 	}
-	v1 := buildStub(t, "26.7.0")
-	v2 := buildStub(t, "26.8.0")
+	v1 := buildStub(t, "26.700")
+	v2 := buildStub(t, "26.800")
 
 	// breakProbe makes the target unreadable-as-a-program while leaving it writable,
 	// which is what a noexec mount or a botched install looks like to execProbe.
@@ -786,8 +762,8 @@ func TestUpgradeRefusesAnUnknownInstalledVersion(t *testing.T) {
 
 	t.Run("an unprobeable target is refused, not guessed", func(t *testing.T) {
 		dataDir := t.TempDir()
-		f := newUpdFixture(t, "26.7.0", "", v1) // OLDER than what is installed, no min_version
-		target := writeTarget(t, v2)            // installed 26.8.0
+		f := newUpdFixture(t, "26.700", "", v1) // OLDER than what is installed, no min_version
+		target := writeTarget(t, v2)            // installed 26.800
 		breakProbe(t, target)
 
 		out, err := runUpgradeCmd(t, "--endpoint", f.server.URL, "--pubkey", f.pubB64,
@@ -809,7 +785,7 @@ func TestUpgradeRefusesAnUnknownInstalledVersion(t *testing.T) {
 			t.Errorf("an unknown version must print as unknown, got:\n%s", out)
 		}
 		// And nothing may have moved.
-		if got := runsVersionMode(t, target); !strings.Contains(got, "26.8.0") {
+		if got := runsVersionMode(t, target); !strings.Contains(got, "26.800") {
 			t.Errorf("a refused upgrade must not swap: %q", got)
 		}
 		if b, _ := filepath.Glob(target + ".bak-*"); len(b) != 0 {
@@ -823,11 +799,11 @@ func TestUpgradeRefusesAnUnknownInstalledVersion(t *testing.T) {
 	t.Run("--current-version keeps anti-rollback armed", func(t *testing.T) {
 		// The legitimate case the fail-closed must not break: the operator declares what
 		// is installed, and the guard then does its job on real numbers.
-		f := newUpdFixture(t, "26.7.0", "", v1)
+		f := newUpdFixture(t, "26.700", "", v1)
 		target := writeTarget(t, v2)
 		breakProbe(t, target)
 
-		_, err := runUpgradeCmd(t, "--endpoint", f.server.URL, "--pubkey", f.pubB64, "--current-version", "26.8.0",
+		_, err := runUpgradeCmd(t, "--endpoint", f.server.URL, "--pubkey", f.pubB64, "--current-version", "26.800",
 			"--target", target, "--os", "linux", "--arch", "amd64", "--yes", "--data-dir", t.TempDir())
 		// NOT the needle "anti-rollback": the unknown-version refusal added by this same
 		// change contains that word too ("anti-rollback and the minimum-version gate are
@@ -843,15 +819,15 @@ func TestUpgradeRefusesAnUnknownInstalledVersion(t *testing.T) {
 	t.Run("a declaration may not override a working probe", func(t *testing.T) {
 		// The escape hatch must not be a bypass. Before this was fixed, the declaration was
 		// consulted BEFORE the probe, so --current-version won over a target that answered
-		// perfectly well: declaring 26.0.0 against a real 26.8.0 installed a 26.7.0
+		// perfectly well: declaring 26.0 against a real 26.800 installed a 26.700
 		// downgrade with exit 0 and no audit line — an UNAUDITED anti-rollback bypass,
 		// strictly more powerful than the audited --force-rollback beside it.
 		dataDir := t.TempDir()
-		f := newUpdFixture(t, "26.7.0", "", v1) // OLDER
-		target := writeTarget(t, v2)            // installed 26.8.0, and the probe WORKS
+		f := newUpdFixture(t, "26.700", "", v1) // OLDER
+		target := writeTarget(t, v2)            // installed 26.800, and the probe WORKS
 
 		out, err := runUpgradeCmd(t, "--endpoint", f.server.URL, "--pubkey", f.pubB64,
-			"--current-version", "26.0.0", // a claim the box contradicts
+			"--current-version", "26.0", // a claim the box contradicts
 			"--target", target, "--os", "linux", "--arch", "amd64", "--yes", "--data-dir", dataDir)
 		if err == nil {
 			t.Fatalf("a declaration contradicting a working probe must refuse, got success:\n%s", out)
@@ -859,7 +835,7 @@ func TestUpgradeRefusesAnUnknownInstalledVersion(t *testing.T) {
 		if !strings.Contains(err.Error(), "refusing to act on a declaration the target contradicts") {
 			t.Fatalf("the refusal must name the contradiction, got %v", err)
 		}
-		if got := runsVersionMode(t, target); !strings.Contains(got, "26.8.0") {
+		if got := runsVersionMode(t, target); !strings.Contains(got, "26.800") {
 			t.Fatalf("nothing may be installed: %q", got)
 		}
 		if audit, _ := os.ReadFile(filepath.Join(dataDir, "upgrade-audit.log")); len(audit) != 0 {
@@ -870,12 +846,12 @@ func TestUpgradeRefusesAnUnknownInstalledVersion(t *testing.T) {
 	t.Run("a declared version is marked as declared, in the plan and in the audit", func(t *testing.T) {
 		// A record that cannot tell a measurement from an operator's claim is not evidence.
 		dataDir := t.TempDir()
-		f := newUpdFixture(t, "26.7.0", "", v1)
+		f := newUpdFixture(t, "26.700", "", v1)
 		target := writeTarget(t, v2)
 		breakProbe(t, target)
 
 		out, err := runUpgradeCmd(t, "--endpoint", f.server.URL, "--pubkey", f.pubB64,
-			"--current-version", "26.8.0", "--force-rollback",
+			"--current-version", "26.800", "--force-rollback",
 			"--target", target, "--os", "linux", "--arch", "amd64", "--yes", "--data-dir", dataDir)
 		if err != nil {
 			t.Fatalf("an audited forced rollback on a declared version must proceed: %v", err)
@@ -884,7 +860,7 @@ func TestUpgradeRefusesAnUnknownInstalledVersion(t *testing.T) {
 			t.Fatalf("the plan must not render a claim as if it were a reading:\n%s", out)
 		}
 		audit, _ := os.ReadFile(filepath.Join(dataDir, "upgrade-audit.log"))
-		if !strings.Contains(string(audit), "from=26.8.0(declared)") {
+		if !strings.Contains(string(audit), "from=26.800(declared)") {
 			t.Fatalf("the audit record must mark a declared from-version, got:\n%s", audit)
 		}
 	})
@@ -893,7 +869,7 @@ func TestUpgradeRefusesAnUnknownInstalledVersion(t *testing.T) {
 		// The status line is the same lie in a different row: with CurrentKnown false both
 		// IsUpToDate and IsRollback are false, so every unknown fell into the default arm
 		// and printed "upgrade available" two lines under the word UNKNOWN.
-		f := newUpdFixture(t, "26.8.0", "26.6.0", v2)
+		f := newUpdFixture(t, "26.800", "26.600", v2)
 		target := writeTarget(t, v2) // SAME version: genuinely up to date
 		breakProbe(t, target)
 
@@ -905,7 +881,7 @@ func TestUpgradeRefusesAnUnknownInstalledVersion(t *testing.T) {
 		if !strings.Contains(out, "status:    UNKNOWN") {
 			t.Errorf("the status line must say it cannot tell:\n%s", out)
 		}
-		if !strings.Contains(out, "min_ver:   26.6.0 (NOT CHECKABLE") {
+		if !strings.Contains(out, "min_ver:   26.600 (NOT CHECKABLE") {
 			t.Errorf("the min_ver line must not imply it was checked:\n%s", out)
 		}
 	})
@@ -914,7 +890,7 @@ func TestUpgradeRefusesAnUnknownInstalledVersion(t *testing.T) {
 		// resolveTargetBinary tested the RAW flag while targetIsSelf trimmed it, so
 		// `--target "  "` resolved to a path AND was treated as the running executable —
 		// re-opening the exact main.version substitution this session removed.
-		f := newUpdFixture(t, "26.8.0", "", v2)
+		f := newUpdFixture(t, "26.800", "", v2)
 		_, err := runUpgradeCmd(t, "--endpoint", f.server.URL, "--pubkey", f.pubB64,
 			"--target", "   ", "--os", "linux", "--arch", "amd64", "--yes", "--data-dir", t.TempDir())
 		if err == nil {
@@ -932,13 +908,13 @@ func TestUpgradeRefusesAnUnknownInstalledVersion(t *testing.T) {
 	})
 
 	t.Run("a malformed declaration is an error, not a shrug", func(t *testing.T) {
-		f := newUpdFixture(t, "26.8.0", "", v2)
+		f := newUpdFixture(t, "26.800", "", v2)
 		target := writeTarget(t, v1)
 		breakProbe(t, target)
 		// "26.8" was in this list until the release grammar made MAJOR.MINOR a version
 		// (a1ea1c45, "accept monthly versions without a zero patch": 26.10, 26.11 have no
 		// .0). It is a version now, tested below; these are still not one.
-		for _, bad := range []string{"26", "26.8.0.1", "26.x", "banana", "   "} {
+		for _, bad := range []string{"26", "1.0.1", "26.10.2", "26.x", "banana", "   "} {
 			_, err := runUpgradeCmd(t, "--endpoint", f.server.URL, "--pubkey", f.pubB64,
 				"--current-version", bad,
 				"--target", target, "--os", "linux", "--arch", "amd64", "--yes", "--data-dir", t.TempDir())
@@ -948,37 +924,36 @@ func TestUpgradeRefusesAnUnknownInstalledVersion(t *testing.T) {
 		}
 	})
 
-	t.Run("a monthly version without .0 is a version", func(t *testing.T) {
-		// a1ea1c45: "26.7" is the 26.7 release, the same as 26.7.0, so declaring it allows the
-		// same forward move.
-		f := newUpdFixture(t, "26.8.0", "26.6.0", v2)
+	t.Run("a two-number declaration is a version", func(t *testing.T) {
+		// The declared two-number identity is compared numerically to the minimum.
+		f := newUpdFixture(t, "26.800", "26.600", v2)
 		target := writeTarget(t, v1)
 		breakProbe(t, target)
-		if _, err := runUpgradeCmd(t, "--endpoint", f.server.URL, "--pubkey", f.pubB64, "--current-version", "26.7",
+		if _, err := runUpgradeCmd(t, "--endpoint", f.server.URL, "--pubkey", f.pubB64, "--current-version", "26.700",
 			"--target", target, "--os", "linux", "--arch", "amd64", "--yes", "--data-dir", t.TempDir()); err != nil {
-			t.Fatalf("a declared 26.7 -> 26.8.0 is a legitimate upgrade: %v", err)
+			t.Fatalf("a declared 26.700 -> 26.800 is a legitimate upgrade: %v", err)
 		}
-		if got := runsVersionMode(t, target); !strings.Contains(got, "26.8.0") {
+		if got := runsVersionMode(t, target); !strings.Contains(got, "26.800") {
 			t.Fatalf("target not upgraded: %q", got)
 		}
 	})
 
 	t.Run("--current-version allows a genuine forward move", func(t *testing.T) {
-		f := newUpdFixture(t, "26.8.0", "26.6.0", v2)
+		f := newUpdFixture(t, "26.800", "26.600", v2)
 		target := writeTarget(t, v1)
 		breakProbe(t, target)
 
-		if _, err := runUpgradeCmd(t, "--endpoint", f.server.URL, "--pubkey", f.pubB64, "--current-version", "26.7.0",
+		if _, err := runUpgradeCmd(t, "--endpoint", f.server.URL, "--pubkey", f.pubB64, "--current-version", "26.700",
 			"--target", target, "--os", "linux", "--arch", "amd64", "--yes", "--data-dir", t.TempDir()); err != nil {
-			t.Fatalf("a declared 26.7.0 -> 26.8.0 is a legitimate upgrade: %v", err)
+			t.Fatalf("a declared 26.700 -> 26.800 is a legitimate upgrade: %v", err)
 		}
-		if got := runsVersionMode(t, target); !strings.Contains(got, "26.8.0") {
+		if got := runsVersionMode(t, target); !strings.Contains(got, "26.800") {
 			t.Fatalf("target not upgraded: %q", got)
 		}
 	})
 
 	t.Run("an unstamped declaration is not a version", func(t *testing.T) {
-		f := newUpdFixture(t, "26.8.0", "", v2)
+		f := newUpdFixture(t, "26.800", "", v2)
 		target := writeTarget(t, v1)
 		breakProbe(t, target)
 
@@ -992,9 +967,9 @@ func TestUpgradeRefusesAnUnknownInstalledVersion(t *testing.T) {
 	t.Run("a target that reports dev is unknown, not ancient", func(t *testing.T) {
 		// The other half of the unification: an UNSTAMPED build is the same missing fact
 		// as an unprobeable one. Here the probe SUCCEEDS and answers "dev" — before
-		// that was the zero version, so a min_version of 26.6.0 refused it as TOO OLD,
+		// that was the zero version, so a min_version of 26.600 refused it as TOO OLD,
 		// which is the precise contradiction version.go's header used to enshrine.
-		f := newUpdFixture(t, "26.8.0", "26.6.0", v2)
+		f := newUpdFixture(t, "26.800", "26.600", v2)
 		target := writeTarget(t, buildStub(t, "dev"))
 
 		_, err := runUpgradeCmd(t, "--endpoint", f.server.URL, "--pubkey", f.pubB64,

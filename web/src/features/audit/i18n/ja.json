@@ -100,10 +100,49 @@
     "this": "本",
     "sig": "イベント署名",
     "checkpoint": "署名",
-    "chainHint": "各イベントのハッシュは前のイベントに連鎖します。フィンガープリントの背後にペイロードはありません。ハッシュそのものが証拠です（設計上の最小データ）。"
+    "chainHint": "各イベントのハッシュは前のイベントに連鎖します。フィンガープリントの背後にペイロードはありません。ハッシュそのものが証拠です（設計上の最小データ）。",
+    "details": "詳細",
+    "actorMember": "メンバー"
   },
   "empty": {
     "title": "まだ証拠はありません",
     "description": "このスコープの台帳は空です。統制された操作は、発生のたびに改ざん検知可能なイベントを追記します。"
+  },
+  "actions": {
+    "governance_approval_create": "承認を要求",
+    "governance_approval_decision": "承認判断を記録",
+    "governance_approval_cancel": "承認を取り消し",
+    "sessions_run_launched": "セッションを開始",
+    "sessions_run_stopping": "セッション停止を要求",
+    "sessions_work_item_create": "作業項目を作成",
+    "sessions_work_item_ready": "作業項目を準備完了に設定",
+    "sessions_work_item_complete": "作業項目を完了",
+    "authorization_decision_record": "認可判断を記録",
+    "policy_artifact_record": "ポリシーの証跡を記録",
+    "governance_policy_create": "ポリシーを作成",
+    "governance_policy_update": "ポリシーを更新",
+    "governance_policy_delete": "ポリシーを削除",
+    "auth_login": "サインイン",
+    "auth_logout": "サインアウト",
+    "auth_login_failed": "サインインに失敗",
+    "auth_webauthn_register": "パスキーを追加",
+    "auth_webauthn_unregister": "パスキーを削除",
+    "user_set_password": "パスワードを変更",
+    "user_create": "メンバーを追加",
+    "membership_grant": "ロールを付与",
+    "membership_update": "ロールを変更",
+    "membership_offboard": "メンバーを削除",
+    "token_issue": "API トークンを作成",
+    "token_revoke": "API トークンを取り消し",
+    "secret_delete": "シークレットを削除"
+  },
+  "targets": {
+    "core_policy": "ポリシー"
+  },
+  "internal": {
+    "hidden": "非表示の内部記録: {{count}}",
+    "show": "内部記録を表示",
+    "hide": "内部記録を非表示",
+    "allHidden": "これまでに読み込んだものはすべて内部記録です。"
   }
 }

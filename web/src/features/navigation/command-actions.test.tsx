@@ -136,7 +136,9 @@ describe('the registry declares each verb with its own mutation permission', () 
   it.each([
     ['eventing', 'createSubscription', 'eventing:subscription:write'],
     ['alerting', 'createRoute', 'notify:route:write'],
-    ['orchestration', 'createSchedule', 'orchestration:schedule:write'],
+    ...(FEATURE_VIEWS.some((v) => v.id === 'orchestration')
+      ? [['orchestration', 'createSchedule', 'orchestration:schedule:write']]
+      : []),
     ['killswitch', 'engage', 'governance:killswitch:admin'],
     ['identity', 'invite', 'membership:write'],
   ])('%s/%s writes with %s', (featureId, actionId, permission) => {

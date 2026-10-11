@@ -25,7 +25,7 @@ grep -q 'HOLD' "$DOC" || fail "$DOC lost HOLD"
 grep -q 'Lanes stay closed' "$DOC" || fail "$DOC lost lanes-closed"
 grep -q 'Does not fill U_f' "$DOC" || fail "$DOC lost U_f pin"
 if grep -qiE 'opened a sales lane|FIRMA A claimed|U_f filled' "$DOC"; then
-	fail "$DOC claims a close this lote does not have"
+	fail "$DOC claims a close this batch does not have"
 fi
 
 grep -q 'refund_fee_adder: UNKNOWN' "$CANON" \

@@ -18,6 +18,7 @@ import (
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/modules/governance"
+	"github.com/olivaresai/olivares/modules/sessions/hookpep"
 )
 
 func TestSessionClaudeApprovalKeepsEffectiveInputAcrossPolicyChange(t *testing.T) {
@@ -48,11 +49,11 @@ func TestSessionClaudeApprovalKeepsEffectiveInputAcrossPolicyChange(t *testing.T
 			var policy struct {
 				ID string `json:"id"`
 			}
-			if code := h.reqInto(http.MethodPost, "/v1/m/governance/policies", h.adminToken, h.tenantA, map[string]any{"name": "review rewrite", "kind": "approval", "enabled": true, "spec": map[string]any{"required_approvals": 1, "match": map[string]any{"action": hookActionCapability, "subject_kind": "claude.tool"}}}, &policy); code != http.StatusCreated || policy.ID == "" {
+			if code := h.reqInto(http.MethodPost, "/v1/m/governance/policies", h.adminToken, h.tenantA, map[string]any{"name": "review rewrite", "kind": "approval", "enabled": true, "spec": map[string]any{"required_approvals": 1, "match": map[string]any{"action": hookpep.ActionCapability, "subject_kind": "claude.tool"}}}, &policy); code != http.StatusCreated || policy.ID == "" {
 				t.Fatalf("policy=%d", code)
 			}
 			const original, rewritten = "printf original", "printf governed"
-			d := &claudeHookDecider{defaultPolicy: &hookPolicyDoc{Default: "allow", Rules: []hookPolicyRule{{Tool: "Bash", Decision: "allow", Rewrite: map[string]any{"command": rewritten}}}}, authr: credentials, eval: h.set.gov.Evaluator(), scoped: h.set.gov.ScopedGrants(), approvals: service, store: h.st, clock: time.Now, log: discardLog()}
+			d := newClaudeHookDecider(&hookpep.Decider{DefaultPolicy: &hookpep.PolicyDoc{Default: "allow", Rules: []hookpep.PolicyRule{{Tool: "Bash", Decision: "allow", Rewrite: map[string]any{"command": rewritten}}}}, Authr: credentials, Eval: h.set.gov.Evaluator(), Authz: harnessAuthz(h), Scoped: h.set.gov.ScopedGrants(), Approvals: service, Store: h.st, Clock: time.Now, Log: discardLog()})
 			raw, _ := json.Marshal(map[string]any{"hook_event_name": "PreToolUse", "tool_name": "Bash", "tool_input": map[string]any{"command": original}})
 			ctx, cancel := context.WithTimeout(t.Context(), 4*time.Second)
 			defer cancel()
@@ -64,7 +65,7 @@ func TestSessionClaudeApprovalKeepsEffectiveInputAcrossPolicyChange(t *testing.T
 			defer func() { cancel(); <-done }()
 			var pending governance.Approval
 			for pending.ID == "" {
-				items, _, err := service.List(ctx, tenant, hookActionCapability, "pending", "")
+				items, _, err := service.List(ctx, tenant, hookpep.ActionCapability, "pending", "")
 				if err != nil {
 					t.Fatal(err)
 				}

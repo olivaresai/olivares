@@ -12,8 +12,8 @@ marker='@OLIVARES_INSTALLER_VERSION@'
 
 case "$is_snapshot" in
   false)
-    [[ "$version" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]] || {
-      printf 'error: release version must be YY.M[.N] without v: %s\n' "$version" >&2
+    [[ "$version" =~ ^[0-9]+\.[0-9]+$ ]] || {
+      printf 'error: release version must be MAJOR.MINOR without v: %s\n' "$version" >&2
       exit 1
     }
     embedded_version="$version"

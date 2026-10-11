@@ -57,7 +57,7 @@ escanea() {
 		grep -qE '^[[:space:]]*set -[a-zA-Z]*u|set -o nounset' "$f" 2>/dev/null || continue
 		printf '%s\n' "$f"
 	done | while IFS= read -r f; do
-		awk -v archivo="${f#"$ROOT"/}" -v vars="$VARS" '
+		awk -v file_path="${f#"$ROOT"/}" -v vars="$VARS" '
 			BEGIN { split(vars, V, " "); estado = "n" }
 			{
 				linea = $0
@@ -105,7 +105,7 @@ escanea() {
 					# printf que ESCRIBE un fixture, donde el VAR= y el $VAR no tenian relacion.
 					# (Sin comillas simples en este comentario: cierran el programa awk.)
 					if (linea ~ ("(^|[[:space:]])(export[[:space:]]+)?" V[k] "=\"?\\$\\{?" V[k] "\\}?\"?([[:space:]]|;|$)")) {
-						printf "%s:%d  %s=\"$%s\" (autorreferente: lee lo que aun no existe)\n", archivo, FNR, V[k], V[k]
+						printf "%s:%d  %s=\"$%s\" (self-referential: reads a value before it exists)\n", file_path, FNR, V[k], V[k]
 						sucio = 1
 					}
 				}
@@ -157,7 +157,7 @@ escanea() {
 						# El gate YA tenia esta idea en `guardada[]`, pero solo dentro de la MISMA
 						# linea. Esto la lleva al fichero, que es donde `set -u` la evalua.
 						if (v in asignada && asignada[v] <= FNR) continue
-						printf "  %s:%d  $%s sin ${%s:-...}\n", archivo, FNR, v, v
+						printf "  %s:%d  $%s without ${%s:-...}\n", file_path, FNR, v, v
 						hallazgos++
 					}
 				}
@@ -178,32 +178,32 @@ if [ "${1:-}" = "--selftest" ]; then
 
 	n="$(escanea "$caso" 2>/dev/null | grep -c . || true)"
 	if [ "$n" = "1" ]; then
-		echo "  ok    encuentra la lectura sin guarda y SOLO esa (1 de 4 ficheros)"
+		echo "  ok    detects only the unguarded read (1 of 4 files)"
 	else
-		echo "  FAIL  esperaba 1 hallazgo, dio $n"; fail=1
+		echo "  FAIL expected 1 finding, got $n"; fail=1
 		escanea "$caso" 2>/dev/null | sed 's/^/        /'
 	fi
 
 	out="$(bash "$0" "$caso" 2>&1)" && rc=0 || rc=$?
 	if [ "$rc" = "1" ] && grep -q 'malo.sh' <<<"$out"; then
-		echo "  ok    un arbol sucio sale ROJO y nombra el fichero"
+		echo "  ok    a tree with violations fails and names the file"
 	else
-		echo "  FAIL  un arbol sucio no salio rojo (rc=$rc)"; fail=1
+		echo "  FAIL  a tree with violations did not fail (rc=$rc)"; fail=1
 	fi
 
 	rm -f "$caso/malo.sh"
 	out="$(bash "$0" "$caso" 2>&1)" && rc=0 || rc=$?
 	if [ "$rc" = "0" ]; then
-		echo "  ok    sin la lectura sin guarda queda verde (la direccion que no dispara)"
+		echo "  ok    removing the unguarded read makes the check pass (negative control)"
 	else
-		echo "  FAIL  un arbol limpio no quedo verde (rc=$rc)"; fail=1
+		echo "  FAIL  a clean tree did not pass (rc=$rc)"; fail=1
 	fi
 
 	out="$(bash "$0" /ruta-que-no-existe-para-el-selftest 2>&1)" && rc=0 || rc=$?
-	if [ "$rc" = "2" ] && grep -q 'NO HE PODIDO MIRAR' <<<"$out"; then
-		echo "  ok    una raiz ilegible es NO HE PODIDO MIRAR, no verde"
+	if [ "$rc" = "2" ] && grep -q 'COULD NOT CHECK' <<<"$out"; then
+		echo "  ok    an unreadable root returns COULD NOT CHECK, not a pass"
 	else
-		echo "  FAIL  una raiz ilegible no dio la tercera respuesta (rc=$rc)"; fail=1
+		echo "  FAIL  an unreadable root did not return the third result (rc=$rc)"; fail=1
 	fi
 
 	# ⛔ AMBITO DE FICHERO: en SU PROPIO directorio, porque los casos de arriba comparten uno y
@@ -214,9 +214,9 @@ if [ "${1:-}" = "--selftest" ]; then
 	printf '#!/bin/bash\nset -euo pipefail\nexport HOME=/w/x\necho "$HOME/y"\n' > "$amb/asigna-y-lee.sh"
 	na="$(escanea "$amb" 2>/dev/null | grep -c . || true)"
 	if [ "$na" = "0" ]; then
-		echo "  ok    una lectura DOMINADA por la asignacion del propio fichero no es hallazgo"
+		echo "  ok    a read preceded by an assignment in the same file is not a finding"
 	else
-		echo "  FAIL  esperaba 0 en asigna-y-lee, dio $na"; fail=1
+		echo "  FAIL  assign-then-read expected 0, got $na"; fail=1
 		escanea "$amb" 2>/dev/null | sed 's/^/        /'
 	fi
 
@@ -226,9 +226,9 @@ if [ "${1:-}" = "--selftest" ]; then
 	printf '#!/bin/bash\nset -euo pipefail\necho "$HOME/y"\nexport HOME=/w/x\n' > "$amb/lee-y-asigna.sh"
 	nb="$(escanea "$amb" 2>/dev/null | grep -c . || true)"
 	if [ "$nb" = "1" ]; then
-		echo "  ok    leer ANTES de asignar sigue siendo hallazgo (el orden manda)"
+		echo "  ok    a read before assignment remains a finding; order matters"
 	else
-		echo "  FAIL  esperaba 1 en lee-y-asigna, dio $nb"; fail=1
+		echo "  FAIL  read-then-assign expected 1, got $nb"; fail=1
 	fi
 
 	# ⛔ CASO 7: EL DEFECTO QUE ESTA PATA NO VEIA. Reintroduce `TMPDIR="$TMPDIR"` bajo `set -u`,
@@ -241,16 +241,16 @@ if [ "${1:-}" = "--selftest" ]; then
 	printf '#!/bin/bash\nset -uo pipefail\nenv TMPDIR="$TMPDIR" true\n' > "$amb2/selfref.sh" # unbound-ok
 	nsr="$(escanea "$amb2" 2>/dev/null | grep -c 'autorreferente' || true)"
 	if [ "${nsr:-0}" -ge 1 ]; then
-		echo "  ok    la asignacion AUTORREFERENTE se ve"
+		echo "  ok    a self-referential assignment is detected"
 	else
-		echo "  FAIL  la autorreferencia NO se ve: es el bug que tumbo el runner del overlay"; fail=1
+		echo "  FAIL  self-reference is missed; this defect broke the overlay runner"; fail=1
 	fi
 	# CASO 8, su control negativo: un printf que ESCRIBE un fixture no es una autorreferencia.
 	printf '#!/bin/bash\nset -uo pipefail\nprintf "export HOME=/w/x %s" "$PWD" > /dev/null\n' > "$amb2/fixture.sh"
 	rm -f "$amb2/selfref.sh"
 	nfx="$(escanea "$amb2" 2>/dev/null | grep -c 'autorreferente' || true)"
-	if [ "${nfx:-0}" = "0" ]; then echo "  ok    un fixture escrito por printf NO es autorreferencia"
-	else echo "  FAIL  falso positivo sobre un printf que escribe un fixture"; fail=1; fi
+	if [ "${nfx:-0}" = "0" ]; then echo "  ok    a fixture written by printf is not self-reference"
+	else echo "  FAIL  false positive on a printf writing a fixture"; fail=1; fi
 
 	[ "$fail" = "0" ] && { echo "check-unbound-env selftest: 8 passed, 0 failed"; exit 0; }
 	echo "check-unbound-env selftest: FAILED"; exit 1
@@ -259,31 +259,31 @@ fi
 RAIZ="${1:-$ROOT/scripts}"
 EXTRA="${2:-$ROOT/.githooks}"
 [ -d "$RAIZ" ] || {
-	echo "check-unbound-env: NO HE PODIDO MIRAR — '$RAIZ' no es un directorio; no se ha" >&2
-	echo "  examinado nada, y eso no es lo mismo que estar limpio." >&2
+	echo "check-unbound-env: COULD NOT CHECK — '$RAIZ' is not a directory; nothing was" >&2
+	echo "  examined, so the tree cannot be reported as clean." >&2
 	exit 2
 }
 
 # Una sola pasada por raiz, y el total se cuenta de la SALIDA. La version anterior escaneaba
 # dos veces y pegaba los dos textos sin salto de linea entre ellos, asi que el ultimo hallazgo
 # de una raiz y el primero de la otra salian en el mismo renglon.
-salida="$(escanea "$RAIZ" 2>/dev/null)"
+output="$(escanea "$RAIZ" 2>/dev/null)"
 if [ -d "$EXTRA" ] && [ "$EXTRA" != "$RAIZ" ]; then
 	extra_txt="$(escanea "$EXTRA" 2>/dev/null)"
-	[ -n "$extra_txt" ] && salida="$(printf '%s\n%s' "$salida" "$extra_txt")"
+	[ -n "$extra_txt" ] && output="$(printf '%s\n%s' "$output" "$extra_txt")"
 fi
-salida="$(printf '%s' "$salida" | sed '/^$/d')"
-total="$(printf '%s' "$salida" | grep -c . || true)"
+output="$(printf '%s' "$output" | sed '/^$/d')"
+total="$(printf '%s' "$output" | grep -c . || true)"
 
 if [ "$total" -gt 0 ]; then
-	echo "check-unbound-env: SUCIO — $total lectura(s) sin forma por defecto bajo 'set -u':"
-	printf '%s\n' "$salida"
+	echo "check-unbound-env: FAIL — $total read(s) without defaults under 'set -u':"
+	printf '%s\n' "$output"
 	echo
-	echo "  En los runners de CI estas variables NO siempre existen (HOME falta en seis de"
-	echo "  nueve, medido). Bajo 'set -u' el guion muere en esa linea, y el rojo aparece con"
-	echo "  el nombre del PASO, no con el de la variable: el 2026-08-19 un \$HOME sin guarda"
-	echo "  tumbo 'control-plane' bajo el rotulo 'license boundary' con la licencia impecable."
-	echo "  Arreglo: \${VAR:-valor}. Si no hay valor razonable, comprueba y di que falta."
+	echo "  These variables are not always set in CI runners (HOME was absent in six of"
+	echo "  nine measured runners). Under 'set -u', the script exits at that line, and CI"
+	echo "  names the step rather than the variable. On 2026-08-19, an unguarded \$HOME"
+	echo "  broke 'control-plane' under 'license boundary' even though the license was valid."
+	echo "  Fix: \${VAR:-valor}. If no reasonable default exists, check and report the missing value."
 	exit 1
 fi
-echo "check-unbound-env: LIMPIO — ninguna lectura sin guarda de [$VARS] bajo 'set -u'."
+echo "check-unbound-env: CLEAN — no unguarded reads of [$VARS] under 'set -u'."

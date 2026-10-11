@@ -33,7 +33,7 @@ nuevo, usa un `--data-dir` nuevo.
 
 ```text
 generated a new audit signing key; back it up path=/var/lib/olivares/audit-signing.key
-generated a self-signed TLS certificate; clients must trust it, or pin it with --pin-sha256=<pin_sha256> (that value, verbatim) cert=/var/lib/olivares/tls.crt cert_fingerprint_sha256=d38567e8…378c4e7f pin_sha256=JsdrhrY77Me8miAmobJsqamE3NDWIOSBrDTwbHkyCD0
+generated a local TLS certificate; clients must trust it, or pin it with --pin-sha256=<pin_sha256> (that value, verbatim) cert=/var/lib/olivares/tls.crt cert_fingerprint_sha256=d38567e8…378c4e7f pin_sha256=JsdrhrY77Me8miAmobJsqamE3NDWIOSBrDTwbHkyCD0
 ```
 
 Ambos son deliberados, y el primero es el que muerde más tarde: **no hay
@@ -106,12 +106,11 @@ arranque:
 ingest: no observation sources configured (OLIVARES_SOURCES_CONFIG.sources is empty); no connector will ingest — the estate runs on no live traffic
 ```
 
-Un fichero de fuentes ausente, ilegible o inválido **avisa y continúa** (el arranque
-nunca falla por ello) — así que un motor de aspecto sano con un mapa vacío suele
-significar que la configuración nunca se cargó. Corrige el fichero/ruta y reinicia; el
-éxito tiene el aspecto de `ingest: wired source … kind=…` por cada fuente. Una fuente que
-no consigue construirse registra `ingest: failed to register in-process source; not wired`
-con el motivo — se informa, nunca se descarta en silencio.
+### El motor no arranca con una configuración de fuentes
+
+Si `OLIVARES_SOURCES_CONFIG` apunta a un fichero ausente, ilegible o con JSON inválido, `olivares serve` termina con código `1`. Busca el error de arranque `load sources operator config: OLIVARES_SOURCES_CONFIG`, que incluye `refusing to start instead of silently omitting operator configuration`. Comprueba la ruta tal como la ve el servicio o contenedor, asegúrate de que su usuario puede leer el fichero, valida el JSON y reinicia. Este error del fichero impide el arranque; no deja al motor funcionando con un mapa vacío.
+
+Tras un arranque correcto, busca `ingest: wired source … kind=…` por cada fuente. Una fuente que no consigue construirse registra `ingest: failed to register in-process source; not wired` con el motivo.
 
 ### pgAudit está cableado pero no llegan edges
 

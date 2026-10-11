@@ -580,6 +580,17 @@ type canonicalToolCallParams struct {
 	// `resultType:"task"` without it is only a custom core ResultType string
 	// (open enum, schema.ts:208-216) and relays as extension data.
 	DeclaresTasks bool
+	// DeclaresFormElicitation is the exact per-request elicitation capability:
+	// _meta["io.modelcontextprotocol/clientCapabilities"].elicitation with form
+	// support (an empty object means form). It selects the approval round trip
+	// (ask.go); it authorizes nothing.
+	DeclaresFormElicitation bool
+	// AskState and AskResponse are this gateway's own approval round trip: a
+	// requestState carrying askStatePrefix and the client's answer to
+	// askInputKey. Both are STRIPPED from Forward and Effect — the upstream never
+	// sees a state it did not issue — and redeemed by the gate (ask.go).
+	AskState    string
+	AskResponse json.RawMessage
 	// OperationKey is the client-supplied idempotency key ("" when none). Never
 	// persisted raw; consumed only by the OperationID derivation.
 	OperationKey string
@@ -609,8 +620,9 @@ type canonicalToolCallParams struct {
 // "inputResponses" is reserved here for the SAME reason (round-1 F-07):
 // the MRTR mediator inspects it before the call is authorized, so a case-variant
 // alias would let it approve one member while a case-folding upstream consumes
-// another out of the very bytes forwarded.
-var toolCallReservedKeys = []string{"name", "arguments", "_meta", "inputResponses"}
+// another out of the very bytes forwarded. "requestState" likewise: the gateway
+// reads and strips its own approval round-trip state from it (ask.go).
+var toolCallReservedKeys = []string{"name", "arguments", "_meta", "inputResponses", "requestState"}
 
 // keyFoldsTo is THE key-equivalence predicate of this connector: `strings.EqualFold`
 // applies Unicode SIMPLE FOLDING, so it treats U+017F (ʼlong sʼ) as equivalent to
@@ -692,12 +704,17 @@ func canonicalizeToolCallParams(raw json.RawMessage) (canonicalToolCallParams, e
 	if kerr != nil {
 		return canonicalToolCallParams{}, kerr
 	}
+	// This gateway's approval round trip is taken out of the tree before anything
+	// is rendered, so neither the forwarded bytes nor the mediated inputResponses
+	// carry it.
+	out.AskState, out.AskResponse = extractAskRoundTrip(&v)
 	// The mediated MRTR member is read from the SAME strict tree with exact
 	// casing (round-1 F-07) — never re-parsed out of the forwarded bytes.
 	if members, ok := strictObjectMembers(&v, "inputResponses"); ok {
 		out.InputResponses = members
 	}
 	out.DeclaresTasks = declaresTasksExtension(&v)
+	out.DeclaresFormElicitation = declaresFormElicitation(&v)
 	out.OperationKey = opKey
 	out.Forward = encodeCanonical(v)
 	if args := v.member("arguments"); args != nil {
@@ -744,6 +761,51 @@ func declaresTasksExtension(v *canonValue) bool {
 	}
 	decl := ext.val.member(extensionTasks)
 	return decl != nil && decl.val.kind == canonObject
+}
+
+// declaresFormElicitation reads the per-request elicitation capability with exact
+// casing: an elicitation object that declares form, or declares neither mode
+// (the empty object means form only).
+func declaresFormElicitation(v *canonValue) bool {
+	meta := v.member("_meta")
+	if meta == nil || meta.val.kind != canonObject {
+		return false
+	}
+	caps := meta.val.member(metaClientCapabilities)
+	if caps == nil || caps.val.kind != canonObject {
+		return false
+	}
+	el := caps.val.member("elicitation")
+	if el == nil || el.val.kind != canonObject {
+		return false
+	}
+	if form := el.val.member("form"); form != nil {
+		return form.val.kind == canonObject
+	}
+	return el.val.member("url") == nil
+}
+
+// extractAskRoundTrip removes this gateway's own requestState and the client's
+// answer to its approval request from a tools/call params tree and returns them.
+// A requestState without askStatePrefix belongs to the upstream and stays.
+func extractAskRoundTrip(v *canonValue) (string, json.RawMessage) {
+	state := v.member("requestState")
+	if state == nil || state.val.kind != canonString || !strings.HasPrefix(state.val.str, askStatePrefix) {
+		return "", nil
+	}
+	token := state.val.str
+	v.removeMember("requestState")
+	var response json.RawMessage
+	if responses := v.member("inputResponses"); responses != nil && responses.val.kind == canonObject {
+		if answer := responses.val.member(askInputKey); answer != nil {
+			response = encodeCanonical(answer.val)
+			responses.val.removeMember(askInputKey)
+		}
+		if len(responses.val.obj) == 0 {
+			v.removeMember("inputResponses")
+		}
+	}
+	return token, response
 }
 
 // --- derivations -------------------------------------------------------------------
@@ -860,6 +922,13 @@ func toolCallPolicyDigest(policy ToolPolicy, pin pinBinding, coaz coazBinding) s
 		"pin:"+pin.State, pin.Fingerprint, pin.Version,
 		"coaz:"+coaz.State, coaz.DecisionRef, coaz.PolicyVersion,
 	)
+	// The Cedar conditions that let this call through are part of the policy
+	// that authorized it. Absent conditions add nothing, so the digest of every
+	// entry without them is unchanged.
+	if strings.TrimSpace(policy.Conditions) != "" {
+		sum := sha256.Sum256([]byte(policy.Conditions))
+		parts = append(parts, "conditions:sha256", hex.EncodeToString(sum[:]))
+	}
 	return evidenceLPDigest(parts...)
 }
 

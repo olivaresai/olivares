@@ -6,10 +6,55 @@ package deploy
 
 import (
 	"net/http"
+	"strings"
 	"testing"
 
 	sdkmodel "github.com/olivaresai/olivares/sdk/model"
 )
+
+func TestDigestPinnedImageAcceptedAndRetained(t *testing.T) {
+	h := newHarness(t)
+	root := h.adminLogin()
+	tid := h.createOrg(root, "acme")
+	tok := h.roleToken(root, tid, "ops@acme.io", "admin")
+	const image = "localhost:15509/backenduseb-agent@sha256:1a8dd377d3b776acfdad633c046a543e005bd79cab0d2e4857d006c0d5907347"
+	defID := h.createDef(tok, tid, "digest-agent", agentSpec(image, "agent:billing"))
+	r := h.do("GET", "/v1/m/deploy/definitions/"+defID, tok, nil, tenantHdr(tid))
+	if r.code != http.StatusOK {
+		t.Fatalf("get digest definition = %d %s, want 200", r.code, r.raw)
+	}
+	spec, ok := r.body["spec"].(map[string]any)
+	if !ok || spec["image"] != image {
+		t.Fatalf("stored image = %v, want %s", spec["image"], image)
+	}
+
+	for _, tc := range []struct {
+		name, image, command string
+	}{
+		{"truncated", image[:len(image)-1], ""},
+		{"non_hex", image[:len(image)-1] + "g", ""},
+		{"uppercase", image[:len(image)-64] + strings.ToUpper(image[len(image)-64:]), ""},
+		{"nonterminal", image + ":tag", ""},
+		{"trailing_newline", image + "\n", ""},
+		{"credential_prefix", "password=hunter2/" + image, ""},
+		{"credential_command", image, "password=hunter2"},
+		{"digest_command", "img:1", image},
+		{"overlong_image", strings.Repeat("i", 2049) + image, ""},
+		{"overlong_command", image, strings.Repeat("i", 2049)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			badSpec := agentSpec(tc.image, "agent:billing")
+			badSpec["command"] = tc.command
+			body := map[string]any{
+				"subject_kind": "agent", "subject_ref": "acme-bot", "name": tc.name,
+				"environment": "prod", "target": "docker.host/node1", "runtime": "docker", "spec": badSpec,
+			}
+			if r := h.do("POST", "/v1/m/deploy/definitions", tok, body, tenantHdr(tid)); r.code != http.StatusBadRequest {
+				t.Fatalf("create %s = %d %s, want 400", tc.name, r.code, r.raw)
+			}
+		})
+	}
+}
 
 // TestInlineCredentialRejected proves the no-cleartext-secret guarantee: a spec
 // with raw credential material (rather than a secret-store reference) is rejected
@@ -243,5 +288,55 @@ func TestApplyFailsClosedWithoutExecutor(t *testing.T) {
 	}
 	if r := h.applyPhase1(tok, tid, defID); r.code != http.StatusServiceUnavailable {
 		t.Fatalf("apply without executor = %d %s, want 503", r.code, r.raw)
+	}
+}
+
+// TestExecutorReadAnswersWhetherDeployCanAct proves GET /executor reports the same seam
+// plan and apply consult, to any reader of deployments: without an executor it answers
+// configured=false and plan fails closed; with one it answers configured=true and plan
+// runs. The console reads it to say what Deploy needs before it offers a form.
+func TestExecutorReadAnswersWhetherDeployCanAct(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		opts     []Option
+		want     bool
+		planCode int
+	}{
+		{"no executor", nil, false, http.StatusServiceUnavailable},
+		{"executor wired", []Option{WithExecutor(newMockExecutor())}, true, http.StatusOK},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newHarnessWith(t, append(tc.opts, WithApprovalGate(newFakeGate()))...)
+			root := h.adminLogin()
+			tid := h.createOrg(root, "acme")
+			viewer := h.roleToken(root, tid, "viewer@acme.io", "viewer")
+			admin := h.roleToken(root, tid, "ops@acme.io", "admin")
+
+			r := h.do("GET", "/v1/m/deploy/executor", viewer, nil, tenantHdr(tid))
+			if r.code != http.StatusOK {
+				t.Fatalf("executor read = %d %s, want 200", r.code, r.raw)
+			}
+			if got, ok := r.body["configured"].(bool); !ok || got != tc.want {
+				t.Fatalf("configured = %v (%s), want %v", r.body["configured"], r.raw, tc.want)
+			}
+
+			defID := h.createDef(admin, tid, "billing-agent", agentSpec("img:1", "agent:billing"))
+			if p := h.do("POST", "/v1/m/deploy/definitions/"+defID+"/plan", admin, nil, tenantHdr(tid)); p.code != tc.planCode {
+				t.Fatalf("plan = %d %s, want %d: the read and plan disagree about the executor", p.code, p.raw, tc.planCode)
+			}
+		})
+	}
+
+	h := newHarnessWith(t)
+	root := h.adminLogin()
+	if r := h.do("GET", "/v1/m/deploy/executor", "", nil, nil); r.code != http.StatusUnauthorized {
+		t.Fatalf("anonymous executor read = %d %s, want 401", r.code, r.raw)
+	}
+	// A member of another organization holds no deploy:deployment:read in this one.
+	acme := h.createOrg(root, "acme")
+	other := h.createOrg(root, "other")
+	outsider := h.roleToken(root, other, "admin@other.io", "admin")
+	if r := h.do("GET", "/v1/m/deploy/executor", outsider, nil, tenantHdr(acme)); r.code != http.StatusForbidden {
+		t.Fatalf("executor read from another organization = %d %s, want 403", r.code, r.raw)
 	}
 }

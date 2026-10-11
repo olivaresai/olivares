@@ -55,27 +55,28 @@ func twoServerParams() map[string]any {
 // adapter's free-form Reason is never persisted, published, logged, audited or returned, and
 // the adapter's own intent object is not mutated. Expected at bf54a94bc0: exit 1 by the
 // persisted-reason canary assertion.
-func TestProxyMCPEgressApprovalPrivacyMixedLegacyNotification(t *testing.T) {
+
+// The adapter's free-form reason never reaches storage, the bus, logs or audit.
+func TestProxyMCPEgressLegacyNotificationPrivacy(t *testing.T) {
 	const adapterCanary = "ADAPTER-LEGACY-REASON-CANARY"
 	canaries := append(mcpWireCanaries(), adapterCanary)
 	h := newHarness(t)
 	br := buildBridge(t, h, h.mintBoundToken(t, auth.RoleEditor))
 	tid := tenantAID(t, h)
-	grant := h.activateBreakGlassE2E(t, "", "r2 control: a mixed legacy notification is not an authorization")
 
 	d, inf, up := mcpProxyDecider(true)
-	d.authr = fakeProxyAuthr{p: auth.ScopedPrincipal(model.ID("u1"), "user one", tid, "editor")}
-	d.approvals = br
+	d.Auth = fakeProxyAuthr{p: auth.ScopedPrincipal(model.ID("u1"), "user one", tid, "editor")}
+	d.Approvals = proxyApprovalsFor(br)
 	bus := &fakeObservationBus{}
-	d.bus = bus
+	d.Bus = bus
 	var logs bytes.Buffer
-	d.log = slog.New(slog.NewTextHandler(&logs, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	d.Log = slog.New(slog.NewTextHandler(&logs, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	adapterReason := "grant web search " + adapterCanary + " " + strings.Join(mcpWireCanaries(), " ")
 	intent := &claudeapi.ServerToolEgressApprovalIntent{
 		Action: "inference.servertool.egress", Family: "web_search", ToolType: "web_search_20260209",
 		Subject: "web_search", PlanHash: "plan-r2-mixed-legacy", Reason: adapterReason,
 	}
-	d.egress = &fakeEgressGate{dec: claudeapi.ServerToolEgressDecision{
+	d.Egress = &fakeEgressGate{dec: claudeapi.ServerToolEgressDecision{
 		Forward: false, Status: http.StatusForbidden, ErrorType: "permission_error", Reason: adapterCanary, ApprovalIntent: intent,
 	}}
 	aud := &recordingAuditor{}
@@ -86,7 +87,6 @@ func TestProxyMCPEgressApprovalPrivacyMixedLegacyNotification(t *testing.T) {
 	requireProxyRefusal(t, rec, http.StatusForbidden, "permission_error", "server-tool egress denied by policy")
 	requireNoCanary(t, "HTTP refusal", rec.Body.Bytes(), canaries)
 	up.requireNone(t)
-	requireBreakGlassUses(t, h, grant, 0)
 
 	list := h.getJSON(h.adminToken, h.tenantA, "/v1/m/governance/approvals?status=pending&action=inference.servertool.egress&limit=200")
 	items, _ := list["items"].([]any)
@@ -124,9 +124,9 @@ func TestProxyMCPEgressSecondDestinationGoverned(t *testing.T) {
 	t.Run("second origin not granted", func(t *testing.T) {
 		gov := &fakeGovernance{}
 		d, inf, up := mcpProxyDecider(true)
-		d.approvals = fakeBridge(gov, proxyTestTenant, 3600, notifyNow)
+		d.Approvals = proxyApprovalsFor(fakeBridge(gov, proxyTestTenant, 3600, notifyNow))
 		gate := grantMCPTestOrigin()
-		d.egress = gate
+		d.Egress = gate
 		rec := serveProxy(t, claudeapi.NewMessagesProxy(inf, d, nil, nil), "/v1/messages", twoServerParams())
 		requireProxyRefusal(t, rec, http.StatusForbidden, "permission_error", "mcp_origin_not_granted")
 		up.requireNone(t)
@@ -154,7 +154,7 @@ func TestProxyMCPEgressSecondDestinationGoverned(t *testing.T) {
 	})
 	t.Run("both origins granted", func(t *testing.T) {
 		d, inf, up := mcpProxyDecider(true)
-		d.egress = &originGate{granted: map[string]bool{mcpTestOrigin: true, mcpSecondOrigin: true}}
+		d.Egress = &originGate{granted: map[string]bool{mcpTestOrigin: true, mcpSecondOrigin: true}}
 		rec := serveProxy(t, claudeapi.NewMessagesProxy(inf, d, nil, nil), "/v1/messages", twoServerParams())
 		if rec.Code != http.StatusOK {
 			t.Fatalf("both origins granted but refused: %d %s", rec.Code, rec.Body.String())
@@ -206,8 +206,8 @@ func TestProxyMCPEgressApprovalTenantIsolation(t *testing.T) {
 	run := func(p auth.Principal) {
 		t.Helper()
 		d, inf, up := mcpProxyDecider(true)
-		d.authr = fakeProxyAuthr{p: p}
-		d.approvals, d.egress = bridge, gate
+		d.Auth = fakeProxyAuthr{p: p}
+		d.Approvals, d.Egress = proxyApprovalsFor(bridge), gate
 		rec := serveProxy(t, claudeapi.NewMessagesProxy(inf, d, nil, nil), "/v1/messages", mcpParams(false))
 		requireProxyRefusal(t, rec, http.StatusForbidden, "permission_error", "mcp_origin_not_granted")
 		up.requireNone(t)
@@ -263,7 +263,7 @@ func TestProxyMCPEgressLegacyDenyStatusValidated(t *testing.T) {
 			}
 			t.Run(name, func(t *testing.T) {
 				d, inf, up := mcpProxyDecider(true)
-				d.egress = &fakeEgressGate{dec: claudeapi.ServerToolEgressDecision{
+				d.Egress = &fakeEgressGate{dec: claudeapi.ServerToolEgressDecision{
 					Forward: false, Status: r.status, ErrorType: r.errType, Reason: "no egress grant",
 				}}
 				rec := serveProxy(t, claudeapi.NewMessagesProxy(inf, d, nil, nil), "/v1/messages", body)

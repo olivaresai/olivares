@@ -9,54 +9,97 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+
+	"github.com/olivaresai/olivares/core/api/oas"
+	"github.com/olivaresai/olivares/core/auth"
 )
+
+// bodyKindsModule documents one operation of each body kind, so the coherence
+// checks run over documents the module system really builds.
+type bodyKindsModule struct{}
+
+func (bodyKindsModule) APINamespace() string           { return "bodykinds" }
+func (bodyKindsModule) Permissions() []auth.Permission { return nil }
+func (bodyKindsModule) APIRoutes(reg RouteRegistrar) {
+	reg.Handle(http.MethodPost, "/json", "", nil)
+	reg.Handle(http.MethodPost, "/opaque", "", nil)
+	reg.Handle(http.MethodPost, "/none", "", nil)
+	reg.Handle(http.MethodPost, "/undocumented", "", nil)
+	reg.Handle(http.MethodGet, "/read", "", nil)
+}
+
+func (bodyKindsModule) OperationDocumentation(method, pattern string) (ModuleOperationDocumentation, bool) {
+	jsonBody := func(schema map[string]any) map[string]any {
+		return oas.Obj("required", true, "content", oas.Obj("application/json", oas.Obj("schema", schema)))
+	}
+	switch method + " " + pattern {
+	case "POST /json":
+		return ModuleOperationDocumentation{
+			BodyKind:    ModuleOperationJSONBody,
+			RequestBody: jsonBody(oas.Obj("type", "object", "properties", oas.Obj("name", oas.Obj("type", "string")))),
+		}, true
+	case "POST /opaque":
+		return ModuleOperationDocumentation{
+			BodyKind:    ModuleOperationOpaqueBody,
+			RequestBody: jsonBody(oas.Obj("type", "object")),
+		}, true
+	case "POST /none":
+		return ModuleOperationDocumentation{BodyKind: ModuleOperationBodyless}, true
+	}
+	return ModuleOperationDocumentation{}, false
+}
+
+func bodyKindsOperations(t *testing.T) map[string]map[string]any {
+	t.Helper()
+	ops := map[string]map[string]any{}
+	paths := ModuleOpenAPIDocument([]Module{bodyKindsModule{}})["paths"].(map[string]any)
+	for path, item := range paths {
+		for method, op := range item.(map[string]any) {
+			ops[strings.ToUpper(method)+" "+path] = op.(map[string]any)
+		}
+	}
+	return ops
+}
 
 func TestModuleMutationRequestBodyDispositionsAreCoherent(t *testing.T) {
 	t.Parallel()
 
-	checked := false
-	for key := range operationDescriptions {
-		method, path, ok := strings.Cut(key, " ")
-		if !ok || !strings.HasPrefix(path, "/v1/m/") {
-			continue
+	want := map[string]string{
+		"POST /v1/m/bodykinds/json":         "schema-published",
+		"POST /v1/m/bodykinds/opaque":       "opaque-body",
+		"POST /v1/m/bodykinds/none":         "bodyless",
+		"POST /v1/m/bodykinds/undocumented": "unclassified",
+	}
+	ops := bodyKindsOperations(t)
+	for key, disposition := range want {
+		op, ok := ops[key]
+		if !ok {
+			t.Fatalf("%s is not in the module document", key)
 		}
-		route, ok := moduleRouteFromOperationKey(method, path)
-		if !ok || !moduleRouteIsMutation(route) {
-			continue
-		}
-		checked = true
-		op := moduleOperation(route)
 		if problem := moduleRequestBodyDispositionProblem(op); problem != "" {
 			t.Errorf("%s: %s", key, problem)
 		}
-		want := string(moduleRequestBodyDispositionFor(route))
-		if got := op[moduleRequestBodyDispositionExtension]; got != want {
-			t.Errorf("%s: %s = %#v, want %q", key, moduleRequestBodyDispositionExtension, got, want)
+		if got := op[moduleRequestBodyDispositionExtension]; got != disposition {
+			t.Errorf("%s: %s = %#v, want %q", key, moduleRequestBodyDispositionExtension, got, disposition)
 		}
-	}
-	if !checked {
-		t.Fatal("operation catalog exposes no module mutations")
 	}
 }
 
 func TestModuleNonMutationsDoNotPublishRequestBodyDisposition(t *testing.T) {
 	t.Parallel()
 
-	for key := range operationDescriptions {
-		method, path, ok := strings.Cut(key, " ")
-		if !ok || !strings.HasPrefix(path, "/v1/m/") {
-			continue
-		}
-		route, ok := moduleRouteFromOperationKey(method, path)
-		if !ok || moduleRouteIsMutation(route) {
-			continue
-		}
-		if got := moduleOperation(route)[moduleRequestBodyDispositionExtension]; got != nil {
-			t.Errorf("%s: non-mutation publishes %s=%#v", key, moduleRequestBodyDispositionExtension, got)
-		}
+	op, ok := bodyKindsOperations(t)["GET /v1/m/bodykinds/read"]
+	if !ok {
+		t.Fatal("GET /v1/m/bodykinds/read is not in the module document")
+	}
+	if got := op[moduleRequestBodyDispositionExtension]; got != nil {
+		t.Errorf("non-mutation publishes %s=%#v", moduleRequestBodyDispositionExtension, got)
 	}
 }
 
+// TestModuleRequestBodyDispositionSentinels pins the core half of the
+// classification: a mutation no module documents stays unclassified. Each
+// module pins its own kinds in its own package.
 func TestModuleRequestBodyDispositionSentinels(t *testing.T) {
 	t.Parallel()
 
@@ -66,53 +109,20 @@ func TestModuleRequestBodyDispositionSentinels(t *testing.T) {
 		want  moduleRequestBodyDisposition
 	}{
 		{
-			name:  "raw workspace file",
-			route: moduleRoute{ns: "sessions", method: http.MethodPut, pattern: "/workspaces/{ref}/files/raw"},
-			want:  moduleRequestBodySchemaPublished,
-		},
-		{
-			name:  "legacy protocol binding",
-			route: moduleRoute{ns: "sessions", method: http.MethodPost, pattern: "/protocol-bindings/{id}/reconcile"},
-			want:  moduleRequestBodySchemaPublished,
-		},
-		{
-			name:  "legacy run input",
-			route: moduleRoute{ns: "sessions", method: http.MethodPost, pattern: "/runs/{ref}/input"},
-			want:  moduleRequestBodySchemaPublished,
-		},
-		{
-			name:  "legacy work mutation",
-			route: moduleRoute{ns: "sessions", method: http.MethodPost, pattern: "/work-items"},
-			want:  moduleRequestBodySchemaPublished,
-		},
-		{
-			name:  "models command-like post",
-			route: moduleRoute{ns: "models", method: http.MethodPost, pattern: "/routing-policies/{id}/resolve"},
-			want:  moduleRequestBodyBodyless,
-		},
-		{
-			name:  "models delete",
-			route: moduleRoute{ns: "models", method: http.MethodDelete, pattern: "/routing-policies/{id}"},
-			want:  moduleRequestBodyBodyless,
-		},
-		{
-			name:  "finops delete",
-			route: moduleRoute{ns: "finops", method: http.MethodDelete, pattern: "/budgets/{id}"},
-			want:  moduleRequestBodyBodyless,
-		},
-		{
-			name:  "compliance opaque JSON",
-			route: moduleRoute{ns: "compliance", method: http.MethodPost, pattern: "/aims/pack"},
-			want:  moduleRequestBodyOpaque,
-		},
-		{
-			name:  "knowledge opaque NDJSON",
-			route: moduleRoute{ns: "knowledge", method: http.MethodPost, pattern: "/memory/import"},
-			want:  moduleRequestBodyOpaque,
-		},
-		{
 			name:  "unknown mutation",
 			route: moduleRoute{ns: "unknown", method: http.MethodPatch, pattern: "/future"},
+			want:  moduleRequestBodyUnclassified,
+		},
+		{
+			name: "documented opaque body",
+			route: moduleRoute{ns: "unknown", method: http.MethodPost, pattern: "/import", documentation: &ModuleOperationDocumentation{
+				BodyKind: ModuleOperationOpaqueBody, RequestBody: oas.Obj("content", oas.Obj("application/x-ndjson", oas.Obj("schema", oas.Obj()))),
+			}},
+			want: moduleRequestBodyOpaque,
+		},
+		{
+			name:  "opaque kind without its body",
+			route: moduleRoute{ns: "unknown", method: http.MethodPost, pattern: "/import", documentation: &ModuleOperationDocumentation{BodyKind: ModuleOperationOpaqueBody}},
 			want:  moduleRequestBodyUnclassified,
 		},
 	}
@@ -130,8 +140,8 @@ func TestModuleRequestBodyDispositionSentinels(t *testing.T) {
 func TestModuleRequestBodyDispositionMutantsReportExactMessages(t *testing.T) {
 	t.Parallel()
 
-	minimalBody := oaObj(
-		"content", oaObj("application/json", oaObj("schema", oaObj())),
+	minimalBody := oas.Obj(
+		"content", oas.Obj("application/json", oas.Obj("schema", oas.Obj())),
 	)
 	tests := []struct {
 		name string
@@ -140,22 +150,22 @@ func TestModuleRequestBodyDispositionMutantsReportExactMessages(t *testing.T) {
 	}{
 		{
 			name: "missing extension",
-			op:   oaObj(),
+			op:   oas.Obj(),
 			want: "mutation has no x-olivares-request-body-disposition",
 		},
 		{
 			name: "schema disposition without body",
-			op:   oaObj(moduleRequestBodyDispositionExtension, string(moduleRequestBodySchemaPublished)),
+			op:   oas.Obj(moduleRequestBodyDispositionExtension, string(moduleRequestBodySchemaPublished)),
 			want: "schema-published operation must declare requestBody",
 		},
 		{
 			name: "opaque disposition without body",
-			op:   oaObj(moduleRequestBodyDispositionExtension, string(moduleRequestBodyOpaque)),
+			op:   oas.Obj(moduleRequestBodyDispositionExtension, string(moduleRequestBodyOpaque)),
 			want: "opaque-body operation must declare requestBody",
 		},
 		{
 			name: "bodyless disposition with body",
-			op: oaObj(
+			op: oas.Obj(
 				moduleRequestBodyDispositionExtension, string(moduleRequestBodyBodyless),
 				"requestBody", minimalBody,
 			),
@@ -163,7 +173,7 @@ func TestModuleRequestBodyDispositionMutantsReportExactMessages(t *testing.T) {
 		},
 		{
 			name: "unclassified disposition with body",
-			op: oaObj(
+			op: oas.Obj(
 				moduleRequestBodyDispositionExtension, string(moduleRequestBodyUnclassified),
 				"requestBody", minimalBody,
 			),
@@ -171,17 +181,17 @@ func TestModuleRequestBodyDispositionMutantsReportExactMessages(t *testing.T) {
 		},
 		{
 			name: "unknown disposition",
-			op:   oaObj(moduleRequestBodyDispositionExtension, "future-kind"),
+			op:   oas.Obj(moduleRequestBodyDispositionExtension, "future-kind"),
 			want: "mutation has unsupported x-olivares-request-body-disposition value \"future-kind\"",
 		},
 		{
 			name: "invented opaque properties",
-			op: oaObj(
+			op: oas.Obj(
 				moduleRequestBodyDispositionExtension, string(moduleRequestBodyOpaque),
-				"requestBody", oaObj(
-					"content", oaObj(
-						"application/json", oaObj(
-							"schema", oaObj("type", "object", "properties", oaObj("invented", oaObj())),
+				"requestBody", oas.Obj(
+					"content", oas.Obj(
+						"application/json", oas.Obj(
+							"schema", oas.Obj("type", "object", "properties", oas.Obj("invented", oas.Obj())),
 						),
 					),
 				),
@@ -198,20 +208,6 @@ func TestModuleRequestBodyDispositionMutantsReportExactMessages(t *testing.T) {
 			}
 		})
 	}
-}
-
-func moduleRouteFromOperationKey(method, path string) (moduleRoute, bool) {
-	relative := strings.TrimPrefix(path, "/v1/m/")
-	if relative == path || relative == "" {
-		return moduleRoute{}, false
-	}
-	namespace, pattern, found := strings.Cut(relative, "/")
-	if !found {
-		pattern = "/"
-	} else {
-		pattern = "/" + pattern
-	}
-	return moduleRoute{ns: namespace, method: method, pattern: pattern}, namespace != ""
 }
 
 func moduleRequestBodyDispositionProblem(op map[string]any) string {

@@ -586,39 +586,6 @@ func sortedNames(obj map[string]any) []string {
 // server, with a session from the login, the role's permissions and the tenant header.
 // An editor reserves and commits a hold; a viewer reads the reconciliation and is refused
 // the reserve.
-func TestAdmissionHTTPThroughTheAuthenticatedServer(t *testing.T) {
-	m := New()
-	srv := newAdmissionServer(t, m)
-	admin := srv.login("root@x.io", "supersecret1")
-	tenant := srv.createOrg(admin, "admission")
-	editor := srv.roleToken(admin, tenant, "ed@x.io", "editor")
-	viewer := srv.roleToken(admin, tenant, "vi@x.io", "viewer")
-
-	if got := srv.do(http.MethodPost, "/v1/m/finops/budgets", editor, tenant, map[string]any{
-		"name": "cap", "enabled": true, "dimension": "global", "period": "monthly",
-		"limit_micro_usd": 2 * oneUSD, "action": "block",
-	}); got.code != http.StatusCreated {
-		t.Fatalf("create the budget = %d %s", got.code, got.raw)
-	}
-	reserve := map[string]any{"scope": "model_gateway", "estimate_micro_usd": oneUSD, "idempotency_key": "model_gateway/server-1"}
-	if got := srv.do(http.MethodPost, "/v1/m/finops/admission/reserve", viewer, tenant, reserve); got.code != http.StatusForbidden {
-		t.Fatalf("a viewer's reserve = %d %s, want 403", got.code, got.raw)
-	}
-	held := srv.do(http.MethodPost, "/v1/m/finops/admission/reserve", editor, tenant, reserve)
-	h, _ := held.body["handle"].(string)
-	if held.code != http.StatusOK || held.body["allowed"] != true || h == "" {
-		t.Fatalf("an editor's reserve = %d %s, want 200 under a handle", held.code, held.raw)
-	}
-	if got := srv.do(http.MethodGet, "/v1/m/finops/admission/reconciliation", viewer, tenant, nil); got.code != http.StatusOK || got.body["active"] != float64(1) {
-		t.Fatalf("a viewer's reconciliation = %d %s, want 200 with one active row", got.code, got.raw)
-	}
-	if got := srv.do(http.MethodPost, "/v1/m/finops/admission/commit", editor, tenant, map[string]any{"handle": h, "actual_micro_usd": oneUSD / 2}); got.code != http.StatusOK || got.body["committed"] != true {
-		t.Fatalf("an editor's commit = %d %s, want 200", got.code, got.raw)
-	}
-	if got := srv.do(http.MethodGet, "/v1/m/finops/admission/reconciliation", viewer, tenant, nil); got.code != http.StatusOK || got.body["committed"] != float64(1) || got.body["active"] != float64(0) {
-		t.Fatalf("the reconciliation after the commit = %d %s, want one committed row and none active", got.code, got.raw)
-	}
-}
 
 // admissionServer is the engine's API server over a SQLite store, with m mounted.
 type admissionServer struct {

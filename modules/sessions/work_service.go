@@ -50,7 +50,7 @@ func (d tenantWorkData) Mutate(ctx context.Context, fn func(store.Scope) error) 
 }
 
 func (m *Module) workData(tenant model.TenantID) workData {
-	return tenantWorkData{data: m.data, tenant: tenant}
+	return tenantWorkData{data: m.Data, tenant: tenant}
 }
 
 // Validate performs the same syntactic, referential, FSM and policy checks as
@@ -208,11 +208,11 @@ func (m *Module) preflightContent(ctx context.Context, tenant model.TenantID, cm
 	if len(content) == 0 {
 		return nil
 	}
-	if m.workContent == nil {
+	if m.WorkContent == nil {
 		return unknown("policy_unavailable", nil)
 	}
 	for _, item := range content {
-		decision, err := m.workContent.Inspect(ctx, tenant, cmd.WorkspaceID, item.kind, []byte(item.text))
+		decision, err := m.WorkContent.Inspect(ctx, tenant, cmd.WorkspaceID, item.kind, []byte(item.text))
 		if err != nil {
 			return unknown("policy_unavailable", err)
 		}
@@ -460,7 +460,7 @@ func workCommandPermission(command string) string {
 }
 
 func (m *Module) checkParticipant(ctx context.Context, tenant model.TenantID, workspace model.ID, kind, ref string) error {
-	if m.workIdentity == nil {
+	if m.WorkIdentity == nil {
 		return unknown("evidence_unavailable", nil)
 	}
 	// Inside a prepared replay the owner was resolved before the owning
@@ -538,7 +538,7 @@ func (m *Module) revalidateAgentWorkOwnerInScope(
 	if !needsFence {
 		return nil
 	}
-	checker, ok := m.workIdentity.(WorkAgentEligibilityInScope)
+	checker, ok := m.WorkIdentity.(WorkAgentEligibilityInScope)
 	if !ok {
 		return unknown("evidence_unavailable", store.ErrRowLockUnavailable)
 	}
@@ -699,7 +699,7 @@ func (m *Module) validateAgentWorkAuthorityInView(
 		}
 		return nil
 	}
-	validator, ok := m.workIdentity.(WorkAgentAuthorityReadValidator)
+	validator, ok := m.WorkIdentity.(WorkAgentAuthorityReadValidator)
 	if !ok {
 		return unknown("evidence_unavailable", nil)
 	}
@@ -722,7 +722,7 @@ func (m *Module) observeAgentWorkAuthority(
 	cmd *WorkCommand,
 	ownerRef string,
 ) error {
-	checker, ok := m.workIdentity.(WorkAgentEligibilityInScope)
+	checker, ok := m.WorkIdentity.(WorkAgentEligibilityInScope)
 	if !ok {
 		return unknown("evidence_unavailable", store.ErrRowLockUnavailable)
 	}
@@ -857,7 +857,7 @@ func (m *Module) preflightIdentity(
 			if cmd.HolderAgentRef != "" && cmd.HolderAgentRef != ownerRef {
 				return broken(http.StatusUnprocessableEntity, "owner_ineligible")
 			}
-			matcher, ok := m.workIdentity.(WorkAuthenticatedAgentMatcher)
+			matcher, ok := m.WorkIdentity.(WorkAuthenticatedAgentMatcher)
 			if !ok {
 				return unknown("evidence_unavailable", nil)
 			}
@@ -913,10 +913,10 @@ func (m *Module) preflightIdentity(
 		if cmd.HolderAgentRef != "" && cmd.HolderAgentRef != ownerRef {
 			return broken(http.StatusUnprocessableEntity, "owner_ineligible")
 		}
-		if m.workIdentity == nil {
+		if m.WorkIdentity == nil {
 			return unknown("evidence_unavailable", nil)
 		}
-		acts, err := m.workIdentity.SessionActsForAgent(ctx, tenant, cmd.HolderSID, ownerRef)
+		acts, err := m.WorkIdentity.SessionActsForAgent(ctx, tenant, cmd.HolderSID, ownerRef)
 		if err != nil {
 			return unknown("evidence_unavailable", err)
 		}
@@ -1046,10 +1046,10 @@ func (m *Module) preflightIdentity(
 					return err
 				}
 			}
-			if m.workIdentity == nil {
+			if m.WorkIdentity == nil {
 				return unknown("evidence_unavailable", nil)
 			}
-			acts, err := m.workIdentity.SessionActsForAgent(ctx, tenant, cmd.HolderSID, ownerRef)
+			acts, err := m.WorkIdentity.SessionActsForAgent(ctx, tenant, cmd.HolderSID, ownerRef)
 			if err != nil {
 				return unknown("evidence_unavailable", err)
 			}

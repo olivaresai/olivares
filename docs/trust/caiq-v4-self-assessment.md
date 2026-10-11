@@ -97,7 +97,7 @@ Scope note: Olivares enforces product RBAC and tenant isolation and integrates w
 | Control area | Posture | Evidence |
 |---|---|---|
 | RBAC, tenant isolation, and access observability | Implemented | `docs/SECURITY-HARDENING.md:108-117`; `modules/compliance/frameworks.go:1373-1377`; `README.md:85-89` |
-| Single-IdP SSO and enterprise multi-IdP boundary | Partial | `LICENSING.md`; `cmd/olivares/wire_noenterprise.go:46-70` |
+| Single-IdP SSO and Business: Identity & Scale multi-IdP boundary | Partial | [Editions](../editions.md); `LICENSING.md`; `cmd/olivares/wire_noenterprise.go:46-70` |
 | User accounts (no cap in any edition) | Implemented | `LICENSING.md`; `core/auth/seatcap.go:48-78`; `core/auth/seatcap.go:154-174`; `cmd/olivares/wire_noenterprise.go:87-98` |
 
 ## IPY — Interoperability & Portability

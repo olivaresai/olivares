@@ -48,7 +48,7 @@ command -v python3 >/dev/null || cannot "no python3"
 ERR="$(mktemp "${TMPDIR:-/tmp}/c1305.XXXXXX")" || cannot "cannot create a scratch file"
 trap 'rm -f "$ERR" "$ERR.out"' EXIT
 set +e
-[ -r "$ROOT/scripts/module-catalog-go.sh" ] || cannot "falta scripts/module-catalog-go.sh: sin el envoltorio del derivador no hay con qué comparar (un 127 no es un veredicto)"
+[ -r "$ROOT/scripts/module-catalog-go.sh" ] || cannot "missing scripts/module-catalog-go.sh: the derivation wrapper is required for comparison (exit 127 is not a result)"
 bash "$ROOT/scripts/module-catalog-go.sh" check >"$ERR.out" 2>"$ERR"
 rc=$?
 set -e
@@ -59,7 +59,7 @@ set -e
 case "$rc" in
 0 | 1 | 2) ;;
 *)
-	say "check-c13-05-catalog-diverge-prep: COULD NOT LOOK — la derivación salió con un código que su contrato no define ($rc):" >&2
+	say "check-c13-05-catalog-diverge-prep: COULD NOT LOOK — derivation returned an exit code its contract does not define ($rc):" >&2
 	cat "$ERR" >&2 || true
 	exit 2
 	;;
@@ -115,7 +115,7 @@ if data.get("schema") != "c13-05-catalog-diverge-prep/v2":
 if data.get("source") != "design/PRICING-CANON.md":
     fail("the record still names a source that is not the canon: %r" % data.get("source"))
 if data.get("sold_map_is_canon_derived") is not True:
-    fail("sold_map_is_canon_derived must be true; that is what this lote delivered")
+    fail("sold_map_is_canon_derived must be true; that is what this batch delivered")
 if data.get("packaging_hold_retired") is not True:
     fail("packaging_hold_retired must be true")
 if data.get("hub_tier_card_is_not_overlay") is not True:

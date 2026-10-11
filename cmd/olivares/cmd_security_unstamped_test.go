@@ -95,10 +95,10 @@ func runCheckProcess(t *testing.T, args ...string) (string, int) {
 // TestUnstampedBuildIsNeverReportedClean is death #1: the original P0. An unstamped build
 // checked against an advisory with a REAL "introduced" used to print "no known advisory
 // affects this version" and exit 0 — the sentence an operator pastes into an audit. The
-// feed here is the one that produced it (introduced 26.5.0, above the zero version), so a
+// feed here is the one that produced it (introduced 1.500, above the zero version), so a
 // mutant that re-fabricates the CLEAN half dies HERE and names that half.
 func TestUnstampedBuildIsNeverReportedClean(t *testing.T) {
-	feedPath, pub := writeSignedFeedRange(t, t.TempDir(), "GHSA-fixture-clean", "26.5.0", "26.7.2")
+	feedPath, pub := writeSignedFeedRange(t, t.TempDir(), "GHSA-fixture-clean", "1.500", "1.702")
 	out, code := runCheckProcess(t, "--feed", feedPath, "--pubkey", pub)
 
 	if strings.Contains(out, "no known advisory affects this version") {
@@ -119,7 +119,7 @@ func TestUnstampedBuildIsNeverReportedClean(t *testing.T) {
 // which is precisely what made the old verdict meaningless. A mutant that lets the zero
 // version fall through to the range compare dies HERE naming the AFFECTED half.
 func TestUnstampedBuildIsNeverReportedAffected(t *testing.T) {
-	feedPath, pub := writeSignedFeedRange(t, t.TempDir(), "GHSA-fixture-affected", "0", "26.7.2")
+	feedPath, pub := writeSignedFeedRange(t, t.TempDir(), "GHSA-fixture-affected", "0", "1.702")
 	out, code := runCheckProcess(t, "--feed", feedPath, "--pubkey", pub)
 
 	if strings.Contains(out, "AFFECTED") {
@@ -139,23 +139,23 @@ func TestUnstampedBuildIsNeverReportedAffected(t *testing.T) {
 // honest label, so both verdict directions are pinned here.
 func TestStampedBuildStillGetsARealVerdict(t *testing.T) {
 	t.Run("affected", func(t *testing.T) {
-		feedPath, pub := writeSignedFeedRange(t, t.TempDir(), "GHSA-fixture-hit", "0", "26.7.2")
-		out, code := runCheckProcess(t, "--feed", feedPath, "--pubkey", pub, "--product-version", "26.7.0")
+		feedPath, pub := writeSignedFeedRange(t, t.TempDir(), "GHSA-fixture-hit", "0", "1.702")
+		out, code := runCheckProcess(t, "--feed", feedPath, "--pubkey", pub, "--product-version", "1.700")
 		if code == exitcode.Indeterminate {
-			t.Fatalf("26.7.0 is a real, orderable version and must get a verdict, not an abstention:\n%s", out)
+			t.Fatalf("1.700 is a real, orderable version and must get a verdict, not an abstention:\n%s", out)
 		}
 		if code != exitcode.Degraded || !strings.Contains(out, "AFFECTED") {
-			t.Fatalf("26.7.0 is inside [0,26.7.2) and must report AFFECTED with exit %d, got %d:\n%s", exitcode.Degraded, code, out)
+			t.Fatalf("1.700 is inside [0,1.702) and must report AFFECTED with exit %d, got %d:\n%s", exitcode.Degraded, code, out)
 		}
 	})
 	t.Run("clean", func(t *testing.T) {
-		feedPath, pub := writeSignedFeedRange(t, t.TempDir(), "GHSA-fixture-miss", "0", "26.6.0")
-		out, code := runCheckProcess(t, "--feed", feedPath, "--pubkey", pub, "--product-version", "26.7.0")
+		feedPath, pub := writeSignedFeedRange(t, t.TempDir(), "GHSA-fixture-miss", "0", "1.600")
+		out, code := runCheckProcess(t, "--feed", feedPath, "--pubkey", pub, "--product-version", "1.700")
 		if code == exitcode.Indeterminate {
-			t.Fatalf("26.7.0 is a real, orderable version and must get a verdict, not an abstention:\n%s", out)
+			t.Fatalf("1.700 is a real, orderable version and must get a verdict, not an abstention:\n%s", out)
 		}
 		if code != exitcode.OK || !strings.Contains(out, "no known advisory affects this version") {
-			t.Fatalf("26.7.0 is past the 26.6.0 fix and must report CLEAN with exit 0, got %d:\n%s", code, out)
+			t.Fatalf("1.700 is past the 1.600 fix and must report CLEAN with exit 0, got %d:\n%s", code, out)
 		}
 	})
 }
@@ -166,7 +166,7 @@ func TestStampedBuildStillGetsARealVerdict(t *testing.T) {
 // has (--product-version; there is no --current-version here, whatever the upgrade path
 // calls its own).
 func TestAbstentionNamesItsCauseAndItsWayOut(t *testing.T) {
-	feedPath, pub := writeSignedFeedRange(t, t.TempDir(), "GHSA-fixture-msg", "26.5.0", "26.7.2")
+	feedPath, pub := writeSignedFeedRange(t, t.TempDir(), "GHSA-fixture-msg", "1.500", "1.702")
 	out, _ := runCheckProcess(t, "--feed", feedPath, "--pubkey", pub)
 
 	for _, want := range []string{
@@ -192,7 +192,7 @@ func TestAbstentionNamesItsCauseAndItsWayOut(t *testing.T) {
 // form of "silence reads as clean". Exit 8 alone is not enough: whoever reads the log has
 // to find a sentence there.
 func TestQuietCannotSilenceTheAbstention(t *testing.T) {
-	feedPath, pub := writeSignedFeedRange(t, t.TempDir(), "GHSA-fixture-quiet", "26.5.0", "26.7.2")
+	feedPath, pub := writeSignedFeedRange(t, t.TempDir(), "GHSA-fixture-quiet", "1.500", "1.702")
 	out, code := runCheckProcess(t, "--feed", feedPath, "--pubkey", pub, "--quiet")
 
 	if code != exitcode.Indeterminate {
@@ -202,8 +202,8 @@ func TestQuietCannotSilenceTheAbstention(t *testing.T) {
 		t.Fatalf("--quiet silenced the abstention; an empty log reads as clean:\n%s", out)
 	}
 	// And --quiet must still do its actual job on a real, unaffected version.
-	safe, safePub := writeSignedFeedRange(t, t.TempDir(), "GHSA-fixture-quiet-ok", "0", "26.6.0")
-	out, code = runCheckProcess(t, "--feed", safe, "--pubkey", safePub, "--product-version", "26.7.0", "--quiet")
+	safe, safePub := writeSignedFeedRange(t, t.TempDir(), "GHSA-fixture-quiet-ok", "0", "1.600")
+	out, code = runCheckProcess(t, "--feed", safe, "--pubkey", safePub, "--product-version", "1.700", "--quiet")
 	if code != exitcode.OK || strings.TrimSpace(out) != "" {
 		t.Fatalf("--quiet on an unaffected real version should print nothing and exit 0, got %d:\n%s", code, out)
 	}
@@ -217,7 +217,7 @@ func TestQuietCannotSilenceTheAbstention(t *testing.T) {
 // what exit 2 has always meant. Collapsing them would make a fleet sweep read an operator
 // typo as an uncheckable build.
 func TestNonSemverStampAbstainsButATypedOneIsAUsageError(t *testing.T) {
-	feedPath, pub := writeSignedFeedRange(t, t.TempDir(), "GHSA-fixture-sha", "0", "26.7.2")
+	feedPath, pub := writeSignedFeedRange(t, t.TempDir(), "GHSA-fixture-sha", "0", "1.702")
 	out, code := runCheckProcess(t, "--feed", feedPath, "--pubkey", pub, "--product-version", "banana")
 	if code != exitcode.Usage {
 		t.Errorf("a typed non-version should be a usage error (exit %d), got %d:\n%s", exitcode.Usage, code, out)
@@ -249,9 +249,9 @@ func TestNonSemverStampAbstainsButATypedOneIsAUsageError(t *testing.T) {
 // it had never been read. Same lie as the unstamped build, one level down — the command
 // reporting a measurement it did not make.
 func TestUnreadableAdvisoryBlocksACleanVerdict(t *testing.T) {
-	// "26.5.0.1" has four numeric components, so the range cannot be ordered.
-	feedPath, pub := writeSignedFeedRange(t, t.TempDir(), "GHSA-fixture-unreadable", "26.5.0.1", "26.7.2")
-	out, code := runCheckProcess(t, "--feed", feedPath, "--pubkey", pub, "--product-version", "26.7.0")
+	// "1.500.1" has four numeric components, so the range cannot be ordered.
+	feedPath, pub := writeSignedFeedRange(t, t.TempDir(), "GHSA-fixture-unreadable", "1.500.1", "1.702")
+	out, code := runCheckProcess(t, "--feed", feedPath, "--pubkey", pub, "--product-version", "1.700")
 
 	if strings.Contains(out, "no known advisory affects this version") {
 		t.Fatalf("an advisory that was never read was counted as checked (exit %d):\n%s", code, out)
@@ -272,7 +272,7 @@ func TestUnreadableAdvisoryBlocksACleanVerdict(t *testing.T) {
 func TestUnreadableAdvisoryDoesNotHideAConfirmedHit(t *testing.T) {
 	dir := t.TempDir()
 	hit := writeMixedFeed(t, dir)
-	out, code := runCheckProcess(t, "--feed", hit.path, "--pubkey", hit.pub, "--product-version", "26.7.0")
+	out, code := runCheckProcess(t, "--feed", hit.path, "--pubkey", hit.pub, "--product-version", "1.700")
 
 	if code != exitcode.Degraded {
 		t.Fatalf("a confirmed hit must still exit %d, got %d:\n%s", exitcode.Degraded, code, out)
@@ -287,7 +287,7 @@ func TestUnreadableAdvisoryDoesNotHideAConfirmedHit(t *testing.T) {
 
 type mixedFeed struct{ path, pub string }
 
-// writeMixedFeed signs a feed with one advisory that definitely matches 26.7.0 and one
+// writeMixedFeed signs a feed with one advisory that definitely matches 1.700 and one
 // whose range cannot be ordered — the case where the two answers must coexist.
 func writeMixedFeed(t *testing.T, dir string) mixedFeed {
 	t.Helper()
@@ -305,7 +305,7 @@ func writeMixedFeed(t *testing.T, dir string) mixedFeed {
 		}
 	}
 	feed := secadvisory.NewFeed("security@olivares.ai", time.Date(2026, 8, 7, 12, 0, 0, 0, time.UTC),
-		[]secadvisory.Advisory{mk("GHSA-fixture-hit-real", "0", "26.7.2"), mk("GHSA-fixture-unread", "26.5.0.1", "26.9.0")})
+		[]secadvisory.Advisory{mk("GHSA-fixture-hit-real", "0", "1.702"), mk("GHSA-fixture-unread", "1.500.1", "1.900")})
 	fb, sig, err := feed.Sign(priv)
 	if err != nil {
 		t.Fatalf("Sign: %v", err)

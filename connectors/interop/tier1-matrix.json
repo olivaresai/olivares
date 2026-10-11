@@ -53,18 +53,6 @@
       "verification": "fixture-only",
       "conformance": null,
       "last_verified": null
-    },
-    {
-      "connector": "pagerduty",
-      "surface": "PagerDuty Events v2 alerting output",
-      "vendor": "PagerDuty",
-      "api_version": "Events API v2",
-      "auth_modes": ["routing key"],
-      "cloud_limits": "pagerduty.com",
-      "tier": "tier2",
-      "verification": "fixture-only",
-      "conformance": null,
-      "last_verified": null
     }
   ]
 }

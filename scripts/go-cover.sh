@@ -10,14 +10,13 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${ROOT}"
 
-# ⛔ TERCERA RESPUESTA: sin `go.work` no se midió NINGUNA cobertura. Salir 1 lo cuenta como
-#    «la cobertura falló», que es un veredicto sobre el código; lo cierto es que no se pudo mirar
-#    —cwd equivocado, árbol a medio clonar—. Y lo mismo con cero módulos: un barrido que no
-#    encuentra nada NO es un árbol sin código.
-[ -f go.work ] || { echo "go-cover: ⛔ NO HE PODIDO MIRAR — no hay go.work en ${ROOT}; no se midió ninguna cobertura." >&2; exit 2; }
+# Third answer: without go.work no coverage was measured (wrong cwd or partial
+# clone). rc 1 would falsely judge the code. Zero modules is likewise not proof of
+# an empty codebase: report an unperformed check.
+[ -f go.work ] || { echo "go-cover: ⛔ COULD NOT LOOK — no go.work in ${ROOT}; no coverage was measured." >&2; exit 2; }
 
 mapfile -t MODULES < <(go work edit -json | sed -n 's/.*"DiskPath": "\(.*\)".*/\1/p')
-[ "${#MODULES[@]}" -gt 0 ] || { echo "go-cover: ⛔ NO HE PODIDO MIRAR — go.work no declara ningún módulo; no se midió ninguna cobertura." >&2; exit 2; }
+[ "${#MODULES[@]}" -gt 0 ] || { echo "go-cover: ⛔ COULD NOT LOOK — go.work declares no modules; no coverage was measured." >&2; exit 2; }
 
 COVER_DIR="$(mktemp -d "${TMPDIR:-/tmp}/olivares-cover.XXXXXX")"
 trap 'rm -rf "${COVER_DIR}"' EXIT

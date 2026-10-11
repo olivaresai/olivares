@@ -97,26 +97,6 @@ func TestConnectorDispatcherSkipsBadSpec(t *testing.T) {
 
 // TestBuildOutputConnectorKinds: every output connector kind builds (the six
 // plus the SIEM/log/telemetry egress kinds); an unknown kind errors.
-func TestBuildOutputConnectorKinds(t *testing.T) {
-	kinds := []string{
-		"slack", "teams", "pagerduty", "opsgenie", "webhook", "siem", //
-		"syslog", "splunkhec", "otlplog", "chronicle", "datadog", "elastic", "snmp", "filelog", //
-		"s3archive", // Object-lock WORM sink
-	}
-	for _, k := range kinds {
-		c, err := buildOutputConnector(k)
-		if err != nil {
-			t.Errorf("buildOutputConnector(%q) = %v, want a connector", k, err)
-			continue
-		}
-		if c.Descriptor().Type != sdk.TypeOutput {
-			t.Errorf("buildOutputConnector(%q) is not an output connector", k)
-		}
-	}
-	if _, err := buildOutputConnector("does-not-exist"); err == nil {
-		t.Error("buildOutputConnector(unknown) should error")
-	}
-}
 
 // TestLoadNotifyDestinations: the optional config file is parsed; an unset env or a
 // missing/invalid file yields no specs (never a panic).

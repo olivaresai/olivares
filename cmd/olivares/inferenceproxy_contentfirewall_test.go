@@ -18,6 +18,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/olivaresai/olivares/cmd/olivares/internal/inferencepep"
 	claudeapi "github.com/olivaresai/olivares/connectors/claude-api"
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
@@ -33,18 +34,18 @@ func (contentFirewallStubInspector) Inspect(context.Context, claudeapi.ContentIn
 
 func TestInferenceProxyContentFirewallRecorderKeepsTheFirstAttachment(t *testing.T) {
 	var unset *messagesInspectorBinding
-	unset.record(&inferenceProxyDecider{inspector: contentFirewallStubInspector{}})
+	unset.record(&inferencepep.Decider{Inspector: contentFirewallStubInspector{}})
 	if got := unset.ContentFirewallState(); got != inferenceproxy.ContentFirewallUnobserved {
 		t.Fatalf("nil recorder state = %s, want unobserved", got)
 	}
 	cases := []struct {
 		name  string
-		first *inferenceProxyDecider
+		first *inferencepep.Decider
 		want  inferenceproxy.ContentFirewallState
 	}{
 		{"no proxy", nil, inferenceproxy.ContentFirewallPEPNotComposed},
-		{"proxy without inspector", &inferenceProxyDecider{}, inferenceproxy.ContentFirewallInspectorAbsent},
-		{"proxy with inspector", &inferenceProxyDecider{inspector: contentFirewallStubInspector{}}, inferenceproxy.ContentFirewallInspectorAttached},
+		{"proxy without inspector", &inferencepep.Decider{}, inferenceproxy.ContentFirewallInspectorAbsent},
+		{"proxy with inspector", &inferencepep.Decider{Inspector: contentFirewallStubInspector{}}, inferenceproxy.ContentFirewallInspectorAttached},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -57,8 +58,8 @@ func TestInferenceProxyContentFirewallRecorderKeepsTheFirstAttachment(t *testing
 				t.Fatalf("state = %s, want %s", got, tc.want)
 			}
 			b.record(nil)
-			b.record(&inferenceProxyDecider{})
-			b.record(&inferenceProxyDecider{inspector: contentFirewallStubInspector{}})
+			b.record(&inferencepep.Decider{})
+			b.record(&inferencepep.Decider{Inspector: contentFirewallStubInspector{}})
 			if got := b.ContentFirewallState(); got != tc.want {
 				t.Fatalf("state after later records = %s, want the first record %s", got, tc.want)
 			}
@@ -68,7 +69,7 @@ func TestInferenceProxyContentFirewallRecorderKeepsTheFirstAttachment(t *testing
 
 func TestInferenceProxyContentFirewallRecorderConcurrentRecordAndRead(t *testing.T) {
 	b := &messagesInspectorBinding{}
-	dec := &inferenceProxyDecider{inspector: contentFirewallStubInspector{}}
+	dec := &inferencepep.Decider{Inspector: contentFirewallStubInspector{}}
 	start := make(chan struct{})
 	var wg sync.WaitGroup
 	for i := 0; i < 8; i++ {
@@ -130,7 +131,7 @@ func TestInferenceProxyContentFirewallBuilderRecordsEveryNilReturn(t *testing.T)
 			t.Setenv("OLIVARES_CONTENT_FIREWALL_CONFIG", "")
 			tc.config(t)
 			b := &messagesInspectorBinding{}
-			srv, err := buildClaudeMessagesProxyServer(&engine{contentFirewall: b}, discardLog())
+			srv, err := buildClaudeMessagesProxyServer(&engine{contentFirewall: b}, discardLog(), "https://console.example.test")
 			if srv != nil {
 				t.Fatalf("server = %+v, want none", srv)
 			}
@@ -249,7 +250,7 @@ func TestInferenceProxyContentFirewallStatusWithoutAProxyThroughTheEngineWrapper
 	if got := estate.state(t); got != inferenceproxy.ContentFirewallUnobserved {
 		t.Fatalf("state before the builder = %s, want unobserved", got)
 	}
-	srv, err := buildClaudeMessagesProxyServer(estate.eng, discardLog())
+	srv, err := buildClaudeMessagesProxyServer(estate.eng, discardLog(), "https://console.example.test")
 	if err != nil || srv != nil {
 		t.Fatalf("builder = (%v, %v), want no proxy and no error", srv, err)
 	}
@@ -266,7 +267,7 @@ func TestInferenceProxyContentFirewallStatusReportsTheProxyTheBuilderReturned(t 
 	if got := estate.state(t); got != inferenceproxy.ContentFirewallUnobserved {
 		t.Fatalf("state before the builder = %s, want unobserved", got)
 	}
-	srv, err := buildClaudeMessagesProxyServer(estate.eng, discardLog())
+	srv, err := buildClaudeMessagesProxyServer(estate.eng, discardLog(), "https://console.example.test")
 	if err != nil {
 		t.Fatalf("builder: %v", err)
 	}
@@ -308,7 +309,7 @@ func TestInferenceProxyContentFirewallContractMatchesTheModuleStates(t *testing.
 // each no-proxy return records nil, and construction errors record nothing.
 func TestInferenceProxyContentFirewallBuilderRecordsTheDeciderItServes(t *testing.T) {
 	fset := token.NewFileSet()
-	file, err := parser.ParseFile(fset, "inferenceproxy.go", nil, 0)
+	file, err := parser.ParseFile(fset, "inferenceproxyserver.go", nil, 0)
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}

@@ -41,7 +41,7 @@ hostbar. Sie brauchen dafür keine Control Plane, und wir tun nicht so, als wär
 | Dimension | LLM-Gateway + Observability | Olivares AI |
 |---|---|---|
 | **Betrachtungseinheit** | Ein Modellaufruf (Prompt → Completion) | Ein Agent und jede Ressource, die er liest/schreibt — DBs, Object-Stores, MCP, Tools, Dateien |
-| **Beobachtungspunkt** | **Im Request-Pfad** (Proxy/SDK); sieht, was die App sendet | **Out of Band, read-first**; beobachtet Telemetrie, natives Audit und einen Kernel-Backstop — nie im Datenpfad |
+| **Beobachtungspunkt** | **Im Request-Pfad** (Proxy/SDK); sieht, was die App sendet | **Beobachtung außerhalb des Datenpfads** von Telemetrie, nativem Audit und einem Kernel-Backstop; **Inline-Durchsetzung** für geregelte Aktionen |
 | **Source of Truth** | Was die App/der Proxy **berichtet** | Selbstberichtete Telemetrie **abgeglichen gegen das eigene Ledger des Systems** — pgAudit (read vs. write), CloudTrail (Object-Zugriff), eBPF-Backstop |
 | **Die Schlüsselfrage** | „Was hat dieser Prompt getan, und was hat er gekostet?“ | „Nutzt dieser Agent Zugriff, den **niemand gewährt** hat?“ — [Permitted-vs-Observed-Drift](/de/explanation/#die-access-map-read-first-minimal-data-permitted-vs-observed) |
 | **Enforcement** | Gateway kann **Modellaufrufe** gaten (Keys, Budgets) | Deny-closed Gates auf **Aktionen und Ressourcenzugriff**: Freigaben, der [Claude-Code-Hooks-PEP](/de/how-to/connectors/claude-code-hooks-pep/), MCP-Tool-Gating, Kill Switches |
@@ -57,10 +57,18 @@ warum das die erste unserer drei Bahnen ist.
 
 ## Es heißt „und“, nicht „oder“ — wir ingestieren Ihre Telemetrie
 
-Olivares AI ist **kein** Ersatz für Ihr Gateway oder Ihr Tracing-Tool und will nicht in
-dem Request-Pfad sitzen, den diese belegen. Es **konsumiert dasselbe Signal**: Die Control
-Plane ingestiert **OpenTelemetry-GenAI**-Spans gemäß Semantic Convention — dieselbe
-GenAI-Telemetrie, die diese Tools emittieren und konsumieren. Eine gesunde Anordnung ist also:
+Die Access Map konsumiert OpenTelemetry-GenAI-Spans gemäß Semantic Convention
+aus Ihrem Gateway oder Tracing-Tool. Modellaufrufe nutzen Olivares AIs Inline-
+Inferenz-Proxy nicht standardmäßig; dieser setzt Regeln für durchgeleitete Aufrufe
+durch, neben den MCP-tools/call- und A2A-Delegations-Gates auf ihren jeweiligen Pfaden.
+
+Verwaltete Claude-Code-Sitzungen installieren Tool-Aufruf-Hooks, die den standardmäßig
+bereitgestellten Engine-PEP aufrufen. Diese Hooks arbeiten inline und deny-closed:
+Ist der PEP während eines Ausfalls oder Neustarts unerreichbar, wird jeder geregelte
+Tool-Aufruf verweigert. Die Engine-Verfügbarkeit zählt deshalb auch dann, wenn
+Modellaufrufe direkt an einen Provider gehen.
+
+So nutzen Sie den Beobachtungspfad neben Ihrem bestehenden Stack:
 
 - Behalten Sie **LiteLLM** als Ihr Modell-Gateway und **Langfuse** für entwicklerorientiertes
   Tracing und Prompt-Arbeit.

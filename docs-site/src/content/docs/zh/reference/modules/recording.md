@@ -38,8 +38,7 @@ description: >-
   重放转而通过会话的账本窗口将它们关联起来。
 - 在一个**活跃（active）**会话上，最后一个周期性锚点之后的帧仅由链尾约束，直到下一个锚点
   或 seal；`verify` 会报告 `anchored_through`，使该边界明确，绝不靠暗示。
-- 它**不实现**任何清除（purge）和任何法务保留（legal hold）—— 删除由保留/法务保留拥有；
-  账本锚点在任何清除中都得以存续。
+- 合规模块支持 `privileged-session-recording` 的保留计划和按类别的法务保留。帧是仅追加证据，因此**清除不可用**。录制的 `retention_days` 仅供参考；`retention_enforced` 保持 false，不承诺自动删除。
 - 这是 **agentops 治理面板**用于逐会话 I/O 录制的录制子系统：每个被桥接的 Claude Code
   帧都被折叠进同一套哈希链式、锚定到账本的模式中。
 

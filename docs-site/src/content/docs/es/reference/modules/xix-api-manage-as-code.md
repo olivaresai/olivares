@@ -7,6 +7,9 @@ description: >-
   los límites honestos de cada uno.
 ---
 
+> La API REST sigue disponible en Community. El proveedor Terraform es un artefacto de despliegue Business; su código fuente y paquetes se distribuyen por el canal Business.
+
+
 El módulo XIX no es una funcionalidad atornillada al motor — **es** la superficie del motor.
 Cualquier otro módulo alcanza el mundo exterior a través de la misma API de primera parte, y
 la UI web es una capa de presentación sobre ese mismo contrato exacto, no uno paralelo. Esta

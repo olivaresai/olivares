@@ -9,20 +9,20 @@ set -u -o pipefail
 
 NAME='test-console-func-l8-mutants'
 cannot() {
-	printf '%s: NO PUDE MIRAR — %s\n' "$NAME" "$*" >&2
+	printf '%s: CANNOT INSPECT — %s\n' "$NAME" "$*" >&2
 	exit 2
 }
 
 _olivares_git_env="$(cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")" && pwd)/lib/git-env.sh"
 # shellcheck source=/dev/null
-. "$_olivares_git_env" || cannot "no puedo cargar $_olivares_git_env (aislamiento git-env)"
+. "$_olivares_git_env" || cannot "cannot load $_olivares_git_env (git-env isolation)"
 unset _olivares_git_env
 
 for command_name in git bash perl mktemp cp cmp tail tr; do
-	command -v "$command_name" >/dev/null 2>&1 || cannot "$command_name no está disponible"
+	command -v "$command_name" >/dev/null 2>&1 || cannot "$command_name is unavailable"
 done
 
-ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || cannot 'no resuelvo la raíz del repositorio'
+ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || cannot 'cannot resolve the repository root'
 ORACLE="$ROOT/scripts/check-console-func-l8.sh"
 API_GO="$ROOT/modules/inferenceproxy/api.go"
 DEVICE_GO="$ROOT/modules/inferenceproxy/devicegrant.go"
@@ -36,11 +36,11 @@ ADMISSION="$ROOT/web/src/features/model-ops/admission.tsx"
 FILES=("$API_GO" "$DEVICE_GO" "$INFERENCE" "$GPAI" "$MODELS" "$SANDBOX" "$EVALS" "$DOCUMENTS" "$ADMISSION")
 
 for required in "$ORACLE" "${FILES[@]}"; do
-	[ -r "$required" ] || cannot "no leo $required"
+	[ -r "$required" ] || cannot "cannot read $required"
 done
 
-TMP=$(mktemp -d "${TMPDIR:-/tmp}/console-func-l8-mutants.XXXXXX") || cannot 'mktemp falló'
-[ -d "$TMP" ] || cannot 'mktemp no devolvió un directorio'
+TMP=$(mktemp -d "${TMPDIR:-/tmp}/console-func-l8-mutants.XXXXXX") || cannot 'mktemp failed'
+[ -d "$TMP" ] || cannot 'mktemp did not return a directory'
 
 snapshot_name() {
 	printf '%s' "$1" | tr '/.' '__'
@@ -63,12 +63,12 @@ cleanup_on_exit() {
 	local original_rc=$?
 	trap - EXIT HUP INT TERM
 	if ! restore_all || ! assert_restored; then
-		printf '%s: NO PUDE MIRAR — cleanup no restauró bytes exactos; temporal %s\n' \
+		printf '%s: CANNOT INSPECT — cleanup did not restore exact bytes; temporary directory %s\n' \
 			"$NAME" "$TMP" >&2
 		exit 2
 	fi
 	if ! rm -rf -- "$TMP"; then
-		printf '%s: NO PUDE MIRAR — no retiro el temporal restaurado %s\n' "$NAME" "$TMP" >&2
+		printf '%s: CANNOT INSPECT — cannot remove restored temporary directory %s\n' "$NAME" "$TMP" >&2
 		exit 2
 	fi
 	exit "$original_rc"
@@ -77,7 +77,7 @@ trap cleanup_on_exit EXIT
 trap 'exit 2' HUP INT TERM
 
 for file in "${FILES[@]}"; do
-	cp "$file" "$TMP/$(snapshot_name "$file")" || cannot 'no creo el snapshot completo'
+	cp "$file" "$TMP/$(snapshot_name "$file")" || cannot 'cannot create the complete snapshot'
 done
 
 replace_once() {
@@ -95,20 +95,20 @@ run_oracle() {
 
 run_mutant() {
 	local label=$1 file=$2 old=$3 new=$4 rc actual
-	restore_all || cannot "no restauro antes del mutante $label"
+	restore_all || cannot "cannot restore before mutant $label"
 	if ! replace_once "$file" "$old" "$new"; then
-		cannot "el mutante $label no aplicó exactamente una vez"
+		cannot "mutant $label was not applied exactly once"
 	fi
 	if run_oracle "$TMP/$label.log"; then rc=0; else rc=$?; fi
 	actual=$(tail -n 1 "$TMP/$label.log")
-	if [ "$rc" -ne 1 ] || [ "$actual" != 'console-func-l8: ROTO — L8_FOCAL_CONTRACT: falló una aserción funcional focal' ]; then
-		printf '%s: NO PUDE MIRAR — mutante %s: rc=%s, cierre inesperado\n' "$NAME" "$label" "$rc" >&2
+	if [ "$rc" -ne 1 ] || [ "$actual" != 'console-func-l8: FAIL — L8_FOCAL_CONTRACT: a focused functional assertion failed' ]; then
+		printf '%s: CANNOT INSPECT — mutant %s: rc=%s, unexpected closing message\n' "$NAME" "$label" "$rc" >&2
 		cat "$TMP/$label.log" >&2
 		exit 2
 	fi
-	restore_all || cannot "no restauro después del mutante $label"
-	assert_restored || cannot "el mutante $label no restauró bytes exactos"
-	printf '%s: MUERDE %s\n' "$NAME" "$label"
+	restore_all || cannot "cannot restore after mutant $label"
+	assert_restored || cannot "mutant $label did not restore exact bytes"
+	printf '%s: DETECTED %s\n' "$NAME" "$label"
 }
 
 run_mutant config-server-aal "$API_GO" \
@@ -154,23 +154,23 @@ run_mutant admission-tightening-confirm "$ADMISSION" \
 	'if (needsConfirm) {' \
 	'if (false) {'
 
-restore_all || cannot 'no restauro antes del control final'
+restore_all || cannot 'cannot restore before the final control'
 if ! run_oracle "$TMP/final-green.log"; then
-	printf '%s: NO PUDE MIRAR — el control final limpio no quedó verde\n' "$NAME" >&2
+	printf '%s: CANNOT INSPECT — the clean final control did not pass\n' "$NAME" >&2
 	cat "$TMP/final-green.log" >&2
 	exit 2
 fi
-expected_green='console-func-l8: FUNCIONA — AAL3, GPAI, modelos, sandbox, evals y documentos verificados'
-[ "$(tail -n 1 "$TMP/final-green.log")" = "$expected_green" ] || cannot 'mensaje final verde inesperado'
+expected_green='console-func-l8: PASS — AAL3, GPAI, models, sandbox, evals, and documents verified'
+[ "$(tail -n 1 "$TMP/final-green.log")" = "$expected_green" ] || cannot 'unexpected final passing message'
 
 MISSING="$TMP/no-web"
 if OLIVARES_L8_WEB_DIR="$MISSING" bash "$ORACLE" >"$TMP/cannot.log" 2>&1; then rc=0; else rc=$?; fi
-expected_cannot="console-func-l8: NO PUDE MIRAR — no leo $MISSING/package.json"
+expected_cannot="console-func-l8: COULD NOT CHECK — cannot read $MISSING/package.json"
 if [ "$rc" -ne 2 ] || [ "$(tail -n 1 "$TMP/cannot.log")" != "$expected_cannot" ]; then
-	printf '%s: NO PUDE MIRAR — el control rc2 no conservó código y mensaje exactos\n' "$NAME" >&2
+	printf '%s: CANNOT INSPECT — the rc2 control did not preserve the exact code and message\n' "$NAME" >&2
 	cat "$TMP/cannot.log" >&2
 	exit 2
 fi
 
-assert_restored || cannot 'la batería terminó con bytes distintos'
-printf '%s: FUNCIONA — 14/14 mutantes mordieron, rc0/rc1/rc2 y restauración byte-exacta\n' "$NAME"
+assert_restored || cannot 'the test ended with different bytes'
+printf '%s: PASS — 14/14 mutants detected, rc0/rc1/rc2 and byte-for-byte restoration\n' "$NAME"

@@ -12,8 +12,10 @@ Olivares AI speaks gRPC in two places, and they point in opposite directions:
   the REST surface for callers that prefer a typed stub. The REST contract in the
   [API reference](/reference/api/) remains the broader of the two.
 - **The plugin wire contract** (`olivares.sdk.v1.*`) — the versioned contract every
-  out-of-process connector and module speaks. This is the one you implement when you
+  out-of-process connector speaks. This is the one you implement when you
   [build a connector](/how-to/build-a-connector/) in a language other than Go.
+  (A module service pair exists on the frozen wire but is deprecated and was never
+  served; modules run in-process.)
 
 This page is **generated from the registration tables the servers hand to gRPC**, not from
 the `.proto` files. That distinction is the point: a `.proto` edited without regenerating
@@ -79,9 +81,9 @@ Defined in `olivaresv1/v1.proto`; 3 rpc.
 
 | Method | Full method | Kind | Request | Response | What it does |
 |---|---|---|---|---|---|
-| `Log` | `/olivares.sdk.v1.HostService/Log` | unary | `LogRecord` | `Empty` | Writes one structured log record through the engine, so an out-of-process module logs where an in-process one does. |
-| `Publish` | `/olivares.sdk.v1.HostService/Publish` | unary | `Event` | `Empty` | Publishes one event onto the engine's bus on behalf of an out-of-process module. |
-| `Subscribe` | `/olivares.sdk.v1.HostService/Subscribe` | server-streaming | `SubscribeRequest` | `Event` (stream) | Streams bus events to the module, filtered by the event types it asks for. An empty filter means every type. |
+| `Log` | `/olivares.sdk.v1.HostService/Log` | unary | `LogRecord` | `Empty` | Deprecated with the out-of-process module transport, which was never wired: nothing serves HostService. Would have written one structured log record through the engine, so an out-of-process module logs where an in-process one does. |
+| `Publish` | `/olivares.sdk.v1.HostService/Publish` | unary | `Event` | `Empty` | Deprecated with the out-of-process module transport, which was never wired: nothing serves HostService. Would have published one event onto the engine's bus on behalf of an out-of-process module. |
+| `Subscribe` | `/olivares.sdk.v1.HostService/Subscribe` | server-streaming | `SubscribeRequest` | `Event` (stream) | Deprecated with the out-of-process module transport, which was never wired: nothing serves HostService. Would have streamed bus events to the module, filtered by the event types it asked for; an empty filter meant every type. |
 
 ### `olivares.sdk.v1.IngestService`
 
@@ -97,10 +99,10 @@ Defined in `olivaresv1/v1.proto`; 4 rpc.
 
 | Method | Full method | Kind | Request | Response | What it does |
 |---|---|---|---|---|---|
-| `Describe` | `/olivares.sdk.v1.ModuleService/Describe` | unary | `Empty` | `DescribeResponse` | Returns the module's descriptor: its identity and the configuration it accepts. |
-| `Init` | `/olivares.sdk.v1.ModuleService/Init` | unary | `InitRequest` | `Empty` | Hands the module its configuration and lets it prepare, before anything is started. |
-| `Start` | `/olivares.sdk.v1.ModuleService/Start` | unary | `Empty` | `Empty` | Starts the module's work after a successful Init. |
-| `Stop` | `/olivares.sdk.v1.ModuleService/Stop` | unary | `Empty` | `Empty` | Stops the module and lets it release what it holds. |
+| `Describe` | `/olivares.sdk.v1.ModuleService/Describe` | unary | `Empty` | `DescribeResponse` | Deprecated with the out-of-process module transport, which was never wired: no host dispenses ModuleService. Would have returned the module's descriptor: its identity and the configuration it accepts. |
+| `Init` | `/olivares.sdk.v1.ModuleService/Init` | unary | `InitRequest` | `Empty` | Deprecated with the out-of-process module transport, which was never wired: no host dispenses ModuleService. Would have handed the module its configuration and let it prepare, before anything was started. |
+| `Start` | `/olivares.sdk.v1.ModuleService/Start` | unary | `Empty` | `Empty` | Deprecated with the out-of-process module transport, which was never wired: no host dispenses ModuleService. Would have started the module's work after a successful Init. |
+| `Stop` | `/olivares.sdk.v1.ModuleService/Stop` | unary | `Empty` | `Empty` | Deprecated with the out-of-process module transport, which was never wired: no host dispenses ModuleService. Would have stopped the module and let it release what it held. |
 
 ### `olivares.sdk.v1.OutputService`
 

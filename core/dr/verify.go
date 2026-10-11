@@ -58,6 +58,9 @@ type TenantVerify struct {
 	RestoredSeq int64  `json:"restored_seq"`
 	ManifestSeq int64  `json:"manifest_seq"`
 	TipNote     string `json:"tip_note,omitempty"`
+	// restoredHash and manifestHash name the two heads when the sequence numbers
+	// agree and the hashes do not, which "restored seq 7 != manifest seq 7" hid.
+	restoredHash, manifestHash string
 }
 
 // KeyVerify is the restored audit signing key's fingerprint check.
@@ -81,6 +84,20 @@ type KeyVerify struct {
 // This is the gate the runbook's restore step blocks on: a non-OK report means
 // the restore is NOT safe (do not resume writes), with Problems listing why.
 func RestoreVerify(ctx context.Context, st store.Store, m *Manifest, auditPub ed25519.PublicKey, cpVerifier *audit.CheckpointVerifier) (*RestoreReport, error) {
+	return restoreVerify(ctx, BuildOptions{}.auditView(st), func() ([]model.TenantID, error) {
+		return enumerateTenants(ctx, st)
+	}, m, auditPub, cpVerifier)
+}
+
+// RestoreVerifyFromReader applies the same ledger, key, checkpoint, tip and
+// extra-tenant checks to an offline SQLite snapshot, without runtime admission.
+func RestoreVerifyFromReader(ctx context.Context, reader store.DRReader, m *Manifest, auditPub ed25519.PublicKey, cpVerifier *audit.CheckpointVerifier) (*RestoreReport, error) {
+	return restoreVerify(ctx, reader.ViewAudit, func() ([]model.TenantID, error) {
+		return enumerateTenantOrgs(ctx, reader.ListOrgs)
+	}, m, auditPub, cpVerifier)
+}
+
+func restoreVerify(ctx context.Context, view auditViewFunc, enumerate func() ([]model.TenantID, error), m *Manifest, auditPub ed25519.PublicKey, cpVerifier *audit.CheckpointVerifier) (*RestoreReport, error) {
 	if m == nil {
 		return nil, fmt.Errorf("dr: RestoreVerify nil manifest")
 	}
@@ -99,7 +116,7 @@ func RestoreVerify(ctx context.Context, st store.Store, m *Manifest, auditPub ed
 		if err != nil {
 			return nil, fmt.Errorf("dr: manifest tenant %q: %w", mt.Tenant, err)
 		}
-		tv, err := verifyTenant(ctx, st, t, mt, auditPub, cpVerifier, m.TipMatch)
+		tv, err := verifyTenant(ctx, view, t, mt, auditPub, cpVerifier, m.TipMatch)
 		if err != nil {
 			return nil, err
 		}
@@ -118,7 +135,7 @@ func RestoreVerify(ctx context.Context, st store.Store, m *Manifest, auditPub ed
 		}
 		if m.TipMatch == TipExact && !tv.TipOK {
 			rep.OK = false
-			rep.Problems = append(rep.Problems, fmt.Sprintf("tenant %s tip: restored seq %d != manifest seq %d", short(mt.Tenant), tv.RestoredSeq, tv.ManifestSeq))
+			rep.Problems = append(rep.Problems, fmt.Sprintf("tenant %s tip: restored seq %d hash %s != manifest seq %d hash %s", short(mt.Tenant), tv.RestoredSeq, short(tv.restoredHash), tv.ManifestSeq, short(tv.manifestHash)))
 		}
 		// A non-empty manifest chain ENTIRELY absent from the restored store is a lost
 		// chain — always a failure, in BOTH tip modes. An empty restored chain passes
@@ -151,7 +168,7 @@ func RestoreVerify(ctx context.Context, st store.Store, m *Manifest, auditPub ed
 	// strings are joined into the console's failure text (dr_handler.go), so a
 	// wrapped store error would carry its DSN there exactly as it once did through
 	// the API's error envelope.
-	storeTenants, eerr := enumerateTenants(ctx, st)
+	storeTenants, eerr := enumerate()
 	switch {
 	case errors.Is(eerr, store.ErrEnumerationNotAuthoritative):
 		rep.OK = false
@@ -188,19 +205,19 @@ func verifyAuditKey(m *Manifest, auditPub ed25519.PublicKey) KeyVerify {
 	return kv
 }
 
-func verifyTenant(ctx context.Context, st store.Store, t model.TenantID, mt TenantTip, auditPub ed25519.PublicKey, cpVerifier *audit.CheckpointVerifier, tipMode string) (TenantVerify, error) {
+func verifyTenant(ctx context.Context, view auditViewFunc, t model.TenantID, mt TenantTip, auditPub ed25519.PublicKey, cpVerifier *audit.CheckpointVerifier, tipMode string) (TenantVerify, error) {
 	tv := TenantVerify{Tenant: mt.Tenant, System: mt.System, ManifestSeq: mt.HeadSeq}
 	// Custody, not View: a restore must be provable for EVERY tenant in the bundle,
 	// including one whose service was withdrawn when the backup was taken.
-	err := st.Custody(ctx, t, func(sc store.CustodyScope) error {
-		chain, err := sc.Audit().Verify(ctx, 1)
+	err := view(ctx, t, func(log store.AuditLog) error {
+		chain, err := log.Verify(ctx, 1)
 		if err != nil {
 			return err
 		}
 		tv.ChainOK = chain.OK
 		tv.ChainReason = chain.Reason
 
-		events, err := audit.VerifyEvents(ctx, sc.Audit(), auditPub)
+		events, err := audit.VerifyEvents(ctx, log, auditPub)
 		if err != nil {
 			return err
 		}
@@ -211,7 +228,7 @@ func verifyTenant(ctx context.Context, st store.Store, t model.TenantID, mt Tena
 
 		tv.CheckpointsOK = true
 		if cpVerifier != nil && !cpVerifier.Empty() {
-			cp, err := audit.VerifyCheckpointsWith(ctx, sc.Audit(), cpVerifier)
+			cp, err := audit.VerifyCheckpointsWith(ctx, log, cpVerifier)
 			if err != nil {
 				return err
 			}
@@ -230,7 +247,7 @@ func verifyTenant(ctx context.Context, st store.Store, t model.TenantID, mt Tena
 			}
 		}
 
-		head, has, err := sc.Audit().Head(ctx)
+		head, has, err := log.Head(ctx)
 		if err != nil {
 			return err
 		}
@@ -242,6 +259,7 @@ func verifyTenant(ctx context.Context, st store.Store, t model.TenantID, mt Tena
 		// The manifest recorded events for this tenant but the restored store has
 		// none: the chain was lost (not merely truncated within RPO).
 		tv.Missing = !has && mt.HeadSeq > 0
+		tv.restoredHash, tv.manifestHash = restoredHash, mt.HeadHash
 		tv.TipOK = tv.RestoredSeq == mt.HeadSeq && restoredHash == mt.HeadHash
 		if !tv.TipOK {
 			if tipMode == TipAdvisory {

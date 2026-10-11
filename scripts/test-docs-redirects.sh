@@ -11,7 +11,7 @@
 set -uo pipefail
 ROOT="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
 GATE="$ROOT/scripts/check-docs-redirects.sh"
-TMP="$(mktemp -d "${TMPDIR:-/tmp}/docsred.XXXXXX")" || { echo "test-docs-redirects: NO HE PODIDO MIRAR — sin TMPDIR" >&2; exit 2; }
+TMP="$(mktemp -d "${TMPDIR:-/tmp}/docsred.XXXXXX")" || { echo "test-docs-redirects: COULD NOT LOOK — no TMPDIR" >&2; exit 2; }
 trap 'rm -rf "$TMP"' EXIT
 
 mkdir -p "$TMP/docs/reference" "$TMP/docs/start"
@@ -25,37 +25,37 @@ corre() { OLIVARES_DOCS_REDIRECTS="$1" OLIVARES_DOCS_CONTENT="$TMP/docs" bash "$
 
 # control positivo
 printf '/cli  /reference/cli/  301\n/quickstart  /start/quickstart/  301\n' > "$TMP/sano"
-[ "$(corre "$TMP/sano")" = 0 ] && ok "control: reglas sanas con destinos existentes -> CLEAN (0)" \
-                               || bad "el sano no salio 0"
+[ "$(corre "$TMP/sano")" = 0 ] && ok "control: valid rules with existing targets -> CLEAN (0)" \
+                               || bad "valid input did not return 0"
 
 # M1: destino inexistente -> 1
 printf '/cli  /reference/cli/  301\n/viejo  /reference/NO-EXISTE/  301\n' > "$TMP/m1"
-[ "$(corre "$TMP/m1")" = 1 ] && ok "mutante: destino inexistente es HALLAZGO (1)" \
-                             || bad "destino inexistente no salio 1"
+[ "$(corre "$TMP/m1")" = 1 ] && ok "mutant: nonexistent target is a FINDING (1)" \
+                             || bad "nonexistent target did not return 1"
 
 # M2: regla mas larga que el limite de la plataforma -> 1
 { printf '/cli  /reference/cli/  301\n/'; head -c 1200 /dev/zero | tr '\0' 'a'; printf '  /reference/cli/  301\n'; } > "$TMP/m2"
-[ "$(corre "$TMP/m2")" = 1 ] && ok "mutante: regla por encima de 1000 caracteres es HALLAZGO (1)" \
-                             || bad "regla larga no salio 1"
+[ "$(corre "$TMP/m2")" = 1 ] && ok "mutant: rule exceeding 1000 characters is a FINDING (1)" \
+                             || bad "long rule did not return 1"
 
 # M3: fichero ilegible -> 2, nunca 0
-[ "$(corre "$TMP/NO-EXISTE")" = 2 ] && ok "fichero de reglas ausente: NO HE PODIDO MIRAR (2)" \
-                                    || bad "fichero ausente no salio 2"
+[ "$(corre "$TMP/NO-EXISTE")" = 2 ] && ok "missing rules file: COULD NOT LOOK (2)" \
+                                    || bad "missing file did not return 2"
 
 # M4: fichero SOLO con comentarios -> 2, nunca 0. Cero reglas no es limpieza.
 printf '# solo comentarios\n#\n' > "$TMP/m4"
-[ "$(corre "$TMP/m4")" = 2 ] && ok "cero reglas: NO HE PODIDO MIRAR (2), no CLEAN" \
-                             || bad "cero reglas no salio 2"
+[ "$(corre "$TMP/m4")" = 2 ] && ok "zero rules: COULD NOT LOOK (2), not CLEAN" \
+                             || bad "zero rules did not return 2"
 
 # M5 (control negativo): un destino EXTERNO no se comprueba contra el arbol y no debe fallar
 printf '/cli  /reference/cli/  301\n/fuera  https://example.invalid/x  301\n' > "$TMP/m5"
-[ "$(corre "$TMP/m5")" = 0 ] && ok "control: un destino externo se salta, no es hallazgo" \
-                             || bad "destino externo salio distinto de 0"
+[ "$(corre "$TMP/m5")" = 0 ] && ok "control: external target is skipped, not a finding" \
+                             || bad "external target returned nonzero"
 
 # M6 (control negativo): el comodin :splat se normaliza y NO se lee como pagina
 printf '/cli/*  /reference/cli/:splat  301\n' > "$TMP/m6"
-[ "$(corre "$TMP/m6")" = 0 ] && ok "control: el comodin :splat no se confunde con una pagina" \
-                             || bad ":splat salio distinto de 0"
+[ "$(corre "$TMP/m6")" = 0 ] && ok "control: :splat wildcard is not mistaken for a page" \
+                             || bad ":splat returned nonzero"
 
 printf 'check-docs-redirects selftest: %s passed, %s failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ] || exit 1

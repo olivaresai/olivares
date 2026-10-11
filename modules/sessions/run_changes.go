@@ -5,6 +5,7 @@
 package sessions
 
 import (
+	"bytes"
 	"errors"
 	"io"
 	"io/fs"
@@ -28,6 +29,9 @@ import (
 // agent writes can carry repository config that runs commands (fsmonitor, clean and
 // textconv filters) and this read runs in the engine, outside the session's confinement.
 // Every read goes through os.Root, so neither a path nor a symlink leaves the folder.
+//
+// The committed side of a change (?rev=HEAD) is read the same way, without git: the
+// repository's own objects, parsed in git_head.go.
 const (
 	changesMaxListed   = 200
 	changesMaxExamined = 20000
@@ -105,9 +109,9 @@ func listChanges(root *os.Root, since time.Time) ([]changedFile, bool, error) {
 
 // readChangedFile returns one file of root as text, bounded.
 func readChangedFile(root *os.Root, rel string) (runChangedFileDTO, error) {
-	clean := path.Clean(strings.TrimPrefix(rel, "./"))
-	if rel == "" || path.IsAbs(rel) || clean == "." || clean == ".." || strings.HasPrefix(clean, "../") {
-		return runChangedFileDTO{}, fs.ErrInvalid
+	clean, err := cleanFolderPath(rel)
+	if err != nil {
+		return runChangedFileDTO{}, err
 	}
 	info, err := root.Lstat(clean)
 	if err != nil {
@@ -125,16 +129,35 @@ func readChangedFile(root *os.Root, rel string) (runChangedFileDTO, error) {
 	if err != nil {
 		return runChangedFileDTO{}, err
 	}
-	out := runChangedFileDTO{Path: clean, Size: info.Size(), Truncated: len(buf) > changesMaxFileSize}
+	return changedFileDTO(clean, info.Size(), buf), nil
+}
+
+// changedFileDTO is one file as text: the first changesMaxFileSize bytes of buf when they
+// are UTF-8 text, else just the fact that it is binary.
+func changedFileDTO(rel string, size int64, buf []byte) runChangedFileDTO {
+	out := runChangedFileDTO{Path: rel, Size: size, Truncated: len(buf) > changesMaxFileSize}
 	if out.Truncated {
 		buf = buf[:changesMaxFileSize]
 	}
-	if !utf8.Valid(buf) || strings.ContainsRune(string(buf), 0) {
+	if !utf8.Valid(buf) || bytes.IndexByte(buf, 0) >= 0 {
 		out.Binary = true
-		return out, nil
+		return out
 	}
 	out.Text = string(buf)
-	return out, nil
+	return out
+}
+
+// readHeadFile returns one file of the folder as git HEAD holds it, bounded the same way.
+func readHeadFile(root *os.Root, rel string) (runChangedFileDTO, error) {
+	clean, err := cleanFolderPath(rel)
+	if err != nil {
+		return runChangedFileDTO{}, err
+	}
+	buf, err := headBlob(root, clean)
+	if err != nil {
+		return runChangedFileDTO{}, err
+	}
+	return changedFileDTO(clean, int64(len(buf)), buf), nil
 }
 
 // runRoot opens the run's folder; a nil root means the run has no folder this node can
@@ -189,9 +212,19 @@ func (m *Module) handleRunChanges(w http.ResponseWriter, r *http.Request, mc api
 	writeJSON(w, http.StatusOK, out)
 }
 
-// handleRunChangedFile returns the current text of one file in the run's folder
-// (?path=, relative to the folder; at most 256 KiB).
+// handleRunChangedFile returns the current text of one file in the run's folder, or with
+// rev=HEAD the text git HEAD holds for it (?path=, relative to the folder; at most 256 KiB;
+// 404 when the folder has no readable git history or HEAD has no such file).
 func (m *Module) handleRunChangedFile(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
+	read := readChangedFile
+	switch rev := r.URL.Query().Get("rev"); rev {
+	case "":
+	case headRev:
+		read = readHeadFile
+	default:
+		writeJSON(w, http.StatusBadRequest, errorBody("rev must be HEAD"))
+		return
+	}
 	_, root, err := m.runRoot(r, mc)
 	if err != nil {
 		writeRunErr(w, err)
@@ -202,10 +235,14 @@ func (m *Module) handleRunChangedFile(w http.ResponseWriter, r *http.Request, mc
 		return
 	}
 	defer root.Close()
-	out, err := readChangedFile(root, r.URL.Query().Get("path"))
+	out, err := read(root, r.URL.Query().Get("path"))
 	switch {
 	case errors.Is(err, fs.ErrInvalid):
 		writeJSON(w, http.StatusBadRequest, errorBody("path must name a file inside the session's folder"))
+	case errors.Is(err, errNoRepository), errors.Is(err, errNotInHead):
+		writeJSON(w, http.StatusNotFound, errorBody(err.Error()))
+	case errors.Is(err, errHeadTooLarge):
+		writeJSON(w, http.StatusRequestEntityTooLarge, errorBody(err.Error()))
 	case err != nil:
 		writeJSON(w, http.StatusNotFound, errorBody("no such file in the session's folder"))
 	default:

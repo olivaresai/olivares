@@ -36,7 +36,7 @@ if data.get("options") != want_opts:
 if data.get("chosen") != "cmk-per-tenant":
     raise SystemExit("chosen %r, want cmk-per-tenant" % data.get("chosen"))
 if data.get("applied") is not False:
-    raise SystemExit("applied must be false (this lote does not implement SSE)")
+    raise SystemExit("applied must be false (this batch does not implement SSE)")
 for k in ("x_archive", "u_f", "u_d"):
     v = data.get(k)
     if v != "UNKNOWN":
@@ -58,12 +58,12 @@ grep -q 'SSE-S3' "$DOC" || fail "$DOC no longer names SSE-S3"
 grep -q 'shared CMK' "$DOC" || fail "$DOC no longer names shared CMK"
 grep -q 'per-tenant CMK' "$DOC" || fail "$DOC no longer names per-tenant CMK"
 if grep -qiE 'aplicamos (la )?topolog|applied in terraform|APLICADO a deploy' "$DOC"; then
-	fail "$DOC claims an apply this lote does not have"
+	fail "$DOC claims an apply this batch does not have"
 fi
 if grep -qE 'U_f[^A-Za-z0-9_].*[0-9]|u_f[^A-Za-z0-9_].*[0-9]' "$DOC"; then
 	# Allow the string UNKNOWN next to U_f; fail a numeric fill.
 	if grep -qE 'U_f[` ]*[:=][ `]*\$?[0-9]|`U_f`[ `]*[=:][ `]*[0-9]' "$DOC"; then
-		fail "$DOC filled U_f — ECO-05's job, not this lote"
+		fail "$DOC filled U_f — ECO-05's job, not this batch"
 	fi
 fi
 

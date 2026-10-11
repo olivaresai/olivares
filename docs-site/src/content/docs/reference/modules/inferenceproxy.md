@@ -58,6 +58,14 @@ platform ships.
   cannot decide must not forward), and it is not mounted unless an operator
   provisions it.
 
+The default remains the published 26.10.1<!-- release-fixed --> endpoint; existing configurations and
+client URLs need no migration. Codex hooks also default to `127.0.0.1:8448` when
+used alone. To enable both listeners, explicitly give one a different address:
+for example, set `listen` to `127.0.0.1:8450` in the file selected by
+`OLIVARES_CODEX_HOOK_PEP_CONFIG` and set the hook client's
+`OLIVARES_CODEX_HOOK_URL` to `http://127.0.0.1:8450/`. The engine refuses overlapping
+addresses before binding instead of silently relocating either endpoint.
+
 This module **decides nothing** about a live request. It is the durable,
 console-authorable policy the composition root reads via `Policy()`; the
 decision is composed from existing seams (`EvaluateModelAccess`, `CheckBudget`,

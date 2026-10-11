@@ -5,6 +5,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 # Adopter checklist — install to evidence
 
+Audit SIEM export, directory archives and external archive verification require Business. Community retains the signed ledger and `olivares audit verify`; `olivares dr backup` remains available. See [edition placement](../editions.md).
+
 Use this checklist to exercise the shortest operational path from a source checkout
 to a drift finding, a policy denial and a verified evidence export. Run the commands
 from the repository root. The demo estate is loopback-only and uses public demo

@@ -160,54 +160,6 @@ func (m *Module) handleSweep(w http.ResponseWriter, r *http.Request, mc api.Modu
 	writeJSON(w, http.StatusOK, report)
 }
 
-// sweepBreakGlass expires stored-active grants past their window and emits the
-// expiry finding AFTER commit (the "post-review required" reminder). Safety does
-// not depend on it — effectiveBreakGlassStatus already denies a lapsed grant at
-// every consume — this materializes the terminal state and notifies. On error it
-// writes the HTTP error and returns it (the caller stops).
-func (m *Module) sweepBreakGlass(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) (int, error) {
-	var expired []string
-	err := mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
-		repo, err := sc.Ext(breakGlassKind)
-		if err != nil {
-			return err
-		}
-		grants, err := listAll(r.Context(), repo, eq(colBGStatus, bgStatusActive))
-		if err != nil {
-			return err
-		}
-		now := m.clock.Now()
-		for _, g := range grants {
-			if effectiveBreakGlassStatus(g, now) != bgStatusExpired {
-				continue
-			}
-			g[colBGStatus] = bgStatusExpired
-			if _, err := repo.Update(r.Context(), g); err != nil {
-				if isConflict(err) {
-					continue // raced with a revoke/review; a later sweep revisits it
-				}
-				return err
-			}
-			expired = append(expired, g.String(model.ColID))
-		}
-		if len(expired) > 0 {
-			return auditEvent(r.Context(), sc, mc, "governance.breakglass.sweep", breakGlassKind, "", map[string]any{
-				"expired": len(expired),
-			})
-		}
-		return nil
-	})
-	if err != nil {
-		writeStoreError(w, err)
-		return 0, err
-	}
-	for _, id := range expired { // emit AFTER commit
-		m.emitBreakGlassFinding(r.Context(), mc.Tenant, findingBreakGlassExpired, id, "", sdkmodel.SeverityHigh,
-			"Break-glass grant expired — emergency window closed; post-review required before any new activation")
-	}
-	return len(expired), nil
-}
-
 // emitApprovalFinding publishes an approval escalation/expiry finding. The action
 // is hashed into DetailHash (it is operator-supplied free-ish text); the title is
 // a fixed non-sensitive template and the approval id rides SubjectRef (docs/SECURITY-HARDENING.md).

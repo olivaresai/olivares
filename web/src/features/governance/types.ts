@@ -263,6 +263,8 @@ export interface ApprovalDTO {
   action?: string
   /** WHO/WHAT asked — audit-actor string 'user:<id>'/'token:<id>', never an email. */
   requested_by?: string
+  /** The person who launched a new session, for display only; not approval authority. */
+  launched_by?: string
   /** EFFECTIVE status: pending|approved|rejected|canceled|expired. */
   status: ApprovalStatus
   required_approvals: number

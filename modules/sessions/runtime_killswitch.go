@@ -34,7 +34,7 @@ import (
 // runs under a background context (NOT Start's ctx) so it outlives the boot call, and is
 // canceled by Stop. Idempotent: a second call without a Stop is a no-op.
 func (m *Module) startStopSweep() {
-	if m.rt == nil || (m.rt.stopSweepInterval <= 0 && m.rt.sessionAccessCheck == nil) {
+	if m.rt == nil || (m.rt.stopSweepInterval <= 0 && m.rt.SessionAccessCheck == nil) {
 		return
 	}
 	m.mu.Lock()
@@ -47,7 +47,7 @@ func (m *Module) startStopSweep() {
 	interval := m.rt.stopSweepInterval
 	// Owner passes are scheduled every five seconds even when emergency-stop
 	// sweeping is disabled. Keep one timer and preserve the kill-switch cadence.
-	if m.rt.sessionAccessCheck != nil && (interval <= 0 || interval > 5*time.Second) {
+	if m.rt.SessionAccessCheck != nil && (interval <= 0 || interval > 5*time.Second) {
 		interval = 5 * time.Second
 	}
 	m.mu.Unlock()
@@ -73,7 +73,7 @@ func (m *Module) stopStopSweep() {
 func (m *Module) runStopSweep(ctx context.Context, interval time.Duration) {
 	now := time.Now()
 	var nextAccess, nextKill time.Time
-	if m.rt.sessionAccessCheck != nil {
+	if m.rt.SessionAccessCheck != nil {
 		nextAccess = now.Add(interval)
 	}
 	if m.rt.stopSweepInterval > 0 {
@@ -130,7 +130,7 @@ const ownerAccessReadGrace = 5 * time.Minute
 // locks over store reads. A proven withdrawal stops immediately; read failures
 // retry with backoff for a bounded grace. Admission still requires a valid read.
 func (m *Module) sweepSessionAccess(ctx context.Context) {
-	if m.rt.sessionAccessCheck == nil {
+	if m.rt.SessionAccessCheck == nil {
 		return
 	}
 	for _, lr := range m.rt.snapshotLive() {
@@ -142,7 +142,7 @@ func (m *Module) sweepSessionAccess(ctx context.Context) {
 			continue
 		}
 		checkCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-		scope, user, err := m.rt.sessionAccessCheck(checkCtx, lr.tenant, lr.runRef)
+		scope, user, err := m.rt.SessionAccessCheck(checkCtx, lr.tenant, lr.runRef)
 		cancel()
 		if ctx.Err() != nil {
 			return
@@ -155,7 +155,16 @@ func (m *Module) sweepSessionAccess(ctx context.Context) {
 			err = m.StopForAccessEnded(stopCtx, scope, user)
 			stopCancel()
 			if err != nil {
-				m.terminateForRuntimeAccessFailure(lr, "Access ended for "+accessLossUser(user), true)
+				m.terminateForRuntimeAccessFailure(lr, "Access ended for "+accessLossUser(user), accessStopOwnerEnded)
+			}
+			continue
+		}
+		if errors.Is(err, auth.ErrSessionCredentialExpired) {
+			stopCtx, stopCancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+			err = m.StopForCredentialExpiry(stopCtx, scope)
+			stopCancel()
+			if err != nil {
+				m.terminateForRuntimeAccessFailure(lr, auth.SessionCredentialExpiryReason, accessStopCredentialExpired)
 			}
 			continue
 		}
@@ -194,17 +203,9 @@ func (m *Module) sweepSessionAccess(ctx context.Context) {
 			lr.ownerAccessRetryAt = graceEnd
 		}
 		lr.mu.Unlock()
-		// The reader may carry store paths or credentials in its error text.
-		// Log the cause class, never that untrusted text.
-		cause := "read_failed"
-		if errors.Is(err, context.DeadlineExceeded) {
-			cause = "deadline_exceeded"
-		} else if errors.Is(err, context.Canceled) {
-			cause = "canceled"
-		}
-		m.warnf("sessions: owner access check failed", "run_ref", lr.runRef, "attempt", attempt, "cause", cause)
+		m.warnf("sessions: owner access check failed", "run_ref", lr.runRef, "attempt", attempt, "cause", errorCause(err, "read_failed"))
 		if expired {
-			m.terminateForRuntimeAccessFailure(lr, "owner access could not be checked for 5 minutes", false)
+			m.terminateForRuntimeAccessFailure(lr, "owner access could not be checked for 5 minutes", accessStopNone)
 		}
 	}
 }
@@ -220,7 +221,7 @@ func (m *Module) sweepKillSwitch(ctx context.Context) {
 		if skip {
 			continue
 		}
-		dec, err := m.rt.stopGate.Check(ctx, lr.tenant, StopDims{RunRef: lr.runRef, AgentRef: lr.agentRef})
+		dec, err := m.rt.StopGate.Check(ctx, lr.tenant, StopDims{RunRef: lr.runRef, AgentRef: lr.agentRef})
 		if err == nil && !dec.Stopped {
 			continue
 		}
@@ -275,4 +276,21 @@ func (m *Module) terminateForKillSwitch(ctx context.Context, lr *liveRun, stopRe
 		m.warnf("kill-switch sweep: runtime credential revocation incomplete", "run_ref", lr.runRef)
 	}
 	m.warnf("session terminated by kill-switch", "run_ref", lr.runRef, "stop", stopRef)
+}
+
+// errorCause is err's class for a log line. A store or authority error may carry
+// paths or credentials in its text, so only its class is logged; otherwise names
+// any other failure.
+func errorCause(err error, otherwise string) string {
+	switch {
+	case errors.Is(err, auth.ErrSessionAccessEnded):
+		return "access_ended"
+	case errors.Is(err, auth.ErrSessionCredentialExpired):
+		return "credential_expired"
+	case errors.Is(err, context.DeadlineExceeded):
+		return "deadline_exceeded"
+	case errors.Is(err, context.Canceled):
+		return "canceled"
+	}
+	return otherwise
 }

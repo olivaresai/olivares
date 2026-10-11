@@ -148,16 +148,36 @@ func (c consoleAddress) withPlan(plan webAuthnPlan) consoleAddress {
 // "reachable from": a firewall, a route or a NAT is not something this process
 // can observe.
 
-// wildcardAddressList is the DATA half: the addresses, and the sentence that says
-// what they are.
-func wildcardAddressList(c consoleAddress) string {
+// wildcardBindNotice is the statement of network exposure: what the bind accepts
+// and, outside a container, how to keep it on this host. `serve` prints it at the
+// head of the address list and `quickstart` after its own address lines, so the
+// two commands cannot word the same exposure differently (#849). Inside a
+// container a loopback bind would hide the console from the published port, so
+// the container paragraph (wildcardBindGuidance) gives the remedy instead.
+func wildcardBindNotice(c consoleAddress) string {
 	if !c.wildcard || c.Declared {
 		return ""
 	}
+	notice := "This engine accepts connections on EVERY interface of this host (0.0.0.0, and\n" +
+		"where the kernel has IPv6, ::)."
+	if !c.Container {
+		// The gRPC port is not known here, so the remedy keeps the operator's
+		// ports and names the defaults as the example.
+		notice += " To restrict it to this host, bind 127.0.0.1 on the same\n" +
+			"ports (by default --listen " + loopbackHTTPListen + " --grpc-listen " + loopbackGRPCListen + ")."
+	}
+	return notice
+}
+
+// wildcardAddressList is the DATA half: the addresses, and the sentence that says
+// what they are.
+func wildcardAddressList(c consoleAddress) string {
+	notice := wildcardBindNotice(c)
+	if notice == "" {
+		return ""
+	}
 	var b strings.Builder
-	b.WriteString("This engine accepts connections on EVERY interface of this host (0.0.0.0, and\n" +
-		"where the kernel has IPv6, ::). A bind is not an address, so the console answers\n" +
-		"at each of these:")
+	b.WriteString(notice + "\nA bind is not an address, so the console answers at each of these:")
 	if len(c.Reachable) == 0 {
 		// Enumeration failed or the host holds nothing but loopback. Say which
 		// question went unanswered rather than printing an empty list.

@@ -56,11 +56,14 @@ services:
       - --data-dir=/var/lib/olivares
       - --checkpoint-interval=1h
       - --engine=postgres
-      - --dsn=postgres://olivares_app:${OLIVARES_DB_PASSWORD:?set OLIVARES_DB_PASSWORD in .env}@postgres:5432/olivares?sslmode=disable
+      - --dsn=env:OLIVARES_DSN
       # The cross-tenant System read pool. Required for FIRST SETUP on Postgres, and
       # afterwards for the org list, multi-tenant checkpoint coverage and DR backup.
       # Distinct role, distinct credential: NOSUPERUSER BYPASSRLS and read-only.
-      - --admin-dsn=postgres://olivares_admin:${OLIVARES_ADMIN_PASSWORD:?set OLIVARES_ADMIN_PASSWORD in .env}@postgres:5432/olivares?sslmode=disable
+      - --admin-dsn=env:OLIVARES_ADMIN_DSN
+    environment:
+      OLIVARES_DSN: postgres://olivares_app:${OLIVARES_DB_PASSWORD:?set OLIVARES_DB_PASSWORD in .env}@postgres:5432/olivares?sslmode=disable
+      OLIVARES_ADMIN_DSN: postgres://olivares_admin:${OLIVARES_ADMIN_PASSWORD:?set OLIVARES_ADMIN_PASSWORD in .env}@postgres:5432/olivares?sslmode=disable
     depends_on:
       postgres:
         condition: service_healthy

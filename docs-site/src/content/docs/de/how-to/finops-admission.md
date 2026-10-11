@@ -9,6 +9,9 @@ sidebar:
   order: 21
 ---
 
+FinOps-Budgets und Ausgabenanalysen gehören zu **[Business](https://olivares.ai/pricing)**. Community behält die Kostenverfolgung pro Sitzung und den Datenexport. Vor 0.1 gespeicherte Budgets bleiben lesbar und löschbar und werden bei aktivem FinOps-Modul durchgesetzt; Community kann sie nicht erstellen oder ändern. Auswertungen und Testumgebungen bleiben in Community.
+
+
 Ein kostenpflichtiger Effekt **reserviert** seine geschätzten Ausgaben, bevor er
 läuft, und erhält **ein einziges Handle**. Ist der Effekt gelaufen, **bestätigt**
 der Aufrufer (commit) die gemessenen Kosten mit diesem Handle. Lief er nicht,

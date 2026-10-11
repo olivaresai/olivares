@@ -37,7 +37,7 @@ const draftAdvisoryFeed = `{
       "severity": [{"type": "CVSS_V3", "score": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"}],
       "affected": [{
         "package": {"ecosystem": "Go", "name": "github.com/olivaresai/olivares/cmd/olivares"},
-        "ranges": [{"type": "SEMVER", "events": [{"introduced": "0"}, {"fixed": "26.7.1"}]}]
+        "ranges": [{"type": "SEMVER", "events": [{"introduced": "0"}, {"fixed": "26.701"}]}]
       }]
     }
   ]

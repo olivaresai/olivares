@@ -44,7 +44,7 @@ self-assessment is a transcription exercise, not a discovery exercise:
 |---|---|
 | Governance/GRC, audit & assurance | [README.md](./README.md) (status, no-claims), compliance module catalog + status endpoints, `GOVERNANCE.md` |
 | Identity & access, logging & monitoring | [iso-27001-readiness.md](./iso-27001-readiness.md) rows A.5.15–A.5.18, A.8.15–A.8.16; access map drift |
-| Cryptography & key management | BYOK/CMEK envelope, FIPS build, PQC posture (`docs/SCP-09-FIPS-STIG.md`, `docs/SEC-G3-CRYPTO-AGILITY-PQC.md`) |
+| Cryptography & key management | Community BYOK/HYOK and Business CMEK envelope, FIPS build, PQC posture (`docs/SCP-09-FIPS-STIG.md`, `docs/SEC-G3-CRYPTO-AGILITY-PQC.md`) |
 | Data security & privacy lifecycle | PII discovery/DLP, RTBF (`docs/RIGHT-TO-ERASURE.md`), retention/legal hold (`docs/RECORDS-MANAGEMENT.md`), residency |
 | Change control, interoperability, infrastructure | Reference architecture, change ledger, expand-contract migrations, SIEM/ITSM interop |
 | Incident management & forensics | Ledger forensics, `docs/STATUS-AND-INCIDENT-COMMS.md`, `SECURITY.md` |

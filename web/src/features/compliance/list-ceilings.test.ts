@@ -54,8 +54,6 @@ const VISTAS = [
   'features/compliance/retention-view.tsx',
   'features/compliance/holds-view.tsx',
   'features/compliance/erasure-view.tsx',
-  'features/compliance/nis2-view.tsx',
-  'features/compliance/regops-view.tsx',
   'features/executive/executive-view.tsx',
 ]
 

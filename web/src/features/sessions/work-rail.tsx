@@ -27,7 +27,7 @@
 //    summary, then goal, then the action and resource the connector reported, then the
 //    session's own reference — and it is imported rather than re-derived, so the rail
 //    and the front door can never tell the same session two different ways.
-import { Pin } from 'lucide-react'
+import { Pin, SquareTerminal } from 'lucide-react'
 import {
   useCallback,
   useRef,
@@ -43,8 +43,8 @@ import { RelTimeLabel, humanDurationSeconds } from '@/features/shared'
 import { resolveBinding } from '@/lib/keybindings/model'
 import { KEYBINDINGS } from '@/lib/keybindings/table'
 import { cn } from '@/lib/utils'
-import { CcStateBadge } from './cc-state-badge'
-import { RunStateBadge } from '@/features/agentops/run-state-badge'
+import { toolName } from '@/features/agentops/tool-names'
+import { StateDot } from './session-state-dot'
 import {
   primaryRun,
   sessionNaming,
@@ -67,6 +67,13 @@ export interface WorkRailProps {
   /** Rendered when the estate has no sessions at all. One action, already authorized. */
   emptyAction?: ReactNode
   loading?: boolean
+}
+
+/** The tool a session runs, by its product name; null when nothing declared one. */
+function toolLabel(session: UnifiedSession): string | null {
+  const run = primaryRun(session.runs)
+  const driver = run?.provider_driver || session.live?.provider
+  return driver ? toolName(driver) : null
 }
 
 /**
@@ -121,6 +128,13 @@ function RailRow({
       .filter(Boolean)
       .join(' · ') || undefined
 
+  const tool = toolLabel(session)
+  const folderPart = folder ? (
+    <span title={run?.workspace_path} data-testid="rail-row-folder">
+      {folder}
+    </span>
+  ) : null
+
   return (
     <div
       ref={(el) => registerRef(address, el)}
@@ -130,97 +144,75 @@ function RailRow({
       data-testid="rail-row"
       data-address={address}
       onClick={() => onOpen(session)}
-      /* ⛔ TWO SHORT LINES, AND IT WAS 92 px OF THREE (measured on the seeded estate at
-         1440 and at 390). The row stacked a name, then a state badge with an elapsed
-         time and a relative time, then the observed clause, in a 256 px rail whose
-         whole job is to let an operator FIND the session they want.
+      /* ⛔ A ROW IS 52 px: tool icon, a one-line title, a second line, and on the right the
+         state as a dot and the time as a relative figure. The title is cut with an
+         ellipsis and its whole text (name, tail, reference) is on the name's hover; the
+         elapsed duration and the observed clause are on the row's own hover and are
+         painted in full by the thread this row opens. What stays on the row is what a
+         person picks a row BY. The dot has no width to lose in German, which is what the
+         old 146 px state badge did to the name.
 
-         ⛔ AND ONE LINE CUT ALL THREE. In German at 1280 px the state badge took 146 px
-         and the relative time 85, so the name got 0 px and the badge and the time were
-         cut too, with the rest on a hover title no keyboard or touch user can open. The
-         state and the time now share the first line, each whole; the name has the
-         second line to itself and wraps rather than cutting. The reading order stays
-         state, name, time: only the painting order puts the time beside the state.
-
-         WHAT MOVED, because nothing is dropped: the elapsed duration and the observed
-         clause are in this row's `title` — one hover — and both are painted in full,
-         permanently, by the narrative pane this row opens. The TABLE tab keeps them as
-         columns. What stays on the row is what an operator picks a row BY: its state,
-         its name, and how long ago it last did anything. */
+         ⛔ SELECTED IS NEUTRAL. The orange marks the one action, the focus ring and the
+         brand; "this is open" is a tonal fill, and "working" is the dot. */
       title={rowTitle}
       className={cn(
-        'group relative flex min-h-9 cursor-pointer flex-wrap items-center gap-x-1.5 gap-y-0.5 border-l-2 px-3 py-1.5 outline-none transition-colors',
-        selected
-          ? 'border-l-accent bg-accent-soft'
-          : 'border-l-transparent hover:bg-muted',
-        'focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
+        'group relative flex h-14 cursor-pointer min-[761px]:h-[52px] items-center gap-2.5 px-3 outline-none transition-colors',
+        selected ? 'bg-active' : 'hover:bg-hover',
+        'focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset',
       )}
     >
-      {pinned ? (
-        <>
-          {/* An `aria-label` on a bare <svg> is not reliably announced — the icon is
-              hidden and the WORD is what joins the row's accessible name, which for a
-              `role="option"` is composed from its contents. */}
-          {/* ⛔ THE ACCENT IS FOR SELECTION, THE PRIMARY ACTION AND LINKS — and this
-              glyph is none of the three. A pin is a state the operator put the row IN,
-              so it is painted in the muted register every other state mark on this line
-              uses; the ACCENT on this row means "this is the session on screen", and
-              two meanings for one colour in a 256 px rail is a rail that cannot be read
-              at a glance. This was the half of the icon-accent defect that survived a
-              round: the census that replaced the rule could not see it, because the
-              mark renders only for a pinned row and no fixture pinned one. */}
-          <Pin
-            className="size-3 shrink-0 text-muted-foreground"
-            aria-hidden="true"
-          />
-          <span className="sr-only">{t('rail.pinnedMark')}</span>{' '}
-        </>
-      ) : null}
-      {session.live || run ? (
+      <SquareTerminal
+        aria-hidden="true"
+        className="size-4 shrink-0 text-text-3"
+      />
+      <span className="flex min-w-0 flex-1 flex-col justify-center">
         <span
-          data-slot="rail-row-state"
-          className="inline-flex shrink-0 whitespace-nowrap"
+          data-testid="rail-row-name"
+          title={nameTitle}
+          className="min-w-0 truncate text-body font-medium text-text"
         >
-          {/* A launched session's state is its run's (one state, as in the header). */}
-          {run ? (
-            <RunStateBadge state={run.state} className="whitespace-nowrap" />
-          ) : session.live ? (
-            <CcStateBadge
-              state={session.live.cc_state}
-              className="whitespace-nowrap"
-            />
+          {pinned ? (
+            <>
+              {/* An `aria-label` on a bare <svg> is not reliably announced: the icon is
+                  hidden and the WORD joins the row's accessible name, which for a
+                  `role="option"` is composed from its contents. A pin is a state the
+                  operator put the row in, so it is painted in the muted register: the
+                  accent is not a second meaning in a 300 px list. */}
+              <Pin
+                className="mr-1 inline size-3 align-[-1px] text-muted-foreground"
+                aria-hidden="true"
+              />
+              <span className="sr-only">{t('rail.pinnedMark')}</span>{' '}
+            </>
+          ) : null}
+          <WorkClause text={naming.name} live={session.live} />
+          {naming.shortId ? (
+            <span className="font-mono text-caption text-text-3">
+              {' '}
+              {naming.shortId}
+            </span>
           ) : null}
         </span>
-      ) : null}{' '}
-      <span
-        data-testid="rail-row-name"
-        title={nameTitle}
-        className="order-2 min-w-0 basis-full text-body font-medium text-foreground [overflow-wrap:anywhere]"
-      >
-        <WorkClause text={naming.name} live={session.live} />
-        {naming.shortId ? (
-          <span className="font-mono text-caption text-muted-foreground">
-            {' '}
-            {naming.shortId}
-          </span>
-        ) : null}
-        {folder ? (
+        {tool || folderPart ? (
           <span
-            className="font-mono text-caption text-muted-foreground"
-            title={run?.workspace_path}
-            data-testid="rail-row-folder"
+            data-testid="rail-row-meta"
+            className="min-w-0 truncate text-overline font-normal text-text-3"
           >
-            {' · '}
-            {folder}
+            {tool}
+            {tool && folderPart ? ' · ' : null}
+            {folderPart}
           </span>
         ) : null}
-      </span>{' '}
-      {session.lastActivityMs > 0 ? (
-        <RelTimeLabel
-          ts={new Date(session.lastActivityMs).toISOString()}
-          className="order-1 ml-auto shrink-0 whitespace-nowrap text-caption text-muted-foreground"
-        />
-      ) : null}
+      </span>
+      <span className="flex shrink-0 items-center gap-1.5">
+        <StateDot session={session} />
+        {session.lastActivityMs > 0 ? (
+          <RelTimeLabel
+            ts={new Date(session.lastActivityMs).toISOString()}
+            className="shrink-0 whitespace-nowrap text-overline font-normal tabular-nums text-text-3"
+          />
+        ) : null}
+      </span>
     </div>
   )
 }
@@ -310,9 +302,9 @@ export function WorkRail({
   if (!loading && sessions.length === 0) {
     return (
       <EmptyState
-        icon={<Pin />}
-        title={t('rail.emptyTitle')}
-        description={t('rail.emptyDescription')}
+        icon={<SquareTerminal />}
+        title={t('empty.title')}
+        description={t('empty.description')}
         action={emptyAction}
       />
     )
@@ -333,31 +325,26 @@ export function WorkRail({
       onKeyDown={onKeyDown}
       className="flex flex-col"
     >
-      {groups.map((group) => (
-        <div
-          key={group.id}
-          role="group"
-          aria-labelledby={`rail-group-${group.id}`}
-        >
-          <p
-            className="sticky top-0 z-10 bg-surface px-3 py-1.5 text-overline text-muted-foreground uppercase"
-            id={`rail-group-${group.id}`}
+      {groups
+        .filter((group) => group.sessions.length > 0)
+        .map((group) => (
+          <div
+            key={group.id}
+            role="group"
+            aria-labelledby={`rail-group-${group.id}`}
           >
-            {/* THE SPACE IS NOT DECORATION. This paragraph is the group's accessible
-                name (`aria-labelledby`), and without it the name is the two run
-                together — "Active0" — which is what the first live run's snapshot
-                showed. */}
-            {t(`rail.group.${group.id}`)}{' '}
-            <span className="tabular-nums">{group.sessions.length}</span>
-          </p>
-          {group.sessions.length === 0 ? (
-            // An empty section states its own sentence. A section that vanished when
-            // it emptied would move the row under the operator's cursor.
-            <p className="px-3 pb-2 text-caption text-muted-foreground">
-              {t(`rail.groupEmpty.${group.id}`)}
+            <p
+              className="sticky top-0 z-10 bg-canvas px-3 pt-4 pb-1 text-overline font-medium text-text-3"
+              id={`rail-group-${group.id}`}
+            >
+              {/* THE SPACE IS NOT DECORATION. This paragraph is the group's accessible
+                  name (`aria-labelledby`), and without it the name is the two run
+                  together: "Working1". A group with no rows is not drawn, and no
+                  sentence stands in for it. */}
+              {t(`list.group.${group.id}`)}{' '}
+              <span className="tabular-nums">{group.sessions.length}</span>
             </p>
-          ) : (
-            group.sessions.map((s) => (
+            {group.sessions.map((s) => (
               <RailRow
                 key={s.key}
                 session={s}
@@ -368,10 +355,9 @@ export function WorkRail({
                 registerRef={registerRef}
                 shared={shared}
               />
-            ))
-          )}
-        </div>
-      ))}
+            ))}
+          </div>
+        ))}
     </div>
   )
 }

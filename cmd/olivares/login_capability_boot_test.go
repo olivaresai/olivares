@@ -141,7 +141,7 @@ func lastDurableAuditEvent(t *testing.T, st store.Store) (model.AuditEvent, map[
 // operator recovery is still recorded on a build that does not carry the component.
 func TestLoginCapabilityClassifierIsTheAuthSlice(t *testing.T) {
 	t.Parallel()
-	linked := loginEnforcementComponentLinked()
+	linked := thisEdition.loginEnforcementLinked
 	for _, value := range []string{"", "on", "1", "true", "off", "0", "false", "no", "disabled", "DISABLED", " Off "} {
 		b := newLoginCapabilityBoot(loginCapEnv(value), "v-test")
 		want := auth.ClassifyLoginComponent(linked, loginEnforcementDisabled(value))
@@ -363,7 +363,7 @@ func TestLoginCapabilityUndeclaredStateRefusesPromotion(t *testing.T) {
 // linked legs are qualified on the private matrix, which compiles the other predicate.
 func requireAbsentBuild(t *testing.T) {
 	t.Helper()
-	if loginEnforcementComponentLinked() {
+	if thisEdition.loginEnforcementLinked {
 		t.Skip("this artifact links the login-enforcement component; the absent-follower cases belong to the build that does not")
 	}
 }
@@ -386,7 +386,7 @@ func requireAbsentBuild(t *testing.T) {
 // The isolation is UNCONDITIONAL, and that is deliberate:
 //
 //   - The open tree has no predicate for "this build installs process-scoped license
-//     sources". loginEnforcementComponentLinked() is NOT one. Reading it as one is
+//     sources". thisEdition.loginEnforcementLinked is NOT one. Reading it as one is
 //     exactly the conflation that let an add-on-free commercial cut abort this suite
 //     while every case passed alone: there, the artifact does not link the login
 //     component AND does install the process-scoped sources, and only the first half
@@ -584,7 +584,7 @@ func TestLoginCapabilityBootPromotesPristineStaging(t *testing.T) {
 // policy the enterprise wiring actually installs. It runs only where the predicate is
 // true, which is the private matrix.
 func TestLoginCapabilityBootRecordsTheLinkedArtifact(t *testing.T) {
-	if !loginEnforcementComponentLinked() {
+	if !thisEdition.loginEnforcementLinked {
 		t.Skip("this artifact does not link the login-enforcement component; the linked leg belongs to the build that does")
 	}
 	if isolateBootCaller(t) {
@@ -691,7 +691,7 @@ func TestLoginCapabilityInstallAssertsAgainstTheWiredPolicy(t *testing.T) {
 	t.Parallel()
 	st := loginCapStore(t)
 	authn := auth.NewAuthenticator(st, nil)
-	fed := auth.NewFederationService(st, nil, newFederationBuilder(), newFederation(loginCapEnv(""), slog.Default()), newFederationMultiIDP())
+	fed := auth.NewFederationService(st, nil, newFederationBuilder(), newFederation(loginCapEnv(""), slog.Default()), thisEdition.federationMultiIDP.get())
 
 	// No login policy is wired here, so a Wired declaration contradicts the artifact.
 	wired := loginCapabilityBoot{state: auth.LoginComponentWired, linked: true}

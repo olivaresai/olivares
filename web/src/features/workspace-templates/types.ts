@@ -40,6 +40,7 @@ export interface TemplatePolicies {
   max_session_duration_minutes?: number
   allowed_tools?: string[]
   record_io?: boolean
+  require_truncate_protection?: boolean
 }
 
 /**
@@ -109,6 +110,6 @@ export interface ApplyTarget {
 export interface ApplyResult {
   applied: boolean
   conflicts: ApplyConflict[]
-  merged?: ApplyTarget
+  merged?: ApplyTarget & { require_truncate_protection?: boolean }
   unenforceable?: string[]
 }

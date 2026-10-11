@@ -62,10 +62,10 @@
   },
   "outcome": {
     "unknownTitle": "No state claim was made",
-    "unknownBody": "The control plane could not complete the observation. Re-read the evidence before deciding.",
+    "unknownBody": "The observation could not be completed. Refresh the evidence before deciding.",
     "brokenTitle": "The requested condition was not met",
     "brokenBody": "Review the reported code and plan before continuing.",
-    "replayed": "The control plane replayed the already committed result; it did not apply a second change."
+    "replayed": "Returned the previously committed result. No second change was applied."
   },
   "composer": {
     "title": "Compose protocol binding draft",

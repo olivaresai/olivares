@@ -228,7 +228,7 @@ func newK2LifecycleFixture(t *testing.T, name string) k2LifecycleFixture {
 	identity := &k2LifecycleIdentity{
 		base: f.resolver, ownerRef: ownerRef, condition: "eligible", authorityRevision: 1,
 	}
-	f.h.m.UseWorkIdentityResolver(identity)
+	WithWorkIdentityResolver(identity)(f.h.m)
 	driver := k2AgentToken(t, f.h, f.tenant, externalID, f.sid, auth.RoleEditor)
 
 	created := f.h.doJSON(http.MethodPost, "/v1/m/sessions/work-items?mode=apply", f.admin,

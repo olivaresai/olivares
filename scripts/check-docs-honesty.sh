@@ -29,9 +29,6 @@ set -eu
 
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 OVERVIEW="$ROOT/docs-site/src/content/docs/reference/modules/overview.md"
-GITOPS="$ROOT/deploy/gitops/README.md"
-HELM_README="$ROOT/deploy/helm/README.md"
-HELM_CHART="$ROOT/deploy/helm/olivares/Chart.yaml"
 
 fail() { echo "docs-honesty: FAIL — $1" >&2; exit 1; }
 
@@ -91,74 +88,19 @@ fi
 has -Eq '^\| \[Cost & AI FinOps\][^|]*\| live \|' "$OVERVIEW" \
   || fail "overview.md row XI (finops) must keep Actuate 'live' — budget enforcement denies at the cap with no provisioning (C3)"
 
-# ---- C6: gitops README does not claim the chart is already published --------
-[ -f "$GITOPS" ] || fail "missing $GITOPS"
-if has -q 'is published as an \*\*OCI' "$GITOPS"; then
-  fail "gitops/README.md claims the chart 'is published' — it is DRAFT (no chart-v* tag); use conditional/future wording (C6)"
+# ---- No pipe into a shell (#585) ----------------------------------------------
+# security-hardening.md and verify-a-release.md say "Never `curl | bash`": download, verify,
+# then run. No docs-site page may pipe a download into a shell, and INSTALL.md and the READMEs
+# may not pipe a branch head (unsigned, mutable) into one. INSTALL.md keeps its generic
+# installer's HTTPS convenience line on purpose: it is marked not qualified and says the pipe
+# does not pre-verify the script. Line-based: a pipe continued onto the next line is not seen.
+PIPE_SH='\|[[:space:]]*(sudo([[:space:]]+-[^[:space:]|]*)*[[:space:]]+)?(/usr)?(/bin/)?(ba|da|k|z)?sh([^[:alnum:]_.-]|$)'
+if has -rnE "(curl|wget)[[:space:]]+[^|[:space:]][^|]*$PIPE_SH" "$ROOT/docs-site/src/content/docs"; then
+  fail "a docs page pipes a download into a shell (above); show download, verify, then run"
 fi
-has -q 'will be published' "$GITOPS" \
-  || fail "gitops/README.md must state the chart 'will be published' once release-chart.yml runs (C6)"
-has -q 'Publication is \*\*unverified\*\*' "$GITOPS" \
-  || fail "gitops/README.md must state that the chart's publication is **unverified** until a chart-v* tag publishes it (C6)"
-if has -Eq 'registry path is \*\*empty\*\*|not published( to [^.]*)? yet' "$GITOPS"; then
-  fail "gitops/README.md states an absence nobody observed; the chart's publication is unverified (C6)"
+if has -nE "(curl|wget)[^|]*/(main|master)/[^|]*$PIPE_SH" "$ROOT/INSTALL.md" "$ROOT"/README*.md; then
+  fail "INSTALL.md or a README pipes a branch head into a shell (above); show download, verify, then run"
 fi
-# Body intact: the engine entry-points must survive the rewrite.
-has -q 'kustomize build --enable-helm' "$GITOPS" \
-  || fail "gitops/README.md lost the Kustomize entry point — the C6 rewrite must keep Argo/Flux/Kustomize guidance (C6)"
-
-# ---- C6b: the READMEs name the witness's Helm result (2026-09-24) --------------
-# In README.md and its six translations the chart's OCI registry state is spoken of on one line.
-# That line names the witness result, `publication-unverified`: in any language "not published
-# yet" is an absence nobody observed. Every line that mentions OCI must carry the token.
-READMES_SEEN=0
-HITS_OCI="$(mktemp)"
-for readme in "$ROOT/README.md" "$ROOT"/README.??.md; do
-  [ -f "$readme" ] || fail "missing $readme"
-  READMES_SEEN=$((READMES_SEEN + 1))
-  has -q '`publication-unverified`' "$readme" \
-    || fail "${readme#$ROOT/} must name the witness result \`publication-unverified\` on its Kubernetes line (C6b)"
-  : > "$HITS_OCI"
-  has -n 'OCI' "$readme" > "$HITS_OCI" || true
-  if has -v 'publication-unverified' "$HITS_OCI" > /dev/null; then
-    fail "${readme#$ROOT/}: a line about the chart's OCI registry state must name the witness result \`publication-unverified\` (C6b):
-$(grep -v 'publication-unverified' "$HITS_OCI")"
-  fi
-done
-rm -f "$HITS_OCI"
-[ "$READMES_SEEN" -eq 7 ] || fail "expected README.md and six translations, found $READMES_SEEN (C6b)"
-
-# ---- DIST-24-07: source chart is not a published OCI channel ----------------
-for path in "$HELM_README" "$HELM_CHART"; do
-  [ -f "$path" ] || fail "missing $path"
-done
-has -q 'its publication to the public OCI registry is \*\*unverified\*\*' "$HELM_README" \
-  || fail "deploy/helm/README.md must state its publication to the public OCI registry is **unverified** until REL-87 publishes it"
-# An absence only within its demonstrated scope: this repository published nothing. Through a
-# file, not a pipe: a pipe would hide a failing first grep behind the second one's answer.
-HITS_ABSENCE="$(mktemp)"
-has 'not published to the public OCI registry' "$HELM_README" > "$HITS_ABSENCE" || true
-if has -qv 'from this repository' "$HITS_ABSENCE"; then
-  rm -f "$HITS_ABSENCE"
-  fail "deploy/helm/README.md states an absence beyond its demonstrated scope; only this repository's publication is observed, and the registry side is unverified"
-fi
-rm -f "$HITS_ABSENCE"
-has -q 'REL-87' "$HELM_README" \
-  || fail "deploy/helm/README.md lost the named publication act REL-87"
-if has -Eq 'chart (is|has been) published( and consumed)? as an OCI artifact' "$HELM_CHART"; then
-  fail "Chart.yaml claims present-tense OCI publication before REL-87"
-fi
-has -q 'REL-87 has not published it yet' "$HELM_CHART" \
-  || fail "Chart.yaml must distinguish the planned OCI producer from live publication"
-# Its full-line comments too (2026-09-24): they are evidence about the chart and must not call it
-# published. Its YAML values (coordinates, annotations) are product data and are not read here.
-CHART_COMMENTS="$(mktemp)"
-has -E '^[[:space:]]*#' "$HELM_CHART" > "$CHART_COMMENTS" || true
-if has -Eiq 'chart( itself)? (is|has been)( still)? published' "$CHART_COMMENTS"; then
-  rm -f "$CHART_COMMENTS"
-  fail "Chart.yaml comments call the chart published; its OCI publication is unverified (DIST-24-07)"
-fi
-rm -f "$CHART_COMMENTS"
 
 # ---- supply-chain wording honesty ------------------------------------
 LIVE_FILES="$(mktemp)"
@@ -174,7 +116,6 @@ collect_live_files() {
 
   for dir in \
     "$ROOT/docs/trust" \
-    "$ROOT/docs/adr" \
     "$ROOT/docs/ai-context" \
     "$ROOT/docs/launch" \
     "$ROOT/docs-site/src/content" \
@@ -266,8 +207,8 @@ FLOOR_SRC="modules/governance/risktier.go"
 floor="$(grep -oE 'criticalApprovalFloor = [0-9]+' "$FLOOR_SRC" 2>/dev/null | grep -oE '[0-9]+$' | head -1)"
 case "$floor" in
   ''|*[!0-9]*)
-    echo "docs-honesty: no he podido leer criticalApprovalFloor en $FLOOR_SRC" >&2
-    echo "  sin el suelo del motor no puedo juzgar la copy: es NO HE PODIDO MIRAR, no un verde." >&2
+    echo "docs-honesty: could not read criticalApprovalFloor in $FLOOR_SRC" >&2
+    echo "  The engine's approval minimum is required to check the wording: COULD NOT CHECK, not a pass." >&2
     exit 2
     ;;
 esac
@@ -283,9 +224,9 @@ if [ "$floor" -lt 3 ]; then
   # Es un suelo comprobado, no un techo; el techo seria comparar SIGNIFICADO, que ningun grep hace.
   if has -rniE 'post.?review by a third|third approver|approval (from|by) a third|durch einen dritten|por un tercero|par un troisième|三人目|由第三人|третьим лицом|третьего' \
       docs-site/src/content/ docs/ web/src/ README.md; then
-    fail "hay copy publicada que promete un TERCER aprobador y el motor exige $floor
-  ($FLOOR_SRC: criticalApprovalFloor). El post-review es un recordatorio despues del commit,
-  no una aprobacion: prometerlo como control es prometer algo que no existe."
+    fail "published wording promises a third approver, but the engine requires $floor
+  ($FLOOR_SRC: criticalApprovalFloor). Post-review is a reminder after the commit,
+  rather than an approval; presenting it as a control promises a nonexistent requirement."
   fi
 fi
 
@@ -356,8 +297,7 @@ c6c_published() { # c6c_published <path from ROOT>: 0 when the export publishes 
 }
 C6C_ROOT="$(readlink -f -- "$ROOT")" || c6c_unverified "cannot resolve $ROOT"
 {
-  for f in "$ROOT/README.md" "$ROOT"/README.??.md "$ROOT/INSTALL.md" \
-      "$ROOT/deploy/helm/README.md" "$ROOT/deploy/gitops/README.md"; do
+  for f in "$ROOT/README.md" "$ROOT"/README.??.md "$ROOT/INSTALL.md"; do
     if [ -e "$f" ] || [ -L "$f" ]; then printf '%s\n' "$f"; fi
   done
   find "$ROOT/docs" \( -type f \( -name '*.md' -o -name '*.mdx' -o -name '*.txt' \) -o -type l \) -print
@@ -388,4 +328,4 @@ done < "$C6C/docs"
 [ ! -s "$C6C/hits" ] || fail "a published doc offers a remote chart command while the chart's publication is unverified (C6c):
 $(cat "$C6C/hits")"
 
-echo "docs-honesty: OK across $scanned live files (C3 modules catalog + C6 gitops README + supply-chain wording)"
+echo "docs-honesty: OK across $scanned live files (C3 modules catalog + chart publication where shipped + supply-chain wording)"

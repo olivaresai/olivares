@@ -21,7 +21,7 @@ func TestRuntimeSilentWorkOnlySessionKeepsClaimAlive(t *testing.T) {
 	ctx := context.Background()
 	runner := &fakeRunner{}
 	m, _, tenant, clk := newRuntimeHarness(t, WithRunner(runner), WithCredentialSource(staticCred()), WithRuntimeCredentialHeartbeatInterval(5*time.Millisecond))
-	created, err := m.createRun(ctx, tenant, CreateRunParams{Transport: TransportStreamJSON, Isolation: IsolationNative, Actor: "test:silent-worker", ActorKind: model.ActorUser})
+	created, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{Transport: TransportStreamJSON, Isolation: IsolationNative, Actor: "test:silent-worker", ActorKind: model.ActorUser})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -173,7 +173,7 @@ func TestRuntimeWorkSessionCredentialMintRejectsMismatchedBinding(t *testing.T) 
 		ID: "work-cred-bad", Token: "work-token-bad", SessionRef: "sid-sibling",
 		NotAfter: clk.get().Add(30 * time.Minute),
 	}}
-	m.UseWorkSessionCredentialSource(spy)
+	m.WorkSessionCreds = spy
 
 	if _, err := m.maybeMintWorkSession(
 		ctx, tenant, wantReq.RunRef, wantReq.AgentRef, lease,
@@ -210,7 +210,7 @@ func TestRuntimeWorkSessionCredentialRenewsOnlyNearExpiry(t *testing.T) {
 		t.Fatalf("claim: %v", err)
 	}
 	spy := &workSessionCredentialSpy{renewedUntil: clk.get().Add(30 * time.Minute)}
-	m.UseWorkSessionCredentialSource(spy)
+	m.WorkSessionCreds = spy
 	lr := &liveRun{
 		tenant: tenant, runRef: "run-renew", agentRef: "agent:driver", claim: lease,
 		workCredentialID:       "work-cred-renew",
@@ -261,7 +261,7 @@ func TestRuntimeWorkSessionCredentialDoesNotRenewAfterClaimHeartbeatFails(t *tes
 		t.Fatalf("claim: %v", err)
 	}
 	spy := &workSessionCredentialSpy{renewedUntil: clk.get().Add(30 * time.Minute)}
-	m.UseWorkSessionCredentialSource(spy)
+	m.WorkSessionCreds = spy
 	lr := &liveRun{
 		tenant: tenant, runRef: "run-stale-renew", agentRef: "agent:driver", claim: stale,
 		workCredentialID:       "work-cred-stale-renew",
@@ -296,7 +296,7 @@ func TestRuntimeWorkSessionCredentialRevokeRetainsHandleUntilSuccess(t *testing.
 
 	m := New()
 	spy := &workSessionCredentialSpy{revokeErrs: []error{errors.New("auth store unavailable"), nil}}
-	m.UseWorkSessionCredentialSource(spy)
+	m.WorkSessionCreds = spy
 	lr := &liveRun{
 		tenant: "tenant-revoke", runRef: "run-revoke", agentRef: "agent:driver",
 		claim:            Lease{SID: "sid-revoke", Holder: "agent:driver", Fence: 11},
@@ -342,9 +342,9 @@ func TestRuntimeWorkSessionCredentialTokenIsLaunchOnly(t *testing.T) {
 	spy := &workSessionCredentialSpy{mintCredential: WorkSessionCredential{
 		ID: "work-cred-launch", Token: rawToken, NotAfter: clk.get().Add(30 * time.Minute),
 	}}
-	m.UseWorkSessionCredentialSource(spy)
+	m.WorkSessionCreds = spy
 
-	dto, err := m.createRun(ctx, tenant, CreateRunParams{
+	dto, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative,
 		Actor: "agent:driver", ActorKind: model.ActorAgent, AgentRef: "agent:driver",
 	})
@@ -386,9 +386,9 @@ func TestRuntimeWorkSessionCredentialResumeRotatesResidualClaimBeforeEffects(t *
 		ID: "work-cred-residual", Token: "work-token-residual",
 		NotAfter: clk.get().Add(30 * time.Minute),
 	}}
-	m.UseWorkSessionCredentialSource(spy)
+	m.WorkSessionCreds = spy
 
-	created, err := m.createRun(ctx, tenant, CreateRunParams{
+	created, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative,
 		Actor: "agent:driver", ActorKind: model.ActorAgent, AgentRef: "agent:driver",
 	})

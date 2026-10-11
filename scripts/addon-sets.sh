@@ -50,12 +50,15 @@ except OSError as e:
     sys.exit(f"addon-sets: cannot read {path}: {e}")
 
 # The four self-hosted business add-ons and the short code each build tag uses.
+# PACK-COMPOSITION-BEGIN
+# Generated from commercial/pack-composition.json; commerce-lint -pack-composition=write.
 CODES = {
     "regulated": "reg",
     "ai-runtime-security": "airs",
     "compliance-packs": "cp",
     "identity-scale": "ids",
 }
+# PACK-COMPOSITION-END
 # Keys whose entries SHIP INSIDE this add-on's artifact. Enumerated, never globbed.
 SHIPS = {"modules", "modules_day_one", "modules_growth"}
 

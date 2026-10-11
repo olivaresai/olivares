@@ -20,13 +20,9 @@ vous donne les nomment séparément.
 
 | Mot | Ce que c'est |
 |---|---|
-| **Fournisseur** | Un identifiant : une clé d'API, un point de terminaison facultatif et le type auquel il appartient (`anthropic`, `openai`, `xai`, `openai_compatible`). |
+| **Fournisseur** | Une clé d'API ou un point de terminaison de modèle local, une `base_url` facultative et son type (`anthropic`, `openai`, `xai`, `gemini`, `openai_compatible`, `ollama`). |
 | **Profil de fournisseur** | Une identité sur cette machine : quelle CLI officielle tourne, et sous quel répertoire de configuration et quel répertoire personnel. |
 | **Session** | Un processus enfant lancé, sous un profil, avec l'identifiant d'un fournisseur. |
-
-Un fournisseur seul ne lance rien. Un profil sans fournisseur ne lance que si les
-variables de l'hôte se trouvent définies. Ce qui fait démarrer une session, c'est le
-lien entre les deux.
 
 ## 1. Ajoutez le fournisseur
 
@@ -38,8 +34,7 @@ lien entre les deux.
    sélecteur, et collez la clé. Laissez le point de terminaison vide sauf si vous
    pointez vers votre propre passerelle ; un fournisseur `openai_compatible` en exige
    un, car il n'y a aucun point de terminaison officiel à supposer.
-4. Confirmez. L'écriture demande une session AAL3, comme tout autre identifiant de ce
-   produit ; la console montre la cérémonie plutôt qu'un refus.
+4. Confirmez.
 
 Le moteur scelle la clé au repos et renvoie un indice de quatre caractères. **La clé
 n'est plus jamais renvoyée**, pas même juste après l'avoir écrite. Si vous la perdez,
@@ -79,10 +74,10 @@ fonctionnel. Enregistrer un identifiant est une intention ; un test est un fait.
 
 ## 3. Enregistrez un profil et liez le fournisseur
 
-Les répertoires du profil doivent déjà exister sur la machine qui exécute le plan de
-contrôle. Le serveur les valide là-bas et n'en crée jamais un qui manque : un
-répertoire vide de secours donnerait à une session une identité de fournisseur que
-personne n'a configurée.
+Les chemins de répertoires que vous indiquez doivent déjà exister sur la machine
+qui exécute le plan de contrôle. Le serveur les valide là-bas et ne crée pas les
+répertoires indiqués qui manquent : un répertoire vide de secours donnerait à une
+session une identité de fournisseur que personne n'a configurée.
 
 ```sh
 olivares agent profile create \
@@ -102,18 +97,17 @@ valeurs ne forment pas une chaîne de repli :
 - `managed_injection` : un identifiant fourni par le moteur. Avec un fournisseur lié,
   c'est celui de ce fournisseur.
 
-Il existe un raccourci en un seul verbe qui fait la détection, l'enregistrement et la
-liaison ensemble, avec les répertoires propres à ce pilote sous votre `$HOME` par
-défaut :
+Le raccourci combine la détection, l'enregistrement et la liaison au fournisseur.
+Si ni `--config-home` ni `--user-home` n'est fourni, le moteur gère les répertoires
+du profil. Sans `--provider`, il choisit le profil qu'une nouvelle session du pilote
+utiliserait ; avec `--provider`, il crée un profil avec ses propres répertoires :
 
 ```sh
 olivares agent deploy claude --provider prv_01J8ABCDEF
 ```
 
-Il rapporte quatre états qui ne sont pas le même problème : **non installé** (et il
-nomme la commande d'installation au lieu de l'exécuter), **installé**, **profil
-prêt**, **lançable**. Il n'exécute jamais de connexion fournisseur et ne crée jamais
-un répertoire manquant.
+Installez l’outil dans **Outils d’IA** avant d’utiliser ce raccourci. Il ne vous
+connecte pas à votre compte fournisseur.
 
 Pour lier (ou relier) plus tard :
 
@@ -126,12 +120,16 @@ OpenAI sur un profil Claude est un refus qui nomme les deux, au moment de la lia
 puis de nouveau au lancement — pas une session qui échoue au milieu d'une poignée de
 main.
 
-| Type de fournisseur | Pilotes qui le lisent |
-|---|---|
-| `anthropic` | `claude`, `opencode` |
-| `openai` | `codex`, `opencode` |
-| `xai` | `grok`, `opencode` |
-| `openai_compatible` | tous, avec son point de terminaison |
+| Type de fournisseur | Pilotes qui le lisent | Avec une `base_url` personnalisée |
+|---|---|---|
+| `anthropic` | `claude`, `opencode` | `claude` |
+| `openai` | `codex`, `opencode` | `codex` |
+| `xai` | `grok`, `opencode` | `grok` |
+| `gemini` | `gemini-cli` |  |
+| `openai_compatible` | `codex` | `codex` |
+| `ollama` | `codex`, `opencode` | `codex`, `opencode` |
+
+Pour `anthropic`, `openai` et `xai`, OpenCode accepte uniquement le point de terminaison du fournisseur : laissez `base_url` vide. Utilisez `codex` pour un fournisseur `openai_compatible` ; utilisez `codex` ou `opencode` pour `ollama`.
 
 ## 4. Lancez la première session
 
@@ -144,8 +142,13 @@ olivares agent session create \
 olivares agent session attach run-123
 ```
 
-`--provider-profile` est **obligatoire** : le serveur ne sélectionne implicitement ni
-profil, ni répertoire, ni environnement.
+`--provider-profile` sélectionne explicitement un profil. Lorsque les lancements
+avec profil sont activés, son omission laisse le moteur résoudre un profil pour
+Claude Code, l'outil par défaut : il réutilise ou crée un profil pour la connexion
+propre à l'outil ou, à défaut, pour un enregistrement de fournisseur compatible.
+Cela nécessite `sessions:profile:write` ; sans cette permission, sélectionnez un
+profil explicitement. Les refus lors de la résolution du profil et du lancement
+restent applicables.
 
 Depuis la console, le même chemin est **Prise en main → Agents et première session**,
 ou **Sessions → Nouvelle session**.
@@ -182,13 +185,12 @@ propre console.
 
 ## Les variables d'environnement, et où elles s'appliquent encore
 
-`OLIVARES_SESSION_RUNTIME_WIF` et `OLIVARES_SESSION_RUNTIME_TOKEN_FILE` sont
-inchangées et toujours prises en charge. Elles sont l'identifiant de tout l'hôte et
-s'appliquent à tout profil qui **ne** nomme **aucun** fournisseur.
-
-Un profil qui en nomme un utilise celui-là. La sélection la plus précise l'emporte, et
-il n'y a pas de repli depuis elle : un identifiant lié qui ne peut pas être produit
-refuse le lancement au lieu d'utiliser discrètement celui du déploiement.
+Pour les profils Claude avec `managed_injection` qui ne désignent aucun fournisseur,
+`OLIVARES_SESSION_RUNTIME_WIF` ou `OLIVARES_SESSION_RUNTIME_TOKEN_FILE` fournit
+l’identifiant d’inférence de l’hôte. Un profil lié à un fournisseur utilise son
+identifiant ; en cas d’échec, le lancement est refusé sans repli vers celui de l’hôte.
+Un profil avec `provider_account_home` utilise la connexion autorisée de l’outil
+et n’a besoin d’aucune des deux variables.
 
 ## Voir aussi
 

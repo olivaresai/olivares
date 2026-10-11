@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
@@ -37,7 +38,7 @@ func launchUnderProfileMode(t *testing.T, profileMode, launchMode string, admin 
 	if _, err := m.PatchProfile(ctx, tenant, a.Ref, ProfilePatch{SessionPermissionMode: &profileMode}); err != nil {
 		t.Fatalf("declare the profile mode: %v", err)
 	}
-	dto, err := m.createRun(ctx, tenant, CreateRunParams{
+	dto, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative,
 		PermissionMode: launchMode, ProviderProfileRef: a.Ref,
 		Actor: "user:u1", ActorKind: "user", MayRunUnrestricted: admin,
@@ -125,7 +126,7 @@ func TestATemplateNeverWidensTheNamedPreset(t *testing.T) {
 			fr := &fakeRunner{}
 			m, _, tenant, _ := newRuntimeHarness(t, WithRunner(fr), WithCredentialSource(staticCred()))
 			id := seedTemplate(t, m, tenant, "Preset template", tplBody{Settings: &tplSettings{PermissionMode: tc.template}})
-			dto, err := m.createRun(context.Background(), tenant, CreateRunParams{
+			dto, err := createProfiledTestRun(t, m, context.Background(), tenant, CreateRunParams{
 				PermissionMode: tc.chosen, TemplateID: id, Actor: "user:u1", ActorKind: "user", MayRunUnrestricted: true,
 			})
 			if err != nil {
@@ -149,7 +150,7 @@ func TestAnAllowlistTemplateRefusesANarrowerNamedPreset(t *testing.T) {
 		Settings: &tplSettings{PermissionMode: permModeDontAsk},
 		Policies: &tplPolicies{AllowedTools: []string{"Read", "Bash"}},
 	})
-	_, err := m.createRun(context.Background(), tenant, CreateRunParams{
+	_, err := createProfiledTestRun(t, m, context.Background(), tenant, CreateRunParams{
 		PermissionMode: "plan", TemplateID: id, Actor: "user:u1", ActorKind: "user",
 	})
 	if statusOf(err) != http.StatusForbidden || !strings.Contains(err.Error(), "choose edits and commands") {
@@ -169,7 +170,7 @@ func TestAResumeIntoATemplateWidenedToFullNeedsRunAdministration(t *testing.T) {
 	fr := &fakeRunner{initSID: "sess-widened"}
 	m, _, tenant, _ := newRuntimeHarness(t, WithRunner(fr), WithCredentialSource(staticCred()))
 	id := seedTemplate(t, m, tenant, "Mutable", tplBody{Settings: &tplSettings{PermissionMode: "plan"}})
-	dto, err := m.createRun(ctx, tenant, CreateRunParams{PermissionMode: "plan", TemplateID: id, Actor: "user:u1", ActorKind: "user"})
+	dto, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{PermissionMode: "plan", TemplateID: id, Actor: "user:u1", ActorKind: "user"})
 	if err != nil {
 		t.Fatalf("createRun: %v", err)
 	}
@@ -188,7 +189,7 @@ func TestAResumeIntoATemplateWidenedToFullNeedsRunAdministration(t *testing.T) {
 	before := launchCount(fr)
 	for name, resume := range map[string]func() error{
 		"a caller without run administration": func() error {
-			_, err := m.resumeRunAsCaller(ctx, tenant, dto.RunRef, "user:u1", "user", "", false, false)
+			_, err := m.resumeRunAsCaller(ctx, tenant, dto.RunRef, "user:u1", "user", "", callerAsks{})
 			return err
 		},
 		"the launch's own authority (it never ran full)": func() error {
@@ -204,7 +205,7 @@ func TestAResumeIntoATemplateWidenedToFullNeedsRunAdministration(t *testing.T) {
 		t.Fatal("a refused resume started a child")
 	}
 	// A run administrator may resume into the full template, as they may launch it.
-	if _, err := m.resumeRunAsCaller(ctx, tenant, dto.RunRef, "user:admin", "user", "", true, false); err != nil {
+	if _, err := m.resumeRunAsCaller(ctx, tenant, dto.RunRef, "user:admin", "user", "", answeredYes); err != nil {
 		t.Fatalf("an administrator's resume: %v", err)
 	}
 	if mode, _ := argvValue(fr.lastSpec().Args, "--permission-mode"); mode != "bypassPermissions" {
@@ -239,11 +240,11 @@ func TestAQueuedFullLaunchAsksTheLaunchersCurrentRunAdministration(t *testing.T)
 			if err != nil {
 				t.Fatal(err)
 			}
-			m.UseQueuedCredentialCapture(issuer.BindQueuedCredential)
-			m.UseQueuedLaunchAuthorization(func(ctx context.Context, tenant model.TenantID, credential auth.QueuedCredential, runID string, workspace model.ID) (auth.Principal, error) {
+			m.QueuedCredentialCapture = issuer.BindQueuedCredential
+			m.QueuedLaunchAuthorization = func(ctx context.Context, tenant model.TenantID, credential auth.QueuedCredential, runID string, workspace model.ID) (auth.Principal, error) {
 				return issuer.RevalidateQueuedCredential(ctx, credential)
-			})
-			queued := h.doJSON("POST", "/v1/m/sessions/runs", token, map[string]any{"name": "queued full launch", "permission_mode": permModeBypass}, tenantHdr(tenant))
+			}
+			queued := h.doJSON("POST", "/v1/m/sessions/runs", token, map[string]any{"provider_profile_ref": ensureRuntimeTestProfileRef(t, h.m, tenant), "name": "queued full launch", "permission_mode": permModeBypass}, tenantHdr(tenant))
 			if queued.code != http.StatusAccepted || launchCount(runner) != 0 {
 				t.Fatalf("queued = %d %s", queued.code, queued.raw)
 			}
@@ -287,5 +288,63 @@ func TestAQueuedFullLaunchAsksTheLaunchersCurrentRunAdministration(t *testing.T)
 				t.Fatalf("declined reason = %q, want the full-permissions sentence", reason)
 			}
 		})
+	}
+}
+
+// Root on FH 048, #371: a principal confined to one workspace does not run full, even
+// with run administration, and a live launch or resume gets the same answer as a
+// queued launch restored at its approval. The live answer asked run administration
+// only, so a confined administrator was full live and refused once queued. It asks
+// the two answers directly: over HTTP the store refuses a confined caller's launch
+// and resume earlier today (sessions.alias, sessions.run_event carry no lineage).
+func TestALiveAndAQueuedFullLaunchGiveAConfinedAdministratorTheSameAnswer(t *testing.T) {
+	ctx := t.Context()
+	m := New(WithSessionWorkspaceRoot(t.TempDir()), WithRunner(&fakeRunner{}), WithCredentialSource(staticCred()))
+	h := newHarness(t, m)
+	admin := h.adminLogin()
+	tenant := h.createOrg(admin, "confined-full")
+	var workspace model.ID
+	if err := h.st.Mutate(ctx, tenant, func(sc store.Scope) error {
+		id := model.NewID()
+		ws, err := sc.Workspaces().Create(ctx, model.Workspace{Name: id.String(), Slug: id.String(), Status: model.StatusActive})
+		workspace = ws.ID
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	issuer := auth.NewAuthenticator(h.st, nil)
+	administrator := func(email string, workspace model.ID) auth.Principal {
+		t.Helper()
+		body := map[string]any{"email": email, "password": "synthetic-password1", "tenant": tenant.String(), "role": auth.RoleAdmin}
+		if !workspace.IsZero() {
+			body["workspace_id"] = workspace.String()
+		}
+		if r := h.doJSON("POST", "/v1/users", admin, body, nil); r.code != http.StatusCreated {
+			t.Fatalf("administrator = %d %s", r.code, r.raw)
+		}
+		login := h.doJSON("POST", "/v1/auth/login", "", map[string]any{"email": email, "password": "synthetic-password1"}, nil)
+		token, _ := login.body["token"].(string)
+		p, err := issuer.Authenticate(ctx, token)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, confined := p.ConfinedWorkspaceIn(tenant); confined != !workspace.IsZero() {
+			t.Fatalf("fixture confinement of %s = %t", email, confined)
+		}
+		return p
+	}
+	for _, tc := range []struct {
+		name string
+		p    auth.Principal
+		want bool
+	}{
+		{"a tenant-wide administrator", administrator("tenant-wide@fh.invalid", ""), true},
+		{"an administrator confined to one workspace", administrator("confined@fh.invalid", workspace), false},
+	} {
+		live := m.mayRunUnrestricted(ctx, api.ModuleContext{Principal: tc.p, Tenant: tenant})
+		queued := m.principalMayRunUnrestricted(ctx, tenant, tc.p)
+		if live != tc.want || queued != tc.want {
+			t.Errorf("%s: live full = %t, queued full = %t, want both %t", tc.name, live, queued, tc.want)
+		}
 	}
 }

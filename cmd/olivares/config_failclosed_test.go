@@ -6,13 +6,16 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
 
+	"github.com/olivaresai/olivares/cmd/olivares/internal/mcpgateway"
 	"github.com/olivaresai/olivares/core/api/ratelimit"
+	"github.com/olivaresai/olivares/modules/sessions/hookpep"
 )
 
 type failClosedConfigLoaderCase struct {
@@ -43,7 +46,7 @@ func TestOperatorConfigLoadersFailClosed(t *testing.T) {
 		// The built-in hook listener binds an ephemeral loopback port without a config file.
 		{name: "hook PEP", envName: "OLIVARES_HOOK_PEP_CONFIG", load: func() (any, error) {
 			return loadHookPEPConfig(log)
-		}, empty: zero(hookPEPConfig{Listen: "127.0.0.1:0"})},
+		}, empty: zero(hookpep.Config{Listen: "127.0.0.1:0"})},
 		{name: "deploy executor", envName: "OLIVARES_DEPLOY_EXECUTOR_CONFIG", load: func() (any, error) {
 			return loadDeployExecutorConfig(log)
 		}, empty: zero(deployExecutorConfig{})},
@@ -58,16 +61,13 @@ func TestOperatorConfigLoadersFailClosed(t *testing.T) {
 		}, empty: zero(inferenceProxyConfig{})},
 		{name: "agent gateway", envName: "OLIVARES_AGENT_GATEWAY_CONFIG", load: func() (any, error) {
 			return loadAgentGatewayConfig(log)
-		}, empty: zero(agentGatewayConfig{})},
+		}, empty: zero(mcpgateway.Config{})},
 		{name: "NHI actuators", envName: "OLIVARES_NHI_ACTUATORS_CONFIG", load: func() (any, error) {
 			return loadNHIActuatorsConfig(log)
 		}, empty: zero(nhiActuatorsConfig{})},
 		{name: "notifications", envName: "OLIVARES_NOTIFY_CONFIG", load: func() (any, error) {
 			return loadNotifyDestinations(log)
 		}, empty: zero([]notifyDestinationSpec(nil))},
-		{name: "orchestration dispatch", envName: "OLIVARES_ORCH_DISPATCH_CONFIG", load: func() (any, error) {
-			return loadOrchDispatchConfig(log)
-		}, empty: zero(orchDispatchConfig{})},
 		{name: "PIV", envName: "OLIVARES_PIV_CONFIG", load: func() (any, error) {
 			return loadPIVConfig(os.Getenv, log)
 		}, empty: func(got any) bool { return reflect.ValueOf(got).IsNil() }},
@@ -214,24 +214,44 @@ func TestOperatorInlineJSONConfigFailsClosed(t *testing.T) {
 }
 
 func TestBootPropagatesInvalidSourcesConfig(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "invalid-sources.json")
-	if err := os.WriteFile(path, []byte("not-json"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("OLIVARES_SOURCES_CONFIG", path)
+	for _, tc := range []struct {
+		name   string
+		reason string
+	}{
+		{name: "missing", reason: "cannot be read"},
+		{name: "unreadable", reason: "cannot be read"},
+		{name: "invalid JSON", reason: "contains invalid JSON"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "sources.json")
+			switch tc.name {
+			case "unreadable":
+				// A directory cannot be read as a config file, even when tests run as root.
+				if err := os.Mkdir(path, 0o700); err != nil {
+					t.Fatal(err)
+				}
+			case "invalid JSON":
+				if err := os.WriteFile(path, []byte("not-json"), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			t.Setenv("OLIVARES_SOURCES_CONFIG", path)
 
-	eng, err := boot(context.Background(), bootConfig{
-		DataDir: t.TempDir(), Engine: "sqlite", DSN: ":memory:", Version: "test", Logger: discardLog(),
-	})
-	if eng != nil {
-		_ = eng.Close()
-		t.Fatal("boot returned an engine despite invalid configured sources")
-	}
-	if err == nil {
-		t.Fatal("boot must fail when configured sources contain invalid JSON")
-	}
-	if !strings.Contains(err.Error(), "load sources operator config") || !strings.Contains(err.Error(), "OLIVARES_SOURCES_CONFIG") {
-		t.Fatalf("boot error is not actionable: %v", err)
+			eng, err := boot(context.Background(), bootConfig{
+				DataDir: t.TempDir(), Engine: "sqlite", DSN: ":memory:", Version: "test", Logger: discardLog(),
+			})
+			if eng != nil {
+				_ = eng.Close()
+				t.Fatal("boot returned an engine despite invalid configured sources")
+			}
+			if err == nil {
+				t.Fatal("boot must fail when configured sources cannot be loaded")
+			}
+			want := fmt.Sprintf("load sources operator config: OLIVARES_SOURCES_CONFIG is set to %q but the file %s; refusing to start instead of silently omitting operator configuration: ", path, tc.reason)
+			if !strings.HasPrefix(err.Error(), want) {
+				t.Fatalf("boot error does not match the documented refusal: got %q, want prefix %q", err.Error(), want)
+			}
+		})
 	}
 }
 

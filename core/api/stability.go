@@ -50,37 +50,26 @@ func (t StabilityTier) minSupportWindowMonths() int {
 // code enforces; published in the OpenAPI document (info.x-stability-policy)
 // and linked from deprecation responses when an entry sets no Docs URL.
 //
-// It points at the docs ROOT on olivares.ai (2026-08-01: «ahora mismo están en
-// olivares.ai/docs … [docs.olivares.ai] es irrelevante»). It previously pointed at
-// docs.olivares.ai/reference/api-stability/, which then resolved to NOTHING: that
-// hostname routed to the web Worker, not to a build of docs-site/, so every
-// deprecated-route response shipped a dead link to whoever followed our own
-// deprecation signal.
+// It points at the documentation root on olivares.ai under 2026-08-01
+// direction: the docs were at olivares.ai/docs and docs.olivares.ai was irrelevant.
+// The previous docs.olivares.ai/reference/api-stability/ link led to the web Worker,
+// which did not serve docs-site/, so deprecation responses linked to a missing page.
 //
-// ⛔ THE PREMISE UNDER THAT CHOICE HAS EXPIRED, and this note says so rather than
-// letting the paragraph above go on reading as current. Re-measured 2026-08-27:
+// That premise expired. The 2026-08-27 measurement found:
 //
 //	https://docs.olivares.ai/reference/api-stability/   -> 200, in all 7 locales
 //	https://olivares.ai/docs/reference/api-stability    -> 404 (the apex has no depth)
 //
-// docs-site IS deployed now, as the `olivares-docs` Worker, and docs.olivares.ai serves
-// it. Both halves of the old reasoning are gone: the page no longer "exists only in the
-// undeployed docs-site", and the 13-locale cost was the cost of publishing it on the
-// MARKETING site — on the docs site it already ships in 7 locales, translated and gated.
+// docs-site was deployed as the olivares-docs Worker. The policy page shipped in
+// seven translated, gated locales; the earlier 13-locale cost concerned publishing
+// it on the marketing site, not the documentation site.
 //
-// ⚠ AND THE CONSTANT IS NOT CHANGED HERE, deliberately. Two reasons, both stated so the
-// next session decides instead of rediscovering:
-//  1. the line it would overturn carries FRAN'S WORDS. They were a statement of where
-//     the docs were, with «docs.olivares.ai es irrelevante» as the reason — and the
-//     reason is what expired. That is a re-decision worth making explicitly, not a
-//     comment refresh to slip into an unrelated lot.
-//  2. this constant is published in the OpenAPI document (info.x-stability-policy), so
-//     changing it makes `task openapi:check` demand a regenerated snapshot and typed
-//     client. Cheap, but it is a separate change with its own verification.
-//
-// ⇒ Repointing to https://docs.olivares.ai/reference/api-stability/ is one line plus that
-// regen, and it is the better link: a deprecation response should hand the reader the
-// policy, not a documentation homepage. Reported to PLAN with the measurement above.
+// Keep the constant unchanged in this cleanup. Changing recorded direction
+// requires an explicit decision now that its premise has expired. The constant also
+// appears in OpenAPI info.x-stability-policy, so changing it requires regenerated
+// snapshots and typed clients through task openapi:check, with separate verification.
+// Repointing to https://docs.olivares.ai/reference/api-stability/ would give callers
+// the policy itself instead of a documentation homepage; PLAN received that finding.
 const stabilityPolicyURL = "https://olivares.ai/docs"
 
 // RouteDeprecation declares one deprecated REST route. Method and Path use the

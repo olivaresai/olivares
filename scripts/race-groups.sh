@@ -17,6 +17,7 @@
 # Subcommands:
 #   groups              JSON array of group names (for the workflow matrix)
 #   packages <group>    the import paths that group owns, one per line
+#   split               the import paths raced by test name, a turn at a time
 #   check               the union control: every test-bearing package is owned
 #                       by exactly one group, no pattern is stale, no duplicates
 #   run <group>         go test -race over that group's packages
@@ -35,9 +36,9 @@ say() { printf 'race-groups: %s\n' "$*"; }
 fail()   { printf 'race-groups: FAIL — %s\n' "$*" >&2; exit 1; }
 cannot() { printf 'race-groups: COULD NOT LOOK — %s\n' "$*" >&2; exit 2; }
 
-[ -f "${SPEC}" ] || cannot "no encuentro ${SPEC}"
-[ -f go.work ]   || cannot "go.work no está en ${ROOT}"
-command -v go >/dev/null 2>&1 || cannot "no hay toolchain de Go: no puedo enumerar paquetes"
+[ -f "${SPEC}" ] || cannot "cannot find ${SPEC}"
+[ -f go.work ]   || cannot "go.work is absent from ${ROOT}"
+command -v go >/dev/null 2>&1 || cannot "no Go toolchain: cannot enumerate packages"
 
 # ── Enumeración: UNA sola función, la misma para `check` y para `run` ──────────
 # Un `go test ./...` en un workspace sólo cubre el módulo ACTUAL (golang/go#50745),
@@ -48,7 +49,7 @@ enumerate() {
   while IFS= read -r m; do
     [ -n "${m}" ] || continue
     ( cd "${m}" && go list -f '{{if or .TestGoFiles .XTestGoFiles}}{{.ImportPath}}{{end}}' ./... ) \
-      || cannot "go list falló en ${m}"
+      || cannot "go list failed in ${m}"
   done < <(go work edit -json | sed -n 's/.*"DiskPath": "\(.*\)".*/\1/p')
 }
 
@@ -66,7 +67,7 @@ TESTS_CACHE="${TMPDIR:-/tmp}/race-root-tests.$$"
 root_tests() {
   local dir
   dir="$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1],encoding="utf-8"))["root_package"])' "${SPEC}" | sed 's|github.com/olivaresai/olivares/||')"
-  [ -d "${dir}" ] || cannot "no encuentro el directorio del paquete raiz: ${dir}"
+  [ -d "${dir}" ] || cannot "cannot find the root package directory: ${dir}"
   if [ ! -s "${TESTS_CACHE}" ]; then
     # ⛔ EL UNIVERSO SALE DE `go list`, NO DE UN GLOB DE `*_test.go`. Medido por
     # sobre la primera version: el glob daba 1827 y `go test -list` 1811. La diferencia
@@ -85,8 +86,8 @@ root_tests() {
     local files
     files="$(cd "${dir}" && go list -f '{{range .TestGoFiles}}{{.}}
 {{end}}{{range .XTestGoFiles}}{{.}}
-{{end}}' . 2>/dev/null | grep -v '^$')" || cannot "go list fallo en ${dir}"
-    [ -n "${files}" ] || cannot "go list no devolvio ficheros de test en ${dir}"
+{{end}}' . 2>/dev/null | grep -v '^$')" || cannot "go list failed in ${dir}"
+    [ -n "${files}" ] || cannot "go list returned no test files in ${dir}"
     ( cd "${dir}" && printf '%s\n' "${files}" | tr '\n' '\0' | xargs -0 grep -hoE '^func Test[A-Za-z0-9_]+' ) \
       | sed 's/^func //' | grep -vx 'TestMain' | sort -u > "${TESTS_CACHE}"
   fi
@@ -106,16 +107,25 @@ for g in d["groups"]:
 print(json.dumps(out))' "${SPEC}"
     ;;
 
-  packages)
-    G="${2:?usage: $0 packages <group>}"
-    python3 -c 'import json,sys;n=[g["name"] for g in json.load(open(sys.argv[1],encoding="utf-8"))["groups"]];sys.exit(0 if sys.argv[2] in n else 3)' "${SPEC}" "${G}" \
-      || fail "grupo desconocido: ${G}"
+  packages|split)
+    # split: the import paths race-full races a turn at a time, by test name: the root package
+    # and every package a group with shards owns. One `go test -race` run does not finish them.
+    if [ "$1" = split ]; then
+      G=""
+    else
+      G="${2:?usage: $0 packages <group>}"
+      python3 -c 'import json,sys;n=[g["name"] for g in json.load(open(sys.argv[1],encoding="utf-8"))["groups"]];sys.exit(0 if sys.argv[2] in n else 3)' "${SPEC}" "${G}" \
+        || fail "unknown group: ${G}"
+    fi
     LIST="${TMPDIR:-/tmp}/race-groups-list.$$"
     pkgs > "${LIST}"
     python3 - "${SPEC}" "${LIST}" "${G}" <<'PY'
 import json, sys
 spec = json.load(open(sys.argv[1], encoding="utf-8"))
 want = sys.argv[3]
+split = {g["name"] for g in spec["groups"] if g.get("shards")}
+if not want:
+    print(spec["root_package"])
 
 def match(pat, pkg):
     if pat.endswith("/..."):
@@ -136,7 +146,7 @@ for line in open(sys.argv[2], encoding="utf-8"):
     for name, pat in pairs:
         if match(pat, pkg) and weight(pat) > bw:
             best, bw = name, weight(pat)
-    if best == want:
+    if best == want or (not want and best in split):
         print(pkg)
 PY
     ;;
@@ -175,7 +185,7 @@ def fail(msg, extra=()):
     sys.exit(1)
 
 if not pkgs:
-    print("race-groups: COULD NOT LOOK — la enumeración no devolvió ni un paquete", file=sys.stderr)
+    print("race-groups: COULD NOT LOOK — enumeration returned no packages", file=sys.stderr)
     sys.exit(2)
 
 excl = [e["pattern"] for e in spec.get("excluded", [])]
@@ -186,7 +196,7 @@ pairs = [(g["name"], p) for g in spec["groups"] for p in g["patterns"]]
 seen = {}
 for name, pat in pairs:
     if pat in seen:
-        fail("patrón declarado en dos grupos (%s y %s): %s" % (seen[pat], name, pat))
+        fail("pattern declared in two groups (%s and %s): %s" % (seen[pat], name, pat))
     seen[pat] = name
 
 # (2) el reparto
@@ -204,8 +214,8 @@ for pkg in pkgs:
     owner[pkg] = best or "-"
 
 if orphans:
-    fail("%d paquete(s) con tests NO pertenecen a ningún grupo — ese código no se corre "
-         "bajo -race y nadie lo dice" % len(orphans), orphans)
+    fail("%d package(s) with tests belong to NO group — that code is not tested "
+         "under -race, without any warning" % len(orphans), orphans)
 
 # (3) un patrón que ya no casa con NADA es una mentira que sobrevive a su refactor:
 #     declara cobertura sobre algo que no existe. Es el mismo defecto que una lista
@@ -223,7 +233,7 @@ for pat in [p for _, p in pairs] + excl:
             # exención que calla es una exención que nadie revisa.
             avisos.append(pat)
             continue
-        fail("patrón que no casa con NINGÚN paquete (rancio): " + pat)
+        fail("pattern matching NO package (stale): " + pat)
 
 # (3-bis) `cloud_task_group` nombra el grupo cuyo job corre `task test:cloud`. Si
 #     alguien renombra ese grupo, el `if:` del workflow deja de casar y la pata
@@ -232,10 +242,10 @@ for pat in [p for _, p in pairs] + excl:
 ctg = spec.get("cloud_task_group")
 names = [g["name"] for g in spec["groups"]]
 if ctg is None:
-    fail("falta cloud_task_group: el workflow lo lee para decidir dónde corre `task test:cloud`")
+    fail("missing cloud_task_group: the workflow uses it to decide where to run `task test:cloud`")
 if ctg not in names:
-    fail("cloud_task_group nombra un grupo que no existe (%s); el `task test:cloud` del "
-         "workflow se saltaría EN SILENCIO. Grupos: %s" % (ctg, ", ".join(names)))
+    fail("cloud_task_group names a nonexistent group (%s); the workflow "
+         "would SILENTLY skip `task test:cloud`. Groups: %s" % (ctg, ", ".join(names)))
 
 # (4) un grupo sin paquetes es un job que arranca un Postgres para no correr nada
 counts = {}
@@ -243,7 +253,7 @@ for k, v in owner.items():
     counts[v] = counts.get(v, 0) + 1
 for g in spec["groups"]:
     if counts.get(g["name"], 0) == 0:
-        fail("el grupo %s se queda sin paquetes: sobra, o sus patrones son rancios" % g["name"])
+        fail("group %s has no packages: it is unnecessary, or its patterns are stale" % g["name"])
 
 # (5) EL REPARTO DEL PAQUETE RAIZ, por `-run`. Aqui el fallo silencioso es peor que
 #     en los paquetes: **un `-run` que no casa con nada sale 0 y parece verde**, asi
@@ -253,7 +263,7 @@ for g in spec["groups"]:
 # es como se cuelan los 16 tests que midio de diferencia.
 tests = set(l.strip() for l in open(sys.argv[3], encoding="utf-8") if l.strip())
 if not tests:
-    print("race-groups: COULD NOT LOOK — el universo de tests de la raiz vino vacio", file=sys.stderr)
+    print("race-groups: COULD NOT LOOK — the root test inventory was empty", file=sys.stderr)
     sys.exit(2)
 
 # ⛔ LA MISMA GUARDA, POR GRUPO. El override de `go_timeout_minutes` de un grupo puede pasarse del
@@ -266,36 +276,36 @@ for _g in spec.get("groups", []):
         continue
     _techo = _g.get("step_ceiling_minutes", spec.get("step_ceiling_minutes", 45))
     if _to >= _techo:
-        fail("el grupo %s pide go_timeout %dm y no deja margen bajo el techo del paso (%dm): "
-             "el reloj del PASO mataria al job antes de que Go dijera por que"
+        fail("group %s requests go_timeout %dm with no headroom below the step limit (%dm): "
+             "the STEP timer would stop the job before Go could explain why"
              % (_g["name"], _to, _techo))
 
 shards = spec["root_shards"]
 if spec["root_go_timeout_minutes"] >= spec["root_step_ceiling_minutes"]:
-    fail("root_go_timeout (%dm) no deja margen bajo el techo (%dm): es el defecto que mato "
-         "a race-root, el reloj de Go arranca DESPUES de compilar con -race"
+    fail("root_go_timeout (%dm) leaves no headroom below the limit (%dm): this is the defect that stopped "
+         "race-root; the Go timer starts AFTER compilation with -race"
          % (spec["root_go_timeout_minutes"], spec["root_step_ceiling_minutes"]))
 
 hits = {}
 for s in shards:
     fams = s["families"]
     if not fams:
-        fail("el turno %s no declara familias: su -run casaria con NADA y saldria 0" % s["name"])
+        fail("shard %s declares no families: its -run would match NOTHING and exit 0" % s["name"])
     own = [t for t in tests if any(t.startswith("Test" + f) for f in fams)]
     if not own:
-        fail("el turno %s no casa con NINGUN test: sus familias son rancias y `-run` saldria "
-             "0 sin ejecutar nada" % s["name"])
+        fail("shard %s matches NO test: its families are stale and `-run` would exit "
+             "0 without executing anything" % s["name"])
     for t_ in own:
         hits.setdefault(t_, []).append(s["name"])
 
 huerf = sorted(t_ for t_ in tests if t_ not in hits)
 if huerf:
-    fail("%d test(s) del paquete raiz no caen en ningun turno: no se correrian y nadie lo "
-         "diria" % len(huerf), huerf)
+    fail("%d test(s) in the root package belong to no shard: they would not run and nobody would "
+         "notice" % len(huerf), huerf)
 dobles = sorted(t_ for t_, v in hits.items() if len(v) > 1)
 if dobles:
-    fail("%d test(s) caen en DOS turnos (una familia es prefijo de otra en otro turno): "
-         "correrian dos veces" % len(dobles), ["%s → %s" % (t_, ",".join(hits[t_])) for t_ in dobles])
+    fail("%d test(s) belong to TWO shards (a family is a prefix of another family in another shard): "
+         "they would run twice" % len(dobles), ["%s → %s" % (t_, ",".join(hits[t_])) for t_ in dobles])
 
 # ⛔ LA CIFRA DECLARADA ES INFORMATIVA, Y ESO TAMBIEN SE MIDIO. Empezo siendo una igualdad
 # dura y el arbol EXPORTADO la rompe: alli hay 355 ficheros de test en la raiz y no 356, o
@@ -314,8 +324,8 @@ mr = spec.get("measured_run") or {}
 nombres_g = {g["name"] for g in spec["groups"]}
 for k in (mr.get("minutes") or {}):
     if k not in nombres_g:
-        fail("measured_run cita el grupo %s, que ya no existe: la medida con la que se "
-             "reequilibra estaria atada a un grupo muerto" % k)
+        fail("measured_run references group %s, which no longer exists: the measurement used for "
+             "rebalancing would be tied to a removed group" % k)
 
 share = spec.get("max_shard_share", 0.30)
 live = {}
@@ -324,8 +334,8 @@ for s in shards:
 for s in shards:
     frac = live[s["name"]] / float(len(tests))
     if frac > share:
-        fail("el turno %s se lleva el %.1f%% de los tests (tope %.1f%%): un turno gordo es "
-             "el paso que no cabe en el techo del job" % (s["name"], frac * 100, share * 100))
+        fail("shard %s contains %.1f%% of the tests (limit %.1f%%): an oversized shard is "
+             "a step that cannot fit within the job limit" % (s["name"], frac * 100, share * 100))
 
 # (6) LOS SHARDS DE UN GRUPO parten sus tests por `-run`, y ahi el fallo silencioso es el mismo
 #     que en la raiz: un `-run` que no casa con nada SALE 0 Y PARECE VERDE. Se exige lo mismo:
@@ -345,36 +355,36 @@ for g in spec["groups"]:
                 if m and m.group(1) != "TestMain":
                     tg.add(m.group(1))
     if not tg:
-        fail("el grupo %s declara turnos pero no encuentro sus tests" % g["name"])
+        fail("group %s declares shards, but its tests could not be found" % g["name"])
     hits_g = {}
     for s in sh:
         own = [t_ for t_ in tg if any(t_.startswith("Test" + f) for f in s["families"])]
         if not own:
-            fail("el turno %s de %s no casa con NINGUN test: su -run saldria 0 sin correr nada"
+            fail("shard %s of %s matches NO test: its -run would exit 0 without running anything"
                  % (s["name"], g["name"]))
         for t_ in own:
             hits_g.setdefault(t_, []).append(s["name"])
     huer = sorted(t_ for t_ in tg if t_ not in hits_g)
     if huer:
-        fail("%d test(s) de %s no caen en ningun turno" % (len(huer), g["name"]), huer)
+        fail("%d test(s) in %s belong to no shard" % (len(huer), g["name"]), huer)
     dob = sorted(t_ for t_, v in hits_g.items() if len(v) > 1)
     if dob:
-        fail("%d test(s) de %s caen en DOS turnos (familia prefijo de otra)" % (len(dob), g["name"]),
+        fail("%d test(s) in %s belong to TWO shards (one family prefixes another)" % (len(dob), g["name"]),
              ["%s -> %s" % (t_, ",".join(hits_g[t_])) for t_ in dob])
-    print("race-groups: grupo %s — %d test(s) en %d turno(s), 0 huerfanos, 0 dobles"
+    print("race-groups: group %s — %d test(s) in %d shard(s), 0 orphans, 0 duplicates"
           % (g["name"], len(tg), len(sh)))
 
 root_reparto = " ".join("%s=%d(decl %d)" % (s["name"], live[s["name"]], s["tests_now"]) for s in shards)
 
 reparto = " ".join("%s=%d" % (g["name"], counts.get(g["name"], 0)) for g in spec["groups"])
-print("race-groups: CLEAN — %d paquete(s) con tests, 0 huérfanos, 0 patrones rancios, "
-      "%d excluido(s) con motivo escrito. Reparto: %s"
+print("race-groups: CLEAN — %d package(s) with tests, 0 orphans, 0 stale patterns, "
+      "%d excluded with documented reasons. Distribution: %s"
       % (len(pkgs), counts.get("!", 0), reparto))
 for a in avisos:
-    print("race-groups: aviso — la exclusión %s no casa con nada en ESTE árbol (declarada "
-          "como ausente en el publicado)" % a)
-print("race-groups: raiz — %d test(s) de nivel superior en %d turno(s), 0 huerfanos, "
-      "0 dobles. Reparto: %s" % (len(tests), len(shards), root_reparto))
+    print("race-groups: warning — exclusion %s matches nothing in THIS tree (declared "
+          "absent from the published tree)" % a)
+print("race-groups: root — %d top-level test(s) in %d shard(s), 0 orphans, "
+      "0 duplicates. Distribution: %s" % (len(tests), len(shards), root_reparto))
 PY
     ;;
 
@@ -409,10 +419,10 @@ print((g[0].get("parallel") if g else None) or d.get("default_parallel",0))' "${
     # llegaba con la lista vacía y se reportaba como «grupo sin paquetes». Dos causas
     # distintas con el mismo mensaje es una causa que nadie va a encontrar.
     python3 -c 'import json,sys;n=[g["name"] for g in json.load(open(sys.argv[1],encoding="utf-8"))["groups"]];sys.exit(0 if sys.argv[2] in n else 3)' "${SPEC}" "${G}" \
-      || fail "grupo desconocido: ${G} (los declarados: $("$0" groups))"
+      || fail "unknown group: ${G} (declared groups: $("$0" groups))"
     mapfile -t LIST < <("$0" packages "${G}")
-    [ "${#LIST[@]}" -gt 0 ] || fail "el grupo ${G} está declarado pero no casa con ningún paquete con tests: sus patrones son rancios"
-    say "grupo ${G}: ${#LIST[@]} paquete(s), go test -timeout ${TO}m"
+    [ "${#LIST[@]}" -gt 0 ] || fail "group ${G} is declared but matches no package with tests: its patterns are stale"
+    say "group ${G}: ${#LIST[@]} package(s), go test -timeout ${TO}m"
     # ⛔ -timeout de Go POR DEBAJO del techo del paso, y con margen para compilar:
     # el reloj de `-timeout` arranca DESPUÉS de compilar con -race, así que un
     # -timeout igual al techo del paso garantiza que gane el techo y el volcado de
@@ -425,9 +435,9 @@ d=json.load(open(sys.argv[1],encoding="utf-8"))
 g=[x for x in d["groups"] if x["name"]==sys.argv[2]][0]
 s=[x for x in g.get("shards",[]) if x["name"]==sys.argv[3]]
 print("^Test(" + "|".join(sorted(s[0]["families"], key=len, reverse=True)) + ")" if s else "")' "${SPEC}" "${G}" "${SHARD}")"
-      [ -n "${RE}" ] || fail "turno desconocido en ${G}: ${SHARD}"
+      [ -n "${RE}" ] || fail "unknown shard in ${G}: ${SHARD}"
       RFLAG="-run ${RE}"
-      say "turno ${SHARD} del grupo ${G}" >&2
+      say "shard ${SHARD} of group ${G}" >&2
     fi
     # goroutines —lo único que dice DÓNDE colgó— no llegue a imprimirse.
     # OLIVARES_RACE_DRYRUN=1 imprime la orden en vez de correrla: es lo que permite
@@ -450,7 +460,7 @@ print("^Test(" + "|".join(sorted(s[0]["families"], key=len, reverse=True)) + ")"
     ;;
 
   root-run)
-    S="${2:?usage: $0 root-run <turno>}"
+    S="${2:?usage: $0 root-run <shard>}"
     TLIST="${TMPDIR:-/tmp}/race-root-tests-list.$$"
     root_tests > "${TLIST}"
     read -r RE TO CEIL < <(python3 - "${SPEC}" "${S}" <<'PY'
@@ -465,17 +475,17 @@ print("^Test(" + "|".join(fams) + ")",
       spec["root_go_timeout_minutes"], spec["root_step_ceiling_minutes"])
 PY
     )
-    [ -n "${RE}" ] || fail "turno desconocido: ${S} (los declarados: $("$0" root-shards))"
+    [ -n "${RE}" ] || fail "unknown shard: ${S} (declared shards: $("$0" root-shards))"
     # ⛔ UN `-run` QUE NO CASA CON NADA SALE 0 Y PARECE VERDE. Se cuenta ANTES.
     n="$(grep -cE "${RE}" "${TLIST}" || true)"
-    [ "${n}" -gt 0 ] || fail "el turno ${S} no casa con ningun test: sus familias son rancias"
+    [ "${n}" -gt 0 ] || fail "shard ${S} matches no test: its families are stale"
     # ⛔ A STDERR A PROPOSITO: en el workflow esta salida va POR UNA TUBERIA al `tee` que
     # escribe el .jsonl y al awk del progreso. Por stdout, esta linea ensuciaria el .jsonl
     # con texto que no es JSON —el fichero con el que luego se recalibra el reparto— y
     # ademas desapareceria del log, porque el awk solo imprime lo que casa. Por stderr
     # sobrevive intacta, que es donde tiene que estar: es la prueba de que el turno casó
     # tests y no corrio en vacio.
-    say "turno ${S}: ${n} test(s) de nivel superior, go test -timeout ${TO}m (techo del paso ${CEIL}m)" >&2
+    say "shard ${S}: ${n} top-level test(s), go test -timeout ${TO}m (step limit ${CEIL}m)" >&2
     if [ -n "${OLIVARES_RACE_DRYRUN:-}" ]; then
       printf 'cd cmd/olivares && go test -json -race -count=1 -timeout %sm -run %s .\n' "${TO}" "${RE}"
       exit 0
@@ -484,6 +494,6 @@ PY
     ;;
 
   *)
-    cannot "uso: $0 {groups|packages <grupo>|check|run <grupo>|root-shards|root-run <turno>}"
+    cannot "usage: $0 {groups|packages <group>|check|run <group>|root-shards|root-run <shard>}"
     ;;
 esac

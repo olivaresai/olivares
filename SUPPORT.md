@@ -3,11 +3,11 @@
 Thanks for using Olivares AI. This page explains **where to get help** — and,
 just as importantly, **where not to report security problems**.
 
-> Olivares AI is **beta** and in active development. The first tagged release,
-> `v26.8.0`, is published and signed; no commercial support offering exists yet, and
-> when paid support activates it carries best-effort first-response targets, not an
-> SLA (see [`SECURITY.md`](SECURITY.md) for the supported-versions statement).
-> Set your expectations accordingly: this is a beta.
+> Olivares AI is **beta** and in active development (see [`SECURITY.md`](SECURITY.md)
+> for the supported-versions statement). Community support is public and best effort.
+> Business includes business-hours email support, best effort; Enterprise adds
+> first-response targets. None of it is an SLA. Set your expectations accordingly:
+> this is a beta.
 
 ## Do NOT use these channels for security issues
 
@@ -31,66 +31,59 @@ a vulnerability)). Public disclosure before a fix puts users at risk.
 
 ## Commercial support and licensing
 
-The open (AGPL) build is the complete **core governance platform** — nothing is
-capped or held back from within it to upsell you. This is open core: on top of
-that core, the commercial offering adds a small, separate line of additive
-`enterprise/` add-ons that were never part of the open build (multi-IdP
-federation, content firewall/DLP, the compiled threat-intel catalog, and
-server-tool egress
-governance, among others). It never caps your users — self-hosted user accounts
-are unlimited in every edition. If you need a **commercial license** (a private
-exception to the AGPL), any of the separate `enterprise/` add-ons (packaging and
-pricing on request), or you want **larger-deal /
-custom terms**, see [`LICENSING.md`](LICENSING.md) or contact
-`enterprise@olivares.ai`. Commercial and licensing enquiries go to
-`enterprise@`, **not** to `security@` or the public issue tracker.
+The Community build (AGPL-3.0) is the complete product. Nothing is capped or held
+back from it to upsell you, and no edition counts users. Business and Enterprise add
+separate commercial code and support; [`docs/editions.md`](docs/editions.md) lists what
+each edition includes and the [offer page](https://olivares.ai/pricing) has the prices.
+If you need a **commercial license** (a private exception to the AGPL), Business or
+Enterprise, or **custom terms**, see [`LICENSING.md`](LICENSING.md) or contact
+`enterprise@olivares.ai`. Commercial and licensing enquiries go to `enterprise@`,
+**not** to `security@` or the public issue tracker.
 
-## Support tiers and response targets (commercial — defined, not yet purchasable)
+## Support by edition and response targets
 
-> **Honesty first.** No commercial support contract can be purchased today
-> (beta; commercial activation and pricing are a pending business decision —
-> the self-serve commerce flow ships dark until then). This section **describes**
-> the support model intended to take effect with the first commercial contract,
-> published now so procurement can evaluate it. It is sized for what
-> the vendor actually is — see the single-maintainer disclosure in
-> [`docs/trust/vendor-viability.md`](docs/trust/vendor-viability.md) — not for a
-> support floor we don't operate.
+> **Honesty first.** Support is sized for what the vendor actually is: see the
+> single-maintainer disclosure in
+> [`docs/trust/vendor-viability.md`](docs/trust/vendor-viability.md). It does not
+> promise a support floor we don't operate.
 >
 > **This page is not a contract document and is not an offer.** Every target
 > below is a non-binding aim point, not an SLA and not a warranty: no credit,
-> penalty or other remedy attaches to missing one. What binds, once a commercial
-> agreement exists, are that agreement's support terms — and nothing on this page
-> creates, extends or reduces an obligation under it.
+> penalty or other remedy attaches to missing one. What binds are the support terms
+> of your commercial agreement; nothing on this page creates, extends or reduces an
+> obligation under it.
 
-### Tiers
+### Support by edition
 
-| | **Community** (AGPL, free) | **Standard** (commercial) | **Enterprise** |
+| | **Community** (AGPL, free) | **Business** (commercial) | **Enterprise** |
 |---|---|---|---|
-| Channels | Public issues / discussions | Email (dedicated support address) | Email + scheduled video calls; named technical contact (the maintainer) |
-| Hours | Best effort | Business hours, Mon–Fri 09:00–18:00 **Europe/Madrid** | Business hours + reasonable-efforts out-of-hours response for SEV1 |
-| Scope | The software as released | Product defects, upgrade/config guidance for supported versions | Standard + deployment review, upgrade planning, priority feature triage |
-| Response targets | None (best effort) | Targets below (non-binding) | Targets below (non-binding) |
+| Channels | Public issues / discussions | Email; contact `enterprise@olivares.ai` for support routing | Email; contact `enterprise@olivares.ai` for support routing |
+| Hours | Best effort | Business hours | Business hours; anything beyond that is agreed in the contract |
+| Scope | The software as released | The software as released, on supported versions | Business, plus what the contract adds (for example deployment review and upgrade planning) |
+| Response targets | None (best effort) | None (best effort) | Targets below (non-binding) |
 
 Support covers the **product**; it does not operate the customer's deployment
 (self-hosted). Security vulnerabilities always follow [`SECURITY.md`](SECURITY.md)
-regardless of tier (private channel, published remediation targets).
+regardless of edition (private channel, published remediation targets).
 
-**How the tiers map to the commercial offering.** *Standard* support accompanies
-commercial purchases; *Enterprise* support is the top commercial tier — the
-named-contact relationship plus the commercial/legal terms below. The first-response
-targets are **best-efforts aim points sized for a single-maintainer vendor, not
-penalty-backed contractual SLAs** (see [`docs/trust/vendor-viability.md`](docs/trust/vendor-viability.md)
-§6); the precise binding of price tier → support tier is a pending business decision.
+**How the editions map to the offer.** *Business* support comes with every Business
+subscription ([`docs/editions.md`](docs/editions.md)); it is best effort, with no
+response target. *Enterprise* support terms are agreed in the contract. Unless the order
+form states otherwise, the first-response targets below apply as non-binding aim points
+sized for a single-maintainer vendor, not penalty-backed SLAs (see
+[`docs/trust/vendor-viability.md`](docs/trust/vendor-viability.md) §6). The
+[offer page](https://olivares.ai/pricing) states the same per edition.
 
-**The tier is attested in the license, for display only.** A commercial license carries
-an attested `support_tier` label (e.g. `standard` / `enterprise`) that the deployment's
-own console (**Edition & license**) and `GET /v1/server-info` surface, so an operator can
-see which tier their own license records. Like every license claim in the **open (AGPL)
-binary** it is **display/record only — it gates nothing there**
-([`LICENSING.md`](LICENSING.md)); commercial
-add-ons are a paid-term entitlement under the commercial agreement. It is **not** how a support entitlement is decided: per the key-custody rule, no
-Olivares-side support or billing decision trusts the engine's self-report — the actual
-entitlement is the commercial agreement / billing record, never the self-attested label.
+**The support label is attested in the license, for display only.** A commercial license
+can carry an attested, free-form `support_tier` label (for example `business` or
+`enterprise`) that the deployment's own console (**Edition & license**) and
+`GET /v1/server-info` surface, so an operator can see which label their own license
+records. Like every license claim in the **open (AGPL) binary** it is **display/record
+only: it gates nothing there** ([`LICENSING.md`](LICENSING.md)); commercial add-ons are a
+paid-term entitlement under the commercial agreement. It is **not** how a support
+entitlement is decided: per the key-custody rule, no Olivares-side support or billing
+decision trusts the engine's self-report. The actual entitlement is the commercial
+agreement / billing record, never the self-attested label.
 
 ### Severity and first-response targets
 
@@ -99,15 +92,15 @@ authoritative definitions and examples live in
 [`docs/STATUS-AND-INCIDENT-COMMS.md`](docs/STATUS-AND-INCIDENT-COMMS.md) §2, the same
 scale the error-budget policy in
 [`docs/17-PRODUCTION-READINESS-SLO.md`](docs/17-PRODUCTION-READINESS-SLO.md) §3 keys its
-postmortems and `P0`/`P1` incident triggers off. The rows below add a **commercial
+postmortems and `P0`/`P1` incident triggers off. The rows below add an **Enterprise
 first-response** layer over that one scale; they do not redefine it (the glosses are a
-quick reference only):
+quick reference only). Business support has no response target, so it has no column here:
 
-| Severity | Definition | Standard — first response | Enterprise — first response |
-|---|---|---|---|
-| **SEV1** | Control plane down or governance unsafe (enforcement/audit integrity broken) in a production deployment | 8 business hours | **4 business hours** (reasonable efforts out-of-hours) |
-| **SEV2** | Degraded: SLO breached or at risk; plane serving | 2 business days | 1 business day |
-| **SEV3** | Minor: no SLO impact, questions, cosmetic | 5 business days | 3 business days |
+| Severity | Definition | Enterprise: first response |
+|---|---|---|
+| **SEV1** | Control plane down or governance unsafe (enforcement/audit integrity broken) in a production deployment | **4 business hours** |
+| **SEV2** | Degraded: SLO breached or at risk; plane serving | 1 business day |
+| **SEV3** | Minor: no SLO impact, questions, cosmetic | 3 business days |
 
 These are **response** targets, not resolution promises, and they are
 **non-binding**: no result, resolution, availability or timeframe is guaranteed,
@@ -118,11 +111,11 @@ KEV/Critical practice in `SECURITY.md`).
 
 ### Escalation path
 
-1. Support channel (per tier) — include `olivares version`, platform, and
+1. Support channel (per edition) — include `olivares version`, platform, and
    redacted config/logs.
-2. Escalation: the founder/maintainer directly (the escalation chain is honestly
-   one level deep; Enterprise contracts get the direct contact from day one).
-3. SEV1/SEV2 incidents are communicated through the channel of your tier. The
+2. Escalation: the founder/maintainer (the escalation chain is honestly one level
+   deep). An Enterprise contract can name a direct contact.
+3. SEV1/SEV2 incidents are communicated through the channel of your edition. The
    update cadence in [`docs/STATUS-AND-INCIDENT-COMMS.md`](docs/STATUS-AND-INCIDENT-COMMS.md)
    is an operating target for surfaces Olivares AI itself operates: the status
    page shipped with the product is **self-hostable** (`deploy/monitoring/status-page.gatus.yaml`)
@@ -171,14 +164,15 @@ product.
   one**, **verified escrow of the `enterprise/` source offered on request**, and the planned
   written discontinuation / relicense pledge — **not** an indemnity.
 
-### What requires a business decision before activation
+### What is not offered
 
-Pricing per tier, the purchase flow, and any out-of-hours commitment beyond
-"reasonable efforts" (a hard 24×7 SLA will **not** be offered while the team is
-one person — see `docs/trust/vendor-viability.md` §6; saying otherwise would be
-fiction).
+A 24×7 SLA or any out-of-hours commitment is **not** offered while the team is
+one person (see `docs/trust/vendor-viability.md` §6; saying otherwise would be
+fiction). Any commitment beyond this page is only what a signed Enterprise contract states.
 
-Also pending, and **owned by the founder** (legal/business, not buildable in software):
+### Still pending
+
+These are **owned by the founder** (legal/business, not buildable in software):
 the **indemnification terms**, the **verified escrow** agent and contract (e.g. NCC Group
 / Escode), and the **ISO 27001 (EU) → SOC 2** certification path. These back the Enterprise
 commercial terms above; none is in place yet, so that copy is a description of the intended

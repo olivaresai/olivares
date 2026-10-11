@@ -123,7 +123,7 @@ func (v Verified) Plan() string {
 	return v.Claims.Plan
 }
 
-// SupportTier is the flat container's attested support relationship ("standard", "enterprise";
+// SupportTier is the flat container's attested support relationship (e.g. "business", "enterprise";
 // empty = none/community), display-only (LICENSING.md key custody: no Olivares-side decision may
 // trust this self-report).
 //

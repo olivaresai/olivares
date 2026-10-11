@@ -63,6 +63,20 @@ func emitTypeScript(doc *Document) []byte {
 			emitTypeScriptSessionsCommunicationOp(&b, op)
 			continue
 		}
+		name := op.tsName()
+		if op.hasLegacyBodylessSignature() {
+			fmt.Fprintf(&b, "  /**\n   * %s %s without a request body.\n", op.Method, op.Path)
+			if op.Stability != "" {
+				fmt.Fprintf(&b, "   * Stability: %s.\n", op.Stability)
+			}
+			if op.Deprecated {
+				fmt.Fprintf(&b, "   * @deprecated %s\n", op.docDeprecation())
+			}
+			b.WriteString("   */\n")
+			fmt.Fprintf(&b, "  %s(ref: string, opts?: RequestOptions): Promise<Json> {\n", name)
+			fmt.Fprintf(&b, "    return this.%sWithBody(ref, undefined, opts);\n  }\n\n", name)
+			name += "WithBody"
+		}
 		b.WriteString("  /**\n")
 		fmt.Fprintf(&b, "   * %s %s — %s\n", op.Method, op.Path, sentence(op.Summary))
 		if op.Stability != "" {
@@ -113,7 +127,7 @@ func emitTypeScript(doc *Document) []byte {
 		if op.HasBody && op.bodyRequiredInSignature() {
 			jsonSeam = "doJsonRequired"
 		}
-		fmt.Fprintf(&b, "  %s(%s): Promise<Json> {\n", op.tsName(), strings.Join(params, ", "))
+		fmt.Fprintf(&b, "  %s(%s): Promise<Json> {\n", name, strings.Join(params, ", "))
 		fmt.Fprintf(&b, "    return this.%s(%q, %q, %s, %s, opts);\n  }\n\n", jsonSeam, op.Method, op.Path, tsPathExpr(op.Path), bodyArg)
 	}
 	b.WriteString("}\n")

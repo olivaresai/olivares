@@ -252,15 +252,20 @@ The declared structure — re-confirm with counsel at first release:
 - **Community (AGPL) edition**: public releases with public security fixes for the
   current release line; the declared support period per line follows the release
   cadence and is stated in this table when the first line is placed on the market.
-- **Commercial edition (term-only, v4)**: every Commercial entitlement — runtime,
-  add-ons, source exception, Rolling channel and its security support — lasts until
-  the prepaid `paid_through` date (plus the 7-day involuntary-failure grace, once
-  per rolling 365 days). Paid modules technically stop executing at that boundary,
-  which is the factual premise of Recital 60 and Commission FAQ §4.5.2 for a support
-  period tied to the active subscription. The paid-through end date (month and year)
-  is displayed at the time of purchase per Article 13(19). No payment earns a
-  perpetual, frozen-line or fallback right, so no frozen historical Commercial line
-  requires a post-term security channel.
+- **Business and Enterprise (term-only, v4)**: every Business and Enterprise entitlement —
+  runtime, the Business base line, capability families, source exception, Rolling channel
+  and its security support — lasts until the prepaid `paid_through` date (plus
+  an issuer-attested grace extension of up to 7 days for involuntary renewal
+  failure, at most once per rolling 365 days). At that boundary the commercial
+  build's entitlement gate
+  refuses new work of the paid capabilities it covers. It never gates reading,
+  verifying or exporting evidence already produced, nor the evaluation of a
+  deny-closed security control, so paid code does not stop as a whole. Assess
+  that limited stop against the Recital 60 and Commission FAQ §4.5.2 premise of a
+  support period tied to the active subscription; re-confirm it with counsel.
+  The paid-through end date (month and year) is displayed at the time of purchase per Article 13(19). No payment earns a
+  perpetual, frozen-line or fallback right, so no frozen historical Business or
+  Enterprise line requires a post-term security channel.
 - Security updates issued during any support period remain retrievable for at least
   ten years from issue (Article 13(9)) without granting executable entitlement.
 - Security fixes are delivered according to the SLA in [`SECURITY.md`](../SECURITY.md).
@@ -271,8 +276,10 @@ The declared structure — re-confirm with counsel at first release:
 
 **Condition of validity** (from the fallback re-adjudication): the per-module hard
 lock at term end must exist and be regression-tested before first sale — without it
-the term-tied support-period premise fails. Tracked as planned
-entitlement-enforcement work, gated before first sale.
+the term-tied support-period premise fails. The current entitlement gate refuses
+selected operations, not every paid module. Its presence alone does not establish
+this condition; confirm coverage and the support-period declaration with counsel
+before first sale.
 
 ## Secure update mechanism
 

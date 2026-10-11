@@ -427,7 +427,7 @@ func (s *messageLifecycleService) prepareLifecycle(
 		policy := protectedPayloadPolicyFrom(message.Payload)
 		messageSchema, _ := PayloadSlotMessageTerminalReason.schema()
 		messageReason, err := PrepareProtectedPayload(
-			ctx, s.module.communicationSealer, PayloadSlotMessageTerminalReason, policy,
+			ctx, s.module.CommunicationSealer, PayloadSlotMessageTerminalReason, policy,
 			ContentAAD{
 				TenantID: normalized.scope.TenantID, WorkspaceID: normalized.scope.WorkspaceID,
 				ChannelID: message.ChannelID, EntityKind: messageKind, EntityID: message.ID,
@@ -454,7 +454,7 @@ func (s *messageLifecycleService) prepareLifecycle(
 			prepared.decisionID = request.ID
 			responseSchema, _ := PayloadSlotDecisionResponse.schema()
 			response, err := PrepareProtectedPayload(
-				ctx, s.module.communicationSealer, PayloadSlotDecisionResponse,
+				ctx, s.module.CommunicationSealer, PayloadSlotDecisionResponse,
 				protectedPayloadPolicyFrom(request.Request),
 				ContentAAD{
 					TenantID: normalized.scope.TenantID, WorkspaceID: normalized.scope.WorkspaceID,
@@ -480,7 +480,7 @@ func (s *messageLifecycleService) prepareLifecycle(
 			prepared.handoffID = handoff.ID
 			handoffSchema, _ := PayloadSlotHandoffTerminalReason.schema()
 			reason, err := PrepareProtectedPayload(
-				ctx, s.module.communicationSealer, PayloadSlotHandoffTerminalReason,
+				ctx, s.module.CommunicationSealer, PayloadSlotHandoffTerminalReason,
 				protectedPayloadPolicyFrom(handoff.Payload),
 				ContentAAD{
 					TenantID: normalized.scope.TenantID, WorkspaceID: normalized.scope.WorkspaceID,

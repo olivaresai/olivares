@@ -16,6 +16,17 @@ Verbindungs-Gesundheit. Es sitzt im **Management-Layer** und hat **keine
 Aktuierungsfläche**: Es katalogisiert, gouverniert und auditiert, führt aber niemals
 ein Tool aus und mutiert niemals eine laufende MCP-Runtime.
 
+## Gespeicherte MCP-Definitionen
+
+Die verwalteten Konfigurationen in `/capabilities` und
+`/v1/m/capabilities/configs` sind **Beobachtungsmetadaten**, mit auditierten
+Änderungen und unveränderlichem Revisionsverlauf. Speichern, Ändern von `enabled`
+oder Löschen einer Definition konfiguriert weder das MCP-Gateway, startet oder
+stoppt einen Server, löst eine Secret-Referenz auf noch ändert es Transport oder
+Endpunkt eines entdeckten Servers. Das Gateway verwendet seine eigene
+Konfigurationsschnittstelle. Gespeicherte Definitionen und ihr Verlauf bleiben
+nach einem Neustart oder Aus- und Wiedereinschalten des Moduls verfügbar.
+
 ## Was es ist
 
 Das Modul ist ein Overlay, das **auf** der passiven Discovery von Modul I und der

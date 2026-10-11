@@ -6,6 +6,10 @@ description: >-
   fabriquée.
 ---
 
+:::note[Business]
+L’export d’audit (`GET /v1/audit/export`, `olivares audit export`), les archives en répertoire et la vérification d’archives externes nécessitent Business. Community conserve le registre signé, `olivares audit verify` et `olivares dr backup` ; l’export renvoie HTTP 501 ou le code de sortie 9. Le transfert d’audit et les transferts DDIL contenant des segments d’audit nécessitent aussi Business.
+:::
+
 Un control plane (plan de contrôle) pour l'IA est un produit de sécurité. S'il
 exagère ce qu'il couvre, il donne un faux sentiment de sécurité — ce qui est
 pire que pas d'outil du tout. Cette page est donc le contrat explicite sur **ce
@@ -14,6 +18,8 @@ périmètre.** Le reste de la documentation s'y tient : les commandes des
 tutoriels et des guides pratiques sont faites pour être exécutées telles
 qu'écrites, et là où le produit ne couvre pas encore quelque chose, la page le
 dit plutôt que de laisser entendre le contraire.
+
+**Distribution des événements NATS :** Le pont Core NATS et NATS JetStream nécessitent Business Identity & Scale. Community distribue les événements dans le processus.
 
 ## Ce qui tourne aujourd'hui
 
@@ -27,38 +33,40 @@ dit plutôt que de laisser entendre le contraire.
 - **La configuration au premier lancement est sans identifiants.** Une
   installation neuve n'a **aucun identifiant par défaut** ; le moteur affiche un
   jeton de configuration à usage unique au premier démarrage.
-- **Les CLI officielles Codex et Grok sont des pilotes de session lorsqu’elles sont épinglées.**
-  Définir `OLIVARES_SESSION_RUNTIME_CODEX_BIN` ou `OLIVARES_SESSION_RUNTIME_GROK_BIN`
-  enregistre ce pilote sur le nœud. Absentes, les profils de ce pilote restent
-  observables et ne sont pas lançables. Les lancements passent par un
+- **Les CLI officielles Codex, Grok et OpenCode peuvent exécuter des sessions fournisseur.**
+  Le moteur enregistre ces pilotes au démarrage. Au lancement d’une session, il
+  utilise l’installation gérée vérifiée la plus récente, puis la CLI dans son `PATH`.
+  `OLIVARES_SESSION_RUNTIME_CODEX_BIN`, `OLIVARES_SESSION_RUNTIME_GROK_BIN`
+  et `OLIVARES_SESSION_RUNTIME_OPENCODE_BIN` remplacent cette résolution.
+  Si aucun exécutable n’est trouvé, le lancement est refusé. Les lancements passent par un
   [profil fournisseur](/how-to/operate-provider-sessions/).
   `CHANGELOG.md` `[26.9.0]` n’affirme **pas** la compatibilité avec un compte
   Grok officiel authentifié.
 - **L'API REST et l'audit ledger sont réels.** La
-  [référence de l'API](/reference/api/) est rendue à partir du contrat OpenAPI
-  3.1 du produit lui-même. L'audit ledger est en append-only (ajout seul) et
+  [référence de l'API](/reference/api/) est rendue à partir du contrat
+  OpenAPI 3.1 du produit lui-même. L'audit ledger est en append-only (ajout seul) et
   hash-chained (chaîné par hachage) avec des checkpoints signés en Ed25519, et
   peut être exporté dans plusieurs formats SIEM.
 - **Les versions sont signées et vérifiables.** La signature, la provenance SLSA, le SBOM et l'OpenVEX peuvent tous être
   [vérifiés](/fr/how-to/verify-a-release/). La vérification n'est pas encore entièrement hors ligne : les vérifications sans clé
   ont besoin du matériel de racine de confiance Sigstore et l'étape SLSA n'a pas de mode hors ligne. Le produit livre un
-  [bundle air-gap](/fr/how-to/air-gap-install/). La dernière version taguée, **26.10.1**, est publiée avec des archives signées, des paquets natifs et des images de conteneur ; les API, les schémas et la surface des modules peuvent encore changer avant la 1.0.
+  [bundle air-gap](/fr/how-to/air-gap-install/). La prochaine version est **<!-- release -->0.1<!-- /release -->**, pas encore publiée. Compilez depuis les sources jusqu'à sa publication.
 
-## Open core — ce qui est ouvert vs entreprise
+## Open core — ce qui est ouvert vs commercial
 
 Le produit est en **open core** : le binaire par défaut (AGPL) est l'intégralité
 de la plateforme de gouvernance, et une petite ligne commerciale **additive**
-(`enterprise/`, construite uniquement avec `-tags enterprise`, jamais dans le
+(Business et Enterprise ; `enterprise/`, construite uniquement avec `-tags enterprise`, jamais dans le
 binaire public) regroupe les fonctionnalités réservées. Deux frontières comptent
 pour l'usage quotidien, et le build ouvert y répond honnêtement plutôt que de les
 feindre :
 
 - **Le SSO est ouvert pour un IdP unique.** Le login mono-IdP — **OIDC**
   (Authorization Code + PKCE) et **SAML 2.0** (réponses signées, anti-rejeu) —
-  tourne dans le binaire par défaut **sans** `-tags enterprise`. Faire tourner
-  **plus d'un IdP actif** (par tenant / par domaine), l'**application du SSO**
-  (exiger le SSO / bloquer le login par mot de passe) et le **SCIM géré** sont la
-  ligne entreprise réservée ; activer un second IdP actif renvoie
+  tourne dans le binaire par défaut **sans** `-tags enterprise`, tout comme le
+  **SCIM** entrant. Faire tourner **plus d'un IdP actif** (par tenant / par domaine)
+  et l'**application du SSO** (exiger le SSO / bloquer le login par mot de passe)
+  relèvent de Business (Identity & Scale) ; activer un second IdP actif renvoie
   `multi_idp_requires_enterprise` — une limite produit explicite, jamais un faux
   501.
 - **Il n'y a aucun plafond d'utilisateurs — les comptes sont illimités dans toutes les
@@ -73,13 +81,12 @@ feindre :
   inventaire, carte d'accès R/RW, politique RBAC/ABAC/Cedar, l'audit ledger
   scellé, FinOps, conformité, egress SIEM, MCP, HA/distribué — tourne dans le
   binaire ouvert sans aucune vérification de licence. Les modules `enterprise/`
-  additifs (fédération multi-IdP, content firewall/DLP, durcissement des hooks,
-  le catalogue compilé de threat-intel, l'egress des server-tools, le connecteur CyberArk
-  Conjur et le close-loop d'incident) sont du nouveau
-  code qui n'a jamais été dans le produit ouvert, pas des fonctionnalités
-  retirées de celui-ci. La validation de licence dans le binaire ouvert est en
+  additifs sont du nouveau code qui n'a jamais été dans le produit ouvert, pas des
+  fonctionnalités retirées de celui-ci ; quelle capacité relève de quelle édition
+  n'est écrit qu'une fois, dans `docs/editions.md` du dépôt. La validation de licence dans le binaire ouvert est en
   **attestation seule** — elle n'active, ne désactive ni ne bloque jamais quoi
-  que ce soit (voir
+  que ce soit, sauf que l'installation d'un bundle de mise à jour qui n'indique pas l'édition
+  community exige une licence active (voir
   [Open core & licence](/fr/explanation/open-core-and-licensing/)).
 
 ## Ce qui est au stade de conception ou pré-1.0
@@ -168,7 +175,7 @@ sur une page.
   frontier brokés ne le peuvent pas.
 - **Les routes de module sont un contrat séparé, en bêta.** Les endpoints de
   module (par exemple le graphe d'access map et la dérive) ne font pas partie du
-  contrat de cœur stable (70 chemins de cœur) ; ils sont publiés comme un document
+  contrat de cœur stable (128 chemins de cœur) ; ils sont publiés comme un document
   **bêta** séparé — la
   [référence des routes de module](/reference/api-beta/) (servie sur
   `/openapi.beta.json`). Bêta signifie que les formes peuvent changer avec

@@ -5,6 +5,8 @@ SPDX-License-Identifier: Apache-2.0
 
 # Olivares portal proxy — Backstage backend plugin
 
+> **Deprecated.** Olivares does not use these packages. They keep working in this release series; their removal will be announced in the release notes beforehand. They are not qualified for production installation.
+
 `@olivaresai/backstage-plugin-olivares-backend` is the server half of the
 Olivares-in-Backstage integration. It mounts a **read-only** proxy at
 `/api/olivares` that the [frontend plugin](../plugin-frontend) calls to render the

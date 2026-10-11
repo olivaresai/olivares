@@ -14,6 +14,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode"
 	"unicode/utf8"
 
 	"github.com/google/uuid"
@@ -950,11 +951,47 @@ type DecisionResponseContent struct {
 	Reason    CommunicationReasonContent `json:"reason"`
 }
 
+// HandoffContent is the protected body of a Handoff. Branch and SHA are optional and
+// name where the handed-over work is in git: the receiver may open a worktree at them
+// (runtime_worktree.go). They are labels the sender wrote, never a command: git decides
+// what they mean when a person uses them. omitempty keeps the canonical bytes, and so
+// the stored digest, of every handoff that names neither exactly as they were.
 type HandoffContent struct {
 	Summary      string             `json:"summary"`
 	NextAction   string             `json:"next_action"`
 	Risk         string             `json:"risk,omitempty"`
+	Branch       string             `json:"branch,omitempty"`
+	SHA          string             `json:"sha,omitempty"`
 	ArtifactRefs []ContentReference `json:"artifact_refs,omitempty"`
+}
+
+// validHandoffBranch is a branch label a person can read as written: bounded, trimmed,
+// printable (no control or direction-changing character) and not an option. git still
+// judges what a branch name may be when someone uses it (resolveWorktreeStart).
+func validHandoffBranch(branch string) bool {
+	if !validateOpaqueRef(branch) || branch[0] == '-' {
+		return false
+	}
+	for _, r := range branch {
+		if !unicode.IsPrint(r) {
+			return false
+		}
+	}
+	return true
+}
+
+// validGitObjectID is a full git object id: 40 hex digits (SHA-1) or 64 (SHA-256),
+// lowercase as git prints them.
+func validGitObjectID(id string) bool {
+	if len(id) != 40 && len(id) != 64 {
+		return false
+	}
+	for _, c := range id {
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
+			return false
+		}
+	}
+	return true
 }
 
 type ProtectedPayloadPolicy struct {
@@ -1055,6 +1092,8 @@ func CanonicalProtectedPayloadSlot(slot ProtectedPayloadSlot, value any) ([]byte
 		if !ok || !boundedText(content.Summary, 1, maxMessageTextBytes) ||
 			!boundedText(content.NextAction, 1, maxMessageTextBytes) ||
 			(content.Risk != "" && !boundedText(content.Risk, 1, maxMessageTextBytes)) ||
+			(content.Branch != "" && !validHandoffBranch(content.Branch)) ||
+			(content.SHA != "" && !validGitObjectID(content.SHA)) ||
 			len(content.ArtifactRefs) > maxMessageReferences {
 			return nil, communicationError(ErrInvalidCommunicationModel, "invalid Handoff content")
 		}

@@ -63,10 +63,9 @@ WORK="$(mktemp -d -p "${TMPDIR:-/tmp}" check-spdx-tests.XXXXXX)" || {
 # by the same trap that removes the scratch directory — including on interrupt.
 PROBE_BASE="ng-spdx-selftest-probe-$$"
 PROBE_DIR="$ROOT/web/$PROBE_BASE"
-# La ventana del selftest (ver check-spdx.sh) se abre SOLO alrededor de R1, no aqui: el contraste
-# de señalo que abrirla durante toda la bateria deja al gate sin poder reportar un defecto REAL
-# durante mucho mas tiempo del necesario (C1). El fichero lleva el PID EN EL NOMBRE para que dos
-# selftests simultaneos no se pisen (C3).
+# Open the self-test window (see check-spdx.sh) only around R1. review found
+# that leaving it open for the whole suite suppresses real defects too long (C1).
+# Include the PID in its filename to prevent concurrent self-tests colliding (C3).
 INFLIGHT="$(git rev-parse --git-dir 2>/dev/null)/ng-spdx-selftest-inflight.$$"
 cleanup() { rm -rf "$WORK" "$PROBE_DIR"; rm -f "$INFLIGHT"; }
 trap cleanup EXIT INT TERM
@@ -408,7 +407,7 @@ expect_mutant debt-absent \
 R="$(mkrepo debtgone)" || exit 2
 rm -f "$R/PUBLIC-EXPORT.md"
 expect_mutant debt-no-ratchet \
-	'if [ ! -f "$INTERNAL_DEBT" ] && [ ! -f PUBLIC-EXPORT.md ]; then' \
+	'if [ "$files_mode" = 0 ] && [ ! -f "$INTERNAL_DEBT" ] && [ ! -f PUBLIC-EXPORT.md ]; then' \
 	'if false; then' \
 	"M8  mutant (D-2 ratchet removed) lets the exception outlive its subject [witness F10d]" \
 	"$R" silent "named licence debt D-2 whose subject no longer exists"
@@ -440,6 +439,23 @@ esac
 case "$r1_out" in
 *"MISMATCH web/$PROBE_BASE/probe.js"*) pass "R1b .js is still named (control positive)" ;;
 *) fail "R1b .js is still named (control positive)" "no MISMATCH line for the .js probe" ;;
+esac
+
+# F12 --files (the pre-push hook) checks only the named paths, and the population floor that
+# guards the whole-tree walk does not apply to a list the caller chose.
+d="$(mkrepo files)" || fail "F12 fixture" "could not build the fixture repository"
+printf 'export const y = 2;\n' >"$d/web/bad.ts"
+f12_out="$(cd "$d" && sh "$GATE" --files web/ok.ts 2>&1)"
+f12_rc=$?
+case "$f12_rc:$f12_out" in
+"0:"*"SPDX check OK: 1 "*) pass "F12a --files over a clean file passes on exactly that file" ;;
+*) fail "F12a --files over a clean file passes on exactly that file" "rc $f12_rc: $(printf '%s' "$f12_out" | tr '\n' ' ' | cut -c1-200)" ;;
+esac
+f12_out="$(cd "$d" && sh "$GATE" --files web/ok.ts web/bad.ts 2>&1)"
+f12_rc=$?
+case "$f12_rc:$f12_out" in
+"1:"*"MISSING  web/bad.ts"*) pass "F12b --files names a missing header among the listed files" ;;
+*) fail "F12b --files names a missing header among the listed files" "rc $f12_rc: $(printf '%s' "$f12_out" | tr '\n' ' ' | cut -c1-200)" ;;
 esac
 
 if [ "$fails" -ne 0 ]; then

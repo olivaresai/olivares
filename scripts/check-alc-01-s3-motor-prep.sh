@@ -18,10 +18,12 @@ cd "$ROOT" || cannot "cannot enter $ROOT"
 JSON="${OLIVARES_ALC01S3_JSON:-design/alc-01-s3-motor-hold-prep-2026-08-20.json}"
 DOC="${OLIVARES_ALC01S3_DOC:-design/ALC-01-S3-MOTOR-HOLD-PREP-2026-08-20.md}"
 WIRE="${OLIVARES_ALC01S3_WIRE:-cmd/olivares/wire_noenterprise.go}"
+PORTS="${OLIVARES_ALC01S3_PORTS:-cmd/olivares/edition_ports.go}"
 
 [ -r "$JSON" ] || cannot "missing $JSON"
 [ -r "$DOC" ] || cannot "missing $DOC"
 [ -r "$WIRE" ] || cannot "missing $WIRE"
+[ -r "$PORTS" ] || cannot "missing $PORTS"
 command -v python3 >/dev/null || cannot "no python3"
 
 grep -q 'Unique leftover unique vs `check-alc-01-s3-motor-hold.sh`' "$DOC" \
@@ -30,11 +32,13 @@ grep -q 'NO IMPLEMENTADO' "$DOC" \
   || fail "prepare doc lost NO IMPLEMENTADO"
 grep -q 'HOLD' "$DOC" || fail "prepare doc lost HOLD"
 if grep -qiE 'managed SCIM shipped|S3 motor live' "$DOC"; then
-  fail "prepare doc claims a motor this lote does not have"
+  fail "prepare doc claims a motor this batch does not have"
 fi
-grep -q 'func newManagedSCIM()' "$WIRE" \
+grep -q 'managedSCIM editionPort\[any\]' "$PORTS" \
   || fail "default wire lost the named nil seam"
-grep -qE 'return nil' "$WIRE" \
+grep -q '^func editionPortsForBuild()' "$WIRE" \
+  || fail "the default wire no longer fills the Community edition; the nil check below would prove nothing"
+! grep -q 'managedSCIM' "$WIRE" \
   || fail "default wire lost the nil managed-SCIM seam"
 
 python3 - "$JSON" <<'PY' || exit $?

@@ -59,7 +59,7 @@ ROOT=$(cd "$(dirname "$0")/.." && pwd)
 if [ ! -f "$ROOT"/cloud/control-plane/deploy/cloud-control-roles.sql ] \
    && [ "$(bash "$ROOT/scripts/hub-leg.sh" --classify --root "$ROOT" 2>/dev/null)" = "public" ]; then
 	printf '%s\n' "test-cloud-roles-partial: SCOPED — public export; cloud/control-plane is curated out."
-	printf '%s\n' "  El modulo no viaja, asi que aqui no hay degradacion PARTIAL que medir. En el hub SI se mide."
+	printf '%s\n' "  The module is excluded, so this checkout has no PARTIAL degradation to measure."
 	exit 0
 fi
 if [ ! -f "$ROOT"/cloud/control-plane/deploy/cloud-control-roles.sql ]; then
@@ -67,17 +67,17 @@ if [ ! -f "$ROOT"/cloud/control-plane/deploy/cloud-control-roles.sql ]; then
 	exit 2
 fi
 WF="$ROOT/.github/workflows/mainline-ci.yml"
-WORK=$(mktemp -d "${TMPDIR:-/tmp}/cloud-roles.XXXXXX") || { echo "no pude crear el area"; exit 2; }
+WORK=$(mktemp -d "${TMPDIR:-/tmp}/cloud-roles.XXXXXX") || { echo "could not create the workspace"; exit 2; }
 trap 'rm -rf "$WORK"' EXIT
 
 pass=0; fail=0
 ok(){ printf 'ok    %s\n' "$1"; pass=$((pass+1)); }
 no(){ printf 'FAIL  %s\n' "$1"; fail=$((fail+1)); }
-cannot(){ printf 'NO HE PODIDO MIRAR: %s\n' "$1"; exit 2; }
+cannot(){ printf 'COULD NOT CHECK: %s\n' "$1"; exit 2; }
 
-command -v python3 >/dev/null 2>&1 || cannot "sin python3 no leo el YAML"
+command -v python3 >/dev/null 2>&1 || cannot "cannot read YAML without python3"
 PEEK="$ROOT/scripts/lib/ci-yaml-peek.py"
-[ -r "$PEEK" ] || cannot "falta scripts/lib/ci-yaml-peek.py, que es como leo estos YAML"
+[ -r "$PEEK" ] || cannot "missing scripts/lib/ci-yaml-peek.py, which reads these YAML files"
 # Sin PyYAML a proposito: ver la cabecera de ci-yaml-peek.py — el runner de este job es
 # autoalojado y nada en el arbol demuestra que la biblioteca se alcance alli.
 
@@ -403,42 +403,42 @@ fi
 
 B="$WORK/block.sh"
 if ! step_field "$WF" pg-roles-cloud run > "$B" 2>"$WORK/e"; then
-  cannot "no encuentro el paso pg-roles-cloud ($(head -1 "$WORK/e"))"
+  cannot "cannot find the pg-roles-cloud step ($(head -1 "$WORK/e"))"
 fi
-[ -s "$B" ] || cannot "el bloque run: de pg-roles-cloud salio vacio"
+[ -s "$B" ] || cannot "the pg-roles-cloud run: block was empty"
 
-if bash -n "$B" 2>"$WORK/n"; then ok "el bloque run: extraido es shell valido (bash -n)"
-else no "el bloque no pasa bash -n: $(head -1 "$WORK/n")"; fi
+if bash -n "$B" 2>"$WORK/n"; then ok "the extracted run: block is valid shell (bash -n)"
+else no "the block fails bash -n: $(head -1 "$WORK/n")"; fi
 
 # --- caso A: el modulo NO esta (arbol publico) -> PARTIAL y rc 0
-run_case A 0 0 "$B" || cannot "no pude montar el caso A"
-if [ "$CASE_RC" = 0 ]; then ok "A: sin cloud/control-plane el paso NO rompe (rc 0)"
-else no "A: sin el modulo el paso sale rc $CASE_RC: $(head -2 "$CASE_DIR/stdout")"; fi
+run_case A 0 0 "$B" || cannot "could not set up case A"
+if [ "$CASE_RC" = 0 ]; then ok "A: without cloud/control-plane the step does NOT fail (rc 0)"
+else no "A: without the module the step exits with rc $CASE_RC: $(head -2 "$CASE_DIR/stdout")"; fi
 if command grep -qF "cloud-control-roles: NOT APPLICABLE" "$CASE_DIR/stdout" && command grep -qF "cloud/control-plane" "$CASE_DIR/stdout"; then
-  ok "A: imprime el NOT APPLICABLE de #2155, con su sujeto nombrado"
-else no "A: no imprime el mensaje literal: $(head -2 "$CASE_DIR/stdout")"; fi
-if command grep -q 'provisioned=false' "$CASE_DIR/out"; then ok "A: deja el marcador provisioned=false para los consumidores"
-else no "A: no deja marcador: los pasos siguientes no pueden saber que fue PARTIAL"; fi
-if command grep -q 'NOT APPLICABLE' "$CASE_DIR/sum"; then ok "A: y lo repite en el resumen del job (se dice tambien al final)"
-else no "A: el resumen del job no repite el NOT APPLICABLE"; fi
-if ! command grep -q 'DATABASE_TENANT_URL' "$CASE_DIR/env"; then ok "A: no finge DSNs que no existen"
-else no "A: escribio DSNs de capacidad sin haber creado ningun rol"; fi
+  ok "A: prints the NOT APPLICABLE message for #2155, naming its subject"
+else no "A: does not print the literal message: $(head -2 "$CASE_DIR/stdout")"; fi
+if command grep -q 'provisioned=false' "$CASE_DIR/out"; then ok "A: leaves the provisioned=false marker for consumers"
+else no "A: leaves no marker: later steps cannot tell it was PARTIAL"; fi
+if command grep -q 'NOT APPLICABLE' "$CASE_DIR/sum"; then ok "A: and repeats it in the job summary (also reported at the end)"
+else no "A: the job summary does not repeat NOT APPLICABLE"; fi
+if ! command grep -q 'DATABASE_TENANT_URL' "$CASE_DIR/env"; then ok "A: does not invent nonexistent DSNs"
+else no "A: wrote capability DSNs without creating any role"; fi
 # O1: and it touched no database at all. "Exported nothing" is not the same claim as "ran no
 # statement": without the operation log a step could CREATE, bootstrap and then keep quiet.
 if [ ! -s "$CASE_DIR/oplog" ]; then ok "A: and it runs no database operation whatsoever"
 else no "A: it reached the database without a module: $(oplog_pairs "$CASE_DIR/oplog" | tr '\n' ';')"; fi
 
 # --- caso B: modulo y fichero presentes -> camino normal
-run_case B 1 1 "$B" || cannot "no pude montar el caso B"
-if [ "$CASE_RC" = 0 ]; then ok "B: con el modulo presente sigue el camino normal (rc 0)"
-else no "B: el camino normal se rompio (rc $CASE_RC): $(tail -2 "$CASE_DIR/stdout")"; fi
-if command grep -q 'provisioned=true' "$CASE_DIR/out"; then ok "B: marca provisioned=true"
-else no "B: no marca provisioned=true"; fi
+run_case B 1 1 "$B" || cannot "could not set up case B"
+if [ "$CASE_RC" = 0 ]; then ok "B: with the module present follows the normal path (rc 0)"
+else no "B: the normal path failed (rc $CASE_RC): $(tail -2 "$CASE_DIR/stdout")"; fi
+if command grep -q 'provisioned=true' "$CASE_DIR/out"; then ok "B: marks provisioned=true"
+else no "B: does not mark provisioned=true"; fi
 if command grep -q 'DATABASE_TENANT_URL' "$CASE_DIR/env" && command grep -q 'DATABASE_IDEMPOTENCY_URL' "$CASE_DIR/env"; then
-  ok "B: escribe las DSN de capacidad (el trabajo real sigue haciendose)"
-else no "B: el camino normal ya no escribe las DSN"; fi
-if ! command grep -q 'NOT APPLICABLE' "$CASE_DIR/stdout"; then ok "B: y NO dice NOT APPLICABLE cuando no lo es"
-else no "B: dice NOT APPLICABLE con el modulo presente"; fi
+  ok "B: writes capability DSNs (the real work still runs)"
+else no "B: the normal path no longer writes DSNs"; fi
+if ! command grep -q 'NOT APPLICABLE' "$CASE_DIR/stdout"; then ok "B: and does NOT say NOT APPLICABLE when it is applicable"
+else no "B: says NOT APPLICABLE with the module present"; fi
 # O4/O5/O6: WHAT the step did, in WHICH order and against WHICH database. The sequence is
 # pinned on purpose: reordering it is a topology change and has to be re-reviewed, not
 # absorbed. Each pair is <kind> <URI path>, both read from the actual invocation.
@@ -483,11 +483,11 @@ if [ -f "$CASE_DIR/rt/cloud_cp_owner.txt" ]; then ok "B: and cleanup does not re
 else no "B: cleanup removed a RUNNER_TEMP file this step does not own"; fi
 
 # --- caso C: modulo presente y fichero AUSENTE -> el defecto real se sigue viendo
-run_case C 1 0 "$B" || cannot "no pude montar el caso C"
-if [ "$CASE_RC" != 0 ]; then ok "C: con el modulo presente y el guion ausente el paso SIGUE muriendo"
-else no "C: un guion borrado dentro del hub se tapa como si fuera el export (rc 0)"; fi
-if ! command grep -q 'NOT APPLICABLE' "$CASE_DIR/stdout"; then ok "C: y no lo llama NOT APPLICABLE (no es un arbol publico)"
-else no "C: llama NOT APPLICABLE a un defecto real"; fi
+run_case C 1 0 "$B" || cannot "could not set up case C"
+if [ "$CASE_RC" != 0 ]; then ok "C: with the module present and script missing the step STILL fails"
+else no "C: a missing script was incorrectly treated as a curated-out module (rc 0)"; fi
+if ! command grep -q 'NOT APPLICABLE' "$CASE_DIR/stdout"; then ok "C: and does not call it NOT APPLICABLE (this is not a public tree)"
+else no "C: calls a real defect NOT APPLICABLE"; fi
 if ! command grep -q '^DATABASE_' "$CASE_DIR/env"; then ok "C: and a missing script publishes no capability DSN"
 else no "C: it published capability DSNs with the ACL file missing"; fi
 
@@ -498,7 +498,7 @@ else no "C: it published capability DSNs with the ACL file missing"; fi
 # the two apart. These prove routing and control behaviour, never PostgreSQL semantics.
 fault_case() { # <modo> <etiqueta> <accion prohibida: none|create|bootstrap-file> <diagnostico esperado>
   CP_STUB_MODE="$1"
-  run_case F 1 1 "$B" || cannot "no pude montar el caso de fallo $1"
+  run_case F 1 1 "$B" || cannot "could not set up failure case $1"
   CP_STUB_MODE=normal
   if [ "$CASE_RC" != 0 ]; then ok "$2: the step fails"
   else no "$2: the step survived with rc 0"; fi
@@ -567,7 +567,7 @@ fault_case acl-bytes-probe "O14 root's unequal malformed pair"      create "$UTF
 # sharper than it looks -- NFC and NFD carry the same text and different bytes, so a reader
 # that normalised quietly would report them equal and lose the exact value it must preserve.
 CP_STUB_MODE=acl-utf8-equal
-run_case U 1 1 "$B" || cannot "no pude montar el caso de ACL no-ASCII valido"
+run_case U 1 1 "$B" || cannot "could not set up the valid non-ASCII ACL case"
 CP_STUB_MODE=normal
 if [ "$CASE_RC" = 0 ]; then ok "O15 a valid non-ASCII ACL is accepted and the step completes"
 else no "O15 a valid non-ASCII ACL broke the step: $(tail -1 "$CASE_DIR/stdout")"; fi
@@ -576,16 +576,16 @@ else no "O15 the step published nothing with a valid non-ASCII ACL"; fi
 fault_case acl-utf8-nfd    "O15 the same non-ASCII ACL in NFD instead of NFC" none 'datacl changed while the cloud plane was bootstrapped'
 # ---------------------------------------------------------------- el cableado de los consumidores
 
-IF_SUITE=$(step_field "$WF" test-cloud-norace if) || cannot "no encuentro el paso test-cloud-norace"
+IF_SUITE=$(step_field "$WF" test-cloud-norace if) || cannot "cannot find the test-cloud-norace step"
 case "$IF_SUITE" in
   *"steps.pg-roles-cloud.outputs.provisioned == 'true'"*)
-    ok "el consumidor (test:cloud:norace) solo corre si los roles se provisionaron" ;;
-  *) no "el consumidor no mira el marcador: correria sin DSN ($IF_SUITE)" ;;
+    ok "the consumer (test:cloud:norace) runs only if roles were provisioned" ;;
+  *) no "the consumer ignores the marker: it would run without DSNs ($IF_SUITE)" ;;
 esac
-IF_NOTICE=$(notice_if "$WF") || cannot "no encuentro el paso de aviso NOT APPLICABLE"
+IF_NOTICE=$(notice_if "$WF") || cannot "cannot find the NOT APPLICABLE notice step"
 case "$IF_NOTICE" in
-  *"provisioned == 'false'"*) ok "y existe un aviso que dice CON PALABRAS que se salto y por que" ;;
-  *) no "el aviso no esta atado al marcador: el salto seria mudo ($IF_NOTICE)" ;;
+  *"provisioned == 'false'"*) ok "and a notice states IN WORDS that it was skipped and why" ;;
+  *) no "the notice is not tied to the marker: the skip would be silent ($IF_NOTICE)" ;;
 esac
 
 # ---------------------------------------------------------------- mutantes
@@ -599,7 +599,7 @@ if kind=='sin-guarda':
     i=s.index('          if [ ! -d cloud/control-plane ]; then')
     j=s.index('          echo "provisioned=true" >> "$GITHUB_OUTPUT"')
     s=s[:i]+s[j:]
-elif kind=='por-fichero':
+elif kind=='by-file':
     s=s.replace('if [ ! -d cloud/control-plane ]; then',
                 'if [ ! -f cloud/control-plane/deploy/cloud-control-roles.sql ]; then',1)
 elif kind=='sin-exit0':
@@ -621,12 +621,12 @@ elif kind=='sin-comparacion-acl':
                 '            --kind "the maintenance database after bootstrap" --database "$CP_MAINT_DB"'
                 ' --owner postgres --identical "$CP_OBS/maint-pre.json"\n','',1)
 else:
-    sys.stderr.write('mutacion desconocida: %s\n'%kind)
+    sys.stderr.write('unknown mutation: %s\n'%kind)
     raise SystemExit(5)
 # Una mutacion que NO APLICA no es un negativo que pase: es un negativo que no se ha hecho. El
 # `mutant_dies` de antes la contaba como mutante muerto, que es un falso positivo del banco.
 if s==original:
-    sys.stderr.write('la mutacion %s no cambia el workflow\n'%kind)
+    sys.stderr.write('mutation %s does not change the workflow\n'%kind)
     raise SystemExit(4)
 open(sys.argv[2],'w',encoding='utf-8').write(s)
 PY
@@ -636,25 +636,25 @@ mutant_dies(){ # <etiqueta> <kind>  ; 0 muere · 1 SOBREVIVE · 2 la mutacion no
   mut_file "$2" || return 2
   local MB="$WORK/mutblock.sh"
   if ! step_field "$WORK/mut.yml" pg-roles-cloud run > "$MB" 2>/dev/null; then
-    printf 'MUERTO %s (el paso deja de ser legible)\n' "$1"; return 0; fi
+    printf 'KILLED %s (the step becomes unreadable)\n' "$1"; return 0; fi
   case "$2" in
     sin-guarda|sin-exit0)
-      run_case M 0 0 "$MB"; [ "$CASE_RC" = 0 ] || { printf 'MUERTO %s (caso A deja de dar rc 0)\n' "$1"; return 0; } ;;
-    por-fichero)
-      run_case M 1 0 "$MB"; [ "$CASE_RC" != 0 ] || { printf 'MUERTO %s (caso C deja de morir)\n' "$1"; return 0; } ;;
+      run_case M 0 0 "$MB"; [ "$CASE_RC" = 0 ] || { printf 'KILLED %s (case A stops returning rc 0)\n' "$1"; return 0; } ;;
+    by-file)
+      run_case M 1 0 "$MB"; [ "$CASE_RC" != 0 ] || { printf 'KILLED %s (case C stops failing)\n' "$1"; return 0; } ;;
     consumidor-suelto)
       local i; i=$(step_field "$WORK/mut.yml" test-cloud-norace if 2>/dev/null)
-      case "$i" in *"provisioned == 'true'"*) ;; *) printf 'MUERTO %s (el consumidor pierde su guarda)\n' "$1"; return 0;; esac ;;
+      case "$i" in *"provisioned == 'true'"*) ;; *) printf 'KILLED %s (the consumer loses its guard)\n' "$1"; return 0;; esac ;;
     dsn-mal-enrutada)
       # O12: killed by the export checker, not by the step -- the step composes the eleven from
       # one variable, so a hand-edited path is a SOURCE defect the bench has to see.
       run_case M 1 1 "$MB"
-      exports_ok "$CASE_DIR/env" || { printf 'MUERTO %s (el checador de las once exportaciones lo rechaza)\n' "$1"; return 0; } ;;
+      exports_ok "$CASE_DIR/env" || { printf 'KILLED %s (the checker for the eleven exports rejects it)\n' "$1"; return 0; } ;;
     bootstrap-en-postgres)
       # O13a: killed by the step's OWN postconditions. The stub answers a bootstrap on
       # /postgres normally; what fails is that cloudcp then still carries the fresh defaults
       # and postgres carries the cloud objects. No text comparison is involved.
-      run_case M 1 1 "$MB"; [ "$CASE_RC" = 0 ] || { printf 'MUERTO %s (las postcondiciones del paso lo rechazan)\n' "$1"; return 0; } ;;
+      run_case M 1 1 "$MB"; [ "$CASE_RC" = 0 ] || { printf 'KILLED %s (the step postconditions reject it)\n' "$1"; return 0; } ;;
     decodificacion-por-reemplazo)
       # Root's finding, reproduced end to end through the real step. With replacement
       # decoding the two halves of the probe pair collapse to one string, the maintenance
@@ -665,38 +665,38 @@ mutant_dies(){ # <etiqueta> <kind>  ; 0 muere · 1 SOBREVIVE · 2 la mutacion no
       if [ "$first" = "$CP_PROBE_FF" ] && [ "$last" = "$CP_PROBE_FE" ]; then
         ok "$1: the mutated step read both halves of root's probe, and they are byte-unequal"
       else no "$1: the mutated step did not read root's two probe halves (got ${first:-none} / ${last:-none})"; fi
-      [ "$CASE_RC" != 0 ] || { printf 'MUERTO %s (con decodificacion por reemplazo dos observaciones de bytes distintos vuelven a compararse iguales)\n' "$1"; return 0; } ;;
+      [ "$CASE_RC" != 0 ] || { printf 'KILLED %s (with replacement decoding two observations with different bytes compare equal again)\n' "$1"; return 0; } ;;
     sin-comparacion-acl)
       # O13b: a removed comparison can only be caught with UNEQUAL values on either side, so
       # this one is run with the maintenance ACL actually changed.
       CP_STUB_MODE=acl-mutated; run_case M 1 1 "$MB"; CP_STUB_MODE=normal
-      [ "$CASE_RC" != 0 ] || { printf 'MUERTO %s (sin la comparacion un ACL alterado ya no mata el paso)\n' "$1"; return 0; } ;;
+      [ "$CASE_RC" != 0 ] || { printf 'KILLED %s (without the comparison a changed ACL no longer fails the step)\n' "$1"; return 0; } ;;
   esac
-  printf 'SOBREVIVE %s\n' "$1"; return 1
+  printf 'SURVIVES %s\n' "$1"; return 1
 }
 
-for m in "M1 guarda borrada:sin-guarda" \
-         "M2 guarda por FICHERO en vez de por DIRECTORIO:por-fichero" \
-         "M3 NOT APPLICABLE que rompe igual:sin-exit0" \
-         "M4 consumidor sin guarda:consumidor-suelto" \
-         "M5 una de las once DSN apunta a /postgres:dsn-mal-enrutada" \
-         "M6 el bootstrap se aplica a /postgres:bootstrap-en-postgres" \
-         "M7 sin la comparacion del ACL de mantenimiento:sin-comparacion-acl" \
-         "M8 el validador decodifica por reemplazo:decodificacion-por-reemplazo"; do
+for m in "M1 deleted guard:sin-guarda" \
+         "M2 guard by FILE instead of DIRECTORY:by-file" \
+         "M3 NOT APPLICABLE that still fails:sin-exit0" \
+         "M4 consumer without a guard:consumidor-suelto" \
+         "M5 one of the eleven DSNs points to /postgres:dsn-mal-enrutada" \
+         "M6 bootstrap applies to /postgres:bootstrap-en-postgres" \
+         "M7 without the maintenance ACL comparison:sin-comparacion-acl" \
+         "M8 the validator uses replacement decoding:decodificacion-por-reemplazo"; do
   lab=${m%%:*}; kind=${m##*:}
   mutant_dies "$lab" "$kind"; mrc=$?
   case "$mrc" in
-    0) ok "$lab: el mutante muere" ;;
-    2) no "$lab: la mutacion NO APLICA sobre el workflow — un negativo que no se ha hecho no pasa" ;;
-    *) no "$lab SOBREVIVE" ;;
+    0) ok "$lab: the mutant is killed" ;;
+    2) no "$lab: the mutation DOES NOT APPLY to the workflow — an unperformed negative control cannot pass" ;;
+    *) no "$lab SURVIVES" ;;
   esac
 done
 
 # CONTROL sobre el propio guion: si mira un workflow sin el paso, dice que no puede mirar.
 printf 'jobs:\n  control-plane:\n    steps:\n      - name: nada\n' > "$WORK/vacio.yml"
 step_field "$WORK/vacio.yml" pg-roles-cloud run >/dev/null 2>&1
-if [ $? -eq 3 ]; then ok "CONTROL: sin el paso, el extractor dice que no puede mirar"
-else no "CONTROL: la ausencia del paso no se distingue de un pase"; fi
+if [ $? -eq 3 ]; then ok "CONTROL: without the step, the extractor reports it cannot check"
+else no "CONTROL: a missing step is indistinguishable from a pass"; fi
 
 printf '\ntest-cloud-roles-partial: %d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ] || exit 1

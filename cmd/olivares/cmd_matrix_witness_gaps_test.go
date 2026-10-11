@@ -82,7 +82,7 @@ func TestHooksConformArgvReachesEditionBoundaryOnlyForValidArgs(t *testing.T) {
 func TestAuditKeyTransitionArgvReachesSignerGuardOnlyForValidArgs(t *testing.T) {
 	t.Setenv("OLIVARES_LEDGER_SIGNER", "")
 	dir := initialisedDataDir(t)
-	_, _, err := execRoot(t, "audit", "key-transition", "--data-dir", dir, "--yes")
+	_, _, err := execRootOwnProcess(t, "audit", "key-transition", "--data-dir", dir, "--yes")
 	if err == nil || !strings.Contains(err.Error(), "requires an off-box checkpoint signer") {
 		t.Fatalf("audit key-transition error = %v, want the off-box signer guard", err)
 	}

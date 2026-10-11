@@ -12,7 +12,8 @@ version="${RELEASE_VERSION:?}"
 [[ "$repo" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ && "$tag" =~ ^[A-Za-z0-9][A-Za-z0-9.-]*$ ]] || {
   printf '%s\n' 'native publication: invalid repository or tag' >&2; exit 1;
 }
-[[ "${tag#v}" == "$version" ]] || { printf '%s\n' 'native publication: tag/version mismatch' >&2; exit 1; }
+[[ "$version" =~ ^[0-9]+\.[0-9]+$ ]] || { printf '%s\n' 'native publication: version must be MAJOR.MINOR' >&2; exit 1; }
+[[ "$tag" == "$version" ]] || { printf '%s\n' 'native publication: tag/version mismatch' >&2; exit 1; }
 # A draft is visible in the paginated release list, not the published-tag route.
 release="$(gh api --paginate "repos/$repo/releases?per_page=100" | jq -es --arg tag "$tag" '
   if length > 0 and all(type == "array") then
@@ -23,12 +24,15 @@ jq -e --arg tag "$tag" '.tag_name == $tag and .draft == true and .prerelease == 
   printf '%s\n' 'native publication: target must be the exact non-prerelease draft' >&2; exit 1;
 }
 release_id="$(jq -r .id <<<"$release")"
-flags=()
-case "$tag" in v0.0.0-rehearsal.*) flags=(--snapshot) ;; esac
-python3 scripts/build-native-release-packages.py --version "$version" --dist dist "${flags[@]}"
+# A rehearsal uses the exact bare release identity in its validated disposable
+# repository. Keep the snapshot builder path explicit without relaxing this
+# publisher's production grammar or draft/signing/upload checks.
+build_args=()
+[[ "${RELEASE_MODE:-production}" != rehearsal ]] || build_args+=(--snapshot)
+python3 scripts/build-native-release-packages.py --version "$version" --dist dist "${build_args[@]}"
 certificate=''
 if [[ "${COSIGN_MODE:-keyless}" == keyless ]]; then certificate=dist/checksums.txt.pem; fi
-bash scripts/cosign-verified.sh sign-blob \
+bash scripts/cosign-verified.sh --scan-checksums dist/checksums.txt sign-blob \
   --output-signature=dist/checksums.txt.sig --output-certificate="$certificate" dist/checksums.txt --yes
 assets=(dist/checksums.txt dist/checksums.txt.sig)
 [[ -z "$certificate" ]] || assets+=("$certificate")

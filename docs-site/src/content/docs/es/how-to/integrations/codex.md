@@ -16,14 +16,16 @@ Esta página es la vía del **conector y del hook PEP**. Para instalar o verific
 CLI oficial, registrar un recibo de sondeo y lanzar o detener una sesión gobernada,
 use [Instalar la CLI de Codex](/how-to/install-codex-cli/). La vía de operación es
 [Operar una sesión de proveedor](/how-to/operate-provider-sessions/)
-(`OLIVARES_SESSION_RUNTIME_CODEX_BIN` o el recibo de una instalación gestionada,
+(`OLIVARES_SESSION_RUNTIME_CODEX_BIN` como selección explícita; si no está definido, la instalación
+gestionada verificada más reciente y después `codex` en el `PATH` del motor,
 más un perfil de proveedor).
 
 ## Agregar Codex
 
 ### Requisitos previos
 
-- Un tenant empresarial de Olivares AI y una cuenta superadmin con AAL3 para operar el roster.
+- Un tenant empresarial de Olivares AI y una cuenta superadmin. Las operaciones del roster
+  siguen la política de verificación adicional administrativa (`admin_step_up`, `none` por defecto).
 - Para ingestión enterprise, una clave de API de plataforma o un access token de workspace con
   los alcances de lectura correspondientes, además del `workspace_id`. El login de la CLI de
   Codex mediante ChatGPT no es una credencial del conector.

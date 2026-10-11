@@ -35,7 +35,7 @@ export LC_ALL
 me=test-package-upgrade-scripts
 
 could_not_look() {
-	printf '%s: NO HE PODIDO MIRAR — %s\n' "$me" "$*" >&2
+	printf '%s: COULD NOT CHECK — %s\n' "$me" "$*" >&2
 	exit 2
 }
 
@@ -115,7 +115,7 @@ new_box() {
 	printf 'no\n' >"$box/state/rc-default"
 	cat >"$box/bin/systemctl" <<'STUB'
 #!/bin/sh
-# Model: enabled|enabled-runtime|linked|static|indirect|disabled|masked x active|inactive.
+# Model: enabled|enabled-runtime|linked|static|indirect|disabled|masked x active|inactive|failed.
 # Assumptions owed to a real systemd guest (HM-07), not measured here: "disable" turns
 # enabled and linked into disabled, leaves a mask, static, indirect and enabled-runtime as
 # they are, and "--now" still stops.
@@ -131,15 +131,36 @@ case "$verb" in
   daemon-reload) exit 0 ;;
   is-enabled) echo "$en"; case "$en" in enabled|enabled-runtime|linked|static|indirect) exit 0 ;; esac; exit 1 ;;
   is-active) echo "$ac"; [ "$ac" = active ] || exit 3 ;;
-  disable) case "$en" in enabled|linked) echo disabled >"$S/enabled" ;; esac; [ $now = yes ] && echo inactive >"$S/active"; exit 0 ;;
+  disable)
+    # A host where systemctl cannot stop the unit (no systemd as PID 1: a container, WSL).
+    [ ! -f "$S/stop-fails" ] || { echo "Removed /etc/systemd/system/multi-user.target.wants/olivares.service." >&2; echo "System has not been booted with systemd as init system (PID 1). Can't operate." >&2; exit 1; }
+    case "$en" in enabled|linked) echo disabled >"$S/enabled" ;; esac; [ $now = yes ] && echo inactive >"$S/active"; exit 0 ;;
   enable) [ "$en" = masked ] && { echo "Unit file is masked." >&2; exit 1; }; echo enabled >"$S/enabled"; [ $now = yes ] && echo active >"$S/active"; exit 0 ;;
   start|restart|reload-or-restart) [ "$en" = masked ] && { echo "Unit is masked." >&2; exit 1; }; echo active >"$S/active" ;;
-  try-restart|condrestart) [ "$en" = masked ] && exit 1; exit 0 ;;
+  try-restart|condrestart)
+    [ "$en" = masked ] && exit 1
+    [ ! -f "$S/restart-fails" ] || { echo failed >"$S/active"; exit 1; }
+    [ -s "$OLIVARES_TEST_BOX/var/lib/olivares-package/upgrade-snapshot" ] || exit 1
+    exit 0 ;;
   stop) echo inactive >"$S/active" ;;
   mask) echo masked >"$S/enabled"; [ $now = yes ] && echo inactive >"$S/active"; exit 0 ;;
   unmask) [ "$en" = masked ] && echo disabled >"$S/enabled"; exit 0 ;;
   *) echo "systemctl stub: unmodelled verb $verb" >&2; exit 1 ;;
 esac
+STUB
+	cat >"$box/bin/sync" <<'STUB'
+#!/bin/sh
+printf 'sync %s\n' "$*" >>"$OLIVARES_TEST_BOX/calls"
+for path in "$@"; do
+  case "$path" in
+    */upgrade-snapshot.*) failure=request-sync ;;
+    "$OLIVARES_TEST_BOX/var/lib/olivares-package") failure=directory-sync ;;
+    "$OLIVARES_TEST_BOX/var/lib") failure=parent-sync ;;
+    *) continue ;;
+  esac
+  [ ! -f "$OLIVARES_TEST_BOX/state/$failure-fails" ] || exit 1
+done
+exec /usr/bin/sync "$@"
 STUB
 	cat >"$box/bin/rc-service" <<'STUB'
 #!/bin/sh
@@ -164,16 +185,31 @@ esac
 exit 0
 STUB
 	# The uninstall engine's service effect, per uninstall.go stopService: systemd
-	# "disable --now"; OpenRC "stop" plus "rc-update del" when in the runlevel.
+	# "disable --now"; OpenRC "stop" plus "rc-update del" when in the runlevel. A refused
+	# record (state/record-refused) exits 2 as cmd_uninstall.go does for a Load error; a stop
+	# that fails is a plain error, exit 1, as stopServiceWithOps returns it.
 	cat >"$box/usr/bin/olivares" <<'STUB'
 #!/bin/sh
 printf 'olivares %s\n' "$*" >>"$OLIVARES_TEST_BOX/calls"
 [ "$1" = uninstall ] || exit 0
+if [ -f "$OLIVARES_TEST_BOX/state/record-refused" ]; then
+  echo "local install manifest must be a regular file owned by root, not a link" >&2
+  exit 2
+fi
+# Representative engine stdout is input to the real script's reporting boundary.
+# The script must suppress it without losing the engine's stderr or exit status.
+cat <<'REPORT'
+ACTION        ROLE          PATH
+keep          binary        /usr/bin/olivares
+keep          config        /etc/olivares/olivares.env
+keep          unit          /usr/lib/systemd/system/olivares.service
+REPORT
+[ ! -f "$OLIVARES_TEST_BOX/state/engine-exit" ] || exit "$(cat "$OLIVARES_TEST_BOX/state/engine-exit")"
 case "$2" in
   --preserve|--purge)
     init=$(sed -n 's/.*"init": "\([a-z]*\)".*/\1/p' "$OLIVARES_TEST_BOX/var/lib/olivares/install-manifest.json")
     case "$init" in
-      systemd) systemctl disable --now olivares ;;
+      systemd) systemctl disable --now olivares || { echo "Error: stop/disable systemd service: exit status 1" >&2; exit 1; } ;;
       openrc) rc-service olivares stop; [ "$(cat "$OLIVARES_TEST_BOX/state/rc-default")" = yes ] && rc-update del olivares default ;;
     esac ;;
 esac
@@ -238,6 +274,9 @@ for a in "$@"; do case "$a" in -*) ;; */*) olivares-test-hook after "$a" ;; esac
 printf 'chown %s\n' "$*" >>"$OLIVARES_TEST_BOX/calls"
 if [ -f "$OLIVARES_TEST_BOX/state/chown-fails-staged" ]; then
   case "$*" in *install-manifest.json.new) echo "chown: changing group: Operation not permitted" >&2; exit 1 ;; esac
+fi
+if [ -f "$OLIVARES_TEST_BOX/state/chown-fails-env" ]; then
+  case "$*" in */etc/olivares/olivares.env) echo "chown: changing group: Operation not permitted" >&2; exit 1 ;; esac
 fi
 # The sandbox has one user: root and olivares both stand for it, as id -u does. The real
 # chown still runs on the same path.
@@ -336,7 +375,7 @@ seed_install() { # FORMAT SIDE: fresh install by that side's postinstall
 
 states=("enabled active" "enabled inactive" "disabled active" "disabled inactive" "masked active" "masked inactive")
 
-# --- 1. new→new DEB/RPM: each prior state is kept (the first cell is the negative control)
+# --- 1. DEB/RPM: upgrade arms a snapshot, restarts active units, keeps enablement
 for fmt in deb rpm; do
 	for s in "${states[@]}"; do
 		read -r en ac <<<"$s"
@@ -357,12 +396,16 @@ for fmt in deb rpm; do
 			run new postremove.sh 1; r3=$last_rc
 		fi
 		m="$(mutations)"
+		want_calls=''
+		[[ "$ac" == active && "$en" != masked ]] && want_calls='systemctl try-restart olivares'
 		if [[ "$r1$r2$r3" != 000 ]]; then
 			not_ok "$case_id: script exit codes $r1/$r2/$r3, want 0/0/0"
 		elif [[ "$(state)" != "$en/$ac" ]]; then
 			not_ok "$case_id: state kept across upgrade — got $(state), want $en/$ac (calls: $(tr '\n' ';' <<<"$m"))"
-		elif [[ -n "$m" ]]; then
-			not_ok "$case_id: the package changed the service: $(tr '\n' ';' <<<"$m")"
+		elif [[ "$m" != "$want_calls" ]]; then
+			not_ok "$case_id: service calls '$m', want '$want_calls'"
+		elif [[ ! -s "$box/var/lib/olivares-package/upgrade-snapshot" ]]; then
+			not_ok "$case_id: no durable pre-migration snapshot request"
 		elif [[ -e "$box/run/olivares.pkg-pending" ]]; then
 			not_ok "$case_id: a pending condition was left on an upgrade that kept the state: $(tr '\n' ' ' <"$box/run/olivares.pkg-pending")"
 		elif [[ -e "$box/run/olivares.pkg-removed-init" ]]; then
@@ -370,7 +413,66 @@ for fmt in deb rpm; do
 		elif grep -q 'predates the upgrade contract' "$post_out.stdout"; then
 			not_ok "$case_id: the postinstall warned about a replaced package that honors the contract (n-1)"
 		else
-			ok "$case_id: state kept, no service call, no pending condition, no warning"
+			ok "$case_id: snapshot requested, active unmasked service restarted, enablement kept"
+		fi
+	done
+done
+
+# A failed request or restart must be visible, with no start past a failed request.
+for failure in request request-sync directory-sync parent-sync restart; do
+	case_id="upgrade $failure failure"
+	new_box "failure-$failure"
+	seed_install deb new || continue
+	set_state enabled active
+	if [[ "$failure" == request ]]; then
+		mkdir "$box/var/lib/olivares-package/upgrade-snapshot"
+	else
+		: >"$box/state/$failure-fails"
+	fi
+	run new postinstall.sh configure 26.10.1
+	if [[ "$last_rc" == 0 ]]; then
+		not_ok "$case_id: package falsely reported success"
+	elif [[ "$failure" != restart && -n "$(mutations)" ]]; then
+		not_ok "$case_id: restarted without a snapshot request"
+	elif ! grep -Eq 'snapshot-request-failed|restart-failed' "$last_out.stderr"; then
+		not_ok "$case_id: failure not actionable"
+	else
+		ok "$case_id: refused with cause; no unsafe fallback"
+	fi
+done
+
+# A failed replacement leaves the unit stopped: configuring again cannot recover it.
+# The refusal must name a manual start that preserves the prior enablement.
+for fmt in deb rpm; do
+	for en in enabled disabled; do
+		case_id="upgrade $fmt $en failed-start recovery"
+		new_box "recovery-$fmt-$en"
+		seed_install "$fmt" new || continue
+		set_state "$en" active
+		: >"$box/state/restart-fails"
+		args=(configure 26.10.1)
+		[[ "$fmt" != rpm ]] || args=(2)
+		run new postinstall.sh "${args[@]}"
+		failed_out=$last_out
+		if [[ "$last_rc" == 0 || "$(state)" != "$en/failed" ]]; then
+			not_ok "$case_id: failed replacement was not reported ($last_rc, $(state))"
+			continue
+		fi
+		rm "$box/state/restart-fails"
+		: >"$box/calls"
+		run new postinstall.sh "${args[@]}"
+		if [[ "$last_rc" != 0 || "$(state)" != "$en/failed" || -n "$(mutations)" ]]; then
+			not_ok "$case_id: configuration retry changed the failed service ($last_rc, $(state))"
+		elif ! grep -Fq 'systemctl start olivares' "$failed_out.stderr"; then
+			not_ok "$case_id: refusal omits the manual start required after repair"
+		elif [[ ! -s "$box/var/lib/olivares-package/upgrade-snapshot" ]]; then
+			not_ok "$case_id: configuration retry lost the snapshot request"
+		elif ! env OLIVARES_TEST_BOX="$box" "$box/bin/systemctl" start olivares; then
+			not_ok "$case_id: manual start failed after repair"
+		elif [[ "$(state)" != "$en/active" ]]; then
+			not_ok "$case_id: manual start did not recover while preserving enablement"
+		else
+			ok "$case_id: explicit start recovers after configuration retry; enablement kept"
 		fi
 	done
 done
@@ -467,6 +569,97 @@ for side in new old; do
 			ok "$case_id: pre-upgrade stop and post-upgrade start from the stamp only when active; runlevel kept"
 		fi
 	done
+done
+
+# --- 3b. the closing notice follows the action: an upgrade is not a fresh install --------
+# A configured installation keeps its enablement and a running unit is restarted by the
+# package, so the install steps (enable --now, token) must not print, and the notice only
+# says what was measured: restarted, stays stopped, masked, or what a recovery notice owns.
+install_notice='Olivares AI installed|Start it|FIRST-BOOT SETUP|rc-update add'
+for fmt in deb rpm; do
+	for s in "${states[@]}"; do
+		read -r en ac <<<"$s"
+		case_id="upgrade notice $fmt $en/$ac"
+		new_box "notice-$fmt-$en-$ac"
+		seed_install "$fmt" new || continue
+		set_state "$en" "$ac"
+		case "$fmt" in deb) run new postinstall.sh configure 26.10.1; from='upgraded from 26.10.1.' ;; rpm) run new postinstall.sh 2; from='upgraded.' ;; esac
+		out="$last_out.stdout"
+		case "$en/$ac" in
+		masked*/*) want='unmask olivares' deny='restart requested|stays stopped' ;;
+		*/active) want='restart requested' deny='stays stopped|previous version|unmask' ;;
+		*) want='stays stopped' deny='restart requested|unmask' ;;
+		esac
+		if [[ "$last_rc" -ne 0 ]]; then not_ok "$case_id: rc=$last_rc $(tr '\n' ' ' <"$last_out.stderr")"
+		elif grep -Eq "$install_notice|enable --now" "$out"; then
+			not_ok "$case_id: printed the fresh-install notice '$(grep -E "$install_notice|enable --now" "$out" | head -1)'"
+		elif ! grep -Fq "Olivares AI $from" "$out"; then not_ok "$case_id: want 'Olivares AI $from', got '$(head -1 "$out")'"
+		elif ! grep -Fq "$want" "$out"; then not_ok "$case_id: the notice lacks '$want'"
+		elif grep -Eq "$deny" "$out"; then not_ok "$case_id: the notice claims '$(grep -E "$deny" "$out" | head -1)'"
+		elif [[ "$(state)" != "$en/$ac" ]]; then not_ok "$case_id: state $(state), want $en/$ac"
+		else ok "$case_id: upgrade notice; no install steps or token; says only what happened"; fi
+	done
+done
+# apk: the service is started again only when it ran before; the notice says which.
+for ac in active inactive; do
+	case_id="upgrade notice apk $ac"
+	new_box "notice-apk-$ac"
+	seed_install apk new || continue
+	set_state enabled "$ac"
+	run new apk-preupgrade.sh 2.0.0-r0 1.0.0-r0; r1=$last_rc
+	run new postinstall.sh 2.0.0-r0 1.0.0-r0; r2=$last_rc
+	out="$last_out.stdout"
+	started="$(grep -c '^rc-service olivares start' "$box/calls" || true)"
+	if [[ "$r1$r2" != 00 ]]; then not_ok "$case_id: exit codes $r1/$r2"
+	elif grep -Eq "$install_notice" "$out"; then not_ok "$case_id: printed the fresh-install notice '$(grep -E "$install_notice" "$out" | head -1)'"
+	elif ! grep -Fq 'Olivares AI upgraded from 1.0.0-r0.' "$out"; then not_ok "$case_id: no 'upgraded from 1.0.0-r0' notice"
+	elif [[ "$ac" == active ]] && { [[ "$started" != 1 ]] || grep -Fq 'not started' "$out"; }; then
+		not_ok "$case_id: started $started times, or the notice says it was not started"
+	elif [[ "$ac" == inactive ]] && { [[ "$started" != 0 ]] || ! grep -Fq 'was not started by this upgrade; start it with: sudo rc-service olivares start' "$out"; }; then
+		not_ok "$case_id: started $started times, or the notice does not say how to start it"
+	else ok "$case_id: upgrade notice; rc-service start calls $started"; fi
+done
+# An aborted transaction unwinds an earlier one: no install steps, no upgrade claim.
+for abort in "abort-upgrade 2.0.0" "abort-remove in-favour other 1.0" "abort-deconfigure in-favour other 1.0"; do
+	case_id="${abort%% *} prints no install notice"
+	new_box "notice-${abort%% *}"
+	seed_install deb new || continue
+	set_state enabled active
+	# shellcheck disable=SC2086
+	run new postinstall.sh $abort
+	if [[ "$last_rc" -ne 0 ]]; then not_ok "$case_id: rc=$last_rc $(tr '\n' ' ' <"$last_out.stderr")"
+	elif grep -Eq "$install_notice|enable --now|Olivares AI upgraded" "$last_out.stdout"; then
+		not_ok "$case_id: printed '$(grep -E "$install_notice|enable --now|Olivares AI upgraded" "$last_out.stdout" | head -1)'"
+	else ok "$case_id: no closing install or upgrade notice"; fi
+done
+# The replaced prerm stopped and disabled the unit: the recovery notice owns the one
+# instruction ("enable --now" restores the enablement); the closing line must not add a
+# bare "start".
+case_id="upgrade notice old->new deb legacy prerm"
+new_box notice-legacy
+if seed_install deb old; then
+	set_state enabled active
+	run old preremove.sh upgrade 26.10.1; run old postremove.sh upgrade 26.10.1
+	run new postinstall.sh configure 26.9.0
+	out="$last_out.stdout"
+	if [[ "$last_rc" -ne 0 ]]; then not_ok "$case_id: rc=$last_rc $(tr '\n' ' ' <"$last_out.stderr")"
+	elif [[ "$(pending_field condition)" != legacy-prerm-upgrade ]] || ! grep -Fq 'systemctl enable --now olivares' "$out"; then
+		not_ok "$case_id: the recovery notice is missing (pending '$(pending_field condition)')"
+	elif grep -Eq "$install_notice|stays stopped|previous version" "$out"; then
+		not_ok "$case_id: the closing notice adds '$(grep -E "$install_notice|stays stopped|previous version" "$out" | head -1)'"
+	else ok "$case_id: one instruction, from the recovery notice"; fi
+fi
+# A fresh install still prints the steps, and the setup token is only promised there.
+for fmt in deb rpm apk; do
+	case_id="install notice $fmt"
+	new_box "notice-install-$fmt"
+	ship "$fmt"
+	case "$fmt" in deb) run new postinstall.sh configure '' ;; rpm) run new postinstall.sh 1 ;; apk) run new postinstall.sh 1.0.0-r0 ;; esac
+	if [[ "$last_rc" -ne 0 ]]; then not_ok "$case_id: rc=$last_rc"
+	elif ! grep -Fq 'Olivares AI installed' "$last_out.stdout" || ! grep -Fq 'FIRST-BOOT SETUP' "$last_out.stdout"; then
+		not_ok "$case_id: the install steps and setup token are missing"
+	elif grep -Fq 'Olivares AI upgraded' "$last_out.stdout"; then not_ok "$case_id: an install printed the upgrade notice"
+	else ok "$case_id: install steps and setup token printed"; fi
 done
 
 # --- 4. removal and purge keep today's contract (same service effects as ccf7ea20) ----
@@ -1501,6 +1694,161 @@ for how in other-boot unknown-schema; do
 	if [[ "$last_rc" -ne 0 ]]; then not_ok "$case_id: rc=$last_rc"
 	elif grep -q '^systemctl start olivares' "$box/calls"; then not_ok "$case_id: started from it"
 	else ok "$case_id: no start"; fi
+done
+
+# --- 6c. the service env file: root:olivares, a mode doctor accepts, the operator's content kept
+# BEFORE is the mode of the file the package manager left: the 0640 payload, or an
+# operator-edited conffile it kept on upgrade (dpkg/rpm never re-mode a kept conffile);
+# "none" is APK, which copies the example. Doctor accepts 0400, 0440, 0600 and 0640.
+E=etc/olivares/olivares.env
+env_case() { # ID FORMAT BEFORE WANT ARGS...
+	local before=$3 want=$4 gid
+	case_id=$1
+	new_box "env-$2-$3"
+	ship "$2"
+	if [[ "$before" == none ]]; then
+		printf 'OLIVARES_EXTRA_ARGS=\n# example\n' >"$box/usr/share/olivares/olivares.env.example"
+	else
+		printf 'OLIVARES_EXTRA_ARGS=--listen=127.0.0.1:8443\n# operator edit\n' >"$box/$E"
+		chmod "$before" "$box/$E"
+	fi
+	shift 4
+	run new postinstall.sh "$@"
+	gid=$(id -g)
+	if [[ "$last_rc" -ne 0 ]]; then not_ok "$case_id: rc=$last_rc $(tr '\n' ' ' <"$last_out.stderr")"
+	elif [[ "$(stat -c %a "$box/$E" 2>/dev/null)" != "$want" ]]; then not_ok "$case_id: mode $(stat -c %a "$box/$E" 2>/dev/null || echo absent), want $want"
+	elif ! grep -qx "chown root:$gid $box/$E" "$box/calls"; then not_ok "$case_id: the file was not given to root:olivares"
+	elif ! grep -qx "# $([[ "$before" == none ]] && echo example || echo 'operator edit')" "$box/$E"; then
+		not_ok "$case_id: the content was replaced"
+	else ok "$case_id: mode $want, root:olivares, content kept"; fi
+}
+env_case "env deb upgrade keeps an operator-edited 0644 file and closes it" deb 644 640 configure 26.10.1
+env_case "env rpm upgrade keeps an operator-edited 0644 file and closes it" rpm 644 640 2
+env_case "env rpm install gives the 0640 payload to the service group" rpm 640 640 1
+env_case "env deb install gives the 0640 payload to the service group" deb 640 640 configure ''
+env_case "env an operator's stricter 0600 is kept" deb 600 600 configure 26.10.1
+env_case "env an operator's 0440 is kept" rpm 440 440 2
+env_case "env an operator's 0400 is kept" deb 400 400 configure 26.10.1
+env_case "env a group-writable 0660 is closed" deb 660 640 configure 26.10.1
+env_case "env apk install copies the example as 0640 root:olivares" apk none 640 1.0.0-r0
+
+case_id="env an operator who deleted the env file gets none back"
+new_box env-absent
+ship deb
+run new postinstall.sh configure 26.10.1
+if [[ "$last_rc" -ne 0 ]]; then not_ok "$case_id: rc=$last_rc"
+elif [[ -e "$box/$E" || -L "$box/$E" ]]; then not_ok "$case_id: an env file was created"
+else ok "$case_id: rc 0, nothing created"; fi
+
+case_id="env a failed chown refuses by name"
+new_box env-chown-fails
+ship deb
+printf 'OLIVARES_EXTRA_ARGS=\n' >"$box/$E"; chmod 0644 "$box/$E"
+: >"$box/state/chown-fails-env"
+run new postinstall.sh configure 26.10.1
+if [[ "$last_rc" -eq 0 ]]; then not_ok "$case_id: rc=0"
+elif ! grep -Fq 'refused: env-file-owner-failed' "$last_out.stderr"; then not_ok "$case_id: $(tr '\n' ' ' <"$last_out.stderr")"
+else ok "$case_id: refused: env-file-owner-failed"; fi
+
+case_id="env a link at the env file's name is not followed"
+new_box env-link
+ship deb
+printf 'victim\n' >"$box/victim-env"; chmod 0644 "$box/victim-env"
+ln -s "$box/victim-env" "$box/$E"
+run new postinstall.sh configure 26.10.1
+if [[ "$last_rc" -ne 0 ]]; then not_ok "$case_id: rc=$last_rc"
+elif [[ "$(stat -c %a "$box/victim-env")" != 644 ]] || grep -qE "^ch(own|mod) .*$box/$E\$" "$box/calls"; then
+	not_ok "$case_id: root changed the link's target"
+else ok "$case_id: the target untouched"; fi
+
+# --- 6d. a removal whose service stop fails names the stop, never a refused record -----
+# The engine exits 2 for a record it refuses and 1 for a stop that failed; the removal
+# completes either way. The message names the true cause with systemctl's reason, and the
+# receipt says stopped=yes only when the service was stopped (a host where systemctl cannot
+# stop the unit: no systemd as PID 1, a container or WSL).
+# stop_case ID FORMAT RECORD STOP: remove the package; RECORD is trusted|refused (exit 2)|broken
+# (the engine exits 3), STOP ok|fails.
+stop_case() {
+	local id=$1 fmt=$2 record=$3 stop=$4 arg=remove want=yes l
+	[[ "$fmt" == rpm ]] && arg=0
+	case_id=$id
+	new_box "stop-$fmt-$record-$stop"
+	seed_install "$fmt" new || return 0
+	set_state enabled active
+	[[ "$record" == refused ]] && : >"$box/state/record-refused"
+	[[ "$record" == broken ]] && printf '3\n' >"$box/state/engine-exit"
+	[[ "$stop" == fails ]] && { : >"$box/state/stop-fails"; want=no; }
+	run new preremove.sh "$arg"
+	l="$(lineof preremove)"
+	if [[ "$last_rc" -ne 0 ]]; then not_ok "$id: the removal failed, rc=$last_rc: $(tr '\n' ' ' <"$last_out.stderr")"
+	elif grep -Eq '^keep[[:space:]]+(binary|config|unit)[[:space:]]' "$last_out.stdout"; then
+		not_ok "$id: the engine's keep table reached package-removal stdout"
+	elif ! want_fields "$id" "$l" stopped=$want result=ok; then :
+	elif [[ "$record" != refused ]] && grep -Fq 'install record refused' "$last_out.stderr"; then
+		not_ok "$id: a failure that is not a refusal was reported as one: $(tr '\n' ' ' <"$last_out.stderr")"
+	elif [[ "$record" == broken ]] && ! grep -Fq 'uninstall engine failed (exit 3)' "$last_out.stderr"; then
+		not_ok "$id: the engine's exit status is not named: $(tr '\n' ' ' <"$last_out.stderr")"
+	elif [[ "$record" == trusted && "$stop" == fails ]] && ! grep -Fq 'Error: stop/disable systemd service: exit status 1' "$last_out.stderr"; then
+		not_ok "$id: the engine's stop diagnostic was swallowed"
+	elif [[ "$record" == refused ]] && ! grep -Fq 'local install manifest must be a regular file owned by root, not a link' "$last_out.stderr"; then
+		not_ok "$id: the engine's refusal diagnostic was swallowed"
+	elif [[ "$record" == trusted && "$stop" == fails ]] && ! grep -Fq 'uninstall engine failed (exit 1)' "$last_out.stderr"; then
+		not_ok "$id: the engine failure is not named: $(tr '\n' ' ' <"$last_out.stderr")"
+	elif [[ "$record" == refused ]] && ! grep -Fq 'install record refused' "$last_out.stderr"; then
+		not_ok "$id: the refusal is not reported: $(tr '\n' ' ' <"$last_out.stderr")"
+	elif [[ "$stop" == ok ]] && grep -Fq 'could not be stopped' "$last_out.stderr"; then
+		not_ok "$id: a stop that worked was reported as failed: $(tr '\n' ' ' <"$last_out.stderr")"
+	elif [[ "$stop" == fails ]] && { ! grep -Fq 'could not be stopped' "$last_out.stderr" ||
+		! grep -F 'could not be stopped' "$last_out.stderr" | grep -Fq "Can't operate" ||
+		! grep -Fq 'stop it yourself' "$last_out.stderr"; }; then
+		not_ok "$id: the failed stop is not named with its reason: $(tr '\n' ' ' <"$last_out.stderr")"
+	else ok "$id: stopped=$want and the cause is named truthfully"; fi
+}
+stop_case "6d control: deb removal, record accepted, stop works" deb trusted ok
+stop_case "6d deb removal, record accepted, stop fails: the stop is named, stopped=no" deb trusted fails
+stop_case "6d rpm removal, record accepted, stop fails: the stop is named, stopped=no" rpm trusted fails
+stop_case "6d deb removal, record refused, stop fails: both causes named, stopped=no" deb refused fails
+stop_case "6d deb removal, record refused, stop works: the safe stop, stopped=yes" deb refused ok
+stop_case "6d deb removal, engine exits 3, stop works: named by its exit, not refused, stopped=yes" deb broken ok
+
+# --- 6e. package removal reports the package manager's effects, not the engine's ----
+for fmt in deb rpm apk; do
+	for record in trusted missing refused; do
+		case_id="6e $fmt removal output ($record record)"
+		new_box "report-$fmt-$record"
+		seed_install "$fmt" new || continue
+		[[ "$record" == missing ]] && rm -f "$box/var/lib/olivares/install-manifest.json"
+		[[ "$record" == refused ]] && : >"$box/state/record-refused"
+		arg=remove unit="$box/usr/lib/systemd/system/olivares.service"
+		[[ "$fmt" == rpm ]] && arg=0
+		[[ "$fmt" == apk ]] && { arg=1.0.0-r0; unit="$box/etc/init.d/olivares"; }
+		run new preremove.sh "$arg"
+		if [[ "$last_rc" != 0 ]]; then not_ok "$case_id: rc=$last_rc"
+		elif [[ "$record" == refused ]] && ! grep -Fq 'local install manifest must be a regular file owned by root, not a link' "$last_out.stderr"; then
+			not_ok "$case_id: the engine's refusal diagnostic was swallowed"
+		elif grep -Eq '^keep[[:space:]]+(binary|config|unit)[[:space:]]' "$last_out.stdout"; then
+			not_ok "$case_id: the engine's keep table reached package-removal stdout"
+		elif ! grep -Fq "package manager will remove binary $box/usr/bin/olivares and unit $unit" "$last_out.stdout"; then
+			not_ok "$case_id: package-owned binary/unit removal is not disclosed"
+		elif ! grep -Fq "config $box/etc/olivares/olivares.env follows $fmt package-manager policy" "$last_out.stdout"; then
+			not_ok "$case_id: config policy is not disclosed"
+		elif [[ "$fmt" == deb ]] && ! grep -Fq 'kept on remove; removed on purge' "$last_out.stdout"; then
+			not_ok "$case_id: Debian remove/purge distinction is missing"
+		elif ! grep -Fq "data $box/var/lib/olivares, keys and service account are preserved" "$last_out.stdout"; then
+			not_ok "$case_id: retained data/keys/account are not disclosed"
+		else ok "$case_id: package paths and config policy disclosed, no false keep table"; fi
+	done
+done
+
+for fmt in deb rpm; do
+	case_id="6e $fmt upgrade has no removal notice"
+	new_box "report-upgrade-$fmt"
+	seed_install "$fmt" new || continue
+	arg=upgrade; [[ "$fmt" == rpm ]] && arg=1
+	run new preremove.sh "$arg"
+	if [[ "$last_rc" != 0 || -s "$last_out.stdout" ]]; then
+		not_ok "$case_id: rc=$last_rc, stdout must be empty"
+	else ok "$case_id: no removal report"; fi
 done
 
 # --- 7. boundary: no product script touches boot artifacts --------------------------

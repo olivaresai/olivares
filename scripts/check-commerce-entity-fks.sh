@@ -23,10 +23,10 @@ MAIN="$RAIZ/commercial/commerce/cmd/commerce/main.go"
 MIGR="$RAIZ/commercial/commerce/migrations"
 
 if [ ! -r "$MAIN" ]; then
-	echo "check-commerce-entity-fks: NO PUDE MIRAR — no leo $MAIN" >&2; exit 2
+	echo "check-commerce-entity-fks: COULD NOT CHECK — cannot read $MAIN" >&2; exit 2
 fi
 if [ ! -d "$MIGR" ]; then
-	echo "check-commerce-entity-fks: NO PUDE MIRAR — no hay directorio $MIGR" >&2; exit 2
+	echo "check-commerce-entity-fks: COULD NOT CHECK — missing directory $MIGR" >&2; exit 2
 fi
 
 tmp="$(mktemp -d "${TMPDIR:-/tmp}/commfk.XXXXXX")"
@@ -46,7 +46,7 @@ awk '
 ' "$MAIN" | sort -u > "$tmp/declarado"
 
 if [ ! -s "$tmp/declarado" ]; then
-	echo "check-commerce-entity-fks: NO PUDE MIRAR — no he sabido leer expected_entity_foreign_keys en $MAIN" >&2
+	echo "check-commerce-entity-fks: COULD NOT CHECK — cannot read expected_entity_foreign_keys in $MAIN" >&2
 	exit 2
 fi
 
@@ -75,14 +75,14 @@ awk '
 ' "$MIGR"/*.up.sql | sort -u > "$tmp/real"
 
 if command grep -q '^__HUERFANA__' "$tmp/real"; then
-	echo "check-commerce-entity-fks: NO PUDE MIRAR — hay una REFERENCES a commerce.legal_entities" >&2
-	echo "  FUERA de un CREATE TABLE (un ALTER TABLE ... ADD CONSTRAINT, o una forma que este guion" >&2
-	echo "  no sabe atribuir a su tabla). Antes de dar una lista incompleta por buena, rehusa." >&2
+	echo "check-commerce-entity-fks: COULD NOT CHECK — a REFERENCES to commerce.legal_entities appears" >&2
+	echo "  outside a CREATE TABLE (ALTER TABLE ... ADD CONSTRAINT, or a form this script cannot" >&2
+	echo "  associate with its table). Refusing to approve an incomplete list." >&2
 	exit 2
 fi
 
 if [ ! -s "$tmp/real" ]; then
-	echo "check-commerce-entity-fks: NO PUDE MIRAR — no he encontrado ninguna FK hacia legal_entities en $MIGR" >&2
+	echo "check-commerce-entity-fks: COULD NOT CHECK — no foreign keys to legal_entities found in $MIGR" >&2
 	exit 2
 fi
 
@@ -93,23 +93,23 @@ n_dec="$(command grep -c . "$tmp/declarado" || true)"
 n_real="$(command grep -c . "$tmp/real" || true)"
 
 if [ -z "$faltan" ] && [ -z "$sobran" ]; then
-	echo "check-commerce-entity-fks: LIMPIO — las $n_real FK hacia legal_entities que crean las migraciones"
-	echo "  son exactamente las $n_dec que declara expected_entity_foreign_keys."
+	echo "check-commerce-entity-fks: CLEAN — the $n_real foreign keys to legal_entities created by migrations"
+	echo "  exactly match the $n_dec declared by expected_entity_foreign_keys."
 	exit 0
 fi
 
-echo "check-commerce-entity-fks: HALLAZGO — la lista blanca del postflight y las migraciones no coinciden." >&2
+echo "check-commerce-entity-fks: FINDING — the postflight allowlist and migrations disagree." >&2
 if [ -n "$faltan" ]; then
-	echo "  EN LAS MIGRACIONES Y NO EN LA LISTA (el servicio REHUSARÁ arrancar):" >&2
+	echo "  IN MIGRATIONS BUT NOT IN THE LIST (the service will refuse to start):" >&2
 	printf '%s\n' "$faltan" | while read -r t c; do
 		[ -n "$t" ] || continue
 		echo "    ('${t}_${c}_fkey', '${t}', '${c}')" >&2
 	done
 fi
 if [ -n "$sobran" ]; then
-	echo "  EN LA LISTA Y NO EN LAS MIGRACIONES (declara algo que ya no existe):" >&2
+	echo "  IN THE LIST BUT NOT IN MIGRATIONS (declares something that no longer exists):" >&2
 	printf '%s\n' "$sobran" | sed 's/^/    /' >&2
 fi
-echo "  arreglo: añade o retira esas filas en expected_entity_foreign_keys de" >&2
-echo "  commercial/commerce/cmd/commerce/main.go. Declaradas=$n_dec reales=$n_real." >&2
+echo "  fix: add or remove these rows in expected_entity_foreign_keys in" >&2
+echo "  commercial/commerce/cmd/commerce/main.go. Declared=$n_dec actual=$n_real." >&2
 exit 1

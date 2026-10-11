@@ -34,13 +34,13 @@ func CommunicationSchemaKinds() []model.Kind {
 // row-level invariants: those belong to the guard witness and to each apply
 // path's same-transaction checks.
 func (m *Module) VerifyCommunicationSchema(ctx context.Context, tenant model.TenantID) error {
-	if m == nil || m.data == nil {
+	if m == nil || m.Data == nil {
 		return store.ErrStoreUnavailable
 	}
 	if !validCanonicalCommunicationTenant(tenant) {
 		return communicationError(ErrInvalidCommunicationTransition, "communication schema proof tenant is invalid")
 	}
-	return m.data.View(ctx, tenant, func(sc store.Scope) error {
+	return m.Data.View(ctx, tenant, func(sc store.Scope) error {
 		for _, kind := range CommunicationSchemaKinds() {
 			repo, err := sc.Ext(kind)
 			if err != nil {

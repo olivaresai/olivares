@@ -5,9 +5,7 @@
 package accessmap
 
 import (
-	"encoding/json"
-	"net/http"
-
+	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/model"
 )
 
@@ -188,17 +186,7 @@ func toDiffResponse(d PrivilegeDiff) diffResponse {
 	return out
 }
 
-// writeJSON writes v as a JSON response. Modules cannot reach the core API's
-// unexported render helper, so each module owns a tiny equivalent.
-func writeJSON(w http.ResponseWriter, status int, v any) {
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.WriteHeader(status)
-	if v != nil {
-		_ = json.NewEncoder(w).Encode(v)
-	}
-}
+var writeJSON = api.WriteJSON
 
 // errorBody is the small error envelope module endpoints return.
-func errorBody(msg string) map[string]any {
-	return map[string]any{"error": map[string]string{"message": msg}}
-}
+var errorBody = api.ModuleErrorBody

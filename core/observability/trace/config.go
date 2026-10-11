@@ -35,10 +35,16 @@ import (
 	"os"
 	"strconv"
 	"strings"
+
+	"github.com/olivaresai/olivares/core/envconfig"
 )
 
 // defaultServiceName is the OTel resource service.name the engine reports.
 const defaultServiceName = "olivares"
+
+// optInGenAILatest is the OTEL_SEMCONV_STABILITY_OPT_IN token the gen-ai
+// semantic-convention README defines for emitting the latest experimental form.
+const optInGenAILatest = "gen_ai_latest_experimental"
 
 // Protocol selects the OTLP transport. Both are Stable OTLP; gRPC (4317) and
 // HTTP/protobuf (4318) are the two transports the OTLP spec defines.
@@ -89,6 +95,18 @@ type Config struct {
 	// semantic-conventions-genai/c321d7e/docs/gen-ai/README.md). This knob is
 	// Olivares-specific pending upstream guidance.
 	GenAICompat bool
+	// GenAILatest switches GenAI emission to the latest experimental semconv
+	// form instead of the published one the default emits: the
+	// gen_ai.client.inference.usage per-tier counters replace the
+	// gen_ai.client.token.usage histogram and its gen_ai.token.type attribute
+	// (semantic-conventions-genai #374), and the span's cache attribute is
+	// gen_ai.usage.cache_write.input_tokens (#440). The replaced names are NOT
+	// emitted — this is the opt-in the gen-ai semconv README documents
+	// ("emit the latest experimental version ... do not emit the old one"), set
+	// through the standard comma-separated OTEL_SEMCONV_STABILITY_OPT_IN list
+	// containing gen_ai_latest_experimental. Environment-only, like the SDK's own
+	// OTEL_EXPORTER_* inputs: there is no saved-settings form.
+	GenAILatest bool
 	// ProviderBaggageAllowlist declares non-secret control values that may leave
 	// through AnthropicHTTPClient. Empty denies baggage; trace context continues.
 	// This does not authorize provider execution or apply to other transports.
@@ -107,10 +125,10 @@ func FromEnv(version string) Config {
 		ServiceName:    defaultServiceName,
 		ServiceVersion: version,
 	}
-	endpoint := firstNonEmpty(os.Getenv("OLIVARES_OTEL_ENDPOINT"), os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT"))
+	endpoint := firstNonEmpty(envconfig.Get("OLIVARES_OTEL_ENDPOINT"), os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT"))
 	cfg.Endpoint = strings.TrimSpace(endpoint)
 
-	if p := firstNonEmpty(os.Getenv("OLIVARES_OTEL_PROTOCOL"), os.Getenv("OTEL_EXPORTER_OTLP_PROTOCOL")); p != "" {
+	if p := firstNonEmpty(envconfig.Get("OLIVARES_OTEL_PROTOCOL"), os.Getenv("OTEL_EXPORTER_OTLP_PROTOCOL")); p != "" {
 		switch strings.TrimSpace(strings.ToLower(p)) {
 		case "http", "http/protobuf", "httpprotobuf":
 			cfg.Protocol = ProtocolHTTP
@@ -118,23 +136,24 @@ func FromEnv(version string) Config {
 			cfg.Protocol = ProtocolGRPC
 		}
 	}
-	if v := os.Getenv("OLIVARES_OTEL_INSECURE"); truthy(v) {
+	if v := envconfig.Get("OLIVARES_OTEL_INSECURE"); truthy(v) {
 		cfg.Insecure = true
 	}
-	if v := strings.TrimSpace(os.Getenv("OLIVARES_OTEL_SAMPLE_RATIO")); v != "" {
+	if v := strings.TrimSpace(envconfig.Get("OLIVARES_OTEL_SAMPLE_RATIO")); v != "" {
 		if r, err := strconv.ParseFloat(v, 64); err == nil && r >= 0 && r <= 1 {
 			cfg.SampleRatio = r
 		}
 	}
-	if v := strings.TrimSpace(os.Getenv("OLIVARES_OTEL_SERVICE_NAME")); v != "" {
+	if v := strings.TrimSpace(envconfig.Get("OLIVARES_OTEL_SERVICE_NAME")); v != "" {
 		cfg.ServiceName = v
 	}
-	cfg.GenAICompat = truthy(os.Getenv("OLIVARES_OTEL_GENAI_COMPAT"))
+	cfg.GenAICompat = truthy(envconfig.Get("OLIVARES_OTEL_GENAI_COMPAT"))
+	cfg.GenAILatest = semconvOptIn(os.Getenv("OTEL_SEMCONV_STABILITY_OPT_IN"), optInGenAILatest)
 	cfg.ProviderBaggageAllowlist, cfg.providerBaggageRejection = parseProviderBaggage(
-		os.Getenv("OLIVARES_OTEL_PROVIDER_BAGGAGE_ALLOWLIST"),
+		envconfig.Get("OLIVARES_OTEL_PROVIDER_BAGGAGE_ALLOWLIST"),
 	)
 	// Enabled when explicitly turned on, or implicitly when an endpoint is configured.
-	cfg.Enabled = truthy(os.Getenv("OLIVARES_OTEL_ENABLED")) || cfg.Endpoint != ""
+	cfg.Enabled = truthy(envconfig.Get("OLIVARES_OTEL_ENABLED")) || cfg.Endpoint != ""
 	return cfg
 }
 
@@ -150,4 +169,16 @@ func firstNonEmpty(vals ...string) string {
 func truthy(v string) bool {
 	v = strings.TrimSpace(strings.ToLower(v))
 	return v == "1" || v == "true" || v == "yes" || v == "on"
+}
+
+// semconvOptIn reports whether the standard comma-separated
+// OTEL_SEMCONV_STABILITY_OPT_IN list contains token. Entries are matched whole
+// after trimming (the instrumentation.yaml convention), never as substrings.
+func semconvOptIn(list, token string) bool {
+	for _, v := range strings.Split(list, ",") {
+		if strings.TrimSpace(v) == token {
+			return true
+		}
+	}
+	return false
 }

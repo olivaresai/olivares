@@ -86,6 +86,9 @@ export interface PrivilegedMutationOptions<TVars, TData> {
   invalidateKeys?: QueryKey[] | ((data: TData, vars: TVars) => QueryKey[])
   successMessage: string | ((data: TData, vars: TVars) => string)
   successDescription?: string
+  /** The toast's intent when the request worked but its answer is bad news (a
+   *  connection test that came back refused). Defaults to success. */
+  successIntent?: (data: TData, vars: TVars) => 'success' | 'warning'
   onDone?: (data: TData, vars: TVars) => void
   stepUpAction?: string
   /** Add Connector owns an inline demand in its existing dialog. No other console
@@ -170,7 +173,7 @@ export function usePrivilegedMutation<TVars = void, TData = unknown>(
           typeof opts.successMessage === 'function'
             ? opts.successMessage(data, vars)
             : opts.successMessage
-        toast.success(
+        toast[opts.successIntent?.(data, vars) ?? 'success'](
           message,
           opts.successDescription
             ? { description: opts.successDescription }

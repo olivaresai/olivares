@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/olivaresai/olivares/core/auth"
+	"github.com/olivaresai/olivares/core/driverfacts"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 	"github.com/olivaresai/olivares/modules/sessions/accountname"
@@ -111,6 +112,15 @@ var (
 	errAccountAdoptContended = &runErr{http.StatusConflict, "the provider profile changed during every attempt to adopt it; retry"}
 )
 
+// accountNameStem is the word generated names of a driver start from: its alias
+// in the driver facts, else the driver key itself.
+func accountNameStem(driver string) string {
+	if facts, ok := driverfacts.Lookup(driver); ok {
+		return facts.NameStem()
+	}
+	return driver
+}
+
 func accountNameTaken(name string) error {
 	return &runErr{http.StatusConflict, fmt.Sprintf(
 		"account name %q is already taken in this environment (by an account of any driver or state; "+
@@ -179,7 +189,7 @@ func accountFromRecord(rec model.Record) ProviderAccount {
 // the filter narrows it. A profile with no name is not an account and is never
 // listed as one.
 func (m *Module) ListProviderAccounts(ctx context.Context, tenant model.TenantID, f ProviderAccountFilter, q model.Query) ([]ProviderAccount, model.Page, error) {
-	if m.data == nil {
+	if m.Data == nil {
 		return nil, model.Page{}, errNoData
 	}
 	q.Filters = append(q.Filters, model.Filter{Column: colPPAccountName, Op: model.OpNotNull})
@@ -194,7 +204,7 @@ func (m *Module) ListProviderAccounts(ctx context.Context, tenant model.TenantID
 	}
 	var out []ProviderAccount
 	var page model.Page
-	err := m.data.View(ctx, tenant, func(sc store.Scope) error {
+	err := m.Data.View(ctx, tenant, func(sc store.Scope) error {
 		repo, err := sc.Ext(providerProfileKind)
 		if err != nil {
 			return err
@@ -216,14 +226,14 @@ func (m *Module) ListProviderAccounts(ctx context.Context, tenant model.TenantID
 // GetProviderAccount reads one account by its reference, which is its profile's
 // reference. A profile nobody has named answers exactly like an unknown one.
 func (m *Module) GetProviderAccount(ctx context.Context, tenant model.TenantID, ref string) (ProviderAccount, error) {
-	if m.data == nil {
+	if m.Data == nil {
 		return ProviderAccount{}, errNoData
 	}
 	if !validProfileRef(ref) {
 		return ProviderAccount{}, ErrAccountNotFound
 	}
 	var out ProviderAccount
-	err := m.data.View(ctx, tenant, func(sc store.Scope) error {
+	err := m.Data.View(ctx, tenant, func(sc store.Scope) error {
 		rec, err := findProfileRec(ctx, sc, ref)
 		if errors.Is(err, ErrProfileNotFound) {
 			return ErrAccountNotFound
@@ -241,8 +251,11 @@ func (m *Module) GetProviderAccount(ctx context.Context, tenant model.TenantID, 
 }
 
 // ProviderAccountMetadataPatch distinguishes omitted fields from explicit clears.
-// These fields are display metadata only and never enter a launch snapshot.
+// DisplayName and Accent are display metadata only and never enter a launch
+// snapshot. Name renames the account: it changes the account_name column and
+// nothing else, so the reference, the homes and the launch digest stay as they were.
 type ProviderAccountMetadataPatch struct {
+	Name        *string
 	DisplayName *string
 	Accent      *string
 }
@@ -257,21 +270,31 @@ func normalizeAccountAccent(value string) (string, error) {
 	}
 }
 
-// PatchProviderAccountMetadata updates only supplied display fields of a named
-// account. Admission serializes partial updates and retirement; the row and audit
-// commit together. A normalized retry is a no-op, without changing row version.
+// PatchProviderAccountMetadata updates only the supplied fields of a named
+// account: its display fields and, when Name is given, its name. Admission
+// serializes partial updates, renames and retirement; the row and audit commit
+// together. A normalized retry is a no-op, without changing row version.
+//
+// A rename is checked exactly as an operator-given name is at create: the shape
+// by accountname.Validate (422), the environment's reserved names (409). The
+// name is never replaced by another one.
 func (m *Module) PatchProviderAccountMetadata(ctx context.Context, actor auth.Principal, tenant model.TenantID, ref string, patch ProviderAccountMetadataPatch) (ProviderAccount, error) {
-	if m.data == nil {
+	if m.Data == nil {
 		return ProviderAccount{}, errNoData
 	}
 	if !validProfileRef(ref) {
 		return ProviderAccount{}, ErrAccountNotFound
 	}
-	if patch.DisplayName == nil && patch.Accent == nil {
-		return ProviderAccount{}, badRequest("provide display_name and/or accent")
+	if patch.Name == nil && patch.DisplayName == nil && patch.Accent == nil {
+		return ProviderAccount{}, badRequest("provide name, display_name and/or accent")
 	}
 	var name, accent string
 	var err error
+	if patch.Name != nil {
+		if err := accountname.Validate(*patch.Name); err != nil {
+			return ProviderAccount{}, accountNameRefusal(err)
+		}
+	}
 	if patch.DisplayName != nil {
 		name, err = validDisplayName(*patch.DisplayName)
 		if err != nil {
@@ -285,8 +308,8 @@ func (m *Module) PatchProviderAccountMetadata(ctx context.Context, actor auth.Pr
 		}
 	}
 	var out ProviderAccount
-	err = m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
-		repo, _, err := accountHomeAdmission(ctx, sc, tenant)
+	err = m.Data.Mutate(ctx, tenant, func(sc store.Scope) error {
+		repo, ops, err := accountHomeAdmission(ctx, sc, tenant)
 		if err != nil {
 			return err
 		}
@@ -304,16 +327,28 @@ func (m *Module) PatchProviderAccountMetadata(ctx context.Context, actor auth.Pr
 			return ErrProfileRetired
 		}
 		out = accountFromRecord(rec)
-		changed := false
+		previousName := out.Name
+		renamed, labelled := false, false
+		if patch.Name != nil && out.Name != *patch.Name {
+			taken, err := accountReservedNames(ctx, sc, repo, out.EnvironmentRef)
+			if err != nil {
+				return err
+			}
+			if taken[*patch.Name] {
+				return accountNameTaken(*patch.Name)
+			}
+			rec[colPPAccountName] = *patch.Name
+			renamed = true
+		}
 		if patch.DisplayName != nil && out.DisplayName != name {
 			rec[colPPDisplayName] = name
-			changed = true
+			labelled = true
 		}
 		if patch.Accent != nil && out.Accent != accent {
 			rec[colPPAccent] = accent
-			changed = true
+			labelled = true
 		}
-		if !changed {
+		if !renamed && !labelled {
 			return nil
 		}
 		updated, err := repo.Update(ctx, rec)
@@ -321,9 +356,35 @@ func (m *Module) PatchProviderAccountMetadata(ctx context.Context, actor auth.Pr
 			return err
 		}
 		out = accountFromRecord(updated)
-		return appendAccountAudit(ctx, sc, actor, "metadata_updated", out)
+		if renamed {
+			if err := moveNameReservation(ctx, ops, out.Ref, out.Name); err != nil {
+				return err
+			}
+			if err := appendAccountAuditMeta(ctx, sc, actor, "renamed", out, map[string]any{"previous_name": previousName}); err != nil {
+				return err
+			}
+		}
+		if labelled {
+			return appendAccountAudit(ctx, sc, actor, "metadata_updated", out)
+		}
+		return nil
 	})
 	return out, err
+}
+
+// moveNameReservation moves the name reservation of an account the engine built
+// (its home operation row) to the account's new name, in the rename's transaction.
+// Name checks read that row and its unique index covers it, so leaving the old
+// name there would keep it taken and let the new one be given away. An adopted
+// account has no such row.
+func moveNameReservation(ctx context.Context, ops store.GenericRepo, profileRef, name string) error {
+	rows, _, err := ops.List(ctx, model.Query{Filters: []model.Filter{eq(colHORef, profileRef)}, Limit: 1})
+	if err != nil || len(rows) == 0 {
+		return err
+	}
+	rows[0][colHOName] = name
+	_, err = ops.Update(ctx, rows[0])
+	return err
 }
 
 // adoptAttempt is what one attempt learned before its write: the profile's driver
@@ -342,7 +403,7 @@ type adoptAttempt struct {
 // disk and touches no file. The write and its audit event are one transaction,
 // and the unique index — not this function — decides whether the name is free.
 func (m *Module) AdoptProviderAccount(ctx context.Context, actor auth.Principal, tenant model.TenantID, profileRef, name string) (ProviderAccount, error) {
-	if m.data == nil {
+	if m.Data == nil {
 		return ProviderAccount{}, errNoData
 	}
 	if !validProfileRef(profileRef) {
@@ -395,7 +456,7 @@ func (m *Module) AdoptProviderAccount(ctx context.Context, actor auth.Principal,
 func (m *Module) adoptOnce(ctx context.Context, actor auth.Principal, tenant model.TenantID, ref, name string, lost map[string]bool) (ProviderAccount, adoptAttempt, error) {
 	var out ProviderAccount
 	var at adoptAttempt
-	err := m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
+	err := m.Data.Mutate(ctx, tenant, func(sc store.Scope) error {
 		repo, _, err := accountHomeAdmission(ctx, sc, tenant)
 		if err != nil {
 			return err
@@ -423,7 +484,7 @@ func (m *Module) adoptOnce(ctx context.Context, actor auth.Principal, tenant mod
 			for n := range lost {
 				taken[n] = true
 			}
-			proposed, err := accountname.NextName(at.driver, taken)
+			proposed, err := accountname.NextName(accountNameStem(at.driver), taken)
 			if err != nil {
 				return accountNameRefusal(err)
 			}
@@ -482,7 +543,7 @@ func accountNamesIn(ctx context.Context, repo store.GenericRepo, environmentRef 
 // profile was named meanwhile by another adopt, or name is now held by another
 // row of the environment. Neither means the row itself moved under the attempt.
 func (m *Module) adoptLossCause(ctx context.Context, tenant model.TenantID, ref, environmentRef, name string) (named, held bool, err error) {
-	err = m.data.View(ctx, tenant, func(sc store.Scope) error {
+	err = m.Data.View(ctx, tenant, func(sc store.Scope) error {
 		rec, err := findProfileRec(ctx, sc, ref)
 		if err != nil {
 			return err
@@ -514,6 +575,12 @@ func (m *Module) adoptLossCause(ctx context.Context, tenant model.TenantID, ref,
 // appendAccountAudit seals one account act in the caller's transaction, so the
 // row and its evidence commit or roll back together.
 func appendAccountAudit(ctx context.Context, sc store.Scope, actor auth.Principal, verb string, a ProviderAccount) error {
+	return appendAccountAuditMeta(ctx, sc, actor, verb, a, nil)
+}
+
+// appendAccountAuditMeta is appendAccountAudit with extra facts of the act
+// (a rename records the name it replaced).
+func appendAccountAuditMeta(ctx context.Context, sc store.Scope, actor auth.Principal, verb string, a ProviderAccount, extra map[string]any) error {
 	meta := map[string]any{
 		"profile_ref":     a.Ref,
 		"name":            a.Name,
@@ -528,6 +595,9 @@ func appendAccountAudit(ctx context.Context, sc store.Scope, actor auth.Principa
 	}
 	if a.OSUser != "" {
 		meta["os_user"] = a.OSUser
+	}
+	for k, v := range extra {
+		meta[k] = v
 	}
 	if verb == "metadata_updated" {
 		meta["display_name"] = a.DisplayName

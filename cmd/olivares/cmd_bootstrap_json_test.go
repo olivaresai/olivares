@@ -774,30 +774,45 @@ func l3MoveSigningKeysOutOfTheDataDir(t *testing.T, dataDir, vault string) strin
 // Both panes are asserted, and the text one includes the note as its FIRST line —
 // under -o json that note moves to stderr, and dropping it instead would take away
 // the operator's only warning that this bundle cannot be verified alone.
+//
+// The data dir still holds the default communication keyrings, which are not
+// signing keys and are carried whatever the signing-key custody. Counting them as
+// signing keys turned this case into an ordinary self-escrowing backup.
 func TestDRBackupJSONFlagsABundleThatEscrowsNoKeyMaterial(t *testing.T) {
-	const note = "note: signing keys are externally custodied (BYOK/CMEK) — the bundle escrows NO key " +
-		"material; at restore time provision the key from your Secret/KMS envelope before verifying\n"
+	const note = "note: signing keys are externally custodied (BYOK/CMEK) — the bundle escrows NO signing " +
+		"key; at restore time provision the key from your Secret/KMS envelope before verifying\n"
+	noSigningKey := func(m dr.Manifest) {
+		t.Helper()
+		for _, kr := range m.Keys {
+			if kr.PubSHA256 != "" {
+				t.Fatalf("the bundle escrowed signing key %s; this case is supposed to escrow none: %+v", kr.Name, m.Keys)
+			}
+		}
+	}
 
 	src := t.TempDir()
 	seedDataDir(t, src)
 	t.Setenv(envAuditKeyFile, l3MoveSigningKeysOutOfTheDataDir(t, src, t.TempDir()))
+	// The move took the sealer key files too; this deployment supplies them from
+	// its variables, as serve does, so the backup has every sealer key in effect.
+	for _, k := range drSealerKeys {
+		t.Setenv(k.env, drValidSealerKey)
+	}
 	pf := l3Passphrase(t)
 
 	bundle := filepath.Join(t.TempDir(), "byok.drbundle")
-	out, errOut, err := execRoot(t, "dr", "backup", "--data-dir", src, "--out", bundle, "--passphrase-file", pf)
+	out, errOut, err := execRootOwnProcess(t, "dr", "backup", "--data-dir", src, "--out", bundle, "--passphrase-file", pf)
 	if err != nil {
 		t.Fatalf("dr backup under external custody: %v\n%s", err, errOut)
 	}
 	m := l3Manifest(t, bundle)
-	if len(m.Keys) != 0 {
-		t.Fatalf("the bundle escrowed %d key(s); this case is supposed to escrow none", len(m.Keys))
-	}
+	noSigningKey(m)
 	assertExactStdout(t, "dr backup BYOK", out, note+fmt.Sprintf(
 		"DR bundle written: %s\n  taken: %s (RPO basis)\n  engine: %s  tenants: %d  keys: %d\n",
 		bundle, m.CreatedAt, m.EngineKind, len(m.Tenants), len(m.Keys)))
 
 	jsonBundle := filepath.Join(t.TempDir(), "byok-json.drbundle")
-	out, errOut, err = execRoot(t, "dr", "backup", "--data-dir", src, "--out", jsonBundle,
+	out, errOut, err = execRootOwnProcess(t, "dr", "backup", "--data-dir", src, "--out", jsonBundle,
 		"--passphrase-file", pf, "-o", "json")
 	if err != nil {
 		t.Fatalf("dr backup under external custody -o json: %v\n%s", err, errOut)
@@ -812,9 +827,11 @@ func TestDRBackupJSONFlagsABundleThatEscrowsNoKeyMaterial(t *testing.T) {
 		t.Fatal(err)
 	}
 	// The document and the note answer the same question, and they are driven by the
-	// same predicate: keys == 0 with the field true is what makes them one answer.
-	if decoded.Keys != 0 {
-		t.Fatalf("keys = %d, want 0 under external custody: %#v", decoded.Keys, decoded)
+	// same predicate: no signing key with the field true is what makes them one answer.
+	jm := l3Manifest(t, jsonBundle)
+	noSigningKey(jm)
+	if decoded.Keys != len(jm.Keys) {
+		t.Fatalf("keys = %d, want the %d the bundle carries: %#v", decoded.Keys, len(jm.Keys), decoded)
 	}
 	if !strings.Contains(errOut, note) {
 		t.Fatalf("the custody note must move to stderr under -o json, not vanish; stderr = %q", errOut)
@@ -830,7 +847,7 @@ func TestDRBackupTextUnchangedAndJSONCarriesTheRPOBasis(t *testing.T) {
 	pf := l3Passphrase(t)
 
 	bundle := filepath.Join(t.TempDir(), "text.drbundle")
-	out, errOut, err := execRoot(t, "dr", "backup", "--data-dir", src, "--out", bundle, "--passphrase-file", pf)
+	out, errOut, err := execRootOwnProcess(t, "dr", "backup", "--data-dir", src, "--out", bundle, "--passphrase-file", pf)
 	if err != nil {
 		t.Fatalf("dr backup: %v\n%s", err, errOut)
 	}
@@ -840,7 +857,7 @@ func TestDRBackupTextUnchangedAndJSONCarriesTheRPOBasis(t *testing.T) {
 		bundle, m.CreatedAt, m.EngineKind, len(m.Tenants), len(m.Keys)))
 
 	jsonBundle := filepath.Join(t.TempDir(), "json.drbundle")
-	out, errOut, err = execRoot(t, "dr", "backup", "--data-dir", src, "--out", jsonBundle, "--passphrase-file", pf, "-o", "json")
+	out, errOut, err = execRootOwnProcess(t, "dr", "backup", "--data-dir", src, "--out", jsonBundle, "--passphrase-file", pf, "-o", "json")
 	if err != nil {
 		t.Fatalf("dr backup -o json: %v\n%s", err, errOut)
 	}
@@ -929,7 +946,7 @@ func TestDRBackupJSONStaysADocumentWhileOffsiteAndRetentionStillReport(t *testin
 
 	args := append([]string{"dr", "backup", "--data-dir", src, "--out", bundle,
 		"--passphrase-file", pf, "--retain-days", "7", "-o", "json"}, flags...)
-	out, errOut, err := execRoot(t, args...)
+	out, errOut, err := execRootOwnProcess(t, args...)
 	if err != nil {
 		t.Fatalf("dr backup offsite+retention -o json: %v\n%s", err, errOut)
 	}
@@ -1046,7 +1063,7 @@ func TestDRBackupRetentionIsOneShapePerTierWhicheverFlagAsksForIt(t *testing.T) 
 	textMock.objects["aa-old.drbundle"] = []byte("old")
 	textMock.mu.Unlock()
 
-	out, errOut, err := execRoot(t, append([]string{"dr", "backup", "--data-dir", src,
+	out, errOut, err := execRootOwnProcess(t, append([]string{"dr", "backup", "--data-dir", src,
 		"--out", textBundle, "--passphrase-file", pf, "--gfs-keep-last", "1"}, textFlags...)...)
 	if err != nil {
 		t.Fatalf("dr backup --gfs-keep-last: %v\n%s", err, errOut)
@@ -1070,7 +1087,7 @@ func TestDRBackupRetentionIsOneShapePerTierWhicheverFlagAsksForIt(t *testing.T) 
 	jsonMock.objects["aa-old.drbundle"] = []byte("old")
 	jsonMock.mu.Unlock()
 
-	out, errOut, err = execRoot(t, append([]string{"dr", "backup", "--data-dir", src,
+	out, errOut, err = execRootOwnProcess(t, append([]string{"dr", "backup", "--data-dir", src,
 		"--out", jsonBundle, "--passphrase-file", pf, "--gfs-keep-last", "1", "-o", "json"}, jsonFlags...)...)
 	if err != nil {
 		t.Fatalf("dr backup --gfs-keep-last -o json: %v\n%s", err, errOut)
@@ -1123,7 +1140,7 @@ func TestDRBackupSaysWhenARetentionTierNeverRan(t *testing.T) {
 	bundle := filepath.Join(t.TempDir(), "kept.drbundle")
 	mock, flags := l3OffsiteThatCannotList(t)
 
-	out, errOut, err := execRoot(t, append([]string{"dr", "backup", "--data-dir", src,
+	out, errOut, err := execRootOwnProcess(t, append([]string{"dr", "backup", "--data-dir", src,
 		"--out", bundle, "--passphrase-file", pf, "--gfs-keep-last", "1", "-o", "json"}, flags...)...)
 	if err != nil {
 		t.Fatalf("a prune that cannot run must not fail the backup: %v\n%s", err, errOut)
@@ -1228,7 +1245,7 @@ func TestDRPushAndPullTextUnchangedAndJSONNamesTheOffsiteLocation(t *testing.T) 
 	seedDataDir(t, src)
 	pf := l3Passphrase(t)
 	bundle := filepath.Join(t.TempDir(), "estate.drbundle")
-	if _, errOut, err := execRoot(t, "dr", "backup", "--data-dir", src, "--out", bundle, "--passphrase-file", pf); err != nil {
+	if _, errOut, err := execRootOwnProcess(t, "dr", "backup", "--data-dir", src, "--out", bundle, "--passphrase-file", pf); err != nil {
 		t.Fatalf("seed backup: %v\n%s", err, errOut)
 	}
 	_, _, flags := newMockOffsite(t)

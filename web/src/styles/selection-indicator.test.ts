@@ -28,16 +28,7 @@ const SELECTION_SITES = [
     aria: 'aria-pressed={isActive}',
     occurrences: 1,
   },
-  {
-    file: 'src/features/automations/workflows/topo-list.tsx',
-    aria: "aria-current={isSelected ? 'true' : undefined}",
-    occurrences: 1,
-  },
-  {
-    file: 'src/features/automations/workflows/editor.tsx',
-    aria: "aria-current={selected ? 'true' : undefined}",
-    occurrences: 1,
-  },
+
 ]
 
 describe('the selected state never rests on colour alone', () => {
@@ -66,15 +57,5 @@ describe('the selected state never rests on colour alone', () => {
     })
   }
 
-  it('the editor keeps the selection signals independent of validity', () => {
-    // A node that is selected AND invalid loses its accent border to border-danger.
-    // If the rail and the ARIA were also gated on !invalid, that node would carry NO
-    // selection signal at all — not colour, not shape, not the a11y tree — precisely
-    // when the user has clicked it to fix it.
-    const src = readFileSync(
-      'src/features/automations/workflows/editor.tsx',
-      'utf8',
-    )
-    expect(src).not.toContain('selected && !invalid')
-  })
+
 })

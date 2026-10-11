@@ -11,13 +11,14 @@ Una fuente hace un único trabajo: **observa** un sistema externo y **emite obse
 
 En concreto, una fuente implementa una interfaz pequeña — `Open` (configurar una vez), `Gather` (ejecutar, emitiendo), `Close` (liberar) — y durante `Gather` entrega al motor una observación cada vez a través de un sink. El motor es dueño de la planificación: una fuente de streaming (un tail de log, un receptor) se bloquea en `Gather` y emite hasta que se cancela; una fuente por lotes hace su trabajo y retorna, y el motor decide cuándo volver a ejecutarla. El connector nunca posee su propio temporizador.
 
-Hay exactamente tres tipos de observación que una fuente puede emitir:
+Hay exactamente cuatro tipos de observación que una fuente puede emitir:
 
 | Observación | Qué transporta | Usada por |
 |---|---|---|
 | `edge` | Un origen (agente / identidad / sesión) tocó un recurso, con un modo de lectura/escritura | El access map R/RW |
 | `cost` | Coste de uso de modelo/proveedor | FinOps |
 | `finding` | Un hallazgo de guardrail / red-team / forense | Seguridad |
+| `metric` | Una medida que no es un coste | Métricas de productividad y adopción |
 
 El conjunto está cerrado por diseño — un tercero no puede introducir un nuevo tipo de observación. El motor **eleva** cada observación emitida al event bus en proceso, donde los módulos la consumen sin acoplarse a la fuente que la produjo. Para el access map en concreto, el motor resuelve las referencias en cadena del connector a entidades y fusiona la observación en una arista de acceso persistida.
 
@@ -139,13 +140,13 @@ Las claves exactas dentro del bloque `config` de cada connector (rutas de log, e
 
 ### Una fuente no configurada avisa honestamente
 
-El motor falla de forma segura, no ruidosa, cuando no hay nada cableado:
+El arranque distingue entre una variable sin establecer y un fichero configurado:
 
 - Si `OLIVARES_SOURCES_CONFIG` está **sin establecer**, el motor arranca sin fuentes.
-- Si el fichero **falta, no es legible o no es JSON válido**, el motor **avisa y continúa** sin fuentes — no se cae en el arranque.
+- Si el fichero configurado **falta, no se puede leer o contiene JSON inválido**, `olivares serve` **termina con código `1`**. El error empieza por `load sources operator config: OLIVARES_SOURCES_CONFIG` e incluye `refusing to start instead of silently omitting operator configuration`.
 - Si la lista de fuentes está **vacía**, el motor avisa de que ningún connector ingerirá y de que el estate está corriendo sin tráfico en vivo.
 
-En todos los casos el log de arranque te dice con claridad que no hay nada real cableado, en lugar de aparentar salud en silencio con un map vacío. Un aviso honesto es el diseño: un access map vacío nunca debería parecer uno limpio.
+Si has configurado un fichero, corrige la ruta, los permisos de lectura o el JSON y reinicia. El motor se niega a omitir silenciosamente la configuración del operador.
 
 ## Dónde se ejecuta esto
 

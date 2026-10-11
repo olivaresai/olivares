@@ -147,6 +147,11 @@ func TestDBInitWritesPrivateCredentialsAndReusesQuickstartConfig(t *testing.T) {
 	q.Del("sslmode")
 	u.RawQuery = q.Encode()
 	t.Setenv("N2_DB_INIT_MAINTENANCE", u.String())
+	// An installation saved before db init provisioned an admin role has no
+	// admin.dsn and gets the optional role later; simulate one.
+	if err := os.Remove(filepath.Join(dir, "postgres/admin.dsn")); err != nil {
+		t.Fatal(err)
+	}
 	adminPWFile := filepath.Join(dir, "admin.password")
 	if err := os.WriteFile(adminPWFile, []byte("n2-later-admin-password-fixture"), 0o600); err != nil {
 		t.Fatal(err)

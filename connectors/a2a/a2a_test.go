@@ -5,12 +5,11 @@ package a2a
 
 import (
 	"encoding/json"
+	"github.com/olivaresai/olivares/sdk"
+	"github.com/olivaresai/olivares/sdk/model"
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/olivaresai/olivares/sdk"
-	"github.com/olivaresai/olivares/sdk/model"
 )
 
 func TestDescriptor(t *testing.T) {

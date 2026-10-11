@@ -25,7 +25,7 @@ func plainLaunch() sessions.LaunchIntent {
 // once, at boot and in doctor. Until 26.10.1 every launch raised the same finding.
 func TestSessionLaunchGate_UnroutedLaunchIsAllowedAndPublishesNothing(t *testing.T) {
 	// The gate holds no routing posture and no bus: there is nothing a launch could publish.
-	g := &sessionLaunchGate{recordAvailable: true, log: slog.Default()}
+	g := &sessionLaunchGate{log: slog.Default()}
 	for _, tenant := range []string{"tenant-a", "tenant-b", "tenant-a"} {
 		dec, err := g.Authorize(context.Background(), model.TenantID(tenant), plainLaunch())
 		if err != nil || !dec.Allowed {

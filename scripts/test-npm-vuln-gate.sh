@@ -265,7 +265,7 @@ mutante() { # mutante <rotulo> <sed> <allowlist> <fixture-json> <aguja-que-debe-
 	clave="$(printf '%s' "${rotulo}" | tr -cd 'a-z')"
 	sed "${expr}" "${GATE}" >"${M}"
 	if cmp -s "${GATE}" "${M}"; then
-		echo "FAIL  ${rotulo}: el mutante NO se aplico (el ancla cambio) — sin aplicar no prueba nada"
+		echo "FAIL  ${rotulo}: the mutant was NOT applied (the anchor changed) — an unapplied mutant proves nothing"
 		fail=$((fail + 1)); return
 	fi
 	local RM BM salida
@@ -282,22 +282,22 @@ mutante() { # mutante <rotulo> <sed> <allowlist> <fixture-json> <aguja-que-debe-
 	#    push en la pata 166 con «scripts/test-npm-vuln-gate.sh: 1 -> 2».
 	case "${salida}" in
 	*"${aguja}"*)
-		echo "FAIL  ${rotulo}: el mutante SOBREVIVE (la aguja «${aguja}» sigue saliendo)"
+		echo "FAIL  ${rotulo}: the mutant SURVIVES (the needle «${aguja}» still appears)"
 		fail=$((fail + 1))
 		;;
 	*)
-		echo "ok    mutante muerto — ${rotulo}"
+		echo "ok    mutant killed — ${rotulo}"
 		pass=$((pass + 1))
 		;;
 	esac
 }
 
 # Sin el umbral, ninguna entrada se marca y `norazon.yaml` vuelve a eximir en silencio.
-mutante "sin el umbral de razon" 's/< MIN_REASON/< 0/' \
+mutante "without the reason threshold" 's/< MIN_REASON/< 0/' \
 	"${WORK}/norazon.yaml" "${HIGH}" "carries no real reason"
 
 # Con la condicion vieja, la entrada curada y NO caducada se vuelve a callar.
-mutante "la nota exigiendo tambien caducidad" 's/^    if ghsa not in seen:$/    if ghsa not in seen and exp < today:/' \
+mutante "the note also requiring expiration" 's/^    if ghsa not in seen:$/    if ghsa not in seen and exp < today:/' \
 	"${WORK}/live.yaml" "${CLEAN}" "no longer present"
 
 echo

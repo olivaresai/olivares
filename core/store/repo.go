@@ -139,6 +139,21 @@ type ResourceRepo interface {
 	Move(ctx context.Context, node, newParent model.ID) (model.Resource, error)
 }
 
+// WorkspaceRepo is the typed Workspace repository plus SetParent, which places a
+// workspace (a department) in the organization tree. As in ResourceRepo, the
+// parent and the materialized path are store-maintained: Create sets the path
+// from ParentID, SetParent rewrites it across the subtree, and Update preserves
+// both.
+type WorkspaceRepo interface {
+	Repository[model.Workspace]
+	// SetParent places node under parent (a zero parent makes it a root),
+	// rewriting node's path and every descendant's in one atomic step. It
+	// returns ErrNotFound if node or parent is absent or owned by another
+	// tenant, ErrWorkspaceCycle if parent is node itself or one of its
+	// descendants, and ErrConflict if node changed concurrently.
+	SetParent(ctx context.Context, node, parent model.ID) (model.Workspace, error)
+}
+
 // AccessEdgeRepo is the typed repository for the differential AccessEdge entity
 // plus the graph queries that make the R/RW map (module III) a view over the
 // model rather than a separate schema (ARCHITECTURE.md, §6).

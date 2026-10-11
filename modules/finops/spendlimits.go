@@ -273,55 +273,6 @@ func findSpendLimitPolicies(ctx context.Context, sc store.Scope, spec storedSpen
 	return out, nil
 }
 
-// SpendLimitUpsert creates or replaces a cap in place and audits atomically.
-func (m *Module) SpendLimitUpsert(ctx context.Context, tenant model.TenantID, in SpendLimitSpec, adminActor string) (SpendLimit, bool, error) {
-	spec, err := normalizeSpendLimitSpec(in)
-	if err != nil {
-		return SpendLimit{}, false, err
-	}
-	if m.data == nil {
-		return SpendLimit{}, false, errors.New("finops: data unavailable")
-	}
-	var out SpendLimit
-	created := false
-	err = m.fencedMutate(ctx, tenant, spendLimitSubjects(spec), func(sc store.Scope) error {
-		matches, err := findSpendLimitPolicies(ctx, sc, spec)
-		if err != nil {
-			return err
-		}
-		var before *SpendLimit
-		action := "create"
-		var p model.Policy
-		if len(matches) > 0 {
-			// The lowest-id row is canonical; any extra rows are duplicates left by a
-			// concurrent-insert race and are healed here, inside the same transaction,
-			// so exactly one row holds the logical (scope, period) key after commit.
-			p = matches[0]
-			v := spendLimitFromPolicy(p)
-			before = &v
-			for _, dup := range matches[1:] {
-				if err := sc.Policies().Delete(ctx, dup.ID); err != nil {
-					return err
-				}
-			}
-			p.Spec = spec.mapValue()
-			p.Enabled = true
-			p.Name = spendLimitPolicyName(spec)
-			p, err = sc.Policies().Update(ctx, p)
-			action = "update"
-		} else {
-			p, err = sc.Policies().Create(ctx, model.Policy{Name: spendLimitPolicyName(spec), Kind: policyKindSpendLimit, Enabled: true, Spec: spec.mapValue()})
-			created = true
-		}
-		if err != nil {
-			return err
-		}
-		out = spendLimitFromPolicy(p)
-		return createSpendLimitAudit(ctx, sc, strings.TrimSpace(adminActor), action, out.ID, before, &out)
-	})
-	return out, created, err
-}
-
 func spendLimitPolicyName(s storedSpendLimitSpec) string {
 	key := s.ScopeKey
 	if key == "" {

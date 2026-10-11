@@ -16,6 +16,19 @@ import (
 	"github.com/olivaresai/olivares/core/store"
 )
 
+// ErrSessionStopActive is what SessionStopEpoch returns while a stop that covers the
+// agent is active. It is a decision, not an outage: callers refuse and do not retry.
+var ErrSessionStopActive = errors.New("session authority revoked by an active kill switch")
+
+// SessionStopActiveError preserves the stop observed by the epoch read, so callers
+// can attribute the refusal without consulting mutable stop state again.
+type SessionStopActiveError struct {
+	StopID model.ID
+}
+
+func (*SessionStopActiveError) Error() string { return ErrSessionStopActive.Error() }
+func (*SessionStopActiveError) Unwrap() error { return ErrSessionStopActive }
+
 // SessionStopEpoch reads the existing stop history for one session's agent.
 // Every matching engagement changes the epoch permanently, including after
 // re-enable. An active stop refuses mint/use. No separate state is persisted.
@@ -23,6 +36,7 @@ func (m *Module) SessionStopEpoch(ctx context.Context, tenant model.TenantID, ag
 	if m.data == nil {
 		return "", errNoData
 	}
+	agentRef = strings.TrimSpace(agentRef)
 	var ids []string
 	err := m.data.View(ctx, tenant, func(sc store.Scope) error {
 		repo, err := sc.Ext(killSwitchKind)
@@ -33,6 +47,9 @@ func (m *Module) SessionStopEpoch(ctx context.Context, tenant model.TenantID, ag
 		if err != nil {
 			return err
 		}
+		if id, stopped := stopStateFromRows(rows).Stopped(agentRef); stopped {
+			return &SessionStopActiveError{StopID: id}
+		}
 		for _, row := range rows {
 			matches := row.String(colKSScopeKind) == ksScopeEstate
 			if row.String(colKSScopeKind) == ksScopeAgent && agentRef != "" {
@@ -40,9 +57,6 @@ func (m *Module) SessionStopEpoch(ctx context.Context, tenant model.TenantID, ag
 			}
 			if !matches {
 				continue
-			}
-			if row.String(colKSStatus) == ksStatusActive {
-				return errors.New("session authority revoked by an active kill switch")
 			}
 			ids = append(ids, row.String(model.ColID))
 		}

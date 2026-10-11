@@ -1,11 +1,13 @@
 {
   "truncation": {
     "label": "{{n}} Zeilen geladen; es gibt weitere",
-    "hint": "Diese Workspace-Vorschau ist begrenzt. Über Alle anzeigen lässt sich das breitere Inventar prüfen."
+    "hint": "Diese Workspace-Vorschau ist begrenzt. Über Alle anzeigen lässt sich das breitere Inventar prüfen.",
+    "hintCapped": "Diese Workspace-Vorschau ist begrenzt."
   },
   "title": "Arbeitsbereich-Übersicht",
   "selectTitle": "Kein Arbeitsbereich ausgewählt",
   "selectPrompt": "Wählen Sie einen Arbeitsbereich in der Navigationsleiste, um diese Übersicht zu öffnen, oder gehen Sie zum Inventar der Organisation.",
+  "selectPromptWorkspaceOnly": "Wählen Sie einen Arbeitsbereich in der Navigationsleiste, um diese Übersicht zu öffnen.",
   "viewInventory": "Inventar öffnen",
   "agents": "Agenten",
   "sessions": "Sitzungen",
@@ -24,5 +26,12 @@
   "viewAll": "Alle anzeigen",
   "defaultBadge": "Standard",
   "created": "Erstellt",
-  "lastUpdated": "Zuletzt aktualisiert"
+  "lastUpdated": "Zuletzt aktualisiert",
+  "contents": {
+    "title": "Inhalt des Arbeitsbereichs",
+    "count": "Anzahl",
+    "loading": "Inhalt des Arbeitsbereichs wird gelesen…",
+    "empty": "Dieser Arbeitsbereich enthält noch nichts.",
+    "unavailable": "Der Inhalt des Arbeitsbereichs ist nicht verfügbar."
+  }
 }

@@ -10,6 +10,7 @@ import (
 	"crypto/ed25519"
 	"crypto/sha256"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -29,6 +30,7 @@ import (
 	"github.com/olivaresai/olivares/core/store"
 	"github.com/olivaresai/olivares/modules/inferenceproxy"
 	"github.com/olivaresai/olivares/modules/models"
+	"github.com/olivaresai/olivares/modules/sessions"
 )
 
 // modelsguardedtextcomposition_test.go closes the causal R3 of the independent review
@@ -75,11 +77,15 @@ type chatComposition struct {
 	signer        *audit.Signer
 	env           map[string]string
 	secretLookups *int
+	providerVault *deepseekFixtureVault
+	modelsModule  *models.Module
 }
 
 type chatCompositionOptions struct {
 	policy    *inferenceproxy.ProxyPolicy
 	inspector contentInspector
+	deepseek  bool
+	backend   *store.Config
 }
 
 // newChatComposition assembles the composition. The ORDER is forced by the product: the
@@ -91,11 +97,36 @@ func newChatComposition(t *testing.T, opts chatCompositionOptions) *chatComposit
 	ctx := context.Background()
 
 	upstream := &chatUpstream{body: chatCompletionBody(chatFixtureModel, "hello from the fixture")}
-	server := httptest.NewTLSServer(upstream)
+	var handler http.Handler = upstream
+	if opts.deepseek {
+		handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodGet || r.URL.Path != "/models" {
+				upstream.ServeHTTP(w, r)
+				return
+			}
+			if r.Header.Get("Authorization") != "Bearer "+deepseekFixtureKey {
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
+			upstream.mu.Lock()
+			status := upstream.status
+			upstream.mu.Unlock()
+			if status == 0 {
+				status = http.StatusOK
+			}
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(status)
+			_ = json.NewEncoder(w).Encode(map[string]any{"data": []map[string]string{{"id": chatFixtureModel}}})
+		})
+	}
+	server := httptest.NewTLSServer(handler)
 	t.Cleanup(server.Close)
 	// The client trusts the SERVER'S OWN test CA and nothing else, so a dispatch that
 	// reached any other origin would fail verification rather than quietly succeed.
 	transport := &countingTransport{base: server.Client().Transport}
+	if opts.deepseek {
+		transport.base = deepseekFixtureTransport{target: server.URL, base: server.Client().Transport}
+	}
 
 	endpoint := server.URL + "/v1/chat/completions"
 	origin, err := profileEndpointOrigin(endpoint, false)
@@ -115,13 +146,36 @@ func newChatComposition(t *testing.T, opts chatCompositionOptions) *chatComposit
 	dir := t.TempDir()
 	// The schema is the models module's own; a throwaway instance registers it because the
 	// real one cannot be built before the tenant exists.
-	st, err := coreengine.Open(ctx, store.Config{
+	cfg := store.Config{
 		Engine: store.EngineSQLite, DSN: filepath.Join(dir, "composition.db"), SignEvent: signer.SignEvent,
-	}, models.New().RegisterSchema)
+	}
+	if opts.backend != nil {
+		cfg = *opts.backend
+		cfg.SignEvent = signer.SignEvent
+	}
+	vault := &deepseekFixtureVault{}
+	ss := sessions.New(sessions.WithProviderSecretVault(vault), sessions.WithProviderProbe(providerProbe{client: &http.Client{Transport: transport}}))
+	st, err := coreengine.Open(ctx, cfg, func(reg store.ExtensionRegistry) error {
+		if err := models.New().RegisterSchema(reg); err != nil {
+			return err
+		}
+		if opts.deepseek {
+			return ss.RegisterSchema(reg)
+		}
+		return nil
+	})
 	if err != nil {
 		t.Fatalf("open composition store: %v", err)
 	}
 	t.Cleanup(func() { _ = st.Close() })
+	if opts.deepseek {
+		sealer, err := newSecretSealer(t.TempDir(), func(string) string { return "" })
+		if err != nil {
+			t.Fatal(err)
+		}
+		vault.store = auth.NewSecretStore(st, sealer)
+		ss.UseData(api.NewModuleData(st))
+	}
 
 	var tenant model.TenantID
 	if err := st.System(ctx, func(sys store.SystemScope) error {
@@ -174,6 +228,7 @@ func newChatComposition(t *testing.T, opts chatCompositionOptions) *chatComposit
 	if !exec.bind(chatExecutorDeps{
 		Store: st, Policy: policy, ContextPolicy: &stubContextPolicy{},
 		Secrets: resolver, HTTPClient: &http.Client{Transport: transport},
+		Providers: ss,
 	}) {
 		t.Fatal("the composition's Chat executor did not become ready")
 	}
@@ -189,9 +244,13 @@ func newChatComposition(t *testing.T, opts chatCompositionOptions) *chatComposit
 	if err != nil {
 		t.Fatalf("setup token: %v", err)
 	}
+	apiModules := []api.Module{m}
+	if opts.deepseek {
+		apiModules = append(apiModules, ss)
+	}
 	srv, err := api.New(api.Options{
 		Store: st, Authenticator: auth.NewAuthenticator(st, nil), Authorizer: auth.NewAuthorizer(nil),
-		Signer: signer, SetupToken: setupToken, Version: "composition", Modules: []api.Module{m},
+		Signer: signer, SetupToken: setupToken, Version: "composition", Modules: apiModules,
 	})
 	if err != nil {
 		t.Fatalf("api.New: %v", err)
@@ -199,7 +258,7 @@ func newChatComposition(t *testing.T, opts chatCompositionOptions) *chatComposit
 
 	c := &chatComposition{
 		t: t, srv: srv, store: st, tenant: tenant, profile: profile, exec: exec,
-		upstream: upstream, transport: transport, signer: signer, env: env, secretLookups: &lookups,
+		upstream: upstream, transport: transport, signer: signer, env: env, secretLookups: &lookups, providerVault: vault, modelsModule: m,
 	}
 
 	// --- a real operator, through the real setup and login ---------------------------------
@@ -219,17 +278,55 @@ func newChatComposition(t *testing.T, opts chatCompositionOptions) *chatComposit
 		t.Fatalf("login returned no session token: %s", login.raw)
 	}
 	c.admin = token
-
-	// The governed estate the routing decision resolves over.
-	if err := st.Mutate(ctx, tenant, func(sc store.Scope) error {
-		p, err := sc.Providers().Create(ctx, model.Provider{Name: profile.ProviderRef, Kind: profile.ProviderRef, Status: model.StatusActive})
-		if err != nil {
-			return err
+	if opts.deepseek {
+		created := c.do("POST", providersPath, token, map[string]any{"kind": "openai_compatible", "service": "deepseek", "display_name": "DeepSeek", "api_key": deepseekFixtureKey})
+		if created.code != http.StatusCreated {
+			t.Fatalf("register DeepSeek = %d %s", created.code, created.raw)
 		}
-		_, err = sc.Models().Create(ctx, model.Model{Name: profile.ModelRef, ProviderID: p.ID, Status: model.StatusActive})
-		return err
-	}); err != nil {
-		t.Fatalf("seed governed model: %v", err)
+		entry := modelGatewayProfileConfig{
+			Ref: profile.Ref, TenantRef: tenant.String(), Action: profile.Action, Protocol: profile.Protocol,
+			AdapterID: models.ExecutionAdapterDeepSeekText, AdapterVersion: "1", ProviderRef: created.body["provider_ref"].(string),
+			ModelRef: chatFixtureModel, Endpoint: modelprovider.DeepSeekChatURL, Surface: profile.Surface, InferenceGeo: "unverified",
+			CredentialAudience: modelprovider.DeepSeekBaseURL, AuthScheme: "bearer",
+			CredentialRef:   fmt.Sprintf("provider:%s:%.0f", created.body["provider_ref"], created.body["version"]),
+			MaxRequestBytes: 1 << 20, MaxResponseBytes: 1 << 20, TimeoutMS: 5000,
+		}
+		entry.Revision, err = calculateModelGatewayProfileRevision(entry)
+		if err != nil {
+			t.Fatal(err)
+		}
+		next, err := newModelGatewayProfileRegistry(modelGatewayProfilesDocument{SchemaVersion: modelGatewayProfilesV1, Profiles: []modelGatewayProfileConfig{entry}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		registry.profiles = next.profiles
+		profile, err = registry.ResolveExecutionProfile(ctx, tenant, entry.Ref, entry.Revision)
+		if err != nil {
+			t.Fatal(err)
+		}
+		c.profile = profile
+		m.UseAvailabilitySource(configuredModelDiscovery{sessions: ss}, func(context.Context) ([]model.TenantID, error) { return nil, nil })
+		if err := m.Start(ctx); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = m.Stop(context.Background()) })
+		if err := m.RefreshAvailability(ctx, tenant); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// Legacy profiles retain their core inventory. DeepSeek uses actual registered discovery.
+	if !opts.deepseek {
+		if err := st.Mutate(ctx, tenant, func(sc store.Scope) error {
+			p, err := sc.Providers().Create(ctx, model.Provider{Name: profile.ProviderRef, Kind: profile.ProviderRef, Status: model.StatusActive})
+			if err != nil {
+				return err
+			}
+			_, err = sc.Models().Create(ctx, model.Model{Name: profile.ModelRef, ProviderID: p.ID, Status: model.StatusActive})
+			return err
+		}); err != nil {
+			t.Fatalf("seed governed model: %v", err)
+		}
 	}
 
 	created := c.do("POST", "/v1/m/models/routing-policies", c.admin, map[string]any{
@@ -244,9 +341,13 @@ func newChatComposition(t *testing.T, opts chatCompositionOptions) *chatComposit
 	if c.policyID == "" {
 		t.Fatalf("policy creation returned no id: %s", created.raw)
 	}
-	// The bootstrap must not have touched the gateway or the credential.
-	if c.transport.count() != 0 || *c.secretLookups != 0 {
-		t.Fatalf("bootstrap dispatched %d times and resolved %d secrets", c.transport.count(), *c.secretLookups)
+	if opts.deepseek {
+		calls := c.transport.calls()
+		if len(calls) != 1 || calls[0].method != http.MethodGet || calls[0].url != modelprovider.DeepSeekModelsURL || vault.opens != 1 || upstream.hits != 0 || lookups != 0 {
+			t.Fatal("DeepSeek bootstrap must only read registered models with the sealed credential")
+		}
+	} else if c.transport.count() != 0 || lookups != 0 {
+		t.Fatalf("bootstrap dispatched %d times and resolved %d secrets", c.transport.count(), lookups)
 	}
 	return c
 }
@@ -661,8 +762,8 @@ func TestChatCompositionRefusesWithoutTheExplicitActivation(t *testing.T) {
 // ⛔ WHAT IT PROVES, EXACTLY: the executor's inspector IS the value the production
 // constructor returns for the same environment — not a test double, not a borrowed Messages
 // inspector, not nothing-because-nobody-looked. In THIS build (default AGPL) that value is
-// nil: newContentInspector is build-tag gated and the commercial firewall links only under
-// `-tags enterprise` (wire_noenterprise.go). So a NON-NIL configured inspector cannot be
+// nil: Community has no contentInspector edition port and the commercial firewall links only
+// under `-tags enterprise` (wire_noenterprise.go). So a NON-NIL configured inspector cannot be
 // qualified from this build at all, and the report says so rather than staging a stub and
 // calling it a boot. The USE half — that whatever sits in that field is consulted in both
 // directions with the exact prepared input — is
@@ -676,7 +777,7 @@ func TestChatBuildsItsInspectorThroughTheConfiguredConstructor(t *testing.T) {
 	if x == nil {
 		t.Fatal("the development activation built no executor")
 	}
-	configured := newContentInspector(getenv, log)
+	configured := thisEdition.contentInspector.get(getenv, log)
 	if x.inspector != configured {
 		t.Fatalf("the executor's inspector (%T) is not what the configured constructor returns (%T)", x.inspector, configured)
 	}

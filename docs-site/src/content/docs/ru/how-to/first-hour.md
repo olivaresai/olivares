@@ -58,18 +58,17 @@ DATA="$(mktemp -d)"
 `--listen 127.0.0.1:8443`. Измерено на этой машине 2026-09-17:
 `quickstart --quiet` напечатал токен за **3 с**.
 
-Панель приветствия печатает:
+При нативном запуске выводится одна из этих инструкций в зависимости от
+состояния настройки. Токен печатается только при его новой выдаче:
 
 ```text
-     (HTTPS with a self-signed certificate on first boot — your browser will
-      warn once; that is expected for a local install.)
-  2. Complete setup with this one-time token (shown once, single-use):
-
-         olst_…
+Next: Open the console; it guides setup, sign-in and your first session.
+Next: Open the console and sign in to continue your work.
+Next: Open the console to finish setup with the one-time token issued earlier.
 ```
 
 Для привязки-джокера по умолчанию баннер печатает `https://localhost:8443` и
-перечисляет под токеном все остальные адреса, на которых отвечает этот хост, —
+перечисляет остальные адреса, на которых отвечает этот хост, —
 они нужны, чтобы открыть консоль с другой машины. Если баннер уже прокрутился,
 `olivares first-boot` снова печатает адрес(а) консоли и состояние первой
 настройки. Откройте `https://localhost:PORT` до регистрации passkey: браузер
@@ -180,6 +179,10 @@ curl -sf "$BASE/v1/audit?action=hook.tool.deny&limit=100" \
 task smoke:first-hour
 ```
 
+Каждое управляемое решение добавляет `hook.tool.allow` или `hook.tool.deny` в
+журнал тенанта (`modules/sessions/hookpep/claudehookpep.go`). Дымовой тест проверяет,
+что обе записи существуют.
+
 ## Форма 2 — Команда (Postgres и Docker)
 
 В этом контейнере **нет Docker**. PostgreSQL **здесь не запущен**. Не считайте
@@ -210,7 +213,7 @@ docker compose -f deploy/compose/docker-compose.yml \
 API-токены не удовлетворяют этой проверке.
 
 Чтобы потребовать свежую AAL3 для этих действий, зарегистрируйте passkey на
-`https://localhost:PORT` и выполните свежую проверку passkey/PIV по этому
+`https://localhost:PORT` и выполните свежую проверку passkey по этому
 адресу консоли. В **Settings → Sign-in → Extra check for administrative
 actions** выберите **Passkey**. Эквивалент через API —
 `PUT /v1/auth/step-up-policy` с `{"admin_step_up":"passkey"}`. Движок
@@ -226,12 +229,22 @@ actions** выберите **Passkey**. Эквивалент через API —
 session runtime: no inference credential source configured; stream-json launches are deny-closed
 ```
 
-(`cmd/olivares/sessionruntime.go`). Задайте **один** из
-`OLIVARES_SESSION_RUNTIME_WIF` или `OLIVARES_SESSION_RUNTIME_TOKEN_FILE`.
-С выпуска 26.10 это больше не единственный путь: зарегистрируйте учётные данные в консоли
-и привяжите их к профилю. См.
-[Добавить провайдера и запустить агента](/ru/how-to/add-a-provider/) и
-[Эксплуатация сессии провайдера](/how-to/operate-provider-sessions/).
+Для профилей Claude с `managed_injection`, которые не указывают провайдера,
+`OLIVARES_SESSION_RUNTIME_WIF` или `OLIVARES_SESSION_RUNTIME_TOKEN_FILE` задаёт
+учётные данные вывода на хосте. Профиль, привязанный к провайдеру, использует его
+учётные данные; при ошибке запуск отклоняется без перехода к данным хоста.
+Профиль с `provider_account_home` использует разрешённый вход инструмента и
+не требует ни одной из этих переменных. См.
+[Добавить провайдера](/ru/how-to/add-a-provider/).
+
+## Проверки состояния OpenCode
+
+Если проверка состояния входа OpenCode во время настройки завершается ошибкой
+или по тайм-ауту, движок сообщает, что состояние прочитать не удалось. Повторите
+проверку; её ошибка не означает, что инструмент вышел из учётной записи.
+Одновременные проверки для одной организации и учётной записи используют одну
+нативную команду. Успешные результаты переиспользуются до 30 секунд и обновляются
+при изменении файла входа или установленного исполняемого файла.
 
 ## Связанные страницы
 

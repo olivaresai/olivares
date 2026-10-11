@@ -1,0 +1,10 @@
+{
+  "dictate": "Dicter",
+  "hint": "Dicter. Votre voix reste dans ce navigateur.",
+  "loading": "Chargement de la reconnaissance vocale…",
+  "listening": "Écoute en cours. Appuyez à nouveau ou sur Échap pour arrêter.",
+  "transcribing": "Transcription…",
+  "nothing": "Aucune parole entendue.",
+  "failed": "La dictée a échoué. Réessayez.",
+  "blocked": "Le navigateur a bloqué le micro."
+}

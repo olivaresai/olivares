@@ -17,10 +17,9 @@ export function hiddenInBell(action: string): boolean {
   )
 }
 
-/** Bookkeeping a person does not wait for: sign-in and out, and a session's own steps
+/** Bookkeeping a person does not wait for: sign-out and a session's own steps
  * (created, attached, streamed, the engine's "stopped" after the person's "stopping"). */
 const ROUTINE: ReadonlySet<string> = new Set([
-  'auth.login',
   'auth.logout',
   'auth.refresh',
   'sessions.run.created',
@@ -33,8 +32,31 @@ const ROUTINE: ReadonlySet<string> = new Set([
   'recording.session.close',
 ])
 
+/** Supporting engine records stay available without crowding out people's actions:
+ * authorization and policy evidence (*.record), reads, and a session being viewed. The bell
+ * and Audit fold the same set. */
+export function internalRecord(action: string): boolean {
+  return (
+    action.endsWith('.record') ||
+    action.endsWith('.read') ||
+    action === 'sessions.run.attach' ||
+    action.endsWith('.stream.open')
+  )
+}
+
 /** The sentence key (common:notifications.events.<key>) for an action, if it has one. */
 const SENTENCES: Readonly<Record<string, string>> = {
+  'auth.login': 'signedIn',
+  'sessions.work.item.create': 'workCreated',
+  'sessions.work.item.ready': 'workReady',
+  'sessions.work.item.complete': 'workCompleted',
+  'sessions.work.item.block': 'workBlocked',
+  'sessions.work.item.cancel': 'workCanceled',
+  'governance.approval.decision': 'approvalDecided',
+  'governance.approval.cancel': 'approvalCanceled',
+  'governance.policy.create': 'policyCreated',
+  'governance.policy.update': 'policyUpdated',
+  'governance.policy.delete': 'policyDeleted',
   'audit.checkpoint': 'auditCheckpoint',
   'org.create': 'orgCreated',
   'auth.login.blocked': 'loginBlocked',

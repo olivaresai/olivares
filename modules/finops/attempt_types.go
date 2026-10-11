@@ -755,6 +755,9 @@ type TargetSnapshot struct {
 	StaticReservedMicroUSD *int64
 	Action                 string
 	Membership             []EvidenceRef
+	// WorkspaceRefs captures the workspace predicate at preparation. Historical
+	// reads validate against this committed set, never the directory after a move.
+	WorkspaceRefs []string
 }
 
 func (t TargetSnapshot) canon(w *canonWriter) {
@@ -773,6 +776,14 @@ func (t TargetSnapshot) canon(w *canonWriter) {
 	w.optNum(t.StaticReservedMicroUSD)
 	w.str(t.Action)
 	canonEvidenceRefs(w, t.Membership)
+	// Omit the extension for old scalar snapshots, preserving their commitments.
+	if len(t.WorkspaceRefs) != 0 {
+		w.str("workspace-scope-v1")
+		w.count(len(t.WorkspaceRefs))
+		for _, ref := range t.WorkspaceRefs {
+			w.str(ref)
+		}
+	}
 }
 
 // AccountingBasis records what the accounting instant MEANS, so a NULL instant is

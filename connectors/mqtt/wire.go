@@ -384,7 +384,7 @@ func dialClient(c config) (mqttClient, error) {
 	if c.timeout > 0 {
 		_ = nc.SetReadDeadline(time.Now().Add(c.timeout))
 	}
-	if err := cn.expect(pktCONNACK); err != nil {
+	if err := cn.readConnack(); err != nil {
 		nc.Close()
 		return nil, fmt.Errorf("mqtt: connack: %w", err)
 	}
@@ -393,7 +393,7 @@ func dialClient(c config) (mqttClient, error) {
 		nc.Close()
 		return nil, err
 	}
-	if err := cn.expect(pktSUBACK); err != nil {
+	if err := cn.readSuback(1, len(c.topics)); err != nil {
 		nc.Close()
 		return nil, fmt.Errorf("mqtt: suback: %w", err)
 	}
@@ -416,17 +416,71 @@ func (c *conn) write(p []byte) error {
 	return nil
 }
 
-// expect reads one packet and asserts its type, draining its body. It is used for
-// the CONNACK/SUBACK handshake replies whose contents the observer does not need.
-func (c *conn) expect(want byte) error {
-	pktType, _, body, err := readPacket(c.r)
+// readAck verifies the expected control packet and its reserved header flags.
+func (c *conn) readAck(want byte) ([]byte, error) {
+	pktType, flags, body, err := readPacket(c.r)
+	if err != nil {
+		return nil, err
+	}
+	if pktType != want {
+		return nil, fmt.Errorf("mqtt: expected packet 0x%x, got 0x%x", want, pktType)
+	}
+	if flags != 0 {
+		return nil, fmt.Errorf("mqtt: invalid acknowledgement flags 0x%x", flags)
+	}
+	return body, nil
+}
+
+// readConnack confirms the clean-start session was accepted (MQTT 5 §3.2).
+func (c *conn) readConnack() error {
+	body, err := c.readAck(pktCONNACK)
 	if err != nil {
 		return err
 	}
-	if pktType != want {
-		return fmt.Errorf("mqtt: expected packet 0x%x, got 0x%x", want, pktType)
+	if len(body) < 3 {
+		return io.ErrUnexpectedEOF
 	}
-	_ = body
+	if body[0] != 0 { // Clean Start requires Session Present = 0; other bits are reserved.
+		return fmt.Errorf("mqtt: invalid clean-start session flags 0x%x", body[0])
+	}
+	if body[1] != 0 {
+		return fmt.Errorf("mqtt: connection refused, reason 0x%02x", body[1])
+	}
+	properties, n, err := decodeVBI(body, 2)
+	if err != nil {
+		return err
+	}
+	if 2+n+properties != len(body) { // CONNACK has properties but no payload.
+		return fmt.Errorf("mqtt: invalid CONNACK property length")
+	}
+	return nil
+}
+
+// readSuback correlates every granted QoS with the QoS 0 request (MQTT 5 §3.9).
+func (c *conn) readSuback(packetID uint16, topicCount int) error {
+	body, err := c.readAck(pktSUBACK)
+	if err != nil {
+		return err
+	}
+	if len(body) < 4 {
+		return io.ErrUnexpectedEOF
+	}
+	if binary.BigEndian.Uint16(body[:2]) != packetID {
+		return fmt.Errorf("mqtt: SUBACK packet identifier does not match the subscription")
+	}
+	properties, n, err := decodeVBI(body, 2)
+	if err != nil {
+		return err
+	}
+	off := 2 + n + properties
+	if off > len(body) || len(body)-off != topicCount {
+		return fmt.Errorf("mqtt: invalid SUBACK property length or reason count")
+	}
+	for _, reason := range body[off:] {
+		if reason != 0 { // Granted QoS cannot exceed the requested QoS 0.
+			return fmt.Errorf("mqtt: subscription not granted at QoS 0, reason 0x%02x", reason)
+		}
+	}
 	return nil
 }
 

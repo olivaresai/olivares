@@ -9,6 +9,8 @@ sidebar:
   order: 1
 ---
 
+**Редакция:** создание и изменение собственных политик Cedar, включая permit и forbid, требует Business. Community продолжает применять сохранённые политики, пользовательские роли и ограниченные права; чтение и отзыв остаются доступны. `DELETE /v1/m/governance/pdp/active?engine=cedar` отключает только авторскую политику Cedar и сохраняет историю, управляемые права и принятые политики. Встроенные роли, штатные правила запрета и аварийная остановка остаются в Community. Внешний PDP в этом рецепте только ограничивает доступ; авторские Cedar permit могут предоставлять доступ в пределах своей области.
+
 **Цель:** добавить ограничения на основе атрибутов поверх RBAC с
 deny-by-default — например, «никто не трогает ресурсы с меткой `secret`, что бы
 ни говорила его роль».
@@ -61,7 +63,7 @@ default allow := true
 
 allow := false if {
   input.resource.sensitivity == "secret"
-  input.action == "read"
+  endswith(input.permission, ":read")
 }
 ```
 
@@ -75,15 +77,17 @@ allow := false if {
 никогда не попадала вслепую:
 
 ```bash
+# policy.cedar is the Cedar policy above; jq 1.6 or newer builds the JSON bodies.
 # Compile-check the source:
 curl -ks -X POST "$BASE/v1/m/governance/pdp/validate" \
   -H "Authorization: Bearer $TOKEN" -H "X-Olivares-Tenant: $TENANT" \
-  -d @policy.json
+  -d "$(jq -n --rawfile source policy.cedar '{engine:"cedar",$source}')"
 
 # Pre-flight a decision WITHOUT audit side effects:
 curl -ks -X POST "$BASE/v1/m/governance/pdp/dry-run" \
   -H "Authorization: Bearer $TOKEN" -H "X-Olivares-Tenant: $TENANT" \
-  -d '{"principal":"…","action":"…","resource":{"kind":"credential","sensitivity":"secret"}}'
+  -d "$(jq -n --rawfile source policy.cedar --argjson request '{"principal":{"kind":"user","id":"u1"},"permission":"models:keys:read","resource":{"kind":"credential","sensitivity":"secret"}}' \
+        '{engine:"cedar",$source,$request}')"
 
 # Then publish (policy-admin permission):
 curl -ks -X POST "$BASE/v1/m/governance/pdp/publish" …

@@ -3,7 +3,14 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { useMutation } from '@tanstack/react-query'
 import { AlertTriangle, CirclePause, Radio, Send, Trash2 } from 'lucide-react'
-import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type FormEvent,
+} from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -16,7 +23,7 @@ import { useSessionStore } from '@/stores/session'
 import { useTenantStore } from '@/stores/tenant'
 import { useRunAttach } from './attach'
 import { agentOpsApi } from './api'
-import { sessionTurnBody } from './session-turn'
+import { sendBlockedReason, sessionTurnBody } from './session-turn'
 import { useTurnInterrupt } from './turn-interrupt'
 import type { AttachFrame, RunDTO } from './types'
 import { currentControlFence } from './work-fence'
@@ -114,6 +121,8 @@ function LiveConsoleSession({ run }: { run: RunDTO }) {
 
   const [line, setLine] = useState('')
   const [wire, setWire] = useState('')
+  const sendReasonId = useId()
+  const wireReasonId = useId()
   const items = mapConversationFrames(frames.map((f) => f.line))
   const turn = useTurnInterrupt(run)
   const inputMutation = useMutation({
@@ -140,7 +149,22 @@ function LiveConsoleSession({ run }: { run: RunDTO }) {
     },
   })
 
-  const canSend = run.state === 'running' && !isRemote
+  // `idle` is display-only (a quiet running session): the engine still takes input.
+  const canSend = isLive && !isRemote
+  // A disabled Send says why, from the state that disables it.
+  const waitingApproval = run.state === 'waiting_approval'
+  const sendReason = sendBlockedReason({
+    live: canSend,
+    draft: line,
+    sending: inputMutation.isPending,
+    waitingApproval,
+  })
+  const wireReason = sendBlockedReason({
+    live: canSend,
+    draft: wire,
+    sending: inputMutation.isPending,
+    waitingApproval,
+  })
   const onSubmit = (e: FormEvent) => {
     e.preventDefault()
     const l = line.trim()
@@ -255,7 +279,8 @@ function LiveConsoleSession({ run }: { run: RunDTO }) {
           type="submit"
           variant="primary"
           size="sm"
-          disabled={!canSend || !line.trim() || inputMutation.isPending}
+          disabled={sendReason !== null}
+          aria-describedby={sendReason ? sendReasonId : undefined}
         >
           <Send className="size-3.5" />
           {t('live.send')}
@@ -282,15 +307,21 @@ function LiveConsoleSession({ run }: { run: RunDTO }) {
             type="submit"
             variant="secondary"
             size="sm"
-            disabled={!canSend || !wire.trim() || inputMutation.isPending}
+            disabled={wireReason !== null}
+            aria-describedby={wireReason ? wireReasonId : undefined}
           >
             {t('live.send')}
           </Button>
         </form>
+        {wireReason && (
+          <p id={wireReasonId} className="mt-1">
+            {t(wireReason)}
+          </p>
+        )}
       </details>
-      {!canSend && !isRemote && (
-        <p className="text-caption text-muted-foreground">
-          {t('live.inputNotAllowed')}
+      {sendReason && (
+        <p id={sendReasonId} className="text-caption text-muted-foreground">
+          {t(sendReason)}
         </p>
       )}
     </div>

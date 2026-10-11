@@ -239,9 +239,9 @@ func TestClaimAdmissionCallsFreshAuthorityCheck(t *testing.T) {
 		innerCalls++
 		return LaunchDecision{Allowed: true}, nil
 	})
-	real := m.data
+	real := m.Data
 	faults := &nthViewFaultData{inner: real, failAt: 2, err: store.ErrNotLeader}
-	m.data = faults
+	m.Data = faults
 	gate := NewClaimAdmission(inner, m, ProviderOperated, IntentHolder)
 	intent := LaunchIntent{
 		RunRef: "authority-caller", ClaimSID: sid, Holder: "worker:a", Fence: lease.Fence,
@@ -263,7 +263,7 @@ func TestClaimAdmissionCallsFreshAuthorityCheck(t *testing.T) {
 
 	// Non-trigger direction: with the second read healthy, the same exact live
 	// holder and fence proceed through the inner admission gate.
-	m.data = real
+	m.Data = real
 	decision, err = gate.Authorize(ctx, tenant, intent)
 	if err != nil || !decision.Allowed {
 		t.Fatalf("healthy Authority = allowed:%v err:%v, want allowed", decision.Allowed, err)
@@ -365,7 +365,7 @@ func TestF3_TakeoverCommittedBeforeGovernedReadRejectsStaleWrite(t *testing.T) {
 		t.Fatalf("claim: %v", err)
 	}
 
-	real := m.data
+	real := m.Data
 	clk.advance(2 * time.Minute)
 
 	takeoverAdmitted := make(chan struct{})
@@ -384,7 +384,7 @@ func TestF3_TakeoverCommittedBeforeGovernedReadRejectsStaleWrite(t *testing.T) {
 		},
 	}
 	go func() {
-		_, terr := (&Module{data: takeoverData, clock: clk}).Claim(
+		_, terr := (&Module{Dependencies: &Dependencies{Data: takeoverData}, clock: clk}).Claim(
 			ctx, tenant, sid, "user:second", time.Minute,
 		)
 		takeoverDone <- terr
@@ -393,7 +393,7 @@ func TestF3_TakeoverCommittedBeforeGovernedReadRejectsStaleWrite(t *testing.T) {
 
 	writerRequested := make(chan struct{})
 	writerDone := make(chan error, 1)
-	m.data = &sequencedData{
+	m.Data = &sequencedData{
 		inner:        real,
 		beforeMutate: func() { close(writerRequested) },
 	}
@@ -411,7 +411,7 @@ func TestF3_TakeoverCommittedBeforeGovernedReadRejectsStaleWrite(t *testing.T) {
 		t.Fatalf("takeover: %v", terr)
 	}
 	err = awaitError(t, ctx, writerDone, "stale governed write refusal")
-	m.data = real
+	m.Data = real
 	successor, live, aerr := m.ActiveClaim(ctx, tenant, sid)
 	if aerr != nil || !live || successor.Holder != "user:second" || successor.Fence != lease.Fence+1 {
 		t.Fatalf("successor claim = %#v live:%v err:%v, want user:second at fence %d",
@@ -455,7 +455,7 @@ func TestF3_AlreadyAuthorizedWriteCommitsBeforeSerializedTakeover(t *testing.T) 
 		t.Fatalf("claim: %v", err)
 	}
 
-	real := m.data
+	real := m.Data
 	takeoverRequested := make(chan struct{})
 	takeoverAdmitted := make(chan struct{})
 	takeoverDone := make(chan error, 1)
@@ -486,20 +486,20 @@ func TestF3_AlreadyAuthorizedWriteCommitsBeforeSerializedTakeover(t *testing.T) 
 			},
 		}
 		go func() {
-			_, terr := (&Module{data: takeoverData, clock: clk}).Claim(
+			_, terr := (&Module{Dependencies: &Dependencies{Data: takeoverData}, clock: clk}).Claim(
 				ctx, tenant, sid, "user:second", time.Minute,
 			)
 			takeoverDone <- terr
 		}()
 		awaitSignal(t, ctx, takeoverRequested, "concurrent takeover request")
 	}
-	m.data = bar
+	m.Data = bar
 
 	_, err = m.persistCreate(ctx, tenant, "run-inflight", CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative, PermissionMode: "default",
 		Actor: "user:first", ActorKind: "user",
 	}, "", "", runGovFacts{}, lease)
-	m.data = real
+	m.Data = real
 
 	if err != nil {
 		t.Fatalf("already-authorized governed write: %v", err)
@@ -603,7 +603,7 @@ func TestF5_TheLateRecheckSurvivesAClockRollbackInTheFollowUpGap(t *testing.T) {
 
 	sid, lease := claimed(t, m, tenant, "run-gap-rollback", "user:first")
 
-	real := m.data
+	real := m.Data
 	bar := &barrierData{inner: real, kind: claimKind}
 	// The lease is live when the fence check passes and runs out while the governed
 	// body is in flight, so the LATE re-check is the first observer.
@@ -611,12 +611,12 @@ func TestF5_TheLateRecheckSurvivesAClockRollbackInTheFollowUpGap(t *testing.T) {
 	// ...and the clock goes back the instant that transaction ends, before the record
 	// of the observation is written. This is the gap, reproduced.
 	bar.afterMutate = func() { clk.advance(-2 * time.Minute) }
-	m.data = bar
+	m.Data = bar
 	_, err := m.persistCreate(ctx, tenant, "run-gap-rollback", CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative, PermissionMode: "default",
 		Actor: "user:first", ActorKind: "user",
 	}, "", "", runGovFacts{}, lease)
-	m.data = real
+	m.Data = real
 
 	if !errIsStatus(err, 403) {
 		t.Fatalf("a write whose lease expired mid-flight = %v, want a 403 refusal", err)
@@ -646,22 +646,22 @@ func TestF5_AnObservationDoesNotRetireTheSuccessorThatTookOverInTheGap(t *testin
 
 	sid, lease := claimed(t, m, tenant, "run-gap-takeover", "user:first")
 
-	real := m.data
+	real := m.Data
 	bar := &barrierData{inner: real, kind: claimKind}
 	bar.afterRead = func() { clk.advance(2 * time.Minute) }
 	// In the gap, somebody takes the session over legitimately. The observation the
 	// rolled-back transaction is carrying is now about a generation that is gone.
 	bar.afterMutate = func() {
-		if _, terr := (&Module{data: real, clock: clk}).Claim(ctx, tenant, sid, "user:second", time.Minute); terr != nil {
+		if _, terr := (&Module{Dependencies: &Dependencies{Data: real}, clock: clk}).Claim(ctx, tenant, sid, "user:second", time.Minute); terr != nil {
 			t.Errorf("the takeover could not commit: %v", terr)
 		}
 	}
-	m.data = bar
+	m.Data = bar
 	_, err := m.persistCreate(ctx, tenant, "run-gap-takeover", CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative, PermissionMode: "default",
 		Actor: "user:first", ActorKind: "user",
 	}, "", "", runGovFacts{}, lease)
-	m.data = real
+	m.Data = real
 
 	if err == nil {
 		t.Fatal("the write under a lease that expired mid-flight was allowed")
@@ -695,13 +695,13 @@ func TestF5_AFencedWriteRetiresWithinItsOwnTransaction(t *testing.T) {
 	sid, lease := claimed(t, m, tenant, "run-nogap", "user:first")
 	clk.advance(2 * time.Minute) // the lease runs out; this write is the first observer
 
-	real := m.data
-	m.data = &deadAfterData{inner: real, budget: 1}
+	real := m.Data
+	m.Data = &deadAfterData{inner: real, budget: 1}
 	_, err := m.persistCreate(ctx, tenant, "run-nogap", CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative, PermissionMode: "default",
 		Actor: "user:first", ActorKind: "user",
 	}, "", "", runGovFacts{}, lease)
-	m.data = real
+	m.Data = real
 
 	if !errIsStatus(err, 403) {
 		t.Fatalf("a write under a lapsed lease = %v, want a 403 refusal", err)
@@ -727,10 +727,10 @@ func TestF5_AHeartbeatRetiresWithinItsOwnTransaction(t *testing.T) {
 	sid, lease := claimed(t, m, tenant, "run-nogap-hb", "user:first")
 	clk.advance(2 * time.Minute)
 
-	real := m.data
-	m.data = &deadAfterData{inner: real, budget: 1}
+	real := m.Data
+	m.Data = &deadAfterData{inner: real, budget: 1}
 	_, err := m.Heartbeat(ctx, tenant, sid, "user:first", lease.Fence, time.Minute)
-	m.data = real
+	m.Data = real
 
 	if !errors.Is(err, ErrLeaseLost) {
 		t.Fatalf("a heartbeat on a lapsed lease = %v, want ErrLeaseLost", err)
@@ -752,10 +752,10 @@ func TestF5_AnExhaustedFenceRetiresWithinItsOwnTransaction(t *testing.T) {
 	seedFenceCeiling(t, m, tenant, sid)
 	clk.advance(2 * time.Minute)
 
-	real := m.data
-	m.data = &deadAfterData{inner: real, budget: 1}
+	real := m.Data
+	m.Data = &deadAfterData{inner: real, budget: 1}
 	_, err := m.Claim(ctx, tenant, sid, "user:second", time.Minute)
-	m.data = real
+	m.Data = real
 
 	if err == nil {
 		t.Fatal("a takeover from an exhausted fence was allowed; the token would go backwards")
@@ -778,10 +778,10 @@ func TestF5_TheReadPathNeverAnswersAnObservationItCouldNotRecord(t *testing.T) {
 	sid, lease := claimed(t, m, tenant, "run-read-nogap", "user:first")
 	clk.advance(2 * time.Minute)
 
-	real := m.data
-	m.data = &deadAfterData{inner: real, budget: 0} // no write transaction at all
+	real := m.Data
+	m.Data = &deadAfterData{inner: real, budget: 0} // no write transaction at all
 	err := m.Authority(ctx, tenant, sid, "user:first", lease.Fence)
-	m.data = real
+	m.Data = real
 
 	if !errors.Is(err, errProcessGone) {
 		t.Fatalf("Authority = %v, want the store failure: a refusal returned here would be a "+
@@ -811,14 +811,14 @@ func TestF5_AuthorityDoesNotReDecideAfterItsReadObservedTheLapse(t *testing.T) {
 	sid, lease := claimed(t, m, tenant, "run-auth-regap", "user:first")
 	clk.advance(2 * time.Minute) // the lease runs out; this read is the first observer
 
-	real := m.data
+	real := m.Data
 	bar := &barrierData{inner: real, kind: claimKind}
 	// The clock goes back the instant the read has taken its own `now` and read the
 	// row — i.e. inside the gap between the observation and its record.
 	bar.afterRead = func() { clk.advance(-2 * time.Minute) }
-	m.data = bar
+	m.Data = bar
 	err := m.Authority(ctx, tenant, sid, "user:first", lease.Fence)
-	m.data = real
+	m.Data = real
 
 	if !errors.Is(err, ErrLeaseLost) {
 		t.Fatalf("Authority = %v, want ErrLeaseLost: a clock that moved backwards in the gap "+
@@ -899,10 +899,10 @@ func TestF5_ARefusalIsNotDeliveredWhenItsTransactionDidNotCommit(t *testing.T) {
 		seedFenceCeiling(t, m, tenant, sid)
 		clk.advance(2 * time.Minute)
 
-		real := m.data
-		m.data = &mutateFaults{inner: real, fault: failFirst}
+		real := m.Data
+		m.Data = &mutateFaults{inner: real, fault: failFirst}
 		_, err := m.Claim(ctx, tenant, sid, "user:second", time.Minute)
-		m.data = real
+		m.Data = real
 		assertNotCommitted(t, m, tenant, sid, err)
 	})
 
@@ -912,10 +912,10 @@ func TestF5_ARefusalIsNotDeliveredWhenItsTransactionDidNotCommit(t *testing.T) {
 		sid, lease := claimed(t, m, tenant, "run-nc-hb", "user:first")
 		clk.advance(2 * time.Minute)
 
-		real := m.data
-		m.data = &mutateFaults{inner: real, fault: failFirst}
+		real := m.Data
+		m.Data = &mutateFaults{inner: real, fault: failFirst}
 		_, err := m.Heartbeat(ctx, tenant, sid, "user:first", lease.Fence, time.Minute)
-		m.data = real
+		m.Data = real
 		assertNotCommitted(t, m, tenant, sid, err)
 	})
 
@@ -925,13 +925,13 @@ func TestF5_ARefusalIsNotDeliveredWhenItsTransactionDidNotCommit(t *testing.T) {
 		sid, lease := claimed(t, m, tenant, "run-nc-write", "user:first")
 		clk.advance(2 * time.Minute)
 
-		real := m.data
-		m.data = &mutateFaults{inner: real, fault: failFirst}
+		real := m.Data
+		m.Data = &mutateFaults{inner: real, fault: failFirst}
 		_, err := m.persistCreate(ctx, tenant, "run-nc-write", CreateRunParams{
 			Transport: TransportStreamJSON, Isolation: IsolationNative, PermissionMode: "default",
 			Actor: "user:first", ActorKind: "user",
 		}, "", "", runGovFacts{}, lease)
-		m.data = real
+		m.Data = real
 		assertNotCommitted(t, m, tenant, sid, err)
 	})
 
@@ -947,12 +947,12 @@ func TestF5_ARefusalIsNotDeliveredWhenItsTransactionDidNotCommit(t *testing.T) {
 		}
 		clk.advance(2 * time.Minute)
 
-		real := m.data
-		m.data = &mutateFaults{inner: real, fault: failFirst}
+		real := m.Data
+		m.Data = &mutateFaults{inner: real, fault: failFirst}
 		_, err := m.transition(ctx, tenant, "run-nc-tr", transitionInput{
 			event: "launched", toState: stateRunning, lease: lease,
 		})
-		m.data = real
+		m.Data = real
 		assertNotCommitted(t, m, tenant, sid, err)
 	})
 }
@@ -987,8 +987,8 @@ func TestF5_ARetryThatNeverRanDoesNotAnswerWithTheFirstAttemptsVerdict(t *testin
 	sid, lease := claimed(t, m, tenant, "run-stale-refusal", "user:first")
 	clk.advance(2 * time.Minute)
 
-	real := m.data
-	m.data = &mutateFaults{inner: real, fault: func(call int) (error, bool) {
+	real := m.Data
+	m.Data = &mutateFaults{inner: real, fault: func(call int) (error, bool) {
 		switch call {
 		case 1:
 			return store.ErrConflict, false // the callback decides, then the commit conflicts
@@ -1001,7 +1001,7 @@ func TestF5_ARetryThatNeverRanDoesNotAnswerWithTheFirstAttemptsVerdict(t *testin
 		Transport: TransportStreamJSON, Isolation: IsolationNative, PermissionMode: "default",
 		Actor: "user:first", ActorKind: "user",
 	}, "", "", runGovFacts{}, lease)
-	m.data = real
+	m.Data = real
 
 	if !errors.Is(err, errNeverOpened) {
 		t.Fatalf("err = %v, want the second attempt's failure: the first attempt's refusal "+
@@ -1024,10 +1024,10 @@ func TestF5_ALateObservationWhoseRecordFailsIsNotAnsweredAsARefusal(t *testing.T
 
 	sid, lease := claimed(t, m, tenant, "run-followup-fails", "user:first")
 
-	real := m.data
+	real := m.Data
 	bar := &barrierData{inner: real, kind: claimKind}
 	bar.afterRead = func() { clk.advance(2 * time.Minute) } // lapses mid-flight
-	m.data = &mutateFaults{inner: bar, fault: func(call int) (error, bool) {
+	m.Data = &mutateFaults{inner: bar, fault: func(call int) (error, bool) {
 		if call == 2 { // 1 is the governed transaction, 2 is the record of the observation
 			return errCommitFailed, true
 		}
@@ -1037,7 +1037,7 @@ func TestF5_ALateObservationWhoseRecordFailsIsNotAnsweredAsARefusal(t *testing.T
 		Transport: TransportStreamJSON, Isolation: IsolationNative, PermissionMode: "default",
 		Actor: "user:first", ActorKind: "user",
 	}, "", "", runGovFacts{}, lease)
-	m.data = real
+	m.Data = real
 
 	if errIsStatus(err, 403) {
 		t.Fatalf("err = %v: a 403 says authority moved AND the store knows it, and the second "+
@@ -1070,10 +1070,10 @@ func TestF5_ALateObservationInATransitionWhoseRecordFailsIsNotAnsweredAsARefusal
 		t.Fatalf("persistCreate: %v", err)
 	}
 
-	real := m.data
+	real := m.Data
 	bar := &barrierData{inner: real, kind: claimKind}
 	bar.afterRead = func() { clk.advance(2 * time.Minute) } // lapses mid-flight
-	m.data = &mutateFaults{inner: bar, fault: func(call int) (error, bool) {
+	m.Data = &mutateFaults{inner: bar, fault: func(call int) (error, bool) {
 		if call == 2 { // 1 is the transition, 2 is the record of the observation
 			return errCommitFailed, true
 		}
@@ -1082,7 +1082,7 @@ func TestF5_ALateObservationInATransitionWhoseRecordFailsIsNotAnsweredAsARefusal
 	_, err := m.transition(ctx, tenant, "run-tr-followup", transitionInput{
 		event: "launched", toState: stateRunning, lease: lease,
 	})
-	m.data = real
+	m.Data = real
 
 	if errIsStatus(err, 403) {
 		t.Fatalf("err = %v: the refusal was answered as if its record had landed", err)
@@ -1107,10 +1107,10 @@ func TestF5_ARecordThatFailedOverIsStillReportedAsRetryable(t *testing.T) {
 
 	_, lease := claimed(t, m, tenant, "run-notleader", "user:first")
 
-	real := m.data
+	real := m.Data
 	bar := &barrierData{inner: real, kind: claimKind}
 	bar.afterRead = func() { clk.advance(2 * time.Minute) }
-	m.data = &mutateFaults{inner: bar, fault: func(call int) (error, bool) {
+	m.Data = &mutateFaults{inner: bar, fault: func(call int) (error, bool) {
 		if call == 2 {
 			return store.ErrNotLeader, true // the node stopped being the writer in the gap
 		}
@@ -1120,7 +1120,7 @@ func TestF5_ARecordThatFailedOverIsStillReportedAsRetryable(t *testing.T) {
 		Transport: TransportStreamJSON, Isolation: IsolationNative, PermissionMode: "default",
 		Actor: "user:first", ActorKind: "user",
 	}, "", "", runGovFacts{}, lease)
-	m.data = real
+	m.Data = real
 
 	if !errors.Is(err, store.ErrNotLeader) {
 		t.Fatalf("err = %v, want store.ErrNotLeader to survive: a caller that cannot see it "+
@@ -1148,16 +1148,18 @@ func TestAdmission_AStoreFailureDuringALaunchIsNotPublishedAsAPolicyDenial(t *te
 	fr := &fakeRunner{}
 	m, _, tenant, _ := newRuntimeHarness(t, WithRunner(fr), WithCredentialSource(staticCred()))
 
-	real := m.data
+	profileRef := ensureRuntimeTestProfileRef(t, m, tenant)
+	real := m.Data
 	// The node stops being the writer the moment the preamble tries to acquire.
-	m.data = &mutateFaults{inner: real, fault: func(int) (error, bool) {
+	m.Data = &mutateFaults{inner: real, fault: func(int) (error, bool) {
 		return store.ErrNotLeader, true
 	}}
 	_, err := m.createRun(ctx, tenant, CreateRunParams{
-		Transport: TransportStreamJSON, Isolation: IsolationNative,
+		ProviderProfileRef: profileRef,
+		Transport:          TransportStreamJSON, Isolation: IsolationNative,
 		Actor: "user:u1", ActorKind: "user",
 	})
-	m.data = real
+	m.Data = real
 
 	if err == nil {
 		t.Fatal("a launch whose admission plane could not write was ALLOWED")
@@ -1198,7 +1200,7 @@ func TestAdmission_TheMintAndKillSwitchOutagesKeepTheirRetryableStatus(t *testin
 		})
 		m, _, tenant, _ := newRuntimeHarness(t, WithRunner(&fakeRunner{}), WithCredentialSource(creds))
 
-		_, err := m.createRun(ctx, tenant, CreateRunParams{
+		_, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{
 			Transport: TransportStreamJSON, Isolation: IsolationNative,
 			Actor: "user:u1", ActorKind: "user",
 		})
@@ -1213,7 +1215,7 @@ func TestAdmission_TheMintAndKillSwitchOutagesKeepTheirRetryableStatus(t *testin
 		m, _, tenant, _ := newRuntimeHarness(t, WithRunner(&fakeRunner{}),
 			WithCredentialSource(staticCred()), WithStopGate(stop))
 
-		_, err := m.createRun(ctx, tenant, CreateRunParams{
+		_, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{
 			Transport: TransportStreamJSON, Isolation: IsolationNative,
 			Actor: "user:u1", ActorKind: "user",
 		})
@@ -1325,7 +1327,7 @@ func TestAdmission_AGateErrorIsNotPublishedAsAPolicyDenial(t *testing.T) {
 	m, _, tenant, _ := newRuntimeHarness(t, WithRunner(&fakeRunner{}),
 		WithCredentialSource(staticCred()), WithLaunchGate(gate))
 
-	_, err := m.createRun(ctx, tenant, CreateRunParams{
+	_, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative,
 		Actor: "user:u1", ActorKind: "user",
 	})
@@ -1354,7 +1356,7 @@ func TestAdmission_AGateDenialKeepsItsForbidden(t *testing.T) {
 	m, _, tenant, _ := newRuntimeHarness(t, WithRunner(&fakeRunner{}),
 		WithCredentialSource(staticCred()), WithLaunchGate(gate))
 
-	_, err := m.createRun(ctx, tenant, CreateRunParams{
+	_, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative,
 		Actor: "user:u1", ActorKind: "user",
 	})
@@ -1373,7 +1375,7 @@ func TestAdmission_ABusinessRefusalKeepsItsStatusAndLeaksNoCause(t *testing.T) {
 	m, _, tenant, _ := newRuntimeHarness(t, WithRunner(fr), WithCredentialSource(staticCred()),
 		WithLaunchGate(&spyGate{inner: LaunchDecision{Allowed: true}}))
 
-	dto, err := m.createRun(ctx, tenant, CreateRunParams{
+	dto, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative,
 		Actor: "user:u1", ActorKind: "user",
 	})
@@ -1442,10 +1444,10 @@ func TestF5_TheOtherReadersAlsoRefuseToAnswerAnUnrecordedObservation(t *testing.
 		sid, _ := claimed(t, m, tenant, "run-ac-nogap", "user:first")
 		clk.advance(2 * time.Minute)
 
-		real := m.data
-		m.data = &deadAfterData{inner: real, budget: 0}
+		real := m.Data
+		m.Data = &deadAfterData{inner: real, budget: 0}
 		_, live, err := m.ActiveClaim(ctx, tenant, sid)
-		m.data = real
+		m.Data = real
 
 		if !errors.Is(err, errProcessGone) {
 			t.Fatalf("ActiveClaim = %v, want the store failure", err)
@@ -1461,10 +1463,10 @@ func TestF5_TheOtherReadersAlsoRefuseToAnswerAnUnrecordedObservation(t *testing.
 		sid, _ := claimed(t, m, tenant, "run-lo-nogap", "user:first")
 		clk.advance(2 * time.Minute)
 
-		real := m.data
-		m.data = &deadAfterData{inner: real, budget: 0}
+		real := m.Data
+		m.Data = &deadAfterData{inner: real, budget: 0}
 		_, err := m.leaseOf(ctx, tenant, sid, "user:first")
-		m.data = real
+		m.Data = real
 
 		if !errors.Is(err, errProcessGone) {
 			t.Fatalf("leaseOf = %v, want the store failure", err)
@@ -1476,7 +1478,7 @@ func TestF5_TheOtherReadersAlsoRefuseToAnswerAnUnrecordedObservation(t *testing.
 func seedFenceCeiling(t *testing.T, m *Module, tenant model.TenantID, sid string) {
 	t.Helper()
 	ctx := context.Background()
-	if err := m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
+	if err := m.Data.Mutate(ctx, tenant, func(sc store.Scope) error {
 		repo, err := sc.Ext(claimKind)
 		if err != nil {
 			return err
@@ -1497,7 +1499,7 @@ func seedFenceCeiling(t *testing.T, m *Module, tenant model.TenantID, sid string
 func claimStateOf(t *testing.T, m *Module, tenant model.TenantID, sid string) string {
 	t.Helper()
 	var out string
-	if err := m.data.View(context.Background(), tenant, func(sc store.Scope) error {
+	if err := m.Data.View(context.Background(), tenant, func(sc store.Scope) error {
 		rec, found, err := findClaim(context.Background(), sc, sid)
 		if err != nil || !found {
 			return err
@@ -1524,7 +1526,7 @@ func claimStateOf(t *testing.T, m *Module, tenant model.TenantID, sid string) st
 // after it is created and before the production closure runs — which is exactly
 // what a contended write lock does. With the clock read INSIDE the transaction the
 // lease has expired by the time it is consulted and the heartbeat is refused; with
-// the read hoisted above m.data.Mutate it captures a pre-barrier instant and renews
+// the read hoisted above m.Data.Mutate it captures a pre-barrier instant and renews
 // a lease that is already dead.
 func TestF6_TheClockIsReadInsideTheTransaction(t *testing.T) {
 	t.Parallel()
@@ -1547,13 +1549,13 @@ func TestF6_TheClockIsReadInsideTheTransaction(t *testing.T) {
 
 	// The heartbeat is issued while the lease is still live, and then waits — the way
 	// a real one waits behind another writer.
-	real := m.data
-	m.data = &barrierData{
+	real := m.Data
+	m.Data = &barrierData{
 		inner: real, kind: claimKind,
 		beforeCallback: func() { time.Sleep(2 * ttl) },
 	}
 	_, err = m.Heartbeat(ctx, tenant, sid, "user:first", lease.Fence, ttl)
-	m.data = real
+	m.Data = real
 
 	if !errors.Is(err, ErrLeaseLost) {
 		t.Fatalf("a heartbeat that entered its transaction AFTER its lease expired = %v, want ErrLeaseLost: "+
@@ -1582,15 +1584,15 @@ func TestF5_ALapseObservedByTheLateRecheckIsStillRetired(t *testing.T) {
 	// The lease is LIVE when the transaction opens and the fence check passes; it runs
 	// out while the governed body is in flight. The barrier is the body's own clock
 	// advance, which is what a slow effect looks like from the claim's point of view.
-	real := m.data
+	real := m.Data
 	bar := &barrierData{inner: real, kind: claimKind}
 	bar.afterRead = func() { clk.advance(2 * time.Minute) }
-	m.data = bar
+	m.Data = bar
 	_, err := m.persistCreate(ctx, tenant, "run-late-lapse", CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative, PermissionMode: "default",
 		Actor: "user:first", ActorKind: "user",
 	}, "", "", runGovFacts{}, lease)
-	m.data = real
+	m.Data = real
 
 	if !errIsStatus(err, 403) {
 		t.Fatalf("a write whose lease expired mid-flight = %v, want a 403 refusal", err)

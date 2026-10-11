@@ -155,11 +155,11 @@ func (s *joinedCheckedStanding) Standing(
 // call made inside an owning replay transaction is recorded and refused.
 func installJoinedPortChecks(m *Module, tenant model.TenantID) *joinedPortCalls {
 	calls := &joinedPortCalls{tenant: tenant}
-	m.communicationDirectoryResolver = &joinedCheckedDirectory{next: m.communicationDirectoryResolver, calls: calls}
-	m.communicationAudienceAttestor = &joinedCheckedAttestor{next: m.communicationAudienceAttestor, calls: calls}
-	m.communicationGrantClosure = &joinedCheckedClosure{next: m.communicationGrantClosure, calls: calls}
-	m.communicationOperationAuthorizer = &joinedCheckedAuthorizer{next: m.communicationOperationAuthorizer, calls: calls}
-	m.standing = &joinedCheckedStanding{next: m.standing, calls: calls}
+	m.CommunicationDirectoryResolver = &joinedCheckedDirectory{next: m.CommunicationDirectoryResolver, calls: calls}
+	m.CommunicationAudienceAttestor = &joinedCheckedAttestor{next: m.CommunicationAudienceAttestor, calls: calls}
+	m.CommunicationGrantClosure = &joinedCheckedClosure{next: m.CommunicationGrantClosure, calls: calls}
+	m.CommunicationOperationAuthorizer = &joinedCheckedAuthorizer{next: m.CommunicationOperationAuthorizer, calls: calls}
+	m.Standing = &joinedCheckedStanding{next: m.Standing, calls: calls}
 	return calls
 }
 

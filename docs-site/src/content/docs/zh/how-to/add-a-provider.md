@@ -17,12 +17,9 @@ description: >-
 
 | 词 | 它是什么 |
 |---|---|
-| **提供方** | 一份凭据：一个 API 密钥、一个可选端点，以及它所属的类型（`anthropic`、`openai`、`xai`、`openai_compatible`）。 |
+| **提供方** | 一个 API 密钥或本地模型端点、一个可选的 `base_url`，以及它的类型（`anthropic`、`openai`、`xai`、`gemini`、`openai_compatible`、`ollama`）。 |
 | **提供方配置档案** | 本机上的一个身份：哪个官方 CLI 运行，以及在哪个配置主目录和用户主目录之下。 |
 | **会话** | 一个已启动的子进程，运行在一个配置档案之下，使用一个提供方的凭据。 |
-
-仅有提供方不会启动任何东西。没有提供方的配置档案，只有在宿主机变量恰好已设置时才能
-启动。让会话真正启动的，是两者之间的绑定。
 
 ## 1. 添加提供方
 
@@ -33,8 +30,7 @@ description: >-
 3. 选择提供方，取一个你在选择器中能认出来的名字，并粘贴密钥。除非你指向自己的网关，
    否则请将端点留空；`openai_compatible` 的提供方必须填写端点，因为没有可假定的官方
    端点。
-4. 确认。这次写入需要 AAL3 会话，与本产品中其他所有凭据一样；控制台展示的是认证流程，
-   而不是一个拒绝。
+4. 确认。
 
 引擎会在静态存储时封存该密钥，并返回四个字符的提示。**密钥永不再被返回**，即使在你刚
 写入之后也是如此。如果丢失，请更换：没有任何读取可以把它取回。
@@ -72,8 +68,9 @@ olivares provider test prv_01J8ABCDEF
 
 ## 3. 注册配置档案并绑定提供方
 
-配置档案的主目录必须已经存在于运行控制平面的那台机器上。服务器在那里校验它们，且绝不
-创建缺失的目录：一个空的后备主目录会让会话获得无人配置过的提供方身份。
+显式指定的主目录路径必须已经存在于运行控制平面的机器上。服务器会在那里校验
+这些路径，不会创建缺失的显式指定目录：一个空的后备主目录会让会话获得无人
+配置过的提供方身份。
 
 ```sh
 olivares agent profile create \
@@ -91,16 +88,15 @@ olivares agent profile create \
   东西，也从不读取那个文件。
 - `managed_injection` —— 由引擎提供的凭据。若绑定了提供方，就是该提供方的凭据。
 
-还有一个单动词的快捷方式，它把检测、注册和绑定一次做完，并把主目录默认为该驱动在你
-`$HOME` 下的那一个：
+这个快捷方式将检测、注册和提供方绑定合并为一步。如果 `--config-home` 和
+`--user-home` 均未指定，引擎会管理主目录。不带 `--provider` 时，它会选择该驱动的
+新会话将使用的配置档案；带 `--provider` 时，它会创建具有专用主目录的配置档案：
 
 ```sh
 olivares agent deploy claude --provider prv_01J8ABCDEF
 ```
 
-它报告四种状态，而这不是同一个问题：**未安装**（它会给出安装命令而不是执行它）、
-**已安装**、**配置档案就绪**、**可启动**。它绝不执行提供方登录，也绝不创建缺失的主
-目录。
+使用此快捷方式前，请在 **AI 工具** 中安装工具。它不会登录你的提供方账户。
 
 之后再绑定（或重新绑定）：
 
@@ -111,12 +107,16 @@ olivares provider bind prv_01J8ABCDEF --profile ppf_01J8ZZZZZZ
 引擎会拒绝该配置档案的驱动无法读取的凭据。把 OpenAI 密钥绑到 Claude 配置档案上，会得到
 一个同时指名两者的拒绝：绑定时一次，启动时再一次 —— 而不是一个在握手中途失败的会话。
 
-| 提供方类型 | 能读取它的驱动 |
-|---|---|
-| `anthropic` | `claude`、`opencode` |
-| `openai` | `codex`、`opencode` |
-| `xai` | `grok`、`opencode` |
-| `openai_compatible` | 全部，配合它自己的端点 |
+| 提供方类型 | 能读取它的驱动 | 使用自定义 `base_url` 时 |
+|---|---|---|
+| `anthropic` | `claude`, `opencode` | `claude` |
+| `openai` | `codex`, `opencode` | `codex` |
+| `xai` | `grok`, `opencode` | `grok` |
+| `gemini` | `gemini-cli` |  |
+| `openai_compatible` | `codex` | `codex` |
+| `ollama` | `codex`, `opencode` | `codex`, `opencode` |
+
+对于 `anthropic`、`openai` 和 `xai`，OpenCode 只接受提供方自己的端点：请将 `base_url` 留空。`openai_compatible` 提供方请使用 `codex`；`ollama` 请使用 `codex` 或 `opencode`。
 
 ## 4. 启动第一次会话
 
@@ -129,7 +129,11 @@ olivares agent session create \
 olivares agent session attach run-123
 ```
 
-`--provider-profile` 是**必填项**：服务器不会隐式选择配置档案、主目录或环境。
+`--provider-profile` 用于显式选择配置档案。启用基于配置档案的启动后，省略它时，
+引擎会为默认工具 Claude Code 解析配置档案：优先复用或创建使用工具自身登录的
+配置档案；未登录时，则使用兼容的提供商记录复用或创建配置档案。这需要
+`sessions:profile:write` 权限；没有该权限时，请显式选择配置档案。配置档案解析和
+启动时的拒绝仍然有效。
 
 在控制台中，同一条路径是**新手引导 → 代理与第一次会话**，或**会话 → 新建会话**。
 
@@ -161,11 +165,11 @@ olivares provider rm prv_01J8ABCDEF --yes               # 不可撤销
 
 ## 环境变量，以及它们仍然适用的地方
 
-`OLIVARES_SESSION_RUNTIME_WIF` 和 `OLIVARES_SESSION_RUNTIME_TOKEN_FILE` 保持不变，仍受
-支持。它们是整台宿主机的凭据，适用于**没有**指明提供方的任何配置档案。
-
-指明了提供方的配置档案使用那一个。更具体的选择优先，并且不存在从它回退的路径：一份无法
-取出的已绑定凭据会拒绝启动，而不是悄悄改用部署级的凭据。
+对于未指定提供方的 `managed_injection` Claude 配置档案，
+`OLIVARES_SESSION_RUNTIME_WIF` 或 `OLIVARES_SESSION_RUNTIME_TOKEN_FILE`
+提供主机的推理凭据。绑定提供方的配置档案使用该提供方的凭据；若无法读取，
+则拒绝启动，不回退到主机凭据。`provider_account_home` 配置档案使用获授权的
+工具登录，不需要这两个变量。参见
 
 ## 相关
 

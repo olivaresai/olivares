@@ -125,7 +125,7 @@ func canonicalURI(path string) string {
 // 2+. url.QueryUnescape maps '+' to space, matching url.Values.Encode() wire
 // semantics; query components encode '/' (encodeSlash=true) per the SigV4 spec.
 // An undecodable component falls back to its raw bytes (defensive — no caller
-// produces one). Mirrors the proven connectors/s3archive/sign.go behavior.
+// produces one). Shares the signing contract used by S3 Object Lock delivery.
 func canonicalQuery(raw string) string {
 	if raw == "" {
 		return ""

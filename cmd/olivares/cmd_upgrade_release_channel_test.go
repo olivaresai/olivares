@@ -112,14 +112,14 @@ func newGHFixture(t *testing.T, owner, repo, version string, bin []byte) *ghFixt
 	}
 	// The producer's asset names: release.yml:719 uploads `stable-manifest.json`, and
 	// scripts/release-attach-stable-pair.sh:141-142 attaches `stable-manifest.json.sig`.
-	for _, prefix := range []string{base + "/latest/download", base + "/download/v" + version} {
+	for _, prefix := range []string{base + "/latest/download", base + "/download/" + version} {
 		mux.HandleFunc(prefix+"/stable-manifest.json", record(func(w http.ResponseWriter) { _, _ = w.Write(mb) }))
 		mux.HandleFunc(prefix+"/stable-manifest.json.sig", record(func(w http.ResponseWriter) { _, _ = w.Write([]byte(sig)) }))
 	}
 	// The ARTIFACT lives only under the tag, never under /latest/download: if the
 	// implementation ever fetched it through the mutable pointer this 404s, which is the
 	// point of not registering it there.
-	mux.HandleFunc(base+"/download/v"+version+"/"+f.artName,
+	mux.HandleFunc(base+"/download/"+version+"/"+f.artName,
 		record(func(w http.ResponseWriter) { _, _ = w.Write(art) }))
 	mux.HandleFunc("/", record(func(w http.ResponseWriter) { http.Error(w, "not found", http.StatusNotFound) }))
 
@@ -140,11 +140,11 @@ func TestUpgradeFromGitHubReleases(t *testing.T) {
 	if _, err := exec.LookPath("go"); err != nil {
 		t.Skip("go toolchain not available to build stub binaries")
 	}
-	v1 := buildStub(t, "26.7.0")
-	v2 := buildStub(t, "26.8.0")
+	v1 := buildStub(t, "26.700")
+	v2 := buildStub(t, "26.800")
 
 	t.Run("latest release: manifest by asset name, artifact by the SIGNED tag", func(t *testing.T) {
-		f := newGHFixture(t, "olivaresai", "olivares", "26.8.0", v2)
+		f := newGHFixture(t, "olivaresai", "olivares", "26.800", v2)
 		target := writeTarget(t, v1)
 		out, err := runUpgradeCmd(t, "--endpoint", f.repoEndpoint("olivaresai", "olivares"),
 			"--pubkey", f.pubB64, "--target", target, "--os", "linux", "--arch", "amd64",
@@ -152,7 +152,7 @@ func TestUpgradeFromGitHubReleases(t *testing.T) {
 		if err != nil {
 			t.Fatalf("upgrade from release assets: %v\n%s", err, out)
 		}
-		if got := runsVersion(t, target); !strings.Contains(got, "26.8.0") {
+		if got := runsVersion(t, target); !strings.Contains(got, "26.800") {
 			t.Fatalf("target not upgraded: %q", got)
 		}
 		wantManifest := "/olivaresai/olivares/releases/latest/download/stable-manifest.json"
@@ -162,7 +162,7 @@ func TestUpgradeFromGitHubReleases(t *testing.T) {
 		if !f.sawPath(wantManifest + ".sig") {
 			t.Fatalf("detached signature was not read beside the manifest; server saw %q", f.seen())
 		}
-		wantArtifact := "/olivaresai/olivares/releases/download/v26.8.0/" + f.artName
+		wantArtifact := "/olivaresai/olivares/releases/download/26.800/" + f.artName
 		if !f.sawPath(wantArtifact) {
 			t.Fatalf("artifact was not fetched from the signed tag %s; the server saw %q", wantArtifact, f.seen())
 		}
@@ -182,16 +182,16 @@ func TestUpgradeFromGitHubReleases(t *testing.T) {
 	})
 
 	t.Run("a pinned release tag reads and downloads from that tag only", func(t *testing.T) {
-		f := newGHFixture(t, "example-owner", "example-rehearsal", "26.8.0", v2)
+		f := newGHFixture(t, "example-owner", "example-rehearsal", "26.800", v2)
 		target := writeTarget(t, v1)
 		out, err := runUpgradeCmd(t, "--endpoint",
-			f.tagEndpoint("example-owner", "example-rehearsal", "v26.8.0"),
+			f.tagEndpoint("example-owner", "example-rehearsal", "26.800"),
 			"--pubkey", f.pubB64, "--target", target, "--os", "linux", "--arch", "amd64",
 			"--yes", "--data-dir", t.TempDir())
 		if err != nil {
 			t.Fatalf("upgrade from a pinned tag: %v\n%s", err, out)
 		}
-		base := "/example-owner/example-rehearsal/releases/download/v26.8.0"
+		base := "/example-owner/example-rehearsal/releases/download/26.800"
 		if !f.sawPath(base + "/stable-manifest.json") {
 			t.Fatalf("pinned manifest not read from the tag; server saw %q", f.seen())
 		}
@@ -209,7 +209,7 @@ func TestUpgradeFromGitHubReleases(t *testing.T) {
 	})
 
 	t.Run("--check reads the channel and installs nothing", func(t *testing.T) {
-		f := newGHFixture(t, "olivaresai", "olivares", "26.8.0", v2)
+		f := newGHFixture(t, "olivaresai", "olivares", "26.800", v2)
 		target := writeTarget(t, v1)
 		out, err := runUpgradeCmd(t, "--endpoint", f.repoEndpoint("olivaresai", "olivares"),
 			"--pubkey", f.pubB64, "--target", target, "--os", "linux", "--arch", "amd64",
@@ -217,10 +217,10 @@ func TestUpgradeFromGitHubReleases(t *testing.T) {
 		if err != nil {
 			t.Fatalf("--check against release assets: %v\n%s", err, out)
 		}
-		if !strings.Contains(out, "26.8.0") {
+		if !strings.Contains(out, "26.800") {
 			t.Fatalf("--check did not report the available version:\n%s", out)
 		}
-		if got := runsVersion(t, target); !strings.Contains(got, "26.7.0") {
+		if got := runsVersion(t, target); !strings.Contains(got, "26.700") {
 			t.Fatalf("--check must not install: %q", got)
 		}
 	})
@@ -229,7 +229,7 @@ func TestUpgradeFromGitHubReleases(t *testing.T) {
 		// The server publishes ONLY a stable manifest, which is exactly what release.yml
 		// does for a tag that declares no advisory. Asking for `security` must fail with
 		// the missing-channel explanation, never fall back to the stable bytes.
-		f := newGHFixture(t, "olivaresai", "olivares", "26.8.0", v2)
+		f := newGHFixture(t, "olivaresai", "olivares", "26.800", v2)
 		target := writeTarget(t, v1)
 		_, err := runUpgradeCmd(t, "--endpoint", f.repoEndpoint("olivaresai", "olivares"),
 			"--pubkey", f.pubB64, "--target", target, "--os", "linux", "--arch", "amd64",
@@ -250,7 +250,7 @@ func TestUpgradeFromGitHubReleases(t *testing.T) {
 		if !strings.Contains(err.Error(), "is NOT a fallback to stable") {
 			t.Fatalf("the refusal must say the channel does not fall back to stable, got: %v", err)
 		}
-		if got := runsVersion(t, target); !strings.Contains(got, "26.7.0") {
+		if got := runsVersion(t, target); !strings.Contains(got, "26.700") {
 			t.Fatalf("a refused channel must leave the target untouched: %q", got)
 		}
 	})

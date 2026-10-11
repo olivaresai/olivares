@@ -51,14 +51,16 @@ can-enforce versus can-only-observe table.
 
 ## 3. Launch and stop
 
-Pin the official binary, or use a managed install receipt:
+The engine can use a managed install or its `PATH`. To select an official
+binary explicitly:
 
 ```sh
 export OLIVARES_SESSION_RUNTIME_CODEX_BIN=/var/lib/olivares/tools/codex/<version>-<platform>/bin/codex
 ```
 
-If that variable is unset and a **registered** managed release exists, the
-session runtime uses that executable. It does not search `PATH`.
+If that variable is unset, the session runtime uses the newest verified
+managed install, then `codex` on the engine's `PATH`. It resolves the program
+at launch.
 
 ```sh
 olivares agent session create --name "codex-work" --workspace ws-123 --provider-profile prof-123

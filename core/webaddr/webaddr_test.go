@@ -271,19 +271,13 @@ func TestRelyingPartyValidityIsNotBrowserAcceptance(t *testing.T) {
 		"https://trail-.example":        false,
 		"https://.panel.example.com":    false, // empty label
 		"https://olivares":              false, // refused by THIS build's verifier, not by the specification
-		// AND THE TRAILING DOT FLIPS IT, which looks like a bug and is a faithful
-		// report of the installed verifier: its rule for a non-IP is
-		// `value != "localhost" && !strings.Contains(rpid.Path, ".")`, and the root
-		// dot satisfies the dot. A browser agrees — "olivares." is a valid domain
-		// and is its own effective domain — so this is recorded rather than
-		// second-guessed. Raised by an independent review's probe.
-		"https://olivares.":    true,
-		"https://127.0.0.1":    false, // the verifier accepts the string; browsers refuse it
-		"https://127.1":        false,
-		"https://0x7f000001":   false,
-		"https://[::1]":        false,
-		"https://0.0.0.0":      false,
-		"https://192.168.1.10": false,
+		"https://olivares.":             false, // root-dot normalization does not make a single-label ID dotted
+		"https://127.0.0.1":             false, // both the verifier and browsers refuse an IP
+		"https://127.1":                 false,
+		"https://0x7f000001":            false,
+		"https://[::1]":                 false,
+		"https://0.0.0.0":               false,
+		"https://192.168.1.10":          false,
 	}
 	for in, want := range cases {
 		a, err := Parse("--public-url", in)
@@ -459,6 +453,19 @@ func TestPotentiallyTrustworthy(t *testing.T) {
 		}
 		if got := a.PotentiallyTrustworthy(); got != want {
 			t.Errorf("Parse(%q).PotentiallyTrustworthy() = %v, want %v", in, got, want)
+		}
+	}
+}
+
+func TestRelyingPartyDomainAcceptsOnlyOneRootDot(t *testing.T) {
+	for _, host := range []string{"example.com", "example.com.", "localhost", "localhost."} {
+		if !IsRelyingPartyDomain(host) {
+			t.Errorf("valid relying-party domain %q was refused", host)
+		}
+	}
+	for _, host := range []string{"example.com..", "a..example.com", ".", "10.1.2.3", "my_host.example.com", "olivares"} {
+		if IsRelyingPartyDomain(host) {
+			t.Errorf("invalid relying-party domain %q was accepted", host)
 		}
 	}
 }

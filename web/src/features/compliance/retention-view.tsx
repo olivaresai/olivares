@@ -1074,7 +1074,10 @@ function RetentionRunsCard({ classes }: { classes: DataClassEntry[] }) {
           value={filter === '' ? 'all' : filter}
           onValueChange={(v) => setFilter(v === 'all' ? '' : v)}
         >
-          <SelectTrigger className="w-56">
+          <SelectTrigger
+            className="w-56"
+            aria-label={t('holds.dialog.dataClass')}
+          >
             <SelectValue />
           </SelectTrigger>
           <SelectContent>

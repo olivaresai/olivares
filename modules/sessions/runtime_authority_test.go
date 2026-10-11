@@ -259,10 +259,9 @@ func TestCodexRuntimeWorkBoundRunHasFencedTextInput(t *testing.T) {
 		WithWorkContentGuard(allowWorkContent{}),
 	)
 	itemID, _, agentRef := readyWorkLaunchItem(t, m, st, tenant)
-	m.UseWorkIdentityResolver(durableWorkLaunchIdentity{m: m, st: st})
+	WithWorkIdentityResolver(durableWorkLaunchIdentity{m: m, st: st})(m)
 	record := setCodexFixture(t, prof, codexFixture{ThreadID: "thread-work-bound", Account: "apikey"})
-	spec := workLaunchSpec(itemID, agentRef)
-	spec.Runtime.ProviderProfileRef = prof.Ref
+	spec := workLaunchSpec(t, m, tenant, itemID, agentRef, prof.Ref)
 
 	managed, err := m.LaunchForWork(context.Background(), tenant, spec)
 	if err != nil {

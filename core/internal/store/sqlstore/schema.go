@@ -18,9 +18,9 @@ import (
 	"github.com/olivaresai/olivares/core/store"
 )
 
-// Tracking objects. Core migrations use an ordered version table; module entity
-// tables are tracked by NAME (not by registration position), so adding,
-// removing or reordering a module never re-maps a version to a different table.
+// Core versions and module descriptor versions share the migration runner.
+// Keep legacy module-table receipts for upgrade compatibility; each table now
+// has its own version namespace, independent of module registration order.
 const (
 	coreTrackingTable    = "schema_migrations_core"
 	moduleTablesTracking = "applied_module_tables"
@@ -67,7 +67,7 @@ func buildCoreMigrations(
 		if deploymentSettingsRelation(d.Kind) {
 			continue
 		}
-		d = beforeExternalProvider(beforeGroupOrigin(beforeConsentCustody(beforeAuthenticationFreshness(d))))
+		d = beforeUserGroupWorkspace(beforeWorkspaceTree(beforeExternalProvider(beforeGroupOrigin(beforeConsentCustody(beforeAuthenticationFreshness(d))))))
 		entity = append(entity, dia.CreateTableStmts(d)...)
 	}
 	migrations := []migrate.Migration{
@@ -123,7 +123,8 @@ func buildCoreMigrations(
 	return append(migrations, coreDirectoryMigration(dia, descs, directoryAfter), coreLineageMigration(dia))
 }
 
-// buildCoreMigrationPlan is the COMPLETE core plan, v1 through v9.
+// buildCoreMigrationPlan is the complete registered core plan through v20,
+// preserving the permanent gaps at v12 and v16.
 //
 // It exists beside buildCoreMigrations because amendment R2-G1 needs the two halves
 // separately: everything through v8 applies first, the access-evidence edge's predecessor
@@ -145,24 +146,30 @@ func buildCoreMigrationPlan(
 		coreAccessEvidenceMigration(dia, descs, graph, boot),
 		coreUserAuthorityMigration(dia, userAuthorityRoles...),
 		coreEvidenceRefusedMigration(dia, evidenceStates),
-		// v12 is reserved for FinOps custody and deliberately unregistered; the compiled
-		// plan is 1..11, 13, 14, 15.
+		// v12 and v16 remain unregistered in every deployed history.
 		coreLoginCapabilityMigration(dia, userAuthorityRoles...),
 		coreConsentCustodyMigration(),
 		coreCredentialBindingMigration(),
 		coreAuthenticationFreshnessMigration(),
 		coreTOTPMigration(),
+		coreFinOpsCustodyControlMigration(dia, userAuthorityRoles...),
+		coreOSAccountMigration(),
+		coreDescriptorSchemaMigration(dia),
+		coreFederationDataMigration(dia),
+		coreAuditSchemaMigration(dia),
+		coreAuditTreeMigration(dia),
+		coreWorkspaceTreeMigration(dia),
+		coreAuditTreeGuardMigration(dia),
+		coreUserGroupWorkspaceMigration(dia),
 	)
 }
 
-// reconcileCoreData runs idempotent, one-time DATA normalizations for core tables
-// whose descriptor changed a column from an implicit to an explicit value — the
-// data-shape analog of reconcileColumns (which reconciles the SCHEMA). It runs
-// AFTER reconcileColumns (so the new columns exist) and under the same migration
-// advisory lock. Every statement MUST be idempotent (a no-op once applied and on a
-// fresh/empty table) because it runs on EVERY boot, not version-tracked — that is
-// what lets it converge an upgraded database onto the shape a fresh one is created
-// with, without a hand-authored, order-fragile migration.
+// reconcileCoreData is the transaction-owning helper for core data normalization.
+// Production runs reconcileCoreDataTx once in core migration v22, after v21 has
+// adopted the descriptor schema, under the migration advisory lock. Its statements
+// remain idempotent so adopting a legacy database whose rows are already normalized
+// preserves them. A fixture staging legacy aliases must also make v22 pending;
+// changing rows after that version is recorded does not replay the migration.
 //
 // It runs BOUND to the auth partition, in ONE transaction. federation_configs is
 // an auth-partition table: it is reachable only through
@@ -194,6 +201,18 @@ func buildCoreMigrationPlan(
 // overwrites the pin, and System() clears it explicitly when it wants the
 // cross-tenant exception (store.go).
 func reconcileCoreData(ctx context.Context, db dialect.Execer, dia dialect.Dialect) error {
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin transaction: %w", err)
+	}
+	defer tx.Rollback() //nolint:errcheck // no-op after commit
+	if err := reconcileCoreDataTx(ctx, tx, dia); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func reconcileCoreDataTx(ctx context.Context, tx *sql.Tx, dia dialect.Dialect) error {
 	// U4: the federation_configs.alias column is added nullable by reconcile, so every
 	// pre-U4 row carries alias NULL. Converge them to the reserved "default" so the
 	// (tenant_id, target_tenant_id, alias) UNIQUE index enforces one default IdP per scope
@@ -234,11 +253,6 @@ func reconcileCoreData(ctx context.Context, db dialect.Execer, dia dialect.Diale
 		                  AND f3.alias = 'default')`,
 		`UPDATE federation_configs SET alias = 'dup-' || id WHERE alias IS NULL OR alias = ''`,
 	}
-	tx, err := db.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("begin transaction: %w", err)
-	}
-	defer tx.Rollback() //nolint:errcheck // no-op after commit
 	if err := dia.BindTenant(ctx, tx, model.SystemTenantID); err != nil {
 		return fmt.Errorf("bind auth partition: %w", err)
 	}
@@ -250,30 +264,20 @@ func reconcileCoreData(ctx context.Context, db dialect.Execer, dia dialect.Diale
 			return fmt.Errorf("statement %d: %w", i+1, err)
 		}
 	}
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("commit: %w", err)
-	}
 	return nil
 }
 
-// reconcileAuditLedger adds the ledger columns the audit table gained after its
-// v3 CREATE TABLE. The ledger is raw DDL rather than a descriptor-generated table,
-// so reconcileColumns cannot see it — but it needs the same forward path, and for
-// the same reason: a database created before a column existed must converge onto
-// the shape a fresh one is created with, without a version-tracked migration that
-// would then have to be a no-op on every fresh database forever.
-//
-// ADD COLUMN is the whole of it, and it must stay that way. The table carries
-// append-only triggers and a tenant guard; anything beyond adding a nullable column
-// belongs in an authored migration where its online-safety can be reviewed.
+// reconcileAuditLedger is core v23's transactional adoption of the audit schema.
+// It adds nullable ledger columns and their guards without rewriting sealed rows.
+// Future audit schema changes need a new version.
 //
 // meta_blind is nullable BY CONTRACT, not for convenience: a row sealed before
 // blinding existed has no blind, and the absence is what tells Verify to apply the
 // unblinded rule that row was actually sealed under. Backfilling a blind here would
 // be the one unforgivable operation on an evidence ledger — it would change the
 // metadata commitment of already-sealed rows and break their chain hashes.
-func reconcileAuditLedger(ctx context.Context, db dialect.Execer, dia dialect.Dialect) error {
-	have, err := dia.TableColumns(ctx, db, dialect.AuditEventsTable)
+func reconcileAuditLedger(ctx context.Context, tx *sql.Tx, dia dialect.Dialect) error {
+	have, err := dia.TableColumns(ctx, tx, dialect.AuditEventsTable)
 	if err != nil {
 		return fmt.Errorf("introspect %q: %w", dialect.AuditEventsTable, err)
 	}
@@ -303,11 +307,6 @@ func reconcileAuditLedger(ctx context.Context, db dialect.Execer, dia dialect.Di
 	// record exists to make impossible. The observation and the row it produces must
 	// therefore be inseparable. Both engines run DDL transactionally, so this costs
 	// nothing on either.
-	tx, err := db.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("reconcile %q: begin: %w", dialect.AuditEventsTable, err)
-	}
-	defer func() { _ = tx.Rollback() }()
 	if legacyLedger {
 		stmt := fmt.Sprintf("ALTER TABLE %s ADD COLUMN meta_blind %s",
 			dialect.AuditEventsTable, dia.ColumnType(model.KindBytes, true))
@@ -318,13 +317,7 @@ func reconcileAuditLedger(ctx context.Context, db dialect.Execer, dia dialect.Di
 	if err := reconcileAuditBlindingState(ctx, tx, dia, legacyLedger); err != nil {
 		return err
 	}
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("reconcile %q: commit: %w", dialect.AuditEventsTable, err)
-	}
-	// Outside the transaction on purpose: the guard is defense in depth, it probes the
-	// catalog and may legitimately skip itself on a non-owner role, and none of that
-	// belongs in the atomic unit above.
-	return reconcileAuditBlindGuards(ctx, db, dia)
+	return reconcileAuditBlindGuards(ctx, tx, dia)
 }
 
 // reconcileAuditBlindingState creates and seeds the global record of whether this
@@ -400,7 +393,7 @@ func reconcileAuditBlindingState(ctx context.Context, db dialect.Querier, dia di
 // supported and privilege-conscious posture; failing its boot over a
 // defense-in-depth constraint would punish the more careful operator. Skipping is
 // announced rather than silent, so the operator can add it themselves.
-func reconcileAuditBlindGuards(ctx context.Context, db dialect.Execer, dia dialect.Dialect) error {
+func reconcileAuditBlindGuards(ctx context.Context, db *sql.Tx, dia dialect.Dialect) error {
 	if dia.Name() != store.EnginePostgres {
 		return nil
 	}
@@ -697,29 +690,23 @@ func reconcileEvidenceOpStateCheck(ctx context.Context, db dialect.Execer, dia d
 	return nil
 }
 
-// reconcileColumns brings each descriptor's table up to the descriptor: it CREATES
-// a wholly missing table (with its base columns, isolation guards and indexes, the
-// same DDL the v2 migration would have generated) and adds any NULLABLE field an
-// existing table is missing, then ensures the descriptor's secondary indexes
-// exist. It is the additive-schema-growth vehicle for BOTH core auth/entity tables
-// AND module-owned tables — neither path otherwise ALTERs an existing
-// table: a core table's CREATE TABLE is frozen in the v2 "core_entities" migration
-// (migrate.Apply skips v2 on an already-migrated database), and a module table's
-// CREATE TABLE runs in applyModuleTables ONLY when the table is not yet tracked, so
-// once tracked it is never re-touched. In both cases a descriptor that gained a
-// column would be created on a FRESH database (regenerated from the current
-// descriptors) but never on an existing one — bricking CRUD that selects the new
-// column. A naive CREATE/ALTER in a new migration would then fail on the fresh
-// database (the object already exists). This reconcile resolves both: it
-// introspects the live schema and adds ONLY what is missing, so it converges fresh
-// and existing databases identically and is a no-op once applied. It is strictly
-// additive — never ALTER/DROP/RENAME of an existing column (the no-destructive-
-// migration rule) — and refuses to add a NOT NULL column to an existing table
-// (which a populated table cannot accept without a default; that genuinely needs a
-// hand-authored migration). It runs after the core migrations / module-table
-// creation and before the self-test, so a created table is still covered by the
-// isolation-guard self-check.
+// reconcileColumns is a transaction-owning helper for isolated schema checks.
+// Production calls reconcileColumnsTx inside a numbered migration. It creates
+// missing tables, adds nullable fields and installs indexes without rewriting
+// rows. A required field on an existing table needs an explicit backfill plan.
 func reconcileColumns(ctx context.Context, db dialect.Execer, dia dialect.Dialect, descs []model.EntityDescriptor) error {
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback() //nolint:errcheck // no-op after commit
+	if err := reconcileColumnsTx(ctx, tx, dia, descs); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func reconcileColumnsTx(ctx context.Context, db *sql.Tx, dia dialect.Dialect, descs []model.EntityDescriptor) error {
 	for _, d := range descs {
 		have, err := dia.TableColumns(ctx, db, d.Table)
 		if err != nil {
@@ -733,8 +720,10 @@ func reconcileColumns(ctx context.Context, db dialect.Execer, dia dialect.Dialec
 			// createModuleTable: a mid-create failure must leave nothing behind, or
 			// the next boot would find a guard-less table and the self-test would
 			// refuse to open forever.
-			if cerr := createTableTx(ctx, db, dia, d); cerr != nil {
-				return fmt.Errorf("reconcile %q create table: %w", d.Table, cerr)
+			for _, stmt := range dia.CreateTableStmts(d) {
+				if _, err := db.ExecContext(ctx, stmt); err != nil {
+					return fmt.Errorf("reconcile %q create table: %w", d.Table, err)
+				}
 			}
 			continue
 		}
@@ -759,21 +748,6 @@ func reconcileColumns(ctx context.Context, db dialect.Execer, dia dialect.Dialec
 		}
 	}
 	return nil
-}
-
-// createTableTx creates a descriptor's table, guards and indexes atomically.
-func createTableTx(ctx context.Context, db dialect.Execer, dia dialect.Dialect, d model.EntityDescriptor) error {
-	tx, err := db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback() //nolint:errcheck // no-op after commit
-	for _, stmt := range dia.CreateTableStmts(d) {
-		if _, err := tx.ExecContext(ctx, stmt); err != nil {
-			return err
-		}
-	}
-	return tx.Commit()
 }
 
 // reconcileIndexStmts renders idempotent (IF NOT EXISTS) CREATE INDEX statements
@@ -801,66 +775,26 @@ func reconcileIndexStmts(d model.EntityDescriptor) []string {
 	return out
 }
 
-// applyModuleTables creates each registered module table that does not yet exist,
-// keyed by table name in a tracking table. Each table is generated from its
-// validated descriptor (inheriting base columns and the tenant/append-only
-// guards) and created atomically with its tracking row. Because tracking is by
-// name, the set of modules can change between boots without corrupting the
-// schema; a removed module simply leaves its (orphan) table in place.
+// applyModuleTables adopts each registered descriptor as version 1 in a stable
+// table-specific namespace. Legacy receipts and rows are retained. Subsequent
+// schema evolution belongs in numbered module SQL migrations, so changing the
+// enabled module set never renumbers or drops another module's schema.
 func applyModuleTables(ctx context.Context, db dialect.Execer, dia dialect.Dialect, mods []model.EntityDescriptor) error {
-	if len(mods) == 0 {
-		return nil
-	}
-	if _, err := db.ExecContext(ctx,
-		"CREATE TABLE IF NOT EXISTS "+moduleTablesTracking+" (table_name TEXT PRIMARY KEY, applied_at TEXT NOT NULL)"); err != nil {
-		return err
-	}
-	applied, err := appliedModuleTables(ctx, db)
-	if err != nil {
-		return err
-	}
 	for _, d := range mods {
-		if applied[d.Table] {
-			continue
-		}
-		if err := createModuleTable(ctx, db, dia, d); err != nil {
-			return fmt.Errorf("create module table %q: %w", d.Table, err)
+		migrations := []migrate.Migration{{
+			Version: 1, Name: "descriptor_schema",
+			Stmts: []string{"CREATE TABLE IF NOT EXISTS " + moduleTablesTracking + " (table_name TEXT PRIMARY KEY, applied_at TEXT NOT NULL)"},
+			Exec: func(ctx context.Context, tx *sql.Tx) error {
+				if err := reconcileColumnsTx(ctx, tx, dia, []model.EntityDescriptor{d}); err != nil {
+					return err
+				}
+				_, err := tx.ExecContext(ctx, dia.Rebind("INSERT INTO "+moduleTablesTracking+"(table_name, applied_at) VALUES(?, ?) ON CONFLICT(table_name) DO NOTHING"), d.Table, time.Now().UTC().Format(time.RFC3339Nano))
+				return err
+			},
+		}}
+		if err := migrate.Apply(ctx, db, dia, "schema_migrations_tbl_"+d.Table, migrations); err != nil {
+			return fmt.Errorf("module table %q: %w", d.Table, err)
 		}
 	}
 	return nil
-}
-
-func appliedModuleTables(ctx context.Context, db dialect.Querier) (map[string]bool, error) {
-	rows, err := db.QueryContext(ctx, "SELECT table_name FROM "+moduleTablesTracking)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	set := make(map[string]bool)
-	for rows.Next() {
-		var name string
-		if err := rows.Scan(&name); err != nil {
-			return nil, err
-		}
-		set[name] = true
-	}
-	return set, rows.Err()
-}
-
-func createModuleTable(ctx context.Context, db dialect.Execer, dia dialect.Dialect, d model.EntityDescriptor) error {
-	tx, err := db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback() //nolint:errcheck // no-op after commit
-	for _, stmt := range dia.CreateTableStmts(d) {
-		if _, err := tx.ExecContext(ctx, stmt); err != nil {
-			return err
-		}
-	}
-	ins := dia.Rebind("INSERT INTO " + moduleTablesTracking + "(table_name, applied_at) VALUES(?, ?)")
-	if _, err := tx.ExecContext(ctx, ins, d.Table, time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
-		return err
-	}
-	return tx.Commit()
 }

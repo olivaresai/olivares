@@ -20,7 +20,7 @@ func TestPrepareClaudeHooksWiresTheHookSettings(t *testing.T) {
 	pepEnv := []EnvVar{{Name: "OLIVARES_HOOK_PEP_URL", Value: "https://127.0.0.1:8443/v1/hooks"}, {Name: "OLIVARES_HOOK_PEP_TOKEN", Value: "launch-token"}}
 
 	spec := LaunchSpec{Env: pepEnv}
-	if err := m.prepareClaudeHooks(&spec, CreateRunParams{Transport: TransportStreamJSON}, "run-1"); err != nil {
+	if err := m.prepareClaudeHooks(&spec, CreateRunParams{Transport: TransportStreamJSON, ProviderHome: &ProviderHomeSnapshot{Driver: providerDriverClaude}}, "run-1"); err != nil {
 		t.Fatal(err)
 	}
 	settings := filepath.Join(dataDir, "run", "run-1", "pep-settings.json")
@@ -32,7 +32,7 @@ func TestPrepareClaudeHooksWiresTheHookSettings(t *testing.T) {
 	}
 
 	plain := LaunchSpec{}
-	if err := m.prepareClaudeHooks(&plain, CreateRunParams{Transport: TransportStreamJSON}, "run-2"); err != nil || len(plain.Args) != 0 {
+	if err := m.prepareClaudeHooks(&plain, CreateRunParams{Transport: TransportStreamJSON, ProviderHome: &ProviderHomeSnapshot{Driver: providerDriverClaude}}, "run-2"); err != nil || len(plain.Args) != 0 {
 		t.Fatalf("no PEP mounted: args=%v err=%v, want untouched", plain.Args, err)
 	}
 	codex := LaunchSpec{Env: pepEnv}
@@ -41,7 +41,7 @@ func TestPrepareClaudeHooksWiresTheHookSettings(t *testing.T) {
 		t.Fatalf("codex: args=%v err=%v, want untouched", codex.Args, err)
 	}
 	broken := LaunchSpec{Env: []EnvVar{{Name: "OLIVARES_HOOK_PEP_URL", Value: "https://x"}}}
-	if err := m.prepareClaudeHooks(&broken, CreateRunParams{Transport: TransportStreamJSON}, "run-4"); err == nil {
+	if err := m.prepareClaudeHooks(&broken, CreateRunParams{Transport: TransportStreamJSON, ProviderHome: &ProviderHomeSnapshot{Driver: providerDriverClaude}}, "run-4"); err == nil {
 		t.Fatal("a PEP launch whose hook settings cannot be written must be refused")
 	}
 }

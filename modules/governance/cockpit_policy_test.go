@@ -252,7 +252,7 @@ func TestCockpitSessionInheritsAgentGroup(t *testing.T) {
 // collision across tenants is not a collision.
 //
 // ⛔ NO CYCLE TEST, AND THE ABSENCE IS DELIBERATE RATHER THAN AN OVERSIGHT. An AgentGroup
-// gets exactly one parent here — its workspace (agentGroupParents) — and a workspace has
+// gets exactly one parent here — its workspace (agentGroupUID) — and a workspace has
 // none, so the graph this change extends is two levels deep and cannot contain a cycle.
 // Writing a cycle test against it would assert a property of a shape that cannot occur,
 // which is worse than no test: it would read as coverage. The nesting that CAN be deep is

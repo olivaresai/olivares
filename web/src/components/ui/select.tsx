@@ -43,6 +43,7 @@ export function SelectTrigger({
         'aria-describedby':
           props['aria-describedby'] ?? campo['aria-describedby'],
         'aria-invalid': props['aria-invalid'] ?? campo['aria-invalid'],
+        'aria-required': props['aria-required'] ?? campo['aria-required'],
       }
     : {}
   return (

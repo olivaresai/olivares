@@ -25,7 +25,7 @@ RAIZ="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/.." && pwd)"
 # Fail-closed: un saneador que no se puede cargar es «no he podido aislar», nunca «no hacia falta».
 # shellcheck source=/dev/null
 . "${RAIZ}/scripts/lib/git-env.sh" || {
-	echo "test-ci-sibling-legs: NO HE PODIDO MIRAR — no puedo sourcear scripts/lib/git-env.sh" >&2
+	echo "test-ci-sibling-legs: COULD NOT LOOK — cannot source scripts/lib/git-env.sh" >&2
 	exit 2
 }
 GATE="$RAIZ/scripts/check-ci-sibling-legs.sh"
@@ -45,12 +45,12 @@ comprobar() { # <descripción> <rc-esperado> <directorio> [patrón-que-debe-sali
 	salida="$(bash "$GATE" "$dir" 2>&1)"
 	rc=$?
 	if [ "$rc" != "$esperado" ]; then
-		printf '  FALLA  %-58s rc=%s (esperaba %s)\n' "$desc" "$rc" "$esperado"
+		printf '  FAIL   %-58s rc=%s (expected %s)\n' "$desc" "$rc" "$esperado"
 		falla=$((falla + 1))
 		return
 	fi
 	if [ -n "$patron" ] && ! grep -q -- "$patron" <<<"$salida"; then
-		printf '  FALLA  %-58s rc=%s pero no dice «%s»\n' "$desc" "$rc" "$patron"
+		printf '  FAIL   %-58s rc=%s but does not report «%s»\n' "$desc" "$rc" "$patron"
 		falla=$((falla + 1))
 		return
 	fi
@@ -64,7 +64,7 @@ siembra() { # <dir> <fichero> — escribe un workflow sintético desde stdin
 }
 
 # ── 1 · el árbol real ────────────────────────────────────────────────────────────────────────
-comprobar "el arbol real esta limpio" 0 "$RAIZ/.github/workflows" "limpio"
+comprobar "the real tree is clean" 0 "$RAIZ/.github/workflows" "CLEAN"
 
 # ── 2 · EL CASO QUE MANDA: el main de esa mañana ──────────────────────────────────────────────
 # Se reconstruye desde git, no se copia a mano: una copia a mano envejece y acabaría probando el
@@ -76,22 +76,22 @@ if git -C "$RAIZ" rev-parse --verify -q "origin/main:.github/workflows/mainline-
 		grep -q 'race (commerce domain)' "$ANTES/mainline-ci.yml"; then
 		vecina="$(grep -A1 'id: race-commerce' "$ANTES/mainline-ci.yml")"
 		if grep -q 'cancelled()' <<<"$vecina"; then
-			printf '  ok     %-58s (main ya lleva el arreglo)\n' "el main de referencia ya esta arreglado"
+			printf '  ok     %-58s (main already contains the fix)\n' "reference main is already fixed"
 			pasa=$((pasa + 1))
 		else
-			comprobar "el main sin guarda enrojece" 1 "$ANTES" "race (commerce domain)"
+			comprobar "main without the guard turns red" 1 "$ANTES" "race (commerce domain)"
 		fi
 	else
-		printf '  FALLA  %-58s no pude extraer el mainline-ci de origin/main\n' "el main sin guarda enrojece"
+		printf '  FAIL   %-58s could not extract mainline-ci from origin/main\n' "main without the guard turns red"
 		falla=$((falla + 1))
 	fi
 else
-	printf '  ok     %-58s (sin origin/main aqui)\n' "el main sin guarda enrojece — saltado"
+	printf '  ok     %-58s (no origin/main here)\n' "main without the guard turns red — skipped"
 	pasa=$((pasa + 1))
 fi
 
 # ── 3 · las tres respuestas ──────────────────────────────────────────────────────────────────
-comprobar "un directorio que no existe es 2, no 0" 2 "$TRABAJO/no-existe" "NO HE PODIDO MIRAR"
+comprobar "a nonexistent directory returns 2, not 0" 2 "$TRABAJO/no-existe" "COULD NOT CHECK"
 
 D="$TRABAJO/ilegible/.github/workflows"
 siembra "$D" "x.yml" <<'YML'
@@ -104,10 +104,10 @@ jobs:
 YML
 chmod 000 "$D/x.yml"
 if [ -r "$D/x.yml" ]; then
-	printf '  ok     %-58s (corriendo como root: no se puede probar)\n' "un fichero ilegible es 2 — saltado"
+	printf '  ok     %-58s (running as root: cannot test this)\n' "an unreadable file returns 2 — skipped"
 	pasa=$((pasa + 1))
 else
-	comprobar "un fichero ilegible es 2, nunca limpio" 2 "$D" "NO HE PODIDO MIRAR"
+	comprobar "an unreadable file returns 2, never clean" 2 "$D" "COULD NOT CHECK"
 fi
 chmod 644 "$D/x.yml"
 
@@ -121,7 +121,7 @@ jobs:
         timeout-minutes: 5
         run: task test:algo
 YML
-comprobar "un job race con UNA pata no marca nada" 0 "$D" "limpio"
+comprobar "a race job with ONE leg flags nothing" 0 "$D" "CLEAN"
 
 D="$TRABAJO/no-race/.github/workflows"
 siembra "$D" "w.yml" <<'YML'
@@ -135,7 +135,7 @@ jobs:
         timeout-minutes: 5
         run: task b
 YML
-comprobar "un job que NO es race queda fuera del alcance" 0 "$D" "limpio"
+comprobar "a NON-race job is out of scope" 0 "$D" "CLEAN"
 
 D="$TRABAJO/sin-techo/.github/workflows"
 siembra "$D" "w.yml" <<'YML'
@@ -148,7 +148,7 @@ jobs:
       - name: segunda sin techo ni guarda
         run: task b
 YML
-comprobar "un paso sin timeout-minutes no es una pata" 0 "$D" "limpio"
+comprobar "a step without timeout-minutes is not a leg" 0 "$D" "CLEAN"
 
 # ── 5 · MUTANTES: lo que tiene que enrojecer ─────────────────────────────────────────────────
 D="$TRABAJO/hermana-desnuda/.github/workflows"
@@ -163,7 +163,7 @@ jobs:
         timeout-minutes: 5
         run: task b
 YML
-comprobar "una hermana sin guarda enrojece y se NOMBRA" 1 "$D" "hermana sin guarda"
+comprobar "an unguarded sibling turns red and is NAMED" 1 "$D" "sibling step without"
 
 D="$TRABAJO/always/.github/workflows"
 siembra "$D" "w.yml" <<'YML'
@@ -178,7 +178,7 @@ jobs:
         if: ${{ always() }}
         run: task b
 YML
-comprobar "always() NO vale: una cancelada debe seguir cancelada" 1 "$D" "hermana con always"
+comprobar "always() is INVALID: a canceled leg must remain canceled" 1 "$D" "sibling step without"
 
 D="$TRABAJO/tercera/.github/workflows"
 siembra "$D" "w.yml" <<'YML'
@@ -196,7 +196,7 @@ jobs:
         timeout-minutes: 5
         run: task c
 YML
-comprobar "caza la TERCERA aunque la segunda este bien" 1 "$D" "tercera desnuda"
+comprobar "catches the THIRD even when the second is correct" 1 "$D" "tercera desnuda"
 
 printf 'ci-sibling-legs gate: %s passed, %s failed\n' "$pasa" "$falla"
 [ "$falla" -eq 0 ]

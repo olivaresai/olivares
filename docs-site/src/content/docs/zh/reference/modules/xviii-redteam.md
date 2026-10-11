@@ -5,6 +5,9 @@ description: >-
   已发布对抗性探针，评分汇入一份篡改可检测的记分卡。它测试什么、同意红线，以及其诚实限制。
 ---
 
+红队目录、目标和运行属于 **[Business](https://olivares.ai/pricing)** 功能。Community 对这些 API 路由返回 501，并隐藏命令组和控制台页面。已保存的目标、运行和结果仍保留在数据导出和灾难恢复备份中。评估和沙箱仍属于 Community。
+
+
 模块 XVIII 是一个**防御性健壮性测试装置**。它用一批已发布的对抗性测试用例——prompt 注入、
 越狱、外泄、工具投毒——探测客户**自己的**受治理 agent，并对它们的抗性评分，
 映射到 **OWASP Top 10 for Agentic Applications**、**OWASP LLM Top 10（2025）**和

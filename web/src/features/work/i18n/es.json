@@ -95,7 +95,12 @@
         "hint": "La decisión en la que se apoya el acto. Re-basar el reloj lleva evidencia: el motor no lo acepta sin nombrarla.",
         "placeholder": "id de la decisión"
       }
-    }
+    },
+    "details": "Detalles",
+    "readyTitle": "Marcar '{{title}}' como listo",
+    "actionTitle": "{{action}}: {{title}}",
+    "waitsFor": "'{{title}}' espera a que '{{dependency}}' esté terminado.",
+    "dependencyWaiting": "Este elemento espera a que sus dependencias estén terminadas."
   },
   "checks": {
     "evidence": "evidencia {{ref}}"
@@ -103,6 +108,19 @@
   "common": {
     "refresh": "Actualizar",
     "loadMore": "Cargar más"
+  },
+  "create": {
+    "action": "Nueva unidad",
+    "title": "Nueva unidad de trabajo",
+    "description": "Registra una unidad de trabajo de la que eres responsable. Su plan se muestra antes de escribir nada; cuando exista podrás ofrecerla como traspaso.",
+    "workspace": "Espacio de trabajo",
+    "workspaceNone": "Aquí no tienes ningún espacio de trabajo disponible. Elige uno en el selector de espacios o pídeselo a un administrador.",
+    "workspaceError": "No se ha podido leer la lista de espacios de trabajo. Cierra esto y vuelve a intentarlo.",
+    "itemTitle": "Título",
+    "brief": "Descripción",
+    "briefHint": "Qué hay que hacer y por qué.",
+    "doneWhen": "Terminada cuando",
+    "doneWhenHint": "El criterio de aceptación que dice que la unidad está terminada."
   },
   "decisions": {
     "title": "Decisiones",

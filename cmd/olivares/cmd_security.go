@@ -38,7 +38,7 @@ func newSecurityCmd() *cobra.Command {
 			"publisher side: they build and sign the artifacts the fleet then verifies.\n\n" +
 			"drill exercises the whole pipeline end to end and times it, because an\n" +
 			"advisory path that was never rehearsed is not a response capability.",
-		Example: "  olivares security check --feed advisories.json --product-version 26.7.0\n" +
+		Example: "  olivares security check --feed advisories.json --product-version 1.0\n" +
 			"  olivares security rulepack verify --in rulepack.json --pubkey \"$RELEASE_PUBLIC_KEY\"\n" +
 			"  olivares security drill",
 	}
@@ -70,7 +70,7 @@ Exit status is 0 when no advisory affects the selected version and 7 when at lea
 does (so it composes in a health probe, fleet check, or CI gate). A build that declares
 no version cannot be checked at all: that exits 8 and names the way out, because a clean
 answer there would be an artifact of comparing against version zero, not a measurement.`),
-		Example: "  olivares security check --feed advisories.json --product-version 26.7.0",
+		Example: "  olivares security check --feed advisories.json --product-version 1.0",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			// The caller's own invocation is wrong, so it is a usage error — the
@@ -116,7 +116,7 @@ answer there would be an artifact of comparing against version zero, not a measu
 				// "this BUILD cannot be checked" so a fleet sweep can act on that alone.
 				if versionFromFlag && !release.IsUnstamped(checkVersion) {
 					return exitcode.New(exitcode.Usage, fmt.Errorf(
-						"olivares security check: --product-version %q is not a semantic version (MAJOR.MINOR.PATCH)", checkVersion))
+						"olivares security check: --product-version %q is not a semantic version (MAJOR.MINOR)", checkVersion))
 				}
 				// Deliberately NOT gated on --quiet, and deliberately on the same stream
 				// as the two verdicts. --quiet means "say nothing when UNAFFECTED", and
@@ -136,7 +136,7 @@ answer there would be an artifact of comparing against version zero, not a measu
 					fmt.Fprintf(out, "           here would be an artifact of comparing against version zero, not a\n")
 					fmt.Fprintf(out, "           measurement.\n")
 					fmt.Fprintf(out, "  way out: name the version to check —\n")
-					fmt.Fprintf(out, "             olivares security check --feed %s --product-version <MAJOR.MINOR.PATCH>\n", feedPath)
+					fmt.Fprintf(out, "             olivares security check --feed %s --product-version <MAJOR.MINOR>\n", feedPath)
 					fmt.Fprintf(out, "           A released binary carries its own stamp; only a build from source does not.\n")
 					_, werr := fmt.Fprintf(out, "  the feed itself verified fine (%d advisories) — it is the VERSION that is unknown.\n", len(feed.Advisories))
 					return werr

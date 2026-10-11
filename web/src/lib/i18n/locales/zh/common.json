@@ -1,4 +1,10 @@
 {
+  "edition": {
+    "viewPolicy": "查看策略",
+    "editingRequiresBusiness": "编辑自定义策略、角色和授权需要 Business。",
+    "disablePolicy": "禁用策略",
+    "disablePolicyDescription": "编写的策略将停止生效。其历史记录和其他正在执行的策略将保留。"
+  },
   "errors": {
     "generic": "出现错误"
   },
@@ -214,8 +220,8 @@
       "sessionResumed": "{{actor}} 恢复了会话",
       "sessionResumed_you": "你恢复了会话",
       "sessionFailed": "有一个会话未能启动",
-      "approvalRequested": "{{actor}} 的会话请求批准",
-      "approvalRequested_you": "你的会话请求批准",
+      "approvalRequested": "{{actor}}请求了审批",
+      "approvalRequested_you": "您请求了审批",
       "killswitchEngaged": "{{actor}} 启用了紧急停止",
       "killswitchEngaged_you": "你启用了紧急停止",
       "killswitchReleased": "{{actor}} 解除了紧急停止",
@@ -228,14 +234,37 @@
       "workspaceCreated": "{{actor}} 创建了工作区",
       "workspaceCreated_you": "你创建了工作区",
       "workspaceUpdated": "{{actor}} 更新了工作区",
-      "workspaceUpdated_you": "你更新了工作区"
+      "workspaceUpdated_you": "你更新了工作区",
+      "signedIn": "{{actor}}已登录",
+      "workCreated": "{{actor}}创建了工作项",
+      "workReady": "{{actor}}将工作项标记为就绪",
+      "workCompleted": "{{actor}}完成了工作项",
+      "workBlocked": "{{actor}}阻止了工作项",
+      "workCanceled": "{{actor}}取消了工作项",
+      "approvalDecided": "{{actor}}记录了审批决定",
+      "approvalCanceled": "{{actor}}取消了审批请求",
+      "policyCreated": "{{actor}}创建了策略",
+      "policyUpdated": "{{actor}}更新了策略",
+      "policyDeleted": "{{actor}}删除了策略",
+      "signedIn_you": "您已登录",
+      "workCreated_you": "您创建了工作项",
+      "workReady_you": "您将工作项标记为就绪",
+      "workCompleted_you": "您完成了工作项",
+      "workBlocked_you": "您阻止了工作项",
+      "workCanceled_you": "您取消了工作项",
+      "approvalDecided_you": "您记录了审批决定",
+      "approvalCanceled_you": "您取消了审批请求",
+      "policyCreated_you": "您创建了策略",
+      "policyUpdated_you": "您更新了策略",
+      "policyDeleted_you": "您删除了策略"
     },
     "actors": {
       "you": "你",
       "member": "一名成员",
       "token": "一个 API 令牌",
       "system": "Olivares"
-    }
+    },
+    "includeInternal": "包含内部记录"
   },
   "passphrase": {
     "tooShort": "密码短语长度至少为 {{min}} 个字符",

@@ -155,8 +155,8 @@ func TestPublicV268SQLiteUpgradesToTheAccessEvidenceEdition(t *testing.T) {
 	// The exemption list is short and each entry is a durable record this upgrade is
 	// supposed to append to: the migration tracker gains every core migration between the
 	// published fixture's ceiling and this build's supported version. The inventory gains
-	// DA's four access-evidence activations and the independent DE and DG module activations.
-	// Each of those three edition transitions adds its own seal. Everything else must be equal; a
+	// DA's four access-evidence activations and the independent DE, DG and DS module activations.
+	// Each of those four edition transitions adds its own seal. Everything else must be equal; a
 	// blanket "counts may grow" would have hidden exactly what this test is for.
 	//
 	// The guard allowances come from the named additions below, not the observed totals.
@@ -164,7 +164,7 @@ func TestPublicV268SQLiteUpgradesToTheAccessEvidenceEdition(t *testing.T) {
 	// prestate, so neither is taken from the database under test.
 	rowsAfter := sqliteRowCensus(t, db)
 	guardAdditions := append(slices.Clone(accessEvidenceFixtureRelations),
-		"evals_comparison", "gitpublish_observation")
+		"evals_comparison", "gitpublish_observation", "skills_revision")
 	guardInventoryTarget := slices.Clone(guardInventoryBefore)
 	for _, table := range guardAdditions {
 		guardInventoryTarget = append(guardInventoryTarget, "activate:"+table)
@@ -182,13 +182,17 @@ func TestPublicV268SQLiteUpgradesToTheAccessEvidenceEdition(t *testing.T) {
 	if missing := missingFrom(guardReceiptsBefore, guardReceiptsAfter); len(missing) != 0 {
 		t.Fatalf("the upgrade removed or replaced historical guard receipts: %v", missing)
 	}
-	// DA must precede both module deltas. DE and DG may be applied in either order;
-	// their seals must name one complete path, rather than merely add three rows.
+	// DA must precede all three module deltas. DE, DG and DS may be applied in any
+	// order; their seals must name one complete path, rather than merely add four rows.
 	guardSeals := sqliteStringColumn(t, db,
 		"SELECT attempt_id FROM olivares_guard_receipts WHERE epoch > 4 ORDER BY epoch")
 	guardSealPaths := [][]string{
-		{"edition-4-to-7", "edition-7-to-10", "edition-10-to-16"},
-		{"edition-4-to-7", "edition-7-to-13", "edition-13-to-16"},
+		{"edition-4-to-7", "edition-7-to-10", "edition-10-to-16", "edition-16-to-28"},
+		{"edition-4-to-7", "edition-7-to-10", "edition-10-to-22", "edition-22-to-28"},
+		{"edition-4-to-7", "edition-7-to-13", "edition-13-to-16", "edition-16-to-28"},
+		{"edition-4-to-7", "edition-7-to-13", "edition-13-to-25", "edition-25-to-28"},
+		{"edition-4-to-7", "edition-7-to-19", "edition-19-to-22", "edition-22-to-28"},
+		{"edition-4-to-7", "edition-7-to-19", "edition-19-to-25", "edition-25-to-28"},
 	}
 	if !slices.ContainsFunc(guardSealPaths, func(path []string) bool { return slices.Equal(guardSeals, path) }) {
 		t.Fatalf("the upgrade recorded edition seals %v, want one of %v", guardSeals, guardSealPaths)
@@ -319,9 +323,9 @@ func openProductStoreForFixture(t *testing.T, dsn string) (store.Store, error) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	set, err := buildModules(signer,
+	set, err := buildModules(nil, signer,
 		ed25519.NewKeyFromSeed(fixedSeed(1)), ed25519.NewKeyFromSeed(fixedSeed(2)),
-		nil, nil, sourcesConfig{}, EditionConfig{}, t.TempDir(), log)
+		nil, nil, nil, sourcesConfig{}, EditionConfig{}, t.TempDir(), log)
 	if err != nil {
 		t.Fatal(err)
 	}

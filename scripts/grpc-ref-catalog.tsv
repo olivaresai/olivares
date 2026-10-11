@@ -28,14 +28,14 @@
 /olivares.sdk.v1.ContentSourceService/FetchACL	Returns the permission references that govern one document. An empty result means the knowledge base default applies.
 /olivares.sdk.v1.ContentSourceService/List	Streams document references one page at a time, bounded by the ceilings the host passes so a corpus cannot be pulled into host memory in one call.
 /olivares.sdk.v1.ContentSourceService/Open	Starts a session with the configuration the host supplies, before any content call.
-/olivares.sdk.v1.HostService/Log	Writes one structured log record through the engine, so an out-of-process module logs where an in-process one does.
-/olivares.sdk.v1.HostService/Publish	Publishes one event onto the engine's bus on behalf of an out-of-process module.
-/olivares.sdk.v1.HostService/Subscribe	Streams bus events to the module, filtered by the event types it asks for. An empty filter means every type.
+/olivares.sdk.v1.HostService/Log	Deprecated with the out-of-process module transport, which was never wired: nothing serves HostService. Would have written one structured log record through the engine, so an out-of-process module logs where an in-process one does.
+/olivares.sdk.v1.HostService/Publish	Deprecated with the out-of-process module transport, which was never wired: nothing serves HostService. Would have published one event onto the engine's bus on behalf of an out-of-process module.
+/olivares.sdk.v1.HostService/Subscribe	Deprecated with the out-of-process module transport, which was never wired: nothing serves HostService. Would have streamed bus events to the module, filtered by the event types it asked for; an empty filter meant every type.
 /olivares.sdk.v1.IngestService/Push	Accepts a stream of observations pushed by a collector daemon and lifts each onto the event bus, returning a summary when the stream completes.
-/olivares.sdk.v1.ModuleService/Describe	Returns the module's descriptor: its identity and the configuration it accepts.
-/olivares.sdk.v1.ModuleService/Init	Hands the module its configuration and lets it prepare, before anything is started.
-/olivares.sdk.v1.ModuleService/Start	Starts the module's work after a successful Init.
-/olivares.sdk.v1.ModuleService/Stop	Stops the module and lets it release what it holds.
+/olivares.sdk.v1.ModuleService/Describe	Deprecated with the out-of-process module transport, which was never wired: no host dispenses ModuleService. Would have returned the module's descriptor: its identity and the configuration it accepts.
+/olivares.sdk.v1.ModuleService/Init	Deprecated with the out-of-process module transport, which was never wired: no host dispenses ModuleService. Would have handed the module its configuration and let it prepare, before anything was started.
+/olivares.sdk.v1.ModuleService/Start	Deprecated with the out-of-process module transport, which was never wired: no host dispenses ModuleService. Would have started the module's work after a successful Init.
+/olivares.sdk.v1.ModuleService/Stop	Deprecated with the out-of-process module transport, which was never wired: no host dispenses ModuleService. Would have stopped the module and let it release what it held.
 /olivares.sdk.v1.OutputService/Close	Ends the session opened by Open and releases whatever the connector held for it.
 /olivares.sdk.v1.OutputService/Describe	Returns the connector's descriptor: its identity, its configuration fields and the capabilities it advertises.
 /olivares.sdk.v1.OutputService/Notify	Delivers one notification to the destination and reports what the destination did with it, which is what decides whether the host retries.

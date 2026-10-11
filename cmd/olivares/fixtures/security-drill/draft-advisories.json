@@ -23,10 +23,10 @@
               "type": "SEMVER",
               "events": [
                 {
-                  "introduced": "26.5.0"
+                  "introduced": "1.1"
                 },
                 {
-                  "fixed": "26.7.1"
+                  "fixed": "1.2"
                 }
               ]
             }

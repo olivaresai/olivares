@@ -134,10 +134,10 @@ func newAuthorityTransactionFixture(
 ) (workLeaseDomainFixture, *authorityTransactionResolver) {
 	t.Helper()
 	f := newWorkLeaseDomainFixture(t, title)
-	data := &openWorkViewData{inner: f.m.data}
-	f.m.data = data
+	data := &openWorkViewData{inner: f.m.Data}
+	f.m.Data = data
 	resolver := &authorityTransactionResolver{data: data}
-	f.m.UseWorkIdentityResolver(resolver)
+	WithWorkIdentityResolver(resolver)(f.m)
 	return f, resolver
 }
 
@@ -224,7 +224,7 @@ func TestWorkAuthorityPlanReadValidationClassification(t *testing.T) {
 	t.Run("missing read validator is unknown", func(t *testing.T) {
 		f := newWorkLeaseDomainFixture(t, "plan without read validator")
 		resolver := &observeOnlyAuthorityResolver{}
-		f.m.UseWorkIdentityResolver(resolver)
+		WithWorkIdentityResolver(resolver)(f.m)
 		cmd := f.command("lease.acquire", f.ready.Version, 0)
 		plan, err := f.m.Plan(context.Background(), f.tenant, f.holder, cmd)
 		if err != nil || plan.Verdict != VerdictUnknown || plan.Code != "evidence_unavailable" || plan.PlanHash != "" {

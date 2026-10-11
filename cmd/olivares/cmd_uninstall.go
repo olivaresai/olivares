@@ -5,7 +5,9 @@
 package main
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"path/filepath"
 
 	"github.com/spf13/cobra"
@@ -68,6 +70,23 @@ func newUninstallCmd() *cobra.Command {
 			}
 			m, err := localinstall.Load(manifestOnDisk, offlineRoot == "")
 			if err != nil {
+				// A manifest missing from its derived place is a local installation
+				// (quickstart, serve, source build — the shape doctor reports
+				// install_shape=local), not a broken service record: it gets doctor's
+				// wording plus what removal means, with the open error kept for the
+				// cause. An operator-selected --manifest is a claim about a service
+				// record, and every other failure (a link, an owner, a parse) fails
+				// closed — those keep the library error verbatim.
+				if manifestPath == "" && errors.Is(err, fs.ErrNotExist) {
+					guidance := serviceShapedChecks["install-manifest"]
+					// Only a live look may teach the host removal: an offline --root
+					// inspects a staged copy, whose state says nothing about the host.
+					if offlineRoot == "" {
+						guidance += "; to remove this installation, stop the engine, remove the " +
+							"olivares binary and delete the data directory " + logicalDataDir
+					}
+					return exitcode.New(exitcode.Usage, fmt.Errorf("%s: %w", guidance, err))
+				}
 				return exitcode.New(exitcode.Usage, err)
 			}
 			if m.DataDir != logicalDataDir || m.ManifestPath != logicalManifest {

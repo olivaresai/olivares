@@ -37,20 +37,20 @@ grep -F -q 'Daily expiry notice not landed' "$DOC" \
 grep -F -q 'Does not add 0032' "$DOC" \
   || fail "prepare doc lost 0032 HOLD"
 if grep -qiE 'FIRMA A claimed|remainder applied on origin/main|expiry notice landed' "$DOC"; then
-  fail "prepare doc claims an application this lote does not have"
+  fail "prepare doc claims an application this batch does not have"
 fi
 
 if [ -e "$NOTICE" ]; then
-  fail "expiry-notice.ts landed — this HOLD lote does not apply C05-24"
+  fail "expiry-notice.ts landed — this HOLD batch does not apply C05-24"
 fi
 if [ -e "$MIG" ]; then
-  fail "0032_expiry_notice.sql landed — this HOLD lote does not apply C05-24"
+  fail "0032_expiry_notice.sql landed — this HOLD batch does not apply C05-24"
 fi
 if grep -q 'runExpiryNotices' "$IDX"; then
-  fail "runExpiryNotices imported — this HOLD lote does not apply C05-24"
+  fail "runExpiryNotices imported — this HOLD batch does not apply C05-24"
 fi
 if grep -F -q '0 12 * * *' "$WRA"; then
-  fail "daily noon cron landed — this HOLD lote does not apply C05-24"
+  fail "daily noon cron landed — this HOLD batch does not apply C05-24"
 fi
 
 python3 - "$JSON" <<'PY' || exit $?

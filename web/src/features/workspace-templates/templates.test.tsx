@@ -286,6 +286,44 @@ describe('TemplateEditor', () => {
     )
   })
 
+  it('saves and reloads the optional truncation protection', async () => {
+    api.create.mockResolvedValue(customTemplate)
+    const created = wrap(<TemplateEditor open={true} onOpenChange={vi.fn()} />)
+    const label = 'Require truncation protection for read-only sessions'
+    const choice = screen.getByRole('checkbox', { name: label })
+    expect(choice).not.toBeChecked()
+    await userEvent.type(
+      screen.getByPlaceholderText('e.g. Secure coding session'),
+      'Strict read only',
+    )
+    await userEvent.click(choice)
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(api.create).toHaveBeenCalled())
+    expect(
+      api.create.mock.calls[0][0].body.policies.require_truncate_protection,
+    ).toBe(true)
+    created.unmount()
+    api.update.mockResolvedValue(customTemplate)
+    wrap(
+      <TemplateEditor
+        open={true}
+        onOpenChange={vi.fn()}
+        template={{
+          ...customTemplate,
+          body: { policies: { require_truncate_protection: true } },
+        }}
+      />,
+    )
+    expect(screen.getByRole('checkbox', { name: label })).toBeChecked()
+    await userEvent.click(screen.getByRole('checkbox', { name: label }))
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(api.update).toHaveBeenCalled())
+    expect(
+      api.update.mock.calls[0][1].body.policies?.require_truncate_protection ??
+        false,
+    ).toBe(false)
+  })
+
   it('a template can let its sessions message each other (peers_rule, MC)', async () => {
     api.create.mockResolvedValue(customTemplate)
     wrap(<TemplateEditor open={true} onOpenChange={vi.fn()} />)

@@ -446,7 +446,7 @@ func (m *Module) ReconcileCommunicationGuards(
 	tenant model.TenantID,
 	mode CommunicationGuardReconcileMode,
 ) error {
-	if m == nil || m.communicationGuardData == nil {
+	if m == nil || m.CommunicationGuardData == nil {
 		return store.ErrStoreUnavailable
 	}
 	if !mode.valid() || !validCanonicalCommunicationTenant(tenant) {
@@ -458,7 +458,7 @@ func (m *Module) ReconcileCommunicationGuards(
 	seenCursors := make(map[string]struct{})
 	seenWorkspaces := make(map[model.ID]struct{})
 	for {
-		workspaces, page, err := m.communicationGuardData.listWorkspacePage(ctx, tenant, query)
+		workspaces, page, err := m.CommunicationGuardData.listWorkspacePage(ctx, tenant, query)
 		if err != nil {
 			return fmt.Errorf("list communication guard workspaces: %w", err)
 		}
@@ -498,7 +498,7 @@ func (m *Module) ReconcileCommunicationGuards(
 			seenWorkspaces[workspace.ID] = struct{}{}
 		}
 		for _, workspace := range workspaces {
-			if err := m.communicationGuardData.mutateWorkspace(
+			if err := m.CommunicationGuardData.mutateWorkspace(
 				ctx, tenant, workspace.ID,
 				func(scope communicationGuardBootstrapScope) error {
 					return reconcileCommunicationGuardsInScope(ctx, scope, workspace.ID, mode)

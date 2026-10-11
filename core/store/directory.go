@@ -65,9 +65,17 @@ const (
 )
 
 // DirectoryStatus is the non-secret boot witness for K3's directory fence.
-// Enabled remains false until the later composition and activation cuts earn
-// readiness; complete epoch coverage alone never enables communication.
+// Complete epoch coverage alone never enables communication.
 type DirectoryStatus struct {
+	// Enabled is always false and gates nothing: no later composition or
+	// activation cut is scheduled to earn it, and communication readiness's
+	// store term is the store proof's verdict (one conjunct of server-info's
+	// communication_ready), never this flag.
+	//
+	// Deprecated: the flag stays published false so existing witnesses and
+	// boot-log proofs keep their shape; removal in a later release under the
+	// product's deprecation policy. It is computed at boot and stores nothing,
+	// so no data migration is involved.
 	Enabled                       bool
 	EpochCoverageComplete         bool
 	ControlMode                   DirectoryControlMode

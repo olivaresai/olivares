@@ -17,21 +17,29 @@ import (
 
 	"github.com/olivaresai/olivares/core/auth"
 	corefederation "github.com/olivaresai/olivares/core/auth/federation"
+	"github.com/olivaresai/olivares/core/dr"
 	"github.com/olivaresai/olivares/core/model"
 )
 
 // newFederation builds the OPEN-CORE single-IdP OIDC/SAML provider from the
 // environment. It is wired build-INDEPENDENTLY — the same in the default
 // AGPL build and under -tags enterprise — because single-IdP SSO is open-core; the
-// default artifact therefore links go-oidc/crewjam. It fails CLOSED: any missing
+// default artifact therefore links go-oidc/gosaml2. It fails CLOSED: any missing
 // or invalid configuration yields auth.NoFederation (SSO requests answer 501)
 // rather than a half-configured provider. This env provider is only the FALLBACK
-// the FederationService uses when no managed config row exists.
+// the FederationService uses when no managed config row exists. A protocol
+// that is set but does not build keeps its cause, so the SP metadata endpoint reports
+// a misconfiguration instead of an absent IdP.
 func newFederation(getenv func(string) string, log *slog.Logger) auth.Federation {
 	fed, err := corefederation.FromEnv(getenv)
 	if err != nil {
-		log.Info("env SSO not configured; SSO defers to managed config or answers 501", "err", err)
-		return auth.NoFederation{}
+		protocol := getenv("OLIVARES_SSO_PROTOCOL")
+		if protocol == "" {
+			log.Info("env SSO not configured; SSO defers to managed config or answers 501", "err", err)
+			return auth.NoFederation{}
+		}
+		log.Warn("env SSO configured but invalid; SSO login answers 501", "err", err)
+		return auth.NoFederation{Cause: err, ConfiguredProtocol: protocol}
 	}
 	log.Info("env SSO federation enabled (single-IdP, open-core)", "protocol", fed.Protocol())
 	return fed
@@ -40,7 +48,7 @@ func newFederation(getenv func(string) string, log *slog.Logger) auth.Federation
 // newFederationBuilder returns the OPEN-CORE single-IdP managed-config provider
 // builder: the console can configure SSO from a store-backed, sealed
 // config in BOTH builds (it was enterprise-only before). The reserved
-// multi-IdP line is gated separately via newFederationMultiIDP, not here.
+// multi-IdP line is gated separately via the federationMultiIDP edition port, not here.
 func newFederationBuilder() auth.FederationBuilder {
 	return corefederation.FromConfig
 }
@@ -55,10 +63,10 @@ const (
 	// federationSecretKeyEnv supplies the 32-byte base64 sealer key directly (the
 	// HA path: every node must seal/open with the SAME key). Unset => a per-node
 	// key file in the data dir.
-	federationSecretKeyEnv = "OLIVARES_SSO_SECRET_KEY"
+	federationSecretKeyEnv = dr.SSOSecretKeyEnv
 	// federationSecretKeyFile is the on-disk key minted on first boot (0600,
 	// fail-closed on wider permissions).
-	federationSecretKeyFile = "sso-secret.key"
+	federationSecretKeyFile = dr.SSOSecretKeyFile
 )
 
 // newFederationSealer builds the AES-256-GCM SSO secret sealer over the

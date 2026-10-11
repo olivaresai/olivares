@@ -6,19 +6,109 @@ package confine
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 )
+
+func TestFilesystemFailureReachesReadinessPipe(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		args []string
+		want string
+	}{
+		{"legacy", []string{"--rw", "relative", "--", "/bin/true"}, "not an absolute path"},
+		{"shared", []string{"--policy-v1", `{"Program":"/bin/true","Policy":{"ReadWrite":["relative"]}}`, "--", "/bin/true"}, "not an absolute path"},
+		{"unexpected argument", []string{"secret-fixture", "--", "/bin/true"}, "unexpected confinement argument"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			reader, writer, err := os.Pipe()
+			if err != nil {
+				t.Fatal(err)
+			}
+			code := RunHelperWithReady(tc.args, writer)
+			_ = writer.Close()
+			body, err := io.ReadAll(reader)
+			_ = reader.Close()
+			if code != 126 || err != nil || !strings.Contains(string(body), tc.want) || strings.Contains(string(body), "secret-fixture") {
+				t.Fatalf("confinement failure reason=%q, code=%d, err=%v", body, code, err)
+			}
+		})
+	}
+}
 
 // TestMain serves HelperArg: Command re-executes this test binary as the helper.
 func TestMain(m *testing.M) {
+	if len(os.Args) > 1 && os.Args[1] == "__ready_failure" {
+		os.Exit(RunHelperWithReady(os.Args[2:], os.NewFile(3, "ready")))
+	}
+	if len(os.Args) > 1 && os.Args[1] == "__owned_policy_probe" {
+		_, err := os.ReadFile(os.Args[2])
+		switch {
+		case err == nil:
+			fmt.Println("read-ok")
+		case errors.Is(err, os.ErrPermission):
+			fmt.Println("read-denied")
+		default:
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		os.Exit(0)
+	}
 	if len(os.Args) > 1 && os.Args[1] == HelperArg {
 		os.Exit(RunHelper(os.Args[2:]))
 	}
 	os.Exit(m.Run())
+}
+
+func TestFailedExecKeepsReasonAfterReadyMarker(t *testing.T) {
+	requireLandlock(t)
+	dir := t.TempDir()
+	program := filepath.Join(dir, "missing-interpreter")
+	if err := os.WriteFile(program, []byte("#!/olivares-fixture-no-such-interpreter\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	payload, err := json.Marshal(map[string]any{"Program": program, "Policy": map[string]any{"ReadWrite": []string{dir}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, args := range [][]string{
+		{"--rw", dir, "--", program},
+		{"--policy-v1", string(payload), "--", program},
+	} {
+		t.Run([]string{"legacy", "shared"}[i], func(t *testing.T) {
+			reader, writer, err := os.Pipe()
+			if err != nil {
+				t.Fatal(err)
+			}
+			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+			cmd := exec.CommandContext(ctx, os.Args[0], append([]string{"__ready_failure"}, args...)...)
+			cmd.ExtraFiles = []*os.File{writer}
+			if err := cmd.Start(); err != nil {
+				t.Fatal(err)
+			}
+			_ = writer.Close()
+			if err := reader.SetReadDeadline(time.Now().Add(5 * time.Second)); err != nil {
+				t.Fatal(err)
+			}
+			body, err := io.ReadAll(reader)
+			_ = reader.Close()
+			waitErr := cmd.Wait()
+			cancel()
+			var exited *exec.ExitError
+			if err != nil || !errors.As(waitErr, &exited) || exited.ExitCode() != 126 || !strings.HasPrefix(string(body), "ready\n") || !strings.Contains(string(body), "no such file or directory") {
+				t.Fatalf("failed exec reason=%q, read=%v, wait=%v", body, err, waitErr)
+			}
+		})
+	}
 }
 
 func TestPolicyRoundTrip(t *testing.T) {
@@ -155,6 +245,59 @@ cat `+f.key+` && echo KEY-READ || echo key-denied`)
 	}
 }
 
+// A tool installed by npm under a prefix outside the system directories
+// (npm --prefix, nvm, ~/.npm-global) is a launcher in one package that runs a
+// binary from a sibling package of the same node_modules tree: Codex's
+// node_modules/.bin/codex -> @openai/codex/bin/codex.js spawns
+// @openai/codex-linux-x64/vendor/.../codex. The whole tree is the install and
+// can be read and run; the prefix around it and a protected path inside it stay
+// closed.
+func TestNpmLauncherRunsItsSiblingPackageUnderANonSystemPrefix(t *testing.T) {
+	requireLandlock(t)
+	f := newFixture(t)
+	prefix := filepath.Join(f.root, "tools")
+	modules := filepath.Join(prefix, "node_modules")
+	native := filepath.Join(modules, "@openai", "codex-linux-x64", "vendor", "bin", "codex")
+	launcher := filepath.Join(modules, "@openai", "codex", "bin", "codex.js")
+	for path, body := range map[string]string{
+		native: "#!/bin/sh\necho native-ran\n",
+		launcher: "#!/bin/sh\ncat " + filepath.Join(prefix, "outside.txt") + " && echo PREFIX-READ || echo prefix-denied\n" +
+			"cat " + filepath.Join(modules, ".protected", "key") + " && echo PROTECTED-READ || echo protected-denied\nexec " + native + "\n",
+		filepath.Join(modules, ".protected", "key"): "protected-fixture",
+	} {
+		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(body), 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	bin := filepath.Join(modules, ".bin", "codex")
+	if err := os.MkdirAll(filepath.Dir(bin), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("../@openai/codex/bin/codex.js", bin); err != nil {
+		t.Fatal(err)
+	}
+	outside := filepath.Join(prefix, "outside.txt")
+	if err := os.WriteFile(outside, []byte("prefix-file"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	cmd, _, err := Command(context.Background(), Policy{ReadWrite: []string{f.folder}, Protect: []string{f.data, filepath.Join(modules, ".protected")}}, bin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmd.Dir = f.folder
+	out, err := cmd.CombinedOutput()
+	if err != nil || !strings.Contains(string(out), "native-ran") {
+		t.Fatalf("the npm launcher did not run its sibling package: %v\n%s", err, out)
+	}
+	if !strings.Contains(string(out), "prefix-denied") || !strings.Contains(string(out), "protected-denied") {
+		t.Fatalf("the npm launcher reached its prefix outside node_modules or a protected path inside it:\n%s", out)
+	}
+}
+
 func TestUnconfinedSameUserReadsTheKey(t *testing.T) {
 	f := newFixture(t)
 	if b, err := os.ReadFile(f.key); err != nil || string(b) != "sealing-key-fixture" {
@@ -192,5 +335,18 @@ func TestPolicyRefusesAWritablePathThatReopensASealedOne(t *testing.T) {
 	got, argv, err := decode(append(p.encode(), "--", "/bin/true"))
 	if err != nil || !reflect.DeepEqual(got, p) || !reflect.DeepEqual(argv, []string{"/bin/true"}) {
 		t.Fatalf("decode(encode) = %+v %v %v", got, argv, err)
+	}
+}
+
+// Consumers keep the session package's published type identities, including
+// serializers that name a Go type by its package path. Policy stays four-field.
+func TestSessionPublishedTypesRemainInTheirPackage(t *testing.T) {
+	for _, value := range []any{Policy{}, State{}, ModeNone} {
+		if got := reflect.TypeOf(value).PkgPath(); got != "github.com/olivaresai/olivares/modules/sessions/confine" {
+			t.Errorf("published %T moved to %s", value, got)
+		}
+	}
+	if fields := reflect.TypeOf(Policy{}).NumField(); fields != 4 {
+		t.Errorf("published session Policy has %d fields, want four", fields)
 	}
 }

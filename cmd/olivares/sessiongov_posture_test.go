@@ -20,23 +20,21 @@ import (
 func TestResolveAvailabilityPosture(t *testing.T) {
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	tests := []struct {
-		name    string
-		raw     string
-		edition string
-		want    availabilityPosture
+		name string
+		raw  string
+		want availabilityPosture
 	}{
-		{name: "explicit fail-open wins in enterprise", raw: "fail-open", edition: "enterprise", want: availabilityFailOpen},
-		{name: "explicit fail-closed wins in community", raw: "fail-closed", edition: "community", want: availabilityFailClosed},
-		{name: "explicit value is normalized", raw: "  FAIL-OPEN ", edition: "enterprise", want: availabilityFailOpen},
-		{name: "enterprise default", edition: "enterprise", want: availabilityFailClosed},
-		{name: "community default", edition: "community", want: availabilityFailOpen},
-		{name: "invalid fails closed", raw: "fail-clsoed", edition: "community", want: availabilityFailClosed},
+		{name: "explicit fail-open wins", raw: "fail-open", want: availabilityFailOpen},
+		{name: "explicit fail-closed wins", raw: "fail-closed", want: availabilityFailClosed},
+		{name: "explicit value is normalized", raw: "  FAIL-OPEN ", want: availabilityFailOpen},
+		{name: "unset is fail-closed", want: availabilityFailClosed},
+		{name: "invalid fails closed", raw: "fail-clsoed", want: availabilityFailClosed},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := resolveAvailabilityPosture(tt.raw, tt.edition, log); got != tt.want {
-				t.Fatalf("resolveAvailabilityPosture(%q, %q) = %v, want %v", tt.raw, tt.edition, got, tt.want)
+			if got := resolveAvailabilityPosture(tt.raw, log); got != tt.want {
+				t.Fatalf("resolveAvailabilityPosture(%q) = %v, want %v", tt.raw, got, tt.want)
 			}
 		})
 	}
@@ -44,10 +42,9 @@ func TestResolveAvailabilityPosture(t *testing.T) {
 
 func TestSessionLaunchGate_BudgetFailClosedOnReadError(t *testing.T) {
 	g := &sessionLaunchGate{
-		fin:             fakeBudget{err: errors.New("budget ledger unavailable")},
-		budgetPosture:   availabilityFailClosed,
-		recordAvailable: true,
-		log:             slog.New(slog.NewTextHandler(io.Discard, nil)),
+		fin:           fakeBudget{err: errors.New("budget ledger unavailable")},
+		budgetPosture: availabilityFailClosed,
+		log:           slog.New(slog.NewTextHandler(io.Discard, nil)),
 	}
 
 	dec, err := g.Authorize(context.Background(), "t1", sessions.LaunchIntent{PermissionMode: "default"})
@@ -67,10 +64,9 @@ func TestSessionLaunchGate_BudgetFailClosedOnReadError(t *testing.T) {
 
 func TestSessionLaunchGate_BudgetFailOpenOnReadError(t *testing.T) {
 	g := &sessionLaunchGate{
-		fin:             fakeBudget{err: errors.New("budget ledger unavailable")},
-		budgetPosture:   availabilityFailOpen,
-		recordAvailable: true,
-		log:             slog.New(slog.NewTextHandler(io.Discard, nil)),
+		fin:           fakeBudget{err: errors.New("budget ledger unavailable")},
+		budgetPosture: availabilityFailOpen,
+		log:           slog.New(slog.NewTextHandler(io.Discard, nil)),
 	}
 
 	dec, err := g.Authorize(context.Background(), "t1", sessions.LaunchIntent{PermissionMode: "default"})
@@ -84,12 +80,12 @@ func TestSessionLaunchGate_BudgetFailOpenOnReadError(t *testing.T) {
 
 // TestSessionLaunchGate_AdmissionNeverFollowsTheLaunchPosture pins the separation between
 // two postures. The launch gate's availability posture answers a control it could not
-// READ, and its community default is fail-open. Admission is a different question: a
+// READ, and an operator may set it to fail-open. Admission is a different question: a
 // Reserve HOLDS money, so an unreachable ledger has no headroom to give and no hold to
 // settle later. Whatever the posture, the request this gate builds carries deny.
 //
 // A gate that derived AdmissionRequest.Unreachable from its posture would turn a WRITE
-// fail-open on every community install that configured nothing: Reserve would answer
+// fail-open on every install that set fail-open: Reserve would answer
 // "allowed" with no row behind it, and concurrent launches would over-admit against one
 // cap. What the posture does still decide, what the launch does with admission's deny, is
 // asserted here too.
@@ -105,10 +101,9 @@ func TestSessionLaunchGate_AdmissionNeverFollowsTheLaunchPosture(t *testing.T) {
 		t.Run(c.posture.String(), func(t *testing.T) {
 			spy := &spyAdmissionBudget{err: errors.New("budget ledger unavailable")}
 			g := &sessionLaunchGate{
-				fin:             spy,
-				budgetPosture:   c.posture,
-				recordAvailable: true,
-				log:             slog.New(slog.NewTextHandler(io.Discard, nil)),
+				fin:           spy,
+				budgetPosture: c.posture,
+				log:           slog.New(slog.NewTextHandler(io.Discard, nil)),
 			}
 
 			dec, err := g.Authorize(context.Background(), "t1", sessions.LaunchIntent{PermissionMode: "default"})
@@ -166,10 +161,9 @@ func (s *spyAdmissionBudget) Release(context.Context, model.TenantID, string) er
 
 func TestSessionLaunchGate_ContextFailClosedOnReadError(t *testing.T) {
 	g := &sessionLaunchGate{
-		contextPolicy:   &fakeSessionContextPolicy{err: errors.New("context policy unavailable")},
-		contextPosture:  availabilityFailClosed,
-		recordAvailable: true,
-		log:             slog.New(slog.NewTextHandler(io.Discard, nil)),
+		contextPolicy:  &fakeSessionContextPolicy{err: errors.New("context policy unavailable")},
+		contextPosture: availabilityFailClosed,
+		log:            slog.New(slog.NewTextHandler(io.Discard, nil)),
 	}
 
 	dec, err := g.Authorize(context.Background(), "t1", sessions.LaunchIntent{PermissionMode: "default"})
@@ -189,10 +183,9 @@ func TestSessionLaunchGate_ContextFailClosedOnReadError(t *testing.T) {
 
 func TestSessionLaunchGate_ContextFailOpenOnReadError(t *testing.T) {
 	g := &sessionLaunchGate{
-		contextPolicy:   &fakeSessionContextPolicy{err: errors.New("context policy unavailable")},
-		contextPosture:  availabilityFailOpen,
-		recordAvailable: true,
-		log:             slog.New(slog.NewTextHandler(io.Discard, nil)),
+		contextPolicy:  &fakeSessionContextPolicy{err: errors.New("context policy unavailable")},
+		contextPosture: availabilityFailOpen,
+		log:            slog.New(slog.NewTextHandler(io.Discard, nil)),
 	}
 
 	dec, err := g.Authorize(context.Background(), "t1", sessions.LaunchIntent{PermissionMode: "default"})
@@ -218,9 +211,8 @@ func TestSessionLaunchGate_BudgetCapDeniesRegardlessOfAvailabilityPosture(t *tes
 		for _, action := range actions {
 			t.Run(posture.String()+"/"+action.name, func(t *testing.T) {
 				g := &sessionLaunchGate{
-					fin:             fakeBudget{chk: finops.BudgetCheck{Allowed: false, Action: action.name}},
-					budgetPosture:   posture,
-					recordAvailable: true,
+					fin:           fakeBudget{chk: finops.BudgetCheck{Allowed: false, Action: action.name}},
+					budgetPosture: posture,
 				}
 				dec, err := g.Authorize(context.Background(), "t1", sessions.LaunchIntent{PermissionMode: "default"})
 				if err != nil {

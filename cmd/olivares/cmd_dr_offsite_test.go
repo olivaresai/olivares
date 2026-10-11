@@ -123,17 +123,17 @@ func TestDROffsitePushPullList(t *testing.T) {
 	pf := filepath.Join(t.TempDir(), "pass")
 	_ = os.WriteFile(pf, []byte("a strong DR passphrase"), 0o600)
 	bundle := filepath.Join(t.TempDir(), "estate.drbundle")
-	if out, err := runDR("backup", "--data-dir", src, "--out", bundle, "--passphrase-file", pf); err != nil {
+	if out, err := runDR(t, "backup", "--data-dir", src, "--out", bundle, "--passphrase-file", pf); err != nil {
 		t.Fatalf("backup: %v\n%s", err, out)
 	}
 	orig, _ := os.ReadFile(bundle)
 
 	_, _, flags := newMockOffsite(t)
 
-	if out, err := runDR(append([]string{"push", "--in", bundle}, flags...)...); err != nil {
+	if out, err := runDR(t, append([]string{"push", "--in", bundle}, flags...)...); err != nil {
 		t.Fatalf("push: %v\n%s", err, out)
 	}
-	out, err := runDR(append([]string{"list", "--offsite"}, flags...)...)
+	out, err := runDR(t, append([]string{"list", "--offsite"}, flags...)...)
 	if err != nil {
 		t.Fatalf("list --offsite: %v\n%s", err, out)
 	}
@@ -142,7 +142,7 @@ func TestDROffsitePushPullList(t *testing.T) {
 	}
 
 	pulled := filepath.Join(t.TempDir(), "pulled.drbundle")
-	if out, err := runDR(append([]string{"pull", "--name", "estate.drbundle", "--out", pulled}, flags...)...); err != nil {
+	if out, err := runDR(t, append([]string{"pull", "--name", "estate.drbundle", "--out", pulled}, flags...)...); err != nil {
 		t.Fatalf("pull: %v\n%s", err, out)
 	}
 	got, _ := os.ReadFile(pulled)
@@ -162,7 +162,7 @@ func TestDRBackupOffsiteReplication(t *testing.T) {
 
 	_, mock, flags := newMockOffsite(t)
 	args := append([]string{"backup", "--data-dir", src, "--out", bundle, "--passphrase-file", pf}, flags...)
-	out, err := runDR(args...)
+	out, err := runDR(t, args...)
 	if err != nil {
 		t.Fatalf("backup --offsite: %v\n%s", err, out)
 	}
@@ -196,21 +196,21 @@ func TestDRRestoreInPlace(t *testing.T) {
 	// ordenable. Se sella el senuelo, no se ablanda la guarda. Explicacion completa en
 	// cmd_dr_test.go, TestDRBackupVerifyRestoreCLI.
 	prevVersion := version
-	version = "26.9.0"
+	version = "26.900"
 	t.Cleanup(func() { version = prevVersion })
 	dir := t.TempDir()
 	seedDataDir(t, dir)
 	pf := filepath.Join(t.TempDir(), "pass")
 	_ = os.WriteFile(pf, []byte("a strong DR passphrase"), 0o600)
 	bundle := filepath.Join(t.TempDir(), "b.drbundle")
-	if out, err := runDR("backup", "--data-dir", dir, "--out", bundle, "--passphrase-file", pf); err != nil {
+	if out, err := runDR(t, "backup", "--data-dir", dir, "--out", bundle, "--passphrase-file", pf); err != nil {
 		t.Fatalf("backup: %v\n%s", err, out)
 	}
 
 	// Restore in place over the SAME live dir. Replacing a live estate now carries
 	// a declared operator and reason; everything this test asserts about the
 	// staged, atomic, self-preserving promotion is unchanged by that.
-	out, err := runDR("restore", "--in", bundle, "--data-dir", dir, "--engine", "sqlite", "--passphrase-file", pf, "--in-place",
+	out, err := runDR(t, "restore", "--in", bundle, "--data-dir", dir, "--engine", "sqlite", "--passphrase-file", pf, "--in-place",
 		"--operator", "ops@x.io", "--reason", "in-place restore drill")
 	if err != nil {
 		t.Fatalf("in-place restore: %v\n%s", err, out)
@@ -244,7 +244,7 @@ func TestDRRestoreInPlaceWrongPassphraseLeavesLiveIntact(t *testing.T) {
 	_ = os.WriteFile(pf, []byte("right one"), 0o600)
 	_ = os.WriteFile(wrong, []byte("nope"), 0o600)
 	bundle := filepath.Join(t.TempDir(), "b.drbundle")
-	if out, err := runDR("backup", "--data-dir", dir, "--out", bundle, "--passphrase-file", pf); err != nil {
+	if out, err := runDR(t, "backup", "--data-dir", dir, "--out", bundle, "--passphrase-file", pf); err != nil {
 		t.Fatalf("backup: %v\n%s", err, out)
 	}
 
@@ -255,7 +255,7 @@ func TestDRRestoreInPlaceWrongPassphraseLeavesLiveIntact(t *testing.T) {
 	// on the PASSPHRASE. Without it the command would now refuse earlier, for the
 	// missing operator, and this test would go green having never decrypted
 	// anything — a fixture passing for the wrong reason.
-	if _, err := runDR("restore", "--in", bundle, "--data-dir", dir, "--engine", "sqlite", "--passphrase-file", wrong, "--in-place",
+	if _, err := runDR(t, "restore", "--in", bundle, "--data-dir", dir, "--engine", "sqlite", "--passphrase-file", wrong, "--in-place",
 		"--operator", "ops@x.io", "--reason", "wrong-passphrase safety drill"); err == nil {
 		t.Fatal("in-place restore with the wrong passphrase should fail")
 	}
@@ -275,7 +275,7 @@ func TestDRRestoreInPlaceWrongPassphraseLeavesLiveIntact(t *testing.T) {
 // TestDRDrillCLI runs the full round-trip drill and asserts it passes with a
 // measured RTO — the reproducible drill (docs/DR-RUNBOOK.md §8), run here.
 func TestDRDrillCLI(t *testing.T) {
-	out, err := runDR("drill", "--events", "40")
+	out, err := runDR(t, "drill", "--events", "40")
 	if err != nil {
 		t.Fatalf("drill: %v\n%s", err, out)
 	}

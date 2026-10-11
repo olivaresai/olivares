@@ -883,7 +883,7 @@ func TestCommunicationWorkEventDualAggregateAcrossBackends(t *testing.T) {
 			reopenedModule.UseData(api.NewModuleData(reopened))
 			bindStoreStanding(reopenedModule, reopened)
 			sink := &recordingWorkSink{}
-			reopenedModule.UseWorkEventSink(sink)
+			WithWorkEventSink(sink)(reopenedModule)
 			if err := reopenedModule.DrainWorkOutbox(context.Background(), fixture.tenant, 10); err != nil {
 				t.Fatalf("drain dual-aggregate outbox after reopen: %v", err)
 			}
@@ -958,7 +958,7 @@ func TestCommunicationWorkEventDualAggregateAcrossBackends(t *testing.T) {
 				drainedReplay[5].AggregateID != replayMessageID {
 				t.Fatalf("replayed Message envelope = %#v", drainedReplay)
 			}
-			if err := reopenedModule.data.View(context.Background(), fixture.tenant, func(sc store.Scope) error {
+			if err := reopenedModule.Data.View(context.Background(), fixture.tenant, func(sc store.Scope) error {
 				events, err := sc.Ext(workEventKind)
 				if err != nil {
 					return err
@@ -1252,7 +1252,7 @@ func TestCommunicationCausalArcHashPersistenceAcrossBackends(t *testing.T) {
 			t.Cleanup(func() { _ = reopened.Close() })
 			reopenedModule.UseData(api.NewModuleData(reopened))
 			bindStoreStanding(reopenedModule, reopened)
-			if err := reopenedModule.data.View(ctx, fixture.tenant, func(sc store.Scope) error {
+			if err := reopenedModule.Data.View(ctx, fixture.tenant, func(sc store.Scope) error {
 				repo, err := sc.Ext(messageAudienceRecipientKind)
 				if err != nil {
 					return err
@@ -1599,7 +1599,7 @@ func TestCommunicationDispatchRouteAndReconcileDurabilityAcrossBackends(t *testi
 			t.Cleanup(func() { _ = reopened.Close() })
 			reopenedModule.UseData(api.NewModuleData(reopened))
 			bindStoreStanding(reopenedModule, reopened)
-			if err := reopenedModule.data.View(ctx, fixture.tenant, func(sc store.Scope) error {
+			if err := reopenedModule.Data.View(ctx, fixture.tenant, func(sc store.Scope) error {
 				repo, err := sc.Ext(deliveryDispatchKind)
 				if err != nil {
 					return err
@@ -1675,13 +1675,13 @@ func TestCommunicationK3ReadinessIsTwoPhase(t *testing.T) {
 	if err != nil || !supported {
 		t.Fatalf("directory status = supported %v, err %v", supported, err)
 	}
-	if status.Enabled {
+	if status.Enabled { //nolint:staticcheck // SA1019: pins the deprecated field's published false until removal
 		t.Fatal("Slice F schema alone enabled K3 before composition readiness")
 	}
 	if m.CommunicationSessionCredentialsEnabled() {
 		t.Fatal("new module starts with communication credentials enabled")
 	}
-	m.UseCommunicationSessionCredentialSource(communicationSchemaCredentialSource{})
+	m.CommunicationSessionCreds = communicationSchemaCredentialSource{}
 	if m.CommunicationSessionCredentialsEnabled() {
 		t.Fatal("late-binding only the issuer enabled K3")
 	}
@@ -3291,11 +3291,12 @@ func communicationOpenFixtureWithClock(
 	}
 	m.UseData(api.NewModuleData(st))
 	bindStoreStanding(m, st)
-	m.UseCommunicationGuardReconciliationData(
-		NewCommunicationGuardReconciliationData(api.NewModuleData(st)),
-	)
+	func() {
+		m.CommunicationGuardData = NewCommunicationGuardReconciliationData(api.NewModuleData(st))
+		m.normalize()
+	}()
 	var workspace model.ID
-	if err := m.data.View(ctx, tenant, func(sc store.Scope) error {
+	if err := m.Data.View(ctx, tenant, func(sc store.Scope) error {
 		value, err := sc.DefaultWorkspace(ctx)
 		if err == nil {
 			workspace = value.ID
@@ -3319,7 +3320,7 @@ func TestCommunicationTransactionTimeStampsDomainEffectsAcrossBackends(t *testin
 				communicationChannelRecord(fixture.workspace, "transaction-stamp"))
 			resultID := model.ID(channel.String(model.ColID))
 
-			unstampedErr := fixture.m.data.Mutate(ctx, fixture.tenant, func(sc store.Scope) error {
+			unstampedErr := fixture.m.Data.Mutate(ctx, fixture.tenant, func(sc store.Scope) error {
 				clock, ok := sc.(store.TransactionClock)
 				if !ok {
 					return errors.New("communication scope has no TransactionClock")
@@ -3345,7 +3346,7 @@ func TestCommunicationTransactionTimeStampsDomainEffectsAcrossBackends(t *testin
 				t.Fatal("ordinary GenericRepo write silently substituted process time for DB time")
 			}
 
-			if err := fixture.m.data.Mutate(ctx, fixture.tenant, func(sc store.Scope) error {
+			if err := fixture.m.Data.Mutate(ctx, fixture.tenant, func(sc store.Scope) error {
 				clock, ok := sc.(store.TransactionClock)
 				if !ok {
 					return errors.New("communication scope has no TransactionClock")
@@ -3471,7 +3472,7 @@ func communicationCreate(
 	record model.Record,
 ) (model.Record, error) {
 	var created model.Record
-	err := m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
+	err := m.Data.Mutate(ctx, tenant, func(sc store.Scope) error {
 		repo, err := sc.Ext(kind)
 		if err != nil {
 			return err
@@ -3491,7 +3492,7 @@ func communicationCreateWithID(
 	record model.Record,
 ) (model.Record, error) {
 	var created model.Record
-	err := m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
+	err := m.Data.Mutate(ctx, tenant, func(sc store.Scope) error {
 		repo, err := sc.Ext(kind)
 		if err != nil {
 			return err
@@ -3510,7 +3511,7 @@ func communicationUpdate(
 	record model.Record,
 ) (model.Record, error) {
 	var updated model.Record
-	err := m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
+	err := m.Data.Mutate(ctx, tenant, func(sc store.Scope) error {
 		repo, err := sc.Ext(kind)
 		if err != nil {
 			return err
@@ -3955,7 +3956,7 @@ func TestCommunicationTenantAndWorkspaceIsolation(t *testing.T) {
 			fixture := communicationOpenFixture(t, backend)
 			ctx := context.Background()
 			var otherWorkspace model.ID
-			if err := fixture.m.data.Mutate(ctx, fixture.tenant, func(sc store.Scope) error {
+			if err := fixture.m.Data.Mutate(ctx, fixture.tenant, func(sc store.Scope) error {
 				workspace, err := sc.Workspaces().Create(ctx, model.Workspace{
 					Name: "Other", Slug: "other", Status: model.StatusActive,
 				})
@@ -3971,7 +3972,7 @@ func TestCommunicationTenantAndWorkspaceIsolation(t *testing.T) {
 			communicationMustCreate(t, fixture, channelKind,
 				communicationChannelRecord(otherWorkspace, "foreign-workspace"))
 
-			if err := fixture.m.data.View(ctx, fixture.tenant, func(raw store.Scope) error {
+			if err := fixture.m.Data.View(ctx, fixture.tenant, func(raw store.Scope) error {
 				confined, err := store.ConfineWorkspace(ctx, raw, fixture.workspace)
 				if err != nil {
 					return err
@@ -4001,7 +4002,7 @@ func TestCommunicationTenantAndWorkspaceIsolation(t *testing.T) {
 			}); err != nil {
 				t.Fatal(err)
 			}
-			if err := fixture.m.data.View(ctx, tenantB, func(sc store.Scope) error {
+			if err := fixture.m.Data.View(ctx, tenantB, func(sc store.Scope) error {
 				repo, err := sc.Ext(channelKind)
 				if err != nil {
 					return err
@@ -4147,7 +4148,7 @@ func TestCommunicationRowsSurviveDropTenantAcrossBackends(t *testing.T) {
 				{channelKind, model.ID(channel.String(model.ColID))},
 				{communicationCommandKind, model.ID(command.String(model.ColID))},
 			} {
-				if err := fixture.m.data.View(ctx, fixture.tenant, func(sc store.Scope) error {
+				if err := fixture.m.Data.View(ctx, fixture.tenant, func(sc store.Scope) error {
 					repo, err := sc.Ext(row.kind)
 					if err != nil {
 						return err
@@ -4157,7 +4158,7 @@ func TestCommunicationRowsSurviveDropTenantAcrossBackends(t *testing.T) {
 				}); err != nil {
 					t.Errorf("retained %s after DropTenant: %v", row.kind, err)
 				}
-				if err := fixture.m.data.Mutate(ctx, fixture.tenant, func(sc store.Scope) error {
+				if err := fixture.m.Data.Mutate(ctx, fixture.tenant, func(sc store.Scope) error {
 					repo, err := sc.Ext(row.kind)
 					if err != nil {
 						return err

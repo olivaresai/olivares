@@ -4,16 +4,9 @@
 //
 // The front door's LIVE SESSIONS and INVENTORY tiles and the topbar workspace selector.
 //
-// Both reads are tenant-wide. `GET /v1/m/sessions/live` takes no core-workspace
-// selector and its DTO carries none (an internal design note (not shipped)
-// contract, ratified 2026-09-08); `GET /v1/m/inventory/summary` reads no request
-// filter and the catalog carries no workspace lineage (an internal design note (not shipped)
-// effective-workspace-scope, ratified the same day). The Sessions tile stopped sending
-// `workspace_id` first; until this change the Inventory tile still sent it and keyed
-// its query on the selection, so a W1→W2 switch re-fetched the SAME tenant-wide
-// summary and presented it as the new workspace's estate — beside a Sessions tile that
-// already said it was tenant-wide. These cases run the real view against the real
-// workspace store and a real QueryClient; only the API modules and auth are doubled.
+// Both reads are tenant-wide (neither takes a workspace selector), so a workspace switch keeps the same figures.
+// These cases run the real view against the real workspace store and a real QueryClient; only the API
+// modules and auth are doubled.
 //
 // CONTROLLED FIXTURES, NOT BACKEND PROOF. Each double deliberately answers a DIFFERENT
 // page when any selector is sent, so a pretended filter is measurable as a wrong

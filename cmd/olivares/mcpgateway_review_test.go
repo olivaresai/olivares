@@ -11,6 +11,7 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -21,7 +22,9 @@ import (
 
 	jose "github.com/go-jose/go-jose/v4"
 	jwt "github.com/go-jose/go-jose/v4/jwt"
+	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
 
+	"github.com/olivaresai/olivares/cmd/olivares/internal/mcpgateway"
 	mcpc "github.com/olivaresai/olivares/connectors/mcp"
 	"github.com/olivaresai/olivares/core/model"
 )
@@ -84,7 +87,7 @@ func countingUpstreamServer(t *testing.T, calls *int32) *httptest.Server {
 
 func buildReviewMCP(t *testing.T, eng *engine, jwks []byte, upstreamURL, tenantStr string) *mcpc.ResourceServer {
 	t.Helper()
-	cfg := &mcpGatewayConfig{
+	cfg := &mcpgateway.MCPConfig{
 		Resource:             mcpReviewResource,
 		AuthorizationServers: []string{"https://auth.review.example"},
 		Issuer:               "https://auth.review.example",
@@ -157,10 +160,10 @@ func TestMCPTenantCanonicalizationPreventsDoubleEffect(t *testing.T) {
 // forwarder classifies each leg honestly. Pre-fix, non-2xx and malformed/
 // uncorrelated 2xx bodies were laundered as completed.
 func TestMCPUpstreamForwarderDispatchClassification(t *testing.T) {
-	newForwarder := func(url string) *mcpUpstreamForwarder {
-		return &mcpUpstreamForwarder{url: url, client: &http.Client{Timeout: 5 * time.Second}}
+	newForwarder := func(url string) *mcpgateway.UpstreamForwarder {
+		return &mcpgateway.UpstreamForwarder{URL: url, Client: &http.Client{Timeout: 5 * time.Second}}
 	}
-	call := func(f *mcpUpstreamForwarder) (mcpc.UpstreamResult, error) {
+	call := func(f *mcpgateway.UpstreamForwarder) (mcpc.UpstreamResult, error) {
 		return f.Forward(context.Background(), mcpc.UpstreamRequest{Method: "tools/call", Params: []byte(`{"name":"search"}`)})
 	}
 
@@ -219,12 +222,41 @@ func TestMCPUpstreamForwarderDispatchClassification(t *testing.T) {
 
 	t.Run("credential-provider failure before Do is not_sent", func(t *testing.T) {
 		f := newForwarder("http://127.0.0.1:1/")
-		f.credProv = erroringCredProvider{}
+		f.CredProv = erroringCredProvider{}
 		res, err := call(f)
 		if err == nil || res.State != mcpc.DispatchNotSent {
 			t.Fatalf("cred-provider failure = state %q err=%v, want not_sent (nothing dispatched)", res.State, err)
 		}
 	})
+}
+
+// TestMCPUpstreamForwarderSendsGovernedParamsInSDKEnvelope: the forwarder's
+// request is the official go-sdk JSON-RPC encoding, and the governed params
+// reach the upstream byte for byte (the bytes the EffectDigest binds are the
+// bytes sent).
+func TestMCPUpstreamForwarderSendsGovernedParamsInSDKEnvelope(t *testing.T) {
+	governed := []byte(`{"arguments":{"q":"\u003cb\u003e & <i>"},"name":"search"}`)
+	var got []byte
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got, _ = io.ReadAll(r.Body)
+		_, _ = w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":{"ok":1}}`))
+	}))
+	defer srv.Close()
+	f := &mcpgateway.UpstreamForwarder{URL: srv.URL, Client: srv.Client()}
+	if res, err := f.Forward(context.Background(), mcpc.UpstreamRequest{Method: "tools/call", Params: governed}); err != nil || res.State != mcpc.DispatchCompleted {
+		t.Fatalf("forward = %+v err=%v", res, err)
+	}
+	msg, err := jsonrpc.DecodeMessage(got)
+	if err != nil {
+		t.Fatalf("the go-sdk decoder refused the forwarded request %s: %v", got, err)
+	}
+	req, ok := msg.(*jsonrpc.Request)
+	if !ok || req.Method != "tools/call" || !req.IsCall() || req.ID.Raw() != int64(1) {
+		t.Fatalf("forwarded message = %#v, want the tools/call request with id 1", msg)
+	}
+	if string(req.Params) != string(governed) {
+		t.Errorf("forwarded params %s, want the governed bytes %s", req.Params, governed)
+	}
 }
 
 type erroringCredProvider struct{}
@@ -372,10 +404,10 @@ func TestMCPFullInterleavingSingleEffect(t *testing.T) {
 // member matching, last-duplicate-wins) and truncated at 8MiB without overflow
 // detection, so every case below was laundered as completed.
 func TestMCPUpstreamForwarderStrictResponseValidation(t *testing.T) {
-	newForwarder := func(url string) *mcpUpstreamForwarder {
-		return &mcpUpstreamForwarder{url: url, client: &http.Client{Timeout: 5 * time.Second}}
+	newForwarder := func(url string) *mcpgateway.UpstreamForwarder {
+		return &mcpgateway.UpstreamForwarder{URL: url, Client: &http.Client{Timeout: 5 * time.Second}}
 	}
-	call := func(f *mcpUpstreamForwarder) (mcpc.UpstreamResult, error) {
+	call := func(f *mcpgateway.UpstreamForwarder) (mcpc.UpstreamResult, error) {
 		return f.Forward(context.Background(), mcpc.UpstreamRequest{Method: "tools/call", Params: []byte(`{"name":"search"}`)})
 	}
 	serve := func(t *testing.T, body string) *httptest.Server {

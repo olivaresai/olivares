@@ -220,6 +220,10 @@ func sourceStatus(d model.SourceDef, applied map[string]appliedSource, live map[
 
 // PutSource persists a source definition and applies it to the running engine.
 func (sr *sourceReconciler) PutSource(ctx context.Context, actor auth.Principal, in api.SourceRosterInput) (api.SourceApplyResult, error) {
+	return sr.putSource(ctx, actor, in, false)
+}
+
+func (sr *sourceReconciler) putSource(ctx context.Context, actor auth.Principal, in api.SourceRosterInput, credentialsChanged bool) (api.SourceApplyResult, error) {
 	def := defFromInput(in)
 	if err := checkInlineSecrets(def); err != nil {
 		return api.SourceApplyResult{}, err
@@ -246,6 +250,13 @@ func (sr *sourceReconciler) PutSource(ctx context.Context, actor auth.Principal,
 		return res, nil
 	}
 
+	if credentialsChanged {
+		if app, ok := sr.applied[saved.Name]; ok {
+			// A failed replacement must remain pending for the next reload.
+			app.fingerprint = ""
+			sr.applied[saved.Name] = app
+		}
+	}
 	if app, ok := sr.applied[saved.Name]; ok && app.fingerprint == fingerprintDef(saved) {
 		res.Action, res.Applied = "unchanged", true
 		return res, nil
@@ -496,12 +507,8 @@ func (sr *sourceReconciler) applyErrReason(verb, name string, err error) string 
 	return verb + " failed: " + err.Error()
 }
 
-// fingerprintDef hashes the identity- and behavior-affecting fields of a
-// definition so the reconciler re-applies a source only when something actually
-// changed. It hashes secret REFERENCES (never values), so rotating a reference is
-// detected; rotating the secret VALUE behind an unchanged reference is NOT — to
-// force that, toggle the source's enabled flag or change a config field. (A
-// dedicated rotate action is a possible follow-on.)
+// fingerprintDef hashes identity and configuration, including credential references.
+// Onboarding invalidates the applied fingerprint after replacing a credential.
 func fingerprintDef(def model.SourceDef) string {
 	h := sha256.New()
 	fmt.Fprintf(h, "kind=%s\x00tenant=%s\x00poll=%d\x00", def.Kind, def.Tenant, def.PollSeconds)

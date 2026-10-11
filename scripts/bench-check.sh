@@ -29,26 +29,46 @@ BT="${BENCHTIME:-1x}"
 FULL=0
 [ "${1:-}" = "--full" ] && FULL=1
 OUT="$(mktemp)"
-trap 'rm -f "$OUT"' EXIT
+RUN_OUT="$(mktemp)"
+trap 'rm -f "$OUT" "$RUN_OUT"' EXIT
+
+run_bench() {
+  local package="$1" selector="$2" benches bench
+  # -list matches top-level names; -bench also selects slash-separated subbenchmarks.
+  benches="$(go test "$package" -run '^$' -list "${selector%%/*}" | sed -n '/^Benchmark/p')"
+  if [ -z "$benches" ]; then
+    echo "bench smoke: $package selector '$selector' matched no benchmarks" >&2
+    return 1
+  fi
+  go test "$package" -run '^$' -bench "$selector" -benchmem -benchtime "$BT" | tee "$RUN_OUT" | tee -a "$OUT"
+  while IFS= read -r bench; do
+    if ! awk -v bench="$bench" '$1 ~ ("^" bench "(/|(-[0-9]+)?$)") && $2 ~ /^[1-9][0-9]*$/ {ran=1} END {exit !ran}' "$RUN_OUT"; then
+      echo "bench smoke: $package $bench produced no completed benchmark rows" >&2
+      return 1
+    fi
+  done <<< "$benches"
+}
 
 echo "== bench smoke (build + run once, benchtime=$BT, full=$FULL) =="
 # core/bench: write plane + storage-growth + per-tenant cost (all fast).
-go test ./core/bench/ -run '^$' -bench . -benchmem -benchtime "$BT" | tee -a "$OUT"
+run_bench ./core/bench/ .
 # finops plane: budget reservation + check. Added 2026-08-01 — this script's own
 # header promises each benchmark runs once, and modules/finops matched no selector
 # here, so BenchmarkReserveBudget and BenchmarkCheckBudget were never smoke-run.
-go test ./modules/finops/ -run '^$' -bench 'Budget' -benchmem -benchtime "$BT" | tee -a "$OUT"
+run_bench ./modules/finops/ 'Budget'
 # decision plane: in-memory algebra + end-to-end hook/proxy governed decision.
-go test ./modules/inferenceproxy/ -run '^$' -bench 'DLPDecide' -benchmem -benchtime "$BT" | tee -a "$OUT"
-go test ./cmd/olivares/ -run '^$' -bench 'HookDecide|ProxyAuthorizeEndToEnd' -benchmem -benchtime "$BT" | tee -a "$OUT"
+run_bench ./modules/inferenceproxy/ 'DLPDecide'
+run_bench ./cmd/olivares/ 'HookDecide'
+run_bench ./cmd/olivares/ 'ProxyAuthorizeEndToEnd'
 if [ "$FULL" = 1 ]; then
   # retrieval plane: the 100k end-to-end point seeds a real corpus (~45s) and the
   # 1M ranker curve allocs ~24 MiB — nightly only.
-  go test ./modules/knowledge/ -run '^$' -bench 'Retrieval|Cosine' -benchmem -benchtime "$BT" | tee -a "$OUT"
+  run_bench ./modules/knowledge/ 'Retrieval'
+  run_bench ./modules/knowledge/ 'Cosine'
 else
   # fast subset: the exact-cosine ranker at 10k proves the knowledge bench builds+runs;
   # the heavy end-to-end seed + 1M point are covered by the --full nightly.
-  go test ./modules/knowledge/ -run '^$' -bench 'BenchmarkCosineIndexRankCurve/candidates=10000$' -benchmem -benchtime "$BT" | tee -a "$OUT"
+  run_bench ./modules/knowledge/ 'BenchmarkCosineIndexRankCurve/candidates=10000$'
 fi
 echo "== bench smoke OK (all benches built and ran) =="
 

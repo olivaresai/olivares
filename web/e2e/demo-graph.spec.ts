@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { expect, test, type Page } from '@playwright/test'
+import { assertSessionAccepted, sessionToken } from './live-session'
 
 // UI tramo of the E2E: the embedded web rendering REAL seeded data from a live
 // olivares (no /v1 mocks). scripts/web-e2e-demo.sh boots `serve --seed-demo`
@@ -69,15 +70,16 @@ async function loginDemo(page: Page): Promise<string> {
   expect(response.status(), 'the demo login must reach the real handler').toBe(
     200,
   )
-  const body = (await response.json()) as { token: string }
   // WHAT A FRESH SIGN-IN PAINTS. The console lands on the root, which belongs to no
   // navigation area, and the sidebar hides a closed area's panel — so the entries on
   // screen are the areas and the overview above them, not a leaf like Inventory. The
   // name is exact because neighbouring entries contain it.
   await expect(
-    page.getByRole('link', { name: 'Now', exact: true }),
+    page
+      .getByRole('navigation', { name: 'Journeys', exact: true })
+      .getByRole('link', { name: 'Now', exact: true }),
   ).toBeVisible({ timeout: 15_000 })
-  return body.token
+  return sessionToken(page)
 }
 
 function nodeIDs(edges: LiveAccessEdge[]): string[] {
@@ -131,6 +133,8 @@ async function waitForDemoAccessEstate(
             headers: authHeaders(token),
           }),
         ])
+        assertSessionAccepted(graphResponse)
+        assertSessionAccepted(driftResponse)
         if (!graphResponse.ok() || !driftResponse.ok()) return false
         const graph = (await graphResponse.json()) as LiveAccessGraph
         const drift = (await driftResponse.json()) as LiveDrift
@@ -216,6 +220,9 @@ test.describe('embedded web over real seeded data', () => {
         url.searchParams.get('limit') === '500'
       )
     })
+    // The sidebar draws each area folded, so a leaf like Access map is reached by opening
+    // the areas first, as a person would.
+    await page.getByRole('button', { name: 'Expand all areas' }).click()
     await page.getByRole('link', { name: /access map/i }).click()
     await page.waitForURL('**/access-map')
     const initialResponse = await initialGraphResponse
@@ -354,9 +361,10 @@ test.describe('embedded web over real seeded data', () => {
       'the demo seed must expose at least one drift row for this functional check',
     ).toBeGreaterThan(0)
     await expect(page.getByRole('heading', { name: /drift/i })).toBeVisible()
-    await expect(page.locator('aside').getByRole('listitem')).toHaveCount(
-      findingCount,
-    )
+    // The drift panel is the aside of the page content; the sidebar is an aside too.
+    await expect(
+      page.locator('#main-content aside').getByRole('listitem'),
+    ).toHaveCount(findingCount)
     await page.screenshot({
       path: 'playwright-report/demo-access-map-drift.png',
     })
@@ -507,14 +515,23 @@ test.describe('embedded web over real seeded data', () => {
     ).toContainText('svc_pool')
   })
 
-  test('executive dashboard mounts the spend section', async ({ page }) => {
+  test('executive dashboard mounts its risk and reliability sections', async ({
+    page,
+  }) => {
     await loginDemo(page)
 
     await page.goto('/dashboards')
-    // This check covers the route and section mount; KPI semantics live elsewhere.
-    await expect(page.getByText(/spend trend/i)).toBeVisible({
-      timeout: 15_000,
-    })
+    // This check covers the route and section mount; KPI semantics live elsewhere. The
+    // spend trend and the compliance section are edition sections (a finops source and a
+    // compliance panel a Community engine does not have), so they are not asserted here.
+    // Read inside the page content: the sidebar has entries named like sections too.
+    const content = page.locator('#main-content')
+    for (const title of ['Risk posture', 'Reliability']) {
+      await expect(
+        content.getByText(title, { exact: true }).first(),
+        `the ${title} section must mount`,
+      ).toBeVisible({ timeout: 15_000 })
+    }
     await page.screenshot({ path: 'playwright-report/demo-dashboard.png' })
   })
 

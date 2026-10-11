@@ -26,9 +26,24 @@ func TestCoreOpenAPIPermissionAnnotations(t *testing.T) {
 		"whoami":           true,
 		"searchConsole":    true,
 		"authCapabilities": true,
+		// The subject completes its own native proof; administration was authorized separately.
+		"completeOSAccountBinding": true,
 		// The signed-in user's own browser session (browser_session.go).
 		"getBrowserSession":     true,
 		"migrateBrowserSession": true,
+		// The signed-in human's own password change: current-password proof, no permission.
+		"changeOwnPassword": true,
+		// The signed-in session proves itself with a second factor (WebAuthn assertion or PIV certificate):
+		// sessionRoute/authenticatedRoute gate it, never a permission.
+		"webauthnRegisterOptions":     true,
+		"webauthnRegister":            true,
+		"webauthnAuthenticateOptions": true,
+		"webauthnAuthenticate":        true,
+		"listWebAuthnCredentials":     true,
+		"renameWebAuthnCredential":    true,
+		"deleteWebAuthnCredential":    true,
+		"getPIVStatus":                true,
+		"elevatePIV":                  true,
 	}
 
 	h := newHarness(t)
@@ -94,6 +109,8 @@ func TestCoreOpenAPIPermissionAnnotations(t *testing.T) {
 		"getConnectorHealth":    "health:status:read",
 		"getStepUpPolicy":       "system:admin",
 		"setStepUpPolicy":       "system:admin",
+		"getTracingSettings":    "system:admin",
+		"saveTracingSettings":   "system:admin",
 	}
 	found := map[string]string{}
 	for _, item := range doc.Paths {

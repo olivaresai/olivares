@@ -28,12 +28,12 @@ func writeCRLManifest(t *testing.T, dir string, rs *release.RevokedSet, otaPriv 
 	m := release.Manifest{
 		SchemaVersion: release.ManifestSchemaVersion,
 		Channel:       release.ChannelStable,
-		Version:       "26.8.0",
+		Version:       "26.800",
 		ReleasedAt:    time.Now().UTC().Add(-time.Hour),
 		Rollout:       release.Rollout{},
 		Artifacts: []release.Artifact{{
 			OS: "linux", Arch: "amd64",
-			Filename: "olivares_26.8.0_linux_amd64.tar.gz",
+			Filename: "olivares_26.800_linux_amd64.tar.gz",
 			SHA256:   strings.Repeat("a", 64),
 		}},
 		Revoked: rs,
@@ -95,6 +95,7 @@ func TestLicenseVerifyCRLStates(t *testing.T) {
 	if crl, ok := got["crl"].(string); !ok || !strings.Contains(crl, "unavailable") {
 		t.Fatalf("without a manifest the CRL must be honestly unavailable, got %v", got["crl"])
 	}
+	checkPublicDocReferences(t, publicDocumentPaths(t), out)
 
 	// 2) OTA-signed manifest revoking the serial: revoked wins.
 	manifest := writeCRLManifest(t, dir, &release.RevokedSet{Serials: []string{"ser-1"}}, otaPriv)

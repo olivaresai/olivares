@@ -12,16 +12,8 @@
 // service_account_id, account_id, advisor/thinking/programmatic) are NOT requested as
 // live /spend slices — they live as a DECLARED reference catalog in ./schema and are
 // rendered behind a SeamBadge, never faked as a queryable slice (§5).
-import {
-  http,
-  ensureFreshSession,
-  notifyUnauthorized,
-  type TenantRequestOptions,
-} from '@/lib/api/client'
-import { ApiError, NetworkError } from '@/lib/api/errors'
+import { http, apiFetchRaw, type TenantRequestOptions } from '@/lib/api/client'
 import type { ListResponse } from '@/lib/api/types'
-import { useSessionStore } from '@/stores/session'
-import { useTenantStore } from '@/stores/tenant'
 import type {
   AdmissionReconciliation,
   Alert,
@@ -81,11 +73,9 @@ export interface ExportParams extends RangeParams {
 
 /**
  * Fetch the FOCUS export as a CSV Blob. The /spend/export route returns `text/csv`
- * (FOCUS v1.3), NOT JSON, so the shared JSON `http` client cannot consume it — this
- * uses a raw same-origin fetch with the SAME auth/tenant headers the client injects
- * (read from the stores, like configureApiClient does). It reimplements no server
- * logic; it only carries the bearer/tenant and surfaces a typed error so a 404/403/5xx
- * is handled honestly by the caller (never a corrupt download). EffectiveCost is
+ * (FOCUS v1.3), NOT JSON, so it is read through the client's raw download, which
+ * surfaces a typed error so a 404/403/5xx is handled honestly by the caller (never a
+ * corrupt download). EffectiveCost is
  * sum-safe (estimated rows omit it in the mixed export) — the UI never recomputes
  * totals from the CSV.
  */
@@ -96,43 +86,9 @@ export async function fetchFocusExport(params: ExportParams): Promise<Blob> {
   })
   if (params.since) search.set('since', params.since)
   if (params.until) search.set('until', params.until)
-
-  // La renovación va ANTES de la petición: este camino rodea `apiFetch`, así que sin esto
-  // sería el único del console que sigue muriendo por caducidad. Comparte el vuelo único.
-  // ⛔ EL INQUILINO SE LEE ANTES DE LA ESPERA. Este camino rodea `apiFetch`, así que no
-  //    hereda la fijación de `apiFetchWithMeta`: si se leyera después del refresco, un
-  //    cambio de inquilino durante la renovación mandaría la petición al inquilino nuevo.
-  const tenant = useTenantStore.getState().activeTenant
-  await ensureFreshSession()
-  const headers = new Headers({ Accept: 'text/csv' })
-  const token = useSessionStore.getState().csrfToken
-  if (token) headers.set('X-CSRF-Token', token)
-  if (tenant) headers.set('X-Olivares-Tenant', tenant)
-
-  let res: Response
-  try {
-    res = await fetch(`${BASE}/spend/export?${search.toString()}`, {
-      method: 'GET',
-      headers,
-      credentials: 'same-origin',
-    })
-  } catch (cause) {
-    throw new NetworkError('The control plane is unreachable.', cause)
-  }
-  if (!res.ok) {
-    // ⛔ ESTE CAMINO NO TENÍA GANCHO DE 401, y su propio comentario dice que lleva «las MISMAS
-    //    cabeceras de auth/tenant que el cliente inyecta». Llevaba las cabeceras y no la
-    //    consecuencia: una sesión caída durante una descarga salía como un error genérico y la
-    //    sesión NUNCA se limpiaba, así que el operador se quedaba con una consola que ya no
-    //    autenticaba y ninguna pantalla se lo decía.
-    if (res.status === 401) notifyUnauthorized()
-    throw new ApiError(
-      res.status,
-      'export_failed',
-      res.statusText || 'Export failed',
-      res.headers.get('X-Request-ID') ?? undefined,
-    )
-  }
+  const res = await apiFetchRaw(`${BASE}/spend/export?${search.toString()}`, {
+    headers: { Accept: 'text/csv' },
+  })
   return res.blob()
 }
 
@@ -445,35 +401,9 @@ export const finopsKeys = {
  *    `writeJSON` es el 400 de id inválido.
  */
 export async function fetchStatementExport(id: string): Promise<Blob> {
-  // La renovación va ANTES de la petición: este camino rodea `apiFetch`, así que sin esto
-  // sería el único del console que sigue muriendo por caducidad. Comparte el vuelo único.
-  // ⛔ EL INQUILINO SE LEE ANTES DE LA ESPERA. Este camino rodea `apiFetch`, así que no
-  //    hereda la fijación de `apiFetchWithMeta`: si se leyera después del refresco, un
-  //    cambio de inquilino durante la renovación mandaría la petición al inquilino nuevo.
-  const tenant = useTenantStore.getState().activeTenant
-  await ensureFreshSession()
-  const headers = new Headers({ Accept: 'text/csv' })
-  const token = useSessionStore.getState().csrfToken
-  if (token) headers.set('X-CSRF-Token', token)
-  if (tenant) headers.set('X-Olivares-Tenant', tenant)
-
-  let res: Response
-  try {
-    res = await fetch(`${BASE}/statements/${encodeURIComponent(id)}/export`, {
-      method: 'GET',
-      headers,
-      credentials: 'same-origin',
-    })
-  } catch (cause) {
-    throw new NetworkError('The control plane is unreachable.', cause)
-  }
-  if (!res.ok) {
-    throw new ApiError(
-      res.status,
-      'statement_export_failed',
-      res.statusText || 'Export failed',
-      res.headers.get('X-Request-ID') ?? undefined,
-    )
-  }
+  const res = await apiFetchRaw(
+    `${BASE}/statements/${encodeURIComponent(id)}/export`,
+    { headers: { Accept: 'text/csv' } },
+  )
   return res.blob()
 }

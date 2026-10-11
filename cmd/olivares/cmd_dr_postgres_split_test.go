@@ -225,6 +225,8 @@ func (f *pgSplitFixture) drArgs() []string {
 // recovered one tenant and lost the rest report itself green.
 func (f *pgSplitFixture) seed(t *testing.T, dataDir string) {
 	t.Helper()
+	prepareCompositionTestBoot(t)
+	defer prepareCompositionTestBoot(t)
 	ctx := t.Context()
 	eng, err := boot(ctx, bootConfig{
 		DataDir: dataDir, Engine: "postgres",
@@ -305,7 +307,7 @@ func roleDSNKeepUser(t *testing.T, super, dbName string) string {
 func stampVersion(t *testing.T) {
 	t.Helper()
 	prev := version
-	version = "26.9.0"
+	version = "26.900"
 	t.Cleanup(func() { version = prev })
 }
 
@@ -343,7 +345,7 @@ func TestDRPostgresRoundTripAcrossBothPostures(t *testing.T) {
 			src.seed(t, dataDir)
 			args := append([]string{"backup", "--data-dir", dataDir}, src.drArgs()...)
 			args = append(args, "--pg-dump", src.bin("pg_dump"), "--out", bundle, "--passphrase-file", pf)
-			if out, err := runDR(args...); err != nil {
+			if out, err := runDR(t, args...); err != nil {
 				t.Fatalf("dr backup in the %s posture failed: %v\n%s", postureName(split), err, out)
 			}
 
@@ -354,7 +356,7 @@ func TestDRPostgresRoundTripAcrossBothPostures(t *testing.T) {
 			restoreDir := t.TempDir()
 			rargs := append([]string{"restore", "--data-dir", restoreDir}, dst.drArgs()...)
 			rargs = append(rargs, "--pg-restore", dst.bin("pg_restore"), "--in", bundle, "--passphrase-file", pf)
-			out, err := runDR(rargs...)
+			out, err := runDR(t, rargs...)
 			if err != nil {
 				t.Fatalf("dr restore into an EMPTY %s target failed: %v\n%s", postureName(split), err, out)
 			}
@@ -428,7 +430,7 @@ func TestDRRestorePostgresRefusesAWrongRoleBEFOREItWrites(t *testing.T) {
 	pf := passphraseFile(t)
 	args := append([]string{"backup", "--data-dir", dataDir}, src.drArgs()...)
 	args = append(args, "--pg-dump", src.bin("pg_dump"), "--out", bundle, "--passphrase-file", pf)
-	if out, err := runDR(args...); err != nil {
+	if out, err := runDR(t, args...); err != nil {
 		t.Fatalf("fixture backup failed: %v\n%s", err, out)
 	}
 
@@ -466,7 +468,7 @@ func TestDRRestorePostgresRefusesAWrongRoleBEFOREItWrites(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			dst := newPGSplitFixture(t, "wrdst", true)
 			restoreDir := t.TempDir()
-			out, err := runDR("restore", "--engine", "postgres",
+			out, err := runDR(t, "restore", "--engine", "postgres",
 				"--dsn", tc.dsn(dst), "--owner-dsn", tc.owner(dst), "--admin-dsn", dst.adminDSN,
 				"--data-dir", restoreDir, "--pg-restore", dst.bin("pg_restore"),
 				"--in", bundle, "--passphrase-file", pf)
@@ -523,7 +525,7 @@ func TestDRRestorePostgresRefusesMISMATCHEDTargets(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := runDR("restore", "--engine", "postgres",
+			_, err := runDR(t, "restore", "--engine", "postgres",
 				"--dsn", tc.dsn, "--owner-dsn", tc.ownerDSN, "--admin-dsn", tc.adminDSN,
 				"--data-dir", t.TempDir(), "--in", bundle, "--passphrase-file", pf)
 			if err == nil {
@@ -560,16 +562,17 @@ func TestDRBackupPostgresInTheSplitNamesTheOwnerFlag(t *testing.T) {
 	// deploy/postgres/backup/pg-dump.sh and the Helm CronJob both produce the dump
 	// in a separate step (a postgres-client container; the engine image is
 	// distroless and has no pg_dump) and hand it to `dr backup` exactly like this.
-	// It is also what keeps this cell measuring the AUTHORITY refusal instead of
-	// whichever pg_dump happens to be installed.
+	// Archive classification runs before authority preflight, so use a real dump
+	// and the fixture's matched clients to reach the missing-owner refusal.
 	snap := filepath.Join(t.TempDir(), "dump.pgcustom")
-	if err := os.WriteFile(snap, []byte("fixture dump bytes"), 0o600); err != nil {
-		t.Fatal(err)
+	if err := runPgDump(t.Context(), src.bin("pg_dump"), src.adminDSN, snap); err != nil {
+		t.Fatalf("create the supplied snapshot: %v", err)
 	}
-	_, err := runDR("backup", "--data-dir", dataDir, "--engine", "postgres",
+	bundle := filepath.Join(t.TempDir(), "b.drbundle")
+	_, err := runDR(t, "backup", "--data-dir", dataDir, "--engine", "postgres",
 		"--dsn", src.appDSN, "--admin-dsn", src.adminDSN,
-		"--snapshot-file", snap,
-		"--out", filepath.Join(t.TempDir(), "b.drbundle"), "--passphrase-file", pf)
+		"--snapshot-file", snap, "--pg-dump", src.bin("pg_dump"),
+		"--out", bundle, "--passphrase-file", pf)
 	if err == nil {
 		t.Fatal("a backup in the owner/app split without --owner-dsn was accepted")
 	}
@@ -580,6 +583,9 @@ func TestDRBackupPostgresInTheSplitNamesTheOwnerFlag(t *testing.T) {
 	}
 	if strings.Contains(err.Error(), "olv_k3p_epoch") {
 		t.Fatalf("the operator still gets the raw contract-probe error: %v", err)
+	}
+	if _, err := os.Stat(bundle); !os.IsNotExist(err) {
+		t.Fatalf("the refused backup published a bundle: %v", err)
 	}
 }
 
@@ -616,7 +622,7 @@ func TestDRRestorePITRCompanionNeedsTheOwnerPoolAtBOOT(t *testing.T) {
 	args := append([]string{"backup", "--data-dir", srcDir}, est.drArgs()...)
 	args = append(args, "--pitr-ref", "s3://wal-archive/olivares/2026-09-07T00:00:00Z",
 		"--out", bundle, "--passphrase-file", pf)
-	if out, err := runDR(args...); err != nil {
+	if out, err := runDR(t, args...); err != nil {
 		t.Fatalf("PITR companion backup failed: %v\n%s", err, out)
 	}
 
@@ -630,7 +636,7 @@ func TestDRRestorePITRCompanionNeedsTheOwnerPoolAtBOOT(t *testing.T) {
 		a := append([]string{"restore", "--engine", "postgres", "--data-dir", t.TempDir(),
 			"--dsn", est.appDSN, "--admin-dsn", est.adminDSN,
 			"--in", bundle, "--passphrase-file", pf}, decl...)
-		_, err := runDR(a...)
+		_, err := runDR(t, a...)
 		if err == nil {
 			t.Fatal("a PITR restore into a split estate was accepted with no owner pool")
 		}
@@ -644,7 +650,7 @@ func TestDRRestorePITRCompanionNeedsTheOwnerPoolAtBOOT(t *testing.T) {
 		a := append([]string{"restore", "--engine", "postgres", "--data-dir", dstDir,
 			"--dsn", est.appDSN, "--owner-dsn", est.ownerDSN, "--admin-dsn", est.adminDSN,
 			"--in", bundle, "--passphrase-file", pf}, decl...)
-		out, err := runDR(a...)
+		out, err := runDR(t, a...)
 		if err != nil {
 			t.Fatalf("PITR companion restore into the split estate failed: %v\n%s", err, out)
 		}
@@ -737,7 +743,7 @@ func TestDRRestoreRefusesAReadOnlyDDLPoolBeforeAnyEffect(t *testing.T) {
 	bundle := filepath.Join(t.TempDir(), "b.drbundle")
 	args := append([]string{"backup", "--data-dir", dataDir}, src.drArgs()...)
 	args = append(args, "--pg-dump", src.bin("pg_dump"), "--out", bundle, "--passphrase-file", pf)
-	if out, err := runDR(args...); err != nil {
+	if out, err := runDR(t, args...); err != nil {
 		t.Fatalf("fixture backup failed: %v\n%s", err, out)
 	}
 
@@ -749,7 +755,7 @@ func TestDRRestoreRefusesAReadOnlyDDLPoolBeforeAnyEffect(t *testing.T) {
 	restoreDir := t.TempDir()
 	rargs := append([]string{"restore", "--data-dir", restoreDir}, dst.drArgs()...)
 	rargs = append(rargs, "--pg-restore", dst.bin("pg_restore"), "--in", bundle, "--passphrase-file", pf)
-	out, err := runDR(rargs...)
+	out, err := runDR(t, rargs...)
 	if err == nil {
 		t.Fatalf("a restore whose DDL pool cannot execute one statement of DDL was ACCEPTED:\n%s", out)
 	}
@@ -946,7 +952,7 @@ func TestDRRestoreRefusesAReadOnlyAPPPoolBeforeAnyEffect(t *testing.T) {
 	bundle := filepath.Join(t.TempDir(), "b.drbundle")
 	args := append([]string{"backup", "--data-dir", dataDir}, src.drArgs()...)
 	args = append(args, "--pg-dump", src.bin("pg_dump"), "--out", bundle, "--passphrase-file", pf)
-	if out, err := runDR(args...); err != nil {
+	if out, err := runDR(t, args...); err != nil {
 		t.Fatalf("fixture backup failed: %v\n%s", err, out)
 	}
 
@@ -959,7 +965,7 @@ func TestDRRestoreRefusesAReadOnlyAPPPoolBeforeAnyEffect(t *testing.T) {
 	restoreDir := t.TempDir()
 	rargs := append([]string{"restore", "--data-dir", restoreDir}, dst.drArgs()...)
 	rargs = append(rargs, "--pg-restore", dst.bin("pg_restore"), "--in", bundle, "--passphrase-file", pf)
-	out, err := runDR(rargs...)
+	out, err := runDR(t, rargs...)
 	if err == nil {
 		t.Fatalf("a restore whose APPLICATION pool cannot write was accepted; it would seal no declaration:\n%s", out)
 	}

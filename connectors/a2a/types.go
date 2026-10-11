@@ -5,10 +5,9 @@ package a2a
 
 import (
 	"encoding/json"
+	"github.com/olivaresai/olivares/connectors/internal/redact"
 	"sort"
 	"strings"
-
-	"github.com/olivaresai/olivares/connectors/internal/redact"
 )
 
 // AgentCard is the governance-relevant subset of an A2A v1.0 Agent Card. The full

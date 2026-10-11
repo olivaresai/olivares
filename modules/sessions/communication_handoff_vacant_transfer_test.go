@@ -566,7 +566,7 @@ func writeDurableAcceptedHandoff(
 	}
 	clock.set(at)
 	ackID := model.NewID()
-	return fixture.m.data.Mutate(ctx, fixture.tenant, func(sc store.Scope) error {
+	return fixture.m.Data.Mutate(ctx, fixture.tenant, func(sc store.Scope) error {
 		deliveries, err := sc.Ext(messageDeliveryKind)
 		if err != nil {
 			return err

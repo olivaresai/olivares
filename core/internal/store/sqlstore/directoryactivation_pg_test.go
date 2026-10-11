@@ -118,7 +118,7 @@ func TestDirectoryActivationPostgresSingleAndSplit(t *testing.T) {
 			legacyTarget := mustCreateAgent(t, raw, tenant, "before activation")
 			cached, _, err := raw.(store.DirectoryStatuser).DirectoryStatus(ctx)
 			if err != nil || cached.ControlMode != store.DirectoryControlStaged ||
-				cached.ExpectedGeneration != 1 || cached.WriterPosture != tc.posture || cached.Enabled {
+				cached.ExpectedGeneration != 1 || cached.WriterPosture != tc.posture || cached.Enabled { //nolint:staticcheck // SA1019: pins the deprecated field's published false until removal
 				t.Fatalf("cached status = %+v err=%v", cached, err)
 			}
 
@@ -126,7 +126,7 @@ func TestDirectoryActivationPostgresSingleAndSplit(t *testing.T) {
 			if err != nil {
 				t.Fatalf("ActivateDirectoryWriter: %v", err)
 			}
-			if !changed || !before.EpochCoverageComplete || before.InventoryOrgCount != 2 || after.Enabled ||
+			if !changed || !before.EpochCoverageComplete || before.InventoryOrgCount != 2 || after.Enabled || //nolint:staticcheck // SA1019: pins the deprecated field's published false until removal
 				after.ControlMode != store.DirectoryControlEnforced ||
 				after.ExpectedGeneration != 2 || after.WriterPosture != tc.posture {
 				t.Fatalf("activation before=%+v after=%+v changed=%t", before, after, changed)
@@ -163,7 +163,7 @@ WHERE id = $1 AND tenant_id = $2`, legacyTarget.ID.String(), tenant.String())
 			directoryWriterTestWantPostgresGenerationBaseline(t, raw.(*sqlStore).db)
 
 			_, retryAfter, retryChanged, err := ActivateDirectoryWriter(ctx, raw, cfg, 1)
-			if err != nil || retryChanged || retryAfter.ExpectedGeneration != 2 || retryAfter.Enabled {
+			if err != nil || retryChanged || retryAfter.ExpectedGeneration != 2 || retryAfter.Enabled { //nolint:staticcheck // SA1019: pins the deprecated field's published false until removal
 				t.Fatalf("activation retry after=%+v changed=%t err=%v",
 					retryAfter, retryChanged, err)
 			}
@@ -176,7 +176,7 @@ WHERE id = $1 AND tenant_id = $2`, legacyTarget.ID.String(), tenant.String())
 			}
 			defer reopened.Close() //nolint:errcheck
 			status, _, err := reopened.(store.DirectoryStatuser).DirectoryStatus(ctx)
-			if err != nil || status.Enabled || status.ControlMode != store.DirectoryControlEnforced ||
+			if err != nil || status.Enabled || status.ControlMode != store.DirectoryControlEnforced || //nolint:staticcheck // SA1019: pins the deprecated field's published false until removal
 				status.ExpectedGeneration != 2 || status.WriterPosture != tc.posture ||
 				!status.EpochCoverageComplete {
 				t.Fatalf("reopened status = %+v err=%v", status, err)

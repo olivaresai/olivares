@@ -6,15 +6,15 @@ import type { HTMLAttributes } from 'react'
 import { cn } from '@/lib/utils'
 
 /**
- * Badge — the subtle-fill status/label chip. Each semantic variant is text =
+ * Badge — the compatible boxed fact label. States use StatusChip. Each semantic variant is text =
  * semantic color, bg = the semantic soft fill, border = the semantic line, so ≤2
  * colors show per row and the table stays calm. Counts/ids inside should use mono
- * tabular-nums. Specialized product badges (status / access mode / R-RW confidence)
- * compose this in components/data so they can localize their labels.
+ * tabular-nums. Access-mode and R/RW confidence badges compose this in components/data
+ * so they can localize their labels; status badges compose StatusChip instead.
  */
 const badgeVariants = cva(
   cn(
-    'inline-flex items-center gap-1 rounded-sm border px-1.5 py-0.5',
+    'inline-flex items-center gap-1 rounded-[6px] border px-1.5 py-0.5',
     'text-caption font-medium leading-none whitespace-nowrap',
   ),
   {

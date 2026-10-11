@@ -107,3 +107,56 @@ describe('ConfirmDialog (privileged-action gate)', () => {
     expect(onConfirm, witness).not.toHaveBeenCalled()
   })
 })
+
+// A disabled confirm says why, in visible text the button points at. Approve on
+// /permissions is this button: it was disabled with a spinner and no reason.
+describe('ConfirmDialog — a disabled confirm says why', () => {
+  it('while pending, says the action is running', () => {
+    render(
+      <ConfirmDialog
+        open
+        onOpenChange={noop}
+        title="Approve this request?"
+        confirmLabel="Approve"
+        pending
+        onConfirm={noop}
+      />,
+    )
+    const approve = screen.getByRole('button', { name: /approve/i })
+    expect(approve).toBeDisabled()
+    expect(approve).toHaveAccessibleDescription('Working…')
+    // Visible, not a screen-reader-only node: it is the reason sighted operators read.
+    expect(screen.getByRole('status')).not.toHaveClass('sr-only')
+    expect(
+      screen.getByRole('button', { name: /cancel/i }),
+    ).toHaveAccessibleDescription('Working…')
+  })
+
+  it('until the phrase is typed, points at the phrase it needs', async () => {
+    render(
+      <ConfirmDialog
+        open
+        onOpenChange={noop}
+        title="Rollback"
+        confirmPhrase="ROLLBACK"
+        onConfirm={noop}
+      />,
+    )
+    const confirm = screen.getByRole('button', { name: /^confirm$/i })
+    expect(confirm).toHaveAccessibleDescription('Type ROLLBACK to confirm')
+    await userEvent.type(
+      screen.getByLabelText(/confirmation phrase/i),
+      'ROLLBACK',
+    )
+    expect(confirm).not.toHaveAttribute('aria-describedby')
+  })
+
+  it('while it can act, carries no reason', () => {
+    render(
+      <ConfirmDialog open onOpenChange={noop} title="X" onConfirm={noop} />,
+    )
+    expect(
+      screen.getByRole('button', { name: /^confirm$/i }),
+    ).not.toHaveAttribute('aria-describedby')
+  })
+})

@@ -36,7 +36,7 @@ fi
 # the script always dies later — the verdict is leg 1's own OK line, not the exit code.
 leg1_verdict() {
   printf '%s\n' '#!/bin/sh' 'case "$1" in' "  version) echo \"$1\";;" \
-    '  --version) echo "olivares version 26.8.0";;' '  *) exit 9;;' 'esac' > "${WORK}/fake"
+    '  --version) echo "olivares version 1.0";;' '  *) exit 9;;' 'esac' > "${WORK}/fake"
   chmod +x "${WORK}/fake"
   # No pipeline here, on purpose. Under `set -o pipefail` a `bash smoke | grep -q` reports the
   # SMOKE's status, not grep's match, and the smoke always dies later on the stub's missing
@@ -58,21 +58,21 @@ check() { # <what> <expected> <version string>
 echo "release-smoke stamp leg — cases:"
 # Accepts what the pipeline actually produces. Without this the whole battery is satisfiable
 # by a leg that rejects everything, which would be a green battery over a dead release.
-check "a real stamp is accepted"                accepted 'olivares 26.8.0 (commit 47b745890, built 2026-08-31T02:20:22Z)'
-check "a real stamp, date-only form"            accepted 'olivares 26.8.0 (commit 47b745890, built 2026-08-31)'
-check "long sha is accepted"                    accepted 'olivares 26.8.0 (commit 47b7458905250fb7dd56, built 2026-08-31T02:20:22Z)'
+check "a real stamp is accepted"                accepted 'olivares 1.0 (commit 47b745890, built 2026-08-31T02:20:22Z)'
+check "a real stamp, date-only form"            accepted 'olivares 1.0 (commit 47b745890, built 2026-08-31)'
+check "long sha is accepted"                    accepted 'olivares 1.0 (commit 47b7458905250fb7dd56, built 2026-08-31T02:20:22Z)'
 # The ldflags-less build: the three defaults of cmd/olivares/main.go:36-38.
 check "unstamped build (all three defaults)"    rejected 'olivares dev (commit none, built unknown)'
-check "commit none"                             rejected 'olivares 26.8.0 (commit none, built 2026-08-31T02:20:22Z)'
-check "built unknown"                           rejected 'olivares 26.8.0 (commit 47b745890, built unknown)'
+check "commit none"                             rejected 'olivares 1.0 (commit none, built 2026-08-31T02:20:22Z)'
+check "built unknown"                           rejected 'olivares 1.0 (commit 47b745890, built unknown)'
 # The ldflags run whose template resolved to nothing. These are what the literal-string checks
 # missed; each one alone is a binary the old leg called traceable.
-check "empty date"                              rejected 'olivares 26.8.0 (commit 47b745890, built )'
-check "empty commit"                            rejected 'olivares 26.8.0 (commit , built 2026-08-31T02:20:22Z)'
-check "both empty"                              rejected 'olivares 26.8.0 (commit , built )'
-check "Go zero time (measured on the export)"   rejected 'olivares 26.8.0 (commit 47b745890, built 0001-01-01T00:00:00Z)'
-check "unexpanded goreleaser template"          rejected 'olivares 26.8.0 (commit {{.ShortCommit}}, built 2026-08-31T02:20:22Z)'
-check "a word where a date belongs"             rejected 'olivares 26.8.0 (commit 47b745890, built yesterday)'
+check "empty date"                              rejected 'olivares 1.0 (commit 47b745890, built )'
+check "empty commit"                            rejected 'olivares 1.0 (commit , built 2026-08-31T02:20:22Z)'
+check "both empty"                              rejected 'olivares 1.0 (commit , built )'
+check "Go zero time (measured on the export)"   rejected 'olivares 1.0 (commit 47b745890, built 0001-01-01T00:00:00Z)'
+check "unexpanded goreleaser template"          rejected 'olivares 1.0 (commit {{.ShortCommit}}, built 2026-08-31T02:20:22Z)'
+check "a word where a date belongs"             rejected 'olivares 1.0 (commit 47b745890, built yesterday)'
 
 echo
 echo "release-smoke-stamp: ${pass} passed, ${fail} failed"

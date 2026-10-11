@@ -31,38 +31,9 @@ EOF
 	cat >"$TMP/tree/design/ARTEFACTOS-POR-PACK-2026-08-08.md" <<'EOF'
 preserved_on_every_lapse. ningún seam retirado por tag puede cambiar el CONTRATO DE ARRANQUE.
 EOF
-	# 51 constructors, one fmt.Errorf, CAEP error tuple + nil,nil.
-	#
-	# The pin lives in three places: JSON, the guard script, and this throwaway
-	# fixture. Moving it is three deliberate edits. Count = 46 audited (44 generic
-	# + the two GO-block seams) plus the NAMED post-audit constructors in the JSON;
-	# the guard looks each name up in the wire, not only the number. A new seam is
-	# added here by name, not by raising the generic 44 loop. 2026-09-13: the fifth
-	# named post-audit seam is loginEnforcementComponentLinked, a bare bool false
-	# predicate (51 = 46 + 5). The boot invariant stays open.
-	{
-		echo 'package main'
-		i=1
-		while [ "$i" -le 44 ]; do
-			printf 'func seam%02d() {}\n' "$i"
-			i=$((i + 1))
-		done
-		cat <<'GO'
-func newDurableBus() (any, error) {
-	return nil, fmt.Errorf("community durable bus")
-}
-func newCAEPTransmitter() (caepTransmitter, error) {
-	return nil, nil
-}
-func editionModuleRegistrars(_ EditionConfig) []api.Module { return nil }
-func editionAgentServers() []editionAuxServer { return nil }
-func editionWebFS(base fs.FS) fs.FS { return base }
-func editionBindModuleDependencies(context.Context, EditionConfig, []api.Module, EditionDependencies, *slog.Logger) ([]io.Closer, error) {
-	return nil, nil
-}
-func loginEnforcementComponentLinked() bool { return false }
-GO
-	} >"$TMP/tree/cmd/olivares/wire_noenterprise.go"
+	# Since #149 the seams are the fields of one editionPorts value: the battery
+	# stages the live port declaration and the live Community wire and mutates them.
+	cp "$ROOT/cmd/olivares/edition_ports.go" "$ROOT/cmd/olivares/wire_noenterprise.go" "$TMP/tree/cmd/olivares/"
 }
 
 run() {
@@ -73,167 +44,111 @@ run() {
 	return 0
 }
 
-stage
-run
-if [ "$(cat "$TMP/rc")" = 0 ]; then
-	ok "no-fire: pinned open audit is CLEAN"
-else
-	bad "untouched tree should be CLEAN ($(cat "$TMP/rc") $(cat "$TMP/err"))"
-fi
-
-stage
-python3 - "$TMP/tree/design/c02-12-boot-seams.json" <<'PY'
-import json, sys
-p = sys.argv[1]
-d = json.load(open(p, encoding="utf-8"))
-d["invariant_closed"] = True
-json.dump(d, open(p, "w", encoding="utf-8"))
-PY
-run
-if [ "$(cat "$TMP/rc")" = 1 ]; then
-	ok "firing: invariant_closed true is FAIL"
-else
-	bad "invariant_closed true should FAIL 1 ($(cat "$TMP/rc") $(cat "$TMP/err"))"
-fi
-
-stage
-python3 - "$TMP/tree/design/c02-12-boot-seams.json" <<'PY'
-import json, sys
-p = sys.argv[1]
-d = json.load(open(p, encoding="utf-8"))
-d["constructors"] = 44
-json.dump(d, open(p, "w", encoding="utf-8"))
-PY
-run
-if [ "$(cat "$TMP/rc")" = 1 ]; then
-	ok "firing: claiming 44 constructors is FAIL"
-else
-	bad "constructors 44 should FAIL 1 ($(cat "$TMP/rc") $(cat "$TMP/err"))"
-fi
-
-stage
-python3 - "$TMP/tree/design/c02-12-boot-seams.json" <<'PY'
-import json, sys
-p = sys.argv[1]
-d = json.load(open(p, encoding="utf-8"))
-d["boot_aborting"] = []
-d["boot_aborting_count"] = 0
-json.dump(d, open(p, "w", encoding="utf-8"))
-PY
-run
-if [ "$(cat "$TMP/rc")" = 1 ]; then
-	ok "firing: hiding newDurableBus abort is FAIL"
-else
-	bad "empty boot_aborting should FAIL 1 ($(cat "$TMP/rc") $(cat "$TMP/err"))"
-fi
-
-stage
-python3 - "$TMP/tree/cmd/olivares/wire_noenterprise.go" <<'PY'
+# mutate FILE OLD NEW replaces the first OLD and stops the battery when OLD is absent,
+# so a mutant that silently stopped applying cannot pass as a kill.
+mutate() {
+	python3 -c '
 import sys
-p = sys.argv[1]
-t = open(p, encoding="utf-8").read().replace("return nil, fmt.Errorf(\"community durable bus\")", "return nil, nil")
-open(p, "w", encoding="utf-8").write(t)
-PY
+p, old, new = sys.argv[1], sys.argv[2], sys.argv[3]
+t = open(p, encoding="utf-8").read()
+if old not in t:
+    raise SystemExit("mutant target moved: %r" % old)
+open(p, "w", encoding="utf-8").write(t.replace(old, new, 1))
+' "$@"
+}
+
+# json_set CODE runs CODE with the staged JSON bound to d, then writes it back.
+json_set() {
+	python3 -c '
+import json, sys
+p, code = sys.argv[1], sys.argv[2]
+d = json.load(open(p, encoding="utf-8"))
+exec(code)
+json.dump(d, open(p, "w", encoding="utf-8"))
+' "$TMP/tree/design/c02-12-boot-seams.json" "$1"
+}
+
+# expect NAME RC [MESSAGE]
+expect() {
+	if [ "$(cat "$TMP/rc")" = "$2" ] && { [ -z "${3:-}" ] || grep -qF "$3" "$TMP/err"; }; then
+		ok "$1"
+	else
+		bad "$1 (want rc $2${3:+ and '$3'}; got $(cat "$TMP/rc") $(cat "$TMP/err"))"
+	fi
+}
+
+WIRE_T="$TMP/tree/cmd/olivares/wire_noenterprise.go"
+PORTS_T="$TMP/tree/cmd/olivares/edition_ports.go"
+
+stage
 run
-if [ "$(cat "$TMP/rc")" = 1 ]; then
-	ok "firing: dropping the fmt.Errorf return is FAIL"
-else
-	bad "dropped fmt.Errorf should FAIL 1 ($(cat "$TMP/rc") $(cat "$TMP/err"))"
-fi
+expect "no-fire: pinned open audit is CLEAN" 0
+
+stage
+json_set 'd["invariant_closed"] = True'
+run
+expect "firing: invariant_closed true is FAIL" 1
+
+stage
+json_set 'd["constructors"] = 44'
+run
+expect "firing: claiming 44 constructors is FAIL" 1
+
+stage
+json_set 'd["boot_aborting"] = []; d["boot_aborting_count"] = 0'
+run
+expect "firing: hiding the durableBus abort is FAIL" 1
+
+stage
+mutate "$WIRE_T" 'return nil, fmt.Errorf(' '_ = fmt.Sprintf('
+run
+expect "firing: dropping the fmt.Errorf return is FAIL" 1
 
 stage
 echo 'invariant closed' >>"$TMP/tree/design/C02-12-BOOT-SEAMS-2026-08-19.md"
 run
-if [ "$(cat "$TMP/rc")" = 1 ]; then
-	ok "firing: doc claiming invariant closed is FAIL"
-else
-	bad "false close should FAIL 1 ($(cat "$TMP/rc") $(cat "$TMP/err"))"
-fi
+expect "firing: doc claiming invariant closed is FAIL" 1
 
-# Causal negative controls for the 2026-09-06 failure class: the WIRE moves and the
-# evidence does not (an unaccounted constructor), a seam the evidence names is gone while
-# the count survives, a count that names one seam fewer than it claims, and the pinned
-# abort migrating from newDurableBus into a post-audit seam with the file-level error
-# count unchanged. Each asserts the message of the check that must fire, so a red for
-# another reason does not pass as this one.
+# Causal negative controls for the 2026-09-06 failure class, on the port struct: an
+# unaccounted port, a named seam gone while the count survives, a count that names one
+# seam fewer than it claims, and the pinned abort migrating into a post-audit seam with
+# the file-level error count unchanged. Each asserts the message of the check that must
+# fire, so a red for another reason does not pass as this one.
 stage
-printf 'func seamUnaccounted() {}\n' >>"$TMP/tree/cmd/olivares/wire_noenterprise.go"
+mutate "$PORTS_T" $'\tagentServers ' $'\tunaccounted editionPort[any]\n\tagentServers '
 run
-if [ "$(cat "$TMP/rc")" = 1 ] && grep -q 'live constructor count 52 != pinned 51' "$TMP/err"; then
-	ok "firing: an unaccounted constructor in the wire is FAIL on the count"
-else
-	bad "unaccounted constructor should FAIL 1 on the count ($(cat "$TMP/rc") $(cat "$TMP/err"))"
-fi
+expect "firing: an unaccounted port is FAIL on the count" 1 'live port count 58 != pinned 57'
 
 stage
-python3 - "$TMP/tree/cmd/olivares/wire_noenterprise.go" <<'PY'
-import sys
-p = sys.argv[1]
-t = open(p, encoding="utf-8").read().replace("func editionBindModuleDependencies(", "func editionRenamedSeam(")
-open(p, "w", encoding="utf-8").write(t)
-PY
+mutate "$PORTS_T" $'\tbindModuleDependencies ' $'\trenamedBinding '
 run
-if [ "$(cat "$TMP/rc")" = 1 ] && grep -q 'wire lost editionBindModuleDependencies' "$TMP/err"; then
-	ok "firing: a named post-audit seam missing at the pinned count is FAIL by name"
-else
-	bad "missing named seam should FAIL 1 by name ($(cat "$TMP/rc") $(cat "$TMP/err"))"
-fi
+expect "firing: a named post-audit port missing at the pinned count is FAIL by name" 1 'edition ports lost bindModuleDependencies'
 
 stage
-python3 - "$TMP/tree/cmd/olivares/wire_noenterprise.go" <<'PY'
-import sys
-p = sys.argv[1]
-t = open(p, encoding="utf-8").read().replace("func loginEnforcementComponentLinked(", "func loginEnforcementRenamedPredicate(")
-open(p, "w", encoding="utf-8").write(t)
-PY
+mutate "$PORTS_T" $'\tloginEnforcementLinked ' $'\tloginRenamedPredicate '
 run
-if [ "$(cat "$TMP/rc")" = 1 ] && grep -q 'wire lost loginEnforcementComponentLinked' "$TMP/err"; then
-	ok "firing: the named login-enforcement predicate missing at the pinned count is FAIL by name"
-else
-	bad "missing login-enforcement predicate should FAIL 1 by name ($(cat "$TMP/rc") $(cat "$TMP/err"))"
-fi
+expect "firing: the named login-enforcement port missing is FAIL by name" 1 'edition ports lost loginEnforcementLinked'
 
 stage
-python3 - "$TMP/tree/design/c02-12-boot-seams.json" <<'PY'
-import json, sys
-p = sys.argv[1]
-d = json.load(open(p, encoding="utf-8"))
-d["post_audit_constructors"].remove("editionBindModuleDependencies")
-json.dump(d, open(p, "w", encoding="utf-8"))
-PY
+json_set 'd["post_audit_constructors"].remove("bindModuleDependencies")'
 run
-if [ "$(cat "$TMP/rc")" = 1 ] && grep -q 'constructors 51 != audited 46 + 4 post-audit seams' "$TMP/err"; then
-	ok "firing: a count that names one seam fewer is FAIL on the arithmetic"
-else
-	bad "unnamed count should FAIL 1 on the arithmetic ($(cat "$TMP/rc") $(cat "$TMP/err"))"
-fi
+expect "firing: a count that names one seam fewer is FAIL on the arithmetic" 1 'constructors 51 != audited 46 + 4 post-audit seams'
 
 stage
-python3 - "$TMP/tree/cmd/olivares/wire_noenterprise.go" <<'PY'
-import sys
-w = sys.argv[1]
-t = open(w, encoding="utf-8").read()
-t = t.replace("return nil, fmt.Errorf(\"community durable bus\")", "return nil, nil")
-t = t.replace(
-    "EditionDependencies, *slog.Logger) ([]io.Closer, error) {\n\treturn nil, nil",
-    "EditionDependencies, *slog.Logger) ([]io.Closer, error) {\n\treturn nil, fmt.Errorf(\"edition bind\")")
-open(w, "w", encoding="utf-8").write(t)
-PY
+mutate "$WIRE_T" 'return nil, fmt.Errorf(' 'return nil, errors.New('
+mutate "$WIRE_T" 'return []api.Module{sessioncockpit.NewPlaceholder()}' 'return nil, fmt.Errorf("edition mount")'
 run
-if [ "$(cat "$TMP/rc")" = 1 ] && grep -q 'editionBindModuleDependencies must not abort boot' "$TMP/err"; then
-	ok "firing: the pinned abort migrating into a post-audit seam is FAIL by name"
-else
-	bad "abort migrated into a post-audit seam should FAIL 1 by name ($(cat "$TMP/rc") $(cat "$TMP/err"))"
-fi
+expect "firing: the pinned abort migrating into a post-audit seam is FAIL by name" 1 'moduleRegistrars must not abort boot'
+
+stage
+mutate "$WIRE_T" $'\t\tname: "community",\n' $'\t\tname: "community",\n\t\tcaepTransmitter: nil,\n'
+run
+expect "firing: Community filling the CAEP port is FAIL" 1 'Community fills caepTransmitter'
 
 stage
 rm -f "$TMP/tree/design/c02-12-boot-seams.json"
 run
-if [ "$(cat "$TMP/rc")" = 2 ]; then
-	ok "missing JSON is LOOK (2)"
-else
-	bad "missing JSON should LOOK 2 ($(cat "$TMP/rc") $(cat "$TMP/err"))"
-fi
+expect "missing JSON is LOOK (2)" 2
 
 if OLIVARES_ROOT="$ROOT" bash "$CHECK" >/dev/null 2>"$TMP/err"; then
 	ok "no-fire: live checkout stays CLEAN"

@@ -14,11 +14,11 @@ Betreiber vom „Soll ich dieses Release einspielen?“ bis zum „Ich brauche d
 Version zurück“.
 
 :::caution[Zuerst sichern]
-Erstellen Sie vor jedem Upgrade ein Backup, auch wenn es routinemäßig aussieht. Sowohl
-die Konsole unter **Backups** (`/backups`) als auch
-[Sichern und wiederherstellen](/de/how-to/backup-and-restore/) erledigen das. Nichts auf
-dieser Seite setzt ein Backup voraus — und spätestens bei der einen unerwarteten
-Überraschung werden Sie eines haben wollen.
+Erstellen Sie vor jedem Upgrade mit `dr backup` des installierten Releases ein DR-Backup.
+Die Konsole unter **Backups** (`/backups`) und [Sichern und wiederherstellen](/de/how-to/backup-and-restore/)
+beschreiben das Verfahren. **Nach einer Schemaerhöhung sind das Backup von vor dem Upgrade
+und seine private Passphrase oder sein KEK für die Rückkehr zum vorigen Release erforderlich.**
+`olivares upgrade` sichert die ausführbare Datei, nicht die Datenbank.
 :::
 
 ## Welcher Upgrade-Pfad ist Ihrer?
@@ -52,9 +52,11 @@ installierte Version und können daher nicht ausgewertet werden. Der Befehl verw
 den Vorgang, statt zu raten. Geben Sie die bekannte Version an; dann bleiben die
 Schutzmechanismen aktiv:
 
+<!-- release -->
 ```sh
-olivares upgrade --check --current-version 26.10.1
+olivares upgrade --check --current-version 0.1
 ```
+<!-- /release -->
 
 ## Release-Channels
 
@@ -123,6 +125,9 @@ Der Befehl führt der Reihe nach folgende Schritte aus:
 Fügen Sie `--yes` hinzu, wenn ein Skript den Vorgang steuert und niemand die
 Bestätigungsfrage beantworten kann.
 
+Der automatische Rollback in Schritt 4 prüft `version`, nicht den Dienststart oder die
+Datenbankkompatibilität. Er stellt keinen beim nächsten Neustart migrierten Store wieder her.
+
 :::note[Kein Hot-Patching]
 Ein Go-Binary wird nicht im laufenden Prozess gepatcht. „Zero Downtime“ bedeutet hier
 Graceful Drain und Übergabe oder einen Rolling Restart — niemals einen In-Process-Patch.
@@ -136,29 +141,12 @@ Eine Air-Gap-Bereitstellung erreicht niemals einen Update-Host. Übertragen Sie 
 Bundle mit einem bereits vertrauenswürdigen Verfahren und installieren Sie es aus der
 lokalen Datei. Die Verifikation ist identisch, denn dem Netzwerk wurde nie vertraut.
 
-**Die Installation aus einem Bundle benötigt eine aktive Lizenz auf dem System.**
-Sie wird offline gegen den in Ihrem Binary eingebetteten Lizenzschlüssel geprüft. Es
-erfolgt kein Aufruf, daher funktioniert das hinter dem Air Gap. Falls Sie Ihre Lizenz noch
-nicht auf dem System installiert haben, finden Sie die Schritte auf der Seite
-[Eine Lizenz installieren und zu Enterprise wechseln](/de/how-to/install-a-license/).
-`--check` ist nicht
-gegatet; Sie können ein Bundle vor jedem Staging verifizieren:
+Offline-Installation erfordert Enterprise. Community prüft ein Bundle mit `--bundle --check`, ohne eine Lizenz zu lesen oder es zu installieren.
 
 ```sh
-olivares upgrade --bundle ./olivares-release.tar.gz --check   # verify only; no license read
-olivares upgrade --bundle ./olivares-release.tar.gz --yes     # install; needs a live license
+olivares upgrade --bundle ./olivares-release.tar.gz --check
 ```
 
-Enthält Ihr Build keinen eingebetteten Release-Schlüssel oder spiegeln Sie Releases
-unter Ihrem eigenen Signierschlüssel, verweisen Sie auf den Schlüssel, gegen den
-verifiziert werden soll:
-
-```sh
-olivares upgrade --bundle ./olivares-release.tar.gz --pubkey @/etc/olivares/release.pub
-```
-
-[Air-Gap-Installation](/de/how-to/air-gap-install/) beschreibt, wie das Bundle erzeugt
-und übertragen wird.
 
 ## Gestaffelter Rollout und unbeaufsichtigte Prüfungen
 
@@ -199,27 +187,51 @@ der Engine aus [Mit Prometheus überwachen](/de/how-to/monitor-with-prometheus/)
 
 ## Rollback
 
-Das vorige Binary bleibt neben seinem Ersatz erhalten, und der Befehl gibt beim
-Austausch den Pfad aus. Für den Rollback stellen Sie diese Datei wieder her und starten
-den Dienst neu.
+Die vorige ausführbare Datei bleibt neben ihrem Ersatz erhalten; der Befehl gibt ihren
+Pfad aus. Diese Kopie ist kein Wiederherstellungspunkt für Ihre Daten.
 
-Rollback ist konstruktionsbedingt sicher: Jede Schemaänderung wird zuerst als additive
-Expand-Phase ausgeliefert, ihr destruktiver Contract erst in einem späteren Release.
-Das Binary des vorigen Releases funktioniert daher weiterhin mit dem aktualisierten
-Schema. Deshalb bedeutet Rollback „altes Binary zurücklegen“ und nicht „Datenbank
-zurückmigrieren“.
+**Ein älteres Binary verweigert eine Core-Schemaversion, die neuer ist als die von ihm
+unterstützte**, auch nach additiven Migrationen. Das alte Binary oder Image zurückzuspielen
+macht die Schemaerhöhung nicht rückgängig. Ändern Sie weder die Migrationshistorie noch den Schutz.
 
-Müssen Sie statt des aufbewahrten Backups ein älteres Release installieren, blockiert
-der Anti-Rollback-Schutz den Vorgang bis zu Ihrem ausdrücklichen Override:
+1. Stoppen Sie alle Engines am Store. Bewahren Sie die aktualisierten Daten, Dienstkonfiguration,
+   das TLS-Material und externe Sealer-Schlüssel auf.
+2. Stellen Sie mit dem **Binary des vorigen Releases** das DR-Bundle **von vor dem Upgrade**
+   wieder her: [Sichern und wiederherstellen](/de/how-to/backup-and-restore/). SQLite: frisches
+   Datenverzeichnis oder `dr restore --in-place` mit `--operator` und `--reason`; bewahren Sie
+   die automatisch gesicherten Dateien bis zur bestätigten Wiederherstellung auf. PostgreSQL:
+   leeres Ziel mit `olivares db init`, dessen `--dsn`, `--owner-dsn` und `--admin-dsn` sowie
+   ein frisches Verzeichnis für den wiederhergestellten Signierschlüssel verwenden.
+3. Ledger und Audit-Schlüssel müssen erfolgreich verifiziert sein. Richten Sie Datenverzeichnis,
+   Volumes und PostgreSQL-DSNs des Dienstes auf den wiederhergestellten Store und die passenden
+   Signierschlüssel aus, bevor Sie das vorige Release starten.
+4. Melden Sie sich an und prüfen Sie die wiederhergestellten Daten und den Dienstzustand.
 
-```sh
-olivares upgrade --force-rollback --yes
-```
+Die Wiederherstellung kehrt zum gesicherten Zeitpunkt zurück. Spätere Schreibvorgänge fehlen;
+bewahren Sie den aktualisierten Store zum Abgleich auf. Ohne das Bundle und seine Passphrase
+oder seinen KEK ersetzt die ausführbare Datei keine Wiederherstellung.
 
-Der Override wird im Audit-Log aufgezeichnet. Das Mindestversions-Gate lässt sich
-dadurch **nicht** umgehen: Deklariert ein Manifest eine Untergrenze oberhalb Ihrer
-installierten Version, führen Sie das Upgrade über das genannte Zwischenrelease aus,
-statt die Stufe zu überspringen.
+`--force-rollback` erlaubt die Installation eines älteren Binary und protokolliert den Override
+im Audit-Log. Es umgeht weder die Core-Schemaprüfung noch das Mindestversions-Gate und stellt
+keine Daten wieder her. Unterhalb der Mindestversion ist ein Zwischenrelease erforderlich.
+
+### Wiederherstellung vor dem Produktionsupgrade testen
+
+Starten Sie das verifizierte vorige Release mit einem temporären SQLite-Datenverzeichnis,
+führen Sie Setup und Anmeldung durch, stoppen Sie es und erstellen und verifizieren Sie mit
+seinem `dr backup` und `dr verify` ein Bundle. Starten Sie den Kandidaten auf demselben Store,
+melden Sie sich an und stoppen Sie ihn. Nach einer Schemaerhöhung über die unterstützte Version
+muss das vorige Release mit `core schema version newer than this binary supports` fehlschlagen.
+Stellen Sie das Bundle mit dem vorigen `dr restore` in ein frisches Verzeichnis wieder her.
+Verlangen Sie Exit null und erfolgreiche Ledger-Verifikation; starten Sie dort das vorige
+Release und prüfen Sie Anmeldung, ursprünglichen Audit-Public-Key und gesicherte Daten.
+Ein fehlgeschlagener Restore oder eine fehlgeschlagene Anmeldung bedeutet einen fehlgeschlagenen Test.
+
+Gemessene SQLite-Wiederherstellung (2026-10-08): Das offizielle Release 26.10.1<!-- release-fixed --> erstellte
+Core-Schema 18, ein neuerer Kandidat erhöhte es auf 27. Das alte Binary verweigerte den Store
+mit Exit 1 (`database=27 binary=18`). Seine `dr backup`, `dr verify` und `dr restore` beendeten
+sich mit Code 0. Nach Wiederherstellung des Bundles von vor dem Upgrade in ein frisches
+Verzeichnis funktionierten die ursprüngliche Anmeldung und der ursprüngliche Audit-Public-Key.
 
 ## Wenn etwas schiefgeht
 
@@ -227,7 +239,8 @@ statt die Stufe zu überspringen.
 |---|---|---|
 | `--check` gibt `UNKNOWN` aus | Die installierte Version konnte nicht ermittelt werden, daher ist keine Aussage über die Reihenfolge möglich | Übergeben Sie mit `--current-version` die bekanntermaßen installierte Version |
 | `min_ver` meldet eine zu alte Version | Das Release verweigert die direkte Installation über Ihrer Version | Aktualisieren Sie zuerst auf das genannte Zwischenrelease |
-| Das neue Binary startet nicht | Die Prüfung nach dem Austausch ist fehlgeschlagen | Das Backup wurde bereits automatisch wiederhergestellt; prüfen Sie die Logs und melden Sie das Release |
+| Die installierte Datei besteht die `version`-Prüfung nach dem Austausch nicht | Die Prüfung der ausführbaren Datei ist fehlgeschlagen | Der Befehl stellt die gesicherte Datei wieder her; prüfen Sie die Logs |
+| Dienststart nach dem Neustart fehlgeschlagen oder Core-Schema zu neu für das alte Binary | Das liegt außerhalb der Prüfung der ausführbaren Datei | Dienst stoppen und gemäß Rollback das DR-Bundle von vor dem Upgrade wiederherstellen |
 | `--install-timer` löst aus, aber nichts geschieht | Der Node gehört nicht zur Kohorte des gestaffelten Rollouts | Mit `--if-eligible` ist das erwartet; die Kohorte wird im Verlauf des Rollouts erweitert |
 | "another olivares upgrade is already installing", exit **5** | Je Binary kann nur ein Upgrade laufen. Die Sperre gilt für die gesamte Download-und-Austausch-Sequenz | Warten Sie auf den laufenden Vorgang und starten Sie erneut. Läuft nichts mehr, hat der Kernel die Sperre bereits freigegeben; starten Sie jetzt erneut |
 | "it CHANGED while this upgrade was downloading" | Nach der Planung hat etwas anderes das Binary ersetzt — Paketmanager, Image-Rollout oder Konfigurationsverwaltung | Starten Sie erneut: Die Schutzmechanismen werden gegen die tatsächlich installierte Datei neu ausgewertet. Wiederholt sich das, verwalten zwei Systeme dasselbe Binary |

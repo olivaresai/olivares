@@ -157,7 +157,7 @@ func (m *Module) handleWorkOutboxReplay(w http.ResponseWriter, r *http.Request, 
 	}
 	// Optional body: a bare POST carries only the If-Plan-Hash header.
 	if err := api.DecodeRequestBody(w, r, &body, api.RequestBodySpec{MaxBytes: 1 << 20, Optional: true}); err != nil {
-		writeWorkError(w, broken(http.StatusBadRequest, "invalid_command"))
+		writeWorkError(w, errors.Join(broken(http.StatusBadRequest, "invalid_command"), err))
 		return
 	}
 	headerPlan := r.Header.Get("If-Plan-Hash")
@@ -184,7 +184,7 @@ func (m *Module) handleWorkOutboxReplay(w http.ResponseWriter, r *http.Request, 
 		writeWorkError(w, broken(http.StatusPreconditionRequired, "version_required"))
 		return
 	}
-	principal, err := workPrincipalFromAuth(mc.Principal, mc.Tenant)
+	principal, err := workPrincipalFromAuth(mc.Principal, workAdmin(r.Context(), mc))
 	if err != nil {
 		writeWorkError(w, unknown("evidence_unavailable", err))
 		return
@@ -391,7 +391,7 @@ func (m *Module) dispatchWorkMutation(w http.ResponseWriter, r *http.Request, mc
 		cmd.ExpectedVersion = v
 	}
 	cmd.IdempotencyKey = r.Header.Get("Idempotency-Key")
-	principal, err := workPrincipalFromAuth(mc.Principal, mc.Tenant)
+	principal, err := workPrincipalFromAuth(mc.Principal, workAdmin(r.Context(), mc))
 	if err != nil {
 		writeWorkError(w, unknown("evidence_unavailable", err))
 		return
@@ -463,7 +463,7 @@ func workSessionCommandAllowed(command string) bool {
 }
 
 func (m *Module) authorizeWorkAdmin(r *http.Request, mc api.ModuleContext, itemID model.ID) (bool, error) {
-	if m.workAuthz == nil || itemID.IsZero() {
+	if m.WorkAuthorizer == nil || itemID.IsZero() {
 		return false, nil
 	}
 	var workspace model.ID
@@ -484,7 +484,7 @@ func (m *Module) authorizeWorkAdmin(r *http.Request, mc api.ModuleContext, itemI
 	}
 	resource := auth.ResourceFor(permWorkAdmin)
 	resource.ID, resource.WorkspaceID = itemID.String(), workspace
-	decision := m.workAuthz.Authorize(r.Context(), auth.Request{
+	decision := m.WorkAuthorizer.Authorize(r.Context(), auth.Request{
 		Principal: mc.Principal, Permission: permWorkAdmin, Tenant: mc.Tenant, Resource: resource,
 	})
 	return decision.Allow, nil
@@ -535,7 +535,7 @@ func canonicalWorkCommandScope(method, path string, cmd WorkCommand) string {
 
 func decodeWorkJSON(w http.ResponseWriter, r *http.Request, dst any) bool {
 	if err := api.DecodeRequestBody(w, r, dst, api.RequestBodySpec{MaxBytes: 1 << 20}); err != nil {
-		writeWorkError(w, broken(http.StatusBadRequest, "invalid_command"))
+		writeWorkError(w, errors.Join(broken(http.StatusBadRequest, "invalid_command"), err))
 		return false
 	}
 	return true
@@ -555,15 +555,20 @@ func parseWorkETag(value string) (int64, bool, error) {
 	return n, true, nil
 }
 
-func workPrincipalFromAuth(p auth.Principal, tenant model.TenantID) (WorkPrincipal, error) {
+// workAdmin is the work admin bit a REST work command carries. A dedicated orchestration
+// credential has it only through its granted capability; every other principal has it
+// when the admission seam admits sessions:work:admin, whatever tenant role it holds.
+func workAdmin(ctx context.Context, mc api.ModuleContext) bool {
+	if mc.Principal.IsOrchestrationSessionCredential() {
+		return orchestrationHasCapability(mc.Principal, "work.review")
+	}
+	return mc.Admits(ctx, permWorkAdmin, auth.ResourceFor(permWorkAdmin))
+}
+
+func workPrincipalFromAuth(p auth.Principal, admin bool) (WorkPrincipal, error) {
 	actor, err := p.AttributableActor()
 	if err != nil {
 		return WorkPrincipal{}, err
-	}
-	role, _ := p.RoleIn(tenant)
-	admin := p.Superadmin || auth.RoleRank(role) >= auth.RoleRank(auth.RoleAdmin)
-	if p.IsOrchestrationSessionCredential() {
-		admin = orchestrationHasCapability(p, "work.review")
 	}
 	if p.AgentIdentity != "" {
 		return WorkPrincipal{ActorKind: model.ActorAgent, ActorRef: p.AgentIdentity, Actor: actor,
@@ -650,7 +655,7 @@ func writeWorkError(w http.ResponseWriter, err error) {
 	// ⛔ `field` SE PERDIA AQUI, y con el la mitad del arreglo. `validate` y `plan` salen por
 	// `assessmentFromError`, que si lo pone en `evidence_ref`; `apply` sale por AQUI, y esta
 	// funcion leia status/code/verdict y TIRABA el campo. Resultado: el mismo comando que en
-	// `validate` te decia «blocked_code (o code)» te contestaba MUDO en `apply` — la mitad
+	// `validate` te decia «blocked_code (or code)» te contestaba MUDO en `apply` — la mitad
 	// del camino de tres fases seguia obligando a adivinar. Lo destapo un contraste; mi
 	// testigo no lo veia porque sólo ejercitaba el camino de validate.
 	campo := ""
@@ -695,7 +700,7 @@ func writeWorkError(w http.ResponseWriter, err error) {
 	}
 	cuerpo := map[string]any{
 		"verdict": verdict, "code": code,
-		"error": map[string]string{"code": code, "message": code},
+		"error": map[string]string{"code": code, "message": api.RequestBodyErrorMessage(err, code)},
 	}
 	if campo != "" {
 		// Mismo nombre de clave que en `validate`/`plan`, para que el llamante no tenga que
@@ -913,7 +918,7 @@ func (m *Module) canReadWorkLeaseEvents(
 	mc api.ModuleContext,
 	event model.Record,
 ) bool {
-	if m.workAuthz == nil {
+	if m.WorkAuthorizer == nil {
 		return false
 	}
 	resource := auth.ResourceFor(permLeaseRead)
@@ -922,7 +927,7 @@ func (m *Module) canReadWorkLeaseEvents(
 		resource.ID = event.String(model.ColID)
 	}
 	resource.WorkspaceID = model.ID(event.String(colWorkWorkspaceID))
-	return m.workAuthz.Authorize(ctx, auth.Request{
+	return m.WorkAuthorizer.Authorize(ctx, auth.Request{
 		Principal:  mc.Principal,
 		Permission: permLeaseRead,
 		Tenant:     mc.Tenant,

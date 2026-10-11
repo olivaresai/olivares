@@ -7,7 +7,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"net/url"
 	"time"
 
@@ -53,12 +52,9 @@ func auditListCmd() *cobra.Command {
 			var head struct {
 				HeadSeq int64 `json:"head_seq"`
 			}
-			status, b, err := cfg.do(cmd.Context(), "GET", path+"?limit=1", nil)
+			_, b, err := cfg.do(cmd.Context(), "GET", path+"?limit=1", nil)
 			if err != nil {
 				return err
-			}
-			if status != http.StatusOK {
-				return httpErr(status, b)
 			}
 			if err := json.Unmarshal(b, &head); err != nil {
 				return err
@@ -68,12 +64,9 @@ func auditListCmd() *cobra.Command {
 			if !all {
 				q.Set("exclude_action", "audit.read")
 			}
-			status, b, err = cfg.do(cmd.Context(), "GET", path+"?"+q.Encode(), nil)
+			_, b, err = cfg.do(cmd.Context(), "GET", path+"?"+q.Encode(), nil)
 			if err != nil {
 				return err
-			}
-			if status != http.StatusOK {
-				return httpErr(status, b)
 			}
 			var page struct {
 				Items []struct {

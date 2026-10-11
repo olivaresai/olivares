@@ -11,10 +11,11 @@ result and a result footer — the four shapes the conversation view must render
 from __future__ import annotations
 
 import json
+import os
 import sys
 
-SID = "sess-conversation-fixture"
-CWD = "/tmp/olivares-conversation-fixture"
+SID = f"sess-conversation-fixture-{os.getpid()}"
+CWD = os.getcwd()
 
 
 def emit(obj: dict[str, object]) -> None:

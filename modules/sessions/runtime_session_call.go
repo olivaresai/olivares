@@ -115,6 +115,12 @@ func (m *Module) cancelSessionCalls(lr *liveRun, turn string, closeAdmission boo
 	}
 	calls := slices.Clone(lr.sessionCalls)
 	lr.mu.Unlock()
+	return cancelCalls(calls, turn)
+}
+
+// cancelCalls cancels the calls of turn ("" for all of them) and waits for their
+// owners to close them.
+func cancelCalls(calls []*runtimeSessionCall, turn string) error {
 	waiting := calls[:0]
 	for _, call := range calls {
 		if turn == "" || call.turn == turn {

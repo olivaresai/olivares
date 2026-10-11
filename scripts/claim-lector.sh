@@ -57,8 +57,8 @@ LECTOR="${OLIVARES_LECTOR:-$(git config user.name 2>/dev/null)}"
 
 uso() {
 	cat >&2 <<'USO'
-uso: claim-lector.sh tomar|soltar|libre <claim> [<sha>]
-     <claim> es el nombre bajo refs/integration-claims/, sin prefijo ni sufijo.
+usage: claim-lector.sh tomar|soltar|libre <claim> [<sha>]
+     <claim> is the name under refs/integration-claims/, without the prefix or suffix.
 USO
 	exit 2
 }
@@ -83,16 +83,16 @@ cmd_tomar() {
 	local claim="$1" sha="${2:-}"
 	if [ -z "$sha" ]; then
 		sha="$(remoto_lee "$(ref_claim "$claim")")" || {
-			echo "no he podido mirar el claim en $REMOTO" >&2
+			echo "could not inspect the claim on $REMOTO" >&2
 			return 2
 		}
 		[ -n "$sha" ] || {
-			echo "el claim '$claim' no existe en $REMOTO: no hay nada que leer" >&2
+			echo "claim '$claim' does not exist on $REMOTO: there is nothing to read" >&2
 			return 1
 		}
 	fi
 	git cat-file -e "$sha^{commit}" 2>/dev/null || {
-		echo "no tengo el objeto $sha; haz fetch antes de tomarlo" >&2
+		echo "object $sha is unavailable locally; fetch before taking the claim" >&2
 		return 2
 	}
 	local tag
@@ -109,23 +109,23 @@ cmd_tomar() {
 		EOT
 	)"
 	[ -n "$tag" ] || {
-		echo "no pude construir el objeto de señal" >&2
+		echo "could not create the signal object" >&2
 		return 2
 	}
 	# El lease contra cadena VACIA = «este ref no debe existir todavia». Es lo que impide que dos
 	# lectores se pisen; NO impide que alguien mueva el claim, que no se puede (ver cabecera).
 	if git push --force-with-lease="$(ref_de "$claim"):" "$REMOTO" "$tag:$(ref_de "$claim")" >/dev/null 2>&1; then
-		printf 'tomado: %s lee %s en %s\n' "${LECTOR:-lector}" "$claim" "$sha"
+		printf 'taken: %s is reading %s at %s\n' "${LECTOR:-lector}" "$claim" "$sha"
 		return 0
 	fi
 	local ya
 	ya="$(remoto_lee "$(ref_de "$claim")")" || return 2
 	if [ -n "$ya" ]; then
-		echo "ya hay un lector en '$claim' — suelta el suyo o espera:" >&2
+		echo "'$claim' already has a reader — release that signal or wait:" >&2
 		cmd_libre "$claim" >&2
 		return 1
 	fi
-	echo "el push de la señal fallo y el ref sigue vacio: no he podido tomarlo" >&2
+	echo "pushing the signal failed and the ref is still empty: could not take the claim" >&2
 	return 2
 }
 
@@ -133,24 +133,24 @@ cmd_soltar() {
 	local claim="$1" ya
 	ya="$(remoto_lee "$(ref_de "$claim")")" || return 2
 	[ -n "$ya" ] || {
-		printf 'no habia lector en %s\n' "$claim"
+		printf '%s had no reader\n' "$claim"
 		return 0
 	}
 	git push "$REMOTO" --delete "$(ref_de "$claim")" >/dev/null 2>&1 || {
-		echo "no pude borrar la señal de '$claim'" >&2
+		echo "could not delete the signal for '$claim'" >&2
 		return 2
 	}
-	printf 'soltado: %s\n' "$claim"
+	printf 'released: %s\n' "$claim"
 }
 
 cmd_libre() {
 	local claim="$1" sha_senal sha_claim
 	sha_senal="$(remoto_lee "$(ref_de "$claim")")" || {
-		echo "no he podido mirar $REMOTO" >&2
+		echo "could not inspect $REMOTO" >&2
 		return 2
 	}
 	sha_claim="$(remoto_lee "$(ref_claim "$claim")")" || {
-		echo "no he podido mirar el claim en $REMOTO" >&2
+		echo "could not inspect the claim on $REMOTO" >&2
 		return 2
 	}
 	if [ -z "$sha_senal" ]; then
@@ -159,10 +159,10 @@ cmd_libre() {
 		local segunda
 		segunda="$(remoto_lee "$(ref_de "$claim")")" || return 2
 		if [ -n "$segunda" ]; then
-			printf 'NO HE PODIDO MIRAR: aparecio un lector en %s mientras miraba\n' "$claim" >&2
+			printf 'COULD NOT LOOK: a reader appeared on %s during inspection\n' "$claim" >&2
 			return 2
 		fi
-		printf 'libre: %s no tiene lector\n' "$claim"
+		printf 'free: %s has no reader\n' "$claim"
 		return 0
 	fi
 	# ⛔ SEÑAL SIN FUENTE = NO HE PODIDO MIRAR, nunca «libre» ni «ocupado». Un lector sobre un claim
@@ -170,7 +170,7 @@ cmd_libre() {
 	#    con su lector dentro (y entonces alguien esta leyendo humo) o una señal huerfana. Las dos
 	#    piden intervencion, y ninguna se parece a «adelante».
 	if [ -z "$sha_claim" ]; then
-		printf 'NO HE PODIDO MIRAR: %s tiene lector pero el claim NO existe en %s\n' "$claim" "$REMOTO" >&2
+		printf 'COULD NOT LOOK: %s has a reader but the claim does NOT exist on %s\n' "$claim" "$REMOTO" >&2
 		return 2
 	fi
 	# ⛔ LA VENTANA ENTRE LAS DOS LECTURAS, Y NO SE TAPA CON PROSA. Entre leer la señal y leer el
@@ -181,13 +181,13 @@ cmd_libre() {
 	local senal_final
 	senal_final="$(remoto_lee "$(ref_de "$claim")")" || return 2
 	if [ "$senal_final" != "$sha_senal" ]; then
-		printf 'NO HE PODIDO MIRAR: la señal de %s cambio mientras la leia\n' "$claim" >&2
+		printf 'COULD NOT LOOK: the signal for %s changed during inspection\n' "$claim" >&2
 		return 2
 	fi
 	git cat-file -e "$sha_senal" 2>/dev/null || git fetch -q "$REMOTO" "$(ref_de "$claim")" >/dev/null 2>&1
 	local cuerpo quien cuando objetivo edad
 	cuerpo="$(git cat-file tag "$sha_senal" 2>/dev/null)" || {
-		printf 'NO HE PODIDO MIRAR: %s tiene lector (%s) y no puedo leer la señal\n' "$claim" "$sha_senal" >&2
+		printf 'COULD NOT LOOK: %s has a reader (%s), but the signal could not be read\n' "$claim" "$sha_senal" >&2
 		return 2
 	}
 	# La autoridad va VERSIONADA: una señal de un formato que este guion no conoce no se interpreta
@@ -198,7 +198,7 @@ cmd_libre() {
 	case "$cuerpo" in
 	*$'\n'"lector-v1"$'\n'* | "lector-v1"$'\n'*) ;;
 	*)
-		printf 'NO HE PODIDO MIRAR: la señal de %s no declara lector-v1\n' "$claim" >&2
+		printf 'COULD NOT LOOK: the signal for %s does not declare lector-v1\n' "$claim" >&2
 		return 2 ;;
 	esac
 	objetivo="$(printf '%s' "$cuerpo" | awk '/^object /{print $2; exit}')"
@@ -214,11 +214,11 @@ cmd_libre() {
 	#    —eso lo intenta el gancho— pero SI puede hacerlo visible despues, que es lo que ninguna
 	#    version anterior hacia: leian «ocupado» y nadie comparaba con la fuente.
 	if [ -n "$objetivo" ] && [ "$objetivo" != "$sha_claim" ]; then
-		printf 'MOVIDO BAJO LECTOR: %s lo lee %s desde hace %s min sobre %s, y el claim vale AHORA %s\n' \
+		printf 'MOVED WITH READER: %s has been read by %s for %s min at %s; the claim is NOW %s\n' \
 			"$claim" "${quien:-?}" "$edad" "$objetivo" "$sha_claim"
 		return 1
 	fi
-	printf 'ocupado: %s lo lee %s desde hace %s min (SHA leido %s)\n' \
+	printf 'busy: %s has been read by %s for %s min (SHA read: %s)\n' \
 		"$claim" "${quien:-?}" "$edad" "${objetivo:-?}"
 	return 1
 }
@@ -227,7 +227,7 @@ cmd_libre() {
 verbo="$1"
 claim="$2"
 nombre_ok "$claim" || {
-	echo "nombre de claim invalido: '$claim'" >&2
+	echo "invalid claim name: '$claim'" >&2
 	exit 2
 }
 case "$verbo" in

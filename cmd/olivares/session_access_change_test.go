@@ -6,12 +6,13 @@ package main
 
 import (
 	"context"
-	"github.com/olivaresai/olivares/core/auth"
-	"github.com/olivaresai/olivares/core/model"
-	"github.com/olivaresai/olivares/modules/sessions"
 	"net/http"
 	"testing"
 	"time"
+
+	"github.com/olivaresai/olivares/core/auth"
+	"github.com/olivaresai/olivares/core/model"
+	"github.com/olivaresai/olivares/modules/sessions"
 )
 
 func TestSessionGroupClosureChangeStopsCleanlyAndResumeUsesCurrentAccess(t *testing.T) {
@@ -40,15 +41,14 @@ func runSessionAccessChange(t *testing.T, activeCall bool) {
 	}
 	m := h.set.sessions
 	sessions.WithRunner(approvalProjectionRunner{})(m)
-	m.EnableProfiledLaunches()
 	m.UseExecutionEnvironmentRef("access-change-test")
 	credentials := newSessionHookCredentials(h.authr, h.st, m, h.set.gov)
 	var token string
-	m.UseLaunchGate(approvalProjectionLaunchGate(func(ctx context.Context, tenant model.TenantID, intent sessions.LaunchIntent) (sessions.LaunchDecision, error) {
+	sessions.WithLaunchGate(approvalProjectionLaunchGate(func(ctx context.Context, tenant model.TenantID, intent sessions.LaunchIntent) (sessions.LaunchDecision, error) {
 		var err error
 		token, err = credentials.mint(ctx, tenant, intent)
 		return sessions.LaunchDecision{Allowed: err == nil}, err
-	}))
+	}))(m)
 	var profile struct {
 		Ref string `json:"profile_ref"`
 	}

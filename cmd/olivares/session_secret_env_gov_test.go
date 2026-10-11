@@ -36,7 +36,7 @@ func TestSessionLaunchPlanBindsVaultSecretNames(t *testing.T) {
 	if len(hashes) != 4 {
 		t.Fatal("adding, widening or re-pointing a session secret must invalidate the approval")
 	}
-	if got := describeLaunch(one); !strings.Contains(got, "secrets=GITHUB_TOKEN<-env/github") {
+	if got := describeLaunch(one); !strings.Contains(got, "secrets GITHUB_TOKEN from env/github") {
 		t.Fatalf("approval receipt = %q, want the secret names", got)
 	}
 }

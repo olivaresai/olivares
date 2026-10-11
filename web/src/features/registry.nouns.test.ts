@@ -2,56 +2,22 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// THE SECOND LANGUAGE. The sidebar is headed by five VERBS; the question this console
+// THE SEARCH WORDS. A page's place is its area and section; the question this console
 // answers — "¿puede un ingeniero VER y GESTIONAR … sesiones, agentes, conexiones,
 // identidades, modelos, reglas, automatizaciones, grupos, estados, workflows, tareas,
-// protocolos e infraestructura?" — is thirteen NOUNS.
+// protocolos e infraestructura?" — is thirteen NOUNS, and the palette and the sidebar
+// filter find pages by them.
 //
-// A navigation explicable in only one of the two has lost the other, and the way that
-// loss happens is silent: a noun stops being pointable when the last view claiming it
-// is renamed, and no heading changes. These assertions are the tripwire.
-//
-// Hub-to-noun spans are DECLARED here, not asserted away. Two nouns reach three hubs
-// each; that is a real finding about the vocabulary (written up in
-// an internal design note (not shipped)) and pinning it means a
-// future change that widens or narrows a span has to say so on purpose.
+// The way that loss happens is silent: a noun stops being findable when the last view
+// claiming it is renamed, and no heading changes. These assertions are the tripwire.
 import { readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { LANGUAGE_CODES } from '@/lib/i18n'
-import {
-  FEATURE_VIEWS,
-  HUB_ORDER,
-  PRODUCT_NOUNS,
-  nounsForView,
-  type HubId,
-} from './registry'
+import { FEATURE_VIEWS, PRODUCT_NOUNS, nounsForView } from './registry'
 
 const LOCALES_ROOT = resolve(__dirname, '../lib/i18n/locales')
 const viewIds = new Set(FEATURE_VIEWS.map((v) => v.id))
-const hubOf = new Map(FEATURE_VIEWS.map((v) => [v.id, v.hub]))
-
-/**
- * Nouns that legitimately live under more than one hub, and every hub they reach.
- *
- * This IS the "trece sustantivos contra cinco hubs" tension, held as data. Only four of
- * the thirteen sit in a single hub; `agents` reaches FOUR. That is the measurement, not
- * a defect to tidy away — a noun cutting across four job-shaped headings is precisely
- * why the nouns cannot BE the headings and have to be the search index instead.
- */
-const DECLARED_SPANS: Record<string, HubId[]> = {
-  // Run one, administer the roster, contain it, prove what it shipped, attack it.
-  agents: ['operate', 'govern', 'prove', 'connect'],
-  // The CLIENT's estate, OUR plane's own runtime, and where bytes may legally sit.
-  infrastructure: ['connect', 'operate', 'govern'],
-  // Catalogue/route them, cap them, price them, score them.
-  models: ['connect', 'govern', 'prove'],
-  sessions: ['operate', 'prove'],
-  connections: ['connect', 'govern'],
-  groups: ['govern', 'operate'],
-  tasks: ['operate', 'automate'],
-  protocols: ['connect', 'operate'],
-}
 
 describe('the thirteen nouns', () => {
   it('carries exactly the thirteen of the product question, in order', () => {
@@ -84,35 +50,6 @@ describe('the thirteen nouns', () => {
     ).toEqual([])
   })
 
-  it('sends each noun to whichever hub its PRIMARY view actually sits in', () => {
-    const wrong = PRODUCT_NOUNS.filter(
-      (n) => hubOf.get(n.views[0]) !== n.hub,
-    ).map(
-      (n) =>
-        `${n.id}: declared ${n.hub}, primary view ${n.views[0]} is in ${hubOf.get(n.views[0])}`,
-    )
-    expect(
-      wrong,
-      `A noun advertises a hub that does not hold its first view:\n  ${wrong.join('\n  ')}`,
-    ).toEqual([])
-  })
-
-  it('declares every hub a noun spans, so a widened span is deliberate', () => {
-    const actual = Object.fromEntries(
-      PRODUCT_NOUNS.map((n) => [
-        n.id,
-        [...new Set(n.views.map((v) => hubOf.get(v)!))],
-      ]).filter(([, hubs]) => (hubs as HubId[]).length > 1),
-    )
-    expect(
-      actual,
-      `The spread of the nouns across hubs changed. This is the "trece sustantivos contra cinco\n` +
-        `hubs" tension, and it is meant to be visible: update DECLARED_SPANS *and* the\n` +
-        `audit note if a noun genuinely moved, rather than filing it under whichever hub\n` +
-        `objects least.`,
-    ).toEqual(DECLARED_SPANS)
-  })
-
   it('accounts for every view the thirteen nouns cannot name', () => {
     // ⚠ THE MEASURED GAP IN THE PRODUCT'S OWN VOCABULARY, and the reason this is an
     // allowlist instead of an empty array: TEN views answer to NONE of the thirteen
@@ -140,13 +77,15 @@ describe('the thirteen nouns', () => {
       audit: 'evidence',
       security: 'evidence',
       compliance: 'evidence',
-      postureExport: 'evidence',
       attestation: 'evidence',
       reporting: 'evidence',
+      ...(viewIds.has('postureExport')
+        ? { postureExport: 'evidence' as const }
+        : {}),
       // Compares repository revisions; it does not administer the connection.
       sourceDiff: 'evidence',
-      // "value" — what it costs and whether it is being used. Neither the thirteen
-      // nouns nor the five hub verbs contain a word for money.
+      // "value" — what it costs and whether it is being used. The thirteen nouns
+      // contain no word for money.
       'team-costs': 'value',
       dashboards: 'value',
       adoption: 'value',
@@ -161,47 +100,27 @@ describe('the thirteen nouns', () => {
         `If a view GAINED a noun, drop it from UNNAMED. If one LOST its last noun, it\n` +
         `just became unfindable by any word an operator already knows — give it back a\n` +
         `noun, or add it here with the class it belongs to and say so in the audit note.`,
-    ).toEqual(Object.keys(UNNAMED).sort())
+    ).toEqual(
+      Object.keys(UNNAMED)
+        .filter((id) => FEATURE_VIEWS.some((view) => view.id === id))
+        .sort(),
+    )
   })
 
-  it('translates every hub and every noun in all seven languages', () => {
+  it('translates every noun in all seven languages', () => {
     const missing: string[] = []
     for (const lng of LANGUAGE_CODES) {
       const nav = JSON.parse(
         readFileSync(join(LOCALES_ROOT, lng, 'nav.json'), 'utf8'),
-      ) as { hubs?: Record<string, string>; nouns?: Record<string, string> }
-      for (const h of HUB_ORDER)
-        if (!nav.hubs?.[h]?.trim()) missing.push(`${lng}: hubs.${h}`)
+      ) as { nouns?: Record<string, string> }
       for (const n of PRODUCT_NOUNS)
         if (!nav.nouns?.[n.id]?.trim()) missing.push(`${lng}: nouns.${n.id}`)
     }
     expect(
       missing,
-      `Untranslated hub headings / noun search terms:\n  ${missing.join('\n  ')}\n` +
-        `A missing hub label paints the raw key as a section heading; a missing noun\n` +
-        `label silently removes that word from the sidebar filter in that language.`,
-    ).toEqual([])
-  })
-})
-
-describe('the five hubs', () => {
-  it('assigns every registered view to a hub in the render order', () => {
-    const stray = FEATURE_VIEWS.filter((v) => !HUB_ORDER.includes(v.hub)).map(
-      (v) => `${v.id}: ${v.hub}`,
-    )
-    expect(
-      stray,
-      `Views in a hub that HUB_ORDER never renders — invisible in the sidebar:\n  ${stray.join('\n  ')}`,
-    ).toEqual([])
-  })
-
-  it('leaves no hub empty', () => {
-    const empty = HUB_ORDER.filter(
-      (h) => !FEATURE_VIEWS.some((v) => v.hub === h && !v.hideInNav),
-    )
-    expect(
-      empty,
-      `Hubs that would render as a heading with nothing under it: ${empty.join(', ')}`,
+      `Untranslated noun search terms:\n  ${missing.join('\n  ')}\n` +
+        `A missing noun label silently removes that word from the sidebar filter and\n` +
+        `the palette in that language.`,
     ).toEqual([])
   })
 })

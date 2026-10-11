@@ -108,24 +108,10 @@ type WorkOutboxEffectPolicy interface {
 // backoff and is retried once the authority is present again.
 var ErrWorkOutboxAuthorityWithdrawn = errors.New("sessions: work outbox authority withdrawn between claim and effect")
 
-// UseWorkOutboxClaimAuthority late-binds the composition root's MANDATORY
-// outbox authority. Every production drain (the post-commit nudge in Apply,
-// the public DrainWorkOutbox and the periodic pump) consults it for the
-// communication and unknown families before any caller-supplied restriction;
-// a caller policy can only narrow the result further. Nil or a typed nil
-// unbinds it, which on a composed module holds those families deny-closed.
-func (m *Module) UseWorkOutboxClaimAuthority(authority WorkOutboxClaimPolicy) {
-	if !communicationPortBound(authority) {
-		m.workOutboxAuthority = nil
-		return
-	}
-	m.workOutboxAuthority = authority
-}
-
 // WorkOutboxClaimAuthorityBound reports whether the composition root bound the
 // mandatory authority, for boot logs and tests. It does not evaluate it.
 func (m *Module) WorkOutboxClaimAuthorityBound() bool {
-	return communicationPortBound(m.workOutboxAuthority)
+	return communicationPortBound(m.WorkOutboxAuthority)
 }
 
 // DrainWorkOutboxWithPolicy is DrainWorkOutbox with an additional caller
@@ -199,8 +185,8 @@ func (m *Module) workOutboxBaselineClaim(ctx context.Context, candidate WorkOutb
 	case WorkEventFamilyWork, WorkEventFamilyProtocol:
 		return true, nil
 	default:
-		if communicationPortBound(m.workOutboxAuthority) {
-			return m.workOutboxAuthority.AllowWorkOutboxClaim(ctx, candidate)
+		if communicationPortBound(m.WorkOutboxAuthority) {
+			return m.WorkOutboxAuthority.AllowWorkOutboxClaim(ctx, candidate)
 		}
 		if m.communicationReadinessComposed() {
 			return false, nil
@@ -216,12 +202,12 @@ func (m *Module) workOutboxBaselineEffect(ctx context.Context, candidate WorkOut
 	case WorkEventFamilyWork, WorkEventFamilyProtocol:
 		return true, nil
 	default:
-		if !communicationPortBound(m.workOutboxAuthority) {
+		if !communicationPortBound(m.WorkOutboxAuthority) {
 			// The claim boundary already decided for a module without an
 			// authority; nothing changed in between that this module can see.
 			return true, nil
 		}
-		effect, ok := m.workOutboxAuthority.(WorkOutboxEffectPolicy)
+		effect, ok := m.WorkOutboxAuthority.(WorkOutboxEffectPolicy)
 		if !ok {
 			return true, nil
 		}

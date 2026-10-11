@@ -10,6 +10,7 @@ import (
 	"errors"
 	"io"
 	"strings"
+	"time"
 
 	"github.com/olivaresai/olivares/core/model"
 )
@@ -45,7 +46,7 @@ const (
 )
 
 // AuditSpoolStatus is the operator-visible state of a configured audit spool
-// budget (ADR-0024 Q2).
+// budget.
 type AuditSpoolStatus struct {
 	// MaxBytes is the declared logical audit spool budget.
 	MaxBytes int64
@@ -192,6 +193,38 @@ type CanonicalWalker interface {
 	// in which case the commitment follows the legacy unblinded rule, and nil is
 	// the discriminator that says so (core/internal/store/canon.MetaCommitmentFor).
 	WalkCanonical(ctx context.Context, fromSeq int64, fn func(ev model.AuditEvent, metaCanonical string, metaBlind []byte) error) error
+}
+
+// AuditFilter is the filtered audit LIST view's predicate set (CUTS A3,
+// 2026-10-02): the same rules the handler applied in Go after decoding every
+// row, pushed to the store so a filtered list reads only matching rows.
+// OccurredAt compares as canonical timestamp text (fixed-width UTC, so the
+// lexicographic order IS the chronological one). ActionPrefix and the
+// exclusions are LITERAL prefixes (character-counted substr at the store),
+// matching strings.HasPrefix exactly. Q is a case-insensitive substring over
+// action, actor, target kind and target id with Go's Unicode rules
+// (strings.ToLower + strings.Contains) — the store applies it in Go on the
+// structurally-narrowed rows, because SQL's case folding is not Go's (SQLite's
+// lower() folds ASCII only) and there is no portable position function.
+type AuditFilter struct {
+	Actor                 string     // exact
+	ActionPrefix          string     // literal prefix
+	ExcludeActionPrefixes []string   // literal prefixes
+	TargetKind            string     // exact
+	TargetID              string     // exact
+	Since                 *time.Time // occurred_at >=
+	Until                 *time.Time // occurred_at <=
+	Q                     string     // case-insensitive substring over the four text fields
+}
+
+// FilteredWalker is an OPTIONAL capability of an AuditLog (the CanonicalWalker
+// shape): Walk with the AuditFilter applied BY THE STORE, in sequence order
+// from fromSeq, yielding only matching events. The handler's filtered list
+// type-asserts it; an AuditLog without it keeps the pre-A3 behavior (the caller
+// walks and filters). Confined audit logs refuse tenant-wide reads at all, so
+// they do not implement it.
+type FilteredWalker interface {
+	WalkFiltered(ctx context.Context, fromSeq int64, f AuditFilter, fn func(model.AuditEvent) error) error
 }
 
 // VerifiedAuditAnchorReader is an OPTIONAL, bounded audit capability for a

@@ -38,7 +38,7 @@ grep -F -q 'HOLD. NOT APPLIED.' "$DOC" \
 grep -F -q 'Does not copy `#943`' "$DOC" \
   || fail "prepare doc lost stale-branch HOLD"
 if grep -qiE 'FIRMA A claimed|remainder applied on origin/main|#943 landed' "$DOC"; then
-  fail "prepare doc claims an application this lote does not have"
+  fail "prepare doc claims an application this batch does not have"
 fi
 
 pf_selftest=""

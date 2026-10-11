@@ -5,6 +5,14 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 # Records management — retention, legal hold, and WORM archiving
 
+Audit SIEM export, directory archives and external archive verification require Business. Community retains the signed ledger and `olivares audit verify`; `olivares dr backup` remains available. See [edition placement](editions.md).
+
+S3 Object Lock archives and notification delivery require Business Regulated Operations.
+Community keeps directory archives, offline verification and data export. An installation
+configured for S3 refuses to serve in Community; offline reads and exports remain available.
+Archive objects, configuration files and resume metadata are preserved for Business.
+
+
 **Date:** 2026-06-10 · **Status:** implemented. **Audience:** operators and compliance
 officers deploying Olivares AI. **Feeds:** RTBF/erasure, recordings, and evidence.
 
@@ -32,6 +40,7 @@ modules. A stored policy can never contradict it (the sweep re-queries it on eve
 | `session.timeline` | `sessions.live`, `sessions.timeline` | `updated_at` | yes | yes | 365 d |
 | `voice.session` | `voice.session` | `updated_at` | yes | yes | 365 d |
 | `finops.cost_sample` | `finops.cost_sample` | `created_at` | yes | no | 730 d |
+| `privileged-session-recording` | `recording.session`, `recording.frame` | — | **no** | no | 180 d; retain policies and class holds only; append-only frames cannot be purged |
 | `knowledge.content` | `knowledge.base/document/chunk` | — | **no** (v1) | no | deletion via KB delete / RTBF; holds DO apply (§2.4) |
 | `audit.ledger` | `audit_events` (core table) | — | **no** (never in v1) | no | 2555 d (7 years) + continuous WORM archiving (§4) |
 | `evidence.append_only` | every module `AppendOnly` table | — | **no** (v1) | no | ≥ `audit.ledger`; see the §6.3 seam |
@@ -48,6 +57,12 @@ until first rule" posture). Each tenant creates its policies; validation require
 `1 ≤ retention_days ≤ 36500`, and `disposition=purge` only on purgeable classes
 (`dataclass.go:152-171`). Non-purgeable classes accept `retain`: documenting the schedule is also
 evidence.
+
+The recording class accepts retain schedules and class-scoped legal holds through
+these same APIs. It rejects purge, including a disabled purge policy: its frames
+are append-only evidence. Recording config `retention_days` remains advisory and
+`retention_enforced` remains false. Neither setting nor a retain schedule promises
+automatic deletion of sessions, frames or their account references.
 
 **What committing to a schedule means** (a compliance decision by the operator): by issuing a `PUT`
 of a policy you are declaring, with `basis` (legal/business basis, ≤2048 chars), that THAT class is
@@ -123,7 +138,7 @@ The full trail is `GET /holds/{id}/events`. Set and release additionally emit fi
 | Destruction path | Enforcement | Result under hold |
 |---|---|---|
 | Retention sweep (§3.2) | hold re-check WITHIN each batch (`retention.go:533-545`) | class skipped or rows excluded, certificate records it |
-| `DELETE /v1/m/knowledge/kb/{id}` | subject `("kb", id)` + class `knowledge.content` (`modules/knowledge/kb.go:380`) | **423 Locked** |
+| `DELETE /v1/m/knowledge/kbs/{id}` | subject `("kb", id)` + class `knowledge.content` (`modules/knowledge/kb.go:387`) | **423 Locked** |
 | `POST /v1/m/knowledge/memory/purge` | class `agent.memory` (+ subject `agent` if filtered; per-row also subjects `user`/`session` of scoped rows) (`memory.go:467-547`) | 423 |
 | `DELETE /v1/m/knowledge/memory/{id}` | subjects `("agent", agent_ref)` + `("user"/"session", row scope)` + class (`memory.go:422-430`) | 423 |
 | Erasure RTBF (future) | same hold-gate, Go or HTTP, BEFORE the erase approval-gate (§6.1) | 423 |
@@ -193,12 +208,12 @@ immutable substrate ("you archive it, you don't change it").
 ### 4.1 Prepare the bucket
 
 1. Create the bucket **with Object Lock enabled at creation** (which implies versioning — the connector
-   requires it, `connectors/s3archive/s3archive.go:178`).
+   requires it).
 2. **COMPLIANCE** mode (connector default): no one — not even the account root — can shorten the
-   retention or delete the version before retain-until (`s3archive.go:14-19`).
+   retention or delete the version before retain-until.
 3. **Configure a default retention on the bucket**: with `retention_days=0` the connector relies
    on it, and the verify-after-write **fails** if the object ends up with NO protection at all
-   (`s3archive.go:448-450` — a WORM sink that writes unprotected objects is a failure, not a warning).
+   (a WORM sink that writes unprotected objects is a failure, not a warning).
 
 Equivalences if your substrate is not S3 (only the S3 face is implemented and tested; Azure/GCS are
 verified guidance as of 2026-06-10 for compatible gateways or future connectors):
@@ -211,14 +226,13 @@ verified guidance as of 2026-06-10 for compatible gateways or future connectors)
 
 ### 4.2 Config of the `olivares.s3archive` connector
 
-Fields (`s3archive.go:175-189`): `endpoint` (empty ⇒ AWS virtual-host; custom ⇒ path-style, MinIO),
+Business connector fields: `endpoint` (empty ⇒ AWS virtual-host; custom ⇒ path-style, MinIO),
 `region`*, `bucket`*, `prefix`, `access_key_id`*, `secret_access_key`* (Secret), `session_token`
 (Secret), `lock_mode` (default `compliance`), `retention_days` (0 ⇒ bucket default),
 `legal_hold`, `verify_lock` (default `true`), `format` (Notify face), `max_attempts` (default 4).
-`Open` validates EVERYTHING at provisioning: a misconfigured WORM sink fails to open, never to archive
-(`s3archive.go:193-270`). Every PUT carries SigV4 with all `x-amz-*` headers signed,
+`Open` validates EVERYTHING at provisioning: a misconfigured WORM sink fails to open, never to archive. Every PUT carries SigV4 with all `x-amz-*` headers signed,
 `Content-MD5` (mandatory with object-lock), and the lock headers; with `verify_lock`, a signed HEAD
-must confirm the protection or the Put is an **error** (`s3archive.go:404-452`). A re-PUT of the same
+must confirm the protection or the Put is an **error**. A re-PUT of the same
 content to the same key = another locked version (idempotent recovery, harmless).
 
 **Secrets live outside the store**: the loop reads the connector config from a JSON file pointed to
@@ -340,5 +354,6 @@ any case — but the mutable content under hold is not, hence the rule.)
 
 **References:** code
 `modules/compliance/{dataclass,retention,holds}.go`, `modules/knowledge/ports.go`,
-`core/audit/{archive,archiveverify,dirsink}.go`, `connectors/s3archive/`,
+`core/audit/{archive,archiveverify,dirsink}.go`, the Community `connectors/s3archive/` seam
+and Business Regulated Operations S3 Object Lock delivery,
 `cmd/olivares/cmd_audit.go` · security posture `docs/SECURITY-HARDENING.md`.

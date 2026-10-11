@@ -23,6 +23,9 @@
 //      back to the launcher it was opened from — a focus contract the DOM only has in
 //      a browser.
 import { expect, test, type Page } from '@playwright/test'
+import AxeBuilder from '@axe-core/playwright'
+import { mkdirSync } from 'node:fs'
+import { join } from 'node:path'
 
 const demoTenant = process.env.DEMO_TENANT ?? ''
 const EMAIL = 'demo@olivares.local'
@@ -85,7 +88,7 @@ async function launcherSettled(page: Page) {
   await page.getByTestId('work-composer').waitFor()
   await page
     .locator(
-      '[data-testid="launcher-input"], [data-testid="launcher-add-provider"], [data-testid="launcher-blocked"]',
+      '[data-testid="launcher-input"], [data-testid="launcher-add-provider"], [data-testid="launcher-blocked"], [data-testid="composer-send"]',
     )
     .first()
     .waitFor()
@@ -132,7 +135,7 @@ test.describe('the work surface', () => {
     await fresh.goto(deepLink)
     await expect(fresh.getByTestId('session-context')).toBeVisible()
     expect(addressInUrl(fresh)).toBe(first)
-    await expect(fresh.getByTestId('pane-button-context')).toHaveAttribute(
+    await expect(fresh.getByTestId('context-toggle')).toHaveAttribute(
       'aria-pressed',
       'true',
     )
@@ -145,7 +148,7 @@ test.describe('the work surface', () => {
     await fresh.reload()
     await expect(fresh.getByTestId('session-context')).toBeVisible()
     expect(addressInUrl(fresh)).toBe(first)
-    await expect(fresh.getByTestId('pane-button-context')).toHaveAttribute(
+    await expect(fresh.getByTestId('context-toggle')).toHaveAttribute(
       'aria-pressed',
       'true',
     )
@@ -219,16 +222,26 @@ test.describe('the work surface', () => {
       // Same row: a "three-pane" surface that wrapped would be three stacked panes.
       expect(Math.abs(boxes[0]!.y - boxes[2]!.y)).toBeLessThan(4)
 
-      // …and BELOW `xl` exactly one is in front, with the switcher that chooses it.
+      // …from 761 px the list and the thread sit side by side, and the context pane
+      // comes forward on its own (the Context icon) instead of beside them…
       await page.setViewportSize({ width: 1024, height: 900 })
-      await expect(page.getByTestId('pane-button-rail')).toBeVisible()
       await expect(rail).toBeVisible()
+      await expect(narrative).toBeVisible()
+      await expect(page.getByTestId('pane-button-rail')).toBeHidden()
+      await page.getByTestId('pane-button-context').click()
+      await expect(context).toBeVisible()
       await expect(narrative).toBeHidden()
       await page.getByTestId('pane-button-narrative').click()
       await expect(narrative).toBeVisible()
+      // …and BELOW 761 px exactly one is in front, with the back arrow that chooses it.
+      await page.setViewportSize({ width: 600, height: 900 })
+      await expect(narrative).toBeVisible()
       await expect(rail).toBeHidden()
+      await page.getByTestId('pane-button-rail').click()
+      await expect(rail).toBeVisible()
+      await expect(narrative).toBeHidden()
       // The choice is in the address, so it is shareable from a laptop too.
-      expect(new URL(page.url()).searchParams.get('pane')).toBe('narrative')
+      expect(new URL(page.url()).searchParams.get('pane')).toBe('rail')
     })
   }
 
@@ -286,18 +299,13 @@ test.describe('the work surface', () => {
     await signIn(page)
     await page.setViewportSize({ width: 1024, height: 900 })
     await page.goto('/sessions')
-    await expect(page.getByTestId('pane-button-rail')).toBeVisible()
+    await expect(page.getByTestId('work-surface')).toBeVisible()
+    const pane = () => new URL(page.url()).searchParams.get('pane')
 
     await page.keyboard.press(']')
-    await expect(page.getByTestId('pane-button-narrative')).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    )
+    await expect.poll(pane).toBe('narrative')
     await page.keyboard.press('[')
-    await expect(page.getByTestId('pane-button-rail')).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    )
+    await expect.poll(pane).toBe('rail')
   })
 
   test('the shell says what the next action applies to, and offers it honestly', async ({
@@ -306,43 +314,21 @@ test.describe('the work surface', () => {
     await prefer(page, 'dark', 'en')
     await signIn(page)
     await page.goto('/')
-    const scope = page.getByTestId('work-scope-line')
-    await expect(scope).toBeVisible()
-    await expect(scope).toContainText(demoTenant.slice(0, 8))
-
-    // ⛔ THE WITH-PROVIDER CASE IS NOT ASSERTED HERE, and that is the honest half.
-    //    The demo seed registers no provider profile, so what this deployment can show
-    //    is the state with none, and that is what is asserted. Starting a session from
-    //    the launcher needs a registered provider record and is asserted where one exists.
-    const launcher = page.getByTestId('work-composer')
-    await expect(launcher).toBeVisible()
-    await launcherSettled(page)
-    const hasField = await page.getByTestId('launcher-input').count()
-    if (hasField === 0) {
-      // No profile registered: it says so and offers the ONE action. Never a disabled
-      // field with no reason.
-      await expect(page.getByTestId('launcher-add-provider')).toBeVisible()
-      await expect(launcher).toContainText(/provider/i)
-    } else {
-      // A deployment that DOES have a profile: the field is there and the start is
-      // gated on the one thing the server cannot default.
-      await expect(page.getByTestId('launcher-profile')).toBeVisible()
-      await expect(page.getByTestId('launcher-start')).toBeDisabled()
-    }
+    const start = page.getByTestId('now-start')
+    await expect(start).toBeVisible()
+    await expect(start).not.toContainText(demoTenant)
+    await expect(start.getByRole('button').first()).toBeVisible()
+    await expect(start).toContainText(/New session|Sign in|Install|Providers/i)
   })
 
-  test('the palette keeps focus while open and RETURNS it to the launcher', async ({
+  test('the palette keeps focus while open and RETURNS it to the list filter', async ({
     page,
   }) => {
     await prefer(page, 'dark', 'en')
     await signIn(page)
-    await page.goto('/')
-    await launcherSettled(page)
-    const field = page.getByTestId('launcher-input')
-    test.skip(
-      (await field.count()) === 0,
-      'no provider profile on this deployment, so there is no launcher field to return to',
-    )
+    await page.goto('/sessions')
+    const field = page.getByTestId('rail-filter')
+    await expect(field).toBeVisible()
 
     await field.focus()
     await page.keyboard.press('ControlOrMeta+k')
@@ -366,13 +352,15 @@ test.describe('the work surface', () => {
   }) => {
     await prefer(page, 'dark', 'en')
     await signIn(page)
-    await page.goto('/sessions')
+    const run = process.env.E2E_CAPTURE_RUN_REF
+    expect(
+      run,
+      'the fixture harness must supply a running session reference',
+    ).toBeTruthy()
+    await page.goto(`/sessions?session=run:${run}&pane=narrative`)
     await launcherSettled(page)
     const field = page.getByTestId('launcher-input')
-    test.skip(
-      (await field.count()) === 0,
-      'no provider profile on this deployment, so there is no launcher field',
-    )
+    await expect(field).toBeVisible()
     await page.getByTestId('work-rail').waitFor()
     await page.keyboard.press('/')
     await expect(field).toBeFocused()
@@ -421,4 +409,205 @@ test.describe('the work surface', () => {
       expect(raw ?? [], `raw i18n keys on screen in ${lang}`).toEqual([])
     })
   }
+})
+
+test.describe('URL view and panel history', () => {
+  test.setTimeout(120_000)
+  test.beforeEach(async ({ page }) => {
+    test.skip(!demoTenant, 'DEMO_TENANT not set — run against the demo engine')
+    await prefer(page, 'dark', 'en')
+    await signIn(page)
+  })
+
+  for (const view of ['table', 'workspaces', 'profiles'] as const) {
+    test(`${view}: cold URL, reload, Back and Forward`, async ({ page }) => {
+      await page.goto(`/sessions?tab=${view}`)
+      const heading = {
+        table: 'Table',
+        workspaces: 'Workspaces',
+        profiles: 'Provider profiles',
+      }[view]
+      const assertView = () =>
+        expect(
+          page.getByRole('heading', { name: heading, exact: true }),
+        ).toBeVisible()
+      await assertView()
+      await page.reload()
+      await assertView()
+      await page.getByTestId('sessions-view-back').click()
+      await expect(page.getByTestId('sessions-list-menu')).toBeVisible()
+      await page.goBack()
+      await assertView()
+      await page.goForward()
+      await expect(page.getByTestId('sessions-list-menu')).toBeVisible()
+    })
+  }
+
+  for (const panel of ['context', 'changes', 'files'] as const) {
+    test(`${panel}: cold URL, reload, Back resets to Context, Forward restores`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width: 390, height: 844 })
+      await page.goto('/sessions')
+      const first = await firstRowAddress(page)
+      const second = await page
+        .getByTestId('rail-row')
+        .nth(1)
+        .getAttribute('data-address')
+      expect(second).toBeTruthy()
+      await page.goto(
+        `/sessions?session=${encodeURIComponent(first)}&pane=context`,
+      )
+      await expect(
+        page.getByRole('radio', { name: 'Context', exact: true }),
+      ).toHaveAttribute('aria-checked', 'true')
+      await page.goto(
+        `/sessions?session=${encodeURIComponent(second!)}&pane=context&panel=${panel}`,
+      )
+      const choice = page.getByRole('radio', {
+        name: { context: 'Context', changes: 'Changes', files: 'Files' }[panel],
+        exact: true,
+      })
+      await expect(choice).toHaveAttribute('aria-checked', 'true')
+      await page.reload()
+      await expect(choice).toHaveAttribute('aria-checked', 'true')
+      await page.goBack()
+      await expect(
+        page.getByRole('radio', { name: 'Context', exact: true }),
+      ).toHaveAttribute('aria-checked', 'true')
+      await page.goForward()
+      await expect(choice).toHaveAttribute('aria-checked', 'true')
+    })
+  }
+})
+
+test.describe('running thread and Context capture matrix', () => {
+  test.setTimeout(120_000)
+  for (const theme of ['dark', 'light'] as const) {
+    for (const width of [1280, 390]) {
+      test(`${theme}, ${width}px: running thread and Context`, async ({
+        page,
+      }) => {
+        const run = process.env.E2E_CAPTURE_RUN_REF
+        const captures = process.env.E2E_SESSIONS_CAPTURES
+        test.skip(
+          !demoTenant || !run || !captures,
+          'capture harness must supply a running run and evidence directory',
+        )
+        await prefer(page, theme, 'en')
+        await page.setViewportSize({ width, height: 900 })
+        await signIn(page)
+        await page.goto(
+          `/sessions?session=${encodeURIComponent(`run:${run}`)}&pane=narrative`,
+        )
+        await expect(page.getByTestId('session-narrative')).toBeVisible()
+        await expect
+          .poll(() =>
+            page
+              .locator('html')
+              .evaluate((el) => el.classList.contains('dark')),
+          )
+          .toBe(theme === 'dark')
+        await expect(
+          page
+            .getByTestId('session-conversation')
+            .locator('[data-kind="operator"]')
+            .first(),
+        ).toContainText('Look up the readme')
+        await expect(page.getByTestId('work-composer')).toHaveAttribute(
+          'data-attached',
+          'true',
+        )
+        await expect(
+          page
+            .getByTestId('session-conversation')
+            .locator('[data-kind="assistant"]')
+            .first(),
+        ).toContainText(/look that up/i)
+        expect(
+          (
+            await new AxeBuilder({ page })
+              .include('#work-pane-narrative')
+              .analyze()
+          ).violations,
+        ).toEqual([])
+        mkdirSync(captures!, { recursive: true })
+        await page.screenshot({
+          path: join(captures!, `${width}-${theme}-thread.png`),
+        })
+        if (width === 390) {
+          await page.getByTestId('narrative-menu').click()
+          await page
+            .getByRole('menuitem', { name: 'Context', exact: true })
+            .click()
+        } else {
+          await page.getByTestId('context-toggle').click()
+        }
+        await expect(page.getByTestId('session-context')).toBeVisible()
+        await expect(
+          page.getByRole('radio', { name: 'Context', exact: true }),
+        ).toHaveAttribute('aria-checked', 'true')
+        expect(
+          (
+            await new AxeBuilder({ page })
+              .include('#work-pane-context')
+              .analyze()
+          ).violations,
+        ).toEqual([])
+        await page.screenshot({
+          path: join(captures!, `${width}-${theme}-context.png`),
+        })
+      })
+    }
+  }
+})
+
+test('Files reads and saves the actual worktree and retires its draft on a cached session switch', async ({
+  page,
+}) => {
+  test.setTimeout(120_000)
+  const run = process.env.E2E_WORKTREE_RUN_REF
+  const scope = process.env.E2E_WORKTREE_SCOPE_REF
+  test.skip(
+    !demoTenant || !run || !scope,
+    'the fixture harness must supply a governed worktree scope',
+  )
+  await prefer(page, 'dark', 'en')
+  await page.setViewportSize({ width: 1600, height: 1000 })
+  await signIn(page)
+  const listing = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'GET' &&
+      new URL(response.url()).pathname ===
+        `/v1/m/sessions/workspaces/${scope}/files`,
+  )
+  await page.goto(`/sessions?session=run:${run}&pane=context&panel=files`)
+  expect((await listing).ok()).toBe(true)
+  await page.getByText('README.md', { exact: true }).click()
+  const editor = page.locator('#work-pane-context .cm-content')
+  await expect(editor).toContainText('Labelled worktree folder')
+  await page.getByRole('button', { name: 'Edit', exact: true }).click()
+  await editor.fill('# Saved only in the worktree')
+  const saved = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'PUT' &&
+      new URL(response.url()).pathname ===
+        `/v1/m/sessions/workspaces/${scope}/files/raw`,
+  )
+  await page.getByRole('button', { name: 'Save', exact: true }).click()
+  expect((await saved).ok()).toBe(true)
+  await page.getByRole('button', { name: 'Edit', exact: true }).click()
+  await editor.fill('# Unsaved draft from the worktree')
+  await page
+    .getByTestId('rail-row')
+    .filter({ hasText: 'labelled-local-running-session' })
+    .click()
+  await page.getByRole('radio', { name: 'Files', exact: true }).click()
+  await expect(
+    page.getByRole('button', { name: 'Save', exact: true }),
+  ).toHaveCount(0)
+  await page.getByText('README.md', { exact: true }).click()
+  await expect(editor).toContainText('Labelled local session')
+  await expect(editor).not.toContainText('Saved only in the worktree')
+  await expect(editor).not.toContainText('Unsaved draft from the worktree')
 })

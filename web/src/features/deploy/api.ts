@@ -12,6 +12,7 @@ import type {
   DefinitionCreateInput,
   DefinitionDTO,
   DefinitionUpdateInput,
+  ExecutorDTO,
   MutationInput,
   MutationResponse,
   OperationDTO,
@@ -116,6 +117,9 @@ export const deployApi = {
     http.get<ListResponse<OperationDTO>>(`${BASE}/operations`, {
       query: { ...params, limit: params?.limit ?? EVIDENCE_PAGE },
     }),
+
+  // --- whether plan/verify/apply/retire can reach infrastructure ------------
+  executor: () => http.get<ExecutorDTO>(`${BASE}/executor`),
 }
 
 /** Tenant-scoped query keys (query.ts contract: tenant id in every key). */
@@ -137,4 +141,7 @@ export const deployKeys = {
     params === undefined
       ? (['deploy', t, 'operations'] as const)
       : (['deploy', t, 'operations', params] as const),
+  executor: (t: string | null) => ['deploy', t, 'executor'] as const,
+  subjects: (t: string | null, kind: string) =>
+    ['deploy', t, 'subjects', kind] as const,
 }

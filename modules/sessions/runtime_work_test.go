@@ -72,7 +72,7 @@ func TestLegacyRuntimeControlRejectsWorkBoundRunWithoutProcessEffects(t *testing
 	fr := &fakeRunner{}
 	m, _, tenant, _ := newRuntimeHarness(t, WithRunner(fr), WithCredentialSource(staticCred()))
 	ctx := context.Background()
-	dto, err := m.createRun(ctx, tenant, CreateRunParams{
+	dto, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative,
 		Actor: "user:u1", ActorKind: model.ActorUser,
 	})
@@ -110,7 +110,7 @@ func TestLegacyResumeRejectsWorkBoundRunAndStillAllowsLegacyRun(t *testing.T) {
 		fr.mu.Lock()
 		fr.initSID = providerSID
 		fr.mu.Unlock()
-		dto, err := m.createRun(ctx, tenant, CreateRunParams{
+		dto, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{
 			Name: name, Transport: TransportStreamJSON, Isolation: IsolationNative,
 			Actor: "user:u1", ActorKind: model.ActorUser,
 		})
@@ -175,7 +175,7 @@ func TestRunDispatchKeyIsUniquePerTenantAndAllowsDistinctKeys(t *testing.T) {
 		t.Fatalf("create second tenant: %v", err)
 	}
 	create := func(runTenant model.TenantID, actor string) runDTO {
-		dto, err := m.createRun(ctx, runTenant, CreateRunParams{
+		dto, err := createProfiledTestRun(t, m, ctx, runTenant, CreateRunParams{
 			Transport: TransportStreamJSON, Isolation: IsolationNative,
 			Actor: actor, ActorKind: model.ActorUser,
 		})
@@ -235,7 +235,7 @@ func mutateRunForWorkTest(
 	mutate func(model.Record),
 ) error {
 	ctx := context.Background()
-	return m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
+	return m.Data.Mutate(ctx, tenant, func(sc store.Scope) error {
 		repo, err := sc.Ext(runKind)
 		if err != nil {
 			return err

@@ -32,9 +32,14 @@ evidence.
 
 ## Governing principles
 
-* **Read-first = low asymmetric risk.** The engine observes through logs,
-  OpenTelemetry and eBPF. It does **not** sit in the agent's data path, so a
-  collector failure cannot break production traffic.
+* **Out-of-band observation.** The access map observes logs, OpenTelemetry and
+  eBPF. An observation collector failure creates a visibility gap without gating
+  agent traffic.
+- **Deny-closed inline enforcement.** Managed Claude Code tool-call hooks call
+  the engine's PEP, mounted by default. An engine outage or restart that makes it
+  unreachable denies every governed tool call. The inline inference proxy, MCP
+  tools/call gate and A2A delegation gate apply to traffic routed through them;
+  session model calls do not use the inference proxy by default.
 * **Minimal data.** The graph stores **relations** — origin → resource, read/write,
   source, confidence, timestamp — **never** payloads, SQL bodies, secrets or PII.
   *What is not stored cannot leak.*

@@ -14,6 +14,8 @@ import {
   mergeSessions,
   operatorName,
   primaryRun,
+  runAwaitedApproval,
+  runWantsAPerson,
   sessionReference,
   sessionShortId,
   sharedNames,
@@ -49,7 +51,7 @@ export interface RailRow {
   minutes: number
   /** Where the row opens: a registry path and the search it carries. A session waiting
    * on an approval opens the request itself. */
-  to: '/sessions' | '/communications/handoffs' | '/permissions'
+  to: '/sessions' | '/agentops' | '/communications/handoffs' | '/permissions'
   search: Record<string, string>
   /** The same address as one string, for a reader and a test. */
   href: string
@@ -57,7 +59,12 @@ export interface RailRow {
 
 export interface RailGroup {
   id: RailGroupId
+  /** The first RAIL_ROWS_PER_GROUP rows of the group. */
   rows: RailRow[]
+  /** How many rows the group holds before the cap: what a count must say. */
+  total: number
+  /** Sessions only, excluding offered handoffs, before the display cap. */
+  sessionTotal: number
 }
 
 export interface RailSources {
@@ -65,6 +72,15 @@ export interface RailSources {
   handoffs: readonly HandoffInboxItem[]
   /** The sessions this console's engine operates (launched runs). */
   runs?: readonly RunDTO[]
+}
+
+interface RailDestinations {
+  sessionTo?: '/sessions' | '/agentops'
+  canOpenApprovals?: boolean
+}
+
+export function approvalDestination(approval: string) {
+  return { to: '/permissions', search: { tab: 'approvals', approval } } as const
 }
 
 function minutesSince(iso: string | undefined, now: number): number {
@@ -81,23 +97,17 @@ function sessionState(live: LiveDTO): RailState {
   return 'idle'
 }
 
-function isLiveState(run: RunDTO): boolean {
-  return (
-    run.state === 'running' || run.state === 'idle' || run.state === 'pending'
-  )
-}
-
-/** A launched run: running or idle is working; pending or waiting for an
- * approval needs the operator; stopped, failed or cleaned is earlier. */
+/** A launched run: one asking for a person needs the operator (the rule Sessions files
+ * by too), running or idle is working, pending needs the operator, and stopped, failed
+ * or cleaned is earlier. */
 function runState(run: RunDTO): RailState {
-  // A tool call waiting for a person needs the operator even though the run is running.
-  if (run.pending_approval_ref && isLiveState(run)) return 'need'
+  if (runWantsAPerson(run)) return 'need'
   if (run.state === 'running' || run.state === 'idle') return 'live'
-  if (run.state === 'pending' || run.state === 'waiting_approval') return 'need'
+  if (run.state === 'pending') return 'need'
   return 'ended'
 }
 
-/** A title another row also carries gets the session's short tail (HU 029). */
+/** Distinguish repeated titles with the short session identifier. */
 function distinctTitle(
   title: string | null,
   s: UnifiedSession,
@@ -112,6 +122,7 @@ function sessionRow(
   s: UnifiedSession,
   now: number,
   shared: ReadonlySet<string> = new Set(),
+  destinations: RailDestinations = {},
 ): RailRow {
   const run = primaryRun(s.runs)
   const live = s.live
@@ -121,13 +132,15 @@ function sessionRow(
       ? sessionState(live)
       : 'idle'
   const waitingOn =
-    state === 'need' && run?.pending_approval_ref
-      ? run.pending_approval_ref
+    state === 'need' && destinations.canOpenApprovals !== false && run
+      ? runAwaitedApproval(run)
       : undefined
-  const search: Record<string, string> = waitingOn
-    ? { tab: 'approvals', approval: waitingOn }
-    : { [SESSION_PARAM]: addressOf(s) }
-  const to = waitingOn ? ('/permissions' as const) : ('/sessions' as const)
+  const { to, search }: Pick<RailRow, 'to' | 'search'> = waitingOn
+    ? approvalDestination(waitingOn)
+    : {
+        to: destinations.sessionTo ?? '/sessions',
+        search: { [SESSION_PARAM]: addressOf(s) },
+      }
   // Tool and folder (Warp concept) for a launched session; engine and agent otherwise.
   const meta = (
     run
@@ -176,8 +189,13 @@ function handoffRow(item: HandoffInboxItem, now: number): RailRow {
 }
 
 /** The three groups, always all three and always in this order, so the rail keeps its
- * shape while rows move between them. */
-export function railGroups(sources: RailSources, now: number): RailGroup[] {
+ * shape while rows move between them: it draws Needs you always, at the top, and Working
+ * and Earlier when they hold rows. */
+export function railGroups(
+  sources: RailSources,
+  now: number,
+  destinations: RailDestinations = {},
+): RailGroup[] {
   const needs: RailRow[] = sources.handoffs
     .filter(
       (h) => h.handoff.state === undefined || h.handoff.state === 'offered',
@@ -187,7 +205,7 @@ export function railGroups(sources: RailSources, now: number): RailGroup[] {
   const earlier: RailRow[] = []
   const sessions = mergeSessions([...sources.live], [...(sources.runs ?? [])])
   const shared = sharedNames(sessions, '')
-  const rows = sessions.map((s) => sessionRow(s, now, shared))
+  const rows = sessions.map((s) => sessionRow(s, now, shared, destinations))
   for (const row of rows) {
     if (row.state === 'need') needs.push(row)
     else if (row.state === 'live') working.push(row)
@@ -195,8 +213,23 @@ export function railGroups(sources: RailSources, now: number): RailGroup[] {
   }
   const cap = (rows: RailRow[]) => rows.slice(0, RAIL_ROWS_PER_GROUP)
   return [
-    { id: 'needsYou', rows: cap(needs) },
-    { id: 'working', rows: cap(working) },
-    { id: 'earlier', rows: cap(earlier) },
+    {
+      id: 'needsYou',
+      rows: cap(needs),
+      total: needs.length,
+      sessionTotal: needs.filter((row) => row.kind === 'session').length,
+    },
+    {
+      id: 'working',
+      rows: cap(working),
+      total: working.length,
+      sessionTotal: working.length,
+    },
+    {
+      id: 'earlier',
+      rows: cap(earlier),
+      total: earlier.length,
+      sessionTotal: earlier.length,
+    },
   ]
 }

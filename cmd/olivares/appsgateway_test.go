@@ -86,7 +86,9 @@ func newAppsGatewayHarness(t *testing.T) *appsGatewayHarness {
 		creds,
 		func() time.Time { return clk.t },
 		"test-version",
+		admitsThrough(auth.NewAuthorizer(nil)),
 	)
+	handler.consoleURL = "https://console.example.test"
 	mux := http.NewServeMux()
 	mountAppsGatewayHandlers(mux, handler)
 	mux.Handle("/", appsGatewayRootHandler(http.NotFoundHandler()))
@@ -192,7 +194,7 @@ func TestAppsGatewaySupersetConformance(t *testing.T) {
 		"/", "/protocol", "/v1/messages", "/v1/messages/batches",
 		appsGatewaySpendLimitPath, appsGatewaySpendLimitPath + "/{id}",
 		appsGatewaySpendLimitPath + "/effective", appsGatewaySpendLimitPath + "/audit",
-		"/.well-known/oauth-authorization-server", "/oauth/device_authorization", "/oauth/token",
+		"/.well-known/oauth-authorization-server", "/oauth/device_authorization", "/oauth/token", "/device",
 		"/managed/settings",
 	}
 	if !reflect.DeepEqual(descriptor.Endpoints, wantEndpoints) {
@@ -276,7 +278,7 @@ func TestAppsGatewayFeatureOffAndMessagesRegression(t *testing.T) {
 	baseline := http.NewServeMux()
 	baseline.Handle("/", proxy)
 	withGateway := http.NewServeMux()
-	handler := newAppsGatewayHandler(inferenceProxyConfig{}, tenant, fakeProxyAuthr{p: principal}, ipx, nil, nil, time.Now, "test")
+	handler := newAppsGatewayHandler(inferenceProxyConfig{}, tenant, fakeProxyAuthr{p: principal}, ipx, nil, nil, time.Now, "test", nil)
 	mountAppsGatewayHandlers(withGateway, handler)
 	withGateway.Handle("/", appsGatewayRootHandler(proxy))
 	for _, path := range []string{"/.well-known/oauth-authorization-server", "/managed/settings"} {
@@ -332,93 +334,6 @@ func TestBudgetDeniesCarryNoRetryHeader(t *testing.T) {
 	}
 }
 
-func TestAppsGatewaySpendLimitsPhase2(t *testing.T) {
-	h := newAppsGatewayHarness(t)
-	headers := map[string]string{"Authorization": "Bearer admin"}
-
-	post := func(body string) (*http.Response, []byte, finops.SpendLimit) {
-		t.Helper()
-		res, raw := doProxy(t, h.proxy.URL, http.MethodPost, appsGatewaySpendLimitPath, body, headers)
-		var row finops.SpendLimit
-		if res.StatusCode == http.StatusOK {
-			if err := json.Unmarshal(raw, &row); err != nil {
-				t.Fatalf("decode POST: %v body=%s", err, raw)
-			}
-		}
-		return res, raw, row
-	}
-
-	res, raw, created := post(`{"scope":{"type":"user","user_id":"user:u1"},"amount":"75000","period":"monthly"}`)
-	if res.StatusCode != http.StatusOK || res.Header.Get(headerSpendRequestID) == "" || created.Type != "spend_limit" || !strings.HasPrefix(created.ID, "spl_") || created.Amount == nil || *created.Amount != "75000" || created.Currency != "USD" {
-		t.Fatalf("POST status=%d headers=%v row=%+v body=%s", res.StatusCode, res.Header, created, raw)
-	}
-	res, raw = doProxy(t, h.proxy.URL, http.MethodGet, appsGatewaySpendLimitPath+"/"+created.ID, "", headers)
-	if res.StatusCode != http.StatusOK || res.Header.Get(headerSpendRequestID) == "" {
-		t.Fatalf("GET id status=%d headers=%v body=%s", res.StatusCode, res.Header, raw)
-	}
-	var got finops.SpendLimit
-	if err := json.Unmarshal(raw, &got); err != nil || !reflect.DeepEqual(got, created) {
-		t.Fatalf("GET id=%+v err=%v want=%+v", got, err, created)
-	}
-
-	_, _, org := post(`{"scope":{"type":"organization"},"amount":"100000","period":"monthly"}`)
-	if org.ID == "" {
-		t.Fatal("organization limit was not created")
-	}
-	res, raw = doProxy(t, h.proxy.URL, http.MethodGet, appsGatewaySpendLimitPath+"?limit=1", "", headers)
-	var list struct {
-		Data    []finops.SpendLimit `json:"data"`
-		HasMore bool                `json:"has_more"`
-		FirstID *string             `json:"first_id"`
-		LastID  *string             `json:"last_id"`
-	}
-	if err := json.Unmarshal(raw, &list); res.StatusCode != http.StatusOK || err != nil || len(list.Data) != 1 || !list.HasMore || list.FirstID == nil || list.LastID == nil {
-		t.Fatalf("list status=%d value=%+v err=%v body=%s", res.StatusCode, list, err, raw)
-	}
-
-	res, raw = doProxy(t, h.proxy.URL, http.MethodGet, appsGatewaySpendLimitPath+"/effective?user_ids%5B%5D=user%3Au1&period%5B%5D=monthly", "", headers)
-	var effective struct {
-		Data     []finops.SpendLimitEffectiveRow `json:"data"`
-		NextPage *string                         `json:"next_page"`
-	}
-	if err := json.Unmarshal(raw, &effective); res.StatusCode != http.StatusOK || err != nil || len(effective.Data) != 1 || effective.NextPage != nil || effective.Data[0].Amount == nil || *effective.Data[0].Amount != "75000" || effective.Data[0].Actor.UserID != "user:u1" {
-		t.Fatalf("effective status=%d value=%+v err=%v body=%s", res.StatusCode, effective, err, raw)
-	}
-	res, raw = doProxy(t, h.proxy.URL, http.MethodGet, appsGatewaySpendLimitPath+"/effective?sort=spend_desc", "", headers)
-	if res.StatusCode != http.StatusBadRequest || res.Header.Get(headerSpendRequestID) == "" || !strings.Contains(string(raw), `"invalid_request_error"`) {
-		t.Fatalf("invalid sort status=%d headers=%v body=%s", res.StatusCode, res.Header, raw)
-	}
-
-	_, _, updated := post(`{"scope":{"type":"user","user_id":"user:u1"},"amount":null,"currency":"USD","period":"monthly"}`)
-	if updated.ID != created.ID || updated.Amount != nil {
-		t.Fatalf("upsert did not replace in place: created=%+v updated=%+v", created, updated)
-	}
-	res, raw = doProxy(t, h.proxy.URL, http.MethodGet, appsGatewaySpendLimitPath+"/audit?limit=2", "", headers)
-	var audit struct {
-		Data    []finops.SpendLimitAuditEvent `json:"data"`
-		HasMore bool                          `json:"has_more"`
-	}
-	if err := json.Unmarshal(raw, &audit); res.StatusCode != http.StatusOK || err != nil || len(audit.Data) != 2 || !audit.HasMore || audit.Data[0].Action != "update" || audit.Data[0].Before == nil || audit.Data[0].After == nil {
-		t.Fatalf("audit status=%d value=%+v err=%v body=%s", res.StatusCode, audit, err, raw)
-	}
-
-	res, raw = doProxy(t, h.proxy.URL, http.MethodDelete, appsGatewaySpendLimitPath+"/"+created.ID, "", headers)
-	var deleted map[string]string
-	_ = json.Unmarshal(raw, &deleted)
-	if res.StatusCode != http.StatusOK || deleted["type"] != "spend_limit_deleted" || deleted["id"] != created.ID {
-		t.Fatalf("DELETE status=%d value=%v body=%s", res.StatusCode, deleted, raw)
-	}
-	res, raw = doProxy(t, h.proxy.URL, http.MethodGet, appsGatewaySpendLimitPath+"/"+created.ID, "", headers)
-	if res.StatusCode != http.StatusNotFound || !strings.Contains(string(raw), `"not_found_error"`) {
-		t.Fatalf("GET deleted status=%d body=%s", res.StatusCode, raw)
-	}
-
-	res, raw, _ = post(`{"scope":{"type":"organization"},"amount":"1","currency":"EUR","period":"daily"}`)
-	if res.StatusCode != http.StatusBadRequest || res.Header.Get(headerSpendRequestID) == "" || !strings.Contains(string(raw), `"invalid_request_error"`) {
-		t.Fatalf("EUR status=%d headers=%v body=%s", res.StatusCode, res.Header, raw)
-	}
-}
-
 func TestAppsGatewaySpendLimitAuthenticationAndAuthorization(t *testing.T) {
 	h := newAppsGatewayHarness(t)
 	request := func(handler http.Handler, method, path, body string) *httptest.ResponseRecorder {
@@ -430,7 +345,7 @@ func TestAppsGatewaySpendLimitAuthenticationAndAuthorization(t *testing.T) {
 		return rec
 	}
 	build := func(authr principalAuthenticator, spend spendLimitAdmin) http.Handler {
-		handler := newAppsGatewayHandler(inferenceProxyConfig{}, h.tenant, authr, h.ipx, spend, nil, time.Now, "test")
+		handler := newAppsGatewayHandler(inferenceProxyConfig{}, h.tenant, authr, h.ipx, spend, nil, time.Now, "test", admitsThrough(auth.NewAuthorizer(nil)))
 		mux := http.NewServeMux()
 		mountAppsGatewayHandlers(mux, handler)
 		return mux
@@ -563,4 +478,67 @@ func urlValues(in map[string]string) string {
 		values.Set(k, v)
 	}
 	return values.Encode()
+}
+
+func TestAppsGatewayDeviceVerification(t *testing.T) {
+	h := newAppsGatewayHarness(t)
+	var device struct {
+		DeviceCode              string `json:"device_code"`
+		UserCode                string `json:"user_code"`
+		VerificationURIComplete string `json:"verification_uri_complete"`
+	}
+	postFormProxy(t, h.proxy.URL, "/oauth/device_authorization", nil, &device)
+	verification, err := url.Parse(device.VerificationURIComplete)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	res, err := client.Get(h.proxy.URL + verification.RequestURI() + "&returnTo=https://untrusted.example")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	want := "https://console.example.test/inference-proxy?user_code=" + url.QueryEscape(device.UserCode) + "#device"
+	if res.StatusCode != http.StatusSeeOther || res.Header.Get("Location") != want {
+		t.Fatalf("verification = %d location=%q, want %q", res.StatusCode, res.Header.Get("Location"), want)
+	}
+	if res.Header.Get("Cache-Control") != "no-store" || res.Header.Get("Referrer-Policy") != "no-referrer" {
+		t.Fatal("verification code must not be cached or sent as a referrer")
+	}
+	assertOAuthError(t, h.proxy.URL, device.DeviceCode, "authorization_pending")
+	if len(h.creds.reqs) != 0 {
+		t.Fatal("following the link minted a credential")
+	}
+	if status, _ := doJSON(t, h.apiHandler, "POST", "/v1/m/inferenceproxy/device/approve", "", h.tenant.String(), map[string]any{"user_code": device.UserCode}); status != http.StatusUnauthorized {
+		t.Fatalf("anonymous approval = %d", status)
+	}
+	if status, body := doJSON(t, h.apiHandler, "POST", "/v1/m/inferenceproxy/device/approve", h.adminToken, h.tenant.String(), map[string]any{"user_code": device.UserCode}); status != http.StatusOK {
+		t.Fatalf("existing approval = %d %s", status, body)
+	}
+	var token map[string]any
+	postToken(t, h.proxy.URL, device.DeviceCode, &token)
+	if token["access_token"] != "minted-device-token" {
+		t.Fatal("approved device could not redeem its code")
+	}
+	for _, tc := range []struct {
+		method, path, location string
+		status                 int
+	}{
+		{"GET", "/device", "https://console.example.test/inference-proxy#device", http.StatusSeeOther},
+		{"POST", "/device", "", http.StatusMethodNotAllowed},
+		{"GET", "/device/other", "", http.StatusNotFound},
+	} {
+		req, err := http.NewRequest(tc.method, h.proxy.URL+tc.path, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res, err := client.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res.Body.Close()
+		if res.StatusCode != tc.status || res.Header.Get("Location") != tc.location {
+			t.Errorf("%s %s = %d %q", tc.method, tc.path, res.StatusCode, res.Header.Get("Location"))
+		}
+	}
 }

@@ -67,9 +67,9 @@ func newFanoutRun(t *testing.T, rec Recorder, record bool) (*Module, *fakeProc, 
 	}
 	m, _, tenant, _ := newRuntimeHarness(t, opts...)
 	if rec != nil {
-		m.UseRecorder(rec)
+		WithRecorder(rec)(m)
 	}
-	dto, err := m.createRun(context.Background(), tenant, CreateRunParams{
+	dto, err := createProfiledTestRun(t, m, context.Background(), tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative,
 		WorkspaceRef: registerTestWorkspace(t, m, tenant, t.TempDir()),
 		Actor:        "user:u1", ActorKind: model.ActorUser,

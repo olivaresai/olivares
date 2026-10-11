@@ -76,12 +76,18 @@
         },
         {
           "dst": "/etc/olivares/olivares.env",
+          "file_info": {
+            "mode": 416
+          },
           "packager": "deb",
           "src": "packaging/olivares.env.example",
           "type": "config|noreplace"
         },
         {
           "dst": "/etc/olivares/olivares.env",
+          "file_info": {
+            "mode": 416
+          },
           "packager": "rpm",
           "src": "packaging/olivares.env.example",
           "type": "config|noreplace"
@@ -192,6 +198,9 @@
         },
         {
           "dst": "/etc/olivares/olivares.env",
+          "file_info": {
+            "mode": 416
+          },
           "src": "packaging/olivares.env.example",
           "type": "config|noreplace"
         }

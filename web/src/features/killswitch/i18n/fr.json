@@ -79,7 +79,13 @@
   },
   "reenable": {
     "title": "Réactiver cet arrêt",
-    "body": "Le redémarrage n'est jamais la décision d'une seule personne : deux comptes utilisateur différents doivent approuver, et personne ne peut approuver sa propre demande. Chaque approbateur doit utiliser une connexion renforcée (AAL3), sauf si une règle d'approbation abaisse le niveau de risque de cette action ; la règle des deux comptes s'applique même dans ce cas. Aucune voie d'urgence ne permet de l'éviter, car rester arrêté est l'état sûr. Le moteur vérifie que les comptes sont différents ; il ne peut pas vérifier qu'ils sont utilisés par deux personnes différentes.",
+    "body": "Le redémarrage n'est jamais la décision d'une seule personne : deux comptes utilisateur différents doivent approuver, et personne ne peut approuver sa propre demande. {{stepUp}} Aucune voie d'urgence ne permet de l'éviter, car rester arrêté est l'état sûr. Le moteur vérifie que les comptes sont différents ; il ne peut pas vérifier qu'ils sont utilisés par deux personnes différentes.",
+    "stepUp": {
+      "none": "La vérification supplémentaire pour les actions d'administration est désactivée sur ce serveur : chaque approbateur approuve donc avec sa connexion habituelle.",
+      "totp": "Chaque approbateur doit s'être connecté avec un code d'authentification ou par authentification unique avec MFA, ou confirmer avec une passkey, sauf si une règle d'approbation abaisse le niveau de risque de cette action ; la règle des deux comptes s'applique même dans ce cas.",
+      "passkey": "Chaque approbateur doit confirmer avec une passkey (AAL3), sauf si une règle d'approbation abaisse le niveau de risque de cette action ; la règle des deux comptes s'applique même dans ce cas.",
+      "unknown": "Chaque approbateur doit passer la vérification supplémentaire pour les actions d'administration de ce serveur, sauf si une règle d'approbation abaisse le niveau de risque de cette action ; la règle des deux comptes s'applique même dans ce cas."
+    },
     "reason": "Note",
     "reasonHint": "Facultatif — joint à la demande de double contrôle pour les approbateurs.",
     "existingApproval": "Une approbation en double contrôle ({{id}}) est déjà ouverte pour cet arrêt. La vérification rend compte de son avancement et finalise la réactivation une fois que les deux comptes ont approuvé.",

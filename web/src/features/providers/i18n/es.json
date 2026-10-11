@@ -1,11 +1,12 @@
 {
   "title": "Proveedores",
-  "subtitle": "Una credencial de proveedor en la nube o un endpoint de modelos locales, seleccionado mediante un perfil.",
+  "subtitle": "Una credencial de proveedor en la nube o un endpoint de modelos locales con el que trabajan tus herramientas de agentes.",
   "nav": "Proveedores",
   "add": "Añadir proveedor",
+  "rowMenu": "Acciones de fila para {{name}}",
   "empty": {
     "title": "Todavía no hay ningún proveedor registrado",
-    "description": "Conecta Anthropic, OpenAI o xAI con una clave API, o añade un endpoint local de Ollama sin clave. Prueba la conexión y vincúlalo a un perfil.",
+    "description": "Conecta Anthropic, OpenAI o xAI con una clave API, o añade un endpoint local de Ollama sin clave, y prueba la conexión.",
     "action": "Añade tu primer proveedor"
   },
   "emptyFiltered": {
@@ -28,6 +29,7 @@
     "anthropic": "Anthropic",
     "openai": "OpenAI",
     "xai": "xAI",
+    "gemini": "Gemini",
     "openai_compatible": "Compatible con OpenAI",
     "ollama": "Ollama"
   },
@@ -35,6 +37,7 @@
     "anthropic": "Claude Code. Inyecta ANTHROPIC_API_KEY.",
     "openai": "Codex. Inyecta OPENAI_API_KEY.",
     "xai": "Grok. Inyecta XAI_API_KEY.",
+    "gemini": "Gemini CLI en la API oficial de Google. Usa una clave API de Gemini.",
     "openai_compatible": "Cualquier endpoint con forma de OpenAI. Inyecta OPENAI_API_KEY y OPENAI_BASE_URL; el endpoint es obligatorio.",
     "ollama": "Modelos locales para OpenCode. Sin clave API. Usa el endpoint nativo de Ollama; la prueba lee los metadatos de modelos."
   },
@@ -78,6 +81,7 @@
     "namePlaceholder": "Anthropic (producción)",
     "baseURL": "Endpoint",
     "baseURLHint": "Déjalo vacío para el endpoint oficial del proveedor. Tiene que ser https.",
+    "baseURLLocalHint": "Déjalo vacío para el endpoint oficial del proveedor. Si no, https, o http sin cifrar en una dirección de loopback o de red privada.",
     "baseURLPlaceholder": "https://llm.ejemplo.com",
     "apiKey": "Clave de API",
     "apiKeyHint": "Se envía una vez, la sella el motor y no vuelve nunca a este navegador.",
@@ -85,11 +89,13 @@
     "submit": "Añadir proveedor",
     "submitting": "Sellando…",
     "cancel": "Cancelar",
-    "success": "Proveedor registrado. Prueba la conexión para confirmar que funciona.",
+    "success": "Proveedor añadido.",
     "testNext": "Probar la conexión ahora",
     "registering": "Registrando…",
     "localNameHint": "Opcional. Si lo dejas vacío, se usa el nombre del proveedor.",
-    "advanced": "Advanced: custom endpoint"
+    "advanced": "Advanced: custom endpoint",
+    "missingFields": "Completa los campos que faltan: {{fields}}.",
+    "requiredEndpointHint": "Introduce el endpoint del servicio: https, o http sin cifrar en una dirección de loopback o de red privada."
   },
   "rotate": {
     "title": "Rotar la clave de este proveedor",
@@ -137,5 +143,24 @@
     "unavailable": "Faltan permisos de perfiles o un perfil activo compatible.",
     "loadError": "No se pudieron cargar los perfiles.",
     "success": "Proveedor vinculado al perfil."
+  },
+  "defaultModel": {
+    "title": "Modelo predeterminado",
+    "model": "Modelo",
+    "hint": "Las sesiones nuevas usan este modelo salvo que se elija otro.",
+    "modelsHint": "Modelos de la última prueba de conexión de este proveedor.",
+    "native": "Sin modelo predeterminado",
+    "save": "Guardar",
+    "success": "Modelo predeterminado guardado.",
+    "createHint": "Opcional. Déjalo vacío para elegir un modelo tras probar la conexión."
+  },
+  "prepare": {
+    "pending": "Preparando {{tool}} para tu primera sesión…",
+    "installing": "Instalando {{tool}} para tu primera sesión: {{progress}}",
+    "ready": "Todo listo para iniciar una sesión.",
+    "start": "Nueva sesión",
+    "failed": "Proveedor guardado. No se pudo preparar la sesión: {{error}}",
+    "retry": "Reintentar preparación",
+    "incomplete": "La instalación de la herramienta está en estado {{state}}. Revisa Herramientas de IA y reinténtalo."
   }
 }

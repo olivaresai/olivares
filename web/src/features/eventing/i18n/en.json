@@ -95,7 +95,8 @@
     "errors": {
       "maxAttempts": "Max attempts must be 0 or between 1 and 20.",
       "initialInterval": "Initial interval must be 0 or between 5 and 3600 seconds."
-    }
+    },
+    "businessRequired": "SIEM delivery and external telemetry export require Business. Stored settings are preserved; Community does not send them."
   },
   "secret": {
     "title": "Subscription secret",

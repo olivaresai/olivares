@@ -16,18 +16,13 @@ GORELEASER="$ROOT/.goreleaser.yaml"
 fail() { echo "cra-pack: FAIL: $1" >&2; exit 1; }
 warn() { echo "cra-pack: WARN: $1" >&2; }
 
-# ⛔ TRES RESPUESTAS, NO DOS. `blind` marca una comprobación que NO SE PUDO HACER — no una
-#    que falló. Sin `date -d` de GNU (el defecto en macOS/BSD) este guion decía
-#    «FAIL: GNU date with -d is required», que se lee como «el paquete CRA está roto» cuando lo
-#    cierto es que la FRESCURA no se miró y todo lo demás sí. Un punto ciego no es un defecto y
-#    tampoco es un verde.
-#
-#    No sale de inmediato a propósito: el bloque de la fecha está EN MEDIO, así que abortar ahí se
-#    llevaría por delante las comprobaciones de UPGRADE y goreleaser, que sí se pueden hacer. Se
-#    anota, se sigue, y el veredicto final es PARCIAL con rc=2 — el mismo idioma que el gate pesado
-#    usa cuando no alcanza a Postgres.
+# Three answers: `blind` means a check could not run, not that the CRA pack failed.
+# Without GNU `date -d` (macOS/BSD), freshness is unmeasured while other checks still
+# run. Do not exit in this middle block and skip the upgrade/goreleaser checks.
+# Record the gap, continue, and report PARTIAL with rc 2, as the heavy gate does when
+# Postgres is unavailable.
 BLIND=""
-blind() { BLIND="$1"; echo "cra-pack: ⛔ NO HE PODIDO MIRAR: $1" >&2; }
+blind() { BLIND="$1"; echo "cra-pack: ⛔ COULD NOT CHECK: $1" >&2; }
 
 [ -f "$CRA" ] || fail "missing docs/CRA-READINESS.md"
 
@@ -85,7 +80,7 @@ printf '%s\n' "$release_block" | grep -qi 'support period' \
   || fail ".goreleaser.yaml release header does not mention the support period"
 
 if [ -n "$BLIND" ]; then
-  echo "cra-pack: PARCIAL — document, templates, table and release/update pointers verified; FRESHNESS NOT CHECKED ($BLIND)" >&2
+  echo "cra-pack: PARTIAL — document, templates, table and release/update pointers verified; FRESHNESS NOT CHECKED ($BLIND)" >&2
   exit 2
 fi
 echo "cra-pack: OK (document present, templates/table/freshness checked, release/update pointers present)"

@@ -44,5 +44,14 @@
     "untitledSession": "未命名会话",
     "unknownUser": "未知用户",
     "unknownWorkspace": "未知工作区"
+  },
+  "headDiff": {
+    "file": "文件",
+    "changes": "相对 HEAD 的更改",
+    "committed": "HEAD（已提交）",
+    "current": "当前",
+    "same": "与 HEAD 没有差异。",
+    "view": "视图",
+    "unavailable": "无法与 HEAD 比较。"
   }
 }

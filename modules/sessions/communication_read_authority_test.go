@@ -543,18 +543,18 @@ func newDirectNoticeExactReadFixtureWithGrantExpiries(
 	resolver := &directNoticeReadDirectoryResolver{now: fixture.now, epoch: epoch}
 	closure := &directNoticeReadClosureResolver{now: fixture.now, epoch: epoch}
 	legacy := &directNoticeExactReadLegacyAuthorizer{}
-	fixture.m.communicationDirectoryResolver = resolver
+	fixture.m.CommunicationDirectoryResolver = resolver
 	if len(additionalSubjects) == 0 {
-		fixture.m.communicationGrantClosure = closure
+		fixture.m.CommunicationGrantClosure = closure
 	} else {
-		fixture.m.communicationGrantClosure = &directNoticeExactAdditionalSubjectsClosure{
+		fixture.m.CommunicationGrantClosure = &directNoticeExactAdditionalSubjectsClosure{
 			inner: closure,
 			additional: append(
 				[]CommunicationSubjectRef(nil), additionalSubjects...,
 			),
 		}
 	}
-	fixture.m.communicationReadAuthorizer = legacy
+	fixture.m.CommunicationReadAuthorizer = legacy
 	fixture.source.calls = 0
 	fixture.source.requests = nil
 	fixture.source.trace = nil
@@ -671,14 +671,14 @@ func TestDirectNoticeExactPointReadUsesOneBoundMutationAndNoLegacyAuthority(t *t
 
 	fixture := newDirectNoticeExactReadFixture(t)
 	before := directNoticeExactReadRows(t, fixture.directNoticeFixture)
-	base := fixture.m.data
+	base := fixture.m.Data
 	authorityTrace := &directNoticeAuthorityTrace{}
 	authorityFirst := &directNoticeExactAuthorityFirstData{inner: base}
 	observer := &directNoticeMutateObserverData{inner: &directNoticeAuthorityTraceData{
 		inner: authorityFirst,
 		trace: authorityTrace,
 	}}
-	fixture.m.data = observer
+	fixture.m.Data = observer
 	var opens atomic.Int64
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
@@ -762,7 +762,7 @@ func TestDirectNoticeExactPointReadUsesOneBoundMutationAndNoLegacyAuthority(t *t
 		)
 	}
 
-	fixture.m.data = base
+	fixture.m.Data = base
 	after := directNoticeExactReadRows(t, fixture.directNoticeFixture)
 	if !reflect.DeepEqual(after, before) {
 		t.Fatalf("exact point read changed domain rows\nbefore=%#v\nafter=%#v", before, after)
@@ -785,10 +785,10 @@ func TestDirectNoticeExactPointReadPublicBoundaryBindsBeforeReadinessAndStaysOff
 		sealerReady: true,
 		trace:       &trace,
 	}
-	fixture.m.UseCommunicationStoreReadinessWitness(readiness)
-	fixture.m.UseCommunicationContentSealer(readiness)
-	observer := &directNoticeMutateObserverData{inner: fixture.m.data}
-	fixture.m.data = observer
+	fixture.m.CommunicationStoreReadiness = readiness
+	func() { fixture.m.CommunicationSealer = readiness; fixture.m.normalize() }()
+	observer := &directNoticeMutateObserverData{inner: fixture.m.Data}
+	fixture.m.Data = observer
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 	_, err := fixture.m.GetDirectNoticeMessage(
@@ -834,8 +834,8 @@ func TestDirectNoticeExactPointReadRejectsUnboundRequestsBeforeObservers(t *test
 			fixture := newDirectNoticeExactAuthorityFixture(t)
 			resolver := &communicationAuthorityResolverRecorder{resolved: fixture.authUser}
 			fixture.m.useCommunicationRequestAuthoritySources(resolver, fixture.source)
-			observer := &directNoticeMutateObserverData{inner: fixture.m.data}
-			fixture.m.data = observer
+			observer := &directNoticeMutateObserverData{inner: fixture.m.Data}
+			fixture.m.Data = observer
 			var opens atomic.Int64
 			ctx := context.Background()
 			if !test.noDeadline {
@@ -934,8 +934,8 @@ func TestDirectNoticeExactPointReadNormalizesCoreDenyAndPreservesUnknown(t *test
 			fixture.source.evidence = test.evidence
 			resolver := &communicationAuthorityResolverRecorder{resolved: fixture.authUser}
 			fixture.m.useCommunicationRequestAuthoritySources(resolver, fixture.source)
-			observer := &directNoticeMutateObserverData{inner: fixture.m.data}
-			fixture.m.data = observer
+			observer := &directNoticeMutateObserverData{inner: fixture.m.Data}
+			fixture.m.Data = observer
 			var opens atomic.Int64
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 			defer cancel()
@@ -1002,11 +1002,11 @@ func TestDirectNoticeExactPointReadNeverConcealsJoinedUnknownAndNotFound(t *test
 			fixture := newDirectNoticeExactReadFixture(t)
 			before := directNoticeExactReadRows(t, fixture.directNoticeFixture)
 			fault := &directNoticeExactAuthorityFirstData{
-				inner: fixture.m.data, getErr: test.getErr, lockErr: test.lockErr,
+				inner: fixture.m.Data, getErr: test.getErr, lockErr: test.lockErr,
 				listErrKind: test.listErrKind, listErr: test.listErr,
 			}
 			observer := &directNoticeMutateObserverData{inner: fault}
-			fixture.m.data = observer
+			fixture.m.Data = observer
 			var opens atomic.Int64
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 			defer cancel()
@@ -1071,8 +1071,8 @@ func TestDirectNoticeExactPointReadRejectsAgentBeforeLocalObservers(t *testing.T
 	agent := fixture.reader.WithAgentIdentity("agent:" + model.NewID().String())
 	resolver := &communicationAuthorityResolverRecorder{resolved: agent}
 	fixture.m.useCommunicationRequestAuthoritySources(resolver, fixture.source)
-	observer := &directNoticeMutateObserverData{inner: fixture.m.data}
-	fixture.m.data = observer
+	observer := &directNoticeMutateObserverData{inner: fixture.m.Data}
+	fixture.m.Data = observer
 	var opens atomic.Int64
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
@@ -1129,11 +1129,11 @@ func TestDirectNoticeExactPointReadConcealsMissingAfterFinalFreshness(t *testing
 			fixture.resolver.freshFor = 2 * time.Minute
 			fixture.closure.freshFor = 4 * time.Minute
 			finalClock := &directNoticeFinalExpiryData{
-				inner: fixture.m.data,
+				inner: fixture.m.Data,
 				final: model.NewTimestamp(test.final(fixture.now)),
 			}
 			observer := &directNoticeMutateObserverData{inner: finalClock}
-			fixture.m.data = observer
+			fixture.m.Data = observer
 			var opens atomic.Int64
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 			defer cancel()
@@ -1185,11 +1185,11 @@ func TestDirectNoticeExactPointReadNeverConcealsResidualStoreNotFound(t *testing
 		t.Run(test.name, func(t *testing.T) {
 			fixture := newDirectNoticeExactReadFixture(t)
 			fault := &directNoticeExactResidualNotFoundData{
-				inner:         fixture.m.data,
+				inner:         fixture.m.Data,
 				afterCallback: test.afterCallback,
 			}
 			observer := &directNoticeMutateObserverData{inner: fault}
-			fixture.m.data = observer
+			fixture.m.Data = observer
 			var opens atomic.Int64
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 			defer cancel()
@@ -1229,11 +1229,11 @@ func TestDirectNoticeExactPointReadNeverConcealsResidualStoreNotFound(t *testing
 	t.Run("authority_lock", func(t *testing.T) {
 		fixture := newDirectNoticeExactReadFixture(t)
 		fault := &directNoticeAuthorityFaultData{
-			inner:  fixture.m.data,
+			inner:  fixture.m.Data,
 			failAt: 1,
 			err:    store.ErrNotFound,
 		}
-		fixture.m.data = fault
+		fixture.m.Data = fault
 		var opens atomic.Int64
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 		defer cancel()
@@ -1291,11 +1291,11 @@ func TestDirectNoticeExactPointReadUsesLocalWindowAtFinalization(t *testing.T) {
 			fixture.resolver.freshFor = 2 * time.Minute
 			fixture.closure.freshFor = 4 * time.Minute
 			finalClock := &directNoticeFinalExpiryData{
-				inner: fixture.m.data,
+				inner: fixture.m.Data,
 				final: model.NewTimestamp(test.final(fixture.now)),
 			}
 			observer := &directNoticeMutateObserverData{inner: finalClock}
-			fixture.m.data = observer
+			fixture.m.Data = observer
 			var opens atomic.Int64
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 			defer cancel()
@@ -1364,12 +1364,12 @@ func TestDirectNoticeExactPointReadUsesLatestMatchingGrantExpiry(t *testing.T) {
 			)
 			earlyExpiry := fixture.now.Add(2 * time.Minute)
 			sequenced := &directNoticeExactSequencedClockData{
-				inner:   fixture.m.data,
+				inner:   fixture.m.Data,
 				refresh: model.NewTimestamp(earlyExpiry.Add(-time.Nanosecond)),
 				final:   model.NewTimestamp(test.final(fixture.now)),
 			}
 			observer := &directNoticeMutateObserverData{inner: sequenced}
-			fixture.m.data = observer
+			fixture.m.Data = observer
 			var opens atomic.Int64
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 			defer cancel()
@@ -1494,13 +1494,13 @@ func TestDirectNoticeExactPointReadRejectsDBTimeBeforeLatestAuthorityObservation
 	fixture.closure.now = fixture.now.Add(2 * time.Minute)
 	fixture.closure.freshFor = 8 * time.Minute
 	fixture.m.clock = &testClock{now: fixture.now.Add(3 * time.Minute)}
-	order := &directNoticeExactAuthorityFirstData{inner: fixture.m.data}
+	order := &directNoticeExactAuthorityFirstData{inner: fixture.m.Data}
 	trace := &directNoticeAuthorityTrace{}
 	observer := &directNoticeMutateObserverData{inner: &directNoticeAuthorityTraceData{
 		inner: order,
 		trace: trace,
 	}}
-	fixture.m.data = observer
+	fixture.m.Data = observer
 	var opens atomic.Int64
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
@@ -1552,10 +1552,10 @@ func TestDirectNoticeExactPointReadRejectsCredentialRevocationBeforeCarrierReads
 	}
 	trace := &directNoticeAuthorityTrace{}
 	observer := &directNoticeMutateObserverData{inner: &directNoticeAuthorityTraceData{
-		inner: fixture.m.data,
+		inner: fixture.m.Data,
 		trace: trace,
 	}}
-	fixture.m.data = observer
+	fixture.m.Data = observer
 	var opens atomic.Int64
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
@@ -1633,13 +1633,13 @@ func TestDirectNoticeExactPointReadRejectsCrossedResolutionBeforeClosure(t *test
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			fixture := newDirectNoticeExactReadFixture(t)
-			fixture.m.communicationDirectoryResolver =
+			fixture.m.CommunicationDirectoryResolver =
 				&directNoticeExactCrossedResolutionResolver{
 					DirectorySnapshotResolver: fixture.resolver,
 					cross:                     test.cross,
 				}
-			observer := &directNoticeMutateObserverData{inner: fixture.m.data}
-			fixture.m.data = observer
+			observer := &directNoticeMutateObserverData{inner: fixture.m.Data}
+			fixture.m.Data = observer
 			var opens atomic.Int64
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 			defer cancel()
@@ -1750,10 +1750,10 @@ func TestDirectNoticeExactPointReadRejectsAuthorityBindingSplices(t *testing.T) 
 			}
 			trace := &directNoticeAuthorityTrace{}
 			observer := &directNoticeMutateObserverData{inner: &directNoticeAuthorityTraceData{
-				inner: fixture.m.data,
+				inner: fixture.m.Data,
 				trace: trace,
 			}}
-			fixture.m.data = observer
+			fixture.m.Data = observer
 			authorized, hidden, err := fixture.m.authorizeDirectNoticeReadWithAuthority(
 				ctx,
 				question,
@@ -1874,11 +1874,11 @@ func TestDirectNoticeExactPointReadOwnsLocalAuthorityAliasesBeforeMutation(t *te
 		resolver.recipient.DirectoryEpoch++
 		mutatedDuringClosure.Store(true)
 	}
-	fixture.m.communicationDirectoryResolver = resolver
-	fixture.m.communicationGrantClosure = closure
+	fixture.m.CommunicationDirectoryResolver = resolver
+	fixture.m.CommunicationGrantClosure = closure
 	mutatedBeforeMutation := atomic.Bool{}
 	data := &directNoticeExactAliasMutatingData{
-		inner: fixture.m.data,
+		inner: fixture.m.Data,
 		before: func() {
 			if resolver.recipient == nil || len(closure.subjects) == 0 {
 				return
@@ -1889,7 +1889,7 @@ func TestDirectNoticeExactPointReadOwnsLocalAuthorityAliasesBeforeMutation(t *te
 			mutatedBeforeMutation.Store(true)
 		},
 	}
-	fixture.m.data = data
+	fixture.m.Data = data
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 	result, err := fixture.m.getDirectNoticeMessageWithAuthority(

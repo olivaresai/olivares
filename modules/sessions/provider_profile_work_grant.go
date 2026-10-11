@@ -110,10 +110,10 @@ func (m *Module) authorizeProfileWorkGrant(ctx context.Context, actor auth.Princ
 	if err != nil {
 		return err
 	}
-	if actor.IsPurposeRestricted() || m.workAuthz == nil {
+	if actor.IsPurposeRestricted() || m.WorkAuthorizer == nil {
 		return forbiddenErr("session work grants require operator authority")
 	}
-	if !m.workAuthz.Authorize(ctx, auth.Request{Principal: actor, Tenant: tenant, Permission: permProfileAdmin, Resource: auth.ResourceFor(permProfileAdmin)}).Allow {
+	if !m.WorkAuthorizer.Authorize(ctx, auth.Request{Principal: actor, Tenant: tenant, Permission: permProfileAdmin, Resource: auth.ResourceFor(permProfileAdmin)}).Allow {
 		return forbiddenErr("session work grants require profile administration")
 	}
 	if grant != nil {
@@ -121,7 +121,7 @@ func (m *Module) authorizeProfileWorkGrant(ctx context.Context, actor auth.Princ
 			permission := orchestrationCapabilities[capability]
 			resource := auth.ResourceFor(permission)
 			resource.WorkspaceID = grant.WorkspaceID
-			if !m.workAuthz.Authorize(ctx, auth.Request{Principal: actor, Tenant: tenant, Permission: permission, Resource: resource}).Allow {
+			if !m.WorkAuthorizer.Authorize(ctx, auth.Request{Principal: actor, Tenant: tenant, Permission: permission, Resource: resource}).Allow {
 				return forbiddenErr("operator cannot delegate this session work capability")
 			}
 		}

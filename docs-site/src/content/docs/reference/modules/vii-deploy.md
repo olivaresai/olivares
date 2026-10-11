@@ -38,6 +38,48 @@ real infrastructure. A real engine (Tofu/Terraform, GitOps, Kubernetes, Docker, 
 Crossplane) plus a short-lived, per-operation, attested credential source wire in **only
 on operator configuration**; absent that, the module never silently acts.
 
+## Connect an executor
+
+Until an administrator connects an executor, Deploy keeps your deployment definitions and
+changes no infrastructure. To connect one:
+
+1. Write a JSON file with a block for each runtime you deploy to (`docker`, `k8s`, `nomad`,
+   `tofu`, `terraform`, `gitops` or `crossplane`) and a `credential` block. Only the runtimes
+   in the file are connected. For Docker on the same host:
+
+   ```json
+   {
+     "docker": { "socket_path": "/var/run/docker.sock" },
+     "credential": {
+       "kind": "file",
+       "path_template": "/run/olivares/deploy/{env}-{mode}.token",
+       "ttl_seconds": 900
+     }
+   }
+   ```
+
+   For each operation Olivares reads a short-lived token from `path_template`: `{env}` is the
+   definition's environment and `{mode}` is `read` (Plan, Verify) or `write` (Apply, Retire).
+   A tool you already run, such as Vault Agent or a SPIFFE helper, creates that directory and
+   writes and rotates the token files. Without a token, every operation is refused. For Docker,
+   the `olivares` service user must also be able to open the socket; membership of the `docker`
+   group gives it root-level access to that host.
+2. Point Olivares at the file. With the deb or rpm package, add this line to
+   `/etc/olivares/olivares.env`:
+
+   ```sh
+   OLIVARES_DEPLOY_EXECUTOR_CONFIG=/etc/olivares/deploy-executor.json
+   ```
+
+   The `olivares` user must be able to read the JSON file, for example with owner
+   `root:olivares` and mode `0640`.
+
+3. Restart Olivares with `sudo systemctl restart olivares`. If the file cannot be read or is
+   not valid, Olivares does not start and its log says why.
+
+The Deploy page then offers **Declare deployment** as its main action, and Plan and Apply
+reach the runtime. Every Apply and Retire still waits for an approval.
+
 ## Entities and the declared contract
 
 The module declares four namespaced entities plus the core `Deployment` as the applied

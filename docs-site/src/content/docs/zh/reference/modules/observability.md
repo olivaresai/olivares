@@ -6,7 +6,7 @@ description: >-
   供应链可被证明为真的内容。它不拥有任何实体，也不持久化任何数据。
 ---
 
-可观测性（`modules/observability`）是 31 个模块之一 —— 与
+可观测性（`modules/observability`）是 32 个模块之一 —— 与
 [实时摄取](/zh/reference/modules/live-ingest/) 一样，它承担的是架构性角色，而非填补某个
 能力槽位。它是引擎对**自身的只读模型**：`/v1/m/observability/` 下的三个只读
 表面，回答管理控制台 System（系统）区域所渲染的问题，且不拥有任何一个存储实体。

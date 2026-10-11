@@ -59,16 +59,18 @@ description: "在一台 Linux 主机上联合部署 Olivares 控制平面与 Cla
 
 先按 digest 固定引擎并校验它：
 
+<!-- release -->
 ```sh
 # verify the engine image you run (it is cosign-signed)
-cosign verify docker.io/olivaresai/olivares:26.10.1 \
-  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v?[0-9]+\.[0-9]+(\.[0-9]+)?$' \
+cosign verify docker.io/olivaresai/olivares:0.1 \
+  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/[0-9]+\.[0-9]+$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 
 export OLIVARES_IMAGE=docker.io/olivaresai/olivares@sha256:<digest>
 export OLIVARES_BIND=127.0.0.1
 docker compose -f deploy/compose/docker-compose.yml up -d
 ```
+<!-- /release -->
 
 ### 安装并登录 Claude Code
 
@@ -88,11 +90,35 @@ olivares tool login claude
 引擎与 `claude` 都在主机上；systemd 运行引擎，由引擎指挥 `claude`。工作区位于
 `/var/lib/olivares/workspaces`。
 
-### 一条命令
+### 下载、验证，然后运行
 
+不要把安装脚本通过管道交给 shell。先验证该版本的签名校验和列表，检出其中指明的那个提交，
+再从该检出目录运行安装脚本。这样 `install.sh` 及其打包文件都来自该检出，而不是某个分支。
+该代码块在带 `set -eu` 的子 shell 中运行：任一步骤失败即停止，校验失败后绝不会运行安装脚本。
+
+<!-- release -->
 ```sh
-curl -fsSL https://raw.githubusercontent.com/olivaresai/olivares/main/scripts/install-agentops.sh | sh
+(
+set -eu
+cd "$(mktemp -d)"
+ver=0.1
+base=https://github.com/olivaresai/olivares/releases/download/$ver
+curl -fsSLO $base/checksums.txt
+curl -fsSLO $base/checksums.txt.sig
+curl -fsSLO $base/checksums.txt.pem
+curl -fsSLO $base/release-commit.txt
+cosign verify-blob \
+  --certificate checksums.txt.pem --signature checksums.txt.sig \
+  --certificate-identity "https://github.com/olivaresai/olivares/.github/workflows/release.yml@refs/tags/$ver" \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  checksums.txt
+grep ' release-commit.txt$' checksums.txt | sha256sum --check
+git clone https://github.com/olivaresai/olivares.git
+cd olivares && git checkout --detach "$(cat ../release-commit.txt)"
+OLIVARES_TOPOLOGY=native OLIVARES_VERSION=$ver sh scripts/install-agentops.sh
+)
 ```
+<!-- /release -->
 
 它会自动检测原生拓扑，安装**经过验证的**引擎二进制文件（受 cosign 关卡控制的 `install.sh`），
 从签名的 apt/dnf/apk 仓库安装 `claude`（带密钥指纹验证——或用 `OLIVARES_CLAUDE_INSTALL=byo` 跳过），
@@ -102,9 +128,11 @@ curl -fsSL https://raw.githubusercontent.com/olivaresai/olivares/main/scripts/in
 ### 安装程序接入了什么（以及为什么）
 
 - `packaging/systemd/olivares.service.d/agentops.conf` —— 一个 drop-in，为被指挥的 `claude`
-  提供一个可写的 `HOME` 用于 `~/.claude`（保留在 `/var/lib/olivares` 之下，因此 `ProtectHome=true`
-  仍保护真实用户），确保工作区目录存在，并仅放开**一项**沙箱属性：`MemoryDenyWriteExecute`
-  （`claude` 运行时会做 JIT 编译，需要 W→X 内存）。基础单元中的所有其他加固指令依然有效。
+  提供一个可写的 `HOME` 用于 `~/.claude`（保留在 `/var/lib/olivares` 之下），确保工作区目录存在，
+  并重申基础单元的文件系统策略：`ProtectSystem=full`、`ProtectHome=false`、`PrivateTmp=false`
+  和 `MemoryDenyWriteExecute=false`（`claude` 运行时会做 JIT 编译，需要 W→X 内存）。主目录和
+  `/tmp` 对引擎保持可见，所选文件夹仍可访问；每个会话的 `claude` 及其 stdio MCP 服务器改由
+  产品按文件夹施加的 Landlock 隔离约束。基础单元中的所有其他加固指令依然有效。
 - `/etc/olivares/agentops.env` —— 会话运行时配置（令牌文件、TTL、可选的网关基础 URL、
   可选的自带 `claude` 路径）。
 
@@ -200,7 +228,8 @@ Docker attach/hijack 桥接。数据模型接缝已经**建模**了它（`--isol
   `0.0.0.0`；主机端口映射控制公开范围。原生/systemd 监听器也默认使用所有接口；
   请配置其监听地址以限制访问。
 - **非 root，最小权限。** uid/gid 65532、只读根文件系统、`cap_drop: ALL`、`no-new-privileges`（Docker）/
-  完整的 `Protect*`/`Restrict*` 集合，减去那一项已记录的 W^X 放宽（systemd）。
+  内核与命名空间的 `Protect*`/`Restrict*` 指令；主目录和 `/tmp` 保持可见，允许 W^X，每个会话由
+  Landlock 限制在自己的文件夹内（systemd）。
 - **最小数据、白名单环境。** 子进程 `claude` 仅继承一个明确的白名单（PATH、HOME、locale……）外加内存中的
   推理令牌——**没有** `OLIVARES_*` 签名密钥，**没有**可能遮蔽所铸造凭据的环境态 `ANTHROPIC_*`/`CLAUDE_CODE_*`。
 - **经过验证的供应链。** 引擎经 cosign 签名（验证它 / 按摘要固定）；`claude` 从 Anthropic 的签名仓库安装，

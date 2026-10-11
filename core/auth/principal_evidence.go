@@ -61,6 +61,8 @@ const (
 // A human superadmin explicitly selecting a tenant enters as its owner. The
 // resolved principal retains superadmin attribution and is confined to that
 // selected tenant; global API tokens remain ineligible for this admission.
+// Only the engine-owned OS installation reference may retain account-wide
+// attribution, after its sealed original ceiling and current proofs hold.
 func (a *Authenticator) ResolvePrincipalScope(
 	ctx context.Context,
 	ref PrincipalRef,
@@ -94,8 +96,10 @@ func (a *Authenticator) ResolvePrincipalScope(
 		}
 		// A reference read from a credential binding holds only while that
 		// binding is current, proved here at the epoch just read.
+		var binding model.CredentialBinding
 		if ref.binding.bound() {
-			if err := verifyCredentialBindingProof(ctx, as, ref, tenant); err != nil {
+			binding, err = verifyCredentialBindingProof(ctx, as, ref, tenant)
+			if err != nil {
 				return err
 			}
 		}
@@ -111,6 +115,17 @@ func (a *Authenticator) ResolvePrincipalScope(
 		}
 		if err != nil {
 			return err
+		}
+		if binding.SubjectKind == CredentialBindingOSAccount {
+			if material.session == nil || !osCeilingWithin(osSessionPin(material.principal, ref, tenant, *material.session).ceiling, recordedCeiling(binding)) {
+				return ErrCredentialBindingCeiling
+			}
+			if ref.installation {
+				if !material.principal.Superadmin || !material.session.TenantScope.IsZero() || binding.CeilingRole != string(PermSystemAdmin) {
+					return ErrUnauthenticated
+				}
+				material.principal.sessionScope = ""
+			}
 		}
 
 		mode := principalTokenDirectoryOnly
@@ -153,6 +168,7 @@ func (a *Authenticator) ResolvePrincipalScope(
 		}
 		principal = principal.withCredentialRef(ref.version)
 		principal.credentialRef.binding = ref.binding
+		principal.credentialRef.installation = ref.installation
 		principal.evidence = principalEvidenceProvenance{
 			tenant:          tenant,
 			ref:             ref,
@@ -178,7 +194,7 @@ func (a *Authenticator) ResolvePrincipalScope(
 		if errors.Is(err, ErrUnauthenticated) {
 			return Principal{}, ErrUnauthenticated
 		}
-		if errors.Is(err, ErrPrincipalEvidenceUnavailable) {
+		if errors.Is(err, ErrPrincipalEvidenceUnavailable) || errors.Is(err, ErrCredentialBindingCeiling) {
 			return Principal{}, err
 		}
 		return Principal{}, principalEvidenceUnavailable("auth view failed", err)
@@ -451,6 +467,9 @@ func validLivePrincipalEvidenceAuthBase(base model.BaseFields) bool {
 }
 
 func validPrincipalRef(ref PrincipalRef) bool {
+	if ref.installation && (ref.kind != KindUser || !ref.binding.bound() || ref.binding.subject.Kind != CredentialBindingOSAccount || !ref.binding.subject.valid()) {
+		return false
+	}
 	return (ref.kind == KindUser || ref.kind == KindToken) &&
 		ref.version >= 1 && validPrincipalEvidenceID(ref.credentialID)
 }

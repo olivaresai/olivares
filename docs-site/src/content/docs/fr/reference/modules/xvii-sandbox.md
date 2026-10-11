@@ -71,9 +71,82 @@ exécution, un rejeu ou une comparaison est une action **privilégiée, portée 
   scorer est enregistré comme exécuté mais non noté — jamais un pass silencieux.
 - **Le rejeu est honnête sur les lacunes.** Si la source d'historique ne peut pas reconstruire une
   timeline ordonnée, le rejeu est rapporté dégradé avec zéro étape, jamais fabriqué.
-- **Aucune génération de données synthétiques.** C'est un point d'extension post-v1 documenté uniquement ;
-  le module ne livre aucun générateur, n'expose aucune route pour cela, et ne produit aucun échantillon.
+- **Génération locale de données.** Générez des entrées reproductibles via l’API du sandbox avec des modèles de texte locaux bornés. Aucun appel à un modèle IA ou au réseau.
 :::
+
+## Générer les entrées d’un scénario
+
+La CLI peut écrire les entrées générées directement au format des étapes de
+création d’un scénario :
+
+```sh
+olivares sandbox generate --count 2 --seed-file seed.txt -o json > steps.json
+olivares sandbox scenarios create --name generated --steps-file steps.json
+```
+
+`--seed-file -` lit le modèle depuis stdin. Omettez ce flag pour utiliser le modèle
+par défaut. Les sauts de ligne du fichier sont conservés ; n’utilisez que du texte
+synthétique. `POST /v1/m/sandbox/synthetic-data` exige la même permission que la
+création d’un scénario. Il renvoie des `samples`, chacun avec `key` et `input`,
+prêts à servir de `steps`. La génération elle-même n’enregistre pas les entrées ;
+son événement d’audit contient uniquement leur nombre. Utilisez du texte synthétique,
+pas de secrets ni de données de production.
+
+```json
+{"subject_kind":"agent","count":2,"seed":"{{subject_kind}}:user{{index}}@example.test"}
+```
+
+Les deux entrées sont `agent:user1@example.test` et `agent:user2@example.test`.
+Les seules substitutions sont `{{index}}` (à partir de 1) et `{{subject_kind}}` ;
+tout autre texte reste littéral. Il s’agit de génération locale de fixtures, pas
+de langage généré par un modèle ni de simulation statistique. Les valeurs par
+défaut sont le sujet `agent`, le nombre `10` et le modèle
+`{{subject_kind}}-sample-{{index}}`. Le nombre est limité à 100, le sujet à 200 octets
+et le modèle ainsi que chaque entrée générée à 8192 octets. Les requêtes trop grandes
+échouent sans renvoyer d’échantillon partiel. Le lot encodé doit aussi respecter la
+limite de requête de 1 MiB de l’API de scénarios, y compris l’échappement JSON et
+l’espace des nom, description et sujet bornés. Mocks et formatage supplémentaires
+comptent également dans cette limite.
+
+## Exécuter un scénario généré
+
+Activez le module sélectionnable avec `olivares modules on sandbox`. Génération,
+création de scénarios et exécution exigent un éditeur ou administrateur ; un viewer
+peut inspecter les scénarios, runs et sorties enregistrés.
+
+Créez un modèle sans saut de ligne final :
+
+```sh
+printf '%s' '{{subject_kind}}:user{{index}}@example.test' > seed.txt
+```
+
+Enregistrez cette réponse synthétique dans `mocks.json` :
+
+```json
+[{"resource":"agent:user1@example.test","response":"first synthetic account"}]
+```
+
+```sh
+olivares sandbox generate --count 2 --seed-file seed.txt -o json > steps.json
+olivares sandbox scenarios create --name generated --steps-file steps.json --mocks-file mocks.json -o json
+olivares sandbox scenarios run <scenario-id> --variant candidate -o json
+olivares sandbox runs get <run-id> -o json
+olivares sandbox runs outputs <run-id> -o json
+```
+
+Utilisez l’ID de scénario renvoyé par la création, puis l’ID de run renvoyé par
+l’exécution. Avec le runner `inproc-mock` par défaut, la première entrée résout la
+réponse ci-dessus ; la seconde renvoie `[[mock-miss:agent:user2@example.test]]`.
+Un mock manquant incrémente `steps_error`, mais constitue un résultat synthétique
+attendu : le run conserve `status: completed`, `steps_total: 2`, `steps_ok: 1`,
+`steps_error: 1`, `isolated: true` et `destroyed: true`. Il n’appelle aucune ressource
+réelle. Cet exemple ne demande aucun scoring et ne qualifie pas de runtime OS.
+La correspondance utilise le texte exact, y compris les sauts de ligne du modèle.
+
+Scénarios, runs et sorties restent disponibles après redémarrage du moteur.
+Désactiver le module retire l’accès à ses routes sans supprimer les données ;
+le réactiver restaure l’accès. Ces enregistrements sont délimités par tenant :
+une autre organisation ne peut pas les lire.
 
 ## Voir aussi
 

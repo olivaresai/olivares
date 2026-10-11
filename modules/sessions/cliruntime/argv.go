@@ -23,7 +23,7 @@ func LaunchArgs(kind string, req LaunchRequest) ([]string, error) {
 
 // ClaudeArgs is the governed stream-json transport of the official Claude Code
 // CLI, and it is the ONLY definition of that form in this repository — the
-// engine's own launch path (sessions.Module.buildLaunchSpec) builds its argv
+// engine's own launch path (sessions.Module.childSpec) builds its argv
 // here.
 //
 // ⛔ IT IS ONE TABLE BECAUSE TWO WERE MEASURED TO DRIFT APART. Until r3 the

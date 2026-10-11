@@ -93,7 +93,7 @@
       "data-dir": "Datenverzeichnis"
     },
     "communityNote": "Community-Edition: das Anwenden einer verifizierten Lizenz zeigt deren Angaben hier; es ändert diesen Build nicht.",
-    "expiredBanner": "Diese kommerzielle Lizenz ist abgelaufen: die Enterprise-Module sind inaktiv und die Bereitstellung verhält sich wie die Community-Edition. Ihre Daten und Ihre Benutzerkonten sind unversehrt — kein Konto wurde begrenzt, deaktiviert oder gelöscht. Installieren Sie eine erneuerte Lizenz, um die Module wiederherzustellen.",
+    "expiredBanner": "Diese kommerzielle Lizenz ist abgelaufen: die Business-Module sind inaktiv und die Bereitstellung verhält sich wie die Community-Edition. Ihre Daten und Ihre Benutzerkonten sind unversehrt — kein Konto wurde begrenzt, deaktiviert oder gelöscht. Installieren Sie eine erneuerte Lizenz, um die Module wiederherzustellen.",
     "managedExternally": "Die Lizenz wird out-of-band verwaltet (Quelle: {{source}}). Bearbeiten Sie diese Quelle, um sie zu ändern — die Installation über die Konsole ist deaktiviert, um eine verdeckte Datei zu vermeiden.",
     "installTitle": "Lizenz installieren oder aktualisieren",
     "installHint": "Fügen Sie den signierten Lizenz-Blob ein oder laden Sie die Lizenzdatei hoch. Sie wird vor dem Speichern gegen den Schlüssel dieses Builds verifiziert und anschließend live angewendet.",
@@ -192,6 +192,7 @@
     "mode": "Wie sie sich anmelden",
     "modePassword": "Ein anfängliches Passwort festlegen",
     "modeInvite": "Eine E-Mail-Einladung senden",
+    "inviteUnavailable": "Dieser Server kann keine Einladungen per E-Mail senden (siehe OLIVARES_INVITE_MAIL_DESTINATION in der Konfigurationsreferenz). Legen Sie daher ein Anfangspasswort fest.",
     "password": "Anfängliches Passwort",
     "passwordHint": "Mindestens 8 Zeichen. Der Benutzer kann es später ändern.",
     "submit": "Aufnehmen",
@@ -206,9 +207,9 @@
   },
   "sso": {
     "title": "Single Sign-on",
-    "caption": "Binden Sie Ihren Identitätsanbieter (OIDC oder SAML) an. Geheimnisse werden im Ruhezustand verschlüsselt und niemals erneut angezeigt. Die Konfiguration von SSO ist eine bereitstellungsweite, ausschließlich Superadministratoren vorbehaltene und durch Step-up geschützte Aktion.",
+    "caption": "Binden Sie Ihren Identitätsanbieter (OIDC oder SAML) an. Geheimnisse werden im Ruhezustand verschlüsselt und niemals erneut angezeigt. Die Konfiguration von SSO ist eine bereitstellungsweite, ausschließlich Superadministratoren vorbehaltene Aktion.",
     "superadminOnly": "SSO ist eine bereitstellungsweite Einstellung; nur ein Superadministrator kann sie einsehen oder ändern.",
-    "builderUnavailable": "Dieser Build kann die SSO-Konfiguration speichern, sie jedoch nicht aktivieren. Erstellen Sie den Build mit dem Enterprise-Tag neu, um die OIDC/SAML-Anmeldung zu aktivieren.",
+    "builderUnavailable": "Dieser Build kann die SSO-Konfiguration speichern, sie jedoch nicht aktivieren: In dieser Engine ist kein OIDC/SAML-Anbieter verfügbar.",
     "statusConfigured": "Konfiguriert",
     "statusNotConfigured": "Nicht konfiguriert",
     "statusEnabled": "Aktiviert",
@@ -243,64 +244,11 @@
     "deleteTitle": "SSO-Konfiguration entfernen",
     "deleteBody": "Die SSO-Anmeldung funktioniert nicht mehr und kehrt zu lokalen Anmeldedaten zurück. Die gespeicherten Geheimnisse werden gelöscht.",
     "deleted": "SSO-Konfiguration entfernt.",
-    "enforcement": {
-      "title": "Anmeldungsdurchsetzung",
-      "caption": "Optionale, standardmäßig sperrende Kontrollen darüber, wie sich Benutzer anmelden. Hier konfiguriert; durchgesetzt vom Business-Build.",
-      "requireSso": "SSO erzwingen (Passwort-Anmeldung deaktivieren)",
-      "requireSsoHint": "Blockiert die Passwort-Anmeldung, solange ein Identitätsanbieter aktiv ist, sodass ein fehlender oder deaktivierter IdP niemals alle aussperren kann. Der Business-Build setzt dies durch; ein Notschalter des Betreibers dient als Break-Glass.",
-      "networkAllowlist": "Netzwerk-Zulassungsliste (CIDR)",
-      "networkAllowlistHint": "Ein CIDR pro Zeile (z. B. 10.0.0.0/8 oder 2001:db8::/32). Wenn gesetzt, werden Anmeldungen nur aus diesen Bereichen akzeptiert; leer bedeutet keine IP-Beschränkung. Es schützt die Anmeldeoberfläche (Passwort und SSO-Abschluss) anhand der echten Verbindungs-IP, nicht eines weitergeleiteten Headers — es ist keine Netzwerk-Firewall.",
-      "enforcedEnterprise": "Von diesem Build durchgesetzt",
-      "enforcedUnavailable": "Gespeichert, von diesem Build nicht durchgesetzt",
-      "enforcedOutOfScope": "Für diesen Anbieter nicht durchgesetzt",
-      "notConfigured": "Keine Durchsetzung konfiguriert",
-      "requireSsoOn": "Passwort-Anmeldung deaktiviert (SSO erforderlich)",
-      "requireSsoOff": "Passwort-Anmeldung erlaubt",
-      "noNetworkRestriction": "Keine IP-Beschränkung",
-      "unavailableBanner": "Dieser Build speichert die Durchsetzungsvorgabe, setzt sie jedoch nicht durch. Erstellen Sie den Build mit dem Enterprise-Tag neu, um die SSO-Pflicht und die Netzwerk-Zulassungsliste durchzusetzen — die Kontrolle wird niemals stillschweigend durchgesetzt oder vorgetäuscht.",
-      "outOfScopeBanner": "Dieser Build setzt die Anmelderichtlinie durch, aber nur für den bereitstellungsweiten primären Identitätsanbieter. Die hier gespeicherte Postur ist nicht die, die er liest, und wird daher nicht angewendet. Konfigurieren Sie sie am bereitstellungsweiten Primäranbieter, damit sie wirksam wird.",
-      "noIdpWarning": "Die SSO-Pflicht wird erst wirksam, sobald oben ein Identitätsanbieter aktiviert ist (Aussperrschutz)."
-    },
-    "groupsClaim": "Gruppen-Claim",
-    "groupsClaimHint": "Optional. Der ID-Token-/UserInfo-Claim mit den Gruppen des Nutzers (z. B. „groups“). Die Business-Version ordnet sie beim Login Rollen zu.",
-    "groupsAttr": "Gruppen-Attribut",
-    "groupsAttrHint": "Optional. Das mehrwertige SAML-Attribut mit den Gruppen des Nutzers (z. B. „memberOf“). Die Business-Version ordnet sie beim Login Rollen zu.",
     "groups": {
-      "title": "Gruppen-Mapping & Bereitstellung",
-      "caption": "Wie Verzeichnisgruppen des IdP zu Rollen werden und ob SCIM die alleinige Autorität für Konten ist. Hier konfiguriert; von der Business-Version zugeordnet.",
       "provisioningTitle": "Bereitstellung",
       "provisioningCaption": "Ob SCIM die alleinige Autorität für Konten ist.",
       "scimAuthoritative": "SCIM ist maßgeblich",
-      "scimAuthoritativeHint": "Wenn aktiv, legt ein SSO-Login nie ein Konto an und ändert keine Gruppenmitgliedschaft — SCIM verwaltet das Verzeichnis. Wenn inaktiv, stellt der erste Login den Nutzer bereit und fügt die vom IdP genannten Gruppen hinzu (entfernt sie nie).",
-      "unavailableBanner": "Diese Version extrahiert Gruppen aus der Assertion, ordnet sie aber keinen Rollen zu. Die Business-Version macht aus genannten Gruppen beim Login Berechtigungen."
-    },
-    "scope": {
-      "label": "Geltungsbereich",
-      "global": "Global (systemweit)",
-      "globalHint": "Der Standard-IdP für jeden Mandanten ohne eigenen IdP.",
-      "tenantHint": "Der eigene IdP dieses Mandanten. Er greift bei der Anmeldung nur in der Business-Version (Multi-IdP-Funktion); das Aktivieren eines zweiten IdP setzt sie voraus."
-    },
-    "idp": {
-      "label": "Identitätsanbieter",
-      "default": "Primär (Standard)",
-      "add": "+ Identitätsanbieter hinzufügen…",
-      "hint": "Eine Organisation kann mehrere aktive Anbieter nutzen; jeder weitere muss eigene E-Mail-Domains beanspruchen. Der bereitstellungsweite Bereich nutzt nur seinen primären Anbieter.",
-      "addTitle": "Identitätsanbieter hinzufügen",
-      "addBody": "Geben Sie dem neuen IdP einen kurzen Alias. Er identifiziert diesen IdP im Geltungsbereich und ist sein Routing-Schlüssel bei der Anmeldung.",
-      "aliasLabel": "Alias",
-      "aliasHint": "Kleinbuchstaben, Ziffern und Bindestriche (z. B. „okta“, „azure-ad“). 1–31 Zeichen.",
-      "addConfirm": "Weiter",
-      "on": "bei der Anmeldung aktiv",
-      "off": "aus",
-      "activeNow": "Bei der Anmeldung aktiv: {{names}}.",
-      "noneActive": "Kein Identitätsanbieter ist bei der Anmeldung aktiv: Die Anmeldung erfolgt mit Passwort."
-    },
-    "domains": {
-      "title": "Home-Realm-Routing",
-      "caption": "Leite eine Anmeldung anhand der E-Mail-Domäne des Benutzers an diesen IdP.",
-      "label": "Beanspruchte E-Mail-Domänen",
-      "hint": "Eine Domäne pro Zeile (z. B. corp.com). Jede Domäne ist global über alle IdPs eindeutig; eine E-Mail-first-Anmeldung für diese Domäne wird hierher geleitet.",
-      "unavailableBanner": "Domänen werden gespeichert, aber dieser Build leitet nicht danach; Home-Realm-Routing erfordert die Business-Edition."
+      "scimAuthoritativeHint": "Wenn aktiv, legt ein SSO-Login nie ein Konto an und ändert keine Gruppenmitgliedschaft — SCIM verwaltet das Verzeichnis. Wenn inaktiv, stellt der erste Login den Nutzer bereit und fügt die vom IdP genannten Gruppen hinzu (entfernt sie nie)."
     },
     "displayName": "Name auf der Anmeldeschaltfläche",
     "displayNameHint": "Angezeigt wird „Anmelden mit <Name>“. Leer lassen, um „Single Sign-on“ anzuzeigen. Höchstens 80 Zeichen.",
@@ -333,12 +281,14 @@
     "sealerUnavailable": "Dieser Build kann Secrets auflisten, hat aber keinen Sealer angebunden, daher können keine Werte gespeichert werden. Konfigurieren Sie ein Sealer-Backend, um den Speicher zu aktivieren.",
     "create": "Neues Secret",
     "colName": "Name",
-    "colHint": "Fingerabdruck",
-    "colDescription": "Beschreibung",
     "rotate": "Rotieren",
     "delete": "Löschen",
     "none": "Noch keine Secrets.",
-    "noneHint": "Fügen Sie ein Secret hinzu, um es in einer Connector-Konfiguration als store:<name> zu referenzieren.",
+    "noneHint": {
+      "sources": "Fügen Sie ein Secret hinzu, um es in einer Connector-Konfiguration als store:<name> zu referenzieren.",
+      "mcp": "Fügen Sie ein Secret hinzu, um es in einem MCP-Server als store:<name> zu referenzieren.",
+      "sessions": "Fügen Sie ein Secret hinzu, um es einer Sitzung als Umgebungsvariable zu übergeben."
+    },
     "createTitle": "Neues Secret",
     "editTitle": "Secret rotieren",
     "name": "Name",
@@ -352,12 +302,40 @@
     "rotated": "Secret gespeichert.",
     "deleted": "Secret gelöscht.",
     "deleteTitle": "Secret löschen",
-    "deleteBody": "Das Secret wird aus dem Speicher entfernt. Jede Connector-Konfiguration, die store:<name> referenziert, schlägt bei der Auflösung fehl, bis Sie es neu anlegen.",
-    "sessionCaption": "Geheimnisse, die eine Sitzung als Umgebungsvariablen erhalten kann. Namen beginnen mit env/. Ein Wert wird nie wieder angezeigt."
+    "deleteBody": {
+      "sources": "Das Secret wird aus dem Speicher entfernt. Jede Connector-Konfiguration, die store:<name> referenziert, schlägt bei der Auflösung fehl, bis Sie es neu anlegen.",
+      "mcp": "Das Secret wird aus dem Speicher entfernt. Jeder MCP-Server, der store:<name> referenziert, kann es nicht auflösen, bis Sie es neu anlegen.",
+      "sessions": "Das Secret wird aus dem Speicher entfernt. Eine Sitzung, die es erhält, läuft weiter, kann aber nicht fortgesetzt werden, und eine Vorlage, die es nennt, kann nicht starten, bis Sie es neu anlegen."
+    },
+    "sessionCaption": "Geheimnisse, die eine Sitzung als Umgebungsvariablen erhalten kann. Namen beginnen mit env/. Ein Wert wird nie wieder angezeigt.",
+    "colValue": "Wert",
+    "colChanged": "Zuletzt geändert",
+    "colReference": "Referenz",
+    "colUsedBy": "Verwendet von",
+    "rootFolder": "Oberste Ebene",
+    "valueMasked": "Wert verborgen; der Fingerabdruck ändert sich mit dem Wert",
+    "usedByLoading": "Wird geprüft…",
+    "usedByUnavailable": "Konnte nicht geprüft werden",
+    "usedByNone": {
+      "sources": "Kein Konnektor im Quellenverzeichnis",
+      "mcp": "Kein MCP-Server",
+      "sessions": "Keine Sitzung"
+    },
+    "useKind": {
+      "source": "Konnektor",
+      "mcp": "MCP-Server",
+      "session": "Sitzung"
+    },
+    "externalTitle": "Externe Referenzen",
+    "externalCaption": "Konnektoren verweisen auf diese Geheimnisse in einem anderen Backend. Sie werden dort gespeichert und rotiert; diese Liste zeigt nur, wo sie verwendet werden.",
+    "readOnly": "Schreibgeschützt",
+    "usedByNoneRecent": "Keine Sitzung unter den {{limit}} neuesten",
+    "usedByUnwired": "In diesem Build nicht verfügbar",
+    "usedByMore": "und {{more}} weitere"
   },
   "connectors": {
     "title": "Connectors",
-    "caption": "Fügen Sie die Connectors hinzu und konfigurieren Sie sie, aus denen die Engine ihre Daten bezieht, wobei ihre Anmeldedaten im Ruhezustand versiegelt werden. Eine Änderung wird ohne Neustart auf die laufende Engine angewendet. Deploymentweit, ausschließlich Superadministratoren vorbehalten und durch Step-up geschützt.",
+    "caption": "Fügen Sie die Connectors hinzu und konfigurieren Sie sie, aus denen die Engine ihre Daten bezieht, wobei ihre Anmeldedaten im Ruhezustand versiegelt werden. Eine Änderung wird ohne Neustart auf die laufende Engine angewendet. Deploymentweit und ausschließlich Superadministratoren vorbehalten.",
     "superadminOnly": "Connectors sind eine deploymentweite Einstellung; nur ein Superadmin kann sie ansehen oder ändern.",
     "unavailable": "Dieser Build hat das Connector-Onboarding nicht angebunden; Connectors werden stattdessen über die Boot-Datei konfiguriert.",
     "sourcesUnavailable": "Dieser Build liefert keine Quellenliste; die laufenden Connectors können hier nicht aufgelistet werden.",
@@ -477,7 +455,7 @@
       "restartBody": "Diese Konfigurationsbereiche werden einmalig beim Start gelesen und von diesem Neuladen NICHT angewendet. Ein Neustart ist erforderlich, damit sie wirksam werden:"
     },
     "catalog": {
-      "caption": "Alle Konnektoren, die dieser Build einbinden kann, aus der Engine gelesen — insgesamt {{count}}. Das Ansehen ist schreibgeschützt; das Hinzufügen erfordert weiterhin eine Step-up-Authentifizierung.",
+      "caption": "Alle Konnektoren, die dieser Build einbinden kann, aus der Engine gelesen — insgesamt {{count}}. Das Ansehen ist schreibgeschützt.",
       "noMatch": "Kein Konnektor passt zu „{{query}}“.",
       "noMatchHint": "Der Katalog listet jeden Connector auf, den dieser Build installieren kann. Leeren Sie die Suche, um alle zu sehen.",
       "search": "Nach Name oder Art filtern",
@@ -621,7 +599,8 @@
       "workspaceScope": "Arbeitsbereich: {{ref}}",
       "groupScope": "Agent-Gruppe: {{ref}}",
       "classLabel": "beschränkt auf {{class}}",
-      "loadError": "Ihre Delegationsbefugnis konnte nicht geladen werden. Bitte erneut versuchen."
+      "loadError": "Ihre Delegationsbefugnis konnte nicht geladen werden. Bitte erneut versuchen.",
+      "folderScope": "Ordner: {{ref}}"
     },
     "grants": {
       "title": "Geltungsbereichsbezogene Gewährungen",
@@ -664,6 +643,26 @@
       "note": "Notiz",
       "noteHint": "Optionaler Kontext, der zusammen mit der Gewährung festgehalten wird.",
       "submit": "Gewährung erstellen"
+    },
+    "filters": {
+      "title": "Vererbungsfilter",
+      "caption": "Auf einem Arbeitsbereich, einer Agentengruppe oder einem Ordner Rechte stoppen, die eine Ressourcenart von oberhalb des Knotens erreichen. Berechtigungen am Knoten oder darunter gelten weiter; Verbotsregeln entscheiden weiterhin überall.",
+      "create": "Neuer Filter",
+      "none": "Noch keine Vererbungsfilter.",
+      "noneHint": "Jeder Knoten erbt die oberhalb erteilten Rechte.",
+      "node": "Knoten",
+      "class": "Ressourcenart",
+      "classHint": "Rechte von oberhalb des Knotens gelten dort für diese Art nicht mehr. Eine Agentengruppe filtert nur Agenten.",
+      "createdBy": "Gesetzt von",
+      "actions": "Aktionen",
+      "folder": "Ordner",
+      "remove": "Entfernen",
+      "removeTitle": "Filter entfernen",
+      "removeBody": "Rechte von oberhalb dieses Knotens gelten sofort wieder. Nur ein Administrator des Knotens kann ihn entfernen.",
+      "removed": "Filter entfernt.",
+      "created": "Filter gesetzt.",
+      "formTitle": "Neuer Vererbungsfilter",
+      "submit": "Filter setzen"
     },
     "defs": {
       "title": "Benutzerdefinierte Rollen",
@@ -884,7 +883,23 @@
       "exportNotSealed": "Nicht versiegelt",
       "exportPopulation": "Population",
       "exportEntries": "Zugriffseinträge",
-      "exportIntegrity": "Integrität"
+      "exportIntegrity": "Integrität",
+      "why": {
+        "tab": "Warum",
+        "hint": "Welche der acht Trustee-Rechte ein Subjekt an einem Agenten, einer Sitzung oder einer Ressource hält, und der Pfad der Container, in dem der Knoten liegt. Jedes Recht ist die Antwort der Autorisierungs-Engine selbst; dieses Panel zeigt sie nur an.",
+        "run": "Erklären",
+        "path": "Pfad",
+        "inWorkspace": "(im Workspace {{workspace}})",
+        "right": "Recht",
+        "state": "Status",
+        "states": {
+          "held": "Gehalten",
+          "not_held": "Nicht gehalten",
+          "unknown": "Unbekannt",
+          "not_applicable": "Nicht anwendbar"
+        },
+        "unknownHint": "Unbekannt heißt, die Engine konnte dieses Recht nicht entscheiden; die Ursache steht im Engine-Log. Es ist keine Ablehnung."
+      }
     }
   },
   "activation": {
@@ -1088,17 +1103,7 @@
     }
   },
   "entitlement": {
-    "title": "Module",
-    "description": "Prüfen Sie Edition, Lizenzabdeckung und Aktivierungsstatus jedes Moduls.",
-    "helpSummary": "Modul-Status verstehen",
-    "threeQuestions": "Jede Spalte verwendet ihre eigenen aktuellen Angaben. „Nicht bekannt“ bedeutet, dass nicht genug Informationen vorliegen, um diesen Status zu bestimmen. Nutzen Sie die Statusanzeige und «Erneut versuchen», um nicht verfügbare Angaben erneut abzurufen.",
-    "noVerifiedLicense": "Die Modul-Abdeckung ist unbekannt, bis eine verifizierte Lizenz vorliegt.",
-    "colAddon": "Modul",
-    "colBinary": "In dieser Edition",
-    "colEntitled": "Lizenzabdeckung",
-    "colActivated": "Aktivierung",
     "unknown": "nicht bekannt",
-    "entitled": "berechtigt",
     "state": {
       "active": "an",
       "pending": "Neustart ausstehend",
@@ -1109,15 +1114,6 @@
       "needsReview": "braucht Prüfung",
       "needsInput": "braucht Eingaben"
     },
-    "binaryUnknownWhy": "Diese Edition ({{edition}}) gehört zur laufenden Binärdatei. Wenn die Engine veröffentlicht, ob ein Modul in diesem Build enthalten ist, zeigt die Spalte es; sonst bleibt sie nicht bekannt. Sie wird nicht aus der Paketierung abgeleitet.",
-    "catalogueSourceHelp": "Die verfügbaren Modul-Angaben hängen vom installierten Build ab. Eine Lizenzinstallation aktualisiert die Lizenzdaten; die Modul-Verfügbarkeit wird getrennt gemeldet.",
-    "noAddons": "Diese Installation hat einen leeren Modul-Katalog geliefert.",
-    "loading": "Modul-Katalog wird geladen…",
-    "unavailable": "Modul-Angaben sind in diesem Build nicht verfügbar.",
-    "unavailableAction": "Erneut versuchen, um die Modul-Angaben erneut anzufordern.",
-    "failed": "Der Modul-Katalog konnte nicht geladen werden. Die Modul-Abdeckung ist derzeit unbekannt.",
-    "failedAction": "Erneut versuchen, um die Modul-Angaben erneut anzufordern.",
-    "staleNotCurrent": "Zuvor geladene Modul-Angaben sind nicht mehr aktuell.",
     "knownFacts": "Edition: {{edition}} · Lizenzstatus: {{status}}.",
     "knownFactsUnavailable": "Edition und Lizenzstatus wurden nicht bereitgestellt.",
     "licenseRefreshFailed": "Der Lizenzstatus konnte nicht aktualisiert werden. Die aktuelle Modul-Abdeckung ist unbekannt.",
@@ -1127,10 +1123,7 @@
     "licenseRefreshFailedAction": "Erneut versuchen, um den Lizenzstatus zu aktualisieren.",
     "licenseRetry": "Lizenzstatus erneut versuchen",
     "technicalSummary": "Technisches Detail",
-    "technicalDetail": "{{method}} {{endpoint}} · HTTP {{status}}{{codePart}}{{requestPart}}",
-    "inBuild": "in dieser Edition",
-    "notInBuild": "nicht in dieser Edition",
-    "notCovered": "nicht von der Lizenz abgedeckt"
+    "technicalDetail": "{{method}} {{endpoint}} · HTTP {{status}}{{codePart}}{{requestPart}}"
   },
   "mcpGateway": {
     "title": "MCP-Gateway",
@@ -1230,7 +1223,8 @@
       "legacy_forwarder": "Bestehende Dateiweiterleitung",
       "session_runner_engine_user_session_folder": "Sitzungsausführung als Engine-Benutzer im Sitzungsordner",
       "reported_by_session_runner": "Wie von der Sitzungsausführung gemeldet",
-      "not_supplied_for_local_commands": "Für lokale Befehle nicht bereitgestellt"
+      "not_supplied_for_local_commands": "Für lokale Befehle nicht bereitgestellt",
+      "listed_egress_hosts_for_local_commands": "Nur die aufgeführten Hosts, für einen lokalen Befehl, der sie aufführt"
     },
     "nameHint": "Wird in der Serverliste angezeigt. Leer übernimmt den Hostnamen des Servers.",
     "advanced": "Erweitert",
@@ -1289,6 +1283,41 @@
       "confirm": "Einschalten"
     },
     "sessionOn": "Ein: zum Beenden ausschalten.",
-    "sessionOff": "Aus: Sitzungen können einander keine Nachrichten senden und ihre zugewiesene Arbeit nicht nutzen."
+    "sessionOff": "Aus: Sitzungen können einander keine Nachrichten senden und ihre zugewiesene Arbeit nicht nutzen.",
+    "startersTitle": "Startserver",
+    "startersHint": "Ausgewählte Server, jeder mit seiner Abschottung und seinen Netzwerkgrenzen. Hinzufügen füllt das Formular aus; der Server wird ausgeschaltet gespeichert und führt nichts aus, bis du ihn testest und aktivierst.",
+    "starterAdd": "{{name}} hinzufügen",
+    "starterLicence": "Lizenz: {{licence}}",
+    "starterSource": "Quelle",
+    "egressHosts": "Erlaubte Hosts",
+    "egressHostsHint": "Der Befehl erreicht nur diese HTTPS-Hosts, einer pro Zeile: host oder host:port. Leer lassen, um das Netzwerk der Sitzung beizubehalten.",
+    "egressHostsInvalid": "Schreibe jeden Host als host oder host:port, kleingeschrieben und ohne https://, höchstens 16.",
+    "starters": {
+      "filesystem": {
+        "summary": "Liest und schreibt Dateien im Ordner der Sitzung.",
+        "profile": "Läuft auf diesem Server mit npx. Schreibt nur im Ordner der Sitzung und erreicht nur registry.npmjs.org, um sein fest angegebenes Paket zu laden.",
+        "setup": "Benötigt Node.js (npx) auf diesem Server. Speichern, testen, dann aktivieren."
+      },
+      "git": {
+        "summary": "Liest den Verlauf und erstellt Commits in den Repositorys der Sitzung.",
+        "profile": "Läuft auf diesem Server mit uvx. Schreibt nur im Ordner der Sitzung und erreicht nur pypi.org und files.pythonhosted.org, um sein fest angegebenes Paket zu laden.",
+        "setup": "Benötigt uv (uvx) auf diesem Server. Speichern, testen, dann aktivieren."
+      },
+      "github": {
+        "summary": "Issues, Pull Requests und Code auf GitHub, über GitHubs eigenen Server.",
+        "profile": "Ein entfernter Server: Die Engine verbindet sich nur mit api.githubcopilot.com, an geprüfte Adressen und ohne Weiterleitungen. Sitzungen sehen dein Token nie.",
+        "setup": "Lege vor dem Test in Zugangsdaten verwalten das Geheimnis mcp/github mit dem Wert Bearer gefolgt von einem persönlichen GitHub-Zugriffstoken an und wähle es als Anmeldung."
+      },
+      "gitlab": {
+        "summary": "Issues, Merge Requests und Pipelines auf GitLab, über GitLabs eingebauten Server.",
+        "profile": "Ein entfernter Server: Die Engine verbindet sich nur mit gitlab.com, an geprüfte Adressen und ohne Weiterleitungen. Für dein eigenes GitLab ändere die Adresse.",
+        "setup": "Lege vor dem Test in Zugangsdaten verwalten das Geheimnis mcp/gitlab mit dem Wert Bearer gefolgt von einem GitLab-OAuth-Token mit dem Bereich mcp an und wähle es als Anmeldung."
+      },
+      "playwright": {
+        "summary": "Öffnet und bedient Webseiten in einem Browser ohne Oberfläche.",
+        "profile": "Läuft auf diesem Server mit npx, in einem frischen Browserprofil. Schreibt nur im Ordner der Sitzung und erreicht nur registry.npmjs.org.",
+        "setup": "Benötigt Node.js und Google Chrome auf diesem Server. Surfen hinter diesem Netzwerkprofil ist noch nicht geprüft: Der Browser vertraut dem HTTPS-Proxy des Profils womöglich nicht."
+      }
+    }
   }
 }

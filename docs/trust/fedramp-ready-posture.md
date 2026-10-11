@@ -5,6 +5,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 # FedRAMP posture — what applies, what we meet, what we do not claim
 
+SIEM/ITSM push and external telemetry/posture export require Business. Implementation paths below describe the private assembled Business tree; Community retains its local views, stored data and backup export.
+
+Audit SIEM export, directory archives and external archive verification require Business. Community retains the signed ledger and `olivares audit verify`; `olivares dr backup` remains available. See [edition placement](../editions.md).
+
 > **Status: no FedRAMP authorization exists, none is pending, and — decisive fact first — for
 > the product as actually sold today (self-hosted), FedRAMP does not apply at all.** The FedRAMP
 > Minimum Assessment Scope (FRR-MAS; re-verified against fedramp.gov, including the Consolidated
@@ -48,10 +52,10 @@ model 20x mandates for cloud offerings:
 
 | 20x evidence idea (KSI theme) | Product counterpart | Evidence anchor |
 |---|---|---|
-| KSI-IAM — identity, MFA, least privilege | Federation (SAML/OIDC, PIV path), AAL step-up, deny-closed scoping | `core/auth/federation.go`, `core/auth/piv.go`, `core/auth/assurance.go:21-31`, `modules/sourcescope` |
+| KSI-IAM — identity, MFA, least privilege | Federation (SAML/OIDC), Business Identity & Scale PIV path, AAL step-up, deny-closed scoping | `core/auth/federation.go`, private Business PIV verifier (Community `core/auth/piv.go` is a no-op seam), `core/auth/assurance.go:21-31`, `modules/sourcescope` |
 | KSI-MLA — monitoring/logging/auditing | Append-only hash-chained ledger with **live chain verify exposed as evidence**; SIEM push; WORM archive + legal hold | `core/store/audit.go:12`, `modules/compliance/evidence.go:23`, `modules/siemforward/forwarder.go`, `core/audit/archivecaps.go` |
 | KSI-CNA — architecture, segmentation, encryption in transit | TLS-on-by-default single binary; deny-by-default egress gate for isolated runs; documented network posture | `cmd/olivares/cmd_serve.go`, `core/secure/tls.go`, `core/runtime/sandboxrt/proxy.go:17-34`, [ipv6-parity.md](./ipv6-parity.md) |
-| KSI-SVC — hardening, FIPS-validated crypto | FIPS 140-3 build variant on the CMVP-validated Go module (cert #5247, ACTIVE, re-verified 2026-07-09); STIG-hardened image with OpenSCAP pipeline | `Dockerfile.fips`, `Dockerfile.stig`, `oscap/`, `docs/SCP-09-FIPS-STIG.md` |
+| KSI-SVC — hardening, FIPS-validated crypto | FIPS 140-3 build variant on the CMVP-validated Go module (cert #5247, ACTIVE, re-verified 2026-07-09); STIG-hardened image with OpenSCAP pipeline | `Dockerfile.fips`, `Dockerfile.stig`, Business OpenSCAP source, `docs/SCP-09-FIPS-STIG.md` |
 | KSI-CMT — change management | Signed releases, SLSA Build L3 provenance, schema-parity upgrade gate, OTA signed manifests | `docs/CRA-READINESS.md`, `cmd/olivares/cmd_upgrade.go` |
 | KSI-INR — incident response | Findings→notification→HITL decision→enforcement loop; kill switch; forensics timeline | `modules/eventing`, `modules/sessions/runtime_killswitch.go`, `modules/security/forensic.go` |
 | KSI-RPL — resilience/recovery | DR backup/restore with drills (`olivares dr`), documented RTO/RPO | `core/dr/dr.go`, `docs/DR-RUNBOOK.md` |

@@ -95,7 +95,8 @@
     "errors": {
       "maxAttempts": "Los intentos máximos deben ser 0 o estar entre 1 y 20.",
       "initialInterval": "El intervalo inicial debe ser 0 o estar entre 5 y 3600 segundos."
-    }
+    },
+    "businessRequired": "El envío SIEM y la exportación externa de telemetría requieren Business. Se conservan los ajustes; Community no envía los datos."
   },
   "secret": {
     "title": "Secreto de suscripción",

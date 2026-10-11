@@ -229,11 +229,9 @@ test.describe('console review captures', () => {
         await signIn(page)
         await page.goto('/sessions')
         await shellReady(page)
-        // The TABLE tab: the list instrument, as distinct from the work surface. The
-        // screen keeps both and this capture is of the list.
-        const tab = page.getByRole('tab', { name: /table/i }).first()
-        await tab.waitFor({ timeout: 30_000 })
-        await tab.click()
+        // The table remains reachable through the list's menu.
+        await page.getByTestId('sessions-list-menu').click()
+        await page.getByRole('menuitem', { name: 'Show as table' }).click()
         await page
           .locator('[data-slot="data-table"] table tbody tr')
           .first()
@@ -258,21 +256,8 @@ test.describe('console review captures', () => {
           'every rail row carries the address it opens — without one there is no surface to photograph',
         ).toBeTruthy()
         await row.click()
-        // ⛔ BELOW `xl` THE SURFACE SHOWS ONE PANE, AND THAT IS THE DESIGN, NOT A DEFECT.
-        //    The three panes sit side by side from 1280 px up and fold to one below it
-        //    (`work-surface.tsx:134-183`: `hidden xl:block` on the two panes the address is
-        //    not pointing at). Measured 2026-09-18: at 390 and at 1024 this wait resolved 63
-        //    times to a HIDDEN `session-narrative` and timed out — the spec was asking a
-        //    narrow screen to show a wide screen's layout.
-        //
-        //    So the narrow framings switch panes the way an operator does: the product paints
-        //    a pane switcher below `xl` and this presses its narrative button. The capture is
-        //    then of the same thing at every width — the pane that proves the surface
-        //    RESOLVED a session — reached by each width's own control.
+        // Choosing the row opens the thread at every viewport size.
         const narrative = page.getByTestId('session-narrative')
-        if (!(await narrative.isVisible())) {
-          await page.getByTestId('pane-button-narrative').click()
-        }
         await narrative.waitFor({ timeout: 30_000 })
         await page
           .getByTestId('narrative-loading')
@@ -341,9 +326,8 @@ test.describe('console review captures', () => {
         await signIn(page)
         await page.goto('/sessions')
         await shellReady(page)
-        const tab = page.getByRole('tab', { name: /table/i }).first()
-        await tab.waitFor({ timeout: 30_000 })
-        await tab.click()
+        await page.getByTestId('sessions-list-menu').click()
+        await page.getByRole('menuitem', { name: 'Show as table' }).click()
         const search = page
           .locator('[data-slot="data-table"] input[placeholder]')
           .first()

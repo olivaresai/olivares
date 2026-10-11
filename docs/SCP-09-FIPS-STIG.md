@@ -13,14 +13,16 @@ profile, shipped as **separate, opt-in artifacts**.
 > We claim **no FedRAMP authorization and no DoD ATO**, and we do **not** fabricate a
 > CMVP validation that does not exist.
 
+From 0.1 the deployment variants, scanner and tailoring described here are supplied through Business. The full scan procedure is included in that distribution.
+
 ## TL;DR
 
 | Artifact | What it is | How you verify it |
 |---|---|---|
 | `olivares-fips` binary / archive (`.goreleaser.yaml`) | The control plane built in Go **native FIPS 140-3 mode** (`GOFIPS140=v1.0.0`, still `CGO_ENABLED=0` pure-Go static). | `scripts/fips-verify.sh` — builds it, proves the validated module is linked, demonstrates the runtime toggle. |
 | `Dockerfile.fips` → `…:VERSION-fips-amd64` | That FIPS binary on the same Debian 13 slim base as the default image, launched with `GODEBUG=fips140=on`. | `docker run --rm IMG version` (FIPS on); not STIG-scanned (see below). |
-| `Dockerfile.stig` → `…:VERSION-stig-amd64` | The FIPS binary on a **scannable**, STIG-profiled OS (UBI micro), non-root. | `oscap/scan.sh --image …` against the **upstream** DISA STIG SCAP content. |
-| `oscap/` | OpenSCAP harness: `scan.sh`, `tailoring.xml` (extends the upstream profile), `README.md`. | You run it; it produces **your** report. We ship no baked result. |
+| `Dockerfile.stig` → `…:VERSION-stig-amd64` | The FIPS binary on a **scannable**, STIG-profiled OS (UBI micro), non-root. | Business OpenSCAP scanner against the **upstream** DISA STIG SCAP content. |
+| Business OpenSCAP source | OpenSCAP harness: `scan.sh`, `tailoring.xml` (extends the upstream profile), `README.md`. | You run it; it produces **your** report. We ship no baked result. |
 
 **The default pure-Go reproducible binary that release packaging ships is
 unaffected.** These are additive variants alongside it.
@@ -40,7 +42,7 @@ unaffected.** These are additive variants alongside it.
 - **DoD / federal → STIG hardening with auditable OSCAP verification.** DISA STIG
   is the hardening standard and **OpenSCAP/OSCAP** is the verification path. The
   STIG image bases on an OS that ships DISA STIG SCAP content and is **self-verifiable**
-  with `oscap/`. A passing scan is **evidence**, not an accreditation/ATO.
+  with Business OpenSCAP source. A passing scan is **evidence**, not an accreditation/ATO.
   Authority: DISA STIG + OpenSCAP; public profile source **ComplianceAsCode /
   `scap-security-guide`** — <https://github.com/ComplianceAsCode/content> and
   <https://www.open-scap.org/>
@@ -75,8 +77,8 @@ This is exactly what the `.goreleaser.yaml` `olivares-fips` build, the
 
 ### Why `v1.0.0` and not `v1.26.0`/`latest`
 
-This repo's workspace toolchain is **Go 1.26.8** (`go.work`: `go 1.26.8` /
-`toolchain go1.26.8`).
+This repo's workspace toolchain is **Go 1.26.9** (`go.work`: `go 1.26.9` /
+`toolchain go1.26.9`).
 The module matching it is **v1.26.0** — but as of **2026-04-28** that module is
 **"Pending Review"** on the CMVP **Modules-In-Process List** (CAVP cert **A8028**) —
 i.e. **NOT yet validated**. The **v1.0.0** module (frozen from Go 1.24) holds
@@ -141,27 +143,20 @@ Therefore the **STIG image** (`Dockerfile.stig`) is a separate **deployment** va
   (uid/gid 65532), and sets `GODEBUG=fips140=on`.
 - **Alternative base (documented, not shipped):** Ubuntu + the **`usg`** Ubuntu
   Security Guide tooling (or the upstream `ssg-ubuntu*` datastream) is an equally
-  valid STIG base; swap the final stages and point `oscap/scan.sh --datastream` at
+  valid STIG base; swap the final stages and point Business OpenSCAP scanner at
   the Ubuntu datastream.
 
 ### Run the scan (you produce the evidence)
 
-```sh
-# On the SCANNING host (not in the image):
-dnf install -y openscap-scanner openscap-utils scap-security-guide
-
-oscap/scan.sh --image olivares:stig                       # scan the image rootfs
-oscap/scan.sh --image olivares:stig --tailoring oscap/tailoring.xml
-oscap/scan.sh --host                                                   # scan the host OS
-```
+The Business distribution supplies this scan procedure and its inputs.
 
 Outputs: `oscap-results/results-<ts>.xml`, `arf-<ts>.xml`, `report-<ts>.html`.
 `oscap` exit `2` = "ran, some rules failed" (a real outcome to remediate, **not** a
 harness error). The content is the **authoritative upstream** DISA STIG profile; our
-`oscap/tailoring.xml` only **extends** it and **deselects** container-inapplicable
+Business OpenSCAP tailoring only **extends** it and **deselects** container-inapplicable
 rules (graphical login, bootloader, USB) with each deselection justified inline — it
 **redefines no rule** and **weakens nothing**. FIPS/crypto-policy rules stay selected.
-See [`oscap/README.md`](../oscap/README.md).
+See Business deployment documentation.
 
 ---
 
@@ -175,8 +170,8 @@ the contract: what each artifact claims, and its verification status.
 | **FIPS binary** `GOFIPS140=v1.0.0` (`olivares-fips`, `Dockerfile.fips`, `Dockerfile.stig`) | Built in Go native FIPS 140-3 mode using the **CMVP-validated** "FIPS 140-3 Go Cryptographic Module **v1.0.0**", **CMVP Certificate #5247** (active; frozen from Go 1.24). | **Validated module.** Self-verify the build with `scripts/fips-verify.sh` (links `crypto/internal/fips140/v1.0.0`) and the runtime with `GODEBUG=fips140=on` → `fips140.Enabled()==true`, `Version()=="v1.0.0"`. We claim the *module* is validated — **not** that any product/system is FedRAMP-authorized. |
 | **`GOFIPS140=v1.26.0` / `latest`** (matches this repo's Go 1.26 toolchain) | Enables FIPS 140-3 **mode** with the v1.26.0 module. | **FIPS mode, but NOT CMVP-validated.** v1.26.0 is **"Pending Review"** on the CMVP Modules-In-Process List (2026-04-28, CAVP cert **A8028**). Do **not** represent as validated. We pin `v1.0.0` precisely to avoid this. |
 | **`GODEBUG=fips140=on`** (runtime) | The validated module runs its self-tests and the stdlib permits only approved algorithms for this process. | **Verifiable** via `crypto/fips140.Enabled()`. Build-time `GOFIPS140` selects the module; this toggle enforces it at runtime. |
-| **STIG image** (`Dockerfile.stig`) | Hardened toward the DISA STIG and **self-verifiable** with the published OpenSCAP profile. | **Self-verifiable, NOT a certification.** Run `oscap/scan.sh` against the **upstream** ComplianceAsCode DISA STIG content to produce **your** report. We ship the harness, not a passing result. **No DoD ATO** is claimed. |
-| **`oscap/tailoring.xml`** | A tailoring that **extends** the upstream DISA STIG profile and deselects only container-inapplicable rules. | **Honest tailoring.** Inherits all upstream rules; redefines none; weakens none; each deselection justified inline and reversible. FIPS/crypto rules stay selected. |
+| **STIG image** (`Dockerfile.stig`) | Hardened toward the DISA STIG and **self-verifiable** with the published OpenSCAP profile. | **Self-verifiable, NOT a certification.** Run Business OpenSCAP scanner against the **upstream** ComplianceAsCode DISA STIG content to produce **your** report. We ship the harness, not a passing result. **No DoD ATO** is claimed. |
+| **Business OpenSCAP tailoring** | A tailoring that **extends** the upstream DISA STIG profile and deselects only container-inapplicable rules. | **Honest tailoring.** Inherits all upstream rules; redefines none; weakens none; each deselection justified inline and reversible. FIPS/crypto rules stay selected. |
 | **Default pure-Go binary / Debian 13 slim image** (base `olivares` build, `Dockerfile`/`Dockerfile.release`) | The standard reproducible release artifact. | **Unaffected by SCP-09.** Byte-for-byte unchanged; the FIPS/STIG variants are additive and opt-in. |
 | **FedRAMP / DoD ATO** | — | **Not claimed. None held.** This deliverable provides validated-crypto and self-verifiable-STIG *building blocks*; authorization is a separate, system-level process. |
 

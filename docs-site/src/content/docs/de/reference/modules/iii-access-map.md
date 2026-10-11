@@ -11,7 +11,7 @@ Modul III ist die **Read/Write Access Map**: welche Herkunft (Agent, Identität,
 Session) welche Ressource berührt, als read oder read-write klassifiziert, und
 der **Permitted-vs-Observed-Diff**, der Least-Privilege-Drift sichtbar macht. Es
 ist eine der nützlichsten und differenziertesten Fähigkeiten des Produkts — eines
-der 31 Module, nicht das ganze Produkt. Diese Seite ist die Referenz dafür, was
+der 32 Module, nicht das ganze Produkt. Diese Seite ist die Referenz dafür, was
 die Map ist und wie man sie ehrlich liest.
 
 ## Der Edge

@@ -34,9 +34,9 @@ type Module struct {
 	log   *slog.Logger
 	data  api.ModuleData
 	clock model.Clock
-	// toolPins is the operator surface of the enterprise pin verifier
-	// (nil in community — the /toolpins routes answer 501 honestly).
-	toolPins mcpc.ToolPinAdmin
+	// Verification can be present without its optional management surface.
+	toolPinVerifier mcpc.ToolPinVerifier
+	toolPins        mcpc.ToolPinAdmin
 
 	mu     sync.Mutex
 	cancel func() // bus unsubscribe

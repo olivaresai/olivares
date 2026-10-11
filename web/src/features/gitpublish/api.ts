@@ -7,9 +7,9 @@
 // the tenant the operator acted in, so a tenant switch between the click and the dispatch
 // cannot move a publication to another tenant.
 //
-// ⛔ The refusal body of this module is FLAT — `{"error": "<code>", "intent_id": "…"}` — not
-//    the core envelope, so ApiError.code reads `internal` for it. model.ts reads the code from
-//    ApiError.body; nothing here re-parses messages.
+// Refusals use the shared error.code/error.message envelope. The intent_id stays
+// beside error so model.ts can retain the recovery reference. Older servers may
+// still return a string-valued error; model.ts also accepts that legacy form.
 import { http, type TenantRequestOptions } from '@/lib/api/client'
 import type {
   CreateTargetInput,

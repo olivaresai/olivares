@@ -7,6 +7,7 @@ import {
   can,
   confinedWorkspaceIn,
   grantInTenant,
+  isGlobalAccount,
   roleInTenant,
   roleRank,
 } from './rbac'
@@ -207,3 +208,22 @@ describe('roleRank', () => {
 // RoleGrants exactly — with a vacuity control on both the universe and the set, and a
 // check that the set invents nothing outside it. That is strictly stronger than the
 // four cases removed here, and it sits where the rule now lives.
+
+describe('isGlobalAccount — superadmin with no grant in the tenant (#503)', () => {
+  it('the setup administrator (superadmin and owner here) is a member, not global', () => {
+    const p = principal([grant(TENANT, 'owner', [])], true)
+    expect(isGlobalAccount(p, TENANT)).toBe(false)
+  })
+
+  it('a superadmin with no grant in this tenant is global', () => {
+    expect(isGlobalAccount(principal([], true), TENANT)).toBe(true)
+    const p = principal([grant(OTHER, 'owner', [])], true)
+    expect(isGlobalAccount(p, TENANT)).toBe(true)
+    expect(isGlobalAccount(p, null)).toBe(true)
+  })
+
+  it('a non-superadmin or an unresolved principal is never global', () => {
+    expect(isGlobalAccount(principal([]), TENANT)).toBe(false)
+    expect(isGlobalAccount(null, TENANT)).toBe(false)
+  })
+})

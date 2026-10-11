@@ -96,7 +96,7 @@ var (
 	// A content fingerprint of the canonical desired spec.
 	pdeclNoneSpecHash = model.None("hex SHA-256 of the canonical desired spec: spec.go:161, helpers.go:203")
 	// A source-control reference, refused when it carries a credential.
-	pdeclNoneSourceRef = model.None("a GitOps source reference, refused when it looks like a credential and otherwise only rendered: definitions.go:114, definitions.go:66, definitions.go:467")
+	pdeclNoneSourceRef = model.None("a source provenance label, never a principal; credential-like values are refused and catalog applies compare it to the approved entry label: definitions.go:114, lifecycle.go")
 	// A pointer into a secret store, never a secret and never a principal.
 	pdeclNoneSecretRef = model.None("a secret-store reference <scheme>:<locator> from a closed scheme allow-list: helpers.go:260, helpers.go:284")
 	// The enterprise resource a wiring connects to.
@@ -226,8 +226,8 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 			{Name: colFromVersion, Kind: model.KindInt},
 			{Name: colToVersion, Kind: model.KindInt},
 			{Name: colPlanHash, Kind: model.KindText, Nullable: true, Indexed: true, Principal: model.None("a hex SHA-256 binding an approval to one transition, compared only as a hash: helpers.go:210, lifecycle.go:314")},
-			{Name: colApprovalRef, Kind: model.KindText, Nullable: true, Principal: model.None("a governance approval reference (approval id, no-gate or break-glass handle) resolved only as an approval: cmd/olivares/approvalbridge.go:379, cmd/olivares/approvalbridge.go:382, cmd/olivares/approvalbridge.go:646; the stored copy is only rendered: operations.go:39")},
-			{Name: colGateStatus, Kind: model.KindText, Principal: model.None("a gate decision from the closed GateStatus set (ports.go:31, ports.go:42) the governance adapter maps into: cmd/olivares/approvalbridge.go:943")},
+			{Name: colApprovalRef, Kind: model.KindText, Nullable: true, Principal: model.None("a governance approval reference (approval id, no-gate or break-glass handle) resolved only as an approval: cmd/olivares/internal/approvalbridge/approvalbridge.go:509, cmd/olivares/internal/approvalbridge/approvalbridge.go:512, cmd/olivares/internal/approvalbridge/approvalbridge.go:518; the stored copy is only rendered: operations.go:39")},
+			{Name: colGateStatus, Kind: model.KindText, Principal: model.None("a gate decision from the closed GateStatus set (ports.go:31, ports.go:42) the governance adapter maps into: cmd/olivares/internal/approvalbridge/approvalbridge.go:1130")},
 			{Name: colOpStatus, Kind: model.KindText, Indexed: true, Principal: model.None("closed set of operation outcomes: lifecycle.go:29, lifecycle.go:36")},
 			{Name: colActor, Kind: model.KindText, Principal: model.Ref(model.EncodeUserRef, model.ClassEvidence)},
 			{Name: colResult, Kind: model.KindText, Nullable: true, Principal: model.None("a bounded outcome summary, only rendered: lifecycle.go:676, operations.go:40")},

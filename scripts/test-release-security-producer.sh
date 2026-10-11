@@ -157,15 +157,15 @@ _restamp() {
 		cd "$WORK/root" || exit 1
 		git add -A >/dev/null 2>&1
 		git commit -q --amend --no-edit >/dev/null 2>&1
-		git tag -f v26.8.0 >/dev/null 2>&1
+		git tag -f 1.0 >/dev/null 2>&1
 	)
 }
 declare_security() {
-	printf '%s\n' "$@" >"$WORK/root/release/advisories/26.8.0.txt"
+	printf '%s\n' "$@" >"$WORK/root/release/advisories/1.0.txt"
 	_restamp
 }
 declare_none() {
-	rm -f "$WORK/root/release/advisories/26.8.0.txt"
+	rm -f "$WORK/root/release/advisories/1.0.txt"
 	_restamp
 }
 
@@ -183,7 +183,7 @@ declare_none() {
 	cp "$ROOT/.gitignore" .gitignore 2>/dev/null || :
 	git add -A >/dev/null 2>&1
 	git commit -q -m "fixture release commit" >/dev/null 2>&1
-	git tag v26.8.0
+	git tag 1.0
 ) || exit 1
 [ -z "$(git -C "$WORK/root" status --porcelain)" ]
 check "the fixture checkout starts clean" "the dirty cases are meaningful" $?
@@ -199,7 +199,7 @@ run_block() { # run_block [VAR=VAL …]
 	log="$WORK/log.$n"
 	: >"$log"
 	(cd "$WORK/root" && env -i PATH="${PATH_OVERRIDE:-$WORK/bin:/usr/bin:/bin}" HOME="$WORK" \
-		RELEASE_TAG="v26.8.0" RELEASE_VERSION="26.8.0" GH_TOKEN="stub-token" \
+		RELEASE_TAG="1.0" RELEASE_VERSION="1.0" GH_TOKEN="stub-token" \
 		MANIFEST_EXPIRES_IN="2160h" STUB_LOG="$log" "$@" \
 		bash "$BLOCK") >"$WORK/out.$n" 2>&1
 	rc=$?
@@ -226,13 +226,13 @@ check "a declared security release produces" "the firing direction" $?
 # EVERY argument, in order. Not "does it mention security" — the channel, the version, the
 # advisory list, the expiry and the output path are each a way to produce the wrong manifest
 # while still producing one.
-want_gen=$'ARGV 16\nARG run\nARG ./cmd/olivares\nARG release\nARG manifest\nARG --dir\nARG dist\nARG --channel\nARG security\nARG --version\nARG 26.8.0\nARG --advisory\nARG CVE-2026-0001\nARG --expires-in\nARG 2160h\nARG --out\nARG dist/security-manifest.json'
+want_gen=$'ARGV 16\nARG run\nARG ./cmd/olivares\nARG release\nARG manifest\nARG --dir\nARG dist\nARG --channel\nARG security\nARG --version\nARG 1.0\nARG --advisory\nARG CVE-2026-0001\nARG --expires-in\nARG 2160h\nARG --out\nARG dist/security-manifest.json'
 [ "$(argv_nth 1)" = "$want_gen" ]
 check "generation runs with the exact expected argv" "channel, version, advisory, out" $?
 
 # The generator's own self-check is structural; the POLICY bounds run in the verifier, so a
 # producer that generates and skips verification ships an unchecked manifest.
-want_ver=$'ARGV 14\nARG run\nARG ./cmd/olivares\nARG release\nARG verify-manifest\nARG --manifest\nARG dist/security-manifest.json\nARG --checksums\nARG dist/checksums.txt\nARG --dir\nARG dist\nARG --expect-channel\nARG security\nARG --expect-version\nARG 26.8.0'
+want_ver=$'ARGV 14\nARG run\nARG ./cmd/olivares\nARG release\nARG verify-manifest\nARG --manifest\nARG dist/security-manifest.json\nARG --checksums\nARG dist/checksums.txt\nARG --dir\nARG dist\nARG --expect-channel\nARG security\nARG --expect-version\nARG 1.0'
 [ "$(argv_nth 2)" = "$want_ver" ]
 check "the manifest is VERIFIED, same channel and version" "generate is not enough" $?
 
@@ -245,7 +245,7 @@ check "the manifest is VERIFIED, same channel and version" "generate is not enou
 # The assertion stays argv-EXACT rather than being loosened to "contains upload": an
 # exact argv is what makes a silently re-added flag fail here, and loosening it to
 # accommodate the change would have removed the only witness that can catch its return.
-want_upl=$'ARGV 4\nARG release\nARG upload\nARG v26.8.0\nARG dist/security-manifest.json'
+want_upl=$'ARGV 4\nARG release\nARG upload\nARG 1.0\nARG dist/security-manifest.json'
 [ "$(argv_nth 3)" = "$want_upl" ]
 check "the manifest is uploaded CREATE-ONLY to the draft" "the producer's last act, no --clobber" $?
 [ "$(calls)" -eq 3 ]
@@ -272,7 +272,7 @@ printf '%s' "$out" | command grep -q 'no security channel'
 check "and it says so" "an audible no-op" $?
 
 # --- D · the classifier's refusal stops the producer ---------------------------------------
-: >"$WORK/root/release/advisories/26.8.0.txt" # exists, declares nothing => refuse (exit 2)
+: >"$WORK/root/release/advisories/1.0.txt" # exists, declares nothing => refuse (exit 2)
 run_block
 [ "$rc" -ne 0 ] && [ "$(calls)" -eq 0 ]
 check "a half-made declaration stops the producer" "refusal is not 'none'" $?

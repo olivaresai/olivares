@@ -6,8 +6,10 @@ package sessions
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -17,6 +19,73 @@ import (
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 )
+
+func TestWorkspace_ExactLookupBeforeLimit(t *testing.T) {
+	m, st, tenant, _ := newRuntimeHarness(t)
+	ctx := context.Background()
+	saved := mkWorkspace(t, m, tenant, CreateWorkspaceParams{MountMode: mountRO})
+	disabled := mkWorkspace(t, m, tenant, CreateWorkspaceParams{RootPath: saved.RootPath})
+	if err := st.Mutate(ctx, tenant, func(sc store.Scope) error {
+		repo, err := sc.Ext(workspaceKind)
+		if err != nil {
+			return err
+		}
+		rec, err := findWorkspaceRec(ctx, repo, disabled.WorkspaceRef)
+		if err != nil {
+			return err
+		}
+		rec[colWsState] = wsDisabled
+		_, err = repo.Update(ctx, rec)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	newer := mkWorkspace(t, m, tenant, CreateWorkspaceParams{})
+	var otherTenant model.TenantID
+	if err := st.System(ctx, func(sys store.SystemScope) error {
+		org, err := sys.CreateOrg(ctx, model.Org{Name: "other", Slug: "other", Status: model.StatusActive})
+		otherTenant = org.TenantID
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	mkWorkspace(t, m, otherTenant, CreateWorkspaceParams{RootPath: saved.RootPath})
+	for _, tc := range []struct {
+		name  string
+		query url.Values
+		want  string
+	}{
+		{"older active match", url.Values{"root_path": {saved.RootPath}, "state": {"active"}}, saved.WorkspaceRef},
+		{"disabled match", url.Values{"root_path": {saved.RootPath}, "state": {"disabled"}}, disabled.WorkspaceRef},
+		{"missing exact path", url.Values{"root_path": {saved.RootPath + "' OR 1=1 --"}, "state": {"active"}}, ""},
+		{"unfiltered newest first", url.Values{}, newer.WorkspaceRef},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.query.Set("limit", "1")
+			rec := httptest.NewRecorder()
+			m.handleListWorkspaces(rec, httptest.NewRequest(http.MethodGet, "/workspaces?"+tc.query.Encode(), nil), api.ModuleContext{Tenant: tenant})
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status=%d", rec.Code)
+			}
+			var got listResponse[workspaceDTO]
+			if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+				t.Fatal(err)
+			}
+			if tc.want == "" {
+				if len(got.Items) != 0 {
+					t.Fatal("nonexistent exact path returned a workspace")
+				}
+				return
+			}
+			if len(got.Items) != 1 || got.Items[0].WorkspaceRef != tc.want {
+				t.Fatalf("workspace=%+v, want %s", got.Items, tc.want)
+			}
+			if tc.want == saved.WorkspaceRef && got.Items[0].MountMode != mountRO {
+				t.Fatal("lookup changed the saved access policy")
+			}
+		})
+	}
+}
 
 // These are real stored TEXT values, not a fake decoder result. KindJSON's
 // repository currently permits malformed text as well as JSON of the wrong shape.
@@ -82,7 +151,7 @@ func TestWorkspace_CorruptPolicyBlocksFileEffects(t *testing.T) {
 				assertWorkspacePolicyUnavailable(t, m.deleteFile(ctx, tenant, ws.WorkspaceRef, rel, false, actorU, actorKindU))
 				assertWorkspacePolicyUnavailable(t, m.deleteFile(ctx, tenant, ws.WorkspaceRef, rel, true, actorU, actorKindU))
 			}
-			_, err := m.createRun(ctx, tenant, CreateRunParams{
+			_, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{
 				Transport: TransportStreamJSON, Isolation: IsolationNative, WorkspaceRef: ws.WorkspaceRef,
 				Actor: actorU, ActorKind: actorKindU,
 			})
@@ -161,7 +230,7 @@ func TestWorkspace_PolicyEmptyFormsRemainUsable(t *testing.T) {
 			if err != nil || len(page.Items) != 1 || page.Items[0].WorkspaceRef != ws.WorkspaceRef {
 				t.Fatalf("valid policy disappeared from the registry: %v", err)
 			}
-			if _, err := m.createRun(ctx, tenant, CreateRunParams{
+			if _, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{
 				Transport: TransportStreamJSON, Isolation: IsolationNative, WorkspaceRef: ws.WorkspaceRef,
 				Actor: actorU, ActorKind: actorKindU,
 			}); err != nil {
@@ -255,7 +324,7 @@ func TestWorkspace_CorruptPolicyBlocksResume(t *testing.T) {
 	fr := &fakeRunner{initSID: "workspace-policy-session"}
 	m, st, tenant, _ := newRuntimeHarness(t, WithRunner(fr), WithCredentialSource(staticCred()))
 	ws := mkWorkspace(t, m, tenant, CreateWorkspaceParams{})
-	run, err := m.createRun(ctx, tenant, CreateRunParams{
+	run, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative, WorkspaceRef: ws.WorkspaceRef,
 		Actor: actorU, ActorKind: actorKindU,
 	})
@@ -313,7 +382,7 @@ func TestWorkspace_CorruptPolicyRegistryHTTP(t *testing.T) {
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/workspaces", nil)
 	m.handleListWorkspaces(rec, req, api.ModuleContext{Tenant: tenant})
-	if rec.Code != http.StatusFailedDependency || rec.Body.String() != "{\"error\":{\"message\":\"workspace allow_subpaths policy is unavailable\"}}\n" {
+	if rec.Code != http.StatusFailedDependency || rec.Body.String() != "{\"error\":{\"code\":\"module_error\",\"message\":\"workspace allow_subpaths policy is unavailable\"}}\n" {
 		t.Fatalf("corrupt policy HTTP response: code=%d body=%q", rec.Code, rec.Body.String())
 	}
 }

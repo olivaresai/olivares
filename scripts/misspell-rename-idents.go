@@ -26,11 +26,11 @@ import (
 )
 
 func main() {
-	de := flag.String("de", "", "subcadena mal escrita")
-	a := flag.String("a", "", "subcadena correcta")
+	de := flag.String("de", "", "misspelled substring")
+	a := flag.String("a", "", "correct substring")
 	flag.Parse()
 	if *de == "" || *a == "" || flag.NArg() == 0 {
-		fmt.Fprintln(os.Stderr, "uso: -de <mal> -a <bien> <fichero.go>...")
+		fmt.Fprintln(os.Stderr, "usage: -de <incorrect> -a <correct> <file.go>...")
 		os.Exit(2)
 	}
 	// Con la primera en mayúscula también, para identificadores camelCase (numCancelled).
@@ -82,7 +82,7 @@ func main() {
 			fmt.Fprintf(os.Stderr, "misspell-rename-idents: %v\n", err)
 			os.Exit(2)
 		}
-		fmt.Printf("%-64s %d identificador(es)\n", ruta, len(cambios))
+		fmt.Printf("%-64s %d identifier(s)\n", ruta, len(cambios))
 	}
-	fmt.Printf("total: %d identificador(es) reescritos\n", total)
+	fmt.Printf("total: %d identifier(s) rewritten\n", total)
 }

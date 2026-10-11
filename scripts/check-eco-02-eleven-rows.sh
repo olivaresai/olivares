@@ -27,7 +27,7 @@ CANON="${OLIVARES_ECO02_CANON:-design/PRICING-CANON.md}"
 
 grep -q 'NOT EXECUTED' "$DOC" || fail "$DOC lost NOT EXECUTED"
 if grep -qiE 'catalog closed|eleven rows (are )?done|executed on overlay main' "$DOC"; then
-	fail "$DOC claims a close this lote does not have"
+	fail "$DOC claims a close this batch does not have"
 fi
 grep -q 'incomplete_is_worklist: true' "$CANON" || fail "canon lost incomplete_is_worklist"
 grep -q 'once filas' "$DIFF" || fail "$DIFF lost the eleven-row work list"

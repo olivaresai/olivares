@@ -7,6 +7,31 @@
 // not immutable truth. Key references carry only a masked `hint` — NEVER a usable
 // credential (docs/SECURITY-HARDENING.md): there is no field that can hold the secret.
 
+/** Current per-account/provider observations; the reference catalog is not availability. */
+export interface ModelAvailability {
+  source_ref: string
+  provider_kind: string
+  provider_ref?: string
+  account_ref?: string
+  driver?: string
+  state: 'fresh' | 'stale' | 'failed' | 'unsupported'
+  models: { id: string; seen_at: string }[]
+  seen_at?: string
+  checked_at?: string
+  message?: string
+}
+
+export interface ModelAvailabilityResponse {
+  items: ModelAvailability[]
+  refresh_interval_seconds: number
+}
+
+export interface ModelAvailabilityFilter {
+  provider_ref?: string
+  account_ref?: string
+  driver?: string
+}
+
 export type ModelCapability =
   | 'streaming'
   | 'tool_use'

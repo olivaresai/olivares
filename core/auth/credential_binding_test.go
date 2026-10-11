@@ -21,7 +21,7 @@ import (
 	"github.com/olivaresai/olivares/core/store"
 )
 
-// credentialBindingFixture is a real SQLite store with the real Authenticator:
+// credentialBindingFixture is a real store with the real Authenticator:
 // two accounts that are members of one tenant, and a second tenant only the
 // administrator belongs to. Sessions are seeded as rows and then authenticated,
 // so every principal carries the private reference Authenticate stamps.
@@ -39,14 +39,18 @@ type credentialBindingFixture struct {
 
 func newCredentialBindingFixture(t *testing.T) *credentialBindingFixture {
 	t.Helper()
+	return newCredentialBindingFixtureConfig(t, store.Config{Engine: store.EngineSQLite, DSN: filepath.Join(t.TempDir(), "credential-binding.db"), Debug: true})
+}
+
+func newCredentialBindingFixtureConfig(t *testing.T, cfg store.Config) *credentialBindingFixture {
+	t.Helper()
 	ctx := context.Background()
-	dsn := filepath.Join(t.TempDir(), "credential-binding.db")
-	st, err := sqlstore.Open(ctx, store.Config{Engine: store.EngineSQLite, DSN: dsn, Debug: true}, nil)
+	st, err := sqlstore.Open(ctx, cfg, nil)
 	if err != nil {
 		t.Fatalf("open store: %v", err)
 	}
 	t.Cleanup(func() { _ = st.Close() })
-	f := &credentialBindingFixture{t: t, ctx: ctx, dsn: dsn, st: st, a: NewAuthenticator(st, nil)}
+	f := &credentialBindingFixture{t: t, ctx: ctx, dsn: cfg.DSN, st: st, a: NewAuthenticator(st, nil)}
 	if err := st.System(ctx, func(sys store.SystemScope) error {
 		if _, err := sys.EnsureSystemTenant(ctx); err != nil {
 			return err

@@ -23,11 +23,11 @@ func manifestRevoking(rs *release.RevokedSet, releasedAt time.Time) release.Mani
 	return release.Manifest{
 		SchemaVersion: release.ManifestSchemaVersion,
 		Channel:       release.ChannelStable,
-		Version:       "26.8.0",
+		Version:       "26.800",
 		ReleasedAt:    releasedAt,
 		Artifacts: []release.Artifact{{
 			OS: "linux", Arch: "amd64",
-			Filename: "olivares_26.8.0_linux_amd64.tar.gz",
+			Filename: "olivares_26.800_linux_amd64.tar.gz",
 			SHA256:   strings.Repeat("a", 64),
 		}},
 		Revoked: rs,

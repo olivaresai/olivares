@@ -36,20 +36,23 @@ export LC_ALL
 
 RAIZ="${OLIVARES_CLONE:-$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")/.." && pwd -P)}"
 cd "$RAIZ" 2>/dev/null || {
-	echo "check-screenshot-coverage: ⛔ NO HE PODIDO MIRAR: no existe $RAIZ" >&2
+	echo "check-screenshot-coverage: ⛔ COULD NOT CHECK: missing $RAIZ" >&2
 	exit 2
 }
 
-REG="web/src/features/registry.tsx"
+# The console's view entries: one features/<dir>/views.tsx per directory.
+REG="web/src/features/*/views.tsx"
+# shellcheck disable=SC2206 # the pattern is meant to expand
+reg_files=($REG)
 CAPS="docs-site/public/console"
 TECHO="${OLIVARES_SCREENSHOT_UNCOVERED_MAX:-40}"
 
-[ -f "$REG" ] || {
-	echo "check-screenshot-coverage: ⛔ NO HE PODIDO MIRAR: falta $REG" >&2
+[ -f "${reg_files[0]}" ] || {
+	echo "check-screenshot-coverage: ⛔ COULD NOT CHECK: missing $REG" >&2
 	exit 2
 }
 [ -d "$CAPS" ] || {
-	echo "check-screenshot-coverage: ⛔ NO HE PODIDO MIRAR: falta $CAPS/" >&2
+	echo "check-screenshot-coverage: ⛔ COULD NOT CHECK: missing $CAPS/" >&2
 	exit 2
 }
 
@@ -64,7 +67,7 @@ TECHO="${OLIVARES_SCREENSHOT_UNCOVERED_MAX:-40}"
 # lo que ni siquiera mira. Ahora se unen las dos fuentes, de modo que ninguna puede esconder una
 # ruta por si sola, y la deuda de seis queda DECLARADA en el techo en vez de invisible.
 CENSO="${OLIVARES_ROUTE_CENSUS:-web/src/features/route-census.json}"
-rutas_reg="$(grep -oE "^[[:space:]]+path: '(/[A-Za-z0-9/_-]*)'," "$REG" 2>/dev/null |
+rutas_reg="$(grep -ohE "^[[:space:]]+path: '(/[A-Za-z0-9/_-]*)'," "${reg_files[@]}" 2>/dev/null |
 	sed -E "s/.*path: '([^']*)'.*/\1/")"
 rutas_censo=""
 if [ -r "$CENSO" ]; then
@@ -75,12 +78,12 @@ n_rutas="$(grep -c . <<<"$rutas" || true)"
 # CONTROL POSITIVO en las DOS fuentes: cero rutas o cero capturas no es un verde, es no haber
 # mirado. Un censo vacío aprueba cualquier cosa, que es el defecto que este gate viene a cerrar.
 if [ "${n_rutas:-0}" -lt 10 ]; then
-	echo "check-screenshot-coverage: ⛔ NO HE PODIDO MIRAR: el registro dio $n_rutas rutas (<10)." >&2
+	echo "check-screenshot-coverage: ⛔ COULD NOT CHECK: registry yielded $n_rutas routes (<10)." >&2
 	exit 2
 fi
 n_caps="$(find "$CAPS" -name '*.png' -type f 2>/dev/null | wc -l | tr -d ' ')"
 if [ "${n_caps:-0}" -eq 0 ]; then
-	echo "check-screenshot-coverage: ⛔ NO HE PODIDO MIRAR: cero PNG en $CAPS/." >&2
+	echo "check-screenshot-coverage: ⛔ COULD NOT CHECK: no PNG files in $CAPS/." >&2
 	exit 2
 fi
 bases="$(find "$CAPS" -name '*.png' -type f -printf '%f\n' 2>/dev/null |
@@ -120,29 +123,29 @@ done <<EOF
 $rutas
 EOF
 
-echo "check-screenshot-coverage: $n_sin de $n_rutas ruta(s) sin captura (techo $TECHO) · $n_caps PNG en $CAPS/"
+echo "check-screenshot-coverage: $n_sin of $n_rutas route(s) without screenshots (maximum $TECHO) · $n_caps PNGs in $CAPS/"
 if [ "$n_sin" -gt 0 ]; then
-	echo "  sin captura:"
+	echo "  without screenshots:"
 	printf '%s' "$sin" | sed 's/^/    /'
 fi
 
 if [ "$n_sin" -gt "$TECHO" ]; then
-	echo "check-screenshot-coverage: ⛔ SUBIÓ: $n_sin sin captura frente al techo $TECHO." >&2
-	echo "  Una ruta nueva sin captura es legítima; que la cifra suba sin decirlo, no. Captúrala, o" >&2
-	echo "  sube OLIVARES_SCREENSHOT_UNCOVERED_MAX en el Taskfile en el MISMO commit y di cuál es." >&2
+	echo "check-screenshot-coverage: ⛔ INCREASE: $n_sin without screenshots, above maximum $TECHO." >&2
+	echo "  A new route without a screenshot is allowed when declared. Capture it, or" >&2
+	echo "  raise OLIVARES_SCREENSHOT_UNCOVERED_MAX in the Taskfile in this commit and name the route." >&2
 	# ⛔ CON EL TECHO EN 0 (desde 2026-08-20) ESTE MENSAJE ES LO PRIMERO QUE VE QUIEN AÑADE UNA RUTA,
 	# y hasta hoy decía «captúrala» sin decir CÓMO. Un trinquete que muerde sin dar el comando manda
 	# a quien lo encuentra a leerse el arnés entero, y la salida cómoda pasa a ser subir el techo.
-	echo "  Capturarla son dos pasos y ninguno es heroico:" >&2
-	echo "    1) añade la ruta a VIEWS en web/e2e/docs-captures.spec.ts CON su \`heading\` — el h1 real" >&2
-	echo "       de la vista. Sin él se guarda una captura del esqueleto y pasa cualquier comprobación" >&2
-	echo "       de que el fichero existe (registry.capture-coverage.test.ts lo exige y lo explica)." >&2
-	echo "    2) PUBLICAR=1 bash scripts/docs-captures.sh   — arranca los motores, fotografía y publica." >&2
-	echo "  Si la ruta NO debe fotografiarse, decláralo en SIN_CAPTURA con el motivo EN LA MISMA LÍNEA," >&2
-	echo "  nunca en un comentario suelto; y si el motivo se puede quitar, quítalo en vez de declararlo." >&2
+	echo "Capture it in two steps:" >&2
+	echo "    1) add the route to VIEWS in web/e2e/docs-captures.spec.ts with its \`heading\`, the view's" >&2
+	echo "       actual h1. Without it, a loading-skeleton screenshot can pass file-existence checks" >&2
+	echo "       (registry.capture-coverage.test.ts requires it and explains why)." >&2
+	echo "    2) PUBLICAR=1 bash scripts/docs-captures.sh — starts engines, captures screenshots, and publishes." >&2
+	echo "  If the route should not be captured, declare it in SIN_CAPTURA with a reason on the same line," >&2
+	echo "  not in a separate comment. Resolve avoidable exclusions instead of declaring them." >&2
 	exit 1
 fi
 if [ "$n_sin" -lt "$TECHO" ]; then
-	echo "check-screenshot-coverage: ✔ bajó a $n_sin — baja el techo en el mismo commit."
+	echo "check-screenshot-coverage: ✔ decreased to $n_sin; lower the maximum in this commit."
 fi
-echo "check-screenshot-coverage: ✔ la deuda de cobertura no sube"
+echo "check-screenshot-coverage: ✔ screenshot coverage backlog has not increased"

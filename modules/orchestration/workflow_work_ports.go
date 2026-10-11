@@ -12,14 +12,10 @@ import (
 	"github.com/olivaresai/olivares/core/model"
 )
 
-// WorkActor is the authenticated workflow initiator projected into the work
-// ports. It is provenance only; adapters construct the neighbor module's
-// principal from trusted composition state, never from workflow config.
-//
-// CredentialBinding and RunID are the run's opaque core/auth credential
-// binding and the run it binds. A communication effect resolves the pair
-// through core/auth; neither is authority by itself, and the handle prints and
-// serializes as nothing.
+// WorkActor records initiator provenance; adapters construct principals from
+// trusted composition state, never workflow config. Effects resolve the opaque
+// CredentialBinding/RunID pair through core/auth; neither is authority by itself.
+// The credential handle never prints or serializes.
 type WorkActor struct {
 	Kind              string
 	Ref               string
@@ -261,6 +257,7 @@ type WorkflowAckReader interface {
 	ObserveWorkAck(context.Context, model.TenantID, WorkAckQuery) (WorkAckObservation, error)
 }
 
+// Deprecated: Use RemoteWorkObserveRequest.
 type WorkReconcileRequest struct {
 	RunRef         string
 	StepRef        string
@@ -269,6 +266,7 @@ type WorkReconcileRequest struct {
 	BindingID      model.ID
 }
 
+// Deprecated: Use RemoteWorkResult.
 type WorkReconcileResult struct {
 	BindingID model.ID
 	CommandID model.ID
@@ -277,6 +275,7 @@ type WorkReconcileResult struct {
 	State     string
 }
 
+// Deprecated: Use RemoteWorkExecutor.
 type WorkflowBindingControl interface {
 	ReconcileWorkBinding(context.Context, model.TenantID, WorkReconcileRequest) (WorkReconcileResult, error)
 }
@@ -287,7 +286,8 @@ var (
 	ErrWorkflowMessageUnwired   = errors.New("orchestration: workflow message control is not wired")
 	ErrWorkflowHandoffUnwired   = errors.New("orchestration: workflow handoff control is not wired")
 	ErrWorkflowAckReaderUnwired = errors.New("orchestration: workflow ack reader is not wired")
-	ErrWorkflowBindingUnwired   = errors.New("orchestration: workflow binding control is not wired")
+	// Deprecated: Retained for source compatibility.
+	ErrWorkflowBindingUnwired = errors.New("orchestration: workflow binding control is not wired")
 
 	// ErrWorkflowReauthenticationRequired is returned by a communication port
 	// when the run's credential binding is missing, invalid, superseded or no
@@ -339,10 +339,4 @@ type unwiredWorkflowAckReader struct{}
 
 func (unwiredWorkflowAckReader) ObserveWorkAck(context.Context, model.TenantID, WorkAckQuery) (WorkAckObservation, error) {
 	return WorkAckObservation{}, ErrWorkflowAckReaderUnwired
-}
-
-type unwiredWorkflowBindingControl struct{}
-
-func (unwiredWorkflowBindingControl) ReconcileWorkBinding(context.Context, model.TenantID, WorkReconcileRequest) (WorkReconcileResult, error) {
-	return WorkReconcileResult{}, ErrWorkflowBindingUnwired
 }

@@ -42,7 +42,7 @@ export LC_ALL
 export GOMAXPROCS="${GOMAXPROCS:-2}"
 
 could_not_look() {
-	printf 'test-nfpm-openrc: NO HE PODIDO MIRAR — %s\n' "$*" >&2
+	printf 'test-nfpm-openrc: COULD NOT CHECK — %s\n' "$*" >&2
 	exit 2
 }
 fail() {

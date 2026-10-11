@@ -70,16 +70,18 @@ fichero override.
 
 Fija el motor por digest y verifícalo primero:
 
+<!-- release -->
 ```sh
 # verify the engine image you run (it is cosign-signed)
-cosign verify docker.io/olivaresai/olivares:26.10.1 \
-  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v?[0-9]+\.[0-9]+(\.[0-9]+)?$' \
+cosign verify docker.io/olivaresai/olivares:0.1 \
+  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/[0-9]+\.[0-9]+$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 
 export OLIVARES_IMAGE=docker.io/olivaresai/olivares@sha256:<digest>
 export OLIVARES_BIND=127.0.0.1
 docker compose -f deploy/compose/docker-compose.yml up -d
 ```
+<!-- /release -->
 
 ### Instalar y conectar Claude Code
 
@@ -100,11 +102,37 @@ nunca usan una conexión guardada en el home de la cuenta del servidor.
 Motor y `claude` en el host; systemd ejecuta el motor, que conduce `claude`. El
 workspace vive en `/var/lib/olivares/workspaces`.
 
-### Un comando
+### Descargar, verificar y ejecutar
 
+No canalices el instalador hacia una shell. Verifica la lista de sumas firmada de la
+versión, haz checkout exactamente del commit que nombra y ejecuta el instalador desde esa
+copia. Así lee `install.sh` y sus ficheros de empaquetado de la copia, nunca de una rama. El
+bloque se ejecuta en una subshell con `set -eu`: se detiene en el primer paso que falla y
+nunca llega al instalador tras una comprobación fallida.
+
+<!-- release -->
 ```sh
-curl -fsSL https://raw.githubusercontent.com/olivaresai/olivares/main/scripts/install-agentops.sh | sh
+(
+set -eu
+cd "$(mktemp -d)"
+ver=0.1
+base=https://github.com/olivaresai/olivares/releases/download/$ver
+curl -fsSLO $base/checksums.txt
+curl -fsSLO $base/checksums.txt.sig
+curl -fsSLO $base/checksums.txt.pem
+curl -fsSLO $base/release-commit.txt
+cosign verify-blob \
+  --certificate checksums.txt.pem --signature checksums.txt.sig \
+  --certificate-identity "https://github.com/olivaresai/olivares/.github/workflows/release.yml@refs/tags/$ver" \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  checksums.txt
+grep ' release-commit.txt$' checksums.txt | sha256sum --check
+git clone https://github.com/olivaresai/olivares.git
+cd olivares && git checkout --detach "$(cat ../release-commit.txt)"
+OLIVARES_TOPOLOGY=native OLIVARES_VERSION=$ver sh scripts/install-agentops.sh
+)
 ```
+<!-- /release -->
 
 Detecta automáticamente la topología nativa, instala el binario del motor **verificado** (el
 `install.sh` con verificación cosign), instala `claude` desde el repositorio apt/dnf/apk firmado (con
@@ -116,11 +144,14 @@ es tu decisión explícita.
 ### Qué cablea el instalador (y por qué)
 
 - `packaging/systemd/olivares.service.d/agentops.conf` — un drop-in que da al
-  `claude` conducido un `HOME` escribible para `~/.claude` (mantenido bajo `/var/lib/olivares`,
-  para que `ProtectHome=true` siga blindando a los usuarios reales), garantiza que exista el directorio
-  de workspace y levanta exactamente **una** propiedad de sandbox: `MemoryDenyWriteExecute` (el runtime de
-  `claude` compila JIT y necesita memoria W→X). El resto de directivas de endurecimiento de la unidad base
-  permanece en vigor.
+  `claude` conducido un `HOME` escribible para `~/.claude` (mantenido bajo `/var/lib/olivares`),
+  garantiza que exista el directorio de workspace y repite la política de sistema de ficheros
+  de la unidad base: `ProtectSystem=full`, `ProtectHome=false`, `PrivateTmp=false` y
+  `MemoryDenyWriteExecute=false` (el runtime de `claude` compila JIT y necesita memoria W→X).
+  Los directorios personales y `/tmp` siguen visibles para el motor, así que las carpetas que
+  elijas siguen accesibles; el `claude` de cada sesión y sus servidores MCP stdio quedan
+  confinados por carpeta con Landlock. El resto de directivas de endurecimiento de la unidad
+  base permanece en vigor.
 - `/etc/olivares/agentops.env` — la configuración del session-runtime (fichero de token, TTL, URL base
   opcional del gateway, ruta opcional al `claude` BYO).
 
@@ -231,8 +262,9 @@ existente. Hasta entonces, el valor por defecto seguro es la co-localización.
   nativos/systemd también escuchan en todas las interfaces por defecto; configura
   sus direcciones de escucha para limitar el acceso.
 - **Sin root, mínimo privilegio.** uid/gid 65532, sistema de archivos raíz de solo lectura, `cap_drop:
-  ALL`, `no-new-privileges` (Docker) / el conjunto completo `Protect*`/`Restrict*` menos la única
-  relajación W^X documentada (systemd).
+  ALL`, `no-new-privileges` (Docker) / las directivas `Protect*`/`Restrict*` de kernel y
+  namespaces, con los directorios personales y `/tmp` visibles, W^X permitido y cada sesión
+  confinada a su carpeta por Landlock (systemd).
 - **Datos mínimos, entorno con allowlist.** El `claude` hijo hereda solo una allowlist
   explícita (PATH, HOME, locale…) más el token de inferencia en memoria —**ninguna** clave de firma
   `OLIVARES_*`, **ningún** `ANTHROPIC_*`/`CLAUDE_CODE_*` ambiental que pudiera ensombrecer la

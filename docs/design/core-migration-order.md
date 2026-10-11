@@ -26,3 +26,24 @@ while retaining v17 refuses, and inserting v16 refuses without repairing history
 pins the registered plan and the unchanged historical session DDL. These tests
 require the official CI database qualification; source preparation alone is not
 runtime evidence.
+
+Schema adoption and security repair use the same versioned runner. Core v21
+adopts the descriptor schema and OS-account reservations once; the separate
+`schema_migrations_os_account_guards` plan reasserts reservation indexes at
+every boot. Rollout evidence guards likewise use `migrate.ReconcileTx` with
+`schema_migrations_rollout_guards`. Repair preserves the original version
+receipt and runs transactionally: missing guards are restored, and a failed
+repair refuses startup. Schema evolution still requires a new version.
+
+`TestRolloutEvidenceGuardsRepairOnRestart` drops each SQLite evidence trigger,
+reopens the store, and checks that updates/deletes remain blocked without
+rewriting receipts or losing evidence. `TestOSAccountReservationIndexesRepairOnRestart`
+covers all three reservation indexes on SQLite and PostgreSQL.
+
+Core v23 adopts the audit blinding schema once. On PostgreSQL, the separate
+`schema_migrations_audit_blind_guards` repair plan reasserts the blind-length
+CHECK on every boot without changing v23 or sealed rows. The existing non-owner
+warning and SQLite upgrade posture remain unchanged. `TestAuditBlindGuardRepairsOnRestart`
+removes the CHECK across successive restarts, verifies malformed blinds are
+rejected, and refuses startup when existing malformed data prevents repair.
+Audit rows, blinding state, and migration receipts remain unchanged.

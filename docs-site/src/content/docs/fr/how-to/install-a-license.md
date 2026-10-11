@@ -19,12 +19,7 @@ utilisateur — les utilisateurs auto-hébergés sont illimités dans chaque niv
 déclaration signée de ce à quoi vous avez droit, pas une clé qui déverrouille du code déjà
 présent sur votre disque.
 
-**Ce qu'elle verrouille, en revanche, c'est l'ACCÈS AUX ARTEFACTS**, et cette distinction
-constitue tout le modèle : une licence active est nécessaire pour télécharger le build Enterprise
-et pour effectuer une installation depuis un bundle local (`olivares upgrade --bundle`) ; elle
-est vérifiée hors ligne avec la clé intégrée à votre binaire. C'est pourquoi l'édition Enterprise
-est un binaire différent que vous récupérez avec un jeton, au lieu d'un feature flag basculé dans
-celui que vous possédez — et pourquoi vous dire qu'« elle ne verrouille rien » serait faux.
+**Une licence active donne accès aux artefacts commerciaux.** L’installation hors ligne (`olivares upgrade --bundle`) nécessite le binaire Enterprise. Enterprise installe un paquet Community signé sans licence ; un paquet commercial exige une licence active, vérifiée hors ligne. Community et Business prennent en charge `--bundle --check` sans lire de licence ni installer le paquet.
 :::
 
 ## Ce que vous avez reçu
@@ -32,7 +27,7 @@ celui que vous possédez — et pourquoi vous dire qu'« elle ne verrouille rien
 | Votre achat | Ce qui arrive | Ce que vous en faites |
 |---|---|---|
 | Community | rien à installer | déjà en cours d'exécution — rien sur cette page ne s'applique |
-| Business / Enterprise, auto-hébergé | un **fichier de licence** et un **jeton de téléchargement** | installez la licence, puis passez au binaire Enterprise |
+| Business / Enterprise, auto-hébergé | un **fichier de licence** et un **jeton de téléchargement** | installez la licence, puis passez au binaire commercial |
 | Cloud | les identifiants d'un tenant hébergé | rien à installer sur l'un de vos hôtes |
 
 La licence est un blob signé unique. Enregistrez-le dans un fichier — `customer.license`, ou
@@ -123,14 +118,14 @@ AI Runtime Security, Compliance Packs et Identity & Scale dans un abonnement.
 Chaque famille peut être activée ou désactivée ; aucune n'est vendue séparément.
 :::
 
-Avec une licence installée, le binaire Enterprise n'est plus qu'à un téléchargement. Rien
+Avec une licence installée, le binaire commercial n'est plus qu'à un téléchargement. Rien
 n'est réinstallé et aucune donnée n'est déplacée :
 
 ```sh
 olivares upgrade --enterprise --token <TOKEN>
 ```
 
-La commande récupère le build Enterprise signé pour votre plateforme et **vérifie la signature
+La commande récupère le build commercial signé pour votre plateforme et **vérifie la signature
 hors ligne** — un artefact altéré interrompt la mise à niveau en laissant intact le binaire en
 cours d'exécution — puis le remplace atomiquement en conservant une sauvegarde du précédent.
 Utilisez d'abord `--check` si vous souhaitez voir le plan sans l'appliquer :
@@ -145,10 +140,11 @@ Redémarrez le service, puis activez les modules :
 olivares enterprise enable <preset>     # starter | regulated | full
 ```
 
+La commande et les noms de preset sont ce que le binaire commercial accepte. Les presets ne sont pas des éditions et ne correspondent pas un à un aux quatre familles de capacités Business.
 L'activation est encadrée et auditée : elle vous montre d'abord un diff et place en attente
 tout module nécessitant un secret ou une revue au lieu de l'activer à moitié.
 `olivares enterprise status` indique ce qui est actif. Ces commandes existent **uniquement
-dans le binaire Enterprise** — si `olivares enterprise` n'est pas une commande, vous utilisez
+dans le binaire commercial** — si `olivares enterprise` n'est pas une commande, vous utilisez
 encore le build Community et le remplacement ci-dessus n'a pas encore eu lieu.
 
 :::caution[Sauvegardez avant le remplacement]
@@ -170,7 +166,7 @@ flag `--license` transmis à un moteur exécuté dans un processus distinct lui 
 la moitié hors ligne du propre `DELETE /v1/console/license` de la console.
 
 Retirer la licence ne désactive **rien** de ce que vous exécutiez. Cela retire l'attestation ;
-le binaire Enterprise continue de se comporter comme le binaire Enterprise jusqu'à ce que
+le binaire commercial continue de se comporter comme le binaire commercial jusqu'à ce que
 vous reveniez au précédent.
 
 ## Ce qui ne figure *pas* sur cette page

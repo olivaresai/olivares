@@ -7,6 +7,8 @@ description: >-
   seam deny-closed, dicho con honestidad.
 ---
 
+**Edición:** Business Identity & Scale. Community devuelve `501` en estas rutas, no incluye la consola ni el motor de orquestación y conserva los registros para exportarlos.
+
 El módulo IV es el plano de **observación y gobierno** de cómo se coordinan los
 agentes. **No** reimplementa un framework de agentes (sin
 LangGraph/CrewAI/AutoGen), no ejecuta un agente y nunca genera un proceso.

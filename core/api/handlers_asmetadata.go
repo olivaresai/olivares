@@ -28,7 +28,7 @@ type authorizationServerMetadata struct {
 	AuthorizationGrantProfilesSupported []string `json:"authorization_grant_profiles_supported,omitempty"`
 }
 
-func (s *Server) handleAuthorizationServerMetadata(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleAuthorizationServerMetadata(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
 	base := schemeHost(r)
 	doc := authorizationServerMetadata{
 		Issuer:                            base,

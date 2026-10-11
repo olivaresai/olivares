@@ -12,6 +12,7 @@ import (
 	"go/token"
 	"io"
 	"log/slog"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -27,7 +28,19 @@ import (
 // gitpublishBootFunc parses file and returns its function name.
 func gitpublishBootFunc(t *testing.T, file, name string) *ast.FuncDecl {
 	t.Helper()
-	parsed, err := parser.ParseFile(token.NewFileSet(), file, nil, 0)
+	var src any
+	if file == "boot.go" && name == "boot" {
+		raw, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		expanded, err := expandedBootSource(raw)
+		if err != nil {
+			t.Fatal(err)
+		}
+		src = expanded
+	}
+	parsed, err := parser.ParseFile(token.NewFileSet(), file, src, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,6 +78,7 @@ func gitpublishGuarded(body *ast.BlockStmt, call *ast.CallExpr, module string) b
 // The publication module's ports are bound exactly once in boot(): the
 // authority with the serving Authenticator and the composed Authorizer after
 // both exist, custody and git after the source roster and the secret store,
+// the session folder reader when the sessions module is composed,
 // and the sweep on the runtime scheduler, all before the runtime starts and
 // under the module's nil guard (the sweep under the running view's).
 func TestBootBindsGitPublicationOnce(t *testing.T) {
@@ -134,6 +148,17 @@ func TestBootBindsGitPublicationOnce(t *testing.T) {
 	before("UseCustody", "set.gitpublish", custody[0], "secretResolver", "secretStore", "sourceStore")
 	before("UseGit", "set.gitpublish", git[0], "secretResolver", "secretStore", "sourceStore")
 
+	// The session folder reader is the sessions module itself, bound only when
+	// that module is composed (a nil *sessions.Module is a non-nil interface).
+	folders := calls["set.gitpublish.UseSessions"]
+	if len(folders) != 1 || len(folders[0].Args) != 1 || communicationBootSelectorPath(folders[0].Args[0]) != "set.sessions" {
+		t.Fatalf("gitpublish session binds = %d, want one UseSessions(b.set.sessions)", len(folders))
+	}
+	before("UseSessions", "set.gitpublish", folders[0])
+	if !gitpublishGuarded(boot.Body, folders[0], "set.sessions") {
+		t.Error("UseSessions is not under the set.sessions nil guard")
+	}
+
 	if len(sweeps) != 1 {
 		t.Fatalf("gitpublish sweep registrations = %d, want one", len(sweeps))
 	}
@@ -165,7 +190,7 @@ func TestBootBindsGitPublicationOnce(t *testing.T) {
 			if call, ok := node.(*ast.CallExpr); ok {
 				switch path := communicationBootSelectorPath(call.Fun); {
 				case strings.HasSuffix(path, "gitpublish.UseAuthority"), strings.HasSuffix(path, "gitpublish.UseCustody"),
-					strings.HasSuffix(path, "gitpublish.UseGit"):
+					strings.HasSuffix(path, "gitpublish.UseGit"), strings.HasSuffix(path, "gitpublish.UseSessions"):
 					t.Errorf("%s binds %s outside boot()", file, path)
 				}
 			}
@@ -268,7 +293,7 @@ func newTestGitpublishCustody(t *testing.T, defs ...model.SourceDef) (*gitpublis
 func githubPublicationConfig() map[string]string {
 	return map[string]string{
 		"org": "acme", "app_id": "12", "installation_id": "34",
-		gitpublishCredentialKey: "store:git-host/acme-app", gitpublishRepositoriesKey: "acme/widgets, acme/gears",
+		gp.PublicationCredentialKey: "store:git-host/acme-app", gp.PublicationRepositoriesKey: "acme/widgets, acme/gears",
 	}
 }
 
@@ -276,7 +301,7 @@ func TestGitpublishCustodySelectsApprovedBindings(t *testing.T) {
 	ctx := context.Background()
 	c, secrets, inits := newTestGitpublishCustody(t,
 		gitpublishTestSource("gh", "github", githubPublicationConfig()),
-		gitpublishTestSource("gl", "gitlab", map[string]string{"group": "acme", gitpublishCredentialKey: "store:git-host/acme-bot", gitpublishRepositoriesKey: "acme/tools"}))
+		gitpublishTestSource("gl", "gitlab", map[string]string{"group": "acme", gp.PublicationCredentialKey: "store:git-host/acme-bot", gp.PublicationRepositoriesKey: "acme/tools"}))
 
 	cb, err := c.CredentialBinding(ctx, gitpublishTestTenant, gitpublishTestWorkspace, "gh")
 	if err != nil || cb.ID != "gh" || cb.Version != 3 || cb.Host != "github" || len(cb.AllowedOwners) != 1 || cb.AllowedOwners[0] != "acme" {
@@ -345,16 +370,19 @@ func TestGitpublishCustodyRefusesUnapprovedBindings(t *testing.T) {
 		{"other kind", with(func(d *model.SourceDef) { d.Kind = "vault" }), "gh", "gh:acme/widgets"},
 		{"other tenant", with(func(d *model.SourceDef) { d.Tenant = "tenant-b" }), "gh", "gh:acme/widgets"},
 		{"tenant-scoped row", with(func(d *model.SourceDef) { d.Scope = gitpublishTestTenant }), "gh", "gh:acme/widgets"},
-		{"no publication credential", with(func(d *model.SourceDef) { delete(d.Config, gitpublishCredentialKey) }), "gh", "gh:acme/widgets"},
-		{"env credential", with(func(d *model.SourceDef) { d.Config[gitpublishCredentialKey] = "env:GITHUB_KEY" }), "gh", "gh:acme/widgets"},
-		{"file credential", with(func(d *model.SourceDef) { d.Config[gitpublishCredentialKey] = "file:/etc/key.pem" }), "gh", "gh:acme/widgets"},
-		{"store outside git-host", with(func(d *model.SourceDef) { d.Config[gitpublishCredentialKey] = "store:deploy-key" }), "gh", "gh:acme/widgets"},
-		{"store escaping git-host", with(func(d *model.SourceDef) { d.Config[gitpublishCredentialKey] = "store:git-host/../deploy-key" }), "gh", "gh:acme/widgets"},
-		{"other workspace", with(func(d *model.SourceDef) { d.Config[gitpublishWorkspacesKey] = "ws-2,ws-3" }), "gh", "gh:acme/widgets"},
+		{"no publication credential", with(func(d *model.SourceDef) { delete(d.Config, gp.PublicationCredentialKey) }), "gh", "gh:acme/widgets"},
+		{"env credential", with(func(d *model.SourceDef) { d.Config[gp.PublicationCredentialKey] = "env:GITHUB_KEY" }), "gh", "gh:acme/widgets"},
+		{"file credential", with(func(d *model.SourceDef) { d.Config[gp.PublicationCredentialKey] = "file:/etc/key.pem" }), "gh", "gh:acme/widgets"},
+		{"store outside git-host", with(func(d *model.SourceDef) { d.Config[gp.PublicationCredentialKey] = "store:deploy-key" }), "gh", "gh:acme/widgets"},
+		{"store escaping git-host", with(func(d *model.SourceDef) { d.Config[gp.PublicationCredentialKey] = "store:git-host/../deploy-key" }), "gh", "gh:acme/widgets"},
+		{"other workspace", with(func(d *model.SourceDef) { d.Config[gp.PublicationWorkspacesKey] = "ws-2,ws-3" }), "gh", "gh:acme/widgets"},
 		{"repository not listed", with(func(*model.SourceDef) {}), "gh", "gh:acme/secrets"},
-		{"repository path escape", with(func(d *model.SourceDef) { d.Config[gitpublishRepositoriesKey] = "acme/../x" }), "gh", "gh:acme/../x"},
+		{"repository path escape", with(func(d *model.SourceDef) { d.Config[gp.PublicationRepositoriesKey] = "acme/../x" }), "gh", "gh:acme/../x"},
 		{"repository of another row", with(func(*model.SourceDef) {}), "gh", "gl:acme/widgets"},
-		{"enterprise host without allowlist", with(func(d *model.SourceDef) { d.Config["api_base"] = "https://ghe.example.com/api/v3" }), "gh", "gh:acme/widgets"},
+		{"api_base over http", with(func(d *model.SourceDef) { d.Config["api_base"] = "http://ghe.example.com/api/v3" }), "gh", "gh:acme/widgets"},
+		{"api_base IP literal", with(func(d *model.SourceDef) { d.Config["api_base"] = "https://10.0.0.7/api/v3" }), "gh", "gh:acme/widgets"},
+		{"api_base other port", with(func(d *model.SourceDef) { d.Config["api_base"] = "https://ghe.example.com:8443/api/v3" }), "gh", "gh:acme/widgets"},
+		{"api_base userinfo", with(func(d *model.SourceDef) { d.Config["api_base"] = "https://u:p@ghe.example.com/api/v3" }), "gh", "gh:acme/widgets"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			custody, secrets, inits := newTestGitpublishCustody(t, c.def)
@@ -363,8 +391,12 @@ func TestGitpublishCustodyRefusesUnapprovedBindings(t *testing.T) {
 			if !errors.Is(rerr, gitpublish.ErrBindingNotApproved) {
 				t.Fatalf("repository binding err = %v, want ErrBindingNotApproved", rerr)
 			}
-			switch c.name {
-			case "repository not listed", "repository path escape", "repository of another row", "enterprise host without allowlist":
+			endpoint := strings.HasPrefix(c.name, "api_base")
+			if endpoint != errors.Is(rerr, gp.ErrEndpoint) {
+				t.Fatalf("repository binding err = %v, endpoint refusal want %v", rerr, endpoint)
+			}
+			switch {
+			case endpoint, c.name == "repository not listed", c.name == "repository path escape", c.name == "repository of another row":
 				if cerr != nil {
 					t.Fatalf("credential binding err = %v, want approved", cerr)
 				}
@@ -380,6 +412,68 @@ func TestGitpublishCustodyRefusesUnapprovedBindings(t *testing.T) {
 	}
 	if _, err := (&gitpublishCustody{sources: fakeGitpublishSources{}}).CredentialBinding(ctx, gitpublishTestTenant, gitpublishTestWorkspace, "a:b"); !errors.Is(err, gitpublish.ErrBindingNotApproved) {
 		t.Fatalf("credential id with a colon = %v", err)
+	}
+}
+
+// gitpublishRecordDoer answers every host call with one canned response and
+// records the URLs it was asked for.
+type gitpublishRecordDoer struct {
+	status int
+	body   string
+	urls   []string
+}
+
+func (d *gitpublishRecordDoer) Do(req *http.Request) (*http.Response, error) {
+	d.urls = append(d.urls, req.URL.String())
+	return &http.Response{StatusCode: d.status, Header: http.Header{}, Body: io.NopCloser(strings.NewReader(d.body)), Request: req}, nil
+}
+
+// An approved row's own api_base host is the write allowlist, so GitHub
+// Enterprise Server and self-managed GitLab publish; nothing else is added.
+func TestGitpublishCustodyOpensApprovedSelfHostedHosts(t *testing.T) {
+	ctx := context.Background()
+	ghe := githubPublicationConfig()
+	ghe["api_base"] = "https://GHE.example.com/api/v3/"
+	c, _, _ := newTestGitpublishCustody(t,
+		gitpublishTestSource("gh", "github", ghe),
+		gitpublishTestSource("gl", "gitlab", map[string]string{
+			"api_base": "https://gitlab.example.com", "group": "acme",
+			gp.PublicationCredentialKey: "store:git-host/acme-bot", gp.PublicationRepositoriesKey: "acme/tools",
+		}))
+	doer := &gitpublishRecordDoer{status: http.StatusCreated, body: `{"iid":7,"state":"opened","source_branch":"agent/run-1","target_branch":"main"}`}
+	c.doer = doer
+
+	open := func(cred, repo, repoID string) gp.Host {
+		t.Helper()
+		cb, err := c.CredentialBinding(ctx, gitpublishTestTenant, gitpublishTestWorkspace, cred)
+		if err != nil {
+			t.Fatal(err)
+		}
+		rb, err := c.RepositoryBinding(ctx, gitpublishTestTenant, gitpublishTestWorkspace, repo)
+		if err != nil || rb.RepoID != repoID {
+			t.Fatalf("%s repository binding = %+v %v", repo, rb, err)
+		}
+		host, err := c.OpenHost(ctx, gitpublishTestTenant, cb, rb)
+		if err != nil {
+			t.Fatalf("%s open = %v, want the approved self-hosted host", repo, err)
+		}
+		return host
+	}
+
+	ghes := open("gh", "gh:acme/widgets", "ghe.example.com/acme/widgets")
+	if push, _, _ := ghes.PushTarget(gp.Token{}); !strings.EqualFold(push, "https://ghe.example.com/acme/widgets.git") {
+		t.Fatalf("GHES push target = %q", push)
+	}
+	gitlab := open("gl", "gl:acme/tools", "gitlab.example.com/acme/tools")
+	if push, _, _ := gitlab.PushTarget(gp.Token{}); push != "https://gitlab.example.com/acme/tools.git" {
+		t.Fatalf("GitLab push target = %q", push)
+	}
+	change, res := gitlab.CreateChange(ctx, gp.Token{}, gp.ChangeSpec{Head: "agent/run-1", Base: "main", Title: "fix"})
+	if res.Class != gp.Applied || change.Number != 7 {
+		t.Fatalf("merge request = %+v %+v", change, res)
+	}
+	if len(doer.urls) != 1 || doer.urls[0] != "https://gitlab.example.com/api/v4/projects/acme%2Ftools/merge_requests" {
+		t.Fatalf("host calls = %v, want one merge request on the self-managed host", doer.urls)
 	}
 }
 

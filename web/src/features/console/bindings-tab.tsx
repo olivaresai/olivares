@@ -1422,27 +1422,25 @@ function ActorVerdict({
  */
 
 /**
- * El SUJETO sobre el que se decide, resuelto — o dicho que no se pudo.
+ * Resolve the subject of the decision, or state why it could not be resolved.
  *
- * ⛔ LA COLA PINTABA UN IDENTIFICADOR OPACO AL LADO DE UNA DECISIÓN DE SEGURIDAD. Puso el
- * PERFIL (de qué a qué), y quedaba la otra mitad: SOBRE QUÉ. Un `target_id` crudo no le dice al
- * aprobador si la asignación que va a tocar es de lectura o de escritura, ni a qué espacio va, ni
- * si está siquiera activa.
+ * The queue displayed an opaque identifier beside a security decision. Added the
+ * profile (from/to), but the subject was still missing. A raw `target_id` does not tell
+ * the approver whether an assignment grants reads or writes, which workspace it targets,
+ * or whether it is active.
  *
- * ⛔ CUATRO RESPUESTAS, y las cuatro significan cosas distintas para quien decide:
+ * Four outcomes have distinct meanings:
+ *   resolved: connector, workspace, mode, and status provide actionable context.
+ *   no permission: `sourcescope:assignment:read` differs from the queue's
+ *     `sourcescope:posture:admin` + `binding:read`. A reviewer may lack it; report that.
+ *   not found: the ID matches no assignment (deleted or another type). This claim requires
+ *     a complete list.
+ *   unknown: the query failed or was paginated, so absence proves nothing.
  *
- *   resuelta ......... conector → espacio, modo y estado, que es lo accionable
- *   sin permiso ...... `sourcescope:assignment:read` NO es el permiso con el que se monta esta
- *                      cola (`sourcescope:posture:admin` + `binding:read`). Un revisor puede
- *                      legítimamente no tenerlo, y entonces la pantalla dice ESO, no «no existe».
- *   no encontrada .... el id no casa con ninguna asignación: borrada, o de otra clase. Es un
- *                      HECHO, y sólo se puede afirmar sobre un listado COMPLETO.
- *   no se sabe ....... la consulta no cargó, o vino paginada y la ausencia ya no prueba nada.
- *
- * ⛔ Y LA PAGINACIÓN ES LA MISMA TRAMPA QUE: `handleListAssignments` devuelve `has_more` sin
- * drenar el cursor (`modules/sourcescope/assignment.go:109`) sobre un repositorio que pagina a 100.
- * La asimetría vuelve a decidir el arreglo: paginar sólo puede fabricar AUSENCIAS falsas, jamás
- * una asignación falsa, así que `has_more` entra SÓLO en la rama del «no encontrada».
+ * As in `handleListAssignments` returns `has_more` without draining the cursor
+ * (`modules/sourcescope/assignment.go:109`) over a repository that paginates at 100.
+ * Pagination can produce false absences, never a false assignment, so `has_more` affects
+ * only the not-found branch.
  */
 /**
  * ⛔ LAS OPERACIONES CUYO `target_id` ES UNA ASIGNACIÓN, Y SÓLO ÉSAS.
@@ -1496,13 +1494,13 @@ function TargetAssignment({
       </span>
     )
   }
-  // ⛔ `canResolve` AQUÍ NO ES REDUNDANTE CON EL `enabled` DE LA CONSULTA, y creerlo fue el
-  //    defecto: `enabled` evita una llamada NUEVA, pero el consumidor sigue observando la MISMA
-  //    entrada de caché, cuya clave es `['console', tenant, 'sourcescope', 'assignments']` — sin
-  //    principal ni permiso. Una respuesta cacheada por alguien CON el permiso se pintaría para
-  //    alguien que ya no lo tiene. Es la misma clase que el contraste me devolvió horas antes en
-  //    el panel de egreso, cometida otra vez aquí: **acotar el productor no acota al
-  //    consumidor cuando algo entre medias está indexado más grueso que la frontera.**
+  // `canResolve` is required even with query `enabled`. The latter prevents a new request,
+  // but consumers still observe the same cache entry, keyed by
+  // `['console', tenant, 'sourcescope', 'assignments']`, without principal or permission.
+  // Data cached by an authorized user could otherwise render for someone who lost permission.
+  // The earlier egress-panel review found the same defect: guarding the producer does
+  // not guard consumers when an intermediate cache has a broader key than the security
+  // boundary.
   if (assignment && canResolve) {
     return (
       <span className="text-caption">
@@ -1639,11 +1637,11 @@ function PostureQueue({
   //
   //    Lo cazó el contraste Codex sol max (hallazgo ALTO), y verificado aquí antes de adoptarlo.
   const posturesIncomplete = postures.data?.has_more === true
-  // ⛔ EL PERMISO NO ES EL DE ESTA COLA, y por eso la consulta se acota. `/assignments` exige
-  //    `sourcescope:assignment:read` (`modules/sourcescope/api.go:25,131`), mientras que la cola
-  //    se monta con `posture:admin` + `binding:read`. En la ruta hermana pedía el MISMO
-  //    permiso y por eso allí no hacía falta; aquí difiere de verdad, así que un revisor puede
-  //    legítimamente no poder resolver, y la pantalla tiene que decir eso y no «no existe».
+  // The query needs a different permission from this queue. `/assignments` requires
+  // `sourcescope:assignment:read` (`modules/sourcescope/api.go:25,131`), while the queue uses
+  // `posture:admin` + `binding:read`. sibling route used the same permission as its
+  // queue, so it needed no separate guard. Here a reviewer may legitimately be unable to
+  // resolve the assignment; the screen must report that rather than claiming it does not exist.
   const canResolveTarget = can('sourcescope:assignment:read')
   const assignments = useQuery({
     queryKey: consoleKeys.assignments(activeTenant),

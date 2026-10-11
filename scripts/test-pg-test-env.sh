@@ -119,7 +119,7 @@ trap cleanup EXIT HUP INT TERM
 # Declaring the number closes it: a run that measures less than this battery claims to measure
 # is a FAILED run, whatever its individual cases said. Raise it deliberately when you add a
 # case — a diff that changes this line is exactly the review signal you want.
-EXPECTED_CASES=160
+EXPECTED_CASES=156 # Three appliance cases run in the private deployment battery.
 
 pass=0
 fail=0
@@ -952,7 +952,7 @@ TASKFILE="$ROOT/Taskfile.yml"
 # instead of 34 -- and it points at the recipe, which is where the accident lands.
 PINNED_RECIPE="      - bash scripts/with-pg-env.sh bash scripts/modules-race-partition.sh go test -race -count=1 -timeout 150m"
 if ! grep -qxF "$PINNED_RECIPE" "$TASKFILE"; then
-	printf 'pg-test-env: ⛔ NO HE PODIDO MIRAR: the modules race recipe this battery mutates is not in %s\n' "$TASKFILE" >&2
+	printf 'pg-test-env: ⛔ COULD NOT CHECK: the modules race recipe this battery mutates is not in %s\n' "$TASKFILE" >&2
 	printf '             expected verbatim: %s\n' "$PINNED_RECIPE" >&2
 	printf '             found:             %s\n' "$(grep -n "with-pg-env.sh bash scripts/modules-race-partition.sh" "$TASKFILE" | head -1)" >&2
 	printf '             If the recipe changed ON PURPOSE, update PINNED_RECIPE and the 18 hardcoded\n' >&2
@@ -1984,11 +1984,12 @@ $helpers
 HELPERS
 fi
 [ "$helpers_clean" -eq 0 ]
+helpers_status=$?
 # The label NAMES them rather than counting them. A count here printed `0` for a one-line list —
 # `$( )` strips the trailing newline, so `wc -l` saw no line at all — which is this session's own
 # P1 committed inside the row that closes it.
 check "every reviewed recipe helper keeps its premise (runs no go test)" \
-	"$(printf '%s' "$helpers" | cut -f1 | tr '\n' ' ')" $?
+	"$(printf '%s' "$helpers" | cut -f1 | tr '\n' ' ')" "$helpers_status"
 
 # And the premise check itself has to be able to fail, or it is decoration.
 first_helper="$(printf '%s\n' "$helpers" | head -1 | cut -f1)"
@@ -2164,7 +2165,7 @@ spelling_case 'a target from a ${{ }} expression' 2 '  race-undetected:
       - run: task ${{ matrix.target }}'
 
 spelling_case 'a uses: job with no steps key' 2 '  race-undetected:
-    uses: ./.github/workflows/e2e-operator-kind.yml'
+    uses: ./.github/workflows/mainline-ci.yml'
 
 # A -RACE LEG INSIDE A LOCAL COMPOSITE ACTION, directly and then one hop further. The direct case
 # closes a premise that used to be assumed rather than checked: that no action in this repository
@@ -2396,8 +2397,7 @@ exempt_harness_sweep() {
 # como los demás (Taskfile.yml, task test:cloud). Ampliarla habría dejado un árbol que lee
 # el arnés excusado de decidir su entorno, que es exactamente el agujero que el caso
 # «an exempt tree that STARTS reading the harness is DETECTED» existe para cerrar.
-for exempt in "core/license:test:release" "scripts/hookpar:lint:test-hook-parallelism:selftest" \
-	"appliance:appliance:test:answers" "appliance:appliance:test:base"; do
+for exempt in "core/license:test:release" "scripts/hookpar:lint:test-hook-parallelism:selftest"; do
 	exempt_tree="${exempt%%:*}"
 	exempt_entry="${exempt#*:}"
 	if [ -d "$ROOT/$exempt_tree" ]; then
@@ -2444,32 +2444,6 @@ EOF
 exempt_harness_sweep "$EXEMPT_GREEN" >/dev/null
 check "a tree with its OWN Postgres, not the harness, stays exempt" "the detector can say no" $?
 
-# AND THE SAME RED ON THE APPLIANCE TREE ITSELF (2026-09-25). The synthetic tree above proves
-# the detector can say yes; this proves it says yes about the tree the newest exemption answers
-# for, as that tree really is (its own module, nested packages, testdata/), plus ONE test file
-# that reads the harness. The copy must sweep GREEN before that file lands: that is the
-# fixture's own control. Without it, a copy that failed would leave a directory holding only
-# the harness file, and the red would prove nothing about appliance.
-APPLIANCE_RED="$WORK/appliance-red"
-if [ -d "$ROOT/appliance/answers" ] && cp -R "$ROOT/appliance" "$APPLIANCE_RED" 2>/dev/null &&
-	[ -f "$APPLIANCE_RED/go.mod" ] && exempt_harness_sweep "$APPLIANCE_RED" >/dev/null; then
-	cat >"$APPLIANCE_RED/answers/harness_test.go" <<'EOF'
-package answers
-
-import "os"
-
-var harnessDSN = os.Getenv("OLIVARES_TEST_POSTGRES_DSN")
-EOF
-	exempt_harness_sweep "$APPLIANCE_RED" >/dev/null
-	rc_appliance_red=$?
-	[ "$rc_appliance_red" -ne 0 ]
-	check "appliance STARTING to read the harness ends its exemption" "nonzero" $?
-else
-	unexercised "appliance STARTING to read the harness ends its exemption"
-fi
-
-grep -q 'scripts/pg-test-env.sh' "$ROOT/.githooks/pre-push"
-check "the pre-push hook still makes the decision too" "hook wired" $?
 
 echo
 # THREE numbers, because there are three answers. A summary that folds skips into `passed` is

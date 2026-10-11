@@ -548,7 +548,7 @@ func (s *codexSession) resolveServerRequest(req *codexServerRequest, key string,
 		if err != nil {
 			// An authority that could not decide never means "allow".
 			s.warn("sessions: the provider approval authority failed; refusing deny-closed",
-				"run_ref", s.cfg.RunRef, "method", req.method)
+				"run_ref", s.cfg.RunRef, "method", req.method, "cause", errorCause(err, "unavailable"))
 			s.answer(req, req.codec.refuse())
 			return
 		}

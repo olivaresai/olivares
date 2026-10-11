@@ -86,6 +86,9 @@ type tplPolicies struct {
 	MaxSessionDurationMinutes int      `json:"max_session_duration_minutes,omitempty"`
 	AllowedTools              []string `json:"allowed_tools,omitempty"`
 	RecordIO                  *bool    `json:"record_io,omitempty"`
+	// RequireTruncateProtection refuses a read-only session on kernels that cannot
+	// block existing-file truncation. Omitted, the run continues with a kernel warning.
+	RequireTruncateProtection bool `json:"require_truncate_protection,omitempty"`
 }
 
 func toTemplateDTO(rec model.Record) templateDTO {
@@ -188,8 +191,7 @@ func (m *Module) handleCreateTemplate(w http.ResponseWriter, r *http.Request, mc
 	// STRICT: an unknown key is rejected, not dropped. The body is decoded into a typed
 	// struct and marshaled straight back to storage, so a misspelled policy key —
 	// "allowed_tool", "record_i0" — used to disappear on the way in and leave a template
-	// that looked authored and governed nothing. That is the same defect as the rest of
-	// this pack, entering one level earlier (Codex sol max contrast, 2026-08-11).
+	// that looked authored and governed nothing.
 	var req createTemplateRequest
 	if !decodeJSONBody(w, r, &req) {
 		return
@@ -408,12 +410,13 @@ type applyTarget struct {
 // Peer selection is a server-resolved launch default, not an input to /apply.
 type applyMergedTarget struct {
 	applyTarget
-	PeersRule string `json:"peers_rule,omitempty"`
+	PeersRule                 string `json:"peers_rule,omitempty"`
+	RequireTruncateProtection bool   `json:"require_truncate_protection,omitempty"`
 }
 
 // applyTemplateRequest is the OPTIONAL POST /templates/{id}/apply body. An absent body
 // previews the template against an empty configuration, which is what a caller asking
-// "what does this template impose?" wants and what every pre client sends.
+// "what does this template impose?" wants and what an older client sends.
 type applyTemplateRequest struct {
 	Target applyTarget `json:"target"`
 }
@@ -471,11 +474,10 @@ func (m *Module) handleApplyTemplate(w http.ResponseWriter, r *http.Request, mc 
 	// implementation here is how the preview and the launch would drift into disagreeing,
 	// which is a subtler version of the defect this endpoint used to have.
 	//
-	// ⛔ AND THE SAME REFUSALS, which is the half this handler was missing: it used to
-	// answer applied:true for an ARCHIVED template and for one whose terms the launch
-	// refuses on the chosen transport, so a preview could promise a configuration the very
-	// next call rejected. A preview that disagrees with the thing it previews is worse than
-	// none (Codex sol max contrast, 2026-08-11).
+	// And the same refusals as the launch: an ARCHIVED template, or one whose terms the
+	// launch refuses on the chosen transport, is refused here too, so a preview never
+	// promises a configuration the very next call rejects. A preview that disagrees with
+	// the thing it previews is worse than none.
 	terms := templateTerms(dto.Body)
 	if dto.ArchivedAt != "" {
 		terms.unenforceable = append(terms.unenforceable,
@@ -497,7 +499,7 @@ func (m *Module) handleApplyTemplate(w http.ResponseWriter, r *http.Request, mc 
 	if conflicts == nil {
 		conflicts = []mergeConflict{}
 	}
-	merged := applyMergedTarget{applyTarget: targetOf(p), PeersRule: p.templatePeersRule}
+	merged := applyMergedTarget{applyTarget: targetOf(p), PeersRule: p.templatePeersRule, RequireTruncateProtection: p.requireTruncateProtection}
 	writeJSON(w, http.StatusOK, applyResponse{
 		Applied:   true,
 		Conflicts: conflicts,
@@ -544,7 +546,7 @@ func targetOf(p CreateRunParams) applyTarget {
 // (templateapply.go) refuses a launch whose template it cannot honor, and a built-in
 // that refuses is a defect we shipped, not a control working.
 //
-// Two of them were exactly that until: "Secure Development" declared
+// Two of them once were: "Secure Development" declared
 // dlp_mode:"classify" and "Security Audit" dlp_mode:"block", and NEITHER IS A VALUE
 // THIS PRODUCT HAS EVER HAD — the DLP vocabulary is off|label|deny (workspace_schema.go,
 // validated at workspace.go:551). They read as strict postures and named nothing. They
@@ -618,8 +620,7 @@ var builtinTemplates = []struct {
 			// does not provision hooks into the child (templateTerms says why), so naming
 			// this template at launch is REFUSED with that reason rather than started
 			// without its pre-session hook. Deleting the hook would make the template
-			// launchable by promising less, which is the move this whole pack exists to
-			// stop; the fix is hook provisioning, and until it lands the refusal is the
+			// launchable by promising less; the fix is hook provisioning, and until it lands the refusal is the
 			// honest state. Same for "Refactoring" below.
 			Hooks: &tplHooks{
 				PreSession: []tplHookEntry{
@@ -687,7 +688,7 @@ var seededTenants sync.Map
 // ensureBuiltins lazily seeds built-in templates for the given tenant on first
 // access. It is safe to call concurrently.
 func (m *Module) ensureBuiltins(ctx context.Context, tenant model.TenantID) {
-	if m.data == nil {
+	if m.Data == nil {
 		return
 	}
 	if _, loaded := seededTenants.LoadOrStore(tenant, struct{}{}); loaded {
@@ -701,7 +702,7 @@ func (m *Module) ensureBuiltins(ctx context.Context, tenant model.TenantID) {
 // seedBuiltins idempotently creates or updates built-in templates. It runs at
 // most once per tenant per process boot (guarded by ensureBuiltins).
 func (m *Module) seedBuiltins(ctx context.Context, tenant model.TenantID) error {
-	return m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
+	return m.Data.Mutate(ctx, tenant, func(sc store.Scope) error {
 		repo, err := sc.Ext(templateKind)
 		if err != nil {
 			return err

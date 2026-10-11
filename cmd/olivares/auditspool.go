@@ -18,7 +18,7 @@ const (
 	auditSpoolOnFullEnv   = "OLIVARES_AUDIT_SPOOL_ON_FULL"
 )
 
-// loadAuditSpoolConfig resolves ADR-0024 Q2's logical spool budget. An unset
+// loadAuditSpoolConfig resolves the logical audit spool budget. An unset
 // budget keeps the optional guard off, while a configured invalid budget refuses
 // startup. An invalid exhaustion mode falls back to block so a typo can never
 // weaken the deny-closed default (the same stay-safe posture as the

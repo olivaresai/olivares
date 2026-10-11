@@ -38,11 +38,11 @@ DIR="${1:-${OLIVARES_SCRATCH_DIR:-}}"
 
 # ⛔ Un argumento que no se honra vale 2, y el mensaje dice que SI se honra.
 if [ -z "$DIR" ]; then
-	echo "purge-scratch: NO HE PODIDO MIRAR: falta el directorio." >&2
-	echo "               uso: purge-scratch.sh [--apply] <dir>   (o OLIVARES_SCRATCH_DIR)" >&2
+	echo "purge-scratch: COULD NOT LOOK: missing directory." >&2
+	echo "               usage: purge-scratch.sh [--apply] <dir>   (or OLIVARES_SCRATCH_DIR)" >&2
 	exit 2
 fi
-[ -d "$DIR" ] || { echo "purge-scratch: NO HE PODIDO MIRAR: '$DIR' no es un directorio." >&2; exit 2; }
+[ -d "$DIR" ] || { echo "purge-scratch: COULD NOT LOOK: '$DIR' is not a directory." >&2; exit 2; }
 
 # ⛔ CANONICALIZAR ES LO PRIMERO, Y ANTES DE TODA GUARDA. Lo levanto el lector 47 y lo reproduje:
 # pasandole una ruta RELATIVA, las guardas de uso **no cortaban** y borro un fichero con descriptor
@@ -58,11 +58,11 @@ fi
 # (`/`, `/workspace`, `/tmp`, `$HOME`) comparaba texto, asi que un `.` estando EN `/workspace` no
 # casaba con `/workspace` y la negativa no disparaba.
 if command -v realpath >/dev/null 2>&1; then
-	DIR=$(realpath -m -- "$DIR") || { echo "purge-scratch: NO HE PODIDO MIRAR: no canonicalizo '$DIR'." >&2; exit 2; }
+	DIR=$(realpath -m -- "$DIR") || { echo "purge-scratch: COULD NOT LOOK: cannot resolve the canonical path of '$DIR'." >&2; exit 2; }
 else
-	DIR=$(cd -- "$DIR" 2>/dev/null && pwd -P) || { echo "purge-scratch: NO HE PODIDO MIRAR: no canonicalizo el directorio." >&2; exit 2; }
+	DIR=$(cd -- "$DIR" 2>/dev/null && pwd -P) || { echo "purge-scratch: COULD NOT LOOK: cannot resolve the canonical directory path." >&2; exit 2; }
 fi
-case "$DIR" in /*) : ;; *) echo "purge-scratch: NO HE PODIDO MIRAR: la ruta canonica no es absoluta." >&2; exit 2;; esac
+case "$DIR" in /*) : ;; *) echo "purge-scratch: COULD NOT LOOK: the canonical path is not absolute." >&2; exit 2;; esac
 # ⛔ Y CANONICALIZAR UNA MITAD DEJA LA GUARDA IGUAL DE CIEGA. Lo levanto el lector 47 sobre la v3,
 # que ya canonicalizaba el ARGUMENTO: esta comparacion enfrentaba el `$DIR` canonico contra `$HOME`
 # **crudo**, asi que con HOME siendo un enlace al scratch la negativa no disparaba y la purga borro
@@ -85,7 +85,7 @@ _canon(){ realpath -m -- "$1" 2>/dev/null || printf '%s' "$1"; }
 for _raiz in / /workspace /tmp "${HOME:-/dev/null/sin-home}"; do
 	[ -n "$_raiz" ] || continue
 	if [ "$DIR" = "$(_canon "$_raiz")" ]; then
-		echo "purge-scratch: ⛔ me niego: '$DIR' es (o resuelve a) '$_raiz', que no es un scratch." >&2
+		echo "purge-scratch: ⛔ refused: '$DIR' is (or resolves to) '$_raiz', which is not a scratch directory." >&2
 		exit 2
 	fi
 done
@@ -140,7 +140,7 @@ _pat_dirs(){ local pat; for pat in "${CLASES_DIR[@]}"; do find "$DIR" -mindepth 
 while IFS= read -r f; do
 	[ -n "$f" ] || continue
 	b=$(basename "$f")
-	if _intocable "$b"; then RECHAZA="${RECHAZA}${f}	nombre intocable"$'\n'; continue; fi
+	if _intocable "$b"; then RECHAZA="${RECHAZA}${f}	protected name"$'\n'; continue; fi
 	# El tipo manda: un socket o un FIFO nunca se borran, los nombre quien los nombre.
 	#
 	# ⛔ ESTA COMPROBACION ES REDUNDANTE PARA EL BORRADO, Y NO SOBRA. Lo destapo su propio mutante:
@@ -151,34 +151,34 @@ while IFS= read -r f; do
 	# de la lista en SILENCIO, y un barrido que no dice por que no toco algo no ensena nada al que
 	# lo lee. Por eso el mutante de esta rama se juzga por su MENSAJE, no por si el fichero
 	# sobrevive. Si alguien la borra por «codigo muerto», el banco lo caza.
-	if [ -S "$f" ] || [ -p "$f" ]; then RECHAZA="${RECHAZA}${f}	es socket/FIFO: vale por ser encontrable"$'\n'; continue; fi
-	if _en_uso "$f"; then RECHAZA="${RECHAZA}${f}	EN USO: algun proceso lo tiene abierto"$'\n'; continue; fi
+	if [ -S "$f" ] || [ -p "$f" ]; then RECHAZA="${RECHAZA}${f}	socket/FIFO: must remain discoverable"$'\n'; continue; fi
+	if _en_uso "$f"; then RECHAZA="${RECHAZA}${f}	IN USE: a process has it open"$'\n'; continue; fi
 	[ -f "$f" ] && BORRA="${BORRA}${f}"$'\n'
 done < <(_pat_ficheros)
 
 while IFS= read -r d; do
 	[ -n "$d" ] || continue
 	b=$(basename "$d")
-	if _intocable "$b"; then RECHAZA="${RECHAZA}${d}	nombre intocable"$'\n'; continue; fi
+	if _intocable "$b"; then RECHAZA="${RECHAZA}${d}	protected name"$'\n'; continue; fi
 	# ⛔ AQUI ESTA LA GUARDA QUE ME FALTO: `rm -rf` no mira dentro, asi que miro yo ANTES.
 	dentro=$(find "$d" \( -type s -o -type p \) 2>/dev/null | head -3)
 	if [ -n "$dentro" ]; then
-		RECHAZA="${RECHAZA}${d}	contiene socket/FIFO: $(printf '%s' "$dentro" | tr '\n' ' ')"$'\n'; continue
+		RECHAZA="${RECHAZA}${d}	contains a socket/FIFO: $(printf '%s' "$dentro" | tr '\n' ' ')"$'\n'; continue
 	fi
-	if _en_uso "$d"; then RECHAZA="${RECHAZA}${d}	EN USO: es el cwd de un proceso o cuelga de el algo abierto"$'\n'; continue; fi
+	if _en_uso "$d"; then RECHAZA="${RECHAZA}${d}	IN USE: a process has its working directory or an open file under this directory"$'\n'; continue; fi
 	[ -d "$d" ] && BORRA="${BORRA}${d}"$'\n'
 done < <(_pat_dirs)
 
 nb=$(printf '%s' "$BORRA" | sed '/^$/d' | wc -l)
 nr=$(printf '%s' "$RECHAZA" | sed '/^$/d' | wc -l)
-[ "$nr" -gt 0 ] && { echo "purge-scratch: RECHAZADOS ($nr):"; printf '%s' "$RECHAZA" | sed '/^$/d' | sed 's/^/      /'; }
-echo "purge-scratch: a borrar: $nb entrada(s) de las clases nombradas."
-[ "$APLICA" = no ] && { echo "purge-scratch: ENSAYO. Nada borrado; usa --apply."; exit 0; }
+[ "$nr" -gt 0 ] && { echo "purge-scratch: REJECTED ($nr):"; printf '%s' "$RECHAZA" | sed '/^$/d' | sed 's/^/      /'; }
+echo "purge-scratch: to delete: $nb entry/entries in the specified classes."
+[ "$APLICA" = no ] && { echo "purge-scratch: DRY RUN. Nothing deleted; use --apply."; exit 0; }
 
 n=0
 while IFS= read -r p; do
 	[ -n "$p" ] || continue
-	case "$p" in "$DIR"/*) : ;; *) echo "purge-scratch: ⛔ fuera del scratch, no toco: $p" >&2; continue;; esac
+	case "$p" in "$DIR"/*) : ;; *) echo "purge-scratch: ⛔ outside the scratch directory; leaving untouched: $p" >&2; continue;; esac
 	rm -rf -- "$p" && n=$((n+1))
 done < <(printf '%s' "$BORRA" | sed '/^$/d')
-echo "purge-scratch: borradas $n entrada(s); $nr rechazada(s)."
+echo "purge-scratch: deleted $n entry/entries; $nr rejected."

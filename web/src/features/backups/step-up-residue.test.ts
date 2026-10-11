@@ -2,23 +2,21 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repo root.
 //
-// ⛔ EL CIERRE DEL RESIDUO, Y LAS CUATRO FAMILIAS DE EMISORES BIEN CONTADAS.
+// Close the remaining step-up handling gaps, accounting for all four emitter families.
 //
-// Escribí dos veces en esta campaña que los emisores de `step_up_required` eran dos conjuntos.
-// **Son cuatro**, y el contraste me lo refutó:
-//   · las 21 llamadas a `requireAAL3` de `core/api` (convergen en `middleware.go:298-300`);
-//   · dos ESCRITURAS en `modules/governance` (`breakglass.go:187`, `approvals.go:579`);
-//   · el `requireStepUp` PROPIO de `modules/deploy` (`helpers.go:73-76`), desde `handleApply`
-//     y `handleRetire`;
-//   · los retornos de `core/auth/webauthn.go` (`:234`, `:307`, `:473`), FUERA de `requireAAL3`.
+// The earlier inventory incorrectly named two families. Review confirmed four:
+//   - 21 `requireAAL3` calls in `core/api`, converging at `middleware.go:298-300`;
+//   - two writes in `modules/governance` (`breakglass.go:187`, `approvals.go:579`);
+//   - `modules/deploy`'s own `requireStepUp` (`helpers.go:73-76`), reached by `handleApply`
+//     and `handleRetire`;
+//   - returns in `core/auth/webauthn.go` (`:234`, `:307`, `:473`), outside `requireAAL3`.
 //
-// Ninguna de las NUEVE rutas de esta celda está en esas familias hoy, así que esto es **defensa
-// en profundidad** — dicho de entrada, porque presentar como «camino vivo» lo que no lo es ya me
-// costó dos refutaciones.
+// None of this test's six routes currently belongs to those families. This is defense in
+// depth, not evidence of a live failure; two earlier reviews rejected that incorrect claim.
 //
-// Se arregla igual porque el defecto es de FORMA: `isForbidden` es SÓLO el status 403
-// (`lib/api/errors.ts:59-61`) y la ceremonia se reconoce por el CÓDIGO (`:71-79`), así que el
-// brazo de rol se la tragaría entera el día que el gate llegue a cualquiera de ellas.
+// The handling pattern still needs protection: `isForbidden` checks only HTTP 403
+// (`lib/api/errors.ts:59-61`), while step-up is recognized by code (`:71-79`). The role-denial
+// branch would swallow the step-up request if a gate reached any of these routes.
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -54,14 +52,12 @@ const sinComentarios = (src: string): string[] => {
   })
 }
 
-// Los NUEVE del residuo. Se amplía la lista al arreglarlos, no después: una guarda que sólo
-// mira los primeros cuatro daría verde sobre los otros cinco sin decir que no los miró.
+// The six remaining subjects in the public console; RegOps and NIS 2 panels ship with
+// Business. Extend the list while fixing subjects, not afterward: a check that covers only
+// the initial subjects can silently pass without inspecting later ones.
 const SUJETOS = [
-  'automations/workflows/workflows-tab.tsx',
   'backups/restore-dialog.tsx',
   'claude-policy/cedar-opa-view.tsx',
-  'compliance/nis2-view.tsx',
-  'compliance/regops-view.tsx',
   'identity/nhi-actions.tsx',
   'inference-proxy/inference-proxy-view.tsx',
   'recordings/recording-config-panel.tsx',
@@ -223,17 +219,17 @@ describe('el residuo de ceremonia: la acusación nunca va sin la salida delante'
   })
 
   it('⛔ y ninguno decide un 403 leyendo `status === 403` a pelo', () => {
-    // La forma que ningún barrido de `isForbidden` encuentra, y que EXISTÍA en este árbol
-    // (`routine-policies-view` la tenía antes de).
+    // This pattern escapes an `isForbidden` search and existed in this tree:
+    // `routine-policies-view` used it before.
     const culpables = SUJETOS.filter((rel) =>
       leer(rel).some((l) => /\.status\s*===\s*403/.test(l)),
     )
     expect(culpables).toEqual([])
   })
 
-  it('y el barrido MIRÓ los NUEVE, con su decisión cada uno', () => {
+  it('checks every subject in this edition with one decision each', () => {
     // Un cero sobre cero ficheros no es un cero.
-    expect(SUJETOS.length).toBe(9)
+    expect(SUJETOS.length).toBe(6)
     for (const rel of SUJETOS) {
       const l = leer(rel)
       expect(l.length, `${rel} vacío`).toBeGreaterThan(50)

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { describe, expect, it } from 'vitest'
-import { sessionTurnBody } from './session-turn'
+import { sendBlockedReason, sessionTurnBody } from './session-turn'
 import type { RunDTO } from './types'
 
 const claude: Pick<RunDTO, 'provider_driver'> = { provider_driver: 'claude' }
@@ -46,5 +46,52 @@ describe('sessionTurnBody — a turn is a sentence', () => {
     const wire = '{"type":"user","message":"continue"}'
     expect(sessionTurnBody(claude, wire, true)).toEqual({ line: wire })
     expect(sessionTurnBody(codex, wire, true)).toEqual({ line: wire })
+  })
+})
+
+describe('sendBlockedReason — a disabled Send says why', () => {
+  it('names the session state first: nothing can be sent to a session that is not live', () => {
+    expect(
+      sendBlockedReason({ live: false, draft: 'hello', sending: false }),
+    ).toBe('live.blocked.notLive')
+    expect(sendBlockedReason({ live: false, draft: '', sending: true })).toBe(
+      'live.blocked.notLive',
+    )
+  })
+
+  it('names the launch approval a held session waits on, not start or resume', () => {
+    expect(
+      sendBlockedReason({
+        live: false,
+        draft: 'hello',
+        sending: false,
+        waitingApproval: true,
+      }),
+    ).toBe('live.blocked.approval')
+  })
+
+  it('says a sentence is on its way while the last one is being sent', () => {
+    expect(
+      sendBlockedReason({ live: true, draft: 'hello', sending: true }),
+    ).toBe('live.blocked.sending')
+    // Typing cannot help while a sentence is on its way: sending wins over empty.
+    expect(sendBlockedReason({ live: true, draft: '', sending: true })).toBe(
+      'live.blocked.sending',
+    )
+  })
+
+  it('asks for a sentence when the box is empty or blank', () => {
+    expect(sendBlockedReason({ live: true, draft: '', sending: false })).toBe(
+      'live.blocked.empty',
+    )
+    expect(
+      sendBlockedReason({ live: true, draft: '   ', sending: false }),
+    ).toBe('live.blocked.empty')
+  })
+
+  it('has no reason when Send can act', () => {
+    expect(
+      sendBlockedReason({ live: true, draft: 'hello', sending: false }),
+    ).toBeNull()
   })
 })

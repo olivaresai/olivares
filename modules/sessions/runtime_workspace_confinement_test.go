@@ -18,6 +18,7 @@ import (
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
+	"github.com/olivaresai/olivares/modules/governance/testsupport"
 )
 
 // Exercise the mounted route, real authentication/RBAC and an open live output
@@ -70,7 +71,7 @@ func TestRunHTTPWorkspaceConfinement(t *testing.T) {
 	if workspace, ok := principal.ConfinedWorkspaceIn(tenant); !ok || workspace != workspaceA || principal.Superadmin {
 		t.Fatalf("fixture did not establish workspace-A confinement: %s %t", workspace, ok)
 	}
-	reads := &runRouteReadCounter{ModuleData: h.m.data}
+	reads := &runRouteReadCounter{ModuleData: h.m.Data}
 	h.m.UseData(reads)
 	const marker = "FOREIGN-WORKSPACE-LIVE-OUTPUT"
 	const unrelatedMarker = "ANOTHER-RUN-OR-ORPHAN-EVENT"
@@ -279,6 +280,29 @@ func TestRunHTTPWorkspaceConfinement(t *testing.T) {
 			})
 		}
 	}
+	t.Run("readable admin policy-denied controls retain 403", func(t *testing.T) {
+		testsupport.SeedCedar(t, h.st, tenant, `forbid(principal, action, resource) when { context.permission == "sessions:run:write" || context.permission == "sessions:run:admin" };`, f.gov)
+
+		if r := h.do("GET", "/v1/m/sessions/runs/"+runRef, admin, tenantHdr(tenant)); r.code != http.StatusOK {
+			t.Fatalf("admin read = %d %s", r.code, r.raw)
+		}
+		for _, action := range []string{"input", "interrupt", "stop", "resume", "peers", "cleanup", "delete"} {
+			t.Run(action, func(t *testing.T) {
+				beforeRead, beforeWrite := reads.views.Load(), reads.mutations.Load()
+				method, suffix := "POST", "/"+action
+				if action == "delete" {
+					method, suffix = "DELETE", ""
+				} else if action == "peers" {
+					method = "PUT"
+				}
+				r := h.doJSON(method, "/v1/m/sessions/runs/"+runRef+suffix, admin, map[string]any{}, tenantHdr(tenant))
+				errorObject, _ := r.body["error"].(map[string]any)
+				if r.code != http.StatusForbidden || errorObject["code"] != "forbidden" || reads.views.Load() != beforeRead || reads.mutations.Load() != beforeWrite {
+					t.Fatalf("policy-denied readable control = %d %s; want 403 before runtime access", r.code, r.raw)
+				}
+			})
+		}
+	})
 	t.Run("tenant-wide reader still receives live output", func(t *testing.T) { attach(t, unconfined, runRef, 200) })
 	t.Run("same-workspace reader receives live output", func(t *testing.T) { attach(t, sameWorkspace, runRef, 200) })
 }

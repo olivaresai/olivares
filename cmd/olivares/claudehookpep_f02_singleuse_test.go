@@ -16,6 +16,7 @@ import (
 	"github.com/olivaresai/olivares/connectors/claude"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
+	"github.com/olivaresai/olivares/modules/sessions/hookpep"
 )
 
 // claudehookpep_f02_singleuse_test.go is the (F-02) red→green repro at the REAL
@@ -113,7 +114,7 @@ func TestHookPEP_F02_AbsentToolUseIDIsStrictSingleUse(t *testing.T) {
 	agentTok := h.firmAgentToken(t, "agent-f02-noid@e2e.test")
 	_, reviewerTok := h.createApprover(t, "reviewer-f02-noid@e2e.test")
 
-	pol := hookPolicyDoc{Default: "deny", Rules: []hookPolicyRule{{Tool: "Bash", Decision: "ask"}}}
+	pol := hookpep.PolicyDoc{Default: "deny", Rules: []hookpep.PolicyRule{{Tool: "Bash", Decision: "ask"}}}
 	f := newHookPEPFixture(t, h, pol, false, fixedEval{allow: true}, true /*real bridge*/)
 	destructive := map[string]any{"command": "rm -rf /var/lib/app/data"}
 
@@ -124,7 +125,7 @@ func TestHookPEP_F02_AbsentToolUseIDIsStrictSingleUse(t *testing.T) {
 	}
 
 	// A human approves the exact plan.
-	id := h.firstPendingApproval(t, hookActionCapability)
+	id := h.firstPendingApproval(t, hookpep.ActionCapability)
 	if id == "" {
 		t.Fatal("expected a pending governed approval opened by the PEP")
 	}
@@ -172,7 +173,7 @@ func TestHookPEP_F02_ApprovalIsSingleUseNotReplayable(t *testing.T) {
 	_, reviewerTok := h.createApprover(t, "reviewer-f02@e2e.test")
 
 	// A destructive shell command routed to human approval.
-	pol := hookPolicyDoc{Default: "deny", Rules: []hookPolicyRule{{Tool: "Bash", Decision: "ask"}}}
+	pol := hookpep.PolicyDoc{Default: "deny", Rules: []hookpep.PolicyRule{{Tool: "Bash", Decision: "ask"}}}
 	f := newHookPEPFixture(t, h, pol, false, fixedEval{allow: true}, true /*real bridge*/)
 	destructive := map[string]any{"command": "rm -rf /var/lib/app/data"}
 
@@ -184,7 +185,7 @@ func TestHookPEP_F02_ApprovalIsSingleUseNotReplayable(t *testing.T) {
 	}
 
 	// A human approves the exact plan.
-	id := h.firstPendingApproval(t, hookActionCapability)
+	id := h.firstPendingApproval(t, hookpep.ActionCapability)
 	if id == "" {
 		t.Fatal("expected a pending governed approval opened by the PEP")
 	}

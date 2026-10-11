@@ -6,13 +6,8 @@ import type { HTMLAttributes } from 'react'
 import { cn } from '@/lib/utils'
 
 /**
- * Tag — a short word on a soft fill: a state ("Ready", "Signed out", "Update"), a scope
- * ("in telescopes") or an identifier (`mono`). The word is the meaning; the tone repeats it
- * in color and never replaces it. Each tone's text keeps 4.5:1 on its own soft fill in both
- * themes (the design's contrast method measures the pairs).
- *
- * Badge stays the chip of the existing screens; Tag is the v26.10 chip the redesigned
- * screens use.
+ * Tag — a boxed non-state fact: a tool, branch, folder, scope or identifier.
+ * States use StatusChip; counts use CountBadge. Existing tone/mono props stay compatible.
  */
 const tagVariants = cva(
   cn(

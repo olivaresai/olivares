@@ -33,9 +33,9 @@
 set -uo pipefail
 
 GATE="$(cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")" && pwd)/check-cra-pack.sh"
-[ -f "$GATE" ] || { echo "FATAL: no encuentro el sujeto en $GATE" >&2; exit 2; }
+[ -f "$GATE" ] || { echo "FATAL: cannot find the subject at $GATE" >&2; exit 2; }
 command -v date >/dev/null 2>&1 && date -u -d '1970-01-01' +%s >/dev/null 2>&1 \
-	|| { echo "FATAL: esta bateria necesita GNU date para FABRICAR sus fechas" >&2; exit 2; }
+	|| { echo "FATAL: this test needs GNU date to GENERATE its dates" >&2; exit 2; }
 # ⛔ EL TEMPORAL TIENE QUE EJECUTAR, y en estas cajas `/tmp` NO ejecuta (tmpfs con `noexec`).
 # Medido el 2026-09-01: con `TMPDIR=/tmp` esta bateria da **9 passed, 1 failed** —su caso del
 # senuelo `date` se NIEGA a medir, que es lo correcto— y con un temporal ejecutable da **11/0**.
@@ -47,9 +47,9 @@ command -v date >/dev/null 2>&1 && date -u -d '1970-01-01' +%s >/dev/null 2>&1 \
 # `test-exec-tmpdir.sh`, y si NINGUN candidato ejecuta se rehusa con 2: no medido no es verde.
 _cra_lib="$(cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")" && pwd)/lib/exec-tmpdir.sh"
 # shellcheck source=/dev/null
-. "$_cra_lib" || { echo "test-check-cra-pack: FATAL: no puedo cargar $_cra_lib" >&2; exit 2; }
+. "$_cra_lib" || { echo "test-check-cra-pack: FATAL: cannot load $_cra_lib" >&2; exit 2; }
 if ! _cra_base="$(olivares_exec_tmpdir)"; then
-	echo "test-check-cra-pack: NO HE PODIDO MIRAR: ningun directorio temporal EJECUTA" >&2
+	echo "test-check-cra-pack: COULD NOT LOOK: no temporary directory allows EXECUTION" >&2
 	exit 2
 fi
 unset _cra_lib
@@ -82,12 +82,12 @@ caso() { # caso <nombre> <rc-esperado> <subcadena|-> <dir> [VAR=VAL...]
 	local out rc=0
 	out="$(env "$@" CRA_PACK_ROOT="$d" sh "$GATE" 2>&1)" || rc=$?
 	if [ "$rc" -ne "$want" ]; then
-		printf 'FAIL  %s: rc=%s, esperaba %s\n' "$n" "$rc" "$want"
+		printf 'FAIL  %s: rc=%s, expected %s\n' "$n" "$rc" "$want"
 		printf '%s\n' "$out" | head -3 | sed 's/^/        /'; fail=$((fail + 1)); return
 	fi
 	if [ "$sub" != "-" ]; then
 		case "$out" in *"$sub"*) : ;; *)
-			printf 'FAIL  %s: rc correcto (%s) pero no dijo %s\n' "$n" "$rc" "$sub"
+			printf 'FAIL  %s: correct rc (%s) but did not report %s\n' "$n" "$rc" "$sub"
 			printf '%s\n' "$out" | head -3 | sed 's/^/        /'; fail=$((fail + 1)); return ;;
 		esac
 	fi
@@ -96,39 +96,39 @@ caso() { # caso <nombre> <rc-esperado> <subcadena|-> <dir> [VAR=VAL...]
 
 # 1 · el paquete completo y fresco sale limpio. Sin este control positivo, los rojos de abajo no
 #     prueban nada: podrian estar fallando por como monto la fixture.
-caso "un paquete completo y fresco sale limpio" 0 "-" "$(pack completo '-10 days')"
+caso "a complete fresh package is clean" 0 "-" "$(pack completo '-10 days')"
 
 # 2 · falta el documento entero
 d="$(pack sin-cra '-10 days')"; rm -f "$d/docs/CRA-READINESS.md"
-caso "sin docs/CRA-READINESS.md es FAIL" 1 "missing docs/CRA-READINESS.md" "$d"
+caso "missing docs/CRA-READINESS.md is FAIL" 1 "missing docs/CRA-READINESS.md" "$d"
 
 # 3 · falta una de las plantillas de notificacion (el corazon del deber de aviso)
 d="$(pack sin-72h '-10 days')"; sed -i '/notification (≤72h)/d' "$d/docs/CRA-READINESS.md"
-caso "sin la plantilla de notificacion (72h) es FAIL" 1 "notification template heading" "$d"
+caso "missing notification template (72h) is FAIL" 1 "notification template heading" "$d"
 
 # 4 · sin linea de re-verificacion NO se puede afirmar frescura
 d="$(pack sin-fecha '-10 days')"; sed -i '/^Last re-verification:/d' "$d/docs/CRA-READINESS.md"
-caso "sin 'Last re-verification' es FAIL" 1 "missing Last re-verification" "$d"
+caso "missing 'Last re-verification' is FAIL" 1 "missing Last re-verification" "$d"
 
 # 5 · una fecha en el FUTURO no es frescura, es un reloj mal puesto o una copia
-caso "una re-verificacion en el FUTURO es FAIL" 1 "in the future" "$(pack futura '+3 days')"
+caso "a re-verification in the FUTURE is FAIL" 1 "in the future" "$(pack futura '+3 days')"
 
 # 6 · rancia de verdad (>400 dias)
-caso "una re-verificacion de mas de 400 dias es FAIL" 1 "older than 400 days" "$(pack rancia '-500 days')"
+caso "a re-verification older than 400 days is FAIL" 1 "older than 400 days" "$(pack rancia '-500 days')"
 
 # 7 · ⛔ ENTRE 180 Y 400 DIAS ES AVISO, NO FALLO. Es la distincion que un mutante perezoso borra:
 #     convertir el warn en fail bloquea a los cinco carriles por un documento que sigue siendo valido.
-caso "entre 180 y 400 dias AVISA pero no falla" 0 "older than 180 days" "$(pack tibia '-200 days')"
+caso "between 180 and 400 days WARNS but does not fail" 0 "older than 180 days" "$(pack tibia '-200 days')"
 
 # 8 · falta el documento de actualizacion y reversion
 d="$(pack sin-upgrade '-10 days')"; rm -f "$d/docs/UPGRADE-AND-ROLLBACK.md"
-caso "sin docs/UPGRADE-AND-ROLLBACK.md es FAIL" 1 "missing docs/UPGRADE-AND-ROLLBACK.md" "$d"
+caso "missing docs/UPGRADE-AND-ROLLBACK.md is FAIL" 1 "missing docs/UPGRADE-AND-ROLLBACK.md" "$d"
 
 # 9 · la cabecera de release tiene que MENCIONAR el periodo de soporte: es la afirmacion que viaja
 #     al usuario final en cada release.
 d="$(pack sin-soporte '-10 days')"
 printf 'release:\n  header: |\n    nada que declarar\n' >"$d/.goreleaser.yaml"
-caso "una cabecera de release sin 'support period' es FAIL" 1 "support period" "$d"
+caso "a release header missing 'support period' is FAIL" 1 "support period" "$d"
 
 # 10 · ⛔ SIN `date -d` DE GNU: PARCIAL con rc=2, ni 0 ni 1. Se inyecta un `date` señuelo que falla
 #      con -d y funciona sin el; el CONTROL POSITIVO va primero, porque un señuelo que no sabe hacer
@@ -141,11 +141,11 @@ exec /usr/bin/date "$@"
 SH
 chmod +x "$WORK/bin/date"
 if "$WORK/bin/date" -u +%Y >/dev/null 2>&1 && ! "$WORK/bin/date" -u -d '1970-01-01' +%s >/dev/null 2>&1; then
-	printf 'ok    control positivo: el date señuelo sirve SIN -d y falla CON -d\n'; pass=$((pass + 1))
-	caso "sin GNU date la frescura no se mira: PARCIAL rc=2, ni 0 ni 1" 2 "NO HE PODIDO MIRAR" \
+	printf 'ok    positive control: decoy date works WITHOUT -d and fails WITH -d\n'; pass=$((pass + 1))
+	caso "without GNU date, freshness cannot be checked: PARTIAL rc=2, neither 0 nor 1" 2 "COULD NOT CHECK" \
 		"$(pack ciego '-10 days')" "PATH=$WORK/bin:$PATH"
 else
-	printf 'FAIL  el date señuelo no se comporta como pide el caso: no mido nada\n'; fail=$((fail + 1))
+	printf 'FAIL  decoy date does not behave as required by the case: nothing measured\n'; fail=$((fail + 1))
 fi
 
 printf '\ntest-check-cra-pack: %d passed, %d failed\n' "$pass" "$fail"

@@ -38,11 +38,11 @@
 set -euo pipefail
 
 if ! command -v git >/dev/null 2>&1; then
-	echo "check-mid-operation: NO_HE_PODIDO_MIRAR — no hay git en el PATH" >&2
+	echo "check-mid-operation: NO_HE_PODIDO_MIRAR — git is not in PATH" >&2
 	exit 2
 fi
 if ! git rev-parse --git-dir >/dev/null 2>&1; then
-	echo "check-mid-operation: NO_HE_PODIDO_MIRAR — esto no es un repositorio git" >&2
+	echo "check-mid-operation: NO_HE_PODIDO_MIRAR — outside a Git repository" >&2
 	exit 2
 fi
 
@@ -59,13 +59,13 @@ report() {
 for estado in rebase-merge rebase-apply; do
 	ruta="$(git rev-parse --git-path "$estado")"
 	if [ -d "$ruta" ]; then
-		report "REBASE A MEDIAS ($estado). Termínalo con 'git rebase --continue' o retíralo con 'git rebase --abort' ANTES de publicar."
+		report "INCOMPLETE REBASE ($estado). Finish it with 'git rebase --continue' or cancel it with 'git rebase --abort' BEFORE publishing."
 	fi
 done
 for estado in MERGE_HEAD CHERRY_PICK_HEAD REVERT_HEAD BISECT_LOG; do
 	ruta="$(git rev-parse --git-path "$estado")"
 	if [ -e "$ruta" ]; then
-		report "OPERACIÓN A MEDIAS ($estado). Termínala o retírala ANTES de publicar."
+		report "INCOMPLETE OPERATION ($estado). Finish or cancel it BEFORE publishing."
 	fi
 done
 
@@ -73,14 +73,14 @@ done
 # un `git checkout -m`), así que se mira también el índice: la etapa distinta de 0 ES el conflicto.
 if conflictos="$(git diff --name-only --diff-filter=U 2>/dev/null)" && [ -n "$conflictos" ]; then
 	n="$(printf '%s\n' "$conflictos" | wc -l | tr -d ' ')"
-	report "$n fichero(s) con CONFLICTO SIN RESOLVER en el índice:"
+	report "$n file(s) with UNRESOLVED CONFLICTS in the index:"
 	printf '%s\n' "$conflictos" | sed 's/^/    /'
 fi
 
 if [ "$hallazgos" -gt 0 ]; then
-	echo "check-mid-operation: $hallazgos hallazgo(s). Un árbol a medias es internamente consistente:"
-	echo "                     los gates de contenido pasan y publican un PARCIAL. Medido el 2026-08-19."
+	echo "check-mid-operation: $hallazgos finding(s). A partially updated tree can be internally consistent:"
+	echo "                     content checks pass and publish an incomplete tree. Measured on 2026-08-19."
 	exit 1
 fi
-echo "check-mid-operation: OK — ninguna operación de git a medias"
+echo "check-mid-operation: OK — no incomplete Git operations"
 exit 0

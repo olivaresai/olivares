@@ -17,15 +17,16 @@ installieren oder zu verifizieren, eine Probe-Quittung aufzuzeichnen und eine
 gesteuerte Session zu starten oder zu stoppen, verwenden Sie
 [Die Codex-CLI installieren](/how-to/install-codex-cli/). Der Betriebspfad ist
 [Eine Anbieter-Session betreiben](/how-to/operate-provider-sessions/)
-(`OLIVARES_SESSION_RUNTIME_CODEX_BIN` oder die Quittung einer verwalteten
-Installation, plus ein Anbieterprofil).
+(`OLIVARES_SESSION_RUNTIME_CODEX_BIN` als explizite Auswahl; sonst die neueste verifizierte verwaltete
+Installation, danach `codex` im `PATH` der Engine, plus ein Anbieterprofil).
 
 ## Codex hinzufügen
 
 ### Voraussetzungen
 
-- Ein Olivares-AI-Enterprise-Tenant und ein Superadmin-Konto mit AAL3-Elevation für
-  Roster-Vorgänge.
+- Ein Olivares-AI-Enterprise-Tenant und ein Superadmin-Konto. Roster-Vorgänge folgen
+  der Richtlinie für zusätzliche administrative Authentifizierung (`admin_step_up`,
+  standardmäßig `none`).
 - Für die Enterprise-Ingestion ein Plattform-API-Key oder ein Workspace-Access-Token mit den
   erforderlichen Read-Scopes sowie die `workspace_id`. Die Anmeldung an der Codex CLI über
   ChatGPT stellt keine Connector-Zugangsdaten bereit.

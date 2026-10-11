@@ -43,7 +43,7 @@ EOF
 
 good_wire() {
 	mkdir -p "$TMP/tree/cmd/olivares"
-	cat >"$TMP/tree/cmd/olivares/wire_noenterprise.go" <<'EOF'
+	cat >"$TMP/tree/cmd/olivares/edition_ports.go" <<'EOF'
 // (enterprise/computeruse) is additive
 EOF
 }
@@ -115,6 +115,16 @@ if [ "$(cat "$TMP/rc")" = 2 ]; then
 	ok "missing proposals doc is LOOK (2)"
 else
 	bad "missing doc should LOOK 2 ($(cat "$TMP/rc") $(cat "$TMP/err"))"
+fi
+
+# 5b. firing: proposal 3 applied (the computer-use port comment lost enterprise/computeruse)
+stage
+sed -i 's#enterprise/computeruse#computerusegate#' "$TMP/tree/cmd/olivares/edition_ports.go"
+run
+if [ "$(cat "$TMP/rc")" = 1 ] && grep -q 'enterprise/computeruse' "$TMP/err"; then
+	ok "firing: renaming enterprise/computeruse in edition_ports.go is FAIL"
+else
+	bad "lost enterprise/computeruse should FAIL 1 ($(cat "$TMP/rc") $(cat "$TMP/err"))"
 fi
 
 # 6. no-fire after firing

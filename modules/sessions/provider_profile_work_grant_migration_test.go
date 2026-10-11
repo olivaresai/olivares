@@ -53,7 +53,7 @@ func TestProviderProfileWorkGrantNullableUpgradeBothBackends(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			m.UseWorkAuthorizer(auth.NewAuthorizer(nil))
+			WithWorkAuthorizer(auth.NewAuthorizer(nil))(m)
 			var workspace model.ID
 			if err := st.View(ctx, tenant, func(sc store.Scope) error { ws, err := sc.DefaultWorkspace(ctx); workspace = ws.ID; return err }); err != nil {
 				t.Fatal(err)

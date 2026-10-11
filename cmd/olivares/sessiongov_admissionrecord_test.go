@@ -45,10 +45,9 @@ func TestSessionLaunchGate_UnreachableLedgerIsRecordedInBothPostures(t *testing.
 				// The fake answers exactly as the module does on an unreachable ledger
 				// under the deny posture: a refusal with a NIL error, the shape that
 				// otherwise leaves the gate without a word.
-				fin:             fakeBudget{err: errors.New("dial budget store: connection refused")},
-				budgetPosture:   c.posture,
-				recordAvailable: true,
-				log:             slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})),
+				fin:           fakeBudget{err: errors.New("dial budget store: connection refused")},
+				budgetPosture: c.posture,
+				log:           slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})),
 			}
 
 			dec, err := g.Authorize(context.Background(), "t1", sessions.LaunchIntent{PermissionMode: "default"})
@@ -87,10 +86,9 @@ func TestSessionLaunchGate_AnAllowedLaunchIsNotRecordedAsAFailure(t *testing.T) 
 	var buf bytes.Buffer
 	spy := &spyAdmissionBudget{chk: finops.BudgetCheck{Allowed: true}}
 	g := &sessionLaunchGate{
-		fin:             spy,
-		budgetPosture:   availabilityFailOpen,
-		recordAvailable: true,
-		log:             slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})),
+		fin:           spy,
+		budgetPosture: availabilityFailOpen,
+		log:           slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})),
 	}
 	dec, err := g.Authorize(context.Background(), "t1", sessions.LaunchIntent{PermissionMode: "default"})
 	if err != nil || !dec.Allowed {
@@ -112,10 +110,9 @@ func TestSessionLaunchGate_AnAdmissionErrorIsNotTheUnreachableOutcome(t *testing
 	for _, posture := range []availabilityPosture{availabilityFailOpen, availabilityFailClosed} {
 		t.Run(posture.String(), func(t *testing.T) {
 			g := &sessionLaunchGate{
-				fin:             &spyAdmissionBudget{reserveErr: finops.ErrAdmissionConflict},
-				budgetPosture:   posture,
-				recordAvailable: true,
-				log:             slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)),
+				fin:           &spyAdmissionBudget{reserveErr: finops.ErrAdmissionConflict},
+				budgetPosture: posture,
+				log:           slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)),
 			}
 			dec, err := g.Authorize(context.Background(), "t1", sessions.LaunchIntent{PermissionMode: "default", RunRef: "run-1"})
 			if err != nil {
@@ -140,9 +137,8 @@ func TestSessionLaunchGate_AnIntegrityRefusalIsA503InEveryPosture(t *testing.T) 
 				fin: fakeBudget{chk: finops.BudgetCheck{
 					Allowed: false, Action: "block", Reason: finops.ReasonAdmissionIntegrity,
 				}},
-				budgetPosture:   posture,
-				recordAvailable: true,
-				log:             slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})),
+				budgetPosture: posture,
+				log:           slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})),
 			}
 			dec, err := g.Authorize(context.Background(), "t1", sessions.LaunchIntent{PermissionMode: "default", RunRef: "run-1"})
 			if err != nil {
@@ -182,10 +178,9 @@ func TestSessionLaunchGate_RecordsTheClassOfAnAdmissionError(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			var buf bytes.Buffer
 			g := &sessionLaunchGate{
-				fin:             &spyAdmissionBudget{reserveErr: c.cause},
-				budgetPosture:   c.posture,
-				recordAvailable: true,
-				log:             slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})),
+				fin:           &spyAdmissionBudget{reserveErr: c.cause},
+				budgetPosture: c.posture,
+				log:           slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})),
 			}
 			dec, err := g.Authorize(context.Background(), "t1", sessions.LaunchIntent{PermissionMode: "default", RunRef: "run-1"})
 			if err != nil {

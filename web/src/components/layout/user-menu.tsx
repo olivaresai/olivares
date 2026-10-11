@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { useNavigate } from '@tanstack/react-router'
-import { LogOut, Settings, SquareTerminal } from 'lucide-react'
+import { KeyRound, LogOut, Settings, SquareTerminal } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { useAuth } from '@/lib/auth/context'
 import { CommandLineDialog } from './command-line-dialog'
+import { ChangePasswordDialog } from './change-password-dialog'
 
 function initialsOf(name: string): string {
   const trimmed = name.replace(/^user:/, '').trim()
@@ -35,6 +36,7 @@ export function UserMenu() {
   // Every signed-in person can reach the command line (Root, 09b), not only the wizard's
   // administrator.
   const [commandLine, setCommandLine] = useState(false)
+  const [passwordChange, setPasswordChange] = useState(false)
 
   return (
     <>
@@ -85,6 +87,10 @@ export function UserMenu() {
             <SquareTerminal />
             {t('auth:account.commandLine')}
           </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => setPasswordChange(true)}>
+            <KeyRound />
+            {t('auth:passwordChange.title')}
+          </DropdownMenuItem>
           <DropdownMenuItem
             variant="destructive"
             onSelect={() => void logout()}
@@ -95,6 +101,9 @@ export function UserMenu() {
         </DropdownMenuContent>
       </DropdownMenu>
       <CommandLineDialog open={commandLine} onOpenChange={setCommandLine} />
+      {passwordChange && (
+        <ChangePasswordDialog onOpenChange={setPasswordChange} />
+      )}
     </>
   )
 }

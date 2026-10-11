@@ -74,7 +74,7 @@ func TestProviderProfile_StandardAccountHome(t *testing.T) {
 // product makes, both inside the profile's own directory: it never shares the
 // tool's own login folder with the operator's subscription sign-in.
 func TestProviderProfile_ManagedHomesAreTheProfilesOwn(t *testing.T) {
-	m := &Module{}
+	m := &Module{Dependencies: &Dependencies{}}
 	if _, _, err := m.managedProfileHomes("claude", "ppf_x"); statusOf(err) != http.StatusUnprocessableEntity {
 		t.Fatalf("no profile homes root = %v, want 422", err)
 	}

@@ -44,6 +44,8 @@ func (o Operation) sessionsCommunicationBodyType() string {
 		return "SessionsCommunicationHandoffOfferBody"
 	case "POST /v1/m/sessions/handoffs/{id}/responses":
 		return "SessionsCommunicationHandoffResponseBody"
+	case "POST /v1/m/sessions/decision-requests/{id}/responses":
+		return "SessionsCommunicationDecisionRequestResponseBody"
 	default:
 		return ""
 	}
@@ -85,6 +87,8 @@ func (o Operation) sessionsCommunicationResultType() string {
 		return "SessionsCommunicationHandoffOfferResult"
 	case "POST /v1/m/sessions/handoffs/{id}/responses":
 		return "SessionsCommunicationHandoffResponseResult"
+	case "POST /v1/m/sessions/decision-requests/{id}/responses":
+		return "SessionsCommunicationDecisionRequestResponseResult"
 	default:
 		return ""
 	}
@@ -776,6 +780,22 @@ func emitSessionsCommunicationJavaObject(b *strings.Builder, object *sessionsCom
 			fmt.Fprintf(b, "            Objects.requireNonNull(%s, %q);\n", field, field)
 		}
 		b.WriteString("        }\n\n")
+	}
+	if object.Name == "SessionsCommunicationHandoffContent" {
+		var legacyFields, args []string
+		for _, field := range object.Fields {
+			if field.Name == "branch" || field.Name == "sha" {
+				args = append(args, "null")
+			} else {
+				legacyFields = append(legacyFields, javaSessionsCommunicationType(field.Type, field.Required)+" "+field.Name)
+				args = append(args, field.Name)
+			}
+		}
+		if len(legacyFields) != len(object.Fields) {
+			b.WriteString("        /** Build a handoff without the optional branch and sha fields. */\n")
+			fmt.Fprintf(b, "        public %s(%s) {\n", object.Name, strings.Join(legacyFields, ", "))
+			fmt.Fprintf(b, "            this(%s);\n        }\n\n", strings.Join(args, ", "))
+		}
 	}
 	fmt.Fprintf(b, "        static %s from(Map<String, Object> value) {\n", object.Name)
 	fmt.Fprintf(b, "            return new %s(\n", object.Name)

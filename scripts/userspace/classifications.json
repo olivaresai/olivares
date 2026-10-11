@@ -1,0 +1,178 @@
+[
+  {
+    "finding": "postgres: published migration removed or rewritten: eventing/postgres/0001_event_id_unique.sql",
+    "path": ["migrations", "postgres", "files", "eventing/postgres/0001_event_id_unique.sql"],
+    "published": "3ef609d4579422544045c78a88adf24ee2ac9804d4546b367d89efe70ef8e4eb",
+    "candidate": "50cf4c2e3b22182775f326c8c4864947a98b5546be189a7b270779e57bedfb4b",
+    "reason": "Only SQL comments differ; the complete exported SQL bytes equal the published migration.",
+    "evidence": "modules/eventing/migrations/postgres/0001_event_id_unique.sql: full exported bytes equal the authenticated published source; both compiled manifest hashes are pinned above."
+  },
+  {
+    "finding": "postgres: published migration removed or rewritten: eventing/postgres/0002_subscription_auth_retry.sql",
+    "path": ["migrations", "postgres", "files", "eventing/postgres/0002_subscription_auth_retry.sql"],
+    "published": "4c7d5465b89888fe32cc9faf5fb7858eb6de20c458295da39da6eec20df24df7",
+    "candidate": "7631cbeec1eacbc26fd08737b1843e19232eeaadc17a53d22d03753d6e1f883c",
+    "reason": "Only SQL comments differ; the complete exported SQL bytes equal the published migration.",
+    "evidence": "modules/eventing/migrations/postgres/0002_subscription_auth_retry.sql: full exported bytes equal the authenticated published source; both compiled manifest hashes are pinned above."
+  },
+  {
+    "finding": "postgres: published migration removed or rewritten: eventing/postgres/0003_writer_fence_fn.sql",
+    "path": ["migrations", "postgres", "files", "eventing/postgres/0003_writer_fence_fn.sql"],
+    "published": "6adc2d2e488d356b3358dae6a02629d55b855bba2dfa21445425a19aed7ee623",
+    "candidate": "edcedfe7d8b9ddd8d3b7541ee7c462f3cc1a726c7e978ea8f2fa34576a4e1fc4",
+    "reason": "Only SQL comments differ; the complete exported SQL bytes equal the published migration.",
+    "evidence": "modules/eventing/migrations/postgres/0003_writer_fence_fn.sql: full exported bytes equal the authenticated published source; both compiled manifest hashes are pinned above."
+  },
+  {
+    "finding": "postgres: published migration removed or rewritten: eventing/postgres/0004_writer_fence_delete_fn.sql",
+    "path": ["migrations", "postgres", "files", "eventing/postgres/0004_writer_fence_delete_fn.sql"],
+    "published": "8cb997ba41b7e91906b934a08b78f8a34320e2752e38eb5842969b2603dd5f9c",
+    "candidate": "3b21e554913c49fe83214d7a5a0cc1315bad39d871c5cd224e2442308b1b997f",
+    "reason": "Only SQL comments differ; the complete exported SQL bytes equal the published migration.",
+    "evidence": "modules/eventing/migrations/postgres/0004_writer_fence_delete_fn.sql: full exported bytes equal the authenticated published source; both compiled manifest hashes are pinned above."
+  },
+  {
+    "finding": "postgres: published migration removed or rewritten: eventing/postgres/0005_writer_fence_triggers.sql",
+    "path": ["migrations", "postgres", "files", "eventing/postgres/0005_writer_fence_triggers.sql"],
+    "published": "61eb8a535282d45419ca25620fbf3529ea54cec99e827ab2f9404e24496a565a",
+    "candidate": "6e94849fea09426e72ef76df7731b2aad760cc57d0e904c0ba0199bf57beeff8",
+    "reason": "Only SQL comments differ; the complete exported SQL bytes equal the published migration.",
+    "evidence": "modules/eventing/migrations/postgres/0005_writer_fence_triggers.sql: full exported bytes equal the authenticated published source; both compiled manifest hashes are pinned above."
+  },
+  {
+    "finding": "postgres: published migration removed or rewritten: sessions/postgres/0024_work_handoff_vacant_transfer.sql",
+    "path": ["migrations", "postgres", "files", "sessions/postgres/0024_work_handoff_vacant_transfer.sql"],
+    "published": "0e5abb7142700d1e54951e82feb6d15ff957edfcb0e97892154ecf627588a479",
+    "candidate": "db54e0ba0957e0022997a18981afeff9984802d704eb5029e6d2b24046531e4d",
+    "reason": "Only SQL comments differ; the complete exported SQL bytes equal the published migration.",
+    "evidence": "modules/sessions/migrations/postgres/0024_work_handoff_vacant_transfer.sql: full exported bytes equal the authenticated published source; both compiled manifest hashes are pinned above."
+  },
+  {
+    "finding": "sqlite: published migration removed or rewritten: eventing/sqlite/0001_event_id_unique.sql",
+    "path": ["migrations", "sqlite", "files", "eventing/sqlite/0001_event_id_unique.sql"],
+    "published": "3ef609d4579422544045c78a88adf24ee2ac9804d4546b367d89efe70ef8e4eb",
+    "candidate": "50cf4c2e3b22182775f326c8c4864947a98b5546be189a7b270779e57bedfb4b",
+    "reason": "Only SQL comments differ; the complete exported SQL bytes equal the published migration.",
+    "evidence": "modules/eventing/migrations/sqlite/0001_event_id_unique.sql: full exported bytes equal the authenticated published source; both compiled manifest hashes are pinned above."
+  },
+  {
+    "finding": "sqlite: published migration removed or rewritten: eventing/sqlite/0002_subscription_auth_retry.sql",
+    "path": ["migrations", "sqlite", "files", "eventing/sqlite/0002_subscription_auth_retry.sql"],
+    "published": "87193e7556f1cd973d2bb52f51fdfde51f0c5db4760591410d545d800130e7de",
+    "candidate": "fbc3256f89b8ac890e34a845c9e8180b2f3a6f916065e27f20ea2e88a534a928",
+    "reason": "Only SQL comments differ; the complete exported SQL bytes equal the published migration.",
+    "evidence": "modules/eventing/migrations/sqlite/0002_subscription_auth_retry.sql: full exported bytes equal the authenticated published source; both compiled manifest hashes are pinned above."
+  },
+  {
+    "finding": "sqlite: published migration removed or rewritten: eventing/sqlite/0003_writer_fence_subscription_ins.sql",
+    "path": ["migrations", "sqlite", "files", "eventing/sqlite/0003_writer_fence_subscription_ins.sql"],
+    "published": "edd0190f7d74b298b5fb81d9ce85bea123d1246252c21ef1ff82c4792d38831f",
+    "candidate": "c53a2cd24d065bdcaa4ee151d25aabde03e7b73ab3bba09e86169675884fd97f",
+    "reason": "Only SQL comments differ; the complete exported SQL bytes equal the published migration.",
+    "evidence": "modules/eventing/migrations/sqlite/0003_writer_fence_subscription_ins.sql: full exported bytes equal the authenticated published source; both compiled manifest hashes are pinned above."
+  },
+  {
+    "finding": "sqlite: published migration removed or rewritten: eventing/sqlite/0004_writer_fence_subscription_upd.sql",
+    "path": ["migrations", "sqlite", "files", "eventing/sqlite/0004_writer_fence_subscription_upd.sql"],
+    "published": "165dce5a39938faccf5275419a510b3d75bfb9bf6e494e2db0ca7ec30073ec70",
+    "candidate": "c7e5d919fa6cae6f6340974d24eeac1299255920e356ccd8f59888634d97e062",
+    "reason": "Only SQL comments differ; the complete exported SQL bytes equal the published migration.",
+    "evidence": "modules/eventing/migrations/sqlite/0004_writer_fence_subscription_upd.sql: full exported bytes equal the authenticated published source; both compiled manifest hashes are pinned above."
+  },
+  {
+    "finding": "sqlite: published migration removed or rewritten: eventing/sqlite/0005_writer_fence_sink_ins.sql",
+    "path": ["migrations", "sqlite", "files", "eventing/sqlite/0005_writer_fence_sink_ins.sql"],
+    "published": "f67ca5a4fc545ec22a7225275b27be91429b6f1533e296163f3bb8ee831bdcc1",
+    "candidate": "ffb7940f79cf8196eeebec5dadb966e40c82e9cb14dde7d5530b5c0f345d461f",
+    "reason": "Only SQL comments differ; the complete exported SQL bytes equal the published migration.",
+    "evidence": "modules/eventing/migrations/sqlite/0005_writer_fence_sink_ins.sql: full exported bytes equal the authenticated published source; both compiled manifest hashes are pinned above."
+  },
+  {
+    "finding": "sqlite: published migration removed or rewritten: eventing/sqlite/0006_writer_fence_sink_upd.sql",
+    "path": ["migrations", "sqlite", "files", "eventing/sqlite/0006_writer_fence_sink_upd.sql"],
+    "published": "2a2592e85fec9d340d2bb5d35bac60e60c12a189e75b43ab98ab70e5a4fe8fbe",
+    "candidate": "f9885975b88ecc2279f15305983da09211ffa62255aa79370abf4318690e27d5",
+    "reason": "Only SQL comments differ; the complete exported SQL bytes equal the published migration.",
+    "evidence": "modules/eventing/migrations/sqlite/0006_writer_fence_sink_upd.sql: full exported bytes equal the authenticated published source; both compiled manifest hashes are pinned above."
+  },
+  {
+    "finding": "sqlite: published migration removed or rewritten: eventing/sqlite/0007_writer_fence_sink_del.sql",
+    "path": ["migrations", "sqlite", "files", "eventing/sqlite/0007_writer_fence_sink_del.sql"],
+    "published": "1e57a4caaedb8bebdd6bcc73703eb00b879fdeb1aa6835a158d737af3ef23332",
+    "candidate": "358842e81b586bf93bb12f295beb0f85941a5ccc3ea3dcc3fcdc205f15b293d9",
+    "reason": "Only SQL comments differ; the complete exported SQL bytes equal the published migration.",
+    "evidence": "modules/eventing/migrations/sqlite/0007_writer_fence_sink_del.sql: full exported bytes equal the authenticated published source; both compiled manifest hashes are pinned above."
+  },
+  {
+    "finding": "openapi: GET /v1/access-edges ('query', 'limit'): changed default",
+    "path": ["openapi", "paths", "/v1/access-edges", "get", "parameters", {"in": "query", "name": "limit"}],
+    "published": {"description": "Maximum number of items to return.", "in": "query", "name": "limit", "required": false, "schema": {"default": 50, "maximum": 1000, "minimum": 1, "type": "integer"}},
+    "candidate": {"description": "Maximum number of items to return.", "in": "query", "name": "limit", "required": false, "schema": {"default": 100, "maximum": 1000, "minimum": 1, "type": "integer"}},
+    "reason": "The documented default 50 was corrected to the unchanged effective default 100; explicit limit=50 remains accepted.",
+    "evidence": "core/api/handlers_core.go: parseListQuery leaves omitted limit unset; core/internal/store/sqlstore/generic.go defaults it to 100. Published Go, Python, TypeScript and Java generated operations pass caller queries without inserting a limit."
+  },
+  {
+    "finding": "openapi: GET /v1/agents ('query', 'limit'): changed default",
+    "path": ["openapi", "paths", "/v1/agents", "get", "parameters", {"in": "query", "name": "limit"}],
+    "published": {"description": "Maximum number of items to return.", "in": "query", "name": "limit", "required": false, "schema": {"default": 50, "maximum": 1000, "minimum": 1, "type": "integer"}},
+    "candidate": {"description": "Maximum number of items to return.", "in": "query", "name": "limit", "required": false, "schema": {"default": 100, "maximum": 1000, "minimum": 1, "type": "integer"}},
+    "reason": "The documented default 50 was corrected to the unchanged effective default 100; explicit limit=50 remains accepted.",
+    "evidence": "core/api/handlers_core.go: parseListQuery leaves omitted limit unset; core/internal/store/sqlstore/generic.go defaults it to 100. Published Go, Python, TypeScript and Java generated operations pass caller queries without inserting a limit."
+  },
+  {
+    "finding": "openapi: GET /v1/audit ('query', 'limit'): changed default",
+    "path": ["openapi", "paths", "/v1/audit", "get", "parameters", {"in": "query", "name": "limit"}],
+    "published": {"description": "Maximum number of items to return.", "in": "query", "name": "limit", "required": false, "schema": {"default": 50, "maximum": 1000, "minimum": 1, "type": "integer"}},
+    "candidate": {"description": "Maximum number of items to return.", "in": "query", "name": "limit", "required": false, "schema": {"default": 100, "maximum": 1000, "minimum": 1, "type": "integer"}},
+    "reason": "The documented default 50 was corrected to the unchanged effective default 100; explicit limit=50 remains accepted.",
+    "evidence": "core/api/handlers_audit.go: auditListInto and handleSystemAuditList default to 100. Published Go, Python, TypeScript and Java generated operations pass caller queries without inserting a limit."
+  },
+  {
+    "finding": "openapi: GET /v1/audit/system ('query', 'limit'): changed default",
+    "path": ["openapi", "paths", "/v1/audit/system", "get", "parameters", {"in": "query", "name": "limit"}],
+    "published": {"description": "Maximum number of items to return.", "in": "query", "name": "limit", "required": false, "schema": {"default": 50, "maximum": 1000, "minimum": 1, "type": "integer"}},
+    "candidate": {"description": "Maximum number of items to return.", "in": "query", "name": "limit", "required": false, "schema": {"default": 100, "maximum": 1000, "minimum": 1, "type": "integer"}},
+    "reason": "The documented default 50 was corrected to the unchanged effective default 100; explicit limit=50 remains accepted.",
+    "evidence": "core/api/handlers_audit.go: auditListInto and handleSystemAuditList default to 100. Published Go, Python, TypeScript and Java generated operations pass caller queries without inserting a limit."
+  },
+  {
+    "finding": "openapi: GET /v1/users ('query', 'limit'): changed default",
+    "path": ["openapi", "paths", "/v1/users", "get", "parameters", {"in": "query", "name": "limit"}],
+    "published": {"description": "Maximum number of items to return.", "in": "query", "name": "limit", "required": false, "schema": {"default": 50, "maximum": 1000, "minimum": 1, "type": "integer"}},
+    "candidate": {"description": "Maximum number of items to return.", "in": "query", "name": "limit", "required": false, "schema": {"default": 100, "maximum": 1000, "minimum": 1, "type": "integer"}},
+    "reason": "The documented default 50 was corrected to the unchanged effective default 100; explicit limit=50 remains accepted.",
+    "evidence": "core/api/handlers_core.go: parseListQuery leaves omitted limit unset; core/internal/store/sqlstore/generic.go defaults it to 100. Published Go, Python, TypeScript and Java generated operations pass caller queries without inserting a limit."
+  },
+  {
+    "finding": "openapi: GET /v1/workspaces ('query', 'limit'): changed default",
+    "path": ["openapi", "paths", "/v1/workspaces", "get", "parameters", {"in": "query", "name": "limit"}],
+    "published": {"description": "Maximum number of items to return.", "in": "query", "name": "limit", "required": false, "schema": {"default": 50, "maximum": 1000, "minimum": 1, "type": "integer"}},
+    "candidate": {"description": "Maximum number of items to return.", "in": "query", "name": "limit", "required": false, "schema": {"default": 100, "maximum": 1000, "minimum": 1, "type": "integer"}},
+    "reason": "The documented default 50 was corrected to the unchanged effective default 100; explicit limit=50 remains accepted.",
+    "evidence": "core/api/handlers_core.go: parseListQuery leaves omitted limit unset; core/internal/store/sqlstore/generic.go defaults it to 100. Published Go, Python, TypeScript and Java generated operations pass caller queries without inserting a limit."
+  },
+  {
+    "finding": "olivares db init: flag app-role metadata default changed; native effective default preserved",
+    "path": ["cli", "commands", {"path": "olivares db init"}, "flags", {"name": "app-role"}],
+    "published": {"name": "app-role", "type": "string", "default": "olivares_app", "usage": "application role (runtime traffic; NOSUPERUSER NOBYPASSRLS)", "effective_default": "olivares_app"},
+    "candidate": {"name": "app-role", "type": "string", "default": "", "usage": "application role (runtime traffic; NOSUPERUSER NOBYPASSRLS; default olivares_app; with --data-dir, generated)", "effective_default": "olivares_app"},
+    "reason": "The optional data-directory mode has different flag metadata; classic omitted-input behavior is unchanged.",
+    "evidence": "cmd/olivares/cmd_db.go and the actual published/candidate db init provisioning JSON both retain 'olivares_app' for app-role."
+  },
+  {
+    "finding": "olivares db init: flag database metadata default changed; native effective default preserved",
+    "path": ["cli", "commands", {"path": "olivares db init"}, "flags", {"name": "database"}],
+    "published": {"name": "database", "type": "string", "default": "olivares", "usage": "application database name to create/own", "effective_default": "olivares"},
+    "candidate": {"name": "database", "type": "string", "default": "", "usage": "application database name to create/own (default olivares; with --data-dir, generated for that installation)", "effective_default": "olivares"},
+    "reason": "The optional data-directory mode has different flag metadata; classic omitted-input behavior is unchanged.",
+    "evidence": "cmd/olivares/cmd_db.go and the actual published/candidate db init provisioning JSON both retain 'olivares' for database."
+  },
+  {
+    "finding": "olivares db init: flag sslmode metadata default changed; native effective default preserved",
+    "path": ["cli", "commands", {"path": "olivares db init"}, "flags", {"name": "sslmode"}],
+    "published": {"name": "sslmode", "type": "string", "default": "verify-full", "usage": "libpq sslmode for the printed DSN hints", "effective_default": "verify-full"},
+    "candidate": {"name": "sslmode", "type": "string", "default": "", "usage": "libpq sslmode (default verify-full for the printed DSN hints; with --data-dir, prefer for local hosts/sockets and verify-full for remote hosts; preserves an explicit DSN mode)", "effective_default": "verify-full"},
+    "reason": "The optional data-directory mode has different flag metadata; classic omitted-input behavior is unchanged.",
+    "evidence": "cmd/olivares/cmd_db.go and the actual published/candidate db init provisioning JSON both retain 'verify-full' for sslmode."
+  }
+]

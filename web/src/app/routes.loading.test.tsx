@@ -45,6 +45,7 @@ vi.mock('@/features/registry', () => ({
       element: () => <p>Protected audit screen</p>,
     },
   ],
+  NAV_AREAS: [],
   ROUTE_ALIASES: [],
 }))
 vi.mock('@/features/anonymous-registry', () => ({ ANONYMOUS_VIEWS: [] }))

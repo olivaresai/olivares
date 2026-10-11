@@ -91,27 +91,44 @@ var (
 	// and "[::1]:port"; net.SplitHostPort then confirms the shape. The numeric-port
 	// tail is what SplitHostPort itself does NOT enforce.
 	hostPortRE = regexp.MustCompile(`^.*:[0-9]+$`)
-	// passwordKeywordRE catches a libpq keyword-form DSN that inlines a password
-	// (the URL form is caught via net/url userinfo).
-	passwordKeywordRE = regexp.MustCompile(`(?i)(^|\s)password\s*=`)
+	// dsnCredentialKeywordRE catches libpq keyword-form inline credentials.
+	// libpq permits all ASCII whitespace and adjacent assignments after a quoted
+	// value. The same credential names are checked in decoded URL query keys.
+	dsnCredentialKeywordRE = regexp.MustCompile(`(?i)(^|[[:space:]'])(password|sslpassword|oauth_client_secret)[[:space:]]*=`)
 )
 
-// dsnInlinesSecret reports whether a DSN argument carries a password BY VALUE — a
-// URL userinfo password or a libpq `password=` keyword. A secret reference
-// (file:/env:/store:/…) points AT the secret and is fine. Used to refuse a
-// cleartext credential in the generated env file (the strict no-inline-secret
-// posture of core/secret, applied to the one secret the wizard can't store in the
-// sealed store: the database password).
+// dsnInlinesSecret reports whether a DSN argument carries a credential by value:
+// URL userinfo or a libpq password, TLS-key password or OAuth client secret in
+// keyword/query form. A secret reference (file:/env:/store:/…) points at the secret
+// and is safe to display and use in generated config.
 func dsnInlinesSecret(arg string) bool {
 	if arg == "" || secret.IsReference(arg) {
 		return false
 	}
-	if u, err := url.Parse(arg); err == nil && u.User != nil {
-		if _, ok := u.User.Password(); ok {
+	if u, err := url.Parse(arg); err == nil {
+		if u.User != nil {
+			if _, ok := u.User.Password(); ok {
+				return true
+			}
+		}
+		// Inspect names without parsing values: libpq permits literal semicolons,
+		// while url.Query silently discards those pairs. Undecodable names cannot
+		// establish that a URL is safe to display or write into generated config.
+		for _, pair := range strings.Split(u.RawQuery, "&") {
+			key, _, _ := strings.Cut(pair, "=")
+			key, err := url.PathUnescape(key)
+			if err != nil || dsnCredentialKeywordRE.MatchString(key+"=") {
+				return true
+			}
+		}
+	} else if scheme, _, hasURL := strings.Cut(arg, "://"); hasURL {
+		// Malformed URLs can hide credentials before userinfo/query are returned.
+		// Validate the scheme alone: keyword values and JSON can contain URL text.
+		if prefix, prefixErr := url.Parse(strings.TrimSpace(scheme) + ":/"); prefixErr == nil && prefix.Scheme != "" {
 			return true
 		}
 	}
-	return passwordKeywordRE.MatchString(arg)
+	return dsnCredentialKeywordRE.MatchString(arg)
 }
 
 // validate checks every field so a misconfiguration is caught at generate time, not

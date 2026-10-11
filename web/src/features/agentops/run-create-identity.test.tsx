@@ -4,12 +4,20 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, expect, it, vi } from 'vitest'
-const auth = vi.hoisted(() => ({ principal: 'u1', tenant: 't1', canNhi: true }))
+const auth = vi.hoisted(() => ({
+  principal: 'u1',
+  tenant: 't1',
+  canNhi: true,
+  canRunWrite: true,
+}))
 vi.mock('@/lib/auth/context', () => ({
   useAuth: () => ({
     activeTenant: auth.tenant,
     principal: { user_id: auth.principal, aal: 1 },
-    can: (p: string) => p !== 'governance:nhi:read' || auth.canNhi,
+    can: (p: string) =>
+      p === 'sessions:run:write'
+        ? auth.canRunWrite
+        : p !== 'governance:nhi:read' || auth.canNhi,
   }),
 }))
 const api = vi.hoisted(() => ({
@@ -17,6 +25,7 @@ const api = vi.hoisted(() => ({
   listWorkspaces: vi.fn(),
   listProfiles: vi.fn(),
   profileLaunchReadiness: vi.fn(),
+  input: vi.fn(),
 }))
 vi.mock('./api', async (orig) => ({
   ...(await orig<typeof import('./api')>()),
@@ -31,6 +40,11 @@ vi.mock('@/features/workspace-templates/api', () => ({
     list: vi.fn().mockResolvedValue({ items: [], has_more: false }),
   },
   templatesKeys: { list: () => ['templates'], detail: () => ['template'] },
+}))
+const navigate = vi.hoisted(() => vi.fn())
+vi.mock('@tanstack/react-router', async (orig) => ({
+  ...(await orig<typeof import('@tanstack/react-router')>()),
+  useNavigate: () => navigate,
 }))
 vi.mock('@/components/ui/toaster', () => ({
   toast: { success: vi.fn(), error: vi.fn() },
@@ -71,8 +85,15 @@ function mount() {
   const ui = render(el())
   return { ...ui, refresh: () => ui.rerender(el()) }
 }
+/** Every choice but the profile and the first message, and the
+ * profile's requirements in full, are under Advanced options. */
+async function openAdvanced(user = userEvent.setup()) {
+  const toggle = await screen.findByRole('button', { name: 'Advanced options' })
+  if (toggle.getAttribute('aria-expanded') !== 'true') await user.click(toggle)
+}
 async function chooseProfile() {
   const user = userEvent.setup()
+  await openAdvanced(user)
   await user.click(await screen.findByLabelText('Provider profile'))
   await user.click(
     await screen.findByRole('option', { name: /Orchestrator profile/ }),
@@ -85,6 +106,7 @@ beforeEach(() => {
   auth.principal = 'u1'
   auth.tenant = 't1'
   auth.canNhi = true
+  auth.canRunWrite = true
   useSessionStore.setState({
     csrfToken: 'fixture-human',
     credentialGeneration: 1,
@@ -112,7 +134,7 @@ beforeEach(() => {
 it('requires a separate admitted agent for an orchestration profile, with no automatic selection', async () => {
   mount()
   await chooseProfile()
-  expect(screen.getByRole('button', { name: 'Request launch' })).toBeDisabled()
+  expect(screen.getByRole('button', { name: 'Start' })).toBeDisabled()
   expect(
     screen.getByText(
       'An orchestration profile requires an independently authenticated agent identity.',
@@ -133,12 +155,12 @@ it('launches with the explicitly selected admitted agent through OBO, without a 
   expect(
     screen.queryByRole('option', { name: /^(blocked|orphan|human|offboard)$/ }),
   ).toBeNull()
-  expect(screen.getByRole('button', { name: 'Request launch' })).toBeDisabled()
+  expect(screen.getByRole('button', { name: 'Start' })).toBeDisabled()
   await user.selectOptions(
     screen.getByLabelText('Agent identity'),
     'agent-fixture',
   )
-  await user.click(screen.getByRole('button', { name: 'Request launch' }))
+  await user.click(screen.getByRole('button', { name: 'Start' }))
   await waitFor(() => expect(launch).toHaveBeenCalledOnce())
   expect(launch).toHaveBeenCalledWith(
     expect.objectContaining({ provider_profile_ref: profile.profile_ref }),
@@ -151,6 +173,71 @@ it('launches with the explicitly selected admitted agent through OBO, without a 
   )
   expect(api.createRun).not.toHaveBeenCalled()
 })
+it('sends the first message to a session launched as the admitted agent', async () => {
+  api.input.mockResolvedValue({ accepted: true })
+  mount()
+  const user = await chooseProfile()
+  await user.type(
+    screen.getByRole('textbox', { name: 'First message (optional)' }),
+    'Plan the release',
+  )
+  await user.selectOptions(
+    screen.getByLabelText('Launch identity'),
+    '__agent__',
+  )
+  await screen.findByRole('option', { name: 'agent-fixture' })
+  await user.selectOptions(
+    screen.getByLabelText('Agent identity'),
+    'agent-fixture',
+  )
+  await user.click(screen.getByRole('button', { name: 'Start' }))
+  await waitFor(() => expect(launch).toHaveBeenCalledOnce())
+  expect(launch.mock.calls[0][0]).toMatchObject({ name: 'Plan the release' })
+  await waitFor(() =>
+    expect(api.input).toHaveBeenCalledWith(
+      'run-fixture',
+      expect.any(String),
+      undefined,
+      expect.objectContaining({
+        signal: expect.any(AbortSignal),
+        dispatchGuard: expect.any(Function),
+      }),
+    ),
+  )
+  expect(navigate).toHaveBeenCalledWith({
+    to: '/sessions',
+    search: { session: 'run:run-fixture', pane: 'narrative' },
+  })
+  expect(api.createRun).not.toHaveBeenCalled()
+})
+it('refuses the dispatch when the run permission is withdrawn while the launch is in flight', async () => {
+  let dispatchGuard = () => {}
+  launch.mockImplementation(
+    (_body, _actor, _tenant, opts: { dispatchGuard: () => void }) => {
+      dispatchGuard = opts.dispatchGuard
+      return new Promise(() => {})
+    },
+  )
+  const { refresh } = mount()
+  const user = await chooseProfile()
+  await user.selectOptions(
+    screen.getByLabelText('Launch identity'),
+    '__agent__',
+  )
+  await screen.findByRole('option', { name: 'agent-fixture' })
+  await user.selectOptions(
+    screen.getByLabelText('Agent identity'),
+    'agent-fixture',
+  )
+  await user.click(screen.getByRole('button', { name: 'Start' }))
+  await waitFor(() => expect(launch).toHaveBeenCalledOnce())
+  expect(() => dispatchGuard()).not.toThrow()
+  auth.canRunWrite = false
+  refresh()
+  expect(() => dispatchGuard()).toThrow(
+    'This action is no longer permitted with your current permissions; nothing was sent.',
+  )
+})
 it('does not read identities or launch without the NHI read permission', async () => {
   auth.canNhi = false
   mount()
@@ -161,7 +248,7 @@ it('does not read identities or launch without the NHI read permission', async (
   )
   expect(screen.getByLabelText('Agent identity')).toBeDisabled()
   expect(identities.nhiLifecycle).not.toHaveBeenCalled()
-  expect(screen.getByRole('button', { name: 'Request launch' })).toBeDisabled()
+  expect(screen.getByRole('button', { name: 'Start' })).toBeDisabled()
 })
 it.each(['principal', 'tenant', 'credential'] as const)(
   'discards profile and agent selections on %s change',
@@ -183,9 +270,7 @@ it.each(['principal', 'tenant', 'credential'] as const)(
       useSessionStore.setState({ credentialGeneration: 2 })
     ui.refresh()
     expect(screen.getByLabelText('Launch identity')).toHaveValue('')
-    expect(
-      screen.getByRole('button', { name: 'Request launch' }),
-    ).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Start' })).toBeDisabled()
     expect(launch).not.toHaveBeenCalled()
   },
 )
@@ -198,7 +283,7 @@ it('keeps launch disabled when the identity list is unavailable', async () => {
     '__agent__',
   )
   await screen.findByText('Agent identity list unavailable.')
-  expect(screen.getByRole('button', { name: 'Request launch' })).toBeDisabled()
+  expect(screen.getByRole('button', { name: 'Start' })).toBeDisabled()
   expect(api.createRun).not.toHaveBeenCalled()
   expect(launch).not.toHaveBeenCalled()
 })

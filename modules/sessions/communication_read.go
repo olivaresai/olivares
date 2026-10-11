@@ -691,12 +691,12 @@ func (m *Module) authorizeDirectNoticeReadCore(
 	principal CommunicationPrincipal,
 	entity EntityRef,
 ) (ReadWitness, bool, error) {
-	if !communicationPortBound(m.communicationReadAuthorizer) {
+	if !communicationPortBound(m.CommunicationReadAuthorizer) {
 		return ReadWitness{}, false, communicationError(
 			ErrCommunicationEvidenceUnknown, "direct notice read authorizer is unavailable",
 		)
 	}
-	witness, err := m.communicationReadAuthorizer.AuthorizeEntityRead(ctx, principal, entity)
+	witness, err := m.CommunicationReadAuthorizer.AuthorizeEntityRead(ctx, principal, entity)
 	if err != nil || ValidateReadWitness(witness) != nil {
 		return ReadWitness{}, false, communicationError(
 			ErrCommunicationEvidenceUnknown, "direct notice core authorization is unavailable",
@@ -749,8 +749,8 @@ func (m *Module) preflightDirectNoticeReaders(
 	principal CommunicationPrincipal,
 	cores []ReadWitness,
 ) ([]directNoticeReaderPreflight, error) {
-	if !communicationPortBound(m.communicationDirectoryResolver) ||
-		!communicationPortBound(m.communicationGrantClosure) {
+	if !communicationPortBound(m.CommunicationDirectoryResolver) ||
+		!communicationPortBound(m.CommunicationGrantClosure) {
 		return nil, communicationError(
 			ErrCommunicationEvidenceUnknown, "direct notice read resolver ports are unavailable",
 		)
@@ -799,8 +799,8 @@ func (m *Module) preflightDirectNoticeReaderIdentity(
 	principal CommunicationPrincipal,
 	coreCurrent func(time.Time) bool,
 ) (directNoticeReaderIdentityPreflight, error) {
-	if !communicationPortBound(m.communicationDirectoryResolver) ||
-		!communicationPortBound(m.communicationGrantClosure) {
+	if !communicationPortBound(m.CommunicationDirectoryResolver) ||
+		!communicationPortBound(m.CommunicationGrantClosure) {
 		return directNoticeReaderIdentityPreflight{}, communicationError(
 			ErrCommunicationEvidenceUnknown, "direct notice read resolver ports are unavailable",
 		)
@@ -1996,8 +1996,15 @@ func evaluateDirectNoticeLockedRead(
 			"direct notice authority expired while waiting for locks", nil,
 		)
 	}
+	// Work tasks share the direct audience graph. Keep their original carrier
+	// for authorization and content; this projection grants no access to the work.
+	graphMessage := message
+	if message.Kind == MessageWorkTask && validCanonicalCommunicationID(message.WorkItemID) {
+		graphMessage.Kind = MessageNotice
+		graphMessage.WorkItemID = ""
+	}
 	delivery, err := exactDirectNoticeReadGraph(
-		preflight, ids, channel, message, deliveries, audiences, contributions,
+		preflight, ids, channel, graphMessage, deliveries, audiences, contributions,
 	)
 	if err != nil {
 		return directNoticeAuthorizedRead{}, err
@@ -2385,7 +2392,7 @@ func (m *Module) openDirectNoticeRead(
 	authorized directNoticeAuthorizedRead,
 	opener directNoticePayloadOpener,
 ) (DirectNoticeReadResult, error) {
-	raw, err := opener(ctx, m.communicationSealer, authorized.OpenPlan)
+	raw, err := opener(ctx, m.CommunicationSealer, authorized.OpenPlan)
 	if err != nil {
 		return DirectNoticeReadResult{}, err
 	}

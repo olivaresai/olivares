@@ -480,6 +480,7 @@ func newHarness(t *testing.T, opts ...Option) *harness {
 
 	// The default deterministic clock is PREPENDED so a test-supplied WithClock
 	// (e.g. the movableClock) applied later wins.
+	opts = append(compliancePacksTestOptions(), opts...)
 	opts = append([]Option{WithClock(fixedClock{t: time.Date(2026, 6, 4, 12, 0, 0, 0, time.UTC)})}, opts...)
 	mod := New(opts...)
 	h.mod = mod

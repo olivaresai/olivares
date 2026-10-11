@@ -15,11 +15,10 @@ import "context"
 // -tags enterprise (the RegulatoryPackager / AIMSPackager pattern). The open binary
 // never links it.
 //
-// No rug-pull (LICENSING.md): the open framework catalog (frameworks.go — 4 US state laws + 3
-// sector overlays), the regulatory calendar (calendar.go — milestones with source + verified_on),
-// the on-demand live assessment (assess.go), the evidence engine (evidence.go) and the risk
-// classifier (risk.go) are ALL unchanged and stay open. Without a wired depth packager the new
-// endpoints answer 501; the default binary is byte-identical.
+// Framework catalogs, regulatory calendars and live assessments are Business
+// Compliance Packs. The shared module keeps risk classification, stored-evidence
+// reads and JSON/CSV export. Without a wired depth packager its endpoints answer
+// 501; the shared interface remains inert.
 //
 // Honesty (docs/SECURITY-HARDENING.md): the add-on automates evidence gathering, obligation mapping and
 // reporting against named regulations; it does NOT make the operator compliant with any law
@@ -31,8 +30,8 @@ import "context"
 
 // ComplianceDepthPackager is the closed seam for compliance depth on top of the open
 // compliance substrate. The default is nil — without a wired depth packager the
-// endpoints answer 501 and the open catalog/calendar/evidence/risk surfaces keep their
-// behavior. The real implementation is enterprise/compliancedepth, wired only under -tags
+// endpoints answer 501. Stored evidence and risk remain shared; catalogs and calendar
+// belong to Business Compliance Packs. The implementation is enterprise/compliancedepth, wired under -tags
 // enterprise.
 type ComplianceDepthPackager interface {
 	// BuildUSStatePack structures operator-supplied jurisdiction context + the live

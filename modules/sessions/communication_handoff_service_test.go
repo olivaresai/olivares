@@ -10,6 +10,7 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 	"testing"
 	"time"
@@ -68,6 +69,9 @@ type handoffServiceFixtureSpec struct {
 	// skipOperationClockReanchor leaves that aged bootstrap clock in place so a
 	// constructor-local control can witness the pre-reanchor stale_offer.
 	skipOperationClockReanchor bool
+	// ownerSession makes a session, not the offering user, the item's owner: the
+	// state in which the sender is not the party that may offer the item.
+	ownerSession bool
 }
 
 const handoffStaleSetupAnchorAge = 3*time.Minute + 5*time.Second
@@ -149,10 +153,10 @@ func newHandoffServiceFixtureFor(
 	}
 	fixture.source.evidence.ObservedAt = fixture.now
 	fixture.source.evidence.FreshUntil = fixture.now.Add(5 * time.Minute)
-	fixture.m.communicationDirectoryResolver = &directNoticeReadDirectoryResolver{
+	fixture.m.CommunicationDirectoryResolver = &directNoticeReadDirectoryResolver{
 		now: fixture.now, epoch: directoryEpoch,
 	}
-	fixture.m.communicationGrantClosure = &directNoticeReadClosureResolver{
+	fixture.m.CommunicationGrantClosure = &directNoticeReadClosureResolver{
 		now: fixture.now, epoch: directoryEpoch,
 	}
 
@@ -187,6 +191,10 @@ func newHandoffServiceFixtureFor(
 	workRecord := workSchemaItem(fixture.workspace, "K3 handoff")
 	workRecord[colWorkOwnerKind] = string(RecipientUser)
 	workRecord[colWorkOwnerRef] = fixture.sender.String()
+	if spec.ownerSession {
+		workRecord[colWorkOwnerKind] = string(RecipientSession)
+		workRecord[colWorkOwnerRef] = "osn_" + model.NewID().String()
+	}
 	workRecord[colWorkLastEventSeq] = int64(1)
 	createdWork, err := communicationCreateFencedWithID(
 		ctx, fixture.m, fixture.st, fixture.tenant, workItemKind, workID, workRecord, fixture.sender,
@@ -625,6 +633,40 @@ func TestHandoffFreshOperationAnchorKeepsOriginalWindowsAndStaleOfferBoundary(t 
 			t.Fatal("stale offer persisted a Handoff row")
 		}
 	})
+}
+
+// A sender that is not the item's current owner is refused for that reason: a
+// permanent 403 not_owner, not the store conflict that tells the caller to
+// re-read and try again (issue #504). The refusal rolls the whole offer back.
+func TestHandoffOfferBySenderWhoDoesNotOwnTheItemIsRefusedAsNotOwner(t *testing.T) {
+	t.Parallel()
+
+	fixture := newHandoffServiceFixtureFor(t, handoffServiceFixtureSpec{ownerSession: true})
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	t.Cleanup(cancel)
+	_, err := fixture.m.offerHandoffWithAuthority(
+		ctx, fixture.scope, fixture.ref,
+		handoffOfferCommandForFixture(fixture, "Offer by a non-owner", "Must refuse not_owner"),
+	)
+	if err == nil {
+		t.Fatal("offer by a sender that does not own the item succeeded")
+	}
+	if errors.Is(err, store.ErrConflict) {
+		t.Fatalf("non-owner offer = %v, want a refusal that is not a store conflict", err)
+	}
+	status, code, _, ok := communicationHTTPDisposition(err)
+	if !ok || status != http.StatusForbidden || code != "not_owner" {
+		t.Fatalf("non-owner offer disposition = %d %q (mapped %v) from %v, want 403 not_owner",
+			status, code, ok, err)
+	}
+	if len(communicationRowsForTest(t, fixture.directNoticeFixture, handoffKind)) != 0 {
+		t.Fatal("non-owner offer persisted a Handoff row")
+	}
+	item := handoffStoredRecord(t, fixture, workItemKind, fixture.workID)
+	if item.Int(model.ColVersion) != 1 || item.Int(colWorkLastEventSeq) != 1 {
+		t.Fatalf("non-owner offer changed the item: version %d, last_event_seq %d",
+			item.Int(model.ColVersion), item.Int(colWorkLastEventSeq))
+	}
 }
 
 func assertHandoffOfferAcceptReplayAndAudit(t *testing.T, fixture handoffServiceFixture, summary, next string) {

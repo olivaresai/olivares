@@ -391,6 +391,7 @@ function ConnectorsTabBody({ scope }: { scope: string }) {
       r.rejected && r.rejected.length > 0
         ? t('console:connectors.reload.toastPartial')
         : t('console:connectors.reload.toastClean'),
+    successIntent: (r) => (r.rejected?.length ? 'warning' : 'success'),
     onDone: (r) => {
       setReloadOpen(false)
       setReport(r)
@@ -988,6 +989,7 @@ function ConnectorForm({
       res.applied
         ? t('console:connectors.saved')
         : t('console:connectors.savedNotApplied', { note: res.note ?? '' }),
+    successIntent: (res) => (res.applied ? 'success' : 'warning'),
     onDone: onClose,
   })
 
@@ -1003,16 +1005,18 @@ function ConnectorForm({
       await consoleApi.testConnector(buildInput())
       toast.success(t('console:connectors.tested'))
     } catch (err) {
-      // ⛔ ASEGURAMIENTO ANTES QUE ROJO. Este `test` es una escritura gateada por AAL3
-      // (core/api/server.go:721 → handleTestConnector), y este `catch` pintaba cualquier `ApiError.message` en rojo —
-      // incluido el `step_up_required`, que NO es un fallo sino una ceremonia pendiente.
+      // Handle step-up before displaying a red error. This test performs an AAL3-gated write
+      // (core/api/server.go:721 -> handleTestConnector). The catch previously displayed every
+      // `ApiError.message`
+      // as a failure, including `step_up_required`, which requests step-up.
       //
-      // Y NO BASTA con que el diálogo esté envuelto en `RequireAssurance`: ese pre-gate decide
-      // sobre el `principal.aal` CACHEADO (identity/assurance.tsx:49-78) y `whoami` no tiene
-      // `refetchInterval` (lib/auth/context.tsx:68-78), mientras el motor degrada AAL3 a AAL1
-      // a los 15 minutos (core/auth/assurance.go:31-54). La caché puede decir AAL3 con el
-      // motor en AAL1: el pre-gate deja pasar y el rechazo llega igual.
-      // **Pre-gateado no es cubierto** — lo levantó el contraste de.
+      // `RequireAssurance` alone does not cover this: it reads cached `principal.aal`
+      // (`identity/assurance.tsx:49-78`), and `whoami` has no `refetchInterval`
+      // (`lib/auth/context.tsx:68-78`). The engine downgrades AAL3 to AAL1 after 15 minutes
+      // (`core/auth/assurance.go:31-54`). The cache can still say AAL3 while the engine says
+      // AAL1,
+      // allowing the write through the pre-gate before the engine rejects it.
+      // The review identified this gap: a pre-gate does not fully cover step-up handling.
       if (err instanceof ApiError && err.isStepUpRequired) {
         report(
           err,

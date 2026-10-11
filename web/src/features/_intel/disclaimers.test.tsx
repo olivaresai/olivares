@@ -7,6 +7,7 @@ import { act, renderIntel, screen } from '@/test/intel'
 import '@/features/_intel'
 import { DisclaimerNote } from '@/features/_intel'
 import { KNOWN_DISCLAIMERS, disclaimerKey } from './disclaimers'
+import en from './i18n/en.json'
 import es from './i18n/es.json'
 import de from './i18n/de.json'
 import fr from './i18n/fr.json'
@@ -33,6 +34,62 @@ import zh from './i18n/zh.json'
  */
 const REPORT_DISCLAIMER =
   'Technical control-status mapping derived from observed platform evidence. NOT a certification and NOT legal advice.'
+
+const AIMS_PACK_DISCLAIMER =
+  "Draft ISO/IEC 42001:2023 certification-readiness pack based on Olivares AI's current assessment and operator-supplied context. All artifacts are drafts; a competent person must review them before submission to a certification body, auditor or buyer. This pack provides neither certification nor conformity assurance nor legal advice. Certification requires an accredited body (ISO/IEC 42006:2025). Control status reflects current tenant evidence; gaps remain unsatisfied."
+
+// prettier-ignore
+const spanishNegativeClause = 'ni certificación ni garantía de conformidad ni asesoramiento jurídico' // language-data: Spanish disclaimer assertion
+// prettier-ignore
+const frenchNegativeClause = 'ni certification, ni assurance de conformité, ni conseil juridique' // language-data: French disclaimer assertion
+// prettier-ignore
+const frenchGapClause = 'lacunes restent non comblées' // language-data: French disclaimer assertion
+
+const AIMS_LOCALES: [
+  string,
+  { disclaimers: Record<string, string> },
+  RegExp[],
+][] = [
+  [
+    'en',
+    en,
+    [
+      /neither certification nor conformity assurance nor legal advice/,
+      /gaps remain unsatisfied/,
+    ],
+  ],
+  [
+    'es',
+    es,
+    [new RegExp(spanishNegativeClause), /brechas siguen sin resolverse/],
+  ],
+  [
+    'de',
+    de,
+    [
+      /weder eine Zertifizierung noch eine Konformitätszusicherung noch Rechtsberatung/,
+      /Lücken bleiben unerfüllt/,
+    ],
+  ],
+  ['fr', fr, [new RegExp(frenchNegativeClause), new RegExp(frenchGapClause)]],
+  [
+    'ja',
+    ja,
+    [
+      /認証、適合性の保証、法的助言のいずれも提供しません/,
+      /不備は未充足のまま/,
+    ],
+  ],
+  [
+    'ru',
+    ru,
+    [
+      /не предоставляет ни сертификации, ни заверения о соответствии, ни юридической консультации/,
+      /пробелы остаются неустранёнными/,
+    ],
+  ],
+  ['zh', zh, [/不提供认证、符合性保证或法律建议/, /缺口仍未满足/]],
+]
 
 afterEach(async () => {
   await i18n.changeLanguage('en')
@@ -142,6 +199,44 @@ describe('the canonical map', () => {
       // And it must not merely PREFIX the English, which the gate would otherwise
       // accept as a translation.
       expect(text).not.toContain(REPORT_DISCLAIMER)
+    },
+  )
+})
+
+describe('the ISO 42001 draft pack disclaimer', () => {
+  it('recognises only the exact engine wording, allowing surrounding whitespace', () => {
+    expect(disclaimerKey(AIMS_PACK_DISCLAIMER)).toBe('aimsPack')
+    expect(disclaimerKey(`  ${AIMS_PACK_DISCLAIMER}  `)).toBe('aimsPack')
+    expect(
+      disclaimerKey(
+        AIMS_PACK_DISCLAIMER.replace('neither certification', 'certification'),
+      ),
+    ).toBeNull()
+    expect(
+      disclaimerKey(`${AIMS_PACK_DISCLAIMER} Additional notice.`),
+    ).toBeNull()
+  })
+
+  it.each(AIMS_LOCALES)(
+    'renders the complete %s notice with the original English accessible',
+    async (locale, catalog, negativeClauses) => {
+      const text = catalog.disclaimers.aimsPack
+      expect(text).toBeTruthy()
+      for (const clause of negativeClauses) expect(text).toMatch(clause)
+      expect(text).toContain('ISO/IEC 42001:2023')
+      expect(text).toContain('ISO/IEC 42006:2025')
+      if (locale === 'en') expect(text).toBe(AIMS_PACK_DISCLAIMER)
+      else expect(text).not.toContain(AIMS_PACK_DISCLAIMER)
+
+      await act(async () => {
+        await i18n.changeLanguage(locale)
+      })
+      renderIntel(<DisclaimerNote text={AIMS_PACK_DISCLAIMER} />)
+      expect(screen.getByText(text)).toBeInTheDocument()
+      if (locale !== 'en') {
+        expect(screen.queryByText(AIMS_PACK_DISCLAIMER)).not.toBeInTheDocument()
+        expect(screen.getByTitle(AIMS_PACK_DISCLAIMER)).toBeInTheDocument()
+      }
     },
   )
 })

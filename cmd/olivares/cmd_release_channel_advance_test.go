@@ -165,8 +165,8 @@ func runChannelAdvance(t *testing.T, args ...string) (string, error) {
 func TestVerifyChannelAdvance(t *testing.T) {
 	t.Run("a newer candidate ADVANCES the channel", func(t *testing.T) {
 		sg := newSigner(t)
-		endpoint := liveChannel(t, "stable", chanManifest(t, "stable", "26.8.0"), sg, liveChannelOpts{})
-		cand := writeManifestFile(t, chanManifest(t, "stable", "26.8.1"))
+		endpoint := liveChannel(t, "stable", chanManifest(t, "stable", "26.800"), sg, liveChannelOpts{})
+		cand := writeManifestFile(t, chanManifest(t, "stable", "26.801"))
 		out, err := runChannelAdvance(t, "--candidate", cand, "--endpoint", endpoint, "--pubkey", sg.pub)
 		if err != nil {
 			t.Fatalf("a forward step must be accepted: %v\n%s", err, out)
@@ -181,8 +181,8 @@ func TestVerifyChannelAdvance(t *testing.T) {
 
 	t.Run("re-publishing the SAME version is refused", func(t *testing.T) {
 		sg := newSigner(t)
-		endpoint := liveChannel(t, "stable", chanManifest(t, "stable", "26.8.0"), sg, liveChannelOpts{})
-		cand := writeManifestFile(t, chanManifest(t, "stable", "26.8.0"))
+		endpoint := liveChannel(t, "stable", chanManifest(t, "stable", "26.800"), sg, liveChannelOpts{})
+		cand := writeManifestFile(t, chanManifest(t, "stable", "26.800"))
 		_, err := runChannelAdvance(t, "--candidate", cand, "--endpoint", endpoint, "--pubkey", sg.pub)
 		if err == nil {
 			t.Fatal("re-publishing the live version does not advance the channel and must be refused")
@@ -193,11 +193,11 @@ func TestVerifyChannelAdvance(t *testing.T) {
 	})
 
 	t.Run("a BACKWARDS publication is refused and names the remedy", func(t *testing.T) {
-		// The real shape of the hazard: 26.8.1 cut after 26.9.0 is what a security backport
+		// The real shape of the hazard: 26.801 cut after 26.900 is what a security backport
 		// looks like, and on GitHub Releases it becomes the channel head.
 		sg := newSigner(t)
-		endpoint := liveChannel(t, "stable", chanManifest(t, "stable", "26.9.0"), sg, liveChannelOpts{})
-		cand := writeManifestFile(t, chanManifest(t, "stable", "26.8.1"))
+		endpoint := liveChannel(t, "stable", chanManifest(t, "stable", "26.900"), sg, liveChannelOpts{})
+		cand := writeManifestFile(t, chanManifest(t, "stable", "26.801"))
 		_, err := runChannelAdvance(t, "--candidate", cand, "--endpoint", endpoint, "--pubkey", sg.pub)
 		if err == nil {
 			t.Fatal("a publication that takes the channel backwards must be refused")
@@ -213,7 +213,7 @@ func TestVerifyChannelAdvance(t *testing.T) {
 	t.Run("a channel with no manifest yet is a legitimate FIRST publication", func(t *testing.T) {
 		sg := newSigner(t)
 		endpoint := liveChannel(t, "stable", nil, sg, liveChannelOpts{status: http.StatusNotFound})
-		cand := writeManifestFile(t, chanManifest(t, "stable", "26.8.0"))
+		cand := writeManifestFile(t, chanManifest(t, "stable", "26.800"))
 		out, err := runChannelAdvance(t, "--candidate", cand, "--endpoint", endpoint, "--pubkey", sg.pub)
 		if err != nil {
 			t.Fatalf("the first publication of a channel must pass: %v\n%s", err, out)
@@ -228,9 +228,9 @@ func TestVerifyChannelAdvance(t *testing.T) {
 		// returned through one error value, so a 404 on the SIGNATURE took the
 		// first-publication shortcut — with a live manifest, and a version never compared.
 		sg := newSigner(t)
-		endpoint := liveChannel(t, "stable", chanManifest(t, "stable", "26.9.0"), sg,
+		endpoint := liveChannel(t, "stable", chanManifest(t, "stable", "26.900"), sg,
 			liveChannelOpts{sigStatus: http.StatusNotFound})
-		cand := writeManifestFile(t, chanManifest(t, "stable", "26.8.1"))
+		cand := writeManifestFile(t, chanManifest(t, "stable", "26.801"))
 		out, err := runChannelAdvance(t, "--candidate", cand, "--endpoint", endpoint, "--pubkey", sg.pub)
 		if err == nil {
 			t.Fatalf("a split pair must not be read as an unpublished channel:\n%s", out)
@@ -250,7 +250,7 @@ func TestVerifyChannelAdvance(t *testing.T) {
 		for _, status := range []int{http.StatusInternalServerError, http.StatusForbidden, http.StatusBadGateway} {
 			sg := newSigner(t)
 			endpoint := liveChannel(t, "stable", nil, sg, liveChannelOpts{status: status})
-			cand := writeManifestFile(t, chanManifest(t, "stable", "26.8.0"))
+			cand := writeManifestFile(t, chanManifest(t, "stable", "26.800"))
 			out, err := runChannelAdvance(t, "--candidate", cand, "--endpoint", endpoint, "--pubkey", sg.pub)
 			if err == nil {
 				t.Fatalf("HTTP %d must not be read as a clean answer:\n%s", status, out)
@@ -267,12 +267,12 @@ func TestVerifyChannelAdvance(t *testing.T) {
 		// argued the failure direction was safe because a forged NEWER live version can only
 		// cause a refusal. The other direction is the dangerous one: a forged or replayed
 		// OLDER live version makes the fence report an advance while the real head is newer.
-		// Here the live channel CLAIMS 26.8.0 under a key that is not ours, while a real head
-		// of 26.9.0 would refuse the candidate.
+		// Here the live channel CLAIMS 26.800 under a key that is not ours, while a real head
+		// of 26.900 would refuse the candidate.
 		ours := newSigner(t)
 		theirs := newSigner(t)
-		endpoint := liveChannel(t, "stable", chanManifest(t, "stable", "26.8.0"), theirs, liveChannelOpts{})
-		cand := writeManifestFile(t, chanManifest(t, "stable", "26.8.1"))
+		endpoint := liveChannel(t, "stable", chanManifest(t, "stable", "26.800"), theirs, liveChannelOpts{})
+		cand := writeManifestFile(t, chanManifest(t, "stable", "26.801"))
 		out, err := runChannelAdvance(t, "--candidate", cand, "--endpoint", endpoint, "--pubkey", ours.pub)
 		if err == nil {
 			t.Fatalf("a live manifest signed by another key must not be compared:\n%s", out)
@@ -288,9 +288,9 @@ func TestVerifyChannelAdvance(t *testing.T) {
 		// its own freshness bound produces the same false advance the signature check exists
 		// to prevent.
 		sg := newSigner(t)
-		expired := chanManifestExpiring(t, "stable", "26.9.0", time.Now().UTC().Add(-1*time.Hour))
+		expired := chanManifestExpiring(t, "stable", "26.900", time.Now().UTC().Add(-1*time.Hour))
 		endpoint := liveChannel(t, "stable", expired, sg, liveChannelOpts{})
-		cand := writeManifestFile(t, chanManifest(t, "stable", "26.8.1"))
+		cand := writeManifestFile(t, chanManifest(t, "stable", "26.801"))
 		_, err := runChannelAdvance(t, "--candidate", cand, "--endpoint", endpoint, "--pubkey", sg.pub)
 		if err == nil {
 			t.Fatal("an expired live manifest must not be compared")
@@ -302,11 +302,11 @@ func TestVerifyChannelAdvance(t *testing.T) {
 			t.Fatalf("the refusal must say what it saw, got: %v", err)
 		}
 		// NON-FIRING: the same manifest with a live freshness bound still compares.
-		fresh := chanManifestExpiring(t, "stable", "26.9.0", time.Now().UTC().Add(24*time.Hour))
+		fresh := chanManifestExpiring(t, "stable", "26.900", time.Now().UTC().Add(24*time.Hour))
 		ep2 := liveChannel(t, "stable", fresh, sg, liveChannelOpts{})
 		_, err = runChannelAdvance(t, "--candidate", cand, "--endpoint", ep2, "--pubkey", sg.pub)
 		if code := exitcode.From(err); code != exitcode.Err {
-			t.Fatalf("a fresh 26.9.0 head must REFUSE a 26.8.1 candidate as a regression (%d), got %d: %v",
+			t.Fatalf("a fresh 26.900 head must REFUSE a 26.801 candidate as a regression (%d), got %d: %v",
 				exitcode.Err, code, err)
 		}
 	})
@@ -315,9 +315,9 @@ func TestVerifyChannelAdvance(t *testing.T) {
 		// The command's subject is the head. Pointed at one release it would compare two
 		// authentic versions, neither of them the live one — the same false green by another
 		// route, and the command's own Example used to show exactly that.
-		cand := writeManifestFile(t, chanManifest(t, "stable", "26.8.1"))
+		cand := writeManifestFile(t, chanManifest(t, "stable", "26.801"))
 		_, err := runChannelAdvance(t, "--candidate", cand,
-			"--endpoint", "https://github.com/acme/widget/releases/tag/v26.8.0", "--pubkey", newSigner(t).pub)
+			"--endpoint", "https://github.com/acme/widget/releases/tag/26.800", "--pubkey", newSigner(t).pub)
 		if err == nil {
 			t.Fatal("a pinned endpoint must be refused")
 		}
@@ -331,8 +331,8 @@ func TestVerifyChannelAdvance(t *testing.T) {
 
 	t.Run("a live manifest for ANOTHER channel is COULD NOT LOOK", func(t *testing.T) {
 		sg := newSigner(t)
-		endpoint := liveChannel(t, "stable", chanManifest(t, "security", "26.9.0"), sg, liveChannelOpts{})
-		cand := writeManifestFile(t, chanManifest(t, "stable", "26.8.1"))
+		endpoint := liveChannel(t, "stable", chanManifest(t, "security", "26.900"), sg, liveChannelOpts{})
+		cand := writeManifestFile(t, chanManifest(t, "stable", "26.801"))
 		_, err := runChannelAdvance(t, "--candidate", cand, "--endpoint", endpoint, "--pubkey", sg.pub)
 		if err == nil {
 			t.Fatal("a live manifest signed for another channel must not be compared")
@@ -346,13 +346,13 @@ func TestVerifyChannelAdvance(t *testing.T) {
 		// The table reserves 1 for "I compared and found a regression". An unreadable
 		// candidate is not that, and exiting 1 for it told the caller the wrong thing.
 		sg := newSigner(t)
-		endpoint := liveChannel(t, "stable", chanManifest(t, "stable", "26.8.0"), sg, liveChannelOpts{})
+		endpoint := liveChannel(t, "stable", chanManifest(t, "stable", "26.800"), sg, liveChannelOpts{})
 		cases := [][]string{
 			{"--endpoint", endpoint, "--pubkey", sg.pub},
 			{"--candidate", "/nonexistent/manifest.json", "--endpoint", endpoint, "--pubkey", sg.pub},
-			{"--candidate", writeManifestFile(t, chanManifest(t, "security", "26.8.1")),
+			{"--candidate", writeManifestFile(t, chanManifest(t, "security", "26.801")),
 				"--endpoint", endpoint, "--channel", "stable", "--pubkey", sg.pub},
-			{"--candidate", writeManifestFile(t, chanManifest(t, "stable", "26.8.1")),
+			{"--candidate", writeManifestFile(t, chanManifest(t, "stable", "26.801")),
 				"--endpoint", "https://github.com/acme", "--pubkey", sg.pub},
 		}
 		for i, args := range cases {

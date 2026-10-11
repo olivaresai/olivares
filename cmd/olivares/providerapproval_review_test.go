@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -25,7 +26,7 @@ import (
 func TestProviderApprovalPublishesStructuredReview(t *testing.T) {
 	const value = "N1reviewLiteralNoPattern0123456789"
 	for _, driver := range []string{"codex", "grok", "opencode"} {
-		for _, surface := range []string{"command", "files", "options"} {
+		for _, surface := range []string{"command", "files", "options", "masked-options", "no-facts", "command-and-files"} {
 			t.Run(driver+"/"+surface, func(t *testing.T) {
 				h := newHarness(t)
 				tenant := model.TenantID(h.tenantA)
@@ -54,19 +55,35 @@ func TestProviderApprovalPublishesStructuredReview(t *testing.T) {
 					req.Kind, req.Method, req.CommandLine = "file_change", "item/fileChange/requestApproval", ""
 					req.FilePaths = []string{"/project/" + value + "/one.txt", "/project/" + value + "/two.txt"}
 					wantTool, wantText = "File change", "/project/[secret env/review]/one.txt\n/project/[secret env/review]/two.txt"
-				case "options":
-					// ACP currently forwards offered option IDs without tool-input
-					// facts. Show only that known scope; never invent a command.
+				case "options", "masked-options", "no-facts":
+					// Offered option IDs describe the decision, not the operation.
 					req.Kind, req.Method, req.CommandLine = "tool_call_permission", "session/request_permission", ""
 					req.Requested = []string{"allow-once", "deny-once"}
 					wantTool, wantText = "Provider permission", "allow-once\ndeny-once"
+					if surface == "masked-options" {
+						req.Requested[0] = "allow-" + value
+						wantText = "allow-[secret env/review]\ndeny-once"
+					} else if surface == "no-facts" {
+						req.Requested = nil
+						wantTool, wantText = "", ""
+					}
+				case "command-and-files":
+					req.FilePaths = []string{"/project/" + value + "/one.txt"}
+				}
+				if driver == "opencode" {
+					// ACP uses this codec for commands, paths and absent facts alike.
+					req.Kind, req.Method = "tool_call_permission", "session/request_permission"
+				}
+				var wantReview *governance.ApprovalReview
+				if wantTool != "" {
+					wantReview = &governance.ApprovalReview{Tool: wantTool, Text: wantText}
 				}
 				original, err := json.Marshal(req)
 				if err != nil {
 					t.Fatal(err)
 				}
 				bridge := newApprovalBridge(approvalBridgeConfig{}, slog.Default())
-				bridge.localProposer = service
+				bridge.LocalProposer = service
 				adapter := providerApprovalAdapter{bridge: bridge, reviewFacts: policy.reviewFacts, reviewReason: policy.reviewReason}
 				ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 				defer cancel()
@@ -86,7 +103,7 @@ func TestProviderApprovalPublishesStructuredReview(t *testing.T) {
 					}
 					if len(items) != 0 {
 						ref = items[0].ID
-						if items[0].Review == nil || items[0].Review.Tool != wantTool || items[0].Review.Text != wantText {
+						if !reflect.DeepEqual(items[0].Review, wantReview) {
 							t.Fatal("queue lacks the exact proven structured provider review")
 						}
 						break
@@ -102,7 +119,7 @@ func TestProviderApprovalPublishesStructuredReview(t *testing.T) {
 				var detail struct {
 					Review *governance.ApprovalReview `json:"review"`
 				}
-				if code := h.reqInto(http.MethodGet, "/v1/m/governance/approvals/"+ref, h.adminToken, h.tenantA, nil, &detail); code != http.StatusOK || detail.Review == nil || detail.Review.Tool != wantTool || detail.Review.Text != wantText {
+				if code := h.reqInto(http.MethodGet, "/v1/m/governance/approvals/"+ref, h.adminToken, h.tenantA, nil, &detail); code != http.StatusOK || !reflect.DeepEqual(detail.Review, wantReview) {
 					t.Fatal("approval detail changed the proven review")
 				}
 				var list struct {
@@ -111,7 +128,7 @@ func TestProviderApprovalPublishesStructuredReview(t *testing.T) {
 						Review *governance.ApprovalReview `json:"review"`
 					} `json:"items"`
 				}
-				if code := h.reqInto(http.MethodGet, "/v1/m/governance/approvals?status=pending", h.adminToken, h.tenantA, nil, &list); code != http.StatusOK || len(list.Items) != 1 || list.Items[0].ID != ref || list.Items[0].Review == nil || list.Items[0].Review.Text != wantText {
+				if code := h.reqInto(http.MethodGet, "/v1/m/governance/approvals?status=pending", h.adminToken, h.tenantA, nil, &list); code != http.StatusOK || len(list.Items) != 1 || list.Items[0].ID != ref || !reflect.DeepEqual(list.Items[0].Review, wantReview) {
 					t.Fatal("approval list changed the proven review")
 				}
 				if code, _ := h.decide(t, h.adminToken, ref, "approve"); code != http.StatusOK {
@@ -175,7 +192,7 @@ func TestProviderStructuredReviewRefusesBeforeQueueOnChangedDisplayOrInvalidProv
 			}
 			service := h.set.gov.EngineApprovals()
 			bridge := newApprovalBridge(approvalBridgeConfig{}, slog.Default())
-			bridge.localProposer = service
+			bridge.LocalProposer = service
 			adapter := providerApprovalAdapter{bridge: bridge, reviewFacts: policy.reviewFacts, reviewReason: mask}
 			before := len(canonicalLedgerEventsFrom(t, h.st, tenant, 0))
 			ctx, cancel := context.WithTimeout(t.Context(), 300*time.Millisecond)

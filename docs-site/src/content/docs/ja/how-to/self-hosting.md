@@ -8,6 +8,13 @@ description: >-
   SIEM／Webhook 出力など、あなたがそのように設定したものだけである。
 ---
 
+> デプロイ用パッケージは Business チャネルで提供されます。ここでは公開状況は未検証です。ローカルチャートを使う前に、チャネルの手順でパッケージと発行者を検証してください。マニフェストの例では Business が提供する `business-install.yaml` を使います。エアギャップ環境へのインストールには Enterprise が必要です。
+
+
+> Helm, Kubernetes operators, Terraform, appliance and FIPS/STIG images are Business deployment artifacts. The source paths below are in the Business distribution. Air-gapped installation requires Enterprise.
+
+次のリリースは <!-- release -->`0.1`<!-- /release --> で、GitHub ではまだ公開されていません。以下のコマンドは予定されている成果物を示します。公開まではソースからビルドし、公開後も使用前に各成果物を検証してください。観測した公開状況は <!-- release -->`docs/releases/0.1-install-surfaces.json`<!-- /release --> に記録されています。
+
 Olivares AI は **セルフホスト・ファースト** です。製品全体が Web UI を埋め込んだ
 1 つの静的バイナリであるため、最も単純なデプロイは単一ファイルで済みます。マルチノードや
 本番向けには Compose や Kubernetes の経路も用意されています。どの経路も同じセキュアな
@@ -28,6 +35,8 @@ Olivares AI は **セルフホスト・ファースト** です。製品全体�
 ネットワーク非接続のサイトについては
 [エアギャップ環境でインストールする](/how-to/air-gap-install/) を参照してください。
 
+**NATS イベント配信:** Core NATS ブリッジと NATS JetStream には Business Identity & Scale が必要です。Community はプロセス内でイベントを配信します。
+
 ## セキュアなデフォルト設定 (すべての経路)
 
 | デフォルト | 動作 |
@@ -35,7 +44,7 @@ Olivares AI は **セルフホスト・ファースト** です。製品全体�
 | **認証情報** | なし。初回起動時に **ワンタイムかつ単一利用のセットアップトークン** (`olst_…`) を表示する。これを使って最初の管理者を作成する。 |
 | **TLS** | デフォルトで有効。`--insecure` (平文) は localhost での開発専用。 |
 | **バインド** | デフォルトで**すべてのインターフェース**（`:8443`、`:8444`）。これはサーバーです。このホストだけに制限するには `--listen 127.0.0.1:8443 --grpc-listen 127.0.0.1:8444` を渡します。 |
-| **ライセンス** | オープン（AGPL）バイナリでは、ライセンスは **オフライン** で検証され（Ed25519）、証明（attestation）にのみ用いられる。オープン製品をゲートしたり劣化させたりすることは決してなく、この点は変わらない。商用アドオンは、**サブスクリプションによるエンタープライズリポジトリへのアクセス**として提供される、支払われた期間に対する権利である（SUSE/Novell モデル）。アドオンを取得し、その更新（セキュリティ更新を含む）を受け取るには、この権利が必要となる。エアギャップ環境への提供も SUSE と同じ方式で行われ、この権利が引き続き適用されるローカルミラーを経由する。 |
+| **ライセンス** | オープン（AGPL）バイナリでは、ライセンスは **オフライン** で検証され（Ed25519）、証明（attestation）にのみ用いられる。オープン製品をゲートしたり劣化させたりすることは決してなく、この点は変わらない。Business は、Regulated Operations、AI Runtime Security、Compliance Packs、Identity & Scale を 1 つのサブスクリプションに含みます。お客様は各ファミリーを有効または無効にできます。Business と Enterprise はバイナリとして提供され、有料版のソースコードは非公開のままです。 |
 | **テレメトリ送信** | オフ。エンジンは起動時に必須の外向き通信を一切行わない。 |
 
 ## 選択肢 1 — 単一バイナリ
@@ -82,11 +91,11 @@ Organization"). The reply carries the new organization's tenant_id.
 最初の管理者を作成し、ログインします:
 
 ```bash
-curl -fsS -X POST https://localhost:8443/v1/setup \
+curl --cacert /var/lib/olivares/tls.crt -fsS -X POST https://localhost:8443/v1/setup \
   -H 'Content-Type: application/json' \
   -d '{"token":"<olst_ token>","email":"you@example.com","password":"<strong-password>"}'
 
-curl -fsS -X POST https://localhost:8443/v1/auth/login \
+curl --cacert /var/lib/olivares/tls.crt -fsS -X POST https://localhost:8443/v1/auth/login \
   -H 'Content-Type: application/json' \
   -d '{"email":"you@example.com","password":"<strong-password>"}'
 ```
@@ -113,19 +122,17 @@ SDD 04 §6: 設定可能な各フィールドは owner、schema、accepted sourc
 | Any path component is a symbolic link | `path component is a symbolic link ($prefix -> …); pass the resolved path instead of provisioning through a link: $1` |
 | Parent of a new custom directory does not exist | `parent of the custom data directory does not exist; create it with the intended owner first: $(dirname -- "$data_target")` |
 | Existing system directory mode is not 0700 or 0750 | `existing system data directory mode is $data_mode; require 0700 or 0750` |
-| Path is under `/dev`, `/proc` or `/sys` | `data directory $data_dir is under an API file system (/dev, /proc, /sys): those hold kernel and device interfaces rather than durable state…; choose a real directory` |
-| Path under `/tmp` or `/var/tmp` on systemd older than 235 | `data directory $data_dir is under /tmp or /var/tmp and this host runs systemd $running: creating a BindPaths= destination inside the private /tmp needs systemd 235 or later…` |
-| A BindPaths= path contains `:` | `$2 $1 contains ':' and this location can only be reached with BindPaths=, whose value uses ':' to separate source from destination; choose a path without it` |
+| Path is under `/dev`, `/proc` or `/sys` | `data directory $data_dir is under an API file system (/dev, /proc, /sys): choose a real directory` |
 
 `install-agentops.sh` は `OLIVARES_DATA_DIR` に同じ 2 階層規則を使います:
 `OLIVARES_DATA_DIR must name a dedicated directory at least two levels deep
 (for example /srv/olivares), not a top-level directory`。`OLIVARES_DATA_DIR` と明示選択された
 `OLIVARES_WORKSPACE_DIR` を尊重します。
 
-`/home`、`/root`、`/run/user` 配下のパスは `ProtectHome=tmpfs` と、そのディレクトリ
-だけの `BindPaths=` で描画されます。`/tmp` または `/var/tmp` 配下は
-`PrivateTmp=true` を保ち、そのディレクトリだけの `BindPaths=` を受けます
-（`scripts/install-service.sh` の `sandbox_access`）。
+ユニットはディレクトリを `ReadWritePaths=<data-dir>` として描画します。`ProtectHome=false` と
+`PrivateTmp=false` を設定しているので、`/home`、`/root`、`/run/user`、`/tmp`、`/var/tmp`
+配下のディレクトリにも追加のマウントは要りません。インストーラーは、`/tmp` と `/var/tmp` が
+起動時やタイマーで消去されうることを警告します。
 
 `olivares uninstall` は、索引付きパスのユニットがそのディレクトリでエンジンを実行する
 とき、または preserve が既にサービス設定の横にアンインストール証人を残しているときに
@@ -169,32 +176,14 @@ ingress を前面に立てることができます。Compose スタックはホ�
 
 ## 選択肢 3 — Kubernetes (Helm)
 
-`deploy/helm/olivares` の Helm チャートは、control plane を **コア StatefulSet** (単一ライター。その
-データディレクトリには監査署名鍵と TLS マテリアルが格納される) としてデプロイし、
-分散トポロジー向けには、観測結果を **gRPC + mTLS** 経由でコアにプッシュする
-**コレクター DaemonSet** をデプロイします。エンジンの 26.10.1 リリースは OCI
-チャートを公開せず、独立した `chart-v*` タグもまだ workflow を実行していません。
-レビュー済みのソースを checkout からインストールし、公開イメージを digest で固定します。
+デプロイ用パッケージは Business チャネルで提供されます。ここでは公開状況は未検証です。ローカルチャートを使う前に、チャネルの手順でパッケージと発行者を検証してください。マニフェストの例では Business が提供する `business-install.yaml` を使います。エアギャップ環境へのインストールには Enterprise が必要です。
 
 ```bash
-helm install olivares \
-  deploy/helm/olivares \
-  --set image.repository=docker.io/olivaresai/olivares \
-  --set image.digest=<sha256-digest>
+# Set these inputs from the authenticated Business channel after verification.
+helm upgrade --install olivares "$BUSINESS_CHART_PACKAGE" \
+  --set image.repository="$BUSINESS_IMAGE_REPOSITORY" \
+  --set image.digest="$BUSINESS_IMAGE_DIGEST"
 ```
-
-> 将来チャートが公開されると、`release-chart.yml` は OCI manifest を cosign 署名し、GPG
-> `.prov` layer は出力しません。その成果物は digest で別途検証します。ソースからの
-> インストールを署名済み OCI download として扱いません。`deploy/helm/README.md` を参照。
-
-チャートは Docker Hub (`docker.io/olivaresai/olivares`) からコンテナイメージを取得します。同じ
-イメージは `ghcr.io/olivaresai/olivares` にもあり、ダイジェストは同一です。Docker Hub の
-**匿名**プルのレート制限が障害になる場合は `image.repository` をそちらに向けてください
-（ghcr.io は公開イメージに制限を課しません）。チャートは独立リリースまで
-`deploy/helm/olivares` から取得します。
-
-常に **ダイジェストで** デプロイし、可変タグは決して使わないでください。完全にネットワーク
-非接続のクラスターでは、まずバンドルをミラーします — [エアギャップインストール](/how-to/air-gap-install/) を参照してください。
 
 ## トポロジーを選ぶ
 

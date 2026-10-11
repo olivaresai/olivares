@@ -17,9 +17,11 @@
 // connector therefore pulls in zero third-party dependencies.
 //
 // The gRPC/protobuf wire contract and the hashicorp/go-plugin transport that let
-// a connector or module ship as a separate process live in the SEPARATE module
+// a connector ship as a separate process live in the SEPARATE module
 // github.com/olivaresai/olivares/sdk/plugin, so the gRPC dependency tree is
 // opt-in: it reaches an author's go.sum only if they choose to ship a plugin.
+// Modules run in-process only; the out-of-process module transport once sketched
+// for the plugin SDK is deprecated (see VERSIONING.md, honest limits).
 //
 // # Packages
 //

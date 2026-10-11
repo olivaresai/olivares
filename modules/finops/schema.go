@@ -434,6 +434,7 @@ var (
 			"legacy.value_kind", "legacy.note"),
 		model.Leaf("policy.key", pdeclBudgetKeyEvidence),
 		model.Leaf("context.scope_value", pdeclBudgetKeyEvidence),
+		model.Leaf("context.scope_values[]", pdeclBudgetKeyEvidence),
 		model.TypeLeaves(alertEvidenceComponent{}, pdeclLeaves(pdeclNoneAlertEnvelope, "state", "value_micro_usd", "causes[]")...))...)
 )
 

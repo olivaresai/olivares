@@ -17,7 +17,10 @@ import (
 // pipe open would otherwise block the read and wedge teardown forever). On
 // non-Unix this is a no-op and the default per-process kill applies.
 func configureProcGroup(cmd *exec.Cmd) {
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	if cmd.SysProcAttr == nil {
+		cmd.SysProcAttr = &syscall.SysProcAttr{}
+	}
+	cmd.SysProcAttr.Setpgid = true
 	cmd.Cancel = func() error { return procGroupKill(cmd) }
 }
 

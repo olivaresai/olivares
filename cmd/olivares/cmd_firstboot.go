@@ -48,6 +48,17 @@ import (
 // there. And it is refused once an administrator exists, which is the property the
 // token was ever protecting.
 
+// firstBootEUID and engineAccount are the two identities --new-token compares: the
+// account this process runs as, and the account the engine runs as, read from the
+// owner of the console record the engine writes at every start (consolestate.go).
+// Tests replace them to run as an account the test process is not.
+var (
+	firstBootEUID = os.Geteuid
+	engineAccount = func(dataDir string) (uid, gid int, known bool, err error) {
+		return fileOwner(filepath.Join(dataDir, consoleStateFile))
+	}
+)
+
 type firstBootOptions struct {
 	dataDir  string
 	newToken bool
@@ -70,7 +81,9 @@ func newFirstBootCmd() *cobra.Command {
 			"It does NOT print the one-time setup token. The engine stores only a SHA-256 of\n" +
 			"that token, so the original cannot be recovered — it is shown once, at mint time.\n" +
 			"While no administrator exists, --new-token mints a replacement and prints it once;\n" +
-			"the running engine accepts it immediately and the previous token stops working.",
+			"the running engine accepts it immediately and the previous token stops working.\n" +
+			"Run --new-token as the engine's account or as root (sudo): root writes the\n" +
+			"replacement as the engine's account, so the engine can read it.\n\n" + textOnlyOutputHelp,
 		Example: "  # In a Compose or Docker deployment, with no shell in the image\n" +
 			"  docker compose -f deploy/compose/docker-compose.yml exec olivares olivares first-boot\n\n" +
 			"  # Lost the token before setup was completed? Mint a replacement\n" +
@@ -80,6 +93,9 @@ func newFirstBootCmd() *cobra.Command {
 			"  olivares first-boot --data-dir /var/lib/olivares",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			if err := requireTextOutput(cmd); err != nil {
+				return err
+			}
 			dataDir := o.dataDir
 			if dataDir == "" {
 				resolved, err := defaultDataDir()
@@ -130,15 +146,27 @@ func runFirstBoot(dest io.Writer, dataDir string, newToken bool) error {
 			"no engine has recorded a console address in %s. Either no engine has started with this data directory, or it is not the directory the engine uses: start it (`olivares serve --data-dir %s`), or pass the right --data-dir",
 			dataDir, dataDir))
 	}
+	// Only a missing setup.token means setup is complete. A token this process cannot
+	// even stat (the package data directory is 0750 olivares, and a normal user cannot
+	// search it) is a state it does not know, and it says so before it prints, or
+	// changes, anything (#513).
+	tok := secure.NewSetupToken(filepath.Join(dataDir, "setup.token"))
+	pending, tokenErr := tok.Check()
+	if tokenErr != nil {
+		again := "sudo olivares first-boot --data-dir " + shellQuote(dataDir)
+		if newToken {
+			again += " --new-token"
+		}
+		return exitcode.New(exitcode.Indeterminate, fmt.Errorf(
+			"cannot tell whether setup is pending: %w. Run it as root or as the account that owns the data directory, for example:\n\n  %s",
+			tokenErr, again))
+	}
 	// An unreadable record is reported and the rest of the report still runs: the
 	// setup state below comes from a different file and is the half that matters
 	// most to somebody who cannot get in.
 	if stateErr != nil {
 		fmt.Fprintf(out, "The recorded console address could not be read: %v\n\n", stateErr)
 	}
-
-	tok := secure.NewSetupToken(filepath.Join(dataDir, "setup.token"))
-	pending := tok.Exists()
 
 	fmt.Fprint(out, "=== OLIVARES AI — THIS INSTALLATION ===\n")
 	fmt.Fprintf(out, "Data directory: %s\n", dataDir)
@@ -193,15 +221,22 @@ func runFirstBoot(dest io.Writer, dataDir string, newToken bool) error {
 		return withReportFailure(out, nil)
 	}
 
+	// Decided before anything is retired: a run that cannot leave a token the
+	// engine can read must leave the current token as it is.
+	uid, gid, err := newTokenOwner(dataDir)
+	if err != nil {
+		return err
+	}
+
 	// The reissue itself. Consume-then-Ensure, in that order, so the window in
 	// which two tokens are valid does not exist: the old hash is gone before the
 	// new one is written.
 	if err := tok.Consume(); err != nil {
 		return fmt.Errorf("could not retire the previous setup token: %w", err)
 	}
-	plaintext, created, err := tok.Ensure()
+	plaintext, created, err := tok.EnsureAs(uid, gid)
 	if err != nil {
-		return fmt.Errorf("could not mint a replacement setup token: %w", err)
+		return fmt.Errorf("could not mint a replacement setup token; the previous one has been retired, so restart the engine to mint a fresh one: %w", err)
 	}
 	if !created || plaintext == "" {
 		return fmt.Errorf("a replacement setup token was not minted; the previous one has been retired, so restart the engine to mint a fresh one")
@@ -214,6 +249,37 @@ func runFirstBoot(dest io.Writer, dataDir string, newToken bool) error {
 	// exit 0. Minting again is safe while no administrator exists, and the
 	// message says which command does it.
 	return withReportFailure(out, nil)
+}
+
+// newTokenOwner returns the account a replacement setup token must belong to (#514),
+// or -1, -1 for this process's own.
+//
+// The engine reads setup.token on every Verify, and the file is 0600: a token that
+// belongs to another account answers 403, and a restart does not help because the
+// file exists. Only root can give the file away, so only root needs the engine's
+// account for certain: it writes the file as that account, as the appliance's first
+// boot does with the token it mints (appliance/layer/base/adapters.go), and refuses
+// when the record cannot say. Any other run mints as itself, as before #514, unless
+// the record names another non-root account, which could not read the result: that
+// run is refused before anything changes, with the command that works. An engine
+// running as root reads a file of any owner (unless its capabilities were dropped,
+// which this process cannot see).
+func newTokenOwner(dataDir string) (uid, gid int, err error) {
+	uid, gid, known, err := engineAccount(dataDir)
+	euid := firstBootEUID()
+	if err != nil && euid == 0 {
+		return 0, 0, fmt.Errorf("could not tell which account the engine runs as from %s: %w",
+			filepath.Join(dataDir, consoleStateFile), err)
+	}
+	if err != nil || !known || euid == uid || uid == 0 {
+		return -1, -1, nil
+	}
+	if euid == 0 {
+		return uid, gid, nil
+	}
+	return 0, 0, exitcode.New(exitcode.Usage, fmt.Errorf(
+		"--new-token was refused: the engine runs as uid %d, and it could not read a token written by uid %d. The current token is left as it is. Run it as the engine's account, for example:\n\n  sudo -u '#%d' olivares first-boot --data-dir %s --new-token",
+		uid, euid, uid, shellQuote(dataDir)))
 }
 
 // withReportFailure turns a rejected or short write into the command's verdict,

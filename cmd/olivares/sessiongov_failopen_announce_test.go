@@ -32,8 +32,8 @@ func announceFixture() moduleSet {
 // wireSessionGovernance announced its result as one INFO line — "session governance wired"
 // — carrying nine key/value pairs, two of which were budget_posture and context_posture.
 // A posture of fail-open means that when the process cannot READ the budget ledger or the
-// context policy, the launch is ALLOWED. On the community edition that is the DEFAULT, so
-// the operator most likely to be running it is the one who configured nothing.
+// context policy, the launch is ALLOWED. It is an explicit setting after 26.10.1 (it was the
+// community default until then), and a setting made once is easy to forget.
 //
 // Announcing "I will decline to enforce when I cannot see" as a pair inside a message that
 // reads like good news is the fourth answer wearing the first one's clothes. This is the
@@ -112,5 +112,28 @@ func TestFailOpenAnnouncementFixtureIsNotVacuous(t *testing.T) {
 	wireSessionGovernance(announceFixture(), nil, nil, nil, func(string) string { return "fail-open" }, log)
 	if !strings.Contains(buf.String(), "session governance wired") {
 		t.Fatalf("the fixture never reached the announcement, so the sibling test asserts nothing:\n%s", buf.String())
+	}
+}
+
+// TestUnsetAvailabilityIsFailClosedInEveryBuild: with neither availability variable set,
+// the launch gate refuses a session whose budget or context policy it cannot read, and
+// nothing about it depends on the build. The file has no build tag, so the same assertion
+// runs in the Community build and in the build whose edition name is "enterprise".
+func TestUnsetAvailabilityIsFailClosedInEveryBuild(t *testing.T) {
+	var buf bytes.Buffer
+	log := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	wireSessionGovernance(announceFixture(), nil, nil, nil, func(string) string { return "" }, log)
+
+	out := buf.String()
+	if !strings.Contains(out, "session governance wired") {
+		t.Fatalf("the fixture never reached the boot line:\n%s", out)
+	}
+	for _, want := range []string{"budget_posture=fail-closed", "context_posture=fail-closed"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("build %q with the variables unset: boot line lacks %q\n%s", thisEdition.name, want, out)
+		}
+	}
+	if strings.Contains(out, "session launch gate is FAIL-OPEN") {
+		t.Errorf("build %q with the variables unset announced a FAIL-OPEN control:\n%s", thisEdition.name, out)
 	}
 }

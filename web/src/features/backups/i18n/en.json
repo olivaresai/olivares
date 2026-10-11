@@ -1,6 +1,6 @@
 {
   "title": "Backup & Restore",
-  "description": "Manage disaster-recovery snapshots of the control plane.",
+  "description": "Manage disaster recovery snapshots of Olivares AI.",
   "tabs": {
     "backups": "Backups",
     "schedule": "Schedule"
@@ -75,7 +75,7 @@
   "trigger": {
     "started": "Backup started",
     "title": "Create Backup",
-    "description": "Create an encrypted snapshot of the entire control plane.",
+    "description": "Create an encrypted snapshot of Olivares AI.",
     "notes": "Notes",
     "notesPlaceholder": "Optional description for this backup",
     "passphrase": "Passphrase",
@@ -110,7 +110,7 @@
     "uploadFailed": "Upload failed",
     "started": "Restore started",
     "title": "Restore from Backup",
-    "description": "Upload a .drbundle file to restore the control plane state.",
+    "description": "Upload a .drbundle file to restore Olivares AI state.",
     "apply": "Apply Restore",
     "confirmTitle": "Confirm Restore",
     "confirmDescription": "This will overwrite all current data with the backup contents. This operation cannot be undone.",
@@ -149,7 +149,7 @@
   "empty": {
     "backup": {
       "title": "No backup snapshots created yet",
-      "description": "Create an encrypted backup from this console on SQLite; for PostgreSQL, create the bundle with the DR CLI in the configured backup directory."
+      "description": "Create an encrypted backup from this console."
     }
   }
 }

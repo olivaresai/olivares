@@ -5,6 +5,7 @@
 package engine_test
 
 import (
+	"bytes"
 	"errors"
 	"os"
 	"path/filepath"
@@ -74,5 +75,78 @@ func TestAuditReaderExistingLedgerIsReadOnlyAndTenantPinned(t *testing.T) {
 		}); err != nil {
 			t.Fatal(err)
 		}
+	}
+}
+
+func TestDRReaderInventoryIncludesSuspendedTenantsWithoutWrites(t *testing.T) {
+	cfg := store.Config{Engine: store.EngineSQLite, DSN: filepath.Join(t.TempDir(), "ledger.db")}
+	st, err := engine.Open(t.Context(), cfg, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var tenants []model.TenantID
+	if err := st.System(t.Context(), func(sc store.SystemScope) error {
+		for _, slug := range []string{"dr-active", "dr-suspended"} {
+			org, err := sc.CreateOrg(t.Context(), model.Org{Name: slug, Slug: slug, Status: model.StatusActive})
+			if err != nil {
+				return err
+			}
+			tenants = append(tenants, org.TenantID)
+		}
+		_, err := sc.SetOrgStatus(t.Context(), tenants[1], model.StatusSuspended)
+		return err
+	}); err != nil {
+		_ = st.Close()
+		t.Fatal(err)
+	}
+	if err := st.Close(); err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.ReadFile(cfg.DSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reader, err := engine.OpenDRReader(t.Context(), cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reader.Close()
+	orgs, err := reader.ListOrgs(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(orgs) != len(tenants) {
+		t.Fatalf("inventory: %d orgs, want %d", len(orgs), len(tenants))
+	}
+	for _, tenant := range tenants {
+		found := false
+		for _, org := range orgs {
+			found = found || org.TenantID == tenant
+		}
+		if !found {
+			t.Fatalf("inventory omitted %s", tenant)
+		}
+		if err := reader.ViewAudit(t.Context(), tenant, func(log store.AuditLog) error {
+			_, err := log.Append(t.Context(), model.AuditDraft{})
+			if !errors.Is(err, store.ErrReadOnly) {
+				t.Fatalf("reader accepted append: %v", err)
+			}
+			return nil
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := reader.Close(); err != nil {
+		t.Fatal(err)
+	}
+	after, err := os.ReadFile(cfg.DSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Fatal("offline inventory changed the snapshot bytes")
+	}
+	if _, err := engine.OpenDRReader(t.Context(), store.Config{Engine: store.EnginePostgres}); err == nil {
+		t.Fatal("SQLite reader accepted PostgreSQL without its DR preflight")
 	}
 }

@@ -10,19 +10,19 @@ set -u -o pipefail
 
 NAME='test-console-func-l4-exfil-mutants'
 cannot() {
-	printf '%s: NO PUDE MIRAR — %s\n' "$NAME" "$*" >&2
+	printf '%s: CANNOT INSPECT — %s\n' "$NAME" "$*" >&2
 	exit 2
 }
 
 _olivares_git_env="$(cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")" && pwd)/lib/git-env.sh"
-. "$_olivares_git_env" || cannot "no puedo cargar $_olivares_git_env (aislamiento git-env)"
+. "$_olivares_git_env" || cannot "cannot load $_olivares_git_env (git-env isolation)"
 unset _olivares_git_env
 
 for command_name in git bash perl mktemp cp cmp tail; do
-	command -v "$command_name" >/dev/null 2>&1 || cannot "$command_name no está disponible"
+	command -v "$command_name" >/dev/null 2>&1 || cannot "$command_name is unavailable"
 done
 
-ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || cannot 'no resuelvo la raíz del repositorio'
+ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || cannot 'cannot resolve the repository root'
 ORACLE="$ROOT/scripts/check-console-func-l4-exfil.sh"
 API="$ROOT/web/src/features/access-map/api.ts"
 PANEL="$ROOT/web/src/features/access-map/attack-paths.tsx"
@@ -32,12 +32,12 @@ URL_STATE="$ROOT/web/src/lib/hooks/use-url-state.ts"
 
 for required in "$ORACLE" "$API" "$PANEL" "$DETAIL" "$SELECTION" "$URL_STATE"; do
 	[ -r "$required" ] || {
-		printf '%s: NO PUDE MIRAR — no leo %s\n' "$NAME" "$required" >&2
+		printf '%s: CANNOT INSPECT — cannot read %s\n' "$NAME" "$required" >&2
 		exit 2
 	}
 done
-TMP=$(mktemp -d "${TMPDIR:-/tmp}/console-func-l4-mutants.XXXXXX") || cannot 'mktemp falló'
-[ -d "$TMP" ] || cannot 'mktemp no devolvió un directorio'
+TMP=$(mktemp -d "${TMPDIR:-/tmp}/console-func-l4-mutants.XXXXXX") || cannot 'mktemp failed'
+[ -d "$TMP" ] || cannot 'mktemp did not return a directory'
 
 restore_all() {
 	cp "$TMP/api.ts" "$API" &&
@@ -59,12 +59,12 @@ cleanup_on_exit() {
 	local original_rc=$?
 	trap - EXIT HUP INT TERM
 	if ! restore_all || ! assert_restored; then
-		printf '%s: NO PUDE MIRAR — cleanup no restauró bytes exactos; snapshots preservados en %s\n' \
+		printf '%s: CANNOT INSPECT — cleanup did not restore exact bytes; snapshots preserved in %s\n' \
 			"$NAME" "$TMP" >&2
 		exit 2
 	fi
 	if ! rm -rf -- "$TMP"; then
-		printf '%s: NO PUDE MIRAR — no retiro el temporal restaurado %s\n' "$NAME" "$TMP" >&2
+		printf '%s: CANNOT INSPECT — cannot remove restored temporary directory %s\n' "$NAME" "$TMP" >&2
 		exit 2
 	fi
 	exit "$original_rc"
@@ -79,7 +79,7 @@ cp "$API" "$TMP/api.ts" &&
 	cp "$PANEL" "$TMP/attack-paths.tsx" &&
 	cp "$DETAIL" "$TMP/detail.tsx" &&
 	cp "$SELECTION" "$TMP/selection.ts" &&
-	cp "$URL_STATE" "$TMP/use-url-state.ts" || cannot 'no creo el snapshot completo antes de mutar'
+	cp "$URL_STATE" "$TMP/use-url-state.ts" || cannot 'cannot create the complete snapshot before mutation'
 
 replace_once() {
 	local file=$1 old=$2 new=$3
@@ -102,25 +102,25 @@ run_oracle() {
 
 run_mutant() {
 	local label=$1 file=$2 old=$3 new=$4 message=$5 rc expected actual
-	restore_all || cannot "no restauro antes del mutante $label"
+	restore_all || cannot "cannot restore before mutant $label"
 	if ! replace_once "$file" "$old" "$new"; then
-		printf '%s: NO PUDE MIRAR — el mutante %s no aplicó exactamente una vez\n' "$NAME" "$label" >&2
+		printf '%s: CANNOT INSPECT — mutant %s was not applied exactly once\n' "$NAME" "$label" >&2
 		exit 2
 	fi
 	if run_oracle "$TMP/$label.log"; then rc=0; else rc=$?; fi
-	expected="console-func-l4-exfil: ROTO — $message"
+	expected="console-func-l4-exfil: FAIL — $message"
 	actual=$(tail -n 1 "$TMP/$label.log")
 	if [ "$rc" -ne 1 ] || [ "$actual" != "$expected" ]; then
-		printf '%s: NO PUDE MIRAR — mutante %s: rc=%s, última línea inesperada\n' "$NAME" "$label" "$rc" >&2
+		printf '%s: CANNOT INSPECT — mutant %s: rc=%s, unexpected final line\n' "$NAME" "$label" "$rc" >&2
 		cat "$TMP/$label.log" >&2
 		exit 2
 	fi
-	restore_all || cannot "no restauro después del mutante $label"
+	restore_all || cannot "cannot restore after mutant $label"
 	if ! assert_restored; then
-		printf '%s: NO PUDE MIRAR — mutante %s no restauró bytes exactos\n' "$NAME" "$label" >&2
+		printf '%s: CANNOT INSPECT — mutant %s did not restore exact bytes\n' "$NAME" "$label" >&2
 		exit 2
 	fi
-	printf '%s: MUERDE %s — %s\n' "$NAME" "$label" "$message"
+	printf '%s: DETECTED %s — %s\n' "$NAME" "$label" "$message"
 }
 
 QUERY_MSG='EXFIL_QUERY_CONTRACT: /attack-paths/exfil requires resource_id=resource-7 and must not send agent_id'
@@ -200,15 +200,15 @@ run_mutant url-state "$URL_STATE" \
 	'    const next = readSearch(keysRef.current)' \
 	"$URL_STATE_MSG"
 
-restore_all || cannot 'no restauro antes del control final'
+restore_all || cannot 'cannot restore before the final control'
 if ! run_oracle "$TMP/final-green.log"; then
-	printf '%s: NO PUDE MIRAR — el control final limpio no quedó verde\n' "$NAME" >&2
+	printf '%s: CANNOT INSPECT — the clean final control did not pass\n' "$NAME" >&2
 	cat "$TMP/final-green.log" >&2
 	exit 2
 fi
-expected_green='console-func-l4-exfil: FUNCIONA — exfil y estado URL verificados en cuatro suites'
+expected_green='console-func-l4-exfil: PASS — exfiltration and URL state verified in four suites'
 [ "$(tail -n 1 "$TMP/final-green.log")" = "$expected_green" ] || {
-	printf '%s: NO PUDE MIRAR — mensaje final verde inesperado\n' "$NAME" >&2
+	printf '%s: CANNOT INSPECT — unexpected final passing message\n' "$NAME" >&2
 	exit 2
 }
 
@@ -218,15 +218,15 @@ if OLIVARES_L4_WEB_DIR="$MISSING" bash "$ORACLE" >"$TMP/cannot.log" 2>&1; then
 else
 	rc=$?
 fi
-expected_cannot="console-func-l4-exfil: NO PUDE MIRAR — no leo $MISSING/package.json"
+expected_cannot="console-func-l4-exfil: COULD NOT CHECK — cannot read $MISSING/package.json"
 if [ "$rc" -ne 2 ] || [ "$(tail -n 1 "$TMP/cannot.log")" != "$expected_cannot" ]; then
-	printf '%s: NO PUDE MIRAR — el control rc2 no conservó código y mensaje exactos\n' "$NAME" >&2
+	printf '%s: CANNOT INSPECT — the rc2 control did not preserve the exact code and message\n' "$NAME" >&2
 	cat "$TMP/cannot.log" >&2
 	exit 2
 fi
 
 assert_restored || {
-	printf '%s: NO PUDE MIRAR — la batería terminó con bytes distintos\n' "$NAME" >&2
+	printf '%s: CANNOT INSPECT — the test ended with different bytes\n' "$NAME" >&2
 	exit 2
 }
-printf '%s: FUNCIONA — 15/15 mutantes mordieron, rc0/rc1/rc2 y restauración byte-exacta\n' "$NAME"
+printf '%s: PASS — 15/15 mutants detected, rc0/rc1/rc2 and byte-for-byte restoration\n' "$NAME"

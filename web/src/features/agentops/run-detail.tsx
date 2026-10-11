@@ -26,6 +26,7 @@ import { Spinner } from '@/components/ui/spinner'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { toast } from '@/components/ui/toaster'
 import { sessionNameLadder } from '@/features/home/work-line'
+import { isResumableRun } from '@/features/sessions/provenance'
 import { RelTimeLabel } from '@/features/shared'
 import { NamedRef } from '@/features/shared/named-ref'
 import { useClientSettings } from '@/features/settings/preferences'
@@ -33,6 +34,7 @@ import { ApiError } from '@/lib/api/errors'
 import { useAuth } from '@/lib/auth/context'
 import { cn } from '@/lib/utils'
 import { agentOpsApi, agentOpsKeys } from './api'
+import { DiscardWorktreeOption } from './discard-worktree-option'
 import { GovernancePanel } from './governance-panel'
 import { LiveConsole } from './live-console'
 import { RunStateBadge } from './run-state-badge'
@@ -164,6 +166,13 @@ export function RunDetailSheet({
     const [confirm, setConfirm] = useState<
       null | 'cleanup' | 'delete' | 'stop'
     >(null)
+    // The person's confirmation to discard the session's git worktree and branch with
+    // unmerged or uncommitted work; asked only of a session that has one.
+    const [discardWorktree, setDiscardWorktree] = useState(false)
+    const closeConfirm = () => {
+      setConfirm(null)
+      setDiscardWorktree(false)
+    }
 
     const invalidate = () =>
       qc.invalidateQueries({ queryKey: agentOpsKeys.all(activeTenant) })
@@ -185,9 +194,9 @@ export function RunDetailSheet({
       onError: onErr,
     })
     const cleanup = useMutation({
-      mutationFn: () => agentOpsApi.cleanup(run.run_ref),
+      mutationFn: () => agentOpsApi.cleanup(run.run_ref, discardWorktree),
       onSuccess: () => {
-        setConfirm(null)
+        closeConfirm()
         invalidate()
       },
       onError: onErr,
@@ -195,11 +204,12 @@ export function RunDetailSheet({
     const del = useMutation({
       // The server deletes only a cleaned record; a stopped or failed one is cleaned first.
       mutationFn: async () => {
-        if (run.state !== 'cleaned') await agentOpsApi.cleanup(run.run_ref)
+        if (run.state !== 'cleaned')
+          await agentOpsApi.cleanup(run.run_ref, discardWorktree)
         return agentOpsApi.deleteRun(run.run_ref)
       },
       onSuccess: () => {
-        setConfirm(null)
+        closeConfirm()
         invalidate()
         onClose()
       },
@@ -208,7 +218,7 @@ export function RunDetailSheet({
 
     const stoppable = ['pending', 'running', 'idle'].includes(run.state)
     // A stream-json run that never captured a session starts again with the same settings.
-    const resumable = ['stopped', 'failed'].includes(run.state)
+    const resumable = isResumableRun(run)
     const startsAgain =
       run.transport === 'stream-json' && !run.claude_session_id
     const cleanable = ['stopped', 'failed'].includes(run.state)
@@ -272,22 +282,38 @@ export function RunDetailSheet({
         />
         <ConfirmDialog
           open={confirm === 'cleanup'}
-          onOpenChange={(o) => !o && setConfirm(null)}
+          onOpenChange={(o) => !o && closeConfirm()}
           title={t('actions.cleanup')}
           description={t('detail.minimalData')}
           confirmLabel={t('actions.cleanup')}
           pending={cleanup.isPending}
           onConfirm={() => cleanup.mutate()}
-        />
+        >
+          {run.worktree_branch && run.state !== 'cleaned' && (
+            <DiscardWorktreeOption
+              branch={run.worktree_branch}
+              checked={discardWorktree}
+              onCheckedChange={setDiscardWorktree}
+            />
+          )}
+        </ConfirmDialog>
         <ConfirmDialog
           open={confirm === 'delete'}
-          onOpenChange={(o) => !o && setConfirm(null)}
+          onOpenChange={(o) => !o && closeConfirm()}
           tone="danger"
           title={t('actions.delete')}
           confirmLabel={t('actions.delete')}
           pending={del.isPending}
           onConfirm={() => del.mutate()}
-        />
+        >
+          {run.worktree_branch && run.state !== 'cleaned' && (
+            <DiscardWorktreeOption
+              branch={run.worktree_branch}
+              checked={discardWorktree}
+              onCheckedChange={setDiscardWorktree}
+            />
+          )}
+        </ConfirmDialog>
       </div>
     )
   }
@@ -453,6 +479,11 @@ export function RunInfo({ run }: { run: RunDTO }) {
             : `${run.workspace_path} (${t('info.workspaceDirectoryOwn')})`
           : none}
       </KvRow>
+      {run.worktree_branch && (
+        <KvRow label={t('info.worktreeBranch')} mono align="start">
+          {run.worktree_branch}
+        </KvRow>
+      )}
       <KvRow label={t('info.claudeSessionId')} mono align="start">
         {run.claude_session_id || none}
       </KvRow>

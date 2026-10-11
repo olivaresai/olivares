@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+import { useQuery } from '@tanstack/react-query'
 import { Plus, ScrollText, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -25,9 +26,12 @@ import {
 } from '@/components/ui/select'
 import { Spinner } from '@/components/ui/spinner'
 import { Textarea } from '@/components/ui/textarea'
+import { agentsApi } from '@/lib/api/endpoints'
 import { useAuth } from '@/lib/auth/context'
 import { looksLikeCredential } from '@/lib/credentials'
+import { capabilitiesApi } from '@/features/capabilities/api'
 import { usePrivilegedMutation } from '@/lib/hooks/use-privileged-mutation'
+import { useModuleOn } from '@/stores/modules'
 import { deployApi, deployKeys } from './api'
 import './i18n'
 import { SUBJECT_KINDS, WIRING_MODES } from './types'
@@ -41,6 +45,117 @@ import type {
   WiringMode,
   WiringSpec,
 } from './types'
+
+// --- the Subject, chosen from what exists -----------------------------------------
+
+/**
+ * The agent or MCP server to deploy, chosen from the tenant's agents (the roster the
+ * identity binder resolves `subject_ref` against, by name) or its MCP servers. When the
+ * list cannot be read whole (a role without that read, the module off, more than one
+ * page), names change when trimmed, or names collide with other names or external
+ * IDs, the reference is typed so an external ID can still target a specific agent.
+ */
+function SubjectPicker({
+  kind,
+  value,
+  onChange,
+}: {
+  kind: SubjectKind
+  value: string
+  onChange: (ref: string) => void
+}) {
+  const { t } = useTranslation('deploy')
+  const { activeTenant } = useAuth()
+  const capabilitiesOn = useModuleOn('capabilities')
+  const canReadSubjects = kind !== 'mcp_server' || capabilitiesOn
+  const names = useQuery({
+    enabled: canReadSubjects,
+    queryKey: deployKeys.subjects(activeTenant, kind),
+    queryFn: async () => {
+      const page: {
+        items: { name: string; external_id?: string }[]
+        has_more?: boolean
+      } =
+        kind === 'mcp_server'
+          ? await capabilitiesApi.listServers()
+          : await agentsApi.list()
+      const unique = new Set(page.items.map((i) => i.name).filter(Boolean))
+      return {
+        names: [...unique].sort((a, b) => a.localeCompare(b)),
+        // A partial list would hide the rest without saying so.
+        complete: !page.has_more,
+        // The identity binder matches names OR external IDs. A name must not
+        // resolve to another agent, regardless of the roster order.
+        ambiguous:
+          unique.size !== page.items.length ||
+          // Cover both JS trim (\s) and Go strings.TrimSpace (White_Space).
+          page.items.some((i) =>
+            /^[\s\p{White_Space}]|[\s\p{White_Space}]$/u.test(i.name),
+          ) ||
+          (kind === 'agent' &&
+            page.items.some(
+              (i) =>
+                i.external_id &&
+                i.external_id !== i.name &&
+                unique.has(i.external_id),
+            )),
+      }
+    },
+  })
+  if (
+    !canReadSubjects ||
+    names.isError ||
+    names.data?.complete === false ||
+    names.data?.ambiguous
+  ) {
+    return (
+      <Field
+        label={t('editor.subjectRef')}
+        htmlFor="def-subject-ref"
+        description={t('editor.subjectRefHint')}
+        required
+      >
+        <Input
+          id="def-subject-ref"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          mono
+        />
+      </Field>
+    )
+  }
+  const options = names.data?.names ?? []
+  const none = names.isSuccess && options.length === 0
+  return (
+    <Field
+      label={t('editor.subjectRef')}
+      htmlFor="def-subject-ref"
+      description={
+        none ? t(`editor.subjectNone.${kind}`) : t('editor.subjectRefHint')
+      }
+      required
+    >
+      <Select
+        // Controlled throughout: '' shows the placeholder. `undefined` would hand the
+        // value to Radix and keep the name chosen for the other kind on screen.
+        value={value}
+        onValueChange={onChange}
+        disabled={!names.isSuccess || none}
+      >
+        <SelectTrigger id="def-subject-ref">
+          <SelectValue placeholder={t(`editor.subjectChoose.${kind}`)} />
+        </SelectTrigger>
+        <SelectContent>
+          {options.map((name) => (
+            <SelectItem key={name} value={name}>
+              {name}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </Field>
+  )
+}
 
 // --- draft rows (stable client keys so React keys survive reorder/removal) ----
 
@@ -271,7 +386,11 @@ function DefinitionForm({
           <Field label={t('editor.subjectKind')} htmlFor="def-subject-kind">
             <Select
               value={subjectKind}
-              onValueChange={(v) => setSubjectKind(v as SubjectKind)}
+              onValueChange={(v) => {
+                // A name chosen for one kind does not name the other.
+                setSubjectKind(v as SubjectKind)
+                setSubjectRef('')
+              }}
               disabled={isEdit}
             >
               <SelectTrigger id="def-subject-kind">
@@ -280,26 +399,29 @@ function DefinitionForm({
               <SelectContent>
                 {SUBJECT_KINDS.map((sk) => (
                   <SelectItem key={sk} value={sk}>
-                    {sk}
+                    {t(`editor.subjectKinds.${sk}`, { defaultValue: sk })}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </Field>
-          <Field
-            label={t('editor.subjectRef')}
-            htmlFor="def-subject-ref"
-            description={t('editor.subjectRefHint')}
-            required
-          >
-            <Input
-              id="def-subject-ref"
+          {isEdit ? (
+            <Field
+              label={t('editor.subjectRef')}
+              htmlFor="def-subject-ref"
+              description={t('editor.subjectRefHint')}
+              required
+            >
+              <Input id="def-subject-ref" value={subjectRef} disabled mono />
+            </Field>
+          ) : (
+            <SubjectPicker
+              key={subjectKind}
+              kind={subjectKind}
               value={subjectRef}
-              onChange={(e) => setSubjectRef(e.target.value)}
-              disabled={isEdit}
-              mono
+              onChange={setSubjectRef}
             />
-          </Field>
+          )}
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">

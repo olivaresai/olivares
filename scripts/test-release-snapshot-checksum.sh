@@ -46,7 +46,7 @@ want_case() { case "$CASES" in *"$1"*) return 0 ;; *) return 1 ;; esac; }
 OID=0123456789abcdef0123456789abcdef01234567
 
 cannot_look() {
-	echo "test-release-snapshot-checksum: NO HE PODIDO MIRAR: $*" >&2
+	echo "test-release-snapshot-checksum: COULD NOT CHECK: $*" >&2
 	exit 2
 }
 [ -f "$CFG" ] || cannot_look "no configuration at $CFG"
@@ -170,10 +170,10 @@ bash "$ROOT/scripts/render-release-installer.sh" 0.0.0-SNAPSHOT-0123456789 \
 	cannot_look "render-release-installer.sh did not render the snapshot installer: $(head -c 300 "$WORK/render-snapshot.out")"
 (cd "$REL" && env -i PATH="/usr/bin:/bin" HOME="$WORK" GITHUB_SHA="$OID" \
 	GITHUB_REPOSITORY_ID=123456789 GITHUB_REPOSITORY=olivaresai/olivares GITHUB_EVENT_NAME=push \
-	GITHUB_REF=refs/tags/v26.10.0 GITHUB_RUN_ID=36357280245 GITHUB_RUN_ATTEMPT=1 \
+	GITHUB_REF=refs/tags/1.0 GITHUB_RUN_ID=36357280245 GITHUB_RUN_ATTEMPT=1 \
 	bash "$ROOT/scripts/release-commit-evidence.sh" false) >"$WORK/hook-release.out" 2>&1 ||
 	cannot_look "the evidence hook did not write a real release's evidence: $(head -c 300 "$WORK/hook-release.out")"
-bash "$ROOT/scripts/render-release-installer.sh" 26.10.0 "$REL/dist/olivares-install-26.10.0.sh" false \
+bash "$ROOT/scripts/render-release-installer.sh" 1.0 "$REL/dist/olivares-install-1.0.sh" false \
 	>"$WORK/render-release.out" 2>&1 || cannot_look "render-release-installer.sh did not render the release installer"
 
 if want_case S; then

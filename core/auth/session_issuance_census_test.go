@@ -67,6 +67,15 @@ func TestSessionIssuanceCensus(t *testing.T) {
 		if err != nil {
 			return err
 		}
+		modelPackage := ""
+		for _, imp := range file.Imports {
+			if imp.Path.Value == `"github.com/olivaresai/olivares/core/model"` {
+				modelPackage = "model"
+				if imp.Name != nil {
+					modelPackage = imp.Name.Name
+				}
+			}
+		}
 		rel, err := filepath.Rel(root, path)
 		if err != nil {
 			return err
@@ -108,6 +117,18 @@ func TestSessionIssuanceCensus(t *testing.T) {
 					if sel, ok := n.Fun.(*ast.SelectorExpr); ok && sel.Sel.Name == "Create" {
 						if call, ok := sel.X.(*ast.CallExpr); ok {
 							if accessor, ok := call.Fun.(*ast.SelectorExpr); ok && accessor.Sel.Name == "Sessions" {
+								// A runtime model.Session is not a human auth credential.
+								// Keep unknown/indirect values in the census; only this
+								// explicit, distinct model type is outside its scope.
+								if len(n.Args) == 2 {
+									if lit, ok := n.Args[1].(*ast.CompositeLit); ok {
+										if typ, ok := lit.Type.(*ast.SelectorExpr); ok && typ.Sel.Name == "Session" {
+											if pkg, ok := typ.X.(*ast.Ident); ok && pkg.Name == modelPackage {
+												break
+											}
+										}
+									}
+								}
 								kind = "Sessions.Create"
 							}
 						}

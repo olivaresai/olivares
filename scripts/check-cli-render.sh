@@ -89,7 +89,7 @@ LC_ALL=C
 export LC_ALL
 
 ROOT="${OLIVARES_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/.." && pwd)}"
-cd "$ROOT" || { printf 'check-cli-render: NO HE PODIDO MIRAR: no puedo entrar en %s\n' "$ROOT" >&2; exit 2; }
+cd "$ROOT" || { printf 'check-cli-render: COULD NOT CHECK: cannot enter %s\n' "$ROOT" >&2; exit 2; }
 
 PKG="${OLIVARES_CLI_PKG:-cmd/olivares}"
 BASELINE="${OLIVARES_CLI_RENDER_BASELINE:-docs/cli-render-baseline.txt}"
@@ -102,17 +102,17 @@ case "${1:-}" in
 	# An unknown flag is NOT ignored: a caller that asks for a mode this script does not
 	# have is asking for a verdict it will not get, and a silent fallback to --gate reads
 	# as an answer to the question they asked.
-	*) printf 'check-cli-render: NO HE PODIDO MIRAR: opcion desconocida %q (modos: --census, --gate)\n' "$1" >&2; exit 2 ;;
+	*) printf 'check-cli-render: COULD NOT CHECK: unknown option %q (modes: --census, --gate)\n' "$1" >&2; exit 2 ;;
 esac
 
-[ -d "$PKG" ] || { printf 'check-cli-render: NO HE PODIDO MIRAR: no existe %s\n' "$PKG" >&2; exit 2; }
+[ -d "$PKG" ] || { printf 'check-cli-render: COULD NOT CHECK: missing %s\n' "$PKG" >&2; exit 2; }
 
 # POPULATION FLOOR. A glob that stopped seeing the package reports zero findings and looks
 # like success. The same floor, and the same reason, as the transport-exemption gate.
 SEEN=$(find "$PKG" -name '*.go' ! -name '*_test.go' | wc -l)
 if [ "$SEEN" -lt "$FLOOR" ]; then
-	printf 'check-cli-render: NO HE PODIDO MIRAR: el barrido ve %d ficheros .go y el paquete\n' "$SEEN" >&2
-	printf '  tiene cientos. Un escaneo que no ve el paquete no puede declararlo limpio.\n' >&2
+	printf 'check-cli-render: COULD NOT CHECK: the scan sees %d .go files, but the package\n' "$SEEN" >&2
+	printf '  contains hundreds. A scan that cannot read the package cannot report it as clean.\n' >&2
 	exit 2
 fi
 
@@ -122,32 +122,32 @@ fi
 # this one from looking. /tmp is noexec in the dev container, so the binary lands under
 # TMPDIR and the 126/127 case is named rather than left as "permission denied".
 TWSRC="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)/cli-render-tabwriter"
-[ -d "$TWSRC" ] || { printf 'check-cli-render: NO HE PODIDO MIRAR: falta el lector de la regla table en %s\n' "$TWSRC" >&2; exit 2; }
+[ -d "$TWSRC" ] || { printf 'check-cli-render: COULD NOT CHECK: missing table-rule reader at %s\n' "$TWSRC" >&2; exit 2; }
 command -v go >/dev/null 2>&1 || {
-	printf 'check-cli-render: NO HE PODIDO MIRAR: no hay toolchain de Go en el PATH, asi que la\n' >&2
-	printf '  regla table no se ha podido construir. Una puerta que no se ha mirado no esta limpia.\n' >&2
+	printf 'check-cli-render: COULD NOT CHECK: no Go toolchain in PATH, so the table rule\n' >&2
+	printf '  could not be built. An unchecked rule cannot be reported as clean.\n' >&2
 	exit 2
 }
 [ -n "${TMPDIR:-}" ] && mkdir -p "$TMPDIR" 2>/dev/null
 TWDIR="$(mktemp -d 2>/dev/null)" || {
-	printf 'check-cli-render: NO HE PODIDO MIRAR: no pude crear un scratch (TMPDIR=%s)\n' "${TMPDIR:-unset}" >&2
+	printf 'check-cli-render: COULD NOT CHECK: could not create scratch space (TMPDIR=%s)\n' "${TMPDIR:-unset}" >&2
 	exit 2
 }
 trap 'rm -rf "$TWDIR"' EXIT
 TWBIN="$TWDIR/cli-render-tabwriter"
 TWBUILD=$(cd "$TWSRC" && GOWORK=off go build -o "$TWBIN" . 2>&1) || {
-	printf 'check-cli-render: NO HE PODIDO MIRAR: el lector de la regla table no compila.\n' >&2
+	printf 'check-cli-render: COULD NOT CHECK: the table-rule reader does not compile.\n' >&2
 	printf '%s\n' "$TWBUILD" | sed 's/^/    /' >&2
 	exit 2
 }
 TABLE_LINES=$("$TWBIN" -pkg "$PKG" -root . -skip "$PKG/internal/termrender")
 TWRC=$?
 if [ "$TWRC" -eq 126 ] || [ "$TWRC" -eq 127 ]; then
-	printf 'check-cli-render: NO HE PODIDO MIRAR: el lector se construyo bajo TMPDIR=%s y el shell\n' "${TMPDIR:-/tmp}" >&2
-	printf '  no pudo ejecutarlo (exit %d). /tmp esta montado noexec en este contenedor.\n' "$TWRC" >&2
+	printf 'check-cli-render: COULD NOT CHECK: the reader was built under TMPDIR=%s, but the shell\n' "${TMPDIR:-/tmp}" >&2
+	printf '  could not execute it (exit %d). /tmp is mounted noexec in this container.\n' "$TWRC" >&2
 	exit 2
 fi
-[ "$TWRC" -eq 0 ] || { printf 'check-cli-render: NO HE PODIDO MIRAR: el lector de la regla table salio %d\n' "$TWRC" >&2; exit 2; }
+[ "$TWRC" -eq 0 ] || { printf 'check-cli-render: COULD NOT CHECK: the table-rule reader exited %d\n' "$TWRC" >&2; exit 2; }
 
 CENSUS=$(OLIVARES_CLI_PKG="$PKG" OLIVARES_CLI_TABLE_LINES="$TABLE_LINES" python3 - <<'PY'
 import os, re, sys
@@ -230,7 +230,7 @@ for path in sorted(rows):
     lines = ",".join(str(n) for k in sorted(kinds) for n in kinds[k])
     print("%s\t%d\t%s\t%s" % (path, total, detail, lines))
 PY
-) || { printf 'check-cli-render: NO HE PODIDO MIRAR: el escaneo fallo\n' >&2; exit 2; }
+) || { printf 'check-cli-render: COULD NOT CHECK: scan failed\n' >&2; exit 2; }
 
 TOTAL=$(printf '%s\n' "$CENSUS" | command grep -c . || true)
 PATHS=$(printf '%s\n' "$CENSUS" | command grep . | awk -F'\t' '{s+=$2} END {print s+0}')
@@ -245,9 +245,9 @@ if [ "$MODE" = "census" ]; then
 fi
 
 if [ ! -r "$BASELINE" ]; then
-	printf 'check-cli-render: NO HE PODIDO MIRAR: no puedo leer la linea base %s.\n' "$BASELINE" >&2
-	printf '  Sin ella el trinquete no tiene contra que medir, y «no hay fichero» no es «esta limpio».\n' >&2
-	printf '  Para crearla: bash scripts/check-cli-render.sh --census\n' >&2
+	printf 'check-cli-render: COULD NOT CHECK: cannot read baseline %s.\n' "$BASELINE" >&2
+	printf '  The ratchet needs a baseline for comparison; a missing baseline is not a clean result.\n' >&2
+	printf '  To create it: bash scripts/check-cli-render.sh --census\n' >&2
 	exit 2
 fi
 
@@ -301,12 +301,12 @@ for label, rows in (("NEW", new), ("OVER", over), ("UNDER", under)):
     for row in rows:
         print("%s\t%s" % (label, row))
 PY
-) || { printf 'check-cli-render: NO HE PODIDO MIRAR: no pude leer la linea base\n' >&2; exit 2; }
+) || { printf 'check-cli-render: COULD NOT CHECK: could not read the baseline\n' >&2; exit 2; }
 
 if command grep -q '^MALFORMED$' <<<"$VERDICT"; then
-	printf 'check-cli-render: NO HE PODIDO MIRAR: %s tiene filas ilegibles.\n' "$BASELINE" >&2
-	printf '  Una fila es «<cuenta>\\t<fichero>\\t<razon>», y la razon no es opcional: un numero\n' >&2
-	printf '  sin razon es alguien tecleando una cifra, no alguien tomando una decision.\n' >&2
+	printf 'check-cli-render: COULD NOT CHECK: %s has unreadable rows.\n' "$BASELINE" >&2
+	printf '  A row is «<count>\\t<file>\\t<reason>»; the reason is required to explain\n' >&2
+	printf '  why that count was accepted.\n' >&2
 	printf '%s\n' "$VERDICT" | command grep -v '^MALFORMED$' >&2
 	exit 2
 fi
@@ -316,17 +316,17 @@ WANT=$(printf '%s\n' "$VERDICT" | awk -F'\t' '$1=="TOTAL" {print $3}')
 FINDINGS=$(printf '%s\n' "$VERDICT" | command grep -E '^(NEW|OVER|UNDER)\b' || true)
 
 if [ -n "$FINDINGS" ]; then
-	printf 'check-cli-render: %d ruta(s) formateadas a mano frente a una linea base de %d.\n' "$HAVE" "$WANT" >&2
+	printf 'check-cli-render: %d manually formatted path(s), against a baseline of %d.\n' "$HAVE" "$WANT" >&2
 	printf '%s\n' "$FINDINGS" | sed 's/^NEW\t/    NEW   /; s/^OVER\t/    OVER  /; s/^UNDER\t/    UNDER /' >&2
-	printf '\n  NEW/OVER: pasa esa salida por el renderer (cmd/olivares/internal/termrender):\n' >&2
-	printf '    Table para una lista, Fields para un bloque clave/valor, StatusLine para un\n' >&2
-	printf '    veredicto, Summary para el cierre, Error para un fallo, Next para el paso siguiente.\n' >&2
-	printf '  UNDER: baja la fila en ESTE commit. Un trinquete que recupera holgura en silencio\n' >&2
-	printf '    es un contador.\n' >&2
+	printf '\n  NEW/OVER: use the renderer (cmd/olivares/internal/termrender) for this output:\n' >&2
+	printf '    Table for a list, Fields for a key/value block, StatusLine for a\n' >&2
+	printf '    result, Summary for a closing summary, Error for a failure, Next for the next step.\n' >&2
+	printf '  UNDER: reduce the row in this commit. A ratchet that silently regains slack\n' >&2
+	printf '    is only a counter.\n' >&2
 	exit 1
 fi
 
-printf 'check-cli-render: LIMPIO — %d ruta(s) formateadas a mano en %d fichero(s), en su linea base\n' \
+printf 'check-cli-render: CLEAN — %d manually formatted path(s) in %d file(s), within their baseline\n' \
 	"$HAVE" "$TOTAL"
-printf '  de %d, sobre %d fichero(s) .go de %s.\n' "$WANT" "$SEEN" "$PKG"
+printf '  of %d, across %d .go file(s) in %s.\n' "$WANT" "$SEEN" "$PKG"
 exit 0

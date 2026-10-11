@@ -50,5 +50,14 @@
     "untitledSession": "Сеанс без названия",
     "unknownUser": "Неизвестный пользователь",
     "unknownWorkspace": "Неизвестное рабочее пространство"
+  },
+  "headDiff": {
+    "file": "Файл",
+    "changes": "Изменения относительно HEAD",
+    "committed": "HEAD (закоммичено)",
+    "current": "Текущий",
+    "same": "Отличий от HEAD нет.",
+    "view": "Вид",
+    "unavailable": "Не удалось сравнить с HEAD."
   }
 }

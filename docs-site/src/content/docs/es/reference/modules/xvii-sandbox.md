@@ -72,9 +72,49 @@ tenant y auditada** (editor y superiores para ejecutar; la comparación de deplo
   adaptador de scorer se registra como ejecutada pero no puntuada — nunca un pase silencioso.
 - **El replay es honesto sobre las brechas.** Si la fuente de historial no puede reconstruir una línea
   temporal ordenada, el replay se reporta degradado con cero pasos, nunca fabricado.
-- **Sin generación de datos sintéticos.** Es solo un punto de extensión documentado post-v1;
-  el módulo no incluye generador, no expone ninguna ruta para ello y produce cero muestras.
+- **Generación local de datos.** Genera entradas reproducibles para escenarios mediante la API de sandbox con plantillas locales acotadas. No se llama a un modelo ni a la red.
 :::
+
+## Ejecutar un escenario generado
+
+Activa el módulo seleccionable con `olivares modules on sandbox`. Generar, crear
+escenarios y ejecutarlos requiere un editor o administrador; un viewer puede
+inspeccionar escenarios, ejecuciones y salidas guardados.
+
+Crea una plantilla sin salto de línea final:
+
+```sh
+printf '%s' '{{subject_kind}}:user{{index}}@example.test' > seed.txt
+```
+
+Guarda esta respuesta sintética en `mocks.json`:
+
+```json
+[{"resource":"agent:user1@example.test","response":"first synthetic account"}]
+```
+
+```sh
+olivares sandbox generate --count 2 --seed-file seed.txt -o json > steps.json
+olivares sandbox scenarios create --name generated --steps-file steps.json --mocks-file mocks.json -o json
+olivares sandbox scenarios run <scenario-id> --variant candidate -o json
+olivares sandbox runs get <run-id> -o json
+olivares sandbox runs outputs <run-id> -o json
+```
+
+Usa el id de escenario devuelto al crearlo y luego el id de ejecución devuelto al
+ejecutarlo. Con el runner por defecto `inproc-mock`, la primera entrada resuelve
+a la respuesta anterior; la segunda devuelve
+`[[mock-miss:agent:user2@example.test]]`. Un mock miss incrementa `steps_error`,
+pero es un resultado sintético esperado: la ejecución sigue registrando
+`status: completed`, `steps_total: 2`, `steps_ok: 1`, `steps_error: 1`,
+`isolated: true` y `destroyed: true`. No hace peticiones a recursos reales. Este
+ejemplo no pide scoring ni cualifica un runtime a nivel de SO. La coincidencia
+usa el texto de entrada exacto, incluidos los saltos de línea de la plantilla.
+
+Escenarios, ejecuciones y salidas siguen disponibles tras reiniciar el motor.
+Desactivar el módulo elimina el acceso a sus rutas sin borrar los datos;
+reactivarlo restaura el acceso. Son registros acotados por tenant: otra
+organización no puede leerlos.
 
 ## Relacionado
 

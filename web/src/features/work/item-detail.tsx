@@ -191,7 +191,18 @@ export function ItemDetailSheet({
                   }}
                   intent={intent}
                   acceptanceState={acceptanceState}
-                  title={t('detail.applyTitle')}
+                  title={
+                    intent?.command === 'item.ready'
+                      ? t('apply.readyTitle', { title: snapshot.item.title })
+                      : t('apply.actionTitle', {
+                          title: snapshot.item.title,
+                          action: t(`transition.${intent?.command}`, {
+                            defaultValue: t('detail.applyTitle'),
+                          }),
+                        })
+                  }
+                  itemTitle={snapshot.item.title}
+                  dependencies={snapshot.dependencies}
                   onApplied={() => refreshIntentTenant(intent)}
                   // A version conflict is resolved by RE-READING, which is exactly this.
                   onReread={() => refreshIntentTenant(intent)}

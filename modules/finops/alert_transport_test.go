@@ -124,7 +124,7 @@ func TestBudgetEvidenceProducerCommitAndRollback(t *testing.T) {
 					t.Fatalf("crossing changed: %+v", f)
 				}
 			}}
-			err := m.onCost(context.Background(), tenant, mkCost("openai", "gpt-x", "transport", 1, 1, cost, baseTime), nil)
+			err := m.onCost(context.Background(), tenant, mkCost("openai", "gpt-x", "transport", 1, 1, cost, baseTime), nil, nil)
 			if tc == "rollback" {
 				if !errors.Is(err, boom) || checked != 0 || len(host.findings()) != 0 || len(alertRows(t, st, tenant)) != 0 || countCosts(t, st, tenant) != 0 {
 					t.Fatalf("rollback leaked publication or rows: err=%v checked=%d", err, checked)

@@ -54,8 +54,10 @@ superficie tiene su raíz en `/v1/m/recording/` (`sessions`, `replay`, `verify`,
   quedan ligados solo por la punta de la cadena hasta el siguiente anclaje o sello;
   `verify` informa de `anchored_through` para que la frontera sea explícita, nunca
   implícita.
-- No implementa **ni purga ni legal hold** — retención/legal-hold posee el borrado;
-  los anclajes al ledger sobreviven a cualquier purga.
+- Compliance admite calendarios de retención y legal holds acotados por clase para
+  `privileged-session-recording`. **La purga no está disponible** porque los frames
+  son evidencia append-only. `retention_days` de recording es orientativo;
+  `retention_enforced` sigue siendo false y no se promete borrado automático.
 - Este es el subsistema de grabación que usa el **panel de gobernanza de agentops**
   para la grabación de E/S por sesión: cada frame de Claude Code puenteado se
   pliega al mismo patrón hash-chained y anclado al ledger.

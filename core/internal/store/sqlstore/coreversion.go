@@ -54,7 +54,14 @@ var ErrCoreSchemaVersionAhead = errors.New("sqlstore: the database records a cor
 //
 // It advances to v18 with the TOTP second-factor relations (totpmigration.go),
 // so a v17 binary refuses a store that holds them.
-const coreSupportedMigrationVersion = coreTOTPMigrationVersion
+// v19 registers FinOps custody without filling either historical gap.
+// v20 appends immutable native OS-account bindings after that deployed prefix.
+// v21..v23 adopt the previously unversioned schema/data reconciliation.
+// v24 adds the audit ledger's RFC 6962 Merkle tree table.
+// v25 adds the workspace parent and materialized path.
+// v26 promotes the audit tree's canonical immutability guard to ALWAYS.
+// v27 adds the optional workspace place of a user group.
+const coreSupportedMigrationVersion = coreUserGroupWorkspaceVersion
 
 // ErrCoreSchemaVersionUnrecognized is returned before any boot DDL when the database
 // records a version at or below the supported ceiling that this binary's compiled plan
@@ -73,7 +80,7 @@ func compiledCoreMigrationVersions(dia dialect.Dialect) map[int64]struct{} {
 }
 
 // compiledCoreMigrationVersionOrder is the compiled plan's versions in ascending order
-// (1..11, 13, 14, 15, 17, 18). A legitimate tracked history is an ordered prefix of it.
+// (1..11, 13, 14, 15, 17..26). A legitimate tracked history is an ordered prefix of it.
 func compiledCoreMigrationVersionOrder(dia dialect.Dialect) []int64 {
 	set := compiledCoreMigrationVersions(dia)
 	out := make([]int64, 0, len(set))

@@ -57,11 +57,8 @@ type connectorSummaryDTO struct {
 // live source roster status with connector catalog metadata. Gated on
 // health:status:read so any admin/viewer with health permission can see it (not
 // superadmin-only like the source roster CRUD).
-func (s *Server) handleConnectorHealth(w http.ResponseWriter, r *http.Request) {
-	_, tenant, ok := s.authzTenant(w, r, "health:status:read")
-	if !ok {
-		return
-	}
+func (s *Server) handleConnectorHealth(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	tenant := mc.Tenant
 
 	ctx := r.Context()
 	now := s.clock.Now()
@@ -227,7 +224,7 @@ func (s *Server) currentKnowledgeStatus(ctx context.Context) KnowledgeStatus {
 // handlePublicStatus is the unauthenticated status page endpoint. It probes the
 // same signals as /readyz (store ping, leader status) and enriches with the
 // connector fleet aggregate when available. No sensitive data is exposed.
-func (s *Server) handlePublicStatus(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handlePublicStatus(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
 	writeJSON(w, http.StatusOK, s.publicStatusProjection(r.Context(), true))
 }
 

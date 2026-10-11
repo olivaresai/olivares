@@ -1,12 +1,11 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 //
-// las invariantes honestas de la superficie de una sesión de voz.
+// truthful voice-session surface invariants.
 //
-// El open gobernado tiene CINCO desenlaces y los tres del medio son los que una consola
-// normal borra: una decisión de política dibujada como fallo, un hueco de despliegue
-// dibujado como denegación, y un «no se pudo mirar» dibujado como «no». Cada celda mata
-// una mutación concreta.
+// Governed open has five outcomes. Three are easy to misrepresent: a policy decision
+// as a failure, a deployment gap as a denial, and an unavailable check as a negative
+// verdict. Each test kills a specific mutation.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'

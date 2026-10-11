@@ -1,0 +1,47 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+# Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+"""GoReleaser Docker launcher: inspect every saved layer before pushing an image."""
+import os
+from pathlib import Path
+import re
+import subprocess
+import sys
+import tempfile
+
+
+def main():
+    real = os.environ.get('OLIVARES_REAL_DOCKER', '')
+    if not real.startswith('/') or Path(real).resolve() == Path(__file__).resolve():
+        raise ValueError('real Docker executable must be pinned before installing this launcher')
+    args = sys.argv[1:]
+    if args[:1] == ['push']:
+        if len(args) != 2 or args[1].startswith('-'):
+            raise ValueError('unsupported Docker push shape')
+        image = args[1]
+        inspect = [real, 'image', 'inspect', '--format={{.Id}}', image]
+        image_id = subprocess.check_output(inspect, text=True).strip()
+        if not re.fullmatch(r'sha256:[0-9a-f]{64}', image_id):
+            raise ValueError('image identity is missing')
+        with tempfile.TemporaryDirectory(prefix='image-secrets-') as temporary:
+            saved = Path(temporary) / 'image.tar'
+            subprocess.run([real, 'image', 'save', '--output', str(saved), image_id], check=True)
+            checker = Path(__file__).resolve().parents[1] / 'check-artifact-secrets.py'
+            subprocess.run([sys.executable, str(checker), str(saved)], check=True)
+        if subprocess.check_output(inspect, text=True).strip() != image_id:
+            raise ValueError('image tag changed during scan')
+    # Buildx --push bypasses docker push. Fail closed if a future recipe introduces it.
+    if args[:2] == ['buildx', 'build'] and any(
+            arg == '--push' or arg.startswith('--push=') or 'push=true' in arg
+            or 'type=registry' in arg for arg in args[2:]):
+        raise ValueError('build and push must be separate to scan local image layers')
+    os.execv(real, [real, *args])
+
+
+if __name__ == '__main__':
+    try:
+        main()
+    except (OSError, ValueError, subprocess.SubprocessError):
+        print('artifact-secrets: Docker publication blocked', file=sys.stderr)
+        sys.exit(2)

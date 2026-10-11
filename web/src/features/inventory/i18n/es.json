@@ -56,7 +56,11 @@
     "viewAccess": "Mapa de acceso",
     "viewSessions": "Sesiones",
     "gone": "Esta entrada ya no está en el catálogo.",
-    "noProjection": "No hay detalles adicionales disponibles para mostrar de esta entrada. Esto no permite determinar si tiene relaciones."
+    "noProjection": "No hay detalles adicionales disponibles para mostrar de esta entrada. Esto no permite determinar si tiene relaciones.",
+    "aiDiscovery": {
+      "unregistered_at_discovery": "Sin registrar al descubrirlo. Este punto de acceso de IA era nuevo en el inventario; se desconoce su gobierno actual. La cobertura se limita al registro del proxy y los hosts de IA configurados.",
+      "unknown": "Punto de acceso de IA observado. Se desconoce su gobierno. La cobertura se limita al registro del proxy y los hosts de IA configurados."
+    }
   },
   "freshness": {
     "title": "Frescura del catálogo",

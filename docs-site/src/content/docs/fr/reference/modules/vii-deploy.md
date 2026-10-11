@@ -41,6 +41,51 @@ réelle. Un véritable moteur (Tofu/Terraform, GitOps, Kubernetes, Docker, Nomad
 plus une source de credentials attestée, éphémère et par opération, ne se câblent **que sur
 configuration de l'opérateur** ; à défaut, le module n'agit jamais en silence.
 
+## Connecter un exécuteur
+
+Tant qu’un administrateur n’a pas connecté d’exécuteur, Deploy conserve vos définitions de
+déploiement et ne modifie aucune infrastructure. Pour en connecter un :
+
+1. Écrivez un fichier JSON avec un bloc pour chaque runtime sur lequel vous déployez
+   (`docker`, `k8s`, `nomad`, `tofu`, `terraform`, `gitops` ou `crossplane`) et un bloc
+   `credential`. Seuls les runtimes présents dans le fichier sont connectés. Pour Docker sur le
+   même hôte :
+
+   ```json
+   {
+     "docker": { "socket_path": "/var/run/docker.sock" },
+     "credential": {
+       "kind": "file",
+       "path_template": "/run/olivares/deploy/{env}-{mode}.token",
+       "ttl_seconds": 900
+     }
+   }
+   ```
+
+   Pour chaque opération, Olivares lit un jeton de courte durée depuis `path_template` :
+   `{env}` est l’environnement de la définition et `{mode}` vaut `read` (Planifier,
+   Vérifier) ou `write` (Appliquer, Retirer). Un outil que vous exécutez déjà, comme Vault Agent
+   ou un assistant SPIFFE, crée leur répertoire puis
+   écrit et renouvelle ces fichiers. Sans jeton, chaque opération est
+   refusée. Pour Docker, l’utilisateur de service `olivares` doit aussi pouvoir ouvrir le
+   socket ; l’appartenance au groupe `docker` lui donne un accès root à cet hôte.
+2. Indiquez le fichier à Olivares. Avec le paquet deb ou rpm, ajoutez cette ligne à
+   `/etc/olivares/olivares.env` :
+
+   ```sh
+   OLIVARES_DEPLOY_EXECUTOR_CONFIG=/etc/olivares/deploy-executor.json
+   ```
+
+   L’utilisateur `olivares` doit pouvoir lire le fichier JSON, par exemple avec le
+   propriétaire `root:olivares` et le mode `0640`.
+
+3. Redémarrez Olivares avec `sudo systemctl restart olivares`. Si le fichier est illisible ou
+   invalide, Olivares ne démarre pas et son journal indique pourquoi.
+
+La page Deploy propose alors **Déclarer un déploiement** comme action principale, et
+Planifier et Appliquer atteignent le runtime. Chaque Appliquer et Retirer attend toujours une
+approbation.
+
 ## Entités et le contrat déclaré
 
 Le module déclare quatre entités namespacées plus le `Deployment` du cœur comme snapshot

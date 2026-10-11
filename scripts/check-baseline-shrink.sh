@@ -27,19 +27,19 @@ export LC_ALL
 
 _olivares_git_env="$(cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")" && pwd)/lib/git-env.sh"
 # shellcheck source=/dev/null
-. "$_olivares_git_env" || { echo "check-baseline-shrink: ⛔ NO HE PODIDO MIRAR: no puedo cargar $_olivares_git_env" >&2; exit 2; }
+. "$_olivares_git_env" || { echo "check-baseline-shrink: ⛔ COULD NOT CHECK: cannot load $_olivares_git_env" >&2; exit 2; }
 unset _olivares_git_env
 
-command -v git >/dev/null 2>&1 || { echo "check-baseline-shrink: ⛔ NO HE PODIDO MIRAR: no hay git." >&2; exit 2; }
+command -v git >/dev/null 2>&1 || { echo "check-baseline-shrink: ⛔ COULD NOT CHECK: git is not installed." >&2; exit 2; }
 ROOT="$(git rev-parse --show-toplevel 2>/dev/null || true)"
-[ -n "$ROOT" ] || { echo "check-baseline-shrink: ⛔ NO HE PODIDO MIRAR: fuera de un arbol git." >&2; exit 2; }
+[ -n "$ROOT" ] || { echo "check-baseline-shrink: ⛔ COULD NOT CHECK: outside a Git tree." >&2; exit 2; }
 cd "$ROOT" || exit 2
 
 TRUNK="${OLIVARES_BASELINE_TRUNK:-origin/main}"
 git rev-parse --verify --quiet "$TRUNK" >/dev/null 2>&1 \
-	|| { echo "check-baseline-shrink: ⛔ NO HE PODIDO MIRAR: no hay '$TRUNK' contra el que comparar." >&2; exit 2; }
+	|| { echo "check-baseline-shrink: ⛔ COULD NOT CHECK: no '$TRUNK' to compare against." >&2; exit 2; }
 BASE="$(git merge-base "$TRUNK" HEAD 2>/dev/null || true)"
-[ -n "$BASE" ] || { echo "check-baseline-shrink: ⛔ NO HE PODIDO MIRAR: sin base comun con $TRUNK." >&2; exit 2; }
+[ -n "$BASE" ] || { echo "check-baseline-shrink: ⛔ COULD NOT CHECK: no merge-base with $TRUNK." >&2; exit 2; }
 
 # Las lineas base VIGILADAS son listas de rutas, una por linea. Enumeradas a proposito: un fichero
 # nuevo se anade aqui adrede, y un `find` amplio arrastraria allowlists YAML cuyo formato no es este.
@@ -142,14 +142,14 @@ for b in $BASELINES; do
 $quitadas
 EOF_Q
 
-	echo "check-baseline-shrink: $b · antes=$antes ahora=$ahora · quitadas=$n_quit · con trabajo en el push=$con_trabajo"
+	echo "check-baseline-shrink: $b · before=$antes now=$ahora · removed=$n_quit · related changes in push=$con_trabajo"
 	# El veredicto NO cambia: este gate exige, por diseno declarado en su cabecera, que el
 	# commit toque ALGO de lo que quita, no todo. Pero hasta hoy las entradas SIN trabajo
 	# detras no se nombraban, asi que un commit con una retirada legitima podia arrastrar
 	# otras sin que nadie lo viera. Una permisividad elegida se defiende; una invisible se
 	# sufre. Se nombran; quien lea decide.
 	if [ -n "$sin_trabajo" ] && [ "$con_trabajo" -gt 0 ]; then
-		echo "  nota: $b pierde entrada(s) que este push NO toca (permitido, pero visible):"
+		echo "  note: $b loses entry/entries whose subjects this push does not change (allowed, but reported):"
 		printf '%s' "$sin_trabajo" | sed 's/^/    /'
 	fi
 	# ── TERCERA FORMA de la insatisfacibilidad, medida el 2026-08-20 ───────────────
@@ -172,27 +172,27 @@ EOF_Q
 		_stem="${_stem%-baseline}"
 		_checker="scripts/check-${_stem}.sh"
 		if [ -f "$_checker" ] && grep -qE "(^|/)$(printf '%s' "$_checker" | sed 's/[][\.*^$+?(){}|\/]/\\&/g')$" <<<"$tocados"; then
-			echo "check-baseline-shrink: $b pierde $n_quit entrada(s) y el push no toca sus rutas,"
-			echo "  pero SI toca su productor: $_checker. Una entrada que cae porque el detector"
-			echo "  dejo de inventarla tiene trabajo detras, en otro fichero. Aceptado y dicho."
+			echo "check-baseline-shrink: $b loses $n_quit entry/entries and the push does not change their paths,"
+			echo "  but it does change their producer: $_checker. Removing a finding because its detector"
+			echo "  no longer reports a false positive is backed by a change in another file. Accepted and reported."
 			continue
 		fi
 	fi
 	if [ "$con_trabajo" -eq 0 ]; then
 		hallazgos=$((hallazgos + 1))
-		echo "check-baseline-shrink: ⛔ $b PIERDE $n_quit entrada(s) y el push NO TOCA NINGUNA de ellas." >&2
+		echo "check-baseline-shrink: ⛔ $b LOSES $n_quit entry/entries and the push CHANGES NONE of their subjects." >&2
 		printf '%s\n' "$quitadas" | head -8 | sed 's/^/      /' >&2
-		echo "  Un commit que solo borra lineas de una linea base es indistinguible de silenciar el gate." >&2
-		echo "  Y el coste no lo paga quien lo escribe: en la rama el gate esta VERDE, y enrojece al" >&2
-		echo "  aterrizar en el tronco, donde ya bloquea a todos los carriles." >&2
-		echo "  repair: haz el trabajo que justifica quitarlas (y el push lo tocara), o dejalas." >&2
+		echo "  Deleting baseline entries without related changes is indistinguishable from silencing the check." >&2
+		echo "  The branch passes, but the check fails after merging to main and blocks" >&2
+		echo "  every contributor, rather than just the author of this change." >&2
+		echo "  fix: make the changes that justify removing these entries, or keep them." >&2
 	fi
 done
 
 if [ "$vistas" -eq 0 ]; then
-	echo "check-baseline-shrink: ninguna de las lineas base vigiladas existe en la base de comparacion; nada que juzgar."
+	echo "check-baseline-shrink: none of the monitored baselines exists at the comparison base; nothing to check."
 	exit 0
 fi
 [ "$hallazgos" -eq 0 ] || exit 1
-echo "check-baseline-shrink: OK — $vistas linea(s) base vigilada(s), ninguna encoge sin trabajo detras."
+echo "check-baseline-shrink: OK — $vistas monitored baseline(s), none reduced without related changes."
 exit 0

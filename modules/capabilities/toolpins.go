@@ -33,6 +33,22 @@ func WithToolPinAdmin(admin mcpc.ToolPinAdmin) Option {
 	return func(m *Module) { m.toolPins = admin }
 }
 
+// WithToolPinVerifier distinguishes an absent verifier from unavailable management.
+func WithToolPinVerifier(verifier mcpc.ToolPinVerifier) Option {
+	return func(m *Module) {
+		m.toolPinVerifier = verifier
+		m.toolPins, _ = verifier.(mcpc.ToolPinAdmin)
+	}
+}
+
+func (m *Module) toolPinManagementUnavailable(w http.ResponseWriter) {
+	if m.toolPinVerifier != nil {
+		writeError(w, http.StatusServiceUnavailable, "Tool pin management is unavailable in this build.")
+		return
+	}
+	writeError(w, http.StatusNotImplemented, "tool pinning is a Business capability (no verifier wired)")
+}
+
 type toolPinDTO struct {
 	Tool        string `json:"tool"`
 	Fingerprint string `json:"fingerprint"`
@@ -73,7 +89,7 @@ type toolPinActionInput struct {
 // handleListToolPins is GET /toolpins: this tenant's pins, drift included.
 func (m *Module) handleListToolPins(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
 	if m.toolPins == nil {
-		writeError(w, http.StatusNotImplemented, "tool pinning is an enterprise add-on (no verifier wired)")
+		m.toolPinManagementUnavailable(w)
 		return
 	}
 	tenant := mc.Tenant.String()
@@ -95,12 +111,12 @@ func (m *Module) handleListToolPins(w http.ResponseWriter, r *http.Request, mc a
 // expected_version. Returns 202 (the durable apply/settle is authoritative).
 func (m *Module) handleApproveToolPin(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
 	if m.toolPins == nil {
-		writeError(w, http.StatusNotImplemented, "tool pinning is an enterprise add-on (no verifier wired)")
+		m.toolPinManagementUnavailable(w)
 		return
 	}
 	var in toolPinActionInput
 	if err := api.DecodeRequestBody(w, r, &in, api.RequestBodySpec{AllowUnknownFields: true}); err != nil || in.Tool == "" {
-		writeError(w, http.StatusBadRequest, "invalid JSON body (tool is required)")
+		writeError(w, http.StatusBadRequest, api.RequestBodyErrorMessage(err, "invalid JSON body (tool is required)"))
 		return
 	}
 	idemKey := strings.TrimSpace(r.Header.Get("Idempotency-Key"))
@@ -135,12 +151,12 @@ func (m *Module) handleApproveToolPin(w http.ResponseWriter, r *http.Request, mc
 // handleUnpinToolPin is POST /toolpins/unpin: revoke this tenant's pin.
 func (m *Module) handleUnpinToolPin(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
 	if m.toolPins == nil {
-		writeError(w, http.StatusNotImplemented, "tool pinning is an enterprise add-on (no verifier wired)")
+		m.toolPinManagementUnavailable(w)
 		return
 	}
 	var in toolPinActionInput
 	if err := api.DecodeRequestBody(w, r, &in, api.RequestBodySpec{AllowUnknownFields: true}); err != nil || in.Tool == "" {
-		writeError(w, http.StatusBadRequest, "invalid JSON body (tool is required)")
+		writeError(w, http.StatusBadRequest, api.RequestBodyErrorMessage(err, "invalid JSON body (tool is required)"))
 		return
 	}
 	idemKey := strings.TrimSpace(r.Header.Get("Idempotency-Key"))

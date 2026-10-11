@@ -10,8 +10,76 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sync"
+	"sync/atomic"
 	"testing"
 )
+
+type countedVerifier struct {
+	SignatureVerifier
+	calls atomic.Int32
+}
+
+func (v *countedVerifier) Verify(ctx context.Context, key []byte, pin string, sig, data []byte) (SignatureReport, error) {
+	v.calls.Add(1)
+	return v.SignatureVerifier.Verify(ctx, key, pin, sig, data)
+}
+
+func TestConcurrentInventoryReadsVerifyAReleaseOnce(t *testing.T) {
+	f := newFixture(t)
+	f.engine.verified = NewVerifiedCache()
+	f.publish(fxVersion)
+	if _, _, err := f.install(fxVersion); err != nil {
+		t.Fatal(err)
+	}
+	v := &countedVerifier{SignatureVerifier: f.verifier}
+	f.claude.verifier = v
+	start := make(chan struct{})
+	var wg sync.WaitGroup
+	for range 12 {
+		wg.Go(func() {
+			<-start
+			inv, err := f.engine.List(t.Context(), f.root)
+			if err != nil || len(inv.Installed) != 1 || inv.Installed[0].State != StateInstalled {
+				t.Errorf("inventory = %+v, %v", inv, err)
+			}
+		})
+	}
+	close(start)
+	wg.Wait()
+	if got := v.calls.Load(); got != 1 {
+		t.Fatalf("concurrent inventory reads verified the unchanged release %d times, want 1", got)
+	}
+}
+
+func TestDriverLookupDoesNotHashUnrelatedReleases(t *testing.T) {
+	engine, req, _, _ := cachedArchiveInstall(t)
+	engine.verified = nil // Even an uncached lookup must inspect only its driver.
+	engine.capabilities = NewOfficialCatalog(nil, UnavailableVerifier{})
+	for _, lookup := range []struct {
+		name string
+		run  func() error
+	}{
+		{"detect", func() error {
+			_, err := engine.Detect(t.Context(), DetectOptions{Driver: DriverGrok, Root: req.DestRoot})
+			return err
+		}},
+		{"latest", func() error {
+			_, _, err := engine.LatestInstalled(t.Context(), req.DestRoot, DriverGrok)
+			return err
+		}},
+	} {
+		t.Run(lookup.name, func(t *testing.T) {
+			if n := hashesDuring(t, func() {
+				if err := lookup.run(); err != nil {
+					t.Fatal(err)
+				}
+			}); n != 0 {
+				t.Fatalf("Grok lookup hashed %d files from the unrelated Codex install", n)
+			}
+		})
+	}
+}
 
 // EU-CB07 (09b) and Root's conditions of 2026-10-02: every read of a tool's status
 // re-hashed the installed release (about 1.0 s for Claude Code, 0.5 s for Codex). A

@@ -6,7 +6,6 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Plug, Plus, RefreshCw } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useCommunityBuild } from '@/lib/hooks/use-edition'
 import { Badge } from '@/components/ui/badge'
 import { StepUpRequiredState } from '@/components/layout/step-up-state'
 import { Button } from '@/components/ui/button'
@@ -25,14 +24,12 @@ import { ToolAnnotations } from './annotations'
 import { capabilitiesApi, capabilitiesKeys } from './api'
 import { ConfigEditorDialog } from './config-editor'
 import { ServerDetailSheet } from './server-detail'
-import { ToolPinsTab } from './tool-pins'
 import { WiringGraph } from './wiring-graph'
 import './i18n'
 import type { ConfigDTO, ServerDTO, SkillDTO, ToolDTO } from './types'
 import { ListTruncationBadge } from '@/features/_intel'
-
-type TabKey =
-  'servers' | 'tools' | 'tool-pins' | 'skills' | 'wiring' | 'configs'
+import { PANEL_EXTENSIONS } from '@/features/extensions'
+import { useOfferedPanels } from '@/features/panels'
 
 export default function CapabilitiesView() {
   const { t } = useTranslation(['capabilities', 'common', 'intel'])
@@ -40,12 +37,9 @@ export default function CapabilitiesView() {
   const queryClient = useQueryClient()
   const canWriteConfig = can('capabilities:config:write')
   const canReadConfig = can('capabilities:config:read')
-  // Tool pins need the Business verifier: a Community build answers 501 there
-  // (modules/capabilities/toolpins.go), so it offers no Tool pins tab.
-  const communityBuild = useCommunityBuild()
-  const showToolPins = canReadConfig && !communityBuild
+  const extensionTabs = useOfferedPanels(PANEL_EXTENSIONS.capabilitiesTabs)
 
-  const [tab, setTab] = useState<TabKey>('servers')
+  const [tab, setTab] = useState('servers')
   const [selectedServer, setSelectedServer] = useState<string | null>(null)
   const [detailOpen, setDetailOpen] = useState(false)
   const [editorOpen, setEditorOpen] = useState(false)
@@ -283,13 +277,15 @@ export default function CapabilitiesView() {
         }
       />
 
-      <Tabs value={tab} onValueChange={(v) => setTab(v as TabKey)}>
+      <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
           <TabsTrigger value="servers">{t('tabs.servers')}</TabsTrigger>
           <TabsTrigger value="tools">{t('tabs.tools')}</TabsTrigger>
-          {showToolPins && (
-            <TabsTrigger value="tool-pins">{t('tabs.toolPins')}</TabsTrigger>
-          )}
+          {extensionTabs.map((p) => (
+            <TabsTrigger key={p.id} value={p.id}>
+              {p.label()}
+            </TabsTrigger>
+          ))}
           <TabsTrigger value="skills">{t('tabs.skills')}</TabsTrigger>
           <TabsTrigger value="wiring">{t('tabs.wiring')}</TabsTrigger>
           {canReadConfig && (
@@ -378,11 +374,11 @@ export default function CapabilitiesView() {
           />
         </TabsContent>
 
-        {showToolPins && (
-          <TabsContent value="tool-pins">
-            <ToolPinsTab canWrite={canWriteConfig} />
+        {extensionTabs.map((p) => (
+          <TabsContent key={p.id} value={p.id}>
+            <p.Component />
           </TabsContent>
-        )}
+        ))}
 
         <TabsContent value="skills">
           <ListTruncationBadge
@@ -448,6 +444,9 @@ export default function CapabilitiesView() {
 
         {canReadConfig && (
           <TabsContent value="configs">
+            <p className="mb-3 text-caption text-muted-foreground">
+              {t('configs.observationNotice')}
+            </p>
             {canWriteConfig && (
               <PagePrimaryAction>
                 <Button

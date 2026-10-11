@@ -27,7 +27,9 @@ Source-Konfiguration referenziert sie als `store:<name>`, niemals inline.
 olivares secrets put \
   --data-dir /var/lib/olivares \
   --name s3/prod-runbooks-read \
-  --value-file /run/secrets/s3-prod-runbooks-read
+  --value-file /run/secrets/s3-prod-runbooks-read \
+  --actor platform-operator \
+  --reason governed-rag-source-credential
 ```
 
 Speichern Sie für Google Drive das OAuth-Bearer-/Refresh-Material, das Ihr
@@ -76,7 +78,17 @@ olivares quickstart --data-dir /var/lib/olivares
 ```
 
 Schließen Sie bei einer frischen Installation die erstmalige Einrichtung in
-der Konsole ab. Führen Sie dann das Bootstrap-Skript mit einem Admin-Token aus:
+der Konsole ab.
+
+Bei einer frischen Installation sind `knowledge` und `sourcescope` deaktiviert. Aktivieren Sie
+`knowledge` und `sourcescope` als Administrator unter **Settings > Edition & modules** und lassen
+Sie die anderen ausgewählten Module an. Für die CLI melden Sie sich zuerst
+mit `olivares login` als Administrator bei dieser Engine an und führen dann
+`olivares modules on knowledge` und `olivares modules on sourcescope` aus. Warten Sie vor dem Fortfahren auf jeden Neustart der Engine;
+laufende Sessions werden gestoppt und können fortgesetzt werden. Andernfalls
+geben diese API-Aufrufe `404 module_not_enabled` zurück.
+
+Führen Sie dann das Bootstrap-Skript mit einem Admin-Token aus:
 
 ```sh
 OLIVARES_TOKEN=<admin-token> \

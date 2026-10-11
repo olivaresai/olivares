@@ -13,16 +13,14 @@ package main
 import (
 	"context"
 
+	"github.com/olivaresai/olivares/cmd/olivares/internal/inferencepep"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/sdk/event"
 )
 
-// circuitBreakerState is the state of a circuit breaker for one agent.
-type circuitBreakerState struct {
-	State    string // closed | open | half_open
-	RuleRef  string // the rule that tripped it
-	ResetsAt string // when auto-reset fires (open+suspend only)
-}
+// circuitBreakerState is the state of a circuit breaker for one agent; the inference PEP
+// owns the type (internal/inferencepep).
+type circuitBreakerState = inferencepep.CircuitBreakerState
 
 // circuitBreakerEngine is the interface the inference PEP and the composition
 // root use to consult the circuit-breaker. nil = no circuit-breaker (the open

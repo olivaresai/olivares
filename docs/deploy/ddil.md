@@ -10,9 +10,6 @@ how governance behaves while the link is down for hours or days and returns in
 short windows. This page is the honest operator guide: what survives an outage,
 what does not, and the limits you must declare.
 
-The design decisions behind this page are recorded in
-[ADR-0024](../adr/0024-ddil-offline-semantics-and-signed-bundle.md).
-
 ## The three planes, offline
 
 ### Policy — deny survives, positive grants expire
@@ -162,7 +159,6 @@ Honesty about the limits:
 
 Delivered and tested (2026-07-09, the DDIL foundation):
 
-- **ADR-0024** — the ratified semantics above.
 - **`core/sigbundle`** — the one signed envelope + the domain-tag registry;
   `core/release` (OTA updater) refactored onto it with a byte-identical golden test.
 - **`core/ddil`** — the air-gap bundle: export, offline verify, and idempotent,

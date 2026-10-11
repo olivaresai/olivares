@@ -14,8 +14,8 @@ This page is the **connector and PEP-hook** path. To install or verify the offic
 CLI, record a probe receipt, and launch or stop a governed session, use
 [Install the Grok CLI](/how-to/install-grok-cli/). The operate path is
 [Operate a provider session](/how-to/operate-provider-sessions/)
-(`OLIVARES_SESSION_RUNTIME_GROK_BIN` or a managed install receipt, plus a
-provider profile). Compatibility with an authenticated official Grok account is
+(`OLIVARES_SESSION_RUNTIME_GROK_BIN` as an explicit override; otherwise the newest verified managed
+install, then `grok` on the engine's `PATH`, plus a provider profile). Compatibility with an authenticated official Grok account is
 not claimed there.
 
 ## Add Grok Build
@@ -28,7 +28,8 @@ not claimed there.
 - Permission for the Olivares service account to read `~/.grok/config.toml`,
   `/etc/grok/requirements.toml`, `~/.grok/disabled-hooks`, and, when configured, the compatible
   `managed-settings.json`.
-- A superadmin account with AAL3 elevation if the source is created from the console.
+- A superadmin account if the source is created from the console. Administrative writes
+  follow the step-up policy (`admin_step_up`, default `none`).
 
 Do not enter an xAI key for this source. It has no secret field and makes no inference API calls.
 

@@ -20,6 +20,7 @@ const (
 	ExecutionActionTextGenerate       = "text.generate"
 	ExecutionProtocolChatTextV1       = "chat-completions.text.v1"
 	ExecutionAdapterModelProviderChat = "olivares.modelprovider.chat-text"
+	ExecutionAdapterDeepSeekText      = "olivares.modelprovider.deepseek-text"
 	ExecutionAdapterVersion1          = "1"
 )
 
@@ -166,7 +167,7 @@ func (m *Module) resolveExecutionProfile(ctx context.Context, tenant model.Tenan
 	if p.Action != ExecutionActionTextGenerate {
 		return ExecutionProfile{}, unsupportedExecutionOperation()
 	}
-	if p.Protocol != ExecutionProtocolChatTextV1 || p.AdapterID != ExecutionAdapterModelProviderChat ||
+	if p.Protocol != ExecutionProtocolChatTextV1 || (p.AdapterID != ExecutionAdapterModelProviderChat && p.AdapterID != ExecutionAdapterDeepSeekText) ||
 		p.AdapterVersion != ExecutionAdapterVersion1 {
 		return ExecutionProfile{}, unsupportedProfileProtocol()
 	}

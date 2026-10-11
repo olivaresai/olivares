@@ -154,6 +154,10 @@ const NO_VERB: ReadonlyArray<{ dir: string; why: string }> = [
     why: 'a detail screen: verify and summarise are secondary, and it has no list',
   },
   {
+    dir: 'features/skills',
+    why: 'packs are installed through the CLI; assignment changes belong to the selected pack detail sheet',
+  },
+  {
     dir: 'features/source-diff',
     why: 'a read-only comparison of existing revisions; ref controls change the query, not the source',
   },
@@ -272,7 +276,10 @@ describe('the page header owns the verb, the filter row owns the filters', () =>
       if (!offers && !declared.has(dir)) missing.push(dir)
       if (offers && declared.has(dir)) stale.push(dir)
     }
-    expect(missing).toEqual([])
+    expect(
+      missing,
+      'Declare a primary action or document its absence with a reason in NO_VERB',
+    ).toEqual([])
     // A screen that GAINED a verb must lose its row, or the list stops meaning anything.
     expect(stale).toEqual([])
     expect(withHeader.size).toBeGreaterThanOrEqual(50)

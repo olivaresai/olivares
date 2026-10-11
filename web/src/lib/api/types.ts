@@ -82,6 +82,13 @@ export interface ServerInfo {
   /** Whether the session communication plane (K3) is effective on this node. Its
    * screens show only when true; the console never probes a route to learn it. */
   communication_ready?: boolean
+  /** A new installation. The console's navigation no longer reads it (it lists every page
+   * the person may open); the field stays in the API. */
+  previews_hidden?: boolean
+  /** No invitation mailer: onboarding in invite mode answers 409
+   * invite_delivery_unavailable, so the console offers the initial password only.
+   * Absent when invitations are mailed. */
+  invite_delivery_unavailable?: boolean
   /** The SPKI SHA-256 pin of this engine's TLS certificate (CLX): what
    * `olivares login --pin-sha256` trusts. Absent on an engine that does not publish it. */
   tls_pin_sha256?: string
@@ -159,6 +166,8 @@ export interface Grant {
 
 /** GET /v1/auth/whoami — the calling principal and its grants. */
 export interface Whoami {
+  /** Signed-in user email; absent for token principals and older engines. */
+  email?: string
   kind: PrincipalKind
   user_id: string
   actor: string
@@ -179,6 +188,8 @@ export interface Whoami {
   amr?: string[]
   /** What administrative actions demand beyond the sign-in on this deployment
    *  (Settings > Security). Absent on servers before 26.10.1. */
+  /** Lifetime assigned at sign-in or renewal, reported by the engine. */
+  session_ttl_seconds?: number
   admin_step_up?: 'none' | 'totp' | 'passkey'
   /** Whether THIS session meets `admin_step_up` right now. The engine computes
    *  it with the same predicate every gated route uses. */

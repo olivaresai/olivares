@@ -9,6 +9,7 @@ import {
   type Page,
   type Response,
 } from '@playwright/test'
+import { sessionToken } from './live-session'
 
 // CONSOLE-FUNC-01 lot 6 runs against a disposable engine with the real module
 // handlers and embedded console. Playwright never routes, fulfils, aborts, or
@@ -113,15 +114,16 @@ async function loginDemo(
   await page.getByRole('button', { name: /^sign in$/i }).click()
   const response = await loginRead
   expect(response.status(), `real login for ${email}`).toBe(200)
-  const body = (await response.json()) as { token: string }
   // WHAT A FRESH SIGN-IN PAINTS. The console lands on the root, which belongs to no
   // navigation area, and the sidebar hides a closed area's panel — so the entries on
   // screen are the areas and the overview above them, not a leaf like Inventory. The
   // name is exact because neighbouring entries contain it.
   await expect(
-    page.getByRole('link', { name: 'Now', exact: true }),
+    page
+      .getByRole('navigation', { name: 'Journeys', exact: true })
+      .getByRole('link', { name: 'Now', exact: true }),
   ).toBeVisible({ timeout: 20_000 })
-  return body.token
+  return sessionToken(page)
 }
 
 async function loginAPI(page: Page, email: string, password: string) {
@@ -1205,12 +1207,14 @@ test('deploy plans GitOps live and governs desired-state authoring end to end', 
     name: 'Declare deployment',
   })
   await createDialog.getByRole('combobox', { name: 'Subject kind' }).click()
-  await page.getByRole('option', { name: 'mcp_server', exact: true }).click()
+  await page.getByRole('option', { name: 'MCP server', exact: true }).click()
   await createDialog.getByRole('combobox', { name: 'Subject kind' }).click()
-  await page.getByRole('option', { name: 'agent', exact: true }).click()
+  await page.getByRole('option', { name: 'Agent', exact: true }).click()
+  // The Subject is chosen from the estate's agents, not typed.
   await createDialog
-    .getByRole('textbox', { name: 'Subject' })
-    .fill('l6-ui-agent')
+    .getByRole('combobox', { name: 'Subject', exact: true })
+    .click()
+  await page.getByRole('option').first().click()
   await createDialog.getByRole('textbox', { name: 'Name' }).fill(definitionName)
   await createDialog.getByRole('textbox', { name: 'Environment' }).fill('l6-ui')
   await createDialog
@@ -1460,6 +1464,11 @@ test('deploy plans GitOps live and governs desired-state authoring end to end', 
 test('orchestration governs topology, schedules, revisions, and a two-person fire live', async ({
   page,
 }) => {
+  test.skip(
+    (await (await page.request.get('/v1/server-info')).json()).edition ===
+      'community',
+    'Orchestration is Business Identity & Scale; Community refusal is qualified separately.',
+  )
   const token = await loginDemo(page)
   const secondAdminToken = await loginAPI(
     page,

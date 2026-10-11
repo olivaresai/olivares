@@ -193,6 +193,46 @@ func TestSCIMSetReceiverDeactivateOffboardsAndActivateRestoresNothing(t *testing
 	}
 }
 
+func TestSCIMSetOlderActivationCannotUndoNewerDisable(t *testing.T) {
+	ctx := context.Background()
+	st := testStore(t)
+	a := auth.NewAuthenticator(st, nil)
+	super := mustSuperadmin(t, ctx, a)
+	tenant := provisionTenant(t, st, "ordered-events")
+	u, _, err := a.SCIMProvisionUser(ctx, super, tenant, auth.SCIMUserInput{
+		UserName: "ordered@acme.com", Active: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sessTok, apiTok := mintUserCreds(t, st, u.ID, tenant)
+	signer := newES256Signer(t)
+	enableSET(t, ctx, a, super, tenant, signer)
+
+	older := provEvent(scim.EventProvActivate, u.ID.String(), "older-activate")
+	older["iat"] = time.Now().Add(-time.Minute).Unix()
+	activation := envFromSET(t, signer.signSET(t, "k1", older))
+	if _, err := a.SCIMReceiveEvent(ctx, super, tenant, activation); err != nil {
+		t.Fatalf("initial activation = %v", err)
+	}
+	newer := envFromSET(t, signer.signSET(t, "k1", provEvent(scim.EventProvDeactivate, u.ID.String(), "newer-disable")))
+	if _, err := a.SCIMReceiveEvent(ctx, super, tenant, newer); err != nil {
+		t.Fatalf("newer disable = %v", err)
+	}
+	if _, err := a.SCIMReceiveEvent(ctx, super, tenant, activation); err == nil {
+		t.Fatal("replayed older activation was accepted after newer disable")
+	}
+	if _, err := a.SCIMGetMember(ctx, tenant, u.ID); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("older activation restored membership: %v", err)
+	}
+	if p, err := a.Authenticate(ctx, sessTok); err != nil || !p.ExcludedFrom(tenant) {
+		t.Errorf("account-scope session lost the tenant exclusion: %v", err)
+	}
+	if _, err := a.Authenticate(ctx, apiTok); !errors.Is(err, auth.ErrUnauthenticated) {
+		t.Errorf("older activation restored a tenant token: %v", err)
+	}
+}
+
 func TestSCIMSetReceiverDeleteOffboards(t *testing.T) {
 	ctx := context.Background()
 	st := testStore(t)

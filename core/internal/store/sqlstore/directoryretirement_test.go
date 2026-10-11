@@ -240,6 +240,9 @@ func retirementSeedUserTombstone(
 	var tombstone model.UserTombstone
 	err = h.raw.System(context.Background(), func(scope store.SystemScope) error {
 		sys := scope.(*systemScope)
+		if err := sys.beginLineageMutation(context.Background()); err != nil {
+			return err
+		}
 		if err := sys.bindFor(context.Background(), model.SystemTenantID); err != nil {
 			return err
 		}
@@ -306,6 +309,9 @@ func retirementSeedDirectoryTombstone(
 	var tombstone model.DirectoryTombstone
 	err := h.raw.System(context.Background(), func(scope store.SystemScope) error {
 		sys := scope.(*systemScope)
+		if err := sys.beginLineageMutation(context.Background()); err != nil {
+			return err
+		}
 		if err := sys.bindFor(context.Background(), tenant); err != nil {
 			return err
 		}
@@ -355,6 +361,46 @@ func retirementSeedDirectoryTombstone(
 		t.Fatalf("seed directory tombstone: %v", err)
 	}
 	return tombstone
+}
+
+func TestRetirementTombstoneSeedsCommitSQLite(t *testing.T) {
+	for _, name := range []string{"user-valid-anchor", "user-missing-anchor", "identity", "agent"} {
+		t.Run(name, func(t *testing.T) {
+			h := newCurrentSchemaDirectoryRetirementSQLiteHarness(t)
+			tenant := provisionTenant(t, h.raw, "tombstone-seed-"+name)
+			principal := model.NewID()
+			var base model.BaseFields
+			var anchor model.RetirementAuditAnchor
+			table := directoryTombstoneDescriptor.Table
+			if strings.HasPrefix(name, "user-") {
+				tombstone := retirementSeedUserTombstone(t, h, tenant, principal, name == "user-valid-anchor")
+				base, anchor = tombstone.BaseFields, tombstone.AuditAnchor
+				table = userTombstoneDescriptor.Table
+			} else {
+				kind := model.DirectoryPrincipalIdentity
+				source := principal
+				var workspace model.ID
+				if name == "agent" {
+					kind = model.DirectoryPrincipalAgent
+					workspace = retirementDefaultWorkspace(t, h.raw, tenant).ID
+					source = model.NewID()
+				}
+				tombstone := retirementSeedDirectoryTombstone(t, h, tenant, kind, principal, workspace, source)
+				base, anchor = tombstone.BaseFields, tombstone.AuditAnchor
+			}
+			// The helper's in-transaction readback cannot prove System committed.
+			if got := retirementRowCount(t, h.sql, table, "tenant_id = ? AND id = ?", base.TenantID.String(), base.ID.String()); got != 1 {
+				t.Fatalf("committed %s seed rows = %d, want 1", name, got)
+			}
+			var wantAudit int64 = 1
+			if name == "user-missing-anchor" {
+				wantAudit = 0
+			}
+			if got := retirementRowCount(t, h.sql, auditTable, "tenant_id = ? AND id = ?", base.TenantID.String(), anchor.EventID.String()); got != wantAudit {
+				t.Fatalf("committed %s seed audit rows = %d, want %d", name, got, wantAudit)
+			}
+		})
+	}
 }
 
 func retirementWantMissing[T any](

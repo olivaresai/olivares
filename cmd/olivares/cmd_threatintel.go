@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/olivaresai/olivares/core/envconfig"
 	"github.com/spf13/cobra"
 
 	"github.com/olivaresai/olivares/connectors/threatfeed"
@@ -36,7 +37,7 @@ var errThreatIntelNotActive = notInEdition()
 // resolveThreatIntelSource builds the source from the operator environment, or
 // returns an honest error when the add-on is not available in this build/config.
 func resolveThreatIntelSource() (threatIntelSource, error) {
-	src := newThreatIntelSource(os.Getenv, slog.Default())
+	src := thisEdition.threatIntelSource.get(envconfig.Get, slog.Default())
 	if src == nil {
 		return nil, errThreatIntelNotActive
 	}
@@ -46,16 +47,16 @@ func resolveThreatIntelSource() (threatIntelSource, error) {
 func newThreatIntelCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "threatintel",
-		Short: "Manage the AI threat-intel catalog and its signed catalog releases (enterprise add-on)",
+		Short: "Manage the AI threat-intel catalog and its signed catalog releases (Business)",
 		Example: "  olivares threatintel status --crosswalk\n" +
 			"  olivares threatintel verify ./threat-feed.json\n" +
 			"  olivares threatintel apply ./threat-feed.json",
-		Long: "threatintel manages the AI threat-intel add-on (enterprise): a base catalog compiled into\n" +
+		Long: "threatintel manages the AI threat-intel add-on (Business): a base catalog compiled into\n" +
 			"the build, plus optional signed feed artifacts you pin a publisher key for. Olivares operates\n" +
 			"no curated feed distribution — the endpoint and the trusted keys are yours. Subcommands:\n" +
 			"verify and apply signed feeds (fail-closed), pull from the configured endpoint, sign a feed\n" +
-			"(publisher), and show the active feed + Claude/Anthropic governance crosswalk. Requires an\n" +
-			"enterprise build and OLIVARES_THREATINTEL_CONFIG; the default AGPL build reports it is unavailable.",
+			"(publisher), and show the active feed + Claude/Anthropic governance crosswalk. Requires the\n" +
+			"Business edition and OLIVARES_THREATINTEL_CONFIG; the Community build reports it is unavailable.",
 	}
 	cmd.AddCommand(
 		threatIntelVerifyCmd(),
@@ -240,7 +241,7 @@ func readSigningKey(keyPath string) (string, error) {
 		}
 		return strings.TrimSpace(string(b)), nil
 	}
-	if env := strings.TrimSpace(os.Getenv(envThreatIntelSigningKey)); env != "" {
+	if env := strings.TrimSpace(envconfig.Get(envThreatIntelSigningKey)); env != "" {
 		return env, nil
 	}
 	return "", fmt.Errorf("no signing key: pass --key <file> or set $%s", envThreatIntelSigningKey)

@@ -93,9 +93,9 @@ func TestApply_ScopesEnvAndAttests(t *testing.T) {
 	if !foundEgress {
 		t.Error("the egress degrade must be recorded honestly")
 	}
-	// Without seccomp+landlock this release, the level must never claim strong.
+	// Seccomp and bounding-capability clearance remain absent; Strong is unreachable.
 	if att.Level == LevelStrong {
-		t.Errorf("level must not be strong without seccomp+landlock: %+v", att)
+		t.Errorf("level must not be strong without seccomp+cleared bounding capabilities: %+v", att)
 	}
 	if att.Level != LevelMinimal && att.Level != LevelPartial {
 		t.Errorf("unexpected level %q", att.Level)
@@ -113,9 +113,9 @@ func TestApply_HonestAttestation(t *testing.T) {
 	}
 	defer cleanup()
 
-	// Controls that are NOT wired this release must never be asserted.
+	// Absent mechanisms and child-only controls before launch must not be asserted.
 	if att.CapsDropped {
-		t.Error("CapsDropped must not be asserted until bounding-drop + no-new-privs are wired")
+		t.Error("CapsDropped must not be asserted without bounding-set clearance")
 	}
 	if att.Seccomp {
 		t.Error("Seccomp must not be asserted this release")

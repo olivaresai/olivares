@@ -3,7 +3,8 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 #
 # C03-11 — FASE R stays HOLD until a customer binary exists to replace.
-# Production runs the 2026-09-17 order (an internal design note (not shipped)).
+# The Worker config's production block carries the pins that an internal design note (not shipped) records
+# (the Worker deploy follows at release time).
 # Exit 0 CLEAN · 1 finding · 2 could not look.
 
 set -euo pipefail
@@ -98,7 +99,8 @@ if [[ -n "$WRANGLER" ]]; then
 	crc=0
 	python3 - C03-11 "$WRANGLER" "$STATE" "$OFFERS" <<'PY' || crc=$?
 # THE CURRENT PRODUCTION CONTRACT, the same block in every gate that reads production state
-# (an internal design note (not shipped)): the 2026-09-17 order's sale switch and version, the
+# (an internal design note (not shipped)): the sale switch and release version it records, held
+# to sale on and to RELEASE-VERSION, the
 # four Business configurations by id in every sold place, and no Cloud id in any of them.
 import json, sys
 
@@ -144,15 +146,31 @@ def load(path, jsonc=False):
         cannot(f"{path} is not readable JSON: {e}")
 
 state = load(state_path)
+if not isinstance(state, dict):
+    cannot(f"{state_path} is not a JSON object")
 configs = state.get("configurations") or {}
 cloud_ids = {i for fam in (state.get("not_sold") or {}).values() for i in (fam.get("ids") or [])}
-if state.get("schema") != "production-state/v1" or len(configs) != 4 or not cloud_ids:
-    cannot(f"{state_path} does not name four configurations and the not-sold Cloud ids")
+pins = state.get("production")
+if (state.get("schema") != "production-state/v1" or len(configs) != 4 or not cloud_ids
+        or not isinstance(pins, dict) or set(pins) != {"FULFILLMENT_ENABLED", "ENTERPRISE_VERSION"}
+        or not all(isinstance(v, str) and v for v in pins.values())):
+    cannot(f"{state_path} does not name the production pins, four configurations and the not-sold Cloud ids")
+# The record names the release being prepared: sale on, at the version RELEASE-VERSION names.
+try:
+    canon = next(l.strip() for l in open("RELEASE-VERSION", encoding="utf-8")
+                 if l.strip() and not l.lstrip().startswith("#"))
+except (OSError, StopIteration) as e:
+    cannot(f"RELEASE-VERSION names no release: {e!r}")
+for key, value, why in (("FULFILLMENT_ENABLED", "true", "sale on"),
+                        ("ENTERPRISE_VERSION", canon, "RELEASE-VERSION")):
+    if pins[key] != value:
+        found.append(f"the record's production {key} is {pins[key]!r}, want {value!r} ({why})")
 
 prod = (((load(wf, jsonc=True).get("env") or {}).get("production") or {}).get("vars") or {})
-for key, value in (("FULFILLMENT_ENABLED", "true"), ("ENTERPRISE_VERSION", "26.9.0")):
+for key, value in sorted(pins.items()):
     if prod.get(key) != value:
-        found.append(f"production {key} is {prod.get(key)!r}, want {value!r} (the 2026-09-17 order)")
+        found.append(f"production {key} is {prod.get(key)!r}, want {value!r} "
+                     f"({state_path}; the Worker deploy follows at release time)")
 
 def var(name):
     raw = prod.get(name)
@@ -225,5 +243,5 @@ if [ "$_public_partial" -eq 1 ]; then
 	echo "  the production contract were not graded (curated out of this tree)."
 	exit 0
 fi
-echo "C03-11: CLEAN — FASE R remains HOLD; seat seam still no-op; production runs the 2026-09-17 order: four Business configurations, no Cloud"
+echo "C03-11: CLEAN — FASE R remains HOLD; seat seam still no-op; the Worker config's production pins match the production-state record and RELEASE-VERSION (the Worker deploy follows at release time): four Business configurations, no Cloud"
 exit 0

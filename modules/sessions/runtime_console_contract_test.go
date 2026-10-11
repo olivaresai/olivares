@@ -128,7 +128,7 @@ func TestConsoleSendContractOnADriverRunIsTextNotLine(t *testing.T) {
 //
 // ⛔ IT EXISTS BECAUSE A POSITIVE CONTROL WAS WRONG. The web positive case first listed
 // CODEX_MODEL as an ordinary variable. The engine reserves every `CODEX_*` name
-// (forbiddenInheritedEnvName, procrunner.go) and validateCreate applies that to every
+// (forbiddenInheritedEnvName, child_env.go) and validateCreate applies that to every
 // env_allow item, so the browser would have posted a body the server refuses and the
 // dialog would have said nothing. A mocked-transport test can never notice that; only
 // this one can.
@@ -199,6 +199,7 @@ func TestEnvAllowPositiveNamesTheDialogAdmitsAreTheOnesTheServerAdmits(t *testin
 		for _, reserved := range []string{
 			"OLIVARES_TOKEN", "ANTHROPIC_API_KEY", "CLAUDE_CODE_THING",
 			"OPENAI_API_KEY", "GROK_API_KEY", "XAI_API_KEY", "DISABLE_AUTOUPDATER",
+			"AWS_SECRET_ACCESS_KEY", "VAULT_TOKEN", "DATABASE_URL",
 		} {
 			refused := create([]string{reserved})
 			if refused.code != http.StatusBadRequest {

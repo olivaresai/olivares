@@ -179,9 +179,9 @@ describe('el techo se pide y el recorte se declara', () => {
     expect(
       await screen.findByText('Loaded 1 agents; there are more'),
     ).toBeVisible()
-    // ⛔ CARDINALIDAD EXACTA, no presencia. Dos avisos distintos que dicen lo mismo pasan
-    //    cualquier `findByText` —los textos difieren— y la pantalla enseña el recorte DOS veces.
-    //    Es la clase del badge doble; la destapó el contraste (F-01) contando 2 aquí.
+    // Assert exact cardinality. Two differently worded notices can pass `findByText` while
+    // showing truncation twice. Review (F-01) exposed this duplicate-badge defect by
+    // counting two.
     expect(screen.getAllByText(/there are more/i)).toHaveLength(1)
 
     cleanup()

@@ -15,6 +15,17 @@ situe dans la **couche de gestion** et n'a **aucune surface d'actionnement** : i
 catalogue, gouverne et audite, mais n'exécute jamais d'outil et ne modifie jamais
 un runtime MCP en service.
 
+## Définitions MCP enregistrées
+
+Les configurations gérées dans `/capabilities` et `/v1/m/capabilities/configs`
+sont des **métadonnées d’observation**, avec modifications auditées et historique
+immuable des révisions. Enregistrer une définition, modifier `enabled` ou la
+supprimer ne configure pas la gateway MCP, ne démarre ni n’arrête un serveur, ne
+résout aucune référence de secret et ne modifie ni transport ni endpoint d’un
+serveur découvert. La gateway utilise sa propre interface de configuration.
+Les définitions enregistrées et leur historique restent disponibles après un
+redémarrage ou après désactivation puis réactivation du module.
+
 ## Ce que c'est
 
 Le module est une couche construite **au-dessus** de la découverte passive du

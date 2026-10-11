@@ -46,4 +46,4 @@ The 30 product modules that compose the Olivares AI governance platform. Each mo
 
 ## Adding a module
 
-Modules implement the `sdk.Module` interface. See [`modules/example/`](example/) for a minimal scaffold and the [SDK documentation](../sdk/README.md).
+Modules implement the `sdk.Module` interface. See the [runnable reference module](example/README.md) for a minimal scaffold and the [SDK documentation](../sdk/README.md).

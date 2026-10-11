@@ -161,15 +161,15 @@
     }
   },
   "airgap": {
-    "title": "Bundle air-gap y chart Helm OCI",
-    "description": "Un bundle verificable sin conexión y un chart Helm OCI con doble firma. Nada en esta ruta hace llamadas al exterior.",
-    "bundleTitle": "Bundle air-gap",
-    "bundleIntro": "La vía con clave no necesita Rekor ni Fulcio. Los mantenedores construyen un bundle autocontenido en línea una vez; el sitio desconectado lo verifica y lo replica.",
+    "title": "Bundle offline y paquete Helm Business",
+    "description": "Distribución privada: un bundle offline y un paquete de chart Business firmado. La publicación sigue sin verificar.",
+    "bundleTitle": "Bundle offline",
+    "bundleIntro": "La vía con clave no necesita Rekor ni Fulcio. Los mantenedores construyen el bundle una vez en línea desde la distribución privada ensamblada; el sitio desconectado lo verifica y lo replica.",
     "buildCommand": "Construir (en línea una vez)",
     "mirrorCommand": "Replicar (sin internet)",
-    "chartTitle": "Chart Helm OCI",
-    "ociCoordinate": "Coordenada OCI",
-    "cosignManifest": "cosign (manifiesto)",
+    "chartTitle": "Paquete Helm Business",
+    "distribution": "Distribución",
+    "cosignPackage": "cosign (paquete)",
     "gpgProv": "GPG .prov",
     "verifyCommand": "Comando de verificación"
   },

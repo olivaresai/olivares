@@ -28,8 +28,6 @@ const api = vi.hoisted(() => ({
   listServers: vi.fn(),
   getServer: vi.fn(),
   listTools: vi.fn(),
-  listToolPins: vi.fn(),
-  sendToolPinIntent: vi.fn(),
   listSkills: vi.fn(),
   wiring: vi.fn(),
   listConfigs: vi.fn(),
@@ -47,7 +45,6 @@ vi.mock('./api', async (importOriginal) => {
 import CapabilitiesView from './capabilities-view'
 import { RevisionsSheet } from './revisions'
 import { ServerDetailSheet } from './server-detail'
-import { ToolPinsTab } from './tool-pins'
 
 const stepUp = () =>
   new ApiError(403, 'step_up_required', 'assurance level too low')
@@ -139,26 +136,5 @@ describe('capabilities re-enters every real read after step-up', () => {
       await screen.findByRole('button', { name: 'Complete elevation' }),
     )
     await waitFor(() => expect(api.listRevisions).toHaveBeenCalledTimes(2))
-  })
-
-  it('refetches tool pins after its two bounded retries', async () => {
-    api.listToolPins
-      .mockRejectedValueOnce(stepUp())
-      .mockRejectedValueOnce(stepUp())
-      .mockRejectedValueOnce(stepUp())
-      .mockResolvedValue({ items: [] })
-    wrap(<ToolPinsTab canWrite />)
-
-    const user = userEvent.setup()
-    await user.click(
-      await screen.findByRole(
-        'button',
-        { name: 'Complete elevation' },
-        { timeout: 7_000 },
-      ),
-    )
-    await waitFor(() => expect(api.listToolPins).toHaveBeenCalledTimes(4), {
-      timeout: 7_000,
-    })
   })
 })

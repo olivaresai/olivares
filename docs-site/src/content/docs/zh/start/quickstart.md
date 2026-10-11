@@ -6,6 +6,9 @@ description: >-
   pgAudit connector 验证它并非演示。
 ---
 
+> 部署包通过 Business 渠道提供；此处未验证其发布状态。使用本地 chart 前，请按渠道说明验证包及其发布者。清单示例使用 Business 提供的 `business-install.yaml`。隔离环境安装需要 Enterprise。
+
+
 这是体验 Olivares AI *用途*的快速通道：一张你 estate 的**读/写访问图**，以及在它之上的
 **Permitted-vs-Observed 漂移**——即某个 agent *被授予*的访问与它*被观测到*实际使用的访问之间的差距。
 
@@ -42,7 +45,7 @@ task build                      # compiles ./bin/olivares with the web UI embedd
 `task build` 在 `./bin/olivares` 处产出一个自包含的产物——引擎、嵌入的 web UI 以及第一方
 connector 插件。**容器和 Kubernetes 安装都包装的是同一个二进制文件**：一个已发布镜像加上一份 Compose 文件
 （[自托管](/zh/how-to/self-hosting/)），或一份扁平 manifest，你用 `kubectl apply -f
-deploy/manifests/install.yaml` 应用即可（无需 Helm）。下面你看到的核心能力在这三种方式上完全一致——
+./business-install.yaml` 应用即可（无需 Helm）。下面你看到的核心能力在这三种方式上完全一致——
 仅演示种子数据不同（仅回环，绝不出现在真实安装中）。
 
 ## 2. 启动演示 estate（仅回环）
@@ -209,7 +212,7 @@ curl -sf "$BASE/v1/m/accessmap/drift" \
 
 :::note[端点的形态]
 Permitted-vs-Observed 结果由 `/v1/m/accessmap/drift` 提供（没有 `/diff`）。
-`/v1/m/accessmap/*` 路由不属于包含 70 条路径的稳定核心契约；它们以独立的
+`/v1/m/accessmap/*` 路由不属于包含 128 条路径的稳定核心契约；它们以独立的
 **beta** 文档发布——见[模块路由参考](/reference/api-beta/)。[API 参考](/reference/api/)
 记录稳定核心表面。
 :::

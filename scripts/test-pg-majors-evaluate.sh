@@ -60,6 +60,31 @@ setup "$WORK/green"
 run_case green
 check "clean four-major run is ACCEPTED" "baseline" "$rc"
 
+# The workflow must select its declared scope before Go executes it, rather
+# than teaching the evaluator to accept expected skips afterwards.
+setup "$WORK/selection"
+cat >"$WORK/selection/ci/pg-majors-expectations.json" <<'EOF'
+{"floors":{"pkg/alpha":2,"pkg/beta":1},"exclusions":[
+  {"test":"TestHelper","majors":[15,16,17,18],"reason":"subprocess entry point"},
+  {"test":"TestMajorSpecific","majors":[15,16],"reason":"capability starts at 17"},
+  {"test":"TestPortable/postgres/impossible_type","majors":[15,16,17,18],"reason":"native type prevents this fixture"}
+]}
+EOF
+(cd "$WORK/selection" && python3 "$ROOT/scripts/pg-majors-evaluate.py" --skip-pattern 15 >pattern)
+rc=$?
+[ "$rc" -eq 0 ] && [ "$(cat "$WORK/selection/pattern")" = '^TestHelper$|^TestMajorSpecific$|^TestPortable$/^postgres$/^impossible_type$' ]
+check "selection names exactly the declared major's exclusions" "native Go selector" "$?"
+(cd "$WORK/selection" && python3 "$ROOT/scripts/pg-majors-evaluate.py" --skip-pattern 18 >pattern)
+rc=$?
+[ "$rc" -eq 0 ] && [ "$(cat "$WORK/selection/pattern")" = '^TestHelper$|^TestPortable$/^postgres$/^impossible_type$' ]
+check "a later major keeps its supported capability in scope" "major boundary" "$?"
+
+setup "$WORK/m-fail-event"
+echo '{"Action":"fail","Package":"github.com/olivaresai/olivares/pkg/beta","Test":"TestBroke"}' >>"$WORK/m-fail-event/gotest-18.json"
+run_case m-fail-event
+[ "$rc" -ne 0 ] && grep -q 'FAIL in matrix packages' "$WORK/m-fail-event/out.log"
+check "a failure event stays RED even with a forged zero exit" "assertion preservation" "$?"
+
 # ---- mutations: every one must turn the verdict red -----------------------
 setup "$WORK/m-exit"
 sed -i 's/^17 0$/17 1/' "$WORK/m-exit/pg-majors-exits.txt"

@@ -106,7 +106,7 @@ func TestPathExprs(t *testing.T) {
 			`"/v1/agents/" + escapePath(id)`},
 		{"/v1/system/orgs/{tenant}/region",
 			`"/v1/system/orgs/"+pathEscape(tenant)+"/region"`,
-			`"/v1/system/orgs/" + quote(str(tenant), safe="") + "/region"`,
+			`"/v1/system/orgs/" + quote(str(tenant_path), safe="") + "/region"`,
 			"`/v1/system/orgs/${encodeURIComponent(tenant)}/region`",
 			`"/v1/system/orgs/" + escapePath(tenant) + "/region"`},
 	}
@@ -114,7 +114,7 @@ func TestPathExprs(t *testing.T) {
 		if got := goPathExpr(c.path); got != c.goE {
 			t.Errorf("goPathExpr(%s) = %s, want %s", c.path, got, c.goE)
 		}
-		if got := pyPathExpr(c.path); got != c.pyE {
+		if got := pyPathExpr(c.path, pyPathParams(Operation{PathParams: pathParams(c.path)})); got != c.pyE {
 			t.Errorf("pyPathExpr(%s) = %s, want %s", c.path, got, c.pyE)
 		}
 		if got := tsPathExpr(c.path); got != c.tsE {
@@ -420,6 +420,7 @@ func TestSessionsCommunicationTypedFamilyGeneration(t *testing.T) {
 		{"pre-existing", preexistingCommunicationOperations},
 		{"incoming-handoff", handoffCommunicationOperations},
 		{"administrative", administrativeCommunicationOperations},
+		{"decision-response", []string{"POST /v1/m/sessions/decision-requests/{id}/responses"}},
 	}
 	declared := map[string]bool{}
 	for _, group := range censusGroups {
@@ -498,6 +499,16 @@ func TestSessionsCommunicationTypedFamilyGeneration(t *testing.T) {
 	// dropping the other's leaves the census at the right number while the
 	// dropped side's items collapse onto a reused type.
 	addedCommunicationContracts := map[string][]string{
+		"SessionsCommunicationDecisionRequestResponseBody": {
+			"transition", "response", "blocker_work_item_id",
+		},
+		"SessionsCommunicationDecisionRequestResponseBodyResponse": {
+			"choice_key", "reason",
+		},
+		"SessionsCommunicationDecisionRequestResponseResult": {
+			"command_id", "request_id", "response_id", "message_id", "work_item_id",
+			"work_decision_id", "event_id", "version", "etag", "state", "audit_seq",
+		},
 		"SessionsCommunicationChannelAdministrationPage": {
 			"items", "has_more", "continuation",
 		},
@@ -1713,6 +1724,25 @@ func TestTypedEmittersPublishParsedStability(t *testing.T) {
 	}
 }
 
+func TestRegenerationPreservesPublishedCleanupAndHandoffCalls(t *testing.T) {
+	out := t.TempDir()
+	if err := run(filepath.Join("..", "..", "web", "openapi", "openapi.json"),
+		filepath.Join("..", "..", "web", "openapi", "openapi.beta.json"), out); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct{ path, want string }{
+		{"go/operations.gen.go", "// Stability: beta.\nfunc (c *Client) PostV1MSessionsRunsByRefCleanup(ctx context.Context, ref string, opts ...RequestOption)"},
+		{"typescript/src/operations.gen.ts", "* Stability: beta.\n   */\n  postV1MSessionsRunsByRefCleanup(ref: string, opts?: RequestOptions)"},
+		{"java/src/main/java/ai/olivares/client/Client.java", "postV1MSessionsRunsByRefCleanup(String ref)"},
+		{"java/src/main/java/ai/olivares/client/Client.java", "postV1MSessionsRunsByRefCleanup(String ref, RequestOptions options)"},
+		{"java/src/main/java/ai/olivares/client/Client.java", "SessionsCommunicationHandoffContent(List<SessionsCommunicationContentReference> artifact_refs, String next_action, String risk, String summary)"},
+	} {
+		if !strings.Contains(mustRead(t, filepath.Join(out, filepath.FromSlash(tc.path))), tc.want) {
+			t.Errorf("%s lost published call %s", tc.path, tc.want)
+		}
+	}
+}
+
 // ── N3-A: the schema 2 wire vocabulary reaches the generated surfaces ───────────────
 //
 // The N2 non-disclosure amendment (docs/contracts/CAPABILITY-PROJECTION.md) moved the
@@ -2125,6 +2155,34 @@ func TestStatementExportCSVGeneratesRawSeams(t *testing.T) {
 						t.Errorf("%s: export call uses the JSON seam %s: %s", emitter.lang, bad, strings.TrimSpace(line))
 					}
 				}
+			}
+		})
+	}
+}
+
+// TestCleanupAndHandoffPublishedCallForms keeps snapshot catch-up from changing
+// existing SDK calls. Runtime request-capture tests cover the emitted methods.
+func TestCleanupAndHandoffPublishedCallForms(t *testing.T) {
+	doc, err := loadUnion("../../web/openapi/openapi.json", "../../web/openapi/openapi.beta.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	goSource, err := emitGo(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct{ name, source, want string }{
+		{"Go cleanup body", string(goSource), "PostV1MSessionsRunsByRefCleanupWithBody(ctx context.Context, ref string, body any, opts ...RequestOption)"},
+		{"TypeScript cleanup body", string(emitTypeScript(doc)), "postV1MSessionsRunsByRefCleanupWithBody(ref: string, body?: JsonInput, opts?: RequestOptions)"},
+		{"Java cleanup body", string(emitJava(doc)), "postV1MSessionsRunsByRefCleanupWithBody(String ref, Object body, RequestOptions options)"},
+		{"Go cleanup", string(goSource), "PostV1MSessionsRunsByRefCleanup(ctx context.Context, ref string, opts ...RequestOption)"},
+		{"TypeScript cleanup", string(emitTypeScript(doc)), "postV1MSessionsRunsByRefCleanup(ref: string, opts?: RequestOptions)"},
+		{"Java cleanup", string(emitJava(doc)), "postV1MSessionsRunsByRefCleanup(String ref)"},
+		{"Java cleanup options", string(emitJava(doc)), "postV1MSessionsRunsByRefCleanup(String ref, RequestOptions options)"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if !strings.Contains(tc.source, tc.want) {
+				t.Fatalf("missing published call form %q", tc.want)
 			}
 		})
 	}

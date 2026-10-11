@@ -47,6 +47,38 @@ afterEach(() => {
 })
 
 describe('useRunAttach', () => {
+  it('delivers stored history without advancing the output cursor or ending unavailable I/O', async () => {
+    const onHistory = vi.fn()
+    const frames: AttachFrame[] = []
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      body: streamFrom(
+        sse('history', { line: 'native-history' }),
+        sse('history', { line: 42 }),
+        sse('output', { seq: 0, stream: 'stdout', line: 'first' }),
+        sse('notice', { io_unavailable: 'not_live_on_node' }),
+      ),
+    } as Response)
+    vi.stubGlobal('fetch', fetchMock)
+    const { result } = renderHook(() =>
+      useRunAttach({
+        runRef: 'run-x',
+        onHistory,
+        onFrame: (frame) => frames.push(frame),
+      }),
+    )
+    await waitFor(() =>
+      expect(result.current.ioUnavailable).toBe('not_live_on_node'),
+    )
+    expect(onHistory).toHaveBeenCalledExactlyOnceWith('native-history')
+    expect(
+      new URL(fetchMock.mock.calls[0][0], 'http://localhost').searchParams.get(
+        'history',
+      ),
+    ).toBe('1')
+    expect(frames.map((frame) => frame.seq)).toEqual([0])
+    expect(result.current.ended).toBe(false)
+  })
   it('delivers output frames in order, dedupes seq replays, resyncs past a lag, and ends', async () => {
     const body = streamFrom(
       sse('output', { seq: 0, stream: 'stdout', line: 'a' }),
@@ -77,6 +109,11 @@ describe('useRunAttach', () => {
       expect.stringContaining('/v1/m/sessions/runs/run-x/attach?from=0'),
       expect.objectContaining({ method: 'GET' }),
     )
+    expect(
+      new URL(fetchMock.mock.calls[0][0], 'http://localhost').searchParams.has(
+        'history',
+      ),
+    ).toBe(false)
     // Exactly the three distinct frames, in order — the seq-5 duplicate was deduped.
     expect(frames.map((f) => f.line)).toEqual(['a', 'b', 'c'])
     // The lag sentinel surfaced honestly.
@@ -408,7 +445,7 @@ describe('useRunAttach', () => {
   })
 
   it.each(['tenant', 'credential'] as const)(
-    'drops late output, lag, notice and end after %s identity cleanup',
+    'drops late history, output, lag, notice and end after %s identity cleanup',
     async (identity) => {
       const controllers: ReadableStreamDefaultController<Uint8Array>[] = []
       const fetchMock = vi.fn().mockImplementation(() => {
@@ -424,6 +461,7 @@ describe('useRunAttach', () => {
       const { result } = renderHook(() =>
         useRunAttach({
           runRef: 'run-x',
+          onHistory: (line) => deliveries.push(line),
           onFrame: (f) => deliveries.push(f),
           onLag: (l) => deliveries.push(l),
           onNotice: (n) => deliveries.push(n),
@@ -447,7 +485,8 @@ describe('useRunAttach', () => {
       try {
         controllers[0].enqueue(
           encoder.encode(
-            sse('output', { seq: 1, stream: 'stdout', line: 'late' }) +
+            sse('history', { line: 'late-history' }) +
+              sse('output', { seq: 1, stream: 'stdout', line: 'late' }) +
               sse('lag', { type: 'lag', dropped: 5, next_seq: 9 }) +
               sse('notice', {
                 type: 'notice',

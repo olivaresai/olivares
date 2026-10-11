@@ -18,6 +18,82 @@ import (
 	"github.com/olivaresai/olivares/core/store"
 )
 
+// The SQL path (CUTS A3): the filtered scan is complete and cheap, so the
+// honest answer to a match-nothing filter IS scan_complete — the cap-shaped
+// "incomplete" envelope belonged to the decode-every-row walk it replaced.
+func TestAuditFilteredListSQLCompletesHonestly(t *testing.T) {
+	ctx := context.Background()
+	st, err := sqlstore.Open(ctx, store.Config{
+		Engine: store.EngineSQLite,
+		DSN:    ":memory:",
+		Debug:  true,
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	if err := st.System(ctx, func(sys store.SystemScope) error {
+		_, err := sys.EnsureSystemTenant(ctx)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	var firstSeq int64
+	if err := st.Mutate(ctx, model.SystemTenantID, func(sc store.Scope) error {
+		for i := 0; i < 3; i++ {
+			event, err := sc.Audit().Append(ctx, model.AuditDraft{
+				Actor:  "scan-cap",
+				Action: "event." + strconv.Itoa(i),
+			})
+			if err != nil {
+				return err
+			}
+			if i == 0 {
+				firstSeq = event.Seq
+			}
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/?action=does-not-match", nil)
+	filters, filtered, err := parseAuditFilters(req)
+	if err != nil || !filtered {
+		t.Fatalf("parse filters: filtered=%v err=%v", filtered, err)
+	}
+	rec := httptest.NewRecorder()
+	server := &Server{st: st}
+	server.auditFilteredListInto(
+		rec,
+		req,
+		auth.Principal{},
+		model.SystemTenantID,
+		firstSeq,
+		100,
+		filters,
+	)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("filtered list = %d %s", rec.Code, rec.Body.String())
+	}
+
+	var body map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body["scan_complete"] != true || body["has_more"] != false {
+		t.Fatalf("the SQL path scanned everything and must SAY so: %#v", body)
+	}
+	// next_from is one past the chain head, exactly the legacy completed-walk value.
+	if got, ok := body["next_from"].(float64); !ok || int64(got) != firstSeq+3 {
+		t.Fatalf("next_from = %#v, want %d (chain head + 1)", body["next_from"], firstSeq+3)
+	}
+}
+
+// The legacy walk (a store without the filtered capability — a test fake)
+// keeps the cap-shaped envelope: a scan that did not finish must not claim
+// scan_complete.
 func TestAuditFilteredListReportsScanCapHonestly(t *testing.T) {
 	previousCap := auditScanCap
 	auditScanCap = 2
@@ -66,7 +142,7 @@ func TestAuditFilteredListReportsScanCapHonestly(t *testing.T) {
 	}
 	rec := httptest.NewRecorder()
 	server := &Server{st: st}
-	server.auditFilteredListInto(
+	server.auditFilteredListLegacy(
 		rec,
 		req,
 		auth.Principal{},

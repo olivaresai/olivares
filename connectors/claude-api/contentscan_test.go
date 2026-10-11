@@ -83,6 +83,31 @@ func TestCollectEncodedSecretsForRescan(t *testing.T) {
 	}
 }
 
+// TestCollectPathsAndIdentifiersAreText pins path handling: Claude Code's system prompt always
+// carries file paths, and code carries snake_case names. A '/' or '_' inside such a token
+// is a separator, not an encoding marker, so the stock "unscanned" deny must not refuse
+// them. A base64-wrapped secret next to a path is still decoded for rescan.
+func TestCollectPathsAndIdentifiersAreText(t *testing.T) {
+	for _, text := range []string{
+		"memory at /home/alice/.claude/projects/-home-alice-proj/memory/",
+		"Working directory: /workspace/data/tmp/",
+		"see /Users/Alice/GitHub/MyProject/ and internal/api/handlers/",
+		"https://example.org/project/issues/306",
+		"~/projects/my_project/README",
+		"if len(buf) > MAX_TOKEN_SIZE { return get_user_profile() }",
+	} {
+		if c := CollectRequestContent(reqWithUserBlocks(TextBlock(text))); c.Unscanned {
+			t.Errorf("plain text %q was marked unscanned", text)
+		}
+	}
+	const secret = "token=supersecretvalue"
+	text := "cwd /home/alice/proj/ value " + base64.StdEncoding.EncodeToString([]byte(secret))
+	c := CollectRequestContent(reqWithUserBlocks(TextBlock(text)))
+	if c.Unscanned || !hasText(c, secret) {
+		t.Fatalf("base64 secret beside a path: unscanned=%v texts=%v", c.Unscanned, c.Texts)
+	}
+}
+
 // TestCollectBase64DocumentTextForRescan prevents a caller from relabeling encoded
 // plaintext as a document source to bypass the same detector.
 func TestCollectBase64DocumentTextForRescan(t *testing.T) {

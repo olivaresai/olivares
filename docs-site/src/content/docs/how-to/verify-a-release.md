@@ -5,11 +5,18 @@ description: >-
   before you run it. Never pipe an installer straight into a shell.
 ---
 
+> Business deployment packages are supplied through the Business channel; their publication is unverified here. Verify the chart package and its publisher using the channel instructions before using the local chart below. The flat manifest example uses a Business-supplied file named `business-install.yaml`. Air-gapped installation requires Enterprise.
+
+
+> Helm, Kubernetes operators, Terraform, appliance and FIPS/STIG images are Business deployment artifacts. The source paths below are in the Business distribution. Air-gapped installation requires Enterprise.
+
+The next release is <!-- release -->`0.1`<!-- /release -->; its GitHub release is not published yet. The commands below describe the planned artifacts. Build from source until publication, then verify each artifact before use. See <!-- release -->`docs/releases/0.1-install-surfaces.json`<!-- /release --> for the observed publication state.
+
 A control plane is a security product, so the first thing you should do with a
 release is **prove it is the one the project published**. Olivares AI releases ship
 everything you need to verify cryptographically: a signature over the checksums, a
-SLSA provenance attestation, an SBOM (SPDX + CycloneDX), and an OpenVEX
-attestation — all referenced **by digest, never by tag**.
+SLSA provenance attestation, and one SBOM (SPDX) and one OpenVEX document, both
+attested to the container image — all referenced **by digest, never by tag**.
 
 :::danger[Never `curl | bash`]
 Do not pipe an installer into a shell. Download the artifacts, **verify them**, and
@@ -20,31 +27,41 @@ only then run them. The steps below are how.
 
 | Artifact | What it is |
 |---|---|
-| `checksums.txt` (+ `.sig`, `.pem`) | SHA-256 of every artifact, with a cosign signature and certificate |
+| `checksums.txt` (+ `.sig`, `.pem`) | SHA-256 of the archives, packages, installer, `release-commit.txt` and `release-build-context.json`, with a cosign signature and certificate |
 | `*_<os>_<arch>.tar.gz` | the release archive(s) |
-| `*.sbom.sigstore.json` | SBOM (SPDX) as a signed in-toto attestation |
-| `*.vex.sigstore.json` | OpenVEX as a signed in-toto attestation |
+| `olivares.spdx.sbom.json` | the release SBOM (SPDX), generated from the container image and attested to it by digest |
+| `olivares.vex.openvex.json` | the release OpenVEX, attested to the container image by digest |
 | `*.intoto.jsonl` | SLSA Build L3 provenance |
 | container image | published to GHCR and Docker Hub, pinned and verified by digest |
-| Helm chart source | install from `deploy/helm/olivares`; its OCI publication is unverified (`publication-unverified`: never published from this repository) |
+| Helm chart source | install from `./business-chart`; its OCI publication is unverified (`publication-unverified`: never published from this repository) |
+
+Releases up to 26.10.1<!-- release-fixed --> instead carry a per-archive SBOM and OpenVEX bundle
+(`*.sbom.sigstore.json`, `*.vex.sigstore.json`); later releases do not.
 
 ## The one-command path
 
 The repository ships `scripts/verify-release.sh`, which runs the full chain:
 verifies the signature over `checksums.txt`, re-computes every artifact's SHA-256,
-then verifies the SBOM, OpenVEX and SLSA attestations.
+then verifies the per-archive SBOM and OpenVEX bundles of releases up to 26.10.1<!-- release-fixed -->
+(later releases report these two steps as skipped) and the SLSA provenance.
 
+<!-- release -->
 ```bash
+# The verifier is in a source checkout of the release tag, not a release asset; running it
+# trusts the checkout. Without one, INSTALL.md shows the cosign + sha256sum commands.
+# Run it from the directory that holds the downloaded files.
+
 # Default: keyless (Sigstore). Needs Rekor and Sigstore trusted-root material.
-scripts/verify-release.sh
+/path/to/olivares/scripts/verify-release.sh
 
 # Pin the SLSA provenance to a specific source tag.
-scripts/verify-release.sh --source-tag 26.10.1
+/path/to/olivares/scripts/verify-release.sh --source-tag 0.1
 
 # Key-based: only for files signed with a private key you control.
 # Releases are signed keyless and do not publish a public key.
-scripts/verify-release.sh --key /path/to/your-cosign.pub
+/path/to/olivares/scripts/verify-release.sh --key /path/to/your-cosign.pub
 ```
+<!-- /release -->
 
 `--key` checks signatures against a public key instead of the release workflow's identity, and
 ignores the transparency log. It proves that the files were signed with the matching private
@@ -53,8 +70,8 @@ separate from the files you verify.
 
 `--offline` removes only the Rekor lookup from the cosign calls; it does not make verification
 network-free. Keyless verification still needs Sigstore trusted-root material, which cosign
-fetches unless it is already cached, and the script has no `--trusted-root` option. The SBOM
-and OpenVEX bundle checks need a trusted root even with `--key`, and the SLSA step runs
+fetches unless it is already cached, and the script has no `--trusted-root` option. The per-archive
+SBOM and OpenVEX bundle checks (releases up to 26.10.1<!-- release-fixed -->) need a trusted root even with `--key`, and the SLSA step runs
 `slsa-verifier` without an offline option.
 
 ## What it checks, step by step
@@ -68,7 +85,7 @@ If you prefer to run the checks yourself, this is what the script does:
    cosign verify-blob \
      --certificate checksums.txt.pem \
      --signature checksums.txt.sig \
-     --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v?[0-9]+\.[0-9]+(\.[0-9]+)?$' \
+     --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/[0-9]+\.[0-9]+$' \
      --certificate-oidc-issuer https://token.actions.githubusercontent.com \
      checksums.txt
    ```
@@ -76,10 +93,14 @@ If you prefer to run the checks yourself, this is what the script does:
 2. **Artifact integrity** — every downloaded artifact must match `checksums.txt`:
 
    ```bash
-   sha256sum --check checksums.txt
+   # checksums.txt lists all release artifacts; skip files you did not download.
+   # Before use, ensure each downloaded artifact is listed and reports OK.
+   # GNU sha256sum fails if no listed file is present or a checksum mismatches.
+   sha256sum --check --ignore-missing checksums.txt
    ```
 
-3. **SBOM (SPDX) attestation:**
+3. **SBOM (SPDX) attestation** — per-archive bundle, releases up to 26.10.1<!-- release-fixed --> only. Later
+   releases carry one SBOM attested to the container image; see *Verifying the container image* below.
 
    ```bash
    cosign verify-blob-attestation --type spdxjson \
@@ -87,7 +108,9 @@ If you prefer to run the checks yourself, this is what the script does:
      --check-claims <artifact>
    ```
 
-4. **OpenVEX attestation** (the project's reachability-based vulnerability statement):
+4. **OpenVEX attestation** (the project's reachability-based vulnerability statement) — per-archive
+   bundle, releases up to 26.10.1<!-- release-fixed --> only. Later releases carry one OpenVEX attested to the
+   container image; see *Verifying the container image* below.
 
    ```bash
    cosign verify-blob-attestation --type openvex \
@@ -106,7 +129,9 @@ If you prefer to run the checks yourself, this is what the script does:
 ## Verifying the container image
 
 For the published image, resolve the digest and verify against the GitHub Actions
-identity (this path is keyless and needs network):
+identity (this path is keyless and needs network). The `spdxjson` and `openvex` attestations
+are the release SBOM (`olivares.spdx.sbom.json`) and OpenVEX (`olivares.vex.openvex.json`),
+attested to the image by digest:
 
 ```bash
 IMAGE=docker.io/olivaresai/olivares
@@ -114,13 +139,13 @@ DIGEST="$(crane digest "$IMAGE:<version>")"
 REF="$IMAGE@$DIGEST"
 
 cosign verify "$REF" \
-  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v?[0-9]+\.[0-9]+(\.[0-9]+)?$' \
+  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/[0-9]+\.[0-9]+$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 cosign verify-attestation "$REF" --type spdxjson \
-  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v?[0-9]+\.[0-9]+(\.[0-9]+)?$' \
+  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/[0-9]+\.[0-9]+$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 cosign verify-attestation "$REF" --type openvex \
-  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v?[0-9]+\.[0-9]+(\.[0-9]+)?$' \
+  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/[0-9]+\.[0-9]+$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 slsa-verifier verify-image "$REF" \
   --source-uri github.com/olivaresai/olivares --source-tag <version>

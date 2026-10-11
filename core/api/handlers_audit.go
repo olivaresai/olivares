@@ -26,7 +26,6 @@ var errStopWalk = errors.New("stop walk")
 
 // errStopAuditRange stops an export Walk once its inclusive ?to bound has been
 // passed (a sentinel, not a real error).
-var errStopAuditRange = errors.New("stop audit range")
 
 const auditScanPageSize = 1000
 
@@ -127,11 +126,9 @@ func auditHeadSeq(ctx context.Context, sc store.Scope) (int64, error) {
 // handleAuditList returns a page of the tenant's ledger from ?from (default 1).
 // The legacy unfiltered path keeps its read and self-audit in one committed
 // transaction; filtered requests use bounded Views and a separate Mutate.
-func (s *Server) handleAuditList(w http.ResponseWriter, r *http.Request) {
-	p, tenant, ok := s.authzTenant(w, r, "audit:read")
-	if !ok {
-		return
-	}
+func (s *Server) handleAuditList(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	p := mc.Principal
+	tenant := mc.Tenant
 	s.auditListInto(w, r, p, tenant)
 }
 
@@ -146,11 +143,8 @@ func (s *Server) handleAuditList(w http.ResponseWriter, r *http.Request) {
 // model.SystemTenantID with system:admin, which authorizer.go grants ONLY to the
 // superadmin flag — a tenant-bound principal (even one holding audit:read in its own
 // tenant) gets 403, never cross-tenant visibility.
-func (s *Server) handleSystemAuditList(w http.ResponseWriter, r *http.Request) {
-	p, ok := s.authzSystem(w, r, auth.PermSystemAdmin)
-	if !ok {
-		return
-	}
+func (s *Server) handleSystemAuditList(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	p := mc.Principal
 	s.auditListInto(w, r, p, model.SystemTenantID)
 }
 
@@ -161,7 +155,7 @@ func (s *Server) handleSystemAuditList(w http.ResponseWriter, r *http.Request) {
 // system tenant for /v1/audit/system) — never re-derived from the request.
 func (s *Server) auditListInto(w http.ResponseWriter, r *http.Request, p auth.Principal, tenant model.TenantID) {
 	from := queryInt64(r, "from", 1)
-	limit := int(queryInt64(r, "limit", 100))
+	limit := int(queryInt64(r, "limit", stableListDefaultLimit))
 	if limit <= 0 || limit > 1000 {
 		limit = 100
 	}
@@ -206,11 +200,136 @@ func (s *Server) auditListInto(w http.ResponseWriter, r *http.Request, p auth.Pr
 	writeJSON(w, http.StatusOK, out)
 }
 
-// auditFilteredListInto scans in bounded, short read transactions so attribute
-// filtering never holds the store's single SQLite connection for an unbounded
-// write transaction. Continuation follows the last examined event, not the last
-// sparse match.
+// auditFilteredListInto answers the filtered audit list. When the store offers
+// the filtered walk (store.FilteredWalker — the shipped store always does), the
+// filter runs in SQL over the (tenant_id, seq) walk and only matching rows are
+// decoded (CUTS A3; AU2-05 measured 63.7 ms of decode for a needle filter, the
+// SQL model for the same answer is 4.5 ms). The envelope is unchanged:
+// next_from is the last returned match + 1 while a page is full, and the chain
+// head + 1 once the ledger is scanned to its end; a legacy AuditLog without the
+// capability (a test fake) takes the pre-A3 walk.
 func (s *Server) auditFilteredListInto(
+	w http.ResponseWriter,
+	r *http.Request,
+	p auth.Principal,
+	tenant model.TenantID,
+	from int64,
+	limit int,
+	filters auditFilters,
+) {
+	if s.filteredAuditSQL(w, r, p, tenant, from, limit, filters) {
+		return
+	}
+	s.auditFilteredListLegacy(w, r, p, tenant, from, limit, filters)
+}
+
+// errNoFilteredWalk marks an AuditLog without the filtered-walk capability.
+var errNoFilteredWalk = errors.New("filtered walk unavailable")
+
+// storeFilter renders the handler's filter set for the store walk. The rules
+// are the handler's matches(), moved to SQL without changing them.
+func (f auditFilters) storeFilter() store.AuditFilter {
+	out := store.AuditFilter{
+		Actor:                 f.values["actor"],
+		ActionPrefix:          f.values["action"],
+		ExcludeActionPrefixes: f.excludeActions,
+		TargetKind:            f.values["target_kind"],
+		TargetID:              f.values["target_id"],
+		Since:                 f.since,
+		Until:                 f.until,
+		Q:                     f.q,
+	}
+	return out
+}
+
+// filteredAuditSQL is the A3 path. It reports false only when the store cannot
+// filter (the legacy path then answers).
+func (s *Server) filteredAuditSQL(
+	w http.ResponseWriter,
+	r *http.Request,
+	p auth.Principal,
+	tenant model.TenantID,
+	from int64,
+	limit int,
+	filters auditFilters,
+) bool {
+	out := auditListResponse{Items: []AuditEventDTO{}}
+	rerr := s.st.View(r.Context(), tenant, func(sc store.Scope) error {
+		fw, ok := sc.Audit().(store.FilteredWalker)
+		if !ok {
+			return errNoFilteredWalk
+		}
+		var page []model.AuditEvent
+		err := fw.WalkFiltered(r.Context(), from, filters.storeFilter(), func(ev model.AuditEvent) error {
+			page = append(page, ev)
+			if len(page) > limit {
+				return errStopWalk
+			}
+			return nil
+		})
+		if err != nil && !errors.Is(err, errStopWalk) {
+			return err
+		}
+		if len(page) > limit {
+			// The lookahead row exists: a further page follows. next_from is one
+			// past the last RETURNED match — the same value the legacy walk's
+			// last-examined had, since a full page always ends on a match.
+			page = page[:limit]
+			out.HasMore = true
+			out.NextFrom = page[len(page)-1].Seq + 1
+		} else {
+			out.ScanComplete = true
+			// A completed scan examined to the head: next_from is one past it,
+			// exactly the legacy walk's last-examined value.
+			head, hasHead, err := sc.Audit().Head(r.Context())
+			if err != nil {
+				return err
+			}
+			if hasHead {
+				out.NextFrom = head.Seq + 1
+			}
+		}
+		for _, ev := range page {
+			out.Items = append(out.Items, toAuditDTO(ev))
+		}
+		return nil
+	})
+	if errors.Is(rerr, errNoFilteredWalk) {
+		return false
+	}
+	if rerr != nil {
+		s.writeError(w, r, rerr)
+		return true
+	}
+	meta := map[string]any{
+		"filters": filters.meta(),
+		"from":    from,
+		"limit":   limit,
+	}
+	if err := s.st.Mutate(r.Context(), tenant, func(sc store.Scope) error {
+		// Same ordering rule as the legacy path: the head is read BEFORE this
+		// request's own audit.read joins the chain, so head_seq describes the
+		// ledger the returned page was scanned from and an empty one still answers 0.
+		head, herr := auditHeadSeq(r.Context(), sc)
+		if herr != nil {
+			return herr
+		}
+		out.HeadSeq = head
+		return appendAuditWithMeta(r.Context(), sc, p, "audit.read", "core.audit_event", "", meta)
+	}); err != nil {
+		s.writeError(w, r, err)
+		return true
+	}
+	writeJSON(w, http.StatusOK, out)
+	return true
+}
+
+// auditFilteredListLegacy is the pre-A3 path for an AuditLog without
+// store.FilteredWalker (a test fake): it scans in bounded, short read
+// transactions so attribute filtering never holds the store's single SQLite
+// connection for an unbounded write transaction. Continuation follows the last
+// examined event, not the last sparse match.
+func (s *Server) auditFilteredListLegacy(
 	w http.ResponseWriter,
 	r *http.Request,
 	p auth.Principal,
@@ -299,11 +418,8 @@ func (s *Server) auditFilteredListInto(
 // handleAuditVerify verifies the chain structurally AND verifies every signed
 // checkpoint's Ed25519 signature against the engine key. It does NOT self-audit
 // (verification is an observer; auditing it would grow the chain it inspects).
-func (s *Server) handleAuditVerify(w http.ResponseWriter, r *http.Request) {
-	_, tenant, ok := s.authzTenant(w, r, "audit:read")
-	if !ok {
-		return
-	}
+func (s *Server) handleAuditVerify(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	tenant := mc.Tenant
 	from := queryInt64(r, "from", 1)
 	var structural store.VerifyReport
 	var checks audit.CheckpointReport
@@ -353,157 +469,9 @@ func (s *Server) handleAuditVerify(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// handleAuditExport streams the tenant's ledger in any format audit.Formats()
-// lists — CEF, LEEF, RFC5424 syslog, the bare OTLP-logs projection, a complete
-// OTLP/HTTP export request, or an OCSF v1.8.0 API Activity projection — carrying
-// the chain-integrity fields so an external WORM/SIEM holds an independently
-// verifiable copy. The export action is itself self-audited
-// (best effort, after streaming).
-func (s *Server) handleAuditExport(w http.ResponseWriter, r *http.Request) {
-	p, tenant, ok := s.authzTenant(w, r, "audit:read")
-	if !ok {
-		return
-	}
-	format := audit.Format(r.URL.Query().Get("format"))
-	if format == "" {
-		format = audit.DefaultFormat()
-	}
-	if !audit.ValidFormat(format) {
-		// Built from the engine's own registry: a list typed by hand here is how the
-		// CLI ended up telling operators that two working formats did not exist.
-		s.badRequest(w, r, "unknown export format (use "+audit.FormatList()+")")
-		return
-	}
-	from := queryInt64(r, "from", 1)
-	to, hasTo, terr := queryOptionalInt64(r, "to")
-	if terr != nil {
-		s.badRequest(w, r, terr.Error())
-		return
-	}
-	if hasTo && to < from {
-		s.badRequest(w, r, "to must be greater than or equal to from")
-		return
-	}
-	filters, _, ferr := parseAuditFilters(r)
-	if ferr != nil {
-		s.badRequest(w, r, ferr.Error())
-		return
-	}
-	ct := "text/plain; charset=utf-8"
-	if jsonPerLineFormat(format) {
-		// JSON-object-per-line formats stream as NDJSON.
-		ct = "application/x-ndjson; charset=utf-8"
-	}
-
-	// Page through the ledger in bounded, SHORT read transactions, writing each
-	// page to the client only AFTER its transaction closes — so a slow client
-	// never holds the single SQLite connection open (a wedge DoS otherwise). The
-	// chain is gap-free, so seq-keyset paging is exact.
-	const pageSize = 1000
-	cursor := from
-	var total, lastSeq int64
-	wrote := false
-	for {
-		var page []model.AuditEvent
-		// Export, not View: this is the customer's copy of their own ledger, so it
-		// survives a withdrawal of service — and is recorded on their chain when it is
-		// taken during one (core/suspension).
-		rerr := s.st.Export(r.Context(), tenant, func(sc store.ExportScope) error {
-			return sc.Audit().Walk(r.Context(), cursor, func(ev model.AuditEvent) error {
-				if hasTo && ev.Seq > to {
-					return errStopAuditRange
-				}
-				if len(page) >= pageSize {
-					return errStopWalk
-				}
-				page = append(page, ev)
-				return nil
-			})
-		})
-		full := errors.Is(rerr, errStopWalk)
-		rangeComplete := errors.Is(rerr, errStopAuditRange)
-		if rerr != nil && !full && !rangeComplete {
-			if !wrote {
-				s.writeError(w, r, rerr)
-			} else {
-				s.log.Error("api: audit export failed mid-stream", "err", rerr, "tenant", tenant)
-			}
-			return
-		}
-		if !wrote {
-			w.Header().Set("Content-Type", ct)
-			wrote = true
-		}
-		for _, ev := range page {
-			if !filters.matches(ev) {
-				continue
-			}
-			line, ferr := audit.FormatEvent(ev, format)
-			if ferr != nil {
-				s.log.Error("api: audit export format failed", "err", ferr)
-				return
-			}
-			if _, werr := w.Write([]byte(line + "\n")); werr != nil {
-				return // client gone
-			}
-			total, lastSeq = total+1, ev.Seq
-		}
-		if rangeComplete || !full {
-			break
-		}
-		cursor = page[len(page)-1].Seq + 1
-	}
-	// A completion terminator makes a truncated export detectable: its ABSENCE
-	// tells a SIEM the stream was cut short.
-	_, _ = w.Write([]byte(exportTerminator(format, total, lastSeq) + "\n"))
-
-	// Best-effort self-audit of the extraction (separate committed tx).
-	meta := map[string]any{
-		"format": string(format),
-		"from":   from,
-	}
-	if hasTo {
-		meta["to"] = to
-	}
-	if filterMeta := filters.meta(); len(filterMeta) > 0 {
-		meta["filters"] = filterMeta
-	}
-	if err := s.st.Mutate(r.Context(), tenant, func(sc store.Scope) error {
-		return appendAuditWithMeta(r.Context(), sc, p, "audit.export", "core.audit_event", "", meta)
-	}); err != nil {
-		s.log.Error("api: failed to record audit export", "err", err)
-	}
-}
-
-// jsonPerLineFormat reports whether an export format emits one JSON object per
-// line (NDJSON) rather than a text record. It decides both the Content-Type and
-// the shape of the stream terminator, so the two can never disagree — a JSON
-// stream whose last line is a `#` comment breaks precisely the consumers that
-// parse every line.
-func jsonPerLineFormat(f audit.Format) bool {
-	switch f {
-	case audit.FormatOTLP, audit.FormatOTLPEnvelope, audit.FormatOTLPLogRecord, audit.FormatOCSF:
-		return true
-	default:
-		return false
-	}
-}
-
-// exportTerminator is the final line of an audit export; its presence confirms
-// the consumer received the complete stream.
-func exportTerminator(f audit.Format, count, lastSeq int64) string {
-	if jsonPerLineFormat(f) {
-		return fmt.Sprintf(`{"export_complete":true,"count":%d,"last_seq":%d}`, count, lastSeq)
-	}
-	return fmt.Sprintf("# olivares-audit-export-complete count=%d last_seq=%d", count, lastSeq)
-}
-
 // handleAuditPubkey returns the engine's audit checkpoint verification key, so an
 // external party can verify exported checkpoints offline.
-func (s *Server) handleAuditPubkey(w http.ResponseWriter, r *http.Request) {
-	if _, _, ok := s.authzTenant(w, r, "audit:read"); !ok {
-		return
-	}
+func (s *Server) handleAuditPubkey(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
 	writeJSON(w, http.StatusOK, map[string]string{
 		"algorithm":  "ed25519",
 		"public_key": base64.StdEncoding.EncodeToString(s.signer.PublicKey()),

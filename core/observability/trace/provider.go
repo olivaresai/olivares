@@ -6,34 +6,21 @@ package trace
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"net/url"
-	"strings"
+	"sync"
+	"sync/atomic"
 
 	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
-	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
-	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
-	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
-	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/propagation"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
-	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	oteltrace "go.opentelemetry.io/otel/trace"
-	"go.opentelemetry.io/otel/trace/noop"
 )
 
 // instrumentationName is the OTel instrumentation scope for this package's spans
 // and metrics.
 const instrumentationName = "github.com/olivaresai/olivares/core/observability/trace"
-
-// OTLP/HTTP signal paths defined by the OTLP exporter specification.
-const (
-	otlpHTTPTracesPath  = "/v1/traces"
-	otlpHTTPMetricsPath = "/v1/metrics"
-)
 
 // Provider holds the composite W3C propagator and (when enabled) the recording
 // TracerProvider + MeterProvider + OTLP exporters. The propagator ALWAYS works
@@ -41,10 +28,16 @@ const (
 // mesh stitching hold even in no-op mode; only span recording and OTLP export are
 // gated on Enabled. A Provider is safe for concurrent use.
 type Provider struct {
+	current  atomic.Pointer[Provider]
+	updateMu sync.Mutex
+	stopped  bool
+	settings Settings
+
 	propagator    propagation.TextMapPropagator
 	tracer        oteltrace.Tracer
 	enabled       bool
 	genAICompat   bool
+	genAILatest   bool
 	genai         *genAIInstruments // nil when disabled
 	baggagePolicy providerBaggagePolicy
 
@@ -60,12 +53,14 @@ type Provider struct {
 // delay or fail boot — a tracing fault must never break the engine (docs/SECURITY-HARDENING.md).
 func New(ctx context.Context, cfg Config) (*Provider, error) {
 	p := &Provider{
+		settings: VisibleSettings(cfg),
 		// W3C Trace Context + Baggage, composed. The propagator is Level-2-aware: it
 		// parses the L2 random-trace-id flag and future traceparent versions forward-
 		// compatibly (rather than rejecting them) and never deletes/reorders an upstream
 		// tracestate member it did not write — exactly the read-first rule (docs/SECURITY-HARDENING.md).
 		propagator:    propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}),
 		genAICompat:   cfg.GenAICompat,
+		genAILatest:   cfg.GenAILatest,
 		baggagePolicy: compileProviderBaggage(cfg.ProviderBaggageAllowlist, cfg.providerBaggageRejection),
 	}
 	if p.baggagePolicy.state == baggagePolicyInvalid {
@@ -73,61 +68,7 @@ func New(ctx context.Context, cfg Config) (*Provider, error) {
 		otel.Handle(fmt.Errorf("trace: provider baggage policy rejected (%s); baggage propagation disabled", p.baggagePolicy.reason))
 	}
 
-	if !cfg.Enabled || strings.TrimSpace(cfg.Endpoint) == "" {
-		p.tracer = noop.NewTracerProvider().Tracer(instrumentationName)
-		return p, nil
-	}
-
-	res, err := resource.New(ctx,
-		resource.WithAttributes(
-			attribute.String("service.name", cfg.ServiceName),
-			attribute.String("service.version", cfg.ServiceVersion),
-		),
-	)
-	if err != nil {
-		// A resource-detection error must not deny tracing; fall back to a bare resource.
-		res = resource.NewSchemaless(
-			attribute.String("service.name", cfg.ServiceName),
-			attribute.String("service.version", cfg.ServiceVersion),
-		)
-	}
-
-	traceExp, err := buildTraceExporter(ctx, cfg)
-	if err != nil {
-		return nil, fmt.Errorf("trace: build OTLP trace exporter: %w", err)
-	}
-	metricExp, err := buildMetricExporter(ctx, cfg)
-	if err != nil {
-		_ = traceExp.Shutdown(ctx)
-		return nil, fmt.Errorf("trace: build OTLP metric exporter: %w", err)
-	}
-
-	tp := sdktrace.NewTracerProvider(
-		sdktrace.WithBatcher(traceExp),
-		sdktrace.WithResource(res),
-		// Parent-based: a sampled upstream (the client/mesh decision) is always
-		// honored; only roots are decided by the ratio.
-		sdktrace.WithSampler(sdktrace.ParentBased(sdktrace.TraceIDRatioBased(cfg.SampleRatio))),
-	)
-	mp := sdkmetric.NewMeterProvider(
-		sdkmetric.WithReader(sdkmetric.NewPeriodicReader(metricExp)),
-		sdkmetric.WithResource(res),
-	)
-
-	genai, err := newGenAIInstruments(mp.Meter(instrumentationName))
-	if err != nil {
-		_ = tp.Shutdown(ctx)
-		_ = mp.Shutdown(ctx)
-		return nil, fmt.Errorf("trace: build gen_ai instruments: %w", err)
-	}
-
-	p.tracer = tp.Tracer(instrumentationName)
-	p.enabled = true
-	p.genai = genai
-	p.tp = tp
-	p.mp = mp
-	p.shutdownFns = []func(context.Context) error{tp.Shutdown, mp.Shutdown}
-	return p, nil
+	return configureExport(ctx, cfg, p)
 }
 
 // Propagator returns the composite W3C Trace Context + Baggage propagator for
@@ -135,11 +76,56 @@ func New(ctx context.Context, cfg Config) (*Provider, error) {
 func (p *Provider) Propagator() propagation.TextMapPropagator { return p.propagator }
 
 // Enabled reports whether spans are recorded and exported (a collector is wired).
-func (p *Provider) Enabled() bool { return p.enabled }
+func (p *Provider) Enabled() bool { return p.active().enabled }
 
-// Shutdown flushes and stops the exporters. It is a no-op when disabled and is safe
-// to call once on engine shutdown. Errors from the providers are joined.
+// Settings reports this provider's applied configuration, with credentials redacted.
+func (p *Provider) Settings() Settings {
+	active := p.active()
+	settings := active.settings
+	settings.Enabled = active.enabled
+	return settings
+}
+
+// active snapshots the exporter for a request; existing transports retain this handle.
+func (p *Provider) active() *Provider {
+	if current := p.current.Load(); current != nil {
+		return current
+	}
+	return p
+}
+
+// Replace installs a freshly constructed provider without replacing middleware or clients.
+// The old exporter is flushed after the swap; a flush failure never undoes the new choice.
+func (p *Provider) Replace(ctx context.Context, next *Provider) error {
+	if next == nil || next == p || next.current.Load() != nil {
+		return errors.New("trace: replacement must be a new provider")
+	}
+	p.updateMu.Lock()
+	defer p.updateMu.Unlock()
+	if p.stopped {
+		_ = next.Shutdown(ctx)
+		return errors.New("trace: provider is stopped")
+	}
+	old := p.active()
+	p.current.Store(next)
+	if err := old.shutdown(ctx); err != nil {
+		otel.Handle(errors.New("trace: previous exporter could not flush"))
+	}
+	return nil
+}
+
+// Shutdown flushes and stops the active exporters. Repeated calls are harmless.
 func (p *Provider) Shutdown(ctx context.Context) error {
+	p.updateMu.Lock()
+	defer p.updateMu.Unlock()
+	if p.stopped {
+		return nil
+	}
+	p.stopped = true
+	return p.active().shutdown(ctx)
+}
+
+func (p *Provider) shutdown(ctx context.Context) error {
 	var firstErr error
 	for _, fn := range p.shutdownFns {
 		if err := fn(ctx); err != nil && firstErr == nil {
@@ -147,77 +133,4 @@ func (p *Provider) Shutdown(ctx context.Context) error {
 		}
 	}
 	return firstErr
-}
-
-// buildTraceExporter constructs the OTLP trace exporter for the configured protocol.
-func buildTraceExporter(ctx context.Context, cfg Config) (*otlptrace.Exporter, error) {
-	switch cfg.Protocol {
-	case ProtocolHTTP:
-		opts := []otlptracehttp.Option{}
-		if strings.Contains(cfg.Endpoint, "://") {
-			opts = append(opts, otlptracehttp.WithEndpointURL(httpSignalEndpointURL(cfg.Endpoint, otlpHTTPTracesPath)))
-		} else {
-			opts = append(opts, otlptracehttp.WithEndpoint(cfg.Endpoint))
-			if cfg.Insecure {
-				opts = append(opts, otlptracehttp.WithInsecure())
-			}
-		}
-		return otlptracehttp.New(ctx, opts...)
-	default:
-		opts := []otlptracegrpc.Option{}
-		if strings.Contains(cfg.Endpoint, "://") {
-			opts = append(opts, otlptracegrpc.WithEndpointURL(cfg.Endpoint))
-		} else {
-			opts = append(opts, otlptracegrpc.WithEndpoint(cfg.Endpoint))
-			if cfg.Insecure {
-				opts = append(opts, otlptracegrpc.WithInsecure())
-			}
-		}
-		return otlptracegrpc.New(ctx, opts...)
-	}
-}
-
-// buildMetricExporter constructs the OTLP metric exporter for the configured protocol.
-func buildMetricExporter(ctx context.Context, cfg Config) (sdkmetric.Exporter, error) {
-	switch cfg.Protocol {
-	case ProtocolHTTP:
-		opts := []otlpmetrichttp.Option{}
-		if strings.Contains(cfg.Endpoint, "://") {
-			opts = append(opts, otlpmetrichttp.WithEndpointURL(httpSignalEndpointURL(cfg.Endpoint, otlpHTTPMetricsPath)))
-		} else {
-			opts = append(opts, otlpmetrichttp.WithEndpoint(cfg.Endpoint))
-			if cfg.Insecure {
-				opts = append(opts, otlpmetrichttp.WithInsecure())
-			}
-		}
-		return otlpmetrichttp.New(ctx, opts...)
-	default:
-		opts := []otlpmetricgrpc.Option{}
-		if strings.Contains(cfg.Endpoint, "://") {
-			opts = append(opts, otlpmetricgrpc.WithEndpointURL(cfg.Endpoint))
-		} else {
-			opts = append(opts, otlpmetricgrpc.WithEndpoint(cfg.Endpoint))
-			if cfg.Insecure {
-				opts = append(opts, otlpmetricgrpc.WithInsecure())
-			}
-		}
-		return otlpmetricgrpc.New(ctx, opts...)
-	}
-}
-
-// httpSignalEndpointURL returns the OTLP/HTTP URL one signal exports to when Endpoint is a URL.
-// A URL whose path is empty or "/" is a base URL, so the signal path is set here: since
-// go.opentelemetry.io/otel v1.45.0, WithEndpointURL no longer appends it. Scheme (and so TLS
-// selection), user info, host, query and fragment are kept. A URL with any other path is the
-// existing explicit endpoint for both signals and is returned unchanged, as is a value that does
-// not parse or has no host; the exporter keeps its own handling and nothing here logs the value.
-func httpSignalEndpointURL(endpoint, signalPath string) string {
-	u, err := url.Parse(endpoint)
-	if err != nil || u.Host == "" || (u.Path != "" && u.Path != "/") {
-		return endpoint
-	}
-	signal := *u
-	signal.Path = signalPath
-	signal.RawPath = ""
-	return signal.String()
 }

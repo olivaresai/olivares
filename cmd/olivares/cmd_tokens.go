@@ -21,18 +21,8 @@ import (
 
 const tokensPath = "/v1/tokens"
 
-// `olivares tokens` is the CREDENTIAL half of the browser-free first run. Until it
-// existed, `olivares auth login --token` consumed something only the console or a
-// hand-written POST /v1/setup could produce: an install with no browser could
-// authenticate nothing, and every other command in this binary was unreachable.
-//
-// It is a thin client over /v1/tokens (core/api/server.go:809). Every decision
-// stays server-side: who may mint a cross-tenant token (superadmin only,
-// handlers_core.go:342), who may mint a bound one (token:write in that tenant,
-// :355), and who may see or revoke one (a token outside the caller's authority is
-// reported NOT FOUND, not forbidden, so this surface cannot be used as a
-// cross-tenant existence oracle — :387). The CLI adds no check of its own and
-// removes none.
+// Token authorization and tenant filtering stay server-side. Out-of-scope IDs
+// return not found to avoid a cross-tenant existence oracle.
 func newTokensCmd() *cobra.Command {
 	flags := &authClientFlags{}
 	root := &cobra.Command{
@@ -87,9 +77,7 @@ type cliIssuedToken struct {
 	RevokedID string `json:"revoked_id,omitempty"`
 }
 
-// revokedRole mutes a revoked token's row rather than colouring it red. A revoked
-// token is a completed lifecycle step, not a failure, and a list where half the
-// rows are red is a list nobody reads for red.
+// Revocation is a completed lifecycle step; mute the row rather than mark an error.
 func revokedRole(revoked bool) termrender.Role {
 	if revoked {
 		return termrender.RoleMuted
@@ -162,8 +150,8 @@ func tokensIssueCmd(client bootstrapClient) *cobra.Command {
 		Long: "Issue an API token. By default it is BOUND to the resolved tenant with --role, which is\n" +
 			"what a CI job or a collector should hold; --superadmin mints a cross-tenant token and is\n" +
 			"accepted only from a caller who is already a superadmin (the engine decides, not this\n" +
-			"command). The secret is printed once and never stored by the CLI — pass it to\n" +
-			"`olivares auth login --token` to save it in a client context.",
+			"command). The secret is printed once and never stored by the CLI — write it to a file and pass\n" +
+			"that to `olivares auth login --token-file <file>` (or - for stdin) to save it in a client context.",
 		Example: `  olivares tokens issue --name ci --tenant tenant-a --role admin
   olivares tokens issue --name platform --superadmin -o json`,
 		Args: cobra.NoArgs,
@@ -172,21 +160,12 @@ func tokensIssueCmd(client bootstrapClient) *cobra.Command {
 			if name == "" {
 				return exitcode.New(exitcode.Usage, fmt.Errorf("--name is required: a token without a name cannot be told apart in `tokens ls`"))
 			}
-			// Decided from the ARGUMENTS ALONE, before any request: the two shapes
-			// are exclusive in the engine (handlers_core.go:342-360) and saying so
-			// here costs no round trip and no ambiguity. This REFUSES a request; it
-			// never approves one — a caller passing --superadmin still has to be a
-			// superadmin as far as the engine is concerned.
+			// These shapes are exclusive. The engine still authorizes the caller.
 			if superadmin && (cmd.Flags().Changed("role") || cmd.Flags().Changed("tenant")) {
 				return exitcode.New(exitcode.Usage, fmt.Errorf(
 					"--superadmin mints a CROSS-TENANT token, so it takes neither --tenant nor --role"))
 			}
-			// NORMALIZE ONCE, THEN USE THAT VALUE EVERYWHERE. isKnownTokenRole
-			// validated strings.TrimSpace(role) while the body carried the raw one,
-			// so `--role " admin"` passed the local check and was then refused by the
-			// engine's IsRole, which compares exactly (core/auth/permission.go:39) —
-			// a legitimate value rejected for an accidental space, with an error from
-			// the far end that never mentions whitespace.
+			// Validate and send the same normalized role.
 			role = strings.TrimSpace(role)
 			if !superadmin && !isKnownTokenRole(role) {
 				return exitcode.New(exitcode.Usage, fmt.Errorf(
@@ -223,26 +202,8 @@ func tokensIssueCmd(client bootstrapClient) *cobra.Command {
 	return cmd
 }
 
-// tokensRotateCmd is the one verb in this family whose PROMISE was bigger than
-// the engine behind it.
-//
-// The route is two transactions, not one: handleRotateToken calls IssueToken,
-// which commits its own AuthMutate (core/auth/accounts.go:325), and only then
-// RevokeToken, which opens another (…:389). A failure between them — store,
-// audit, a canceled context — leaves the replacement PERSISTED and the old
-// secret STILL VALID, and the handler answers with an error before handing over
-// the new secret. That is a partial mutation whose credential-closing half fails
-// open, and it is a defect of the ENDPOINT: the CLI cannot fix it from here, and
-// widening the API for the CLI's convenience is not this branch's call to make.
-// It is written up for the endpoint's owner (a service-level RotateToken doing
-// both writes and both audit events inside ONE AuthMutate).
-//
-// What the CLI owns is the promise it prints. Both halves of this command used to
-// state a guarantee the engine does not provide — "then revokes the old one",
-// "every holder stops working immediately" — so an operator reading a failure had
-// every reason to believe nothing had happened. Now the text says what the engine
-// really does, and a failure ASKS THE PLANE what state it left behind and reports
-// it, instead of leaving the operator to assume the safe answer.
+// Rotation commits issuance before revocation; a failed request may leave both
+// tokens live. Probe the old token after failure rather than assume rollback.
 func tokensRotateCmd(client bootstrapClient) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "rotate <token-id>",
@@ -280,15 +241,8 @@ func tokensRotateCmd(client bootstrapClient) *cobra.Command {
 // not a search, so it walks a few pages and then says it could not tell.
 const maxRotationProbePages = 20
 
-// reportRotationAftermath answers the question a failed rotation leaves open and
-// the operator cannot answer from the error alone: IS THE OLD SECRET STILL LIVE?
-//
-// It writes to stderr and never changes the exit code — the command has already
-// failed and keeps the classification the plane earned (401 → 3, 5xx → 6). What it
-// adds is the state, measured rather than assumed, because the two outcomes need
-// opposite actions: a still-active token must be revoked by hand, and a revoked one
-// means a replacement secret exists that nobody was shown and that must be found
-// and revoked in `tokens ls`.
+// Report the old token's observed state on stderr, preserving the original exit
+// code. A replacement may exist even when the operator was not shown its secret.
 func reportRotationAftermath(cmd *cobra.Command, client bootstrapClient, id string) {
 	w := cmd.ErrOrStderr()
 	safeID := safeCLIValue(id, "")
@@ -313,11 +267,7 @@ func reportRotationAftermath(cmd *cobra.Command, client bootstrapClient, id stri
 	}
 }
 
-// findTokenByID looks one token up through the listing the engine already serves.
-// There is no GET /v1/tokens/{id} (core/api/server.go:809) and this branch does not
-// add one; the listing is authority-filtered server-side, so a token outside the
-// caller's authority is simply absent — which is reported as "cannot tell", never
-// as "it is gone".
+// The listing is authority-filtered: absence means "cannot tell", not "revoked".
 func findTokenByID(cmd *cobra.Command, client bootstrapClient, id string) (*cliTokenRow, error) {
 	cursor := ""
 	for page := 0; page < maxRotationProbePages; page++ {
@@ -366,8 +316,10 @@ func tokensRevokeCmd(client bootstrapClient) *cobra.Command {
 				tokensPath+"/"+bootstrapPathID(args[0]), nil, http.StatusNoContent); err != nil {
 				return err
 			}
-			_, err := fmt.Fprintf(cmd.OutOrStdout(), "revoked API token %s\n", safeCLIValue(args[0], ""))
-			return err
+			return renderOut(cmd, func(out io.Writer) error {
+				_, err := fmt.Fprintf(out, "revoked API token %s\n", safeCLIValue(args[0], ""))
+				return err
+			}, map[string]any{"id": args[0], "revoked": true})
 		},
 	}
 	addYesFlag(cmd, &yes)
@@ -405,10 +357,7 @@ func renderIssuedToken(cmd *cobra.Command, raw []byte, verb string) error {
 			return err
 		}
 	}
-	// The recommendation used to be `auth login --token …`, which puts the secret
-	// this command just minted into argv — readable by every process on the host
-	// through /proc, and written to the shell history file. The file/stdin form is
-	// the same command without that exposure.
+	// Keep secrets out of process arguments and shell history.
 	_, err := fmt.Fprintln(cmd.ErrOrStderr(),
 		"NOTE: the secret above is shown ONCE — the engine stores only its hash. Save it now and "+
 			"pass it by file, never in argv (`olivares auth login --token-file <file>`, or - for "+
@@ -416,11 +365,7 @@ func renderIssuedToken(cmd *cobra.Command, raw []byte, verb string) error {
 	return err
 }
 
-// isKnownTokenRole mirrors core/auth IsRole (permission.go:40). It is a USAGE
-// check, not an authorization one: it turns a typo into exit 2 with the list of
-// valid roles instead of a 400 from the plane. The engine still validates the role
-// itself and still enforces the role ceiling — a caller can never mint above its
-// own rank, and nothing here can change that.
+// Role spelling is a usage check; authorization and role ceilings stay server-side.
 func isKnownTokenRole(role string) bool {
 	switch strings.TrimSpace(role) {
 	case "viewer", "editor", "admin", "owner":
@@ -434,10 +379,7 @@ func completeTokenRole(_ *cobra.Command, _ []string, _ string) ([]string, cobra.
 	return []string{"viewer", "editor", "admin", "owner"}, cobra.ShellCompDirectiveNoFileComp
 }
 
-// addListPageFlags exposes the engine's OWN ?limit/?cursor parameters on a
-// listing. It is deliberately a pass-through and not a pagination policy: the
-// policy for the whole CLI is a separate, still-open decision, and inventing one
-// here would be a second answer to that question.
+// Pass through the engine's page size and cursor.
 func addListPageFlags(cmd *cobra.Command, limit *int, cursor *string) {
 	cmd.Flags().IntVar(limit, "limit", 0, "server-side page size (left out: the engine's default)")
 	cmd.Flags().StringVar(cursor, "cursor", "", "continue from the cursor a previous page reported")

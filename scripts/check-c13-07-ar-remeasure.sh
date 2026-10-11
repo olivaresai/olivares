@@ -106,7 +106,7 @@ hold_visible = visible_markdown(hold)
 if "Unique leftover unique vs original OPEN" not in doc_visible:
     raise SystemExit("remasure doc lost visible uniqueness vs original OPEN")
 if re.search(r"FIRMA A claimed|overlay remasured live", doc_visible, flags=re.I):
-    raise SystemExit("remasure doc visibly claims a close this lote does not have")
+    raise SystemExit("remasure doc visibly claims a close this batch does not have")
 
 if data.get("schema") != "c13-07-ar-holds-remeasure/v2":
     raise SystemExit("unknown schema %r" % data.get("schema"))

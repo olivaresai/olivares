@@ -50,7 +50,7 @@ const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const ROOT = path.resolve(REPO, process.env.OLIVARES_WRANGLER_PROJECT || 'docs-site');
 
 function couldNotLook(why) {
-  console.error(`check-wrangler-pin: NO HE PODIDO MIRAR: ${why}`);
+  console.error(`check-wrangler-pin: COULD NOT CHECK: ${why}`);
   process.exit(2);
 }
 

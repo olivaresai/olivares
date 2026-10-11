@@ -136,6 +136,9 @@ func announceQuickstart(ctx context.Context, out io.Writer, eng *engine, addr co
 				fmt.Fprintf(&addresses, "Console (LAN): %s\n", a.Origin)
 			}
 		}
+		if notice := wildcardBindNotice(addr); notice != "" {
+			addresses.WriteString(notice + "\n")
+		}
 	} else if addr.loopback {
 		addresses.WriteString("This engine listens on loopback only (this computer).\n")
 	}

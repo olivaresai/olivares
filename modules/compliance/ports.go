@@ -21,12 +21,15 @@ import (
 // ---- AutonomySource: an agent's scheduling/autonomy signal (module IV /) -----
 
 // AutonomySignal is the MINIMAL-DATA autonomy view of an agent the risk classifier
-// folds in: whether it runs on a schedule and whether it acts unattended. It is a
-// signal, never a payload.
+// folds in. Native orchestration reports declared intent, not observed actuation.
+// It is a signal, never a payload.
 type AutonomySignal struct {
-	// Scheduled reports the agent has one or more governed schedules.
+	// State is declared, none_declared or partial for native declarations. An
+	// absent or unrecognized state is unknown, including historical adapters.
+	State string
+	// Scheduled reports one or more active governed schedule declarations.
 	Scheduled bool
-	// Autonomous reports the agent acts event-driven / unattended.
+	// Autonomous reports a declared cron/event trigger, not unattended execution.
 	Autonomous bool
 	// Detail is a short, non-sensitive note (e.g. "3 active cron schedules").
 	Detail string
@@ -39,8 +42,8 @@ type AutonomySource interface {
 	Autonomy(ctx context.Context, tenant model.TenantID, agentRef string) (AutonomySignal, error)
 }
 
-// coreAutonomy is the default: it knows nothing on its own, so an un-wired autonomy
-// seam can only ever LOWER the suggested tier, never raise it on a fabricated signal.
+// coreAutonomy knows nothing on its own. Its false flags are not proof that an
+// agent is non-autonomous; the assessment retains an unknown declaration state.
 type coreAutonomy struct{}
 
 func (coreAutonomy) Autonomy(_ context.Context, _ model.TenantID, _ string) (AutonomySignal, error) {

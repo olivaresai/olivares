@@ -77,7 +77,7 @@ func TestLifecycleUseDataReachesExternalProviderReads(t *testing.T) {
 	}
 }
 
-// These external providers cannot implement reporting's private binding method.
+// External providers bind through api.DataConsumer, the module's one binding seam.
 type externalDataBinding struct {
 	data  api.ModuleData
 	calls int

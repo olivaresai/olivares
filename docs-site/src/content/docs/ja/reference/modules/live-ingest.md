@@ -1,14 +1,14 @@
 ---
 title: "Live-ingest — インプロセスの observe プロデューサー"
 description: >-
-  31 のモジュールの 1 つ。アウトオブプロセスのコネクタが emit できない
+  32 のモジュールの 1 つ。アウトオブプロセスのコネクタが emit できない
   detective イベントを公開する「ライブタップ」プロデューサー。deny-closed
   かつ最小データであり、生のコンテンツを一切移動せず、所有するすべての
   observe 半分は偽装ではなく正直に空である。Partial — オプトインかつ
   env ゲート付き。
 ---
 
-Live-ingest（`modules/liveingest`）は配線済み 31 モジュールの 1 つであり、能力スロット
+Live-ingest（`modules/liveingest`）は配線済み 32 モジュールの 1 つであり、能力スロット
 ではなく**インプロセスのプロデューサー**である。歴史的な番号付きマップ I–XXIII には
 含まれない。これは 1 つのアーキテクチャ上の
 理由で存在する。アウトオブプロセスの `SourceConnector` は、gRPC コントラクト上で
@@ -83,6 +83,6 @@ observe 半分は正直に休眠状態であり、バックエンドがそれに
 - [Module IX — セキュリティ、ガードレール、監査](/ja/reference/modules/ix-security/) — このモジュールが公開する `guardrail.observed` フィードを消費する検出器チェーン。
 - [Module XVI — 音声およびリアルタイムエージェント](/ja/reference/modules/xvi-voice/) — （休眠中の）`voice.telemetry.observed` 半分のコンシューマー。
 - [Module II — ライブオペレーションおよびセッション](/ja/reference/modules/ii-sessions/) — live-ingest イベント経由ではなく、既に消費しているシグナルから直接、独自の `goal` / `agent_ref` / `summary` を導出する。
-- [モジュールカタログ](/ja/reference/modules/overview/) — 31 のモジュールと、このインプロセスプロデューサーが支える正直な Govern/Observe-vs-Actuate の切り分け。
+- [モジュールカタログ](/ja/reference/modules/overview/) — 32 のモジュールと、このインプロセスプロデューサーが支える正直な Govern/Observe-vs-Actuate の切り分け。
 - [アーキテクチャ概要](/ja/explanation/architecture/overview/) — インプロセスモジュールとアウトオブプロセスコネクタがどこに位置するか。
 - [正直さと限界](/ja/start/honesty-and-limits/) — なぜ空の半分が偽装ではなく宣言されるのか。

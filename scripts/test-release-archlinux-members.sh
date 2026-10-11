@@ -14,7 +14,7 @@ LC_ALL=C
 export LC_ALL
 
 could_not_look() {
-	printf 'test-release-archlinux-members: NO HE PODIDO MIRAR — %s\n' "$*" >&2
+	printf 'test-release-archlinux-members: COULD NOT CHECK — %s\n' "$*" >&2
 	exit 2
 }
 root="$(unset CDPATH; cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
@@ -30,7 +30,7 @@ ok() { passed=$((passed + 1)); printf 'ok - %s\n' "$1"; }
 not_ok() { failed=$((failed + 1)); printf 'not ok - %s\n' "$1"; }
 
 # --- K1: the release index kind -----------------------------------------------------------
-VER=26.10.0
+VER=1.0
 DIST="$W/dist"
 mkdir -p "$DIST" "$W/tmp"
 printf '0123456789abcdef0123456789abcdef01234567\n' >"$W/release-commit.txt"
@@ -64,7 +64,7 @@ findings() {
 	printf '%s\n' "$@" >"$W/names"
 	bash -c '. "$1"; package_member_findings "$2"' _ "$W/recipe.sh" "$W/names"
 }
-V=26.10.0
+V=1.0
 base=(
 	"olivares_${V}_linux_amd64.deb" "olivares_${V}_linux_arm64.deb"
 	"olivares-${V}-1.x86_64.rpm" "olivares-${V}-1.aarch64.rpm"

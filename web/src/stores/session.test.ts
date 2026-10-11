@@ -83,3 +83,46 @@ describe('session store — credential generation', () => {
     expect(localStorage.getItem('olivares.session')).toBeNull()
   })
 })
+
+// HU-R37: a session the engine ended dropped to Sign in with no reason.
+describe('session store — why a session ended', () => {
+  it('says expired when its own expiry passed, and ended when it was refused earlier', () => {
+    useSessionStore.setState({ expiresAt: '2000-01-01T00:00:00Z' })
+    useSessionStore.getState().ended()
+    expect(useSessionStore.getState().endReason).toBe('expired')
+    useSessionStore.setState({
+      csrfToken: 'c',
+      sessionId: SID,
+      expiresAt: '2999-01-01T00:00:00Z',
+    })
+    useSessionStore.getState().ended()
+    expect(useSessionStore.getState().endReason).toBe('ended')
+  })
+
+  it('records no reason for a sign-out, and forgets it at the next sign-in', () => {
+    useSessionStore.getState().clear()
+    expect(useSessionStore.getState().endReason).toBeNull()
+    useSessionStore.setState({ sessionId: SID })
+    useSessionStore.getState().ended()
+    useSessionStore
+      .getState()
+      .setSession({ csrfToken: 'n', sessionId: 'new', expiresAt: EXP })
+    expect(useSessionStore.getState().endReason).toBeNull()
+  })
+})
+
+// SR4C on 793f2e30: the client answers one request's 401 twice (the failed refresh, then the
+// request itself), and the second notice erased the reason.
+describe('session store — a repeated end notice', () => {
+  it('keeps the reason a second notice finds, and a sign-out still clears it', () => {
+    useSessionStore.setState({
+      sessionId: SID,
+      expiresAt: '2999-01-01T00:00:00Z',
+    })
+    useSessionStore.getState().ended()
+    useSessionStore.getState().ended()
+    expect(useSessionStore.getState().endReason).toBe('ended')
+    useSessionStore.getState().clear()
+    expect(useSessionStore.getState().endReason).toBeNull()
+  })
+})

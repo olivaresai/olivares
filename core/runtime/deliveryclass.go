@@ -4,7 +4,10 @@
 
 package runtime
 
-import "github.com/olivaresai/olivares/core/eventbus"
+import (
+	"github.com/olivaresai/olivares/core/eventbus"
+	"github.com/olivaresai/olivares/core/modulespec"
+)
 
 // moduleDeliveryClass maps a module to its event-bus QoS delivery class. Only the
 // OPTIONAL-OUTPUT modules are droppable; every other module defaults to the durable
@@ -27,10 +30,18 @@ import "github.com/olivaresai/olivares/core/eventbus"
 // Everything else — security, governance, recording, finops, eventing, inventory,
 // sessions, access-map, health, models, capabilities, orchestration, claudeadoption,
 // liveingest, voice — projects durable state or drives enforcement and stays block.
-var moduleDeliveryClass = map[string]eventbus.DeliveryClass{
-	"observability": eventbus.ClassTelemetry,
-	"notify":        eventbus.ClassState,
-}
+var moduleDeliveryClass = func() map[string]eventbus.DeliveryClass {
+	classes := make(map[string]eventbus.DeliveryClass)
+	for _, spec := range modulespec.All() {
+		switch spec.DeliveryClass {
+		case "telemetry":
+			classes[spec.DeliveryName] = eventbus.ClassTelemetry
+		case "state":
+			classes[spec.DeliveryName] = eventbus.ClassState
+		}
+	}
+	return classes
+}()
 
 // deliveryClassForModule returns a module's QoS lane, defaulting to the durable
 // ClassEnforcement lane for any module not explicitly declared droppable. Defaulting

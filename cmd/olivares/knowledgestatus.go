@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"sync"
 
+	"github.com/olivaresai/olivares/cmd/olivares/internal/inferencepep"
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
@@ -201,7 +202,7 @@ type providerRefEmbedder interface {
 // retrieval had succeeded.
 type governedKnowledgeEmbedder struct {
 	inner  knowledge.Embedder
-	gate   modelAccessGate
+	gate   inferencepep.ModelAccessGate
 	status *knowledgePlaneStatus
 	log    *slog.Logger
 
@@ -209,7 +210,7 @@ type governedKnowledgeEmbedder struct {
 	data api.ModuleData
 }
 
-func newGovernedKnowledgeEmbedder(inner knowledge.Embedder, gate modelAccessGate, status *knowledgePlaneStatus, log *slog.Logger) *governedKnowledgeEmbedder {
+func newGovernedKnowledgeEmbedder(inner knowledge.Embedder, gate inferencepep.ModelAccessGate, status *knowledgePlaneStatus, log *slog.Logger) *governedKnowledgeEmbedder {
 	return &governedKnowledgeEmbedder{inner: inner, gate: gate, status: status, log: log}
 }
 

@@ -271,5 +271,19 @@
     "truncatedHint": "Es gibt mehr Zugriffsregeln als angezeigt; diese Seite nimmt Zeilen nach ID. Die Markierungen dieser Zeilen spiegeln NUR die geladenen Regeln: Allows, die eine Einschränkung einführen oder erlaubte Ziele ergänzen, können fehlen, und Forbids, die Zugriff abziehen, ebenfalls — die Seite kann also weiter ODER enger wirken als die Wirklichkeit, und ein Subjekt ohne geladene Regel erscheint gar nicht. Leite hieraus keinen effektiven Zugriff ab: die Engine liest alle Seiten, bevor sie entscheidet, und löst ein Principal über Nutzer, Rolle und Gruppe zugleich auf, was eine Zeile nicht zeigen kann.",
     "groupsTruncated": "{{n}} Gruppen geladen; es gibt mehr",
     "groupsTruncatedHint": "Es gibt mehr Modellgruppen als angezeigt; diese Seite nimmt Zeilen nach ID. Eine hier fehlende Gruppe belegt nicht, dass sie nicht existiert — eine Regel kann sie weiterhin adressieren."
+  },
+  "availability": {
+    "label": "Modell",
+    "placeholder": "Standardmodell des Werkzeugs verwenden oder ein Modell eingeben",
+    "default": "Standardmodell des Werkzeugs verwenden",
+    "discovering": "Modelle werden ermittelt.",
+    "stale": "Die Modellliste ist veraltet",
+    "failed": "Modelle konnten nicht aktualisiert werden. Prüfen Sie die Anbieter-Verbindung oder melden Sie sich erneut an.",
+    "unsupported": "Die automatische Modellerkennung ist für dieses Werkzeug nicht verfügbar. Verwenden Sie sein Standardmodell.",
+    "empty": "Dieser Anbieter hat keine Modelle aufgelistet.",
+    "provider": "Anbieter: {{provider}}",
+    "observed": "Zuletzt beobachtet: {{time}}",
+    "checked": "Zuletzt geprüft: {{time}}",
+    "connection": "Anbieter-Einstellungen öffnen"
   }
 }

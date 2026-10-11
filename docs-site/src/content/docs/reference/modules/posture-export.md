@@ -6,6 +6,8 @@ description: >-
   control tower pulls to enrich its own view. A neutral-JSON projection, not a
   verified native push.
 ---
+SIEM and ITSM push, OTLP downloads, external trace and metric delivery, and posture export require Business. Community keeps local observability, trace-context propagation, saved settings and `olivares dr backup`. Generic chat, email and webhook notifications remain available in Community.
+
 
 Posture export (`modules/posture-export`) is the engine's **outbound posture
 surface**: a single read-only endpoint a control tower polls to enrich its own
@@ -28,6 +30,11 @@ inside **one audited transaction** with three projections:
   permitted accesses, plus unused-grant and inventory-grant counts.
 - **`findings`** — security findings projected as refs and a `detail_hash` only,
   filterable by `?severity=` floor and `?category=`.
+- **`projection_readiness`** — booleans for `inventory`, `posture_drift` and
+  `findings`, reporting whether their inventory, access-map and security producers
+  are running. This does not attest freshness or full coverage. A stopped or
+  unavailable producer adds a partial-evidence warning to `note`; retained data
+  remains exportable. The CLI summary and downloaded document carry the same note.
 
 Every export is **minimal-data** — refs, hashes and relations only, never a raw
 payload or secret — and a defensive redact pass scrubs every free-form field.

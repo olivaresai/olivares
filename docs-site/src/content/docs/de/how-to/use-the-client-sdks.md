@@ -19,7 +19,7 @@ und das die [API-Referenz](/reference/api/) rendert:
 
 :::note[Distributionsstatus]
 Die SDKs liegen im Produkt-Repository unter `clients/` und werden mit ihm versioniert.
-Diese Seite behauptet nicht, dass die 26.10.1-Clients auf pkg.go.dev, Maven Central,
+Diese Seite behauptet nicht, dass die Clients von Olivares <!-- release -->0.1<!-- /release --> auf pkg.go.dev, Maven Central,
 PyPI oder npm liegen. Beziehen Sie sie aus dem Repo
 (Go-Modulpfad oben, `mvn -f clients/java install`, `pip install ./clients/python`,
 `npm install ./clients/typescript`), sofern Sie ein Registry-Paket für diese

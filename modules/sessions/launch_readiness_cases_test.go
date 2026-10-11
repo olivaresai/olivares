@@ -113,6 +113,7 @@ func TestLaunchReadiness_AuthTransportMatrix(t *testing.T) {
 				WithProviderDriver(NewCodexDriver()), WithDriverProgram("codex", bins.present),
 				WithProviderDriver(NewGrokDriver()), WithDriverProgram("grok", bins.present),
 				WithProviderDriver(NewOpenCodeDriver()), WithDriverProgram("opencode", bins.present),
+				WithProviderDriver(NewGeminiDriver()), WithDriverProgram("gemini-cli", bins.present),
 				WithProviderCredentialSource("codex", mintRefusingProviderSource{t}),
 				WithLaunchGate(refusingLaunchGate{t}), WithStopGate(refusingStopGate{t}),
 			)
@@ -236,6 +237,18 @@ func TestLaunchReadiness_AuthTransportMatrix(t *testing.T) {
 				doc, r := f.readiness(newProfile("opencode", AuthSourceAccountHome), "")
 				if r.code != http.StatusOK || doc.ConfigurationState != ReadinessReady {
 					t.Fatalf("= %d state=%q %s", r.code, doc.ConfigurationState, r.raw)
+				}
+			})
+
+			t.Run("gemini account home is ready and speaks its own protocol", func(t *testing.T) {
+				doc, r := f.readiness(newProfile("gemini-cli", AuthSourceAccountHome), "")
+				if r.code != http.StatusOK || doc.ConfigurationState != ReadinessReady {
+					t.Fatalf("= %d state=%q %s", r.code, doc.ConfigurationState, r.raw)
+				}
+				if doc.TransportCapabilities.Protocol != protocolGeminiACP ||
+					doc.TransportCapabilities.IO != ioBidirectional ||
+					doc.TransportCapabilities.Input != inputText {
+					t.Fatalf("capabilities = %+v", doc.TransportCapabilities)
 				}
 			})
 

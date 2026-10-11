@@ -8,7 +8,6 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -16,12 +15,12 @@ import (
 	"github.com/olivaresai/olivares/core/store"
 )
 
-// B1 — the profiled launch path of the operate runtime.
+// The profiled launch path of the operate runtime.
 //
 // A profiled launch differs from a legacy one in exactly three places: the profile
 // is resolved server-side into a home snapshot before anything durable happens
 // (resolveLaunchProfileInto), the child is started under that snapshot's homes
-// (runtime_bridge.go buildLaunchSpec), and the provider's session id announced by
+// (child_launch.go childSpec), and the provider's session id announced by
 // the child is bound under the profile's scope inside one transaction with the run
 // row (captureProfiledSessionID).
 //
@@ -49,77 +48,33 @@ import (
 // bearers, the PEP env, templates, budgets, the stop gate, the claim and the fence
 // all apply exactly as before, and a profile never stores a credential of its own.
 
-// The environment variables a profile owns on the child. All are explicit launch
-// values, never inherited for a profiled launch and never accepted from a
-// caller's env_allow, a gate's injection or a credential adapter.
-const (
-	envUserHome              = "HOME"
-	envClaudeConfigDir       = "CLAUDE_CONFIG_DIR"
-	envGrokHome              = "GROK_HOME"
-	envOpenCodeConfigDir     = "OPENCODE_CONFIG_DIR"
-	envOpenCodeConfig        = "OPENCODE_CONFIG"
-	envOpenCodeConfigContent = "OPENCODE_CONFIG_CONTENT"
-	envOpenCodeTUIConfig     = "OPENCODE_TUI_CONFIG"
-	envXDGConfigHome         = "XDG_CONFIG_HOME"
-	envXDGDataHome           = "XDG_DATA_HOME"
-	envXDGStateHome          = "XDG_STATE_HOME"
-	envXDGCacheHome          = "XDG_CACHE_HOME"
-	envXDGRuntimeDir         = "XDG_RUNTIME_DIR"
-)
-
-// providerHomeEnvName reports whether name selects a provider HOME on the child.
-//
-// The set is the whole family, not just the current driver's, and that is the
-// point: a Claude launch that accepted CODEX_HOME from a caller would be handing
-// the child a home nobody authorized for a provider nobody selected. GROK_HOME is
-// here for the same reason ahead of its driver — refusing a variable costs
-// nothing, and the refusal is what has to exist BEFORE the driver does.
-func providerHomeEnvName(name string) bool {
-	switch name {
-	case envUserHome, envClaudeConfigDir, envCodexHome, envGrokHome,
-		envOpenCodeConfigDir, envOpenCodeConfig, envOpenCodeConfigContent, envOpenCodeTUIConfig:
-		return true
-	default:
-		return false
+// nativeACPToolName is the tool a driver with no mapping for template instructions
+// or tool restrictions names in its refusal, "" for any other driver.
+func nativeACPToolName(driver string) string {
+	switch driver {
+	case providerDriverOpenCode:
+		return "OpenCode"
+	case providerDriverGemini:
+		return "Gemini CLI"
 	}
+	return ""
 }
 
-// openCodeReservedEnvName is the XDG family reserved for OpenCode profiled
-// launches only. It is not a global home name: existing drivers may still set
-// explicit XDG values of their own.
-func openCodeReservedEnvName(name string) bool {
-	switch name {
-	case envXDGConfigHome, envXDGDataHome, envXDGStateHome, envXDGCacheHome, envXDGRuntimeDir:
-		return true
-	default:
-		return false
-	}
-}
-
-func openCodeXDGMapping(userHome string) []EnvVar {
-	return []EnvVar{
-		{Name: envXDGConfigHome, Value: filepath.Join(userHome, ".config")},
-		{Name: envXDGDataHome, Value: filepath.Join(userHome, ".local", "share")},
-		{Name: envXDGStateHome, Value: filepath.Join(userHome, ".local", "state")},
-		{Name: envXDGCacheHome, Value: filepath.Join(userHome, ".cache")},
-	}
-}
-
-func refuseOpenCodeUnsupportedControls(p CreateRunParams) error {
+func refuseACPUnsupportedControls(p CreateRunParams, tool string) error {
 	if len(p.AllowedTools) > 0 && launchPreset(p) != PresetEditsAndCommands {
-		return badRequest("this OpenCode driver has no mapping for template tool restrictions; refusing the launch rather than discarding them")
+		return badRequest("this " + tool + " driver has no mapping for template tool restrictions; refusing the launch rather than discarding them")
 	}
 	if strings.TrimSpace(p.Instructions) != "" {
-		return badRequest("this OpenCode driver has no mapping for template instructions; refusing the launch rather than discarding them")
+		return badRequest("this " + tool + " driver has no mapping for template instructions; refusing the launch rather than discarding them")
 	}
 	if launchPreset(p) == PresetCustom {
-		return badRequest("this OpenCode driver cannot apply the session template's tool restrictions; choose a built-in permission preset")
+		return badRequest("this " + tool + " driver cannot apply the session template's tool restrictions; choose a built-in permission preset")
 	}
 	return nil
 }
 
 // refuseGrokWithoutItsSandbox refuses a Grok launch whose preset needs bubblewrap on a server
-// without it, with the reason (HU2-34), before anything is spawned.
+// without it, with the reason, before anything is spawned.
 func refuseGrokWithoutItsSandbox(p CreateRunParams, driver string) error {
 	if driver == providerDriverGrok && grokSandboxUnavailable(launchPreset(p)) {
 		return conflictErr(grokSandboxMissing)
@@ -130,30 +85,6 @@ func refuseGrokWithoutItsSandbox(p CreateRunParams, driver string) error {
 func refuseNativeCustomPreset(p CreateRunParams, driver string) error {
 	if driver != providerDriverClaude && launchPreset(p) == PresetCustom {
 		return badRequest("this tool cannot apply the session template's tool restrictions; choose a built-in permission preset")
-	}
-	return nil
-}
-
-func validateOpenCodeReservedInjection(driver string, env []EnvVar) error {
-	if driver != providerDriverOpenCode {
-		return nil
-	}
-	for _, item := range env {
-		if openCodeReservedEnvName(item.Name) {
-			return forbiddenErr("launch denied: " + item.Name + " is reserved for the OpenCode profiled launch mapping")
-		}
-	}
-	return nil
-}
-
-func validateOpenCodeEnvAllow(driver string, names []string) error {
-	if driver != providerDriverOpenCode {
-		return nil
-	}
-	for _, name := range names {
-		if openCodeReservedEnvName(name) {
-			return badRequest("env_allow may not name " + name + " for an OpenCode profiled launch: the profile owns the XDG mapping")
-		}
 	}
 	return nil
 }
@@ -185,7 +116,7 @@ func (m *Module) configHomeEnvForDriver(driver string) string {
 }
 
 // resolveLaunchProfileInto turns p.ProviderProfileRef into p.ProviderHome, the
-// SERVER's snapshot. B2 refuses a missing profile before any launch effect. It refuses,
+// SERVER's snapshot. A missing profile is refused before any launch effect. It refuses,
 // deny-closed, an unknown/disabled/retired/foreign/non-operable profile, a home
 // that no longer resolves, and an env_allow that names a variable the profile
 // owns — resolving that by order would be exactly the accident this refuses.
@@ -194,15 +125,10 @@ func (m *Module) resolveLaunchProfileInto(ctx context.Context, tenant model.Tena
 	p.ProviderProfileRef = strings.TrimSpace(p.ProviderProfileRef)
 	if p.ProviderProfileRef == "" {
 		p.ProviderHome = nil // never trusted from the caller
-		if m.rt.profiledLaunchesEnabled {
-			return badRequest("select a provider profile before launching a session")
-		}
-		return nil
+		return badRequest("select a provider profile before launching a session")
 	}
-	for _, name := range p.EnvAllow {
-		if providerHomeEnvName(name) {
-			return badRequest("env_allow may not name " + name + " for a profiled launch: the profile owns it")
-		}
+	if err := validateProfiledEnvAllow(p.EnvAllow); err != nil {
+		return err
 	}
 	snap, policy, err := m.resolveLaunchProfile(ctx, tenant, p.ProviderProfileRef)
 	if err != nil {
@@ -231,28 +157,13 @@ func (m *Module) resolveLaunchProfileInto(ctx context.Context, tenant model.Tena
 	if err := validateOpenCodeEnvAllow(snap.Driver, p.EnvAllow); err != nil {
 		return err
 	}
-	if snap.Driver == providerDriverOpenCode {
-		if err := refuseOpenCodeUnsupportedControls(*p); err != nil {
+	if tool := nativeACPToolName(snap.Driver); tool != "" {
+		if err := refuseACPUnsupportedControls(*p, tool); err != nil {
 			return err
 		}
 	}
 	p.ProviderHome = &snap
 	p.orchestrationGrant = policy.workGrant
-	return nil
-}
-
-// validateProfiledInjectedEnv refuses a gate injection that names a variable the
-// profile owns. The gate's env is otherwise authoritative over the host's; for a
-// profiled launch the profile is authoritative over the gate for these two names,
-// and the conflict is refused rather than ordered.
-func validateProfiledInjectedEnv(env []EnvVar) error {
-	for _, item := range env {
-		if providerHomeEnvName(item.Name) {
-			// A decision, not an outage: the launch is refused with the status the
-			// other deny-closed verdicts carry, and denyClosedErr passes it through.
-			return forbiddenErr("launch denied: the launch gate injected " + item.Name + ", which the provider profile owns")
-		}
-	}
 	return nil
 }
 
@@ -335,7 +246,7 @@ func (m *Module) captureRegisteredProfiledSessionID(ctx context.Context, lr *liv
 			if err := m.bindManagedProviderAliasWithin(ctx, sc, in); err != nil {
 				return err
 			}
-			// B2: the plane's own live row for this run, proven in the SAME
+			// The plane's own live row for this run, proven in the SAME
 			// transaction as the alias. It is keyed by canonical sid, so a cooperative
 			// observation that copies the external id lands elsewhere.
 			managedRec, err := m.upsertManagedLive(ctx, sc, in, lr.profile.EnvironmentRef, at)
@@ -357,7 +268,7 @@ func (m *Module) captureRegisteredProfiledSessionID(ctx context.Context, lr *liv
 			antes := rec.String(colLastActivityAt)
 			rec[colLastActivityAt] = model.NewTimestamp(at).String()
 			conservaElSelloMasNuevo(rec, antes)
-			// The run→row half of the managed join, persisted with the proof (B2).
+			// The run→row half of the managed join, persisted with the proof.
 			rec[colRunLiveRef] = managedRec.String(model.ColID)
 			_, err = repo.Update(ctx, rec)
 			return err
@@ -366,7 +277,7 @@ func (m *Module) captureRegisteredProfiledSessionID(ctx context.Context, lr *liv
 	err := bind()
 	if errors.Is(err, store.ErrConflict) {
 		// The whole losing transaction rolled back; a fresh attempt re-reads the
-		// committed state (the SG-00 pattern proven on Postgres). Either the same pair
+		// committed state (the pattern the canonical identity proves on Postgres). Either the same pair
 		// is now bound (idempotent success) or the row moved on (a real refusal).
 		err = bind()
 	}
@@ -402,21 +313,19 @@ func (m *Module) captureRegisteredProfiledSessionID(ctx context.Context, lr *liv
 	}
 }
 
-// applySessionPolicy imposes the profile's DECLARED session policy on a launch
-// (provider_profile_policy.go), and is the point at which "the product governs
-// which profile launches and then narrows nothing" stops being true.
+// applySessionPolicy resolves the profile's session policy for a launch
+// (provider_profile_policy.go).
 //
 // Two rules, and both are decisions rather than conveniences:
 //
-//  1. THE TOOL SURFACE IS DENY-CLOSED. A profiled launch whose profile declares
-//     nothing gets an EMPTY surface, which the Claude form emits as `--tools ""`.
-//     The measured alternative is what the golden path found: 34 tools including
-//     Bash, Write and Edit, handed to a child in a directory nobody chose.
+//  1. A Claude profile with no tool declaration gets `--tools default`. An
+//     explicit empty list gets `--tools ""`; a non-empty list limits the built-in
+//     tools to that list. Permission checks and confinement apply separately.
 //
 //  2. THE DECLARED PERMISSION MODE NEVER REPLACES ONE THE LAUNCH NAMED. The
-//     person's preset at launch is the session's preset (TARGET §3, PEP
-//     2026-10-01): a profile "default" turned an explicit acceptEdits into default,
-//     and a wider profile mode could replace "ask". So the profile's mode applies
+//     person's preset at launch is the session's preset: a profile "default" would
+//     turn an explicit acceptEdits into default, and a wider profile mode could
+//     replace "ask". So the profile's mode applies
 //     only to a launch that named none (until the migration removes it), and never
 //     over a template: a template's terms are approval-bound and re-resolved per
 //     launch, and a profile is an identity. A bound that forbids the resulting mode
@@ -424,8 +333,7 @@ func (m *Module) captureRegisteredProfiledSessionID(ctx context.Context, lr *liv
 //
 // A driver whose owned launch form cannot express a tool surface never receives
 // one: the declaration is refused when it is MADE (validateSessionPolicyInput), so
-// reaching here with one is a stored policy from before that check — it is
-// dropped, loudly, rather than silently ignored.
+// reaching here with a stored declaration refuses the launch with 422.
 func applySessionPolicy(p *CreateRunParams, driver string, policy sessionPolicy) error {
 	if policy.PermissionMode != "" {
 		if !validPermissionModes[policy.PermissionMode] {

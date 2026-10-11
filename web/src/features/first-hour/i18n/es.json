@@ -2,7 +2,9 @@
   "tools": {
     "claude": "Claude Code",
     "codex": "Codex",
-    "grok": "Grok Build"
+    "grok": "Grok Build",
+    "opencode": "OpenCode",
+    "gemini-cli": "Gemini CLI"
   },
   "status": {
     "installed": "Instalado",
@@ -13,7 +15,7 @@
     "usesKey": "Usa tu clave de API: {{name}}",
     "usesLocal": "Usa el servidor de modelos local: {{name}}",
     "keyRefused": "Se rechazó la clave de API {{name}}. Reemplázala en Proveedores.",
-    "keyUnchecked": "No se pudo comprobar la clave {{name}}. Pruébala en Proveedores."
+    "noSignIn": "Esta herramienta no tiene un inicio de sesión oficial que ejecutar aquí. Usa el comando de terminal en Otras formas."
   },
   "actions": {
     "install": "Instalar",
@@ -23,7 +25,9 @@
     "signInClaude": "Iniciar sesión con Claude",
     "signInChatGPT": "Iniciar sesión con ChatGPT",
     "useApiKey": "Usar una clave de API en su lugar",
-    "signInGrok": "Iniciar sesión con tu cuenta de xAI"
+    "signInGrok": "Iniciar sesión con tu cuenta de xAI",
+    "signInGoogle": "Iniciar sesión con Google",
+    "signIn": "Iniciar sesión"
   },
   "signIn": {
     "openLink": "Abrir la página de inicio de sesión",
@@ -32,7 +36,11 @@
     "continue": "Continuar",
     "enterCode": "En la página de inicio de sesión, introduce este código:",
     "waiting": "Esperando a que termines en la página de inicio de sesión…",
-    "expires": "El código sirve durante 15 minutos. Cancelar detiene el inicio de sesión en este servidor."
+    "expires": "El código sirve durante 15 minutos. Cancelar detiene el inicio de sesión en este servidor.",
+    "copy": "Copiar",
+    "copied": "Copiado",
+    "starting": "Iniciando el inicio de sesión…",
+    "lostTouch": "Se perdió el contacto con el servidor. El inicio de sesión puede seguir en curso."
   },
   "errors": {
     "status": "No se pudo leer el estado de la herramienta.",
@@ -44,7 +52,10 @@
   "steps": {
     "install": {
       "title": "Instala una herramienta de agente",
-      "body": "Olivares ejecuta el Claude Code o el Codex oficial en este servidor. Con uno basta."
+      "body": "Olivares ejecuta el Claude Code o el Codex oficial en este servidor. Con uno basta.",
+      "orUse": "O usa una clave de API o un modelo local en su lugar:",
+      "addKey": "Añadir una clave de API",
+      "addLocal": "Añadir un modelo local"
     },
     "signIn": {
       "title": "Inicia sesión en ella",
@@ -53,7 +64,7 @@
     },
     "start": {
       "title": "Inicia una sesión",
-      "body": "Elige una carpeta y, si quieres, di qué hacer primero."
+      "body": "Elige una herramienta y, si quieres, di qué hacer primero."
     },
     "progress": "{{done}} de 3 hechos"
   },
@@ -62,6 +73,9 @@
     "notReady": "{{tool}} todavía no puede empezar.",
     "folder": "Carpeta",
     "folderHint": "Una carpeta de este servidor. Déjala vacía para empezar en una carpeta nueva.",
+    "folderNew": "Una carpeta nueva para esta sesión",
+    "folderChange": "Cambiar carpeta",
+    "readingFolder": "Leyendo la carpeta de la última sesión…",
     "prompt": "Primer mensaje (opcional)",
     "promptPlaceholder": "¿Qué debe hacer primero?",
     "more": "Más opciones",
@@ -70,7 +84,7 @@
     "starting": "Iniciando…",
     "needTool": "Primero instala una herramienta e inicia sesión en ella.",
     "dialogTitle": "Nueva sesión",
-    "dialogDescription": "Elige una carpeta y di qué hacer.",
+    "dialogDescription": "Elige una herramienta y di qué hacer.",
     "advanced": "Opciones avanzadas de inicio",
     "secrets": "Secretos como variables de entorno",
     "secretsHint": "La sesión lee cada secreto elegido del almacén desde la variable que indiques. El valor nunca se muestra, se registra ni se escribe en la carpeta.",
@@ -78,7 +92,23 @@
     "secretUse": "Dar {{name}} a esta sesión",
     "secretVariable": "Variable para {{name}}",
     "secretsManage": "Gestionar secretos de sesión",
-    "openTools": "Abrir Herramientas de IA"
+    "openTools": "Abrir Herramientas de IA",
+    "model": "Modelo",
+    "providerDefault": "Predeterminado ({{model}})",
+    "nativeDefault": "Predeterminado de {{tool}}",
+    "modelChoice": "Modelos que superaron la última prueba de conexión de esta clave.",
+    "chooseModel": "Elige un modelo: esta clave no tiene modelo predeterminado.",
+    "noTestedModel": "Ningún modelo de esta clave ha superado todavía su prueba de conexión: prueba la clave en Proveedores.",
+    "openProviders": "Abrir Proveedores",
+    "profile": "Perfil",
+    "profileNotSignedIn": "Sin iniciar sesión",
+    "profileNeedsKey": "Falta una clave"
+  },
+  "lists": {
+    "runsTruncated": "Sesiones recientes: {{count}} cargadas; hay más.",
+    "runsHint": "Las sesiones anteriores no aparecen en esta lista.",
+    "foldersTruncated": "Carpetas registradas: {{count}} cargadas; hay más.",
+    "foldersHint": "Algunas carpetas registradas no aparecen en esta lista."
   },
   "permission": {
     "editsOnly": "Solo editar archivos",

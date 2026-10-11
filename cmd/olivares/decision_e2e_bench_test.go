@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/olivaresai/olivares/cmd/olivares/internal/inferencepep"
 	"github.com/olivaresai/olivares/connectors/claude"
 	claudeapi "github.com/olivaresai/olivares/connectors/claude-api"
 	"github.com/olivaresai/olivares/core/api"
@@ -22,6 +23,7 @@ import (
 	"github.com/olivaresai/olivares/modules/governance"
 	"github.com/olivaresai/olivares/modules/inferenceproxy"
 	"github.com/olivaresai/olivares/modules/models"
+	"github.com/olivaresai/olivares/modules/sessions/hookpep"
 )
 
 var (
@@ -43,7 +45,7 @@ type decisionBenchmarkHarness struct {
 // tenant, firm-token, governance, and inference-policy wiring. The measured
 // paths still use the real authenticator, kill-switch repository, policy
 // repository, signed audit ledger, and transaction engine.
-func newDecisionBenchmarkHarness(b *testing.B) *decisionBenchmarkHarness {
+func newDecisionBenchmarkHarness(b testing.TB) *decisionBenchmarkHarness {
 	b.Helper()
 	ctx := context.Background()
 	gov := governance.New()
@@ -96,7 +98,7 @@ func newDecisionBenchmarkHarness(b *testing.B) *decisionBenchmarkHarness {
 	return &decisionBenchmarkHarness{st: st, tenant: tenant, bearer: bearer, gov: gov, proxy: proxy}
 }
 
-func mintDecisionBenchmarkToken(b *testing.B, st store.Store, tenant model.TenantID) string {
+func mintDecisionBenchmarkToken(b testing.TB, st store.Store, tenant model.TenantID) string {
 	b.Helper()
 	credential, err := auth.NewCredential(auth.PrefixToken)
 	if err != nil {
@@ -104,13 +106,20 @@ func mintDecisionBenchmarkToken(b *testing.B, st store.Store, tenant model.Tenan
 	}
 	ctx := context.Background()
 	err = st.AuthMutate(ctx, func(as store.AuthScope) error {
-		_, err := as.Tokens().Create(ctx, model.APIToken{
+		user, err := as.Users().Create(ctx, model.User{
+			Email: "decision-bench@example.test", DisplayName: "Decision benchmark", Status: model.StatusActive,
+		})
+		if err != nil {
+			return err
+		}
+		_, err = as.Tokens().Create(ctx, model.APIToken{
 			Name:          "decision-bench-agent",
-			UserID:        model.NewID(),
+			UserID:        user.ID,
 			Selector:      credential.Selector,
 			SecretHash:    credential.SecretHash,
 			BoundTenantID: tenant,
 			Role:          auth.RoleEditor,
+			Scope:         auth.VerbRead + " " + auth.VerbWrite,
 			AgentRef:      "agent@e2e.test",
 		})
 		return err
@@ -121,7 +130,7 @@ func mintDecisionBenchmarkToken(b *testing.B, st store.Store, tenant model.Tenan
 	return credential.Token
 }
 
-func seedMandatoryProxyPolicy(b *testing.B, st store.Store, tenant model.TenantID) {
+func seedMandatoryProxyPolicy(b testing.TB, st store.Store, tenant model.TenantID) {
 	b.Helper()
 	ctx := context.Background()
 	err := st.Mutate(ctx, tenant, func(sc store.Scope) error {
@@ -156,22 +165,22 @@ func seedMandatoryProxyPolicy(b *testing.B, st store.Store, tenant model.TenantI
 // per-call kill-switch store read before the in-memory policy/PDP decision.
 func BenchmarkHookDecideEndToEnd(b *testing.B) {
 	h := newDecisionBenchmarkHarness(b)
-	pol := hookPolicyDoc{Default: claude.DecisionAllow}
-	decider := &claudeHookDecider{
-		tenants: map[model.TenantID]resolvedTenant{
-			h.tenant: {tenant: h.tenant, requireFirm: true, policy: pol},
+	pol := hookpep.PolicyDoc{Default: claude.DecisionAllow}
+	decider := newClaudeHookDecider(&hookpep.Decider{
+		Tenants: map[model.TenantID]hookpep.ResolvedTenant{
+			h.tenant: hookTenant(b, h.tenant, true, pol),
 		},
-		authr: auth.NewAuthenticator(h.st, nil),
-		eval:  fixedEval{allow: true},
-		stops: h.gov,
-		store: h.st,
-		clock: time.Now,
-		log:   discardLog(),
-	}
+		Authr: auth.NewAuthenticator(h.st, nil),
+		Eval:  fixedEval{allow: true},
+		Stops: h.gov,
+		Store: h.st,
+		Clock: time.Now,
+		Log:   discardLog(),
+	})
 	in := claude.HookDecisionInput{
 		Event:        "PreToolUse",
 		Tool:         "Read",
-		ResourceKind: hookResourceKindFile,
+		ResourceKind: hookpep.ResourceKindFile,
 		ResourceRef:  "/srv/acme/Public/readme.txt",
 		Mode:         "read",
 		Identity: claude.HookIdentity{
@@ -206,16 +215,16 @@ func BenchmarkHookDecideEndToEnd(b *testing.B) {
 // fixtures so no external provider or mutable budget state enters the result.
 func BenchmarkProxyAuthorizeEndToEnd(b *testing.B) {
 	h := newDecisionBenchmarkHarness(b)
-	decider := &inferenceProxyDecider{
-		surface:    "direct",
-		authr:      auth.NewAuthenticator(h.st, nil),
-		models:     &fakeProxyModels{v: models.ModelAccessVerdict{Allowed: true}},
-		budget:     &fakeProxyBudget{bc: finops.BudgetCheck{Allowed: true}},
-		killSwitch: h.gov,
-		policy:     h.proxy,
-		store:      h.st,
-		clock:      time.Now,
-		log:        discardLog(),
+	decider := &inferencepep.Decider{
+		Surface:    "direct",
+		Auth:       auth.NewAuthenticator(h.st, nil),
+		Models:     &fakeProxyModels{v: models.ModelAccessVerdict{Allowed: true}},
+		Budget:     &fakeProxyBudget{bc: finops.BudgetCheck{Allowed: true}},
+		KillSwitch: h.gov,
+		Policy:     h.proxy,
+		Store:      h.st,
+		Clock:      time.Now,
+		Log:        discardLog(),
 	}
 	req := userReq("scale envelope decision", false)
 

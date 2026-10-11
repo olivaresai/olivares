@@ -6,6 +6,12 @@ description: >-
   on, the receiver limits that apply to each transport, and the two places where
   a projection is not a spec-complete envelope.
 ---
+SIEM and ITSM push, OTLP downloads, external trace and metric delivery, and posture export require Business. Community keeps local observability, trace-context propagation, saved settings and `olivares dr backup`. Generic chat, email and webhook notifications remain available in Community.
+
+
+:::note[Business]
+Audit export (`GET /v1/audit/export`, `olivares audit export`), directory archives and external archive verification require Business. Community keeps the signed ledger, `olivares audit verify` and `olivares dr backup`; export routes and commands return HTTP 501 or exit 9. Audit forwarding and DDIL transfers carrying audit segments also require Business.
+:::
 
 This page is the **egress contract**: what leaves the control plane, in which
 dialect, over which transport, and what a receiver does with it. It is written
@@ -53,7 +59,7 @@ one shared catalog so the lists cannot drift apart:
 |---|---|---|
 | Ledger export (`GET /v1/audit/export?format=…`) | `cef\|leef\|syslog\|otlp\|otlp_envelope\|otlp_log_record\|ocsf` | `cef` |
 | Eventing sink (`sink_format` on a push subscription) | `ocsf\|cef\|leef\|syslog\|otlp\|otlp_envelope\|json` | `ocsf` |
-| Notification connectors (`filelog`, `splunkhec`, `s3archive`, `siem`) | `json\|cef\|leef\|syslog\|otlp\|otlp_envelope\|ocsf\|asim` | `json` |
+| Notification connectors (`filelog`, `splunkhec`, `s3archive` (Business: Regulated Operations), `siem`) | `json\|cef\|leef\|syslog\|otlp\|otlp_envelope\|ocsf\|asim` | `json` |
 | syslog connector | `syslog\|cef\|leef` | `syslog` |
 
 The ledger export has no raw-JSON passthrough — its JSON shapes are the OTLP forms
@@ -61,7 +67,7 @@ above. `json` means two different deliveries: the eventing sink posts the raw
 captured event envelope (the structured passthrough, no dialect transform), while
 the notification connectors render a minimal notification projection — the
 displayable fields, not the original payload. All four notification connectors
-accept `asim`, `s3archive` included. A format outside its surface's list is
+accept `asim`, `s3archive` (Business: Regulated Operations) included. A format outside its surface's list is
 rejected: a typo at authoring or configuration time gets an error naming the
 surface's accepted tokens, and a corrupted stored value is refused at encode time
 (naming the corrupt spelling, not the list); nothing silently falls back to JSON.

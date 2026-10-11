@@ -11,13 +11,14 @@ Eine Quelle hat genau eine Aufgabe: Sie **beobachtet** ein externes System und *
 
 Konkret implementiert eine Quelle ein kleines Interface — `Open` (einmal konfigurieren), `Gather` (laufen, emittierend), `Close` (freigeben) — und während `Gather` übergibt sie der Engine durch einen Sink jeweils eine Beobachtung. Die Engine besitzt das Scheduling: Eine Streaming-Quelle (ein Log-Tail, ein Receiver) blockiert in `Gather` und emittiert, bis sie abgebrochen wird; eine Batch-Quelle erledigt ihre Arbeit und kehrt zurück, und die Engine entscheidet, wann sie wieder laufen soll. Der Connector besitzt niemals seinen eigenen Timer.
 
-Es gibt genau drei Arten von Beobachtung, die eine Quelle emittieren kann:
+Es gibt genau vier Arten von Beobachtung, die eine Quelle emittieren kann:
 
 | Beobachtung | Was sie trägt | Verwendet von |
 |---|---|---|
 | `edge` | Ein Ursprung (Agent / Identität / Sitzung) hat eine Ressource berührt, mit einem Read/Write-Modus | Die R/RW-Access-Map |
 | `cost` | Modell-/Provider-Nutzungskosten | FinOps |
 | `finding` | Ein Guardrail-/Red-Team-/Forensik-Finding | Security |
+| `metric` | Ein Messwert ohne Kostenbezug | Produktivitäts- und Nutzungsmetriken |
 
 Die Menge ist absichtlich geschlossen — ein Dritter kann keine neue Beobachtungsart einführen. Die Engine **hebt** jede emittierte Beobachtung auf den In-Process-Event-Bus, wo Module sie konsumieren, ohne an die Quelle gekoppelt zu sein, die sie erzeugt hat. Speziell für die Access Map löst die Engine die String-Referenzen des Connectors zu Entitäten auf und merged die Beobachtung in eine persistierte Access-Edge.
 
@@ -140,13 +141,13 @@ Die genauen Schlüssel innerhalb des `config`-Blocks jedes Connectors (Log-Pfade
 
 ### Eine unkonfigurierte Quelle warnt ehrlich
 
-Die Engine schlägt sicher fehl, nicht laut, wenn nichts verkabelt ist:
+Beim Start wird zwischen einer nicht gesetzten Variable und einer konfigurierten Datei unterschieden:
 
 - Wenn `OLIVARES_SOURCES_CONFIG` **nicht gesetzt** ist, startet die Engine ohne Quellen.
-- Wenn die Datei **fehlt, nicht lesbar oder kein gültiges JSON** ist, **warnt die Engine und fährt fort** ohne Quellen — sie stürzt beim Boot nicht ab.
+- Wenn die konfigurierte Datei **fehlt, nicht lesbar ist oder ungültiges JSON enthält**, beendet sich `olivares serve` **mit Exit-Code `1`**. Der Fehler beginnt mit `load sources operator config: OLIVARES_SOURCES_CONFIG` und enthält `refusing to start instead of silently omitting operator configuration`.
 - Wenn die Quellenliste **leer** ist, warnt die Engine, dass kein Connector ingestieren wird und dass das Estate auf keinem Live-Traffic läuft.
 
-In jedem Fall sagt das Boot-Log dir klar, dass nichts Echtes verkabelt ist, statt mit einer leeren Map stillschweigend gesund zu wirken. Eine ehrliche Warnung ist das Design: Eine leere Access Map sollte niemals wie eine saubere aussehen.
+Korrigieren Sie bei einer konfigurierten Datei den Pfad, die Leserechte oder das JSON und starten Sie neu. Die Engine lässt die Operator-Konfiguration nicht stillschweigend weg.
 
 ## Wo das läuft
 

@@ -28,6 +28,7 @@ package vault
 
 import (
 	"context"
+	"errors"
 	"net/url"
 	"regexp"
 	"sort"
@@ -75,6 +76,7 @@ type Source struct {
 // Compile-time proof that Source satisfies both contracts.
 var (
 	_ sdk.SourceConnector          = (*Source)(nil)
+	_ sdk.SourceChecker            = (*Source)(nil)
 	_ identitysource.GraphProvider = (*Source)(nil)
 )
 
@@ -125,6 +127,22 @@ func (s *Source) Open(_ context.Context, cfg sdk.Config) error {
 
 // Close releases resources; this connector holds none.
 func (s *Source) Close(context.Context) error { return nil }
+
+// Check proves Vault answers with this configuration: one read-only lookup of the
+// token itself, which every token may make. Open contacts nothing, so that the engine
+// starts while Vault is away; `olivares sources test` calls this after Open (ACN-11).
+// With no token the source runs offline and there is nothing to contact, which is
+// said rather than reported as an answer.
+func (s *Source) Check(ctx context.Context) error {
+	if s.token == "" {
+		return errors.New("vault: no token is configured, so the source runs offline and contacts nothing")
+	}
+	if s.client == nil {
+		return errors.New("vault: the source is not open")
+	}
+	var resp struct{}
+	return s.client.GetJSON(ctx, "/v1/auth/token/lookup-self", nil, &resp)
+}
 
 // listResponse is the shape of Vault's LIST (?list=true) replies.
 type listResponse struct {

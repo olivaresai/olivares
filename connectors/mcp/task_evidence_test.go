@@ -1102,8 +1102,8 @@ func taskHandleUpstreamFn(taskID string) func(UpstreamRequest) (json.RawMessage,
 // --- review round-1 regressions -------------------------------------------
 
 // errUpstreamRPC is the PRODUCTION shape of a strictly valid upstream JSON-RPC
-// ERROR: mcpUpstreamForwarder returns {State: completed} together with a non-nil
-// error for it (cmd/olivares/mcpgateway.go). Round-1 F-13: the connector fake
+// ERROR: mcpgateway.UpstreamForwarder returns {State: completed} together with a non-nil
+// error for it (cmd/olivares/internal/mcpgateway/forwarder.go). Round-1 F-13: the connector fake
 // mapped every error to not_sent and therefore could not represent this leg at
 // all — the very leg F-02 exploits.
 var errUpstreamRPC = &dispatchError{"mcp gateway: upstream rpc -32000 task cannot be canceled"}

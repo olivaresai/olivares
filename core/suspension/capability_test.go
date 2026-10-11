@@ -79,7 +79,7 @@ func TestGuardsPreserveRolloutStater(t *testing.T) {
 			t.Fatalf("%s: directory status=%+v supported=%t err=%v",
 				name, status, supported, err)
 		}
-		if status.Enabled || status.ControlMode != store.DirectoryControlStaged ||
+		if status.Enabled || status.ControlMode != store.DirectoryControlStaged || //nolint:staticcheck // SA1019: pins the deprecated field's published false until removal
 			status.WriterPosture != store.DirectoryWriterSQLiteCapability ||
 			status.ExpectedGeneration != 1 {
 			t.Fatalf("%s: forwarded directory status = %+v", name, status)

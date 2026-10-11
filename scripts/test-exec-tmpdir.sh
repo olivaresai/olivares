@@ -37,31 +37,31 @@ rc=$?
 if [ "$rc" = "0" ] && [ -d "$r" ]; then
 	printf '#!/bin/sh\nexit 0\n' >"$r/.p-banco"; chmod +x "$r/.p-banco" 2>/dev/null
 	if "$r/.p-banco" 2>/dev/null && case "$r" in */run-*) true ;; *) false ;; esac; then
-		paso "devuelve un directorio PROPIO DE LA CORRIDA y ese directorio EJECUTA de verdad"
+		paso "returns a directory OWNED BY THE RUN and that directory really EXECUTES"
 	elif "$r/.p-banco" 2>/dev/null; then
-		malo "ejecuta pero devolvio la raiz compartida ($r): dos corridas se pisarian y nadie puede limpiar"
+		malo "executes but returned the shared root ($r): two runs would collide and no one could clean up"
 	else
-		malo "devolvio $r y NO ejecuta: el ayudante no esta sondeando"
+		malo "returned $r and it does NOT execute: the helper is not probing"
 	fi
 	rm -f "$r/.p-banco"
 	# ⛔ Y SE BORRA EL RUN, no solo la sonda (the reviewer, A-05). El banco dejaba un `run-NNN` colgado
 	#    en la raiz compartida: un guion que vigila fugas de scratch fugando scratch.
 	rmdir "$r" 2>/dev/null || rm -rf "$r"
 else
-	malo "no devolvio ningun directorio (rc $rc) en un arbol donde su hermano si ejecuta"
+	malo "returned no directory (rc $rc) in a tree where its sibling does execute"
 fi
 
 # ── 2 · RECHAZA un directorio que no ejecuta ──────────────────────────────────────────────────
 if [ "$TMP_EJECUTA" = "1" ]; then
-	printf 'SALTADO  el temporal de esta caja EJECUTA, asi que aqui no hay un noexec real con el que\n'
-	printf '         probar el rechazo. NO es un ok: la mitad que importa se queda sin ejercer.\n'
+	printf 'SKIPPED  this host temporary directory EXECUTES, so no real noexec directory is available to\n'
+	printf '         test rejection. This is NOT a pass: the decisive half remains untested.\n'
 else
 	r="$( . "$LIB"; OLIVARES_EXEC_TMPDIR="$T/uno" olivares_exec_tmpdir "$T/dos" )"
 	rc=$?
 	if [ "$rc" != "0" ] && [ -z "$r" ]; then
-		paso "con los dos candidatos en un temporal noexec REAL, sale rc 1 y no inventa una ruta"
+		paso "with both candidates in a REAL noexec temporary directory, returns rc 1 without inventing a path"
 	else
-		malo "acepto un directorio que no ejecuta (rc $rc, ruta '$r'): el motor no podria lanzar nada"
+		malo "accepted a directory that does not execute (rc $rc, path '$r'): the engine could not launch anything"
 	fi
 fi
 
@@ -75,18 +75,18 @@ src = open(sys.argv[1]).read()
 viejo = '\t\tif "$probe" 2>/dev/null; then'
 nuevo = '\t\tif true; then  # MUTANTE: no se corre la sonda, se acepta el candidato'
 mut = src.replace(viejo, nuevo, 1)
-assert mut != src, "el mutante de la sonda NO se aplico"
+assert mut != src, "the probe mutant was NOT applied"
 open(sys.argv[2], "w").write(mut)
 PY
 if [ "$TMP_EJECUTA" = "1" ]; then
-	printf 'SALTADO  el mutante de la sonda no se puede matar sin un noexec real (ver caso 2).\n'
+	printf 'SKIPPED  the probe mutant cannot be killed without a real noexec directory (see case 2).\n'
 else
 	r="$( . "$mS"; OLIVARES_EXEC_TMPDIR="$T/tres" olivares_exec_tmpdir "$T/cuatro" )"
 	rc=$?
 	if [ "$rc" = "0" ] && [ -n "$r" ]; then
-		paso "el mutante que quita la sonda ACEPTA el noexec: el caso 2 lo caza"
+		paso "the mutant that removes the probe ACCEPTS noexec: case 2 catches it"
 	else
-		malo "el mutante sobrevivio (rc $rc): el caso 2 no acredita la sonda"
+		malo "the mutant survived (rc $rc): case 2 does not verify the probe"
 	fi
 fi
 
@@ -94,7 +94,7 @@ fi
 # ⛔ ES EL TRINQUETE QUE DE VERDAD ENVEJECE BIEN. Arreglar los guiones de hoy no impide que manana
 #    alguien anada un `"$BIN" serve` sin el, y ese arranque quedaria mudo y deny-closed. Se cuenta
 #    sobre el ARBOL, no sobre una lista escrita a mano.
-faltan=""
+missing_inputs=""
 total=0
 for f in "$RAIZ"/scripts/launch-state-captures.sh "$RAIZ"/scripts/web-e2e-demo.sh \
 	"$RAIZ"/scripts/smoke-agentops.sh "$RAIZ"/scripts/quickstart-smoke.sh; do
@@ -112,16 +112,16 @@ for f in "$RAIZ"/scripts/launch-state-captures.sh "$RAIZ"/scripts/web-e2e-demo.s
 		anterior="$(sed -n "$((n - 1))p" "$f")"
 		case "$linea$anterior" in
 		*'TMPDIR="${EXEC_TMP:-${TMPDIR:-/tmp}}"'*) : ;;
-		*) faltan="$faltan $(basename "$f"):$n" ;;
+		*) missing_inputs="$missing_inputs $(basename "$f"):$n" ;;
 		esac
 	done < <(command grep -n '"\$BIN" serve' "$f" | cut -d: -f1)
 done
-if [ "$total" -ge 6 ] && [ -z "$faltan" ]; then
-	paso "los $total arranques del motor de los cuatro guiones llevan el TMPDIR sondeado"
-elif [ -n "$faltan" ]; then
-	malo "arranques SIN el TMPDIR sondeado:$faltan"
+if [ "$total" -ge 6 ] && [ -z "$missing_inputs" ]; then
+	paso "all $total engine starts in the four scripts use the probed TMPDIR"
+elif [ -n "$missing_inputs" ]; then
+	malo "starts WITHOUT the probed TMPDIR:$missing_inputs"
 else
-	malo "solo encontre $total arranques y esperaba 6 o mas: ¿cambio la forma de arrancar el motor?"
+	malo "found only $total starts and expected 6 or more: has engine startup changed?"
 fi
 
 # ── 5 · CADA GUION LIMPIA SU PROPIO SCRATCH ───────────────────────────────────────────────────
@@ -138,11 +138,11 @@ for f in "$RAIZ"/scripts/launch-state-captures.sh "$RAIZ"/scripts/web-e2e-demo.s
 	command grep -q 'rm -rf.*EXEC_TMP' "$f" || sin_limpieza="$sin_limpieza $(basename "$f")"
 done
 if [ "$mirados" = "4" ] && [ -z "$sin_limpieza" ]; then
-	paso "los cuatro guiones borran su scratch de plugins al salir (no acumulan una extraccion por corrida)"
+	paso "all four scripts remove their plugin scratch on exit (no extraction accumulates per run)"
 elif [ -n "$sin_limpieza" ]; then
-	malo "guiones que NO limpian su scratch:$sin_limpieza"
+	malo "scripts that do NOT clean up their scratch:$sin_limpieza"
 else
-	malo "solo encontre $mirados de los 4 guiones: la lista y el arbol no coinciden"
+	malo "found only $mirados of the 4 scripts: the list and tree disagree"
 fi
 
 # ── 5-bis · EL REHUSE, VISTO CORTAR ───────────────────────────────────────────────────────────
@@ -185,17 +185,17 @@ calco_rehusa() { # $1 = lanzador; rc 0 = rehusa con su mensaje
 	#    como deuda: con la tuberia, esta pata mata el gancho de la flota entera.
 	#    La forma sin tuberia es una cadena aqui-documento: el patron se busca sobre texto ya
 	#    capturado y no hay productor al que matar.
-	[ "$rc" != "0" ] && command grep -q 'NO ARRANCO: ningun directorio temporal EJECUTA' <<<"$out"
+	[ "$rc" != "0" ] && command grep -q 'CANNOT START: no temporary directory allows EXECUTION' <<<"$out"
 }
 
 _cr_rc=0
 calco_rehusa launch-state-captures.sh || _cr_rc=$?
 if [ "$_cr_rc" = 3 ]; then
-	paso "NO HE PODIDO MIRAR: /tmp EJECUTA en esta caja, el caso de los dos noexec no se monta"
+	paso "COULD NOT CHECK: /tmp EXECUTES on this host, so the two-noexec case cannot be set up"
 elif [ "$_cr_rc" = 0 ]; then
-	paso "con los dos candidatos noexec el lanzador REHUSA (rc != 0) y dice por que: el seguro corta"
+	paso "with both candidates noexec the launcher REJECTS (rc != 0) and explains why: the guard stops it"
 else
-	malo "el lanzador NO rehusa con los dos candidatos noexec: avisa y arranca, que es no asegurar"
+	malo "the launcher does NOT reject both noexec candidates: it warns and starts, leaving the guard ineffective"
 fi
 
 # ── 6 · LLAMAR Y LIMPIAR DEVUELVE LA RAIZ A SU CUENTA ─────────────────────────────────────────
@@ -213,9 +213,9 @@ done
 despues_n=0
 [ -d "$RAIZ_SCRATCH" ] && despues_n="$(find "$RAIZ_SCRATCH" -mindepth 1 -maxdepth 1 | wc -l | tr -d ' ')"
 if [ "$antes_n" = "$despues_n" ]; then
-	paso "tres llamadas con su limpieza dejan la raiz igual ($antes_n entradas): no acumula"
+	paso "three calls with cleanup leave the root unchanged ($antes_n entries): no accumulation"
 else
-	malo "la raiz paso de $antes_n a $despues_n entradas: el ayudante o su limpieza fugan"
+	malo "the root grew from $antes_n to $despues_n entries: the helper or its cleanup leaks"
 fi
 
 # ── 7 · CONCURRENCIA: N llamadas a la vez, N exitos ───────────────────────────────────────────
@@ -241,9 +241,9 @@ done
 wait
 n_ok="$(find "$MARCAS" -type f | wc -l | tr -d ' ')"
 if [ "$n_ok" = "$N_CONC" ]; then
-	paso "$N_CONC llamadas SIMULTANEAS dan $N_CONC exitos: la sonda no se pisa a si misma"
+	paso "$N_CONC SIMULTANEOUS calls yield $N_CONC successes: the probe does not collide with itself"
 else
-	malo "de $N_CONC llamadas simultaneas solo $n_ok tuvieron exito: la sonda se pisa (nombre compartido)"
+	malo "of $N_CONC simultaneous calls only $n_ok succeeded: the probe collides (shared name)"
 fi
 
 # ── 8 · EL TRAP SE ARMA ANTES DEL PRIMER TEMPORAL ─────────────────────────────────────────────
@@ -261,9 +261,9 @@ for f in "$RAIZ"/scripts/launch-state-captures.sh "$RAIZ"/scripts/web-e2e-demo.s
 	[ "$t" -lt "$m" ] || tarde="$tarde $(basename "$f"):trap=$t,mktemp=$m"
 done
 if [ -z "$tarde" ]; then
-	paso "en los cuatro guiones el trap se arma ANTES del primer temporal: sin ventana"
+	paso "in all four scripts the trap is armed BEFORE the first temporary directory: no gap"
 else
-	malo "guiones con el trap DESPUES del primer temporal:$tarde"
+	malo "scripts with the trap AFTER the first temporary directory:$tarde"
 fi
 
 # ── LA PURGA POR EDAD, Y EL TESTIGO DE QUE NADIE LO USA ───────────────────
@@ -320,14 +320,14 @@ _purga_caso() {
 _PR="$(_purga_caso)"; _PRC=$?
 case "$_PRC" in
 0) : ;;
-2) malo "NO HE PODIDO MIRAR: el fixture de la purga no se pudo montar (mktemp/touch), rc 2" ;;
-3) paso "NO HE PODIDO MIRAR: el padre del repo no EJECUTA, la purga no se puede montar aqui" ;;
-4) malo "NO HE PODIDO MIRAR: no pude sourcear la libreria para probar la purga" ;;
-*) malo "NO HE PODIDO MIRAR: rc INESPERADO $_PRC de _purga_caso — no esta enumerado, y un rc sin nombre no se ignora" ;;
+2) malo "COULD NOT CHECK: the purge fixture could not be set up (mktemp/touch), rc 2" ;;
+3) paso "COULD NOT CHECK: the repo parent does not EXECUTE, so the purge cannot be set up here" ;;
+4) malo "COULD NOT CHECK: could not source the library to test the purge" ;;
+*) malo "COULD NOT CHECK: UNEXPECTED rc $_PRC from _purga_caso — it is not enumerated, and an unnamed rc is not ignored" ;;
 esac
 [ "$_PRC" = 0 ] && case "$_PR" in
-no\|si\|si\|si\|si) paso "purga: retira el viejo MUERTO, conserva joven y ajeno, y RESPETA tanto el proceso vivo como el SOCKET vivo" ;;
-*) malo "purga mal: viejo|joven|ajena|vivo|socket = $_PR (esperado no|si|si|si|si)" ;;
+no\|si\|si\|si\|si) paso "purge: removes old DEAD scratch, preserves young and unrelated scratch, and RESPECTS both the live process and live SOCKET" ;;
+*) malo "bad purge: old|young|unrelated|live|socket = $_PR (expected no|si|si|si|si)" ;;
 esac
 
 # ── EL MUTANTE DEL PROPIO ARNES, VERSIONADO ───────────────────────────────
@@ -370,19 +370,19 @@ if [ "${OLIVARES_EXECTMP_META:-1}" = 1 ]; then
 		if [ "$_LC" = "$(( _LO + 1 ))" ]; then
 			_MOUT="$(cd "$RAIZ" && OLIVARES_EXECTMP_META=0 TMPDIR="${_EXECBASE:-${TMPDIR:-/tmp}}" \
 				timeout 300 bash "$_META/copia.sh" 2>&1)"
-			if command grep -q 'rc INESPERADO 7' <<<"$_MOUT"; then
-				paso "el mutante del arnes queda VERSIONADO: un rc sin enumerar produce fila, no silencio"
+			if command grep -q 'UNEXPECTED rc 7' <<<"$_MOUT"; then
+				paso "the harness mutant is VERSIONED: an unenumerated rc produces a row instead of silence"
 			elif [ -z "$_EXECBASE" ]; then
-				malo "NO HE PODIDO MIRAR: sin dir ejecutable, la copia para en su propio arnes y el mutante no llega a correr"
+				malo "COULD NOT CHECK: without an executable directory, the copy stops in its own harness and the mutant never runs"
 			else
-				malo "el mutante del arnes NO fue nombrado: un rc sin enumerar sigue pudiendo desaparecer"
+				malo "the harness mutant was NOT named: an unenumerated rc can still disappear"
 			fi
 		else
-			malo "NO HE PODIDO MIRAR: no pude construir el mutante del arnes (sin artefacto no hay juicio)"
+			malo "COULD NOT CHECK: could not construct the harness mutant (no artifact means no verdict)"
 		fi
 		rm -rf "$_META"
 	else
-		malo "NO HE PODIDO MIRAR: no pude crear el temporal del mutante del arnes"
+		malo "COULD NOT CHECK: could not create the harness mutant temporary directory"
 	fi
 fi
 
@@ -410,17 +410,17 @@ base_noexec() { # imprime un dir donde una sonda NO puede ejecutarse; rc 1 si aq
 }
 DC="$RAIZ/scripts/docs-captures.sh"
 if [ ! -f "$DC" ]; then
-	malo "NO HE PODIDO MIRAR: no encuentro scripts/docs-captures.sh"
+	malo "COULD NOT CHECK: cannot find scripts/docs-captures.sh"
 else
 	ini="$(command grep -n 'lib/exec-tmpdir\.sh"$' "$DC" | head -1 | cut -d: -f1)"
 	fin=""
 	[ -n "$ini" ] && fin="$(command awk -v i="$ini" 'NR>i && /^fi$/ {print NR; exit}' "$DC")"
 	BN="$(base_noexec)" || BN=""
 	if [ -z "$ini" ] || [ -z "$fin" ]; then
-		malo "NO HE PODIDO MIRAR: no encuentro el bloque de la sonda en docs-captures.sh (source/fi)"
+		malo "COULD NOT CHECK: cannot find the probe block in docs-captures.sh (source/fi)"
 	elif [ -z "$BN" ]; then
-		printf 'SALTADO  /tmp EJECUTA en esta caja, asi que no hay un noexec real con el que ver\n'
-		printf '         PARAR al arnes. NO es un ok: la mitad que importa se queda sin ejercer.\n'
+		printf 'SKIPPED  /tmp EXECUTES on this host, so no real noexec directory is available to observe\n'
+		printf '         the harness STOPPING. This is NOT a pass: the decisive half remains untested.\n'
 	else
 		sed -n "${ini},${fin}p" "$DC" > "$BN/bloque-sonda.sh"
 		mkdir -p "$BN/raiz/hijo"
@@ -432,13 +432,13 @@ else
 			    echo "ARRANCARIA_CON=${EXEC_TMP:-${TMPDIR:-/tmp}}"
 			  ' ) 2>&1
 		}
-		salida="$(corre_bloque "$BN/bloque-sonda.sh")"; rcb=$?
-		if command grep -q 'ARRANCARIA_CON=' <<<"$salida"; then
-			malo "el arnes SIGUE tras fallar la sonda y arrancaria con $(command grep -o 'ARRANCARIA_CON=.*' <<<"$salida"): el fallo original vuelve disfrazado"
+		checked_output="$(corre_bloque "$BN/bloque-sonda.sh")"; rcb=$?
+		if command grep -q 'ARRANCARIA_CON=' <<<"$checked_output"; then
+			malo "the harness CONTINUES after the probe fails and would start with $(command grep -o 'ARRANCARIA_CON=.*' <<<"$checked_output"): the original failure returns in disguise"
 		elif [ "$rcb" != "0" ]; then
-			paso "con los candidatos en un noexec REAL, el bloque del arnes PARA (rc $rcb) en vez de arrancar con /tmp"
+			paso "with candidates on REAL noexec, the harness block STOPS (rc $rcb) instead of starting with /tmp"
 		else
-			malo "el bloque salio 0 sin llegar a arrancar: no puedo decir que pare (salida: $salida)"
+			malo "the block exited 0 without starting: cannot claim it stops (output: $checked_output)"
 		fi
 
 		python3 - "$BN/bloque-sonda.sh" "$BN/bloque-mut.sh" <<'PYB'
@@ -446,9 +446,9 @@ import sys
 src = open(sys.argv[1], encoding="utf8").read()
 viejo = "  exit 2\n"
 if viejo not in src:
-    sys.stderr.write("    el bloque extraido no lleva `exit 2`: el mutante no se puede construir\n")
+    sys.stderr.write("    the extracted block has no `exit 2`: the mutant cannot be constructed\n")
     sys.exit(1)
-open(sys.argv[2], "w", encoding="utf8").write(src.replace(viejo, '  EXEC_TMP=""  # MUTANTE: vacia y sigue\n', 1))
+open(sys.argv[2], "w", encoding="utf8").write(src.replace(viejo, '  EXEC_TMP=""  # MUTANT: empty directory and continue\n', 1))
 PYB
 		if [ -s "$BN/bloque-mut.sh" ] && ! cmp -s "$BN/bloque-sonda.sh" "$BN/bloque-mut.sh"; then
 			salm="$(corre_bloque "$BN/bloque-mut.sh")"
@@ -459,12 +459,12 @@ PYB
 			#    entorno contesta cosas distintas segun quien lo llame, que es justo lo que este
 			#    fichero acaba de curar en el fixture.
 			if command grep -q 'ARRANCARIA_CON=' <<<"$salm"; then
-				paso "el mutante que vacia EXEC_TMP SIGUE y arranca ($(command grep -o 'ARRANCARIA_CON=.*' <<<"$salm" | head -1)): el caso M acredita la parada"
+				paso "the mutant that empties EXEC_TMP CONTINUES and starts ($(command grep -o 'ARRANCARIA_CON=.*' <<<"$salm" | head -1)): case M verifies stopping"
 			else
-				malo "el mutante que vacia EXEC_TMP no llega a arrancar: el caso M no acredita la parada"
+				malo "the mutant that empties EXEC_TMP never starts: case M does not verify stopping"
 			fi
 		else
-			malo "NO se pudo construir el mutante del bloque de la sonda: sin artefacto no hay juicio"
+			malo "could NOT construct the probe-block mutant: no artifact means no verdict"
 		fi
 		rm -rf "$BN"
 	fi
@@ -499,7 +499,7 @@ GRAMATICA_EXPORT="export-closure: absent-by-""design"
 if [ ! -f "$DC" ]; then
 	:
 elif ! command grep -q 'objetivos-sembrado\.json' "$DC"; then
-	paso "docs-captures.sh ya no referencia el catalogo de objetivos: la declaracion no hace falta"
+	paso "docs-captures.sh no longer references the objectives catalog: the declaration is unnecessary"
 # ⛔ ESTE PATRON NO ESCRIBE LA RUTA COMPLETA, y las DOS versiones anteriores lo hicieron mal por
 #    la misma razon de fondo: `lint:export-closure` lee este fichero buscando su propia gramatica,
 #    asi que un patron de `grep` que la contenga se lee como una DECLARACION de verdad — no como
@@ -513,12 +513,12 @@ elif ! command grep -q 'objetivos-sembrado\.json' "$DC"; then
 #
 #    Y este comentario tampoco la escribe, por lo mismo.
 elif command grep -qE "^# $GRAMATICA_EXPORT .*objetivos-sembrado" "$DC"; then
-	paso "la declaracion absent-by-design del catalogo de objetivos sigue en docs-captures.sh"
+	paso "the objectives catalog absent-by-design declaration remains in docs-captures.sh"
 else
-	malo "docs-captures.sh referencia ese catalogo y NO lleva su declaracion absent-by-design: se ha perdido en un merge"
+	malo "docs-captures.sh references that catalog and lacks its absent-by-design declaration: it was lost in a merge"
 fi
 
 
-printf '\ntest-exec-tmpdir: %d pasan, %d fallan\n' "$ok" "$fail"
+printf '\ntest-exec-tmpdir: %d passed, %d failed\n' "$ok" "$fail"
 [ "$fail" -eq 0 ] || exit 1
 exit 0

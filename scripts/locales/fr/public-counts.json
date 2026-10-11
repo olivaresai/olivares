@@ -1,0 +1,4 @@
+{
+  "selectable_modules": "modules\\s+sélectionnables\\b",
+  "selectable_adjective": "sélectionnables\\b"
+}

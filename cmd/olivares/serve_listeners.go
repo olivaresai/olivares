@@ -45,7 +45,11 @@ func bindServeListener(_ context.Context, addr string, reusePort bool) (net.List
 
 // serveListenerSpec is one listener to acquire, in launch order.
 type serveListenerSpec struct {
-	addr string
+	name, defaultAddr, configKey string
+	// admission states whether the surface uses the API chain, or its protocol-specific authority.
+	admission string
+	server    *http.Server
+	addr      string
 	// http marks an HTTP listener: it keeps the reuse-port error wrap and the
 	// unsupported-platform warning serveHTTP used to emit. gRPC never had either.
 	http bool
@@ -67,7 +71,7 @@ func httpBindAddr(addr string, insecure, reusePort bool) string {
 
 // plaintextBindRefusal is the choke point for plaintext exposure. insecureBindGuard
 // reads --listen and --grpc-listen, but the auxiliary listeners take their addresses
-// from operator config files (agentGatewayConfig.Listen and friends) and are served
+// from operator config files (mcpgateway.Config.Listen and friends) and are served
 // with the same global --insecure switch — so loopback primaries let that guard pass
 // while an auxiliary socket served plain HTTP off-host (found by the Codex contrast
 // of 2026-08-06, F-01). Adding one more address to the guard's arguments would fix
@@ -158,15 +162,19 @@ func (o *ownedServeListeners) closeAll() error {
 // registers its close authority at once; the first failure unwinds what was acquired
 // and returns the original cause first, with close failures joined after it.
 func acquireServeListeners(ctx context.Context, bind serveListenerBind, specs []serveListenerSpec, reusePort bool, log *slog.Logger) (*ownedServeListeners, error) {
+	addresses, err := resolveServeListenerAddresses(ctx, specs)
+	if err != nil {
+		return nil, err
+	}
 	owned := &ownedServeListeners{listeners: make([]net.Listener, 0, len(specs))}
-	for _, spec := range specs {
+	for i, spec := range specs {
 		if err := ctx.Err(); err != nil {
 			return nil, withCloseErrors(fmt.Errorf("serve startup canceled before binding %q: %w", spec.addr, err), owned.closeAll())
 		}
 		if spec.http && reusePort && !serverhandover.Supported() {
 			log.Warn("--reuse-port set but SO_REUSEPORT is unsupported here; using a plain listener (drain+restart, not overlap)", "addr", spec.addr)
 		}
-		lis, err := bind(ctx, spec.addr, reusePort)
+		lis, err := bind(ctx, addresses[i].String(), reusePort)
 		if err == nil && lis == nil {
 			err = fmt.Errorf("no listener returned for %q", spec.addr)
 		}
@@ -177,6 +185,18 @@ func acquireServeListeners(ctx context.Context, bind serveListenerBind, specs []
 			return nil, withCloseErrors(fmt.Errorf("listener failed: %w", err), owned.closeAll())
 		}
 		owned.listeners = append(owned.listeners, newCloseOnceListener(lis))
+		// An ephemeral port can equal a later explicitly configured port.
+		// Check its assigned value while we can still unwind before serving.
+		if addresses[i].Port == 0 {
+			actual, ok := lis.Addr().(*net.TCPAddr)
+			if !ok {
+				return nil, withCloseErrors(fmt.Errorf("listener %s did not return a TCP address", spec.name), owned.closeAll())
+			}
+			addresses[i].Port = actual.Port
+			if err := checkServeListenerCollisions(specs, addresses); err != nil {
+				return nil, withCloseErrors(err, owned.closeAll())
+			}
+		}
 	}
 	return owned, nil
 }

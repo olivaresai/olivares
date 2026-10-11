@@ -26,7 +26,7 @@ import (
 // itself.
 //
 // The proof surface is everything the launch hands the child: the argv and the
-// environment the engine builds (buildLaunchSpec, the production path), and
+// environment the engine builds (childSpec, the production path), and
 // every frame the driver writes on the child's stdin through its handshake and
 // its first turn. A term declared carried must reach one of them; a term
 // declared not_carried must reach none of them. It is the whole handshake and
@@ -75,6 +75,7 @@ func launchTermsRows() []launchTermsRow {
 		{driver: providerDriverCodex, impl: NewCodexDriver(), answer: launchTermsCodexAnswer},
 		{driver: providerDriverGrok, impl: NewGrokDriver(), answer: launchTermsGrokAnswer},
 		{driver: providerDriverOpenCode, impl: NewOpenCodeDriver(), answer: launchTermsOpenCodeAnswer},
+		{driver: providerDriverGemini, impl: NewGeminiDriver(), answer: launchTermsGeminiAnswer},
 	}
 }
 
@@ -350,7 +351,7 @@ type launchTermsFrame struct {
 }
 
 // launchTermsLaunch runs the probe launch the way the runtime does and returns
-// what it handed the child: the spec buildLaunchSpec built, and every frame the
+// what it handed the child: the spec childSpec built, and every frame the
 // driver wrote through its handshake and its first turn.
 //
 // The driver's session is opened by the runtime's own glue, not by a config
@@ -358,15 +359,14 @@ type launchTermsFrame struct {
 // reaches this conformance without anybody editing it.
 func launchTermsLaunch(t *testing.T, m *Module, p CreateRunParams, answer launchTermsAnswer) (LaunchSpec, []launchTermsFrame) {
 	t.Helper()
-	spec := m.buildLaunchSpec(p, Credential{}, WorkSessionCredential{}, CommunicationSessionCredential{},
-		"", nil, nil, nil)
+	spec := m.childSpec(p, childDecision{})
 
 	// The same steps a create takes, in its order: the live run, the driver's
 	// session (a no-op on the Claude path), then the reservation window, which
 	// keeps every row effect of the handshake queued — there is no row here.
 	child := &launchTermsChild{t: t, answer: answer, inbox: make(chan []byte, 64)}
 	lr := &liveRun{runRef: "run-probe", transport: p.Transport, proc: child, profile: p.ProviderHome}
-	m.attachDriverSession(lr, p, spec.Dir, "")
+	m.attachDriverSession(lr, p, spec, "")
 	lr.abreVentanaDeReserva()
 	if lr.session == nil {
 		return spec, nil
@@ -559,11 +559,11 @@ func launchTermsCodexAnswer(method string, _ map[string]any) (any, bool) {
 // turn does.
 func launchTermsGrokAnswer(method string, _ map[string]any) (any, bool) {
 	switch method {
-	case grokMethodInitialize:
+	case acpMethodInitialize:
 		return grokInitializeResult(grokAllAuthMethods()), true
 	case grokMethodAuthenticate:
 		return map[string]any{}, true
-	case grokMethodSessionNew:
+	case acpMethodSessionNew:
 		return map[string]any{"sessionId": "grok-probe"}, true
 	}
 	return nil, false
@@ -575,9 +575,9 @@ func launchTermsGrokAnswer(method string, _ map[string]any) (any, bool) {
 // first session/prompt stays open, as a running turn does.
 func launchTermsOpenCodeAnswer(method string, params map[string]any) (any, bool) {
 	switch method {
-	case openCodeMethodInitialize:
+	case acpMethodInitialize:
 		return openCodeInitializeResult(), true
-	case openCodeMethodSessionNew:
+	case acpMethodSessionNew:
 		return map[string]any{
 			"sessionId": "ses_probe", "configOptions": launchTermsOpenCodeOptions("opencode/big-pickle", "medium"),
 		}, true
@@ -591,6 +591,23 @@ func launchTermsOpenCodeAnswer(method string, params map[string]any) (any, bool)
 			effort = value
 		}
 		return map[string]any{"configOptions": launchTermsOpenCodeOptions(model, effort)}, true
+	}
+	return nil, false
+}
+
+// launchTermsGeminiAnswer plays Gemini CLI: the recorded session/new answer with
+// the probe model offered beside its own, and an empty answer to each setting.
+func launchTermsGeminiAnswer(method string, params map[string]any) (any, bool) {
+	switch method {
+	case acpMethodInitialize:
+		return geminiInitializeResult(), true
+	case acpMethodSessionNew:
+		result := geminiSessionResultFor("ses_probe")
+		models := result["models"].(map[string]any)
+		models["availableModels"] = append(models["availableModels"].([]any), map[string]any{"modelId": launchTermsProbeModel})
+		return result, true
+	case geminiMethodSetMode, geminiMethodSetModel:
+		return map[string]any{}, true
 	}
 	return nil, false
 }
@@ -626,6 +643,13 @@ func nativeLaunchPermission(t *testing.T, driver string, spec LaunchSpec, frames
 			if frame.method == codexMethodThreadStart {
 				params := frame.body.(map[string]any)["params"].(map[string]any)
 				return fmt.Sprint(params["sandbox"], "/", params["approvalPolicy"])
+			}
+		}
+	}
+	if driver == providerDriverGemini {
+		for _, frame := range frames {
+			if frame.method == geminiMethodSetMode {
+				return fmt.Sprint(frame.body.(map[string]any)["params"].(map[string]any)["modeId"])
 			}
 		}
 	}

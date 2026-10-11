@@ -20,6 +20,7 @@ import (
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
+	obstrace "github.com/olivaresai/olivares/core/observability/trace"
 	"github.com/olivaresai/olivares/core/store"
 	"github.com/olivaresai/olivares/modules/reporting"
 )
@@ -40,12 +41,18 @@ const settingsRestartMarker = "settings-restart.marker"
 
 // productSettingsDoc is the record's document.
 type productSettingsDoc struct {
+	Tracing    *obstrace.Settings  `json:"tracing,omitempty"`
 	Version    string              `json:"version"`
 	Activation *ActivationManifest `json:"activation,omitempty"`
 	// Modules is the module selection (moduleprofile.go); absent until the
 	// first start that records one.
 	Modules          *moduleSelectionDoc     `json:"modules,omitempty"`
 	ReportingSigning *reporting.SigningState `json:"reporting_signing,omitempty"`
+	// PreviewsHidden is recorded with a new installation's first module
+	// selection: its console navigation lists the first job only, and every
+	// other page keeps its address. An installation that existed before never
+	// has it, so its navigation lists everything it did.
+	PreviewsHidden bool `json:"previews_hidden,omitempty"`
 }
 
 // productSettings reads and writes the record and keeps this node's file copy
@@ -189,25 +196,39 @@ func sortedUnion(a, b []string) []string {
 
 // writeModules stores the module selection and appends one audit event.
 func (p *productSettings) writeModules(ctx context.Context, actor auth.Principal, action string, selected []string) error {
-	sel := moduleSelectionDoc{Selected: slices.Clone(selected), UpdatedAt: p.now().UTC().Format(time.RFC3339)}
+	sel := moduleSelectionDoc{Version: moduleProfileVersion, Selected: slices.Clone(selected), UpdatedAt: p.now().UTC().Format(time.RFC3339)}
 	if sel.Selected == nil {
 		sel.Selected = []string{}
 	}
-	return p.update(ctx, actor, action, map[string]any{"selected": sel.Selected}, func(doc *productSettingsDoc) { doc.Modules = &sel })
+	meta := map[string]any{"selected": sel.Selected}
+	return p.update(ctx, actor, action, meta, func(doc *productSettingsDoc) {
+		doc.Modules = &sel
+		// An administrator's own selection ends the first run: from the next
+		// start the console lists every page.
+		delete(meta, "previews_hidden")
+		if doc.PreviewsHidden {
+			doc.PreviewsHidden = false
+			meta["previews_hidden"] = false
+		}
+	})
 }
 
 // update changes one part of the record's document, keeping the others, and
 // appends one audit event. A conflict (another node created the record at the
 // same moment) is retried once as an update.
 func (p *productSettings) update(ctx context.Context, actor auth.Principal, action string, meta map[string]any, change func(*productSettingsDoc)) error {
-	err := p.updateOnce(ctx, actor, action, meta, change)
+	return p.updateWithAudit(ctx, actor, action, meta, change, false)
+}
+
+func (p *productSettings) updateWithAudit(ctx context.Context, actor auth.Principal, action string, meta map[string]any, change func(*productSettingsDoc), requireEvidence bool) error {
+	err := p.updateOnce(ctx, actor, action, meta, change, requireEvidence)
 	if errors.Is(err, store.ErrConflict) {
-		err = p.updateOnce(ctx, actor, action, meta, change)
+		err = p.updateOnce(ctx, actor, action, meta, change, requireEvidence)
 	}
 	return err
 }
 
-func (p *productSettings) updateOnce(ctx context.Context, actor auth.Principal, action string, meta map[string]any, change func(*productSettingsDoc)) error {
+func (p *productSettings) updateOnce(ctx context.Context, actor auth.Principal, action string, meta map[string]any, change func(*productSettingsDoc), requireEvidence bool) error {
 	return p.st.AuthMutate(ctx, func(as store.AuthScope) error {
 		rows, _, err := as.DeploymentSettings().List(ctx, model.Query{Filters: []model.Filter{}})
 		if err != nil {
@@ -235,11 +256,14 @@ func (p *productSettings) updateOnce(ctx context.Context, actor auth.Principal, 
 		if err != nil {
 			return err
 		}
-		_, err = as.Audit().Append(ctx, model.AuditDraft{
+		event, err := as.Audit().Append(ctx, model.AuditDraft{
 			Actor: actor.Actor(), ActorKind: actor.ActorKind(),
 			Action: action, TargetKind: "core.deployment_settings",
 			Meta: meta,
 		})
+		if err == nil && requireEvidence && event.Seq <= 0 {
+			return errors.New("deployment settings audit evidence was not persisted")
+		}
 		return err
 	})
 }
@@ -293,6 +317,26 @@ func reconcileSettings(ctx context.Context, p *productSettings, mods *moduleReco
 	}
 	log.Info("settings: restarting before serving", "reasons", reasons)
 	return &selfRestartError{reason: strings.Join(reasons, "; ")}
+}
+
+// reconcileBeforeServing is what serve does with a booted engine before any
+// listener starts: bring it in step with the deployment settings
+// (reconcileSettings), then tell server-info whether the console navigation
+// lists the first job only. An unreadable answer lists every page.
+func reconcileBeforeServing(ctx context.Context, eng *engine, log *slog.Logger) error {
+	mods := &moduleReconcile{booted: eng.moduleProfile, used: func(ctx context.Context) ([]string, error) { return usedModules(ctx, eng.store, eng.census) }, demo: !eng.demoTenant.IsZero()}
+	settings := newProductSettings(eng.store, eng.dataDir)
+	settings.used = mods.used
+	if err := reconcileSettings(ctx, settings, mods, log); err != nil {
+		return err
+	}
+	doc, _, err := settings.load(ctx)
+	if err != nil {
+		log.Error("settings: cannot read whether the console hides preview pages; its navigation lists every page until the next start reads it", "err", err)
+		return nil
+	}
+	eng.api.SetPreviewsHidden(doc.PreviewsHidden)
+	return nil
 }
 
 // reconcileActivation makes this node's activation file match the record and

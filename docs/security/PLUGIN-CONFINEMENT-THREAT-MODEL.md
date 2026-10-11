@@ -6,7 +6,8 @@
 **Scope of the claim: _signed trusted-operator plugin confinement_ — NOT a "safe
 marketplace sandbox".** External (third-party) connector plugins run as
 operator-admitted, signed, digest-pinned binaries. Admission (Sigstore/DSSE over the
-operator's trust anchors + a checksum re-pin at exec time) proves *what* runs;
+operator's trust anchors + a checksum check of the original path before launch)
+checks the admitted artifact;
 confinement bounds *what a running plugin can reach*. This document states exactly
 what the confinement contains and — just as importantly — what it does not, so the
 attestation each launch emits can be read against a written contract instead of an
@@ -17,9 +18,11 @@ implied guarantee.
 A plugin is a separate process the engine launches and talks to over an AutoMTLS
 gRPC channel on loopback (hashicorp go-plugin). It is admitted only when the
 operator pinned its digest and its signature verifies against the operator's trust
-policy (`cmd/olivares/externalplugins.go`), and go-plugin re-hashes the binary
-immediately before exec (the TOCTOU pin). So the operator has already decided to
-trust this code. Confinement is **defense in depth on top of that trust**, to bound
+policy (`cmd/olivares/externalplugins.go`). The loader uses go-plugin's checksum
+check on the original plugin path before a helper-wrapped launch; unwrapped
+launches keep go-plugin's ordinary check. The existing hash-then-exec window
+remains: a later path replacement is not sealed out. The operator has already
+decided to trust this code. Confinement is **defense in depth on top of that trust**, to bound
 the blast radius of a plugin that is buggy, compromised after admission, or
 over-curious — it is not a mechanism for safely running arbitrary untrusted code.
 
@@ -45,17 +48,42 @@ control marked _follow-up_ is recorded as degraded in every attestation — neve
 
 | # | Threat | Control | Status (this release) |
 |---|--------|---------|-----------------------|
-| C1 | Plugin reads host/other-connector secrets from its **environment** | The plugin does NOT inherit the engine environment (`SkipHostEnv`); it gets only an explicit, minimal, allowlisted env. Its own config travels over gRPC (`conn.Open`), never env. | **Applied.** BUT effective **only with C3**: a *same-UID* plugin can still read the engine's secrets from `/proc/<engine-pid>/environ` and `/proc/<engine-pid>/mem`. The dedicated non-root UID (C3) makes those (mode 0400, owned by the engine UID) unreadable. When C3 cannot apply (unprivileged engine), the attestation records `env-scoping bypassable` and `level: minimal` — never a hidden gap. |
+| C1 | Plugin reads secrets from its environment | `ScopedEnv` plus go-plugin `SkipHostEnv`; only PATH, owned scratch TMPDIR and explicit extras are forwarded. | **Applied.** No engine environment is inherited. Default Landlock grants no `/proc`, but an unprivileged engine still shares its UID with the child; same-UID process-memory access is not a generally enforced boundary without UID isolation. Unsupported Landlock leaves filesystem access at that UID. The attestation keeps this degradation explicit. |
 | C2 | Plugin exhausts host CPU / memory / PIDs | A per-plugin **cgroup v2** with `memory.max`, `pids.max`, `cpu.max`; the whole cgroup is killed on teardown (`cgroup.kill`). | **Applied when delegated.** Each ceiling is written and **read back**; a ceiling the host did not delegate (controller absent from `subtree_control`) is recorded degraded and NOT asserted. `att.Cgroup` is true only when a fork-bomb/OOM guard is verified in effect. |
-| C3 | Plugin runs with engine privileges / escalates | A dedicated, **per-launch non-root UID/GID** with all **supplementary groups dropped** (co-resident plugins get distinct UIDs, so cross-plugin `/proc`/ptrace is UID-blocked). | **UID drop applied (when engine is root).** The stronger claim — bounding-set cleared + **no-new-privs** so a setuid/setcap binary cannot regain privilege — is a **follow-up** (re-exec launcher); `CapsDropped` is therefore NOT asserted this release. |
-| C4 | Plugin writes/reads arbitrary host filesystem | **landlock** read-only host-fs restriction (Linux ≥ 5.13). | **Follow-up — NOT applied this release.** Always recorded degraded; `att.Landlock` is never true yet. |
-| C5 | Plugin issues dangerous syscalls (ptrace, mount, kexec, bpf, module load) | A **deny-by-default seccomp** allowlist (enough to run + reach the loopback channel). | **Follow-up — NOT applied this release.** Always recorded degraded; `att.Seccomp` is never true yet. (Note: until seccomp lands, ptrace is not denied, so the C3 per-UID isolation is the only cross-plugin memory-read barrier.) |
+| C3 | Plugin runs with engine privileges / escalates | Dedicated per-launch non-root UID/GID and empty supplementary groups when the engine is root; shared helper sets `no_new_privs`. | **UID drop applied when privileged; no_new_privs applied with supported-Linux Landlock before exec and recorded after handshake.** The bounding capability set is **not cleared**; `CapsDropped` stays false. |
+| C4 | Plugin reads/writes ungranted host files | Shared core Landlock mechanism, with explicit SDK policy rather than session defaults. | **Applied on supported Linux kernels and recorded after successful handshake.** A restriction failure refuses exec; an unsupported/disabled kernel is explicitly degraded. The policy below grants only named roots and devices. |
+| C5 | Plugin issues dangerous syscalls | Requested deny-by-default seccomp filter. | **Not implemented.** `Seccomp` stays false and the request is recorded degraded. Landlock/no_new_privs do not replace seccomp or generally deny ptrace. |
 | C6 | A hung/looping plugin stalls the host | Resource kills via the C2 cgroup guards; a post-handshake health/kill budget with a classified reason. | **Partial.** The cgroup OOM/pids guards (when effective) are the real resource kill, and go-plugin's start timeout bounds a hung launch. An **active post-handshake health-timeout** kill is a **follow-up**, recorded degraded. |
 
-**Attestation grades.** `strong` requires the full set (uid + caps + no-new-privs + cgroup
-+ seccomp + landlock) and is therefore **not attainable until the re-exec launcher lands**
-C4/C5/no-new-privs; the ceiling this release is `partial`. This is stated so no reader
-mistakes an absent `strong` for a defect.
+**SDK filesystem policy.** Read/execute grants are the plugin's logical and
+canonical directory (including sibling resources), plus caller-supplied
+`ReadableRoots`. Static ELF adds no runtime roots. A shebang/dynamic ELF adds its
+selected interpreter and canonical target, `/etc/ld.so.cache` and matching ABI
+library directories: amd64 `/lib/x86_64-linux-gnu`, `/usr/lib/x86_64-linux-gnu`,
+`/lib64`, `/usr/lib64`; arm64 uses the corresponding `aarch64-linux-gnu` paths.
+Custom runtimes need explicit `ReadableRoots`. Parent inspection precedes UID
+drop; the child need not read an engine-readable 0711 executable.
+
+DNS grants name `/etc/resolv.conf`, `/etc/hosts`, `/etc/nsswitch.conf`. HTTPS gets
+the first existing Go Linux CA bundle: `/etc/ssl/certs/ca-certificates.crt`,
+`/etc/pki/tls/certs/ca-bundle.crt`, `/etc/ssl/ca-bundle.pem`,
+`/etc/pki/tls/cacert.pem`, `/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem`,
+`/etc/ssl/cert.pem`, in that order. Canonical targets are granted, not their
+whole parent directories or private keys. Custom trust roots are explicit.
+
+Only per-plugin owned scratch is writable; there is no global `/tmp`, home,
+`/dev/shm`, `/etc`, `/opt`, `/usr` or `/proc` grant. Devices are `/dev/null`
+read/write and `/dev/urandom` read, without execute/ioctl grants. An operator who
+explicitly grants a broader root authorizes its contents; this policy does not
+invent a private-key carve-out inside such a grant. Session roots/devices/limits
+remain their separate caller policy, byte-for-byte unchanged.
+
+**Attestation grades.** `strong` requires uid, cleared bounding capabilities,
+no_new_privs, cgroup, seccomp and Landlock. Bounding-capability clearance and
+seccomp are absent, so **Strong is unreachable**; the ceiling is `partial`.
+An active health-timeout monitor is also absent. These three are separate open
+causes; no request field implies that its mechanism is enforced. Landlock and
+no_new_privs are not asserted at preparation time or after a failed handshake.
 
 **Inherited stdin (known, low).** go-plugin sets the child's stdin to the engine's stdin;
 plugjail does not (and cannot, via go-plugin) override it. A daemon's stdin is normally
@@ -70,7 +98,7 @@ feed the engine secrets on stdin while a plugin is loaded.
   plugin and the host are not addressed.
 - **Full network-egress control for the long-lived control channel.** The plugin
   needs a loopback gRPC channel to the engine, which a "no-NIC" network namespace (as
-  the one-shot `sandboxrt` job runner uses) would break. PRE-release, egress for the
+  the one-shot `sandboxrt` job runner uses) would break. In this release, egress for the
   resident plugin process is **not** network-isolated to a declared allowlist; this is
   a **declared-degraded axis**, recorded as such in the attestation. The one-shot,
   no-NIC + egress-proxy model remains for batch sandbox jobs, not for the plugin RPC.
@@ -85,10 +113,10 @@ feed the engine secrets on stdin while a plugin is loaded.
 
 ## Attestation contract
 
-Every plugin launch emits an isolation attestation recording the **real** level
+Every successful plugin handshake emits an isolation attestation recording the **real** level
 achieved: which of C1–C6 applied, the platform, and an overall confinement level
-(`strong` when the full Linux control set applied, `partial` when some primitive was
-unavailable and degraded, `minimal` on a platform without the OS controls). A control
+(`partial` when an OS control applied, `minimal` without those controls; `strong`
+is currently unreachable). A control
 that could not be applied is reported as not-applied — never asserted. This is the
 evidence an enterprise buyer reads; a claim without it is unverifiable.
 

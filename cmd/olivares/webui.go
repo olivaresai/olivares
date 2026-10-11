@@ -69,7 +69,9 @@ func isAPIPath(p string) bool {
 	// default-off and exact audience/session checks, must receive the request.
 	// Routing this tree to the API grants no authentication exception: the API
 	// delegates only its canonical protocol leaves and rejects neighboring paths.
-	if p == "/session/mcp" || strings.HasPrefix(p, "/mcp/gateway/") ||
+	// A session's browser preview is served by the API the same way, and is
+	// authorized there by its token alone.
+	if p == "/session/mcp" || strings.HasPrefix(p, "/mcp/gateway/") || strings.HasPrefix(p, api.SessionPreviewPathPrefix) ||
 		strings.HasPrefix(p, "/.well-known/oauth-protected-resource/mcp/gateway/") {
 		return true
 	}
@@ -116,6 +118,9 @@ func (s *spaServer) serve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if strings.HasPrefix(name, "assets/") && s.serveLargeAsset(w, r, name) {
+		return
+	}
 	data, err := fs.ReadFile(s.fsys, name)
 	if err != nil {
 		// Unknown path → a client-side route (e.g. /inventory, /login) → the SPA
@@ -125,16 +130,15 @@ func (s *spaServer) serve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	setSecurityHeaders(w)
 	// Vite emits content-hashed asset filenames under assets/, safe to cache hard;
 	// everything else (favicon, etc.) revalidates so a redeploy is picked up.
 	if strings.HasPrefix(name, "assets/") {
 		asset, _ := s.assets.LoadOrStore(name, newSPAAsset(name, data))
 		asset.(*spaAsset).serve(w, r, name)
 		return
-	} else {
-		w.Header().Set("Cache-Control", "no-cache")
 	}
+	setSecurityHeaders(w)
+	w.Header().Set("Cache-Control", "no-cache")
 	http.ServeContent(w, r, name, time.Time{}, bytes.NewReader(data))
 }
 
@@ -216,7 +220,14 @@ func buildCSP(nonce string) string {
 		// no script and cannot weaken script-src.
 		"manifest-src 'self'",
 		"connect-src 'self'",
+		// The console's dictation runs speech recognition in a worker it starts from
+		// /assets/. Same-origin workers only; the worker's own limits are assetCSP's.
+		"worker-src 'self'",
 		"form-action 'self'",
+		// The session preview panel frames /session/preview/, which runs sandboxed
+		// in an opaque origin (modules/sessions/preview.go). Other engine pages
+		// refuse to be framed with frame-ancestors 'none'.
+		"frame-src 'self'",
 		"frame-ancestors 'none'",
 		"object-src 'none'",
 		"require-trusted-types-for 'script'",

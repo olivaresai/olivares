@@ -26,6 +26,7 @@ stage() {
 	cp "$ROOT/design/alc-01-s3-motor-hold.json" "$TMP/tree/design/"
 	cp "$ROOT/design/ALC-01-S3-MOTOR-HOLD-2026-08-20.md" "$TMP/tree/design/"
 	cp "$ROOT/cmd/olivares/wire_noenterprise.go" "$TMP/tree/cmd/olivares/"
+	cp "$ROOT/cmd/olivares/edition_ports.go" "$TMP/tree/cmd/olivares/"
 	cat >"$TMP/ent/enterprise/activation/catalog.go" <<'EOF'
 package activation
 

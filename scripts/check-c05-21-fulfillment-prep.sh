@@ -37,16 +37,16 @@ grep -F -q 'fulfillmentBlock not landed' "$DOC" \
 grep -F -q 'C05-26 manifesto already on origin/main' "$DOC" \
   || fail "prepare doc lost C05-26 remasure"
 if grep -qiE 'FIRMA A claimed|remainder applied on origin/main|fulfillmentBlock landed' "$DOC"; then
-  fail "prepare doc claims an application this lote does not have"
+  fail "prepare doc claims an application this batch does not have"
 fi
 
 grep -q 'return env.FULFILLMENT_ENABLED === "true"' "$ENVF" \
   || fail "fulfillmentEnabled is no longer flag-only"
 if grep -q 'export function fulfillmentBlock' "$ENVF"; then
-  fail "fulfillmentBlock landed — this HOLD lote does not apply C05-21"
+  fail "fulfillmentBlock landed — this HOLD batch does not apply C05-21"
 fi
 if grep -q 'ENTERPRISE_VERSION_PLACEHOLDER' "$ENVF"; then
-  fail "ENTERPRISE_VERSION_PLACEHOLDER landed — this HOLD lote does not apply C05-21"
+  fail "ENTERPRISE_VERSION_PLACEHOLDER landed — this HOLD batch does not apply C05-21"
 fi
 grep -q 'C05-26: the channel manifesto is the authority' "$DELIV" \
   || fail "C05-26 manifesto authority comment drifted"
@@ -55,7 +55,7 @@ grep -q 'ENTERPRISE_VERSION is not a fallback' "$DELIV" \
 grep -q 'fulfillmentEnabled(env)' "$WH" \
   || fail "webhook no longer consults fulfillmentEnabled"
 if grep -q 'fulfillmentBlock(env)' "$WH"; then
-  fail "webhook consults fulfillmentBlock — this HOLD lote does not apply C05-21"
+  fail "webhook consults fulfillmentBlock — this HOLD batch does not apply C05-21"
 fi
 
 python3 - "$JSON" <<'PY' || exit $?

@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/olivaresai/olivares/cmd/olivares/internal/pepkit"
 	voiceconn "github.com/olivaresai/olivares/connectors/voice"
 	voicemod "github.com/olivaresai/olivares/modules/voice"
 )
@@ -190,12 +191,5 @@ func principalID(req voicemod.OpenRequest) string {
 	return hex.EncodeToString(sum[:16])
 }
 
-// firstNonEmpty returns the first non-blank string.
-func firstNonEmpty(vals ...string) string {
-	for _, v := range vals {
-		if strings.TrimSpace(v) != "" {
-			return v
-		}
-	}
-	return ""
-}
+// firstNonEmpty returns the first non-blank string (pepkit owns it).
+var firstNonEmpty = pepkit.FirstNonEmpty

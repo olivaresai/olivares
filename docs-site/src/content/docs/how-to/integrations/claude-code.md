@@ -30,8 +30,8 @@ separate surface: it uses its own local socket, authenticates every request, and
 decision.
 
 1. Open **Control console** (`/console`) and select the **Connectors** tab. The connector roster is
-   global: a superadmin account is required, and saving, testing, and reloading require AAL3
-   elevation.
+   global: a superadmin account is required. Saving, testing and reloading follow the
+   administrative step-up policy (`admin_step_up`, default `none`).
 2. Add a source with type `claude`, a stable operational name such as `claude-code-prod`, the
    appropriate tenant, `live` mode, interval `0`, and enabled status. A zero interval is correct:
    this connector maintains receivers rather than polling in batches.

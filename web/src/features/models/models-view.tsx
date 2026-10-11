@@ -658,32 +658,25 @@ function PolicyCard({ policy }: { policy: RoutingPolicy }) {
   )
 }
 
-// --- ejecución gobernada de una política (C07-04) ----------------------------
+// Governed routing-policy execution (C07-04).
 //
-// ⛔ ESTE BOTÓN GASTA DINERO DE VERDAD, y ésa es la razón de que se cablee con cuidado en vez de
-//    junto a «Resolve». `modules/models/execute.go:114-120`: `/execute` «resolves a stored routing
-//    policy AND EXECUTES the resolved target chain through the governed Executor, emitting the
-//    result's CostSample». `/resolve`, el que ya existía, es **selección pura** y no cuesta nada.
-//    Presentar los dos como «probar la política» funde una consulta gratis con una llamada de
-//    pago al proveedor.
+// This button spends real money. `modules/models/execute.go:114-120` states that `/execute`
+// resolves a stored routing policy, executes the resolved target chain through the governed
+// Executor, and emits its CostSample. Existing `/resolve` only selects a target and costs
+// nothing. Calling both actions a policy test would blur a free query and a paid provider call.
 //
-// ⛔ Y EL PERMISO NO ES EL DE LA PANTALLA. La vista gatea todo con `models:routing:write`; el
-//    motor exige **`models:routing:admin`** para ejecutar y lo justifica en `api.go:33-37`: es
-//    ADMIN «matching the actuation convention of the other modules — distinct from the read-tier
-//    resolve. **A viewer/editor cannot spend against a provider**». Con el permiso de la pantalla,
-//    un editor vería un botón de gasto que el motor le va a negar con un 403.
+// Execution requires a different permission from the screen. The view uses
+// `models:routing:write`; execution requires `models:routing:admin` (`api.go:33-37`), following
+// other modules' actuation convention. Viewers/editors cannot spend against a provider.
+// Using the screen's permission would expose a spending button that the engine rejects with
+// 403.
 //
-// ⛔ LAS DOS RESPUESTAS QUE NO SON AVERÍAS, y que un manejador de errores genérico convertiría en
-//    «algo ha ido mal»:
-//
-//    - **503 = no hay ejecutor provisionado.** No es una caída: es el estado deny-closed de
-//      fábrica — «the control plane can resolve a routing decision but never spends against a
-//      provider until an operator provisions an executor» (`models.go:79-82`). Pintarlo como
-//      indisponibilidad manda a alguien a investigar una avería que no existe, cuando lo que hay
-//      que hacer es aprovisionar.
-//    - **402/429 = el presupuesto de FinOps denegó el gasto ANTES de llamar al proveedor**
-//      (Denial-of-Wallet). Es un veredicto de gobierno funcionando, no un fallo: decirlo como
-//      error empuja a reintentar justo lo que el tope acaba de frenar.
+// Two response classes need specific handling:
+//   - 503 means no executor is provisioned. This is the default deny-closed state, not an
+//     outage: routing can resolve but cannot spend until an operator provisions an executor
+//     (`models.go:79-82`). The next action is provisioning rather than outage investigation.
+//   - 402/429 means FinOps denied spending before the provider call (Denial-of-Wallet).
+//     This is a governance verdict, not a failure inviting retries against the enforced cap.
 function ExecutePanel({ policy }: { policy: RoutingPolicy }) {
   const { t } = useTranslation('models')
   const { can } = useAuth()
@@ -748,7 +741,9 @@ function ExecutePanel({ policy }: { policy: RoutingPolicy }) {
       {resultado ? (
         <div className="flex flex-col gap-1 rounded-md border border-border p-2 text-caption">
           <div className="flex flex-wrap items-center gap-2">
-            <Badge variant="neutral">{resultado.served?.model ?? '—'}</Badge>
+            <Badge variant="neutral">
+              {resultado.served?.model_ref || resultado.served?.model || '—'}
+            </Badge>
             {/* Servido ≠ primera opción: sin esto, una cadena que cayó al respaldo se lee
                 como si la política hubiese elegido eso a la primera. */}
             {resultado.fallback_used ? (
@@ -764,6 +759,12 @@ function ExecutePanel({ policy }: { policy: RoutingPolicy }) {
               })}
             </span>
           </div>
+          {/* The answer itself, as text: React escapes it, so model output never becomes markup. */}
+          {resultado.output ? (
+            <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words font-mono text-body text-text">
+              {resultado.output}
+            </pre>
+          ) : null}
           {/* `execute.go:119-120`: la salida se devuelve al llamante y NO se persiste — al ledger
               sólo llega el CostSample redactado. Quien la necesite, que la copie ahora. */}
           <p className="text-muted-foreground">
@@ -798,8 +799,11 @@ function ExecutePanel({ policy }: { policy: RoutingPolicy }) {
   )
 }
 
+/** POST …/routing-policies/{id}/execute (`execute.go` executeResponseDTO). `served.model` is
+ * the older name, still read. */
 type ExecuteResult = {
-  served?: { model?: string }
+  served?: { provider_ref?: string; model_ref?: string; model?: string }
+  output?: string | null
   fallback_used?: boolean
   refusal?: boolean
   input_tokens?: number

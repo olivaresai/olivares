@@ -34,10 +34,18 @@ func (r archiveContextReader) Read(b []byte) (int, error) {
 
 type archiveLink struct{ name, target string }
 
+func codexPackageResource(name string) bool {
+	return name == "codex-package.json" || name == "codex-path" || name == "codex-resources" ||
+		strings.HasPrefix(name, "codex-path/") || strings.HasPrefix(name, "codex-resources/")
+}
+
 // Safe archive links are materialized as ordinary files. No extracted symlink
 // exists, including while another member is being written. Link copies count
 // toward the same expanded-byte limit as ordinary members.
 func extractReleaseArchive(ctx context.Context, driver string, root *os.Root, prefix, fetched string, layout ExpectedLayout) (*ObservedPayloadInventory, error) {
+	if driver == DriverGemini {
+		return extractGeminiBundle(ctx, root, prefix, fetched, layout)
+	}
 	file, err := root.Open(fetched)
 	if err != nil {
 		return nil, err
@@ -98,9 +106,14 @@ func extractReleaseArchive(ctx context.Context, driver string, root *os.Root, pr
 		if driver == DriverOpenCode && name == "opencode" {
 			name = "bin/opencode"
 		}
-		// The Codex archive holds one binary named after its platform target.
-		if driver == DriverCodex && strings.HasPrefix(name, "codex-") && strings.HasSuffix(name, "-unknown-linux-musl") && !strings.Contains(name, "/") {
+		// The single-binary Codex archive holds one binary named after its platform target.
+		if layout.ID == LayoutIDCodexArchiveV1 && strings.HasPrefix(name, "codex-") && strings.HasSuffix(name, "-unknown-linux-musl") && !strings.Contains(name, "/") {
 			name = "bin/codex"
+		}
+		// The Codex release package also carries resources a governed session does not
+		// run (voice host, bundled rg and bwrap, its manifest): read past, never placed.
+		if layout.ID == LayoutIDCodexReleasePackageV1 && codexPackageResource(name) {
+			continue
 		}
 		if !releaseArchiveMember(driver, name) || seen[name] {
 			return nil, refuse(KindManifestInvalid, "unexpected or duplicate archive member %q", name)
@@ -201,6 +214,10 @@ func extractReleaseArchive(ctx context.Context, driver string, root *os.Root, pr
 	if err != nil {
 		return nil, err
 	}
+	return requireArchiveMembers(inventory, layout)
+}
+
+func requireArchiveMembers(inventory *ObservedPayloadInventory, layout ExpectedLayout) (*ObservedPayloadInventory, error) {
 	for _, required := range layout.Members {
 		found := false
 		for _, member := range inventory.Members {

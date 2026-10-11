@@ -6,6 +6,8 @@ description: >-
   HITL-gated fire. Live dispatch is a deny-closed seam, stated honestly.
 ---
 
+**Edition:** Business Identity & Scale. Community returns `501` for these routes, carries no orchestration console or execution engine, and retains stored records for export.
+
 Module IV is the **observe-and-govern** plane for how agents coordinate. It does
 **not** reimplement an agent framework (no LangGraph/CrewAI/AutoGen), it does not run
 an agent, and it never spawns a process. It derives a live communication & delegation
@@ -63,7 +65,7 @@ the module never runs a cross-tenant background scan.
 :::caution[Honest limits]
 - **Live fire is a deny-closed seam.** The module *governs and schedules*; it never
   actuates on its own. A fire leaves through a Dispatcher seam. With the dispatcher
-  unconfigured (the default binary), an approved fire returns an honest `200` with
+  unconfigured (the Business binary), an approved fire returns an honest `200` with
   status `declared_not_fired` — the safe state is "declared, not fired". A dispatcher
   built and configured by the operator routes an approved, plan-matched fire to
   the same deployment executor or a signed-card-verified A2A task; a dispatcher error

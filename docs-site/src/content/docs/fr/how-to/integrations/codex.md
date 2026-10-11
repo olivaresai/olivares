@@ -17,15 +17,17 @@ CLI officielle, enregistrer un reçu de sonde et lancer ou arrêter une session
 gouvernée, utilisez [Installer la CLI Codex](/how-to/install-codex-cli/). Le chemin
 d’exploitation est
 [Exploiter une session fournisseur](/how-to/operate-provider-sessions/)
-(`OLIVARES_SESSION_RUNTIME_CODEX_BIN` ou le reçu d’une installation gérée, plus un
-profil fournisseur).
+(`OLIVARES_SESSION_RUNTIME_CODEX_BIN` pour choisir explicitement un exécutable ; sinon l’installation
+gérée vérifiée la plus récente, puis `codex` dans le `PATH` du moteur,
+plus un profil fournisseur).
 
 ## Ajouter Codex
 
 ### Prérequis
 
-- Un tenant enterprise Olivares AI et un compte superadmin avec élévation AAL3 pour les opérations
-  sur le roster.
+- Un tenant enterprise Olivares AI et un compte superadmin. Les opérations sur le roster
+  suivent la politique d’authentification renforcée administrative (`admin_step_up`,
+  `none` par défaut).
 - Pour l'ingestion enterprise, une clé API de plateforme ou un access token de workspace avec les
   scopes de lecture requis, ainsi que le `workspace_id`. Se connecter à la CLI Codex via ChatGPT
   ne fournit pas d'identifiant au connecteur.

@@ -317,23 +317,13 @@ func newRulePackVerifyCmd() *cobra.Command {
 	return cmd
 }
 
-// ── El ancla de firma de los dos productores de respuesta a incidentes ────────────────────
-//
-// ⛔ POR QUE HACE FALTA, Y POR QUE NO BASTA CON EL AUTO-VERIFY QUE YA HABIA. Una clave publica
-// Ed25519 y un seed miden LOS DOS 32 bytes, asi que `loadEd25519Private` acepta la mitad PUBLICA
-// como seed y deriva OTRO par, en silencio y con rc=0. El feed sale firmado por una clave que no
-// tiene nadie, y el receptor —que fija la publica original— lo rechaza. Es la misma confusion que
-// el contraste `sol max` reprodujo para `ddil export` (F-02).
-//
-// El auto-verify del rule-pack NO la caza y conviene decir por que: comprueba la firma contra
-// `priv.Public()`, o sea la publica DERIVADA de lo que se haya cargado. Un verificador construido
-// sobre la misma suposicion que el productor confirma la creencia en vez de probarla: pasa igual
-// de verde con el par correcto que con el derivado por error. La separacion tiene que ser
-// EXTRINSECA — de ahi `--expect-pubkey`, que el operador toma del ancla que fija la flota.
-//
-// ⛔ Y NI UN BYTE DE CLAVE EN EL DIAGNOSTICO: solo huellas de 8 hex. Imprimir el ancla o la
-// derivada en base64 publica 44 caracteres en el stderr de la ceremonia, y si el error fue pasar
-// la privada por --expect-pubkey, eso manda el SEED a los logs. La huella identifica sin revelar.
+// Both incident-response producers require an independent signing anchor.
+// Ed25519 public keys and seeds are both 32 bytes: loadEd25519Private accepts
+// a public key as a seed and silently derives another pair. Self-verification
+// against priv.Public() cannot detect that mistake. --expect-pubkey must come
+// from the fleet's independently pinned anchor.
+// Only 8-hex fingerprints enter diagnostics: echoing either flag could expose
+// a seed accidentally passed as the anchor.
 func securityResponseSigningKey(signKeyFlag, expectPubFlag string) (ed25519.PrivateKey, error) {
 	expect, err := securityResponseLoadPublic(expectPubFlag)
 	if err != nil {
@@ -345,28 +335,25 @@ func securityResponseSigningKey(signKeyFlag, expectPubFlag string) (ed25519.Priv
 	}
 	got := priv.Public().(ed25519.PublicKey)
 	if !got.Equal(expect) {
-		// ⛔ AQUI NO SE PUEDE DECIR CUAL DE LAS DOS BANDERAS ESTA MAL. Esta condicion se
-		// cumple tanto si se paso la publica a --sign-key como si las dos apuntan al mismo
-		// fichero; sin una procedencia autenticada del ancla no hay forma de distinguirlas,
-		// y afirmar una manda a buscar al sitio equivocado.
+		// A mismatch cannot identify the incorrect flag without authenticated
+		// anchor provenance. Name the possible causes rather than guess.
 		return nil, fmt.Errorf(
 			"REFUSING to sign: --sign-key derives public key %s, but --expect-pubkey anchors %s.\n\n"+
-				"Una clave publica Ed25519 y un seed miden los dos 32 bytes, asi que una publica pasada "+
-				"como clave de firma se acepta y deriva OTRO par: la firma verificaria contra una clave "+
-				"que no tiene nadie. Tres causas ordinarias, y este mandato NO puede distinguirlas "+
-				"sin una procedencia autenticada del ancla: (1) la clave de firma y el ancla son de "+
-				"PARES DISTINTOS —lo mas comun: se roto una y no la otra—; (2) se paso la PUBLICA "+
-				"en --sign-key; (3) las dos banderas apuntan al MISMO material. Comprueba cual de "+
-				"las tres es. (Huellas de 8 hex: no se imprime material de clave.)",
+				"An Ed25519 public key and a seed are both 32 bytes, so a public key passed as the "+
+				"signing key is accepted and derives a DIFFERENT pair: the signature would verify "+
+				"against a key nobody holds. Three ordinary causes, and this command cannot tell "+
+				"them apart without an authenticated provenance of the anchor: (1) the signing key "+
+				"and the anchor belong to DIFFERENT pairs —most common: one was rotated and the "+
+				"other was not—; (2) the PUBLIC key was passed in --sign-key; (3) both flags point "+
+				"at the SAME material. Check which of the three applies. (8-hex fingerprints; no "+
+				"key material is printed.)",
 			securityResponseFingerprint(got), securityResponseFingerprint(expect))
 	}
 	return priv, nil
 }
 
-// securityResponseLoadPublic acepta las MISMAS tres codificaciones que el cargador privado
-// —base64 estandar, base64 raw-url y `@fichero` con cualquiera de las dos— porque un ancla que
-// solo entienda una de ellas convierte un formato valido en «clave equivocada», que es el error
-// mas caro de diagnosticar de los tres.
+// securityResponseLoadPublic accepts the private loader's three encodings:
+// standard base64, raw URL base64, and @file containing either encoding.
 func securityResponseLoadPublic(flag string) (ed25519.PublicKey, error) {
 	raw := strings.TrimSpace(flag)
 	if raw == "" {
@@ -375,10 +362,8 @@ func securityResponseLoadPublic(flag string) (ed25519.PublicKey, error) {
 	if strings.HasPrefix(raw, "@") {
 		b, err := os.ReadFile(raw[1:])
 		if err != nil {
-			// ⛔ LA RUTA NO SE ECO-A, y no es paranoia: `--expect-pubkey @<algo>` con la
-			// CLAVE pegada donde iba la ruta publica ese material en el error. `%w` sobre
-			// el error de `os` arrastra el argumento entero. Se dice QUE fallo y de que
-			// clase, que es lo que un operador necesita, sin repetir lo que escribio.
+			// Do not echo the path or wrap the os error: a mistyped flag may put
+			// key material where the path belongs. Report only the error class.
 			switch {
 			case errors.Is(err, os.ErrNotExist):
 				return nil, fmt.Errorf("--expect-pubkey names a file that does not exist (the path is not echoed: a mistyped flag can put key material where a path belongs)")
@@ -402,9 +387,8 @@ func securityResponseLoadPublic(flag string) (ed25519.PublicKey, error) {
 	return ed25519.PublicKey(dec), nil
 }
 
-// securityResponseFingerprint identifica una clave publica sin revelarla: los 8 primeros hex del
-// SHA-256 de sus bytes. Suficiente para casar dos anclas en un mensaje de error, inutil para
-// reconstruir la clave.
+// securityResponseFingerprint identifies a public key without revealing it:
+// the first eight hex digits of SHA-256 over its bytes.
 func securityResponseFingerprint(pub ed25519.PublicKey) string {
 	sum := sha256.Sum256(pub)
 	return hex.EncodeToString(sum[:])[:8]

@@ -47,6 +47,7 @@ import {
 } from '@/test/session-row-locator'
 import type { ProviderProfileDTO, RunDTO } from '@/features/agentops/types'
 import { ApiError } from '@/lib/api/errors'
+import type { QueryClient } from '@tanstack/react-query'
 import { createQueryClient } from '@/lib/api/query'
 import { useSessionStore } from '@/stores/session'
 import { useWorkspaceStore } from '@/stores/workspace'
@@ -313,8 +314,11 @@ function makeClient() {
     queries: { ...prev.queries, retry: false, refetchOnWindowFocus: false },
     mutations: prev.mutations,
   })
+  currentClient = qc
   return qc
 }
+
+let currentClient: QueryClient | undefined
 
 function view() {
   return <SessionsWorkspaceView entrance="observe" />
@@ -332,12 +336,16 @@ function view() {
  *    them works from either.
  */
 function openTable() {
-  const trigger = screen.getByRole('tab', { name: 'Table' })
-  // MOUSEDOWN, not click: a Radix tab trigger selects on mouse-down, and a bare
-  // `.click()` leaves the strip exactly where it was — which reads as "the table is
-  // empty" instead of "the tab never changed".
+  // The table is a view of the page, reached from the list header's `⋯` menu. Already
+  // on the table (a rerender keeps the view), there is no menu and nothing to open.
+  const trigger = screen.queryByTestId('sessions-list-menu')
+  if (!trigger) return
   act(() => {
-    fireEvent.mouseDown(trigger)
+    fireEvent.keyDown(trigger, { key: 'Enter' })
+  })
+  const item = screen.getByRole('menuitem', { name: 'Show as table' })
+  act(() => {
+    fireEvent.click(item)
   })
 }
 
@@ -359,7 +367,7 @@ function renderView(qc = makeClient()) {
  * The figure the summary reports for one count.
  *
  * ⛔ THE HEADER STATES TWO FIGURES NOW (Root review, 09: counts only):
- *    `2 sessions · 2 running`. The launched, discovered and attention figures and the
+ *    `2 sessions · 2 working`. The launched, discovered and attention figures and the
  *    scope note left the header; a row's origin is still asserted on the row itself.
  *    Every fixture session here is active, so where the run half was read, running
  *    equals the session count. Where the launched half was not read, a launched
@@ -370,11 +378,12 @@ function renderView(qc = makeClient()) {
  *   failure from reporting the wrong one — and the label is matched on a whole segment.
  */
 function summaryText(): string {
-  return screen.queryByTestId('sessions-summary')?.textContent ?? ''
+  // The count in words is the figure's name and hover: the figure itself is a number.
+  return screen.queryByTestId('sessions-summary')?.getAttribute('title') ?? ''
 }
 
-function tileValue(label: 'Sessions' | 'Running'): string | undefined {
-  const whole = label === 'Sessions' ? /^(.+?) sessions?$/ : /^(.+?) running$/
+function tileValue(label: 'Sessions' | 'Working'): string | undefined {
+  const whole = label === 'Sessions' ? /^(.+?) sessions?$/ : /^(.+?) working$/
   for (const segment of summaryText().split('·')) {
     const match = segment.trim().match(whole)
     if (match) return match[1]
@@ -411,8 +420,21 @@ async function rowFor(address: string, setupName: string) {
   return rows.find(address, setupName)
 }
 
-function refreshButton() {
-  return screen.getByRole('button', { name: /refresh/i })
+/**
+ * ASK AGAIN, as the operator's old Refresh did: the page has no Refresh button now (the
+ * list is live), so this asks the client for the live and run reads again. The queries carry
+ * their own `enabled` guards, so a half this person may not read is not asked.
+ */
+async function refreshReads() {
+  await act(async () => {
+    // Not awaited: a read held in flight must not hold the test with it.
+    void currentClient?.refetchQueries({
+      type: 'active',
+      predicate: (q) =>
+        q.queryKey[2] === 'b' &&
+        (q.queryKey[4] === 'live' || q.queryKey[4] === 'runs'),
+    })
+  })
 }
 
 /** The scope object a call to the live/runs API was pinned to. */
@@ -528,7 +550,7 @@ describe('SessionsWorkspaceView — both halves admitted (controls)', () => {
       .toBeInTheDocument()
     expect.soft(tileValue('Sessions'), 'spr-auth/healthy/total-count').toBe('2')
     expect
-      .soft(tileValue('Running'), 'spr-auth/healthy/running-count')
+      .soft(tileValue('Working'), 'spr-auth/healthy/running-count')
       .toBe('2')
     expect
       .soft(
@@ -608,7 +630,7 @@ describe('SessionsWorkspaceView — one half refused, the other still admitted',
     const refusedCard = openCardText()
 
     harness.live.mockRejectedValue(FORBIDDEN)
-    await user.click(refreshButton())
+    await refreshReads()
     await waitFor(() => {
       expect(
         screen.getByText(/observed half could not be read/i),
@@ -657,7 +679,7 @@ describe('SessionsWorkspaceView — one half refused, the other still admitted',
       .toBe('1')
     expect
       .soft(
-        tileValue('Running'),
+        tileValue('Working'),
         'spr-auth/live-403/running-count-healthy-only',
       )
       .toBe('1')
@@ -721,7 +743,7 @@ describe('SessionsWorkspaceView — one half refused, the other still admitted',
     ).toBeInTheDocument()
 
     harness.listRuns.mockRejectedValue(STEP_UP)
-    await user.click(refreshButton())
+    await refreshReads()
     await waitFor(() => {
       expect(
         screen.getByText(/launched half could not be read/i),
@@ -765,7 +787,7 @@ describe('SessionsWorkspaceView — one half refused, the other still admitted',
     //    left out of the header (no dash: Root review, 09), never stated as `0`.
     expect
       .soft(
-        tileValue('Running'),
+        tileValue('Working'),
         'spr-auth/run-stepup/running-count-not-stated',
       )
       .toBeUndefined()
@@ -807,7 +829,7 @@ describe('SessionsWorkspaceView — one half refused, the other still admitted',
     await rowFor(LIVE_ONLY_AT, 'spr-auth/live-5xx/setup-live-row')
 
     harness.live.mockRejectedValue(LIVE_5XX)
-    await user.click(refreshButton())
+    await refreshReads()
     await waitFor(() => {
       expect(
         screen.getByText(/observed half could not be read/i),
@@ -852,7 +874,7 @@ describe('SessionsWorkspaceView — one half refused, the other still admitted',
       )
       .not.toBeInTheDocument()
     expect
-      .soft(tileValue('Running'), 'spr-auth/live-5xx/running-count-kept')
+      .soft(tileValue('Working'), 'spr-auth/live-5xx/running-count-kept')
       .toBe('2')
     await user.click(runRow)
     expect
@@ -864,14 +886,13 @@ describe('SessionsWorkspaceView — one half refused, the other still admitted',
   })
 
   it('CONTROL: both halves out still replaces the grid, and names the refusal it got', async () => {
-    const user = userEvent.setup()
     renderView()
     await rowFor(LIVE_ONLY_AT, 'spr-auth/dual/setup-live-row')
     // Sighted too, so the claim that its row leaves is a claim this case can make.
     await rowFor(RUN_ONLY_AT, 'spr-auth/dual/setup-run-row')
     harness.live.mockRejectedValue(FORBIDDEN)
     harness.listRuns.mockRejectedValue(FORBIDDEN)
-    await user.click(refreshButton())
+    await refreshReads()
     // The body becomes a STATE (the table element and its grid role stay).
     await waitFor(() => {
       expect(
@@ -955,7 +976,7 @@ describe('SessionsWorkspaceView — a read bit that leaves, and comes back', () 
       .soft(tileValue('Sessions'), 'spr-auth/live-bit/total-count-run-only')
       .toBe('1')
     expect
-      .soft(tileValue('Running'), 'spr-auth/live-bit/running-count-one')
+      .soft(tileValue('Working'), 'spr-auth/live-bit/running-count-one')
       .toBe('1')
     expect
       .soft(
@@ -1054,7 +1075,7 @@ describe('SessionsWorkspaceView — a read bit that leaves, and comes back', () 
       )
       .not.toBeInTheDocument()
     expect
-      .soft(tileValue('Running'), 'spr-auth/run-bit/running-count-not-stated')
+      .soft(tileValue('Working'), 'spr-auth/run-bit/running-count-not-stated')
       .toBeUndefined()
     expect
       .soft(tileValue('Sessions'), 'spr-auth/run-bit/total-count-live-only')
@@ -1134,7 +1155,7 @@ describe('SessionsWorkspaceView — a JOINED row loses exactly the half that lef
       .toBeInTheDocument()
 
     harness.listRuns.mockRejectedValue(STEP_UP)
-    await user.click(refreshButton())
+    await refreshReads()
     await waitFor(() => {
       expect(
         screen.getByText(/launched half could not be read/i),
@@ -1183,7 +1204,7 @@ describe('SessionsWorkspaceView — a JOINED row loses exactly the half that lef
       .toBe('1')
     expect
       .soft(
-        tileValue('Running'),
+        tileValue('Working'),
         'spr-auth/joined-run-out/running-count-not-stated',
       )
       .toBeUndefined()
@@ -1215,7 +1236,7 @@ describe('SessionsWorkspaceView — a JOINED row loses exactly the half that lef
     ).toBeInTheDocument()
 
     harness.live.mockRejectedValue(FORBIDDEN)
-    await user.click(refreshButton())
+    await refreshReads()
     await waitFor(() => {
       expect(
         screen.getByText(/observed half could not be read/i),
@@ -1249,7 +1270,7 @@ describe('SessionsWorkspaceView — a JOINED row loses exactly the half that lef
       .soft(tileValue('Sessions'), 'spr-auth/joined-live-out/total-still-one')
       .toBe('1')
     expect
-      .soft(tileValue('Running'), 'spr-auth/joined-live-out/running-count-one')
+      .soft(tileValue('Working'), 'spr-auth/joined-live-out/running-count-one')
       .toBe('1')
     await user.click(row)
     // Opened by the id the RUN captured (`claude_session_id`), which is the run half's
@@ -1473,7 +1494,6 @@ describe('SessionsWorkspaceView — an answer that arrives after its context is 
    * flight when the context changes.
    */
   it('tenant switch mid-refetch: the old answer is cancelled and cannot paint', async () => {
-    const user = userEvent.setup()
     const inflight = deferred<typeof LIVE_OK>()
     let liveCalls = 0
     harness.live.mockImplementation(() => {
@@ -1496,7 +1516,7 @@ describe('SessionsWorkspaceView — an answer that arrives after its context is 
       within(liveRow).getByText('spr-live-action'),
       'spr-auth/inflight-tenant/setup-action-is-painted',
     ).toBeInTheDocument()
-    await user.click(refreshButton())
+    await refreshReads()
     await waitFor(() => {
       expect(
         liveCalls,
@@ -1562,7 +1582,6 @@ describe('SessionsWorkspaceView — an answer that arrives after its context is 
   })
 
   it('principal switch mid-refetch: the previous principal’s answer cannot paint', async () => {
-    const user = userEvent.setup()
     const inflight = deferred<typeof LIVE_OK>()
     let liveCalls = 0
     harness.live.mockImplementation(() => {
@@ -1583,7 +1602,7 @@ describe('SessionsWorkspaceView — an answer that arrives after its context is 
       within(liveRow).getByText('spr-live-action'),
       'spr-auth/inflight-principal/setup-action-is-painted',
     ).toBeInTheDocument()
-    await user.click(refreshButton())
+    await refreshReads()
     await waitFor(() => {
       expect(
         liveCalls,
@@ -1677,7 +1696,7 @@ describe('SessionsWorkspaceView — a refusal outlives the error that reported i
       // CONTROL, and it must survive the correction: an ordinary 500 with no refusal
       // behind it withdraws nothing. The half keeps its last answer and its card.
       failing.mockRejectedValue(LIVE_5XX)
-      await user.click(refreshButton())
+      await refreshReads()
       await waitFor(() => expect(errorOf()).toBe(LIVE_5XX))
       expect
         .soft(rows.query(oldAt), 'R1/ordinary-500-keeps-its-last-answer')
@@ -1693,7 +1712,7 @@ describe('SessionsWorkspaceView — a refusal outlives the error that reported i
       // The refusal itself: admission ends here, and so does the selection made under it.
       const denial = half === 'live' ? FORBIDDEN : STEP_UP
       failing.mockRejectedValue(denial)
-      await user.click(refreshButton())
+      await refreshReads()
       await waitFor(() => expect(errorOf()).toBe(denial))
       await waitFor(() =>
         expect(
@@ -1709,7 +1728,7 @@ describe('SessionsWorkspaceView — a refusal outlives the error that reported i
 
       // No success follows the refusal — only another outage, which answers nothing.
       failing.mockRejectedValue(LIVE_5XX)
-      await user.click(refreshButton())
+      await refreshReads()
       await waitFor(() => expect(errorOf()).toBe(LIVE_5XX))
       await waitFor(() => expect(qc.isFetching()).toBe(0))
 
@@ -1753,7 +1772,7 @@ describe('SessionsWorkspaceView — a refusal outlives the error that reported i
               has_more: false,
             }
       failing.mockResolvedValue(readmitted)
-      await user.click(refreshButton())
+      await refreshReads()
       const freshAt =
         half === 'live'
           ? sessAddress('spr-live-readmitted')
@@ -1972,7 +1991,7 @@ describe('SessionsWorkspaceView — leaving a context and coming back to it', ()
               has_more: false,
             }
       failing.mockResolvedValue(fresh)
-      await user.click(refreshButton())
+      await refreshReads()
       const freshAt =
         half === 'live'
           ? sessAddress('spr-live-fresh-a')
@@ -1986,14 +2005,13 @@ describe('SessionsWorkspaceView — leaving a context and coming back to it', ()
   )
 
   it('a new mount cannot bootstrap itself from the page an earlier reader was refused', async () => {
-    const user = userEvent.setup()
     const { qc, unmount } = renderView()
     await rowFor(LIVE_ONLY_AT, 'R1/remount/setup-row')
     // Sighted so the run half can act as the live control through the whole case.
     await rowFor(RUN_ONLY_AT, 'R1/remount/setup-run-row')
 
     harness.live.mockRejectedValue(FORBIDDEN)
-    await user.click(refreshButton())
+    await refreshReads()
     await waitFor(() =>
       expect(
         rows.gone(LIVE_ONLY_AT, 'R1/remount/refusal-excludes-the-row', {
@@ -2004,7 +2022,7 @@ describe('SessionsWorkspaceView — leaving a context and coming back to it', ()
     // …then an ordinary outage replaces the refusal as the query's ONLY error. The
     // cache still holds the pre-refusal page.
     harness.live.mockRejectedValue(LIVE_5XX)
-    await user.click(refreshButton())
+    await refreshReads()
     // The LIST's entry, named rather than taken by position: the open session's
     // resolution keeps its own entries under the same `sessions` root.
     const liveList = () =>
@@ -2185,14 +2203,13 @@ describe('SessionsWorkspaceView — a stream frame is a hint, never a row', () =
   })
 
   it('R3/4 the subscription never opens over a half that has no admitted answer', async () => {
-    const user = userEvent.setup()
     renderView()
     await rowFor(LIVE_ONLY_AT, 'R3/4/setup-row')
     await rowFor(RUN_ONLY_AT, 'R3/4/setup-run-row')
     await streamOpen('R3/4/setup-stream-open')
 
     harness.live.mockRejectedValue(FORBIDDEN)
-    await user.click(refreshButton())
+    await refreshReads()
     await waitFor(() =>
       expect(harness.stream.enabled, 'R3/4/refusal-retires-the-stream').toBe(
         false,
@@ -2241,9 +2258,9 @@ describe('SessionsWorkspaceView — a stream frame is a hint, never a row', () =
     await rowFor(LIVE_ONLY_AT, 'R3/6/setup-row')
     await rowFor(RUN_ONLY_AT, 'R3/6/setup-run-row')
     expect(
-      screen.getByTestId('sessions-summary').textContent,
+      screen.getByTestId('sessions-summary').getAttribute('title'),
       'R3/6/counts-present',
-    ).toMatch(/^\d+ sessions?( · \d+ running)?$/)
+    ).toMatch(/^\d+ sessions?( · \d+ working)?$/)
     expect
       .soft(
         screen.queryByText(/most recent page, not the whole estate/i),
@@ -2257,8 +2274,11 @@ describe('SessionsWorkspaceView — a stream frame is a hint, never a row', () =
       )
       .toBeInTheDocument()
     expect
-      .soft(refreshButton(), 'R3/6/manual-refresh-still-offered')
-      .toBeInTheDocument()
+      .soft(
+        screen.queryByRole('button', { name: /refresh/i }),
+        'R3/6/no-refresh-button-the-list-is-live',
+      )
+      .not.toBeInTheDocument()
     // The origin facet still narrows the same global inventory.
     await user.click(screen.getByLabelText('All sources'))
     await user.click(await screen.findByRole('option', { name: 'Launched' }))
@@ -2316,7 +2336,6 @@ describe('SessionsWorkspaceView — the queue ends with the admission that autho
   }
 
   it('R3/7 a hint queued during a read that is REFUSED starts no further read', async () => {
-    const user = userEvent.setup()
     renderView()
     await rowFor(LIVE_ONLY_AT, 'R3/7a/setup-row')
     await rowFor(RUN_ONLY_AT, 'R3/7a/setup-run-row')
@@ -2364,7 +2383,7 @@ describe('SessionsWorkspaceView — the queue ends with the admission that autho
       items: [{ ...LIVE_ONLY, session_ref: 'spr-after-recovery' }],
       has_more: false,
     })
-    await user.click(refreshButton())
+    await refreshReads()
     await rowFor(
       sessAddress('spr-after-recovery'),
       'R3/7a/manual-recovery-paints',
@@ -2511,7 +2530,6 @@ describe('SessionsWorkspaceView — the queue ends with the admission that autho
   })
 
   it('R3/7 a read already in flight is JOINED, not cancelled, by a hint', async () => {
-    const user = userEvent.setup()
     renderView()
     await rowFor(LIVE_ONLY_AT, 'R3/7f/setup-row')
     await streamOpen('R3/7f/setup-stream-open')
@@ -2520,7 +2538,7 @@ describe('SessionsWorkspaceView — the queue ends with the admission that autho
     // The OPERATOR's own read, which the queue never started and does not track.
     const manual = deferred<typeof LIVE_OK>()
     harness.live.mockImplementation(() => manual.promise)
-    await user.click(refreshButton())
+    await refreshReads()
     await waitFor(() =>
       expect(harness.live.mock.calls.length, 'R3/7f/manual-read-out').toBe(
         antes + 1,

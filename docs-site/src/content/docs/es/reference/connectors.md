@@ -44,6 +44,51 @@ atribución firme por agente, que sigue siendo la dependencia dura (una cuenta c
 incluso un almacén de nivel limpio a `approximate`).
 :::
 
+## Modo de proceso por tipo
+
+Cada tipo se ejecuta en un único modo de proceso, fijado por el motor:
+
+- **Plugin fuera de proceso.** El motor incorpora el conector como programa
+  separado, lo inicia como subproceso confinado (entorno acotado; usuario y cgroup
+  dedicados cuando el host lo permite) y se comunica por gRPC con AutoMTLS.
+  Sus árboles de dependencias nunca se enlazan al motor. Tipos de fuente:
+  `claude`, `cowork`, `kafka`, `amqp`, `nats`, `mqtt`, `cloudqueue`, `debezium`,
+  `envoy` y `hubble`. Tipos de destino: `kafka`, `amqp` y `cloudqueue`. Una build
+  sin `task build:connectors` no los incorpora y el arranque avisa por cada uno
+  que esté configurado.
+- **En proceso.** Todos los demás tipos de esta página. El conector está enlazado
+  al binario y corre dentro del proceso del motor; un panic queda contenido y
+  la fuente se marca `failed`.
+- **Plugin externo.** Una fuente o destino configurado con `plugin` (ruta del
+  binario, digest fijado y firma verificada contra `connector_trust`) siempre
+  corre fuera de proceso con el mismo confinamiento. Los programas
+  `connectors/<kind>/cmd/` de los tipos en proceso no forman parte de la release;
+  compila uno y admítelo así ([operar un plugin](/es/how-to/build-a-connector/))
+  para ejecutar ese conector en su propio proceso.
+
+Si muere el proceso de un plugin **fuente**, el motor reinicia el mismo binario,
+comprueba de nuevo el digest fijado de un plugin externo, lo abre con los ajustes
+de la fuente y reanuda la recogida. El primer reinicio espera aproximadamente un
+segundo; la espera se duplica en cada reinicio posterior hasta cinco minutos y
+vuelve a un segundo cuando el plugin lleva cinco minutos ejecutándose. Desde
+que se detecta la muerte hasta que el nuevo proceso está disponible, la fuente
+informa `failed`, con el error de reinicio mientras falle un intento.
+
+Un plugin **destino** se reinicia del mismo modo cuando falla una entrega y se
+detecta que su proceso ha muerto: el motor reinicia el binario, comprueba de nuevo
+el digest si es externo y lo abre con los ajustes del destino. La entrega que
+detectó la muerte sigue informándose como fallida, con el error de reinicio si
+este se rechazó, y la escala de reintentos de notificaciones la reintenta contra
+el nuevo proceso. El primer reinicio es inmediato; los posteriores esperan un
+segundo, duplicándose hasta cinco minutos y empezando de nuevo cuando el último
+intento tiene más de cinco minutos. Un destino sin entregas no se reinicia hasta
+que llega una.
+
+El plugin reiniciado se abre con los ajustes originales del conector: un secreto
+modificado o rotado llega al recargar la configuración o reiniciar el motor,
+igual que en un plugin que nunca murió. Un plugin cuyo proceso sigue vivo pero
+cuya recogida o entrega falla no se reinicia: ese fallo es propio del conector.
+
 ## Cooperativo — Claude y telemetría de proveedores
 
 Las fuentes de máxima fidelidad cuando están presentes. La fuente runtime de Claude Code corre
@@ -191,9 +236,10 @@ anterior.
 | `openhands` | `config.toml` + entorno de OpenHands → postura de sandbox/fijación de modelo/credencial/telemetría y aristas permitidas de MCP/acciones | Solo lo declarado en la configuración; uso en vivo mediante OTEL `gen_ai.*` nativo |
 | `goose` | `profiles.yaml` + entorno de Goose (Block) → postura de ajustes admin/fijación de modelo/extensión/aprobación de herramientas y aristas permitidas de extensiones | Solo lo declarado en la configuración |
 | `cline` | Namespaces de Cline / Kilo Code en `settings.json` de VSCode → postura de aprobación automática/allowlist MCP/credencial/fijación de modelo | Solo lo declarado en la configuración; no hay OTEL nativo upstream |
-| `grok` | Grok Build (xAI) — el agente de codificación de terminal, leído por su configuración LOCAL: wire de hooks, eventos con veto documentado y postura de gobierno declarable | **NO es el conector de la API de xAI** (`xai` lee catálogo y coste, con `grok-build-0.1` entre sus MODELOS). Este lee el AGENTE, y no se solapan. La mitad de OBSERVACIÓN va por el ingest OTLP que Grok Build ya emite. `PostureEnforced` solo lo reclama `PreToolUse`, el único evento con veto documentado; el resto es `observed` |
+| `grok` | Grok Build (xAI), el agente de codificación de terminal: configuración local, cableado de hooks, eventos con veto documentado y postura de gobernanza declarada | Postura del agente declarada por configuración. El conector de API `xai` lee el catálogo de modelos y los costes, con `grok-build-0.1` como modelo; este conector lee el agente. La observación en vivo usa el ingest OTLP emitido por Grok Build. `PostureEnforced` solo se aplica a `PreToolUse`, el único evento con veto documentado; los demás son `observed` |
 | `openclaw` | `openclaw.json` de OpenClaw (descubrimiento JSON5, `$include` confinado) → postura de gateway/canal/herramienta/sandbox/skill/modelo por agente y aristas declaradas de canal/skill/modelo | Solo lo declarado en la configuración; no se ha verificado un hook PEP inline upstream |
 | `hermes` | `config.yaml` + árboles de perfiles + ámbito gestionado de Hermes Agent → postura de terminal/canal/skill/seguridad/modelo/MCP y aristas declaradas | Solo lo declarado en la configuración; no se ha verificado un hook PEP inline ni OTEL nativo upstream |
+| `paperclip` | API REST de Paperclip (clave de API del board, solo GET) → empresas como colecciones de grupos y agentes como filas del roster NHI (`paperclip/<adapterType>`, rol, título, `reports_to`), recuentos de ejecuciones de días completos y muestras orientativas de coste (`cost_type=paperclip`) | Solo observación: no inicia ni confina los agentes de Paperclip. El coste es un agregado diario porque Paperclip no ofrece una lista de eventos de coste en bruto; una parte rechazada se informa como hallazgo de cobertura |
 | `google-adk` | JSON de sesión exportado de Google ADK 2.0 → inventario de agente/app, subagentes, llamadas de funciones de herramientas, transferencias, drift de herramientas aprobadas y correlación Vertex reasoningEngine | Exportación de solo lectura; nunca contenido de mensajes. Distinto de la superficie de plataforma `google-agent` |
 | `agents-md` | Recorrido del repo de ficheros de instrucciones de agentes (AGENTS.md y ficheros de memoria/instrucciones por agente) → drift de línea base SHA-256 + escaneo de inyección de instrucciones / Unicode oculto / secretos | Datos mínimos: rutas saneadas + detalles hasheados, nunca contenido |
 | `mcpb` | Extensiones de escritorio `.mcpb` instaladas / distribuidas → escaneo de postura del manifiesto, drift de allowlist enterprise y verificación de firma PKCS#7 | PERMITIDO-frente-a-OBSERVADO en la superficie de extensiones |
@@ -314,6 +360,7 @@ rol / proceso / credencial compartida en lugar de a un agente resuelto.
 | `egress-proxy` | Log de veredicto de egress-proxy → aristas de egress L7 | approximate |
 | `kong-audit` | Logs de auditoría de Kong → hallazgos de cambio de config | approximate |
 | `ai-gateway` | Registros de uso de Envoy AI Gateway → muestras de **coste** (FinOps) | flujo de coste |
+| `git` | Vínculo de publicación Git simple: la fila del roster que aprueba un remoto Git SSH o HTTPS para pushes de gitpublish | No observa nada; solo push (un remoto simple no tiene API de pull requests ni de merge) |
 | `github` | Repositorios GitHub como fuentes de datos de agentes → aristas de acceso R/RW observadas (webhook primero, reconciliación por polling de API) + aristas ACL permitidas | observado + permitido; streaming (`poll_seconds: 0`) |
 | `gitlab` | Repositorios GitLab → aristas de acceso R/RW observadas + aristas ACL permitidas | observado + permitido; streaming (`poll_seconds: 0`) |
 
@@ -468,7 +515,7 @@ nivel de cobertura. Se cablean por separado de las fuentes.
 
 Kinds de destino en proceso: `slack`, `teams`, `pagerduty`, `opsgenie`, `webhook`,
 `siem`, `splunkhec`, `syslog`, `servicenow`, `jira`, `email`, `twilio`, `chronicle`,
-`datadog`, `elastic`, `snmp`, `filelog`, `otlplog` (logs OTLP/HTTP) y `s3archive`
+`datadog`, `elastic`, `snmp`, `filelog`, `otlplog` (logs OTLP/HTTP) y `s3archive` (Business: Regulated Operations)
 (el sink WORM de S3 Object Lock: un objeto inmutable y con bloqueo verificado por
 notificación).
 
@@ -514,9 +561,10 @@ Los conectores de diferencial R/RW están cableados en el binario por defecto, p
   (o por subscription) — ese único rol cubre Resource Graph, el listado de subscriptions y
   el Activity Log. Las subscriptions se listan automáticamente cuando `subscriptions` no está fijado.
 
-Ambos siguen corriendo **en proceso** (transporte A); los binarios go-plugin
-`cmd/{pg-audit,s3-cloudtrail,ebpf-source}` existen para un despliegue de **collector** fuera de proceso
-cerca del host si prefieres aislarlos ahí.
+Ambos corren **en proceso**, como todo tipo no listado como plugin en
+[Modo de proceso por tipo](#modo-de-proceso-por-tipo). Para ejecutar uno en su
+propio proceso, compila su programa `connectors/<kind>/cmd/` y admítelo como
+plugin externo.
 
 Toda fuente es **opt-in, deny-closed**: un `log_path`/`path`/`events_path` faltante es un
 error de configuración en el arranque (la fuente no se cablea), nunca un no-op silencioso. El estate

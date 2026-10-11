@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/olivaresai/olivares/core/envconfig"
 	"github.com/spf13/cobra"
 
 	"github.com/olivaresai/olivares/core/dr"
@@ -85,14 +86,14 @@ type offsiteFlags struct {
 }
 
 func addOffsiteFlags(cmd *cobra.Command, f *offsiteFlags) {
-	cmd.Flags().StringVar(&f.endpoint, "offsite-endpoint", os.Getenv("OLIVARES_DR_OFFSITE_ENDPOINT"), "S3-compatible endpoint for offsite replication (R2/MinIO/Wasabi); empty = AWS S3 from --offsite-region")
-	cmd.Flags().StringVar(&f.bucket, "offsite-bucket", os.Getenv("OLIVARES_DR_OFFSITE_BUCKET"), "offsite bucket for DR bundles (set to enable offsite replication)")
-	cmd.Flags().StringVar(&f.region, "offsite-region", os.Getenv("OLIVARES_DR_OFFSITE_REGION"), "offsite region (default us-east-1; Cloudflare R2 uses 'auto')")
-	cmd.Flags().StringVar(&f.prefix, "offsite-prefix", os.Getenv("OLIVARES_DR_OFFSITE_PREFIX"), "key prefix within the offsite bucket")
+	cmd.Flags().StringVar(&f.endpoint, "offsite-endpoint", envconfig.Get("OLIVARES_DR_OFFSITE_ENDPOINT"), "S3-compatible endpoint for offsite replication (R2/MinIO/Wasabi); empty = AWS S3 from --offsite-region")
+	cmd.Flags().StringVar(&f.bucket, "offsite-bucket", envconfig.Get("OLIVARES_DR_OFFSITE_BUCKET"), "offsite bucket for DR bundles (set to enable offsite replication)")
+	cmd.Flags().StringVar(&f.region, "offsite-region", envconfig.Get("OLIVARES_DR_OFFSITE_REGION"), "offsite region (default us-east-1; Cloudflare R2 uses 'auto')")
+	cmd.Flags().StringVar(&f.prefix, "offsite-prefix", envconfig.Get("OLIVARES_DR_OFFSITE_PREFIX"), "key prefix within the offsite bucket")
 	cmd.Flags().BoolVar(&f.pathStyle, "offsite-path-style", false, "force path-style S3 addressing (implied by a custom --offsite-endpoint)")
-	cmd.Flags().StringVar(&f.akidFile, "offsite-access-key-id-file", os.Getenv("OLIVARES_DR_OFFSITE_ACCESS_KEY_ID_FILE"), "file holding the offsite access key id (credential by reference; falls back to $AWS_ACCESS_KEY_ID)")
-	cmd.Flags().StringVar(&f.secretFile, "offsite-secret-access-key-file", os.Getenv("OLIVARES_DR_OFFSITE_SECRET_ACCESS_KEY_FILE"), "file holding the offsite secret access key (credential by reference; falls back to $AWS_SECRET_ACCESS_KEY)")
-	cmd.Flags().StringVar(&f.tokenFile, "offsite-session-token-file", os.Getenv("OLIVARES_DR_OFFSITE_SESSION_TOKEN_FILE"), "optional file holding an STS session token (falls back to $AWS_SESSION_TOKEN)")
+	cmd.Flags().StringVar(&f.akidFile, "offsite-access-key-id-file", envconfig.Get("OLIVARES_DR_OFFSITE_ACCESS_KEY_ID_FILE"), "file holding the offsite access key id (credential by reference; falls back to $AWS_ACCESS_KEY_ID)")
+	cmd.Flags().StringVar(&f.secretFile, "offsite-secret-access-key-file", envconfig.Get("OLIVARES_DR_OFFSITE_SECRET_ACCESS_KEY_FILE"), "file holding the offsite secret access key (credential by reference; falls back to $AWS_SECRET_ACCESS_KEY)")
+	cmd.Flags().StringVar(&f.tokenFile, "offsite-session-token-file", envconfig.Get("OLIVARES_DR_OFFSITE_SESSION_TOKEN_FILE"), "optional file holding an STS session token (falls back to $AWS_SESSION_TOKEN)")
 }
 
 // configured reports whether an offsite target was supplied (a bucket is the switch).
@@ -134,7 +135,7 @@ func readSecretRef(file, envName string) (string, error) {
 		}
 		return strings.TrimSpace(string(b)), nil
 	}
-	return strings.TrimSpace(os.Getenv(envName)), nil
+	return strings.TrimSpace(envconfig.Get(envName)), nil
 }
 
 // gfsFlags configure a Grandfather-Father-Son retention policy.

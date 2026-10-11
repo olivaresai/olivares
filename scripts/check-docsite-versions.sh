@@ -29,13 +29,13 @@
 set -uo pipefail
 
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)" || {
-	echo "check-docsite-versions: NO HE PODIDO MIRAR — no resuelvo la raíz" >&2; exit 2; }
+	echo "check-docsite-versions: COULD NOT CHECK — cannot resolve the root" >&2; exit 2; }
 cd "$ROOT" || exit 2
 
 MANIFIESTO="${OLIVARES_DOCSITE_MANIFEST:-docs-site/src/site-locales.mjs}"
 CONTENIDO="${OLIVARES_DOCSITE_CONTENT:-docs-site/src/content/docs}"
 
-no_pude() { echo "check-docsite-versions: NO HE PODIDO MIRAR — $1" >&2; exit 2; }
+cannot_read() { echo "check-docsite-versions: COULD NOT CHECK — $1" >&2; exit 2; }
 
 # Los slugs se DERIVAN del manifiesto. No se teclean: una lista tecleada salta lo que no nombra.
 # Se lee la forma `slug: '...'` dentro del array VERSIONS, acotando por sus corchetes, porque el
@@ -60,21 +60,21 @@ dirs_de_instantanea() {
 
 comprobar() {
 	local man="$1" cont="$2" decl dirs s huecos=0 n_decl=0 n_dir=0
-	decl="$(slugs_declarados "$man")" || no_pude "no leo $man"
-	[ -n "$decl" ] || no_pude "$man no declara ningún slug en VERSIONS; o cambió de forma, o la sonda no mide"
-	dirs="$(dirs_de_instantanea "$cont")" || no_pude "no leo $cont"
+	decl="$(slugs_declarados "$man")" || cannot_read "cannot read $man"
+	[ -n "$decl" ] || cannot_read "$man declares no slugs in VERSIONS; either its format changed or this probe cannot measure it"
+	dirs="$(dirs_de_instantanea "$cont")" || cannot_read "cannot read $cont"
 
 	while IFS= read -r s; do
 		[ -n "$s" ] || continue
 		n_decl=$((n_decl + 1))
 		if [ ! -d "$cont/$s" ]; then
-			echo "  ⛔ DECLARADO SIN CONTENIDO: VERSIONS trae '$s' y no existe $cont/$s"
+			echo "  ⛔ DECLARED WITHOUT CONTENT: VERSIONS includes '$s', but $cont/$s is missing"
 			huecos=$((huecos + 1))
 		elif [ -z "$(find "$cont/$s" -type f -name '*.md*' -print -quit 2>/dev/null)" ]; then
-			echo "  ⛔ DECLARADO Y VACÍO: $cont/$s existe y no tiene una sola página"
+			echo "  ⛔ DECLARED AND EMPTY: $cont/$s exists but contains no pages"
 			huecos=$((huecos + 1))
 		else
-			echo "  ok '$s' declarado y con contenido ($(find "$cont/$s" -type f -name '*.md*' 2>/dev/null | grep -c .) página(s))"
+			echo "  ok '$s' declared and populated ($(find "$cont/$s" -type f -name '*.md*' 2>/dev/null | grep -c .) page(s))"
 		fi
 	done <<<"$decl"
 
@@ -82,16 +82,16 @@ comprobar() {
 		[ -n "$s" ] || continue
 		n_dir=$((n_dir + 1))
 		if ! grep -qxF "$s" <<<"$decl"; then
-			echo "  ⛔ CONTENIDO SIN DECLARAR: existe $cont/$s y VERSIONS no lo nombra — inalcanzable desde el selector"
+			echo "  ⛔ UNDECLARED CONTENT: $cont/$s exists, but VERSIONS does not name it; inaccessible from the selector"
 			huecos=$((huecos + 1))
 		fi
 	done <<<"$dirs"
 
 	if [ "$huecos" -gt 0 ]; then
-		echo "check-docsite-versions: SUCIO — $huecos desajuste(s) entre VERSIONS ($n_decl) y las instantáneas en disco ($n_dir)."
+		echo "check-docsite-versions: FAIL — $huecos mismatch(es) between VERSIONS ($n_decl) and snapshots on disk ($n_dir)."
 		return 1
 	fi
-	echo "check-docsite-versions: LIMPIO — $n_decl versión(es) declarada(s) y $n_dir instantánea(s), en correspondencia exacta."
+	echo "check-docsite-versions: CLEAN — $n_decl declared version(s) and $n_dir snapshots match exactly."
 	return 0
 }
 
@@ -101,48 +101,48 @@ if [ "${1:-}" = "--self-test" ]; then
 	mal() { printf '  FAIL  %-52s %s\n' "$1" "$2"; fallos=$((fallos + 1)); }
 
 	if grep -qx '2026-06' <<<"$(slugs_declarados "$MANIFIESTO")"; then
-		ok "los slugs se derivan del manifiesto" "encontrado 2026-06"
-	else mal "los slugs se derivan del manifiesto" "no salió el slug conocido"; fi
+		ok "slugs are derived from the manifest" "found 2026-06"
+	else mal "slugs are derived from the manifest" "the known slug was not found"; fi
 
 	if grep -qx '2026-06' <<<"$(dirs_de_instantanea "$CONTENIDO")"; then
-		ok "las instantáneas se derivan del disco" "encontrado 2026-06"
-	else mal "las instantáneas se derivan del disco" "no salió el directorio conocido"; fi
+		ok "snapshots are derived from disk" "found 2026-06"
+	else mal "snapshots are derived from disk" "the known directory was not found"; fi
 
 	if grep -qxE 'de|es|fr|ja|ru|zh' <<<"$(dirs_de_instantanea "$CONTENIDO")"; then
-		mal "una carpeta de idioma NO es una instantánea" "coló un idioma"
-	else ok "una carpeta de idioma NO es una instantánea" "la forma AAAA-MM los excluye"; fi
+		mal "a language directory is not a snapshot" "a language directory was included"
+	else ok "a language directory is not a snapshot" "the YYYY-MM pattern excludes it"; fi
 
 	rc=0; comprobar "$MANIFIESTO" "$CONTENIDO" >/dev/null 2>&1 || rc=$?
-	if [ "$rc" -eq 0 ]; then ok "el árbol de hoy sale LIMPIO" "rc=0"
-	else mal "el árbol de hoy sale LIMPIO" "rc=$rc"; fi
+	if [ "$rc" -eq 0 ]; then ok "the current tree is CLEAN" "rc=0"
+	else mal "the current tree is CLEAN" "rc=$rc"; fi
 
 	# MUTANTE A — el que ningún gate cazaba: un slug declarado sin directorio.
-	tmp="$(mktemp -d "${TMPDIR:-/tmp}/cdv.XXXXXX")" || no_pude "sin directorio temporal"
+	tmp="$(mktemp -d "${TMPDIR:-/tmp}/cdv.XXXXXX")" || cannot_read "could not create a temporary directory"
 	sed "s#export const VERSIONS = \[#export const VERSIONS = [{ slug: '2099-99', label: 'MUTANTE' },#" \
 		"$MANIFIESTO" > "$tmp/m.mjs"
 	if grep -q '2099-99' "$tmp/m.mjs"; then
-		rc=0; salida="$(comprobar "$tmp/m.mjs" "$CONTENIDO" 2>&1)" || rc=$?
-		if [ "$rc" -eq 1 ] && grep -q 'DECLARADO SIN CONTENIDO' <<<"$salida"; then
-			ok "MUTANTE slug sin directorio sale SUCIO" "rc=1 y lo nombra"
-		else mal "MUTANTE slug sin directorio sale SUCIO" "rc=$rc — es el caso que nadie cazaba"; fi
-	else mal "el mutante A se inyectó" "sed no cambió nada"; fi
+		rc=0; output="$(comprobar "$tmp/m.mjs" "$CONTENIDO" 2>&1)" || rc=$?
+		if [ "$rc" -eq 1 ] && grep -q 'DECLARED WITHOUT CONTENT' <<<"$output"; then
+			ok "MUTANT slug without directory fails" "rc=1 and names it"
+		else mal "MUTANT slug without directory fails" "rc=$rc — this is the previously undetected case"; fi
+	else mal "mutant A was injected" "sed made no changes"; fi
 
 	# MUTANTE B — el sentido contrario: contenido en disco que nadie declara.
 	mkdir -p "$tmp/contenido/2098-01" && : > "$tmp/contenido/2098-01/x.md"
 	mkdir -p "$tmp/contenido/2026-06" && : > "$tmp/contenido/2026-06/x.md"
-	rc=0; salida="$(comprobar "$MANIFIESTO" "$tmp/contenido" 2>&1)" || rc=$?
-	if [ "$rc" -eq 1 ] && grep -q 'CONTENIDO SIN DECLARAR' <<<"$salida"; then
-		ok "MUTANTE instantánea sin declarar sale SUCIO" "rc=1 y lo nombra"
-	else mal "MUTANTE instantánea sin declarar sale SUCIO" "rc=$rc"; fi
+	rc=0; output="$(comprobar "$MANIFIESTO" "$tmp/contenido" 2>&1)" || rc=$?
+	if [ "$rc" -eq 1 ] && grep -q 'UNDECLARED CONTENT' <<<"$output"; then
+		ok "MUTANT undeclared snapshot fails" "rc=1 and names it"
+	else mal "MUTANT undeclared snapshot fails" "rc=$rc"; fi
 	rm -rf "$tmp"
 
 	# En SUBSHELL: `no_pude` hace `exit 2` y sin el subshell se lleva el autotest por delante —
 	# medido, el caso 7 mataba los anteriores sin imprimir nada.
 	rc=0; ( comprobar "/no/existe.mjs" "$CONTENIDO" >/dev/null 2>&1 ) || rc=$?
-	if [ "$rc" -eq 2 ]; then ok "un manifiesto ilegible es 'no he podido mirar'" "rc=2"
-	else mal "un manifiesto ilegible es 'no he podido mirar'" "rc=$rc"; fi
+	if [ "$rc" -eq 2 ]; then ok "an unreadable manifest returns 'could not check'" "rc=2"
+	else mal "an unreadable manifest returns 'could not check'" "rc=$rc"; fi
 
-	echo "check-docsite-versions --self-test: $((7 - fallos)) pasan, $fallos fallan"
+	echo "check-docsite-versions --self-test: $((7 - fallos)) passed, $fallos failed"
 	[ "$fallos" -eq 0 ] || exit 1
 	exit 0
 fi

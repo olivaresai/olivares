@@ -40,21 +40,21 @@ repo_slug() {
 	[ -n "$(repo_slug)" ] && { printf '%s' "$(repo_slug)"; return 0; }
 	REPO="${OLIVARES_REPO:-${GITHUB_REPOSITORY:-}}"
 	[ -n "$(repo_slug)" ] || REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null) || REPO=""
-	[ -n "$(repo_slug)" ] || { echo "check-run-table: 2 NO PUDE MIRAR: no se que repositorio consultar (fija OLIVARES_REPO)" >&2; exit 2; }
+	[ -n "$(repo_slug)" ] || { echo "check-run-table: 2 COULD NOT CHECK: cannot determine the repository (set OLIVARES_REPO)" >&2; exit 2; }
 	printf '%s' "$(repo_slug)"
 }
-[ -n "$RUN" ] || { echo "uso: $0 <run-id>" >&2; exit 2; }
-command -v jq >/dev/null 2>&1 || { echo "modo-tabla: ⛔ NO HE PODIDO MIRAR: sin jq" >&2; exit 2; }
+[ -n "$RUN" ] || { echo "usage: $0 <run-id>" >&2; exit 2; }
+command -v jq >/dev/null 2>&1 || { echo "check-run-table: ⛔ COULD NOT CHECK: jq is not installed" >&2; exit 2; }
 
 if [ -n "${OLIVARES_TABLA_JSON:-}" ]; then
-  [ -r "$OLIVARES_TABLA_JSON" ] || { echo "modo-tabla: ⛔ NO HE PODIDO MIRAR: fixture ilegible" >&2; exit 2; }
+  [ -r "$OLIVARES_TABLA_JSON" ] || { echo "check-run-table: ⛔ COULD NOT CHECK: unreadable fixture" >&2; exit 2; }
   J=$(cat "$OLIVARES_TABLA_JSON")
 else
-  command -v gh >/dev/null 2>&1 || { echo "modo-tabla: ⛔ NO HE PODIDO MIRAR: sin gh" >&2; exit 2; }
+  command -v gh >/dev/null 2>&1 || { echo "check-run-table: ⛔ COULD NOT CHECK: gh is not installed" >&2; exit 2; }
   J=$(gh api "repos/$(repo_slug)/actions/runs/${RUN}/jobs" --paginate 2>/dev/null) \
-    || { echo "modo-tabla: ⛔ NO HE PODIDO MIRAR: la API no devolvio los jobs de ${RUN}" >&2; exit 2; }
+    || { echo "check-run-table: ⛔ COULD NOT CHECK: the API did not return jobs for ${RUN}" >&2; exit 2; }
 fi
-printf '%s' "$J" | jq -e . >/dev/null 2>&1 || { echo "modo-tabla: ⛔ NO HE PODIDO MIRAR: JSON ilegible" >&2; exit 2; }
+printf '%s' "$J" | jq -e . >/dev/null 2>&1 || { echo "check-run-table: ⛔ COULD NOT CHECK: unreadable JSON" >&2; exit 2; }
 
 # ⛔ EL RUN SE PREGUNTA AL RUN, NO A SUS JOBS. Mirar solo `/jobs` confunde «todos los jobs que hay
 # AHORA han terminado» con «el run ha CERRADO», y son cosas distintas: GitHub materializa los jobs
@@ -63,68 +63,58 @@ printf '%s' "$J" | jq -e . >/dev/null 2>&1 || { echo "modo-tabla: ⛔ NO HE PODI
 # tenia dentro el agujero que esa guarda existe para tapar. Lo cazo the reviewer (A-01).
 if [ -n "${OLIVARES_TABLA_JSON:-}" ]; then
   EST=$(printf '%s' "$J" | jq -r '.run.status // empty')
-  [ -n "$EST" ] || { echo "check-run-table: ⛔ NO HE PODIDO MIRAR: el fixture no trae \`run.status\`." >&2
-                     echo "  Sin el estado del RUN no se puede distinguir «cerrado» de «los jobs de esta tanda»." >&2; exit 2; }
+  [ -n "$EST" ] || { echo "check-run-table: ⛔ COULD NOT CHECK: fixture has no \`run.status\`." >&2
+                     echo "  Without the run status, finished jobs cannot prove the run is complete." >&2; exit 2; }
 else
-  EST=$(gh api "repos/$(repo_slug)/actions/runs/${RUN}" --jq '.status' 2>/dev/null)     || { echo "check-run-table: ⛔ NO HE PODIDO MIRAR: la API no devolvio el run ${RUN}." >&2; exit 2; }
+  EST=$(gh api "repos/$(repo_slug)/actions/runs/${RUN}" --jq '.status' 2>/dev/null)     || { echo "check-run-table: ⛔ COULD NOT CHECK: the API did not return run ${RUN}." >&2; exit 2; }
 fi
 if [ "$EST" != "completed" ]; then
-  echo "check-run-table: ⛔ NO HE PODIDO MIRAR: el run ${RUN} esta en '${EST}', no 'completed'." >&2
-  echo "  GitHub materializa los jobs por tandas: los que ya existen pueden estar todos terminados" >&2
-  echo "  y faltar otros. Re-corre cuando el RUN cierre." >&2
+  echo "check-run-table: ⛔ COULD NOT CHECK: run ${RUN} is '${EST}', not 'completed'." >&2
+  echo "  GitHub creates jobs in batches: all existing jobs may be finished while others" >&2
+  echo "  have not been created. Rerun this check after the run finishes." >&2
   exit 2
 fi
 
 TOT=$(printf '%s' "$J" | jq '.jobs|length')
-[ "${TOT:-0}" -gt 0 ] || { echo "modo-tabla: ⛔ NO HE PODIDO MIRAR: cero jobs en ${RUN}" >&2; exit 2; }
+[ "${TOT:-0}" -gt 0 ] || { echo "check-run-table: ⛔ COULD NOT CHECK: no jobs in ${RUN}" >&2; exit 2; }
 VUELO=$(printf '%s' "$J" | jq '[.jobs[]|select(.status!="completed")]|length')
 if [ "${VUELO:-0}" -gt 0 ]; then
-  echo "modo-tabla: ⛔ NO HE PODIDO MIRAR: ${VUELO} de ${TOT} job(s) siguen en vuelo." >&2
-  echo "  Una tabla tomada en vuelo enseña menos jobs y se lee igual que una completa" >&2
-  echo "  (una medida en vuelo dio 14 jobs a las 06:12Z y 15 al cerrar). Re-corre cuando el run cierre." >&2
+  echo "check-run-table: ⛔ COULD NOT CHECK: ${VUELO} of ${TOT} job(s) are still running." >&2
+  echo "  A table captured during a run can look complete while omitting jobs." >&2
+  echo "  One run had 14 jobs at 06:12Z and 15 when finished. Rerun this check after completion." >&2
   exit 2
 fi
 
-# ⛔ UNA SOLA FUENTE PARA LA TABLA Y PARA EL VEREDICTO. La version anterior imprimia la tabla con
-# una expresion jq y contaba los jobs con saltos con OTRA, independiente. Las dos podian discrepar
-# —y discrepaban: al mutar el filtro de saltos estructurales, la tabla marcaba el salto y el
-# veredicto seguia saliendo 0, o sea **el rc no venia de lo que se habia impreso**. Ahora la tabla
-# se escribe a un fichero y el veredicto se CUENTA DE ESE MISMO FICHERO: lo que se ve es lo que se
-# juzga. Lo destapo su propio mutante, que es para lo que estan.
-# ⛔ EL rc DE `jq` SE COMPRUEBA. Un job valido SIN `steps` hacia fallar la expresion, su rc se
-# perdia y el guion terminaba «CLEAN rc 0» sobre una tabla que no se habia podido construir: un
-# «no pude mirar» disfrazado de limpio, la familia que este carril lleva toda la noche cazando.
-# ⛔ EL PREDICADO COMPARTIDO SE CARGA DE SU FICHERO, Y SU AUSENCIA ES rc 2 — NO «sin reglas».
-# Sin reglas, TODO salto seria sustantivo y esta tabla volveria a ser el ruido que quitamos: nueve
-# de once jobs marcados. Y alguien la «arreglaria» ignorandolos. Misma decision que tomo en
-# su consumidor, para que los dos fallen igual ante el mismo fichero roto.
-# ⛔ TRES ESTADOS DE `steps`, NO DOS. Me lo enseño midiendo el suyo, y al medir el mio el
-# tercero era el que se colaba: `steps` AUSENTE y `steps: null` reventaban `jq` —rc 2 correcto pero
-# con el error de `jq` como mensaje, no con un diagnostico mio— y `steps: []` salia **CLEAN con una
-# fila basura**: `nulls` de duracion y `-` de paso mas caro, o sea un job que se lee como barato y
-# sano. Colapsar los tres en dos es donde se pierde el aviso.
-# ⛔ EL `or` DENTRO DEL `select`, no fuera: `select(A) or (B)` no es «A o B» — es un `select(A)`
-# seguido de una disyuncion, la expresion no hace lo que parece y `jq` revienta ANTES de mi sonda,
-# devolviendo su propio error como mensaje. Sintoma: rc 2 correcto con diagnostico ajeno.
+# Use one source for the table and verdict. Independent jq expressions previously
+# disagreed when the structural-skip filter was mutated: a displayed skip still
+# returned 0. Write the table to a file and count the verdict from that same file.
+# Check jq's rc: a valid job without steps previously failed to build a table but
+# still returned CLEAN rc 0. Load the shared predicate file; absence returns 2,
+# matching rather than treating all skips as substantive (9 of 11 jobs).
+# Distinguish three steps states: missing and null broke jq with its own
+# diagnostic; [] falsely printed CLEAN with null duration and a dash for the most
+# expensive step. Report each explicitly. Keep `or` inside select: `select(A) or (B)`
+# is a selection followed by disjunction, not select(A or B), and fails before the
+# probe with jq's diagnostic.
 SIN=$(printf '%s' "$J" | jq -r '[.jobs[]|select((has("steps")|not) or (.steps==null))|.name]|join(", ")' 2>/dev/null)
 if [ -n "${SIN:-}" ]; then
-  echo "check-run-table: ⛔ NO HE PODIDO MIRAR: job(s) sin lista \`steps\` (ausente o null): ${SIN}." >&2
-  echo "  El JSON esta incompleto; no es que el job no tenga pasos." >&2; exit 2
+  echo "check-run-table: ⛔ COULD NOT CHECK: job(s) with missing or null \`steps\` list: ${SIN}." >&2
+  echo "  The JSON is incomplete; this does not prove the jobs have no steps." >&2; exit 2
 fi
 VACIO=$(printf '%s' "$J" | jq -r '[.jobs[]|select((.steps|type=="array") and (.steps|length==0))|.name]|join(", ")' 2>/dev/null)
 if [ -n "${VACIO:-}" ]; then
-  echo "check-run-table: ⛔ NO HE PODIDO MIRAR: job(s) con CERO pasos: ${VACIO}." >&2
-  echo "  Una lista vacia no es un job barato: es un job del que no hay nada que leer." >&2; exit 2
+  echo "check-run-table: ⛔ COULD NOT CHECK: job(s) with no steps: ${VACIO}." >&2
+  echo "  An empty list leaves nothing to inspect; it does not prove the job needs no work." >&2; exit 2
 fi
 
 REGLAS="${OLIVARES_SKIPS_FILE:-scripts/lib/skips-estructurales.txt}"
-[ -r "$REGLAS" ] || { echo "check-run-table: ⛔ NO HE PODIDO MIRAR: no leo el predicado compartido $REGLAS." >&2
-                      echo "  Lo publica el carril que mantiene el predicado. Sin el, todo salto seria" >&2
-                      echo "  sustantivo y la tabla volveria a ser ruido." >&2; exit 2; }
+[ -r "$REGLAS" ] || { echo "check-run-table: ⛔ COULD NOT CHECK: cannot read shared predicate $REGLAS." >&2
+                      echo "  The predicate's maintainer publishes it. Without it, every skip would be" >&2
+                      echo "  treated as substantive, making the table noisy." >&2; exit 2; }
 EXENTOS=$(sed -n 's/^exacto:"\(.*\)"$/\1/p' "$REGLAS" | jq -R . | jq -s .) || {
-  echo "check-run-table: ⛔ NO HE PODIDO MIRAR: no pude leer las reglas de $REGLAS." >&2; exit 2; }
+  echo "check-run-table: ⛔ COULD NOT CHECK: could not read rules from $REGLAS." >&2; exit 2; }
 NREG=$(printf '%s' "$EXENTOS" | jq 'length')
-[ "${NREG:-0}" -gt 0 ] || { echo "check-run-table: ⛔ NO HE PODIDO MIRAR: $REGLAS no trae ninguna regla \`exacto:\`." >&2; exit 2; }
+[ "${NREG:-0}" -gt 0 ] || { echo "check-run-table: ⛔ COULD NOT CHECK: $REGLAS declares no rules using \`exacto:\`." >&2; exit 2; }
 
 FILA=$(mktemp "${TMPDIR:-/tmp}/tabla.XXXXXX") || exit 2
 trap 'rm -f "$FILA"' EXIT
@@ -135,25 +125,16 @@ printf '%s' "$J" | jq -r --argjson exentos "$EXENTOS" '
   . as $j |
   ([.steps[] | {n: .name, d: dur(.), c: .conclusion}]) as $st |
   ($st | map(select(.c=="skipped") | .n)) as $todos |
-  # ⛔ UN AVISO QUE SE ENCIENDE EN TODO NO INFORMA. Medido sobre la corrida 33291332689: el aviso
-  # de «pasos saltados» salta en **9 de 11 jobs**, y casi siempre por `report failure` (guardado
-  # con `if: failure()`, o sea saltado JUSTAMENTE porque el job fue bien) y por los `Post Run` de
-  # las actions. Esos saltos son ESTRUCTURALES: su presencia es la prueba de que todo fue bien.
-  # Mezclarlos con los que sí cuestan cobertura convierte la senal en ruido — la misma clase que
-  # las 376 issues abiertas que nadie lee.
-  #
-  # ⚠ HEURISTICA DECLARADA: la API no devuelve el `if:` de cada paso, asi que la separacion es POR
-  # NOMBRE. Si alguien renombra el informador, su salto pasara a contarse como perdida de
-  # cobertura — falso positivo, no falso negativo, que es el lado correcto para equivocarse.
-  # ⛔ UNA SOLA FUENTE PARA EL PREDICADO COMPARTIDO. La v2 mantenia un literal EMBEBIDO ademas del
-  # fichero de datos de y dos fuentes derivan: el falso positivo reproducible era
-  # `NOT APPLICABLE notice…`, que su fichero exime y mi lista no tenia. Lo cazaron los dos lectores
-  # a la vez, cada uno desde su lado. Aqui no queda NINGUN nombre embebido.
-  #
-  # El emparejamiento `Post Run X` ↔ `Run X` SI vive en codigo, y no es una excepcion a lo anterior:
-  # no es una lista de nombres, es una ESTRUCTURA que Actions genera. Una lista tendria que crecer
-  # con cada bump de `setup-go`; el emparejamiento sobrevive al bump porque los dos nombres cambian
-  # juntos. Medido: 3 de 3 saltos `Post Run` emparejados, 0 huerfanos.
+  # Warnings that fire everywhere hide lost coverage: run 33291332689 marked 9 of 11
+  # jobs, usually because `report failure` under if: failure() and action Post Run
+  # steps were structurally skipped on success. Separate these from substantive skips.
+  # Declared heuristic: the API omits the if: condition for each step, so classification uses names.
+  # Renaming the reporter can cause a false positive, the safe direction of error.
+  # Use the shared data file from alone: the v2 embedded list omitted the exempt
+  # `NOT APPLICABLE notice…` and drifted from that file, as both readers found.
+  # The Post Run X ↔ Run X pairing stays in code because it is Actions-generated
+  # structure, not an enumerated list; names change together across setup-go bumps.
+  # Measured: all three Post Run skips paired, zero orphans.
   ([$st[].n] | map(select(startswith("Run ")))) as $runs |
   ($todos | map(select(
       . as $n
@@ -169,15 +150,15 @@ printf '%s' "$J" | jq -r --argjson exentos "$EXENTOS" '
 # —el caso normal— el campo desaparecia y el contador de la derecha se leia en su sitio: el
 # recuento estructural salia siempre 0 y su linea no se imprimia nunca. El sintoma parecia del
 # sujeto y era del formato.
-' > "$FILA" || { echo "check-run-table: ⛔ NO HE PODIDO MIRAR: la expresión jq falló sobre los jobs de ${RUN}." >&2; exit 2; }
-[ -s "$FILA" ] || { echo "check-run-table: ⛔ NO HE PODIDO MIRAR: la tabla salió vacía con ${TOT} job(s)." >&2; exit 2; }
+' > "$FILA" || { echo "check-run-table: ⛔ COULD NOT CHECK: jq expression failed on jobs for ${RUN}." >&2; exit 2; }
+[ -s "$FILA" ] || { echo "check-run-table: ⛔ COULD NOT CHECK: table is empty despite ${TOT} job(s)." >&2; exit 2; }
 CON=0
 while IFS=$'\t' read -r nombre veredicto suma caro cd nskip ntot skips; do
-  printf '  %-18s %-9s %5ss   más caro: %-46s %4ss\n' "$nombre" "$veredicto" "$suma" "${caro:0:46}" "$cd"
+  printf '  %-18s %-9s %5ss   slowest: %-46s %4ss\n' "$nombre" "$veredicto" "$suma" "${caro:0:46}" "$cd"
   [ "${nskip:-0}" -gt 0 ] && CON=$((CON+1))
-  [ "${nskip:-0}" -gt 0 ] && printf '  %-18s   ⚠ %s salto(s) NO estructural(es): %s\n' "" "$nskip" "$skips"
+  [ "${nskip:-0}" -gt 0 ] && printf '  %-18s   ⚠ %s NONSTRUCTURAL skipped step(s): %s\n' "" "$nskip" "$skips"
   est=$(( ${ntot:-0} - ${nskip:-0} ))
-  [ "$est" -gt 0 ] && printf '  %-18s     (%s salto(s) estructural(es): informador/Post Run)\n' "" "$est"
+  [ "$est" -gt 0 ] && printf '  %-18s     (%s structural skipped step(s): reporter/Post Run)\n' "" "$est"
 done < "$FILA"
-echo "  ── ${TOT} job(s); ${CON} con saltos NO estructurales"
+echo "  ── ${TOT} job(s); ${CON} with nonstructural skips"
 [ "${CON:-0}" -eq 0 ]

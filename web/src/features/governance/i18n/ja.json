@@ -17,7 +17,7 @@
     "activationStateUnknown": "現在の許可とレビューの状態をコンソールが検証できるまで、有効化は利用できません。",
     "activationBlockedUnreviewed": "未レビューの以前の許可があります。アクティブなら終了し、別のユーザーアカウントに事後レビューを完了してもらってから、新しい緊急ウィンドウを開いてください。",
     "activationHumanRequired": "システムトークンでは緊急アクセスを有効化できません。安定したアイデンティティを持つ人間の管理者としてサインインしてください。",
-    "activationHardwareRequired": "ブレークグラスの有効化にはハードウェア検証済み（AAL3）セッションが必要です。ID → 特権ログイン から WebAuthn または PIV のステップアップを完了してから、ここに戻ってください。",
+    "activationHardwareRequired": "ブレークグラスの有効化にはハードウェア検証済み（AAL3）セッションが必要です。ID → 特権ログイン から WebAuthn のステップアップを完了してから、ここに戻ってください。",
     "currentTitle": "現在の緊急アクセス",
     "currentCaption": "今この時点で、誰がどのアクションについていつまで二者統制を回避できるかを示します。",
     "noActive": "アクティブな緊急アクセスはありません",
@@ -223,7 +223,8 @@
     "decisionApprove": "承認済み",
     "decisionReject": "却下",
     "reenableNeedsAdmins": "ほかの管理者アカウント 2 つの承認が必要です。「アイデンティティとNHI」または `olivares users create` で作成してください。",
-    "openIdentity": "「アイデンティティとNHI」を開く"
+    "openIdentity": "「アイデンティティとNHI」を開く",
+    "cannotDecideOwn": "自分のリクエストは承認できません。別の管理者が判断する必要があります。"
   },
   "policies": {
     "title": "ポリシー",
@@ -386,8 +387,7 @@
     "denied": "computer-useがポリシーにより拒否されました",
     "sensitiveInput": "computer-useの入力テキストに機密コンテンツが含まれています（DLPクラス検出）",
     "responseBlocked": "レスポンス保留：computer-useの入力テキストに機密コンテンツが含まれています",
-    "honesty": "実施はプロキシでのみverified-deployedです。カスタムANTHROPIC_BASE_URLはこれを回避します。computer-useツールはクライアント側です：モデルが提案し、クライアントが実行します。",
-    "enterpriseRequired": "深層スクリーンショット分析（OCR + DLP）とタイムライン記録にはエンタープライズモジュールが必要です。"
+    "honesty": "実施はプロキシでのみverified-deployedです。カスタムANTHROPIC_BASE_URLはこれを回避します。computer-useツールはクライアント側です：モデルが提案し、クライアントが実行します。"
   },
   "projects": {
     "title": "Claudeプロジェクトガバナンス",
@@ -708,6 +708,7 @@
     "folder": "フォルダー",
     "askedBy": "要求元",
     "askedBySession": "セッション自身",
+    "askedByForSession": "{{name}}（新しいセッション）",
     "tool": "ツール",
     "willRun": "実行される内容",
     "noReview": "このリクエストには実行される内容が含まれていません。",
@@ -717,6 +718,10 @@
     "details": "詳細",
     "id": "リクエスト ID",
     "untitled": "無題のセッション",
-    "openToDecide": "開いて承認または却下"
+    "openToDecide": "開いて承認または却下",
+    "you": "あなた",
+    "member": "メンバー",
+    "apiToken": "API トークン",
+    "requestSummary": "リクエスト"
   }
 }

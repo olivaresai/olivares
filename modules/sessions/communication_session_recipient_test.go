@@ -124,12 +124,12 @@ func TestCommunicationCursorTokenKeyringPublicPort(t *testing.T) {
 	if m.CommunicationCursorTokenKeyringBound() || m.communicationCursorTokenKeyring() != nil {
 		t.Fatal("fresh module reports a bound cursor keyring")
 	}
-	m.UseCommunicationCursorTokenKeyring(keyring)
+	m.CursorKeyring = (keyring).Snapshot()
 	ready, err := m.CommunicationCursorTokenKeyringReady(context.Background())
 	if !m.CommunicationCursorTokenKeyringBound() || m.communicationCursorTokenKeyring() == nil || !ready || err != nil {
 		t.Fatal("binding a valid keyring did not make it available")
 	}
-	m.UseCommunicationCursorTokenKeyring(nil)
+	m.CursorKeyring = nil
 	if m.CommunicationCursorTokenKeyringBound() {
 		t.Fatal("nil keyring stayed bound")
 	}

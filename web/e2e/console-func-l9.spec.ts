@@ -84,9 +84,19 @@ interface ConfigRecord {
   secret_refs: Array<{ name: string; ref_kind: string; ref: string }>
 }
 
-function authHeaders(token: string): Record<string, string> {
+interface BrowserSession {
+  token?: string
+  csrf_token?: string
+}
+
+function authHeaders(session: BrowserSession): Record<string, string> {
   return {
-    Authorization: `Bearer ${token}`,
+    ...(session.token
+      ? { Authorization: `Bearer ${session.token}` }
+      : {
+          'X-Olivares-Session': 'cookie',
+          'X-CSRF-Token': session.csrf_token ?? '',
+        }),
     'X-Olivares-Tenant': demoTenant,
   }
 }
@@ -105,7 +115,7 @@ async function preparePage(page: Page): Promise<void> {
   )
 }
 
-async function loginDemo(page: Page): Promise<string> {
+async function loginDemo(page: Page): Promise<BrowserSession> {
   const loginRead = page.waitForResponse((response) => {
     const url = new URL(response.url())
     return (
@@ -119,15 +129,15 @@ async function loginDemo(page: Page): Promise<string> {
   await page.getByRole('button', { name: /^sign in$/i }).click()
   const response = await loginRead
   expect(response.status()).toBe(200)
-  const body = (await response.json()) as { token: string }
+  const body = (await response.json()) as BrowserSession
   // WHAT A FRESH SIGN-IN PAINTS. The console lands on the root, which belongs to no
   // navigation area, and the sidebar hides a closed area's panel — so the entries on
   // screen are the areas and the overview above them, not a leaf like Inventory. The
   // name is exact because neighbouring entries contain it.
   await expect(
-    page.getByRole('link', { name: 'Now', exact: true }),
+    page.getByLabel('Journeys').getByRole('link', { name: 'Now', exact: true }),
   ).toBeVisible({ timeout: 20_000 })
-  return body.token
+  return body
 }
 
 function observe(
@@ -149,12 +159,34 @@ function observe(
   )
 }
 
-async function getJSON<T>(page: Page, token: string, endpoint: string) {
-  const response = await page.request.get(endpoint, {
-    headers: authHeaders(token),
-  })
-  expect(response.ok(), `GET ${endpoint}`).toBe(true)
-  return (await response.json()) as T
+async function requestJSON(
+  page: Page,
+  session: BrowserSession,
+  method: string,
+  endpoint: string,
+) {
+  return page.evaluate(
+    async ({ method, endpoint, headers }) => {
+      const response = await fetch(endpoint, {
+        method,
+        headers,
+        credentials: 'same-origin',
+      })
+      return {
+        ok: response.ok,
+        status: response.status,
+        body:
+          response.status === 204 ? null : ((await response.json()) as unknown),
+      }
+    },
+    { method, endpoint, headers: authHeaders(session) },
+  )
+}
+
+async function getJSON<T>(page: Page, token: BrowserSession, endpoint: string) {
+  const response = await requestJSON(page, token, 'GET', endpoint)
+  expect(response.ok, `GET ${endpoint}: HTTP ${response.status}`).toBe(true)
+  return response.body as T
 }
 
 async function rowFor(page: Page, text: string): Promise<Locator> {
@@ -613,7 +645,22 @@ test('knowledge governs KB, prompt, memory, context, DLP and data-product lifecy
   expect(kbs.items.some((item) => item.id === kb.id)).toBe(false)
 })
 
-test('catalog freezes signed entries and governs active and rejected instances live', async ({
+async function newCatalogEntry(page: Page): Promise<void> {
+  // Refusal notifications can cover the page action. Dismiss them as a user
+  // would before starting the next entry; keep normal click actionability.
+  const close = page.getByRole('button', { name: 'Close toast', exact: true })
+  while (await close.count()) {
+    const count = await close.count()
+    await close.first().click()
+    await expect(close).toHaveCount(count - 1)
+  }
+  await page
+    .locator('[data-slot="page-actions"]')
+    .getByRole('button', { name: 'New entry', exact: true })
+    .click()
+}
+
+test('catalog freezes signed entries and refuses unprovisioned activation', async ({
   page,
 }) => {
   const token = await loginDemo(page)
@@ -644,7 +691,7 @@ test('catalog freezes signed entries and governs active and rejected instances l
   await choose(page, page.getByRole('combobox', { name: 'Kind' }), 'All')
   await choose(page, page.getByRole('combobox', { name: 'Status' }), 'All')
 
-  await page.getByRole('button', { name: 'New entry' }).click()
+  await newCatalogEntry(page)
   let entryEditor = page.getByRole('dialog', { name: 'New catalog entry' })
   await choose(page, entryEditor.locator('#entry-kind'), 'MCP')
   await entryEditor.locator('#entry-name').fill(entryName)
@@ -770,12 +817,21 @@ test('catalog freezes signed entries and governs active and rejected instances l
     page,
     'POST',
     `/v1/m/catalog/instances/${activeInstance.id}/transition`,
-    200,
+    409,
   )
   await transition.getByRole('button', { name: 'Activate' }).click()
+  await transitionWrite
+  await expect(transition).toBeVisible()
   expect(
-    ((await (await transitionWrite).json()) as InstanceRecord).status,
-  ).toBe('active')
+    (
+      await getJSON<InstanceRecord>(
+        page,
+        token,
+        `/v1/m/catalog/instances/${activeInstance.id}`,
+      )
+    ).status,
+  ).toBe('approved')
+  await page.keyboard.press('Escape')
   await instanceDetail.getByRole('button', { name: 'Close' }).click()
 
   await (await rowFor(page, rejectedName)).click()
@@ -815,7 +871,7 @@ test('catalog freezes signed entries and governs active and rejected instances l
   )
   await approvedDetail.getByRole('button', { name: 'Close' }).click()
 
-  await page.getByRole('button', { name: 'New entry' }).click()
+  await newCatalogEntry(page)
   entryEditor = page.getByRole('dialog', { name: 'New catalog entry' })
   await choose(page, entryEditor.locator('#entry-kind'), 'Connector')
   await entryEditor.locator('#entry-name').fill(disposableName)
@@ -877,13 +933,13 @@ test('catalog freezes signed entries and governs active and rejected instances l
   )
   expect(
     allInstances.items.find((item) => item.id === activeInstance.id)?.status,
-  ).toBe('active')
+  ).toBe('approved')
   expect(
     allInstances.items.find((item) => item.id === rejectedInstance.id)?.status,
   ).toBe('rejected')
 })
 
-test('capabilities reads the live graph and preserves config revisions while tool pins fail closed', async ({
+test('capabilities reads the live graph and preserves config revisions, with no tool pins tab', async ({
   page,
 }) => {
   const token = await loginDemo(page)
@@ -932,12 +988,8 @@ test('capabilities reads the live graph and preserves config revisions while too
   await page.getByRole('button', { name: 'Zoom Out' }).click()
   await page.getByRole('button', { name: 'Fit View' }).click()
 
-  const pinsRead = observe(page, 'GET', '/v1/m/capabilities/toolpins', 501)
-  await page.getByRole('tab', { name: 'Tool pins' }).click()
-  await pinsRead
-  await expect(
-    page.getByText(/enterprise capability.*no enterprise verifier/i),
-  ).toBeVisible()
+  // Tool pins are a Business panel: the Community console offers no such tab.
+  await expect(page.getByRole('tab', { name: 'Tool pins' })).toHaveCount(0)
 
   await page.getByRole('tab', { name: 'Managed configs' }).click()
   await page.getByRole('button', { name: 'New config' }).click()
@@ -991,11 +1043,13 @@ test('capabilities reads the live graph and preserves config revisions while too
   )
   expect(revisions.items.map((item) => item.revision).sort()).toEqual([1, 2])
 
-  const configDelete = await page.request.delete(
+  const configDelete = await requestJSON(
+    page,
+    token,
+    'DELETE',
     `/v1/m/capabilities/configs/${config.id}`,
-    { headers: authHeaders(token) },
   )
-  expect(configDelete.status()).toBe(204)
+  expect(configDelete.status).toBe(204)
   const remaining = await getJSON<ListBody<ConfigRecord>>(
     page,
     token,

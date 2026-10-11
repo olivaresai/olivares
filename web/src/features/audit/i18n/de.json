@@ -100,10 +100,49 @@
     "this": "dieser",
     "sig": "Ereignis-Signatur",
     "checkpoint": "Sig.",
-    "chainHint": "Der Hash jedes Ereignisses ist mit dem vorherigen verkettet. Hinter einem Fingerabdruck steckt keine Nutzlast — der Hash ist der Nachweis (Datensparsamkeit by Design)."
+    "chainHint": "Der Hash jedes Ereignisses ist mit dem vorherigen verkettet. Hinter einem Fingerabdruck steckt keine Nutzlast — der Hash ist der Nachweis (Datensparsamkeit by Design).",
+    "details": "Details",
+    "actorMember": "Ein Mitglied"
   },
   "empty": {
     "title": "Noch keine Nachweise",
     "description": "Das Hauptbuch ist für diesen Bereich leer. Geregelte Vorgänge hängen manipulationssichere Ereignisse an, sobald sie auftreten."
+  },
+  "actions": {
+    "governance_approval_create": "Genehmigung angefordert",
+    "governance_approval_decision": "Genehmigungsentscheidung protokolliert",
+    "governance_approval_cancel": "Genehmigung zurückgezogen",
+    "sessions_run_launched": "Sitzung gestartet",
+    "sessions_run_stopping": "Sitzungsstopp angefordert",
+    "sessions_work_item_create": "Arbeitselement erstellt",
+    "sessions_work_item_ready": "Arbeitselement als bereit markiert",
+    "sessions_work_item_complete": "Arbeitselement abgeschlossen",
+    "authorization_decision_record": "Autorisierungsentscheidung protokolliert",
+    "policy_artifact_record": "Richtliniennachweis protokolliert",
+    "governance_policy_create": "Richtlinie erstellt",
+    "governance_policy_update": "Richtlinie aktualisiert",
+    "governance_policy_delete": "Richtlinie gelöscht",
+    "auth_login": "Angemeldet",
+    "auth_logout": "Abgemeldet",
+    "auth_login_failed": "Anmeldung fehlgeschlagen",
+    "auth_webauthn_register": "Passkey hinzugefügt",
+    "auth_webauthn_unregister": "Passkey entfernt",
+    "user_set_password": "Passwort geändert",
+    "user_create": "Person hinzugefügt",
+    "membership_grant": "Rolle vergeben",
+    "membership_update": "Rolle geändert",
+    "membership_offboard": "Person entfernt",
+    "token_issue": "API-Token erstellt",
+    "token_revoke": "API-Token widerrufen",
+    "secret_delete": "Geheimnis gelöscht"
+  },
+  "targets": {
+    "core_policy": "Richtlinie"
+  },
+  "internal": {
+    "hidden": "Ausgeblendete interne Datensätze: {{count}}",
+    "show": "Interne Datensätze anzeigen",
+    "hide": "Interne Datensätze ausblenden",
+    "allHidden": "Alles bisher Geladene sind interne Datensätze."
   }
 }

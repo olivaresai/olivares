@@ -19,7 +19,7 @@ LC_ALL=C
 export LC_ALL
 
 could_not_look() {
-	printf 'test-nfpm-archlinux: NO HE PODIDO MIRAR — %s\n' "$*" >&2
+	printf 'test-nfpm-archlinux: COULD NOT CHECK — %s\n' "$*" >&2
 	exit 2
 }
 fail() {

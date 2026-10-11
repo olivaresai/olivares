@@ -11,6 +11,7 @@ import (
 
 	"github.com/olivaresai/olivares/connectors/claude"
 	"github.com/olivaresai/olivares/core/model"
+	"github.com/olivaresai/olivares/modules/sessions/hookpep"
 )
 
 // A stored tool-use review asks before acting. Post and lifecycle hooks still
@@ -32,15 +33,15 @@ func TestSessionClaudeApprovalOnlyQueuesPermissionGates(t *testing.T) {
 			}
 			service := h.set.gov.EngineApprovals()
 			h.set.gov.UseApprovalCapacity(h.authr.ApprovalCapacity)
-			createSessionReviewPolicy(t, h, hookActionCapability, "claude.tool")
-			d := &claudeHookDecider{defaultPolicy: &hookPolicyDoc{Default: "allow"}, authr: c, eval: h.set.gov.Evaluator(), scoped: h.set.gov.ScopedGrants(), approvals: service, stops: h.set.gov, stopRec: newStopDenyRecorder(h.st, discardLog()), store: h.st, clock: time.Now, log: discardLog()}
+			createSessionReviewPolicy(t, h, hookpep.ActionCapability, "claude.tool")
+			d := newClaudeHookDecider(&hookpep.Decider{DefaultPolicy: &hookpep.PolicyDoc{Default: "allow"}, Authr: c, Eval: h.set.gov.Evaluator(), Authz: harnessAuthz(h), Scoped: h.set.gov.ScopedGrants(), Approvals: service, Stops: h.set.gov, StopDeny: newStopDenyRecorder(h.st, discardLog()).record, Store: h.st, Clock: time.Now, Log: discardLog()})
 			ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
 			defer cancel()
 			out, err := d.Decide(ctx, claude.HookDecisionInput{Event: event, Tool: "Write", ResourceKind: "file", ResourceRef: "/tmp/proof", Mode: "write", PlanHash: hexSHA("review-event")}, token)
 			if err != nil || out.Permission != "allow" {
 				t.Fatalf("%s must finish without a tool-use review: %+v err=%v", event, out, err)
 			}
-			items, _, err := service.List(context.Background(), tenant, hookActionCapability, "", "")
+			items, _, err := service.List(context.Background(), tenant, hookpep.ActionCapability, "", "")
 			if err != nil || len(items) != 0 {
 				t.Fatalf("%s opened a tool-use approval: %d requests err=%v", event, len(items), err)
 			}

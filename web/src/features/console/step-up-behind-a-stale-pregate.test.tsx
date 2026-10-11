@@ -2,34 +2,30 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repo root.
 //
-// ⛔ «PRE-GATEADO» NO ES «CUBIERTO», Y ÉSTE ES EL INVARIANTE QUE LO FIJA.
+// A pre-gate does not fully cover step-up handling; this invariant protects that distinction.
 //
-// `RequireAssurance` decide sobre el `principal.aal` **cacheado**
-// (`features/identity/assurance.tsx:49-78`). `whoami` tiene `staleTime` de 60 s y **ningún
-// `refetchInterval`** (`lib/auth/context.tsx:68-78`), mientras el motor **degrada AAL3 a AAL1 a
-// los 15 minutos** y recalcula el AAL efectivo en cada autenticación
-// (`core/auth/assurance.go:31-54`). El cliente sólo trata el 401 globalmente; un 403 se entrega a
-// la mutación (`lib/api/client.ts:167-184`).
+// `RequireAssurance` reads cached `principal.aal` (`features/identity/assurance.tsx:49-78`).
+// `whoami` has a 60-second `staleTime` and no `refetchInterval` (`lib/auth/context.tsx:68-78`).
+// The engine downgrades AAL3 to AAL1 after 15 minutes and recalculates effective AAL on each
+// authentication (`core/auth/assurance.go:31-54`). The client handles 401 globally but passes
+// 403 to the mutation (`lib/api/client.ts:167-184`).
 //
-// ⇒ **La caché puede decir AAL3 mientras el motor dice AAL1.** El pre-gate deja pasar, la
-// escritura sale, el motor contesta `step_up_required` y una mutación escrita a mano lo pintaba
-// en ROJO — obstáculo sin puerta.
+// The cache can say AAL3 while the engine says AAL1. The pre-gate allows the write, the engine
+// returns `step_up_required`, and a manual mutation previously displayed a red error without
+// offering step-up.
 //
-// Los caminos, verificados POR RUTA y no por nombre de método (la trampa que me costó):
+// Verify paths by route, not method name (the inventory mistake in):
+//   connector test: POST /v1/console/connectors/test, server.go:721 -> handleTestConnector
+//   SSO test: POST /v1/console/sso/**/test, server.go:672 -> handleTestSSOConfig
+//   license install: POST /v1/console/license, server.go:732 -> handleInstallLicense
+//   license remove: DELETE /v1/console/license, server.go:733 -> handleUninstallLicense
+//   activation: POST /v1/console/activation/apply, server.go:742 -> handleActivationApply
 //
-//   connector test  POST /v1/console/connectors/test     server.go:721 → handleTestConnector
-//   SSO test        POST /v1/console/sso/**/test         server.go:672 → handleTestSSOConfig
-//   license inst.   POST /v1/console/license             server.go:732 → handleInstallLicense
-//   license quitar  DELETE /v1/console/license           server.go:733 → handleUninstallLicense
-//   activación      POST /v1/console/activation/apply    server.go:742 → handleActivationApply
+// All five handlers call `s.requireAAL3(...)`. The engine's route comments document AAL3
+// step-up for install/uninstall writes and the apply write.
 //
-// Los cinco handlers llaman `s.requireAAL3(...)`, y el propio motor lo documenta en el bloque de
-// rutas: «the writes (install/uninstall) additionally require an AAL3 step-up», «the apply write
-// requires an AAL3 step-up».
-//
-// Esta celda NO conduce cada pantalla —eso lo hacen las suites de cada tab—: fija el invariante
-// de FORMA (AST local) que las cinco comparten, porque el defecto reaparece en cuanto alguien
-// escribe otra mutación a mano detrás del mismo pre-gate.
+// Individual tab suites exercise the screens. This local AST test protects their shared
+// handling pattern, which can regress when another manual mutation is added behind a pre-gate.
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'

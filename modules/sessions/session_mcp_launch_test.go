@@ -43,3 +43,31 @@ func TestSessionMCPLaunchConfigurationKeepsBearerInEnvironment(t *testing.T) {
 		})
 	}
 }
+
+// ACP carries the server; the driver's provider and permission settings stay intact.
+func TestSessionMCPLaunchKeepsOpenCodesInlineConfiguration(t *testing.T) {
+	for _, existing := range []string{`{"share":"disabled","enabled_providers":["anthropic"]}`, ""} {
+		const bearer = "fixture-session-token-never-in-file-or-args"
+		spec := LaunchSpec{Args: []string{"acp"}, Env: []EnvVar{{Name: "OLIVARES_HOOK_PEP_TOKEN", Value: bearer}}}
+		if existing != "" {
+			spec.Env = append(spec.Env, EnvVar{Name: envOpenCodeConfigContent, Value: existing})
+		}
+		cleanup, err := ConfigureSessionMCP(&spec, providerDriverOpenCode, t.TempDir(), "run-one", "http://127.0.0.1:8443/session/mcp", "OLIVARES_HOOK_PEP_TOKEN")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer cleanup()
+		var content string
+		for _, item := range spec.Env {
+			if item.Name == envOpenCodeConfigContent {
+				content = item.Value
+			}
+		}
+		if content != existing || strings.Join(spec.Args, " ") != "acp" || strings.Contains(content, bearer) {
+			t.Fatal("MCP changed provider configuration or exposed its credential")
+		}
+		if spec.SessionMCPURL != "http://127.0.0.1:8443/session/mcp" || spec.SessionMCPTokenEnv != "OLIVARES_HOOK_PEP_TOKEN" {
+			t.Fatal("ACP did not receive the session connection")
+		}
+	}
+}

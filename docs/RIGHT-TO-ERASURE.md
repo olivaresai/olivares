@@ -177,9 +177,9 @@ with attached chats returns 409 (the orchestrator erases chats first). Shared ra
   shred, verify and reconciliation. The `rtbf_erasure` capability (GDPR `art_17`) moves to
   *satisfied* ONLY when ≥1 real receipt exists — an unexecuted workflow is an honest *gap*.
 
-## 7. Enterprise depth: the crypto-shred coordinator (optional)
+## 7. Business: the crypto-shred coordinator (optional)
 
-The enterprise build can wire an RTBF-depth coordinator (`OLIVARES_RTBF_DEPTH_CONFIG=/path.json`)
+Business (Regulated Operations) can wire an RTBF-depth coordinator (`OLIVARES_RTBF_DEPTH_CONFIG=/path.json`)
 that adds policy readiness, WORM-sink coordination and an independent completeness verdict on top
 of the open workflow above — which is complete on its own and unchanged without it.
 

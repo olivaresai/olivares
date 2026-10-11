@@ -6,11 +6,8 @@ package main
 
 import (
 	"bytes"
-	"context"
 	"crypto/ed25519"
-	"crypto/sha256"
 	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -23,13 +20,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/spf13/cobra"
-
+	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
 	"github.com/olivaresai/olivares/core/audit"
 	"github.com/olivaresai/olivares/core/ddil"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/sigbundle"
 	"github.com/olivaresai/olivares/modules/governance"
+	"github.com/spf13/cobra"
 )
 
 type ddilVerifyPolicyReport struct {
@@ -225,6 +222,9 @@ func newDDILImportCmd() *cobra.Command {
 			if parsedTenant.String() != im.Index.Tenant {
 				return fmt.Errorf("--tenant %q does not match DDIL bundle tenant %q", parsedTenant, im.Index.Tenant)
 			}
+			if len(im.Index.Segments) > 0 && !audit.ExportLinked {
+				return exitcode.New(exitcode.Edition, audit.ErrBusinessAudit)
+			}
 			if len(im.Index.Segments) > 0 && strings.TrimSpace(auditOut) == "" {
 				return fmt.Errorf("--audit-out is required because the DDIL bundle carries %d audit segment(s)", len(im.Index.Segments))
 			}
@@ -234,7 +234,7 @@ func newDDILImportCmd() *cobra.Command {
 			}
 
 			cursorBefore := int64(0)
-			if auditOut != "" {
+			if auditOut != "" && len(im.Index.Segments) > 0 {
 				cursorBefore, err = deriveDDILArchiveCursor(cmd.Context(), auditOut, im.Index.Tenant)
 				if err != nil {
 					return err
@@ -397,172 +397,11 @@ func inspectDDILBundle(file string, pub ed25519.PublicKey, now time.Time) (ddil.
 	return im, opened, nil
 }
 
-func ddilArchiveVerifyOptions(checkpointPubkeys, eventPubkeys []string) (audit.ArchiveVerifyOptions, error) {
-	if len(eventPubkeys) > 0 && len(checkpointPubkeys) == 0 {
-		return audit.ArchiveVerifyOptions{}, fmt.Errorf("--event-pubkey without --checkpoint-pubkey: checkpoint lines would be unverifiable; pin both key sets, or pin none for structural verification")
-	}
-	if len(checkpointPubkeys) == 0 {
-		return audit.ArchiveVerifyOptions{}, nil
-	}
-	opts, _, err := archiveVerifyOptions("", "", checkpointPubkeys, eventPubkeys)
-	if err != nil {
-		return audit.ArchiveVerifyOptions{}, fmt.Errorf("DDIL staged archive key pins: %w", err)
-	}
-	return opts, nil
-}
-
-func deriveDDILArchiveCursor(ctx context.Context, dir, tenant string) (int64, error) {
-	info, err := os.Stat(dir)
-	if os.IsNotExist(err) {
-		return 0, nil
-	}
-	if err != nil {
-		return 0, fmt.Errorf("inspect local archive %q: %w", dir, err)
-	}
-	if !info.IsDir() {
-		return 0, fmt.Errorf("local archive %q is not a directory", dir)
-	}
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return 0, fmt.Errorf("inspect local archive %q: %w", dir, err)
-	}
-	if len(entries) == 0 {
-		return 0, nil
-	}
-	report, err := audit.VerifyArchiveDir(ctx, dir, audit.ArchiveVerifyOptions{})
-	if err != nil {
-		return 0, fmt.Errorf("local archive corrupt: verify %q: %w", dir, err)
-	}
-	if !report.OK {
-		return 0, fmt.Errorf("local archive corrupt: reason=%s tenant=%s segment=%s seq=%d", report.Reason, report.BreakTenant, report.BreakSegment, report.BreakAt)
-	}
-	return report.Ranges[tenant].ToSeq, nil
-}
-
 type ddilStagedSegment struct {
 	ref         ddil.SegmentRef
 	manifest    audit.SegmentManifest
 	eventsKey   string
 	manifestKey string
-}
-
-func applyDDILAuditSegments(
-	ctx context.Context,
-	auditOut, tenant string,
-	cursorBefore int64,
-	refs []ddil.SegmentRef,
-	payloads map[string][]byte,
-	verifyOpts audit.ArchiveVerifyOptions,
-) (applied int, cursorAfter int64, err error) {
-	cursorAfter = cursorBefore
-	if err := os.MkdirAll(auditOut, 0o755); err != nil {
-		return 0, cursorAfter, fmt.Errorf("create audit archive %q: %w", auditOut, err)
-	}
-	// Stage OUTSIDE the WORM archive root. VerifyArchiveDir and the cursor/fork checks
-	// walk auditOut RECURSIVELY (filepath.WalkDir), so a staging dir left inside it by an
-	// unclean crash — power loss is the design-basis failure of a DDIL edge — would be
-	// counted as durably-held evidence: the derived cursor would jump past segments that
-	// never committed and they would be skipped forever (silent loss). The commit loop
-	// below COPIES bytes into the real sink (os.ReadFile → Put), never renames, so staging
-	// on a different filesystem is fine; a crash now only orphans a dir under the system
-	// temp, which the OS reclaims and which no verifier ever walks.
-	staging, err := os.MkdirTemp("", fmt.Sprintf("olivares-ddil-staging-%d-", os.Getpid()))
-	if err != nil {
-		return 0, cursorAfter, fmt.Errorf("create DDIL audit staging directory: %w", err)
-	}
-	defer func() {
-		if staging != "" {
-			_ = os.RemoveAll(staging)
-		}
-	}()
-	stageSink, err := audit.NewDirSink(staging)
-	if err != nil {
-		return 0, cursorAfter, err
-	}
-
-	staged := make([]ddilStagedSegment, 0, len(refs))
-	for _, ref := range refs {
-		manifestBody, manifestOK := payloads[ref.ManifestName]
-		eventsBody, eventsOK := payloads[ref.EventsName]
-		if !manifestOK || !eventsOK {
-			return 0, cursorAfter, fmt.Errorf("DDIL bundle omitted payloads for audit segment %d..%d after verification", ref.FromSeq, ref.ToSeq)
-		}
-		var manifest audit.SegmentManifest
-		if err := json.Unmarshal(manifestBody, &manifest); err != nil {
-			return 0, cursorAfter, fmt.Errorf("decode staged audit manifest %q: %w", ref.ManifestName, err)
-		}
-		if err := matchDDILSegmentReference(tenant, ref, manifest); err != nil {
-			return 0, cursorAfter, err
-		}
-		eventsKey := audit.SegmentKey(tenant, ref.FromSeq, ref.ToSeq)
-		manifestKey := audit.SegmentManifestKey(tenant, ref.FromSeq, ref.ToSeq)
-		if _, err := stageSink.Put(ctx, eventsKey, eventsBody, audit.ArchivePutOptions{ContentSHA256: manifest.EventsSHA256}); err != nil {
-			return 0, cursorAfter, fmt.Errorf("stage audit events %d..%d: %w", ref.FromSeq, ref.ToSeq, err)
-		}
-		manifestSum := sha256.Sum256(manifestBody)
-		if _, err := stageSink.Put(ctx, manifestKey, manifestBody, audit.ArchivePutOptions{ContentSHA256: hex.EncodeToString(manifestSum[:])}); err != nil {
-			return 0, cursorAfter, fmt.Errorf("stage audit manifest %d..%d: %w", ref.FromSeq, ref.ToSeq, err)
-		}
-		staged = append(staged, ddilStagedSegment{ref: ref, manifest: manifest, eventsKey: eventsKey, manifestKey: manifestKey})
-	}
-
-	stageReport, err := audit.VerifyArchiveDir(ctx, staging, verifyOpts)
-	if err != nil {
-		return 0, cursorAfter, fmt.Errorf("verify staged DDIL audit archive: %w", err)
-	}
-	if !stageReport.OK {
-		return 0, cursorAfter, fmt.Errorf("staged DDIL audit archive verification failed: reason=%s tenant=%s segment=%s seq=%d", stageReport.Reason, stageReport.BreakTenant, stageReport.BreakSegment, stageReport.BreakAt)
-	}
-	wantFrom, wantTo := refs[0].FromSeq, refs[len(refs)-1].ToSeq
-	gotRange, ok := stageReport.Ranges[tenant]
-	if !ok || gotRange.FromSeq != wantFrom || gotRange.ToSeq != wantTo {
-		return 0, cursorAfter, fmt.Errorf("staged DDIL audit archive covers %d..%d for tenant %q, want exactly %d..%d", gotRange.FromSeq, gotRange.ToSeq, tenant, wantFrom, wantTo)
-	}
-	if cursorBefore > 0 {
-		localLast, err := readDDILLastManifest(auditOut, tenant, cursorBefore)
-		if err != nil {
-			return 0, cursorAfter, err
-		}
-		stagedPrev := staged[0].manifest.PrevSegmentLastHash
-		if stagedPrev != localLast.LastHash {
-			return 0, cursorAfter, fmt.Errorf("audit fork detected: hash mismatch at cursor %d: staged prev_segment_last_hash=%s local last_hash=%s", cursorBefore, stagedPrev, localLast.LastHash)
-		}
-	}
-
-	realSink, err := audit.NewDirSink(auditOut)
-	if err != nil {
-		return 0, cursorAfter, err
-	}
-	for _, segment := range staged {
-		eventsBody, err := os.ReadFile(filepath.Join(staging, filepath.FromSlash(segment.eventsKey)))
-		if err != nil {
-			return applied, cursorAfter, fmt.Errorf("read verified staged audit events %q: %w", segment.eventsKey, err)
-		}
-		manifestBody, err := os.ReadFile(filepath.Join(staging, filepath.FromSlash(segment.manifestKey)))
-		if err != nil {
-			return applied, cursorAfter, fmt.Errorf("read verified staged audit manifest %q: %w", segment.manifestKey, err)
-		}
-		if _, err := realSink.Put(ctx, segment.eventsKey, eventsBody, audit.ArchivePutOptions{ContentSHA256: segment.manifest.EventsSHA256}); err != nil {
-			return applied, cursorAfter, fmt.Errorf("commit audit events %d..%d: %w", segment.ref.FromSeq, segment.ref.ToSeq, err)
-		}
-		manifestSum := sha256.Sum256(manifestBody)
-		if _, err := realSink.Put(ctx, segment.manifestKey, manifestBody, audit.ArchivePutOptions{ContentSHA256: hex.EncodeToString(manifestSum[:])}); err != nil {
-			return applied, cursorAfter, fmt.Errorf("commit audit manifest %d..%d: %w", segment.ref.FromSeq, segment.ref.ToSeq, err)
-		}
-		applied++
-	}
-	if err := os.RemoveAll(staging); err != nil {
-		return applied, cursorAfter, fmt.Errorf("remove DDIL audit staging directory: %w", err)
-	}
-	staging = ""
-	cursorAfter, err = deriveDDILArchiveCursor(ctx, auditOut, tenant)
-	if err != nil {
-		return applied, cursorBefore, fmt.Errorf("verify committed DDIL audit archive: %w", err)
-	}
-	if cursorAfter != wantTo {
-		return applied, cursorAfter, fmt.Errorf("committed DDIL audit cursor is %d, want %d", cursorAfter, wantTo)
-	}
-	return applied, cursorAfter, nil
 }
 
 func matchDDILSegmentReference(tenant string, ref ddil.SegmentRef, manifest audit.SegmentManifest) error {

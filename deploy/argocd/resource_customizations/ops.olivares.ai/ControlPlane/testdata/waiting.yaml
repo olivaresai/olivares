@@ -1,4 +1,0 @@
-apiVersion: ops.olivares.ai/v1alpha1
-kind: ControlPlane
-metadata:
-  name: prod

@@ -43,7 +43,7 @@ func TestSessionMCPPeerToolsPinSenderAndInboxToSharedPrincipal(t *testing.T) {
 	}
 	bearer, readonly := mint(launcher), mint(viewer)
 	calls := 0
-	h := &sessionMCPHandler{authr: issuer, issuedSessionOnly: true, work: func(w http.ResponseWriter, r *http.Request, p auth.Principal, got model.TenantID) {
+	h := &sessionMCPHandler{authr: issuer, issuedSessionOnly: true, admits: admitsThrough(auth.NewAuthorizer(nil)), work: func(w http.ResponseWriter, r *http.Request, p auth.Principal, got model.TenantID) {
 		calls++
 		bounded, ok := p.ConfinedWorkspaceIn(got)
 		if got != tenant || !ok || bounded != workspace || p.SessionIdentity != sender || r.Header.Get("Authorization") != "" {

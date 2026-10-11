@@ -7,11 +7,14 @@ package api
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 
+	"github.com/olivaresai/olivares/core/audit"
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/license"
+	"github.com/olivaresai/olivares/core/secure"
 	"github.com/olivaresai/olivares/core/store"
 )
 
@@ -32,6 +35,44 @@ var (
 	errRateLimited = errors.New("rate limited")
 )
 
+// forbiddenFor is errForbidden for a refusal whose missing permission is known
+// (#491). Status and code stay 403 "forbidden"; the message names the permission
+// and where it applies, so the caller knows what to ask for and of whom: an
+// organization admin, or the server's superadmin. The permission is the route's
+// own declaration, never derived from a row, so it discloses nothing about data;
+// a concealing route passes store.ErrNotFound and never reaches this.
+func forbiddenFor(perm auth.Permission, serverWide bool) error {
+	return permissionDenied{perm: perm, serverWide: serverWide}
+}
+
+type permissionDenied struct {
+	perm       auth.Permission
+	serverWide bool
+}
+
+func (e permissionDenied) Unwrap() error { return errForbidden }
+
+func (e permissionDenied) Error() string {
+	switch {
+	case e.perm == "":
+		return errForbidden.Error()
+	case e.serverWide:
+		return fmt.Sprintf("This needs the %q permission across the whole server, which only a superadmin holds.", e.perm)
+	}
+	// The built-in roles that include the permission are a fact about the
+	// permission, not a diagnosis of this caller: a scoped grant, a workspace
+	// confinement or a policy can refuse a holder of that role too.
+	for _, role := range []string{auth.RoleViewer, auth.RoleEditor, auth.RoleAdmin} {
+		if auth.RoleGrants(role, e.perm) {
+			return fmt.Sprintf("This needs the %q permission in this organization (built-in roles: %s and above).", e.perm, role)
+		}
+	}
+	if auth.RoleGrants(auth.RoleOwner, e.perm) {
+		return fmt.Sprintf("This needs the %q permission in this organization (built-in role: owner).", e.perm)
+	}
+	return fmt.Sprintf("This needs the %q permission in this organization.", e.perm)
+}
+
 // errorBody is the single JSON error envelope for the whole API.
 type errorBody struct {
 	Error struct {
@@ -46,6 +87,14 @@ type errorBody struct {
 // so the API is never a cross-tenant existence oracle (errors.go).
 func statusFor(err error) (int, string) {
 	switch {
+	case errors.Is(err, audit.ErrBusinessAudit):
+		return http.StatusNotImplemented, "audit_export_unavailable"
+	case errors.Is(err, ErrTracingUnavailable):
+		return http.StatusServiceUnavailable, "tracing_unavailable"
+	case errors.Is(err, auth.ErrSSOProviderUnavailable):
+		// Checked before the causes it wraps (a store or sealer error). 500: writeError
+		// logs the cause and answers "internal error", never the cause's text.
+		return http.StatusInternalServerError, "sso_provider_unavailable"
 	case errors.Is(err, auth.ErrUnauthenticated), errors.Is(err, auth.ErrInvalidCredentials):
 		return http.StatusUnauthorized, "unauthenticated"
 	case errors.Is(err, auth.ErrSSONotConfigured):
@@ -98,6 +147,10 @@ func statusFor(err error) (int, string) {
 		// the console connector-onboarding surface is not wired on this
 		// deployment (an embedder/test that did not opt in). 501 honest-seam.
 		return http.StatusNotImplemented, "connector_onboarding_unavailable"
+	case errors.Is(err, errWorkspaceContentsUnavailable):
+		// No store registry was handed to the server (an embedder or test store
+		// that exposes none). 501 honest seam, never a list without module kinds.
+		return http.StatusNotImplemented, "workspace_contents_unavailable"
 	case errors.Is(err, errDRUnavailable):
 		// the DR console surface is not wired on this deployment. 501.
 		return http.StatusNotImplemented, "dr_unavailable"
@@ -117,6 +170,10 @@ func statusFor(err error) (int, string) {
 		return http.StatusBadRequest, "activation_invalid_request"
 	case errors.Is(err, ErrModulesUnavailable):
 		return http.StatusNotImplemented, "modules_unavailable"
+	case errors.Is(err, ErrDepartmentsUnavailable):
+		// Departments and filing a group in a workspace are the Business
+		// edition (docs/editions.md). 501 honest seam.
+		return http.StatusNotImplemented, "departments_unavailable"
 	case errors.Is(err, ErrUnknownModule):
 		return http.StatusBadRequest, "unknown_module"
 	case errors.Is(err, ErrModulesNotRecorded):
@@ -184,6 +241,12 @@ func statusFor(err error) (int, string) {
 		// of asking someone senior. Same reasoning as domain_claimed and the
 		// edition codes below.
 		return http.StatusForbidden, "role_ceiling"
+	case errors.Is(err, auth.ErrCredentialBindingInvalid), errors.Is(err, auth.ErrCredentialBindingCeiling):
+		return http.StatusForbidden, "os_account_refused"
+	case errors.Is(err, auth.ErrCredentialBindingConflict):
+		return http.StatusConflict, "os_account_conflict"
+	case errors.Is(err, auth.ErrCredentialBindingUnavailable):
+		return http.StatusServiceUnavailable, "os_account_unavailable"
 	case errors.Is(err, errForbidden), errors.Is(err, auth.ErrWorkspaceConfined):
 		return http.StatusForbidden, "forbidden"
 	case errors.Is(err, store.ErrWorkspaceConfinement), errors.Is(err, store.ErrWorkspaceLineageRequired):
@@ -211,7 +274,7 @@ func statusFor(err error) (int, string) {
 		// constructs this error — the add-ons it refuses do not exist here — so the arm
 		// is inert in the default artifact, in the same way user_cap_requires_enterprise
 		// stayed mapped after B10 made it unreachable. Only the closed enterprise build
-		// decides (LICENSING.md §ADR-0010); this is where its decision becomes one status
+		// decides (LICENSING.md); this is where its decision becomes one status
 		// code instead of many. And /v1/console/license is untouched: it still answers
 		// 200 in every commercial state (handlers_license_polarity_test.go).
 		return http.StatusForbidden, "addon_requires_license"
@@ -255,6 +318,11 @@ func statusFor(err error) (int, string) {
 		// (conflicts with the acyclic-forest invariant); distinct code so the console
 		// explains the chosen parent is already a descendant.
 		return http.StatusConflict, "group_cycle"
+	case errors.Is(err, store.ErrWorkspaceCycle):
+		// C4.4: placing a department under itself or one of its sub-departments
+		// would make it its own ancestor. 409 like group_cycle; a distinct code so
+		// the console says the chosen parent sits inside the department.
+		return http.StatusConflict, "workspace_cycle"
 	case errors.Is(err, auth.ErrGroupOriginReadOnly):
 		return http.StatusForbidden, "group_origin_read_only"
 	case errors.Is(err, auth.ErrGroupOriginAdopted):
@@ -364,6 +432,11 @@ func statusFor(err error) (int, string) {
 		return http.StatusConflict, "setup_required"
 	case errors.Is(err, auth.ErrSetupComplete):
 		return http.StatusConflict, "setup_complete"
+	case errors.Is(err, secure.ErrSetupTokenUnreadable):
+		// #530: not the caller's wrong token (403 forbidden) but a token file the
+		// engine's account cannot read. Refused deny-closed until the operator fixes
+		// the file, and setup accepts the token again with no restart: 503.
+		return http.StatusServiceUnavailable, "setup_token_unreadable"
 	case errors.Is(err, auth.ErrCoordinationUnavailable):
 		// A decision that must serialize across the cluster refused because it
 		// could not take its lock. NOTHING was written, so this is transient and
@@ -381,7 +454,7 @@ func statusFor(err error) (int, string) {
 		// a transient, retryable condition, not a client error.
 		return http.StatusServiceUnavailable, "not_leader"
 	case errors.Is(err, store.ErrAuditSpoolFull):
-		// ADR-0024 Q2: evidence integrity outranks write availability. Reads remain
+		// audit-spool policy: evidence integrity outranks write availability. Reads remain
 		// serviceable, but governed actions fail deny-closed until the operator
 		// restores spool capacity, so 503 describes an actionable transient state.
 		return http.StatusServiceUnavailable, "audit_spool_full"
@@ -460,6 +533,7 @@ func statusFor(err error) (int, string) {
 // told `internal error` and has nothing to act on", and a new sentinel added
 // tomorrow must not silently reintroduce it.
 var honestSeamMessage = map[string]string{
+	"audit_export_unavailable":         "Audit export and external archive verification require Business. The signed ledger and dr backup remain available.",
 	"activation_not_recorded":          "The change reached this server but could not be saved for the deployment, so the engine did not restart. Apply it again; if it fails again, check the engine log.",
 	"activation_restart_unavailable":   "The change is saved, but this engine cannot restart itself. Restart the engine with its service manager to apply it.",
 	"sso_not_configured":               "SSO is not configured on this deployment.",
@@ -470,9 +544,11 @@ var honestSeamMessage = map[string]string{
 	"source_roster_unavailable":        "The durable source roster is not wired on this deployment.",
 	"connector_onboarding_unavailable": "Connector onboarding is not wired on this deployment.",
 	"dr_unavailable":                   "Disaster-recovery operations are not wired on this deployment.",
+	"workspace_contents_unavailable":   "Workspace contents are unavailable: no store registry is wired on this deployment, so the kinds a workspace holds cannot be listed.",
 	"log_broker_unavailable":           "The log broker is not wired on this deployment.",
 	"license_unavailable":              "License operations are not wired on this deployment.",
 	"activation_unavailable":           "Activation is not wired on this deployment.",
+	"departments_unavailable":          "Departments and filing a group in a workspace are in the Business edition. What is already stored stays readable and keeps applying.",
 	"recording_unavailable":            "Session recording is not wired on this deployment.",
 	"entity_authorization_unavailable": "Entity authorization evidence is temporarily unavailable.",
 	"piv_not_configured":               "Privileged login (PIV) is not configured on this deployment.",
@@ -489,6 +565,10 @@ var honestSeamMessage = map[string]string{
 	"webauthn_relying_party_unusable": "Passkeys cannot be used at the address this console was reached on. A passkey relying party has to be a domain name that the verifier this build ships accepts: an IP address is not one, and neither is a single-label name. Reach the console by a dotted host name, or by localhost, and start the engine with that address declared in --public-url (or OLIVARES_PUBLIC_URL).",
 	"not_leader":                      "This node is not the leader; retry against the leader.",
 	"audit_spool_full":                "The audit spool is full; the ledger is refusing writes deny-closed rather than dropping evidence.",
+	// #530: the person at the setup screen needs the remedy, the operator needs the file
+	// and the errno. The sentence carries no path (it is served before anyone signs in);
+	// the log line writeError writes for it carries both.
+	"setup_token_unreadable": "The engine cannot read its setup token file. Run `olivares first-boot --data-dir <data directory> --new-token` as root or as the engine's account to replace it, then use the new token; the engine log names the file and the reason.",
 	// the ONE sentence a first-boot operator needs. It names the remedy in
 	// full — which role, which command, which flag — because the alternative
 	// measured on 2026-08-08 was "internal error" on POST /v1/setup with the remedy
@@ -560,7 +640,7 @@ func (s *Server) writeError(w http.ResponseWriter, r *http.Request, err error) {
 	case errors.Is(err, auth.ErrGroupOriginAdopted):
 		msg = "group cannot change provisioner"
 	case status == http.StatusInternalServerError:
-		s.log.Error("api: request failed", "err", err, "path", r.URL.Path, "request_id", requestID(r.Context()))
+		s.log.Error("api: request failed", "err", err, "path", logPath(r.URL.Path), "request_id", requestID(r.Context()))
 		msg = "internal error"
 	case status > http.StatusInternalServerError:
 		// Deliberate: not implemented here, or wired deny-closed. Never echo the
@@ -580,8 +660,11 @@ func (s *Server) writeError(w http.ResponseWriter, r *http.Request, err error) {
 		// configured" to someone who has just configured it. A shared cache is
 		// already held off by Authorization (RFC 9111 §3.5); a private one was not.
 		w.Header().Set("Cache-Control", "no-store")
+		// The cause goes to the log, never to the client: for a wrapped refusal such
+		// as setup_token_unreadable it is the only place the operator learns the
+		// file and the errno (#530).
 		s.log.Info("api: refused by design", "code", code, "status", status,
-			"path", r.URL.Path, "request_id", requestID(r.Context()))
+			"path", logPath(r.URL.Path), "request_id", requestID(r.Context()), "err", err)
 	}
 	var body errorBody
 	body.Error.Code = code

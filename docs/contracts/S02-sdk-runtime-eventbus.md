@@ -7,7 +7,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 **Status:** stable (Phase A). **Modules:** `/sdk` and `/sdk/plugin` (Apache-2.0), `/core/eventbus` and
 `/core/runtime` (AGPL-3.0-only). **Go 1.26.5** module baseline; the workspace
-toolchain is Go 1.26.8.
+toolchain is Go 1.26.9.
 **Consumed by:** the connectors, the modules and the API/authz layer.
 
 This document is the most consumed contract in the project: **every** connector or module
@@ -362,6 +362,8 @@ engine seam (wired by the API/authz layer); in this contract the `Host` gives bu
 - **The API/authz layer** implements the out-of-process module glue (HostService over broker), binds the
   `Scope`/authz that an in-proc module uses for data, wires `cmd/olivares` (boot:
   `sqlstore.Open(.., rt.RegisterSchema)` → `rt.Start`), and exposes everything over the API.
+  *Status 2026-10-06: the out-of-process module glue was never implemented; the transport is
+  deprecated (`sdk/VERSIONING.md`, Deprecation). The authz/boot/API wiring above did ship.*
 - **The real connectors** (Claude/OTEL, pg-audit, eBPF, model/provider, identity/output) are written
   against `sdk` (§8).
 - **The real modules** are written against `sdk` + the schema seam (§9).
@@ -394,7 +396,7 @@ The distributed bus delivers the implementation that §4 promised, as a **hybrid
 is still the in-proc bus — **all the guarantees of §4 remain intact on the local path**
 (blocking backpressure, zero local loss, panic isolation, shutdown with drain, no codec
 on the hot path) — and NATS acts as a **best-effort bridge between nodes** (`core/eventbus/natsbus`,
-decision and full comparison in ADR-0017). Delta of this contract:
+see the bridge semantics below). Delta of this contract:
 
 - **Semantics between nodes: at-most-once.** Connection with `NoEcho` (the bridge subscription receives only
   events of remote origin → no double delivery); per-publisher order preserved across types (one
@@ -403,7 +405,7 @@ decision and full comparison in ADR-0017). Delta of this contract:
   pending fills up — are **counted** (`olivares_eventbus_bridge_*`) and alertable, never
   silent. **No JetStream in v1**: the 2026-06-12 subscriber census shows that most are not
   duplicate-safe; at-least-once is the future upgrade path, conditioned on an idempotency
-  pass (ADR-0017).
+  pass.
 - **Wire format**: the frozen `Event` proto of §6 (typed oneof for the three observation
   payloads — "never JSON", as §3 requires — and `json_payload` + decoder registry for the module
   types). An unregistered type arrives as `json.RawMessage` (the shape that the tolerant-consumer

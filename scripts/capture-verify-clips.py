@@ -63,11 +63,11 @@ def main():
     worst = 0
     for p in paths:
         if not os.path.exists(p):
-            print(f"⚠ NO HE PODIDO MIRAR  {p}: missing")
+            print(f"⚠ COULD NOT LOOK  {p}: missing")
             worst = max(worst, 2)
             continue
         rc, findings, (n, total, size) = check(p)
-        tag = {0: "ok   ", 1: "⛔ FALLO", 2: "⚠ CIEGO"}[rc]
+        tag = {0: "ok   ", 1: "⛔ FAIL", 2: "⚠ UNVERIFIED"}[rc]
         print(f"{tag} {os.path.basename(p)}: {n} frames · {total:.1f}s · {size/1024/1024:.2f} MB")
         for f in findings:
             print(f"        - {f}")

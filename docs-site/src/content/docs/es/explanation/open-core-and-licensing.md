@@ -2,7 +2,7 @@
 title: Open core y licencias
 description: >-
   Open core: el producto completo es AGPL-3.0-only, el SDK y los conectores son
-  Apache-2.0, y una pequeña línea enterprise aditiva es comercial. El binario AGPL
+  Apache-2.0, y una pequeña línea aditiva, las ediciones Business y Enterprise, es comercial. El binario AGPL
   nunca se mutila para empujarte a pagar, pero no es idéntico a la edición
   comercial. Qué significa para quienes hacen self-hosting y para los autores de
   conectores.
@@ -24,13 +24,13 @@ frontera se aplica en CI (un conector nunca puede importar el motor):
 | Ruta | Licencia | Qué es |
 |---|---|---|
 | `core/` | **AGPL-3.0-only** | el motor: ingesta, bus de eventos, modelo de datos, runtime de módulos, API, authz, auditoría |
-| `modules/` | **AGPL-3.0-only** | los 31 módulos (inventario, el mapa R/RW, FinOps, evals, guardrails, …) |
+| `modules/` | **AGPL-3.0-only** | los 32 módulos (inventario, el mapa R/RW, FinOps, evals, guardrails, …) |
 | `web/` | **AGPL-3.0-only** | la interfaz React |
 | `sdk/` | **Apache-2.0** | las interfaces de conector/módulo, el contrato gRPC y los tipos compartidos |
 | `connectors/` | **Apache-2.0** | los conectores (Claude, OpenAI, pgAudit, eBPF, cloud, Slack, SIEM, …) |
-| `enterprise/` | **comercial** | módulos aditivos, protegidos por build-tag, nunca en el binario público: federación multi-IdP, content firewall/DLP, hook hardening, catálogo compilado de threat-intel, egress de server-tools, CyberArk Conjur, cierre de incidentes (close-loop) (`LicenseRef-Olivares-Commercial`) |
+| `enterprise/` | **comercial** | módulos aditivos, protegidos por build-tag, nunca en el binario público (`LicenseRef-Olivares-Commercial`) |
 
-El sitio de documentación que estás leyendo forma parte del producto AGPL.
+El sitio de documentación que estás leyendo forma parte del producto AGPL. Qué capacidad va en qué edición se escribe en un solo lugar, `docs/editions.md` en el repositorio; esta página no lo repite.
 
 ## Qué significa esto para ti
 
@@ -55,8 +55,8 @@ El sitio de documentación que estás leyendo forma parte del producto AGPL.
 | Edición | Precio | Alcance |
 | --- | --- | --- |
 | Community | Gratis, AGPL-3.0-only | Usuarios ilimitados; un proveedor de identidad (IdP) activo. |
-| Business | 129 USD/mes o 1.290 USD/año | Usuarios ilimitados; una entidad jurídica; hasta dos despliegues de producción, cada uno con un despliegue de staging; hasta cinco IdP activos en total. |
-| Enterprise | Contacta con nosotros | Varias entidades, más despliegues o IdP, mirrors air-gap, LTS personalizado y otros requisitos negociados. |
+| Business | 129 USD/mes o 1.290 USD/año | Usuarios ilimitados; una entidad jurídica; una instancia activa a la vez. |
+| Enterprise | Contacta con nosotros | Condiciones pactadas en un contrato y las capacidades que dependen de ellas: varias entidades, más despliegues o IdP, mirrors air-gap, LTS personalizado y credenciales upstream acotadas emitidas por intercambio de tokens OAuth 2.0 (RFC 8693). |
 
 Business incluye **Regulated Operations**, **AI Runtime Security**,
 **Compliance Packs** e **Identity & Scale**. Cada familia conserva su código y su
@@ -69,25 +69,27 @@ binarios comerciales, fuera del repositorio público.
 No. Las cuatro familias nombradas están incluidas en la suscripción Business.
 Elige facturación mensual o anual en [Precios](https://olivares.ai/pricing).
 
-### ¿Y si necesito más despliegues o proveedores de identidad?
+### ¿Y si necesito más de una instancia activa a la vez?
 
-Contacta con **enterprise@olivares.ai** para un alcance Enterprise. Business permite
-hasta dos despliegues de producción y cinco IdP activos en total, no cinco por despliegue.
+Contacta con **enterprise@olivares.ai** para un alcance Enterprise. Una licencia
+Business está activa en una instancia a la vez; la liberas en una instancia y la
+activas en otra tantas veces como necesites. Enterprise cubre varias instancias
+activas a la vez.
 
 
-## Qué es abierto y qué es enterprise
+## Qué es abierto y qué es comercial
 
-El binario abierto es la plataforma de gobierno al completo; la línea `enterprise/`
+El binario abierto es la plataforma de gobierno al completo; la línea comercial `enterprise/`
 es **aditiva**. Merece la pena destacar dos fronteras, porque el binario abierto
 responde por ellas con honestidad en vez de fingirlas:
 
-- **SSO** — el login de un solo IdP (OIDC + SAML 2.0) es **abierto** en el binario
-  por defecto: login real, sin `-tags enterprise`. Varios IdP activos (por tenant /
-  por dominio), la imposición de SSO (SSO-enforcement) y el SCIM gestionado son la
-  línea enterprise reservada; activar un segundo IdP activo devuelve
+- **SSO** — el login de un solo IdP (OIDC + SAML 2.0) y el SCIM entrante son
+  **abiertos** en el binario por defecto: login real, sin `-tags enterprise`. Varios
+  IdP activos (por tenant / por dominio), el mapeo de grupos al iniciar sesión y la
+  exigencia de SSO son de Business (Identity & Scale); activar un segundo IdP activo devuelve
   `multi_idp_requires_enterprise`.
 - **Cuentas de usuario** — **ilimitadas en todas las ediciones**. El binario de
-  comunidad no tiene tope de usuarios, y el enterprise tampoco: ningún estado de
+  comunidad no tiene tope de usuarios, y el comercial tampoco: ningún estado de
   licencia (válida, caducada, ausente) puede limitar cuántas cuentas ejecuta un
   deployment. El tope de tres cuentas activas anterior al 2026-07-27 se eliminó por
   completo; el seam de asientos permanece en el código como un no-op de compatibilidad
@@ -95,7 +97,7 @@ responde por ellas con honestidad en vez de fingirlas:
   cuenta.
 
 Consulta [Honestidad y límites](/es/start/honesty-and-limits/) para el panorama
-completo de qué es abierto y qué es enterprise.
+completo de qué es abierto y qué es comercial.
 
 ## La licencia nunca limita el producto abierto
 
@@ -105,12 +107,12 @@ estado; **nunca deshabilita, degrada ni bloquea** ninguna petición, ningún mó
 el arranque por una comprobación de licencia, y funciona **offline** (una firma
 Ed25519, sin servidor de licencias), motivo por el cual el producto abierto funciona
 air-gapped. El único punto donde la licencia se *consume* en lugar de mostrarse es el
-binario enterprise cerrado, y solo para dar derecho a los módulos que cubre el
+binario comercial cerrado, y solo para dar derecho a los módulos que cubre el
 acuerdo comercial, evaluados módulo por módulo — una
 decisión local de la edición comercial, nunca una comprobación en el binario abierto.
 Nunca limita usuarios: las cuentas son ilimitadas en todas las ediciones. Así que
 el binario abierto es genuinamente íntegro y sin tope por licencia; lo que difiere en
-la edición comercial son los módulos aditivos de `enterprise/`, no una clave de
+la edición comercial son los módulos comerciales aditivos de `enterprise/`, no una clave de
 licencia que active funciones dentro del mismo binario.
 
 ## Por qué este modelo
@@ -134,8 +136,8 @@ la guía `CONTRIBUTING` del repositorio para conocer el proceso actual.
 
 ## Relacionado
 
-- [Instalar una licencia y pasar a enterprise](/es/how-to/install-a-license/) — dónde se
-  guarda una licencia adquirida y cómo hacer el cambio in-place de Community → enterprise.
+- [Instalar una licencia y pasar a Business](/es/how-to/install-a-license/) — dónde se
+  guarda una licencia adquirida y cómo hacer el cambio in-place de Community → Business.
   Esta página explica el modelo; la otra detalla los pasos.
 - [Modelo de seguridad](/es/explanation/security/security-model/) — por qué las licencias
   solo de atestación importan para un producto de seguridad air-gapped.

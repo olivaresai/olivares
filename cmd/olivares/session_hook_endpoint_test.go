@@ -13,6 +13,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"syscall"
@@ -34,6 +35,7 @@ func startHookEndpointEngine(t *testing.T) *engine {
 	ready := make(chan *engine, 1)
 	opts := bindAnnounceInsecureOpts(t.TempDir(), "127.0.0.1:0", "127.0.0.1:0")
 	opts.seedDemo, opts.quickstart, opts.quiet = true, true, true
+	prepareCompositionTestBoot(t)
 	go func() {
 		announce := func(ctx context.Context, _ io.Writer, eng *engine, _ consoleAddress) error {
 			if _, _, err := eng.authr.BootstrapSuperadminOwning(ctx, demoEmail, demoPassword, eng.demoTenant); err != nil {
@@ -47,6 +49,8 @@ func startHookEndpointEngine(t *testing.T) *engine {
 		err := runEngine(ctx, io.Discard, opts, announce)
 		var restart *selfRestartError
 		if ctx.Err() == nil && errors.As(err, &restart) && len(restart.env) == 0 {
+			// The first engine has drained: the re-entry is the next process.
+			prepareCompositionTestBoot(t)
 			err = runEngine(ctx, io.Discard, opts, announce)
 		}
 		done <- err
@@ -106,6 +110,7 @@ func endpointSessionHook(t *testing.T, eng *engine, run string) (string, string,
 	if err != nil {
 		t.Fatal(err)
 	}
+	hookTestRunID(t, eng.store, tenant, run)
 	sid, err := eng.sessionsMod.ResolveSession(ctx, tenant, sessions.SessionBinding{Provider: sessions.ProviderOperated, ExternalID: run, Origin: sessions.OriginOperated})
 	if err != nil {
 		t.Fatal(err)
@@ -177,36 +182,64 @@ func callEndpointHook(t *testing.T, endpoint, token string, tenant model.TenantI
 	return answer.Output.Decision
 }
 
+// The second engine of the separate-endpoints test runs as a second process of this
+// binary beside the first. The add-on license sources are process-scoped and refuse a
+// second engine in one process, so two engines that must be alive together cannot
+// share one; two processes are what two serving nodes on one host really are.
+const (
+	hookFirstEngineURLEnv    = "OLIVARES_TEST_HOOK_FIRST_URL"
+	hookFirstEngineTokenEnv  = "OLIVARES_TEST_HOOK_FIRST_TOKEN"
+	hookFirstEngineTenantEnv = "OLIVARES_TEST_HOOK_FIRST_TENANT"
+)
+
+// requireHookAnsweredByItsOwnEngine proves a session's hook reaches the engine that minted
+// it and that engine audits it.
+func requireHookAnsweredByItsOwnEngine(t *testing.T, eng *engine, endpoint, token string, intent sessions.LaunchIntent) {
+	t.Helper()
+	if got := callEndpointHook(t, endpoint, token, eng.demoTenant); got != "allow" {
+		t.Fatalf("session did not reach its own engine: %s", got)
+	}
+	for _, event := range canonicalLedgerEventsFrom(t, eng.store, eng.demoTenant, 0) {
+		if event.event.Action == "hook.tool.allow" && event.meta["session_ref"] == intent.ClaimSID && event.meta["run_ref"] == intent.RunRef {
+			return
+		}
+	}
+	t.Fatal("own engine did not audit its session's hook")
+}
+
 func TestDefaultHookPEPEnginesUseSeparateEphemeralEndpoints(t *testing.T) {
 	t.Setenv("OLIVARES_HOOK_PEP_CONFIG", "")
 	first := startHookEndpointEngine(t)
-	second := startHookEndpointEngine(t)
 	firstURL, firstToken, firstIntent := endpointSessionHook(t, first, "first-engine-run")
+	requireHookAnsweredByItsOwnEngine(t, first, firstURL, firstToken, firstIntent)
+
+	cmd := exec.Command(os.Args[0], "-test.run=^TestDefaultHookPEPSecondEngineChild$", "-test.count=1", "-test.v")
+	cmd.Env = append(os.Environ(), "OLIVARES_CLI_TRAMPOLINE=",
+		hookFirstEngineURLEnv+"="+firstURL, hookFirstEngineTokenEnv+"="+firstToken, hookFirstEngineTenantEnv+"="+first.demoTenant.String())
+	out, err := cmd.CombinedOutput()
+	if err != nil || !strings.Contains(string(out), "--- PASS: TestDefaultHookPEPSecondEngineChild") {
+		t.Fatalf("second engine (its own process, beside the first) = %v:\n%s", err, out)
+	}
+	// The first engine kept serving and auditing while the second one ran.
+	requireHookAnsweredByItsOwnEngine(t, first, firstURL, firstToken, firstIntent)
+}
+
+// TestDefaultHookPEPSecondEngineChild is the second engine of
+// TestDefaultHookPEPEnginesUseSeparateEphemeralEndpoints, started while the first one is
+// serving. Alone it skips.
+func TestDefaultHookPEPSecondEngineChild(t *testing.T) {
+	firstURL, firstToken, firstTenant := os.Getenv(hookFirstEngineURLEnv), os.Getenv(hookFirstEngineTokenEnv), os.Getenv(hookFirstEngineTenantEnv)
+	if firstURL == "" || firstToken == "" || firstTenant == "" {
+		t.Skip("the second engine of TestDefaultHookPEPEnginesUseSeparateEphemeralEndpoints")
+	}
+	t.Setenv("OLIVARES_HOOK_PEP_CONFIG", "")
+	second := startHookEndpointEngine(t)
 	secondURL, secondToken, secondIntent := endpointSessionHook(t, second, "second-engine-run")
 	if firstURL == secondURL {
 		t.Fatal("two engines share one hook listener")
 	}
-	for _, proof := range []struct {
-		eng             *engine
-		endpoint, token string
-		intent          sessions.LaunchIntent
-	}{
-		{first, firstURL, firstToken, firstIntent}, {second, secondURL, secondToken, secondIntent},
-	} {
-		if got := callEndpointHook(t, proof.endpoint, proof.token, proof.eng.demoTenant); got != "allow" {
-			t.Fatalf("session did not reach its own engine: %s", got)
-		}
-		found := false
-		for _, event := range canonicalLedgerEventsFrom(t, proof.eng.store, proof.eng.demoTenant, 0) {
-			if event.event.Action == "hook.tool.allow" && event.meta["session_ref"] == proof.intent.ClaimSID && event.meta["run_ref"] == proof.intent.RunRef {
-				found = true
-			}
-		}
-		if !found {
-			t.Fatal("own engine did not audit its session's hook")
-		}
-	}
-	if got := callEndpointHook(t, secondURL, firstToken, first.demoTenant); got != "deny" {
+	requireHookAnsweredByItsOwnEngine(t, second, secondURL, secondToken, secondIntent)
+	if got := callEndpointHook(t, secondURL, firstToken, model.TenantID(firstTenant)); got != "deny" {
 		t.Fatalf("another engine accepted the first engine's session bearer: %s", got)
 	}
 }

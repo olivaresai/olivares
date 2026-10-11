@@ -60,6 +60,23 @@ type sessionMCPHandler struct {
 	managed            func(http.ResponseWriter, *http.Request, auth.Principal, model.TenantID, sessionMCPRequest)
 	managedTools       func(context.Context, auth.Principal, model.TenantID) ([]mcpc.Tool, error)
 	managedCall        func(http.ResponseWriter, *http.Request, auth.Principal, model.TenantID, sessionMCPRequest) bool
+	// admits is the admission seam's door; nil refuses, so no work tool is listed.
+	admits func(context.Context, auth.Request) bool
+	// configurer serves the configuration tools; nil lists none.
+	configurer sessionConfigurer
+	// publisher serves the publish proposal tools; nil lists none.
+	publisher sessionPublisher
+}
+
+// issuedWriter reports whether an issued session credential may write work in its
+// session's tenant. It asks the admission seam instead of comparing the rank of the
+// launcher's role, so a scoped grant counts and a credential ceiling or a deny narrows.
+func (h *sessionMCPHandler) issuedWriter(ctx context.Context, p auth.Principal) bool {
+	if !h.issuedSessionOnly || h.admits == nil {
+		return false
+	}
+	return h.admits(ctx, auth.Request{Principal: p, Tenant: p.SessionScope(), Permission: auth.WorkSessionWorkWrite,
+		Resource: auth.ResourceFor(auth.WorkSessionWorkWrite)})
 }
 
 type sessionMCPRequest struct {
@@ -133,7 +150,7 @@ func (h *sessionMCPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	var in sessionMCPRequest
 	if err := api.DecodeRequestBody(w, r, &in, api.RequestBodySpec{}); err != nil || in.JSONRPC != "2.0" || in.Method == "" || !validSessionRPCID(in.ID) {
-		sessionRPCError(w, nil, -32600, "Invalid JSON-RPC request")
+		sessionRPCError(w, nil, -32600, api.RequestBodyErrorMessage(err, "Invalid JSON-RPC request"))
 		return
 	}
 	if len(in.ID) == 0 {
@@ -158,7 +175,7 @@ func (h *sessionMCPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "ping":
 		sessionRPCResult(w, in.ID, map[string]any{})
 	case "tools/list":
-		tools := sessionMCPTools(p, h.issuedSessionOnly)
+		tools := append(append(sessionMCPTools(p, h.issuedSessionOnly, h.issuedWriter(r.Context(), p)), h.configTools()...), h.publishTools()...)
 		if h.managedTools != nil {
 			extra, err := h.managedTools(r.Context(), p, tenant)
 			if err != nil {
@@ -181,8 +198,14 @@ func (h *sessionMCPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			sessionRPCError(w, in.ID, -32602, "Provide name and arguments from tools/list")
 			return
 		}
+		if h.callConfigTool(w, r, p, tenant, in.ID, call.Name, call.Arguments, parts[1]) {
+			return
+		}
+		if h.callPublishTool(w, r, p, tenant, in.ID, call.Name, call.Arguments, parts[1]) {
+			return
+		}
 		allowed := false
-		for _, tool := range sessionMCPTools(p, h.issuedSessionOnly) {
+		for _, tool := range sessionMCPTools(p, h.issuedSessionOnly, h.issuedWriter(r.Context(), p)) {
 			if tool.Name == call.Name {
 				allowed = true
 				break
@@ -203,12 +226,7 @@ func (h *sessionMCPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		response := &sessionAPIResponse{header: make(http.Header)}
 		h.work(response, request, p, tenant)
-		if response.overflow {
-			sessionToolResult(w, in.ID, http.StatusBadGateway, []byte(`{"code":"response_too_large","message":"Use a smaller page limit"}`), nil)
-			return
-		}
-		raw := bytes.ReplaceAll(response.body.Bytes(), []byte(parts[1]), []byte("[redacted]"))
-		sessionToolResult(w, in.ID, response.status, raw, response.header)
+		writeSessionAPIResult(w, in.ID, response, parts[1])
 	default:
 		sessionRPCError(w, in.ID, -32601, "Method not found")
 	}
@@ -326,6 +344,17 @@ func (w *sessionAPIResponse) Write(b []byte) (int, error) {
 	return w.body.Write(b)
 }
 
+// writeSessionAPIResult returns an in-process API answer as the tool result,
+// without the session's own bearer.
+func writeSessionAPIResult(w http.ResponseWriter, id json.RawMessage, response *sessionAPIResponse, bearer string) {
+	if response.overflow {
+		sessionToolResult(w, id, http.StatusBadGateway, []byte(`{"code":"response_too_large","message":"Use a smaller page limit"}`), nil)
+		return
+	}
+	raw := bytes.ReplaceAll(response.body.Bytes(), []byte(bearer), []byte("[redacted]"))
+	sessionToolResult(w, id, response.status, raw, response.header)
+}
+
 type sessionWorkListArgs struct {
 	Kind    string            `json:"kind,omitempty"`
 	Limit   int               `json:"limit,omitempty"`
@@ -421,10 +450,9 @@ func sessionTool(name, description string, input any, required []string, read bo
 	destructive, idempotent, open := !read, read, false
 	return mcpc.Tool{Name: name, Title: name, Description: description, InputSchema: raw, Annotations: &mcpc.ToolAnnotations{ReadOnlyHint: &read, DestructiveHint: &destructive, IdempotentHint: &idempotent, OpenWorldHint: &open}}
 }
-func sessionMCPTools(p auth.Principal, issued bool) []mcpc.Tool {
+func sessionMCPTools(p auth.Principal, issued, issuedWriter bool) []mcpc.Tool {
 	tools := []mcpc.Tool{}
-	role, _ := p.RoleIn(p.SessionScope())
-	writable := p.IsWorkSessionCredential() || (issued && auth.RoleRank(role) >= auth.RoleRank(auth.RoleEditor))
+	writable := p.IsWorkSessionCredential() || issuedWriter
 	if binding, ok := p.OrchestrationSessionGrant(); ok {
 		for _, cap := range binding.Capabilities {
 			if cap == "work.create" || cap == "work.assign" || cap == "work.review" || cap == "decision.write" {
@@ -521,10 +549,8 @@ func sessionToolRequest(ctx context.Context, p auth.Principal, name string, raw 
 		}
 		method, path = http.MethodPost, "/work-items"
 		query.Set("mode", "apply")
-		// Keep work apply's UUID contract while isolating retries by the
-		// authenticated sender. The domain and SID cannot contain a separator.
-		key := []byte("olivares_peer_send\x00" + p.SessionIdentity + "\x00" + args.IdempotencyKey)
-		headers.Set("Idempotency-Key", uuid.NewHash(sha256.New(), uuid.NameSpaceURL, key, 8).String())
+		// Work apply requires a UUID; retries are scoped to the authenticated sender.
+		headers.Set("Idempotency-Key", uuid.NewHash(sha256.New(), uuid.NameSpaceURL, []byte("olivares_peer_send\x00"+p.SessionIdentity+"\x00"+args.IdempotencyKey), 8).String())
 		body = sessions.WorkCommand{
 			Command: "item.create", WorkspaceID: workspace, WorkKind: "message", Title: args.Title, BriefMD: args.BriefMD, Priority: args.Priority,
 			OwnerKind: "session", OwnerRef: args.ToSID, ProvenanceKind: "mcp", ProvenanceRef: p.SessionIdentity,

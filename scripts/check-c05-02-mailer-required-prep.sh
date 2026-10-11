@@ -32,7 +32,7 @@ grep -F -q 'Unique leftover unique vs `#1380`' "$DOC" \
 grep -F -q 'mailer not wired refuses Provision' "$DOC" \
   || fail "prepare doc lost deny-closed HOLD"
 if grep -qiE 'FIRMA A claimed|bytes are real|stub gone' "$DOC"; then
-  fail "prepare doc claims a close this lote does not have"
+  fail "prepare doc claims a close this batch does not have"
 fi
 
 grep -q 'mailer not wired' "$MGR" \

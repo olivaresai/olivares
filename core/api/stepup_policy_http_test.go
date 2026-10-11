@@ -46,9 +46,11 @@ func TestFreshInstallAdministratorActsAtSignInStrength(t *testing.T) {
 	}
 }
 
-// Raising the policy refuses unless this session already meets the new level;
-// lowering it always works, so an administrator cannot lock themselves out.
-func TestStepUpPolicyRaiseRefusesLowerAlwaysWorks(t *testing.T) {
+// Raising the policy refuses unless this session already meets the new level,
+// so an administrator cannot lock themselves out; lowering or turning it off
+// refuses unless the session meets the current level, so a session below the
+// policy cannot remove it and then act unprotected.
+func TestStepUpPolicyRaiseAndLowerNeedTheStrongerLevel(t *testing.T) {
 	h := newHarness(t)
 	admin := h.adminLogin()
 	tenant := h.createOrg(admin, "policy")
@@ -70,22 +72,73 @@ func TestStepUpPolicyRaiseRefusesLowerAlwaysWorks(t *testing.T) {
 	if r := h.do("GET", "/v1/auth/whoami", admin, nil, nil); r.body["admin_step_up"] != "passkey" || r.body["step_up_satisfied"] != false {
 		t.Fatalf("whoami under passkey = %s", r.raw)
 	}
-	if r := h.do("PUT", "/v1/auth/step-up-policy", admin, map[string]any{"admin_step_up": "none"}, nil); r.code != http.StatusOK || r.body["admin_step_up"] != "none" {
-		t.Fatalf("turn off at AAL1 = %d %s, want 200 none", r.code, r.raw)
+	for _, lower := range []string{"none", "totp"} {
+		if r := h.do("PUT", "/v1/auth/step-up-policy", admin, map[string]any{"admin_step_up": lower}, nil); r.code != http.StatusForbidden || errorCode(r) != "step_up_required" {
+			t.Fatalf("lower passkey -> %s at AAL1 = %d %s, want 403 step_up_required", lower, r.code, r.raw)
+		}
 	}
-	if r := h.do("POST", "/v1/workspaces", admin, map[string]any{"name": "A", "slug": "a"}, tenantHdr(tenant)); r.code != http.StatusCreated {
-		t.Fatalf("create after turning it off = %d %s, want 201", r.code, r.raw)
+	if r := h.do("GET", "/v1/auth/step-up-policy", admin, nil, nil); r.code != http.StatusOK || r.body["admin_step_up"] != "passkey" {
+		t.Fatalf("GET after the refused lowering = %d %s, want passkey", r.code, r.raw)
+	}
+	if r := h.do("POST", "/v1/workspaces", admin, map[string]any{"name": "A", "slug": "a"}, tenantHdr(tenant)); r.code != http.StatusForbidden || errorCode(r) != "step_up_required" {
+		t.Fatalf("create after the refused lowering = %d %s, want 403 step_up_required", r.code, r.raw)
+	}
+
+	// A fresh passkey step-up meets the current level, so it may lower it.
+	h.elevate(admin)
+	if r := h.do("PUT", "/v1/auth/step-up-policy", admin, map[string]any{"admin_step_up": "none"}, nil); r.code != http.StatusOK || r.body["admin_step_up"] != "none" {
+		t.Fatalf("turn off after a passkey step-up = %d %s, want 200 none", r.code, r.raw)
 	}
 }
 
-// SR2 FH-02: lowering is a lowering whatever it lowers to: passkey -> totp from a
-// password session needs no TOTP proof.
-func TestStepUpPolicyLowerPasskeyToTOTPAtCurrentStrength(t *testing.T) {
+// Under the totp policy a password-only session (one that predates the factor's
+// enrolment) cannot lower it and a TOTP sign-in can; under passkey a TOTP
+// sign-in is still below the level, so it cannot lower it to totp either.
+func TestStepUpPolicyLowerNeedsTheCurrentLevel(t *testing.T) {
 	h := newHarness(t)
-	root := h.adminLogin()
+	wireTOTPSealer(t, h)
+	password := h.adminLogin()
+	tenant := h.createOrg(password, "lower")
+
+	r := h.do("POST", "/v1/auth/totp/enrol", password, map[string]any{}, nil)
+	if r.code != http.StatusOK {
+		t.Fatalf("enrol = %d %s", r.code, r.raw)
+	}
+	secret := r.body["secret"].(string)
+	if r := h.do("POST", "/v1/auth/totp/activate", password, map[string]any{"code": apiTOTPCode(t, secret, time.Now())}, nil); r.code != http.StatusOK {
+		t.Fatalf("activate = %d %s", r.code, r.raw)
+	}
+	r = h.do("POST", "/v1/auth/login", "", map[string]any{"email": harnessAdminEmail, "password": harnessAdminPass}, nil)
+	if r.code != http.StatusOK || r.body["mfa_required"] != true {
+		t.Fatalf("login after enrolment = %d %s, want mfa_required", r.code, r.raw)
+	}
+	r = h.do("POST", "/v1/auth/totp/challenge", "", map[string]any{"mfa_token": r.body["mfa_token"], "code": apiTOTPCode(t, secret, time.Now())}, nil)
+	if r.code != http.StatusOK || r.body["token"] == nil {
+		t.Fatalf("challenge = %d %s", r.code, r.raw)
+	}
+	withCode := r.body["token"].(string)
+
+	if r := h.do("PUT", "/v1/auth/step-up-policy", withCode, map[string]any{"admin_step_up": "totp"}, nil); r.code != http.StatusOK {
+		t.Fatalf("raise to totp from a TOTP sign-in = %d %s, want 200", r.code, r.raw)
+	}
+	if r := h.do("PUT", "/v1/auth/step-up-policy", password, map[string]any{"admin_step_up": "none"}, nil); r.code != http.StatusForbidden || errorCode(r) != "step_up_required" {
+		t.Fatalf("turn off totp from a password-only session = %d %s, want 403 step_up_required", r.code, r.raw)
+	}
+	if r := h.do("GET", "/v1/auth/step-up-policy", password, nil, nil); r.body["admin_step_up"] != "totp" {
+		t.Fatalf("GET after the refused lowering = %s, want totp", r.raw)
+	}
+	if r := h.do("POST", "/v1/workspaces", password, map[string]any{"name": "B", "slug": "b"}, tenantHdr(tenant)); r.code != http.StatusForbidden || errorCode(r) != "step_up_required" {
+		t.Fatalf("password-only create under totp = %d %s, want 403 step_up_required", r.code, r.raw)
+	}
+
 	h.requirePasskeyStepUp()
-	if r := h.do("PUT", "/v1/auth/step-up-policy", root, map[string]any{"admin_step_up": "totp"}, nil); r.code != http.StatusOK {
-		t.Fatalf("lower passkey -> totp at AAL1 = %d %s, want 200", r.code, r.raw)
+	if r := h.do("PUT", "/v1/auth/step-up-policy", withCode, map[string]any{"admin_step_up": "totp"}, nil); r.code != http.StatusForbidden || errorCode(r) != "step_up_required" {
+		t.Fatalf("lower passkey -> totp from a TOTP sign-in = %d %s, want 403 step_up_required", r.code, r.raw)
+	}
+
+	h.requireStepUp(auth.StepUpTOTP)
+	if r := h.do("PUT", "/v1/auth/step-up-policy", withCode, map[string]any{"admin_step_up": "none"}, nil); r.code != http.StatusOK || r.body["admin_step_up"] != "none" {
+		t.Fatalf("turn off totp from a TOTP sign-in = %d %s, want 200 none", r.code, r.raw)
 	}
 }
 

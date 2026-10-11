@@ -7,13 +7,15 @@ description: >-
 draft: false
 ---
 
+下一个版本是 <!-- release -->`0.1`<!-- /release -->，其 GitHub 发行尚未发布。以下命令描述计划中的产物。发布前请从源码构建，发布后也应在使用前验证每个产物。观测到的发布状态记录在 <!-- release -->`docs/releases/0.1-install-surfaces.json`<!-- /release -->。
+
 :::note[已发布的软件包名称]
-GitHub 的 26.10.1 发行发布 `amd64` 与 `arm64` 的 `.deb`、`.rpm` 和 `.apk`，并附带
+GitHub 的 Olivares <!-- release -->0.1<!-- /release --> 发行发布 `amd64` 与 `arm64` 的 `.deb`、`.rpm` 和 `.apk`，并附带
 `checksums.txt`、`checksums.txt.sig` 和 `checksums.txt.pem`。下面的命令使用该发行的字面
 `amd64` 名称；在 64 位 ARM 主机上将 `amd64` 换成 `arm64`。请从这些已验证的发行产物安装。
 源码树中的仓库元数据生成器不是本指南的安装说明。
 
-**DIST-24-05 资格认定。** CI 认定的是经验证的 **shell 安装器** 及其服务/doctor 契约，而不是
+**安装器资格认定。** CI 认定的是经验证的 **shell 安装器** 及其服务/doctor 契约，而不是
 `dpkg`、`rpm` 或 `apk`：一个 dispatch/pull request 矩阵在 Debian stable、Ubuntu 24.04 LTS、
 Fedora、openSUSE Leap 和 Alpine 的容器 userland 以及托管的 macOS 14 runner 上，针对已发布的
 发行运行它；当公开发行不可达时，它以「不可测量」失败，而不是把 dry-run 算作覆盖。
@@ -21,7 +23,7 @@ Fedora、openSUSE Leap 和 Alpine 的容器 userland 以及托管的 macOS 14 ru
 正在运行的 OpenRC 服务以及移除 — 已在一次性的 Alpine 客户机中本地演练；这是对本源码树的证据，
 不是已签名、已托管或 preproduction 的资格认定，那些仍待完成。
 
-**DIST-24-06 拟议仓库（不是可用的安装面）。** 源码树包含确定性的 apt、rpm-md 和 APK 仓库
+**拟议软件包仓库（不是可用的安装面）。** 源码树包含确定性的 apt、rpm-md 和 APK 仓库
 生成器、签名索引校验器、干净客户端资格认定，以及一个分阶段发布工作流，其 dispatch 在审阅者
 批准之前保持不激活。**没有任何软件包仓库 URL 处于可用状态**，没有委派的 DNS 名称，也没有配置
 生产环境的仓库签名密钥。此提案中没有任何东西是包管理器源；请继续使用下面经验证的发行产物。
@@ -38,8 +40,10 @@ RHEL/Fedora/SUSE 默认使用 **systemd**。Alpine 的默认 init 是 **OpenRC**
 `checksums.txt` 和签名放在同一目录，并 **从该目录** 运行验证器：
 
 ```bash
+# The verifier is in a source checkout of the release tag, not a release asset; running it
+# trusts the checkout. Without one, INSTALL.md shows the cosign + sha256sum commands.
 # keyless / Sigstore (default; reaches Rekor over the network)
-./verify-release.sh
+/path/to/olivares/scripts/verify-release.sh
 ```
 
 发布采用无密钥签名，不发布 cosign 公钥，因此对从发布下载的软件包请使用无密钥命令。它需要
@@ -58,16 +62,18 @@ Sigstore 信任根材料，尚未缓存时由 cosign 获取。`--offline` 只去
 根据主机上是否存在 `systemctl` 来猜测。Linux 归档携带相同的服务适配器：
 `scripts/install-service.sh` 和 `packaging/service/`。
 
+<!-- release -->
 ```bash
 # Debian / Ubuntu
-sudo dpkg -i olivares_26.10.1_linux_amd64.deb
+sudo dpkg -i olivares_0.1_linux_amd64.deb
 
 # RHEL / Fedora / SUSE
-sudo rpm -Uvh olivares_26.10.1_linux_amd64.rpm
+sudo rpm -Uvh olivares_0.1_linux_amd64.rpm
 
 # Alpine
-sudo apk add --allow-untrusted olivares_26.10.1_linux_amd64.apk
+sudo apk add --allow-untrusted olivares_0.1_linux_amd64.apk
 ```
+<!-- /release -->
 
 安装会 **创建系统用户和组 `olivares`**（shell 为 `/usr/sbin/nologin`，家目录为
 `/var/lib/olivares`），创建属主为该用户、模式为 `0750` 的 `/var/lib/olivares`，并创建
@@ -107,12 +113,28 @@ sudo -u olivares olivares serve --data-dir=/var/lib/olivares \
 
 随包 systemd 单元以非特权用户 `olivares` 运行引擎，capability bounding 集为空 — 既没有
 ambient 也没有 bounding capability — 并设置 `NoNewPrivileges=true`，因此它启动的任何进程都
-无法获得权限。此外还带有 `ProtectSystem=strict`（文件系统只读，例外是
-`ReadWritePaths=/var/lib/olivares`）、`ProtectHome`、`PrivateTmp`、`PrivateDevices`、四条
-`ProtectKernel*`/`ProtectClock` 指令、`RestrictNamespaces`、`RestrictSUIDSGID`、
-`RestrictRealtime`、`LockPersonality`、`MemoryDenyWriteExecute`、
+无法获得权限。此外还带有 `ProtectSystem=full`（`/usr`、`/boot`、`/efi` 和 `/etc` 只读）、
+`PrivateDevices=true`、`ProtectClock=true`、`ProtectKernelTunables=true`、
+`ProtectKernelModules=true`、`ProtectKernelLogs=true`、`ProtectControlGroups=true`、
+`RestrictNamespaces=user net`（会话获得自己的用户和网络命名空间，其他命名空间类型一律拒绝）、
+`RestrictSUIDSGID=true`、`RestrictRealtime=true`、`LockPersonality=true`、
 `SystemCallArchitectures=native`、额外去掉 `@privileged` 和 `@resources` 的
 `@system-service` 系统调用过滤器，以及 `UMask=0027`。
+
+该单元**不**隐藏主目录和临时目录，并允许可执行内存：它设置 `ProtectHome=false`、
+`PrivateTmp=false` 和 `MemoryDenyWriteExecute=false`。引擎能访问普通文件权限允许
+`olivares` 账户访问的一切，包括 `/home`、`/tmp` 和 `/var/tmp`，这样你为会话选择的文件夹
+仍可访问。隔离改为按会话进行：每个代理工具或 stdio MCP 服务器运行之前，引擎都会施加一条
+Landlock 策略，允许它写入自己的会话文件夹、工具主目录和临时目录，并且永远无法触及引擎的
+数据目录、`/etc/olivares` 以及引擎账户自己的凭据。Node/V8 代理和 MCP 运行时需要可执行的
+JIT 内存，因此 `MemoryDenyWriteExecute=false`。在没有 Landlock 的内核上，引擎拒绝启动会话；
+`olivares doctor` 会给出原因。
+
+26.10.0<!-- release-fixed --> 发布的单元更严格：除数据目录外整个文件系统只读、主目录被隐藏、使用私有 `/tmp`，
+并且不允许可写的可执行内存。26.10.1<!-- release-fixed --> 把它放宽为上面的值。你可以在 drop-in
+（`systemctl edit olivares`）中把其中任何一项加回去。之后位于主目录或 `/tmp` 下的会话文件夹
+以及依赖 JIT 的工具将无法工作；文件系统只读时，数据目录之外的每个会话文件夹都需要自己的
+`ReadWritePaths=` 行。
 
 在默认 Alpine 上，这些 systemd 指令不适用于 **此前发布的** `.apk`，因为该载荷的 systemd
 单元并未运行。本源码树构建的 `.apk` 软件包改为在 OpenRC 下运行：使用 `olivares` 账户，把首次
@@ -155,7 +177,7 @@ check_scratch_mount() {
 check_scratch_mount /var/lib/olivares
 ```
 
-若显示 `noexec`，把 `TMPDIR` 指向在 `ProtectSystem=strict` 下可写 **且** 位于可执行挂载上的
+若显示 `noexec`，把 `TMPDIR` 指向 `olivares` 用户可写 **且** 位于可执行挂载上的
 目录：
 
 ```bash
@@ -253,8 +275,7 @@ sudo olivares upgrade --yes      # do it
 对软件包安装特别重要的三个标志：
 
 - **`--endpoint`** — 从你控制的 GitHub 仓库而不是默认位置获取更新。这是镜像或分叉的出路。
-- **`--bundle`** — 从本地捆绑目录或 `.tar.gz` **完全不联网** 安装。构建并转移该捆绑见
-  [在隔离环境中安装](/zh/how-to/air-gap-install/)。
+- **`--bundle`** — 离线安装需要 Enterprise。Community 使用 `--bundle --check` 验证包，不读取许可证，也不进行安装。
 - **`--install-timer`** — 发出按计划检查更新的 **可选 systemd** 定时器与服务。没有任何东西
   替你安装它；见 [软件包不会做的事](#8-软件包不会做的事)。它是 systemd 生成器。
 

@@ -13,7 +13,7 @@ import (
 	"testing"
 )
 
-// HU2-23: with the product's Ollama stopped, an OpenCode session started and its turn
+// With the product's Ollama stopped, an OpenCode session started and its turn
 // failed with OpenCode's raw connection errors; nothing said Ollama was stopped. The
 // launch now looks at the local endpoint once and, when it does not answer, is refused
 // with one sentence that names the provider and how to start it.

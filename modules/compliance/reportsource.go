@@ -7,7 +7,6 @@ package compliance
 import (
 	"context"
 	"errors"
-	"sort"
 
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
@@ -233,10 +232,4 @@ func (m *Module) ReportRetention(ctx context.Context, tenant model.TenantID) (Re
 		return nil
 	})
 	return out, err
-}
-
-// sortReportIncidents orders incidents newest-first by created_at (stable).
-// Exposed for the reporting adapter's deterministic output.
-func sortReportIncidents(in []ReportIncident) {
-	sort.SliceStable(in, func(i, j int) bool { return in[i].CreatedAt > in[j].CreatedAt })
 }

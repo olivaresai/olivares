@@ -8,6 +8,8 @@ import (
 	"errors"
 	"net/http"
 	"regexp"
+	"slices"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 
@@ -32,12 +34,16 @@ var slugPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}$`)
 
 // WorkspaceDTO is the JSON shape of a workspace.
 type WorkspaceDTO struct {
-	ID        string         `json:"id"`
-	TenantID  string         `json:"tenant_id"`
-	Name      string         `json:"name"`
-	Slug      string         `json:"slug"`
-	Status    string         `json:"status"`
-	IsDefault bool           `json:"is_default"`
+	ID        string `json:"id"`
+	TenantID  string `json:"tenant_id"`
+	Name      string `json:"name"`
+	Slug      string `json:"slug"`
+	Status    string `json:"status"`
+	IsDefault bool   `json:"is_default"`
+	// ParentID is the parent department in the organization tree; absent on a
+	// root, and in every answer to a workspace-confined caller (workspaceDTOFor:
+	// its ancestors' ids are other workspaces' ids/B-03).
+	ParentID  string         `json:"parent_id,omitempty"`
 	Settings  map[string]any `json:"settings,omitempty"`
 	CreatedAt string         `json:"created_at"`
 	UpdatedAt string         `json:"updated_at"`
@@ -47,9 +53,23 @@ type WorkspaceDTO struct {
 func toWorkspaceDTO(w model.Workspace) WorkspaceDTO {
 	return WorkspaceDTO{
 		ID: w.ID.String(), TenantID: w.TenantID.String(), Name: w.Name, Slug: w.Slug,
-		Status: string(w.Status), IsDefault: w.Slug == model.DefaultWorkspaceSlug, Settings: w.Settings,
+		Status: string(w.Status), IsDefault: w.Slug == model.DefaultWorkspaceSlug,
+		ParentID: idOrEmpty(w.ParentID), Settings: w.Settings,
 		CreatedAt: w.CreatedAt.String(), UpdatedAt: w.UpdatedAt.String(), Version: w.Version,
 	}
+}
+
+// workspaceDTOFor is the caller's view of a workspace. These core handlers read
+// the raw tenant scope, not store.ConfineWorkspace, so the store's own
+// concealment of the tree position does not run here: a workspace-confined
+// caller would otherwise learn its parent department's id, which is another
+// workspace's id it may not enumerate.
+func workspaceDTOFor(p auth.Principal, tenant model.TenantID, w model.Workspace) WorkspaceDTO {
+	dto := toWorkspaceDTO(w)
+	if _, confined := p.ConfinedWorkspaceIn(tenant); confined {
+		dto.ParentID = ""
+	}
+	return dto
 }
 
 // createWorkspaceInput is the create payload for a workspace.
@@ -67,12 +87,10 @@ type updateWorkspaceInput struct {
 	Settings *map[string]any `json:"settings"`
 }
 
-func (s *Server) handleListWorkspaces(w http.ResponseWriter, r *http.Request) {
-	p, tenant, ok := s.authzTenant(w, r, "tenant:read")
-	if !ok {
-		return
-	}
-	q := parseListQuery(r)
+func (s *Server) handleListWorkspaces(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	p := mc.Principal
+	tenant := mc.Tenant
+	q := parseListQuery(r, stableListDefaultLimit)
 	// B-03: a workspace-confined caller sees ONLY its own workspace. The axis
 	// here is not a workspace_id column — a workspace does not carry one, it IS the
 	// node — so the forced predicate is on the row's own id. Applying the generic
@@ -96,7 +114,7 @@ func (s *Server) handleListWorkspaces(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 		for _, ws := range wss {
-			out.Items = append(out.Items, toWorkspaceDTO(ws))
+			out.Items = append(out.Items, workspaceDTOFor(p, tenant, ws))
 		}
 		out.Cursor, out.HasMore = page.Cursor, page.HasMore
 		return nil
@@ -108,12 +126,10 @@ func (s *Server) handleListWorkspaces(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, out)
 }
 
-func (s *Server) handleGetWorkspace(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleGetWorkspace(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
 	id := model.ID(chi.URLParam(r, "id"))
-	p, tenant, ok := s.authzTenantEntity(w, r, "tenant:read", id)
-	if !ok {
-		return
-	}
+	p := mc.Principal
+	tenant := mc.Tenant
 	// B-03: naming another workspace by id is ErrNotFound, not a distinguishable
 	// refusal — otherwise the route stays an oracle for the ids the list no longer
 	// enumerates.
@@ -127,7 +143,7 @@ func (s *Server) handleGetWorkspace(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return err
 		}
-		dto = toWorkspaceDTO(ws)
+		dto = workspaceDTOFor(p, tenant, ws)
 		return nil
 	})
 	if err != nil {
@@ -141,11 +157,9 @@ func (s *Server) handleGetWorkspace(w http.ResponseWriter, r *http.Request) {
 //): a workspace-admin administers WITHIN a workspace, it does not
 // mint them. So beyond the tenant:admin RBAC gate we require the caller to be the
 // tenant owner (or a superadmin), and — as a privilege-shaped action — AAL3.
-func (s *Server) handleCreateWorkspace(w http.ResponseWriter, r *http.Request) {
-	p, tenant, ok := s.authzTenant(w, r, "tenant:admin")
-	if !ok {
-		return
-	}
+func (s *Server) handleCreateWorkspace(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	p := mc.Principal
+	tenant := mc.Tenant
 	if !s.requireOwner(w, r, p, tenant) {
 		return
 	}
@@ -154,7 +168,7 @@ func (s *Server) handleCreateWorkspace(w http.ResponseWriter, r *http.Request) {
 	}
 	var in createWorkspaceInput
 	if err := decodeJSON(w, r, &in); err != nil {
-		s.badRequest(w, r, "invalid JSON body")
+		s.badRequest(w, r, RequestBodyErrorMessage(err, "invalid JSON body"))
 		return
 	}
 	if !slugPattern.MatchString(in.Slug) {
@@ -177,7 +191,7 @@ func (s *Server) handleCreateWorkspace(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return err
 		}
-		dto = toWorkspaceDTO(created)
+		dto = workspaceDTOFor(p, tenant, created)
 		return appendAudit(r.Context(), sc, p, "workspace.create", "core.workspace", created.ID)
 	})
 	if err != nil {
@@ -190,18 +204,16 @@ func (s *Server) handleCreateWorkspace(w http.ResponseWriter, r *http.Request) {
 // handleUpdateWorkspace renames a workspace, edits its settings, or archives it
 // (Status inactive). The default workspace cannot be archived (it is the
 // resolution target for an unset WorkspaceID). Slug is immutable. AAL3-gated.
-func (s *Server) handleUpdateWorkspace(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleUpdateWorkspace(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
 	id := model.ID(chi.URLParam(r, "id"))
-	p, tenant, ok := s.authzTenantEntity(w, r, "tenant:admin", id)
-	if !ok {
-		return
-	}
+	p := mc.Principal
+	tenant := mc.Tenant
 	if !s.requireStepUp(w, r, p) {
 		return
 	}
 	var in updateWorkspaceInput
 	if err := decodeJSON(w, r, &in); err != nil {
-		s.badRequest(w, r, "invalid JSON body")
+		s.badRequest(w, r, RequestBodyErrorMessage(err, "invalid JSON body"))
 		return
 	}
 	if in.Status != nil && *in.Status != string(model.StatusActive) && *in.Status != string(model.StatusInactive) {
@@ -230,7 +242,7 @@ func (s *Server) handleUpdateWorkspace(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return err
 		}
-		dto = toWorkspaceDTO(updated)
+		dto = workspaceDTOFor(p, tenant, updated)
 		return appendAudit(r.Context(), sc, p, "workspace.update", "core.workspace", id)
 	})
 	if err != nil {
@@ -238,6 +250,51 @@ func (s *Server) handleUpdateWorkspace(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, dto)
+}
+
+// handleSetWorkspaceParent places a workspace (a department) under another
+// workspace of its organization, or with parent_id "" makes it a root. It is the
+// Business department surface (DepartmentService): the Community build answers
+// 501 departments_unavailable. A grant on a department reaches its
+// sub-departments, so reshaping the tree is privilege-shaped like creating a
+// workspace: owner-only and step-up gated, both checked here before the service
+// runs. A workspace-confined caller is refused (403) even as an owner: where its
+// workspace sits is the organization's decision.
+func (s *Server) handleSetWorkspaceParent(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	if s.departments == nil {
+		s.writeError(w, r, ErrDepartmentsUnavailable)
+		return
+	}
+	id := model.ID(chi.URLParam(r, "id"))
+	p := mc.Principal
+	tenant := mc.Tenant
+	if _, confined := p.ConfinedWorkspaceIn(tenant); confined {
+		s.writeError(w, r, auth.ErrWorkspaceConfined)
+		return
+	}
+	if !s.requireOwner(w, r, p, tenant) {
+		return
+	}
+	if !s.requireStepUp(w, r, p) {
+		return
+	}
+	var in struct {
+		ParentID *string `json:"parent_id"`
+	}
+	if err := decodeJSON(w, r, &in); err != nil {
+		s.badRequest(w, r, RequestBodyErrorMessage(err, "invalid JSON body"))
+		return
+	}
+	if in.ParentID == nil {
+		s.badRequest(w, r, "parent_id is required; use an empty string to make the workspace a root")
+		return
+	}
+	moved, err := s.departments.SetWorkspaceParent(r.Context(), p, tenant, id, model.ID(*in.ParentID))
+	if err != nil {
+		s.writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, workspaceDTOFor(p, tenant, moved))
 }
 
 // --- Agent-groups ------------------------------------------------------------
@@ -299,16 +356,19 @@ type AgentGroupMemberDTO struct {
 	AgentID string `json:"agent_id"`
 }
 
-func (s *Server) handleListAgentGroups(w http.ResponseWriter, r *http.Request) {
-	p, tenant, ok := s.authzTenant(w, r, "agent:read")
-	if !ok {
-		return
-	}
+func (s *Server) handleListAgentGroups(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	p := mc.Principal
+	tenant := mc.Tenant
 	confinedWS, _ := p.ConfinedWorkspaceIn(tenant)
 	var out listResponse[AgentGroupDTO]
 	out.Items = []AgentGroupDTO{}
-	err := s.st.View(r.Context(), tenant, func(sc store.Scope) error {
-		gs, page, err := sc.AgentGroups().List(r.Context(), parseFilteredListQuery(r, confinedWS))
+	// Confined like handleListAgents: the scope, not the OpEq filter, is the boundary.
+	err := NewScopedData(s.st, tenant).View(withModuleRequestBoundary(r.Context(), tenant, p), func(sc store.Scope) error {
+		sc, err := listScope(r.Context(), r, sc, confinedWS)
+		if err != nil {
+			return err
+		}
+		gs, page, err := sc.AgentGroups().List(r.Context(), parseFilteredListQuery(r, confinedWS, 0))
 		if err != nil {
 			return err
 		}
@@ -325,14 +385,11 @@ func (s *Server) handleListAgentGroups(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, out)
 }
 
-func (s *Server) handleGetAgentGroup(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleGetAgentGroup(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
 	id := model.ID(chi.URLParam(r, "id"))
 	// F3: authorize against the GROUP entity (not the "agent" kind the permission implies)
 	// so the scoped engine derives the group's workspace and confinement applies.
-	_, tenant, ok := s.authzTenantEntityKind(w, r, "agent:read", "agent_group", id)
-	if !ok {
-		return
-	}
+	tenant := mc.Tenant
 	var dto AgentGroupDTO
 	err := s.st.View(r.Context(), tenant, func(sc store.Scope) error {
 		g, err := sc.AgentGroups().Get(r.Context(), id)
@@ -349,14 +406,12 @@ func (s *Server) handleGetAgentGroup(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, dto)
 }
 
-func (s *Server) handleCreateAgentGroup(w http.ResponseWriter, r *http.Request) {
-	p, tenant, ok := s.authzTenant(w, r, "agent:write")
-	if !ok {
-		return
-	}
+func (s *Server) handleCreateAgentGroup(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	p := mc.Principal
+	tenant := mc.Tenant
 	var in agentGroupInput
 	if err := decodeJSON(w, r, &in); err != nil {
-		s.badRequest(w, r, "invalid JSON body")
+		s.badRequest(w, r, RequestBodyErrorMessage(err, "invalid JSON body"))
 		return
 	}
 	if !slugPattern.MatchString(in.Slug) {
@@ -393,15 +448,13 @@ func (s *Server) handleCreateAgentGroup(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, http.StatusCreated, dto)
 }
 
-func (s *Server) handleUpdateAgentGroup(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleUpdateAgentGroup(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
 	id := model.ID(chi.URLParam(r, "id"))
-	p, tenant, ok := s.authzTenantEntity(w, r, "agent:write", id)
-	if !ok {
-		return
-	}
+	p := mc.Principal
+	tenant := mc.Tenant
 	var in updateAgentGroupInput
 	if err := decodeJSON(w, r, &in); err != nil {
-		s.badRequest(w, r, "invalid JSON body")
+		s.badRequest(w, r, RequestBodyErrorMessage(err, "invalid JSON body"))
 		return
 	}
 	if in.Status != nil && *in.Status != string(model.StatusActive) && *in.Status != string(model.StatusInactive) {
@@ -451,12 +504,10 @@ func (s *Server) handleUpdateAgentGroup(w http.ResponseWriter, r *http.Request) 
 
 // handleDeleteAgentGroup deletes a group and its roster (the membership rows),
 // never the member agents themselves.
-func (s *Server) handleDeleteAgentGroup(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleDeleteAgentGroup(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
 	id := model.ID(chi.URLParam(r, "id"))
-	p, tenant, ok := s.authzTenantEntity(w, r, "agent:write", id)
-	if !ok {
-		return
-	}
+	p := mc.Principal
+	tenant := mc.Tenant
 	err := s.st.Mutate(r.Context(), tenant, func(sc store.Scope) error {
 		if _, err := sc.AgentGroups().Get(r.Context(), id); err != nil {
 			return err
@@ -483,14 +534,11 @@ func (s *Server) handleDeleteAgentGroup(w http.ResponseWriter, r *http.Request) 
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (s *Server) handleListAgentGroupMembers(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleListAgentGroupMembers(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
 	id := model.ID(chi.URLParam(r, "id"))
 	// F3: authorize against the GROUP entity so the scoped engine derives the group's
 	// workspace — otherwise a workspace-confined operator reads a cross-workspace group.
-	_, tenant, ok := s.authzTenantEntityKind(w, r, "agent:read", "agent_group", id)
-	if !ok {
-		return
-	}
+	tenant := mc.Tenant
 	out := listResponse[AgentGroupMemberDTO]{Items: []AgentGroupMemberDTO{}}
 	err := s.st.View(r.Context(), tenant, func(sc store.Scope) error {
 		if _, err := sc.AgentGroups().Get(r.Context(), id); err != nil {
@@ -498,7 +546,7 @@ func (s *Server) handleListAgentGroupMembers(w http.ResponseWriter, r *http.Requ
 		}
 		// Pagina como sus vecinos de este mismo fichero (`:74`, `:317`): respeta el `limit`
 		// y el `cursor` del llamante y DECLARA el recorte, en vez de servir un tope mudo.
-		q := parseListQuery(r)
+		q := parseListQuery(r, 0)
 		q.Filters = append(q.Filters, model.Filter{
 			Column: "group_id", Op: model.OpEq, Value: id.String(),
 		})
@@ -523,13 +571,11 @@ func (s *Server) handleListAgentGroupMembers(w http.ResponseWriter, r *http.Requ
 
 // handleAddAgentGroupMember adds an agent to a group. Idempotent: if the agent is
 // already a member the existing row is returned (200), a fresh add returns 201.
-func (s *Server) handleAddAgentGroupMember(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleAddAgentGroupMember(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
 	groupID := model.ID(chi.URLParam(r, "id"))
 	agentID := model.ID(chi.URLParam(r, "agentID"))
-	p, tenant, ok := s.authzTenantEntity(w, r, "agent:write", groupID)
-	if !ok {
-		return
-	}
+	p := mc.Principal
+	tenant := mc.Tenant
 	var (
 		dto     AgentGroupMemberDTO
 		created bool
@@ -573,13 +619,11 @@ func (s *Server) handleAddAgentGroupMember(w http.ResponseWriter, r *http.Reques
 	writeJSON(w, http.StatusOK, dto)
 }
 
-func (s *Server) handleRemoveAgentGroupMember(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleRemoveAgentGroupMember(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
 	groupID := model.ID(chi.URLParam(r, "id"))
 	agentID := model.ID(chi.URLParam(r, "agentID"))
-	p, tenant, ok := s.authzTenantEntity(w, r, "agent:write", groupID)
-	if !ok {
-		return
-	}
+	p := mc.Principal
+	tenant := mc.Tenant
 	err := s.st.Mutate(r.Context(), tenant, func(sc store.Scope) error {
 		if _, err := sc.AgentGroups().Get(r.Context(), groupID); err != nil {
 			return err
@@ -634,12 +678,10 @@ type WorkspaceSummaryDTO struct {
 }
 
 // handleWorkspaceSummary returns a workspace with counts of its scoped entities.
-func (s *Server) handleWorkspaceSummary(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleWorkspaceSummary(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
 	id := model.ID(chi.URLParam(r, "id"))
-	p, tenant, ok := s.authzTenantEntity(w, r, "tenant:read", id)
-	if !ok {
-		return
-	}
+	p := mc.Principal
+	tenant := mc.Tenant
 	// Match Workspace GET's concealment before reading metadata or scoped counts.
 	if confinedWS, confined := p.ConfinedWorkspaceIn(tenant); confined && id != confinedWS {
 		s.writeError(w, r, store.ErrNotFound)
@@ -655,50 +697,104 @@ func (s *Server) handleWorkspaceSummary(w http.ResponseWriter, r *http.Request) 
 		dto.Name = ws.Name
 		dto.Slug = ws.Slug
 		dto.IsDefault = ws.Slug == model.DefaultWorkspaceSlug
-
-		// Limit is deliberately above the store's maxLimit: asking for more than a
-		// page can hold is how this endpoint says "as many as you will give me".
-		// The store clamps it and reports the truncation in the model.Page, which
-		// is why every List below keeps its page instead of discarding it.
-		wsFilter := model.Query{
-			Filters: []model.Filter{{Column: "workspace_id", Op: model.OpEq, Value: ws.ID.String()}},
-			Limit:   10000,
-		}
-
-		agents, agentPage, err := sc.Agents().List(r.Context(), wsFilter)
+		// The published counts come from the workspace's one contents read, which
+		// counts through the confined scope, including the rows without a workspace
+		// that belong to the default one. The summary publishes only core counts,
+		// so it asks for no module kind.
+		contents, err := store.ReadWorkspaceContents(r.Context(), sc, ws.ID, nil)
 		if err != nil {
 			return err
 		}
-		dto.AgentCount = len(agents)
-		dto.AgentCountCapped = agentPage.HasMore
-
-		sessions, sessionPage, err := sc.Sessions().List(r.Context(), wsFilter)
-		if err != nil {
-			return err
-		}
-		dto.SessionCount = len(sessions)
-		dto.SessionCountCapped = sessionPage.HasMore
-
-		resources, resourcePage, err := sc.Resources().List(r.Context(), wsFilter)
-		if err != nil {
-			return err
-		}
-		dto.ResourceCount = len(resources)
-		dto.ResourceCountCapped = resourcePage.HasMore
-
-		groups, groupPage, err := sc.AgentGroups().List(r.Context(), wsFilter)
-		if err != nil {
-			return err
-		}
-		dto.GroupCount = len(groups)
-		dto.GroupCountCapped = groupPage.HasMore
-
+		agents, sessions := contents["core.agent"], contents["core.session"]
+		resources, groups := contents["core.resource"], contents["core.agent_group"]
+		dto.AgentCount, dto.AgentCountCapped = agents.Count, agents.Capped
+		dto.SessionCount, dto.SessionCountCapped = sessions.Count, sessions.Capped
+		dto.ResourceCount, dto.ResourceCountCapped = resources.Count, resources.Capped
+		dto.GroupCount, dto.GroupCountCapped = groups.Count, groups.Capped
 		return nil
 	})
 	if err != nil {
 		s.writeError(w, r, err)
 		return
 	}
+	writeJSON(w, http.StatusOK, dto)
+}
+
+// --- Workspace contents ------------------------------------------------------
+
+// errWorkspaceContentsUnavailable: no store registry was handed in, so the
+// route cannot say which kinds a workspace holds. 501, never a partial list.
+var errWorkspaceContentsUnavailable = errors.New("api: workspace contents unavailable")
+
+// userGroupKind is the contents line of the user groups placed in a workspace.
+const userGroupKind = "core.user_group"
+
+// WorkspaceContentsDTO is the JSON shape of a workspace's one contents read.
+type WorkspaceContentsDTO struct {
+	WorkspaceID string                  `json:"workspace_id"`
+	Kinds       []WorkspaceKindCountDTO `json:"kinds"`
+}
+
+// WorkspaceKindCountDTO is how many rows of one kind the workspace holds.
+type WorkspaceKindCountDTO struct {
+	Kind  string `json:"kind"`
+	Count int    `json:"count"`
+	// Capped says Count is a floor ("at least Count"), never a total.
+	Capped bool `json:"capped"`
+}
+
+// handleWorkspaceContents counts every kind that declares workspace lineage in
+// the workspace, through store.ReadWorkspaceContents, sorted by kind. A kind
+// gains a line by declaring lineage in its descriptor, with no handler code,
+// unless the descriptor marks it Internal (a module's own bookkeeping rows).
+func (s *Server) handleWorkspaceContents(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	if s.census == nil {
+		s.writeError(w, r, errWorkspaceContentsUnavailable)
+		return
+	}
+	id := model.ID(chi.URLParam(r, "id"))
+	// Match Workspace GET's concealment before reading anything.
+	if confinedWS, confined := mc.Principal.ConfinedWorkspaceIn(mc.Tenant); confined && id != confinedWS {
+		s.writeError(w, r, store.ErrNotFound)
+		return
+	}
+	var dto WorkspaceContentsDTO
+	err := s.st.View(r.Context(), mc.Tenant, func(sc store.Scope) error {
+		ws, err := sc.Workspaces().Get(r.Context(), id)
+		if err != nil {
+			return err
+		}
+		contents, err := store.ReadWorkspaceContents(r.Context(), sc, ws.ID, s.census.CensusDescriptors())
+		if err != nil {
+			return err
+		}
+		dto.WorkspaceID = ws.ID.String()
+		dto.Kinds = make([]WorkspaceKindCountDTO, 0, len(contents)+1)
+		for kind, c := range contents {
+			dto.Kinds = append(dto.Kinds, WorkspaceKindCountDTO{Kind: string(kind), Count: c.Count, Capped: c.Capped})
+		}
+		return nil
+	})
+	if err != nil {
+		s.writeError(w, r, err)
+		return
+	}
+	// User groups live in the authentication partition, outside the tenant scope
+	// above, so their count is read from it by the workspace id the first read
+	// just proved exists in this tenant.
+	err = s.st.AuthView(r.Context(), func(as store.AuthScope) error {
+		c, err := store.ReadWorkspaceUserGroups(r.Context(), as, mc.Tenant, model.ID(dto.WorkspaceID))
+		if err != nil {
+			return err
+		}
+		dto.Kinds = append(dto.Kinds, WorkspaceKindCountDTO{Kind: userGroupKind, Count: c.Count, Capped: c.Capped})
+		return nil
+	})
+	if err != nil {
+		s.writeError(w, r, err)
+		return
+	}
+	slices.SortFunc(dto.Kinds, func(a, b WorkspaceKindCountDTO) int { return strings.Compare(a.Kind, b.Kind) })
 	writeJSON(w, http.StatusOK, dto)
 }
 

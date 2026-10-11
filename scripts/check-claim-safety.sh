@@ -29,7 +29,7 @@ set -u
 _olivares_git_env="$(cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")" && pwd)/lib/git-env.sh"
 # shellcheck source=/dev/null
 . "$_olivares_git_env" || {
-  echo "check-claim-safety: NO HE PODIDO MIRAR: no puedo cargar $_olivares_git_env (aislamiento git)." >&2
+  echo "check-claim-safety: COULD NOT CHECK: cannot load $_olivares_git_env (aislamiento git)." >&2
   exit 2; }
 unset _olivares_git_env
 
@@ -49,24 +49,24 @@ DECL="${OLIVARES_CLAIM_FILES:-}"
 # fichero rancio o estas revirtiendo trabajo ajeno — las dos cosas se ven en el mismo numero.
 BORRA_OK="${OLIVARES_CLAIM_DELETIONS:-0}"
 
-[ -n "$DECL" ] || { echo "check-claim-safety: NO HE PODIDO MIRAR: falta OLIVARES_CLAIM_FILES." >&2
-                    echo "  Declara cuantos ficheros DEBE tocar el claim: un claim de un fichero que toca" >&2
-                    echo "  diez es un NO antes de leer nada, y sin la cifra declarada no hay contra que" >&2
-                    echo "  comparar. Ej.: OLIVARES_CLAIM_FILES=1 bash $0 <commit> [base]" >&2; exit 2; }
+[ -n "$DECL" ] || { echo "check-claim-safety: COULD NOT CHECK: OLIVARES_CLAIM_FILES is not set." >&2
+                    echo "  Declare how many files the change must touch. A change declared as one file" >&2
+                    echo "  that touches ten must be rejected; without a declared count, there is nothing" >&2
+                    echo "  to compare against. Example: OLIVARES_CLAIM_FILES=1 bash $0 <commit> [base]" >&2; exit 2; }
 
 C="${1:-}"
-[ -n "$C" ] || { echo "check-claim-safety: NO HE PODIDO MIRAR: falta el commit a revisar." >&2
-                 echo "  uso: bash scripts/check-claim-safety.sh <commit> [base]" >&2; exit 2; }
-git rev-parse --git-dir >/dev/null 2>&1 || { echo "check-claim-safety: NO HE PODIDO MIRAR: no estoy en un repositorio." >&2; exit 2; }
+[ -n "$C" ] || { echo "check-claim-safety: COULD NOT CHECK: no commit specified for review." >&2
+                 echo "  usage: bash scripts/check-claim-safety.sh <commit> [base]" >&2; exit 2; }
+git rev-parse --git-dir >/dev/null 2>&1 || { echo "check-claim-safety: COULD NOT CHECK: outside a repository." >&2; exit 2; }
 CS=$(git rev-parse --verify "${C}^{commit}" 2>/dev/null) \
-  || { echo "check-claim-safety: NO HE PODIDO MIRAR: '$C' no es un commit de este clon." >&2; exit 2; }
+  || { echo "check-claim-safety: COULD NOT CHECK: '$C' is not a commit in this clone." >&2; exit 2; }
 
 if [ $# -ge 2 ] && [ -n "${2:-}" ]; then
   BS=$(git rev-parse --verify "${2}^{commit}" 2>/dev/null) \
-    || { echo "check-claim-safety: NO HE PODIDO MIRAR: la base '$2' no resuelve." >&2; exit 2; }
+    || { echo "check-claim-safety: COULD NOT CHECK: base '$2' cannot be resolved." >&2; exit 2; }
 else
   BS=$(git rev-parse --verify "${CS}^" 2>/dev/null) \
-    || { echo "check-claim-safety: NO HE PODIDO MIRAR: '$C' no tiene primer padre y no diste base." >&2; exit 2; }
+    || { echo "check-claim-safety: COULD NOT CHECK: '$C' has no first parent and no base was specified." >&2; exit 2; }
 fi
 
 # ⛔ LA BASE SE IMPRIME RESUELTA A SHA, SIEMPRE. Un veredicto contra `origin/main` no es citable:
@@ -96,40 +96,40 @@ trap 'exit 129' HUP
 trap 'exit 130' INT
 trap 'exit 143' TERM
 olivares_git_owned_store_open "$BS" "$CS" "${BS}^{tree}" "${CS}^{tree}" || {
-  echo "check-claim-safety: NO HE PODIDO MIRAR: no pude abrir un almacen de objetos propio para la fusion." >&2
-  echo "  Sin el, la fusion escribiria en el almacen del repositorio objetos que nadie alcanza; y un" >&2
-  echo "  almacen que no lee la base y el claim no daria un veredicto, daria otra cosa." >&2
+  echo "check-claim-safety: COULD NOT CHECK: could not open a separate object store for the merge." >&2
+  echo "  Without it, the merge would write unreachable objects to the repository's store." >&2
+  echo "  A store that cannot read both the base and the change cannot produce a valid result." >&2
   exit 2; }
 FUS=$(olivares_git_owned merge-tree --write-tree "$BS" "$CS" 2>/dev/null); RCM=$?
 if [ "$RCM" -ne 0 ] || [ -z "$FUS" ]; then
-  echo "check-claim-safety: NO HE PODIDO MIRAR: la fusion de ${CS} sobre ${BS} CONFLICTA." >&2
-  echo "  Un claim que no fusiona no se puede juzgar por lo que destruiria: primero se rebasa." >&2; exit 2
+  echo "check-claim-safety: COULD NOT CHECK: merging ${CS} onto ${BS} causes conflicts." >&2
+  echo "  The deletion check requires a conflict-free merge: rebase the change first." >&2; exit 2
 fi
 # El OID va MARCADO: ese arbol vive en el almacen propio y desaparece con el. Citarlo como un objeto
 # recuperable del repositorio seria citar algo que alli no existe.
-echo "  arbol fusionado (transitorio: vive en un almacen propio que se borra al salir): ${FUS}"
-NUM=$(olivares_git_owned diff --numstat "$BS" "$FUS" 2>/dev/null) || { echo "check-claim-safety: NO HE PODIDO MIRAR: git diff fallo." >&2; exit 2; }
+echo "  merged tree (temporary, in a separate object store removed on exit): ${FUS}"
+NUM=$(olivares_git_owned diff --numstat "$BS" "$FUS" 2>/dev/null) || { echo "check-claim-safety: COULD NOT CHECK: git diff failed." >&2; exit 2; }
 if [ -z "$NUM" ]; then
-  echo "check-claim-safety: NO HE PODIDO MIRAR: la fusion no cambia NADA sobre la base." >&2
-  echo "  Un claim que no aporta nada no es 'limpio': o ya esta aterrizado, o comparas contra ti mismo." >&2; exit 2
+  echo "check-claim-safety: COULD NOT CHECK: the merge changes nothing from the base." >&2
+  echo "  An empty change cannot be reported as clean: it may already be merged, or compared against itself." >&2; exit 2
 fi
 
 # La guarda de arriba es la que hace fiable esta cuenta: `printf '%s\n' ""` emite UNA linea vacia,
 # asi que sobre un diff vacio esto daria 1 y no 0. No se llega aqui con $NUM vacio, a proposito.
 NF=$(printf '%s\n' "$NUM" | wc -l)
 printf '%s\n' "$NUM" | awk '{printf "  %6s +%-6s -%s\n", "", $1, $2" "$3}'
-echo "  -- ${NF} fichero(s)"
+echo "  -- ${NF} file(s)"
 
 RC=0
 # 0-bis · borrados FUERA del prefijo protegido, contra lo declarado
-case "$BORRA_OK" in ''|*[!0-9]*) echo "check-claim-safety: NO HE PODIDO MIRAR: OLIVARES_CLAIM_DELETIONS='$BORRA_OK' no es un numero." >&2; exit 2;; esac
+case "$BORRA_OK" in ''|*[!0-9]*) echo "check-claim-safety: COULD NOT CHECK: OLIVARES_CLAIM_DELETIONS='$BORRA_OK' is not a number." >&2; exit 2;; esac
 BORRADAS=$(printf '%s\n' "$NUM" | awk -F'\t' -v p="$PROTEGIDO" '$3 !~ "^"p && $2 ~ /^[0-9]+$/ {s+=$2} END{print s+0}')
 if [ "$BORRADAS" -gt "$BORRA_OK" ]; then
-  echo "check-claim-safety: ⛔ HALLAZGO — borra ${BORRADAS} linea(s) fuera de '${PROTEGIDO}' y declaraste ${BORRA_OK}:" >&2
+  echo "check-claim-safety: ⛔ FINDING — deletes ${BORRADAS} line(s) outside '${PROTEGIDO}', but ${BORRA_OK} were declared:" >&2
   printf '%s\n' "$NUM" | awk -F'\t' -v p="$PROTEGIDO" '$3 !~ "^"p && $2+0 > 0 {printf "      %s: -%s\n", $3, $2}' >&2
-  echo "      Un claim que solo AÑADE no puede tener borrados. Si los tiene, o reusaste un fichero" >&2
-  echo "      construido contra otra base, o estas revirtiendo trabajo ajeno." >&2
-  echo "      Si son intencionados: OLIVARES_CLAIM_DELETIONS=${BORRADAS}" >&2
+  echo "      An additions-only change cannot delete lines. Deletions may come from reusing a file" >&2
+  echo "      built against a different base or reverting someone else's work." >&2
+  echo "      If intentional: OLIVARES_CLAIM_DELETIONS=${BORRADAS}" >&2
   RC=1
 fi
 # ⛔ 0 · MODOS. `git diff --numstat` CUENTA LINEAS y el modo viaja en el ARBOL, no en el diff de
@@ -140,35 +140,35 @@ SUM=$(olivares_git_owned diff --summary "$BS" "$FUS" 2>/dev/null)
 MODO=$(printf '%s\n' "$SUM" | grep -E '^ *mode change ' || true)
 NOEXE=$(printf '%s\n' "$SUM" | grep -E '^ *create mode 100644 scripts/' || true)
 if [ -n "$MODO" ]; then
-  echo "check-claim-safety: ⛔ HALLAZGO — el commit cambia MODOS de fichero:" >&2
+  echo "check-claim-safety: ⛔ FINDING — the commit changes file modes:" >&2
   printf '%s\n' "$MODO" | sed 's/^ */      /' >&2
-  echo "      Un cambio de modo no aparece en \`--numstat\`: se ve con \`--summary\`. Si no era" >&2
-  echo "      intencionado, reconstruye el arbol con el modo correcto." >&2
+  echo "      Mode changes do not appear in \`--numstat\`; inspect \`--summary\`. If unintentional," >&2
+  echo "      rebuild the tree with the correct mode." >&2
   RC=1
 fi
 if [ -n "$NOEXE" ]; then
-  echo "check-claim-safety: ⛔ HALLAZGO — guion(es) creados NO EJECUTABLES bajo scripts/:" >&2
+  echo "check-claim-safety: ⛔ FINDING — new nonexecutable script(s) under scripts/:" >&2
   printf '%s\n' "$NOEXE" | sed 's/^ */      /' >&2
-  echo "      Un guion que nace 100644 no se puede correr como \`./scripts/<nombre>.sh\` (rc 126)." >&2
+  echo "      A script created with mode 100644 cannot run as \`./scripts/<nombre>.sh\` (exit 126)." >&2
   RC=1
 fi
 
 # 1 · borrados en rutas protegidas
 MAL=$(printf '%s\n' "$NUM" | awk -v p="$PROTEGIDO" '$3 ~ "^"p && $2 ~ /^[0-9]+$/ && $2+0 > 0 {print "      " $3 ": -" $2}')
 if [ -n "$MAL" ]; then
-  echo "check-claim-safety: ⛔ HALLAZGO — el commit BORRA lineas bajo '${PROTEGIDO}':" >&2
+  echo "check-claim-safety: ⛔ FINDING — the commit deletes lines under '${PROTEGIDO}':" >&2
   printf '%s\n' "$MAL" >&2
-  echo "      Nadie decide borrar correo publicado dentro de un claim de codigo. Si de verdad" >&2
-  echo "      quieres retirar un asiento, es un commit propio que lo diga." >&2
+  echo "      Published correspondence must not be deleted as part of a code change. If an entry" >&2
+  echo "      must be removed, use a separate commit that describes the removal." >&2
   RC=1
 fi
 
 # 2 · el numero de ficheros DECLARADO
 if [ -n "$DECL" ]; then
-  case "$DECL" in ''|*[!0-9]*) echo "check-claim-safety: NO HE PODIDO MIRAR: OLIVARES_CLAIM_FILES='$DECL' no es un numero." >&2; exit 2;; esac
+  case "$DECL" in ''|*[!0-9]*) echo "check-claim-safety: COULD NOT CHECK: OLIVARES_CLAIM_FILES='$DECL' is not a number." >&2; exit 2;; esac
   if [ "$NF" -ne "$DECL" ]; then
-    echo "check-claim-safety: ⛔ HALLAZGO — declaraste ${DECL} fichero(s) y toca ${NF}." >&2
-    echo "      'un fichero' con ${NF} filas es un NO antes de leer nada mas." >&2
+    echo "check-claim-safety: ⛔ FINDING — ${DECL} file(s) declared, but the change touches ${NF}." >&2
+    echo "      A one-file change with ${NF} rows must be rejected before further review." >&2
     RC=1
   fi
 fi
@@ -186,11 +186,11 @@ fi
 NUEVOS=$(printf '%s\n' "$NUM" | awk -F'\t' '$3 ~ /^scripts\// {print $3}' | while IFS= read -r f; do
            olivares_git_owned cat-file -e "${BS}:${f}" 2>/dev/null || printf '%s\n' "$f"; done)
 if [ -n "$NUEVOS" ]; then
-  echo "  ⚠ guion(es) NUEVO(s) bajo scripts/ — \`scripts/\` viaja en el export:"
+  echo "  ⚠ new script(s) under scripts/ — \`scripts/\` is included in the export:"
   printf '%s\n' "$NUEVOS" | sed 's/^/      /'
-  echo "     Corre \`task lint:export-closure\` en un checkout REAL antes de publicar: ese gate es"
-  echo "     pata del gancho, y un hallazgo suyo en \`main\` bloquea el push de TODAS las cajas."
+  echo "     Run \`task lint:export-closure\` in a real checkout before publishing: this check"
+  echo "     runs in the hook, and a finding on \`main\` blocks pushes from every host."
 fi
 
-[ "$RC" -eq 0 ] && echo "check-claim-safety: limpio — ${NF} fichero(s), cero borrados bajo '${PROTEGIDO}'."
+[ "$RC" -eq 0 ] && echo "check-claim-safety: CLEAN — ${NF} file(s), no deletions under '${PROTEGIDO}'."
 exit "$RC"

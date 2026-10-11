@@ -71,8 +71,25 @@ func (s *lineageEvidenceScope) Agents() store.Repository[model.Agent] {
 	return &lineageEvidenceRepo[model.Agent]{Repository: s.Scope.Agents(), scope: s, kind: "core.agent"}
 }
 
-func (s *lineageEvidenceScope) Workspaces() store.Repository[model.Workspace] {
-	return &lineageEvidenceRepo[model.Workspace]{Repository: s.Scope.Workspaces(), scope: s, kind: "core.workspace"}
+type lineageEvidenceWorkspaces struct {
+	store.WorkspaceRepo
+	scope *lineageEvidenceScope
+}
+
+func (s *lineageEvidenceScope) Workspaces() store.WorkspaceRepo {
+	return &lineageEvidenceWorkspaces{WorkspaceRepo: s.Scope.Workspaces(), scope: s}
+}
+func (r *lineageEvidenceWorkspaces) Get(ctx context.Context, id model.ID) (model.Workspace, error) {
+	if err := r.scope.observe(ctx, "core.workspace"); err != nil {
+		return model.Workspace{}, err
+	}
+	return r.WorkspaceRepo.Get(ctx, id)
+}
+func (r *lineageEvidenceWorkspaces) List(ctx context.Context, q model.Query) ([]model.Workspace, model.Page, error) {
+	if err := r.scope.observe(ctx, "core.workspace"); err != nil {
+		return nil, model.Page{}, err
+	}
+	return r.WorkspaceRepo.List(ctx, q)
 }
 
 func (s *lineageEvidenceScope) AgentGroups() store.Repository[model.AgentGroup] {

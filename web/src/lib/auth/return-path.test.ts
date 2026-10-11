@@ -2,7 +2,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { expect, it } from 'vitest'
-import { consoleReturnPath, isSignInPath } from './return-path'
+import { ssoStartHref } from '@/app/pages/login-sso'
+import {
+  consoleReturnPath,
+  isPlainOriginPath,
+  isSignInPath,
+} from './return-path'
 const origin = 'https://console.example.test:8443'
 
 it.each([
@@ -47,3 +52,21 @@ it.each(['/', '/sessions', '/loginx', '/settings?tab=login'])(
     expect(isSignInPath(path)).toBe(false)
   },
 )
+
+// Every character U+0000 to U+0020 and the backslash end a plain path; U+0021 does not.
+const refused = [
+  '\\',
+  ...Array.from({ length: 0x21 }, (_, code) => String.fromCharCode(code)),
+]
+it('refuses a path with a backslash, space or control character, in both callers', () => {
+  for (const c of refused) {
+    const path = `/audit${c}x`
+    expect(isPlainOriginPath(path)).toBe(false)
+    expect(consoleReturnPath(path, origin)).toBeNull()
+    expect(ssoStartHref(`/v1/auth/sso/start${c}x`, null, origin)).toBeNull()
+  }
+  expect(isPlainOriginPath('/audit!x')).toBe(true)
+  expect(ssoStartHref('/v1/auth/sso/start', null, origin)).toBe(
+    '/v1/auth/sso/start?browser_session=1',
+  )
+})

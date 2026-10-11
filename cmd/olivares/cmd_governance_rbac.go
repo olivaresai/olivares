@@ -5,6 +5,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
 	"github.com/olivaresai/olivares/cmd/olivares/internal/termrender"
 )
 
@@ -35,15 +37,18 @@ func governanceRBACCmd(flags *authClientFlags) *cobra.Command {
 		Short: "Who can do what: the grant vocabulary, the custom roles and the scoped grants",
 		Long: "rbac reads the authorization model: the vocabulary a grant may be built from\n" +
 			"(`catalog`), what you yourself may delegate (`delegation-authority`), the custom roles\n" +
-			"and permission groups, and the scoped grants in force.\n\n" +
+			"and permission groups, the scoped grants in force, and the inheritance filters that\n" +
+			"stop rights from above a node (`filters`, the one verb here that also sets).\n\n" +
 			"Pairs with `governance pdp active`: that one says whether positive grants have expired,\n" +
-			"this one says which grants they were.",
+			"this one says which grants they were. `rights` says what one subject holds at one node.",
 		Example: "  olivares governance rbac grants ls\n" +
-			"  olivares governance rbac catalog -o json",
+			"  olivares governance rbac catalog -o json\n" +
+			"  olivares governance rbac rights agent <agent-id> --subject <user-id>",
 	}
 	cmd.AddCommand(
 		rbacCatalogCmd(flags), rbacDelegationCmd(flags),
 		rbacRolesCmd(flags), rbacPermGroupsCmd(flags), rbacGrantsCmd(flags),
+		rbacFiltersCmd(flags), rbacRightsCmd(flags),
 	)
 	return cmd
 }
@@ -489,5 +494,98 @@ func rbacGrantsCmd(flags *authClientFlags) *cobra.Command {
 			}, observeJSON(res.raw))
 		},
 	})
+	return cmd
+}
+
+// effectiveRightsPath is the engine's one effective-rights read (handlers_effective_rights.go).
+const effectiveRightsPath = "/v1/auth/effective-rights"
+
+type cliEffectiveRights struct {
+	Subject struct {
+		Kind string `json:"kind"`
+		ID   string `json:"id"`
+	} `json:"subject"`
+	Node struct {
+		Kind string `json:"kind"`
+		ID   string `json:"id"`
+	} `json:"node"`
+	Path []struct {
+		Kind      string `json:"kind"`
+		Ref       string `json:"ref"`
+		Workspace string `json:"workspace,omitempty"`
+	} `json:"path"`
+	Rights []struct {
+		Name  string `json:"name"`
+		State string `json:"state"`
+	} `json:"rights"`
+}
+
+// rbacRightsCmd — what one subject holds at one node, and the path that explains it. The engine
+// asks each trustee right of the Authorizer; this verb only prints the answer, and validates
+// nothing the engine already refuses with its own message.
+func rbacRightsCmd(flags *authClientFlags) *cobra.Command {
+	var subject, subjectType string
+	cmd := &cobra.Command{
+		Use:   "rights <agent|session|resource> <id>",
+		Short: "Which trustee rights a subject holds at a node, and the node's path",
+		Example: "  olivares governance rbac rights agent <agent-id> --subject <user-id>\n" +
+			"  olivares governance rbac rights resource <resource-id> --subject <token-id> --subject-type token -o json",
+		Long: "The eight trustee rights (Supervisor, Browse, Read, Write, Create, Erase, Modify, Access\n" +
+			"Control) of one user or token at one agent, session or resource, each answered by the\n" +
+			"authorization engine, and the containers the node sits on, outermost first.\n\n" +
+			"An administrator read (authz:admin). UNKNOWN means the engine could not decide that right;\n" +
+			"the cause is in the engine log, and it is not a deny. The answer is the trustee question,\n" +
+			"not a promise about one route: a route that narrows its role decides on its own.",
+		Args: cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			query := url.Values{
+				"subject_type": {subjectType}, "subject_id": {subject}, "kind": {args[0]}, "id": {args[1]},
+			}
+			client := bootstrapClient{flags: flags, surface: "governance rbac rights"}
+			raw, err := client.expect(cmd, http.MethodGet, effectiveRightsPath+"?"+query.Encode(), nil, http.StatusOK)
+			if err != nil {
+				return err
+			}
+			var r cliEffectiveRights
+			if err := decodeBootstrapJSON(client.surface, raw, &r); err != nil {
+				return err
+			}
+			// The engine always sends the node's path and the eight rights. A body without them
+			// is not an answer, and printing it would read as "holds nothing".
+			if len(r.Path) == 0 || len(r.Rights) == 0 {
+				return exitcode.New(exitcode.Server, errors.New("the engine answered without the node's path or rights"))
+			}
+			return renderOut(cmd, func(out io.Writer) error {
+				steps := make([]string, 0, len(r.Path))
+				for _, s := range r.Path {
+					step := observeCell(s.Kind) + " " + observeCell(s.Ref)
+					if s.Workspace != "" {
+						step += " (workspace " + observeCell(s.Workspace) + ")"
+					}
+					steps = append(steps, step)
+				}
+				renderTo(out).Fields([]termrender.Field{
+					{Key: "subject", Value: observeCell(r.Subject.Kind) + " " + observeCell(r.Subject.ID)},
+					{Key: "node", Value: observeCell(r.Node.Kind) + " " + observeCell(r.Node.ID)},
+					{Key: "path", Value: strings.Join(steps, " > ")},
+				})
+				t := termrender.Table{Header: []string{"right", "state"}, Empty: "no right"}
+				unknown := false
+				for _, x := range r.Rights {
+					unknown = unknown || x.State == "unknown"
+					t.Rows = append(t.Rows, []string{observeCell(x.Name), observeCell(strings.ReplaceAll(x.State, "_", " "))})
+				}
+				renderTo(out).Table(t)
+				if unknown {
+					_, err := fmt.Fprintln(out, "unknown: the engine could not decide that right; see the engine log (not a deny)")
+					return err
+				}
+				return nil
+			}, observeJSON(raw))
+		},
+	}
+	cmd.Flags().StringVar(&subject, "subject", "", "the id of the user or token whose rights to read")
+	cmd.Flags().StringVar(&subjectType, "subject-type", "user", "user or token")
+	_ = cmd.MarkFlagRequired("subject")
 	return cmd
 }

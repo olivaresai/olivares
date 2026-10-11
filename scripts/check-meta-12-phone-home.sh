@@ -6,18 +6,13 @@
 # META-12: the substitution for "zero phone-home" is written AND applied.
 # Three answers: 0 CLEAN · 1 finding · 2 could not look.
 #
-# ⛔ ESTE GATE ESTUVO INVERTIDO, Y NO POR DESCUIDO: el 2026-08-20 exigía el literal
-# `NO APLICADO al docs-site` y `applied_to_docs_site == false`, y su batería **mataba el mutante
-# que ponía `true`**. Era correcto ese día —META-12 REDACTABA y C09-05 APLICABA, en otro carril— y
-# quedó al revés en el instante en que C09-05 se ejecutó (2026-08-28): el gate probaba que
-# el trabajo correcto enrojeciera. Un gate que codifica el estado viejo como esperado no envejece
-# en silencio: **bloquea su propio arreglo**.
-#
-# Y EL CAMBIO DE FONDO, que es lo que evita repetirlo: antes comprobaba un FLAG en un JSON, o sea
-# una afirmación sobre el árbol escrita a mano. Ahora comprueba el ÁRBOL — que el docs-site vivo
-# está a CERO promesas absolutas—, y lo hace **llamando a `check-phone-home-claims.sh`** en vez de
-# copiar su patrón: un hecho escrito en dos sitios deriva, y aquí el hecho es «qué forma tiene una
-# promesa absoluta», que ya vive allí con su batería multilingüe.
+# This gate's polarity became stale after C09-05 applied the copy (2026-08-28).
+# On 2026-08-20 it required a not-applied statement and applied_to_docs_site == false,
+# and killed the mutant setting true: META-12 wrote the text while C09-05 applied it.
+# After application, that guard blocked its own intended fix.
+# Check the live tree for zero absolute promises rather than a manually authored JSON
+# flag. Call check-phone-home-claims.sh instead of duplicating its multilingual pattern,
+# so there is one definition of an absolute promise.
 set -euo pipefail
 say() { printf '%s\n' "$*"; }
 fail() { say "check-meta-12-phone-home: FAIL — $*" >&2; exit 1; }
@@ -37,8 +32,8 @@ SITE="${OLIVARES_META12_SITE:-docs-site/src/content/docs}"
 [ -r "$JSON" ] || cannot "missing $JSON"
 [ -r "$DOC" ] || cannot "missing $DOC"
 [ -r "$README" ] || cannot "missing $README"
-[ -r "$LICENCIA" ] || cannot "missing $LICENCIA — sin el canon no puedo juzgar si se aplicó"
-[ -r "$RATCHET" ] || cannot "missing $RATCHET — no puedo mirar el árbol sin el patrón"
+[ -r "$LICENCIA" ] || cannot "missing $LICENCIA; the canonical definition is required to determine whether it was applied"
+[ -r "$RATCHET" ] || cannot "missing $RATCHET; the pattern is required to inspect the tree"
 [ -d "$SITE" ] || cannot "missing $SITE"
 command -v python3 >/dev/null || cannot "no python3"
 
@@ -49,7 +44,7 @@ command -v python3 >/dev/null || cannot "no python3"
 # escrito para el otro gate. Y anclar en `docs-site\*\*` tampoco valía: la batería lo cazó en su
 # primera corrida (el mutante escribía `docs-site.**` y sobrevivía con rc 0).
 CABECERA="$(grep -m1 '^\*\*REDACTADO' "$DOC" || true)"
-[ -n "$CABECERA" ] || cannot "$DOC no tiene línea de cabecera '**REDACTADO…' que juzgar"
+[ -n "$CABECERA" ] || cannot "$DOC has no '**REDACTADO…' header line to check"
 case "$CABECERA" in
   *"NO APLICADO al docs-site"*)
     fail "the header still declares NO APLICADO — the substitution IS applied since 2026-08-28" ;;
@@ -66,7 +61,7 @@ grep -q 'no mandatory telemetry' "$DOC" \
 # `sol max` (F8): hoy vive en `README.md:41`. Se comprueba por CONTENIDO, no por número de línea:
 # una cita por línea envejece en silencio en cuanto alguien añade un párrafo encima.
 grep -q 'no mandatory telemetry' "$README" \
-  || fail "$README lost the canonical wording this lote cites"
+  || fail "$README lost the canonical wording this batch cites"
 
 # ⛔⛔ LA MITAD POSITIVA, QUE FALTABA POR COMPLETO. Hallazgo ALTO del contraste (F2): este gate sólo
 # comprobaba AUSENCIA léxica, así que **borrar entera la explicación correcta de una página seguía
@@ -140,14 +135,12 @@ want("signed_wording_source", "LICENSING.md:166-176")
 print("json-ok")
 PY
 
-# ── EL ÁRBOL, que es la mitad que faltaba ────────────────────────────────────────────────────
-# «Aplicado» significa: el docs-site VIVO no hace ninguna promesa absoluta, en ninguno de los
-# siete locales. Se mide con el trinquete a repository gate acotado a esa superficie y con una línea base
-# de CEROS generada aquí — deny-closed: cualquier cuenta > 0 sube y enrojece. No se copia su
-# patrón; se le llama, para que exista una sola definición de «promesa absoluta».
+# The tree: applied means the live docs-site has zero absolute promises in all seven
+# locales. Run a repository gate on that surface against a generated zero baseline: any positive
+# count fails closed. Call the shared checker instead of copying its pattern.
 _tmp_base="${TMPDIR:-/workspace/.olivares-tmptest}"
-mkdir -p "$_tmp_base" || cannot "no puedo crear $_tmp_base"
-BASE_TMP="$(mktemp "$_tmp_base/meta12-base.XXXXXX")" || cannot "mktemp falló"
+mkdir -p "$_tmp_base" || cannot "cannot create $_tmp_base"
+BASE_TMP="$(mktemp "$_tmp_base/meta12-base.XXXXXX")" || cannot "mktemp failed"
 trap 'rm -f "$BASE_TMP"' EXIT
 # Las rutas del docs-site que la línea base real ya vigila, forzadas a 0. Sin ellas el trinquete
 # vería el conjunto vacío y contestaría «NO HE PODIDO MIRAR», que es lo correcto por su parte.
@@ -155,7 +148,7 @@ REAL_BASE="${OLIVARES_PHONEHOME_BASELINE:-docs/phone-home-claims-baseline.txt}"
 if [ -r "$REAL_BASE" ]; then
   awk -F'\t' -v s="$SITE" '$2 ~ "^" s "/" { printf "0\t%s\n", $2 }' "$REAL_BASE" > "$BASE_TMP"
 fi
-[ -s "$BASE_TMP" ] || cannot "no hay ninguna ruta de $SITE en $REAL_BASE — sin control positivo no juzgo"
+[ -s "$BASE_TMP" ] || cannot "no paths under $SITE in $REAL_BASE; a positive control is required"
 
 _rc=0
 OLIVARES_CLONE="$ROOT" \
@@ -165,11 +158,11 @@ OLIVARES_PHONEHOME_BASELINE="$BASE_TMP" \
   bash "$RATCHET" > "$BASE_TMP.out" 2>&1 || _rc=$?
 case "$_rc" in
   0) : ;;
-  1) say "check-meta-12-phone-home: FAIL — la sustitución NO está aplicada en $SITE:" >&2
+  1) say "check-meta-12-phone-home: FAIL — the replacement is not applied in $SITE:" >&2
      sed 's/^/    /' "$BASE_TMP.out" >&2
      rm -f "$BASE_TMP.out"
      exit 1 ;;
-  *) say "check-meta-12-phone-home: COULD NOT LOOK — el trinquete salió $_rc:" >&2
+  *) say "check-meta-12-phone-home: COULD NOT LOOK — the ratchet exited $_rc:" >&2
      sed 's/^/    /' "$BASE_TMP.out" >&2
      rm -f "$BASE_TMP.out"
      exit 2 ;;

@@ -61,12 +61,13 @@ func (p *pausingStore) pause() bool {
 
 func (p *pausingStore) AuthMutate(ctx context.Context, fn func(store.AuthScope) error) error {
 	return p.Store.AuthMutate(ctx, func(as store.AuthScope) error {
-		return fn(pausingScope{AuthScope: as, p: p})
+		return fn(pausingScope{AuthScope: as, AuthUserAuthorityWriter: as.(store.AuthUserAuthorityWriter), p: p})
 	})
 }
 
 type pausingScope struct {
 	store.AuthScope
+	store.AuthUserAuthorityWriter
 	p *pausingStore
 }
 
@@ -222,4 +223,17 @@ func TestLoginComponentAbsent_NewSessionCommitsBeforeConfigWriter(t *testing.T) 
 		t.Fatalf("session count %d -> %d, want one new session", before, after)
 	}
 	assertGlobalPostureConfigured(t, writer, true)
+}
+
+func TestPausingScopePreservesUserAuthorityWriter(t *testing.T) {
+	st := newPausingStore(t, testStore(t), false, false)
+	if err := st.AuthMutate(context.Background(), func(as store.AuthScope) error {
+		writer, ok := as.(store.AuthUserAuthorityWriter)
+		if !ok {
+			t.Fatal("the pausing decorator hid the real user-authority writer")
+		}
+		return writer.PrepareUserAuthorityWrite(context.Background(), nil)
+	}); err != nil {
+		t.Fatal(err)
+	}
 }

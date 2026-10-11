@@ -1,18 +1,18 @@
 ---
 title: 模块目录
 description: >-
-  Olivares AI 的 31 个模块 —— 按九大能力领域组织，并附上每个模块诚实的成熟度。
+  Olivares AI 的 35 个可选模块 —— 按九大能力领域组织，并附上每个模块诚实的成熟度。
   Olivares AI 唯一可信事实源：Claude Code 处于最深层次，Codex 与 Grok Build 并列其旁，用于在企业中集成、管理和保护 AI；
   本文是逐模块的参考。
 ---
 
 Olivares AI 以单一可信事实源构建（Claude Code 处于最深层次，Codex 与 Grok Build 并列其旁），用于在企业中集成、管理和保护 AI。
-它是一个**模块化平台** —— 一个引擎、一个控制台、**31 个模块**接入到单一二进制文件中
+它是一个**模块化平台** —— 一个引擎、一个控制台、目录中的 **35 个可选模块**
 —— 它观察 agent 在何处运行，治理它们被允许做什么，并（在不断扩大的子集上）对你的真实
 基础设施执行操作。每个模块都会：(a) 从核心消费规范化的事件/数据，(b) 在共享数据模型中
 声明其实体，以及 (c) 暴露自己的 API 端点和 UI 视图 —— 而不触碰核心或其他模块。
 
-这 31 个模块按下文的**九大能力领域**组织。请将每个模块的状态读作**两个部分**：
+这 35 个可选模块由 **32 个模块包**实现；governance 包提供四个可分别选择的模块。它们按下文的**九大能力领域**组织。请将每个模块的状态读作**两个部分**：
 *治理/观察（Govern/Observe）*（编目、观察、把关、报告）今天已构建并接入；
 *执行（Actuate）*（在真实基础设施上执行操作 —— 部署、调度、发送、强制、运行）落入若干
 诚实的状态 —— 在默认二进制文件中对一个子集是**实时（live）**的，对若干模块是**按需
@@ -25,10 +25,10 @@ Olivares AI 以单一可信事实源构建（Claude Code 处于最深层次，Co
 
 **访问图谱（access map）**（`iii-access-map`）—— 即每个 agent 能够触及以及实际触及哪些
 内容的读取/读写图谱，配合最小权限漂移（least-privilege drift）= `Permitted ≠ Observed`
-—— 是这 31 个模块中**最有用的能力之一**，而非整个产品。广度才是要点：九大领域、一个引擎、
+—— 是这 35 个可选模块中**最有用的能力之一**，而非整个产品。广度才是要点：九大领域、一个引擎、
 一个控制台。
 
-## 31 个模块，按能力领域
+## 35 个可选模块，按能力领域
 
 每一行都链接到其模块页面（`/reference/modules/<slug>/`）。**Actuate（执行）**列是执行部分
 的诚实状态；`—` 表示该模块在本质上是治理/观察型的，没有执行表面。
@@ -52,17 +52,20 @@ Olivares AI 以单一可信事实源构建（Claude Code 处于最深层次，Co
 | 模块 | 执行 | 用途 |
 |---|---|---|
 | [身份、权限与治理](/zh/reference/modules/vi-governance/) | — | 谁以及什么能做什么，粒度化：Cedar RBAC + 拒止覆盖层 + 作用域授权、名册对账、作用域化管理员/自定义角色、应急破窗（break-glass）、紧急停止开关（kill-switch）。 |
+| [身份（`identity`）](/reference/modules/identity/) | — | 只读工作负载身份联邦、SSO、外部密钥和驻留姿态。 |
 | [源与凭据作用域化](/zh/reference/modules/sourcescope/) | — | 将源绑定到某个工作区/agent 组；拒止关闭的作用域解析器 + 解析时的作用域化凭据。 |
 | [部署与集成](/zh/reference/modules/vii-deploy/) | 按需（503） | 规划并治理向真实基础设施的部署；执行器为按需 —— 在预置之前，实时的 `apply`/`retire` 返回 `503`。 |
 | [受治理的 Git 发布](/zh/reference/modules/gitpublish/) | on-demand | 通过批准的 Git 主机绑定推送提交、创建合并请求并合并，检查当前权限并保留操作结果。 |
 
-> **身份与访问**位于 [治理](/zh/reference/modules/vi-governance/) 内部 —— 没有单独的模块。
-> NHI 生命周期、agent 身份联邦、AAL3 升级验证以及 SSO/SCIM 都是治理能力。
+> **Identity** 是用于只读身份姿态控制台的独立可选模块。它共享 governance 包，并依赖拥有授权模型和身份生命周期的 [governance](/zh/reference/modules/vi-governance/)。共享包不代表共享模块开关。
 
 ### Claude 与 agent 生态
 
 | 模块 | 执行 | 用途 |
 |---|---|---|
+| [Claude Code 受管策略（`claude-policy`）](/reference/modules/claude-policy/) | — | 验证、预览和发布版本化受管策略；查看分发与已观测漂移。 |
+| [Claude agent 确认（`claude-agents`）](/reference/modules/claude-agents/) | — | 读取受管 agent 线程事件，并批准或拒绝待处理工具确认。 |
+| [技能目录与分配](/zh/reference/modules/skills/) | — | 不可变的技能目录与固定分配：经摘要验证的技能包安装在 `/v1/m/skills/packs` 下，按目标固定，绝不在原地修改。 |
 | [模型与提供方管理](/zh/reference/modules/x-models/) | 按需（503） | 跨整个模型/提供方栈进行治理：模型访问、逐表面上下文窗口、模型组门控；模型*执行*为按需 —— 在推理凭据被预置之前返回 `503`。 |
 | [内联推理代理](/zh/reference/modules/inferenceproxy/) | PARTIAL | 为内联 `/v1/messages` PEP 代理提供逐租户的推理出口配置 + DLP；模块配置已实时生效，监听器为可选启用、回环默认、失败时关闭（fail-CLOSED）。 |
 | [内部目录与市场](/zh/reference/modules/xiv-catalog/) | — | 经核准/签名的 agent、MCP 服务器与技能的精选市场。 |
@@ -116,13 +119,11 @@ Olivares AI 以单一可信事实源构建（Claude Code 处于最深层次，Co
 （推理代理监听器为可选启用、回环默认；实时摄取受环境门控；态势导出是一个中立的只读投影）；
 `—` = 该模块在本质上是治理/观察型的，没有执行表面。这一拆分就是诚实的契约：产品**今天广泛地
 观察并治理，并在一个不断扩大、大多受预置门控的子集上执行** —— 参见
-[诚实与局限](/zh/start/honesty-and-limits/)。该目录派生自组合根（`cmd/olivares/wire.go`）：
-全部 31 个模块都在那里构造并通过 `rt.AddModule` 注册（已于 2026-09-27 对 进行验证）。
+[诚实与局限](/zh/start/honesty-and-limits/)。可选目录来自 `core/modulespec/modules.json`，这也是 `olivares modules ls` 和控制台**版本与模块**列表使用的来源。`npm run test:modules` 检查每个可选命名空间是否链接到参考页面，并验证计数。
 
-## 版本可用性接缝（不计入 31 个模块之内）
+## 版本可用性接缝（不计入 35 个可选模块之内）
 
-上表目录是组合根作为产品模块构造的 **31 个模块**。另外，Community 在
-`session-cockpit` API 命名空间下注册一个可用性描述符。它不是那 31 个之一。
+上表目录涵盖共享模块规范中的 **35 个可选模块**。另外，Community 在 `session-cockpit` API 命名空间下注册一个可用性描述符。它不是这 35 个之一。
 
 - [会话驾驶舱（可用性）](/zh/reference/modules/session-cockpit/) ——
   Community 中没有处理程序；`/v1/m/session-cockpit` 因**缺失而返回 404**。
@@ -130,10 +131,9 @@ Olivares AI 以单一可信事实源构建（Claude Code 处于最深层次，Co
   见 [实时运行与会话](/zh/reference/modules/ii-sessions/) 和
   [在 Olivares 中运行 Claude Code](/zh/how-to/run-claude-code-with-olivares/)。
 
-## 平台与核心能力（不计入 31 个模块之内）
+## 平台与核心能力（不计入 35 个可选模块之内）
 
-以下是真实的、已交付的能力，但它们是**引擎/核心/Web 能力**，而非 `modules/` 集合中的
-模块 —— 因此不计入这 31 个之内：
+以下是真实的已交付能力，但它们是**引擎／核心／Web 能力**，不是独立可选模块，因此不计入这 35 个之内：
 
 - [自有 API + 以代码管理](/zh/reference/modules/xix-api-manage-as-code/) ——
   **引擎/核心能力。** 引擎自有的、带版本的 REST/gRPC API，外加 Terraform provider；
@@ -143,7 +143,7 @@ Olivares AI 以单一可信事实源构建（Claude Code 处于最深层次，Co
   的租户隔离。
 - [高管仪表盘](/zh/reference/modules/xxi-executive-dashboards/) ——
   **Web 能力。** 与技术 UI 并列的领导层控制台视图。（其报告生成后端是
-  [reporting](/zh/reference/modules/reporting/) 模块，该模块计入 31 个模块。）
+  [reporting](/zh/reference/modules/reporting/) 模块，该模块计入 35 个可选模块。）
 - [模型运维（自有模型）](/zh/reference/modules/xxiii-model-operations/) ——
   **models 模块的能力**（通过模块 X 的行计数，不是单独一行）：受治理的自有模型注册表、
   签名模型准入、数据集/微调作业的血缘记录、本地推理部署治理，以及 AIBOM/模型卡片证据。
@@ -151,7 +151,7 @@ Olivares AI 以单一可信事实源构建（Claude Code 处于最深层次，Co
 **计划中：** 自有模型微调与本地推理的**执行**
 （[xxiii-fine-tuning](/zh/reference/modules/xxiii-fine-tuning/)）—— 平台今天已治理并记录
 这些工作（见上文模型运维），但自身不执行训练、不提供推理服务；执行的那一半是有文档记载的
-**计划中**工作，**未交付**，也不在这 31 个之内。
+**计划中**工作，**未交付**，也不在这 35 个之内。
 
 ## 模块如何在 API 与总线中呈现
 
@@ -163,11 +163,11 @@ Olivares AI 以单一可信事实源构建（Claude Code 处于最深层次，Co
 
 ## 层级
 
-这 31 个模块构建在引擎之上的若干层级上，与上文的引擎/核心及 Web 能力并列：
+这 35 个可选模块构建在引擎之上的若干层级上，与上文的引擎/核心及 Web 能力并列：
 
-- **引擎（第 0 层）** —— 自有 API/以代码管理与多租户能力（核心，不计入这 31 个）。
+- **引擎（第 0 层）** —— 自有 API/以代码管理与多租户能力（核心，不计入这 35 个）。
 - **核心（第 1 层）** —— 清点、会话、访问图谱、模型、健康、可观测性。
-- **管理（第 2 层）** —— 能力、治理、sourcescope、部署、知识。
+- **管理（第 2 层）** —— 能力、治理、identity、claude-policy、claude-agents、skills、sourcescope、部署、gitpublish、知识。
 - **智能（第 3 层）** —— 编排、安全、录制、推理代理、finops、评估、合规、reporting、siemforward、
   态势导出、目录、notify、事件订阅、语音、沙箱、红队、实时摄取、已保存的控制台视图。
 - **Web（第 4 层）** —— UI 与高管仪表盘能力。

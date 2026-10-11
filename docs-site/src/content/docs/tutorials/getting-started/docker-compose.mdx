@@ -22,27 +22,19 @@ points (`deploy/compose/*.yml`), and the first-run flow they drive is the same
 one verified end-to-end against the binary in the
 [single-node tutorial](/tutorials/getting-started/single-node/).
 
-<Aside type="caution" title="Pin the published 26.10.1 image by digest">
-Release **26.10.1** published the signed images: the install-surface witness records Docker
-Hub and GHCR as **published** for `26.10.1` (`docs/releases/26.10.1-install-surfaces.json`). The
-same note is on [Deploy with Docker](/how-to/docker-deployment/). They are built and signed on
-`ghcr.io/olivaresai/olivares` first and then copied to Docker Hub by digest, so the ghcr.io
-coordinate serves the identical image as a fallback. Set
-`OLIVARES_IMAGE=docker.io/olivaresai/olivares@sha256:<digest>` and
-[verify it](/how-to/verify-a-release/) first — by digest, never a tag. To run the development
-tree instead, build the hardened image from source and point the stack at it:
-
-```bash
-task image                                   # builds olivares:dev
-echo 'OLIVARES_IMAGE=olivares:dev' >> deploy/compose/.env
-```
+{/* release */}
+<Aside type="caution" title="Olivares 0.1">
+The next release is `0.1`; its GitHub release is not published yet. The commands below describe the planned artifacts. Build from source until publication, then verify each artifact before use. See `docs/releases/0.1-install-surfaces.json` for the observed publication state.
 </Aside>
+{/* /release */}
 
 ## 1. Bring up the single-node stack (SQLite)
 
 <Steps>
 
 1. Start it:
+
+   On hosts that mediate user namespace creation with AppArmor, complete "Session confinement on AppArmor hosts" in `deploy/compose/README.md` on the Docker daemon host before starting the stack.
 
    ```bash
    docker compose -f deploy/compose/docker-compose.yml up --wait --wait-timeout 120
@@ -54,6 +46,7 @@ echo 'OLIVARES_IMAGE=olivares:dev' >> deploy/compose/.env
    |---|---|
    | Ports | `8443` (HTTPS: REST + web UI), `8444` (gRPC) — published on **every host interface**, because this is a server. Set `OLIVARES_BIND=127.0.0.1` in `.env` to restrict them to the host |
    | Data | named volume `olivares-data` → `/var/lib/olivares` (SQLite store, audit signing key, TLS material) |
+   | Project folder | at `/project`, read-write: the host folder whose absolute path is in `OLIVARES_PROJECT_DIR`, or an empty volume when it is unset. Sessions started in `/project` can change everything in it; see "Work on a host project folder" in `deploy/compose/README.md` |
    | Hardening | runs as `65532:65532`, read-only root, all capabilities dropped, `no-new-privileges`, tmpfs `/tmp` |
    | Healthcheck | direct exec of the built-in `olivares readyz` command—no shell, curl, or wget. Only local `/readyz` HTTP 200 is healthy |
 
@@ -83,7 +76,7 @@ echo 'OLIVARES_IMAGE=olivares:dev' >> deploy/compose/.env
 </Steps>
 
 <Aside type="note" title="Current contract versus hosted qualification">
-**DIST-24-12 current tree contract.** Hermetic local HTTP/TLS fixtures prove the
+**Compose readiness contract.** Hermetic local HTTP/TLS fixtures prove the
 probe's three answers: 200 → rc 0, a received non-200 → rc 1, and an input/TLS/
 transport failure → rc 2. **Docker qualification remains unmeasured until the
 dispatch workflow succeeds** for this commit; a checked-in workflow is not evidence
@@ -151,16 +144,25 @@ the container as well.
 ## 3. Encrypted DR backups (the `backup` profile)
 
 The stack ships a one-shot backup service that produces an **encrypted,
-ledger-continuity-safe** bundle (`olivares dr backup`) and prunes bundles
-older than 14 days:
+ledger-continuity-safe** bundle (`olivares dr backup`):
+
+Keep the passphrase in a private file outside the checkout and the image, and keep
+a copy somewhere safe off this host: without it, no bundle can be restored. Give
+the backup container read-only access to it (the image runs as UID `65532`):
 
 ```bash
-# Write your KEK passphrase once (keep it OUT of the repo / image):
-printf 'a strong DR passphrase' > deploy/compose/dr-pass
+sudo install -d -o 65532 -g 65532 -m 0700 /srv/olivares-dr
+sudo install -o 65532 -g 65532 -m 0400 /path/to/private-passphrase /srv/olivares-dr/dr-pass
 
+BACKUP_TS="$(date -u +%Y%m%dT%H%M%SZ)" \
 docker compose -f deploy/compose/docker-compose.yml \
                -f deploy/compose/docker-compose.backup.yml \
-               --profile backup run --rm backup
+               -f - --profile backup run --rm backup <<'YAML'
+services:
+  backup:
+    volumes:
+      - /srv/olivares-dr/dr-pass:/run/secrets/dr-pass:ro
+YAML
 ```
 
 Wrap that command in host cron for a scheduled RPO, and **mirror the
@@ -177,9 +179,17 @@ superuser, no `BYPASSRLS` — the engine *refuses* to start against a privileged
 role, because row-level security is the tenant backstop), and points the
 engine at it:
 
+The override also provisions `olivares_admin`, a separate `NOSUPERUSER BYPASSRLS`
+role with read-only access to the engine tables. The engine uses it through
+`--admin-dsn` for cross-tenant reads, including first setup.
+
+Set three distinct passwords first, using only `A-Z a-z 0-9 . _ ~ -` for this
+Compose demo, then bring the stack up:
+
 ```bash
 cp deploy/compose/.env.example deploy/compose/.env
-# set POSTGRES_SUPERUSER_PASSWORD and OLIVARES_DB_PASSWORD in .env
+# set three distinct passwords in deploy/compose/.env:
+# POSTGRES_SUPERUSER_PASSWORD, OLIVARES_DB_PASSWORD, OLIVARES_ADMIN_PASSWORD
 
 docker compose -f deploy/compose/docker-compose.yml \
                -f deploy/compose/docker-compose.postgres.yml up -d

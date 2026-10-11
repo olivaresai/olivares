@@ -6,10 +6,13 @@
 # Patch-velocity checks this base for drift; Dependabot proposes digest updates.
 # Runtime support only; agent CLIs are installed by Olivares into the data volume.
 # Node 24 is LTS; this official image uses Debian 13 (trixie) and includes npm/npx.
-FROM node:24-trixie-slim@sha256:8ec5d7557396cfe32d21c3f9c13072355ceab22b584578ca4bb28af31120cffe
+FROM node:25-trixie-slim@sha256:aabbe39553d15ede8a97cc60c9e1a97034ff772afcf696ea42b94e7f5f2ec71b
 # hadolint ignore=DL3008
 RUN apt-get update \
+    && apt-get upgrade -y \
     && apt-get install -y --no-install-recommends ca-certificates git python3 python3-venv \
+    && npm install --global --ignore-scripts npm@11.21.0 \
+    && npm cache clean --force \
     && rm -rf /var/lib/apt/lists/* /usr/local/include/node \
     && groupadd --gid 65532 nonroot \
     && useradd --uid 65532 --gid 65532 --home-dir /var/lib/olivares/home --no-create-home nonroot \
@@ -19,6 +22,8 @@ COPY packaging/container/uv-LICENSE-MIT.txt /usr/share/doc/uv/LICENSE-MIT
 # A writable home is required for npm/npx and uvx on Compose's read-only rootfs.
 # Per-account homes are set by the product when launching subscription tools.
 ENV HOME=/var/lib/olivares/home
+# The directory the CMD serves, so a bare `olivares first-boot` (or any data-dir default) finds it.
+ENV OLIVARES_DATA_DIR=/var/lib/olivares
 WORKDIR /var/lib/olivares
 LABEL org.opencontainers.image.title="olivares" \
       org.opencontainers.image.description="Olivares AI — self-hosted control plane for AI agents" \
@@ -38,8 +43,9 @@ COPY --chown=65532:65532 --chmod=0700 packaging/container/data-dir/ /backups/
 # them run it nor the warranty disclaimer that protects everyone who wrote it. A label
 # is metadata; AGPL sections 4 and 5 ask for the document.
 COPY LICENSE NOTICE LICENSING.md DISCLAIMER.md /usr/share/doc/olivares/
+COPY .license-notices/NOTICE-community /usr/share/doc/olivares/NOTICE
 COPY LICENSES /usr/share/doc/olivares/LICENSES
 USER 65532:65532
 EXPOSE 8443 8444
 ENTRYPOINT ["/usr/local/bin/olivares"]
-CMD ["serve", "--listen", "0.0.0.0:8443", "--grpc-listen", "0.0.0.0:8444", "--data-dir", "/var/lib/olivares"]
+CMD ["serve", "--data-dir", "/var/lib/olivares"]

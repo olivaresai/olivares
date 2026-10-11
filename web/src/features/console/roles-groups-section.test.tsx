@@ -98,6 +98,33 @@ describe('group role mapping', () => {
     },
   )
 
+  // Group nesting is published Community API: removing a parent sends the
+  // empty parent the route takes as "un-nest".
+  it('removes a stored parent through the nesting route', async () => {
+    const user = userEvent.setup()
+    api.setGroupParent.mockResolvedValue({
+      id: 'g-eng',
+      display_name: 'Engineering',
+      parent_group_id: '',
+    })
+    api.listGroups.mockResolvedValue({
+      groups: [
+        { ...engineering, id: 'g-parent', display_name: 'Company' },
+        { ...engineering, parent_group_id: 'g-parent' },
+      ],
+    })
+    wrap(<GroupHierarchySection canAdmin />)
+    const row = (await screen.findByText('Engineering')).closest('tr')!
+    await user.click(within(row).getByRole('button', { name: 'Remove parent' }))
+    const dialog = await screen.findByRole('dialog')
+    await user.click(
+      within(dialog).getByRole('button', { name: 'Remove parent' }),
+    )
+    await waitFor(() =>
+      expect(api.setGroupParent).toHaveBeenCalledWith('g-eng', ''),
+    )
+  })
+
   it('states the blast radius before the operator commits', async () => {
     const user = userEvent.setup()
     wrap(<GroupHierarchySection canAdmin />)

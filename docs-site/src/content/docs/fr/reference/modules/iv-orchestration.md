@@ -7,6 +7,8 @@ description: >-
   couture fermée par défaut, exposée honnêtement.
 ---
 
+**Édition :** Business Identity & Scale. Community renvoie `501` pour ces routes, ne contient ni console ni moteur d’orchestration et conserve les données pour leur exportation.
+
 Le module IV est le plan d'**observation et de gouvernance** de la coordination des
 agents. Il ne **réimplémente pas** un framework d'agents (pas de LangGraph/CrewAI/AutoGen),
 il n'exécute pas d'agent, et il ne crée jamais de processus. Il dérive un graphe en

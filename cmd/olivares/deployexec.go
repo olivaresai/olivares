@@ -15,7 +15,7 @@ import (
 // Executor port (modules/deploy/ports.go) by delegating to the real, governed
 // actuation engine (core/runtime/executor). It is the ONLY layer that imports both
 // the AGPL deploy module and the AGPL executor engine — the composition root —
-// exactly as notifydispatch.go bridges notify and approvalbridge.go bridges
+// exactly as notifydispatch.go bridges notify and internal/approvalbridge bridges
 // the four ApprovalGate seams. The module never knows which backend acts; the
 // executor selects it by runtime and enforces credential-minting + the blast-radius
 // gate. Here we only translate the module's typed deploySpec into the executor's

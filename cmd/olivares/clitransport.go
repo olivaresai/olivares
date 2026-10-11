@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
+	"github.com/olivaresai/olivares/core/envconfig"
 )
 
 // defaultCLIRequestTimeout is the overall deadline a CLI request gets when the
@@ -53,11 +54,9 @@ type cliTransportOptions struct {
 	// stream. It exists because Timeout==0 cannot express it: zero means "not
 	// specified" here and is replaced by defaultCLIRequestTimeout.
 	//
-	// Shipped without this and regressed `agent session attach`: that path
-	// passed 0 meaning "unlimited" (which is what a bare http.Client does with a
-	// zero Timeout, the merge-base behavior) and silently got ten seconds — and
-	// http.Client.Timeout covers reading the body, so a live SSE attach died
-	// mid-stream. Found by the sol-max contrast.
+	// Without it a caller passing 0 to mean "unlimited" (what a bare http.Client
+	// does with a zero Timeout) would get the default, and http.Client.Timeout
+	// covers reading the body, so a live SSE attach would die mid-stream.
 	Unbounded bool
 	// CarriesSecret marks a request whose BODY carries a secret even though no
 	// bearer is attached: the two anonymous legs, POST /v1/setup (one-time setup
@@ -77,7 +76,7 @@ type cliTransportOptions struct {
 // unambiguous affirmatives count: a variable that happens to be set to "0" or ""
 // must not silently disable a credential protection.
 func cleartextOptIn() bool {
-	switch strings.ToLower(strings.TrimSpace(os.Getenv(cliCleartextOptInEnv))) {
+	switch strings.ToLower(strings.TrimSpace(envconfig.Get(cliCleartextOptInEnv))) {
 	case "1", "true", "yes", "on":
 		return true
 	default:
@@ -169,9 +168,7 @@ func cliTransport(opts cliTransportOptions) (*http.Client, http.Header, error) {
 	resolved := opts.Resolved
 	// Every refusal below is about the CALLER'S ARGUMENTS, so each one exits 2 —
 	// "the invocation itself is wrong", the contract the root command's help
-	// publishes. They carried no code at all until so exitcode.From read them
-	// as the generic 1 and a script could not tell a mistyped pin from a broken
-	// control plane. Same defect as the pin decoder below, same function.
+	// publishes, so a script can tell a mistyped pin from a broken control plane.
 	if resolved.Server == "" {
 		return nil, nil, notSignedIn("--server", "OLIVARES_SERVER_URL")
 	}
@@ -207,7 +204,7 @@ func cliTransport(opts cliTransportOptions) (*http.Client, http.Header, error) {
 	if resolved.CACert != "" {
 		roots, err := loadCLIRootCAs(resolved.CACert)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, exitcode.New(exitcode.Usage, err)
 		}
 		tlsConfig.RootCAs = roots
 	}
@@ -265,14 +262,14 @@ func cliTransport(opts cliTransportOptions) (*http.Client, http.Header, error) {
 	}, headers, nil
 }
 
-// cliDo performs req and classifies a TRANSPORT failure as exit 6 (E3).
+// cliDo performs req and classifies a TRANSPORT failure as exit 6.
 //
 // httpErr already maps HTTP statuses onto the exit contract, but it only ever
 // sees a response. A control plane that is down, unreachable, or presenting a
 // certificate the caller refuses never produces one: client.Do returns a Go
-// error, which exitcode.From could only read as generic. Measured before this:
-// `dial tcp: connection refused` exited 1, so a script could not tell a dead
-// engine from a bad request — the contract in `olivares help exit-codes` says 6.
+// error, which exitcode.From could only read as generic: `dial tcp: connection
+// refused` would exit 1, and a script could not tell a dead engine from a bad
+// request. The contract in `olivares help exit-codes` says 6.
 //
 // Every CLI network path goes through here, so the classification is stated once
 // rather than at each of the dozens of call sites that could forget it.
@@ -289,7 +286,7 @@ func cliDo(client *http.Client, req *http.Request) (*http.Response, error) {
 }
 
 // missingCLIValueError explains an unresolved server/token/tenant in terms of
-// EVERY place it could have come from, including the client contexts (E7).
+// EVERY place it could have come from, including the client contexts.
 // The old message named only the flag and the environment variable, so after a
 // successful `olivares auth login` a command could still say "no server: set
 // --server or OLIVARES_SERVER_URL" without ever mentioning that contexts exist,
@@ -349,12 +346,9 @@ func loadCLIRootCAs(path string) (*x509.CertPool, error) {
 // decodeSPKIPin parses one --pin-sha256 value into the 32 raw bytes of a leaf
 // SubjectPublicKeyInfo SHA-256 digest.
 //
-// Widened it and sharpened its refusal, for one reason: the digest is 32 bytes
-// and HOW THEY WERE WRITTEN DOWN IS NOT A SECURITY PROPERTY. This accepted base64
-// only, while `openssl x509 -fingerprint -sha256` — and, until our own
-// first-boot log line — hand the operator hex. A correct pin was being refused for
-// its punctuation, with a message that never said a digest of WHAT, so there was no
-// way to act on it. Hex and base64 cannot be confused: 32 bytes is 64 hex characters
+// The digest is 32 bytes and HOW THEY ARE WRITTEN DOWN IS NOT A SECURITY PROPERTY:
+// `openssl x509 -fingerprint -sha256` hands the operator hex, so both hex and base64
+// are accepted, and a refusal says a digest of what. Hex and base64 cannot be confused: 32 bytes is 64 hex characters
 // or 43/44 base64 ones.
 //
 // What did NOT widen, and must not: this is the SPKI digest, and only an SPKI digest
@@ -395,15 +389,15 @@ func decodeSPKIPin(spec string) ([]byte, error) {
 		"invalid --pin-sha256 %q: expected the leaf certificate's SPKI SHA-256 digest — 32 bytes, "+
 			"written as base64 or hex. This is NOT the certificate fingerprint: the engine prints "+
 			"the value to use as pin_sha256 on the line where it reports the certificate "+
-			"(`generated a self-signed TLS certificate…` / `serving HTTPS…`). From a PEM: "+
+			"(`generated a local TLS certificate…` / `serving HTTPS…`). From a PEM: "+
 			"openssl x509 -in cert.pem -pubkey -noout | openssl pkey -pubin -outform der | "+
 			"openssl dgst -sha256 -binary | openssl base64", original))
 }
 
 // trimMatchingQuotes removes ONE matching pair of surrounding quotes.
 //
-// strings.Trim was wrong here and the sol-max contrast said why: it strips any
-// number and any mix of quote characters from both ends, so `'digest"` and `""digest`
+// Not strings.Trim: it strips any number and any mix of quote characters from
+// both ends, so `'digest"` and `""digest`
 // were accepted as if they were quoted values. That is not "the operator pasted a
 // quoted log field", it is a typo being silently normalised.
 func trimMatchingQuotes(s string) string {

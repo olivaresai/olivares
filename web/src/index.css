@@ -99,7 +99,8 @@
    * only the ="true"/pressed selection states. */
   @media (forced-colors: active) {
     [aria-current='true'],
-    [aria-pressed='true'] {
+    [aria-pressed='true'],
+    [role='tab'][aria-selected='true'] {
       outline: 2px solid Highlight;
       outline-offset: -2px;
     }

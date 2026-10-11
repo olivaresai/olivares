@@ -1,0 +1,234 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# integration-check — the checks that measure the product, run once on an integrated tree
+# before a release: one build of the binary and every module, the published userspace
+# contracts on that binary, the race detector on the Go packages changed since `base`, and the
+# licence-header, AGPL-boundary and secret scans.
+name: integration-check
+
+on:
+  workflow_dispatch:
+    inputs:
+      base:
+        description: >-
+          Commit the integration started from (usually the last checked main); the race detector
+          runs on the Go packages changed since it.
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: integration-check-${{ github.ref }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  integration-check:
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 345  # > the sum of the step ceilings (lint:ci-timeout-arithmetic)
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16@sha256:a36250871de0833b8757561c72f2477ef1ddd1101afa4e617fb552e0de514c6b
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+          --memory=1g
+      # sqlstore's TestDRDestinationUnrelatedCluster needs a second, unrelated server.
+      postgres_other:
+        image: pgvector/pgvector:pg16@sha256:a36250871de0833b8757561c72f2477ef1ddd1101afa4e617fb552e0de514c6b
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+          --memory=1g
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 5
+        with:
+          fetch-depth: 0 # gitleaks scans the history; the race selection reads base..HEAD
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        timeout-minutes: 5
+        with:
+          go-version-file: go.work
+          cache: ${{ runner.environment == 'github-hosted' }}   # self-hosted runners keep the Go caches on local disk
+          cache-dependency-path: go.work.sum
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        timeout-minutes: 5
+        with:
+          node-version-file: .node-version
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        timeout-minutes: 5
+        with:
+          dest: ${{ runner.temp }}/setup-pnpm
+          standalone: true
+      - name: install go-task and gitleaks (pinned)
+        timeout-minutes: 5
+        uses: ./.github/actions/olivares-tool-cache
+        with:
+          gitleaks: "true"
+      # build:bin compiles with CGO_ENABLED=0 -trimpath (scripts/lib/build-bin.sh); build:go
+      # with the same flags reuses every package the binary already compiled.
+      - name: build the binary with its console and connectors, then every module
+        id: build
+        timeout-minutes: 30
+        run: |
+          set -euo pipefail
+          task build
+          CGO_ENABLED=0 GOFLAGS=-trimpath task build:go
+      - name: resolve the Postgres services into the test DSNs
+        timeout-minutes: 2
+        env:
+          PGPORT_HOST: ${{ job.services.postgres.ports['5432'] }}
+          PGPORT_OTHER: ${{ job.services.postgres_other.ports['5432'] }}
+        run: |
+          set -euo pipefail
+          # Suites build and execute helpers; a hardened /tmp is noexec.
+          mkdir -p "$RUNNER_TEMP/exec"
+          echo "TMPDIR=$RUNNER_TEMP/exec" >> "$GITHUB_ENV"
+          echo "GOTMPDIR=$RUNNER_TEMP/exec" >> "$GITHUB_ENV"
+          bash scripts/ci-postgres-service.sh resolve
+      - name: provision postgres roles (least-privilege app role + BYPASSRLS admin)
+        timeout-minutes: 2
+        env:
+          PGPASSWORD: postgres
+        run: bash scripts/ci-postgres-service.sh provision
+      - name: install the existing browser test tools
+        timeout-minutes: 10
+        run: |
+          set -euo pipefail
+          pnpm --dir web install --frozen-lockfile
+          # Self-hosted images must supply system libraries; the runner has no sudo.
+          deps=()
+          if [[ "$RUNNER_ENVIRONMENT" == github-hosted ]]; then
+            deps=(--with-deps)
+          fi
+          # The upgrade fixture changes HOME; installation and launch must share a cache.
+          export PLAYWRIGHT_BROWSERS_PATH="$RUNNER_TEMP/userspace-browsers"
+          pnpm --dir web exec playwright install "${deps[@]}" chromium
+          echo "PLAYWRIGHT_BROWSERS_PATH=$PLAYWRIGHT_BROWSERS_PATH" >> "$GITHUB_ENV"
+          echo "NODE_PATH=$PWD/web/node_modules" >> "$GITHUB_ENV"
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        timeout-minutes: 5
+        with:
+          cosign-release: v2.6.4
+          install-dir: ${{ runner.temp }}/cosign
+      - name: authenticate the verifier
+        timeout-minutes: 2
+        run: bash scripts/assert-cosign-binary.sh --isolate
+      - name: preserve published contracts and upgrade both stores
+        timeout-minutes: 40
+        run: |
+          set -euo pipefail
+          export USERSPACE_OUT="$RUNNER_TEMP/userspace"
+          mkdir -m 700 "$USERSPACE_OUT"
+          echo "USERSPACE_OUT=$USERSPACE_OUT" >> "$GITHUB_ENV"
+          USERSPACE_POSTGRES_DSN="$OLIVARES_TEST_POSTGRES_SUPERUSER_DSN" \
+            bash scripts/userspace/compat.sh bin/olivares
+      - name: remove the published source worktree
+        if: always() && env.USERSPACE_OUT != ''
+        timeout-minutes: 2
+        run: |
+          set -euo pipefail
+          registered="$(git worktree list --porcelain)"
+          if grep -Fx "worktree $USERSPACE_OUT/published-source" <<< "$registered"; then
+            git worktree remove --force "$USERSPACE_OUT/published-source"
+          fi
+      - name: Preserve evidence on the runner
+        if: always() && env.USERSPACE_OUT != ''
+        continue-on-error: true
+        uses: ./.github/actions/ci-evidence
+        with:
+          name: userspace-compat-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ env.USERSPACE_OUT }}/baseline.json
+            ${{ env.USERSPACE_OUT }}/published.json
+            ${{ env.USERSPACE_OUT }}/candidate.json
+            ${{ env.USERSPACE_OUT }}/findings.json
+            ${{ env.USERSPACE_OUT }}/sqlite/result.json
+            ${{ env.USERSPACE_OUT }}/sqlite/*.log
+            ${{ env.USERSPACE_OUT }}/postgres/result.json
+            ${{ env.USERSPACE_OUT }}/postgres/*.log
+      - name: retain contract findings and redacted upgrade results
+        if: always() && env.USERSPACE_OUT != ''
+        timeout-minutes: 5
+        continue-on-error: true
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: userspace-compat-${{ github.run_id }}-${{ github.run_attempt }}
+          retention-days: 1
+          if-no-files-found: error
+          path: |
+            ${{ env.USERSPACE_OUT }}/baseline.json
+            ${{ env.USERSPACE_OUT }}/published.json
+            ${{ env.USERSPACE_OUT }}/candidate.json
+            ${{ env.USERSPACE_OUT }}/findings.json
+            ${{ env.USERSPACE_OUT }}/sqlite/result.json
+            ${{ env.USERSPACE_OUT }}/sqlite/*.log
+            ${{ env.USERSPACE_OUT }}/postgres/result.json
+            ${{ env.USERSPACE_OUT }}/postgres/*.log
+      # One run reports every result: the race step needs only the build, and the two scans
+      # need nothing, so a failure before them does not skip them.
+      - name: the race detector on the Go packages changed since base
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        timeout-minutes: 120
+        env:
+          BASE: ${{ inputs.base }}
+        run: |
+          set -euo pipefail
+          bash scripts/test-changed-go-packages.sh
+          changed="$(bash scripts/changed-go-packages.sh "$BASE")"
+          if [ -z "$changed" ]; then
+            echo "No Go package changed since $BASE; nothing to race."
+            exit 0
+          fi
+          mapfile -t dirs <<<"$changed"
+          paths="$(go list "${dirs[@]}")"
+          # race-full races these a turn at a time, by test name (scripts/race-groups.json), and
+          # release.yml requires it green on the tagged commit: one go test run does not finish them.
+          bash scripts/race-groups.sh split > "$RUNNER_TEMP/split.txt"
+          race=()
+          while IFS= read -r path; do
+            if grep -Fxq -- "$path" "$RUNNER_TEMP/split.txt"; then
+              echo "left to race-full: $path"
+            else
+              race+=("$path")
+            fi
+          done <<<"$paths"
+          [ "${#race[@]}" -gt 0 ] || exit 0
+          printf '%s\n' "${race[@]}"
+          bash scripts/with-pg-env.sh go test -race -count=1 -timeout 60m "${race[@]}"
+      # The checks no hook, workflow or other task runs (ci/kept-checks.txt), as a ratchet against
+      # base: a check that fails here and not on base, or with new output, fails; a failure base
+      # already has warns; could not look fails. Many read the build, so they need it.
+      - name: the checks nothing else runs, as a ratchet against base
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        timeout-minutes: 60
+        env:
+          BASE: ${{ inputs.base }}
+        run: bash scripts/kept-checks.sh "$BASE"
+      - name: licence headers and the AGPL boundary
+        if: ${{ !cancelled() }}
+        timeout-minutes: 10
+        run: task lint:spdx lint:boundary
+      - name: no secret in the history
+        if: ${{ !cancelled() }}
+        timeout-minutes: 20
+        run: task lint:secrets

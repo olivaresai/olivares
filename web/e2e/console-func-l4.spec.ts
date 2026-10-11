@@ -4,6 +4,7 @@
 import { Buffer } from 'node:buffer'
 import { readFile } from 'node:fs/promises'
 import { expect, test, type Locator, type Page } from '@playwright/test'
+import { assertSessionAccepted, sessionToken } from './live-session'
 
 // Functional tranche L4 runs against the same disposable, genuinely seeded engine as
 // demo-graph.spec.ts. Responses are observed, never fulfilled by Playwright.
@@ -77,15 +78,16 @@ async function loginDemo(page: Page): Promise<string> {
   await page.getByRole('button', { name: /^sign in$/i }).click()
   const response = await loginRead
   expect(response.status()).toBe(200)
-  const body = (await response.json()) as { token: string }
   // WHAT A FRESH SIGN-IN PAINTS. The console lands on the root, which belongs to no
   // navigation area, and the sidebar hides a closed area's panel — so the entries on
   // screen are the areas and the overview above them, not a leaf like Inventory. The
   // name is exact because neighbouring entries contain it.
   await expect(
-    page.getByRole('link', { name: 'Now', exact: true }),
+    page
+      .getByRole('navigation', { name: 'Journeys', exact: true })
+      .getByRole('link', { name: 'Now', exact: true }),
   ).toBeVisible({ timeout: 15_000 })
-  return body.token
+  return sessionToken(page)
 }
 
 async function waitForDemoRoster(page: Page, token: string): Promise<void> {
@@ -95,6 +97,7 @@ async function waitForDemoRoster(page: Page, token: string): Promise<void> {
         const response = await page.request.get('/v1/m/governance/identities', {
           headers: authHeaders(token),
         })
+        assertSessionAccepted(response)
         if (!response.ok()) return []
         const body = (await response.json()) as ListBody<IdentityItem>
         return body.items.map((item) => item.ref).sort()
@@ -115,12 +118,13 @@ async function expectGridCardinality(
 ): Promise<void> {
   // DataTable virtualizes above 100 rows, so DOM <tr> count is not the dataset.
   // Its APG contract exposes the exact data cardinality plus the header instead.
-  if (count > 0) {
-    await expect(grid).toHaveAttribute('aria-rowcount', String(count + 1))
-    return
-  }
-  await expect(grid).not.toHaveAttribute('aria-rowcount')
-  await expect(grid.getByText(emptyTitle, { exact: true })).toBeVisible()
+  await expect(grid).toHaveAttribute('aria-rowcount', String(count + 1))
+  // With nothing to list, the header row is all the grid holds. Its empty state is drawn
+  // beside it and is the grid's accessible description (`aria-describedby`).
+  if (count === 0)
+    await expect(grid).toHaveAccessibleDescription(
+      new RegExp(emptyTitle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')),
+    )
 }
 
 test.describe('CONSOLE-FUNC-01 lot 4 over a disposable live engine', () => {
@@ -175,7 +179,9 @@ test.describe('CONSOLE-FUNC-01 lot 4 over a disposable live engine', () => {
         url.pathname === '/v1/m/identity/sso'
       )
     })
-    await page.goto('/identity')
+    // An administrator lands on Users & groups; the redirect checker and the SSO read belong
+    // to the SSO & SCIM tab, which the page opens from its `tab` parameter.
+    await page.goto('/identity?tab=federation')
     const ssoResponse = await ssoRead
     expect(ssoResponse.status()).toBe(200)
     const sso = (await ssoResponse.json()) as { redirect_uri?: string }
@@ -310,12 +316,23 @@ test.describe('CONSOLE-FUNC-01 lot 4 over a disposable live engine', () => {
       ).toHaveCount(mcpFindings.items.length)
     }
 
-    await selectTab('WIF graph', 'wif')
-    await expect(
-      page.getByRole('heading', { name: 'Step-up authentication required' }),
-    ).toBeVisible()
-    await page.waitForTimeout(500)
+    // The WIF graph is a privileged read that audits itself, so nothing may read it before
+    // its tab is opened: every other tab has been visited by now and none fetched it. On
+    // this engine the read is allowed once the tab is open; the step-up state the page
+    // draws when the engine demands one is covered by the identity unit tests.
     expect(wifGets).toBe(0)
+    const wifRead = page.waitForResponse((response) => {
+      const url = new URL(response.url())
+      return (
+        response.request().method() === 'GET' &&
+        url.pathname === '/v1/m/identity/wif'
+      )
+    })
+    await selectTab('WIF graph', 'wif')
+    expect((await wifRead).status()).toBe(200)
+    await expect(
+      page.getByRole('heading', { name: 'WIF object graph' }),
+    ).toBeVisible()
     page.off('request', countWif)
 
     const keysRead = page.waitForResponse((response) => {
@@ -357,7 +374,14 @@ test.describe('CONSOLE-FUNC-01 lot 4 over a disposable live engine', () => {
     const register = registerDialog.getByRole('button', {
       name: 'Register passkey',
     })
-    await expect(register).toBeDisabled()
+    // The name is optional: left empty, the passkey is named after the device, and the
+    // dialog says so. Registering is therefore offered at once, and naming it keeps it so.
+    await expect(
+      registerDialog.getByText(
+        'Optional. Leave it empty to name it after this device.',
+      ),
+    ).toBeVisible()
+    await expect(register).toBeEnabled()
     await registerDialog.getByLabel('Passkey name').fill('L4 disposable key')
     await expect(register).toBeEnabled()
     await registerDialog.getByRole('button', { name: 'Cancel' }).click()
@@ -410,18 +434,16 @@ test.describe('CONSOLE-FUNC-01 lot 4 over a disposable live engine', () => {
     page,
   }) => {
     await loginDemo(page)
+    // Settings opens on General, where theme, density and language are rows of one page.
     await page.goto('/settings')
-    await page.getByRole('tab', { name: 'Appearance' }).click()
 
-    await page.locator('#theme').click()
-    await page.getByRole('option', { name: 'Dark', exact: true }).click()
+    await page.locator('#theme-dark').click()
     await expect(page.locator('html')).toHaveClass(/dark/)
     expect(
       await page.evaluate(() => localStorage.getItem('olivares.theme')),
     ).toBe('dark')
 
-    await page.locator('#density').click()
-    await page.getByRole('option', { name: 'Compact', exact: true }).click()
+    await page.getByRole('radio', { name: 'Compact', exact: true }).click()
     expect(
       await page.evaluate(() => {
         const stored = localStorage.getItem('olivares.prefs')
@@ -435,7 +457,11 @@ test.describe('CONSOLE-FUNC-01 lot 4 over a disposable live engine', () => {
     await page.locator('#language').click()
     await page.getByRole('option', { name: 'Español', exact: true }).click()
     await expect(page.locator('html')).toHaveAttribute('lang', 'es')
-    await expect(page.getByRole('heading', { name: 'Ajustes' })).toBeVisible()
+    // The page re-reads in the chosen language, and the density chosen above is still the
+    // checked option: its label is now Spanish.
+    await expect(
+      page.getByRole('radio', { name: 'Compacta', exact: true }),
+    ).toHaveAttribute('aria-checked', 'true')
     expect(
       await page.evaluate(() => localStorage.getItem('olivares.lang')),
     ).toBe('es')
@@ -443,8 +469,9 @@ test.describe('CONSOLE-FUNC-01 lot 4 over a disposable live engine', () => {
     await page.reload()
     await expect(page.locator('html')).toHaveClass(/dark/)
     await expect(page.locator('html')).toHaveAttribute('lang', 'es')
-    await page.getByRole('tab', { name: 'Apariencia' }).click()
-    await expect(page.locator('#density')).toContainText('Compacta')
+    await expect(
+      page.getByRole('radio', { name: 'Compacta', exact: true }),
+    ).toHaveAttribute('aria-checked', 'true')
     await page.screenshot({ path: 'playwright-report/l4-settings-es-dark.png' })
   })
 
@@ -640,41 +667,8 @@ test.describe('CONSOLE-FUNC-01 lot 4 over a disposable live engine', () => {
       'No recording sessions yet',
     )
 
-    // The search is deliberately recorded only as a loaded-page effect. An exact
-    // opened_at value gives this page one DTO-backed match even though several
-    // active sessions share the same subject.
-    let listGets = 0
-    const countLists = (request: { method(): string; url(): string }) => {
-      if (
-        request.method() === 'GET' &&
-        new URL(request.url()).pathname === '/v1/m/recording/sessions'
-      ) {
-        listGets += 1
-      }
-    }
-    page.on('request', countLists)
-    const subjectSearch = page.getByPlaceholder('Search subject, grant…')
-    await subjectSearch.fill(witness.opened_at)
-    const subjectMatches = bounded.items.filter((item) =>
-      item.opened_at.includes(witness.opened_at),
-    )
-    expect(subjectMatches).toHaveLength(1)
-    await expectGridCardinality(
-      recordingsGrid,
-      subjectMatches.length,
-      'No recording sessions yet',
-    )
-    await expect(
-      page
-        .getByRole('grid', { name: 'Recordings' })
-        .getByRole('row')
-        .filter({ hasText: witness.subject }),
-    ).toHaveCount(subjectMatches.length)
-    await page.waitForTimeout(500)
-    expect(listGets).toBe(0)
-    page.off('request', countLists)
-    await subjectSearch.clear()
-
+    // (The Recordings list no longer offers a search over the loaded page; the page it
+    // loaded is the one just asserted, and its filters are the server's.)
     const witnessIndex = bounded.items.findIndex(
       (item) => item.id === witness.id,
     )
@@ -918,31 +912,47 @@ test.describe('CONSOLE-FUNC-01 lot 4 over a disposable live engine', () => {
     }
     page.on('request', countAuditGets)
     await expect(witnessRow).toHaveCount(1)
+    // The row is read BEFORE the dialog opens: a modal makes the page behind it inert, and
+    // the grid then leaves the accessibility tree this locator reads.
+    const rowText = (await witnessRow.innerText()).replace(/\s+/g, ' ')
     await witnessRow.click()
     const evidence = page.getByRole('dialog')
+    // The dialog is titled with the event's label, the same text its row shows in the
+    // Action column; the sequence number and the recorded action code sit under Details.
+    const title = evidence.getByRole('heading').first()
+    await expect(title).toBeVisible()
+    const label = ((await title.textContent()) ?? '').trim()
+    expect(label, 'the dialog is titled with the event label').not.toBe('')
+    expect(
+      rowText,
+      'the row shows the label the dialog is titled with',
+    ).toContain(label)
+    // Details toggles, so it is opened only when it is closed.
+    const details = evidence.locator('details').first()
+    if (!(await details.evaluate((el: HTMLDetailsElement) => el.open)))
+      await details.locator('summary').click()
     await expect(
-      evidence.getByRole('heading', { name: `Event #${witness.seq}` }),
-    ).toBeVisible()
+      evidence
+        .locator('dt', { hasText: /^Sequence$/ })
+        .locator('xpath=following-sibling::dd[1]'),
+      'the dialog is the clicked event: its Sequence field',
+    ).toHaveText(String(witness.seq))
     await expect(evidence).toContainText(witness.action)
     await expect(evidence).toContainText('Chain integrity')
     expect(auditGets).toBe(0)
     await evidence.getByRole('button', { name: 'Close' }).click()
     await expect(evidence).toHaveCount(0)
 
-    // The loaded-row search is local and says so in its placeholder.
-    const loadedSearch = page.getByPlaceholder(
-      'Filter loaded rows only (client-side)…',
-    )
-    await loadedSearch.fill(witness.hash)
-    const visibleRows = auditGrid.locator('tbody tr')
-    await expectGridCardinality(auditGrid, 1, 'No evidence yet')
-    await expect(visibleRows).toHaveCount(1)
-    await expect(visibleRows.first()).toContainText(witness.action)
+    // Opening a row and closing it again read nothing: the dialog is a projection of rows
+    // already loaded. (The ledger no longer offers a client-side search over loaded rows;
+    // every filter below is the server's.)
     await page.waitForTimeout(500)
     expect(auditGets).toBe(0)
-    await loadedSearch.clear()
     page.off('request', countAuditGets)
 
+    // The server-side filters live in the Filters popover, which stays open while they are
+    // driven and is closed before the next control is used.
+    await page.getByRole('button', { name: /^Filters/ }).click()
     const actionInput = page.getByLabel('Action prefix', { exact: true })
     const actionRead = page.waitForResponse((response) => {
       const url = new URL(response.url())
@@ -1068,6 +1078,7 @@ test.describe('CONSOLE-FUNC-01 lot 4 over a disposable live engine', () => {
     await expect(ledgerSearch).toHaveValue('')
     await expect(actionInput).toHaveValue('')
     await expect(witnessRow).toHaveCount(1)
+    await page.keyboard.press('Escape')
 
     const verifyRead = page.waitForResponse((response) => {
       return new URL(response.url()).pathname === '/v1/audit/verify'
@@ -1083,7 +1094,8 @@ test.describe('CONSOLE-FUNC-01 lot 4 over a disposable live engine', () => {
     expect(verdict.ok).toBe(true)
     expect(verdict.chain.ok).toBe(true)
     expect(verdict.chain.checked).toBeGreaterThan(0)
-    const verifyStatus = page.getByRole('status').filter({ hasText: 'Chain' })
+    // The verdict is drawn as badges in a popover (a dialog region), not a status line.
+    const verifyStatus = page.getByRole('dialog').filter({ hasText: 'Chain' })
     await expect(verifyStatus).toContainText(
       `Chain · ${verdict.chain.checked} links`,
     )
@@ -1130,11 +1142,15 @@ test.describe('CONSOLE-FUNC-01 lot 4 over a disposable live engine', () => {
     page.off('request', countPubkey)
 
     // Export one known event through the browser and then observe its audit side effect.
+    // The filter and the export options are popovers: each is opened, used, and closed.
+    await page.getByRole('button', { name: /^Filters/ }).click()
     await actionInput.fill(witness.action)
     await expect
       .poll(() => new URL(page.url()).searchParams.get('action'))
       .toBe(witness.action)
     await expect(witnessRow).toHaveCount(1)
+    await page.keyboard.press('Escape')
+    await page.getByRole('button', { name: 'Export options' }).click()
     await page.getByLabel('From seq').fill(String(witness.seq))
     await page.getByLabel('To seq').fill(String(witness.seq))
     await page.getByRole('combobox', { name: 'Export format' }).click()
@@ -1147,6 +1163,29 @@ test.describe('CONSOLE-FUNC-01 lot 4 over a disposable live engine', () => {
     await expect(useCurrent).not.toBeChecked()
     await useCurrent.click()
     await expect(useCurrent).toBeChecked()
+    await page.keyboard.press('Escape')
+
+    // Audit export is a Business capability: a Community engine answers 501
+    // audit_export_unavailable (core/api/audit_export_community_test.go), saves nothing, and
+    // the page says the export failed. The ledger, verification and key reads above are
+    // Community. The OCSF flow below is the one any other edition runs.
+    const edition = (
+      (await (await page.request.get('/v1/server-info')).json()) as {
+        edition?: string
+      }
+    ).edition
+    if (edition === 'community') {
+      const refusedRead = page.waitForResponse(
+        (response) => new URL(response.url()).pathname === '/v1/audit/export',
+      )
+      await page.getByRole('button', { name: 'Export', exact: true }).click()
+      const refused = await refusedRead
+      expect(refused.status()).toBe(501)
+      expect(await refused.text()).toContain('audit_export_unavailable')
+      await expect(page.getByText(/Export failed/)).toBeVisible()
+      await page.screenshot({ path: 'playwright-report/l4-audit-export.png' })
+      return
+    }
 
     // verify reports how many contiguous links existed before this export. Use
     // the next sequence as the lower bound so a row left by an earlier retry
@@ -1167,8 +1206,10 @@ test.describe('CONSOLE-FUNC-01 lot 4 over a disposable live engine', () => {
     const downloadReady = page.waitForEvent('download')
     await page.getByRole('button', { name: 'Export', exact: true }).click()
     const exportResponse = await exportRead
-    const download = await downloadReady
+    // The read is judged before the download is awaited: a refused export draws a toast and
+    // saves nothing, and would otherwise surface only as a download that never comes.
     expect(exportResponse.status()).toBe(200)
+    const download = await downloadReady
     expect(exportResponse.headers()['content-type']).toContain(
       'application/x-ndjson',
     )
@@ -1211,6 +1252,7 @@ test.describe('CONSOLE-FUNC-01 lot 4 over a disposable live engine', () => {
             `/v1/audit?from=${exportAuditFloor}&action=audit.export&limit=100`,
             { headers: authHeaders(token) },
           )
+          assertSessionAccepted(response)
           if (!response.ok()) return false
           const body = (await response.json()) as ListBody<AuditItem>
           return body.items.some(

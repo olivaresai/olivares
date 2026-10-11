@@ -24,6 +24,7 @@ func TestSuperadminCLILifecycle(t *testing.T) {
 
 	// Seed two superadmins (A + B) into the default SQLite file, then release the
 	// single-writer file so the CLI can open it.
+	prepareCompositionTestBoot(t)
 	eng, err := boot(ctx, bootConfig{DataDir: dir, Engine: "sqlite", Logger: slog.Default()})
 	if err != nil {
 		t.Fatalf("boot: %v", err)
@@ -46,6 +47,7 @@ func TestSuperadminCLILifecycle(t *testing.T) {
 		cmd.SetErr(&errOut)
 		cmd.SetContext(ctx)
 		cmd.SetArgs(args)
+		prepareCompositionTestBoot(t)
 		err := cmd.Execute()
 		return out.String(), err
 	}

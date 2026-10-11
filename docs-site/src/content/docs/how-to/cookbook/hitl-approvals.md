@@ -94,3 +94,7 @@ silently forgets.
   pending request; it is recorded too.
 - What is still maturing is the richer review **console**; the engine-side
   guarantees above are live ([honest scope](/how-to/govern-and-approve/)).
+
+## Approval editions (0.1)
+
+Community retains the approval engine, the two-distinct-human CRITICAL floor, kill-switch dual control, and policies that require review or raise tier or quorum. Tier-lowering approval policies and break-glass belong to the Business base line. Stored lowering policies and emergency grants remain readable/exportable, but cannot lower Community defaults or authorize emergency access.

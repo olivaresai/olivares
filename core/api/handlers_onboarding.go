@@ -57,17 +57,15 @@ type acceptInviteInput struct {
 
 // handleOnboardMember creates-or-reuses an account and grants its tenant
 // membership. membership:write + AAL3.
-func (s *Server) handleOnboardMember(w http.ResponseWriter, r *http.Request) {
-	p, tenant, ok := s.authzTenant(w, r, "membership:write")
-	if !ok {
-		return
-	}
+func (s *Server) handleOnboardMember(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	p := mc.Principal
+	tenant := mc.Tenant
 	if !s.requireStepUp(w, r, p) {
 		return
 	}
 	var in onboardInput
 	if err := decodeJSON(w, r, &in); err != nil {
-		s.badRequest(w, r, "invalid JSON body")
+		s.badRequest(w, r, RequestBodyErrorMessage(err, "invalid JSON body"))
 		return
 	}
 	if in.Mode != "" && in.Mode != "password" && in.Mode != "invite" {
@@ -134,11 +132,9 @@ func (s *Server) deliverInvite(r *http.Request, email string, id model.ID, token
 // handleResendInvite rotates a pending invitation's secret and mails the new
 // link to the invitee. membership:write + AAL3; 409 invite_delivery_unavailable
 // without a mailer.
-func (s *Server) handleResendInvite(w http.ResponseWriter, r *http.Request) {
-	p, tenant, ok := s.authzTenant(w, r, "membership:write")
-	if !ok {
-		return
-	}
+func (s *Server) handleResendInvite(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	p := mc.Principal
+	tenant := mc.Tenant
 	if !s.requireStepUp(w, r, p) {
 		return
 	}
@@ -160,10 +156,10 @@ func (s *Server) handleResendInvite(w http.ResponseWriter, r *http.Request) {
 
 // handleAcceptInvite redeems an invite token: sets the password, activates the
 // account and mints a session. Unauthenticated (the token is the gate).
-func (s *Server) handleAcceptInvite(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleAcceptInvite(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
 	var in acceptInviteInput
 	if err := decodeJSON(w, r, &in); err != nil {
-		s.badRequest(w, r, "invalid JSON body")
+		s.badRequest(w, r, RequestBodyErrorMessage(err, "invalid JSON body"))
 		return
 	}
 	token, sess, err := s.authr.AcceptInvite(r.Context(), in.Token, in.Password, clientIP(r))
@@ -176,11 +172,8 @@ func (s *Server) handleAcceptInvite(w http.ResponseWriter, r *http.Request) {
 
 // handleListInvites lists a tenant's pending (unaccepted, unexpired) invitations,
 // without any token material. membership:read.
-func (s *Server) handleListInvites(w http.ResponseWriter, r *http.Request) {
-	_, tenant, ok := s.authzTenant(w, r, "membership:read")
-	if !ok {
-		return
-	}
+func (s *Server) handleListInvites(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	tenant := mc.Tenant
 	invites, err := s.authr.ListPendingInvites(r.Context(), tenant)
 	if err != nil {
 		s.writeError(w, r, err)
@@ -194,11 +187,9 @@ func (s *Server) handleListInvites(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleRevokeInvite deletes a pending invitation. membership:write.
-func (s *Server) handleRevokeInvite(w http.ResponseWriter, r *http.Request) {
-	p, tenant, ok := s.authzTenant(w, r, "membership:write")
-	if !ok {
-		return
-	}
+func (s *Server) handleRevokeInvite(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	p := mc.Principal
+	tenant := mc.Tenant
 	id := model.ID(chi.URLParam(r, "id"))
 	if err := s.authr.RevokeInvite(r.Context(), p, tenant, id); err != nil {
 		s.writeError(w, r, err)

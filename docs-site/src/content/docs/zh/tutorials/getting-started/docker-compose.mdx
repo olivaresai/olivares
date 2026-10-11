@@ -17,25 +17,19 @@ import { Steps, Aside } from '@astrojs/starlight/components'
 （`deploy/compose/*.yml`），它们驱动的首次运行流程，与[单节点教程](/tutorials/getting-started/single-node/)中
 针对二进制端到端验证过的流程相同。
 
-<Aside type="caution" title="按 digest 固定已发布的 26.10.1 镜像">
-版本 **26.10.1** 已发布签名镜像：安装面证人将 `26.10.1` 的 Docker Hub 与 GHCR 记为
-**published**（`docs/releases/26.10.1-install-surfaces.json`）。同样的诚实说明见
-[用 Docker 部署](/how-to/docker-deployment/)。设置
-`OLIVARES_IMAGE=docker.io/olivaresai/olivares@sha256:<digest>` 并先
-[验证它](/how-to/verify-a-release/)——按 digest，绝不按 tag。若要改为运行开发树，请从
-源码构建加固的镜像，并让栈指向它：
-
-```bash
-task image                                   # builds olivares:dev
-echo 'OLIVARES_IMAGE=olivares:dev' >> deploy/compose/.env
-```
+{/* release */}
+<Aside type="caution" title="Olivares 0.1">
+下一个版本是 `0.1`，其 GitHub 发行尚未发布。以下命令描述计划中的产物。发布前请从源码构建，发布后也应在使用前验证每个产物。观测到的发布状态记录在 `docs/releases/0.1-install-surfaces.json`。
 </Aside>
+{/* /release */}
 
 ## 1. 启动单节点栈（SQLite）
 
 <Steps>
 
 1. 启动它：
+
+   如果 AppArmor 管控用户命名空间的创建，请先在 Docker 守护进程所在主机上按 `deploy/compose/README.md` 中的“Session confinement on AppArmor hosts”完成配置，再启动服务。
 
    ```bash
    docker compose -f deploy/compose/docker-compose.yml up --wait --wait-timeout 120
@@ -75,7 +69,7 @@ echo 'OLIVARES_IMAGE=olivares:dev' >> deploy/compose/.env
 </Steps>
 
 <Aside type="note" title="当前契约与托管环境资格验证">
-**DIST-24-12 当前树契约。** 本地、封闭的 HTTP/TLS fixture 验证探针的三种结果：
+**Compose 就绪契约。** 本地、封闭的 HTTP/TLS fixture 验证探针的三种结果：
 200 → rc 0，收到非 200 响应 → rc 1，输入、TLS 或传输失败 → rc 2。
 **在该提交的手动调度工作流成功之前，Docker 资格仍未测量**；仓库中存在工作流，
 并不能证明其 Docker 运行已经发生。
@@ -137,15 +131,25 @@ docker compose -f deploy/compose/docker-compose.yml logs olivares | grep "ingest
 ## 3. 加密的 DR 备份（`backup` profile）
 
 该栈随附一个一次性（one-shot）备份服务，它产出一个**加密的、ledger 连续性安全的** bundle
-（`olivares dr backup`），并修剪超过 14 天的 bundle：
+（`olivares dr backup`）：
+
+将口令保存在仓库和镜像之外的私密文件中，并在这台主机之外的安全位置保留一份副本：
+没有口令，任何备份包都无法恢复。让备份容器以只读方式访问该文件
+（镜像以 UID `65532` 运行）：
 
 ```bash
-# Write your KEK passphrase once (keep it OUT of the repo / image):
-printf 'a strong DR passphrase' > deploy/compose/dr-pass
+sudo install -d -o 65532 -g 65532 -m 0700 /srv/olivares-dr
+sudo install -o 65532 -g 65532 -m 0400 /path/to/private-passphrase /srv/olivares-dr/dr-pass
 
+BACKUP_TS="$(date -u +%Y%m%dT%H%M%SZ)" \
 docker compose -f deploy/compose/docker-compose.yml \
                -f deploy/compose/docker-compose.backup.yml \
-               --profile backup run --rm backup
+               -f - --profile backup run --rm backup <<'YAML'
+services:
+  backup:
+    volumes:
+      - /srv/olivares-dr/dr-pass:/run/secrets/dr-pass:ro
+YAML
 ```
 
 把该命令包进宿主机 cron 以获得定时 RPO，并**将 `olivares-backups` 卷镜像到异地**——同主机备份不是灾难恢复，
@@ -157,9 +161,17 @@ docker compose -f deploy/compose/docker-compose.yml \
 对于多租户拓扑，叠加 Postgres override。它会启动一个 Postgres 16，配置**最小权限的 `olivares_app` 角色**
 （无 superuser、无 `BYPASSRLS`——引擎*拒绝*针对一个特权角色启动，因为行级安全是租户兜底），并让引擎指向它：
 
+覆盖文件还会创建 `olivares_admin`，这是一个独立的 `NOSUPERUSER BYPASSRLS`
+角色，对引擎表只有只读访问权限。引擎通过 `--admin-dsn` 使用它进行跨租户读取，
+包括首次设置。
+
+首先设置三个不同的密码。此 Compose 演示只允许使用 `A-Z a-z 0-9 . _ ~ -`，
+然后启动栈：
+
 ```bash
 cp deploy/compose/.env.example deploy/compose/.env
-# set POSTGRES_SUPERUSER_PASSWORD and OLIVARES_DB_PASSWORD in .env
+# set three distinct passwords in deploy/compose/.env:
+# POSTGRES_SUPERUSER_PASSWORD, OLIVARES_DB_PASSWORD, OLIVARES_ADMIN_PASSWORD
 
 docker compose -f deploy/compose/docker-compose.yml \
                -f deploy/compose/docker-compose.postgres.yml up -d

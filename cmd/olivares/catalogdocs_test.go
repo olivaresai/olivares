@@ -11,24 +11,19 @@ import (
 	"testing"
 )
 
-// catalogdocs_test.go (E4b/E4c) — engine↔docs catalog parity. The docs-site
-// connector catalog (reference/connectors.md, the EN page — the authoritative one,
-// the locales are marked-as-MT derivatives) is CURATED: kinds are grouped by honest
-// coverage tier with per-kind judgment notes, which no generator can derive from a
-// Descriptor. What CAN be enforced mechanically is set equality: every kind this
-// build wires must be named on the page, and every kind-looking table row on the
-// page must be wired (or deliberately excluded below). By 2026-07 the page had
-// drifted ~37 kinds behind the composition root; this test makes that class of
-// drift a build failure instead of a docs audit finding.
+// The curated English connector catalog must name every wired kind and offer no
+// unwired kinds. Coverage-tier judgments stay in the documentation.
 
 const connectorsDocPath = "../../docs-site/src/content/docs/reference/connectors.md"
 
-// wiredCatalogKinds returns every connector kind the default build can wire, from
-// the composition root's own switches/maps (AST-parsed — see switchCaseKinds).
+// wiredCatalogKinds enumerates the default build's source factories and other builders.
 func wiredCatalogKinds(t *testing.T) map[string]bool {
 	t.Helper()
 	kinds := map[string]bool{}
-	for _, k := range switchCaseKinds(t, "sources.go", "buildInProcSource") {
+	for k := range inProcSourceFactories {
+		kinds[k] = true
+	}
+	for k := range inProcSourceAliases {
 		kinds[k] = true
 	}
 	for _, k := range switchCaseKinds(t, "sources.go", "buildRosterProvider") {
@@ -112,11 +107,7 @@ func TestConnectorDocsListNoUnwiredKind(t *testing.T) {
 	}
 }
 
-// TestConnectorDocsOutputsComplete (E4c): the output-destinations paragraph lists
-// EXACTLY the kinds buildOutputConnector + outputPluginForKind can wire — 19
-// in-process + 3 plugin egress kinds as of (otlplog and s3archive were
-// missing; kafka/amqp/cloudqueue became reachable when the plugin-output path was
-// wired).
+// The output-destinations paragraph lists every in-process and plugin output kind.
 func TestConnectorDocsOutputsComplete(t *testing.T) {
 	doc, err := os.ReadFile(connectorsDocPath)
 	if err != nil {
@@ -140,6 +131,50 @@ func TestConnectorDocsOutputsComplete(t *testing.T) {
 	for _, kind := range outputs {
 		if !spans[kind] {
 			t.Errorf("output kind %q is buildable but not listed in the Output destinations section of %s", kind, connectorsDocPath)
+		}
+	}
+}
+
+// TestConnectorDocsProcessModeMatchesWiring: the "Process mode per kind" section
+// names exactly the kinds that run as out-of-process plugins, so the docs cannot
+// claim isolation for an in-process kind or miss a plugin kind.
+func TestConnectorDocsProcessModeMatchesWiring(t *testing.T) {
+	doc, err := os.ReadFile(connectorsDocPath)
+	if err != nil {
+		t.Fatalf("read %s: %v", connectorsDocPath, err)
+	}
+	sec := regexp.MustCompile(`(?s)## Process mode per kind\n.*?\n## `).FindString(string(doc))
+	if sec == "" {
+		t.Fatalf("could not locate the '## Process mode per kind' section in %s", connectorsDocPath)
+	}
+	list := func(label, next string) map[string]bool {
+		part := regexp.MustCompile(`(?s)` + label + `(.*?)` + next).FindStringSubmatch(sec)
+		if part == nil {
+			t.Fatalf("the process mode section has no %q list ending at %q", label, next)
+		}
+		spans := map[string]bool{}
+		for _, m := range regexp.MustCompile("`([a-z0-9_-]+)`").FindAllStringSubmatch(part[1], -1) {
+			spans[m[1]] = true
+		}
+		return spans
+	}
+	for _, c := range []struct {
+		what  string
+		doc   map[string]bool
+		wired map[string]string
+	}{
+		{"source", list(`Source kinds:`, `Destination kinds:`), pluginBinaryForKind},
+		{"destination", list(`Destination kinds:`, `\.\s+A build without`), outputPluginForKind},
+	} {
+		for kind := range c.wired {
+			if !c.doc[kind] {
+				t.Errorf("out-of-process %s kind %q is not named in the process mode section of %s", c.what, kind, connectorsDocPath)
+			}
+		}
+		for kind := range c.doc {
+			if _, ok := c.wired[kind]; !ok {
+				t.Errorf("the process mode section names %q as an out-of-process %s kind, but it runs in-process", kind, c.what)
+			}
 		}
 	}
 }

@@ -20,8 +20,8 @@ fallos=0
 ok() { printf '  ok    %s\n' "$1"; }
 mal() { printf '  FAIL  %s — %s\n' "$1" "$2"; fallos=$((fallos + 1)); }
 
-[ -r "$WF" ] || { echo "test-ci-secrets-cap: 2 NO PUDE MIRAR — sin $WF" >&2; exit 2; }
-command -v python3 >/dev/null 2>&1 || { echo "test-ci-secrets-cap: 2 NO PUDE MIRAR — sin python3" >&2; exit 2; }
+[ -r "$WF" ] || { echo "test-ci-secrets-cap: 2 COULD NOT LOOK — missing $WF" >&2; exit 2; }
+command -v python3 >/dev/null 2>&1 || { echo "test-ci-secrets-cap: 2 COULD NOT LOOK — missing python3" >&2; exit 2; }
 
 # ⛔ CAMINO DE REPUESTO SIN PyYAML, Y NO ES COMODIDAD. Este guion corre en el carril RAPIDO
 # (`.githooks/pre-push`), o sea en TODA rama, y con `import yaml` como unica via devolvia 2 en
@@ -97,14 +97,14 @@ PASOEOF
 	#
 	# Las dos mitades mandan a mirar sitios distintos, asi que se escriben distinto — que es el
 	# contrato de tres respuestas que este guion ya declara arriba.
-	echo "test-ci-secrets-cap: 2 NO PUDE MIRAR — no he podido EJECUTAR el lector del workflow (interprete o entorno), asi que no digo nada sobre su forma" >&2
+	echo "test-ci-secrets-cap: 2 COULD NOT LOOK — could not EXECUTE the workflow reader (interpreter or environment), so its shape cannot be assessed" >&2
 	exit 2
 }
-[ -n "$PASO" ] || { echo "test-ci-secrets-cap: 2 NO PUDE MIRAR — el lector CORRIO y no encontro el paso gitleaks: o el workflow no lo declara con la forma esperada, o la lectura de repuesto no supo leerlo" >&2; exit 2; }
+[ -n "$PASO" ] || { echo "test-ci-secrets-cap: 2 COULD NOT LOOK — reader RAN but did not find the gitleaks step: either the workflow has an unexpected shape or the fallback reader could not read it" >&2; exit 2; }
 
 case "$PASO" in
 *PIPESTATUS*) : ;;
-*) echo "test-ci-secrets-cap: 2 NO PUDE MIRAR — el paso extraido no lee PIPESTATUS" >&2; exit 2 ;;
+*) echo "test-ci-secrets-cap: 2 COULD NOT LOOK — extracted step does not read PIPESTATUS" >&2; exit 2 ;;
 esac
 
 # El techo del job tiene que quedar POR ENCIMA de la cota interna, o la cota no llega a disparar
@@ -116,9 +116,9 @@ TECHO="$(python3 "$(dirname "${BASH_SOURCE[0]:-$0}")/ci-timeouts.py" "$(dirname 
 	| awk -F'\t' '$1=="JOB" && $2=="mainline-ci.yml" && $3=="secrets" {print $4}')"
 COTA="$(printf '%s' "$PASO" | grep -oE '[0-9]+m \\?$|[0-9]+m ' | grep -oE '[0-9]+' | head -1)"
 if [ -n "${COTA:-}" ] && [ -n "${TECHO:-}" ] && [ "$COTA" -lt "$TECHO" ]; then
-	ok "la cota interna (${COTA}m) queda por debajo del techo del job (${TECHO}m)"
+	ok "internal limit (${COTA}m) is below the job limit (${TECHO}m)"
 else
-	mal "cota vs techo" "cota='${COTA:-?}' techo='${TECHO:-?}': la cota no puede disparar antes"
+	mal "internal limit vs job limit" "internal='${COTA:-?}' job='${TECHO:-?}': internal limit cannot trigger first"
 fi
 
 # ⛔ EL SUSTITUTO DE `task` TIENE QUE PODER EJECUTARSE, y en este contenedor /tmp esta montado
@@ -137,8 +137,8 @@ for cand in "${TMPDIR:-}" /workspace/.olivares-tmptest "$RAIZ/.ci-secrets-cap-tm
 	rm -f "$sonda"
 done
 if [ -z "$EXEC_DIR" ]; then
-	echo "test-ci-secrets-cap: 2 NO PUDE MIRAR — ningun directorio de trabajo permite ejecutar;" >&2
-	echo "test-ci-secrets-cap:   sin el, el sustituto de \`task\` se salta y se mide el barrido real." >&2
+	echo "test-ci-secrets-cap: 2 COULD NOT LOOK — no working directory allows execution;" >&2
+	echo "test-ci-secrets-cap:   without it, the \`task\` substitute is skipped and the real scan is measured." >&2
 	exit 2
 fi
 
@@ -159,38 +159,38 @@ corre() { # $1 = comportamiento del `task` sustituido; imprime "<rc>|<salida>"
 	printf '%s|%s' "$rc" "$(printf '%s' "$out" | tr '\n' ' ')"
 }
 
-echo "test-ci-secrets-cap: no caber es un rojo CON MOTIVO, no un cancelled"
+echo "test-ci-secrets-cap: running out of time is a failure WITH A REASON, not cancelled"
 
 r="$(corre cuelga)"
-if [ "${r%%|*}" = "2" ] && case "${r#*|}" in *"NO PUDE MIRAR"*) true ;; *) false ;; esac; then
-	ok "agotar la cota sale 2 y NOMBRA que no pudo mirar"
+if [ "${r%%|*}" = "2" ] && case "${r#*|}" in *"UNVERIFIED"*) true ;; *) false ;; esac; then
+	ok "reaching the limit returns 2 and NAMES the inability to inspect"
 else
-	mal "agotar la cota" "rc=${r%%|*} salida='${r#*|}'"
+	mal "reaching the limit" "rc=${r%%|*} output='${r#*|}'"
 fi
 
 r="$(corre limpio)"
-[ "${r%%|*}" = "0" ] && ok "un barrido limpio sigue saliendo 0" || mal "barrido limpio" "rc=${r%%|*}"
+[ "${r%%|*}" = "0" ] && ok "a clean scan still returns 0" || mal "clean scan" "rc=${r%%|*}"
 
 r="$(corre sucio)"
-[ "${r%%|*}" = "1" ] && ok "un hallazgo real sigue saliendo 1, no se lo come la cota" \
-	|| mal "hallazgo real" "rc=${r%%|*} — el codigo del barrido no llega intacto"
+[ "${r%%|*}" = "1" ] && ok "a real finding still returns 1, not swallowed by the limit" \
+	|| mal "real finding" "rc=${r%%|*} — scan exit code is not preserved"
 
 # CONTROL NEGATIVO: leer el codigo del PIPE en vez de PIPESTATUS. Un barrido agotado tiene que
 # pasar a verde; si no pasa, este test no distingue las dos formas y no prueba nada.
 PASO_VIEJO="$(printf '%s\n' "$PASO" | sed 's/rc=\${PIPESTATUS\[0\]}/rc=$?/')"
 if [ "$PASO_VIEJO" = "$PASO" ]; then
-	mal "CONTROL NEGATIVO" "no he sabido construir la forma vieja: el mutante no aplica"
+	mal "NEGATIVE CONTROL" "could not construct the old form: mutant does not apply"
 else
 	PASO_ORIG="$PASO"; PASO="$PASO_VIEJO"
 	r="$(corre cuelga)"
 	PASO="$PASO_ORIG"
-	[ "${r%%|*}" = "0" ] && ok "CONTROL NEGATIVO: leyendo el pipe, un barrido agotado sale VERDE" \
-		|| mal "CONTROL NEGATIVO" "la forma vieja dio rc=${r%%|*} y esperaba 0: este test no ve la diferencia"
+	[ "${r%%|*}" = "0" ] && ok "NEGATIVE CONTROL: reading the pipe status makes a timed-out scan GREEN" \
+		|| mal "NEGATIVE CONTROL" "old form returned rc=${r%%|*}, expected 0: this test cannot distinguish them"
 fi
 
 if [ "$fallos" -eq 0 ]; then
-	echo "test-ci-secrets-cap: 0 CLEAN — 5 casos"
+	echo "test-ci-secrets-cap: 0 CLEAN — 5 cases"
 	exit 0
 fi
-echo "test-ci-secrets-cap: 1 — $fallos caso(s) mal"
+echo "test-ci-secrets-cap: 1 — $fallos failed case(s)"
 exit 1

@@ -43,7 +43,8 @@ func TestStatusCommandPrintsKnowledgePosture(t *testing.T) {
 	cmd := newStatusCmd()
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
-	cmd.SetArgs([]string{"--server", srv.URL})
+	// The knowledge posture is printed with --verbose.
+	cmd.SetArgs([]string{"--server", srv.URL, "--verbose"})
 	// This fixture reports a DEGRADED posture, so the exit contract
 	// makes the command return the silent degraded code after printing.
 	if err := cmd.Execute(); exitcode.From(err) != exitcode.Degraded || !exitcode.Silent(err) {
@@ -101,8 +102,9 @@ func TestStatusCommandNotConfiguredExitsZeroAndNamesIt(t *testing.T) {
 		t.Fatalf("status on a healthy-but-unconfigured engine: want exit 0, got code %d (%v)\n%s", exitcode.From(err), err, out.String())
 	}
 	got := out.String()
+	// Named up front in the status sentence, and in the component table.
 	for _, want := range []string{
-		"NOT_CONFIGURED",
+		"running; knowledge search not set up",
 		"knowledge",
 		"not_configured",
 		"embeddings_provider_missing",

@@ -22,6 +22,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/olivaresai/olivares/cmd/olivares/internal/inferencepep"
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 )
@@ -51,14 +52,14 @@ func TestInferenceProxyRefusesAPresentButInvalidTenant(t *testing.T) {
 	// CONTROL: a valid tenant with the very same (unwired) engine must NOT error.
 	// Without this, the assertion below could pass on the dependency guard alone.
 	writeInferenceProxyConfig(t, model.NewTenantID().String())
-	if srv, err := buildClaudeMessagesProxyServer(&engine{}, discardLog()); err != nil {
+	if srv, err := buildClaudeMessagesProxyServer(&engine{}, discardLog(), "https://console.example.test"); err != nil {
 		t.Fatalf("control: a VALID tenant must not error here; got %v (the test below would be meaningless)", err)
 	} else if srv != nil {
 		t.Fatalf("control: an unwired engine must mount nothing; got %+v", srv)
 	}
 
 	writeInferenceProxyConfig(t, "not-a-tenant-id")
-	srv, err := buildClaudeMessagesProxyServer(&engine{}, discardLog())
+	srv, err := buildClaudeMessagesProxyServer(&engine{}, discardLog(), "https://console.example.test")
 	if err == nil {
 		t.Fatal("a present but invalid tenant must refuse the mount, not fall back to per-credential resolution")
 	}
@@ -84,12 +85,12 @@ func TestInferenceProxyRefusesTheConfiguredSystemTenant(t *testing.T) {
 
 	// CONTROL: same engine, a real business tenant → no error.
 	writeInferenceProxyConfig(t, model.NewTenantID().String())
-	if _, err := buildClaudeMessagesProxyServer(&engine{}, discardLog()); err != nil {
+	if _, err := buildClaudeMessagesProxyServer(&engine{}, discardLog(), "https://console.example.test"); err != nil {
 		t.Fatalf("control: a VALID tenant must not error here; got %v", err)
 	}
 
 	writeInferenceProxyConfig(t, sys)
-	if _, err := buildClaudeMessagesProxyServer(&engine{}, discardLog()); err == nil {
+	if _, err := buildClaudeMessagesProxyServer(&engine{}, discardLog(), "https://console.example.test"); err == nil {
 		t.Fatal("the reserved system tenant must not be accepted as a governed surface's fixed tenant")
 	}
 }
@@ -100,7 +101,7 @@ func TestInferenceProxyRefusesTheConfiguredSystemTenant(t *testing.T) {
 func TestInferenceProxyAbsentTenantDoesNotRefuse(t *testing.T) {
 	for _, raw := range []string{"", "   "} {
 		writeInferenceProxyConfig(t, raw)
-		srv, err := buildClaudeMessagesProxyServer(&engine{}, discardLog())
+		srv, err := buildClaudeMessagesProxyServer(&engine{}, discardLog(), "https://console.example.test")
 		if err != nil {
 			t.Errorf("an ABSENT tenant (%q) is legitimate and must not refuse the mount; got %v", raw, err)
 		}
@@ -118,8 +119,8 @@ func TestEmptyTenantHintStillResolvesPerCredential(t *testing.T) {
 	sole := model.NewTenantID()
 	p := auth.ScopedPrincipal(model.ID("u1"), "user one", sole, "editor")
 
-	d := &inferenceProxyDecider{} // tenantHint unset — the "" configuration
-	got, ok := d.resolveTenant(p)
+	d := &inferencepep.Decider{} // tenantHint unset — the "" configuration
+	got, ok := d.ResolveTenant(p)
 	if !ok || got != sole {
 		t.Fatalf("an empty tenantHint must resolve to the credential's sole grant; got (%q, %v), want (%q, true)", got, ok, sole)
 	}
@@ -127,12 +128,12 @@ func TestEmptyTenantHintStillResolvesPerCredential(t *testing.T) {
 	// And a CONFIGURED hint still pins the tenant for a member: the two legs differ.
 	fixed := model.NewTenantID()
 	pf := auth.ScopedPrincipal(model.ID("u2"), "user two", fixed, "editor")
-	df := &inferenceProxyDecider{tenantHint: fixed}
-	if got, ok := df.resolveTenant(pf); !ok || got != fixed {
+	df := &inferencepep.Decider{TenantHint: fixed}
+	if got, ok := df.ResolveTenant(pf); !ok || got != fixed {
 		t.Fatalf("a configured tenantHint must pin the tenant for a member; got (%q, %v)", got, ok)
 	}
 	// A non-member gets nothing, even with a configured hint.
-	if got, ok := df.resolveTenant(p); ok {
+	if got, ok := df.ResolveTenant(p); ok {
 		t.Fatalf("a configured tenantHint must not resolve for a non-member; got (%q, %v)", got, ok)
 	}
 }

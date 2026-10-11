@@ -14,7 +14,7 @@ enger als ihre Branchenverwendung, und die Enge ist der Punkt.
 Modul IIIs Graph von **Origins** (Agents, Identities, Sessions) und den
 **Resources**, die sie berühren, jede Kante klassifiziert nach [Modus](#mode) und getaggt
 mit ihrer [Signalquelle](#signal-source), [Attribution](#attribution-konfidenz)
-und [Coverage-Stufe](#coverage-stufe). Eine zentrale differenzierte Fähigkeit — eines der 31
+und [Coverage-Stufe](#coverage-stufe). Eine zentrale differenzierte Fähigkeit — eines der 32
 Module, nicht das ganze Produkt. Siehe [Was ist Olivares AI?](/de/start/what-is-olivares-ai/).
 
 ### Aktuierungszustände: `v1` / `on-demand` / `seam`
@@ -161,8 +161,9 @@ und zu [SIEM-Sinks](/de/how-to/cookbook/push-to-siem/).
 **Gartners** Begriff für AI, die *andere* AI-Agents überwacht oder bei ihnen interveniert.
 Olivares AI liefert das **Governance-Ergebnis** der Kategorie — beobachten,
 permitted-vs-observed diffen, deny-closed gaten, immutable aufzeichnen — aber als
-**read-first Control Plane außerhalb des Data Paths**, nicht als inline LLM,
-das Wache steht. Siehe [Analysten-Vokabular](/de/explanation/positioning/analyst-vocabulary/);
+**Beobachtung außerhalb des Datenpfads und Inline-Durchsetzung mit deny-closed**,
+ohne ein wachendes LLM. Verwaltete Claude-Code-Hooks hängen vom Engine-PEP ab;
+ein unerreichbarer PEP verweigert geregelte Tool-Aufrufe. Siehe [Analysten-Vokabular](/de/explanation/positioning/analyst-vocabulary/);
 kontrastiere den In-Product-[Guardian-Loop](#guardian-loop).
 
 ### Guardian-Loop
@@ -187,7 +188,7 @@ an einen Agenten bindet. Siehe [eBPF/Tetragon](/de/how-to/connectors/ebpf-tetrag
 
 ### live_ref
 
-Die vom Server vergebene Identität **einer** Live-Session-Zeile. 26.10.1
+Die vom Server vergebene Identität **einer** Live-Session-Zeile. Olivares <!-- release -->0.1<!-- /release -->
 schlüsselt Beobachtung nach `(Beobachtungsumfang, externe ID)`, damit zwei
 Anbieter-Homes, die dieselbe Session-ID bekanntgeben, zwei Zeilen bleiben.
 Konsolen- und API-Reads, die „diese Zeile“ meinen, nutzen `live_ref`, nicht

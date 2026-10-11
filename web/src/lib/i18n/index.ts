@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
-import i18n, { type BackendModule } from 'i18next'
+import i18n, { type BackendModule, type ResourceKey } from 'i18next'
 import { initReactI18next } from 'react-i18next'
 import LanguageDetector from 'i18next-browser-languagedetector'
 
@@ -34,6 +34,13 @@ import frCommon from './locales/fr/common.json'
 import frNav from './locales/fr/nav.json'
 import frErrors from './locales/fr/errors.json'
 import frSettings from './locales/fr/settings.json'
+// The auth dictionaries other than English, by URL (fetched on demand, see authBackend).
+import deAuthUrl from './locales/de/auth.json?url'
+import esAuthUrl from './locales/es/auth.json?url'
+import frAuthUrl from './locales/fr/auth.json?url'
+import jaAuthUrl from './locales/ja/auth.json?url'
+import ruAuthUrl from './locales/ru/auth.json?url'
+import zhAuthUrl from './locales/zh/auth.json?url'
 
 /**
  * i18n foundation. The console shipped EN + ES from day one (ES = Spain)
@@ -75,15 +82,22 @@ export const FOUNDATION_NAMESPACES = [
   'settings',
 ] as const
 
-// Keep English fallback available even when a language chunk is unavailable.
-// The other auth dictionaries are separate Vite chunks, loaded only on demand.
-const authLoaders = {
-  es: () => import('./locales/es/auth.json'),
-  zh: () => import('./locales/zh/auth.json'),
-  ja: () => import('./locales/ja/auth.json'),
-  de: () => import('./locales/de/auth.json'),
-  ru: () => import('./locales/ru/auth.json'),
-  fr: () => import('./locales/fr/auth.json'),
+// Lazy auth dictionaries; English stays bundled for offline fallback. Fetched, not imported: a
+// failed import stays failed in the browser until the page reloads; a fetch is simply made again.
+const authUrls = {
+  es: esAuthUrl,
+  zh: zhAuthUrl,
+  ja: jaAuthUrl,
+  de: deAuthUrl,
+  ru: ruAuthUrl,
+  fr: frAuthUrl,
+}
+
+async function fetchDictionary(url: string): Promise<ResourceKey> {
+  const response = await fetch(url, { credentials: 'same-origin' })
+  if (!response.ok)
+    throw new Error(`Translation resource answered ${response.status}`)
+  return (await response.json()) as ResourceKey
 }
 
 export const authBackend: BackendModule = {
@@ -94,13 +108,13 @@ export const authBackend: BackendModule = {
       callback(null, enAuth)
       return
     }
-    const load = authLoaders[language as keyof typeof authLoaders]
-    if (namespace !== 'auth' || !load) {
+    const url = authUrls[language as keyof typeof authUrls]
+    if (namespace !== 'auth' || !url) {
       callback(new Error('Translation resource is not available'), false)
       return
     }
-    void load().then(
-      ({ default: bundle }) => callback(null, bundle),
+    void fetchDictionary(url).then(
+      (bundle) => callback(null, bundle),
       (error: unknown) =>
         callback(
           error instanceof Error
@@ -165,8 +179,7 @@ export const i18nReady = i18n
   .init({
     resources,
     partialBundledLanguages: true,
-    // Fail promptly to bundled English; leave transient failures retryable on
-    // the next language selection or an explicit resource reload.
+    // Retry on language selection or reload, without delaying fallback.
     maxRetries: 0,
     fallbackLng: 'en',
     supportedLngs: LANGUAGE_CODES as unknown as string[],
@@ -177,8 +190,6 @@ export const i18nReady = i18n
     ns: FOUNDATION_NAMESPACES as unknown as string[],
     interpolation: { escapeValue: false },
     returnNull: false,
-    // main.tsx awaits initialization before the first paint. Language changes
-    // load auth before notifying consumers; failed loads retain English fallback.
     react: { useSuspense: false },
     detection: {
       order: ['localStorage', 'navigator', 'htmlTag'],
@@ -194,9 +205,17 @@ function syncHtmlLang(lng: string) {
 syncHtmlLang(i18n.resolvedLanguage ?? i18n.language)
 i18n.on('languageChanged', syncHtmlLang)
 
-/** Switch UI language (persisted by the detector's localStorage cache). */
+// The person's latest choice wins: a dictionary that arrives late must not switch back to it.
+let latestChoice = 0
+
+/** Switch UI language (persisted by the detector's localStorage cache). A dictionary that could
+ * not load before (offline) is fetched again first: i18next never reads a failed namespace a
+ * second time, and loading before switching keeps the words and the language together. */
 export async function setLanguage(code: LanguageCode): Promise<void> {
-  await i18n.changeLanguage(code)
+  const choice = ++latestChoice
+  if (!i18n.hasResourceBundle(code, 'auth'))
+    await i18n.reloadResources(code, 'auth')
+  if (choice === latestChoice) await i18n.changeLanguage(code)
 }
 
 /**

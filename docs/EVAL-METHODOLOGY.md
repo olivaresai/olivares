@@ -174,9 +174,10 @@ eval-gate:
     - name: Regression gate (blocking)
       run: |
         olivares evals gate \
-          --server "$OLIVARES_SERVER_URL" --token "$OLIVARES_TOKEN" --tenant "$OLIVARES_TENANT" \
+          --server "$OLIVARES_SERVER_URL" --tenant "$OLIVARES_TENANT" \
           --suite "$EVAL_SUITE_ID" --subject "$GITHUB_REPOSITORY@$GITHUB_SHA" \
           --outputs outputs.json --seed "$EVAL_SUITE_ID" --sample-size 50
+      # OLIVARES_TOKEN (a CI secret) is read from the environment; never pass it in argv.
       # exit 1 ⇒ the merge is blocked. After a governed override:
       #   olivares evals gate --check-id <gate-id>
 ```

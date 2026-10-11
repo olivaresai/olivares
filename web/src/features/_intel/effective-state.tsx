@@ -40,13 +40,19 @@ export interface EffectiveStateTarget {
 export function EffectiveStateLinks({
   targets,
   label,
+  links = [],
 }: {
   targets: EffectiveStateTarget[]
+  /** Registry links already authorized by their caller. */
+  links?: readonly Pick<EffectiveStateTarget, 'to' | 'label'>[]
   /** Lead-in copy, e.g. "This estate's configuration:". */
   label: ReactNode
 }) {
   const { can } = useAuth()
-  const allowed = targets.filter((target) => can(target.permission))
+  const allowed = [
+    ...targets.filter((target) => can(target.permission)),
+    ...links,
+  ]
   if (allowed.length === 0) return null
 
   return (

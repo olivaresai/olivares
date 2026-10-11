@@ -31,6 +31,7 @@ import {
 import { Textarea } from '@/components/ui/textarea'
 import { ApiError } from '@/lib/api/errors'
 import { useAuth } from '@/lib/auth/context'
+import { PANEL_EXTENSIONS } from '@/features/extensions'
 import { usePrivilegedMutation } from '@/lib/hooks/use-privileged-mutation'
 import { identityApi, identityKeys } from './api'
 import type {
@@ -130,7 +131,7 @@ function criticalNotice(
 ) {
   // The assurance bar sits on the APPROVERS' decisions, not on opening the
   // request, and the two actions differ on the emergency path: rotation may be
-  // authorized under break-glass, finalize may never be. Saying "no actuation
+  // authorized under break-glass in Business, finalize may never be. Saying "no actuation
   // until a second human approves" for both would be false for rotation — and a
   // false reassurance about an emergency bypass is worse than no notice at all.
   return (
@@ -139,7 +140,10 @@ function criticalNotice(
         {t('lifecycle.actions.critical.twoAccountsAal3')}
       </p>
       <p>
-        {action === 'finalize'
+        {action === 'finalize' ||
+        !(PANEL_EXTENSIONS.governanceTabs ?? []).some(
+          (panel) => panel.id === 'break-glass',
+        )
           ? t('lifecycle.actions.critical.noBreakGlass')
           : t('lifecycle.actions.critical.breakGlassPossible')}
       </p>
@@ -167,6 +171,14 @@ function resultMessage(
   if (result.status === 'break_glass')
     return t('lifecycle.actions.result.breakGlass')
   return t('lifecycle.actions.result.received')
+}
+
+function resultIntent(result: NhiActionResult): 'success' | 'warning' {
+  return ['rejected', 'expired', 'no_gate', 'unavailable'].includes(
+    result.status,
+  )
+    ? 'warning'
+    : 'success'
 }
 
 export function NhiActions({ identity }: { identity: NhiLifecycleDTO }) {
@@ -226,6 +238,7 @@ export function NhiActions({ identity }: { identity: NhiLifecycleDTO }) {
     mutationFn: (input) => identityApi.rotateNhi(identity.identity_ref, input),
     invalidateKeys,
     successMessage: (result) => resultMessage(t, result),
+    successIntent: resultIntent,
     onDone: (result) => handleActuation('rotate', result),
   })
   const offboard = usePrivilegedMutation<NhiActionInput, NhiActionResult>({
@@ -233,6 +246,7 @@ export function NhiActions({ identity }: { identity: NhiLifecycleDTO }) {
       identityApi.offboardNhi(identity.identity_ref, input),
     invalidateKeys,
     successMessage: (result) => resultMessage(t, result),
+    successIntent: resultIntent,
     onDone: (result) => handleActuation('offboard', result),
   })
   const finalize = usePrivilegedMutation<NhiActionInput, NhiActionResult>({
@@ -240,12 +254,14 @@ export function NhiActions({ identity }: { identity: NhiLifecycleDTO }) {
       identityApi.finalizeNhi(identity.identity_ref, input),
     invalidateKeys,
     successMessage: (result) => resultMessage(t, result),
+    successIntent: resultIntent,
     onDone: (result) => handleActuation('finalize', result),
   })
   const restore = usePrivilegedMutation<void, NhiActionResult>({
     mutationFn: () => identityApi.restoreNhi(identity.identity_ref),
     invalidateKeys,
     successMessage: (result) => resultMessage(t, result),
+    successIntent: resultIntent,
     onDone: (result) => handleActuation('restore', result),
   })
 

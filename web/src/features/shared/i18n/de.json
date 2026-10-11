@@ -46,5 +46,14 @@
     "untitledSession": "Sitzung ohne Titel",
     "unknownUser": "Unbekannter Benutzer",
     "unknownWorkspace": "Unbekannter Arbeitsbereich"
+  },
+  "headDiff": {
+    "file": "Datei",
+    "changes": "Änderungen seit HEAD",
+    "committed": "HEAD (committet)",
+    "current": "Aktuell",
+    "same": "Keine Unterschiede zu HEAD.",
+    "view": "Ansicht",
+    "unavailable": "Der Vergleich mit HEAD war nicht möglich."
   }
 }

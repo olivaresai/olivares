@@ -197,6 +197,13 @@ function engineInventory() {
   if (!inv.declared || Object.keys(inv.declared).length === 0) {
     die('permsdump declared no permissions at all; refusing to report the console clean')
   }
+  for (const m of inv.modules ?? []) {
+    for (const r of m.routes ?? []) {
+      if (r.surface !== undefined && !['console', 'api-only', 'edition-refusal'].includes(r.surface)) {
+        die(`unknown route surface ${JSON.stringify(r.surface)} at ${m.namespace} ${r.method} ${r.pattern}`)
+      }
+    }
+  }
   return inv
 }
 
@@ -782,6 +789,200 @@ function sealedRegistryProperty(call, projection, depth, seen, bindings) {
   return values?.length ? values : null
 }
 
+// Panel filter callbacks are consumers of the installed composition, including a
+// known-empty Community collection. Follow actual arguments, not a generic type's
+// permission union or an unrelated object's writes. This is deliberately limited
+// to PANEL_EXTENSIONS; arbitrary array methods/remote producers stay unreadable.
+function purePanelPredicate(predicate) {
+  let pure = true
+  walk(predicate, (n) => {
+    if (ts.isBinaryExpression(n) && n.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
+        n.operatorToken.kind <= ts.SyntaxKind.LastAssignment ||
+        ts.isPostfixUnaryExpression(n) || ts.isPrefixUnaryExpression(n) &&
+        [ts.SyntaxKind.PlusPlusToken, ts.SyntaxKind.MinusMinusToken].includes(n.operator) ||
+        ts.isDeleteExpression(n) || ts.isNewExpression(n)) pure = false
+    if (ts.isCallExpression(n) && !(standardMethod(n, 'Array', 'includes') ||
+        standardMethod(n, 'ReadonlyArray', 'includes') ||
+        callableOrigins(n.expression).every((origin) => canDecls.has(origin)))) pure = false
+  })
+  return pure
+}
+function immutableInitializer(expr, depth = 0) {
+  expr = unwrapExpr(expr)
+  if (!expr || depth > 32) return null
+  if (!ts.isIdentifier(expr)) return expr
+  const d = declOf(expr)
+  if (!d || !ts.isVariableDeclaration(d) || !(d.parent.flags & ts.NodeFlags.Const) ||
+      callableAssignments.has(d)) return null
+  return immutableInitializer(d.initializer, depth + 1)
+}
+function sealedProperty(expr, key) {
+  expr = immutableInitializer(expr)
+  if (!registryBuiltinsIntact || !standardFreeze(expr)) return null
+  const object = unwrapExpr(expr.arguments[0])
+  if (!ts.isObjectLiteralExpression(object) || object.properties.some((p) =>
+      !ts.isPropertyAssignment(p) || ts.isComputedPropertyName(p.name) ||
+      p.name.text === '__proto__')) return null
+  const properties = object.properties.filter((p) => p.name.text === key)
+  return properties.length === 1 ? properties[0].initializer : null
+}
+function sealedPermissionValue(expr, depth = 0) {
+  if (depth > 32) return null
+  expr = immutableInitializer(expr)
+  if (!expr) return null
+  if (ts.isStringLiteral(expr) || ts.isNoSubstitutionTemplateLiteral(expr)) return [expr.text]
+  return ts.isPropertyAccessExpression(expr)
+    ? sealedPermissionValue(sealedProperty(expr.expression, expr.name.text), depth + 1) : null
+}
+function frozenLiteral(expr) {
+  return standardFreeze(outerExpression(expr).parent)
+}
+function parameterOnlyFiltered(parameter) {
+  if (!parameter.parent.body) return false
+  let safe = true
+  walk(parameter.parent.body, (n) => {
+    if (!ts.isIdentifier(n)) return
+    const shorthand = ts.isShorthandPropertyAssignment(n.parent)
+      ? checker.getShorthandAssignmentValueSymbol(n.parent)?.declarations : []
+    if (declOf(n) !== parameter && !shorthand?.includes(parameter)) return
+    const receiver = outerExpression(n)
+    const access = receiver.parent
+    const call = access?.parent
+    if (!ts.isPropertyAccessExpression(access) || access.expression !== receiver ||
+        !(standardMethod(call, 'Array', 'filter') || standardMethod(call, 'ReadonlyArray', 'filter')) ||
+        !call.arguments[0] || !isFunctionLike(call.arguments[0]) ||
+        !purePanelPredicate(call.arguments[0])) safe = false
+  })
+  return safe
+}
+function panelProducer(expr, projection = [], depth = 0, composition = false) {
+  expr = unwrapExpr(expr)
+  if (!registryBuiltinsIntact || !expr || depth > 32) return null
+  if (ts.isIdentifier(expr)) {
+    const d = declOf(expr)
+    if (!d) return null
+    if (ts.isParameter(d)) {
+      if (callableAssignments.has(d) || !parameterOnlyFiltered(d)) return null
+      const inputs = parameterInputs(d)
+      return inputs.length ? panelParts(inputs.map((v) =>
+        panelProducer(v, projection, depth + 1, composition))) : null
+    }
+    if (!ts.isVariableDeclaration(d) || !(d.parent.flags & ts.NodeFlags.Const) || callableAssignments.has(d)) return null
+    // filter creates a mutable result; only an inline filter or an explicitly
+    // frozen result can retain the installed composition's immutable witnesses.
+    const value = unwrapExpr(d.initializer)
+    if (standardMethod(value, 'Array', 'filter') || standardMethod(value, 'ReadonlyArray', 'filter')) return null
+    composition ||= d.name.getText() === 'PANEL_EXTENSIONS' &&
+      /[\/]features[\/]extensions\.tsx?$/.test(d.getSourceFile().fileName)
+    return panelProducer(d.initializer, projection, depth + 1, composition)
+  }
+  if (ts.isPropertyAccessExpression(expr)) {
+    return panelProducer(expr.expression, [expr.name.text, ...projection], depth + 1, composition)
+  }
+  if (ts.isCallExpression(expr) &&
+      (standardMethod(expr, 'Array', 'filter') || standardMethod(expr, 'ReadonlyArray', 'filter'))) {
+    // A pure prefilter can remove witnesses but cannot introduce permissions.
+    // Keep the entire finite collection as a conservative census; opaque or
+    // mutating callbacks cannot earn this composition credit.
+    const predicate = expr.arguments[0]
+    if (!predicate || !isFunctionLike(predicate)) return null
+    return purePanelPredicate(predicate)
+      ? panelProducer(expr.expression.expression, projection, depth + 1, composition) : null
+  }
+
+  if (standardFreeze(expr)) {
+    return panelProducer(expr.arguments[0], projection, depth + 1, composition)
+  }
+  if (ts.isBinaryExpression(expr) && expr.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken) {
+    // The fallback must itself be visibly empty. Unknown left operands cannot
+    // disappear behind `?? []`.
+    const right = unwrapExpr(expr.right)
+    if (!ts.isArrayLiteralExpression(right) || right.elements.length) return null
+    return panelProducer(expr.left, projection, depth + 1, composition)
+  }
+  if (ts.isObjectLiteralExpression(expr) && projection.length) {
+    if (!frozenLiteral(expr)) return null
+    const [key, ...rest] = projection
+    if (expr.properties.some((p) => ts.isSpreadAssignment(p) || p.name?.text === '__proto__' ||
+      p.name && ts.isComputedPropertyName(p.name))) return null
+    const matches = expr.properties.filter((p) => p.name?.text === key)
+    if (!matches.length) return composition ? { nodes: [], composition } : null
+    if (matches.length !== 1) return null
+    const p = matches[0]
+    // Explicit properties follow the checked binding path below. Unsupported
+    // shorthand producers fail closed instead of bypassing that path.
+    if (!ts.isPropertyAssignment(p)) return null
+    const value = p.initializer
+    return panelProducer(value, rest, depth + 1, composition)
+  }
+  if (ts.isArrayLiteralExpression(expr) && !projection.length) {
+    if (!frozenLiteral(expr)) return null
+    return panelParts([...expr.elements].map((n) => ts.isSpreadElement(n)
+      ? panelProducer(n.expression, [], depth + 1, composition)
+      : { nodes: [n], composition }), composition)
+  }
+  return null
+}
+function panelParts(parts, composition = false) {
+  if (parts.some((p) => p === null)) return null
+  return { nodes: parts.flatMap((p) => p.nodes), composition: composition || parts.length > 0 && parts.every((p) => p.composition) }
+}
+// Select the stricter composition resolver only for collections flowing from
+// the installed panel registry. Ordinary typed navigation targets retain their
+// existing contextual-property resolver. This trace does not grant permission
+// credit: mutation, opacity and freezing are checked by panelProducer below.
+function fromPanelComposition(expr, seen = new Set()) {
+  expr = unwrapExpr(expr)
+  if (!expr || seen.has(expr) || seen.size > 32) return false
+  const next = new Set(seen).add(expr)
+  if (ts.isIdentifier(expr)) {
+    const d = declOf(expr)
+    if (!d) return false
+    if (ts.isVariableDeclaration(d) && d.name.getText() === 'PANEL_EXTENSIONS' &&
+        /[\/]features[\/]extensions\.tsx?$/.test(d.getSourceFile().fileName)) return true
+    if (ts.isVariableDeclaration(d)) return fromPanelComposition(d.initializer, next)
+    if (ts.isParameter(d)) return parameterInputs(d).some(v => fromPanelComposition(v, next))
+  }
+  if (ts.isPropertyAccessExpression(expr)) return fromPanelComposition(expr.expression, next)
+  if (ts.isCallExpression(expr)) {
+    return fromPanelComposition(expr.expression, next) ||
+      expr.arguments.some(v => fromPanelComposition(v, next))
+  }
+  if (ts.isBinaryExpression(expr)) return fromPanelComposition(expr.left, next) ||
+    fromPanelComposition(expr.right, next)
+  return false
+}
+function panelPermission(expr) {
+  expr = unwrapExpr(expr)
+  if (!ts.isPropertyAccessExpression(expr) || expr.name.text !== 'permission' ||
+      !ts.isIdentifier(expr.expression)) return undefined
+  const parameter = declOf(expr.expression)
+  if (!parameter || !ts.isParameter(parameter)) return undefined
+  const callback = parameter.parent
+  const call = callback.parent
+  if (!ts.isCallExpression(call) || call.arguments[0] !== callback || callback.parameters[0] !== parameter ||
+      !(standardMethod(call, 'Array', 'filter') || standardMethod(call, 'ReadonlyArray', 'filter'))) return undefined
+  if (!fromPanelComposition(call.expression.expression)) return undefined
+  if (!purePanelPredicate(callback)) return null
+  const producer = panelProducer(call.expression.expression)
+  if (!producer?.composition) return null
+  return combineValues(producer.nodes.map((node) => {
+    node = unwrapExpr(node)
+    if (ts.isIdentifier(node)) {
+      node = immutableInitializer(node)
+    }
+    if (!standardFreeze(node)) return null
+    node = unwrapExpr(node.arguments[0])
+    if (!node || !ts.isObjectLiteralExpression(node) || node.properties.some((p) =>
+        ts.isSpreadAssignment(p) || p.name?.text === '__proto__' || p.name && ts.isComputedPropertyName(p.name))) return null
+    const properties = node.properties.filter((p) => p.name?.text === 'permission')
+    if (!properties.length) return []
+    if (properties.length !== 1) return null
+    const p = properties[0]
+    return ts.isPropertyAssignment(p) ? sealedPermissionValue(p.initializer) : null
+  }))
+}
+
 /** Resolve permissions through finite local producers; null always fails closed. */
 function resolve(expr, depth = 0, seen = new Set(), bindings = new Map(), projection = []) {
   expr = unwrapExpr(expr)
@@ -802,6 +1003,15 @@ function resolve(expr, depth = 0, seen = new Set(), bindings = new Map(), projec
     }
     return out
   }
+  // Private views also publish flat, frozen permission dictionaries. Read only
+  // an own property of that sealed object; nested mutable objects, getters and
+  // opaque spreads keep the existing unreadable result.
+  if (projection.length === 1 && standardFreeze(expr)) {
+    if ([...seen].some((d) => ts.isVariableDeclaration(d) &&
+        (!(d.parent.flags & ts.NodeFlags.Const) || callableAssignments.has(d)))) return null
+    return sealedPermissionValue(sealedProperty(expr, projection[0]))
+  }
+
   if (ts.isCallExpression(expr)) {
     const name = calleeNameNode(expr)
     const fn = name && callableOf(canonicalDecl(name))
@@ -922,7 +1132,8 @@ for (const sf of sourceFiles) {
       finding('unreadable', n, 'can() called with no permission argument')
       return
     }
-    const values = resolve(arg)
+    const panelValues = panelPermission(arg)
+    const values = panelValues === undefined ? resolve(arg) : panelValues
     if (values === null) {
       finding(
         'unreadable',
@@ -1763,33 +1974,6 @@ for (const [permission, nodes] of [...sitesOf].sort()) {
   }
 }
 
-// --- 5. report -------------------------------------------------------------
-if (args.has('--list')) {
-  // Every permission the console can ask about, with where it was found. Not part
-  // of the check — it is how a human audits what the guard believes it is guarding.
-  for (const [p, nodes] of [...sitesOf].sort()) {
-    const d = inv.declared[p]
-    console.log(`${p}\t${d ? d.forms.join('|') : 'UNDECLARED'}\t${nodes.length} site(s)\t${at(nodes[0])}`)
-  }
-  process.exit(findings.length ? 1 : 0)
-}
-
-if (asJson) {
-  console.log(
-    JSON.stringify(
-      {
-        checked: sitesOf.size,
-        callSites: callSites.length,
-        capabilityQuestions: capabilityQuestions.length,
-        findings,
-      },
-      null,
-      2,
-    ),
-  )
-  process.exit(findings.length ? 1 : 0)
-}
-
 // ═══ LA DIRECCIÓN INVERSA, ACOTADA PARA QUE NO GRITE EN FALSO ═══════════════════════════
 //
 // Todo lo de arriba pregunta «¿existe en el motor lo que la consola pide?». Nada preguntaba lo
@@ -1835,12 +2019,12 @@ const SIN_SUPERFICIE_TRINQUETE = 22
 const enRutas = new Map()
 for (const m of inv.modules ?? []) {
   for (const r of m.routes ?? []) {
-    if (!r.permission) continue
+    if (!r.permission || r.surface === 'api-only' || r.surface === 'edition-refusal') continue
     if (!enRutas.has(r.permission)) enRutas.set(r.permission, [])
     enRutas.get(r.permission).push(`${m.namespace}${r.pattern}`)
   }
 }
-if (enRutas.size === 0) {
+if (!(inv.modules ?? []).some((m) => (m.routes ?? []).some((r) => r.permission))) {
   die('the inventory declared no route permissions at all; refusing to report the console clean')
 }
 if (porCapacidad.size > 0) {
@@ -1879,6 +2063,34 @@ if (sinSuperficie.length > SIN_SUPERFICIE_TRINQUETE) {
       `${SIN_SUPERFICIE_TRINQUETE}`,
   })
 }
+
+// --- 5. report -------------------------------------------------------------
+if (args.has('--list')) {
+  // Every permission the console can ask about, with where it was found. Not part
+  // of the check — it is how a human audits what the guard believes it is guarding.
+  for (const [p, nodes] of [...sitesOf].sort()) {
+    const d = inv.declared[p]
+    console.log(`${p}\t${d ? d.forms.join('|') : 'UNDECLARED'}\t${nodes.length} site(s)\t${at(nodes[0])}`)
+  }
+  process.exit(findings.length ? 1 : 0)
+}
+
+if (asJson) {
+  console.log(
+    JSON.stringify(
+      {
+        checked: sitesOf.size,
+        callSites: callSites.length,
+        capabilityQuestions: capabilityQuestions.length,
+        findings,
+      },
+      null,
+      2,
+    ),
+  )
+  process.exit(findings.length ? 1 : 0)
+}
+
 
 const order = { unreadable: 0, undeclared: 1, divergent: 2 }
 findings.sort((a, b) => (order[a.kind] - order[b.kind]) || a.where.localeCompare(b.where))

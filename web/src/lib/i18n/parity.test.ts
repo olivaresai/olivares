@@ -18,18 +18,7 @@ import i18n, { i18nReady, LANGUAGE_CODES } from './index'
 // glob picks it up: it used to be re-registered BY HAND here from its JSON, which
 // let the test prove the store was complete while saying nothing about whether
 // anything in the app registered it (it did not — see _intel/i18n/index.ts).
-//
-// MEASURED GAP, deliberately left for its own change (2026-08-05): this glob is one
-// level deep, and so is `discoverNamespaces` in scripts/check-i18n-parity.mjs — so
-// `automations/workflows/i18n` (namespace `automations-workflows`) is checked by
-// NEITHER parity implementation. check-i18n-usage.mjs walks `**` and sees 58 English
-// namespaces; parity sees 57. Widening this glob to `**` makes it fail immediately:
-//   automations-workflows/es editor.validationSummary categories:
-//     expected [ 'other' ] to deeply equal [ 'many', 'one', 'other' ]
-// The bundle carries a bare `validationSummary` + `_other` in all 7 languages, i.e.
-// no CLDR plural forms for es/fr/ru/de. That is a translation fix in someone else's
-// strings, not this one — do not widen the glob without doing it.
-import.meta.glob('@/features/*/i18n/index.ts', { eager: true })
+import.meta.glob('@/features/**/i18n/index.ts', { eager: true })
 
 const PLURAL_SUFFIX = /_(zero|one|two|few|many|other)$/
 const pluralCats = (lng: string) =>

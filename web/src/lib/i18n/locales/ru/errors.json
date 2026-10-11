@@ -14,7 +14,7 @@
   },
   "serverError": {
     "title": "Что-то пошло не так",
-    "description": "В control plane произошла непредвиденная ошибка. Повторите попытку.",
+    "description": "В Olivares произошла непредвиденная ошибка. Повторите попытку.",
     "back": "Вернуться к обзору"
   },
   "evidenceUnavailable": {
@@ -31,6 +31,7 @@
     "reload": "Перезагрузить"
   },
   "generic": "Что-то пошло не так.",
+  "sessionTemplateUnavailable": "Шаблон «Edits and commands» недоступен, поэтому сеанс не запущен. Выберите другое разрешение или попросите администратора восстановить шаблон.",
   "requestId": "ID запроса",
   "codes": {
     "unauthenticated": "Ваша сессия больше недействительна.",
@@ -42,6 +43,7 @@
     "locked_out": "Слишком много попыток. Повторите попытку через некоторое время.",
     "setup_required": "Для control plane требуется первоначальная настройка.",
     "setup_complete": "Настройка уже завершена.",
+    "setup_token_unreadable": "Движок не может прочитать файл токена настройки. Выполните `olivares first-boot --data-dir <data directory> --new-token` от имени root или учётной записи движка, чтобы заменить его, затем используйте новый токен; в журнале движка указаны файл и причина.",
     "cross_tenant_admin_pool_not_configured": "Эта база данных не может перечислить все организации. Выполните `olivares db init --superuser-dsn <superuser DSN> --data-dir <data directory> --install-directory-inventory` и перезапустите движок. Или создайте роль NOSUPERUSER BYPASSRLS командой `olivares db init --superuser-dsn <dsn> --admin-role olivares_admin --admin-password-file <file>` (см. deploy/postgres/README.md) и перезапустите сервер с --admin-dsn, указывающим на эту роль.",
     "internal": "Произошла внутренняя ошибка."
   },
@@ -50,7 +52,6 @@
     "description": "Войдите с учётной записью каталога, допущенной в организацию. Глобальные права bootstrap не разрешают операции связи в рабочем пространстве."
   },
   "moduleNotEnabled": {
-    "title": "Не включено в этой установке",
     "description": "Эта часть Olivares здесь выключена, поэтому показывать нечего.",
     "named": "Модуль «{{module}}» не включён в этой установке.",
     "unnamed": "Этот модуль не включён в этой установке."

@@ -194,16 +194,21 @@ type confinedSelfRepo struct {
 }
 
 func (r confinedSelfRepo) List(ctx context.Context, q model.Query) ([]model.Workspace, model.Page, error) {
-	return r.raw.List(ctx, forceQuery(q, model.Filter{
+	out, page, err := r.raw.List(ctx, forceQuery(q, model.Filter{
 		Column: model.ColID, Op: model.OpEq, Value: r.b.id.String(),
 	}))
+	for i := range out {
+		out[i] = withoutTreePosition(out[i])
+	}
+	return out, page, err
 }
 
 func (r confinedSelfRepo) Get(ctx context.Context, id model.ID) (model.Workspace, error) {
 	if id != r.b.id {
 		return model.Workspace{}, ErrNotFound
 	}
-	return r.raw.Get(ctx, id)
+	ws, err := r.raw.Get(ctx, id)
+	return withoutTreePosition(ws), err
 }
 
 func (r confinedSelfRepo) Create(ctx context.Context, v model.Workspace) (model.Workspace, error) {
@@ -214,11 +219,25 @@ func (r confinedSelfRepo) Update(ctx context.Context, v model.Workspace) (model.
 	if v.ID != r.b.id {
 		return model.Workspace{}, ErrNotFound
 	}
-	return r.raw.Update(ctx, v)
+	ws, err := r.raw.Update(ctx, v)
+	return withoutTreePosition(ws), err
 }
 
 func (r confinedSelfRepo) Delete(ctx context.Context, id model.ID) error {
 	return deniedWrite("a workspace-confined caller cannot delete a workspace")
+}
+
+// SetParent is refused: moving its own workspace would re-place the caller in
+// the organization tree, which is the organization's decision.
+func (r confinedSelfRepo) SetParent(ctx context.Context, node, parent model.ID) (model.Workspace, error) {
+	return model.Workspace{}, deniedWrite("a workspace-confined caller cannot set a workspace parent")
+}
+
+// withoutTreePosition hides a confined caller's ancestors: their ids are other
+// workspaces' ids, which the caller may not enumerate.
+func withoutTreePosition(ws model.Workspace) model.Workspace {
+	ws.ParentID, ws.Path = "", ""
+	return ws
 }
 
 // confinedMemberRepo allows the point operations on (group → agent) membership

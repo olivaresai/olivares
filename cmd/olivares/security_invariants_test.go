@@ -6,28 +6,31 @@ package main
 
 import "testing"
 
-// TestInvariant_D6_FailClosedEnterpriseDefault pins the ratified D6 posture
-// (an internal design note (not shipped), D6=A): when a per-control availability dependency
-// at the session launch gate cannot be READ, the ENTERPRISE edition defaults to
-// fail-closed (deny), community preserves fail-open, and any invalid/typo value is
-// fail-closed + loud. A regression that flips the enterprise default to fail-open —
-// silently weakening the gate so an unreadable budget/context control lets a
-// session through — must fail here. Anchor: resolveAvailabilityPosture (sessiongov.go).
-func TestInvariant_D6_FailClosedEnterpriseDefault(t *testing.T) {
+// TestInvariant_D6_FailClosedDefault pins the launch gate's posture over a per-control
+// availability dependency it cannot READ (budget ledger, context policy): unset is
+// fail-closed in every build (Community defaulted to fail-open until 26.10.1), an explicit
+// value wins, and any invalid/typo value is fail-closed + loud. A regression that makes
+// the default fail-open again (silently weakening the gate so an unreadable
+// budget/context control lets a session through) must fail here. Anchor:
+// resolveAvailabilityPosture (sessiongov.go).
+func TestInvariant_D6_FailClosedDefault(t *testing.T) {
 	cases := []struct {
-		raw, edition string
-		want         availabilityPosture
+		raw  string
+		want availabilityPosture
 	}{
-		{"", "enterprise", availabilityFailClosed},        // D6: enterprise default = fail-closed
-		{"", "community", availabilityFailOpen},           // community preserves fail-open
-		{"garbage", "enterprise", availabilityFailClosed}, // invalid → fail-closed + loud
-		{"typo", "community", availabilityFailClosed},     // invalid → fail-closed even on community
-		{"fail-open", "enterprise", availabilityFailOpen}, // explicit override wins
-		{"fail-closed", "community", availabilityFailClosed},
+		{"", availabilityFailClosed},        // the default, whatever the edition is
+		{"garbage", availabilityFailClosed}, // invalid → fail-closed + loud
+		{"fail-open", availabilityFailOpen}, // explicit override wins
+		{"fail-closed", availabilityFailClosed},
 	}
 	for _, c := range cases {
-		if got := resolveAvailabilityPosture(c.raw, c.edition, nil); got != c.want {
-			t.Errorf("resolveAvailabilityPosture(%q, %q) = %v, want %v", c.raw, c.edition, got, c.want)
+		if got := resolveAvailabilityPosture(c.raw, nil); got != c.want {
+			t.Errorf("resolveAvailabilityPosture(%q) = %v, want %v", c.raw, got, c.want)
 		}
+	}
+	// A gate built without a posture must deny too.
+	var zero availabilityPosture
+	if zero != availabilityFailClosed {
+		t.Errorf("the zero availabilityPosture is %v, want fail-closed", zero)
 	}
 }

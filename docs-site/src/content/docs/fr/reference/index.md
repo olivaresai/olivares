@@ -23,13 +23,13 @@ limites](/fr/start/honesty-and-limits/) pour le contrat global.
 
 | Domaine | Ce qu'il documente | Source de vérité |
 |---|---|---|
-| **[API REST](/reference/api/)** | L'API HTTP du control plane : auth, setup, tenancy, agents, l'access map R/RW, tokens et l'audit ledger. | Le contrat **OpenAPI 3.1** du produit (70 chemins de cœur), rendu au build à partir du fichier réel — pas une copie. |
+| **[API REST](/reference/api/)** | L'API HTTP du control plane : auth, setup, tenancy, agents, l'access map R/RW, tokens et l'audit ledger. | Le contrat **OpenAPI 3.1** du produit (128 chemins de cœur), rendu au build à partir du fichier réel — pas une copie. |
 | **[Routes de module (bêta)](/reference/api-beta/)** | Les routes de module du produit (`/v1/m/<ns>/…`) — FinOps, conformité, gouvernance, sessions, modèles, knowledge, … — dans un document OpenAPI **bêta** distinct. | Le même contrat OpenAPI 3.1, reflété au build à partir des routes enregistrées par les modules. |
 | **[Politique de stabilité](/fr/reference/api-stability/)** | Versioning, niveaux de stabilité, signalement dépréciation/sunset et fenêtres de support minimales pour l'API, le provider et les SDK clients. | La table de dépréciation in-code et ses tests de fenêtre qui font échouer le build. |
-| **[gRPC](/fr/reference/grpc/)** | Le miroir gRPC du moteur et le contrat wire versionné des plugins utilisé par chaque connecteur et module hors processus. | Les tables d'enregistrement `grpc.ServiceDesc` que les serveurs transmettent à gRPC. |
+| **[gRPC](/fr/reference/grpc/)** | Le miroir gRPC du moteur et le contrat wire versioné des plugins utilisé par chaque connecteur hors processus. | Les tables d'enregistrement `grpc.ServiceDesc` que les serveurs transmettent à gRPC. |
 | **[Bus d'événements](/fr/reference/events/)** | Le bus d'événements interne : l'enveloppe d'événement, les types d'événements first-party et les payloads d'observation que les connecteurs y hissent. | Un contrat **AsyncAPI 3.0**, dérivé à la main du SDK Go. |
 | **[Écrans de la console](/fr/reference/console/)** | Chaque route publiée par la console, avec la permission RBAC requise et la page de référence qu'ouvre son lien d'aide intégré au produit. | Le recensement des routes de la console, épinglé au router construit. |
-| **[Catalogue des modules](/fr/reference/modules/overview/)** | Les 31 modules du produit — ce qu'est chacun, son statut, et quelles routes (le cas échéant) il expose hors de l'API de cœur. | Le catalogue de capacités du produit et les interfaces de modules typées. |
+| **[Catalogue des modules](/fr/reference/modules/overview/)** | Les 32 modules du produit — ce qu'est chacun, son statut, et quelles routes (le cas échéant) il expose hors de l'API de cœur. | Le catalogue de capacités du produit et les interfaces de modules typées. |
 | **[Contrat de la passerelle de modèles](/reference/model-gateway-contract/)** | Matrice driver × protocole × transport pour CreateMessage, le streaming, l'annulation et l'usage. Étiquettes de cellule honnêtes. | `connectors/modelprovider/gateway` et sa suite de conformité. |
 | **[CLI](/fr/reference/cli/)** | Le binaire `olivares` et ses sous-commandes — `serve`, `collector`, `audit`, `license`, `openapi`, `version` — et leurs flags. | Les définitions de commandes compilées. |
 | **[Configuration](/fr/reference/configuration/)** | Variables d'environnement et options runtime : le répertoire de données, le câblage des sources, le moteur d'autorisation et la signature du ledger. | Les chargeurs de configuration du moteur. |
@@ -45,7 +45,7 @@ agents, l'access map lecture/écriture (`GET /v1/access-edges` ; son *drift* lea
 réconcilié est servi par le module access-map plutôt que par la surface de cœur), la
 gestion des tokens et l'audit ledger.
 
-Le contrat décrit **70 chemins de cœur**. C'est délibéré : c'est la surface stable et
+Le contrat décrit **128 chemins de cœur**. C'est délibéré : c'est la surface stable et
 versionnée du control plane, pas chaque route à laquelle le moteur peut répondre. Ce à quoi
 « stable » s'engage — versioning, signalement de dépréciation et fenêtres de support
 minimales — est la [politique de stabilité de l'API](/fr/reference/api-stability/).
@@ -53,7 +53,7 @@ minimales — est la [politique de stabilité de l'API](/fr/reference/api-stabil
 :::note[Les routes de module forment un contrat bêta distinct]
 Les routes de module — par exemple les `/v1/m/accessmap/graph`,
 `/v1/m/accessmap/neighbors` et `/v1/m/accessmap/drift` du module access-map — ne font
-**pas** partie du document stable de 54 chemins du cœur. Elles sont publiées dans un
+**pas** partie du document stable de 128 chemins du cœur. Elles sont publiées dans un
 document OpenAPI **bêta** distinct à [`/reference/api-beta/`](/reference/api-beta/)
 (servi à `/openapi.beta.json` et reflété à partir des routes que les modules enregistrent
 réellement), de sorte que la surface stable reste identifiable tandis que la surface
@@ -88,7 +88,7 @@ dit plutôt que de l'inventer.
 
 ## Catalogue des modules
 
-Le [catalogue des modules](/fr/reference/modules/overview/) énumère les **31 modules** qui
+Le [catalogue des modules](/fr/reference/modules/overview/) énumère les **32 modules** qui
 reposent sur le moteur de cœur, à travers neuf domaines de capacité. L'un des plus utiles
 est l'**access map R/RW** avec son diff **Permitted-vs-Observed** : il lit depuis les logs,
 OTEL et (comme backstop non coopératif) eBPF plutôt que de siéger dans le data path, et il
@@ -101,7 +101,7 @@ L'observation passive est **classée par niveaux** selon le type de store — cl
 stores SQL, object et entrepôt ; lossy pour les document et vector stores ; impossible sans
 coopération pour les stores en mémoire ou embarqués — et le catalogue marque où un module est
 en phase de conception. Le registry de modèles propres et le fine-tuning sont une **capacité
-prévue**, pas l'un des 31 modules livrés.
+prévue**, pas l'un des 32 modules livrés.
 
 ## CLI
 

@@ -174,7 +174,9 @@ describe('RequestPanel destination and credential policy', () => {
       expect(
         usePlayground.getState().response?.body,
         'deny-closed: a blocked destination must explain the local refusal',
-      ).toBe('API Playground can only send requests to this control plane.')
+      ).toBe(
+        'API Playground can send requests only to this Olivares AI server.',
+      )
       expect(
         usePlayground.getState().history,
         'deny-closed: a request that never left must not look like an engine response',

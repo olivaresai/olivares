@@ -75,7 +75,7 @@ type SecretView struct {
 // SecretStore owns the runtime secret store: sealed CRUD over the auth partition
 // plus the Resolve path the engine's reference resolver consumes.
 type SecretStore struct {
-	st     store.Store
+	st     authStorage
 	sealer SecretSealer
 }
 

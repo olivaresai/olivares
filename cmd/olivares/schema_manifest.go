@@ -19,6 +19,7 @@ import (
 
 	"github.com/olivaresai/olivares/core/audit"
 	"github.com/olivaresai/olivares/core/model"
+	"github.com/olivaresai/olivares/core/modulespec"
 	"github.com/olivaresai/olivares/core/runtime"
 	"github.com/olivaresai/olivares/core/store"
 	"github.com/olivaresai/olivares/sdk"
@@ -254,7 +255,7 @@ func collectSchemaManifest() (*schemaManifest, error) {
 	catalogPriv := ed25519.NewKeyFromSeed(fixedSeed(1))
 	policyPriv := ed25519.NewKeyFromSeed(fixedSeed(2))
 
-	set, err := buildModules(signer, catalogPriv, policyPriv, nil, nil, sourcesConfig{}, EditionConfig{}, "", log)
+	set, err := buildModules(nil, signer, catalogPriv, policyPriv, nil, nil, nil, sourcesConfig{}, EditionConfig{}, "", log)
 	if err != nil {
 		return nil, fmt.Errorf("schema manifest: load module operator config: %w", err)
 	}
@@ -264,7 +265,7 @@ func collectSchemaManifest() (*schemaManifest, error) {
 		if !ok {
 			return nil, fmt.Errorf("schema manifest: module %q does not satisfy sdk.Module", m.APINamespace())
 		}
-		if aerr := rt.AddModule(sm, sdk.Config{}); aerr != nil {
+		if aerr := rt.AddModule(sm, modulespec.DefaultConfig(m.APINamespace())); aerr != nil {
 			return nil, fmt.Errorf("schema manifest: register module %q: %w", m.APINamespace(), aerr)
 		}
 	}
@@ -309,11 +310,11 @@ func fixedSeed(b byte) []byte {
 func migrateManifestCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "manifest",
-		Short: "Print this binary's registered schema manifest (deterministic; the open≡enterprise parity oracle)",
+		Short: "Print this binary's registered schema manifest (deterministic; the Community≡Business parity oracle)",
 		Long: "manifest serializes the EXACT schema this binary registers at boot — every module's entity\n" +
 			"descriptors (tables/columns/indexes/guards) and file migrations (by content hash) — as canonical\n" +
-			"JSON plus a trailing sha256. It opens no database. The open≡enterprise parity gate runs this\n" +
-			"command on BOTH artifacts — the community binary built here and the enterprise binary built from\n" +
+			"JSON plus a trailing sha256. It opens no database. The Community≡Business parity gate runs this\n" +
+			"command on BOTH artifacts — the Community binary built here and the Business binary built from\n" +
 			"its own distribution — and asserts identical output, so a binary swap between editions can never\n" +
 			"land in a partial-upgrade schema state (docs/UPGRADE-AND-ROLLBACK.md).",
 		Args:         cobra.NoArgs,

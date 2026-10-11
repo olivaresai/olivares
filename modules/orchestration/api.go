@@ -26,40 +26,40 @@ func (m *Module) Permissions() []auth.Permission {
 // the resolved tenant.
 func (m *Module) APIRoutes(reg api.RouteRegistrar) {
 	// The live communication/delegation graph (privileged, self-audited reads).
-	reg.Handle("GET", "/graph", permGraphRead, m.handleGraph)
-	reg.Handle("GET", "/graph/neighbors", permGraphRead, m.handleNeighbors)
-	reg.Handle("GET", "/flows", permGraphRead, m.handleFlows)
-	reg.Handle("GET", "/timeline", permGraphRead, m.handleTimeline)
-	reg.Handle("GET", "/stream", permGraphRead, m.handleStream)
+	reg.Handle("GET", "/graph", permGraphRead, m.route("handleGraph"))
+	reg.Handle("GET", "/graph/neighbors", permGraphRead, m.route("handleNeighbors"))
+	reg.Handle("GET", "/flows", permGraphRead, m.route("handleFlows"))
+	reg.Handle("GET", "/timeline", permGraphRead, m.route("handleTimeline"))
+	reg.Handle("GET", "/stream", permGraphRead, m.route("handleStream"))
 
 	// Governed schedules. Declaring/retargeting desired state is write-tier; FIRING
 	// is admin-tier AND gated by the HITL approval (deny-by-default).
-	reg.Handle("GET", "/schedules", permScheduleRead, m.handleListSchedules)
-	reg.Handle("POST", "/schedules", permScheduleWrite, m.handleCreateSchedule)
-	reg.Handle("GET", "/schedules/{id}", permScheduleRead, m.handleGetSchedule)
-	reg.Handle("PATCH", "/schedules/{id}", permScheduleWrite, m.handlePatchSchedule)
-	reg.Handle("POST", "/schedules/{id}/fire", permScheduleAdmin, m.handleFire)
-	reg.Handle("GET", "/schedules/{id}/decisions", permScheduleRead, m.handleScheduleDecisions)
-	reg.Handle("GET", "/schedules/{id}/revisions", permScheduleRead, m.handleListRevisions)
-	reg.Handle("POST", "/schedules/{id}/restore", permScheduleWrite, m.handleRestoreSchedule)
+	reg.Handle("GET", "/schedules", permScheduleRead, m.route("handleListSchedules"))
+	reg.Handle("POST", "/schedules", permScheduleWrite, m.route("handleCreateSchedule"))
+	reg.Handle("GET", "/schedules/{id}", permScheduleRead, m.route("handleGetSchedule"))
+	reg.Handle("PATCH", "/schedules/{id}", permScheduleWrite, m.route("handlePatchSchedule"))
+	reg.Handle("POST", "/schedules/{id}/fire", permScheduleAdmin, m.route("handleFire"))
+	reg.Handle("GET", "/schedules/{id}/decisions", permScheduleRead, m.route("handleScheduleDecisions"))
+	reg.Handle("GET", "/schedules/{id}/revisions", permScheduleRead, m.route("handleListRevisions"))
+	reg.Handle("POST", "/schedules/{id}/restore", permScheduleWrite, m.route("handleRestoreSchedule"))
 
 	// The append-only fire/miss governance-evidence ledger.
-	reg.Handle("GET", "/decisions", permScheduleRead, m.handleDecisions)
+	reg.Handle("GET", "/decisions", permScheduleRead, m.route("handleDecisions"))
 
 	// DAG workflows. Declaring/editing the graph is write-tier; the dry-run
 	// is a no-effects read; RUNNING is admin-tier AND HITL-gated (two-phase).
-	reg.Handle("GET", "/workflows", permWorkflowRead, m.handleListWorkflows)
-	reg.Handle("POST", "/workflows", permWorkflowWrite, m.handleCreateWorkflow)
-	reg.Handle("GET", "/workflows/{id}", permWorkflowRead, m.handleGetWorkflow)
-	reg.Handle("PATCH", "/workflows/{id}", permWorkflowWrite, m.handlePatchWorkflow)
-	reg.Handle("PUT", "/workflows/{id}/steps", permWorkflowWrite, m.handlePutWorkflowSteps)
-	reg.Handle("GET", "/workflows/{id}/revisions", permWorkflowRead, m.handleListWorkflowRevisions)
-	reg.Handle("POST", "/workflows/{id}/restore", permWorkflowWrite, m.handleRestoreWorkflow)
-	reg.Handle("POST", "/workflows/{id}/dry-run", permWorkflowRead, m.handleDryRunWorkflow)
-	reg.Handle("POST", "/workflows/{id}/run", permWorkflowAdmin, m.handleRunWorkflow)
-	reg.Handle("GET", "/workflows/{id}/runs", permWorkflowRead, m.handleListWorkflowRuns)
-	reg.Handle("GET", "/workflows/{id}/runs/{run}", permWorkflowRead, m.handleGetWorkflowRun)
+	reg.Handle("GET", "/workflows", permWorkflowRead, m.route("handleListWorkflows"))
+	reg.Handle("POST", "/workflows", permWorkflowWrite, m.route("handleCreateWorkflow"))
+	reg.Handle("GET", "/workflows/{id}", permWorkflowRead, m.route("handleGetWorkflow"))
+	reg.Handle("PATCH", "/workflows/{id}", permWorkflowWrite, m.route("handlePatchWorkflow"))
+	reg.Handle("PUT", "/workflows/{id}/steps", permWorkflowWrite, m.route("handlePutWorkflowSteps"))
+	reg.Handle("GET", "/workflows/{id}/revisions", permWorkflowRead, m.route("handleListWorkflowRevisions"))
+	reg.Handle("POST", "/workflows/{id}/restore", permWorkflowWrite, m.route("handleRestoreWorkflow"))
+	reg.Handle("POST", "/workflows/{id}/dry-run", permWorkflowRead, m.route("handleDryRunWorkflow"))
+	reg.Handle("POST", "/workflows/{id}/run", permWorkflowAdmin, m.route("handleRunWorkflow"))
+	reg.Handle("GET", "/workflows/{id}/runs", permWorkflowRead, m.route("handleListWorkflowRuns"))
+	reg.Handle("GET", "/workflows/{id}/runs/{run}", permWorkflowRead, m.route("handleGetWorkflowRun"))
 	// The owning continuation of a run paused for reauthentication: admin-tier,
 	// like starting the run, and bound to the caller's own credential.
-	reg.Handle("POST", "/workflows/{id}/runs/{run}/reauthorize", permWorkflowAdmin, m.handleReauthorizeWorkflowRun)
+	reg.Handle("POST", "/workflows/{id}/runs/{run}/reauthorize", permWorkflowAdmin, m.route("handleReauthorizeWorkflowRun"))
 }

@@ -189,7 +189,7 @@ func acctDigest(t *testing.T, m *Module, tenant model.TenantID, ref string) stri
 func acctRow(t *testing.T, m *Module, tenant model.TenantID, ref string) model.Record {
 	t.Helper()
 	var out model.Record
-	if err := m.data.View(context.Background(), tenant, func(sc store.Scope) error {
+	if err := m.Data.View(context.Background(), tenant, func(sc store.Scope) error {
 		rec, err := findProfileRec(context.Background(), sc, ref)
 		out = rec
 		return err
@@ -568,8 +568,8 @@ func TestProviderAccount_GeneratedNameLosingTheRaceRetriesThenExhausts(t *testin
 				}
 			}
 			target := acctProfiles(t, m, tenant, "claude", 1)[0]
-			stale := &acctStaleNames{inner: m.data}
-			m.data = stale
+			stale := &acctStaleNames{inner: m.Data}
+			m.Data = stale
 
 			stale.hide(taken...)
 			r := a.adopt(target.Ref, "")
@@ -770,7 +770,7 @@ func TestProviderAccount_UpgradeFromProfileOnlySchema(t *testing.T) {
 				}
 				// A legacy row keys on its own profile_ref: no other row may claim that
 				// key, which is what keeps every existing row unique at upgrade time.
-				err := m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
+				err := m.Data.Mutate(ctx, tenant, func(sc store.Scope) error {
 					repo, err := sc.Ext(providerProfileKind)
 					if err != nil {
 						return err

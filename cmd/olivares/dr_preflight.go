@@ -161,6 +161,12 @@ func drDDLDSN(f drFlags) string {
 // Reading through a replica requires a separate snapshot/LSN contract and is
 // not supported by this preflight.
 func preflightPostgresDR(ctx context.Context, f drFlags, op string) error {
+	return preflightPostgresDRWithPrivilege(ctx, f, op, false)
+}
+
+// Package boot retains serve's explicit privileged-role opt-in. The DR CLI
+// continues to require least privilege; identity and trigger checks never relax.
+func preflightPostgresDRWithPrivilege(ctx context.Context, f drFlags, op string, allowPrivileged bool) error {
 	if store.Engine(f.engineKind) != store.EnginePostgres {
 		return nil
 	}
@@ -183,6 +189,10 @@ func preflightPostgresDR(ctx context.Context, f drFlags, op string) error {
 		// admin role that is a superuser or is not BYPASSRLS. Restating any of that
 		// here would be a second copy of the boot guard, free to drift.
 		verdict, ok := checkVerdict(auth.Posture, pools[i].kind == drPoolAdmin)
+		if allowPrivileged && auth.Posture.Reachable && auth.Posture.RLSUnsafe() &&
+			(pools[i].kind == drPoolAdmin || !auth.Posture.TriggersDisabled()) {
+			ok = true
+		}
 		if !ok {
 			problem := pools[i].label + " " + verdict
 			// checkVerdict's RLS-unsafe wording offers `--allow-privileged-db-role`

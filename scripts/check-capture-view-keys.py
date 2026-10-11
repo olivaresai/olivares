@@ -28,7 +28,7 @@
 import re
 import sys
 
-RC_LIMPIO, RC_HALLAZGO, RC_NO_PUDE_MIRAR = 0, 1, 2
+RC_LIMPIO, RC_HALLAZGO, RC_UNAVAILABLE = 0, 1, 2
 
 RUTA = "web/e2e/docs-captures.spec.ts"
 
@@ -230,26 +230,26 @@ def razon_de_existir():
        comentario, deja de afirmar en vez de afirmar de mas.
     """
     import glob
-    ficheros = sorted(glob.glob("web/tsconfig*.json"))
-    if not ficheros:
-        return ("no he podido comprobar si algun `tsconfig` mira `e2e/`: no encuentro ninguno "
-                "(¿ruta distinta?), asi que NO afirmo la premisa de este gate")
+    source_files = sorted(glob.glob("web/tsconfig*.json"))
+    if not source_files:
+        return ("could not check whether any `tsconfig` includes `e2e/`: none were found "
+                "(has the path changed?), so this check cannot confirm its premise")
     nombran = []
-    for f in ficheros:
+    for f in source_files:
         try:
             if "e2e" in open(f, encoding="utf-8").read():
                 nombran.append(f)
         except OSError as e:
-            return f"no he podido leer {f} ({type(e).__name__}): no afirmo la premisa de este gate"
+            return f"could not read {f} ({type(e).__name__}): this check cannot confirm its premise"
     if nombran:
-        return ("⚠ ALGUN tsconfig NOMBRA `e2e`: " + ", ".join(nombran) + " — si de verdad lo "
-                "compila, `tsc` ya caza esto y este gate podria sobrar. Compruebalo.")
-    return (f"`tsc` no puede cazarlo: ninguno de los {len(ficheros)} tsconfig de `web/` nombra "
-            "`e2e` (medido ahora, no recordado)")
+        return ("⚠ A tsconfig NAMES `e2e`: " + ", ".join(nombran) + " — if it actually "
+                "compiles it, `tsc` already catches this and this check may be redundant. Verify it.")
+    return (f"`tsc` cannot catch this: none of the {len(source_files)} tsconfig files in `web/` names "
+            "`e2e` (checked now)")
 
 
 def universo():
-    """Los ficheros de `web/e2e/` que DECLARAN una tabla `VIEWS`, enumerados, no listados a mano.
+    """Los source_files de `web/e2e/` que DECLARAN una tabla `VIEWS`, enumerados, no listados a mano.
 
     ⛔ ESTE GATE FIJABA SU UNIVERSO A UN SOLO FICHERO (`RUTA`) y salia verde. Medido: `web/e2e/`
        tiene DOS tablas `VIEWS` —`docs-captures.spec.ts` y `management-views.spec.ts`— y la
@@ -265,8 +265,8 @@ def revisa(ruta):
     try:
         src = open(ruta, encoding="utf-8").read()
     except OSError as e:
-        print(f"check-capture-view-keys: NO HE PODIDO MIRAR: {e}", file=sys.stderr)
-        return RC_NO_PUDE_MIRAR
+        print(f"check-capture-view-keys: COULD NOT CHECK: {e}", file=sys.stderr)
+        return RC_UNAVAILABLE
 
     # ── el TIPO ───────────────────────────────────────────────────────────────────────────────
     # ⛔ EL TIPO SE LEE SIN PROSA, IGUAL QUE TODO LO DEMAS. Este gate ya blanqueaba comentarios y
@@ -283,15 +283,15 @@ def revisa(ruta):
     src_sin_prosa = sin_prosa(src)
     m = re.search(r"const VIEWS:\s*\{(.*?)\}\[\]\s*=", src_sin_prosa, re.S)
     if not m:
-        print("check-capture-view-keys: NO HE PODIDO MIRAR: no encuentro la declaracion "
-              "`const VIEWS: { … }[] =`; si la spec cambio de forma, este gate no la entiende "
-              "y NO puede decir que este limpia", file=sys.stderr)
-        return RC_NO_PUDE_MIRAR
+        print("check-capture-view-keys: COULD NOT CHECK: cannot find the declaration "
+              "`const VIEWS: { … }[] =`; if the spec format changed, this check cannot read it "
+              "and cannot report it as clean", file=sys.stderr)
+        return RC_UNAVAILABLE
     declaradas = set(re.findall(r"^\s*(\w+)\??\s*:", m.group(1), re.M))
     if not declaradas:
-        print("check-capture-view-keys: NO HE PODIDO MIRAR: el tipo de VIEWS no declara ni una "
-              "clave — eso es que no lo he leido bien, no que no tenga", file=sys.stderr)
-        return RC_NO_PUDE_MIRAR
+        print("check-capture-view-keys: COULD NOT CHECK: the VIEWS type declares no "
+              "keys — this indicates a failed read, not a type without keys", file=sys.stderr)
+        return RC_UNAVAILABLE
 
     # ── el USO ────────────────────────────────────────────────────────────────────────────────
     # Se recorta el literal del array por conteo de llaves desde `= [` hasta su cierre, para no
@@ -308,9 +308,9 @@ def revisa(ruta):
                 fin = i
                 break
     if fin is None:
-        print("check-capture-view-keys: NO HE PODIDO MIRAR: el literal de VIEWS no cierra",
+        print("check-capture-view-keys: COULD NOT CHECK: the VIEWS literal is not closed",
               file=sys.stderr)
-        return RC_NO_PUDE_MIRAR
+        return RC_UNAVAILABLE
     cuerpo = src[corchete:fin]
 
     # ⛔ SE QUITAN COMENTARIOS Y CADENAS ANTES DE BUSCAR CLAVES. Sin esto, la prosa de los
@@ -367,9 +367,9 @@ def revisa(ruta):
             usadas.add(clave)
 
     if not usadas:
-        print("check-capture-view-keys: NO HE PODIDO MIRAR: no he reconocido ni una clave de "
-              "entrada; la spec ha cambiado de forma y este gate no la entiende", file=sys.stderr)
-        return RC_NO_PUDE_MIRAR
+        print("check-capture-view-keys: COULD NOT CHECK: no entry keys were recognized; "
+              "the spec format changed and this check cannot read it", file=sys.stderr)
+        return RC_UNAVAILABLE
     hallazgos = sorted(k for k in usadas if k not in declaradas)
 
     # ── las INVOCACIONES, que es el lado donde el fallo es silencioso ────────────────────────
@@ -382,19 +382,19 @@ def revisa(ruta):
     limpio_todo = sin_prosa(src)
     nombres = ligaduras(limpio_todo)
     if not nombres:
-        print("check-capture-view-keys: NO HE PODIDO MIRAR: no encuentro ninguna variable ligada a "
-              "una entrada de VIEWS (ni `for … of VIEWS`, ni `.map`, ni un parametro tipado). La "
-              "spec cambio de forma y NO puedo decir que las invocaciones esten bien",
+        print("check-capture-view-keys: COULD NOT CHECK: no variable bound to a "
+              "VIEWS entry was found (no `for … of VIEWS`, `.map`, or typed parameter). The "
+              "spec format changed; this check cannot validate the property accesses",
               file=sys.stderr)
-        return RC_NO_PUDE_MIRAR
+        return RC_UNAVAILABLE
     sueltos = usos_no_modelados(limpio_todo)
     if sueltos:
-        print(f"check-capture-view-keys: NO HE PODIDO MIRAR: {ruta} toca `VIEWS` en la(s) linea(s) "
-              f"{sueltos} de una forma que no se leer (no es la declaracion ni un `for … of` ni un "
-              "`.map`/`.forEach`/`.filter`/`.find`/`.flatMap` ni un parametro tipado). Las claves "
-              "que se invoquen por ahi me son invisibles, asi que NO puedo decir que este limpio",
+        print(f"check-capture-view-keys: COULD NOT CHECK: {ruta} uses `VIEWS` on line(s) "
+              f"{sueltos} in an unsupported form (not the declaration, `for … of`, "
+              "`.map`/`.forEach`/`.filter`/`.find`/`.flatMap`, or a typed parameter). Property accesses "
+              "in those forms are not inspected, so this check cannot report a clean result",
               file=sys.stderr)
-        return RC_NO_PUDE_MIRAR
+        return RC_UNAVAILABLE
 
     # ⛔ QUIEN INVOCA CADA CLAVE, NO «LA PRIMERA POR ORDEN ALFABETICO». El diagnostico decia
     #    `{sorted(nombres)[0]}.{k}` — con dos ligaduras (`for (const alfa of VIEWS)` y
@@ -412,7 +412,7 @@ def revisa(ruta):
         """La invocacion literal, con TODAS sus ligaduras si son varias."""
         return " / ".join(f"{n}.{k}" for n in dict.fromkeys(quien.get(k, sorted(nombres)[:1])))
 
-    nombre_fichero = ruta.rsplit("/", 1)[-1]
+    file_name = ruta.rsplit("/", 1)[-1]
     # ⛔ UN HALLAZGO POR CLAVE, CON SU RAZON MAS ESPECIFICA. La primera version listaba `despuess`
     #    DOS veces —«no declarada» y «ninguna entrada la trae»— porque las dos son ciertas a la vez.
     #    Un gate que repite se lee como ruido y se apaga; el orden de abajo es de mas informativo a
@@ -423,12 +423,12 @@ def revisa(ruta):
         hallazgos.setdefault(k, porque)
 
     for k in sorted(invocadas - usadas - declaradas):
-        anota(k, f"el arnes la INVOCA ({como(k)}), el tipo no la declara y NINGUNA "
-                 "entrada la trae: es un typo de invocacion y nada la satisfara jamas")
+        anota(k, f"the harness accesses it ({como(k)}), but the type does not declare it and no "
+                 "entry provides it: this is a property-access typo that no entry can satisfy")
     for k in sorted(invocadas - declaradas):
-        anota(k, f"el arnes la INVOCA ({como(k)}) y el tipo no la declara")
+        anota(k, f"the harness accesses it ({como(k)}), but the type does not declare it")
     for k in sorted(usadas - declaradas):
-        anota(k, "una ENTRADA la usa y el tipo no la declara")
+        anota(k, "an entry uses it, but the type does not declare it")
     # Declarada, puesta por alguna entrada, y que el arnes no lee nunca: gancho muerto.
     # ⛔ AQUI HABIA UNA EXENCION A MANO: `- {"id", "path"}`, con el comentario «el arnes las consume
     #    por otra via». La via era una PLANTILLA (`mgmt-${view.id}-${theme}.png`), y no las veia
@@ -437,19 +437,19 @@ def revisa(ruta):
     #    gemelo, que era el caso insignia de este gate. Arreglada la sonda, la exencion sobra y se
     #    retira: una lista de exentos es donde van a morir los defectos que nadie vuelve a mirar.
     for k in sorted((usadas & declaradas) - invocadas):
-        anota(k, "las ENTRADAS la traen y el arnes NO la invoca nunca: gancho muerto")
+        anota(k, "entries provide it, but the harness never accesses it: unused hook")
 
     print(f"check-capture-view-keys: {ruta}")
-    print(f"  declaradas en el tipo : {sorted(declaradas)}")
-    print(f"  usadas en entradas    : {sorted(usadas)}")
-    print(f"  invocadas por el arnes: {sorted(invocadas)}  (ligadura: {sorted(nombres)})")
+    print(f"  declared in type     : {sorted(declaradas)}")
+    print(f"  used in entries      : {sorted(usadas)}")
+    print(f"  accessed by harness : {sorted(invocadas)}  (bound variables: {sorted(nombres)})")
     if not hallazgos:
-        print("  sin hallazgos: tipo, entradas e invocaciones concuerdan")
+        print("  no findings: type, entries, and property accesses agree")
         return RC_LIMPIO
     for k, porque in sorted(hallazgos.items()):
         # ⛔ CLAVE **Y** FICHERO EN CADA LINEA. Sin el fichero, quien lea el rojo en un gancho con
         #    ciento sesenta patas no sabe donde mirar; el banco protege esta forma con un mutante.
-        print(f"  ⛔ `{k}` en {nombre_fichero}: {porque}")
+        print(f"  ⛔ `{k}` in {file_name}: {porque}")
     print(f"  ⇒ {razon_de_existir()}", file=sys.stderr)
     return RC_HALLAZGO
 
@@ -459,17 +459,17 @@ def main(argv):
         return revisa(argv[1])
     rutas = universo()
     if not rutas:
-        print("check-capture-view-keys: NO HE PODIDO MIRAR: no encuentro NINGUNA tabla `VIEWS` en "
-              "`web/e2e/*.spec.ts`. O han cambiado de sitio o estoy corriendo desde otro "
-              "directorio; lo que NO puedo es decir que esta limpio", file=sys.stderr)
-        return RC_NO_PUDE_MIRAR
-    print(f"check-capture-view-keys: {len(rutas)} tabla(s) VIEWS: {', '.join(rutas)}")
+        print("check-capture-view-keys: COULD NOT CHECK: no `VIEWS` tables found in "
+              "`web/e2e/*.spec.ts`. They may have moved, or this check may be running from another "
+              "directory; it cannot report a clean result", file=sys.stderr)
+        return RC_UNAVAILABLE
+    print(f"check-capture-view-keys: {len(rutas)} VIEWS table(s): {', '.join(rutas)}")
     # ⛔ SE REVISAN TODAS Y GANA LA PEOR: parar en el primer rojo dejaria el resto sin medir, que
     #    es la cortina que este proyecto ya se ha comido (un rojo temprano oculta lo de detras).
     peor = RC_LIMPIO
     for r in rutas:
         rc = revisa(r)
-        peor = max(peor, rc) if rc != RC_NO_PUDE_MIRAR and peor != RC_NO_PUDE_MIRAR else RC_NO_PUDE_MIRAR
+        peor = max(peor, rc) if rc != RC_UNAVAILABLE and peor != RC_UNAVAILABLE else RC_UNAVAILABLE
     return peor
 
 

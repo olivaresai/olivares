@@ -138,13 +138,13 @@ func TestLaPistaSeparaElDirectorioSinBusquedaDelMontajeNoexec(t *testing.T) {
 	t.Cleanup(func() { _ = os.Chmod(medio, 0o700) })
 
 	got = noexecHintFor(bin, syscall.EACCES, sinPrivilegios)
-	if !strings.Contains(got, "BUSQUEDA") || !strings.Contains(got, medio) {
+	if !strings.Contains(got, "grants no search bit") || !strings.Contains(got, medio) || !strings.Contains(got, "its owner") {
 		t.Fatalf("un ancestro sin bit de busqueda debe NOMBRARSE, no atribuirse al montaje; salio %q", got)
 	}
-	// ⛔ MENCIONAR el montaje no es ATRIBUIRSELO. El mensaje dice «igual que un montaje noexec»
+	// ⛔ MENCIONAR el montaje no es ATRIBUIRSELO. El mensaje dice «just like a noexec mount»
 	// como comparacion, y eso ayuda; lo que no puede hacer es SOSPECHAR del montaje cuando ya tiene
 	// una causa comprobada. Se comprueba la frase de sospecha, no la palabra.
-	if strings.Contains(got, "es probable que") {
+	if strings.Contains(got, "probably noexec") {
 		t.Fatalf("con una causa comprobada no se sospecha del montaje: %q", got)
 	}
 }
@@ -170,14 +170,38 @@ func TestElRecorridoDeAncestrosPreguntaPorElUidQueVaAEjecutar(t *testing.T) {
 		t.Fatalf("como root, la pista no nombra el directorio 0700 que bloquea al uid enjaulado.\n"+
 			"pista: %q", got)
 	}
-	if strings.Contains(got, "todos sus directorios son atravesables") {
+	if !strings.Contains(got, "grants no search bit") || !strings.Contains(got, "the dedicated non-root uid") {
+		t.Fatalf("as root, the hint does not name the missing search bit.\n"+
+			"hint: %q", got)
+	}
+	if strings.Contains(got, "its directory chain is traversable") {
 		t.Fatalf("como root, la pista AFIRMA que los directorios son atravesables y son 0700: %q", got)
 	}
 
 	// Sin privilegios: el hijo hereda el uid del motor, el 0700 SI es atravesable y esta rama
 	// no debe disparar — la direccion que no dispara, que es la mitad que se olvida.
 	got = noexecHintFor(bin, syscall.EACCES, 1000)
-	if strings.Contains(got, "no concede bit de BUSQUEDA") {
+	if strings.Contains(got, "grants no search bit") {
 		t.Fatalf("sin privilegios, un 0700 propio NO bloquea y la pista no debe acusarlo: %q", got)
+	}
+}
+
+func TestNoexecRootBinaryPermissionHintIsEnglish(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.Chmod(dir, 0o711); err != nil {
+		t.Fatal(err)
+	}
+	// A relative path keeps the constructor's ancestor walk in the owned
+	// fixture, so a private TMPDIR cannot mask the binary-permission branch.
+	t.Chdir(dir)
+	bin := "connector"
+	if err := os.WriteFile(bin, []byte("fixture"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	got := noexecHintFor(bin, syscall.EACCES, 0)
+	for _, want := range []string{"the engine runs as ROOT", "DEDICATED non-root uid", "grants no permission to that uid", bin} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("root binary-permission diagnostic %q does not contain %q", got, want)
+		}
 	}
 }

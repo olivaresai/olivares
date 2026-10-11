@@ -272,7 +272,7 @@
     }
   },
   "statusPage": {
-    "title": "Olivares Control Plane — Estado",
+    "title": "Olivares AI — Estado",
     "subtitle": "Estado operativo actual de todos los componentes.",
     "unavailable": "La información de estado no está disponible actualmente.",
     "lastUpdated": "Última actualización: {{time}}",
@@ -308,7 +308,11 @@
     "checked": "Comprobación de actualizaciones completada",
     "advisories": "Avisos de seguridad corregidos",
     "checkNow": "Comprobar ahora",
-    "unconfigured": "La comprobación de actualizaciones no está configurada. Es lo esperado en despliegues air-gapped."
+    "unconfigured": "La comprobación de actualizaciones no está configurada. No se ha comprobado ninguna actualización; las comprobaciones de red siguen desactivadas.",
+    "unavailable": "Comprobación no disponible",
+    "instructions": "Instrucciones de actualización",
+    "configure": "Para activar las comprobaciones, use una versión oficial con su clave de verificación integrada. Configure OLIVARES_UPDATE_ENDPOINT con su canal firmado aprobado en la configuración del servicio y reinicie Olivares. Déjelo sin configurar para mantener desactivadas las comprobaciones de red.",
+    "manual": "Para actualizar manualmente, haga una copia de seguridad de sus datos, verifique el nuevo paquete o imagen y actualice mediante su método de instalación. Conserve el mismo directorio de datos. Una compilación de desarrollo sin clave de verificación no puede comprobar un canal firmado."
   },
   "system": {
     "title": "Salud del sistema",
@@ -471,10 +475,9 @@
     "download": "Descargar paquete de soporte",
     "generate": "Generar y descargar",
     "confirmTitle": "¿Generar un paquete de soporte?",
-    "confirmDescription": "Esta acción privilegiada AAL3 queda registrada en el ledger de auditoría.",
+    "confirmDescription": "Esta acción privilegiada queda registrada en el ledger de auditoría.",
     "contents": "El paquete contiene la configuración efectiva redactada, el estado operativo y los logs. Revísalo antes de compartirlo.",
     "downloaded": "Paquete de soporte descargado",
-    "needsAal3": "Se requiere un step-up AAL3 con respaldo hardware para generar un paquete de soporte.",
     "failed": "La generación del paquete de soporte ha fallado."
   }
 }

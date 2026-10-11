@@ -23,11 +23,42 @@ vi.mock('@/lib/auth/context', () => ({
 }))
 
 import { FEATURE_VIEWS, NAV_AREAS } from '@/features/registry'
+import { useModulesStore } from '@/stores/modules'
 import { AreaDirectoryView } from './area-directory'
 
 afterEach(() => {
   canMock.mockReset()
   canMock.mockReturnValue(true)
+  useModulesStore.setState({ off: new Set() })
+})
+
+describe('AreaDirectoryView on a new installation', () => {
+  const hrefs = () =>
+    screen.getAllByRole('link').map((a) => a.getAttribute('href'))
+
+  it('lists every page of an area from the first sign-in', () => {
+    renderIntel(<AreaDirectoryView areaId="ai" />)
+    expect(hrefs()).toEqual(
+      expect.arrayContaining([
+        '/sessions',
+        '/agent-tools',
+        '/providers',
+        '/models',
+      ]),
+    )
+  })
+
+  it('lists the pages of the security area from the first sign-in', () => {
+    renderIntel(<AreaDirectoryView areaId="security-identity" />)
+    expect(hrefs()).toContain('/permissions')
+    expect(screen.queryByText(/no entries/i)).toBeNull()
+  })
+
+  it('offers the operate door to a principal who may read only runs', () => {
+    canMock.mockImplementation((p) => p === 'sessions:run:read')
+    renderIntel(<AreaDirectoryView areaId="ai" />)
+    expect(hrefs()).toEqual(['/agentops'])
+  })
 })
 
 describe('AreaDirectoryView', () => {
@@ -45,25 +76,39 @@ describe('AreaDirectoryView', () => {
     const links = screen.getAllByRole('link')
     const hrefs = links.map((a) => a.getAttribute('href'))
     const aiPaths = FEATURE_VIEWS.filter(
-      (v) => v.navigation.kind === 'feature' && v.navigation.areaId === 'ai',
+      (v) =>
+        v.navigation.kind === 'feature' &&
+        v.navigation.areaId === 'ai' &&
+        // A second door into a screen this principal can already open is not a leaf.
+        !v.doorTo,
     ).map((v) => v.path)
     // Extensions can append views to an earlier section in the registry.
     // Every authorized leaf appears once; section order is checked above.
     expect(hrefs).toHaveLength(aiPaths.length)
     expect(hrefs).toEqual(expect.arrayContaining(aiPaths))
-    // Two doors into one screen stay two entries, each with its own name.
+    // One screen, one entry, named as the sidebar and the page name it (26.10.1 review:
+    // Sessions, Observe sessions and Operate sessions for one thing).
+    const sessions = screen.getAllByRole('link', { name: 'Sessions' })
+    expect(sessions).toHaveLength(1)
+    expect(sessions[0]).toHaveAttribute('href', '/sessions')
+    expect(hrefs).not.toContain('/agentops')
+    expect(screen.queryByText(/Observe sessions|Operate sessions/)).toBeNull()
+    // The description beside it is the console's own sentence, in plain words.
     expect(
-      screen.getByRole('link', { name: 'Observe sessions' }),
-    ).toHaveAttribute('href', '/sessions')
-    expect(
-      screen.getByRole('link', { name: 'Operate sessions' }),
-    ).toHaveAttribute('href', '/agentops')
-    // The description beside a door is the console's own sentence.
-    expect(
-      screen.getByText(/shares its screen with Observe sessions/),
+      screen.getByText(
+        'Start sessions and follow what each one does, including the ones Olivares finds',
+      ),
     ).toBeInTheDocument()
     // No control other than the title link lives in a card: nothing nested in a link.
     for (const a of links) expect(a.querySelector('button, a')).toBeNull()
+  })
+
+  it('offers the operate door, as Sessions, to a principal who may read only launched runs', () => {
+    canMock.mockImplementation((p) => p === 'sessions:run:read')
+    renderIntel(<AreaDirectoryView areaId="ai" />)
+    const links = screen.getAllByRole('link')
+    expect(links.map((a) => a.getAttribute('href'))).toEqual(['/agentops'])
+    expect(links[0]).toHaveTextContent('Sessions')
   })
 
   it('shows only what can() allows, and the sibling door never rides along', () => {
@@ -140,5 +185,24 @@ describe('AreaDirectoryView', () => {
     const text = document.body.textContent ?? ''
     expect(text).not.toMatch(/\b\d+\s*(items?|entries|sessions|agents)\b/i)
     expect(text).not.toMatch(/ready|available|unavailable|online|offline/i)
+  })
+})
+
+describe('AreaDirectoryView lists a page whose module is off as a calm entry', () => {
+  it('tags it Off and keeps the link', () => {
+    useModulesStore.setState({ off: new Set(['deploy']) })
+    renderIntel(<AreaDirectoryView areaId="deployment" />)
+    const link = screen
+      .getAllByRole('link')
+      .find((a) => a.getAttribute('href') === '/deploy')!
+    expect(link).toBeDefined()
+    expect(within(link.closest('li')!).getByText('Off')).toBeInTheDocument()
+    // The tag is part of the link, so its name tells a screen reader the page is off.
+    expect(link).toHaveAccessibleName(/Off$/)
+    const others = screen
+      .getAllByRole('link')
+      .filter((a) => a.getAttribute('href') !== '/deploy')
+    for (const a of others)
+      expect(within(a.closest('li')!).queryByText('Off')).toBeNull()
   })
 })

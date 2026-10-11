@@ -41,10 +41,10 @@ func newDecisionResponseFixtureWithDueDelay(
 	}
 	fixture := newDirectNoticeExactAuthorityFixture(t)
 	fixture.reanchorOperationClock(t)
-	fixture.m.communicationDirectoryResolver = &directNoticeReadDirectoryResolver{
+	fixture.m.CommunicationDirectoryResolver = &directNoticeReadDirectoryResolver{
 		now: fixture.now, epoch: fixture.epoch,
 	}
-	fixture.m.communicationGrantClosure = &directNoticeReadClosureResolver{
+	fixture.m.CommunicationGrantClosure = &directNoticeReadClosureResolver{
 		now: fixture.now, epoch: fixture.epoch,
 	}
 	ctx := context.Background()
@@ -454,8 +454,8 @@ func TestDecisionRequestReceiptFailureRollsBackDecisionHeadAndResponse(t *testin
 	beforeItem := workItemRecordForDecisionTest(t, fixture)
 	beforeAudit := directNoticeAuditHead(t, fixture.directNoticeFixture)
 	failure := errors.New("injected DecisionResponse receipt failure")
-	fixture.m.data = &directNoticeExactAckWriteFailureData{
-		inner: fixture.m.data, kind: communicationCommandKind,
+	fixture.m.Data = &directNoticeExactAckWriteFailureData{
+		inner: fixture.m.Data, kind: communicationCommandKind,
 		operation: "create_with_id", failure: failure,
 	}
 	if _, err := fixture.m.respondDecisionRequestWithAuthority(
@@ -707,8 +707,8 @@ func TestDecisionRequestDeadlineReceiptFailureRollsBack(t *testing.T) {
 	beforeItem := workItemRecordForDecisionTest(t, fixture)
 	beforeAudit := directNoticeAuditHead(t, fixture.directNoticeFixture)
 	failure := errors.New("injected DecisionRequest deadline receipt failure")
-	fixture.m.data = &directNoticeExactAckWriteFailureData{
-		inner: fixture.m.data, kind: communicationCommandKind,
+	fixture.m.Data = &directNoticeExactAckWriteFailureData{
+		inner: fixture.m.Data, kind: communicationCommandKind,
 		operation: "create_with_id", failure: failure,
 	}
 	if _, err := service.Expire(

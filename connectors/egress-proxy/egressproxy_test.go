@@ -75,6 +75,84 @@ func gather(t *testing.T, path string) *capturingSink {
 	return sink
 }
 
+func TestConfiguredAIHosts(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "proxy.jsonl")
+	lines := `{"ts":"2026-10-02T12:00:00Z","fqdn":" API.ANTHROPIC.COM. ","identity":"worker","decision":"allow","method":"POST","body":"SUPERSECRETPAYLOAD_MUST_NOT_LEAK","authorization":"AKIAIOSFODNN7EXAMPLE"}
+{"ts":"2026-10-02T12:00:01Z","fqdn":"api.anthropic.com.evil.example","decision":"allow","method":"POST"}
+{"ts":"2026-10-02T12:00:02Z","fqdn":"api.anthropic.com","decision":"deny","method":"POST"}
+{"fqdn":"model.local","decision":"allow","method":"POST"}
+{"ts":"bad-time","fqdn":"model.local","decision":"allow","method":"POST"}
+`
+	if err := os.WriteFile(path, []byte(lines), 0600); err != nil {
+		t.Fatal(err)
+	}
+	for _, configured := range []bool{false, true} {
+		t.Run(map[bool]string{false: "legacy", true: "opt-in"}[configured], func(t *testing.T) {
+			settings := map[string]string{"path": path}
+			if configured {
+				settings["ai_hosts"] = "api.anthropic.com, MODEL.LOCAL."
+			}
+			s := egressproxy.New()
+			if err := s.Open(context.Background(), sdk.Config{Settings: settings}); err != nil {
+				t.Fatal(err)
+			}
+			sink := &capturingSink{}
+			if err := s.Gather(context.Background(), sink); err != nil {
+				t.Fatal(err)
+			}
+			edges := sink.edges()
+			if len(edges) != 4 || len(sink.findings()) != 1 {
+				t.Fatalf("allow/deny changed: edges=%d findings=%d", len(edges), len(sink.findings()))
+			}
+			want := egressproxy.SignalEgressProxy
+			if configured {
+				want = "egress_proxy_ai"
+			}
+			if edges[0].Source != want || edges[1].Source != egressproxy.SignalEgressProxy {
+				t.Fatalf("exact host classification = %q/%q, want %q/egress_proxy", edges[0].Source, edges[1].Source, want)
+			}
+			if !edges[0].ObservedAt.Equal(time.Date(2026, 10, 2, 12, 0, 0, 0, time.UTC)) {
+				t.Fatal("declared occurrence changed")
+			}
+			for _, edge := range edges[2:] {
+				if edge.ObservedAt.IsZero() != configured {
+					t.Fatal("missing/invalid time was presented as source-declared occurrence, or legacy clock fallback changed")
+				}
+			}
+			b, _ := json.Marshal(sink.obs)
+			if strings.Contains(string(b), fixturePayload) || strings.Contains(string(b), fixtureAWSKey) {
+				t.Fatal("payload or credential leaked")
+			}
+			if err := os.Remove(path); err != nil {
+				t.Fatal(err)
+			}
+			outage := &capturingSink{}
+			err := s.Gather(context.Background(), outage)
+			if configured {
+				if err != nil || len(outage.obs) != 1 {
+					t.Fatalf("outage report: err=%v observations=%d", err, len(outage.obs))
+				}
+				report, ok := outage.obs[0].(model.InventoryCollectionReport)
+				if !ok || report.State != "unavailable" || report.Reason != "gather_error" {
+					t.Fatalf("missing log did not report unavailable: %+v", outage.obs)
+				}
+			} else if err == nil {
+				t.Fatal("legacy missing log lost its error")
+			}
+			if err := os.WriteFile(path, []byte(lines), 0600); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+	t.Run("invalid-config", func(t *testing.T) {
+		for _, host := range []string{"https://api.anthropic.com/path", "user:secret@api.anthropic.com", "*.anthropic.com", "api.anthropic.com:443", "Key.ai", "kK.ai", "mødèl.ai"} {
+			if err := egressproxy.New().Open(context.Background(), sdk.Config{Settings: map[string]string{"path": path, "ai_hosts": host}}); err == nil {
+				t.Fatalf("accepted invalid exact ASCII AI host %q", host)
+			}
+		}
+	})
+}
+
 func TestGatherEmitsEdgesAndFindings(t *testing.T) {
 	sink := gather(t, "testdata/verdicts.jsonl")
 

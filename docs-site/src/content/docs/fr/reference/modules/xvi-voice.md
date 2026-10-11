@@ -67,19 +67,120 @@ hashé, après commit.
 
 ## Statut d'actuation
 
-Une ouverture gouvernée dispatche **en direct** : une fois qu'un dispatcher vocal est provisionné
-par l'opérateur, une ouverture approuvée frappe une **credential éphémère côté serveur** et ne
-retourne que cette credential plus les coordonnées de connexion — modèle, voix, outils et détection
-de tour sont fixés **depuis la politique**, jamais depuis le client, et la clé maître du fournisseur
-ne quitte jamais le serveur. Sans ce provisionnement, le seam de dispatch est **deny-closed** : une
-ouverture approuvée est honnêtement enregistrée comme « déclarée, non ouverte » plutôt que simulée.
+Une ouverture gouvernée dispatche **en direct** : une fois le dispatcher voice
+provisionné par l’opérateur, une ouverture approuvée crée un **credential éphémère
+côté serveur** et le renvoie avec les coordonnées de connexion. La configuration
+de session opérateur fournit voix et détection de tours ; un modèle configuré
+remplace celui demandé. Sans modèle configuré, le dispatcher utilise le modèle
+demandé autorisé par la politique du tenant. La clé maître du fournisseur ne quitte
+jamais le serveur. Sans provisionnement, le dispatch **refuse en cas d’échec** :
+l’ouverture approuvée est honnêtement enregistrée « déclarée, non ouverte ».
+
+## Configurer et tester une ouverture gouvernée
+
+Activez le module existant avec `olivares modules on voice`. Le moteur enregistre
+la sélection et redémarre une fois si l’ensemble des modules actifs change ;
+`olivares modules ls` indique s’il tourne. Voice exige FinOps et governance selon
+la spécification des modules. Le désactiver conserve politiques, métadonnées de
+session et ledger des décisions.
+
+Le dispatcher est provisionné sur l’hôte du moteur via
+`OLIVARES_VOICE_DISPATCH_CONFIG`, chemin absolu d’un fichier JSON détenu par
+l’opérateur. Seul le compte du moteur doit pouvoir le lire. Les clés maîtres des
+fournisseurs appartiennent à ce fichier, jamais aux arguments CLI, lignes de
+politique ou bundles de connexion client. Pour un adaptateur OpenAI :
+
+```json
+{
+  "providers": [
+    {"ref": "openai", "kind": "openai", "api_key": "<server-held provider key>"}
+  ],
+  "policies": [
+    {
+      "agent_ref": "contact-agent",
+      "provider_ref": "openai",
+      "model": "<your permitted realtime model>",
+      "voice": "marin",
+      "max_duration_seconds": 60
+    }
+  ]
+}
+```
+
+Définissez la variable d’environnement pour le service du moteur et redémarrez-le.
+Un fichier fourni illisible ou invalide empêche le démarrage. Sans configuration
+de dispatcher, le comportement reste « déclaré, non ouvert ». Le fichier opérateur
+choisit adaptateurs et paramètres de session ; la politique voice du tenant
+autorise séparément l’agent, le modèle et le fournisseur demandés. Utilisez les
+mêmes références de modèle et de fournisseur dans les deux.
+
+Après `olivares login`, déclarez cette politique et demandez une approbation :
+
+```sh
+olivares voice policies set --agent-ref contact-agent \
+  --allowed-model-ref '<your permitted realtime model>' --allowed-provider-ref openai \
+  --max-session-minutes 1 --max-latency-ms 300
+olivares voice sessions open --session-ref contact-1 --agent-ref contact-agent \
+  --model-ref '<your permitted realtime model>' --provider-ref openai -o json
+```
+
+La première demande renvoie `op_status: requested`, une `approval_ref` et le code
+de sortie CLI 7. Elle n’ouvre aucune connexion média et ne crée aucun credential
+fournisseur. Les approbateurs indépendants requis approuvent cette référence via
+la page d’approbation governance ou
+`olivares governance approvals approve <approval-ref>`. Pour les nouvelles demandes
+via le pont local d’approbation par défaut, le demandeur ne peut pas approuver sa
+propre demande, même avec un autre credential du même compte. Répétez la même
+ouverture avec `--approval-ref <approval-ref>`. Un refus de politique ou une
+approbation en attente renvoie 403 et le code CLI 3 ; un échec d’adaptateur renvoie
+502. Les contrôles de budget et d’arrêt de l’estate restent applicables.
+
+Une demande configurée réussie renvoie `op_status: dispatched`. Son `dispatch_ref`
+est une chaîne JSON contenant le `credential` temporaire, les coordonnées `connect`,
+le `transport`, le modèle et l’expiration. Traitez cette réponse comme un credential :
+ne la copiez pas dans des rapports ou logs. Pour OpenAI, le client échange une offre
+SDP à l’URL `connect` renvoyée avec le credential temporaire, puis possède la
+connexion média WebRTC. La création du credential ne prouve pas une connexion
+média établie. Le ledger conserve une empreinte SHA-256 du bundle contenant un
+credential, pas le credential de connexion. Les anciens bundles stockés sont
+également hachés à la lecture ; les lignes append-only existantes ne sont pas
+réécrites. Les handles fournisseur simples conservent leur valeur.
+
+Inspectez les métadonnées et décisions conservées :
+
+```sh
+olivares voice sessions get contact-1 -o json
+olivares voice sessions decisions contact-1 -o json
+olivares voice policies ls -o json
+```
+
+Utilisez le même répertoire de données entre redémarrages. La politique et les
+décisions append-only restent disponibles après redémarrage et après désactivation
+puis réactivation de voice ; les credentials fournisseur restent à provisionner
+séparément. Les commandes JSON utilisent les mêmes routes `/v1/m/voice`, délimitées
+par tenant, que l’API.
 
 :::caution[Limites honnêtes]
-- **L'observation est dormante dans ce build.** Aucun connecteur ou sonde vocale n'est encore
-  livré, donc la moitié observation reste **honnêtement vide** jusqu'à ce qu'une sonde in-process
-  publie de la télémétrie. Le module avertit au démarrage lorsque rien ne l'alimente. Un plugin
-  hors-processus **ne peut pas** l'alimenter (le proto gRPC du control plane ne porte aucun RPC
-  d'événement) — la sonde doit être in-process.
+- **L’attribution des approbations a un périmètre.** Le pont local par défaut
+  conserve le demandeur authentifié pour les nouvelles ouvertures humaines. Les
+  approbations existantes conservent leur attribution stockée. Un pont explicitement
+  configuré avec token de service attribue les demandes à son credential de service ;
+  il ne garantit pas la même séparation de la personne à l’origine de la demande.
+- **L’observation exige un producteur configuré.** Le plan d’appels OpenAI Realtime
+  SIP optionnel utilise `OLIVARES_VOICE_CALL_CONFIG` pour vérifier les webhooks et
+  attribuer tenant et projet, avec les credentials fournisseur du dispatcher. Sans
+  cette configuration ou un producteur de télémétrie in-process, l’observation reste
+  vide. Créer un credential WebRTC ne remplit ni le nombre de tours ni la latence.
+  Un plugin hors processus ne peut pas publier l’événement du module via le plan
+  de contrôle gRPC, qui n’expose aucun RPC d’événement.
+- **Le client possède les médias des sessions créées.** Ce module n’implémente pas
+  de client WebRTC et ne ferme pas sa connexion audio. Le contrôleur SIP optionnel
+  est un chemin séparé. Un test local avec audio synthétique ne qualifie ni la voix
+  du fournisseur, ni la facturation, ni l’observation SIP, ni l’arrêt des médias.
+- **La console a un périmètre distinct.** La vue voice modifie les politiques et
+  affiche sessions, décisions et flux de métadonnées. Le provisionnement du
+  dispatcher et la connexion média client en sont séparés ; une journey API ou CLI
+  ne qualifie pas une action navigateur.
 - **Aucun contenu, jamais.** C'est une propriété stricte du fil, pas un réglage : le schéma n'a
   aucune colonne de contenu et le parser rejette les clés inconnues. La latence est affichée comme
   moyenne/max honnêtes issues d'échantillons réels — jamais un p50/p95 fabriqué.

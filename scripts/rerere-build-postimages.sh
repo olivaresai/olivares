@@ -46,16 +46,16 @@ set -uo pipefail
 #
 # Fail-closed: no poder cargar el saneador es «no he podido aislar», nunca «no hacia falta».
 _rrbp_here="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")" && pwd)" || {
-  echo "rerere-build-postimages: 2 NO HE PODIDO MIRAR — no pude resolver mi propio directorio" >&2
+  echo "rerere-build-postimages: 2 COULD NOT LOOK — could not resolve the script directory" >&2
   exit 2
 }
 # shellcheck source=/dev/null
 . "${_rrbp_here}/lib/git-env.sh" || {
-  echo "rerere-build-postimages: 2 NO HE PODIDO MIRAR — no pude cargar lib/git-env.sh" >&2
+  echo "rerere-build-postimages: 2 COULD NOT LOOK — could not source lib/git-env.sh" >&2
   exit 2
 }
 
-no_puedo() { printf 'rerere-build-postimages: 2 NO HE PODIDO MIRAR — %s\n' "$*" >&2; exit 2; }
+cannot_check() { printf 'rerere-build-postimages: 2 COULD NOT LOOK — %s\n' "$*" >&2; exit 2; }
 
 # La FORMA de un sello: UNA linea, digest de 64 hex, un espacio, un entero. No es el nombre del
 # fichero: el nombre no viaja en el `rr-cache`, solo el contenido del conflicto y su resolucion.
@@ -66,10 +66,10 @@ es_de_build() {
   LC_ALL=C grep -qE '^[0-9a-f]{64} [0-9]+$' "$f"
 }
 
-censo() {
+census() {
   local cache="$1" purgar="$2" repo="${3:-}"
   local n=0 p=0
-  [ -d "$cache" ] || { printf '  rr-cache no existe: %s\n' "$cache"; return 0; }
+  [ -d "$cache" ] || { printf '  rr-cache does not exist: %s\n' "$cache"; return 0; }
   local e f
   while IFS= read -r e; do
     [ -n "$e" ] || continue
@@ -83,14 +83,14 @@ censo() {
       rm -rf -- "$cache/$e" && p=$((p + 1))
     fi
   done < <(ls -1 "$cache" 2>/dev/null | LC_ALL=C sort)
-  printf 'rerere-build-postimages: %s entrada(s) con postimage de build' "$n"
-  [ "$purgar" = "1" ] && printf ' · %s retirada(s)' "$p"
+  printf 'rerere-build-postimages: %s entry/entries with a build postimage' "$n"
+  [ "$purgar" = "1" ] && printf ' · %s removed' "$p"
   printf '\n'
   return 0
 }
 
 selftest() {
-  local t; t=$(mktemp -d "${TMPDIR:-/tmp}/rrbp.XXXXXX") || no_puedo "no pude crear el temporal"
+  local t; t=$(mktemp -d "${TMPDIR:-/tmp}/rrbp.XXXXXX") || cannot_check "could not create the temporary directory"
   # shellcheck disable=SC2064
   trap "rm -rf '$t'" EXIT
   local c="$t/rr-cache" oks=0 fails=0
@@ -103,41 +103,41 @@ selftest() {
   #    mal. Lo caza su propio selftest, que es para lo que existe.
   printf '%s 42\n' "$(printf 'z%.0s' $(seq 64))" > "$c/bbb/postimage"
   printf 'una resolucion de TEXTO\ncon dos lineas\n' > "$c/ccc/postimage"
-  local out; out=$(censo "$c" 0)
+  local out; out=$(census "$c" 0)
   case "$out" in
-    *"1 entrada(s) con postimage de build"*) ok "cuenta SOLO la que tiene forma de sello (hex)" ;;
-    *) bad "esperaba 1 entrada; salio: $(printf '%s' "$out" | tail -1)" ;;
+    *"1 entry/entries with a build postimage"*) ok "counts ONLY the entry with the stamp format (hex)" ;;
+    *) bad "expected 1 entry; got: $(printf '%s' "$out" | tail -1)" ;;
   esac
   case "$out" in
-    *ccc*) bad "una resolucion de texto NO puede entrar en el censo" ;;
-    *)     ok "la resolucion de TEXTO se queda fuera" ;;
+    *ccc*) bad "a text resolution MUST NOT enter the census" ;;
+    *)     ok "the TEXT resolution remains excluded" ;;
   esac
   # y con --purge: retira la de build y deja las otras dos
-  out=$(censo "$c" 1)
+  out=$(census "$c" 1)
   case "$out" in
-    *"1 retirada(s)"*) ok "--purge retira exactamente las de build" ;;
-    *) bad "esperaba 1 retirada; salio: $(printf '%s' "$out" | tail -1)" ;;
+    *"1 removed"*) ok "--purge removes exactly the build entries" ;;
+    *) bad "expected 1 removal; got: $(printf '%s' "$out" | tail -1)" ;;
   esac
   if [ -d "$c/ccc" ] && [ -d "$c/bbb" ] && [ ! -d "$c/aaa" ]; then
-    ok "deja intactas las que no son de build"
+    ok "leaves non-build entries intact"
   else
-    bad "deberia quedar bbb y ccc y no aaa: $(ls -1 "$c" | tr '\n' ' ')"
+    bad "bbb and ccc should remain, but aaa should not: $(ls -1 "$c" | tr '\n' ' ')"
   fi
   # ⛔ y se comprueba que `rerere.autoupdate` NO esta fijado: si lo estuviera, una re-aplicacion
   #    quedaria INDEXADA sola y la ventana de riesgo dejaria de ser «entre el merge y el gate».
   local au; au=$(git config --get rerere.autoupdate 2>/dev/null || true)
   case "$au" in
-    ""|false) ok "rerere.autoupdate sin fijar o false (la re-aplicacion no se indexa sola)" ;;
-    *)        bad "rerere.autoupdate=$au — una re-aplicacion se indexaria SOLA" ;;
+    ""|false) ok "rerere.autoupdate unset or false (reapplied resolutions are not automatically staged)" ;;
+    *)        bad "rerere.autoupdate=$au — a reapplied resolution would be AUTOMATICALLY staged" ;;
   esac
   # ⛔ AISLAMIENTO: con un `GIT_DIR` envenenado, este guion NO puede acabar operando sobre otro
   #    repositorio. `GIT_DIR` manda sobre `-C` y sobre el cwd, asi que sin el saneador un
   #    `--purge` borraria del `rr-cache` equivocado. Se comprueba que tras sourcear la lib la
   #    variable ya no esta en el entorno: eso es lo que hace `olivares_git_env_isolate`.
   if [ -z "${GIT_DIR:-}" ] && [ -z "${GIT_WORK_TREE:-}" ]; then
-    ok "el entorno git quedo aislado (GIT_DIR y GIT_WORK_TREE sin fijar)"
+    ok "the Git environment is isolated (GIT_DIR and GIT_WORK_TREE unset)"
   else
-    bad "GIT_DIR='${GIT_DIR:-}' GIT_WORK_TREE='${GIT_WORK_TREE:-}' — el saneador no actuo"
+    bad "GIT_DIR='${GIT_DIR:-}' GIT_WORK_TREE='${GIT_WORK_TREE:-}' — the sanitizer did not run"
   fi
   printf 'rerere-build-postimages selftest: %s passed, %s failed\n' "$oks" "$fails"
   [ "$fails" = "0" ] || return 1
@@ -149,11 +149,11 @@ for a in "$@"; do
   case "$a" in
     --selftest) selftest; exit $? ;;
     --purge)    PURGAR=1 ;;
-    *)          no_puedo "argumento desconocido: $a" ;;
+    *)          cannot_check "unknown argument: $a" ;;
   esac
 done
 
-command -v git >/dev/null 2>&1 || no_puedo "no hay git en el PATH"
-CACHE="$(git rev-parse --git-common-dir 2>/dev/null)/rr-cache" || no_puedo "no estoy en un repositorio git"
+command -v git >/dev/null 2>&1 || cannot_check "git is unavailable on PATH"
+CACHE="$(git rev-parse --git-common-dir 2>/dev/null)/rr-cache" || cannot_check "not inside a Git repository"
 printf 'rerere-build-postimages: %s\n' "$CACHE"
-censo "$CACHE" "$PURGAR"
+census "$CACHE" "$PURGAR"

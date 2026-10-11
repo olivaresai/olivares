@@ -6,6 +6,9 @@ description: >-
   demo estate, then on a real pgAudit connector to prove it is not a demo.
 ---
 
+> Business deployment packages are supplied through the Business channel; their publication is unverified here. Verify the chart package and its publisher using the channel instructions before using the local chart below. The flat manifest example uses a Business-supplied file named `business-install.yaml`. Air-gapped installation requires Enterprise.
+
+
 This is the fast path to seeing what Olivares AI is *for*: a **read/write access
 map** of your estate and the **Permitted-vs-Observed drift** on top of it — the gap
 between the access an agent is *granted* and the access it is *observed* using.
@@ -47,7 +50,7 @@ task build                      # compiles ./bin/olivares with the web UI embedd
 engine, the embedded web UI and the first-party connector plugins. The **container and
 Kubernetes installs wrap this same binary**: a published image plus a Compose file
 ([self-hosting](/how-to/self-hosting/)), or a flat manifest you `kubectl apply -f
-deploy/manifests/install.yaml` (no Helm required). The hero you see below is identical
+./business-install.yaml` (no Helm required). The hero you see below is identical
 on all three — only the demo seed differs (loopback-only, never in a real install).
 
 ## 2. Boot the demo estate (loopback only)
@@ -231,7 +234,7 @@ precisely because it pre-binds its agents.
 
 :::note[The endpoint shape]
 The Permitted-vs-Observed result is served at `/v1/m/accessmap/drift` (there is no
-`/diff`). The `/v1/m/accessmap/*` routes are not in the 70-path stable core contract;
+`/diff`). The `/v1/m/accessmap/*` routes are not in the 128-path stable core contract;
 they are published as a separate **beta** document — the
 [module-route reference](/reference/api-beta/). The [API reference](/reference/api/)
 documents the stable core surface.

@@ -5,6 +5,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 # Evaluation guide — proof of value in 10 business days
 
+Audit SIEM export, directory archives and external archive verification require Business. Community retains the signed ledger and `olivares audit verify`; `olivares dr backup` remains available. See [edition placement](../editions.md).
+
 > For platform engineering, security and compliance teams evaluating Olivares AI.
 > Every step runs against the real binary serving real data. The demo estate is
 > synthetic — the engine, the enforcement and the audit trail are not.
@@ -32,9 +34,9 @@ not check, stop here.
 
 | # | Criterion | Action | Expected result | Reference |
 |---|---|---|---|---|
-| 1.1 | Build from source | `task build` | Binary appears at `./bin/olivares`; exit 0 | [README — Install](../../README.md#install) |
-| 1.2 | Boot the demo estate | `./bin/olivares serve --seed-demo --insecure --listen 127.0.0.1:8901 --grpc-listen 127.0.0.1:8902 --data-dir "$(mktemp -d)"` | `=== DEMO MODE (SYNTHETIC DATA) ===` banner with the public demo credentials; console at `http://127.0.0.1:8901` (loopback-only; `--insecure` turns TLS off — demo only, refused on non-loopback addresses) | [README — Quickstart](../../README.md#quickstart) |
-| 1.2b | Secure first run (no demo) | `./bin/olivares quickstart` | TLS on at the printed URL (default `https://127.0.0.1:8443`), **one-time setup token** printed, no default credentials — this is the credential-free-first-run property; it belongs to a fresh estate, not the seeded demo | [README — Quickstart](../../README.md#quickstart) |
+| 1.1 | Build from source | `task build` | Binary appears at `./bin/olivares`; exit 0 | [Install — From source](../../INSTALL.md#from-source) |
+| 1.2 | Boot the demo estate | `./bin/olivares serve --seed-demo --insecure --listen 127.0.0.1:8901 --grpc-listen 127.0.0.1:8902 --data-dir "$(mktemp -d)"` | `=== DEMO MODE (SYNTHETIC DATA) ===` banner with the public demo credentials; console at `http://127.0.0.1:8901` (loopback-only; `--insecure` turns TLS off — demo only, refused on non-loopback addresses) | [Install — From source](../../INSTALL.md#from-source) |
+| 1.2b | Secure first run (no demo) | `./bin/olivares quickstart` | TLS on at the printed URL (default `https://127.0.0.1:8443`), **one-time setup token** printed, no default credentials — this is the credential-free-first-run property; it belongs to a fresh estate, not the seeded demo | [Install — From source](../../INSTALL.md#from-source) |
 | 1.3 | Verify cosign signature | `scripts/verify-release.sh --key cosign.pub` | "PASS" for all 5 checks (signature, SBOM attestation, SLSA provenance, OpenVEX, checksum) | [RELEASE-VERIFICATION.md](../RELEASE-VERIFICATION.md) |
 | 1.4 | Check SBOM attestation | Inspect the release attestation bundle | CycloneDX and SPDX SBOMs present and parseable | [RELEASE-VERIFICATION.md](../RELEASE-VERIFICATION.md) |
 | 1.5 | Inspect security.txt | `curl -fsSL https://olivares.ai/.well-known/security.txt` (this repo's copy: `docs-site/public/.well-known/security.txt`, a docs-site asset that the engine does not serve; the apex is served by the web site) | RFC 9116-valid `security.txt` with contact, policy and encryption fields; consistency with `SECURITY.md` is CI-checked by `scripts/check-security-txt.sh` | [SECURITY.md](../../SECURITY.md) |
@@ -71,9 +73,10 @@ any step silently succeeds without an audit event, that is a bug — report it.
 
 ## Phase 3 — Day 7-10: Compliance and enterprise readiness
 
-Validate the evidence, compliance and identity surfaces. Steps marked
-"(enterprise)" require evaluation entitlements for the corresponding commercial
-add-ons — contact enterprise@olivares.ai to arrange them.
+Validate the evidence, compliance and identity surfaces. Steps marked with a
+Business family name require a Business evaluation license with that family enabled —
+contact enterprise@olivares.ai to arrange it. [Editions](../editions.md) says which
+family each capability belongs to.
 
 | # | Criterion | Action | Expected result | Reference |
 |---|---|---|---|---|
@@ -82,24 +85,24 @@ add-ons — contact enterprise@olivares.ai to arrange them.
 | 3.3 | Wire identity source (OIDC) | Configure an OIDC provider (Okta, Entra, Google, etc.) via the console | SSO login works; the identity source appears in the roster; user attributes are reconciled | [SSO how-to](../../docs-site/src/content/docs/how-to/connectors/sso-scim-identity.md) |
 | 3.4 | Backup/restore cycle | `olivares dr backup --passphrase-file <file>` then `olivares dr restore` (exactly one of `--passphrase-file` or `--kek-key-file`; the passphrase is never passed inline) | `.drbundle` created; restore succeeds; `olivares audit verify` passes post-restore (chain continuity preserved) | [DR-RUNBOOK.md](../DR-RUNBOOK.md) |
 | 3.5 | Verify there is NO user cap | Create a 4th, 10th and 50th active user account, with and without a licence installed; then let a licence lapse (or remove it) and create another | Every creation succeeds — user accounts are unlimited in every edition and a licence lapse never caps or deletes accounts. The console's Edition & license tab shows active-user USAGE with no quota | [LICENSING.md](../../LICENSING.md) |
-| 3.6 | SSO enforcement (enterprise) | Enable require-SSO and block password login | Password login blocked; SSO remains the only login path; the SSO config API reports `enforced_by: "enterprise"` for the deployment-wide primary IdP (the open build honestly reports `"unavailable"` — it stores the posture but never enforces it). Set the posture on the deployment-wide primary: a per-tenant IdP, or a second IdP under another alias, reports `"out_of_scope"` — the engine resolves the deployment-wide primary's posture only, so a posture stored elsewhere is definitively not the one applied | [SSO enforcement](../../docs-site/src/content/docs/explanation/open-core-and-licensing.md) |
-| 3.7 | Content firewall (enterprise) | Enable the content firewall and send a prompt with a known injection pattern | Injection detected and blocked across message, retrieval and MCP render channels; the event shows the detection detail | [Content firewall](../../docs-site/src/content/docs/explanation/open-core-and-licensing.md) |
-| 3.8 | Multi-IdP federation (enterprise) | Configure a second active IdP (OIDC or SAML) | Both IdPs active; login routes to the correct IdP by tenant or domain | [Multi-IdP federation](../../docs-site/src/content/docs/explanation/open-core-and-licensing.md) |
+| 3.6 | SSO enforcement (Business: Identity & Scale) | Enable require-SSO and block password login | Password login blocked; SSO remains the only login path; the SSO config API reports `enforced_by: "enterprise"` for the deployment-wide primary IdP (the open build honestly reports `"unavailable"` — it stores the posture but never enforces it). Set the posture on the deployment-wide primary: a per-tenant IdP, or a second IdP under another alias, reports `"out_of_scope"` — the engine resolves the deployment-wide primary's posture only, so a posture stored elsewhere is definitively not the one applied | [SSO enforcement](../../docs-site/src/content/docs/explanation/open-core-and-licensing.md) |
+| 3.7 | Content firewall (Business: AI Runtime Security) | Enable the content firewall and send a prompt with a known injection pattern | Injection detected and blocked across message, retrieval and MCP render channels; the event shows the detection detail | [Content firewall](../../docs-site/src/content/docs/explanation/open-core-and-licensing.md) |
+| 3.8 | Multi-IdP federation (Business: Identity & Scale) | Configure a second active IdP (OIDC or SAML) | Both IdPs active; login routes to the correct IdP by tenant or domain | [Multi-IdP federation](../../docs-site/src/content/docs/explanation/open-core-and-licensing.md) |
 | 3.9 | Review honesty-and-limits page | Read `docs-site/src/content/docs/start/honesty-and-limits.md` | Every listed gap and limitation matches real product behavior — no overclaimed capability | [Honesty & limits](../../docs-site/src/content/docs/start/honesty-and-limits.md) |
 
 **Pass/fail:** the compliance evidence is machine-readable, the backup restores
 with cryptographic verification, and the honest limits page matches observed
-behavior. Enterprise criteria require the corresponding add-on evaluation
-entitlements.
+behavior. Criteria marked with a Business family name require a Business
+evaluation license with that family enabled.
 
 ---
 
 ## After the evaluation
 
 - **Feature matrix:** see [feature-matrix.md](./feature-matrix.md) for the
-  complete open-core vs commercial add-ons comparison.
-- **Why the commercial add-ons:** see [why-enterprise.md](./why-enterprise.md) for the
-  commercial value proposition and what each add-on entitlement includes.
+  complete Community vs Business and Enterprise comparison.
+- **Editions:** see [editions.md](../editions.md) for what Community, Business (its base
+  line and four capability families) and Enterprise include.
 - **Reference architecture:** see [reference-architecture.md](./reference-architecture.md)
   for deployment topologies, HA/DR numbers and sizing.
 - **Vendor viability:** see [vendor-viability.md](./vendor-viability.md) for the

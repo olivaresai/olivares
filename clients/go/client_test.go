@@ -34,6 +34,37 @@ func newTestClient(t *testing.T, h http.Handler, opts ...Option) (*Client, *[]ti
 	return c, &slept
 }
 
+func TestCleanupKeepsBodylessCallsAndOptions(t *testing.T) {
+	var bodies []string
+	c, _ := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" || r.URL.Path != "/v1/m/sessions/runs/run/cleanup" {
+			t.Errorf("request = %s %s", r.Method, r.URL.Path)
+		}
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Error(err)
+		}
+		bodies = append(bodies, string(body))
+		if len(bodies) > 1 && (r.Header.Get("X-Olivares-Tenant") != "override" || r.URL.Query().Get("probe") != "yes") {
+			t.Errorf("per-call options lost: %v %v", r.Header, r.URL.Query())
+		}
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	ctx := context.Background()
+	if _, err := c.PostV1MSessionsRunsByRefCleanup(ctx, "run"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.PostV1MSessionsRunsByRefCleanup(ctx, "run", Tenant("override"), Query("probe", "yes")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.PostV1MSessionsRunsByRefCleanupWithBody(ctx, "run", map[string]any{"force": true}, Tenant("override"), Query("probe", "yes")); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(bodies, "|") != `||{"force":true}` {
+		t.Errorf("bodies = %q", bodies)
+	}
+}
+
 func TestRequestShape(t *testing.T) {
 	var got *http.Request
 	c, _ := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -493,5 +524,61 @@ func TestOther503GETStillRetried(t *testing.T) {
 	if calls.Load() != 3 {
 		t.Errorf("requests = %d, want 3 (initial plus 2 retries): the HA handoff retry is not C32's to remove",
 			calls.Load())
+	}
+}
+
+func TestCleanupPublishedCallForms(t *testing.T) {
+	type request struct{ path, query, tenant, header, body string }
+	var seen []request
+	c, _ := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Error(err)
+		}
+		seen = append(seen, request{r.URL.Path, r.URL.Query().Get("probe"), r.Header.Get("X-Olivares-Tenant"), r.Header.Get("X-Probe"), string(body)})
+		_, _ = w.Write([]byte(`{}`))
+	}), WithTenant("default-tenant"))
+	ctx := context.Background()
+	if _, err := c.PostV1MSessionsRunsByRefCleanup(ctx, "run"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.PostV1MSessionsRunsByRefCleanup(ctx, "run", Tenant("requested-tenant"), requestHeader("X-Probe", "kept"), Query("probe", "kept")); err != nil {
+		t.Fatal(err)
+	}
+	if len(seen) != 2 {
+		t.Fatalf("requests = %d", len(seen))
+	}
+	if seen[0].body != "" || seen[0].tenant != "default-tenant" {
+		t.Fatalf("default call = %+v", seen[0])
+	}
+	want := request{"/v1/m/sessions/runs/run/cleanup", "kept", "requested-tenant", "kept", ""}
+	if seen[1] != want {
+		t.Fatalf("options call = %+v, want %+v", seen[1], want)
+	}
+}
+
+func TestCleanupBodyCall(t *testing.T) {
+	var bodies []string
+	var tenants []string
+	c, _ := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Error(err)
+		}
+		bodies = append(bodies, string(body))
+		tenants = append(tenants, r.Header.Get("X-Olivares-Tenant"))
+		_, _ = w.Write([]byte(`{}`))
+	}), WithTenant("default-tenant"))
+	if _, err := c.PostV1MSessionsRunsByRefCleanupWithBody(context.Background(), "run", map[string]any{"discard_worktree": true}, Tenant("requested-tenant")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.PostV1MSessionsRunsByRefCleanupWithBody(context.Background(), "run", nil); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(bodies, "|") != `{"discard_worktree":true}|` {
+		t.Fatalf("bodies = %q", bodies)
+	}
+	if strings.Join(tenants, "|") != "requested-tenant|default-tenant" {
+		t.Fatalf("tenants = %q", tenants)
 	}
 }

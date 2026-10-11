@@ -26,18 +26,14 @@ func approvalURL(ref string) string {
 	return "/v1/m/governance/approvals/" + ref
 }
 
-// UseApprovalRecoveryTenants supplies the composition root's authoritative local
-// tenant inventory. The queue and the waiting runs remain in their existing stores.
-func (m *Module) UseApprovalRecoveryTenants(f func(context.Context) ([]model.TenantID, error)) {
-	m.rt.approvalRecoveryTenants = f
-}
-
+// RecoverWaitingLaunches re-arms readable waiting runs. An unreadable question
+// stays waiting for repair and is logged without blocking the tenant's other runs.
 func (m *Module) RecoverWaitingLaunches(ctx context.Context, tenant model.TenantID) error {
 	q := model.Query{Limit: 200, Filters: []model.Filter{eq(colState, stateWaitingApproval)}}
 	for {
 		var rows []model.Record
 		var page model.Page
-		err := m.data.View(ctx, tenant, func(sc store.Scope) error {
+		err := m.Data.View(ctx, tenant, func(sc store.Scope) error {
 			repo, err := sc.Ext(runKind)
 			if err != nil {
 				return err
@@ -51,7 +47,9 @@ func (m *Module) RecoverWaitingLaunches(ctx context.Context, tenant model.Tenant
 		for _, row := range rows {
 			var intent LaunchIntent
 			if err := json.Unmarshal([]byte(row.String(colRunQueuedIntent)), &intent); err != nil {
-				return errors.New("waiting launch question is unreadable")
+				m.warnf("waiting launch question is unreadable; leaving this launch waiting",
+					"tenant", tenant.String(), "run_ref", row.String(colRunRef))
+				continue
 			}
 			intent.Actor = row.String(colRunQueuedActor)
 			intent.ActorKind = row.String(colRunQueuedActorKind)
@@ -71,7 +69,7 @@ func (m *Module) RecoverWaitingLaunches(ctx context.Context, tenant model.Tenant
 // Every worker owns a durable run, never a request context. Reading approval
 // status conveys no authority; the approved continuation re-enters admission.
 func (m *Module) watchApproval(tenant model.TenantID, runRef string, intent LaunchIntent) {
-	reader, ok := m.rt.launchGate.(LaunchApprovalReader)
+	reader, ok := m.rt.LaunchGate.(LaunchApprovalReader)
 	if !ok {
 		m.warnf("waiting launch has no approval status reader", "run_ref", runRef)
 		return
@@ -133,7 +131,7 @@ func (m *Module) watchApproval(tenant model.TenantID, runRef string, intent Laun
 			warned = false
 			switch status {
 			case "approved", "break_glass":
-				_, err := m.resumeRunInternal(ctx, tenant, runRef, "", "", "", true, resumeAsLaunchOwner, false)
+				_, err := m.resumeRunInternal(ctx, tenant, runRef, "", "", "", true, callerAsks{})
 				if err == nil {
 					return
 				}
@@ -195,10 +193,6 @@ func (m *Module) stopApprovalWorkers(ctx context.Context) {
 	}
 }
 
-func (m *Module) UseQueuedLaunchAuthorization(f func(context.Context, model.TenantID, auth.QueuedCredential, string, model.ID) (auth.Principal, error)) {
-	m.rt.queuedLaunchAuthorization = f
-}
-
 func clearQueuedLaunchAuthority(row model.Record) {
 	for _, column := range []string{colRunQueuedUserID, colRunQueuedActor, colRunQueuedActorKind, colRunQueuedCredentialID, colRunQueuedCredentialKind, colRunQueuedCredentialVersion, colRunQueuedCredentialSeal, colRunQueuedIntent, colRunEnvAllow} {
 		row[column] = nil
@@ -224,8 +218,4 @@ func retryableApprovalWait(err error) bool {
 		return refusal.status >= http.StatusInternalServerError
 	}
 	return !errors.Is(err, store.ErrNotFound) && !errors.Is(err, ErrLeaseLost) && !errors.Is(err, ErrNoClaim)
-}
-
-func (m *Module) UseQueuedCredentialCapture(f func(context.Context, auth.QueuedCredential) (auth.QueuedCredential, error)) {
-	m.rt.queuedCredentialCapture = f
 }

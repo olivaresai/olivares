@@ -26,10 +26,7 @@ func (s *Server) connectorOnboardingSvc(w http.ResponseWriter, r *http.Request) 
 	return s.connectorOnboarding, true
 }
 
-func (s *Server) handleListConnectors(w http.ResponseWriter, r *http.Request) {
-	if _, ok := s.authzSystem(w, r, "system:admin"); !ok {
-		return
-	}
+func (s *Server) handleListConnectors(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
 	svc, ok := s.connectorOnboardingSvc(w, r)
 	if !ok {
 		return
@@ -45,11 +42,8 @@ func (s *Server) handleListConnectors(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"connectors": infos})
 }
 
-func (s *Server) handleTestConnector(w http.ResponseWriter, r *http.Request) {
-	p, ok := s.authzSystem(w, r, "system:admin")
-	if !ok {
-		return
-	}
+func (s *Server) handleTestConnector(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	p := mc.Principal
 	if !s.requireStepUp(w, r, p) {
 		return
 	}
@@ -59,7 +53,7 @@ func (s *Server) handleTestConnector(w http.ResponseWriter, r *http.Request) {
 	}
 	var in ConnectorOnboardInput
 	if err := decodeJSON(w, r, &in); err != nil {
-		s.badRequest(w, r, "invalid JSON body")
+		s.badRequest(w, r, RequestBodyErrorMessage(err, "invalid JSON body"))
 		return
 	}
 	if err := svc.TestConnector(r.Context(), p, in); err != nil {
@@ -69,11 +63,8 @@ func (s *Server) handleTestConnector(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
-func (s *Server) handlePutConnector(w http.ResponseWriter, r *http.Request) {
-	p, ok := s.authzSystem(w, r, "system:admin")
-	if !ok {
-		return
-	}
+func (s *Server) handlePutConnector(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	p := mc.Principal
 	if !s.requireStepUp(w, r, p) {
 		return
 	}
@@ -83,7 +74,7 @@ func (s *Server) handlePutConnector(w http.ResponseWriter, r *http.Request) {
 	}
 	var in ConnectorOnboardInput
 	if err := decodeJSON(w, r, &in); err != nil {
-		s.badRequest(w, r, "invalid JSON body")
+		s.badRequest(w, r, RequestBodyErrorMessage(err, "invalid JSON body"))
 		return
 	}
 	res, err := svc.PutConnector(r.Context(), p, in)
@@ -94,11 +85,8 @@ func (s *Server) handlePutConnector(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, res)
 }
 
-func (s *Server) handleDeleteConnector(w http.ResponseWriter, r *http.Request) {
-	p, ok := s.authzSystem(w, r, "system:admin")
-	if !ok {
-		return
-	}
+func (s *Server) handleDeleteConnector(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	p := mc.Principal
 	if !s.requireStepUp(w, r, p) {
 		return
 	}
@@ -110,7 +98,7 @@ func (s *Server) handleDeleteConnector(w http.ResponseWriter, r *http.Request) {
 		Name string `json:"name"`
 	}
 	if err := decodeJSON(w, r, &in); err != nil {
-		s.badRequest(w, r, "invalid JSON body")
+		s.badRequest(w, r, RequestBodyErrorMessage(err, "invalid JSON body"))
 		return
 	}
 	res, err := svc.DeleteConnector(r.Context(), p, in.Name)

@@ -8,7 +8,7 @@
 // modules and output connectors react, and the whole graph starts and stops as
 // one. A faulty component is isolated — a panicking in-process Gather or a
 // crashing plugin is logged and marked failed, never allowed to take down the
-// engine (ARCHITECTURE.md).
+// engine (ARCHITECTURE.md). A source or output plugin whose process dies is started again.
 //
 // The runtime imports the Apache SDK (and the Apache sdk/plugin transport) and
 // the engine's store interfaces. Connectors never see it; they see only ./sdk.
@@ -42,7 +42,8 @@ const (
 	StatusRunning Status = "running"
 	// StatusStopped means cleanly stopped.
 	StatusStopped Status = "stopped"
-	// StatusFailed means it errored or panicked; it is isolated, not retried (S02).
+	// StatusFailed means it errored or panicked; it is isolated, not retried (S02),
+	// except a source plugin whose process died, which is restarted with backoff.
 	StatusFailed Status = "failed"
 	// StatusDormant means registered for its schema only: this node does not run
 	// the module (it is outside the node's module profile).
@@ -193,6 +194,15 @@ type sourceReg struct {
 	cancel context.CancelFunc
 	done   chan struct{}
 	client *goplugin.Client
+	// plugin is how client was started (path and pinned checksum). When the process
+	// dies, the gather loop restarts it from here and swaps conn and client, under
+	// r.mu, from the source's own goroutine. Zero for an in-process source.
+	plugin pluginLaunch
+	// restartWait and restartedAt belong to the gather goroutine alone: the delay
+	// before the next plugin restart, which keeps doubling while the plugin keeps
+	// dying, and when the last restart succeeded.
+	restartWait time.Duration
+	restartedAt time.Time
 }
 
 // jobReg is an engine-owned periodic job: non-Gather work (e.g. the governance
@@ -269,6 +279,10 @@ var ErrSourceNotFound = errors.New("runtime: no such source")
 // render the wrapped detail (the secret-resolver error is genericized the same
 // way). Match with errors.Is.
 var ErrSourceOpenFailed = errors.New("runtime: source open failed")
+
+// ErrSourceDidNotAnswer wraps a probe's failed sdk.SourceChecker.Check: the source
+// opened with its configuration and its target did not answer with it.
+var ErrSourceDidNotAnswer = errors.New("runtime: source did not answer")
 
 // ErrEmptyRegistrationName is returned by the explicitly-NAMED registration
 // variants when the composition root supplies no name. It is deliberately an

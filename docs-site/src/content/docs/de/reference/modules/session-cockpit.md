@@ -10,7 +10,7 @@ description: >-
 Die Community-Binärdatei registriert einen Verfügbarkeitsdeskriptor für den
 API-Namensraum `session-cockpit`. Dieser Namensraum hat derzeit **keine Handler**
 und **kein interaktives Cockpit**. Anfragen unter `/v1/m/session-cockpit`
-erhalten **404 durch Abwesenheit**. Der Deskriptor ist keines der 31
+erhalten **404 durch Abwesenheit**. Der Deskriptor ist keines der 32
 Produktmodule im Katalog.
 
 ## Aktuelle Verfügbarkeit
@@ -33,7 +33,7 @@ Prüfen Sie, dass mitgelieferte Session-Oberflächen weiterhin funktionieren:
 
 1. Live-Session-Modulrouten unter dem Namensraum `sessions` —
    [Live-Betrieb und Sessions](/de/reference/modules/ii-sessions/).
-2. Konsole **Sessions** (`/sessions`), **Claude Code** (`/agentops`) und
+2. Konsole **Sessions** (`/sessions`, auch `/agentops`) und
    **Work** (`/work`) — [Konsolenreferenz](/de/reference/console/).
 3. Offizieller CLI-Lebenszyklus im nächsten Abschnitt.
 

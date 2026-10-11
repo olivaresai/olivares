@@ -8,7 +8,7 @@ description: >-
   nada.
 ---
 
-Observabilidad (`modules/observability`) es uno de los 31 módulos — al igual que
+Observabilidad (`modules/observability`) es uno de los 32 módulos — al igual que
 [live-ingest](/es/reference/modules/live-ingest/), cumple un papel arquitectónico
 más que ocupar una ranura de capacidad. Es el **modelo de lectura que el motor
 tiene de sí mismo**: tres superficies de solo lectura bajo

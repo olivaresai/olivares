@@ -384,7 +384,7 @@ async function step(name, fn) {
     `[${name}]${streaming ? ' (streaming)' : ''} ${s.url} nav=${navError ?? 'ok'} gated=${gated.length} conErr=${conErrReal.length} pageErr=${pageErr.length} badReq=${badReq.length} stalled=${stalled.length}${mark}`,
   )
   for (const x of gated.slice(0, 8)) {
-    console.log(`      GATEADO ${x.status} ${x.method} ${x.url.replace(BASE, '')} (la consola declara esta puerta)`)
+    console.log(`      GATED ${x.status} ${x.method} ${x.url.replace(BASE, '')} (the console declares this gate)`)
   }
   for (const x of badReq.slice(0, 8)) {
     console.log(`      ${x.status} ${x.method} ${x.url.replace(BASE, '')}${x.failure ? ' :: ' + x.failure : ''}`)
@@ -488,17 +488,17 @@ console.log(`\nconsole-walk: ${findings.length} screen(s), ${bad.length} with fi
 // pudo derivar, se nombra aquí — el walk no presume de saber lo que no ha podido mirar.
 if (gatedTotal > 0 || PUERTAS.sinBase.length > 0 || PUERTAS.sinRutas.length > 0 || !PUERTAS.leido) {
   console.log(
-    `console-walk: ${gatedTotal} respuesta(s) 501 en rutas que la consola DECLARA gatear ` +
-      `(${PUERTAS.rutas.length} RUTA(s) derivadas de web/src/features/*/api.ts) — no son hallazgos.`,
+    `console-walk: ${gatedTotal} 501 response(s) on routes the console DECLARES gated ` +
+      `(${PUERTAS.rutas.length} ROUTE(s) derived from web/src/features/*/api.ts) — these are not findings.`,
   )
   if (!PUERTAS.leido)
     console.log(
-      '  ⚠ NO he podido leer web/src/features: cualquier 501 se ha contado como HALLAZGO, que es el lado seguro.',
+      '  ⚠ COULD NOT read web/src/features: every 501 counts as a FINDING to fail safely.',
     )
   for (const f of PUERTAS.sinBase)
-    console.log(`  ⚠ ${f} comprueba 501 pero no declara un BASE literal: sus 501 siguen contando como hallazgo.`)
+    console.log(`  ⚠ ${f} checks for 501 but declares no literal BASE: its 501 responses still count as findings.`)
   for (const f of PUERTAS.sinRutas)
-    console.log(`  ⚠ ${f} declara BASE pero no construye rutas literales sobre él: NO se gatea su módulo.`)
+    console.log(`  ⚠ ${f} declares BASE but builds no literal routes from it: its module is NOT treated as gated.`)
 }
 for (const f of bad) {
   const why = [

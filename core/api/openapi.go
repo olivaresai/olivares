@@ -7,7 +7,9 @@ package api
 import (
 	"net/http"
 
+	"github.com/olivaresai/olivares/core/api/oas"
 	"github.com/olivaresai/olivares/core/audit"
+	"github.com/olivaresai/olivares/core/auth"
 )
 
 // The OpenAPI document is the published REST contract (DoD: "OpenAPI/proto
@@ -18,7 +20,7 @@ import (
 // sub-spec; this document describes the engine surface that is stable for the
 // web UI and SDK clients.
 
-func (s *Server) handleOpenAPI(w http.ResponseWriter, _ *http.Request) {
+func (s *Server) handleOpenAPI(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
 	writeJSON(w, http.StatusOK, s.openapiDoc)
 }
 
@@ -94,12 +96,44 @@ func buildOpenAPI() map[string]any {
 	idParam := obj("name", "id", "in", "path", "required", true,
 		"description", "Resource identifier (UUIDv7).",
 		"schema", obj("type", "string", "format", "uuid"))
+	agentIDParam := obj("name", "agentID", "in", "path", "required", true,
+		"description", "Agent identifier (UUIDv7).",
+		"schema", obj("type", "string", "format", "uuid"))
+	// The SSO scope and IdP-alias path parameters are names, not UUIDs: a scope
+	// is the deployment-wide default or one tenant's key, and an alias is the
+	// scope-unique IdP handle ("default" is the scope's primary).
+	ssoTenantParam := obj("name", "tenant", "in", "path", "required", true,
+		"description", "Tenant whose IdP surface this is (the tenant's key).",
+		"schema", obj("type", "string"))
+	aliasParam := obj("name", "alias", "in", "path", "required", true,
+		"description", "IdP alias within the scope; \"default\" addresses the scope's primary IdP.",
+		"schema", obj("type", "string", "minLength", 1))
+	// DR ids are bundle filenames and job ids, not UUIDs; both are opaque to a
+	// client and must not be declared with a format the engine does not enforce.
+	drIDParam := func(name, desc string) map[string]any {
+		return obj("name", name, "in", "path", "required", true, "description", desc,
+			"schema", obj("type", "string", "minLength", 1))
+	}
+	// The engine-log filter both log routes share (parseLogFilter): the exact
+	// level set is authoritative when it carries a value; the legacy threshold
+	// applies only without it; an empty levels value clears the level filter.
+	logLevelParams := []any{
+		obj("name", "module", "in", "query", "required", false,
+			"description", "Only entries from this module.",
+			"schema", obj("type", "string")),
+		obj("name", "levels", "in", "query", "required", false,
+			"description", "Exact level set, comma-separated (debug, info, warn, error); authoritative whenever non-empty. An empty value clears the level filter; an unknown level is a 400, never a silent widening.",
+			"schema", obj("type", "string")),
+		obj("name", "level", "in", "query", "required", false,
+			"description", "Legacy minimum-level threshold, used only when levels is empty or absent.",
+			"schema", obj("type", "string")),
+	}
 	tenantPathParam := obj("name", "tenant_id", "in", "path", "required", true,
 		"description", "Tenant identifier (UUIDv7).",
 		"schema", obj("type", "string", "format", "uuid"))
 	limitParam := obj("name", "limit", "in", "query", "required", false,
 		"description", "Maximum number of items to return.",
-		"schema", obj("type", "integer", "minimum", 1, "maximum", 1000, "default", 50))
+		"schema", obj("type", "integer", "minimum", 1, "maximum", 1000, "default", stableListDefaultLimit))
 	cursorParam := obj("name", "cursor", "in", "query", "required", false,
 		"description", "Pagination cursor from a previous response.",
 		"schema", obj("type", "string"))
@@ -155,6 +189,17 @@ func buildOpenAPI() map[string]any {
 		resps := o["responses"].(map[string]any)
 		delete(resps, "200")
 		resps["201"] = successResp
+		return o
+	}
+	// op202 publishes the asynchronous-accept answer (a job or an intent was
+	// recorded; the work itself is followed elsewhere): the DR handlers and the
+	// invite resend answer 202, and a contract that says 200 would promise a
+	// completed result the handler never sends.
+	op202 := func(id, summary string, tags []string, secured bool, successResp map[string]any, reqBody map[string]any, params ...any) map[string]any {
+		o := op(id, summary, tags, secured, successResp, reqBody, params...)
+		resps := o["responses"].(map[string]any)
+		delete(resps, "200")
+		resps["202"] = successResp
 		return o
 	}
 
@@ -215,6 +260,13 @@ func buildOpenAPI() map[string]any {
 	tagSystem := []string{"system"}
 	tagConsole := []string{"console"}
 	tagConnectors := []string{"connectors"}
+	tagDirectory := []string{"directory"}
+
+	passwordChange := op204("changeOwnPassword", "Change your password and revoke your other sign-ins; requires the current password and a human session", tagAuth, true)
+	passwordChange["requestBody"] = body(obj("type", "object", "additionalProperties", false,
+		"required", arr("current_password", "new_password"),
+		"properties", obj("current_password", obj("type", "string", "writeOnly", true),
+			"new_password", obj("type", "string", "minLength", auth.MinPasswordLen, "writeOnly", true))))
 
 	paths := obj(
 		// ── Health ──────────────────────────────────────────────────────
@@ -229,6 +281,8 @@ func buildOpenAPI() map[string]any {
 		"/metrics", obj("get", rawOp("getMetrics", "Prometheus exposition (text format 0.0.4) of engine metrics",
 			tagHealth, false, "Prometheus text exposition", "text/plain")),
 		"/openapi.json", obj("get", op("getOpenAPI", "This OpenAPI document", tagHealth, false,
+			jsonResp("OK", obj("type", "object")), nil)),
+		"/openapi.beta.json", obj("get", op("getOpenAPIBeta", "The BETA module-route OpenAPI document (/v1/m/<ns>/…), reflected from the routes the modules register", tagHealth, false,
 			jsonResp("OK", obj("type", "object")), nil)),
 		"/status", obj("get", op("getPublicStatus", "Public status page summary (unauthenticated)", tagHealth, false,
 			jsonResp("OK", ref("PublicStatus")), nil)),
@@ -248,6 +302,7 @@ func buildOpenAPI() map[string]any {
 			"get", op("getBrowserSession", "Restore cookie session metadata", tagAuth, true, jsonResp("OK", ref("BrowserSessionResponse")), nil),
 			"post", op("migrateBrowserSession", "Rotate a legacy bearer into a cookie without extending expiry", tagAuth, true, jsonResp("OK", ref("BrowserSessionResponse")), nil)),
 		"/v1/auth/logout", obj("post", op204("logout", "Revoke the calling session", tagAuth, true)),
+		"/v1/account/password", obj("post", passwordChange),
 		"/v1/auth/refresh", obj("post", op("refreshToken", "Renew the calling session token (rotates the credential, extends expiry)", tagAuth, true,
 			jsonResp("OK", ref("SessionResponse")), nil)),
 		"/v1/auth/whoami", obj("get", op("whoami", "The calling principal and its tenant grants", tagAuth, true,
@@ -257,12 +312,80 @@ func buildOpenAPI() map[string]any {
 			jsonResp("OK", ref("CapabilityResults")),
 			body(ref("CapabilityQuestions")), tenantParam),
 			jsonResp("Common authorization evidence is unavailable; no target was resolved", ref("Error")))),
+		"/v1/auth/effective-rights", obj("get", op("getEffectiveRights",
+			"One trustee's effective rights over one node: the subject, the node, the assurance the answer holds, the lineage path and each right's state. Needs authz:admin; answers 404 while the operator has the AuthZEN search surface disabled and 403 outside its permitted network",
+			tagAuth, true,
+			jsonResp("OK", ref("EffectiveRights")), nil, tenantParam,
+			obj("name", "subject_type", "in", "query", "required", true,
+				"description", "The subject to project: a user or an API token (never an email — an id, so the 404 is not an account oracle).",
+				"schema", obj("type", "string", "enum", arr("user", "token"))),
+			obj("name", "subject_id", "in", "query", "required", true,
+				"description", "The subject's identifier (UUIDv7).",
+				"schema", obj("type", "string", "format", "uuid")),
+			obj("name", "kind", "in", "query", "required", true,
+				"description", "The node's kind.",
+				"schema", obj("type", "string", "enum", arr("agent", "session", "resource"))),
+			obj("name", "id", "in", "query", "required", true,
+				"description", "The node's identifier (UUIDv7).",
+				"schema", obj("type", "string", "format", "uuid")))),
+		"/v1/auth/webauthn/register/options", obj("post", op("webauthnRegisterOptions",
+			"Issue WebAuthn creation options (challenge) to register a new authenticator for the calling session's user",
+			tagAuth, true,
+			jsonResp("OK", ref("WebAuthnCeremonyOptions")), nil)),
+		"/v1/auth/webauthn/register", obj("post", op("webauthnRegister",
+			"Verify the browser's attestation and persist the credential (403 on any ceremony failure, 409 on an already-registered credential id)",
+			tagAuth, true,
+			jsonResp("OK", obj("type", "object", "properties", obj("ok", obj("type", "boolean")), "required", arr("ok"))),
+			body(ref("WebAuthnCredentialInput")))),
+		"/v1/auth/webauthn/authenticate/options", obj("post", op("webauthnAuthenticateOptions",
+			"Issue WebAuthn assertion options (challenge) for a step-up of the calling session",
+			tagAuth, true,
+			jsonResp("OK", ref("WebAuthnCeremonyOptions")), nil)),
+		"/v1/auth/webauthn/authenticate", obj("post", op("webauthnAuthenticate",
+			"Verify the browser's assertion and elevate the calling session to AAL3",
+			tagAuth, true,
+			jsonResp("OK", obj("type", "object", "properties", obj(
+				"ok", obj("type", "boolean"),
+				"aal", obj("type", "integer", "description", "The session's authenticator assurance level after the step-up."),
+			), "required", arr("ok", "aal"))),
+			body(ref("WebAuthnCredentialInput")))),
+		"/v1/auth/webauthn/credentials", obj("get", op("listWebAuthnCredentials",
+			"The calling user's registered authenticators — id, label and registration time only, never key material",
+			tagAuth, true,
+			jsonResp("OK", obj("type", "object", "properties", obj(
+				"items", obj("type", "array", "items", ref("WebAuthnCredential")),
+			), "required", arr("items"))), nil)),
+		"/v1/auth/webauthn/credentials/{id}", obj(
+			"patch", op("renameWebAuthnCredential",
+				"Update the display name of one of the calling user's authenticators (owner-only, no step-up: a metadata change)",
+				tagAuth, true,
+				jsonResp("OK", obj("type", "object", "properties", obj("ok", obj("type", "boolean")), "required", arr("ok"))),
+				body(obj("type", "object", "additionalProperties", false,
+					"required", arr("name"),
+					"properties", obj("name", obj("type", "string", "minLength", 1)))), idParam),
+			"delete", op204("deleteWebAuthnCredential",
+				"Unregister one of the calling user's authenticators (lost/stolen-key remediation; step-up required)",
+				tagAuth, true, idParam)),
+		"/v1/auth/piv/status", obj("get", op("getPIVStatus",
+			"The calling session's presented PIV smart-card certificate status (501 when no PIV verifier roots are configured)",
+			tagAuth, true,
+			jsonResp("OK", ref("PIVStatus")), nil)),
+		"/v1/auth/piv/elevate", obj("post", op("elevatePIV",
+			"Verify the presented PIV certificate (chain, OCSP, user binding) and elevate the calling session to AAL3 (method piv)",
+			tagAuth, true,
+			jsonResp("OK", obj("type", "object", "properties", obj(
+				"ok", obj("type", "boolean"),
+				"aal", obj("type", "integer", "description", "The session's authenticator assurance level after the elevation."),
+			), "required", arr("ok", "aal"))), nil)),
 
 		// ── Agents ─────────────────────────────────────────────────────
 		"/v1/agents", obj(
 			"get", op("listAgents", "List agents in the resolved tenant", tagAgents, true,
 				jsonResp("OK", listOf(ref("Agent"))),
-				nil, tenantParam, limitParam, cursorParam),
+				nil, tenantParam, limitParam, cursorParam,
+				obj("name", "workspace_id", "in", "query", "required", false,
+					"description", "Filter agents by workspace. A workspace-confined caller remains limited to its assigned workspace.",
+					"schema", obj("type", "string", "format", "uuid"))),
 			"post", op201("createAgent", "Create an agent", tagAgents, true,
 				jsonResp("Created", ref("Agent")),
 				body(ref("AgentInput")), tenantParam)),
@@ -274,6 +397,41 @@ func buildOpenAPI() map[string]any {
 				jsonResp("OK", ref("Agent")),
 				body(ref("AgentInput")), idParam, tenantParam),
 			"delete", op204("deleteAgent", "Delete an agent", tagAgents, true, idParam, tenantParam)),
+
+		// ── Agent groups (S256: groups as an authorization subject) ───
+		"/v1/agent-groups", obj(
+			"get", op("listAgentGroups", "List agent groups in the resolved tenant", tagDirectory, true,
+				jsonResp("OK", listOf(ref("AgentGroup"))),
+				nil, tenantParam, limitParam, cursorParam,
+				obj("name", "workspace_id", "in", "query", "required", false,
+					"description", "Filter groups by workspace. A workspace-confined caller remains limited to its assigned workspace.",
+					"schema", obj("type", "string", "format", "uuid"))),
+			"post", op201("createAgentGroup", "Create an agent group (name, slug and optional workspace scope)", tagDirectory, true,
+				jsonResp("Created", ref("AgentGroup")),
+				body(ref("AgentGroupInput")), tenantParam)),
+		"/v1/agent-groups/{id}", obj(
+			"get", op("getAgentGroup", "Get an agent group by ID", tagDirectory, true,
+				jsonResp("OK", ref("AgentGroup")),
+				nil, idParam, tenantParam),
+			"patch", op("updateAgentGroup", "Update an agent group; only fields present in the request are touched", tagDirectory, true,
+				jsonResp("OK", ref("AgentGroup")),
+				body(ref("AgentGroupPatch")), idParam, tenantParam),
+			"delete", op204("deleteAgentGroup", "Delete a group and its roster (the membership rows), never the member agents themselves", tagDirectory, true, idParam, tenantParam)),
+		"/v1/agent-groups/{id}/members", obj("get", op("listAgentGroupMembers", "List the agents that are members of one group", tagDirectory, true,
+			jsonResp("OK", listOf(ref("AgentGroupMember"))),
+			nil, idParam, tenantParam, limitParam, cursorParam)),
+		"/v1/agent-groups/{id}/members/{agentID}", obj(
+			"put", func() map[string]any {
+				// The handler answers 200 for an already-member (idempotent) and
+				// 201 for a fresh add; the contract says both, not one average.
+				o := op("addAgentGroupMember", "Add an agent to a group. Idempotent: 200 with the existing row when already a member, 201 for a fresh add",
+					tagDirectory, true,
+					jsonResp("OK", ref("AgentGroupMember")),
+					nil, idParam, agentIDParam, tenantParam)
+				o["responses"].(map[string]any)["201"] = jsonResp("Created", ref("AgentGroupMember"))
+				return o
+			}(),
+			"delete", op204("removeAgentGroupMember", "Remove an agent from a group (404 when the agent is not a member)", tagDirectory, true, idParam, agentIDParam, tenantParam)),
 
 		// ── Access edges ───────────────────────────────────────────────
 		"/v1/access-edges", obj("get", op("listAccessEdges", "List access edges (R/RW map); self-audited", tagAgents, true,
@@ -360,8 +518,15 @@ func buildOpenAPI() map[string]any {
 
 		// ── Tokens ─────────────────────────────────────────────────────
 		"/v1/tokens", obj(
-			"get", op("listTokens", "List API tokens for the calling user", tagTokens, true,
-				jsonResp("OK", listOf(ref("Token"))), nil),
+			"get", op("listTokens", "List API tokens visible to the caller", tagTokens, true,
+				jsonResp("OK", listOf(ref("Token"))), nil,
+				obj("name", "limit", "in", "query", "required", false,
+					"description", "Maximum number of items to return.",
+					"schema", obj("type", "integer", "minimum", 1, "maximum", 1000, "default", 100)),
+				cursorParam,
+				obj("name", "include_revoked", "in", "query", "required", false,
+					"description", "Include revoked tokens when true. Revoked tokens are excluded by default.",
+					"schema", obj("type", "boolean", "default", false))),
 			"post", op201("issueToken", "Issue an API token", tagTokens, true,
 				jsonResp("Created", obj("type", "object", "properties", obj(
 					"token", obj("type", "string", "description", "The opaque API key (olvk_…). Shown only once."),
@@ -394,6 +559,82 @@ func buildOpenAPI() map[string]any {
 			jsonResp("OK", listOf(ref("RosterMember"))),
 			nil, tenantParam)),
 
+		// ── Directory: provisioned groups, invitations, onboarding ────
+		"/v1/groups", obj("get", op("listGroups",
+			"List the tenant's provisioned groups with their mapped roles and member counts — the operator's view of what the IdP pushed and what each group confers",
+			tagDirectory, true,
+			jsonResp("OK", obj("type", "object", "properties", obj(
+				"groups", obj("type", "array", "items", ref("DirectoryGroup")),
+			), "required", arr("groups"))), nil, tenantParam)),
+		"/v1/groups/{id}/role", obj("put", op("setGroupRole",
+			"Set (or clear, with an empty role) the role a group's members are elevated to in the group's tenant; ceiling-checked against the caller's authority",
+			tagDirectory, true,
+			jsonResp("OK", obj("type", "object", "properties", obj(
+				"id", obj("type", "string", "format", "uuid"),
+				"display_name", obj("type", "string"),
+				"mapped_role", obj("type", "string"),
+			), "required", arr("id", "display_name", "mapped_role"))),
+			body(obj("type", "object", "additionalProperties", false,
+				"required", arr("role"),
+				"properties", obj("role", obj("type", "string",
+					"description", "The role the group's members are elevated to; an empty string clears the mapping.")))),
+			idParam, tenantParam)),
+		"/v1/groups/{id}/parent", obj("put", op("setGroupParent",
+			"Nest (or, with an empty parent_id, un-nest) a group under another group of the same tenant; a member of the child is then also a member of the parent for authorization (409 on a cycle)",
+			tagDirectory, true,
+			jsonResp("OK", obj("type", "object", "properties", obj(
+				"id", obj("type", "string", "format", "uuid"),
+				"display_name", obj("type", "string"),
+				"parent_group_id", obj("type", "string", "description", "The parent group's id; empty when the group is top-level."),
+			), "required", arr("id", "display_name", "parent_group_id"))),
+			body(obj("type", "object", "additionalProperties", false,
+				"required", arr("parent_id"),
+				"properties", obj("parent_id", obj("type", "string", "format", "uuid",
+					"description", "The parent group; an empty string un-nests the group.")))),
+			idParam, tenantParam)),
+		"/v1/groups/{id}/workspace", obj("put", op("setGroupWorkspace",
+			"Place a user group in a workspace of the same tenant, or clear its place with an empty workspace_id; membership and authorization are unchanged",
+			tagDirectory, true,
+			jsonResp("OK", obj("type", "object", "properties", obj(
+				"id", obj("type", "string", "format", "uuid"),
+				"display_name", obj("type", "string"),
+				"workspace_id", obj("type", "string", "description", "The workspace's id; empty when the group is unplaced."),
+			), "required", arr("id", "display_name", "workspace_id"))),
+			body(obj("type", "object", "additionalProperties", false,
+				"required", arr("workspace_id"),
+				"properties", obj("workspace_id", obj("type", "string",
+					"description", "The workspace of the same tenant; an empty string clears the place.")))),
+			idParam, tenantParam)),
+		"/v1/invites", obj("get", op("listInvites",
+			"List the tenant's pending (unaccepted, unexpired) invitations, without any token material",
+			tagDirectory, true,
+			jsonResp("OK", listOf(ref("Invite"))), nil, tenantParam)),
+		"/v1/invites/accept", obj("post", op("acceptInvite",
+			"Redeem an invitation token: set the password, activate the account and mint a session (the single-use token is the gate; no authentication)",
+			tagAuth, false,
+			jsonResp("OK", ref("SessionResponse")),
+			body(obj("type", "object", "additionalProperties", false,
+				"required", arr("token", "password"),
+				"properties", obj(
+					"token", obj("type", "string", "writeOnly", true),
+					"password", obj("type", "string", "format", "password", "minLength", 12, "writeOnly", true)))))),
+		"/v1/invites/{id}", obj("delete", op204("revokeInvite", "Delete a pending invitation", tagDirectory, true, idParam, tenantParam)),
+		"/v1/invites/{id}/resend", obj("post", op202("resendInvite",
+			"Rotate a pending invitation's secret and mail the new link to the invitee (409 invite_delivery_unavailable without a mailer)",
+			tagDirectory, true,
+			jsonResp("Accepted", obj("type", "object", "properties", obj(
+				"id", obj("type", "string", "format", "uuid"),
+				"expires_at", obj("type", "string", "format", "date-time"),
+				"delivery", obj("type", "string", "enum", arr("sent", "failed"),
+					"description", "Whether the invitation email left the engine; the token travels only in the mail."),
+			), "required", arr("id", "expires_at", "delivery"))),
+			nil, idParam, tenantParam)),
+		"/v1/onboard", obj("post", consentRequired(op201("onboardMember",
+			"Create-or-reuse an account and grant its tenant membership (membership:write, AAL3 step-up; mode invite emails a single-use token)",
+			tagDirectory, true,
+			jsonResp("Created", ref("OnboardResult")),
+			body(ref("OnboardInput")), tenantParam))),
+
 		// ── Federated console search ────────────────────────────
 		"/v1/search", obj("get", op("searchConsole",
 			"Federated console search: fan out to every searchable kind, deny-closed per kind on its own read permission",
@@ -417,8 +658,32 @@ func buildOpenAPI() map[string]any {
 			"patch", op("updateWorkspace", "Update a workspace", tagWorkspaces, true,
 				jsonResp("OK", ref("Workspace")),
 				body(ref("UpdateWorkspaceInput")), idParam, tenantParam)),
+		"/v1/workspaces/{id}/parent", obj("put", op("setWorkspaceParent",
+			"Place a workspace (a department) under another workspace of the same tenant, or make it a root with an empty parent_id; the subtree moves with it (owner, AAL3 step-up)",
+			tagWorkspaces, true,
+			jsonResp("OK", ref("Workspace")),
+			body(obj("type", "object", "additionalProperties", false,
+				"required", arr("parent_id"),
+				"properties", obj("parent_id", obj("type", "string",
+					"description", "The parent workspace of the same tenant; an empty string makes the workspace a root.")))),
+			idParam, tenantParam)),
+		"/v1/workspaces/{id}/summary", obj("get", op("getWorkspaceSummary",
+			"A workspace with counts of its scoped entities; a *_capped count is a FLOOR (at least N), never a total",
+			tagWorkspaces, true,
+			jsonResp("OK", ref("WorkspaceSummary")),
+			nil, idParam, tenantParam)),
+		"/v1/workspaces/{id}/contents", obj("get", op("getWorkspaceContents",
+			"Every kind that declares workspace lineage, counted in the workspace and sorted by kind; a capped count is a floor (501 when the census is not wired)",
+			tagWorkspaces, true,
+			jsonResp("OK", ref("WorkspaceContents")),
+			nil, idParam, tenantParam)),
 
 		// ── System (orgs) ──────────────────────────────────────────────
+		"/v1/system/tracing", obj(
+			"get", op("getTracingSettings", "Read saved and effective tracing settings (superadmin)", tagSystem, true,
+				jsonResp("OK", ref("TracingStatus")), nil),
+			"put", op("saveTracingSettings", "Save and apply tracing settings (superadmin, configured step-up)", tagSystem, true,
+				jsonResp("OK", ref("TracingStatus")), body(ref("TracingSettings")))),
 		"/v1/system/residency", obj(
 			"get", op("getResidencyRegistry", "Get the configured data-residency registry (superadmin)", tagSystem, true,
 				jsonResp("OK", ref("ResidencyRegistry")), nil)),
@@ -524,19 +789,243 @@ func buildOpenAPI() map[string]any {
 					"message", obj("type", "string"),
 				))),
 				body(ref("SSOConfigInput")))),
+		// The multi-IdP subtree (U4) over the SAME global scope the base
+		// /console/sso routes govern: additional IdPs by alias, default first.
+		"/v1/console/sso/idps", obj("get", op("listSSOIdPs",
+			"List every IdP configured under the deployment-wide global scope, default first; no secrets, only hints",
+			tagConsole, true,
+			jsonResp("OK", obj("type", "object", "properties", obj(
+				"idps", obj("type", "array", "items", ref("SSOConfig")),
+			), "required", arr("idps"))), nil)),
+		"/v1/console/sso/idps/{alias}", obj(
+			"get", op("getSSOIdP", "Get one additional IdP's configuration by alias", tagConsole, true,
+				jsonResp("OK", ref("SSOConfig")), nil, aliasParam),
+			"put", op("putSSOIdP", "Create or update one additional IdP by alias (AAL3 step-up)", tagConsole, true,
+				jsonResp("OK", ref("SSOConfig")),
+				body(ref("SSOConfigInput")), aliasParam),
+			"delete", op204("deleteSSOIdP", "Remove one additional IdP by alias (AAL3 step-up)", tagConsole, true, aliasParam)),
+		"/v1/console/sso/idps/{alias}/test", obj("post", op("testSSOIdP",
+			"Validate a candidate additional-IdP config (OIDC discovery / SAML metadata fetch) without persisting it; 501 when no SSO provider service is wired",
+			tagConsole, true,
+			jsonResp("OK", obj("type", "object", "properties", obj("ok", obj("type", "boolean")), "required", arr("ok"))),
+			body(ref("SSOConfigInput")), aliasParam)),
+		// The SAME SSO admin surface scoped to one tenant's IdPs (U6): the
+		// base routes operate the scope's primary ("default") IdP; the /idps
+		// subtree below it is the per-tenant multi-IdP surface.
+		"/v1/console/sso/tenants/{tenant}", obj(
+			"get", op("getTenantSSOConfig", "Get the tenant's primary SSO/IdP configuration", tagConsole, true,
+				jsonResp("OK", ref("SSOConfig")), nil, ssoTenantParam),
+			"put", op("putTenantSSOConfig", "Create or update the tenant's primary SSO/IdP configuration (AAL3 step-up)", tagConsole, true,
+				jsonResp("OK", ref("SSOConfig")),
+				body(ref("SSOConfigInput")), ssoTenantParam),
+			"delete", op204("deleteTenantSSOConfig", "Remove the tenant's primary SSO/IdP configuration (AAL3 step-up)", tagConsole, true, ssoTenantParam)),
+		"/v1/console/sso/tenants/{tenant}/test", obj("post", op("testTenantSSOConfig",
+			"Test the tenant's primary SSO/IdP connectivity (AAL3 step-up)",
+			tagConsole, true,
+			jsonResp("OK", obj("type", "object", "properties", obj("ok", obj("type", "boolean")), "required", arr("ok"))),
+			body(ref("SSOConfigInput")), ssoTenantParam)),
+		"/v1/console/sso/tenants/{tenant}/idps", obj("get", op("listTenantSSOIdPs",
+			"List every IdP configured under the tenant's scope, default first; no secrets, only hints",
+			tagConsole, true,
+			jsonResp("OK", obj("type", "object", "properties", obj(
+				"idps", obj("type", "array", "items", ref("SSOConfig")),
+			), "required", arr("idps"))), nil, ssoTenantParam)),
+		"/v1/console/sso/tenants/{tenant}/idps/{alias}", obj(
+			"get", op("getTenantSSOIdP", "Get one of the tenant's additional IdPs by alias", tagConsole, true,
+				jsonResp("OK", ref("SSOConfig")), nil, ssoTenantParam, aliasParam),
+			"put", op("putTenantSSOIdP", "Create or update one of the tenant's additional IdPs by alias (AAL3 step-up)", tagConsole, true,
+				jsonResp("OK", ref("SSOConfig")),
+				body(ref("SSOConfigInput")), ssoTenantParam, aliasParam),
+			"delete", op204("deleteTenantSSOIdP", "Remove one of the tenant's additional IdPs by alias (AAL3 step-up)", tagConsole, true, ssoTenantParam, aliasParam)),
+		"/v1/console/sso/tenants/{tenant}/idps/{alias}/test", obj("post", op("testTenantSSOIdP",
+			"Validate a candidate tenant-scoped IdP config without persisting it; 501 when no SSO provider service is wired",
+			tagConsole, true,
+			jsonResp("OK", obj("type", "object", "properties", obj("ok", obj("type", "boolean")), "required", arr("ok"))),
+			body(ref("SSOConfigInput")), ssoTenantParam, aliasParam)),
+		// Live reconfiguration of the source roster: reconcile the whole
+		// roster and re-resolve the license without a restart.
+		"/v1/console/runtime/reload", obj("post", op("reloadRuntime",
+			"Reconcile the durable source roster against the running engine and re-resolve the license (AAL3 step-up); the report names what applied and what needs a restart",
+			tagConsole, true,
+			jsonResp("OK", ref("SourceReloadReport")), nil)),
+		"/v1/console/sources/diff", obj("get", op("getSourceContentDiff",
+			"A bounded content diff between two refs of one repository owned by a configured source (501 when no git-host diff reader is wired; 422 when the diff exceeds the read cap)",
+			tagConsole, true,
+			jsonResp("OK", ref("GitHostDiff")), nil,
+			obj("name", "source", "in", "query", "required", true,
+				"description", "The configured source's name.", "schema", obj("type", "string", "minLength", 1)),
+			obj("name", "host", "in", "query", "required", true,
+				"description", "The git host.", "schema", obj("type", "string", "enum", arr("github", "gitlab"))),
+			obj("name", "repository", "in", "query", "required", true,
+				"description", "The repository (owner/name).", "schema", obj("type", "string", "minLength", 1)),
+			obj("name", "base", "in", "query", "required", true,
+				"description", "The base ref.", "schema", obj("type", "string", "minLength", 1)),
+			obj("name", "head", "in", "query", "required", true,
+				"description", "The head ref.", "schema", obj("type", "string", "minLength", 1)))),
+		// ── Disaster recovery console: backup, restore, schedule ──
+		"/v1/console/dr/backup", obj("post", op202("triggerBackup",
+			"Start an encrypted disaster-recovery backup and return its job id (501 without the DR service)",
+			tagConsole, true,
+			jsonResp("Accepted: the backup job started; follow it at /v1/console/dr/jobs/{job_id}/stream", obj("type", "object", "properties", obj(
+				"job_id", obj("type", "string"),
+			), "required", arr("job_id"))),
+			body(obj("type", "object", "additionalProperties", false,
+				"required", arr("passphrase"),
+				"properties", obj(
+					"passphrase", obj("type", "string", "writeOnly", true,
+						"description", "Passphrase encrypting the backup keys; must meet the documented floor."),
+					"notes", obj("type", "string")))))),
+		"/v1/console/dr/backups", obj("get", op("listBackups",
+			"List the backup directory's .drbundle files, newest first, with each bundle's manifest summary",
+			tagConsole, true,
+			jsonResp("OK", obj("type", "object", "properties", obj(
+				"items", obj("type", "array", "items", ref("DRBackup")),
+			), "required", arr("items"))), nil)),
+		"/v1/console/dr/backups/{id}", obj(
+			"get", op("getBackup", "One backup's manifest and size by bundle id", tagConsole, true,
+				jsonResp("OK", ref("DRBackupDetail")),
+				nil, drIDParam("id", "The backup's bundle id (its filename).")),
+			"delete", op204("deleteBackup", "Delete one backup bundle by id", tagConsole, true,
+				drIDParam("id", "The backup's bundle id (its filename)."))),
+		"/v1/console/dr/backups/{id}/download", obj("get", func() map[string]any {
+			o := rawOp("downloadBackup",
+				"Download one backup bundle's verbatim bytes (.drbundle)",
+				tagConsole, true, "The encrypted DR bundle", "application/octet-stream")
+			o["parameters"] = arr(drIDParam("id", "The backup's bundle id (its filename)."))
+			return o
+		}()),
+		"/v1/console/dr/restore/upload", obj("post", func() map[string]any {
+			o := op("uploadRestore",
+				"Upload a raw .drbundle file for restore pre-flight (the body is the file's verbatim bytes, at most 10 GiB); the manifest is inspected and returned with the upload id",
+				tagConsole, true,
+				jsonResp("OK", ref("DRRestoreUpload")), nil)
+			o["requestBody"] = obj("required", true, "content",
+				obj("application/octet-stream", obj("schema", obj("type", "string", "format", "binary"))))
+			return o
+		}()),
+		"/v1/console/dr/restore/{id}/apply", obj("post", op202("applyRestore",
+			"Apply an uploaded bundle: with the dual-control gate armed this records an intent for a second administrator to approve (request_id); otherwise it starts the restore job (job_id)",
+			tagConsole, true,
+			jsonResp("Accepted", ref("DRRestoreApply")),
+			body(obj("type", "object", "additionalProperties", false,
+				"required", arr("passphrase"),
+				"properties", obj("passphrase", obj("type", "string", "writeOnly", true,
+					"description", "Passphrase decrypting the backup keys (the single-actor path).")))),
+			drIDParam("id", "The id returned by the upload."))),
+		"/v1/console/dr/restore/{id}/approve", obj("post", op202("approveRestore",
+			"Approve a dual-control restore as a DISTINCT administrator account (403 when the requester self-approves)",
+			tagConsole, true,
+			jsonResp("Accepted", ref("DRRestoreApply")),
+			body(obj("type", "object", "additionalProperties", false,
+				"required", arr("request_id", "passphrase"),
+				"properties", obj(
+					"request_id", obj("type", "string"),
+					"passphrase", obj("type", "string", "writeOnly", true)))),
+			drIDParam("id", "The id returned by the upload."))),
+		"/v1/console/dr/restore/pending", obj("get", op("listPendingRestores",
+			"Restore requests awaiting a second approver, newest first, so a distinct admin can find and approve one",
+			tagConsole, true,
+			jsonResp("OK", obj("type", "object", "properties", obj(
+				"items", obj("type", "array", "items", ref("DRPendingRestore")),
+			), "required", arr("items"))), nil)),
+		"/v1/console/dr/jobs", obj("get", op("listDRJobs",
+			"The DR job list (backup and restore) with phase and progress",
+			tagConsole, true,
+			jsonResp("OK", obj("type", "object", "properties", obj(
+				"items", obj("type", "array", "items", ref("DRJob")),
+			), "required", arr("items"))), nil)),
+		"/v1/console/dr/jobs/{id}/stream", obj("get", rawOp("streamDRJob",
+			"Server-Sent Events stream of one DR job's progress: event: job frames with the DRJob payload, heartbeats as comments, until the job completes or fails",
+			tagConsole, true, "SSE stream of DR job progress", "text/event-stream"),
+			drIDParam("id", "The job id.")),
+		"/v1/console/dr/schedule", obj(
+			"get", op("getDRSchedule", "The scheduled-backup configuration and its last run's outcome", tagConsole, true,
+				jsonResp("OK", ref("DRSchedule")), nil),
+			"put", op("putDRSchedule",
+				"Save the schedule (enabled, cron, retention); the dual-control restore gate's armed state is preserved, and server-owned bookkeeping fields are ignored",
+				tagConsole, true,
+				jsonResp("OK", ref("DRSchedule")),
+				body(ref("DRScheduleInput")))),
+		// ── Enterprise activation surface (501 on a community build) ──
+		"/v1/console/activation", obj("get", op("getActivationStatus",
+			"The edition's activation view: current edition and preset, each add-on's state and each preset's add-on keys",
+			tagConsole, true,
+			jsonResp("OK", ref("ActivationStatus")), nil)),
+		"/v1/console/activation/preview", obj("post", op("previewActivation",
+			"Preview a preset change as a per-add-on diff (activate, stage, unchanged or console) without applying it",
+			tagConsole, true,
+			jsonResp("OK", ref("ActivationPlan")),
+			body(obj("type", "object", "additionalProperties", false,
+				"required", arr("preset"),
+				"properties", obj("preset", obj("type", "string", "minLength", 1)))))),
+		"/v1/console/activation/apply", obj("post", op("applyActivation",
+			"Enable or disable a preset, or promote one add-on (AAL3 step-up; 501 without the activation service)",
+			tagConsole, true,
+			jsonResp("OK", ref("ActivationStatus")),
+			body(obj("type", "object", "additionalProperties", false,
+				"required", arr("action"),
+				"properties", obj(
+					"action", obj("type", "string", "enum", arr("enable", "disable", "promote")),
+					"preset", obj("type", "string", "description", "Required for enable/disable."),
+					"addon", obj("type", "string", "description", "Required for promote.")))))),
+		// ── Module selection: which optional modules the engine runs ───
+		"/v1/console/modules", obj(
+			"get", op("getModuleSelection",
+				"The module catalog and, for each module, whether it is selected, running, always-on, holds data, and who keeps it on",
+				tagConsole, true,
+				jsonResp("OK", ref("ModuleSelection")), nil),
+			"put", op("selectModules",
+				"Set which optional modules the engine runs; the engine restarts itself to apply the change (AAL3 step-up)",
+				tagConsole, true,
+				jsonResp("OK", ref("ModuleSelection")),
+				body(obj("type", "object", "additionalProperties", false,
+					"required", arr("selected"),
+					"properties", obj("selected", obj("type", "array", "items", obj("type", "string"),
+						"description", "The modules to run, by name.")))))),
+		// ── Engine log viewer: SSE stream + ring-buffer snapshot ──
+		"/v1/console/logs/stream", obj("get", func() map[string]any {
+			o := rawOp("streamLogs",
+				"Server-Sent Events stream of the engine log: event: log frames with one entry's payload, heartbeats as comments; filtered by the same parameters as the buffer",
+				tagConsole, true, "SSE stream of engine log entries", "text/event-stream")
+			o["parameters"] = arr(logLevelParams...)
+			return o
+		}()),
+		"/v1/console/logs/buffer", obj("get", func() map[string]any {
+			o := op("getLogBuffer",
+				"The engine log's ring-buffer snapshot, newest last, with the match total and whether older matches were left out",
+				tagConsole, true,
+				jsonResp("OK", ref("LogBuffer")), nil)
+			ps := append([]any{}, logLevelParams...)
+			ps = append(ps, obj("name", "limit", "in", "query", "required", false,
+				"description", "How many entries to return (default 1000, at most 10000: a larger value is clamped, a missing or non-positive one uses the default).",
+				"schema", obj("type", "integer", "default", 1000)))
+			o["parameters"] = arr(ps...)
+			return o
+		}()),
 	)
 
+	for _, method := range []string{"get", "put"} {
+		operation := paths["/v1/system/tracing"].(map[string]any)[method].(map[string]any)
+		operation["responses"].(map[string]any)["503"] = jsonResp("Tracing settings or collector configuration unavailable", ref("Error"))
+	}
 	applyStability(paths)
 
 	schemas := obj(
+		"TracingSettings", obj("type", "object", "properties", obj(
+			"enabled", obj("type", "boolean"),
+			"endpoint", obj("type", "string", "maxLength", 4096, "description", "Collector host or HTTP(S) URL without credentials, query or fragment."),
+			"protocol", obj("type", "string", "enum", arr("grpc", "http/protobuf")),
+			"insecure", obj("type", "boolean"),
+			"sample_ratio", obj("type", "number", "minimum", 0, "maximum", 1),
+			"service_name", obj("type", "string", "minLength", 1, "maxLength", 256),
+			"genai_compat", obj("type", "boolean"),
+		), "required", arr("enabled", "endpoint", "protocol", "insecure", "sample_ratio", "service_name", "genai_compat")),
+		"TracingStatus", obj("type", "object", "properties", obj(
+			"settings", ref("TracingSettings"), "effective", ref("TracingSettings"),
+			"overrides", obj("type", "array", "items", obj("type", "string"), "description", "Names of environment overrides; never their credential values."),
+		), "required", arr("settings", "effective", "overrides")),
 		// ── Error envelope ──────────────────────────────────────────
-		"Error", obj("type", "object", "properties", obj(
-			"error", obj("type", "object", "properties", obj(
-				"code", obj("type", "string"),
-				"message", obj("type", "string"),
-				"module", obj("type", "string", "description", "With code module_not_enabled: the namespace of the module this node does not run."),
-			), "required", arr("code", "message")),
-		), "required", arr("error")),
+		"Error", apiErrorSchema(),
 
 		// ── Agent ───────────────────────────────────────────────────
 		"Agent", obj("type", "object", "properties", obj(
@@ -696,6 +1185,8 @@ func buildOpenAPI() map[string]any {
 			"slug", obj("type", "string", "pattern", "^[a-z0-9][a-z0-9-]{0,62}$"),
 			"status", obj("type", "string", "enum", arr("active", "inactive")),
 			"is_default", obj("type", "boolean"),
+			"parent_id", obj("type", "string", "format", "uuid",
+				"description", "The parent workspace in the organization tree; absent on a root and for a workspace-confined caller."),
 			"settings", obj("type", "object", "additionalProperties", true),
 			"created_at", obj("type", "string", "format", "date-time"),
 			"updated_at", obj("type", "string", "format", "date-time"),
@@ -877,6 +1368,7 @@ func buildOpenAPI() map[string]any {
 			"user_id", obj("type", "string", "format", "uuid"),
 			"actor", obj("type", "string"),
 			"display_name", obj("type", "string"),
+			"email", obj("type", "string", "description", "Signed-in user email; omitted for token principals."),
 			"superadmin", obj("type", "boolean"),
 			"grants", obj("type", "array", "items", obj("type", "object", "properties", obj(
 				"tenant", obj("type", "string"),
@@ -896,6 +1388,7 @@ func buildOpenAPI() map[string]any {
 					"description", "The display name of this tenant's organization, read from the principal's "+
 						"own tenant (no cross-tenant read). Absent when it cannot be read."),
 			), "required", arr("tenant", "role", "permissions"))),
+			"session_ttl_seconds", obj("type", "integer", "description", "Session lifetime in seconds at sign-in or refresh (sessions only; fixed by the engine)."),
 			"aal", obj("type", "integer", "description", "Authentication assurance level (sessions only)"),
 			"amr", obj("type", "array", "items", obj("type", "string"), "description", "Authentication method references (sessions only)"),
 			"authentication_configuration", obj("type", "object",
@@ -918,6 +1411,10 @@ func buildOpenAPI() map[string]any {
 				"description", "The --pin-sha256 value of the certificate this engine serves (base64 SHA-256 of its SubjectPublicKeyInfo). Absent when the engine serves plain HTTP."),
 			"modules_not_enabled", obj("type", "array", "items", obj("type", "string")),
 			"communication_ready", obj("type", "boolean"),
+			"previews_hidden", obj("type", "boolean",
+				"description", "A new installation's console navigation lists the first job only; every other page keeps its address. Absent on an installation that existed before."),
+			"invite_delivery_unavailable", obj("type", "boolean",
+				"description", "The engine cannot mail invitations (OLIVARES_INVITE_MAIL_DESTINATION with a declared console address): onboarding in invite mode answers 409 invite_delivery_unavailable. Absent when invitations are mailed."),
 			"license", obj("type", "object", "properties", obj(
 				"status", obj("type", "string"),
 				"licensee", obj("type", "string"),
@@ -1095,7 +1592,7 @@ func buildOpenAPI() map[string]any {
 		), "required", arr("keys")),
 
 		"KeyInfo", obj("type", "object", "properties", obj(
-			"purpose", obj("type", "string", "enum", arr("audit", "catalog", "policy", "license", "eventing", "sso", "secret-store")),
+			"purpose", obj("type", "string", "enum", arr("audit", "catalog", "policy", "license", "eventing", "sso", "secret-store", "memory-portability")),
 			"algorithm", obj("type", "string"),
 			"custody_mode", obj("type", "string", "enum", arr("minted", "byok-env", "byok-file", "cmek")),
 			"kek", obj("type", "string", "description", "Non-secret KEK provider and key identifier"),
@@ -1306,6 +1803,335 @@ func buildOpenAPI() map[string]any {
 			// a document that demands more than the server does is the same class of lie as
 			// one that demands different names.
 		), "required", arr("protocol")),
+
+		// ── Effective rights ──────────────────────────────────
+		"EffectiveRights", obj("type", "object", "properties", obj(
+			"subject", ref("EffectiveRightsRef"),
+			"node", ref("EffectiveRightsRef"),
+			"assurance", obj("type", "integer", "description", "The authenticator assurance level the subject was evaluated at."),
+			"path", obj("type", "array", "items", ref("EffectiveRightsStep"),
+				"description", "The node's container lineage, outermost first."),
+			"rights", obj("type", "array", "items", obj("type", "object", "properties", obj(
+				"name", obj("type", "string"),
+				"state", obj("type", "string", "description", "The right's decision state as the engine reports it."),
+			), "required", arr("name", "state"))),
+		), "required", arr("subject", "node", "assurance", "path", "rights")),
+		"EffectiveRightsRef", obj("type", "object", "properties", obj(
+			"kind", obj("type", "string"),
+			"id", obj("type", "string"),
+		), "required", arr("kind", "id")),
+		"EffectiveRightsStep", obj("type", "object", "properties", obj(
+			"kind", obj("type", "string"),
+			"ref", obj("type", "string"),
+			"workspace", obj("type", "string", "description", "Set only on an agent group that lives in a different workspace than the node."),
+		), "required", arr("kind", "ref")),
+
+		// ── WebAuthn credentials (panel) ────────────────────────
+		"WebAuthnCeremonyOptions", obj("type", "object", "properties", obj(
+			"publicKey", obj("type", "object",
+				"description", "The WebAuthn ceremony's PublicKeyCredential options (creation or assertion), serialized as the browser API expects."),
+		), "required", arr("publicKey")),
+		"WebAuthnCredentialInput", obj("type", "object", "properties", obj(
+			"credential", obj("type", "object", "description", "The browser's encoded ceremony response."),
+			"name", obj("type", "string", "description", "Optional user-supplied display name for the credential."),
+		), "required", arr("credential")),
+		"WebAuthnCredential", obj("type", "object", "properties", obj(
+			"id", obj("type", "string", "format", "uuid"),
+			"name", obj("type", "string"),
+			"created_at", obj("type", "string", "format", "date-time"),
+			"backup_eligible", obj("type", "boolean", "description", "Present when the credential's flags declare it; never any key material."),
+		), "required", arr("id", "name", "created_at")),
+
+		// ── PIV smart-card status ───────────────────────────────────
+		"PIVStatus", obj("type", "object", "properties", obj(
+			"presented", obj("type", "boolean"),
+			"subject", obj("type", "string", "description", "The certificate's subject DN."),
+			"issuer", obj("type", "string", "description", "The certificate's issuer DN."),
+			"mapped_role", obj("type", "string", "description", "The role the certificate maps to."),
+			"ocsp", obj("type", "string", "enum", arr("good", "revoked", "unknown")),
+			"not_after", obj("type", "string", "format", "date-time"),
+		), "required", arr("presented")),
+
+		// ── Agent groups (S256) ─────────────────────────────────────
+		"AgentGroup", obj("type", "object", "properties", obj(
+			"id", obj("type", "string", "format", "uuid"),
+			"tenant_id", obj("type", "string", "format", "uuid"),
+			"workspace_id", obj("type", "string", "format", "uuid", "description", "The group's workspace scope; absent when tenant-wide."),
+			"name", obj("type", "string"),
+			"slug", obj("type", "string", "description", "The stable scope handle ([a-z0-9][a-z0-9-]*, max 63)."),
+			"description", obj("type", "string"),
+			"status", obj("type", "string", "enum", arr("active", "inactive")),
+			"metadata", obj("type", "object", "additionalProperties", true),
+			"created_at", obj("type", "string", "format", "date-time"),
+			"updated_at", obj("type", "string", "format", "date-time"),
+			"version", obj("type", "integer", "format", "int64"),
+		), "required", arr("id", "tenant_id", "name", "slug", "status", "created_at", "updated_at", "version")),
+		"AgentGroupInput", obj("type", "object", "additionalProperties", false,
+			"properties", obj(
+				"workspace_id", obj("type", "string", "format", "uuid"),
+				"name", obj("type", "string", "minLength", 1),
+				"slug", obj("type", "string", "pattern", "^[a-z0-9][a-z0-9-]*$", "maxLength", 63),
+				"description", obj("type", "string"),
+				"status", obj("type", "string", "enum", arr("active", "inactive")),
+				"metadata", obj("type", "object", "additionalProperties", true),
+			), "required", arr("name", "slug")),
+		"AgentGroupPatch", obj("type", "object", "description",
+			"Partial update: every field is a pointer, so an omitted field is left untouched (slug is immutable). "+
+				"A set workspace_id re-scopes the group; an explicit empty string clears the scope back to tenant-wide.",
+			"properties", obj(
+				"name", obj("type", "string"),
+				"description", obj("type", "string"),
+				"status", obj("type", "string", "enum", arr("active", "inactive")),
+				"metadata", obj("type", "object", "additionalProperties", true),
+				"workspace_id", obj("type", "string"),
+			)),
+		"AgentGroupMember", obj("type", "object", "properties", obj(
+			"id", obj("type", "string", "format", "uuid", "description", "The membership row's id."),
+			"group_id", obj("type", "string", "format", "uuid"),
+			"agent_id", obj("type", "string", "format", "uuid"),
+		), "required", arr("id", "group_id", "agent_id")),
+
+		// ── Directory groups (IdP-provisioned) ──────────────────────
+		"DirectoryGroup", obj("type", "object", "properties", obj(
+			"id", obj("type", "string", "format", "uuid"),
+			"display_name", obj("type", "string"),
+			"external_id", obj("type", "string", "description", "The group's id in the provisioning IdP."),
+			"provisioned_by", obj("type", "string"),
+			"mapped_role", obj("type", "string", "description", "The role the group's members are elevated to; empty when unmapped."),
+			"parent_group_id", obj("type", "string", "description", "The parent group's id; empty when the group is top-level."),
+			"workspace_id", obj("type", "string", "description", "The workspace where the group is placed; empty when unplaced or concealed from a workspace-confined caller."),
+			"members", obj("type", "integer", "description", "The group's member count."),
+		), "required", arr("id", "display_name", "mapped_role", "parent_group_id", "workspace_id", "members")),
+
+		// ── Invitations and onboarding ──────────────────────────────
+		"Invite", obj("type", "object", "properties", obj(
+			"id", obj("type", "string", "format", "uuid"),
+			"email", obj("type", "string", "format", "email"),
+			"tenant", obj("type", "string"),
+			"role", obj("type", "string"),
+			"expires_at", obj("type", "string", "format", "date-time"),
+			"created_at", obj("type", "string", "format", "date-time"),
+		), "required", arr("id", "email", "tenant", "role", "expires_at", "created_at")),
+		"OnboardInput", obj("type", "object", "additionalProperties", false,
+			"properties", obj(
+				"email", obj("type", "string", "format", "email"),
+				"display_name", obj("type", "string"),
+				"role", obj("type", "string"),
+				"mode", obj("type", "string", "enum", arr("password", "invite"),
+					"description", "password: the admin sets the initial password. invite: email a single-use token. Empty defaults to password."),
+				"password", obj("type", "string", "format", "password", "writeOnly", true),
+			), "required", arr("email")),
+		"OnboardResult", obj("type", "object", "properties", obj(
+			"user", ref("User"),
+			"created", obj("type", "boolean", "description", "false when an existing account was reused."),
+			"membership", obj("type", "object", "properties", obj(
+				"id", obj("type", "string", "format", "uuid"),
+				"user_id", obj("type", "string", "format", "uuid"),
+				"tenant", obj("type", "string"),
+				"role", obj("type", "string"),
+			), "required", arr("id", "user_id", "tenant", "role")),
+			"invite", obj("type", "object", "description", "Present only for mode=invite.",
+				"properties", obj(
+					"id", obj("type", "string", "format", "uuid"),
+					"expires_at", obj("type", "string", "format", "date-time"),
+					"delivery", obj("type", "string", "enum", arr("sent", "failed"),
+						"description", "Whether the invitation email left the engine; the token travels only in the mail."),
+				)),
+		), "required", arr("user", "created", "membership")),
+
+		// ── Workspace summary and contents ──────────────────────────
+		"WorkspaceSummary", obj("type", "object", "properties", obj(
+			"workspace_id", obj("type", "string", "format", "uuid"),
+			"name", obj("type", "string"),
+			"slug", obj("type", "string"),
+			"is_default", obj("type", "boolean"),
+			"agent_count", obj("type", "integer"),
+			"session_count", obj("type", "integer"),
+			"resource_count", obj("type", "integer"),
+			"group_count", obj("type", "integer"),
+			"agent_count_capped", obj("type", "boolean", "description", "The matching count is a FLOOR (at least N), never a total."),
+			"session_count_capped", obj("type", "boolean"),
+			"resource_count_capped", obj("type", "boolean"),
+			"group_count_capped", obj("type", "boolean"),
+		), "required", arr("workspace_id", "name", "slug", "is_default",
+			"agent_count", "session_count", "resource_count", "group_count",
+			"agent_count_capped", "session_count_capped", "resource_count_capped", "group_count_capped")),
+		"WorkspaceContents", obj("type", "object", "properties", obj(
+			"workspace_id", obj("type", "string", "format", "uuid"),
+			"kinds", obj("type", "array", "items", obj("type", "object", "properties", obj(
+				"kind", obj("type", "string"),
+				"count", obj("type", "integer"),
+				"capped", obj("type", "boolean", "description", "Count is a floor (\"at least Count\"), never a total."),
+			), "required", arr("kind", "count", "capped"))),
+		), "required", arr("workspace_id", "kinds")),
+
+		// ── Source roster live reload and git-host content diff ─────
+		"SourceReloadReport", obj("type", "object", "properties", obj(
+			"added", obj("type", "array", "items", obj("type", "string")),
+			"removed", obj("type", "array", "items", obj("type", "string")),
+			"rotated", obj("type", "array", "items", obj("type", "string")),
+			"unchanged", obj("type", "integer"),
+			"rejected", obj("type", "array", "items", obj("type", "object",
+				"description", "One source the reconciler could not apply, with the reason.")),
+			"requires_restart", obj("type", "array", "items", obj("type", "string"),
+				"description", "Configuration domains this live reload does NOT cover; changes to them need a restart."),
+		), "required", arr("unchanged")),
+		"GitHostDiff", obj("type", "object", "properties", obj(
+			"head_commit", obj("type", "string"),
+			"head_tree", obj("type", "string"),
+			"truncated", obj("type", "boolean", "description", "The diff exceeded the read cap and was cut."),
+			"files", obj("type", "array", "items", obj("type", "object", "properties", obj(
+				"path", obj("type", "string"),
+				"previous_path", obj("type", "string", "description", "Set on a rename."),
+				"status", obj("type", "string"),
+				"binary", obj("type", "boolean"),
+				"truncated", obj("type", "boolean"),
+				"hunks", obj("type", "array", "items", obj("type", "string")),
+			), "required", arr("path", "status", "binary", "truncated", "hunks"))),
+		), "required", arr("head_commit", "truncated", "files")),
+
+		// ── Disaster recovery ────────────────────────────────
+		"DRBackup", obj("type", "object", "properties", obj(
+			"id", obj("type", "string", "description", "The bundle's filename."),
+			"filename", obj("type", "string"),
+			"size_bytes", obj("type", "integer", "format", "int64"),
+			"created_at", obj("type", "string", "format", "date-time"),
+			"engine", obj("type", "string", "enum", arr("sqlite", "postgres")),
+			"engine_version", obj("type", "string"),
+			"tenant_count", obj("type", "integer"),
+			"notes", obj("type", "string"),
+		), "required", arr("id", "filename", "size_bytes", "created_at", "engine", "tenant_count")),
+		"DRBackupDetail", obj("type", "object", "properties", obj(
+			"id", obj("type", "string"),
+			"filename", obj("type", "string"),
+			"size_bytes", obj("type", "integer", "format", "int64"),
+			"manifest", ref("DRManifest"),
+		), "required", arr("id", "filename", "size_bytes", "manifest")),
+		"DRManifest", obj("type", "object", "properties", obj(
+			"format", obj("type", "string", "description", "The manifest format; a reader rejects an unknown format."),
+			"created_at", obj("type", "string", "format", "date-time", "description", "The instant the backup was taken; RPO at a disaster is time-of-disaster minus this."),
+			"engine", obj("type", "string", "enum", arr("sqlite", "postgres")),
+			"engine_version", obj("type", "string", "description", "The engine binary version that produced the bundle."),
+		), "required", arr("format", "created_at", "engine")),
+		"DRRestoreUpload", obj("type", "object", "properties", obj(
+			"upload_id", obj("type", "string"),
+			"manifest", ref("DRManifest"),
+			"filename", obj("type", "string"),
+		), "required", arr("upload_id", "manifest", "filename")),
+		"DRRestoreApply", obj("type", "object", "description",
+			"The apply outcome: a job id (single-actor path) OR an awaiting-approval request id (dual-control path).",
+			"properties", obj(
+				"job_id", obj("type", "string"),
+				"awaiting_approval", obj("type", "boolean", "description", "True when the dual-control gate armed and the restore records an intent instead of running."),
+				"request_id", obj("type", "string", "description", "The pending request a distinct administrator approves."),
+				"initiator", obj("type", "string"),
+			)),
+		"DRPendingRestore", obj("type", "object", "properties", obj(
+			"request_id", obj("type", "string"),
+			"upload_id", obj("type", "string"),
+			"initiator", obj("type", "string"),
+			"initiator_user", obj("type", "string"),
+			"created_at", obj("type", "string", "format", "date-time"),
+		), "required", arr("request_id", "upload_id", "initiator", "created_at")),
+		"DRJob", obj("type", "object", "properties", obj(
+			"id", obj("type", "string"),
+			"kind", obj("type", "string", "enum", arr("backup", "restore")),
+			"status", obj("type", "string"),
+			"phase", obj("type", "string"),
+			"progress", obj("type", "integer", "minimum", 0, "maximum", 100),
+			"bundle_id", obj("type", "string"),
+			"notes", obj("type", "string"),
+			"error", obj("type", "string"),
+			"started_at", obj("type", "string", "format", "date-time"),
+			"done_at", obj("type", "string", "format", "date-time"),
+		), "required", arr("id", "kind", "status", "phase", "progress", "started_at")),
+		"DRSchedule", obj("type", "object", "properties", obj(
+			"enabled", obj("type", "boolean"),
+			"cron", obj("type", "string"),
+			"retain_days", obj("type", "integer", "minimum", 0),
+			"last_run", obj("type", "string", "format", "date-time"),
+			"next_run", obj("type", "string", "format", "date-time"),
+			"last_run_status", obj("type", "string", "enum", arr("completed", "failed"),
+				"description", "The most recent scheduled run's outcome, so a failing schedule is not a silent gap."),
+			"last_run_error", obj("type", "string"),
+			"require_dual_control_restore", obj("type", "boolean",
+				"description", "The effective console restore gate. When armed, a distinct administrator account must approve; CLI restore uses a declared-operator record instead, so estates requiring approval for every restore must also control host access."),
+			"dual_control_disarm_effective_at", obj("type", "string", "format", "date-time"),
+			"dual_control_disarm_requested_by", obj("type", "string"),
+		), "required", arr("enabled", "cron", "retain_days", "require_dual_control_restore")),
+		"DRScheduleInput", obj("type", "object", "additionalProperties", false,
+			"description", "The schedule's operator-owned fields. The armed state of the dual-control gate is preserved; server-owned bookkeeping (disarm instant, run history) is ignored on write.",
+			"properties", obj(
+				"enabled", obj("type", "boolean"),
+				"cron", obj("type", "string", "description", "The runner's cron grammar; validated on write."),
+				"retain_days", obj("type", "integer", "minimum", 0),
+				"require_dual_control_restore", obj("type", "boolean",
+					"description", "Arm (true) or request the disarm of (false) the dual-control restore gate. Disarm takes effect at the engine's persisted instant, never immediately."),
+			), "required", arr("enabled", "cron", "retain_days")),
+
+		// ── Enterprise activation ────────────────────────────
+		"ActivationStatus", obj("type", "object", "properties", obj(
+			"edition", obj("type", "string"),
+			"preset", obj("type", "string"),
+			"restart_required", obj("type", "boolean"),
+			"addons", obj("type", "array", "items", obj("type", "object", "properties", obj(
+				"key", obj("type", "string"),
+				"title", obj("type", "string"),
+				"summary", obj("type", "string"),
+				"env", obj("type", "string"),
+				"preset", obj("type", "string"),
+				"state", obj("type", "string", "enum", arr("active", "pending", "available", "console")),
+				"reason", obj("type", "string"),
+				"needs_secret", obj("type", "boolean"),
+				"in_build", obj("type", "boolean", "description", "The edition's catalog has the add-on. Absent means not known; false is an observed absence."),
+				"license_covered", obj("type", "boolean", "description", "The verified licence covers it. Absent means not known; false is an observed absence."),
+			), "required", arr("key", "title", "summary", "env", "preset", "state"))),
+			"presets", obj("type", "array", "items", obj("type", "object", "properties", obj(
+				"name", obj("type", "string"),
+				"addons", obj("type", "array", "items", obj("type", "string")),
+			), "required", arr("name", "addons"))),
+			"restarting", obj("type", "boolean"),
+		), "required", arr("edition", "restart_required", "addons", "presets")),
+		"ActivationPlan", obj("type", "object", "properties", obj(
+			"preset", obj("type", "string"),
+			"changes", obj("type", "boolean"),
+			"entries", obj("type", "array", "items", obj("type", "object", "properties", obj(
+				"addon", obj("type", "string"),
+				"action", obj("type", "string", "enum", arr("activate", "stage", "unchanged", "console")),
+				"state", obj("type", "string"),
+				"reason", obj("type", "string"),
+			), "required", arr("addon", "action"))),
+		), "required", arr("preset", "changes", "entries")),
+
+		// ── Module selection ────────────────────────────────────────
+		"ModuleSelection", obj("type", "object", "properties", obj(
+			"modules", obj("type", "array", "items", obj("type", "object", "properties", obj(
+				"name", obj("type", "string"),
+				"selected", obj("type", "boolean", "description", "The administrator chose it."),
+				"running", obj("type", "boolean", "description", "It runs on this node now (selected, required, or always on)."),
+				"always_on", obj("type", "boolean", "description", "The engine cannot run without it; it cannot be deselected."),
+				"requires", obj("type", "array", "items", obj("type", "string")),
+				"required_by", obj("type", "array", "items", obj("type", "string"),
+					"description", "The running modules that keep it on although it is not selected."),
+				"holds_data", obj("type", "boolean",
+					"description", "Its tables hold rows in this installation. A module that is not running keeps that data, but nothing acts on it."),
+				"activated_by", obj("type", "array", "items", obj("type", "string"),
+					"description", "The active edition add-ons that run it although it may not be selected."),
+			), "required", arr("name", "selected", "running"))),
+			"restarting", obj("type", "boolean", "description", "The engine is restarting itself to apply the change."),
+			"running_sessions", obj("type", "integer",
+				"description", "Sessions this engine runs now. The restart that applies a change stops every one of them; each can be resumed."),
+		), "required", arr("modules", "running_sessions")),
+
+		// ── Engine log buffer ───────────────────────────────────────
+		"LogBuffer", obj("type", "object", "properties", obj(
+			"items", obj("type", "array", "items", obj("type", "object",
+				"description", "One engine log entry, newest last.")),
+			"total", obj("type", "integer", "description", "Entries in the ring that matched the filter — the size of the set, not of this page."),
+			"returned", obj("type", "integer", "description", "Entries this response carries."),
+			"truncated", obj("type", "boolean", "description", "Older matches were left out."),
+			"capture_level", obj("type", "string", "description", "The level the engine currently captures at."),
+		), "required", arr("items", "total", "returned", "truncated", "capture_level")),
 	)
 
 	addMCPGatewayContracts(paths, schemas)
@@ -1315,6 +2141,7 @@ func buildOpenAPI() map[string]any {
 		"saml_contexts", obj("type", arr("array", "null"), "items", obj("type", "string")),
 	), "description", "Exact upstream MFA values. Omitted/null amr accepts mfa or a signed combination of knowledge (pwd/pin) and possession (otp/hwk/swk); a single method never counts by default. Explicit amr lists replace these defaults with operator-owned exact matches. Omitted/null saml_contexts defaults to https://refeds.org/profile/mfa. ACR has no implicit values. Empty lists trust none. An empty object restores defaults; omission preserves the stored mapping.")
 	addTOTPContract(paths, schemas)
+	addOSAccountContract(paths, schemas)
 	stampCorePermissions(paths)
 	applyOperationDescriptions(paths)
 
@@ -1339,6 +2166,7 @@ func buildOpenAPI() map[string]any {
 			obj("name", "system", "description", "Tenant provisioning and memberships"),
 			obj("name", "connectors", "description", "Connector health monitoring"),
 			obj("name", "console", "description", "Console admin operations (secrets, sources, connectors, SSO, license)"),
+			obj("name", "directory", "description", "Directory: agent groups, provisioned groups, invitations, onboarding"),
 		),
 		"components", obj(
 			"securitySchemes", obj("bearerAuth", obj(
@@ -1362,4 +2190,16 @@ func auditFormatEnum() []any {
 		out[i] = string(f)
 	}
 	return out
+}
+
+// apiErrorSchema is shared by stable and beta REST documents. Keep the stable
+// schema byte-for-byte equivalent; protocol-specific errors keep their schemas.
+func apiErrorSchema() map[string]any {
+	return oas.Obj("type", "object", "properties", oas.Obj(
+		"error", oas.Obj("type", "object", "properties", oas.Obj(
+			"code", oas.Obj("type", "string"),
+			"message", oas.Obj("type", "string"),
+			"module", oas.Obj("type", "string", "description", "With code module_not_enabled: the namespace of the module this node does not run."),
+		), "required", []any{"code", "message"}),
+	), "required", []any{"error"})
 }

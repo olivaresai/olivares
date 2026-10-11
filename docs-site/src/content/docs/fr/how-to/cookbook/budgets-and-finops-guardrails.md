@@ -9,6 +9,9 @@ sidebar:
   order: 2
 ---
 
+Les budgets et l’analyse des dépenses FinOps sont des fonctions **[Business](https://olivares.ai/pricing)**. Community conserve le suivi des coûts par session et l’exportation des données. Les budgets enregistrés avant 0.1 restent consultables et supprimables, et sont appliqués tant que le module FinOps est actif ; Community ne peut pas les créer ni les modifier. Les évaluations et les environnements de test restent dans Community.
+
+
 **Objectif :** « les agents de cette équipe arrêtent de dépenser à 500 $/mois »
 — déclaré une fois, appliqué en direct, avec des seuils d'alerte en chemin vers
 le haut.

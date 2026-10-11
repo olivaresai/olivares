@@ -19,6 +19,7 @@ import (
 // bootDemo serves dir with --seed-demo, as `serve` does (module profile applied).
 func bootDemo(t *testing.T, dir string) (*engine, error) {
 	t.Helper()
+	prepareCompositionTestBoot(t)
 	return boot(context.Background(), bootConfig{
 		DataDir: dir, Engine: "sqlite", Version: version, Logger: quietLog(),
 		DemoSeed: true, ApplyModuleProfile: true,
@@ -98,6 +99,8 @@ func TestSeedDemoThenSelfRestartReachesReadiness(t *testing.T) {
 		}
 	}
 	assertGraph(t, second, http.StatusOK)
+	// The next fixture is another start of the same binary, not a second engine beside this one.
+	_ = second.Close()
 	t.Run("explicit selection stays authoritative", func(t *testing.T) {
 		dir := t.TempDir()
 		if err := saveNodeModuleSelection(dir, []string{"consoleviews"}, time.Now()); err != nil {
@@ -139,6 +142,7 @@ func TestSeedDemoSecondStartKeepsTheSameEstate(t *testing.T) {
 // over: --seed-demo refuses with one sentence and writes nothing.
 func TestSeedDemoRefusesAnOrganizationItDidNotCreate(t *testing.T) {
 	dir := t.TempDir()
+	prepareCompositionTestBoot(t)
 	eng, err := boot(context.Background(), bootConfig{DataDir: dir, Engine: "sqlite", Version: version, Logger: quietLog()})
 	if err != nil {
 		t.Fatal(err)

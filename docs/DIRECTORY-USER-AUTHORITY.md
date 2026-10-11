@@ -11,7 +11,12 @@ reused. H exposes no public repository or payload.
 
 This increment supplies durable writers, locking and activation. It does not
 complete grant-only principal admission, messaging evidence, recipient receipts
-or the remaining F2 readiness work. `DirectoryStatus.Enabled` stays false.
+or the remaining F2 readiness work. `DirectoryStatus.Enabled` stays false and is
+deprecated: it gates nothing — communication readiness's store term is the
+store proof, one conjunct of server-info's `communication_ready` — and no
+scheduled increment earns it. The flag keeps its published false value until
+removal in a later release under the product's deprecation policy; it stores
+nothing, so no data migration is involved.
 
 ## Upgrade a stopped installation
 

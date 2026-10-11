@@ -113,7 +113,7 @@ export function Segmented<V extends string = string>({
       role="radiogroup"
       data-slot="segmented"
       className={cn(
-        'inline-flex max-w-full gap-0.5 rounded-[9px] border border-line bg-surface p-0.5',
+        'inline-flex max-w-full gap-0.5 rounded-ctl bg-hover p-0.5',
         className,
       )}
       {...props}
@@ -138,10 +138,8 @@ export function Segmented<V extends string = string>({
             }}
             onKeyDown={(event) => onKeyDown(event, i)}
             className={cn(
-              'inline-flex min-w-0 items-center justify-center gap-1.5 rounded-[7px] font-medium whitespace-nowrap',
-              size === 'sm'
-                ? 'h-6 px-2 text-overline'
-                : 'h-7 px-2.5 text-caption',
+              'inline-flex min-w-0 items-center justify-center gap-1.5 rounded-[5px] font-medium whitespace-nowrap',
+              size === 'sm' ? 'h-7 px-2 text-caption' : 'h-7 px-3 text-body',
               'text-text-2 transition-colors duration-100 ease-out outline-none',
               'hover:text-text',
               'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus',

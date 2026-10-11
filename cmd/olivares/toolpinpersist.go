@@ -244,13 +244,8 @@ func recToPinSnapshot(tenant model.TenantID, rec model.Record) mcpc.PinSnapshot 
 	return snap
 }
 
-// capabilitiesOpts wires the pin verifier's optional operator surface
-// into the capabilities module. The type assertion keeps the community build
-// free of any enterprise type: a nil verifier (or one without the admin
-// surface) yields no option and the routes stay honestly 501.
+// capabilitiesOpts carries verifier availability as well as its optional
+// management surface, so missing management is not reported as a missing edition.
 func capabilitiesOpts(verifier mcpc.ToolPinVerifier) []capabilities.Option {
-	if admin, ok := verifier.(mcpc.ToolPinAdmin); ok && admin != nil {
-		return []capabilities.Option{capabilities.WithToolPinAdmin(admin)}
-	}
-	return nil
+	return []capabilities.Option{capabilities.WithToolPinVerifier(verifier)}
 }

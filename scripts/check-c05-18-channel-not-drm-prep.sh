@@ -37,17 +37,17 @@ grep -F -q 'Channel-not-DRM wording not landed' "$DOC" \
 grep -F -q 'Does not write docs-site' "$DOC" \
   || fail "prepare doc lost docs-site HOLD"
 if grep -qiE 'FIRMA A claimed|remainder applied on origin/main|channel-not-DRM landed' "$DOC"; then
-  fail "prepare doc claims an application this lote does not have"
+  fail "prepare doc claims an application this batch does not have"
 fi
 
 if grep -q 'not DRM' "$GATE"; then
-  fail "gate.ts gained not DRM — this HOLD lote does not apply C05-18"
+  fail "gate.ts gained not DRM — this HOLD batch does not apply C05-18"
 fi
 if grep -q 'not consumed' "$GATE"; then
-  fail "gate.ts gained not consumed — this HOLD lote does not apply C05-18"
+  fail "gate.ts gained not consumed — this HOLD batch does not apply C05-18"
 fi
 grep -q 'watermarking por cliente' "$STRAT" \
-  || fail "strategy no longer presents watermarking por cliente — remasure drifted"
+  || fail "strategy no longer presents per-customer watermarking — the remeasurement drifted"
 
 python3 - "$JSON" <<'PY' || exit $?
 import json, sys

@@ -5,7 +5,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactElement, ReactNode } from 'react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { PanelExtension } from '@/features/panels'
 import { ApiError } from '@/lib/api/errors'
 import { queryKeys } from '@/lib/api/query'
 import './i18n'
@@ -27,11 +28,19 @@ const { api, authState, restart } = vi.hoisted(() => ({
   },
 }))
 
-const edition = vi.hoisted(() => ({ community: false }))
-vi.mock('@/lib/hooks/use-edition', () => ({
-  useCommunityBuild: () => edition.community,
-  useEdition: () => (edition.community ? 'community' : undefined),
-}))
+const panels = vi.hoisted(() => ({ licenseCards: [] as PanelExtension[] }))
+vi.mock('@/features/extensions', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/features/extensions')>()
+  return {
+    ...actual,
+    PANEL_EXTENSIONS: {
+      ...actual.PANEL_EXTENSIONS,
+      get licenseCards() {
+        return panels.licenseCards
+      },
+    },
+  }
+})
 vi.mock('@/lib/auth/context', () => ({ useAuth: () => authState }))
 vi.mock('@/features/identity/assurance', () => ({
   AAL: { PASSWORD: 1, MFA: 2, HARDWARE: 3 },
@@ -76,6 +85,11 @@ const validLicense = {
   seat_limited: true,
   active_users: 12,
 }
+
+afterEach(() => {
+  panels.licenseCards = []
+  authState.can = () => true
+})
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -144,30 +158,39 @@ describe('LicenseTab', () => {
     expect(help?.textContent).not.toMatch(/a verified license is shown/i)
   })
 
-  it('shows no module matrix on a Community build, where module activation answers 501', async () => {
-    edition.community = true
-    try {
-      api.getLicense.mockResolvedValue({
-        edition: 'community',
-        hot_apply: true,
-        status: 'none',
-        source: 'none',
-        managed_externally: false,
-        max_users: 0,
-        seat_limit: 0,
-        seat_limited: false,
-        active_users: 1,
-      })
-      wrap(<LicenseTab />)
-      expect(await screen.findByText('No license')).toBeInTheDocument()
-      expect(
-        screen.queryByText(/module information is unavailable/i),
-      ).toBeNull()
-      expect(screen.queryByText(/HTTP 501/)).toBeNull()
-      expect(api.getActivation).not.toHaveBeenCalled()
-    } finally {
-      edition.community = false
-    }
+  it('shows no module matrix of its own and makes no activation read for it', async () => {
+    api.getLicense.mockResolvedValue({
+      edition: 'community',
+      hot_apply: true,
+      status: 'none',
+      source: 'none',
+      managed_externally: false,
+      max_users: 0,
+      seat_limit: 0,
+      seat_limited: false,
+      active_users: 1,
+    })
+    wrap(<LicenseTab />)
+    expect(await screen.findByText('No license')).toBeInTheDocument()
+    expect(screen.queryByText(/module information is unavailable/i)).toBeNull()
+    expect(screen.queryByText(/HTTP 501/)).toBeNull()
+    expect(api.getActivation).not.toHaveBeenCalled()
+  })
+
+  it('mounts extension cards below the license, each only with its permission', async () => {
+    authState.can = (p) => p !== 'fixture:hidden'
+    panels.licenseCards = [
+      { id: 'shown', Component: () => <p>Fixture card</p> },
+      {
+        id: 'hidden',
+        permission: 'fixture:hidden',
+        Component: () => <p>Hidden card</p>,
+      },
+    ]
+    api.getLicense.mockResolvedValue(validLicense)
+    wrap(<LicenseTab />)
+    expect(await screen.findByText('Fixture card')).toBeInTheDocument()
+    expect(screen.queryByText('Hidden card')).not.toBeInTheDocument()
   })
 
   it('renders the live edition, status and active-user usage', async () => {

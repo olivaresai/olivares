@@ -35,10 +35,10 @@
 set -uo pipefail
 
 HOOK="${HOOK_SRC:-.githooks/commit-msg}"
-[ -r "$HOOK" ] || { echo "test-commit-msg-scope: 2 NO HE PODIDO MIRAR — no leo $HOOK" >&2; exit 2; }
+[ -r "$HOOK" ] || { echo "test-commit-msg-scope: 2 COULD NOT LOOK — cannot read $HOOK" >&2; exit 2; }
 
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/commitmsg-scope.XXXXXX")" || {
-  echo "test-commit-msg-scope: 2 NO HE PODIDO MIRAR — sin temporal" >&2; exit 2; }
+  echo "test-commit-msg-scope: 2 COULD NOT LOOK — no temporary directory" >&2; exit 2; }
 # shellcheck disable=SC2064
 trap "rm -rf '$WORK'" EXIT
 
@@ -50,7 +50,7 @@ bad() { fail=$((fail+1)); printf '  FAIL  %-52s %s\n' "$1" "${2:-}"; }
 # gobierna es el respaldo. Que el otro juez exista o no es justamente el defecto de arriba.
 run_respaldo() { # run_respaldo <mensaje> -> rc
   local m="$1" f="$WORK/msg"
-  printf '%s\n' "$m" > "$f"
+  printf '%s\n\nSigned-off-by: Test <test@example.invalid>\n' "$m" > "$f"
   ( cd "$WORK" && PATH="/usr/bin:/bin" bash "$OLDPWD/$HOOK" "$f" >/dev/null 2>&1 )
   printf '%s' "$?"
 }
@@ -60,9 +60,9 @@ run_respaldo() { # run_respaldo <mensaje> -> rc
 #    ausente, y `--config` fuera del arbol hizo que commitlint crasheara sin juzgar. Si esta linea
 #    no enrojece, ninguna de las de abajo significa nada.
 if [ "$(run_respaldo 'noesuntipo(x): y')" != "0" ]; then
-  ok "CONTROL POSITIVO: un tipo invalido es RECHAZADO" "(si esto pasara, el resto no valdria)"
+  ok "POSITIVE CONTROL: an invalid type is REJECTED" "(if this passed, the rest would prove nothing)"
 else
-  bad "CONTROL POSITIVO: un tipo invalido PASO" "la guarda no esta juzgando: el resto no vale"
+  bad "POSITIVE CONTROL: an invalid type PASSED" "the guard is not evaluating: the rest proves nothing"
 fi
 
 # Los que el repo USA — los dos primeros son commits reales de `main` que el juez estricto rechazaba.
@@ -76,7 +76,7 @@ for m in \
   'chore(s-1026): digits after a hyphen' \
   'chore(s1026): digits glued to letters — passes by RULE, discouraged by CONVENTION'
 do
-  if [ "$(run_respaldo "$m")" = "0" ]; then ok "acepta: ${m%%:*}"; else bad "RECHAZA lo que el repo usa: ${m%%:*}"; fi
+  if [ "$(run_respaldo "$m")" = "0" ]; then ok "accepts: ${m%%:*}"; else bad "REJECTS a scope used by the repo: ${m%%:*}"; fi
 done
 
 # Los que NO: mayuscula, y los tres donde el respaldo es MAS severo que `lower-case`, a proposito.
@@ -86,14 +86,14 @@ for m in \
   'chore(a.b): a dot' \
   'chore(a b): a space'
 do
-  if [ "$(run_respaldo "$m")" != "0" ]; then ok "rechaza: ${m%%:*}"; else bad "ACEPTA lo que no debe: ${m%%:*}"; fi
+  if [ "$(run_respaldo "$m")" != "0" ]; then ok "rejects: ${m%%:*}"; else bad "ACCEPTS invalid input: ${m%%:*}"; fi
 done
 
 # Un asunto sin scope sigue siendo valido: la regla es sobre el scope, no sobre su presencia.
 if [ "$(run_respaldo 'docs: a subject with no scope at all')" = "0" ]; then
-  ok "un asunto SIN scope sigue pasando"
+  ok "a subject WITHOUT a scope still passes"
 else
-  bad "un asunto sin scope fue rechazado" "la regla es del scope, no de su presencia"
+  bad "a subject without a scope was rejected" "the rule concerns the scope, not its presence"
 fi
 
 printf '\ntest-commit-msg-scope: %d passed, %d failed\n' "$pass" "$fail"

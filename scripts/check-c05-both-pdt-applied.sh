@@ -29,7 +29,7 @@ HOLDER="${OLIVARES_C05PDT_HOLDER:-cloud/control-plane/internal/tenant/manager.go
 
 grep -q 'sandbox e2e NOT RUN' "$DOC" || fail "$DOC lost sandbox e2e NOT RUN"
 if grep -qiE 'sandbox e2e passed|FIRMA A claimed|bytes are real' "$DOC"; then
-	fail "$DOC claims a close this lote does not have"
+	fail "$DOC claims a close this batch does not have"
 fi
 grep -q 'CreateUser' "$HOLDER" || fail "manager lost CreateUser invite"
 grep -q 'GrantMembership' "$HOLDER" || fail "manager lost GrantMembership invite"

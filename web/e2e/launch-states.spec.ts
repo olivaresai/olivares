@@ -69,7 +69,9 @@ async function entrar(page: import('@playwright/test').Page) {
   // screen are the areas and the overview above them, not a leaf like Inventory. The
   // name is exact because neighbouring entries contain it.
   await expect(
-    page.getByRole('link', { name: 'Now', exact: true }),
+    page
+      .getByRole('navigation', { name: 'Journeys', exact: true })
+      .getByRole('link', { name: 'Now', exact: true }),
   ).toBeVisible({
     timeout: 15_000,
   })
@@ -193,7 +195,8 @@ test.describe('Launch-copy STATES over real seeded data', () => {
   }) => {
     await entrar(page)
     await page.goto('/agentops')
-    await page.getByRole('tab', { name: /^Workspaces$/i }).click()
+    await page.getByTestId('sessions-list-menu').click()
+    await page.getByRole('menuitem', { name: /^Workspaces$/i }).click()
     // ⚠ La pestaña NO pinta un encabezado propio: «Workspaces» sólo existe como rótulo de la
     //    pestaña, así que esperar un `heading` con ese nombre falla aunque el panel esté delante —
     //    medido, con la captura del fallo. Se espera por el SUBTÍTULO del panel, que además dice lo

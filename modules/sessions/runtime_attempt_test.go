@@ -19,8 +19,8 @@ func TestRuntimeAttemptOperationsRefuseReplacementWhileWaitingForRunLock(t *test
 	for _, operation := range []string{"attach", "interrupt"} {
 		t.Run(operation, func(t *testing.T) {
 			runner := &fakeRunner{initSID: "exact-attempt-provider"}
-			m, _, tenant, _ := newRuntimeHarness(t, WithRunner(runner), WithCredentialSource(staticCred()))
-			dto, err := m.createRun(context.Background(), tenant, CreateRunParams{Transport: TransportStreamJSON, Isolation: IsolationNative, Actor: "user:operator", ActorKind: model.ActorUser})
+			m, st, tenant, _ := newRuntimeHarness(t, WithRunner(runner), WithCredentialSource(staticCred()))
+			dto, err := createProfiledTestRun(t, m, context.Background(), tenant, CreateRunParams{Transport: TransportStreamJSON, Isolation: IsolationNative, Actor: "user:operator", ActorKind: model.ActorUser})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -39,7 +39,7 @@ func TestRuntimeAttemptOperationsRefuseReplacementWhileWaitingForRunLock(t *test
 				if operation == "attach" {
 					done <- m.AttachRuntimeOutput(ctx, identity, "user:operator", model.ActorUser, "inspect operation", 0, func(RuntimeOutputEvent) error { emitted++; return nil })
 				} else {
-					result, err := m.InterruptRuntimeAttempt(ctx, RuntimeInputTarget{Tenant: tenant, WorkspaceID: identity.WorkspaceID, RunRef: identity.RunRef, ExpectedLaunch: identity.RuntimeLaunchID, ExpectedSID: identity.SessionSID}, "user:operator", model.ActorUser, "cancel wrong turn")
+					result, err := m.InterruptRuntimeAttempt(ctx, RuntimeInputTarget{Tenant: tenant, WorkspaceID: identity.WorkspaceID, RunRef: identity.RunRef, RunID: model.ID(storedRunIDForTest(t, st, tenant, identity.RunRef)), ExpectedLaunch: identity.RuntimeLaunchID, ExpectedSID: identity.SessionSID}, "user:operator", model.ActorUser, "cancel wrong turn")
 					if result.Attempted {
 						done <- errors.New("attempted old target")
 						return
@@ -66,7 +66,7 @@ func TestRuntimeAttemptOperationsRefuseReplacementWhileWaitingForRunLock(t *test
 func TestRuntimeAttemptOutputUsesOriginalRing(t *testing.T) {
 	runner := &fakeRunner{initSID: "exact-output-provider"}
 	m, _, tenant, _ := newRuntimeHarness(t, WithRunner(runner), WithCredentialSource(staticCred()))
-	dto, err := m.createRun(context.Background(), tenant, CreateRunParams{Transport: TransportStreamJSON, Isolation: IsolationNative, Actor: "user:operator", ActorKind: model.ActorUser})
+	dto, err := createProfiledTestRun(t, m, context.Background(), tenant, CreateRunParams{Transport: TransportStreamJSON, Isolation: IsolationNative, Actor: "user:operator", ActorKind: model.ActorUser})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -103,7 +103,7 @@ func TestRuntimeAttemptInterruptKeepsOwnedProcessAndRecordsReason(t *testing.T) 
 		t.Fatal(err)
 	}
 	waitFor(t, "active provider turn", func() bool { return live.session.ActiveTurn() != "" })
-	target := RuntimeInputTarget{Tenant: tenant, WorkspaceID: identity.WorkspaceID, RunRef: identity.RunRef, ExpectedLaunch: identity.RuntimeLaunchID, ExpectedSID: identity.SessionSID}
+	target := RuntimeInputTarget{Tenant: tenant, WorkspaceID: identity.WorkspaceID, RunRef: identity.RunRef, RunID: model.ID(storedRunIDForTest(t, st, tenant, identity.RunRef)), ExpectedLaunch: identity.RuntimeLaunchID, ExpectedSID: identity.SessionSID}
 	result, err := m.InterruptRuntimeAttempt(context.Background(), target, "user:operator", model.ActorUser, "wrong implementation direction")
 	if err != nil || result.Outcome != RuntimeInputAccepted || !result.Attempted {
 		t.Fatalf("interrupt %+v %v", result, err)
@@ -125,7 +125,7 @@ func TestRuntimeAttemptInterruptKeepsOwnedProcessAndRecordsReason(t *testing.T) 
 func TestRuntimeAttemptOutputDrainsFinalTailAndEnd(t *testing.T) {
 	runner := &fakeRunner{initSID: "finished-output-provider"}
 	m, _, tenant, _ := newRuntimeHarness(t, WithRunner(runner), WithCredentialSource(staticCred()))
-	dto, err := m.createRun(context.Background(), tenant, CreateRunParams{Transport: TransportStreamJSON, Isolation: IsolationNative, Actor: "user:operator", ActorKind: model.ActorUser})
+	dto, err := createProfiledTestRun(t, m, context.Background(), tenant, CreateRunParams{Transport: TransportStreamJSON, Isolation: IsolationNative, Actor: "user:operator", ActorKind: model.ActorUser})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -14,7 +14,7 @@ I (inventario) materializa el estate durable, el módulo II mantiene una **capa
 operativa en vivo** por sesión sobre el mismo flujo de observaciones — y muestra
 solo lo que ese flujo lleva honestamente.
 
-26.10.1 también **lanza** CLI oficiales de proveedor como hijos propios bajo un
+Olivares <!-- release -->0.1<!-- /release --> también **lanza** CLI oficiales de proveedor como hijos propios bajo un
 [perfil de proveedor](/how-to/operate-provider-sessions/). Esa vía gestionada
 es el mismo módulo. No sustituye la capa ni fusiona dos homes que anuncian el
 mismo id de sesión del proveedor (`CHANGELOG.md` `[26.9.0]` B1/B2).
@@ -83,10 +83,13 @@ fila con `GET /v1/m/sessions/live/by-id/{live_ref}` (y su consulta de
 cronología / stream / runs). Las rutas de id externo desnudo permanecen y son
 **legacy**: responden solo para la fila legacy.
 
-Los controladores se registran **por nodo** fijando un binario oficial
-(`OLIVARES_SESSION_RUNTIME_CLAUDE_BIN`, `_CODEX_BIN`, `_GROK_BIN` — véase
-[Configuración](/reference/configuration/)). Sin fijar, los perfiles de ese
-controlador siguen observables y no se pueden lanzar. Pasos del operador:
+Los controladores se registran en cada nodo al arrancar. Al iniciar una sesión,
+el motor usa la instalación gestionada verificada más reciente y después la CLI
+en su `PATH`. `OLIVARES_SESSION_RUNTIME_CLAUDE_BIN`, `_CODEX_BIN`, `_GROK_BIN` y
+`_OPENCODE_BIN` sustituyen explícitamente esa resolución
+(véase [Configuración](/reference/configuration/)). Si no encuentra un ejecutable,
+rechaza el lanzamiento. Las demás comprobaciones de preparación, incluida la
+autenticación del perfil y la política de lanzamiento, siguen vigentes. Pasos del operador:
 [Operar una sesión de proveedor](/how-to/operate-provider-sessions/).
 
 ## Qué consume (y qué deriva)

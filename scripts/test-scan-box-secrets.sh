@@ -28,40 +28,40 @@ run() { OLIVARES_SCAN_ROOTS="$1" bash "$SUT" ${2:-} >"$W/out" 2>"$W/err"; echo $
 
 # (1) limpio -> rc 0
 rc=$(run "$W/limpio")
-[ "$rc" = 0 ] && ok "un arbol limpio da rc 0" || bad "un arbol limpio da rc 0" "rc=$rc"
+[ "$rc" = 0 ] && ok "a clean tree returns rc 0" || bad "a clean tree returns rc 0" "rc=$rc"
 
 # (2) y su informe LISTA lo que miro: un cero sin la lista es indistinguible de no mirar
-grep -q "$W/limpio" "$W/out" && ok "el informe del verde NOMBRA la raiz revisada" \
-	|| bad "el informe del verde NOMBRA la raiz revisada"
+grep -q "$W/limpio" "$W/out" && ok "the passing report NAMES the inspected root" \
+	|| bad "the passing report NAMES the inspected root"
 
 # (3) con secreto -> rc 1 y nombra el fichero
 rc=$(run "$W/sucio")
 { [ "$rc" = 1 ] && grep -q 'volcado.dmp' "$W/out"; } \
-	&& ok "un secreto plantado da rc 1 y nombra el fichero" \
-	|| bad "un secreto plantado da rc 1 y nombra el fichero" "rc=$rc"
+	&& ok "a planted secret returns rc 1 and names the file" \
+	|| bad "a planted secret returns rc 1 and names the file" "rc=$rc"
 
 # (4) ⛔ LA PROPIEDAD QUE MAS IMPORTA: el valor NO aparece en ninguna salida.
 if grep -q "$PLANTADO" "$W/out" "$W/err"; then
-	bad "el valor NUNCA se imprime" "el guion filtro el secreto en su propio informe"
+	bad "the value is NEVER printed" "the script leaked the secret in its own report"
 else
-	ok "el valor NUNCA se imprime"
+	ok "the value is NEVER printed"
 fi
 
 # (5) una raiz que no existe se DICE, no se calla
 rc=$(run "$W/no-existe")
-{ [ "$rc" = 2 ] && grep -q 'NO EXISTE' "$W/out"; } \
-	&& ok "una raiz ausente se nombra y no hay verde" \
-	|| bad "una raiz ausente se nombra y no hay verde" "rc=$rc"
+{ [ "$rc" = 2 ] && grep -q 'DOES NOT EXIST' "$W/out"; } \
+	&& ok "a missing root is named and does not pass" \
+	|| bad "a missing root is named and does not pass" "rc=$rc"
 
 # (6) las cachés se excluyen POR DEFECTO y la exclusion sale impresa
 rc=$(run "$W/cache")
-{ [ "$rc" = 0 ] && grep -q 'exclusiones por ruta' "$W/out"; } \
-	&& ok "go-build excluido por defecto Y la exclusion sale impresa" \
-	|| bad "go-build excluido por defecto Y la exclusion sale impresa" "rc=$rc"
+{ [ "$rc" = 0 ] && grep -q 'path exclusions' "$W/out"; } \
+	&& ok "go-build excluded by default AND the exclusion is printed" \
+	|| bad "go-build excluded by default AND the exclusion is printed" "rc=$rc"
 
 # (7) ...y --incluir-caches la levanta: si no, la exclusion seria una pared
 rc=$(run "$W/cache" --incluir-caches)
-[ "$rc" = 1 ] && ok "--incluir-caches levanta la exclusion" || bad "--incluir-caches levanta la exclusion" "rc=$rc"
+[ "$rc" = 1 ] && ok "--incluir-caches removes the exclusion" || bad "--incluir-caches removes the exclusion" "rc=$rc"
 
 # (8) una raiz ILEGIBLE no es un verde.
 # ⛔ SE SALTA COMO ROOT, Y SE DICE: root ignora los bits de permiso, asi que `chmod 000` no
@@ -71,12 +71,12 @@ rc=$(run "$W/cache" --incluir-caches)
 # deja pasar como verde, que es la misma mentira por el otro lado.
 mkdir -p "$W/cerrado/dentro"; printf 'x\n' > "$W/cerrado/dentro/f"; chmod 000 "$W/cerrado"
 if [ "$(id -u)" -eq 0 ]; then
-	printf 'skip %-58s %s\n' "una raiz ilegible no da verde" "corriendo como root: chmod no restringe"
+	printf 'skip %-58s %s\n' "an unreadable root does not pass" "running as root: chmod does not restrict access"
 elif [ -r "$W/cerrado" ]; then
-	printf 'skip %-58s %s\n' "una raiz ilegible no da verde" "el sistema de ficheros no aplico chmod"
+	printf 'skip %-58s %s\n' "an unreadable root does not pass" "the filesystem did not apply chmod"
 else
 	rc=$(run "$W/cerrado")
-	[ "$rc" != 0 ] && ok "una raiz ilegible no da verde" "rc=$rc" || bad "una raiz ilegible no da verde" "rc=$rc"
+	[ "$rc" != 0 ] && ok "an unreadable root does not pass" "rc=$rc" || bad "an unreadable root does not pass" "rc=$rc"
 fi
 chmod 755 "$W/cerrado" 2>/dev/null
 
@@ -92,17 +92,17 @@ run "$W/dos" >/dev/null
 et_a=$(grep 'a.dmp' "$W/out" | sed -n 's/.*\[\([0-9a-f]\{12\}\)\].*/\1/p')
 et_b=$(grep 'b.dmp' "$W/out" | sed -n 's/.*\[\([0-9a-f]\{12\}\)\].*/\1/p')
 et_c=$(grep 'c.dmp' "$W/out" | sed -n 's/.*\[\([0-9a-f]\{12\}\)\].*/\1/p')
-[ -n "$et_a" ] && ok "cada hallazgo lleva etiqueta de valor" "[$et_a]" || bad "cada hallazgo lleva etiqueta de valor"
-[ -n "$et_a" ] && [ "$et_a" = "$et_b" ] && ok "el MISMO valor comparte etiqueta" \
-	|| bad "el MISMO valor comparte etiqueta" "a=$et_a b=$et_b"
-[ -n "$et_c" ] && [ "$et_a" != "$et_c" ] && ok "valores DISTINTOS tienen etiquetas distintas" \
-	|| bad "valores DISTINTOS tienen etiquetas distintas" "a=$et_a c=$et_c"
+[ -n "$et_a" ] && ok "each finding carries a value label" "[$et_a]" || bad "each finding carries a value label"
+[ -n "$et_a" ] && [ "$et_a" = "$et_b" ] && ok "the SAME value shares a label" \
+	|| bad "the SAME value shares a label" "a=$et_a b=$et_b"
+[ -n "$et_c" ] && [ "$et_a" != "$et_c" ] && ok "DIFFERENT values have different labels" \
+	|| bad "DIFFERENT values have different labels" "a=$et_a c=$et_c"
 
 # (12) y la etiqueta NO puede ser el valor: es sha256 truncado, no se invierte
 if grep -q "$OTRO" "$W/out" "$W/err"; then
-	bad "la etiqueta no revela el valor" "el segundo valor aparecio en el informe"
+	bad "the label does not reveal the value" "the second value appeared in the report"
 else
-	ok "la etiqueta no revela el valor"
+	ok "the label does not reveal the value"
 fi
 
 printf '\nscan-box-secrets battery: %d passed, %d failed\n' "$PASS" "$FAIL"

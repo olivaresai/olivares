@@ -17,7 +17,7 @@ import (
 func TestResolve_ARefusedKeyIsChosenOnlyWhenNothingElseCanRun(t *testing.T) {
 	m, tenant, _ := resolveHarness(t)
 	probe := &fakeProbe{err: ErrProviderRefused}
-	m.UseProviderProbe(probe)
+	WithProviderProbe(probe)(m)
 	ctx := context.Background()
 	bad := addRecord(t, m, tenant, ProviderKindOpenAI, "Old OpenAI", "", "sk-proj-fixture-old-0123456789")
 	if _, err := m.TestProviderRecord(ctx, tenant, bad.Ref); err != nil {

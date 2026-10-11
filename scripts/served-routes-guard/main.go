@@ -308,15 +308,15 @@ func stmtKind(st ast.Stmt) string {
 	case *ast.GoStmt:
 		return "go"
 	case *ast.BlockStmt:
-		return "bloque anidado"
+		return "nested block"
 	case *ast.LabeledStmt:
-		return "etiqueta"
+		return "label"
 	case *ast.AssignStmt:
-		return "asignacion"
+		return "assignment"
 	case *ast.DeclStmt:
-		return "declaracion"
+		return "declaration"
 	case *ast.ExprStmt:
-		return "expresion"
+		return "expression"
 	case *ast.ReturnStmt:
 		return "return"
 	}
@@ -359,7 +359,7 @@ func firstTransfer(st ast.Stmt) (ast.Node, string) {
 				return false
 			}
 		case *ast.LabeledStmt:
-			found, what = x, "etiqueta "+x.Label.Name+":"
+			found, what = x, "label "+x.Label.Name+":"
 			return false
 		}
 		return true
@@ -450,14 +450,14 @@ func enclosingTop(body *ast.BlockStmt, pos token.Pos) ast.Stmt {
 func mainPathReason(body *ast.BlockStmt, boundary ast.Stmt) string {
 	for _, st := range body.List {
 		if n, what := firstTransfer(st); n != nil {
-			return fmt.Sprintf("transferencia de control en la linea %d (%s) dentro de main: el camino lineal no se puede seguir, se registre o no el mux", line(n), what)
+			return fmt.Sprintf("control transfer at line %d (%s) inside main: cannot follow a linear path, whether or not the mux is registered", line(n), what)
 		}
 		if st.Pos() >= boundary.Pos() {
 			continue
 		}
 		_, returns := st.(*ast.ReturnStmt)
 		if returns || terminates(st) {
-			return fmt.Sprintf("main termina en la linea %d (%s) antes de la frontera del servidor seleccionado", line(st), short(st))
+			return fmt.Sprintf("main terminates at line %d (%s) before the selected server boundary", line(st), short(st))
 		}
 	}
 	return ""
@@ -484,37 +484,37 @@ func walkStraight(fn string, body *ast.BlockStmt, mux, mode string) (routes []ro
 	last := len(body.List) - 1
 	for i, st := range body.List {
 		if n, what := firstTransfer(st); n != nil {
-			return nil, 0, defined, fmt.Sprintf("transferencia de control en la linea %d (%s) dentro de %s: el camino lineal no se puede seguir, se registre o no el mux", line(n), what, fn)
+			return nil, 0, defined, fmt.Sprintf("control transfer at line %d (%s) inside %s: cannot follow a linear path, whether or not the mux is registered", line(n), what, fn)
 		}
 		if terminates(st) && (mode == "router" || associated == 0) {
-			return nil, 0, defined, fmt.Sprintf("%s termina en la linea %d (%s) antes de la frontera", fn, line(st), short(st))
+			return nil, 0, defined, fmt.Sprintf("%s terminates at line %d (%s) before the boundary", fn, line(st), short(st))
 		}
 		uses := usesOf(st, mux)
 		if _, ok := st.(*ast.ReturnStmt); ok {
 			if mode == "router" {
 				if i != last {
-					return nil, 0, defined, fmt.Sprintf("func %s tiene un return en la linea %d que no es su ultima sentencia: el orden de registro no es lineal", fn, line(st))
+					return nil, 0, defined, fmt.Sprintf("func %s has a return at line %d before its last statement: registration order is not linear", fn, line(st))
 				}
 				continue
 			}
 			if associated == 0 {
-				return nil, 0, defined, fmt.Sprintf("main termina en la linea %d antes de asociar %s a un http.Server", line(st), mux)
+				return nil, 0, defined, fmt.Sprintf("main terminates at line %d before binding %s to an http.Server", line(st), mux)
 			}
 			continue
 		}
 		if definitionOf(st, mux) {
 			if defined {
-				return nil, 0, defined, fmt.Sprintf("%s se define dos veces en %s (linea %d)", mux, fn, line(st))
+				return nil, 0, defined, fmt.Sprintf("%s is defined twice in %s (line %d)", mux, fn, line(st))
 			}
 			defined = true
 			continue
 		}
 		if c := registrationOf(st, mux); c != nil && len(uses) == 1 {
 			if !defined {
-				return nil, 0, defined, fmt.Sprintf("registro en la linea %d antes de definir %s", line(st), mux)
+				return nil, 0, defined, fmt.Sprintf("registration at line %d before defining %s", line(st), mux)
 			}
 			if associated != 0 {
-				return nil, 0, defined, fmt.Sprintf("registro en la linea %d despues de asociar %s a un http.Server (linea %d): orden fuera del modelo lineal", line(st), mux, associated)
+				return nil, 0, defined, fmt.Sprintf("registration at line %d after binding %s to an http.Server (line %d): order is outside the linear model", line(st), mux, associated)
 			}
 			if len(c.Args) == 0 {
 				opaque++
@@ -540,14 +540,14 @@ func walkStraight(fn string, body *ast.BlockStmt, mux, mode string) (routes []ro
 		if len(uses) == 0 {
 			if mode == "router" {
 				if r := firstReturn(st); r != nil {
-					return nil, 0, defined, fmt.Sprintf("func %s devuelve por mas de un camino (return en la linea %d dentro de un %s): ambiguo para este gate", fn, line(r), stmtKind(st))
+					return nil, 0, defined, fmt.Sprintf("func %s returns through multiple paths (return at line %d inside a %s): ambiguous for this gate", fn, line(r), stmtKind(st))
 				}
 			}
 			continue
 		}
 		if mode == "main" && associates(st, mux, uses) {
 			if !defined {
-				return nil, 0, defined, fmt.Sprintf("%s se asocia a un http.Server en la linea %d antes de definirse", mux, line(st))
+				return nil, 0, defined, fmt.Sprintf("%s is bound to an http.Server at line %d before being defined", mux, line(st))
 			}
 			if associated == 0 {
 				associated = line(st)
@@ -557,12 +557,12 @@ func walkStraight(fn string, body *ast.BlockStmt, mux, mode string) (routes []ro
 		u := uses[0]
 		ctx := stmtKind(st)
 		if u.inFuncLit {
-			ctx = "funcion anonima (definirla no la ejecuta)"
+			ctx = "anonymous function (defining it does not execute it)"
 		}
-		return nil, 0, defined, fmt.Sprintf("el mux `%s` se escapa del modelo de ejecucion lineal en la linea %d, contexto %s (%s); no se acredita como servido", mux, line(u.id), ctx, short(st))
+		return nil, 0, defined, fmt.Sprintf("mux `%s` escapes the linear execution model at line %d, context %s (%s); it cannot be verified as served", mux, line(u.id), ctx, short(st))
 	}
 	if mode == "main" && associated == 0 {
-		return nil, 0, defined, fmt.Sprintf("%s nunca se asocia a un http.Server como Handler en el camino lineal de main", mux)
+		return nil, 0, defined, fmt.Sprintf("%s is never bound to an http.Server as Handler on the linear main path", mux)
 	}
 	return routes, opaque, defined, ""
 }
@@ -603,11 +603,11 @@ func main() {
 	mainPath := filepath.Join(root, mainRel)
 	mainFile, err := parser.ParseFile(fset, mainPath, nil, 0)
 	if err != nil {
-		die(2, "no puedo parsear %s: %v", mainRel, err)
+		die(2, "cannot parse %s: %v", mainRel, err)
 	}
 	mainFn := funcDecl(mainFile, "main")
 	if mainFn == nil {
-		die(2, "%s no declara func main", mainRel)
+		die(2, "%s does not declare func main", mainRel)
 	}
 
 	// 1. The one http.Server literal with Addr cfg.ListenAddr, wherever it is written.
@@ -627,7 +627,7 @@ func main() {
 		return true
 	})
 	if len(lits) != 1 {
-		die(2, "encuentro %d http.Server con Addr: cfg.ListenAddr en %s y esperaba exactamente uno", len(lits), mainRel)
+		die(2, "found %d http.Server instances with Addr: cfg.ListenAddr in %s; expected exactly one", len(lits), mainRel)
 	}
 	lit := lits[0]
 	// 2. It must be bound by a top-level simple statement `s := &http.Server{...}`: a literal
@@ -641,18 +641,18 @@ func main() {
 	}
 	if srvDef == nil {
 		top := enclosingTop(mainFn.Body, lit.Pos())
-		ctx := "fuera de main"
+		ctx := "outside main"
 		if top != nil {
 			ctx = stmtKind(top) + " (" + short(top) + ")"
 		}
-		die(2, "el http.Server de cfg.ListenAddr (linea %d) no se construye en una asignacion simple del nivel superior de main, sino dentro de %s: construccion condicional, fuera del modelo lineal", line(lit), ctx)
+		die(2, "the http.Server for cfg.ListenAddr (line %d) is built inside %s rather than a simple top-level assignment in main: conditional construction, outside the linear model", line(lit), ctx)
 	}
 	if reason := mainPathReason(mainFn.Body, srvDef); reason != "" {
 		die(2, "%s", reason)
 	}
 	hid, ok := serverHandler(lit).(*ast.Ident)
 	if !ok {
-		die(2, "el Handler del servidor en cfg.ListenAddr no es una variable simple (%s); este gate no sabe seguirlo", canon(printExpr(serverHandler(lit))))
+		die(2, "the server Handler at cfg.ListenAddr is not a simple variable (%s); this gate cannot trace it", canon(printExpr(serverHandler(lit))))
 	}
 	// 3. The binding is kept: every other use of the server variable is a method call on it.
 	//    net/http's methods do not replace Handler; a field assignment, a reassignment, a
@@ -674,9 +674,9 @@ func main() {
 		top := enclosingTop(mainFn.Body, u.id.Pos())
 		ctx := stmtKind(top)
 		if u.inFuncLit {
-			ctx = "funcion anonima"
+			ctx = "anonymous function"
 		}
-		die(2, "el servidor `%s` se usa fuera del modelo en la linea %d, contexto %s (%s): la asociacion Handler del servidor seleccionado no se conserva", srvName, line(u.id), ctx, short(top))
+		die(2, "server `%s` is used outside the model at line %d, context %s (%s): the selected server Handler binding is not preserved", srvName, line(u.id), ctx, short(top))
 	}
 	tls := 0
 	if mentions(mainFile, "ListenAndServeTLS") || mentions(mainFile, "X509KeyPair") {
@@ -719,7 +719,7 @@ func main() {
 		}
 	}
 	if binds != 1 || rhs == nil {
-		die(2, "%s se asigna %d vez/veces en func main (esperaba una asignacion simple en el nivel superior)", hid.Name, binds)
+		die(2, "%s is assigned %d time(s) in func main (expected one simple top-level assignment)", hid.Name, binds)
 	}
 
 	var routes []route
@@ -755,9 +755,9 @@ func main() {
 			}
 			ctx := stmtKind(st)
 			if uses[0].inFuncLit {
-				ctx = "funcion anonima (definirla no la ejecuta)"
+				ctx = "anonymous function (defining it does not execute it)"
 			}
-			die(2, "el handler `%s` se usa fuera del modelo lineal de main en la linea %d, contexto %s (%s)", hid.Name, line(uses[0].id), ctx, short(st))
+			die(2, "handler `%s` is used outside the linear main model at line %d, context %s (%s)", hid.Name, line(uses[0].id), ctx, short(st))
 		}
 		call, ok := rhs.(*ast.CallExpr)
 		var sel *ast.SelectorExpr
@@ -769,31 +769,31 @@ func main() {
 			pkgID, ok = sel.X.(*ast.Ident)
 		}
 		if !ok {
-			die(2, "%s se construye con %s en %s y este gate no sabe leer eso", hid.Name, canon(printExpr(rhs)), mainRel)
+			die(2, "%s is built with %s in %s, which this gate cannot interpret", hid.Name, canon(printExpr(rhs)), mainRel)
 		}
 		pkg, fn := pkgID.Name, sel.Sel.Name
 		imp := resolveImport(mainFile, pkg)
 		if imp == "" {
-			die(2, "%s.%s construye el handler y %s no importa ningun paquete llamado %s", pkg, fn, mainRel, pkg)
+			die(2, "%s.%s builds the handler, but %s imports no package named %s", pkg, fn, mainRel, pkg)
 		}
 		modBytes, err := os.ReadFile(filepath.Join(root, modRel, "go.mod"))
 		if err != nil {
-			die(2, "las rutas viven en %s y no puedo resolverlo sin %s/go.mod", imp, modRel)
+			die(2, "routes live in %s, which cannot be resolved without %s/go.mod", imp, modRel)
 		}
 		m := regexp.MustCompile(`(?m)^module\s+(\S+)`).FindSubmatch(modBytes)
 		if m == nil {
-			die(2, "%s/go.mod no declara module", modRel)
+			die(2, "%s/go.mod does not declare module", modRel)
 		}
 		modPath := string(m[1])
 		if !strings.HasPrefix(imp, modPath+"/") {
-			die(2, "el paquete %s no pertenece al modulo %s de %s; este gate no lo sigue", imp, modPath, modRel)
+			die(2, "package %s does not belong to module %s in %s; this gate does not trace it", imp, modPath, modRel)
 		}
 		dirRel := filepath.Join(modRel, strings.TrimPrefix(imp, modPath+"/"))
 		pkgs, err := parser.ParseDir(fset, filepath.Join(root, dirRel), func(fi os.FileInfo) bool {
 			return !strings.HasSuffix(fi.Name(), "_test.go")
 		}, 0)
 		if err != nil && !os.IsNotExist(err) {
-			die(2, "no puedo parsear %s: %v", dirRel, err)
+			die(2, "cannot parse %s: %v", dirRel, err)
 		}
 		var fd *ast.FuncDecl
 		files := 0
@@ -808,27 +808,27 @@ func main() {
 			}
 		}
 		if fd == nil {
-			die(2, "main.go construye el handler con %s.%s y no encuentro func %s en %s (%d fichero(s) .go sin _test)", pkg, fn, fn, dirRel, files)
+			die(2, "main.go builds the handler with %s.%s, but func %s was not found in %s (%d non-test .go file(s))", pkg, fn, fn, dirRel, files)
 		}
 		// 3. What the function RETURNS as its LAST statement, which is the only thing the
 		//    server gets; then the straight-line path that leads there.
 		if fd.Body == nil || len(fd.Body.List) == 0 {
-			die(2, "func %s no tiene cuerpo", fn)
+			die(2, "func %s has no body", fn)
 		}
 		lastStmt := fd.Body.List[len(fd.Body.List)-1]
 		ret, ok := lastStmt.(*ast.ReturnStmt)
 		if !ok {
-			die(2, "func %s no termina en un return del handler (ultima sentencia: %s en la linea %d): camino no lineal", fn, stmtKind(lastStmt), line(lastStmt))
+			die(2, "func %s does not end by returning the handler (last statement: %s at line %d): nonlinear path", fn, stmtKind(lastStmt), line(lastStmt))
 		}
 		if len(ret.Results) != 1 {
-			die(2, "func %s tiene un return con %d valores; este gate espera exactamente el handler", fn, len(ret.Results))
+			die(2, "func %s has a return with %d values; this gate expects only the handler", fn, len(ret.Results))
 		}
 		switch res := ret.Results[0].(type) {
 		case *ast.Ident:
 			returned = res.Name
 		default:
 			if !isCall(res, "http", "NewServeMux") {
-				die(2, "func %s devuelve %s; este gate solo sigue un ServeMux declarado en la funcion o un http.NewServeMux() directo", fn, canon(printExpr(res)))
+				die(2, "func %s returns %s; this gate only traces a ServeMux declared in the function or a direct http.NewServeMux()", fn, canon(printExpr(res)))
 			}
 			returned = "fresh"
 		}
@@ -842,7 +842,7 @@ func main() {
 			die(2, "%s", reason)
 		}
 		if !defined {
-			die(2, "func %s devuelve %s, que no es un http.NewServeMux() declarado una sola vez en el nivel superior de la funcion", fn, returned)
+			die(2, "func %s returns %s, which is not an http.NewServeMux() declared exactly once at the top level of the function", fn, returned)
 		}
 	}
 

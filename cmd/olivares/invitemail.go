@@ -66,11 +66,16 @@ func (m inviteMailer) SendInvite(ctx context.Context, email, token string, expir
 // console address to link to.
 func newInviteSender(getenv func(string) string, dispatch *connectorDispatcher, console webaddr.Address, log *slog.Logger) api.InviteSender {
 	name := strings.TrimSpace(getenv(inviteMailDestinationEnv))
-	if name == "" || dispatch == nil {
+	if name == "" {
 		return nil
 	}
 	if log == nil {
 		log = slog.Default()
+	}
+	if dispatch == nil {
+		log.Warn("invitations: no notification dispatcher runs (the notify module with OLIVARES_NOTIFY_CONFIG), so invitations are not mailed and invite mode is unavailable",
+			"env", inviteMailDestinationEnv, "destination", name)
+		return nil
 	}
 	if !dispatch.systemDestination(name) {
 		log.Warn("invitations: the named destination is not scoped to no tenant (\"tenants\": []), so invitations are not mailed and invite mode is unavailable",

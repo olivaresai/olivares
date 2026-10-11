@@ -21,8 +21,7 @@ import (
 	"context"
 	"errors"
 
-	githubsrc "github.com/olivaresai/olivares/connectors/github"
-	gitlabsrc "github.com/olivaresai/olivares/connectors/gitlab"
+	gp "github.com/olivaresai/olivares/connectors/gitpublish"
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/secret"
 	"github.com/olivaresai/olivares/sdk"
@@ -43,34 +42,6 @@ type Resolver interface {
 // runningStatus is the roster status of a source the runtime runs.
 const runningStatus = "running"
 
-// Source kinds, as the roster names them, for the two hosts the route accepts.
-const (
-	kindGitHub = "github"
-	kindGitLab = "gitlab"
-)
-
-// connector is what the reader needs of a GitHub or GitLab source besides its read.
-type connector interface {
-	Descriptor() sdk.Descriptor
-	Open(ctx context.Context, cfg sdk.Config) error
-	Close(ctx context.Context) error
-}
-
-type githubSource interface {
-	connector
-	ReadContentDiff(ctx context.Context, repository, base, head string) (githubsrc.ContentDiff, error)
-}
-
-type gitlabSource interface {
-	connector
-	ReadContentDiff(ctx context.Context, repository, base, head string) (gitlabsrc.ContentDiff, error)
-}
-
-var (
-	_ githubSource = (*githubsrc.Source)(nil)
-	_ gitlabSource = (*gitlabsrc.Source)(nil)
-)
-
 // The engine hands New its source reconciler, an api.SourceRoster, and its secret
 // resolver; these assertions keep that wiring compiling where it is written.
 var (
@@ -82,9 +53,8 @@ var (
 type Reader struct {
 	roster   Roster
 	resolver Resolver
-	// newGitHub and newGitLab build a fresh connector; tests replace them.
-	newGitHub func() githubSource
-	newGitLab func() gitlabSource
+	// newSource opens the kind's read-only observer; tests replace it.
+	newSource func(gp.TargetKind) gp.DiffSource
 }
 
 var _ api.ContentDiffReader = (*Reader)(nil)
@@ -94,8 +64,7 @@ func New(roster Roster, resolver Resolver) *Reader {
 	return &Reader{
 		roster:    roster,
 		resolver:  resolver,
-		newGitHub: func() githubSource { return githubsrc.New() },
-		newGitLab: func() gitlabSource { return gitlabsrc.New() },
+		newSource: func(kind gp.TargetKind) gp.DiffSource { return kind.NewDiffSource() },
 	}
 }
 
@@ -110,31 +79,23 @@ func (r *Reader) ReadContentDiff(ctx context.Context, q api.GitHostDiffQuery) (a
 	if entry.Kind != q.Host {
 		return api.GitHostDiff{}, api.ErrContentDiffUnknownRef
 	}
-	switch q.Host {
-	case kindGitHub:
-		conn := r.newGitHub()
-		if err := r.open(ctx, conn, entry); err != nil {
-			return api.GitHostDiff{}, err
-		}
-		defer func() { _ = conn.Close(ctx) }()
-		d, err := conn.ReadContentDiff(ctx, q.Repository, q.Base, q.Head)
-		if err != nil {
-			return api.GitHostDiff{}, routeError(err, githubsrc.ErrUnknownRef, githubsrc.ErrForbidden)
-		}
-		return fromGitHub(d), nil
-	case kindGitLab:
-		conn := r.newGitLab()
-		if err := r.open(ctx, conn, entry); err != nil {
-			return api.GitHostDiff{}, err
-		}
-		defer func() { _ = conn.Close(ctx) }()
-		d, err := conn.ReadContentDiff(ctx, q.Repository, q.Base, q.Head)
-		if err != nil {
-			return api.GitHostDiff{}, routeError(err, gitlabsrc.ErrUnknownRef, gitlabsrc.ErrForbidden)
-		}
-		return fromGitLab(d), nil
+	kind, ok := gp.LookupTargetKind(q.Host)
+	if !ok {
+		return api.GitHostDiff{}, api.ErrContentDiffUnknownRef
 	}
-	return api.GitHostDiff{}, api.ErrContentDiffUnknownRef
+	conn := r.newSource(kind)
+	if conn == nil {
+		return api.GitHostDiff{}, api.ErrContentDiffUnknownRef
+	}
+	if err := r.open(ctx, conn, entry); err != nil {
+		return api.GitHostDiff{}, err
+	}
+	defer func() { _ = conn.Close(ctx) }()
+	d, err := conn.ReadContentDiff(ctx, q.Repository, q.Base, q.Head)
+	if err != nil {
+		return api.GitHostDiff{}, routeError(err)
+	}
+	return fromDiff(d), nil
 }
 
 // runningSource returns the roster row named name when it is enabled, running and
@@ -160,7 +121,7 @@ func (r *Reader) runningSource(ctx context.Context, name string) (api.SourceRost
 // open resolves entry's configuration for conn and opens conn with it. Either
 // failure is an upstream error without its text: a resolver error can name a
 // secret backend, and an Open error ran against the resolved configuration.
-func (r *Reader) open(ctx context.Context, conn connector, entry api.SourceRosterEntry) error {
+func (r *Reader) open(ctx context.Context, conn gp.DiffSource, entry api.SourceRosterEntry) error {
 	cfg, err := r.resolver.Resolve(ctx, conn.Descriptor(), sdk.Config{Settings: entry.Config})
 	if err != nil {
 		return api.ErrContentDiffUpstream
@@ -175,11 +136,11 @@ func (r *Reader) open(ctx context.Context, conn connector, entry api.SourceRoste
 // routeError maps a connector read error to the route's errors. A diff past the
 // read cap and a rate limit keep their own error, which the route reads by
 // interface; anything else is upstream.
-func routeError(err, unknownRef, forbidden error) error {
+func routeError(err error) error {
 	switch {
-	case errors.Is(err, unknownRef):
+	case errors.Is(err, gp.ErrDiffUnknownRef):
 		return api.ErrContentDiffUnknownRef
-	case errors.Is(err, forbidden):
+	case errors.Is(err, gp.ErrDiffForbidden):
 		return api.ErrContentDiffForbidden
 	}
 	var tooLarge interface{ GitHostDiffTooLarge() }
@@ -193,22 +154,7 @@ func routeError(err, unknownRef, forbidden error) error {
 	return api.ErrContentDiffUpstream
 }
 
-func fromGitHub(d githubsrc.ContentDiff) api.GitHostDiff {
-	files := make([]api.GitHostDiffFile, len(d.Files))
-	for i, f := range d.Files {
-		files[i] = api.GitHostDiffFile{
-			Path: f.Path, PreviousPath: f.PreviousPath, Status: f.Status,
-			Binary: f.Binary, Truncated: f.Truncated, Hunks: f.Hunks,
-		}
-	}
-	return api.GitHostDiff{
-		Repository: d.Repository, Base: d.Base, Head: d.Head,
-		BaseCommit: d.BaseCommit, HeadCommit: d.HeadCommit, HeadTree: d.HeadTree,
-		Truncated: d.Truncated, Files: files,
-	}
-}
-
-func fromGitLab(d gitlabsrc.ContentDiff) api.GitHostDiff {
+func fromDiff(d gp.ContentDiff) api.GitHostDiff {
 	files := make([]api.GitHostDiffFile, len(d.Files))
 	for i, f := range d.Files {
 		files[i] = api.GitHostDiffFile{

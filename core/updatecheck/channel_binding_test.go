@@ -64,11 +64,11 @@ func TestCheckRefusesAManifestSignedForAnotherChannel(t *testing.T) {
 	}
 	// The endpoint answers the SECURITY path with a genuine STABLE manifest — a stale
 	// mirror, a misrouted gate, or the wrong air-gap bundle all produce exactly this.
-	srv := serveManifestOnChannel(t, release.ChannelStable, release.ChannelSecurity, "26.9.0", priv)
+	srv := serveManifestOnChannel(t, release.ChannelStable, release.ChannelSecurity, "26.900", priv)
 
 	st := Check(context.Background(), Config{
 		Endpoint: srv.URL, Channel: release.ChannelSecurity, PubKey: pub,
-		CurrentVersion: "26.8.0", InstallID: "n1",
+		CurrentVersion: "26.800", InstallID: "n1",
 	})
 
 	if st.Error == "" {
@@ -96,11 +96,11 @@ func TestCheckAcceptsTheChannelItAskedFor(t *testing.T) {
 	if err != nil {
 		t.Fatalf("keygen: %v", err)
 	}
-	srv := serveManifestOnChannel(t, release.ChannelSecurity, release.ChannelSecurity, "26.9.0", priv)
+	srv := serveManifestOnChannel(t, release.ChannelSecurity, release.ChannelSecurity, "26.900", priv)
 
 	st := Check(context.Background(), Config{
 		Endpoint: srv.URL, Channel: release.ChannelSecurity, PubKey: pub,
-		CurrentVersion: "26.8.0", InstallID: "n1",
+		CurrentVersion: "26.800", InstallID: "n1",
 	})
 
 	if st.Error != "" {
@@ -122,10 +122,10 @@ func TestCheckDefaultChannelIsStableAndStillAccepted(t *testing.T) {
 	if err != nil {
 		t.Fatalf("keygen: %v", err)
 	}
-	srv := serveManifestOnChannel(t, release.ChannelStable, release.ChannelStable, "26.9.0", priv)
+	srv := serveManifestOnChannel(t, release.ChannelStable, release.ChannelStable, "26.900", priv)
 
 	st := Check(context.Background(), Config{
-		Endpoint: srv.URL, PubKey: pub, CurrentVersion: "26.8.0", InstallID: "n1",
+		Endpoint: srv.URL, PubKey: pub, CurrentVersion: "26.800", InstallID: "n1",
 	})
 
 	if st.Error != "" {

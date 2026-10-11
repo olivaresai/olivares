@@ -23,13 +23,13 @@ overall contract.
 
 | Area | What it documents | Source of truth |
 |---|---|---|
-| **[REST API](/reference/api/)** | The control-plane HTTP API: auth, setup, tenancy, agents, the R/RW access map, tokens, and the audit ledger. | The product's **OpenAPI 3.1** contract (70 core paths), rendered at build time from the real file — not a copy. |
+| **[REST API](/reference/api/)** | The control-plane HTTP API: auth, setup, tenancy, agents, the R/RW access map, tokens, and the audit ledger. | The product's **OpenAPI 3.1** contract (128 core paths), rendered at build time from the real file — not a copy. |
 | **[Module routes (beta)](/reference/api-beta/)** | The product's module routes (`/v1/m/<ns>/…`) — finops, compliance, governance, sessions, models, knowledge, … — as a separate **beta** OpenAPI document. | The same OpenAPI 3.1 contract, reflected at build time from the routes the modules register. |
 | **[Stability policy](/reference/api-stability/)** | Versioning, stability tiers, deprecation/sunset signalling and the minimum support windows for the API, the provider and the client SDKs. | The in-code deprecation table and its build-failing window tests. |
-| **[gRPC](/reference/grpc/)** | The engine's gRPC mirror and the versioned plugin wire contract every out-of-process connector and module speaks. | The `grpc.ServiceDesc` registration tables the servers hand to gRPC. |
+| **[gRPC](/reference/grpc/)** | The engine's gRPC mirror and the versioned plugin wire contract every out-of-process connector speaks. | The `grpc.ServiceDesc` registration tables the servers hand to gRPC. |
 | **[Event bus](/reference/events/)** | The internal event bus: the event envelope, the first-party event types, and the observation payloads connectors lift onto it. | An **AsyncAPI 3.0** contract, hand-derived from the Go SDK. |
 | **[Console screens](/reference/console/)** | Every route the console publishes, with the RBAC permission it requires and the reference page its in-product help link opens. | The console's route census, pinned against the built router. |
-| **[Modules catalog](/reference/modules/overview/)** | The 31 product modules — what each is, its status, and which routes (if any) it exposes outside the core API. | The product capability catalog and the typed module interfaces. |
+| **[Modules catalog](/reference/modules/overview/)** | The 32 product modules — what each is, its status, and which routes (if any) it exposes outside the core API. | The product capability catalog and the typed module interfaces. |
 | **[Model gateway contract](/reference/model-gateway-contract/)** | Driver × protocol × transport matrix for CreateMessage, streaming, cancellation and usage. Honest cell labels. | `connectors/modelprovider/gateway` and its conformance suite. |
 | **[CLI](/reference/cli/)** | The `olivares` binary and its subcommands — `serve`, `collector`, `audit`, `license`, `openapi`, `version` — and their flags. | The compiled command definitions. |
 | **[Configuration](/reference/configuration/)** | Environment variables and runtime options: the data directory, source wiring, the authorization engine, and ledger signing. | The engine's configuration loaders. |
@@ -46,7 +46,7 @@ identity and tenancy, agents, the read/write access map
 access-map module rather than the core surface), token management, and the audit
 ledger.
 
-The contract describes **70 core paths**. That is deliberate: it is the stable,
+The contract describes **128 core paths**. That is deliberate: it is the stable,
 versioned surface of the control plane, not every route the engine can answer.
 What "stable" commits to — versioning, deprecation signalling and minimum
 support windows — is the [API stability policy](/reference/api-stability/).
@@ -54,7 +54,7 @@ support windows — is the [API stability policy](/reference/api-stability/).
 :::note[Module routes are a separate, beta contract]
 The module routes — for example the access-map module's
 `/v1/m/accessmap/graph`, `/v1/m/accessmap/neighbors` and `/v1/m/accessmap/drift`
-— are **not** part of the 70-path stable core document. They are published as a
+— are **not** part of the 128-path stable core document. They are published as a
 separate **beta** OpenAPI document at [`/reference/api-beta/`](/reference/api-beta/)
 (served at `/openapi.beta.json`, reflected from the routes the modules actually
 register), so the stable surface stays identifiable while the full product
@@ -73,6 +73,14 @@ verify), used where a typed binary contract is preferred (for example collectors
 It mirrors the REST contract rather than extending it; the OpenAPI document remains
 the canonical surface for the full API.
 
+Both transports use the same tenant resolution, permissions, and workspace
+confinement. Surrounding whitespace in bearer headers and tenant selectors is
+ignored; an empty authorization header leaves the caller anonymous. A bound token
+cannot select another tenant. Agent lists are filtered
+to the caller's workspace before pagination, and entity requests check the stored
+workspace. The collector-only `IngestService.Push` has no REST counterpart and
+requires `ingest:write`; standard gRPC health methods use the public health policy.
+
 ## Event bus
 
 The [event-bus reference](/reference/events/) is an **AsyncAPI 3.0** contract. The
@@ -89,7 +97,7 @@ says so rather than inventing it.
 
 ## Modules catalog
 
-The [modules catalog](/reference/modules/overview/) enumerates the **31 modules**
+The [modules catalog](/reference/modules/overview/) enumerates the **32 modules**
 that sit on top of the core engine, across nine capability areas. One of the most
 useful is the **R/RW access map** with its **Permitted-vs-Observed** diff: it
 reads from logs, OTEL and (as a non-cooperative backstop) eBPF rather than sitting

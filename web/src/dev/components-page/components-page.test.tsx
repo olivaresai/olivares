@@ -78,4 +78,14 @@ describe('the components page', () => {
     const board = container.querySelector('main')!
     expect(within(board).getByText('Working')).toBeVisible()
   })
+
+  it('shows state as dot chips, facts as tags, and tab counts as pills', () => {
+    const { container } = render(
+      <ComponentsPage d={DEMO.en} view="primitives" onView={() => undefined} />,
+    )
+    const tags = container.querySelector('section[aria-labelledby="p5"]')!
+    expect(tags.querySelectorAll('[data-slot="status-chip"]')).toHaveLength(5)
+    expect(tags.querySelectorAll('[data-slot="tag"]')).toHaveLength(2)
+    expect(container.querySelector('[data-slot="count-badge"]')).not.toBeNull()
+  })
 })

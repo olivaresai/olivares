@@ -103,6 +103,13 @@ describe('the console classifies a host exactly as the engine does', () => {
   )
 })
 
+it('normalizes one root dot before applying the verifier single-label rule', () => {
+  expect(classifyConsoleHost('panel.example.com.').relyingParty).toBe(true)
+  expect(classifyConsoleHost('localhost.').relyingParty).toBe(true)
+  expect(classifyConsoleHost('olivares.').relyingParty).toBe(false)
+  expect(classifyConsoleHost('panel.example.com..').relyingParty).toBe(false)
+})
+
 describe('the engine agrees with the installed WHATWG URL implementation', () => {
   const rows = golden<OriginRow[]>('browser-origins.json')
 

@@ -160,8 +160,8 @@
     }
   },
   "seam": {
-    "synthetic": "Datos sintéticos: no cableado",
-    "syntheticData": "La generación de datos sintéticos es un punto de extensión documentado post-v1 — no implementado en esta versión."
+    "synthetic": "Generación local de datos",
+    "syntheticData": "Genera entradas reproducibles para escenarios mediante la API de sandbox con plantillas locales acotadas. No se llama a un modelo ni a la red."
   },
   "empty": {
     "runs": {

@@ -6,9 +6,8 @@ package a2a
 import (
 	"encoding/json"
 	"fmt"
-	"strings"
-
 	jose "github.com/go-jose/go-jose/v4"
+	"strings"
 )
 
 // Agent Card ISSUANCE (E5) — the signing counterpart of verify.go. Olivares can

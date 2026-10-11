@@ -101,7 +101,7 @@ func newManagedStopFixtureWith(t *testing.T, cfg store.Config, opts ...Option) *
 		authr: auth.NewAuthenticator(st, nil),
 		authz: auth.NewAuthorizer(nil),
 	}
-	m.UseManagedStopAuthority(f.authr, f.authz, st.Leader())
+	m.ManagedStopAuthority = NewManagedStopAuthority(f.authr, f.authz, st.Leader())
 	if err := st.View(ctx, tenant, func(sc store.Scope) error {
 		def, derr := sc.DefaultWorkspace(ctx)
 		f.workspace = def.ID
@@ -586,7 +586,7 @@ func TestManagedStopUnwiredRefusesBeforeAnyRead(t *testing.T) {
 	f := newManagedStopFixture(t, store.Config{Engine: store.EngineSQLite, DSN: ":memory:", Debug: true})
 	op := f.operator("unwired@w2.test", auth.RoleEditor, true, 2*time.Minute)
 	dto, lr := f.launch("thread-unwired")
-	f.m.managedStop = nil
+	f.m.ManagedStopAuthority = nil
 
 	res, err := f.call(f.request(op, dto, lr.launchID, "unwired-1"))
 	if !errors.Is(err, ErrManagedStopUnwired) {

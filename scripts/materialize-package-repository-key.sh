@@ -26,8 +26,8 @@ while [[ "$#" -gt 0 ]]; do
 	esac
 done
 
-blind() { printf 'materialize-package-repository-key: NO HE PODIDO MIRAR — %s\n' "$*" >&2; exit 2; }
-fail() { printf 'materialize-package-repository-key: HALLAZGO — %s\n' "$*" >&2; exit 1; }
+blind() { printf 'materialize-package-repository-key: COULD NOT LOOK — %s\n' "$*" >&2; exit 2; }
+fail() { printf 'materialize-package-repository-key: FINDING — %s\n' "$*" >&2; exit 1; }
 
 [[ "$bundle_file" == /* && -f "$bundle_file" && ! -L "$bundle_file" ]] || blind 'the base64 bundle file is not a regular absolute path'
 [[ "$passphrase_file" == /* && -f "$passphrase_file" && ! -L "$passphrase_file" ]] || blind 'the passphrase file is not a regular absolute path'

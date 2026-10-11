@@ -140,8 +140,8 @@ func writeNIS2Error(w http.ResponseWriter, err error) {
 func (m *Module) handleClassifyNIS2Incident(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
 	if m.nis2Packager == nil {
 		writeJSON(w, http.StatusNotImplemented, errorBody(
-			"NIS 2 significant-incident classification requires the Olivares enterprise "+
-				"add-on (nis2incident); not linked in this build"))
+			"NIS 2 significant-incident classification requires the Olivares Business "+
+				"edition (nis2incident); not linked in this build"))
 		return
 	}
 	reference := strings.TrimSpace(r.URL.Query().Get("reference"))

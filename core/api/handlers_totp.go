@@ -55,10 +55,10 @@ type totpPolicyInput struct {
 // handleTOTPEnrol starts an enrolment: from the acting session (self-service),
 // or from a pending login when the mfa_token is supplied (the policy requires
 // a factor and the account has none). The response is shown once.
-func (s *Server) handleTOTPEnrol(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleTOTPEnrol(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
 	var in totpEnrolInput
 	if err := decodeJSON(w, r, &in); err != nil {
-		s.badRequest(w, r, "invalid JSON body: expected {mfa_token?}")
+		s.badRequest(w, r, RequestBodyErrorMessage(err, "invalid JSON body: expected {mfa_token?}"))
 		return
 	}
 	var (
@@ -97,10 +97,10 @@ func (s *Server) handleTOTPEnrol(w http.ResponseWriter, r *http.Request) {
 // the recovery codes exactly once. Pending-login (policy-forced): the verified
 // code completes the login, so the session response is returned together with
 // the recovery codes.
-func (s *Server) handleTOTPActivate(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleTOTPActivate(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
 	var in totpActivateInput
 	if err := decodeJSON(w, r, &in); err != nil || auth.ReformatCode(in.Code) == "" {
-		s.badRequest(w, r, "invalid JSON body: expected {code[, mfa_token]}")
+		s.badRequest(w, r, RequestBodyErrorMessage(err, "invalid JSON body: expected {code[, mfa_token]}"))
 		return
 	}
 	code := auth.ReformatCode(in.Code)
@@ -129,10 +129,10 @@ func (s *Server) handleTOTPActivate(w http.ResponseWriter, r *http.Request) {
 
 // handleTOTPChallenge completes a factor-gated login with a TOTP code or a
 // recovery code.
-func (s *Server) handleTOTPChallenge(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleTOTPChallenge(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
 	var in totpChallengeInput
 	if err := decodeJSON(w, r, &in); err != nil || in.MFAToken == "" {
-		s.badRequest(w, r, "invalid JSON body: expected {mfa_token, code | recovery_code}")
+		s.badRequest(w, r, RequestBodyErrorMessage(err, "invalid JSON body: expected {mfa_token, code | recovery_code}"))
 		return
 	}
 	var code string
@@ -154,11 +154,8 @@ func (s *Server) handleTOTPChallenge(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleTOTPStatus reports the acting account's factor (non-secret shape).
-func (s *Server) handleTOTPStatus(w http.ResponseWriter, r *http.Request) {
-	p, ok := s.sessionPrincipal(w, r)
-	if !ok {
-		return
-	}
+func (s *Server) handleTOTPStatus(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	p := mc.Principal
 	status, err := s.authr.TOTPStatusOf(r.Context(), p.UserID)
 	if err != nil {
 		s.writeError(w, r, err)
@@ -170,11 +167,8 @@ func (s *Server) handleTOTPStatus(w http.ResponseWriter, r *http.Request) {
 // handleTOTPRemove deletes the acting account's own factor. AAL3-gated like
 // removing a passkey: the second factor cannot be dropped from a plain
 // password session.
-func (s *Server) handleTOTPRemove(w http.ResponseWriter, r *http.Request) {
-	p, ok := s.sessionPrincipal(w, r)
-	if !ok {
-		return
-	}
+func (s *Server) handleTOTPRemove(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	p := mc.Principal
 	if !s.requireStepUp(w, r, p) {
 		return
 	}
@@ -186,10 +180,7 @@ func (s *Server) handleTOTPRemove(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleTOTPPolicyGet reads the require-for-administrators policy.
-func (s *Server) handleTOTPPolicyGet(w http.ResponseWriter, r *http.Request) {
-	if _, ok := s.authzSystem(w, r, "system:admin"); !ok {
-		return
-	}
+func (s *Server) handleTOTPPolicyGet(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
 	on, err := s.authr.RequireTOTPForAdmins(r.Context())
 	if err != nil {
 		s.writeError(w, r, err)
@@ -200,17 +191,14 @@ func (s *Server) handleTOTPPolicyGet(w http.ResponseWriter, r *http.Request) {
 
 // handleTOTPPolicyPut sets the require-for-administrators policy. AAL3-gated:
 // this knob decides who may log in with just a password.
-func (s *Server) handleTOTPPolicyPut(w http.ResponseWriter, r *http.Request) {
-	p, ok := s.authzSystem(w, r, "system:admin")
-	if !ok {
-		return
-	}
+func (s *Server) handleTOTPPolicyPut(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	p := mc.Principal
 	if !s.requireStepUp(w, r, p) {
 		return
 	}
 	var in totpPolicyInput
 	if err := decodeJSON(w, r, &in); err != nil || in.RequireForAdmins == nil {
-		s.badRequest(w, r, "invalid JSON body: expected {require_for_admins: bool}")
+		s.badRequest(w, r, RequestBodyErrorMessage(err, "invalid JSON body: expected {require_for_admins: bool}"))
 		return
 	}
 	if err := s.authr.SetRequireTOTPForAdmins(r.Context(), p, *in.RequireForAdmins); err != nil {
@@ -222,11 +210,8 @@ func (s *Server) handleTOTPPolicyPut(w http.ResponseWriter, r *http.Request) {
 
 // handleUserTOTPStatus reports another account's factor to an administrator
 // (tenant-scoped read, the members-grid permission).
-func (s *Server) handleUserTOTPStatus(w http.ResponseWriter, r *http.Request) {
-	_, tenant, ok := s.authzTenant(w, r, "membership:read")
-	if !ok {
-		return
-	}
+func (s *Server) handleUserTOTPStatus(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	tenant := mc.Tenant
 	accountID, ok := totpAccountParam(w, r)
 	if !ok {
 		return
@@ -243,11 +228,9 @@ func (s *Server) handleUserTOTPStatus(w http.ResponseWriter, r *http.Request) {
 // factor and recovery codes. Tenant-scoped membership write + AAL3, exactly the
 // onboarding gates — the same population that can issue an invite may clear a
 // lost factor.
-func (s *Server) handleUserTOTPReset(w http.ResponseWriter, r *http.Request) {
-	p, tenant, ok := s.authzTenant(w, r, "membership:write")
-	if !ok {
-		return
-	}
+func (s *Server) handleUserTOTPReset(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	p := mc.Principal
+	tenant := mc.Tenant
 	if !s.requireStepUp(w, r, p) {
 		return
 	}

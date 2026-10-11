@@ -3,52 +3,36 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md
 #
-# watchdog-unpublished-work.sh — a repository gate. La otra mitad de check-unpublished-work.sh.
+# watchdog-unpublished-work.sh — a repository gate, the companion to check-unpublished-work.sh.
+# This is a watchdog, not a push gate. lint:unpublished-work was introduced and retired
+# on 2026-08-10 after two workers measured the problem over four hours: branches
+# belong to a clone shared by three containers and many sessions, but a push belongs
+# to one. Blocking it charged the pusher for another session's unresolved work.
+# One worker published feature mid-work to reduce the count, but the live session
+# kept committing and it rose again. With many active sessions it cannot reach zero;
+# a guard whose only remedy is --no-verify defeats its own policy.
+# The hook says a watchdog should wake the owner without blocking others. Never block.
 #
-# ⛔ POR QUÉ NO ES UN GATE, y esto es el hallazgo entero de la fila.
-#
-# `lint:unpublished-work` fue un ratchet del carril rápido y se RETIRÓ el mismo día que aterrizó
-# (2026-08-10), medido por dos carriles en cuatro horas. Su premisa era global: contaba ramas que
-# sólo existen en el clon, pero el clon lo comparten tres contenedores y N sesiones, mientras que
-# un push es de UNA. Cobraba al que empujaba por trabajo ajeno que no podía resolver.
-# Otro carril se quedó bloqueado por `feature`, una sesión VIVA; publicó su punta a medias
-# para bajar el contador y volvió a subir, porque seguía commiteando. Con N sesiones el
-# contador NO puede llegar a cero, y el único remedio que queda es `--no-verify`: una regla cuyo
-# único remedio es lo que ella misma prohíbe.
-#
-# El hook lo dice con todas las letras: «a watchdog is the right home for it — it wakes its owner
-# without blocking anyone». Esto es eso. **No bloquea nunca a nadie.**
-#
-# ⛔ Y LO QUE LE FALTABA AL CENSO NO ERA EL SITIO: ERA LA EDAD.
-# `check-unpublished-work.sh` responde «¿hay trabajo sin publicar?» y la respuesta honesta es
-# SIEMPRE que sí, porque en cualquier instante hay carriles a medio commit. Un número que siempre
-# dice lo mismo es un número sobre el que nadie actúa — el patrón que este proyecto ya tiene
-# nombrado. Lo accionable no es que exista, es **cuánto lleva ahí**:
-#
-#   EN VUELO    < 45 min   alguien está trabajando. No se toca, no se avisa. Es lo normal.
-#   SIN PUBLICAR  45 min–4 h   merece un aviso a su dueño: probablemente se olvidó el push.
-#   OLVIDADO    > 4 h      es la clase que se pierde. Nueve informes vivían así el 2026-08-12.
-#
-# El dueño se nombra por su WORKTREE, que es la única atribución que este repositorio tiene y que
-# no depende de la identidad del commit (los tres carriles firman con la MISMA dirección noreply,
-# así que el autor no distingue a nadie).
-#
-# Salidas: 0 = nada olvidado (aunque haya trabajo en vuelo) · 1 = hay OLVIDADO · 2 = NO HE PODIDO
-# MIRAR. La tercera no es cosmética: sin remotos conocidos, «no está en ningún remoto» es cierto
-# para TODO, y ese falso positivo total sería peor que no mirar.
+# Age makes the census actionable: some unpublished work always exists while sessions
+# work. Under 45 minutes is normal in-flight work, with no notification; 45 minutes
+# to four hours merits an owner reminder; over four hours risks forgotten work (nine
+# reports on 2026-08-12). Attribute owners by worktree: all three workers share the
+# same noreply signing identity, so commit author cannot distinguish them.
+# Exit: 0 no forgotten work · 1 forgotten work · 2 could not check. Without known
+# remotes, every commit would look unpublished; do not report that as a finding.
 set -euo pipefail
 
 RAIZ="${OLIVARES_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || echo "")}"
-[ -n "$RAIZ" ] || { echo "watchdog-unpublished-work: ⛔ NO HE PODIDO MIRAR: no estoy en un repositorio." >&2; exit 2; }
-cd "$RAIZ" || { echo "watchdog-unpublished-work: ⛔ NO HE PODIDO MIRAR: no puedo entrar en '$RAIZ'." >&2; exit 2; }
+[ -n "$RAIZ" ] || { echo "watchdog-unpublished-work: ⛔ COULD NOT LOOK: not inside a repository." >&2; exit 2; }
+cd "$RAIZ" || { echo "watchdog-unpublished-work: ⛔ COULD NOT LOOK: cannot enter '$RAIZ'." >&2; exit 2; }
 
 STALE="${OLIVARES_WATCHDOG_STALE_SECS:-2700}"      # 45 min
 OLVID="${OLIVARES_WATCHDOG_FORGOTTEN_SECS:-14400}" # 4 h
-case "$STALE$OLVID" in *[!0-9]*) echo "watchdog-unpublished-work: ⛔ NO HE PODIDO MIRAR: umbrales no numéricos." >&2; exit 2;; esac
+case "$STALE$OLVID" in *[!0-9]*) echo "watchdog-unpublished-work: ⛔ COULD NOT LOOK: thresholds are not numeric." >&2; exit 2;; esac
 if [ "$OLVID" -le "$STALE" ]; then
 	# Un umbral de olvido por debajo del de aviso haría inalcanzable el tramo intermedio y el
 	# watchdog gritaría por todo. Se corrige y SE DICE, igual que hace el mutex con WAIT/STALE.
-	echo "watchdog-unpublished-work: ⚠ FORGOTTEN ($OLVID) <= STALE ($STALE); derivo FORGOTTEN=$((STALE + 3600))." >&2
+	echo "watchdog-unpublished-work: ⚠ FORGOTTEN ($OLVID) <= STALE ($STALE); using FORGOTTEN=$((STALE + 3600))." >&2
 	OLVID=$((STALE + 3600))
 fi
 
@@ -72,21 +56,21 @@ if [ "${OLIVARES_WATCHDOG_NO_FETCH:-0}" != "1" ]; then
 fi
 n_rem="$(git for-each-ref --format='%(refname)' refs/remotes/ 2>/dev/null | grep -c . || true)"
 if [ "${n_rem:-0}" -eq 0 ]; then
-	echo "watchdog-unpublished-work: ⛔ NO HE PODIDO MIRAR: cero refs remotas conocidas." >&2
-	echo "                           Con eso, TODO sale «sin publicar» y el aviso no valdría nada." >&2
+	echo "watchdog-unpublished-work: ⛔ COULD NOT LOOK: no known remote refs." >&2
+	echo "                           That would mark EVERYTHING as unpublished, making the warning meaningless." >&2
 	exit 2
 fi
 
 ahora="$(date +%s)"
 olvidados=0; avisos=0; en_vuelo=0
-echo "watchdog-unpublished-work: $n_rem ref(s) remota(s) conocidas — la sonda mide."
+echo "watchdog-unpublished-work: $n_rem known remote ref(s) — the probe can measure."
 
 while IFS= read -r d; do
 	[ -d "$d" ] || continue
 	h="$(git -C "$d" rev-parse HEAD 2>/dev/null)" || continue
 	n="$(git -C "$d" rev-list --count HEAD --not --remotes 2>/dev/null)" || continue
 	[ "${n:-0}" -gt 0 ] || continue
-	rama="$(git -C "$d" symbolic-ref --short -q HEAD 2>/dev/null || echo '(HEAD suelta)')"
+	rama="$(git -C "$d" symbolic-ref --short -q HEAD 2>/dev/null || echo '(detached HEAD)')"
 	# El commit sin publicar MÁS ANTIGUO es el que fija la edad: la punta puede ser de hace un
 	# minuto y estar sentada encima de trabajo de ayer, y es ese trabajo el que se pierde.
 	viejo="$(git -C "$d" rev-list HEAD --not --remotes 2>/dev/null | tail -1)"
@@ -108,24 +92,24 @@ while IFS= read -r d; do
 	equiv=""
 	if up="$(git -C "$d" rev-parse --verify -q origin/main 2>/dev/null)" && [ -n "$up" ]; then
 		ya="$(git -C "$d" cherry origin/main HEAD 2>/dev/null | grep -c '^-' || true)"
-		[ "${ya:-0}" -gt 0 ] && equiv="  [${ya}/${n} ya aplicado(s) arriba por contenido]"
+		[ "${ya:-0}" -gt 0 ] && equiv="  [${ya}/${n} already applied upstream by content]"
 	fi
 	if   [ "$edad" -ge "$OLVID" ]; then
-		printf '  ⛔ OLVIDADO    %-34s %2d commit(s), el más viejo hace %-8s %s%s\n' "$rama" "$n" "$hm" "$d" "$equiv"
+		printf '  ⛔ FORGOTTEN   %-34s %2d commit(s), oldest: %-8s ago %s%s\n' "$rama" "$n" "$hm" "$d" "$equiv"
 		olvidados=$((olvidados + 1))
 	elif [ "$edad" -ge "$STALE" ]; then
-		printf '  ⚠  SIN PUBLICAR %-33s %2d commit(s), el más viejo hace %-8s %s%s\n' "$rama" "$n" "$hm" "$d" "$equiv"
+		printf '  ⚠  UNPUBLISHED  %-33s %2d commit(s), oldest: %-8s ago %s%s\n' "$rama" "$n" "$hm" "$d" "$equiv"
 		avisos=$((avisos + 1))
 	else
 		en_vuelo=$((en_vuelo + 1))
 	fi
 done < <(git worktree list --porcelain 2>/dev/null | awk '/^worktree /{print $2}')
 
-echo "watchdog-unpublished-work: olvidados=$olvidados avisos=$avisos en-vuelo=$en_vuelo"
+echo "watchdog-unpublished-work: forgotten=$olvidados warnings=$avisos in-progress=$en_vuelo"
 if [ "$olvidados" -gt 0 ]; then
-	echo "watchdog-unpublished-work: ⛔ $olvidados con más de $((OLVID / 3600)) h sin publicar." >&2
-	echo "                           NO bloquea a nadie: publica desde ESE worktree, no desde otro." >&2
+	echo "watchdog-unpublished-work: ⛔ $olvidados unpublished for more than $((OLVID / 3600)) h." >&2
+	echo "                           This does NOT block anyone: publish from THAT worktree." >&2
 	exit 1
 fi
-echo "watchdog-unpublished-work: ✔ nada olvidado."
+echo "watchdog-unpublished-work: ✔ nothing forgotten."
 exit 0

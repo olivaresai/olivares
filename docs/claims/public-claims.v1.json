@@ -1,14 +1,14 @@
 {
   "schemaVersion": "public-claims/v1",
-  "measuredAt": "2026-09-12",
+  "measuredAt": "2026-10-07",
   "measurement": {
-    "auditReportTitle": "Current capability measurement, 2026-09-12",
-    "auditReportSha256": "e3e3da52dee6f7af61e123714cf7b7412277bc4d378baff123e500d5f4cb44e9",
+    "auditReportTitle": "Current capability source review, 2026-10-07",
+    "auditReportSha256": "d5cd9ecb02f4ca5ebfa5c89f2fe9ba9cfcc436f9a4a1ab5859587a665113e665",
     "auditor": "Olivares AI Community documentation source review",
     "refs": {
-      "hub": "97f799be6c5822ec4a0af1ec30511c4c50084ae4",
-      "web": "459faf501325cd9fb51e3944da5df4f4577d8f73",
-      "enterprise": "2a603663d00e4d53a97d038deb220d342b52859e"
+      "hub": "60380e54f1e291bc51882905c31871279103eb28",
+      "web": "e66a52d3250e9e1f9bd3268ed581be82a817d671",
+      "enterprise": "efa7c12c83f1e5c5dca069dd6ba7b40f77c8dd22"
     }
   },
   "jobs": [
@@ -75,21 +75,21 @@
       "conditions": [
         "The session schema records current action, model, tokens, cost and event/timeline data.",
         "A goal is present only when the source reports it.",
-        "Fifteen governed work-item routes are registered behind separate sessions:work read, write and admin permissions. They cover creating, listing, reading and updating a work item, its transitions, assignment, dependencies, acceptance criteria and per-item events, plus administrative event replay and a work stream.",
+        "Governed work-item routes have separate read, write and admin permissions. Work items, dependencies, acceptance criteria, events, leases, decisions and administrative event replay are separate surfaces; the work stream observes their events.",
         "A handoff offer, response, cancellation and deadline execute in one transaction that locks the bound work item and its single work lease, refuses a work item from another workspace lineage, and is idempotent against a stored command receipt."
       ],
       "unpromoted": [
-        "Computed task progress: no task-derived progress invariant was found in the session sources inspected for this measurement, and none is asserted. This is a bounded observation of the files listed in the audit, not a claim about the whole product.",
+        "An accepted task-progress journey: current live-session fields and the work-item APIs are separate source inventories; this measurement does not establish a combined task-progress invariant.",
         "Claim-level acceptance: the work-item and handoff behavior below is source and component-test inventory, not an executed claim-acceptance run."
       ],
       "controlRoutes": [
-        "modules/sessions/schema.go@57eb21d7362c",
-        "modules/sessions/doc.go@ac55d5594097",
-        "modules/sessions/work_api.go@021a10133d99",
-        "modules/sessions/work_model.go@574a60a5662f",
-        "modules/sessions/communication_model.go@ebe32a69f5eb",
-        "modules/sessions/communication_api.go@c884b40074aa",
-        "modules/sessions/communication_handoff_apply.go@45479488e122"
+        "modules/sessions/schema.go@539d932a57d4009742ca3b7f8667002a769f2f6e",
+        "modules/sessions/doc.go@ac55d5594097c86401de86e137c4a6b2ef6eb6ca",
+        "modules/sessions/work_api.go@4dec5df1c92d8f7549d48708af0f95bb17f7bff4",
+        "modules/sessions/work_model.go@22e82643a9f7a3b240339da41e09531069a37cc1",
+        "modules/sessions/communication_model.go@ebe32a69f5ebb352337f2b41b535b549dde56aed",
+        "modules/sessions/communication_api.go@2628ce1e01dd1c058d4aa1b730666d5903bc2aaa",
+        "modules/sessions/communication_handoff_apply.go@4590107349e4a80240a8b2e9b1a1bb5711a220a9"
       ],
       "surfaces": [
         {
@@ -105,7 +105,7 @@
       "acceptance": {
         "job": "claim-sessions-work",
         "tests": [
-          "modules/sessions/live_test.go:120-168",
+          "modules/sessions/live_test.go",
           "modules/sessions/communication_handoff_service_test.go"
         ],
         "testsAreAcceptance": false,
@@ -138,12 +138,12 @@
         "Claim-level acceptance for the public sentence at its route."
       ],
       "controlRoutes": [
-        "modules/orchestration/api.go@a5fa2fac754c",
-        "modules/orchestration/dto.go@00fe6645566a",
-        "modules/orchestration/workflow_graph.go@85355cca1a9a",
-        "modules/sessions/workflow_communication_handoff.go@7dd45e721375",
-        "modules/sessions/workflow_communication_ack.go@b19093137140",
-        "cmd/olivares/wire.go@837f1a69a8b2"
+        "modules/orchestration/api.go@762b8066d733d9cb570a369de54213a4ca956bc1",
+        "modules/orchestration/dto.go@00fe6645566aab8b3ea841bb36b20d8287d376b9",
+        "modules/orchestration/workflow_graph.go@2e84a97777b826f39a64f11c37d8ad3f9ff8117d",
+        "modules/sessions/workflow_communication_handoff.go@b27706b701f709cd7b8a63b0b97b4188ad52694c",
+        "modules/sessions/workflow_communication_ack.go@b19093137140456a73f362130847fb7c64f201be",
+        "cmd/olivares/wire.go@29c7ee647e021cf787b62cd49e10da5694e9ea8b"
       ],
       "surfaces": [
         {
@@ -187,16 +187,17 @@
         "Ordered replay depends on an ordered history source."
       ],
       "unpromoted": [
-        "Real-agent execution, synthetic data generation and console scenario lifecycle.",
-        "Attested OS isolation: no executed backend attestation exists at any inspected object. A replay or a local fake does not qualify OS isolation on an absent backend."
+        "Accepted journeys for real-agent execution, local synthetic-data generation and the console scenario lifecycle. The local generator expands bounded templates; this is not model-generated synthetic data.",
+        "Attested OS isolation: this source review supplies no executed backend attestation. Backend construction and preflight code are source inventory only."
       ],
       "controlRoutes": [
-        "modules/sandbox/doc.go@353a68d29e28",
-        "modules/sandbox/ports.go@0570ea99aa43",
-        "modules/sandbox/sandbox.go@1ff188f23eaa",
-        "core/runtime/sandboxrt/engine.go@6d7753f330fb",
-        "cmd/olivares/sandboxrt.go@c446023ef58a",
-        "cmd/olivares/sandboxrt_load.go@47169fa174ff"
+        "modules/sandbox/doc.go@c00b698f792eec66e5c357270e2cac44837e4e7e",
+        "modules/sandbox/ports.go@0fee867db6c06915e870a6a9ca576de9a69db5ef",
+        "modules/sandbox/sandbox.go@35b4da87694a01d8be10e395c7bcfc940fb4bc35",
+        "core/runtime/sandboxrt/engine.go@6d7753f330fb0bc58c6972002d1b6e2f51971a7f",
+        "cmd/olivares/sandboxrt.go@5d77a38356165c6a92413fa78e29c7a050d39390",
+        "cmd/olivares/sandboxrt_load.go@1e08f436851cd1bd2e7088d06a201f82705ad16f",
+        "modules/sandbox/synthetic.go@0fe30503400d3052126905b42b0d6feacc40ae45"
       ],
       "surfaces": [
         {
@@ -212,14 +213,15 @@
       "acceptance": {
         "job": "claim-sandbox-agent-isolation",
         "tests": [
-          "modules/sandbox/sandbox_test.go"
+          "modules/sandbox/sandbox_test.go",
+          "modules/sandbox/synthetic_test.go"
         ],
         "testsAreAcceptance": false,
         "evidence": null,
         "mutation": null
       },
       "gaps": [
-        "No backend attestation artifact is recorded, so configured gVisor or Firecracker isolation has no evidence at any inspected ref. Backend construction is composition inventory only."
+        "This source review supplies no backend attestation artifact; configured gVisor or Firecracker construction is source inventory only."
       ]
     },
     {
@@ -232,27 +234,31 @@
         "implementation": "HUB modules/models, connectors/modelrouter",
         "publication": "WEB /product"
       },
-      "boundedProposition": "Define cost, latency, capability or pinned policies and resolve an ordered fallback chain. The route POST /routing-policies/{id}/execute is deny-closed by construction and actuates only through a Claude Messages-compatible client, directly or with a resolved gateway endpoint as the Messages base URL.",
+      "boundedProposition": "Define cost, latency, capability or pinned policies and resolve an ordered fallback chain. POST /routing-policies/{id}/execute is deny-closed when execution is not configured. A policy without an execution profile uses the Claude Messages-compatible executor. A policy with an execution profile selects a separate Chat text port on the same route, composed only under explicit development activation with a profile registry and readiness checks.",
       "conditions": [
         "Policy resolution produces an ordered candidate chain.",
         "The module always resolves a route and acts only through an executor port. The default executor is unwired, so routing resolves without any provider call until an executor is composed.",
-        "The executor composed for this measured model-routing path speaks the Claude Messages protocol. This does not establish a provider or model matrix, and other product generation paths are separate.",
-        "Two deny-closed scope gates and the kill-switch stop gate precede the FinOps budget gate, which precedes the executor."
+        "The unprofiled executor speaks Claude Messages, directly or through a configured gateway base URL. The profiled Chat text port requires OLIVARES_MODEL_GATEWAY_CHAT_MODE=development_precheck and a profile registry; otherwise profiled execution returns 503. Neither branch establishes a universal provider or model matrix.",
+        "The handler applies its stop and scope checks before execution. The unprofiled branch then consults the composed FinOps admission gate. The development Chat branch runs its separate ordered content and routing budget precheck; its declared assurance is non-atomic development precheck, not a qualified hard monetary cap."
       ],
       "unpromoted": [
         "A universal provider or model matrix: the Claude Messages protocol establishes one configured route, not a matrix, and this record does not assert that no other product generation path exists.",
         "Centralized key custody: provider key fields are references.",
-        "Execution from the console: the console resolves and tests policies and has no execute call."
+        "Execution from the console as an accepted journey: the routing panel calls the execute API after explicit confirmation for models:routing:admin users. This source review did not execute that journey."
       ],
       "controlRoutes": [
-        "modules/models/api.go@c38d24d38e8d",
-        "modules/models/routing.go@1a83e05103d0",
-        "modules/models/execute.go@4d0b01044af2",
-        "modules/models/models.go@224a070b4b55",
-        "modules/models/keys.go@b4fcbf5b8a6d",
-        "connectors/modelrouter/router.go@1a519c4c2f5d",
-        "cmd/olivares/modelsactuate.go@29e25a6975d3",
-        "cmd/olivares/wire.go@837f1a69a8b2"
+        "modules/models/api.go@c0434c8c8fc13122bd0eb407285a556833993010",
+        "modules/models/routing.go@cff992f4224f59e6de8a84c26b932679f882196a",
+        "modules/models/execute.go@9531721f778880530efdf2c835fe94b2d53d92c4",
+        "modules/models/models.go@56674982dd15ce9b3369611ff03d77771212644c",
+        "modules/models/keys.go@b4fcbf5b8a6dafb2b30f1b5c1059707f5c50086b",
+        "connectors/modelrouter/router.go@1db9c3aa6e5b5a375216787af4a1da36f9ffd5e6",
+        "cmd/olivares/modelsactuate.go@09e200acec51bf47fad0583ddde625c49d894564",
+        "cmd/olivares/wire.go@29c7ee647e021cf787b62cd49e10da5694e9ea8b",
+        "modules/models/guardedtext.go@03f524b5e2ec20baf8ea65010dad87a3466a7001",
+        "cmd/olivares/modelsguardedtext.go@121c2422045125858a6745674dacd2a6f754468f",
+        "web/src/features/models/models-view.tsx@928fd5da12595ca6ddffd2a2ea8d32384f0aaf3b",
+        "web/src/features/models/api.ts@e78c318249128e83ba35c4402102d36943b93e50"
       ],
       "surfaces": [
         {
@@ -302,12 +308,12 @@
         "Per-host application: the fleet seam distributes intent and attestation; it does not prove the endpoint applied the settings."
       ],
       "controlRoutes": [
-        "connectors/managedsettings/delivery.go@0fced3eb80b4",
-        "cmd/olivares/cmd_managedsettings.go@e97e9d3ab8d6",
-        "cmd/olivares/cmd_agent.go@9c24474bebda",
-        "modules/governance/claudepolicy.go@bcbf5902fcc0",
-        "modules/governance/claudepolicy_truth.go@dd113b474ab8",
-        "cmd/olivares/appsgateway.go@84ccfbc9b087"
+        "connectors/managedsettings/delivery.go@0fced3eb80b48ef46788fb9aa6e491f1857c6834",
+        "cmd/olivares/cmd_managedsettings.go@3f614ae37e4ce4c9eb67b08baf7e6500243ee2c8",
+        "cmd/olivares/cmd_agent.go@c729a1c178cae0c398a78b6acb5e977d4d7ae114",
+        "modules/governance/claudepolicy.go@2952bb328149edf5946356995d895da48d6bf248",
+        "modules/governance/claudepolicy_truth.go@dd113b474ab80a3f33ad1ea9468bab161f292930",
+        "cmd/olivares/appsgateway.go@b38cc0fbb4b86a5858744168e4cf6431a689f348"
       ],
       "surfaces": [
         {
@@ -350,9 +356,9 @@
         "Claim-level acceptance for the published roadmap sentence."
       ],
       "controlRoutes": [
-        "modules/access-map/api.go@5a498e8e4c5f",
-        "modules/access-map/query.go@14391f90cd1c",
-        "modules/access-map/evidence.go@36327fccee95"
+        "modules/access-map/api.go@a9ad3ff6c22fbae2918f8f4fe3e8b78dce2fea34",
+        "modules/access-map/query.go@14391f90cd1c6358c27ff4c8d9e8d4c494af97e0",
+        "modules/access-map/evidence.go@36327fccee95b318e689fe16fc2d0315d4b46995"
       ],
       "surfaces": [
         {
@@ -396,9 +402,9 @@
         "Host-side policy constraints beyond the hook path."
       ],
       "controlRoutes": [
-        "cmd/olivares/claudehookpep.go@d38f7f8e323e",
-        "modules/governance/claudepolicy.go@bcbf5902fcc0",
-        "modules/governance/claudeagents.go@2b24706c7d1c"
+        "cmd/olivares/claudehookpep.go@5fc761bc7fa64e9c4c7b9751d674677780be820b",
+        "modules/governance/claudepolicy.go@2952bb328149edf5946356995d895da48d6bf248",
+        "modules/governance/claudeagents.go@2b24706c7d1c3e237a13b79b04a3299ee632e340"
       ],
       "surfaces": [
         {
@@ -412,14 +418,14 @@
         "job": "claim-roadmap-bindings",
         "tests": [
           "modules/governance/approvals_test.go",
-          "cmd/olivares/killswitch_e2e_test.go:235"
+          "cmd/olivares/killswitch_e2e_test.go"
         ],
         "testsAreAcceptance": false,
         "evidence": null,
         "mutation": null
       },
       "gaps": [
-        "The policy and host constraints remain unresolved and no claim-level evidence exists."
+        "This measurement does not execute the public hook-policy journey or establish host-wide constraints. No claim-level acceptance artifact is supplied."
       ]
     },
     {
@@ -432,7 +438,7 @@
         "implementation": "HUB modules/catalog",
         "publication": "WEB /roadmap"
       },
-      "boundedProposition": "Admit, sign and provision MCP servers and connectors through a governed catalog with tested admission boundaries. Interoperability with every external server is not asserted.",
+      "boundedProposition": "Admit, sign and provision MCP servers and connectors through a governed catalog with admission-boundary component test sources. Interoperability with every external server is not asserted.",
       "conditions": [
         "Catalog admission covers MCP, connector and model entries in the measured sources.",
         "Provisioning and signing are catalog-owned surfaces."
@@ -441,8 +447,8 @@
         "All-server interoperability and an executed version matrix against real counterparts."
       ],
       "controlRoutes": [
-        "modules/catalog/mcpadmission.go@1baa64388fed",
-        "modules/catalog/sign.go@f4efdd45476f"
+        "modules/catalog/mcpadmission.go@be5050d0829a2ae6afa37d18afc2f4cbd1b169d9",
+        "modules/catalog/sign.go@f4efdd45476f7746f1e3839ec16787ba9ffc5312"
       ],
       "surfaces": [
         {
@@ -463,7 +469,7 @@
         "mutation": null
       },
       "gaps": [
-        "The interoperability contract is under separate correction and no executed counterpart matrix exists."
+        "This measurement supplies no executed external counterpart or version matrix and no claim-level acceptance artifact."
       ]
     },
     {
@@ -476,19 +482,26 @@
         "implementation": "HUB modules/finops, cmd/olivares budget gates",
         "publication": "WEB /roadmap"
       },
-      "boundedProposition": "Apply FinOps budget admission at composed production gates. A read error allows and a budget definitively over its cap denies; reservation and release exist in the module and are not composed into a production path.",
+      "boundedProposition": "Apply FinOps admission at composed production gates. Reserve denies when the ledger cannot establish admission; enforcing exhausted budgets deny. The configured inference proxy reserves an estimate before forwarding, then commits observed cost or releases the hold. Legacy CheckBudget retains its fail-open read-error behavior.",
       "conditions": [
-        "Four composed gates consult budget admission before an action is actuated.",
-        "A FinOps read error never denies actuation; a definitively exhausted budget denies. This is the module's own documented contract and is not rewritten here.",
-        "Only a budget id, an action and a money-free reason cross the seam."
+        "In-process orchestration, voice, evals and model-route gates call Reserve with the deny-on-unreachable posture. Their zero estimate evaluates admission without creating a monetary hold; an unbound evals gate allows until composition binds FinOps.",
+        "When its budget gate is enabled, the inference proxy reserves a real estimate before forwarding. Finalization commits measured spend or releases the hold; settlement errors after the effect are logged and the hold expires, rather than undoing the completed effect.",
+        "Legacy CheckBudget may return allow with a read error. Session-launch availability is configured separately and may allow an admission refusal; Reserve itself still uses the deny posture. The development Chat route declares a non-atomic precheck assurance, not a qualified hard cap.",
+        "Gate decisions carry provider-neutral references and money-free refusal reasons. Internal reservations and inference settlement carry the estimate and actual cost."
       ],
       "unpromoted": [
-        "Reservation and settlement on a production path: the reservation and release operations are declared in the module and have no non-test caller in the measured sources beyond their own definition, so the production-path integration remains an open obligation.",
-        "Any claim that the composed gate performs reservation or settlement."
+        "A universal hard-cap guarantee across every actuation path, including configured session availability and development Chat execution.",
+        "Claim-level acceptance of the reservation, dispatch and settlement journey: source composition and test inventory alone do not establish it."
       ],
       "controlRoutes": [
-        "cmd/olivares/budgetgate.go@ca784df53477",
-        "modules/finops/reservation.go@72b3b68617f6"
+        "cmd/olivares/budgetgate.go@8aafae8af725c75abf188044708168bacbafca0f",
+        "modules/finops/reservation.go@a04bbe725d52bb70be0c430436fb12f0c7413b50",
+        "modules/finops/admission.go@e330ef7f5a5756e72f5d73bbffba17c6a27f99ee",
+        "modules/finops/budgets.go@144623239847f185fbde1f9ef52b88e61d7ea030",
+        "cmd/olivares/wire.go@29c7ee647e021cf787b62cd49e10da5694e9ea8b",
+        "cmd/olivares/internal/inferencepep/inferenceproxy.go@9a6421a8db7fd817b7e05e686920b88765071e12",
+        "cmd/olivares/sessiongov.go@3589ed426a5cdcdb799939368d98bc0d039588af",
+        "cmd/olivares/modelsguardedtext.go@121c2422045125858a6745674dacd2a6f754468f"
       ],
       "surfaces": [
         {
@@ -502,14 +515,16 @@
         "job": "claim-roadmap-bindings",
         "tests": [
           "cmd/olivares/budgetgate_test.go",
-          "modules/finops/reservation_group_test.go"
+          "modules/finops/reservation_group_test.go",
+          "modules/finops/admission_test.go",
+          "cmd/olivares/internal/inferencepep/inferenceproxy_test.go"
         ],
         "testsAreAcceptance": false,
         "evidence": null,
         "mutation": null
       },
       "gaps": [
-        "The remaining obligation is the production-path integration of reservation and settlement, which the separate lifecycle contract owns; this documentation task does not decide the fail-open policy."
+        "The composed Reserve and inference commit/release paths exist at the measured source. This source review supplies no executed claim-level reservation/settlement acceptance artifact."
       ]
     },
     {
@@ -532,8 +547,8 @@
         "Historical reconstruction with integrity, provenance, completeness and semantic replay separated."
       ],
       "controlRoutes": [
-        "modules/compliance/evidence.go@f616312c2af7",
-        "modules/compliance/export.go@40871237ffcd"
+        "modules/compliance/evidence.go@e8e8776cf69a61b88bdd1ddacdb59ce6ce521d7c",
+        "modules/compliance/export.go@40871237ffcd1d42e02bd4a7a6f5fd10746e6315"
       ],
       "surfaces": [
         {
@@ -566,7 +581,7 @@
         "implementation": "HUB modules/governance, cmd/olivares stop gates",
         "publication": "WEB /roadmap"
       },
-      "boundedProposition": "Stop agent activity through governed stop gates. The hook enforcement point fails closed when stop state cannot be read, and the surrounding circuit breaker fails open because the stop gate is the hard stop. Dual-control recovery is not qualified.",
+      "boundedProposition": "Stop agent activity through governed stop gates. The hook enforcement point fails closed when stop state cannot be read. The optional inference circuit breaker fails open on a state-read error and relies on the kill-switch as the hard stop. Dual-control recovery is not qualified by this source review.",
       "conditions": [
         "The enforcement point fails closed on a stop-state read error.",
         "The circuit breaker returns no denial when it cannot read state and defers to the stop gate.",
@@ -576,10 +591,10 @@
         "Dual-control recovery: no inspected test exercises a dual-control reset or recovery path, so the recovery half of the public sentence is not qualified."
       ],
       "controlRoutes": [
-        "cmd/olivares/killswitchgate.go@908d6628115e",
-        "cmd/olivares/claudehookpep.go@d38f7f8e323e",
-        "cmd/olivares/cmd_governance.go@2fe2df469380",
-        "cmd/olivares/circuitbreakergate.go@f07b15578c1b"
+        "cmd/olivares/killswitchgate.go@908d6628115e0f7d6538286b8c2646167aaa99b1",
+        "cmd/olivares/claudehookpep.go@5fc761bc7fa64e9c4c7b9751d674677780be820b",
+        "cmd/olivares/cmd_governance.go@79250677c25d905f6ba8e809bac7b1e291c38163",
+        "cmd/olivares/internal/inferencepep/circuitbreakergate.go@aed50946e6f2b3fb772c49b3fc2ba9507e4f9c1d"
       ],
       "surfaces": [
         {
@@ -609,23 +624,20 @@
       "state": "implemented_unaccepted",
       "components": [],
       "owner": {
-        "implementation": "HUB operator, cmd/olivares",
+        "implementation": "cmd/olivares",
         "publication": "WEB /roadmap"
       },
-      "boundedProposition": "Run the control plane on infrastructure the operator owns, through a Kubernetes operator with a ControlPlane resource and a self-hosted boot and licensing path. The supported deployment and recovery matrix is not qualified by code inventory.",
+      "boundedProposition": "Run the Community control plane on infrastructure the operator owns. Kubernetes fleet management requires Business. The supported deployment and recovery matrix is not qualified by code inventory.",
       "conditions": [
-        "A control-plane custom resource and a rollout convergence controller exist in the measured sources. Source inventory does not qualify the whole supported deployment and recovery matrix.",
-        "A self-hosted boot and licensing path exists in the command tree."
+        "A self-hosted boot and licensing path exists in the command tree. Kubernetes fleet source is distributed in Business."
       ],
       "unpromoted": [
         "Install, interrupt, swap, migration, startup and credential recovery with data and authority intact.",
         "Any qualified deployment or recovery matrix."
       ],
       "controlRoutes": [
-        "operator/api/v1alpha1/controlplane_types.go@0ef43fe5dbce",
-        "operator/internal/controller/convergence.go@d9b1c0bd0698",
-        "cmd/olivares/boot.go@0180418bfa03",
-        "cmd/olivares/license_service.go@74086fe59482"
+        "cmd/olivares/boot.go@5249f6e0b148bcce3445213a58ddef7f310c9306",
+        "cmd/olivares/license_service.go@ce93b55d377a77e7899ac7faf071900eb7722f9b"
       ],
       "surfaces": [
         {

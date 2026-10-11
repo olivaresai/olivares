@@ -47,11 +47,10 @@ func (m *Module) RuntimeCompanion(ctx context.Context, tenant model.TenantID, p 
 	if (!legacyPurpose && (ordinary || !confined)) || len(p.Tenants()) != 1 || p.Tenants()[0] != tenant {
 		return deny()
 	}
-	release, err := m.rt.lockRunContext(ctx, liveKey(tenant, p.SessionRunRef))
-	if err != nil {
-		return RuntimeCompanion{}, err
-	}
-	defer release()
+	// A provider can request its MCP catalogue while resume holds the operation
+	// lock waiting for that provider's handshake. Resolve the exact launch below
+	// without taking that lock; its fenced authority and lifetime still govern
+	// every companion, including cancellation when this generation stops.
 	live, ok := m.rt.getLive(tenant, p.SessionRunRef)
 	if !ok {
 		return deny()
@@ -68,5 +67,5 @@ func (m *Module) RuntimeCompanion(ctx context.Context, tenant model.TenantID, p 
 	if err := m.assertRunAuthority(ctx, live); err != nil {
 		return deny()
 	}
-	return RuntimeCompanion{LaunchSpec: companionSpec(live.companion), Runner: m.rt.runner, Context: live.context, LaunchID: live.launchID}, nil
+	return RuntimeCompanion{LaunchSpec: companionSpec(live.companion), Runner: m.rt.Runner, Context: live.context, LaunchID: live.launchID}, nil
 }

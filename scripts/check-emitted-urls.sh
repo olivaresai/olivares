@@ -83,76 +83,51 @@ MAX_RECORD_AGE_DAYS=45
 #       product's update path, and it needs a signed channel manifest, which needs the release
 #       ceremony's key. It is not code that is missing.
 #
-#   compliance-pages-unpublished — ⛔ RESUELTO EL 2026-08-29, y se deja escrito en vez de borrado.
-#       Decía: el exportador OSCAL estampa estas URL en documentos que lee un auditor
-#       (modules/compliance/oscal.go:109,195,242 · oscalprofile.go:159), el documento es correcto
-#       y la página que cita no existe. Ya existe: web#97 (`4e7eff79d`) las publicó y las tres
-#       responden 200 — medido con el método de este propio gate (`curl -sSL`, que sigue la
-#       redirección de la barra final), 26 ids × 2 rutas = 52/52 a 200, y el control negativo
-#       `/compliance/frameworks/no_such_framework` a 404, sin el cual 52 doscientos no distinguen
-#       enrutado real de un comodín.
-#
-#       Se conserva el párrafo, y no es sentimentalismo: la cabecera de más abajo lo NOMBRA como
-#       uno de los cuatro dueños que un re-sondeo masivo aplastó el 2026-08-18. Borrarlo dejaría
-#       esa lección citando algo que ya no está en el fichero.
+# compliance-pages-unpublished — resolved 2026-08-29; retain this measured history.
+#       OSCAL exports cite these pages (modules/compliance/oscal.go:109,195,242 and
+#       oscalprofile.go:159). web#97 (`4e7eff79d`) published them. Using this gate's
+#       `curl -sSL` method, which follows trailing-slash redirects, all 26 ids × 2 routes
+#       answered 200 (52/52), while `/compliance/frameworks/no_such_framework` answered
+#       404. That negative control distinguishes real routing from a wildcard.
+#       Keep the note because the warning below names this owner among those flattened
+#       by a bulk re-probe on 2026-08-18.
 #
 #   namespace-identifier-not-a-location
 #       https://olivares.ai/ns/oscal is a NAMESPACE. It identifies; it is not required to answer,
 #       and its 404 is recorded rather than waived so nobody later reads the silence as health.
 #
 #   docs-subdomain-withdrawn
-#       ⛔ RENOMBRADO DESDE `fran-deployment-decision` EL 2026-08-19, PORQUE YA NO ES UNA DECISIÓN
-#       PENDIENTE. Decía que las páginas existen en el repo y no están desplegadas en ese host, y
-#       planteaba dos salidas: entregar docs.olivares.ai a docs-site, o repuntar las URLs a
-#       olivares.ai/docs. **La primera ya no existe: el nombre ha sido retirado del DNS.**
+# Renamed from `fran-deployment-decision` on 2026-08-19: the decision was no longer
+#       pending. The pages existed in source but not on that host; the alternatives were
+#       deploying docs-site to docs.olivares.ai or using olivares.ai/docs. DNS no longer
+#       published the subdomain at that measurement.
 #
-#       Medido hoy con la calibración que a las lecturas anteriores les faltaba —y ésa es toda la
-#       diferencia, porque un 000 desde esta caja ya engañó una vez y borró un Canonical que
-#       servía—: `getent hosts` resuelve olivares.ai, alma.olivares.ai y licenses.olivares.ai en la
-#       MISMA corrida y falla sólo en docs (si fuese el egreso, fallarían las cuatro), y un
-#       resolutor independiente del local —Cloudflare DoH— devuelve **Status 3 (NXDOMAIN)** con 0
-#       respuestas, frente a Status 0 con 2 para el apex. NXDOMAIN no es «no contesta ahora»: es
-#       «el nombre no está publicado». Cinco intentos HTTP: 5/5 000.
+#       A local 000 previously caused a working Canonical to be deleted, so calibrate:
+#       `getent hosts` resolved olivares.ai, alma.olivares.ai and licenses.olivares.ai
+#       in the same run while docs failed. Cloudflare DoH independently returned
+#       Status 3 (NXDOMAIN), zero answers, versus Status 0 and two for the apex.
+#       HTTP returned 000 in 5/5 probes. Had already decided on 2026-08-01
+#       (core/api/stability.go:54) that the pages were at olivares.ai/docs and the
+#       subdomain was irrelevant; the old owner label falsely implied a pending act.
 #
-#       Y no queda decisión que pedir: Ya la tomó el 2026-08-01, citada literal en
-#       core/api/stability.go:54 — «ahora mismo están en olivares.ai/docs … [docs.olivares.ai] es
-#       irrelevante». Mantener la etiqueta anterior hacía que este gate pareciera estar esperando a
-#       por algo ya resuelto, que es la clase de espera que no debe existir.
+#       Remeasured 2026-08-23: the name returned and its row moved from 000 to 200.
+#       Each deploy had removed it: wrangler.jsonc `routes` declaratively reconciles
+#       custom domains, so manual provisioning from 08-01 vanished on each main push
+#       (at least seven since 08-13). Web PR #82 declared it and redirected to the apex
+#       (merged 12:42:42Z); DNS resolved three minutes later. With `curl -sSL`, docs
+#       answered 200 in 5/5 probes and the apex in 3/3; the chain was
+#       docs.olivares.ai/ → 301 → olivares.ai/docs → 200 in one redirect.
 #
-#       ⛔ RE-MEDIDO EL 2026-08-23: **el nombre VOLVIÓ, y la fila pasa de `000` a `200`.**
-#       Todo lo de arriba fue cierto mientras se escribió y la lección del `000` sigue en pie —por
-#       eso no se borra—, pero el diagnóstico se completó ese día: el nombre no estaba «retirado»,
-#       lo **desprendía cada deploy**. `routes` de `wrangler.jsonc` es DECLARATIVO y reconcilia los
-#       custom domains contra el fichero, así que el aprovisionamiento a mano del 08-01 se perdía
-#       en cada push a `main` (>=7 desde el 08-13). Declarado en el fichero y plegado al apex con
-#       un 301 (repo web, PR #82, mergeado 12:42:42Z), el nombre resolvió a los TRES minutos.
-#
-#       Medido con el mismo método que este gate usa (`curl -sSL`, que sigue redirecciones y por
-#       tanto anota el código FINAL) y con control, porque un número sin control ya nos costó una
-#       vez: **5/5 = 200** para docs.olivares.ai, **3/3 = 200** para el apex. La cadena real es
-#       `docs.olivares.ai/` → 301 → `olivares.ai/docs` → 200, en UN salto.
-#
-#       ⛔⛔ LOS DOS PÁRRAFOS QUE SEGUÍAN AQUÍ ESTABAN CADUCADOS Y DECÍAN LO CONTRARIO DE LO QUE
-#       PASA. Re-medido el 2026-08-27 por el carril del escaparate, y se corrige aquí porque un
-#       comentario falso en
-#       el fichero que sostiene un registro se cita después como si fuera la medida.
-#
-#       Decían: (a) «la profundidad no está publicada… el docs-site Astro, que sigue sin
-#       publicarse», y (b) «**ninguno de los 38** [destinos de ayuda de la consola] existe».
-#
-#       Hoy, medido con el mismo método y con control positivo:
-#         · `docs.olivares.ai/` → **200 DIRECTO**, sirviendo el docs-site. La cadena
-#           `docs.olivares.ai → 301 → olivares.ai/docs` que describe la nota de arriba YA NO
-#           EXISTE: el hostname es una route del Worker `olivares-docs` (y su DNS lo sostiene
-#           todavía el custom domain de `olivaresai-web`; ver docs-site/wrangler.jsonc).
-#         · `docs.olivares.ai/reference/api-stability/` → **200**. La profundidad SÍ está
-#           publicada; lo que sigue en 404 es esa misma ruta bajo el apex, que es otro sitio.
-#         · los 37 `helpHref` no-raíz de `web/src/features/registry.tsx`, pedidos uno a uno bajo
-#           `https://docs.olivares.ai<ruta>/`: **37/37 = 200, cero no-200**. De ahí que
-#           `DEEP_LINKS_PUBLISHED` esté hoy en `true` y `DOCS_BASE` vuelva a ser el subdominio.
-#
-#       ⇒ Lo que este registro mide sigue siendo la RAÍZ, que es lo correcto para una fila de
-#       URL emitida. Lo que cambia es que la salvedad ya no aplica y no debe volver a copiarse.
+#       Remeasured 2026-08-27: prior comments claiming no published depth and no live
+#       console help targets were stale. docs.olivares.ai/ served docs-site directly
+#       with 200, no apex redirect. The hostname was a route of the `olivares-docs`
+#       Worker, with DNS still held by olivaresai-web's custom domain
+#       (docs-site/wrangler.jsonc). /reference/api-stability/ answered 200 on docs
+#       while the same path under the apex remained 404. All 37 non-root helpHref
+#       targets from web/src/features/registry.tsx answered 200 under the docs host;
+#       DEEP_LINKS_PUBLISHED became true and DOCS_BASE returned to the subdomain.
+#       The record still measures the emitted root URL. The old depth caveat no
+#       longer applied and must not be copied as current evidence.
 #
 #   public-repo-empty-release-blocker
 #       ⛔ THE LAUNCH BLOCKER ITSELF, measured instead of remembered (the count moves as copy
@@ -261,13 +236,12 @@ MAX_RECORD_AGE_DAYS=45
 # answered 000 five times out of five from this container, exactly as they did once before under
 # local load — and that reading, taken as fact, once deleted a working Canonical from our
 # published security.txt. The 2026-08-13 values are the ones taken when the box was quiet and
-# every host answered 5/5. That caution was RIGHT, and el 2026-08-19 queda
-# DESCARGADA en vez de repetida: «una medida honesta y vieja gana a una fresca que el punto de
-# observación no puede sostener» sólo vale mientras ese punto no se pueda calibrar. Hoy se calibró
-# —control positivo sobre los hermanos con el MISMO instrumento, más un resolutor independiente que
-# devuelve NXDOMAIN— y el veredicto ya no depende de esta caja: el nombre no está publicado. El
-# detalle, en `docs-subdomain-withdrawn` arriba. What this gate guarantees meanwhile is that the number
-# cannot quietly grow and the record cannot quietly rot.
+# every host answered 5/5. That caution was correct. Calibration on 2026-08-19
+# superseded it: an honest old measurement beats an unsupported fresh one only
+# while the observation point cannot be calibrated. Positive controls on sibling
+# hosts with the same tool, plus independent NXDOMAIN, established the DNS state.
+# See `docs-subdomain-withdrawn` above. This gate keeps the count from silently
+# growing and the record from silently aging.
 # 2026-09-17 · README rewrite (docs/readme-clarity-20260916): the thirteen olivares.ai section URLs it
 # links, the releases index and the v26.9.0 tag page were measured with --probe from this box (five
 # attempts each). The tag page is 404 on the public repository until the v26.9.0 release is published
@@ -298,15 +272,18 @@ MAX_RECORD_AGE_DAYS=45
 # 2026-10-02 · the package-service journey in pr-ci.yml emits the 26.10.0 download directory and the
 # 26.10.0 release workflow identity. Both answered 404 in five of five probes; neither is a page,
 # so each carries its owner.
+# 2026-10-05 · the Deploy console links the executor guide on the module VII page; it answered 200
+# in five of five probes (GET, following redirects).
 EMITTED_RECORD="https://alma.olivares.ai 200 2026-09-24
 https://appliance.olivares.ai 000 2026-10-01 appliance-origin-unpublished
 https://docs.olivares.ai 200 2026-09-24
 https://docs.olivares.ai/cli 200 2026-09-24
 https://docs.olivares.ai/reference/api-stability/ 200 2026-09-24
 https://docs.olivares.ai/reference/configuration/ 200 2026-09-24
+https://docs.olivares.ai/reference/modules/vii-deploy/#connect-an-executor 200 2026-10-05
 https://github.com/olivaresai/olivares 200 2026-09-24
 https://github.com/olivaresai/olivares.git 200 2026-09-24
-https://github.com/olivaresai/olivares/.github/workflows/release.yml@refs/tags/26.10.0 404 2026-10-02 sigstore-certificate-identity-not-a-location
+https://github.com/olivaresai/olivares/.github/workflows/release.yml@refs/tags/\$ver 404 2026-10-08 sigstore-certificate-identity-not-a-location
 https://github.com/olivaresai/olivares/.github/workflows/release.yml@refs/tags/\${tag} 404 2026-09-24 sigstore-certificate-identity-not-a-location
 https://github.com/olivaresai/olivares/blob/main/CONTRIBUTING.md 200 2026-09-24
 https://github.com/olivaresai/olivares/blob/main/GOVERNANCE.md 200 2026-09-24
@@ -316,11 +293,8 @@ https://github.com/olivaresai/olivares/blob/main/SUPPORT.md 200 2026-09-24
 https://github.com/olivaresai/olivares/blob/main/docs/RELEASE-VERIFICATION.md 200 2026-09-24
 https://github.com/olivaresai/olivares/blob/main/scripts/smoke-agentops.sh 200 2026-09-24
 https://github.com/olivaresai/olivares/releases 200 2026-09-24
-https://github.com/olivaresai/olivares/releases/download/26.10.0 404 2026-10-02 release-asset-base-not-a-location
-https://github.com/olivaresai/olivares/releases/download/26.10.1/olivares_26.10.1_linux_amd64.apk 404 2026-10-02 public-release-26.10.1-pending
-https://github.com/olivaresai/olivares/releases/download/26.10.1/olivares_26.10.1_linux_amd64.deb 404 2026-10-02 public-release-26.10.1-pending
-https://github.com/olivaresai/olivares/releases/download/26.10.1/olivares_26.10.1_linux_amd64.rpm 404 2026-10-02 public-release-26.10.1-pending
-https://github.com/olivaresai/olivares/releases/tag/26.10.1 404 2026-10-02 public-release-26.10.1-pending
+https://github.com/olivaresai/olivares/releases/download/\$ver 404 2026-10-08 release-asset-base-not-a-location
+https://github.com/olivaresai/olivares/releases/tag/1.0 404 2026-10-07 public-release-1.0-pending
 https://github.com/olivaresai/olivares/security/advisories/OLIVARES-DRILL-0001 404 2026-09-24 drill-fixture-not-a-location
 https://github.com/olivaresai/olivares/tree/main/examples/govern-claude-code 200 2026-09-24
 https://licenses.olivares.ai 200 2026-09-24
@@ -351,7 +325,8 @@ https://olivares.ai/status 200 2026-09-24
 https://olivares.ai/roadmap 200 2026-09-24
 https://olivares.ai/updates 404 2026-09-24 release-blocker-no-producer-no-server
 https://packages.olivares.ai 404 2026-09-24 package-repository-awaits-authorized-publish
-https://raw.githubusercontent.com/olivaresai/olivares/main/scripts/install-agentops.sh 200 2026-09-24"
+https://github.com/olivaresai/olivares/.github/workflows/release.yml@refs/tags/\$baseline 404 2026-10-07 sigstore-certificate-identity-not-a-location
+https://github.com/olivaresai/olivares/releases/download/\$baseline 404 2026-10-07 release-asset-base-not-a-location"
 
 EMU_SELFTEST=0
 [ "${1:-}" = "--selftest" ] && EMU_SELFTEST=1
@@ -399,20 +374,14 @@ COPY_ROOTS = ("docs/launch", "docs/trust", "docs-site/src/content")
 # aquí; y una cuenta personal de Sponsors quedaría fuera de los dos patrones a propósito:
 # este censo cubre nuestros dominios y nuestra organización, no terceros.)
 COPY_FILES = ("README.md", ".github/FUNDING.yml")
-# ⛔ `.github/` ENTERO, Y NO SÓLO SU FUNDING.yml. Medido el 2026-08-27: las plantillas de issues
-# que VIAJAN en el export emitían `https://github.com/olivaresai/olivares/discussions` —404, porque
-# Discussions está DESHABILITADO— y este censo no las miraba, porque de `.github/` sólo entraba
-# FUNDING.yml por la línea de arriba. Es exactamente la clase que cerró en `docs/launch` y que
-# aquí seguía abierta con NINGÚN control encima: la superficie más visible del repositorio
-# (plantillas de issue, chooser, perfil de la organización, botón Sponsor) quedaba fuera del único
-# gate que comprueba que lo que emitimos existe.
-#
-# Se barre con LOS DOS PATRONES, como `.github/FUNDING.yml` y por la misma razón: `.github/` no es
-# código que se envía, es COPY PUBLICADA — la lee todo el que entra al repositorio. La ampliación
-# se midió antes de hacerla, que es lo que la hace segura: sobre el árbol de hoy destapa NUEVE URLs
-# distintas, de las que SIETE ya estaban declaradas; las dos nuevas son `alma.olivares.ai` (perfil
-# de la organización) y el `blob` de GOVERNANCE.md (plantilla de feature). No es una ampliación a
-# ciegas que enrojece el día que se añade, que es como se desactivan los gates.
+# Scan all of `.github/`, not just FUNDING.yml. On 2026-08-27 exported issue templates
+# emitted `https://github.com/olivaresai/olivares/discussions` (404: Discussions disabled),
+# but this census admitted only FUNDING.yml. Fixed the same gap in docs/launch;
+# issue templates, chooser, organization profile and Sponsor button were still omitted.
+# Use both patterns, as for FUNDING.yml: this is published copy, not shipped code.
+# Measured before expansion: nine distinct URLs, seven already declared. The new two
+# were alma.olivares.ai (organization profile) and GOVERNANCE.md's blob URL (feature
+# template). Measuring first avoids introducing unexplained failures.
 PUBLISHED_SURFACE_ROOTS = (".github",)
 SKIP_DIRS = {"node_modules", ".git", "vendor", "dist", ".astro", "testdata"}
 EXTS = (".go", ".ts", ".tsx", ".md", ".json", ".yaml", ".yml")

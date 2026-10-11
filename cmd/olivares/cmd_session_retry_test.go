@@ -10,7 +10,7 @@ import (
 	"testing"
 )
 
-// HU2-13 (CLI side): with an API key the provider refused, Claude Code retried up to
+// The CLI side: with an API key the provider refused, Claude Code retried up to
 // ten times and `session follow` printed "· api retry" each time, never the 401 every
 // frame carried. The refusal is said once with what fixes it; another cause is one
 // warning with its status, not one line per attempt.

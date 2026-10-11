@@ -22,13 +22,14 @@
     "edition": "版本与模块",
     "about": "关于",
     "sections": "设置分区",
-    "signing": "报告签名"
+    "signing": "报告签名",
+    "tracing": "跟踪"
   },
   "general": {
     "title": "常规",
     "scope": "你自己的偏好。它们会跟随你到此安装上的每个工作区。",
     "theme": "主题",
-    "themeHint": "除非你选择浅色或跟随系统，否则为深色。",
+    "themeHint": "除非你选择浅色或深色，否则跟随系统。",
     "density": "密度",
     "densityHint": "紧凑显示更多行；舒适更易阅读。",
     "language": "语言",
@@ -46,8 +47,7 @@
   },
   "unavailable": {
     "notifications": "此安装尚未保存通知偏好。",
-    "sessionDefaults": "此安装尚未保存会话默认值。",
-    "signIn": "登录策略还不能在此屏幕上编辑。"
+    "sessionDefaults": "此安装尚未保存会话默认值。"
   },
   "keyboard": {
     "title": "键盘",
@@ -55,37 +55,38 @@
   },
   "edition": {
     "title": "版本与模块",
-    "scope": "此构建的版本、它运行的模块，以及 Business 构建增加的功能。",
+    "scope": "此构建的版本、它运行的模块，以及 Business 增加的功能。",
     "label": "版本",
     "unknown": "此引擎未报告",
     "editions": {
       "community": "社区版",
       "enterprise": "商业版"
     },
-    "businessAdds": "Business 构建新增",
+    "businessAdds": "Business 新增",
     "adds": {
       "loginEnforcement": "登录强制：要求 SSO 和网络允许列表",
       "identityProviders": "多个身份提供方，按组织配置并按电子邮件域路由",
       "groupMapping": "登录时将目录组映射为角色",
       "regulatory": "监管运营：DORA 登记册、NIS 2 事件分类、OSCAL 配置文件、美国及行业合规包，以及持续控制监控",
-      "reports": "企业报告和定时报告",
+      "reports": "Business 报告和定时报告",
       "toolPins": "工具固定"
     }
   },
   "about": {
     "title": "关于",
-    "scope": "此安装以及当前登录的主体。",
+    "scope": "此安装及已登录的用户。",
     "version": "版本",
     "engine": "存储引擎",
     "edition": "版本",
-    "community": "Community 版（免费）",
+    "community": "Community 版本 — 无需许可证",
     "license": "许可证状态",
     "licensee": "许可对象",
     "none": "无",
     "displayName": "显示名",
-    "actor": "主体",
+    "actor": "主体 ID",
     "role": "在此组织中的角色",
-    "memberships": "组织"
+    "memberships": "组织",
+    "email": "电子邮件"
   },
   "stopConfirm": {
     "title": "停止此会话？",
@@ -94,10 +95,16 @@
   },
   "modules": {
     "title": "模块",
-    "description": "开启或关闭此安装运行的 Olivares 功能。应用会重启引擎一次以生效。",
+    "description": "开启或关闭此安装运行的 Olivares 功能。应用会重启引擎一次以生效，重启会停止正在运行的会话。",
     "apply_other": "应用 {{count}} 项更改",
     "applied": "模块选择已保存。",
     "restarting": "正在重启引擎…",
+    "restartWarning": {
+      "title": "重启引擎？",
+      "stop_other": "{{count}} 个正在运行的会话将停止。重启后可以逐个恢复。",
+      "unknown": "所有正在运行的会话都将停止。重启后可以逐个恢复。",
+      "confirm": "重启并应用"
+    },
     "pending_other": "{{count}} 项更改等待应用。",
     "unavailable": "此引擎不支持选择模块。",
     "loadFailed": "无法读取模块列表。请重试。",
@@ -184,6 +191,8 @@
       "sourcescope": "代理可以读取哪些来源。",
       "voice": "语音代理与通话。"
     },
+    "noChanges": "没有可应用的更改。请先启用或停用一个模块。",
+    "saving": "正在保存模块选择…",
     "applyNone": "应用",
     "whenOffDefault": "其数据会保留，但模块关闭期间不会被使用。",
     "whenOff": {
@@ -203,7 +212,13 @@
       "claude-policy": "不再检查受管的 Claude Code 设置。"
     },
     "turnOn": "开启{{name}}",
-    "activatedBy": "由 {{addons}} 启用。只要该附加组件处于活动状态，它就保持开启。"
+    "activatedBy": "由 {{addons}} 启用。只要该附加组件处于活动状态，它就保持开启。",
+    "turnOnPlain": "开启",
+    "alsoTurnsOn": "开启后还会同时开启 {{names}}，并重启引擎。",
+    "openEdition": "打开“版本与模块”",
+    "askAdmin": "请管理员开启它。",
+    "notSetUp": "此安装中尚未设置。",
+    "stillRestarting": "仍在重启。请刷新页面。"
   },
   "signing": {
     "title": "报告签名",
@@ -232,5 +247,36 @@
     "turnOn": "开启签名",
     "turnOff": "关闭签名",
     "offKeepsKey": "关闭后会保留密钥，因此之前签名的证据包仍可验证。"
+  },
+  "tracing": {
+    "description": "将跟踪和指标导出到您的收集器。更改无需重启即可生效。",
+    "enabled": "启用跟踪",
+    "endpoint": "收集器地址",
+    "protocol": "协议",
+    "insecure": "允许在可信网络上使用明文",
+    "sampleRatio": "采样比例（0–1）",
+    "serviceName": "服务名称",
+    "compat": "包含旧版 GenAI 属性",
+    "overrides": "优先使用的环境变量：{{names}}",
+    "active": "跟踪已启用。",
+    "inactive": "跟踪已关闭。",
+    "apply": "应用",
+    "saved": "跟踪设置已保存。",
+    "businessRequired": "SIEM 推送和外部遥测导出需要 Business。设置会保留；Community 不会发送数据。"
+  },
+  "signIn": {
+    "methods": "登录方式",
+    "password": "密码",
+    "sso": "单点登录：{{providers}}",
+    "noSso": "登录页面没有可用的单点登录提供商。",
+    "manageSso": "管理身份提供商",
+    "session": "会话有效期",
+    "sessionHint": "引擎在登录时设置此有效期，并在刷新会话时续期。此设置不可更改。",
+    "passwordAvailable": "可使用本地密码登录。",
+    "passwordBlocked": "必须使用单点登录。本地密码登录已被阻止。",
+    "ssoNotEnforced": "已要求使用单点登录，但此构建不会执行该策略。退出登录前，请检查身份提供商设置。",
+    "passwordManaged": "组织管理员负责管理密码登录。",
+    "hours_other": "{{count}} 小时",
+    "ssoInactive": "已要求使用单点登录，但其身份提供商未启用。此要求不会阻止密码登录。"
   }
 }

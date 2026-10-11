@@ -41,6 +41,11 @@ type Authenticator struct {
 	// every request can carry it without reading inside a store transaction.
 	stepUp stepUpCache
 
+	// ownerRenewal guards native credential rotation and live owner publication.
+	// Runtime callbacks never run under this lock.
+	ownerRenewal sync.RWMutex
+	ownerIssuers []*SessionCredentials
+
 	st         store.Store
 	clock      model.Clock
 	throttle   *throttle
@@ -122,6 +127,14 @@ type Authenticator struct {
 	// census is the composition census of the store as it opened, for a store
 	// wrapped in guards that hide it (retirement.go); nil reads it from st.
 	census store.CompositionCensus
+
+	// tokenUses is when this process last tried to record each API token's use
+	// (recordTokenUse), and when it last dropped the expired attempts.
+	tokenUses struct {
+		mu     sync.Mutex
+		last   map[model.ID]time.Time
+		pruned time.Time
+	}
 }
 
 // NewAuthenticator builds an Authenticator over st. clock may be nil (system
@@ -143,8 +156,9 @@ func NewAuthenticator(st store.Store, clock model.Clock) *Authenticator {
 }
 
 // Authenticate resolves a bearer credential string to a Principal, or returns
-// ErrUnauthenticated. It is read-only (it does not take the write path), so it is
-// cheap on the hot path of every API request.
+// ErrUnauthenticated. It resolves in a read-only view, so it is cheap on the hot
+// path of every API request; the only write is an API token's last use, at most
+// once per tokenUseInterval (recordTokenUse).
 func (a *Authenticator) Authenticate(ctx context.Context, token string) (Principal, error) {
 	prefix, selector, secret, ok := ParseToken(token)
 	if !ok {
@@ -221,6 +235,7 @@ func (a *Authenticator) principalFromSession(ctx context.Context, as store.AuthS
 	}
 	p = newPrincipal(KindUser, u.ID, s.ID, u.IsSuperadmin, u.DisplayName, grants, groups).
 		withConfinements(confined).withStanding(standing)
+	p.Email = u.Email
 	if !s.TenantScope.IsZero() {
 		p = p.withSessionScope(s.TenantScope)
 	}
@@ -231,7 +246,10 @@ func (a *Authenticator) principalFromSession(ctx context.Context, as store.AuthS
 }
 
 func (a *Authenticator) authToken(ctx context.Context, selector, secret string) (Principal, error) {
-	var p Principal
+	var (
+		p    Principal
+		used model.ID
+	)
 	err := a.st.AuthView(ctx, func(as store.AuthScope) error {
 		t, found, err := lookupAPITokenBySelector(ctx, as, selector)
 		if err != nil {
@@ -240,6 +258,7 @@ func (a *Authenticator) authToken(ctx context.Context, selector, secret string) 
 		if !found {
 			return ErrUnauthenticated
 		}
+		used = t.ID
 		if !SecretMatches(secret, t.SecretHash) || t.Revoked {
 			return ErrUnauthenticated
 		}
@@ -337,7 +356,58 @@ func (a *Authenticator) authToken(ctx context.Context, selector, secret string) 
 	if err != nil {
 		return Principal{}, err
 	}
+	a.recordTokenUse(ctx, used)
 	return p, nil
+}
+
+// tokenUseInterval is how often this process tries to record one API token's
+// use: the first authentication writes, later ones at most once a minute, whether
+// the write succeeded or not, so neither a busy token nor a store that refuses
+// the write (a standby, a held writer) costs a write and a log line per request.
+const tokenUseInterval = time.Minute
+
+// recordTokenUse stamps token id's last use after it authenticated. A failure is
+// logged, not returned: the bearer has proved itself, and a bookkeeping write
+// must not turn that into a refusal or a store error for the request.
+// ponytail: synchronous on the request path once a minute per token; move it off
+// the request if writer contention ever shows in token authentication latency.
+func (a *Authenticator) recordTokenUse(ctx context.Context, id model.ID) {
+	now := a.clock.Now()
+	if !a.claimTokenUse(id, now.Time()) {
+		return
+	}
+	if err := a.st.AuthMutate(ctx, func(as store.AuthScope) error {
+		return as.RecordAPITokenUse(ctx, id, now)
+	}); err != nil {
+		a.log.Warn("auth: recording API token use", "token", id.String(), "err", err)
+	}
+}
+
+// claimTokenUse reports whether this call records id's use now: the token's last
+// attempt is at least tokenUseInterval old, or unknown. Once an interval it drops
+// the attempts that no longer hold anything back, so the map stays the size of
+// the tokens used in the last minute or two.
+func (a *Authenticator) claimTokenUse(id model.ID, now time.Time) bool {
+	a.tokenUses.mu.Lock()
+	defer a.tokenUses.mu.Unlock()
+	if at, ok := a.tokenUses.last[id]; ok {
+		if age := now.Sub(at); age >= 0 && age < tokenUseInterval {
+			return false
+		}
+	}
+	if a.tokenUses.last == nil || now.Sub(a.tokenUses.pruned) >= tokenUseInterval {
+		for other, at := range a.tokenUses.last {
+			if now.Sub(at) >= tokenUseInterval {
+				delete(a.tokenUses.last, other)
+			}
+		}
+		if a.tokenUses.last == nil {
+			a.tokenUses.last = make(map[model.ID]time.Time)
+		}
+		a.tokenUses.pruned = now
+	}
+	a.tokenUses.last[id] = now
+	return true
 }
 
 func tokenCarriesDelegationBinding(t model.APIToken) bool {
@@ -430,8 +500,12 @@ func loadGrants(ctx context.Context, as store.AuthScope, userID model.ID, supera
 		return nil, nil, nil, err
 	}
 	cache := make(map[model.ID]*model.UserGroup, len(rows)) // each group resolved once per call
-	var subjectGroups map[model.TenantID][]string           // S256: gated group memberships → principal Group:: parents
-	seen := map[model.ID]bool{}                             // a group is carried once even via several nesting paths
+	// The prefill only warms this cache: resolved identically either way; an absent id stays deny-closed nil.
+	if err := prefillGroupCache(ctx, as, cache, rows); err != nil {
+		return nil, nil, nil, err
+	}
+	var subjectGroups map[model.TenantID][]string // S256: gated group memberships → principal Group:: parents
+	seen := map[model.ID]bool{}                   // a group is carried once even via several nesting paths
 	for _, r := range rows {
 		grp, err := groupByID(ctx, as, cache, r.GroupID)
 		if err != nil {
@@ -549,6 +623,69 @@ func groupByID(ctx context.Context, as store.AuthScope, cache map[model.ID]*mode
 		cache[id] = &got
 		return &got, nil
 	}
+}
+
+// prefillGroupCache warms groupByID's per-call cache with batched reads: the
+// direct groups of the member rows in one pass, then their parents level by
+// level (one IN query per level, chunked at 500 ids so the placeholder count
+// stays under every backend's variable limit). The read SET is identical to
+// what the uncached walk performed — including the cross-tenant parent the
+// closure reads before it refuses the chain.
+func prefillGroupCache(ctx context.Context, as store.AuthScope, cache map[model.ID]*model.UserGroup, rows []model.UserGroupMember) error {
+	var frontier []model.ID
+	queued := map[model.ID]bool{}
+	for _, r := range rows {
+		if !queued[r.GroupID] {
+			queued[r.GroupID] = true
+			frontier = append(frontier, r.GroupID)
+		}
+	}
+	for len(frontier) > 0 {
+		if err := groupsByIDs(ctx, as, cache, frontier); err != nil {
+			return err
+		}
+		var next []model.ID
+		for _, id := range frontier {
+			if grp := cache[id]; grp != nil && !grp.ParentGroupID.IsZero() && !queued[grp.ParentGroupID] {
+				queued[grp.ParentGroupID] = true
+				next = append(next, grp.ParentGroupID)
+			}
+		}
+		frontier = next
+	}
+	return nil
+}
+
+// groupsByIDs resolves one id set in chunks of 500, writing every outcome into
+// cache: the group under its id, or nil for one that does not exist.
+func groupsByIDs(ctx context.Context, as store.AuthScope, cache map[model.ID]*model.UserGroup, ids []model.ID) error {
+	const chunk = 500
+	for start := 0; start < len(ids); start += chunk {
+		end := start + chunk
+		if end > len(ids) {
+			end = len(ids)
+		}
+		part := ids[start:end]
+		grps, _, err := as.Groups().List(ctx, model.Query{
+			Filters: []model.Filter{{Column: model.ColID, Op: model.OpIn, Value: part}},
+			Limit:   len(part),
+		})
+		if err != nil {
+			return err
+		}
+		got := make(map[model.ID]bool, len(grps))
+		for _, grp := range grps {
+			grp := grp
+			cache[grp.ID] = &grp
+			got[grp.ID] = true
+		}
+		for _, id := range part {
+			if !got[id] {
+				cache[id] = nil
+			}
+		}
+	}
+	return nil
 }
 
 // loadGroupClosure records grp and every group it is nested under (following
@@ -718,7 +855,7 @@ func (a *Authenticator) LoginFrom(ctx context.Context, emailRaw, password, ip st
 		return LoginResult{}, err
 	}
 	if challenge {
-		pending, err := a.mintTOTPPending(user.ID, attempt.ip, user.CustodyScope(), nil)
+		pending, err := a.mintTOTPPending(user, attempt.ip, user.CustodyScope(), nil)
 		if err != nil {
 			return LoginResult{}, err
 		}
@@ -726,7 +863,9 @@ func (a *Authenticator) LoginFrom(ctx context.Context, emailRaw, password, ip st
 		return LoginResult{MFAToken: pending, MFAEnrolmentRequired: enrol}, nil
 	}
 
-	token, sess, err := a.mintSession(ctx, attempt, user, user.CustodyScope(), "auth.login", passwordLogin, nil, nil, nil)
+	token, sess, err := a.mintSession(ctx, attempt, user, user.CustodyScope(), "auth.login", passwordLogin, nil, nil, func(as store.AuthScope) error {
+		return verifyPasswordLoginTx(ctx, as, user.ID, user.PasswordHash)
+	})
 	if err != nil {
 		return LoginResult{}, err
 	}
@@ -773,7 +912,7 @@ func (a *Authenticator) mintSession(ctx context.Context, attempt *loginAttempt, 
 		// credential creation writes, and again AFTER the session and audit
 		// writes — both inside THIS transaction, so a withdrawal or expiry
 		// that lands between them rolls the whole issuance back. Callers
-		// that pass nil (every local, OIDC and SAML path) are unchanged.
+		// that pass nil (including OIDC and SAML) are unchanged.
 		if txVerify != nil {
 			if err := txVerify(as); err != nil {
 				return err
@@ -867,13 +1006,28 @@ func (a *Authenticator) MigrateBrowserSession(ctx context.Context, actor Princip
 }
 
 func (a *Authenticator) rotateSession(ctx context.Context, actor Principal, renew bool) (string, model.AuthSession, error) {
-	if actor.Kind != KindUser || actor.CredID.IsZero() {
+	ref, ok := actor.Ref()
+	if !ok || ref.kind != KindUser || actor.Kind != KindUser || actor.CredID != ref.credentialID {
 		return "", model.AuthSession{}, ErrUnauthenticated
+	}
+	var bindings map[*SessionCredentials]map[[32]byte]bool
+	if renew {
+		var err error
+		bindings, err = a.liveOwnerRenewals(ctx, ref)
+		if err != nil {
+			return "", model.AuthSession{}, err
+		}
+	}
+	a.ownerRenewal.Lock()
+	defer a.ownerRenewal.Unlock()
+	if renew && a.ownerRenewalsChanged(ref, bindings) {
+		return "", model.AuthSession{}, store.ErrConflict
 	}
 	now := a.clock.Now()
 	var (
-		sess  model.AuthSession
-		token string
+		sess    model.AuthSession
+		token   string
+		oldSeal string
 	)
 	if err := a.st.AuthMutate(ctx, func(as store.AuthScope) error {
 		s, err := as.Sessions().Get(ctx, actor.CredID)
@@ -885,14 +1039,13 @@ func (a *Authenticator) rotateSession(ctx context.Context, actor Principal, rene
 		}
 		// A revoked or expired session is not renewable — re-login is required
 		// (deny-closed: refresh extends a live session, it never resurrects a dead one).
-		if s.Revoked || s.ExpiresAt.Before(now) {
+		if s.Revoked || s.DeletedAt != nil || !now.Before(s.ExpiresAt) || ref.version != s.Version {
 			return ErrUnauthenticated
 		}
-		// Migration is single-use even when two requests authenticated the old
-		// bearer before either reached this transaction.
-		if !renew && actor.credentialRef.version != s.Version {
-			return ErrUnauthenticated
+		if _, err := a.principalFromSession(ctx, as, s); err != nil {
+			return err
 		}
+		oldSeal = queuedCredentialSeal(s.SecretHash)
 		// A scoped session stays scoped: the new token carries the prefix the
 		// row's scope requires, named at its call for the session issuance census.
 		var cred Credential
@@ -924,6 +1077,9 @@ func (a *Authenticator) rotateSession(ctx context.Context, actor Principal, rene
 		return err
 	}); err != nil {
 		return "", model.AuthSession{}, err
+	}
+	if renew {
+		a.publishOwnerRenewal(ref, oldSeal, sess, bindings)
 	}
 	return token, sess, nil
 }

@@ -21,7 +21,7 @@ type AuditEvent struct {
 	// Seq is the per-tenant, monotonic sequence number (starts at 1). The
 	// numbering is contiguous except across a signed audit.gap marker, the only
 	// sanctioned discontinuity: it declares evidence dropped under the explicit
-	// degrade spool policy (ADR-0024 Q2). Hash linkage is continuous regardless.
+	// degrade spool policy. Hash linkage is continuous regardless.
 	Seq int64
 	// OccurredAt is the server-assigned event time (display/filter only; chain
 	// order is Seq).

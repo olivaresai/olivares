@@ -28,8 +28,8 @@ task build                  # builds bin/olivares (community edition)
 
 There is **no `-tags enterprise` build in this repository.** The tag used to select
 the commercial tree, but that tree now lives in its own private distribution, so
-`go build -tags enterprise ./cmd/olivares` fails with undefined symbols — the seam
-files here (`wire_noenterprise.go`, `edition_noenterprise.go`) are only half of the
-pair. The enterprise edition is built and signed from that separate distribution.
+`go build -tags enterprise ./cmd/olivares` fails with an undefined symbol — the seam
+file here (`wire_noenterprise.go`, which fills the `editionPorts` value of
+`edition_ports.go` for Community) is only half of the pair. The commercial build is built and signed from that separate distribution.
 
 The binary embeds the web UI (`core/internal/webui/dist/`), so a frontend build (`pnpm --prefix web build`) must precede the Go build.

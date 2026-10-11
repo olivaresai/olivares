@@ -12,6 +12,7 @@
     "close": "Close",
     "push": "Push",
     "pull_request": "Open pull request",
+    "draftPullRequest": "Open a draft pull request",
     "merge": "Merge",
     "reconcile": "Reconcile",
     "abandon": "Abandon"
@@ -70,7 +71,7 @@
   },
   "authority": {
     "requires": "Requires {{permission}}",
-    "requiresAal3": "Requires {{permission}} and a step-up to AAL3"
+    "requiresStepUp": "Requires {{permission}} and the extra check for administrative actions"
   },
   "publish": {
     "push": {
@@ -89,6 +90,12 @@
       "submit": "Request merge"
     }
   },
+  "session": {
+    "title": "Publish",
+    "hint": "Push this session’s commit through the publication target of its workspace. The engine fetches the commit from the session’s folder.",
+    "publish": "Publish",
+    "publishTo": "Publish to {{prefix}}"
+  },
   "fields": {
     "ref": "Branch ref",
     "refHint": "A full ref under the push prefix, for example refs/heads/{{prefix}}change.",
@@ -97,6 +104,9 @@
     "commit": "Commit",
     "tree": "Tree",
     "treeHint": "The commit’s tree ID. The engine refuses the push if the managed repository holds a different tree.",
+    "sessionRun": "Session run",
+    "sessionRunHint": "Optional. The session run whose folder holds the commit. The engine fetches the commit from it into the managed repository first.",
+    "sessionRunFixedHint": "The session this push comes from. The engine fetches the commit from its folder into the managed repository first.",
     "headRef": "Head branch",
     "headRefHint": "A branch under {{prefix}}.",
     "base": "Base branch",
@@ -108,7 +118,7 @@
     "expectedHeadHint": "The merge happens only while the pull request’s head is this commit.",
     "method": "Merge method",
     "acknowledgeIntent": "Acknowledge abandoned intent",
-    "acknowledgeIntentHint": "Optional. The ID of an abandoned intent that holds this scope. Naming it needs target administration at AAL3.",
+    "acknowledgeIntentHint": "Optional. The ID of an abandoned intent that holds this scope. Naming it needs target administration.",
     "operationId": "Operation ID",
     "operationIdHint": "Sending this same request again with this ID returns the recorded intent. It does not dispatch a second time."
   },
@@ -175,11 +185,15 @@
     "protected_branch_refused": "The branch is protected on the host, and publishing to it is refused.",
     "push_prefix_overlaps_base": "The push prefix would let a push land on a merge base.",
     "ref_not_allowed": "The branch is not under this target’s push prefix.",
+    "repository_config_refused": "The managed repository’s configuration is not the one the engine manages. Nothing was pushed.",
     "repository_outside_binding": "The repository is outside the owners the credential binding allows.",
     "runtime_credential_refused": "A session’s runtime credential cannot publish. Act with your own credential.",
     "scoped_grant_required": "This action needs a scoped grant on this target.",
+    "separation_of_duty": "You launched the session that authored this change. Ask another person to review and merge it.",
+    "session_source_refused": "The session run is not in this target’s workspace, or its folder is not a repository the engine can fetch from.",
+    "session_source_unavailable": "The session’s folder could not be read in time. Nothing was pushed.",
     "stale_lease": "The branch no longer holds the expected current commit.",
-    "step_up_required": "This action needs a step-up to AAL3. Complete the step-up when asked.",
+    "step_up_required": "This action needs the extra check for administrative actions this deployment requires. Complete it when asked.",
     "subject_mismatch": "This operation ID belongs to a request made by another subject.",
     "target_changed": "The target changed after the request was admitted. Nothing was dispatched.",
     "target_in_use": "A dispatching, uncertain or abandoned intent still holds this target.",

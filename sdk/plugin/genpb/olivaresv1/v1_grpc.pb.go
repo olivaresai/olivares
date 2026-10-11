@@ -997,7 +997,11 @@ const (
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 //
-// ModuleService is served by a Module plugin.
+// ModuleService is served by a Module plugin. Deprecated: the out-of-process
+// module transport it was defined for is deprecated and was never wired;
+// modules run in-process.
+//
+// Deprecated: Do not use.
 type ModuleServiceClient interface {
 	Describe(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*DescribeResponse, error)
 	Init(ctx context.Context, in *InitRequest, opts ...grpc.CallOption) (*Empty, error)
@@ -1009,6 +1013,7 @@ type moduleServiceClient struct {
 	cc grpc.ClientConnInterface
 }
 
+// Deprecated: Do not use.
 func NewModuleServiceClient(cc grpc.ClientConnInterface) ModuleServiceClient {
 	return &moduleServiceClient{cc}
 }
@@ -1057,7 +1062,11 @@ func (c *moduleServiceClient) Stop(ctx context.Context, in *Empty, opts ...grpc.
 // All implementations must embed UnimplementedModuleServiceServer
 // for forward compatibility.
 //
-// ModuleService is served by a Module plugin.
+// ModuleService is served by a Module plugin. Deprecated: the out-of-process
+// module transport it was defined for is deprecated and was never wired;
+// modules run in-process.
+//
+// Deprecated: Do not use.
 type ModuleServiceServer interface {
 	Describe(context.Context, *Empty) (*DescribeResponse, error)
 	Init(context.Context, *InitRequest) (*Empty, error)
@@ -1095,6 +1104,7 @@ type UnsafeModuleServiceServer interface {
 	mustEmbedUnimplementedModuleServiceServer()
 }
 
+// Deprecated: Do not use.
 func RegisterModuleServiceServer(s grpc.ServiceRegistrar, srv ModuleServiceServer) {
 	// If the following call pancis, it indicates UnimplementedModuleServiceServer was
 	// embedded by pointer and is nil.  This will cause panics if an
@@ -1218,7 +1228,10 @@ const (
 //
 // HostService is served by the ENGINE and dialed by a module plugin through the
 // go-plugin broker, giving an out-of-process module the same bus/log surface an
-// in-process module gets from sdk.Host.
+// in-process module gets from sdk.Host. Deprecated with the rest of the
+// out-of-process module transport: nothing serves it and no plugin dials it.
+//
+// Deprecated: Do not use.
 type HostServiceClient interface {
 	Publish(ctx context.Context, in *Event, opts ...grpc.CallOption) (*Empty, error)
 	Subscribe(ctx context.Context, in *SubscribeRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[Event], error)
@@ -1229,6 +1242,7 @@ type hostServiceClient struct {
 	cc grpc.ClientConnInterface
 }
 
+// Deprecated: Do not use.
 func NewHostServiceClient(cc grpc.ClientConnInterface) HostServiceClient {
 	return &hostServiceClient{cc}
 }
@@ -1278,7 +1292,10 @@ func (c *hostServiceClient) Log(ctx context.Context, in *LogRecord, opts ...grpc
 //
 // HostService is served by the ENGINE and dialed by a module plugin through the
 // go-plugin broker, giving an out-of-process module the same bus/log surface an
-// in-process module gets from sdk.Host.
+// in-process module gets from sdk.Host. Deprecated with the rest of the
+// out-of-process module transport: nothing serves it and no plugin dials it.
+//
+// Deprecated: Do not use.
 type HostServiceServer interface {
 	Publish(context.Context, *Event) (*Empty, error)
 	Subscribe(*SubscribeRequest, grpc.ServerStreamingServer[Event]) error
@@ -1312,6 +1329,7 @@ type UnsafeHostServiceServer interface {
 	mustEmbedUnimplementedHostServiceServer()
 }
 
+// Deprecated: Do not use.
 func RegisterHostServiceServer(s grpc.ServiceRegistrar, srv HostServiceServer) {
 	// If the following call pancis, it indicates UnimplementedHostServiceServer was
 	// embedded by pointer and is nil.  This will cause panics if an

@@ -42,7 +42,7 @@ nous ne prétendrons pas le contraire.
 | Dimension | Passerelle LLM + observabilité | Olivares AI |
 |---|---|---|
 | **Unité de préoccupation** | Un appel de modèle (prompt → complétion) | Un agent et chaque ressource qu'il lit/écrit — BDD, stockages objet, MCP, outils, fichiers |
-| **Point de vue** | **Dans le chemin de la requête** (proxy/SDK) ; voit ce que l'application envoie | **Hors bande, lecture d'abord** ; observe la télémétrie, l'audit natif et un backstop noyau — jamais dans le chemin de données |
+| **Point de vue** | **Dans le chemin de la requête** (proxy/SDK) ; voit ce que l'application envoie | **Observation hors du chemin des données** de la télémétrie, de l’audit natif et d’un backstop noyau ; **application inline** pour les actions gouvernées |
 | **Source de vérité** | Ce que l'application/le proxy **rapporte** | Télémétrie auto-déclarée **corroborée par rapport au propre journal du système** — pgAudit (lecture vs écriture), CloudTrail (accès objet), backstop eBPF |
 | **La question clé** | « Qu'a fait ce prompt, et combien a-t-il coûté ? » | « Cet agent utilise-t-il un accès **que personne n'a accordé** ? » — [écart Permis-vs-Observé](/fr/explanation/#laccess-map--read-first-minimal-data-permitted-vs-observed) |
 | **Application** | La passerelle peut filtrer les **appels de modèle** (clés, budgets) | Gates en refus par défaut sur les **actions et l'accès aux ressources** : approbations, le [PEP via hooks Claude Code](/fr/how-to/connectors/claude-code-hooks-pep/), filtrage des outils MCP, coupe-circuits |
@@ -58,11 +58,19 @@ pour comprendre pourquoi c'est la première de nos trois voies.
 
 ## C'est « et », pas « ou » — nous ingérons votre télémétrie
 
-Olivares AI n'est **pas** un remplacement de votre passerelle ou de votre outil de
-traçage, et il ne veut pas être dans le chemin de la requête qu'ils occupent. Il
-**consomme le même signal** : le control plane ingère les spans à convention sémantique
-**OpenTelemetry GenAI**, la même télémétrie gen-ai que ces outils émettent et consomment.
-Donc une organisation saine est :
+La carte d’accès consomme les spans OpenTelemetry GenAI conformes aux conventions
+sémantiques de votre gateway ou outil de traçage. Les appels aux modèles n’utilisent
+pas le proxy d’inférence inline d’Olivares AI par défaut ; il applique les règles
+aux appels qui le traversent, aux côtés des gates MCP tools/call et de délégation
+A2A sur leurs chemins respectifs.
+
+Les sessions Claude Code gérées installent des hooks d’appel d’outil qui contactent
+le PEP du moteur, exposé par défaut. Ces hooks sont inline et refusent en cas d’échec :
+si le PEP est inaccessible pendant une panne ou un redémarrage du moteur, tout
+appel d’outil gouverné est refusé. La disponibilité du moteur compte donc même
+lorsque les appels aux modèles vont directement chez un fournisseur.
+
+Pour utiliser l’observation aux côtés de votre stack existante :
 
 - Conservez **LiteLLM** comme passerelle de modèles et **Langfuse** pour le traçage
   orienté développeur et le travail sur les prompts.

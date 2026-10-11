@@ -6,6 +6,7 @@
 // 400s on an empty body), edit PRESERVES the SIEM sink profile (omitting
 // sink_* would make the backend delete it), "Load more" actually paginates,
 // and the delivery filters are real controls fed from the live rosters.
+import { PANEL_EXTENSIONS } from '@/features/extensions'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -351,6 +352,11 @@ describe('EventingView sink profile (E3b)', () => {
     await user.click(await screen.findByRole('menuitem', { name: /^edit$/i }))
 
     const dialog = await screen.findByRole('dialog')
+    expect(
+      within(dialog).queryByText(
+        'SIEM delivery and external telemetry export require Business. Stored settings are preserved; Community does not send them.',
+      ) !== null,
+    ).toBe(!PANEL_EXTENSIONS.operationsExportAvailable)
     await user.click(
       within(dialog).getByRole('button', { name: /save changes/i }),
     )

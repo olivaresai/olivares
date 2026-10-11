@@ -194,7 +194,7 @@ OTROS_RUNNERS=(
   "e2e/launch-states.spec.ts"   # scripts/launch-state-captures.sh — MUTA el estate, va al final
 )
 for _o in "${OTROS_RUNNERS[@]}"; do
-  [ -f "$ROOT/web/$_o" ] || { echo "web-e2e: NO HE PODIDO MIRAR: la exclusion nombra $_o y no existe" >&2; exit 2; }
+  [ -f "$ROOT/web/$_o" ] || { echo "web-e2e: COULD NOT LOOK: the exclusion names $_o, which does not exist" >&2; exit 2; }
 done
 
 # Everything else shares one engine, as before.
@@ -205,7 +205,7 @@ while IFS= read -r spec; do
   for ot in "${OTROS_RUNNERS[@]}"; do [ "$spec" = "$ot" ] && keep=0; done
   [ "$keep" -eq 1 ] && SHARED+=("$spec")
 done < <(cd "$ROOT/web" && ls e2e/*.spec.ts | sort)
-echo "==> ${#OTROS_RUNNERS[@]} spec(s) excluida(s) por tener runner propio: ${OTROS_RUNNERS[*]}"
+echo "==> ${#OTROS_RUNNERS[@]} spec(s) excluded because they have their own runner: ${OTROS_RUNNERS[*]}"
 
 echo "==> ${#FIRSTBOOT[@]} first-boot spec(s), each on its own virgin engine; ${#SHARED[@]} shared"
 cd "$ROOT/web"
@@ -219,6 +219,19 @@ for spec in "${FIRSTBOOT[@]}"; do
     pnpm exec playwright test "$spec" || rc=1
   next_port="$((next_port + 2))"
 done
+
+# Deploy's journey has a second half that needs a runtime executor, so its spec gets one more
+# virgin engine, started with a test executor: a Docker backend whose socket does not exist.
+# That wires the executor without reaching any infrastructure; the spec never plans or applies.
+DEPLOY_SPEC="e2e/deploy-executor.spec.ts"
+[ -f "$DEPLOY_SPEC" ] || { echo "web-e2e: CANNOT LOOK: $DEPLOY_SPEC is gone; update this run" >&2; exit 2; }
+printf '%s\n' '{"docker":{"socket_path":"/nonexistent/olivares-e2e-docker.sock"}}' >"$WORK/test-executor.json"
+echo "==> [$DEPLOY_SPEC] booting a virgin engine with a test executor on 127.0.0.1:$next_port"
+token="$(OLIVARES_DEPLOY_EXECUTOR_CONFIG="$WORK/test-executor.json" \
+  boot_engine "$next_port" "$WORK/deploy-executor-configured")"
+PLAYWRIGHT_BASE_URL="http://127.0.0.1:$next_port" PLAYWRIGHT_SETUP_TOKEN="$token" \
+  PLAYWRIGHT_DEPLOY_EXECUTOR=configured pnpm exec playwright test "$DEPLOY_SPEC" || rc=1
+next_port="$((next_port + 2))"
 
 if [ "${#SHARED[@]}" -gt 0 ]; then
   echo "==> [shared] booting the engine for the remaining specs on 127.0.0.1:$next_port"

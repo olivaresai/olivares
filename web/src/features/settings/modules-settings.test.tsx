@@ -4,8 +4,15 @@
 import { act } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import userEvent from '@testing-library/user-event'
-import { renderIntel, screen, waitFor, within } from '@/test/intel'
+import {
+  createTestQueryClient,
+  renderIntel,
+  screen,
+  waitFor,
+  within,
+} from '@/test/intel'
 import { ApiError } from '@/lib/api/errors'
+import { queryKeys } from '@/lib/api'
 import { consoleApi } from '@/features/console/api'
 
 vi.mock('@/lib/auth/context', () => ({
@@ -25,6 +32,7 @@ vi.mock('@/features/console/engine-restart', () => ({
 
 import {
   ModulesSettings,
+  TurnOnModule,
   moduleRowState,
   modulesApi,
   type ModuleSelection,
@@ -43,6 +51,7 @@ const catalog: ModuleSelection = {
     },
     { name: 'health', selected: true, running: false },
   ],
+  running_sessions: 0,
 }
 
 beforeEach(() => {
@@ -75,6 +84,11 @@ describe('Settings > Modules (ARCH C1)', () => {
       within(list).getByText('Kept on: needed by Orchestration.'),
     ).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /apply/i })).toBeDisabled()
+    expect(
+      screen.getByRole('button', { name: /apply/i }),
+    ).toHaveAccessibleDescription(
+      'No changes to apply. Turn a module on or off first.',
+    )
   })
 
   it('applies the chosen set, waits for the restart, then reads the result', async () => {
@@ -97,6 +111,9 @@ describe('Settings > Modules (ARCH C1)', () => {
     expect(
       await screen.findByText('Restarting the engine…'),
     ).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: /apply/i }),
+    ).toHaveAccessibleDescription('Restarting the engine…')
     const reads = vi.mocked(modulesApi.get).mock.calls.length
     await act(async () => restart.resolve(true))
     await waitFor(() =>
@@ -104,6 +121,113 @@ describe('Settings > Modules (ARCH C1)', () => {
         reads,
       ),
     )
+  })
+
+  it('warns with the running-session count, read at Apply, before the restart stops them (#507)', async () => {
+    const select = vi
+      .spyOn(modulesApi, 'select')
+      .mockResolvedValue({ ...structuredClone(catalog), restarting: true })
+    const user = userEvent.setup()
+    renderIntel(<ModulesSettings />)
+    await user.click(await screen.findByRole('switch', { name: 'Inventory' }))
+    // Two sessions started after the page was read: Apply reads the count again.
+    vi.mocked(modulesApi.get).mockResolvedValue({
+      ...structuredClone(catalog),
+      running_sessions: 2,
+    })
+    await user.click(screen.getByRole('button', { name: 'Apply 1 change' }))
+    const dialog = await screen.findByRole('dialog')
+    expect(
+      within(dialog).getByText(
+        '2 running sessions stop. Each one can be resumed after the restart.',
+      ),
+    ).toBeInTheDocument()
+    expect(select).not.toHaveBeenCalled()
+    await user.click(
+      within(dialog).getByRole('button', { name: 'Restart and apply' }),
+    )
+    await waitFor(() =>
+      expect(select).toHaveBeenCalledWith(['finops', 'inventory', 'health']),
+    )
+  })
+
+  it('warns for a change only the engine knows restarts it (#507)', async () => {
+    // Health waits for a restart, so the engine restarts for any Apply, even one
+    // that only chooses Eventing, which Orchestration already keeps on.
+    vi.mocked(modulesApi.get).mockResolvedValue({
+      ...structuredClone(catalog),
+      running_sessions: 2,
+    })
+    const select = vi
+      .spyOn(modulesApi, 'select')
+      .mockResolvedValue({ ...structuredClone(catalog), restarting: true })
+    const user = userEvent.setup()
+    renderIntel(<ModulesSettings />)
+    await user.click(await screen.findByRole('switch', { name: 'Eventing' }))
+    await user.click(screen.getByRole('button', { name: 'Apply 1 change' }))
+    const dialog = await screen.findByRole('dialog')
+    expect(
+      within(dialog).getByText(
+        '2 running sessions stop. Each one can be resumed after the restart.',
+      ),
+    ).toBeInTheDocument()
+    expect(select).not.toHaveBeenCalled()
+  })
+
+  it('warns without a number when the reply leaves the count out', async () => {
+    const select = vi.spyOn(modulesApi, 'select')
+    const user = userEvent.setup()
+    renderIntel(<ModulesSettings />)
+    await user.click(await screen.findByRole('switch', { name: 'Inventory' }))
+    const { running_sessions: _, ...without } = structuredClone(catalog)
+    vi.mocked(modulesApi.get).mockResolvedValue(without)
+    await user.click(screen.getByRole('button', { name: 'Apply 1 change' }))
+    const dialog = await screen.findByRole('dialog')
+    expect(
+      within(dialog).getByText(
+        'Every running session stops. Each one can be resumed after the restart.',
+      ),
+    ).toBeInTheDocument()
+    expect(select).not.toHaveBeenCalled()
+  })
+
+  it('cancelling the warning applies nothing', async () => {
+    const select = vi.spyOn(modulesApi, 'select')
+    vi.mocked(modulesApi.get).mockResolvedValue({
+      ...structuredClone(catalog),
+      running_sessions: 1,
+    })
+    const user = userEvent.setup()
+    renderIntel(<ModulesSettings />)
+    await user.click(await screen.findByRole('switch', { name: 'Inventory' }))
+    await user.click(screen.getByRole('button', { name: 'Apply 1 change' }))
+    const dialog = await screen.findByRole('dialog')
+    expect(
+      within(dialog).getByText(
+        '1 running session stops. It can be resumed after the restart.',
+      ),
+    ).toBeInTheDocument()
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(select).not.toHaveBeenCalled()
+    // Opened from code, the dialog gives focus back to the button that asked.
+    expect(screen.getByRole('button', { name: 'Apply 1 change' })).toHaveFocus()
+  })
+
+  it('warns that running sessions stop when the count cannot be read at Apply', async () => {
+    const select = vi.spyOn(modulesApi, 'select')
+    const user = userEvent.setup()
+    renderIntel(<ModulesSettings />)
+    await user.click(await screen.findByRole('switch', { name: 'Inventory' }))
+    vi.mocked(modulesApi.get).mockRejectedValue(new Error('offline'))
+    await user.click(screen.getByRole('button', { name: 'Apply 1 change' }))
+    const dialog = await screen.findByRole('dialog')
+    expect(
+      within(dialog).getByText(
+        'Every running session stops. Each one can be resumed after the restart.',
+      ),
+    ).toBeInTheDocument()
+    expect(select).not.toHaveBeenCalled()
   })
 
   it('a module that holds data says what stops when it is off (holds_data)', async () => {
@@ -204,6 +328,133 @@ describe('Settings > Modules (ARCH C1)', () => {
     renderIntel(<ModulesSettings />)
     expect(
       await screen.findByText('Modules cannot be chosen on this engine.'),
+    ).toBeInTheDocument()
+  })
+})
+
+it('explains Apply while module choices are loading', () => {
+  vi.spyOn(modulesApi, 'get').mockImplementation(() => new Promise(() => {}))
+  renderIntel(<ModulesSettings />)
+  expect(
+    screen.getByRole('button', { name: 'Apply' }),
+  ).toHaveAccessibleDescription('Loading…')
+})
+
+it('explains Apply after a module read failure', async () => {
+  vi.spyOn(modulesApi, 'get').mockRejectedValue(new Error('offline'))
+  renderIntel(<ModulesSettings />)
+  await waitFor(() =>
+    expect(
+      screen.getByRole('button', { name: 'Apply' }),
+    ).toHaveAccessibleDescription(
+      'The module list could not be read. Try again.',
+    ),
+  )
+})
+
+it('explains Apply during saving and removes the idle reason when a choice changes', async () => {
+  vi.spyOn(modulesApi, 'select').mockImplementation(() => new Promise(() => {}))
+  const user = userEvent.setup()
+  renderIntel(<ModulesSettings />)
+  await user.click(await screen.findByRole('switch', { name: 'Inventory' }))
+  const apply = screen.getByRole('button', { name: 'Apply 1 change' })
+  expect(apply).toBeEnabled()
+  expect(apply).not.toHaveAttribute('aria-describedby')
+  await user.click(apply)
+  await waitFor(() => expect(apply).toBeDisabled())
+  expect(apply).toHaveAccessibleDescription('Saving module selection…')
+})
+
+it('Turn on warns with the running-session count before the restart (#507)', async () => {
+  vi.mocked(modulesApi.get).mockResolvedValue({
+    ...structuredClone(catalog),
+    running_sessions: 3,
+  })
+  const select = vi
+    .spyOn(modulesApi, 'select')
+    .mockResolvedValue({ ...structuredClone(catalog), restarting: true })
+  const user = userEvent.setup()
+  renderIntel(<TurnOnModule module="inventory" />)
+  await user.click(screen.getByRole('button', { name: 'Turn on Inventory' }))
+  const dialog = await screen.findByRole('dialog')
+  expect(
+    within(dialog).getByText(
+      '3 running sessions stop. Each one can be resumed after the restart.',
+    ),
+  ).toBeInTheDocument()
+  expect(select).not.toHaveBeenCalled()
+  await user.click(
+    within(dialog).getByRole('button', { name: 'Restart and apply' }),
+  )
+  await waitFor(() =>
+    expect(select).toHaveBeenCalledWith(['finops', 'health', 'inventory']),
+  )
+})
+
+it('Turn on applies at once when no session runs', async () => {
+  const select = vi
+    .spyOn(modulesApi, 'select')
+    .mockResolvedValue({ ...structuredClone(catalog), restarting: true })
+  const user = userEvent.setup()
+  renderIntel(<TurnOnModule module="inventory" />)
+  await user.click(screen.getByRole('button', { name: 'Turn on Inventory' }))
+  await waitFor(() =>
+    expect(select).toHaveBeenCalledWith(['finops', 'health', 'inventory']),
+  )
+  expect(screen.queryByRole('dialog')).toBeNull()
+})
+
+describe('when the restart does not end cleanly', () => {
+  const restartingCatalog = () => ({
+    ...structuredClone(catalog),
+    restarting: true,
+  })
+
+  it('Turn on says the engine is still restarting after the wait gives up, and re-reads the modules anyway', async () => {
+    vi.spyOn(modulesApi, 'select').mockResolvedValue(restartingCatalog())
+    const queryClient = createTestQueryClient()
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
+    const user = userEvent.setup()
+    renderIntel(<TurnOnModule module="inventory" />, { queryClient })
+    await user.click(screen.getByRole('button', { name: 'Turn on Inventory' }))
+    expect(
+      await screen.findByText('Restarting the engine…'),
+    ).toBeInTheDocument()
+    await act(async () => restart.resolve(false))
+    expect(
+      await screen.findByText('Still restarting. Reload the page.'),
+    ).toBeInTheDocument()
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.serverInfo })
+  })
+
+  it('Turn on still re-reads server-info when the page is left during the restart', async () => {
+    vi.spyOn(modulesApi, 'select').mockResolvedValue(restartingCatalog())
+    const queryClient = createTestQueryClient()
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
+    const user = userEvent.setup()
+    const view = renderIntel(<TurnOnModule module="inventory" />, {
+      queryClient,
+    })
+    await user.click(screen.getByRole('button', { name: 'Turn on Inventory' }))
+    await screen.findByText('Restarting the engine…')
+    view.unmount()
+    expect(invalidate).not.toHaveBeenCalledWith({
+      queryKey: queryKeys.serverInfo,
+    })
+    await act(async () => restart.resolve(true))
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.serverInfo })
+  })
+
+  it('Apply says the engine is still restarting after the wait gives up', async () => {
+    vi.spyOn(modulesApi, 'select').mockResolvedValue(restartingCatalog())
+    const user = userEvent.setup()
+    renderIntel(<ModulesSettings />)
+    await user.click(await screen.findByRole('switch', { name: 'Inventory' }))
+    await user.click(screen.getByRole('button', { name: 'Apply 1 change' }))
+    await screen.findByText('Restarting the engine…')
+    await act(async () => restart.resolve(false))
+    expect(
+      await screen.findByText('Still restarting. Reload the page.'),
     ).toBeInTheDocument()
   })
 })

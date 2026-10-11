@@ -285,14 +285,12 @@ func (r *genericRepo) List(ctx context.Context, q model.Query) ([]model.Record, 
 		where = append(where, "deleted_at IS NULL")
 	}
 	for _, f := range q.Filters {
-		frag, val, err := r.filterFragment(f)
+		frag, vals, err := r.filterFragment(f)
 		if err != nil {
 			return nil, model.Page{}, err
 		}
 		where = append(where, frag)
-		if f.Op != model.OpIsNull && f.Op != model.OpNotNull {
-			args = append(args, val)
-		}
+		args = append(args, vals...)
 	}
 
 	orderBy, customSort, err := r.orderClause(q.Sort)
@@ -327,13 +325,21 @@ func (r *genericRepo) List(ctx context.Context, q model.Query) ([]model.Record, 
 	}
 	defer rows.Close()
 
+	// A5 (2026-10-02): the scan plan is built ONCE per query. It used to be
+	// rebuilt for every row (AU2-09: 12.29 us of plan work per 64-field row,
+	// vs ~79 ns with the plan hoisted). Reusing the destinations across rows is
+	// safe by construction: record() materializes each row into a fresh map
+	// before the next Scan overwrites the pointers, and database/sql hands
+	// *[]byte destinations freshly-allocated bytes per scan (only sql.RawBytes
+	// aliases, and these dests are never RawBytes).
+	st, err := newScanState(r.desc, cols)
+	if err != nil {
+		return nil, model.Page{}, err
+	}
+	dests := r.scanDests(st)
 	var out []model.Record
 	for rows.Next() {
-		st, err := newScanState(r.desc, cols)
-		if err != nil {
-			return nil, model.Page{}, err
-		}
-		if err := rows.Scan(r.scanDests(st)...); err != nil {
+		if err := rows.Scan(dests...); err != nil {
 			return nil, model.Page{}, err
 		}
 		out = append(out, st.record())
@@ -406,14 +412,12 @@ func (r *genericRepo) renderDistinctProjection(
 	}
 	common = append(common, p.Column+" IS NOT NULL")
 	for _, f := range p.Filters {
-		frag, val, err := r.filterFragment(f)
+		frag, vals, err := r.filterFragment(f)
 		if err != nil {
 			return distinctProjectionStatement{}, err
 		}
 		common = append(common, frag)
-		if f.Op != model.OpIsNull && f.Op != model.OpNotNull {
-			commonArgs = append(commonArgs, val)
-		}
+		commonArgs = append(commonArgs, vals...)
 	}
 	if p.After != "" {
 		common = append(common, p.Column+" > ?")
@@ -434,14 +438,12 @@ func (r *genericRepo) renderDistinctProjection(
 		parts := make([]string, 0, len(alternative))
 		args = append(args, commonArgs...)
 		for _, f := range alternative {
-			frag, val, err := r.filterFragment(f)
+			frag, vals, err := r.filterFragment(f)
 			if err != nil {
 				return distinctProjectionStatement{}, err
 			}
 			parts = append(parts, frag)
-			if f.Op != model.OpIsNull && f.Op != model.OpNotNull {
-				args = append(args, val)
-			}
+			args = append(args, vals...)
 		}
 		members = append(members, fmt.Sprintf("SELECT %s FROM (%s) AS a%d", p.Column, arm(parts), index))
 	}
@@ -641,7 +643,7 @@ func (r *genericRepo) relation() string {
 // filterFragment renders one validated filter predicate and returns its bound
 // value. An unknown column or operator is rejected (column-name injection
 // guard).
-func (r *genericRepo) filterFragment(f model.Filter) (string, any, error) {
+func (r *genericRepo) filterFragment(f model.Filter) (string, []any, error) {
 	kind, ok := r.desc.KindOfColumn(f.Column)
 	if !ok {
 		return "", nil, fmt.Errorf("%w: unknown filter column %q", store.ErrUnknownEntity, f.Column)
@@ -651,18 +653,25 @@ func (r *genericRepo) filterFragment(f model.Filter) (string, any, error) {
 	// nullable UUID column stores NULL (codec_helpers encOptID). Rendering both
 	// keeps the predicate correct across the two encodings a lineage column may
 	// legitimately use, and it stays in SQL so the keyset page stays honest.
+	if f.Op == model.OpIn {
+		frag, vals, err := inFragment(f)
+		if err != nil {
+			return "", nil, err
+		}
+		return frag, vals, nil
+	}
 	if f.Op == model.OpEqOrUnset {
 		frag := "(" + f.Column + " = ? OR " + f.Column + " IS NULL"
 		if kind == model.KindText {
 			frag += " OR " + f.Column + " = ''"
 		}
-		return frag + ")", f.Value, nil
+		return frag + ")", []any{f.Value}, nil
 	}
 	// OpUnsetOrGt renders "IS NULL OR > ?": an optional deadline that is absent
 	// ("never") or still ahead of the bound instant. Like OpEqOrUnset it stays in
 	// SQL so Limit, HasMore and keyset anchors keep their meaning.
 	if f.Op == model.OpUnsetOrGt {
-		return "(" + f.Column + " IS NULL OR " + f.Column + " > ?)", f.Value, nil
+		return "(" + f.Column + " IS NULL OR " + f.Column + " > ?)", []any{f.Value}, nil
 	}
 	if f.Op == model.OpIsNull {
 		return f.Column + " IS NULL", nil, nil
@@ -690,9 +699,43 @@ func (r *genericRepo) filterFragment(f model.Filter) (string, any, error) {
 		return "", nil, fmt.Errorf("invalid filter operator %q", f.Op)
 	}
 	if f.Op == model.OpLike {
-		return f.Column + " " + op, f.Value, nil
+		return f.Column + " " + op, []any{f.Value}, nil
 	}
-	return f.Column + " " + op + " ?", f.Value, nil
+	return f.Column + " " + op + " ?", []any{f.Value}, nil
+}
+
+// inFragment renders "col IN (?, ?, ...)" binding each element as its own
+// placeholder. The set must be non-empty and scalar; interpolation is never
+// involved, so an id that happens to contain SQL text binds as a value.
+func inFragment(f model.Filter) (string, []any, error) {
+	var vals []any
+	switch set := f.Value.(type) {
+	case []string:
+		vals = make([]any, len(set))
+		for i, v := range set {
+			vals[i] = v
+		}
+	case []model.ID:
+		vals = make([]any, len(set))
+		for i, v := range set {
+			vals[i] = string(v)
+		}
+	case []any:
+		vals = set
+	default:
+		return "", nil, fmt.Errorf("invalid IN set type %T for column %q", f.Value, f.Column)
+	}
+	if len(vals) == 0 {
+		return "", nil, fmt.Errorf("invalid IN set for column %q: empty", f.Column)
+	}
+	for i, v := range vals {
+		switch v.(type) {
+		case string, int64, int, float64, bool:
+		default:
+			return "", nil, fmt.Errorf("invalid IN set element %d of column %q: %T is not a scalar", i, f.Column, v)
+		}
+	}
+	return f.Column + " IN (" + strings.TrimRight(strings.Repeat("?, ", len(vals)), ", ") + ")", vals, nil
 }
 
 // orderClause renders the ORDER BY, always ending with id as the stable

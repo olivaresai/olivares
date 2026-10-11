@@ -32,7 +32,7 @@ func seedTemplate(t *testing.T, m *Module, tenant model.TenantID, name string, b
 	t.Helper()
 	ctx := context.Background()
 	var id string
-	err := m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
+	err := m.Data.Mutate(ctx, tenant, func(sc store.Scope) error {
 		repo, err := sc.Ext(templateKind)
 		if err != nil {
 			return err
@@ -64,7 +64,7 @@ func seedTemplate(t *testing.T, m *Module, tenant model.TenantID, name string, b
 func archiveTemplate(t *testing.T, m *Module, tenant model.TenantID, id string) {
 	t.Helper()
 	ctx := context.Background()
-	err := m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
+	err := m.Data.Mutate(ctx, tenant, func(sc store.Scope) error {
 		repo, err := sc.Ext(templateKind)
 		if err != nil {
 			return err
@@ -87,7 +87,7 @@ func archiveTemplate(t *testing.T, m *Module, tenant model.TenantID, id string) 
 func retermTemplate(t *testing.T, m *Module, tenant model.TenantID, id string, body tplBody) {
 	t.Helper()
 	ctx := context.Background()
-	err := m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
+	err := m.Data.Mutate(ctx, tenant, func(sc store.Scope) error {
 		repo, err := sc.Ext(templateKind)
 		if err != nil {
 			return err
@@ -373,7 +373,7 @@ func TestCreateRun_TemplateRestrictsTheChild(t *testing.T) {
 	m, _, tenant, _ := newRuntimeHarness(t, WithRunner(r), WithCredentialSource(staticCred()))
 	id := seedTemplate(t, m, tenant, "Locked Down", restrictive())
 
-	dto, err := m.createRun(context.Background(), tenant, CreateRunParams{
+	dto, err := createProfiledTestRun(t, m, context.Background(), tenant, CreateRunParams{
 		TemplateID: id, Actor: "user:u1", ActorKind: "user",
 	})
 	if err != nil {
@@ -414,7 +414,7 @@ func TestCreateRun_WithoutATemplateIsUntouched(t *testing.T) {
 	r := &fakeRunner{}
 	m, _, tenant, _ := newRuntimeHarness(t, WithRunner(r), WithCredentialSource(staticCred()))
 
-	dto, err := m.createRun(context.Background(), tenant, CreateRunParams{
+	dto, err := createProfiledTestRun(t, m, context.Background(), tenant, CreateRunParams{
 		PermissionMode: "plan", Actor: "user:u1", ActorKind: "user",
 	})
 	if err != nil {
@@ -452,7 +452,7 @@ func TestCreateRun_RefusesATemplateItCannotKeep(t *testing.T) {
 		Policies: &tplPolicies{AllowedTools: []string{"Read"}},
 	})
 
-	_, err := m.createRun(context.Background(), tenant, CreateRunParams{
+	_, err := createProfiledTestRun(t, m, context.Background(), tenant, CreateRunParams{
 		TemplateID: id, Actor: "user:u1", ActorKind: "user",
 	})
 	if err == nil {
@@ -481,14 +481,14 @@ func TestCreateRun_RefusesAnArchivedTemplate(t *testing.T) {
 	id := seedTemplate(t, m, tenant, "Retired", restrictive())
 
 	// It launches while live — the no-fire control for the refusal below.
-	if _, err := m.createRun(context.Background(), tenant, CreateRunParams{
+	if _, err := createProfiledTestRun(t, m, context.Background(), tenant, CreateRunParams{
 		TemplateID: id, Actor: "user:u1", ActorKind: "user",
 	}); err != nil {
 		t.Fatalf("a live template must launch: %v", err)
 	}
 
 	archiveTemplate(t, m, tenant, id)
-	_, err := m.createRun(context.Background(), tenant, CreateRunParams{
+	_, err := createProfiledTestRun(t, m, context.Background(), tenant, CreateRunParams{
 		TemplateID: id, Actor: "user:u1", ActorKind: "user",
 	})
 	if err == nil || statusOf(err) != http.StatusUnprocessableEntity {
@@ -513,7 +513,7 @@ func TestCreateRun_RefusesADLPTermTheChildWouldBypass(t *testing.T) {
 	}
 	// Even against a workspace that DECLARES the strictest posture: the metadata matching
 	// is not the enforcement, and the launch says so instead of passing.
-	_, err := m.createRun(context.Background(), tenant, CreateRunParams{
+	_, err := createProfiledTestRun(t, m, context.Background(), tenant, CreateRunParams{
 		TemplateID: id, WorkspaceRef: ws.WorkspaceRef, Actor: "user:u1", ActorKind: "user",
 	})
 	if err == nil || statusOf(err) != http.StatusUnprocessableEntity {
@@ -522,7 +522,7 @@ func TestCreateRun_RefusesADLPTermTheChildWouldBypass(t *testing.T) {
 	// No-fire: the same launch without the DLP term goes through, so the refusal is about
 	// the term and not about templates-with-workspaces in general.
 	plain := seedTemplate(t, m, tenant, "No DLP", restrictive())
-	if _, err := m.createRun(context.Background(), tenant, CreateRunParams{
+	if _, err := createProfiledTestRun(t, m, context.Background(), tenant, CreateRunParams{
 		TemplateID: plain, WorkspaceRef: ws.WorkspaceRef, Actor: "user:u1", ActorKind: "user",
 	}); err != nil {
 		t.Fatalf("a template without a DLP term must launch: %v", err)
@@ -539,7 +539,7 @@ func TestCreateRun_RefusesRecordingOnATransportThatBridgesNothing(t *testing.T) 
 	m, _, tenant, _ := newRuntimeHarness(t, WithRunner(r), WithCredentialSource(staticCred()))
 	id := seedTemplate(t, m, tenant, "Recorded", tplBody{Policies: &tplPolicies{RecordIO: boolPtr(true)}})
 
-	_, err := m.createRun(context.Background(), tenant, CreateRunParams{
+	_, err := createProfiledTestRun(t, m, context.Background(), tenant, CreateRunParams{
 		TemplateID: id, Transport: TransportRemoteControl, Actor: "user:u1", ActorKind: "user",
 	})
 	if err == nil || statusOf(err) != http.StatusUnprocessableEntity {
@@ -547,7 +547,7 @@ func TestCreateRun_RefusesRecordingOnATransportThatBridgesNothing(t *testing.T) 
 	}
 	// No-fire: the same template on the transport that DOES bridge its I/O launches and
 	// the run really does carry the recording flag.
-	dto, err := m.createRun(context.Background(), tenant, CreateRunParams{
+	dto, err := createProfiledTestRun(t, m, context.Background(), tenant, CreateRunParams{
 		TemplateID: id, Transport: TransportStreamJSON, Actor: "user:u1", ActorKind: "user",
 	})
 	if err != nil {
@@ -567,7 +567,7 @@ func TestCreateRun_PersistsTheTemplateRevisionItRanUnder(t *testing.T) {
 	m, _, tenant, _ := newRuntimeHarness(t, WithRunner(r), WithCredentialSource(staticCred()))
 	id := seedTemplate(t, m, tenant, "Versioned", restrictive())
 
-	dto, err := m.createRun(context.Background(), tenant, CreateRunParams{
+	dto, err := createProfiledTestRun(t, m, context.Background(), tenant, CreateRunParams{
 		TemplateID: id, Actor: "user:u1", ActorKind: "user",
 	})
 	if err != nil {
@@ -583,7 +583,7 @@ func TestCreateRun_PersistsTheTemplateRevisionItRanUnder(t *testing.T) {
 		Settings: &tplSettings{PermissionMode: permModeDontAsk},
 		Policies: &tplPolicies{AllowedTools: []string{"Read"}},
 	})
-	next, err := m.createRun(context.Background(), tenant, CreateRunParams{
+	next, err := createProfiledTestRun(t, m, context.Background(), tenant, CreateRunParams{
 		TemplateID: id, Actor: "user:u1", ActorKind: "user",
 	})
 	if err != nil {
@@ -611,7 +611,7 @@ func TestExpireRun_DoesNotTouchASuccessorRun(t *testing.T) {
 	}
 	id := seedTemplate(t, m, tenant, "Bounded", tplBody{Policies: &tplPolicies{MaxSessionDurationMinutes: 60}})
 	ctx := context.Background()
-	dto, err := m.createRun(ctx, tenant, CreateRunParams{TemplateID: id, Actor: "user:u1", ActorKind: "user"})
+	dto, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{TemplateID: id, Actor: "user:u1", ActorKind: "user"})
 	if err != nil {
 		t.Fatalf("createRun: %v", err)
 	}
@@ -654,7 +654,7 @@ func TestResumeRun_ReResolvesTheCurrentTerms(t *testing.T) {
 		Policies: &tplPolicies{AllowedTools: []string{"Read", "Bash"}},
 	})
 	ctx := context.Background()
-	dto, err := m.createRun(ctx, tenant, CreateRunParams{TemplateID: id, Actor: "user:u1", ActorKind: "user"})
+	dto, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{TemplateID: id, Actor: "user:u1", ActorKind: "user"})
 	if err != nil {
 		t.Fatalf("createRun: %v", err)
 	}
@@ -687,7 +687,7 @@ func TestResumeRun_RefusesATemplateThatBecameUnenforceable(t *testing.T) {
 	m, _, tenant, _ := newRuntimeHarness(t, WithRunner(r), WithCredentialSource(staticCred()))
 	id := seedTemplate(t, m, tenant, "Will Break", restrictive())
 	ctx := context.Background()
-	dto, err := m.createRun(ctx, tenant, CreateRunParams{TemplateID: id, Actor: "user:u1", ActorKind: "user"})
+	dto, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{TemplateID: id, Actor: "user:u1", ActorKind: "user"})
 	if err != nil {
 		t.Fatalf("createRun: %v", err)
 	}
@@ -750,7 +750,7 @@ func TestRunDeadline_EndsTheSessionAtTheTemplateCeiling(t *testing.T) {
 		Policies: &tplPolicies{MaxSessionDurationMinutes: 60},
 	})
 	ctx := context.Background()
-	dto, err := m.createRun(ctx, tenant, CreateRunParams{TemplateID: id, Actor: "user:u1", ActorKind: "user"})
+	dto, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{TemplateID: id, Actor: "user:u1", ActorKind: "user"})
 	if err != nil {
 		t.Fatalf("createRun: %v", err)
 	}
@@ -796,7 +796,7 @@ func TestRunDeadline_IsReleasedWhenTheSessionEndsFirst(t *testing.T) {
 	}
 	id := seedTemplate(t, m, tenant, "Bounded", tplBody{Policies: &tplPolicies{MaxSessionDurationMinutes: 60}})
 	ctx := context.Background()
-	dto, err := m.createRun(ctx, tenant, CreateRunParams{TemplateID: id, Actor: "user:u1", ActorKind: "user"})
+	dto, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{TemplateID: id, Actor: "user:u1", ActorKind: "user"})
 	if err != nil {
 		t.Fatalf("createRun: %v", err)
 	}

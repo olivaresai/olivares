@@ -3,6 +3,10 @@ title: "The security model"
 description: "The secure-by-design posture behind Olivares AI — why read-first, minimal-data, deny-by-default, and a tamper-evident audit are the load-bearing security decisions, not the threat enumeration."
 ---
 
+:::note[Business]
+Audit export (`GET /v1/audit/export`, `olivares audit export`), directory archives and external archive verification require Business. Community keeps the signed ledger, `olivares audit verify` and `olivares dr backup`; export routes and commands return HTTP 501 or exit 9. Audit forwarding and DDIL transfers carrying audit segments also require Business.
+:::
+
 Olivares AI is a security product that runs **inside the customer's own
 infrastructure** and builds a map of what every AI agent can reach. That makes it
 both highly sensitive and highly valuable to an attacker: a defect in this product is
@@ -25,18 +29,18 @@ deployment. Those belong in operator hardening material, not in public docs.
 
 ## Read-first: low asymmetric risk
 
-The core **observes**; it does not interpose. The access map is reconstructed from
-signals the estate already emits — OpenTelemetry, database audit, cloud audit trails,
-and (as a non-cooperative backstop) eBPF — and the collector is **never in the
-agent's data path**.
+The access map observes out of band. It reconstructs access from OpenTelemetry,
+database audit, cloud audit trails and an eBPF backstop. An observation collector
+failure loses visibility without gating the agent's actions.
 
-This is a security decision before it is a product one. An inline enforcer that sits
-in front of every agent action is a single point of failure: if it stalls or
-crashes, it can take production down with it, and it becomes a high-value target
-precisely *because* it is in the path. A read-first observer carries the opposite,
-**asymmetric** risk profile. If the collector fails, it stops *seeing* — it does not
-stop the agent, and it does not break production. The worst-case failure of an
-observer is a gap in visibility, not an outage.
+Enforcement has a different availability requirement: enforcement points are
+inline and deny closed. Managed Claude Code tool-call hooks call the engine's
+policy enforcement point (PEP), which the engine mounts by default. If that PEP
+is unreachable during an engine outage or restart, every governed tool call is
+denied. The inline inference proxy, MCP tools/call gate and A2A delegation gate
+apply to traffic routed through them; the inference proxy is not the default
+route for session model calls. Include the engine in availability planning for
+governed sessions.
 
 The same property neutralises the obvious evasion. The collector runs as a separate,
 privileged service **outside the agent's control**, so an agent that disables its own
@@ -147,7 +151,7 @@ not give.
 
 :::note[Two paths off-box: pull, and a real push]
 The verifiable ledger reaches a SIEM two ways. The **pull** export (`GET
-/v1/audit/export`) is always available and is the artifact an operator archives. A
+/v1/audit/export`) requires Business and is the artifact an operator archives. A
 **push** is real when configured: an `audit.recorded` eventing subscription starts a
 per-tenant ledger pump that walks each sealed record and delivers it **at-least-once**
 through the durable, SSRF-guarded, retrying/dead-lettering transport
@@ -218,8 +222,8 @@ built today versus designed.
 
 ## Why these decisions hang together
 
-None of these choices stands alone. Read-first keeps the product out of the blast
-radius of the very systems it watches. Minimal-data shrinks what a breach of the
+Read-first observation limits collector failures to visibility gaps; inline
+enforcement depends on the engine and denies closed. Minimal-data shrinks what a breach of the
 product could even expose. Opaque tokens, no default credentials, deny-by-default RBAC
 and a restrict-only ABAC seam mean authority is small, revocable, and impossible to
 accidentally widen. The hash-chained, signed, externally-exported ledger makes the

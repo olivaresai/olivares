@@ -21,8 +21,9 @@
 # This closes the class so the next writer cannot reopen it.
 #
 # WHAT IT DERIVES, so a number's provenance is code and not a memory:
-#   providers = the Provider* string constants in core/secure/kmswrap/kmswrap.go
-# and it cross-checks that the contract comment in core/secure/envelope.go lists the same
+#   providers = the Provider* string constants in core/secure/envelope.go
+# CMEK adapters are private Business source; their provider names alias this metadata.
+# It cross-checks that the envelope format lists the same
 # spellings, because those two drifting apart is how "local" got invented in the first place.
 #
 # WHAT IT REFUSES, on every public surface that states the count:
@@ -40,7 +41,7 @@
 #
 # THE POLARITY IT ALSO PINS, because it was nearly published backwards. A rescued draft
 # proposed saying that without a configured KEK "keys are local key files, not
-# envelope-wrapped". That is false in the direction that matters: core/secure/envelope.go
+# envelope-wrapped". That is false in the direction that matters: the Business CMEK implementation
 # refuses — seal() with a nil KeyWrapper returns "no key wrapper configured" and encrypts
 # nothing. It fails CLOSED. The local key file is a different mechanism (the Ed25519 audit
 # signing key in core/secure/keys.go, which may be backed by an HSM/KMS instead). Conflating
@@ -73,7 +74,7 @@ set -u
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT" || { echo "check-kms-backends: cannot enter repo root" >&2; exit 2; }
 
-WRAP="core/secure/kmswrap/kmswrap.go"
+WRAP="core/secure/envelope.go"
 ENV_FILE="core/secure/envelope.go"
 
 [ -r "$WRAP" ] || { echo "check-kms-backends: cannot read $WRAP — NOT a clean result" >&2; exit 2; }
@@ -127,10 +128,11 @@ N = len(providers)
 
 # ── cross-check: the contract comment in envelope.go must list the same spellings ───────
 env = open(envf, encoding="utf-8").read()
-missing = [v for v in values if v not in env]
+contract = re.search(r"// Provider names the backend ([^\n]+)", env)
+missing = [v for v in values if not contract or v not in contract.group(1)]
 if missing:
-    print(f"FAIL {envf}: the Provider() contract does not mention {', '.join(missing)}.")
-    print("     kmswrap and envelope.go disagree on the backend set. That drift is how a")
+    print(f"FAIL {envf}: the ciphertext-format contract does not mention {', '.join(missing)}.")
+    print("     the provider metadata and envelope format disagree on the backend set. That drift is how a")
     print("     fourth backend gets invented in prose. Reconcile them before shipping.")
     sys.exit(1)
 

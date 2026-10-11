@@ -7,11 +7,9 @@
 // never recomputes it). Tenant-scoped keys include the active tenant so switching org
 // refetches cleanly. Privileged reads (anomalies, case timelines, integrity verify)
 // are self-audited server-side; the UI surfaces that with a SelfAuditNotice.
-import { http } from '@/lib/api/client'
-import { ApiError, NetworkError, parseErrorEnvelope } from '@/lib/api/errors'
+import { apiFetchRaw, http } from '@/lib/api/client'
+import { serverFilename } from '@/lib/api/download'
 import type { ListResponse } from '@/lib/api/types'
-import { useSessionStore } from '@/stores/session'
-import { useTenantStore } from '@/stores/tenant'
 import type { ExportFormat } from '@/features/audit/types'
 import type {
   CaseLink,
@@ -36,68 +34,31 @@ import type {
 
 const BASE = '/v1/m/security'
 
-/** fetchFindingsExport uses a RAW fetch (not `http.*`) for the same reason the
+/** fetchFindingsExport reads the raw response (not `http.*`) for the same reason the
  *  compliance evidence export does: the file a consumer ingests must be the
  *  server's EXACT bytes, never re-serialized by the client — a SARIF run that
  *  the browser re-encoded is no longer the artifact the server signed off on.
  *  It also needs two things off the response the JSON client discards: the
  *  filename the server suggests, and the honest truncation header the export
- *  sets when the result cap is hit. It reuses the same token/tenant the client
- *  is wired to, so RBAC and the server-side export self-audit still apply. */
+ *  sets when the result cap is hit. */
 async function fetchFindingsExport(
   filters?: FindingFilters,
 ): Promise<FindingsExportResult> {
-  const token = useSessionStore.getState().csrfToken
-  const tenant = useTenantStore.getState().activeTenant
-  const headers = new Headers({ Accept: 'application/json' })
-  if (token) headers.set('X-CSRF-Token', token)
-  if (tenant) headers.set('X-Olivares-Tenant', tenant)
-
   const query = new URLSearchParams({ format: 'sarif' })
   for (const [key, value] of Object.entries(filters ?? {})) {
     if (value !== undefined && value !== null && value !== '') {
       query.set(key, String(value))
     }
   }
-
-  let res: Response
-  try {
-    res = await fetch(`${BASE}/findings/export?${query.toString()}`, {
-      method: 'GET',
-      headers,
-      credentials: 'same-origin',
-    })
-  } catch (cause) {
-    throw new NetworkError('The control plane is unreachable.', cause)
-  }
-
+  const res = await apiFetchRaw(`${BASE}/findings/export?${query.toString()}`, {
+    headers: { Accept: 'application/json' },
+  })
   const text = await res.text()
-  if (!res.ok) {
-    let parsed: unknown
-    try {
-      parsed = JSON.parse(text)
-    } catch {
-      parsed = undefined
-    }
-    const { code, message } = parseErrorEnvelope(parsed, res.statusText)
-    throw new ApiError(
-      res.status,
-      code,
-      message,
-      res.headers.get('X-Request-ID') ?? undefined,
-    )
-  }
-
-  // The server names the artifact (Content-Disposition); the console must not
-  // invent a second name for the same file the CLI writes. Built via the RegExp
-  // constructor, not a literal: the export scrubber's lexer has no regex concept,
-  // and a literal with an odd number of double quotes desynchronizes its string
-  // tracking for the rest of the file.
-  const disposition = res.headers.get('Content-Disposition') ?? ''
-  const suggested = new RegExp('filename="([^"]+)"', 'i').exec(disposition)?.[1]
 
   return {
-    filename: suggested ?? 'olivares-findings.sarif',
+    // The server names the artifact; the console must not invent a second name for
+    // the same file the CLI writes.
+    filename: serverFilename(res.headers, 'olivares-findings.sarif'),
     content_type: res.headers.get('Content-Type') ?? 'application/json',
     text,
     // The server sets this when the export hit its result cap: the file is

@@ -139,6 +139,10 @@ beforeAll(async () => {
           ? EVIDENCE_UNAVAILABLE_ENVELOPE
           : COMMIT_OUTCOME_UNKNOWN_ENVELOPE,
       );
+    } else if (url.pathname === "/v1/m/sessions/runs/run/cleanup") {
+      let body = "";
+      req.on("data", (chunk: Buffer) => { body += chunk.toString(); });
+      req.on("end", () => json(200, { body }));
     } else if (url.pathname === "/raw-request") {
       json(200, {});
     } else if (url.pathname === "/v1/users" && req.method === "GET") {
@@ -206,6 +210,21 @@ beforeEach(() => {
 });
 
 describe("request shape", () => {
+  it("keeps cleanup bodyless calls and per-call options", async () => {
+    const c = newClient();
+    expect(await c.postV1MSessionsRunsByRefCleanup("run")).toEqual({ body: "" });
+    const opts = { tenant: "override", query: { probe: "yes" }, headers: { "X-Probe": "yes" } };
+    expect(await c.postV1MSessionsRunsByRefCleanup("run", opts)).toEqual({ body: "" });
+    expect(await c.postV1MSessionsRunsByRefCleanupWithBody("run", { force: true }, opts))
+      .toEqual({ body: '{"force":true}' });
+    for (const request of seen.slice(1)) {
+      expect(request.method).toBe("POST");
+      expect(request.url).toBe("/v1/m/sessions/runs/run/cleanup?probe=yes");
+      expect(request.headers["x-olivares-tenant"]).toBe("override");
+      expect(request.headers["x-probe"]).toBe("yes");
+    }
+  });
+
   it("sends auth, tenant override, UA and query", async () => {
     const c = newClient();
     const out = await c.getV1Agents({
@@ -547,4 +566,56 @@ describe("capability projection, schema 2", () => {
     // Re-serializing the typed result reproduces the wire exactly.
     expect(JSON.parse(JSON.stringify(out))).toEqual(published);
   });
+});
+
+it("preserves cleanup options without a request body", async () => {
+  const requests: { url: string; headers: Headers; body: unknown }[] = [];
+  const c = new Client({
+    endpoint: "http://127.0.0.1:1",
+    tenant: "default-tenant",
+    fetch: async (url, init) => {
+      requests.push({
+        url: String(url),
+        headers: new Headers(init?.headers),
+        body: init?.body,
+      });
+      return new Response("{}", { headers: { "Content-Type": "application/json" } });
+    },
+  });
+  await c.postV1MSessionsRunsByRefCleanup("run");
+  await c.postV1MSessionsRunsByRefCleanup("run", {
+    tenant: "requested-tenant",
+    headers: { "X-Probe": "kept" },
+    query: { probe: "kept" },
+  });
+  expect(requests).toHaveLength(2);
+  expect(requests[0].body).toBeUndefined();
+  expect(requests[0].headers.get("X-Olivares-Tenant")).toBe("default-tenant");
+  expect(requests[1].url).toBe(
+    "http://127.0.0.1:1/v1/m/sessions/runs/run/cleanup?probe=kept",
+  );
+  expect(requests[1].headers.get("X-Olivares-Tenant")).toBe("requested-tenant");
+  expect(requests[1].headers.get("X-Probe")).toBe("kept");
+  expect(requests[1].body).toBeUndefined();
+});
+
+it("sends cleanup body separately from request options", async () => {
+  const requests: { headers: Headers; body: unknown }[] = [];
+  const c = new Client({
+    endpoint: "http://127.0.0.1:1",
+    tenant: "default-tenant",
+    fetch: async (_url, init) => {
+      requests.push({ headers: new Headers(init?.headers), body: init?.body });
+      return new Response("{}", { headers: { "Content-Type": "application/json" } });
+    },
+  });
+  await c.postV1MSessionsRunsByRefCleanupWithBody(
+    "run",
+    { discard_worktree: true },
+    { tenant: "requested-tenant" },
+  );
+  await c.postV1MSessionsRunsByRefCleanupWithBody("run", undefined);
+  expect(requests[0].headers.get("X-Olivares-Tenant")).toBe("requested-tenant");
+  expect(JSON.parse(String(requests[0].body))).toEqual({ discard_worktree: true });
+  expect(requests[1].body).toBeUndefined();
 });

@@ -387,3 +387,38 @@ func TestEngineApprovalReviewPolicyUsesEnabledScopedAuthoredMatch(t *testing.T) 
 		t.Fatal("unreadable enabled policy became allow")
 	}
 }
+
+// The in-process service reads the same decision trail the REST route answers,
+// and only inside the tenant it is asked about: another tenant's approval id
+// yields an empty trail, never its rows.
+func TestEngineApprovalsDecisionsMatchRESTTrailAndStayInTenant(t *testing.T) {
+	h := newHarness(t)
+	admin := h.adminLogin()
+	tenant := h.createOrg(admin, "acme")
+	other := h.createOrg(admin, "other")
+	_, editor := h.roleUser(admin, tenant, "ed@x.io", "editor")
+	id := h.createApproval(editor, tenant, map[string]any{"action": "deploy"}).body["id"].(string)
+	if rr := h.do("POST", govPath+"/approvals/"+id+"/decisions", admin, map[string]any{"decision": "approve", "note": "looks fine"}, tenantHdr(tenant)); rr.code != http.StatusOK {
+		t.Fatalf("decide = %d %s", rr.code, rr.raw)
+	}
+	service := h.gov.EngineApprovals()
+	got, err := service.Decisions(t.Context(), tenant, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rest := items(h.do("GET", govPath+"/approvals/"+id+"/decisions", admin, nil, tenantHdr(tenant)))
+	if len(got) != 1 || len(rest) != 1 {
+		t.Fatalf("service trail=%v rest trail=%v, want one entry each", got, rest)
+	}
+	entry := rest[0].(map[string]any)
+	if got[0].Decision != "approve" || got[0].Note != "looks fine" || got[0].Decider != entry["decider"] || got[0].DeciderUser != entry["decider_user"] {
+		t.Fatalf("service entry %+v differs from REST entry %v", got[0], entry)
+	}
+	foreign, err := service.Decisions(t.Context(), other, id)
+	if err != nil || len(foreign) != 0 {
+		t.Fatalf("another tenant read %d decisions (err=%v), want none", len(foreign), err)
+	}
+	if rows, err := service.Decisions(t.Context(), "", id); err == nil || len(rows) != 0 {
+		t.Fatalf("zero tenant read %d decisions (err=%v), want an error and none", len(rows), err)
+	}
+}

@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/olivaresai/olivares/core/model"
-	"github.com/olivaresai/olivares/core/runtime"
 	"github.com/olivaresai/olivares/core/store"
 	"github.com/olivaresai/olivares/modules/sessions"
 )
@@ -48,7 +47,11 @@ const (
 	runLineageRepairJobName = "sessions.run_lineage_repair"
 	// defaultRunLineageRepairInterval is the job-owned cadence Root selected for the
 	// initial bounded implementation. It is not an operator setting.
-	defaultRunLineageRepairInterval = time.Minute
+	// C2 item 6: the repair runs ONCE at boot (immediate registration) and then
+	// every 15 minutes — a lineage that needs repair is found at start or soon
+	// after a run changes, and the steady-state page is cheap enough at 15x the
+	// old cadence with none of the per-minute wake.
+	defaultRunLineageRepairInterval = 15 * time.Minute
 )
 
 // runLineageRepairInterval is the cadence boot registers. Production never assigns
@@ -83,10 +86,16 @@ func newRunLineageRepairLoop(st store.Store, sm *sessions.Module, log *slog.Logg
 	return &runLineageRepairLoop{st: st, repair: sm, interval: runLineageRepairInterval, log: log}
 }
 
+// periodicScheduler is the registration seam the C2 pumps share:
+// *runtime.Runtime satisfies it; a test records the triple instead.
+type periodicScheduler interface {
+	SchedulePeriodic(name string, interval time.Duration, runImmediately bool, job func(context.Context) error) error
+}
+
 // register schedules the loop on the runtime's own scheduler. It must run before
 // Start: the scheduler refuses later registrations.
-func (l *runLineageRepairLoop) register(rt *runtime.Runtime) error {
-	return rt.SchedulePeriodic(runLineageRepairJobName, l.interval, false, l.runOnce)
+func (l *runLineageRepairLoop) register(rt periodicScheduler) error {
+	return rt.SchedulePeriodic(runLineageRepairJobName, l.interval, true, l.runOnce)
 }
 
 // runLineagePass is what one pass over one tenant observed. The outcomes stay

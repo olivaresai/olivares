@@ -60,6 +60,15 @@ type SourceConnector interface {
 	Close(ctx context.Context) error
 }
 
+// SourceChecker is an optional SourceConnector capability. A source whose Open only
+// records its configuration, so that the engine starts while its target is away (Vault's
+// does), proves here that the target answers with that configuration. Only a probe
+// (`olivares sources test`) calls it, after Open; the engine never does, so a source
+// whose target is down at start still starts and retries on its own schedule.
+type SourceChecker interface {
+	Check(ctx context.Context) error
+}
+
 // IdempotencyKeyField is the well-known Notification.Fields key carrying a STABLE
 // per-delivery idempotency token. The durable notification outbox sets it to a value
 // that is the same across every retry of one delivery, so a connector whose target

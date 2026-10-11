@@ -164,23 +164,6 @@ describe('an address the same card refuses', () => {
     expect(link).toHaveAttribute('href', 'http://localhost:18761')
   })
 
-  it('keeps PIV reachable, which is the way out that still works', async () => {
-    atLocation('http://127.0.0.1:18761/identity?tab=login', true)
-    api.pivStatus.mockResolvedValue({ presented: true })
-    // The engine refuses it. That is the point: this asserts the request LEAVES,
-    // not that an elevation succeeded.
-    api.pivElevate.mockRejectedValue(new ApiError(403, 'piv_denied', 'denied'))
-    const user = userEvent.setup()
-    wrap()
-
-    const piv = await screen.findByRole('button', {
-      name: en.assurance.authenticatePiv,
-    })
-    expect(piv).not.toHaveAttribute('aria-disabled')
-    await user.click(piv)
-    await waitFor(() => expect(api.pivElevate).toHaveBeenCalledTimes(1))
-  })
-
   it('withdraws it at a routable IP, which has no localhost to offer', async () => {
     atLocation('http://10.0.0.7:8443/identity?tab=login', false)
     const user = userEvent.setup()

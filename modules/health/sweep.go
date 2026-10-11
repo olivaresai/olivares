@@ -44,12 +44,27 @@ func (m *Module) sweepAll(ctx context.Context) {
 
 // sweepTenant scans one tenant's active checks: it transitions a subject overdue
 // vs its cadence to degraded, then down (opening/escalating an incident), and
-// evaluates each SLA target against the trailing window. Findings and SSE
-// snapshots are emitted AFTER the transaction commits.
+// evaluates each SLA target against the trailing window.
+//
+// CUTS A2 (2026-10-02): the evaluation is the READ phase and holds no write
+// transaction (the old shape rebuilt every subject's lifetime history inside
+// one Mutate every 30 s — O(H log H) while holding the writer lock, AU2-04).
+// Phase 1 reads (window+anchor per subject, never the lifetime) and plans;
+// phase 2 writes only the checks whose state actually moves, re-deriving each
+// on a fresh row so a report that landed between the phases is never clobbered.
+// A default install plans zero writes and opens no write transaction at all.
+// Findings and SSE snapshots are emitted AFTER the transaction commits.
 func (m *Module) sweepTenant(ctx context.Context, tenant model.TenantID) error {
 	now := m.clock.Now().Time()
-	var emits []func()
-	err := m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
+
+	// Phase 1: evaluate, read-only.
+	type plan struct {
+		id    model.ID
+		stale string
+		sla   bool
+	}
+	var plans []plan
+	if err := m.data.View(ctx, tenant, func(sc store.Scope) error {
 		repo, err := sc.Ext(checkKind)
 		if err != nil {
 			return err
@@ -59,32 +74,74 @@ func (m *Module) sweepTenant(ctx context.Context, tenant model.TenantID) error {
 			return err
 		}
 		for _, check := range checks {
-			changed := false
-
-			if newState := m.deriveStaleState(check, now); newState != "" {
-				t, err := m.applyStateTx(ctx, sc, check, newState, causeSweep, -1, "silence", now)
-				if err != nil {
-					return err
-				}
-				// applyStateTx refreshed last_checked_at in-memory even on a same-state
-				// sweep, so persist it (a stably-down subject's "last checked" should
-				// still advance). A same-state pass creates no event/incident/finding.
-				changed = true
-				if t.happened {
-					tt := t // capture per iteration
-					emits = append(emits, func() { m.publishTransition(ctx, tenant, tt) })
-				}
-			}
-
-			slaChanged, alert, err := m.evaluateSLATx(ctx, sc, check, now)
+			p := plan{id: model.ID(check.String(model.ColID)), stale: m.deriveStaleState(check, now)}
+			slaChanged, _, err := m.evaluateSLATx(ctx, sc, check, now)
 			if err != nil {
 				return err
 			}
-			if slaChanged {
-				changed = true
-				if alert != nil {
-					a := alert
-					emits = append(emits, func() { m.emitSLA(ctx, tenant, a) })
+			p.sla = slaChanged
+			if p.stale != "" || p.sla {
+				plans = append(plans, p)
+			}
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+	if len(plans) == 0 {
+		return nil
+	}
+
+	// Phase 2: apply to the changed checks only, each re-read and re-derived
+	// inside the write transaction.
+	var emits []func()
+	err := m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
+		repo, err := sc.Ext(checkKind)
+		if err != nil {
+			return err
+		}
+		for _, p := range plans {
+			check, found, err := findOne(ctx, repo, eq(model.ColID, p.id.String()))
+			if err != nil {
+				return err
+			}
+			if !found {
+				continue // retired between the phases: nothing to sweep
+			}
+			changed := false
+
+			if p.stale != "" {
+				// Re-derive on the fresh row: the sweep never fights a liveness
+				// report that landed between the phases.
+				if newState := m.deriveStaleState(check, now); newState != "" {
+					t, err := m.applyStateTx(ctx, sc, check, newState, causeSweep, -1, "silence", now)
+					if err != nil {
+						return err
+					}
+					// applyStateTx refreshed last_checked_at in-memory even on a same-state
+					// sweep, so persist it (a stably-down subject's "last checked" should
+					// still advance). A same-state pass creates no event/incident/finding.
+					changed = true
+					if t.happened {
+						tt := t // capture per iteration
+						emits = append(emits, func() { m.publishTransition(ctx, tenant, tt) })
+					}
+				}
+			}
+
+			if p.sla {
+				// Re-evaluate on the fresh row: a recovery between the phases leaves
+				// nothing to write.
+				slaChanged, alert, err := m.evaluateSLATx(ctx, sc, check, now)
+				if err != nil {
+					return err
+				}
+				if slaChanged {
+					changed = true
+					if alert != nil {
+						a := alert
+						emits = append(emits, func() { m.emitSLA(ctx, tenant, a) })
+					}
 				}
 			}
 

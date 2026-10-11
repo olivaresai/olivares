@@ -995,9 +995,10 @@ func TestPostgresRefusesASplitTopologyTheAppRoleCanEscalateOutOf(t *testing.T) {
 			if !errors.Is(err, store.ErrAppendOnlyACLOpen) {
 				t.Fatalf("the refusal was %v, which is not the named ACL error — so it refused for some other reason and this test would pass without the closure", err)
 			}
-			if !strings.Contains(err.Error(), assumable) {
+			if !strings.Contains(err.Error(), fmt.Sprintf("%q", assumable)) {
 				t.Errorf("the refusal does not name %s, the role the application role can become: %v", assumable, err)
 			}
+			t.Logf("split-topology refusal: %v", err)
 
 			// 4. AND IT IS THE MEMBERSHIP, not something else this test did: breaking the chain
 			// restores the boot. Only the link the application role holds is revoked, which is

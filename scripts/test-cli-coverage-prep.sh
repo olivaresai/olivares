@@ -29,11 +29,11 @@ stage() {
 
   lint:addon-sets:
     cmds:
-      - bash scripts/check-helm-chart-prep.sh
+      - bash scripts/check-ci-ports.sh
 
   lint:addon-sets-gate:
     cmds:
-      - bash scripts/test-helm-chart-prep.sh
+      - bash scripts/test-ci-ports-gate.sh
 EOF
 }
 run() {

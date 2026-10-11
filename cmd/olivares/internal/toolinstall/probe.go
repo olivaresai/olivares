@@ -20,6 +20,9 @@ type probeSpec struct {
 	// Env is the complete environment; nothing is inherited.
 	Env []string
 	Dir string
+	// Write are the paths a confined probe may write (its scratch home); Read
+	// are the paths beside its program it may read (a release's libraries).
+	Write, Read []string
 	// Budget is the time the tool has to exit on its own; after it the process
 	// group receives SIGTERM, and Grace later SIGKILL.
 	Budget time.Duration
@@ -96,13 +99,41 @@ func firstVersionToken(line string) string {
 	return fields[0]
 }
 
-func newProbeCmd(ctx context.Context, spec probeSpec, out *cappedBuffer) *exec.Cmd {
-	cmd := exec.CommandContext(ctx, spec.Exe, spec.Args...) // #nosec G204 -- spec.Exe is the absolute path of the staged file whose size and SHA-256 were just verified, or a detected path the operator named explicitly with --probe; args are fixed literals per provider
+// ChildCommand builds a child with the paths it may write (rw) and read (ro);
+// the composition confines it there like a session child, which also clears a
+// root engine's capabilities. The program itself is readable.
+type ChildCommand func(ctx context.Context, rw, ro []string, program string, args ...string) (*exec.Cmd, error)
+
+type childCommandKey struct{}
+
+// withChildCommand hands the engine's ChildCommand to the probes of one call;
+// the providers start them and the Provider interface does not carry it.
+func withChildCommand(ctx context.Context, build ChildCommand) context.Context {
+	if build == nil {
+		return ctx
+	}
+	return context.WithValue(ctx, childCommandKey{}, build)
+}
+
+// newProbeCmd builds the probe with the engine's ChildCommand, or unconfined,
+// as the engine user, when none is wired (the CLI). A builder error stops the
+// probe; it never falls back to an unconfined start.
+func newProbeCmd(ctx context.Context, spec probeSpec, out *cappedBuffer) (*exec.Cmd, error) {
+	build, _ := ctx.Value(childCommandKey{}).(ChildCommand)
+	if build == nil {
+		build = func(ctx context.Context, _, _ []string, program string, args ...string) (*exec.Cmd, error) {
+			return exec.CommandContext(ctx, program, args...), nil // #nosec G204 -- spec.Exe is the absolute path of the staged file whose size and SHA-256 were just verified, or a detected path the operator named explicitly with --probe; args are fixed literals per provider
+		}
+	}
+	cmd, err := build(ctx, spec.Write, spec.Read, spec.Exe, spec.Args...)
+	if err != nil {
+		return nil, err
+	}
 	cmd.Env = spec.Env
 	cmd.Dir = spec.Dir
 	cmd.Stdout, cmd.Stderr = out, out
 	cmd.Stdin = nil
-	return cmd
+	return cmd, nil
 }
 
 // probeVersion identifies the client version in the vendor's bounded output.

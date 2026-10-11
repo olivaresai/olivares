@@ -20,7 +20,7 @@ Olivares AI holds **no SOC 2 report, no ISO/IEC 27001 or 42001 certificate**, ha
 CSA STAR Registry. What exists instead — and is arguably more useful pre-contract —
 is a verifiable readiness package: control-by-control mappings to evidence you can
 pull from a running deployment yourself, plus the explicit list of decisions
-(certification engagements, pen-test contracting, commercial support activation)
+(certification engagements, pen-test contracting)
 that remain open. FedRAMP/ATO is explicitly out of scope for the self-hosted
 product.
 :::
@@ -85,10 +85,11 @@ report would attest, you can verify directly in your own deployment.
 
 ## Support and accessibility
 
-- The support model (tiers, severity-based response targets, escalation) is
-  published in `SUPPORT.md` — including the honest disclosure that commercial
-  support is defined but not yet purchasable, and that the escalation chain is
-  one person deep today.
+- Business includes business-hours email support, best effort with no response
+  target. Enterprise adds non-binding first-response targets agreed in the contract.
+  The support model and escalation path are published in `SUPPORT.md` and the
+  [current offer](https://olivares.ai/pricing); the escalation chain is one person
+  deep today.
 - The accessibility conformance report is a completed **VPAT 2.5Rev INT** edition
   ACR (WCAG 2.1/2.2 AA + Revised Section 508 + EN 301 549 V3.2.1) at
   `docs/accessibility/VPAT-olivares-admin.md`, with the formal

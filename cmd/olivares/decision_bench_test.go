@@ -8,54 +8,7 @@ import (
 	"sort"
 	"testing"
 	"time"
-
-	"github.com/olivaresai/olivares/connectors/claude"
 )
-
-var (
-	benchmarkHookDisposition hookDisposition
-	benchmarkHookMatched     bool
-)
-
-// BenchmarkHookDecideAlgebra measures only the in-memory policy algebra. For
-// this pure function p95/p99 are expected to be approximately p50; their spread
-// is timer, GC, and scheduler jitter. That honest flat result demonstrates that
-// the in-memory decision plane is not the bottleneck; store-backed end-to-end
-// p99 is measured separately.
-func BenchmarkHookDecideAlgebra(b *testing.B) {
-	pol := hookPolicyDoc{
-		Default:        claude.DecisionAllow,
-		PathPrecedence: "deny-overrides",
-		Rules: []hookPolicyRule{
-			{Tool: "Read", ResourceKind: hookResourceKindFile, Paths: []string{"/srv/acme/**"}, Decision: claude.DecisionAllow},
-			{Tool: "Read", ResourceKind: hookResourceKindFile, Subtree: "/srv/acme/Finance", Decision: claude.DecisionDeny},
-			{Tool: "Write", ResourceKind: hookResourceKindFile, Paths: []string{"/srv/acme/Finance/**"}, Decision: claude.DecisionDeny},
-		},
-	}
-	in := claude.HookDecisionInput{
-		Event:        "PreToolUse",
-		Tool:         "Read",
-		ResourceKind: hookResourceKindFile,
-		ResourceRef:  "/srv/acme/Finance/q3.xlsx",
-		Mode:         "read",
-	}
-
-	disp, matched := evalHookPolicy(pol, in)
-	if !matched || disp.decision != claude.DecisionDeny {
-		b.Fatalf("unexpected warm-up decision: matched=%v disp=%+v", matched, disp)
-	}
-
-	lat := make([]time.Duration, b.N)
-	start := time.Now()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		t0 := time.Now()
-		benchmarkHookDisposition, benchmarkHookMatched = evalHookPolicy(pol, in)
-		lat[i] = time.Since(t0)
-	}
-	b.StopTimer()
-	reportDecisionLatency(b, lat, time.Since(start))
-}
 
 func reportDecisionLatency(b *testing.B, lat []time.Duration, elapsed time.Duration) {
 	b.Helper()

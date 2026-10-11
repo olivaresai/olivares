@@ -6,9 +6,11 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"io/fs"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -22,6 +24,7 @@ import (
 	coreengine "github.com/olivaresai/olivares/core/engine"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
+	"github.com/olivaresai/olivares/sdk"
 )
 
 // The census is computed from the composition's own registry: every descriptor
@@ -517,9 +520,10 @@ func noneReasons(d *model.ColumnDecl, seen map[*model.ColumnDecl]bool) []string 
 }
 
 // TestEveryNoneCitesALineThatExists: every file:line a None declaration of the
-// composition cites names a file of this repository that has that line. It
-// checks that the reader a reason points at is there; whether the line shows
-// what the reason says is the declaration audit's to judge.
+// composition cites resolves locally, except exact immutable citations whose
+// readers moved to Business. Those retain historical custody in
+// Community; this tree cannot prove the private readers still exist. Whether
+// a reader shows what its reason says is the declaration audit's to judge.
 func TestEveryNoneCitesALineThatExists(t *testing.T) {
 	_, here, _, ok := runtime.Caller(0)
 	if !ok {
@@ -558,19 +562,6 @@ func TestEveryNoneCitesALineThatExists(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("walk the repository: %v", err)
 	}
-	resolves := func(cited string, last int) bool {
-		for rel, counts := range lineCounts {
-			if rel != cited && !strings.HasSuffix(rel, "/"+cited) {
-				continue
-			}
-			for _, n := range counts {
-				if n >= last {
-					return true
-				}
-			}
-		}
-		return false
-	}
 	onConsentEngines(t, func(t *testing.T, e *consentEstate) {
 		if e.eng.census == nil {
 			t.Fatal("the composed store exposes no census")
@@ -580,13 +571,27 @@ func TestEveryNoneCitesALineThatExists(t *testing.T) {
 			for _, f := range d.Fields {
 				for _, reason := range noneReasons(f.Principal, map[*model.ColumnDecl]bool{}) {
 					for _, m := range censusCitation.FindAllStringSubmatch(reason, -1) {
-						last, _ := strconv.Atoi(m[2])
+						first, _ := strconv.Atoi(m[2])
+						last := first
 						if m[3] != "" {
 							last, _ = strconv.Atoi(m[3])
 						}
+						cited := m[1]
+						// This unchanged notify declaration predates its helpers moving up 25 lines.
+						// Qualify the real reader; another module's longer helpers.go is no evidence.
+						if strings.HasPrefix(string(d.Kind), "notify.") && reason == "a severity label, read only as a severity: helpers.go:286-298, helpers.go:302-305" {
+							switch last {
+							case 298:
+								cited, last = "modules/notify/helpers.go", 273
+							case 305:
+								cited, last = "modules/notify/helpers.go", 281
+							}
+						}
 						checked++
-						if !resolves(m[1], last) {
-							t.Errorf("%s.%s cites %s:%d, which no file of this repository has", d.Kind, f.Name, m[1], last)
+						if !localNoneCitationResolves(lineCounts, d.Kind, cited, first, last) &&
+							!(!orchestrationReadersLinked() && historicalOrchestrationNoneReason(d.Kind, reason)) &&
+							!historicalBusinessNoneCitation(thisEdition.name == "community", d.Kind, reason, m[0]) {
+							t.Errorf("%s.%s cites %s:%d, which no file of this repository has", d.Kind, f.Name, cited, last)
 						}
 					}
 				}
@@ -596,4 +601,126 @@ func TestEveryNoneCitesALineThatExists(t *testing.T) {
 			t.Fatal("no None citation was checked")
 		}
 	})
+}
+
+// These exact immutable declarations accompanied the reader move to Business.
+// Community keeps their historical provenance for export; it cannot verify a
+// private reader's current source. Business still resolves the actual citations.
+// A new or changed reason is never admitted by this historical inventory.
+var historicalOrchestrationNoneReasons = map[string]bool{
+	"a canonical timestamp, parsed by canonicalTimestamp: workflow_graph.go:417":                                                                                                                            true,
+	"a closed participant kind: workflow_graph.go:358":                                                                                                                                                      true,
+	"a closed status, output or attempt value set by the executor: workflow_run.go:65,754":                                                                                                                  true,
+	"a closed subject kind, trigger kind or desired status the schedule validator checks: schedules.go:67-69, schedules.go:383":                                                                             true,
+	"a closed value set checked by the step validator: workflow_graph.go:358-368,669,685,781":                                                                                                               true,
+	"a content digest bounded and compared for integrity: workflow_graph.go:566,784":                                                                                                                        true,
+	"a cron expression or event-type reference, hashed into the fire plan, checked against the cron allowlist and bound into the target: schedules.go:128-131, schedules.go:1090-1091, targetbind.go:94-95": true,
+	"a field of the schedule as it stood; restore re-validates and re-applies only its status, subject, cadence, interval and grace: revisions.go:274-292, dto.go:229-251":                                  true,
+	"a ref, digest, label or state of the module's own governed-effect claim and outbox, compared for replay only: operation.go:189-196, operation.go:207-210, operation.go:276-282, operation.go:297-303":  true,
+	"a remote peer, skill or runtime profile, never an account: workflow_graph.go:781-784":                                                                                                                  true,
+	"a runtime session id, bounded by validWorkText: workflow_graph.go:627":                                                                                                                                 true,
+	"a schedule or workflow name, rendered, searched and hashed into a plan only: dto.go:236, search.go:40, workflow.go:46-55":                                                                              true,
+	"a spent approval id, the schedule it activated or the plan hash it was bound to: routinepolicy.go:684-685":                                                                                             true,
+	"a step kind, refused unless stepConfigs has it: workflow_graph.go:878":                                                                                                                                 true,
+	"a step ref or slug, matched by stepRefPattern: workflow_graph.go:183":                                                                                                                                  true,
+	"a workflow or work-item id, status, plan hash, approval id or pause reason of a run: workflow_run.go:834-836, workflow_run.go:1668-1670, workflow_run.go:1721":                                         true,
+	"an id of a non-principal row, parsed by canonicalConfigID: workflow_graph.go:373":                                                                                                                      true,
+	"an id, timestamp or ref of the run's own work, recorded by the executor: workflow_run.go:1508-1512,1556-1567":                                                                                          true,
+	"an op, schedule id, plan hash, approval id, gate or op status, dispatch ref, detail digest or short result of the decision ledger, rendered only: schedules.go:158-172, dto.go:271-288":                true,
+	"an opaque credential-binding handle, parsed as such: modules/orchestration/workflow_work_run.go:20":                                                                                                    true,
+	"an opaque target-binding fingerprint and key id: workflow_run.go:782-783":                                                                                                                              true,
+	"an operator-facing status line, clamped and rendered only: workflow_run.go:1558":                                                                                                                       true,
+	"create, update or restore: revisions.go:42-44, revisions.go:328":                                                                                                                                       true,
+	"operator prose, bounded and rendered only: workflow.go:51, workflow.go:323":                                                                                                                            true,
+	"operator text, bounded by validWorkText and rendered only: workflow_graph.go:378":                                                                                                                      true,
+	"the agent, swarm or workflow a schedule or decision governs; subject kinds are agent, swarm or workflow only: schedules.go:67, schedules.go:383, workflow_run.go:1680":                                 true,
+	"the caller's actor kind, recorded beside its actor ref and rendered only: revisions.go:80, dto.go:284, workflow.go:321":                                                                                true,
+	"the constant fence family key: routinepolicy.go:492-499":                                                                                                                                               true,
+	"the declaring caller's confined core workspace id, a routine-policy scope key: routinepolicy.go:149-150, routinepolicy.go:550":                                                                         true,
+	"the id of the schedule or workflow a revision belongs to, compared before a restore: revisions.go:269, workflow.go:651":                                                                                true,
+	"the initiator's actor kind, agent identity, session identity or runtime generation, replayed into the step actor beside its account id: workflow_run.go:837-842, workflow_work_run.go:18-28":           true,
+	"the observed worker, tool or MCP endpoint and the edge's kind, mode, signal and confidence labels: ingest.go:65-87, ingest.go:145-147, dto.go:51-65":                                                   true,
+	"the remote protocol's bounded projection, ids, hashes and verdicts only: workflow_run.go:1515-1537":                                                                                                    true,
+	"the run, step, profile, key id, fingerprint or generation of an approved target binding: workflow_run.go:393-397":                                                                                      true,
+}
+
+func historicalOrchestrationNoneReason(kind model.Kind, reason string) bool {
+	return strings.HasPrefix(string(kind), "orchestration.") && historicalOrchestrationNoneReasons[reason]
+}
+
+func TestHistoricalOrchestrationNoneReasonsAreExact(t *testing.T) {
+	const original = "a step ref or slug, matched by stepRefPattern: workflow_graph.go:183"
+	if !historicalOrchestrationNoneReason("orchestration.workflow", original) {
+		t.Fatal("lost immutable historical reason")
+	}
+	for _, reason := range []string{original + " changed", strings.ReplaceAll(original, ":183", ":9999"), "new missing reader: workflow_graph.go:183"} {
+		if historicalOrchestrationNoneReason("orchestration.workflow", reason) {
+			t.Fatalf("admitted unrecorded reason %q", reason)
+		}
+	}
+	if historicalOrchestrationNoneReason("notify.route", original) {
+		t.Fatal("historical inventory covered a foreign module")
+	}
+}
+
+// censusBootFixture registers real scratch schema through the runtime's module
+// seam, so the test reaches the same census read as a production boot.
+type censusBootFixture struct{ sdk.Module }
+
+func (censusBootFixture) Descriptor() sdk.Descriptor {
+	return sdk.Descriptor{Name: "census-boot-fixture"}
+}
+
+func (censusBootFixture) RegisterSchema(reg store.ExtensionRegistry) error {
+	return reg.Register(censusFixtureDescriptor("fixture.boot_none", model.KindText, model.None("no user")))
+}
+
+func TestBootWarnsWhenRetirementCensusIsUnready(t *testing.T) {
+	prepareCompositionTestBoot(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	var logs bytes.Buffer
+	b := &bootState{cfg: bootConfig{
+		DataDir: t.TempDir(), Engine: "sqlite", DSN: ":memory:", Version: "test", NoIngest: true,
+		Logger: slog.New(slog.NewJSONHandler(&logs, nil)),
+	}}
+	defer b.unwind()
+	for _, phase := range []func(context.Context) error{b.configure, b.loadSigningCustody, b.buildRuntime} {
+		if err := phase(ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := b.rt.AddModule(censusBootFixture{}, sdk.Config{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.openStore(ctx); err != nil {
+		t.Fatalf("an unready census must keep serving: %v", err)
+	}
+	defer func() { _ = b.st.Close() }()
+	readiness := b.census.CompositionReadiness()
+	if readiness.Ready() || !strings.Contains(readiness.Cause(), "fixture.boot_none.doc") {
+		t.Fatalf("want citation-less None as the first cause, got %+v", readiness)
+	}
+	warnings := 0
+	scanner := bufio.NewScanner(&logs)
+	for scanner.Scan() {
+		var record map[string]any
+		if err := json.Unmarshal(scanner.Bytes(), &record); err != nil {
+			t.Fatal(err)
+		}
+		if record["msg"] != "retirement: composition census is unready; account retirement is blocked" {
+			continue
+		}
+		warnings++
+		if record["level"] != "WARN" || record["cause"] != readiness.Cause() {
+			t.Fatalf("want WARN with first readiness cause %q, got %v", readiness.Cause(), record)
+		}
+		t.Logf("boot operator signal: %s", scanner.Text())
+	}
+	if err := scanner.Err(); err != nil {
+		t.Fatal(err)
+	}
+	if warnings != 1 {
+		t.Fatalf("got %d retirement census warnings, want exactly one", warnings)
+	}
 }

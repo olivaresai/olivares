@@ -209,10 +209,43 @@ func rewindLoginCapabilityForHistoricalFixture(ctx context.Context, db *sql.DB, 
 // are their whole versioned footprint, and removing the later ones too keeps the
 // reconstructed history an ordered prefix of the plan. A caller that already
 // stands pre-v14 continues.
+//
+// v19 is the exception: it creates the FinOps custody relations with a plain
+// CREATE that refuses a collision, so its objects are removed first. v20..v25
+// converge on what they find and need nothing here.
 func rewindConsentCustodyForHistoricalFixture(ctx context.Context, db *sql.DB, dia dialect.Dialect) error {
+	if err := rewindFinOpsCustodyForHistoricalFixture(ctx, db, dia); err != nil {
+		return err
+	}
 	if _, err := db.ExecContext(ctx, dia.Rebind(
 		"DELETE FROM "+coreTrackingRelation(dia)+" WHERE version >= ?"), coreConsentCustodyMigrationVersion); err != nil {
 		return fmt.Errorf("rewind core v%d: delete tracking row: %w", coreConsentCustodyMigrationVersion, err)
+	}
+	return nil
+}
+
+// rewindFinOpsCustodyForHistoricalFixture reconstructs the v18 predecessor: no
+// release before v19 created the custody relations, so they go together with
+// v19's tracking row and every later one. Already-absent relations continue.
+func rewindFinOpsCustodyForHistoricalFixture(ctx context.Context, db *sql.DB, dia dialect.Dialect) error {
+	for _, table := range dialect.FinOpsCustodyControlTables() {
+		statement := "DROP TABLE IF EXISTS " + directoryWriterRelation(dia, table)
+		if dia.Name() == store.EnginePostgres {
+			statement += " CASCADE"
+		}
+		if _, err := db.ExecContext(ctx, statement); err != nil {
+			return fmt.Errorf("rewind core v%d: drop %s: %w", coreFinOpsCustodyControlMigrationVersion, table, err)
+		}
+	}
+	if dia.Name() == store.EnginePostgres {
+		if _, err := db.ExecContext(ctx, "DROP FUNCTION IF EXISTS "+
+			dialect.EngineSchema+"."+dialect.PostgresCustodyGuardFunction+"()"); err != nil {
+			return fmt.Errorf("rewind core v%d: drop guard function: %w", coreFinOpsCustodyControlMigrationVersion, err)
+		}
+	}
+	if _, err := db.ExecContext(ctx, dia.Rebind(
+		"DELETE FROM "+coreTrackingRelation(dia)+" WHERE version >= ?"), coreFinOpsCustodyControlMigrationVersion); err != nil {
+		return fmt.Errorf("rewind core v%d: delete tracking row: %w", coreFinOpsCustodyControlMigrationVersion, err)
 	}
 	return nil
 }

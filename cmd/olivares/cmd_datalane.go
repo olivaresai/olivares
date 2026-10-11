@@ -80,10 +80,11 @@ func (c datalaneClient) do(cmd *cobra.Command, method, path string, query url.Va
 		return nil, 0, redactCoded(err, c.flags.token)
 	}
 	client, headers, err := cliTransport(cliTransportOptions{
-		Resolved: resolved,
-		Insecure: c.flags.insecure,
-		Timeout:  c.flags.timeout,
-		Stderr:   cmd.ErrOrStderr(),
+		Resolved:       resolved,
+		Insecure:       c.flags.insecure,
+		AllowCleartext: c.flags.allowCleartext,
+		Timeout:        c.flags.timeout,
+		Stderr:         cmd.ErrOrStderr(),
 	})
 	if err != nil {
 		return nil, 0, exitcode.Or(exitcode.Server, redactCoded(err, resolved.Token))
@@ -142,10 +143,11 @@ func (c datalaneClient) doRawBody(cmd *cobra.Command, method, path string, body 
 		return nil, 0, redactCoded(err, c.flags.token)
 	}
 	client, headers, err := cliTransport(cliTransportOptions{
-		Resolved: resolved,
-		Insecure: c.flags.insecure,
-		Timeout:  c.flags.timeout,
-		Stderr:   cmd.ErrOrStderr(),
+		Resolved:       resolved,
+		Insecure:       c.flags.insecure,
+		AllowCleartext: c.flags.allowCleartext,
+		Timeout:        c.flags.timeout,
+		Stderr:         cmd.ErrOrStderr(),
 	})
 	if err != nil {
 		return nil, 0, exitcode.Or(exitcode.Server, redactCoded(err, resolved.Token))
@@ -219,13 +221,22 @@ func datalaneSegment(seg string) (string, error) {
 // datalaneHTTPError classifies a refusal. It delegates to httpErr — the ONE
 // mapping this CLI has (401/403→3, 404→4, 409→5, 5xx→6) — so these families
 // cannot answer the same refusal with a different number than `agent`, `mcp` or
-// `compliance` do. 404 additionally names the likeliest cause on a module route.
+// `compliance` do. 404 additionally names the likeliest cause on a module route,
+// except a module_not_enabled refusal the formatter can name the remedy for
+// (the engine named its module): no lane guess is stacked on the engine's own
+// diagnosis. The wrap keeps the *apiRefusal (status and code) reachable, so
+// -o json carries them like every other family.
 func datalaneHTTPError(what string, status int, body []byte) error {
 	if status == http.StatusNotFound {
-		return exitcode.New(exitcode.NotFound, fmt.Errorf(
-			"%s (either the entity does not exist, or this engine was built without the %s "+
-				"module, which serves the whole /v1/m/%s namespace)",
-			describeAPIRefusal(status, body), what, what))
+		var env apiErrorEnvelope
+		if json.Unmarshal(body, &env) != nil ||
+			strings.TrimSpace(env.Error.Code) != "module_not_enabled" ||
+			moduleOffRemedy(strings.TrimSpace(env.Error.Module)) == "" {
+			return fmt.Errorf(
+				"%w (either the entity does not exist, or this engine was built without the %s "+
+					"module, which serves the whole /v1/m/%s namespace)",
+				httpErr(status, body), what, what)
+		}
 	}
 	return httpErr(status, body)
 }

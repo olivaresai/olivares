@@ -20,11 +20,11 @@ sidebar:
 - 登录流的端点存在于每一个构建中，且引擎会把每一个携带机密的流值都保留在服务器端 ——
   CSRF state、OIDC nonce、PKCE verifier（只有 S256 *challenge* 会发往提供方）。
   Authorization Code + **PKCE 始终开启**。
-- **Community 和 Enterprise 都支持单一 IdP 的 OIDC/SAML 登录。**
+- **所有版本（包括 Community）都支持单一 IdP 的 OIDC/SAML 登录。**
   请通过控制台的托管 SSO 设置进行配置。没有托管配置时，引擎使用启动环境变量
   （`OLIVARES_SSO_PROTOCOL`、`OLIVARES_OIDC_*` 或 `OLIVARES_SAML_*`）。
   未配置提供方时，`NoFederation` 返回 `501 sso_not_configured`；这表示缺少配置，
-  并不表示该协议仅供 Enterprise 使用。
+  并不表示该协议仅供商业版使用。
 - 你的 IdP 必须携带的 redirect/ACS URI 是**精确匹配**的（你控制台 origin 上的
   `…/v1/auth/federation/callback` —— 遵循 RFC 9700 的精确匹配，不存在前缀技巧）。
 
@@ -46,7 +46,7 @@ control plane 是一个标准的 SCIM 2.0（RFC 7644）服务提供方，位于�
 
 - **认证：** 在 SCIM 集成上使用一个绑定租户的 **admin/owner API token** —— 与 API 其余
   部分相同的不透明 token 模型，不存在单独的 SCIM 密钥类型。该端点始终存在（不受特性门控）。
-- **Users** 在 Community 和 Enterprise 中预配及撤销预配身份。
+- **Users** 在所有版本（包括 Community）中预配及撤销预配身份。
   变更取决于 SCIM 请求的送达和成功处理；应检查响应及受影响的访问权限，
   不要仅凭人事事件就认定权限吊销已完成。SCIM 不会删除操作系统账户。
 - **Groups** 承载身份到组的引用数据。每个组都可以通过 `mapped_role` 映射到一个 control-plane

@@ -21,6 +21,7 @@ const (
 	classSessionTimeline  = "session.timeline"
 	classVoiceSession     = "voice.session"
 	classCostSample       = "finops.cost_sample"
+	classRecording        = "privileged-session-recording"
 	classKnowledgeContent = "knowledge.content"
 	classAuditLedger      = "audit.ledger"
 	classEvidenceAppend   = "evidence.append_only"
@@ -127,6 +128,14 @@ var dataClassRegistry = []dataClass{
 		ModelIO:         false,
 		RecommendedDays: 730,
 		Note:            "FinOps cost read-model samples (counts and refs, no content).",
+	},
+	{
+		ID:              classRecording,
+		ExtKinds:        []model.Kind{"recording.session", "recording.frame"},
+		Purgeable:       false,
+		RecommendedDays: 180,
+		SubjectKinds:    []string{subjectKindUser, subjectKindSession},
+		Note:            "Privileged recording sessions and append-only frames. Retain policies and legal holds are supported; purge is unavailable. Recording config retention_days is advisory and does not enable deletion.",
 	},
 	{
 		ID:           classKnowledgeContent,

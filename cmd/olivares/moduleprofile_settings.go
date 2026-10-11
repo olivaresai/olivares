@@ -30,7 +30,7 @@ import (
 // moduleProfileFile is this node's copy of the selection, in the data directory.
 const moduleProfileFile = "module-profile.json"
 
-const moduleProfileVersion = "olivares.module.profile.v1"
+const moduleProfileVersion = "olivares.module.profile.v2"
 
 // moduleSelectionDoc is the selection, as recorded and as copied on each node.
 type moduleSelectionDoc struct {
@@ -42,12 +42,24 @@ type moduleSelectionDoc struct {
 	ImportPending bool `json:"import_pending,omitempty"`
 }
 
+// Before v2, sessions forced liveingest ON even for an empty selection.
+// Preserve that state until an administrator records a v2 selection.
+func (doc moduleSelectionDoc) selectedModules() []string {
+	if doc.Version != moduleProfileVersion {
+		return sortedUnion(doc.Selected, []string{"liveingest"})
+	}
+	return doc.Selected
+}
+
 func moduleProfilePath(dataDir string) string { return filepath.Join(dataDir, moduleProfileFile) }
 
 // loadNodeModuleSelection reads this node's copy; found is false when there is none.
 func loadNodeModuleSelection(dataDir string) (sel []string, found bool, err error) {
 	doc, found, err := loadNodeModuleDocument(dataDir)
-	return doc.Selected, found, err
+	if err == nil && found {
+		sel = doc.selectedModules()
+	}
+	return sel, found, err
 }
 
 func loadNodeModuleDocument(dataDir string) (doc moduleSelectionDoc, found bool, err error) {
@@ -152,7 +164,7 @@ func usedModules(ctx context.Context, st store.Store, census store.CompositionCe
 	for _, d := range census.CensusDescriptors() {
 		ns := d.Kind.Namespace()
 		// The kernel always runs: it is never part of a selection.
-		if spec, ok := moduleCatalog[ns]; ok && !spec.kernel {
+		if spec, ok := moduleCatalog[ns]; ok && spec.Kind != "kernel" {
 			byModule[ns] = append(byModule[ns], d.Kind)
 		}
 	}
@@ -205,6 +217,9 @@ type moduleReconcile struct {
 	booted moduleProfile
 	// used names the modules that already hold data (usedModules).
 	used func(context.Context) ([]string, error)
+	// demo: this start seeded the demo estate, which a new installation's
+	// navigation must still list (its pages are what the demo shows).
+	demo bool
 }
 
 // moduleInstallationExists reads the durable marker 26.10.0 ensured on every
@@ -228,22 +243,27 @@ func moduleInstallationExists(ctx context.Context, st store.Store) (bool, error)
 //
 //   - no selection recorded yet: import an explicit node selection, otherwise
 //     preserve the 26.10.0 default for an existing installation, otherwise
-//     select the standard modules and this new installation's seeded data;
+//     select the standard modules and this new installation's seeded data; a
+//     new installation also records previews_hidden (productSettingsDoc);
 //   - otherwise this node's copy is rewritten from the record when it differs.
 func (p *productSettings) reconcileModules(ctx context.Context, mr moduleReconcile, log *slog.Logger) (bool, error) {
 	doc, found, err := p.load(ctx)
 	if err != nil {
 		return false, err
 	}
-	var selection []string
+	var selection, used []string
+	action := ""
+	newInstallation := false
 	node, nodeFound, nodeErr := loadNodeModuleDocument(p.dataDir)
 	if found && doc.Modules != nil {
-		selection = doc.Modules.Selected
+		selection = doc.Modules.selectedModules()
+		if doc.Modules.Version != moduleProfileVersion {
+			action = "deployment.settings.modules.upgrade"
+		}
 	} else {
-		var used []string
 		switch {
 		case nodeErr == nil && nodeFound && !node.ImportPending:
-			selection = node.Selected // an explicit empty selection is authoritative too
+			selection = node.selectedModules() // a v2 explicit empty selection is authoritative too
 		case nodeErr == nil && !nodeFound && mr.booted.existingInstallation:
 			selection = published26100ModuleSelection()
 		default:
@@ -256,16 +276,45 @@ func (p *productSettings) reconcileModules(ctx context.Context, mr moduleReconci
 			}
 			selection = standardModuleSelection()
 			if nodeErr == nil && node.ImportPending {
-				selection = slices.Clone(node.Selected)
+				selection = slices.Clone(node.selectedModules())
 			}
 			selection = append(selection, used...)
 		}
 		selection, _ = knownModules(selection)
+		action = "deployment.settings.modules.import"
+		// This start created the installation, or a first start stopped before
+		// this import: a new installation, whose console lists the first job
+		// only, unless it is the seeded demo.
+		newInstallation = !mr.demo && (!mr.booted.existingInstallation || (nodeErr == nil && nodeFound && node.ImportPending))
+	}
+	if action != "" {
 		actor, aerr := auth.NewSystemOperator("boot/module-profile", "record this installation's module selection in the deployment settings")
 		if aerr != nil {
 			return false, aerr
 		}
-		if err := p.writeModules(ctx, actor, "deployment.settings.modules.import", selection); err != nil {
+		at := p.now().UTC().Format(time.RFC3339)
+		meta := map[string]any{}
+		err = p.update(ctx, actor, action, meta, func(current *productSettingsDoc) {
+			delete(meta, "previews_hidden") // a retry after a conflict may not record it
+			if current.Modules == nil {
+				current.Modules = &moduleSelectionDoc{Version: moduleProfileVersion, Selected: slices.Clone(selection), UpdatedAt: at}
+				if current.Modules.Selected == nil {
+					current.Modules.Selected = []string{}
+				}
+				if newInstallation {
+					current.PreviewsHidden = true
+					meta["previews_hidden"] = true
+				}
+			} else if current.Modules.Version != moduleProfileVersion {
+				current.Modules.Selected = current.Modules.selectedModules()
+				current.Modules.Version = moduleProfileVersion
+				current.Modules.UpdatedAt = at
+			}
+			// Import and upgrade both follow the current record; a newer admin selection wins.
+			selection = current.Modules.Selected
+			meta["selected"] = selection
+		})
+		if err != nil {
 			return false, err
 		}
 		log.Info("modules: recorded this installation's module selection", "selected", selection, "in_use", used)
@@ -281,7 +330,7 @@ func (p *productSettings) reconcileModules(ctx context.Context, mr moduleReconci
 		}
 	}
 	want, _ := resolveModuleProfileWith(known, activationModules(activation))
-	if nodeErr != nil || !nodeFound || node.ImportPending || !slices.Equal(node.Selected, want.Selected()) {
+	if nodeErr != nil || !nodeFound || node.ImportPending || node.Version != moduleProfileVersion || !slices.Equal(node.Selected, want.Selected()) {
 		if err := saveNodeModuleSelection(p.dataDir, want.Selected(), p.now()); err != nil {
 			return false, fmt.Errorf("write this node's module profile from the deployment settings: %w", err)
 		}
@@ -306,6 +355,16 @@ type moduleSelectionService struct {
 	log      *slog.Logger
 	// used names the modules whose tables hold rows (usedModules); nil reads none.
 	used func(context.Context) ([]string, error)
+	// sessions counts the sessions running now, which a restart stops; nil counts none.
+	sessions func() int
+}
+
+// runningSessions is how many sessions the restart that applies a change would stop.
+func (s moduleSelectionService) runningSessions() int {
+	if s.sessions == nil {
+		return 0
+	}
+	return s.sessions()
 }
 
 // holdingData is the set of modules whose tables hold rows.
@@ -333,7 +392,9 @@ func (s moduleSelectionService) ModuleSelection(ctx context.Context) (api.Module
 	if err != nil {
 		return api.ModuleSelectionDTO{}, err
 	}
-	return moduleSelectionDTO(selected, s.running, used), nil
+	dto := moduleSelectionDTO(selected, s.running, used)
+	dto.RunningSessions = s.runningSessions()
+	return dto, nil
 }
 
 func (s moduleSelectionService) SelectModules(ctx context.Context, actor auth.Principal, selected []string) (api.ModuleSelectionDTO, error) {
@@ -356,6 +417,8 @@ func (s moduleSelectionService) SelectModules(ctx context.Context, actor auth.Pr
 		return api.ModuleSelectionDTO{}, err
 	}
 	dto := moduleSelectionDTO(want.Selected(), s.running, used)
+	// Read before any restart is requested: the sessions it is about to stop.
+	dto.RunningSessions = s.runningSessions()
 	if want.sameActive(s.running) {
 		return dto, nil
 	}
@@ -378,7 +441,7 @@ func moduleSelectionDTO(selected []string, running moduleProfile, used []string)
 		spec := moduleCatalog[name]
 		st := api.ModuleStateDTO{
 			Name: name, Selected: slices.Contains(selected, name), Running: running.Active(name),
-			AlwaysOn: spec.kernel, Requires: slices.Clone(spec.requires),
+			AlwaysOn: spec.Kind == "kernel", Requires: slices.Clone(spec.Requires),
 			HoldsData: slices.Contains(used, name), ActivatedBy: running.ActivatedBy(name),
 		}
 		if st.Running && !st.Selected && !st.AlwaysOn {

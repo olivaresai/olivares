@@ -395,6 +395,7 @@ func TestSupportBundleExactSecretReferenceGrammar(t *testing.T) {
 // fixture now comes from boot(), which is what `serve` runs.
 func TestSupportBundleSecretInventoryListsMetadataWithoutOpeningValue(t *testing.T) {
 	dataDir := t.TempDir()
+	prepareCompositionTestBoot(t)
 	eng, err := boot(context.Background(), bootConfig{
 		DataDir: dataDir, Engine: "sqlite", Version: "test", Logger: slog.Default(),
 	})
@@ -419,6 +420,7 @@ func TestSupportBundleSecretInventoryListsMetadataWithoutOpeningValue(t *testing
 	outPath := filepath.Join(t.TempDir(), "inventory.tar.gz")
 	cmd := supportBundleCmd()
 	cmd.SetArgs([]string{"--offline", "--include", "secrets", "--data-dir", dataDir, "--out", outPath})
+	prepareCompositionTestBoot(t)
 	if err := cmd.Execute(); err != nil {
 		t.Fatal(err)
 	}

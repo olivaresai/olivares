@@ -95,7 +95,12 @@
         "hint": "The decision this act rests on. Rebasing a clock is evidence-bearing: the engine will not take it unnamed.",
         "placeholder": "the decision id"
       }
-    }
+    },
+    "details": "Details",
+    "readyTitle": "Mark '{{title}}' ready",
+    "actionTitle": "{{action}}: {{title}}",
+    "waitsFor": "'{{title}}' waits for '{{dependency}}' to be done.",
+    "dependencyWaiting": "This item waits for its dependencies to be done."
   },
   "checks": {
     "evidence": "evidence {{ref}}"
@@ -103,6 +108,19 @@
   "common": {
     "refresh": "Refresh",
     "loadMore": "Load more"
+  },
+  "create": {
+    "action": "New item",
+    "title": "New work item",
+    "description": "Record a work item that you own. Its plan is shown before anything is written; once it exists you can offer it as a handoff.",
+    "workspace": "Workspace",
+    "workspaceNone": "No workspace is available to you here. Choose one in the workspace switcher or ask an administrator.",
+    "workspaceError": "The workspace list could not be read. Close this and try again.",
+    "itemTitle": "Title",
+    "brief": "Brief",
+    "briefHint": "What needs doing and why.",
+    "doneWhen": "Done when",
+    "doneWhenHint": "The acceptance criterion that says the item is finished."
   },
   "decisions": {
     "title": "Decisions",

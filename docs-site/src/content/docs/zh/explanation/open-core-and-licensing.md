@@ -2,7 +2,7 @@
 title: 开放内核与授权许可
 description: >-
   开放内核：完整产品采用 AGPL-3.0-only 授权，SDK 与连接器采用
-  Apache-2.0，另有一小条增量式企业产品线为商业授权。AGPL 构建从不
+  Apache-2.0，另有一小条增量式产品线（Business 与 Enterprise 版本）为商业授权。AGPL 构建从不
   被削弱以促成升级，但它与商业版并不完全相同。这对自托管用户与连接器
   作者意味着什么。
 ---
@@ -21,13 +21,13 @@ AGPL 构建包含整个治理平台，用户数量不限，支持一个活动身
 | 路径 | 授权许可 | 它是什么 |
 |---|---|---|
 | `core/` | **AGPL-3.0-only** | 引擎：摄取、事件总线、数据模型、模块运行时、API、授权、审计 |
-| `modules/` | **AGPL-3.0-only** | 这 31 个模块（清点、R/RW 访问图、FinOps、评估、护栏……） |
+| `modules/` | **AGPL-3.0-only** | 这 32 个模块（清点、R/RW 访问图、FinOps、评估、护栏……） |
 | `web/` | **AGPL-3.0-only** | React 界面 |
 | `sdk/` | **Apache-2.0** | 连接器/模块接口、gRPC 契约与共享类型 |
 | `connectors/` | **Apache-2.0** | 各类连接器（Claude、OpenAI、pgAudit、eBPF、云、Slack、SIEM……） |
-| `enterprise/` | **商业** | 增量式模块，受构建标签门控，从不出现在公开二进制文件中：多 IdP 联邦、内容防火墙/DLP、Hook 加固、编译的威胁情报目录、服务器端工具出口、CyberArk Conjur、事件闭环（`LicenseRef-Olivares-Commercial`） |
+| `enterprise/` | **商业** | 增量式模块，受构建标签门控，从不出现在公开二进制文件中（`LicenseRef-Olivares-Commercial`） |
 
-你正在阅读的这个文档站点是 AGPL 产品的一部分。
+你正在阅读的这个文档站点是 AGPL 产品的一部分。哪项能力属于哪个版本，只在一处写明，即仓库中的 `docs/editions.md`；本页不再重复。
 
 ## 这对你意味着什么
 
@@ -48,8 +48,8 @@ AGPL 构建包含整个治理平台，用户数量不限，支持一个活动身
 | 版本 | 价格 | 范围 |
 | --- | --- | --- |
 | Community | 免费，AGPL-3.0-only | 用户数量不限；一个活动身份提供方（IdP）。 |
-| Business | 每月 USD 129 或每年 USD 1,290 | 用户数量不限；一个法律实体；最多两个生产部署，每个可配一个 staging 部署；活动 IdP 总数最多五个。 |
-| Enterprise | 联系我们 | 多实体、更多部署或 IdP、隔离环境镜像、自定义 LTS 及其他合同约定的要求。 |
+| Business | 每月 USD 129 或每年 USD 1,290 | 用户数量不限；一个法律实体；同一时间一个活跃实例。 |
+| Enterprise | 联系我们 | 合同约定的条款及依赖这些条款的能力：多实体、更多部署或 IdP、隔离环境镜像、自定义 LTS，以及通过 OAuth 2.0 令牌交换（RFC 8693）签发的限定范围上游凭据。 |
 
 Business 包含 **Regulated Operations**、**AI Runtime Security**、
 **Compliance Packs** 和 **Identity & Scale**。每个系列保留自己的代码和许可证权益边界。
@@ -60,27 +60,28 @@ Business 包含 **Regulated Operations**、**AI Runtime Security**、
 不可以。上述四个系列均包含在 Business 订阅中。
 在[价格](https://olivares.ai/pricing)页面选择按月或按年付款。
 
-### 如果需要更多部署或身份提供方，该怎么办？
+### 如果需要同时运行多个活跃实例，该怎么办？
 
-请联系 **enterprise@olivares.ai** 商议 Enterprise 范围。Business 最多支持两个生产部署，
-活动 IdP 总数最多五个，并非每个部署五个。
+请联系 **enterprise@olivares.ai** 商议 Enterprise 范围。Business 许可证同一时间只能在一个
+实例上生效；你可以在一个实例上释放它，并根据需要在另一个实例上激活。Enterprise 支持多个
+同时活跃的实例。
 
 
-## 何为开放、何为企业
+## 何为开放、何为商业
 
-开放二进制文件就是整个治理平台；`enterprise/` 产品线是**增量式**的。有两条
+开放二进制文件就是整个治理平台；商业版 `enterprise/` 产品线是**增量式**的。有两条
 边界值得专门点明，因为开放构建会就它们诚实地作答，而非假装它们不存在：
 
-- **SSO** —— 单 IdP 登录（OIDC + SAML 2.0）在默认二进制文件中是**开放**的：
-  真实登录，无需 `-tags enterprise`。多个活动 IdP（按租户/按域名）、SSO 强制
-  执行与托管式 SCIM 属于保留的企业产线；启用第二个活动 IdP 会返回
+- **SSO** —— 单 IdP 登录（OIDC + SAML 2.0）与入站 SCIM 在默认二进制文件中是**开放**的：
+  真实登录，无需 `-tags enterprise`。多个活动 IdP（按租户/按域名）、登录时的组映射
+  与强制 SSO 属于 Business（Identity & Scale）；启用第二个活动 IdP 会返回
   `multi_idp_requires_enterprise`。
-- **用户账户** —— **在所有版本中都不受数量限制**。社区构建没有用户上限，企业构建
+- **用户账户** —— **在所有版本中都不受数量限制**。社区构建没有用户上限，商业版构建
   同样没有：任何授权状态（有效、过期、缺失）都无法限制一个部署可运行的账户数量。
   2026-07-27 之前存在的三个活动账户上限已被彻底移除；席位接缝仍作为兼容性 no-op
   保留在代码中，但不会拒绝任何操作，授权过期也绝不会限制、停用或删除账户。
 
-完整的开放与企业对照请参见[诚实与限度](/zh/start/honesty-and-limits/)。
+完整的开放与商业对照请参见[诚实与限度](/zh/start/honesty-and-limits/)。
 
 ## 授权密钥从不对开放产品设限
 
@@ -88,10 +89,10 @@ Business 包含 **Regulated Operations**、**AI Runtime Security**、
 存证**。引擎记录谁持有该授权及其状态；它**从不**因一次授权检查而禁用、降级
 或阻止任何请求、任何模块或启动过程，并且它**离线**运行（一个 Ed25519 签名，
 无授权服务器），这正是该开放产品能在气隙（air-gapped）环境下工作的原因。授权
-被*消费*而非仅被展示的唯一场所，是封闭的企业构建，且仅用于授予商业协议所涵盖
+被*消费*而非仅被展示的唯一场所，是封闭的商业版构建，且仅用于授予商业协议所涵盖
 的模块的权限，并逐个模块评估 —— 这是商业版中的一项本地决策，而绝非开放
 二进制文件中的检查。它绝不限制用户数量：账户在所有版本中都不受限。因此开放构建确实是完整的、不受授权限制的；商业版中有所
-不同的，是那些增量式的 `enterprise/` 模块，而非一把授权密钥在同一个二进制
+不同的，是那些增量式的商业版 `enterprise/` 模块，而非一把授权密钥在同一个二进制
 文件内开关功能。
 
 ## 为何选择这一模式
@@ -112,7 +113,7 @@ copyleft 产品，一套让连接器生态系统免于摩擦的宽松 SDK，以�
 
 ## 相关
 
-- [安装许可证并迁移到企业版](/zh/how-to/install-a-license/) —— 已购许可证应放在哪里，以及
-  如何原地从 Community 切换到企业版。本页解释这一模型；另一页给出具体步骤。
+- [安装许可证并迁移到 Business](/zh/how-to/install-a-license/) —— 已购许可证应放在哪里，以及
+  如何原地从 Community 切换到 Business。本页解释这一模型；另一页给出具体步骤。
 - [安全模型](/zh/explanation/security/security-model/) —— 为何仅存证式授权对一款
   气隙安全产品至关重要。

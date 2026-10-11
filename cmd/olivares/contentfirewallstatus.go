@@ -7,6 +7,7 @@ package main
 import (
 	"sync/atomic"
 
+	"github.com/olivaresai/olivares/cmd/olivares/internal/inferencepep"
 	"github.com/olivaresai/olivares/modules/inferenceproxy"
 )
 
@@ -25,16 +26,16 @@ type messagesInspectorBinding struct {
 var _ inferenceproxy.ContentFirewallStatusSource = (*messagesInspectorBinding)(nil)
 
 // record stores the attachment of dec, the decider the built Messages proxy serves, or
-// pep_not_composed when dec is nil. It applies the proxy's own nil test to dec.inspector.
+// pep_not_composed when dec is nil. It applies the proxy's own nil test to dec.Inspector.
 // Only the first record is kept.
-func (b *messagesInspectorBinding) record(dec *inferenceProxyDecider) {
+func (b *messagesInspectorBinding) record(dec *inferencepep.Decider) {
 	if b == nil {
 		return
 	}
 	state := inferenceproxy.ContentFirewallPEPNotComposed
 	if dec != nil {
 		state = inferenceproxy.ContentFirewallInspectorAbsent
-		if dec.inspector != nil {
+		if dec.Inspector != nil {
 			state = inferenceproxy.ContentFirewallInspectorAttached
 		}
 	}

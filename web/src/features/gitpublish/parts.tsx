@@ -7,6 +7,7 @@
 import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { useStepUpSatisfied } from '@/features/identity/assurance'
 import { cn } from '@/lib/utils'
 import {
   actionAuthority,
@@ -23,7 +24,9 @@ export function IntentStateBadge({ state }: { state: IntentState }) {
   return <Badge variant={stateTone(state)}>{t(`states.${state}`)}</Badge>
 }
 
-/** The authority the engine mounts an action with, stated before the operator acts. */
+/** The authority the engine mounts an action with, stated before the operator acts. An
+ * AAL3 route floor is the administrative step-up, which the deployment's policy decides
+ * (off by default), so the extra check is named only when this session does not meet it. */
 export function AuthorityNote({
   action,
   className,
@@ -32,13 +35,37 @@ export function AuthorityNote({
   className?: string
 }) {
   const { t } = useTranslation('gitpublish')
+  const stepUpSatisfied = useStepUpSatisfied()
   const { permission, aal3 } = actionAuthority(action)
   return (
     <p className={cn('text-caption text-muted-foreground', className)}>
-      {aal3
-        ? t('authority.requiresAal3', { permission })
+      {aal3 && !stepUpSatisfied
+        ? t('authority.requiresStepUp', { permission })
         : t('authority.requires', { permission })}
     </p>
+  )
+}
+
+/** The look at an intent, named by its whole id. The label may wrap at any character and
+ * the button grows in height: a button that never wraps is as wide as its 36-character id
+ * and widens its dialog's grid column past a 390 px screen. */
+function OpenIntentButton({
+  id,
+  onOpenIntent,
+}: {
+  id: string
+  onOpenIntent: (id: string) => void
+}) {
+  const { t } = useTranslation('gitpublish')
+  return (
+    <Button
+      size="sm"
+      variant="outline"
+      className="h-auto min-h-7 max-w-full whitespace-normal break-all py-1"
+      onClick={() => onOpenIntent(id)}
+    >
+      {t('intents.open', { id })}
+    </Button>
   )
 }
 
@@ -76,13 +103,10 @@ export function OutcomePanel({
           <p className="text-foreground">
             {t(`receipts.${outcome.intent.receipt}`)}
           </p>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => onOpenIntent(outcome.intent.id)}
-          >
-            {t('intents.open', { id: outcome.intent.id })}
-          </Button>
+          <OpenIntentButton
+            id={outcome.intent.id}
+            onOpenIntent={onOpenIntent}
+          />
         </section>
       )
     case 'uncertain':
@@ -109,13 +133,10 @@ export function OutcomePanel({
                 {t('actions.reconcile')}
               </Button>
             ) : null}
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => onOpenIntent(outcome.intent.id)}
-            >
-              {t('intents.open', { id: outcome.intent.id })}
-            </Button>
+            <OpenIntentButton
+              id={outcome.intent.id}
+              onOpenIntent={onOpenIntent}
+            />
           </div>
         </section>
       )
@@ -139,13 +160,10 @@ export function OutcomePanel({
             </code>
           ) : null}
           <div>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => onOpenIntent(outcome.intent.id)}
-            >
-              {t('intents.open', { id: outcome.intent.id })}
-            </Button>
+            <OpenIntentButton
+              id={outcome.intent.id}
+              onOpenIntent={onOpenIntent}
+            />
           </div>
         </section>
       )
@@ -164,13 +182,10 @@ export function OutcomePanel({
             <code className="font-mono">{outcome.code}</code>
           </p>
           {outcome.intentId ? (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => onOpenIntent(outcome.intentId!)}
-            >
-              {t('intents.open', { id: outcome.intentId })}
-            </Button>
+            <OpenIntentButton
+              id={outcome.intentId}
+              onOpenIntent={onOpenIntent}
+            />
           ) : null}
         </section>
       )

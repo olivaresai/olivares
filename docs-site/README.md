@@ -31,11 +31,12 @@ rewrite edits the very inline `<style>` blocks the policy hashes. See
 
 `npm test` runs:
 
+- `test:enforcement-docs` — checks that observation and deny-closed engine enforcement are distinguished.
 - `spec:openapi` — validates the product's OpenAPI 3.1 contract (`@readme/openapi-parser`).
 - `spec:asyncapi` — validates the AsyncAPI 3.0 event-bus spec (`@asyncapi/parser`).
 - `build` — `astro build` (Pagefind search index + sitemap) plus the three post-build steps.
 - `test:drift` — proves the API reference renders from the real spec (no copy).
-- `test:modules` — proves every module dir has a linked reference page (no catalog orphans).
+- `test:modules` — tests the coverage guard, then proves every selectable namespace in `core/modulespec/modules.json` has a linked reference page and the catalog count matches.
 - `test:links` — fails on any broken internal link across the built site.
 - `test:policy:selftest` / `test:policy` — proves the response-policy gate can fail, then runs it.
 
@@ -62,17 +63,8 @@ question against the running site.
   `public/asyncapi/asyncapi.yaml` — an AsyncAPI 3.0 contract hand-derived from the
   Go SDK (there is no AsyncAPI codegen in the product, so this file is the source of
   truth; keep it in step with `sdk/event` + `sdk/model`).
-- **ADRs are NOT published here, and that is deliberate.** Until 2026-08-25 this
-  site carried 229 generated pages under `explanation/adr/`, written from the
-  project's internal MADR register by `scripts/sync-adr.mjs`. The project owner
-  withdrew the whole section that day: architecture decision records are internal
-  development documentation, and publishing them can compromise the integrity and
-  security of the project and its paid business/enterprise part. The register stays
-  exactly where it was — in the development repository, committed and private — and
-  the generator, its strings file and its `lint:adr-sync` gate were removed with it.
-  `task lint:adr-not-published` now holds the line in the other direction: it fails
-  if an ADR page, an ADR-shaped filename, a live link to the withdrawn route, or the
-  generator itself comes back to this tree.
+- Internal development records and their publishers must stay out of this site.
+  `task lint:adr-not-published` rejects their pages, links and generators.
 
 ## Search & i18n
 
@@ -123,7 +115,7 @@ Versioning is provided by the [`starlight-versions`](https://starlight-versions.
 plugin and is **active**. The only archived version is honestly labelled as a
 **dated docs snapshot**, not a product release: slug `2026-06`, label
 **"2026-06 (pre-1.0 preview)"**. The first public CalVer cut was `v26.8.0`.
-The current canon is `26.10.1` (`RELEASE-VERSION`). The docs tree remains
+The current canon is `0.1` (`RELEASE-VERSION`). The docs tree remains
 **Latest** until a maintainer cuts a dated snapshot; do not fabricate a
 release archive.
 

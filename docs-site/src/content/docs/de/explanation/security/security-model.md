@@ -3,6 +3,10 @@ title: "Das Sicherheitsmodell"
 description: "Die secure-by-design Posture hinter Olivares AI — warum read-first, minimal-data, deny-by-default und ein manipulationserkennbares Audit die tragenden Sicherheitsentscheidungen sind, nicht die Bedrohungsaufzählung."
 ---
 
+:::note[Business]
+Audit-Export (`GET /v1/audit/export`, `olivares audit export`), Verzeichnisarchive und die Prüfung externer Archive erfordern Business. Community behält das signierte Ledger, `olivares audit verify` und `olivares dr backup`; Export liefert HTTP 501 oder Exit-Code 9. Audit-Weiterleitung und DDIL-Transfers mit Audit-Segmenten erfordern ebenfalls Business.
+:::
+
 Olivares AI ist ein Sicherheitsprodukt, das **innerhalb der eigenen Infrastruktur des
 Kunden** läuft und eine Karte dessen erstellt, was jeder AI-Agent erreichen kann. Das macht
 es sowohl höchst sensibel als auch höchst wertvoll für einen Angreifer: Ein Defekt in diesem
@@ -25,18 +29,19 @@ Deployments auf. Diese gehören in Härtungsmaterial für Betreiber, nicht in ö
 
 ## Read-first: niedriges asymmetrisches Risiko
 
-Der Core **beobachtet**; er schaltet sich nicht dazwischen. Die Access Map wird aus Signalen
-rekonstruiert, die das Estate ohnehin emittiert — OpenTelemetry, Datenbank-Audit,
-Cloud-Audit-Trails und (als nicht-kooperativer Backstop) eBPF — und der Collector ist **nie
-im Datenpfad des Agenten**.
+Die Access Map beobachtet außerhalb des Datenpfads. Sie rekonstruiert Zugriffe
+aus OpenTelemetry, Datenbank-Audit, Cloud-Audit-Trails und einem eBPF-Backstop.
+Ein Ausfall eines Beobachtungs-Collectors kostet Sichtbarkeit, ohne Agentenaktionen
+zu sperren.
 
-Das ist eine Sicherheitsentscheidung, bevor es eine Produktentscheidung ist. Ein Inline-Enforcer,
-der vor jeder Agentenaktion sitzt, ist ein Single Point of Failure: Wenn er hängt oder
-abstürzt, kann er die Produktion mit sich reißen, und er wird zu einem hochwertigen Ziel —
-gerade *weil* er im Pfad ist. Ein Read-first-Beobachter trägt das gegenteilige,
-**asymmetrische** Risikoprofil. Fällt der Collector aus, hört er auf zu *sehen* — er stoppt
-nicht den Agenten und bricht nicht die Produktion. Der Worst-Case-Ausfall eines Beobachters
-ist eine Lücke in der Sichtbarkeit, kein Ausfall.
+Durchsetzung hat andere Verfügbarkeitsanforderungen: Durchsetzungspunkte arbeiten
+inline und deny-closed. Verwaltete Claude-Code-Tool-Aufruf-Hooks rufen den PEP der
+Engine auf, den diese standardmäßig bereitstellt. Ist er während eines Ausfalls
+oder Neustarts nicht erreichbar, wird jeder geregelte Tool-Aufruf verweigert.
+Der Inline-Inferenz-Proxy, das MCP-tools/call-Gate und das A2A-Delegations-Gate
+gelten für Verkehr, der durch sie geleitet wird; der Inferenz-Proxy ist nicht die
+Standardroute für Modellaufrufe einer Sitzung. Berücksichtigen Sie die Engine in
+der Verfügbarkeitsplanung für geregelte Sitzungen.
 
 Dieselbe Eigenschaft neutralisiert die naheliegende Umgehung. Der Collector läuft als
 separater, privilegierter Dienst **außerhalb der Kontrolle des Agenten**, sodass ein Agent,
@@ -149,7 +154,7 @@ Enterprise-Auditor verlangt, und es ist das, was native Telemetrie nicht liefert
 
 :::note[Zwei Wege off-box: Pull und ein echter Push]
 Das verifizierbare Ledger erreicht ein SIEM auf zwei Wegen. Der **Pull**-Export
-(`GET /v1/audit/export`) ist immer verfügbar und ist das Artefakt, das ein Betreiber
+(`GET /v1/audit/export`) erfordert Business und ist das Artefakt, das ein Betreiber
 archiviert. Ein **Push** ist real, sobald er konfiguriert ist: ein
 `audit.recorded`-Eventing-Abonnement startet eine Ledger-Pumpe pro Tenant, die jeden
 versiegelten Datensatz **mindestens einmal** über den dauerhaften, SSRF-geschützten
@@ -226,8 +231,8 @@ verbindliche Vertrag darüber, was heute gebaut ist versus designt.
 
 ## Warum diese Entscheidungen zusammenhalten
 
-Keine dieser Entscheidungen steht für sich allein. Read-first hält das Produkt aus dem
-Wirkungsradius genau der Systeme heraus, die es überwacht. Minimal-data verkleinert, was ein
+Read-first-Beobachtung begrenzt Collector-Ausfälle auf Sichtbarkeitslücken;
+Inline-Durchsetzung hängt von der Engine ab und verweigert bei Ausfall. Minimal-data verkleinert, was ein
 Breach des Produkts überhaupt offenlegen könnte. Opake Tokens, keine Standard-Credentials,
 deny-by-default RBAC und ein nur einschränkendes ABAC-Seam bedeuten, dass die Autorität klein,
 widerrufbar und unmöglich versehentlich zu erweitern ist. Das hash-chained, signierte, extern

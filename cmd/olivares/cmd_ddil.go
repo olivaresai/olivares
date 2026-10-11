@@ -18,12 +18,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/spf13/cobra"
-
 	"github.com/olivaresai/olivares/core/audit"
 	"github.com/olivaresai/olivares/core/ddil"
-	"github.com/olivaresai/olivares/core/model"
-	"github.com/olivaresai/olivares/modules/governance"
+	"github.com/spf13/cobra"
 )
 
 // newDDILCmd groups the disconnected-transfer operations.
@@ -120,113 +117,7 @@ func newDDILExportCmd() *cobra.Command {
     --sign-key @ddil-private.b64 --evidence assessment=./assessment.pdf --expires 168h`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			resolvedTenant, err := resolveTenant(tenant)
-			if err != nil {
-				return err
-			}
-			t, err := model.ParseTenantID(resolvedTenant)
-			if err != nil {
-				return fmt.Errorf("--tenant: %w", err)
-			}
-			if maxStaleness < 0 {
-				return fmt.Errorf("--max-staleness must not be negative")
-			}
-			if expires < 0 {
-				return fmt.Errorf("--expires must not be negative")
-			}
-			priv, err := loadEd25519Private(signKey)
-			if err != nil {
-				return err
-			}
-			evidence, evidenceNames, err := loadDDILEvidence(evidenceSpecs)
-			if err != nil {
-				return err
-			}
-
-			eng, err := auditBootRO(cmd, dataDir, engineName, dsn)
-			if err != nil {
-				return err
-			}
-			defer func() { _ = eng.Close() }()
-
-			sink := newMemArchiveSink()
-			segments := make([]ddil.Segment, 0)
-			auditReport, err := audit.ExportSegments(cmd.Context(), eng.store, t, sink,
-				audit.ExportOptions{FromSeq: fromSeq, SegmentEvents: segmentEvents},
-				func(res audit.SegmentResult) error {
-					manifest, ok := sink.get(res.ManifestKey)
-					if !ok {
-						return fmt.Errorf("ddil export: archive sink omitted manifest %q", res.ManifestKey)
-					}
-					events, ok := sink.get(res.EventsKey)
-					if !ok {
-						return fmt.Errorf("ddil export: archive sink omitted events %q", res.EventsKey)
-					}
-					segments = append(segments, ddil.Segment{
-						FromSeq:             res.Manifest.FromSeq,
-						ToSeq:               res.Manifest.ToSeq,
-						FirstHash:           res.Manifest.FirstHash,
-						LastHash:            res.Manifest.LastHash,
-						PrevSegmentLastHash: res.Manifest.PrevSegmentLastHash,
-						ManifestJSON:        manifest,
-						EventsJSONL:         events,
-					})
-					return nil
-				})
-			if err != nil {
-				return err
-			}
-
-			var policySnapshot []byte
-			var policyRevision string
-			policyIncluded := false
-			if !noPolicy {
-				snapshot, revision, ok, err := governance.ActivePolicySnapshot(cmd.Context(), eng.store, t)
-				if err != nil {
-					return err
-				}
-				if ok {
-					policySnapshot = []byte(snapshot)
-					policyRevision = revision
-					policyIncluded = true
-				}
-			}
-			if !policyIncluded && cmd.Flags().Changed("max-staleness") {
-				return fmt.Errorf("--max-staleness requires an included active policy snapshot")
-			}
-
-			createdAt := time.Now().UTC()
-			var expiresAt *time.Time
-			if expires > 0 {
-				v := createdAt.Add(expires)
-				expiresAt = &v
-			}
-			input := ddil.ExportInput{
-				Tenant:             t.String(),
-				PolicyRevision:     policyRevision,
-				PolicySnapshot:     policySnapshot,
-				PolicyMaxStaleness: maxStaleness,
-				Segments:           segments,
-				Evidence:           evidence,
-				CreatedAt:          createdAt,
-				Expires:            expiresAt,
-				Notes:              notes,
-			}
-			if err := writeDDILBundleFile(out, input, priv); err != nil {
-				return err
-			}
-
-			report := ddilExportReport{
-				Out: out, Tenant: t.String(), Segments: len(segments), Events: auditReport.Events,
-				FromSeq: auditReport.FromSeq, ToSeq: auditReport.ToSeq,
-				Policy: ddilExportPolicyReport{
-					Included: policyIncluded, Revision: policyRevision,
-					MaxStaleness: maxStaleness.String(),
-				},
-				Evidence: evidenceNames, CreatedAt: createdAt, Expires: expiresAt,
-			}
-			// E2: honor -o instead of always printing JSON.
-			return renderReportOut(cmd, report)
+			return runDDILExport(cmd, dataDir, engineName, dsn, tenant, out, signKey, fromSeq, segmentEvents, evidenceSpecs, maxStaleness, expires, notes, noPolicy)
 		},
 	}
 	addStoreFlags(cmd, &dataDir, &engineName, &dsn)

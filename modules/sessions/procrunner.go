@@ -10,6 +10,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"strings"
@@ -18,9 +20,10 @@ import (
 	"time"
 
 	"github.com/olivaresai/olivares/modules/sessions/confine"
+	"github.com/olivaresai/olivares/modules/sessions/egress"
 )
 
-// procRunner is the NATIVE host-process Runner — the v1 default (choice)
+// procRunner is the NATIVE host-process Runner — the default
 // and the path that is fully implemented and exercised end-to-end. It launches
 // `claude` with bridged stdin/stdout, adapted from the verified connectors/mcp
 // stdio transport pattern (the pattern is replicated here in AGPL code rather
@@ -45,6 +48,28 @@ func NewProcRunner() Runner { return &procRunner{lineCap: maxOutputLine} }
 // NewPTYRunner returns the native runner that attaches a local PTY for
 // stdin/stdout. Container/sandbox isolation is still refused.
 func NewPTYRunner() Runner { return &procRunner{lineCap: maxOutputLine, usePTY: true} }
+
+// RunConfinementHelper dispatches the private session reexec stages. Keeping the
+// network supervisor here leaves the standalone filesystem helper independent.
+func RunConfinementHelper(args []string) int {
+	if egress.Handles(args) {
+		return egress.RunHelper(args, confine.RunHelperWithReady)
+	}
+	return confine.RunHelper(args)
+}
+
+// boundaryErr carries the network boundary's own reason, which names no secret,
+// into the run's failure instead of the generic launch failure text.
+type boundaryErr struct {
+	*runErr
+	cause error
+}
+
+func (e boundaryErr) Unwrap() []error { return []error{e.runErr, e.cause} }
+
+func networkBoundaryErr(err error) error {
+	return boundaryErr{&runErr{http.StatusBadGateway, "the session was not started because its network boundary could not be set up: " + err.Error()}, err}
+}
 
 // maxOutputLine bounds one bridged output line (1 MiB) — a stream-json frame is
 // far smaller; this guards against a runaway line, never a normal one.
@@ -75,6 +100,18 @@ func (pr *procRunner) Launch(ctx context.Context, spec LaunchSpec) (Process, err
 	}
 	cmd.Dir = spec.Dir
 	cmd.Env = sanitizedEnv(spec.EnvAllow, env)
+	var waitReady func() error
+	var preview string
+	if spec.NetworkPolicy != nil {
+		var releaseNetwork func()
+		waitReady, releaseNetwork, preview, err = egress.Wrap(ctx, cmd, *spec.NetworkPolicy)
+		if err != nil {
+			release()
+			return nil, networkBoundaryErr(err)
+		}
+		releaseFiles := release
+		release = func() { releaseNetwork(); releaseFiles() }
+	}
 	if spec.WaitDelay > 0 {
 		cmd.WaitDelay = spec.WaitDelay
 	}
@@ -86,9 +123,20 @@ func (pr *procRunner) Launch(ctx context.Context, spec LaunchSpec) (Process, err
 	}
 	if err != nil {
 		release()
+		if waitReady != nil {
+			return nil, networkBoundaryErr(fmt.Errorf("the host or container must allow unprivileged user and network namespaces and Landlock: %w", err))
+		}
 		return nil, err
 	}
 	p.confinement = state
+	p.previewSocket = preview
+	if waitReady != nil {
+		if err := waitReady(); err != nil {
+			stopCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			return nil, errors.Join(networkBoundaryErr(err), p.Stop(stopCtx))
+		}
+	}
 	return p, nil
 }
 
@@ -212,21 +260,6 @@ func (pr *procRunner) watch(cmd *exec.Cmd, stdin io.WriteCloser, stdout, stderr 
 		close(p.waitDone)
 	}()
 	return p
-}
-
-func validateExplicitEnv(env []EnvVar) error {
-	if len(env) > 128 {
-		return errors.New("sessions: too many explicit environment values")
-	}
-	seen := make(map[string]bool, len(env))
-	for _, item := range env {
-		if !validEnvName(item.Name) || seen[item.Name] || strings.ContainsRune(item.Value, '\x00') ||
-			len(item.Value) > 64*1024 {
-			return errors.New("sessions: invalid or duplicate explicit environment value")
-		}
-		seen[item.Name] = true
-	}
-	return nil
 }
 
 // pump reads newline-delimited frames from r and forwards them, dropping a
@@ -355,6 +388,9 @@ type procProcess struct {
 
 	// confinement is how the child runs (Landlock, or none and why).
 	confinement confine.State
+	// previewSocket is the network boundary's preview bridge; empty when the
+	// child shares the engine's network (DialPreview).
+	previewSocket string
 
 	// mu guards the stdin LIFECYCLE state and the lazily built write gate. It is
 	// held for state decisions ONLY and NEVER across a write to the child.
@@ -753,6 +789,15 @@ func (p *procProcess) PID() int {
 	return p.cmd.Process.Pid
 }
 
+// DialPreview connects to address, a loopback port the session listens on, in
+// the session's own network: through the boundary's bridge when it has one.
+func (p *procProcess) DialPreview(ctx context.Context, address string) (net.Conn, error) {
+	if p.previewSocket != "" {
+		return egress.DialPreview(ctx, p.previewSocket, address)
+	}
+	return (&net.Dialer{}).DialContext(ctx, "tcp", address)
+}
+
 // closeStdin closes the child's input once. It is safe to call WHILE a Send is
 // blocked in Write on the same pipe — that is the point of it no longer sharing a
 // mutex with the write: os.File's poller unblocks the pending write instead of
@@ -829,96 +874,4 @@ func exitCodeOf(err error) (int, error) {
 		return ee.ExitCode(), nil
 	}
 	return -1, err
-}
-
-// baseEnvAllow is the minimal, non-sensitive host environment a launched official
-// CLI needs: PATH (to find node/claude/codex), HOME (its config + transcripts) and
-// locale/term/tmp basics. Nothing secret is in this set, and a PROFILED launch
-// overrides HOME explicitly, so the inherited one only ever serves an unprofiled
-// legacy run.
-var baseEnvAllow = []string{
-	"PATH", "HOME", "LANG", "LC_ALL", "LC_CTYPE", "TERM", "TMPDIR", "TZ", "USER", "SHELL",
-}
-
-// sanitizedEnv builds the child environment as an ALLOWLIST: ONLY the minimal
-// safe base (baseEnvAllow) plus the operator-named `allow` variables are inherited
-// from the host; EVERYTHING else — every OLIVARES_* signing key / KMS token the
-// control-plane process holds — is withheld (minimal-data, docs/SECURITY-HARDENING.md: a denylist
-// would leak the whole secret set to an agent running under bypassPermissions).
-// The explicit spec env (the governed ANTHROPIC_AUTH_TOKEN / ANTHROPIC_BASE_URL) is
-// appended last. ANTHROPIC_*/CLAUDE_CODE_* host vars are dropped even if allowlisted
-// (a static key/cloud-provider var would shadow the minted WIF token).
-func sanitizedEnv(allow []string, extra []EnvVar) []string {
-	allowed := make(map[string]bool, len(baseEnvAllow)+len(allow))
-	for _, n := range baseEnvAllow {
-		allowed[n] = true
-	}
-	for _, n := range allow {
-		if n = strings.TrimSpace(n); validEnvName(n) && !forbiddenInheritedEnvName(n) {
-			allowed[n] = true
-		}
-	}
-	explicitNames := make(map[string]bool, len(extra))
-	for _, e := range extra {
-		if validEnvName(e.Name) {
-			explicitNames[e.Name] = true
-		}
-	}
-	out := make([]string, 0, len(allowed)+len(extra))
-	for _, kv := range os.Environ() {
-		name := kv
-		if i := strings.IndexByte(kv, '='); i >= 0 {
-			name = kv[:i]
-		}
-		if !allowed[name] || forbiddenInheritedEnvName(name) || explicitNames[name] {
-			continue // withhold everything not explicitly allowed (incl. all OLIVARES_*)
-		}
-		out = append(out, kv)
-	}
-	seenExplicit := make(map[string]bool, len(extra))
-	for _, e := range extra {
-		if !validEnvName(e.Name) || seenExplicit[e.Name] {
-			continue
-		}
-		seenExplicit[e.Name] = true
-		out = append(out, e.Name+"="+e.Value)
-	}
-	return out
-}
-
-func validEnvName(name string) bool {
-	if name == "" || len(name) > 128 {
-		return false
-	}
-	for i, r := range name {
-		if (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') || r == '_' ||
-			(i > 0 && r >= '0' && r <= '9') {
-			continue
-		}
-		return false
-	}
-	return true
-}
-
-// forbiddenInheritedEnvName names what the child never INHERITS, whatever an
-// operator allowlists.
-//
-// The set is the control plane's own secrets plus EVERY provider's credential and
-// routing family, not just the one this launch uses. An inherited OPENAI_API_KEY
-// would silently authenticate a Codex child as whoever runs the engine, and a
-// CODEX_HOME or GROK_HOME would point it at a home nobody selected — both are the
-// same accident §6 refuses from a caller, arriving through the host environment
-// instead of a request body. The explicit launch values are unaffected: they are
-// appended after this filter, which is what lets a profile set the home it owns.
-func forbiddenInheritedEnvName(name string) bool {
-	return strings.HasPrefix(name, "OLIVARES_") ||
-		strings.HasPrefix(name, "ANTHROPIC_") ||
-		strings.HasPrefix(name, "CLAUDE_CODE_") ||
-		strings.HasPrefix(name, "CODEX_") ||
-		strings.HasPrefix(name, "OPENAI_") ||
-		strings.HasPrefix(name, "GROK_") ||
-		strings.HasPrefix(name, "XAI_") ||
-		strings.HasPrefix(name, "OPENCODE_") ||
-		name == "CLAUDE_CONFIG_DIR" ||
-		name == "DISABLE_AUTOUPDATER"
 }

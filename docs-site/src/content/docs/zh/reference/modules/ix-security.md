@@ -15,12 +15,12 @@ description: >-
 
 本模块横跨三项有界职责：
 
-- **护栏**——一条由确定性、可解释的检测器组成的链，在 `input`、`output` 和 `tool_args`
+- **护栏**——一条由确定性、可解释的检测器组成的链，在 `input`、`output`、`tool_args` 和 `tool_result`
   界面上检查智能体文本，以查找密钥/PII、提示注入（prompt-injection）、越狱（jailbreak）、
   不允许内容、输出模式违规以及 OWASP Agentic Top 10。检测携带框架引用（OWASP LLM Top 10
-  2025、OWASP Agentic Top 10 2026、MITRE ATLAS），逐字取自一手来源，绝不臆造。一个可选、
-  可插拔的分类器（一个托管的护栏 LLM）运行在确定性检测器*之后*：它只能**新增**检测，绝不能
-  压制任何一项检测，且其失败会被记录并忽略。
+  2025、OWASP Agentic Top 10 2026、MITRE ATLAS），逐字取自一手来源，绝不臆造。
+  标准二进制未配置模型分类器；提供商／账户选择未连接到该端口。可选 Go 接口仍受支持：
+  注入的分类器可以新增检测，不能压制确定性检测结果，其错误会被记录并忽略。
 - **异常检测**——它将 [模块 III](/zh/reference/modules/iii-access-map/) 计算出的"许可 vs 观察
   （Permitted-vs-Observed）"偏移与高严重度发现相关联，并联结内核侧与协作侧的反规避信号：
   一个使自身遥测静默的智能体被当作一个信号，而非一个盲点。

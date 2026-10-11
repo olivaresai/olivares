@@ -92,7 +92,7 @@ func TestSecretEnv_AValueWithAShortLineRefusesTheLaunchByVariable(t *testing.T) 
 	vault.mu.Lock()
 	vault.values[tenant.String()+"|env/github"] = "ab\nLEAKCANARY_long_line_0123"
 	vault.mu.Unlock()
-	_, err := m.createRun(context.Background(), tenant, secretEnvParams(githubSecretEnv, true))
+	_, err := createProfiledTestRun(t, m, context.Background(), tenant, secretEnvParams(githubSecretEnv, true))
 	if statusOf(err) != http.StatusConflict || !strings.Contains(err.Error(), "GITHUB_TOKEN") || strings.Contains(err.Error(), "LEAKCANARY") {
 		t.Fatalf("a value with a short line = %v, want 409 naming GITHUB_TOKEN and not the value", err)
 	}
@@ -145,7 +145,7 @@ func TestSecretEnv_AValueSharingTextWithTheCutNoteRefusesTheLaunch(t *testing.T)
 		vault.mu.Lock()
 		vault.values[tenant.String()+"|env/github"] = value
 		vault.mu.Unlock()
-		_, err := m.createRun(context.Background(), tenant, secretEnvParams(githubSecretEnv, true))
+		_, err := createProfiledTestRun(t, m, context.Background(), tenant, secretEnvParams(githubSecretEnv, true))
 		if statusOf(err) != http.StatusConflict || !strings.Contains(err.Error(), "GITHUB_TOKEN") || strings.Contains(err.Error(), value) {
 			t.Fatalf("value %q = %v, want 409 naming GITHUB_TOKEN and not the value", value, err)
 		}

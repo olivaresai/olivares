@@ -13,9 +13,10 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
-	"sync"
-	"time"
+
+	"github.com/olivaresai/olivares/core/driverfacts"
 )
 
 // The official OpenCode ACP driver (CLI v1.18.30), over ACP on the owned child's
@@ -39,25 +40,9 @@ const providerDriverOpenCode = "opencode"
 
 const envOpenCodeDisableAutoUpdate = "OPENCODE_DISABLE_AUTOUPDATE"
 
-const (
-	openCodeMethodInitialize      = "initialize"
-	openCodeMethodSessionNew      = "session/new"
-	openCodeMethodSessionResume   = "session/resume"
-	openCodeMethodSessionLoad     = "session/load"
-	openCodeMethodSessionPrompt   = "session/prompt"
-	openCodeMethodSessionCancel   = "session/cancel"
-	openCodeMethodSessionClose    = "session/close"
-	openCodeMethodSetConfigOption = "session/set_config_option"
-	openCodeNotifySessionUpdate   = "session/update"
-)
-
-const openCodeProtocolVersion = 1
-
-// openCodeErrAuthRequired is RequestError.authRequired from the ACP SDK 0.21.0
-// pinned by OpenCode v1.18.30. Match the CODE, not localized message text.
-const openCodeErrAuthRequired = -32000
-
-const openCodeErrMethodNotSupported = -32601
+// openCodeMethodSetConfigOption is the ACP method only OpenCode's settings use;
+// the shared methods are in acp_session.go.
+const openCodeMethodSetConfigOption = "session/set_config_option"
 
 const (
 	openCodeConfigIDModel  = "model"
@@ -69,9 +54,15 @@ type openCodeDriver struct{}
 // NewOpenCodeDriver returns the official OpenCode ACP driver.
 func NewOpenCodeDriver() ProviderDriver { return openCodeDriver{} }
 
-func (openCodeDriver) Key() string            { return providerDriverOpenCode }
-func (openCodeDriver) ConfigHomeEnv() string  { return envOpenCodeConfigDir }
-func (openCodeDriver) DefaultProgram() string { return "opencode" }
+func (openCodeDriver) Key() string { return providerDriverOpenCode }
+func (openCodeDriver) ConfigHomeEnv() string {
+	facts, _ := driverfacts.Lookup(providerDriverOpenCode)
+	return facts.ConfigHomeEnv
+}
+func (openCodeDriver) DefaultProgram() string {
+	facts, _ := driverfacts.Lookup(providerDriverOpenCode)
+	return facts.Program
+}
 
 func (openCodeDriver) LaunchArgs(l DriverLaunch) []string {
 	args := []string{"acp", "--hostname", "127.0.0.1"}
@@ -109,9 +100,9 @@ func (openCodeDriver) LaunchEnv(l DriverLaunch) []EnvVar {
 	bound := true
 	switch {
 	case l.LocalModelEndpoint != "":
-		_ = json.Unmarshal([]byte(openCodeLocalProviderConfig(l.LocalModelEndpoint, l.LocalModels)), &cfg)
+		_ = json.Unmarshal([]byte(openCodeLocalProviderConfig(l.LocalModelEndpoint, l.LocalModels, l.Model)), &cfg)
 	case l.BoundProvider.Kind != "":
-		openCodeConfineToKey(cfg, l.BoundProvider)
+		openCodeConfineToKey(cfg, l.BoundProvider, l.Model)
 	default:
 		bound = false
 	}
@@ -151,15 +142,15 @@ func (openCodeDriver) LaunchEnv(l DriverLaunch) []EnvVar {
 // openCodeLocalProviderID names the local provider in OpenCode's configuration.
 const openCodeLocalProviderID = "olivares_ollama"
 
-// A SESSION BOUND TO A PROVIDER RECORD REACHES ONLY THAT PROVIDER (Root 21:16Z, HU2 019).
+// A SESSION BOUND TO A PROVIDER RECORD REACHES ONLY THAT PROVIDER.
 //
 // OpenCode keeps its own hosted provider (OpenCode Zen, "opencode") beside any key it is
 // given, and with no model chosen it answers there: an Anthropic-key session answered on
 // opencode/big-pickle. So every record-bound launch allows exactly the bound provider,
 // disables the hosted one by name and turns sharing off. The title, small-model and
 // compaction requests resolve their model among the enabled providers, so they stay on it
-// too. Measured on OpenCode 1.18.34 over a whole session (FH 118 follow-up, egress probe
-// r4): Anthropic, OpenAI and xAI keys reached only their own API host, a local model only
+// too. Measured on OpenCode 1.18.34 over a whole session with an egress probe:
+// Anthropic, OpenAI and xAI keys reached only their own API host, a local model only
 // loopback.
 //
 // Three more requests went to other hosts, each closed by OpenCode's own switch:
@@ -168,7 +159,7 @@ const openCodeLocalProviderID = "olivares_ollama"
 //     registry.npmjs.org into every configuration directory (it fails and is logged);
 //   - OPENCODE_DISABLE_LSP_DOWNLOAD: language servers downloaded when a file is edited.
 //
-// And two held against what a profile or a project may already hold (SR5C on a8ac380a):
+// And two held against what a profile or a project may already hold:
 //   - the bound provider's address is pinned in the same configuration, so a baseURL saved
 //     for that provider elsewhere cannot carry the key and the prompt to another host;
 //   - OPENCODE_DISABLE_SHARE: share=disabled stops new shares, but a session shared before
@@ -202,7 +193,7 @@ const openCodeUnconfinedProviderID = "olivares_no_provider"
 // openCodeConfineToKey allows only the bound key's provider, at the carrier's endpoint. A
 // carrier naming a kind OpenCode has no provider for, or any address but the vendor's own,
 // enables no provider at all.
-func openCodeConfineToKey(cfg map[string]any, b BoundProvider) {
+func openCodeConfineToKey(cfg map[string]any, b BoundProvider, model string) {
 	p, ok := openCodeKeyProviders[b.Kind]
 	if !ok || b.Endpoint != providerVendorEndpoints[b.Kind] {
 		openCodeConfineTo(cfg, openCodeUnconfinedProviderID)
@@ -210,14 +201,24 @@ func openCodeConfineToKey(cfg map[string]any, b BoundProvider) {
 	}
 	cfg["provider"] = map[string]any{p.id: map[string]any{"options": map[string]any{"baseURL": p.baseURL}}}
 	openCodeConfineTo(cfg, p.id)
+	if model != "" {
+		cfg["model"] = openCodeModelValue(b, model, false)
+		cfg["small_model"] = cfg["model"]
+	}
 }
 
-// openCodeCanConfine reports whether OpenCode can be confined to a key record: a kind it
-// has a provider for, at that provider's own address (a custom address has no measured
-// OpenCode mapping).
-func openCodeCanConfine(kind, baseURL string) bool {
-	_, ok := openCodeKeyProviders[kind]
-	return ok && strings.TrimSpace(baseURL) == ""
+// A record stores the endpoint's model ID. OpenCode's config and ACP select use
+// provider/model. Endpoint IDs always acquire the prefix; an explicit native
+// choice already qualified on that same provider keeps its published spelling.
+func openCodeModelValue(b BoundProvider, model string, endpointID bool) string {
+	id := openCodeKeyProviders[b.Kind].id
+	if b.Kind == ProviderKindOllama {
+		id = openCodeLocalProviderID
+	}
+	if id == "" || model == "" || !endpointID && strings.HasPrefix(model, id+"/") {
+		return model
+	}
+	return id + "/" + model
 }
 
 // openCodeManagedConfigDir is where OpenCode 1.18.34 reads its host-managed configuration on
@@ -228,8 +229,8 @@ var openCodeManagedConfigDir = "/etc/opencode"
 // exists with any content, or cannot be read. OpenCode merges it after the launch's own
 // configuration, and it can name the provider, its address and the models in more ways than a
 // reader here can follow (decoded escapes, {env:...} and {file:...} substitution, its own
-// comment rules), so a session on a provider from Providers does not start on top of it at all
-// (Root 2026-10-02 23:20Z). An empty file holds nothing.
+// comment rules), so a session on a provider from Providers does not start on top of it at all.
+// An empty file holds nothing.
 func openCodeManagedConfigPresent() (string, bool) {
 	for _, name := range []string{"opencode.json", "opencode.jsonc"} {
 		path := filepath.Join(openCodeManagedConfigDir, name)
@@ -264,7 +265,7 @@ func openCodeConfineTo(cfg map[string]any, providerID string) {
 // listed, the first is the default, and enabled_providers allows no other
 // provider. A launch with no listed model is refused before this is built
 // (runtime_provider_auth.go).
-func openCodeLocalProviderConfig(endpoint string, models []string) string {
+func openCodeLocalProviderConfig(endpoint string, models []string, model string) string {
 	listed := map[string]any{}
 	for _, name := range models {
 		listed[name] = map[string]any{"name": name}
@@ -280,90 +281,50 @@ func openCodeLocalProviderConfig(endpoint string, models []string) string {
 		},
 	}
 	openCodeConfineTo(cfg, openCodeLocalProviderID)
-	if len(models) > 0 {
-		cfg["model"] = openCodeLocalProviderID + "/" + models[0]
+	endpointID := model == ""
+	if endpointID && len(models) > 0 {
+		model = models[0]
+	}
+	if model != "" {
+		cfg["model"] = openCodeModelValue(BoundProvider{Kind: ProviderKindOllama}, model, endpointID)
 		cfg["small_model"] = cfg["model"]
 	}
 	body, _ := json.Marshal(cfg)
 	return string(body)
 }
 
+// openCodeSessionMCP encodes the existing session edge for ACP v1. Only the
+// owned stdio request carries the bearer; argv and configuration files do not.
+func openCodeSessionMCP(spec LaunchSpec) []json.RawMessage {
+	if spec.SessionMCPURL == "" {
+		return nil
+	}
+	token := ""
+	for _, env := range spec.Env {
+		if env.Name == spec.SessionMCPTokenEnv {
+			token = env.Value
+		}
+	}
+	raw, _ := json.Marshal(map[string]any{
+		"type": "http", "name": "olivares", "url": spec.SessionMCPURL,
+		"headers": []map[string]string{{"name": "Authorization", "value": "Bearer " + token}},
+	})
+	return []json.RawMessage{raw}
+}
+
 func (openCodeDriver) OpenSession(cfg DriverSessionConfig) DriverSession {
-	s := &openCodeSession{cfg: cfg, pending: map[string]*openCodeServerRequest{}}
-	s.conn = newRPCConn(cfg.Send, true)
+	if cfg.sessionMCP == nil {
+		cfg.sessionMCP = []json.RawMessage{}
+	}
+	s := &openCodeSession{acpSession: newACPSession(cfg, providerDriverOpenCode)}
 	s.conn.onRequest = s.onServerRequest
 	s.conn.onNotify = s.onNotification
 	return s
 }
 
 type openCodeSession struct {
-	cfg  DriverSessionConfig
-	conn *rpcConn
-
-	mu            sync.Mutex
-	sessionID     string
-	promptID      string
-	cancelledTurn string
-	authState     string
-	replayFor     string
-	caps          openCodeAgentCapabilities
-	updates       openCodeUpdateCounts
-	pending       map[string]*openCodeServerRequest
-	closed        bool
-}
-
-type openCodeUpdateCounts struct {
-	live    int
-	history int
-	foreign int
-}
-
-type openCodeClientInfo struct {
-	Name    string `json:"name"`
-	Version string `json:"version"`
-}
-
-type openCodeFSCapabilities struct {
-	ReadTextFile  bool `json:"readTextFile"`
-	WriteTextFile bool `json:"writeTextFile"`
-}
-
-type openCodeClientCapabilities struct {
-	FS       openCodeFSCapabilities `json:"fs"`
-	Terminal bool                   `json:"terminal"`
-}
-
-type openCodeInitializeParams struct {
-	ProtocolVersion    int                        `json:"protocolVersion"`
-	ClientInfo         openCodeClientInfo         `json:"clientInfo"`
-	ClientCapabilities openCodeClientCapabilities `json:"clientCapabilities"`
-}
-
-type openCodeSessionCapabilities struct {
-	List   json.RawMessage `json:"list"`
-	Resume json.RawMessage `json:"resume"`
-	Close  json.RawMessage `json:"close"`
-}
-
-type openCodeAgentCapabilities struct {
-	LoadSession         bool                        `json:"loadSession"`
-	SessionCapabilities openCodeSessionCapabilities `json:"sessionCapabilities"`
-}
-
-type openCodeInitializeResponse struct {
-	ProtocolVersion   json.RawMessage           `json:"protocolVersion"`
-	AgentCapabilities openCodeAgentCapabilities `json:"agentCapabilities"`
-}
-
-type openCodeNewSessionParams struct {
-	Cwd        string            `json:"cwd"`
-	MCPServers []json.RawMessage `json:"mcpServers"`
-}
-
-type openCodeResumeSessionParams struct {
-	SessionID  string            `json:"sessionId"`
-	Cwd        string            `json:"cwd"`
-	MCPServers []json.RawMessage `json:"mcpServers"`
+	acpSession
+	caps acpAgentCapabilities
 }
 
 type openCodeSessionResult struct {
@@ -391,59 +352,13 @@ type openCodeSetConfigOptionResult struct {
 	ConfigOptions []openCodeConfigOption `json:"configOptions"`
 }
 
-type openCodeContentBlock struct {
-	Type string `json:"type"`
-	Text string `json:"text"`
-}
-
-type openCodePromptParams struct {
-	SessionID string                 `json:"sessionId"`
-	Prompt    []openCodeContentBlock `json:"prompt"`
-}
-
-type openCodePromptResponse struct {
-	StopReason string `json:"stopReason"`
-}
-
-type openCodeSessionParams struct {
-	SessionID string `json:"sessionId"`
-}
-
-type openCodeSessionNotification struct {
-	SessionID string          `json:"sessionId"`
-	Update    json.RawMessage `json:"update"`
-}
-
-func (s *openCodeSession) Deliver(frame OutputFrame) {
-	if frame.Stream != streamStdout {
-		return
-	}
-	s.conn.deliver(frame.Data)
-}
-
 func (s *openCodeSession) Handshake(ctx context.Context) (DriverHandshake, error) {
-	raw, err := s.conn.call(ctx, openCodeMethodInitialize, openCodeInitializeParams{
-		ProtocolVersion: openCodeProtocolVersion,
-		ClientInfo:      openCodeClientInfo{Name: s.cfg.ClientName, Version: s.cfg.ClientVersion},
-		ClientCapabilities: openCodeClientCapabilities{
-			FS: openCodeFSCapabilities{ReadTextFile: false, WriteTextFile: false}, Terminal: false,
-		},
-	}, s.cfg.CallTimeout)
+	init, err := s.initialize(ctx)
 	if err != nil {
-		return DriverHandshake{}, openCodeHandshakeErr("initialize", err)
-	}
-	if err := openCodeRequireResultObject(raw); err != nil {
 		return DriverHandshake{}, err
 	}
-	var init openCodeInitializeResponse
-	if err := json.Unmarshal(raw, &init); err != nil {
-		return DriverHandshake{}, &runErr{http.StatusBadGateway, "the provider's initialize response could not be read"}
-	}
-	if !openCodeProtocolVersionMatches(init.ProtocolVersion) {
-		return DriverHandshake{}, &runErr{
-			http.StatusBadGateway,
-			"the provider answered an agent protocol version this client does not implement",
-		}
+	if len(s.cfg.sessionMCP) > 0 && !init.AgentCapabilities.MCP.HTTP {
+		return DriverHandshake{}, &runErr{http.StatusConflict, "OpenCode does not support the HTTP MCP connection required for this session"}
 	}
 	s.mu.Lock()
 	s.caps = init.AgentCapabilities
@@ -459,13 +374,13 @@ func (s *openCodeSession) Handshake(ctx context.Context) (DriverHandshake, error
 }
 
 func (s *openCodeSession) newConversation(ctx context.Context) (DriverHandshake, error) {
-	raw, err := s.conn.call(ctx, openCodeMethodSessionNew, openCodeNewSessionParams{
-		Cwd: s.workDir(), MCPServers: []json.RawMessage{},
+	raw, err := s.conn.call(ctx, acpMethodSessionNew, acpNewSessionParams{
+		Cwd: s.workDir(), MCPServers: s.cfg.sessionMCP,
 	}, s.cfg.CallTimeout)
 	if err != nil {
 		return DriverHandshake{}, s.conversationErr(err)
 	}
-	if err := openCodeRequireResultObject(raw); err != nil {
+	if err := acpRequireResultObject(raw); err != nil {
 		return DriverHandshake{}, err
 	}
 	var resp openCodeSessionResult
@@ -493,10 +408,10 @@ func (s *openCodeSession) resumeConversation(ctx context.Context, resume string)
 
 	method := ""
 	switch {
-	case openCodeCapabilityPresent(caps.SessionCapabilities.Resume):
-		method = openCodeMethodSessionResume
+	case acpCapabilityPresent(caps.SessionCapabilities.Resume):
+		method = acpMethodSessionResume
 	case caps.LoadSession:
-		method = openCodeMethodSessionLoad
+		method = acpMethodSessionLoad
 	default:
 		s.endReplay()
 		return DriverHandshake{}, &runErr{
@@ -504,22 +419,8 @@ func (s *openCodeSession) resumeConversation(ctx context.Context, resume string)
 			"the provider advertises neither session resume nor session load; refusing to start a different conversation",
 		}
 	}
-	raw, err := s.conn.callInOrder(ctx, method, openCodeResumeSessionParams{
-		SessionID: resume, Cwd: s.workDir(), MCPServers: []json.RawMessage{},
-	}, s.cfg.CallTimeout, func(json.RawMessage) {
-		s.endReplay()
-	})
+	raw, err := s.resumeCall(ctx, method, resume)
 	if err != nil {
-		s.endReplay()
-		if auth := s.recognizeAuthRequired(err); auth != nil {
-			return DriverHandshake{}, auth
-		}
-		return DriverHandshake{}, &runErr{
-			http.StatusConflict,
-			"the provider could not resume the stored conversation for this session; refusing to start a different one",
-		}
-	}
-	if err := openCodeRequireResultObject(raw); err != nil {
 		return DriverHandshake{}, err
 	}
 	var resp openCodeSessionResult
@@ -541,14 +442,8 @@ func (s *openCodeSession) resumeConversation(ctx context.Context, resume string)
 	return DriverHandshake{ConversationID: resume, AuthState: s.AuthState()}, nil
 }
 
-func (s *openCodeSession) endReplay() {
-	s.mu.Lock()
-	s.replayFor = ""
-	s.mu.Unlock()
-}
-
 func (s *openCodeSession) honorSettings(ctx context.Context, options []openCodeConfigOption) error {
-	model := strings.TrimSpace(s.cfg.Model)
+	model := openCodeModelValue(s.cfg.BoundProvider, strings.TrimSpace(s.cfg.Model), false)
 	effort := strings.TrimSpace(s.cfg.Effort)
 	if model == "" && effort == "" {
 		return nil
@@ -578,10 +473,12 @@ func (s *openCodeSession) setConfigOption(ctx context.Context, configID, value s
 		return nil, err
 	}
 	if !openCodeExactOfferedValue(offered, value) {
-		return nil, &runErr{
+		// HU-R34: the refusal names what OpenCode does offer, so the next try can use it.
+		return nil, &requestNotOffered{&runErr{
 			http.StatusUnprocessableEntity,
-			"the requested " + configID + " is not an exact offered value; refusing the handshake rather than substituting a default",
-		}
+			"OpenCode does not offer the " + configID + " " + strconv.Quote(clipCause(value)) + "; it offers: " +
+				acpOfferedList(offered) + " (the session did not start rather than use a default)",
+		}}
 	}
 	raw, err := s.conn.call(ctx, openCodeMethodSetConfigOption, openCodeSetConfigOptionParams{
 		SessionID: s.ConversationID(), ConfigID: configID, Value: value,
@@ -595,7 +492,7 @@ func (s *openCodeSession) setConfigOption(ctx context.Context, configID, value s
 			"the provider rejected the requested " + configID + "; refusing the handshake rather than keeping a default",
 		}
 	}
-	if err := openCodeRequireResultObject(raw); err != nil {
+	if err := acpRequireResultObject(raw); err != nil {
 		return nil, err
 	}
 	var resp openCodeSetConfigOptionResult
@@ -615,238 +512,11 @@ func (s *openCodeSession) setConfigOption(ctx context.Context, configID, value s
 	return resp.ConfigOptions, nil
 }
 
-func (s *openCodeSession) Input(ctx context.Context, text string) (bool, error) {
-	if strings.TrimSpace(text) == "" {
-		return false, badRequest("input text is required for a provider-driven session")
-	}
-	s.mu.Lock()
-	session, prompt := s.sessionID, s.promptID
-	s.mu.Unlock()
-	if session == "" {
-		return false, conflictErr("the provider conversation is not bound yet")
-	}
-	if prompt != "" {
-		return false, conflictErr("a provider turn is already in flight on this conversation; interrupt it before sending another")
-	}
-	dctx, cancel := context.WithTimeout(ctx, s.callTimeout())
-	defer cancel()
-	key, err := s.conn.dispatch(dctx, openCodeMethodSessionPrompt, openCodePromptParams{
-		SessionID: session, Prompt: []openCodeContentBlock{{Type: "text", Text: text}},
-	}, func(id string) func(json.RawMessage, error) {
-		s.beginTurn(id)
-		return func(result json.RawMessage, err error) { s.completeTurn(id, result, err) }
-	})
-	if err != nil {
-		s.clearTurn(key)
-		if key == "" {
-			return false, openCodeTurnErr("start", err)
-		}
-		return true, openCodeTurnErr("start", err)
-	}
-	return true, nil
-}
-
-func (s *openCodeSession) Interrupt(ctx context.Context) (bool, error) {
-	session, prompt := s.markTurnCancelled()
-	if session == "" {
-		return false, conflictErr("the provider conversation is not bound yet")
-	}
-	if prompt == "" {
-		return false, conflictErr("there is no active provider turn to interrupt")
-	}
-	s.cancelPendingApprovals(ctx)
-	if err := s.conn.notify(ctx, openCodeMethodSessionCancel, openCodeSessionParams{SessionID: session}); err != nil {
-		return true, openCodeTurnErr("interrupt", err)
-	}
-	return true, nil
-}
-
 func (s *openCodeSession) Shutdown(ctx context.Context) {
-	session, prompt := s.markTurnCancelled()
-	if session == "" {
-		return
-	}
 	s.mu.Lock()
 	caps := s.caps
 	s.mu.Unlock()
-	s.cancelPendingApprovals(ctx)
-	if prompt != "" {
-		_ = s.conn.notify(ctx, openCodeMethodSessionCancel, openCodeSessionParams{SessionID: session})
-	}
-	if openCodeCapabilityPresent(caps.SessionCapabilities.Close) {
-		_, _ = s.conn.call(ctx, openCodeMethodSessionClose, openCodeSessionParams{SessionID: session}, s.callTimeout())
-	}
-}
-
-func (s *openCodeSession) AuthState() string {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.authState == "" {
-		return AuthStateUnknown
-	}
-	return s.authState
-}
-
-func (s *openCodeSession) ActiveTurn() string {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.promptID
-}
-
-func (s *openCodeSession) ConversationID() string {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.sessionID
-}
-
-func (s *openCodeSession) Close(err error) {
-	s.mu.Lock()
-	s.closed = true
-	s.pending = map[string]*openCodeServerRequest{}
-	s.mu.Unlock()
-	s.conn.close(err)
-}
-
-func (s *openCodeSession) beginTurn(id string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.closed || id == "" {
-		return
-	}
-	s.promptID = id
-}
-
-func (s *openCodeSession) clearTurn(id string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if id == "" {
-		return
-	}
-	if s.promptID == id {
-		s.promptID = ""
-	}
-	if s.cancelledTurn == id {
-		s.cancelledTurn = ""
-	}
-}
-
-func (s *openCodeSession) markTurnCancelled() (string, string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.sessionID != "" && s.promptID != "" {
-		s.cancelledTurn = s.promptID
-	}
-	return s.sessionID, s.promptID
-}
-
-func (s *openCodeSession) turnCancelled(id string) bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return id != "" && s.cancelledTurn == id
-}
-
-func (s *openCodeSession) completeTurn(id string, result json.RawMessage, err error) {
-	s.clearTurn(id)
-	if err != nil {
-		var re *rpcError
-		if errors.As(err, &re) && re.Code == openCodeErrAuthRequired {
-			s.setAuthState(AuthStateRequired)
-		}
-		return
-	}
-	var resp openCodePromptResponse
-	if json.Unmarshal(result, &resp) != nil {
-		return
-	}
-	s.warnStopReason(resp.StopReason)
-}
-
-func (s *openCodeSession) warnStopReason(reason string) {
-	if reason == "" {
-		s.warn("sessions: the provider's turn response carried no stop reason", "run_ref", s.cfg.RunRef)
-	}
-}
-
-func (s *openCodeSession) onNotification(method string, params json.RawMessage) {
-	if method != openCodeNotifySessionUpdate {
-		return
-	}
-	var n openCodeSessionNotification
-	if json.Unmarshal(params, &n) != nil {
-		return
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	switch {
-	case s.replayFor != "" && n.SessionID == s.replayFor:
-		s.updates.history++
-	case s.sessionID == "" || n.SessionID != s.sessionID:
-		s.updates.foreign++
-	default:
-		s.updates.live++
-	}
-}
-
-func (s *openCodeSession) updateCounts() openCodeUpdateCounts {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.updates
-}
-
-func (s *openCodeSession) workDir() string {
-	if dir := strings.TrimSpace(s.cfg.WorkDir); dir != "" {
-		return dir
-	}
-	if wd, err := os.Getwd(); err == nil {
-		return wd
-	}
-	return "/"
-}
-
-func (s *openCodeSession) callTimeout() time.Duration {
-	if s.cfg.CallTimeout > 0 {
-		return s.cfg.CallTimeout
-	}
-	return defaultDriverCallTimeout
-}
-
-func (s *openCodeSession) setAuthState(state string) {
-	s.mu.Lock()
-	changed := s.authState != state
-	s.authState = state
-	s.mu.Unlock()
-	if changed && s.cfg.OnAuthState != nil {
-		s.cfg.OnAuthState(state)
-	}
-}
-
-func (s *openCodeSession) warn(msg string, args ...any) {
-	if s.cfg.Warn != nil {
-		s.cfg.Warn(msg, args...)
-	}
-}
-
-func openCodeProtocolVersionMatches(raw json.RawMessage) bool {
-	var version int
-	if err := json.Unmarshal(raw, &version); err != nil {
-		return false
-	}
-	return version == openCodeProtocolVersion
-}
-
-func openCodeCapabilityPresent(raw json.RawMessage) bool {
-	return len(raw) > 0 && string(raw) != "null"
-}
-
-func openCodeRequireResultObject(raw json.RawMessage) error {
-	trimmed := bytes.TrimSpace(raw)
-	if len(trimmed) == 0 || string(trimmed) == "null" {
-		return &runErr{http.StatusBadGateway, "the provider answered without a result"}
-	}
-	if trimmed[0] != '{' {
-		return &runErr{http.StatusBadGateway, "the provider's result was not an object"}
-	}
-	return nil
+	s.shutdown(ctx, acpCapabilityPresent(caps.SessionCapabilities.Close))
 }
 
 func openCodeFindConfigOption(options []openCodeConfigOption, id string) (openCodeConfigOption, error) {
@@ -912,48 +582,4 @@ func openCodeCurrentValue(raw json.RawMessage) string {
 		return s
 	}
 	return ""
-}
-
-func openCodeHandshakeErr(step string, err error) error {
-	var re *runErr
-	if errors.As(err, &re) {
-		return re
-	}
-	if errors.Is(err, errRPCClosed) {
-		return &runErr{http.StatusBadGateway, "the owned provider process ended during " + step}
-	}
-	return &runErr{http.StatusBadGateway, "the provider refused " + step + " for this launch"}
-}
-
-func (s *openCodeSession) conversationErr(err error) error {
-	if auth := s.recognizeAuthRequired(err); auth != nil {
-		return auth
-	}
-	return openCodeHandshakeErr(openCodeMethodSessionNew, err)
-}
-
-// recognizeAuthRequired publishes required and returns the bounded public
-// category when the provider's own JSON-RPC code is auth-required. It does not
-// invent a ready transition. A nil return means this error is some other failure.
-func (s *openCodeSession) recognizeAuthRequired(err error) error {
-	var re *rpcError
-	if errors.As(err, &re) && re.Code == openCodeErrAuthRequired {
-		s.setAuthState(AuthStateRequired)
-		return &runErr{
-			http.StatusUnprocessableEntity,
-			"the provider refused to open a conversation because this profile is not authenticated (auth_required)",
-		}
-	}
-	return nil
-}
-
-func openCodeTurnErr(step string, err error) error {
-	var re *runErr
-	if errors.As(err, &re) {
-		return re
-	}
-	if errors.Is(err, errRPCClosed) {
-		return &runErr{http.StatusConflict, "the owned provider process is no longer accepting input"}
-	}
-	return conflictErr("the provider refused to " + step + " a turn on this conversation")
 }

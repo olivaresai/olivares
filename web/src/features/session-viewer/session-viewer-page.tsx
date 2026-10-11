@@ -26,6 +26,7 @@ import { StepUpRequiredState } from '@/components/layout/step-up-state'
 import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
 import { toast } from '@/components/ui/toaster'
+import { downloadBlob } from '@/lib/api/download'
 import { ApiError } from '@/lib/api/errors'
 import { useAuth } from '@/lib/auth/context'
 import { CaveatNotice } from '@/features/_intel'
@@ -253,6 +254,8 @@ export function SessionViewerPage() {
     ],
     successMessage: (outcome) =>
       t(outcome.status === 'sealed' ? 'seal.done' : 'seal.alreadySealed'),
+    successIntent: (outcome) =>
+      outcome.status === 'sealed' ? 'success' : 'warning',
     onDone: (outcome) => {
       setConfirmSeal(false)
       setSealNotice({
@@ -518,16 +521,4 @@ function accumulateLane<T>(
 
 function cursorInputKey(cursor: string | undefined): string {
   return cursor === undefined ? 'initial' : `cursor:${cursor}`
-}
-
-/** Trigger a browser file download for a Blob. */
-function downloadBlob(blob: Blob, filename: string) {
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = filename
-  document.body.appendChild(a)
-  a.click()
-  document.body.removeChild(a)
-  URL.revokeObjectURL(url)
 }

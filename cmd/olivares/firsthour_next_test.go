@@ -70,6 +70,8 @@ func TestFirstHourHelpEndsWithTheNextCommand(t *testing.T) {
 		{"first-boot", "olivares doctor"},
 		{"doctor", "olivares tool ls"},
 		{"agent deploy", "olivares session start <folder>"},
+		{"admin", "olivares superadmin status"},
+		{"gitpublish", "olivares gitpublish targets ls"},
 	} {
 		t.Run(tc.path, func(t *testing.T) {
 			got := helpFor(t, strings.Fields(tc.path)...)

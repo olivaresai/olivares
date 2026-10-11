@@ -12,21 +12,21 @@ export LC_ALL
 
 lot5_root="${OLIVARES_CLONE:-$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")/.." && pwd -P)}"
 cd "$lot5_root" 2>/dev/null || {
-	echo "console-func-l5: NO PUDE MIRAR — no puedo entrar en $lot5_root" >&2
+	echo "console-func-l5: COULD NOT CHECK — cannot enter $lot5_root" >&2
 	exit 2
 }
 
 if [ "${CONSOLE_FUNC_L5_FORCE_UNAVAILABLE:-0}" = "1" ]; then
-	echo "console-func-l5: NO PUDE MIRAR — indisponibilidad de control solicitada" >&2
+	echo "console-func-l5: COULD NOT CHECK — unavailable positive control requested" >&2
 	exit 2
 fi
 
 command -v rg >/dev/null 2>&1 || {
-	echo "console-func-l5: NO PUDE MIRAR — falta rg" >&2
+	echo "console-func-l5: COULD NOT CHECK — rg is not installed" >&2
 	exit 2
 }
 command -v pnpm >/dev/null 2>&1 || {
-	echo "console-func-l5: NO PUDE MIRAR — falta pnpm" >&2
+	echo "console-func-l5: COULD NOT CHECK — pnpm is not installed" >&2
 	exit 2
 }
 
@@ -36,20 +36,20 @@ lot5_require() {
 	lot5_file="$2"
 	lot5_needle="$3"
 	if [ ! -r "$lot5_file" ]; then
-		echo "console-func-l5: NO PUDE MIRAR — no puedo leer $lot5_file" >&2
+		echo "console-func-l5: COULD NOT CHECK — cannot read $lot5_file" >&2
 		exit 2
 	fi
 	lot5_count="$(rg -F -c -- "$lot5_needle" "$lot5_file" 2>/dev/null)"
 	lot5_rc=$?
 	if [ "$lot5_rc" -gt 1 ]; then
-		echo "console-func-l5: NO PUDE MIRAR — rg fallo sobre $lot5_file" >&2
+		echo "console-func-l5: COULD NOT CHECK — rg failed on $lot5_file" >&2
 		exit 2
 	fi
 	if [ "${lot5_count:-0}" -lt 1 ]; then
-		echo "console-func-l5: ROTO — $lot5_name" >&2
+		echo "console-func-l5: FAIL — $lot5_name" >&2
 		lot5_broken=1
 	else
-		echo "console-func-l5: FUNCIONA — $lot5_name"
+		echo "console-func-l5: PASS — $lot5_name"
 	fi
 }
 
@@ -77,7 +77,7 @@ if [ "$lot5_broken" -ne 0 ]; then
 fi
 
 lot5_log="$(mktemp "${TMPDIR:-/tmp}/console-func-l5.XXXXXX")" || {
-	echo "console-func-l5: NO PUDE MIRAR — mktemp fallo" >&2
+	echo "console-func-l5: COULD NOT CHECK — mktemp failed" >&2
 	exit 2
 }
 trap 'rm -f -- "$lot5_log"' EXIT
@@ -85,10 +85,10 @@ if pnpm -C web exec vitest run \
 	src/features/health/health-view.test.tsx \
 	src/features/alerting/alerting-view.test.tsx \
 	src/features/backups/backup-inspect.test.tsx >"$lot5_log" 2>&1; then
-	echo "console-func-l5: FUNCIONA — FOCUSED_COMPONENT_TESTS"
+	echo "console-func-l5: PASS — FOCUSED_COMPONENT_TESTS"
 	exit 0
 fi
 lot5_rc=$?
-echo "console-func-l5: ROTO — FOCUSED_COMPONENT_TESTS (rc=$lot5_rc)" >&2
+echo "console-func-l5: FAIL — FOCUSED_COMPONENT_TESTS (rc=$lot5_rc)" >&2
 sed -n '1,160p' "$lot5_log" >&2
 exit 1

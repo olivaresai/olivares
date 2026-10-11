@@ -5,18 +5,18 @@
 #
 # Live Playwright spec for the session conversation surface. Boots
 # `serve --insecure --seed-demo` with the fixture driver (no provider account,
-# no model turn), registers one Claude profile, and runs
-# web/e2e/session-conversation.spec.ts.
+# no model turn), creates a named running session, and runs
+# web/e2e/session-conversation.spec.ts. Extra arguments go to Playwright.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 . "$(cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")" && pwd)/lib/build-bin.sh"
 . "$ROOT/scripts/lib/exec-tmpdir.sh"
+. "$ROOT/scripts/lib/session-conversation-fixture.sh"
 
 PORT="${E2E_PORT:-8490}"
 GRPC_PORT="${E2E_GRPC_PORT:-$((PORT + 1))}"
 BIN="${OLIVARES_BIN:-$ROOT/bin/olivares}"
-DRIVER="$ROOT/web/e2e/fixtures/conversation-driver.py"
 
 cleanup() {
   [ -n "${PID:-}" ] && kill "$PID" 2>/dev/null || true
@@ -37,10 +37,7 @@ if [ ! -x "$BIN" ]; then
   echo "==> building $BIN"
   build_olivares_bin "$BIN"
 fi
-chmod +x "$DRIVER"
-
-printf 'fixture-dummy-bearer-not-a-secret' >"$DATA/session-token"
-mkdir -p "$DATA/claude-config" "$DATA/claude-home" "$DATA/ws"
+prepare_conversation_fixture
 
 if curl -sf --connect-timeout 1 "http://127.0.0.1:$PORT/healthz" >/dev/null 2>&1; then
   echo "$(basename "$0"): something already answers on 127.0.0.1:$PORT" >&2
@@ -48,9 +45,6 @@ if curl -sf --connect-timeout 1 "http://127.0.0.1:$PORT/healthz" >/dev/null 2>&1
 fi
 
 echo "==> serve --insecure --seed-demo with the conversation fixture driver"
-OLIVARES_SESSION_RUNTIME_CLAUDE_BIN="$DRIVER" \
-OLIVARES_SESSION_RUNTIME_TOKEN_FILE="$DATA/session-token" \
-OLIVARES_SESSION_RUNTIME_TOKEN_TTL="15m" \
 TMPDIR="$EXEC_TMP" \
 "$BIN" serve --insecure --seed-demo \
   --listen "127.0.0.1:$PORT" \
@@ -79,17 +73,10 @@ TENANT="$(python3 -c 'import sys,json;[print(o["tenant_id"]) for o in json.load(
 [ -n "$TENANT" ] || { echo "could not resolve demo tenant"; exit 1; }
 echo "==> demo tenant $TENANT"
 
-PROFILE="$(printf 'Authorization: Bearer %s\n' "$TOKEN" | curl -sf -X POST "http://127.0.0.1:$PORT/v1/m/sessions/provider-profiles" \
-  -H @- \
-  -H "X-Olivares-Tenant: $TENANT" \
-  -H 'Content-Type: application/json' \
-  -d "{\"driver\":\"claude\",\"config_home\":\"$DATA/claude-config\",\"user_home\":\"$DATA/claude-home\",\"display_name\":\"Fixture Claude\"}")"
-echo "$PROFILE" | python3 -c 'import sys,json; d=json.load(sys.stdin); assert d.get("profile_ref"), d' \
-  || { echo "could not register the fixture profile: $PROFILE"; cat "$DATA/engine.log" >&2; exit 1; }
+seed_conversation_fixture
 
 echo "==> Playwright session-conversation.spec.ts"
 cd "$ROOT/web"
 PLAYWRIGHT_BASE_URL="http://127.0.0.1:$PORT" \
 DEMO_TENANT="$TENANT" \
-CONVERSATION_FIXTURE=1 \
-  nice -n 10 pnpm exec playwright test e2e/session-conversation.spec.ts
+  nice -n 10 pnpm exec playwright test e2e/session-conversation.spec.ts "$@"

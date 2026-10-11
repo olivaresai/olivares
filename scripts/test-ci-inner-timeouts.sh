@@ -8,7 +8,7 @@ SUT="${SUT:-$RAIZ/scripts/check-ci-inner-timeouts.sh}"
 TMP=$(mktemp -d "${TMPDIR:-/tmp}/cit.XXXXXX"); trap 'rm -rf "$TMP"' EXIT
 PASS=0; FAIL=0
 check(){ if [ "$2" = "$3" ]; then PASS=$((PASS+1)); printf 'ok   %-58s rc=%s\n' "$1" "$3"
-         else FAIL=$((FAIL+1)); printf 'FAIL %-58s esperaba %s, dio %s\n' "$1" "$2" "$3"; fi; }
+         else FAIL=$((FAIL+1)); printf 'FAIL %-58s expected %s, got %s\n' "$1" "$2" "$3"; fi; }
 corre(){ OLIVARES_ROOT="$RAIZ" OLIVARES_INNER_WFDIR="$1" OLIVARES_INNER_MIN="${2:-1}" \
          bash "$SUT" > "$TMP/out" 2>&1; echo $?; }
 wf(){ mkdir -p "$TMP/$1"; cat > "$TMP/$1/w.yml"; printf '%s' "$TMP/$1"; }
@@ -27,9 +27,9 @@ jobs:
           timeout --signal=TERM --kill-after=60s 80m task lint:secrets
 Y
 )
-check "(1) el paso REAL de gitleaks CAE" 1 "$(corre "$D")"
-check "(1b) y nombra su techo y su reloj" 0 "$( grep -q 'techo del paso 60 min' "$TMP/out" && grep -q '80 min' "$TMP/out"; echo $? )"
-check "(1c) y cuenta el kill-after, no lo confunde con el reloj" 0 "$( grep -q 'kill-after 1 min' "$TMP/out"; echo $? )"
+check "(1) the REAL gitleaks step FAILS" 1 "$(corre "$D")"
+check "(1b) names its cap and timer" 0 "$( grep -q 'step timeout 60 min' "$TMP/out" && grep -q '80 min' "$TMP/out"; echo $? )"
+check "(1c) counts kill-after without confusing it with the timer" 0 "$( grep -q 'kill-after 1 min' "$TMP/out"; echo $? )"
 
 # 2 · EL MISMO PASO CORREGIDO — debe PASAR
 D=$(wf sano <<'Y'
@@ -45,7 +45,7 @@ jobs:
           timeout --signal=TERM --kill-after=60s 80m task lint:secrets
 Y
 )
-check "(2) el mismo paso con techo 90 PASA" 0 "$(corre "$D")"
+check "(2) the same step with cap 90 PASSES" 0 "$(corre "$D")"
 
 # 3 · la segunda forma: el reloj INTERNO de otro comando
 D=$(wf goflag <<'Y'
@@ -59,7 +59,7 @@ jobs:
         run: go test ./... -timeout 45m
 Y
 )
-check "(3) '-timeout 45m' bajo un techo de JOB de 30 CAE" 1 "$(corre "$D")"
+check "(3) '-timeout 45m' under JOB cap 30 FAILS" 1 "$(corre "$D")"
 
 # 4 · NO-DESCARGA · un reloj que SÍ cabe no debe encenderse
 D=$(wf cabe <<'Y'
@@ -73,7 +73,7 @@ jobs:
         run: kubectl rollout status deploy/x --timeout=180s
 Y
 )
-check "(4) un reloj que CABE no se enciende" 0 "$(corre "$D")"
+check "(4) a timer that FITS is not flagged" 0 "$(corre "$D")"
 
 # 5 · NO-DESCARGA · sin reloj interior no hay nada que juzgar
 D=$(wf sinreloj <<'Y'
@@ -87,7 +87,7 @@ jobs:
         run: echo hola
 Y
 )
-check "(5) sin reloj interior sale limpio" 0 "$(corre "$D")"
+check "(5) no inner timer => clean" 0 "$(corre "$D")"
 
 # 6 · el techo del PASO manda sobre el del JOB
 D=$(wf paso <<'Y'
@@ -102,15 +102,15 @@ jobs:
         run: go test ./... -timeout 45m
 Y
 )
-check "(6) el techo del PASO manda sobre el del JOB" 1 "$(corre "$D")"
+check "(6) STEP cap overrides JOB cap" 1 "$(corre "$D")"
 
 # 7-9 · FAIL-CLOSED
-check "(7) directorio inexistente -> 2" 2 "$( OLIVARES_ROOT="$RAIZ" OLIVARES_INNER_WFDIR=/no/existe bash "$SUT" >/dev/null 2>&1; echo $? )"
+check "(7) nonexistent directory -> 2" 2 "$( OLIVARES_ROOT="$RAIZ" OLIVARES_INNER_WFDIR=/no/existe bash "$SUT" >/dev/null 2>&1; echo $? )"
 mkdir -p "$TMP/vacio"
-check "(8) menos workflows que el mínimo -> 2" 2 "$( OLIVARES_ROOT="$RAIZ" OLIVARES_INNER_WFDIR="$TMP/vacio" OLIVARES_INNER_MIN=1 bash "$SUT" >/dev/null 2>&1; echo $? )"
+check "(8) fewer workflows than the minimum -> 2" 2 "$( OLIVARES_ROOT="$RAIZ" OLIVARES_INNER_WFDIR="$TMP/vacio" OLIVARES_INNER_MIN=1 bash "$SUT" >/dev/null 2>&1; echo $? )"
 mkdir -p "$TMP/roto"; printf 'jobs: [esto: no\n  es: yaml\n' > "$TMP/roto/w.yml"
-check "(9) YAML ilegible -> 2, no 0" 2 "$( OLIVARES_ROOT="$RAIZ" OLIVARES_INNER_WFDIR="$TMP/roto" OLIVARES_INNER_MIN=1 bash "$SUT" >/dev/null 2>&1; echo $? )"
-check "(10) argumento posicional -> 2" 2 "$( OLIVARES_ROOT="$RAIZ" bash "$SUT" loquesea >/dev/null 2>&1; echo $? )"
+check "(9) unreadable YAML -> 2, not 0" 2 "$( OLIVARES_ROOT="$RAIZ" OLIVARES_INNER_WFDIR="$TMP/roto" OLIVARES_INNER_MIN=1 bash "$SUT" >/dev/null 2>&1; echo $? )"
+check "(10) positional argument -> 2" 2 "$( OLIVARES_ROOT="$RAIZ" bash "$SUT" loquesea >/dev/null 2>&1; echo $? )"
 
 # 12 · FRONTERA · aquí el kill-after DECIDE, y por eso mata al mutante que lo quita
 D=$(wf frontera-cae <<'Y'
@@ -124,7 +124,7 @@ jobs:
         run: timeout --kill-after=2m 10m task algo
 Y
 )
-check "(12a) FRONTERA techo=interior+kill-1 CAE" 1 "$(corre "$D")"
+check "(12a) BOUNDARY cap=inner+kill-1 FAILS" 1 "$(corre "$D")"
 D=$(wf frontera-pasa <<'Y'
 on: {push: {branches: [main]}}
 jobs:
@@ -136,9 +136,9 @@ jobs:
         run: timeout --kill-after=2m 10m task algo
 Y
 )
-check "(12b) FRONTERA techo=interior+kill+margen PASA" 0 "$(corre "$D")"
+check "(12b) BOUNDARY cap=inner+kill+margin PASSES" 0 "$(corre "$D")"
 
-# 13 · COBERTURA · bandera con valor SEPARADO (el defecto que the reviewer encontró)
+# 13 · Coverage: flag with a separate value (the defect the reviewer found).
 D=$(wf separada <<'Y'
 on: {push: {branches: [main]}}
 jobs:
@@ -150,7 +150,7 @@ jobs:
         run: timeout --signal TERM 10m task algo
 Y
 )
-check "(13) 'timeout --signal TERM 10m' (valor separado) CAE" 1 "$(corre "$D")"
+check "(13) 'timeout --signal TERM 10m' (separate value) FAILS" 1 "$(corre "$D")"
 
 # 14 · FAIL-OPEN CERRADO · un workflow de solo `uses:` no es un verde
 D=$(wf solouses <<'Y'
@@ -162,7 +162,7 @@ jobs:
       - uses: actions/checkout@v4
 Y
 )
-check "(14) workflow SIN ningún run: -> 2, no 0" 2 "$(corre "$D")"
+check "(14) workflow WITHOUT any run: -> 2, not 0" 2 "$(corre "$D")"
 
 # 16-18 · LA DIMENSION QUE FALTABA: el reloj no siempre es un literal del `run:`
 D=$(wf var <<'Y'
@@ -177,7 +177,7 @@ jobs:
         run: timeout "$INNER_TIMEOUT" task algo
 Y
 )
-check "(16) reloj en \$VAR con env estático se RESUELVE y CAE" 1 "$(corre "$D")"
+check "(16) timer in \$VAR with static env is RESOLVED and FAILS" 1 "$(corre "$D")"
 D=$(wf goflags <<'Y'
 on: {push: {branches: [main]}}
 jobs:
@@ -190,7 +190,7 @@ jobs:
         run: go test ./...
 Y
 )
-check "(17) reloj escondido en GOFLAGS del env CAE" 1 "$(corre "$D")"
+check "(17) timer hidden in env GOFLAGS FAILS" 1 "$(corre "$D")"
 D=$(wf expr <<'Y'
 on: {push: {branches: [main]}}
 jobs:
@@ -202,7 +202,7 @@ jobs:
         run: timeout ${{ vars.T }} task algo
 Y
 )
-check "(18) una expresión \${{ }} en la duración -> 2, NUNCA limpio" 2 "$(corre "$D")"
+check "(18) expression \${{ }} in duration -> 2, NEVER clean" 2 "$(corre "$D")"
 
 # 19 · NO-DESCARGA · variables en el shell que NO tocan el reloj no deben dar 2
 D=$(wf varsuelta <<'Y'
@@ -218,7 +218,7 @@ jobs:
           rc=$?
 Y
 )
-check "(19) variables FUERA de la duración no dan 2" 0 "$(corre "$D")"
+check "(19) variables OUTSIDE the duration do not return 2" 0 "$(corre "$D")"
 
 # 20-24 · EL RELOJ QUE VIVE EN EL TASKFILE (el punto ciego que este gate declaraba)
 cat > "$TMP/Taskfile.yml" <<'TF'
@@ -248,7 +248,7 @@ jobs:
         run: task test:race-hot:modules
 Y
 )
-check "(20) el caso REAL: 150m bajo techo 210 CABE" 0 "$(corretf "$D")"
+check "(20) REAL case: 150m under cap 210 FITS" 0 "$(corretf "$D")"
 D2=$(wf tf-no-cabe <<'Y'
 on: {push: {branches: [main]}}
 jobs:
@@ -260,8 +260,8 @@ jobs:
         run: task test:race-hot:modules
 Y
 )
-check "(21) con el techo a 140 CAE" 1 "$(corretf "$D2")"
-check "(21b) y NOMBRA la tarea donde vive el reloj" 0 "$( grep -q 'dentro de .task test:race-hot:modules' "$TMP/out"; echo $? )"
+check "(21) with cap 140, FAILS" 1 "$(corretf "$D2")"
+check "(21b) NAMES the task containing the timer" 0 "$( grep -q 'dentro de .task test:race-hot:modules' "$TMP/out"; echo $? )"
 
 D3=$(wf tf-dep <<'Y'
 on: {push: {branches: [main]}}
@@ -274,7 +274,7 @@ jobs:
         run: task con-dep
 Y
 )
-check "(22) el reloj llega por 'deps:' y CAE igual" 1 "$(corretf "$D3")"
+check "(22) timer reached through 'deps:' still FAILS" 1 "$(corretf "$D3")"
 
 D4=$(wf tf-falta <<'Y'
 on: {push: {branches: [main]}}
@@ -287,7 +287,7 @@ jobs:
         run: task no-existe-jamas
 Y
 )
-check "(23) una tarea que el Taskfile NO tiene -> 2" 2 "$(corretf "$D4")"
+check "(23) task NOT present in the Taskfile -> 2" 2 "$(corretf "$D4")"
 
 D5=$(wf tf-var <<'Y'
 on: {push: {branches: [main]}}
@@ -300,7 +300,7 @@ jobs:
         run: task con-var
 Y
 )
-check "(24) un {{.VAR}} en la duración -> 2, nunca limpio" 2 "$(corretf "$D5")"
+check "(24) {{.VAR}} in duration -> 2, never clean" 2 "$(corretf "$D5")"
 
 # ⛔ NO-DESCARGA · `task` en PROSA de un comentario no debe disparar nada. Mi primera version casaba
 # «task no esta en PATH» y dio 24 falsos «no pude mirar» sobre el arbol real.
@@ -317,7 +317,7 @@ jobs:
           echo hola
 Y
 )
-check "(25) 'task' en un COMENTARIO no dispara nada" 0 "$(corretf "$D6")"
+check "(25) 'task' in a COMMENT triggers nothing" 0 "$(corretf "$D6")"
 
 # 11 · MUTANTE · quitar la comparación
 cat > "$TMP/mut.py" <<PYEOF
@@ -325,12 +325,12 @@ import sys
 o = open(sys.argv[1]).read()
 v = "                if float(techo) < exige:"
 n = "                if False:"
-assert o.count(v) == 1, "el patron del mutante no casa"
+assert o.count(v) == 1, "mutant pattern does not match"
 open(sys.argv[2], "w").write(o.replace(v, n, 1))
 PYEOF
-python3 "$TMP/mut.py" "$SUT" "$TMP/m.sh" || { echo "MUTANTE NO FABRICADO"; exit 1; }
+python3 "$TMP/mut.py" "$SUT" "$TMP/m.sh" || { echo "MUTANT NOT CONSTRUCTED"; exit 1; }
 chmod +x "$TMP/m.sh"
-check "(11a) el mutante REALMENTE difiere" 0 "$( cmp -s "$SUT" "$TMP/m.sh" && echo 1 || echo 0 )"
+check "(11a) the mutant ACTUALLY differs" 0 "$( cmp -s "$SUT" "$TMP/m.sh" && echo 1 || echo 0 )"
 D=$(wf mut <<'Y'
 on: {push: {branches: [main]}}
 jobs:
@@ -342,9 +342,9 @@ jobs:
         run: timeout --kill-after=60s 80m task lint:secrets
 Y
 )
-check "(11b) MUTANTE 'sin comparación' es CAZADO" 0 \
+check "(11b) MUTANT 'without comparison' is DETECTED" 0 \
   "$( OLIVARES_ROOT="$RAIZ" OLIVARES_INNER_WFDIR="$D" OLIVARES_INNER_MIN=1 bash "$TMP/m.sh" >/dev/null 2>&1
-      m=$?; [ "$m" -eq 0 ] && echo 0 || echo "el mutante siguió dando $m: caso invalido" )"
+      m=$?; [ "$m" -eq 0 ] && echo 0 || echo "the mutant still returned $m: invalid case" )"
 
 # 15 · MUTANTE · quitar el `+ K` (el kill-after deja de contar). Muere en la FRONTERA de (12a):
 # sin K la exigencia baja de 13 a 11 y el techo 11 pasa a caber, o sea el hallazgo desaparece.
@@ -355,14 +355,14 @@ import sys
 o = open(sys.argv[1]).read()
 v = "                exige = D + K + margen"
 n = "                exige = D + margen"
-assert o.count(v) == 1, "el patron del mutante no casa"
+assert o.count(v) == 1, "mutant pattern does not match"
 open(sys.argv[2], "w").write(o.replace(v, n, 1))
 PYEOF
-python3 "$TMP/mut2.py" "$SUT" "$TMP/m2.sh" || { echo "MUTANTE NO FABRICADO"; exit 1; }
-check "(15a) el mutante del kill-after REALMENTE difiere" 0 "$( cmp -s "$SUT" "$TMP/m2.sh" && echo 1 || echo 0 )"
-check "(15b) MUTANTE 'sin kill-after' es CAZADO en la FRONTERA" 0 \
+python3 "$TMP/mut2.py" "$SUT" "$TMP/m2.sh" || { echo "MUTANT NOT CONSTRUCTED"; exit 1; }
+check "(15a) the kill-after mutant ACTUALLY differs" 0 "$( cmp -s "$SUT" "$TMP/m2.sh" && echo 1 || echo 0 )"
+check "(15b) MUTANT 'without kill-after' is DETECTED at the BOUNDARY" 0 \
   "$( OLIVARES_ROOT="$RAIZ" OLIVARES_INNER_WFDIR="$TMP/frontera-cae" OLIVARES_INNER_MIN=1 bash "$TMP/m2.sh" >/dev/null 2>&1
-      m=$?; [ "$m" -eq 0 ] && echo 0 || echo "el mutante siguió dando $m: caso invalido" )"
+      m=$?; [ "$m" -eq 0 ] && echo 0 || echo "the mutant still returned $m: invalid case" )"
 
 echo
 echo "check-ci-inner-timeouts selftest: $PASS passed, $FAIL failed"

@@ -35,6 +35,8 @@ import type {
   ModelAccessGrant,
   ModelAccessInput,
   ModelAdmission,
+  ModelAvailabilityResponse,
+  ModelAvailabilityFilter,
   ModelCardDoc,
   ModelGroup,
   ModelGroupInput,
@@ -62,6 +64,19 @@ const BASE = '/v1/m/models'
 export const EVIDENCE_PAGE = 1000
 
 export const modelsApi = {
+  availability: ({
+    tenant,
+    signal,
+    query,
+  }: TenantRequestOptions & {
+    signal?: AbortSignal
+    query: ModelAvailabilityFilter
+  }) =>
+    http.get<ModelAvailabilityResponse>('/v1/m/models/availability', {
+      tenant,
+      signal,
+      query: { ...query },
+    }),
   // ── C07-04 · las diez rutas de models que la consola nunca llamaba ─────────────────
   //
   // 67 rutas en `modules/models/api.go` y 57 llamadas. Las diez que faltaban incluyen dos

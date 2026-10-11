@@ -15,6 +15,7 @@ import (
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/modules/governance"
 	"github.com/olivaresai/olivares/modules/sessions"
+	"github.com/olivaresai/olivares/modules/sessions/hookpep"
 )
 
 func TestSessionClaudeApprovalWaitsAndRechecksLiveAuthority(t *testing.T) {
@@ -35,8 +36,8 @@ func TestSessionClaudeApprovalWaitsAndRechecksLiveAuthority(t *testing.T) {
 			service := h.set.gov.EngineApprovals()
 			h.set.gov.UseApprovalCapacity(h.authr.ApprovalCapacity)
 			h.set.gov.UseApprovalAuthority(h.authr, auth.NewAuthorizer(h.set.gov.RequestEvaluator(), auth.WithScopedGrants(h.set.gov.ScopedGrants())))
-			createSessionReviewPolicy(t, h, hookActionCapability, "claude.tool")
-			d := &claudeHookDecider{defaultPolicy: &hookPolicyDoc{Default: "allow"}, authr: c, eval: h.set.gov.Evaluator(), scoped: h.set.gov.ScopedGrants(), approvals: service, stops: h.set.gov, stopRec: newStopDenyRecorder(h.st, discardLog()), store: h.st, clock: time.Now, log: discardLog()}
+			createSessionReviewPolicy(t, h, hookpep.ActionCapability, "claude.tool")
+			d := newClaudeHookDecider(&hookpep.Decider{DefaultPolicy: &hookpep.PolicyDoc{Default: "allow"}, Authr: c, Eval: h.set.gov.Evaluator(), Authz: harnessAuthz(h), Scoped: h.set.gov.ScopedGrants(), Approvals: service, Stops: h.set.gov, StopDeny: newStopDenyRecorder(h.st, discardLog()).record, Store: h.st, Clock: time.Now, Log: discardLog()})
 			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 			defer cancel()
 			results := make(chan claude.HookDecisionResult, 1)
@@ -46,7 +47,7 @@ func TestSessionClaudeApprovalWaitsAndRechecksLiveAuthority(t *testing.T) {
 			}()
 			var pending governance.Approval
 			for pending.ID == "" {
-				items, _, err := service.List(ctx, tenant, hookActionCapability, "pending", "")
+				items, _, err := service.List(ctx, tenant, hookpep.ActionCapability, "pending", "")
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -110,8 +111,8 @@ func TestSessionClaudeApprovalDeadlineReturnsExplicitDeny(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	createSessionReviewPolicy(t, h, hookActionCapability, "claude.tool")
-	d := &claudeHookDecider{defaultPolicy: &hookPolicyDoc{Default: "allow"}, authr: c, eval: h.set.gov.Evaluator(), approvals: h.set.gov.EngineApprovals(), store: h.st, clock: time.Now, log: discardLog()}
+	createSessionReviewPolicy(t, h, hookpep.ActionCapability, "claude.tool")
+	d := newClaudeHookDecider(&hookpep.Decider{DefaultPolicy: &hookpep.PolicyDoc{Default: "allow"}, Authr: c, Eval: h.set.gov.Evaluator(), Authz: harnessAuthz(h), Approvals: h.set.gov.EngineApprovals(), Store: h.st, Clock: time.Now, Log: discardLog()})
 	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
 	defer cancel()
 	out, err := d.Decide(ctx, claude.HookDecisionInput{Event: "PreToolUse", Tool: "Read", ResourceKind: "file", ResourceRef: "/tmp/proof", Mode: "read", PlanHash: hexSHA("timeout")}, token)
@@ -137,7 +138,7 @@ func TestProviderSessionPolicyUsesLivePDPFactsAndAudit(t *testing.T) {
 		t.Fatal(err)
 	}
 	observed := &providerFactEvaluator{next: h.set.gov.Evaluator()}
-	g := sessionProviderPolicy{credentials: c.SessionCredentials, eval: observed, scoped: h.set.gov.ScopedGrants(), approvals: h.set.gov.EngineApprovals(), store: h.st}
+	g := sessionProviderPolicy{credentials: c.SessionCredentials, eval: observed, authz: harnessAuthz(h), scoped: h.set.gov.ScopedGrants(), approvals: h.set.gov.EngineApprovals(), store: h.st}
 	req := sessions.ProviderApprovalRequest{Driver: "codex", RunRef: intent.RunRef, SessionRef: scope.SessionRef, Principal: p, Method: "item/commandExecution/requestApproval", Kind: "command_execution", CommandLine: "curl https://user:fixture-secret@host/proof", FactsComplete: true}
 	out, err := g.Decide(context.Background(), tenant, req)
 	if err != nil || out.Disposition != sessions.ProviderApprovalAllow {
@@ -198,7 +199,7 @@ func TestProviderSessionPolicyRefusesUnreviewableCommandWithoutPartialEvidence(t
 				t.Fatal(err)
 			}
 			observed := &providerFactEvaluator{next: h.set.gov.Evaluator()}
-			g := sessionProviderPolicy{credentials: c.SessionCredentials, eval: observed, scoped: h.set.gov.ScopedGrants(), approvals: h.set.gov.EngineApprovals(), store: h.st}
+			g := sessionProviderPolicy{credentials: c.SessionCredentials, eval: observed, authz: harnessAuthz(h), scoped: h.set.gov.ScopedGrants(), approvals: h.set.gov.EngineApprovals(), store: h.st}
 			out, err := g.Decide(context.Background(), tenant, sessions.ProviderApprovalRequest{
 				Driver: "codex", RunRef: intent.RunRef, SessionRef: scope.SessionRef, Principal: p,
 				Method: "item/commandExecution/requestApproval", Kind: "command_execution",

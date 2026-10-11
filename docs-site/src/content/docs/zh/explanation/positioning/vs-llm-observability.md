@@ -33,7 +33,7 @@ OpenTelemetry gen-ai 信号**。
 | 维度 | LLM 网关 + 可观测性 | Olivares AI |
 |---|---|---|
 | **关注单元** | 一次模型调用（prompt → completion） | 一个智能体及其读/写的每一项资源——数据库、对象存储、MCP、工具、文件 |
-| **观察位置** | **在请求路径中**（proxy/SDK）；看到应用所发送的内容 | **带外、读优先（read-first）**；观察遥测、原生审计和一个内核兜底——永不在数据路径中 |
+| **观察位置** | **在请求路径中**（proxy/SDK）；看到应用所发送的内容 | 对遥测、原生审计和内核后备进行**带外观测**；对受治理动作实施**内联控制** |
 | **真相来源** | 应用/代理 **所报告** 的内容 | 自报告遥测 **与系统自身账本相互印证**——pgAudit（读 vs 写）、CloudTrail（对象访问）、eBPF 兜底 |
 | **关键问题** | "这次 prompt 做了什么，花了多少？" | "这个智能体是否在使用 **无人授予** 的访问权？"——[Permitted-vs-Observed 偏移](/zh/explanation/#访问图谱读优先最小数据许可对比观测) |
 | **强制执行** | 网关能对 **模型调用** 设闸（密钥、预算） | 对 **动作与资源访问** 的 deny-closed 闸门：审批、[Claude Code hooks PEP](/zh/how-to/connectors/claude-code-hooks-pep/)、MCP 工具设闸、kill switch |
@@ -47,9 +47,11 @@ OpenTelemetry gen-ai 信号**。
 
 ## 这是"且"，而非"或"——我们摄入你的遥测
 
-Olivares AI **不是** 你的网关或追踪工具的替代品，它也不想置身于它们所占据的请求路径中。它 **消费同一份信号**：
-该 control plane 摄入 **OpenTelemetry GenAI** 语义约定的 span，正是这些工具发出与消费的同一份 gen-ai 遥测。
-因此一种健康的安排是：
+访问图从你的网关或追踪工具摄取 OpenTelemetry GenAI 语义约定的 span。模型调用默认不使用 Olivares AI 的内联推理代理；代理对经由它路由的调用执行控制，MCP tools/call 与 A2A 委派门控也在各自路径上执行控制。
+
+受管 Claude Code 会话安装工具调用 hook，调用引擎默认挂载的 PEP。这些 hook 是内联且 deny-closed 的：如果引擎停机或重启导致 PEP 无法访问，每个受治理工具调用都会被拒绝。因此，即使模型调用直接发往提供商，引擎可用性仍然重要。
+
+要将观测路径与现有技术栈一起使用：
 
 - 保留 **LiteLLM** 作为你的模型网关，**Langfuse** 用于面向开发者的追踪与 prompt 工作。
 - 把 **OTel gen-ai** 流指向 Olivares AI，作为一个印证来源，让访问图、偏移检测与账本在其上构成全资产范围的治理层。

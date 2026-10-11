@@ -7,6 +7,8 @@ description: >-
   少なくとも1回（at-least-once）の配信で送出します。レンダリングして転送するだけで、
   整合性を再導出することはありません。
 ---
+SIEM and ITSM push, OTLP downloads, external trace and metric delivery, and posture export require Business. Community keeps local observability, trace-context propagation, saved settings and `olivares dr backup`. Generic chat, email and webhook notifications remain available in Community.
+
 
 SIEM/ITSM フォワーダー（`modules/siemforward`）は、エンジンがすでに封印した
 証拠を、SOC がすでに運用しているタワーへ届けます。これは **LIVE** です。新たな証拠は
@@ -49,9 +51,10 @@ Ingestion / DCR）、Datadog Logs、New Relic、または汎用 HTTPS コレク�
 
 ## 境界づけられたコンテキスト（率直に）
 
-- これは**転送する**のであって、保存はしません。シンクサブスクリプションを持たない
-  テナントは no-op（何もしない）です。何もキューに入らず、カーソルは前進し続け、
-  失われるものはありません。
+- テナントごとのカーソルを保存し、eventing がイベントと配信を保存します。
+  シンクサブスクリプションがなければ何もキューに入りませんが、有効なポンプはカーソルを前進させます。
+  新しいシンクはカーソルが通過済みのレコードを遡って配信しません。
+  元の台帳はプルエクスポートで引き続き利用できます。
 - 転送はカーソルウォークから実行され、**台帳の封印トランザクションの外側**で動きます。
   ネットワーク書き込みが封印パスに居座ることはありません。
 - これは**お使いのタワーへのプッシュ**であり、読み取り専用の

@@ -1,6 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+import { FEATURE_EXTENSIONS } from '@/features/extensions'
+import { useModulesStore } from '@/stores/modules'
+import { act } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ReactNode } from 'react'
 import { DEFAULT_AUTH, renderIntel, screen, within } from '@/test/intel'
@@ -39,6 +42,7 @@ import './i18n'
 // below pinned only the hrefs — swapping `inferenceproxy:config:read` for any other valid
 // permission left it green. An allow-set makes the permission half load-bearing, exactly as
 // platforms.test.tsx does. It defaults to allow-all so every pre-existing case is unchanged.
+const business = FEATURE_EXTENSIONS.some((view) => view.id === 'finops')
 const auth = vi.hoisted(() => ({ allow: null as Set<string> | null }))
 vi.mock('@/lib/auth/context', () => ({
   useAuth: () => ({
@@ -49,6 +53,7 @@ vi.mock('@/lib/auth/context', () => ({
 
 afterEach(() => {
   vi.restoreAllMocks()
+  useModulesStore.getState().setOff([])
 })
 
 describe('RateLimitCountStat (REAL count finding)', () => {
@@ -217,10 +222,9 @@ describe("RateLimitsView — where this estate's own answer lives", () => {
     expect(
       await screen.findByRole('link', { name: /inference proxy/i }),
     ).toHaveAttribute('href', '/inference-proxy')
-    expect(screen.getByRole('link', { name: /spend|finops/i })).toHaveAttribute(
-      'href',
-      '/finops',
-    )
+    expect(
+      screen.getByRole('link', { name: /spend|finops|budgets|cost/i }),
+    ).toHaveAttribute('href', business ? '/finops' : '/stored-budgets')
   })
 
   it('gates each link on ITS OWN route permission, not on any permission at all', async () => {
@@ -243,13 +247,17 @@ describe("RateLimitsView — where this estate's own answer lives", () => {
     expect(
       await screen.findByRole('link', { name: /inference proxy/i }),
     ).toBeVisible()
-    expect(screen.queryByRole('link', { name: /spend|finops/i })).toBeNull()
+    expect(
+      screen.queryByRole('link', { name: /spend|finops|budgets|cost/i }),
+    ).toBeNull()
   })
 
   it('and the reciprocal: only the FinOps permission leaves FinOps and drops the proxy', async () => {
-    // Without this, `finops:spend:read` could be any other valid string and nothing would go
+    // Without this, the destination permission could be any other string and nothing would go
     // red — the previous case only ever proves FinOps is NOT gated on the proxy's permission.
-    auth.allow = new Set(['finops:spend:read'])
+    auth.allow = new Set([
+      business ? 'finops:spend:read' : 'finops:budget:read',
+    ])
     vi.spyOn(rateLimitsApi, 'findings').mockResolvedValue({
       items: [findingFixture],
       has_more: false,
@@ -260,10 +268,26 @@ describe("RateLimitsView — where this estate's own answer lives", () => {
     renderIntel(<RateLimitsView />)
 
     expect(
-      await screen.findByRole('link', { name: /spend|finops/i }),
+      await screen.findByRole('link', { name: /spend|finops|budgets|cost/i }),
     ).toBeVisible()
     expect(screen.queryByRole('link', { name: /inference proxy/i })).toBeNull()
   })
+})
+
+it('does not offer Cost to a principal holding only the other edition permission', () => {
+  auth.allow = new Set([business ? 'finops:budget:read' : 'finops:spend:read'])
+  vi.spyOn(rateLimitsApi, 'findings').mockResolvedValue({
+    items: [],
+    has_more: false,
+  })
+  vi.spyOn(rateLimitsApi, 'inventory').mockResolvedValue(
+    inventoryResponseFixture,
+  )
+  renderIntel(<RateLimitsView />)
+  expect(
+    screen.queryByRole('link', { name: /spend|finops|budgets|cost/i }),
+  ).toBeNull()
+  auth.allow = null
 })
 
 describe('read-only / RBAC invariant', () => {
@@ -284,4 +308,24 @@ describe('read-only / RBAC invariant', () => {
     ).not.toBeInTheDocument()
     vi.doUnmock('@/lib/auth/context')
   })
+})
+
+it('removes the cost link when FinOps is switched off while keeping the proxy', async () => {
+  auth.allow = null
+  vi.spyOn(rateLimitsApi, 'findings').mockResolvedValue({
+    items: [findingFixture],
+    has_more: false,
+  })
+  vi.spyOn(rateLimitsApi, 'inventory').mockResolvedValue(
+    inventoryResponseFixture,
+  )
+  renderIntel(<RateLimitsView />)
+  expect(
+    await screen.findByRole('link', { name: /spend|finops|budgets|cost/i }),
+  ).toBeVisible()
+  act(() => useModulesStore.getState().setOff(['finops']))
+  expect(
+    screen.queryByRole('link', { name: /spend|finops|budgets|cost/i }),
+  ).toBeNull()
+  expect(screen.getByRole('link', { name: /inference proxy/i })).toBeVisible()
 })

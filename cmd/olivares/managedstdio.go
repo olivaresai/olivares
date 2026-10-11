@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/olivaresai/olivares/cmd/olivares/internal/mcpgateway"
 	mcpc "github.com/olivaresai/olivares/connectors/mcp"
 	"github.com/olivaresai/olivares/modules/sessions"
 	"github.com/olivaresai/olivares/modules/sessions/confine"
@@ -176,10 +177,7 @@ func (s *managedStdio) guard(raw []byte) error {
 	if len(s.patterns) == 0 {
 		return nil
 	}
-	reader := &mcpCredentialResponseReader{body: io.NopCloser(bytes.NewReader(raw)), patterns: s.patterns}
-	for _, pattern := range s.patterns {
-		reader.matchers = append(reader.matchers, newMCPCredentialMatcher(pattern))
-	}
+	reader := mcpgateway.NewCredentialResponseReader(io.NopCloser(bytes.NewReader(raw)), s.patterns)
 	_, err := io.Copy(io.Discard, reader)
 	return err
 }

@@ -485,21 +485,26 @@ service IngestService {
   rpc Push(stream IngestEnvelope) returns (IngestSummary);
 }
 
-// --- Module + Host: contract LOCKED in v1, glue implemented in a later session.
-// The out-of-process module transport (the reverse HostService over the
-// go-plugin broker) is not wired in S02; modules run in-process. Defining the
-// messages and services now freezes the wire shape so buf guards it from the
-// start and implements the glue without a breaking change.
+// --- Module + Host: DEPRECATED (announced 2026-10-06). The out-of-process module
+// transport (the reverse HostService over the go-plugin broker) was never wired:
+// modules run in-process, no host glue ever dispensed ModuleService and no Serve*
+// function ever served it. The wire shape stays frozen and marked deprecated
+// rather than removed — inside a major the wire never breaks — and removal
+// happens only in a future major, per the deprecation policy in sdk/VERSIONING.md.
 
 message InitRequest {
+  option deprecated = true;
   Config config = 1;
   // host_broker_id is the go-plugin broker stream id the module dials back on to
   // reach the host's HostService (Publish/Subscribe/Log).
   uint32 host_broker_id = 2;
 }
 
-// ModuleService is served by a Module plugin.
+// ModuleService is served by a Module plugin. Deprecated: the out-of-process
+// module transport it was defined for is deprecated and was never wired;
+// modules run in-process.
 service ModuleService {
+  option deprecated = true;
   rpc Describe(Empty) returns (DescribeResponse);
   rpc Init(InitRequest) returns (Empty);
   rpc Start(Empty) returns (Empty);
@@ -507,10 +512,12 @@ service ModuleService {
 }
 
 message SubscribeRequest {
+  option deprecated = true;
   repeated string types = 1; // event.Type strings; empty = all
 }
 
 message LogRecord {
+  option deprecated = true;
   string level = 1;
   string message = 2;
   map<string, string> fields = 3;
@@ -518,8 +525,10 @@ message LogRecord {
 
 // HostService is served by the ENGINE and dialed by a module plugin through the
 // go-plugin broker, giving an out-of-process module the same bus/log surface an
-// in-process module gets from sdk.Host.
+// in-process module gets from sdk.Host. Deprecated with the rest of the
+// out-of-process module transport: nothing serves it and no plugin dials it.
 service HostService {
+  option deprecated = true;
   rpc Publish(Event) returns (Empty);
   rpc Subscribe(SubscribeRequest) returns (stream Event);
   rpc Log(LogRecord) returns (Empty);

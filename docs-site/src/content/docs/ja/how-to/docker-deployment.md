@@ -6,6 +6,12 @@ description: >-
   リバースプロキシによる TLS 終端、アップグレード、ダイジェスト固定。
 ---
 
+> デプロイ用パッケージは Business チャネルで提供されます。ここでは公開状況は未検証です。ローカルチャートを使う前に、チャネルの手順でパッケージと発行者を検証してください。マニフェストの例では Business が提供する `business-install.yaml` を使います。エアギャップ環境へのインストールには Enterprise が必要です。
+
+
+> Helm, Kubernetes operators, Terraform, appliance and FIPS/STIG images are Business deployment artifacts. The source paths below are in the Business distribution. Air-gapped installation requires Enterprise.
+
+
 このガイドは、Olivares AI の control plane を Docker で本番運用に投入するエンジニアと SRE 向けです。
 製品全体は単一のイメージ ── Web UI を組み込んだエンジン ── なので、
 単一ホストで外部依存なしに SQLite トポロジを実行でき、必要なときには Postgres オーバーライドで
@@ -15,11 +21,11 @@ description: >-
 そして TLS はデフォルトで有効です。ホストポートはすべてのインターフェースに公開されます —
 これはサーバーだからです。下記のように意図して制限してください。
 
-:::note[ベータ ── 26.10.1 のイメージは公開済み]
-Olivares AI は **ベータ** です。以下のイメージ座標は解決します。リリース `26.10.1` がそれらを
-Docker Hub と `ghcr.io` に公開しました（インストール面の証人 `docs/releases/26.10.1-install-surfaces.json`）。
-これは本番運用可能であることの保証ではなく、あなたが使うことになるデプロイの形だと捉えてください。
+<!-- release -->
+:::note[Olivares 0.1]
+次のリリースは `0.1` で、GitHub ではまだ公開されていません。以下のコマンドは予定されている成果物を示します。公開まではソースからビルドし、公開後も使用前に各成果物を検証してください。観測した公開状況は `docs/releases/0.1-install-surfaces.json` に記録されています。
 :::
+<!-- /release -->
 
 すべてのデプロイ選択肢とそのデフォルトを俯瞰する判断ページについては、
 [control plane をセルフホストする](/how-to/self-hosting/) を参照してください。
@@ -31,15 +37,17 @@ Docker Hub と `ghcr.io` に公開しました（インストール面の証人 
 
 主要なコンテナのプル元は **Docker Hub** です:
 
+<!-- release -->
 ```bash
-docker pull docker.io/olivaresai/olivares:26.10.1
+docker pull docker.io/olivaresai/olivares:0.1
 ```
+<!-- /release -->
 
 同じ内容は `ghcr.io/olivaresai/olivares` にも公開されています ── ダイジェストで同一であり、
 バックアップ兼ビルドレジストリとして使われます。Docker Hub は**匿名**プルにレート制限を課しますが、
 ghcr.io は公開イメージの匿名プルにレート制限を課しません。CI ノードや大規模なフリートが上限に達した
-場合は `docker login` するか、ghcr.io の座標に切り替えてください。タグには **先頭に `v` が付きません**:
-`:26.10.1` はリリースを固定し、`:latest` は浮動、`:26.10.1-fips` / `:26.10.1-stig` は
+場合は `docker login` するか、ghcr.io の座標に切り替えてください。タグには **先頭に `v` が付きません**: <!-- release -->
+`:0.1`<!-- /release --> はリリースを固定し、`:latest` は浮動、<!-- release -->`:0.1-fips`<!-- /release --> / <!-- release -->`:0.1-stig`<!-- /release --> は
 堅牢化されたバリアントです。ベースと `:latest` タグはマルチアーキ
 （`linux/amd64`、`linux/arm64`）で、`fips`/`stig` は `amd64` 専用です。
 
@@ -48,18 +56,20 @@ control plane はセキュリティ製品なので、実行前に検証してく
 レジストリに対しても同一に機能します ── 署名とアテステーションは `cosign copy` で
 Docker Hub にコピーされるため、ダイジェストは同じです:
 
+<!-- release -->
 ```bash
 IMAGE=docker.io/olivaresai/olivares          # fallback: ghcr.io/olivaresai/olivares (same digest)
-DIGEST="$(crane digest "$IMAGE:26.10.1")"
+DIGEST="$(crane digest "$IMAGE:0.1")"
 REF="$IMAGE@$DIGEST"
 
 cosign verify "$REF" \
-  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v?[0-9]+\.[0-9]+(\.[0-9]+)?$' \
+  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/[0-9]+\.[0-9]+$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 cosign verify-attestation "$REF" --type spdxjson \
-  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v?[0-9]+\.[0-9]+(\.[0-9]+)?$' \
+  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/[0-9]+\.[0-9]+$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
+<!-- /release -->
 
 完全なチェーン ── チェックサム署名、SBOM、OpenVEX、SLSA provenance ── は
 [ダウンロードしたものを検証する](/how-to/verify-a-release/) にあります。検証したら、
@@ -75,6 +85,7 @@ cosign verify-attestation "$REF" --type spdxjson \
 ホストインターフェースに公開します。コンソールをホストだけに留めるには `-p 127.0.0.1:8443:8443` を使います。
 非 root、読み取り専用、すべての capability を削除して実行してください:
 
+<!-- release -->
 ```bash
 docker volume create olivares-data
 
@@ -87,13 +98,14 @@ docker run -d --name olivares \
   -v olivares-data:/var/lib/olivares \
   -p 8443:8443 \
   -p 8444:8444 \
-  docker.io/olivaresai/olivares:26.10.1 \
+  docker.io/olivaresai/olivares:0.1 \
   serve \
     --listen=0.0.0.0:8443 \
     --grpc-listen=0.0.0.0:8444 \
     --data-dir=/var/lib/olivares \
     --checkpoint-interval=1h
 ```
+<!-- /release -->
 
 | フラグ | 理由 |
 |---|---|
@@ -151,10 +163,12 @@ docker compose -f deploy/compose/docker-compose.yml down
 ## 3. マルチテナント Postgres
 
 マルチテナントトポロジでは、ベースファイルの上に Postgres オーバーライドを重ねます。
-まず2つのパスワードを設定してから、スタックを立ち上げます:
+まず3つの異なるパスワードを設定します。この Compose デモでは
+`A-Z a-z 0-9 . _ ~ -` のみを使用し、次にスタックを立ち上げます:
 
 ```bash
-cp deploy/compose/.env.example deploy/compose/.env   # set POSTGRES_SUPERUSER_PASSWORD + OLIVARES_DB_PASSWORD
+cp deploy/compose/.env.example deploy/compose/.env   # set three distinct passwords in deploy/compose/.env:
+# POSTGRES_SUPERUSER_PASSWORD, OLIVARES_DB_PASSWORD, OLIVARES_ADMIN_PASSWORD
 docker compose -f deploy/compose/docker-compose.yml \
                -f deploy/compose/docker-compose.postgres.yml up -d
 ```
@@ -165,6 +179,10 @@ docker compose -f deploy/compose/docker-compose.yml \
 `--engine=postgres` でエンジンをその非スーパーユーザーロールに向けます。これにより
 FORCE-RLS テナントバックストップが実効的になります: エンジンはスーパーユーザー /
 `BYPASSRLS` ロールに対しては **起動を拒否** します。
+
+オーバーライドは `olivares_admin` もプロビジョニングします。この独立した
+`NOSUPERUSER BYPASSRLS` ロールは、エンジンのテーブルへの読み取り専用アクセスを持ちます。
+エンジンは `--admin-dsn` を通じて、初回セットアップを含むテナント横断の読み取りに使用します。
 
 :::caution[`sslmode=disable` はネットワーク内デモ専用]
 オーバーライドの DSN は、両コンテナが Docker ネットワークを共有するため `sslmode=disable` を
@@ -177,16 +195,26 @@ DSN Secret とマネージド（またはあなた自身の）Postgres を備え
 
 バックアッププロファイルは、スケジュールされ、台帳の連続性を損なわない DR バンドルを生成します:
 ストアのスナップショットに加え、署名鍵を KEK で暗号化し、テナントごとのチェーンの先端を記した
-マニフェストを添えます。パスフレーズを **リポジトリとイメージの外** に保持したファイルへ書き込み、
-ワンショットの `backup` プロファイルを実行してください:
+マニフェストを添えます。
+
+パスフレーズはチェックアウトとイメージの外にある非公開ファイルに保管し、
+このホストとは別の安全な場所にもコピーを保管してください。パスフレーズがなければ、
+どのバンドルも復元できません。バックアップコンテナにはそのファイルへの読み取り専用アクセスを
+与えてください（イメージは UID `65532` で実行されます）：
 
 ```bash
-printf 'a strong DR passphrase' > deploy/compose/dr-pass
-# the host stamps the bundle name:
+sudo install -d -o 65532 -g 65532 -m 0700 /srv/olivares-dr
+sudo install -o 65532 -g 65532 -m 0400 /path/to/private-passphrase /srv/olivares-dr/dr-pass
+
 BACKUP_TS="$(date -u +%Y%m%dT%H%M%SZ)" \
 docker compose -f deploy/compose/docker-compose.yml \
                -f deploy/compose/docker-compose.backup.yml \
-               --profile backup run --rm backup
+               -f - --profile backup run --rm backup <<'YAML'
+services:
+  backup:
+    volumes:
+      - /srv/olivares-dr/dr-pass:/run/secrets/dr-pass:ro
+YAML
 ```
 
 このジョブはエンジンのデータボリュームを共有し、バンドルを `olivares-backups` ボリュームへ
@@ -197,7 +225,7 @@ docker compose -f deploy/compose/docker-compose.yml \
 同一ホスト上のバックアップはディザスタリカバリではありません。次のコマンドで復元・検証します:
 
 ```bash
-olivares dr restore --in <bundle> --data-dir <dir> --passphrase-file dr-pass
+olivares dr restore --in <bundle> --data-dir <dir> --passphrase-file /path/to/private-passphrase
 ```
 
 完全な RPO/RTO、鍵の保管、DR ドリルの手順はリポジトリの DR ランブックにあります。
@@ -300,7 +328,7 @@ docker compose -f deploy/compose/docker-compose.yml up -d
 
 ## 8. 本番ではダイジェストで固定する
 
-可変タグ（`:26.10.1`、`:latest`）は評価用です。本番では検証した **ダイジェスト** を固定してください ──
+可変タグ（<!-- release -->`:0.1`<!-- /release -->、`:latest`）は評価用です。本番では検証した **ダイジェスト** を固定してください ──
 ダイジェストは不変であり、まさにあなたが承認したものです:
 
 ```bash
@@ -313,7 +341,7 @@ Compose では、`deploy/compose/.env` にダイジェスト参照を設定し�
 OLIVARES_IMAGE=docker.io/olivaresai/olivares@sha256:<digest>
 ```
 
-スケールアウトとマルチノードには `deploy/helm/olivares` の Helm チャートを使い、
+スケールアウトとマルチノードには `./business-chart` の Helm チャートを使い、
 公開イメージを digest で固定してください。チャートの OCI 公開は未検証です（`publication-unverified`：このリポジトリから公開されたことはなく、レジストリ側は観測できません）。
 ソースからのコマンドについては
 [control plane をセルフホストする](/how-to/self-hosting/) を、完全に切り離されたサイトについては

@@ -16,9 +16,12 @@ package models
 // concern). The beta identifiers are Anthropic's exact dated tokens.
 // Source: https://platform.claude.com/docs/en/build-with-claude/context-editing
 
-// Claude context-management / memory beta identifiers (exact dated tokens).
+// Claude context-management beta headers and historical context-edit/tool identifiers.
+// ClearToolUses/ClearThinking are edit types, not HTTP beta header values.
 const (
 	BetaContextManagement = "context-management-2025-06-27"
+	BetaCompaction        = "compact-2026-01-12"
+	EditCompaction        = "compact_20260112"
 	BetaClearToolUses     = "clear_tool_uses_20250919"
 	BetaClearThinking     = "clear_thinking_20251015"
 	BetaMemoryTool        = "memory_20250818"
@@ -93,12 +96,15 @@ func ClaudeDataGovernance() []DataGovernanceFeature {
 	return out
 }
 
-// ContextMayBeServerCleared reports whether any of the given active beta tokens can
-// clear content from the model's working context. Forensics uses it to annotate
-// that the captured trail may not reflect the model's full working context (so an
-// investigator does not over-trust an OTEL gap as "nothing happened").
+// ContextMayBeServerCleared reports whether any active beta header or context-edit
+// identifier can clear content from the model's working context. Historical edit
+// identifiers remain accepted for compatibility. It reports a possibility, not
+// an observed applied edit. The captured trail cannot reconstruct provider context.
 func ContextMayBeServerCleared(activeBetas []string) bool {
 	for _, b := range activeBetas {
+		if b == BetaCompaction || b == EditCompaction {
+			return true
+		}
 		for _, f := range claudeDataGovernance {
 			if f.ServerClears && f.BetaID == b {
 				return true

@@ -41,7 +41,7 @@ done | sort -n)"
 
 n="$(printf '%s\n' "$edades" | grep -c .)"
 if [ "$n" -lt 2 ]; then
-	echo "test-hygiene-freshness: NO HE PODIDO MIRAR — solo $n arbol(es) legible(s); hacen falta 2" >&2
+	echo "test-hygiene-freshness: COULD NOT LOOK — only $n readable tree(s); need 2" >&2
 	exit 2
 fi
 viejo="$(printf '%s\n' "$edades" | head -1 | cut -f2)"
@@ -49,25 +49,25 @@ joven="$(printf '%s\n' "$edades" | tail -1 | cut -f2)"
 h_viejo=$(( ( $(date +%s) - $(printf '%s\n' "$edades" | head -1 | cut -f1) ) / 3600 ))
 h_joven=$(( ( $(date +%s) - $(printf '%s\n' "$edades" | tail -1 | cut -f1) ) / 3600 ))
 
-if demasiado_fresco "$joven"; then ok "el arbol MAS JOVEN se conserva" "${h_joven}h < ${UMBRAL}h"
-else mal "el arbol MAS JOVEN se conserva" "${h_joven}h y no lo conserva"; fi
+if demasiado_fresco "$joven"; then ok "the YOUNGEST tree is preserved" "${h_joven}h < ${UMBRAL}h"
+else mal "the YOUNGEST tree is preserved" "${h_joven}h and it is not preserved"; fi
 
 if [ "$h_viejo" -ge "$UMBRAL" ]; then
-	if demasiado_fresco "$viejo"; then mal "el arbol MAS VIEJO sigue siendo candidato" "${h_viejo}h y lo conserva"
-	else ok "el arbol MAS VIEJO sigue siendo candidato" "${h_viejo}h >= ${UMBRAL}h"; fi
+	if demasiado_fresco "$viejo"; then mal "the OLDEST tree remains a candidate" "${h_viejo}h and it is preserved"
+	else ok "the OLDEST tree remains a candidate" "${h_viejo}h >= ${UMBRAL}h"; fi
 else
-	ok "el arbol MAS VIEJO sigue siendo candidato" "OMITIDO: el mas viejo tiene ${h_viejo}h, por debajo del umbral"
+	ok "the OLDEST tree remains a candidate" "SKIPPED: the oldest is ${h_viejo}h, below the threshold"
 fi
 
 # El umbral se puede bajar por entorno: con 0 h nada se conserva.
 if OLIVARES_HYGIENE_FRESH_HOURS=0 UMBRAL=0 demasiado_fresco "$joven"; then
-	mal "el umbral es ajustable por entorno" "con 0 h sigue conservando"
-else ok "el umbral es ajustable por entorno" "con 0 h no conserva nada"; fi
+	mal "the threshold can be set through the environment" "with 0 h it still preserves trees"
+else ok "the threshold can be set through the environment" "with 0 h it preserves nothing"; fi
 
 # Fail-closed: lo ilegible NO se enmascara como fresco.
 if demasiado_fresco "/no/existe/en/ninguna/parte"; then
-	mal "una ruta ilegible NO se enmascara" "la dio por fresca"
-else ok "una ruta ilegible NO se enmascara" "no conserva lo que no puede leer"; fi
+	mal "an unreadable path is NOT disguised" "reported it as fresh"
+else ok "an unreadable path is NOT disguised" "does not preserve what it cannot read"; fi
 
-echo "test-hygiene-freshness: $((4 - fallos)) pasan, $fallos fallan  (sobre $n arbol(es) derivado(s))"
+echo "test-hygiene-freshness: $((4 - fallos)) passed, $fallos failed  (on $n derived tree(s))"
 [ "$fallos" -eq 0 ] || exit 1

@@ -74,7 +74,7 @@ func newDRHarness(
 		open = observeOpen[0]
 	}
 	return newHarnessOptsFromStoreSource(t, harnessStoreSource{borrowed: st, open: open}, func(o *api.Options) {
-		o.Version = "26.9.0"
+		o.Version = "26.900"
 		o.DR = &api.DRConfig{DataDir: dir, EngineKind: "sqlite", PassphraseFile: passFile}
 	})
 }
@@ -147,6 +147,63 @@ func TestDRScheduleLegacyRecordDefaultsDualControlFailClosed(t *testing.T) {
 	}
 	if r.body["require_dual_control_restore"] != true {
 		t.Fatalf("legacy schedule defaulted dual-control open: %s", r.raw)
+	}
+}
+
+func TestDRScheduleCorruptStateKeepsAPIAvailable(t *testing.T) {
+	for name, saved := range map[string]any{
+		"malformed JSON": `{"enabled":true,"require_dual_control_restore":false`,
+		"empty JSON":     "",
+		"wrong type":     float64(7),
+	} {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			st := openDRStore(t, dir)
+			ctx := context.Background()
+			if err := st.Mutate(ctx, model.SystemTenantID, func(sc store.Scope) error {
+				_, err := sc.SetOrgSettings(ctx, map[string]any{"dr.schedule": saved})
+				return err
+			}); err != nil {
+				t.Fatal(err)
+			}
+
+			h := newDRHarness(t, dir, st, "")
+			if r := h.do("GET", "/healthz", "", nil, nil); r.code != http.StatusOK {
+				t.Fatalf("health = %d %s", r.code, r.raw)
+			}
+			admin := h.adminLogin()
+			if r := h.do("GET", "/v1/auth/whoami", admin, nil, nil); r.code != http.StatusOK {
+				t.Fatalf("whoami = %d %s", r.code, r.raw)
+			}
+			for _, route := range []struct{ method, path string }{
+				{"GET", "/v1/console/dr/schedule"},
+				{"POST", "/v1/console/dr/restore/fixture/apply"},
+				{"POST", "/v1/console/dr/restore/fixture/approve"},
+			} {
+				r := h.do(route.method, route.path, admin, map[string]any{}, nil)
+				if r.code != http.StatusNotImplemented || !strings.Contains(r.raw, "dr_unavailable") {
+					t.Errorf("%s %s = %d %s, want DR unavailable", route.method, route.path, r.code, r.raw)
+				}
+			}
+			if configured, err := h.srv.ScheduledBackupConfigured(ctx); configured || err != nil {
+				t.Fatalf("unavailable schedule configured = %v, %v", configured, err)
+			}
+			if ran, err := h.srv.RunDueScheduledBackup(ctx, time.Now()); ran || err != nil {
+				t.Fatalf("unavailable schedule ran = %v, %v", ran, err)
+			}
+			if _, _, err := api.ReadDualControlRestorePolicy(ctx, st, time.Now()); err == nil {
+				t.Fatal("CLI restore policy accepted corrupt state")
+			}
+			if err := st.View(ctx, model.SystemTenantID, func(sc store.Scope) error {
+				org, err := sc.Org(ctx)
+				if err == nil && org.Settings["dr.schedule"] != saved {
+					t.Error("startup replaced the corrupt schedule")
+				}
+				return err
+			}); err != nil {
+				t.Fatal(err)
+			}
+		})
 	}
 }
 

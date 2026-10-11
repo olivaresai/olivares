@@ -283,6 +283,21 @@ rm -f /run/olivares.pkg-deconfigured
 printf '%s\n' "$OLIVARES_PKG_INIT" > /run/olivares.pkg-removed-init
 chmod 0600 /run/olivares.pkg-removed-init
 
+# The engine's table describes only its own effects: package-owned files are
+# unmanaged there. Report the package transaction instead, including config policy.
+if [ "$OLIVARES_PKG_INIT" = openrc ]; then
+  unit_path=/etc/init.d/olivares
+else
+  unit_path=/usr/lib/systemd/system/olivares.service
+fi
+printf 'olivares package: package manager will remove binary /usr/bin/olivares and unit %s\n' "$unit_path"
+config_policy="$format package-manager policy"
+if [ "$format" = deb ]; then
+  config_policy="$config_policy (kept on remove; removed on purge)"
+fi
+printf 'olivares package: config /etc/olivares/olivares.env follows %s\n' "$config_policy"
+printf '%s\n' 'olivares package: data /var/lib/olivares, keys and service account are preserved'
+
 olv_stopped=no
 olv_prior=unknown
 if [ "$OLIVARES_PKG_INIT" = openrc ]; then
@@ -315,23 +330,36 @@ if command -v systemctl >/dev/null 2>&1; then
 fi
 # The install record sits in the service-owned directory, so the service account can
 # put something else at its name. The engine refuses anything but root's own regular
-# file before any change; the removal then takes the same safe stop as a package
-# without the record, and never fails on it.
+# file before any change (exit 2, exitcode.Usage); any other failure, such as a service
+# stop that systemctl refuses, is exit 1. The removal then takes the same safe stop as a
+# package without the record, and never fails on it.
 olv_engine=skipped
 if [ -x /usr/bin/olivares ] && [ -r /var/lib/olivares/install-manifest.json ]; then
-  if /usr/bin/olivares uninstall --preserve --data-dir /var/lib/olivares; then
+  olv_engine_rc=0
+  /usr/bin/olivares uninstall --preserve --data-dir /var/lib/olivares >/dev/null || olv_engine_rc=$?
+  if [ "$olv_engine_rc" -eq 0 ]; then
     olv_engine=ran
-  else
+  elif [ "$olv_engine_rc" -eq 2 ]; then
     olv_engine=refused
     echo "olivares package: install record refused by the uninstall engine; stopping the service without it" >&2
+  else
+    olv_engine=failed
+    echo "olivares package: the uninstall engine failed (exit $olv_engine_rc); stopping the service without it" >&2
   fi
 fi
 if [ "$olv_engine" = ran ]; then
   olv_stopped=yes
 elif command -v systemctl >/dev/null 2>&1; then
-  # No usable v2 ownership record (a legacy package, or one the engine refused):
-  # the safe stop, with no path list invented and nothing deleted.
-  systemctl disable --now olivares >/dev/null 2>&1 || true
-  olv_stopped=yes
+  # No usable v2 ownership record (a legacy package, or one the engine refused or
+  # failed on): the safe stop, with no path list invented and nothing deleted. The
+  # receipt says stopped=yes only when systemctl stopped it; otherwise the reason is
+  # printed and the removal goes on, so the administrator knows to stop it.
+  if olv_why=$(systemctl disable --now olivares 2>&1 >/dev/null); then
+    olv_stopped=yes
+  else
+    # One printable line: systemctl may print several, and its text is not ours to trust.
+    olv_why=$(printf '%s' "$olv_why" | tr -c '[:print:]' ' ')
+    printf 'olivares package: the olivares service could not be stopped (systemctl disable --now olivares failed: %s); stop it yourself\n' "${olv_why:-no output}" >&2
+  fi
 fi
 receipt "$format" "$action" ok

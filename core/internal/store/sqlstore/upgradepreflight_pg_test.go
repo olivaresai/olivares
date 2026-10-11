@@ -210,13 +210,15 @@ func hcr1CountRows(t *testing.T, f *hcr1Fixture, table string) int64 {
 func hcr1MakeRelationsFuture(t *testing.T, f *hcr1Fixture, moduleTable string) []string {
 	t.Helper()
 	hcr1Exec(t, f.owner, `DROP TABLE `+dialect.EngineSchema+`.`+quoteIdent(leaderEpochTable))
+	// Remove the versioned receipt too: the predecessor has not created this relation.
+	hcr1Exec(t, f.owner, `DROP TABLE `+dialect.EngineSchema+`.schema_migrations_leader`)
 	if moduleTable == "" {
 		return []string{leaderEpochTable}
 	}
 	hcr1Exec(t, f.owner, `DROP TABLE `+dialect.EngineSchema+`.`+quoteIdent(moduleTable)+` CASCADE`)
-	// The module tracking row goes with it. Left behind, applyModuleTables would skip
-	// the table it thinks it already applied, and the test would be measuring a
-	// half-repaired estate instead of an upgrade.
+	// Both versioned and legacy receipts go with the module table. Otherwise the
+	// runner skips creation and the fixture models damage instead of an upgrade.
+	hcr1Exec(t, f.owner, `DROP TABLE `+dialect.EngineSchema+`.`+quoteIdent("schema_migrations_tbl_"+moduleTable))
 	if _, err := f.owner.ExecContext(context.Background(),
 		`DELETE FROM `+moduleTablesTracking+` WHERE table_name = $1`, moduleTable); err != nil {
 		t.Fatalf("clear the module tracking row for %q: %v", moduleTable, err)
@@ -1130,6 +1132,8 @@ func TestUpgradePreflightUnionCoversRuntimeControlsAndModuleTables(t *testing.T)
 	for _, relation := range []string{
 		dialect.ControlRolloutStateTable,
 		dialect.ControlRolloutTransitionTable,
+		// The predecessor has not applied the rollout schema either.
+		"schema_migrations_rollout",
 	} {
 		hcr1Exec(t, f.owner, `DROP TABLE `+dialect.EngineSchema+`.`+quoteIdent(relation))
 	}

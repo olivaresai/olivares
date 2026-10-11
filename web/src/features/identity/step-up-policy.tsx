@@ -5,13 +5,15 @@
 // Settings > Sign-in: what administrative actions demand beyond the sign-in.
 // Off by default. The engine refuses to raise it unless this session already
 // meets the new level (a passkey ceremony at this address, or a TOTP sign-in),
-// and lowering it always works, so nobody can lock themselves out.
+// so nobody can lock themselves out. It refuses to lower or turn it off unless
+// the session meets the current level; that step_up_required is handled like
+// any other administrative action's.
 import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Segmented } from '@/components/ui/segmented'
 import { ApiError } from '@/lib/api/errors'
-import { http, queryKeys } from '@/lib/api'
+import { http, queryKeys, type RequestOptions } from '@/lib/api'
 import { useAuth } from '@/lib/auth/context'
 import { usePrivilegedMutation } from '@/lib/hooks/use-privileged-mutation'
 import './i18n'
@@ -19,12 +21,21 @@ import './i18n'
 export type StepUpPolicy = 'none' | 'totp' | 'passkey'
 
 export const stepUpPolicyApi = {
-  get: () =>
-    http.get<{ admin_step_up: StepUpPolicy }>('/v1/auth/step-up-policy'),
-  set: (policy: StepUpPolicy) =>
-    http.put<{ admin_step_up: StepUpPolicy }>('/v1/auth/step-up-policy', {
-      admin_step_up: policy,
+  get: (signal?: AbortSignal) =>
+    http.get<{ admin_step_up: StepUpPolicy }>('/v1/auth/step-up-policy', {
+      signal,
     }),
+  set: (
+    policy: StepUpPolicy,
+    opts?: Pick<RequestOptions, 'signal' | 'dispatchGuard'>,
+  ) =>
+    http.put<{ admin_step_up: StepUpPolicy }>(
+      '/v1/auth/step-up-policy',
+      {
+        admin_step_up: policy,
+      },
+      opts,
+    ),
 }
 
 const policyKey = ['identity', 'step-up-policy'] as const
@@ -36,11 +47,12 @@ export function StepUpPolicySetting() {
   const [refusal, setRefusal] = useState<string | null>(null)
   const policy = useQuery({
     queryKey: policyKey,
-    queryFn: () => stepUpPolicyApi.get(),
+    queryFn: ({ signal }) => stepUpPolicyApi.get(signal),
     enabled: allowed,
   })
   const save = usePrivilegedMutation({
-    mutationFn: (next: StepUpPolicy) => stepUpPolicyApi.set(next),
+    mutationFn: (next: StepUpPolicy, authority) =>
+      stepUpPolicyApi.set(next, authority),
     invalidateKeys: [policyKey, queryKeys.whoami],
     successMessage: t('stepUpPolicy.saved'),
     stepUpAction: 'stepUpPolicy',
@@ -59,7 +71,14 @@ export function StepUpPolicySetting() {
   })
 
   if (!allowed) return null
-  const current = policy.data?.admin_step_up ?? 'none'
+  if (policy.isError)
+    return (
+      <p className="text-body text-danger" role="alert">
+        {t('stepUpPolicy.loadFailed')}
+      </p>
+    )
+  if (!policy.data) return <p role="status">{t('common:states.loading')}</p>
+  const current = policy.data.admin_step_up
   return (
     <section
       className="flex flex-col gap-3 py-2"
@@ -91,11 +110,6 @@ export function StepUpPolicySetting() {
       {refusal ? (
         <p className="text-body text-danger" role="alert">
           {refusal}
-        </p>
-      ) : null}
-      {policy.isError ? (
-        <p className="text-body text-danger" role="alert">
-          {t('stepUpPolicy.loadFailed')}
         </p>
       ) : null}
       <p className="text-caption text-text-2">{t('stepUpPolicy.note')}</p>

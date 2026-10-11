@@ -6,6 +6,9 @@ description: >-
   続いて実物の pgAudit コネクターで、これがデモではないことを証明します。
 ---
 
+> デプロイ用パッケージは Business チャネルで提供されます。ここでは公開状況は未検証です。ローカルチャートを使う前に、チャネルの手順でパッケージと発行者を検証してください。マニフェストの例では Business が提供する `business-install.yaml` を使います。エアギャップ環境へのインストールには Enterprise が必要です。
+
+
 これは Olivares AI が *何のためにあるのか* を最短で体感する経路です。エステートの
 **read/write アクセスマップ**と、その上に重ねた **Permitted-vs-Observed ドリフト** —
 エージェントに*付与された*アクセスと、実際に使用していると*観測された*アクセスとの差分です。
@@ -49,7 +52,7 @@ task build                      # compiles ./bin/olivares with the web UI embedd
 エンジン、組み込みの Web UI、そしてファーストパーティのコネクタープラグインです。
 **コンテナおよび Kubernetes のインストールはこの同じバイナリをラップします**：
 公開イメージと Compose ファイル（[セルフホスティング](/ja/how-to/self-hosting/)）、または
-`kubectl apply -f deploy/manifests/install.yaml` するフラットなマニフェスト（Helm 不要）。
+`kubectl apply -f ./business-install.yaml` するフラットなマニフェスト（Helm 不要）。
 以下に見るヒーローは3つすべてで同一です — 異なるのはデモシードだけです
 （ループバック専用であり、実物のインストールには決して含まれません）。
 
@@ -230,7 +233,7 @@ pgAudit シグナルが名指しするのは*統制されたエージェント*�
 
 :::note[エンドポイントの形]
 Permitted-vs-Observed の結果は `/v1/m/accessmap/drift` で提供されます（`/diff` は存在しません）。
-`/v1/m/accessmap/*` のルートは 70 パスの安定コア契約には含まれず、別の **beta**
+`/v1/m/accessmap/*` のルートは 128 パスの安定コア契約には含まれず、別の **beta**
 ドキュメントとして [module-route リファレンス](/reference/api-beta/) で公開されます。
 [API リファレンス](/reference/api/)は安定コアサーフェスを記述します。
 :::

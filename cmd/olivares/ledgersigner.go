@@ -13,6 +13,7 @@ import (
 
 	"github.com/olivaresai/olivares/core/audit"
 	"github.com/olivaresai/olivares/core/audit/kmssign"
+	"github.com/olivaresai/olivares/core/envconfig"
 )
 
 // buildCheckpointKey reads the OPTIONAL off-box ledger checkpoint signer from the
@@ -44,15 +45,15 @@ import (
 // static engine binary. A native PKCS#11/HSM lives out-of-process behind the same
 // seam.
 func buildCheckpointKey(log *slog.Logger) (audit.CheckpointKey, error) {
-	kind := strings.TrimSpace(os.Getenv("OLIVARES_LEDGER_SIGNER"))
+	kind := strings.TrimSpace(envconfig.Get("OLIVARES_LEDGER_SIGNER"))
 	switch kind {
 	case "", "ed25519", "on-box":
 		return nil, nil
 	case "aws-kms":
 		ck, err := kmssign.NewAWS(kmssign.AWSConfig{
-			Region:           os.Getenv("OLIVARES_LEDGER_KMS_AWS_REGION"),
-			KeyID:            os.Getenv("OLIVARES_LEDGER_KMS_AWS_KEY_ID"),
-			SigningAlgorithm: os.Getenv("OLIVARES_LEDGER_KMS_AWS_SIGNING_ALG"),
+			Region:           envconfig.Get("OLIVARES_LEDGER_KMS_AWS_REGION"),
+			KeyID:            envconfig.Get("OLIVARES_LEDGER_KMS_AWS_KEY_ID"),
+			SigningAlgorithm: envconfig.Get("OLIVARES_LEDGER_KMS_AWS_SIGNING_ALG"),
 			Creds: kmssign.AWSCreds{
 				AccessKeyID:     os.Getenv("AWS_ACCESS_KEY_ID"),
 				SecretAccessKey: os.Getenv("AWS_SECRET_ACCESS_KEY"),
@@ -70,7 +71,7 @@ func buildCheckpointKey(log *slog.Logger) (audit.CheckpointKey, error) {
 			return nil, err
 		}
 		ck, err := kmssign.NewGCP(kmssign.GCPConfig{
-			KeyVersionName: os.Getenv("OLIVARES_LEDGER_KMS_GCP_KEY"),
+			KeyVersionName: envconfig.Get("OLIVARES_LEDGER_KMS_GCP_KEY"),
 			Token:          ts,
 		})
 		if err != nil {
@@ -84,9 +85,9 @@ func buildCheckpointKey(log *slog.Logger) (audit.CheckpointKey, error) {
 			return nil, err
 		}
 		ck, err := kmssign.NewAzure(kmssign.AzureConfig{
-			VaultURL:   os.Getenv("OLIVARES_LEDGER_KMS_AZURE_VAULT_URL"),
-			KeyName:    os.Getenv("OLIVARES_LEDGER_KMS_AZURE_KEY_NAME"),
-			KeyVersion: os.Getenv("OLIVARES_LEDGER_KMS_AZURE_KEY_VERSION"),
+			VaultURL:   envconfig.Get("OLIVARES_LEDGER_KMS_AZURE_VAULT_URL"),
+			KeyName:    envconfig.Get("OLIVARES_LEDGER_KMS_AZURE_KEY_NAME"),
+			KeyVersion: envconfig.Get("OLIVARES_LEDGER_KMS_AZURE_KEY_VERSION"),
 			Token:      ts,
 		})
 		if err != nil {
@@ -103,7 +104,7 @@ func buildCheckpointKey(log *slog.Logger) (audit.CheckpointKey, error) {
 // call so the operator's refresher keeps it fresh) or <prefix> (static). The file
 // form is preferred for a long-lived engine because a static token expires.
 func tokenSourceFromEnv(prefix string) (kmssign.TokenSource, error) {
-	if path := strings.TrimSpace(os.Getenv(prefix + "_FILE")); path != "" {
+	if path := strings.TrimSpace(envconfig.Get(prefix + "_FILE")); path != "" {
 		return func(context.Context) (string, error) {
 			b, err := os.ReadFile(path)
 			if err != nil {
@@ -112,7 +113,7 @@ func tokenSourceFromEnv(prefix string) (kmssign.TokenSource, error) {
 			return strings.TrimSpace(string(b)), nil
 		}, nil
 	}
-	if tok := strings.TrimSpace(os.Getenv(prefix)); tok != "" {
+	if tok := strings.TrimSpace(envconfig.Get(prefix)); tok != "" {
 		return kmssign.StaticToken(tok), nil
 	}
 	// Named for the VARIABLES rather than for one of the callers: this helper also

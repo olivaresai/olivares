@@ -10,6 +10,7 @@ import (
 	"sort"
 
 	"github.com/olivaresai/olivares/core/api"
+	"github.com/olivaresai/olivares/core/modulespec"
 	"github.com/olivaresai/olivares/modules/recording"
 )
 
@@ -18,64 +19,27 @@ import (
 // the profile is dormant: its tables stay, but it is not started, its routes
 // answer "module_not_enabled" and its periodic jobs are not scheduled.
 //
-// Requirements are the composition root's own wiring (a module that receives
-// another module at construction or at boot requires it), so they live here
-// beside that wiring. A namespace that is not in the catalog (edition modules,
-// host modules) is always active: the profile only ever turns off what it knows.
+// Requirements cover constructor/boot wiring, live data owners and event
+// consumers. The shared spec records them beside the constructor declaration.
+// A namespace outside the catalog (edition modules, host modules) is always
+// active: the profile only turns off what it knows.
 
-// moduleSpec is one catalog entry.
-type moduleSpec struct {
-	// requires are the modules this one is wired to and cannot run without.
-	requires []string
-	// kernel modules always run: the rest of the engine calls them directly.
-	kernel bool
-	// standard modules are in the profile of a new installation.
-	standard bool
-}
-
-// moduleCatalog is every module the profile can turn off, by API namespace.
-var moduleCatalog = map[string]moduleSpec{
-	"governance":     {kernel: true},
-	"sessions":       {kernel: true, requires: []string{"governance", "liveingest"}},
-	"claude-policy":  {standard: true, requires: []string{"governance"}},
-	"claude-agents":  {requires: []string{"governance"}},
-	"identity":       {standard: true, requires: []string{"governance"}},
-	"accessmap":      {},
-	"adoption":       {},
-	"capabilities":   {standard: true},
-	"catalog":        {},
-	"compliance":     {},
-	"consoleviews":   {standard: true},
-	"deploy":         {requires: []string{"governance"}},
-	"evals":          {requires: []string{"sessions"}},
-	"eventing":       {requires: []string{"governance"}},
-	"finops":         {},
-	"gitpublish":     {},
-	"health":         {},
-	"inferenceproxy": {requires: []string{"models", "finops", "knowledge", "governance"}},
-	"inventory":      {},
-	"knowledge":      {requires: []string{"sourcescope", "compliance"}},
-	"liveingest":     {},
-	"models":         {requires: []string{"finops", "governance", "sourcescope"}},
-	"notify":         {},
-	"observability":  {},
-	"orchestration":  {requires: []string{"finops", "governance", "notify", "sessions"}},
-	"posture":        {requires: []string{"inventory"}},
-	"recording":      {requires: []string{"sessions"}},
-	"redteam":        {},
-	"reporting":      {requires: []string{"compliance"}},
-	"sandbox":        {requires: []string{"evals", "sessions"}},
-	"security":       {},
-	"siemforward":    {requires: []string{"eventing"}},
-	"sourcescope":    {requires: []string{"governance"}},
-	"voice":          {requires: []string{"finops", "governance"}},
-}
+// moduleCatalog is the selectable projection of the shared module spec.
+var moduleCatalog = func() map[string]modulespec.Spec {
+	catalog := make(map[string]modulespec.Spec)
+	for _, spec := range modulespec.All() {
+		if spec.Selectable {
+			catalog[spec.Namespace] = spec
+		}
+	}
+	return catalog
+}()
 
 // standardModuleSelection is the selection of a new installation.
 func standardModuleSelection() []string {
 	var out []string
 	for name, spec := range moduleCatalog {
-		if spec.standard {
+		if spec.Standard {
 			out = append(out, name)
 		}
 	}
@@ -96,14 +60,14 @@ func allModuleSelection() []string {
 // published26100ModuleSelection is the profile-free default shipped in 26.10.0.
 // Keep it fixed: adding a catalog module must not silently enable it on upgrade.
 func published26100ModuleSelection() []string {
-	return []string{
-		"accessmap", "adoption", "capabilities", "catalog", "claude-agents",
-		"claude-policy", "compliance", "consoleviews", "deploy", "evals", "eventing",
-		"finops", "gitpublish", "governance", "health", "identity", "inferenceproxy",
-		"inventory", "knowledge", "liveingest", "models", "notify", "observability",
-		"orchestration", "posture", "recording", "redteam", "reporting", "sandbox",
-		"security", "sessions", "siemforward", "sourcescope", "voice",
+	var out []string
+	for name, spec := range moduleCatalog {
+		if spec.Published26100 {
+			out = append(out, name)
+		}
 	}
+	sort.Strings(out)
+	return out
 }
 
 // moduleProfile is a resolved selection.
@@ -117,10 +81,6 @@ type moduleProfile struct {
 	activatedBy map[string][]string
 }
 
-// activationModulesOf is the edition seam editionActivationModules; tests
-// replace it to give an add-on modules.
-var activationModulesOf = editionActivationModules
-
 // activationModules is the module to add-on map of m's active entries: while an
 // add-on is active, the modules its edition names for it run, whatever the
 // administrator selected. Enabling a family is then one action, its activation.
@@ -129,11 +89,14 @@ func activationModules(m *ActivationManifest) map[string][]string {
 		return nil
 	}
 	out := map[string][]string{}
+	if thisEdition.activationModules == nil {
+		return out
+	}
 	for _, e := range m.Entries {
 		if !e.overlaid() {
 			continue
 		}
-		for _, name := range activationModulesOf(e.Addon) {
+		for _, name := range thisEdition.activationModules(e.Addon) {
 			if _, ok := moduleCatalog[name]; ok && !slices.Contains(out[name], e.Addon) {
 				out[name] = append(out[name], e.Addon)
 			}
@@ -171,7 +134,7 @@ func resolveModuleProfileWith(selected []string, activated map[string][]string) 
 	}
 	sort.Strings(p.selected)
 	for name, spec := range moduleCatalog {
-		if spec.kernel {
+		if spec.Kind == "kernel" {
 			queue = append(queue, name)
 		}
 	}
@@ -182,7 +145,7 @@ func resolveModuleProfileWith(selected []string, activated map[string][]string) 
 			continue
 		}
 		p.active[name] = true
-		queue = append(queue, moduleCatalog[name].requires...)
+		queue = append(queue, moduleCatalog[name].Requires...)
 	}
 	return p, nil
 }
@@ -222,7 +185,7 @@ func (p moduleProfile) sameActive(q moduleProfile) bool {
 func (p moduleProfile) requiredBy(name string) []string {
 	var out []string
 	for other := range p.active {
-		if slices.Contains(moduleCatalog[other].requires, name) {
+		if slices.Contains(moduleCatalog[other].Requires, name) {
 			out = append(out, other)
 		}
 	}

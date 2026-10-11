@@ -200,7 +200,7 @@ func (m *Module) authorizedLiveRunClaim(
 	if err != nil {
 		return Lease{}, err
 	}
-	if m.data == nil {
+	if m.Data == nil {
 		return Lease{}, unknown("observation_unavailable", store.ErrStoreUnavailable)
 	}
 	if err := m.Authority(ctx, tenant, claim.SID, claim.Holder, claim.Fence); err != nil {

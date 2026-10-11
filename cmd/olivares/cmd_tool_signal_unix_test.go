@@ -38,10 +38,12 @@ func TestToolLoginCancelsTheSignInOnASignal(t *testing.T) {
 	}{
 		{"claude", "s1", "Claude Code", syscall.SIGINT},
 		{"codex", "s2", "Codex", syscall.SIGTERM},
+		{"opencode", "s3", "OpenCode", syscall.SIGINT},
 	} {
 		t.Run(tc.driver, func(t *testing.T) {
 			f := newFakeToolEngine(t)
 			f.pending = true
+			f.onPath[tc.driver] = true
 			listening, done := make(chan struct{}), make(chan struct{})
 			prev := toolLoginSignals
 			t.Cleanup(func() { toolLoginSignals = prev })
@@ -59,7 +61,11 @@ func TestToolLoginCancelsTheSignInOnASignal(t *testing.T) {
 				}}
 			}
 			go func() {
-				for _, ch := range []chan struct{}{listening, f.started} {
+				started := f.started
+				if tc.driver == "opencode" {
+					started = f.polling // interrupt after the CLI knows the still-starting flow id
+				}
+				for _, ch := range []chan struct{}{listening, started} {
 					select {
 					case <-ch:
 					case <-done:

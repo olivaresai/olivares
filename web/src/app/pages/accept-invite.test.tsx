@@ -62,11 +62,11 @@ describe('AcceptInvitePage', () => {
     expect(screen.queryByLabelText(/new password/i)).not.toBeInTheDocument()
   })
 
-  //el subtitulo promete una contrasena que en el estado sin token NO existe.
+  //the subtitle promises a password that does not exist without a token.
   //
-  // ⛔ LAS DOS DIRECCIONES, o no prueba nada. Afirmar solo la AUSENCIA la pasaria tambien
-  //    borrar el subtitulo de la pantalla entera; afirmar solo la PRESENCIA la pasaria
-  //    dejandolo fuera del condicional, que es justo el defecto que este testigo cierra.
+  // Check both directions. An absence-only assertion would pass if the subtitle were deleted
+  // from the whole screen; a presence-only assertion would pass if it stayed outside the
+  // conditional, reproducing the defect this test covers.
   it('no promete una contrasena sin token, y si la promete con token', () => {
     // ⚠ NO vale /choose a password/i: `invite.weakPassword` es "Choose a password of at
     //   least 8 characters." y casaria tambien. La sonda tiene que casar el SUBTITULO.

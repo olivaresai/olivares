@@ -12,7 +12,7 @@ import {
 import { lazy, Suspense } from 'react'
 import { RequirePermission } from '@/components/layout/require-permission'
 import { Spinner } from '@/components/ui/spinner'
-import { FEATURE_VIEWS, ROUTE_ALIASES, type AreaId } from '@/features/registry'
+import { FEATURE_VIEWS, NAV_AREAS, ROUTE_ALIASES } from '@/features/registry'
 import { ANONYMOUS_VIEWS } from '@/features/anonymous-registry'
 import { AcceptInvitePage } from './pages/accept-invite'
 import { LoginPage } from './pages/login'
@@ -47,7 +47,7 @@ const StatusPage = lazy(() =>
  * RequirePermission so a deep-link is RBAC-checked, not just hidden in the nav.–
  * only edit the registry — never this file or the shell.
  */
-/** Calm centered spinner while a code-split view's chunk loads (registry.tsx has its twin). */
+/** Calm centered spinner while a code-split view's chunk loads (features/lazy-view.tsx has its twin). */
 function ViewLoading() {
   return (
     <div className="flex min-h-[40vh] items-center justify-center">
@@ -56,17 +56,10 @@ function ViewLoading() {
   )
 }
 
-function ShellError({ error, reset }: ErrorComponentProps) {
-  return (
-    <RouteErrorPage
-      error={error}
-      reset={async () => {
-        // Retry the failed import before clearing the route's error boundary.
-        await AppLayout.preload?.()
-        reset()
-      }}
-    />
-  )
+function ShellError({ error }: ErrorComponentProps) {
+  // A failed browser import stays cached for this document. Use the error
+  // page's reload recovery so Retry fetches the shell in a fresh module map.
+  return <RouteErrorPage error={error} />
 }
 
 export const rootRoute = createRootRoute({
@@ -128,81 +121,22 @@ const settingsRoute = createRoute({
 })
 
 /**
- * N1 — the nine area directory routes. They are written out as LITERAL createRoute calls
- * rather than mapped from NAV_AREAS on purpose: the census (route-census.json), the guide
- * generator (scripts/guide-docs/console-dump.mjs) and the capture-coverage guard all read
- * route paths as literals, and a path computed from a table is invisible to every one of
- * them. features/navigation/routes.test.ts pins that the mounted `/areas/*` set equals
- * NAV_AREAS in both directions, so the two lists cannot drift: drop a route here and it
- * goes red, add an area there without a route here and it goes red.
- *
- * They sit under the authenticated shell like every feature route, so AppLayout's auth
- * guard and TenantGate apply unchanged. No RequirePermission: an area is the union of its
- * leaves, and the directory itself shows only what `can()` allows.
+ * N1 — the nine area directory routes, one per NAV_AREAS entry. They sit under the
+ * authenticated shell like every feature route, so AppLayout's auth guard and TenantGate
+ * apply unchanged. No RequirePermission: an area is the union of its leaves, and the
+ * directory itself shows only what `can()` allows.
  */
-function areaDirectory(areaId: AreaId) {
-  return () => (
-    <Suspense fallback={<ViewLoading />}>
-      <AreaDirectoryView areaId={areaId} />
-    </Suspense>
-  )
-}
-const areaInfrastructureRoute = createRoute({
-  getParentRoute: () => appRoute,
-  path: '/areas/infrastructure',
-  component: areaDirectory('infrastructure'),
-})
-const areaAiRoute = createRoute({
-  getParentRoute: () => appRoute,
-  path: '/areas/ai',
-  component: areaDirectory('ai'),
-})
-const areaDataContextRoute = createRoute({
-  getParentRoute: () => appRoute,
-  path: '/areas/data-context',
-  component: areaDirectory('data-context'),
-})
-const areaWorkCommunicationsRoute = createRoute({
-  getParentRoute: () => appRoute,
-  path: '/areas/work-communications',
-  component: areaDirectory('work-communications'),
-})
-const areaAutomationRoute = createRoute({
-  getParentRoute: () => appRoute,
-  path: '/areas/automation',
-  component: areaDirectory('automation'),
-})
-const areaSecurityIdentityRoute = createRoute({
-  getParentRoute: () => appRoute,
-  path: '/areas/security-identity',
-  component: areaDirectory('security-identity'),
-})
-const areaDeploymentRoute = createRoute({
-  getParentRoute: () => appRoute,
-  path: '/areas/deployment',
-  component: areaDirectory('deployment'),
-})
-const areaObservationRoute = createRoute({
-  getParentRoute: () => appRoute,
-  path: '/areas/observation',
-  component: areaDirectory('observation'),
-})
-const areaSystemRoute = createRoute({
-  getParentRoute: () => appRoute,
-  path: '/areas/system',
-  component: areaDirectory('system'),
-})
-const areaRoutes = [
-  areaInfrastructureRoute,
-  areaAiRoute,
-  areaDataContextRoute,
-  areaWorkCommunicationsRoute,
-  areaAutomationRoute,
-  areaSecurityIdentityRoute,
-  areaDeploymentRoute,
-  areaObservationRoute,
-  areaSystemRoute,
-]
+const areaRoutes = NAV_AREAS.map((area) =>
+  createRoute({
+    getParentRoute: () => appRoute,
+    path: area.path,
+    component: () => (
+      <Suspense fallback={<ViewLoading />}>
+        <AreaDirectoryView areaId={area.id} />
+      </Suspense>
+    ),
+  }),
+)
 
 const featureRoutes = FEATURE_VIEWS.map((view) =>
   createRoute({

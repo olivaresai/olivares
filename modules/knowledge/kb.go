@@ -113,12 +113,12 @@ func embedderRegion(e Embedder) string {
 // region-locked (≠ ""/"global"), the embedder EGRESSES, and the embedder's declared
 // provider region does not match the KB region (or is undeclared). Such a pairing is
 // REFUSED at KB create/update, ingest and retrieval (defense in depth) so the chunk
-// text and the query never leave the KB's residency boundary (docs/SECURITY-HARDENING.md — el dato
-// NUNCA sale del perímetro; the air-gap/residency guarantee).
+// text and the query never leave the KB's residency boundary (docs/SECURITY-HARDENING.md:
+// data must never leave the perimeter; the air-gap/residency guarantee).
 //
 // This is the EGRESS residency gate (no cross-border EMBED), DISTINCT from and
 // composed with the retrieval-time identity-vs-KB residency gate (no cross-border
-// READ, retrieval.go). Listón: inference_geo ∈ {global, us, not_available} and
+// READ, retrieval.go). Requires inference_geo ∈ {global, us, not_available} and
 // the Workspace data-residency geo is a SEPARATE control from inference routing —
 // choosing inference_geo alone does NOT satisfy a residency-locked KB; the embedder
 // must be provably in-region, else egress is refused (fail closed).

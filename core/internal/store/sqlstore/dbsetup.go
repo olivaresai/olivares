@@ -681,9 +681,9 @@ func RenderProvisionSQL(spec store.PgProvisionSpec) ([]store.PgProvisionStep, er
 		// already migrated the bulk grant widens it, so it is re-established in the same
 		// transaction (loginCapabilityReprovisionStmt).
 		add("app role: DML on the owner's future + existing tables, minus mutation on the append-only (evidence) ones — ONE TRANSACTION",
-			fmt.Sprintf("BEGIN;\nGRANT USAGE ON SCHEMA public TO %s;\nALTER DEFAULT PRIVILEGES FOR ROLE %s IN SCHEMA public\n  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO %s;\nALTER DEFAULT PRIVILEGES FOR ROLE %s IN SCHEMA public\n  GRANT USAGE, SELECT ON SEQUENCES TO %s;\nGRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO %s;\nGRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO %s;\n%s;\n%s;\nCOMMIT;",
+			fmt.Sprintf("BEGIN;\nGRANT USAGE ON SCHEMA public TO %s;\nALTER DEFAULT PRIVILEGES FOR ROLE %s IN SCHEMA public\n  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO %s;\nALTER DEFAULT PRIVILEGES FOR ROLE %s IN SCHEMA public\n  GRANT USAGE, SELECT ON SEQUENCES TO %s;\nGRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO %s;\nGRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO %s;\n%s;\n%s;\n%s;\nCOMMIT;",
 				spec.App.Name, owner.Name, spec.App.Name, owner.Name, spec.App.Name, spec.App.Name, spec.App.Name,
-				dialect.AppendOnlyCatalogRevokeStmt(spec.App.Name, "public"), loginCapabilityReprovisionStmt(spec.App.Name)), false)
+				dialect.AppendOnlyCatalogRevokeStmt(spec.App.Name, "public"), loginCapabilityReprovisionStmt(spec.App.Name), finOpsCustodyReprovisionStmt(spec.App.Name)), false)
 	}
 
 	if spec.Admin != nil {
@@ -1342,6 +1342,8 @@ func grantAppDML(ctx context.Context, db *sql.DB, dbName, ownerName, appName str
 		// And re-establish the exact core v13 login capability boundary the bulk grant
 		// widened on a migrated database, or the next boot refuses the drift.
 		loginCapabilityReprovisionStmt(appName),
+		// Custody is owner-written and SELECT-only for the application role.
+		finOpsCustodyReprovisionStmt(appName),
 	}
 	return execAllTx(ctx, db, stmts)
 }

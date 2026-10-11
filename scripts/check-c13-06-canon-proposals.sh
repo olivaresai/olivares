@@ -15,7 +15,7 @@ cd "$ROOT" || cannot "cannot enter $ROOT"
 
 CANON="${OLIVARES_C1306_CANON:-design/PRICING-CANON.md}"
 DOC="${OLIVARES_C1306_DOC:-design/C13-06-CANON-PROPOSALS-2026-08-19.md}"
-WIRE="${OLIVARES_C1306_WIRE:-cmd/olivares/wire_noenterprise.go}"
+WIRE="${OLIVARES_C1306_WIRE:-cmd/olivares/edition_ports.go}"
 
 [ -f "$CANON" ] || cannot "missing $CANON"
 [ -f "$DOC" ] || cannot "missing $DOC"
@@ -47,7 +47,7 @@ grep -q 'NO APLICADO' "$DOC" || fail "$DOC lost NO APLICADO"
 grep -q 'modules_day_one' "$DOC" && grep -q 'self_hosted.enterprise' "$DOC" && grep -q 'retrievalscan' "$DOC" \
 	|| fail "$DOC no longer names the three proposals"
 if grep -qiE 'aplicamos la propuesta|applied proposal|canon rewritten' "$DOC"; then
-	fail "$DOC claims an application this lote does not have"
+	fail "$DOC claims an application this batch does not have"
 fi
 
 say "check-c13-06-canon-proposals: CLEAN — five keys and enterprise scope still in the canon; proposals presented, none applied."

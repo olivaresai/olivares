@@ -17,7 +17,7 @@
     "activationStateUnknown": "L’activation est indisponible tant que la console ne peut pas vérifier l’octroi actuel et l’état des revues.",
     "activationBlockedUnreviewed": "Un octroi antérieur n’a pas encore été examiné. Fermez-le s’il est actif, puis faites effectuer sa revue a posteriori par un autre compte utilisateur avant d’ouvrir une nouvelle fenêtre d’urgence.",
     "activationHumanRequired": "Un jeton système ne peut pas activer l’accès d’urgence. Connectez-vous en tant qu’administrateur humain disposant d’une identité stable.",
-    "activationHardwareRequired": "L’activation du break-glass exige une session vérifiée par matériel (AAL3). Effectuez l’élévation WebAuthn ou PIV depuis Identité → Connexion privilégiée, puis revenez ici.",
+    "activationHardwareRequired": "L’activation du break-glass exige une session vérifiée par matériel (AAL3). Effectuez l’élévation WebAuthn depuis Identité → Connexion privilégiée, puis revenez ici.",
     "currentTitle": "Accès d’urgence actuel",
     "currentCaption": "Qui peut contourner le double contrôle maintenant, pour quelles actions et jusqu’à quand.",
     "noActive": "Aucun accès d’urgence actif",
@@ -225,7 +225,8 @@
     "decisionApprove": "Approuvé",
     "decisionReject": "Rejeté",
     "reenableNeedsAdmins": "Deux autres comptes administrateur doivent approuver. Créez-les dans Identité et NHI, ou avec `olivares users create`.",
-    "openIdentity": "Ouvrir Identité et NHI"
+    "openIdentity": "Ouvrir Identité et NHI",
+    "cannotDecideOwn": "Vous ne pouvez pas approuver votre propre demande. Un autre administrateur doit décider."
   },
   "policies": {
     "title": "Politiques",
@@ -392,8 +393,7 @@
     "denied": "Computer-use refusé par la politique",
     "sensitiveInput": "Le texte saisi par computer-use contient du contenu sensible (classes DLP détectées)",
     "responseBlocked": "Réponse retenue : le texte saisi par computer-use contient du contenu sensible",
-    "honesty": "L’application est verified-deployed uniquement au proxy. Un ANTHROPIC_BASE_URL personnalisé le contourne. Les outils computer-use sont côté client : le modèle propose, le client exécute.",
-    "enterpriseRequired": "L’analyse approfondie des captures d’écran (OCR + DLP) et l’enregistrement de la chronologie nécessitent le module commercial."
+    "honesty": "L’application est verified-deployed uniquement au proxy. Un ANTHROPIC_BASE_URL personnalisé le contourne. Les outils computer-use sont côté client : le modèle propose, le client exécute."
   },
   "projects": {
     "title": "Gouvernance des projets Claude",
@@ -714,6 +714,7 @@
     "folder": "Dossier",
     "askedBy": "Demandé par",
     "askedBySession": "La session elle-même",
+    "askedByForSession": "{{name}} pour une nouvelle session",
     "tool": "Outil",
     "willRun": "Ce qui sera exécuté",
     "noReview": "Cette demande n’indique pas ce qui sera exécuté.",
@@ -723,6 +724,10 @@
     "details": "Détails",
     "id": "Identifiant de la demande",
     "untitled": "Session sans titre",
-    "openToDecide": "Ouvrir pour approuver ou refuser"
+    "openToDecide": "Ouvrir pour approuver ou refuser",
+    "you": "Vous",
+    "member": "Un membre",
+    "apiToken": "Un jeton API",
+    "requestSummary": "Demande"
   }
 }

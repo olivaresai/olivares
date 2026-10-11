@@ -67,13 +67,6 @@ func (h *harness) addAgentToGroup(tenant model.TenantID, agentID model.ID, group
 
 // publishGrant activates a tenant's authored Cedar grant policy through the real
 // authoring surface (admin must hold governance:policy:admin in the tenant).
-func (h *harness) publishGrant(admin string, tenant model.TenantID, src string) {
-	h.t.Helper()
-	r := h.do("POST", "/v1/m/governance/pdp/publish", admin, map[string]any{"engine": "cedar", "source": src}, tenantHdr(tenant))
-	if r.code != http.StatusOK {
-		h.t.Fatalf("publish grant = %d %s", r.code, r.raw)
-	}
-}
 
 func (h *harness) scoped(tenant model.TenantID, p auth.Principal, perm auth.Permission, resourceID model.ID) auth.ScopedDecision {
 	h.t.Helper()

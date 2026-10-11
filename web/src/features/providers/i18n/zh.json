@@ -1,11 +1,12 @@
 {
   "title": "提供方",
-  "subtitle": "通过提供方配置档选择云服务凭据或本地模型端点。",
+  "subtitle": "智能体工具使用的云服务凭据或本地模型端点。",
   "nav": "提供方",
   "add": "添加提供方",
+  "rowMenu": "{{name}} 的行操作",
   "empty": {
     "title": "尚未注册任何提供方",
-    "description": "使用 API 密钥连接 Anthropic、OpenAI 或 xAI，或添加无需密钥的本地 Ollama 端点。测试连接，然后绑定到配置档。",
+    "description": "使用 API 密钥连接 Anthropic、OpenAI 或 xAI，或添加无需密钥的本地 Ollama 端点，然后测试连接。",
     "action": "添加你的第一个提供方"
   },
   "emptyFiltered": {
@@ -28,6 +29,7 @@
     "anthropic": "Anthropic",
     "openai": "OpenAI",
     "xai": "xAI",
+    "gemini": "Gemini",
     "openai_compatible": "兼容 OpenAI",
     "ollama": "Ollama"
   },
@@ -35,6 +37,7 @@
     "anthropic": "Claude Code。注入 ANTHROPIC_API_KEY。",
     "openai": "Codex。注入 OPENAI_API_KEY。",
     "xai": "Grok。注入 XAI_API_KEY。",
+    "gemini": "Gemini CLI 使用 Google 官方 API 地址和 Gemini API 密钥。",
     "openai_compatible": "任何 OpenAI 形态的端点。注入 OPENAI_API_KEY 和 OPENAI_BASE_URL；端点为必填。",
     "ollama": "用于 OpenCode 的本地模型。无需 API 密钥。请使用 Ollama 原生端点；测试读取模型元数据。"
   },
@@ -78,6 +81,7 @@
     "namePlaceholder": "Anthropic（生产）",
     "baseURL": "端点",
     "baseURLHint": "留空表示使用提供方的官方端点。必须是 https。",
+    "baseURLLocalHint": "留空表示使用提供方的官方端点。否则使用 https，或环回或私有网络地址上的普通 http。",
     "baseURLPlaceholder": "https://llm.example.com",
     "apiKey": "API 密钥",
     "apiKeyHint": "只发送一次，由引擎封存，永不返回到此浏览器。",
@@ -85,11 +89,13 @@
     "submit": "添加提供方",
     "submitting": "封存中…",
     "cancel": "取消",
-    "success": "提供方已注册。请测试连接以确认它可用。",
+    "success": "已添加提供方。",
     "testNext": "立即测试连接",
     "registering": "正在注册…",
     "localNameHint": "此端点的显示名称，将显示在选择器中。",
-    "advanced": "Advanced: custom endpoint"
+    "advanced": "Advanced: custom endpoint",
+    "missingFields": "请填写缺少的字段：{{fields}}。",
+    "requiredEndpointHint": "请输入服务端点：https，或环回或私有网络地址上的普通 http。"
   },
   "rotate": {
     "title": "更换此提供方的密钥",
@@ -137,5 +143,24 @@
     "unavailable": "缺少配置档权限或兼容的活动配置档。",
     "loadError": "无法加载配置档。",
     "success": "提供方已绑定到配置档。"
+  },
+  "defaultModel": {
+    "title": "默认模型",
+    "model": "模型",
+    "hint": "新会话使用此模型，除非另选模型。",
+    "modelsHint": "此提供商上次连接测试列出的模型。",
+    "native": "未保存默认模型",
+    "save": "保存",
+    "success": "默认模型已保存。",
+    "createHint": "可选。留空将在连接测试后选择默认模型。"
+  },
+  "prepare": {
+    "pending": "正在为首次会话准备 {{tool}}…",
+    "installing": "正在为首次会话安装 {{tool}}：{{progress}}",
+    "ready": "已准备好开始会话。",
+    "start": "新建会话",
+    "failed": "提供商已保存。会话准备失败：{{error}}",
+    "retry": "重试准备",
+    "incomplete": "工具安装状态为 {{state}}。请检查 AI 工具后重试。"
   }
 }

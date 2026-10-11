@@ -1,0 +1,133 @@
+{
+  "$comment": "Pre-publication observations for the next release. GitHub returned HTTP 404 for 0.1 and its named assets. Anonymous OCI reads returned HTTP 401, which proves inability, not absence. This is not a production qualification.",
+  "schema": "olivares.ai/install-surfaces/v1",
+  "version": "0.1",
+  "measured_at": "2026-10-10T07:24:53Z",
+  "surfaces": [
+    {
+      "id": "github-release",
+      "status": "not-published",
+      "producer": {
+        "path": ".goreleaser.yaml",
+        "matches": "^release:$"
+      },
+      "prose": {
+        "path": "README.md",
+        "contains": "https://github.com/olivaresai/olivares/releases/tag/0.1"
+      },
+      "evidence": "GET https://api.github.com/repos/olivaresai/olivares/releases/tags/0.1 returned HTTP 404 at 2026-10-10T07:24:53Z. Scope: the exact 0.1 GitHub release or asset URL only."
+    },
+    {
+      "id": "archives",
+      "status": "not-published",
+      "producer": {
+        "path": ".goreleaser.yaml",
+        "matches": "^archives:$"
+      },
+      "prose": {
+        "path": "INSTALL.md",
+        "contains": "olivares_${ver}_${os}_${arch}.tar.gz"
+      },
+      "evidence": "GET https://github.com/olivaresai/olivares/releases/download/0.1/olivares_0.1_linux_amd64.tar.gz returned HTTP 404 at 2026-10-10T07:24:53Z. Scope: the exact 0.1 GitHub release or asset URL only."
+    },
+    {
+      "id": "native-packages",
+      "status": "not-published",
+      "producer": {
+        "path": "packaging/nfpm/packages.json",
+        "matches": "^[[:space:]]*\"nfpms\": [[]$"
+      },
+      "prose": {
+        "path": "docs-site/src/content/docs/how-to/install-from-packages.md",
+        "contains": "olivares_0.1_linux_amd64.deb"
+      },
+      "evidence": "GET https://github.com/olivaresai/olivares/releases/download/0.1/olivares_0.1_linux_amd64.deb returned HTTP 404 at 2026-10-10T07:24:53Z. Scope: the exact 0.1 GitHub release or asset URL only."
+    },
+    {
+      "id": "ghcr",
+      "status": "publication-unverified",
+      "producer": {
+        "path": ".goreleaser.yaml",
+        "matches": "^dockers:$"
+      },
+      "prose": {
+        "path": "INSTALL.md",
+        "contains": "ghcr.io/olivaresai/olivares:0.1"
+      },
+      "evidence": "Anonymous publication read could not establish availability of this OCI coordinate; no absence or publication is claimed.",
+      "inabilities": [
+        {
+          "observed_at": "2026-10-10T07:24:53Z",
+          "request": "GET https://ghcr.io/v2/olivaresai/olivares/manifests/0.1",
+          "answer": "HTTP 401; authentication is required, so the manifest state was not observed."
+        }
+      ]
+    },
+    {
+      "id": "docker-hub",
+      "status": "publication-unverified",
+      "producer": {
+        "path": ".github/workflows/release.yml",
+        "matches": "^[[:space:]]+MIRROR_IMAGE_REPO:.*['\"]docker[.]io/olivaresai/olivares['\"]"
+      },
+      "prose": {
+        "path": "INSTALL.md",
+        "contains": "docker.io/olivaresai/olivares:0.1"
+      },
+      "evidence": "Anonymous publication read could not establish availability of this OCI coordinate; no absence or publication is claimed.",
+      "inabilities": [
+        {
+          "observed_at": "2026-10-10T07:24:53Z",
+          "request": "GET https://registry-1.docker.io/v2/olivaresai/olivares/manifests/0.1",
+          "answer": "HTTP 401; authentication is required, so the manifest state was not observed."
+        }
+      ]
+    },
+    {
+      "id": "homebrew",
+      "status": "not-published",
+      "producer": {
+        "path": ".goreleaser.yaml",
+        "matches": "^homebrew_casks:$"
+      },
+      "prose": {
+        "path": "INSTALL.md",
+        "contains": "brew install olivaresai/tap/olivares"
+      },
+      "evidence": "GET https://raw.githubusercontent.com/olivaresai/homebrew-tap/main/Casks/olivares.rb returned HTTP 200 at 2026-10-10T07:24:53Z; the active cask names a different version. Scope: this tap main Casks/olivares.rb, not all registries."
+    },
+    {
+      "id": "installer",
+      "status": "not-published",
+      "producer": {
+        "path": "scripts/install.sh",
+        "matches": "^\"[$]cosign_bin\" verify-blob"
+      },
+      "prose": {
+        "path": "INSTALL.md",
+        "contains": "https://olivares.ai/olivares/install.sh"
+      },
+      "evidence": "GET https://github.com/olivaresai/olivares/releases/download/0.1/olivares-install-0.1.sh returned HTTP 404 at 2026-10-10T07:24:53Z. Scope: the exact 0.1 GitHub release or asset URL only."
+    },
+    {
+      "id": "helm-oci",
+      "status": "publication-unverified",
+      "producer": {
+        "path": ".github/workflows/release-chart.yml",
+        "matches": "^[[:space:]]+tags: [[][\"]chart-v[*][\"][]]$"
+      },
+      "prose": {
+        "path": "INSTALL.md",
+        "contains": "cosign-signed \u2014 is **unverified**"
+      },
+      "evidence": "Anonymous publication read could not establish availability of this OCI coordinate; no absence or publication is claimed.",
+      "inabilities": [
+        {
+          "observed_at": "2026-10-10T07:24:53Z",
+          "request": "GET https://ghcr.io/v2/olivaresai/charts/olivares/manifests/0.1.0",
+          "answer": "HTTP 401; authentication is required, so the manifest state was not observed."
+        }
+      ]
+    }
+  ]
+}

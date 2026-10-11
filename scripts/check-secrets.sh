@@ -809,10 +809,10 @@ fi
 # un gate sólo debe cobrarte por lo que puedes arreglar. Y no afloja nada: ese mismo secreto se cobra
 # cuando se gatea SU rama, que es donde vive quien puede rotarlo.
 if [ "$reachable_n" -eq 0 ] && [ "$unreachable_n" -gt 0 ]; then
-	say "check-secrets: ⚠ ${unreachable_n} hallazgo(s), NINGUNO alcanzable desde HEAD."
-	say "  No se cobra a este push: no introduce ninguno. Pero NO son inexistentes — están arriba con"
-	say "  el ref que los lleva, y siguen siendo secretos que alguien debe rotar y limpiar del clon."
-	say "  Si aparecen en el runner compartido, se limpia SU clon; no se hace un allowlist desde aquí."
+	say "check-secrets: ⚠ ${unreachable_n} finding(s), NONE reachable from HEAD."
+	say "This push introduces none of them. They still exist: their containing refs are listed above,"
+	say "and the secrets must still be rotated and removed from the clone."
+	say "If they appear on the shared runner, clean that clone; do not add an allowlist here."
 	exit 0
 fi
 exit 1

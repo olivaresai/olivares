@@ -18,7 +18,7 @@ import (
 // injects build-independently (cmd/olivares/federationwire.go) so SSO can be
 // configured from the console rather than a redeploy. Since it is OPEN-CORE
 // and wired in BOTH builds, so the base AGPL artifact builds a real single-IdP
-// provider from managed config (it links go-oidc/crewjam now).
+// provider from managed config (it links go-oidc/gosaml2 now).
 //
 // It fails like FromEnv: a partial/invalid config or an unreachable IdP at
 // construction is an error (the core resolver maps it to NoFederation/501), never

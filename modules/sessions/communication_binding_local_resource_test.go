@@ -47,14 +47,14 @@ func TestProtocolLocalResourcePreviewRequiresAuthoritativeProjection(t *testing.
 	resourceID := model.NewID()
 	input := protocolAgentRuntimeInputForTest(resourceID)
 
-	unwired := (&Module{}).validateProtocolLocalResourcePreview(ctx, tenant, input)
+	unwired := (&Module{Dependencies: &Dependencies{}}).validateProtocolLocalResourcePreview(ctx, tenant, input)
 	if unwired == nil || unwired.Verdict != ProtocolObservationUnknown ||
 		unwired.Code != "local_resource_resolver_unwired" {
 		t.Fatalf("unwired preview = %#v", unwired)
 	}
 
-	module := &Module{}
-	module.UseProtocolLocalResourceResolver(protocolLocalResourceResolverFunc(func(
+	module := &Module{Dependencies: &Dependencies{}}
+	module.ProtocolLocalResourceResolver = protocolLocalResourceResolverFunc(func(
 		_ context.Context,
 		gotTenant model.TenantID,
 		request ProtocolLocalResourceRequest,
@@ -67,7 +67,7 @@ func TestProtocolLocalResourcePreviewRequiresAuthoritativeProjection(t *testing.
 			WorkspaceID: request.WorkspaceID, Kind: request.Kind, ID: request.ID, Version: 3,
 			Fields: map[string]any{"agent.name": "Operations agent"},
 		}, nil
-	}))
+	})
 	if validation := module.validateProtocolLocalResourcePreview(ctx, tenant, input); validation != nil {
 		t.Fatalf("authoritative preview = %#v, want success", validation)
 	}
@@ -93,8 +93,8 @@ func TestProtocolLocalResourcePreviewSupportsEveryClosedNonWorkKind(t *testing.T
 				Source: row.source, Target: "message.text",
 				Cardinality: ProtocolMappingOneToOne, Transform: ProtocolTransformText,
 			}}
-			module := &Module{}
-			module.UseProtocolLocalResourceResolver(protocolLocalResourceResolverFunc(func(
+			module := &Module{Dependencies: &Dependencies{}}
+			module.ProtocolLocalResourceResolver = protocolLocalResourceResolverFunc(func(
 				_ context.Context,
 				_ model.TenantID,
 				request ProtocolLocalResourceRequest,
@@ -103,7 +103,7 @@ func TestProtocolLocalResourcePreviewSupportsEveryClosedNonWorkKind(t *testing.T
 					WorkspaceID: request.WorkspaceID, Kind: request.Kind, ID: request.ID, Version: 1,
 					Fields: map[string]any{row.source: "resolved resource"},
 				}, nil
-			}))
+			})
 			if validation := module.validateProtocolLocalResourcePreview(
 				context.Background(), model.NewTenantID(), input,
 			); validation != nil {
@@ -145,14 +145,14 @@ func TestProtocolLocalResourcePreviewRejectsUnusableEvidence(t *testing.T) {
 	}
 	for _, row := range rows {
 		t.Run(row.name, func(t *testing.T) {
-			module := &Module{}
-			module.UseProtocolLocalResourceResolver(protocolLocalResourceResolverFunc(func(
+			module := &Module{Dependencies: &Dependencies{}}
+			module.ProtocolLocalResourceResolver = protocolLocalResourceResolverFunc(func(
 				context.Context,
 				model.TenantID,
 				ProtocolLocalResourceRequest,
 			) (ProtocolLocalResourceProjection, error) {
 				return row.projection, nil
-			}))
+			})
 			validation := module.validateProtocolLocalResourcePreview(ctx, tenant, input)
 			if validation == nil || validation.Verdict == ProtocolObservationClean ||
 				validation.Code != row.wantCode {
@@ -161,14 +161,14 @@ func TestProtocolLocalResourcePreviewRejectsUnusableEvidence(t *testing.T) {
 		})
 	}
 
-	unavailable := &Module{}
-	unavailable.UseProtocolLocalResourceResolver(protocolLocalResourceResolverFunc(func(
+	unavailable := &Module{Dependencies: &Dependencies{}}
+	unavailable.ProtocolLocalResourceResolver = protocolLocalResourceResolverFunc(func(
 		context.Context,
 		model.TenantID,
 		ProtocolLocalResourceRequest,
 	) (ProtocolLocalResourceProjection, error) {
 		return ProtocolLocalResourceProjection{}, errors.New("not available")
-	}))
+	})
 	validation := unavailable.validateProtocolLocalResourcePreview(ctx, tenant, input)
 	if validation == nil || validation.Code != "local_resource_unavailable" {
 		t.Fatalf("unavailable preview = %#v", validation)
@@ -201,7 +201,7 @@ func TestProtocolBindingSpecAPINonWorkResourceIsResolvedForEveryDecision(t *test
 	module.UseProtocolBindingSpecValidator(BindingProtocolA2A, remote)
 	resourceID := model.NewID()
 	resolverCalls := 0
-	module.UseProtocolLocalResourceResolver(protocolLocalResourceResolverFunc(func(
+	module.ProtocolLocalResourceResolver = protocolLocalResourceResolverFunc(func(
 		_ context.Context,
 		_ model.TenantID,
 		request ProtocolLocalResourceRequest,
@@ -211,7 +211,7 @@ func TestProtocolBindingSpecAPINonWorkResourceIsResolvedForEveryDecision(t *test
 			WorkspaceID: request.WorkspaceID, Kind: request.Kind, ID: request.ID, Version: 1,
 			Fields: map[string]any{"agent.name": "Resolved agent"},
 		}, nil
-	}))
+	})
 	h := newHarness(t, module)
 	admin := h.adminLogin()
 	tenant := h.createOrg(admin, "protocol-binding-agent-preview")

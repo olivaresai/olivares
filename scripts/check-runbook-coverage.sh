@@ -20,13 +20,13 @@ rules="$repo_root/deploy/monitoring/olivares-slo.rules.yaml"
 # Y una entrada VACÍA tampoco es cobertura: cero alertas paginables no es «todas cubiertas», es un
 # censo que dejó de encontrar sujeto. Las dos salen por la tercera respuesta, con nombre.
 if [ ! -r "$rules" ]; then
-	echo "runbook coverage: NO HE PODIDO MIRAR: falta ${rules}." >&2
-	echo "  Sin las reglas no hay alertas que cubrir, y eso no es cobertura: es no haber mirado." >&2
+	echo "runbook coverage: COULD NOT CHECK: missing ${rules}." >&2
+	echo "  Without rules there are no alerts to cover; nothing was checked." >&2
 	exit 2
 fi
 if ! grep -qE '^[[:space:]]*-[[:space:]]*alert:' "$rules"; then
-	echo "runbook coverage: NO HE PODIDO MIRAR: ${rules} no declara ninguna alerta." >&2
-	echo "  Cero alertas paginables no es «todas cubiertas»: es un censo sin sujeto." >&2
+	echo "${rules} declares no alerts." >&2
+	echo "  No paging alerts found; an empty scan cannot prove full coverage." >&2
 	exit 2
 fi
 

@@ -2,43 +2,27 @@
 # SPDX-FileCopyrightText: 2026 Olivares.AI
 # SPDX-License-Identifier: AGPL-3.0-only
 #
-# check-rescue-backlog.sh — un rescate no deja de estar pendiente por estar publicado.
+# check-rescue-backlog.sh — publishing a rescue does not integrate its pending work.
 #
 # CENSUS-SUBJECT: external
-#   Su sujeto son los refs del REMOTO, no el árbol: pasar sobre un árbol vacío es correcto.
+# The subject is remote refs, not local files; an empty tree can pass correctly.
 #
-# ⛔ POR QUÉ EXISTE, medido el 2026-09-02 (a repository gate). Lo levantó al publicar su propio rescate:
+# found this gap on 2026-09-02 (a repository gate): check-unpublished-work.sh uses
+# --not --remotes, counting commits unreachable from any remote. Publishing a rescue
+# therefore removed it from that census without integrating it. Remote refs survive
+# worktree deletion and can still lose work if no one claims them. Measured that day:
+# 16 refs under refs/heads/rescate/*, 87 unintegrated patches, some from August 2.
 #
-#   «el control post-rescate de esta casa es CIEGO a refs/rescate/*. Un ref ahí existe pero no
-#    aparece en el censo que busca trabajo sin publicar, así que esto sobrevive al borrado del
-#    worktree y sigue sin salir en ninguna lista. Si nadie lo recoge, se pierde igual — sólo que
-#    más despacio.»
+# Use git cherry's patch-id comparison. Rescues rebase onto feature/* and change SHA;
+# merge-base --is-ancestor <tip> main would report pending forever after integration.
+# Repeated false alarms defeat the control. git cherry reports +<sha> for pending
+# patches and -<sha> for integrated equivalents. The positive control used the same
+# patch with another SHA: ancestry said pending, cherry said integrated.
 #
-#   Y no era un riesgo de diseño: era un mes de trabajo. `check-unpublished-work.sh` cuenta con
-#   `--not --remotes`, es decir, commits inalcanzables desde CUALQUIER remoto — así que **publicar
-#   un rescate lo BORRA del censo sin integrarlo**. Medido ese día: **16 refs bajo
-#   `refs/heads/rescate/*` con 87 parches sin integrar**, algunos del **2 de agosto**.
-#   Un rescate que se anula a sí mismo es peor que no rescatar: da por salvado lo que sigue perdido.
-#
-# ⛔ EL PREDICADO ES `git cherry`, Y LA ALTERNATIVA OBVIA FABRICA EL DEFECTO QUE ARREGLA.
-#   Un rescate se integra REBASADO a `feature/*`, así que sus SHA cambian. Con
-#   `merge-base --is-ancestor <punta> main` la respuesta sería **NO para siempre**, incluso después
-#   de integrarlo perfectamente — y un control que grita cuando el trabajo ya está dentro se
-#   desactiva solo: a la tercera falsa alarma nadie lo mira. `git cherry` compara por **patch-id**:
-#
-#       +<sha>  el parche NO está en main  → sigue PENDIENTE
-#       -<sha>  ya está, con otro SHA      → deja de contar
-#
-#   Control positivo medido, mismo parche y otro SHA:  is-ancestor ⛔ pendiente · cherry ✅ integrado.
-#
-# ⚠ SU LÍMITE, escrito aquí y no descubierto luego: el patch-id cambia con CUALQUIER
-#   integración que MODIFIQUE el parche — un squash, un cambio pedido en revisión, un conflicto
-#   resuelto de otra forma, otro `gofmt`. El squash es sólo el caso más visible. Por eso existe la
-#   salida explícita: una línea `rescue-integrated: <ref> <sha-que-lo-absorbió> <fecha>` en
-#   `an internal design note (not shipped)`. No es la excepción del squash: es la salida general para toda
-#   integración no idéntica.
-#
-# Salida: 0 no hay pendientes · 1 los hay (con su edad) · 2 NO HE PODIDO MIRAR.
+# Limit: any edit changes patch-id, including squash, review fixes, conflict
+# resolution or gofmt. The explicit general escape for nonidentical integration is
+# `rescue-integrated: <ref> <absorbing-sha> <date>` in an internal design note (not shipped)
+# Exit: 0 no pending work · 1 pending work with age · 2 could not check.
 set -uo pipefail
 LC_ALL=C
 export LC_ALL
@@ -52,13 +36,13 @@ _olivares_git_env="$(cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")" && pwd)/lib/g
 unset _olivares_git_env
 
 decir() { printf '%s\n' "$*"; }
-ciego() { printf 'check-rescue-backlog: NO HE PODIDO MIRAR: %s\n' "$*" >&2; exit 2; }
+ciego() { printf 'check-rescue-backlog: COULD NOT CHECK: %s\n' "$*" >&2; exit 2; }
 
-RAIZ="$(git rev-parse --show-toplevel 2>/dev/null)" || ciego "no estoy dentro de un repositorio git"
-cd "$RAIZ" || ciego "no puedo entrar en $RAIZ"
+RAIZ="$(git rev-parse --show-toplevel 2>/dev/null)" || ciego "not inside a Git repository"
+cd "$RAIZ" || ciego "cannot enter $RAIZ"
 
 BASE="${OLIVARES_RESCUE_BASE:-origin/main}"
-git rev-parse -q --verify "$BASE" >/dev/null 2>&1 || ciego "no existe la base $BASE"
+git rev-parse -q --verify "$BASE" >/dev/null 2>&1 || ciego "base $BASE does not exist"
 
 LEDGER="${OLIVARES_RESCUE_LEDGER:-design/RESCUE-LEDGER.md}"
 UMBRAL_DIAS="${OLIVARES_RESCUE_AGE_DAYS:-7}"
@@ -67,14 +51,14 @@ UMBRAL_DIAS="${OLIVARES_RESCUE_AGE_DAYS:-7}"
 REFS="$(git for-each-ref --format='%(refname:short)' 'refs/remotes/*/rescate/*' 2>/dev/null)"
 [ -n "$REFS" ] || REFS="$(git for-each-ref --format='%(refname:short)' 'refs/heads/rescate/*' 2>/dev/null)"
 if [ -z "$REFS" ]; then
-	decir "check-rescue-backlog: LIMPIO — no hay refs bajo rescate/*."
+	decir "check-rescue-backlog: CLEAN — no refs under rescate/*."
 	exit 0
 fi
 
 ahora="$(date -u +%s)"
 pendientes=0
 ramas=0
-salida=""
+output=""
 sin_medir=""
 while IFS= read -r ref; do
 	[ -n "$ref" ] || continue
@@ -86,7 +70,7 @@ while IFS= read -r ref; do
 	n="$(timeout "${OLIVARES_RESCUE_TIMEOUT:-60}" git cherry "$BASE" "$ref" 2>/dev/null | grep -c '^+')"
 	rc_cherry=$?
 	if [ "$rc_cherry" -eq 124 ]; then
-		sin_medir="$sin_medir  $ref — NO MEDIDO: git cherry excedió ${OLIVARES_RESCUE_TIMEOUT:-60}s
+		sin_medir="$sin_medir  $ref — UNMEASURED: git cherry exceeded ${OLIVARES_RESCUE_TIMEOUT:-60}s
 "
 		continue
 	fi
@@ -102,42 +86,42 @@ while IFS= read -r ref; do
 	cuando="$(git log -1 --format='%ct' "$ref" 2>/dev/null)"
 	dias="?"
 	case "$cuando" in ''|*[!0-9]*) ;; *) dias=$(( (ahora - cuando) / 86400 )) ;; esac
-	salida="$salida  $ref — $n parche(s) sin integrar, $dias día(s)
+	output="$output  $ref — $n unintegrated patch(es), $dias day(s)
 "
 done <<REFLIST
 $REFS
 REFLIST
 
 if [ -n "$sin_medir" ]; then
-	printf 'check-rescue-backlog: NO HE PODIDO MIRAR algunos refs:\n' >&2
+	printf 'check-rescue-backlog: COULD NOT CHECK some refs:\n' >&2
 	printf '%s' "$sin_medir" >&2
-	printf '  Un ref no medido NO es un ref limpio. Sube OLIVARES_RESCUE_TIMEOUT o mídelo aparte.\n' >&2
+	printf '  An unmeasured ref cannot be reported as clean. Raise OLIVARES_RESCUE_TIMEOUT or measure it separately.\n' >&2
 	exit 2
 fi
 
 if [ "$ramas" -eq 0 ]; then
-	decir "check-rescue-backlog: LIMPIO — ningún rescate tiene parches fuera de $BASE."
+	decir "check-rescue-backlog: CLEAN — no recovery branch has patches missing from $BASE."
 	exit 0
 fi
 
-printf 'check-rescue-backlog: %s rescate(s) con %s parche(s) SIN INTEGRAR:\n' "$ramas" "$pendientes" >&2
-printf '%s' "$salida" >&2
+printf 'check-rescue-backlog: %s recovery branch(es) with %s unintegrated patch(es):\n' "$ramas" "$pendientes" >&2
+printf '%s' "$output" >&2
 # ⛔ EL DELIMITADOR VA ENTRECOMILLADO. Sin comillas, el shell EXPANDE el cuerpo: los backticks de
 #    `check-unpublished-work.sh` y `--not --remotes` se EJECUTARON y dejaron la frase
 #    gramatical y sin el dato — «Un rescate publicado NO está integrado: usa , así que…».
 #    Un mensaje de ayuda con un agujero no parece roto: parece una frase mal escrita.
 cat >&2 <<'AVISO'
-  Un rescate publicado NO está integrado: `check-unpublished-work.sh` usa `--not --remotes`, así
-  que publicarlo lo saca de ESE censo sin meterlo en main. Éste es el censo que sí lo ve.
-  Salidas, en este orden:
-    1. intégralo — rebasado a feature/*, carril rápido entero sobre esa rama;
-    2. si lo integraste y el parche cambió (squash, revisión, conflicto resuelto de otra forma),
-       declara la salida en el libro mayor de rescates:
-           rescue-integrated: rescate/<nombre> <sha-que-lo-absorbió> <fecha ISO>
-       porque el patch-id cambia con cualquier integración no idéntica y este gate volvería a
-       contarlo;
-    3. si no debe integrarse, dilo igual en ese libro mayor con el sha y la razón: un NO-LAND declarado
-       deja de ser un pendiente silencioso.
+  Publishing a recovery branch does not integrate it: `check-unpublished-work.sh` uses `--not --remotes`,
+  so publication removes it from that inventory without merging it into main. This inventory still sees it.
+  Resolve it in this order:
+    1. Integrate it: rebase onto feature/* and run the full fast lane on that branch.
+    2. If integration changed the patch (squash, review changes, or a different conflict resolution),
+       record its integration in the recovery ledger:
+           rescue-integrated: rescate/<name> <absorbing-sha> <ISO-date>
+       Patch IDs change with any nonidentical integration, so this gate would otherwise count
+       it again.
+    3. If it should not land, record its SHA and rationale in the same ledger: an explicit NO-LAND
+       decision removes a silently pending patch.
 AVISO
-[ "$UMBRAL_DIAS" -gt 0 ] 2>/dev/null && printf '  (edad de referencia: %s días)\n' "$UMBRAL_DIAS" >&2
+[ "$UMBRAL_DIAS" -gt 0 ] 2>/dev/null && printf '  (reference age: %s days)\n' "$UMBRAL_DIAS" >&2
 exit 1

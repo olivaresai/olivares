@@ -43,25 +43,28 @@ Codex ドライバー、Grok ドライバー）、生成された
    ソースのバインドには `sessions:profile-binding:write` とソース管理が必要です。
    ランの起動には `sessions:run:write` が必要です。
    権限: [コンソールリファレンス](/reference/console/)。
-4. 対応するドライバーは、公式バイナリを固定することで **このノードに登録**
-   されます。準備状態はドライバーごとです。共有スイッチはありません
-   （`cmd/olivares/sessionruntime.go`）。
+4. 対応するドライバーの実行ファイルが **このノード** に必要です。明示的に
+   固定したバイナリが優先され、固定していなければ起動時にエンジンが検索します。
+   ドライバーごとの準備状態とポリシーの確認は引き続き適用されます。
 
 | ドライバー | この環境変数を固定 | 未設定のとき |
 |---|---|---|
-| Claude Code | `OLIVARES_SESSION_RUNTIME_CLAUDE_BIN`（既定 `claude`） | Claude 経路は既定の実行ファイル名を使う |
-| Codex | `OLIVARES_SESSION_RUNTIME_CODEX_BIN` | 未設定なら、**登録済み**の管理対象インストール（`olivares agent tool install --driver codex`）がレシートの実行ファイルを固定する。それ以外では Codex プロファイルは観測可能のままで起動できない。エンジンは `PATH` を検索しない |
-| Grok | `OLIVARES_SESSION_RUNTIME_GROK_BIN` | 未設定なら、**登録済み**の管理対象インストール（`olivares agent tool install --driver grok`）がレシートの実行ファイルを固定する。それ以外では Grok プロファイルは観測可能のままで起動できない。エンジンは `PATH` を検索しない |
+| Claude Code | `OLIVARES_SESSION_RUNTIME_CLAUDE_BIN` | 検証済みの最新の管理対象インストール、次にエンジンの `PATH` 上の `claude`。 |
+| Codex | `OLIVARES_SESSION_RUNTIME_CODEX_BIN` | 検証済みの最新の管理対象インストール、次にエンジンの `PATH` 上の `codex`。 |
+| Grok | `OLIVARES_SESSION_RUNTIME_GROK_BIN` | 検証済みの最新の管理対象インストール、次にエンジンの `PATH` 上の `grok`。 |
 
-値はこのノードが運用してよい公式バイナリです。エンジンは `PATH` から
-`codex` や `grok` を解決しません。生成された設定表は同じ登録規則で
-`OLIVARES_SESSION_RUNTIME_OPENCODE_BIN` も列挙します。このページは
-OpenCode についてそれ以上の主張をしません。
+値はこのノードで使用する公式実行ファイルを固定します。固定していない場合、
+ツールをインストールするとエンジンの再起動なしで利用できます。管理対象
+インストールも `PATH` 上の実行ファイルもなければ、起動は拒否されます。
+`OLIVARES_SESSION_RUNTIME_OPENCODE_BIN` も同じ順序で検索します。
 
-Claude の起動には推論資格情報のソースがなお必要です
-（`OLIVARES_SESSION_RUNTIME_WIF` または
-`OLIVARES_SESSION_RUNTIME_TOKEN_FILE`）。
-[最初の1時間](/how-to/first-hour/) を参照。
+プロバイダーを指定しない `managed_injection` の Claude プロファイルでは、
+`OLIVARES_SESSION_RUNTIME_WIF` または `OLIVARES_SESSION_RUNTIME_TOKEN_FILE` が
+ホストの推論資格情報を提供します。プロバイダーに紐づいたプロファイルはその資格情報を使い、
+取得できない場合はホストの資格情報に切り替えずに起動を拒否します。
+`provider_account_home` のプロファイルは許可されたツールのログインを使い、
+どちらの変数も必要ありません。
+[プロバイダーを追加する](/ja/how-to/add-a-provider/) を参照してください。
 Codex と Grok はプロファイルの AUTHORIZED な `auth_source` だけを使います:
 `provider_account_home` または `managed_injection`。相互フォールバックも既定も
 ありません（`CHANGELOG.md` `[26.9.0]`、`ProviderProfileDTO.auth_source`）。
@@ -131,23 +134,36 @@ Codex と Grok はプロファイルの AUTHORIZED な `auth_source` だけを�
 古いリクエスト本体のままになり、この API はそれを拒否します
 （`CHANGELOG.md` `[26.9.0]` B2、CLI フラグ `--provider-profile`）。
 
-起動ダイアログは **active** なプロファイルを提示します。プロファイルは
-事前選択されません。workspace と template の選択はクリアできるが、
+起動ダイアログは **active** なプロファイルを提示します。active なプロファイルが
+1 つだけならそれが事前選択されます。複数ある場合はどれも選択されず、**Start**
+が選択を求めます。workspace と template の選択はクリアできるが、
 プロファイルはできません（`CHANGELOG.md` `[26.9.0]` Fixed）。
 
 ### コンソール
 
-1. **Operate sessions**（`/agentops`）または **Observe sessions**
-   （`/sessions`）を開く。画面は共有
+1. **セッション**（`/sessions`）を開く。`/agentops` も同じ画面を開く
    （[コンソールリファレンス](/reference/console/)）。
-2. 起動ダイアログを開く。
-3. **Provider profile**（`agentops.create.profile`）を選ぶ。ヒントは
-   プロファイル必須と述べる。
-4. 任意で workspace、template、model、effort を設定する。Grok では model と
-   effort は公式エージェントフラグ上のプロバイダー所有の開いた文字列のまま
-   （`CHANGELOG.md` `[26.9.0]`）。
-5. **Request launch** を送る。投稿されるのはプロファイルの **参照** だけ。
-   サーバーがホームを解決する。
+2. **New session** を開き、**Advanced launch options** を開く（ツールが
+   準備済みなら **More options** の中）。
+3. **Provider profile**（`agentops.create.profile`）を確認し、必要なら
+   **First message** を入力する。
+4. 任意で **Advanced options** で workspace、template、model、effort を設定
+   する。Grok では model と effort は公式エージェントフラグ上の
+   プロバイダー所有の開いた文字列のまま（`CHANGELOG.md` `[26.9.0]`）。
+5. **Start** を押す。開始できない間は、その下の行に足りないものが表示される。
+   投稿されるのはプロファイルの **参照** だけ。サーバーがホームを解決する。
+
+### ハンドオフに示された作業を開く
+
+ワークツリーはファイルを分離しますが、リポジトリの git メタデータは共有します。ハンドオフの内容には、作業の所在として任意の `branch` と `sha`（完全なコミット ID）を指定できます。API、または両方を含む JSON を受け取る `olivares message handoff offer --context-file` で提供します。どちらも指定しないハンドオフの動作は変わりません。
+
+指定されたハンドオフを読むと、パネルにブランチとコミットがテキストで表示されます。**新しいセッションワークツリーで開く**を選ぶと、ワークツリーが選択され、開始地点が表示された起動画面を開きます。コミットを保持するリポジトリのワークスペースを選ぶまで開始は待機します。フォルダーの選択を解除しても要求は保持されます。通常のセッションを開始するには、ワークツリーの選択を明示的に解除してください。CLI では次を使います：
+
+```sh
+olivares session start . --worktree-from <commit or branch> --name review
+```
+
+`--worktree-from` は `--worktree` を含意します。セッションはそのコミットから自身の新しいブランチで作業するため、送信者のブランチやあなたのチェックアウトは移動しません。ワークスペースのリポジトリにコミットがなければ、何も作成する前に起動が拒否されます（422）。先にそのリポジトリへ fetch してください。どのブランチ、タグ、リモートブランチも保持しないコミットも拒否されます。セッションの**ブランチの変更**ペインは、そのブランチにあり、ワークスペースの現在のコミットにない変更を一覧にし、各パスのマージベースとブランチ先端のテキストを並べて開きます。表示するのはコミット済みの作業のみで、ワークスペースの許可サブパスと DLP ポスチャに従います。未コミットの編集は**変更**にあります。
 
 ### CLI
 
@@ -156,9 +172,9 @@ olivares agent session create --provider-profile <profile_ref>
 ```
 
 [CLI リファレンス](/reference/cli/) のとおり `--server`、`--tenant`、
-`--token`（またはアクティブなクライアントコンテキスト）を付ける。
-このリリースの isolation は `native`。`container` と `sandbox` は API が
-受け付け、ランチャーはそれらのランナーが届くまで拒否する（生成 CLI ヘルプ）。
+`--token-file`（またはアクティブなクライアントコンテキスト）を付ける。
+このリリースの isolation は `native`。`container` と `sandbox` は実行レコードを
+作成する前に HTTP 422 で拒否される。組み込みランナーでは `native` を選ぶ。
 
 結果: ランリソース。管理ライブ行は観測スコープと外部 id ごとに一意。
 行を指す読み取りは `live_ref` を使い、2 つのホームが共有し得る素の

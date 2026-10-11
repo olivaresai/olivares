@@ -168,6 +168,7 @@ func TestStoreFileIsNotWorldReadable(t *testing.T) {
 func initialisedDataDir(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
+	resetBootProcessScope(t)
 	eng, err := boot(context.Background(), bootConfig{
 		DataDir: dir, Version: "test", Logger: discardLog(),
 	})

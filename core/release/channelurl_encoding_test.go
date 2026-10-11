@@ -31,7 +31,7 @@ import (
 
 func TestResolveChannelKeepsRawSegmentBoundaries(t *testing.T) {
 	t.Parallel()
-	const asset = "olivares_26.8.0_linux_amd64.tar.gz"
+	const asset = "olivares_26.800_linux_amd64.tar.gz"
 	cases := []struct {
 		name     string
 		endpoint string
@@ -116,7 +116,7 @@ func TestResolveChannelKeepsRawSegmentBoundaries(t *testing.T) {
 		endpoint: "https://mirror.example.test/u/%72eleases/latest/download",
 		wantTag:  "",
 		wantMani: "https://mirror.example.test/u/%72eleases/latest/download/stable-manifest.json",
-		wantArt:  "https://mirror.example.test/u/%72eleases/download/v26.8.0/" + asset,
+		wantArt:  "https://mirror.example.test/u/%72eleases/download/26.800/" + asset,
 	}, {
 		// A tag whose decoded value is one of the shape words. The POSITION decides, and the
 		// encoding must not change which position it is read in.
@@ -153,7 +153,7 @@ func TestResolveChannelKeepsRawSegmentBoundaries(t *testing.T) {
 			if got := l.SignatureURL(); got != c.wantMani+".sig" {
 				t.Fatalf("SignatureURL() = %q, want the manifest URL plus .sig", got)
 			}
-			got, err := l.ArtifactURL("26.8.0", "olivares_26.8.0_linux_amd64.tar.gz")
+			got, err := l.ArtifactURL("26.800", "olivares_26.800_linux_amd64.tar.gz")
 			if err != nil {
 				t.Fatalf("ArtifactURL: %v", err)
 			}
@@ -364,7 +364,7 @@ func TestResolveChannelAddressesTheServerItNames(t *testing.T) {
 		if err != nil {
 			t.Fatalf("ResolveChannel(%q): %v", endpoint, err)
 		}
-		art, err := l.ArtifactURL("26.8.0", "olivares_26.8.0_linux_amd64.tar.gz")
+		art, err := l.ArtifactURL("26.800", "olivares_26.800_linux_amd64.tar.gz")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -372,7 +372,7 @@ func TestResolveChannelAddressesTheServerItNames(t *testing.T) {
 		want := []string{
 			"/o/r/releases/download/v1%20beta/stable-manifest.json",
 			"/o/r/releases/download/v1%20beta/stable-manifest.json.sig",
-			"/o/r/releases/download/v1%20beta/olivares_26.8.0_linux_amd64.tar.gz",
+			"/o/r/releases/download/v1%20beta/olivares_26.800_linux_amd64.tar.gz",
 		}
 		assertTargets(t, seen(), want)
 		assertAuth(t, seen())

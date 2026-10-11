@@ -98,3 +98,7 @@ que le ledger oublie silencieusement.
 - Ce qui est encore en maturation, c'est la **console** de revue plus riche ;
   les garanties côté moteur ci-dessus sont actives
   ([périmètre honnête](/fr/how-to/govern-and-approve/)).
+
+## Éditions et approbations (0.1)
+
+Community conserve le moteur d’approbation, le minimum de deux personnes distinctes pour les actions CRITICAL, le double contrôle du kill-switch et les politiques qui imposent une revue ou augmentent le niveau de risque ou le quorum. Les politiques qui abaissent le risque et l’accès d’urgence break-glass font partie de la base Business. Les données stockées restent lisibles et exportables, mais ne peuvent ni abaisser les valeurs par défaut de Community ni autoriser un accès d’urgence.

@@ -18,6 +18,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/olivaresai/olivares/cmd/olivares/internal/mcpgateway"
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/modules/sessions"
@@ -118,6 +119,7 @@ type managedMCPApprovalFixture struct {
 	calls             atomic.Int32
 	executed          chan json.RawMessage
 	process           *mcpLifecycleProcess
+	onUpstreamList    atomic.Pointer[func()] // runs once, on the next upstream tools/list
 }
 
 func newManagedMCPApprovalFixture(t *testing.T, catalogue ...string) *managedMCPApprovalFixture {
@@ -142,14 +144,13 @@ func newManagedMCPApprovalFixture(t *testing.T, catalogue ...string) *managedMCP
 	f := &managedMCPApprovalFixture{t: t, h: h, tenant: model.TenantID(h.tenantA), executed: make(chan json.RawMessage, 8)}
 	m := h.set.sessions
 	sessions.WithRunner(mcpLifecycleRunner{launched: func(p *mcpLifecycleProcess) { f.process = p }})(m)
-	m.EnableProfiledLaunches()
 	m.UseExecutionEnvironmentRef("managed-mcp-approval-test")
 	f.credentials = newSessionHookCredentials(h.authr, h.st, m, h.set.gov)
-	m.UseLaunchGate(approvalProjectionLaunchGate(func(ctx context.Context, tenant model.TenantID, in sessions.LaunchIntent) (sessions.LaunchDecision, error) {
+	sessions.WithLaunchGate(approvalProjectionLaunchGate(func(ctx context.Context, tenant model.TenantID, in sessions.LaunchIntent) (sessions.LaunchDecision, error) {
 		var err error
 		f.token, err = f.credentials.mint(ctx, tenant, in)
 		return sessions.LaunchDecision{Allowed: err == nil}, err
-	}))
+	}))(m)
 	var profile struct {
 		Ref string `json:"profile_ref"`
 	}
@@ -170,12 +171,12 @@ func newManagedMCPApprovalFixture(t *testing.T, catalogue ...string) *managedMCP
 	if err != nil {
 		t.Fatal(err)
 	}
-	f.management, err = newMCPManagement(h.st, auth.NewSecretStore(h.st, sealer), agentGatewayConfig{}, false)
+	f.management, err = newMCPManagement(h.st, auth.NewSecretStore(h.st, sealer), mcpgateway.Config{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	bridge := newApprovalBridge(approvalBridgeConfig{}, discardLog())
-	bridge.localProposer = h.set.gov.EngineApprovals()
+	bridge.LocalProposer = h.set.gov.EngineApprovals()
 	f.management.eng = &engine{store: h.st, authr: h.authr, sessionsMod: m, sessionHooks: f.credentials, engineApprovals: h.set.gov.EngineApprovals(), approvalBridge: bridge, log: discardLog()}
 	f.management.UseSessionCredentials(f.credentials.SessionCredentials)
 	upstream := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -192,6 +193,11 @@ func newManagedMCPApprovalFixture(t *testing.T, catalogue ...string) *managedMCP
 		if in.Method == "notifications/initialized" {
 			w.WriteHeader(http.StatusAccepted)
 			return
+		}
+		if in.Method == "tools/list" {
+			if hook := f.onUpstreamList.Swap(nil); hook != nil {
+				(*hook)()
+			}
 		}
 		result := advertised
 		if in.Method == "initialize" {

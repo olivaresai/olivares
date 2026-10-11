@@ -98,7 +98,7 @@ StatefulSet. It can never become the writer: the Postgres lock is the sole write
 authority and every application request re-checks it. If that trade is unacceptable,
 stay on `Legacy` and accept that HA cannot be rolling-updated in place.
 
-The manager's own ClusterRole grows accordingly (`operator/config/rbac/role.yaml`):
+The manager's own ClusterRole grows accordingly (Business operator RBAC):
 `serviceaccounts` and `roles`/`rolebindings` CRUD, `pods` `get,list,watch,patch`,
 and `pods/proxy` **`get`** — the read that observes traffic readiness.
 
@@ -106,7 +106,7 @@ Be precise about what that last one is. Kubernetes RBAC authorizes the
 **subresource**, not a path inside it: `get pods/proxy` permits a GET of *any* path
 on any pod in scope, and there is no rule that can say "only `/readyz`". What
 limits this manager to `/readyz` on one verified pod is its own code
-(`operator/internal/controller/routereadiness.go`): a fixed path, a fixed port, a
+(Business operator readiness controller): a fixed path, a fixed port, a
 GET with no body, nothing taken from the ControlPlane, no redirect followed, a
 bounded read and a bounded deadline. The manager's ClusterRole is the trust
 boundary; the code is the constraint inside it. Do not read the grant as
@@ -133,18 +133,20 @@ engine's `/pod-readyz` and label publisher are inert without it.
 
 ## 3. Enabling it on a NEW install
 
+<!-- release -->
 ```yaml
 apiVersion: ops.olivares.ai/v1alpha1
 kind: ControlPlane
 metadata: { name: cp }
 spec:
-  image: docker.io/olivaresai/olivares:26.10.1   # MUST serve /pod-readyz
+  image: docker.io/olivaresai/olivares:0.1   # MUST serve /pod-readyz
   engine: postgres
   replicas: 3
   haRouting: LeaderRouting
   auditSigningKeySecret: olivares-audit-key
   postgres: { dsnSecret: olivares-pg }
 ```
+<!-- /release -->
 
 Point clients (Ingress, service mesh, internal callers) at `cp-leader`, **not** `cp`.
 
@@ -155,7 +157,7 @@ acknowledgement that the two preconditions hold. It cannot verify either one —
 image reference does not reveal whether the binary serves `/pod-readyz`, and no
 controller can know where your clients connect.
 
-1. **Upgrade the engine first.** Roll `spec.image` to ≥ 26.7.0 *while still on
+1. **Upgrade the engine first.** Roll `spec.image` to ≥ 0.1 *while still on
    `Legacy`*. On the legacy layout that rollout wedges at the first replaced standby,
    so drive it the documented way: `kubectl delete statefulset <name> --cascade=orphan`
    is **not** needed here — instead delete the standby pods one at a time
@@ -259,7 +261,7 @@ nothing routes to a node that knows it is not one".
 
 ## 8. What is verified, and what is not
 
-`.github/workflows/e2e-operator-kind.yml` runs `operator/test/e2e` on a real kind
+`.github/workflows/e2e-operator-kind.yml` runs Business operator source on a real kind
 cluster with an in-cluster Postgres and two engine images, with the manager
 authenticated **as its own ServiceAccount** so the shipped ClusterRole is what is
 exercised. Its assertions are: a healthy 3-replica HA reaches `Ready` with three

@@ -25,7 +25,12 @@ const OP_STATUS_VARIANT: Record<string, BadgeVariant> = {
   noop: 'neutral',
 }
 
-export function OperationsTable() {
+export function OperationsTable({
+  noExecutor = false,
+}: {
+  /** The engine said no runtime executor is configured: nothing can write an entry yet. */
+  noExecutor?: boolean
+}) {
   const { t } = useTranslation('deploy')
   const { activeTenant } = useAuth()
 
@@ -145,7 +150,11 @@ export function OperationsTable() {
         empty={
           <EmptyState
             title={t('empty.operations.title')}
-            description={t('empty.operations.description')}
+            description={
+              noExecutor
+                ? t('empty.operations.description')
+                : t('operations.emptyHint')
+            }
           />
         }
       />

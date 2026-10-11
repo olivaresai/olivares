@@ -48,6 +48,19 @@ func execRoot(t *testing.T, args ...string) (string, string, error) {
 	return out.String(), errb.String(), err
 }
 
+// execRootOwnProcess is execRoot for a command that boots and closes its own
+// engine (`dr backup`). In production each invocation is a fresh process, and
+// the add-on license sources are process-scoped, so a test that runs such a
+// command more than once resets the test composition on both sides of it. Keep
+// plain execRoot for callers that hold a live engine behind --server: a reset
+// under a live engine is the defect this boundary exists to avoid.
+func execRootOwnProcess(t *testing.T, args ...string) (string, string, error) {
+	t.Helper()
+	prepareCompositionTestBoot(t)
+	defer prepareCompositionTestBoot(t)
+	return execRoot(t, args...)
+}
+
 func TestExitCodeUsageOnBadFlag(t *testing.T) {
 	_, _, err := execRoot(t, "status", "--definitely-not-a-flag")
 	if err == nil {
@@ -135,12 +148,18 @@ func TestCompleteSessionsQueriesRunsEndpoint(t *testing.T) {
 func TestEveryVisibleCommandIsGrouped(t *testing.T) {
 	root := newRootCmd()
 	root.InitDefaultHelpCmd()
+	groups := make(map[string]bool)
+	for _, g := range root.Groups() {
+		groups[g.ID] = true
+	}
 	for _, c := range root.Commands() {
 		if c.Hidden {
 			continue
 		}
 		if c.GroupID == "" {
 			t.Errorf("visible command %q has no help group — add it to commandGroups", c.Name())
+		} else if !groups[c.GroupID] {
+			t.Errorf("visible command %q has unregistered help group %q", c.Name(), c.GroupID)
 		}
 	}
 }

@@ -31,9 +31,9 @@ SITIO="${OLIVARES_DOCS_SITE:-https://docs.olivares.ai}"
 CONTROL="${OLIVARES_DOCS_CONTROL:-/}"
 
 say() { printf '%s\n' "$*"; }
-no_puedo() { say "check-adr-not-served: ⛔ NO HE PODIDO MIRAR — $*" >&2; exit 2; }
+cannot_check() { say "check-adr-not-served: ⛔ COULD NOT CHECK — $*" >&2; exit 2; }
 
-command -v curl >/dev/null || no_puedo "no hay curl en esta caja"
+command -v curl >/dev/null || cannot_check "curl is not installed on this host"
 
 # codigo(): imprime SOLO el codigo HTTP, o la cadena vacia si ni siquiera hubo respuesta.
 # --max-time acota; -o /dev/null descarta el cuerpo; -s -S deja pasar el error a stderr.
@@ -47,8 +47,8 @@ codigo() {
 _ctrl="$(codigo "${SITIO}${CONTROL}")" || _ctrl=""
 case "$_ctrl" in
 	200) : ;;
-	"")  no_puedo "el control positivo ${SITIO}${CONTROL} no dio ni respuesta (sin red, DNS, o sitio caido)" ;;
-	*)   no_puedo "el control positivo ${SITIO}${CONTROL} devolvio ${_ctrl}, no 200: no puedo distinguir «retirado» de «caido»" ;;
+	"")  cannot_check "positive control ${SITIO}${CONTROL} did not respond (network, DNS, or site unavailable)" ;;
+	*)   cannot_check "positive control ${SITIO}${CONTROL} returned ${_ctrl}, not 200: cannot distinguish a removed page from an unavailable site" ;;
 esac
 
 # Rutas del registro ADR. Las seis raices de idioma mas la raiz y la instantanea archivada:
@@ -71,7 +71,7 @@ for r in "${RUTAS[@]}"; do
 	case "$c" in
 		200)         servidas+=("${r} 200") ;;
 		404|410)     : ;;
-		"")          ilegibles+=("${r} sin-respuesta") ;;
+		"")          ilegibles+=("${r} no-response") ;;
 		*)           ilegibles+=("${r} ${c}") ;;
 	esac
 done
@@ -79,18 +79,18 @@ done
 # ⛔ Una ruta que no se pudo leer NO cuenta como retirada. Si queda alguna, el veredicto es 2
 # aunque las demas esten limpias: un censo con un hueco no es un censo.
 if [ "${#ilegibles[@]}" -gt 0 ]; then
-	say "check-adr-not-served: ⛔ NO HE PODIDO MIRAR — ${#ilegibles[@]} ruta(s) sin veredicto:" >&2
+	say "check-adr-not-served: ⛔ COULD NOT CHECK — ${#ilegibles[@]} path(s) could not be checked:" >&2
 	printf '             %s\n' "${ilegibles[@]}" >&2
-	say "             El control positivo SI respondio 200, asi que el sitio esta en pie." >&2
+	say "             The positive control returned 200, so the site is available." >&2
 	exit 2
 fi
 
 if [ "${#servidas[@]}" -gt 0 ]; then
-	say "check-adr-not-served: ⛔ ${#servidas[@]} de ${#RUTAS[@]} rutas ADR SIGUEN SERVIDAS en ${SITIO}:" >&2
+	say "check-adr-not-served: ⛔ ${#servidas[@]} of ${#RUTAS[@]} ADR paths ARE STILL SERVED at ${SITIO}:" >&2
 	printf '             %s\n' "${servidas[@]}" >&2
-	say "             Cortar la fuente no retira lo ya desplegado: hace falta un DESPLIEGUE." >&2
+	say "             Removing the source does not remove deployed content: deploy the updated site." >&2
 	exit 1
 fi
 
-say "check-adr-not-served: OK — 0 de ${#RUTAS[@]} rutas ADR servidas en ${SITIO} (control positivo ${CONTROL} = 200)."
+say "check-adr-not-served: OK — 0 of ${#RUTAS[@]} ADR paths served at ${SITIO} (positive control ${CONTROL} = 200)."
 exit 0

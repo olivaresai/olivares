@@ -34,7 +34,7 @@ El motor (el núcleo, "Capa 0") es el conjunto de subsistemas compartidos de los
 |---|---|---|
 | **Ingesta + bus de eventos** | Recibe entrada OTLP y de conectores, la normaliza y distribuye eventos a los módulos | Los módulos reaccionan a los eventos sin acoplarse entre sí |
 | **SDK de conectores** | Una interfaz estable de conector de entrada/salida — la columna vertebral de la amplitud | Terceros extienden la plataforma sin bifurcar el núcleo |
-| **Runtime de módulos** | Carga y ejecuta módulos: compilados in-process más plugins out-of-process | Añade un módulo sin re-arquitecturar ni recompilar el núcleo |
+| **Runtime de módulos** | Carga y ejecuta módulos compilados in-process; aloja plugins de conectores out-of-process | Añade un módulo sin re-arquitecturar el núcleo |
 | **Modelo de datos general** | Entidades y relaciones multitenant que sirven a todo el catálogo | Un esquema que todos los módulos comparten y extienden |
 | **API (REST/gRPC) + manage-as-code** | Toda la funcionalidad sobre una API, más un proveedor de Terraform | La CLI y la web hablan la misma API; el panel es GitOps-able |
 | **AuthN/Z + multitenancy** | RBAC/ABAC, orgs y tenants, aislamiento | Reajustar permisos y tenancy a posteriori es ruinosamente caro — así que, desde el primer día |
@@ -43,7 +43,7 @@ El motor (el núcleo, "Capa 0") es el conjunto de subsistemas compartidos de los
 
 Algunos detalles concretos que merece la pena destacar:
 
-- **Runtime de módulos.** Los módulos del núcleo se compilan dentro del binario; los módulos y conectores out-of-process corren como plugins sobre gRPC usando `hashicorp/go-plugin`. Esto da aislamiento de fallos y permite añadir un módulo sin recompilar el núcleo.
+- **Runtime de módulos.** Los módulos del núcleo se compilan dentro del binario; los conectores out-of-process corren como plugins sobre gRPC usando `hashicorp/go-plugin`. Esto da aislamiento de fallos y permite añadir un conector sin recompilar el núcleo. Los módulos corren solo in-process: el transporte de módulos out-of-process está deprecado y nunca se cableó.
 - **Bus de eventos.** In-process por defecto (canales de Go). El binding distribuido sobre **NATS es opcional**, no obligatorio — los despliegues de un solo nodo nunca lo tocan.
 - **Manage-as-code.** La API es el contrato de referencia; la superficie de manage-as-code añade un proveedor de Terraform para que el propio control plane pueda declararse y versionarse.
 - **Auditoría + integridad.** El ledger es **append-only y hash-chained**, con **checkpoints firmados con Ed25519**. Las entradas llevan un número de secuencia, el hash anterior, el hash actual y una firma — y nunca llevan PII. El ledger sale de la caja por dos vías: un endpoint de exportación **pull** emite CEF, LEEF, syslog, OTLP (un request de exportación completo y posteable; `otlp_envelope` es un alias exacto, y la proyección simple de LogRecord es el token separado `otlp_log_record`) u OCSF, y un **push** — real en cuanto se configura una suscripción de eventing `audit.recorded` — entrega cada registro sellado al menos una vez por el transporte duradero. Consulta [cómo reenviar la auditoría a Splunk](/es/how-to/forward-audit-to-splunk/).
@@ -90,7 +90,7 @@ La auditoría nativa atribuye la actividad a una credencial o rol, no a un agent
 
 ### Llegar al map
 
-Ver el grafo de accesos es una **acción privilegiada**: con alcance de tenant, disponible para el rol de editor y superiores (nunca el rol de viewer más bajo), y **cada lectura se audita**. Las rutas del map — el grafo y el resultado del drift — no forman parte del contrato estable del núcleo; se publican en la [referencia de rutas de módulos](/reference/api-beta/) **beta** separada (servida en `/openapi.beta.json`), y sus formas a nivel de campo viven en interfaces tipadas de Go y TypeScript. El resultado de permitido-frente-a-observado se expone en la ruta `drift` del motor (`/v1/m/accessmap/drift`); no hay un endpoint `diff` separado. La superficie REST estable del núcleo — 54 paths renderizados a partir del propio contrato OpenAPI 3.1 del producto — está documentada en la [referencia de la API](/reference/api/). Para la lista completa de módulos, consulta el [catálogo de módulos](/es/reference/modules/overview/).
+Ver el grafo de accesos es una **acción privilegiada**: con alcance de tenant, disponible para el rol de editor y superiores (nunca el rol de viewer más bajo), y **cada lectura se audita**. Las rutas del map — el grafo y el resultado del drift — no forman parte del contrato estable del núcleo; se publican en la [referencia de rutas de módulos](/reference/api-beta/) **beta** separada (servida en `/openapi.beta.json`), y sus formas a nivel de campo viven en interfaces tipadas de Go y TypeScript. El resultado de permitido-frente-a-observado se expone en la ruta `drift` del motor (`/v1/m/accessmap/drift`); no hay un endpoint `diff` separado. La superficie REST estable del núcleo — 128 paths core renderizados a partir del propio contrato OpenAPI 3.1 del producto — está documentada en la [referencia de la API](/reference/api/). Para la lista completa de módulos, consulta el [catálogo de módulos](/es/reference/modules/overview/).
 
 ## Topología de despliegue
 
@@ -121,7 +121,7 @@ El control plane (el motor) puede self-hostearse como un binario o, en el futuro
 Dos fronteras dan forma a la arquitectura más allá de la topología de runtime:
 
 - **La frontera del conector.** Un conector **nunca importa del núcleo** — depende solo del SDK. Esto evita que los conectores de terceros contaminen el núcleo y mantiene limpia la frontera de licencia.
-- **La frontera de licencia.** El núcleo, los módulos y la web son **AGPL-3.0-only**; el SDK y los conectores son **Apache-2.0**; el tier enterprise es comercial. La frontera del conector anterior es lo que hace que la división Apache/AGPL sea aplicable en código. Consulta [open core y licencia](/es/explanation/open-core-and-licensing/).
+- **La frontera de licencia.** El núcleo, los módulos y la web son **AGPL-3.0-only**; el SDK y los conectores son **Apache-2.0**; las ediciones Business y Enterprise son comerciales. La frontera del conector anterior es lo que hace que la división Apache/AGPL sea aplicable en código. Consulta [open core y licencia](/es/explanation/open-core-and-licensing/).
 
 ## Postura de seguridad, en breve
 

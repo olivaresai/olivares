@@ -16,6 +16,22 @@ mechanism, see §9 Honest limits).
 
 **The enrolled DR restore control supports PostgreSQL 15, 16, 17 and 18 in 26.10** (measured on 15.19, 16.15, 17.11 and 18.6). Other majors refuse with `DR restore control contract: PostgreSQL major <major> is unsupported (verified contracts: 15, 16, 17, 18)`, where `<major>` is the detected server major. A control is never repaired: after an in-place major upgrade, a control that does not match the new major's catalog and permissions is refused.
 
+Logical PostgreSQL restore re-establishes the compiled custody-table permissions before booting the recovered store: the separate application role receives SELECT only, while the backup administrator retains read access. The ACL changes commit together with the existing authority and login-capability privilege restoration. A malformed custody schema or guard refuses restore and rolls back those privilege changes; normal boot continues to refuse permission drift.
+
+For a logical PostgreSQL backup containing the isolated tenant-inventory function, also pass `--superuser-dsn env:RESTORE_DBA_DSN` (or a `file:` reference). This explicit DBA credential must connect directly to the **target database**; it is never saved, used by `pg_restore`, or substituted for the application, owner or read-only backup administrator. It restores the inventory function's dedicated `NOLOGIN BYPASSRLS` owner and compiled grants. Missing or mismatched DBA authority is refused before custody installation or import. Backups without that function do not require it.
+
+```sh
+olivares dr restore --engine postgres --data-dir /srv/olivares-restored \
+  --dsn file:/run/secrets/restored-app.dsn \
+  --owner-dsn file:/run/secrets/restored-owner.dsn \
+  --admin-dsn file:/run/secrets/restored-admin.dsn \
+  --superuser-dsn env:RESTORE_DBA_DSN \
+  --in /srv/backups/estate.drbundle --passphrase-file /run/secrets/dr-passphrase
+```
+
+The DBA step accepts only the exact compiled inventory function imported under the target schema owner with stripped grants. Ordinary boot and `db init --install-directory-inventory` continue to refuse drift. If post-import verification refuses a changed definition or unsafe inventory role, its authority transaction rolls back, but the imported database and restored keys remain for recovery; the command returns failure and does not claim ledger continuity. Correct the reported cause and repeat recovery into a new empty target.
+
+
 ---
 
 ## 1. Why a signed ledger needs more than a dump
@@ -59,16 +75,43 @@ manifest.json      control record (NOT secret): tips per tenant, public key
                    fingerprints, snapshot method and digest, instant (RPO),
                    per-file digest inventory and keyed authentication tag.
 keys/kek.json      KDF parameters to re-derive the KEK (Argon2id salt; no secret).
-keys/*.key.enc     each signing key (audit + catalog), AES-256-GCM under the KEK.
+keys/*.enc         installation custody, AES-256-GCM under the KEK.
 store/<snapshot>   the consistent store snapshot (absent in PITR mode).
 ```
 
 - **Minimal data:** EVERY `*-signing.key` in the data dir (audit, catalog,
   policy, and any future signing-key class — captured by the glob, pinned by the
-  backup-inventory test) — NOT the TLS material, the setup-token, or the license
-  (provided by the deployment).
+  backup-inventory test), `memory-portability.key`, and the default local
+  `communication-content-keyring.json` and `communication-cursor-keyring.json`
+  when present. The communication pair preserves sealed messages and signed inbox
+  continuations after a clean restore. An incomplete or invalid pair refuses backup.
+  The bundle also carries the sealer keys present in the data dir:
+  `secret-store.key` (provider keys and runtime secrets), `totp-seed.key`,
+  `sso-secret.key` and `eventing-secret.key`. What they sealed opens under no other
+  key. A sealer key supplied by `OLIVARES_SECRET_STORE_KEY`, `OLIVARES_TOTP_SEED_KEY`,
+  `OLIVARES_SSO_SECRET_KEY` or `OLIVARES_EVENTING_SECRET_KEY` is not carried (the
+  engine ignores a file beside it) and stays deployment-owned: set the same value on
+  the source's `dr backup` and on the restored host, in the environment of `dr restore`
+  and `serve`.
+  TLS material, setup tokens and licences remain deployment-owned.
+- **The manifest records one probe per sealer key**, from its variable or its file: an
+  HMAC-SHA-256 under that key, with no key material. `dr restore` recomputes each
+  probe with the key `serve` will use and reports `key custody intact` only when every
+  probe matches. Otherwise it reports `sealer keys NOT restored` and names each key, where
+  `serve` reads it and why, for example a variable that holds another key. A sealer with no
+  valid key in effect at backup (typically `dr backup` run without `serve`'s variables)
+  gets an empty probe: `dr backup` prints a note naming it, and the restore names it too.
+- **Bundles from 26.10.1<!-- release-fixed --> and earlier carry neither the sealer keys nor probes.** They still
+  restore. Over the source's own data dir (`--in-place` or `--force`), recognized by the
+  bundle's audit signing key, the kept sealer key files are the source's and custody is
+  intact; a variable set since is not checked and is named.
+  Anywhere else the restore names each file and its variable instead of `key custody intact`.
+  Put the source's key files in the data dir (mode 0600) with the variables unset, or set the
+  variables to the source's keys, before you start `serve`; otherwise provider keys,
+  TOTP enrolments, SSO and eventing secrets do not open.
 - **The key fingerprint is the public one** (one-way); the private key never appears in
-  the manifest, only encrypted in `keys/*.enc`.
+  the manifest, only encrypted in `keys/*.enc`. Non-signing communication keyrings
+  have no public-key fingerprint; the bundle authenticates their encrypted bytes.
 - **Every non-manifest payload is inventoried by path, size and SHA-256.** The manifest is
   authenticated with `hmac-sha256-kek-v1` under the operator KEK. This is keyed integrity,
   not a public signature: anyone holding the KEK can authenticate a bundle.
@@ -181,6 +224,9 @@ olivares dr backup --data-dir /var/lib/olivares --engine sqlite \
 ```
 Safe to run with `serve` up (VACUUM INTO is a concurrent reader; it does not
 open the live engine).
+Community can also back up an existing Business SQLite installation offline.
+Backup reads the snapshot and existing audit keys without migrating its module
+schema, creating signing keys, or starting configured connectors.
 
 ### With offsite replication + GFS retention (recommended)
 ```sh
@@ -239,7 +285,7 @@ read-only and never gives the backup role a write:
 - Helm: `--set backup.enabled=true --set backup.kekSecret=dr-kek` (CronJob; PG with
   a postgres-client initContainer for `pg_dump`; Postgres also requires
   `--set postgres.adminDsnKey=admin-dsn`, and in the owner/app split
-  `--set postgres.ownerDsnKey=owner-dsn`). See `deploy/helm/README.md`.
+  `--set postgres.ownerDsnKey=owner-dsn`). See Business chart documentation.
 - Compose: `docker-compose.backup.yml`, profile `backup`. See `deploy/compose/README.md`.
 
 The backup **aborts** if some tenant chain does not verify at the moment of the backup
@@ -331,8 +377,8 @@ does not exist yet. Point every DSN at the same server.
 3. **Derives** the KEK, authenticates the complete manifest and checks every declared
    payload's path, size and digest. A separately authenticated pre-v26.9 bundle requires
    the explicit `--allow-legacy-unsigned` exception.
-4. **Decrypts** the signing keys with the KEK and installs them 0600 in the data-dir
-   (fail-closed on overwrite unless `--force`).
+4. **Decrypts** the signing and sealer keys with the KEK and installs them 0600 in the
+   data-dir (fail-closed on overwrite unless `--force`).
 5. **Restores** the store snapshot (SQLite: copies the file; Postgres: `pg_restore`
    **into the `--owner-dsn` role when one is configured**, else `--dsn` — never
    `--admin-dsn`; PITR: skips — the store was recovered out-of-band by WAL replay).
@@ -363,6 +409,51 @@ a green verify **promotes**: it first moves the current store/keys aside as
 files into place atomically, rolling back on any promotion error. **A failed verify
 leaves the live data dir completely untouched** — the destructive operation is
 transactional. Remove the `*.pre-restore-<ts>` files once you are satisfied.
+
+### SQLite restore from the console
+
+Create a backup, download it, then upload it under Backups → Restore and apply
+it with its passphrase. The backup manifest records the exact snapshot's ledger
+tips, so ordinary traffic during backup does not invalidate the bundle.
+
+Restore authenticates and verifies the bundle in scratch before changing the
+live installation. Before promotion it stops the live SQLite store and drains
+its connections. The authorized job stream then reports `completed` with phase
+`restart_required`. Restart the engine to reload the restored signing keys and
+module state; readiness and store requests return `503 restore_restart_required`
+until that restart. `/livez` and `/healthz` stay healthy so a supervisor cannot
+interrupt promotion or custody recovery with an automatic restart.
+This also prevents background writers from signing the restored ledger with
+keys from the previous installation. The administrator who applied or approved
+the restore may reconnect to that job's progress using the same credential for
+ten minutes, or until restart. This is a read-only continuation receipt for that
+job, not fresh authentication; the stopped store cannot recheck credential
+expiry or revocation. It permits no other API access or writes.
+
+The console refuses non-SQLite engines before staging any files. It stages
+all decrypted keys on the destination filesystem and checks their destination
+paths before stopping the store. An invalid key path leaves the live store and
+keys unchanged and available.
+
+Before promotion it preserves a self-contained SQLite snapshot (including
+committed WAL data) and each replaced key as `*.pre-restore-<job-id>` in the data
+directory. Key copies have mode `0600`. The job's `notes`, shown in its progress
+view, name that location and use the CLI's custody report: a legacy bundle or an
+environment override that cannot prove the source's sealer custody names the
+missing or mismatched keys. Follow that report before restarting; restored
+provider credentials, TOTP, SSO and eventing secrets need the source's keys.
+Remove the preserved files only after confirming the restored installation.
+
+If draining, preservation or database promotion fails, the signing keys are
+unchanged, but the store stays stopped: restart before retrying. If a key
+promotion fails after the database was restored, the console rolls back the
+previous keys and database and reports whether that rollback succeeded.
+After a successful rollback, restart before retrying. If rollback fails, **do
+not restart**: keep the engine stopped and recover the previous database and
+keys from the preserved files, or recover the complete database and every
+custody key from the same bundle with an offline CLI restore. The failed job
+names the rollback error and the preservation location; recovering only one
+key can leave signing or encryption custody from different installations.
 
 ### Who is allowed to restore — and where that control does and does not reach
 
@@ -471,6 +562,10 @@ olivares dr verify --in /backups/olivares-dr-<ts>.drbundle --passphrase-file /ru
 # Postgres: checks digest + that the keys decrypt; the full chain
 #           verification requires restoring to a scratch Postgres (see §9).
 ```
+
+SQLite verification reads the restored snapshot offline, including Business
+snapshots verified by Community. It proves ledger continuity; `dr restore` and
+`serve` still apply the destination edition's runtime admission checks.
 
 `dr inspect` is metadata inspection only: it does not receive the KEK and therefore does
 not authenticate the manifest. Use `dr verify`, not `inspect`, for an integrity decision.

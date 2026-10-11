@@ -11,8 +11,8 @@ import (
 
 // ErrAddonRequiresLicense is the STABLE, wire-visible refusal of a commercial add-on
 // operation. It is the open-core half of the AddonGate contract: the CLOSED enterprise
-// build decides (it is the only build that consumes an attested entitlement, LICENSING.md
-// §ADR-0010), and this sentinel is what lets the open binary's error mappers turn that
+// build decides (it is the only build that consumes an attested entitlement), and this sentinel lets
+// the open binary's error mappers turn that
 // decision into one status code and one code string instead of a generic 500.
 //
 // THE SEAM, and why it is shaped this way. The enterprise overlay lives in a separate
@@ -57,7 +57,11 @@ func (e *AddonRequiredError) Error() string {
 // was constructed, so a mapper never has to know which shape it received.
 func (e *AddonRequiredError) Unwrap() error { return ErrAddonRequiresLicense }
 
-// AddonRequired builds the refusal. The enterprise gate is the only intended caller.
+// AddonRequired builds the refusal. Its production callers are in the closed
+// build, by design: enterprise/addongate's NotEntitled.Unwrap and the
+// cmd-overlay enable-module refusal, both in olivares-enterprise. A sweep of
+// this repository alone finds no caller — the open tree maps the refusal
+// (core/api, the MCP gateway); it never raises one.
 func AddonRequired(addon, operation string) error {
 	return &AddonRequiredError{Addon: addon, Operation: operation}
 }

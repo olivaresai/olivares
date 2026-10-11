@@ -33,6 +33,14 @@ describe('StatusBadge', () => {
     render(<StatusBadge status="frobnicating" />)
     expect(screen.getByText('Frobnicating')).toBeInTheDocument()
   })
+
+  it('uses an unboxed shared dot chip for state, keeping facts boxed', () => {
+    const { container } = render(<StatusBadge status="active" />)
+    expect(container.querySelector('[data-slot="status-dot"]')).toHaveClass(
+      'bg-ok',
+    )
+    expect(container.firstChild).not.toHaveClass('border', 'bg-success-soft')
+  })
 })
 
 describe('AccessModeBadge', () => {

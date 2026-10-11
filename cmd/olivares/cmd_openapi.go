@@ -14,6 +14,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/olivaresai/olivares/cmd/olivares/internal/agenttoolsapi"
+	"github.com/olivaresai/olivares/cmd/olivares/internal/permcensus"
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/audit"
 )
@@ -28,7 +29,7 @@ import (
 //   - --beta:   GET /openapi.beta.json — the BETA module-route document (web/openapi/openapi.beta.json),
 //     reflected from the routes the product's modules register.
 func newOpenAPICmd() *cobra.Command {
-	var beta bool
+	var beta, permissions bool
 	cmd := &cobra.Command{
 		Use:   "openapi",
 		Short: "Print an OpenAPI 3.1 document (stable core, or --beta module routes) for client codegen",
@@ -38,8 +39,14 @@ func newOpenAPICmd() *cobra.Command {
   olivares openapi --beta > web/openapi/openapi.beta.json`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			doc := api.OpenAPIDocument()
-			if beta {
+			var doc any = api.OpenAPIDocument()
+			if permissions {
+				modules, err := moduleDocumentModules()
+				if err != nil {
+					return err
+				}
+				doc = permcensus.Build(modules)
+			} else if beta {
 				d, err := moduleOpenAPIDocument()
 				if err != nil {
 					return err
@@ -62,6 +69,8 @@ func newOpenAPICmd() *cobra.Command {
 	}
 	cmd.Flags().BoolVar(&beta, "beta", false,
 		"print the BETA module-route document (/v1/m/<ns>/…) instead of the stable core contract")
+	cmd.Flags().BoolVar(&permissions, "permission-inventory", false, "emit the native module permission census for console qualification")
+	_ = cmd.Flags().MarkHidden("permission-inventory")
 	return cmd
 }
 
@@ -71,6 +80,15 @@ func newOpenAPICmd() *cobra.Command {
 // the silent logger exist only to satisfy buildModules; no route registration
 // depends on them, so the document is reproducible.
 func moduleOpenAPIDocument() (map[string]any, error) {
+	modules, err := moduleDocumentModules()
+	if err != nil {
+		return nil, err
+	}
+	return api.ModuleOpenAPIDocument(modules), nil
+}
+
+// moduleDocumentModules is pure descriptive wiring shared by both engine censuses.
+func moduleDocumentModules() ([]api.Module, error) {
 	_, priv, err := ed25519.GenerateKey(nil)
 	if err != nil {
 		return nil, fmt.Errorf("ephemeral signer key: %w", err)
@@ -80,11 +98,11 @@ func moduleOpenAPIDocument() (map[string]any, error) {
 		return nil, fmt.Errorf("ephemeral signer: %w", err)
 	}
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-	set, err := buildModules(signer, nil, nil, nil, nil, sourcesConfig{}, EditionConfig{}, "", log)
+	set, err := buildModules(nil, signer, nil, nil, nil, nil, nil, sourcesConfig{}, EditionConfig{}, "", log)
 	if err != nil {
 		return nil, fmt.Errorf("load module operator config: %w", err)
 	}
 	// Route reflection does not invoke handlers. This zero-value module adds the
 	// composition-root host routes without opening a journal or probing the host.
-	return api.ModuleOpenAPIDocument(set.apiModules(&agenttoolsapi.Module{})), nil
+	return set.apiModules(&agenttoolsapi.Module{}), nil
 }

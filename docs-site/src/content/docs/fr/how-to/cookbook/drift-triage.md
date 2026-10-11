@@ -15,6 +15,14 @@ rythme régulier, jusqu'à ce que le diff soit silencieux.
 
 ## 1. Récupérer la dérive
 
+Sur une nouvelle installation, `accessmap` est désactivé. En tant
+qu’administrateur, activez `accessmap` dans **Settings > Edition & modules**,
+en conservant les autres modules sélectionnés. Pour la CLI, connectez-vous
+d’abord à ce moteur en tant qu’administrateur avec `olivares login`, puis
+exécutez `olivares modules on accessmap`. Attendez chaque redémarrage du moteur avant de continuer ;
+les sessions en cours s’arrêtent et peuvent être reprises. Sinon, ces appels
+API renvoient `404 module_not_enabled`.
+
 ```bash
 curl -ks "$BASE/v1/m/accessmap/drift" \
   -H "Authorization: Bearer $TOKEN" -H "X-Olivares-Tenant: $TENANT" | python3 -m json.tool

@@ -138,6 +138,9 @@ type EMAGrantConfig struct {
 // EMAGrant is the EMA jwt-bearer grant handler: it validates an ID-JAG,
 // resolves the IdP subject to a local user, and mints an audience-bound
 // at+jwt access token. Safe for concurrent use after construction.
+//
+// Deprecated: Olivares does not use this API. It keeps working in this release series;
+// its removal will be announced in the release notes beforehand.
 type EMAGrant struct {
 	receiver EMAReceiver
 	signer   jose.Signer
@@ -150,6 +153,9 @@ type EMAGrant struct {
 // NewEMAGrant builds the grant handler. Deny-closed: a nil receiver, missing
 // signing key, or empty issuer is a construction error — the handler never
 // falls back to an unsecured path.
+//
+// Deprecated: Olivares does not use this API. It keeps working in this release series;
+// its removal will be announced in the release notes beforehand.
 func NewEMAGrant(cfg EMAGrantConfig, authr *Authenticator) (*EMAGrant, error) {
 	if cfg.Receiver == nil {
 		return nil, fmt.Errorf("%w: no EMA receiver configured", ErrEMAUnavailable)
@@ -191,6 +197,9 @@ func NewEMAGrant(cfg EMAGrantConfig, authr *Authenticator) (*EMAGrant, error) {
 // Issuer reports the AS issuer identifier this grant handler mints tokens
 // under — the value the RFC 8414 metadata document advertises as
 // `issuer`, so discovery and minting can never disagree.
+//
+// Deprecated: Olivares does not use this API. It keeps working in this release series;
+// its removal will be announced in the release notes beforehand.
 func (g *EMAGrant) Issuer() string {
 	if g == nil {
 		return ""
@@ -211,6 +220,9 @@ type EMATokenResponse struct {
 // the identity, mints the access token. Every rejection returns an error that
 // wraps either ErrIDJAGInvalidGrant (assertion validation failure) or
 // ErrInvalidExchange (identity resolution / minting failure).
+//
+// Deprecated: Olivares does not use this API. It keeps working in this release series;
+// its removal will be announced in the release notes beforehand.
 func (g *EMAGrant) Grant(ctx context.Context, assertion, authenticatedClientID, resource string, requestedScopes []string) (EMATokenResponse, error) {
 	if g == nil {
 		return EMATokenResponse{}, ErrEMAUnavailable

@@ -8,10 +8,13 @@
 //
 // Every request flows through one middleware chain — panic recovery, request id,
 // security headers, access log, a body-size cap, authentication, and a setup gate
-// — and every protected handler resolves ONE canonical tenant (agreeing across
-// path, header and a token's bound tenant) and authorizes a permission before it
-// touches the store, binding store.Scope to exactly that tenant (RLS/triggers
-// are the backstop). Sensitive reads (the access graph, the ledger) are
+// — and every route declares its admission policy at registration. Core and
+// module registrars share a checked boundary; construction rejects unmarked
+// routes. Tenant policies resolve ONE canonical tenant and authorize before the
+// handler runs. System, self-service, public and protocol policies retain their
+// distinct contracts. Body/object checks remain in the operation, and store.Scope
+// binds data to the admitted tenant (RLS/triggers are the backstop).
+// Sensitive reads (the access graph, the ledger) are
 // self-audited with the real principal as actor.
 //
 // Modules extend the surface through the APIModule seam (routes mounted under

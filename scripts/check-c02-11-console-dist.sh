@@ -22,7 +22,7 @@ DOC="${OLIVARES_C0211_DOC:-design/C02-11-CONSOLE-DIST-HOLD-2026-08-20.md}"
 grep -q 'HOLD' "$DOC" || fail "$DOC lost HOLD"
 grep -q 'NOT EXECUTED' "$DOC" || fail "$DOC lost NOT EXECUTED"
 if grep -qiE 'FIRMA A claimed|FIRMA A is met|console split shipped|per-set dist landed' "$DOC"; then
-	fail "$DOC claims a split this lote does not have"
+	fail "$DOC claims a split this batch does not have"
 fi
 
 python3 - "$JSON" "$DOC" <<'PY' || fail "JSON/doc failed the C02-11 HOLD contract"

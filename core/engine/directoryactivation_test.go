@@ -77,7 +77,7 @@ func TestDirectoryWriterActivationPublicSeamReportsReopen(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ActivateDirectoryWriter: %v", err)
 	}
-	if !result.Changed || !result.ReopenRequired || result.After.Enabled ||
+	if !result.Changed || !result.ReopenRequired || result.After.Enabled || //nolint:staticcheck // SA1019: pins the deprecated field's published false until removal
 		result.Before.ControlMode != store.DirectoryControlStaged ||
 		result.Before.ExpectedGeneration != 1 ||
 		result.After.ControlMode != store.DirectoryControlEnforced ||
@@ -89,7 +89,7 @@ func TestDirectoryWriterActivationPublicSeamReportsReopen(t *testing.T) {
 	if err != nil {
 		t.Fatalf("idempotent retry: %v", err)
 	}
-	if retry.Changed || !retry.ReopenRequired || retry.After.Enabled ||
+	if retry.Changed || !retry.ReopenRequired || retry.After.Enabled || //nolint:staticcheck // SA1019: pins the deprecated field's published false until removal
 		retry.After.ControlMode != store.DirectoryControlEnforced ||
 		retry.After.ExpectedGeneration != 2 {
 		t.Fatalf("retry result = %+v", retry)

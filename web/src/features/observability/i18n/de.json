@@ -30,7 +30,8 @@
       "active": "Aktiv",
       "available": "Verfügbar",
       "opt_in_off": "Opt-in aus",
-      "blocked": "Blockiert"
+      "blocked": "Blockiert",
+      "unavailable": "Erfordert Business"
     },
     "optInOff": "Konvention in Entwicklung — standardmäßig aus; über das Konnektor-Gate aktivieren.",
     "gate": "Gate",
@@ -128,7 +129,8 @@
       "ok": "OK",
       "error": "Fehler",
       "unset": "Nicht gesetzt"
-    }
+    },
+    "exportFailed": "Trace-Export fehlgeschlagen"
   },
   "empty": {
     "ingestionHealth": {
@@ -147,5 +149,10 @@
       "title": "Keine Span-Zeiten für diesen Trace erfasst",
       "description": "Hauptbuchereignisse müssen Engine-Span-IDs tragen, bevor diese Ansicht Startversatz, Dauer, Akteur und Status jedes Spans anzeigen kann."
     }
+  },
+  "inferenceCoverage": {
+    "inference_metadata_only": "Es werden nur Inferenzmetadaten gespeichert. Der Arbeitskontext des Anbieters kann nicht rekonstruiert werden.",
+    "provider_context_may_change": "Komprimierung oder Kontextänderungen wurden angefordert. Die gespeicherten Metadaten können den Arbeitskontext des Anbieters nicht rekonstruieren.",
+    "provider_context_unknown": "Die Kontextbearbeitung des Anbieters ist für diese Inferenz unbekannt. Die gespeicherten Metadaten können seinen Arbeitskontext nicht rekonstruieren."
   }
 }

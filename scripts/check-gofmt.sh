@@ -116,7 +116,7 @@ selftest() {
 			printf '  ok    %-58s rc=%s\n' "$1" "$3"
 			pass=$((pass + 1))
 		else
-			printf '  FAIL  %-58s rc=%s (esperaba %s)\n' "$1" "$3" "$2"
+			printf '  FAIL  %-58s rc=%s (expected %s)\n' "$1" "$3" "$2"
 			fail=$((fail + 1))
 		fi
 	}

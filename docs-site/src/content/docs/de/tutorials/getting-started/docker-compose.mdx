@@ -24,27 +24,19 @@ Erststart-Ablauf, den sie steuern, ist derselbe, der im
 [Single-Node-Tutorial](/tutorials/getting-started/single-node/) end-to-end gegen
 das Binary verifiziert wird.
 
-<Aside type="caution" title="Das veröffentlichte 26.10.1-Image per Digest pinnen">
-Release **26.10.1** hat die signierten Images veröffentlicht: Der Install-Surface-Zeuge
-verzeichnet Docker Hub und GHCR für `26.10.1` als **published**
-(`docs/releases/26.10.1-install-surfaces.json`). Dieselbe Ehrlichkeit steht unter
-[Mit Docker bereitstellen](/how-to/docker-deployment/). Setzen Sie
-`OLIVARES_IMAGE=docker.io/olivaresai/olivares@sha256:<digest>` und
-[verifizieren Sie es](/how-to/verify-a-release/) zuerst — per Digest, niemals per Tag. Um
-stattdessen den Entwicklungsbaum zu betreiben, bauen Sie das gehärtete Image aus dem
-Quellcode und richten Sie den Stack darauf aus:
-
-```bash
-task image                                   # builds olivares:dev
-echo 'OLIVARES_IMAGE=olivares:dev' >> deploy/compose/.env
-```
+{/* release */}
+<Aside type="caution" title="Olivares 0.1">
+Das nächste Release ist `0.1`; es ist noch nicht auf GitHub veröffentlicht. Die folgenden Befehle beschreiben die geplanten Artefakte. Bauen Sie bis zur Veröffentlichung aus dem Quellcode und prüfen Sie danach jedes Artefakt vor der Verwendung. Der beobachtete Veröffentlichungsstand steht in `docs/releases/0.1-install-surfaces.json`.
 </Aside>
+{/* /release */}
 
 ## 1. Den Single-Node-Stack hochfahren (SQLite)
 
 <Steps>
 
 1. Starten Sie ihn:
+
+   Wenn AppArmor auf dem Host die Erstellung von Benutzer-Namespaces kontrolliert, führe vor dem Start auf dem Host des Docker-Daemons die Schritte unter "Session confinement on AppArmor hosts" in `deploy/compose/README.md` aus.
 
    ```bash
    docker compose -f deploy/compose/docker-compose.yml up --wait --wait-timeout 120
@@ -84,6 +76,14 @@ echo 'OLIVARES_IMAGE=olivares:dev' >> deploy/compose/.env
    ```
 
 </Steps>
+
+<Aside type="note" title="Aktueller Vertrag und gehostete Qualifikation">
+**Compose-Readiness-Vertrag.** Hermetische lokale HTTP-/TLS-Fixtures belegen die
+drei Antworten der Probe: 200 → rc 0, empfangenes Nicht-200 → rc 1 und ein Eingabe-,
+TLS- oder Transportfehler → rc 2. **Die Docker-Qualifikation bleibt ungemessen,
+bis der Dispatch-Workflow** für diesen Commit erfolgreich ist; ein eingecheckter
+Workflow ist kein Beleg, dass sein Docker-Lauf stattgefunden hat.
+</Aside>
 
 <Aside type="tip" title="Token verpasst?">
 Ein Neustart gibt es nicht erneut aus (nur sein Hash wird gespeichert). Solange kein
@@ -147,16 +147,26 @@ ebenfalls read-only in den Container gemountet.
 ## 3. Verschlüsselte DR-Backups (das `backup`-Profil)
 
 Der Stack liefert einen One-Shot-Backup-Service, der ein **verschlüsseltes,
-ledger-kontinuitäts-sicheres** Bundle erzeugt (`olivares dr backup`) und Bundles
-löscht, die älter als 14 Tage sind:
+ledger-kontinuitäts-sicheres** Bundle erzeugt (`olivares dr backup`):
+
+Bewahren Sie die Passphrase in einer privaten Datei außerhalb des Checkouts und
+des Images auf und halten Sie eine Kopie an einem sicheren Ort außerhalb dieses
+Hosts vor: Ohne sie lässt sich kein Bundle wiederherstellen. Geben Sie dem
+Backup-Container schreibgeschützten Zugriff darauf (das Image läuft mit UID `65532`):
 
 ```bash
-# Write your KEK passphrase once (keep it OUT of the repo / image):
-printf 'a strong DR passphrase' > deploy/compose/dr-pass
+sudo install -d -o 65532 -g 65532 -m 0700 /srv/olivares-dr
+sudo install -o 65532 -g 65532 -m 0400 /path/to/private-passphrase /srv/olivares-dr/dr-pass
 
+BACKUP_TS="$(date -u +%Y%m%dT%H%M%SZ)" \
 docker compose -f deploy/compose/docker-compose.yml \
                -f deploy/compose/docker-compose.backup.yml \
-               --profile backup run --rm backup
+               -f - --profile backup run --rm backup <<'YAML'
+services:
+  backup:
+    volumes:
+      - /srv/olivares-dr/dr-pass:/run/secrets/dr-pass:ro
+YAML
 ```
 
 Verpacken Sie diesen Befehl in einen Host-Cron für eine geplante RPO und
@@ -173,9 +183,18 @@ Superuser, kein `BYPASSRLS` — die Engine *verweigert* den Start gegen eine
 privilegierte Rolle, weil Row-Level-Security der Mandanten-Backstop ist) und richtet
 die Engine darauf aus:
 
+Das Override stellt außerdem `olivares_admin` bereit, eine separate Rolle mit
+`NOSUPERUSER BYPASSRLS` und ausschließlich Lesezugriff auf die Engine-Tabellen.
+Die Engine verwendet sie über `--admin-dsn` für mandantenübergreifende
+Lesezugriffe, auch bei der Ersteinrichtung.
+
+Setzen Sie zuerst drei unterschiedliche Passwörter. Verwenden Sie für diese
+Compose-Demo nur `A-Z a-z 0-9 . _ ~ -`, dann fahren Sie den Stack hoch:
+
 ```bash
 cp deploy/compose/.env.example deploy/compose/.env
-# set POSTGRES_SUPERUSER_PASSWORD and OLIVARES_DB_PASSWORD in .env
+# set three distinct passwords in deploy/compose/.env:
+# POSTGRES_SUPERUSER_PASSWORD, OLIVARES_DB_PASSWORD, OLIVARES_ADMIN_PASSWORD
 
 docker compose -f deploy/compose/docker-compose.yml \
                -f deploy/compose/docker-compose.postgres.yml up -d

@@ -15,7 +15,7 @@ import (
 )
 
 // approverperson_test.go pins the ONE translation every downstream quorum
-// depends on: approvalApproverEvidence turns immutable decision trail into the
+// depends on: ApprovalApproverEvidence turns immutable decision trail into the
 // approver evidence five gates hand to eight counters (the inventory is in
 // sessions-cuenta-credenciales.md §1).
 //
@@ -46,7 +46,7 @@ func bridgeServingTrail(t *testing.T, entries ...trailEntry) (*approvalBridge, s
 	if b == nil {
 		t.Fatal("bridge should build")
 	}
-	b.useHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	b.UseHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !strings.HasSuffix(r.URL.Path, "/decisions") {
 			w.WriteHeader(http.StatusNotFound)
 			return
@@ -54,7 +54,7 @@ func bridgeServingTrail(t *testing.T, entries ...trailEntry) (*approvalBridge, s
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{"items": entries})
 	}))
-	cred, ok := b.cred(tid)
+	cred, ok := b.Cred(tid)
 	if !ok {
 		t.Fatal("credential should resolve")
 	}
@@ -70,7 +70,7 @@ func TestApproverEvidenceCountsOneAccountBehindTwoCredentialsOnce(t *testing.T) 
 		trailEntry{Decision: "approve", Decider: "user:alice", DeciderUser: "alice"},
 		trailEntry{Decision: "approve", Decider: "token:cred-7", DeciderUser: "alice"},
 	)
-	ev := b.approvalApproverEvidence(context.Background(), cred, "appr-1")
+	ev := b.ApprovalApproverEvidence(context.Background(), cred, "appr-1")
 
 	if got := len(ev.Persons); got != 1 {
 		t.Fatalf("one human with two credentials is ONE approver, got %d: %v", got, ev.Persons)
@@ -95,7 +95,7 @@ func TestApproverEvidenceCountsTwoDistinctAccountsAsTwo(t *testing.T) {
 		trailEntry{Decision: "approve", Decider: "user:alice", DeciderUser: "alice"},
 		trailEntry{Decision: "approve", Decider: "user:bob", DeciderUser: "bob"},
 	)
-	ev := b.approvalApproverEvidence(context.Background(), cred, "appr-2")
+	ev := b.ApprovalApproverEvidence(context.Background(), cred, "appr-2")
 	if got := len(ev.Persons); got != 2 {
 		t.Fatalf("two distinct humans are two approvers, got %d: %v", got, ev.Persons)
 	}
@@ -113,7 +113,7 @@ func TestApproverEvidenceRefusesADecisionWithNoAccountBehindIt(t *testing.T) {
 		trailEntry{Decision: "approve", Decider: "user:alice", DeciderUser: "alice"},
 		trailEntry{Decision: "approve", Decider: "token:system-9"}, // no person behind it
 	)
-	ev := b.approvalApproverEvidence(context.Background(), cred, "appr-3")
+	ev := b.ApprovalApproverEvidence(context.Background(), cred, "appr-3")
 
 	if got := len(ev.Persons); got != 1 {
 		t.Fatalf("a personless credential is not a human; persons = %d %v", got, ev.Persons)
@@ -135,7 +135,7 @@ func TestApproverEvidenceIgnoresNonApprovals(t *testing.T) {
 		trailEntry{Decision: "approve", Decider: "user:alice", DeciderUser: "alice"},
 		trailEntry{Decision: "reject", Decider: "user:bob", DeciderUser: "bob"},
 	)
-	ev := b.approvalApproverEvidence(context.Background(), cred, "appr-4")
+	ev := b.ApprovalApproverEvidence(context.Background(), cred, "appr-4")
 	if len(ev.Persons) != 1 || ev.Persons[0] != "alice" {
 		t.Fatalf("only approvers count, got %v", ev.Persons)
 	}
@@ -155,11 +155,11 @@ func TestApproverEvidenceDegradesToNothingOnAReadFailure(t *testing.T) {
 	if b == nil {
 		t.Fatal("bridge should build")
 	}
-	b.useHandler(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	b.UseHandler(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
-	cred, _ := b.cred(tid)
-	ev := b.approvalApproverEvidence(context.Background(), cred, "appr-5")
+	cred, _ := b.Cred(tid)
+	ev := b.ApprovalApproverEvidence(context.Background(), cred, "appr-5")
 	if len(ev.Persons) != 0 || len(ev.Actors) != 0 || ev.Unattributed != 0 {
 		t.Fatalf("an unreadable trail is no evidence at all, got %+v", ev)
 	}

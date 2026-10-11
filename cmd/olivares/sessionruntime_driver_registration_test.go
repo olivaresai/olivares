@@ -133,6 +133,19 @@ func TestInstalledSessionProgramFallsBackToThePath(t *testing.T) {
 	if got := installedSessionProgram(empty, "unknown-driver", lookPath); got != "" {
 		t.Fatalf("an unknown driver resolved to %q", got)
 	}
+	if got := installedSessionProgram(empty, "ollama", func(name string) (string, error) {
+		return "/usr/local/bin/" + name, nil
+	}); got != "" {
+		t.Fatalf("ollama has no session driver but resolved to %q", got)
+	}
+	if got := installedSessionProgram(empty, "gemini-cli", func(name string) (string, error) {
+		if name == "gemini" {
+			return "/usr/local/bin/gemini", nil
+		}
+		return "", os.ErrNotExist
+	}); got != "/usr/local/bin/gemini" {
+		t.Fatalf("gemini-cli = %q, want the PATH binary named by its facts", got)
+	}
 }
 
 // TestManagedInstallObserverPrefersTheDeclaredDataDirectory is the unit half: the

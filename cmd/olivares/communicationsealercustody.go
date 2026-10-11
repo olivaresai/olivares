@@ -133,23 +133,9 @@ func openCommunicationContentKeyringOperatorConfig(
 	if err := communicationContentContextError(ctx); err != nil {
 		return nil, err
 	}
-	envelope, err := secure.DecodeSealedEnvelope(raw)
+	plaintext, err := openCMEKOperatorConfig(ctx, raw)
 	if err != nil {
-		return nil, fmt.Errorf("%w: decode operator-config envelope: %w",
-			errCommunicationContentCustody, err)
-	}
-	cfg, err := loadKeyWrapConfig()
-	if err != nil {
-		return nil, fmt.Errorf("%w: resolve configured KEK: %w", errCommunicationContentCustody, err)
-	}
-	if cfg == nil {
-		return nil, fmt.Errorf("%w: no configured KEK can open the keyring envelope",
-			errCommunicationContentCustody)
-	}
-	plaintext, err := openSealedEnvelope(ctx, cfg, envelope, secure.PurposeOperatorConfig)
-	if err != nil {
-		return nil, fmt.Errorf("%w: open operator-config envelope: %w",
-			errCommunicationContentCustody, err)
+		return nil, fmt.Errorf("%w: open operator-config envelope: %w", errCommunicationContentCustody, err)
 	}
 	return plaintext, nil
 }

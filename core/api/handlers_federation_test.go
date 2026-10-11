@@ -9,6 +9,7 @@ import (
 	"crypto/ed25519"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -28,9 +29,15 @@ import (
 // params into a fake IdP URL, and ValidateAssertion asserts the core handed it
 // the full flow context (nonce + PKCE verifier for OIDC) before returning a fixed
 // identity. Raw=="bad" simulates a rejected assertion.
-type fakeFed struct{ proto string }
+type fakeFed struct {
+	proto       string
+	metadataErr error // a SAML provider whose SP metadata cannot be produced
+}
 
 func (f *fakeFed) SAMLMetadata() ([]byte, error) {
+	if f.metadataErr != nil {
+		return nil, f.metadataErr
+	}
 	if f.proto != auth.ProtocolSAML {
 		return nil, auth.ErrSSONotConfigured
 	}
@@ -132,6 +139,68 @@ func TestCommunitySAMLMetadata(t *testing.T) {
 				t.Fatal("metadata must not issue a login credential")
 			}
 		})
+	}
+}
+
+// TestSAMLMetadataProviderUnavailable: a configured SAML IdP whose provider
+// does not build (a broken SP key) or whose metadata cannot be produced answers
+// sso_provider_unavailable, never "not configured", so an operator can tell a
+// misconfiguration from an absent IdP. A broken OIDC IdP is still no SAML IdP (501),
+// and the login start keeps its fail-closed 501.
+func TestSAMLMetadataProviderUnavailable(t *testing.T) {
+	configs := map[string]map[string]any{
+		auth.ProtocolSAML: {"protocol": "saml", "enabled": true, "saml_entity_id": "https://sp.example.test",
+			"saml_metadata_url": "https://idp.example.test/metadata", "saml_acs_url": "https://sp.example.test/acs",
+			"saml_idp_sso_url": "https://idp.example.test/sso"},
+		auth.ProtocolOIDC: {"protocol": "oidc", "enabled": true, "oidc_issuer": "https://idp.example.test",
+			"oidc_client_id": "cid", "oidc_client_secret": "test-client-secret"},
+	}
+	for protocol, config := range configs {
+		t.Run(protocol+" provider does not build", func(t *testing.T) {
+			brokenKey := func(context.Context, auth.FederationParams) (auth.Federation, error) {
+				return nil, errors.New("federation: SSO not configured: SP encryption keypair: no PEM data")
+			}
+			h := newHarnessOpts(t, func(o *api.Options) {
+				o.FederationService = auth.NewFederationService(o.Store, fakeSealer{}, brokenKey, auth.NoFederation{}, nil)
+			})
+			admin := h.adminLogin()
+			h.elevate(admin)
+			if r := h.do("PUT", "/v1/console/sso", admin, config, nil); r.code != http.StatusOK {
+				t.Fatalf("save %s = %d %s", protocol, r.code, r.raw)
+			}
+			metadata := h.raw("GET", "/v1/auth/federation/saml/metadata", nil)
+			if protocol == auth.ProtocolSAML {
+				assertSSOProviderUnavailable(t, metadata)
+			} else if metadata.Code != http.StatusNotImplemented {
+				t.Fatalf("SAML metadata with a broken %s IdP = %d %s, want 501", protocol, metadata.Code, metadata.Body.String())
+			}
+			if r := h.raw("GET", "/v1/auth/federation/start", nil); r.Code != http.StatusNotImplemented {
+				t.Fatalf("start with an unbuildable IdP = %d, want the fail-closed 501", r.Code)
+			}
+		})
+	}
+	t.Run("metadata generation fails", func(t *testing.T) {
+		// The real provider wraps its not-configured sentinel; the cause still answers 500.
+		broken := fmt.Errorf("%w: saml: marshal metadata: broken", auth.ErrSSONotConfigured)
+		h := newFedHarness(t, &fakeFed{proto: auth.ProtocolSAML, metadataErr: broken})
+		h.adminLogin()
+		assertSSOProviderUnavailable(t, h.raw("GET", "/v1/auth/federation/saml/metadata", nil))
+	})
+}
+
+func assertSSOProviderUnavailable(t *testing.T, r *httptest.ResponseRecorder) {
+	t.Helper()
+	var body struct {
+		Error struct {
+			Code    string `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(r.Body.Bytes(), &body); err != nil {
+		t.Fatalf("metadata error body %q: %v", r.Body.String(), err)
+	}
+	if r.Code != http.StatusInternalServerError || body.Error.Code != "sso_provider_unavailable" || body.Error.Message != "internal error" {
+		t.Fatalf("metadata = %d %s, want 500 sso_provider_unavailable without the cause", r.Code, r.Body.String())
 	}
 }
 

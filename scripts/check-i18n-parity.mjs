@@ -37,18 +37,17 @@ const WEB = path.join(ROOT, 'web')
 const LOCALES = path.join(WEB, 'src/lib/i18n/locales')
 const FEATURES = path.join(WEB, 'src/features')
 
-// ⛔ Y EL PUNTO CIEGO DE ANTES DE EMPEZAR: si uno de los dos árboles no existe —repo a
-//    medio clonar, ruta renombrada, ejecución desde otro sitio—, `readdirSync` LANZA y el guion
-//    muere con una traza de Node y rc=1. Eso se lee como «el gate está roto», y lo que hay es que
-//    no pudo mirar. Se comprueba antes y se sale 2, nombrando la ruta que falta.
+// Check both trees before starting. If either is missing after a partial clone,
+// rename or wrong working directory, readdirSync throws and Node exits 1, falsely
+// suggesting a broken gate. Return 2 instead and name the missing path.
 for (const [nombre, dir] of [
   ['LOCALES', LOCALES],
   ['FEATURES', FEATURES],
 ]) {
   if (!fs.existsSync(dir)) {
     console.error(
-      `⛔ i18n parity: NO HE PODIDO MIRAR — ${nombre} no existe (${dir}). No se comparó ningún ` +
-        `idioma, así que esto no dice nada sobre la paridad.`,
+      `⛔ i18n parity: COULD NOT LOOK — ${nombre} does not exist (${dir}). No languages were ` +
+        `compared, so parity remains unverified.`,
     )
     process.exit(2)
   }
@@ -82,8 +81,8 @@ function readJSON(p) {
     return JSON.parse(fs.readFileSync(p, 'utf8'))
   } catch (e) {
     console.error(
-      `✗ i18n parity: no se pudo leer ${p} — ${e instanceof Error ? e.message : String(e)}. ` +
-        `Un locale ausente o con JSON inválido rompe la comparación: arréglalo o retíralo.`,
+      `✗ i18n parity: could not read ${p} — ${e instanceof Error ? e.message : String(e)}. ` +
+        `A missing locale or invalid JSON prevents comparison: fix it or remove it.`,
     )
     process.exit(1)
   }
@@ -234,6 +233,16 @@ const NO_I18N_ALLOWLIST = new Map([
   ],
 ])
 
+// Edition UI keeps the namespace used by its shared API and locale module.
+// Each mapped directory must retain its canonical English file;
+// discoverNamespaces compares every translated file under the same directory.
+const FEATURE_I18N_DIRECTORIES = new Map([
+  // Authorization forms reuse console's role strings; common is a foundation namespace.
+  ['authorization', 'console'],
+  ['compliance-packs', 'compliance'],
+  ['on-demand-reports', 'reporting'],
+])
+
 /** Does this feature dir contain any .tsx (i.e. does it render UI)? */
 function hasTsx(dir) {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -250,11 +259,12 @@ function checkFeaturesWithoutI18n() {
   for (const d of fs.readdirSync(FEATURES, { withFileTypes: true })) {
     if (!d.isDirectory()) continue
     const dir = path.join(FEATURES, d.name)
-    if (fs.existsSync(path.join(dir, 'i18n', `${CANON}.json`))) continue
+    const namespaceDir = path.join(FEATURES, FEATURE_I18N_DIRECTORIES.get(d.name) ?? d.name)
+    if (fs.existsSync(path.join(namespaceDir, 'i18n', `${CANON}.json`))) continue
     if (!hasTsx(dir)) continue
     if (NO_I18N_ALLOWLIST.has(d.name)) continue
     problems.push(
-      `[${d.name}] feature renders UI (.tsx) but has no i18n/${CANON}.json — ` +
+      `[${d.name}] feature renders UI (.tsx) but has no ${rel(path.join(namespaceDir, 'i18n', `${CANON}.json`))} — ` +
         'every visible string must go through i18n (or allowlist the dir in ' +
         'scripts/check-i18n-parity.mjs with a reason)',
     )
@@ -351,10 +361,10 @@ if (SUMMARY || allProblems.length) {
 //    la mejor. Es la misma guarda que `check-client-callers.mjs` lleva por la misma razón.
 if (namespaces.length === 0 || langs.length === 0) {
   console.error(
-    `⛔ i18n parity: NO HE PODIDO MIRAR — el escaneo encontró ${namespaces.length} namespace(s) y ` +
-      `${langs.length} idioma(s). Un árbol sin namespaces ni idiomas NO es un árbol con la paridad ` +
-      `en orden: es un escáner que dejó de reconocer la disposición. Revisa FEATURES/LOCALES antes ` +
-      `de leer esto como verde.`,
+    `⛔ i18n parity: COULD NOT LOOK — the scan found ${namespaces.length} namespace(s) and ` +
+      `${langs.length} language(s). A tree without namespaces or languages does NOT demonstrate ` +
+      `parity: the scanner no longer recognizes its layout. Check FEATURES/LOCALES before ` +
+      `treating this as passing.`,
   )
   process.exit(2)
 }

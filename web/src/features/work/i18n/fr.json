@@ -95,7 +95,12 @@
         "hint": "La décision sur laquelle repose cet acte. Sans elle, le moteur ne l'accepte pas.",
         "placeholder": "id de la décision"
       }
-    }
+    },
+    "details": "Détails",
+    "readyTitle": "Marquer '{{title}}' comme prêt",
+    "actionTitle": "{{action}} : {{title}}",
+    "waitsFor": "'{{title}}' attend que '{{dependency}}' soit terminé.",
+    "dependencyWaiting": "Cet élément attend que ses dépendances soient terminées."
   },
   "checks": {
     "evidence": "preuve {{ref}}"
@@ -103,6 +108,19 @@
   "common": {
     "refresh": "Actualiser",
     "loadMore": "Charger plus"
+  },
+  "create": {
+    "action": "Nouvelle unité",
+    "title": "Nouvelle unité de travail",
+    "description": "Enregistrez une unité de travail dont vous êtes responsable. Son plan est affiché avant toute écriture ; une fois créée, vous pouvez la proposer en passation.",
+    "workspace": "Espace de travail",
+    "workspaceNone": "Aucun espace de travail ne vous est disponible ici. Choisissez-en un dans le sélecteur d'espaces ou demandez à un administrateur.",
+    "workspaceError": "La liste des espaces de travail n'a pas pu être lue. Fermez ceci et réessayez.",
+    "itemTitle": "Titre",
+    "brief": "Description",
+    "briefHint": "Ce qu’il faut faire et pourquoi.",
+    "doneWhen": "Terminée quand",
+    "doneWhenHint": "Le critère d'acceptation qui indique que l'unité est terminée."
   },
   "decisions": {
     "title": "Décisions",

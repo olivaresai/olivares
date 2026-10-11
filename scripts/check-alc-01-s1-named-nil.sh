@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: 2026 Olivares.AI
 # SPDX-License-Identifier: AGPL-3.0-only
 #
-# ALC-01-S1 hub half: newManagedSCIM exists and is nil; boot does not call it.
+# ALC-01-S1 hub half: the managedSCIM edition port exists and is nil; boot does not call it.
 # 0 CLEAN · 1 finding · 2 LOOK.
 
 set -euo pipefail
@@ -16,17 +16,19 @@ cd "$ROOT" || cannot "cannot enter $ROOT"
 JSON="${OLIVARES_ALC01S_JSON:-design/alc-01-s1-named-nil.json}"
 DOC="${OLIVARES_ALC01S_DOC:-design/ALC-01-S1-NAMED-NIL-2026-08-20.md}"
 NOENT="${OLIVARES_ALC01S_NOENT:-cmd/olivares/wire_noenterprise.go}"
+PORTS="${OLIVARES_ALC01S_PORTS:-cmd/olivares/edition_ports.go}"
 BOOT="${OLIVARES_ALC01S_BOOT:-cmd/olivares/wire.go}"
 
 [ -f "$JSON" ] || cannot "missing $JSON"
 [ -f "$DOC" ] || cannot "missing $DOC"
 [ -f "$NOENT" ] || cannot "missing noenterprise wire"
+[ -f "$PORTS" ] || cannot "missing edition ports"
 [ -f "$BOOT" ] || cannot "missing shared wire"
 
 grep -q 'HOLD on the motor' "$DOC" || fail "$DOC lost HOLD on the motor"
 grep -q 'Seam named' "$DOC" || fail "$DOC lost seam named"
 if grep -qiE 'managed SCIM shipped|ALC-01 complete|invented /v1/managed' "$DOC"; then
-	fail "$DOC claims a close this lote does not have"
+	fail "$DOC claims a close this batch does not have"
 fi
 
 python3 - "$JSON" <<'PY' || fail "JSON flags drifted"
@@ -46,24 +48,18 @@ for key in ("hub", "overlay"):
         raise SystemExit("%s is not a 40-hex object id" % key)
 PY
 
-grep -E '^func newManagedSCIM\(\) any \{' "$NOENT" >/dev/null \
-	|| fail "noenterprise wire lost newManagedSCIM"
-# The body of the named seam must still be nil — not a client.
-python3 - "$NOENT" <<'PY' || fail "newManagedSCIM is no longer the nil seam"
-import re, sys
-text = open(sys.argv[1], encoding="utf-8").read()
-m = re.search(r"func newManagedSCIM\(\) any \{([^}]*)\}", text, re.S)
-if not m:
-    raise SystemExit("function body not found")
-body = m.group(1)
-if "return nil" not in body:
-    raise SystemExit("body does not return nil")
-if re.search(r"return [^n]", body):
-    raise SystemExit("body returns something other than nil")
-PY
+# The seam is the managedSCIM edition port. Community leaves it nil, and the shared
+# wire never calls it: the overlay has no constructor to fill it with.
+grep -Eq '^[[:space:]]managedSCIM editionPort\[any\]$' "$PORTS" \
+	|| fail "edition ports lost managedSCIM"
+grep -q '^func editionPortsForBuild()' "$NOENT" \
+	|| fail "the noenterprise wire no longer fills the Community edition; the nil check below would prove nothing"
+if grep -q 'managedSCIM' "$NOENT"; then
+	fail "Community fills managedSCIM — the seam is no longer nil"
+fi
 
-if grep -E 'newManagedSCIM\(' "$BOOT" >/dev/null; then
-	fail "shared wire calls newManagedSCIM — overlay has no matching symbol"
+if grep -l 'thisEdition\.managedSCIM' "$(dirname "$BOOT")"/*.go | grep -qv '_test\.go$'; then
+	fail "shared wire calls the managedSCIM port — overlay has no matching constructor"
 fi
 
 say "check-alc-01-s1-named-nil: CLEAN — seam named nil; motor unbuilt; boot uncalled."

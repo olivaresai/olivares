@@ -6,9 +6,8 @@ package main
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -44,15 +43,16 @@ func TestDBInitAgainAfterTheFirstStartKeepsTheEngineStarting(t *testing.T) {
 	}
 	start("first-start")
 
-	var suffix [4]byte
-	if _, err := rand.Read(suffix[:]); err != nil {
+	// The first init saved an admin role; naming it again re-grants its read access.
+	raw, err := os.ReadFile(filepath.Join(dir, "postgres", "admin.dsn"))
+	if err != nil {
 		t.Fatal(err)
 	}
-	adminPW := filepath.Join(t.TempDir(), "admin.password")
-	if err := os.WriteFile(adminPW, []byte("arch-reinit-admin-password-fixture"), 0o600); err != nil {
+	saved, err := url.Parse(strings.TrimSpace(string(raw)))
+	if err != nil {
 		t.Fatal(err)
 	}
-	reinit := append(initArgs, "--admin-role", "arch_reinit_admin_"+hex.EncodeToString(suffix[:]), "--admin-password-file", adminPW)
+	reinit := append(initArgs, "--admin-role", saved.User.Username())
 	if output, err := runDB(t, reinit...); err != nil {
 		t.Fatalf("db init again with --admin-role: %v\n%s", err, output)
 	}

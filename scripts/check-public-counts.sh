@@ -20,9 +20,11 @@
 # (shallow clones and dirty trees defeat them).
 #
 # The derivations, in the script, so a number's provenance is code:
-#   modules       = unique modules/<name> imports in cmd/olivares/wire.go
-#   integrations  = connector dirs − connector dirs with no Go code
-#   catalogs      = top-level entries in modules/compliance/frameworks.go
+#   modules       = unique selectable module packages in core/modulespec/modules.json
+#   selectable_modules = selectable namespaces in that spec (CLI/console catalog)
+#   integrations  = production Go capability dirs, excluding libraries and the conformance matrix
+#   catalogs      = private compliance.catalog.json in an assembled Business tree;
+#                   unavailable in Community, never measured as zero
 #   enforcement   = deny-closed PEP seams whose PROOF is intact, per the (seam, proof)
 #                   census in scripts/enforcement-seams.tsv — not seam files present,
 #                   which is what this counted until 2026-08-05 and which a fail-OPEN
@@ -31,6 +33,8 @@
 # Exemptions are explicit, never silent: the frozen docs-site 2026-06 snapshot, dated
 # ADRs, and a VERSIONED allowlist of historical-quote lines (path + literal); the
 # `counts-gate: historical-quote` token outside that allowlist FAILS the gate.
+# The retired launch reel has a versioned frozen-census policy in its README;
+# its publication ban and render-manifest integrity remain mandatory.
 #
 # The curated public export drops design/, docs/launch/ and sessions/ on purpose
 # (the export curation script): those sections print SKIP when their root is absent. In
@@ -49,6 +53,37 @@ cd "$(dirname "$0")/.."
 CPC_SELFTEST=0
 [ "${1:-}" = "--selftest" ] && CPC_SELFTEST=1
 export CPC_SELFTEST
+
+# ── delegated-leg verdicts: collected, never a detour (#569) ───────────────────────────
+#
+# The three delegated legs below used to exit the gate the moment one of them failed, so a
+# stale config-env reference or a toolchain the host lacks silenced EVERY count finding
+# that came after them — measured on main 2026-10-08: rc 1 at the config-env leg with zero
+# count findings, while the count body alone held 338. Each leg's verdict is now recorded
+# and the count body always runs; the combined exit keeps this repo's 1-vs-2 contract
+# (test-public-counts-verdicts.sh): a false public claim (1) outranks a leg that could not
+# look (2), because both verdicts are printed and "the figure lies" is the one a triager
+# can act on without fixing a checkout first. One asymmetry is deliberate: when the count
+# body itself could not look (its own blind() exits 2 — census or contract unreadable),
+# that 2 propagates even past a leg's recorded drift, because with no derivation there is
+# no "figure lies" to rank first.
+cpc_leg_drift=0
+cpc_leg_blind=0
+cpc_leg_note() { # <rc> <drift-message> <blind-message>
+	if [ "$1" = "2" ]; then
+		echo "$3" >&2
+		cpc_leg_blind=1
+	elif [ "$1" = "1" ]; then
+		echo "$2" >&2
+		cpc_leg_drift=1
+	else
+		# An abnormal death (noexec, missing interpreter, a signal) is not drift: nothing
+		# was compared, so prescribing --write would be a remedy for a comparison that
+		# never ran. Record inability to compare (2), just like a blind delegate.
+		echo "FAIL check-public-counts: CANNOT LOOK — a delegated leg died abnormally (exit $1); no comparison ran, so no regeneration is prescribed. The counts below were still checked." >&2
+		cpc_leg_blind=1
+	fi
+}
 
 # ── the OLIVARES_* configuration reference, delegated (C09-02) ──────────────────
 #
@@ -79,16 +114,19 @@ if [ -x scripts/check-config-env-docs.sh ] || [ -f scripts/check-config-env-docs
 	[ "$CPC_SELFTEST" = "1" ] && cpc_env_arg="--self-test"
 	TMPDIR="$PWD/.config-env-docs-tmp" bash scripts/check-config-env-docs.sh $cpc_env_arg || {
 		cpc_env_rc=$?
-		echo "FAIL check-public-counts: the generated OLIVARES_* configuration reference is out of date (exit $cpc_env_rc)." >&2
-		echo "  Regenerate with: bash scripts/check-config-env-docs.sh --write" >&2
-		exit "$cpc_env_rc"
+		# The delegate keeps drift (1) and CANNOT LOOK (2) apart; prescribing --write on a
+		# 2 publishes a page built from an enumeration that was never made (see the sibling
+		# leg's note for the measured cost of flattening them).
+		cpc_leg_note "$cpc_env_rc" \
+			"FAIL check-public-counts: the generated OLIVARES_* configuration reference is out of date (exit $cpc_env_rc). Regenerate with: bash scripts/check-config-env-docs.sh --write" \
+			"FAIL check-public-counts: CANNOT LOOK — the OLIVARES_* configuration reference was not checked against the code (exit 2; the cause is named above when the delegate printed one). Do NOT regenerate with --write."
 	}
 else
 	# Fail closed, in the shape check-migrations.sh uses: the delegation's own absence
 	# is "I could not look", never "nothing to report".
 	echo "FAIL check-public-counts: CANNOT LOOK — scripts/check-config-env-docs.sh is missing, so the" >&2
 	echo "  OLIVARES_* configuration reference was not checked against the code at all." >&2
-	exit 2
+	cpc_leg_blind=1
 fi
 
 # ── the generated CLI reference, delegated (C09-03) ────────────────────────────
@@ -131,21 +169,14 @@ if [ -x scripts/check-cli-ref-docs.sh ] || [ -f scripts/check-cli-ref-docs.sh ];
 		# the delegate said CANNOT LOOK and this line still reported "out of date" and
 		# prescribed --write — a false diagnosis with a harmful remedy, because
 		# regenerating would write the page from an enumeration that was never made.
-		if [ "$cpc_cli_rc" = "2" ]; then
-			echo "FAIL check-public-counts: CANNOT LOOK — the CLI reference was not checked against the" >&2
-			echo "  command tree at all (exit 2; the cause is named above). Fix what stopped the walk." >&2
-			echo "  Do NOT regenerate: --write would publish a page built from an enumeration this gate" >&2
-			echo "  could not make." >&2
-		else
-			echo "FAIL check-public-counts: the generated CLI reference is out of date with the binary (exit $cpc_cli_rc)." >&2
-			echo "  Regenerate with: bash scripts/check-cli-ref-docs.sh --write" >&2
-		fi
-		exit "$cpc_cli_rc"
+		cpc_leg_note "$cpc_cli_rc" \
+			"FAIL check-public-counts: the generated CLI reference is out of date with the binary (exit $cpc_cli_rc). Regenerate with: bash scripts/check-cli-ref-docs.sh --write" \
+			"FAIL check-public-counts: CANNOT LOOK — the CLI reference was not checked against the command tree at all (exit 2; the cause is named above when the delegate printed one). Fix what stopped the walk. Do NOT regenerate: --write would publish a page built from an enumeration this gate could not make."
 	}
 else
 	echo "FAIL check-public-counts: CANNOT LOOK — scripts/check-cli-ref-docs.sh is missing, so the" >&2
 	echo "  CLI reference was not checked against the command tree at all." >&2
-	exit 2
+	cpc_leg_blind=1
 fi
 
 # ── the published OpenAPI operation descriptions, delegated (C09-04) ───────────
@@ -189,14 +220,14 @@ if [ -x scripts/check-openapi-op-descriptions.sh ] || [ -f scripts/check-openapi
 	[ "$CPC_SELFTEST" = "1" ] && cpc_oad_arg="--self-test"
 	TMPDIR="$PWD/.openapi-op-descriptions-tmp" bash scripts/check-openapi-op-descriptions.sh $cpc_oad_arg || {
 		cpc_oad_rc=$?
-		echo "FAIL check-public-counts: a published OpenAPI operation description is out of date with the code (exit $cpc_oad_rc)." >&2
-		echo "  Regenerate with: bash scripts/check-openapi-op-descriptions.sh --write && task openapi:dump" >&2
-		exit "$cpc_oad_rc"
+		cpc_leg_note "$cpc_oad_rc" \
+			"FAIL check-public-counts: a published OpenAPI operation description is out of date with the code (exit $cpc_oad_rc). Regenerate with: bash scripts/check-openapi-op-descriptions.sh --write && task openapi:dump" \
+			"FAIL check-public-counts: CANNOT LOOK — the published OpenAPI operation descriptions were not checked against the code (exit 2; the cause is named above when the delegate printed one). Do NOT regenerate: --write would publish descriptions from an enumeration this gate could not make."
 	}
 else
 	echo "FAIL check-public-counts: CANNOT LOOK — scripts/check-openapi-op-descriptions.sh is missing, so the" >&2
 	echo "  published OpenAPI operation descriptions were not checked against the code at all." >&2
-	exit 2
+	cpc_leg_blind=1
 fi
 
 # ── the console, gRPC and upgrade guides: PROMOTED OUT of this gate ─────────────────
@@ -304,7 +335,7 @@ export CPC_RELEASE_CHECKLIST CPC_REVIEW_NOTES CPC_DAY_D_RUNBOOK
 export CPC_BLOG_DRAFT CPC_LAUNCH_INDEX CPC_AGENT_STATE
 
 python3 - <<'PY'
-import glob, hashlib, json, os, re, sys
+import glob, hashlib, json, os, re, runpy, sys
 
 SELFTEST = os.environ.get("CPC_SELFTEST") == "1"
 failures = []
@@ -403,8 +434,10 @@ def proven_seams(census=None, root=""):
                          f"counted ({val!r}) — one enforcement point is one row, or the "
                          "count inflates itself")
             seen[key].add(val)
-        if not (os.path.isfile(under(seam)) and os.path.isfile(under(test))):
-            continue
+        for role, path in (("seam", seam), ("proof", test)):
+            if not os.path.isfile(under(path)):
+                blind(f"UNVERIFIED check-public-counts: {census}:{i} ({label}): missing "
+                      f"{role} file: {path} — the enforcement count cannot be measured")
         # `func ... ^}` bounds the search to that ONE function body: the file merely
         # mentioning the assertion elsewhere is not a proof that this test makes it. The
         # closing brace is REQUIRED — a truncated function has no body to trust.
@@ -455,27 +488,27 @@ def openapi_paths(path=None):
 
 # ── derivations (mirror the full source tree's state script; keep the two in step) ───────────────────
 def derive():
-    wire = rd("cmd/olivares/wire.go")
-    modules = len(set(re.findall(r'"github\.com/olivaresai/olivares/modules/[a-z-]+"', wire)))
-    conn_dirs = sorted(d for d in glob.glob("connectors/*/") if os.path.isdir(d))
-    def has_go(d):
-        # A connector counts as a Go integration because it SHIPS Go, not because it is
-        # TESTED in Go. Test files and fixture trees are evidence about the code, never
-        # the code itself: a directory holding only `foo_test.go` implements nothing, and
-        # a `testdata/` tree can contain arbitrary sources that are inputs to a test.
-        # Measured on 2026-08-04: 0 of the connector directories depend on that evidence
-        # today, so this is a latent class being closed before it can be activated in
-        # silence by whoever adds the next connector.
-        for root, dirs, files in os.walk(d):
-            dirs[:] = [x for x in dirs if x not in ("node_modules", "testdata")]
-            if any(f.endswith(".go") and not f.endswith("_test.go") for f in files):
-                return True
-        return False
-    nongo = sum(1 for d in conn_dirs if not has_go(d))
-    fw = rd("modules/compliance/frameworks.go")
-    catalogs = sum(1 for line in fw.splitlines() if line.startswith("\t{"))
+    specs = json.loads(rd("core/modulespec/modules.json"))
+    modules = len({spec["package"] for spec in specs if spec["selectable"]})
+    try:
+        connector_census = runpy.run_path("scripts/lib/connector_census.py")["connector_census"]
+        counts = connector_census()
+    except (OSError, ValueError) as exc:
+        blind(f"UNVERIFIED check-public-counts: cannot measure connector directories: {exc}")
+    conn_dirs = sorted(d for d in glob.glob("connectors/*/")
+                       if os.path.isdir(d) and d.rstrip("/").split("/")[-1] != "node_modules")
+    catalog_count = runpy.run_path("scripts/lib/catalog_count.py")["catalog_count"]
+    try:
+        catalogs = catalog_count()
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        blind(f"UNVERIFIED check-public-counts: cannot measure private compliance catalog: {exc}")
     enforcement = proven_seams()
-    kinds = len(set(re.findall(r'case "[a-z0-9_-]+"', rd("cmd/olivares/sources.go"))))
+    source_census = runpy.run_path("scripts/lib/source_census.py")["source_census"]
+    try:
+        _, inproc_dirs, all_kinds = source_census(rd("cmd/olivares/sources.go"))
+    except (OSError, ValueError) as exc:
+        blind(f"UNVERIFIED check-public-counts: cannot measure source wiring: {exc}")
+    kinds = len(all_kinds)
     # connector taxonomy (mirrors the ai-state.sh compile-time-assertion greps): the
     # connectors/README.md breakdown states every one of these, so every one is derived.
     plugins = len(glob.glob("connectors/*/cmd/*/main.go"))
@@ -495,11 +528,8 @@ def derive():
                 for k, pat in asserts.items():
                     if pat.search(src):
                         hits[k].add(top)
-    LIB_DIRS = ["contentsource", "datasourceacl", "identitysource", "internal", "modelprovider",
-                "modelrouter", "redact", "secretref", "siemsink", "threatfeed", "vectorindex", "voice"]
-    libs = sum(1 for d in LIB_DIRS if os.path.isdir(f"connectors/{d}"))
     # SOURCE-SCAFFOLD gate (ported from ai-state.sh, which nothing in CI runs): every
-    # sdk.SourceConnector must have an activation path — a buildInProcSource case, a
+    # sdk.SourceConnector must have an activation path — an inProcSourceFactories entry, a
     # plugin binary, or a roster/output/content class. The allowlist may only SHRINK.
     src_pat = re.compile(r"_\s+sdk\.SourceConnector\s*=")
     source_dirs = set()
@@ -511,16 +541,6 @@ def derive():
                    if f.endswith(".go") and not f.endswith("_test.go")):
                 source_dirs.add(top)
                 break
-    src = rd("cmd/olivares/sources.go")
-    imports = dict(re.findall(r'(?:(\w+)\s+)?"github\.com/olivaresai/olivares/connectors/([^"]+)"', src))
-    inproc_dirs = set()
-    fn = re.search(r"func buildInProcSource\(.*?\n\}", src, re.S)
-    if fn:
-        for alias in re.findall(r"return\s+([A-Za-z_][A-Za-z0-9_]*)\.New(?:Audit)?\(", fn.group(0)):
-            for a, path_ in re.findall(r'(?:(\w+)\s+)?"github\.com/olivaresai/olivares/connectors/([^"]+)"', src):
-                name = path_.rsplit("/", 1)[-1]
-                if (a or name.replace("-", "")) == alias:
-                    inproc_dirs.add(name)
     plugin_dirs = {p.split("/")[1] for p in glob.glob("connectors/*/cmd/*/main.go")}
     SCAFFOLD_ALLOW = {"a2a"}  # pending its source-face wiring; this set may only shrink
     scaffolds = source_dirs - inproc_dirs - plugin_dirs - hits["roster"] - hits["output"] - hits["content"]
@@ -528,33 +548,56 @@ def derive():
     if rogue and not SELFTEST:
         sys.exit("FAIL check-public-counts: source connector(s) with NO activation path "
                  f"(not in the shrink-only allowlist): {sorted(rogue)} — wire them or do not merge")
-    return (modules, len(conn_dirs), nongo, catalogs, enforcement, kinds, plugins,
-            len(hits["output"]), len(hits["roster"]), len(hits["content"]), len(hits["content_live"]), libs,
-            openapi_paths())
+    return (modules, counts["dirs"], counts["nongo"], catalogs, enforcement, kinds, plugins,
+            len(hits["output"]), len(hits["roster"]), len(hits["content"]), len(hits["content_live"]), counts["libraries"],
+            openapi_paths(), counts["integrations"])
 
 if not SELFTEST:
     (MODULES, CONN_DIRS, NONGO, CATALOGS, ENFORCEMENT, KINDS,
-     PLUGINS, OUTPUT, ROSTER, CONTENT, CONTENT_LIVE, LIBS, PATHS) = derive()
+     PLUGINS, OUTPUT, ROSTER, CONTENT, CONTENT_LIVE, LIBS, PATHS, INTEGRATIONS) = derive()
 else:
     # fixtures assume today's canon; the real run re-derives every time
     (MODULES, CONN_DIRS, NONGO, CATALOGS, ENFORCEMENT, KINDS,
-     PLUGINS, OUTPUT, ROSTER, CONTENT, CONTENT_LIVE, LIBS, PATHS) = (30, 158, 1, 26, 4, 110,
-                                                                     67, 22, 22, 11, 10, 12, 54)
-INTEGRATIONS = CONN_DIRS - NONGO
+     PLUGINS, OUTPUT, ROSTER, CONTENT, CONTENT_LIVE, LIBS, PATHS, INTEGRATIONS) = (30, 170, 1, 26, 4, 110,
+                                                                     67, 22, 22, 11, 10, 12, 54, 157)
+# Every live catalog follows CLI/console switches, including translations.
+# Keep selectable namespaces distinct from their implementation packages.
+SELECTABLE_MODULES = 30 if SELFTEST else len([
+    spec for spec in json.loads(rd("core/modulespec/modules.json")) if spec["selectable"]
+])
+WITH_GO = CONN_DIRS - NONGO
 
-EXPECT = {"modules": MODULES, "integrations": INTEGRATIONS,
+EXPECT = {"modules": MODULES, "selectable_modules": SELECTABLE_MODULES, "integrations": INTEGRATIONS,
           "catalogs": CATALOGS, "enforcement": ENFORCEMENT, "paths": PATHS}
 
 # ── digit-with-noun matching, all locales, CJK counters normalized ──────────────────────
+def locale_data(path):
+    try:
+        data = json.loads(rd(path))
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        blind(f"UNVERIFIED check-public-counts: cannot read locale data {path}: {error}")
+    if not isinstance(data, dict):
+        blind(f"UNVERIFIED check-public-counts: locale data {path} must be a JSON object")
+    return data
+
+COUNT_LOCALES = {}
+for locale, required in (("es", ("selectable_modules", "modules", "twenty_one")),
+                         ("fr", ("selectable_modules", "selectable_adjective"))):
+    path = f"scripts/locales/{locale}/public-counts.json"
+    data = locale_data(path)
+    if any(not isinstance(data.get(key), str) for key in required):
+        blind(f"UNVERIFIED check-public-counts: locale data {path} lacks required string vocabulary")
+    COUNT_LOCALES[locale] = data
 JOIN = r"(?:[\s\-]|の|個の|个|件の|项|項|つの|间的)*"
 NOUN = {
+    "selectable_modules": r"(?:selectable\s+modules?\b|auswählbar(?:e|en)\s+Modul(?:e|en)\b|" + COUNT_LOCALES["es"]["selectable_modules"] + r"|" + COUNT_LOCALES["fr"]["selectable_modules"] + r"|選択可能なモジュール|выбираемых\s+модул\w*|可选模块)",
     # "module dirs" is a DIFFERENT metric (31 incl. modules/example): the lookahead keeps a
     # correct "31 module dirs" claim from tripping the wired-module check. `path` and `route`
     # joined it on 2026-08-15, found by a fixture for the new paths metric: "24 module paths"
     # is a claim about the BETA CONTRACT's surface, and this pattern read it as a claim that
     # the product ships 24 modules — a true sentence about one metric failing the gate of
     # another, which is the same class the "dir" lookahead was written for.
-    "modules": r"(?:product\s+)?(?:modules?\b(?!\s+(?:dir|path|route))|módulos|Produktmodule\w*|Module\b(?!\s+(?:dir|path|route))|Modulen\b|modules?\s+produit|モジュール|модул\w*|模块)",
+    "modules": r"(?:product\s+)?(?:modules?\b(?!\s+(?:dir|path|route|" + COUNT_LOCALES["fr"]["selectable_adjective"] + r"))|" + COUNT_LOCALES["es"]["modules"] + r"|Produktmodule\w*|Module\b(?!\s+(?:dir|path|route))|Modulen\b|modules?\s+produit|モジュール|модул\w*|模块)",
     "integrations": r"(?:integrations?\b|integraciones|Integrationen|intégrations|統合|интеграц\w*|集成)",
     "catalogs": r"(?:(?:compliance[- ])?framework\s+catalogs?|catálogos\s+de\s+marcos|frameworks?\b|Framework-Katalog\w*|catalogues\s+de\s+cadres|フレームワークカタログ|каталог\w*(?:\s+фреймворков)?|фреймворк\w*|框架目录)",
     "enforcement": r"(?:deny-closed\s+)?(?:enforcement\s+points?|puntos\s+de\s+aplicación|Enforcement\s+Points?|points\s+d'application|エンフォースメントポイント|точк\w*\s+принуждени\w*|执行点)",
@@ -568,7 +611,14 @@ NOUN = {
     # The other two odd forms («à N chemins», «контракт из N путей») were normalised to the
     # canonical noun in the same commit rather than pattern-matched, because a bare "N chemins"
     # or "N путей" would match unrelated prose and this gate must not fire on a true sentence.
-    "paths": r"(?:core\s+paths?|paths?\s+core|Core-Paths?|chemins?\s+de\s+cœur|コアパス|базов\w*\s+пут\w*|条?核心路径|-?\s*path\s+stable\s+core)",
+    # `paths rendered` joined on 2026-10-08 (#569): explanation/architecture/overview.md:93
+    # shipped "54 paths rendered from the product's own OpenAPI 3.1 contract" for two releases
+    # and NO noun above could see it. The lookbehind is defense-in-depth for the beta
+    # document's "N module paths rendered": today JOIN (spaces/hyphens/CJK counters) can
+    # never bridge the word "module", so the beta phrase cannot match with or without it —
+    # it guards a future widening of JOIN, and the selftest's beta fixture pins the
+    # outcome either way.
+    "paths": r"(?:core\s+paths?|paths?\s+core|Core-Paths?|chemins?\s+de\s+cœur|コアパス|базов\w*\s+пут\w*|条?核心路径|-?\s*path\s+stable\s+core|(?<!module\s)paths?\s+rendered)",
 }
 # The digit must stand alone: "v1 module" and "v1.26.0 module" are version strings, not
 # catalog counts — hence the lookbehind. ASCII-only on purpose: \w would match CJK text,
@@ -577,7 +627,7 @@ NOUN = {
 # "11 content sources"); the wrong-count trap only exists near the canonical magnitude,
 # so each metric carries a floor.
 DIGIT_UNIT = {m: re.compile(r"(?<![A-Za-z0-9.])(\d+)" + JOIN + NOUN[m]) for m in NOUN}
-FLOOR = {"modules": 15, "integrations": 100, "catalogs": 10, "enforcement": 0, "paths": 20}
+FLOOR = {"modules": 15, "selectable_modules": 15, "integrations": 100, "catalogs": 10, "enforcement": 0, "paths": 20}
 
 # The per-line waiver token, valid ONLY on the versioned allowlist below (audit trails
 # that QUOTE dead values as history). Anywhere else the token itself is a failure.
@@ -646,7 +696,7 @@ WAIVER_ALLOWLIST = [(path, literal) for path, literal in (
 def waiver_ok(path, line):
     return any(path.endswith(p) and lit in line for p, lit in WAIVER_ALLOWLIST)
 
-def check_units(surface, path, text, metrics=("modules", "integrations", "catalogs", "enforcement", "paths")):
+def check_units(surface, path, text, metrics=("modules", "selectable_modules", "integrations", "catalogs", "enforcement", "paths")):
     for i, raw in enumerate(text.splitlines(), 1):
         line = norm(raw)
         if WAIVER in raw:
@@ -654,6 +704,8 @@ def check_units(surface, path, text, metrics=("modules", "integrations", "catalo
                 fail(surface, f"{path}:{i} waiver token OUTSIDE the versioned allowlist — remove it or extend WAIVER_ALLOWLIST with path+literal+reason")
             continue
         for metric in metrics:
+            if EXPECT[metric] is None:
+                continue
             for m in DIGIT_UNIT[metric].finditer(line):
                 n = int(m.group(1))
                 if n != EXPECT[metric] and n >= FLOOR[metric]:
@@ -704,12 +756,16 @@ ES_TENS = {30:"treinta",40:"cuarenta",50:"cincuenta",60:"sesenta",70:"setenta",
 def es_words(n):
     # A pattern, not a string: before a masculine noun a number ending in one drops its
     # final vowel ("veintiún módulos", "treinta y un módulos"), and both forms are correct.
-    if n == 21: return r"veinti(?:ún|uno)"
+    # `una` sits in the same alternation because the integrations noun is FEMININE
+    # ("ciento sesenta y una integraciones", the only correct Spanish): without it the
+    # required-claim check demanded ungrammatical "un integraciones" the day the count
+    # first ended in one (161, #569).
+    if n == 21: return COUNT_LOCALES["es"]["twenty_one"]
     if n in ES_BASE: return ES_BASE[n]
     if n < 100:
         t = (n // 10) * 10
         if n % 10 == 1:
-            return ES_TENS[t] + r" y un(?:o)?"
+            return ES_TENS[t] + r" y un(?:o|a)?"
         return ES_TENS[t] + (" y " + ES_BASE[n % 10] if n % 10 else "")
     if n < 200:
         return "ciento" + (" " + es_words(n % 100) if n % 100 else "")
@@ -722,14 +778,23 @@ SPELLED_NOUNS = {  # metric -> (EN noun, ES noun)
     "enforcement": (r"enforcement points", r"puntos de aplicación"),
 }
 
-def check_spelled(surface, path, text, require=(), require_langs=("en", "es")):
-    """Forbid every neighbouring word-form (±8) of each metric's canonical value; require
+def check_spelled(surface, path, text, require=(), require_langs=("en", "es"), expected=None):
+    """Forbid integration word-forms across the supported hundred range and neighbouring
+    word-forms (±8) of other metrics; require
     the canonical spelled form for the metrics in `require` (the VO-bearing files), in the
     languages the file actually carries (an .en. subtitle has no Spanish to demand)."""
+    expected = EXPECT if expected is None else expected
     flat = " ".join(norm(text).split()).lower()
     for metric, (noun_en, noun_es) in SPELLED_NOUNS.items():
-        canon = EXPECT[metric]
-        for n in range(max(0, canon - 8), canon + 9):
+        canon = expected[metric]
+        if canon is None:
+            continue
+        # A taxonomy correction can move farther than eight directories. Keep
+        # detecting old integration claims throughout the number-word helpers'
+        # supported range, just as digit claims are checked above their floor.
+        numbers = (range(FLOOR[metric], 200) if metric == "integrations"
+                   else range(max(0, canon - 8), canon + 9))
+        for n in numbers:
             if n == canon:
                 continue
             if re.search(en_words(n) + r"\s+" + noun_en, flat):
@@ -738,13 +803,17 @@ def check_spelled(surface, path, text, require=(), require_langs=("en", "es")):
                 fail(surface, f"{path} spells out '{es_words(n)} {noun_es}' (measured: {canon})")
     for metric in require:
         noun_en, noun_es = SPELLED_NOUNS[metric]
-        canon = EXPECT[metric]
+        canon = expected[metric]
+        if canon is None:
+            continue
         if "en" in require_langs and not re.search(en_words(canon) + r"\s+" + noun_en, flat):
             fail(surface, f"{path} lacks the required spelled EN claim '{en_words(canon)} {noun_en}'")
         if "es" in require_langs and not re.search(es_words(canon) + r"\s+" + noun_es, flat):
             fail(surface, f"{path} lacks the required spelled ES claim '{es_words(canon)} {noun_es}'")
 
 def require_digit_claim(surface, path, text, metric, minimum=1):
+    if EXPECT[metric] is None:
+        return
     flat = norm(text)
     pat = re.compile(str(EXPECT[metric]) + JOIN + NOUN[metric])
     found = len(pat.findall(flat))
@@ -763,7 +832,8 @@ def check_connectors_readme(text, path="connectors/README.md"):
     with nothing watching — every figure it states is derived above and required here."""
     require_nonempty("connectors-readme", path, text, 1000)
     for needle, what in ((f"**{CONN_DIRS} connector directories**", "connector dir count"),
-                         (f"**{INTEGRATIONS} containing Go code**", "with-Go split"),
+                         (f"**{WITH_GO} containing Go code**", "with-Go split"),
+                         (f"**{INTEGRATIONS} integrations**", "capability count"),
                          (f"**{KINDS} unique kind aliases**", "in-proc kind count"),
                          (f"**{PLUGINS} binaries**", "plugin binary count"),
                          (f"output connectors (**{OUTPUT}**)", "output connector count"),
@@ -780,18 +850,18 @@ def check_connectors_readme(text, path="connectors/README.md"):
 SIDEBAR_LOCALES = {"es", "de", "fr", "ja", "ru", "zh-CN"}
 
 def check_sidebar_block(surface, sidebar_text):
-    m = re.search(r'"Overview — the (\d+) modules": \{(.*?)\n  \}', sidebar_text, re.S)
+    m = re.search(r'"Overview — the (\d+) (?:selectable )?modules": \{(.*?)\n  \}', sidebar_text, re.S)
     if not m:
         fail(surface, "sidebar-i18n.mjs: overview label block not found (did its EN key change?)")
         return
-    if int(m.group(1)) != MODULES:
-        fail(surface, f"sidebar-i18n.mjs overview key says {m.group(1)} modules (measured: {MODULES})")
+    if int(m.group(1)) != SELECTABLE_MODULES:
+        fail(surface, f"sidebar-i18n.mjs overview key says {m.group(1)} selectable modules (measured: {SELECTABLE_MODULES})")
     entries = dict(re.findall(r'"([a-zA-Z-]+)": "([^"]+)"', m.group(2)))
     if set(entries) != SIDEBAR_LOCALES:
         fail(surface, f"sidebar-i18n.mjs overview translations cover {sorted(entries)} — required exactly {sorted(SIDEBAR_LOCALES)}")
     for loc, label in entries.items():
-        if str(MODULES) not in label:
-            fail(surface, f"sidebar-i18n.mjs overview label for '{loc}' lacks the count {MODULES}")
+        if str(SELECTABLE_MODULES) not in label:
+            fail(surface, f"sidebar-i18n.mjs overview label for '{loc}' lacks the count {SELECTABLE_MODULES}")
     if re.search(r'"zh": ', sidebar_text):
         fail(surface, "sidebar-i18n.mjs uses \"zh\" keys — Starlight matches by BCP-47 lang (zh-CN); with \"zh\" the Chinese sidebar silently falls back to English")
 
@@ -852,6 +922,20 @@ def check_manifest(surface, man, hash_fn):
             if rec.get("from") != digest:
                 fail(surface, f"manifest[{section}] output {p} was derived from OLDER inputs — re-run the full {section} step")
 
+# Version 1 is scoped to the already retired family, never to current publication copy.
+def video_counts(readme):
+    policy = "<!-- counts-gate: retired-launch-reel-v1 -->"
+    banner = "> # ⛔ EL REEL DEL 28-08 NO SE PUBLICA · RETIRADO EL 2026-08-29"
+    if "counts-gate: retired-launch-reel-" not in readme:
+        return EXPECT
+    if re.findall(r"<!-- counts-gate: retired-launch-reel-[^>]* -->", readme) != [policy] or banner not in readme.splitlines():
+        fail("video", "retirement exemption requires policy v1 and the original publication ban")
+        return EXPECT
+    print("WAIVER video: retired-launch-reel-v1 (retired 2026-08-29): frozen "
+          "31 modules / 159 integrations / 26 catalogs / 4 enforcement points; "
+          "not publishable; render-manifest integrity still checked")
+    return dict(EXPECT, modules=31, integrations=159, catalogs=26, enforcement=4)
+
 # ── selftest: every trap this gate exists for must fail on a fixture ────────────────────
 def selftest():
     def expect_red(name, fn):
@@ -883,6 +967,14 @@ def selftest():
     expect_red("wrong paths digit ja", lambda: check_units("t", "f.md", "契約は **24 のコアパス**を記述する。"))
     expect_red("wrong paths digit ru", lambda: check_units("t", "f.md", "Контракт описывает **24 базовых пути**."))
     expect_red("wrong paths digit zh", lambda: check_units("t", "f.md", "该契约描述 **24 条核心路径**。"))
+    # The rendered form overview.md shipped for two releases with no noun watching it (#569):
+    # 53 ≠ the fixture canon 54, and the beta guard below must not swallow the true one.
+    expect_red("wrong paths digit rendered form", lambda: check_units("t", "f.md",
+        "The stable core REST surface — 53 paths rendered from the product's own OpenAPI 3.1 contract — is documented in the API reference."))
+    expect_green("rendered-form canon", lambda: check_units("t", "f.md",
+        "The stable core REST surface — 54 paths rendered from the product's own OpenAPI 3.1 contract — is documented in the API reference."))
+    expect_green("beta module paths rendered is not this metric", lambda: check_units("t", "f.md",
+        "the beta reference serves 24 module paths rendered from the routes the modules register"))
     # One site fixed and the other left behind — the failure mode this metric exists for.
     expect_red("paths claimed in only ONE of the two sites",
                lambda: require_digit_claim("t", "reference/index.md",
@@ -909,6 +1001,24 @@ def selftest():
     expect_red("sidebar zh key", lambda: check_sidebar_block("t",
         '"Overview — the 30 modules": {\n    "es": "los 30", "de": "die 30", "fr": "les 30", "ja": "30個", "ru": "30", "zh-CN": "30 个"\n  }\n  "Other": { "zh": "x" }'))
 
+    retirement = "<!-- counts-gate: retired-launch-reel-v1 -->"
+    banner = "> # ⛔ EL REEL DEL 28-08 NO SE PUBLICA · RETIRADO EL 2026-08-29"
+    archived = dict(EXPECT, modules=31, integrations=159, catalogs=26, enforcement=4)
+    if video_counts(banner + "\n" + retirement) != archived:
+        print("selftest FAIL: retired reel did not select its frozen census")
+        sys.exit(1)
+    if video_counts(banner) != EXPECT:
+        print("selftest FAIL: reel without retirement policy did not select live census")
+        sys.exit(1)
+    expect_red("retirement policy without publication ban", lambda: video_counts(retirement))
+    expect_red("unknown retirement policy version", lambda: video_counts(banner + "\n" + retirement.replace("v1", "v2")))
+    expect_red("mixed retirement policy versions", lambda: video_counts(banner + "\n" + retirement + "\n" + retirement.replace("v1", "v2")))
+    expect_green("retired spelled census", lambda: check_spelled("t", "f.srt",
+        "Thirty-one modules. A hundred and fifty-nine integrations. Twenty-six framework catalogs.",
+        require=("modules", "integrations", "catalogs"), require_langs=("en",), expected=archived))
+    expect_red("retired spelled count drift", lambda: check_spelled("t", "f.srt",
+        "Thirty-two modules.", expected=archived))
+
     good_inputs = {"design/launch-video/reel.html": "aa"}
     digest = inputs_digest(good_inputs)
     def man(out_sha="bb", frm=None):
@@ -927,8 +1037,17 @@ def selftest():
     expect_green("ja counters", lambda: check_units("t", "f.md", "30個のモジュール、157件の統合、26 のフレームワークカタログ"))
     expect_green("spelled canon", lambda: check_spelled("t", "f.srt",
         "Thirty modules. A hundred and fifty-seven integrations. Twenty-six framework catalogs. Treinta módulos. Ciento cincuenta y siete integraciones. Veintiséis catálogos de marcos."))
+    # The feminine agreement the 161 count forced into the ES VO ("ciento sesenta y una
+    # integraciones"): es_words must ACCEPT it, not demand ungrammatical "un integraciones".
+    # Asserted directly because the fixture canon (157) ends in seven, not one.
+    if not re.search(es_words(161) + r"\s+integraciones", "ciento sesenta y una integraciones"):
+        print("selftest FAIL: es_words(161) rejects the feminine 'una integraciones'")
+        sys.exit(1)
+    print("selftest ok: es feminine una accepted")
     expect_green("allowlisted waiver", lambda: check_units("t", allowlisted_waiver, f"the old '41 console views' figure <!-- {WAIVER} -->"))
     expect_green("module dirs metric untouched", lambda: check_units("t", "f.md", "31 module dirs"))
+    expect_green("selectable modules match their own roster", lambda: check_units("t", "f.md", "30 selectable modules"))
+    expect_red("selectable module count drifts", lambda: check_units("t", "f.md", "31 selectable modules"))
     expect_green("paths canon, all seven nouns", lambda: check_units("t", "f.md",
         "(54 core paths) · **54 paths core** · (54 Core-Paths) · **54 chemins de cœur** · "
         "**54 のコアパス** · **54 базовых пути** · **54 条核心路径**"))
@@ -965,15 +1084,22 @@ def selftest():
             print(f"selftest ok: census {name} -> {got}")
         finally:
             shutil.rmtree(d, ignore_errors=True)
-    def expect_refusal(name, census_body):
+    def expect_refusal(name, census_body, missing=None):
         d = tempfile.mkdtemp(prefix="cpc-census-")
         try:
+            os.makedirs(os.path.join(d, "pkg"))
+            for stem in ("seam.go", "seam_test.go"):
+                if stem != missing:
+                    with open(os.path.join(d, "pkg", stem), "w", encoding="utf-8") as fh:
+                        fh.write(PROOF if stem.endswith("_test.go") else "package pkg\n")
             cpath = os.path.join(d, "census.tsv")
             with open(cpath, "w", encoding="utf-8") as fh:
                 fh.write(census_body)
             try:
                 proven_seams(cpath, d)
-            except SystemExit:
+            except SystemExit as exc:
+                if missing is not None and exc.code != 2:
+                    raise
                 print(f"selftest ok: census {name} -> refused")
                 return
             print(f"selftest FAIL: census fixture '{name}' was accepted; it must refuse")
@@ -995,6 +1121,8 @@ def selftest():
                  'package pkg\n\nfunc TestX(t *testing.T) {\n\tt.Fatal("must deny")\n', 0)
     expect_count("longer name is not this proof", "pkg/seam.go\tpkg/seam_test.go\t^func TestX\\(\tmust deny\tX\n",
                  'package pkg\n\nfunc TestXExtra(t *testing.T) {\n\tt.Fatal("must deny")\n}\n', 0)
+    expect_refusal("missing seam", ROW + "\n", "seam.go")
+    expect_refusal("missing proof", ROW + "\n", "seam_test.go")
     expect_refusal("empty census", "# only a comment\n")
     expect_refusal("four fields", "a\tb\tc\td\n")
     expect_refusal("six fields (a stray tab)", "a\tb\tc\td\te\tf\n")
@@ -1049,7 +1177,7 @@ def selftest():
 if SELFTEST:
     selftest()
 
-print(f"derived: modules={MODULES} integrations={INTEGRATIONS} ({CONN_DIRS} dirs − {NONGO} non-Go) "
+print(f"derived: modules={MODULES} integrations={INTEGRATIONS} ({CONN_DIRS} dirs, {WITH_GO} with Go, {LIBS} libraries) "
       f"paths={PATHS} "
       f"catalogs={CATALOGS} enforcement={ENFORCEMENT} kinds={KINDS}")
 
@@ -1144,34 +1272,35 @@ def check_framework_diagrams(paths=None, waiver=None):
 
     `waiver` permite declarar POR ESCRITO que el rótulo mide otra cosa; mientras no exista, una
     discrepancia es roja. Un waiver vacío no vale: tiene que decir QUÉ mide el rótulo."""
+    if CATALOGS is None:
+        return
     paths = FRAMEWORK_DIAGRAMS if paths is None else paths
     presentes = [p for p in paths if os.path.isfile(p)]
     if not presentes:
         # Los diagramas son material de diseño y pueden no estar en un árbol exportado. Que no
         # estén NO es un verde: es que aquí no se puede mirar, y se dice.
-        print("check-public-counts: (diagramas de marcos ausentes en este árbol — no medidos)")
+        print("check-public-counts: (framework diagrams absent from this tree; not measured)")
         return
     for p in presentes:
         text = rd(p)
         m = FRAMEWORK_LABEL.search(text)
         if not m:
-            fail("diagrams", f"{p} ya no rotula «FRAMEWORKS · N MAPPED» — una cifra pública que "
-                             "desaparece es tan falsa como una equivocada; si el diagrama cambió, "
-                             "actualiza FRAMEWORK_LABEL en este gate")
+            fail("diagrams", f"{p} no longer labels «FRAMEWORKS · N MAPPED» — a public count that "
+                             "disappears is as misleading as an incorrect one; if the diagram changed, "
+                             "update FRAMEWORK_LABEL in this check")
             continue
         rotulado = int(m.group(1))
         if waiver:
             # Un waiver NO silencia: se IMPRIME en cada corrida, con su motivo. Un permiso que
             # nadie vuelve a leer es como no tener gate, sólo que con la conciencia tranquila.
             print(f"check-public-counts: ⚠ diagrama {os.path.basename(p)} rotula {rotulado} "
-                  f"marcos, con waiver declarado — {waiver}")
+                  f"frameworks, with a declared waiver — {waiver}")
             continue
         if rotulado != CATALOGS:
-            fail("diagrams", f"{p} rotula {rotulado} marcos y el catálogo del motor declara "
-                             f"{CATALOGS} (modules/compliance/frameworks.go, entradas de primer "
-                             f"nivel). NO decido cuál vale: «declarados» y «con mapeo completo» "
-                             f"son preguntas distintas. Corrige el diagrama, o declara por escrito "
-                             f"qué mide el rótulo y pásalo como waiver a check_framework_diagrams.")
+            fail("diagrams", f"{p} labels {rotulado} frameworks, but the engine catalog declares "
+                             f"{CATALOGS} (private compliance.catalog.json frameworks). This check cannot choose: declared frameworks and fully mapped frameworks "
+                             f"measure different things. Correct the diagram, or document "
+                             f"what the label measures and pass it as a waiver to check_framework_diagrams.")
 
 # ⛔ WAIVER DECLARADO, con su medición, porque la cifra buena es una decisión de PRODUCTO.
 #
@@ -1277,8 +1406,9 @@ for loc in LOCALES:
         fail("docs-site", f"{ov} missing")
         continue
     rows = sum(1 for line in rd(ov).splitlines() if re.match(r"^\| \[", line))
-    if rows != MODULES:
-        fail("docs-site", f"{ov} lists {rows} module rows in the live catalog (wired: {MODULES})")
+    expected_rows = SELECTABLE_MODULES
+    if rows != expected_rows:
+        fail("docs-site", f"{ov} lists {rows} module rows in the live catalog (expected: {expected_rows})")
     wi = f"{DOCS_ROOT}/{loc}start/what-is-olivares-ai.md"
     if not os.path.isfile(wi):
         fail("docs-site", f"{wi} missing")
@@ -1305,9 +1435,19 @@ for loc in LOCALES:
         require_digit_claim("docs-site", eu, rd(eu), "catalogs")
 
 astro = rd("docs-site/astro.config.mjs")
-if f"Overview — the {MODULES} modules" not in astro:
-    fail("docs-site", f"astro.config.mjs sidebar label does not say 'the {MODULES} modules'")
-check_sidebar_block("docs-site", rd("docs-site/src/sidebar-i18n.mjs"))
+if f"Overview — the {SELECTABLE_MODULES} selectable modules" not in astro:
+    fail("docs-site", f"astro.config.mjs sidebar label does not say 'the {SELECTABLE_MODULES} selectable modules'")
+sidebar = {}
+for locale in SIDEBAR_LOCALES:
+    directory = "zh" if locale == "zh-CN" else locale
+    path = f"docs-site/src/locales/{directory}.json"
+    labels = locale_data(path)
+    for label, translations in labels.items():
+        if (not isinstance(translations, dict) or
+                any(not isinstance(value, str) for value in translations.values())):
+            blind(f"UNVERIFIED check-public-counts: locale data {path} must contain translation maps")
+        sidebar.setdefault(label, {}).update(translations)
+check_sidebar_block("docs-site", json.dumps(sidebar, ensure_ascii=False, indent=2))
 
 # ═══ surface 4: docs/trust + STATE.md + AGENTS.md ═══════════════════════════════════════
 TRUST_REQUIRED = ["docs/trust/README.md", "docs/trust/questionnaire-answer-bank.md",
@@ -1327,16 +1467,19 @@ for p in trust_files:
         if re.search(r"\b1[47][ -]framework", line) or re.search(r"\b1[47] frameworks", line):
             fail("trust", f"{p}:{i} pre-26 framework-catalog count — «{line.strip()[:80]}»")
 if os.path.isfile("docs/trust/reference-architecture.md"):
-    if not re.search(rf"core \+ {MODULES} modules", rd("docs/trust/reference-architecture.md")):
-        fail("trust", f"reference-architecture.md diagram no longer says 'core + {MODULES} modules'")
+    if not re.search(rf"core \+ (?:{MODULES} )?modules", rd("docs/trust/reference-architecture.md")):
+        fail("trust", f"reference-architecture.md diagram must say 'core + modules' or 'core + {MODULES} modules'")
 
 if AGENT_STATE:
     t = rd(AGENT_STATE)
     for needle, what in ((f"**{MODULES} wired**", "wired module count"),
-                         (f"**{CONN_DIRS}** ({INTEGRATIONS} with Go code)", "connector dir split"),
+                         (f"**{CONN_DIRS}** ({WITH_GO} with Go code)", "connector dir split"),
+                         (f"| Integrations | **{INTEGRATIONS}** |", "integration capability count"),
                          (f"| {KINDS} |", "in-proc kind count"),
                          (f"**{CATALOGS}**", "compliance framework count"),
                          (f"| Deny-closed enforcement points | **{ENFORCEMENT}** |", "enforcement row")):
+        if what == "compliance framework count" and CATALOGS is None:
+            continue
         if needle not in t:
             fail("state", f"{AGENT_STATE} lacks '{needle}' ({what}) — regenerate the table from the derivations in this gate")
 elif os.path.isdir("docs/ai-context"):
@@ -1390,23 +1533,29 @@ else:
 
 # ═══ surface 6: the launch video family — sources AND rendered masters ══════════════════
 if os.path.isdir("design/launch-video"):
+    video = video_counts(rd("design/launch-video/README.md"))
+    modules, integrations, catalogs, enforcement = (video[k] for k in
+        ("modules", "integrations", "catalogs", "enforcement"))
     reel = rd("design/launch-video/reel.html")
     m = re.search(r"const data = \[(.*?)\];", reel)
     if not m:
         fail("video", "reel.html: scene-13 data literal not found (did the scene change? update this gate)")
     else:
         pairs = re.findall(r'\["([^"]+)", "([^"]+)"\]', m.group(1))
-        want = {"modules": str(MODULES), "integrations": str(INTEGRATIONS),
-                "framework catalogs": str(CATALOGS), "enforcement points": str(ENFORCEMENT)}
+        want = {"modules": str(modules), "integrations": str(integrations),
+                "framework catalogs": str(catalogs), "enforcement points": str(enforcement)}
+        if catalogs is None:
+            del want["framework catalogs"]
         got = {label: value for value, label in pairs}
         for label, value in want.items():
             if got.get(label) != value:
                 fail("video", f"reel.html scene 13 shows {got.get(label)!r} {label} (measured: {value})")
-    tuple_re = rf"{MODULES} modules · {INTEGRATIONS} integrations · {CATALOGS} framework catalogs · {ENFORCEMENT} enforcement points"
+    catalog_pattern = str(catalogs) if catalogs is not None else r"[0-9]+"
+    tuple_re = rf"{modules} modules · {integrations} integrations · {catalog_pattern} framework catalogs · {enforcement} enforcement points"
     if not re.search(tuple_re, rd("design/launch-video/SCRIPT.md")):
         fail("video", f"SCRIPT.md lacks the canonical tuple «{tuple_re}»")
-    if f"({MODULES} / {INTEGRATIONS} / {CATALOGS} / {ENFORCEMENT}" not in rd("design/launch-video/README.md"):
-        fail("video", f"launch-video/README.md honesty rule is not ({MODULES} / {INTEGRATIONS} / {CATALOGS} / {ENFORCEMENT}, …)")
+    if not re.search(rf"\({modules} / {integrations} / {catalog_pattern} / {enforcement}", rd("design/launch-video/README.md")):
+        fail("video", f"launch-video/README.md honesty rule is not ({modules} / {integrations} / {catalogs} / {enforcement}, …)")
     VO_FILES = ["design/launch-video/PROMPTS.md", "design/launch-video/subtitles.cjs",
                 *sorted(glob.glob("design/launch-video/out/*.srt")),
                 *sorted(glob.glob("design/launch-video/out/*.vtt"))]
@@ -1417,8 +1566,8 @@ if os.path.isdir("design/launch-video"):
         langs = ("en",) if ".en." in p else ("es",) if ".es." in p else ("en", "es")
         check_spelled("video", p, rd(p),
                       require=("modules", "integrations", "catalogs") if subtitle else (),
-                      require_langs=langs)
-    check_spelled("video", "design/launch-video/SCRIPT.md", rd("design/launch-video/SCRIPT.md"))
+                      require_langs=langs, expected=video)
+    check_spelled("video", "design/launch-video/SCRIPT.md", rd("design/launch-video/SCRIPT.md"), expected=video)
 
     MF = "design/launch-video/out/render-manifest.json"
     if not os.path.isfile(MF):
@@ -1439,6 +1588,8 @@ if os.path.isfile(LEDGER):
         last = re.sub(r"\s+", " ", decls[-1])
         for needle in (f"{MODULES} modules", f"{INTEGRATIONS} integrations",
                        f"{CATALOGS} framework", f"{ENFORCEMENT} enforcement points"):
+            if CATALOGS is None and needle == "None framework":
+                continue
             if needle not in last:
                 fail("ledger", f"{LEDGER}: latest counts declaration lacks '{needle}' — «{last[:100]}»")
 elif os.path.isdir("design"):
@@ -1453,6 +1604,21 @@ if failures:
     for f in failures:
         print(f"  {f}")
     sys.exit(1)
-print(f"OK check-public-counts: every public surface states the measured counts "
-      f"({MODULES} modules · {INTEGRATIONS} integrations · {CATALOGS} catalogs · {ENFORCEMENT} enforcement points · {PATHS} core paths)")
+if CATALOGS is None:
+    print("UNAVAILABLE framework-catalog measurement: private Business catalog; run this guard on the assembled Business tree. Other dimensions were measured.")
+print(f"OK check-public-counts: public surfaces agree with the available measurements "
+      f"({MODULES} modules · {INTEGRATIONS} integrations · "
+      f"{CATALOGS if CATALOGS is not None else 'unavailable'} catalogs · {ENFORCEMENT} enforcement points · {PATHS} core paths)")
 PY
+
+# The count body has spoken (a non-zero rc already propagated with its own verdict). When
+# it is clean, a delegated leg's recorded verdict still stands on its own — the legs were
+# never a reason to skip the counts, and they are not a reason to ignore them either.
+if [ "$cpc_leg_drift" = "1" ]; then
+	echo "FAIL check-public-counts: a delegated leg reported drift (recorded above); the counts themselves were checked and clean." >&2
+	exit 1
+fi
+if [ "$cpc_leg_blind" = "1" ]; then
+	echo "FAIL check-public-counts: a delegated leg could not look (exit 2, recorded above); the counts themselves were checked." >&2
+	exit 2
+fi

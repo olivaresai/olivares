@@ -13,7 +13,7 @@ and a reconstructable timeline. Where module I (inventory) materializes the dura
 estate, module II keeps a **live operational overlay** per session over the same
 observation stream — and shows only what that stream honestly carries.
 
-26.10.1 also **launches** official provider CLIs as owned children under a
+Olivares <!-- release -->0.1<!-- /release --> also **launches** official provider CLIs as owned children under a
 [provider profile](/how-to/operate-provider-sessions/). That managed path is
 the same module. It does not replace the overlay, and it does not merge two
 homes that announce the same provider session id (`CHANGELOG.md` `[26.9.0]` B1/B2).
@@ -76,11 +76,50 @@ with `GET /v1/m/sessions/live/by-id/{live_ref}` (and its timeline / stream /
 runs query). Bare external-id routes stay and are **legacy**: they answer for
 the legacy row only.
 
-Drivers are registered **per node** by pinning an official binary
-(`OLIVARES_SESSION_RUNTIME_CLAUDE_BIN`, `_CODEX_BIN`, `_GROK_BIN` — see
-[Configuration](/reference/configuration/)). Unset, that driver's profiles
-stay observable and are not launchable. Operator steps:
+Drivers are registered on each node at boot. At launch, the engine uses the
+newest verified managed install, then the CLI on the engine's `PATH`.
+`OLIVARES_SESSION_RUNTIME_CLAUDE_BIN`, `_CODEX_BIN`, `_GROK_BIN` and `_OPENCODE_BIN`
+explicitly override this resolution (see [Configuration](/reference/configuration/)).
+If no executable resolves, launch is refused. Other readiness checks, including
+profile authentication and launch policy, still apply. Operator steps:
 [Operate a provider session](/how-to/operate-provider-sessions/).
+
+## Managed-run lifecycle and restart boundaries
+
+Sessions is a kernel module: it keeps running even when it is not in the saved
+module selection. Turning off an optional module does not reset session data.
+
+The managed-run API under `/v1/m/sessions/runs` and `olivares session` use the
+same runtime. Run reads require `sessions:run:read`; launch, input, stop and
+resume require `sessions:run:write`. A viewer can read a run without being
+allowed to stop it. Tenant and workspace authority still apply to each run.
+
+```sh
+olivares session ls -o json
+olivares session show <session> -o json
+olivares session send <session> "continue the task"
+olivares session stop <session>
+olivares session resume <session>
+```
+
+Stopped runs, their provider-profile and workspace references, and lifecycle
+events survive an engine restart. Resume starts a new owned child for the
+existing run. Live attach output is an in-memory bounded ring; retained run
+metadata and lifecycle events do not promise a persisted conversation transcript.
+Recording policy and the tool's own resume support remain separate requirements.
+
+## Session filesystem confinement
+
+Managed sessions and local stdio MCP servers require Linux Landlock. If the
+engine host cannot provide it, the launch is refused before the tool starts;
+no permission preset opts out. Enable Landlock on the engine host and run
+`olivares doctor` there to check availability. A doctor check on another machine
+only describes that machine, not the remote engine.
+
+Confined children receive access to their session folder, profile homes and a
+private temporary directory. The engine database, secret-store key and engine
+configuration stay outside those grants. This filesystem boundary does not
+provide network isolation or container isolation.
 
 ## What it consumes (and what it derives)
 

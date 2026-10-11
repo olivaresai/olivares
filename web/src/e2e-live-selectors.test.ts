@@ -9,8 +9,10 @@ import nav from '@/lib/i18n/locales/en/nav.json'
 
 const E2E = join(__dirname, '..', 'e2e')
 
+/** A spec with its whitespace collapsed: the formatter wraps a long selector across lines, and a
+ * selector is the same selector however it is wrapped. */
 function spec(name: string): string {
-  return readFileSync(join(E2E, name), 'utf8')
+  return readFileSync(join(E2E, name), 'utf8').replace(/\s+/g, ' ')
 }
 
 /** The nav catalogue read the other way round: the address a name is reached at. */
@@ -53,6 +55,37 @@ function waitsASignInCannotPaint(file: string, src: string): string[] {
   return found
 }
 
+/**
+ * THE OVERVIEW LINK READ OUTSIDE THE JOURNEYS NAVIGATION.
+ *
+ * ⛔ THE TOP BAR'S CURRENT-PAGE CRUMB IS A LINK TOO (`BreadcrumbPage` is `role="link"`
+ *    with `aria-current`), named like the page it marks. A sign-in lands on the root,
+ *    whose page is Now, so a page-level `getByRole('link', { name: 'Now', exact: true })`
+ *    matches the journey link AND the crumb, and Playwright's strict mode rejects it
+ *    before the assertion it was written for. Measured on the supported demo run
+ *    (#1181): nine cases failed at their sign-in helper. The wait is read inside the
+ *    Journeys navigation, as the specs that already passed read it.
+ */
+function overviewLinksOutsideJourneys(file: string, src: string): string[] {
+  const label = nav.shell.journeysLabel
+  const link = `getByRole('link', { name: '${nav.items.home}', exact: true })`
+  const inJourneys = [
+    `getByRole('navigation', { name: '${label}', exact: true }).`,
+    `getByLabel('${label}').`,
+  ]
+  // A chain the formatter wrapped over several lines is the same chain.
+  const flat = src.replace(/\s+\./g, '.')
+  const found: string[] = []
+  for (let at = flat.indexOf(link); at >= 0; at = flat.indexOf(link, at + 1)) {
+    const before = flat.slice(0, at)
+    if (!inJourneys.some((scope) => before.endsWith(scope)))
+      found.push(
+        `${file}: ${flat.slice(Math.max(0, at - 60), at + link.length)}`,
+      )
+  }
+  return found
+}
+
 describe('live end-to-end specs name what the console paints', () => {
   it('the operate portal is reached by its nav name and its heading', () => {
     // Read as one line: the formatter may wrap a locator's options over several lines.
@@ -65,10 +98,10 @@ describe('live end-to-end specs name what the console paints', () => {
     expect(src.indexOf(`goto('/agentops')`)).toBeLessThan(
       src.indexOf(`getByRole('link', { name: '${nav.items.agentops}'`),
     )
-    expect(src).toContain(
-      `getByRole('heading', { name: '${sessions.operateTitle}'`,
-    )
-    expect(src).not.toContain(`getByRole('link', { name: 'Claude Code'`)
+    // Whichever door opened it, the page is titled as navigation names it.
+    expect(nav.items.agentops).toBe(sessions.title)
+    expect(src).toContain(`getByRole('heading', { name: '${sessions.title}'`)
+    expect(src).not.toContain(`name: 'Claude Code'`)
   })
 
   it('signed-in waits use the overview link and the Playwright base URL', () => {
@@ -96,6 +129,69 @@ describe('live end-to-end specs name what the console paints', () => {
       waits.push(...waitsASignInCannotPaint(file, spec(file)))
     }
     expect(waits).toEqual([])
+  })
+
+  it('the overview link is read inside the Journeys navigation, never at page level', () => {
+    const loose: string[] = []
+    for (const file of readdirSync(E2E)) {
+      if (!file.endsWith('.spec.ts')) continue
+      loose.push(...overviewLinksOutsideJourneys(file, spec(file)))
+    }
+    expect(loose).toEqual([])
+  })
+
+  it.each([
+    [
+      'a page-level link',
+      "await expect(page.getByRole('link', { name: 'Now', exact: true })).toBeVisible()",
+      1,
+    ],
+    [
+      'a link inside the Journeys navigation',
+      "await expect(page.getByRole('navigation', { name: 'Journeys', exact: true }).getByRole('link', { name: 'Now', exact: true })).toBeVisible()",
+      0,
+    ],
+    [
+      'a wrapped chain inside the Journeys label',
+      "page\n  .getByLabel('Journeys')\n  .getByRole('link', { name: 'Now', exact: true })",
+      0,
+    ],
+    [
+      'a link scoped to something else',
+      "page.getByRole('main').getByRole('link', { name: 'Now', exact: true })",
+      1,
+    ],
+  ])('classifies %s', (_name, src, loose) => {
+    expect(overviewLinksOutsideJourneys('probe.spec.ts', src)).toHaveLength(
+      loose,
+    )
+  })
+
+  it('Deploy first boot waits for the shell before its page helper and help link', () => {
+    const src = spec('deploy-executor.spec.ts')
+    const after = src.slice(src.indexOf('name: /^sign in$/i'))
+    const link = /getByRole\(\s*'link',\s*\{([^}]*)\}/.exec(after)
+    expect(link?.[1].trim()).toBe(`name: '${nav.items.home}', exact: true`)
+    expect(link?.index).toBeLessThan(after.indexOf('async function openDeploy'))
+  })
+
+  it.each([
+    ['a closed leaf', '', `name: '${nav.items.inventory}', exact: true`],
+    ['an inexact overview', '', `name: '${nav.items.home}'`],
+    [
+      'an arbitrary help link',
+      "await page.goto('/deploy')",
+      "name: 'How to connect an executor'",
+    ],
+  ])('rejects %s as the first sign-in wait', (_name, navigation, body) => {
+    const src = [
+      "await page.getByRole('button', { name: /^sign in$/i }).click()",
+      navigation,
+      `await expect(page.getByRole('link', { ${body} })).toBeVisible()`,
+    ].join(' ')
+    expect(waitsASignInCannotPaint('unsafe.spec.ts', src)).toEqual([
+      `unsafe.spec.ts: ${body}`,
+    ])
   })
 
   // The exemption is a match, not a hole: going somewhere does not license waiting for

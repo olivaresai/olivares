@@ -17,7 +17,7 @@ wodurch sie finanziert wird.
 
 ## Was die Arbeit heute finanziert
 
-Das **kommerzielle Abonnement** für die additive Linie in `enterprise/`. Wenn Ihre
+Das **kommerzielle Abonnement** (Business und Enterprise) für die additive Linie in `enterprise/`. Wenn Ihre
 Organisation diese Module benötigt, finanziert ihr Kauf den AGPL-Kern, den alle
 anderen kostenlos betreiben — auch die Menschen, die nie etwas bezahlen.
 

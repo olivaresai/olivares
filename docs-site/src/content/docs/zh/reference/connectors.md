@@ -37,6 +37,22 @@ description: >-
 （一个共享账户会把即便是 clean 层级的存储也坍缩为 `approximate`）。
 :::
 
+## 各种类的进程模式
+
+每种类型只使用一种进程模式，由引擎固定：
+
+- **进程外插件。** 引擎将连接器嵌入为独立程序，以受限子进程启动（限定作用域的环境；主机允许时使用专用用户和 cgroup），通过带 AutoMTLS 的 gRPC 通信。依赖树不链接进引擎。源类型：`claude`、`cowork`、`kafka`、`amqp`、`nats`、`mqtt`、`cloudqueue`、`debezium`、`envoy`、`hubble`。目的地类型：`kafka`、`amqp`、`cloudqueue`。未执行 `task build:connectors` 的构建不嵌入这些程序，并在启动时为每个已配置项告警。
+- **进程内。** 本页其余所有类型。连接器链接到引擎二进制中，在引擎进程内运行；panic 被隔离，源被标记为 `failed`。
+- **外部插件。** 通过 `plugin`（二进制路径、固定摘要、针对 `connector_trust` 验证的签名）配置的源或目的地始终以相同的受限方式在进程外运行。仓库中进程内类型的 `connectors/<kind>/cmd/` 程序不随发行版提供；构建它并以此方式准入（[运维插件](/zh/how-to/build-a-connector/#5-运维你的用户要做什么)），即可让连接器独立运行。
+
+**源**插件进程退出时，引擎重新启动同一二进制，再次检查外部插件的固定摘要，使用源设置重新打开并恢复采集。首次重启等待约一秒，之后每次翻倍，最多五分钟；插件运行五分钟后回到一秒。从发现进程退出到新进程启动期间，源报告 `failed`；重启尝试失败时显示重启错误。
+
+**目的地**插件在投递失败且发现进程已退出时，以相同方式重启：引擎重新启动二进制（外部插件再次检查固定摘要），并使用目的地设置打开。发现插件已退出的那次投递仍报告失败；重启被拒绝时附带重启错误。通知重试阶梯会重试并抵达新进程。首次立即重启；之后从一秒开始翻倍，最多五分钟，距最后尝试超过五分钟后重新开始。未收到投递的目的地会等到下一次投递才重启。
+
+重启的插件以最初打开连接器时的设置打开，因此修改或轮换后的密钥在配置重载或引擎重启时才传入，与未退出的插件相同。
+
+进程仍存活但采集或投递失败的插件不会重启：该故障属于连接器自身。
+
 ## Cooperative —— Claude 与厂商遥测
 
 存在时保真度最高的 source。Claude Code 运行时 source 作为内嵌插件**在进程外**运行
@@ -164,9 +180,10 @@ edge。Agent span 在上游仍为 **Development**（实验性）——不声称�
 | `openhands` | OpenHands `config.toml` + env → sandbox/model-pinning/credential/telemetry posture、permitted MCP/action edge | 仅配置声明；实时使用经原生 OTEL `gen_ai.*` |
 | `goose` | Goose（Block）`profiles.yaml` + env → admin-settings/model-pinning/extension/tool-approval posture、permitted extension edge | 仅配置声明 |
 | `cline` | Cline / Kilo Code VSCode `settings.json` namespace → auto-approve/MCP-allowlist/credential/model-pinning posture | 仅配置声明；upstream 无原生 OTEL |
-| `grok` | Grok Build（xAI）终端 coding agent，通过其本地配置读取：hook wiring、具备已记录 veto 的 event 与可声明 governance posture | **不是 xAI API connector**（`xai` 读取 catalog 与 cost，模型中包括 `grok-build-0.1`）。本项读取 AGENT，二者不重叠。观测部分走 Grok Build 已发出的 OTLP ingest。只有 `PreToolUse`（唯一有已记录 veto 的 event）可声明 `PostureEnforced`；其余均为 `observed` |
+| `grok` | Grok Build（xAI）终端编码 agent：本地配置、hook 接线、具有已记录否决支持的事件，以及声明的治理姿态 | 配置声明的 agent 姿态。`xai` API 连接器读取模型目录和成本，其中 `grok-build-0.1` 是一个模型；此连接器读取 agent。实时观测使用 Grok Build 发出的 OTLP ingest。`PostureEnforced` 仅适用于唯一具有已记录否决支持的事件 `PreToolUse`；其他事件是 `observed` |
 | `openclaw` | OpenClaw `openclaw.json`（JSON5 discovery、受限 `$include`）→ 每 agent 的 gateway/channel/tool/sandbox/skill/model posture，声明的 channel/skill/model edge | 仅配置声明；upstream 未验证 inline PEP hook |
 | `hermes` | Hermes Agent `config.yaml` + profile tree + managed scope → terminal/channel/skill/security/model/MCP posture、声明的 edge | 仅配置声明；upstream 未验证 inline PEP hook 或原生 OTEL |
+| `paperclip` | Paperclip REST API（board API 密钥，仅 GET）→ 公司作为组集合、agent 作为 NHI 名册行（`paperclip/<adapterType>`、role、title、`reports_to`），已结束日期的运行计数，以及参考成本样本（`cost_type=paperclip`） | 仅观测：不启动或限制 Paperclip 的 agent。Paperclip 没有原始成本事件列表，因此成本为日聚合；被拒绝的数据获取环节报告为覆盖度 finding |
 | `google-adk` | 导出的 Google ADK 2.0 Session JSON → agent/app 清单、sub-agent、tool function-call、transfer、approved-tool drift、Vertex reasoningEngine correlation | 只读导出；绝不读取消息内容。不同于 `google-agent` 平台表面 |
 | `agents-md` | 遍历 repo 中的 agent instruction 文件（AGENTS.md 与每 agent memory/instruction 文件）→ SHA-256 baseline drift + instruction-injection / hidden-Unicode / secret scan | minimal-data：净化后的 path + hashed detail，绝不读取内容 |
 | `mcpb` | 已安装 / 已分发的 `.mcpb` desktop extension → manifest posture scan、enterprise-allowlist drift、PKCS#7 signature verification | extension 表面上的 PERMITTED-vs-OBSERVED |
@@ -278,6 +295,7 @@ usage API 时，费用由 connector 在 inference path 周围的 Meter 估算，
 | `egress-proxy` | Egress-proxy 裁决日志 → L7 出站 edge | approximate |
 | `kong-audit` | Kong 审计日志 → 配置变更 finding | approximate |
 | `ai-gateway` | Envoy AI Gateway 用量记录 → **成本**采样（FinOps） | 成本流 |
+| `git` | 普通 git 发布绑定：为 gitpublish 推送批准一个 SSH 或 HTTPS git 远程的名册行 | 不观测任何内容；仅推送（普通远程没有拉取请求或合并 API） |
 | `github` | 将 GitHub repository 作为 agent data source → observed R/RW access edge（webhook-first、API poll reconciliation）+ permitted ACL edge | observed + permitted；流式（`poll_seconds: 0`） |
 | `gitlab` | GitLab repository → observed R/RW access edge + permitted ACL edge | observed + permitted；流式（`poll_seconds: 0`） |
 
@@ -421,7 +439,7 @@ minimal-data：它携带 source 的 ACL 与来源（绝不含个人邮箱；模�
 进程内 destination kind：`slack`、`teams`、`pagerduty`、`opsgenie`、`webhook`、
 `siem`、`splunkhec`、`syslog`、`servicenow`、`jira`、`email`、`twilio`、
 `chronicle`、`datadog`、`elastic`、`snmp`、`filelog`、`otlplog`（OTLP/HTTP log）
-与 `s3archive`（S3 Object Lock WORM sink——每条通知生成一个 immutable、lock-verified object）。
+与 `s3archive` (Business: Regulated Operations)（S3 Object Lock WORM sink——每条通知生成一个 immutable、lock-verified object）。
 
 三种 broker egress kind 作为内嵌插件**在进程外**运行（其网络协议 dependency tree
 绝不链接进 engine，与 plugin source 完全相同）：`kafka`、`amqp` 和 `cloudqueue`——
@@ -459,8 +477,7 @@ host 无关，它所消费的*数据*则不然：
   即可覆盖 Resource Graph、subscription 列举与 Activity Log。`subscriptions` 未设置时会自动列举
   subscription。
 
-两者仍**在进程内**运行（传输 A）；若你倾向于把它们隔离在 host 附近的进程外**collector** 部署中，
-则存在 `cmd/{pg-audit,s3-cloudtrail,ebpf-source}` go-plugin 二进制。
+两者均**在进程内**运行，与[各种类的进程模式](#各种类的进程模式)下未列为插件的其他类型相同。若要独立运行，请构建其 `connectors/<kind>/cmd/` 程序并作为外部插件准入。
 
 每个 source 都是**选择性启用、deny-closed** 的：缺失的 `log_path`/`path`/`events_path` 在启动时
 是一个配置错误（该 source 未接入），绝不是静默的空操作。演示 estate（[quickstart](/zh/start/quickstart/)）

@@ -47,14 +47,14 @@ grep -F -q 'W hybrid not landed' "$DOC" \
 grep -F -q 'Paid issue still hardcoded refund_window' "$DOC" \
   || fail "prepare doc lost hardcoded-refund_window remasure"
 if grep -qiE 'FIRMA A claimed|remainder applied on origin/main|W hybrid landed' "$DOC"; then
-  fail "prepare doc claims an application this lote does not have"
+  fail "prepare doc claims an application this batch does not have"
 fi
 
 if grep -q 'phaseForPaidIssue' "$SRC"; then
-  fail "phaseForPaidIssue landed — this HOLD lote does not apply C03-13"
+  fail "phaseForPaidIssue landed — this HOLD batch does not apply C03-13"
 fi
 if grep -q 'PERMISSIVE_MARGIN_DAYS' "$SRC"; then
-  fail "PERMISSIVE_MARGIN_DAYS landed — this HOLD lote does not apply C03-13"
+  fail "PERMISSIVE_MARGIN_DAYS landed — this HOLD batch does not apply C03-13"
 fi
 
 python3 - "$SRC" "$COHORT" "$CRED" "$WH" <<'PY' || exit $?

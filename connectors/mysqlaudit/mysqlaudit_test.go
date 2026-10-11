@@ -5,6 +5,7 @@ package mysqlaudit_test
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -117,6 +118,7 @@ func TestGeneralLogGoldenEdges(t *testing.T) {
 
 // TestNoRawSQLEmitted proves the SQL body never leaks into an emitted edge field.
 func TestNoRawSQLEmitted(t *testing.T) {
+	const unicodeWriteQuery = "UPDATEé/**/'synthetic-private-row'" // language-data: SQL keyword boundary rejection input
 	forbidden := []string{"id, name", "FROM customers", "SET total", "count(*)", "FROM events", "FROM staging", "WHERE id"}
 	for _, tc := range []struct{ format, file string }{
 		{"mariadb_audit", "server_audit.log"},
@@ -131,6 +133,47 @@ func TestNoRawSQLEmitted(t *testing.T) {
 					}
 				}
 			}
+		}
+	}
+	for _, query := range []struct {
+		name, sql, verb string
+		mode            model.AccessMode
+	}{
+		{"compact-comment", "SELECT/**/'synthetic-private-row'", "SELECT", model.ModeRead},
+		{"leading-comment", "/*synthetic-private-row*/SELECT 1", "QUERY", model.ModeUnknown},
+		{"literal-only", "'syntheticprivaterow'", "QUERY", model.ModeUnknown},
+		{"keyword-dollar-read", "SELECT$x/**/'synthetic-private-row'", "QUERY", model.ModeUnknown},
+		{"keyword-unicode-write", unicodeWriteQuery, "QUERY", model.ModeUnknown},
+		{"unicode-fold-read", "ſELECT/**/'synthetic-private-row'", "QUERY", model.ModeUnknown},
+		{"unicode-fold-write", "ıNSERT/**/'synthetic-private-row'", "QUERY", model.ModeUnknown},
+		{"keyword-dollar-comment", "SELECT$/**/'synthetic-private-row'", "QUERY", model.ModeUnknown},
+	} {
+		for _, log := range []struct{ format, text string }{
+			{"mariadb_audit", "20260603 10:23:48,dbserver1,developer,127.0.0.1,7,1,QUERY,development,'" + query.sql + "',0\n"},
+			{"general_log", "2026-06-03T10:23:40Z\t7 Connect\tdeveloper@127.0.0.1 on development\n2026-06-03T10:23:48Z\t7 Query\t" + query.sql + "\n"},
+		} {
+			t.Run(query.name+"/"+log.format, func(t *testing.T) {
+				p := filepath.Join(t.TempDir(), "audit.log")
+				if err := os.WriteFile(p, []byte(log.text), 0o600); err != nil {
+					t.Fatal(err)
+				}
+				edges := gatherBatch(t, openSource(t, map[string]string{"log_path": p, "format": log.format, "follow": "false"}))
+				if len(edges) != 1 {
+					t.Fatalf("got %d edges, want one access observation", len(edges))
+				}
+				e := edges[0]
+				raw, err := json.Marshal(e)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if strings.Contains(strings.ToLower(string(raw)), "synthetic-private-row") || strings.Contains(strings.ToLower(string(raw)), "syntheticprivaterow") {
+					t.Errorf("serialized observation retains query content: %s", raw)
+				}
+				if e.ToolRef != query.verb || e.Mode != query.mode || e.OriginRef != "developer@127.0.0.1" ||
+					e.ResourceKind != "mysql.database" || e.ResourceRef != "development" || e.Source != mysqlaudit.SignalMySQLAudit {
+					t.Errorf("incorrect access metadata: %+v", e)
+				}
+			})
 		}
 	}
 }

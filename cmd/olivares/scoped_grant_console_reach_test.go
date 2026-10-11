@@ -103,6 +103,19 @@ func (r entityReachRecorder) HandleSealed(method, pattern string, perm auth.Perm
 // This lot publishes REST/SDK operations only, so the console limitation remains explicit rather
 // than being disguised as tenant-wide authority or as a client call that does not exist.
 //
+// DECISION RESPONSE AND SKILL ASSIGNMENT (#1456). POST /decision-requests/{id}/responses
+// resolves the stored request's workspace before the outer PEP decides, so answering a
+// decision stays grantable to an operator confined to that workspace. The console does not
+// call it, so this entry is "in the bound, not yet consoled", like the K1 entries. Skill
+// assignment PUT and DELETE /assignments/{id} resolve the stored assignment's workspace_id,
+// so skills:assignment:write is grantable inside that workspace too. This test's unwired
+// skills module records POST /assignments as a collection command. In production,
+// boot.go binds AssignmentAuthority, so POST resolves the body target through an entity
+// reference (modules/skills/catalog.go). The skill pack sheet gates its assign button on
+// the flat whoami set (web/src/features/skills/pack-sheet.tsx), so a workspace-only grant
+// hides that button with no 403 to reveal it. That limitation is declared here rather than
+// widened to tenant scope, which would erase the workspace confinement.
+//
 // K1 moved the entity/collection ratio 5/659 -> 18/677; K2 moved it to 25/685; K5 moves it to
 // 30/694. K3 messaging moves it to 41/708. The premise the bound rests on — entity routes remain
 // the rare case — is still asserted by the test rather than trusted from this dated measurement.
@@ -119,6 +132,7 @@ var moduleScopeTreeReach = []string{
 	"gitpublish:target:read",
 	"sessions:channel:admin",
 	"sessions:channel:read",
+	"sessions:decision-request:write",
 	"sessions:decision:admin",
 	"sessions:decision:read",
 	"sessions:delivery:read",
@@ -138,6 +152,7 @@ var moduleScopeTreeReach = []string{
 	"sessions:work:admin",
 	"sessions:work:read",
 	"sessions:work:write",
+	"skills:assignment:write",
 	"sourcescope:assignment:read",
 	"sourcescope:assignment:write",
 	"sourcescope:workspace_connector:read",

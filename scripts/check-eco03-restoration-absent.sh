@@ -33,6 +33,6 @@ if grep -R --include='*.ts' -n 'refund.requested' "$SRC" >/dev/null 2>&1; then
   say "check-eco03-restoration-absent: refund.requested is now parsed — restoration case is live" >&2
   hits=1
 fi
-[ "$hits" -eq 0 ] || fail "the open case now has a surface; implement authorized-restoration in that lote"
+[ "$hits" -eq 0 ] || fail "the open case now has a surface; implement authorized-restoration in that batch"
 say "check-eco03-restoration-absent: CLEAN — no 0013, no restoration symbol, no refund.requested terminate path."
 exit 0

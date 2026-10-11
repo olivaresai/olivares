@@ -16,12 +16,26 @@ import (
 )
 
 func TestFederationSettingsUpgradePreservesLegacyProvider(t *testing.T) {
+	for _, engine := range store.SupportedEngines() {
+		t.Run(string(engine), func(t *testing.T) {
+			testFederationSettingsUpgradePreservesLegacyProvider(t, engine)
+		})
+	}
+}
+
+func testFederationSettingsUpgradePreservesLegacyProvider(t *testing.T, engine store.Engine) {
+	t.Helper()
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "legacy.db")
-	if err := initializedSQLiteCoreTemplate.copyInto(path); err != nil {
+	config := store.Config{Engine: engine, DSN: path, Debug: true}
+	driver, ownerDSN := "sqlite", path
+	if engine == store.EnginePostgres {
+		pg := isolatedPGSplit(t)
+		config.DSN, config.OwnerDSN, config.AdminDSN = pg.App, pg.Owner, pg.Admin
+		driver, ownerDSN = "pgx", pg.Owner
+	} else if err := initializedSQLiteCoreTemplate.copyInto(path); err != nil {
 		t.Fatal(err)
 	}
-	config := store.Config{Engine: store.EngineSQLite, DSN: path, Debug: true}
 	st, err := Open(ctx, config, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -41,8 +55,10 @@ func TestFederationSettingsUpgradePreservesLegacyProvider(t *testing.T) {
 	if err := st.Close(); err != nil {
 		t.Fatal(err)
 	}
-	// Construct the pre-change schema; the actual public Open performs its upgrade.
-	db, err := sql.Open("sqlite", path)
+	// Reconstruct the missing settings columns AND the pre-v21 tracking prefix.
+	// v21 owns descriptor schema adoption; keeping it tracked would skip the
+	// upgrade. Later records must go too, so the history remains contiguous.
+	db, err := sql.Open(driver, ownerDSN)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -51,6 +67,10 @@ func TestFederationSettingsUpgradePreservesLegacyProvider(t *testing.T) {
 			_ = db.Close()
 			t.Fatal(err)
 		}
+	}
+	if _, err := db.ExecContext(ctx, "DELETE FROM schema_migrations_core WHERE version > 20"); err != nil {
+		_ = db.Close()
+		t.Fatal(err)
 	}
 	if err := db.Close(); err != nil {
 		t.Fatal(err)
@@ -62,12 +82,16 @@ func TestFederationSettingsUpgradePreservesLegacyProvider(t *testing.T) {
 	t.Cleanup(func() { _ = st.Close() })
 	if err := st.AuthView(ctx, func(as store.AuthScope) error {
 		cfg, err := as.FederationConfigs().Get(ctx, id)
-		if err == nil && (cfg.AssuranceMapping != nil || cfg.DisplayName != "" || cfg.OIDCIssuer != "https://idp.example" || cfg.OIDCClientSecretSealed != "sealed-fixture") {
+		if err == nil && (cfg.AssuranceMapping != nil || cfg.DisplayName != "" || cfg.TargetTenantID != model.SystemTenantID || cfg.Protocol != "oidc" || cfg.Status != model.StatusActive || cfg.OIDCClientID != "legacy-client" || cfg.OIDCIssuer != "https://idp.example" || cfg.OIDCClientSecretSealed != "sealed-fixture") {
 			t.Fatalf("upgrade changed the legacy provider: %+v", cfg)
 		}
 		return err
 	}); err != nil {
 		t.Fatal(err)
+	}
+	var recorded int
+	if err := st.(*sqlStore).db.QueryRowContext(ctx, "SELECT COUNT(*) FROM schema_migrations_core WHERE version = 21 AND name = 'descriptor_schema'").Scan(&recorded); err != nil || recorded != 1 {
+		t.Fatalf("descriptor upgrade not recorded: count=%d err=%v", recorded, err)
 	}
 	want := &model.FederationAssuranceMapping{AMR: []string{}, ACR: []string{"urn:corp:mfa"}}
 	if err := st.AuthMutate(ctx, func(as store.AuthScope) error {
@@ -81,6 +105,14 @@ func TestFederationSettingsUpgradePreservesLegacyProvider(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
+	if err := st.Close(); err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := Open(ctx, config, nil)
+	if err != nil {
+		t.Fatalf("reopen upgraded provider: %v", err)
+	}
+	st = reopened
 	if err := st.AuthView(ctx, func(as store.AuthScope) error {
 		cfg, err := as.FederationConfigs().Get(ctx, id)
 		if err == nil && (cfg.DisplayName != "Contoso" || !reflect.DeepEqual(cfg.AssuranceMapping, want)) {

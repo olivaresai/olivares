@@ -376,8 +376,8 @@ func (c *maContext) previewVerdict(modelRef string) ModelAccessVerdict {
 }
 
 // EvaluateModelAccess is the model-access decision for ONE model on ONE surface —
-// the reusable, IDENTITY-PARAMETERIZED seam (enforcement decision: "selección
-// ahora + seam in-band para"). The routing execute/resolve chain calls it per
+// the reusable, IDENTITY-PARAMETERIZED seam (enforcement decision: selection
+// now plus an in-band seam for). The routing execute/resolve chain calls it per
 // candidate (modelAccessDeniesRoute); a future in-line /v1/messages proxy calls it
 // IN-BAND with the identity it resolved from the inbound credential and the real surface,
 // because the inference client itself is identity-blind. It is DENY-CLOSED: any

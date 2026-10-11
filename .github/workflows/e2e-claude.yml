@@ -23,10 +23,10 @@ permissions:
 
 jobs:
   e2e-claude-real:
-    # On olivaresai/olivares the scheduled cadence runs by default; on any other
-    # clone or mirror, scheduled runs are gated on the repository variable
-    # CI_NIGHTLIES=true (manual `gh workflow run <file>` always works).
-    if: github.event_name == 'workflow_dispatch' || github.repository == 'olivaresai/olivares' || vars.CI_NIGHTLIES == 'true'
+    # Scheduled runs only where the repository opts in with CI_NIGHTLIES=true. The public
+    # repository changes only at a release, so a schedule there re-tests unchanged code
+    # (manual `gh workflow run <file>` always works).
+    if: github.event_name == 'workflow_dispatch' || vars.CI_NIGHTLIES == 'true'
     runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 30
     env:
@@ -43,7 +43,7 @@ jobs:
       # NODE, EXPLICIT (P0 class, 2026-07-30): the npm install below assumed the
       # runner ships node preinstalled — true of ubuntu-latest, not of the
       # self-hosted runner CI_RUNNER points at. Same pinned setup as mainline-ci.
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .node-version
 

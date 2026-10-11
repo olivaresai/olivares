@@ -27,7 +27,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
-import { RunCreateDialog } from '@/features/agentops/run-create-dialog'
+import { useNewSessionDialog } from '@/features/first-hour/new-session-store'
 import { ListTruncationBadge } from '@/features/_intel'
 import { ApiError } from '@/lib/api/errors'
 import { useAuth } from '@/lib/auth/context'
@@ -55,14 +55,6 @@ export function TemplatesView() {
     TemplateDTO | undefined
   >()
 
-  // "Apply to session" LAUNCHES a session under the template. It used to POST
-  // /apply and toast; nothing was applied to anything. The launch dialog is where a
-  // session is configured, so that is where a template that governs one belongs.
-  const [launchOpen, setLaunchOpen] = useState(false)
-  const [launchTemplate, setLaunchTemplate] = useState<
-    TemplateDTO | undefined
-  >()
-
   // Query — include_archived only when the checkbox is on.
   const query = useQuery({
     queryKey: templatesKeys.list(activeTenant, {
@@ -86,9 +78,11 @@ export function TemplatesView() {
     setEditorOpen(true)
   }
 
+  // "Apply to session" LAUNCHES a session under the template. It used to POST
+  // /apply and toast; nothing was applied to anything. The launch dialog is where a
+  // session is configured, so that is where a template that governs one belongs.
   function openLaunch(template: TemplateDTO) {
-    setLaunchTemplate(template)
-    setLaunchOpen(true)
+    useNewSessionDialog.getState().openAdvanced({ templateId: template.id })
   }
 
   const items = query.data?.items ?? []
@@ -207,13 +201,6 @@ export function TemplatesView() {
         open={editorOpen}
         onOpenChange={setEditorOpen}
         template={editingTemplate}
-      />
-
-      {/* The session this template governs. */}
-      <RunCreateDialog
-        open={launchOpen}
-        onOpenChange={setLaunchOpen}
-        initialTemplateId={launchTemplate?.id}
       />
     </div>
   )

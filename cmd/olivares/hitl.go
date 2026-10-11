@@ -13,10 +13,10 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
-	"os"
 	"strings"
 	"time"
 
+	"github.com/olivaresai/olivares/cmd/olivares/internal/loopback"
 	"github.com/olivaresai/olivares/connectors/slack"
 	"github.com/olivaresai/olivares/connectors/teams"
 	"github.com/olivaresai/olivares/connectors/webhook"
@@ -28,7 +28,7 @@ import (
 // yields an empty config (the receiver is simply not mounted); a supplied path must be
 // readable and contain valid JSON or startup fails closed.
 func loadHITLConfig(_ *slog.Logger) (hitlConfig, error) {
-	path := os.Getenv("OLIVARES_HITL_CONFIG")
+	path := osGetenv("OLIVARES_HITL_CONFIG")
 	if path == "" {
 		return hitlConfig{}, nil
 	}
@@ -541,7 +541,7 @@ type apiDecider struct {
 // and parses the engine's response.
 func (a apiDecider) Decide(ctx context.Context, tenant, token, approvalID, decision, note string) decisionResult {
 	body, _ := json.Marshal(map[string]string{"decision": decision, "note": note})
-	req, err := http.NewRequestWithContext(loopbackContext(ctx), http.MethodPost,
+	req, err := http.NewRequestWithContext(loopback.Context(ctx), http.MethodPost,
 		"/v1/m/governance/approvals/"+url.PathEscape(approvalID)+"/decisions", bytes.NewReader(body))
 	if err != nil {
 		return decisionResult{Message: "internal request build error"}
@@ -550,15 +550,15 @@ func (a apiDecider) Decide(ctx context.Context, tenant, token, approvalID, decis
 	req.Header.Set("X-Olivares-Tenant", tenant)
 	req.Header.Set("Content-Type", "application/json")
 
-	rec := &captureWriter{header: http.Header{}, status: http.StatusOK}
+	rec := loopback.NewRecorder()
 	a.handler.ServeHTTP(rec, req)
 
-	res := decisionResult{HTTPStatus: rec.status, Recorded: rec.status >= 200 && rec.status < 300}
+	res := decisionResult{HTTPStatus: rec.Status, Recorded: rec.Status >= 200 && rec.Status < 300}
 	if res.Recorded {
 		var dto struct {
 			Status string `json:"status"`
 		}
-		_ = json.Unmarshal(rec.body.Bytes(), &dto)
+		_ = json.Unmarshal(rec.Body.Bytes(), &dto)
 		res.State = dto.Status
 	} else {
 		var e struct {
@@ -566,31 +566,8 @@ func (a apiDecider) Decide(ctx context.Context, tenant, token, approvalID, decis
 				Message string `json:"message"`
 			} `json:"error"`
 		}
-		_ = json.Unmarshal(rec.body.Bytes(), &e)
+		_ = json.Unmarshal(rec.Body.Bytes(), &e)
 		res.Message = e.Error.Message
 	}
 	return res
-}
-
-// captureWriter is a minimal http.ResponseWriter that records the status and body of an
-// in-process API call (so the receiver need not open a socket to its own engine).
-type captureWriter struct {
-	header http.Header
-	status int
-	body   bytes.Buffer
-	wrote  bool
-}
-
-func (c *captureWriter) Header() http.Header { return c.header }
-
-func (c *captureWriter) WriteHeader(status int) {
-	if !c.wrote {
-		c.status = status
-		c.wrote = true
-	}
-}
-
-func (c *captureWriter) Write(b []byte) (int, error) {
-	c.wrote = true
-	return c.body.Write(b)
 }

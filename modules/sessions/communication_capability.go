@@ -82,9 +82,8 @@ func (m *Module) ModuleCapabilityAvailable(
 	if !m.SupportsModuleCapability(operation) {
 		return api.ModuleCapabilityAvailability{Code: "not_supported"}
 	}
-	sources := m.communicationAuthoritySources
-	if sources == nil || !communicationPortBound(sources.resolver) ||
-		!communicationPortBound(sources.source) {
+	sources := m.CommunicationAuthority
+	if !sources.bound() {
 		return api.ModuleCapabilityAvailability{Code: "engine_unready"}
 	}
 	directory := DirectoryScopeRef{TenantID: scope.Tenant, WorkspaceID: scope.Workspace}

@@ -20,6 +20,8 @@ const (
 	EffectMerge       Effect = "merge"
 	// EffectObserve is read-only reconciliation and preflight.
 	EffectObserve Effect = "observe"
+	// EffectRead is a session's clone and fetch: contents:read only.
+	EffectRead Effect = "read"
 )
 
 // Class is the classification of one host WRITE.

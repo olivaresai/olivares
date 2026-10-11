@@ -20,7 +20,7 @@ import (
 	"github.com/olivaresai/olivares/core/model"
 )
 
-// A SESSION BOUND TO A PROVIDER RECORD REACHES ONLY THAT PROVIDER (HU2 019, Root 21:16Z).
+// A SESSION BOUND TO A PROVIDER RECORD REACHES ONLY THAT PROVIDER.
 // An OpenCode session on an Anthropic key answered on OpenCode's own hosted model
 // (opencode/big-pickle): the launch gave OpenCode the key and nothing that confined it.
 
@@ -87,7 +87,7 @@ func openCodeKeyLaunch(t *testing.T, in CreateProviderRecordInput) (map[string]s
 	if err != nil {
 		return nil, err
 	}
-	spec := m.buildLaunchSpec(p, cred, WorkSessionCredential{}, CommunicationSessionCredential{}, "", nil, nil, env)
+	spec := m.childSpec(p, childDecision{cred: cred, providerEnv: env})
 	return envMap(spec.Env), nil
 }
 
@@ -143,6 +143,103 @@ func TestOpenCodeOnALocalModelPinsTheSmallModelAndDisablesTheHostedProvider(t *t
 	}
 }
 
+func TestOpenCodeBoundDefaultKeepsModelAndSmallModelLocal(t *testing.T) {
+	for _, launch := range []DriverLaunch{
+		{Model: "chosen", LocalModelEndpoint: "http://127.0.0.1:11434/v1", LocalModels: []string{"old", "chosen"}, BoundProvider: BoundProvider{Kind: ProviderKindOllama}},
+		{Model: "chosen", BoundProvider: BoundProvider{Kind: ProviderKindOpenAI, Endpoint: providerVendorEndpoints[ProviderKindOpenAI]}},
+	} {
+		env := envMap(openCodeDriver{}.LaunchEnv(launch))
+		cfg := openCodeInline(t, env)
+		provider := "openai"
+		if launch.LocalModelEndpoint != "" {
+			provider = "olivares_ollama"
+		}
+		if cfg["model"] != provider+"/chosen" || cfg["small_model"] != cfg["model"] {
+			t.Fatalf("effective model was not pinned for primary and small requests: %v", cfg)
+		}
+		assertOpenCodeConfined(t, env, provider)
+	}
+	peer := newOpenCodePeer(t, func(cfg *DriverSessionConfig) {
+		cfg.Model = "chosen"
+		cfg.BoundProvider = BoundProvider{Kind: ProviderKindOllama}
+	})
+	done := make(chan error, 1)
+	go func() { _, err := peer.session.Handshake(t.Context()); done <- err }()
+	id, _, _ := peer.nextRequest()
+	peer.reply(id, openCodeInitializeResult())
+	id, _, _ = peer.nextRequest()
+	options := []map[string]any{{"id": "model", "type": "select", "category": "model", "currentValue": "olivares_ollama/old",
+		"options": []map[string]any{{"value": "olivares_ollama/old"}, {"value": "olivares_ollama/chosen"}}}}
+	peer.reply(id, map[string]any{"sessionId": "session-default", "configOptions": options})
+	id, method, params := peer.nextRequest()
+	if method != openCodeMethodSetConfigOption || params["value"] != "olivares_ollama/chosen" {
+		t.Fatalf("bound raw model did not reach native model selection: %s %v", method, params)
+	}
+	options[0]["currentValue"] = "olivares_ollama/chosen"
+	peer.reply(id, map[string]any{"configOptions": options})
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+}
+
+// An endpoint ID can itself begin with OpenCode's provider namespace. Saved
+// raw IDs and published explicit native choices must stay distinct.
+func TestOpenCodeSavedEndpointModelDoesNotShadowAnExplicitNativeChoice(t *testing.T) {
+	raw := "olivares_ollama/code"
+	native := "olivares_ollama/" + raw
+	probe := &fakeProbe{result: ProviderProbeResult{Models: []string{"code", raw}}}
+	m, _, tenant, _ := newRuntimeHarness(t, WithProviderDriver(NewOpenCodeDriver()), WithProviderProbe(probe))
+	m.UseExecutionEnvironmentRef(testEnvRef)
+	rec := mustCreateRecord(t, m, tenant, CreateProviderRecordInput{Kind: ProviderKindOllama, DisplayName: "GPU", BaseURL: "http://127.0.0.1:11434", DefaultModel: &raw})
+	if _, err := m.TestProviderRecord(t.Context(), tenant, rec.Ref); err != nil {
+		t.Fatal(err)
+	}
+	profile := mustCreateProfile(t, m, tenant, CreateProfileInput{Driver: providerDriverOpenCode,
+		ConfigHome: t.TempDir(), UserHome: t.TempDir(), AuthSource: AuthSourceManagedInjection, ProviderRecordRef: rec.Ref})
+	for _, tc := range []struct{ name, explicit, want string }{{"saved endpoint ID", "", native}, {"explicit native choice", raw, raw}} {
+		t.Run(tc.name, func(t *testing.T) {
+			p := CreateRunParams{ProviderProfileRef: profile.Ref, Model: tc.explicit}
+			if err := m.resolveLaunchProfileInto(t.Context(), tenant, &p); err != nil {
+				t.Fatal(err)
+			}
+			if err := m.resolveProviderDefaultModel(t.Context(), tenant, &p); err != nil {
+				t.Fatal(err)
+			}
+			if p.Model != tc.want {
+				t.Fatalf("effective model %q, want %q", p.Model, tc.want)
+			}
+			env := envMap(openCodeDriver{}.LaunchEnv(DriverLaunch{Model: p.Model, LocalModelEndpoint: "http://127.0.0.1:11434/v1",
+				LocalModels: probe.result.Models, BoundProvider: BoundProvider{Kind: ProviderKindOllama}}))
+			cfg := openCodeInline(t, env)
+			if cfg["model"] != tc.want || cfg["small_model"] != tc.want {
+				t.Fatalf("native config selected another model: %v", cfg)
+			}
+			assertOpenCodeConfined(t, env, openCodeLocalProviderID)
+			peer := newOpenCodePeer(t, func(cfg *DriverSessionConfig) {
+				cfg.Model = p.Model
+				cfg.BoundProvider = BoundProvider{Kind: ProviderKindOllama}
+			})
+			done := make(chan error, 1)
+			go func() { _, err := peer.session.Handshake(t.Context()); done <- err }()
+			id, _, _ := peer.nextRequest()
+			peer.reply(id, openCodeInitializeResult())
+			id, _, _ = peer.nextRequest()
+			options := []map[string]any{{"id": "model", "type": "select", "category": "model", "currentValue": raw,
+				"options": []map[string]any{{"value": raw}, {"value": native}}}}
+			peer.reply(id, map[string]any{"sessionId": "collision", "configOptions": options})
+			id, method, params := peer.nextRequest()
+			if method != openCodeMethodSetConfigOption || params["value"] != tc.want {
+				t.Fatalf("ACP selected another model: %s %v", method, params)
+			}
+			options[0]["currentValue"] = tc.want
+			peer.reply(id, map[string]any{"configOptions": options})
+			if err := <-done; err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
 func TestOpenCodeWithNoRecordKeepsItsOwnConfiguration(t *testing.T) {
 	env := envMap(openCodeDriver{}.LaunchEnv(DriverLaunch{Preset: PresetAsk}))
 	cfg := openCodeInline(t, env)
@@ -171,6 +268,10 @@ func TestOpenCodeRuntimeKeyRecordConfinesTheChildOnLaunchAndResume(t *testing.T)
 	rec := mustCreateRecord(t, m, tenant, anthropicInput("Anthropic"))
 	prof := mustCreateProfile(t, m, tenant, CreateProfileInput{Driver: providerDriverOpenCode, ConfigHome: t.TempDir(), UserHome: t.TempDir(),
 		DisplayName: "OpenCode (Anthropic)", AuthSource: AuthSourceManagedInjection, ProviderRecordRef: rec.Ref})
+	m.ProfileLogin = func(context.Context, model.TenantID, string, string) (bool, bool, error) {
+		t.Fatal("a bound provider must not require a separate own-login credential")
+		return false, false, nil
+	}
 	first := setOpenCodeFixture(t, prof, openCodeFixture{SessionID: "ses-key"})
 	run, err := openCodeLaunch(t, m, tenant, prof)
 	if err != nil {
@@ -201,8 +302,8 @@ func TestOpenCodeAKeyCarrierAtAnotherAddressEnablesNoProvider(t *testing.T) {
 
 // OpenCode merges the host's managed configuration after the launch's own, and can read a
 // provider out of it in ways a classifier here cannot follow; so a record-bound launch (key or
-// local, start or resume) does not start while that file has any content or cannot be read
-// (Root 2026-10-02 23:20Z). An absent or empty file changes nothing, and an own-login launch is
+// local, start or resume) does not start while that file has any content or cannot be read.
+// An absent or empty file changes nothing, and an own-login launch is
 // never refused for it.
 func TestOpenCodeRefusesAnyHostManagedConfig(t *testing.T) {
 	dir := t.TempDir()
@@ -252,6 +353,7 @@ func TestOpenCodeRefusesAnyHostManagedConfig(t *testing.T) {
 	// An own-login launch never reads the record mint, so the file does not stop it.
 	m, _, tenant, _ := newRuntimeHarness(t, WithProviderDriver(NewOpenCodeDriver()))
 	m.UseExecutionEnvironmentRef(testEnvRef)
+	m.ProfileLogin = func(context.Context, model.TenantID, string, string) (bool, bool, error) { return true, true, nil }
 	own := mustCreateProfile(t, m, tenant, CreateProfileInput{Driver: providerDriverOpenCode, ConfigHome: t.TempDir(), UserHome: t.TempDir(),
 		AuthSource: AuthSourceAccountHome})
 	p := CreateRunParams{ProviderProfileRef: own.Ref}

@@ -28,7 +28,7 @@ BACKLOG="${OLIVARES_C0205_BACKLOG:-design/BACKLOG-COMPLETITUD-2026-08-16.md}"
 grep -q 'PREFIX ALIGNED' "$DOC" || fail "$DOC lost PREFIX ALIGNED"
 grep -q 'delivery NOT CLOSED' "$DOC" || fail "$DOC lost delivery NOT CLOSED"
 if grep -qiE 'delivery closed|V-09 closed|404 gone' "$DOC"; then
-	fail "$DOC claims a close this lote does not have"
+	fail "$DOC claims a close this batch does not have"
 fi
 grep -q 'C02-05' "$BACKLOG" || fail "$BACKLOG lost the C02-05 row"
 

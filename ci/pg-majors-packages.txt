@@ -2,11 +2,12 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 #
 # The PACKAGE list for the pg-majors matrix (.github/workflows/pg-majors.yml).
-# Selection is by PACKAGE, never by -run filter: `go test ./pkg` sustains the
-# claim "the package ran on major N"; a -run filter sustains nothing (project
-# memory: a filtered run is NOT package coverage), and `-run '<no match>'`
-# exits 0 with "no tests to run" — the exact false green this matrix exists
-# to prevent. Spec: an internal design note (not shipped) §2.3.
+# Run these packages with only the exact, reasoned exclusions declared in
+# pg-majors-expectations.json. Go's native -skip selector prevents invoking
+# helper entry points, impossible backend cases, external historical fixtures
+# and capabilities outside their supported majors. The evaluator still rejects
+# EVERY failure or skip that occurs. This is qualification of the declared
+# scope, not complete package or historical-upgrade coverage.
 #
 # lint:pg-majors-coverage (spec §2.6.5, pending) will fail when a *_test.go
 # referencing pg_catalog / information_schema / pg_has_role appears in a

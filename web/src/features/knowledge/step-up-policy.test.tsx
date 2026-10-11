@@ -288,8 +288,8 @@ describe('knowledge — la negativa de ROL nunca se decide antes que la de ASEGU
   const CUBIERTO_POR_OTRO_PR: string[] = []
 
   it('y ninguna fuente de knowledge decide el rol sin mencionar antes el aseguramiento', () => {
-    // ⚠ EXCEPCIÓN CON NOMBRE Y PR: `lineage-detail.tsx` lo arregla el #753 (rama). Tocarlo
-    //   aquí fabricaría un conflicto en un fichero que ya tiene dueño.
+    // Named exception: #753 (branch) fixes `lineage-detail.tsx`. Editing it here would
+    // create a conflict in a file that already has an owner.
     const culpables = fuentes()
       .filter((f) => !CUBIERTO_POR_OTRO_PR.includes(f))
       .map((f) => [f, readFileSync(join(AQUI, f), 'utf8')] as const)

@@ -307,10 +307,7 @@ func (s *Server) ssoAlias(w http.ResponseWriter, r *http.Request) (string, bool)
 
 // handleListSSOIdPs lists every IdP configured under a scope (U4), default first.
 // No secrets — only hints (toSSOConfigDTO).
-func (s *Server) handleListSSOIdPs(w http.ResponseWriter, r *http.Request) {
-	if _, ok := s.authzSystem(w, r, "system:admin"); !ok {
-		return
-	}
+func (s *Server) handleListSSOIdPs(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
 	svc, ok := s.ssoService(w, r)
 	if !ok {
 		return
@@ -336,10 +333,7 @@ func (s *Server) handleListSSOIdPs(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"idps": items})
 }
 
-func (s *Server) handleGetSSOConfig(w http.ResponseWriter, r *http.Request) {
-	if _, ok := s.authzSystem(w, r, "system:admin"); !ok {
-		return
-	}
+func (s *Server) handleGetSSOConfig(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
 	svc, ok := s.ssoService(w, r)
 	if !ok {
 		return
@@ -360,11 +354,8 @@ func (s *Server) handleGetSSOConfig(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, toSSOConfigDTO(view, scope, federationCallbackURL(r), s.ssoEnforcedBy(scope, alias), s.ssoGroupsMappedBy(), s.ssoRoutedBy()))
 }
 
-func (s *Server) handlePutSSOConfig(w http.ResponseWriter, r *http.Request) {
-	p, ok := s.authzSystem(w, r, "system:admin")
-	if !ok {
-		return
-	}
+func (s *Server) handlePutSSOConfig(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	p := mc.Principal
 	if !s.requireStepUp(w, r, p) {
 		return
 	}
@@ -382,7 +373,7 @@ func (s *Server) handlePutSSOConfig(w http.ResponseWriter, r *http.Request) {
 	}
 	var in ssoConfigInput
 	if err := decodeJSON(w, r, &in); err != nil {
-		s.badRequest(w, r, "invalid JSON body")
+		s.badRequest(w, r, RequestBodyErrorMessage(err, "invalid JSON body"))
 		return
 	}
 	view, err := svc.PutConfigIdP(r.Context(), p, scope, alias, in.toParams())
@@ -393,11 +384,8 @@ func (s *Server) handlePutSSOConfig(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, toSSOConfigDTO(view, scope, federationCallbackURL(r), s.ssoEnforcedBy(scope, alias), s.ssoGroupsMappedBy(), s.ssoRoutedBy()))
 }
 
-func (s *Server) handleDeleteSSOConfig(w http.ResponseWriter, r *http.Request) {
-	p, ok := s.authzSystem(w, r, "system:admin")
-	if !ok {
-		return
-	}
+func (s *Server) handleDeleteSSOConfig(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	p := mc.Principal
 	if !s.requireStepUp(w, r, p) {
 		return
 	}
@@ -422,12 +410,9 @@ func (s *Server) handleDeleteSSOConfig(w http.ResponseWriter, r *http.Request) {
 
 // handleTestSSOConfig validates a candidate config (OIDC discovery / SAML metadata
 // fetch) without persisting it, so the operator can confirm connectivity before
-// saving. Requires the enterprise provider builder (501 otherwise).
-func (s *Server) handleTestSSOConfig(w http.ResponseWriter, r *http.Request) {
-	p, ok := s.authzSystem(w, r, "system:admin")
-	if !ok {
-		return
-	}
+// saving. Requires the SSO provider service (501 otherwise).
+func (s *Server) handleTestSSOConfig(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	p := mc.Principal
 	if !s.requireStepUp(w, r, p) {
 		return
 	}
@@ -445,7 +430,7 @@ func (s *Server) handleTestSSOConfig(w http.ResponseWriter, r *http.Request) {
 	}
 	var in ssoConfigInput
 	if err := decodeJSON(w, r, &in); err != nil {
-		s.badRequest(w, r, "invalid JSON body")
+		s.badRequest(w, r, RequestBodyErrorMessage(err, "invalid JSON body"))
 		return
 	}
 	if err := svc.TestConfigIdP(r.Context(), scope, alias, in.toParams()); err != nil {

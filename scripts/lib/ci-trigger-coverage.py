@@ -960,7 +960,7 @@ def _print(code: int, messages: list[str]) -> int:
     if code == 1:
         stream.write("%s FINDING — %s\n" % (prefix, "; ".join(messages)))
         return 1
-    stream.write("%s NO HE PODIDO MIRAR: %s\n" % (prefix, "; ".join(messages)))
+    stream.write("%s COULD NOT CHECK: %s\n" % (prefix, "; ".join(messages)))
     return 2
 
 
@@ -982,7 +982,7 @@ def cmd_eligible(path: str, branch: str, files: list[str]) -> int:
         ok = push_would_run(events["push"], files, branch=branch)
     except Unsupported as exc:
         sys.stderr.write(
-            "check-classify-paths-parity: NO HE PODIDO MIRAR: %s\n" % exc
+            "check-classify-paths-parity: COULD NOT CHECK: %s\n" % exc
         )
         return 2
     sys.stdout.write("yes\n" if ok else "no\n")
@@ -1005,7 +1005,7 @@ def cmd_classify(path: str, files: list[str]) -> int:
         code = classify_code(patterns, files)
     except Unsupported as exc:
         sys.stderr.write(
-            "check-classify-paths-parity: NO HE PODIDO MIRAR: %s\n" % exc
+            "check-classify-paths-parity: COULD NOT CHECK: %s\n" % exc
         )
         return 2
     sys.stdout.write("code\n" if code else "journal\n")

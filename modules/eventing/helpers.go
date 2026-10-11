@@ -8,7 +8,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
@@ -41,20 +40,10 @@ const (
 // while it serializes as `{"items":[]}` next door (core/api/listresponse.go).
 type listResponse[T any] = api.ListResponse[T]
 
-// writeJSON writes v as a JSON response. Modules cannot reach the core API's
-// unexported render helper, so each module owns a tiny equivalent.
-func writeJSON(w http.ResponseWriter, status int, v any) {
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.WriteHeader(status)
-	if v != nil {
-		_ = json.NewEncoder(w).Encode(v)
-	}
-}
+var writeJSON = api.WriteJSON
 
 // errorBody is the small error envelope module endpoints return.
-func errorBody(msg string) map[string]any {
-	return map[string]any{"error": map[string]string{"message": msg}}
-}
+var errorBody = api.ModuleErrorBody
 
 // errorBodyCode is the error envelope with a stable machine code.
 func errorBodyCode(code, msg string) map[string]any {
@@ -93,7 +82,7 @@ func writeStoreError(w http.ResponseWriter, err error) {
 // fields so a client cannot smuggle a value into an undeclared field.
 func decodeJSON(w http.ResponseWriter, r *http.Request, v any) bool {
 	if err := api.DecodeRequestBody(w, r, v, api.RequestBodySpec{MaxBytes: maxReqBytes}); err != nil {
-		writeJSON(w, http.StatusBadRequest, errorBody("invalid JSON body"))
+		writeJSON(w, http.StatusBadRequest, errorBody(api.RequestBodyErrorMessage(err, "invalid JSON body")))
 		return false
 	}
 	return true

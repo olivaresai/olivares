@@ -6,6 +6,7 @@ package executor
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -223,6 +224,47 @@ func TestGitOpsApplyCommitsPushesAndWritesManifest(t *testing.T) {
 	}
 	if !strings.Contains(string(raw), "kind: Deployment") {
 		t.Fatalf("written manifest is not a Deployment:\n%s", raw)
+	}
+}
+
+func TestGitOpsApplyDefaultReplicas(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		replicas int
+		want     int
+	}{
+		{"unset", 0, 1},
+		{"one", 1, 1},
+		{"two", 2, 2},
+		{"negative-clamped", -1, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			gb, d, _ := gitopsNewBackend(t, &gitopsFakeRunner{})
+			d.Replicas = tc.replicas
+			p, err := gb.Plan(context.Background(), d, mockCred())
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer p.Cleanup()
+			if _, err := gb.Apply(context.Background(), p, mockCred()); err != nil {
+				t.Fatal(err)
+			}
+			raw, err := os.ReadFile(gb.gitopsAbsPath(d))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(string(raw), fmt.Sprintf("\n  replicas: %d\n", tc.want)) {
+				t.Fatalf("replicas %d must render %d, manifest:\n%s", tc.replicas, tc.want, raw)
+			}
+			next, err := gb.Plan(context.Background(), d, mockCred())
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer next.Cleanup()
+			if !next.Diff.Empty() {
+				t.Fatalf("applied replica count must re-plan as noop, got %+v", next.Diff)
+			}
+		})
 	}
 }
 

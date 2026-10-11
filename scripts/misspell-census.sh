@@ -58,19 +58,19 @@ fi
 # Es la clase «un proxy siempre cierto no es una sonda»: comprobe que la herramienta ARRANCA y
 # lo lei como que es la herramienta. Ahora se exige que se IDENTIFIQUE.
 if [ -z "$GCL" ]; then
-	echo "misspell-census: NO HE PODIDO MIRAR - golangci-lint no es ejecutable." >&2
-	echo "                  buscado en PATH y en \$(go env GOPATH)/bin; fija GOLANGCI_LINT=<ruta>." >&2
+	echo "misspell-census: COULD NOT LOOK - golangci-lint is not executable." >&2
+	echo "                  searched PATH and \$(go env GOPATH)/bin; set GOLANGCI_LINT=<path>." >&2
 	exit 2
 fi
 version=$("$GCL" --version 2>&1) || {
-	echo "misspell-census: NO HE PODIDO MIRAR - '$GCL' --version fallo." >&2
+	echo "misspell-census: COULD NOT LOOK - '$GCL' --version failed." >&2
 	exit 2
 }
 case "$version" in
 *golangci-lint*) ;;
 *)
-	echo "misspell-census: NO HE PODIDO MIRAR - '$GCL' no se identifica como golangci-lint." >&2
-	printf '                  --version dijo: %s\n' "$(printf '%s' "$version" | head -1)" >&2
+	echo "misspell-census: COULD NOT LOOK - '$GCL' does not identify itself as golangci-lint." >&2
+	printf '                  --version returned: %s\n' "$(printf '%s' "$version" | head -1)" >&2
 	exit 2
 	;;
 esac
@@ -88,12 +88,12 @@ crudo=$(mktemp "${TMPDIR:-/tmp}/misspell-census.XXXXXX") || exit 2
 # Python, luego `TOTAL 0` y rc 0 (medido). Y una lista VACIA recorria cero modulos y sumaba cero,
 # que es la misma respuesta que un arbol limpio.
 mods=$(go work edit -json 2>/dev/null | python3 -c 'import json,sys; print("\n".join(u["DiskPath"] for u in json.load(sys.stdin)["Use"]))' 2>/dev/null) || {
-	echo "misspell-census: NO HE PODIDO MIRAR - no pude leer los modulos de go.work." >&2
+	echo "misspell-census: COULD NOT LOOK - could not read the modules from go.work." >&2
 	exit 2
 }
 n_mods=$(printf '%s\n' "$mods" | grep -c .) || n_mods=0
 if [ "$n_mods" -eq 0 ]; then
-	echo "misspell-census: NO HE PODIDO MIRAR - go.work no declaro ni un modulo." >&2
+	echo "misspell-census: COULD NOT LOOK - go.work declares no modules." >&2
 	exit 2
 fi
 while IFS= read -r m; do
@@ -106,11 +106,11 @@ while IFS= read -r m; do
 		--max-issues-per-linter=0 --max-same-issues=0 ./... 2>&1 )
 	rc=$?
 	if [ "$rc" -eq 126 ]; then
-		echo "misspell-census: NO HE PODIDO MIRAR ${m}: el modulo de go.work no existe." >&2
+		echo "misspell-census: COULD NOT LOOK ${m}: the module declared in go.work does not exist." >&2
 		exit 2
 	fi
 	if [ "$rc" -gt 1 ]; then
-		echo "misspell-census: NO HE PODIDO MIRAR ${m}: golangci-lint salio ${rc}." >&2
+		echo "misspell-census: COULD NOT LOOK ${m}: golangci-lint exited ${rc}." >&2
 		printf '%s\n' "$salida" | tail -3 | sed 's/^/                  /' >&2
 		exit 2
 	fi
@@ -119,11 +119,11 @@ while IFS= read -r m; do
 	# o el linter fallo de una forma que no sube el rc, o su salida dejo de tener la forma que
 	# este script lee. Las dos son «no he podido mirar», y sin esta invariante las dos contaban 0.
 	if [ "$rc" -eq 1 ] && [ "$n" -eq 0 ]; then
-		echo "misspell-census: NO HE PODIDO MIRAR ${m}: rc 1 sin una sola fila de misspell." >&2
+		echo "misspell-census: COULD NOT LOOK ${m}: rc 1 without any misspell finding." >&2
 		printf '%s\n' "$salida" | tail -3 | sed 's/^/                  /' >&2
 		exit 2
 	fi
-	printf 'modulo  %-40s %s\n' "$m" "$n"
+	printf 'module  %-40s %s\n' "$m" "$n"
 done <<CENSO_MODULOS
 $mods
 CENSO_MODULOS
@@ -139,15 +139,15 @@ printf '\n'
 bin=$(mktemp -d "${TMPDIR:-/tmp}/misspell-census-bin.XXXXXX") || exit 2
 trap 'rm -f -- "$crudo"; rm -rf -- "$bin"' EXIT
 if ! go build -o "$bin/censo" "$raiz/scripts/misspell-census.go" 2>"$bin/err"; then
-	echo "misspell-census: NO HE PODIDO MIRAR - no pude compilar la mitad Go." >&2
+	echo "misspell-census: COULD NOT LOOK - could not compile the Go component." >&2
 	sed 's/^/                  /' "$bin/err" >&2
 	exit 2
 fi
 sort -u "$crudo" | "$bin/censo" "$@"
 rc_go=$?
 if [ "$rc_go" -eq 126 ] || [ "$rc_go" -eq 127 ]; then
-	echo "misspell-census: NO HE PODIDO MIRAR - no pude ejecutar la mitad Go (rc ${rc_go});" >&2
-	echo "                  \$TMPDIR pudiera estar montado noexec. Fija TMPDIR a un sitio ejecutable." >&2
+	echo "misspell-census: COULD NOT LOOK - could not run the Go component (rc ${rc_go});" >&2
+	echo "                  \$TMPDIR may be mounted noexec. Set TMPDIR to an executable location." >&2
 	exit 2
 fi
 exit "$rc_go"

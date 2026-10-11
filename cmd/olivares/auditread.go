@@ -5,15 +5,12 @@
 package main
 
 import (
+	"context"
 	"crypto/ed25519"
-	"errors"
-	"fmt"
 	"log/slog"
-	"path/filepath"
 
 	"github.com/spf13/cobra"
 
-	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
 	"github.com/olivaresai/olivares/core/audit"
 	coreengine "github.com/olivaresai/olivares/core/engine"
 	"github.com/olivaresai/olivares/core/store"
@@ -28,66 +25,56 @@ type auditReadEngine struct {
 func (e *auditReadEngine) Close() error { return e.ledger.Close() }
 
 func auditVerifyBoot(cmd *cobra.Command, dataDir, engineName, dsn, ownerDSN string) (*auditReadEngine, error) {
-	dir, err := resolveDataDir(dataDir)
+	cfg, dir, err := offlineStoreConfig(cmd, dataDir, engineName, dsn, ownerDSN)
 	if err != nil {
 		return nil, err
 	}
-	if dsn == "" {
-		installed, err := quickstartPostgresConfig(cmd.Context(), dir, "")
-		if err != nil {
-			return nil, err
-		}
-		if installed.Engine == store.EnginePostgres {
-			if cmd.Flags().Changed("engine") && engineName != string(store.EnginePostgres) {
-				return nil, errors.New("this data directory uses PostgreSQL; omit --engine or choose a separate --data-dir for SQLite")
-			}
-			engineName, dsn = string(installed.Engine), installed.DSN
-			if ownerDSN == "" {
-				ownerDSN = installed.OwnerDSN
-			}
-		}
+	signer, priors, err := loadOfflineAuditSigner(dir)
+	if err != nil {
+		return nil, err
 	}
-	if engineName == "sqlite" && dsn == "" {
-		if err := requireDataDir(dir); err != nil {
-			return nil, err
-		}
-		dsn = filepath.Join(dir, "olivares.db")
-		if !fileExistsAt(dsn) {
-			return nil, exitcode.New(exitcode.NotFound, fmt.Errorf("no store at %s; point --data-dir at an existing installation", dsn))
-		}
+	reader, err := coreengine.OpenAuditReader(cmd.Context(), cfg)
+	if err != nil {
+		return nil, err
 	}
-	if engineName != "postgres" && ownerDSN != "" {
-		return nil, fmt.Errorf("--owner-dsn requires --engine postgres")
-	}
-	for _, ref := range []struct {
-		name string
-		dst  *string
-	}{{"--dsn", &dsn}, {"--owner-dsn", &ownerDSN}} {
-		resolved, err := resolveDSNRef(cmd.Context(), ref.name, *ref.dst, osGetenv)
-		if err != nil {
-			return nil, err
-		}
-		*ref.dst = resolved
-	}
+	return &auditReadEngine{ledger: reader, signer: signer, auditPriors: priors}, nil
+}
+
+func loadOfflineAuditSigner(dir string) (*audit.Signer, []ed25519.PublicKey, error) {
 	key, err := loadAuditSigningKey(dir, slog.Default(), withoutMinting())
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	var opts []audit.Option
 	checkpointKey, err := buildCheckpointKey(slog.Default())
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if checkpointKey != nil {
 		opts = append(opts, audit.WithCheckpointKey(checkpointKey))
 	}
 	signer, err := audit.NewSigner(key.priv, opts...)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	reader, err := coreengine.OpenAuditReader(cmd.Context(), store.Config{Engine: store.Engine(engineName), DSN: dsn, OwnerDSN: ownerDSN, MaxConns: 2})
+	return signer, key.priors, nil
+}
+
+type drReadEngine struct {
+	ledger store.DRReader
+	signer *audit.Signer
+}
+
+func (e *drReadEngine) Close() error { return e.ledger.Close() }
+
+func drReadBoot(ctx context.Context, dataDir, snapshot string) (*drReadEngine, error) {
+	signer, _, err := loadOfflineAuditSigner(dataDir)
 	if err != nil {
 		return nil, err
 	}
-	return &auditReadEngine{ledger: reader, signer: signer, auditPriors: key.priors}, nil
+	reader, err := coreengine.OpenDRReader(ctx, store.Config{Engine: store.EngineSQLite, DSN: snapshot})
+	if err != nil {
+		return nil, err
+	}
+	return &drReadEngine{ledger: reader, signer: signer}, nil
 }

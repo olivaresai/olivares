@@ -27,7 +27,7 @@ import (
 // (model.FederationConfig) is plain data; the PROVIDER is built by an injected
 // FederationBuilder. Since the single-IdP OIDC/SAML builder is OPEN-CORE
 // (core/auth/federation, wired in BOTH builds), so the base build does real
-// single-IdP login from managed config — go-oidc/crewjam ARE in core's tree now.
+// single-IdP login from managed config — go-oidc/gosaml2 ARE in core's tree now.
 //
 // The open build resolves the single GLOBAL config (TargetTenantID ==
 // SystemTenantID) and enforces the single-IdP CAP: at most one ACTIVE config
@@ -57,7 +57,7 @@ var ErrFederationBuilderUnavailable = errors.New("auth: SSO provider builder una
 // already active returns this — never a generic 501, never a crash. It is a
 // product cut, not a security control. The enterprise build injects a MultiIDP
 // capability (enterprise/federation) that lifts it.
-var ErrMultiIDPRequiresEnterprise = errors.New("auth: multi_idp_requires_enterprise: a second active SSO IdP requires the enterprise build")
+var ErrMultiIDPRequiresEnterprise = errors.New("auth: multi_idp_requires_enterprise: a second active SSO IdP is a Business feature (Identity & Scale)")
 
 // ErrScopeActiveIdPExists is the U4 per-scope single-active rule (BOTH builds):
 // a scope may hold SEVERAL IdP configs (the first-class IdP entity, keyed by alias),
@@ -204,7 +204,7 @@ type MultiIDP interface {
 	// This is an interface method on a capability the AGPL build never wires: with multiIDP nil
 	// the cap is enforced exactly as before, by code that knows nothing about entitlement. The
 	// license check lives in the enterprise implementation, on the other side of the seam —
-	// ADR-0010 intact: the license never gates the OPEN binary.
+	// license-attestation contract intact: the license never gates the OPEN binary.
 	//
 	// It is gateable at all because the cap is, in this file's own words, "a product cut, not a
 	// security control". A security control would not be for sale.
@@ -1067,13 +1067,13 @@ func (s *FederationService) ResolveLogin(ctx context.Context, in SelectionInput)
 		if err != nil {
 			// A store error while a specific IdP was requested must not fall through to the
 			// global IdP (wrong realm). Fail closed.
-			return NoFederation{}, ResolvedIdP{}
+			return NoFederation{Cause: err}, ResolvedIdP{}
 		}
 		if cfg, ok := s.multiIDP.SelectActive(in, active); ok && cfg.Protocol != "" && s.builder != nil {
 			fed, berr := s.buildCached(ctx, cfg)
 			if berr != nil {
 				// Selected but unbuildable → fail closed; keep the identity for auditing.
-				return NoFederation{}, resolvedOf(cfg)
+				return NoFederation{Cause: berr, ConfiguredProtocol: cfg.Protocol}, resolvedOf(cfg)
 			}
 			return fed, resolvedOf(cfg)
 		}
@@ -1125,7 +1125,7 @@ func (s *FederationService) ResolveByAlias(ctx context.Context, scope model.Tena
 func (s *FederationService) resolveGlobal(ctx context.Context) (Federation, bool) {
 	cfg, ok, err := s.loadConfig(ctx, GlobalFederationScope)
 	if err != nil {
-		return NoFederation{}, false // a transient store error must not 500 the login surface
+		return NoFederation{Cause: err}, false // a transient store error must not 500 the login surface
 	}
 	if !ok {
 		return s.fallback, false // no managed config: defer to the env-configured provider
@@ -1135,7 +1135,7 @@ func (s *FederationService) resolveGlobal(ctx context.Context) (Federation, bool
 	}
 	fed, err := s.buildCached(ctx, cfg)
 	if err != nil {
-		return NoFederation{}, cfg.SCIMAuthoritative
+		return NoFederation{Cause: err, ConfiguredProtocol: cfg.Protocol}, cfg.SCIMAuthoritative
 	}
 	return fed, cfg.SCIMAuthoritative
 }

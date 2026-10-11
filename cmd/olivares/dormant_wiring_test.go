@@ -11,16 +11,53 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"testing"
+	"time"
 
 	"github.com/olivaresai/olivares/modules/sessions"
 )
 
-// The default Community profile does not run finops (budgets) or knowledge
-// (context policy). A session launch on it starts: the launch gate holds no budget
-// check and no context policy, rather than a nil module it calls (refresh 08: every
-// launch panicked). Real boot, real API, a protocol stub for the agent CLI.
-func TestDefaultProfileSessionLaunchStartsWithoutFinops(t *testing.T) {
+// Session launch works both with the budget gate of a selected finops and with a
+// dormant budget gate. The standard profile does not select finops (liveingest no
+// longer requires voice), so the first case selects it. The latter must not leave
+// a typed nil interface that panics on launch. Real boot, API and a protocol stub
+// for the CLI.
+func TestDefaultProfileSessionLaunchStartsWithFinops(t *testing.T) {
+	testProfileSessionLaunch(t, false, "finops")
+}
+
+func TestDormantProfileSessionLaunchStartsWithoutFinops(t *testing.T) {
+	testProfileSessionLaunch(t, true)
+}
+
+func testProfileSessionLaunch(t *testing.T, dormant bool, selectModules ...string) {
+	t.Helper()
+	s := bootStubSessionEngine(t, dormant, selectModules...)
+	if s.eng.moduleProfile.Active("finops") == dormant || s.eng.moduleProfile.Active("knowledge") {
+		t.Fatalf("precondition: dormant=%v active=%v", dormant, s.eng.moduleProfile.ActiveNames())
+	}
+	ws := s.do("POST", "/v1/m/sessions/workspaces", map[string]any{"root_path": s.folder, "name": "folder"}, http.StatusCreated)
+	profile := s.do("POST", "/v1/m/sessions/provider-profiles", map[string]any{"driver": "claude", "config_home": s.home, "user_home": s.home, "auth_source": "provider_account_home", "display_name": "stub"}, http.StatusCreated)
+	run := s.do("POST", "/v1/m/sessions/runs", map[string]any{"name": "dormant finops", "transport": "stream-json", "permission_mode": "default", "isolation": "native", "workspace_ref": ws["workspace_ref"], "provider_profile_ref": profile["profile_ref"]}, http.StatusCreated)
+	if run["state"] != "running" {
+		t.Fatalf("launch state = %v, want running", run["state"])
+	}
+	s.do("POST", "/v1/m/sessions/runs/"+run["run_ref"].(string)+"/stop", map[string]any{}, http.StatusOK)
+}
+
+// stubSessionEngine is a booted engine with a protocol stub as `claude`, its hook
+// listener bound and an administrator signed in.
+type stubSessionEngine struct {
+	eng                  *engine
+	do                   func(method, path string, body any, status int) map[string]any
+	tenant, folder, home string
+}
+
+// selectModules are selected on top of the standard profile; the dormant case
+// takes none.
+func bootStubSessionEngine(t *testing.T, dormant bool, selectModules ...string) stubSessionEngine {
+	t.Helper()
 	python, err := exec.LookPath("python3")
 	if err != nil {
 		t.Skip("python3 is not installed")
@@ -41,14 +78,25 @@ func TestDefaultProfileSessionLaunchStartsWithoutFinops(t *testing.T) {
 	}
 	t.Setenv(envSessionClaudeBin, agent)
 
+	// The standard profile leaves finops dormant. A case that needs a live budget
+	// gate selects it; the dormant case drops liveingest as well, as it did when
+	// liveingest pulled voice and finops in.
+	selected := append(standardModuleSelection(), selectModules...)
+	if dormant {
+		selected = slices.DeleteFunc(standardModuleSelection(), func(name string) bool { return name == "liveingest" })
+	}
+	if dormant || len(selectModules) > 0 {
+		if err := saveNodeModuleSelection(dir, selected, time.Now()); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	prepareCompositionTestBoot(t)
 	eng, err := boot(t.Context(), bootConfig{DataDir: dir, Engine: "sqlite", Version: version, Logger: discardLogger(), ApplyModuleProfile: true})
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = eng.Close() })
-	if eng.moduleProfile.Active("finops") || eng.moduleProfile.Active("knowledge") {
-		t.Fatalf("precondition: the default profile runs finops or knowledge (%v)", eng.moduleProfile.ActiveNames())
-	}
 	pep, err := buildClaudeHookPEPServer(eng, discardLogger())
 	if err != nil {
 		t.Fatal(err)
@@ -81,13 +129,7 @@ func TestDefaultProfileSessionLaunchStartsWithoutFinops(t *testing.T) {
 	admin, _ = login["token"].(string)
 	org, _ := setupResult["organization"].(map[string]any)
 	tenant, _ = org["tenant_id"].(string)
-	ws := do("POST", "/v1/m/sessions/workspaces", map[string]any{"root_path": folder, "name": "folder"}, http.StatusCreated)
-	profile := do("POST", "/v1/m/sessions/provider-profiles", map[string]any{"driver": "claude", "config_home": home, "user_home": home, "auth_source": "provider_account_home", "display_name": "stub"}, http.StatusCreated)
-	run := do("POST", "/v1/m/sessions/runs", map[string]any{"name": "dormant finops", "transport": "stream-json", "permission_mode": "default", "isolation": "native", "workspace_ref": ws["workspace_ref"], "provider_profile_ref": profile["profile_ref"]}, http.StatusCreated)
-	if run["state"] != "running" {
-		t.Fatalf("launch state = %v, want running", run["state"])
-	}
-	do("POST", "/v1/m/sessions/runs/"+run["run_ref"].(string)+"/stop", map[string]any{}, http.StatusOK)
+	return stubSessionEngine{eng: eng, do: do, tenant: tenant, folder: folder, home: home}
 }
 
 // Each place boot hands a possibly dormant module to an interface gives an
@@ -123,7 +165,6 @@ func TestDormantModulesLeaveTheirInterfacesNil(t *testing.T) {
 		newRetentionSweepLoop(func(string) string { return "" }, nil, nil, discardLogger()) != nil ||
 		newNotifyPump(func(string) string { return "" }, nil, nil, discardLogger()) != nil ||
 		newLedgerForwardPump(func(string) string { return "" }, nil, nil, discardLogger()) != nil ||
-		newReportSchedulePump(func(string) string { return "" }, nil, nil, discardLogger()) != nil ||
 		newAdmissionReconciler(nil, nil, discardLogger()) != nil {
 		t.Error("a job constructor scheduled work for a dormant module")
 	}

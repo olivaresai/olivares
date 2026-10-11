@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/olivaresai/olivares/connectors/internal/replay"
 	"github.com/olivaresai/olivares/sdk"
 )
 
@@ -69,8 +70,10 @@ type branchRef struct {
 const maxWebhookBody = 10 << 20 // 10 MiB
 
 // handleWebhook returns an http.HandlerFunc that processes GitHub webhook
-// deliveries, verifies the HMAC-SHA256 signature, and emits edges.
+// deliveries, verifies the HMAC-SHA256 signature, drops a repeated
+// X-GitHub-Delivery, and emits edges.
 func (s *Source) handleWebhook(sink sdk.Sink) http.HandlerFunc {
+	seen := replay.New()
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -90,17 +93,19 @@ func (s *Source) handleWebhook(sink sdk.Sink) http.HandlerFunc {
 		}
 
 		event := r.Header.Get("X-GitHub-Event")
-		switch event {
-		case "push":
-			s.handlePush(r, w, body, sink)
-		case "pull_request":
-			s.handlePullRequest(r, w, body, sink)
-		case "check_run", "check_suite", "workflow_run":
-			s.handleGitHubEvidence(r, w, event, body, sink)
-		default:
-			// Accept and ignore unhandled event types.
-			w.WriteHeader(http.StatusOK)
-		}
+		seen.Once(w, event, r.Header.Get("X-GitHub-Delivery"), func(w http.ResponseWriter) {
+			switch event {
+			case "push":
+				s.handlePush(r, w, body, sink)
+			case "pull_request":
+				s.handlePullRequest(r, w, body, sink)
+			case "check_run", "check_suite", "workflow_run":
+				s.handleGitHubEvidence(r, w, event, body, sink)
+			default:
+				// Accept and ignore unhandled event types.
+				w.WriteHeader(http.StatusOK)
+			}
+		})
 	}
 }
 

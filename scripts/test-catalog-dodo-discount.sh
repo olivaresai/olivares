@@ -36,42 +36,42 @@ bad() { printf 'FAIL  %s\n' "$1"; fails=$((fails+1)); }
 expect_rc() { # expect_rc <esperado> <titular> -- <args…>
   local want="$1" title="$2"; shift 3
   local got; got=$(rc_of "$@")
-  [ "$got" = "$want" ] && ok "$title (rc=$got)" || bad "$title: esperaba rc=$want, obtuvo $got"
+  [ "$got" = "$want" ] && ok "$title (rc=$got)" || bad "$title: expected rc=$want, got $got"
 }
 
 # ---------- lo que DEBE pasar ----------
-expect_rc 0 "una regla valida en produccion pasa el parser" -- \
+expect_rc 0 "a valid production rule passes the parser" -- \
   --env production --id "$ID" --bp 9900 --product "$PROD_PRODUCT" --cycles 1 --check
 
 # ---------- los NO-DISPAROS, que son la razon de que exista ----------
-expect_rc 1 "NO-DISPARO 100%: una regla de 10000bp es rehusada (es Fase B)" -- \
+expect_rc 1 "NO TRIGGER 100%: a 10000bp rule is refused (it is Phase B)" -- \
   --env production --id "$ID" --bp 10000 --product "$PROD_PRODUCT" --cycles 1 --check
-expect_rc 1 "NO-DISPARO: sin --cycles (el defecto del proveedor es PARA SIEMPRE)" -- \
+expect_rc 1 "NO TRIGGER: no --cycles (the provider default is FOREVER)" -- \
   --env production --id "$ID" --bp 9900 --product "$PROD_PRODUCT" --check
-expect_rc 1 "NO-DISPARO: 0bp no es un descuento" -- \
+expect_rc 1 "NO TRIGGER: 0bp is not a discount" -- \
   --env production --id "$ID" --bp 0 --product "$PROD_PRODUCT" --cycles 1 --check
-expect_rc 1 "NO-DISPARO: un producto de SANDBOX en el catalogo de PRODUCCION" -- \
+expect_rc 1 "NO TRIGGER: a SANDBOX product in the PRODUCTION catalog" -- \
   --env production --id "$ID" --bp 9900 --product "$SANDBOX_PRODUCT" --cycles 1 --check
-expect_rc 1 "NO-DISPARO: sin --product" -- \
+expect_rc 1 "NO TRIGGER: no --product" -- \
   --env production --id "$ID" --bp 9900 --cycles 1 --check
-expect_rc 1 "NO-DISPARO: --env inventado" -- \
+expect_rc 1 "NO TRIGGER: unknown --env" -- \
   --env staging --id "$ID" --bp 9900 --product "$PROD_PRODUCT" --cycles 1 --check
 
 # --check no escribe: la comprobacion que hace inutil a todo lo anterior si falla
 if cmp -s "$ORIG" "$WORK/commercial/license-worker/wrangler.jsonc"; then
-  ok "--check no ha escrito nada en ninguna de las siete llamadas"
+  ok "--check wrote nothing in any of the seven calls"
 else
-  bad "--check ESCRIBIO — el resto de este banco no prueba nada"
+  bad "--check WROTE DATA — the rest of this test proves nothing"
 fi
 
 # ---------- la escritura, y su alcance ----------
 run --env production --id "$ID" --bp 9900 --product "$PROD_PRODUCT" --cycles 1 >/dev/null
 changed=$(diff "$ORIG" "$WORK/commercial/license-worker/wrangler.jsonc" | grep -c '^[<>]' || true)
-[ "$changed" = "2" ] && ok "una escritura toca UNA sola linea" || bad "toco $((changed/2)) lineas, esperaba 1"
+[ "$changed" = "2" ] && ok "a write touches ONE line" || bad "touched $((changed/2)) lines, expected 1"
 
 sandbox_line_orig=$(grep -n '"DODO_CATALOG"' "$ORIG" | sed -n '2p')
 sandbox_line_now=$(grep -n '"DODO_CATALOG"' "$WORK/commercial/license-worker/wrangler.jsonc" | sed -n '2p')
-[ "$sandbox_line_orig" = "$sandbox_line_now" ] && ok "el bloque de SANDBOX queda intacto" || bad "el bloque de sandbox cambio"
+[ "$sandbox_line_orig" = "$sandbox_line_now" ] && ok "the SANDBOX block remains intact" || bad "the sandbox block changed"
 
 # la regla se lee de vuelta con el parser del worker, no con una expresion regular
 if ( cd "$WORK" && node --input-type=module -e "
@@ -83,26 +83,26 @@ const line = readFileSync('commercial/license-worker/wrangler.jsonc','utf8')
 const c = parseDodoCatalog(JSON.parse('\"' + line.match(/\"DODO_CATALOG\": \"(.*)\",?\s*\$/)[1] + '\"'));
 const r = c.discounts.get('$ID');
 if (!r || r.basisPoints !== 9900 || r.subscriptionCycles !== 1 || r.appliesToAddons !== false) {
-  console.error('la regla no vuelve igual:', JSON.stringify(r)); process.exit(1);
+  console.error('the rule did not round-trip:', JSON.stringify(r)); process.exit(1);
 }
-" 2>/dev/null ); then ok "la regla vuelve del fichero con el parser del worker"; else bad "la regla no round-trips"; fi
+" 2>/dev/null ); then ok "the rule round-trips from the file through the worker parser"; else bad "the rule does not round-trip"; fi
 
-expect_rc 0 "repetir la misma regla no escribe (idempotente)" -- \
+expect_rc 0 "repeating the same rule does not write (idempotent)" -- \
   --env production --id "$ID" --bp 9900 --product "$PROD_PRODUCT" --cycles 1
 
 # ---------- y la vuelta atras ----------
 run --env production --id "$ID" --remove >/dev/null
 if cmp -s "$ORIG" "$WORK/commercial/license-worker/wrangler.jsonc"; then
-  ok "--remove devuelve el fichero BYTE A BYTE al original"
+  ok "--remove restores the file BYTE FOR BYTE"
 else
-  bad "--remove no restaura el fichero"
+  bad "--remove does not restore the file"
 fi
-expect_rc 0 "--remove de algo que no esta es un no-op, no un error" -- --env production --id "$ID" --remove
+expect_rc 0 "--remove of a missing rule is a no-op, not an error" -- --env production --id "$ID" --remove
 
 echo
 if [ "$fails" -eq 0 ]; then
   echo "catalog-dodo-discount bench: OK"
 else
-  echo "catalog-dodo-discount bench: $fails FALLO(S)"
+  echo "catalog-dodo-discount bench: $fails FAILURE(S)"
   exit 1
 fi

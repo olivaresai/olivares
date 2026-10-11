@@ -6,6 +6,8 @@ description: >-
   findings de sécurité — qu'une tour de contrôle récupère pour enrichir sa
   propre vue. Une projection JSON neutre, non un push natif vérifié.
 ---
+SIEM and ITSM push, OTLP downloads, external trace and metric delivery, and posture export require Business. Community keeps local observability, trace-context propagation, saved settings and `olivares dr backup`. Generic chat, email and webhook notifications remain available in Community.
+
 
 L'export de posture (`modules/posture-export`) est la **surface de posture
 sortante** du moteur : un unique point de terminaison en lecture seule qu'une
@@ -64,4 +66,4 @@ export partiel rapporte ses propres indicateurs de troncature et n'est jamais
 - [Honnêteté et limites](/fr/start/honesty-and-limits/) — pourquoi c'est une
   projection, non un push vérifié.
 - [Catalogue des modules](/fr/reference/modules/overview/) — où se situe l'export
-  de posture parmi les 31 modules livrés.
+  de posture parmi les 32 modules livrés.

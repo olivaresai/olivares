@@ -33,7 +33,7 @@ grep -F -q 'Does not write docs-site' "$DOC" \
 grep -F -q 'Does not close the five undocumented verbs' "$DOC" \
   || fail "prepare doc lost undocumented-verbs HOLD"
 if grep -qiE 'docs-site rewritten|100 % closed|FIRMA A claimed' "$DOC"; then
-  fail "prepare doc claims a close this lote does not have"
+  fail "prepare doc claims a close this batch does not have"
 fi
 
 grep -q 'OLIVARES_CLI_DOC_FLOOR' "$ORIG" \

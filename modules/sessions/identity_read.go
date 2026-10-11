@@ -26,14 +26,14 @@ type SessionIdentityReader interface {
 }
 
 func (m *Module) ReadSessionIdentity(ctx context.Context, tenant model.TenantID, sid string) (SessionIdentitySnapshot, error) {
-	if m == nil || m.data == nil {
+	if m == nil || m.Data == nil {
 		return SessionIdentitySnapshot{}, errors.New("sessions: identity reader has no data handle")
 	}
 	if tenant == "" || !validCanonicalSID(sid) {
 		return SessionIdentitySnapshot{}, store.ErrNotFound
 	}
 	var out SessionIdentitySnapshot
-	err := m.data.View(ctx, tenant, func(sc store.Scope) error {
+	err := m.Data.View(ctx, tenant, func(sc store.Scope) error {
 		var err error
 		out, err = ReadSessionIdentityInScope(ctx, sc, sid)
 		return err
@@ -101,14 +101,14 @@ func (m *Module) ReadRunLaunch(
 	workspace model.ID,
 	runRef string,
 ) (RunLaunchSnapshot, error) {
-	if m == nil || m.data == nil {
+	if m == nil || m.Data == nil {
 		return RunLaunchSnapshot{}, errors.New("sessions: run launch reader has no data handle")
 	}
 	if tenant.IsZero() || workspace.IsZero() || runRef == "" {
 		return RunLaunchSnapshot{}, store.ErrNotFound
 	}
 	var out RunLaunchSnapshot
-	err := m.data.View(ctx, tenant, func(raw store.Scope) error {
+	err := m.Data.View(ctx, tenant, func(raw store.Scope) error {
 		sc, err := store.ConfineWorkspace(ctx, raw, workspace)
 		if err != nil {
 			return err
@@ -232,14 +232,14 @@ func (m *Module) ReadRunLaunchTarget(
 	workspace model.ID,
 	runRef string,
 ) (RunLaunchTargetSnapshot, error) {
-	if m == nil || m.data == nil {
+	if m == nil || m.Data == nil {
 		return RunLaunchTargetSnapshot{}, errors.New("sessions: run launch target reader has no data handle")
 	}
 	if tenant.IsZero() || workspace.IsZero() || runRef == "" {
 		return RunLaunchTargetSnapshot{}, store.ErrNotFound
 	}
 	var out RunLaunchTargetSnapshot
-	err := m.data.View(ctx, tenant, func(raw store.Scope) error {
+	err := m.Data.View(ctx, tenant, func(raw store.Scope) error {
 		sc, err := store.ConfineWorkspace(ctx, raw, workspace)
 		if err != nil {
 			return err
@@ -299,4 +299,78 @@ func runLaunchTargetFromRecord(rec model.Record, runRef string) (RunLaunchTarget
 		return RunLaunchTargetSnapshot{}, ErrRunAuthorityUnavailable
 	}
 	return out, nil
+}
+
+// ReadRunWorkspacePath returns the working directory recorded for one run
+// (colRunWorkspacePath), through the same confined lookup as ReadRunLaunch:
+// absent, foreign and lineage-unset runs, and a run with no recorded directory,
+// are all store.ErrNotFound. Git publication reads it to fetch a session's
+// commit; the caller has already authorized that workspace.
+func (m *Module) ReadRunWorkspacePath(ctx context.Context, tenant model.TenantID, workspace model.ID, runRef string) (string, error) {
+	if m == nil || m.Data == nil {
+		return "", errors.New("sessions: run workspace reader has no data handle")
+	}
+	if tenant.IsZero() || workspace.IsZero() || runRef == "" {
+		return "", store.ErrNotFound
+	}
+	var dir string
+	err := m.Data.View(ctx, tenant, func(raw store.Scope) error {
+		sc, err := store.ConfineWorkspace(ctx, raw, workspace)
+		if err != nil {
+			return err
+		}
+		repo, err := sc.Ext(runKind)
+		if err != nil {
+			return err
+		}
+		rows, _, err := repo.List(ctx, model.Query{Filters: []model.Filter{eq(colRunRef, runRef)}, Limit: 1})
+		if err != nil {
+			return err
+		}
+		if len(rows) == 0 || rows[0].String(colRunRef) != runRef || rows[0].String(colRunWorkspacePath) == "" {
+			return store.ErrNotFound
+		}
+		dir = rows[0].String(colRunWorkspacePath)
+		return nil
+	})
+	if errors.Is(err, store.ErrWorkspaceConfinement) {
+		return "", store.ErrNotFound
+	}
+	if err != nil {
+		return "", err
+	}
+	return dir, nil
+}
+
+// StoredRunID reads the stored row ID of the run runRef names. The native run
+// routes name a run by its public run_ref but authorize this ID (runtimeRoutes),
+// so a question about a run asked anywhere else names the same resource.
+func StoredRunID(ctx context.Context, st store.Store, tenant model.TenantID, runRef string) (model.ID, error) {
+	if st == nil {
+		return "", errors.New("sessions: run reader has no store")
+	}
+	var id model.ID
+	err := st.View(ctx, tenant, func(sc store.Scope) error {
+		var err error
+		id, err = StoredRunIDInScope(ctx, sc, runRef)
+		return err
+	})
+	return id, err
+}
+
+// StoredRunIDInScope is StoredRunID in a Scope the caller already holds. A run
+// that does not exist, or no longer does, is store.ErrNotFound.
+func StoredRunIDInScope(ctx context.Context, sc store.Scope, runRef string) (model.ID, error) {
+	runs, err := sc.Ext(runKind)
+	if err != nil {
+		return "", err
+	}
+	rows, _, err := runs.List(ctx, model.Query{Filters: []model.Filter{eq(colRunRef, runRef)}, Limit: 1})
+	if err != nil {
+		return "", err
+	}
+	if len(rows) == 0 {
+		return "", store.ErrNotFound
+	}
+	return model.ID(rows[0].String(model.ColID)), nil
 }

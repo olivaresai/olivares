@@ -11,8 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	githubsrc "github.com/olivaresai/olivares/connectors/github"
-	gitlabsrc "github.com/olivaresai/olivares/connectors/gitlab"
+	gp "github.com/olivaresai/olivares/connectors/gitpublish"
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/sdk"
 )
@@ -77,20 +76,20 @@ func (c *fakeConn) Close(context.Context) error {
 
 type fakeGitHub struct {
 	fakeConn
-	diff githubsrc.ContentDiff
+	diff gp.ContentDiff
 }
 
-func (c *fakeGitHub) ReadContentDiff(_ context.Context, repository, base, head string) (githubsrc.ContentDiff, error) {
+func (c *fakeGitHub) ReadContentDiff(_ context.Context, repository, base, head string) (gp.ContentDiff, error) {
 	c.readArgs = []string{repository, base, head}
 	return c.diff, c.readErr
 }
 
 type fakeGitLab struct {
 	fakeConn
-	diff gitlabsrc.ContentDiff
+	diff gp.ContentDiff
 }
 
-func (c *fakeGitLab) ReadContentDiff(_ context.Context, repository, base, head string) (gitlabsrc.ContentDiff, error) {
+func (c *fakeGitLab) ReadContentDiff(_ context.Context, repository, base, head string) (gp.ContentDiff, error) {
 	c.readArgs = []string{repository, base, head}
 	return c.diff, c.readErr
 }
@@ -123,8 +122,13 @@ type harness struct {
 func newHarness(entries ...api.SourceRosterEntry) *harness {
 	h := &harness{resolver: &fakeResolver{}, gh: &fakeGitHub{fakeConn: fakeConn{name: "olivares.github"}}, gl: &fakeGitLab{fakeConn: fakeConn{name: "olivares.gitlab"}}}
 	h.r = New(fakeRoster{entries: entries}, h.resolver)
-	h.r.newGitHub = func() githubSource { h.built++; return h.gh }
-	h.r.newGitLab = func() gitlabSource { h.built++; return h.gl }
+	h.r.newSource = func(kind gp.TargetKind) gp.DiffSource {
+		h.built++
+		if kind.Name() == "github" {
+			return h.gh
+		}
+		return h.gl
+	}
 	return h
 }
 
@@ -134,10 +138,10 @@ func query(source, host string) api.GitHostDiffQuery {
 
 func TestGitHubSourceMapsEveryFieldAndReadsWithItsResolvedConfig(t *testing.T) {
 	h := newHarness(running("gh", "github", map[string]string{"org": "acme", "pat": "store:gh-pat"}))
-	h.gh.diff = githubsrc.ContentDiff{
+	h.gh.diff = gp.ContentDiff{
 		Repository: "acme/app", Base: "main", Head: "feature",
 		BaseCommit: baseSHA, HeadCommit: headSHA, HeadTree: treeSHA, Truncated: true,
-		Files: []githubsrc.DiffFile{
+		Files: []gp.DiffFile{
 			{Path: "a.go", Status: "modified", Hunks: []string{"@@ -1 +1 @@\n-a\n+b"}},
 			{Path: "new.go", PreviousPath: "old.go", Status: "renamed", Truncated: true, Hunks: []string{}},
 			{Path: "logo.png", Status: "added", Binary: true},
@@ -175,9 +179,9 @@ func TestGitHubSourceMapsEveryFieldAndReadsWithItsResolvedConfig(t *testing.T) {
 
 func TestGitLabSourceKeepsTheResolvedCommitsWithoutAHeadTree(t *testing.T) {
 	h := newHarness(running("gl", "gitlab", map[string]string{"group": "acme", "token": "store:gl"}))
-	h.gl.diff = gitlabsrc.ContentDiff{
+	h.gl.diff = gp.ContentDiff{
 		Repository: "acme/app", Base: "main", Head: "feature", BaseCommit: baseSHA, HeadCommit: headSHA,
-		Files: []gitlabsrc.DiffFile{{Path: "a.go", Status: "modified", Hunks: []string{"@@ -1 +1 @@"}}},
+		Files: []gp.DiffFile{{Path: "a.go", Status: "modified", Hunks: []string{"@@ -1 +1 @@"}}},
 	}
 	got, err := h.r.ReadContentDiff(context.Background(), query("gl", "gitlab"))
 	if err != nil {
@@ -232,12 +236,12 @@ func TestConnectorErrorsBecomeTheRouteErrors(t *testing.T) {
 		readErr error
 		check   func(error) bool
 	}{
-		{"github unknown ref", "github", githubsrc.ErrUnknownRef, func(e error) bool { return errors.Is(e, api.ErrContentDiffUnknownRef) }},
-		{"github forbidden", "github", githubsrc.ErrForbidden, func(e error) bool { return errors.Is(e, api.ErrContentDiffForbidden) }},
-		{"github upstream", "github", githubsrc.ErrUpstream, func(e error) bool { return errors.Is(e, api.ErrContentDiffUpstream) }},
-		{"gitlab unknown ref", "gitlab", gitlabsrc.ErrUnknownRef, func(e error) bool { return errors.Is(e, api.ErrContentDiffUnknownRef) }},
-		{"gitlab forbidden", "gitlab", gitlabsrc.ErrForbidden, func(e error) bool { return errors.Is(e, api.ErrContentDiffForbidden) }},
-		{"gitlab upstream", "gitlab", gitlabsrc.ErrUpstream, func(e error) bool { return errors.Is(e, api.ErrContentDiffUpstream) }},
+		{"github unknown ref", "github", gp.ErrDiffUnknownRef, func(e error) bool { return errors.Is(e, api.ErrContentDiffUnknownRef) }},
+		{"github forbidden", "github", gp.ErrDiffForbidden, func(e error) bool { return errors.Is(e, api.ErrContentDiffForbidden) }},
+		{"github upstream", "github", errors.New("github upstream"), func(e error) bool { return errors.Is(e, api.ErrContentDiffUpstream) }},
+		{"gitlab unknown ref", "gitlab", gp.ErrDiffUnknownRef, func(e error) bool { return errors.Is(e, api.ErrContentDiffUnknownRef) }},
+		{"gitlab forbidden", "gitlab", gp.ErrDiffForbidden, func(e error) bool { return errors.Is(e, api.ErrContentDiffForbidden) }},
+		{"gitlab upstream", "gitlab", errors.New("gitlab upstream"), func(e error) bool { return errors.Is(e, api.ErrContentDiffUpstream) }},
 		{"too large", "github", tooLarge{}, func(e error) bool { var x interface{ GitHostDiffTooLarge() }; return errors.As(e, &x) }},
 		{"rate limited", "gitlab", rateLimited{}, func(e error) bool {
 			var x interface{ RetryAfter() string }
@@ -296,11 +300,16 @@ func TestSetupFailuresAreUpstreamWithoutTheirDetail(t *testing.T) {
 
 func TestTheRealConnectorsAreTheSeams(t *testing.T) {
 	r := New(fakeRoster{}, &fakeResolver{})
-	if _, ok := r.newGitHub().(*githubsrc.Source); !ok {
-		t.Fatal("the GitHub seam does not build the GitHub connector")
+	for _, name := range []string{"github", "gitlab"} {
+		kind, _ := gp.LookupTargetKind(name)
+		conn := r.newSource(kind)
+		if conn.Descriptor().Name != "olivares."+name+"-source" {
+			t.Fatalf("%s observer = %s", name, conn.Descriptor().Name)
+		}
 	}
-	if _, ok := r.newGitLab().(*gitlabsrc.Source); !ok {
-		t.Fatal("the GitLab seam does not build the GitLab connector")
+	plain, _ := gp.LookupTargetKind("git")
+	if r.newSource(plain) != nil {
+		t.Fatal("plain git has no diff observer")
 	}
 	var _ api.ContentDiffReader = r
 }

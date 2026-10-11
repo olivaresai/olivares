@@ -30,7 +30,8 @@
       "active": "Actif",
       "available": "Disponible",
       "opt_in_off": "Activation désactivée",
-      "blocked": "Bloqué"
+      "blocked": "Bloqué",
+      "unavailable": "Nécessite Business"
     },
     "optInOff": "Convention en développement — désactivée par défaut ; activez-la via le garde-fou du connecteur.",
     "gate": "Garde-fou",
@@ -128,7 +129,8 @@
       "ok": "OK",
       "error": "Erreur",
       "unset": "Non défini"
-    }
+    },
+    "exportFailed": "Échec de l’export de la trace"
   },
   "empty": {
     "ingestionHealth": {
@@ -147,5 +149,10 @@
       "title": "Aucun chronométrage de span enregistré pour cette trace",
       "description": "Les événements du registre doivent porter des identifiants de span du moteur avant que cette vue puisse afficher le décalage initial, la durée, l’acteur et l’état de chaque span."
     }
+  },
+  "inferenceCoverage": {
+    "inference_metadata_only": "Seules les métadonnées d’inférence sont conservées. Le contexte de travail du fournisseur ne peut pas être reconstitué.",
+    "provider_context_may_change": "Une compaction ou des modifications du contexte ont été demandées. Les métadonnées conservées ne permettent pas de reconstituer le contexte de travail du fournisseur.",
+    "provider_context_unknown": "La modification du contexte du fournisseur est inconnue pour cette inférence. Les métadonnées conservées ne permettent pas de reconstituer son contexte de travail."
   }
 }

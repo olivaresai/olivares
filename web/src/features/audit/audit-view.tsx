@@ -46,7 +46,6 @@ import { HashChip, IntegrityBadge } from '@/features/_intel'
 import { SavedViewsMenu } from '@/features/saved-views'
 import { isoMinuteBound } from '@/features/shared'
 import {
-  NamedRef,
   RelTimeLabel,
   useMemberNames,
   useWorkspaceNames,
@@ -60,6 +59,9 @@ import { useAuth } from '@/lib/auth/context'
 import { formatInt } from '@/lib/format'
 import { useUrlState } from '@/lib/hooks/use-url-state'
 import { AuditEventSheet } from './audit-detail'
+import { eventLabel } from './event-label'
+import { governanceApi, governanceKeys } from '@/features/governance/api'
+import { internalRecord, readableAction } from '@/components/layout/bell-events'
 import { downloadBlob, exportFilename, fetchAuditExport } from './export'
 import {
   EXPORT_FORMATS,
@@ -162,7 +164,12 @@ function rfc3339FromLocal(value: string): string | undefined {
 export function AuditView() {
   const { t, i18n } = useTranslation(['audit', 'intel'])
   const lang = i18n.language
-  const { activeTenant, isSuperadmin } = useAuth()
+  const { activeTenant, isSuperadmin, can } = useAuth()
+  const mayReadMembers = can('user:read')
+  const mayReadPolicies = can('governance:policy:read')
+  // HU2-19 / HU-15: the ledger's bookkeeping (authorization evidence, reads, views) is
+  // folded away unless asked for, or unless a filter names the action.
+  const [showInternal, setShowInternal] = useState(false)
 
   const [urlState, patchUrlState] = useUrlState(URL_KEYS)
   const validatedParams = useMemo(() => sanitizeParams(urlState), [urlState])
@@ -223,10 +230,17 @@ export function AuditView() {
     enabled: forward || (newest && (head as number) > 0),
   })
 
-  const rows = useMemo(() => {
+  const allRows = useMemo(() => {
     const items = listQuery.data?.pages.flatMap((p) => p.items) ?? []
     return filtersActive ? [...items].sort((a, b) => b.seq - a.seq) : items
   }, [listQuery.data, filtersActive])
+  const foldInternal = !showInternal && !filters.action
+  const rows = useMemo(
+    () =>
+      foldInternal ? allRows.filter((e) => !internalRecord(e.action)) : allRows,
+    [allRows, foldInternal],
+  )
+  const internalCount = allRows.length - rows.length
   const lastPage = listQuery.data?.pages[listQuery.data.pages.length - 1]
   const scannedThrough =
     filtersActive &&
@@ -255,9 +269,27 @@ export function AuditView() {
   // the workspace list, each the read the console already makes for its own screen.
   const memberNames = useMemberNames()
   const workspaceNames = useWorkspaceNames()
+  const policies = useQuery({
+    queryKey: governanceKeys.policies(activeTenant),
+    queryFn: () => governanceApi.listPolicies(),
+    enabled:
+      !isSystem &&
+      mayReadPolicies &&
+      rows.some((e) => e.target_kind === 'core.policy'),
+    staleTime: 60_000,
+  })
 
   const columns = useMemo<TableColumn<AuditEventDTO>[]>(
     () => [
+      {
+        accessorKey: 'action',
+        header: t('cols.action'),
+        cell: ({ getValue }) => (
+          <span className="text-body font-medium text-foreground">
+            {eventLabel(getValue<string>(), t)}
+          </span>
+        ),
+      },
       {
         accessorKey: 'seq',
         header: t('cols.seq'),
@@ -284,15 +316,6 @@ export function AuditView() {
         ),
       },
       {
-        accessorKey: 'action',
-        header: t('cols.action'),
-        cell: ({ getValue }) => (
-          <span className="font-mono text-caption font-medium text-foreground">
-            {getValue<string>()}
-          </span>
-        ),
-      },
-      {
         id: 'actor',
         accessorFn: (e) => `${e.actor} ${e.actor_kind}`,
         header: t('cols.actor'),
@@ -305,16 +328,18 @@ export function AuditView() {
         cell: ({ row }) => {
           const e = row.original
           const person = e.actor_kind === 'user'
-          const name = person ? memberNames.nameOf(e.actor) : null
+          const name =
+            person && mayReadMembers ? memberNames.nameOf(e.actor) : null
           return (
             <div className="flex min-w-0 items-center gap-1.5">
-              <NamedRef
-                className="text-caption text-foreground"
-                mono={!name}
-                name={name}
-                reference={e.actor || 'system'}
-                fallback={e.actor || t('detail.actorSystem')}
-              />
+              <span className="text-caption text-foreground" title={e.actor}>
+                {name ??
+                  (person
+                    ? t('detail.actorMember')
+                    : t(`actorKind.${e.actor_kind}`, {
+                        defaultValue: readableAction(e.actor_kind || 'system'),
+                      }))}
+              </span>
               <Badge variant="neutral">
                 {t(`actorKind.${e.actor_kind}`, {
                   defaultValue: e.actor_kind || '—',
@@ -345,21 +370,31 @@ export function AuditView() {
             e.target_kind === 'core.workspace'
               ? workspaceNames.nameOf(e.target_id)
               : e.target_kind === 'core.user'
-                ? memberNames.nameOf(e.target_id)
-                : null
+                ? mayReadMembers
+                  ? memberNames.nameOf(e.target_id)
+                  : null
+                : e.target_kind === 'core.policy'
+                  ? mayReadPolicies
+                    ? policies.data?.items.find((p) => p.id === e.target_id)
+                        ?.name
+                    : null
+                  : null
           return (
-            <NamedRef
+            <span
               className="text-caption text-muted-foreground"
-              mono={!named}
-              name={named}
-              reference={e.target_id || e.target_kind || ''}
               title={
                 e.target_kind && e.target_id
                   ? `${e.target_kind}: ${e.target_id}`
                   : e.target_kind || e.target_id
               }
-              fallback={e.target_kind || e.target_id || '—'}
-            />
+            >
+              {named ??
+                t(`targets.${e.target_kind?.replaceAll('.', '_')}`, {
+                  defaultValue: readableAction(
+                    e.target_kind || t('detail.target'),
+                  ),
+                })}
+            </span>
           )
         },
       },
@@ -381,7 +416,15 @@ export function AuditView() {
         ),
       },
     ],
-    [t, lang, memberNames, workspaceNames],
+    [
+      t,
+      lang,
+      memberNames,
+      workspaceNames,
+      policies.data,
+      mayReadMembers,
+      mayReadPolicies,
+    ],
   )
 
   return (
@@ -459,6 +502,23 @@ export function AuditView() {
         </div>
       )}
 
+      {internalCount > 0 || (showInternal && !filters.action) ? (
+        <div className="flex items-center gap-2 py-1 text-caption text-muted-foreground">
+          {showInternal ? null : (
+            <span role="status">
+              {t('internal.hidden', { count: internalCount })}
+            </span>
+          )}
+          <Button
+            variant="link"
+            size="sm"
+            onClick={() => setShowInternal((v) => !v)}
+          >
+            {t(showInternal ? 'internal.hide' : 'internal.show')}
+          </Button>
+        </div>
+      ) : null}
+
       <DataTable
         columns={columns}
         data={rows}
@@ -472,7 +532,8 @@ export function AuditView() {
         onLoadMore={() => void listQuery.fetchNextPage()}
         isFetchingMore={listQuery.isFetchingNextPage}
         label={t('title')}
-        empty={<EmptyHint />}
+        // Events were loaded but all are folded: say so, not that the ledger is empty.
+        empty={internalCount > 0 ? <FoldedHint /> : <EmptyHint />}
       />
 
       <AuditEventSheet
@@ -876,6 +937,18 @@ function EvidenceControls({ filters }: { filters: AuditFilters }) {
         {t('export.action')}
       </Button>
     </div>
+  )
+}
+
+function FoldedHint() {
+  const { t } = useTranslation('audit')
+  return (
+    <p
+      role="status"
+      className="px-6 py-12 text-center text-body text-muted-foreground"
+    >
+      {t('internal.allHidden')}
+    </p>
   )
 }
 

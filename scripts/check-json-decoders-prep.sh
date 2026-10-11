@@ -33,7 +33,7 @@ grep -F -q 'Does not write core/' "$DOC" \
 grep -F -q 'Does not collapse the copies' "$DOC" \
   || fail "prepare doc lost copies HOLD"
 if grep -qiE 'core rewritten|copies collapsed|FIRMA A claimed' "$DOC"; then
-  fail "prepare doc claims a close this lote does not have"
+  fail "prepare doc claims a close this batch does not have"
 fi
 
 grep -q 'json\.NewDecoder' "$ORIG" \

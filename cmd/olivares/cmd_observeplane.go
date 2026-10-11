@@ -148,10 +148,11 @@ func (c observeCall) do(cmd *cobra.Command) (observeResult, error) {
 		return observeResult{}, missingCLIValueError("tenant", "--tenant", "OLIVARES_TENANT", resolved)
 	}
 	client, headers, err := cliTransport(cliTransportOptions{
-		Resolved: resolved,
-		Insecure: c.flags.insecure,
-		Timeout:  c.flags.timeout,
-		Stderr:   cmd.ErrOrStderr(),
+		Resolved:       resolved,
+		Insecure:       c.flags.insecure,
+		AllowCleartext: c.flags.allowCleartext,
+		Timeout:        c.flags.timeout,
+		Stderr:         cmd.ErrOrStderr(),
 	})
 	if err != nil {
 		// Or, not New: cliTransport classifies its refusals about the caller's
@@ -229,8 +230,9 @@ func (c observeCall) do(cmd *cobra.Command) (observeResult, error) {
 func observeHTTPError(status int, body []byte) error {
 	if status == http.StatusNotImplemented {
 		detail := observeErrorMessage(body)
-		// The engine names an enterprise seam it does not have: a Business feature.
-		if strings.Contains(strings.ToLower(detail), "enterprise") {
+		// Older engines name the seam enterprise; both messages describe Business.
+		lower := strings.ToLower(detail)
+		if strings.Contains(lower, "enterprise") || strings.Contains(lower, "business") {
 			return notInEdition()
 		}
 		msg := "this capability is not wired in this build (HTTP 501); the rest of this namespace is unaffected"

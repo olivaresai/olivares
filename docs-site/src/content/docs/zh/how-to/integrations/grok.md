@@ -13,7 +13,8 @@ TOML 配置、sandbox profile、MCP server 名称、系统 requirement，以及�
 本页是 **连接器与 PEP hook** 路径。要安装或验证官方 CLI、记录探测回执、启动或停止受治理会话，
 请使用 [安装 Grok CLI](/how-to/install-grok-cli/)。运行路径是
 [运行提供商会话](/how-to/operate-provider-sessions/)
-（`OLIVARES_SESSION_RUNTIME_GROK_BIN` 或托管安装的回执，加上提供商配置文件）。那里不断言与已认证官方 Grok 账户的兼容性。
+（用 `OLIVARES_SESSION_RUNTIME_GROK_BIN` 显式选择可执行文件；未设置时，先使用最新的已验证托管安装，
+再查找引擎 `PATH` 中的 `grok`，并使用提供商配置文件）。那里不断言与已认证官方 Grok 账户的兼容性。
 
 ## 添加 Grok Build
 
@@ -24,7 +25,8 @@ TOML 配置、sandbox profile、MCP server 名称、系统 requirement，以及�
 - 用于归属 posture 的 tenant UUID。
 - Olivares 服务账户有权读取 `~/.grok/config.toml`、`/etc/grok/requirements.toml`、
   `~/.grok/disabled-hooks`，以及配置时兼容的 `managed-settings.json`。
-- 如果从控制台创建 source，需要具有 AAL3 elevation 的 superadmin 账户。
+- 如果从控制台创建 source，需要 superadmin 账户。管理操作的写入遵循追加认证策略
+  （`admin_step_up`，默认为 `none`）。
 
 不要为此 source 输入 xAI key。它没有 secret field，也不进行 inference API call。
 
