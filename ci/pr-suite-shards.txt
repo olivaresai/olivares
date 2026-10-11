@@ -123,13 +123,17 @@ shard modules
 # above. Every selected top-level test keeps all its subtests;
 # fuzz targets, examples and future unmatched names remain in the computed complement.
 group root-a    github.com/olivaresai/olivares/cmd/olivares a    A B CommunicationHandoff CommunicationMessaging
-group root-b    github.com/olivaresai/olivares/cmd/olivares b    D E F G H I J K CommunicationIncoming
-group root-c    github.com/olivaresai/olivares/cmd/olivares c    L M N O P Q R CommunicationChannel
+# October 11: hosted run 38166578517 exhausted root-b's 45m Go clock;
+# root-c took 33m, while root-h/root-e/root-f took about 4m/6m/6m of job wall.
+# Redistribute their prefixes across these five existing jobs. Test counts guide
+# placement only; measure the new groups on the next official hosted run.
+group root-b    github.com/olivaresai/olivares/cmd/olivares b    D J K
+group root-c    github.com/olivaresai/olivares/cmd/olivares c    L M N Q
 group root-d github.com/olivaresai/olivares/cmd/olivares d Catalog Classify Community Compliance Connect Core Cross SR Seat Security Semantic SessionClaude SessionIO SessionStop Static Step Store Template Tenant Transport Un Verify Warn What Wildcard Write
-group root-e github.com/olivaresai/olivares/cmd/olivares e CLI CRL CSP Calendar Campaign Canonical Claude Command CommunicationCursor CommunicationGlobal CommunicationGuard CommunicationReady Complete Completion Composition Confirm Container Coverage Credential Custody SDK Sandbox Sealed Seam Self SessionRemove SessionState SessionTool SessionTurn SessionUnknown SessionView SessionWIF Sessions Setup Signing Slack Sorted Source Split Stale Standing Subject Sweepable TOTP Used Vector Version
-group root-f github.com/olivaresai/olivares/cmd/olivares f Clean Console Copy SLA Schedule SessionGroup SessionIs SessionLaunch SessionList SessionProvider SessionRuntime SessionShow Stamped Status TLS Target Test Token Tool Two Valid Wrap
+group root-e github.com/olivaresai/olivares/cmd/olivares e CLI CRL CSP Calendar Campaign Canonical Claude Command CommunicationCursor CommunicationGlobal CommunicationGuard CommunicationReady Complete Completion Composition Confirm Container Coverage Credential Custody SDK Sandbox Sealed Seam Self SessionRemove SessionState SessionTool SessionTurn SessionUnknown SessionView SessionWIF Sessions Setup Signing Slack Sorted Source Split Stale Standing Subject Sweepable TOTP Used Vector Version F H P CommunicationChannel
+group root-f github.com/olivaresai/olivares/cmd/olivares f Clean Console Copy SLA Schedule SessionGroup SessionIs SessionLaunch SessionList SessionProvider SessionRuntime SessionShow Stamped Status TLS Target Test Token Tool Two Valid Wrap I O R CommunicationIncoming
 group root-g github.com/olivaresai/olivares/cmd/olivares g Cada Capability Check CommunicationCommit CommunicationContent CommunicationResume Counted Schema Secrets Seed Send SessionHook SessionName SessionStart Shadow Shared Teams Third Users Verbs Voice Web
-group root-h github.com/olivaresai/olivares/cmd/olivares h Chat Codex Collector Commit CommunicationLineage CommunicationStore Config Creates SQ Same Save SessionAccess SessionCredential SessionInterrupt SessionWorkspace Strict Success Support Text The Upgrade Whoami Wire
+group root-h github.com/olivaresai/olivares/cmd/olivares h Chat Codex Collector Commit CommunicationLineage CommunicationStore Config Creates SQ Same Save SessionAccess SessionCredential SessionInterrupt SessionWorkspace Strict Success Support Text The Upgrade Whoami Wire E G
 group root-rest github.com/olivaresai/olivares/cmd/olivares rest *
 
 # The eight sibling packages of cmd/olivares and the 178 connector packages ride with the

@@ -3054,7 +3054,7 @@ tasks:
 
   lint:pr-suite-shards:selftest:
     desc: >-
-      PR suite shards — battery of 46 cases: the three mutants the package split exists to
+      PR suite shards — battery of 47 cases: the three mutants the package split exists to
       catch (a package in two shards, a package in no shard, a pattern naming packages that
       do not exist), the matrix out of step with the spec in both directions, a Go timeout at
       or above the step ceiling, a leg that is not a task, an empty shard, a spec line the
@@ -3076,7 +3076,8 @@ tasks:
       cancels the rest of its shard publishes no verdict for the rest. And a count that could
       not be made: a `grep` that exits 2 is COULD NOT LOOK, never a selection of zero. Then the same
       pins on mainline-ci.yml, broken there alone: a matrix that lost a shard, no shard matrix at all,
-      a job ceiling off the spec, and an absent file (COULD NOT LOOK). And the non-firing
+      a job ceiling off the spec, and an absent file (COULD NOT LOOK). Then the b/c rebalance:
+      moved prefixes leave their original jobs and run once across the three lighter jobs. And the non-firing
       directions, without which a gate that refused everything would look perfect: the real
       tree stays clean, the fixture stays clean with and without a name split, and an optional
       pattern that matches nothing is a notice instead of a finding.
