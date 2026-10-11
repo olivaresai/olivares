@@ -276,12 +276,15 @@ func reservedSecretEnvName(name string) bool {
 // reach another host, beyond the proxy and CA-bundle families: interpreter and
 // shell start-up hooks, glibc's loader and resolver outside LD_*, git's commands,
 // repository and TLS overrides, the editors and pagers tools start, the TLS key
-// log, OpenSSL's configuration and modules, other stacks' CA bundles, and the
-// build toolchains' compilers, wrappers, flags, caches and module routing. An
-// operator may forward the engine's own value through env_allow; a vault secret
-// or a credential adapter never sets one. Bash's exported functions
-// (BASH_FUNC_name%%) are no valid name anywhere (validEnvName). GIT_CONFIG_* is
-// git's configuration, which a secret may carry (validateGitReadEnv).
+// log, OpenSSL's configuration and modules, other stacks' CA bundles, the build
+// toolchains' compilers, wrappers, flags, caches and module routing, the JVM
+// builds' launchers, options, homes and caches, PHP's ini files, RubyGems' homes
+// and source, NuGet's own plugins, caches, msbuild and revocation mode (its prefix
+// is shared with the API keys projects name, NUGET_API_KEY and NUGET_AUTH_TOKEN),
+// Deno's cache and JSR registry, and Python's and Node's code caches. An operator may
+// forward the engine's own value through env_allow; a vault secret or a
+// credential adapter never sets one. Bash's exported functions (BASH_FUNC_name%%)
+// are no valid name anywhere (validEnvName).
 var childExecEnv = []string{
 	"NODE_OPTIONS", "NODE_PATH", "NODE_REPL_EXTERNAL_MODULE", "NODE_TLS_REJECT_UNAUTHORIZED",
 	"PYTHONPATH", "PYTHONHOME", "PYTHONSTARTUP", "PYTHONUSERBASE", "PYTHONBREAKPOINT",
@@ -303,16 +306,27 @@ var childExecEnv = []string{
 	"GOPROXY", "GONOPROXY", "GOPRIVATE", "GOSUMDB", "GONOSUMDB", "GONOSUMCHECK", "GOINSECURE", "GOVCS",
 	"RUSTC", "RUSTC_WRAPPER", "RUSTC_WORKSPACE_WRAPPER", "RUSTDOC", "RUSTFMT", "RUSTFLAGS", "RUSTDOCFLAGS",
 	"PNPM_HOME",
+	"PYTHONWARNINGS", "PYTHONPYCACHEPREFIX", "NODE_COMPILE_CACHE",
+	"GIT_ALLOW_PROTOCOL", "GIT_PROXY_SSL_CAINFO", "DENO_DIR", "JSR_URL",
+	"MAVEN_OPTS", "MAVEN_ARGS", "MAVEN_CONFIG", "MAVEN_HOME", "M2_HOME", "MAVEN_USER_HOME", "MAVEN_PROJECTBASEDIR",
+	"MVNW_REPOURL", "GRADLE_OPTS", "GRADLE_USER_HOME", "GRADLE_RO_DEP_CACHE", "ANT_OPTS", "ANT_ARGS", "SBT_OPTS",
+	"JAVA_HOME", "JDK_HOME", "JRE_HOME", "JAVACMD", "JAVA_OPTS", "JDK_JAVAC_OPTIONS",
+	"NUGET_PLUGIN_PATHS", "NUGET_NETFX_PLUGIN_PATHS", "NUGET_NETCORE_PLUGIN_PATHS", "NUGET_PACKAGES",
+	"NUGET_FALLBACK_PACKAGES", "NUGET_HTTP_CACHE_PATH", "NUGET_PLUGINS_CACHE_PATH", "NUGET_RESTORE_MSBUILD_PATH",
+	"NUGET_EXTENSIONS_PATH", "NUGET_CERT_REVOCATION_MODE", "PHPRC", "PHP_INI_SCAN_DIR", "COMPOSER",
+	"GEM_HOME", "GEM_PATH", "GEMRC", "RUBYGEMS_HOST",
 }
 
 // childExecEnvName adds the proxy and CA-bundle families in either case, whose
 // one source is the engine's own environment (driverfacts.NetworkEnv), the
-// build tools (buildToolEnvName) and the package managers' settings
-// (packageManagerEnvName).
+// build tools (buildToolEnvName), the package managers' settings
+// (packageManagerEnvName) and git's configuration, which runs commands
+// (core.fsmonitor, core.sshCommand, a credential.helper of !cmd): a
+// repository's read credential is git_read's (validateGitReadEnv).
 func childExecEnvName(name string) bool {
 	proxy, trust := driverfacts.NetworkEnv(name)
 	return proxy || trust || slices.Contains(childExecEnv, name) || buildToolEnvName(name) ||
-		packageManagerEnvName(name)
+		packageManagerEnvName(name) || name == "GIT_CONFIG" || strings.HasPrefix(name, "GIT_CONFIG_")
 }
 
 // buildToolEnv are the compilers, archivers, flags and pkg-config search paths
@@ -342,39 +356,93 @@ func buildToolEnvName(name string) bool {
 var npmCredentialKeys = []string{"_auth", "_authtoken", "username", "_password", "email", "otp",
 	"cert", "key", "certfile", "keyfile"}
 
+// loweredKeyCredentials are, per family whose tool reads its prefix in either
+// case and lowers the key, the keys that are a registry credential: npm's and
+// pnpm's, and yarn's (npmAuthToken, npmAuthIdent and the client certificate, as
+// npm's; yarn 1 reads yarn_ too).
+var loweredKeyCredentials = []struct {
+	prefix string
+	keys   []string
+}{
+	{"npm_config_", npmCredentialKeys}, {"pnpm_config_", npmCredentialKeys},
+	{"yarn_", []string{"npm_auth_token", "npm_auth_ident", "https_cert_file_path", "https_key_file_path"}},
+}
+
 // packageManagerCredentialEnv are the registry credentials among the families of
-// toolchainEnvPrefixes: Cargo's for crates.io and corepack's.
+// toolchainEnvPrefixes: Cargo's for crates.io, corepack's, bun's, and uv's for
+// publishing and its GitHub token. COMPOSER_AUTH is none: Composer merges the
+// whole object into its configuration (cafile, disable-tls, repositories) and
+// only warns when it is no auth.json.
 var packageManagerCredentialEnv = []string{"CARGO_REGISTRY_TOKEN",
-	"COREPACK_NPM_TOKEN", "COREPACK_NPM_USERNAME", "COREPACK_NPM_PASSWORD"}
+	"COREPACK_NPM_TOKEN", "COREPACK_NPM_USERNAME", "COREPACK_NPM_PASSWORD", "BUN_CONFIG_TOKEN",
+	"UV_PUBLISH_USERNAME", "UV_PUBLISH_PASSWORD", "UV_PUBLISH_TOKEN", "UV_GITHUB_TOKEN"}
 
 // toolchainEnvPrefixes are families each tool reads as written: Cargo's
 // settings, corepack's (which package manager it downloads, from where, checked
-// against which keys), rustup's and cgo's flags.
-var toolchainEnvPrefixes = []string{"CARGO_", "COREPACK_", "RUSTUP_", "CGO_"}
+// against which keys), rustup's and cgo's flags, bun's options and settings,
+// uv's, Composer's, PEAR's, the .NET runtime's (startup hooks, profilers,
+// roots and knobs), Gradle's project properties and Bundler's settings.
+var toolchainEnvPrefixes = []string{"CARGO_", "COREPACK_", "RUSTUP_", "CGO_", "BUN_", "UV_", "COMPOSER_",
+	"PHP_PEAR_", "DOTNET_", "COMPlus_", "COMPLUS_", "CORECLR_", "COR_", "ORG_GRADLE_PROJECT_", "BUNDLE_"}
+
+// gradleCredentialSuffixes are the project properties Gradle's credentials(type,
+// identity) reads for a repository (<identity>Username, <identity>Password and the
+// AWS and HTTP-header kinds'), plus in-memory signing's signingKey.
+var gradleCredentialSuffixes = []string{"Username", "Password", "AccessKey", "SecretKey", "SessionToken",
+	"AuthHeaderName", "AuthHeaderValue", "signingKey"}
 
 // packageManagerEnvName names a setting a package manager or toolchain reads
-// under its own prefix, other than its registry credential: npm and pnpm read
-// npm_config_ (pnpm 11 pnpm_config_) in either case and lower the key, pip reads
+// under its own prefix, other than its registry credential: npm, pnpm and yarn
+// read theirs in either case and lower the key (loweredKeyCredentials), pip reads
 // PIP_ and lowers the key, and the rest read theirs as written. A registry token
-// a project's .npmrc or CI names (NPM_TOKEN, NODE_AUTH_TOKEN) is no setting and
-// stays a secret.
+// a project's .npmrc or CI names (NPM_TOKEN, NODE_AUTH_TOKEN, NUGET_API_KEY) is
+// no setting and stays a secret.
 func packageManagerEnvName(name string) bool {
 	lower := strings.ToLower(name)
-	for _, prefix := range []string{"npm_config_", "pnpm_config_"} {
-		if key, ok := strings.CutPrefix(lower, prefix); ok {
-			return !slices.Contains(npmCredentialKeys, key)
+	for _, family := range loweredKeyCredentials {
+		if key, ok := strings.CutPrefix(lower, family.prefix); ok {
+			return !slices.Contains(family.keys, key)
 		}
 	}
 	if key, ok := strings.CutPrefix(name, "PIP_"); ok {
 		return strings.ToLower(key) != "client_cert"
 	}
-	if slices.Contains(packageManagerCredentialEnv, name) ||
-		strings.HasPrefix(name, "CARGO_REGISTRIES_") && strings.HasSuffix(name, "_TOKEN") {
+	if registryCredentialEnvName(name) {
 		return false
 	}
 	return slices.ContainsFunc(toolchainEnvPrefixes, func(prefix string) bool {
 		return strings.HasPrefix(name, prefix)
 	})
+}
+
+// registryCredentialEnvName names a toolchain family's registry credential:
+// the fixed names, and those a family names per registry. Cargo's is
+// CARGO_REGISTRIES_<name>_TOKEN, uv's UV_INDEX_<name>_USERNAME and _PASSWORD,
+// Gradle's a credential property, and Bundler's the host itself, its dots
+// doubled into underscores (BUNDLE_GEMS__EXAMPLE__COM), where the dotted
+// settings mirror., build., local., path.system and github.https route,
+// compile, load or place gems instead. Bundler's client certificate is a
+// credential, as npm's and pip's are.
+func registryCredentialEnvName(name string) bool {
+	if slices.Contains(packageManagerCredentialEnv, name) || name == "BUNDLE_SSL_CLIENT_CERT" ||
+		strings.HasPrefix(name, "CARGO_REGISTRIES_") && strings.HasSuffix(name, "_TOKEN") {
+		return true
+	}
+	if key, ok := strings.CutPrefix(name, "UV_INDEX_"); ok {
+		return strings.HasSuffix(key, "_USERNAME") || strings.HasSuffix(key, "_PASSWORD")
+	}
+	if property, ok := strings.CutPrefix(name, "ORG_GRADLE_PROJECT_"); ok {
+		return slices.ContainsFunc(gradleCredentialSuffixes, func(suffix string) bool {
+			return strings.HasSuffix(property, suffix)
+		})
+	}
+	if key, ok := strings.CutPrefix(name, "BUNDLE_"); ok {
+		key = strings.ToUpper(key)
+		setting, host, _ := strings.Cut(key, "__")
+		return host != "" && !slices.Contains([]string{"MIRROR", "BUILD", "LOCAL"}, setting) &&
+			key != "PATH__SYSTEM" && key != "GITHUB__HTTPS"
+	}
+	return false
 }
 
 // validateEnvAllow checks a launch's env_allow names and trims them in place. A
@@ -422,17 +490,13 @@ func validateOpenCodeEnvAllow(driver string, names []string) error {
 	return nil
 }
 
-// validateGitReadEnv refuses a git_read launch that also names one of git's
-// configuration variables: the read credential sets git's configuration.
-func validateGitReadEnv(envAllow []string, secretEnv []SecretEnvRef) error {
+// validateGitReadEnv refuses a git_read launch that also forwards one of git's
+// configuration variables: the read credential sets git's configuration. No
+// secret sets one at all (childExecEnvName).
+func validateGitReadEnv(envAllow []string) error {
 	for _, name := range envAllow {
 		if strings.HasPrefix(name, "GIT_CONFIG_") {
 			return badRequest("git_read and env_allow " + name + " cannot be combined: the read credential sets git's configuration")
-		}
-	}
-	for _, ref := range secretEnv {
-		if strings.HasPrefix(ref.Env, "GIT_CONFIG_") {
-			return badRequest("git_read and secret_env " + ref.Env + " cannot be combined: the read credential sets git's configuration")
 		}
 	}
 	return nil
@@ -508,14 +572,14 @@ func validateProviderCredentialEnv(driver string, env []EnvVar) error {
 		// path mints Claude's credential itself, never an adapter). Beyond its OWN
 		// driver's credential, it is held to what a vault secret may not set (a
 		// provider family, the host base, the loader, the exec, trust and proxy
-		// names of childExecEnvName), the variables the engine reads
-		// as secrets and git's configuration: each would hand the child an identity
-		// or code nobody selected.
+		// names and git's configuration of childExecEnvName) and the variables the
+		// engine reads as secrets: each would hand the child an identity or code
+		// nobody selected.
 		if strings.HasPrefix(item.Name, "OLIVARES_") ||
 			strings.HasPrefix(item.Name, "ANTHROPIC_") ||
 			strings.HasPrefix(item.Name, "CLAUDE_") ||
 			!adapterCredentialEnvName(driver, item.Name) && (reservedSecretEnvName(item.Name) ||
-				engineSecretEnvName(item.Name) || strings.HasPrefix(item.Name, "GIT_CONFIG_")) {
+				engineSecretEnvName(item.Name)) {
 			return forbiddenErr("launch denied: the provider credential adapter named " + item.Name + ", which it does not own")
 		}
 	}

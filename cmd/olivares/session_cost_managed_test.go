@@ -82,6 +82,24 @@ func TestGovernedTurnCostUpdatesOnlyItsManagedLiveRow(t *testing.T) {
 			deadline := time.Now().Add(5 * time.Second)
 			for {
 				spend := e.do(http.MethodGet, "/v1/m/finops/spend?dimension=session", e.admin, e.tT, nil)
+				if thisEdition.name == "community" {
+					// FinOps is Business: Community keeps the route with its edition refusal,
+					// and the managed live row checked below is where the turn cost lands.
+					if spend.code != http.StatusNotImplemented {
+						t.Fatalf("Community spend=%d, want 501: %s", spend.code, spend.raw)
+					}
+					live := e.do(http.MethodGet, "/v1/m/sessions/live", e.admin, e.tT, nil)
+					if items, ok := live.body["items"].([]any); ok && len(items) == 1 {
+						if row, ok := items[0].(map[string]any); ok && row["cost_micro_usd"] == float64(17) {
+							break
+						}
+					}
+					if time.Now().After(deadline) {
+						t.Fatal("the ordinary turn cost never reached its managed live row")
+					}
+					time.Sleep(10 * time.Millisecond)
+					continue
+				}
 				if spend.code != http.StatusOK {
 					t.Fatalf("spend=%d %s", spend.code, spend.raw)
 				}

@@ -122,8 +122,9 @@ assert "source " not in openrc
 assert "olivares_extra_args" in openrc
 assert "start_pre()" in openrc
 
-assert goreleaser.count("      - scripts/install-service.sh\n") == 2
-assert goreleaser.count("      - packaging/service/\n") == 2
+# One Community archive carries the service files; the FIPS archive moved to Business (3fa7b705).
+assert goreleaser.count("      - scripts/install-service.sh\n") == 1
+assert goreleaser.count("      - packaging/service/\n") == 1
 assert 'tar -xzf "$tmp/$archive"' in installer
 assert 'scripts/install-service.sh packaging/service' in installer
 # The verifier is invoked through the resolved binary since the pinned temporary cosign

@@ -240,8 +240,10 @@ func TestSecretEnv_RefusesReservedAndMalformedNames(t *testing.T) {
 }
 
 // TestSecretEnv_ARegistryTokenStillLaunches is the registry credential a session
-// is given the way npm, a CI's setup-node and Cargo document it (#1442): the
-// package-manager rule refuses their code, trust and routing settings, never these.
+// is given the way npm, a CI's setup-node and Cargo document it (#1442), and yarn,
+// bun, uv, Gradle, Bundler, RubyGems and a NuGet push (#1474): the package-manager
+// rule refuses their code, trust and routing settings, never these. Composer has
+// none: COMPOSER_AUTH is configuration as much as a credential.
 func TestSecretEnv_ARegistryTokenStillLaunches(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -249,6 +251,11 @@ func TestSecretEnv_ARegistryTokenStillLaunches(t *testing.T) {
 	refs := []SecretEnvRef{
 		{Env: "NPM_TOKEN", Secret: "env/github"}, {Env: "NODE_AUTH_TOKEN", Secret: "env/github"},
 		{Env: "npm_config__authToken", Secret: "env/github"}, {Env: "CARGO_REGISTRY_TOKEN", Secret: "env/github"},
+		{Env: "YARN_NPM_AUTH_TOKEN", Secret: "env/github"}, {Env: "BUN_CONFIG_TOKEN", Secret: "env/github"},
+		{Env: "UV_INDEX_INTERNAL_PASSWORD", Secret: "env/github"}, {Env: "UV_PUBLISH_TOKEN", Secret: "env/github"},
+		{Env: "ORG_GRADLE_PROJECT_mavenPassword", Secret: "env/github"}, {Env: "NUGET_AUTH_TOKEN", Secret: "env/github"},
+		{Env: "BUNDLE_GEMS__CONTRIBSYS__COM", Secret: "env/github"}, {Env: "GEM_HOST_API_KEY", Secret: "env/github"},
+		{Env: "NUGET_API_KEY", Secret: "env/github"},
 	}
 	if _, err := createProfiledTestRun(t, m, ctx, tenant, secretEnvParams(refs, true)); err != nil {
 		t.Fatalf("a launch with registry tokens: %v", err)

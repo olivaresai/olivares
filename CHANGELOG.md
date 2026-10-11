@@ -28,6 +28,18 @@ See [versioning](INSTALL.md#versioning) for the release policy.
 
 ## [Unreleased]
 
+### Changed
+
+- A session's `secret_env` and a provider credential adapter can no longer set the
+  variables that make a tool run other code, trust another certificate authority or
+  use another registry or proxy for yarn, bun, uv, Maven, Gradle, Ant, sbt, .NET,
+  NuGet, PHP, Composer, Bundler, RubyGems and Deno, nor git's `GIT_CONFIG*`
+  configuration. Registry credentials remain allowed, such as `YARN_NPM_AUTH_TOKEN`,
+  `BUN_CONFIG_TOKEN`, `UV_INDEX_<name>_PASSWORD`, `ORG_GRADLE_PROJECT_<id>Password`
+  and `BUNDLE_<HOST>`. `COMPOSER_AUTH` is refused because Composer reads it as
+  configuration. Give a session repository access with `git_read`. Resuming a stored
+  session that names a refused variable fails; start a new session without it.
+
 ### Fixed
 
 - The deployment-wide Secrets API refuses `env/` writes and points to Manage

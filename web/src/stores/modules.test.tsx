@@ -3,10 +3,10 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import userEvent from '@testing-library/user-event'
-import { renderIntel, screen, waitFor } from '@/test/intel'
+import { act, renderIntel, screen, waitFor } from '@/test/intel'
 import { FEATURE_EXTENSIONS } from '@/features/extensions'
 import { CONSOLE_ENTRIES } from '@/features/module-spec.gen'
-import { FEATURE_VIEWS, type FeatureView } from '@/features/registry'
+import { FEATURE_VIEWS } from '@/features/registry'
 import {
   moduleEnabled,
   moduleOfPermission,
@@ -38,7 +38,12 @@ vi.mock('@/features/navigation/permitted-visit', () => ({
 
 import { RequirePermission } from '@/components/layout/require-permission'
 
-afterEach(() => useModulesStore.getState().setOff([]))
+const storedBudgetsView = FEATURE_VIEWS.find((v) => v.id === 'storedBudgets')!
+
+afterEach(() => {
+  act(() => useModulesStore.getState().setOff([]))
+  auth.isSuperadmin = false
+})
 
 describe('modules not enabled on this installation (ARCH C1)', () => {
   it('names a permission’s module by its first segment, in one spelling', () => {
@@ -106,11 +111,24 @@ describe('modules not enabled on this installation (ARCH C1)', () => {
 
   // The module spec names each Community view's module once (core/modulespec
   // console_entries); the permission fallback is left for edition views it cannot name.
+  it('the stored-budget view takes FinOps from the spec without a permission fallback', () => {
+    expect(moduleOfView(undefined, 'storedBudgets')).toBe('finops')
+    expect(moduleEnabled(new Set(['finops']), undefined, 'storedBudgets')).toBe(
+      false,
+    )
+  })
+
   it('every Community view of a built-in module takes its module from the spec', () => {
     const named = new Set(Object.values(CONSOLE_ENTRIES).flat())
     expect(
       [...named].filter((id) => !FEATURE_VIEWS.some((v) => v.id === id)),
-    ).toEqual([])
+    ).toEqual(
+      // docs/editions.md: FinOps analysis, red-team execution and reporting moved
+      // to Business. Their spec entries remain for the paid console extensions.
+      ['finops', 'team-costs', 'redteam', 'reporting'].filter(
+        (id) => !FEATURE_EXTENSIONS.some((v) => v.id === id),
+      ),
+    )
     const unnamed = FEATURE_VIEWS.filter(
       (v) =>
         !FEATURE_EXTENSIONS.includes(v) &&
@@ -127,17 +145,15 @@ describe('modules not enabled on this installation (ARCH C1)', () => {
 
   it('a page of a module that is not enabled says so plainly, never an error', () => {
     useModulesStore.getState().setOff(['finops'])
-    const view = {
-      id: 'finops',
-      permission: 'finops:spend:read',
-    } as FeatureView
     renderIntel(
-      <RequirePermission view={view}>
+      <RequirePermission view={storedBudgetsView}>
         <p>Spend screen</p>
       </RequirePermission>,
     )
     expect(
-      screen.getByText('Token cost, budgets and spend'),
+      screen.getByText(
+        'Consumption against each stored limit. Reserved capacity counts toward the limit.',
+      ),
     ).toBeInTheDocument()
     expect(screen.queryByText(/not enabled on this installation/i)).toBeNull()
     expect(screen.queryByText('Spend screen')).toBeNull()
@@ -147,28 +163,20 @@ describe('modules not enabled on this installation (ARCH C1)', () => {
   // without the communication plane, the five communication pages had none (accessibility run).
   it('a page of a module that is not enabled keeps its one heading', () => {
     useModulesStore.getState().setOff(['finops'])
-    const view = {
-      id: 'finops',
-      permission: 'finops:spend:read',
-    } as FeatureView
     renderIntel(
-      <RequirePermission view={view}>
+      <RequirePermission view={storedBudgetsView}>
         <p>Spend screen</p>
       </RequirePermission>,
     )
     const headings = screen.getAllByRole('heading', { level: 1 })
     expect(headings).toHaveLength(1)
-    expect(headings[0]).toHaveTextContent('Cost & FinOps')
+    expect(headings[0]).toHaveTextContent('Budgets')
   })
 
   it('a permitted page brings its own heading; the gate adds none', () => {
     useModulesStore.getState().setOff(undefined)
-    const view = {
-      id: 'finops',
-      permission: 'finops:spend:read',
-    } as FeatureView
     renderIntel(
-      <RequirePermission view={view}>
+      <RequirePermission view={storedBudgetsView}>
         <p>Spend screen</p>
       </RequirePermission>,
     )
@@ -191,12 +199,8 @@ describe('modules not enabled on this installation (ARCH C1)', () => {
       .mockResolvedValue({ modules: [], restarting: false })
     auth.isSuperadmin = true
     useModulesStore.getState().setOff(['finops'])
-    const view = {
-      id: 'finops',
-      permission: 'finops:spend:read',
-    } as FeatureView
     renderIntel(
-      <RequirePermission view={view}>
+      <RequirePermission view={storedBudgetsView}>
         <p>Spend screen</p>
       </RequirePermission>,
     )
@@ -206,16 +210,11 @@ describe('modules not enabled on this installation (ARCH C1)', () => {
     await waitFor(() =>
       expect(select).toHaveBeenCalledWith(['consoleviews', 'finops']),
     )
-    auth.isSuperadmin = false
   })
 
   it('the same page renders when its module runs', () => {
-    const view = {
-      id: 'finops',
-      permission: 'finops:spend:read',
-    } as FeatureView
     renderIntel(
-      <RequirePermission view={view}>
+      <RequirePermission view={storedBudgetsView}>
         <p>Spend screen</p>
       </RequirePermission>,
     )

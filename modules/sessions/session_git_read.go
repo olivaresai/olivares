@@ -97,7 +97,7 @@ func (m *Module) refuseGitReadFor(p CreateRunParams) error {
 		return &runErr{http.StatusServiceUnavailable,
 			"this session names a git_read repository, and no Git-host custody is wired on this node (the launch is denied)"}
 	}
-	return validateGitReadEnv(p.EnvAllow, p.SecretEnv)
+	return validateGitReadEnv(p.EnvAllow)
 }
 
 // configureGitRead mints the credential for this launch, writes it for the

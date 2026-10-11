@@ -633,7 +633,9 @@ func (e *consentEstate) wantControlUntouched(t *testing.T, key string, subject m
 			t.Errorf("the control %s row is %q after another member's retirement, want %q", s.kind, state, c.state)
 		}
 	}
-	if rec, _ := e.record(subject, e.tT); strings.Contains(rec.BlockingRefs, c.id.String()) {
+	// A refused retirement lists what its steps found in the module results
+	// only, so both are read.
+	if rec, _ := e.record(subject, e.tT); strings.Contains(rec.BlockingRefs, c.id.String()) || strings.Contains(rec.ModuleResults, c.id.String()) {
 		t.Errorf("the retirement record lists the control %s row %s, which names another member", s.kind, c.id)
 	}
 }

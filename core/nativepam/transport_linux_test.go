@@ -23,7 +23,14 @@ import (
 
 func nativePair(t *testing.T) (*net.UnixConn, *net.UnixConn) {
 	t.Helper()
-	listener, err := net.ListenUnix("unix", &net.UnixAddr{Name: filepath.Join(t.TempDir(), "pam.sock"), Net: "unix"})
+	// t.TempDir embeds the test name, which pushes the socket path past the
+	// 108-byte sun_path limit under a long TMPDIR; a short directory does not.
+	dir, err := os.MkdirTemp("", "pam")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	listener, err := net.ListenUnix("unix", &net.UnixAddr{Name: filepath.Join(dir, "pam.sock"), Net: "unix"})
 	if err != nil {
 		t.Fatal(err)
 	}

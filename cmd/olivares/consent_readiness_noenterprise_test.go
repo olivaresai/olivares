@@ -9,6 +9,7 @@ package main
 import (
 	"testing"
 
+	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 )
 
@@ -17,4 +18,13 @@ import (
 func assertEditionAbsenceProofReadiness(t *testing.T, _ *consentEstate, r store.Readiness) {
 	t.Helper()
 	t.Errorf("the Community composition opened unready: %s", r.Cause())
+}
+
+// wantEditionRetirementRefusal is the seam a retirement test calls once the pump
+// has run on the case s, whose seeded row is row. An edition that cannot prove
+// an account's history absent on this engine refuses the retirement; there it
+// checks the account's record shows the refusal and what the steps ahead of
+// the refusing one found, and returns true. Community retires on every engine.
+func (e *consentEstate) wantEditionRetirementRefusal(*testing.T, model.ID, model.TenantID, retirementSeeder, model.ID) bool {
+	return false
 }

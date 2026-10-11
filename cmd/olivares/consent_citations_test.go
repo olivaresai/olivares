@@ -45,6 +45,10 @@ func localNoneCitationResolves(lineCounts map[string][]int, kind model.Kind, cit
 		{"cmd/olivares/sandboxrt.go", 115, 133}: {"cmd/olivares/redteamsandbox_enterprise.go", 35, 75},
 		// The step-kind refusal stands 398 lines earlier than the literal says.
 		{"workflow_graph.go", 878, 878}: {"modules/orchestration/workflow_graph.go", 480, 480},
+		// Orchestration's dto.go ends at line 273: the actor kind is read at 269
+		// and the decision ledger projection spans decisionDTO.
+		{"dto.go", 284, 284}: {"modules/orchestration/dto.go", 269, 269},
+		{"dto.go", 271, 288}: {"modules/orchestration/dto.go", 239, 273},
 	}
 	namespace, _, _ := strings.Cut(string(kind), ".")
 	// Bare citations can relocate only within their owning module. Explicit
@@ -54,7 +58,7 @@ func localNoneCitationResolves(lineCounts map[string][]int, kind model.Kind, cit
 		cited, last = current.file, current.last
 	}
 	switch namespace {
-	case "finops", "redteam", "sandbox", "governance":
+	case "finops", "redteam", "sandbox", "governance", "orchestration":
 		if !strings.Contains(cited, "/") {
 			cited = "modules/" + namespace + "/" + cited
 		}
@@ -194,7 +198,7 @@ func TestHistoricalBusinessNoneCitationsAreExact(t *testing.T) {
 }
 
 func TestEditionNoneCitationsDoNotResolveForeignModuleBasenames(t *testing.T) {
-	for _, kind := range []model.Kind{"finops.cost_sample", "redteam.result", "governance.breakglass", "sandbox.scenario"} {
+	for _, kind := range []model.Kind{"finops.cost_sample", "redteam.result", "governance.breakglass", "sandbox.scenario", "orchestration.workflow"} {
 		t.Run(string(kind), func(t *testing.T) {
 			namespace, _, _ := strings.Cut(string(kind), ".")
 			own := "modules/" + namespace + "/helpers.go"
@@ -235,6 +239,8 @@ func TestEditionNoneCitationRelocationsRespectOwnership(t *testing.T) {
 		{"finops.cost_center_mapping", "costcenter.go", 450, 450, 45},
 		{"redteam.result", "helpers.go", 173, 183, 162},
 		{"orchestration.workflow", "workflow_graph.go", 878, 878, 480},
+		{"orchestration.schedule", "dto.go", 284, 284, 269},
+		{"orchestration.decision", "dto.go", 271, 288, 273},
 	} {
 		t.Run(fmt.Sprintf("%s:%d-%d", tc.file, tc.first, tc.last), func(t *testing.T) {
 			namespace, _, _ := strings.Cut(string(tc.kind), ".")
@@ -302,11 +308,40 @@ func TestBusinessNoneCitationsResolveWhereTheirReadersMoved(t *testing.T) {
 				return
 			}
 			namespace, _, _ := strings.Cut(string(tc.kind), ".")
-			for _, other := range []string{"finops", "redteam", "governance", "sandbox", "notify"} {
+			for _, other := range []string{"finops", "redteam", "governance", "sandbox", "notify", "security"} {
 				foreign := "modules/" + other + "/" + path.Base(tc.file)
 				if other != namespace && localNoneCitationResolves(map[string][]int{foreign: {1 << 20}}, tc.kind, tc.cited, tc.first, tc.last) {
 					t.Errorf("another module's %s supplied the citation", foreign)
 				}
+			}
+		})
+	}
+}
+
+// The orchestration reader file of the assembled Business tree has 273 lines. A
+// longer dto.go of another module is no evidence for a citation of line 284 or
+// of lines 271-288. The own reader resolves them at the lines it really has
+// and not one line short.
+func TestOrchestrationDtoCitationsDoNotResolveAgainstOtherModules(t *testing.T) {
+	foreign := map[string][]int{"modules/security/dto.go": {293}, "modules/finops/dto.go": {518}}
+	for _, tc := range []struct {
+		kind                     model.Kind
+		first, last, currentLast int
+	}{
+		{"orchestration.schedule", 284, 284, 269},
+		{"orchestration.decision", 271, 288, 273},
+	} {
+		t.Run(fmt.Sprintf("%s:%d-%d", tc.kind, tc.first, tc.last), func(t *testing.T) {
+			if localNoneCitationResolves(foreign, tc.kind, "dto.go", tc.first, tc.last) {
+				t.Error("another module's dto.go supplied the orchestration reader")
+			}
+			own := map[string][]int{"modules/orchestration/dto.go": {273}, "modules/security/dto.go": {293}}
+			if !localNoneCitationResolves(own, tc.kind, "dto.go", tc.first, tc.last) {
+				t.Error("lost the orchestration reader at its relocated lines")
+			}
+			short := map[string][]int{"modules/orchestration/dto.go": {tc.currentLast - 1}, "modules/security/dto.go": {293}}
+			if localNoneCitationResolves(short, tc.kind, "dto.go", tc.first, tc.last) {
+				t.Error("admitted an orchestration reader short of its relocated lines")
 			}
 		})
 	}

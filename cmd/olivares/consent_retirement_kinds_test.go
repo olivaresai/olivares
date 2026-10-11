@@ -618,21 +618,28 @@ func (e *consentEstate) retireSeeded(t *testing.T, key string, subject retiremen
 		if present {
 			t.Errorf("the retirement left the %s row naming the account", s.kind)
 		}
-		e.wantRetired(t, subject.id, e.tT)
 	case retireBlocks:
 		if !present {
 			t.Errorf("the retirement deleted the %s row the tenant must resolve", s.kind)
 		}
-		e.wantBlocked(t, subject.id, e.tT, row.String())
 	case retireKeeps:
 		if !present {
 			t.Errorf("the retirement deleted the %s row", s.kind)
 		}
-		e.wantRetired(t, subject.id, e.tT)
 	case retireRevokes:
 		if state := e.rowState(e.tT, s.kind, row); state != "revoked" {
 			t.Errorf("the %s row naming the account is %q after the retirement, want revoked", s.kind, state)
 		}
+	}
+	// The record: where the edition cannot prove the account's history absent
+	// on this engine, a step refuses and the record stays open (the seam checks
+	// what the steps ahead of it found); elsewhere it is retired, or blocked on
+	// the row the case keeps.
+	switch {
+	case e.wantEditionRetirementRefusal(t, subject.id, e.tT, s, row):
+	case s.outcome == retireBlocks:
+		e.wantBlocked(t, subject.id, e.tT, row.String())
+	default:
 		e.wantRetired(t, subject.id, e.tT)
 	}
 	if e.comm != nil {

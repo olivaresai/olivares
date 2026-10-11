@@ -22,8 +22,9 @@ import (
 )
 
 // optionalReads are derived dependencies that are deliberately not activation
-// edges (docs/module-spec.md): the consumer reads the owner's retained tables and
-// tolerates an absent or dormant owner. Each entry must still be derived.
+// edges (docs/module-spec.md): the consumer reads the owner's retained tables, or
+// is wired to it only when both run, and tolerates an absent or dormant owner.
+// Each entry must still be derived.
 var optionalReads = map[[2]string]string{
 	{"catalog", "models"}:       "model approval reads the retained admission policy and verdicts, denying closed without them",
 	{"compliance", "finops"}:    "capability probes report an absent kind as a gap; erasure covers retained data",
@@ -33,6 +34,7 @@ var optionalReads = map[[2]string]string{
 	{"compliance", "voice"}:     "erasure covers retained data",
 	{"liveingest", "voice"}:     "the voice probe has no production caller; voice is its own telemetry producer",
 	{"security", "knowledge"}:   "the forensic timeline omits lineage when knowledge is absent",
+	{"sessions", "skills"}:      "assigned skills are delivered only when the skills module runs; a run starts without them (boot.go wires the source only when both run, prepareSessionSkills returns without one)",
 }
 
 // TestModuleSpecRequiresDerivedDependencies derives module dependencies from
@@ -46,7 +48,7 @@ var optionalReads = map[[2]string]string{
 func TestModuleSpecRequiresDerivedDependencies(t *testing.T) {
 	derived := derivedDependencies(t)
 	specs := modulespec.All()
-	for _, missing := range undeclaredDependencies(specs, derived) {
+	for _, missing := range undeclaredDependencies(specs, derived, optionalReads) {
 		t.Errorf("undeclared module dependency %s: add the requires edge to core/modulespec/modules.json", missing)
 	}
 	for pair := range optionalReads {
@@ -56,19 +58,28 @@ func TestModuleSpecRequiresDerivedDependencies(t *testing.T) {
 	}
 
 	// Planted missing edges must be reported, so neither derivation is vacuous.
-	// Each pair is a direct edge with no other path through the closure.
-	for _, planted := range [][2]string{
-		{"compliance", "accessmap"}, // import
-		{"posture", "inventory"},    // kind read
+	// The import edge is cut from its requires list. Every remaining kind read is
+	// either optional or already satisfied by the kernel, so the kind edge is
+	// planted by withdrawing its optional status instead; it has no other path
+	// through the closure.
+	for _, planted := range []struct {
+		consumer, owner string
+		cutRequires     bool
+		optional        map[[2]string]string
+	}{
+		{"siemforward", "eventing", true, optionalReads}, // import
+		{"catalog", "models", false, nil},                // kind read
 	} {
 		cut := modulespec.All()
-		for i := range cut {
-			if cut[i].Namespace == planted[0] {
-				cut[i].Requires = slices.DeleteFunc(cut[i].Requires, func(ns string) bool { return ns == planted[1] })
+		if planted.cutRequires {
+			for i := range cut {
+				if cut[i].Namespace == planted.consumer {
+					cut[i].Requires = slices.DeleteFunc(cut[i].Requires, func(ns string) bool { return ns == planted.owner })
+				}
 			}
 		}
-		edge := planted[0] + " -> " + planted[1] + " "
-		missing := undeclaredDependencies(cut, derived)
+		edge := planted.consumer + " -> " + planted.owner + " "
+		missing := undeclaredDependencies(cut, derived, planted.optional)
 		if !slices.ContainsFunc(missing, func(m string) bool { return strings.HasPrefix(m, edge) }) {
 			t.Errorf("planted missing edge %s not reported: %v", edge, missing)
 		}
@@ -160,7 +171,7 @@ func derivedDependencies(t *testing.T) map[string]map[string]string {
 // undeclaredDependencies lists "consumer -> owner (position)" for each derived
 // dependency whose owner package has no namespace active with the consumer: the
 // requires closure of the consumer and the kernel.
-func undeclaredDependencies(specs []modulespec.Spec, derived map[string]map[string]string) []string {
+func undeclaredDependencies(specs []modulespec.Spec, derived map[string]map[string]string, optional map[[2]string]string) []string {
 	rows := map[string]modulespec.Spec{}
 	var kernel []string
 	for _, spec := range specs {
@@ -188,7 +199,7 @@ func undeclaredDependencies(specs []modulespec.Spec, derived map[string]map[stri
 			satisfied := slices.ContainsFunc(specs, func(s modulespec.Spec) bool {
 				return active[s.Namespace] && s.Package == rows[owner].Package
 			})
-			if _, optional := optionalReads[[2]string{consumer, owner}]; !satisfied && !optional {
+			if _, isOptional := optional[[2]string{consumer, owner}]; !satisfied && !isOptional {
 				missing = append(missing, consumer+" -> "+owner+" ("+pos+")")
 			}
 		}

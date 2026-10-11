@@ -56,7 +56,7 @@ The canonical, machine-readable matrix is `connectors/interop/tier1-matrix.json`
 writing the qualified open-protocol subset is **A2A** (agent-card discovery) and **MCP**
 (server introspection), both `conformance-defined` with the jobs in
 `connectors/a2a/conformance_integration_test.go` and
-`connectors/mcp/conformance_integration_test.go`; `slack` and `pagerduty` are listed
-explicitly as `fixture-only` so their real level is not mistaken for Tier-1. The measured
+`connectors/mcp/conformance_integration_test.go`; `slack` is listed
+explicitly as `fixture-only` so its real level is not mistaken for Tier-1. The measured
 count of integration-tagged conformance jobs is derived from the same census the
 conformance matrix gates on (`connectors/interop/matrix_test.go`).

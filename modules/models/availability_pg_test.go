@@ -6,6 +6,7 @@ package models
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -43,16 +44,19 @@ func TestAvailableModelsPG16AppRole(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = st.Close() })
 	var tenant, other model.TenantID
+	// The fixture database is shared and outlives the test, so the slugs are
+	// unique per run: a second run on the same database must not collide.
+	run := time.Now().UnixNano()
 	if err := st.System(ctx, func(sys store.SystemScope) error {
 		if _, err := sys.EnsureSystemTenant(ctx); err != nil {
 			return err
 		}
-		one, err := sys.CreateOrg(ctx, model.Org{Name: "Models PG one", Slug: "models-pg-one", Status: model.StatusActive})
+		one, err := sys.CreateOrg(ctx, model.Org{Name: "Models PG one", Slug: fmt.Sprintf("models-pg-one-%d", run), Status: model.StatusActive})
 		if err != nil {
 			return err
 		}
 		tenant = one.TenantID
-		two, err := sys.CreateOrg(ctx, model.Org{Name: "Models PG two", Slug: "models-pg-two", Status: model.StatusActive})
+		two, err := sys.CreateOrg(ctx, model.Org{Name: "Models PG two", Slug: fmt.Sprintf("models-pg-two-%d", run), Status: model.StatusActive})
 		other = two.TenantID
 		return err
 	}); err != nil {

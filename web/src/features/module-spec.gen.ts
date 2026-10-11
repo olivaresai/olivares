@@ -18,7 +18,7 @@ export const CONSOLE_ENTRIES: Readonly<Record<string, readonly string[]>> = {
   deploy: ['deploy'],
   evals: ['evals'],
   eventing: ['eventing'],
-  finops: ['finops', 'team-costs'],
+  finops: ['finops', 'team-costs', 'storedBudgets'],
   gitpublish: ['gitPublication'],
   governance: [
     'permissions',
