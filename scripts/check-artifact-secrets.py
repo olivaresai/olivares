@@ -26,6 +26,8 @@ from package_repository_lib import digest_file, read_checksum_rows, regular_file
 ARCHIVES = ('.tar', '.tar.gz', '.tgz', '.tar.xz', '.tar.zst', '.zip', '.deb', '.rpm', '.apk',
             '.gz', '.gzip', '.xz', '.zst', '.zstd', '.cpio')
 ROOT = Path(__file__).resolve().parents[1]
+# .goreleaser.yaml checksum.extra_files globs these in the working directory, not in dist/.
+RELEASE_EVIDENCE = ('release-commit.txt', 'release-build-context.json')
 
 
 def pinned_exemptions():
@@ -349,7 +351,7 @@ def main():
     if args.checksums:
         regular_file(args.checksums, 'checksums')
         for name, digest in read_checksum_rows(args.checksums).items():
-            path = args.checksums.parent / name
+            path = Path(name) if name in RELEASE_EVIDENCE else args.checksums.parent / name
             regular_file(path, 'checksummed artifact')
             if digest_file(path) != digest:
                 raise ValueError('artifact changed after checksumming')

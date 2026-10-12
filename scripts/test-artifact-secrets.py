@@ -117,6 +117,17 @@ class ArtifactSecrets(unittest.TestCase):
                 # require a populated Go cache before release modules download.
                 self.assertTrue(rows[0]['sources'])
 
+    def test_no_exemption_pins_a_file_the_export_rewrites(self):
+        # The public export drops private modules from go.work, so a dev pin of it can never
+        # hold in the released tree: the release-0.1 rehearsal blocked six Go literal findings
+        # whose Go source files still matched. Go literals pin their GOROOT sources.
+        spec = importlib.util.spec_from_file_location('artifact_gate', CHECK)
+        gate = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(gate)
+        pinned = {source['path'] for row in gate.pinned_exemptions() for source in row['sources']
+                  if source['kind'] == 'repository'}
+        self.assertNotIn('go.work', pinned)
+
     def pinned_fixture(self):
         checkout = self.scratch / 'checkout'
         scripts = checkout / 'scripts'
@@ -217,6 +228,38 @@ class ArtifactSecrets(unittest.TestCase):
         self.assertEqual(self.check('--checksums', checksum).returncode, 0)
         path.write_text('changed')
         self.assertEqual(self.check('--checksums', checksum).returncode, 2)
+
+    def test_release_evidence_rows_resolve_where_goreleaser_globbed_them(self):
+        # checksum.extra_files globs release-commit.txt and release-build-context.json in the
+        # working directory, not in dist/; run 38195427294 stopped at signing on exactly this.
+        dist = self.scratch / 'dist'
+        dist.mkdir()
+        (dist / 'LICENSE').write_text('clean')
+        checksum = dist / 'checksums.txt'
+        names = ('release-commit.txt', 'release-build-context.json')
+
+        def run(**evidence):
+            for name in names:
+                (self.scratch / name).write_text(evidence.get(name, 'clean ' + name))
+            checksum.write_text(''.join(f'{hashlib.sha256(value.encode()).hexdigest()}  {name}\n'
+                                        for name, value in (('LICENSE', 'clean'), *((n, evidence.get(n, 'clean ' + n))
+                                                                                    for n in names))))
+            return subprocess.run([sys.executable, str(CHECK), '--checksums', str(checksum)],
+                                  capture_output=True, text=True, cwd=self.scratch)
+
+        self.assertEqual(run().returncode, 0)
+        for name in names:
+            with self.subTest(name=name):
+                result = run(**{name: 'token=' + CANARY})
+                self.assertEqual(result.returncode, 1)
+                self.assertNotIn(CANARY, result.stdout + result.stderr)
+                run()
+                (self.scratch / name).write_text('changed')
+                self.assertEqual(subprocess.run([sys.executable, str(CHECK), '--checksums', str(checksum)],
+                                                capture_output=True, cwd=self.scratch).returncode, 2)
+                (self.scratch / name).unlink()
+                self.assertEqual(subprocess.run([sys.executable, str(CHECK), '--checksums', str(checksum)],
+                                                capture_output=True, cwd=self.scratch).returncode, 2)
 
     def test_missing_scanner_blocks(self):
         path = self.scratch / 'plain.txt'
