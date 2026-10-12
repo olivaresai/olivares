@@ -20499,7 +20499,10 @@ export interface paths {
       path?: never
       cookie?: never
     }
-    /** deploy module route (requires deploy:deployment:admin) */
+    /**
+     * Returns the saved local Docker executor setup, empty when none is saved, and whether an operator override replaces it.
+     * @description Returns the saved local Docker executor setup, empty when none is saved, and whether an operator override replaces it.
+     */
     get: {
       parameters: {
         query?: never
@@ -20577,7 +20580,10 @@ export interface paths {
         }
       }
     }
-    /** deploy module route (requires deploy:deployment:admin) */
+    /**
+     * Saves the local Docker executor setup for the tenant as the local Docker socket path and a store: secret reference, then returns it; requires step-up, answers 400 for any other socket or reference and 409 while an operator override is in effect.
+     * @description Saves the local Docker executor setup for the tenant as the local Docker socket path and a store: secret reference, then returns it; requires step-up, answers 400 for any other socket or reference and 409 while an operator override is in effect.
+     */
     put: {
       parameters: {
         query?: never
@@ -20684,7 +20690,10 @@ export interface paths {
     }
     get?: never
     put?: never
-    /** deploy module route (requires deploy:deployment:admin) */
+    /**
+     * Checks the saved credential and the local Docker daemon read-only and returns connected; it plans, creates, starts, stops and removes nothing, and answers 409 while an operator override is in effect, 503 when no executor is saved and 502 when the check fails.
+     * @description Checks the saved credential and the local Docker daemon read-only and returns connected; it plans, creates, starts, stops and removes nothing, and answers 409 while an operator override is in effect, 503 when no executor is saved and 502 when the check fails.
+     */
     post: {
       parameters: {
         query?: never
@@ -79673,7 +79682,10 @@ export interface paths {
       path?: never
       cookie?: never
     }
-    /** sessions module route (requires sessions:run:read) */
+    /**
+     * Lists the loopback ports the run's own processes listen on, which a browser preview can open; a run not live on this node has none.
+     * @description Lists the loopback ports the run's own processes listen on, which a browser preview can open; a run not live on this node has none.
+     */
     get: {
       parameters: {
         query?: never
@@ -79766,7 +79778,10 @@ export interface paths {
       }
     }
     put?: never
-    /** sessions module route (requires sessions:run:write) */
+    /**
+     * Opens a browser preview of one port the run listens on and returns its URL, which expires within the hour and when the session stops.
+     * @description Opens a browser preview of one port the run listens on and returns its URL, which expires within the hour and when the session stops.
+     */
     post: {
       parameters: {
         query?: never
@@ -90377,7 +90392,7 @@ export interface components {
       }
       read_only: boolean
       servers: components['schemas']['MCPGatewayServer'][]
-      /** @description One /session/mcp endpoint aggregates the session’s enabled servers and Olivares work tools. It accepts the launch-issued session credential and calls internal module APIs with the resolved principal; it never forwards that bearer into the admin API. Message and communication tools are not exposed in 26.10.1. Server tool aliases are stable and server-scoped. */
+      /** @description One /session/mcp endpoint aggregates the session’s enabled servers and Olivares work tools. It accepts the launch-issued session credential and calls internal module APIs with the resolved principal; it never forwards that bearer into the admin API. Server tool aliases are stable and server-scoped. */
       session_endpoint: string
       session_tools: boolean
       /** @enum {string} */
