@@ -117,6 +117,17 @@ class ArtifactSecrets(unittest.TestCase):
                 # require a populated Go cache before release modules download.
                 self.assertTrue(rows[0]['sources'])
 
+    def test_no_exemption_pins_a_file_the_export_rewrites(self):
+        # The public export drops private modules from go.work, so a dev pin of it can never
+        # hold in the released tree: the release-0.1 rehearsal blocked six Go literal findings
+        # whose Go source files still matched. Go literals pin their GOROOT sources.
+        spec = importlib.util.spec_from_file_location('artifact_gate', CHECK)
+        gate = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(gate)
+        pinned = {source['path'] for row in gate.pinned_exemptions() for source in row['sources']
+                  if source['kind'] == 'repository'}
+        self.assertNotIn('go.work', pinned)
+
     def pinned_fixture(self):
         checkout = self.scratch / 'checkout'
         scripts = checkout / 'scripts'
@@ -218,6 +229,38 @@ class ArtifactSecrets(unittest.TestCase):
         path.write_text('changed')
         self.assertEqual(self.check('--checksums', checksum).returncode, 2)
 
+    def test_release_evidence_rows_resolve_where_goreleaser_globbed_them(self):
+        # checksum.extra_files globs release-commit.txt and release-build-context.json in the
+        # working directory, not in dist/; run 38195427294 stopped at signing on exactly this.
+        dist = self.scratch / 'dist'
+        dist.mkdir()
+        (dist / 'LICENSE').write_text('clean')
+        checksum = dist / 'checksums.txt'
+        names = ('release-commit.txt', 'release-build-context.json')
+
+        def run(**evidence):
+            for name in names:
+                (self.scratch / name).write_text(evidence.get(name, 'clean ' + name))
+            checksum.write_text(''.join(f'{hashlib.sha256(value.encode()).hexdigest()}  {name}\n'
+                                        for name, value in (('LICENSE', 'clean'), *((n, evidence.get(n, 'clean ' + n))
+                                                                                    for n in names))))
+            return subprocess.run([sys.executable, str(CHECK), '--checksums', str(checksum)],
+                                  capture_output=True, text=True, cwd=self.scratch)
+
+        self.assertEqual(run().returncode, 0)
+        for name in names:
+            with self.subTest(name=name):
+                result = run(**{name: 'token=' + CANARY})
+                self.assertEqual(result.returncode, 1)
+                self.assertNotIn(CANARY, result.stdout + result.stderr)
+                run()
+                (self.scratch / name).write_text('changed')
+                self.assertEqual(subprocess.run([sys.executable, str(CHECK), '--checksums', str(checksum)],
+                                                capture_output=True, cwd=self.scratch).returncode, 2)
+                (self.scratch / name).unlink()
+                self.assertEqual(subprocess.run([sys.executable, str(CHECK), '--checksums', str(checksum)],
+                                                capture_output=True, cwd=self.scratch).returncode, 2)
+
     def test_missing_scanner_blocks(self):
         path = self.scratch / 'plain.txt'
         path.write_text('clean')
@@ -245,14 +288,10 @@ class ArtifactSecrets(unittest.TestCase):
                 else:
                     self.assertEqual(self.check(package).returncode, 1)
 
-    def test_saved_image_includes_deleted_layer_and_blocks_push(self):
-        saved = self.scratch / 'saved.tar'
-        saved.write_bytes(tar_bytes({'blobs/sha256/old': gzip.compress(tar_bytes({'root/.codex/auth.json': CANARY})),
-                                    'new/layer.tar': tar_bytes({'root/.codex/.wh.auth.json': ''}),
-                                    'manifest.json': '[{"Layers":["blobs/sha256/old","new/layer.tar"]}]'}))
-        self.assertEqual(self.check(saved).returncode, 1)
+    def push(self, saved, image='example.invalid/canary:1'):
         transport = self.scratch / 'docker'
         marker = self.scratch / 'pushed'
+        marker.unlink(missing_ok=True)
         transport.write_text('#!' + sys.executable + '\n' +
                              'import os, pathlib, shutil, sys\n' +
                              'if sys.argv[1:3] == ["image", "inspect"]:\n' +
@@ -262,25 +301,70 @@ class ArtifactSecrets(unittest.TestCase):
                              'elif sys.argv[1] == "push":\n' +
                              ' pathlib.Path(os.environ["TEST_PUSHED"]).touch()\n')
         transport.chmod(0o755)
-        launcher = ROOT / 'scripts/artifact-scan-bin/docker'
         env = dict(os.environ, OLIVARES_REAL_DOCKER=str(transport), TEST_SAVED=str(saved),
                    TEST_PUSHED=str(marker))
-        result = subprocess.run([str(launcher), 'push', 'example.invalid/canary:1'],
+        result = subprocess.run([str(ROOT / 'scripts/artifact-scan-bin/docker'), 'push', image],
                                 env=env, capture_output=True, text=True)
-        self.assertNotEqual(result.returncode, 0)
-        self.assertFalse(marker.exists(), 'secret-bearing image reached Docker push')
         self.assertNotIn(CANARY, result.stdout + result.stderr)
-        saved.write_bytes(tar_bytes({'layer.tar': tar_bytes({'LICENSE': 'clean'}), 'config.json': '{}'}))
-        result = subprocess.run([str(launcher), 'push', 'example.invalid/canary:1'],
-                                env=env, capture_output=True, text=True)
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertTrue(marker.exists(), 'clean image did not reach Docker push')
-        marker.unlink()
-        result = subprocess.run([str(launcher), 'buildx', 'build', '--push', '.'],
-                                env=env, capture_output=True, text=True)
-        self.assertNotEqual(result.returncode, 0)
-        self.assertFalse(marker.exists())
+        return result, marker.exists()
 
+    def test_saved_image_includes_deleted_layer_and_blocks_push(self):
+        # A path the release Dockerfile copies from the build context, deleted by a later layer.
+        saved = self.scratch / 'saved.tar'
+        saved.write_bytes(tar_bytes({'blobs/sha256/old': gzip.compress(tar_bytes({'var/lib/olivares/auth.json': CANARY})),
+                                    'new/layer.tar': tar_bytes({'var/lib/olivares/.wh.auth.json': ''}),
+                                    'manifest.json': '[{"Layers":["blobs/sha256/old","new/layer.tar"]}]'}))
+        self.assertEqual(self.check(saved).returncode, 1)
+        result, pushed = self.push(saved)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse(pushed, 'secret-bearing image reached Docker push')
+        saved.write_bytes(tar_bytes({'layer.tar': tar_bytes({'usr/share/doc/olivares/LICENSE': 'clean'}),
+                                     'config.json': '{}'}))
+        result, pushed = self.push(saved)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(pushed, 'clean image did not reach Docker push')
+        transport_env = dict(os.environ, OLIVARES_REAL_DOCKER=str(self.scratch / 'docker'))
+        result = subprocess.run([str(ROOT / 'scripts/artifact-scan-bin/docker'), 'buildx', 'build', '--push', '.'],
+                                env=transport_env, capture_output=True, text=True)
+        self.assertNotEqual(result.returncode, 0)
+
+    def test_unsupported_copy_forms_fail_closed(self):
+        # A destination the scope cannot read exactly would drop its bytes from the scan.
+        saved = self.scratch / 'saved.tar'
+        saved.write_bytes(tar_bytes({'ours/layer.tar': tar_bytes({'usr/local/bin/olivares': 'clean'}),
+                                     'config.json': '{}'}))
+        for line in ('COPY ["extra.txt", "/opt/extra.txt"]', 'copy extra.txt /opt/extra.txt',
+                     'ADD ["extra.txt", "/opt/"]', 'COPY extra.txt opt/extra.txt', 'COPY extra.txt $DEST',
+                     'COPY extra.txt /opt/../etc/x', 'COPY extra.txt /opt/./x', 'COPY extra.txt /',
+                     'COPY <<EOF /opt/x', 'COPY extra.txt \\'):
+            with self.subTest(line=line):
+                dockerfile = self.scratch / 'Dockerfile'
+                dockerfile.write_text('FROM scratch\nCOPY olivares /usr/local/bin/olivares\n' + line + '\n')
+                self.assertEqual(self.check('--image-dockerfile', dockerfile, saved).returncode, 2)
+
+    def test_image_push_inspects_the_paths_the_release_dockerfile_copies(self):
+        # Upstream base and package layers (Debian, Node/npm) carry public test keys and examples that
+        # no pin can name; run 38195427294's image would have blocked on 73 such findings. The push
+        # scan inspects what the release Dockerfile COPYs from the build context, plus image metadata.
+        owned = {'usr/local/bin/olivares': 'clean binary', 'usr/share/doc/olivares/NOTICE': 'clean'}
+        third_party = {'usr/lib/node_modules/npm/README.md': 'token=' + CANARY}
+        saved = self.scratch / 'saved.tar'
+        saved.write_bytes(tar_bytes({'base/layer.tar': tar_bytes(third_party),
+                                     'ours/layer.tar': tar_bytes(owned), 'config.json': '{}'}))
+        result, pushed = self.push(saved)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(pushed)
+        saved.write_bytes(tar_bytes({'ours/layer.tar': tar_bytes(owned),
+                                     'config.json': '{"config":{"Env":["TOKEN=' + CANARY + '"]}}'}))
+        self.assertEqual(self.check('--image-dockerfile', ROOT / 'Dockerfile.release', saved).returncode, 1)
+        result, pushed = self.push(saved)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse(pushed, 'secret in image metadata reached Docker push')
+        saved.write_bytes(tar_bytes({'base/layer.tar': tar_bytes({'usr/bin/env': 'clean'}), 'config.json': '{}'}))
+        self.assertEqual(self.check('--image-dockerfile', ROOT / 'Dockerfile.release', saved).returncode, 2)
+        result, pushed = self.push(saved)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse(pushed, 'an image without the copied paths is not a scanned image')
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

@@ -28,7 +28,9 @@ def main():
             saved = Path(temporary) / 'image.tar'
             subprocess.run([real, 'image', 'save', '--output', str(saved), image_id], check=True)
             checker = Path(__file__).resolve().parents[1] / 'check-artifact-secrets.py'
-            subprocess.run([sys.executable, str(checker), str(saved)], check=True)
+            dockerfile = Path(__file__).resolve().parents[2] / 'Dockerfile.release'
+            subprocess.run([sys.executable, str(checker), '--image-dockerfile', str(dockerfile), str(saved)],
+                           check=True)
         if subprocess.check_output(inspect, text=True).strip() != image_id:
             raise ValueError('image tag changed during scan')
     # Buildx --push bypasses docker push. Fail closed if a future recipe introduces it.

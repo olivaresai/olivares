@@ -26,6 +26,8 @@ from package_repository_lib import digest_file, read_checksum_rows, regular_file
 ARCHIVES = ('.tar', '.tar.gz', '.tgz', '.tar.xz', '.tar.zst', '.zip', '.deb', '.rpm', '.apk',
             '.gz', '.gzip', '.xz', '.zst', '.zstd', '.cpio')
 ROOT = Path(__file__).resolve().parents[1]
+# .goreleaser.yaml checksum.extra_files globs these in the working directory, not in dist/.
+RELEASE_EVIDENCE = ('release-commit.txt', 'release-build-context.json')
 
 
 def pinned_exemptions():
@@ -91,7 +93,7 @@ def member_role(origin):
     # and its release version never participate in an exemption lookup.
     member = origin.rsplit('!', 1)[-1].removeprefix('./').lstrip('/')
     for name in ('olivares', 'olivares-fips'):
-        if member in (name, 'usr/bin/' + name):
+        if member in (name, 'usr/bin/' + name, 'usr/local/bin/' + name):
             return 'engine binary ' + name
     return 'artifact member ' + member
 
@@ -228,6 +230,55 @@ def archive_members(data, name):
         yield name, data
 
 
+def copied_paths(dockerfile):
+    """The image paths a Dockerfile COPYs from its build context: the only image bytes this release adds. Only the
+    plain form with a literal absolute destination is read; any other COPY/ADD form blocks rather than drop bytes."""
+    paths = []
+    for line in Path(dockerfile).read_text().splitlines():
+        words = line.split()
+        if not words or words[0].upper() not in ('COPY', 'ADD'):
+            continue
+        destination = words[-1]
+        parts = destination.strip('/').split('/')
+        if (words[0] not in ('COPY', 'ADD') or len(words) < 3 or any(c in line for c in '[]$<\\"\'')
+                or not destination.startswith('/') or destination.strip('/') == ''
+                or any(part in ('', '.', '..') for part in parts)):
+            raise ValueError('unsupported COPY form')
+        if not any(word.startswith('--from') for word in words):
+            paths.append('/'.join(parts))
+    if not paths:
+        raise ValueError('no copied paths')
+    return paths
+
+
+def image_members(data, paths):
+    """A saved image's metadata files and, in every layer (deleted ones too), only the copied paths. Upstream base
+    and package layers carry public test keys and examples that no pin can name."""
+    found = False
+    with tarfile.open(fileobj=io.BytesIO(data), mode='r:') as image:
+        for entry in image:
+            if not entry.isfile():
+                continue
+            blob = image.extractfile(entry).read()
+            layer = gzip.decompress(blob) if blob[:2] == b'\x1f\x8b' else blob
+            if layer[257:262] != b'ustar':
+                yield entry.name, blob   # manifest, config, index
+                continue
+            validate_tar(layer)
+            with tarfile.open(fileobj=io.BytesIO(layer), mode='r:') as files:
+                for member in files:
+                    name = member.name.removeprefix('./').lstrip('/')
+                    if not any(name == path or name.startswith(path + '/') for path in paths):
+                        continue
+                    if member.isfile():
+                        found = True
+                        yield entry.name + '!' + name, files.extractfile(member).read()
+                    elif member.issym() or member.islnk():
+                        yield entry.name + '!' + name + '.link', member.linkname.encode()
+    if not found:
+        raise ValueError('no copied path in the image')
+
+
 def prepare(path, targets, counter, origins, origin, depth=0):
     regular_file(path, 'artifact member')
     index = str(next(counter))
@@ -277,7 +328,7 @@ def prepare(path, targets, counter, origins, origin, depth=0):
                 prepare(member, targets, counter, origins, origin + '!' + name, depth + 1)
 
 
-def scan(paths):
+def scan(paths, copied=None):
     scanner = shutil.which('gitleaks')
     if not scanner:
         raise ValueError('gitleaks is unavailable')
@@ -288,7 +339,15 @@ def scan(paths):
         origins = {}
         counter = itertools.count()
         for path in paths:
-            prepare(path, targets, counter, origins, path.name)
+            if copied is None:
+                prepare(path, targets, counter, origins, path.name)
+                continue
+            regular_file(path, 'saved image')
+            for number, (name, data) in enumerate(image_members(path.read_bytes(), copied)):
+                member = scratch / 'image' / str(number) / Path(name).name
+                member.parent.mkdir(parents=True)
+                member.write_bytes(data)
+                prepare(member, targets, counter, origins, path.name + '!' + name, 1)
         locations = {hashlib.sha256(str(path).encode()).hexdigest(): origins[path.parent.name]
                      for path in targets.glob('*/*') if path.is_file()}
         ignore = scratch / 'ignore'
@@ -344,12 +403,14 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--checksums', type=Path)
     parser.add_argument('files', type=Path, nargs='*')
+    parser.add_argument('--image-dockerfile', type=Path,
+                        help='inspect a saved image: metadata plus the paths this Dockerfile copies')
     args = parser.parse_args()
     paths = args.files
     if args.checksums:
         regular_file(args.checksums, 'checksums')
         for name, digest in read_checksum_rows(args.checksums).items():
-            path = args.checksums.parent / name
+            path = Path(name) if name in RELEASE_EVIDENCE else args.checksums.parent / name
             regular_file(path, 'checksummed artifact')
             if digest_file(path) != digest:
                 raise ValueError('artifact changed after checksumming')
@@ -357,6 +418,10 @@ def main():
         paths.append(args.checksums)
     if not paths:
         raise ValueError('no built artifacts supplied')
+    if args.image_dockerfile:
+        if args.checksums or len(paths) != 1:
+            raise ValueError('an image scan takes exactly one saved image')
+        return scan(paths, copied_paths(args.image_dockerfile))
     return scan(paths)
 
 
