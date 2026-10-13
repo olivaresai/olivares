@@ -17,12 +17,12 @@ func TestDeleteConnectorPreservesNestedSourceCredentialAndName(t *testing.T) {
 	ctx := context.Background()
 	for _, in := range []api.ConnectorOnboardInput{
 		{
-			Name: "a/b", Kind: "vault", Tenant: "acme", Enabled: true,
+			Name: "a/b", Kind: "vault-audit", Tenant: "acme", Enabled: true,
 			Config:  map[string]string{"base_url": "https://b.invalid:8200"},
 			Secrets: map[string]string{"token": "synthetic-owned-b"},
 		},
 		{
-			Name: "a", Kind: "vault", Tenant: "acme", Enabled: true,
+			Name: "a", Kind: "vault-audit", Tenant: "acme", Enabled: true,
 			Config: map[string]string{
 				"base_url": "https://a.invalid:8200", "extra_ref": "store:source/a/b/token",
 				"b/token": "store:source/a/b/token",
@@ -38,7 +38,7 @@ func TestDeleteConnectorPreservesNestedSourceCredentialAndName(t *testing.T) {
 	// The existing db alias and reference whitespace must name the same sealed key.
 	const nestedRef = " DB : source/a/b/token "
 	if _, err := sr.PutConnector(ctx, recAdmin(), api.ConnectorOnboardInput{
-		Name: "a/b", Kind: "vault", Tenant: "acme", Enabled: true,
+		Name: "a/b", Kind: "vault-audit", Tenant: "acme", Enabled: true,
 		Config:  map[string]string{"base_url": "https://b.invalid:8200"},
 		Secrets: map[string]string{"token": nestedRef},
 	}); err != nil {
@@ -93,14 +93,14 @@ func TestDeleteConnectorCleansOwnedCredentialReferencedUnderAnotherField(t *test
 		t.Fatal(err)
 	}
 	if _, err := sr.PutConnector(ctx, recAdmin(), api.ConnectorOnboardInput{
-		Name: "a", Kind: "vault", Tenant: "acme", Enabled: true,
+		Name: "a", Kind: "vault-audit", Tenant: "acme", Enabled: true,
 		Config:  map[string]string{"base_url": "https://a.invalid:8200"},
 		Secrets: map[string]string{"token": "synthetic-owned-a", "b/token": "synthetic-owned-slash-field"},
 	}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := sr.PutConnector(ctx, recAdmin(), api.ConnectorOnboardInput{
-		Name: "a", Kind: "vault", Tenant: "acme", Enabled: true,
+		Name: "a", Kind: "vault-audit", Tenant: "acme", Enabled: true,
 		Config: map[string]string{
 			"base_url": "https://a.invalid:8200", "extra_ref": "store:source/a/token",
 		},
@@ -138,17 +138,17 @@ func TestDeleteConnectorPreservesNestedSourceCredentialAfterReferenceChanges(t *
 			}
 			for _, in := range []api.ConnectorOnboardInput{
 				{
-					Name: tc.owner, Kind: "vault", Tenant: "acme", Enabled: true,
+					Name: tc.owner, Kind: "vault-audit", Tenant: "acme", Enabled: true,
 					Config:  map[string]string{"base_url": "https://owner.invalid:8200"},
 					Secrets: map[string]string{tc.field: "synthetic-original-owner"},
 				},
 				{
-					Name: tc.owner, Kind: "vault", Tenant: "acme", Enabled: true,
+					Name: tc.owner, Kind: "vault-audit", Tenant: "acme", Enabled: true,
 					Config:  map[string]string{"base_url": "https://owner.invalid:8200"},
 					Secrets: map[string]string{tc.field: "store:shared-cred"},
 				},
 				{
-					Name: tc.deleted, Kind: "vault", Tenant: "acme", Enabled: true,
+					Name: tc.deleted, Kind: "vault-audit", Tenant: "acme", Enabled: true,
 					Config: map[string]string{
 						"base_url": "https://deleted.invalid:8200", "token": "store:shared-cred",
 						"extra_ref": "store:source/a/b/token",

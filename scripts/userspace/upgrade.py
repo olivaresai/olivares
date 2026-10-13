@@ -315,8 +315,6 @@ class Upgrade:
                       'display_name': 'Upgrade viewer', 'tenant': self.tenant, 'role': 'viewer'}, 201)
             workspace = self.call('POST', '/v1/workspaces', {'name': 'Upgrade workspace', 'slug': 'upgrade',
                                   'settings': {'custom_value': 'keep-this-setting', 'credential_ref': 'store:upgrade-test'}}, 201)[1]
-            self.call('POST', '/v1/m/governance/rbac/permission-groups', {'name': 'upgrade-readers',
-                      'display_name': 'Upgrade readers', 'permissions': ['sessions:run:read']}, 201)
             for path in ('account/config', 'account/user'):
                 (self.home / path).mkdir(parents=True)
             self.call('POST', '/v1/m/sessions/provider-profiles', {'driver': 'claude',

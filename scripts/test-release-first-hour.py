@@ -10,6 +10,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import tempfile
@@ -18,6 +19,8 @@ import unittest
 import urllib.request
 
 ROOT = Path(__file__).resolve().parents[1]
+# The locked harness: the script's pinned browser image must carry this version.
+HARNESS = re.search(r"^  '@playwright/test@([0-9.]+)':", (ROOT / 'web/pnpm-lock.yaml').read_text(), re.M)[1]
 TOOL = r'''#!/usr/bin/env python3
 import hashlib, json, os, pathlib, sys
 args = sys.argv[1:]
@@ -150,7 +153,7 @@ class ReleaseFirstHourTest(unittest.TestCase):
             shutil.copytree(ROOT / name, root / name)
         package = root / 'web/node_modules/@playwright/test/package.json'
         package.parent.mkdir(parents=True)
-        package.write_text(json.dumps({'version': '1.62.0' if case == 'browser-version' else '1.63.0'}))
+        package.write_text(json.dumps({'version': '1.62.0' if case == 'browser-version' else HARNESS}))
         (root / 'RELEASE-VERSION').write_text(candidate + '\n')
         bindir = root / 'bin'
         bindir.mkdir()

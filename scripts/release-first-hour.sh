@@ -202,7 +202,7 @@ compose+=(-f "$work/provider.yml")
 # Chromium must not see link/address changes from neighboring jobs on the runner host.
 # Share only the engine's network namespace; the locked harness and its evidence stay
 # separate from the engine's filesystem. The image supplies Chromium and its libraries.
-browser_image=mcr.microsoft.com/playwright:v1.63.0-noble@sha256:eff16c30e6f3f4af0a03fa4b706120d5e9b0891c344a27d64559aff5900a4a27
+browser_image=mcr.microsoft.com/playwright:v1.64.0-noble@sha256:06a9939e57531807f8d5fd76ce44b53165ffb7d7501d87ab10e285c20b1e971f
 harness_version=$(node -p 'require("./web/node_modules/@playwright/test/package.json").version')
 [[ $browser_image == "mcr.microsoft.com/playwright:v$harness_version-noble@"* ]] || {
   echo 'FAIL: Playwright image version differs from the locked harness' >&2

@@ -106,7 +106,7 @@ func newSessionHookCredentials(a *auth.Authenticator, st store.Store, m *session
 		return m.StopForAccessChange(stopCtx, scope, user)
 	}), authr: a, store: st, stopEpoch: stopEpoch}
 	if m != nil {
-		m.SessionAccessCheck = credentials.CheckOwnerAccess
+		m.SetSessionAccessCheck(credentials.CheckOwnerAccess)
 	}
 	return credentials
 }

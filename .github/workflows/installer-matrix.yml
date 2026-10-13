@@ -104,9 +104,13 @@ jobs:
         timeout-minutes: 20
         env:
           CGO_ENABLED: "0"
+          # The release-version stamp needs the release anchors (public keys), as in .goreleaser.yaml;
+          # without them doctor fails build-and-anchors on every leg.
+          OLIVARES_LICENSE_PUBKEY: ${{ vars.OLIVARES_LICENSE_PUBKEY }}
+          OLIVARES_OTA_PUBKEY: ${{ vars.OLIVARES_OTA_PUBKEY }}
         run: |
           mkdir -p "$RUNNER_TEMP/installer-candidate"
-          go build -trimpath -ldflags "$(sh scripts/build-ldflags.sh)" -o "$RUNNER_TEMP/installer-candidate/olivares" ./cmd/olivares
+          go build -trimpath -ldflags "$(sh scripts/build-ldflags.sh) -X github.com/olivaresai/olivares/core/license.releasePublicKeyB64=$OLIVARES_LICENSE_PUBKEY -X github.com/olivaresai/olivares/core/release.artifactVerifyKeyB64=$OLIVARES_OTA_PUBKEY" -o "$RUNNER_TEMP/installer-candidate/olivares" ./cmd/olivares
       - name: package this PR head's installer archive
         if: github.event_name == 'pull_request'
         run: |
@@ -154,9 +158,13 @@ jobs:
         timeout-minutes: 20
         env:
           CGO_ENABLED: "0"
+          # The release-version stamp needs the release anchors (public keys), as in .goreleaser.yaml;
+          # without them doctor fails build-and-anchors on every leg.
+          OLIVARES_LICENSE_PUBKEY: ${{ vars.OLIVARES_LICENSE_PUBKEY }}
+          OLIVARES_OTA_PUBKEY: ${{ vars.OLIVARES_OTA_PUBKEY }}
         run: |
           mkdir -p "$RUNNER_TEMP/installer-candidate"
-          go build -trimpath -ldflags "$(sh scripts/build-ldflags.sh)" -o "$RUNNER_TEMP/installer-candidate/olivares" ./cmd/olivares
+          go build -trimpath -ldflags "$(sh scripts/build-ldflags.sh) -X github.com/olivaresai/olivares/core/license.releasePublicKeyB64=$OLIVARES_LICENSE_PUBKEY -X github.com/olivaresai/olivares/core/release.artifactVerifyKeyB64=$OLIVARES_OTA_PUBKEY" -o "$RUNNER_TEMP/installer-candidate/olivares" ./cmd/olivares
       - name: package this PR head's installer archive
         if: github.event_name == 'pull_request'
         run: |

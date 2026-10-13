@@ -38,6 +38,10 @@ class ModuleReads(unittest.TestCase):
 
             def do_POST(self) -> None:
                 self.rfile.read(int(self.headers.get('Content-Length', 0)))
+                # The published Community binary refuses Business authoring (0.1: permission groups).
+                if self.path == '/v1/m/governance/rbac/permission-groups':
+                    self.respond(501, {'error': 'Editing custom policies, roles and grants requires Business.'})
+                    return
                 self.respond(200 if 'work-items' in self.path else 201, {'id': 'workspace'})
 
             def respond(self, status: int, body: object) -> None:

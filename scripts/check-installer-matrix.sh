@@ -90,6 +90,8 @@ assert "vars.CI_RUNNER" not in workflow.split("macos-installer:")[1]
 # Exactly two jobs, so a third runner (or a leg silently duplicated onto Linux) is caught.
 assert workflow.count("runs-on:") == 2
 assert workflow.count("bash scripts/installer-matrix-ci.sh") == 2
+# Both candidates carry the release version stamp, so both need the public release anchors.
+assert workflow.count("core/license.releasePublicKeyB64=$OLIVARES_LICENSE_PUBKEY -X github.com/olivaresai/olivares/core/release.artifactVerifyKeyB64=$OLIVARES_OTA_PUBKEY") == 2
 assert "cosign-release: 'v2.6.4'" in workflow
 
 for token in (

@@ -483,6 +483,12 @@ func doctorSessionConfinement(deps doctorDeps) doctorCheck {
 		c.Status = "fail"
 		c.Detail += "; managed sessions and local MCP children cannot start here"
 		c.Remediation = "use a Linux engine host with Landlock enabled; run olivares doctor on the engine host to verify availability"
+		if deps.goos != "linux" {
+			// Landlock is a Linux kernel feature: on another OS this is a known limit
+			// of a correct install, not a fault, so it warns instead of failing doctor.
+			c.Status = "warn"
+			c.Detail += "; sessions are not confined by Landlock on " + deps.goos
+		}
 	}
 	return c
 }

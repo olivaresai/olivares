@@ -312,7 +312,12 @@ env -u OLIVARES_ASSET_ROOT -u OLIVARES_OS \
 	"$installed" doctor --mode user --init "$init_name" --binary "$installed" \
 	--data-dir "$MATRIX_DATA" --config "$MATRIX_CONFIG" \
 	--server https://127.0.0.1:8443 --ca-cert "$MATRIX_DATA/tls.crt" \
-	--timeout 15s -o json >"$doctor_json" 2>>"$all_log"
+	--timeout 15s -o json >"$doctor_json" 2>>"$all_log" || {
+	rc=$?
+	printf 'installer-matrix: doctor exit %s:\n' "$rc" >&2
+	cat "$doctor_json" >&2 || true
+	exit "$rc"
+}
 cat "$doctor_json" >>"$all_log"
 bash "$lib" doctor "$doctor_json" - - -
 bash "$lib" redacted "$all_log" "$secret_value"
