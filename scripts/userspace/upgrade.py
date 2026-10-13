@@ -247,7 +247,7 @@ class Upgrade:
         self.secrets.append(urllib.parse.unquote(url.password or ''))
         suffix = uuid.uuid4().hex[:12]
         self.database = 'userspace_' + suffix
-        roles = ['userspace_' + suffix + '_' + role for role in ('app', 'owner', 'admin')]
+        roles = [self.database + '_' + role for role in ('app', 'owner', 'admin')]
         password = self.home / 'db-password'
         password.write_text(self.password)
         password.chmod(0o600)
@@ -261,6 +261,13 @@ class Upgrade:
                      '--database', self.database, '--app-role', roles[0], '--app-password-file', str(password),
                      '--owner-role', roles[1], '--owner-password-file', str(password),
                      '--admin-role', roles[2], '--admin-password-file', str(password), '-o', 'json'])
+
+    def install_inventory(self):
+        # Without --admin-dsn the engine reads the tenant inventory only through the closed
+        # routine a DBA installs once the tables exist (docs/DIRECTORY-USER-AUTHORITY.md).
+        self.command(self.args.published, ['db', 'init', '--install-directory-inventory',
+                     '--superuser-dsn', 'env:USERSPACE_MAINTENANCE_DSN', '--database', self.database,
+                     '--app-role', self.database + '_app', '--owner-role', self.database + '_owner', '-o', 'json'])
 
     def rows(self):
         tables = []
@@ -332,8 +339,15 @@ class Upgrade:
                       'brief_md': 'Upgrade data', 'priority': 'p1', 'owner_kind': 'user', 'owner_ref': who['user_id'],
                       'provenance_kind': 'human', 'provenance_ref': 'fixture:upgrade', 'context_refs': [],
                       'acceptance': [{'criterion_key': 'retain', 'ordinal': 0, 'statement': 'Retain data', 'required': True}]}, 200)
+            if self.args.database == 'sqlite':
+                # The published binary writes at boot too (0.1 names unnamed provider profiles:
+                # boot_legacy_profiles.go). Boot it again, as the PostgreSQL app-owner restart
+                # does, so the snapshot is its settled state and not the candidate's first boot.
+                self.stop()
+                self.start(self.args.published, 'published-restart')
             if self.args.database == 'postgres':
                 self.stop()
+                self.install_inventory()
                 self.start(self.args.published, 'published-app-owner')
             paths = ['/v1/users', '/v1/workspaces', '/v1/m/governance/rbac/permission-groups',
                      '/v1/m/sessions/provider-profiles', '/v1/m/sessions/templates', '/v1/m/governance/policies',

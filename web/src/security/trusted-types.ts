@@ -85,11 +85,16 @@ export function trustedHTML(input: string): unknown {
 export type SafetyNetVerdict = 'sanitising' | 'blanking' | 'unsupported'
 
 /** A payload whose two halves discriminate in OPPOSITE directions: the `<b>` must
- *  survive (proves the net still passes safe markup through) and the handler must
- *  not (proves it still strips dangerous markup). A net that blanks everything
+ *  survive (proves the net still passes safe markup through) and the `<script>`
+ *  must not (proves it still strips dangerous markup). A net that blanks everything
  *  passes the second half and fails the first — which is exactly the failure this
- *  check exists to catch. */
-const PROBE = '<b>ok</b><img src=x onerror="alert(1)">'
+ *  check exists to catch.
+ *
+ *  No event-handler attribute here: Chromium reports a `script-src-attr` violation
+ *  ("Executing inline event handler…") as soon as DOMPurify's DOMParser parses an
+ *  `on*` attribute, even in the inert document, so such a probe logged a CSP error
+ *  on every page load. A parsed `<script>` never runs and never consults the CSP. */
+const PROBE = '<b>ok</b><script>alert(1)</script>'
 
 /** Exercise the net once and report which of the three answers is true.
  *
@@ -106,7 +111,7 @@ export function checkSafetyNet(): SafetyNetVerdict {
   if (typeof window === 'undefined') return 'unsupported'
   const out = sanitize(PROBE)
   if (!out.includes('<b>ok</b>')) return 'blanking'
-  if (out.includes('onerror')) return 'blanking'
+  if (out.includes('<script')) return 'blanking'
   return 'sanitising'
 }
 

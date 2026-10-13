@@ -7,7 +7,9 @@
 # does it: start the engine, create the administrator, add a Claude Code account,
 # register a folder, start a session in it, send a prompt, read the reply, stop,
 # resume, stop. On Linux it also asserts that the session process cannot read the
-# engine's data directory (Landlock confinement).
+# engine's data directory (Landlock confinement). On macOS, where Landlock does not
+# exist, it asserts the documented refusal instead: the session start answers
+# HTTP 502 "this server cannot confine sessions" and no session runs.
 #
 #   REAL   — the engine binary, its API, the session runtime, the runner and the
 #            confinement helper.
@@ -82,12 +84,17 @@ HOME="$home" PATH="$stubdir:$PATH" "$bin" serve --insecure --data-dir "$data" \
 	--listen "127.0.0.1:$port" --grpc-listen "127.0.0.1:$grpc_port" >"$work/engine.out" 2>"$work/engine.log" &
 engine_pid=$!
 
-expect_confined=0
-[[ "$(uname -s)" == Linux ]] && expect_confined=1
+# Linux: the session runs confined. macOS: the engine refuses to start an unconfined
+# session (deny-closed). Elsewhere: the journey runs and reports no confinement.
+case "$(uname -s)" in
+	Linux) confinement_mode=confined ;;
+	Darwin) confinement_mode=refused ;;
+	*) confinement_mode=unconfined ;;
+esac
 
-python3 - "http://127.0.0.1:$port" "$work/engine.out" "$folder" "$data" "$expect_confined" "$label" <<'PY'
+python3 - "http://127.0.0.1:$port" "$work/engine.out" "$folder" "$data" "$confinement_mode" "$label" <<'PY'
 import json, re, sys, time, urllib.error, urllib.request
-base, out_path, folder, data, expect_confined, label = sys.argv[1:7]
+base, out_path, folder, data, confinement_mode, label = sys.argv[1:7]
 tenant, token = "", ""
 
 def fail(step, detail):
@@ -143,9 +150,24 @@ profile_ref = acct.get("ref") or acct.get("profile_ref") or acct.get("id")
 ws = ok("register the folder", *call("POST", "/v1/m/sessions/workspaces",
                                     {"name": "project", "root_path": folder, "mount_mode": "rw", "dlp_mode": "off"}))
 ws_ref = ws.get("ref") or ws.get("workspace_ref") or ws.get("id")
-run = ok("start a session", *call("POST", "/v1/m/sessions/runs", {
+start = call("POST", "/v1/m/sessions/runs", {
     "provider_profile_ref": profile_ref, "workspace_ref": ws_ref,
-    "transport": "stream-json", "permission_mode": "default", "name": "journey"}))
+    "transport": "stream-json", "permission_mode": "default", "name": "journey"})
+if confinement_mode == "refused":
+    status, body = start
+    err = {}
+    try:
+        err = json.loads(body).get("error") or {}
+    except (TypeError, ValueError, AttributeError):
+        pass
+    if (status != 502 or err.get("code") != "module_error"
+            or "this server cannot confine sessions" not in err.get("message", "")):
+        fail("start a session", f"want the documented refusal (HTTP 502 module_error "
+             f"'this server cannot confine sessions'), got HTTP {status} {body}")
+    print(f"session-journey: OK — {label}: setup, sign in, account, folder; "
+          f"the session start was refused as documented (no Landlock here): {err['message']}")
+    sys.exit(0)
+run = ok("start a session", *start)
 ref = run.get("run_ref")
 if run.get("state") != "running":
     fail("start a session", f"state {run.get('state')!r}")
@@ -182,7 +204,7 @@ probe = next((json.loads(l).get("probe") for l in lines if "journey_probe" in l)
 
 events = call("GET", f"/v1/m/sessions/runs/{ref}/events")[1]
 confinement = re.search(r"confinement: [^\"]+", json.dumps(events))
-if expect_confined == "1":
+if confinement_mode == "confined":
     if probe != "key-denied":
         fail("confinement", f"the session process read the engine key (probe={probe!r})")
     if not confinement or "landlock" not in confinement.group(0):

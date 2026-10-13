@@ -23,7 +23,8 @@ class ModuleReads(unittest.TestCase):
              '/v1/m/redteam/runs', '/v1/m/redteam/catalog')
 
     def run_upgrade(self, database: str = 'sqlite', published: dict | None = None,
-                    candidate: dict | None = None) -> tuple:
+                    candidate: dict | None = None, calls: list | None = None) -> tuple:
+        calls = [] if calls is None else calls
         disabled = (404, {'error': {'code': 'module_not_enabled'}})
         responses = {'published': published or {path: disabled for path in self.paths},
                      'candidate': candidate or {path: disabled for path in self.paths}}
@@ -59,10 +60,16 @@ class ModuleReads(unittest.TestCase):
                 fixture = Upgrade(SimpleNamespace(output=Path(directory) / 'upgrade', database=database,
                                                   published=Path(__file__), candidate=Path(__file__)))
                 fixture.origin = 'http://127.0.0.1:' + str(server.server_port)
+                fixture.database = 'userspace_test'
 
                 def start(binary: Path, label: str, seed: bool = False) -> None:
                     nonlocal phase
                     phase = 'candidate' if label == 'candidate' else 'published'
+                    calls.append(('start', label))
+
+                def command(binary: Path, argv: list) -> dict:
+                    calls.append(('command', tuple(argv[:3])))
+                    return {'exit': 0, 'json': []}
 
                 ceremony = Mock(returncode=0, pid=12345)
                 ceremony.communicate.return_value = ('{"aal":3}', '')
@@ -70,7 +77,7 @@ class ModuleReads(unittest.TestCase):
                 with patch.object(fixture, 'start', side_effect=start) as starts, \
                         patch.object(fixture, 'stop'), patch.object(fixture, 'provision'), \
                         patch.object(fixture, 'login', return_value={'user_id': 'owner'}), \
-                        patch.object(fixture, 'command', return_value={'exit': 0, 'json': []}), \
+                        patch.object(fixture, 'command', side_effect=command), \
                         patch.object(fixture, 'rows', return_value=rows) as snapshots, \
                         patch('upgrade.subprocess.Popen', return_value=ceremony), \
                         patch('upgrade.os.killpg'), contextlib.redirect_stdout(io.StringIO()):
@@ -96,10 +103,33 @@ class ModuleReads(unittest.TestCase):
                     self.assertIn(('published', path), reads)
                     self.assertIn(('candidate', path), reads)
 
+    def test_postgres_installs_the_inventory_before_the_app_owner_restart(self) -> None:
+        # Without --admin-dsn an enforced store opens only through the closed directory
+        # inventory a DBA installs once the tables exist (docs/DIRECTORY-USER-AUTHORITY.md).
+        install = ('command', ('db', 'init', '--install-directory-inventory'))
+        calls = []
+        rc, result, _, _, _ = self.run_upgrade('postgres', calls=calls)
+        self.assertEqual((rc, result['failures']), (0, []))
+        self.assertIn(install, calls)
+        self.assertLess(calls.index(install), calls.index(('start', 'published-app-owner')))
+        calls = []
+        self.run_upgrade('sqlite', calls=calls)
+        self.assertNotIn(install, calls)
+
     def test_enabled_modules_remain_required_to_return_200(self) -> None:
         enabled = {path: (200, []) for path in self.paths}
         rc, result, _, _, _ = self.run_upgrade(published=enabled, candidate=enabled)
         self.assertEqual((rc, result['complete'], result['failures']), (0, True, []))
+
+    def test_the_published_binary_boots_again_before_the_comparison(self) -> None:
+        # A published binary writes at its own boot (0.1 names unnamed provider profiles,
+        # boot_legacy_profiles.go). The snapshot is taken after that boot, on both stores,
+        # so the candidate is not blamed for what the published binary does on restart.
+        for database, restart in (('sqlite', 'published-restart'), ('postgres', 'published-app-owner')):
+            with self.subTest(database=database):
+                rc, _, _, starts, _ = self.run_upgrade(database)
+                self.assertEqual(rc, 0)
+                self.assertEqual(starts[:3], ['published', restart, 'candidate'])
 
     def test_module_status_changes_fail_in_both_directions(self) -> None:
         # Keep the body identical so only the status comparison can catch this.

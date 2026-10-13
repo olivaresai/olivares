@@ -78,6 +78,11 @@ if [[ "$inside" -eq 0 && "$family" != macos ]]; then
 		}
 	fi
 	host_scratch="$(mktemp -d "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/olivares-installer-${family}.XXXXXX")"
+	# The scratch is /matrix inside the container, where the engine and its confined session
+	# run as root. mktemp makes it 0700 for the job user, and a root child without DAC override
+	# cannot search a directory another user owns: the confinement helper refused to start the
+	# session tool under /matrix ("cannot be traversed without DAC override"). Search only.
+	chmod 0711 "$host_scratch"
 	# The container writes into the bind-mounted scratch as root. On a hosted runner the job
 	# user cannot remove those files, and a cleanup that fails inside the EXIT trap turned a
 	# green leg red (public PR #32, 2026-09-17: "rm: cannot remove …/live/bin/olivares:

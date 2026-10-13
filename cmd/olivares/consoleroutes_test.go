@@ -2015,15 +2015,15 @@ var consoleDeferredOperatorSurface = map[string]string{
 	"DELETE /v1/auth/os-account-bindings/{}": "`olivares auth os-account revoke` confirms audited revocation " +
 		"while retaining the permanent account reservation; this increment has no console revocation control",
 
-	// Skills catalog retirement, revision publishing and binding edits remain CLI and
-	// REST/SDK surfaces. Remove each entry when its console flow gains a caller; the
+	// Skills catalog retirement, revision publishing and revision-to-revision diffs remain
+	// CLI and REST/SDK surfaces. Remove each entry when its console flow gains a caller; the
 	// existing stale-declaration checks enforce it.
 	"DELETE /v1/m/skills/packs/{}": "unused pack retirement uses `olivares skills rm`; " +
 		"the console has no catalog retirement confirmation or pack-version state",
 	"POST /v1/m/skills/packs/{}/revisions": "publishing another immutable revision uses `olivares skills update`; " +
 		"the console has no catalog revision import or retry-key flow",
-	"PUT /v1/m/skills/assignments/{}": "binding changes use `olivares skills assign --assignment --version`; " +
-		"the console has no catalog binding editor with expected-version state",
+	"GET /v1/m/skills/packs/{}/diff": "the diff between two chosen revisions uses `olivares skills diff`; " +
+		"the console's update check shows the diff in the POST /packs/{}/update answer and has no revision picker",
 	//-executor.md ships saved Docker setup as REST APIs without console controls.
 	// The deployment console still reads structural readiness through GET /executor.
 	"GET /v1/m/deploy/executor/config": "saved executor setup is a documented administrator REST read; " +
