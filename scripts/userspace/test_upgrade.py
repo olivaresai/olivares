@@ -207,6 +207,29 @@ class StoredData(unittest.TestCase):
                                 updated_at='new')
         return before, after
 
+    def profile_snapshot(self, account_name=None, home_mode=None, isolation_level=None, display_name='Upgrade profile'):
+        return snapshot_rows([('sessions_provider_profile', ['id'], [{
+            'id': 'ppf', 'driver': 'claude', 'display_name': display_name, 'account_name': account_name,
+            'home_mode': home_mode, 'isolation_level': isolation_level}])])
+
+    def test_boot_naming_fills_only_an_unnamed_profile(self):
+        # 0.1 names unnamed profiles at boot but, on SQLite, its pass ran before the node's
+        # environment was bound and named nothing (#1619); 0.2's first boot names them.
+        unnamed = self.profile_snapshot()
+        for name in ('claude', 'claude-b'):
+            self.assertEqual(row_diff(unnamed, self.profile_snapshot(name, 'adopted', 'shared')), [])
+        named = self.profile_snapshot('claude', 'adopted', 'shared')
+        for after in (self.profile_snapshot('claude-b', 'adopted', 'shared'),
+                      self.profile_snapshot('claude', 'managed', 'shared'),
+                      self.profile_snapshot('claude', 'adopted', 'dedicated')):
+            self.assertTrue(row_diff(named, after))
+        for after in (self.profile_snapshot('claude', 'managed', 'shared'),
+                      self.profile_snapshot('Claude', 'adopted', 'shared'),
+                      self.profile_snapshot('claude', 'adopted', None),
+                      self.profile_snapshot('claude', 'adopted', 'shared', display_name='Renamed')):
+            self.assertTrue(row_diff(unnamed, after))
+        self.assertTrue(row_diff(named, unnamed))
+
     def test_module_profile_v1_upgrade_preserves_settings(self):
         for version in (None, '', 'olivares.module.profile.v1'):
             for selected in ([], ['identity', 'knowledge'], ['identity', 'liveingest']):

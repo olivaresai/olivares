@@ -26,6 +26,9 @@ spec.loader.exec_module(check)
 
 # Approved edition move; all stored rows remain covered by row_diff.
 REDTEAM_EDITION_ROUTES = frozenset(('/v1/m/redteam/targets', '/v1/m/redteam/runs', '/v1/m/redteam/catalog'))
+# The boot naming of provider profiles that predate account names (AdoptUnnamedProfiles):
+# it fills these three empty columns of an unnamed profile and never rewrites a set one.
+PROFILE_NAMING = ('account_name', 'home_mode', 'isolation_level')
 
 
 def digest(value):
@@ -81,9 +84,17 @@ def snapshot_rows(tables):
             entry = entries.setdefault(identity, {'count': 0, 'values': values})
             if table == 'deployment_settings' and 'doc' in row:
                 entry['module_profile'] = module_profile_snapshot(row['doc'])
+            if table == 'sessions_provider_profile':
+                entry['naming'] = [row.get(name) for name in PROFILE_NAMING]
             entry['count'] += 1
         result[table] = entries
     return result
+
+
+def boot_named(before, after):
+    """An unnamed profile that boot named: empty before, a generated adopted shared account after."""
+    return (before == [None, None, None] and isinstance(after, list) and after[1:] == ['adopted', 'shared']
+            and isinstance(after[0], str) and re.fullmatch(r'[a-z][a-z0-9-]{0,31}', after[0]) is not None)
 
 
 def row_diff(before, after):
@@ -102,6 +113,9 @@ def row_diff(before, after):
                     upgraded = row.get('module_profile', {}).get('v2')
                     if (table == 'deployment_settings' and field == 'doc' and upgraded is not None
                             and upgraded == other.get('module_profile', {}).get('doc')):
+                        continue
+                    if (table == 'sessions_provider_profile' and field in PROFILE_NAMING
+                            and boot_named(row.get('naming'), other.get('naming'))):
                         continue
                     failures.append(table + '.' + field + ': stored value changed ' + key)
     return failures

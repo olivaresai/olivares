@@ -191,6 +191,9 @@ Community 0.2 release notes, covering changes since 0.1.
   migration, and the existing signed channels. Automatic paired publication and
   full cross-edition qualification remain pending. See
   [Editions](docs/editions.md#release-cadence).
+- On SQLite, provider profiles created before account names receive their generated
+  name (such as `claude`) at the first start, as they already did on PostgreSQL;
+  names already set are never changed.
 
 ### Fixed
 
