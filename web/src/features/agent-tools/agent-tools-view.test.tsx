@@ -730,7 +730,11 @@ it('says the release is being verified while a review is planned', async () => {
   await user.click(
     await screen.findByRole('button', { name: 'Review Claude Code install' }),
   )
-  expect(await screen.findByText('Verifying release selection…')).toBeVisible()
+  expect(
+    await screen.findByText('Verifying release selection…', {
+      selector: '[role=status]',
+    }),
+  ).toBeVisible()
 })
 
 it('explains review actions while an approved installation is starting', async () => {
@@ -857,7 +861,10 @@ it('reviews a catalog-admitted tool from its source URL through the existing pla
     'https://tools.example/fixture.tar.gz',
   )
   await user.type(screen.getByLabelText('Pinned version'), '1.0.0')
-  await user.click(screen.getByRole('button', { name: 'Review installation' }))
+  const review = screen.getByRole('button', { name: 'Review installation' })
+  expect(review).toBeEnabled()
+  expect(review).not.toHaveAttribute('aria-describedby')
+  await user.click(review)
   await waitFor(() =>
     expect(api.plan).toHaveBeenCalledWith(
       '',
@@ -884,6 +891,49 @@ it('reviews a catalog-admitted tool from its source URL through the existing pla
   expect(await screen.findByText(/installation complete/i)).toBeInTheDocument()
   expect(api.job).toHaveBeenCalled()
 })
+
+// The release first hour opens AI tools on a fresh install while the inventory is read,
+// and again while an install runs: the URL form's primary action says why it waits (#2050).
+it.each([
+  ['the inventory is read', 'Reading…'],
+  ['an install runs', 'Installing…'],
+  [
+    'no organization is chosen',
+    'Select an organization to use its admitted tools.',
+  ],
+])(
+  'says next to Review installation why it is disabled while %s',
+  async (state, reason) => {
+    if (state === 'the inventory is read')
+      api.inventory.mockImplementation(() => new Promise(() => {}))
+    if (state === 'an install runs') {
+      api.inventory.mockResolvedValue({
+        drivers: ['claude'],
+        inventory: { installed: [], leftovers: [] },
+        read_only: false,
+        jobs: [{ id: 'job1' }],
+      })
+      api.job.mockResolvedValue({
+        id: 'job1',
+        state: 'running',
+        driver: 'claude',
+        version: '2.1.261',
+        progress: 'downloading',
+      })
+    }
+    if (state === 'no organization is chosen')
+      useTenantStore.setState({ activeTenant: null })
+    const user = userEvent.setup()
+    mount()
+    await user.click(await screen.findByText('Install from a URL'))
+    const review = screen.getByRole('button', { name: 'Review installation' })
+    await waitFor(() => expect(review).toHaveAccessibleDescription(reason))
+    expect(review).toBeDisabled()
+    expect(
+      within(review.closest('form')!).getByText(reason, { exact: true }),
+    ).toBeVisible()
+  },
+)
 
 it('keeps a removed tool reachable when its workspace still has a stored pin', async () => {
   useTenantStore.setState({ activeTenant: 'tenant-a' })

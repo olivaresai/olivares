@@ -196,15 +196,17 @@ function Tools({ epoch }: { epoch: number }) {
   const installReason = install.isPending ? t('starting') : t('state.running')
   // Without the inventory nothing can be reviewed or installed: said, not hidden.
   const inventoryAvailable = !!inventory.data && !inventory.isError
-  const reviewDisabledReason = !inventoryAvailable
-    ? t('providers.state.error')
-    : inventory.data?.read_only
-      ? t('readOnly')
-      : busy
-        ? installReason
-        : preview.isPending
-          ? t('planning')
-          : undefined
+  const reviewDisabledReason = inventory.isPending
+    ? t('installed.reading')
+    : !inventoryAvailable
+      ? t('providers.state.error')
+      : inventory.data?.read_only
+        ? t('readOnly')
+        : busy
+          ? installReason
+          : preview.isPending
+            ? t('planning')
+            : undefined
   const sourceDisabledReason =
     reviewDisabledReason ?? (!tenant ? t('from.tenant') : undefined)
   const review = (driver: string, version: string) => {
@@ -369,11 +371,6 @@ function Tools({ epoch }: { epoch: number }) {
           }}
         >
           <p className="text-sm text-muted-foreground">{t('from.hint')}</p>
-          {!tenant && (
-            <p role="status" className="text-sm text-muted-foreground">
-              {t('from.tenant')}
-            </p>
-          )}
           <div className="space-y-1">
             <Label htmlFor="tool-source-url">{t('from.source')}</Label>
             <Input
@@ -400,9 +397,20 @@ function Tools({ epoch }: { epoch: number }) {
             type="submit"
             className="self-start"
             disabled={!!sourceDisabledReason}
+            aria-describedby={
+              sourceDisabledReason ? 'tool-source-reason' : undefined
+            }
           >
             {t('from.review')}
           </Button>
+          {sourceDisabledReason && (
+            <p
+              id="tool-source-reason"
+              className="text-sm text-muted-foreground"
+            >
+              {sourceDisabledReason}
+            </p>
+          )}
         </form>
       </details>
       {preview.isPending && <p role="status">{t('planning')}</p>}

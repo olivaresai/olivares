@@ -1357,7 +1357,7 @@
   "root_package": "github.com/olivaresai/olivares/cmd/olivares",
   "root_step_ceiling_minutes": 80,
   "root_go_timeout_minutes": 70,
-  "root_shards_why": "Historical rebalance for the earlier native test universe using top-level test elapsed times from race-full run 37124606369 on hosted runners. The former root-a, root-f, root-g and modules-finops jobs exhausted the unchanged 70-minute Go timeout; the active tests were still making progress. At that measurement, each root turn was estimated at no more than 45 minutes including 20% scheduling margin and 3 minutes startup. Prefixes stay disjoint, and a large family is divided by its next CamelCase word. 2772 of 3201 root tests completed with timings; the 429 unfinished/unstarted tests use their file maximum, or the measured 90th percentile (37.88 seconds) where the file has no completed test. These are estimates, not completed shard durations. The hook endpoint fixtures reserve 90 and 45 seconds respectively because their former 30-second deadline cut raced startup short. Recalibrate from the next full run; the native checker remains the coverage authority. Coverage refresh: added previously uncovered, prefix-disjoint families from the current source inventory to the smallest existing shards by live test count. Existing test owners, timeouts and parallelism are preserved. Refreshed tests_now values describe coverage counts, not new elapsed-time measurements; recalibrate from the next race-full run. All unchanged minutes_est values, including workspace groups, are historical calibration snapshots. Durations after this coverage refresh are not yet measured.",
+  "root_shards_why": "Historical rebalance for the earlier native test universe using top-level test elapsed times from race-full run 37124606369 on hosted runners. The former root-a, root-f, root-g and modules-finops jobs exhausted the unchanged 70-minute Go timeout; the active tests were still making progress. At that measurement, each root turn was estimated at no more than 45 minutes including 20% scheduling margin and 3 minutes startup. Prefixes stay disjoint, and a large family is divided by its next CamelCase word. 2772 of 3201 root tests completed with timings; the 429 unfinished/unstarted tests use their file maximum, or the measured 90th percentile (37.88 seconds) where the file has no completed test. These are estimates, not completed shard durations. The hook endpoint fixtures reserve 90 and 45 seconds respectively because their former 30-second deadline cut raced startup short. Recalibrate from the next full run; the native checker remains the coverage authority. Coverage refresh: added previously uncovered, prefix-disjoint families from the current source inventory to the smallest existing shards by live test count. Existing test owners, timeouts and parallelism are preserved. Refreshed tests_now values describe coverage counts, not new elapsed-time measurements; recalibrate from the next race-full run. All unchanged minutes_est values, including workspace groups, are historical calibration snapshots. Durations after this coverage refresh are not yet measured. 2026-10-13 rebalance: race-full 38450457336 stopped root-b, root-g and root-l at the 70-minute Go timeout with tests still passing, and root-k used 65 of the 70 minutes. The universe had grown to 3324 tests and one boot cost more. The moves use that run's measured elapsed times. Tests the run never reached are estimated at 1.54 times their elapsed time on main's race-full 38133395001, the median ratio for the tests both runs measured, or 60 seconds when main never ran them. SessionClaude is divided by its next CamelCase word into root-b, root-u and root-v. E2 moves to root-w, and SkillsSession joins root-u. Console moves to root-n, DRBackup to root-s, Community to root-t, and Approval and SkillsAssignment to root-r. TestEveryCatalogModuleTurnsOffAndOnAcrossARestart, the test root-l was running when it stopped, restarts the engine twice for each catalog module on SQLite and then on PostgreSQL. Its SQLite leg was still at the knowledge module after 10 min 17 s, so it gets root-x to itself, and the rest of Every is divided by its next CamelCase word. root-x has no estimate yet: the run never measured the PostgreSQL leg. The minutes_est of every moved shard is that estimate without margin; every other minutes_est is the historical snapshot.",
   "root_shards": [
     {
       "name": "root-a",
@@ -1386,17 +1386,22 @@
     },
     {
       "name": "root-b",
-      "tests_now": 107,
-      "minutes_est": 43.4,
+      "tests_now": 71,
+      "minutes_est": 48.3,
       "families": [
         "Account",
-        "Console",
         "Content",
         "DRPostgres",
         "Delete",
         "Enforce",
         "MCPTool",
-        "SessionClaude",
+        "SessionClaudeCanceled",
+        "SessionClaudeCustom",
+        "SessionClaudePost",
+        "SessionClaudeReview",
+        "SessionClaudeStructured",
+        "SessionClaudeTenant",
+        "SessionClaudeUnknown",
         "SessionStop",
         "Setup",
         "Two",
@@ -1717,8 +1722,8 @@
     },
     {
       "name": "root-g",
-      "tests_now": 110,
-      "minutes_est": 43.4,
+      "tests_now": 72,
+      "minutes_est": 37.1,
       "families": [
         "ADocument",
         "AModelForbid",
@@ -1728,7 +1733,6 @@
         "CommunicationGlobal",
         "DDILEvidence",
         "DRCommunication",
-        "E2",
         "Follow",
         "Inventory",
         "LoginAsks",
@@ -1753,7 +1757,6 @@
         "Preview",
         "SessionMemory",
         "SkillsConfined",
-        "SkillsSession",
         "SkillsTarget",
         "Wiki"
       ]
@@ -1819,14 +1822,13 @@
     },
     {
       "name": "root-j",
-      "tests_now": 110,
-      "minutes_est": 43.4,
+      "tests_now": 87,
+      "minutes_est": 51.1,
       "families": [
         "ADelayedCleanup",
         "ADelete",
         "AValid",
         "Aims",
-        "Approval",
         "COMPATB",
         "CommunicationCommit",
         "Demo",
@@ -1853,20 +1855,18 @@
         "LoginGuide",
         "Promotion",
         "SessionRunQuestions",
-        "SkillsAssignment",
         "SessionMove"
       ]
     },
     {
       "name": "root-k",
-      "tests_now": 156,
-      "minutes_est": 43.41,
+      "tests_now": 103,
+      "minutes_est": 45.3,
       "families": [
         "ADormant",
         "ATokenOwnedSubscription",
         "Capability",
         "Cloudflare",
-        "Community",
         "DRDrill",
         "DRIn",
         "DRPush",
@@ -1880,8 +1880,8 @@
     },
     {
       "name": "root-l",
-      "tests_now": 123,
-      "minutes_est": 43.41,
+      "tests_now": 109,
+      "minutes_est": 43.8,
       "families": [
         "AWorkflowNaming",
         "Apps",
@@ -1890,11 +1890,32 @@
         "Composition",
         "Config",
         "DDILImport",
-        "DRBackup",
         "DROffsite",
         "DRSQ",
         "Edition",
-        "Every",
+        "EveryBoot",
+        "EveryCensused",
+        "EveryColumn",
+        "EveryCommand",
+        "EveryComposition",
+        "EveryConsole",
+        "EveryCounted",
+        "EveryEngine",
+        "EveryFamily",
+        "EveryFirst",
+        "EveryLane",
+        "EveryLimit",
+        "EveryList",
+        "EveryLocal",
+        "EveryModule",
+        "EveryNext",
+        "EveryNone",
+        "EveryPublishing",
+        "EveryRender",
+        "EveryReplay",
+        "EveryRoute",
+        "EveryTop",
+        "EveryVisible",
         "Identity",
         "Permission",
         "SessionHook"
@@ -1932,8 +1953,8 @@
     },
     {
       "name": "root-n",
-      "tests_now": 161,
-      "minutes_est": 43.4,
+      "tests_now": 174,
+      "minutes_est": 34.7,
       "families": [
         "AManagedDocument",
         "ARetirementWithout",
@@ -1960,7 +1981,8 @@
         "TLSCertificate",
         "Task",
         "Test",
-        "UsedModules"
+        "UsedModules",
+        "Console"
       ]
     },
     {
@@ -2061,8 +2083,8 @@
     },
     {
       "name": "root-r",
-      "tests_now": 229,
-      "minutes_est": 43.4,
+      "tests_now": 252,
+      "minutes_est": 40.1,
       "families": [
         "AAL3",
         "ABlockedRetirement",
@@ -2086,13 +2108,15 @@
         "SessionName",
         "SessionRemove",
         "SessionView",
-        "SkillsCLI"
+        "SkillsCLI",
+        "Approval",
+        "SkillsAssignment"
       ]
     },
     {
       "name": "root-s",
-      "tests_now": 180,
-      "minutes_est": 43.41,
+      "tests_now": 200,
+      "minutes_est": 48.4,
       "families": [
         "Agent",
         "CommunicationLineage",
@@ -2108,13 +2132,14 @@
         "Persisted",
         "Quickstart",
         "Reconcile",
-        "Superadmin"
+        "Superadmin",
+        "DRBackup"
       ]
     },
     {
       "name": "root-t",
-      "tests_now": 106,
-      "minutes_est": 43.4,
+      "tests_now": 161,
+      "minutes_est": 44.7,
       "families": [
         "A2",
         "APartial",
@@ -2148,7 +2173,41 @@
         "Raw",
         "SessionWorktree",
         "SkillsDirectory",
-        "AccessMapAttackPaths"
+        "AccessMapAttackPaths",
+        "Community"
+      ]
+    },
+    {
+      "name": "root-u",
+      "tests_now": 14,
+      "minutes_est": 30.5,
+      "families": [
+        "SessionClaudeApproval",
+        "SkillsSession"
+      ]
+    },
+    {
+      "name": "root-v",
+      "tests_now": 16,
+      "minutes_est": 31.3,
+      "families": [
+        "SessionClaudeHook",
+        "SessionClaudePreset"
+      ]
+    },
+    {
+      "name": "root-w",
+      "tests_now": 32,
+      "minutes_est": 26.3,
+      "families": [
+        "E2"
+      ]
+    },
+    {
+      "name": "root-x",
+      "tests_now": 1,
+      "families": [
+        "EveryCatalog"
       ]
     }
   ],
